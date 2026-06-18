@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: LG Siteurl From Env
- * Description: Drives WP siteurl/home from /etc/looth/env (LG_PUBLIC_HOST) so a
- *   box standup never needs a per-host DB search-replace. Falls back to the
- *   stored option when the env file is absent (graceful — behaves as before).
+ * Plugin Name: LG Host Options From Env
+ * Description: Drives host-derived WP options from /etc/looth/env (LG_PUBLIC_HOST)
+ *   so a box standup needs zero per-host DB pins: siteurl, home, and the Patreon
+ *   OAuth redirect. Falls back to the stored option when the env file is absent.
  */
 if (!defined('ABSPATH')) return;
 (static function () {
@@ -13,8 +13,9 @@ if (!defined('ABSPATH')) return;
         $e = function_exists('lg_env') ? lg_env() : [];
         $host = (string)($e['host'] ?? '');
     }
-    if ($host === '') return;            // no env host -> leave DB value untouched
-    $url = 'https://' . $host;
-    add_filter('pre_option_siteurl', static fn() => $url);
-    add_filter('pre_option_home',    static fn() => $url);
+    if ($host === '') return;                 // no env host -> leave DB values
+    $base = 'https://' . $host;
+    add_filter('pre_option_siteurl',           static fn() => $base);
+    add_filter('pre_option_home',              static fn() => $base);
+    add_filter('pre_option_lgpo_redirect_uri', static fn() => $base . '/patreon-callback');
 })();
