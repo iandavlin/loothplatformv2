@@ -1,0 +1,11 @@
+[Unit]
+Description=BB-mirror reconciliation (belt-and-suspenders for missed sync hooks)
+After=network.target postgresql.service php8.3-fpm.service
+
+[Service]
+Type=oneshot
+User=looth-dev
+WorkingDirectory=/var/www/dev
+ExecStart=/usr/local/bin/wp eval-file /home/ubuntu/projects/bb-mirror/bin/reconcile.php
+StandardOutput=journal
+StandardError=journal

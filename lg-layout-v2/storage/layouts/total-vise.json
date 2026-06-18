@@ -1,0 +1,165 @@
+{
+    "schema": 1,
+    "_meta": {
+        "sponsor_slug": "total-vise"
+    },
+    "sponsor": {
+        "slug": "total-vise",
+        "wp_user_id": 739,
+        "email": "jeff@totalvise.com",
+        "name": "Jeff Howard's Total Vise",
+        "display_name": "TOTAL VISE",
+        "logo_url": "https://dev.loothgroup.com/wp-content/uploads/2024/09/b6370ce2154e828a976e2a8705a2e4e7-1.jpg",
+        "hero": {
+            "url": "https://dev.loothgroup.com/wp-content/uploads/2025/03/totalvise-hero3.jpg",
+            "caption": "For all your totalitarian vise needs.",
+            "title": "Total Vise",
+            "youtube": "https://youtu.be/H6Tw5MqtRgQ"
+        },
+        "about": "Our mission at Total Vise is to provide smarter, more ergonomic, and productive ways of holding and positioning the craftsman’s work in the shop environment. <br><br>\r\n\r\nFrom commercial and industrial to personal applications, we strive to exceed our customers' expectations and provide the most hands-on customer service.<br><br>\r\n\r\nProudly made in the United States of America.",
+        "website": "https://totalvise.com/",
+        "colors": {
+            "primary": "#e31d20",
+            "secondary": "#09004c",
+            "header": "#ffffff"
+        },
+        "social": {
+            "facebook": "https://www.facebook.com/HowardsTotalVise/",
+            "instagram": "https://www.instagram.com/totalvise/",
+            "youtube": "https://www.youtube.com/c/TotalVise"
+        },
+        "gallery_urls": [
+            "https://dev.loothgroup.com/wp-content/uploads/2024/09/Untitled-1-1-1.webp",
+            "https://dev.loothgroup.com/wp-content/uploads/2024/09/Untitled-2-1-1.webp",
+            "https://dev.loothgroup.com/wp-content/uploads/2024/09/Untitled-3-1-e1742932627990.webp",
+            "https://dev.loothgroup.com/wp-content/uploads/2024/10/14B7992E-B799-415A-8B35-99D7DFBA8E80_1_105_c.jpeg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/03/Total-Vise-Crossover-Dock-with-Number-5.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/03/Total-Vise-Crossover-Dock-with-Number-10-01.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/03/Total-Vise-Crossover-Dock-with-PGW-01.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/03/Total-Vise-Crossover-Dock-with-PGW-02.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/03/Total-Vise-Number-10-024.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/03/Total-Vise-PGW-011.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/03/Total-Vise-PGW-013.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/03/Total-Vise-Totaal-Vise-Number-7.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/03/Total-Vise-TV-PGW-001.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/03/Total-Vise-TVNJ014.jpg"
+        ],
+        "tag_url": "https://dev.loothgroup.com/archive/?_post_tag=total-vise",
+        "forum_url": "/hub/?leaf=34046"
+    },
+    "blocks": [
+        {
+            "type": "brand-hero",
+            "id": "hero",
+            "show_hero_image": true
+        },
+        {
+            "type": "section-heading",
+            "id": "about-h",
+            "text": "About TOTAL VISE",
+            "level": "h2"
+        },
+        {
+            "type": "wysiwyg",
+            "id": "about",
+            "html": "<p>Our mission at Total Vise is to provide smarter, more ergonomic, and productive ways of holding and positioning the craftsman’s work in the shop environment. <br><br>\r\n\r\nFrom commercial and industrial to personal applications, we strive to exceed our customers' expectations and provide the most hands-on customer service.<br><br>\r\n\r\nProudly made in the United States of America.</p>"
+        },
+        {
+            "type": "embed",
+            "id": "hero-yt",
+            "url": "https://youtu.be/H6Tw5MqtRgQ",
+            "caption": "For all your totalitarian vise needs."
+        },
+        {
+            "type": "featured-products",
+            "id": "prods",
+            "heading": "Featured Products",
+            "author": 739,
+            "items": [
+                {
+                    "title": "Erlewine’s Bodyless Neck Support For The Proper’s Guitar Workstation",
+                    "url": "https://dev.loothgroup.com/sponsor-product/erlewines-bodyless-neck-support-for-the-propers-guitar-workstation/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/01/TV-EBNS-002-300x169-1.webp"
+                },
+                {
+                    "title": "Guitar Repair Vise (#7)",
+                    "url": "https://dev.loothgroup.com/sponsor-product/47487/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/03/product-gallery-guitar-repair-vise-7-005-1-300x168.webp"
+                },
+                {
+                    "title": "Proper’s Guitar Workstation With Quick Docking Station",
+                    "url": "https://dev.loothgroup.com/sponsor-product/47485/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/03/27-Total-Vise-PGW-Video1080p_2_Clip0-300x169.webp"
+                },
+                {
+                    "title": "Expansion Package for The Proper’s Guitar Workstation",
+                    "url": "https://dev.loothgroup.com/sponsor-product/jeffs-vice-number-1/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/03/PGW-EP005-scaled-1-300x169.webp"
+                }
+            ]
+        },
+        {
+            "type": "recent-posts",
+            "id": "posts",
+            "heading": "Recent Posts",
+            "author": 739,
+            "items": [
+                {
+                    "title": "10% Off the Proper’s Guitar Workstation from Total Vise",
+                    "url": "https://dev.loothgroup.com/sponsor-post/10-off-the-propers-guitar-workstation-from-total-vise/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/06/tv-propers-001-300x300.jpg",
+                    "date": "Jun 8, 2026",
+                    "excerpt": ""
+                },
+                {
+                    "title": "Erlewine’s Bodyless Neck Support For The Proper’s Guitar Workstation",
+                    "url": "https://dev.loothgroup.com/sponsor-post/erlewines-bodyless-neck-support-for-the-propers-guitar-workstation/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/01/TV-EBNS-002-300x169-1.jpg",
+                    "date": "Jan 16, 2026",
+                    "excerpt": "It’s no secret that Dan Erlewine is a huge fan of the Proper’s Guitar Workstation by Total Vise.  So much so that…"
+                },
+                {
+                    "title": "The Small-Shop Luthier Finishing Station",
+                    "url": "https://dev.loothgroup.com/sponsor-post/the-small-shop-luthier-finishing-station/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/04/T-01-1-300x169.jpg",
+                    "date": "Apr 30, 2025",
+                    "excerpt": "Don’t have room for a large finishing rig? The Total Vise “Small-Shop Finishing Station” is a multi-positioning complete outfit that is the…"
+                },
+                {
+                    "title": "Introducing The Craftsman Vise A (#10)",
+                    "url": "https://dev.loothgroup.com/sponsor-post/numbertenvise/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/03/product-gallery-number10vise-002-300x169.webp",
+                    "date": "Mar 27, 2025",
+                    "excerpt": "Description Step up your shop capabilities with a smart positioner from Total Vise. Designed for skilled craftsmen, this bench style vise offers…"
+                },
+                {
+                    "title": "Using Total Vise with your existing vise or pedestal",
+                    "url": "https://dev.loothgroup.com/sponsor-post/34399/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2024/10/TV-Stew-Mac-Vise-2-300x300.jpg",
+                    "date": "Oct 6, 2024",
+                    "excerpt": "Now, you can get into the Total Vise system even if you already have some another vise or pedestal. Total Vise Round…"
+                },
+                {
+                    "title": "Luthier’s Finishing Station",
+                    "url": "https://dev.loothgroup.com/sponsor-post/luthiers-finishing-station/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2024/10/Screenshot-300x169-1.webp",
+                    "date": "Oct 4, 2024",
+                    "excerpt": "Description Welcome to the next level of luthiery with the Total Vise Luthier Finishing Station. This isn’t just any finishing station; it’s…"
+                }
+            ]
+        },
+        {
+            "type": "brand-gallery",
+            "id": "gallery",
+            "heading": "Image Gallery"
+        },
+        {
+            "type": "whos-talking",
+            "id": "talk"
+        },
+        {
+            "type": "contact-form",
+            "id": "contact"
+        }
+    ]
+}

@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "_meta": {
+    "source": "Sponsor: Total Vise — Anne email 2026-06-07. Discount freedom2026, 10% off total order, 6/12–6/30/2026.",
+    "translated_at": "2026-06-08",
+    "notes": "Sponsor-post promo. PUBLIC — no tier term, no paywall, no gated_tier (the discount code must be visible to all). Portable/older block set. Product image 71442 used as both hero and in-body shot. Product copy drawn from totalvise.com product page."
+  },
+  "blocks": [
+    {
+      "type": "post-header",
+      "image_id": 0,
+      "tagline": "A limited-time Looth Group offer on Total Vise's modular guitar repair workstation — June 12–30, 2026.",
+      "show_read_time": true,
+      "variant": "variant-1"
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<p>Total Vise builds modular workstations for guitar repair &mdash; and they&rsquo;re giving the Looth Group community <strong>10% off</strong> through the end of June. Their Proper&rsquo;s Guitar Workstation Package with Quick Docking holds an instrument securely, face-up or face-down, so you can take on just about any repair on just about any instrument.</p>"
+    },
+    {
+      "type": "callout",
+      "variant": "note",
+      "title": "Your Looth Group discount",
+      "body": "<p>Use code <strong>FREEDOM2026</strong> at checkout for <strong>10% off your total order</strong> at Total Vise.</p><p><em>Valid June 12&ndash;30, 2026.</em></p>"
+    },
+    {
+      "type": "image",
+      "image_id": 0,
+      "url": "https://totalvise.com/wp-content/uploads/2022/11/product-gallery-propers-guitar-worksation-package-with-quick-docking-001.jpg",
+      "alt": "Proper's Guitar Workstation Package with Quick Docking Station from Total Vise.",
+      "image_text": "Proper's Guitar Workstation Package with Quick Docking Station.\n\nThe package pairs the Proper's Guitar Workstation with the Crossover Mini and a Quick Docking Station — letting you switch setups fast and work in nearly any position.",
+      "variant": "variant-1"
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<p>The workstation handles acoustics, electrics, and archtops, and accommodates mandolins, banjos, resonators, and electric basses. The modular design takes your own shop-made fixtures and cauls, so you can adapt it to whatever the bench throws at you &mdash; the setups are limited only by your imagination.</p>"
+    },
+    {
+      "type": "callout",
+      "variant": "links",
+      "title": "Shop Total Vise",
+      "items": [
+        { "icon": "globe", "label": "Proper's Guitar Workstation with Quick Docking", "url": "https://totalvise.com/shop/luthier-tools/propers-guitar-workstation-package-with-quick-docking-station/", "description": "The package featured here" },
+        { "icon": "globe", "label": "totalvise.com", "url": "https://totalvise.com/", "description": "Vises & workstations for the repair bench" }
+      ]
+    },
+    {
+      "type": "post-footer",
+      "show_author": true,
+      "show_related": true,
+      "show_share": true
+    }
+  ]
+}

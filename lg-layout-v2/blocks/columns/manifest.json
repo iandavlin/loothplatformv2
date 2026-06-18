@@ -1,0 +1,83 @@
+{
+  "name": "columns",
+  "version": 2,
+  "selector": ".lg-columns",
+  "description": "Multi-column container. Children live in explicit per-column buckets (block.columns[N].blocks). 2 or 3 columns supported; columns stack vertically on narrow viewports. Optional chrome (bg/border/radius/padding) lets the whole row read as a framed callout.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "columns": {
+        "type": "array",
+        "default": [],
+        "description": "Array of column buckets. Each bucket is an object with a `blocks` array of child blocks. Length determines the column count (2 or 3)."
+      },
+      "variant": {
+        "type": "string",
+        "default": "variant-1",
+        "enum": ["variant-1", "variant-2", "variant-3"],
+        "description": "Visual style. variant-1 = plain (no chrome, like a bare row). variant-2 = framed (cream panel + sage border). variant-3 = dark (ink bg)."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": [
+      "padding",
+      "margin-block",
+      "gap",
+      "bg",
+      "border",
+      "radius",
+      "shadow"
+    ],
+    "text": []
+  },
+  "defaults": {
+    "container": {
+      "padding": "0",
+      "margin-block": "32px",
+      "gap": "24px",
+      "bg": "transparent",
+      "border": "none",
+      "radius": "0",
+      "shadow": "none"
+    },
+    "text": {}
+  },
+  "variants": {
+    "variant-1": {
+      "extends": "defaults"
+    },
+    "variant-2": {
+      "extends": "defaults",
+      "container": {
+        "padding": "20px",
+        "bg": "var(--lg-cream, #fbfbf8)",
+        "border": "1px solid var(--lg-sage-3, #d4e0b8)",
+        "radius": "8px"
+      }
+    },
+    "variant-3": {
+      "extends": "defaults",
+      "container": {
+        "padding": "20px",
+        "bg": "var(--lg-ink, #323532)",
+        "radius": "8px"
+      }
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": [],
+    "custom_picker": null,
+    "variant_prop": "variant",
+    "variant_options": ["variant-1", "variant-2", "variant-3"],
+    "pill_buttons": [
+      "up",
+      "down",
+      "variant",
+      "tier",
+      "delete"
+    ]
+  }
+}

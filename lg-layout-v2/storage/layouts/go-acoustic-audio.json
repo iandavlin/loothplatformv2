@@ -1,0 +1,135 @@
+{
+    "schema": 1,
+    "_meta": {
+        "sponsor_slug": "go-acoustic-audio"
+    },
+    "sponsor": {
+        "slug": "go-acoustic-audio",
+        "wp_user_id": 1503,
+        "email": "info@goacousticaudio.com",
+        "name": "Go Acoustic Audio",
+        "display_name": null,
+        "logo_url": "https://dev.loothgroup.com/wp-content/uploads/2025/08/Go-Acoustic-Square-Loto.png",
+        "hero": {
+            "url": "https://dev.loothgroup.com/wp-content/uploads/2025/08/Cable_Routing1.jpg",
+            "caption": "We design advanced acoustic instrument pickup systems that combine engineering precision with natural acoustic tone, giving players balance, clarity, and freedom on stage.",
+            "title": "Go Acoustic Audio Sound Hole Mount System",
+            "youtube": "https://youtu.be/xe7duwnl-fU?si=K8oDzzBWXrde3GLC"
+        },
+        "about": "In the world of music, where each note carries the potential to inspire, master guitar maker Paul McGill encountered a frustrating dilemma. For over 40 years, he crafted exquisite guitars for icons like Earl Klugh and Chet Atkins, yet amplification technology often failed them, riddling performances with feedback and robbing them of authentic tone. Determined to solve this, Paul joined forces with Ben Shaw, a modern and vintage pro audio electronics expert, to create a solution by merging instrument-making mastery with innovative electronic design. That collaboration led to Go Acoustic Audio, founded in 2019, and its first revolutionary product soon followed.<br><br>\r\n\r\nTheir patent-pending transducer design wasn’t just an enhancement; it reshaped acoustic amplification. By 2020, the duo perfected the Saddle-Pickup transducer, drastically reducing feedback while preserving the natural tone every guitarist craves. Freed from the constraints of traditional systems, musicians could finally express themselves without fear of feedback. Word spread quickly, and within a couple of years, Go Acoustic Audio’s products were embraced by touring artists and high-end guitar builders worldwide, cementing the company as a leader in acoustic pickups.<br><br>\r\n\r\nThe real proof of their success shines through customers’ stories. Many discovered a newfound freedom on stage, hearing their instruments come alive in ways they’d only imagined. Repeat customers and brand advocates soon followed, celebrating how these pickups transformed their live sound.<br><br>\r\n\r\nWith a continued commitment to excellence and innovation, Go Acoustic Audio now pioneers solutions for a range of instruments, including ukuleles. Their focus on solving real-world challenges faced by dedicated musicians sets them apart. Choosing Go Acoustic Audio means investing in a future of unparalleled, authentic acoustic performance—one where artists can finally play and connect with audiences the way they’ve always intended.<br><br>\r\n\r\nGo Acoustic Audio exists to transform live guitar performance, freeing players from feedback and granting authentic tone so they can focus on their music and captivate every audience.<br><br>\r\n\r\nEverything we create begins with a musician’s perspective, forging authentic, no-gimmick solutions that truly resonate onstage and beyond.<br><br>\r\n\r\nWhatever it takes – We relentlessly innovate, rethinking every aspect of acoustic amplification to shatter limitations and give musicians uncompromised, performance-ready solutions",
+        "website": "https://www.goacousticaudio.com",
+        "colors": {
+            "primary": "#fdd304",
+            "secondary": "#232323",
+            "header": "#fdd304"
+        },
+        "social": {
+            "facebook": "https://www.facebook.com/GoAcousticAudio/",
+            "instagram": "https://www.instagram.com/goacousticaudio/",
+            "youtube": "https://www.youtube.com/channel/UCzpQwyjTgFTnnh4kQntFxBA/playlists"
+        },
+        "gallery_urls": [
+            "https://dev.loothgroup.com/wp-content/uploads/2025/08/Nylon_Angle.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/08/Steel_Angle.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/11/Kit_Contents.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/08/Top2.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/08/Box1.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/08/GoAcoustic-Super_Steel_1.jpg.webp",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/11/Controls_Near.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/08/Box_Contents-1.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/08/Cable_Routing1.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/08/PreSonic_Small_Nylon.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/08/PreSonic_Medium_Face.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/08/Inside_Cables.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/08/Naleo_Inside2.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/08/Naleo_System_Top.jpg"
+        ],
+        "tag_url": "https://dev.loothgroup.com/archive/?_post_tag=go-acoustic-audio",
+        "forum_url": "/hub/?leaf=58199"
+    },
+    "blocks": [
+        {
+            "type": "brand-hero",
+            "id": "hero",
+            "show_hero_image": true
+        },
+        {
+            "type": "section-heading",
+            "id": "about-h",
+            "text": "About Go Acoustic Audio",
+            "level": "h2"
+        },
+        {
+            "type": "wysiwyg",
+            "id": "about",
+            "html": "<p>In the world of music, where each note carries the potential to inspire, master guitar maker Paul McGill encountered a frustrating dilemma. For over 40 years, he crafted exquisite guitars for icons like Earl Klugh and Chet Atkins, yet amplification technology often failed them, riddling performances with feedback and robbing them of authentic tone. Determined to solve this, Paul joined forces with Ben Shaw, a modern and vintage pro audio electronics expert, to create a solution by merging instrument-making mastery with innovative electronic design. That collaboration led to Go Acoustic Audio, founded in 2019, and its first revolutionary product soon followed.<br><br>\r\n\r\nTheir patent-pending transducer design wasn’t just an enhancement; it reshaped acoustic amplification. By 2020, the duo perfected the Saddle-Pickup transducer, drastically reducing feedback while preserving the natural tone every guitarist craves. Freed from the constraints of traditional systems, musicians could finally express themselves without fear of feedback. Word spread quickly, and within a couple of years, Go Acoustic Audio’s products were embraced by touring artists and high-end guitar builders worldwide, cementing the company as a leader in acoustic pickups.<br><br>\r\n\r\nThe real proof of their success shines through customers’ stories. Many discovered a newfound freedom on stage, hearing their instruments come alive in ways they’d only imagined. Repeat customers and brand advocates soon followed, celebrating how these pickups transformed their live sound.<br><br>\r\n\r\nWith a continued commitment to excellence and innovation, Go Acoustic Audio now pioneers solutions for a range of instruments, including ukuleles. Their focus on solving real-world challenges faced by dedicated musicians sets them apart. Choosing Go Acoustic Audio means investing in a future of unparalleled, authentic acoustic performance—one where artists can finally play and connect with audiences the way they’ve always intended.<br><br>\r\n\r\nGo Acoustic Audio exists to transform live guitar performance, freeing players from feedback and granting authentic tone so they can focus on their music and captivate every audience.<br><br>\r\n\r\nEverything we create begins with a musician’s perspective, forging authentic, no-gimmick solutions that truly resonate onstage and beyond.<br><br>\r\n\r\nWhatever it takes – We relentlessly innovate, rethinking every aspect of acoustic amplification to shatter limitations and give musicians uncompromised, performance-ready solutions</p>"
+        },
+        {
+            "type": "embed",
+            "id": "hero-yt",
+            "url": "https://youtu.be/xe7duwnl-fU?si=K8oDzzBWXrde3GLC",
+            "caption": "We design advanced acoustic instrument pickup systems that combine engineering precision with natural acoustic tone, giving players balance, clarity, and freedom on stage."
+        },
+        {
+            "type": "featured-products",
+            "id": "prods",
+            "heading": "Featured Products",
+            "author": 1503,
+            "items": [
+                {
+                    "title": "Polydrive Replacement System",
+                    "url": "https://dev.loothgroup.com/sponsor-product/polydrive-replacement-system/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/11/Kit_Contents-300x300.jpg"
+                },
+                {
+                    "title": "Sound Hole Mount System",
+                    "url": "https://dev.loothgroup.com/sponsor-product/sound-hole-mount-system/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/11/Controls_Near-300x300.jpg"
+                },
+                {
+                    "title": "Universal Side Mount System",
+                    "url": "https://dev.loothgroup.com/sponsor-product/57745-2/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/08/CCC1-F00_Top.jpg-300x300.webp"
+                },
+                {
+                    "title": "PreSonic",
+                    "url": "https://dev.loothgroup.com/sponsor-product/presonic/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/11/GoAcoustic-PreSonic_Small_Nylon_Edited.jpg-1-300x300.webp"
+                },
+                {
+                    "title": "ES Replacement System for Taylor Guitars",
+                    "url": "https://dev.loothgroup.com/sponsor-product/es-replacement-system-for-taylor-guitars/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/11/ScreenShot-2025-08-20-at-16.28.30-Safari@2x-300x136.jpg"
+                }
+            ]
+        },
+        {
+            "type": "recent-posts",
+            "id": "posts",
+            "heading": "Recent Posts",
+            "author": 1503,
+            "items": [
+                {
+                    "title": "Go Acoustic Audio: Our Design Philosophy",
+                    "url": "https://dev.loothgroup.com/sponsor-post/go-acoustic-audio-test-post/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/08/GoAcoustic-IMG_7666-Edited.jpg-300x300.webp",
+                    "date": "Aug 20, 2025",
+                    "excerpt": "Historically, acoustic guitar amplification has been a compromise between tone and feedback rejection. Studio microphones sound great, but they’re too feedback prone…"
+                }
+            ]
+        },
+        {
+            "type": "brand-gallery",
+            "id": "gallery",
+            "heading": "Image Gallery"
+        },
+        {
+            "type": "whos-talking",
+            "id": "talk"
+        },
+        {
+            "type": "contact-form",
+            "id": "contact"
+        }
+    ]
+}

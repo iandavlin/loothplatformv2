@@ -1,0 +1,475 @@
+/* post-footer — author card + 'Keep reading' related grid. Mirrors the
+   post-header's accent palette so the article reads as one piece top-to-
+   tail. Responsive: stacks on mobile, side-by-side on tablet+. */
+
+@layer block-shell {
+  .lg-post-footer {
+    padding: var(--lg-padding, 16px 24px 48px);
+    margin-block: var(--lg-margin-block, 48px 0);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+    color: var(--lg-color, var(--lg-charcoal, #1a1d1a));
+    font-family: var(--lg-font-family, var(--lg-font-sans));
+  }
+
+  /* End-of-article dotted divider — soft visual close. */
+  .lg-post-footer__end {
+    max-width: 720px;
+    margin: 24px auto 36px;
+    height: 6px;
+    position: relative;
+    background:
+      radial-gradient(circle 3px at  5% 50%, var(--lg-ink, #323532) 50%, transparent 51%),
+      radial-gradient(circle 3px at 35% 50%, var(--lg-ink, #323532) 50%, transparent 51%),
+      radial-gradient(circle 3px at 65% 50%, var(--lg-ink, #323532) 50%, transparent 51%),
+      radial-gradient(circle 3px at 95% 50%, var(--lg-ink, #323532) 50%, transparent 51%);
+    background-repeat: no-repeat;
+    opacity: 0.35;
+  }
+
+  /* ── Share row ──────────────────────────────────────────────── */
+  /* The post-footer is intentionally full-bleed so the related-posts grid
+     can stretch wider than the article column on big screens. The share
+     row should NOT — it belongs inside the article column. Same constraint
+     the author card uses elsewhere in this stylesheet. */
+  .lg-post-footer__share {
+    max-width: var(--lg-article-max);
+    margin: 0 auto 18px;
+    padding-inline: var(--lg-article-padding-inline);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-block: 14px;
+    border-top: 1px solid var(--lg-tags-border, #e7e3da);
+    border-bottom: 1px solid var(--lg-tags-border, #e7e3da);
+  }
+  .lg-post-footer__share-label {
+    font: 700 11px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--lg-amber-dark, #b8842b);
+    margin-right: 4px;
+  }
+  .lg-post-footer__share-btn {
+    appearance: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--lg-tags-border, #e7e3da);
+    background: transparent;
+    color: var(--lg-ink, #323532);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s;
+  }
+  .lg-post-footer__share-btn svg { width: 18px; height: 18px; display: block; }
+  .lg-post-footer__share-btn:hover {
+    background: var(--lg-amber, #ecb351);
+    color: var(--lg-ink, #323532);
+    border-color: var(--lg-amber, #ecb351);
+    transform: translateY(-1px);
+  }
+  .lg-post-footer__share-btn--copy.is-copied {
+    background: var(--lg-sage, #87986a);
+    color: #fff;
+    border-color: var(--lg-sage, #87986a);
+  }
+
+  /* ── Author card ────────────────────────────────────────────── */
+  .lg-post-footer__author {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: var(--lg-article-max);   /* lock to the article body width */
+    margin: 0 auto 48px;
+    padding: 28px;
+    background: var(--lg-paper, #f7f5f2);
+    border: 1px solid var(--lg-tags-border, #e7e3da);
+    border-radius: 12px;
+  }
+  /* Top inline row: avatar | (pub + name stacked) | socials */
+  .lg-post-footer__author-head {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .lg-post-footer__id {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  /* Bio spans the full card width below the head row. */
+  .lg-post-footer__author-body {
+    width: 100%;
+  }
+
+  /* Pencil on the author card — visible only to admins / the post author
+     (CSS gate via body.lg-can-edit). Opens a textarea modal that PUTs to
+     the user-meta REST endpoint for `author_about`. */
+  .lg-post-footer__author-edit {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    appearance: none;
+    border: 0;
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--lg-ink, #323532);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 150ms ease, background 150ms ease;
+  }
+  .lg-post-footer__author-edit svg { width: 14px; height: 14px; }
+  body.lg-can-edit .lg-post-footer__author:hover .lg-post-footer__author-edit,
+  body.lg-can-edit .lg-post-footer__author-edit:focus,
+  body.lg-can-edit .lg-post-footer__author-edit:hover {
+    opacity: 1;
+    visibility: visible;
+  }
+  .lg-post-footer__author-edit:hover { background: var(--lg-amber, #ecb351); color: var(--lg-ink, #323532); }
+  .lg-post-footer__avatar {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #fff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.10);
+  }
+  .lg-post-footer__pub {
+    font: 600 11px/1 var(--lg-font-sans);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--lg-link-color, var(--lg-amber, #ecb351));
+    margin-bottom: 8px;
+  }
+  .lg-post-footer__name {
+    margin: 0 0 4px;
+    font: 700 22px/1.2 var(--lg-font-sans);
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+  .lg-post-footer__bio {
+    margin: 0;
+    font: 400 15px/1.55 var(--lg-font-serif);
+    color: #4a4f4a;
+  }
+  .lg-post-footer__cta {
+    display: inline-block;
+    margin-top: 12px;
+    font: 600 13px/1 var(--lg-font-sans);
+    color: var(--lg-ink, #323532);
+    border-bottom: 1px solid var(--lg-ink, #323532);
+    text-decoration: none;
+    padding-bottom: 2px;
+  }
+  .lg-post-footer__cta:hover {
+    color: var(--lg-link-color, var(--lg-amber, #ecb351));
+    border-bottom-color: var(--lg-link-color, var(--lg-amber, #ecb351));
+  }
+  .lg-post-footer__links {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .lg-post-footer__links a {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--lg-ink, #323532);
+    color: #fff;
+    text-decoration: none;
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .lg-post-footer__links a:hover {
+    background: var(--lg-link-color, var(--lg-amber, #ecb351));
+    color: var(--lg-ink, #323532);
+  }
+  .lg-post-footer__links svg { width: 18px; height: 18px; }
+
+  /* ── Related grid ───────────────────────────────────────────── */
+  .lg-post-footer__related-h {
+    max-width: var(--lg-article-max);
+    margin: 0 auto 18px;
+    font: 600 11px/1 var(--lg-font-sans);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #6b6f6b;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .lg-post-footer__related-h::before,
+  .lg-post-footer__related-h::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--lg-tags-border, #ddd6c4);
+  }
+
+  /* Carousel shell — track is scroll-snap, arrows scroll one card at a time. */
+  .lg-post-footer__carousel {
+    position: relative;
+    max-width: var(--lg-article-max);
+    margin: 0 auto;
+  }
+  .lg-post-footer__related-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(260px, 1fr);
+    gap: 20px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    padding-block: 4px;          /* room for card hover lift */
+    padding-inline: 4px;
+  }
+  .lg-post-footer__related-grid::-webkit-scrollbar { display: none; }
+  .lg-post-footer__card {
+    display: block;
+    background: #fff;
+    border: 1px solid var(--lg-tags-border, #ece8df);
+    border-radius: 10px;
+    text-decoration: none;
+    color: inherit;
+    overflow: hidden;
+    transition: transform 200ms ease, box-shadow 200ms ease;
+    scroll-snap-align: start;
+  }
+  .lg-post-footer__card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.08);
+  }
+  .lg-post-footer__card-img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    display: block;
+    background: #efece6;
+  }
+  .lg-post-footer__card-body { padding: 14px 16px 18px; }
+  .lg-post-footer__card-author {
+    font: 600 11px/1 var(--lg-font-sans);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--lg-sage, #87986a);
+    margin-bottom: 8px;
+  }
+  .lg-post-footer__card-title {
+    margin: 0;
+    font: 700 17px/1.25 var(--lg-font-serif);
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+
+  /* Carousel arrow buttons — sit just inside the track edges, hidden when
+     there's nothing to scroll (track JS toggles aria-disabled). */
+  .lg-post-footer__carousel-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    border: 1px solid var(--lg-tags-border, #ece8df);
+    background: #fff;
+    color: var(--lg-charcoal, #1a1d1a);
+    font: 700 22px/1 var(--lg-font-serif);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    transition: opacity 150ms ease, transform 200ms ease;
+  }
+  .lg-post-footer__carousel-btn:hover { transform: translateY(-50%) scale(1.05); }
+  .lg-post-footer__carousel-btn--prev { left: -8px; }
+  .lg-post-footer__carousel-btn--next { right: -8px; }
+  /* lg-front.js toggles is-at-start/is-at-end on the wrap as the track scrolls. */
+  .lg-post-footer__carousel.is-at-start .lg-post-footer__carousel-btn--prev,
+  .lg-post-footer__carousel.is-at-end   .lg-post-footer__carousel-btn--next {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* ── Comments ───────────────────────────────────────────────── */
+  .lg-post-footer__comments {
+    max-width: var(--lg-article-max);
+    margin: 56px auto 0;
+  }
+  .lg-comments__title {
+    font: 600 11px/1 var(--lg-font-sans);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #6b6f6b;
+    text-align: center;
+    margin: 0 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .lg-comments__title::before,
+  .lg-comments__title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--lg-tags-border, #ddd6c4);
+  }
+
+  /* Form */
+  .lg-comment-form { margin-bottom: 32px; }
+  .lg-comment-form__reply-title { display: none; }
+  .lg-comment-form__field { margin: 0 0 12px; }
+  .lg-comment-form__field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 96px;
+    padding: 12px 14px;
+    border: 1px solid var(--lg-tags-border, #ece8df);
+    border-radius: 8px;
+    font: 400 15px/1.5 var(--lg-font-sans);
+    color: var(--lg-charcoal, #1a1d1a);
+    background: #fff;
+    resize: vertical;
+  }
+  .lg-comment-form__field textarea:focus {
+    outline: none;
+    border-color: var(--lg-sage, #87986a);
+    box-shadow: 0 0 0 3px rgba(135, 152, 106, 0.18);
+  }
+  .lg-comment-form__submit,
+  .lg-comments .submit {
+    appearance: none;
+    border: 0;
+    background: var(--lg-charcoal, #1a1d1a);
+    color: #fff;
+    font: 600 13px/1 var(--lg-font-sans);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 12px 22px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: opacity 150ms ease;
+  }
+  .lg-comment-form__submit:hover,
+  .lg-comments .submit:hover { opacity: 0.88; }
+
+  /* Comment list */
+  .lg-comments__list,
+  .lg-comments__list .children {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .lg-comments__list .children {
+    margin-left: 56px;
+    padding-left: 16px;
+    border-left: 2px solid var(--lg-tags-border, #ece8df);
+  }
+  .lg-comment { margin: 0 0 20px; }
+  .lg-comment__body {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  .lg-comment__avatar img {
+    width: 48px;
+    height: 48px;
+    border-radius: 999px;
+    display: block;
+  }
+  .lg-comment__main { min-width: 0; }
+  .lg-comment__meta {
+    font: 400 13px/1.4 var(--lg-font-sans);
+    color: #6b6f6b;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .lg-comment__author {
+    font-weight: 700;
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+  .lg-comment__author a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .lg-comment__author a:hover { text-decoration: underline; }
+  .lg-comment__sep { opacity: 0.5; }
+  .lg-comment__pending {
+    font-style: italic;
+    color: var(--lg-amber, #c08a2f);
+    margin-left: 6px;
+  }
+  .lg-comment__content {
+    font: 400 15px/1.55 var(--lg-font-sans);
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+  .lg-comment__content p { margin: 0 0 8px; }
+  .lg-comment__content p:last-child { margin-bottom: 0; }
+  .lg-comment__reply { margin-top: 6px; }
+  .lg-comment__reply a {
+    font: 600 12px/1 var(--lg-font-sans);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--lg-sage, #87986a);
+    text-decoration: none;
+  }
+  .lg-comment__reply a:hover { text-decoration: underline; }
+  .lg-comments__closed {
+    font: 400 14px/1.4 var(--lg-font-sans);
+    color: #6b6f6b;
+    text-align: center;
+    margin-top: 16px;
+  }
+
+  /* ── Responsive breakpoints ─────────────────────────────────── */
+
+  /* Mobile-default: tighter spacing, smaller avatar, socials wrap below */
+  @media (max-width: 759px) {
+    .lg-post-footer__author { gap: 14px; padding: 18px; }
+    .lg-post-footer__author-head { flex-wrap: wrap; gap: 14px; }
+    .lg-post-footer__avatar { width: 64px; height: 64px; }
+    .lg-post-footer__name { font-size: 18px; }
+    .lg-post-footer__links { width: 100%; }
+  }
+
+  /* Tablet+ : wider carousel cards */
+  @media (min-width: 760px) {
+    .lg-post-footer__related-grid { grid-auto-columns: minmax(300px, calc((100% - 40px) / 3)); }
+  }
+
+  /* Laptop+ : roomier author card padding, bigger card images */
+  @media (min-width: 1024px) {
+    .lg-post-footer__author { padding: 32px 36px; }
+    .lg-post-footer__card-img { height: 180px; }
+  }
+
+  /* Large monitors : slightly wider canvas, larger title */
+  @media (min-width: 1440px) {
+    .lg-post-footer__name { font-size: 24px; }
+    .lg-post-footer__card-title { font-size: 18px; }
+    .lg-post-footer__card-img { height: 200px; }
+  }
+}

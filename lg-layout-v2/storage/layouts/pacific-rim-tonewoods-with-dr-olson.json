@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "_meta": {
+    "source": "https://youtu.be/n7xo0vuxmDI — Looth Group Live, 2026-04-28",
+    "translated_at": "2026-06-15",
+    "notes": "post-type-videos, looth-lite. Embed gated; chapter anchors carry lg-ts-link (engine scrubs same-video ?t= to plain text for non-members). No transcript supplied. Featured image = pool attachment 69624 (PRT Dr Olson + Eric Warner, 768x768). Links enriched via WebSearch: PRT sonic-grading page, Fretboard Journal feature."
+  },
+  "blocks": [
+    {
+      "type": "post-header",
+      "tagline": "Why can two visually identical sets of Sitka spruce sound markedly different? PRT's Dr. David Olson and Eric Warner on sonic grading — density, stiffness, damping — and the listening studies behind it.",
+      "show_read_time": true,
+      "variant": "variant-1"
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<p>Aired on <em>Looth Group Live</em>, Tuesday, April 28th, 2026.</p><p>Dr. David Olson and Eric Warner of Pacific Rim Tonewoods join Looth Group Live to examine a familiar but not fully understood phenomenon: why two visually similar sets of Sitka spruce can exhibit markedly different acoustic responses. What material properties are driving those differences?</p><p>Pacific Rim Tonewoods, based in Washington, supplies tonewood to a wide range of contemporary builders. Dr. Olson brings a distinctive interdisciplinary background to the discussion: Director of Research at PRT, otologic surgeon, former forest ecologist, and co-author of acoustics research conducted in TU Dresden&rsquo;s anechoic chamber.</p><p>Together, David and Eric explore sonic grading &mdash; what it quantifies, how measurements are taken, and how well those metrics correlate with the perceptual evaluations luthiers have relied on at the bench.</p>"
+    },
+    {
+      "type": "embed",
+      "url": "https://www.youtube.com/watch?v=n7xo0vuxmDI",
+      "gated_tier": "looth-lite",
+      "caption": "Pacific Rim Tonewoods with Dr. Olson."
+    },
+    {
+      "type": "section-heading",
+      "level": "h3",
+      "text": "Chapters"
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=0s\"><strong>00:00:00</strong> &mdash; Introduction: Pacific Rim Tonewoods &amp; Sonic Grading Overview</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=167s\"><strong>00:02:47</strong> &mdash; Background: Forest Ecology, Acoustics Research &amp; PRT Collaboration</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=312s\"><strong>00:05:12</strong> &mdash; Milling Practices &amp; Why Quartering Matters</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=464s\"><strong>00:07:44</strong> &mdash; Inherent Variability in Wood: Species Tendencies vs Realities</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=682s\"><strong>00:11:22</strong> &mdash; What Gets Measured: Density, Stiffness &amp; Damping Explained</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=901s\"><strong>00:15:01</strong> &mdash; Why Damping Matters: Moisture, Sustain &amp; the Bill Collings Observation</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=1031s\"><strong>00:17:11</strong> &mdash; How the Ear Hears: FFT, the Cochlea &amp; Why Machines Can't Judge Guitars</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=1175s\"><strong>00:19:35</strong> &mdash; The Taylor Guitar Study: Building Test Guitars with Known Properties</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=1276s\"><strong>00:21:16</strong> &mdash; Player Tests at Taylor &amp; Listening Tests in Dresden</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=1448s\"><strong>00:24:08</strong> &mdash; Results: Low Density &amp; Low Stiffness Consistently Preferred</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=1718s\"><strong>00:28:38</strong> &mdash; Q&amp;A: Listener Expertise, Playing Style &amp; Guitar Optimization</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=2073s\"><strong>00:34:33</strong> &mdash; The Q Factor Study: High Q vs Low Q Tops</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=2340s\"><strong>00:39:00</strong> &mdash; Acoustic Rating Protocol &amp; How Builders Can Use This Data</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=2558s\"><strong>00:42:38</strong> &mdash; Q&amp;A: Relationship Between Q and Density, Measuring Challenges</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=3104s\"><strong>00:51:44</strong> &mdash; Lutz Spruce Genetics, Hybrid Species &amp; Sound Radiation Coefficient</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=3369s\"><strong>00:56:09</strong> &mdash; Q&amp;A: Surface Prep Effects on Q, Book-Matched Sets &amp; Top Deflection</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/n7xo0vuxmDI?t=3668s\"><strong>01:01:08</strong> &mdash; Closing Thanks</a></p>"
+    },
+    {
+      "type": "callout",
+      "variant": "links",
+      "title": "Pacific Rim Tonewoods · Guests",
+      "items": [
+        { "icon": "globe", "label": "pacificrimtonewoods.com", "url": "https://pacificrimtonewoods.com/", "description": "Sonically-graded tonewood for guitar builders — Skagit Valley, WA" },
+        { "icon": "instagram", "label": "pacificrimtonewoods", "url": "https://www.instagram.com/pacificrimtonewoods/" },
+        { "icon": "link", "label": "Understanding Sonic Grading", "url": "https://pacificrimtonewoods.com/pages/sonic-grading", "description": "PRT's primer on density, stiffness & damping (Q)" }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "data",
+      "title": "Further reading",
+      "items": [
+        { "icon": "globe", "label": "Fretboard Journal: Sound, Spruce & Science", "url": "https://www.fretboardjournal.com/features/sound-spruce-and-science-measuring-the-variables-of-guitar-tone-with-pacific-rim-tonewoods/", "description": "Long-form feature on PRT's tone-measurement research" },
+        { "icon": "globe", "label": "PRT sonically-graded tonewoods", "url": "https://pacificrimtonewoods.com/pages/sonic-graded-tonewoods", "description": "How the grades map to measured acoustic properties" }
+      ]
+    },
+    {
+      "type": "post-footer",
+      "show_author": true,
+      "show_related": true,
+      "show_comments": true,
+      "show_share": true
+    }
+  ]
+}

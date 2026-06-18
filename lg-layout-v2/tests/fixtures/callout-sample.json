@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "_meta": { "title": "Callout block — every variant", "post_id": 0 },
+  "blocks": [
+    {
+      "id": "b_links",
+      "type": "callout",
+      "variant": "links",
+      "title": "Reach Tim",
+      "items": [
+        { "icon": "globe",     "label": "timfrickguitars.com",   "url": "https://timfrickguitars.com/" },
+        { "icon": "instagram", "label": "@timfrickguitars",      "url": "https://www.instagram.com/timfrickguitars/", "description": "Instagram — shop tours & build progress" },
+        { "icon": "email",     "label": "timfrick9000@gmail.com","url": "mailto:timfrick9000@gmail.com",               "description": "New construction or repair inquiries" }
+      ]
+    },
+    {
+      "id": "b_files",
+      "type": "callout",
+      "variant": "files",
+      "title": "Templates & downloads",
+      "items": [
+        { "icon": "file-pdf", "label": "Fritz rosette template",  "url": "/files/fritz-rosette-template.pdf", "ext": "PDF", "size": "412 KB" },
+        { "icon": "file",     "label": "Dovetail sled, CNC-ready","url": "/files/dovetail-sled.dxf",          "ext": "DXF", "size": "88 KB",  "description": "Imperial / fractional" },
+        { "icon": "file-zip", "label": "2026 jig pack — all files","url": "/files/jig-pack-2026.zip",         "ext": "ZIP", "size": "14 MB" }
+      ]
+    },
+    {
+      "id": "b_people",
+      "type": "callout",
+      "variant": "people",
+      "title": "Guests in this piece",
+      "items": [
+        { "label": "Tim Frick",  "url": "https://timfrickguitars.com/", "description": "Frick Guitars — Portland, OR", "initials": "TF" },
+        { "label": "Frank Ford", "url": "https://gryphonstrings.com/",  "description": "Gryphon Stringed Instruments / Frets.com", "initials": "FF" }
+      ]
+    },
+    {
+      "id": "b_data",
+      "type": "callout",
+      "variant": "data",
+      "title": "References",
+      "items": [
+        { "icon": "link",  "label": "Dan Erlewine — Acoustic Guitar profile", "url": "https://www.acousticguitar.com/dan-erlewine-after-50-years-at-the-forefront/" },
+        { "icon": "globe", "label": "StewMac — tools & supplies",              "url": "https://www.stewmac.com/" }
+      ]
+    },
+    {
+      "id": "b_note",
+      "type": "callout",
+      "variant": "note",
+      "title": "Editor's note",
+      "body": "<p>This article was edited from a longer Zoom conversation. Where Tim referenced a specific tool or supplier, we've linked the most up-to-date catalog entry.</p>"
+    },
+    {
+      "id": "b_quote",
+      "type": "callout",
+      "variant": "quote",
+      "body": "<p>You can fake a relic finish in an afternoon. A real one takes 60 years.</p>",
+      "attribution": "Dan Erlewine"
+    }
+  ]
+}

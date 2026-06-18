@@ -1,0 +1,124 @@
+/* forums.css residual @media(max-width:640px) — CARD rules (removal candidates)
+   ===================================================================
+   HANDOFF: bb-mirror/reactions-surface lane -> Buck (mobile-hub.css owner)
+   2026-06-06.  Post-cut cleanup, NOT blocking.
+
+   Goal: forums.css = desktop-only, mobile-hub.css = mobile-only, no override-war.
+   These are EVERY ≤640px rule in forums.css that touches a card/reply/reaction
+   selector.  They style the OLD class system (feed-card__*, reply-stub__*,
+   lg-card-actions/lg-act, lg-fb-*, lg-react-*); the live markup now ALSO carries
+   the new fc-*/fcr-* classes that YOUR mobile-hub.css styles — so today both apply
+   at ≤640 (the override-war).
+
+   ASK: confirm mobile-hub.css's fc-*/fcr-* rules reproduce anything REAL here
+   (map old->new), fold whatever's missing, then ping me and I'll DELETE these from
+   forums.css. Nothing deleted yet.
+
+   Line numbers are the @media block's start line in forums.css (current tree).
+*/
+
+/* ---- 47 CARD rules ---- */
+
+/*@1677*/ .feed-card { padding: var(--s3); }
+/*@1677*/ .feed-card__title { font-size: 15px; }
+/*@1760*/ .feed-card__header { flex-direction: column; }
+/*@1760*/ .feed-card__cover { width: 100%; }
+/*@2817*/ .feed-card--content .feed-card__cover { order: 0; width: 100%; }
+/*@3043*/ /* keep the thumb inline (don't stack) in compact */ .hub-compact .feed-card:not(.is-verbose) .feed-card__header { flex-direction: row; }
+/*@3043*/ .hub-compact .feed-card:not(.is-verbose) .feed-card__cover { width: 48px; }
+/*@3292*/ .feed-page .feed-card { border-radius:16px;overflow:hidden;border:1px solid var(--lg-line,#e3ddd0);box-shadow:0 1px 2px rgba(26,29,26,.04),0 10px 22px -14px rgba(26,29,26,.30);transition:transform .12s ease,box-shadow .15s ease }
+/*@3292*/ .feed-page .feed-card:active { transform:scale(.992) }
+/*@3292*/ .feed-page .feed-card__cover-img { aspect-ratio:4/5;max-height:440px;width:100%;object-fit:cover;display:block }
+/*@3292*/ .feed-page .feed-card__kind-badge { margin-left:0;font-size:10px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:999px }
+/*@3292*/ .feed-page .feed-card { min-width:0;max-width:100% }
+/*@3292*/ .feed-page .feed-card__meta-top { min-width:0 }
+/*@3292*/ .feed-page .feed-card__forum-ctx { min-width:0;flex:0 1 auto }
+/*@3292*/ .feed-page .feed-card__replies { grid-template-columns:minmax(0,1fr) }
+/*@3292*/ .feed-page .feed-card__replies>* { min-width:0;max-width:100% }
+/*@3292*/ .feed-page .reply-stub { min-width:0 }
+/*@3292*/ .feed-page .reply-stub__head { min-width:0 }
+/*@3292*/ .feed-page .reply-stub__excerpt,.feed-page .reply-stub__body { min-width:0;overflow-wrap:anywhere }
+/*@3292*/ .feed-page .reply-stub__author { min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+/*@3292*/ .feed-page .feed-card__title { font-size:19px;line-height:1.22 }
+/*@3292*/ .feed-page .feed-card--content .feed-card__title { font-size:20px }
+/*@3292*/ .feed-page .feed-card__read-more { font-weight:600;color:var(--lg-sage-d,var(--lguser-accent,#6b7c52)) }
+/*@3292*/ .feed-page .feed-card__meta-top { padding:11px 13px 0;align-items:center }
+/*@3292*/ .feed-page .feed-card__forum-ctx { font-size:11px;letter-spacing:.02em;color:var(--lg-mute,var(--lguser-mute,#6b6f6b));overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+/*@3292*/ .feed-page .feed-card__ctx-forum { color:var(--lg-ink,var(--lguser-ink,#323532));font-weight:600 }
+/*@3292*/ .feed-page .feed-card__time { font-size:11px;color:var(--lg-mute,var(--lguser-mute,#6b6f6b)) }
+/*@3292*/ .feed-page .feed-card__header-body { padding:8px 13px 13px }
+/*@3292*/ .feed-page .feed-card__op-excerpt { font-size:14.5px;line-height:1.5;color:var(--lg-ink,var(--lguser-ink,#323532)) }
+/*@3292*/ .feed-page .feed-card__replies { margin:0 13px 13px;padding-top:11px;gap:8px;border-top:1px solid var(--lg-line,#e3ddd0) }
+/*@3292*/ .feed-page .reply-stub { background:var(--lg-sage-tint,#eef2e3);border-radius:12px;padding:9px 11px }
+/*@3292*/ .feed-page .feed-card__replies .reply-stub ~ .reply-stub { display:none }
+/*@3292*/ .feed-page .reply-stub__reply { display:none }
+/*@3292*/ .feed-page .reply-stub__head { gap:7px;align-items:center }
+/*@3292*/ .feed-page .reply-stub__author { font-size:12.5px;font-weight:600;color:var(--lg-ink,var(--lguser-ink,#323532)) }
+/*@3292*/ .feed-page .reply-stub__time { font-size:11px;color:var(--lg-mute,var(--lguser-mute,#6b6f6b)) }
+/*@3292*/ .feed-page .avatar-init { width:22px;height:22px;font-size:11px }
+/*@3292*/ .feed-page .reply-stub__excerpt,.feed-page .reply-stub__body { font-size:13px;line-height:1.45;color:var(--lg-ink,var(--lguser-ink,#323532));display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden }
+/*@3292*/ .feed-page .feed-card__expand { font-size:13px;font-weight:600;color:var(--lg-sage-d,var(--lguser-accent,#6b7c52)) }
+/*@3292*/ .feed-page .lg-card-actions { display:flex;gap:18px;padding:8px 13px 12px;color:var(--lguser-mute,#6b6f6b);font:600 12.5px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif) }
+/*@3292*/ .feed-page .lg-card-actions .lg-act { display:inline-flex;align-items:center;gap:5px;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;cursor:pointer }
+/*@3292*/ .feed-page .lg-card-actions .ico { width:16px;height:16px;flex:0 0 auto }
+/*@3292*/ .feed-page .lg-card-actions .lg-act-like.is-on { color:#c66845 }
+/*@3292*/ .feed-page .lg-card-actions .lg-act-like.is-on .ico { fill:#c66845 }
+/*@3292*/ .feed-page .feed-card[data-lg-card] .feed-card__read-more,.feed-page .feed-card[data-lg-card] .feed-card__reply-cta--inline { display:none }
+/*@3292*/ .feed-page .feed-sort-bar > .lg-newpost { order:3;display:inline-flex;align-items:center;gap:5px;background:var(--lguser-accent-d,#52613d);color:#fff;border:0;border-radius:999px;padding:7px 13px;font:700 13px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);white-space:nowrap;margin:0 }
+/*@3292*/ .feed-page .feed-card__replies-full .replies-sort { display:none }
+
+/* ---- 54 NON-card ≤640 rules also in forums.css (FYI; end-goal is desktop-only, but not in this 'card block' pass) ---- */
+/*@1011*/ .page { … }
+/*@1011*/ h1 { … }
+/*@1011*/ h2 { … }
+/*@1011*/ .bb-mirror__page-title { … }
+/*@1011*/ .forum-grid { … }
+/*@1011*/ .topic { … }
+/*@1011*/ .topic__monogram { … }
+/*@1011*/ .topic__stats { … }
+/*@1011*/ .topic__stats strong { … }
+/*@1011*/ .topic__stats strong::after { … }
+/*@1011*/ .post { … }
+/*@1011*/ .post__avatar { … }
+/*@1011*/ .post__time { … }
+/*@1011*/ /* Mobile thread depth cap: collapse depth 3+ */ .replies-tree .replies-tree .replies-tree { … }
+/*@1011*/ .replies-tree .replies-tree .replies-tree .replies-tree { … }
+/*@2074*/ .forum-header__new-post { … }
+/*@2081*/ .forum-header__body { … }
+/*@2081*/ .forum-header__title { … }
+/*@3292*/ .feed-page .forum-header { … }
+/*@3292*/ .feed-page .forum-header--has-image { … }
+/*@3292*/ .feed-page .forum-header--explicit-image .forum-header__bg { … }
+/*@3292*/ .feed-page .forum-header::after { … }
+/*@3292*/ .feed-page .forum-header__body { … }
+/*@3292*/ .feed-page .forum-header__title { … }
+/*@3292*/ .feed-page .forum-header__label { … }
+/*@3292*/ .feed-page .lg-hub-tagline { … }
+/*@3292*/ .feed-page .feed { … }
+/*@3292*/ .feed-page .feed { … }
+/*@3292*/ .feed-page .feed-sort-bar { … }
+/*@3292*/ .feed-page .feed-sort-bar > a { … }
+/*@3292*/ .feed-page .feed-sort-bar > a.active { … }
+/*@3292*/ .feed-page .feed-sort-bar > .lg-filters-chip { … }
+/*@3292*/ .feed-page .feed-sort-bar .feed-toolbar-search { … }
+/*@3292*/ .feed-page .forum-header__new-post { … }
+/*@3292*/ #site-header .lg-chrome__hamburger,#site-header .lg-chrome__logo,#site-header .lg-chrome__aside { … }
+/*@3292*/ #site-header .lg-chrome__inner { … }
+/*@3292*/ #site-header.lg-chrome { … }
+/*@3292*/ #site-header.lg-chrome.lg-chrome--tuck { … }
+/*@3292*/ .lg-hub-search { … }
+/*@3292*/ .lg-hub-search__ico { … }
+/*@3292*/ .lg-hub-search input { … }
+/*@3292*/ .lg-hub-search input::placeholder { … }
+/*@3292*/ .lg-hub-search input::-webkit-search-cancel-button { … }
+/*@3292*/ .lg-hub-search__panel { … }
+/*@3292*/ .lg-hub-search__panel.is-open { … }
+/*@3292*/ .lg-hub-search__item { … }
+/*@3292*/ .lg-hub-search__item:active { … }
+/*@3292*/ .lg-hub-search__k { … }
+/*@3292*/ .lg-hub-search__t { … }
+/*@3292*/ .lg-hub-search__note { … }
+/*@3292*/ .feed-page .forum-header { … }
+/*@3298*/ .hub-rail__row--empty { … }
+/*@3305*/ .feed-sort-bar { … }
+/*@3305*/ .feed-view-toggles { … }

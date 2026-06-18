@@ -1,0 +1,18 @@
+[Unit]
+Description=Refresh forums.person identity/visibility cache from profile-app (discussion + master switch)
+# The reconcile timer only touches persons whose POSTS changed; a member who
+# renames themselves or flips a privacy dial would otherwise stay stale on
+# their old posts + in hub search. This is the convergence pass for that
+# (visibility refactor, Ian 6/12). Idempotent; ~seconds for ~500 rows.
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=bb-mirror
+# Dev only: the cookie gate fronts the loopback /profile-api call; the env
+# file carries LG_LOOTHDEV_GATE_TOKEN. Absent on live (no gate) — the '-'
+# makes it optional.
+EnvironmentFile=-/etc/lg-loothdev-gate.env
+ExecStart=/usr/bin/php /srv/bb-mirror/bin/backfill-profile-visibility.php
+StandardOutput=journal
+StandardError=journal

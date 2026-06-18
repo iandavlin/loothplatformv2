@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guitardle</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Menu dropdown — outside game-wrap so overflow:hidden doesn't clip it -->
+    <ul class="menu-dropdown" id="menu-dropdown" aria-label="Site navigation"></ul>
+
+    <!-- Stats overlay -->
+    <div class="overlay-backdrop" id="overlay-stats" style="display:none" role="dialog" aria-modal="true" aria-labelledby="stats-title">
+        <div class="overlay-panel">
+            <h2 class="overlay-title" id="stats-title">Your Stats</h2>
+            <div class="stats-tiles">
+                <div class="stats-tile">
+                    <span class="stats-number" id="stat-played">0</span>
+                    <span class="stats-label">Played</span>
+                </div>
+                <div class="stats-tile">
+                    <span class="stats-number" id="stat-winrate">0%</span>
+                    <span class="stats-label">Win rate</span>
+                </div>
+                <div class="stats-tile">
+                    <span class="stats-number" id="stat-streak">0</span>
+                    <span class="stats-label">Current streak</span>
+                </div>
+                <div class="stats-tile">
+                    <span class="stats-number" id="stat-best">0</span>
+                    <span class="stats-label">Longest streak</span>
+                </div>
+            </div>
+            <h3 class="overlay-subheading stats-dist-heading">Score distribution</h3>
+            <div class="stats-dist" id="stats-dist">
+                <div class="dist-row">
+                    <span class="dist-label">1–4</span>
+                    <div class="dist-bar-wrap"><div class="dist-bar" id="dist-bar-1-4" style="background:#7EBF1D"><span class="dist-count">0</span></div></div>
+                </div>
+                <div class="dist-row">
+                    <span class="dist-label">5–7</span>
+                    <div class="dist-bar-wrap"><div class="dist-bar" id="dist-bar-5-7" style="background:#E8D633"><span class="dist-count dist-count-dark">0</span></div></div>
+                </div>
+                <div class="dist-row">
+                    <span class="dist-label">8–9</span>
+                    <div class="dist-bar-wrap"><div class="dist-bar" id="dist-bar-8-9" style="background:#DD8F33"><span class="dist-count">0</span></div></div>
+                </div>
+                <div class="dist-row">
+                    <span class="dist-label">10+</span>
+                    <div class="dist-bar-wrap"><div class="dist-bar" id="dist-bar-10" style="background:#D7523F"><span class="dist-count">0</span></div></div>
+                </div>
+            </div>
+            <button class="btn-overlay-close" type="button" id="btn-stats-close">Done</button>
+        </div>
+    </div>
+
+    <!-- Instructions overlay -->
+    <div class="overlay-backdrop" id="overlay-instructions" style="display:none" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
+        <div class="overlay-panel">
+            <h2 class="overlay-title" id="overlay-title">How to Play</h2>
+            <ul class="overlay-rules">
+                <li>Consonants are free — click to reveal</li>
+                <li>Vowels cost 2 moves — click once to unlock, again to place</li>
+                <li>Click "Guess the Phrase" at any time — one attempt only</li>
+                <li>Lower score is better</li>
+            </ul>
+            <h3 class="overlay-subheading">About the Phrases</h3>
+            <p class="overlay-body">Phrases cover a wide range of guitar world topics — models, brands, parts, tonewoods, hardware, finishes, and accessories. You may also find some well-known players (but only those associated with specific instruments), as well as luthier tools and processes. Most are accessible even if you're not a builder.</p>
+            <p class="overlay-note">Where British and US spelling differs, we use US spelling.</p>
+            <button class="btn-overlay-close" type="button" id="btn-overlay-close">Got it</button>
+        </div>
+    </div>
+
+    <div class="game-wrap">
+
+        <!-- Slim menu bar above the game header -->
+        <nav class="menu-bar" aria-label="Menu">
+            <div class="menu-bar-inner">
+                <button class="menu-icon-btn" id="btn-menu" aria-label="Open menu" aria-expanded="false">
+                    <svg viewBox="0 0 25 25" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;">
+                        <g transform="matrix(1,0,0,1,-18392.7,-1586.35)">
+                            <g transform="matrix(0.047573,0,0,0.047573,18404.8,1598.53)">
+                                <g transform="matrix(1,0,0,1,-256,-256)">
+                                    <g transform="matrix(32,0,0,32,0,0)">
+                                        <path d="M2.75,12.25L13.25,12.25M2.75,8.25L13.25,8.25M2.75,4.25L13.25,4.25" style="fill:none;fill-rule:nonzero;stroke:currentColor;stroke-width:1.5px;"/>
+                                    </g>
+                                </g>
+                            </g>
+                        </g>
+                    </svg>
+                </button>
+                <div class="menu-icons-right">
+                    <button class="menu-icon-btn" id="btn-stats" aria-label="Stats">
+                        <svg viewBox="0 0 25 25" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+                            <g transform="matrix(1,0,0,1,-18738.4,-1586.35)">
+                                <g transform="matrix(0.047573,0,0,0.047573,18750.6,1598.53)">
+                                    <g transform="matrix(1,0,0,1,-256,-256)">
+                                        <g transform="matrix(32,0,0,32,0,0)">
+                                            <path d="M4,11L2,11L2,14L4,14L4,11ZM9,7L7,7L7,14L9,14L9,7ZM14,2L14,14L12,14L12,2L14,2ZM12,1C11.451,1 11,1.451 11,2L11,14C11,14.549 11.451,15 12,15L14,15C14.549,15 15,14.549 15,14L15,2C15,1.451 14.549,1 14,1L12,1ZM6,7C6,6.451 6.451,6 7,6L9,6C9.549,6 10,6.451 10,7L10,14C10,14.549 9.549,15 9,15L7,15C6.451,15 6,14.549 6,14L6,7ZM1,11C1,10.451 1.451,10 2,10L4,10C4.549,10 5,10.451 5,11L5,14C5,14.549 4.549,15 4,15L2,15C1.451,15 1,14.549 1,14L1,11Z" style="fill:currentColor;fill-rule:nonzero;"/>
+                                        </g>
+                                    </g>
+                                </g>
+                            </g>
+                        </svg>
+                    </button>
+                    <button class="menu-icon-btn" id="btn-help" aria-label="How to play">
+                        <svg viewBox="0 0 25 25" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+                            <g transform="matrix(1,0,0,1,-18771.3,-1586.35)">
+                                <g transform="matrix(0.047573,0,0,0.047573,18783.5,1598.53)">
+                                    <g transform="matrix(1,0,0,1,-256,-256)">
+                                        <g transform="matrix(32,0,0,32,0,0)">
+                                            <path d="M4.475,5.458C4.191,5.458 3.961,5.221 4.005,4.941C4.28,3.24 5.576,2 7.825,2C10.075,2 11.592,3.36 11.592,5.215C11.592,6.559 10.927,7.503 9.802,8.188C8.702,8.847 8.388,9.306 8.388,10.198L8.388,10.228C8.388,10.502 8.162,10.728 7.888,10.728L7.118,10.728C6.846,10.728 6.621,10.505 6.618,10.233L6.615,10.033C6.572,8.812 7.092,8.032 8.26,7.321C9.29,6.689 9.657,6.186 9.657,5.293C9.657,4.314 8.899,3.595 7.731,3.595C6.722,3.595 6.021,4.124 5.793,4.997C5.727,5.251 5.515,5.458 5.253,5.458L4.475,5.458ZM7.496,14C8.118,14 8.591,13.526 8.591,12.91C8.591,12.292 8.118,11.818 7.496,11.818C6.89,11.818 6.409,12.292 6.409,12.909C6.409,13.526 6.89,14 7.496,14Z" style="fill:currentColor;"/>
+                                        </g>
+                                    </g>
+                                </g>
+                            </g>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <header class="game-header">
+            <div class="header-inner">
+                <img src="assets/guitardle_logo.png" alt="Guitardle" class="logotype-img">
+                <div class="move-counter score-tier-0" id="move-counter" aria-label="Move counter">
+                    <span class="move-label">moves</span>
+                    <span class="move-count" id="move-count">0</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="game-main" id="game-main">
+
+            <!-- Phrase tiles — rendered by game.js -->
+            <section class="phrase-display" aria-label="Phrase display">
+                <div class="phrase-row"></div>
+            </section>
+
+            <!-- Guess area: normal state and guess-mode state toggled by JS -->
+            <section class="guess-area" id="guess-area">
+                <!-- Shown during normal play -->
+                <div id="guess-default">
+                    <button class="btn-guess" type="button" id="btn-guess">Guess the Phrase</button>
+                    <p class="guess-warning">One attempt only — a wrong guess ends the game</p>
+                </div>
+                <!-- Shown only during guess mode -->
+                <div class="guess-confirm-row" id="guess-confirm-area" style="display:none">
+                    <button class="btn-cancel" type="button" id="btn-cancel">Cancel</button>
+                    <button class="btn-confirm" type="button" id="btn-confirm" disabled>Confirm</button>
+                </div>
+            </section>
+
+            <!-- End state — replaces guess area + keyboard after game ends -->
+            <div class="end-state" id="end-state" style="display:none">
+
+                <!-- Loss card -->
+                <div class="result-card" id="result-loss" style="display:none">
+                    <div class="result-emoji">🙁</div>
+                    <p class="result-headline">Aw! Not this time.</p>
+                    <p class="result-subline">Try again tomorrow.</p>
+                </div>
+
+                <!-- Win card -->
+                <div class="result-card" id="result-win" style="display:none">
+                    <div class="result-emoji">😀</div>
+                    <p class="result-headline">You did it!</p>
+                    <div class="result-spacer"></div>
+                    <p class="share-date" id="share-date">🎸 Guitardle · —</p>
+                    <div class="score-bar" id="score-bar" aria-hidden="true"></div>
+                    <p class="share-solved" id="share-solved">Solved in — moves</p>
+                    <p class="share-streak" id="share-streak" style="display:none">🔥 — day streak</p>
+                    <button class="btn-share-score" type="button" id="btn-share-score">Share your score</button>
+                    <p class="share-copied" id="share-copied" style="display:none"><span>Score copied!</span><span>Just paste into your post/tweet to share</span></p>
+                </div>
+
+            </div>
+
+            <p class="vowel-instruction" id="vowel-instruction">Vowels cost 2 moves — unlock first, then place.</p>
+
+            <section class="keyboard" id="keyboard" aria-label="Letter keyboard">
+
+                <div class="keyboard-row">
+                    <button class="key consonant" type="button" data-letter="Q" aria-label="Q">
+                        <span class="key-letter">Q</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="W" aria-label="W">
+                        <span class="key-letter">W</span>
+                    </button>
+                    <button class="key vowel" type="button" data-letter="E" aria-label="E">
+                        <span class="key-letter">E</span>
+                        <span class="vowel-cost" aria-hidden="true">+1</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="R" aria-label="R">
+                        <span class="key-letter">R</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="T" aria-label="T">
+                        <span class="key-letter">T</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="Y" aria-label="Y">
+                        <span class="key-letter">Y</span>
+                    </button>
+                    <button class="key vowel" type="button" data-letter="U" aria-label="U">
+                        <span class="key-letter">U</span>
+                        <span class="vowel-cost" aria-hidden="true">+1</span>
+                    </button>
+                    <button class="key vowel" type="button" data-letter="I" aria-label="I">
+                        <span class="key-letter">I</span>
+                        <span class="vowel-cost" aria-hidden="true">+1</span>
+                    </button>
+                    <button class="key vowel" type="button" data-letter="O" aria-label="O">
+                        <span class="key-letter">O</span>
+                        <span class="vowel-cost" aria-hidden="true">+1</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="P" aria-label="P">
+                        <span class="key-letter">P</span>
+                    </button>
+                </div>
+
+                <div class="keyboard-row">
+                    <button class="key vowel" type="button" data-letter="A" aria-label="A">
+                        <span class="key-letter">A</span>
+                        <span class="vowel-cost" aria-hidden="true">+1</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="S" aria-label="S">
+                        <span class="key-letter">S</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="D" aria-label="D">
+                        <span class="key-letter">D</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="F" aria-label="F">
+                        <span class="key-letter">F</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="G" aria-label="G">
+                        <span class="key-letter">G</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="H" aria-label="H">
+                        <span class="key-letter">H</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="J" aria-label="J">
+                        <span class="key-letter">J</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="K" aria-label="K">
+                        <span class="key-letter">K</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="L" aria-label="L">
+                        <span class="key-letter">L</span>
+                    </button>
+                </div>
+
+                <div class="keyboard-row">
+                    <button class="key consonant" type="button" data-letter="Z" aria-label="Z">
+                        <span class="key-letter">Z</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="X" aria-label="X">
+                        <span class="key-letter">X</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="C" aria-label="C">
+                        <span class="key-letter">C</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="V" aria-label="V">
+                        <span class="key-letter">V</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="B" aria-label="B">
+                        <span class="key-letter">B</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="N" aria-label="N">
+                        <span class="key-letter">N</span>
+                    </button>
+                    <button class="key consonant" type="button" data-letter="M" aria-label="M">
+                        <span class="key-letter">M</span>
+                    </button>
+                    <button class="key backspace" type="button" id="btn-backspace" style="display:none" aria-label="Backspace">
+                        <span class="key-letter">⌫</span>
+                    </button>
+                </div>
+
+            </section>
+
+        </main>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>

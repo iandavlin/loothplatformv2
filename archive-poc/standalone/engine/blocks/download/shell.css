@@ -1,0 +1,34 @@
+/* download — black treatment.
+
+   The download block reuses the callout `files` markup (.lg-callout
+   .lg-callout--files) for layout, but renders as a solid black card so it
+   reads as a deliberate download button rather than the cream/amber callout.
+   We override colors only — the grid/row/filemeta layout is inherited from
+   blocks/callout/shell.css. Two-class selectors (.lg-download .…) outrank the
+   single-class callout base rules within this same layer.
+
+   The amber ext badge is kept as the one accent: it pops on black and matches
+   the brand chip used elsewhere.
+*/
+
+@layer block-shell {
+  .lg-download.lg-callout {
+    background: #1a1d1a;
+    border-color: #1a1d1a;
+    border-left-color: #1a1d1a;
+    color: #f4f3ef;
+  }
+
+  .lg-download .lg-callout__title { color: #cfcdc4; }
+
+  .lg-download .lg-callout__row        { color: #f4f3ef; }
+  .lg-download .lg-callout__row:hover  { color: #ffffff; }
+  .lg-download .lg-callout__row:hover .lg-callout__label { text-decoration: underline; }
+
+  .lg-download .lg-callout__icon { color: #f4f3ef; opacity: 1; }
+
+  /* Dividers between multiple rows + the muted size text, lightened for the
+     dark ground. */
+  .lg-download .lg-callout__items li + li { border-top-color: rgba(255, 255, 255, 0.12); }
+  .lg-download .lg-callout__size { color: #a8a89f; }
+}

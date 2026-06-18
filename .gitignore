@@ -1,0 +1,44 @@
+# Bulk / non-source (not version-worthy)
+# recycle = 47M old zips + SSH-key zips; posts/_inbox = 95M raw packs;
+# packs/packs-team = team archives containing SSH keys
+recycle/
+posts/_inbox/
+live-bundle/
+packs/
+packs-team/
+
+# Build artifacts / regenerable
+*.zip
+vendor/
+node_modules/
+*.log
+
+# Secrets / keys (defense-in-depth)
+*.pem
+*.key
+*_deploy
+*_deploy.pub
+id_rsa*
+id_ed25519*
+*-ssh.zip
+.env
+.env.*
+
+# OS / editor cruft
+.DS_Store
+*.swp
+*~
+
+# coordinator: stray dumps/archives — never track
+*.sqlite.bak.*
+download-*.tar.gz
+live-bundle/v2-layouts-bundle.json
+# --- platform v2: cruft kept out ---
+/billing-svc/
+.claude/
+*.prompt.md
+/acf-export-*.json
+*.bak
+*.bak-*
+*.bak.*
+/Code_v2-*.gs

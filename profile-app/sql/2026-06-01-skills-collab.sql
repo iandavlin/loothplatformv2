@@ -1,0 +1,51 @@
+-- Collaboration-vector skills: business / media / teaching / performance — so the directory
+-- surfaces who can help on the non-bench side of a build or shop. ON CONFLICT DO NOTHING.
+INSERT INTO skill_catalog (slug, name, category, sort_order) VALUES
+  -- business / operations
+  ('accounting','Accounting','business',520),
+  ('bookkeeping','Bookkeeping','business',522),
+  ('marketing','Marketing','business',524),
+  ('ecommerce','E-commerce / online sales','business',526),
+  ('inventory-management','Inventory management','business',528),
+  ('customer-service','Customer service','business',530),
+  ('grant-writing','Grant writing','business',532),
+  ('fundraising','Fundraising','business',534),
+  ('contracts-legal','Contracts & legal','business',536),
+  ('ip-trademark','IP / trademark','business',538),
+  ('shipping-logistics','Shipping & logistics','business',540),
+  ('project-management','Project management','business',542),
+  ('operations','Operations management','business',544),
+  ('purchasing','Purchasing / sourcing','business',546),
+  ('estimating','Pricing & estimating','business',548),
+  ('appraisal','Appraisal / valuation','business',550),
+  -- media / creative
+  ('photography','Photography','media',560),
+  ('product-photography','Product photography','media',562),
+  ('videography','Videography','media',564),
+  ('video-editing','Video editing','media',566),
+  ('graphic-design','Graphic design','media',568),
+  ('web-design','Web design / dev','media',570),
+  ('social-media','Social media','media',572),
+  ('copywriting','Copywriting','media',574),
+  ('content-creation','Content creation','media',576),
+  ('branding','Branding','media',578),
+  ('illustration','Illustration','media',580),
+  ('podcasting','Podcasting','media',582),
+  ('product-rendering','Product rendering / viz','media',584),
+  -- teaching / knowledge
+  ('private-lessons','Private lessons','teaching',590),
+  ('workshop-teaching','Workshop teaching','teaching',592),
+  ('curriculum-design','Curriculum design','teaching',594),
+  ('mentoring','Mentoring / apprenticeship','teaching',596),
+  ('clinics-demos','Clinics & demos','teaching',598),
+  ('technical-writing','Technical writing','teaching',600),
+  ('translation','Translation','teaching',602),
+  -- performance / music collaboration
+  ('session-musician','Session musician','music',610),
+  ('live-performance','Live performance','music',612),
+  ('arranging','Arranging','music',614),
+  ('composing','Composing','music',616),
+  ('songwriting','Songwriting','music',618),
+  ('music-transcription','Music transcription','music',620),
+  ('instrument-demos','Instrument demos / reviews','music',622)
+ON CONFLICT (slug) DO NOTHING;

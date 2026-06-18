@@ -1,0 +1,39 @@
+{
+  "_comment": "Stub media map used by the test harness so fixtures don't need a live DB. Keys are attachment IDs as strings. URLs point at placehold.co so previews actually render an image (the URLs don't matter for snapshot diffs — those compare HTML/CSS text, not loaded images).",
+
+  "12345": {
+    "id": 12345,
+    "url": "https://placehold.co/1200x800/87986a/fbfbf8?text=Peghead+stripped",
+    "alt": "Stripped peghead",
+    "mime": "image/jpeg",
+    "sizes": {
+      "thumbnail": { "url": "https://placehold.co/150x150/87986a/fbfbf8", "width": 150, "height": 150 },
+      "medium":    { "url": "https://placehold.co/600x400/87986a/fbfbf8", "width": 600, "height": 400 }
+    },
+    "filesize": 234567
+  },
+  "12346": {
+    "id": 12346,
+    "url": "https://placehold.co/1200x800/d4e0b8/323532?text=Peghead+cleaned",
+    "alt": "Cleaned peghead",
+    "mime": "image/jpeg",
+    "sizes": {
+      "thumbnail": { "url": "https://placehold.co/150x150/d4e0b8/323532", "width": 150, "height": 150 },
+      "medium":    { "url": "https://placehold.co/600x400/d4e0b8/323532", "width": 600, "height": 400 }
+    },
+    "filesize": 198432
+  },
+
+  "22001": { "id": 22001, "url": "https://placehold.co/800x600/87986a/fbfbf8?text=Bracket+mounted", "alt": "Bracket mounted", "mime": "image/jpeg" },
+  "22002": { "id": 22002, "url": "https://placehold.co/800x600/99b27e/fbfbf8?text=Wrenches", "alt": "Wrenches in slots", "mime": "image/jpeg" },
+  "22003": { "id": 22003, "url": "https://placehold.co/800x600/c2d5aa/323532?text=On+the+bed", "alt": "On the bed", "mime": "image/jpeg" },
+  "22004": { "id": 22004, "url": "https://placehold.co/800x600/d4e0b8/323532?text=Slicer", "alt": "Slicer preview", "mime": "image/jpeg" },
+
+  "22010": {
+    "id": 22010,
+    "url": "https://placehold.co/400x200/ecb351/1a1d1a?text=Download+%E2%AC%87",
+    "alt": "",
+    "mime": "application/zip",
+    "filesize": 145873
+  }
+}

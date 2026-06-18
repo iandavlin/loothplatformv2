@@ -1,0 +1,286 @@
+id,phrase,active
+1,Fender Telecaster,1
+2,Fender Stratocaster,1
+3,Les Paul Junior,1
+4,Fender Jazzmaster,1
+5,Hollow Body Guitar,1
+6,Semi Hollow,1
+7,Double Cut,1
+8,Single Cut,1
+9,Gibson Explorer,1
+10,Gibson Flying V,1
+11,Tune-O-Matic Bridge,1
+12,Bigsby Vibrato,1
+13,Locking Tremolo System,1
+14,Bone Nut,1
+15,Compensated Saddle,1
+16,String Through Body,1
+17,Stop Tail Piece,1
+18,Roller Bridge,1
+19,Tuning Machines,1
+20,Locking tuners,1
+21,Sitka Spruce,1
+22,Brazilian Rosewood,1
+23,Indian Rosewood,1
+24,Honduran Mahogany,1
+25,Figured Maple Top,1
+26,Engelmann Spruce,1
+27,Western Red Cedar,1
+28,Adirondack Spruce,1
+29,Quilted Maple,1
+30,Ebony Fingerboard,1
+31,Nitrocellulose Lacquer,1
+32,Hide Glue,1
+33,Scalloped Bracing,1
+34,Dovetail Neck Joint,1
+35,Bolt On Neck,1
+36,Set Neck,1
+37,Neck Through Body,1
+38,Kerfed Lining,1
+39,Truss Rod nut,1
+40,Fret Level,1
+41,Single Coil Pickup,1
+42,Humbucker Pickup,1
+43,Offset Body Style,1
+44,Active Pickup System,1
+45,Coil Split Switch,1
+46,Piezo Pickup,1
+47,Seth Lover,1
+48,Stacked Humbucker,1
+49,Five-Way Switch,1
+50,Volume and Tone Controls,1
+51,Fender Mustang,1
+52,Fender Jazz Bass,1
+53,Fender Precision Bass,1
+54,Fender Jag-Stang,1
+55,Fender Esquire,1
+56,Fender Marauder,1
+57,Lap Steel Guitar,1
+58,B-Bender,1
+59,Fender Bass VI,1
+60,Southern Jumbo,1
+61,BB King Lucille,1
+62,Gibson Firebird,1
+63,Gibson SG,1
+64,Les Paul Studio,1
+65,Gibson Nighthawk,1
+66,Seymour Duncan,1
+67,DiMarzio Pickups,1
+68,Patent Applied For,1
+69,PAF Humbucker,1
+70,Gibson Ripper,1
+71,Gibson Thunderbird,1
+72,Les Paul ,1
+73,Gibson Hummingbird,1
+74,Epiphone,1
+75,Kalamazoo,1
+76,Orville Gibson ,1
+77,Leo Fender,1
+78,Epiphone Sheraton,1
+79,Epiphone Casino,1
+80,Epiphone Wilshire,1
+81,Trapeze tailpiece,1
+82,f-hole,1
+83,Archtop guitar,1
+84,Acoustic Guitar,1
+85,Electric Guitar,1
+86,Semi-Acoustic Guitar,1
+87,Electro-Acoustic Guitar,1
+88,Flat top guitar,1
+89,Steel String Guitar,1
+90,Classical Guitar,1
+91,Maestro Vibrola,1
+92,Kahler Tremolo,1
+93,Floyd Rose,1
+94,Gretsch Duo Jet,1
+95,Gretsch White Falcon,1
+96,Gretsch Tennessean,1
+97,Gretsch Country Gentleman,1
+98,Chet Atkins,1
+99,Filtertron Pickup,1
+100,DeArmond Pickups,1
+101,Gold Foil Pickup,1
+102,Martin Guitars,1
+103,Dreadnought,1
+104,Parlor Guitar,1
+105,Soundhole,1
+106,Soundhole rosette,1
+107,CF Martin,1
+108,X-Bracing,1
+109,Paul Reed Smith,1
+110,Swamp ash,1
+111,Guild Guitars,1
+112,Taylor Guitars,1
+113,Yamaha,1
+114,Grover Jackson,1
+115,Rickenbacker,1
+116,Ovation Guitars,1
+117,Floating Tremolo,1
+118,Hardtail bridge,1
+119,truss rod,1
+120,bullet truss rod,1
+121,Fender bi-flex truss rod,1
+122,dual-action truss rod,1
+123,Schaller tuners,1
+124,Grover tuners,1
+125,gotoh tuners,1
+126,fender spaghetti logo,1
+127,dot inlay,1
+128,block inlay,1
+129,shark inlay,1
+130,pearl inlay,1
+131,abalone inlay,1
+132,pole pieces,1
+133,string tree,1
+134,compensated nut,1
+135,rick-o-sound,1
+136,stainless steel fretwire,1
+137,EVO fretwire,1
+138,three-way switch,1
+139,whammy bar,1
+140,tremolo arm,1
+141,pickguard,1
+142,three-ply pickguard,1
+143,blackguard telecaster,1
+144,nocaster,1
+145,fretboard,1
+146,fretboard radius,1
+147,headstock,1
+148,scarf headstock,1
+149,Music Man,1
+150,volute,1
+151,headless guitar,1
+152,sunburst finish,1
+153,candy-apple red,1
+154,lake placid blue,1
+155,surf green finish,1
+156,carved top,1
+157,alnico magnets,1
+158,toggle switch,1
+159,kluson tuners,1
+160,nashville bridge,1
+161,refret,1
+162,jack socket,1
+163,stereo jack socket,1
+164,potentiometer,1
+165,tone capacitor,1
+166,bone saddle,1
+167,braided cable,1
+168,rotary switch,1
+169,ladder bracing,1
+170,fan bracing,1
+171,tone bar,1
+172,popsicle brace,1
+173,finger brace,1
+174,bridge plate,1
+175,soundboard,1
+176,purfling,1
+177,binding,1
+178,fingerboard,1
+179,fretwire,1
+180,Dan Erlewine,1
+181,neck heel,1
+182,cutaway,1
+183,scale length,1
+184,string action,1
+185,intonation,1
+186,bridge pins,1
+187,pickup selector,1
+188,laminated top,1
+189,compound radius,1
+190,zero fret,1
+191,slotted headstock,1
+192,heel cap,1
+193,mortise and tenon joint,1
+194,spanish heel,1
+195,bending iron,1
+196,neck relief,1
+197,neck reset,1
+198,neck block,1
+199,shellac,1
+200,french polish,1
+201,strap button,1
+202,relic finish,1
+203,Polyurethane finish,1
+204,volume knob,1
+205,tuning pegs,1
+206,fretless bass,1
+207,ceramic magnet,1
+208,string ground wire,1
+209,pickup winder,1
+210,pickup coil,1
+211,wraparound tailpiece,1
+212,mini-toggle switch,1
+213,asymmetrical neck,1
+214,fingerboard extension,1
+215,pickup cover,1
+216,flamed maple,1
+217,basswood,1
+218,maple top,1
+219,bookmatched top,1
+220,sapele,1
+221,birdseye maple,1
+222,bearclaw spruce,1
+223,chatoyance,1
+224,truss rod cover,1
+225,floating pickguard,1
+226,floating pickup,1
+227,output jack,1
+228,undersaddle pickup,1
+229,undersaddle transducer,1
+230,piezo transducer,1
+231,radius block,1
+232,leveling beam,1
+233,Dan Erlewine,1
+234,Erlewine neck jig,1
+235,fret crowning file,1
+236,three-corner file,1
+237,fret rocker,1
+238,deadblow fretting hammer,1
+239,optivisor,1
+240,string action gauge,1
+241,flatwound strings,1
+242,roundwound strings,1
+243,go bar deck,1
+244,truss rod wrench,1
+245,bar fret,1
+246,Adjustable truss rod,1
+247,resonator cone,1
+248,biscuit bridge,1
+249,spider bridge resonator,1
+250,spoke wheel truss rod,1
+251,ashtray bridge cover,1
+252,mini humbucker,1
+253,gibson top hat knobs,1
+254,gibson speed knobs,1
+255,Music Man Stingray,1
+256,Ibanez Jem,1
+257,Taylor GS Mini,1
+258,Taylor Grand Pacific,1
+259,Thinline Telecaster,1
+260,Hofner,1
+261,danelectro,1
+262,ernie ball,1
+263,teisco,1
+264,strobe tuner,1
+265,african mahogany,1
+266,corian nut,1
+267,tusq nut,1
+268,rosewood fingerboard,1
+269,Tortoiseshell Pickguard,1
+270,anodized pickguard,1
+271,road worn strat,1
+272,Fender Highway One Stratocaster,1
+273,Pelham Blue,1
+274,butterscotch blonde,1
+275,TV Yellow,1
+276,cherry sunburst,1
+277,tobacco sunburst,1
+278,lemonburst finish,1
+279,Olympic white,1
+280,Arctic white,1
+281,Fiesta Red,1
+282,Torrefied wood,1
+283,norlin-era gibson,1
+284,CBS-era fender,1
+285,gibson trini lopez,1

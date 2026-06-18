@@ -1,0 +1,64 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Path 1 — Front page</title><link rel="stylesheet" href="audit.css">
+</head><body>
+<nav class="topnav"><div class="inner">
+  <b>Click-path</b>
+  <a class="pill" href="index.html">Overview</a>
+  <a class="pill on" href="path-frontpage.html">Front page</a>
+  <a class="pill" href="path-search.html">Archive search</a>
+  <a class="pill" href="path-hub.html">Open the Hub</a>
+  <a class="pill" href="path-cpt.html">Click → CPT</a>
+  <a class="pill" href="path-discussion.html">Click → discussion</a>
+</div></nav>
+<div class="wrap">
+
+<h1>Path 1 — User opens the front page</h1>
+<p class="sub">GET <code>https://dev.loothgroup.com/</code></p>
+<p class="lead">The home URL never reaches WordPress. nginx redirects it straight to the <b>archive-poc discovery feed</b>,
+which renders server-side from the SQLite search index. (WP’s own front-page setting — page 116, “Feed” — is dead weight; nginx intercepts <code>/</code> first.)</p>
+
+<div class="flow">
+  <div class="step browser"><div class="lyr">Browser</div><div class="ttl">GET /</div>
+    <div class="meta">cookie: loothdev_auth=…</div></div>
+  <div class="arrow">↓</div>
+
+  <div class="step nginx"><div class="lyr">nginx · cookie gate</div><div class="ttl">location <code>= /</code></div>
+    <div class="meta">if $loothdev_is_authorized → 302 Location: /archive-poc/</div>
+    <div class="note">Unauthorized → bounce to /claim. WP page_on_front (116) is never consulted.</div></div>
+  <div class="arrow">↓ <small>302 redirect</small></div>
+
+  <div class="step browser"><div class="lyr">Browser</div><div class="ttl">GET /archive-poc/</div></div>
+  <div class="arrow">↓</div>
+
+  <div class="step nginx"><div class="lyr">nginx</div><div class="ttl">location <code>^~ /archive-poc/</code></div>
+    <div class="meta">alias → /home/ubuntu/projects/archive-poc/web/ · try_files → index.php</div></div>
+  <div class="arrow">↓ <small>fastcgi_pass</small></div>
+
+  <div class="step fpm"><div class="lyr">FPM pool</div><div class="ttl">php8.3-fpm-archive-poc.sock</div>
+    <div class="meta">runs as archive-poc · ondemand, 2 children</div></div>
+  <div class="arrow">↓</div>
+
+  <div class="step app"><div class="lyr">App · SSR</div><div class="ttl">archive-poc/web/index.php</div>
+    <div class="meta">reads config.json (row layout) + queries the index for each row</div>
+    <div class="note">Discovery rows: latest/by-kind/by-tag pulls from content_item; activity strip cached ~5min.</div></div>
+  <div class="arrow">↓ <small>PDO (read-only, WAL)</small></div>
+
+  <div class="step app" style="--c:var(--sqlite)"><div class="lyr">Database · SQLite</div><div class="ttl">archive-poc/index.sqlite</div>
+    <div class="meta">SELECT … FROM content_item ORDER BY published_at DESC / last_activity</div>
+    <div class="note">This index is <b>derived</b> from WordPress (looth_import) by the save_post → loopback sync → indexer pipeline — see Path 2.</div></div>
+  <div class="arrow">↓</div>
+
+  <div class="step render"><div class="lyr">Render</div><div class="ttl">Server-rendered HTML feed → browser</div>
+    <div class="meta">archive.js then hydrates search box + facet behavior</div></div>
+</div>
+
+<div class="touched">
+  <h3>Databases touched</h3>
+  <div class="dbrow">
+    <span class="db sqlite"><span class="dot"></span><span class="eng">SQLite</span><b>archive-poc/index.sqlite</b></span>
+  </div>
+  <p class="note" style="color:var(--faint);margin-top:9px">Zero WordPress queries on the hot path. WP (looth_import) only participated earlier, when content was indexed.</p>
+</div>
+
+</div></body></html>

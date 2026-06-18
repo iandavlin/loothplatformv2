@@ -1,0 +1,618 @@
+/*
+ * /srv/lg-shared/site-header.css
+ *
+ * Canonical CSS for the shared site-header partial.
+ * Sourced from archive-poc/web/archive.css — the first and current
+ * owner of these tokens + chrome rules. All strangler consumers that
+ * include site-header.php MUST also link this stylesheet.
+ *
+ * Root tokens are declared here. Consumers that already declare the
+ * same token names in their own CSS will see no conflict — :root
+ * declarations are last-write-wins; since this ships inside <head>
+ * early, consumer overrides load after and naturally win.
+ *
+ * DO NOT edit rules here and in archive.css separately — one source
+ * of truth. When archive.css "Scope C — Site chrome" section changes,
+ * copy/merge here and push.
+ */
+
+/* ---------- Design tokens (subset needed by header + footer) ---------- */
+:root {
+  --lg-cream:      #fbfbf8;
+  --lg-sage:       #87986a;
+  --lg-sage-d:     #6b7c52;
+  --lg-sage-3:     #d4e0b8;
+  --lg-sage-tint:  #eef2e3;
+  --lg-amber:      #ecb351;
+  --lg-rust:       #c66845;
+  --lg-charcoal:   #1a1d1a;
+  --lg-ink:        #323532;
+  --lg-mute:       #6b6f6b;
+  --lg-line:       #e3ddd0;
+  --lg-font-serif: "Lora", Georgia, serif;
+  --lg-font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+/* ---------- Skip link ---------- */
+.skip-link {
+  position: absolute; left: -9999px; top: 0;
+  background: var(--lg-ink); color: #fff;
+  padding: 10px 16px; border-radius: 0 0 6px 0;
+  font: 600 13px/1 var(--lg-font-sans);
+  z-index: 100; text-decoration: none;
+}
+.skip-link:focus { left: 0; }
+
+/* ---------- Sticky header shell ---------- */
+.lg-chrome {
+  background: rgba(255,255,255,0.96);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--lg-line);
+  position: sticky; top: 0; z-index: 40;
+}
+.lg-chrome__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 60px;
+  display: flex; align-items: center; gap: 18px;
+}
+
+/* --- Hamburger (hidden desktop) --- */
+.lg-chrome__hamburger {
+  display: none;
+  appearance: none; background: transparent; border: 0;
+  width: 40px; height: 40px;
+  border-radius: 8px; cursor: pointer;
+  color: var(--lg-ink); padding: 0;
+}
+.lg-chrome__hamburger:hover { background: var(--lg-sage-tint); }
+.lg-chrome__hamburger svg { width: 22px; height: 22px; display: block; margin: auto; }
+
+/* --- Logo + wordmark --- */
+.lg-chrome__logo {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none; color: var(--lg-ink);
+}
+.lg-chrome__logo img { width: 36px; height: 36px; border-radius: 6px; display: block; }
+.lg-chrome__wordmark {
+  font: 800 17px/1 var(--lg-font-serif);
+  color: var(--lg-sage);
+  letter-spacing: -0.3px;
+}
+
+/* --- Primary nav --- */
+.lg-chrome__nav { flex: 1; }
+.lg-chrome ul.lg-chrome__menu {
+  display: flex; gap: 4px;
+  list-style: none !important; margin: 0; padding: 0;
+}
+.lg-chrome__menu a {
+  display: inline-block;
+  padding: 8px 12px; border-radius: 6px;
+  text-decoration: none;
+  font: 600 13px/1 var(--lg-font-sans);
+  color: var(--lg-ink);
+  letter-spacing: 0.02em;
+}
+.lg-chrome__menu a:hover { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+
+/* "You are here" — the current section is shown (not suppressed) and marked.
+   Subtle sage underline rather than a filled pill, so it stays calm across the
+   full six-item nav. Underline is a pseudo-element so it never shifts layout. */
+.lg-chrome__menu a.is-active {
+  color: var(--lg-sage-d);
+  position: relative;
+}
+.lg-chrome__menu a.is-active::after {
+  content: "";
+  position: absolute;
+  left: 12px; right: 12px; bottom: 3px;
+  height: 2px; border-radius: 2px;
+  background: var(--lg-sage);
+}
+@media (max-width: 820px) {
+  /* Mobile nav stacks vertically; underline reads better flush under the label. */
+  .lg-chrome__menu a.is-active::after { left: 14px; right: auto; width: 1.6em; }
+}
+
+/* --- Aside cluster --- */
+.lg-chrome__aside {
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* --- Icon buttons (messages, notifications) --- */
+.lg-chrome__icon-btn {
+  appearance: none; background: transparent; border: 0;
+  width: 38px; height: 38px;
+  border-radius: 50%; cursor: pointer;
+  color: var(--lg-ink);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.lg-chrome__icon-btn:hover { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+.lg-chrome__icon-btn svg { width: 18px; height: 18px; }
+.lg-chrome__icon-btn--badged { position: relative; text-decoration: none; }
+
+/* --- Unread badge --- */
+.lg-chrome__badge {
+  position: absolute; top: 2px; right: 2px;
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--lg-amber);
+  color: var(--lg-ink);
+  font: 700 10px/16px var(--lg-font-sans);
+  text-align: center;
+  border: 2px solid var(--lg-cream);
+  box-sizing: content-box;
+  pointer-events: none;
+}
+
+/* --- Search button (magnifying glass) --- */
+.lg-chrome__search-btn {
+  appearance: none; background: transparent; border: 0;
+  width: 38px; height: 38px;
+  border-radius: 50%; cursor: pointer;
+  color: var(--lg-ink);
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.lg-chrome__search-btn:hover { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+
+
+/* --- Anon CTAs --- */
+.lg-chrome__signin {
+  font: 600 13px/1 var(--lg-font-sans);
+  color: var(--lg-ink); text-decoration: none;
+  padding: 9px 14px; border-radius: 999px;
+}
+.lg-chrome__signin:hover { background: var(--lg-sage-tint); }
+.lg-chrome__join {
+  background: var(--lg-amber); color: #4a3c10;
+  font: 700 13px/1 var(--lg-font-sans);
+  padding: 10px 16px; border-radius: 999px;
+  text-decoration: none;
+}
+.lg-chrome__join:hover { background: #fff; box-shadow: 0 0 0 1px var(--lg-amber) inset; }
+
+/* --- Account cluster (authed) --- */
+.lg-chrome__account-wrap {
+  position: relative;
+}
+.lg-chrome__account {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--lg-ink); cursor: pointer;
+  padding: 4px 8px 4px 4px; border-radius: 999px;
+  border: 1px solid var(--lg-line);
+  background: #fff;
+  font: inherit;
+}
+.lg-chrome__account:hover,
+.lg-chrome__account-wrap[data-open] .lg-chrome__account {
+  background: var(--lg-sage-tint); border-color: var(--lg-sage);
+}
+.lg-chrome__account-caret {
+  color: var(--lg-mute);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+.lg-chrome__account-wrap[data-open] .lg-chrome__account-caret {
+  transform: rotate(180deg);
+}
+.lg-chrome__avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--lg-sage); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: 700 12px/1 var(--lg-font-sans);
+  overflow: hidden;
+}
+.lg-chrome__avatar img {
+  width: 100%; height: 100%; object-fit: cover;
+  border-radius: 50%; display: block;
+}
+.lg-chrome__account-name { font: 600 13px/1 var(--lg-font-sans); }
+
+/* --- Account dropdown menu --- */
+/* Scoped under .lg-chrome to beat BB theme's global ul rules */
+.lg-chrome ul.lg-chrome__account-menu {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  min-width: 210px;
+  background: #fff;
+  border: 1px solid var(--lg-line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06);
+  padding: 6px;
+  list-style: none !important; margin: 0;
+  z-index: 100;
+}
+.lg-chrome ul.lg-chrome__account-menu[hidden] { display: none; }
+.lg-chrome ul.lg-chrome__account-menu li { list-style: none !important; margin: 0; padding: 0; }
+.lg-chrome ul.lg-chrome__account-menu [role="menuitem"] {
+  display: block;
+  padding: 9px 12px;
+  border-radius: 6px;
+  text-decoration: none;
+  font: 400 13px/1.3 var(--lg-font-sans);
+  color: var(--lg-ink);
+  white-space: nowrap;
+  outline-offset: -2px;
+}
+.lg-chrome ul.lg-chrome__account-menu [role="menuitem"]:hover,
+.lg-chrome ul.lg-chrome__account-menu [role="menuitem"]:focus {
+  background: var(--lg-sage-tint);
+  color: var(--lg-sage-d);
+}
+.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-divider {
+  height: 1px;
+  background: var(--lg-line);
+  margin: 4px 0;
+  padding: 0;
+}
+.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout {
+  color: var(--lg-rust);
+}
+.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout:hover,
+.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout:focus {
+  background: #fdf0ec;
+  color: var(--lg-rust);
+}
+
+/* --- Tier pill --- */
+.lg-chrome__tier {
+  display: inline-flex; align-items: center;
+  padding: 3px 8px; border-radius: 999px;
+  font: 700 10px/1 var(--lg-font-sans);
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.lg-chrome__tier--lite  { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+.lg-chrome__tier--pro   { background: var(--lg-amber); color: #4a3c10; }
+.lg-chrome__tier--admin { background: var(--lg-charcoal); color: #fff; }
+
+/* --- Admin Edit affordance --- */
+.lg-chrome__edit {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--lg-charcoal); color: #fff;
+  padding: 7px 12px; border-radius: 999px;
+  text-decoration: none;
+  font: 700 12px/1 var(--lg-font-sans);
+  letter-spacing: 0.04em;
+}
+.lg-chrome__edit:hover { background: #000; }
+.lg-chrome__edit svg { display: block; }
+
+/* --- Mobile chrome --- */
+@media (max-width: 820px) {
+  .lg-chrome__hamburger { display: inline-flex; align-items: center; justify-content: center; }
+  .lg-chrome__nav {
+    position: absolute; top: 60px; left: 0; right: 0;
+    background: #fff;
+    border-bottom: 1px solid var(--lg-line);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    display: none;
+  }
+  .lg-chrome[data-mobile-open] .lg-chrome__nav { display: block; }
+  .lg-chrome__menu { flex-direction: column; padding: 12px; gap: 2px; }
+  .lg-chrome__menu a { padding: 12px 14px; }
+  .lg-chrome__wordmark { display: none; }
+  .lg-chrome__signin { display: none; }
+  .lg-chrome__account-name { display: none; }
+}
+
+/* --- Live banner sits above the sticky header --- */
+.live-banner { position: relative; top: auto; z-index: 41; }
+
+/* ---------- Footer ---------- */
+.lg-chrome-foot {
+  background: var(--lg-charcoal);
+  color: #d4ccb8;
+  margin-top: 60px;
+}
+.lg-chrome-foot__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 48px 24px 32px;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 48px;
+}
+.lg-chrome-foot__brand { max-width: 280px; }
+.lg-chrome-foot__logo img { width: 56px; height: 56px; border-radius: 8px; background: #fff; padding: 4px; }
+.lg-chrome-foot__tag {
+  margin: 14px 0 0;
+  font: 400 13px/1.5 var(--lg-font-sans);
+  color: rgba(212,204,184,0.75);
+}
+.lg-chrome-foot__cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+}
+.lg-chrome-foot__h {
+  font: 800 11px/1 var(--lg-font-sans);
+  color: var(--lg-amber);
+  text-transform: uppercase; letter-spacing: 0.12em;
+  margin: 0 0 14px;
+}
+.lg-chrome-foot__col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lg-chrome-foot__col a {
+  color: #d4ccb8; text-decoration: none;
+  font: 400 14px/1.4 var(--lg-font-sans);
+}
+.lg-chrome-foot__col a:hover { color: #fff; }
+.lg-chrome-foot__legal {
+  border-top: 1px solid rgba(212,204,184,0.12);
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 18px 24px;
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  font: 400 12px/1.4 var(--lg-font-sans);
+  color: rgba(212,204,184,0.55);
+}
+.lg-chrome-foot__legal nav { display: flex; gap: 18px; }
+.lg-chrome-foot__legal a { color: rgba(212,204,184,0.7); text-decoration: none; }
+.lg-chrome-foot__legal a:hover { color: #fff; }
+
+/* ══ P9 Social modals ════════════════════════════════════════ */
+
+/* Prevent body scroll when a modal is open */
+body.lg-sm-open { overflow: hidden; }
+
+/* Overlay + panel */
+.lg-social-modal {
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; align-items: flex-start; justify-content: flex-end;
+}
+/* The display:flex above overrides the UA [hidden]{display:none}, so the
+   modal would show on load despite the hidden attr. Re-assert hidden. */
+.lg-social-modal[hidden] { display: none; }
+.lg-social-modal__backdrop {
+  position: absolute; inset: 0;
+  background: rgba(26,29,26,0.45);
+  backdrop-filter: blur(3px);
+}
+.lg-social-modal__panel {
+  position: relative; z-index: 1;
+  width: min(400px, 100vw);
+  height: 100vh;
+  background: #fff;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+/* Panel header */
+.lg-social-modal__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--lg-line, #e3ddd0);
+  flex: 0 0 auto;
+}
+.lg-social-modal__title {
+  flex: 1;
+  font: 700 16px/1.2 var(--lg-font-sans, system-ui);
+  color: var(--lg-ink, #323532);
+  margin: 0;
+}
+.lg-social-modal__close,
+.lg-social-modal__back-btn {
+  appearance: none; background: transparent; border: 0;
+  width: 32px; height: 32px; border-radius: 50%;
+  cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--lg-mute, #6b6f6b); flex: 0 0 auto;
+}
+.lg-social-modal__close:hover,
+.lg-social-modal__back-btn:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-ink, #323532); }
+/* Head text action (e.g. "Mark all read") */
+.lg-social-modal__action {
+  appearance: none; background: transparent; border: 0; cursor: pointer;
+  padding: 5px 10px; border-radius: 999px; flex: 0 0 auto;
+  font: 600 12px/1 var(--lg-font-sans, system-ui);
+  color: var(--lg-sage-d, #6b7c52);
+}
+.lg-social-modal__action:hover { background: var(--lg-sage-tint, #eef2e3); }
+
+/* Tab nav (unified Messages | Connections) */
+.lg-social-tabs { display: flex; gap: 4px; flex: 1; }
+.lg-social-tab {
+  appearance: none; background: transparent; border: 0; cursor: pointer;
+  padding: 7px 12px; border-radius: 8px;
+  font: 700 14px/1.2 var(--lg-font-sans, system-ui);
+  color: var(--lg-mute, #6b6f6b);
+}
+.lg-social-tab:hover { color: var(--lg-ink, #323532); }
+.lg-social-tab.is-active { color: var(--lg-ink, #323532); background: var(--lg-sage-tint, #eef2e3); }
+/* Panes fill the panel; only the active one shows (display:flex beats UA [hidden]) */
+.lg-social-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.lg-social-pane[hidden] { display: none; }
+
+/* Scrollable body */
+.lg-social-modal__body {
+  flex: 1; overflow-y: auto;
+  padding: 12px 0;
+}
+
+/* Shared state messages */
+.lg-sm__status, .lg-sm__empty, .lg-sm__error {
+  font: 400 13px/1.5 var(--lg-font-sans, system-ui);
+  padding: 20px 20px;
+  margin: 0;
+}
+.lg-sm__status { color: var(--lg-mute, #6b6f6b); }
+.lg-sm__empty  { color: var(--lg-mute, #6b6f6b); }
+.lg-sm__error  { color: var(--lg-rust, #c66845); }
+
+/* Badge in thread/connection rows */
+.lg-sm__badge {
+  min-width: 18px; height: 18px; padding: 0 4px;
+  border-radius: 999px; background: var(--lg-amber, #ecb351);
+  color: var(--lg-ink, #323532);
+  font: 700 10px/18px var(--lg-font-sans, system-ui);
+  text-align: center; flex: 0 0 auto;
+}
+
+/* Shared avatar */
+.lg-sm__avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  object-fit: cover; flex: 0 0 36px;
+}
+.lg-sm__avatar--initial {
+  background: var(--lg-sage, #87986a); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: 700 14px/1 var(--lg-font-sans, system-ui);
+}
+
+/* ── Notifications ── */
+.lg-notif__item {
+  display: flex; flex-direction: row; align-items: center; gap: 8px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--lg-line, #e3ddd0);
+  cursor: default;
+}
+.lg-notif__item--unread { background: var(--lg-sage-tint, #eef2e3); }
+.lg-notif__body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.lg-notif__clear {
+  appearance: none; background: transparent; border: 0; cursor: pointer;
+  width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--lg-sage-d, #6b7c52);
+}
+.lg-notif__clear:hover { background: var(--lg-line, #e3ddd0); }
+.lg-notif__text {
+  font: 400 13px/1.4 var(--lg-font-sans, system-ui);
+  color: var(--lg-ink, #323532); margin: 0;
+}
+.lg-notif__time {
+  font: 400 11px/1 var(--lg-font-sans, system-ui);
+  color: var(--lg-mute, #6b6f6b);
+}
+
+/* ── Messages ── */
+.lg-msg__thread {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--lg-line, #e3ddd0);
+  cursor: pointer;
+}
+.lg-msg__thread:hover { background: var(--lg-sage-tint, #eef2e3); }
+.lg-msg__thread--unread .lg-msg__name { font-weight: 700; }
+.lg-msg__meta { flex: 1; min-width: 0; }
+.lg-msg__name {
+  font: 600 13px/1.3 var(--lg-font-sans, system-ui);
+  color: var(--lg-ink, #323532);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lg-msg__preview {
+  font: 400 12px/1.3 var(--lg-font-sans, system-ui);
+  color: var(--lg-mute, #6b6f6b);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Thread detail */
+.lg-msg__messages {
+  flex: 1; overflow-y: auto;
+  padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 10px;
+  min-height: 0;
+}
+.lg-msg__msg {
+  display: flex; flex-direction: column; gap: 2px;
+  max-width: 80%; align-self: flex-start;
+}
+.lg-msg__msg--mine { align-self: flex-end; align-items: flex-end; }
+.lg-msg__msg-text {
+  background: var(--lg-sage-tint, #eef2e3);
+  border-radius: 12px 12px 12px 4px;
+  padding: 8px 12px;
+  font: 400 13px/1.4 var(--lg-font-sans, system-ui);
+  color: var(--lg-ink, #323532); margin: 0;
+  word-break: break-word;
+}
+.lg-msg__msg--mine .lg-msg__msg-text {
+  background: var(--lg-sage, #87986a); color: #fff;
+  border-radius: 12px 12px 4px 12px;
+}
+.lg-msg__msg-time {
+  font: 400 10px/1 var(--lg-font-sans, system-ui);
+  color: var(--lg-mute, #6b6f6b); padding: 0 4px;
+}
+
+/* Compose row */
+.lg-msg__compose {
+  flex: 0 0 auto;
+  display: flex; align-items: flex-end; gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--lg-line, #e3ddd0);
+}
+.lg-msg__reply-input {
+  flex: 1; resize: none;
+  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 8px;
+  padding: 8px 12px;
+  font: 400 13px/1.4 var(--lg-font-sans, system-ui);
+  color: var(--lg-ink, #323532);
+  background: #fff; outline: none;
+}
+.lg-msg__reply-input:focus { border-color: var(--lg-sage, #87986a); }
+.lg-msg__send-btn {
+  appearance: none; background: var(--lg-sage, #87986a); border: 0;
+  width: 36px; height: 36px; border-radius: 50%;
+  cursor: pointer; padding: 0; flex: 0 0 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff;
+}
+.lg-msg__send-btn:hover { background: var(--lg-sage-d, #6b7c52); }
+
+/* ── Connections ── */
+.lg-conn__section-h {
+  font: 700 11px/1 var(--lg-font-sans, system-ui);
+  color: var(--lg-mute, #6b6f6b);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 8px 20px 6px;
+  margin: 0;
+}
+.lg-conn__item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--lg-line, #e3ddd0);
+}
+.lg-conn__item--pending { background: var(--lg-sage-tint, #eef2e3); }
+.lg-conn__name {
+  flex: 1;
+  font: 400 13px/1.3 var(--lg-font-sans, system-ui);
+  color: var(--lg-ink, #323532); text-decoration: none;
+}
+.lg-conn__name:hover { text-decoration: underline; }
+.lg-conn__actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.lg-conn__accept,
+.lg-conn__decline {
+  appearance: none; border: 0; cursor: pointer;
+  padding: 5px 12px; border-radius: 999px;
+  font: 600 12px/1 var(--lg-font-sans, system-ui);
+}
+.lg-conn__accept  { background: var(--lg-sage, #87986a); color: #fff; }
+.lg-conn__decline { background: var(--lg-line, #e3ddd0); color: var(--lg-ink, #323532); }
+.lg-conn__accept:hover  { background: var(--lg-sage-d, #6b7c52); }
+.lg-conn__decline:hover { background: #d4cfc4; }
+/* Message button on an accepted connection */
+.lg-conn__msg {
+  appearance: none; border: 0; cursor: pointer;
+  padding: 5px 12px; border-radius: 999px;
+  font: 600 12px/1 var(--lg-font-sans, system-ui);
+  background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #6b7c52);
+}
+.lg-conn__msg:hover { background: var(--lg-line, #e3ddd0); }
+/* Connections search box */
+.lg-conn__search-wrap { padding: 4px 20px 8px; }
+.lg-conn__search {
+  width: 100%; box-sizing: border-box;
+  padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--lg-line, #e3ddd0); background: #fff;
+  font: 400 13px/1.3 var(--lg-font-sans, system-ui);
+  color: var(--lg-ink, #323532);
+}
+.lg-conn__search:focus { outline: none; border-color: var(--lg-sage, #87986a); }
+
+/* Mobile: full-width panel */
+@media (max-width: 480px) {
+  .lg-social-modal__panel { width: 100vw; }
+}

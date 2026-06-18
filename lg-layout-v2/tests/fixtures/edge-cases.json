@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "_meta": {
+    "title": "Edge cases",
+    "post_id": 99999,
+    "post_type": "post-imgcap",
+    "author_id": 5,
+    "fixture_purpose": "Exercises the pain points from v1: IG embed sizing, image-in-columns cascade, gated paywall, empty embed in editor mode, nested-columns validation rejection."
+  },
+  "blocks": [
+    {
+      "type": "wysiwyg",
+      "id": "b_intro",
+      "html": "<p>This fixture exercises the bugs we hit in v1. Each block exists to verify that the v2 architecture handles a class of problem the legacy system mishandled.</p>"
+    },
+
+    {
+      "type": "embed",
+      "id": "b_ig",
+      "url": "https://www.instagram.com/p/CxYz_-_-abc/",
+      "ratio": "1x1",
+      "caption": "Instagram embed — should size to its reported height (~152px for a fake URL, ~600px for a real post), not collapse to 0 because of absolute positioning."
+    },
+
+    {
+      "type": "columns",
+      "id": "b_cols",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "id": "b_cols_img1",
+              "image_id": 12345,
+              "alt": "Image in column",
+              "caption": "001 Inside a column, the image-caption should normalize chrome (no padding/border/background) UNLESS the dash overrides it explicitly.",
+              "number": "001"
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "id": "b_cols_img2",
+              "image_id": 12346,
+              "alt": "Image in column",
+              "caption": "002 Same here. Pair should look uniform.",
+              "number": "002"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "type": "wysiwyg",
+      "id": "b_before_gate",
+      "html": "<p>Everything above this is public. Below is gated.</p>"
+    },
+
+    {
+      "type": "paywall",
+      "id": "b_gate",
+      "tier": "looth-pro"
+    },
+
+    {
+      "type": "wysiwyg",
+      "id": "b_after_gate",
+      "html": "<p>This text only renders if the viewer satisfies tier <code>looth-pro</code>. In editor mode, admins see a 'paywall preview' badge here.</p>",
+      "gated_tier": "looth-pro"
+    },
+
+    {
+      "type": "embed",
+      "id": "b_empty",
+      "url": "",
+      "ratio": "16x9",
+      "_test_note": "In editor mode, this should render the inline URL form with a contracted submit handler — NOT a native form that falls through silently."
+    }
+  ],
+
+  "_test_invalid_input_example": {
+    "comment": "This sibling structure documents what the validator MUST reject. It is not loaded as part of the fixture. The render-test harness exercises this as a separate negative test case.",
+    "nested_columns_attempt": {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "columns",
+              "columns": [
+                { "blocks": [ { "type": "wysiwyg", "html": "<p>This nested columns block must be rejected.</p>" } ] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "unknown_block_type": {
+      "type": "this-block-does-not-exist",
+      "id": "b_bad"
+    },
+    "missing_required_prop": {
+      "type": "image",
+      "id": "b_no_image_id"
+    }
+  }
+}

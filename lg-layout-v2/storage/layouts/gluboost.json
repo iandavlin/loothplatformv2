@@ -1,0 +1,119 @@
+{
+    "schema": 1,
+    "_meta": {
+        "sponsor_slug": "gluboost"
+    },
+    "sponsor": {
+        "slug": "gluboost",
+        "wp_user_id": 808,
+        "email": null,
+        "name": "Gluboost",
+        "display_name": null,
+        "logo_url": "https://dev.loothgroup.com/wp-content/uploads/2026/04/gluboost-logo-square-300x300.png",
+        "hero": {
+            "url": "https://dev.loothgroup.com/wp-content/uploads/2026/04/m009268-fill-n-finish-group-on-white-1500px.webp",
+            "caption": "Home of Fill 'n Finish - Fast and Easy Finishing CA",
+            "title": "Gluboost - Adhesives and Finishing Products",
+            "youtube": "https://youtu.be/ugFQ6UL5dDo"
+        },
+        "about": "The CA adhesive and finish system trusted by professional luthiers worldwide.\r\nGluBoost makes the tools that disappear into the work — crystal-clear CA glues that don't bloom, accelerators that don't pit or haze, and Fill n' Finish, the pore filler and ding repair solution that blends invisibly and cures fast. Whether you're chasing a showroom finish or pulling off a tight repair under the clock, GluBoost is built for the way working luthiers actually work.",
+        "website": "https://gluboost.com/",
+        "colors": {
+            "primary": "#e8821e",
+            "secondary": "#e8821e",
+            "header": "#000000"
+        },
+        "social": {
+            "facebook": "https://www.facebook.com/GluBoost/",
+            "instagram": "https://www.instagram.com/gluboost/",
+            "youtube": "https://www.youtube.com/channel/UC3qFR3BwewGMxNdnW3BGfyQ"
+        },
+        "gallery_urls": [
+            "https://dev.loothgroup.com/wp-content/uploads/2026/04/IMG_4622.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2026/04/IMG_4068-1536x1152-1.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2026/04/IMG_46651-600x450-1.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2026/04/IMG_4654-600x425-1.jpg",
+            "https://dev.loothgroup.com/wp-content/uploads/2026/04/m009268-fill-n-finish-group-on-white-1500px.webp"
+        ],
+        "tag_url": "https://dev.loothgroup.com/archive/?_post_tag=gluboost",
+        "forum_url": null
+    },
+    "blocks": [
+        {
+            "type": "brand-hero",
+            "id": "hero",
+            "show_hero_image": true
+        },
+        {
+            "type": "section-heading",
+            "id": "about-h",
+            "text": "About Gluboost",
+            "level": "h2"
+        },
+        {
+            "type": "wysiwyg",
+            "id": "about",
+            "html": "<p>The CA adhesive and finish system trusted by professional luthiers worldwide.\r\nGluBoost makes the tools that disappear into the work — crystal-clear CA glues that don't bloom, accelerators that don't pit or haze, and Fill n' Finish, the pore filler and ding repair solution that blends invisibly and cures fast. Whether you're chasing a showroom finish or pulling off a tight repair under the clock, GluBoost is built for the way working luthiers actually work.</p>"
+        },
+        {
+            "type": "embed",
+            "id": "hero-yt",
+            "url": "https://youtu.be/ugFQ6UL5dDo",
+            "caption": "Home of Fill 'n Finish - Fast and Easy Finishing CA"
+        },
+        {
+            "type": "featured-products",
+            "id": "prods",
+            "heading": "Featured Products",
+            "author": 808,
+            "items": [
+                {
+                    "title": "Fill n’ Finish UltraThin",
+                    "url": "https://dev.loothgroup.com/sponsor-product/69909-2/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/04/fill-n-finish-ultrathin-300x169.webp"
+                },
+                {
+                    "title": "Gluboost Gludry",
+                    "url": "https://dev.loothgroup.com/sponsor-product/gluboost-gludry/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/04/glu-dry-accelerator-300x169.webp"
+                },
+                {
+                    "title": "MasterGlu Ultra Thin",
+                    "url": "https://dev.loothgroup.com/sponsor-product/69895-2/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/04/master-glu-ultra-thin-300x169.webp"
+                }
+            ]
+        },
+        {
+            "type": "recent-posts",
+            "id": "posts",
+            "heading": "Recent Posts",
+            "author": 808,
+            "items": [
+                {
+                    "title": "New Product – Fill N’ Finish Gel",
+                    "url": "https://dev.loothgroup.com/sponsor-post/new-product-fill-n-finish-gel/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/05/gluboost_fnf_announce-300x169.webp",
+                    "date": "May 18, 2026",
+                    "excerpt": "Sponsored Content GluBoost® gluboost.com · Fine Wood Glues, Fills & Repairs Stop Waiting on Your Finish. GluBoost Fill N’ Finish Flex Gets…"
+                },
+                {
+                    "title": "Refret Refinish 1 2 3!",
+                    "url": "https://dev.loothgroup.com/sponsor-post/refret-refinish-1-2-3/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/04/lac-r-shot-300x169.webp",
+                    "date": "Apr 21, 2026",
+                    "excerpt": "From the GluBoost bench · April 2026 Refret Refinish 1 2 3! GluBoost’s Lac R’ Shot UltraThin Flash Coat brings the spray…"
+                }
+            ]
+        },
+        {
+            "type": "brand-gallery",
+            "id": "gallery",
+            "heading": "Image Gallery"
+        },
+        {
+            "type": "whos-talking",
+            "id": "talk"
+        }
+    ]
+}

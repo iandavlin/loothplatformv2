@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "_meta": {
+    "title": "Battle-Scarred — A '57 Strat Goes Under the Knife",
+    "post_id": 69206,
+    "post_type": "post-imgcap",
+    "author_id": 5,
+    "fixture_purpose": "Minimal happy path: prose + image + embed. Smoke-tests the core pipeline."
+  },
+  "blocks": [
+    {
+      "type": "wysiwyg",
+      "id": "b_intro",
+      "html": "<p>Elyse Kautz brought a beaten '57 Strat into the shop. The peghead had layers of paint and the neck plate was wrong. Here's how she stripped it back to the original maple.</p>"
+    },
+    {
+      "type": "image",
+      "id": "b_img1",
+      "image_id": 12345,
+      "alt": "Stripped peghead showing carved USA and FLMC letters",
+      "number": "001",
+      "image_text": "<strong>001</strong> Chemical stripper revealed letters carved into the maple — \"USA\" and \"FLMC\", matching the neck plate."
+    },
+    {
+      "type": "image",
+      "id": "b_img2",
+      "image_id": 12346,
+      "alt": "Cleaned peghead after sanding",
+      "number": "002",
+      "image_text": "<strong>002</strong> After scraping and sanding, an air-brushed tint made the bare wood look old and worn."
+    },
+    {
+      "type": "embed",
+      "id": "b_yt",
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "ratio": "16x9",
+      "caption": "Acoustic Guitar Builders Club — open discussion checkup."
+    },
+    {
+      "type": "wysiwyg",
+      "id": "b_outro",
+      "html": "<p>The full restoration took three weeks. Final pickup wiring next.</p>"
+    }
+  ]
+}

@@ -1,0 +1,259 @@
+{
+  "schema": 1,
+  "_meta": {
+    "source": "post-imgcap 23177 on loothgroup.com (legacy)",
+    "translated_at": "2026-05-22",
+    "notes": "Re-paired from legacy 30-block linear sequence into 24 blocks: 7 portrait pairs in columns, 13 solos. Featured image 6061 (also reused at beat 008)."
+  },
+  "blocks": [
+    {
+      "type": "post-header",
+      "title": "'68 Jazz Bass Truss Rod Reclamation",
+      "tagline": "",
+      "featured_image_id": 6061,
+      "tier": "",
+      "show_byline": true,
+      "show_categories": true,
+      "show_tags": true
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<p>This '68 Jazz Bass neck had some neck adjustment issues along the way, and after a fair amount of confusing work to adjust it or something that I don't quite understand, ended up in my shop to see if it truly was unfixable as the owner was told. My guess is that it was over-tightened so much that some of the threads bound up in the bullet nut so much that when loosening the rod the nut held tight and the rod unscrewed at the other end of the neck and then couldn't be pulled out. From the looks of the bullet nut, I think someone cut slots for a screwdriver hoping to unscrew it because the initial hex for an Allen wrench was wallowed out and unusable. Always up for a challenge, I said I'd give it a try. It went well, and here's how . . .</p>"
+    },
+    {
+      "type": "image",
+      "image_id": 6028,
+      "image_text": "001) The first thing I did was clamp the neck into a severe backbow which straightened the curved channel enough that I could start pulling the rod out by grabbing it with Vice-grips."
+    },
+    {
+      "type": "image",
+      "image_id": 6046,
+      "image_text": "002) It seems that they had also tried vice-grips from looking at the scars around the entrance hole for the adjusting nut. There's a steel barrel at the bottom of the hole that the truss-rod nut bears against when being tightened."
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6047,
+              "image_text": "003) I started by hammering the vice-grips . . ."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6048,
+              "image_text": "004) . . . then switched to using a punch against the bullet nut."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6049,
+              "image_text": "005) Soon I removed the tuners to make way for the rod since the D- and A- string tuner posts were in the way."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6050,
+              "image_text": "006) Soon the rod was out."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "image_id": 6051,
+      "image_text": "007) This is the end that came un-screwed from the anchor . . ."
+    },
+    {
+      "type": "image",
+      "image_id": 6061,
+      "image_text": "008) . . . and this is the bullet — where the nut meets the threads it was almost as if it was welded to the rod."
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6053,
+              "image_text": "009) I heated the nut . . ."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6054,
+              "image_text": "010) . . . and was able to unscrew it. You can see the problem threads; how that happened I have no idea."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6029,
+              "image_text": "011) Next I drilled a hole into the anchor with a #25 drill-bit . . ."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6030,
+              "image_text": "012) . . . tapped it for an 10-24 thread . . ."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6031,
+              "image_text": "013) . . . poked a soldering iron into the hole . . ."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6032,
+              "image_text": "014) . . . and pulled it out with a 10-24 machine bolt."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "image_id": 6057,
+      "image_text": "015) Next I took a 3/16\" brass rod and drilled it about 1\" deep on the lathe, tapped it with an 8-32 tap, flared it's end slightly, and and cut off 5/16\" length. This became came a crude \"broach\" that would thread onto a long 8-32\" truss rod blank."
+    },
+    {
+      "type": "image",
+      "image_id": 6034,
+      "image_text": "016) I dropped the broach into the anchor hole, and pushed the 8-32\" truss rod into the neck, and using tweezers to hold the broach from spinning I threaded the rod into the broach."
+    },
+    {
+      "type": "image",
+      "image_id": 6035,
+      "image_text": "017) My plan worked! I threaded an 8-32 barrel nut on the other end, chucked it into a drill and was able to pull the broach through the entire length of the truss-rod channel scraping the walls clean so that I wouldn't have as much trouble re-installing the rod."
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6036,
+              "image_text": "018) What had been making the rod so difficult to pull out was the plastic sleeve around the rod used to keep glue from bonding the rod to the wood when the \"skunk-stripe\" filler was glued in. Each back and forth pass produced more and more plastic which I was able to remove with needle nose pliers."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6037,
+              "image_text": "019) In the end my brass broach lasted long enough to remove all of the plastic and of course I kept my fingers crossed the whole time because if the plastic got stuck in there I was in trouble!"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6038,
+              "image_text": "020) I put the original truss rod in the lathe, and exposing six or eight inches at a time, with the rod spinning I burnished and polished it to a mirror finish so it would slide in easily. I also chased the 10-32 threads on each end so they were like new."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 6039,
+              "image_text": "021) The threads on each end were perfect then. After filling the truss rod hole in the anchor with JB-Weld, I pressed the anchor into place, threaded the truss rod back into it, and let it dry overnight."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "image_id": 6040,
+      "image_text": "022) The next day, as insurance that the rod wouldn't come loose again, I drilled a small hole down through the anchor and through the truss-rod to pin it in place."
+    },
+    {
+      "type": "image",
+      "image_id": 6041,
+      "image_text": "023) I took a not-so-good drill-bit the same size and cut a piece off for the pin . . ."
+    },
+    {
+      "type": "image",
+      "image_id": 6042,
+      "image_text": "024) . . . filled the hole in the anchor and coated the pin with JB-Weld . . ."
+    },
+    {
+      "type": "image",
+      "image_id": 6058,
+      "image_text": "025) . . . and pushed the pin down through the truss rod."
+    },
+    {
+      "type": "image",
+      "image_id": 6044,
+      "image_text": "026) I re-installed the tuners . . ."
+    },
+    {
+      "type": "image",
+      "image_id": 6059,
+      "image_text": "027) . . . and I used a solid barrel nut instead of a bullet because it has more metal and will hold up better to the next person that tries to adjust this neck."
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<p>The next thing I need to do is bolt this neck onto a surrogate body (he didn't send the body and I don't need the body for this job), string it up, and see how the neck adjusts. Sorry, but I'm too tired to do that right now.</p>\n<p>Thanks for reading my Looth Pals,</p>\n<p>Dan Erlewine</p>"
+    },
+    {
+      "type": "post-footer",
+      "show_author": true,
+      "show_related": true
+    }
+  ]
+}

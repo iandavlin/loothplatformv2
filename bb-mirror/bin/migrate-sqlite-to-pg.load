@@ -1,0 +1,48 @@
+;; bb-mirror — pgloader recipe for live-cutover SQLite→postgres replay.
+;;
+;; Not used on dev (we re-backfilled from WP). Kept here as the recipe for
+;; cutover day, when live's SQLite mirror has been accumulating sync writes
+;; and we want to seed `forums` schema in one shot rather than re-backfilling
+;; from live WP (which would re-issue 1100+ HTTP calls and take longer).
+;;
+;; Usage (DRY RUN first):
+;;   pgloader --dry-run /home/ubuntu/projects/bb-mirror/bin/migrate-sqlite-to-pg.load
+;;
+;; Then live:
+;;   pgloader /home/ubuntu/projects/bb-mirror/bin/migrate-sqlite-to-pg.load
+;;
+;; Assumes: postgres role `bb-mirror`, database `looth`, schema `forums`
+;; already created (via init-db.php). Recipe MERGEs rather than truncates —
+;; safe to re-run.
+;;
+;; Caveats for cutover day:
+;;   * forum_fts (SQLite virtual table) does NOT migrate; postgres FTS is
+;;     populated by trigger on write. After pgloader, run:
+;;       UPDATE topic SET title = title;   -- forces trigger refresh
+;;       UPDATE reply SET content_text = content_text;
+;;   * The `reply.reply_to_id` column in SQLite maps to `parent_reply_id`
+;;     in postgres; see the CASTs below.
+;;   * attachment + forum_read_state are new in pg, no SQLite source.
+
+LOAD DATABASE
+     FROM sqlite:///home/ubuntu/projects/bb-mirror/index.sqlite
+     INTO postgresql:///looth
+
+ WITH include drop, create no tables, no truncate, data only,
+      batch rows = 1000
+
+   SET search_path TO 'forums, public'
+
+ INCLUDING ONLY TABLE NAMES MATCHING
+     'forum', 'topic', 'reply', 'forum_subscription', 'person', 'sync_state'
+
+ CAST type integer when (= name "id") to bigint drop typemod,
+      column reply.reply_to_id to "parent_reply_id"
+
+ BEFORE LOAD DO
+   $$ SET CONSTRAINTS ALL DEFERRED; $$
+
+ AFTER LOAD DO
+   $$ UPDATE forums.topic SET title = title; $$,
+   $$ UPDATE forums.reply SET content_text = content_text; $$
+;

@@ -1,0 +1,26 @@
+{
+  "service": "bb-mirror",
+  "version": "0.0.1-draft",
+  "db_path": "/home/ubuntu/projects/bb-mirror/index.sqlite",
+  "wp": {
+    "host": "dev.loothgroup.com",
+    "rest_base": "https://dev.loothgroup.com/wp-json",
+    "buddyboss_ns": "buddyboss/v1",
+    "looth_ns": "looth/v1",
+    "looth_internal_ns": "looth-internal/v1"
+  },
+  "identity": {
+    "whoami_url": "https://dev.loothgroup.com/api/v0/whoami",
+    "user_context_url": "https://dev.loothgroup.com/wp-json/looth-internal/v1/user-context/{wp_user_id}",
+    "lg_tier_cookie": "lg_tier",
+    "wp_login_cookie_prefix": "wordpress_logged_in_"
+  },
+  "render": {
+    "header_partial": "/var/www/dev/wp-content/plugins/lg-layout-v2/templates/partials/site-header.php",
+    "footer_partial": null,
+    "fallback_query_arg": "bb_native"
+  },
+  "fts": {
+    "tokenize": "porter unicode61 remove_diacritics 1"
+  }
+}

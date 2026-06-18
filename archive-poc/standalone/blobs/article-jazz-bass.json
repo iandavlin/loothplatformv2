@@ -1,0 +1,138 @@
+{
+  "_blob_meta": {
+    "lane": "layout-standalone",
+    "kind": "hand-materialized PoC blob",
+    "describes": "What the production save-hook materializer must emit per CPT post.",
+    "source_post": "post-imgcap 23177 on loothgroup.com (legacy '68 Jazz Bass loothprint)",
+    "materialized_by": "HAND (PoC) — production: lg-layout-v2 save hook, resolving WP once at save time",
+    "shape": "{ layout: <verbatim _lg_layout_v2 meta>, post_context: <flat resolved identity> }"
+  },
+
+  "layout": {
+    "schema": 1,
+    "_meta": {
+      "source": "_lg_layout_v2 post meta — copied VERBATIM from WP at save time (no enrichment)",
+      "note": "Block props are exactly what the live the_content path reads; identity (title/author/date/terms/avatar) is NOT in here — it lives in post_context."
+    },
+    "blocks": [
+      {
+        "type": "post-header",
+        "variant": "variant-1",
+        "image_id": 6061,
+        "tagline": "A seized truss rod, a fifty-year-old neck, and one careful extraction.",
+        "show_read_time": true
+      },
+      {
+        "type": "section-heading",
+        "level": "h2",
+        "text": "The patient"
+      },
+      {
+        "type": "wysiwyg",
+        "html": "<p>The bass came in dead straight in the worst way — the neck had a forward bow no amount of truss-rod turning would touch, because the rod itself had stopped turning. Somewhere in the last fifty years the nut had seized to the threads, and the previous tech's answer had been to lean on it until something gave. Something did: the rod, not the bow.</p><p>Before touching a wrench I wanted to know what I was working with. A '68 Jazz neck is a single truss rod anchored at the heel, adjusted at the nut. If the threads are gone, the rod has to come out the heel end, and that means pulling the fingerboard — or finding another way.</p>"
+      },
+      {
+        "type": "image",
+        "image_id": 6062,
+        "image_text": "The seized rod backed out a half turn, then bound solid. You can see the galling on the exposed threads where it had been forced."
+      },
+      {
+        "type": "wysiwyg",
+        "html": "<p>The trick that saved the board: heat, penetrating oil wicked down the channel overnight, and a purpose-ground driver that bit the rod's flats instead of the rounded-off nut. It came free in stages over two days. No drama, just patience — which is most of this trade.</p>"
+      },
+      {
+        "type": "embed",
+        "url": "https://www.youtube.com/watch?v=8xg3vE8Ie_E",
+        "ratio": "16x9",
+        "caption": "Full bench walkthrough: the extraction, re-threading the anchor, and the re-set.",
+        "gated_tier": "looth-pro"
+      },
+      {
+        "type": "wysiwyg",
+        "html": "<p>With the rod out and the anchor re-cut, the neck took relief adjustment normally for the first time in decades. Strung back up to pitch it held dead-on overnight — the real test. The owner gets his bass back; you get the long version on the bench above.</p>"
+      },
+      {
+        "type": "post-footer",
+        "variant": "variant-1",
+        "show_author": true,
+        "show_share": true,
+        "show_related": false,
+        "show_comments": false
+      }
+    ]
+  },
+
+  "post_context": {
+    "post_id": 23177,
+    "title": "'68 Jazz Bass Truss Rod Reclamation",
+    "permalink": "https://dev.loothgroup.com/loothprint/68-jazz-bass-truss-rod-reclamation/",
+    "date": "May 22, 2026",
+    "post_tier": "looth-pro",
+    "bloginfo_name": "The Looth Group",
+
+    "author": {
+      "id": 5,
+      "display_name": "Dan Erlewine",
+      "avatar_url": "https://dev.loothgroup.com/wp-content/uploads/avatars/5/dan-erlewine-bpfull.jpg",
+      "archive_url": "https://dev.loothgroup.com/author/dan-erlewine/",
+      "meta": {
+        "author_about": "Dan Erlewine has repaired and built stringed instruments for more than fifty years and has written some of the trade's most-used reference work on the bench craft of guitar repair.",
+        "author_website": "https://www.erlewineguitars.com",
+        "author_instagram": "https://www.instagram.com/danerlewine"
+      }
+    },
+
+    "featured_image": {
+      "id": 6061,
+      "url": "https://dev.loothgroup.com/wp-content/uploads/2024/06/jazz-bass-hero.jpg",
+      "alt": "A 1968 Fender Jazz Bass neck clamped on the repair bench"
+    },
+
+    "terms": {
+      "tier": [
+        { "name": "Looth Pro", "slug": "looth-pro", "term_id": 12, "link": "https://dev.loothgroup.com/archive/?tier=looth-pro" }
+      ],
+      "shared_category": [
+        { "name": "Repair", "slug": "repair", "term_id": 3, "link": "https://dev.loothgroup.com/archive/?cat=repair" }
+      ],
+      "post_tag": [
+        { "name": "truss rod", "slug": "truss-rod", "term_id": 40, "link": "https://dev.loothgroup.com/archive/?tag=truss-rod" },
+        { "name": "bass setup", "slug": "bass-setup", "term_id": 41, "link": "https://dev.loothgroup.com/archive/?tag=bass-setup" }
+      ]
+    },
+
+    "media": {
+      "6061": {
+        "url": "https://dev.loothgroup.com/wp-content/uploads/2024/06/jazz-bass-hero.jpg",
+        "alt": "A 1968 Fender Jazz Bass neck clamped on the repair bench",
+        "mime": "image/jpeg",
+        "sizes": {
+          "medium":       { "url": "https://dev.loothgroup.com/wp-content/uploads/2024/06/jazz-bass-hero-300x200.jpg",  "width": 300,  "height": 200 },
+          "medium_large": { "url": "https://dev.loothgroup.com/wp-content/uploads/2024/06/jazz-bass-hero-768x512.jpg",  "width": 768,  "height": 512 },
+          "large":        { "url": "https://dev.loothgroup.com/wp-content/uploads/2024/06/jazz-bass-hero-1024x683.jpg", "width": 1024, "height": 683 }
+        }
+      },
+      "6062": {
+        "url": "https://dev.loothgroup.com/wp-content/uploads/2024/06/truss-rod-extraction.jpg",
+        "alt": "Galling visible on the exposed truss-rod threads",
+        "mime": "image/jpeg",
+        "sizes": {
+          "medium":       { "url": "https://dev.loothgroup.com/wp-content/uploads/2024/06/truss-rod-extraction-300x200.jpg",  "width": 300,  "height": 200 },
+          "medium_large": { "url": "https://dev.loothgroup.com/wp-content/uploads/2024/06/truss-rod-extraction-768x512.jpg",  "width": 768,  "height": 512 },
+          "large":        { "url": "https://dev.loothgroup.com/wp-content/uploads/2024/06/truss-rod-extraction-1024x683.jpg", "width": 1024, "height": 683 }
+        }
+      }
+    },
+
+    "options": {
+      "lg_layout_v2_gate_cta": {
+        "enabled": true,
+        "headline": "Members-only build video",
+        "body": "The full bench walkthrough — extraction, re-threading, and the re-set — is part of the Looth Pro library. Join to watch the long version and the rest of the repair archive.",
+        "button_label": "Become a member",
+        "button_url": "https://www.patreon.com/theloothgroup",
+        "eyebrow_embed": "Members-only video"
+      }
+    }
+  }
+}

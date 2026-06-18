@@ -1,0 +1,144 @@
+/* lg-site-footer.css — plugin-resident site footer.
+   Mirrors the editorial palette: charcoal ground, cream foreground, sage
+   accents. Sits at the bottom of every page (BB-themed, Elementor, v2).
+   Nav columns are driven by WP menu locations registered in SiteFooter.php. */
+
+.lg-site-footer {
+  background: #1a1d1a;                /* lg-charcoal */
+  color: #d8d4c7;                     /* lg-cream-text */
+  font-family: var(--lg-font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+  padding: 56px 32px 24px;
+  margin-top: 96px;
+}
+
+.lg-site-footer__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 2fr;
+  gap: 56px;
+  align-items: start;
+}
+
+/* Brand */
+.lg-site-footer__logo {
+  display: inline-flex;
+  align-items: center;
+  color: #f4f1e8;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  transition: opacity 150ms ease;
+}
+.lg-site-footer__logo:hover { opacity: 0.82; }
+.lg-site-footer__logo-text {
+  font: 700 22px/1.2 var(--lg-font-serif, Georgia, "Times New Roman", serif);
+}
+.lg-site-footer__logo-img {
+  display: block;
+  height: auto;
+  max-height: 56px;
+  width: auto;
+  max-width: 220px;
+  object-fit: contain;
+  /* Logos shipped as dark-on-light read poorly on the charcoal footer
+     ground. If yours has its own light variant remove the filter. */
+  filter: brightness(1) saturate(1);
+}
+.lg-site-footer__tagline {
+  margin: 10px 0 0;
+  font: 400 14px/1.5 var(--lg-font-sans, sans-serif);
+  color: #9c9888;
+  max-width: 32ch;
+}
+
+/* Nav columns */
+.lg-site-footer__nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+}
+.lg-site-footer__col-h {
+  margin: 0 0 14px;
+  font: 600 11px/1 var(--lg-font-sans, sans-serif);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #c0c98e;                     /* lg-sage-light */
+}
+.lg-site-footer__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lg-site-footer__list a {
+  color: #d8d4c7;
+  text-decoration: none;
+  font: 400 14px/1.4 var(--lg-font-sans, sans-serif);
+  transition: color 150ms ease;
+}
+.lg-site-footer__list a:hover { color: #f4f1e8; }
+
+/* Legal row — divider above, smaller type */
+.lg-site-footer__legal {
+  max-width: 1280px;
+  margin: 48px auto 0;
+  padding-top: 20px;
+  border-top: 1px solid rgba(216, 212, 199, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  font: 400 12px/1.4 var(--lg-font-sans, sans-serif);
+  color: #7c7a6e;
+  letter-spacing: 0.02em;
+}
+.lg-site-footer__mark {
+  font-style: italic;
+  letter-spacing: 0.04em;
+}
+
+/* Inline legal-links nav (Privacy / Terms / etc.) in the legal strip. */
+.lg-site-footer__legal-nav { line-height: 1; }
+.lg-site-footer__legal-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  align-items: center;
+}
+.lg-site-footer__legal-links li { position: relative; }
+.lg-site-footer__legal-links li + li::before {
+  content: "·";
+  position: absolute;
+  left: -11px;
+  color: #56544c;
+}
+.lg-site-footer__legal-links a {
+  color: #9c9888;
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+.lg-site-footer__legal-links a:hover { color: #f4f1e8; }
+
+/* Tablet: stack brand above nav */
+@media (max-width: 879px) {
+  .lg-site-footer { padding: 48px 24px 20px; }
+  .lg-site-footer__inner {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+}
+
+/* Mobile: collapse nav into stacked columns */
+@media (max-width: 559px) {
+  .lg-site-footer__nav {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .lg-site-footer__legal { flex-direction: column; align-items: flex-start; }
+}

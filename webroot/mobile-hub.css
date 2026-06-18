@@ -1,0 +1,161 @@
+/* mobile-hub.css — MOBILE presentation layer for The Hub (≤640px).  OWNER: Buck.
+ *
+ * Loaded as a media-gated <head> <link media="(max-width:640px)"> from bb-mirror's
+ * _chrome.php so it paints on first load (NO flash). Per docs/hub-mobile-desktop-split.md
+ * it CSS-ARRANGES the FLAT card contract into the FB app-card via grid-template-areas on
+ * .feed-card and its fc-* DIRECT children — never via JS DOM-reshape.
+ *
+ * Contract regions (direct children of .feed-card):
+ *   .fc-avatar .fc-author .fc-category .fc-time .fc-cover .fc-title .fc-excerpt
+ *   .fc-actions .fc-replies
+ *
+ * Desktop chrome + arrangement lives in forums.css @media (min-width:641px) and never
+ * touches this layer; the base .feed-card rule was stripped of visual chrome for the
+ * split, so the mobile card chrome below is REQUIRED (without it mobile cards are bare).
+ *
+ * Tokens/font/theme (Sage Tint + Cabin webfont) come from hub-polish.js's brand pass —
+ * this file REFERENCES the --lg-* tokens, it does not redefine them.
+ *
+ * The whole file is wrapped in @media (max-width:640px) so it is self-gating even if the
+ * <link media> attribute is ever dropped. No emoji. No !important (source-order wins:
+ * this file loads AFTER forums.css).
+ */
+@media (max-width:640px){
+
+  /* ───────────────────────────── Card: chrome + FB app-card arrangement ───────── */
+  .feed-page .feed-card{
+    /* chrome — moved off forums.css base for the split; mobile owns it */
+    background:var(--lg-card-bg,#fff);
+    border:1px solid var(--lg-line,#e3ddd0);
+    border-radius:16px;
+    padding:14px 14px 8px;
+    margin:0 0 12px;
+    box-shadow:var(--shadow-card,0 1px 0 rgba(0,0,0,.04));
+    /* Self-healing arrangement of the flat fc-* contract into the app-card.
+       Only the HEADER (avatar left of author/time/category) is explicitly placed;
+       EVERY other region defaults to a full-width row in source order (catch-all below).
+       So when the desktop lane adds new regions to the shared card markup
+       (fc-tags / fc-activity / fc-facepile / fc-composer / …) they stack cleanly on
+       mobile instead of auto-placing into a wrong cell — no per-region churn, no
+       breakage from contract drift. */
+    display:grid;
+    grid-template-columns:40px minmax(0,1fr) auto;
+    column-gap:10px;
+    row-gap:2px;
+    align-items:center;
+  }
+  /* DEFAULT for every direct card region: full-width row, source order (drift-proof). */
+  .feed-page .feed-card > *{ grid-column:1 / -1; min-width:0; }
+  /* colored left rail is desktop-only (≥641 in forums.css); keep mobile flat */
+  .feed-page .feed-card--topic,
+  .feed-page .feed-card--content{ border-left:1px solid var(--lg-line,#e3ddd0); }
+
+  .feed-page .fc-avatar{ grid-column:1; grid-row:1 / span 2; align-self:start; width:40px; height:40px; margin:0; }
+  .feed-page .fc-avatar img,
+  .feed-page .fc-avatar .avatar-init{
+    width:40px; height:40px; border-radius:50%; object-fit:cover; display:block;
+  }
+
+  .feed-page .fc-author{
+    grid-column:2; grid-row:1; align-self:center; min-width:0;
+    display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px;
+  }
+  .feed-page .fc-author__name{ font-weight:600; font-size:14px; color:var(--lg-ink,#323532); }
+  .feed-page .fc-author__name a{ color:inherit; text-decoration:none; }
+  .feed-page .fc-author__biz{ font-size:12px; color:var(--lg-mute,#6b6f6b); }
+  .feed-page .fc-author__badges{ display:inline-flex; gap:4px; }
+
+  .feed-page .fc-category{
+    grid-column:2 / -1; grid-row:2; align-self:start; min-width:0; margin-top:1px;
+    font-size:12px; color:var(--lg-sage-d,#6b7c52); text-decoration:none;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .feed-page .fc-time{
+    grid-column:3; grid-row:1; align-self:center; justify-self:end;
+    font-size:12px; color:var(--lg-mute,#6b6f6b); white-space:nowrap;
+  }
+
+  /* Cover sits ABOVE the title (Buck's approved Sage-Tint "Comfort" 3:2 look). Absent
+     covers render no element → the row collapses, so degrade is clean. */
+  .feed-page .fc-cover{
+    display:block; margin:12px 0 0;
+    border-radius:12px; overflow:hidden; background:var(--lg-sage-tint,#eef2e3);
+  }
+  .feed-page .fc-cover:empty{ display:none; margin:0; }
+  .feed-page .fc-cover img{
+    width:100%; display:block; aspect-ratio:3/2; object-fit:cover; height:auto;
+  }
+
+  .feed-page .fc-title{
+    margin:12px 0 0; font-size:18px; line-height:1.25;
+  }
+  .feed-page .fc-title a{ color:var(--lg-ink,#323532); text-decoration:none; }
+
+  .feed-page .fc-excerpt{ min-width:0; margin-top:5px; }
+  .feed-page .fc-excerpt .feed-card__op-excerpt{ color:var(--lg-mute,#4b4f4b); line-height:1.55; }
+
+  .feed-page .fc-actions{
+    min-width:0; margin-top:10px; padding-top:8px;
+    border-top:1px solid var(--lg-line,#e3ddd0);
+    display:flex; align-items:center; flex-wrap:wrap; gap:8px 14px;
+  }
+  .feed-page .fc-replies{ min-width:0; margin-top:8px; }
+  /* New regions the desktop lane added to the shared markup — inherit the full-width
+     default; light mobile spacing so they read as their own row. */
+  .feed-page .fc-tags{ margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
+  .feed-page .fc-activity{ margin-top:6px; font-size:12.5px; color:var(--lg-mute,#6b6f6b); }
+  .feed-page .fc-facepile{ margin-top:8px; }
+  .feed-page .fc-composer{ margin-top:8px; }
+
+  /* ───────────────────────────── Reactions picker (mobile touch sizing) ─────────
+     The shared discovery-backed picker (.fcr / .fcr-add / .fcr-palette / .fcr-opt)
+     is rendered by the surface lane and wired by forums.js. Buck owns the MOBILE
+     bar styling + the long-press TRIGGER (mobile-hub.js). Here: bigger touch targets
+     and a centered, full-width-ish palette so it is thumb-usable on a phone. */
+  .feed-page .fcr-add{ width:32px; height:32px; }
+  .feed-page .fcr-chip{ padding:4px 9px; font-size:13px; }
+  .feed-page .fcr-palette{
+    left:8px; right:8px; bottom:calc(100% + 4px);
+    flex-wrap:wrap; justify-content:center; gap:4px;
+    padding:8px 10px; border-radius:14px;
+    box-shadow:0 12px 30px -8px rgba(20,30,15,.45);
+  }
+  .feed-page .fcr-opt{ width:42px; height:42px; }
+  .feed-page .fcr-opt .fcr-img{ width:28px; height:28px; }
+  .feed-page .fcr-opt .fcr-emoji{ font-size:26px; }
+  /* iOS: kill the long-press text/callout menu over the engagement row + picker so
+     press-and-hold opens the picker instead of Safari's copy/select bubble. */
+  .feed-page .fc-actions,
+  .feed-page .fc-actions *,
+  .feed-page .fcr-palette,
+  .feed-page .fcr-opt,
+  .feed-page .fcr-opt img{
+    -webkit-touch-callout:none; -webkit-user-select:none; user-select:none;
+  }
+
+  /* ───────────────────────────── Folded Hub band-aids (Hub-scoped only) ─────────
+     Site-wide band-aids (footer overflow, directory map, off-canvas drawer, hamburger
+     dupes, archive→hub redirect) stay in app-mobile-fixes.js / their canonical homes —
+     they are NOT Hub-specific and must keep firing on every page (some at ≤760px), so
+     they do not belong in this Hub-only ≤640 sheet. Dropped per coordinator: the
+     sticky sort-bar + hide-view-toggles (now canonical in forums.css).
+
+     KEPT here (genuinely Hub-only): force the brand LIGHT theme on mobile so every
+     phone matches the cream app-card regardless of the per-browser saved Hub theme
+     (hub-theme-dark/black/panels). Desktop keeps the user's chosen theme — this is
+     inside the ≤640 query and never touches localStorage. */
+  html.hub-theme-dark, html.hub-theme-black, html.hub-theme-panels{
+    --bg:#fbfbf8; --bg-card:#fff; --lg-card-bg:#fff; --lg-cream:#fbfbf8;
+    --bg-sticky:#fbfbf8; --bg-closed:#f3f1ea;
+    --fg:#323532; --fg-muted:#6b6f6b; --fg-soft:#9a9c92;
+    --lg-ink:#323532; --lg-mute:#6b6f6b;
+    --lg-line:#e3ddd0; --border:#e3ddd0; --border-soft:#eef0e6;
+    --lg-sage-tint:#eef2e3; --lg-sage-d:#6b7c52; --accent:#6b7c52;
+    --shadow-card:0 1px 0 rgba(0,0,0,.04);
+    --shadow-elev:0 8px 24px -16px rgba(40,50,30,.20);
+  }
+  /* Compact mode is not offered on mobile (Buck) — the toggle is hidden in forums.css
+     and mobile-hub.js strips the class; this is the CSS belt so a stuck class can't
+     re-densify the app-card before the JS runs. */
+  html.hub-compact .feed-page .feed-card{ padding:14px 14px 8px; }
+}

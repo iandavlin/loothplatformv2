@@ -1,0 +1,45 @@
+{
+  "name": "whos-talking",
+  "version": 1,
+  "selector": ".lg-whos-talking",
+  "description": "Sponsor-page social-proof / cross-link panel. Reads sponsor.forum_url + sponsor.tag_url + name from $ctx['sponsor'] and renders a 'See who's talking about <brand>' card with up to two CTAs: the sponsor's forum thread and its tagged-content archive. Each CTA only renders if its URL is present (a sponsor with no forum still shows the tag link, or nothing). Auto-themes via --brand-primary / --brand-header.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "heading": {
+        "type": "string",
+        "default": "",
+        "description": "Override the auto 'See who's talking about <brand>' heading (inline-editable)."
+      },
+      "blurb": {
+        "type": "string",
+        "default": "",
+        "description": "Optional intro line under the heading (inline-editable)."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": ["margin-block", "padding"],
+    "text": ["font-family"]
+  },
+  "defaults": {
+    "container": {
+      "margin-block": "32px",
+      "padding": "0"
+    },
+    "text": {
+      "font-family": "var(--lg-font-sans)"
+    }
+  },
+  "variants": {
+    "variant-1": { "extends": "defaults" }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["heading", "blurb"],
+    "variant_prop": "variant",
+    "variant_options": ["variant-1"],
+    "pill_buttons": ["move-up", "move-down", "edit", "delete"]
+  }
+}

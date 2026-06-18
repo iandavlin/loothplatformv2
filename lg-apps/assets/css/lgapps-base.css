@@ -1,0 +1,373 @@
+/* ============================================
+   LG Apps — Shared Base Styles
+   Brand tokens + modal framework + button
+   ============================================ */
+
+:root {
+  --lgapps-gold:    #ECB351;
+  --lgapps-gold-dk: #d49b38;
+  --lgapps-sand:    #F1DE83;
+  --lgapps-sand-lt: #faf3d8;
+  --lgapps-mint:    #D4E0B8;
+  --lgapps-mint-dk: #87986A;
+  --lgapps-coral:   #FE6A4F;
+  --lgapps-dark:    #1A1E12;
+  --lgapps-dark-90: #2a2f20;
+  --lgapps-white:   #ffffff;
+  --lgapps-gray-50: #fafafa;
+  --lgapps-gray-100:#f5f5f5;
+  --lgapps-gray-200:#e0e0e0;
+  --lgapps-gray-300:#ccc;
+  --lgapps-gray-400:#999;
+  --lgapps-gray-500:#666;
+  --lgapps-gray-700:#333;
+}
+
+/* --- Trigger Button (widget + shortcode) --- */
+
+.lgapps-open-btn {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--lgapps-gold);
+  color: var(--lgapps-dark);
+  border: 2px solid var(--lgapps-dark);
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  text-align: center;
+  line-height: 1.4;
+  box-shadow: 0 2px 4px rgba(26, 30, 18, 0.15);
+}
+.lgapps-open-btn:hover {
+  background: var(--lgapps-sand);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(26, 30, 18, 0.2);
+}
+.lgapps-open-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(26, 30, 18, 0.15);
+}
+
+/* --- Modal Overlay (shared shell) --- */
+
+.lgapps-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: rgba(26, 30, 18, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 0;
+}
+
+.lgapps-modal-inner {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--lgapps-gray-100);
+  overflow: hidden;
+}
+
+/* --- Modal Header --- */
+
+.lgapps-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--lgapps-dark);
+  color: var(--lgapps-gold);
+  flex-shrink: 0;
+  border-bottom: 3px solid var(--lgapps-gold);
+}
+
+.lgapps-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: system-ui, -apple-system, sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.lgapps-close-btn {
+  background: none;
+  border: none;
+  color: var(--lgapps-gold);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: color 0.15s, transform 0.15s;
+}
+.lgapps-close-btn:hover {
+  color: var(--lgapps-coral);
+  transform: scale(1.1);
+}
+
+/* --- Controls Area --- */
+
+.lgapps-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--lgapps-sand-lt);
+  border-bottom: 2px solid var(--lgapps-gold);
+  flex-shrink: 0;
+}
+
+.lgapps-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lgapps-row-left,
+.lgapps-row-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.lgapps-row-left { flex: 1 1 auto; min-width: 350px; }
+.lgapps-row-right { flex: 0 1 auto; }
+
+.lgapps-separator {
+  margin: 0 6px;
+  color: var(--lgapps-gray-300);
+}
+
+/* --- Controls inputs & buttons --- */
+
+.lgapps-controls button,
+.lgapps-controls input,
+.lgapps-controls select {
+  border-radius: 5px;
+  border: 1px solid #c5b898;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-family: system-ui, -apple-system, sans-serif;
+  box-sizing: border-box;
+  background: var(--lgapps-white);
+}
+.lgapps-controls input[type="number"] { max-width: 75px; }
+.lgapps-controls input[type="text"]   { max-width: 120px; }
+
+.lgapps-controls input:focus,
+.lgapps-controls select:focus {
+  outline: none;
+  border-color: var(--lgapps-gold);
+  box-shadow: 0 0 0 2px rgba(236, 179, 81, 0.25);
+}
+
+.lgapps-controls button {
+  cursor: pointer;
+  background: var(--lgapps-white);
+  color: var(--lgapps-dark);
+  font-weight: 500;
+  border-color: #b5a880;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  box-shadow: 0 1px 2px rgba(26, 30, 18, 0.08);
+}
+.lgapps-controls button:hover {
+  background: var(--lgapps-sand);
+  border-color: var(--lgapps-gold-dk);
+  box-shadow: 0 2px 4px rgba(26, 30, 18, 0.12);
+  transform: translateY(-0.5px);
+}
+.lgapps-controls button:active {
+  transform: translateY(0);
+  box-shadow: 0 0 2px rgba(26, 30, 18, 0.1);
+}
+
+.lgapps-controls button.lgapps-active {
+  background: var(--lgapps-gold);
+  border-color: var(--lgapps-gold-dk);
+  color: var(--lgapps-dark);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(236, 179, 81, 0.4), inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.lgapps-controls button.lgapps-active:hover {
+  background: var(--lgapps-gold-dk);
+}
+
+.lgapps-controls label {
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--lgapps-gray-500);
+  font-weight: 500;
+}
+
+/* --- Sidebar panel (shared pattern) --- */
+
+.lgapps-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: #fcfaf5;
+  border-left: 1px solid #d9cfb8;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+.lgapps-sidebar h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: var(--lgapps-dark);
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--lgapps-gold);
+}
+.lgapps-sidebar input[type="text"],
+.lgapps-sidebar input[type="number"] {
+  width: 100%;
+  padding: 5px 6px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  border: 1px solid #c5b898;
+  border-radius: 4px;
+  background: var(--lgapps-white);
+}
+.lgapps-sidebar input[type="text"]:focus,
+.lgapps-sidebar input[type="number"]:focus {
+  outline: none;
+  border-color: var(--lgapps-gold);
+  box-shadow: 0 0 0 2px rgba(236, 179, 81, 0.25);
+}
+.lgapps-sidebar button {
+  width: 100%;
+  padding: 7px;
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--lgapps-dark);
+  border: 1px solid #b5a880;
+  border-radius: 5px;
+  background: var(--lgapps-white);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  box-shadow: 0 1px 2px rgba(26, 30, 18, 0.06);
+}
+.lgapps-sidebar button:hover {
+  background: var(--lgapps-sand);
+  border-color: var(--lgapps-gold-dk);
+}
+
+/* Primary action button (Apply Changes) */
+.lgapps-sidebar button.lgapps-primary {
+  background: var(--lgapps-gold);
+  border-color: var(--lgapps-gold-dk);
+  color: var(--lgapps-dark);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(236, 179, 81, 0.3);
+}
+.lgapps-sidebar button.lgapps-primary:hover {
+  background: var(--lgapps-gold-dk);
+  color: var(--lgapps-dark);
+}
+.lgapps-sidebar label {
+  font-size: 13px;
+  color: var(--lgapps-gray-500);
+}
+
+/* --- Danger buttons --- */
+
+.lgapps-danger {
+  border-color: var(--lgapps-coral) !important;
+  color: var(--lgapps-coral) !important;
+}
+.lgapps-danger:hover {
+  background: #fff0ed !important;
+  border-color: #e55a42 !important;
+}
+
+/* --- Hint bar --- */
+
+.lgapps-hint {
+  padding: 7px 14px;
+  font-size: 11px;
+  color: var(--lgapps-mint-dk);
+  border-top: 1px solid #d9cfb8;
+  background: var(--lgapps-sand-lt);
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+/* --- Autosave status --- */
+
+.lgapps-autosave-status {
+  font-size: 12px;
+  color: var(--lgapps-mint-dk);
+  font-style: italic;
+  margin-left: 8px;
+}
+
+/* --- Sidebar footer --- */
+
+.lgapps-sidebar-footer {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid #d9cfb8;
+}
+
+/* --- Ad slots (injected by LGApps_Ads) --- */
+
+.lgapps-ad-slot {
+  font-size: 13px;
+  line-height: 1.4;
+}
+.lgapps-ad-slot img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+.lgapps-ad-slot a {
+  color: var(--lgapps-gold-dk);
+  text-decoration: underline;
+}
+
+.lgapps-ad-sidebar {
+  margin: 8px 0;
+  padding: 10px;
+  background: var(--lgapps-sand-lt);
+  border: 1px solid #d9cfb8;
+  border-radius: 5px;
+}
+
+.lgapps-ad-banner {
+  padding: 8px 14px;
+  background: var(--lgapps-sand-lt);
+  border-bottom: 1px solid #d9cfb8;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.lgapps-ad-hint {
+  padding: 6px 14px;
+  background: var(--lgapps-sand-lt);
+  border-top: 1px solid #d9cfb8;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 800px) {
+  .lgapps-sidebar { width: 180px; }
+  .lgapps-controls-row { flex-direction: column; align-items: flex-start; }
+  .lgapps-row-left { min-width: 0; }
+}
+@media (max-width: 600px) {
+  .lgapps-sidebar { display: none; }
+}

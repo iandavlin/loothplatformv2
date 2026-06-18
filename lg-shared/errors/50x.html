@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- Standalone branded 50x (502/503/504). Served straight by nginx when a
+     backend pool is down — keep it asset-free (the icon has onerror cover). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Back in a minute — Looth Group</title>
+<style>
+  :root { --sage:#87986a; --sage-d:#6b7c52; --ink:#1d2117; --mute:#6b6f6b; --cream:#faf7f2; --line:#e4e6e0; }
+  * { box-sizing:border-box; margin:0; }
+  html,body { height:100%; }
+  body { background:var(--cream); color:var(--ink); font:16px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+         display:flex; align-items:center; justify-content:center; padding:24px; }
+  .card { max-width:520px; width:100%; background:#fff; border:1px solid var(--line); border-radius:18px;
+          padding:42px 38px; text-align:center; box-shadow:0 2px 6px rgba(26,32,23,.07), 0 14px 38px rgba(26,32,23,.10); }
+  .brand { display:inline-flex; align-items:center; gap:10px; margin-bottom:22px; text-decoration:none; color:var(--ink); }
+  .brand img { width:36px; height:36px; border-radius:9px; }
+  .brand strong { font:700 19px/1 Georgia,"Times New Roman",serif; }
+  .tool { font-size:46px; line-height:1; }
+  h1 { font:700 24px/1.25 Georgia,serif; margin:14px 0 10px; }
+  p { color:var(--mute); margin-bottom:26px; }
+  .links a { display:inline-block; padding:11px 18px; border-radius:999px; text-decoration:none;
+             font:600 14px/1 inherit; background:var(--sage); color:#fff; }
+  .links a:hover { background:var(--sage-d); }
+  @media (prefers-color-scheme: dark) {
+    body { background:#15171a; color:#e5e7e1; }
+    .card { background:#1d211b; border-color:#2e3429; }
+    .brand { color:#e5e7e1; } h1 { color:#e5e7e1; }
+  }
+</style>
+</head>
+<body>
+  <main class="card">
+    <a class="brand" href="/"><img src="/icons/icon-192.png" alt="" onerror="this.style.display='none'"><strong>Looth Group</strong></a>
+    <div class="tool">&#128736;&#65039;</div>
+    <h1>At the bench — back in a minute</h1>
+    <p>Something on our side hiccuped. It&rsquo;s usually over in moments — give it a refresh.</p>
+    <nav class="links">
+      <a href="javascript:location.reload()">Try again</a>
+    </nav>
+  </main>
+</body>
+</html>

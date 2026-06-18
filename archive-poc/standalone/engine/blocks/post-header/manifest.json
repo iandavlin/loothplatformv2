@@ -1,0 +1,115 @@
+{
+  "name": "post-header",
+  "version": 1,
+  "selector": ".lg-post-header",
+  "description": "Article header: featured image with gradient scrim, title + byline overlaid, tags in a strip below. Pulls author + meta dynamically from the current post; image_id falls back to the post thumbnail. Best as the first block in a post layout.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "image_id": {
+        "type": "integer",
+        "default": 0,
+        "description": "Attachment ID for the hero photo. 0 → use the post's featured image."
+      },
+      "tagline": {
+        "type": "string",
+        "default": "",
+        "description": "Optional one-line dek shown under the title (the magazine-style 'sub-headline'). Empty = none."
+      },
+      "show_read_time": {
+        "type": "boolean",
+        "default": true,
+        "description": "Show estimated read time alongside the date in the byline. Computed from wysiwyg block word counts."
+      },
+      "hidden_links": {
+        "type": "array",
+        "default": [],
+        "description": "Per-post hide-list of author social slot keys (e.g. [\"facebook\", \"youtube\"]). Matching slots are dropped from the social-icon row even if the author has the meta filled in. Edited via the pencil + modal on the social row."
+      },
+      "video_url": {
+        "type": "string",
+        "default": "",
+        "description": "YouTube or Vimeo URL. Only meaningful for variant=video. Renders the hero as a facade — the post's featured image (or image_id) shows as the thumbnail with a play-button overlay; click swaps in the real iframe in place. No JS or iframe loads until the user clicks."
+      },
+      "variant": {
+        "type": "string",
+        "default": "variant-1",
+        "enum": ["variant-1", "variant-2", "variant-3", "video", "sponsor"],
+        "description": "Color palette / mode. variant-1 = amber accent. variant-2 = sage. variant-3 = neutral cream. video = video-hero facade (play button + click-to-play iframe; uses video_url). sponsor = branded sponsor-post header — replaces author byline with brand identity row (logo, name, social icons) + CTA strip; reads brand_* and tlg_* user meta from the post author."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": [
+      "padding",
+      "margin-block",
+      "bg",
+      "radius",
+      "shadow"
+    ],
+    "text": [
+      "color",
+      "link-color",
+      "font-family",
+      "font-size",
+      "font-weight"
+    ]
+  },
+  "defaults": {
+    "container": {
+      "padding": "0",
+      "margin-block": "0 32px",
+      "bg": "transparent",
+      "radius": "0",
+      "shadow": "none"
+    },
+    "text": {
+      "color": "#ffffff",
+      "link-color": "var(--lg-amber, #ecb351)",
+      "font-family": "var(--lg-font-serif)",
+      "font-size": "44px",
+      "font-weight": "700"
+    }
+  },
+  "variants": {
+    "variant-1": {
+      "extends": "defaults"
+    },
+    "variant-2": {
+      "extends": "defaults",
+      "text": {
+        "link-color": "var(--lg-sage-3, #d4e0b8)"
+      }
+    },
+    "variant-3": {
+      "extends": "defaults",
+      "text": {
+        "link-color": "var(--lg-cream, #fbfbf8)"
+      }
+    },
+    "video": {
+      "extends": "defaults",
+      "__label": "Video"
+    },
+    "sponsor": {
+      "extends": "defaults",
+      "__label": "Sponsor"
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["tagline"],
+    "custom_picker": "image",
+    "variant_prop": "variant",
+    "pill_buttons": [
+      "up",
+      "down",
+      "edit",
+      "change",
+      "variant",
+      "tier",
+      "delete"
+    ]
+  }
+}

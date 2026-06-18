@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "_meta": {
+    "title": "event-header — minimal fixture",
+    "post_id": 1,
+    "post_type": "event",
+    "fixture_purpose": "Exercises event-header in isolation with literal-prop overrides (the CLI harness has no WP, so live postmeta reads fall back to props). Covers: (1) ungated virtual event → join link; (2) gated virtual event (looth-pro) under the anonymous test viewer → gate card; (3) in-person event with no zoom_url → no CTA; (4) variant + escaping."
+  },
+  "blocks": [
+    {
+      "type": "event-header",
+      "id": "ev_ungated",
+      "date": "20260329",
+      "time": "15:00:00",
+      "region": "United States",
+      "event_types": ["Virtual event", "Instructional"],
+      "zoom_url": "https://us02web.zoom.us/j/123",
+      "cta_label": "Join on Zoom",
+      "variant": "variant-1"
+    },
+    {
+      "type": "event-header",
+      "id": "ev_gated",
+      "date": "20260412",
+      "time": "09:30:00",
+      "region": "United Kingdom",
+      "event_types": ["Virtual event"],
+      "zoom_url": "https://us02web.zoom.us/j/456",
+      "cta_tier": "looth-pro",
+      "variant": "variant-2"
+    },
+    {
+      "type": "event-header",
+      "id": "ev_inperson",
+      "date": "20260620",
+      "region": "<b>Germany</b>",
+      "event_types": ["In-person show"],
+      "variant": "variant-3"
+    }
+  ]
+}

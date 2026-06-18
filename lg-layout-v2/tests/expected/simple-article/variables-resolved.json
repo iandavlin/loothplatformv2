@@ -1,0 +1,709 @@
+[
+    {
+        "id": "b_intro",
+        "type": "wysiwyg",
+        "resolution": {
+            "container": {
+                "padding": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "0"
+                        }
+                    ],
+                    "effective": "0"
+                },
+                "margin-block": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "16px"
+                        }
+                    ],
+                    "effective": "16px"
+                },
+                "bg": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "transparent"
+                        }
+                    ],
+                    "effective": "transparent"
+                },
+                "border": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "none"
+                        }
+                    ],
+                    "effective": "none"
+                },
+                "radius": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "0"
+                        }
+                    ],
+                    "effective": "0"
+                },
+                "shadow": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "none"
+                        }
+                    ],
+                    "effective": "none"
+                }
+            },
+            "text": {
+                "color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-ink)"
+                        }
+                    ],
+                    "effective": "var(--lg-ink)"
+                },
+                "link-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-sage)"
+                        }
+                    ],
+                    "effective": "var(--lg-sage)"
+                },
+                "font-family": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-font-sans)"
+                        }
+                    ],
+                    "effective": "var(--lg-font-sans)"
+                },
+                "font-size": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "17px"
+                        }
+                    ],
+                    "effective": "17px"
+                },
+                "font-weight": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "400"
+                        }
+                    ],
+                    "effective": "400"
+                },
+                "line-height": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "1.6"
+                        }
+                    ],
+                    "effective": "1.6"
+                },
+                "letter-spacing": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "normal"
+                        }
+                    ],
+                    "effective": "normal"
+                },
+                "text-align": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "left"
+                        }
+                    ],
+                    "effective": "left"
+                }
+            }
+        }
+    },
+    {
+        "id": "b_img1",
+        "type": "image",
+        "resolution": {
+            "container": {
+                "padding": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "12px 16px"
+                        }
+                    ],
+                    "effective": "12px 16px"
+                },
+                "margin-block": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "16px"
+                        }
+                    ],
+                    "effective": "16px"
+                },
+                "bg": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-cream)"
+                        }
+                    ],
+                    "effective": "var(--lg-cream)"
+                },
+                "border": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "1px solid var(--lg-sage-3)"
+                        }
+                    ],
+                    "effective": "1px solid var(--lg-sage-3)"
+                },
+                "radius": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "8px"
+                        }
+                    ],
+                    "effective": "8px"
+                },
+                "shadow": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "none"
+                        }
+                    ],
+                    "effective": "none"
+                },
+                "gap": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "12px"
+                        }
+                    ],
+                    "effective": "12px"
+                }
+            },
+            "text": {
+                "color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-ink)"
+                        }
+                    ],
+                    "effective": "var(--lg-ink)"
+                },
+                "link-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-sage)"
+                        }
+                    ],
+                    "effective": "var(--lg-sage)"
+                },
+                "font-family": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-font-sans)"
+                        }
+                    ],
+                    "effective": "var(--lg-font-sans)"
+                },
+                "font-size": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "18px"
+                        }
+                    ],
+                    "effective": "18px"
+                },
+                "font-weight": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "400"
+                        }
+                    ],
+                    "effective": "400"
+                },
+                "line-height": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "1.5"
+                        }
+                    ],
+                    "effective": "1.5"
+                },
+                "letter-spacing": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "normal"
+                        }
+                    ],
+                    "effective": "normal"
+                },
+                "text-align": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "left"
+                        }
+                    ],
+                    "effective": "left"
+                }
+            }
+        }
+    },
+    {
+        "id": "b_img2",
+        "type": "image",
+        "resolution": {
+            "container": {
+                "padding": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "12px 16px"
+                        }
+                    ],
+                    "effective": "12px 16px"
+                },
+                "margin-block": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "16px"
+                        }
+                    ],
+                    "effective": "16px"
+                },
+                "bg": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-cream)"
+                        }
+                    ],
+                    "effective": "var(--lg-cream)"
+                },
+                "border": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "1px solid var(--lg-sage-3)"
+                        }
+                    ],
+                    "effective": "1px solid var(--lg-sage-3)"
+                },
+                "radius": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "8px"
+                        }
+                    ],
+                    "effective": "8px"
+                },
+                "shadow": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "none"
+                        }
+                    ],
+                    "effective": "none"
+                },
+                "gap": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "12px"
+                        }
+                    ],
+                    "effective": "12px"
+                }
+            },
+            "text": {
+                "color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-ink)"
+                        }
+                    ],
+                    "effective": "var(--lg-ink)"
+                },
+                "link-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-sage)"
+                        }
+                    ],
+                    "effective": "var(--lg-sage)"
+                },
+                "font-family": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-font-sans)"
+                        }
+                    ],
+                    "effective": "var(--lg-font-sans)"
+                },
+                "font-size": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "18px"
+                        }
+                    ],
+                    "effective": "18px"
+                },
+                "font-weight": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "400"
+                        }
+                    ],
+                    "effective": "400"
+                },
+                "line-height": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "1.5"
+                        }
+                    ],
+                    "effective": "1.5"
+                },
+                "letter-spacing": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "normal"
+                        }
+                    ],
+                    "effective": "normal"
+                },
+                "text-align": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "left"
+                        }
+                    ],
+                    "effective": "left"
+                }
+            }
+        }
+    },
+    {
+        "id": "b_yt",
+        "type": "embed",
+        "resolution": {
+            "container": {
+                "padding": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "12px 16px"
+                        }
+                    ],
+                    "effective": "12px 16px"
+                },
+                "margin-block": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "16px"
+                        }
+                    ],
+                    "effective": "16px"
+                },
+                "bg": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-cream)"
+                        }
+                    ],
+                    "effective": "var(--lg-cream)"
+                },
+                "border": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "1px solid var(--lg-sage-3)"
+                        }
+                    ],
+                    "effective": "1px solid var(--lg-sage-3)"
+                },
+                "radius": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "8px"
+                        }
+                    ],
+                    "effective": "8px"
+                },
+                "shadow": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "none"
+                        }
+                    ],
+                    "effective": "none"
+                },
+                "gap": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "12px"
+                        }
+                    ],
+                    "effective": "12px"
+                }
+            },
+            "text": {
+                "color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-ink)"
+                        }
+                    ],
+                    "effective": "var(--lg-ink)"
+                },
+                "link-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-sage)"
+                        }
+                    ],
+                    "effective": "var(--lg-sage)"
+                },
+                "font-family": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-font-sans)"
+                        }
+                    ],
+                    "effective": "var(--lg-font-sans)"
+                },
+                "font-size": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "15px"
+                        }
+                    ],
+                    "effective": "15px"
+                },
+                "font-weight": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "400"
+                        }
+                    ],
+                    "effective": "400"
+                },
+                "line-height": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "1.5"
+                        }
+                    ],
+                    "effective": "1.5"
+                },
+                "letter-spacing": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "normal"
+                        }
+                    ],
+                    "effective": "normal"
+                },
+                "text-align": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "left"
+                        }
+                    ],
+                    "effective": "left"
+                }
+            }
+        }
+    },
+    {
+        "id": "b_outro",
+        "type": "wysiwyg",
+        "resolution": {
+            "container": {
+                "padding": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "0"
+                        }
+                    ],
+                    "effective": "0"
+                },
+                "margin-block": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "16px"
+                        }
+                    ],
+                    "effective": "16px"
+                },
+                "bg": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "transparent"
+                        }
+                    ],
+                    "effective": "transparent"
+                },
+                "border": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "none"
+                        }
+                    ],
+                    "effective": "none"
+                },
+                "radius": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "0"
+                        }
+                    ],
+                    "effective": "0"
+                },
+                "shadow": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "none"
+                        }
+                    ],
+                    "effective": "none"
+                }
+            },
+            "text": {
+                "color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-ink)"
+                        }
+                    ],
+                    "effective": "var(--lg-ink)"
+                },
+                "link-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-sage)"
+                        }
+                    ],
+                    "effective": "var(--lg-sage)"
+                },
+                "font-family": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-font-sans)"
+                        }
+                    ],
+                    "effective": "var(--lg-font-sans)"
+                },
+                "font-size": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "17px"
+                        }
+                    ],
+                    "effective": "17px"
+                },
+                "font-weight": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "400"
+                        }
+                    ],
+                    "effective": "400"
+                },
+                "line-height": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "1.6"
+                        }
+                    ],
+                    "effective": "1.6"
+                },
+                "letter-spacing": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "normal"
+                        }
+                    ],
+                    "effective": "normal"
+                },
+                "text-align": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "left"
+                        }
+                    ],
+                    "effective": "left"
+                }
+            }
+        }
+    }
+]

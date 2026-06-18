@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "_meta": {
+    "source": "/home/ubuntu/projects/B&W  ARCHTOP.zip",
+    "translated_at": "2026-06-15",
+    "featured_image_id": 71681,
+    "notes": "Photo-essay repair article (post-imgcap). 11 webp images, dev IDs 71681-71691 in order. 001 = portrait finished-result hero (figure 1, also featured); 002-011 landscape solo full-width. Fully public (no tier-gate). Light copyedit: source 'old tix' -> 'old one' for readability."
+  },
+  "blocks": [
+    {
+      "type": "post-header",
+      "image_id": 71681,
+      "tagline": "Splinting a crack in an old Epiphone archtop — with spruce borrowed from the guitar’s own fretboard extension, and a sliver of old piano soundboard.",
+      "variant": "variant-1"
+    },
+    {
+      "type": "image",
+      "image_id": 71681,
+      "number": "1",
+      "alt": "The repaired top of an old Epiphone archtop guitar, the repair hidden beneath a replica pickguard.",
+      "image_text": "A repair hidden under the pickguard.\n\nHere’s another old one from the photo vault — a rather different approach to splinting a crack. There were several small, deep dents in the top of this old Epiphone, as well as a pretty large one that cried out to be filled. They were all under where the pickguard would have been. The pickguard was missing, so after repairing the chips and the crack I made a replica copied from one I saw in a photo.",
+      "variant": "variant-1"
+    },
+    {
+      "type": "image",
+      "image_id": 71682,
+      "number": "2",
+      "alt": "The guitar neck removed, showing spruce under the fretboard extension.",
+      "image_text": "Borrowed spruce from under the fretboard extension.\n\nSince I also reset the neck, while it was off I borrowed spruce from under the fretboard extension.",
+      "variant": "variant-1"
+    },
+    {
+      "type": "image",
+      "image_id": 71683,
+      "number": "3",
+      "alt": "Sawing a thick chunk of spruce from under the fretboard extension.",
+      "image_text": "Sawing out a thick chunk…\n\nI sawed out a good thick chunk of…",
+      "variant": "variant-1"
+    },
+    {
+      "type": "image",
+      "image_id": 71684,
+      "number": "4",
+      "alt": "Sawing between the previous saw cuts to free the spruce.",
+      "image_text": "…then between the cuts.\n\n…then sawed between the saw cuts.",
+      "variant": "variant-1"
+    },
+    {
+      "type": "image",
+      "image_id": 71685,
+      "number": "5",
+      "alt": "A removed piece of spruce that matches the guitar top.",
+      "image_text": "A good match for the top.\n\nI was able to remove a good piece that matched the top spruce quite well.",
+      "variant": "variant-1"
+    },
+    {
+      "type": "image",
+      "image_id": 71686,
+      "number": "6",
+      "alt": "The spruce piece being sawn in half on a razor saw clamped in a vise.",
+      "image_text": "Halved on a razor saw.\n\nIt wasn’t long enough to run from the f-hole to the binding, so I sawed it in half on a razor saw clamped in a vise.",
+      "variant": "variant-1"
+    },
+    {
+      "type": "image",
+      "image_id": 71687,
+      "number": "7",
+      "alt": "Chiseling out both sides of a wide crack and filing the sides parallel with a mini-file.",
+      "image_text": "Chiseling the crack parallel.\n\nNext I chiseled out both sides of a dirty, fairly-wide crack, and made the sides parallel with a 4-sided mini-file.",
+      "variant": "variant-1"
+    },
+    {
+      "type": "image",
+      "image_id": 71688,
+      "number": "8",
+      "alt": "The two spruce pieces joined with scarf-joints.",
+      "image_text": "Joined with scarf-joints…\n\nI joined the two pieces with scarf-joints…",
+      "variant": "variant-1"
+    },
+    {
+      "type": "image",
+      "image_id": 71689,
+      "number": "9",
+      "alt": "The spruce splint clamped to the top to dry.",
+      "image_text": "…and clamped to dry.\n\n…and clamped it to dry.",
+      "variant": "variant-1"
+    },
+    {
+      "type": "image",
+      "image_id": 71690,
+      "number": "10",
+      "alt": "The leveled spruce fill, with arrows pointing to two additional thin spruce fills scarfed into the top.",
+      "image_text": "Leveled and ready for color.\n\nOnce leveled it was ready for some color and finish. The arrows point to two short, several-grains-wide spruce fills also cut from the same borrowed piece — each of these is scarfed in as well.",
+      "variant": "variant-1"
+    },
+    {
+      "type": "image",
+      "image_id": 71691,
+      "number": "11",
+      "alt": "The spruce removed from under the fretboard extension replaced with a piece cut from an old piano soundboard brace.",
+      "image_text": "Replacing the donor spruce.\n\nI replaced the piece of spruce that I removed with a piece cut from an old piano soundboard brace.",
+      "variant": "variant-1"
+    },
+    {
+      "type": "post-footer",
+      "show_author": true,
+      "show_related": true
+    }
+  ]
+}

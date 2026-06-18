@@ -1,0 +1,111 @@
+{
+  "name": "section-heading",
+  "version": 1,
+  "selector": ".lg-section-heading",
+  "description": "Boxed section heading — like heading, but wrapped in a container with bg/border/radius so it reads as a visual section break inside an article. Level (h2/h3/h4) is a regular prop; the variant axis is free for color/style flavors of the box.",
+  "schema": {
+    "props": {
+      "text": {
+        "type": "string",
+        "default": "",
+        "description": "The heading's text content. Plain text, not HTML; escaped on render."
+      },
+      "level": {
+        "type": "string",
+        "default": "h2",
+        "enum": ["h2", "h3", "h4"],
+        "description": "Heading level used for the rendered HTML tag. Drives semantic outline + the size modifier class."
+      },
+      "variant": {
+        "type": "string",
+        "default": "variant-1",
+        "enum": ["variant-1", "variant-2", "variant-3"],
+        "description": "Visual style. variant-1 = plain (no chrome — straight heading). variant-2 = boxed (cream bg + sage border). variant-3 = inverted (ink bg + amber text)."
+      }
+    },
+    "required": ["text"]
+  },
+  "inherits_global": false,
+  "vars": {
+    "container": [
+      "padding",
+      "margin-block",
+      "bg",
+      "border",
+      "radius",
+      "shadow"
+    ],
+    "text": [
+      "color",
+      "link-color",
+      "font-family",
+      "font-size",
+      "font-weight",
+      "line-height",
+      "letter-spacing",
+      "text-align"
+    ]
+  },
+  "defaults": {
+    "container": {
+      "padding": "0",
+      "margin-block": "24px",
+      "bg": "transparent",
+      "border": "none",
+      "radius": "0",
+      "shadow": "none"
+    },
+    "text": {
+      "color": "var(--lg-charcoal, #1a1d1a)",
+      "link-color": "var(--lg-sage, #87986a)",
+      "font-family": "var(--lg-font-serif)",
+      "font-size": "24px",
+      "font-weight": "600",
+      "line-height": "1.25",
+      "letter-spacing": "-0.01em",
+      "text-align": "left"
+    }
+  },
+  "variants": {
+    "variant-1": {
+      "extends": "defaults"
+    },
+    "variant-2": {
+      "extends": "defaults",
+      "container": {
+        "padding": "16px 20px",
+        "bg": "var(--lg-cream, #fbfbf8)",
+        "border": "1px solid var(--lg-sage-3, #d4e0b8)",
+        "radius": "8px"
+      }
+    },
+    "variant-3": {
+      "extends": "defaults",
+      "container": {
+        "padding": "16px 20px",
+        "bg": "var(--lg-ink, #323532)",
+        "radius": "8px"
+      },
+      "text": {
+        "color": "var(--lg-amber, #ecb351)"
+      }
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["text"],
+    "custom_picker": null,
+    "variant_prop": "variant",
+    "variant_options": ["variant-1", "variant-2", "variant-3"],
+    "pill_buttons": [
+      "up",
+      "down",
+      "edit",
+      "change",
+      "variant",
+      "tier",
+      "delete"
+    ]
+  },
+  "context_overrides": ["columns"]
+}

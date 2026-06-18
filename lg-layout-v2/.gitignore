@@ -1,0 +1,14 @@
+# Generated bundle — produced by WpAssets::regenerate_bundle()
+/assets/lg-layout-v2-bundle.css
+
+# Harness scratch output (compared against tests/expected snapshots)
+/tests/output/
+
+# Node dev deps (only used by bin/editor-test.js — install via npm i)
+/node_modules/
+
+# Editor + OS junk
+.DS_Store
+*.swp
+*.swo
+*~

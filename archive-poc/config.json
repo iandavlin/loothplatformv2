@@ -1,0 +1,287 @@
+{
+  "sponsors": [
+    {
+      "name": "Total Vise",
+      "url": "https://loothgroup.com/sponsor-page/total-vise/",
+      "logo": "https://loothgroup.com/wp-content/uploads/2024/06/Sponsor-Total-Vise-300x80.webp",
+      "bg": "#212060"
+    },
+    {
+      "name": "StewMac",
+      "url": "https://loothgroup.com/sponsor-page/stewmac/",
+      "logo": "https://loothgroup.com/wp-content/uploads/2024/06/Sponsor-Stew-Mac-300x80.webp",
+      "bg": "#fff"
+    },
+    {
+      "name": "Go Acoustic Audio",
+      "url": "https://loothgroup.com/sponsor-page/go-acoustic-audio/",
+      "logo": "https://loothgroup.com/wp-content/uploads/2024/06/Sponsor-Go-Acoustic-300x80.webp",
+      "bg": "#262626"
+    },
+    {
+      "name": "Strings Micro Factory",
+      "url": "https://loothgroup.com/sponsor-page/strings-micro-factory/",
+      "logo": "https://loothgroup.com/wp-content/uploads/2024/06/SMF-Logo-Horizontal-300x92.jpg",
+      "bg": "#000"
+    },
+    {
+      "name": "GluBoost",
+      "url": "https://loothgroup.com/sponsor-page/gluboost/",
+      "logo": "https://loothgroup.com/wp-content/uploads/2026/04/gluboost-logo.png",
+      "bg": "#000"
+    },
+    {
+      "name": "Member Benefits",
+      "url": "https://loothgroup.com/archive/?_post_type=member-benefit",
+      "logo": "https://loothgroup.com/wp-content/uploads/2024/06/Member-Benefits-300x80.webp",
+      "bg": "#fff"
+    }
+  ],
+  "local_looths": [
+    {
+      "name": "Tri State Looths (NYC)",
+      "url": "https://loothgroup.com/groups/tri-state-looths-nyc/",
+      "avatar": "https://loothgroup.com/wp-content/uploads/group-avatars/38/6703eb1642637-bpthumb.jpg"
+    },
+    {
+      "name": "SoCal Looths",
+      "url": "https://loothgroup.com/groups/socal-looths/",
+      "avatar": "https://loothgroup.com/wp-content/uploads/group-avatars/39/67059fc8c8f52-bpthumb.png"
+    },
+    {
+      "name": "SW Ontario Looths",
+      "url": "https://loothgroup.com/groups/sw-ontario-looths/",
+      "avatar": "https://loothgroup.com/wp-content/uploads/group-avatars/40/695029893f4d0-bpthumb.jpg"
+    },
+    {
+      "name": "DMV Looths",
+      "url": "https://loothgroup.com/groups/dmv-looths/",
+      "avatar": "https://loothgroup.com/wp-content/uploads/group-avatars/41/67bf465a9aa9b-bpthumb.png"
+    },
+    {
+      "name": "Looth Troop PNW",
+      "url": "https://loothgroup.com/groups/looth-troop-pnw/",
+      "avatar": "https://loothgroup.com/wp-content/uploads/group-avatars/42/67c3666232607-bpthumb.jpg"
+    },
+    {
+      "name": "Looths of Ireland",
+      "url": "https://loothgroup.com/groups/looths-of-ireland/",
+      "avatar": "https://loothgroup.com/wp-content/uploads/group-avatars/43/67c4978e6ed05-bpthumb.png"
+    },
+    {
+      "name": "Middle Tennessee Looths",
+      "url": "https://loothgroup.com/groups/middle-tennessee-looths/",
+      "avatar": "https://loothgroup.com/wp-content/uploads/group-avatars/45/68b649a51295e-bpthumb.png"
+    },
+    {
+      "name": "Basque Country Looths",
+      "url": "https://loothgroup.com/groups/basque-country-looths/",
+      "avatar": "https://loothgroup.com/wp-content/uploads/group-avatars/46/68fb57ee07b48-bpthumb.png"
+    },
+    {
+      "name": "Ohio Local Looths",
+      "url": "https://loothgroup.com/groups/ohio-local-looths/",
+      "avatar": "https://loothgroup.com/wp-content/uploads/group-avatars/47/691e1eeae828a-bpthumb.png"
+    }
+  ],
+  "cta_member": [
+    {
+      "label": "Add Forum Post",
+      "url": "https://loothgroup.com/add-a-post-on-the-forum/",
+      "style": "primary",
+      "action": ""
+    },
+    {
+      "label": "Weekly Email",
+      "url": "https://loothgroup.com/looth-group-weekly/",
+      "style": "secondary",
+      "action": ""
+    },
+    {
+      "label": "Member Map",
+      "url": "#member-map",
+      "style": "secondary",
+      "action": "",
+      "attr": "data-action=\"open-member-map\"",
+      "icon": "<svg class=\"cta-btn__icon\" viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z\"/><circle cx=\"12\" cy=\"10\" r=\"3\"/></svg>"
+    },
+    {
+      "label": "Search the Archive",
+      "url": "#search",
+      "style": "ghost",
+      "action": "open-search-modal"
+    }
+  ],
+  "cta_public": [
+    {
+      "label": "Join Looth Group",
+      "url": "https://www.patreon.com/c/theloothgroup/membership",
+      "style": "primary",
+      "action": ""
+    },
+    {
+      "label": "Weekly Newsletter",
+      "url": "https://loothgroup.com/looth-group-weekly/",
+      "style": "secondary",
+      "action": ""
+    },
+    {
+      "label": "Search the Archive",
+      "url": "#search",
+      "style": "ghost",
+      "action": "open-search-modal"
+    }
+  ],
+  "rows": [
+    {
+      "id": "video-promo-public",
+      "title": "Welcome to The Looth Group",
+      "type": "video-promo",
+      "layout": "video-promo",
+      "column": "main",
+      "audience": "public",
+      "query": {
+        "side": "video-right",
+        "video_id": "2IBxue3zPxE",
+        "aspect": "16x9",
+        "html": "<p class=\"vp-eyebrow\">Welcome</p><h3>Built by guitar looths, for guitar looths.</h3><p>The Looth Group is where serious luthiers and builders share tools, techniques, and the candid conversations you cannot find on YouTube. It is a working community — not a marketing channel.</p><ul><li>The full archive of build threads, repair tutorials, and shop-tested fixes.</li><li>Member video library — long-form workshops from working looths.</li><li>Downloads: plans, jigs, templates, and reference files.</li><li>Active discussion forum where questions actually get answered.</li></ul><p><a class=\"vp-cta\" href=\"https://www.patreon.com/c/theloothgroup/membership\">Join Looth Group →</a><a class=\"vp-cta vp-cta--secondary\" href=\"https://loothgroup.com/looth-group-weekly/\">Weekly email</a></p>"
+      }
+    },
+    {
+      "id": "video-promo-members",
+      "title": "What's new",
+      "type": "video-promo",
+      "layout": "video-promo",
+      "column": "main",
+      "audience": "members",
+      "query": {
+        "side": "video-right",
+        "video_id": "LhcIQ0x31hc",
+        "aspect": "16x9",
+        "html": "<p class=\"vp-eyebrow\">What's new</p><h3>Welcome to the new Looth Group website</h3><p>We rebuilt the whole site around one idea: everything the group makes &mdash; discussions, videos, articles, plans &mdash; in one place, and fast. The quick tour:</p><ul><li><strong>The Hub</strong> &mdash; every discussion and new piece of content in one feed. Tap <strong>Filters</strong> to narrow by category or type, and the bookmark on any card saves it to your <strong>Saved</strong> list.</li><li><strong>Your profile</strong> &mdash; your shop's page: skills, gallery, credentials, location. Edit it from your avatar menu; use the arrows (or drag) to reorder sections, and the privacy slider decides who sees what.</li><li><strong>The Map &amp; Directory</strong> &mdash; find looths near you. What shows on the map is up to each member's own privacy setting.</li><li><strong>Events &amp; Loothalong</strong> &mdash; workshops and live streams on one calendar; the green banner means we're live now.</li><li><strong>Messages</strong> &mdash; DM any member straight from their profile.</li><li><strong>Make it an app</strong> &mdash; on your phone, open the site and choose <em>Add to Home Screen</em>. Full app feel, no app store.</li></ul><hr class=\"vp-divider\"><p>It's all live and still moving &mdash; your feedback decides what we build next. Something off, broken, or missing? Tell us.</p><p><a class=\"vp-cta\" data-feedback href=\"/hub/?compose=suggestion-box-bug-reporting\">Report a bug or suggestion &rarr;</a><a class=\"vp-cta vp-cta--secondary\" href=\"/hub/?compose\">Start a thread</a></p>"
+      }
+    },
+    {
+      "id": "cta-bar",
+      "title": "",
+      "type": "cta-bar",
+      "layout": "cta-bar",
+      "column": "left",
+      "audience": "both"
+    },
+    {
+      "id": "local-looths-row",
+      "title": "Local Looths",
+      "type": "local-looths",
+      "layout": "local-looths",
+      "column": "left",
+      "audience": "both"
+    },
+    {
+      "id": "upcoming-events",
+      "title": "Upcoming events",
+      "type": "events-upcoming",
+      "layout": "events",
+      "column": "",
+      "audience": "both",
+      "query": {
+        "limit": 20
+      }
+    },
+    {
+      "id": "recent-posts-row",
+      "title": "Most recent posts",
+      "type": "static",
+      "layout": "rail",
+      "column": "",
+      "audience": "members",
+      "query": {
+        "exclude_kinds": [
+          "discussion",
+          "misc",
+          "event"
+        ],
+        "sort": "newest",
+        "limit": 12
+      }
+    },
+    {
+      "id": "latest-public-posts",
+      "title": "Latest posts",
+      "type": "static",
+      "layout": "rail",
+      "column": "",
+      "audience": "public",
+      "query": {
+        "sort": "newest",
+        "limit": 8,
+        "exclude_kinds": [
+          "discussion",
+          "misc",
+          "event"
+        ],
+        "tier_in": [
+          "public"
+        ]
+      }
+    },
+    {
+      "id": "active-discussions",
+      "title": "Active discussions",
+      "type": "static",
+      "layout": "discussions",
+      "column": "",
+      "audience": "members",
+      "query": {
+        "kind": "discussion",
+        "sort": "active",
+        "limit": 8
+      }
+    },
+    {
+      "id": "mandolin-row",
+      "title": "Mandolin",
+      "type": "static",
+      "layout": "rail",
+      "column": "",
+      "audience": "members",
+      "query": {
+        "tag": "mandolin",
+        "tag_match": "prefix",
+        "sort": "newest",
+        "limit": 10
+      }
+    },
+    {
+      "id": "dan-erlewine-row",
+      "title": "From Dan Erlewine",
+      "type": "static",
+      "layout": "rail",
+      "column": "",
+      "audience": "members",
+      "query": {
+        "author": 8,
+        "sort": "newest",
+        "limit": 12
+      }
+    },
+    {
+      "id": "sponsors",
+      "title": "Our Sponsors",
+      "type": "sponsors",
+      "layout": "sponsors",
+      "column": "right",
+      "audience": "both"
+    }
+  ],
+  "featured_member": {
+    "enabled": true,
+    "name": "Chip Tait",
+    "role": "Brooklyn Fretworks",
+    "where": "Baltimore, Maryland",
+    "bio": "This week's featured member: fretted-instrument work from Chip's bench at Brooklyn Fretworks.",
+    "avatar": "/profile-media/avatars/6afc4e4b-870a-55b1-8345-358d69680cce/1.jpg?v=1",
+    "cta_label": "Visit Chip's profile",
+    "cta_href": "/u/patreon_95515498"
+  }
+}

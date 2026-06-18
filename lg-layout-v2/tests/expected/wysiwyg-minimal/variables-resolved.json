@@ -1,0 +1,138 @@
+[
+    {
+        "id": "b_minimal",
+        "type": "wysiwyg",
+        "resolution": {
+            "container": {
+                "padding": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "0"
+                        }
+                    ],
+                    "effective": "0"
+                },
+                "margin-block": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "16px"
+                        }
+                    ],
+                    "effective": "16px"
+                },
+                "bg": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "transparent"
+                        }
+                    ],
+                    "effective": "transparent"
+                },
+                "border": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "none"
+                        }
+                    ],
+                    "effective": "none"
+                },
+                "radius": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "0"
+                        }
+                    ],
+                    "effective": "0"
+                },
+                "shadow": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "none"
+                        }
+                    ],
+                    "effective": "none"
+                }
+            },
+            "text": {
+                "color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-ink)"
+                        }
+                    ],
+                    "effective": "var(--lg-ink)"
+                },
+                "link-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-sage)"
+                        }
+                    ],
+                    "effective": "var(--lg-sage)"
+                },
+                "font-family": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "var(--lg-font-sans)"
+                        }
+                    ],
+                    "effective": "var(--lg-font-sans)"
+                },
+                "font-size": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "17px"
+                        }
+                    ],
+                    "effective": "17px"
+                },
+                "font-weight": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "400"
+                        }
+                    ],
+                    "effective": "400"
+                },
+                "line-height": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "1.6"
+                        }
+                    ],
+                    "effective": "1.6"
+                },
+                "letter-spacing": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "normal"
+                        }
+                    ],
+                    "effective": "normal"
+                },
+                "text-align": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "left"
+                        }
+                    ],
+                    "effective": "left"
+                }
+            }
+        }
+    }
+]

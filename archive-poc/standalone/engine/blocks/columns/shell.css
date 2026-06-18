@@ -1,0 +1,46 @@
+/* columns — a one-level container. Emits .lg-columns with .lg-columns--N
+   modifier for the grid template, and a .lg-columns__col wrapper per
+   column holding the round-robin-distributed children. Stacks vertically
+   below 720px. No card chrome — columns is structure, not decoration. */
+
+@layer block-shell {
+  .lg-columns {
+    display: grid;
+    gap: var(--lg-gap, 24px);
+    margin-block: var(--lg-margin-block, 32px);
+
+    /* Optional chrome — defaults are no-ops so existing plain rows render
+       unchanged. variant-2 and variant-3 override these via modifier-class
+       selectors emitted by the CSS bundler from manifest.variants. */
+    padding: var(--lg-padding, 0);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+  }
+
+  /* One rule per supported column count. Enum-bound at the manifest
+     level so we don't need a generic --lg-col-count CSS variable. */
+  .lg-columns--2 { grid-template-columns: repeat(2, 1fr); }
+  .lg-columns--3 { grid-template-columns: repeat(3, 1fr); }
+
+  /* Each column is a vertical stack of its assigned children. The flex
+     gap mirrors the manifest's gap var so horizontal + vertical rhythm
+     match without an extra knob. */
+  .lg-columns__col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lg-gap, 24px);
+    min-width: 0;   /* lets long content (long URLs, wide images) shrink to col width */
+  }
+
+  /* Stack on narrow viewports. 768px is the standard mobile breakpoint —
+     covers phones in any orientation and small tablets in portrait. Below
+     this width a 2-column layout cell becomes too cramped for an image
+     plus its multi-paragraph figcaption to read comfortably; better to
+     give each its full width and let the article scroll. */
+  @media (max-width: 768px) {
+    .lg-columns--2,
+    .lg-columns--3 { grid-template-columns: 1fr; }
+  }
+}

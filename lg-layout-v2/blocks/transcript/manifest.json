@@ -1,0 +1,66 @@
+{
+  "name": "transcript",
+  "version": 1,
+  "selector": ".lg-transcript",
+  "description": "Collapsible transcript body. Renders as a native HTML <details>/<summary> accordion so the prose is always in the DOM (search-crawlable) while staying collapsed by default to keep the page short. Authors paste the transcript HTML once; the chrome is provided.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "label": {
+        "type": "string",
+        "default": "Show transcript",
+        "description": "Summary text shown on the collapsed accordion (the clickable affordance)."
+      },
+      "body": {
+        "type": "string",
+        "format": "html",
+        "default": "",
+        "description": "Transcript HTML — paragraphs, in-line timestamps, light emphasis. Sanitized with wp_kses_post on save. Lives in the DOM whether the accordion is open or closed."
+      },
+      "open": {
+        "type": "boolean",
+        "default": false,
+        "description": "Initial state. Default closed (collapsed)."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": [
+      "padding",
+      "margin-block",
+      "bg",
+      "border-color",
+      "radius"
+    ],
+    "text": [
+      "color",
+      "label-color",
+      "font-family",
+      "font-size",
+      "line-height"
+    ]
+  },
+  "defaults": {
+    "container": {
+      "padding": "0",
+      "margin-block": "24px",
+      "bg": "transparent",
+      "border-color": "#e7e3da",
+      "radius": "8px"
+    },
+    "text": {
+      "color": "var(--lg-charcoal, #1a1d1a)",
+      "label-color": "var(--lg-ink, #323532)",
+      "font-family": "var(--lg-font-serif)",
+      "font-size": "16px",
+      "line-height": "1.6"
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["label", "body"],
+    "custom_picker": null,
+    "pill_buttons": ["up", "down", "edit", "change", "tier", "delete"]
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "name": "recent-posts",
+  "version": 1,
+  "selector": ".lg-recent-posts",
+  "description": "Sponsor-page post carousel. Shows the sponsor's `sponsor-post` CPT items as a horizontal scroll-snap strip of cards (thumbnail + title + date + excerpt). Cards are baked into the `items` prop at author/materialize time by querying WHERE author = sponsor.wp_user_id (the `author` prop records that link for write-sponsor-v2 to refresh) — render stays WordPress-free in the standalone path. Reuses the shared [data-lg-carousel] front-end. Auto-themes from --brand-primary. Empty items → block renders nothing.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "heading": {
+        "type": "string",
+        "default": "Recent Posts",
+        "description": "Section heading shown above the carousel (inline-editable)."
+      },
+      "author": {
+        "type": "integer",
+        "default": 0,
+        "description": "Sponsor wp_user_id this feed is keyed to. Render uses the baked `items`; this records the author link for re-baking."
+      },
+      "items": {
+        "type": "array",
+        "default": [],
+        "description": "Baked post cards: [{ title, url, image, date?, excerpt? }]. Order = render order. Resolved from sponsor-post at author time."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": ["margin-block", "padding"],
+    "text": ["font-family"]
+  },
+  "defaults": {
+    "container": {
+      "margin-block": "32px",
+      "padding": "0"
+    },
+    "text": {
+      "font-family": "var(--lg-font-sans)"
+    }
+  },
+  "variants": {
+    "variant-1": { "extends": "defaults" }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["heading"],
+    "variant_prop": "variant",
+    "variant_options": ["variant-1"],
+    "pill_buttons": ["move-up", "move-down", "edit", "delete"]
+  }
+}

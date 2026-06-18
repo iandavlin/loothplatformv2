@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "_meta": {
+    "title": "heading \u2014 minimal fixture",
+    "post_id": 1,
+    "post_type": "post-imgcap",
+    "fixture_purpose": "One heading at each supported level (h2, h3, h4). Confirms render emits the correct tag + escapes text."
+  },
+  "blocks": [
+    {
+      "type": "section-heading",
+      "id": "h_a",
+      "text": "Section 1: The Problem",
+      "level": "h2"
+    },
+    {
+      "type": "section-heading",
+      "id": "h_b",
+      "text": "Subsection A",
+      "level": "h3"
+    },
+    {
+      "type": "section-heading",
+      "id": "h_c",
+      "text": "Footnote",
+      "level": "h4"
+    },
+    {
+      "type": "section-heading",
+      "id": "h_d",
+      "text": "Default level is h2"
+    },
+    {
+      "type": "section-heading",
+      "id": "h_e",
+      "text": "<script>alert(1)</script>",
+      "level": "h2"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "_meta": {
+    "title": "divider — minimal fixture",
+    "post_id": 1,
+    "post_type": "post-imgcap",
+    "fixture_purpose": "Three divider variants (default, dots, space) to exercise variant class emission + variant defaults."
+  },
+  "blocks": [
+    { "type": "wysiwyg", "id": "intro", "html": "<p>Before the first divider.</p>" },
+    { "type": "divider", "id": "d1" },
+    { "type": "wysiwyg", "id": "middle1", "html": "<p>Between line and dots.</p>" },
+    { "type": "divider", "id": "d2", "variant": "dots" },
+    { "type": "wysiwyg", "id": "middle2", "html": "<p>Between dots and space.</p>" },
+    { "type": "divider", "id": "d3", "variant": "space" },
+    { "type": "wysiwyg", "id": "outro", "html": "<p>After the space divider.</p>" }
+  ]
+}

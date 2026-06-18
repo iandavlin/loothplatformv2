@@ -1,0 +1,24 @@
+{
+  "name": "download",
+  "version": 1,
+  "selector": ".lg-download",
+  "description": "A single downloadable file rendered as a download button. Resolves file_id through the media map (url, filename, mime, human size are pre-baked) — no WP attachment calls at render. Visually reuses the callout 'files' treatment. Emitted by the loothprint/loothcut conversion as a bare { type: download, file_id }.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "file_id": { "type": "int", "default": 0, "description": "Attachment ID of the downloadable file. Resolved to a URL + filename + size via the media map." },
+      "url":     { "type": "string", "default": "", "description": "Explicit download URL. Overrides file_id resolution when set (e.g. off-site file)." },
+      "label":   { "type": "string", "default": "", "description": "Override for the row label. Empty falls back to the file's title, then its filename, then 'Download File'." },
+      "title":   { "type": "string", "default": "Download", "description": "Eyebrow shown above the download row. Empty = no eyebrow." }
+    },
+    "required": []
+  },
+  "vars": { "container": [], "text": [] },
+  "defaults": { "container": {}, "text": {} },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": [],
+    "custom_picker": null,
+    "pill_buttons": ["up", "down", "change", "tier", "delete"]
+  }
+}

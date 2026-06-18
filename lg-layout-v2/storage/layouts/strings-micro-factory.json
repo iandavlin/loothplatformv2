@@ -1,0 +1,117 @@
+{
+    "schema": 1,
+    "_meta": {
+        "sponsor_slug": "strings-micro-factory"
+    },
+    "sponsor": {
+        "slug": "strings-micro-factory",
+        "wp_user_id": 476,
+        "email": "stringsmicrofactory@gmail.com",
+        "name": "Strings Micro Factory",
+        "display_name": null,
+        "logo_url": "https://dev.loothgroup.com/wp-content/uploads/2026/01/485189909_1866416607516111_8673439210587313512_n-300x300-1.jpg",
+        "hero": {
+            "url": "https://dev.loothgroup.com/wp-content/uploads/2026/01/ChatGPTImageDec28202505_24_51PM-1.webp",
+            "caption": "SMF Builders Kit",
+            "title": "Strings Micro Factory",
+            "youtube": "https://youtu.be/1ytaBSiQfyg"
+        },
+        "about": "The Strings Micro Factory provides a modern, systems-based approach to acoustic instrument building. Designed specifically for luthiers, educators, small shops, and serious hobbyists, the Micro Factory combines precision jigs, pinned-template tooling, and thoughtfully engineered workflows to improve accuracy, efficiency, and repeatability.",
+        "website": "https://www.stringsmicrofactory.com/",
+        "colors": {
+            "primary": "#9f9d9d",
+            "secondary": "#9f9d9d",
+            "header": "#000000"
+        },
+        "social": {
+            "facebook": null,
+            "instagram": "https://www.instagram.com/stringsmicrofactory",
+            "youtube": "https://www.youtube.com/@StringsMicroFactory"
+        },
+        "gallery_urls": [
+            "https://dev.loothgroup.com/wp-content/uploads/2026/01/BP2-1.webp",
+            "https://dev.loothgroup.com/wp-content/uploads/2026/01/ChatGPTImageDec28202502_07_07PM-1.webp",
+            "https://dev.loothgroup.com/wp-content/uploads/2026/01/ChatGPTImageDec28202505_24_51PM-1.webp",
+            "https://dev.loothgroup.com/wp-content/uploads/2026/01/ChatGPTImageDec29202502_51_22PM-1.webp",
+            "https://dev.loothgroup.com/wp-content/uploads/2026/01/ChatGPTImageDec29202504_19_55PM-1-1.webp",
+            "https://dev.loothgroup.com/wp-content/uploads/2026/01/WB1-1.webp"
+        ],
+        "tag_url": null,
+        "forum_url": "/hub/?leaf=67776"
+    },
+    "blocks": [
+        {
+            "type": "brand-hero",
+            "id": "hero",
+            "show_hero_image": true
+        },
+        {
+            "type": "section-heading",
+            "id": "about-h",
+            "text": "About Strings Micro Factory",
+            "level": "h2"
+        },
+        {
+            "type": "wysiwyg",
+            "id": "about",
+            "html": "<p>The Strings Micro Factory provides a modern, systems-based approach to acoustic instrument building. Designed specifically for luthiers, educators, small shops, and serious hobbyists, the Micro Factory combines precision jigs, pinned-template tooling, and thoughtfully engineered workflows to improve accuracy, efficiency, and repeatability.</p>"
+        },
+        {
+            "type": "embed",
+            "id": "hero-yt",
+            "url": "https://youtu.be/1ytaBSiQfyg",
+            "caption": "SMF Builders Kit"
+        },
+        {
+            "type": "featured-products",
+            "id": "prods",
+            "heading": "Featured Products",
+            "author": 476,
+            "items": [
+                {
+                    "title": "Deluxe Kit",
+                    "url": "https://dev.loothgroup.com/sponsor-product/deluxe-kit/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/01/ChatGPTImageDec29202502_48_23PM-300x176-1.webp"
+                },
+                {
+                    "title": "Builders Kit",
+                    "url": "https://dev.loothgroup.com/sponsor-product/builders-kit/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/01/ChatGPTImageDec29202502_46_56PM-300x300-1.webp"
+                },
+                {
+                    "title": "Essentials Kit",
+                    "url": "https://dev.loothgroup.com/sponsor-product/essentials-kit/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/01/ChatGPTImageDec29202501_24_16PM-300x300-1.webp"
+                }
+            ]
+        },
+        {
+            "type": "recent-posts",
+            "id": "posts",
+            "heading": "Recent Posts",
+            "author": 476,
+            "items": [
+                {
+                    "title": "Happy to be joining the LoothGroup!",
+                    "url": "https://dev.loothgroup.com/sponsor-post/happy-to-be-joining-the-loothgroup/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/02/IMG_0476-699516d50b306-300x300.jpeg",
+                    "date": "Feb 17, 2026",
+                    "excerpt": "Thanks to Ian for the warm welcome in the newsletter, I really appreciate the support and am excited to be here! I’m…"
+                }
+            ]
+        },
+        {
+            "type": "brand-gallery",
+            "id": "gallery",
+            "heading": "Image Gallery"
+        },
+        {
+            "type": "whos-talking",
+            "id": "talk"
+        },
+        {
+            "type": "contact-form",
+            "id": "contact"
+        }
+    ]
+}

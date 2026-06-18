@@ -1,0 +1,530 @@
+/* lg-fe-editor.css — chrome for the front-end inline editor.
+   Loaded only when ?lg_edit=1 AND can_edit() passes. */
+
+/* Transparent block wrapper used by the JS to host a heading's pill —
+   keeps the <h2>/<h3>/<h4> intact, gives the pill a valid positioning
+   parent, and inherits the heading's own margin behavior. */
+.lg-edit-headingwrap { position: relative; }
+
+/* Divider wrapper gets a real hit area so the pill is hover-discoverable;
+   without this the <hr>'s 1px height makes the pill unreachable. */
+.lg-edit-dividerwrap {
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+}
+.lg-edit-dividerwrap > hr { width: 100%; }
+
+/* Highlight all editable blocks subtly so authors see what they can touch. */
+.lg-edit-host {
+    outline: 1px dashed transparent;
+    outline-offset: 4px;
+    transition: outline-color 120ms ease;
+}
+.lg-edit-host:hover,
+.lg-edit-host:focus-within {
+    outline-color: rgba(0, 120, 255, 0.55);
+}
+
+/* Inline-editable text targets — visible cursor + soft bg on focus. */
+[data-lg-edit-prop][contenteditable="true"] {
+    cursor: text;
+}
+[data-lg-edit-prop][contenteditable="true"]:focus {
+    background: rgba(255, 235, 0, 0.10);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255, 200, 0, 0.45);
+}
+
+/* Pill bar — absolute, hover-reveal. Top-center so it doesn't crash into
+   neighboring columns the way a top-right anchor does. */
+.lg-edit-pill {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px 4px;
+    background: #111;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.30);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+    z-index: 50;
+    user-select: none;
+    white-space: nowrap;
+}
+/* Only reveal the *innermost* hovered block's pill. Without this, hovering
+   a column reveals both the column's pill and every child's pill at the
+   same spot. `:has(.lg-edit-host:hover)` matches an ancestor whose
+   descendant is hovered — we use it to hide the ancestor's own pill. */
+.lg-edit-host:hover > .lg-edit-pill,
+.lg-edit-host:focus-within > .lg-edit-pill,
+.lg-edit-pill:hover {
+    opacity: 1;
+    pointer-events: auto;
+}
+.lg-edit-host:has(.lg-edit-host:hover) > .lg-edit-pill,
+.lg-edit-host:has(.lg-edit-host:focus-within) > .lg-edit-pill {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.lg-edit-pill__btn {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: #fff;
+    font: 600 11px/1 system-ui, sans-serif;
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.lg-edit-pill__btn:hover { background: rgba(255, 255, 255, 0.15); }
+.lg-edit-pill__btn--delete:hover { background: #c00; }
+
+/* ── Global save spinner (top-right, refcounted) ─────────────────── */
+.lg-fe-spinner {
+    position: fixed;
+    top: 16px;
+    right: 140px;        /* keep clear of the Edit page / Exit editor pill */
+    z-index: 99999;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #111;
+    color: #fff;
+    border-radius: 6px;
+    font: 600 12px/1 system-ui, sans-serif;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.30);
+}
+.lg-fe-spinner.is-on { display: inline-flex; }
+.lg-fe-spinner__dot {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: lg-fe-spin 0.8s linear infinite;
+}
+@keyframes lg-fe-spin { to { transform: rotate(360deg); } }
+
+/* ── Rich-text editor modal (TinyMCE) ────────────────────────────── */
+.lg-rt-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 16, 14, 0.65);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+}
+.lg-rt-modal__panel {
+    background: #fff;
+    border-radius: 8px;
+    width: min(900px, 100%);
+    max-height: calc(100vh - 64px);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+.lg-rt-modal__title {
+    padding: 14px 18px;
+    font: 600 14px/1.2 system-ui, sans-serif;
+    color: #111;
+    border-bottom: 1px solid #eee;
+}
+.lg-rt-modal__ta {
+    width: 100%;
+    min-height: 320px;
+    border: 0;
+    padding: 0;          /* TinyMCE replaces this with its own chrome */
+}
+.lg-rt-modal__bar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid #eee;
+    background: #fafafa;
+}
+.lg-rt-modal__btn {
+    appearance: none;
+    border: 1px solid #ccc;
+    background: #fff;
+    color: #111;
+    font: 600 13px/1 system-ui, sans-serif;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.lg-rt-modal__btn:hover { background: #f4f4f4; }
+.lg-rt-modal__btn--save { background: #111; color: #fff; border-color: #111; }
+.lg-rt-modal__btn--save:hover { background: #333; }
+
+/* Make sure the TinyMCE wrapper expands inside the modal */
+.lg-rt-modal .wp-editor-wrap { flex: 1; display: flex; flex-direction: column; }
+.lg-rt-modal .wp-editor-container { flex: 1; min-height: 0; }
+
+/* ── Items repeater modal (callout list variants) ────────────────── */
+.lg-items-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 16, 14, 0.65);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+}
+.lg-items-modal__panel {
+    background: #fff;
+    border-radius: 8px;
+    width: min(820px, 100%);
+    max-height: calc(100vh - 64px);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+.lg-items-modal__title {
+    padding: 14px 18px;
+    font: 600 14px/1.2 system-ui, sans-serif;
+    color: #111;
+    border-bottom: 1px solid #eee;
+}
+.lg-items-modal__rows {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #fafafa;
+}
+.lg-items-modal__add {
+    appearance: none;
+    margin: 12px 18px;
+    padding: 8px 14px;
+    border: 1px dashed #c3c4c7;
+    background: #fff;
+    color: #1d2327;
+    font: 500 13px/1 system-ui, sans-serif;
+    border-radius: 6px;
+    cursor: pointer;
+    align-self: flex-start;
+}
+.lg-items-modal__add:hover { background: #f0f1f3; }
+.lg-items-modal__bar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid #eee;
+    background: #fafafa;
+}
+.lg-items-modal__btn {
+    appearance: none;
+    border: 1px solid #ccc;
+    background: #fff;
+    color: #111;
+    font: 600 13px/1 system-ui, sans-serif;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.lg-items-modal__btn:hover { background: #f4f4f4; }
+.lg-items-modal__btn--save { background: #111; color: #fff; border-color: #111; }
+.lg-items-modal__btn--save:hover { background: #333; }
+
+.lg-items-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+}
+.lg-items-row__ctrls { display: flex; flex-direction: column; gap: 3px; }
+.lg-items-row__btn {
+    appearance: none;
+    border: 1px solid #c3c4c7;
+    background: #fff;
+    color: #1d2327;
+    font: 500 12px/1 system-ui, sans-serif;
+    padding: 2px 8px;
+    min-height: 22px;
+    border-radius: 3px;
+    cursor: pointer;
+}
+.lg-items-row__btn:hover { background: #f0f1f3; }
+.lg-items-row__btn--del { color: #b32d2e; }
+.lg-items-row__btn--del:hover { background: #fbeaea; color: #a00; }
+
+.lg-items-row__fields {
+    display: grid;
+    grid-template-columns: 160px 1fr 1fr;
+    gap: 8px 12px;
+    align-items: start;
+}
+.lg-items-row__field { display: flex; flex-direction: column; gap: 3px; font: 12px/1.3 system-ui, sans-serif; min-width: 0; }
+.lg-items-row__field > span { color: #50575e; font-size: 11px; letter-spacing: 0.02em; text-transform: uppercase; }
+.lg-items-row__field input, .lg-items-row__field select {
+    appearance: none;
+    padding: 4px 8px;
+    font: 13px/1.3 system-ui, sans-serif;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    min-height: 28px;
+    width: 100%;
+    box-sizing: border-box;
+    background: #fff;
+    color: #1d2327;
+}
+.lg-items-row__field--description { grid-column: 1 / -1; }
+.lg-items-row__icon-wrap {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px;
+    align-items: center;
+}
+.lg-items-row__icon-preview {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    color: #b8842b;
+}
+.lg-items-row__icon-preview svg { width: 20px; height: 20px; display: block; }
+.lg-items-row__extras { grid-column: 1 / -1; margin-top: 4px; }
+.lg-items-row__extras > summary { cursor: pointer; font-size: 12px; color: #50575e; padding: 2px 0; }
+.lg-items-row__extras[open] > summary { margin-bottom: 6px; }
+.lg-items-row__extras .lg-items-row__fields { padding-top: 6px; border-top: 1px dashed #dcdcde; }
+
+/* ── Add-block insertion zones (between siblings) ────────────────── */
+.lg-add-zone {
+    position: relative;
+    height: 8px;                    /* thin baseline gutter, hover-revealed */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: height 200ms ease;
+}
+.lg-add-zone::before {
+    content: "";
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    top: 50%;
+    height: 1px;
+    background: rgba(0, 0, 0, 0.10);
+    opacity: 0;
+    transition: opacity 150ms ease;
+}
+.lg-add-zone:hover::before,
+.lg-add-zone--open::before { opacity: 1; }
+
+.lg-add-zone__btn {
+    appearance: none;
+    border: 0;
+    background: #111;
+    color: #fff;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font: 700 18px/1 system-ui, sans-serif;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 150ms ease, transform 150ms ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    z-index: 30;
+    position: relative;
+}
+.lg-add-zone:hover .lg-add-zone__btn,
+.lg-add-zone--open .lg-add-zone__btn { opacity: 1; }
+.lg-add-zone__btn:hover { transform: scale(1.10); }
+
+/* When the picker is open, push the surrounding blocks apart so authors
+   see exactly where the new block will land. */
+.lg-add-zone--open {
+    height: 72px;
+}
+.lg-add-zone--open::before { background: rgba(0, 0, 0, 0.25); }
+
+/* The picker popover anchors inside the (now-expanded) zone. */
+.lg-add-zone .lg-add-pop {
+    top: 32px;                      /* just below the round + button */
+}
+
+/* Inside a column, the gutter is even smaller by default but expands the
+   same when picking — keeps narrow columns from feeling cramped. */
+.lg-columns__col > .lg-add-zone { height: 4px; }
+.lg-columns__col > .lg-add-zone--open { height: 64px; }
+
+/* ── Tier picker popover ─────────────────────────────────────────── */
+.lg-tier-pop {
+    position: absolute;
+    top: 16px;            /* sits just below the pill */
+    left: 50%;
+    transform: translateX(-50%);
+    background: #111;
+    color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    padding: 6px 4px;
+    z-index: 60;
+    min-width: 140px;
+}
+.lg-tier-pop__title {
+    font: 600 10px/1 system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #999;
+    padding: 4px 8px 6px;
+}
+.lg-tier-pop__opt {
+    display: block;
+    width: 100%;
+    text-align: left;
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: #fff;
+    font: 500 12px/1 system-ui, sans-serif;
+    padding: 7px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.lg-tier-pop__opt:hover     { background: rgba(255, 255, 255, 0.12); }
+.lg-tier-pop__opt.is-current { background: rgba(255, 255, 255, 0.18); position: relative; }
+.lg-tier-pop__opt.is-current::after {
+    content: "●";
+    position: absolute;
+    right: 10px;
+    font-size: 10px;
+    opacity: 0.7;
+}
+
+/* ── Image edit-mode: grey overlay + centered "Edit Image" button ── */
+.lg-edit-active .lg-image__frame {
+    position: relative;     /* anchor the grey pseudo + overlay button */
+}
+.lg-edit-active .lg-image__frame::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+    z-index: 10;
+}
+.lg-edit-img-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    /* The overlay itself is transparent to pointer events so the <img>
+       underneath can receive pointerdown for the pan-drag UX. Only the
+       overlay's interactive children opt back in (button + select). */
+    pointer-events: none;
+}
+.lg-edit-img-overlay > * { pointer-events: auto; }
+.lg-edit-img-overlay__btn {
+    appearance: none;
+    border: 0;
+    background: #fff;
+    color: #111;
+    font: 600 13px/1 system-ui, sans-serif;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.40);
+    position: absolute;
+    top: 12px; right: 12px;
+    z-index: 22;
+}
+.lg-edit-img-overlay__btn:hover { background: #fafafa; }
+
+/* Aspect-ratio dropdown — small chip in the lower-left of the image */
+.lg-edit-img-overlay__aspect {
+    position: absolute;
+    left: 12px; bottom: 12px;
+    appearance: none;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 6px;
+    padding: 5px 22px 5px 10px;
+    font: 600 12px/1 system-ui, sans-serif;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    background-image: linear-gradient(45deg, transparent 50%, #fff 50%),
+                      linear-gradient(135deg, #fff 50%, transparent 50%);
+    background-position: calc(100% - 12px) center, calc(100% - 8px) center;
+    background-size: 4px 4px, 4px 4px;
+    background-repeat: no-repeat;
+}
+.lg-edit-img-overlay__aspect:hover { background-color: rgba(0, 0, 0, 0.8); }
+.lg-edit-img-overlay__aspect option { background: #1a1d1a; color: #fff; }
+
+/* Pannable image — when an aspect crop is on in editor mode, the <img>
+   becomes a drag handle. Cursor hint + suppress native browser drag. */
+.lg-image__img.lg-edit-img-pannable {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+.lg-image__img.lg-edit-img-pannable:active { cursor: grabbing; }
+
+/* Zoom +/- buttons — stacked at the top-left, below the "Edit Image" button
+   (which lives top-right). Small dark chips so they don't compete with the
+   photo. */
+.lg-edit-img-overlay__zoom {
+    position: absolute;
+    left: 12px;
+    width: 32px; height: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    border-radius: 6px;
+    font: 700 18px/1 system-ui, sans-serif;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    z-index: 22;
+}
+.lg-edit-img-overlay__zoom:hover { background: rgba(0, 0, 0, 0.85); }
+.lg-edit-img-overlay__zoom--in  { top: 12px; }
+.lg-edit-img-overlay__zoom--out { top: 52px; }
+
+/* Save button — top-right under the Edit Image button. Pulses sage when
+   there are unsaved focal/zoom changes. */
+.lg-edit-img-overlay__save {
+    position: absolute;
+    top: 52px; right: 12px;
+    appearance: none;
+    border: 0;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    font: 600 13px/1 system-ui, sans-serif;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    z-index: 22;
+    transition: background 150ms ease-out;
+}
+.lg-edit-img-overlay__save:hover { background: rgba(0, 0, 0, 0.85); }
+.lg-edit-img-overlay__save.is-dirty {
+    background: var(--lg-sage, #5b7e5f);
+    box-shadow: 0 0 0 2px rgba(91, 126, 95, 0.4);
+}
+
+/* WP-attachment caption/description are intentionally left visible in the
+   media picker — they're separate from block-level caption/description
+   (which live in the layout JSON and are edited inline) and may be useful
+   for attachment-wide metadata. */

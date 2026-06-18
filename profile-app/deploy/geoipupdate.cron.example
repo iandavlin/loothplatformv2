@@ -1,0 +1,9 @@
+# /etc/cron.d/geoipupdate — refresh GeoLite2-City weekly.
+#
+# Install:
+#   sudo install -m 644 deploy/geoipupdate.cron.example /etc/cron.d/geoipupdate
+#
+# MaxMind updates GeoLite2 on Tuesdays and Fridays; weekly is plenty for
+# IP-biased autocomplete viewboxes.
+
+17 4 * * 3  root  /usr/bin/geoipupdate >> /var/log/geoipupdate.log 2>&1

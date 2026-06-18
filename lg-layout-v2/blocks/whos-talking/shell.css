@@ -1,0 +1,74 @@
+/* Whos-talking block — sponsor forum/tag cross-link panel.
+   inherits_global: false. Panel uses --brand-header bg + ink; links use
+   --brand-primary. All vars carry sage/neutral fallbacks. */
+
+@layer block-shell {
+  .lg-whos-talking {
+    margin: 0;
+    margin-block: var(--lg-margin-block, 32px);
+    padding: var(--lg-padding, 0);
+    padding-inline: var(--lg-article-padding-inline, 16px);
+    font-family: var(--lg-font-family, var(--lg-font-sans));
+  }
+  .lg-whos-talking__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 28px clamp(20px, 4vw, 40px);
+    border-radius: 16px;
+    background: var(--brand-header, #1a1d1a);
+    color: var(--brand-header-ink, #ffffff);
+    border: 1px solid color-mix(in srgb, var(--brand-header, #1a1d1a) 70%, #000);
+  }
+  .lg-whos-talking__copy { flex: 1 1 280px; min-width: 0; }
+  .lg-whos-talking__title {
+    margin: 0;
+    font-size: clamp(20px, 3vw, 27px);
+    font-weight: 800;
+    line-height: 1.2;
+    color: inherit;
+  }
+  .lg-whos-talking__blurb {
+    margin: 8px 0 0;
+    font-size: 15px;
+    line-height: 1.5;
+    opacity: 0.8;
+    color: inherit;
+  }
+  .lg-whos-talking__links {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .lg-whos-talking__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    background: var(--brand-primary, #87986a);
+    color: var(--brand-primary-ink, #ffffff);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .lg-whos-talking__link:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0,0,0,.25);
+  }
+  .lg-whos-talking__link--tag {
+    background: color-mix(in srgb, var(--brand-primary, #87986a) 18%, transparent);
+    color: var(--brand-header-ink, #ffffff);
+    border: 1px solid color-mix(in srgb, var(--brand-header-ink, #ffffff) 35%, transparent);
+  }
+  .lg-whos-talking__link svg { width: 18px; height: 18px; }
+
+  @media (max-width: 640px) {
+    .lg-whos-talking__inner { flex-direction: column; align-items: stretch; }
+    .lg-whos-talking__link { justify-content: center; }
+  }
+}

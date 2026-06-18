@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en" data-place="1" data-skin="1" data-device="phone" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- the deck ships its OWN dark mode (X) — tell auto-darkeners hands-off,
+     they repaint the light mock with patchy dark cards -->
+<meta name="color-scheme" content="light dark">
+<meta name="darkreader-lock">
+<title>Sponsors Deck — Looth Hub</title>
+<style>
+/* ============================================================
+   SPONSORS DECK  (Looth Hub) — Style Sandbox
+   How should the 5 sponsors (Total Vise, StewMac, Acoustic Audio,
+   Strings Microfactory, GluBoost) appear on the Hub?
+
+   AXES (every combination reachable):
+     Placement  (8 options) ......... Left / Right arrows
+     Logo treatment (3 options) ..... Up / Down arrows
+     Phone / Desktop ................ D
+     Light / Dark ................... X
+
+   Faithful Hub mock: real bb-mirror class names + the locked
+   Sage Tint tokens + Trebuchet type, so the winner ports nearly
+   verbatim into hub-polish.js. Logos are inline recreations —
+   real logo files get swapped in at port time.
+   ============================================================ */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:var(--sans);
+  background:radial-gradient(900px 600px at 50% -10%,#2c322b,transparent),#13160f;
+  color:#e9ece3;min-height:100vh;display:flex;flex-direction:column;align-items:center;
+}
+button{font-family:inherit;cursor:pointer}
+:root{
+  color-scheme:light dark; /* we honor both ourselves — keeps Chrome auto-dark off the mock */
+  --sans:"Trebuchet MS","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --serif:Georgia,"Times New Roman",serif;
+}
+
+/* ============================================================
+   DECK CHROME (dark surround)
+   ============================================================ */
+.topbar{width:100%;max-width:1280px;display:flex;align-items:center;gap:14px;padding:16px 22px 2px;flex-wrap:wrap}
+.brandmark{font:700 15px/1 var(--serif);color:#fbfbf8}
+.brandmark small{font:600 10.5px/1 var(--sans);color:#9aa48c;letter-spacing:.12em;text-transform:uppercase;margin-left:8px}
+.readout{margin-left:auto;font:600 12px/1.4 var(--sans);color:#cdd6bd;text-align:right}
+.readout b{color:#ecb351}
+.keys{font:500 10.5px/1 var(--sans);color:#77815f;margin-top:3px}
+
+.pillrow{width:100%;max-width:1280px;display:flex;flex-wrap:wrap;gap:7px;padding:7px 22px 0;align-items:center}
+.pillrow .axis{font:700 10px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:#77815f;min-width:74px}
+.pill{
+  display:inline-flex;align-items:center;gap:7px;border:1px solid #313a2a;background:#1b2017;
+  color:#cdd6bd;border-radius:999px;padding:7px 12px;font:600 12px/1 var(--sans);transition:.13s;
+}
+.pill:hover{background:#232a1c;border-color:#46543a}
+.pill.on{background:#2b3420;border-color:#ecb351;color:#fff}
+.pill .n{font-weight:700;color:#8b9678;font-size:10.5px}
+.pill.on .n{color:#ecb351}
+.pill.tgl{border-style:dashed}
+.pill .sw{width:13px;height:13px;border-radius:4px;border:1px solid rgba(255,255,255,.25)}
+
+/* ---------- Stage + frames ---------- */
+.stage{flex:1 1 auto;width:100%;max-width:1280px;display:flex;align-items:flex-start;justify-content:center;
+  padding:14px 64px 8px;position:relative}
+.arrow{position:absolute;top:330px;width:44px;height:44px;border-radius:50%;
+  border:1px solid #313a2a;background:#1c2118;color:#cdd6bd;font-size:19px;
+  display:flex;align-items:center;justify-content:center;transition:.15s;z-index:5}
+.arrow:hover{background:#27301f;color:#fff;border-color:#46543a}
+.arrow.prev{left:8px}.arrow.next{right:8px}
+
+.phone-shell{display:none;width:390px;height:780px;border-radius:42px;background:#0a0c08;padding:11px;
+  box-shadow:0 40px 90px -28px #000,0 0 0 2px #2a3122;position:relative;flex:0 0 auto}
+.phone-shell::before{content:"";position:absolute;top:19px;left:50%;transform:translateX(-50%);
+  width:118px;height:24px;background:#0a0c08;border-radius:0 0 15px 15px;z-index:40}
+[data-device="phone"] .phone-shell{display:block}
+
+.desk-shell{display:none;width:min(1160px,94vw);height:740px;border-radius:14px;background:#0e110b;
+  box-shadow:0 36px 80px -26px #000,0 0 0 1px #2a3122;overflow:hidden;flex-direction:column}
+[data-device="desktop"] .desk-shell{display:flex}
+.desk-bar{flex:0 0 auto;height:36px;display:flex;align-items:center;gap:7px;padding:0 14px;background:#171b12;border-bottom:1px solid #232a1c}
+.desk-bar i{width:11px;height:11px;border-radius:50%;background:#39422e;font-style:normal}
+.desk-bar .url{margin-left:8px;flex:0 1 380px;background:#10130c;border:1px solid #232a1c;border-radius:7px;
+  font:500 11px/1 var(--sans);color:#8b9678;padding:6px 11px}
+
+/* the mock screen mounts INSIDE whichever shell is visible */
+.screen-slot{position:absolute;inset:11px;border-radius:32px;overflow:hidden}
+.desk-shell .screen-slot{position:relative;inset:auto;border-radius:0;flex:1 1 auto;min-height:0}
+
+.foot{width:100%;max-width:1280px;padding:6px 22px 22px;font:500 11.5px/1.55 var(--sans);color:#77815f}
+.foot b{color:#9aa48c}
+
+/* ============================================================
+   THE HUB MOCK — Sage Tint tokens (Buck's locked Hub look)
+   ============================================================ */
+.hub{
+  /* light (Sage Tint, lightened per Buck 2026-06-11 — near-cream ground) */
+  --app-bg:#f6f8ee; --card-bg:#ffffff; --line:#dde3cb; --chrome-bg:#fbfcf6;
+  --ink:#1a1d1a; --body:#323532; --mute:#6b6f6b;
+  --accent:#6b7c52; --accent-d:#52613d; --tint:#dde6c7; --tint2:#d4e0b8;
+  --amber:#ecb351; --rust:#c66845;
+  --card-radius:14px;
+  --card-shadow:0 1px 2px rgba(26,29,26,.04),0 10px 22px -14px rgba(26,29,26,.30);
+  --hero-base:linear-gradient(135deg,#52613d,#87986a);
+  --knock:#ffffff; /* knockout color inside logo glyphs (true-color skin) */
+  width:100%;height:100%;display:flex;flex-direction:column;
+  background:var(--app-bg);color:var(--ink);font-family:var(--sans);
+  position:relative;overflow:hidden;
+}
+[data-mode="dark"] .hub{
+  --app-bg:#15170f; --card-bg:#1e2118; --line:#2f3526; --chrome-bg:#191c13;
+  --ink:#e9ece0; --body:#cfd4c4; --mute:#8d937f;
+  --accent:#87986a; --accent-d:#a8b889; --tint:#2a301f; --tint2:#39422a;
+  --card-shadow:0 1px 2px rgba(0,0,0,.3),0 10px 22px -14px rgba(0,0,0,.6);
+  --hero-base:linear-gradient(135deg,#39422a,#52613d);
+}
+
+.status-bar{height:30px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:0 18px;font:600 12px/1 var(--sans);color:var(--ink);background:var(--chrome-bg)}
+[data-device="desktop"] .status-bar{display:none}
+.status-bar .dots{display:flex;gap:3px}
+.status-bar .dots i{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.7;font-style:normal}
+
+.app-chrome{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:9px 14px;background:var(--chrome-bg);border-bottom:1px solid var(--line)}
+.hub-brand{font:600 17px/1 var(--serif);letter-spacing:.01em}
+.hub-brand b{color:var(--accent-d);font-weight:600}
+.chrome-actions{display:flex;gap:14px;color:var(--mute)}
+.chrome-actions .ico{width:19px;height:19px}
+[data-device="desktop"] .app-chrome{padding:10px 26px}
+
+.hub-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:thin}
+
+.feed-page .forum-header{position:relative;overflow:hidden;min-height:118px;display:flex;align-items:flex-end}
+.forum-header__bg{position:absolute;inset:0;background:var(--hero-base)}
+.forum-header::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(165deg,rgba(107,124,82,.32) 0%,rgba(26,29,26,.18) 46%,rgba(26,29,26,.64) 100%)}
+.forum-header__body{position:relative;z-index:2;padding:14px 16px 13px;width:100%}
+.forum-header__label{display:block;color:var(--amber);font:700 10.5px/1 var(--sans);
+  letter-spacing:.14em;text-transform:uppercase;margin-bottom:5px;text-shadow:0 1px 6px rgba(26,29,26,.55)}
+.forum-header__title{margin:0;font:600 26px/1.06 var(--serif);color:#fbfbf8;
+  text-shadow:0 1px 14px rgba(26,29,26,.45)}
+[data-device="desktop"] .forum-header__body{max-width:1080px;margin:0 auto;padding:18px 26px 16px}
+
+.feed-sort-bar{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:8px;
+  padding:9px 12px;background:var(--app-bg);border-bottom:1px solid var(--line)}
+[data-device="desktop"] .feed-sort-bar{padding:10px 26px}
+.sort-tabs{display:flex;gap:4px}
+.sort-tab{border:0;background:transparent;color:var(--mute);font:600 13px/1 var(--sans);padding:7px 12px;border-radius:999px}
+.sort-tab.is-on{background:var(--tint);color:var(--accent-d)}
+.lg-filters-chip{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;
+  border:0;border-radius:999px;padding:6px 12px;font:600 12.5px/1 var(--sans)}
+.spacer{flex:1 1 auto}
+.new-post-btn{display:inline-flex;align-items:center;gap:5px;background:var(--accent-d);color:#fff;
+  border:0;border-radius:999px;padding:7px 13px;font:700 12.5px/1 var(--sans)}
+[data-mode="dark"] .new-post-btn{color:#15170f}
+
+/* ---------- Feed + cards (real class names) ---------- */
+.feed-wrap{display:block;max-width:1080px;margin:0 auto;width:100%}
+[data-device="desktop"] .feed-wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:0 18px;padding:0 26px}
+.feed{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;padding:13px 12px 30px}
+/* desktop = masonry-style column packing (like the real Hub mosaic — no
+   row-aligned vertical gaps under short cards) */
+[data-device="desktop"] .feed{display:block;columns:3;column-gap:18px;padding:18px 0 34px}
+[data-device="desktop"] .feed>*{break-inside:avoid;margin-bottom:18px}
+[data-device="desktop"] .sp-billboard{column-span:all}
+/* placement 8 on desktop: feed shrinks to 2 cols + a sponsor rail */
+[data-device="desktop"][data-place="8"] .feed-wrap{grid-template-columns:minmax(0,1fr) 250px}
+[data-device="desktop"][data-place="8"] .feed{columns:2}
+
+.feed-card{min-width:0;background:var(--card-bg);border:1px solid var(--line);
+  border-radius:var(--card-radius);overflow:hidden;box-shadow:var(--card-shadow)}
+.feed-card__meta-top{display:flex;align-items:center;gap:9px;padding:11px 13px 9px;min-width:0}
+.avatar-init{width:30px;height:30px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  background:var(--tint2);color:var(--accent-d);font:700 11px/1 var(--sans)}
+[data-mode="dark"] .avatar-init{color:#d8e0c4}
+.feed-card__forum-ctx{flex:1 1 auto;min-width:0;font:600 12.5px/1.25 var(--sans);color:var(--body);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feed-card__time{font:500 11px/1 var(--sans);color:var(--mute)}
+.feed-card__kind-badge{flex:0 0 auto;font:700 10px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;
+  background:var(--tint);color:var(--accent-d);border-radius:7px;padding:5px 8px}
+.feed-card__cover{width:100%;aspect-ratio:3/2;max-height:300px;background-size:cover;background-position:center}
+.feed-card__header-body{padding:11px 13px 12px}
+.feed-card__title{margin:0 0 5px;font:600 18px/1.22 var(--serif);color:var(--ink);letter-spacing:.005em}
+.feed-card__op-excerpt{margin:0;font:400 13.5px/1.5 var(--sans);color:var(--body);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.feed-card__actions{display:flex;gap:18px;padding:8px 13px 12px;font:600 12px/1 var(--sans);color:var(--mute)}
+.feed-card__actions span{display:inline-flex;align-items:center;gap:5px}
+.feed-card__actions .ico{width:15px;height:15px}
+
+.icon-svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ============================================================
+   SPONSOR LOGO CHIPS (inline recreations of the 5 brands)
+   .sp-chip > glyph svg + wordmark. Colors come from the skin.
+   ============================================================ */
+.sp-chip{display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  border-radius:9px;padding:8px 12px;min-height:36px;flex:0 0 auto;
+  border:1px solid transparent;line-height:1;white-space:nowrap}
+.sp-chip svg{display:block;flex:0 0 auto}
+.lg-tv{font:800 italic 13px/1 var(--sans);letter-spacing:.07em}
+.lg-tv b{font-weight:800;opacity:.85}
+.lg-sm{font:800 15px/1 var(--sans);letter-spacing:-.01em}
+.lg-sm sup{font-size:7px;font-weight:600;vertical-align:super}
+.lg-aa{font:600 12.5px/1 var(--sans);letter-spacing:.03em}
+.lg-st{display:flex;flex-direction:column;gap:2px;text-align:left}
+.lg-st .a{font:700 italic 12.5px/1 var(--serif)}
+.lg-st .b{font:700 7px/1 var(--sans);letter-spacing:.22em;text-transform:uppercase;opacity:.8}
+.lg-gb{font:800 13.5px/1 var(--sans);letter-spacing:.02em}
+.lg-gb b{opacity:.65;font-weight:800;padding:0 1px}
+
+/* --- Skin 1: TRUE COLOR (each brand on its own chip) --- */
+[data-skin="1"] .sp-chip[data-brand="totalvise"]{background:#1d2c63;color:#fff;border-color:#33457f}
+[data-skin="1"] .sp-chip[data-brand="stewmac"]{background:#fff;color:#16181a;border-color:#d9d9d4;--knock:#fff}
+[data-skin="1"] .sp-chip[data-brand="stewmac"] .g-sq{fill:#c8102e}
+[data-skin="1"] .sp-chip[data-brand="acoustic"]{background:#17191c;color:#f2f3f0;border-color:#2c2f33}
+[data-skin="1"] .sp-chip[data-brand="acoustic"] .g-dot{fill:#ecb351}
+[data-skin="1"] .sp-chip[data-brand="strings"]{background:#101010;color:#fbfbf8;border-color:#2b2b2b}
+[data-skin="1"] .sp-chip[data-brand="gluboost"]{background:#41464b;color:#fff;border-color:#5a6066}
+[data-mode="dark"][data-skin="1"] .sp-chip[data-brand="stewmac"]{border-color:#3a3e35}
+
+/* --- Skin 2: SAGE WASH (mono, quietest, most on-brand) --- */
+[data-skin="2"] .sp-chip{background:var(--tint);color:var(--accent-d);border-color:var(--line);--knock:var(--tint)}
+[data-skin="2"] .sp-chip .g-sq{fill:currentColor}
+[data-skin="2"] .sp-chip .g-dot{fill:currentColor}
+
+/* --- Skin 3: SLATE (mono on charcoal) --- */
+[data-skin="3"] .sp-chip{background:#23261f;color:#f1efe6;border-color:#3a3e33;--knock:#23261f}
+[data-skin="3"] .sp-chip .g-sq{fill:currentColor}
+[data-skin="3"] .sp-chip .g-dot{fill:currentColor}
+[data-mode="dark"][data-skin="3"] .sp-chip{background:#2c3024;border-color:#454a3a}
+
+/* ============================================================
+   PLACEMENTS — all rendered, gated by html[data-place]
+   ============================================================ */
+.sp-label{font:700 9.5px/1 var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--mute)}
+
+/* 1 — LOGO STRIP (static row under the sort bar) */
+.sp-strip{display:none;padding:10px 12px 4px;max-width:1080px;margin:0 auto;width:100%}
+[data-place="1"] .sp-strip{display:block}
+[data-device="desktop"] .sp-strip{padding:14px 26px 0}
+.sp-strip .hd{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.sp-strip .hd .rule{flex:1 1 auto;height:1px;background:var(--line)}
+.sp-strip .row{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.sp-strip .row::-webkit-scrollbar{display:none}
+[data-device="desktop"] .sp-strip .row{justify-content:center;overflow:visible}
+
+/* 2 — MARQUEE (auto-scrolling loop, same spot) */
+.sp-marquee{display:none;border-bottom:1px solid var(--line);background:var(--chrome-bg);
+  padding:9px 0;overflow:hidden;position:relative}
+[data-place="2"] .sp-marquee{display:block}
+.sp-marquee .lane{display:flex;gap:10px;width:max-content;animation:spq 22s linear infinite}
+.sp-marquee:hover .lane{animation-play-state:paused}
+@keyframes spq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.sp-marquee .tag{position:absolute;top:0;left:0;right:0;text-align:center;display:none}
+
+/* 3 — BILLBOARD (featured sponsor hero card at the top of the feed, rotates) */
+.sp-billboard{display:none;grid-column:1/-1;position:relative;overflow:hidden;
+  background:var(--card-bg);border:1px solid var(--line);border-radius:var(--card-radius);box-shadow:var(--card-shadow)}
+[data-place="3"] .sp-billboard{display:block}
+.sp-billboard .inner{display:flex;align-items:center;gap:14px;padding:14px}
+.sp-billboard .copy{flex:1 1 auto;min-width:0}
+.sp-billboard .copy .nm{font:600 17px/1.2 var(--serif);color:var(--ink);margin:6px 0 3px}
+.sp-billboard .copy .tg{font:400 12.5px/1.45 var(--sans);color:var(--body);margin:0}
+.sp-billboard .copy .cta{display:inline-flex;margin-top:9px;background:var(--tint);color:var(--accent-d);
+  border-radius:999px;padding:6px 12px;font:700 11.5px/1 var(--sans)}
+.sp-billboard .dots{position:absolute;right:12px;bottom:12px;display:flex;gap:4px}
+.sp-billboard .dots i{width:5px;height:5px;border-radius:50%;background:var(--line);font-style:normal}
+.sp-billboard .dots i.on{background:var(--accent)}
+.sp-billboard .sp-chip{transform:scale(1.18);transform-origin:left center;margin-right:8px}
+
+/* 4 — SPOTLIGHT CARD (single-sponsor native feed card, scattered) */
+.sp-spot{display:none}
+[data-place="4"] .sp-spot{display:block}
+.sp-spot .feed-card__kind-badge{background:var(--amber);color:#3a2f12}
+.sp-spot .sp-hero{display:flex;align-items:center;justify-content:center;padding:26px 13px;
+  background:linear-gradient(135deg,var(--tint) 0%,var(--card-bg) 100%);border-bottom:1px solid var(--line)}
+.sp-spot .sp-hero .sp-chip{transform:scale(1.45)}
+.sp-spot .feed-card__actions a{color:var(--accent-d);text-decoration:none;display:inline-flex;align-items:center;gap:5px;font-weight:700}
+
+/* 5 — SPONSOR GRID CARD (one "Our sponsors" tile holding all five)
+   — only rendered into the feed for places 5 and 8-on-phone, no CSS gate needed */
+.sp-grid .bd{display:flex;flex-wrap:wrap;gap:8px;padding:12px 13px 14px;justify-content:center}
+.sp-grid .bd .sp-chip{flex:1 1 44%}
+
+/* 6 — INLINE CHIP ROW (ultra-subtle row recurring between cards) */
+.sp-inline{display:none;align-items:center;gap:8px;padding:1px 2px;min-width:0}
+[data-place="6"] .sp-inline{display:flex}
+.sp-inline .sp-label{flex:0 0 auto}
+.sp-inline .row{display:flex;gap:6px;overflow:hidden;flex:1 1 auto;mask-image:linear-gradient(90deg,#000 88%,transparent)}
+.sp-inline .sp-chip{min-height:26px;padding:5px 9px;border-radius:7px}
+.sp-inline .sp-chip svg{transform:scale(.82)}
+.sp-inline .lg-tv{font-size:10px}.sp-inline .lg-sm{font-size:11.5px}
+.sp-inline .lg-aa{font-size:10px}.sp-inline .lg-gb{font-size:10.5px}
+.sp-inline .lg-st .a{font-size:9.5px}.sp-inline .lg-st .b{font-size:5.5px}
+
+/* 7 — STICKY RIBBON (docked above the tab bar, rotates) */
+.sp-ribbon{display:none;position:absolute;left:0;right:0;z-index:8;
+  bottom:56px;background:var(--chrome-bg);border-top:1px solid var(--line);
+  padding:7px 12px;align-items:center;gap:10px}
+[data-place="7"] .sp-ribbon{display:flex}
+[data-device="desktop"] .sp-ribbon{bottom:0}
+.sp-ribbon .who{flex:1 1 auto;min-width:0;font:500 11.5px/1.3 var(--sans);color:var(--mute);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-ribbon .who b{color:var(--body);font-weight:700}
+.sp-ribbon .x{flex:0 0 auto;border:0;background:none;color:var(--mute);font-size:14px;padding:2px 4px}
+
+/* 8 — SIDE RAIL (desktop). Phone falls back to the grid card. */
+.rail{display:none}
+[data-device="desktop"][data-place="8"] .rail{display:block;padding:18px 0 34px}
+.rail .box{position:sticky;top:54px;background:var(--card-bg);border:1px solid var(--line);
+  border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:13px}
+.rail .box .hd{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.rail .box .hd .rule{flex:1 1 auto;height:1px;background:var(--line)}
+.rail .col{display:flex;flex-direction:column;gap:8px}
+.rail .col .sp-chip{width:100%;justify-content:flex-start}
+.rail .note{margin:10px 0 0;font:400 10.5px/1.5 var(--sans);color:var(--mute)}
+
+/* ---------- Bottom tab bar (phone only) ---------- */
+.tabbar{flex:0 0 auto;display:flex;background:var(--chrome-bg);border-top:1px solid var(--line);
+  padding:6px 4px 14px;position:relative;z-index:9}
+[data-device="desktop"] .tabbar{display:none}
+.tab{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;
+  color:var(--mute);font:600 9.5px/1 var(--sans)}
+.tab.on{color:var(--accent-d)}
+.tab .ico{width:21px;height:21px}
+
+@media (max-width:760px){
+  .stage{padding:10px 8px}
+  .arrow{display:none}
+  .pillrow .axis{min-width:100%;margin-top:2px}
+  .readout{width:100%;text-align:left;margin-left:0}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brandmark">Looth <small>Sponsors deck</small></div>
+  <div class="readout"><span id="readout"></span>
+    <div class="keys">←/→ placement &nbsp;·&nbsp; ↑/↓ treatment &nbsp;·&nbsp; D phone/desktop &nbsp;·&nbsp; X light/dark</div>
+  </div>
+</div>
+
+<div class="pillrow" id="placeRow"><span class="axis">Placement</span></div>
+<div class="pillrow">
+  <span class="axis">Treatment</span>
+  <span id="skinRow" style="display:contents"></span>
+</div>
+<div class="pillrow">
+  <span class="axis">View</span>
+  <button class="pill" id="devPhone">Phone 390 <span class="n">D</span></button>
+  <button class="pill" id="devDesk">Desktop <span class="n">D</span></button>
+  <span style="width:14px"></span>
+  <span class="axis" style="min-width:0">Mode</span>
+  <button class="pill" id="modeLight">Light <span class="n">X</span></button>
+  <button class="pill" id="modeDark">Dark <span class="n">X</span></button>
+</div>
+
+<div class="stage">
+  <button class="arrow prev" id="prevBtn">←</button>
+  <div class="phone-shell"><div class="screen-slot" id="slotPhone"></div></div>
+  <div class="desk-shell">
+    <div class="desk-bar"><i></i><i></i><i></i><span class="url">dev.loothgroup.com/hub/</span></div>
+    <div class="screen-slot" id="slotDesk"></div>
+  </div>
+  <button class="arrow next" id="nextBtn">→</button>
+</div>
+
+<div class="foot">
+  <b>Logos are inline recreations</b> — real logo files get swapped in when we port the winner.
+  Out of scope for this deck (decided after a pick): tap-through links, sponsor data source / rotation logic,
+  the hub-polish.js port + deploy, and coordinator awareness for anything feed-scattered.
+</div>
+
+<!-- ======== THE HUB MOCK (one instance, re-mounted into the visible shell) ======== -->
+<div class="hub feed-page" id="hub">
+  <div class="status-bar"><span>9:41</span><span class="dots"><i></i><i></i><i></i><i></i></span></div>
+  <div class="app-chrome">
+    <div class="hub-brand">Looth <b>Group</b></div>
+    <div class="chrome-actions">
+      <svg class="ico icon-svg" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <svg class="ico icon-svg" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+    </div>
+  </div>
+  <div class="hub-scroll" id="hubScroll">
+    <div class="forum-header"><div class="forum-header__bg"></div>
+      <div class="forum-header__body">
+        <span class="forum-header__label">Community</span>
+        <h1 class="forum-header__title">The Hub</h1>
+      </div>
+    </div>
+    <div class="feed-sort-bar">
+      <div class="sort-tabs"><button class="sort-tab is-on">New</button><button class="sort-tab">Hot</button><button class="sort-tab">Top</button></div>
+      <button class="lg-filters-chip">Filters</button>
+      <span class="spacer"></span>
+      <button class="new-post-btn"><span class="plus">+</span> New post</button>
+    </div>
+
+    <!-- placements 1 + 2 live under the sort bar -->
+    <div class="sp-strip">
+      <div class="hd"><span class="rule"></span><span class="sp-label">Supported by</span><span class="rule"></span></div>
+      <div class="row" id="stripRow"></div>
+    </div>
+    <div class="sp-marquee"><div class="lane" id="marqueeLane"></div></div>
+
+    <div class="feed-wrap">
+      <main class="feed" id="feed"></main>
+      <aside class="rail">
+        <div class="box">
+          <div class="hd"><span class="sp-label">Our sponsors</span><span class="rule"></span></div>
+          <div class="col" id="railCol"></div>
+          <p class="note">The folks who keep the Hub running. Tap a sponsor to visit their shop.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="sp-ribbon">
+    <span id="ribbonChip"></span>
+    <span class="who"><b id="ribbonName"></b> · <span id="ribbonTag"></span></span>
+    <button class="x">✕</button>
+  </div>
+
+  <div class="tabbar">
+    <button class="tab on"><svg class="ico icon-svg" viewBox="0 0 24 24"><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Hub</button>
+    <button class="tab"><svg class="ico icon-svg" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>Events</button>
+    <button class="tab"><svg class="ico icon-svg" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.6"/><path d="M14.5 14.6a5.4 5.4 0 0 1 7 5.4"/></svg>Members</button>
+    <button class="tab"><svg class="ico icon-svg" viewBox="0 0 24 24"><path d="M6 2 3 6v13a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Shop</button>
+    <button class="tab"><svg class="ico icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>You</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   DATA
+   ============================================================ */
+var SPONSORS = [
+  {id:'totalvise', name:'Total Vise', tag:'Precision repair vises',
+   blurb:'Repair-grade holding for guitars and basses — the vise your bench has been waiting for.'},
+  {id:'stewmac', name:'StewMac', tag:'Tools + supplies for lutherie',
+   blurb:'Everything for building and repairing stringed instruments.'},
+  {id:'acoustic', name:'Acoustic Audio', tag:'Pickups & acoustic amplification',
+   blurb:'Natural acoustic tone, amplified the way it should be.'},
+  {id:'strings', name:'Strings Microfactory', tag:'Small-batch handmade strings',
+   blurb:'Hand-wound strings from a microfactory obsessed with tone.'},
+  {id:'gluboost', name:'GluBoost', tag:'Adhesives & finishing',
+   blurb:'Pro-grade CA glues and finish systems trusted by luthiers.'}
+];
+
+var POSTS = [
+  {a:"Marco DeLuca", f:"Acoustic Repair", t:"3d", img:"img/martin.jpeg", n:9,
+   title:"Bridge reglue on a '68 Martin — clamping caul tips?",
+   body:"Pulled the bridge clean with the heat blanket, prepping the footprint now. Curious what cauls people trust for the through-clamps on a belly bridge."},
+  {a:"Tess Hardin", f:"Tools & Jigs", t:"5d", n:4,
+   title:"Shop-made fret rocker out of an old plane blade",
+   body:"Took an hour with the surface plate and some lapping film. Dead flat on all four edges and it cost me nothing. Happy to share dimensions if anyone wants them."},
+  {a:"Sean RT Gold City Guitar Repair", f:"Electric Repair", t:"1w", img:"img/lollar.jpeg", n:12,
+   title:"Lollar Monolith HB coil split — I need help!",
+   body:"Client brought it in wired to a card (based on a rough drawing), said he tested it... I had to clean up his wiring and soldering some. Both pickups read fine but the split switches do nothing."},
+  {a:"Priya Nair", f:"Business", t:"1w", n:6,
+   title:"How do you price a full refret with binding nibs?",
+   body:"Getting more vintage work lately and the nib jobs take me nearly twice as long. What's the going rate in your area — flat fee or hourly?"},
+  {a:"Dane Whitfield", f:"Electric Repair", t:"2w", img:"img/lespaul.jpeg", n:21,
+   title:"'59 burst refin came in — documenting everything",
+   body:"Customer wants it player-grade again. Posting the full teardown as I go so the hive mind can keep me honest. First up: neck angle and that suspicious heel crack."},
+  {a:"Ana Sofia Reyes", f:"Acoustic Repair", t:"2w", n:3,
+   title:"Humidity cracks season is coming — your prep checklist?",
+   body:"Last winter I had eleven top cracks come through the door in one month. Building a customer-facing handout this year. What goes on yours?"},
+  {a:"Jon Mercer", f:"Tools & Jigs", t:"3w", n:7,
+   title:"Binding router carriage — StewMac vs shop-built?",
+   body:"On the fence. The TrueChannel jig looks great but I route maybe six bodies a year. Anyone regret going DIY here?"}
+];
+
+/* ============================================================
+   LOGO RECREATIONS (inline, offline)
+   ============================================================ */
+function logoHTML(id){
+  if(id==='totalvise')
+    return '<span class="lg-tv">TOTAL&nbsp;<b>VISE</b></span>';
+  if(id==='stewmac')
+    return '<svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">'+
+      '<rect class="g-sq" x="1" y="1" width="22" height="22" rx="5"/>'+
+      '<rect x="6" y="6.5" width="12" height="2.6" rx="1.3" fill="var(--knock)"/>'+
+      '<rect x="6" y="10.7" width="12" height="2.6" rx="1.3" fill="var(--knock)"/>'+
+      '<rect x="6" y="14.9" width="12" height="2.6" rx="1.3" fill="var(--knock)"/></svg>'+
+      '<span class="lg-sm">stewmac<sup>®</sup></span>';
+  if(id==='acoustic')
+    return '<svg width="20" height="17" viewBox="0 0 28 24" fill="none" aria-hidden="true">'+
+      '<circle cx="12" cy="12" r="8.2" stroke="currentColor" stroke-width="2.4"/>'+
+      '<path d="M20.2 12h5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'+
+      '<circle class="g-dot" cx="12" cy="12" r="2.6"/></svg>'+
+      '<span class="lg-aa">acoustic audio</span>';
+  if(id==='strings')
+    return '<svg width="26" height="16" viewBox="0 0 34 20" fill="none" aria-hidden="true">'+
+      '<path d="M2 14 C 9 2, 18 2, 24 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'+
+      '<circle cx="27" cy="12" r="4.6" stroke="currentColor" stroke-width="1.8"/>'+
+      '<circle cx="27" cy="12" r="1.6" fill="currentColor"/>'+
+      '<path d="M27 5.6v2M27 16.4v2M20.6 12h2M31.4 12h2M22.5 7.5l1.4 1.4M30.1 15.1l1.4 1.4M31.5 7.5l-1.4 1.4M23.9 15.1l-1.4 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'+
+      '<span class="lg-st"><span class="a">Strings</span><span class="b">Microfactory</span></span>';
+  if(id==='gluboost')
+    return '<span class="lg-gb">GLU<b>+</b>BOOST</span>';
+  return '';
+}
+function chip(id){
+  return '<span class="sp-chip" data-brand="'+id+'">'+logoHTML(id)+'</span>';
+}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function initials(name){
+  var p=String(name||'').trim().split(/\s+/).filter(Boolean);
+  return ((p[0]||'')[0]||'?').toUpperCase()+((p[1]||'')[0]||'').toUpperCase();
+}
+
+/* ============================================================
+   FEED RENDER (sponsor inserts depend on the active placement)
+   ============================================================ */
+function postCard(p){
+  return '<article class="feed-card'+(p.img?'':' feed-card--text')+'">'+
+    '<div class="feed-card__meta-top">'+
+      '<span class="avatar-init">'+esc(initials(p.a))+'</span>'+
+      '<span class="feed-card__forum-ctx">'+esc(p.a)+' · <span class="feed-card__time">'+esc(p.t)+'</span></span>'+
+      '<span class="feed-card__kind-badge">'+esc(p.f)+'</span>'+
+    '</div>'+
+    '<div class="feed-card__main">'+
+      (p.img?'<div class="feed-card__cover" style="background-image:url(\''+p.img+'\')"></div>':'')+
+      '<div class="feed-card__header-body">'+
+        '<h3 class="feed-card__title">'+esc(p.title)+'</h3>'+
+        '<p class="feed-card__op-excerpt">'+esc(p.body)+'</p>'+
+      '</div>'+
+    '</div>'+
+    '<div class="feed-card__actions">'+
+      '<span><svg class="ico icon-svg" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>Like</span>'+
+      '<span><svg class="ico icon-svg" viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg>'+p.n+' replies</span>'+
+      '<span><svg class="ico icon-svg" viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>Share</span>'+
+    '</div></article>';
+}
+
+function billboardHTML(){
+  var s=SPONSORS[rotIdx];
+  return '<div class="sp-billboard"><div class="inner">'+
+    chip(s.id)+
+    '<div class="copy"><span class="sp-label">Featured sponsor</span>'+
+      '<div class="nm">'+esc(s.name)+'</div><p class="tg">'+esc(s.blurb)+'</p>'+
+      '<span class="cta">Visit '+esc(s.name)+' →</span></div>'+
+    '</div><div class="dots">'+SPONSORS.map(function(x,i){return '<i'+(i===rotIdx?' class="on"':'')+'></i>';}).join('')+'</div></div>';
+}
+function spotlightHTML(s){
+  return '<article class="feed-card sp-spot">'+
+    '<div class="feed-card__meta-top">'+
+      chip(s.id)+
+      '<span class="feed-card__forum-ctx">'+esc(s.name)+'</span>'+
+      '<span class="feed-card__kind-badge">Sponsor</span>'+
+    '</div>'+
+    '<div class="sp-hero">'+chip(s.id)+'</div>'+
+    '<div class="feed-card__header-body">'+
+      '<h3 class="feed-card__title">'+esc(s.tag)+'</h3>'+
+      '<p class="feed-card__op-excerpt">'+esc(s.blurb)+'</p>'+
+    '</div>'+
+    '<div class="feed-card__actions"><a>Visit site '+
+      '<svg class="ico icon-svg" viewBox="0 0 24 24"><path d="M7 17 17 7"/><path d="M9 7h8v8"/></svg></a></div>'+
+    '</article>';
+}
+function gridCardHTML(){
+  return '<article class="feed-card sp-grid">'+
+    '<div class="feed-card__meta-top">'+
+      '<span class="feed-card__forum-ctx"><span class="sp-label">Our sponsors</span></span>'+
+      '<span class="feed-card__kind-badge">Thank you</span>'+
+    '</div>'+
+    '<div class="bd">'+SPONSORS.map(function(s){return chip(s.id);}).join('')+'</div>'+
+    '</article>';
+}
+function inlineRowHTML(){
+  return '<div class="sp-inline"><span class="sp-label">Sponsors</span><span class="row">'+
+    SPONSORS.map(function(s){return chip(s.id);}).join('')+'</span></div>';
+}
+
+function renderFeed(){
+  var place=document.documentElement.getAttribute('data-place');
+  var device=document.documentElement.getAttribute('data-device');
+  var html='';
+  if(place==='3') html+=billboardHTML();
+  POSTS.forEach(function(p,i){
+    html+=postCard(p);
+    if(place==='4' && (i===1||i===4)) html+=spotlightHTML(SPONSORS[i===1?rotIdx:(rotIdx+2)%SPONSORS.length]);
+    if(place==='5' && i===1) html+=gridCardHTML();
+    if(place==='8' && device==='phone' && i===1) html+=gridCardHTML(); /* phone fallback for the rail */
+    if(place==='6' && (i===1||i===3||i===5)) html+=inlineRowHTML();
+  });
+  document.getElementById('feed').innerHTML=html;
+}
+
+/* static slots rendered once */
+document.getElementById('stripRow').innerHTML=SPONSORS.map(function(s){return chip(s.id);}).join('');
+document.getElementById('marqueeLane').innerHTML=
+  SPONSORS.concat(SPONSORS).map(function(s){return chip(s.id);}).join('');
+document.getElementById('railCol').innerHTML=SPONSORS.map(function(s){return chip(s.id);}).join('');
+
+/* ribbon + billboard rotation */
+var rotIdx=0;
+function paintRibbon(){
+  var s=SPONSORS[rotIdx];
+  document.getElementById('ribbonChip').innerHTML=chip(s.id);
+  document.getElementById('ribbonName').textContent=s.name;
+  document.getElementById('ribbonTag').textContent=s.tag;
+}
+setInterval(function(){
+  rotIdx=(rotIdx+1)%SPONSORS.length;
+  paintRibbon();
+  if(document.documentElement.getAttribute('data-place')==='3'){
+    var bb=document.querySelector('.sp-billboard');
+    if(bb){bb.outerHTML=billboardHTML();}
+  }
+},3500);
+paintRibbon();
+
+/* ============================================================
+   DECK STATE — pills, hotkeys, shell mounting
+   ============================================================ */
+var PLACES=[
+  ['1','Logo Strip'],['2','Marquee'],['3','Billboard'],['4','Spotlight Cards'],
+  ['5','Grid Card'],['6','Inline Chips'],['7','Sticky Ribbon'],['8','Side Rail']
+];
+var SKINS=[['1','True Color'],['2','Sage Wash'],['3','Slate']];
+var html=document.documentElement;
+
+var placeRow=document.getElementById('placeRow');
+PLACES.forEach(function(p){
+  var b=document.createElement('button');
+  b.className='pill';b.innerHTML='<span class="n">'+p[0]+'</span>'+p[1];
+  b.addEventListener('click',function(){setPlace(p[0]);});
+  b.dataset.v=p[0];placeRow.appendChild(b);
+});
+var skinRow=document.getElementById('skinRow');
+SKINS.forEach(function(s){
+  var b=document.createElement('button');
+  b.className='pill';b.innerHTML='<span class="n">'+s[0]+'</span>'+s[1];
+  b.addEventListener('click',function(){setSkin(s[0]);});
+  b.dataset.v=s[0];skinRow.appendChild(b);
+});
+var devPhone=document.getElementById('devPhone'), devDesk=document.getElementById('devDesk');
+var modeLight=document.getElementById('modeLight'), modeDark=document.getElementById('modeDark');
+devPhone.addEventListener('click',function(){setDevice('phone');});
+devDesk.addEventListener('click',function(){setDevice('desktop');});
+modeLight.addEventListener('click',function(){setMode('light');});
+modeDark.addEventListener('click',function(){setMode('dark');});
+function setMode(v){html.setAttribute('data-mode',v);sync();}
+function toggleDevice(){setDevice(html.getAttribute('data-device')==='phone'?'desktop':'phone');}
+function toggleMode(){setMode(html.getAttribute('data-mode')==='light'?'dark':'light');}
+document.getElementById('prevBtn').addEventListener('click',function(){step(-1);});
+document.getElementById('nextBtn').addEventListener('click',function(){step(1);});
+
+function setPlace(v){html.setAttribute('data-place',v);renderFeed();sync();}
+function setSkin(v){html.setAttribute('data-skin',v);sync();}
+function setDevice(v){
+  html.setAttribute('data-device',v);
+  var slot=document.getElementById(v==='phone'?'slotPhone':'slotDesk');
+  slot.appendChild(document.getElementById('hub'));
+  renderFeed();sync();
+}
+function step(d){
+  var cur=+html.getAttribute('data-place');
+  setPlace(String((cur-1+d+PLACES.length)%PLACES.length+1));
+}
+function stepSkin(d){
+  var cur=+html.getAttribute('data-skin');
+  setSkin(String((cur-1+d+SKINS.length)%SKINS.length+1));
+}
+function sync(){
+  var p=html.getAttribute('data-place'),s=html.getAttribute('data-skin');
+  var dev=html.getAttribute('data-device'),m=html.getAttribute('data-mode');
+  placeRow.querySelectorAll('.pill').forEach(function(b){b.classList.toggle('on',b.dataset.v===p);});
+  skinRow.querySelectorAll('.pill').forEach(function(b){b.classList.toggle('on',b.dataset.v===s);});
+  devPhone.classList.toggle('on',dev==='phone');
+  devDesk.classList.toggle('on',dev==='desktop');
+  modeLight.classList.toggle('on',m==='light');
+  modeDark.classList.toggle('on',m==='dark');
+  var pn=PLACES[+p-1][1],sn=SKINS[+s-1][1];
+  document.getElementById('readout').innerHTML='<b>'+pn+'</b> + <b>'+sn+'</b> · '+(dev==='phone'?'Phone':'Desktop')+' · '+(m==='light'?'Light':'Dark');
+}
+document.addEventListener('keydown',function(e){
+  if(/INPUT|TEXTAREA|SELECT/.test((e.target&&e.target.tagName)||'')) return; /* typing guard */
+  if(e.key==='ArrowRight'){e.preventDefault();step(1);}
+  else if(e.key==='ArrowLeft'){e.preventDefault();step(-1);}
+  else if(e.key==='ArrowUp'){e.preventDefault();stepSkin(-1);}
+  else if(e.key==='ArrowDown'){e.preventDefault();stepSkin(1);}
+  else if(e.key==='d'||e.key==='D'){toggleDevice();}
+  else if(e.key==='x'||e.key==='X'){toggleMode();}
+});
+
+/* boot — start in the OS's preferred scheme (X / pills still override) */
+if(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) setMode('dark');
+setDevice('phone');
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+/* divider — a real <hr> element with brand-themed styling. The default
+   variant draws a single line using the container's --lg-border. The dots
+   variant replaces the line with three centered sage dots (via ::before
+   pseudo-content). The space variant just contributes margin-block. */
+
+@layer block-shell {
+  .lg-divider {
+    /* <hr> reset — strip every UA default; we draw the line ourselves
+       from a single --lg-color, with --lg-margin-block for spacing.
+       Nothing else is exposed because a divider isn't a container. */
+    appearance: none;
+    border: none;
+    width: 100%;
+    height: 0;
+    padding: 0;
+    background: transparent;
+
+    margin-block: var(--lg-margin-block, 32px);
+    border-top: 1px solid var(--lg-color, var(--lg-sage-3));
+  }
+
+  /* Dots variant — three centered dots, color from --lg-color. */
+  .lg-divider--dots {
+    border-top: none;
+    height: 6px;
+    background:
+      radial-gradient(circle, var(--lg-color, var(--lg-sage)) 2px, transparent 2.5px) center / 24px 6px no-repeat,
+      radial-gradient(circle, var(--lg-color, var(--lg-sage)) 2px, transparent 2.5px) calc(50% - 24px) center / 24px 6px no-repeat,
+      radial-gradient(circle, var(--lg-color, var(--lg-sage)) 2px, transparent 2.5px) calc(50% + 24px) center / 24px 6px no-repeat;
+  }
+
+  /* Space variant — invisible. Just the margin-block contributes vertical
+     air; the <hr> itself collapses to zero height with no rule. */
+  .lg-divider--space {
+    border-top: none;
+  }
+}

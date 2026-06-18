@@ -1,0 +1,464 @@
+/* post-header — full-bleed hero with gradient scrim + title + byline,
+   followed by a tags strip. Responsive across mobile / tablet / laptop /
+   large monitors. Mobile-first; breakpoints add room for the photo and
+   bigger type as the viewport grows. */
+
+@layer block-shell {
+  .lg-post-header {
+    position: relative;
+    margin-block: var(--lg-margin-block, 0 32px);
+    background: var(--lg-bg, transparent);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+    overflow: hidden;
+  }
+
+  /* ── Hero photo + scrim ────────────────────────────────────── */
+  .lg-post-header__hero {
+    position: relative;
+    overflow: hidden;
+    background: #0e110d;
+  }
+  .lg-post-header__photo {
+    display: block;
+    width: 100%;
+    height: clamp(320px, 56vh, 720px);
+    object-fit: cover;
+    object-position: var(--lg-post-header-focal, center);
+  }
+  .lg-post-header__scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.25) 0%,
+      rgba(0, 0, 0, 0.00) 18%,
+      rgba(0, 0, 0, 0.00) 30%,
+      rgba(0, 0, 0, 0.55) 65%,
+      rgba(0, 0, 0, 0.88) 100%
+    );
+    pointer-events: none;
+  }
+
+  /* ── Body (title + byline) overlaid on the photo ───────────── */
+  .lg-post-header__body {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 24px 24px 28px;
+    color: var(--lg-color, #fff);
+    z-index: 2;
+  }
+  .lg-post-header__inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  /* Eyebrow strip — small slot at the TOP of the photo for the tier
+     chip alone (single most important piece of meta: "is this for me?").
+     Mirrors __body's left/right padding for visual alignment. */
+  .lg-post-header__eyebrow {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 18px 24px 0;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    pointer-events: none;
+  }
+  .lg-post-header__eyebrow > * { pointer-events: auto; }
+  .lg-post-header__eyebrow .lg-post-header__chip {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  }
+
+  /* Chips row — categories + tags. Now lives OUTSIDE the photo on a cream
+     meta-strip ground below the hero. Tier is in the eyebrow, not here. */
+  .lg-post-header__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+  }
+  .lg-post-header__meta-strip {
+    background: var(--lg-paper, #f4f1e8);
+    border-bottom: 1px solid var(--lg-tags-border, #e7e3da);
+  }
+  .lg-post-header__meta-strip-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 14px 24px;
+  }
+  /* Meta-strip chips render on the light ground — flip from
+     transparent-white to outlined-ink so they read on cream. */
+  .lg-post-header__meta-strip .lg-post-header__chip {
+    background: #fff;
+    color: var(--lg-ink, #323532);
+    border: 1px solid var(--lg-tags-border, #e7e3da);
+  }
+  .lg-post-header__meta-strip .lg-post-header__chip:hover {
+    background: var(--lg-cream, #fffaf0);
+    border-color: var(--lg-ink, #323532);
+    transform: translateY(-1px);
+  }
+  .lg-post-header__chip {
+    display: inline-block;
+    padding: 5px 11px;
+    border-radius: 999px;
+    font: 700 10px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-decoration: none;
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.20);
+    transition: transform 120ms ease, background 120ms ease;
+  }
+  .lg-post-header__chip:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.28); }
+
+  /* Tier chip — distinct color so the post's required tier reads as
+     "this is the access level for this article", not as a tag. Per-slug
+     palette below; falls back to the generic chip style for unknown
+     tiers so nothing breaks if a new slug appears. */
+  .lg-post-header__chip--tier { border-color: transparent; }
+  .lg-post-header__chip--tier--looth-lite  { background: var(--lg-amber, #ecb351); color: var(--lg-ink, #323532); }
+  .lg-post-header__chip--tier--looth-pro   { background: var(--lg-sage,  #87986a); color: #fff; }
+  .lg-post-header__chip--tier--looth-club  { background: #e8d4a3;                  color: var(--lg-ink, #323532); }
+  .lg-post-header__chip--tier--looth-group { background: #1a1d1a;                  color: var(--lg-amber, #ecb351); }
+  .lg-post-header__chip--tier--public      { background: rgba(255,255,255,0.85);   color: var(--lg-ink, #323532); }
+
+  .lg-post-header__title {
+    margin: 0;
+    font-family: var(--lg-font-family, var(--lg-font-serif));
+    font-weight: var(--lg-font-weight, 700);
+    font-size: clamp(28px, 5vw, 60px);
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+    color: inherit;
+    text-wrap: balance;
+    /* Pop against busy / light photos. Layered shadow: tight crisp drop
+       for edge definition + soft wide drop for figure-from-ground separation. */
+    text-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.55),
+      0 2px 10px rgba(0, 0, 0, 0.45);
+  }
+  .lg-post-header__tagline {
+    margin: 0;
+    max-width: 720px;
+    font: 400 clamp(15px, 1.4vw, 19px)/1.5 var(--lg-font-serif);
+    color: rgba(255, 255, 255, 0.92);
+    font-style: italic;
+    text-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.55),
+      0 1px 8px rgba(0, 0, 0, 0.35);
+  }
+
+  /* ── Byline row: avatar | id | meta | links ────────────────── */
+  .lg-post-header__byline {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .lg-post-header__avatar-link {
+    flex-shrink: 0;
+    display: inline-block;
+    line-height: 0;
+    border-radius: 50%;
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+  .lg-post-header__avatar-link:hover {
+    transform: scale(1.04);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  }
+  .lg-post-header__avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.30);
+    flex-shrink: 0;
+    display: block;
+  }
+  .lg-post-header__id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .lg-post-header__name {
+    font: 700 15px/1.2 var(--lg-font-sans, system-ui);
+    color: #fff;
+    white-space: nowrap;
+  }
+  .lg-post-header__pub {
+    font: 600 10px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--lg-link-color, var(--lg-amber, #ecb351));
+    margin-top: 4px;
+  }
+  .lg-post-header__meta {
+    font: 400 13px/1.4 var(--lg-font-sans, system-ui);
+    color: rgba(255, 255, 255, 0.78);
+    margin-left: auto;
+  }
+  .lg-post-header__meta sep::before { content: " · "; opacity: 0.6; }
+  .lg-post-header__links {
+    display: flex;
+    gap: 8px;
+    margin-left: 4px;
+  }
+  .lg-post-header__links a {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .lg-post-header__links a:hover {
+    background: var(--lg-link-color, var(--lg-amber, #ecb351));
+    color: var(--lg-ink, #323532);
+  }
+  .lg-post-header__links svg { width: 18px; height: 18px; }
+
+  /* ─────────────────────────────────────────────────────────────
+     Responsive breakpoints
+     ─────────────────────────────────────────────────────────────
+     Mobile-first defaults above; each breakpoint stretches the photo,
+     bumps the title, and gives the byline + tags more breathing room.
+  */
+
+  /* Mobile: drop the focal crop on the hero and stack title + meta on a
+     cream ground BELOW the photo. The overlay-on-photo treatment was
+     unreadable on narrow viewports (title + chip collided over a busy
+     image); on small screens the photo runs natural-aspect and the body
+     reads on solid paper. */
+  @media (max-width: 767px) {
+    .lg-post-header__photo {
+      height: auto;
+      object-fit: unset;
+      object-position: unset;
+    }
+    .lg-post-header__scrim { display: none; }
+    .lg-post-header__eyebrow {
+      position: static;
+      padding: 12px 16px 0;
+    }
+    .lg-post-header__body {
+      position: static;
+      padding: 14px 16px 20px;
+      background: var(--lg-paper, #f4f1e8);
+      color: var(--lg-ink, #323532);
+    }
+    .lg-post-header__inner { gap: 12px; }
+    .lg-post-header__title,
+    .lg-post-header__tagline,
+    .lg-post-header__name {
+      color: var(--lg-ink, #323532);
+      text-shadow: none;
+    }
+    .lg-post-header__tagline { color: rgba(50, 53, 50, 0.85); }
+    .lg-post-header__meta    { color: rgba(50, 53, 50, 0.72); }
+    .lg-post-header__avatar  { border-color: rgba(50, 53, 50, 0.18); }
+    .lg-post-header__links a {
+      background: rgba(0, 0, 0, 0.08);
+      color: var(--lg-ink, #323532);
+    }
+    .lg-post-header__eyebrow .lg-post-header__chip { box-shadow: none; }
+  }
+
+  /* Mid: portrait tablets / small laptops */
+  @media (min-width: 768px) {
+    .lg-post-header__photo { height: clamp(420px, 58vh, 720px); }
+    .lg-post-header__body  { padding: 32px 32px 36px; }
+  }
+
+  /* Laptop / large tablet */
+  @media (min-width: 1024px) {
+    .lg-post-header__photo { height: clamp(480px, 62vh, 760px); }
+    .lg-post-header__body  { padding: 40px 48px 44px; }
+    .lg-post-header__title { line-height: 1.05; }
+    .lg-post-header__avatar { width: 72px; height: 72px; }
+    .lg-post-header__name  { font-size: 16px; }
+    .lg-post-header__meta  { font-size: 14px; }
+  }
+
+  /* Large monitors */
+  @media (min-width: 1440px) {
+    .lg-post-header__photo { height: clamp(560px, 64vh, 820px); }
+    .lg-post-header__body  { padding: 48px 64px 52px; }
+    .lg-post-header__inner { max-width: 1320px; }
+    .lg-post-header__avatar { width: 80px; height: 80px; }
+    .lg-post-header__links a { width: 40px; height: 40px; }
+    .lg-post-header__links svg { width: 20px; height: 20px; }
+  }
+
+  /* Ultra-wide */
+  @media (min-width: 1920px) {
+    .lg-post-header__inner { max-width: 1480px; }
+    .lg-post-header__photo { height: clamp(620px, 60vh, 880px); }
+  }
+
+  /* ── Sponsor variant ────────────────────────────────────────────
+     Layout (Variant A): full-width hero image → title bar → brand
+     strip with accent border → dark CTA strip → tags.
+     Dynamic colors (title bg, logo border, icon color, accent border)
+     are applied as inline styles by render.php from brand_* user meta. */
+
+  /* Hero: full-bleed image, no overlay. Tier chips sit at bottom-left. */
+  .lg-post-header__spr-hero {
+    position: relative;
+    line-height: 0;
+  }
+  .lg-post-header__spr-hero img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 360px;
+    object-fit: cover;
+  }
+  .lg-post-header--sponsor .lg-post-header__eyebrow {
+    position: absolute;
+    bottom: 10px;
+    left: 16px;
+    padding: 0;
+    background: transparent;
+  }
+  /* When there's no hero image, eyebrow renders in normal flow. */
+  .lg-post-header__eyebrow--static {
+    position: static;
+    padding: 12px 20px 0;
+    background: var(--lg-paper, #f4f1e8);
+  }
+
+  /* Title bar: brand_third_color_header_color bg (inline), no float. */
+  .lg-post-header__spr-title {
+    padding: 20px 24px 22px;
+  }
+  .lg-post-header--sponsor .lg-post-header__title {
+    margin: 0;
+    font-family: var(--lg-font-sans, system-ui);
+    font-size: clamp(20px, 3vw, 28px);
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    text-shadow: none;
+    text-wrap: balance;
+  }
+  .lg-post-header--sponsor .lg-post-header__tagline {
+    margin: 6px 0 0;
+    font-size: 15px;
+    font-style: italic;
+    line-height: 1.5;
+    text-shadow: none;
+  }
+
+  /* Brand row: logo circle | id (label + name) | social icons
+     border-bottom-color set inline from brand_primary_color_1. */
+  .lg-post-header__spr-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 14px 24px;
+    background: #fff;
+    border-bottom: 3px solid #eee; /* overridden by inline style */
+  }
+  .lg-post-header__spr-logo {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid currentColor; /* overridden by inline border-color */
+    flex-shrink: 0;
+    background: #f9f9f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lg-post-header__spr-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 4px;
+  }
+  .lg-post-header__spr-id {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+  .lg-post-header__spr-label {
+    font: 400 11px/1 var(--lg-font-sans, system-ui);
+    color: #999;
+    letter-spacing: 0.04em;
+  }
+  .lg-post-header__spr-name {
+    font: 700 16px/1.2 var(--lg-font-sans, system-ui);
+    color: var(--lg-ink, #323532);
+  }
+  .lg-post-header__spr-socials {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+  .lg-post-header__spr-socials a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    color: inherit;
+    text-decoration: none;
+    transition: background 140ms ease, color 140ms ease;
+  }
+  .lg-post-header__spr-socials a:hover { background: rgba(0, 0, 0, 0.07); }
+  .lg-post-header__spr-socials svg { width: 20px; height: 20px; }
+
+  /* CTA strip: dark bar with equal action columns */
+  .lg-post-header__spr-cta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    background: #0f0f0f;
+  }
+  .lg-post-header__spr-cta a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 20px 12px;
+    color: #F1DE8C;
+    text-decoration: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    transition: transform 160ms ease, background 160ms ease;
+  }
+  .lg-post-header__spr-cta a:last-child { border-right: none; }
+  .lg-post-header__spr-cta a:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: scale(1.04);
+  }
+  .lg-post-header__spr-cta svg { width: 26px; height: 26px; }
+  .lg-post-header__spr-cta span {
+    font: 600 11px/1.2 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  /* Sponsor variant responsive */
+  @media (max-width: 767px) {
+    .lg-post-header__spr-hero img { max-height: none; }
+    .lg-post-header__spr-title { padding: 16px 16px 18px; }
+    .lg-post-header__spr-brand { padding: 12px 16px; }
+    .lg-post-header__spr-socials { margin-left: 0; }
+    .lg-post-header__spr-cta { grid-template-columns: 1fr 1fr; }
+    .lg-post-header__spr-cta a { border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+  }
+}

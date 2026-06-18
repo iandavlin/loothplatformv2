@@ -1,0 +1,33 @@
+/* mobile-directory.css — profile-app MAP lane, MOBILE layer (≤640).  BUCK-OWNED.
+ *
+ * The ≤640 overrides for the member directory + map. Seeded by the map-desktop
+ * lane during the 640 split (relocated here from directory.css's old
+ * @media (max-width:760px) blocks, re-cut to the site-wide 640 breakpoint).
+ * Ownership now sits with Buck (mobile layer) per
+ * docs/profile-map-mobile-desktop-split.md.
+ *
+ * Loaded as a media-gated <link media="(max-width:640px)"> in <head> AFTER
+ * directory.css, so it paints on first load (no JS-injection flash) and only
+ * ever applies ≤640. The inner @media keeps the file self-protecting if it's
+ * ever loaded un-gated. directory.css holds the desktop (≥641) base layout.
+ *
+ * Reuses the same edit.css / site-header.css custom props as directory.css.
+ */
+@media (max-width: 640px) {
+  /* Filters + sort stack full-width under the map. */
+  .dir-filterbar .filt,
+  .dir-filterbar .filt.radiusbox,
+  .dir-filterbar .filt.sortbox { flex: 1 1 100%; }
+  .dir-sort, .dir-sort button { width: 100%; }
+
+  /* Lock the map to the top so it stays visible while the filters + member list
+   * scroll underneath (app-style). The site header (.lg-chrome) is sticky at
+   * top:0 / 61px tall, so the map pins just below it. */
+  .dir-map {
+    position: sticky;
+    top: 61px;
+    height: 240px;
+    z-index: 30;
+    box-shadow: 0 6px 12px -6px rgba(26, 29, 26, .35);
+  }
+}

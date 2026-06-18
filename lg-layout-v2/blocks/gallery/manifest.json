@@ -1,0 +1,138 @@
+{
+  "name": "gallery",
+  "version": 1,
+  "selector": ".lg-gallery",
+  "description": "Multi-image grid. Renders an N-column tile grid (default 3) of attachment-driven images. Each tile is lightbox-tagged and pulls its lightbox caption from the WP attachment's own caption (post_excerpt) so it travels with the file — same model as the image block. Useful for repair sequences, before/afters, or any “here are the photos” block where the per-image article-text isn't needed inline.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "image_ids": {
+        "type": "array",
+        "default": [],
+        "description": "Array of attachment IDs (integers). Order = render order. Each ID is resolved to a URL + alt + caption via the media resolver at render time."
+      },
+      "columns": {
+        "type": "integer",
+        "default": 3,
+        "enum": [2, 3, 4],
+        "description": "Tile columns at desktop widths. Collapses to 2 below 960px and 1 below 560px regardless of this setting."
+      },
+      "layout": {
+        "type": "string",
+        "default": "grid",
+        "enum": ["grid", "masonry", "carousel"],
+        "description": "grid = uniform square tiles (object-fit: cover). masonry = CSS column-count layout that preserves natural aspect ratios; Pinterest-style stagger. carousel = horizontal scroll-snap strip with prev/next nav arrows; tile width is fixed, height tracks the row."
+      },
+      "image_text": {
+        "type": "string",
+        "default": "",
+        "description": "Optional figcaption rendered below the whole grid. Multi-paragraph plain text — split on blank lines into <p>s at render. Article-side text, not per-image. The per-image lightbox caption comes from the attachment itself."
+      },
+      "variant": {
+        "type": "string",
+        "default": "variant-1",
+        "enum": ["variant-1", "variant-2"],
+        "description": "Visual style. variant-1 = bare tiles (no surrounding chrome). variant-2 = framed (cream panel + sage border, like the framed-image variant)."
+      }
+    },
+    "required": [
+      "image_ids"
+    ]
+  },
+  "vars": {
+    "container": [
+      "padding",
+      "margin-block",
+      "gap",
+      "bg",
+      "border",
+      "radius",
+      "shadow"
+    ],
+    "text": [
+      "color",
+      "font-family",
+      "font-size",
+      "font-weight",
+      "line-height",
+      "letter-spacing",
+      "text-align"
+    ]
+  },
+  "defaults": {
+    "container": {
+      "padding": "0",
+      "margin-block": "24px",
+      "gap": "12px",
+      "bg": "transparent",
+      "border": "none",
+      "radius": "0",
+      "shadow": "none"
+    },
+    "text": {
+      "color": "var(--lg-ink)",
+      "font-family": "var(--lg-font-sans)",
+      "font-size": "16px",
+      "font-weight": "400",
+      "line-height": "1.5",
+      "letter-spacing": "normal",
+      "text-align": "left"
+    }
+  },
+  "variants": {
+    "variant-1": {
+      "extends": "defaults"
+    },
+    "variant-2": {
+      "extends": "defaults",
+      "container": {
+        "padding": "16px",
+        "gap": "16px",
+        "bg": "var(--lg-cream, #fbfbf8)",
+        "border": "1px solid var(--lg-sage-3, #d4e0b8)",
+        "radius": "8px"
+      }
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": [
+      "image_text"
+    ],
+    "custom_picker": "gallery",
+    "variant_prop": "variant",
+    "variant_options": ["variant-1", "variant-2"],
+    "pill_buttons": [
+      "up",
+      "down",
+      "edit",
+      "change",
+      "variant",
+      "tier",
+      "delete"
+    ]
+  },
+  "context_overrides": [
+    "columns"
+  ],
+  "sub_targets": {
+    "tile": {
+      "selector": ".lg-gallery .lg-gallery__tile",
+      "label": "Tile (individual photo cell)",
+      "vars": {
+        "container": [
+          "border",
+          "radius",
+          "shadow"
+        ]
+      },
+      "defaults": {
+        "container": {
+          "border": "none",
+          "radius": "4px",
+          "shadow": "none"
+        }
+      }
+    }
+  }
+}

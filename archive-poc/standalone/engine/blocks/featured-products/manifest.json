@@ -1,0 +1,50 @@
+{
+  "name": "featured-products",
+  "version": 1,
+  "selector": ".lg-feat-products",
+  "description": "Sponsor-page product carousel. Shows the sponsor's `sponsor-product` CPT items as a horizontal scroll-snap strip of cards (thumbnail + title + optional price + optional CTA). The cards are baked into the `items` prop at author/materialize time by querying WHERE author = sponsor.wp_user_id (the `author` prop records that link so write-sponsor-v2 can refresh) — so render stays WordPress-free in the standalone path. Reuses the shared [data-lg-carousel] front-end (prev/next + scroll-snap). Auto-themes from the article root's --brand-primary. Empty items → block renders nothing (no empty strip).",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "heading": {
+        "type": "string",
+        "default": "Featured Products",
+        "description": "Section heading shown above the carousel (inline-editable)."
+      },
+      "author": {
+        "type": "integer",
+        "default": 0,
+        "description": "Sponsor wp_user_id this feed is keyed to. Render uses the baked `items`; this records the author link so the authoring skill can re-query and re-bake."
+      },
+      "items": {
+        "type": "array",
+        "default": [],
+        "description": "Baked product cards: [{ title, url, image, price?, badge? }]. Order = render order. Resolved from sponsor-product at author time."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": ["margin-block", "padding"],
+    "text": ["font-family"]
+  },
+  "defaults": {
+    "container": {
+      "margin-block": "32px",
+      "padding": "0"
+    },
+    "text": {
+      "font-family": "var(--lg-font-sans)"
+    }
+  },
+  "variants": {
+    "variant-1": { "extends": "defaults" }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["heading"],
+    "variant_prop": "variant",
+    "variant_options": ["variant-1"],
+    "pill_buttons": ["move-up", "move-down", "edit", "delete"]
+  }
+}

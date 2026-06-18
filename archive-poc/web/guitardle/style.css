@@ -1,0 +1,1205 @@
+/* ============================================================
+   Guitardle — Style Sheet
+   Font: Jost (Google Fonts)
+   ============================================================ */
+
+/* ── Custom properties ─────────────────────────────────────── */
+:root {
+    --green-header:   #87986A;  /* dark green — header / structure     */
+    --green-mid:      #A8BE8B;  /* mid green                           */
+    --green-bg-1:     #EAF0DD;  /* lightest — page background          */
+    --green-bg-2:     #D4E0B8;  /* light — tile blank border           */
+    --green-bg-3:     #C2D5AA;  /* mid-light — hover / accents         */
+    --green-card:     #3a4a2e;  /* darkest — header shadow / card bg   */
+
+    --amber:          #ECB351;  /* vowels purchased, active states     */
+    --amber-light:    #F1DE83;  /* amber hover                         */
+
+    --red:            #FE654F;  /* accent — use sparingly              */
+
+    --key-used-bg:    #9FAC8C;  /* used consonant / revealed vowel — sage-muted, on-palette */
+    --key-used-text:  #ffffff;
+
+    --text-dark:      #1f2d14;  /* primary text                        */
+    --text-muted:     #6b7a5a;  /* secondary / muted text              */
+    --white:          #ffffff;
+
+    /* ── Tile sizing ─────────────────────────────────────────y1
+       --max-tiles is set by JS to the letter-count of the
+       longest word in the phrase. CSS does the rest.
+       Formula: fill available width, cap at 44 px.
+       Available = viewport (capped at game-wrap max) minus
+       32 px of horizontal padding (16 px each side).        */
+    --max-tiles:  10;
+    --tile-gap:   4px;
+    --tile-width: min(
+        44px,
+        calc(
+            (min(100vw, 480px) - 32px - (var(--max-tiles) - 1) * var(--tile-gap))
+            / var(--max-tiles)
+        )
+    );
+}
+
+/* ── Reset ─────────────────────────────────────────────────── */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* ── Base ───────────────────────────────────────────────────── */
+html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+    color-scheme: light;   /* belt-and-suspenders with the meta: no auto-dark */
+}
+
+body {
+    font-family: 'Jost', sans-serif;
+    background-color: var(--green-bg-1); /* matches card on mobile */
+    color: var(--text-dark);
+    min-height: 100vh;
+    min-height: 100dvh;
+}
+
+/* ── Game wrapper ───────────────────────────────────────────── */
+.game-wrap {
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+/* ============================================================
+   MENU BAR
+   ============================================================ */
+.menu-bar {
+    background-color: var(--green-bg-1);
+    border-bottom: 1px solid var(--green-bg-2);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+
+.menu-bar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+    height: 40px;
+}
+
+.menu-icons-right {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.menu-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.12s;
+}
+
+.menu-icon-btn:hover {
+    background-color: var(--green-bg-2);
+}
+
+.menu-icon-btn:active {
+    background-color: var(--green-bg-3);
+}
+
+.menu-icon-btn svg {
+    width: 22px;
+    height: 22px;
+    display: block;
+    color: #87986A;
+    transition: color 0.12s;
+}
+
+.menu-icon-btn:hover svg {
+    color: #6B7C52;
+}
+
+/* Dropdown — positioned absolutely via JS, sits outside game-wrap */
+.menu-dropdown {
+    display: none;
+    position: fixed;
+    z-index: 100;
+    list-style: none;
+    background: var(--white);
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    min-width: 220px;
+    overflow: hidden;
+    padding: 4px 0;
+}
+
+.menu-dropdown.open {
+    display: block;
+}
+
+.menu-dropdown li a {
+    display: block;
+    padding: 12px 16px;
+    font-family: 'Jost', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--green-card);
+    text-decoration: none;
+    transition: background-color 0.1s;
+}
+
+.menu-dropdown li a:hover {
+    background-color: var(--green-bg-1);
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.game-header {
+    background-color: var(--green-header);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 76px;
+}
+
+/* Logotype image */
+.logotype-img {
+height: 36px;
+    width: auto;
+    display: block;
+}
+
+/* Move counter — base layout; colour set by .score-tier-* below */
+.move-counter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #6B7A53;
+    border-radius: 8px;
+    padding: 5px 14px 6px;
+    min-width: 60px;
+    line-height: 1;
+}
+
+.move-count {
+    font-size: 1.375rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-top: 2px;
+}
+
+.move-label {
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: #78895B;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 2px;
+    line-height: 1;
+}
+
+/* ── Score box colour tiers ──────────────────────────────────
+   Tier 0: 0–4 moves   (green tones)
+   Tier 1: 5–7 moves   (yellow number)
+   Tier 2: 8–9 moves   (amber number)
+   Tier 3: 10+ moves   (red number)                          */
+.score-tier-0 { background-color: #FBFFF4; }
+.score-tier-0 .move-count { color: #78895B; }
+
+.score-tier-1 { background-color: #FFFEF1; }
+.score-tier-1 .move-count { color: #E8D633; }
+
+.score-tier-2 { background-color: #FCF5ED; }
+.score-tier-2 .move-count { color: #DD8F33; }
+
+.score-tier-3 { background-color: #FFF4F3; }
+.score-tier-3 .move-count { color: #D7523F; }
+
+/* ============================================================
+   GAME MAIN
+   ============================================================ */
+.game-main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 16px 32px;
+    gap: 28px;
+}
+
+/* ============================================================
+   PHRASE DISPLAY
+   ============================================================ */
+.phrase-display {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-top: calc(var(--tile-width) - 20px); /* breathing room below the header, reduced by 20px */
+}
+
+.phrase-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;   /* row-gap between wrapped lines, col-gap between words */
+    justify-content: center;
+    align-items: flex-start;
+}
+
+/* A single word: its tiles sit in a row */
+.word {
+    display: flex;
+    gap: var(--tile-gap);
+    align-items: center;
+}
+
+/* Hyphen — trails its segment, visible always, not a guessable tile.
+   Left gap = tile-gap (4px, from .word flex gap).
+   Right gap = phrase-row column-gap (14px) — negative margin-right cancels
+   the excess so both sides are equal at tile-gap width. */
+.tile-hyphen {
+    font-size: calc(var(--tile-width) * 0.6);
+    font-weight: 400;
+    color: var(--text-muted);
+    line-height: 1;
+    flex-shrink: 0;
+    margin-right: calc(var(--tile-gap) - 14px); /* -10px: equalises left/right gap */
+}
+
+/* Individual letter tile — size driven by CSS custom properties */
+.tile {
+    width: var(--tile-width);
+    aspect-ratio: 1;
+    flex-shrink: 0;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    font-family: 'Jost', sans-serif;
+    font-size: calc(var(--tile-width) * 0.5);
+    font-weight: 700;
+    text-transform: uppercase;
+    line-height: 1;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+/* Blank — not yet revealed */
+.tile.blank {
+    background-color: var(--white);
+    border: 2px solid var(--green-bg-2);
+}
+
+/* Revealed — letter shown */
+.tile.revealed {
+    background-color: var(--green-card);
+    border: 2px solid var(--green-card);
+    color: var(--white);
+}
+
+/* Active tile during guess mode (amber border, pulsing) */
+.tile.active {
+    background-color: var(--white);
+    border: 2px solid var(--amber);
+    animation: pulse-border 1s ease-in-out infinite;
+}
+
+/* Editable tile during guess mode — filled in by player */
+.tile.editable {
+    background-color: var(--white);
+    border: 2px solid var(--green-bg-2);
+    color: var(--text-dark);
+}
+
+/* Blinking cursor inside active tile */
+.tile.active::after {
+    content: '';
+    position: absolute;
+    width: 2px;
+    height: 52%;
+    background-color: var(--amber);
+    border-radius: 1px;
+    animation: blink-cursor 0.9s step-end infinite;
+}
+
+@keyframes blink-cursor {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+}
+
+@keyframes pulse-border {
+    0%, 100% { border-color: var(--amber);       box-shadow: 0 0 0 0   rgba(236,179,81,0.4); }
+    50%       { border-color: var(--amber-light); box-shadow: 0 0 0 4px rgba(236,179,81,0);   }
+}
+
+/* ── Vowel key — temporarily enabled during guess mode ─────── */
+.key.vowel.guess-mode:not(.purchased):not(.used) {
+    background-color: var(--white);
+    border: 2px solid var(--white);
+    color: var(--text-dark);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+}
+
+.key.vowel.guess-mode:not(.purchased):not(.used) .vowel-cost {
+    display: none;
+}
+
+.key.vowel.guess-mode:not(.purchased):not(.used):hover {
+    background-color: var(--green-bg-2);
+    border: 2px solid var(--green-bg-2);
+}
+
+/* ============================================================
+   GUESS AREA
+   ============================================================ */
+.guess-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin-top: auto; /* pushed down by available space above — works in all flex contexts */
+}
+
+.btn-guess {
+    display: block;
+    width: 100%;
+    max-width: 320px;
+    padding: 14px 24px;
+    background-color: var(--green-header);
+    color: var(--white);
+    border: none;
+    border-radius: 10px;
+    font-family: 'Jost', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background-color 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-guess:hover {
+    background-color: var(--green-card);
+}
+
+.btn-guess:active {
+    transform: scale(0.98);
+}
+
+.guess-warning {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.vowel-instruction {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    text-align: center;
+    white-space: nowrap;
+    margin-top: 20px;
+    width: 100%;
+}
+
+/* ============================================================
+   KEYBOARD
+   ============================================================ */
+.keyboard {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.keyboard-row {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+}
+
+/* ── Base key ────────────────────────────────────────────────── */
+.key {
+    /* Fill row proportionally; height is fixed */
+    flex: 1;
+    max-width: 42px;
+    height: 54px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+
+    font-family: 'Jost', sans-serif;
+    font-weight: 600;
+    transition: background-color 0.12s, box-shadow 0.12s, transform 0.08s;
+}
+
+.key-letter {
+    /* Absolutely centered in the full key height — cost label won't shift it */
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+/* ── Consonant — available (white) ────────────────────────── */
+.key.consonant {
+    background-color: var(--white);
+    color: var(--text-dark);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+}
+
+.key.consonant:hover {
+    background-color: var(--green-bg-2);
+}
+
+.key.consonant:active {
+    box-shadow: none;
+    transform: translateY(2px);
+}
+
+/* ── Consonant — used / revealed (grey) ───────────────────── */
+.key.consonant.used,
+.key.consonant[disabled] {
+    background-color: var(--key-used-bg);
+    color: var(--key-used-text);
+    box-shadow: none;
+    cursor: default;
+    opacity: 1; /* override browser disabled dimming */
+}
+
+/* ── Vowel — locked (dashed border, greyed, +1 label) ──────── */
+.key.vowel {
+    background-color: #E3EAD4;
+    border: 2px dashed var(--green-bg-3);
+    color: var(--key-used-bg);
+    box-shadow: none;
+}
+
+.key.vowel:hover {
+    background-color: var(--green-bg-2);
+    border-color: var(--green-mid);
+    color: var(--text-dark);
+}
+
+/* Cost label — occupies the lower half of the key so it never shifts
+   the letter, and sits visually centred in the space below it */
+.vowel-cost {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.5rem;
+    font-weight: 600;
+    color: var(--green-header);
+    letter-spacing: 0.02em;
+    line-height: 1;
+}
+
+/* ── Vowel — purchased / unlocked (amber, second tap pending) ── */
+.key.vowel.purchased {
+    background-color: var(--amber);
+    border: 2px solid var(--amber);
+    color: var(--text-dark);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+}
+
+.key.vowel.purchased:hover {
+    background-color: var(--amber-light);
+    border-color: var(--amber-light);
+}
+
+.key.vowel.purchased:active {
+    box-shadow: none;
+    transform: translateY(2px);
+}
+
+/* Hide cost label when purchased */
+.key.vowel.purchased .vowel-cost {
+    display: none;
+}
+
+/* ── Vowel — used / revealed (same as consonant used) ─────── */
+.key.vowel.used {
+    background-color: var(--key-used-bg);
+    border: 2px solid var(--key-used-bg);
+    color: var(--key-used-text);
+    box-shadow: none;
+    cursor: default;
+}
+
+.key.vowel.used .vowel-cost {
+    display: none;
+}
+
+/* ── Guess-mode confirm/cancel row ─────────────────────────── */
+.guess-confirm-row {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    max-width: 320px;
+}
+
+.btn-cancel {
+    flex: 1;
+    padding: 14px 12px;
+    background-color: #E3EAD4;
+    color: var(--text-dark);
+    border: none;
+    border-radius: 10px;
+    font-family: 'Jost', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-cancel:hover  { background-color: var(--green-bg-2); }
+.btn-cancel:active { transform: scale(0.98); }
+
+.btn-confirm {
+    flex: 3;
+    padding: 14px 16px;
+    background-color: var(--green-card);
+    color: var(--white);
+    border: none;
+    border-radius: 10px;
+    font-family: 'Jost', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background-color 0.15s, opacity 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-confirm:disabled        { opacity: 0.4; cursor: default; }
+.btn-confirm:not(:disabled):hover  { background-color: #2a3820; }
+.btn-confirm:not(:disabled):active { transform: scale(0.98); }
+
+/* ── Backspace key (only shown during guess mode) ─────────── */
+.key.backspace {
+    background-color: var(--green-bg-2);
+    color: var(--text-dark);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+    font-size: 1.1rem;
+}
+
+.key.backspace:hover {
+    background-color: var(--green-bg-3);
+}
+
+.key.backspace:active {
+    box-shadow: none;
+    transform: translateY(2px);
+}
+
+/* ============================================================
+   END STATES
+   ============================================================ */
+
+/* Loss tile — muted, desaturated */
+.tile.revealed-loss {
+    background-color: #BEC8B0;
+    border: 2px solid #BEC8B0;
+    color: #5E6A52;
+}
+
+@keyframes slide-up-in {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0);    }
+}
+
+.end-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin-top: 8px;
+    padding-bottom: 28px;
+    animation: slide-up-in 0.4s ease forwards;
+}
+
+.result-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+    max-width: 340px;
+    background: var(--white);
+    border-radius: 16px;
+    padding: 16px 20px 20px;
+    box-shadow: 0 3px 18px rgba(0, 0, 0, 0.1);
+}
+
+.result-emoji    { font-size: 2.4rem; line-height: 1; margin-bottom: 0; }
+.result-headline { font-size: 1.25rem; font-weight: 700; color: var(--green-card); text-align: center; margin-bottom: 4px; }
+.result-subline  { font-size: 0.95rem; font-weight: 400; color: var(--text-muted); text-align: center; }
+
+.result-spacer { height: 8px; width: 100%; }
+
+.share-date   { font-size: 0.75rem; font-weight: 500; color: var(--text-muted); text-align: center; }
+.score-bar    { display: flex; gap: 3px; width: 100%; height: 10px; }
+.score-seg    { flex: 1; max-width: 28px; border-radius: 3px; }
+.share-solved { font-size: 1.1rem; font-weight: 700; color: var(--green-card); text-align: center; }
+.share-streak { font-size: 0.9rem; font-weight: 600; color: var(--text-muted); text-align: center; }
+
+.btn-share-score {
+    align-self: stretch;  /* overrides align-items: center on parent flex container */
+    margin-top: 25px;
+    background: #3a4a2e;
+    color: white;
+    text-align: center;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    cursor: pointer;
+    font-family: 'Jost', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-share-score:hover  { background: #2a3820; }
+.btn-share-score:active { opacity: 0.85; }
+
+@keyframes fade-out {
+    0%   { opacity: 1; }
+    75%  { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+.share-copied {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--green-header);
+    text-align: center;
+    animation: fade-out 4s ease forwards;
+}
+
+.share-copied span {
+    display: block;
+}
+
+/* ============================================================
+   INSTRUCTIONS OVERLAY
+   ============================================================ */
+.overlay-backdrop {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(30, 40, 20, 0.6);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.overlay-panel {
+    background: var(--white);
+    border-radius: 16px;
+    padding: 28px 1.25rem 24px;
+    width: 100%;
+    max-width: 340px;
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.25);
+}
+
+.overlay-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--green-card);
+    margin: 0;
+    text-align: center;
+}
+
+.overlay-rules {
+    list-style: disc;
+    padding-left: 20px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.overlay-rules li {
+    font-size: 0.95rem;
+    font-weight: 400;
+    color: var(--green-card);
+    line-height: 1.45;
+}
+
+.overlay-subheading {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin: 10px 0 -5px 0;
+    text-align: center;
+}
+
+.overlay-body {
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    line-height: 1.55;
+    margin: 0;
+}
+
+.overlay-note {
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.btn-overlay-close {
+    align-self: stretch;
+    margin-top: 8px;
+    background: var(--green-card);
+    color: var(--white);
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-family: 'Jost', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.15s;
+}
+
+.btn-overlay-close:hover  { background: #2a3820; }
+.btn-overlay-close:active { opacity: 0.85; }
+
+/* ── Stats tiles ─────────────────────────────────────────────── */
+.stats-tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    width: 100%;
+}
+
+.stats-tile {
+    background: var(--green-bg-1);
+    border-radius: 10px;
+    padding: 10px 6px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.stats-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--green-card);
+    line-height: 1;
+}
+
+.stats-label {
+    font-size: 10px;
+    font-weight: 400;
+    color: #87986A;
+    text-align: center;
+    line-height: 1.2;
+}
+
+/* ── Score distribution ──────────────────────────────────────── */
+.stats-dist-heading {
+    text-align: left !important;
+}
+
+.stats-dist {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+
+.dist-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dist-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--green-card);
+    width: 36px;
+    text-align: right;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.dist-bar-wrap {
+    flex: 1;
+    height: 22px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.dist-bar {
+    height: 100%;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 7px;
+    transition: width 0.4s ease;
+}
+
+.dist-count {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--white);
+    line-height: 1;
+}
+
+.dist-count-dark {
+    color: var(--green-card);
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+/* ── Mobile: keyboard pinned to bottom of viewport ──────────── */
+@media (max-width: 499px) {
+    .keyboard {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: var(--green-bg-1);
+        padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
+        z-index: 5;
+    }
+
+    /* game-main spans full height above the keyboard.
+       margin-top: auto on .guess-area naturally pushes it down. */
+    .game-main {
+        min-height: calc(100vh - 116px);
+        min-height: calc(100dvh - 116px);
+        /* padding-bottom reserves room for the fixed keyboard
+           (3 rows × 54px + 2 × 6px gaps + 20px keyboard padding ≈ 210px) */
+        padding-bottom: 210px;
+    }
+
+    /* Remove keyboard padding once game is over (keyboard is hidden) */
+    .game-main.game-over {
+        padding-bottom: 32px;
+    }
+}
+
+/* ── Key/keyboard sizing bump at 480px ──────────────────────── */
+@media (min-width: 480px) {
+    .game-main {
+        padding: 32px 24px 24px;
+    }
+
+    .keyboard-row {
+        gap: 6px;
+    }
+
+    .key {
+        max-width: 46px;
+        height: 58px;
+    }
+
+    /* .tile sizing handled by --tile-width CSS variable */
+}
+
+/* ── Card layout at 500px — bordered container, tall format ─── */
+@media (min-width: 500px) {
+    body {
+        background: transparent;
+    }
+
+    .game-wrap {
+        background-color: var(--green-bg-1);
+        border: 2px solid var(--green-header);
+        border-radius: 16px;
+        box-shadow: 0 4px 28px rgba(0, 0, 0, 0.13);
+        overflow: hidden; /* clips header to card's top corners */
+        margin: 28px auto;
+
+        /* At least 680px tall, never taller than viewport minus margins */
+        min-height: 680px;
+        max-height: calc(100vh - 56px);
+        max-height: calc(100dvh - 56px);
+
+        /* Flex column so game-main can grow to fill the card */
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Remove sticky — the card contains the full game */
+    .game-header {
+        position: static;
+    }
+
+    /* game-main fills remaining card height.
+       Tiles sit near top, keyboard near bottom, button just above keyboard. */
+    .game-main {
+        flex: 1;
+        justify-content: flex-start;
+        gap: 0;
+        padding: 28px 24px 16px;
+    }
+
+    /* Tight gap between guess area and keyboard */
+    .game-main .guess-area {
+        margin-bottom: 16px;
+    }
+
+    /* Halve the tile top margin on card layout */
+    .game-main .phrase-display {
+        margin-top: calc(var(--tile-width) / 2);
+    }
+
+    .game-main .vowel-instruction {
+        margin-bottom: 12px;
+    }
+}
+
+/* ============================================================
+   FRONT-PAGE EMBED MODE (?embed=1 — iframed by the archive-poc
+   guitardle block; height is postMessage'd to the parent)
+   ============================================================ */
+body.is-embed {
+    min-height: 0;
+}
+
+/* In the front-page iframe the card is CONTENT-SIZED, not viewport-sized:
+   the standalone page's fill-the-card layout (min-height 680 + the guess
+   area's margin-top:auto) left a large empty band mid-card during play and
+   a mostly-empty 700px card in the played/forfeited end states (the
+   ResizeObserver posts .game-wrap's bottom edge, which could never shrink
+   below the min-height). Fixed gaps replace the auto-push; the standalone
+   page keeps the original design. */
+body.is-embed .game-wrap {
+    min-height: 0;
+    max-height: none;
+    margin: 16px auto;
+}
+body.is-embed .game-main {
+    flex: 0 0 auto;
+}
+body.is-embed .guess-area {
+    margin-top: 36px;
+}
+/* Helper lines cluster tight above the keyboard instead of floating */
+body.is-embed .game-main .vowel-instruction {
+    margin-top: 14px;
+    margin-bottom: 4px;
+}
+body.is-embed .refresh-warning {
+    margin: 2px 16px 8px;
+}
+
+/* Mobile embed (<=499px): the standalone phone layout pins the keyboard to the
+   viewport bottom and stretches .game-main to 100dvh. Inside the iframe the
+   "viewport" is the parent-sized frame, so 100dvh feeds the postMessage height
+   pipe into a runaway loop (frame grew to ~6000px) and the fixed keyboard
+   landed at the bottom of that giant frame — the game was unusable on phones.
+   In embed mode let the board + keyboard flow inline and size to real content;
+   the desktop embed overrides above already neutralise the >=500px card. */
+@media (max-width: 499px) {
+    body.is-embed .game-main {
+        min-height: 0;
+        padding-bottom: 24px;
+    }
+    body.is-embed .game-main.game-over {
+        padding-bottom: 24px;
+    }
+    body.is-embed .keyboard {
+        position: static;
+        padding: 8px 16px 12px;
+    }
+}
+
+/* ============================================================
+   WEEKLY LEADERBOARD (crown chip in the menu bar + overlay)
+   ============================================================ */
+.board-crown {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 60%;
+    border: none;
+    background: var(--amber, #ECB351);
+    color: #3a4a2e;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+.board-crown:hover { filter: brightness(1.05); }
+.board-crown-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.board-sub {
+    text-align: center;
+    font-size: 0.85rem;
+    color: #78895B;
+    margin: -6px 0 14px;
+}
+.board-list {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 0;
+    max-height: 320px;
+    overflow-y: auto;
+}
+.board-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+}
+.board-row:nth-child(even) { background: #F3F7E9; }
+.board-row--first {
+    background: #FBF3DF;
+    font-weight: 600;
+}
+.board-rank {
+    flex: 0 0 28px;
+    text-align: center;
+    font-weight: 600;
+    color: #87986A;
+}
+.board-name {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.board-meta {
+    flex: 0 0 auto;
+    font-size: 0.82rem;
+    color: #78895B;
+}
+.board-empty {
+    text-align: center;
+    color: #78895B;
+    margin: 8px 0 16px;
+}
+
+/* ── Refresh-forfeit heads-up (shown during play, gone once the game ends) ── */
+.refresh-warning {
+    text-align: center;
+    font-size: 0.78rem;
+    color: #A98434;
+    margin: 6px 16px 2px;
+}
+.game-main.game-over .refresh-warning { display: none; }
+
+/* Optimum reaction image standing in for the win emoji */
+.result-emoji-img {
+    display: block;
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+}
+
+/* Ouch, upside down, for the loss card */
+.result-emoji-img--flip { transform: rotate(180deg); }
+
+/* ── Hardcore mode (opt-in reveal cap) ──────────────────────── */
+/* Hardcore toggle chip — in the menu bar so the mode is discoverable
+   (Ian 6/12: it was buried in the How-to-Play overlay). */
+.hardcore-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: #F9EECB;
+    border: 1.5px solid #D9B765;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #1a1408;        /* explicit near-black — don't let auto-dark half-invert it */
+    cursor: pointer;
+    user-select: none;
+}
+.hardcore-chip input {
+    accent-color: #ECB351;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    flex: 0 0 auto;
+}
+.hardcore-chip:has(input:disabled) { opacity: 0.55; cursor: default; }
+
+/* Out of reveals: dim the letter keys (lifted while typing a guess) */
+.keyboard.capped:not(.guessing) .key { opacity: 0.4; }
+.cap-notice {
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #DD8F33;
+    margin: 6px 16px 2px;
+}
+.game-main.game-over .cap-notice { display: none !important; }
+
+/* Leaderboard names as profile links */
+a.board-name { color: inherit; text-decoration: none; }
+a.board-name:hover { text-decoration: underline; }
+
+/* Crown chip removed (6/12): keep the icons pinned right as the only child */
+.menu-icons-right { margin-left: auto; }
+
+/* ── Embed-mode weekly top 5 (under the game; hosts inherit via height pipe) ── */
+/* (.gdle-eb in-modal board removed — Ian 6/12) */
+
+/* (840px side-by-side embed grid removed with the in-modal board — Ian 6/12) */

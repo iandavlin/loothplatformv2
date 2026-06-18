@@ -1,0 +1,42 @@
+{
+  "name": "paywall",
+  "version": 1,
+  "selector": ".lg-paywall",
+  "description": "Section gate line. Everything below this block is rendered only to viewers at the declared tier or higher. Members see a labeled divider; non-members get the gate-CTA card in place of the line and everything past it is trimmed from the output.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "tier": {
+        "type": "string",
+        "default": "looth-pro",
+        "enum": ["looth-lite", "looth-pro", "looth-group", "admin"],
+        "description": "Required tier. Viewers at this tier or higher see the rest of the post; everyone else sees a CTA card and nothing past the line."
+      },
+      "label": {
+        "type": "string",
+        "default": "Members only below",
+        "description": "Plain text shown on the divider for members. Tier name auto-appended if absent."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": ["margin-block"],
+    "text": ["rule-color", "label-color"]
+  },
+  "defaults": {
+    "container": {
+      "margin-block": "32px"
+    },
+    "text": {
+      "rule-color": "var(--lg-amber-dark, #b8842b)",
+      "label-color": "var(--lg-amber-dark, #b8842b)"
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["label"],
+    "custom_picker": null,
+    "pill_buttons": ["up", "down", "edit", "tier", "delete"]
+  }
+}

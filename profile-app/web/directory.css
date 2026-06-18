@@ -1,0 +1,171 @@
+/* directory.css — profile-app MAP lane, DESKTOP layer (≥641).
+ * Owns the directory/map layout + the multiselect filter bar. Loaded AFTER
+ * edit.css so these rules override the .dir-* defaults that live there
+ * (edit.css is the editor lane's file — never edited from here).
+ * Reuses edit.css custom props: --panel --line --ink --ink-mute --accent
+ * --accent-soft --shadow.
+ *
+ * 640 split (docs/profile-map-mobile-desktop-split.md): the base rules here ARE
+ * the desktop layout and load unconditionally. The ≤640 mobile OVERRIDES live in
+ * mobile-directory.css (Buck-owned), media-gated in <head>. Don't add max-width
+ * media blocks here — they belong in the mobile file.
+ */
+
+/* z-index: contain Leaflet's panes (z 400) + controls (z 1000) inside their own
+ * stacking context so the map never paints over the site header (z 40) or its
+ * account dropdown (z 100). Without position+z-index the leaflet layers live in
+ * the root stacking context and cover the header menu. */
+.dir-map { height: 360px; position: relative; z-index: 0; }
+
+/* Single column — the filters move out of the left rail into a bar under the map. */
+.dir-app { display: block; max-width: 1180px; margin: 0 auto; padding: 0 32px 24px; }
+
+/* Horizontal filter bar: sits under the map, above the member list. */
+.dir-filterbar {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
+  max-width: 1180px; margin: 0 auto; padding: 14px 32px;
+  border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.dir-filterbar .filt { flex: 1 1 170px; min-width: 150px; position: relative; }
+.dir-filterbar .filt.loc { flex: 1 1 220px; }
+.dir-filterbar .filt.radiusbox, .dir-filterbar .filt.sortbox { flex: 0 0 auto; min-width: 0; }
+.dir-filterbar .flab {
+  display: block; font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-mute); font-weight: 700; margin-bottom: 5px;
+}
+.dir-filterbar input[type=text], .dir-filterbar select {
+  width: 100%; padding: 7px 10px; font: inherit; font-size: 13px;
+  border: 1px solid var(--line); border-radius: 6px; background: #fff;
+}
+
+/* --- multiselect "search bar" --- chips + typeahead, no external deps. */
+.ms { position: relative; }
+.ms-control {
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  min-height: 34px; padding: 4px 6px; border: 1px solid var(--line);
+  border-radius: 6px; background: #fff; cursor: text;
+}
+.ms-control.open { border-color: var(--accent); }
+.ms-chip {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+  padding: 2px 4px 2px 8px; background: var(--accent-soft); color: var(--accent);
+  border-radius: 999px; font-weight: 600; max-width: 100%;
+}
+.ms-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-chip button {
+  border: 0; background: none; color: inherit; cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 0 2px;
+}
+.ms-search { flex: 1 1 50px; min-width: 50px; border: 0; outline: 0; background: none; font: inherit; font-size: 13px; }
+.ms-menu {
+  position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 3px);
+  max-height: 240px; overflow: auto; background: #fff; border: 1px solid var(--line);
+  border-radius: 6px; box-shadow: var(--shadow);
+}
+.ms-opt { padding: 7px 10px; font-size: 13px; cursor: pointer; }
+.ms-opt:hover, .ms-opt.active { background: var(--accent-soft); }
+.ms-opt.sel { font-weight: 600; color: var(--accent); }
+.ms-opt.sel::after { content: " ✓"; }
+.ms-none { padding: 8px 10px; font-size: 12px; color: var(--ink-mute); font-style: italic; }
+
+/* --- sort toggle (oldest ⇄ newest join date) --- */
+.dir-sort { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.dir-sort button {
+  border: 0; background: #fff; padding: 7px 12px; font: inherit; font-size: 12px;
+  cursor: pointer; color: var(--ink-mute); white-space: nowrap;
+}
+.dir-sort button + button { border-left: 1px solid var(--line); }
+.dir-sort button.on { background: var(--accent); color: #fff; font-weight: 600; }
+
+/* --- brand typography pass --------------------------------------------------
+ * The directory lane inherited edit.css's editor palette + system fonts, so it
+ * read nothing like the public site (/u/). Realign to the site-header.css brand
+ * tokens: Lora/Georgia serif for member names, page headings, and avatar
+ * initials; cream/charcoal/sage palette. Tokens come from site-header.css —
+ * reference them, never hardcode hex. Loaded after edit.css so these win.
+ */
+body { background: var(--lg-cream); color: var(--lg-ink); }
+.dir-header {
+  background: var(--lg-cream); border-bottom: 1px solid var(--lg-line);
+  font: 700 22px/1.15 var(--lg-font-serif); color: var(--lg-charcoal);
+}
+.dir-meta { font: 400 13px/1 var(--lg-font-sans); color: var(--lg-mute); }
+.dir-filterbar { background: var(--lg-cream); border-bottom-color: var(--lg-line); }
+.dir-filterbar .flab { color: var(--lg-mute); }
+
+.dir-card {
+  background: #fff; border: 1px solid var(--lg-line); border-radius: 16px;
+  padding: 18px; color: var(--lg-ink);
+}
+.dir-card:hover { border-color: var(--lg-sage); }
+.dir-card .name { font: 700 16px/1.2 var(--lg-font-serif); color: var(--lg-charcoal); }
+.dir-card .avi-sm { font-family: var(--lg-font-serif); }
+.dir-card .loc-row { color: var(--lg-mute); font-family: var(--lg-font-sans); }
+.dir-card .hl-chips .hl {
+  background: var(--lg-sage-tint); color: var(--lg-sage-d); font-family: var(--lg-font-sans);
+}
+.dir-link { border-color: var(--lg-line); color: var(--lg-mute); background: #fff; }
+.dir-link:hover { color: var(--lg-sage-d); border-color: var(--lg-sage); }
+
+/* Card link reset (carried here so it survives edit.css caching) + the active-card
+ * ring shown while a card is "zoomed to" on the map before a second click opens it. */
+.dir-card__main { text-decoration: none; color: inherit; }
+.dir-card .name { text-decoration: none; }
+.dir-card.is-active { border-color: var(--lg-sage); box-shadow: 0 0 0 2px var(--lg-sage-tint); }
+
+
+/* Shop banner strip across the top of a member card. Full-bleeds past the card
+ * 18px padding and rounds to match the 16px card top corners; the avatar/name row
+ * flows below it (text nudged down). Only rendered when the member has a banner. */
+.dir-card__banner {
+  width: calc(100% + 36px); margin: -18px -18px 12px; height: 72px;
+  border-radius: 16px 16px 0 0; overflow: hidden; background: var(--lg-sage-tint);
+}
+.dir-card__banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Availability "status lights" — the same widgets as the /u/ profile header
+ * (Block::HEADER_LIGHTS), surfaced read-only on the member card. Tones mirror
+ * the profile: go=green / stop=rust / maybe=amber. */
+.dir-lights { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.dir-light {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--lg-cream); border: 1px solid var(--lg-line); border-radius: 999px;
+  padding: 4px 10px; font: 600 11.5px/1 var(--lg-font-sans); color: var(--lg-ink);
+}
+.dir-light__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lg-mute); flex: 0 0 auto; }
+.dir-light--go .dir-light__dot    { background: #3fa34d; box-shadow: 0 0 0 3px rgba(63,163,77,.18); }
+.dir-light--stop .dir-light__dot  { background: #c0492f; box-shadow: 0 0 0 3px rgba(192,73,47,.16); }
+.dir-light--maybe .dir-light__dot { background: var(--lg-amber); box-shadow: 0 0 0 3px rgba(224,168,60,.2); }
+
+/* ── Anonymous (logged-out) finder — Ian 6/12: the PUBLIC luthier finder is
+   the product. Anon gets the full directory UI (named pins at each member's
+   public precision, list, filters — all server-coarsened); the only anon
+   extra is the floating join card. */
+.dir-join-card {
+  position: fixed; right: 18px; bottom: 18px; z-index: 1100;
+  width: min(360px, calc(100% - 36px));
+  background: #fff; border: 1px solid #e3ddd0; border-radius: 14px;
+  padding: 14px 16px; box-shadow: 0 10px 30px rgba(26, 29, 26, .22);
+}
+.dir-join-card__t { margin: 0 0 3px; font: 700 15px/1.25 var(--lg-font-serif, Georgia, serif); color: #1f1d1a; }
+.dir-join-card__s { margin: 0 0 10px; font: 400 13px/1.45 var(--lg-font-sans, system-ui, sans-serif); color: #6b6f6b; }
+.dir-join-card__row { display: flex; align-items: center; gap: 12px; }
+.dir-join-card__join {
+  background: var(--lg-amber, #ecb351); color: #4a3c10; text-decoration: none;
+  font: 700 13px/1 var(--lg-font-sans, system-ui, sans-serif);
+  padding: 10px 16px; border-radius: 999px;
+}
+.dir-join-card__join:hover { background: #f2c476; }
+.dir-join-card__signin { font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif); color: #6b7c52; }
+
+/* Anonymized "join to see" cards (anon viewers, non-public members — Ian 6/12) */
+.dir-card--gated { opacity: .92; }
+.dir-card--gated .avi-sm--lock { display: flex; align-items: center; justify-content: center;
+  background: #efece4; font-size: 15px; }
+.dir-card--gated .dir-card__name { color: #8a8478; font-weight: 600; }
+.dir-card--gated .dir-card__loc { color: #a9a294; font-size: 12.5px; }
+.dir-card__joincta { display: inline-block; margin: 8px 0 2px;
+  background: var(--lg-amber, #ecb351); color: #4a3c10; text-decoration: none;
+  font: 700 12px/1 var(--lg-font-sans, system-ui, sans-serif);
+  padding: 7px 12px; border-radius: 999px; }
+.dir-card__joincta:hover { background: #f2c476; }

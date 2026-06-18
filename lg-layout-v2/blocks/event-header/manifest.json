@@ -1,0 +1,127 @@
+{
+  "name": "event-header",
+  "version": 1,
+  "selector": ".lg-event-header",
+  "description": "Event header strip for the `event` CPT: date pill + full date/time line, region chip, event-type chips, and a tier-gated virtual-attend CTA. Reads live from event postmeta (showrunner Sheet pipeline owns the data); every field has an explicit-prop override for static-bake / CLI snapshot testing. Header details are public; only the Zoom CTA gates against the event's tier.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "date": {
+        "type": "string",
+        "default": "",
+        "description": "Override start date as YYYYMMDD. Empty → read postmeta `events_start_date_and_time_`."
+      },
+      "time": {
+        "type": "string",
+        "default": "",
+        "description": "Override start time as HH:MM:SS (24h). Empty → read postmeta `time_of_event`."
+      },
+      "tz_label": {
+        "type": "string",
+        "default": "ET",
+        "description": "Timezone label appended to the rendered time (times are stored without a TZ)."
+      },
+      "region": {
+        "type": "string",
+        "default": "",
+        "description": "Override region display name. Empty → read the post's `region` taxonomy term name."
+      },
+      "event_types": {
+        "type": "array",
+        "default": [],
+        "description": "Override list of event-type chip labels. Empty → read the post's `event-type` taxonomy term names."
+      },
+      "zoom_url": {
+        "type": "string",
+        "default": "",
+        "description": "Override the virtual-attend URL. Empty → read postmeta `zoom_url_for_looth_group_virtual_event`."
+      },
+      "cta_label": {
+        "type": "string",
+        "default": "Join on Zoom",
+        "description": "Label on the virtual-attend button."
+      },
+      "cta_tier": {
+        "type": "string",
+        "default": "",
+        "enum": ["", "public", "looth-lite", "looth-pro"],
+        "description": "Override the tier required to see the live Zoom link. Empty → use the post's tier ($ctx['post_tier']). NOTE: deliberately NOT named `gated_tier` — that key is reserved by the Renderer for whole-block gating, which would replace this entire header with a gate-CTA card. This prop gates only the virtual-attend CTA, internal to render.php."
+      },
+      "variant": {
+        "type": "string",
+        "default": "variant-1",
+        "enum": ["variant-1", "variant-2", "variant-3"],
+        "description": "Visual palette. variant-1 = amber accent. variant-2 = sage accent. variant-3 = neutral cream (understated / in-person)."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": [
+      "padding",
+      "margin-block",
+      "bg",
+      "border",
+      "radius",
+      "shadow"
+    ],
+    "text": [
+      "color",
+      "link-color",
+      "font-family",
+      "font-size",
+      "font-weight",
+      "line-height"
+    ]
+  },
+  "defaults": {
+    "container": {
+      "padding": "20px 24px",
+      "margin-block": "0 28px",
+      "bg": "var(--lg-cream, #fbfbf8)",
+      "border": "1px solid var(--lg-sage-3, #d4e0b8)",
+      "radius": "12px",
+      "shadow": "none"
+    },
+    "text": {
+      "color": "var(--lg-ink, #323532)",
+      "link-color": "var(--lg-amber, #ecb351)",
+      "font-family": "var(--lg-font-sans, system-ui)",
+      "font-size": "18px",
+      "font-weight": "600",
+      "line-height": "1.4"
+    }
+  },
+  "variants": {
+    "variant-1": {
+      "extends": "defaults"
+    },
+    "variant-2": {
+      "extends": "defaults",
+      "text": {
+        "link-color": "var(--lg-sage, #87986a)"
+      }
+    },
+    "variant-3": {
+      "extends": "defaults",
+      "text": {
+        "link-color": "var(--lg-charcoal, #1a1d1a)"
+      }
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["cta_label"],
+    "custom_picker": null,
+    "variant_prop": "variant",
+    "variant_options": ["variant-1", "variant-2", "variant-3"],
+    "pill_buttons": [
+      "move-up",
+      "move-down",
+      "edit",
+      "tier",
+      "delete"
+    ]
+  },
+  "context_overrides": ["columns"]
+}

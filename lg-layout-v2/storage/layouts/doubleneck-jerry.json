@@ -1,0 +1,198 @@
+{
+  "schema": 1,
+  "_meta": {
+    "source": "/home/ubuntu/projects/VG 1124 Dan's Guitar Rx Doubleneck Jerry.pdf",
+    "translated_at": "2026-05-23",
+    "notes": "VG reprint, Dan's Guitar Rx column, November 2024. Hero = unnumbered Jerry-1977 portrait. Body figures 1-11. Portrait figs 4/5, 6/7, 8/9 paired as columns; figs 10 and 11 solo; landscape figs 1/2/3 solo.",
+    "featured_image_id": 69410
+  },
+  "blocks": [
+    {
+      "type": "post-header",
+      "title": "Doubleneck Redux",
+      "tagline": "A Return to Glory for “Jerry”",
+      "featured_image_id": 69410,
+      "show_byline": true,
+      "show_categories": true,
+      "show_tags": true
+    },
+    {
+      "type": "callout",
+      "variant": "note",
+      "body": "<p><em>Reprinted with permission from <a href=\"https://www.vintageguitar.com\">Vintage Guitar Magazine</a>, November 2024. Originally appeared in Dan Erlewine’s <a href=\"https://www.vintageguitar.com/author/dan-erlewine/\">Dan’s Guitar Rx</a> column.</em></p>"
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69410,
+              "alt": "Jerry Schafer in 1977 holding the Erlewine-built Guitolin doubleneck.",
+              "image_text": "Jerry Schafer in 1977 with the Erlewine custom Guitolin."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "wysiwyg",
+              "html": "<p>In 1977, I was doing guitar repair in Big Rapids, Michigan, and my services included picking up and delivering repair instruments for several stores. One was Schafer Music, in Mount Pleasant; every couple of weeks, I’d stop to grab whatever they had for repair and hang out with owner Jerry Schafer. He and his wife, Bethel, had seven children and the entire family played instruments.</p>"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "image_id": 69411,
+      "alt": "Jerry Schafer’s band on stage: Ron Flaugher on guitar, Gerda Flaugher on drums, Jerry holding his Gibson EMS-1235 doubleneck, and Bethel Schafer on bass.",
+      "number": "1",
+      "image_text": "Jerry’s band lineup.\n\nJerry’s band had many iterations over the years, but a mainstay included his good friend, Ron Flaugher (left), Ron’s wife, Gerda, on drums, Jerry (and his ’63 Gibson EMS-1235), and Bethel on bass."
+    },
+    {
+      "type": "image",
+      "image_id": 69412,
+      "alt": "Dan Erlewine working on the original Guitolin in his shop, circa 1977.",
+      "number": "2",
+      "image_text": "Building the original Guitolin.\n\nOn one visit, Jerry asked if I could make a semi-hollow doubleneck for him, saying he wanted something that sounded better, acoustically, than his 1235. I jumped at the chance, and designed something that paid homage to two legendary Gibsons – the F-style “Loar” mandolin and the ES-335. Five months later, I was tuning it up for delivery. I was thrilled with the results, but Jerry was even more so, and played the heck out of it for many years."
+    },
+    {
+      "type": "image",
+      "image_id": 69413,
+      "alt": "The Guitolin 47 years later, top oversprayed with a sunburst finish, photographed by Jerry’s son Dan.",
+      "number": "3",
+      "image_text": "Forty-seven years later.\n\nI hadn’t seen the “Guitolin” for 47 years before Jerry’s son, Dan, a professional musician in Nashville, sent a photo, knowing I’d appreciate an update. To my surprise, the top had been oversprayed with a nicely executed sunburst. Seeing it gave me the urge to build another, and I asked Dan if he would loan it for measurements, so I wouldn’t have to start from scratch. He was gracious enough to send it, and I discovered it had undergone other changes, some of which I did not like. It didn’t take long to decide we had to put “Jerry” back in order."
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69414,
+              "alt": "Close-up of the Guitolin’s bridge area after a piezo pickup was installed in place of the Tune-O-Matic.",
+              "number": "4",
+              "image_text": "Piezo retrofit raised the action.\n\nThe Tune-O-Matic bridge had been replaced with a piezo pickup that required larger holes for its anchors. That was bad enough, but the worst thing about the mod was it raised string action, and the bridge couldn’t be lowered because of the wires running underneath."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69415,
+              "alt": "An old, loose-fitting bridge anchor being removed from the Guitolin’s top.",
+              "number": "5",
+              "image_text": "Out with the old anchors.\n\nI was thrilled to remove its poor-quality/loose-fitting anchors."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69416,
+              "alt": "A new brass bridge anchor being threaded onto a post held in a closed drill-press chuck.",
+              "number": "6",
+              "image_text": "Solid-brass replacements.\n\nMy shopmate, T.K. Kelly, made new anchors from solid brass. He knurled the outside and threaded it internally to 8-32. Here, the anchor is being screwed onto the post (held gently in the drill chuck). Tune-O-Matic bridges have always been mounted on 6-32 threaded posts with threaded thumbwheels for adjustment. For our shop-made instruments and guitars that aren’t old/collectible, we make our own posts and thumbwheels that are threaded 8-32 (the next size up). The thicker posts and thumbwheels are hand-machined to tighter tolerances, which make for noticeably better coupling and tone transfer. I started doing this on my Albert King Flying V replicas, and I really like the results."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69417,
+              "alt": "The new brass anchor being pressed into the Guitolin’s top with a bit of hide glue on its knurled exterior.",
+              "number": "7",
+              "image_text": "Hide-glued into the top.\n\nWith the post still in the closed chuck, the anchor was pressed into the body with a bit of hide glue applied to it. The knurling accepts the glue in its recesses, making for a stronger connection in the wood and further aiding tone transfer."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69418,
+              "alt": "T.K. Kelly knurling a piece of steel rod on a lathe to make a matching thumbwheel.",
+              "number": "8",
+              "image_text": "Knurling steel for new thumbwheels.\n\nTo make new thumbwheels, T.K. knurled a piece of steel rod to match the new bridge, which is a Pigtail tune-o-matic in aged nickel. After drilling and tapping the 8-32 thread, he cut the thumbwheels."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69419,
+              "alt": "The finished bridge studs and thumbwheels alongside the new Pigtail Tune-O-Matic bridge, ready for install.",
+              "number": "9",
+              "image_text": "Studs and thumbwheels ready.\n\nThe new bridge studs and thumbwheels are ready. In part two of this project, we’ll show the tricky process of making the bridge’s holes larger to accept the new posts."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "image_id": 69420,
+      "alt": "The Guitolin’s control cavity, packed with a tangled mass of multi-colored wires from years of modifications.",
+      "number": "10",
+      "image_text": "A jungle to untangle.\n\nAlso in part two, we’ll address this jungle of electronics."
+    },
+    {
+      "type": "image",
+      "image_id": 69421,
+      "alt": "Jerry Schafer’s polished black-granite headstone engraved with the image of the Guitolin doubleneck and musical notes.",
+      "number": "11",
+      "image_text": "A doubleneck in stone.\n\nWhen Jerry passed away in 2016, his family had the Guitolin’s image engraved on the back of his headstone."
+    },
+    {
+      "type": "callout",
+      "variant": "data",
+      "title": "Parts & tools used",
+      "items": [
+        { "icon": "globe", "label": "Pigtail Music – aged-nickel Tune-O-Matic bridge", "url": "https://pigtailmusic.com/", "description": "The replacement bridge T.K. matched the new studs and thumbwheels to." },
+        { "icon": "globe", "label": "StewMac – Tune-O-Matic posts, thumbwheels & hide glue", "url": "https://www.stewmac.com/", "description": "Stock 6-32 posts/thumbwheels and ground hide glue — Dan’s longtime supplier." }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "links",
+      "title": "Dan Erlewine · Author",
+      "items": [
+        { "icon": "globe",     "label": "danerlewine.com",                "url": "https://danerlewine.com/",                          "description": "The workshop in Athens, Ohio — Lucy Flying V & Jerry Strat replicas." },
+        { "icon": "instagram", "label": "danerlewine",                    "url": "https://www.instagram.com/danerlewine/",            "description": "Shop updates and build progress." },
+        { "icon": "facebook",  "label": "Dan Erlewine’s Guitar Shop",   "url": "https://www.facebook.com/pages/Dan-Erlewines-Guitar-Shop/110439802644360" },
+        { "icon": "email",     "label": "danerlewine@gmail.com",          "url": "mailto:danerlewine@gmail.com",                      "description": "Contact for replica inquiries and column correspondence." }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "links",
+      "title": "Read more in Vintage Guitar",
+      "items": [
+        { "icon": "globe", "label": "vintageguitar.com",                  "url": "https://www.vintageguitar.com",                     "description": "Monthly print + digital. 25,700+ subscribers." },
+        { "icon": "link",  "label": "Dan’s Guitar Rx column archive",   "url": "https://www.vintageguitar.com/author/dan-erlewine/", "description": "Every column Dan has written since 2004." }
+      ]
+    },
+    {
+      "type": "post-footer",
+      "show_author": true,
+      "show_related": true
+    }
+  ]
+}

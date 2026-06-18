@@ -1,0 +1,6 @@
+{
+    "require": {
+        "ramsey/uuid": "^4.9",
+        "firebase/php-jwt": "^7.0"
+    }
+}

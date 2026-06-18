@@ -1,0 +1,75 @@
+{
+  "name": "post-footer",
+  "version": 1,
+  "selector": ".lg-post-footer",
+  "description": "Article footer: author card (avatar + bio + social links + 'more from author' CTA) followed by a 'Keep reading' related-posts grid. Mirrors the post-header's accent palette so a post reads as one piece top-to-tail. Best as the last block in a post layout.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "show_author":    { "type": "boolean", "default": true,  "description": "Show the author card (avatar + bio + socials + CTA)." },
+      "show_related":   { "type": "boolean", "default": true,  "description": "Show the 3-card 'Keep reading' related grid." },
+      "show_comments":  { "type": "boolean", "default": true,  "description": "Show the comments thread to logged-in viewers. Logged-out viewers never see it regardless of this toggle." },
+      "show_share":     { "type": "boolean", "default": true,  "description": "Show the share row (X, Facebook, email, copy-link). Renders above the author card." },
+      "related_count":  { "type": "integer", "default": 3,     "description": "How many related posts to show. The picker draws from a shared-tag + same-author + same-CPT pool." },
+      "related_heading": { "type": "string", "default": "Keep reading", "description": "Heading text above the related-posts grid." },
+      "author_cta_label":{ "type": "string", "default": "More from {author} →", "description": "CTA link below the bio. {author} → display name." },
+      "variant": {
+        "type": "string",
+        "default": "variant-1",
+        "enum": ["variant-1", "variant-2", "variant-3"],
+        "description": "Accent palette. variant-1 = amber (matches default post-header). variant-2 = sage. variant-3 = neutral cream."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": [
+      "padding",
+      "margin-block",
+      "bg",
+      "border",
+      "radius",
+      "shadow"
+    ],
+    "text": [
+      "color",
+      "link-color",
+      "font-family"
+    ]
+  },
+  "defaults": {
+    "container": {
+      "padding": "16px 24px 48px",
+      "margin-block": "48px 0",
+      "bg": "transparent",
+      "border": "none",
+      "radius": "0",
+      "shadow": "none"
+    },
+    "text": {
+      "color": "var(--lg-charcoal)",
+      "link-color": "var(--lg-amber, #ecb351)",
+      "font-family": "var(--lg-font-sans)"
+    }
+  },
+  "variants": {
+    "variant-1": { "extends": "defaults" },
+    "variant-2": { "extends": "defaults", "text": { "link-color": "var(--lg-sage, #87986a)" } },
+    "variant-3": { "extends": "defaults", "text": { "link-color": "var(--lg-cream, #fbfbf8)" } }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["related_heading"],
+    "custom_picker": null,
+    "variant_prop": "variant",
+    "pill_buttons": [
+      "up",
+      "down",
+      "edit",
+      "change",
+      "variant",
+      "tier",
+      "delete"
+    ]
+  }
+}

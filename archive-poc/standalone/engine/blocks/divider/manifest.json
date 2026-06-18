@@ -1,0 +1,51 @@
+{
+  "name": "divider",
+  "version": 1,
+  "selector": ".lg-divider",
+  "description": "Horizontal rule with brand styling. Variants: default line, dots, or invisible space.",
+  "schema": {
+    "props": {},
+    "required": []
+  },
+  "inherits_global": false,
+  "vars": {
+    "container": [
+      "margin-block",
+      "color"
+    ],
+    "text": []
+  },
+  "defaults": {
+    "container": {
+      "margin-block": "32px",
+      "color": "var(--lg-sage-3)"
+    },
+    "text": {}
+  },
+  "variants": {
+    "dots": {
+      "extends": "defaults",
+      "container": {
+        "color": "var(--lg-sage)"
+      }
+    },
+    "space": {
+      "extends": "defaults",
+      "container": {
+        "margin-block": "48px"
+      }
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": [],
+    "custom_picker": null,
+    "pill_buttons": [
+      "up",
+      "down",
+      "change",
+      "tier",
+      "delete"
+    ]
+  }
+}

@@ -1,0 +1,205 @@
+{
+  "schema": 1,
+  "_meta": {
+    "source": "/home/ubuntu/projects/TEMP STUFF/lg-legacy-source-post-70990.json",
+    "translated_at": "2026-05-23",
+    "notes": "Second pass. Corrections vs prior: (1) post is on `looth-lite` tier (corrected directly on the term); no `gated_tier` baked into JSON — embed auto-gates via taxonomy. (2) Lifted in-body transcript links into callouts: builders cited (Bourgeois, Manzer, Greenfield, Galloup), tool makers (Tormek, Lie-Nielsen, Veritas), references (Wood Database, Hoadley book, Meier book), StewMac. (3) Web-search enrichment added canonical guest websites (Maxmonte, Bashkin About, Manzer, Greenfield), plus enriched the guest callout with descriptions. YouTube `?t=` chapter timestamps left in place (intra-content navigation). Self-link to loothgroup.com homepage left in transcript as plain text. Transcript anchors for lifted external links converted to plain text so body reads naturally."
+  },
+  "blocks": [
+    {
+      "type": "post-header",
+      "title": "AGBC - Checkup (Open Discussion)",
+      "tagline": "Everything you ever wanted to ask and never got a chance to. After one solid year of AGBC, we thought it would be good to have a brief checkup on how we are doing, the format for the Club, the guests we had on, and so forth.",
+      "featured_image_id": 69275,
+      "show_byline": true,
+      "show_categories": true,
+      "show_tags": true
+    },
+    {
+      "type": "embed",
+      "url": "https://youtu.be/wEmt1ySUL4Y"
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<p>So this month we sit around a virtual bonfire and give everyone a chance to ask any question, share feedback, and propose new topics. Max is joined by Michael Bashkin for hosting duties, crowd control and marshmallow roasting.</p><p><em>Aired on Looth Group Live, Wednesday, April 8th, 2026.</em></p>"
+    },
+    {
+      "type": "callout",
+      "variant": "links",
+      "title": "Max Monterosso · Host",
+      "items": [
+        {
+          "icon": "globe",
+          "label": "maxmonte.com",
+          "url": "https://www.maxmonte.com/en/",
+          "description": "Maxmonte Guitars — Abano Terme, Italy. Custom acoustic, electric, harp."
+        },
+        {
+          "icon": "instagram",
+          "label": "@maxmonte_guitars",
+          "url": "https://www.instagram.com/maxmonte_guitars/",
+          "description": "Build progress and shop life"
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "links",
+      "title": "Michael Bashkin · Host",
+      "items": [
+        {
+          "icon": "globe",
+          "label": "bashkinguitars.com",
+          "url": "https://www.bashkinguitars.com/",
+          "description": "Bashkin Guitars — Fort Collins, Colorado. Steel-string acoustics."
+        },
+        {
+          "icon": "globe",
+          "label": "bashkinguitars.com/about",
+          "url": "https://www.bashkinguitars.com/about",
+          "description": "Forestry-to-lutherie background story"
+        },
+        {
+          "icon": "instagram",
+          "label": "bashkin_guitars",
+          "url": "https://www.instagram.com/bashkin_guitars/",
+          "description": "In-shop builds and finished instruments"
+        }
+      ]
+    },
+    {
+      "type": "section-heading",
+      "level": "h3",
+      "text": "Timestamps"
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<ul>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=0\">0:00:00 Welcome &amp; Series Recap: 14 Episodes So Far</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=530\">0:08:50 Open Discussion Begins: Topic Ideas &amp; Feedback</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=621\">0:10:21 Guitar Design, Cutaways, Arm Bevels &amp; Binding</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=1273\">0:21:13 Rosettes, Local Woods &amp; Guest Suggestions</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=1652\">0:27:32 Shop Setup, Layout Tools &amp; Space Planning</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=1802\">0:30:02 Build Philosophy: Light vs Heavy &amp; Old School Approaches</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=2057\">0:34:17 Torrefaction, Pricing &amp; Guitar Shows</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=2280\">0:38:00 Sharpening, Hand Tools &amp; Shop Machines</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=2419\">0:40:19 Tap Tuning Resources &amp; Voicing Discussion</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=2932\">0:48:52 Wood Identification, Books &amp; Microscopy</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=3069\">0:51:09 Building for the Stage, Cases &amp; Tuning Machines</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=3581\">0:59:41 One Simple Idea Round &amp; Shop Tricks</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=3750\">1:02:30 Dust Collection, Ergonomics &amp; Repetitive Strain</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=3891\">1:04:51 International Shows, Shipping &amp; Import/Export</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=4206\">1:10:06 Neck Joints, Structured Sides &amp; Vacuum Bagging</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=4629\">1:17:09 Sealing Guitar Interiors with Shellac</a></li>\n  <li><a href=\"https://youtu.be/wEmt1ySUL4Y?t=5161\">1:26:01 Wrap Up &amp; How to Contribute Ideas</a></li>\n</ul>"
+    },
+    {
+      "type": "section-heading",
+      "level": "h3",
+      "text": "Builders & schools mentioned"
+    },
+    {
+      "type": "callout",
+      "variant": "data",
+      "title": "Builders, schools & shops cited in the discussion",
+      "items": [
+        {
+          "icon": "globe",
+          "label": "Bourgeois Guitars",
+          "url": "https://bourgeoisguitars.com/",
+          "description": "Dana Bourgeois — cited for voicing content and torrefied tops"
+        },
+        {
+          "icon": "link",
+          "label": "Dana Bourgeois on torrefaction",
+          "url": "https://bourgeoisguitars.com/dana-bourgeois-on-torrefaction-for-ag/",
+          "description": "Bourgeois's own writeup on the process (added via search)"
+        },
+        {
+          "icon": "globe",
+          "label": "Manzer Guitars",
+          "url": "https://manzer.com/",
+          "description": "Linda Manzer — art, inlay, and special projects episode"
+        },
+        {
+          "icon": "globe",
+          "label": "Greenfield Guitars",
+          "url": "https://greenfieldguitars.com/",
+          "description": "Michael Greenfield — custom orders, clients, and dealers episode"
+        },
+        {
+          "icon": "globe",
+          "label": "Galloup School of Lutherie",
+          "url": "https://www.galloupguitars.com/galloup-school/",
+          "description": "Bryan Galloup — dedicated voicing classes"
+        },
+        {
+          "icon": "globe",
+          "label": "StewMac Wholesale Program",
+          "url": "https://www.stewmac.com/wholesale-program/",
+          "description": "Chris Herrod / Louisa / Bo & Brock — multiple episode contributors"
+        },
+        {
+          "icon": "globe",
+          "label": "The Spanish Guitar Workshop — Aaron Green",
+          "url": "https://www.thespanishguitarworkshop.com/",
+          "description": "Floated as potential rosettes-episode guest (added via search)"
+        }
+      ]
+    },
+    {
+      "type": "section-heading",
+      "level": "h3",
+      "text": "Tools & sharpening"
+    },
+    {
+      "type": "callout",
+      "variant": "links",
+      "title": "Sharpening & hand-tool makers mentioned",
+      "items": [
+        {
+          "icon": "globe",
+          "label": "Tormek",
+          "url": "https://tormek.com/en",
+          "description": "Swedish water-cooled sharpening systems — forthcoming AGBC episode"
+        },
+        {
+          "icon": "globe",
+          "label": "Lie-Nielsen Toolworks",
+          "url": "https://www.lie-nielsen.com/",
+          "description": "Hand-tool maker — mentioned as potential guest / factory visit"
+        },
+        {
+          "icon": "globe",
+          "label": "Veritas Tools (Lee Valley)",
+          "url": "https://www.veritastools.com/",
+          "description": "Hand-tool maker — mentioned alongside Lie-Nielsen"
+        }
+      ]
+    },
+    {
+      "type": "section-heading",
+      "level": "h3",
+      "text": "Wood identification — reading list"
+    },
+    {
+      "type": "callout",
+      "variant": "data",
+      "title": "Books & references for wood ID",
+      "items": [
+        {
+          "icon": "link",
+          "label": "Understanding Wood — R. Bruce Hoadley",
+          "url": "https://www.amazon.com/Understanding-Wood-Craftsmans-Guide-Technology/dp/1561583588",
+          "description": "The classic craftsman's guide to wood technology"
+        },
+        {
+          "icon": "link",
+          "label": "WOOD! Identifying & Using Hundreds of Woods — Eric Meier",
+          "url": "https://www.amazon.com/s?k=WOOD+Identifying+Using+Hundreds+Woods+Worldwide+Eric+Meier",
+          "description": "Visually-driven companion volume, heavy on tropical species"
+        },
+        {
+          "icon": "globe",
+          "label": "The Wood Database",
+          "url": "https://www.wood-database.com/",
+          "description": "Eric Meier's online reference — free, searchable"
+        }
+      ]
+    },
+    {
+      "type": "transcript",
+      "label": "Read transcript",
+      "open": false,
+      "body": "<p>Fourteen episodes in and we&rsquo;re still finding new things to argue about. That&rsquo;s a good sign. This month&rsquo;s Acoustic Guitar Builders Club skipped the usual guest format in favor of a full open discussion &mdash; a chance to take stock of what we&rsquo;ve covered, hear from members about what&rsquo;s missing, and map out where this thing is headed. The short answer: we&rsquo;ve got material for about five more years if everyone keeps showing up.</p><h3>14 Episodes: What We&rsquo;ve Covered So Far</h3><p>The show launched in February 2025, and host Max walked everyone through the archive. In rough chronological order:</p><ul><li><strong>Wood, wood, more wood.</strong> Lucas from Dark Cypress, Chris Herrod from StewMac, a conversation on wood torrefaction with Dana Bourgeois, and a sourcing/CITES/FSC deep-dive with Louisa from Madinter/StewMac.</li><li><strong>Specialized tools.</strong> Michael covered one-use grinds and pinch-hitter shop tools &mdash; the stuff you make at 10pm because the jig you need doesn&rsquo;t exist yet.</li><li><strong>Jig show-and-tell.</strong> Todd, Zach, and Juliano brought side molds, CNC jigs, purfling machines, and top deflection testing rigs.</li><li><strong>The Kalamazoo Girls book.</strong> John Thomas walked through his whole adventure with that project.</li><li><strong>Recording acoustic guitar</strong> &mdash; from phone-in-a-shoebox all the way up to full studio rig, with Alberto.</li><li><strong>Pinless bridges galore.</strong> Mike and Judson covered designs, jigs, and the philosophical implications of not having pins.</li><li><strong>Art, inlay, and special projects</strong> with Linda Manzer.</li><li><strong>Custom orders, clients, and dealers</strong> with Michael Greenfield and Tom Sans.</li><li><strong>Bendipedia.</strong> Bo and Brock from StewMac went wall-to-wall on bending sides &mdash; hot pipe to full bending machine.</li><li><strong>Rubio Monocoat finishing</strong> with Adriano Serger from Portugal and the regional manager for Italy &mdash; episode is still being processed but it was a good one.</li></ul><p>Looking back at episode one notes: there are still enough ideas in the queue for five more years of shows. Not a problem to have.</p><h3>What You Want to See Next</h3><p>The floor opened up and people got into it. Here&rsquo;s the running list from the discussion, roughly as it came out.</p><h4>Guitar Design &mdash; Pencil, Paper, Proportions</h4><p>One member is deep into a series on analog design &mdash; how to develop new models from scratch without a screen, working with proportion and geometry. He offered to present. Max had actually already had it on the list. Consider it booked in spirit.</p><h4>Cutaways, Venetian and Florentine</h4><p>Tight-radius bending, miter strategies, reinforcement inside the cutaway waist, what purfling backing is appropriate in those curves. Basically: bending episode part two, but fancy. The group consensus was this deserves its own night.</p><h4>Arm Bevels</h4><p>Multiple people jumped on this one. Different approaches &mdash; routed, carved, fabric-lined, unlined &mdash; and how people are actually executing them. Noted.</p><h4>Binding &amp; Purfling</h4><p>One member is mid-binding right now and has tried a different method each time. Cradle router vs. the Elevate setup. Separate purfling channel vs. combined. Titebond vs. CA. He wanted to hear from someone who has actually found their way. Max mentioned he has three existing presentations on this in the archive (binding, purfling, making your own binding, miters on a Florentine cutaway) &mdash; those are behind the Looth Pro tier. Worth a dig. But there&rsquo;s still room for a club episode comparing approaches side-by-side.</p><h4>Rosettes</h4><blockquote>&ldquo;Get somebody in the really traditional Spanish style and compare with some of the more modern takes on the rosette.&rdquo;</blockquote><p>Japanese builders doing non-orthogonal geometric mosaic work came up. Max knows some Italian classical builders doing interesting things. Aaron Green &mdash; classical maker and restorer, regularly posts vintage Spanish guitars on Instagram &mdash; was floated as a potential guest.</p><h4>Archive Organization &amp; Knowledge Base</h4><p>Emanuel made the point clearly: there&rsquo;s a lot in the archive and it&rsquo;s getting hard to navigate. He wants a place to post reference material &mdash; like the dovetail geometry math he&rsquo;d worked out for the LMI jig offset problem &mdash; somewhere members can find it later. Tags and keywords exist but older content is inconsistently tagged. Ian is apparently on it. Also noted: you still can&rsquo;t attach a file to a forum reply, only images and text. That would help.</p><h4>Shop Setup &amp; Layout</h4><p>One member is moving into a new 600-square-foot space and wants inspiration. Max mentioned the Shop Layout Tool on the Looth Group homepage &mdash; a program James put together with AI that lets you drag machines around your floor plan. Worth checking before you start drilling anchor bolts. There was also a shop setup episode from a couple of years ago that Grace hosted; Ian may have it linked somewhere. Beyond that, a dedicated episode with radically different shop configurations &mdash; underground, one-bench, multi-bench, whatever &mdash; sounded good to everyone.</p><h4>How Light to Build &mdash; And the Old School Case for Not Overthinking It</h4><p>Paul raised this one: the perennial light-vs.-heavy debate, and the flip side &mdash; a whole shop built squarely in 1975 with no computer except an iPad running Zoom. The benefits of old-school methods don&rsquo;t get enough airtime in a community that&rsquo;s increasingly CNC-curious. Both sides of this deserve a panel.</p><h4>Torrefaction &mdash; The DIY Question</h4><p>Paul also asked about the Finland podcast &mdash; specifically whether they discussed temperature ranges for DIY torrefaction and whether you need an oxygen-free environment. The honest answer: the episode didn&rsquo;t go into recipe-level detail, and Michael hasn&rsquo;t read the paper himself. What he does know: residential oven temperatures (under 400&deg;F) seem to be in the ballpark, and some people flush their oven with argon to displace oxygen. One Canadian named Mario apparently claimed you could get results at 250&ndash;300&deg;F &mdash; unverified. Dana Bourgeois&rsquo;s episode on torrefaction is in the archive and was well-regarded.</p><h4>Pricing &mdash; Where to Start, How It Evolves</h4><p>How do people price their first guitar? Their tenth? Does starting low doom you? Does starting high price you out before anyone&rsquo;s heard of you? A panel of builders who make their living at it &mdash; talking through the journey rather than quoting numbers &mdash; seemed like the right format. The Minnesota guitar shop teaser that came up later in conversation would fit here too.</p><h4>Guitar Shows &mdash; How to Do Them Right</h4><p>Paul is trying to get into shows and wants practical info: booth setup, how to talk to players, what to expect from the clientele. There&rsquo;s a pre-AGBC episode on this somewhere in the archive &mdash; Max thinks Isaac was on it &mdash; worth finding. But the topic is ripe for revisiting.</p><h4>Sharpening &mdash; Coming Soon</h4><p>Max flagged it as a spoiler: he&rsquo;s in contact with Tormek about an episode on their sharpening system. It fits neatly with Paul&rsquo;s old-school theme &mdash; chisels, plane irons, and keeping them honest. Lie-Nielsen and Veritas were also mentioned as potential guests or factory visit targets (with bonus discount aspirations, which historically haven&rsquo;t worked out but don&rsquo;t hurt to try).</p><h4>Make It vs. Buy It</h4><p>When does it make sense to buy kerfing off the shelf vs. making your own? Cut your own fret slots vs. paying a machine to do it? Spanish kerfing in particular was raised &mdash; nobody sells it pre-made, so you have to build it yourself, and it takes a while. A practical cost-benefit and time-benefit breakdown of common parts would be genuinely useful.</p><h4>Tap Tuning &amp; Voicing</h4><p>Greg brought this up with real humility: he&rsquo;s been trying to develop an ear for tap tuning on his own, without a teacher, and he doesn&rsquo;t know when the bracing is done. The group offered some pointers:</p><ul><li><strong>Bourgeois Guitars</strong> &mdash; Dana has voicing content both in the AGBC archive and on YouTube. Find it.</li><li><strong>Galloup School of Lutherie</strong> &mdash; Bryan Galloup&rsquo;s Instagram shows voicing work in progress, focusing on fixtures and approach. The school also runs dedicated voicing classes.</li><li><strong>StewMac build-through series</strong> &mdash; Michael&rsquo;s StewMac content has a strong voicing section.</li><li>The challenge: this is hard to teach over Zoom. But reach out to Michael directly and he&rsquo;ll talk you through some of it.</li></ul><h4>Wood Science &mdash; What Is Wood, Actually</h4><p>Michael has two forestry degrees but was quick to clarify that isn&rsquo;t the same as wood acoustics. Still, he tried to hire a local forestry professor to help with microscopy-based wood identification &mdash; had a nice microscope, no idea how to use it. Someone in the group mentioned these books as starting points:</p><ul><li><em>Understanding Wood: A Craftsman&rsquo;s Guide to Wood Technology</em> by R. Bruce Hoadley &mdash; the classic. Two editions: <em>Understanding Wood</em> and <em>Identifying Wood</em>.</li><li><em>WOOD! Identifying and Using Hundreds of Woods Worldwide</em> by Eric Meier &mdash; more visually accessible, lots of tropical species, and it comes from the same guy behind The Wood Database.</li></ul><p>Michael said he knows somebody who might be able to come on and actually walk through microscopy for wood ID. Watch this space.</p><h4>Tuning Machines</h4><p>Ciao floated the topic, which led to two specific directions: Sam (a community member) makes custom wood tuner buttons on a CNC or 3D printer &mdash; lighter than standard metal buttons, and a nice accent piece. And Bird &amp; Leg &mdash; a machinist who does embossed back plates and vintage tuner recreations &mdash; was enthusiastically endorsed by Max as a guest. He&rsquo;s apparently at Harvard now but his work is serious.</p><h4>Shop Machines &mdash; From Scratch to CNC</h4><p>What you actually need to start. How to find and restore old iron. Where power tools make sense and where hand tools win. The 3D Club covers some of the CNC/tech side already, so there&rsquo;s a natural boundary &mdash; but general shop machines and restoration could be a standalone episode.</p><h4>Guitar Holding &mdash; Vises, Cradles, Vacuum</h4><p>Ciao is planning to build a small version of a guitar-holding vise setup and wasn&rsquo;t sure what approach to take. Doug Proper&rsquo;s vacuum-based vise systems came up &mdash; they&rsquo;re apparently underused even by people who own them. A jig show-and-tell focused specifically on holding/clamping &mdash; vacuum setups, side molds, body cradles, Total Vise-style rigs &mdash; would be a good episode.</p><h4>One Simple Idea Round</h4><blockquote>&ldquo;One little thing that you thought of that changed how you work. An aha moment.&rdquo;</blockquote><p>Paul gave his example: he drilled holes for a pair of dowels through his radius dish form at opposing angles, so he could hold the thing like a steering wheel while sanding. Stopped scraping his knuckles, stopped the form from sinking, easier on his back. Nobody told him to do it. He just figured it out. He wants to hear everyone else&rsquo;s version of that &mdash; the small dumb revelation that made something obviously better. Good episode format.</p><h4>Dust Collection</h4><p>There was an air quality episode at some point, but not a nuts-and-bolts dust collection deep-dive. This came up and was agreed upon: it&rsquo;s important, it&rsquo;s not exciting, and we should do it anyway.</p><h4>Hand and Arm Ergonomics</h4><p>Max knows a physical therapist who works with Italian national handball and volleyball teams &mdash; specializes in hand, arm, and shoulder injuries from high-repetitive-stress work. Luthiery is basically the same motion profile. Strategies for stretching, warning signs, and keeping your hands working into your 60s and 70s would land well in a community where rotator cuff surgery appears to be a rite of passage.</p><h4>International Shows &mdash; Carnets and Import/Export</h4><p>The horror stories are real. Turned away at the border. Guitar shipped back. Showing up at a show with a photo. If you can find someone who&rsquo;s navigated international temporary import/export &mdash; correctly &mdash; that&rsquo;s worth an episode. Nobody had the right guest name ready, but the topic was universally endorsed.</p><h4>Neck Joints &mdash; With a Repair Person&rsquo;s Perspective</h4><p>Michael&rsquo;s point: there&rsquo;s an existing episode on neck joints (dovetail, bolt-on, bolt-under-fingerboard-extension) but nobody from the repair side weighed in. Repair people have strong opinions about which joints they&rsquo;d rather work on &mdash; and make a living from the ones that are hardest to reset. Getting that perspective alongside the builder perspective would be genuinely useful. John Scott was mentioned as someone who works on a lot of small-builder guitars and has thought about this.</p><h4>Vacuum Bagging</h4><p>Came up in relation to structured sides and bridge gluing. The barrier to entry seems psychological more than technical. A vacuum-jig-focused episode could demystify it &mdash; what the actual setup looks like, where it works well, where it doesn&rsquo;t. The thumbnail basically writes itself. (It would, quote, &ldquo;really suck.&rdquo; Someone had to say it.)</p><h4>Humidity &mdash; Shop vs. Storage vs. EMC</h4><p>Relative humidity vs. absolute humidity vs. equilibrium moisture content. What matters, what&rsquo;s confused, and how to think about shop environment vs. wood storage vs. guitar stability. Good topic, real confusion in the community around it.</p><h4>Open Q&amp;A Episodes &mdash; Quarterly</h4><p>The suggestion: once a quarter, an episode that&rsquo;s just open floor. Anyone can ask anyone anything. No specific topic. The &ldquo;Council of Elders&rdquo; format already exists elsewhere in the Looth Group orbit &mdash; this would be the AGBC version. The group liked it. Scheduling might need adjustment depending on time zones, but in principle: yes.</p><h3>On-the-Spot: Sealing Guitar Interiors with Shellac</h3><p>Ciao asked from Taiwan (at 4:20am, respect) about sealing the inside of a guitar with shellac &mdash; specifically, how to mask the gluing surfaces without losing your mind. The group had a lot to say:</p><p><strong>Michael&rsquo;s approach:</strong> He glues the back on before the top, so the top rim gluing surface is accessible. Tape it off, hit the interior with a rattle can of shellac &mdash; a light mist, a couple coats. Primarily aesthetic, secondarily slows humidity exchange. Easy to touch up later.</p><p><strong>Max&rsquo;s approach:</strong> He glues the top first (voices with the top closed), so he can&rsquo;t use the same masking method. A perimeter negative cutout &mdash; cardboard or MDF made from the mold template &mdash; works as a spray mask. Spray, pull it, done. After the first use it stiffens up with dried shellac and becomes its own tool.</p><p><strong>The consensus from the wider community:</strong> At a Woodstock show, the panel &mdash; Dana Bourgeois, Michael Durian, and others &mdash; was unanimously in favor of interior sealing. They didn&rsquo;t think it measurably affected sound but did believe it slowed moisture exchange. One pound cut, brushed on, stopping short of the gluing line.</p><p><strong>For Taiwan:</strong> Rattle cans of shellac apparently don&rsquo;t exist there, but a light cut through an airbrush works fine. The negative cutout mask eliminates the headache of trying to tape precise gluing surfaces inside a box.</p><p><strong>Got a topic idea, a guest suggestion, or just something you&rsquo;re struggling with in the shop?</strong> Reach out directly to Max or shoot an email to Ian and it&rsquo;ll get forwarded. So far, every single person who&rsquo;s been asked to come on the show has said yes. We&rsquo;re apparently hard to turn down.</p><p><em>See you next month.<br>&mdash; The Looth Group</em></p>"
+    },
+    {
+      "type": "post-footer",
+      "show_author": true,
+      "show_related": true
+    }
+  ]
+}

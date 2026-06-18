@@ -1,0 +1,150 @@
+{
+    "schema": 1,
+    "_meta": {
+        "sponsor_slug": "stewmac"
+    },
+    "sponsor": {
+        "slug": "stewmac",
+        "wp_user_id": 733,
+        "email": "social@stewmac.com",
+        "name": "Stewmac",
+        "display_name": null,
+        "logo_url": "https://dev.loothgroup.com/wp-content/uploads/2023/11/Content-Link-Icon-Stew-Mac-Affiliate.png",
+        "hero": {
+            "url": "https://dev.loothgroup.com/wp-content/uploads/2026/03/i-5295-tileimage-1000px-1.webp",
+            "caption": "For All Your Guitar Repair and Construction Needs !",
+            "title": "Stewart MacDonald",
+            "youtube": "https://youtu.be/IqDIIGS3nM0?si=i7qQYqyTP41fnyyu"
+        },
+        "about": "StewMac (Stewart-MacDonald) is a well-known supplier of tools, parts, and materials primarily for guitar and instrument builders, luthiers, and repair technicians. They offer a wide range of products, including hardware (bridges, tuners, pickups), woodworking tools, finishing supplies, and specialized kits for guitar maintenance and customization.\r\n\r\nFounded in 1968, StewMac is a trusted resource for both professionals and hobbyists, providing high-quality components, detailed tutorials, and technical support. They’re especially popular among those who build or repair electric and acoustic guitars, basses, and other stringed instruments.",
+        "website": "https://stewmac.sjv.io/stewmac",
+        "colors": {
+            "primary": "#ff0000",
+            "secondary": "#000000",
+            "header": "#ffffff"
+        },
+        "social": {
+            "facebook": "https://www.facebook.com/StewMac",
+            "instagram": "https://www.instagram.com/stewmac_guitar/?hl=en",
+            "youtube": "https://www.youtube.com/@stewmac"
+        },
+        "gallery_urls": [
+            "https://dev.loothgroup.com/wp-content/uploads/2025/04/types-tools.webp",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/04/1636-3-pulling-2500px.webp",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/12/5245_1-inuse-1500px.webp",
+            "https://dev.loothgroup.com/wp-content/uploads/2025/04/103839-in-body-2-square.webp"
+        ],
+        "tag_url": "https://dev.loothgroup.com/search-results/?_sft_post_tag=stewmac",
+        "forum_url": "/hub/?leaf=50121"
+    },
+    "blocks": [
+        {
+            "type": "brand-hero",
+            "id": "hero",
+            "show_hero_image": true
+        },
+        {
+            "type": "section-heading",
+            "id": "about-h",
+            "text": "About Stewmac",
+            "level": "h2"
+        },
+        {
+            "type": "wysiwyg",
+            "id": "about",
+            "html": "<p>StewMac (Stewart-MacDonald) is a well-known supplier of tools, parts, and materials primarily for guitar and instrument builders, luthiers, and repair technicians. They offer a wide range of products, including hardware (bridges, tuners, pickups), woodworking tools, finishing supplies, and specialized kits for guitar maintenance and customization.\r\n\r\nFounded in 1968, StewMac is a trusted resource for both professionals and hobbyists, providing high-quality components, detailed tutorials, and technical support. They’re especially popular among those who build or repair electric and acoustic guitars, basses, and other stringed instruments.</p>"
+        },
+        {
+            "type": "embed",
+            "id": "hero-yt",
+            "url": "https://youtu.be/IqDIIGS3nM0?si=i7qQYqyTP41fnyyu",
+            "caption": "For All Your Guitar Repair and Construction Needs !"
+        },
+        {
+            "type": "featured-products",
+            "id": "prods",
+            "heading": "Featured Products",
+            "author": 733,
+            "items": [
+                {
+                    "title": "StewMac Precision Fret Puller",
+                    "url": "https://dev.loothgroup.com/sponsor-product/stewmac-precision-fret-puller/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/04/1636-3-pulling-2500px-1-300x300.webp"
+                },
+                {
+                    "title": "Prop Jack",
+                    "url": "https://dev.loothgroup.com/sponsor-product/50111-2/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/04/103839-in-body-2-square-1-300x300.webp"
+                },
+                {
+                    "title": "The Intonator",
+                    "url": "https://dev.loothgroup.com/sponsor-product/50106-2/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/04/5245_1-inuse-1500px-1-300x300.webp"
+                }
+            ]
+        },
+        {
+            "type": "recent-posts",
+            "id": "posts",
+            "heading": "Recent Posts",
+            "author": 733,
+            "items": [
+                {
+                    "title": "Be Among the First to Try GuitarTek by StewMac",
+                    "url": "https://dev.loothgroup.com/sponsor-post/be-among-the-first-to-try-guitartek-by-stewmac/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/06/GuitarTek-Looth-Group-Trial-300x169.jpg",
+                    "date": "Jun 1, 2026",
+                    "excerpt": "Be Among the First to Try GuitarTek by StewMac Try the all-new GuitarTek cleaners & polishes — completely free. First 50 members…"
+                },
+                {
+                    "title": "4 Days Left to Save 20%",
+                    "url": "https://dev.loothgroup.com/sponsor-post/70280-2/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/04/stewmac_20pct_promo_16x9-300x169.webp",
+                    "date": "Apr 27, 2026",
+                    "excerpt": "Limited Time · Members Only · 4 Days Left 20% Off Sitewide at StewMac Ends April 30 at 4 PM EDT. Some…"
+                },
+                {
+                    "title": "StewMac Mega Tool Sale",
+                    "url": "https://dev.loothgroup.com/sponsor-post/68956-2/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/03/stewmac_16x9-300x169-1.jpg",
+                    "date": "Mar 18, 2026",
+                    "excerpt": "Quick heads up for The Looth Group community — the StewMac Mega Tool Sale is here. We don’t always send out a…"
+                },
+                {
+                    "title": "StewMac Mega Tool Sale",
+                    "url": "https://dev.loothgroup.com/sponsor-post/stewmac-mega-tool-sale/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/03/stewmac_16x9-300x169-1.jpg",
+                    "date": "Mar 18, 2026",
+                    "excerpt": "Quick heads up for The Looth Group community — the StewMac Mega Tool Sale is here. We don’t always send out a…"
+                },
+                {
+                    "title": "CLOSEOUT ! Keenovo Heating Blanket",
+                    "url": "https://dev.loothgroup.com/sponsor-post/closeout-keenovo-heating-blanket/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2025/04/Screenshot-2025-04-30-125130-300x169.png",
+                    "date": "Apr 30, 2025",
+                    "excerpt": "Keenovo Heating Blanket With plenty of heat and the right size and flexibility, this blanket is ideal for bending acoustic guitar sides.…"
+                },
+                {
+                    "title": "StewMac Dreadnought Acoustic Guitar Kit",
+                    "url": "https://dev.loothgroup.com/sponsor-post/stewmac-copy-of-dreadnought-acoustic-guitar-kit/",
+                    "image": "https://dev.loothgroup.com/wp-content/uploads/2026/03/i-5295-tileimage-1000px-1-300x169.webp",
+                    "date": "Apr 30, 2025",
+                    "excerpt": "StewMac Dreadnought Acoustic Guitar Kit Torrefied tops now available! Build a great sounding dreadnought-size guitar from AAA-grade tonewoods. Start with the advantage…"
+                }
+            ]
+        },
+        {
+            "type": "brand-gallery",
+            "id": "gallery",
+            "heading": "Image Gallery"
+        },
+        {
+            "type": "whos-talking",
+            "id": "talk"
+        },
+        {
+            "type": "contact-form",
+            "id": "contact"
+        }
+    ]
+}

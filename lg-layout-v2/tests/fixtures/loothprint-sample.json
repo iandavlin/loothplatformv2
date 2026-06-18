@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "_meta": {
+    "title": "Truss Rod Wrench Storage Bracket",
+    "post_id": 88888,
+    "post_type": "loothprint",
+    "author_id": 12,
+    "fixture_purpose": "Exercises the new `download` block in the context of a loothprint-CPT article. Validates that the toolkit can express a Loothprint post using the unified block set + a CPT-specific shell template."
+  },
+  "blocks": [
+    {
+      "type": "wysiwyg",
+      "id": "b_intro",
+      "html": "<p>A snap-fit wall bracket for the four most common truss-rod wrench sizes. Print in PETG for shop durability; PLA also works.</p>"
+    },
+
+    {
+      "type": "gallery",
+      "id": "b_gallery",
+      "columns": 3,
+      "ratio": "4x3",
+      "items": [
+        { "id": 22001, "alt": "Bracket mounted on shop wall" },
+        { "id": 22002, "alt": "Wrenches in their slots" },
+        { "id": 22003, "alt": "Print on the bed" },
+        { "id": 22004, "alt": "Slicer preview" }
+      ]
+    },
+
+    {
+      "type": "download",
+      "id": "b_dl_stl",
+      "title": "STL — Truss Rod Wrench Bracket v3",
+      "description": "Latest revision. Includes both 4-slot and 6-slot variants. PrusaSlicer profile bundled.",
+      "file_id": 22010,
+      "secondary_links": [
+        { "label": "Onshape source", "url": "https://cad.onshape.com/documents/abcdef/w/123" },
+        { "label": "Printables mirror", "url": "https://www.printables.com/model/xyz" }
+      ],
+      "tip_jar_url": "https://buymeacoffee.com/ianhates",
+      "license": "CC-BY-SA-4.0"
+    },
+
+    {
+      "type": "embed",
+      "id": "b_yt",
+      "url": "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+      "ratio": "16x9",
+      "caption": "Print walkthrough + assembly."
+    },
+
+    {
+      "type": "wysiwyg",
+      "id": "b_print_notes",
+      "html": "<p>Print settings: 0.2mm layer, 35% gyroid infill, 4 perimeters, supports off. The snap tabs need solid perimeters to hold long-term.</p>"
+    },
+
+    {
+      "type": "resource",
+      "id": "b_parts",
+      "variant": "links",
+      "title": "Hardware referenced",
+      "columns": 2,
+      "items": [
+        { "label": "M3×8 screw (qty 2)", "url": "https://example.com/m3-8", "description": "For mounting to drywall anchor", "external": true },
+        { "label": "Drywall anchor (qty 2)", "url": "https://example.com/anchor", "description": "Generic plastic-cone style", "external": true }
+      ]
+    }
+  ]
+}

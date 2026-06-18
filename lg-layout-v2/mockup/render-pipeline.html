@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lg-layout-v2 · Render pipeline mockup</title>
+  <style>
+    :root {
+      --bg: #1a1d1a;
+      --panel: #232723;
+      --panel-2: #2c322c;
+      --ink: #e8ebe5;
+      --ink-dim: #98a098;
+      --sage: #87986a;
+      --sage-dim: #5b6a48;
+      --amber: #ecb351;
+      --cream: #fbfbf8;
+      --rule: #3a3f3a;
+      --ok: #7fb069;
+      --warn: #ecb351;
+      --err: #e26d5c;
+      --mono: 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.6 system-ui, -apple-system, sans-serif;
+    }
+    header {
+      padding: 20px 32px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--rule);
+      display: flex;
+      align-items: baseline;
+      gap: 18px;
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 500; }
+    header .tag { color: var(--sage); font-family: var(--mono); font-size: 12px; }
+    header .desc { color: var(--ink-dim); font-size: 13px; margin-left: auto; }
+    main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+
+    .stage {
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      margin: 0 0 16px;
+      overflow: hidden;
+    }
+    .stage > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      user-select: none;
+      background: var(--panel);
+    }
+    .stage > summary::-webkit-details-marker { display: none; }
+    .stage > summary::before {
+      content: '▸';
+      color: var(--sage);
+      font-size: 11px;
+      transition: transform 120ms;
+    }
+    .stage[open] > summary::before { transform: rotate(90deg); }
+    .stage .num {
+      display: inline-block;
+      width: 26px;
+      height: 26px;
+      line-height: 26px;
+      text-align: center;
+      background: var(--sage);
+      color: var(--bg);
+      border-radius: 50%;
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .stage .label { font-weight: 600; font-size: 14px; }
+    .stage .hint { color: var(--ink-dim); font-size: 12px; margin-left: 8px; }
+    .stage .status { margin-left: auto; font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+    .stage .status.ok   { color: var(--ok);   background: rgba(127, 176, 105, 0.12); }
+    .stage .status.warn { color: var(--warn); background: rgba(236, 179, 81, 0.12); }
+    .stage .status.err  { color: var(--err);  background: rgba(226, 109, 92, 0.12); }
+    .stage .body { padding: 4px 20px 20px; border-top: 1px solid var(--rule); }
+
+    textarea, pre, code {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    textarea {
+      width: 100%;
+      min-height: 280px;
+      background: var(--panel-2);
+      color: var(--ink);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 12px;
+      resize: vertical;
+    }
+    pre {
+      background: var(--panel-2);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 12px;
+      overflow-x: auto;
+      margin: 0;
+      max-height: 480px;
+      overflow-y: auto;
+    }
+    pre code { background: transparent; padding: 0; }
+
+    .toolbar { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
+    button {
+      background: var(--sage);
+      color: var(--bg);
+      border: 0;
+      border-radius: 4px;
+      padding: 7px 14px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    button:hover { filter: brightness(1.1); }
+    button.ghost {
+      background: transparent;
+      border: 1px solid var(--rule);
+      color: var(--ink);
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    button.ghost.active { background: var(--panel-2); border-color: var(--sage); }
+
+    .legend { display: flex; gap: 14px; color: var(--ink-dim); font-size: 11px; align-items: center; flex-wrap: wrap; }
+    .legend code { background: var(--panel-2); padding: 1px 6px; border-radius: 3px; }
+
+    /* Tree view */
+    .tree { font-family: var(--mono); font-size: 12px; }
+    .tree details { margin: 1px 0; }
+    .tree summary {
+      cursor: pointer;
+      padding: 3px 0;
+      list-style: none;
+    }
+    .tree summary::-webkit-details-marker { display: none; }
+    .tree summary::before {
+      content: '▸';
+      color: var(--sage-dim);
+      display: inline-block;
+      width: 14px;
+      transition: transform 120ms;
+    }
+    .tree details[open] > summary::before { transform: rotate(90deg); }
+    .tree .leaf { padding-left: 14px; padding-top: 3px; padding-bottom: 3px; }
+    .tree .leaf::before { content: '·'; color: var(--sage-dim); display: inline-block; width: 14px; }
+    .tree .type { color: var(--sage); }
+    .tree .id { color: var(--ink-dim); margin-left: 8px; }
+    .tree .props { color: var(--ink-dim); margin-left: 8px; }
+    .tree .props code { background: rgba(135, 152, 106, 0.08); padding: 0 5px; border-radius: 3px; color: var(--cream); margin-right: 4px; }
+    .tree details > * { margin-left: 18px; }
+
+    /* Variable resolution table */
+    table.vars {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    table.vars th, table.vars td {
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--rule);
+      text-align: left;
+      vertical-align: top;
+    }
+    table.vars th {
+      color: var(--ink-dim);
+      font-weight: 400;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 10px;
+    }
+    table.vars td.var { color: var(--amber); }
+    table.vars td.layer { color: var(--sage); }
+    table.vars td.win { color: var(--ok); font-weight: 600; }
+    table.vars td.dim { color: var(--ink-dim); text-decoration: line-through; opacity: 0.6; }
+
+    .block-section {
+      margin: 16px 0;
+      padding: 12px;
+      background: var(--panel-2);
+      border-radius: 4px;
+      border-left: 3px solid var(--sage);
+    }
+    .block-section .h {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--cream);
+      margin-bottom: 8px;
+    }
+    .block-section .h .type { color: var(--sage); }
+    .block-section .h .id { color: var(--ink-dim); margin-left: 6px; }
+
+    /* CSS bundle viewer */
+    .layer-tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      margin-right: 8px;
+      color: var(--bg);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .layer-tag.reset { background: #888; }
+    .layer-tag.theme { background: var(--amber); }
+    .layer-tag.shell { background: var(--sage); }
+    .layer-tag.defaults { background: #6aa3c7; }
+    .layer-tag.context { background: #c77a6a; }
+    .layer-tag.dash { background: var(--ok); }
+
+    /* Live preview iframe */
+    .preview-shell {
+      background: var(--cream);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 16px;
+      transition: max-width 200ms;
+      margin: 12px auto;
+    }
+    .preview-shell.mobile { max-width: 390px; }
+    .preview-shell.tablet { max-width: 768px; }
+    .preview-shell.desktop { max-width: 100%; }
+    .preview-iframe {
+      width: 100%;
+      height: 600px;
+      border: 0;
+      background: var(--cream);
+    }
+
+    /* Syntax-ish highlighting for CSS bundle */
+    .css-out { white-space: pre; }
+    .css-out .at { color: var(--amber); }
+    .css-out .sel { color: var(--sage); }
+    .css-out .prop { color: var(--cream); }
+    .css-out .val { color: #b8d4a0; }
+    .css-out .var { color: var(--amber); }
+    .css-out .cmt { color: var(--ink-dim); font-style: italic; }
+
+    /* HTML output */
+    .html-out { white-space: pre-wrap; word-break: break-word; }
+    .html-out .tag { color: var(--sage); }
+    .html-out .attr { color: var(--amber); }
+    .html-out .str { color: #b8d4a0; }
+    .html-out .marker { background: rgba(236, 179, 81, 0.15); padding: 0 2px; border-radius: 2px; }
+
+    /* Validation errors */
+    .err-list { list-style: none; padding: 0; margin: 0; }
+    .err-list li { padding: 8px 12px; margin: 6px 0; background: rgba(226, 109, 92, 0.08); border-left: 3px solid var(--err); border-radius: 4px; font-family: var(--mono); font-size: 12px; }
+    .ok-msg { color: var(--ok); padding: 12px; background: rgba(127, 176, 105, 0.05); border-radius: 4px; font-family: var(--mono); font-size: 12px; }
+
+    .note {
+      font-size: 12px;
+      color: var(--ink-dim);
+      padding: 8px 12px;
+      background: rgba(135, 152, 106, 0.05);
+      border-left: 2px solid var(--sage-dim);
+      border-radius: 0 4px 4px 0;
+      margin: 12px 0;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    footer {
+      padding: 20px 32px;
+      color: var(--ink-dim);
+      font-size: 11px;
+      text-align: center;
+      border-top: 1px solid var(--rule);
+    }
+    footer a { color: var(--sage); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>lg-layout-v2</h1>
+  <span class="tag">render-pipeline mockup</span>
+  <span class="desc">Paste an article JSON above → watch it flow through 6 stages → see the final HTML + CSS bundle</span>
+</header>
+
+<main>
+
+<details class="stage" open>
+  <summary>
+    <span class="num">1</span>
+    <span class="label">Input</span>
+    <span class="hint">Article JSON · dash overrides · viewer context</span>
+    <span class="status ok" id="status-input">loaded</span>
+  </summary>
+  <div class="body">
+    <div class="toolbar">
+      <button id="btn-render">Render</button>
+      <button class="ghost" data-fixture="simple-article">simple-article</button>
+      <button class="ghost" data-fixture="edge-cases">edge-cases</button>
+      <button class="ghost" data-fixture="loothprint-sample">loothprint-sample</button>
+      <span class="legend"><code>Ctrl+Enter</code> renders</span>
+    </div>
+    <textarea id="json-input" spellcheck="false"></textarea>
+    <div class="note">
+      The mockup parses this JSON and walks it through the pipeline below. In production, the same JSON will be read from <code>_lg_layout_v2</code> post meta and the same stages will execute server-side via <code>src/Renderer.php</code>.
+    </div>
+  </div>
+</details>
+
+<details class="stage" open>
+  <summary>
+    <span class="num">2</span>
+    <span class="label">Validation</span>
+    <span class="hint">Schema check against block manifests</span>
+    <span class="status" id="status-valid">—</span>
+  </summary>
+  <div class="body">
+    <div id="validation-output">
+      <div class="ok-msg">Awaiting input.</div>
+    </div>
+    <div class="note">
+      The validator rejects unknown block types, missing required props, enum violations, and nested columns. Errors point at the offending block by id with the offending field highlighted.
+    </div>
+  </div>
+</details>
+
+<details class="stage" open>
+  <summary>
+    <span class="num">3</span>
+    <span class="label">Block tree</span>
+    <span class="hint">Parsed in-memory structure, ids assigned</span>
+    <span class="status" id="status-tree">—</span>
+  </summary>
+  <div class="body">
+    <div class="tree" id="tree-output">—</div>
+    <div class="note">
+      Each block's <code>id</code> persists across saves and lets the editor address blocks stably. Children of <code>columns</code> blocks render nested.
+    </div>
+  </div>
+</details>
+
+<details class="stage" open>
+  <summary>
+    <span class="num">4</span>
+    <span class="label">Variable resolution</span>
+    <span class="hint">For each block: block-defaults → context → dash</span>
+    <span class="status" id="status-vars">—</span>
+  </summary>
+  <div class="body">
+    <div id="vars-output">—</div>
+    <div class="note">
+      This is the cascade made explicit. For every block instance, every CSS variable shows where it resolved from. Strikethrough = lost to a later layer. <code>WIN</code> = effective value.
+    </div>
+  </div>
+</details>
+
+<details class="stage" open>
+  <summary>
+    <span class="num">5</span>
+    <span class="label">CSS bundle</span>
+    <span class="hint">@layer reset, theme, block-shell, block-defaults, context, dash</span>
+    <span class="status" id="status-css">—</span>
+  </summary>
+  <div class="body">
+    <pre class="css-out" id="css-output">—</pre>
+    <div class="note">
+      Layer order is the entire conflict-resolution story. Within a layer, specificity matters; between layers, later wins regardless of specificity.
+    </div>
+  </div>
+</details>
+
+<details class="stage" open>
+  <summary>
+    <span class="num">6</span>
+    <span class="label">HTML output + live preview</span>
+    <span class="hint">Article HTML, raw + rendered</span>
+    <span class="status" id="status-html">—</span>
+  </summary>
+  <div class="body">
+    <div class="grid-2">
+      <div>
+        <div class="legend" style="margin: 0 0 8px;">Raw HTML</div>
+        <pre class="html-out" id="html-output">—</pre>
+      </div>
+      <div>
+        <div class="toolbar">
+          <span class="legend">Viewport:</span>
+          <button class="ghost vw-btn active" data-vw="desktop">desktop</button>
+          <button class="ghost vw-btn" data-vw="tablet">tablet</button>
+          <button class="ghost vw-btn" data-vw="mobile">mobile</button>
+        </div>
+        <div class="preview-shell desktop" id="preview-shell">
+          <iframe class="preview-iframe" id="preview-iframe" sandbox="allow-same-origin"></iframe>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      The iframe loads the rendered HTML + the generated CSS bundle. Resize buttons mimic standard breakpoints. In production, this is the page the user sees.
+    </div>
+  </div>
+</details>
+
+</main>
+
+<footer>
+  Phase 0 mockup — see <a href="../docs/README.md">docs/</a> for the full architecture. The pipeline here is a hand-rolled simulation; Phase 1 replaces it with the real <code>Renderer</code> + <code>CssBuilder</code> classes that produce identical output.
+</footer>
+
+<script>
+/* ─────────────────────────────────────────────────────────────────
+   Simulated render pipeline.
+
+   This is a faithful illustration of how the real pipeline will work, but
+   the actual implementation lives in PHP (Phase 1). The architecture is
+   the contract; this JS exists to make it tangible.
+───────────────────────────────────────────────────────────────── */
+
+/* Inline fixture defaults so the mockup works without a server */
+const FIXTURES = {
+  'simple-article': null,  /* loaded from tests/fixtures via fetch */
+  'edge-cases': null,
+  'loothprint-sample': null,
+};
+
+/* Subset of the v2 block manifest defaults, kept inline so the mockup is
+   self-contained. The real manifests live at blocks/<name>/manifest.json
+   and are loaded by the PHP pipeline. */
+const MANIFESTS = {
+  prose: {
+    selector: '.lg-prose',
+    defaults: { container: { 'margin-block': '16px' }, text: { 'color': 'var(--lg-ink)', 'font-size': '20px' } },
+    context_overrides: ['columns'],
+  },
+  image: {
+    selector: '.lg-image',
+    defaults: {
+      container: { 'padding': '12px 16px', 'margin-block': '16px', 'bg': 'var(--lg-cream)', 'border': '1px solid var(--lg-sage-3)', 'radius': '8px' },
+      text: { 'color': 'var(--lg-ink)', 'font-size': '18px', 'text-align': 'left' },
+    },
+    context_overrides: ['columns'],
+  },
+  embed: {
+    selector: '.lg-embed',
+    defaults: { container: { 'margin-block': '24px', 'radius': '12px' } },
+    context_overrides: ['columns'],
+  },
+  columns: {
+    selector: '.lg-columns',
+    defaults: { container: { 'margin-block': '16px' } },
+  },
+  paywall: {
+    selector: '.lg-paywall',
+    defaults: { container: {} },
+  },
+  gallery: {
+    selector: '.lg-gallery',
+    defaults: { container: { 'margin-block': '24px' } },
+  },
+  download: {
+    selector: '.lg-download',
+    defaults: {
+      container: { 'padding': '16px 20px', 'margin-block': '20px', 'bg': 'var(--lg-cream)', 'border': '1px solid var(--lg-sage-3)', 'radius': '8px' },
+      text: { 'color': 'var(--lg-ink)' },
+    },
+  },
+  resource: {
+    selector: '.lg-resource',
+    defaults: { container: { 'padding': '16px', 'margin-block': '20px', 'bg': 'var(--lg-cream)', 'border': '1px solid var(--lg-sage-3)', 'radius': '8px' } },
+  },
+};
+
+/* Brand tokens (theme layer) */
+const BRAND_TOKENS = {
+  '--lg-amber': '#ecb351',
+  '--lg-sage-3': '#d4e0b8',
+  '--lg-cream': '#fbfbf8',
+  '--lg-ink': '#323532',
+};
+
+/* Demo dash overrides — what the user has customized in the dash */
+const DASH_OVERRIDES = {
+  image: { container: { 'bg': '#f7dcb4' } },  /* user override; cascade test */
+};
+
+/* Named context normalization templates */
+const CONTEXT_RULES = {
+  columns: {
+    selector_template: '.lg-columns__col > {selector}',
+    vars: { 'padding': '0', 'margin-block': '0', 'bg': 'transparent', 'border': 'none', 'shadow': 'none' },
+  },
+};
+
+/* ── Stage 2: Validation ───────────────────────────────────────── */
+function validate(layout) {
+  const errors = [];
+  if (typeof layout !== 'object' || !layout) {
+    errors.push({ path: '/', msg: 'layout must be an object' });
+    return errors;
+  }
+  if (layout.schema !== 1) errors.push({ path: '/schema', msg: 'schema must equal 1' });
+  if (!Array.isArray(layout.blocks)) {
+    errors.push({ path: '/blocks', msg: 'blocks must be an array' });
+    return errors;
+  }
+  walkValidate(layout.blocks, '/blocks', errors, /* depth */ 0);
+  return errors;
+}
+function walkValidate(blocks, path, errors, depth) {
+  blocks.forEach((b, i) => {
+    const p = `${path}[${i}]`;
+    if (!b || typeof b !== 'object') { errors.push({ path: p, msg: 'block must be an object' }); return; }
+    if (!b.type) { errors.push({ path: p, msg: 'missing type' }); return; }
+    if (!MANIFESTS[b.type]) { errors.push({ path: p, msg: `unknown block type: ${b.type}` }); return; }
+    if (b.type === 'columns' && depth > 0) {
+      errors.push({ path: p, msg: 'nested columns are not allowed' });
+    }
+    if (b.type === 'image' && b.image_id === undefined) {
+      errors.push({ path: p, msg: 'image block requires image_id' });
+    }
+    if (Array.isArray(b.blocks)) walkValidate(b.blocks, `${p}.blocks`, errors, depth + 1);
+  });
+}
+
+/* ── Stage 3: Block tree rendering ─────────────────────────────── */
+function renderTree(blocks, container) {
+  container.innerHTML = '';
+  blocks.forEach(b => container.appendChild(treeNode(b)));
+}
+function treeNode(b) {
+  const hasChildren = Array.isArray(b.blocks) && b.blocks.length;
+  const propsToShow = Object.entries(b).filter(([k]) => !['type', 'id', 'blocks', '_test_note'].includes(k));
+  const propsHtml = propsToShow.map(([k, v]) => `<code>${k}=${escapeForHtml(JSON.stringify(v).slice(0, 60))}</code>`).join('');
+
+  if (hasChildren) {
+    const d = document.createElement('details');
+    d.open = true;
+    const s = document.createElement('summary');
+    s.innerHTML = `<span class="type">${b.type}</span><span class="id">${b.id || '(no id)'}</span><span class="props">${propsHtml}</span>`;
+    d.appendChild(s);
+    b.blocks.forEach(child => d.appendChild(treeNode(child)));
+    return d;
+  } else {
+    const div = document.createElement('div');
+    div.className = 'leaf';
+    div.innerHTML = `<span class="type">${b.type}</span><span class="id">${b.id || '(no id)'}</span><span class="props">${propsHtml}</span>`;
+    return div;
+  }
+}
+
+/* ── Stage 4: Variable resolution ──────────────────────────────── */
+function resolveVarsForBlocks(blocks, parentContext = []) {
+  const results = [];
+  blocks.forEach(b => {
+    const m = MANIFESTS[b.type];
+    if (!m) return;
+    const resolution = resolveVars(b, m, parentContext);
+    results.push({ block: b, resolution });
+
+    if (Array.isArray(b.blocks)) {
+      const childContext = b.type === 'columns' ? ['columns'] : [];
+      const childResults = resolveVarsForBlocks(b.blocks, childContext);
+      results.push(...childResults);
+    }
+  });
+  return results;
+}
+
+function resolveVars(block, manifest, parentContext) {
+  /* Walk the layer order: block-defaults → context → dash. Each layer either
+     sets a var (winning over earlier layers at the same selector or losing to
+     later layers) or doesn't touch it. */
+  const groups = ['container', 'text'];
+  const out = {};
+
+  groups.forEach(group => {
+    out[group] = {};
+    const declaredVars = Object.keys(manifest.defaults[group] || {});
+    declaredVars.forEach(varName => {
+      const trail = [];
+
+      /* Layer: block-defaults */
+      const def = manifest.defaults[group][varName];
+      if (def !== undefined) trail.push({ layer: 'block-defaults', value: def });
+
+      /* Layer: context (only if parent context applies AND this block participates) */
+      parentContext.forEach(ctxName => {
+        const ctxRule = CONTEXT_RULES[ctxName];
+        if (!ctxRule) return;
+        if (!(manifest.context_overrides || []).includes(ctxName)) return;
+        if (ctxRule.vars[varName] !== undefined) {
+          trail.push({ layer: 'context (' + ctxName + ')', value: ctxRule.vars[varName] });
+        }
+      });
+
+      /* Layer: dash */
+      const dashRule = DASH_OVERRIDES[block.type];
+      if (dashRule && dashRule[group] && dashRule[group][varName] !== undefined) {
+        trail.push({ layer: 'dash', value: dashRule[group][varName] });
+      }
+
+      /* Effective = last entry in trail */
+      const eff = trail.length ? trail[trail.length - 1].value : '(unset)';
+      out[group][varName] = { trail, effective: eff };
+    });
+  });
+
+  return out;
+}
+
+function renderVarsTable(resolutions, container) {
+  container.innerHTML = '';
+  resolutions.forEach(({ block, resolution }) => {
+    const section = document.createElement('div');
+    section.className = 'block-section';
+    section.innerHTML = `<div class="h"><span class="type">${block.type}</span><span class="id">${block.id || '(no id)'}</span></div>`;
+
+    ['container', 'text'].forEach(group => {
+      const vars = resolution[group];
+      const varNames = Object.keys(vars);
+      if (!varNames.length) return;
+
+      const table = document.createElement('table');
+      table.className = 'vars';
+      table.innerHTML = `<thead><tr><th>${group}</th><th>block-defaults</th><th>context</th><th>dash</th><th>effective</th></tr></thead>`;
+      const tb = document.createElement('tbody');
+      varNames.forEach(vn => {
+        const v = vars[vn];
+        const findLayer = (name) => v.trail.find(t => t.layer.startsWith(name));
+        const dl = findLayer('block-defaults');
+        const cl = findLayer('context');
+        const sl = findLayer('dash');
+        const winner = v.trail.length ? v.trail[v.trail.length - 1].layer : '';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="var">--lg-${vn}</td>
+          <td class="${winner === 'block-defaults' ? 'win' : (dl ? 'dim' : '')}">${dl ? escapeForHtml(dl.value) : '—'}</td>
+          <td class="${winner.startsWith('context') ? 'win' : (cl ? 'dim' : '')}">${cl ? escapeForHtml(cl.value) : '—'}</td>
+          <td class="${winner === 'dash' ? 'win' : (sl ? 'dim' : '')}">${sl ? escapeForHtml(sl.value) : '—'}</td>
+          <td class="win">${escapeForHtml(v.effective)}</td>
+        `;
+        tb.appendChild(tr);
+      });
+      table.appendChild(tb);
+      section.appendChild(table);
+    });
+
+    container.appendChild(section);
+  });
+}
+
+/* ── Stage 5: CSS bundle ───────────────────────────────────────── */
+function buildCss(layout) {
+  const usedTypes = new Set();
+  function collectTypes(blocks) {
+    blocks.forEach(b => {
+      if (b && b.type) usedTypes.add(b.type);
+      if (Array.isArray(b.blocks)) collectTypes(b.blocks);
+    });
+  }
+  collectTypes(layout.blocks || []);
+
+  const lines = [];
+  lines.push(`<span class="cmt">/* lg-layout-v2 bundle — generated ${new Date().toISOString()} */</span>`);
+  lines.push(`<span class="at">@layer</span> reset, theme, block-shell, block-defaults, context, dash;`);
+  lines.push('');
+
+  /* theme layer */
+  lines.push(`<span class="at">@layer</span> theme {`);
+  lines.push(`  :root {`);
+  Object.entries(BRAND_TOKENS).forEach(([k, v]) => {
+    lines.push(`    <span class="var">${k}</span>: <span class="val">${v}</span>;`);
+  });
+  lines.push(`  }`);
+  lines.push(`}`);
+  lines.push('');
+
+  /* block-shell layer (stub — real shell.css lives per block) */
+  lines.push(`<span class="at">@layer</span> block-shell {`);
+  lines.push(`  <span class="cmt">/* in production, blocks/&lt;name&gt;/shell.css contributes here */</span>`);
+  usedTypes.forEach(t => {
+    const m = MANIFESTS[t];
+    if (!m) return;
+    lines.push(`  <span class="sel">${m.selector}</span> { <span class="cmt">/* structural CSS, all chrome via var() */</span> }`);
+  });
+  lines.push(`}`);
+  lines.push('');
+
+  /* block-defaults layer */
+  lines.push(`<span class="at">@layer</span> block-defaults {`);
+  usedTypes.forEach(t => {
+    const m = MANIFESTS[t];
+    if (!m) return;
+    const decls = [];
+    ['container', 'text'].forEach(g => {
+      Object.entries(m.defaults[g] || {}).forEach(([k, v]) => {
+        decls.push(`    <span class="var">--lg-${k}</span>: <span class="val">${escapeForHtml(v)}</span>;`);
+      });
+    });
+    if (decls.length) {
+      lines.push(`  <span class="sel">${m.selector}</span> {`);
+      decls.forEach(d => lines.push(d));
+      lines.push(`  }`);
+    }
+  });
+  lines.push(`}`);
+  lines.push('');
+
+  /* context layer */
+  const contextSelectorsByCtx = {};
+  Object.entries(MANIFESTS).forEach(([t, m]) => {
+    (m.context_overrides || []).forEach(ctx => {
+      if (!contextSelectorsByCtx[ctx]) contextSelectorsByCtx[ctx] = [];
+      contextSelectorsByCtx[ctx].push(m.selector);
+    });
+  });
+  if (Object.keys(contextSelectorsByCtx).length) {
+    lines.push(`<span class="at">@layer</span> context {`);
+    Object.entries(contextSelectorsByCtx).forEach(([ctx, sels]) => {
+      const rule = CONTEXT_RULES[ctx];
+      if (!rule) return;
+      const selList = sels.map(s => rule.selector_template.replace('{selector}', s)).join(',\n    ');
+      lines.push(`  ${selList} {`);
+      Object.entries(rule.vars).forEach(([k, v]) => {
+        lines.push(`    <span class="var">--lg-${k}</span>: <span class="val">${escapeForHtml(v)}</span>;`);
+      });
+      lines.push(`  }`);
+    });
+    lines.push(`}`);
+    lines.push('');
+  }
+
+  /* dash layer */
+  if (Object.keys(DASH_OVERRIDES).length) {
+    lines.push(`<span class="at">@layer</span> dash {`);
+    Object.entries(DASH_OVERRIDES).forEach(([t, o]) => {
+      const m = MANIFESTS[t];
+      if (!m) return;
+      const decls = [];
+      ['container', 'text'].forEach(g => {
+        Object.entries(o[g] || {}).forEach(([k, v]) => {
+          decls.push(`    <span class="var">--lg-${k}</span>: <span class="val">${escapeForHtml(v)}</span>;`);
+        });
+      });
+      if (decls.length) {
+        lines.push(`  <span class="sel">${m.selector}</span> {`);
+        decls.forEach(d => lines.push(d));
+        lines.push(`  }`);
+      }
+    });
+    lines.push(`}`);
+  }
+
+  return lines.join('\n');
+}
+
+/* ── Stage 6: HTML output ──────────────────────────────────────── */
+function renderHtml(layout, editorMode = false) {
+  const out = [];
+  out.push('<article class="lg-article">');
+  layout.blocks.forEach(b => out.push(renderBlock(b, editorMode, /* depth */ 0)));
+  out.push('</article>');
+  return out.join('\n');
+}
+
+function renderBlock(b, editorMode, depth) {
+  const indent = '  '.repeat(depth + 1);
+  const marker = editorMode ? `${indent}<lg-edit data-lg-block-id="${b.id || ''}" data-lg-block-type="${b.type}"></lg-edit>\n` : '';
+
+  switch (b.type) {
+    case 'prose':
+      return `${marker}${indent}<div class="lg-prose">${b.html || ''}</div>`;
+    case 'image': {
+      const cap = b.caption ? `\n${indent}  <figcaption>${b.caption}</figcaption>` : '';
+      const num = b.number ? `\n${indent}  <span class="lg-image__num" aria-label="Figure ${b.number}">${b.number}</span>` : '';
+      return `${marker}${indent}<figure class="lg-image">${num}\n${indent}  <img src="(media ${b.image_id})" alt="${escapeAttr(b.alt || '')}" />${cap}\n${indent}</figure>`;
+    }
+    case 'embed': {
+      const ratio = b.ratio || '16x9';
+      const cap = b.caption ? `\n${indent}  <figcaption>${b.caption}</figcaption>` : '';
+      return `${marker}${indent}<figure class="lg-embed lg-embed--${ratio}">\n${indent}  <div class="lg-embed__frame"><div class="lg-embed__defer" data-lg-embed-url="${escapeAttr(b.url || '')}">(deferred)</div></div>${cap}\n${indent}</figure>`;
+    }
+    case 'columns': {
+      const cells = (b.blocks || []).map(child => `${indent}  <div class="lg-columns__col">\n${renderBlock(child, editorMode, depth + 2)}\n${indent}  </div>`).join('\n');
+      return `${marker}${indent}<div class="lg-columns lg-columns--${b.cols || 2}">\n${cells}\n${indent}</div>`;
+    }
+    case 'paywall':
+      return `${marker}${indent}<div class="lg-paywall" data-tier="${escapeAttr(b.tier || 'public')}"><!-- subsequent blocks gated --></div>`;
+    case 'gallery':
+      return `${marker}${indent}<div class="lg-gallery lg-gallery--cols-${b.columns || 3}">(${(b.items || []).length} items)</div>`;
+    case 'download': {
+      const links = (b.secondary_links || []).map(l => `<a href="${escapeAttr(l.url)}">${escapeForHtml(l.label)}</a>`).join(', ');
+      return `${marker}${indent}<div class="lg-download">\n${indent}  <h3>${escapeForHtml(b.title || '')}</h3>\n${indent}  <p>${escapeForHtml(b.description || '')}</p>\n${indent}  <a class="lg-download__file" href="(media ${b.file_id})">⬇ Download</a>\n${indent}  <div class="lg-download__links">${links}</div>\n${indent}</div>`;
+    }
+    case 'resource':
+      return `${marker}${indent}<div class="lg-resource lg-resource--${b.variant || 'links'}">${escapeForHtml(b.title || '')} (${(b.items || []).length} items)</div>`;
+    default:
+      return `${marker}${indent}<!-- unknown block type: ${b.type} -->`;
+  }
+}
+
+/* ── Stage 6b: Live iframe preview ─────────────────────────────── */
+function updatePreview(html, css) {
+  const iframe = document.getElementById('preview-iframe');
+  const stripCss = stripHtmlForCss(css);
+  const previewDoc = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>
+  body { font: 16px/1.6 system-ui, sans-serif; margin: 0; padding: 16px; color: #323532; background: #fbfbf8; }
+  img { max-width: 100%; height: auto; background: #ddd; display: block; }
+  figure { margin: 0; }
+  ${stripCss}
+</style></head><body>${html}</body></html>`;
+  iframe.srcdoc = previewDoc;
+}
+
+/* Strip mockup's HTML highlighting tags from CSS string before applying */
+function stripHtmlForCss(html) {
+  return html.replace(/<[^>]+>/g, '');
+}
+
+/* ── Orchestrator ──────────────────────────────────────────────── */
+function setStatus(id, state, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'status ' + state;
+  el.textContent = text;
+}
+
+function run() {
+  const ta = document.getElementById('json-input');
+  let layout;
+  try { layout = JSON.parse(ta.value); }
+  catch (e) {
+    setStatus('status-input', 'err', 'JSON parse: ' + e.message);
+    return;
+  }
+  setStatus('status-input', 'ok', 'parsed');
+
+  /* Stage 2 */
+  const errors = validate(layout);
+  const ve = document.getElementById('validation-output');
+  if (errors.length) {
+    setStatus('status-valid', 'err', errors.length + ' error' + (errors.length === 1 ? '' : 's'));
+    ve.innerHTML = '<ul class="err-list">' + errors.map(e => `<li>${e.path}: ${e.msg}</li>`).join('') + '</ul>';
+    return;
+  }
+  setStatus('status-valid', 'ok', 'clean');
+  ve.innerHTML = '<div class="ok-msg">✓ Layout is valid against all block manifests.</div>';
+
+  /* Stage 3 */
+  renderTree(layout.blocks, document.getElementById('tree-output'));
+  setStatus('status-tree', 'ok', countBlocks(layout.blocks) + ' blocks');
+
+  /* Stage 4 */
+  const resolutions = resolveVarsForBlocks(layout.blocks);
+  renderVarsTable(resolutions, document.getElementById('vars-output'));
+  setStatus('status-vars', 'ok', resolutions.length + ' instances');
+
+  /* Stage 5 */
+  const css = buildCss(layout);
+  document.getElementById('css-output').innerHTML = css;
+  setStatus('status-css', 'ok', css.split('\n').length + ' lines');
+
+  /* Stage 6 */
+  const html = renderHtml(layout);
+  document.getElementById('html-output').innerHTML = highlightHtml(html);
+  updatePreview(html, css);
+  setStatus('status-html', 'ok', html.length + ' bytes');
+}
+
+function countBlocks(blocks) {
+  let n = 0;
+  blocks.forEach(b => { n++; if (Array.isArray(b.blocks)) n += countBlocks(b.blocks); });
+  return n;
+}
+
+/* Lightweight HTML escape + highlight */
+function escapeForHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function escapeAttr(s) { return String(s).replace(/"/g, '&quot;'); }
+function highlightHtml(s) {
+  return escapeForHtml(s)
+    .replace(/&lt;(\/?)([a-z-]+)/g, '&lt;$1<span class="tag">$2</span>')
+    .replace(/(\s)([a-z-]+)=&quot;([^&]*)&quot;/g, '$1<span class="attr">$2</span>=<span class="str">"$3"</span>')
+    .replace(/(&lt;lg-edit[^&]*&gt;|&lt;\/lg-edit&gt;)/g, '<span class="marker">$1</span>');
+}
+
+/* Fixture loader */
+async function loadFixture(name) {
+  try {
+    const r = await fetch(`../tests/fixtures/${name}.json`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const text = await r.text();
+    document.getElementById('json-input').value = text;
+    setStatus('status-input', 'ok', 'loaded: ' + name);
+    run();
+  } catch (e) {
+    setStatus('status-input', 'err', 'load failed: ' + e.message);
+  }
+}
+
+/* ── Wire up ───────────────────────────────────────────────────── */
+document.getElementById('btn-render').addEventListener('click', run);
+document.getElementById('json-input').addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); run(); }
+});
+document.querySelectorAll('[data-fixture]').forEach(btn => {
+  btn.addEventListener('click', () => loadFixture(btn.dataset.fixture));
+});
+document.querySelectorAll('.vw-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.vw-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const shell = document.getElementById('preview-shell');
+    shell.className = 'preview-shell ' + btn.dataset.vw;
+  });
+});
+
+/* Auto-load simple-article on first paint */
+loadFixture('simple-article');
+</script>
+
+</body>
+</html>

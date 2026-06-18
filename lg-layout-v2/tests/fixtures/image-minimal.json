@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "_meta": {
+    "title": "image-only minimal fixture",
+    "post_id": 1,
+    "post_type": "post-imgcap",
+    "fixture_purpose": "Single image block with caption. Exercises the image block in isolation for snapshot stability."
+  },
+  "blocks": [
+    {
+      "type": "image",
+      "id": "b_only",
+      "image_id": 12345,
+      "alt": "Stripped peghead showing carved USA and FLMC letters",
+      "image_text": "Chemical stripper revealed letters carved into the maple."
+    }
+  ]
+}

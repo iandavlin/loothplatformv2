@@ -1,0 +1,283 @@
+/* paywall — section gate.
+
+   This file owns CSS for two related surfaces:
+     1. .lg-paywall              — the divider line members see in place of
+                                   the cut. Translated directly from the
+                                   mockup at /var/www/dev/mockups/gate-cta.html.
+     2. .lg-gate-cta              — the "members-only" placeholder card,
+                                   emitted by src/GateCta.php whenever a
+                                   gated_tier block or a paywall block
+                                   would have been rendered to a non-member.
+                                   Three variants: --embed (gated video),
+                                   --download (gated file), --paywall (cut).
+*/
+
+@layer block-shell {
+
+  /* ── 1. The divider — what MEMBERS see ─────────────────────────── */
+  .lg-paywall {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 16px;
+    align-items: center;
+    margin-block: var(--lg-margin-block, 32px);
+  }
+  .lg-paywall__rule {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--lg-rule-color, var(--lg-amber-dark, #b8842b)) 50%, transparent);
+  }
+  .lg-paywall__label {
+    font: 700 10px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--lg-label-color, var(--lg-amber-dark, #b8842b));
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .lg-paywall__label::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--lg-amber, #ecb351);
+  }
+
+  /* ── 2. The CTA card — what NON-MEMBERS see ────────────────────── */
+  /* Shared chrome */
+  .lg-gate-cta {
+    position: relative;
+    margin: 22px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--lg-tags-border, #e7e3da);
+  }
+
+  /* ── 2a. EMBED variant — gated video ───────────────── */
+  .lg-gate-cta--embed {
+    aspect-ratio: 16 / 9;
+    background: #1a1d1a center/cover no-repeat;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__poster {
+    position: absolute; inset: 0;
+    background: center/cover no-repeat;
+    filter: grayscale(0.85) blur(2px) brightness(0.55);
+    transform: scale(1.05);
+  }
+  .lg-gate-cta--embed .lg-gate-cta__scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 100%);
+  }
+  /* Play-button overlay so the viewer reads it as a missing VIDEO. */
+  .lg-gate-cta--embed .lg-gate-cta__play {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, calc(-50% - 36px));
+    width: 84px; height: 84px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    display: grid; place-items: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+  .lg-gate-cta--embed .lg-gate-cta__play::before {
+    content: "";
+    display: block;
+    width: 0; height: 0;
+    border-left: 24px solid #fff;
+    border-top: 15px solid transparent;
+    border-bottom: 15px solid transparent;
+    margin-left: 6px;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__body {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 24px 28px 26px;
+    color: var(--lg-on-dark, #fff);
+    text-align: center;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__eyebrow {
+    font: 700 10px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--lg-amber, #ecb351);
+    margin-bottom: 8px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__eyebrow::before {
+    content: "";
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--lg-amber, #ecb351);
+    display: inline-block;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__headline {
+    font: 700 22px/1.2 var(--lg-font-serif, Georgia, serif);
+    margin: 0 0 8px;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__text {
+    font: 400 14px/1.5 var(--lg-font-sans, system-ui);
+    margin: 0 auto 16px;
+    max-width: 480px;
+    color: rgba(255, 255, 255, 0.88);
+  }
+  .lg-gate-cta--embed .lg-gate-cta__btn {
+    display: inline-block;
+    padding: 11px 22px;
+    border-radius: 6px;
+    background: var(--lg-amber, #ecb351);
+    color: var(--lg-ink, #323532);
+    font: 700 13px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__btn:hover {
+    background: var(--lg-on-dark, #fff);
+  }
+
+  /* ── 2b. DOWNLOAD variant — compact mid-article card ───────────── */
+  .lg-gate-cta--download {
+    background: var(--lg-paper-2, #fdfbf4);
+    border-left: 5px solid var(--lg-amber, #ecb351);
+    padding: 18px 22px;
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    gap: 18px;
+    align-items: center;
+  }
+  .lg-gate-cta--download .lg-gate-cta__icon {
+    width: 48px; height: 48px;
+    display: grid; place-items: center;
+    background: var(--lg-amber, #ecb351);
+    color: var(--lg-ink, #323532);
+    border-radius: 6px;
+  }
+  .lg-gate-cta--download .lg-gate-cta__icon svg {
+    width: 26px; height: 26px;
+  }
+  .lg-gate-cta--download .lg-gate-cta__body {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .lg-gate-cta--download .lg-gate-cta__eyebrow {
+    font: 700 10px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--lg-amber-dark, #b8842b);
+    margin-bottom: 4px;
+  }
+  .lg-gate-cta--download .lg-gate-cta__headline {
+    font: 700 15px/1.3 var(--lg-font-sans, system-ui);
+    color: var(--lg-charcoal, #1a1d1a);
+    margin: 0;
+  }
+  .lg-gate-cta--download .lg-gate-cta__text {
+    font: 400 13px/1.4 var(--lg-font-sans, system-ui);
+    color: #5a5d57;
+    margin: 2px 0 0;
+  }
+  .lg-gate-cta--download .lg-gate-cta__btn {
+    padding: 9px 18px;
+    border-radius: 6px;
+    background: var(--lg-ink, #323532);
+    color: var(--lg-on-dark, #fff);
+    font: 600 12px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .lg-gate-cta--download .lg-gate-cta__btn:hover {
+    background: var(--lg-amber-dark, #b8842b);
+  }
+
+  /* ── 2c. PAYWALL variant — end-of-article large card ───────────── */
+  .lg-gate-cta--paywall {
+    position: relative;
+    aspect-ratio: 21 / 9;
+    min-height: 280px;
+    background: #1a1d1a center/cover no-repeat;
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__poster {
+    position: absolute; inset: 0;
+    background: center/cover no-repeat;
+    filter: grayscale(0.7) blur(4px) brightness(0.5);
+    transform: scale(1.06);
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.78) 100%);
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 44px 28px;
+    color: var(--lg-on-dark, #fff);
+    min-height: 280px;
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__eyebrow {
+    font: 700 11px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--lg-amber, #ecb351);
+    margin-bottom: 14px;
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__headline {
+    font: 700 28px/1.15 var(--lg-font-serif, Georgia, serif);
+    margin: 0 0 10px;
+    max-width: 540px;
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__text {
+    font: 400 15px/1.55 var(--lg-font-sans, system-ui);
+    max-width: 520px;
+    margin: 0 0 22px;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__btn {
+    display: inline-block;
+    padding: 13px 28px;
+    border-radius: 6px;
+    background: var(--lg-amber, #ecb351);
+    color: var(--lg-ink, #323532);
+    font: 700 14px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__btn:hover {
+    background: var(--lg-on-dark, #fff);
+  }
+
+  /* ── Fallback when no featured image (embed/paywall) ──── */
+  .lg-gate-cta--embed:not(.has-poster),
+  .lg-gate-cta--paywall:not(.has-poster) {
+    background: linear-gradient(135deg, var(--lg-amber-dark, #b8842b), var(--lg-charcoal, #1a1d1a));
+  }
+  .lg-gate-cta--embed:not(.has-poster) .lg-gate-cta__poster,
+  .lg-gate-cta--paywall:not(.has-poster) .lg-gate-cta__poster {
+    display: none;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 520px) {
+    .lg-gate-cta--embed .lg-gate-cta__play {
+      width: 64px; height: 64px;
+      transform: translate(-50%, calc(-50% - 28px));
+    }
+    .lg-gate-cta--embed .lg-gate-cta__play::before {
+      border-left-width: 18px;
+      border-top-width: 12px;
+      border-bottom-width: 12px;
+    }
+    .lg-gate-cta--embed .lg-gate-cta__headline { font-size: 18px; }
+    .lg-gate-cta--paywall .lg-gate-cta__headline { font-size: 22px; }
+    .lg-gate-cta--download {
+      grid-template-columns: 1fr;
+      gap: 14px;
+      text-align: center;
+    }
+    .lg-gate-cta--download .lg-gate-cta__icon { justify-self: center; }
+  }
+}

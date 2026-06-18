@@ -1,0 +1,196 @@
+{
+  "name": "image",
+  "version": 1,
+  "selector": ".lg-image",
+  "description": "Image with optional caption underneath. All chrome flows through dash-tweakable variables.",
+  "schema": {
+    "props": {
+      "image_id": {
+        "type": "integer",
+        "description": "Attachment ID. Resolved to a URL via the media resolver at render time. Named image_id (not id) because 'id' is the universal block-instance identifier (b_xxx string) and we don't want the two conflated."
+      },
+      "url": {
+        "type": "string",
+        "default": "",
+        "description": "Optional explicit image URL. If absent, resolved from image_id."
+      },
+      "alt": {
+        "type": "string",
+        "default": "",
+        "description": "Alt text for accessibility. Empty string only if the image is purely decorative."
+      },
+      "image_text": {
+        "type": "string",
+        "default": "",
+        "description": "Per-instance article text shown as the figcaption below the image AND as the lightbox caption when the image is opened. Multi-paragraph plain text \u2014 split on blank lines into <p>s at render; newlines collapse to spaces in the lightbox pill."
+      },
+      "number": {
+        "type": "string",
+        "default": "",
+        "description": "Optional badge text shown as a small overlay in the top-left corner of the image (e.g. '1', '01', 'A'). Empty = no badge. Free-form string so authors can use any short label, not just integers."
+      },
+      "variant": {
+        "type": "string",
+        "default": "variant-1",
+        "enum": ["variant-1", "variant-2"],
+        "description": "Visual style variant. variant-1 = default chrome (sage border + cream bg). variant-2 = framed (heavier border, larger radius, drop shadow)."
+      },
+      "aspect": {
+        "type": "string",
+        "default": "",
+        "description": "Optional display aspect ratio (e.g. '1/1', '16/9', '4/3', '3/2'). When set, the image frame is locked to this ratio and the image fills via object-fit: cover. Empty = render at the source image's intrinsic aspect. Use for hero crops or column-pair normalization."
+      },
+      "focal_x": {
+        "type": "integer",
+        "default": 50,
+        "description": "Horizontal focal point (0-100, percentage from left). Drives object-position when `aspect` crops the image. 50 = centered. Lower = subject is on the left side of the source image; higher = right side."
+      },
+      "focal_y": {
+        "type": "integer",
+        "default": 50,
+        "description": "Vertical focal point (0-100, percentage from top). Drives object-position when `aspect` crops the image. 50 = centered. Lower = subject near top; higher = subject near bottom."
+      },
+      "zoom": {
+        "type": "integer",
+        "default": 100,
+        "description": "Zoom level as a percentage of the natural cover-fit size (100 = no zoom, 200 = 2x, 300 = 3x). Drives a CSS scale on the img inside the cropped frame. Higher values give more pan range to reach edges of the source. Only meaningful when `aspect` is set."
+      }
+    },
+    "required": [
+      "image_id"
+    ]
+  },
+  "vars": {
+    "container": [
+      "padding",
+      "margin-block",
+      "bg",
+      "border",
+      "radius",
+      "shadow",
+      "gap"
+    ],
+    "text": [
+      "color",
+      "link-color",
+      "font-family",
+      "font-size",
+      "font-weight",
+      "line-height",
+      "letter-spacing",
+      "text-align"
+    ]
+  },
+  "defaults": {
+    "container": {
+      "padding": "12px 16px",
+      "margin-block": "16px",
+      "bg": "var(--lg-cream)",
+      "border": "1px solid var(--lg-sage-3)",
+      "radius": "8px",
+      "shadow": "none",
+      "gap": "12px"
+    },
+    "text": {
+      "color": "var(--lg-ink)",
+      "link-color": "var(--lg-sage)",
+      "font-family": "var(--lg-font-sans)",
+      "font-size": "18px",
+      "font-weight": "400",
+      "line-height": "1.5",
+      "letter-spacing": "normal",
+      "text-align": "left"
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": [
+      "image_text"
+    ],
+    "custom_picker": "image",
+    "variant_prop": "variant",
+    "pill_buttons": [
+      "up",
+      "down",
+      "edit",
+      "change",
+      "variant",
+      "tier",
+      "delete"
+    ]
+  },
+  "variants": {
+    "variant-1": {
+      "extends": "defaults"
+    },
+    "variant-2": {
+      "extends": "defaults",
+      "container": {
+        "padding": "10px 10px 14px",
+        "bg": "#fff",
+        "border": "1px solid var(--lg-ink, #323532)",
+        "radius": "2px",
+        "shadow": "0 6px 18px rgba(0, 0, 0, 0.18)"
+      }
+    }
+  },
+  "context_overrides": [
+    "columns"
+  ],
+  "sub_targets": {
+    "photo": {
+      "selector": ".lg-image .lg-image__frame",
+      "label": "Photo (inner image)",
+      "vars": {
+        "container": [
+          "border",
+          "radius",
+          "shadow"
+        ]
+      },
+      "defaults": {
+        "container": {
+          "border": "none",
+          "radius": "0",
+          "shadow": "none"
+        }
+      }
+    },
+    "badge": {
+      "selector": ".lg-image .lg-image__badge",
+      "label": "Number badge (corner overlay)",
+      "vars": {
+        "container": [
+          "padding",
+          "bg",
+          "border",
+          "radius",
+          "shadow"
+        ],
+        "text": [
+          "color",
+          "font-family",
+          "font-size",
+          "font-weight",
+          "letter-spacing"
+        ]
+      },
+      "defaults": {
+        "container": {
+          "padding": "0 6px",
+          "bg": "var(--lg-ink)",
+          "border": "none",
+          "radius": "3px",
+          "shadow": "0 2px 6px rgba(0,0,0,0.25)"
+        },
+        "text": {
+          "color": "var(--lg-cream)",
+          "font-family": "var(--lg-font-sans)",
+          "font-size": "13px",
+          "font-weight": "700",
+          "letter-spacing": "0.04em"
+        }
+      }
+    }
+  }
+}

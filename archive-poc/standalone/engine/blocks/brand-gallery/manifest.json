@@ -1,0 +1,40 @@
+{
+  "name": "brand-gallery",
+  "version": 1,
+  "selector": ".lg-brand-gallery",
+  "description": "Sponsor-page image gallery. Reads the resolved image URLs from $ctx['sponsor'].gallery_urls (Lane-A baked these as URLs, not attachment IDs — so unlike the `gallery` block it needs no media resolver). Renders a horizontal lightbox carousel (reuses the shared [data-lg-carousel] + [data-lg-lightbox] front-end). Optional `heading`. Empty gallery_urls → block renders nothing. Auto-themes via --brand-primary.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "heading": {
+        "type": "string",
+        "default": "Gallery",
+        "description": "Section heading shown above the carousel (inline-editable)."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": ["margin-block", "padding"],
+    "text": ["font-family"]
+  },
+  "defaults": {
+    "container": {
+      "margin-block": "32px",
+      "padding": "0"
+    },
+    "text": {
+      "font-family": "var(--lg-font-sans)"
+    }
+  },
+  "variants": {
+    "variant-1": { "extends": "defaults" }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["heading"],
+    "variant_prop": "variant",
+    "variant_options": ["variant-1"],
+    "pill_buttons": ["move-up", "move-down", "edit", "delete"]
+  }
+}

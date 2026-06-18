@@ -1,0 +1,15 @@
+# /etc/GeoIP.conf — feeds geoipupdate(8). Install with:
+#
+#   sudo apt-get install geoipupdate
+#   sudo install -m 644 deploy/geoipupdate.conf.example /etc/GeoIP.conf
+#   sudo mkdir -p /var/lib/GeoIP && sudo chown root:adm /var/lib/GeoIP
+#   sudo geoipupdate            # initial pull
+#
+# Sign up free at https://www.maxmind.com/en/geolite2/signup for an
+# account, generate a license key, paste it below. Then wire up the
+# cron in deploy/geoipupdate.cron.example.
+
+AccountID         REPLACE_ME
+LicenseKey        REPLACE_ME_LICENSE_KEY
+EditionIDs        GeoLite2-City
+DatabaseDirectory /var/lib/GeoIP

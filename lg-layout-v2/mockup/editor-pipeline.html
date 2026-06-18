@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lg-layout-v2 · Editor pipeline mockup</title>
+  <style>
+    :root {
+      --bg: #1a1d1a;
+      --panel: #232723;
+      --panel-2: #2c322c;
+      --ink: #e8ebe5;
+      --ink-dim: #98a098;
+      --sage: #87986a;
+      --sage-dim: #5b6a48;
+      --amber: #ecb351;
+      --cream: #fbfbf8;
+      --rule: #3a3f3a;
+      --ok: #7fb069;
+      --warn: #ecb351;
+      --err: #e26d5c;
+      --mono: 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, sans-serif; }
+    header {
+      padding: 20px 32px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--rule);
+      display: flex;
+      align-items: baseline;
+      gap: 18px;
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 500; }
+    header .tag { color: var(--sage); font-family: var(--mono); font-size: 12px; }
+    header .desc { color: var(--ink-dim); font-size: 13px; margin-left: auto; }
+    main { max-width: 1400px; margin: 0 auto; padding: 24px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; }
+    @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .panel h2 {
+      margin: 0;
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--rule);
+      background: var(--panel-2);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .panel h2 .num {
+      display: inline-block;
+      width: 22px;
+      height: 22px;
+      line-height: 22px;
+      text-align: center;
+      background: var(--sage);
+      color: var(--bg);
+      border-radius: 50%;
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 11px;
+    }
+    .panel h2 .status { margin-left: auto; font-family: var(--mono); font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 400; }
+    .panel h2 .status.ok { color: var(--ok); background: rgba(127, 176, 105, 0.15); }
+    .panel h2 .status.err { color: var(--err); background: rgba(226, 109, 92, 0.15); }
+    .panel h2 .status.warn { color: var(--warn); background: rgba(236, 179, 81, 0.15); }
+    .panel-body { padding: 14px 16px; max-height: 600px; overflow-y: auto; }
+
+    .toolbar { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; padding: 12px 16px; background: var(--panel-2); border-bottom: 1px solid var(--rule); }
+    button {
+      background: var(--sage);
+      color: var(--bg);
+      border: 0;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font: 12px/1.2 inherit;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    button:hover { filter: brightness(1.1); }
+    button.ghost { background: transparent; border: 1px solid var(--rule); color: var(--ink); font-weight: 400; text-transform: none; letter-spacing: 0; }
+    button.ghost.active { background: var(--panel-2); border-color: var(--sage); }
+    button.danger { background: var(--err); }
+
+    /* Article preview (editor mode) */
+    .article-preview {
+      background: var(--cream);
+      color: #323532;
+      padding: 24px;
+      border-radius: 4px;
+      min-height: 400px;
+      font: 16px/1.6 system-ui, sans-serif;
+    }
+    .article-preview h3 { margin: 24px 0 8px; font-size: 18px; }
+    .article-preview p { margin: 0 0 16px; }
+    .lg-editable-block {
+      position: relative;
+      outline: 1px dashed transparent;
+      outline-offset: 4px;
+      transition: outline-color 120ms;
+    }
+    .lg-editable-block:hover { outline-color: rgba(47, 61, 44, 0.3); }
+    .lg-editable-block.is-wired-fail { outline-color: var(--err); outline-style: solid; outline-offset: 2px; }
+    .lg-edit-pill {
+      position: absolute;
+      top: -28px;
+      right: 0;
+      display: none;
+      gap: 4px;
+      background: var(--sage);
+      color: white;
+      padding: 4px;
+      border-radius: 4px;
+      font: 10px/1 var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      z-index: 5;
+    }
+    .lg-editable-block:hover .lg-edit-pill,
+    .lg-editable-block.show-pill .lg-edit-pill { display: inline-flex; }
+    .lg-edit-pill button { background: rgba(0,0,0,0.2); color: white; font-size: 9px; padding: 3px 7px; }
+
+    /* Mock blocks */
+    .mock-prose, .mock-image, .mock-embed, .mock-empty-embed {
+      margin: 12px 0;
+      padding: 12px;
+      background: #fbfbf8;
+      border: 1px solid #d4e0b8;
+      border-radius: 8px;
+    }
+    .mock-image .img-stub {
+      width: 100%;
+      aspect-ratio: 3/2;
+      background: linear-gradient(135deg, #c4d4a0, #87986a);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font: 12px var(--mono);
+      border-radius: 4px;
+    }
+    .mock-image figcaption { font-size: 14px; margin-top: 8px; color: #5b6a48; }
+    .mock-embed .frame {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #1a1d1a;
+      color: #87986a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font: 12px var(--mono);
+      border-radius: 4px;
+    }
+    .mock-empty-embed {
+      background: rgba(241, 244, 232, 0.6);
+      border: 1.5px dashed rgba(135, 152, 106, 0.55);
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .mock-empty-embed input { width: 100%; max-width: 360px; padding: 8px 12px; border: 1px solid rgba(135, 152, 106, 0.55); border-radius: 4px; font: 13px var(--mono); }
+    .mock-empty-embed button { font-size: 12px; }
+
+    /* Marker hydration table */
+    .markers-table { width: 100%; border-collapse: collapse; font: 11px var(--mono); }
+    .markers-table th, .markers-table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--rule); vertical-align: top; }
+    .markers-table th { color: var(--ink-dim); font-weight: 400; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
+    .markers-table td.id { color: var(--ink-dim); }
+    .markers-table td.type { color: var(--sage); }
+    .markers-table td.bound-yes { color: var(--ok); }
+    .markers-table td.bound-no  { color: var(--err); }
+    .markers-table td.bound-na  { color: var(--ink-dim); }
+
+    /* Mutation log */
+    .mutation-log { font: 11px/1.5 var(--mono); }
+    .mutation-log .entry { padding: 8px 10px; margin: 6px 0; background: var(--panel-2); border-left: 3px solid var(--sage); border-radius: 0 4px 4px 0; }
+    .mutation-log .entry.req { border-left-color: var(--amber); }
+    .mutation-log .entry.res { border-left-color: var(--ok); }
+    .mutation-log .entry.err { border-left-color: var(--err); }
+    .mutation-log .entry.dom { border-left-color: #6aa3c7; }
+    .mutation-log .entry .t { color: var(--ink-dim); font-size: 10px; margin-right: 8px; }
+    .mutation-log .entry .label { color: var(--cream); font-weight: 600; }
+    .mutation-log pre { margin: 4px 0 0; padding: 6px 8px; background: var(--bg); border-radius: 3px; white-space: pre-wrap; font-size: 10px; line-height: 1.4; }
+
+    .note {
+      font-size: 11px;
+      color: var(--ink-dim);
+      padding: 8px 10px;
+      background: rgba(135, 152, 106, 0.04);
+      border-left: 2px solid var(--sage-dim);
+      border-radius: 0 4px 4px 0;
+      margin: 10px 0;
+    }
+    .note.bad { background: rgba(226, 109, 92, 0.06); border-color: var(--err); }
+    .note.good { background: rgba(127, 176, 105, 0.06); border-color: var(--ok); }
+
+    code.kbd { background: var(--panel-2); padding: 1px 6px; border-radius: 3px; font-family: var(--mono); font-size: 11px; }
+
+    /* TinyMCE binding indicator */
+    [data-lg-prop-editable] {
+      cursor: text;
+      transition: background 120ms;
+    }
+    [data-lg-prop-editable]:focus {
+      outline: 2px solid var(--sage);
+      outline-offset: 2px;
+      background: rgba(135, 152, 106, 0.05);
+    }
+    [data-lg-prop-editable]::after {
+      content: 'editable';
+      display: inline-block;
+      margin-left: 6px;
+      font: 9px var(--mono);
+      color: var(--sage-dim);
+      vertical-align: super;
+      opacity: 0.7;
+    }
+
+    footer {
+      padding: 20px 32px;
+      color: var(--ink-dim);
+      font-size: 11px;
+      text-align: center;
+      border-top: 1px solid var(--rule);
+    }
+    footer a { color: var(--sage); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>lg-layout-v2</h1>
+  <span class="tag">editor-pipeline mockup</span>
+  <span class="desc">Diagnostic surface for the inline editor. Each block's wiring state is exposed; mutations flow through visibly.</span>
+</header>
+
+<main>
+
+  <!-- LEFT: live editor preview -->
+  <section class="panel" style="grid-column: 1;">
+    <h2>
+      <span class="num">A</span>
+      Editor preview
+      <span class="status ok" id="editor-status">all wired</span>
+    </h2>
+    <div class="toolbar">
+      <button id="btn-rewire">Re-run wireMarkers</button>
+      <button id="btn-simulate-fail" class="ghost">Simulate partial JS load failure</button>
+      <button id="btn-reset" class="ghost">Reset</button>
+    </div>
+    <div class="panel-body">
+      <div class="article-preview" id="article">
+        <!-- The "rendered article" goes here. Built by JS below from a fake render. -->
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: diagnostic stack -->
+  <div style="display: flex; flex-direction: column; gap: 20px;">
+
+    <section class="panel">
+      <h2>
+        <span class="num">7</span>
+        Marker hydration
+        <span class="status ok" id="markers-status">paired</span>
+      </h2>
+      <div class="panel-body">
+        <table class="markers-table" id="markers-table">
+          <thead><tr><th>id</th><th>type</th><th>host found</th><th>wired</th><th>handlers</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="note">
+          The editor framework reads <code>&lt;lg-edit&gt;</code> markers in the rendered DOM and pairs each with its next sibling (the host block). For every block <code>wireMarkers</code> processes, this table shows: was the host found, was the marker successfully removed, and which handlers got attached.
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>
+        <span class="num">8</span>
+        Mutation flow
+        <span class="status ok" id="mut-status">idle</span>
+      </h2>
+      <div class="panel-body">
+        <div class="note">
+          Click the empty embed's submit button below to fire a real mutation flow. The log shows each step: form submit → REST request → simulated server response → DOM splice → re-hydration.
+        </div>
+        <div class="mutation-log" id="mut-log"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>
+        <span class="num">9</span>
+        TinyMCE binding
+        <span class="status ok" id="tmce-status">bound</span>
+      </h2>
+      <div class="panel-body">
+        <div class="note">
+          For each prose block, the framework wires TinyMCE on the inline-editable HTML. The mockup uses contenteditable directly; the production editor uses TinyMCE with H1/H2/H3/P/list/link toolbar.
+        </div>
+        <ul id="tmce-list" style="list-style: none; padding: 0; margin: 0; font: 11px var(--mono);"></ul>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<footer>
+  Phase 0 mockup — see <a href="../docs/TESTING.md">TESTING.md</a> for what the editor harness asserts in CI.
+  Try: load this in headless Chrome, click "Simulate partial JS load failure", then submit the empty embed form. The failsafe should prevent native form submission even though wireMarkers didn't bind.
+</footer>
+
+<script>
+/* ─────────────────────────────────────────────────────────────────
+   Editor pipeline simulation.
+
+   Two pieces of v2 editor philosophy are demonstrated here:
+
+   1. Marker hydration is fully reflective — every block's wiring state is
+      observable, not silent. If wireMarkers fails to pair a marker with its
+      host, that shows up in the table BEFORE the user encounters the bug.
+
+   2. The empty-embed URL form has a *failsafe* — even if the editor JS
+      partially fails to load and wireMarkers never runs, the rendered form
+      includes an inline `onsubmit="return false"` attribute that prevents
+      native form submission from silently navigating away (the v1 bug).
+      The submit handler is wired up in addition, not as replacement.
+───────────────────────────────────────────────────────────────── */
+
+const sampleBlocks = [
+  { type: 'prose',  id: 'b_intro',  html: 'Elyse Kautz brought a beaten \'57 Strat into the shop.', editable: ['html'] },
+  { type: 'image',  id: 'b_img1',   image_id: 12345, caption: 'Chemical stripper revealed letters carved into the maple.', number: '001', editable: ['caption', 'number'] },
+  { type: 'embed',  id: 'b_yt',     url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', editable: [] },
+  { type: 'embed',  id: 'b_empty',  url: '', editable: [] },  /* triggers empty-form */
+  { type: 'prose',  id: 'b_outro',  html: 'Final pickup wiring next.', editable: ['html'] },
+];
+
+let wiringMode = 'normal';  /* normal | partial-fail */
+
+/* ── Render the article in editor mode ─────────────────────────── */
+function renderArticle() {
+  const article = document.getElementById('article');
+  article.innerHTML = sampleBlocks.map(renderBlockEditor).join('\n');
+}
+
+function renderBlockEditor(b) {
+  const marker = `<lg-edit data-lg-block-id="${b.id}" data-lg-block-type="${b.type}"></lg-edit>`;
+
+  switch (b.type) {
+    case 'prose':
+      return `${marker}<div class="lg-editable-block mock-prose" data-block-id="${b.id}" data-block-type="prose">
+        <div class="lg-edit-pill"><button>edit</button><button>tier</button><button>×</button></div>
+        <p data-lg-prop-editable="html">${b.html}</p>
+      </div>`;
+    case 'image':
+      return `${marker}<figure class="lg-editable-block mock-image" data-block-id="${b.id}" data-block-type="image">
+        <div class="lg-edit-pill"><button>edit-link</button><button>tier</button><button>×</button></div>
+        <div class="img-stub">media ${b.image_id}</div>
+        <span style="display:inline-block; padding:2px 8px; background:rgba(135,152,106,0.55); color:#fff; border-radius:50%; font-family:var(--mono); font-size:11px; margin-top:8px;" data-lg-prop-editable="number">${b.number}</span>
+        <figcaption data-lg-prop-editable="caption">${b.caption}</figcaption>
+      </figure>`;
+    case 'embed':
+      if (!b.url) {
+        /* Empty embed — the URL form. Note inline onsubmit failsafe. */
+        return `${marker}<figure class="lg-editable-block mock-empty-embed" data-block-id="${b.id}" data-block-type="embed-empty">
+          <div class="lg-edit-pill"><button>tier</button><button>×</button></div>
+          <form data-lg-embed-url-form data-lg-block-id="${b.id}" onsubmit="return false">
+            <label style="font-size:13px; color:#5b6a48; margin-bottom:8px; display:block; text-align:center;">Paste an embed URL</label>
+            <input type="url" data-lg-embed-url-input placeholder="https://…" />
+            <button type="submit" data-lg-embed-url-submit style="margin-top:8px;">Embed</button>
+          </form>
+        </figure>`;
+      }
+      return `${marker}<figure class="lg-editable-block mock-embed" data-block-id="${b.id}" data-block-type="embed">
+        <div class="lg-edit-pill"><button>edit-link</button><button>ratio</button><button>tier</button><button>×</button></div>
+        <div class="frame">iframe → ${b.url}</div>
+      </figure>`;
+  }
+  return '';
+}
+
+/* ── wireMarkers: pair markers with hosts, attach handlers ─────── */
+const wiringState = new Map();  /* block-id → { hostFound, wired, handlers, reason } */
+
+function wireMarkers(root) {
+  wiringState.clear();
+  const markers = (root || document).querySelectorAll('lg-edit[data-lg-block-id]');
+
+  markers.forEach((marker, idx) => {
+    const id = marker.dataset.lgBlockId;
+    const type = marker.dataset.lgBlockType;
+    const host = marker.nextElementSibling;
+    const state = { type, hostFound: false, wired: false, handlers: [], reason: '' };
+
+    if (!host) {
+      state.reason = 'nextElementSibling is null';
+      wiringState.set(id, state);
+      return;
+    }
+
+    /* Simulate partial JS load failure: skip every other block */
+    if (wiringMode === 'partial-fail' && idx % 2 === 1) {
+      state.hostFound = true;
+      state.reason = 'wireMarkers crashed mid-loop (simulated)';
+      wiringState.set(id, state);
+      return;
+    }
+
+    state.hostFound = true;
+    host.dataset.lgBlockId = id;
+    host.dataset.lgBlockType = type;
+
+    /* Pill handlers — manifest-driven, but mock here */
+    const pill = host.querySelector('.lg-edit-pill');
+    if (pill) {
+      pill.addEventListener('click', e => {
+        e.preventDefault();
+        logMutation('user-click', 'Clicked pill button: ' + (e.target.textContent || '?'), null);
+      });
+      state.handlers.push('pill-click');
+    }
+
+    /* Inline-editable props */
+    host.querySelectorAll('[data-lg-prop-editable]').forEach(el => {
+      el.setAttribute('contenteditable', 'true');
+      el.addEventListener('blur', () => {
+        const prop = el.dataset.lgPropEditable;
+        const value = el.textContent;
+        sendPatch(id, { [prop]: value }, 'blur-save');
+      });
+      state.handlers.push(`editable:${el.dataset.lgPropEditable}`);
+    });
+
+    /* Embed URL form */
+    const form = host.querySelector('[data-lg-embed-url-form]');
+    if (form) {
+      form.addEventListener('submit', e => {
+        e.preventDefault();
+        const input = form.querySelector('[data-lg-embed-url-input]');
+        const url = (input.value || '').trim();
+        if (!url) {
+          logMutation('skip', 'Submit fired with empty URL — ignored', null);
+          return;
+        }
+        sendPatch(id, { url }, 'embed-url-form');
+      });
+      state.handlers.push('embed-url-submit');
+    }
+
+    state.wired = true;
+    marker.remove();
+    wiringState.set(id, state);
+  });
+
+  /* Mark blocks whose hosts didn't get wired */
+  document.querySelectorAll('.lg-editable-block').forEach(b => {
+    const id = b.dataset.blockId || b.dataset.lgBlockId;
+    const st = wiringState.get(id);
+    if (st && !st.wired) b.classList.add('is-wired-fail');
+    else b.classList.remove('is-wired-fail');
+  });
+
+  updateDiagnostics();
+}
+
+/* ── Diagnostic table updates ──────────────────────────────────── */
+function updateDiagnostics() {
+  const tbody = document.querySelector('#markers-table tbody');
+  tbody.innerHTML = '';
+
+  let wiredCount = 0;
+  let failCount = 0;
+
+  for (const [id, st] of wiringState) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="id">${id}</td>
+      <td class="type">${st.type}</td>
+      <td class="${st.hostFound ? 'bound-yes' : 'bound-no'}">${st.hostFound ? '✓' : '✗ ' + (st.reason || '')}</td>
+      <td class="${st.wired ? 'bound-yes' : 'bound-no'}">${st.wired ? '✓' : '✗ ' + (st.reason || '')}</td>
+      <td>${st.handlers.length ? st.handlers.join(', ') : '<span style="color:var(--ink-dim)">—</span>'}</td>
+    `;
+    tbody.appendChild(tr);
+    if (st.wired) wiredCount++;
+    else failCount++;
+  }
+
+  /* Status */
+  const ms = document.getElementById('markers-status');
+  if (failCount === 0) { ms.className = 'status ok'; ms.textContent = `${wiredCount}/${wiredCount + failCount} wired`; }
+  else { ms.className = 'status err'; ms.textContent = `${failCount} failed`; }
+
+  const es = document.getElementById('editor-status');
+  if (failCount === 0) { es.className = 'status ok'; es.textContent = 'all wired'; }
+  else { es.className = 'status err'; es.textContent = `${failCount} block${failCount === 1 ? '' : 's'} unwired`; }
+
+  /* TinyMCE list */
+  const tmceList = document.getElementById('tmce-list');
+  tmceList.innerHTML = '';
+  let tmceTotal = 0, tmceBound = 0;
+  for (const [id, st] of wiringState) {
+    if (st.type !== 'prose') continue;
+    tmceTotal++;
+    const isBound = st.handlers.some(h => h.startsWith('editable:'));
+    if (isBound) tmceBound++;
+    const li = document.createElement('li');
+    li.style.padding = '5px 0';
+    li.style.borderBottom = '1px solid var(--rule)';
+    li.innerHTML = `<span style="color:var(--sage)">prose</span> <span style="color:var(--ink-dim)">${id}</span> — <span class="${isBound ? 'bound-yes' : 'bound-no'}" style="color:${isBound ? 'var(--ok)' : 'var(--err)'}">${isBound ? '✓ bound' : '✗ not bound'}</span>`;
+    tmceList.appendChild(li);
+  }
+  const ts = document.getElementById('tmce-status');
+  if (tmceTotal === 0) { ts.className = 'status warn'; ts.textContent = 'no prose'; }
+  else if (tmceBound === tmceTotal) { ts.className = 'status ok'; ts.textContent = `${tmceBound}/${tmceTotal} bound`; }
+  else { ts.className = 'status err'; ts.textContent = `${tmceBound}/${tmceTotal} bound`; }
+}
+
+/* ── Mutation log ──────────────────────────────────────────────── */
+function logMutation(kind, label, payload) {
+  const log = document.getElementById('mut-log');
+  const entry = document.createElement('div');
+  entry.className = 'entry ' + kind;
+  const t = new Date().toLocaleTimeString();
+  entry.innerHTML = `<span class="t">${t}</span><span class="label">${label}</span>`;
+  if (payload) {
+    const pre = document.createElement('pre');
+    pre.textContent = JSON.stringify(payload, null, 2);
+    entry.appendChild(pre);
+  }
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+
+  const mut = document.getElementById('mut-status');
+  mut.className = 'status ok';
+  mut.textContent = 'recent: ' + kind;
+}
+
+/* ── sendPatch: simulates REST round-trip + DOM update ─────────── */
+function sendPatch(blockId, patch, origin) {
+  logMutation('req', `POST /lg-layout/v2/block — origin: ${origin}`, { block_id: blockId, patch });
+
+  /* Simulated server response after a short delay */
+  setTimeout(() => {
+    /* Apply patch to local state */
+    const block = sampleBlocks.find(b => b.id === blockId);
+    if (block) Object.assign(block, patch);
+
+    let newHtml;
+    if (patch.url !== undefined && block.type === 'embed') {
+      newHtml = renderBlockEditor({ ...block });
+    } else {
+      newHtml = renderBlockEditor(block);
+    }
+
+    logMutation('res', `200 OK — new HTML returned (${newHtml.length} bytes)`, null);
+
+    /* DOM splice: find the existing host and replace */
+    const oldHost = document.querySelector(`[data-block-id="${blockId}"]`);
+    if (oldHost) {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = newHtml;
+      oldHost.replaceWith(...wrapper.children);
+      logMutation('dom', `DOM spliced — block ${blockId} re-rendered`, null);
+
+      /* Re-hydrate */
+      wireMarkers(document);
+    }
+  }, 400);
+}
+
+/* ── Failsafe demonstration ────────────────────────────────────── */
+/* The empty embed's `<form onsubmit="return false">` attribute is the failsafe.
+   Even if wireMarkers fails and no submit handler is wired, the inline handler
+   prevents the form from submitting natively (which would otherwise navigate
+   away or POST garbage to the current page — v1's "can't save" bug). */
+
+/* ── Controls ──────────────────────────────────────────────────── */
+document.getElementById('btn-rewire').addEventListener('click', () => {
+  logMutation('user-click', 'Manual re-run of wireMarkers', null);
+  /* Mock: we need markers to rewire, but they got removed. In real production,
+     re-running is for newly-inserted content. The mockup just renders fresh and
+     re-runs. */
+  renderArticle();
+  wireMarkers(document);
+});
+
+document.getElementById('btn-simulate-fail').addEventListener('click', e => {
+  wiringMode = wiringMode === 'normal' ? 'partial-fail' : 'normal';
+  e.target.classList.toggle('active');
+  e.target.textContent = wiringMode === 'partial-fail' ? '✓ Simulating partial JS fail' : 'Simulate partial JS load failure';
+  logMutation('user-click', 'Wiring mode → ' + wiringMode, null);
+  renderArticle();
+  wireMarkers(document);
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  /* Reset to initial sample */
+  sampleBlocks.length = 0;
+  sampleBlocks.push(
+    { type: 'prose',  id: 'b_intro',  html: 'Elyse Kautz brought a beaten \'57 Strat into the shop.', editable: ['html'] },
+    { type: 'image',  id: 'b_img1',   image_id: 12345, caption: 'Chemical stripper revealed letters carved into the maple.', number: '001', editable: ['caption', 'number'] },
+    { type: 'embed',  id: 'b_yt',     url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', editable: [] },
+    { type: 'embed',  id: 'b_empty',  url: '', editable: [] },
+    { type: 'prose',  id: 'b_outro',  html: 'Final pickup wiring next.', editable: ['html'] },
+  );
+  document.getElementById('mut-log').innerHTML = '';
+  renderArticle();
+  wireMarkers(document);
+});
+
+/* Initial render */
+renderArticle();
+wireMarkers(document);
+logMutation('init', 'Editor pipeline initialized — markers paired, handlers attached.', null);
+
+/* Expose editor framework on window so the headless-chrome test harness
+   (bin/editor-test.js) can drive it without depending on internal scope. */
+window.wireMarkers = wireMarkers;
+window.renderArticle = renderArticle;
+window.wiringState = wiringState;
+window.sendPatch = sendPatch;
+window.logMutation = logMutation;
+Object.defineProperty(window, 'wiringMode', {
+  get: () => wiringMode,
+  set: (v) => { wiringMode = v; },
+});
+</script>
+
+</body>
+</html>

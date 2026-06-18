@@ -1,0 +1,58 @@
+/* section-heading — boxed section break. Container chrome + per-level
+   typography. The level modifier (`--h2/--h3/--h4`) drives font-size +
+   weight; the variant modifier (`--variant-1/--variant-2`) drives the
+   box's color palette. Both stack on the same element. */
+
+@layer block-shell {
+  .lg-section-heading {
+    display: block;
+    padding: var(--lg-padding, 0);
+    margin-block: var(--lg-margin-block, 24px);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+
+    color: var(--lg-color, inherit);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, 24px);
+    font-weight: var(--lg-font-weight, 600);
+    line-height: var(--lg-line-height, 1.25);
+    letter-spacing: var(--lg-letter-spacing, normal);
+    text-align: var(--lg-text-align, left);
+  }
+
+  .lg-section-heading a {
+    color: var(--lg-link-color, inherit);
+  }
+
+  /* Per-level sizing — lives in shell.css (not manifest.variants) because
+     it's tag/structure, not user-pickable visual style. */
+}
+
+/* Per-level sizing — intentionally OUTSIDE @layer block-shell so it wins
+   against the per-block defaults emitted into @layer block-defaults from
+   manifest.defaults.text.font-size. Without this, the manifest's 24px
+   default would override the level modifier and h2/h3/h4 would all look
+   the same. Levels mirror the post-header title (serif, heavy, tight). */
+.lg-section-heading--h2 {
+  --lg-font-family: var(--lg-font-serif);
+  --lg-font-size: clamp(28px, 5vw, 60px);
+  --lg-font-weight: 700;
+  --lg-line-height: 1.08;
+  --lg-letter-spacing: -0.015em;
+}
+.lg-section-heading--h3 {
+  --lg-font-family: var(--lg-font-serif);
+  --lg-font-size: clamp(22px, 3.2vw, 38px);
+  --lg-font-weight: 700;
+  --lg-line-height: 1.12;
+  --lg-letter-spacing: -0.015em;
+}
+.lg-section-heading--h4 {
+  --lg-font-family: var(--lg-font-serif);
+  --lg-font-size: clamp(18px, 2.2vw, 26px);
+  --lg-font-weight: 700;
+  --lg-line-height: 1.2;
+  --lg-letter-spacing: -0.01em;
+}

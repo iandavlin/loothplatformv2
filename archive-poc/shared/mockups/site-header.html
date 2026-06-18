@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shared site header — four-state mockup</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@600;700;800&display=swap" rel="stylesheet">
+
+<style>
+/* ---- Page chrome around the mockup (NOT part of the partial) ------------ */
+body { background: #efece6; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #1a1d1a; }
+.mock-wrap { max-width: 1320px; margin: 0 auto; padding: 32px 16px 80px; }
+.mock-title { font: 800 20px/1.3 "Lora", Georgia, serif; color: #6b7c52; margin: 32px 0 4px; letter-spacing: -0.3px; }
+.mock-meta { font: 500 13px/1.4 -apple-system, sans-serif; color: #6b6f6b; margin: 0 0 14px; }
+.mock-frame { background: #fff; border: 1px solid #e3ddd0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.04); margin-bottom: 18px; }
+.mock-pageheader { background: #efece6; padding: 24px 28px; border-top: 1px dashed #e3ddd0; font: 500 13px/1.4 -apple-system, sans-serif; color: #6b6f6b; }
+.mock-pageheader strong { color: #1a1d1a; font-weight: 700; }
+.mock-note { background: #fef9ee; border: 1px solid #ecb351; border-radius: 10px; padding: 14px 18px; margin: 14px 0 32px; font: 400 13.5px/1.5 -apple-system, sans-serif; color: #4a3c10; }
+.mock-note b { font-weight: 700; }
+h1.intro { font: 800 28px/1.2 "Lora", Georgia, serif; color: #6b7c52; margin: 0 0 6px; letter-spacing: -0.5px; }
+p.intro { font: 400 14px/1.6 -apple-system, sans-serif; color: #6b6f6b; margin: 0 0 28px; max-width: 720px; }
+
+/* ---- Shared partial styles: copied verbatim from archive.css ------------ */
+/* Root tokens (subset used by header) */
+:root {
+  --lg-cream: #fbfbf8;
+  --lg-sage: #87986a;
+  --lg-sage-d: #6b7c52;
+  --lg-sage-3: #d4e0b8;
+  --lg-sage-tint: #eef2e3;
+  --lg-amber: #ecb351;
+  --lg-rust: #c66845;
+  --lg-charcoal: #1a1d1a;
+  --lg-ink: #323532;
+  --lg-mute: #6b6f6b;
+  --lg-line: #e3ddd0;
+  --lg-font-serif: "Lora", Georgia, serif;
+  --lg-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+.lg-chrome {
+  background: rgba(255,255,255,0.96);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--lg-line);
+}
+.lg-chrome__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 60px;
+  display: flex; align-items: center; gap: 18px;
+}
+.lg-chrome__hamburger {
+  display: none;
+  background: transparent; border: 0;
+  width: 40px; height: 40px;
+  border-radius: 8px; cursor: pointer;
+  color: var(--lg-ink); padding: 0;
+}
+.lg-chrome__hamburger svg { width: 22px; height: 22px; display: block; margin: auto; }
+.lg-chrome__logo {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none; color: var(--lg-ink);
+}
+.lg-chrome__logo img { width: 36px; height: 36px; border-radius: 6px; display: block; background: var(--lg-sage); }
+.lg-chrome__wordmark {
+  font: 800 17px/1 var(--lg-font-serif);
+  color: var(--lg-sage);
+  letter-spacing: -0.3px;
+}
+.lg-chrome__nav { flex: 1; }
+.lg-chrome__menu {
+  display: flex; gap: 4px;
+  list-style: none; margin: 0; padding: 0;
+}
+.lg-chrome__menu a {
+  display: inline-block;
+  padding: 8px 12px; border-radius: 6px;
+  text-decoration: none;
+  font: 600 13px/1 var(--lg-font-sans);
+  color: var(--lg-ink);
+  letter-spacing: 0.02em;
+}
+.lg-chrome__menu a:hover { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+.lg-chrome__aside {
+  display: flex; align-items: center; gap: 8px;
+}
+.lg-chrome__icon-btn {
+  background: transparent; border: 0;
+  width: 38px; height: 38px;
+  border-radius: 50%; cursor: pointer;
+  color: var(--lg-ink);
+  display: inline-flex; align-items: center; justify-content: center;
+  text-decoration: none;
+}
+.lg-chrome__icon-btn:hover { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+.lg-chrome__icon-btn svg { width: 18px; height: 18px; }
+.lg-chrome__icon-btn--badged { position: relative; }
+.lg-chrome__badge {
+  position: absolute; top: 2px; right: 2px;
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--lg-amber);
+  color: var(--lg-ink);
+  font: 700 10px/16px var(--lg-font-sans);
+  text-align: center;
+  border: 2px solid var(--lg-cream);
+  box-sizing: content-box;
+  pointer-events: none;
+}
+.lg-chrome__search {
+  display: flex; align-items: center; gap: 8px;
+  height: 36px; padding: 0 12px;
+  background: var(--lg-sage-tint);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  width: 240px;
+  transition: border-color 0.15s ease, background 0.15s ease, width 0.2s ease;
+}
+.lg-chrome__search:focus-within {
+  background: #fff;
+  border-color: var(--lg-sage);
+  width: 320px;
+}
+.lg-chrome__search-icon { color: var(--lg-mute); flex: 0 0 16px; }
+.lg-chrome__search input {
+  flex: 1; min-width: 0;
+  height: 100%; border: 0; outline: 0; background: transparent;
+  font: 400 13px/1 var(--lg-font-sans); color: var(--lg-ink);
+}
+.lg-chrome__search input::placeholder { color: var(--lg-mute); }
+.lg-chrome__signin {
+  font: 600 13px/1 var(--lg-font-sans);
+  color: var(--lg-ink); text-decoration: none;
+  padding: 9px 14px; border-radius: 999px;
+}
+.lg-chrome__signin:hover { background: var(--lg-sage-tint); }
+.lg-chrome__join {
+  background: var(--lg-amber); color: #4a3c10;
+  font: 700 13px/1 var(--lg-font-sans);
+  padding: 10px 16px; border-radius: 999px;
+  text-decoration: none;
+}
+.lg-chrome__join:hover { background: #fff; box-shadow: 0 0 0 1px var(--lg-amber) inset; }
+.lg-chrome__account {
+  display: inline-flex; align-items: center; gap: 8px;
+  text-decoration: none; color: var(--lg-ink);
+  padding: 4px 8px 4px 4px; border-radius: 999px;
+  border: 1px solid var(--lg-line);
+  background: #fff;
+}
+.lg-chrome__account:hover { background: var(--lg-sage-tint); border-color: var(--lg-sage); }
+.lg-chrome__avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--lg-sage); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: 700 12px/1 var(--lg-font-sans);
+}
+.lg-chrome__account-name { font: 600 13px/1 var(--lg-font-sans); }
+
+/* Tier pill — inside the account cluster */
+.lg-chrome__tier {
+  display: inline-flex; align-items: center;
+  padding: 3px 8px; border-radius: 999px;
+  font: 700 10px/1 var(--lg-font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.lg-chrome__tier--lite  { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+.lg-chrome__tier--pro   { background: var(--lg-amber); color: #4a3c10; }
+.lg-chrome__tier--admin { background: var(--lg-charcoal); color: #fff; }
+
+/* Admin "Edit" affordance (post-cutover FE editor entry point) */
+.lg-chrome__edit {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--lg-charcoal); color: #fff;
+  padding: 7px 12px; border-radius: 999px;
+  text-decoration: none;
+  font: 700 12px/1 var(--lg-font-sans);
+  letter-spacing: 0.04em;
+}
+.lg-chrome__edit:hover { background: #000; }
+.lg-chrome__edit svg { width: 14px; height: 14px; }
+</style>
+</head>
+<body>
+<div class="mock-wrap">
+
+<h1 class="intro">Shared site-header — four-state mockup</h1>
+<p class="intro">
+  Based on the existing <code>archive-poc/web/_chrome.php</code> chrome (white sticky with shadow, sage/amber palette). The shared partial will be hosted at <code>/srv/lg-shared/site-header.php</code> and included by archive-poc, lg-layout-v2, and BB-mirror. Each consumer passes its own viewer-state struct; markup stays identical across surfaces.
+</p>
+
+<!-- ============================================================ -->
+<!-- STATE 1: ANONYMOUS                                            -->
+<!-- ============================================================ -->
+<h2 class="mock-title">1. Anonymous (logged out)</h2>
+<p class="mock-meta">No <code>wordpress_logged_in_*</code> cookie. Anyone hitting the site for the first time.</p>
+<div class="mock-frame">
+  <header class="lg-chrome">
+    <div class="lg-chrome__inner">
+      <button class="lg-chrome__hamburger" type="button" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <a class="lg-chrome__logo" href="#"><img alt="Looth Group"><span class="lg-chrome__wordmark">Looth Group</span></a>
+      <nav class="lg-chrome__nav"><ul class="lg-chrome__menu">
+        <li><a href="#">Forum</a></li>
+        <li><a href="#">Events</a></li>
+        <li><a href="#">About</a></li>
+      </ul></nav>
+      <div class="lg-chrome__aside">
+        <form class="lg-chrome__search" onsubmit="event.preventDefault()">
+          <svg class="lg-chrome__search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="search" placeholder="Search the archive…" aria-label="Search">
+        </form>
+        <a class="lg-chrome__signin" href="#">Sign in</a>
+        <a class="lg-chrome__join" href="#">Join</a>
+      </div>
+    </div>
+  </header>
+  <div class="mock-pageheader"><strong>Anonymous viewer.</strong> Sees public content, gets the join CTA (no free tier — membership is paid), no messages/notifications, no avatar.</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STATE 2: LOGGED-IN LITE                                       -->
+<!-- ============================================================ -->
+<h2 class="mock-title">2. Logged-in lite (looth2 / <code>tier=lite</code>)</h2>
+<p class="mock-meta">WP cookie present. Paying lite member. Tier pill appears inside the account cluster.</p>
+<div class="mock-frame">
+  <header class="lg-chrome">
+    <div class="lg-chrome__inner">
+      <button class="lg-chrome__hamburger" type="button" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <a class="lg-chrome__logo" href="#"><img alt="Looth Group"><span class="lg-chrome__wordmark">Looth Group</span></a>
+      <nav class="lg-chrome__nav"><ul class="lg-chrome__menu">
+        <li><a href="#">Forum</a></li>
+        <li><a href="#">Events</a></li>
+        <li><a href="#">About</a></li>
+      </ul></nav>
+      <div class="lg-chrome__aside">
+        <form class="lg-chrome__search" onsubmit="event.preventDefault()">
+          <svg class="lg-chrome__search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="search" placeholder="Search the archive…" aria-label="Search">
+        </form>
+        <a class="lg-chrome__icon-btn lg-chrome__icon-btn--badged" href="#" aria-label="Messages">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+        </a>
+        <a class="lg-chrome__icon-btn lg-chrome__icon-btn--badged" href="#" aria-label="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="lg-chrome__badge">3</span>
+        </a>
+        <a class="lg-chrome__account" href="#">
+          <span class="lg-chrome__avatar">E</span>
+          <span class="lg-chrome__account-name">evan-gluck</span>
+          <span class="lg-chrome__tier lg-chrome__tier--lite">Lite</span>
+        </a>
+      </div>
+    </div>
+  </header>
+  <div class="mock-pageheader"><strong>Logged-in lite.</strong> Avatar + name + <strong>Lite</strong> tier pill, messages, notifications (3 unread).</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STATE 3: LOGGED-IN PRO                                        -->
+<!-- ============================================================ -->
+<h2 class="mock-title">3. Logged-in pro (looth3 / <code>tier=pro</code>)</h2>
+<p class="mock-meta">Same layout as lite, amber Pro pill in the account cluster.</p>
+<div class="mock-frame">
+  <header class="lg-chrome">
+    <div class="lg-chrome__inner">
+      <button class="lg-chrome__hamburger" type="button" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <a class="lg-chrome__logo" href="#"><img alt="Looth Group"><span class="lg-chrome__wordmark">Looth Group</span></a>
+      <nav class="lg-chrome__nav"><ul class="lg-chrome__menu">
+        <li><a href="#">Forum</a></li>
+        <li><a href="#">Events</a></li>
+        <li><a href="#">About</a></li>
+      </ul></nav>
+      <div class="lg-chrome__aside">
+        <form class="lg-chrome__search" onsubmit="event.preventDefault()">
+          <svg class="lg-chrome__search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="search" placeholder="Search the archive…" aria-label="Search">
+        </form>
+        <a class="lg-chrome__icon-btn lg-chrome__icon-btn--badged" href="#" aria-label="Messages">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+          <span class="lg-chrome__badge">1</span>
+        </a>
+        <a class="lg-chrome__icon-btn lg-chrome__icon-btn--badged" href="#" aria-label="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="lg-chrome__badge">12</span>
+        </a>
+        <a class="lg-chrome__account" href="#">
+          <span class="lg-chrome__avatar">J</span>
+          <span class="lg-chrome__account-name">james-mt</span>
+          <span class="lg-chrome__tier lg-chrome__tier--pro">Pro</span>
+        </a>
+      </div>
+    </div>
+  </header>
+  <div class="mock-pageheader"><strong>Logged-in pro.</strong> Avatar + name + <strong>Pro</strong> amber tier pill, messages, notifications (12 unread).</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STATE 4: ADMIN                                                -->
+<!-- ============================================================ -->
+<h2 class="mock-title">4. Admin (looth4 / <code>manage_options</code>)</h2>
+<p class="mock-meta">Charcoal Admin pill in the account cluster. Below: same baseline, plus the proposed "Edit" affordance for the post-cutover FE editor.</p>
+
+<h3 style="font: 700 14px/1.2 -apple-system, sans-serif; color: #6b6f6b; margin: 12px 0 8px; text-transform: uppercase; letter-spacing: 0.05em;">4a. Admin pill only</h3>
+<div class="mock-frame">
+  <header class="lg-chrome">
+    <div class="lg-chrome__inner">
+      <button class="lg-chrome__hamburger" type="button" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <a class="lg-chrome__logo" href="#"><img alt="Looth Group"><span class="lg-chrome__wordmark">Looth Group</span></a>
+      <nav class="lg-chrome__nav"><ul class="lg-chrome__menu">
+        <li><a href="#">Forum</a></li>
+        <li><a href="#">Events</a></li>
+        <li><a href="#">About</a></li>
+      </ul></nav>
+      <div class="lg-chrome__aside">
+        <form class="lg-chrome__search" onsubmit="event.preventDefault()">
+          <svg class="lg-chrome__search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="search" placeholder="Search the archive…" aria-label="Search">
+        </form>
+        <a class="lg-chrome__icon-btn lg-chrome__icon-btn--badged" href="#" aria-label="Messages">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+        </a>
+        <a class="lg-chrome__icon-btn lg-chrome__icon-btn--badged" href="#" aria-label="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="lg-chrome__badge">2</span>
+        </a>
+        <a class="lg-chrome__account" href="#">
+          <span class="lg-chrome__avatar">I</span>
+          <span class="lg-chrome__account-name">ian-davlin</span>
+          <span class="lg-chrome__tier lg-chrome__tier--admin">Admin</span>
+        </a>
+      </div>
+    </div>
+  </header>
+  <div class="mock-pageheader"><strong>Admin, pill only.</strong> Charcoal Admin pill makes the role visible without adding an edit affordance.</div>
+</div>
+
+<h3 style="font: 700 14px/1.2 -apple-system, sans-serif; color: #6b6f6b; margin: 22px 0 8px; text-transform: uppercase; letter-spacing: 0.05em;">4b. Admin pill + Edit affordance (post-cutover FE editor)</h3>
+<div class="mock-frame">
+  <header class="lg-chrome">
+    <div class="lg-chrome__inner">
+      <button class="lg-chrome__hamburger" type="button" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <a class="lg-chrome__logo" href="#"><img alt="Looth Group"><span class="lg-chrome__wordmark">Looth Group</span></a>
+      <nav class="lg-chrome__nav"><ul class="lg-chrome__menu">
+        <li><a href="#">Forum</a></li>
+        <li><a href="#">Events</a></li>
+        <li><a href="#">About</a></li>
+      </ul></nav>
+      <div class="lg-chrome__aside">
+        <form class="lg-chrome__search" onsubmit="event.preventDefault()">
+          <svg class="lg-chrome__search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="search" placeholder="Search the archive…" aria-label="Search">
+        </form>
+        <a class="lg-chrome__edit" href="/wp-admin/" target="_blank" aria-label="WP Admin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Edit
+        </a>
+        <a class="lg-chrome__icon-btn lg-chrome__icon-btn--badged" href="#" aria-label="Messages">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+        </a>
+        <a class="lg-chrome__icon-btn lg-chrome__icon-btn--badged" href="#" aria-label="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="lg-chrome__badge">2</span>
+        </a>
+        <a class="lg-chrome__account" href="#">
+          <span class="lg-chrome__avatar">I</span>
+          <span class="lg-chrome__account-name">ian-davlin</span>
+          <span class="lg-chrome__tier lg-chrome__tier--admin">Admin</span>
+        </a>
+      </div>
+    </div>
+  </header>
+  <div class="mock-pageheader"><strong>Admin, pill + Edit.</strong> Shown only when <code>capabilities.manage_options</code> is true. Clicking opens <code>/wp-admin/</code> in a new tab.</div>
+</div>
+
+<div class="mock-note">
+  <b>The 4b "Edit" affordance is proposed, not in the current chrome.</b> It's the natural surface for the post-cutover FE editor work and dovetails with the cap-gating decision (<code>edit_archive_poc</code> from <code>/whoami</code>). Reject and I'll drop 4b — that leaves admin chrome with the Admin pill only (4a).
+</div>
+
+<!-- ============================================================ -->
+<!-- INCLUDE API                                                   -->
+<!-- ============================================================ -->
+<h2 class="mock-title">Include API (target shape)</h2>
+<p class="mock-meta">Each consumer computes viewer state from its own truth source and passes a struct. No caller-scope variable leak.</p>
+<div class="mock-frame" style="background: #1a1d1a; color: #d4e0b8; padding: 20px 28px; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;">
+<pre style="margin: 0; white-space: pre-wrap;">// /srv/lg-shared/site-header.php
+require_once '/srv/lg-shared/site-header.php';
+
+lg_shared_render_site_header([
+    'authenticated' =&gt; true,
+    'tier'          =&gt; 'pro',          // public | lite | pro
+    'display_name'  =&gt; 'evan-gluck',
+    'avatar_url'    =&gt; 'https://.../bpfull.jpg',
+    'capabilities'  =&gt; [
+        'manage_options'    =&gt; false,
+        'edit_archive_poc'  =&gt; false,
+    ],
+    'msg_unread'    =&gt; 0,              // optional; null = lazy-load via REST
+    'notif_unread'  =&gt; 0,              // optional
+]);
+</pre>
+</div>
+
+<p class="mock-meta" style="margin-top: 20px">
+  <strong>Source-of-truth per consumer:</strong> archive-poc reads cookie hint + <code>/whoami</code>; lg-layout-v2 reads <code>$current_user</code> in-process; BB-mirror reads <code>/whoami</code>. The partial is dumb — it just renders what it's handed.
+</p>
+
+</div>
+</body>
+</html>

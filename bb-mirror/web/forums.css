@@ -1,0 +1,4268 @@
+/*
+ * bb-mirror forums — v2 visual language + archive-poc design token unification
+ * Tokens: mahogany accent, warm-paper bg, Source Serif Pro headlines,
+ *         system-ui body, monogram icons, glyph state cues.
+ * Option B (no hero card, no right rail — those are Option C, deferred).
+ */
+
+/* Source Serif Pro @import moved to the inlined fonts block in _chrome.php
+   (perf lane 2026-06-11) — as an @import here it was a render-blocking request
+   serialized BEHIND the forums.css download. Same @font-face rules, same swap. */
+
+/* Crisp text (Ian 6/7) — grayscale font-smoothing across the whole Hub (incl. the
+   fixed composer modal + search panel, which live outside .feed-page). This is the
+   single biggest fix for "fuzzy" reading text; pairs with --lguser-font → system stack
+   and the integer font-sizes below. */
+body.bb-mirror{ -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; text-rendering:optimizeLegibility; }
+
+:root {
+  /* ── Shared Looth Group design tokens — mirrors archive-poc ── */
+  --lg-cream:      #fbfbf8;
+  --lg-sage:       #87986a;
+  --lg-sage-d:     #586b3f;  /* brand dark-sage */
+  --lg-sage-3:     #d4e0b8;
+  --lg-sage-tint:  #eef2e3;
+  --lg-amber:      #ecb351;
+  --lg-rust:       #c66845;
+  --lg-charcoal:   #1a1d1a;
+  --lg-ink:        #262925;  /* a little darker */
+  --lg-mute:       #565a55;  /* a little darker */
+  --lg-line:       #e4e7d8;  /* sage-tinted hairline */
+  --lg-card-bg:    #ffffff;  /* cream-sage: white cards */
+  --lg-font-serif: "Lora", Georgia, serif;
+  --lg-font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+
+  /* ── --lguser-* → Hub theme tokens ──────────────────────────────────────
+     The absorbed-polish card rules reference a separate --lguser-* token set
+     that is NEVER defined anywhere (vestigial, like --lguser-scale was). Left
+     undefined they fell back to hard-coded light-mode colours, so card titles/
+     badges/borders ignored the Dark/Black theme (titles went invisible on dark).
+     Alias them to the Hub's own --lg-* tokens so the feed text is cordoned off
+     to the Hub theme and follows the toggle — independent of any shell/user CSS.
+     var() resolves lazily, so these track the per-theme re-pointing below. */
+  --lguser-ink:      var(--lg-ink);
+  --lguser-mute:     var(--lg-mute);
+  --lguser-line:     var(--lg-line);
+  --lguser-bg:       var(--bg);
+  --lguser-accent:   var(--lg-sage);
+  --lguser-accent-d: var(--lg-sage-d);
+  --lguser-pill:     var(--lg-sage-tint);
+  --lguser-font:     var(--lg-font-sans);  /* was UNDEFINED → reading text fell back to soft Trebuchet/Cabin. Alias to the crisp system stack (Ian 6/7: max legibility, matches the chips/buttons). */
+
+  /* Reading text-size toggle (A-/A+ in the searchbar; set on <html> by forums.js,
+     persisted in localStorage). 1 = default; scales post/reply/card body copy only. */
+  --lg-read-scale: 1;
+
+  /* ── Legacy bb-mirror tokens (kept for backward-compat) ── */
+  --bg:          #f4f2ec;  /* cream-sage page (now drives body bg + theme swaps) */
+  --bg-card:     #ffffff;  /* cream-sage: white cards/nav/searchbar */
+  --bg-sticky:   #fff7e6;
+  --bg-closed:   #f4f1ea;
+  --fg:          #1a1814;
+  --fg-muted:    #524e48;  /* a little darker */
+  --fg-soft:     #98938b;
+  --border:      #e4e7d8;
+  --border-soft: #f0ebe1;
+  --accent:      #586b3f;  /* brand dark-sage */
+  --accent-2:    #b8842b;  /* brand gold */
+  --gate-lite:   #b8860b;
+  --gate-pro:    #6b2c91;
+  --online:      #2f9a4a;
+  --unread:      #c4631e;
+  --mod:         #6b2c91;
+  --admin:       #c4631e;
+  --op-pill:     #5a8c5a;
+  --thread-rail: #d4a574;
+
+  --s1:  4px;
+  --s2:  8px;
+  --s3:  12px;
+  --s4:  16px;
+  --s6:  24px;
+  --s8:  32px;
+  --s12: 48px;
+
+  --r-sm: 6px;
+  --r-md: 12px;
+  --r-lg: 20px;
+
+  --shadow-card: 0 1px 0 rgba(0,0,0,.04);
+  --shadow-elev: 0 8px 24px rgba(0,0,0,.06);
+
+  --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-head: "Source Serif Pro", "Iowan Old Style", Georgia, serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+}
+
+/* ══════════════════════════════════════════════════════════
+   LEGACY COLOR-THEME CYCLE (Default → Panels → Dark → Black) RETIRED
+   2026-06-10 (bespoke-cutover two-mode pare-back). The hub-theme-panel/
+   -dark/-black token blocks + their hardcoded-white patches lived here.
+   The C-toggle button stopped being emitted earlier today; the _chrome.php
+   pre-paint class applier is removed with this commit, so the classes can
+   never appear. Color modes are now exactly TWO, owned by the gear
+   (app-settings): Light = no overrides; Dark = --lguser-*/--lg-* inline +
+   the dark token bridge below. forums.js's cycle handler is null-guarded
+   dead code (swept with C3).
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Insulate the shared shell chrome from the Hub's theme ───────────────────
+   The Hub themes by re-pointing the global --lg-* tokens on <html> (so the feed,
+   rail, modal + page bg all flip together). The shared site header/footer
+   (lg-shell, /srv/lg-shared) read those SAME tokens but keep a fixed light bar,
+   so the Hub's Dark/Black themes were bleeding their text light → invisible.
+   Reassert the shell's own canonical palette ON the chrome elements so the Hub
+   theme can't reach them — the chrome stays its normal self in every Hub theme.
+   (Values mirror lg-shell's site-header.css :root; if lg-shell ever moves these
+   onto .lg-chrome itself, this block becomes a harmless duplicate.) */
+.lg-chrome,
+.lg-chrome-foot {
+  --lg-ink:       #323532;
+  --lg-mute:      #6b6f6b;
+  --lg-line:      #e3ddd0;
+  --lg-sage:      #87986a;
+  --lg-sage-d:    #6b7c52;
+  --lg-sage-tint: #eef2e3;
+  --lg-cream:     #fbfbf8;
+  --lg-charcoal:  #1a1d1a;
+  --lg-amber:     #ecb351;
+  --lg-rust:      #c66845;
+}
+
+/* ── DARK-MODE TOKEN BRIDGE (2026-06-10 bespoke-cutover — C10 unification,
+   then the two-mode pare-back: Ian wants exactly ONE light + ONE dark) ───────
+   LIGHT is the no-pick default with ZERO overrides — every surface renders its
+   native brand palette, so nothing can mismatch (this killed the "colors hit
+   some headers and not others" class of bug, along with the legacy hub-theme-*
+   classes that used to live right above this comment).
+   DARK is set by the gear (app-settings): --lguser-* + --lg-* land INLINE on
+   <html> pre-paint via the nginx boot script. This bridge chains the legacy
+   bb-mirror tokens to the same source so the whole Hub shell follows in the
+   SAME frame — plain cascade, no !important, no var() cycle (the inline
+   --lguser values beat the :root aliases). Desktop only: mobile is normalized
+   brand-light by design (folds into mobile-hub.css at the C9 stage). */
+@media (min-width: 641px) {
+  html[data-lguser-theme="dark"] {
+    --bg:          var(--lguser-bg);
+    --bg-card:     var(--lguser-card);
+    --bg-sticky:   var(--lguser-card);
+    --bg-closed:   var(--lguser-bg);
+    --fg:          var(--lguser-ink);
+    --fg-muted:    var(--lguser-mute);
+    --border:      var(--lguser-line);
+    --border-soft: var(--lguser-line);
+    --lg-card-bg:  var(--lguser-card);
+  }
+}
+
+/* The theme-cycle pill in the sort bar (matches .feed-compact-toggle / -text-). */
+.feed-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--lg-line);
+  background: var(--bg-card);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font: 600 13px/1 var(--lg-font-sans);
+  color: var(--lg-ink);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.feed-theme-toggle:hover { background: var(--lg-sage-tint); border-color: var(--lg-sage); color: var(--lg-sage-d); }
+.feed-theme-toggle[aria-pressed="true"] { background: var(--lg-sage-d); border-color: var(--lg-sage-d); color: #fff; }
+.feed-theme-toggle__icon { font-size: 14px; line-height: 1; }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; }
+
+body {
+  font: 16px/1.5 var(--font-body);
+  color: var(--fg);
+  background: var(--bg); /* theme-aware page background (see COLOR THEME TOGGLE) */
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+h1, h2, h3, h4 {
+  font-family: var(--font-head);
+  font-weight: 600;
+  letter-spacing: -.01em;
+  margin: 0;
+}
+h1 { font-size: 28px; }
+h2 { font-size: 22px; }
+h3 { font-size: 18px; }
+h4 { font-size: 15px; }
+
+img { max-width: 100%; display: block; }
+
+/* ── Chrome ── */
+.lg-site-header-placeholder {
+  background: repeating-linear-gradient(45deg, #fee, #fee 10px, #fdd 10px, #fdd 20px);
+  border-bottom: 2px dashed #c00;
+  padding: var(--s3) var(--s4);
+  font: 13px var(--font-mono);
+  color: #800;
+  text-align: center;
+}
+.lg-site-footer-placeholder {
+  background: repeating-linear-gradient(45deg, #fee, #fee 10px, #fdd 10px, #fdd 20px);
+  border-top: 2px dashed #c00;
+  padding: var(--s3) var(--s4);
+  font: 13px var(--font-mono);
+  color: #800;
+  text-align: center;
+}
+
+/* ── Page wrapper ── */
+.bb-mirror__main { min-height: 60vh; }
+
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--s8) var(--s4) var(--s12);
+}
+
+/* ── Breadcrumbs ── */
+.breadcrumbs {
+  font-size: 14px;
+  color: var(--fg-muted);
+  margin-bottom: var(--s3);
+}
+.breadcrumbs a { color: var(--fg-muted); }
+.breadcrumbs a:hover { color: var(--accent); }
+
+/* ── Page title ── */
+.bb-mirror__page-title {
+  margin: 0 0 var(--s6);
+  font-size: 28px;
+}
+
+.forum__description {
+  font-size: 15px;
+  color: var(--fg-muted);
+  margin: 0 0 var(--s6);
+}
+
+.bb-mirror__empty {
+  font-size: 15px;
+  color: var(--fg-soft);
+  text-align: center;
+  padding: var(--s12) 0;
+}
+
+/* ── Badges ── */
+.badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.badge--op    { background: var(--op-pill); color: white; }
+.badge--mod   { background: var(--mod);     color: white; }
+.badge--admin { background: var(--admin);   color: white; }
+.badge--new   { background: var(--unread);  color: white; }
+
+/* ── Gate pills ── */
+.gate-pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  vertical-align: middle;
+  margin-left: var(--s2);
+}
+.gate-pill--lite { background: var(--gate-lite); color: white; }
+.gate-pill--pro  { background: var(--gate-pro);  color: white; }
+
+/* Group-attached pill (Local: SoCal Looths, Repair And Restoration, etc.) */
+.group-pill {
+  display: inline-block;
+  font: 600 11px/1.2 var(--font-body);
+  letter-spacing: .01em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  vertical-align: middle;
+  margin-left: var(--s2);
+  background: rgba(140, 74, 43, 0.08);
+  color: var(--accent);
+  border: 1px solid rgba(140, 74, 43, 0.18);
+}
+.group-pill::before { content: "● "; opacity: .6; }
+
+/* ── CSS initials avatars ── */
+.avatar-init {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-family: var(--lg-font-sans, system-ui, sans-serif);
+  flex-shrink: 0;
+  line-height: 1;
+  user-select: none;
+}
+/* Real photo avatar (profile-app) — same circle as the initials fallback. */
+.avatar-init--img { object-fit: cover; background: var(--bg-closed, #e9e6dc); }
+
+/* ══════════════════════════════════════════════════════════
+   FORUM INDEX
+   ══════════════════════════════════════════════════════════ */
+
+/* Category group (wraps a parent forum + its subforum grid) */
+.cat-group {
+  margin-bottom: var(--s8);
+}
+
+.cat-group__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 2px solid var(--border);
+}
+
+.cat-group__title {
+  font-size: 18px;
+  color: var(--fg);
+}
+
+.cat-group__count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-soft);
+  letter-spacing: .05em;
+}
+
+.cat-group__desc {
+  font-size: 14px;
+  color: var(--fg-muted);
+  margin: 0 0 var(--s3);
+}
+
+.cat-group__stats {
+  display: flex;
+  gap: var(--s4);
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: var(--s2);
+  margin-bottom: var(--s3);
+}
+.cat-group__stats dt { display: inline; font-weight: 600; margin-right: 2px; }
+.cat-group__stats dd { display: inline; margin: 0 var(--s3) 0 0; }
+
+/* Forum grid (subforums inside a category, or standalone forums) */
+.forum-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--s3);
+}
+
+.forum-card {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+  color: var(--fg);
+  text-decoration: none;
+  transition: background .15s, border-color .15s;
+}
+.forum-card:hover {
+  background: var(--bg-sticky);
+  border-color: var(--border);
+  text-decoration: none;
+}
+
+.forum-card__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.forum-card__body { min-width: 0; }
+
+.forum-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: var(--s1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.forum-card__meta {
+  font-size: 12px;
+  color: var(--fg-muted);
+  display: flex;
+  gap: var(--s3);
+  align-items: center;
+}
+
+.forum-card__last {
+  color: var(--fg-soft);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════
+   TOPIC LIST
+   ══════════════════════════════════════════════════════════ */
+
+.topic-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--border-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.topic {
+  display: grid;
+  grid-template-columns: 28px 52px 1fr auto;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  background: var(--bg-card);
+  align-items: start;
+  text-decoration: none;
+  color: var(--fg);
+  transition: background .12s;
+}
+.topic:hover { background: var(--bg-sticky); text-decoration: none; }
+
+.topic--sticky { background: var(--bg-sticky); }
+.topic--closed { background: var(--bg-closed); }
+.topic--unread {
+  border-left: 3px solid var(--unread);
+  padding-left: calc(var(--s4) - 3px);
+}
+
+.topic__icon {
+  font-size: 15px;
+  line-height: 1.6;
+  text-align: center;
+  color: var(--fg-soft);
+  padding-top: 2px;
+}
+
+.topic__monogram {
+  width: 48px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.topic__main { min-width: 0; }
+
+.topic__title {
+  font-family: var(--font-head);
+  font-size: 16px;
+  margin-bottom: var(--s1);
+  color: var(--fg);
+  line-height: 1.3;
+}
+
+.topic__meta {
+  font-size: 13px;
+  color: var(--fg-muted);
+  line-height: 1.4;
+}
+
+.topic__meta-author { color: var(--accent); }
+
+.topic__thread-note {
+  font-size: 11px;
+  color: var(--fg-soft);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+.topic__stats {
+  text-align: right;
+  font-size: 12px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  padding-top: 2px;
+}
+
+.topic__stats strong {
+  display: block;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   SINGLE TOPIC + THREADED REPLIES
+   ══════════════════════════════════════════════════════════ */
+
+.topic-header {
+  margin-bottom: var(--s6);
+}
+
+.topic-header__title {
+  font-size: 28px;
+  margin-bottom: var(--s2);
+}
+
+.topic-header__meta {
+  font-size: 14px;
+  color: var(--fg-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  align-items: center;
+}
+
+.thread__util {
+  display: flex;
+  gap: var(--s4);
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--s4);
+  font-size: 14px;
+  color: var(--fg-muted);
+}
+
+.thread__util .star { font-size: 16px; cursor: pointer; }
+.thread__util .star--on { color: var(--gate-lite); }
+
+.thread {
+  display: grid;
+  gap: var(--s4);
+}
+
+/* Post card (OP + replies) */
+.post {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: var(--s4);
+  padding: var(--s4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.post--op {
+  border-left: 4px solid var(--accent);
+  background: linear-gradient(to right, #fff8ef, var(--bg-card) 20%);
+}
+
+.post__avatar-wrap { position: relative; flex-shrink: 0; }
+
+.post__avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #d4a574, #8c4a2b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 18px;
+  font-family: var(--font-head);
+  user-select: none;
+}
+
+.post__online {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--online);
+  border: 2px solid var(--bg-card);
+}
+
+.post__content { min-width: 0; }
+
+.post__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: baseline;
+  margin-bottom: var(--s2);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.post__author {
+  font-weight: 600;
+  color: var(--fg);
+  font-size: 14px;
+}
+
+.post__time {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-soft);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.post__reply-to {
+  font-size: 12px;
+  color: var(--fg-soft);
+}
+.post__reply-to a { color: var(--accent); }
+
+.post__body {
+  font-size: 15px;
+  line-height: 1.65;
+}
+.post__body p { margin: 0 0 var(--s3); }
+.post__body p:last-child { margin-bottom: 0; }
+.post__body img {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  margin: var(--s3) 0;
+}
+
+.post__actions {
+  display: flex;
+  gap: var(--s4);
+  margin-top: var(--s3);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--border-soft);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.post__actions a { color: var(--fg-muted); }
+.post__actions a:hover { color: var(--accent); }
+
+/* Threaded reply tree */
+.replies-heading {
+  font-size: 18px;
+  margin: var(--s8) 0 var(--s4);
+  color: var(--fg-muted);
+  font-family: var(--font-head);
+}
+
+.replies-tree {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--s2);
+}
+
+/* Depth cuing via CSS nesting */
+.replies-tree .replies-tree {
+  margin-left: var(--s4);
+  padding-left: var(--s4);
+  border-left: 2px solid var(--thread-rail);
+  margin-top: var(--s2);
+}
+.replies-tree .replies-tree .replies-tree {
+  border-left-color: #e0c08a;
+}
+.replies-tree .replies-tree .replies-tree .replies-tree {
+  border-left-color: #ecd9b2;
+}
+.replies-tree .replies-tree .replies-tree .replies-tree .replies-tree {
+  border-left-color: var(--border);
+}
+
+/* Collapse toggle (decorative — no JS yet) */
+.collapse-toggle {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm);
+  padding: var(--s1) var(--s3);
+  margin: var(--s2) 0;
+  cursor: default;
+}
+
+/* Reply form — three states: loading | anon | authed (managed by forums.js) */
+.reply-form-wrap { margin-top: var(--s8); }
+
+.reply-form {
+  padding: var(--s4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+}
+.reply-form--loading { border-style: dashed; color: var(--fg-soft); }
+.reply-form--anon { text-align: center; padding: var(--s6) var(--s4); }
+.reply-form--authed { border-style: solid; }
+
+.reply-form__cta { margin: 0; font-size: 15px; color: var(--fg-muted); }
+.reply-form__signin {
+  display: inline-block;
+  margin-top: var(--s2);
+  padding: var(--s2) var(--s6);
+  background: var(--accent);
+  color: white;
+  border-radius: var(--r-sm);
+  font: 600 14px var(--font-body);
+  text-decoration: none;
+}
+.reply-form__signin:hover { background: var(--accent-hover, #6b3820); text-decoration: none; }
+
+.reply-form__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  margin-bottom: var(--s2);
+}
+
+.reply-form textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font: 15px/1.5 var(--font-body);
+  background: white;
+  resize: vertical;
+  color: var(--fg);
+}
+.reply-form textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+
+.reply-form__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+.reply-form__submit {
+  padding: var(--s2) var(--s4);
+  background: var(--accent);
+  color: white;
+  border: 0;
+  border-radius: var(--r-sm);
+  font: 600 14px var(--font-body);
+  cursor: pointer;
+}
+.reply-form__submit:disabled { opacity: .6; cursor: progress; }
+.reply-form__submit:hover:not(:disabled) { background: var(--accent-hover, #6b3820); }
+
+.reply-form__status {
+  font: 13px var(--font-mono);
+  color: var(--fg-soft);
+}
+
+.reply-form__replying-to {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  margin-bottom: var(--s3);
+  background: rgba(140, 74, 43, 0.06);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.reply-form__replying-to-name { color: var(--accent); font-weight: 600; }
+.reply-form__cancel-thread {
+  background: none;
+  border: 0;
+  color: var(--fg-soft);
+  font: 12px var(--font-mono);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  margin-left: auto;
+}
+.reply-form__cancel-thread:hover { color: var(--accent); }
+
+/* Per-post Reply button (hidden until JS confirms authenticated) */
+.post__reply-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  padding: 2px 10px;
+  border-radius: 12px;
+  font: 600 11px/1.4 var(--font-body);
+  cursor: pointer;
+  margin-top: var(--s2);
+}
+.post__reply-btn:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+/* Edit affordance — same pill shape as reply */
+.post__edit-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  padding: 2px 10px;
+  border-radius: 12px;
+  font: 600 11px/1.4 var(--font-body);
+  cursor: pointer;
+  margin-top: var(--s2);
+  margin-left: var(--s2);
+}
+.post__edit-btn:hover {
+  background: var(--lg-sage-d, #6b7c52);
+  color: #fff;
+  border-color: var(--lg-sage-d, #6b7c52);
+}
+
+/* Delete affordance — same pill, danger-tinted hover */
+.post__delete-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  padding: 2px 10px;
+  border-radius: 12px;
+  font: 600 11px/1.4 var(--font-body);
+  cursor: pointer;
+  margin-top: var(--s2);
+  margin-left: var(--s2);
+}
+.post__delete-btn:hover {
+  background: var(--danger, #c0392b);
+  color: #fff;
+  border-color: var(--danger, #c0392b);
+}
+.post__delete-btn[disabled] { opacity: .6; cursor: default; }
+
+/* Feed card "Reply" CTA → opens the reply modal */
+.feed-card__actions { margin-top: var(--s2); }
+.feed-card__reply-cta {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  padding: 4px 14px;
+  border-radius: 14px;
+  font: 600 12px/1.4 var(--font-body);
+  cursor: pointer;
+}
+.feed-card__reply-cta:hover {
+  background: var(--lg-sage-d, #6b7c52);
+  color: #fff;
+  border-color: var(--lg-sage-d, #6b7c52);
+}
+/* Inline variant: rides the "Started by …" byline row, pushed to the right. */
+.feed-card__reply-cta--inline { margin-left: auto; flex: 0 0 auto; }
+/* Reply modal context line ("Replying to <title>") */
+.frm-context { margin: 0 0 var(--s2); color: var(--fg-muted); font: 400 13px/1.45 var(--font-body); }
+.frm-context__title { font-weight: 600; }
+/* Optimistically-inserted reply stub (until the real one syncs in) */
+.reply-stub--mine { background: rgba(107,124,82,.10); border-radius: 8px; }
+
+/* Inline editor */
+.post-edit {
+  margin-top: var(--s3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.post-edit__title {
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font: 600 16px var(--font-head);
+  color: var(--fg);
+  background: #fff;
+  box-sizing: border-box;
+}
+.post-edit__quill { background: #fff; }  /* cap/scroll on inner .ql-editor, not the container (tooltip clip) */
+.post-edit .ql-toolbar.ql-snow {
+  border: 1px solid var(--border); border-bottom: 0;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+}
+.post-edit .ql-container.ql-snow {
+  border: 1px solid var(--border);
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  font: 14px var(--font-body);
+}
+.post-edit .ql-editor { min-height: 100px; max-height: 300px; overflow-y: auto; }
+.post-edit__fallback {
+  width: 100%; padding: var(--s2) var(--s3);
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  font: 14px var(--font-body); box-sizing: border-box; resize: vertical;
+}
+.post-edit__row { display: flex; align-items: center; gap: var(--s2); }
+.post-edit__save {
+  padding: var(--s1) var(--s4); background: var(--accent); color: #fff;
+  border: 0; border-radius: var(--r-sm); font: 600 13px var(--font-body); cursor: pointer;
+}
+.post-edit__save:hover:not(:disabled) { background: var(--accent-hover, #6b3820); }
+.post-edit__save:disabled { opacity: .6; cursor: progress; }
+.post-edit__cancel {
+  padding: var(--s1) var(--s3); background: none; border: 1px solid var(--border);
+  border-radius: var(--r-sm); font: 13px var(--font-body); color: var(--fg-muted); cursor: pointer;
+}
+.post-edit__cancel:hover { color: var(--fg); border-color: var(--fg-muted); }
+.post-edit__status { font: 12px var(--font-body); color: var(--fg-muted); }
+
+/* ── Pagination ── */
+.pager {
+  display: flex;
+  gap: var(--s2);
+  justify-content: center;
+  margin-top: var(--s6);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.pager a,
+.pager span {
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+.pager a:hover { background: var(--bg-sticky); text-decoration: none; }
+.pager .pager__current {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+/* ── Mobile ── */
+@media (max-width: 960px) {
+  .forum-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .page { padding: var(--s4) var(--s3) var(--s8); }
+
+  h1 { font-size: 22px; }
+  h2 { font-size: 18px; }
+
+  .bb-mirror__page-title { font-size: 22px; }
+
+  .forum-grid { grid-template-columns: 1fr; }
+
+  .topic {
+    grid-template-columns: 24px 1fr;
+  }
+  .topic__monogram { display: none; }
+  .topic__stats {
+    grid-column: 2;
+    text-align: left;
+    padding-top: var(--s1);
+  }
+  .topic__stats strong { display: inline; }
+  .topic__stats strong::after { content: " "; }
+
+  .post { grid-template-columns: 40px 1fr; gap: var(--s3); padding: var(--s3); }
+  .post__avatar { width: 36px; height: 36px; font-size: 14px; }
+  .post__time { margin-left: 0; flex-basis: 100%; }
+
+  /* Mobile thread depth cap: collapse depth 3+ */
+  .replies-tree .replies-tree .replies-tree {
+    margin-left: 0;
+    padding-left: var(--s3);
+    border-left-style: dotted;
+  }
+  .replies-tree .replies-tree .replies-tree .replies-tree {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   SEARCH (bar + results)
+   ══════════════════════════════════════════════════════════ */
+
+.bb-mirror__searchbar {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding: var(--s3) var(--s4);
+}
+.search-form {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  max-width: 920px;
+  margin: 0 auto;
+}
+.search-form__label {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.search-form__input {
+  flex: 1;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font: 14px var(--font-body);
+  background: var(--bg);
+  color: var(--fg);
+}
+.search-form__input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+.search-form__btn {
+  padding: var(--s2) var(--s3);
+  background: var(--accent);
+  color: white;
+  border: 0;
+  border-radius: var(--r-sm);
+  font: 600 16px var(--font-body);
+  cursor: pointer;
+  min-width: 40px;
+}
+.search-form__btn:hover { background: var(--accent-hover, #6b3820); }
+
+/* Search relocated into the sidebar bottom (pins below the nav list; stays
+   visible while the nav scrolls). */
+.bb-mirror__searchbar--sidebar {
+  margin-top: auto;                /* push to the bottom of the flex-column sidebar */
+  position: sticky;
+  bottom: 0;
+  padding: var(--s3) 0 var(--s2);
+  background: var(--bg-card);
+  border-bottom: 0;
+  border-top: 1px solid var(--lg-line);
+}
+.search-form--sidebar { max-width: none; margin: 0; }
+
+.search-meta {
+  font: 13px var(--font-mono);
+  color: var(--fg-muted);
+  margin: 0 0 var(--s6);
+}
+.search-meta strong { color: var(--fg); }
+
+.search-results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--s3);
+}
+.search-result {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm);
+  background: var(--bg-card);
+  transition: border-color .15s, transform .1s;
+}
+.search-result:hover { border-color: var(--accent); }
+.search-result__link {
+  display: block;
+  padding: var(--s4);
+  color: var(--fg);
+}
+.search-result__link:hover { text-decoration: none; }
+.search-result__title {
+  font-family: var(--font-head);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 0 0 var(--s2);
+}
+.search-result__badge {
+  display: inline-block;
+  font: 600 10px/1.4 var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  vertical-align: middle;
+  background: var(--border);
+  color: var(--fg-muted);
+  margin-left: var(--s2);
+}
+.search-result__snippet {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--fg);
+  margin: 0 0 var(--s2);
+}
+.search-result__snippet b {
+  background: rgba(196, 99, 30, 0.18);
+  font-weight: 700;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+.search-result__meta {
+  font: 12px var(--font-mono);
+  color: var(--fg-soft);
+  margin: 0;
+}
+.search-result__forum { color: var(--accent); }
+
+/* ── Attachments (gallery beneath post body) ── */
+.post__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+.attachment--image {
+  display: block;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  line-height: 0;
+}
+.attachment--image img {
+  display: block;
+  max-width: 240px;
+  max-height: 240px;
+  width: auto;
+  height: auto;
+  object-fit: cover;
+}
+.attachment--image:hover { border-color: var(--accent); }
+.attachment--file {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font: 13px/1.4 var(--font-body);
+  color: var(--fg);
+  background: var(--bg);
+}
+.attachment--file:hover { background: var(--bg-sticky); color: var(--accent); text-decoration: none; }
+
+/* ══════════════════════════════════════════════════════════
+   TWO-PANE LAYOUT + LEFT NAV
+   ══════════════════════════════════════════════════════════ */
+
+/* Corner hamburger — fixed triangle in top-left */
+.corner-hamburger {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 76px;
+  height: 76px;
+  background: var(--accent);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  border: 0;
+  cursor: pointer;
+  z-index: 300;
+  padding: 0;
+  transition: background .15s;
+}
+.corner-hamburger:hover { background: var(--accent-2); }
+.corner-hamburger__icon {
+  position: absolute;
+  top: 13px;
+  left: 11px;
+  color: rgba(255,255,255,.92);
+  font-size: 17px;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Mobile drawer backdrop */
+.nav-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 24, 20, .45);
+  z-index: 140;
+  cursor: pointer;
+}
+body.nav-open .nav-overlay { display: block; }
+
+/* Two-pane flex container */
+.bb-layout {
+  display: flex;
+  align-items: flex-start;
+  min-height: calc(100vh - 120px);
+}
+
+/* Left nav pane — desktop persistent, styled to match archive-poc .grid-rail */
+.bb-layout__nav {
+  /* Width follows the contents (Ian): a short Type list shrinks the rail, the
+     longer Category names widen it. Clamped so it never gets cramped or hoggish. */
+  width: fit-content;
+  min-width: 190px;
+  max-width: 300px;
+  flex-shrink: 0;
+  display: flex;                   /* column so the relocated search can pin to the bottom */
+  flex-direction: column;
+  position: sticky;
+  top: 69px;                       /* clear the 61px sticky site header (lg-chrome) so it isn't obscured */
+  height: calc(100vh - 85px);      /* fit below the header; scrolls internally if taller */
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg-card);  /* match the cards */
+  border: 1px solid var(--lg-line);
+  border-radius: 12px;
+  padding: var(--s5) var(--s3) var(--s8) var(--s4);
+  scrollbar-width: thin;
+  scrollbar-color: var(--lg-line) transparent;
+  margin: var(--s4) 0 var(--s4) var(--s4);
+}
+
+/* Desktop collapse */
+@media (min-width: 961px) {
+  body.nav-closed .bb-layout__nav {
+    display: none;
+  }
+  body.nav-closed .bb-layout__content {
+    /* full width — nothing to do, flex: 1 handles it */
+  }
+}
+
+/* Right content pane */
+.bb-layout__content {
+  flex: 1;
+  min-width: 0;
+}
+.bb-layout__content .page {
+  max-width: 1040px;   /* 1180 -> 860 -> 1100 -> 1040: narrowed the desktop stream a tad (Ian 6/14). Mobile reset to none below. */
+}
+
+/* Mobile / tablet: drawer */
+@media (max-width: 960px) {
+  .bb-layout__nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: min(270px, 82vw);
+    transform: translateX(-110%);
+    transition: transform .25s ease;
+    z-index: 150;
+    box-shadow: var(--shadow-elev);
+    border-right: 0;
+    padding-top: 72px; /* clear hamburger */
+  }
+  body.nav-open .bb-layout__nav {
+    transform: translateX(0);
+  }
+  .bb-layout__content .page {
+    max-width: none;
+  }
+}
+
+/* Nav tree */
+.nav-tree { font-size: 13.5px; }
+
+/* "All activity" — the root view. Styled as an obvious, full-width button
+   (filled sage) so it reads as the primary nav action, not plain text. */
+.nav-tree__root {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 13px;
+  margin: 0 0 var(--s4);
+  font: 700 13.5px/1 var(--lg-font-sans);
+  letter-spacing: .01em;
+  color: #fff;
+  background: var(--lg-sage-d);
+  border: 1px solid var(--lg-sage-d);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.10);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .12s, box-shadow .12s, transform .05s;
+}
+.nav-tree__root:hover {
+  background: var(--lg-sage);
+  border-color: var(--lg-sage);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,.14);
+}
+.nav-tree__root:active { transform: translateY(1px); }
+.nav-tree__root--active { background: var(--lg-sage-d); border-color: var(--lg-sage-d); color: #fff; }
+.nav-tree__root-icon { font-size: 14px; line-height: 1; opacity: .9; }
+.nav-tree__root-label { flex: 1; }
+
+.nav-tree__section {
+  margin-bottom: var(--s4);
+}
+
+.nav-tree__section-label {
+  display: block;
+  font: 700 11px/1 var(--lg-font-sans);
+  color: var(--lg-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0 var(--s2) var(--s2);
+  margin: 0 0 4px;
+  border-bottom: 1px solid var(--lg-line);
+}
+
+.nav-tree__item {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 6px;
+  text-decoration: none;
+  font: 600 13px/1 var(--lg-font-sans);
+  color: var(--lg-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background .1s, color .1s;
+}
+.nav-tree__item:hover {
+  background: var(--lg-sage-tint);
+  color: var(--lg-sage-d);
+  text-decoration: none;
+}
+.nav-tree__item--active {
+  background: var(--lg-sage-d);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Clickable parent (category forum) */
+.nav-tree__item--parent {
+  font-weight: 600;
+  color: var(--lg-ink);
+  padding-top: var(--s1);
+}
+.nav-tree__item--parent:hover { color: var(--lg-sage-d); }
+.nav-tree__item--parent.nav-tree__item--active { background: var(--lg-sage-d); color: #fff; }
+
+/* Subforum indented child */
+.nav-tree__item--child {
+  padding-left: var(--s4);
+  font-size: 12.5px;
+  color: var(--lg-mute);
+}
+.nav-tree__item--child.nav-tree__item--active { background: var(--lg-sage-d); color: #fff; }
+
+
+/* ══════════════════════════════════════════════════════════
+   ACTIVITY FEED
+   ══════════════════════════════════════════════════════════ */
+
+.feed-page .bb-mirror__page-title { margin-bottom: var(--s3); }
+
+.feed-page__subtitle {
+  font-size: 18px;
+  color: var(--fg-muted);
+  font-weight: 400;
+  margin-left: var(--s2);
+  font-family: var(--font-body);
+}
+
+.feed {
+  display: grid;
+  /* Explicit single column so the track can't grow to max-content — without this
+     a long title/token (esp. at larger text-size) widens the card past the
+     viewport. minmax(0,…) lets it shrink below content so text wraps instead. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s6);   /* more breathing room between panels */
+}
+
+/* Base card — styled to match archive-poc .dcard aesthetic */
+.feed-card {
+  min-width: 0;                /* allow the grid item to shrink; text wraps, no overflow */
+  /* Visual chrome (bg/border/radius/padding/category rail) moved to the ≥641
+     desktop block (mobile/desktop split) so forums.css never styles mobile cards;
+     Buck's mobile-hub.css owns the mobile card chrome. */
+}
+/* Long titles / unbreakable tokens (@handles, URLs) wrap rather than force width */
+.feed-card__title,
+.feed-card__op-excerpt,
+.feed-card__full-body { overflow-wrap: anywhere; }
+
+/* Card prototype (flag ?proto=cards): expand a card to the max tier in place.
+   The opened card lifts; body + full thread are revealed by the existing
+   read-more / replies handlers the JS drives. Default feed is unaffected. */
+.feed--proto .feed-card { cursor: pointer; }
+.feed--proto .feed-card.feed-card--max { cursor: default; border-color: var(--lg-sage);
+  box-shadow: 0 14px 34px -14px rgba(26,29,26,.40); }
+/* Engagement bar — hidden by default; shown on proto cards (semi + max) */
+.feed-card__eng { display: none; align-items: center; gap: 4px; margin-top: 10px;
+  padding: 8px 2px 0; border-top: 1px solid var(--lg-line); color: var(--lg-mute); font-size: 13px; }
+.feed--proto .feed-card__eng { display: flex; }
+.feed-card__eng .fce-emo { font-size: 15px; letter-spacing: -2px; margin-right: 6px; }
+.feed-card__eng .fce-sp { flex: 1; }
+.feed-card__eng .fce-btn { padding: 5px 9px; border-radius: 8px; white-space: nowrap; }
+.feed--proto .feed-card__eng .fce-btn:hover { background: var(--lg-sage-tint); }
+
+/* Card reactions (engagement) — picker + count chips, server-rendered in _feed.php
+   (feed_reactions_bar) and wired by forums.js §4d to /archive-api/v0/card-react.
+   Mirrors the comments-modal reaction bar (.lgc-rx*). Shown on all viewports. */
+.feed-page .fcr { position: relative; display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap; padding: 9px 13px 2px; }
+.feed-page .fcr-chips { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.feed-page .fcr-chip { display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  font: inherit; font-size: 13px; line-height: 1; padding: 3px 9px 3px 7px;
+  border: 1px solid var(--lguser-line, #cdd6ba); border-radius: 999px;
+  background: var(--bg-card, #fff); color: var(--lguser-mute, #6b6f6b); }
+.feed-page .fcr-chip:hover { background: var(--lguser-pill, #dde6c7); }
+.feed-page .fcr-chip.is-mine { background: var(--lg-sage-tint, #eef2e3);
+  border-color: var(--lg-sage, #87986a); color: var(--lguser-accent-d, #52613d); }
+.feed-page .fcr-n { font-weight: 600; font-variant-numeric: tabular-nums; }
+.feed-page .fcr-emoji { font-size: 15px; line-height: 1; }
+.feed-page .fcr-img { display: inline-block; width: 18px; height: 18px;
+  object-fit: contain; vertical-align: middle; }
+.feed-page .fcr-add { display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; font: inherit; font-size: 14px; line-height: 1; width: 28px; height: 24px;
+  border: 1px solid var(--lguser-line, #cdd6ba); border-radius: 999px;
+  background: var(--bg-card, #fff); color: var(--lguser-accent-d, #52613d); padding: 0; }
+.feed-page .fcr-add span { font-size: 11px; font-weight: 700; margin-left: -1px; }
+.feed-page .fcr-add:hover { background: var(--lguser-pill, #dde6c7); color: var(--lguser-accent-d, #52613d); }
+.feed-page .fcr-palette { position: absolute; left: 13px; bottom: calc(100% - 2px); z-index: 20;
+  display: flex; gap: 2px; padding: 6px; background: #fff;
+  border: 1px solid var(--lguser-line, #cdd6ba); border-radius: 14px;
+  box-shadow: 0 6px 22px rgba(26, 29, 26, .16);
+  /* Absolute + left-only => auto width is shrink-to-fit, clamped to (containing
+     block - left). The .fcr bar is ~200px; the 7-opt palette wants ~250px, so it
+     gets clamped and the flexible image opts collapse to ~1px slivers (custom-image
+     reactions vanish in the picker; emoji opts survive on text min-content). Size to
+     content so it overflows the narrow bar instead of squeezing its items. */
+  width: max-content; max-width: none; }
+.feed-page .fcr-palette[hidden] { display: none; }  /* [hidden] must beat display:flex */
+.feed-page .fcr-opt { display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; border: 0; background: none; padding: 6px; border-radius: 10px;
+  font-size: 20px; line-height: 1; flex: 0 0 auto; }  /* never shrink — keeps image opts at full size */
+.feed-page .fcr-opt:hover { background: var(--lg-sage-tint, #eef2e3); }
+.feed-page .fcr-opt .fcr-img { width: 22px; height: 22px; }
+.feed-page .fcr-opt .fcr-emoji { font-size: 20px; }
+/* logged-out: counts stay visible (read-only), interaction hidden */
+body.fcr-anon .feed-page .fcr-add { display: none; }
+body.fcr-anon .feed-page .fcr-chip { pointer-events: none; }
+
+/* Max tier: lift the title + show the breadcrumb path prominently */
+.feed--proto .feed-card--max .feed-card__title { font-size: 22px; }
+/* Inline reply composer (shown only when a discussion is expanded) */
+.feed-card__inline-compose { display: none; gap: 8px; align-items: flex-start; margin-top: 10px;
+  padding-top: 10px; border-top: 1px solid var(--lg-line); }
+.feed--proto .feed-card--max .feed-card__inline-compose { display: flex; flex-wrap: wrap; }
+.feed-card__inline-compose .fic-input { flex: 1 1 auto; min-width: 0; resize: none; border: 1px solid var(--lg-line);
+  border-radius: 16px; padding: 9px 14px; font: inherit; font-size: 14px; background: var(--bg-card); color: var(--lg-ink);
+  max-height: 160px; }
+.feed-card__inline-compose .fic-send { flex: 0 0 auto; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--lg-sage-d); color: #fff; font: 700 13px/1 var(--lg-font-sans); padding: 9px 16px; }
+.feed-card__inline-compose .fic-send:disabled { opacity: .5; cursor: default; }
+.feed-card__inline-compose .fic-status { flex: 1 0 100%; font-size: 12px; color: var(--lg-mute); }
+.feed-card__inline-compose .fic-status:empty { display: none; }
+/* Moderator Edit + Trash on reply stubs — hidden unless the viewer can moderate */
+.reply-stub__edit, .reply-stub__trash { display: none; margin-left: 6px; border: 0; background: none;
+  cursor: pointer; font-size: 15px; line-height: 1; padding: 3px 5px; border-radius: 6px; color: var(--lg-ink, #323532); opacity: 1; }
+.reply-stub__edit:hover { opacity: 1; color: var(--lg-sage-d, #586b3f); background: var(--lg-sage-tint, #eef2e3); }
+.reply-stub__trash:hover { opacity: 1; color: var(--lg-rust, #c66845); background: var(--lg-sage-tint, #eef2e3); }
+.feed--can-moderate .reply-stub__edit, .feed--can-moderate .reply-stub__trash { display: inline-flex; }
+/* Mobile: bigger tap targets + clear separation between the pencil and the trash (Ian 6/17) */
+@media (max-width: 640px) {
+  .reply-stub__edit, .reply-stub__trash { font-size: 20px; padding: 7px 9px; }
+  .reply-stub__trash { margin-left: 16px; }
+}
+/* Members can edit/delete their OWN replies (Ian 2026-06-11) — the client adds
+   .reply-stub--mine on rows whose data-author-id matches the viewer. */
+.reply-stub--mine > .reply-stub__head .reply-stub__edit,
+.reply-stub--mine > .reply-stub__head .reply-stub__trash,
+.reply-stub--mine .reply-stub__edit, .reply-stub--mine .reply-stub__trash { display: inline-flex; }
+/* Inline reply editor */
+.reply-stub__editbox { margin: 6px 0 4px; width: 100%; flex: 1 1 100%; box-sizing: border-box; }
+.reply-stub__editbox .rse-input { width: 100%; box-sizing: border-box; resize: vertical; min-height: 60px;
+  border: 1px solid var(--lg-line); border-radius: 10px; padding: 8px 11px; font: inherit; font-size: 14px;
+  background: var(--bg-card); color: var(--lg-ink); }
+/* Inline Quill reply-edit editor — same snow treatment + inner-scroll as the reply
+   modal (#frm-editor): cap+scroll the inner .ql-editor, keep the container visible so
+   the link/format tooltip (bounds-clamped) isn't clipped. */
+.reply-stub__editbox .rse-editor { background: var(--bg-card, #fff); border-radius: 10px; }
+.reply-stub__editbox .ql-toolbar.ql-snow { border: 1px solid var(--lg-line); border-bottom: 0;
+  border-radius: 10px 10px 0 0; background: #fff; }
+.reply-stub__editbox .ql-container.ql-snow { border: 1px solid var(--lg-line);
+  border-radius: 0 0 10px 10px; font: 14px var(--font-body, inherit); }
+.reply-stub__editbox .ql-editor { min-height: 120px; max-height: 300px; overflow-y: auto; color: var(--lg-ink); }
+.reply-stub__editbox .ql-editor.ql-blank::before { color: var(--lg-mute); font-style: normal; }
+.reply-stub__editbox .ql-tooltip { max-width: 100%; white-space: normal; z-index: 6; }
+.reply-stub__editbox .rse-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.reply-stub__editbox .rse-save { border: 0; border-radius: 999px; background: var(--lg-sage-d); color: #fff;
+  font: 700 12.5px/1 var(--lg-font-sans); padding: 7px 14px; cursor: pointer; }
+.reply-stub__editbox .rse-cancel { border: 1px solid var(--lg-line); border-radius: 999px; background: none;
+  color: var(--lg-mute); font: 600 12.5px/1 var(--lg-font-sans); padding: 7px 12px; cursor: pointer; }
+.reply-stub__editbox .rse-status { font-size: 12px; color: var(--lg-mute); }
+.feed-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+  border-color: var(--lg-sage);
+}
+.feed-card--topic-start { border-left-color: var(--accent); }
+.feed-card--reply-stack { border-left-color: var(--thread-rail); }
+
+/* Card top row: forum context + timestamp */
+.feed-card__meta-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--s2);
+  gap: var(--s2);
+}
+.feed-card__forum-ctx {
+  font: 600 11px/1 var(--lg-font-sans);
+  color: var(--lg-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.feed-card__time {
+  font: 11px/1 var(--font-mono);
+  color: var(--fg-soft);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Topic-start: large title */
+.feed-card__title {
+  font-size: 17px;
+  font-family: var(--font-head);
+  margin: 0 0 var(--s2);
+  line-height: 1.3;
+}
+
+/* Slightly heavier weight on the LARGER headings only (Ian): the h1–h4 reset sets
+   600, which renders light in the feed's system/Trebuchet face. Bump card titles
+   (topic + content + expanded) and the forum-header title to a real bold — body /
+   excerpt / reply weight untouched. Desktop only; mobile heading weight is Buck's. */
+@media (min-width: 641px) {
+  .feed-page .feed-card__title    { font-weight: 700; }
+  .feed-page .forum-header__title { font-weight: 760; }
+  /* …and the reply author names (the salient "name" in a reply), so replies don't
+     read light next to the now-bolder titles. Body/excerpt text stays normal. */
+  .feed-page .reply-stub__author,
+  .feed-page .lg-fb-name { font-weight: 700; }
+}
+.feed-card__title a {
+  font-family: var(--lg-font-serif);
+  color: var(--lg-ink);
+}
+.feed-card__title a:hover { color: var(--accent); text-decoration: none; }
+
+/* Reply-stack: smaller topic link */
+.feed-card__topic-link {
+  font-size: 14px;
+  font-family: var(--font-head);
+  font-weight: 600;
+  margin: 0 0 var(--s3);
+}
+.feed-card__topic-link a { color: var(--fg); }
+.feed-card__topic-link a:hover { color: var(--accent); text-decoration: none; }
+
+/* Content snippet (topic-start) */
+.feed-card__snippet {
+  font-size: 13.5px;
+  color: var(--fg-muted);
+  margin: 0 0 var(--s2);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feed-card__byline {
+  font-size: 12px;
+  color: var(--fg-soft);
+}
+
+/* Individual reply row (within stack) */
+.feed-card__reply {
+  padding: var(--s2) var(--s3);
+  border-left: 2px solid var(--border-soft);
+  margin-bottom: var(--s2);
+}
+.feed-card__reply:last-child { margin-bottom: 0; }
+.feed-card__reply--top { border-left-color: var(--thread-rail); }
+
+.feed-card__reply-author {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 2px;
+  text-decoration: none;
+}
+a.feed-card__reply-author:hover { text-decoration: underline; }
+
+.feed-card__reply-snippet {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin: 0;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Older replies (hidden until expand) */
+.feed-card__older-replies { margin-bottom: var(--s2); }
+
+/* Stack footer: participants + expand button */
+.feed-card__stack-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s3);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--border-soft);
+  font-size: 12px;
+}
+.feed-card__participants { color: var(--fg-muted); flex: 1; }
+/* .feed-card__expand — defined later in accordion section; this block intentionally omitted */
+
+/* Load-older button */
+.feed-more {
+  text-align: center;
+  padding: var(--s8) 0 var(--s4);
+}
+.feed-more__btn {
+  display: inline-block;
+  padding: var(--s3) var(--s8);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font: 600 14px var(--font-body);
+  color: var(--fg-muted);
+  text-decoration: none;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.feed-more__btn:hover {
+  background: var(--bg-sticky);
+  border-color: var(--accent);
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* Mobile feed tweaks */
+@media (max-width: 640px) {
+  .feed-card { padding: var(--s3); }
+  .feed-card__title { font-size: 15px; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   SORT BAR (Feature 1)
+   ══════════════════════════════════════════════════════════ */
+
+.feed-sort-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.feed-sort-bar a {
+  border: 1px solid var(--lg-line);
+  background: #fff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font: 600 13px/1 var(--lg-font-sans);
+  color: var(--lg-ink);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  transition: background .12s, border-color .12s, color .12s;
+}
+
+.feed-sort-bar a:hover {
+  background: var(--lg-sage-tint);
+  border-color: var(--lg-sage);
+  color: var(--lg-sage-d);
+  text-decoration: none;
+}
+
+.feed-sort-bar a.active {
+  background: var(--lg-charcoal);
+  color: #fff;
+  border-color: var(--lg-charcoal);
+  pointer-events: none;
+}
+
+/* The Saved pill is a VIEW TOGGLE — unlike sort pills it stays clickable when
+   active so a second click exits the Saved view (Ian 2026-06-11). */
+.feed-sort-bar a.lg-saved-pill.active { pointer-events: auto; }
+
+/* FB-bubble name wrap (absorbed from hub-polish lg-fbname-wrap-css 2026-06-11,
+   coord-approved): long author names must wrap INSIDE bubbles instead of
+   driving them to max-content past the viewport. Buck's client copy no-ops. */
+.feed-page .lg-fb-col, #looth-rep-sheet .lg-fb-col { max-width: 100%; }
+.feed-page .lg-fb-bubble .lg-fb-name, #looth-rep-sheet .lg-fb-bubble .lg-fb-name {
+  white-space: normal; overflow-wrap: anywhere; }
+.feed-page .lg-fb-bubble img, #looth-rep-sheet .lg-fb-bubble img { max-width: 100%; height: auto; }
+
+/* Close-filters button at the top of the sidebar (Ian 2026-06-11). Desktop
+   only — mobile's filter drawer has its own close. Same state as the pill. */
+.bb-nav__close { display: none; }
+@media (min-width: 641px) {
+  .bb-layout__nav { position: relative; }
+  .bb-nav__close {
+    display: inline-flex; align-items: center; justify-content: center;
+    position: absolute; top: 8px; right: 8px; z-index: 5;
+    width: 30px; height: 30px; padding: 0;
+    border: 1px solid var(--lg-line, #e3ddd0); border-radius: 50%;
+    background: var(--bg-card, #fff); color: var(--lg-mute, #6b6f6b);
+    font-size: 18px; line-height: 1; cursor: pointer;
+    transition: color .12s ease, border-color .12s ease;
+  }
+  .bb-nav__close:hover { color: var(--lg-rust, #c66845); border-color: var(--lg-rust, #c66845); }
+  body.nav-closed .bb-nav__close { display: none; }
+  /* The Categories/Type segmented toggle is the rail's top row — give it a
+     right gutter so the close X doesn't sit on the "Type" tab (Ian screenshot). */
+  .bb-layout__nav .hub-rail__switch { margin-right: 38px; }
+}
+
+/* Desktop: the sort/search/filters CONTROL SURFACE sticks just below the
+   (sticky, 61px) site header (Ian 2026-06-11: header stays sticky too; the
+   controls stack under it). Solid themed bg so cards slide under cleanly;
+   z BELOW the header's 40 so its account/notification dropdowns overlay the
+   bar. Mobile untouched (Buck lane). */
+@media (min-width: 641px) {
+  .feed-page .feed-sort-bar {
+    position: sticky; top: var(--lg-header-h, 61px); z-index: 39;
+    background: var(--lguser-bg, #e9eedd);
+    padding: 10px 0;
+    box-shadow: 0 8px 14px -12px rgba(26, 29, 26, .35);
+  }
+  /* The Filters chip's ☰ icon keeps position:absolute from the legacy corner-
+     button styling; the bar becoming position:sticky made it the icon's
+     containing block, painting a stray ☰ over the first pill (Ian report).
+     Inline it inside the chip on desktop. */
+  .feed-page .feed-sort-bar .lg-filters-chip .corner-hamburger__icon { position: static; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   CARD v2 — OP EXCERPT + THREADED REPLIES (Features 2 + 3)
+   ══════════════════════════════════════════════════════════ */
+
+/* Unified card kind (replaces topic-start/reply-stack distinction) */
+.feed-card--topic { border-left-color: var(--accent); }
+
+/* Card header: body text + optional thumbnail side by side */
+.feed-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+
+.feed-card__header-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Featured image — uniform 16:9 cover, right column of the card header
+   (where the old thumbnail sat), top-aligned. */
+.feed-card__cover {
+  flex-shrink: 0;
+  width: 240px;
+  align-self: flex-start;
+  display: block;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--bg-closed);
+  line-height: 0;
+}
+.feed-card__cover-img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+/* Mobile: image stacks full-width under the text */
+@media (max-width: 640px) {
+  .feed-card__header { flex-direction: column; }
+  .feed-card__cover { width: 100%; }
+}
+
+/* Feature 3: OP excerpt block */
+.feed-card__op {
+  margin-top: var(--s1);
+}
+
+.feed-card__op-excerpt {
+  font-size: 13.5px;
+  color: var(--fg-muted);
+  margin: 0 0 4px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;   /* show more of the post before "…" (Ian); "Read more" reveals the rest */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* CPT cards only: the excerpt clicks through to the post too (Ian 6/14) — same
+   target as the title/cover, styled as plain text so it reads identically.
+   Discussion cards keep their bare <p> (the card opens its modal/expand). */
+.feed-card--content .feed-card__op-excerpt-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.feed-card__op-meta {
+  font-size: 12px;
+  color: var(--lg-mute);
+}
+
+.feed-card__op-author {
+  color: var(--lg-rust);
+  font-weight: 600;
+  text-decoration: none;
+}
+.feed-card__op-author:hover { color: var(--lg-sage-d); text-decoration: underline; }
+
+/* Inline comment trigger on Hub content cards — sits in the op-meta row beside
+   the like count. Opens the WP-free comment modal (#lgc-modal). */
+.feed-card__comments-btn {
+  -webkit-appearance: none; appearance: none;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 0; padding: 0 0 0 4px; margin: 0;
+  font: inherit; font-size: 12px; font-weight: 600;
+  color: var(--lg-mute); cursor: pointer; line-height: 1;
+}
+.feed-card__comments-btn:hover { color: var(--lg-sage-d); }
+
+/* Content comment modal (mirrors the standalone page's lg-cmodal). */
+.lgc-modal[hidden] { display: none; }
+.lgc-modal {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; box-sizing: border-box;
+}
+.lgc-modal__backdrop {
+  position: absolute; inset: 0; background: rgba(26,29,26,.5);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+.lgc-modal__panel {
+  position: relative; width: min(640px,96vw); max-height: min(86vh,920px);
+  background: #fff; border-radius: 16px; overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0,0,0,.28), 0 4px 12px rgba(0,0,0,.12);
+  display: flex; flex-direction: column;
+}
+.lgc-modal__head {
+  display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+  border-bottom: 1px solid #eee7da; background: #f7f5f2;
+}
+.lgc-modal__title { font-weight: 700; font-size: 16px; color: #1a1d1a; }
+.lgc-modal__close {
+  margin-left: auto; background: none; border: 0; width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px; font-size: 22px; line-height: 1; cursor: pointer;
+  color: #6b6b66; transition: background .15s, color .15s;
+}
+.lgc-modal__close:hover { background: #ece7db; color: #1a1d1a; }
+.lgc-modal__frame {
+  width: 100%; border: 0; height: 320px; background: #fff; transition: height .2s ease;
+}
+
+/* Reply list beneath OP */
+.feed-card__replies {
+  border-top: 1px solid var(--border-soft);
+  padding-top: var(--s2);
+  margin-top: var(--s2);
+  display: grid;
+  gap: 3px;
+}
+
+/* Individual reply stub — two-row layout */
+.reply-stub {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+  border-top: 1px solid var(--lg-line, #e3ddd0);
+}
+
+.reply-stub--overflow {
+  display: none;
+}
+
+.reply-stub__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reply-stub__author {
+  font-weight: 600;
+  color: var(--lg-rust);
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline; }
+
+.reply-stub__time {
+  margin-left: auto;
+  font: 400 11px/1 var(--lg-font-sans, sans-serif);
+  color: var(--lg-mute, #6b6f6b);
+  white-space: nowrap;
+}
+
+.reply-stub__body {
+  padding-left: calc(28px + 8px); /* indent under avatar */
+  font: 400 13px/1.5 var(--lg-font-sans, sans-serif);
+  color: var(--lg-ink, #323532);
+}
+
+.reply-stub__excerpt {
+  display: inline;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Clickable URLs + @mentions inside teaser excerpts (feed OP + reply stubs). */
+.reply-stub__excerpt a,
+.feed-card__op-excerpt a {
+  color: var(--lg-sage-d, #6b7c52);
+  text-decoration: none;
+}
+.reply-stub__excerpt a:hover,
+.feed-card__op-excerpt a:hover { text-decoration: underline; }
+.bb-mention { font-weight: 600; }
+
+.reply-stub__full          { display: inline; }
+.reply-stub__full[hidden]  { display: none; }  /* [hidden] must beat the inline rule */
+.reply-stub__expand {
+  background: none; border: none; padding: 0 0 0 2px;
+  font: 600 12px/1 var(--lg-font-sans, sans-serif);
+  color: var(--lg-sage-d, #6b7c52);
+  cursor: pointer; vertical-align: baseline;
+}
+.reply-stub__expand:hover { color: var(--lg-sage, #87986a); text-decoration: underline; }
+
+.reply-stub__img {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-top: 6px;
+}
+
+/* Accordion expand button — pill style matching archive-poc */
+.feed-card__expand {
+  color: var(--lg-sage-d);
+  border: 1px solid var(--lg-line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font: 600 12px/1 var(--lg-font-sans);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s, border-color .12s;
+  text-align: left;
+  margin-top: 2px;
+  align-self: start;
+}
+.feed-card__expand:hover {
+  background: var(--lg-sage-tint);
+  border-color: var(--lg-sage);
+}
+
+/* When the full thread is expanded, hide the single teaser stub so it isn't
+   shown twice (the lazy-loaded thread already includes it). The teaser is the
+   direct .reply-stub child of .feed-card__replies; thread stubs live inside
+   .feed-card__replies-full. */
+.feed-card.replies-expanded > .feed-card__replies > .reply-stub {
+  display: none;
+}
+/* When replies are expanded, make the collapse affordance obvious */
+.feed-card.replies-expanded .feed-card__expand {
+  background: var(--lg-sage-tint, #eef2e3);
+  border-color: var(--lg-sage, #87986a);
+  color: var(--lg-sage-d, #6b7c52);
+}
+
+/* ══════════════════════════════════════════════════════════
+   FORUM HEADER (Feature: feed page header with image)
+   ══════════════════════════════════════════════════════════ */
+
+.forum-header {
+  position: relative;
+  width: 100%;
+  margin-bottom: var(--s4);
+  overflow: hidden;
+  border-radius: var(--r-md, 12px);
+  /* Subtle sage tint — matches nav-button hover + callout fills. */
+  background: var(--lg-sage-tint, #eef2e3);
+  border: 1px solid var(--lg-line, #e3ddd0);
+  box-shadow: var(--shadow-card);
+  /* Category colour accent (set per data-cat below) */
+  border-left: 5px solid var(--hdr-accent, var(--lg-sage, #87986a));
+  /* Faint wash of the category colour over the sage tint */
+  background:
+    linear-gradient(120deg, color-mix(in srgb, var(--hdr-accent, #87986a) 14%, var(--lg-sage-tint, #eef2e3)) 0%,
+                            var(--lg-sage-tint, #eef2e3) 60%);
+}
+.forum-header[data-cat="acoustic"] { --hdr-accent: var(--cat-acoustic); }
+.forum-header[data-cat="builds"]   { --hdr-accent: var(--cat-builds); }
+.forum-header[data-cat="repair"]   { --hdr-accent: var(--cat-repair); }
+.forum-header[data-cat="tools"]    { --hdr-accent: var(--cat-tools); }
+.forum-header[data-cat="business"] { --hdr-accent: var(--cat-business); }
+.forum-header[data-cat="market"]   { --hdr-accent: var(--cat-market); }
+.forum-header[data-cat="general"]  { --hdr-accent: var(--cat-general); }
+.forum-header[data-cat="sponsors"] { --hdr-accent: var(--cat-sponsors); }
+.forum-header[data-cat="looths"]   { --hdr-accent: var(--cat-looths); }
+
+.forum-header--has-image { min-height: 132px; }
+/* Admin-set image shows more prominently than the faint auto-derived one
+   (still right-side-faded so left-aligned text stays readable). */
+.forum-header--explicit-image .forum-header__bg { opacity: .58; }
+
+/* Image as a soft fade on the right; text stays on the readable left. */
+.forum-header__bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 35%;
+  opacity: 0.4;
+  -webkit-mask-image: linear-gradient(to left, #000 0%, transparent 62%);
+  mask-image: linear-gradient(to left, #000 0%, transparent 62%);
+}
+
+/* Body: breadcrumb / title-row / label, stacked */
+.forum-header__body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--s6);
+}
+
+.forum-header__title {
+  font-family: var(--lg-font-serif);
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 1.1;
+  color: var(--lg-sage-d, #6b7c52);
+  margin: 0;
+  letter-spacing: -.01em;
+}
+
+.forum-header__label {
+  font: 700 10px/1 var(--lg-font-sans);
+  color: var(--hdr-accent, var(--lg-mute));
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  opacity: .85;
+}
+
+/* Admin pencil — set header image (revealed by JS for can_edit_others) */
+.forum-header__edit-img {
+  position: absolute;
+  top: var(--s3);
+  right: var(--s3);
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--lg-line);
+  background: rgba(255,255,255,.85);
+  color: var(--lg-ink);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.forum-header__edit-img:hover {
+  background: #fff;
+  border-color: var(--hdr-accent, var(--lg-sage));
+  color: var(--hdr-accent, var(--lg-sage-d));
+}
+
+/* "+ New post" CTA in the banner — All + category views (leaf views use the
+   "+ Post here" button in the sort bar). Bottom-right of the banner. */
+.forum-header__new-post {
+  position: absolute;
+  right: var(--s4); bottom: var(--s4);
+  z-index: 2;
+  padding: 9px 18px;
+  background: var(--accent, #586b3f);
+  color: #fff; border: 0;
+  border-radius: 999px;
+  font: 600 13.5px var(--font-body);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .14);
+  transition: background .12s, transform .04s;
+}
+.forum-header__new-post:hover { background: var(--accent-hover, #44502f); }
+.forum-header__new-post:active { transform: translateY(1px); }
+@media (max-width: 640px) {
+  .forum-header__new-post {
+    position: static;
+    margin: 0 var(--s4) var(--s4);
+  }
+}
+
+@media (max-width: 640px) {
+  .forum-header__body { padding: var(--s4); }
+  .forum-header__title { font-size: 22px; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   CATEGORY COLOR PALETTE
+   ══════════════════════════════════════════════════════════ */
+
+:root {
+  /* Category colour-coding — ONE brand palette (lg-layout-v2 tokens.json),
+     shared by the sidebar pills (--nc), feed-card rails (--cat-*), and the
+     banner. Each of the 9 categories gets a distinct brand colour, spread for
+     max identifiability: the warm pair (amber/gold), the sage lightness ladder,
+     and the two darks. --on-* is the legible fg (text/glyph) on each colour. */
+  --cat-sponsors: #ecb351;  /* amber  (brand)        */  --on-sponsors: #1a1d1a;
+  --cat-market:   #b8842b;  /* gold   (brand)        */  --on-market:   #ffffff;
+  --cat-builds:   #c66845;  /* coral  (brand EXT)    */  --on-builds:   #ffffff;
+  --cat-repair:   #87986a;  /* sage   (brand)        */  --on-repair:   #ffffff;
+  --cat-acoustic: #586b3f;  /* deep sage (brand)     */  --on-acoustic: #ffffff;
+  --cat-business: #6f8fa6;  /* slate  (brand EXT)    */  --on-business: #1a1d1a;
+  --cat-general:  #99b27e;  /* mid sage (brand)      */  --on-general:  #1a1d1a;
+  --cat-tools:    #1a1d1a;  /* charcoal (brand)      */  --on-tools:    #ffffff;
+  --cat-looths:   #c2d5aa;  /* light sage (brand)    */  --on-looths:   #1a1d1a;
+  --cat-suggestions:  #323532; /* ink (brand) — meta/feedback  */ --on-suggestions:  #ffffff;
+  --cat-perspective:  #8a6f5b; /* warm sienna — editorial/think  */ --on-perspective:  #ffffff;
+  --cat-vintage:      #a67c52; /* warm camel — historical        */ --on-vintage:      #ffffff;
+}
+
+
+/* Feed cards: left-border tint by category */
+.feed-card[data-cat="acoustic"] { border-left-color: var(--cat-acoustic); }
+.feed-card[data-cat="builds"]   { border-left-color: var(--cat-builds);   }
+.feed-card[data-cat="repair"]   { border-left-color: var(--cat-repair);   }
+.feed-card[data-cat="tools"]    { border-left-color: var(--cat-tools);    }
+.feed-card[data-cat="business"] { border-left-color: var(--cat-business); }
+.feed-card[data-cat="market"]   { border-left-color: var(--cat-market);   }
+.feed-card[data-cat="general"]  { border-left-color: var(--cat-general);  }
+.feed-card[data-cat="sponsors"] { border-left-color: var(--cat-sponsors); }
+.feed-card[data-cat="looths"]   { border-left-color: var(--cat-looths);   }
+
+/* ══════════════════════════════════════════════════════════
+   FULL-BODY EXPAND (Read more / Read less)
+   ══════════════════════════════════════════════════════════ */
+
+.feed-card__full-body {
+  margin-top: 10px;
+  font: 400 14px/1.6 var(--lg-font-sans, sans-serif);
+  color: var(--lg-ink, #323532);
+}
+.feed-card__full-body p   { margin: 0 0 12px; }
+.feed-card__full-body p:last-child { margin-bottom: 0; }
+/* Collapse BuddyBoss blank-line spacer paragraphs (<p><br></p>): they stack a
+   full line-height + double margins, so paragraph gaps blow up as type scales.
+   The real <p> margins already give correct spacing. */
+.feed-card__full-body p:has(> br:only-child),
+.post__body p:has(> br:only-child) { display: none; }
+.feed-card__full-body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 10px 0;
+}
+.feed-card__full-body a { color: var(--lg-rust, #c66845); }
+.feed-card__full-body ul,
+.feed-card__full-body ol { padding-left: 1.5em; margin: 0 0 12px; }
+
+.feed-card__read-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(135,152,106,0.10);
+  border: 1px solid var(--border);
+  padding: 7px 16px;
+  margin: 10px 0 4px;
+  border-radius: 999px;
+  font: 600 12px/1 var(--lg-font-sans, sans-serif);
+  color: var(--lg-sage-d, #6b7c52);
+  cursor: pointer;
+  text-decoration: none;
+}
+.feed-card__read-more:hover {
+  background: var(--lg-sage-d, #6b7c52);
+  border-color: var(--lg-sage-d, #6b7c52);
+  color: #fff;
+}
+
+/* ══════════════════════════════════════════════════════════
+   NEW TOPIC BUTTON + MODAL
+   ══════════════════════════════════════════════════════════ */
+
+/* Button in the searchbar */
+/* "+ New post" — full-width button at the top of the left nav */
+.nav-new-post {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: var(--s4);
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: var(--r-sm);
+  font: 600 14px var(--font-body);
+  cursor: pointer;
+  text-align: center;
+}
+.nav-new-post:hover { background: var(--accent-hover, #6b3820); }
+
+/* Prevent body scroll while modal open */
+body.ntm-active { overflow: hidden; }
+
+/* Full-screen overlay */
+.ntm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ntm-overlay[hidden] { display: none; }
+
+/* The composer uses a fixed light palette, NOT the hub theme tokens. The Dark/
+   Black hub themes re-point --bg/--fg/etc on <html>, which left the modal's
+   fields dark-on-dark. Pinning the tokens here (on the overlay) makes the dialog,
+   inputs, forum list and Quill editor all render light in every theme. Brand
+   accent (sage) is kept so headers + the Post button stay on-brand. */
+.ntm-overlay {
+  --bg:        #f6f4ee;
+  --bg-card:   #ffffff;
+  --fg:        #1f231e;
+  --fg-muted:  #5b5f58;
+  --fg-soft:   #8d9088;
+  --border:    #dcd7ca;
+  --lg-sage-tint: #eef2e3;
+}
+
+/* DARK-mode repoint (Ian 2026-06-10: "all forms ignore dark mode") — the same
+   token-pinning trick as the light pin above, with the dark set. The gear's
+   mode is the single source; the whole dialog (panel, inputs, forum list,
+   Quill) follows through these tokens. */
+html[data-lguser-theme="dark"] .ntm-overlay {
+  --bg:        #1b1e21;
+  --bg-card:   #15171a;
+  --fg:        #e5e7e1;
+  --fg-muted:  #a6ac9f;
+  --fg-soft:   #80867d;
+  --border:    #2c312d;
+  --lg-sage-tint: #243024;
+}
+
+.ntm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+}
+
+/* Dialog box */
+.ntm-dialog {
+  position: relative;
+  z-index: 1;
+  background: var(--bg-card, #fff);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-elev);
+  width: min(760px, calc(100vw - var(--s8)));
+  max-height: calc(100vh - var(--s12));
+  overflow-y: auto;
+  padding: var(--s6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.ntm-heading {
+  margin: 0;
+  font-size: 20px;
+  color: var(--fg);
+}
+
+/* State panels */
+.ntm-state--loading {
+  font: 14px var(--font-body);
+  color: var(--fg-muted);
+  padding: var(--s4) 0;
+  text-align: center;
+}
+.ntm-state--anon {
+  text-align: center;
+  padding: var(--s4) 0;
+}
+.ntm-anon__msg {
+  margin: 0 0 var(--s3);
+  font-size: 15px;
+  color: var(--fg-muted);
+}
+.ntm-anon__link {
+  display: inline-block;
+  padding: var(--s2) var(--s4);
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--r-sm);
+  font: 600 14px var(--font-body);
+  text-decoration: none;
+}
+.ntm-anon__link:hover { background: var(--accent-hover, #6b3820); }
+
+/* Form fields */
+.ntm-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+.ntm-label {
+  font: 600 13px var(--font-body);
+  color: var(--fg-muted);
+  letter-spacing: .02em;
+  display: block;
+  margin-bottom: 2px;
+}
+.ntm-label__opt {
+  font-weight: 400;
+  color: var(--fg-soft);
+}
+.ntm-select,
+.ntm-input,
+.ntm-textarea {
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font: 14px var(--font-body);
+  background: var(--bg, #faf8f4);
+  color: var(--fg);
+  box-sizing: border-box;
+}
+.ntm-select:focus,
+.ntm-input:focus,
+.ntm-textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+.ntm-textarea { resize: vertical; min-height: 100px; }
+
+/* ── Forum picker: single-select list, clear category → leaf structure ──────
+   Replaces the native <select>. Category headers are plainly NOT pickable;
+   each leaf is a radio row, so exactly one forum can be chosen. */
+.ntm-forumlist {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg, #faf8f4);
+  max-height: 240px;
+  overflow-y: auto;
+  padding: var(--s1) 0 var(--s2);
+}
+.ntm-fl__cat {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg, #faf8f4);
+  padding: var(--s2) var(--s3) 4px;
+  font: 700 10.5px/1 var(--font-body);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--accent, #6b7c52);
+}
+.ntm-fl__cat:not(:first-child) {
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+  padding-top: var(--s2);
+}
+.ntm-fl__leaf {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 var(--s2);
+  padding: 7px var(--s2) 7px 26px;
+  border-radius: var(--r-sm);
+  font: 500 14px/1.2 var(--font-body);
+  color: var(--fg);
+  cursor: pointer;
+}
+.ntm-fl__leaf:hover { background: var(--lg-sage-tint, #eef2e3); }
+.ntm-fl__leaf input { accent-color: var(--accent, #6b7c52); cursor: pointer; }
+.ntm-fl__leaf:has(input:checked) {
+  background: var(--lg-sage-tint, #eef2e3);
+  font-weight: 700;
+  color: var(--fg);
+}
+.ntm-fl__leaf input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Quick-add workflow tag buttons (councilyes / weeklyyes) */
+.ntm-quicktags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: 6px;
+}
+.ntm-qtag {
+  border: 1px solid var(--border);
+  background: var(--bg-card, #fff);
+  color: var(--fg-muted);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font: 600 12.5px/1 var(--font-body);
+  cursor: pointer;
+}
+.ntm-qtag:hover { border-color: var(--accent); color: var(--fg); }
+.ntm-qtag.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.ntm-qtag.is-on::before { content: "✓ "; }
+
+.ntm-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-top: var(--s1);
+}
+.ntm-submit {
+  padding: var(--s2) var(--s4);
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: var(--r-sm);
+  font: 600 14px var(--font-body);
+  cursor: pointer;
+}
+.ntm-submit:hover:not(:disabled) { background: var(--accent-hover, #6b3820); }
+.ntm-submit:disabled { opacity: .6; cursor: progress; }
+.ntm-cancel {
+  padding: var(--s2) var(--s3);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font: 14px var(--font-body);
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.ntm-cancel:hover { border-color: var(--fg-muted); color: var(--fg); }
+.ntm-status {
+  font: 13px var(--font-body);
+  color: var(--fg-muted);
+  flex: 1;
+}
+
+@media (max-width: 600px) {
+  .ntm-dialog { padding: var(--s4); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   NAV ACCORDION
+   ══════════════════════════════════════════════════════════ */
+
+/* Section head: label link + toggle button side by side */
+/* ── Pill nav ──────────────────────────────────────────────
+   Category pill: real categories = navigable name link + chevron toggle;
+   virtual groups (General/Sponsors/Local Looths) = whole pill is the toggle.
+   Per-category accents come from --nc / --leaf-cap (set on .nav-section--*).
+   Padding lives on the children so the link / chevron fill the whole pill. */
+.nav-tree__cat-pill {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: 3px 0 2px;
+  padding: 0;
+  /* subtle border in a light tint of the section colour (colour lives on the
+     filled chevron + label); pill background stays clean */
+  border: 1px solid color-mix(in srgb, var(--nc, var(--lg-line)) 38%, #fff);
+  border-radius: 999px;
+  background: var(--bg-card, #fff);
+  /* darken the category colour for the label so pale sages stay legible on white */
+  color: color-mix(in srgb, var(--nc, var(--lg-ink)) 68%, var(--lg-ink, #1a1d1a));
+  font: 700 12.5px/1.15 var(--lg-font-sans);
+  text-align: left;
+  overflow: hidden;
+  transition: background .12s, border-color .12s, color .12s;
+}
+button.nav-tree__cat-pill { cursor: pointer; }
+.nav-tree__cat-pill:hover { background: var(--lg-sage-tint); }
+
+/* Solo pill — a standalone forum (e.g. Suggestion Box): whole pill is a link,
+   no chevron, no children. */
+a.nav-tree__cat-pill--solo { text-decoration: none; cursor: pointer; }
+.nav-tree__cat-pill--solo .nav-tree__cat-name { padding-right: 13px; }
+.nav-tree__cat-pill--solo:hover { background: color-mix(in srgb, var(--nc) 12%, #fff); }
+.nav-tree__cat-pill--solo.nav-tree__cat-pill--active {
+  background: var(--nc); border-color: var(--nc); color: var(--on-nc);
+}
+
+/* Category name — an <a> (navigates) for real cats, a <span> for groups */
+.nav-tree__cat-name {
+  flex: 1; min-width: 0;
+  padding: 7px 4px 7px 13px;
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+a.nav-tree__cat-name { cursor: pointer; }
+a.nav-tree__cat-name:hover { text-decoration: underline; }
+
+/* Chevron toggle — a button (real cats) or a bare span (groups) */
+/* Chevron toggle — rendered as a round "open" button on the right of the pill.
+   For real categories it's wrapped in the <button> toggle; for virtual groups
+   it's a bare span inside the whole-pill button. Both show the same circle. */
+.nav-tree__cat-pill .nav-tree__section-toggle {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center;
+  padding: 0 7px 0 4px;
+  background: none; border: none; color: inherit; cursor: pointer;
+}
+.nav-tree__cat-pill > .nav-tree__chevron { margin: 0 7px 0 4px; }  /* group: bare span chevron */
+.nav-tree__chevron {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  border: 1px solid var(--nc, var(--lg-line));
+  border-radius: 50%;
+  background: var(--nc, var(--lg-sage-d));   /* filled button */
+  color: var(--on-nc, #fff);
+  font-size: 13px; line-height: 1;
+  transition: transform .2s, background .12s, color .12s, border-color .12s, filter .12s;
+}
+/* hover deepens the filled button */
+.nav-tree__cat-pill:hover .nav-tree__chevron { filter: brightness(.88); }
+.nav-tree__section--open > .nav-tree__cat-pill {
+  background: var(--nc, var(--lg-sage-d));
+  border-color: var(--nc, var(--lg-sage-d));
+  color: var(--on-nc, #fff);
+}
+/* open: pill is filled; the chevron inverts (fg-coloured circle, category glyph) */
+.nav-tree__section--open > .nav-tree__cat-pill .nav-tree__chevron {
+  transform: rotate(90deg);
+  background: var(--on-nc, #fff); color: var(--nc, var(--lg-sage-d)); border-color: var(--on-nc, #fff);
+}
+
+/* Body hidden until the category is opened */
+.nav-tree__section-body { display: none; padding: 1px 0 4px 10px; }
+.nav-tree__section--open > .nav-tree__section-body { display: block; }
+
+/* Leaf pills */
+.nav-tree__pill {
+  display: block;
+  margin: 3px 0;
+  padding: 5px 12px;
+  border: 1px solid color-mix(in srgb, var(--nc, var(--lg-line)) 30%, #fff);   /* subtle */
+  border-radius: 999px;
+  background: var(--bg-card, #fff);
+  color: var(--lg-ink);
+  font: 600 12.5px/1.25 var(--lg-font-sans);
+  white-space: normal;
+}
+.nav-tree__pill:hover {
+  background: var(--lg-sage-tint);
+  border-color: var(--nc, var(--lg-sage-d));
+  color: var(--nc, var(--lg-sage-d));
+}
+.nav-tree__pill.nav-tree__item--active {
+  background: var(--nc, var(--lg-sage-d));
+  border-color: var(--nc, var(--lg-sage-d));
+  color: var(--on-nc, #fff);
+}
+/* "View all" pill leads the group — subtle, with a lead-in caret */
+.nav-tree__pill--all { font-weight: 600; opacity: .9; }
+.nav-tree__pill--all::before { content: "\25B8\00a0"; color: var(--nc, var(--lg-mute)); }
+.nav-tree__pill--all.nav-tree__item--active::before { color: #fff; }
+
+/* ══════════════════════════════════════════════════════════
+   FORUM HEADER: POST BUTTON + TITLE ROW
+   ══════════════════════════════════════════════════════════ */
+
+.forum-header__parent {
+  display: inline-block;
+  margin-bottom: var(--s1);
+  font: 600 12px/1 var(--font-body);
+  letter-spacing: .02em;
+  color: var(--lg-sage-d, #6b7c52);
+  text-decoration: none;
+}
+.forum-header__parent:hover { color: var(--accent, #8c4a2b); text-decoration: underline; }
+
+.forum-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+/* Post button — now lives on the sort bar, right-aligned. */
+.feed-post-btn {
+  margin-left: auto;
+  padding: 6px 16px;
+  background: var(--accent, #8c4a2b);
+  color: #fff;
+  border: 0;
+  border-radius: 999px;
+  font: 600 13px var(--font-body);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.feed-post-btn:hover { background: var(--accent-hover, #6b3820); }
+
+/* ══════════════════════════════════════════════════════════
+   SUBFORUM PILLS
+   ══════════════════════════════════════════════════════════ */
+
+/* Top-level category row (tier 1) — sits above the forum header banner */
+.category-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0 0 var(--s3);
+}
+.category-pill {
+  display: inline-block;
+  padding: 6px 14px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--lg-line, #e3ddd0);
+  border-radius: 999px;
+  font: 700 12.5px var(--font-body);
+  color: var(--lg-ink);
+  text-decoration: none;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.category-pill:hover {
+  background: var(--lg-sage-tint);
+  border-color: var(--lg-sage);
+  color: var(--lg-sage-d);
+  text-decoration: none;
+}
+.category-pill--active {
+  background: var(--lg-sage-d);
+  border-color: var(--lg-sage-d);
+  color: #fff;
+}
+
+.subforum-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: var(--s2) 0 var(--s4);
+}
+
+.subforum-pill {
+  display: inline-block;
+  padding: 5px 12px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--lg-line, #e3ddd0);
+  border-radius: 999px;
+  font: 600 12px var(--font-body);
+  color: var(--lg-ink);
+  text-decoration: none;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.subforum-pill:hover {
+  background: var(--lg-sage-tint);
+  border-color: var(--lg-sage);
+  color: var(--lg-sage-d);
+  text-decoration: none;
+}
+.subforum-pill--active {
+  background: var(--lg-sage-d);
+  border-color: var(--lg-sage-d);
+  color: #fff;
+}
+
+/* ══════════════════════════════════════════════════════════
+   THREADED REPLY CHILD STUBS
+   ══════════════════════════════════════════════════════════ */
+
+.reply-stub--child {
+  margin-left: 28px;
+  padding-left: var(--s3);
+  border-left: 2px solid var(--lg-line, #e3ddd0);
+  border-top: none;
+  padding-top: 6px;
+  padding-bottom: 2px;
+}
+.reply-stub--child .reply-stub__head { gap: 6px; }
+.reply-stub--child .reply-stub__author { font-size: 12px; }
+.reply-stub--child .reply-stub__time   { font-size: 10px; }
+.reply-stub--child .reply-stub__body {
+  padding-left: calc(22px + 6px);
+  font-size: 12px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   QUILL EDITOR (new post composer)
+   ══════════════════════════════════════════════════════════ */
+
+.ntm-editor {
+  background: var(--bg, #faf8f4);
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  min-height: 220px;
+  /* No overflow/max-height HERE: this div is Quill's .ql-container, and Quill's
+     link tooltip ("Save" popup) is an absolutely-positioned child of it. Clipping
+     the container crops the tooltip. Cap + scroll the inner .ql-editor instead so
+     the container stays overflow:visible and the tooltip can escape. */
+}
+/* Quill's toolbar + container borders → match our field styling */
+.ntm-form .ql-toolbar.ql-snow {
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  background: #fff;
+}
+.ntm-form .ql-container.ql-snow {
+  border: 1px solid var(--border);
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  font: 14px var(--font-body);
+}
+.ntm-form .ql-editor {
+  min-height: 200px;
+  max-height: 420px;
+  overflow-y: auto;
+  color: var(--fg);
+}
+.ntm-form .ql-editor.ql-blank::before {
+  color: var(--fg-soft);
+  font-style: normal;
+}
+/* Quill format/link tooltip must float above the editor (not be clipped by it). */
+.ql-snow .ql-tooltip { z-index: 6; }
+/* Belt-and-suspenders for the link/format popover: with Quill `bounds` set the
+   tooltip is clamped horizontally inside the editor, but keep it from ever
+   spilling past the modal — cap its width and let the input wrap. */
+.lg-fbc .ql-tooltip,
+.ntm-form .ql-tooltip,
+.reply-form__editor .ql-tooltip {
+  max-width: 100%;
+  white-space: normal;
+}
+
+.ntm-paste-hint {
+  margin: var(--s1) 0 0;
+  font: 12px var(--font-body);
+  color: var(--fg-soft);
+}
+
+/* "Post anonymously" toggle (anon-rebuild lane) — composer row in #ntm-form /
+   #frm-form. Shared markup; mobile composer (Buck) inherits these. */
+.ntm-anon {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: var(--s3) 0 0;
+  cursor: pointer;
+  font: 13px var(--font-body);
+  color: var(--fg);
+  user-select: none;
+}
+.ntm-anon__check { margin-top: 2px; flex: 0 0 auto; cursor: pointer; }
+.ntm-anon__hint  { color: var(--fg-soft); font-size: 12px; }
+
+/* Admin/mod-only "(posted anonymously)" reveal marker on a masked author byline. */
+.lg-anon-marker {
+  font-size: .82em;
+  font-style: italic;
+  color: var(--fg-soft, #6b7280);
+  white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════
+   RENDERED EMBEDS (client-side)
+   ══════════════════════════════════════════════════════════ */
+
+.bb-embed {
+  margin: var(--s4) 0;
+  max-width: 640px;
+}
+/* Responsive 16:9 video iframes */
+.bb-embed--video {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: #000;
+}
+.bb-embed--video iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.bb-embed--tweet,
+.bb-embed--ig {
+  display: flex;
+  justify-content: center;
+}
+.bb-embed--ig .instagram-media,
+.bb-embed--tweet .twitter-tweet {
+  margin: 0 auto !important;
+}
+
+/* Images inside rendered post bodies */
+.post__body img,
+.feed-card__full-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-sm);
+  margin: var(--s2) 0;
+}
+
+/* Topic tag chips */
+.feed-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--s2);
+}
+.tag-chip {
+  display: inline-block;
+  padding: 2px 9px;
+  font: 600 11px/1.5 var(--font-body);
+  color: var(--lg-sage-d, #6b7c52);
+  background: var(--lg-sage-tint, #eef2e3);
+  border: 1px solid var(--lg-sage-3, #d4e0b8);
+  border-radius: 999px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.tag-chip::before { content: "#"; opacity: .5; }
+.tag-chip:hover { background: var(--lg-sage-3, #d4e0b8); color: var(--lg-ink); text-decoration: none; }
+
+/* Links inside rendered post bodies — visibly clickable (legacy <a> + autolinks) */
+.post__body a,
+.feed-card__full-body a,
+.bb-autolink {
+  color: var(--accent, #8c4a2b);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;   /* long bare URLs don't blow out the card width */
+}
+.post__body a:hover,
+.feed-card__full-body a:hover,
+.bb-autolink:hover { color: var(--accent-2, #c4631e); }
+
+/* ── Reply sort toggle (Newest / Oldest) in the expanded feed thread ── */
+.replies-sort { display: flex; gap: 4px; margin: 2px 0 10px; }
+.replies-sort__btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  padding: 2px 12px;
+  border-radius: 11px;
+  font: 600 11px/1.5 var(--font-body);
+  cursor: pointer;
+}
+.replies-sort__btn.is-active {
+  background: var(--lg-sage-d, #6b7c52);
+  color: #fff;
+  border-color: var(--lg-sage-d, #6b7c52);
+}
+.replies-sort__btn:not(.is-active):hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Desktop/tablet readability: larger reading type + wider column.
+      Scoped to >640px so mobile (which already reads fine full-width) is unchanged. ── */
+@media (min-width: 641px) {
+  .feed-card__title      { font-size: 20px; }
+  .feed-card__op-excerpt { font-size: 15px; line-height: 1.55; }
+  .feed-card__full-body  { font-size: 16px; line-height: 1.65; }
+  .feed-card__op-meta,
+  .feed-card__meta-top   { font-size: 13px; }
+  .reply-stub            { font-size: 14px; }
+  .reply-stub--child     { font-size: 13.5px; }
+  .post__body            { font-size: 16px; line-height: 1.6; }
+  .topic-header__title   { font-size: 26px; }
+}
+
+/* ── Desktop MASONRY feed geometry — moved out of deferred hub-polish.js
+   (ensureDesktopCss) into forums.css so the multi-column layout paints on
+   FIRST load instead of reflowing when the deferred JS runs (kills the feed
+   flash the html.lg-feed-booting hold was masking). GEOMETRY ONLY — the JS
+   keeps the --lguser-* theme-coherence rules (they depend on JS-set tokens).
+   CSS multi-column packs cards tight (Pinterest-style); column-width drives a
+   responsive column count, capped by the 2100px feed width. Buck-greenlit
+   2026-06-10 (hub-coord). No !important: `.feed-page .feed` outspecifies the
+   base single-column `.feed` grid above; values match the JS so no reflow. */
+@media (min-width: 641px) {
+  /* SPREAD (Ian 2026-06-10): no width cap — the feed runs out to the header
+     edges (24px side padding matches the header inner gutter). The REAL trap
+     was `.bb-layout__content .page{max-width:1100px}` (higher specificity than
+     a bare .feed-page rule), so this selector must outweigh it. */
+  .feed-page,
+  .bb-layout__content .page.feed-page { max-width: none; }
+  .feed-page .feed {
+    display: block;
+    /* Mosaic = exactly THREE columns (Ian 2026-06-10) — was column-width:370px
+       (responsive count). Narrow-desktop guard below drops to 2 so cards keep
+       a readable shape in a squeezed window. */
+    column-count: 3;
+    column-gap: 18px;
+    padding: 22px 24px 48px;
+  }
+  .feed-page .feed-card {
+    display: block;
+    width: 100%;
+    margin: 0 0 18px;
+    column-span: none;
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* UNIFORM covers (Ian 2026-06-10: "cards should be uniform") — every card,
+     first included, fills its column at 16:9; the first-child hero special-
+     case is retired (here AND in the overlay). Outweighs the arrangement
+     block's 440px cover cap. */
+  .feed-page .feed-card .feed-card__cover,
+  .feed-page .feed-card .fc-cover {
+    aspect-ratio: 16 / 9; max-height: 300px; max-width: none; width: 100%;
+  }
+  /* The IMAGE fills the 16:9 box (Ian 2026-06-10: "images need to be cover") —
+     without object-fit the natural-ratio img letterboxed inside the fixed box. */
+  .feed-page .feed-card .feed-card__cover img,
+  .feed-page .feed-card .fc-cover img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    /* release the legacy absorbed-polish img clamps (un-queried aspect-ratio:3/2
+       + max-height:360px) that kept DISCUSSION images from covering the box —
+       content cards had a 16:9 rescue rule, topics didn't (Ian 2026-06-10). */
+    aspect-ratio: auto; max-height: none;
+  }
+}
+/* Narrow-desktop guard: 3 columns under ~1100px squeezes cards past readability —
+   drop to 2 in that band. Full-size desktop gets the 3 Ian asked for. */
+@media (min-width: 641px) and (max-width: 1100px) {
+  .feed-page .feed { column-count: 2; }
+}
+
+/* PINNED columns (forums.js §9) — multicol rebalances the whole flow on every
+   append/insert, so infinite scroll made already-read cards change columns
+   ("feed reorganizes + repeats", Ian 2026-06-11). The JS converts the feed to
+   fixed .feed-colw buckets; placed cards never move. The column-count rules
+   above stay as the SOURCE for how many buckets to build (read via computed
+   style — a flex container ignores multicol props, so they coexist). */
+@media (min-width: 641px) {
+  .feed-page .feed.feed--pinned { display: flex; align-items: flex-start; gap: 18px; }
+  .feed-page .feed.feed--pinned .feed-colw { flex: 1 1 0; min-width: 0; }
+}
+
+/* CONTENT MEETS THE BANNER (Ian 2026-06-11: "content box expands to meet the
+   header, not vice versa") — no width caps anywhere in the Hub strip; the feed
+   fills the same width as the banner at every desktop size, and the column
+   count scales so cards stay readable instead of ballooning. (Supersedes the
+   overlay's 1716/2294/2872 caps — removed from hub-polish in the same change.) */
+@media (min-width: 1101px) and (max-width: 2399px) {
+  .feed-page .feed { column-count: 3; }
+}
+@media (min-width: 2400px) {
+  .feed-page .feed { column-count: 4; }
+}
+@media (min-width: 3200px) {
+  .feed-page .feed { column-count: 5; }
+}
+
+/* ── STREAM layout variant — one centered reading column. The default is the
+   mosaic/masonry geometry above; layouts pulled back to these TWO (Ian
+   2026-06-10, bespoke-cutover). html[data-lg-hublayout] is set PRE-PAINT by
+   the nginx boot script from localStorage lg-hub-layout (the gear panel is the
+   control), so the picked layout paints on the first frame. The attribute
+   selector outweighs the mosaic rules above; no !important. (Moved here from
+   hub-polish ensureHubLayoutCss; Cards/Compact variants retired.) ── */
+@media (min-width: 641px) {
+  /* Cap the READING COLUMN only (Ian 2026-06-10: 760 on the whole page was too
+     narrow and squeezed the hero/sort bar with it) — the page spreads like
+     mosaic; the card column centers at a comfortable 1100. */
+  html[data-lg-hublayout="stream"] .feed-page .feed {
+    display: block; column-width: auto; columns: 1;
+    max-width: 1100px; margin: 0 auto; padding: 22px 16px 48px;
+  }
+  /* Hub banner + sort bar align to the CARD edges (Ian 2026-06-10: "header same
+     width as the card container"). Cards sit 16px inside the 1100 column, so
+     the matching outer width is 1100 - 2*16. */
+  html[data-lg-hublayout="stream"] .feed-page .forum-header,
+  html[data-lg-hublayout="stream"] .feed-page .feed-sort-bar,
+  html[data-lg-hublayout="stream"] .feed-page .hub-chipbar,
+  html[data-lg-hublayout="stream"] .feed-page .hub-author-hdr {
+    max-width: calc(1100px - 32px);
+    margin-left: auto; margin-right: auto;
+  }
+  html[data-lg-hublayout="stream"] .feed-page .feed-card { margin: 0 0 20px; }
+  /* UNIFORM covers (Ian 2026-06-10): every card — the first card and video CPTs
+     included — gets the same full-card-width, TRUE 16:9 preview. No hero
+     special-case, no max-height crop. Outweighs the arrangement block's 440px
+     cover cap and matches the overlay's first-child hero values, so nothing
+     fights. */
+  html[data-lg-hublayout="stream"] .feed-page .feed-card .feed-card__cover,
+  html[data-lg-hublayout="stream"] .feed-page .feed-card .fc-cover {
+    aspect-ratio: 16 / 9; max-height: none; max-width: none; width: 100%;
+  }
+}
+
+/* ── Sponsor rail (Ian 2026-06-12: sponsors OUT of the stream feed, into a
+   right-hand rail; mosaic keeps the inline spotlight cards as discovery).
+   The aside is server-rendered on every hub load; these rules decide which
+   treatment paints — both keyed on pre-paint state (the boot script's
+   data-lg-hublayout + the media query), so neither layout flashes.
+   The rail is position:fixed in the right gutter of the 1100px reading
+   column: out of flow, so it can never shift feed content (zero CLS). ── */
+.feed-page .hub-sponsor-rail { display: none; }
+@media (min-width: 641px) {
+  /* Stream pulls the INLINE sponsor cards (sponsor-cards.js .lg-sponsor-card)
+     out of the feed at every desktop width — the rail replaces them where it
+     fits. Mobile (≤640) and mosaic keep them untouched. !important because the
+     hub-polish overlay's C3-leftover '.feed-page .feed-card{display:block
+     !important}' otherwise outranks the hide (dies at the C3 absorb). */
+  html[data-lg-hublayout="stream"] .feed-page .feed .lg-sponsor-card { display: none !important; }
+}
+@media (min-width: 1570px) {
+  /* 1100px column + 2×(200px rail + gaps) — below this the gutter can't hold
+     the rail without crowding the cards, so sponsors sit this band out. */
+  html[data-lg-hublayout="stream"] .feed-page .hub-sponsor-rail {
+    display: block;
+    position: fixed;
+    top: 132px;                          /* clears the sticky chrome + sort bar */
+    left: calc(50% + 550px + 24px);      /* right gutter of the centered column */
+    width: 200px;
+    max-height: calc(100vh - 156px);
+    overflow: auto;
+  }
+  .hub-sponsor-rail .hsr-head {
+    margin: 0 0 10px;
+    font: 700 11px/1 var(--lg-font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+    letter-spacing: .09em; text-transform: uppercase;
+    color: var(--lguser-mute, var(--lg-mute, #6b6f6b));
+    padding-bottom: 7px;
+    border-bottom: 2px solid var(--lg-amber, #ecb351);
+  }
+  .hub-sponsor-rail .hsr-tile {
+    display: flex; align-items: center; justify-content: center;
+    height: 84px; margin: 0 0 10px; padding: 0 14px;
+    background: #fff;                    /* logos are designed for white slabs */
+    border: 1px solid var(--lguser-line, var(--lg-line, #e3ddd0));
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(26, 29, 26, .08);
+  }
+  .hub-sponsor-rail .hsr-tile img {
+    display: block; max-width: 100%; max-height: 56px; width: auto; height: auto;
+  }
+  .hub-sponsor-rail .hsr-tile:hover {
+    border-color: var(--lguser-accent, var(--lg-sage-d, #6b7c52));
+  }
+}
+
+
+/* ── cream-sage: forum-parent prominence (brand-accent left bar + colored
+      parent label + category icon). 9 categories map onto the 3 brand accent
+      families (sage / amber-gold / charcoal). ── */
+.feed-card { --ca:#323532; --cb:#586b3f; }
+.feed-card[data-cat="repair"],
+.feed-card[data-cat="business"],
+.feed-card[data-cat="looths"]   { --ca:#586b3f; --cb:#87986a; }  /* sage */
+.feed-card[data-cat="acoustic"],
+.feed-card[data-cat="sponsors"],
+.feed-card[data-cat="market"]   { --ca:#b8842b; --cb:#ecb351; }  /* amber-gold */
+.feed-card[data-cat="builds"],
+.feed-card[data-cat="tools"],
+.feed-card[data-cat="general"]  { --ca:#323532; --cb:#586b3f; }  /* charcoal */
+
+@media (min-width:641px){ .feed-card--topic { border-left: 5px solid var(--cb); } }
+.feed-card__ctx-parent { color: var(--ca); font-weight: 800; }
+.feed-card__ctx-sep,
+.feed-card__ctx-forum  { color: var(--lg-mute); }
+
+.feed-card[data-cat="repair"]   .feed-card__ctx-parent::before { content:"🛠 "; }
+.feed-card[data-cat="builds"]   .feed-card__ctx-parent::before { content:"🔨 "; }
+.feed-card[data-cat="acoustic"] .feed-card__ctx-parent::before { content:"🎸 "; }
+.feed-card[data-cat="tools"]    .feed-card__ctx-parent::before { content:"🧰 "; }
+.feed-card[data-cat="business"] .feed-card__ctx-parent::before { content:"💼 "; }
+.feed-card[data-cat="market"]   .feed-card__ctx-parent::before { content:"🏷 "; }
+.feed-card[data-cat="general"]  .feed-card__ctx-parent::before { content:"💬 "; }
+.feed-card[data-cat="sponsors"] .feed-card__ctx-parent::before { content:"⭐ "; }
+.feed-card[data-cat="looths"]   .feed-card__ctx-parent::before { content:"📍 "; }
+
+/* Clickable feed card — whole card navigates to the topic (links/buttons opt out via JS) */
+.feed-card--topic { cursor: pointer; transition: box-shadow .12s ease, border-color .12s ease; }
+.feed-card--topic:hover { box-shadow: var(--shadow-elev, 0 8px 24px rgba(0,0,0,.08)); }
+
+/* Forum header on a single post — title links back to the forum */
+a.forum-header__title--link { color: inherit; text-decoration: none; }
+a.forum-header__title--link:hover { text-decoration: underline; text-decoration-color: var(--hdr-accent, var(--lg-sage)); }
+.forum-header__home { font: 600 11px/1 var(--lg-font-sans); text-transform: uppercase; letter-spacing: .06em; color: var(--lg-mute); display: inline-block; margin-bottom: 2px; }
+
+/* Teaser reply: image hidden behind an opener until the reply is opened */
+.reply-stub__img-open {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 4px;
+  background: var(--lg-sage-tint, #eef2e3); border: 1px solid var(--border);
+  color: var(--accent, #586b3f); padding: 3px 11px; border-radius: 11px;
+  font: 600 11px/1.4 var(--font-body); cursor: pointer;
+}
+.reply-stub__img-open:hover { background: var(--lg-sage-d, #586b3f); color: #fff; border-color: var(--lg-sage-d, #586b3f); }
+
+/* Per-reply "Reply" button (opens the reply modal nested) — a small chip at the
+   right of the head row, styled like .reply-stub__img-open so it reads as an action. */
+.reply-stub__reply {
+  margin-left: auto; cursor: pointer;
+  background: var(--lg-sage-tint, #eef2e3);
+  border: 1px solid var(--border, #e3ddd0);
+  color: var(--accent, #586b3f);
+  font: 600 11px/1.4 var(--font-body);
+  padding: 2px 10px; border-radius: 999px;
+  transition: color .12s, background .12s, border-color .12s;
+}
+.reply-stub__reply:hover {
+  background: var(--lg-sage-d, #586b3f); color: #fff;
+  border-color: var(--lg-sage-d, #586b3f);
+}
+
+/* "↪ @author" prefix on replies deeper than one tier (flattened nesting) */
+.reply-stub__reply-to {
+  display: inline-block; margin-right: 4px;
+  color: var(--accent, #586b3f);
+  font: 600 11px/1.4 var(--font-body);
+}
+
+/* Load-more control for paginated top-level threads */
+.replies-loadmore {
+  display: block; width: 100%;
+  margin: var(--s2) 0 var(--s1);
+  padding: 7px 12px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 999px;
+  color: var(--accent, #586b3f);
+  font: 600 12px/1.3 var(--font-body); cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.replies-loadmore:hover { background: var(--lg-sage-tint, #eef2e3); border-color: var(--lg-sage, #87986a); }
+.replies-loadmore:disabled { opacity: .6; cursor: default; }
+
+/* Search results reuse the activity-card shell (brand accent + clickable) */
+.feed-card--search .feed-card__op-excerpt b { background: rgba(196,99,30,0.18); font-weight: 700; padding: 0 2px; border-radius: 2px; }
+.feed-card__kind-badge { display: inline-block; margin-left: 6px; font: 600 10px/1.4 var(--font-body); text-transform: uppercase; letter-spacing: .04em; color: var(--lg-mute); background: var(--lg-sage-tint, #eef2e3); border-radius: 6px; padding: 1px 6px; vertical-align: middle; }
+
+/* Content cards folded into the unified Hub feed — per-kind badge accents +
+   a subtle left rail so folded content reads distinct from forum threads. */
+/* Content (CPT) cards: callout accent on the BOTTOM (not the left rail), and a
+   media layout — featured image LEFT, large caption RIGHT. */
+@media (min-width:641px){ .feed-card--content { border-bottom: 3px solid var(--lg-sage, #87986a); } }
+.feed-card--content .feed-card__header { gap: var(--s4); align-items: flex-start; }
+@media (min-width:641px){ .feed-card--content .feed-card__cover { order: -1; width: 300px; } }
+.feed-card--content .feed-card__title { font-size: 21px; line-height: 1.25; }
+@media (max-width: 640px) {
+  .feed-card--content .feed-card__cover { order: 0; width: 100%; }
+}
+.feed-card__kind-badge--article      { color: #3a5f2e; background: #e7f0dd; }
+.feed-card__kind-badge--video        { color: #8a2f17; background: #f6e3dc; }
+.feed-card__kind-badge--event        { color: #2f4a7a; background: #dfe7f5; }
+.feed-card__kind-badge--sponsor-post { color: #9a4a12; background: #f7e7d6; }
+.feed-card__kind-badge--loothprint   { color: #5a3a7a; background: #ece1f3; }
+.feed-card__kind-badge--discussion   { color: #4a4636; background: #e6e2d6; }
+
+/* ── Section (category) colors on card borders ──────────────────────────────
+   The .feed-page user-skin sets `border-color: --lguser-line` on every card
+   (same specificity as the per-category rules but later in source), which was
+   flattening the category accent. Re-assert it here, scoped under .feed-page
+   (specificity 0,0,3,0) so the exact section color wins:
+     • discussions  → colored LEFT rail
+     • content/CPT  → colored BOTTOM rule, no side rail   */
+.feed-page .feed-card[data-cat="sponsors"]    { --sec: var(--cat-sponsors); }
+.feed-page .feed-card[data-cat="market"]      { --sec: var(--cat-market); }
+.feed-page .feed-card[data-cat="repair"]      { --sec: var(--cat-repair); }
+.feed-page .feed-card[data-cat="builds"]      { --sec: var(--cat-builds); }
+.feed-page .feed-card[data-cat="acoustic"]    { --sec: var(--cat-acoustic); }
+.feed-page .feed-card[data-cat="general"]     { --sec: var(--cat-general); }
+.feed-page .feed-card[data-cat="looths"]      { --sec: var(--cat-looths); }
+.feed-page .feed-card[data-cat="tools"]       { --sec: var(--cat-tools); }
+.feed-page .feed-card[data-cat="business"]    { --sec: var(--cat-business); }
+.feed-page .feed-card[data-cat="suggestions"] { --sec: var(--cat-suggestions); }
+.feed-page .feed-card[data-cat="perspective"] { --sec: var(--cat-perspective); }
+.feed-page .feed-card[data-cat="vintage"]     { --sec: var(--cat-vintage); }
+
+/* Colored card rails are DESKTOP-only (≥641) — mobile card chrome is Buck's. */
+@media (min-width:641px){
+  .feed-page .feed-card--topic[data-cat]   { border-left: 5px solid var(--sec, var(--cb)); }
+  .feed-page .feed-card--content[data-cat] {
+    border-left: 1px solid var(--lguser-line, #cdd6ba);   /* drop the side rail */
+    border-bottom: 3px solid var(--sec, var(--lg-sage));  /* section color on the bottom */
+  }
+  /* CPT cover: always 16:9 cover (beats the .feed-page 3/2 default) */
+  .feed-page .feed-card--content .feed-card__cover-img { aspect-ratio: 16 / 9; max-height: none; }
+}
+
+/* Tier chip on content cards (access level) */
+.feed-card__tier-chip { display: inline-block; margin-left: 5px; font: 700 9px/1.4 var(--lg-font-sans);
+  text-transform: uppercase; letter-spacing: .05em; border-radius: 5px; padding: 1px 6px; vertical-align: middle; }
+.feed-card__tier-chip--public { color: #3a5f2e; background: #e7f0dd; }
+.feed-card__tier-chip--lite   { color: #8a5a14; background: #f4e7cd; }
+.feed-card__tier-chip--pro    { color: #8a2f17; background: #f4ddd6; }
+.feed-card__kind-dur { display: inline-block; margin-left: 4px; font: 600 10px/1.4 var(--font-body); color: var(--lg-mute); vertical-align: middle; }
+
+/* Inline provider embed in a feed card (lazily built by forums.js §2e) */
+.feed-card__embed { margin-top: var(--s3); max-width: 540px; }
+.feed-card__embed:empty { margin: 0; }   /* keep box so IntersectionObserver can fire */
+.feed-card__embed .bb-embed { margin: 0; }
+
+/* Rich-text reply editor (Quill) on the single-topic page */
+.reply-form__editor { background: #fff; border-radius: var(--r-sm, 6px); }
+.reply-form__editor .ql-editor { min-height: 120px; max-height: 320px; overflow-y: auto; font: 15px/1.6 var(--font-body); }
+.reply-form__editor .ql-toolbar.ql-snow,
+.reply-form__editor .ql-container.ql-snow { border-color: var(--border); }
+/* Reply modal (#frm-editor) — same inner-scroll treatment, container stays visible. */
+#frm-editor .ql-editor { min-height: 140px; max-height: 300px; overflow-y: auto; }
+
+/* ── Forum nav skin: category icon captions + lighter per-category leaf end-caps ── */
+/* Per-category accent (--nc) + lighter pill border tint (--leaf-cap), per brand family */
+.nav-section--sponsors { --nc: var(--cat-sponsors); --on-nc: var(--on-sponsors); }
+.nav-section--market   { --nc: var(--cat-market);   --on-nc: var(--on-market); }
+.nav-section--repair   { --nc: var(--cat-repair);   --on-nc: var(--on-repair); }
+.nav-section--builds   { --nc: var(--cat-builds);   --on-nc: var(--on-builds); }
+.nav-section--acoustic { --nc: var(--cat-acoustic); --on-nc: var(--on-acoustic); }
+.nav-section--general  { --nc: var(--cat-general);  --on-nc: var(--on-general); }
+.nav-section--looths   { --nc: var(--cat-looths);   --on-nc: var(--on-looths); }
+.nav-section--tools    { --nc: var(--cat-tools);    --on-nc: var(--on-tools); }
+.nav-section--business { --nc: var(--cat-business); --on-nc: var(--on-business); }
+.nav-section--suggestions { --nc: var(--cat-suggestions); --on-nc: var(--on-suggestions); }
+/* leaf-pill border = a lighter mix of the category colour */
+[class*="nav-section--"] { --leaf-cap: color-mix(in srgb, var(--nc) 48%, #fff); }
+
+/* ── Image lightbox (click any forum image) ───────────────────────────────── */
+.lg-lightbox {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(20, 22, 20, .88);
+  cursor: zoom-out;
+  opacity: 0; transition: opacity .15s ease;
+}
+.lg-lightbox.is-open { opacity: 1; }
+.lg-lightbox[hidden] { display: none; }
+.lg-lightbox__img {
+  max-width: 96vw; max-height: 92vh;
+  border-radius: 6px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, .55);
+  background: #fff;
+  cursor: default;
+}
+.lg-lightbox__close {
+  position: absolute; top: 14px; right: 18px;
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, .14); color: #fff; border: none;
+  font-size: 20px; line-height: 1; cursor: pointer;
+  transition: background .12s;
+}
+.lg-lightbox__close:hover { background: rgba(255, 255, 255, .3); }
+
+/* Signal that forum images are clickable */
+.feed-card__cover-img, .reply-stub__img,
+.post__body img, .feed-card__full-body img,
+.attachment--image img { cursor: zoom-in; }
+
+/* Mobile: post image gallery becomes a swipe carousel (Ian 2026-06-17).
+   Desktop keeps the wrap-grid above. Scroll-snap, peek-next, lightbox unchanged
+   (the a.attachment--image tap is still caught by forums.js). */
+@media (max-width: 640px) {
+  .post__attachments {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 8px;
+    margin-left: -2px;
+    padding-bottom: 2px;
+  }
+  .post__attachments::-webkit-scrollbar { display: none; }
+  .post__attachments .attachment--image {
+    flex: 0 0 86%;
+    max-width: 86%;
+    scroll-snap-align: center;
+  }
+  .post__attachments .attachment--image:only-child {
+    flex-basis: 100%;
+    max-width: 100%;
+  }
+  .post__attachments .attachment--image img {
+    width: 100%;
+    max-width: 100%;
+    max-height: 70vh;
+    height: auto;
+    object-fit: contain;
+    background: var(--bg, #f6f4ee);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   COMPACT FEED VIEW (user toggle, persisted via localStorage)
+   Card collapses to: avatar + author + title + small thumbnail.
+   Activated by .hub-compact on <html>; scoped to .feed-card so it
+   never leaks to single-topic / other pages.
+   ══════════════════════════════════════════════════════════ */
+
+/* Toggle button in the sort bar */
+.feed-compact-toggle {
+  margin-left: auto;            /* push to the right edge of the sort bar */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--lg-line);
+  background: #fff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font: 600 13px/1 var(--lg-font-sans);
+  color: var(--lg-ink);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.feed-compact-toggle:hover {
+  background: var(--lg-sage-tint);
+  border-color: var(--lg-sage);
+  color: var(--lg-sage-d);
+}
+.feed-compact-toggle[aria-pressed="true"] {
+  background: var(--lg-charcoal);
+  color: #fff;
+  border-color: var(--lg-charcoal);
+}
+.feed-compact-toggle__icon { font-size: 14px; line-height: 1; }
+/* When a "+ Post here" button is also present, the toggle's margin-left:auto
+   already groups them at the right; drop the post button's own auto-margin. */
+.feed-sort-bar .feed-compact-toggle + .feed-post-btn { margin-left: 6px; }
+
+/* Tighter list rhythm */
+.hub-compact .feed { display: flex; flex-direction: column; gap: 8px; }
+
+/* A compact card the user expanded back to verbose (.is-verbose) renders like a
+   normal card — every collapse/reflow rule below is scoped to :not(.is-verbose)
+   so it simply stops applying to that one card. */
+.hub-compact .feed-card:not(.is-verbose) { padding: 10px 14px; }
+.hub-compact .feed-card:not(.is-verbose):hover {
+  transform: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+}
+
+/* Hide everything except the forum›leaf context, title, ONE-line excerpt,
+   avatar+author, and thumb. (meta-top stays visible for the forum context;
+   only its timestamp is dropped — see __time below.) */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__time,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__read-more,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__full-body,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__embed,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__tags,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__replies,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__reply-cta,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__op-lead,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__op-time { display: none !important; }
+
+/* Reflow header: title + one-line snippet + byline left, small thumb right */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__header { margin-bottom: 0; align-items: center; gap: 12px; }
+.hub-compact .feed-card:not(.is-verbose) .feed-card__title  { font-size: calc(16.5px * var(--lg-read-scale, 1)); margin: 0 0 2px; line-height: 1.25; }
+.hub-compact .feed-card:not(.is-verbose) .feed-card__op     { margin-top: 0; }
+.hub-compact .feed-card:not(.is-verbose) .feed-card__op-meta { margin: 2px 0 0; gap: 6px !important; }
+
+/* Forum › leaf context line above the title in compact (timestamp dropped) */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__meta-top { display: flex; align-items: center; margin: 0 0 2px; }
+.hub-compact .feed-card:not(.is-verbose) .feed-card__forum-ctx { font-size: 11px; line-height: 1.2; }
+
+/* The added one-line excerpt under the title */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__op-excerpt {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;   /* ~2x text in compact (Ian) */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  font-size: calc(13px * var(--lg-read-scale));
+  line-height: 1.4;
+}
+
+/* Small square thumbnail */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__cover { width: 52px; }
+.hub-compact .feed-card:not(.is-verbose) .feed-card__cover-img { aspect-ratio: 1 / 1; }
+
+/* Per-card expand/collapse caret — only present in compact mode */
+.feed-card__compact-expand { display: none; }
+.hub-compact .feed-card__compact-expand {
+  display: none;   /* Ian: drop the leftover compact caret — card click / unified expand handles it */
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  align-self: center;
+  width: 26px;
+  height: 26px;
+  margin-left: 2px;
+  padding: 0;
+  border: 1px solid var(--lg-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--lg-mute);
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.hub-compact .feed-card__compact-expand:hover {
+  background: var(--lg-sage-tint);
+  border-color: var(--lg-sage);
+  color: var(--lg-sage-d);
+}
+.feed-card__compact-expand-icon { font-size: 12px; line-height: 1; transition: transform .15s ease; }
+/* Expanded → caret flips up; pin the button to the card's top-right */
+.hub-compact .feed-card.is-verbose .feed-card__compact-expand { align-self: flex-start; }
+.hub-compact .feed-card.is-verbose .feed-card__compact-expand-icon { transform: rotate(180deg); }
+
+@media (max-width: 640px) {
+  /* keep the thumb inline (don't stack) in compact */
+  .hub-compact .feed-card:not(.is-verbose) .feed-card__header { flex-direction: row; }
+  .hub-compact .feed-card:not(.is-verbose) .feed-card__cover { width: 48px; }
+}
+
+/* ── Reading text-size scaling ────────────────────────────────────────────
+   Multiplies only the body copy by --lg-read-scale. At scale 1 these reproduce
+   the exact existing sizes (mobile 15/14/13; desktop ≥641px 16/16), so the
+   default render is unchanged; the A-/A+ control bumps the scale. Appended last
+   so it wins on source order over the base rules at equal specificity. */
+.post__body            { font-size: calc(15px   * var(--lg-read-scale)); }
+.feed-card__op-excerpt { font-size: calc(14px   * var(--lg-read-scale)); }
+.feed-card__full-body  { font-size: calc(14px   * var(--lg-read-scale)); }
+.reply-stub__body      { font-size: calc(13px   * var(--lg-read-scale)); }
+@media (min-width: 641px) {
+  .post__body            { font-size: calc(16px * var(--lg-read-scale)); }
+  .feed-card__op-excerpt { font-size: calc(15px * var(--lg-read-scale)); }
+  .feed-card__full-body  { font-size: calc(16px * var(--lg-read-scale)); }
+}
+
+/* Larger-text toggle — sits beside the Compact pill, mirrors its styling.
+   On = --lg-read-scale bumped (set by forums.js); aria-pressed drives the look. */
+.feed-text-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--lg-line); background: #fff;
+  padding: 8px 14px; border-radius: 999px;
+  font: 600 13px/1 var(--lg-font-sans); color: var(--lg-ink);
+  cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+}
+.feed-text-toggle__icon { font-weight: 700; font-size: 14px; line-height: 1; transition: font-size .12s; }
+.feed-text-toggle[data-level="1"] .feed-text-toggle__icon { font-size: 16px; }
+.feed-text-toggle[data-level="2"] .feed-text-toggle__icon { font-size: 18px; }
+.feed-text-toggle:hover { background: var(--lg-sage-tint); border-color: var(--lg-sage); color: var(--lg-sage-d); }
+.feed-text-toggle[aria-pressed="true"] { background: var(--lg-charcoal); color: #fff; border-color: var(--lg-charcoal); }
+
+/* ── Compact letter view-toggles (live under the header in the sort bar) ──────
+   T  = text size  → state shown by the GLYPH SIZE
+   C  = color theme → state shown by the GLYPH COLOR
+   Cpt = compact   → state shown by FILL (on/off)
+   Grouped + right-aligned; square chips instead of worded pills. */
+.feed-view-toggles { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.feed-view-toggles > button {
+  margin: 0; min-width: 34px; height: 34px; padding: 0 9px;
+  gap: 0; justify-content: center; line-height: 1;
+}
+/* T — neutral chip; size encodes the level (no charcoal fill, so size reads) */
+.feed-text-toggle[aria-pressed="true"] { background: #fff; color: var(--lg-ink); border-color: var(--lg-sage); }
+.feed-text-toggle__icon { font-size: 12px; }
+.feed-text-toggle[data-level="1"] .feed-text-toggle__icon { font-size: 16px; }
+.feed-text-toggle[data-level="2"] .feed-text-toggle__icon { font-size: 21px; }
+/* C — glyph color encodes the theme; no fill so the color is the signal */
+.feed-theme-toggle[aria-pressed="true"] { background: #fff; color: var(--lg-ink); border-color: var(--lg-sage); }
+.feed-theme-toggle__icon { font-weight: 800; font-size: 15px; color: var(--lg-mute); transition: color .12s; }
+.feed-theme-toggle[data-level="1"] .feed-theme-toggle__icon { color: var(--lg-sage-d, #586b3f); }  /* Panels */
+.feed-theme-toggle[data-level="2"] .feed-theme-toggle__icon { color: var(--lg-amber, #ecb351); }   /* Dark   */
+.feed-theme-toggle[data-level="3"] .feed-theme-toggle__icon { color: #c66845; }                     /* Black  */
+/* Cpt — fill encodes on/off */
+.feed-compact-toggle { margin-left: 0; }
+.feed-compact-toggle__icon { font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+
+/* ============================================================================
+   Hub control sidebar (Option A — rail replaces the forum nav on the feed)
+   Increment 1: search + Type/Category facets (counts, click-to-filter) +
+   Author filter + active-filter chip bar. Mute switches = incr 2.
+   ========================================================================== */
+.hub-rail { display: flex; flex-direction: column; gap: 2px; }
+.hub-rail .search-form--sidebar { margin: 0 0 4px; }
+.hub-rail__h { margin: 14px 2px 5px; font: 600 11px/1 var(--lg-font-sans, sans-serif);
+  letter-spacing: .08em; text-transform: uppercase; color: var(--lg-mute); }
+.hub-rail__h:first-of-type { margin-top: 6px; }
+/* Single-open top-level sections (Type / Categories) — the <h4> becomes a toggle */
+.hub-rail__sec { margin-bottom: 5px; }
+.hub-rail__sec:first-of-type { margin-top: 6px; }
+/* The section header is a pressable button (matches the category-row cards below) */
+.hub-rail__sec-toggle { display: flex; align-items: center; gap: 8px; width: 100%;
+  margin: 0; padding: 9px 12px; text-align: left; cursor: pointer;
+  background: var(--bg-card, #f4f2ec); border: 1px solid var(--lg-line, #e3ddd0);
+  border-radius: 10px; color: var(--lg-ink); font-weight: 700;
+  box-shadow: 0 1px 1px rgba(26,29,26,.04);
+  transition: background .12s, border-color .12s, box-shadow .1s, transform .05s; }
+.hub-rail__sec-toggle:hover { background: var(--lg-sage-tint, #eef2e3); border-color: var(--lg-sage-d, #6b7c52); }
+.hub-rail__sec-toggle:active { box-shadow: inset 0 1px 3px rgba(26,29,26,.13); transform: translateY(1px); }
+.hub-rail__sec[open] > .hub-rail__sec-toggle { border-color: var(--lg-sage, #87986a); background: var(--lg-sage-tint, #eef2e3); }
+/* drop the instructional sub-text — the switches on each row speak for themselves */
+.hub-rail__sec-toggle small { display: none; }
+.hub-rail__sec-chev { font-size: 11px; line-height: 1; color: var(--lg-sage-d, #6b7c52);
+  transition: transform .15s ease; }
+.hub-rail__sec[open] > .hub-rail__sec-toggle .hub-rail__sec-chev { transform: rotate(90deg); }
+/* Keep the COLLAPSED section's button on top; the open one drops below it (View stays last) */
+.hub-rail > .hub-rail__reset { order: 0; }
+.hub-rail > .hub-rail__sec       { order: 1; }
+.hub-rail > .hub-rail__sec[open] { order: 2; }
+.hub-rail > .hub-rail__h,
+.hub-rail > .hub-rail__view      { order: 3; }
+/* Native <details> disclosure: hide the default marker (the chevron span is ours) */
+summary.hub-rail__sec-toggle, summary.hub-acc__parent { list-style: none; cursor: pointer; }
+summary.hub-rail__sec-toggle::-webkit-details-marker,
+summary.hub-acc__parent::-webkit-details-marker { display: none; }
+
+/* ── Saved view toggle — a dedicated rail entry (canonical owner of the desktop
+   Saved filter; supersedes the hub-polish.js overlay pill). Logged-in only; the
+   PHP omits it for anon. Sits at the very top of the rail (order:-1). ── */
+.hub-rail > .hub-rail__saved { order: -1; }
+.hub-rail__saved { display: flex; align-items: center; gap: 8px; margin: 0 0 6px;
+  padding: 9px 12px; text-decoration: none; cursor: pointer;
+  background: var(--bg-card, #f4f2ec); border: 1px solid var(--lg-line, #e3ddd0);
+  border-radius: 10px; color: var(--lg-ink); font: 700 13.5px/1 var(--lg-font-sans, sans-serif);
+  box-shadow: 0 1px 1px rgba(26,29,26,.04);
+  transition: background .12s, border-color .12s, box-shadow .1s, transform .05s; }
+.hub-rail__saved:hover { background: var(--lg-sage-tint, #eef2e3); border-color: var(--lg-sage-d, #6b7c52); }
+.hub-rail__saved:active { box-shadow: inset 0 1px 3px rgba(26,29,26,.13); transform: translateY(1px); }
+.hub-rail__saved.is-on { border-color: var(--lg-sage, #87986a); background: var(--lg-sage-tint, #eef2e3);
+  color: var(--lg-sage-d, #586b3f); }
+.hub-rail__saved-ico { font-size: 15px; line-height: 1; color: var(--lg-sage-d, #6b7c52); }
+.hub-rail__saved.is-on .hub-rail__saved-ico { color: var(--lg-amber, #ecb351); }
+.hub-rail__saved-nm { flex: 1 1 auto; }
+.hub-rail__saved-x { font-size: 16px; line-height: 1; color: var(--lg-mute); }
+
+/* ── Centered filters modal (Ian 2026-06-11: "both open, no toggle") ──────────
+   The rail renders inside #hub-fmodal (_chrome.php); the segmented radio
+   toggle is retired — Categories and Types sit side by side. The shell is
+   token-driven so user themes/dark restyle it like the cards. */
+.hub-fmodal { position: fixed; inset: 0; z-index: 240; }
+.hub-fmodal[hidden] { display: none; }
+.hub-fmodal__back { position: absolute; inset: 0; background: rgba(26, 24, 20, .48);
+  cursor: pointer; }
+.hub-fmodal__panel { position: relative; margin: clamp(16px, 7vh, 64px) auto 0;
+  width: min(720px, calc(100vw - 32px)); max-height: min(82vh, 860px);
+  display: flex; flex-direction: column; outline: none;
+  background: var(--bg-card, #fbfaf6); color: var(--lg-ink, #323532);
+  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(26, 29, 26, .28); }
+.hub-fmodal__head { display: flex; align-items: baseline; gap: 12px;
+  padding: 16px 20px 12px; border-bottom: 1px solid var(--lg-line, #e3ddd0); }
+.hub-fmodal__title { margin: 0; font: 700 19px/1.2 var(--lg-font-serif, Georgia, serif); }
+.hub-fmodal__help { margin: 0; flex: 1 1 auto;
+  font: 400 12.5px/1.4 var(--lg-font-sans, system-ui, sans-serif);
+  color: var(--lg-mute, #6b6f6b); }
+.hub-fmodal__x { flex: none; align-self: center; border: 0; background: none; cursor: pointer;
+  font: 400 24px/1 var(--lg-font-sans, system-ui, sans-serif); color: var(--lg-mute, #6b6f6b);
+  padding: 2px 8px; border-radius: 8px; }
+.hub-fmodal__x:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-ink, #323532); }
+.hub-fmodal__body { overflow-y: auto; padding: 14px 20px 20px;
+  scrollbar-width: thin; scrollbar-color: var(--lg-line) transparent; }
+/* fetch-in-flight while a filter applies (modal stays open, Ian 6/11) */
+.hub-fmodal__body.is-loading { opacity: .55; pointer-events: none;
+  transition: opacity .15s; }
+body.hub-fmodal-lock { overflow: hidden; }
+/* Two open sections, side by side; single column on phones */
+.hub-rail__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px;
+  align-items: start; }
+.hub-rail__colh { margin: 6px 2px 7px; font: 600 11px/1 var(--lg-font-sans, sans-serif);
+  letter-spacing: .08em; text-transform: uppercase; color: var(--lg-mute); }
+@media (max-width: 560px) {
+  .hub-rail__cols { grid-template-columns: 1fr; }
+  .hub-fmodal__help { display: none; }
+}
+/* Short how-to-filter/mute helper */
+.hub-rail__help { margin: 0 2px 8px; padding: 0; max-width: 210px;
+  font: 400 11.5px/1.45 var(--lg-font-sans, system-ui, sans-serif);
+  color: var(--lg-mute, #6b6f6b); }
+.hub-sw--demo { display: inline-block; vertical-align: -3px; margin: 0 1px;
+  transform: scale(.72); transform-origin: center; }
+
+.hub-rail__group { display: flex; flex-direction: column; }
+.hub-rail__row { display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+  border-radius: 7px; font-size: 14px; color: var(--lg-ink); text-decoration: none;
+  transition: background .12s, color .12s; }
+.hub-rail__row:hover { background: var(--lg-sage-tint, #eef2e3); }
+.hub-rail__nm { flex: 1; min-width: 0; }
+.hub-rail__ct { font-size: 12px; color: var(--lg-mute); }
+.hub-rail__row.is-on { background: var(--lg-sage, #87986a); color: #fff; font-weight: 600; }
+.hub-rail__row.is-on .hub-rail__ct { color: rgba(255,255,255,.82); }
+/* Category colour-coding for the accordion sidebar */
+.hub-acc[data-cat="sponsors"]   { --nc: var(--cat-sponsors);   --on-nc: var(--on-sponsors); }
+.hub-acc[data-cat="market"]     { --nc: var(--cat-market);     --on-nc: var(--on-market); }
+.hub-acc[data-cat="repair"]     { --nc: var(--cat-repair);     --on-nc: var(--on-repair); }
+.hub-acc[data-cat="builds"]     { --nc: var(--cat-builds);     --on-nc: var(--on-builds); }
+.hub-acc[data-cat="acoustic"]   { --nc: var(--cat-acoustic);   --on-nc: var(--on-acoustic); }
+.hub-acc[data-cat="general"]    { --nc: var(--cat-general);    --on-nc: var(--on-general); }
+.hub-acc[data-cat="looths"]     { --nc: var(--cat-looths);     --on-nc: var(--on-looths); }
+.hub-acc[data-cat="tools"]      { --nc: var(--cat-tools);      --on-nc: var(--on-tools); }
+.hub-acc[data-cat="business"]   { --nc: var(--cat-business);   --on-nc: var(--on-business); }
+.hub-acc[data-cat="suggestions"]{ --nc: var(--cat-suggestions); --on-nc: var(--on-suggestions); }
+.hub-acc[data-cat="perspective"]{ --nc: var(--cat-perspective); --on-nc: var(--on-perspective); }
+.hub-acc[data-cat="vintage"]    { --nc: var(--cat-vintage);    --on-nc: var(--on-vintage); }
+/* Coloured left border ties sidebar row to feed-card accent; active fill uses the category colour */
+.hub-acc[data-cat] > .hub-rail__row { border-left: 3px solid var(--nc, transparent); border-radius: 0 7px 7px 0; }
+.hub-acc[data-cat] > .hub-rail__row.is-on { background: var(--nc, var(--lg-sage)); color: var(--on-nc, #fff); }
+.hub-acc[data-cat] > .hub-rail__row.is-on .hub-rail__ct { color: color-mix(in srgb, var(--on-nc, #fff) 75%, transparent); }
+.hub-acc[data-cat] > .hub-rail__row.is-on .hub-rail__nm,
+.hub-acc[data-cat] > .hub-rail__row.is-on .hub-acc__chev { color: inherit; }
+
+/* Active-filter chip bar above the feed */
+.hub-chipbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  background: var(--lg-card-bg, #fff); border: 1px solid var(--lg-line, #dcd6c8);
+  border-radius: 12px; padding: 8px 12px; margin-bottom: var(--s3, 12px); }
+.hub-chipbar__lab { font-size: 12px; font-weight: 600; color: var(--lg-mute); }
+.hub-chipbar__and { background: var(--lg-rust, #c8772f); color: #fff; border-radius: 5px;
+  padding: 1px 6px; font: 700 11px/1.4 var(--lg-font-sans, sans-serif); }
+.hub-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--lg-sage-tint, #eef1e6);
+  border: 1px solid var(--lg-sage-d, #87986a); color: var(--lg-ink); border-radius: 16px; padding: 3px 6px 3px 11px; font-size: 13px; }
+.hub-chip b { font-weight: 700; }
+.hub-chip__x { color: inherit; text-decoration: none; font-weight: 700; opacity: .6; padding: 0 2px; }
+.hub-chip__x:hover { opacity: 1; }
+.hub-chipbar__reset { margin-left: auto; font-size: 13px; font-weight: 600;
+  color: var(--lg-rust, #c8772f); text-decoration: none; }
+.hub-chipbar__reset:hover { text-decoration: underline; }
+
+/* Sticky mute switch (per Type/Category row) + muted row/chip states */
+.hub-sw { flex: none; width: 32px; height: 18px; border-radius: 20px; background: #cfc9ba;
+  position: relative; text-decoration: none; transition: background .15s; }
+.hub-sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: #fff; transition: left .15s; }
+.hub-sw.is-on { background: var(--lg-sage, #87986a); }
+.hub-sw.is-on::after { left: 16px; }
+.hub-rail__row.is-muted .hub-rail__nm,
+.hub-rail__row.is-muted .hub-rail__ct { opacity: .45; }
+/* a muted row is never also filtered-on, but guard the override anyway */
+.hub-rail__row.is-muted.is-on { background: transparent; }
+.hub-rail__row.is-muted.is-on .hub-rail__nm { color: var(--lg-ink); font-weight: 400; }
+.hub-chip--muted { background: #f3e6dd; border-color: #e6cab2; color: #8a4f23; }
+/* Category chips inherit their category colour */
+.hub-chip[data-cat="sponsors"]   { --nc: var(--cat-sponsors);   --on-nc: var(--on-sponsors); }
+.hub-chip[data-cat="market"]     { --nc: var(--cat-market);     --on-nc: var(--on-market); }
+.hub-chip[data-cat="repair"]     { --nc: var(--cat-repair);     --on-nc: var(--on-repair); }
+.hub-chip[data-cat="builds"]     { --nc: var(--cat-builds);     --on-nc: var(--on-builds); }
+.hub-chip[data-cat="acoustic"]   { --nc: var(--cat-acoustic);   --on-nc: var(--on-acoustic); }
+.hub-chip[data-cat="general"]    { --nc: var(--cat-general);    --on-nc: var(--on-general); }
+.hub-chip[data-cat="looths"]     { --nc: var(--cat-looths);     --on-nc: var(--on-looths); }
+.hub-chip[data-cat="tools"]      { --nc: var(--cat-tools);      --on-nc: var(--on-tools); }
+.hub-chip[data-cat="business"]   { --nc: var(--cat-business);   --on-nc: var(--on-business); }
+.hub-chip[data-cat="suggestions"]{ --nc: var(--cat-suggestions); --on-nc: var(--on-suggestions); }
+.hub-chip[data-cat="perspective"]{ --nc: var(--cat-perspective); --on-nc: var(--on-perspective); }
+.hub-chip[data-cat="vintage"]    { --nc: var(--cat-vintage);    --on-nc: var(--on-vintage); }
+.hub-chip[data-cat] { background: color-mix(in srgb, var(--nc) 14%, #fff); border-color: color-mix(in srgb, var(--nc) 38%, #ddd); color: color-mix(in srgb, var(--nc) 85%, #000); }
+.hub-chip--muted[data-cat] { background: color-mix(in srgb, var(--nc) 10%, #f3e6dd); border-color: color-mix(in srgb, var(--nc) 30%, #e6cab2); }
+
+/* Search + author filter moved into the feed toolbar (the sort-bar gap).
+   Own margin-left:auto so it shares the free space with the toggles' auto-margin
+   and lands centered between the sort tabs and the view toggles. */
+.feed-toolbar-search { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.feed-toolbar-search + .feed-compact-toggle { margin-left: 12px; } /* toggles sit just right of search, not auto-shoved to the edge */
+.hub-tsearch { display: flex; align-items: center; gap: 6px; background: var(--bg-card, #fff);
+  border: 1px solid var(--lg-line); border-radius: 999px; padding: 6px 12px; }
+.hub-tsearch__ico { color: var(--lg-mute); font-size: 13px; line-height: 1; }
+.hub-tsearch__in { border: 0; background: transparent; outline: none;
+  font: 500 13px/1 var(--lg-font-sans); color: var(--lg-ink); width: 132px; }
+.hub-tsearch--author .hub-tsearch__in { width: 150px; }  /* fits "Search by author…" — was 116, clipped */
+.hub-tsearch__in::placeholder { color: var(--lg-mute); }
+.hub-tsearch { position: relative; }
+.hub-tsearch:focus-within { border-color: var(--lg-sage-d, #6b7c52); }
+
+/* Type-ahead dropdown (live search + author autocomplete) */
+.hub-suggest { position: absolute; top: calc(100% + 5px); left: 0; z-index: 60;
+  min-width: 240px; max-width: 360px; background: var(--bg-card, #fff); border: 1px solid var(--lg-line);
+  border-radius: 10px; box-shadow: var(--shadow-elev, 0 8px 26px rgba(0,0,0,.16)); padding: 5px; overflow: hidden; }
+.hub-suggest__item { display: flex; align-items: center; gap: 8px; width: 100%;
+  text-align: left; background: none; border: 0; cursor: pointer; padding: 7px 9px;
+  border-radius: 7px; font: 500 13px/1.3 var(--lg-font-sans); color: var(--lg-ink); text-decoration: none; }
+.hub-suggest__item:hover,
+.hub-suggest__item.is-active { background: var(--lg-sage-tint, #eef2e3); }
+.hub-suggest__av { flex: none; width: 24px; height: 24px; border-radius: 50%;
+  object-fit: cover; background: var(--lg-sage-tint, #eef2e3); }
+.hub-suggest__av--init { display: inline-flex; align-items: center; justify-content: center;
+  font: 600 11px/1 var(--lg-font-sans); color: var(--lg-sage-d, #6b7c52); }
+.hub-suggest__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-suggest__kind { flex: none; font: 600 9px/1.4 var(--lg-font-sans); text-transform: uppercase;
+  letter-spacing: .04em; color: var(--lg-mute); background: var(--lg-sage-tint, #eef2e3);
+  border-radius: 5px; padding: 1px 6px; }
+.hub-suggest__n { margin-left: auto; flex: none; font-size: 12px; color: var(--lg-mute); }
+#hub-feed-results { transition: opacity .12s; }
+#hub-feed-results.is-loading { opacity: .5; }
+
+/* Author header — shown when the feed is narrowed to one author */
+.hub-author-hdr { display: flex; align-items: center; gap: 16px; margin-bottom: var(--s4, 16px);
+  padding: 16px 18px; border-radius: 12px; color: #fff;
+  background: linear-gradient(110deg, var(--lg-sage-d, #5d6b40), var(--lg-sage, #76864e)); }
+.hub-author-hdr__av .avatar-init { width: 60px; height: 60px; font-size: 24px; border: 2px solid rgba(255,255,255,.5); }
+.hub-author-hdr__body { flex: 1; min-width: 0; }
+.hub-author-hdr__name { margin: 0; font: 700 22px/1.2 var(--lg-font-serif, Georgia, serif); color: #fff; }
+.hub-author-hdr__bio { margin: 3px 0 0; font-size: 13.5px; opacity: .9; }
+.hub-author-hdr__meta { margin-top: 5px; font-size: 13px; opacity: .85; }
+.hub-author-hdr__profile { color: #fff; text-decoration: underline; }
+.hub-author-hdr__sep { opacity: .6; }
+.hub-author-hdr__clear { flex: none; align-self: flex-start; color: #fff; text-decoration: none;
+  background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35);
+  border-radius: 18px; padding: 5px 12px; font-size: 13px; }
+.hub-author-hdr__clear:hover { background: rgba(255,255,255,.28); }
+
+/* View toggles relocated into the rail (under Categories) */
+.hub-rail__view { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px; }
+.hub-rail__view .feed-compact-toggle,
+.hub-rail__view .feed-text-toggle,
+.hub-rail__view .feed-theme-toggle { margin-left: 0; }
+
+/* Rail "Reset all filters" (top of sidebar) */
+.hub-rail__reset { display: inline-block; margin: 0 2px 8px; font-size: 12.5px; font-weight: 600;
+  color: var(--lg-rust, #c8772f); text-decoration: none; }
+.hub-rail__reset:hover { text-decoration: underline; }
+
+/* Category accordion: parent chevron + indented leaf rows */
+.hub-acc__chev { flex: none; width: 16px; height: 16px; padding: 0; border: 0; background: none;
+  cursor: pointer; color: var(--lg-mute); font-size: 10px; line-height: 16px; text-align: center;
+  transition: transform .15s; }
+.hub-acc[open] > .hub-rail__row .hub-acc__chev { transform: rotate(90deg); }
+.hub-acc__chev--none { cursor: default; }
+.hub-acc__leaf { padding-left: 30px; }
+.hub-acc__leaf .hub-rail__nm { font-size: 13px; }
+.hub-acc__leaf .hub-sw { width: 28px; height: 16px; }
+.hub-acc__leaf .hub-sw::after { width: 12px; height: 12px; }
+.hub-acc__leaf .hub-sw.is-on::after { left: 14px; }
+/* Rail follows the theme tokens (var(--bg-card)) so it always matches the
+   panels — no hard-coded colors here. The dark-grey page background lives on
+   the Panels theme (--bg), below. */
+
+
+/* ============================================================
+   HUB POLISH — absorbed from hub-polish.js (2026-06-06)
+   Previously injected client-side via injectStyles(); now canonical.
+   ============================================================ */
+@media (max-width:640px){.feed-page .forum-header{position:relative;overflow:hidden}.feed-page .forum-header--has-image{min-height:190px}.feed-page .forum-header--explicit-image .forum-header__bg{opacity:.72}.feed-page .forum-header::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(165deg,rgba(107,124,82,.32) 0%,rgba(26,29,26,.18) 46%,rgba(26,29,26,.64) 100%)}.feed-page .forum-header__body{position:relative;z-index:2}.feed-page .forum-header__title{font-size:30px;line-height:1.06;color:#fbfbf8;letter-spacing:.01em;text-shadow:0 1px 14px rgba(26,29,26,.45),0 1px 2px rgba(26,29,26,.55)}.feed-page .forum-header__label{color:var(--lg-amber,#ecb351);font-weight:700;letter-spacing:.14em;text-shadow:0 1px 6px rgba(26,29,26,.55)}.feed-page .lg-hub-tagline{display:block;margin-top:6px;max-width:32ch;color:rgba(251,251,248,.94);font:500 13.5px/1.42 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);text-shadow:0 1px 8px rgba(26,29,26,.55)}.feed-page .feed{gap:16px}.feed-page .feed-card{border-radius:16px;overflow:hidden;border:1px solid var(--lg-line,#e3ddd0);box-shadow:0 1px 2px rgba(26,29,26,.04),0 10px 22px -14px rgba(26,29,26,.30);transition:transform .12s ease,box-shadow .15s ease}.feed-page .feed-card:active{transform:scale(.992)}.feed-page .feed-card__cover-img{aspect-ratio:4/5;max-height:440px;width:100%;object-fit:cover;display:block}.feed-page .feed-card__kind-badge{margin-left:0;font-size:10px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:999px}.feed-page .feed{grid-template-columns:minmax(0,1fr)}.feed-page .feed-card{min-width:0;max-width:100%}.feed-page .feed-card__meta-top{min-width:0}.feed-page .feed-card__forum-ctx{min-width:0;flex:0 1 auto}.feed-page .feed-card__replies{grid-template-columns:minmax(0,1fr)}.feed-page .feed-card__replies>*{min-width:0;max-width:100%}.feed-page .reply-stub{min-width:0}.feed-page .reply-stub__head{min-width:0}.feed-page .reply-stub__excerpt,.feed-page .reply-stub__body{min-width:0;overflow-wrap:anywhere}.feed-page .reply-stub__author{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.feed-page .feed-card__title{font-size:19px;line-height:1.22}.feed-page .feed-card--content .feed-card__title{font-size:20px}.feed-page .feed-card__read-more{font-weight:600;color:var(--lg-sage-d,var(--lguser-accent,#6b7c52))}}@media (max-width:640px){.feed-page .feed-card__meta-top{padding:11px 13px 0;align-items:center}.feed-page .feed-card__forum-ctx{font-size:11px;letter-spacing:.02em;color:var(--lg-mute,var(--lguser-mute,#6b6f6b));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.feed-page .feed-card__ctx-forum{color:var(--lg-ink,var(--lguser-ink,#323532));font-weight:600}.feed-page .feed-card__time{font-size:11px;color:var(--lg-mute,var(--lguser-mute,#6b6f6b))}.feed-page .feed-card__header-body{padding:8px 13px 13px}.feed-page .feed-card__op-excerpt{font-size:14.5px;line-height:1.5;color:var(--lg-ink,var(--lguser-ink,#323532))}.feed-page .feed-card__replies{margin:0 13px 13px;padding-top:11px;gap:8px;border-top:1px solid var(--lg-line,#e3ddd0)}.feed-page .reply-stub{background:var(--lg-sage-tint,#eef2e3);border-radius:12px;padding:9px 11px}.feed-page .feed-card__replies .reply-stub ~ .reply-stub{display:none}.feed-page .reply-stub__reply{display:none}.feed-page .reply-stub__head{gap:7px;align-items:center}.feed-page .reply-stub__author{font-size:12.5px;font-weight:600;color:var(--lg-ink,var(--lguser-ink,#323532))}.feed-page .reply-stub__time{font-size:11px;color:var(--lg-mute,var(--lguser-mute,#6b6f6b))}.feed-page .avatar-init{width:22px;height:22px;font-size:11px}.feed-page .reply-stub__excerpt,.feed-page .reply-stub__body{font-size:13px;line-height:1.45;color:var(--lg-ink,var(--lguser-ink,#323532));display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.feed-page .feed-card__expand{font-size:13px;font-weight:600;color:var(--lg-sage-d,var(--lguser-accent,#6b7c52))}}.hub-rail__group>.hub-rail__row,.hub-acc__parent{border:1px solid var(--lg-line,#e3ddd0);border-radius:12px;background:var(--bg-card,#fff);margin:3px 0}.hub-rail__group>.hub-rail__row:hover,.hub-acc__parent:hover{border-color:var(--lg-sage-d,var(--lguser-accent,#6b7c52))}.hub-rail__group>.hub-rail__row.is-on,.hub-acc__parent.is-on{border-color:var(--lg-sage,#87986a)}.hub-acc__leaves{margin:2px 0 6px 14px;border-left:1px solid var(--lg-line,#e3ddd0)}.hub-acc__leaf{border:0;border-radius:0;background:none}.hub-acc__leaf:hover{background:var(--lg-sage-tint,#eef2e3)}.hub-acc__parent .hub-acc__chev{margin-right:2px}.feed-sort-bar .lg-filters-chip{position:static;width:auto;height:auto;display:inline-flex;align-items:center;gap:6px;clip-path:none;background:var(--lg-sage,#87986a);color:#fff;border:0;border-radius:999px;padding:6px 13px;box-shadow:none;cursor:pointer;margin-right:2px;font:600 13px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif)}.feed-sort-bar .lg-filters-chip .corner-hamburger__icon{font-size:13px;line-height:1}.feed-sort-bar .lg-filters-chip:active{background:var(--lg-sage-d,var(--lguser-accent,#6b7c52))}.feed-page{background:var(--lguser-bg,#e9eedd)}.feed-page,.feed-page .forum-header__title,.feed-page .feed-card__title,.feed-page .feed-card__op-excerpt,.feed-page .reply-stub__excerpt,.feed-page .reply-stub__body{font-family:var(--lguser-font,"Trebuchet MS","Cabin","Segoe UI",sans-serif)}.feed-page .feed-card{border-radius:14px;border-color:var(--lguser-line,#cdd6ba)}.feed-page .feed-card__cover-img{aspect-ratio:3/2;max-height:360px}.feed-page .feed-card__read-more,.feed-page .feed-card__expand{color:var(--lguser-accent-d,#52613d)}.feed-page .feed-card__replies{border-top-color:var(--lguser-line,#cdd6ba)}.feed-page .reply-stub{background:var(--lguser-pill,#dde6c7)}.feed-sort-bar .lg-filters-chip{background:var(--lguser-accent,#6b7c52)}.feed-sort-bar .lg-filters-chip:active{background:var(--lguser-accent-d,#52613d)}.feed-page .feed-card__meta-top{display:flex;align-items:center;gap:8px;padding:11px 13px 0;min-width:0}.feed-page .feed-card__meta-top .lg-card-avatar{flex:0 0 auto;width:30px;height:30px;border-radius:50%;object-fit:cover;background:var(--lguser-accent,#6b7c52)}.feed-page .lg-card-id{min-width:0;flex:1 1 auto;color:var(--lguser-mute,#6b6f6b);font:500 11.5px/1.3 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.feed-page .lg-card-author{color:var(--lguser-ink,#323532);font-weight:600;text-decoration:none}.feed-page .lg-card-time{flex:0 0 auto;color:var(--lguser-mute,#6b6f6b);white-space:nowrap;font:500 11px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif)}.feed-page .lg-card-time::before{content:"\00b7";margin:0 5px;color:#9aa093}.feed-page .feed-card__meta-top .lg-card-cat{flex:0 0 auto;margin-left:auto;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:999px;font:700 10px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);background:var(--lguser-pill,#dde6c7);color:var(--lguser-accent-d,#52613d);white-space:nowrap;border:0}.feed-page .feed-card__header{display:flex;flex-direction:column}.feed-page .feed-card__cover{order:-1;margin:11px 0 0}.feed-page .feed-card__title{font-size:18px;line-height:1.22;margin:0 0 5px}.feed-page .feed-card__title a{color:var(--lguser-ink,#1a1d1a);text-decoration:none}.feed-page .feed-card[data-lg-card] .feed-card__op-meta{margin-top:10px}.feed-page .feed-card[data-lg-card] .feed-card__op-meta > img,.feed-page .feed-card[data-lg-card] .feed-card__op-meta > span{display:none}.feed-page .lg-card-actions{display:none}@media (max-width:640px){.feed-page .lg-card-actions{display:flex;gap:18px;padding:8px 13px 12px;color:var(--lguser-mute,#6b6f6b);font:600 12.5px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif)}.feed-page .lg-card-actions .lg-act{display:inline-flex;align-items:center;gap:5px;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;cursor:pointer}.feed-page .lg-card-actions .ico{width:16px;height:16px;flex:0 0 auto}.feed-page .lg-card-actions .lg-act-like.is-on{color:#c66845}.feed-page .lg-card-actions .lg-act-like.is-on .ico{fill:#c66845}.feed-page .feed-card[data-lg-card] .feed-card__read-more,.feed-page .feed-card[data-lg-card] .feed-card__reply-cta--inline{display:none}}.feed-page .feed-sort-bar > .lg-newpost{display:none}@media (max-width:640px){.feed-page .feed-sort-bar{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}.feed-page .feed-sort-bar > a{order:1;border-radius:999px;padding:7px 12px;font:600 13px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);color:var(--lguser-mute,#6b6f6b);text-decoration:none;white-space:nowrap}.feed-page .feed-sort-bar > a.active{background:var(--lguser-pill,#dde6c7);color:var(--lguser-accent-d,#52613d)}.feed-page .feed-sort-bar > .lg-filters-chip{order:2;margin-left:auto}.feed-page .feed-sort-bar > .lg-newpost{order:3;display:inline-flex;align-items:center;gap:5px;background:var(--lguser-accent-d,#52613d);color:#fff;border:0;border-radius:999px;padding:7px 13px;font:700 13px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);white-space:nowrap;margin:0}.feed-page .feed-sort-bar .feed-toolbar-search{display:none}.feed-page .forum-header__new-post{display:none}}.feed-page .feed-card__title{font-size:calc(18px*var(--lg-read-scale,1))}.feed-page .feed-card--content .feed-card__title{font-size:calc(20px*var(--lg-read-scale,1))}.feed-page .feed-card__op-excerpt,.feed-page .feed-card__full-body{font-size:calc(15px*var(--lg-read-scale,1))}.feed-page .reply-stub__excerpt,.feed-page .reply-stub__body{font-size:calc(13px*var(--lg-read-scale,1))}.feed-page .reply-stub__author{font-size:calc(13px*var(--lguser-scale,1))}.feed-page .lg-card-actions{font-size:calc(13px*var(--lguser-scale,1))}.feed-page .lg-card-id{font-size:calc(12px*var(--lguser-scale,1))}.feed-page .feed-card__expand{font-size:calc(13px*var(--lguser-scale,1))}.feed-page .feed-card__replies-full .reply-stub__excerpt,.feed-page .feed-card__replies-full .reply-stub__body{display:block;-webkit-line-clamp:unset;overflow:visible;max-height:none}.feed-page .lg-act-like{position:relative}.feed-page .lg-act-like .lg-react-emoji{font-size:16px;line-height:1;display:inline-flex}.lg-react-bar{position:absolute;bottom:calc(100% + 9px);left:-8px;display:flex;gap:1px;padding:5px 8px;background:#fff;border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;box-shadow:0 8px 26px rgba(26,29,26,.20);opacity:0;transform:translateY(7px) scale(.9);transform-origin:bottom left;transition:opacity .15s ease,transform .16s cubic-bezier(.3,1.3,.5,1);z-index:60;white-space:nowrap}.lg-react-bar.is-open{opacity:1;transform:translateY(0) scale(1)}.lg-react{all:unset;cursor:pointer;font-size:25px;line-height:1;padding:3px 5px;border-radius:50%;transition:transform .12s ease}.lg-react:hover,.lg-react:active{transform:scale(1.3) translateY(-2px)}.feed-page .lg-reply-react{position:relative;margin-left:auto;cursor:pointer;display:inline-flex;align-items:center;padding:2px 3px;color:var(--lg-mute,var(--lguser-mute,#6b6f6b));flex:0 0 auto}.feed-page .lg-reply-react .ico{width:15px;height:15px}.feed-page .lg-reply-react.is-on{color:#c66845}.feed-page .lg-reply-react.is-on .ico{fill:#c66845}.feed-page .lg-reply-react .lg-react-emoji{font-size:14px;line-height:1}.feed-page .feed-card__replies-full .reply-stub.lg-rshow{display:flex!important}.feed-page .feed-card__replies-full .reply-stub.lg-rhide{display:none!important}.feed-page .feed-card__replies-full .reply-stub{margin-bottom:10px}.feed-page .lg-viewall{display:block;width:100%;text-align:left;background:none;border:0;cursor:pointer;padding:9px 4px 2px;margin:0;font:600 13px/1.3 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",sans-serif);color:var(--lguser-accent-d,#52613d)}@media (max-width:640px){.feed-page .feed-card__replies-full .replies-sort{display:none}}.feed-page .feed-card .reply-stub{display:flex;gap:8px;align-items:flex-start;background:none!important;padding:0;border:0;margin-bottom:12px}.feed-page .feed-card .reply-stub .avatar-init{width:32px;height:32px;border-radius:50%;flex:0 0 auto;font-size:13px}.feed-page .lg-fb-col{display:flex;flex-direction:column;min-width:0;flex:1 1 auto;align-items:flex-start}.feed-page .lg-fb-bubble{background:var(--lguser-bubble,#eceff3);border-radius:16px;padding:7px 12px;max-width:100%}.feed-page .lg-fb-name{display:block;font-weight:700;font-size:13px;color:#1a1d1a;text-decoration:none;margin:0 0 1px}.feed-page .lg-fb-bubble .reply-stub__body{margin:0}.feed-page .lg-fb-bubble .reply-stub__excerpt,.feed-page .lg-fb-bubble .reply-stub__body{font-size:calc(14px*var(--lg-read-scale,1));line-height:1.4;color:#1a1d1a}.feed-page .lg-fb-bubble .reply-stub__img{margin-top:6px;border-radius:12px}.feed-page .lg-fb-actions{display:flex;align-items:center;gap:16px;padding:4px 12px 0;font:600 12.5px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",sans-serif);color:#65676b}.feed-page .lg-fb-act{cursor:pointer;position:relative}.feed-page .lg-fb-like.is-on{color:var(--lguser-accent-d,#52613d)}.feed-page .lg-fb-time{font-weight:400;color:#8a8d91}.feed-page .lg-fb-like .lg-react-emoji{font-size:14px;margin-right:3px}.feed-page .lg-fb-replybox{display:flex;gap:8px;align-items:flex-start;margin:8px 0 2px;width:100%}.feed-page .lg-fb-myavi{width:28px;height:28px;border-radius:50%;overflow:hidden;flex:0 0 auto;background:var(--lg-sage-tint,#eef2e3)}.feed-page .lg-fb-myavi img{width:100%;height:100%;object-fit:cover;display:block}.feed-page .lg-fb-replywrap{display:flex;align-items:flex-end;gap:6px;flex:1 1 auto;background:var(--lguser-bubble,#eceff3);border-radius:18px;padding:4px 6px 4px 12px}.feed-page .lg-fb-replyinput{flex:1 1 auto;border:0;background:none;resize:none;outline:none;font:14px/1.4 var(--lg-font-sans,system-ui,sans-serif);color:#1a1d1a;max-height:120px;padding:4px 0}.feed-page .lg-fb-send{flex:0 0 auto;border:0;background:none;cursor:pointer;color:var(--lguser-accent-d,#52613d);font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);padding:6px 8px}.feed-page .lg-fb-send:disabled{color:#b0b3b8;cursor:default}.feed-page .lg-fb-note{font:12px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:#8a8d91;padding:4px 0 0 36px;width:100%}.lg-fbc .lg-fbc-head{display:flex;align-items:center;gap:10px;margin:2px 0 10px}.lg-fbc .lg-fbc-avi{width:40px;height:40px;border-radius:50%;overflow:hidden;flex:0 0 auto;background:var(--lg-sage-tint,#eef2e3)}.lg-fbc .lg-fbc-avi img{width:100%;height:100%;object-fit:cover;display:block}.lg-fbc .lg-fbc-name{font:700 14px/1.2 var(--lg-font-serif,Georgia,serif);color:var(--lg-ink,#1a1d1a)}.lg-fbc #ntm-content,.lg-fbc .ql-editor{min-height:96px;font-size:16px;line-height:1.45}.lg-fbc .ql-editor.ql-blank::before{font-size:16px;color:var(--lg-mute,#8a8d91);font-style:normal}.lg-fbc .lg-fbc-chips{margin:12px 0 4px;max-height:240px;overflow:auto}.lg-fbc .lg-fbc-catgroup{margin:0 0 10px}.lg-fbc .lg-fbc-catgroup__h{font:700 10.5px/1 var(--lg-font-sans,system-ui,sans-serif);letter-spacing:.06em;text-transform:uppercase;color:var(--lg-mute,#6b6f6b);margin:0 0 6px}.lg-fbc .lg-fbc-chips__h{font:700 11.5px/1 var(--lg-font-sans,system-ui,sans-serif);letter-spacing:.05em;text-transform:uppercase;color:var(--lg-mute,#6b6f6b);margin:0 0 8px}.lg-fbc .lg-fbc-chiprow{display:flex;flex-wrap:wrap;gap:7px}.lg-fbc .lg-fbc-chip{border:1px solid var(--lg-line,#e3ddd0);background:var(--bg-card,#fff);border-radius:999px;padding:7px 12px;font:600 12.5px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#323532);cursor:pointer;white-space:nowrap}.lg-fbc .lg-fbc-chip.is-on{background:var(--lguser-accent,#6b7c52);color:#fff;border-color:var(--lguser-accent,#6b7c52)}@media (max-width:640px){#site-header .lg-chrome__hamburger,#site-header .lg-chrome__logo,#site-header .lg-chrome__aside{display:none!important}#site-header .lg-chrome__inner{gap:0;padding-left:12px;padding-right:12px}#site-header.lg-chrome{transition:transform .26s ease;will-change:transform}#site-header.lg-chrome.lg-chrome--tuck{transform:translateY(-100%)}.lg-hub-search{display:flex;align-items:center;gap:9px;flex:1 1 auto;min-width:0;background:#fff;border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;padding:9px 15px;box-shadow:0 1px 2px rgba(26,29,26,.04)}.lg-hub-search__ico{width:18px;height:18px;flex:0 0 auto;color:var(--lg-mute,#6b6f6b)}.lg-hub-search input{flex:1 1 auto;min-width:0;border:0;outline:0;background:none;padding:0;margin:0;font:15px/1.2 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);color:var(--lg-ink,#323532);-webkit-appearance:none}.lg-hub-search input::placeholder{color:var(--lg-mute,#6b6f6b)}.lg-hub-search input::-webkit-search-cancel-button{-webkit-appearance:none}.lg-hub-search__panel{position:fixed;left:0;right:0;z-index:2147481250;display:none;max-height:72vh;overflow:auto;-webkit-overflow-scrolling:touch;background:var(--lg-cream,#fbfbf8);border-top:1px solid var(--lg-line,#e3ddd0);box-shadow:0 14px 34px rgba(26,29,26,.18)}.lg-hub-search__panel.is-open{display:block}.lg-hub-search__item{display:flex;flex-direction:column;gap:3px;padding:12px 16px;text-decoration:none;border-bottom:1px solid var(--lg-line,#e3ddd0)}.lg-hub-search__item:active{background:var(--lg-sage-tint,#eef2e3)}.lg-hub-search__k{font:700 10px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",sans-serif);letter-spacing:.07em;text-transform:uppercase;color:var(--lg-sage-d,#6b7c52)}.lg-hub-search__t{font:600 14.5px/1.32 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",sans-serif);color:var(--lg-ink,#323532)}.lg-hub-search__note{padding:15px 16px;color:var(--lg-mute,#6b6f6b);font:14px/1.4 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",sans-serif)}}@media (max-width:640px){.feed-page .forum-header{display:none!important}}
+/* Server-render guard: hide Filters chip on desktop (JS-only on mobile, now emitted always) */
+/* Filters chip lives in the sort bar at ALL widths now (the green corner wedge is
+   retired on the hub). is-on = rail currently open. */
+@media (min-width:641px){.feed-page .feed-sort-bar > .lg-filters-chip{display:inline-flex}}
+.feed-sort-bar .lg-filters-chip.is-on{background:var(--lguser-accent-d,#52613d)}
+/* Retire the green corner #bb-ham on the hub feed — the sort-bar Filters chip is
+   the rail toggle now (desktop + mobile). */
+body:has(.feed-page) #bb-ham{display:none}
+/* Server-render guard: hide zero-count filter rows on mobile (was JS hideEmptyFilterRows) */
+@media (max-width:640px){.hub-rail__row--empty{display:none}}
+/* Canonicalize app-mobile-fixes.js v7 (Buck stopgap) — v54 mobile bar regressions:
+   (1) keep the sort/filter/new-post bar reachable (was static, scrolled away) —
+       pin it just under the 61px sticky header;
+   (2) the T/C/Cpt view toggles no longer belong in the bar (theme moved to the
+       profile-bubble Settings) — don't show them there on mobile.
+   Buck drops the v7 guard once this lands. */
+@media (max-width:640px){
+  .feed-sort-bar{position:sticky;top:61px;z-index:40;background:var(--lg-cream,#fbfbf8)}
+  .feed-view-toggles{display:none}
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   DESKTOP card arrangement (≥641) — grid-arranges the FLAT fc-* contract
+   (docs/hub-mobile-desktop-split.md). Mobile (≤640) is Buck's mobile-hub.css;
+   this block is min-width-gated so it NEVER touches mobile. The old nested-
+   wrapper rules (.feed-card__header/__meta-top/etc.) went dead when the markup
+   flattened — this restores the desktop forum-row off the flat children.
+   ════════════════════════════════════════════════════════════════════════ */
+/* MOBILE GUARD: the cooler card's NET-NEW regions are hidden by default, so they
+   add NOTHING to the mobile card (Buck's mobile-hub.css un-hides + arranges them
+   when his layer's ready). The desktop block below shows them ≥641. fc-tags is an
+   existing visible region (relocated), so it is NOT hidden. */
+.fc-activity, .fc-facepile, .fc-composer{ display:none; }
+.fc-pulse{ width:8px; height:8px; border-radius:50%; background:#54c06a; position:relative; flex:none; }
+.fc-pulse::after{ content:""; position:absolute; inset:0; border-radius:50%; background:#54c06a; animation:fc-pulse 1.9s ease-out infinite; }
+@keyframes fc-pulse{ 0%{transform:scale(1);opacity:.6} 100%{transform:scale(3.2);opacity:0} }
+
+@media (min-width:641px){
+  .feed-page .feed-card{
+    /* card chrome — desktop only (moved off the base rule for the split) */
+    background:var(--bg-card); border:1px solid var(--lg-line); border-radius:8px;
+    /* top breathing room + real bottom padding under the action row (Ian 6/15) */
+    padding:18px 16px 16px; border-left:4px solid var(--sec,transparent);
+    transition:transform .18s ease, box-shadow .18s ease, border-color .15s ease; overflow:hidden;
+    display:grid;
+    grid-template-columns:44px minmax(0,1fr) auto;
+    grid-template-areas:
+      "avatar   author    time"
+      "avatar   activity  category"
+      "title    title     title"
+      "excerpt  excerpt   excerpt"
+      "cover    cover     cover"
+      "actions  actions   actions"
+      "tags     tags      tags"
+      "facepile facepile  facepile"
+      "replies  replies   replies"
+      "composer composer  composer";
+    column-gap:12px; row-gap:0; align-items:center;
+  }
+  /* hover lift + cover zoom */
+  .feed-page .feed-card:hover{ transform:translateY(-3px); }
+  .feed-page .fc-cover .feed-card__cover-img{ transition:transform .4s ease; }
+  .feed-page .feed-card:hover .fc-cover .feed-card__cover-img{ transform:scale(1.05); }
+
+  .feed-page .fc-avatar  { grid-area:avatar; align-self:start; width:40px; height:40px; }
+  .feed-page .fc-avatar img,
+  .feed-page .fc-avatar .avatar-init{ width:40px; height:40px; border-radius:50%; object-fit:cover; }
+  .feed-page .fc-author  { grid-area:author; align-self:end; display:flex; align-items:baseline; gap:7px; min-width:0; }
+  .feed-page .fc-author__name{ font-weight:700; color:var(--lg-ink,#323532); }
+  .feed-page .fc-activity{ display:flex; grid-area:activity; align-self:start; align-items:center; gap:6px;
+    font:600 12px/1 var(--lg-font-sans); color:var(--sage-d,#586b3f); margin-top:2px; }
+  .feed-page .fc-time    { grid-area:time; align-self:start; font-size:12px; color:var(--lg-mute,#6b6f6b); white-space:nowrap; text-align:right; }
+  .feed-page .fc-category{ grid-area:category; align-self:start; justify-self:end; margin-top:3px; font-size:11px;
+    color:color-mix(in srgb, var(--sec,var(--lg-sage)) 82%, var(--lg-ink)); text-decoration:none; white-space:nowrap; }
+  .feed-page .fc-title   { grid-area:title;   margin:8px 0 0; }
+  .feed-page .fc-excerpt { grid-area:excerpt; min-width:0; margin-top:2px; }
+  .feed-page .fc-cover   { grid-area:cover; display:block; margin-top:10px; max-width:440px; border-radius:11px; overflow:hidden; }
+  .feed-page .fc-cover img{ width:100%; display:block; }
+  /* fc-tags */
+  .feed-page .fc-tags    { grid-area:tags; display:flex; flex-wrap:wrap; gap:6px; margin-top:11px; }
+  /* fc-facepile — the reply-count CONTROL. Reads as a tappable pill BUTTON so it's
+     obviously the way to open the thread (Ian: bigger + clearly the entry to replies). */
+  .feed-page .fc-facepile{ display:inline-flex; grid-area:facepile; justify-self:start; align-items:center;
+    margin-top:13px; padding:7px 16px 7px 10px; border:1px solid var(--lg-line,#e3ddd0);
+    border-radius:999px; background:var(--lg-sage-tint,#eef2e3); cursor:pointer;
+    transition:background .12s ease, border-color .12s ease, box-shadow .15s ease; }
+  .feed-page .fc-facepile:hover{ background:var(--lg-sage,#87986a); border-color:var(--lg-sage,#87986a);
+    box-shadow:0 2px 8px rgba(26,29,26,.14); }
+  .feed-page .fc-facepile:focus-visible{ outline:2px solid var(--lg-sage-d,#586b3f); outline-offset:2px; }
+  .feed-page .fc-facepile__stack{ display:flex; padding-left:8px; }
+  .feed-page .fc-facepile__av{ display:inline-flex; margin-left:-8px; }
+  .feed-page .fc-facepile__av .avatar-init,
+  .feed-page .fc-facepile__av img{ width:26px; height:26px; border-radius:50%; border:2px solid var(--bg-card); font-size:10px; }
+  .feed-page .fc-facepile__count{ margin-left:10px; font:700 14.5px/1 var(--lg-font-sans); color:var(--lg-sage-d,#586b3f); white-space:nowrap; }
+  .feed-page .fc-facepile:hover .fc-facepile__count{ color:#fff; }
+  /* fc-actions — engagement block sits directly under the cover, left-aligned
+     (left-anchored so the reaction picker opens rightward into the full card
+     width instead of clipping off the right edge under overflow:hidden). */
+  .feed-page .fc-actions { grid-area:actions; display:flex; align-items:center; flex-wrap:wrap; gap:8px; justify-content:flex-start; margin-top:13px; }
+  /* fc-save — binary ☆ bookmark toggle, sits at the right end of the actions row.
+     Inert star at rest; brand-sage fill when the viewer has saved it (.is-saved). */
+  .feed-page .fc-save { -webkit-appearance:none; appearance:none; margin-left:auto;
+    display:inline-flex; align-items:center; gap:4px; background:none; border:0; padding:2px 3px;
+    font:600 12px/1 var(--lg-font-sans); color:var(--lg-mute); cursor:pointer; transition:color .12s; }
+  .feed-page .fc-save .ico { width:16px; height:16px; flex:0 0 auto; }
+  .feed-page .fc-save:hover { color:var(--lg-sage-d,#586b3f); }
+  .feed-page .fc-save.is-saved { color:var(--lg-sage-d,#586b3f); }
+  .feed-page .fc-save.is-saved .ico { fill:currentColor; }
+  body.fc-save-anon .feed-page .fc-save { display:none; }   /* logged-out → no save affordance */
+  .feed-page .fc-replies { grid-area:replies; min-width:0; margin-top:6px; }
+  /* fc-composer — persistent, pinned to the card bottom (full-bleed) */
+  .feed-page .fc-composer{ display:flex; grid-area:composer; align-items:center; gap:9px;
+    margin:12px -16px 0; padding:11px 16px; border-top:1px solid var(--lg-line);
+    background:color-mix(in srgb, var(--lg-sage) 5%, var(--bg-card)); border-radius:0 0 7px 7px; }
+  .feed-page .fc-composer__av .avatar-init,
+  .feed-page .fc-composer__av img{ width:30px; height:30px; border-radius:50%; }
+  .feed-page .fc-composer__wrap{ flex:1; display:flex; align-items:center; gap:8px; background:var(--bg-card);
+    border:1px solid var(--lg-line); border-radius:999px; padding:5px 6px 5px 14px; transition:.15s; }
+  .feed-page .fc-composer__wrap:focus-within{ border-color:var(--lg-sage); box-shadow:0 0 0 3px color-mix(in srgb, var(--lg-sage) 18%, transparent); }
+  .feed-page .fc-composer__input{ flex:1; border:0; outline:0; background:none; font:14px/1.3 var(--lg-font-sans); color:var(--lg-ink); }
+  .feed-page .fc-composer__send{ border:0; background:var(--lg-sage-d,#586b3f); color:#fff; border-radius:999px;
+    padding:7px 15px; font:700 13px/1 var(--lg-font-sans); cursor:pointer; transition:.12s; }
+  .feed-page .fc-composer__send:disabled{ opacity:.45; cursor:default; }
+  .feed-page .fc-composer__status{ font:12px/1 var(--lg-font-sans); color:var(--lg-mute); }
+  .feed-page .fc-composer__status:empty{ display:none; }
+}
+
+/* ── Themed affordances (Ian) — subtle, present at REST (before hover) with a
+   gentle bump on hover. Reply buttons: soft DROP SHADOW on light/panel, brand-sage
+   GLOW on dark/black. Cards: subtle sage glow on dark/black hover (desktop ≥641 —
+   mobile card look is Buck's mobile-hub.css). Glow adapts via color-mix(--accent). */
+.feed-card__reply-cta, .reply-stub__reply {
+  transition: color .12s, background .12s, border-color .12s, box-shadow .15s ease;
+}
+/* Resting (before hover) — re-keyed 2026-06-10 from the retired hub-theme-*
+   classes to the two-mode attribute (Light = no data-lguser-theme="dark"). */
+html:not([data-lguser-theme="dark"]) .feed-card__reply-cta,
+html:not([data-lguser-theme="dark"]) .reply-stub__reply {
+  box-shadow: 0 1px 4px rgba(26, 29, 26, .16);
+}
+html[data-lguser-theme="dark"] .feed-card__reply-cta,
+html[data-lguser-theme="dark"] .reply-stub__reply {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--lguser-accent, #9cb37d) 42%, transparent);
+}
+/* Hover bump */
+html:not([data-lguser-theme="dark"]) .feed-card__reply-cta:hover,
+html:not([data-lguser-theme="dark"]) .reply-stub__reply:hover {
+  box-shadow: 0 3px 9px rgba(26, 29, 26, .24);
+}
+html[data-lguser-theme="dark"] .feed-card__reply-cta:hover,
+html[data-lguser-theme="dark"] .reply-stub__reply:hover {
+  box-shadow: 0 0 14px color-mix(in srgb, var(--lguser-accent, #9cb37d) 68%, transparent);
+}
+/* Cards — subtle sage glow on dark hover (desktop ≥641) */
+@media (min-width: 641px) {
+  html[data-lguser-theme="dark"] .feed-page .feed-card:hover {
+    box-shadow: 0 0 22px color-mix(in srgb, var(--lguser-accent, #9cb37d) 17%, transparent);
+  }
+}
+
+/* ── Inline video facade + tier-gated teaser (Ian 6/7, hub-coord) ──────────────
+   Facade: thumb + centered play; the YouTube iframe (.fc-video) is injected by
+   forums.js on click ONLY (no embed up front). Gated cards never get a play host —
+   the server renders the lock overlay instead, so content never leaks. */
+.feed-page .fc-cover--video { position: relative; cursor: pointer; }
+.feed-page .fc-play { position: absolute; inset: 0; margin: auto; width: 62px; height: 62px;
+  display: flex; align-items: center; justify-content: center; border: 0; border-radius: 50%;
+  background: rgba(20,20,20,.60); color: #fff; cursor: pointer; z-index: 3;
+  transition: background .15s, transform .15s; }
+.feed-page .fc-cover--video:hover .fc-play { background: var(--lguser-accent,#6b7c52); transform: scale(1.06); }
+.feed-page .fc-play svg { width: 28px; height: 28px; margin-left: 3px; }
+.feed-page .fc-cover--video:has(iframe) .fc-play,
+.feed-page .fc-cover--video:has(iframe) .fc-dur { display: none; }
+/* Mobile: video cards click through to the post (no inline play), so the play
+   overlay would mislead — hide it; the cover image is the tap target. The "min"
+   duration chip stays so it still reads as a video. (Ian 2026-06-17) */
+@media (max-width: 640px) {
+  .feed-page .fc-cover--video .fc-play { display: none; }
+}
+.feed-page .fc-dur { position: absolute; right: 8px; bottom: 8px; z-index: 3;
+  background: rgba(20,20,20,.78); color: #fff; font: 600 11px/1 var(--lg-font-sans,sans-serif);
+  padding: 3px 7px; border-radius: 5px; }
+
+/* Gated teaser: dimmed thumb + lock overlay. Links to the standalone page, which
+   carries the real paywall/upgrade gate. */
+.feed-page .fc-cover--gated { position: relative; display: block; cursor: pointer; }
+.feed-page .fc-cover--gated .feed-card__cover-img { filter: brightness(.48) saturate(.72); }
+.feed-page .fc-gate { position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 5px; text-align: center; color: #fff; padding: 12px; }
+.feed-page .fc-gate__lock { font-size: 26px; line-height: 1; }
+.feed-page .fc-gate__t { font: 700 13px/1.25 var(--lg-font-sans,sans-serif); text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+.feed-page .fc-gate__cta { margin-top: 3px; background: var(--lguser-accent,#6b7c52); color: #fff;
+  font: 700 12px/1 var(--lg-font-sans,sans-serif); padding: 7px 14px; border-radius: 999px; }
+.feed-page .fc-cover--gated:hover .fc-gate__cta { background: var(--lguser-accent-d,#52613d); }
+/* tier badge beside the kind badge */
+.feed-page .fc-tier-badge { font: 700 9.5px/1 var(--lg-font-sans,sans-serif); letter-spacing: .05em;
+  text-transform: uppercase; padding: 3px 7px; border-radius: 999px; background: var(--lg-amber,#ecb351); color: #3a2e10; }
+.feed-page .feed-card--gated-pro .fc-tier-badge { background: #caa24a; }
+
+@media (min-width: 641px) {
+  /* CPT (content) cards now match discussions: a full-width 16:9 cover BAND in
+     the card flow — NOT the old image-LEFT/text-RIGHT split (Ian 2026-06-11).
+     They keep the default single-column grid (cover = the full "cover" row);
+     we just normalise the cover img to a true 16:9 cover. :has(.fc-cover) so
+     text-only CPT cards stay clean. */
+  .feed-page .feed-card--content:has(.fc-cover) .fc-cover {
+    grid-area: cover; align-self: stretch; max-width: none; width: auto; }
+  .feed-page .feed-card--content:has(.fc-cover) .fc-cover .feed-card__cover-img {
+    aspect-ratio: 16 / 9; height: auto; max-height: none; object-fit: cover; }
+
+  /* ── Full-bleed cover band (Ian 2026-06-11): the 16:9 image fills edge-to-edge
+     to the card sides by breaking out of the 16px card padding; the card's
+     overflow:hidden clips it into a clean band. Applies to BOTH discussion and
+     CPT covers. 3-class selector + late source order outweighs the legacy
+     .feed-page .fc-cover (3654) and masonry cover rules. Desktop only — mobile
+     covers are Buck's mobile-hub.css. */
+  .feed-page .feed-card .fc-cover {
+    width: auto; max-width: none; margin: 12px -16px 0; border-radius: 0;
+  }
+}
+
+/* Composer → rich (Quill) expand affordance (Ian 6/7). Sits in the composer wrap
+   between the quick input and Reply; opens the full feed-reply Quill modal. Reads
+   as a defined button AT REST (resting tint + ring) so the formatting/image escape
+   hatch isn't lost next to Reply — bumps on hover. */
+.feed-page .fc-composer__rich { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; cursor: pointer; color: var(--lg-sage-d, #586b3f);
+  background: var(--lg-sage-tint, #eef2e3); border: 1px solid color-mix(in srgb, var(--lg-sage, #87986a) 35%, transparent);
+  font-size: 17px; line-height: 1; padding: 0; border-radius: 999px;
+  transition: background .12s, color .12s, border-color .12s, transform .12s; }
+.feed-page .fc-composer__rich:hover { background: var(--lg-sage, #87986a); color: #fff;
+  border-color: var(--lg-sage, #87986a); transform: translateY(-1px); }
+.feed-page .fc-composer__rich:active { transform: translateY(0); }
+
+/* ── Unified in-place expand (Ian 6/7): ONE chevron replaces Read-more + View-replies.
+   The originals stay in the DOM (the orchestration handler + the composer's post-reload
+   click .feed-card__expand) but are hidden. The card-level reply CTA is hidden too —
+   the composer is the reply entry now — yet kept as the nested-reply topic/forum source. */
+/* "Read more" is now the VISIBLE body-only expander (Ian: split from replies).
+   The lazy view-replies trigger (.feed-card__expand) stays hidden — the reply-count
+   control (.fc-facepile) drives it — and the card-level inline reply CTA stays hidden
+   (the composer is the reply entry). */
+.feed-page .feed-card__expand,
+.feed-page .feed-card__reply-cta--inline { display: none !important; }
+.feed-page .feed-card__expand-all { margin-left: auto; flex: 0 0 auto; display: inline-flex;
+  align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 999px; background: var(--bg-card, #fff);
+  color: var(--lg-mute, #6b6f6b); cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
+.feed-page .feed-card__expand-all:hover { background: var(--lg-sage-tint, #eef2e3);
+  border-color: var(--lg-sage, #87986a); color: var(--lg-sage-d, #586b3f); }
+.feed-page .feed-card__expand-all-chev { font-size: 12px; line-height: 1; transition: transform .15s ease; }
+.feed-page .feed-card__expand-all[aria-expanded="true"] .feed-card__expand-all-chev { transform: rotate(180deg); }
+/* compact has its own caret — don't show two expanders */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__expand-all { display: none !important; }
+/* compact thumb a little larger. Cursor is NOT set here: CPT/content covers click
+   through to the article (link cursor), only forum-topic covers lightbox (rule below). */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__cover { width: 72px; }
+/* forum-topic cover photo lightboxes on click (view full-size) instead of opening
+   the thread — at ALL widths (Ian). Video/gated covers keep their own cursor.
+   CPT/content covers navigate, so they keep the default link (pointer) cursor. */
+.feed-card--topic .feed-card__cover:not(.fc-cover--video):not(.fc-cover--gated) { cursor: zoom-in; }
+
+/* The category-as-chip (.fc-cat-chip, in the author badges) is a DESKTOP consolidation
+   element: it must NOT render below 641, where the standalone .fc-category shows instead —
+   otherwise the category appears TWICE (and the unstyled chip reads as a stray gray box).
+   Default-hidden here; shown only inside the >=641 block below. This is the <=640 complement
+   of the desktop consolidation, shipped in the SAME rule so the two can't diverge (replaces
+   Buck's app-mobile-fixes.js chip-hide stopgap; no <=640 media query needed). */
+.feed-page .fc-cat-chip { display: none; }
+
+/* ── Consolidated card meta + compact-CPT large images + tags spacing (Ian 6/7) ── */
+@media (min-width: 641px) {
+  /* type + category + tier as chips in ONE cluster (the author badges line). The
+     standalone fc-category region is hidden on desktop but kept in the DOM for the
+     flat contract + Buck's mobile layer. */
+  .feed-page .fc-author { flex-wrap: wrap; row-gap: 4px; }
+  .feed-page .fc-author__badges { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .feed-page .fc-cat-chip { display: inline-flex; align-items: center; font: 700 10px/1 var(--lg-font-sans, sans-serif); letter-spacing: .04em;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
+    background: var(--lguser-pill, #dde6c7); color: var(--lguser-accent-d, #52613d); white-space: nowrap; }
+  .feed-page .feed-card .fc-category { display: none; }
+
+  /* compact: CPT cards keep the LARGE image-left 16:9 (Ian) — only topic cards
+     shrink to the small thumb. */
+  .hub-compact .feed-card--content:not(.is-verbose):has(.fc-cover) .fc-cover { width: 360px; }
+  .hub-compact .feed-card--content:not(.is-verbose):has(.fc-cover) .feed-card__cover-img { aspect-ratio: 16 / 9; }
+
+  /* CPT cards have no bottom composer, so the tags/actions row was crammed against
+     the card edge — give the card bottom breathing room. */
+  .feed-page .feed-card--content { padding-bottom: 14px; }
+  .feed-page .feed-card--content .fc-tags { margin-top: 12px; row-gap: 6px; }
+}
+
+/* Divider between the title and the body, both compact + verbose (Ian). border-top
+   on the excerpt so it only shows when there IS a body (gated/title-only cards stay
+   clean). Appended last so it wins over the grid rule's margin. */
+.feed-page .fc-excerpt { border-top: 1px solid var(--lguser-line, #cdd6ba); margin-top: 9px; padding-top: 9px; }
+/* fork: bespoke-cutover preview */
+
+
+/* ══ §4e DESKTOP DISCUSSION MODAL (bespoke-cutover, Ian 2026-06-10) ══
+   Token-driven, so Light/Dark follow automatically. Thread inherits the
+   .reply-stub family (incl. --child indent + .fcr reaction bars). */
+@media (min-width: 641px) {
+  /* z 8800: BELOW the reply composer overlay (9000) + lightbox (9999) — both
+     open on top of this modal ("reply buttons land under the modal", Ian). */
+  #lg-dmodal { position: fixed; inset: 0; z-index: 8800; }
+  #lg-dmodal[hidden] { display: none; }
+  #lg-dmodal .lg-dmodal__back { position: absolute; inset: 0; background: rgba(10, 12, 10, .58); }
+  #lg-dmodal .lg-dmodal__panel.lg-dmodal--s { width: min(620px, calc(100vw - 48px)); }
+  #lg-dmodal .lg-dmodal__panel.lg-dmodal--l { width: min(1040px, calc(100vw - 64px)); }
+  #lg-dmodal .lg-dmodal__panel {
+    position: relative; width: min(760px, calc(100vw - 48px)); max-height: 86vh;
+    margin: 7vh auto 0; display: flex; flex-direction: column; overflow: hidden;
+    background: var(--bg-card); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 24px 64px -16px rgba(0, 0, 0, .45);
+  }
+  #lg-dmodal .lg-dmodal__head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+  }
+  #lg-dmodal .lg-dmodal__title { flex: 1; min-width: 0; margin: 0; font: 700 calc(18px*var(--lg-read-scale,1))/1.3 var(--font-head); color: var(--fg); }
+  #lg-dmodal .lg-dmodal__x {
+    flex: none; width: 34px; height: 34px; border: 0; border-radius: 50%; cursor: pointer;
+    background: var(--lg-sage-tint); color: var(--fg-muted); font: 400 20px/1 var(--font-body);
+  }
+  #lg-dmodal .lg-dmodal__x:hover { background: var(--lg-sage); color: #fff; }
+  /* .feed-page rides on the scroll body so the reaction picker/chips/fb styles
+     match the feed exactly (Ian: "make picker same as outside") — and we kill
+     the page-bg/width side effects the class drags in. */
+  #lg-dmodal .lg-dmodal__scroll { overflow-y: auto; padding: 16px 18px 22px; background: transparent; max-width: none; }
+  #lg-dmodal .lg-dmodal__meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  #lg-dmodal .lg-dmodal__meta .fc-avatar img,
+  #lg-dmodal .lg-dmodal__meta .fc-avatar .avatar-init { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; }
+  #lg-dmodal .lg-dmodal__meta-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  #lg-dmodal .lg-dmodal__meta .fc-author__name { font-weight: 700; color: var(--fg); }
+  #lg-dmodal .lg-dmodal__meta .fc-time { font-size: 12.5px; color: var(--fg-muted); }
+  #lg-dmodal .lg-dmodal__body { font-size: calc(15.5px*var(--lg-read-scale,1)); line-height: 1.6; color: var(--fg); margin-bottom: 4px; }
+  #lg-dmodal .lg-dmodal__body img { max-width: 100%; height: auto; border-radius: 10px; }
+  #lg-dmodal .lg-dmodal__thread { border-top: 1px solid var(--border); padding-top: 6px; }
+  #lg-dmodal .lg-dmodal__note { padding: 18px 4px; color: var(--fg-muted); font: 14px/1.5 var(--font-body); }
+  /* Size cycle (S/M/L) in the head */
+  #lg-dmodal .lg-dmodal__size {
+    flex: none; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 50%;
+    cursor: pointer; background: none; color: var(--fg-muted); font: 700 12px/1 var(--font-body);
+  }
+  #lg-dmodal .lg-dmodal__size:hover { border-color: var(--lg-sage, #87986a); color: var(--fg); }
+  /* Social-style action rows — one place, under the content (Ian) */
+  #lg-dmodal .lg-dmodal__opacts {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 0; margin-bottom: 12px; border-bottom: 1px solid var(--border);
+  }
+  #lg-dmodal .lg-dmodal__act,
+  #lg-dmodal .reply-stub__reply {
+    display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+    background: none; border: 0; padding: 2px 4px; box-shadow: none;
+    color: var(--lg-sage-d, #586b3f); font: 700 calc(13px*var(--lg-read-scale,1))/1 var(--font-body);
+  }
+  #lg-dmodal .lg-dmodal__act:hover,
+  #lg-dmodal .reply-stub__reply:hover { color: var(--lg-sage, #87986a); background: none; box-shadow: none; }
+  #lg-dmodal .lg-dmodal__del { margin-left: auto; color: var(--lg-mute, #6b6f6b); }
+  #lg-dmodal .lg-dmodal__del:hover { color: #c33; background: rgba(193, 51, 51, .1); border-radius: 8px; }
+  /* [hidden] must beat .lg-dmodal__act display:inline-flex — author CSS overrides the
+     UA [hidden] rule, so without this an action button shows to NON-authors (JS leaves
+     hidden=true for them; only the click handler is gated). Guard ALL act buttons
+     (delete, edit, …) so a new one can't reintroduce the leak. Author/mod-only render. */
+  #lg-dmodal .lg-dmodal__act[hidden] { display: none; }
+  #lg-dmodal .lg-dmodal__acts {
+    display: flex; align-items: center; gap: 14px; padding: 6px 0 0; width: 100%;
+  }
+  /* Thread rhythm: divided top-level stubs, breathing room, indented children.
+     The scroll body carries .feed-page (picker styling), which also brings the
+     feed's pill background for .reply-stub — modal rows stay flat separators. */
+  #lg-dmodal .lg-dmodal__thread .reply-stub { padding: 12px 0; margin: 0; border-top: 1px solid var(--border-soft, var(--border)); background: none !important; border-radius: 0; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub:first-child { border-top: 0; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub--child { margin-left: 42px; border-top: 0; padding-top: 4px; }
+  #lg-dmodal .lg-dmodal__thread .avatar-init,
+  #lg-dmodal .lg-dmodal__thread .reply-stub img.avatar { width: 32px; height: 32px; font-size: 13px; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub__author { font-size: 13.5px; font-weight: 700; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub__excerpt,
+  #lg-dmodal .lg-dmodal__thread .reply-stub__body { font-size: calc(14.5px*var(--lg-read-scale,1)); line-height: 1.55; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub__head .reply-stub__reply { display: none; } /* moved to the acts row */
+  /* the modal drains the pages itself — the per-5 button never shows */
+  #lg-dmodal .lg-dmodal__thread .replies-loadmore { display: none; }
+}
+
+
+/* ── CARD PARE-DOWN with the discussion modal (Ian 2026-06-10: "pare the card
+   functionality down so it doesn't duplicate what is in the modal") — desktop
+   topic cards are PREVIEWS: title/excerpt/cover/facepile/reactions/save. The
+   thread (teaser reply, expand, read-more full body, inline composer, reply
+   CTA) lives in the §4e modal. ≥641 only — mobile keeps its sheet flow. The
+   modal's own thread renders OUTSIDE .feed-card, so these don't touch it. ── */
+@media (min-width: 641px) {
+  .feed-page .feed-card--topic .fc-replies,
+  .feed-page .feed-card--topic .feed-card__replies,
+  .feed-page .feed-card--topic .feed-card__replies-full,
+  .feed-page .feed-card--topic .feed-card__read-more,
+  .feed-page .feed-card--topic .fc-composer,
+  .feed-page .feed-card--topic .feed-card__reply-cta,
+  .feed-page .feed-card--topic .feed-card__reply-cta--inline { display: none; }
+}
+
+
+/* ── CPT card bottom row (Ian 2026-06-10: "could use some love") — desktop:
+   one coherent row: reactions left, comment + save right. The overlay's
+   duplicate bookmark pill is retired (v147); ☆ fc-save is THE save. ── */
+@media (min-width: 641px) {
+  .feed-page .feed-card .fc-actions {
+    display: flex; align-items: center; gap: 12px;
+    padding-top: 10px; border-top: 1px solid var(--border-soft, var(--border));
+  }
+  .feed-page .feed-card .fc-actions .fcr { flex: 1 1 auto; min-width: 0; }
+  .feed-page .feed-card .fc-actions .feed-card__comments-btn,
+  .feed-page .feed-card .fc-actions .fc-save {
+    flex: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    background: none; border: 0; padding: 4px 6px;
+    color: var(--fg-muted); font: 600 calc(13px*var(--lg-read-scale,1))/1 var(--font-body);
+  }
+  .feed-page .feed-card .fc-actions .feed-card__comments-btn:hover,
+  .feed-page .feed-card .fc-actions .fc-save:hover { color: var(--lg-sage-d, #586b3f); }
+  .feed-page .feed-card .fc-actions .fc-save.is-on { color: var(--lg-sage-d, #586b3f); }
+}
+
+/* Desktop hub: top banner removed on the FRONT-DOOR hub (scoped forums keep
+   theirs); the sort-bar New-post pill un-hides and sits right of Filters —
+   mirrors the existing mobile banner-hide. (Buck pre-launch 2026-06-11) */
+@media (min-width:641px){
+  .feed-page .forum-header--hub{display:none}
+  .feed-page .feed-sort-bar > .lg-newpost{
+    display:inline-flex;align-items:center;gap:5px;position:static;width:auto;height:auto;
+    background:var(--lguser-accent-d,#52613d);color:#fff;border:0;border-radius:999px;
+    padding:8px 15px;font:700 13px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);
+    white-space:nowrap;margin:0;box-shadow:none;transform:none;cursor:pointer;
+  }
+  .feed-page .feed-sort-bar > .lg-newpost:hover{background:var(--lguser-accent,#6b7c52)}
+}
+
+/* ── Modal image lightbox (forums.js §10, Ian 2026-06-11) ── */
+#lg-imglb { position: fixed; inset: 0; z-index: 9100; /* above #lg-dmodal (8800) */
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 8, .88); cursor: zoom-out; }
+#lg-imglb[hidden] { display: none; }
+#lg-imglb .lg-imglb__img { max-width: 94vw; max-height: 92vh; width: auto; height: auto;
+  border-radius: 6px; box-shadow: 0 24px 70px rgba(0, 0, 0, .55); }
+#lg-imglb .lg-imglb__x { position: absolute; top: 14px; right: 18px; border: 0;
+  background: none; color: #fff; font: 400 34px/1 var(--lg-font-sans, system-ui, sans-serif);
+  cursor: pointer; opacity: .8; padding: 4px 10px; }
+#lg-imglb .lg-imglb__x:hover { opacity: 1; }
+
+/* ── Composer image attachment tray (desktop ≥641 only) ─────────────────────
+   Out-of-body tray = source of truth for bbp_media (see forums.js
+   lgComposerTray). Mobile (≤640) keeps the legacy inline-embed path and never
+   creates this DOM, so these rules are gated to desktop to avoid any paint on
+   Buck's mobile composer surface. */
+@media (min-width: 641px) {
+  .lg-mtray { display: flex; flex-wrap: wrap; gap: 8px; margin: 9px 0 2px; position: relative; }
+  .lg-mtray.is-uploading { min-height: 7px; }
+  /* Indeterminate "working" bar above the thumb row (no determinate % — the
+     current fetch upload can't report bytes; a sliding bar signals progress). */
+  .lg-mtray.is-uploading::before {
+    content: ""; position: absolute; left: 0; right: 0; top: -5px; height: 3px;
+    border-radius: 2px; background: var(--lg-line, #e3ddd0); overflow: hidden; }
+  .lg-mtray.is-uploading::after {
+    content: ""; position: absolute; top: -5px; height: 3px; width: 38%;
+    border-radius: 2px; background: var(--lguser-accent, #6b7c52);
+    animation: lg-mtray-indet 1.05s ease-in-out infinite; }
+  @keyframes lg-mtray-indet { 0% { left: -40%; } 100% { left: 100%; } }
+  .lg-mtray__item {
+    position: relative; display: inline-flex; width: 74px; height: 74px;
+    border-radius: 8px; overflow: hidden;
+    border: 1px solid var(--lg-line, #e3ddd0); background: var(--lg-cream, #fbfbf8); }
+  .lg-mtray__img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .lg-mtray__rm {
+    position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; padding: 0;
+    border: 0; cursor: pointer; border-radius: 50%;
+    background: rgba(26, 29, 26, .72); color: #fff;
+    font: 600 12px/20px var(--lg-font-sans, system-ui, sans-serif); text-align: center; }
+  .lg-mtray__rm:hover { background: rgba(26, 29, 26, .92); }
+}
+
+/* Composer image hint + error message (paired with lgComposerTray). The hint is
+   only ever inserted on desktop (JS-gated); the error colour applies on both
+   surfaces so a rejected upload — e.g. an unsupported webp — is never silent. */
+.lg-mtray-hint {
+  margin: 5px 0 0; font: 500 11.5px/1.4 var(--lg-font-sans, system-ui, sans-serif);
+  color: var(--lg-mute, #6b6f6b); }
+.ntm-status.lg-msg-error, .frm-status.lg-msg-error, .lg-msg-error,
+.reply-form__status.lg-msg-error, .post-edit__status.lg-msg-error {
+  color: #b3261e; font-weight: 600; }

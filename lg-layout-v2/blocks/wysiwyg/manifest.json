@@ -1,0 +1,96 @@
+{
+  "name": "wysiwyg",
+  "version": 1,
+  "selector": ".lg-wysiwyg",
+  "description": "TinyMCE-edited rich text body copy. Paragraphs, in-body headings (H1–H3), inline emphasis, lists, links.",
+  "schema": {
+    "props": {
+      "html": {
+        "type": "string",
+        "default": "",
+        "description": "Rich-text HTML from TinyMCE. Sanitized with wp_kses_post on save."
+      },
+      "style": {
+        "type": "string",
+        "default": "plain",
+        "enum": ["plain", "panel"],
+        "description": "Visual variant. plain = transparent body copy. panel = framed callout with bg + padding + radius."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": [
+      "padding",
+      "margin-block",
+      "bg",
+      "border",
+      "radius",
+      "shadow"
+    ],
+    "text": [
+      "color",
+      "link-color",
+      "font-family",
+      "font-size",
+      "font-weight",
+      "line-height",
+      "letter-spacing",
+      "text-align"
+    ]
+  },
+  "defaults": {
+    "container": {
+      "padding": "0",
+      "margin-block": "16px",
+      "bg": "transparent",
+      "border": "none",
+      "radius": "0",
+      "shadow": "none"
+    },
+    "text": {
+      "color": "var(--lg-ink)",
+      "link-color": "var(--lg-sage)",
+      "font-family": "var(--lg-font-sans)",
+      "font-size": "17px",
+      "font-weight": "400",
+      "line-height": "1.6",
+      "letter-spacing": "normal",
+      "text-align": "left"
+    }
+  },
+  "variants": {
+    "plain": {
+      "extends": "defaults"
+    },
+    "panel": {
+      "extends": "defaults",
+      "container": {
+        "padding": "20px 24px",
+        "bg": "var(--lg-cream, #fbfbf8)",
+        "border": "1px solid var(--lg-sage-3, #d4e0b8)",
+        "radius": "8px"
+      }
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": [
+      "html"
+    ],
+    "custom_picker": "rich-text",
+    "variant_prop": "style",
+    "pill_buttons": [
+      "up",
+      "down",
+      "edit",
+      "change",
+      "variant",
+      "tier",
+      "delete"
+    ]
+  },
+  "context_overrides": [
+    "columns"
+  ]
+}

@@ -1,0 +1,140 @@
+/* embed — structural CSS only. The outer figure carries chrome; the
+   .lg-embed__frame inside enforces aspect ratio via the CSS aspect-ratio
+   property. Authors set a numeric ratio via the `ratio` prop ("16x9"); the
+   renderer translates that into the CSS shorthand "16/9" applied inline
+   on the frame element (only inline-style we tolerate — it's content-
+   derived, not author-typed). */
+
+@layer block-shell {
+  .lg-embed {
+    /* Container */
+    display: grid;
+    gap: var(--lg-gap, 12px);
+
+    padding: var(--lg-padding, 0);
+    margin-block: var(--lg-margin-block, 0);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+
+    /* Text (caption) */
+    color: var(--lg-color, inherit);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, inherit);
+    font-weight: var(--lg-font-weight, 400);
+    line-height: var(--lg-line-height, 1.5);
+    letter-spacing: var(--lg-letter-spacing, normal);
+    text-align: var(--lg-text-align, left);
+  }
+
+  .lg-embed a {
+    color: var(--lg-link-color, inherit);
+  }
+
+  /* The frame box — reserves vertical space at the requested ratio so the
+     iframe loads into pre-allocated layout. Zero CLS. The aspect-ratio
+     value is applied inline by render.php (the only inline style we allow,
+     because it's a fully-validated content prop). */
+  .lg-embed__frame {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  /* Inner iframe / video element fills the frame box completely. */
+  .lg-embed__frame iframe,
+  .lg-embed__frame video,
+  .lg-embed__frame embed {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  /* Fallback link rendered when oEmbed didn't resolve (provider missing,
+     network failure, etc.). Center-aligned link to the source URL. */
+  .lg-embed__fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 16px;
+  }
+
+  .lg-embed__caption {
+    margin: 0;
+  }
+
+  /* Instagram variant: blockquote+iframe set their own width (max 658px,
+     min 326px). Without intervention the grid leaves them flush-left in
+     a wider column. Centering the grid items puts the embed in the
+     middle of the figure regardless of column width. The aspect-ratio
+     `ratio` prop is intentionally ignored here — IG's iframe sizes its
+     own height from content (carousels vary, reels are taller). */
+  .lg-embed--instagram { justify-items: center; }
+  .lg-embed--instagram .instagram-media,
+  .lg-embed--instagram iframe.instagram-media-rendered { width: 100% !important; max-width: 658px; }
+
+  /* ── Facade: lite YouTube / Vimeo ─────────────────────────────────
+     Static thumbnail with a play-button overlay. No iframe (and no
+     YouTube/Vimeo JS) loads until the user clicks. lg-front.js handles
+     the click — replaces the facade contents with a real iframe. */
+  .lg-embed__facade {
+    cursor: pointer;
+    background: #000;
+  }
+  .lg-embed__poster {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: filter 200ms ease;
+  }
+  .lg-embed__facade:hover .lg-embed__poster { filter: brightness(0.88); }
+
+  .lg-embed__play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 68px;
+    height: 48px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    display: block;
+    transition: transform 200ms ease, filter 200ms ease;
+  }
+  .lg-embed__play svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .lg-embed__play .lg-embed__play-bg {
+    fill: #212121;
+    fill-opacity: 0.82;
+    transition: fill 150ms ease, fill-opacity 150ms ease;
+  }
+  .lg-embed__facade:hover .lg-embed__play {
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+  .lg-embed__facade:hover .lg-embed__play .lg-embed__play-bg {
+    fill: #f00;          /* YouTube red on hover (vimeo gets blue via override) */
+    fill-opacity: 1;
+  }
+  .lg-embed--vimeo .lg-embed__facade:hover .lg-embed__play .lg-embed__play-bg {
+    fill: #00adef;       /* Vimeo brand blue */
+  }
+
+  /* When JS swaps the facade for an iframe, drop the cursor + hover state */
+  .lg-embed__facade.is-playing { cursor: default; background: #000; }
+  .lg-embed__facade.is-playing .lg-embed__poster,
+  .lg-embed__facade.is-playing .lg-embed__play { display: none; }
+}

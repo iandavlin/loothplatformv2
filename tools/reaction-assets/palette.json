@@ -1,0 +1,12 @@
+{
+  "_comment": "Looth reaction palette, sourced from the BuddyBoss bb_reaction CPT (7 reactions, menu_order 0-6). 3 are custom community images (staged here, friendly-named); 4 are standard emoji/icon rendered from unicode. Hand to the comments+reactions lane (session 1c86c753) as the reaction set for the comment-reactions build. Source of custom pngs: /var/www/dev/wp-content/uploads/bb-reactions-media/.",
+  "reactions": [
+    { "order": 0, "slug": "like",          "label": "Like",          "type": "builtin", "note": "the existing like (discovery.likes) — not a new reaction; keep wired to the current like path" },
+    { "order": 1, "slug": "ouch",          "label": "Ouch",          "type": "image",   "file": "ouch.png",          "depicts": "bandaged thumbs-up", "bb_src": "68a617b8df8bf.png" },
+    { "order": 2, "slug": "wow",           "label": "Wow",           "type": "emoji",   "char": "😮",  "codepoint": "1F62E", "name": "face with open mouth" },
+    { "order": 3, "slug": "lol",           "label": "LOL",           "type": "emoji",   "char": "😂",  "codepoint": "1F602", "name": "face with tears of joy" },
+    { "order": 4, "slug": "shop",          "label": "Shop",          "type": "image",   "file": "shop.png",          "depicts": "luthier with flip-up visor + glasses", "bb_src": "65c94517f1b45.png" },
+    { "order": 5, "slug": "take-my-money", "label": "Take my money", "type": "image",   "file": "take-my-money.png", "depicts": "Futurama Fry waving cash", "bb_src": "65cd58be65b8d.png" },
+    { "order": 6, "slug": "brain",         "label": "Brain",         "type": "emoji",   "char": "🧠",  "codepoint": "1F9E0", "name": "brain" }
+  ]
+}

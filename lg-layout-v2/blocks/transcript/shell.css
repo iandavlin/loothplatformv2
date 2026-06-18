@@ -1,0 +1,92 @@
+/* transcript — collapsible HTML body for long-form transcript prose.
+   Built on native <details>/<summary> so content stays in the DOM at all
+   times (crawler-friendly) while collapsed by default for short pages.
+   Style cues match the callout family — same border-left rail, same
+   chevron-on-hover language — so transcripts feel like a sibling of
+   the existing structured asides. */
+
+@layer block-shell {
+  .lg-transcript {
+    display: block;
+    margin-block: var(--lg-margin-block, 24px);
+    background: var(--lg-bg, transparent);
+    border: 1px solid var(--lg-border-color, #e7e3da);
+    border-radius: var(--lg-radius, 8px);
+    padding: var(--lg-padding, 0);
+    color: var(--lg-color, var(--lg-charcoal, #1a1d1a));
+    font-family: var(--lg-font-family, var(--lg-font-serif));
+    font-size: var(--lg-font-size, 16px);
+    line-height: var(--lg-line-height, 1.6);
+    overflow: hidden;
+  }
+
+  /* Summary — the clickable label that toggles the accordion. */
+  .lg-transcript__label {
+    cursor: pointer;
+    list-style: none;
+    padding: 14px 18px;
+    font: 600 13px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--lg-label-color, var(--lg-ink, #323532));
+    background: var(--lg-cream, #fbfbf8);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .lg-transcript__label:hover {
+    background: var(--lg-cream-warm, #f7f5f2);
+  }
+  /* Strip the default marker across browsers — we draw our own chevron. */
+  .lg-transcript__label::-webkit-details-marker { display: none; }
+  .lg-transcript__label::marker { content: ''; }
+
+  /* Chevron — rotates on open. Uses currentColor so it tracks label color. */
+  .lg-transcript__label::after {
+    content: '';
+    width: 10px;
+    height: 10px;
+    margin-left: auto;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 0.18s ease;
+    flex: 0 0 auto;
+  }
+  .lg-transcript[open] > .lg-transcript__label::after {
+    transform: rotate(-135deg);
+  }
+
+  /* Body — transcript prose. Inherits typography from container so authors
+     get serif paragraphs by default. */
+  .lg-transcript__body {
+    padding: 18px 22px 22px;
+    border-top: 1px solid var(--lg-border-color, #e7e3da);
+  }
+  .lg-transcript__body :first-child { margin-top: 0; }
+  .lg-transcript__body :last-child  { margin-bottom: 0; }
+  .lg-transcript__body p {
+    margin: 0 0 0.85em;
+  }
+  .lg-transcript__body p:last-child { margin-bottom: 0; }
+  .lg-transcript__body a {
+    color: var(--lg-amber, #ecb351);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+  /* Timestamp-style first-of-line emphasis (e.g. <strong>00:14:32</strong>
+     at the start of a paragraph). No layout impact — just a hint that
+     timestamps belong in <strong>. */
+  .lg-transcript__body strong {
+    font-weight: 600;
+    color: var(--lg-ink, #323532);
+  }
+
+  @media (max-width: 520px) {
+    .lg-transcript__label { padding: 12px 14px; font-size: 12px; }
+    .lg-transcript__body  { padding: 14px 16px 18px; }
+  }
+}

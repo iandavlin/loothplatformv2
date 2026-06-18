@@ -1,0 +1,158 @@
+{
+  "_comment": "archive-poc Variant D row config. Render order is array order. 'audience' is structural insurance for scope C (public-mode); v0 only honors 'members'. 'seed: weekly' picks deterministically from floor(unix_ts / 604800).",
+  "rows": [
+    {
+      "id": "video-promo-demo",
+      "title": "Welcome to The Looth Group",
+      "type": "video-promo",
+      "layout": "video-promo",
+      "column": "main",
+      "audience": "public",
+      "query": {
+        "side": "video-right",
+        "video_id": "dQw4w9WgXcQ",
+        "aspect": "16x9",
+        "html": "<h3>Built by guitar makers, for guitar makers.</h3><p>The Looth Group is where serious luthiers and builders share tools, techniques, and the stuff you cannot find on YouTube. Membership unlocks the full archive, video library, downloads, and the discussion forum.</p><p><a href=\"https://www.patreon.com/c/theloothgroup/membership\">See what is inside \u2192</a></p>"
+      }
+    },
+    {
+      "id": "cta-bar",
+      "type": "cta-bar",
+      "audience": "both",
+      "layout": "cta-bar",
+      "column": "left"
+    },
+    {
+      "id": "upcoming-events",
+      "title": "Upcoming events",
+      "type": "events-upcoming",
+      "audience": "both",
+      "layout": "events",
+      "column": "left",
+      "query": {
+        "limit": 20
+      }
+    },
+    {
+      "id": "new-this-week",
+      "title": "New this week",
+      "type": "static",
+      "audience": "members",
+      "layout": "rail",
+      "query": {
+        "sort": "newest",
+        "max_age_days": 14,
+        "limit": 10,
+        "exclude_kinds": [
+          "discussion"
+        ]
+      }
+    },
+    {
+      "id": "active-discussions",
+      "title": "Active discussions",
+      "type": "static",
+      "audience": "both",
+      "layout": "discussions",
+      "query": {
+        "kind": "discussion",
+        "sort": "active",
+        "limit": 8
+      }
+    },
+    {
+      "id": "most-liked",
+      "title": "Most-liked of all time",
+      "type": "static",
+      "audience": "both",
+      "layout": "rail",
+      "query": {
+        "sort": "liked",
+        "limit": 10,
+        "min_likes": 1
+      }
+    },
+    {
+      "id": "latest-videos",
+      "title": "Latest videos",
+      "type": "static",
+      "audience": "members",
+      "layout": "rail",
+      "query": {
+        "kind": "video",
+        "sort": "newest",
+        "limit": 10
+      }
+    },
+    {
+      "id": "latest-loothprints",
+      "title": "Latest loothprints",
+      "type": "static",
+      "audience": "members",
+      "layout": "rail",
+      "query": {
+        "kind": "loothprint",
+        "sort": "newest",
+        "limit": 10
+      }
+    },
+    {
+      "id": "tag-row-1",
+      "title": "More on {{tag_label}}",
+      "type": "tag-random",
+      "audience": "members",
+      "layout": "rail",
+      "seed": "weekly",
+      "candidate_pool": "top-20-by-count",
+      "exclude": [
+        "repair-and-restoration",
+        "loothprints",
+        "video",
+        "loothing",
+        "all-videos",
+        "legacy-post"
+      ],
+      "slot": 0,
+      "query": {
+        "sort": "newest",
+        "limit": 10
+      }
+    },
+    {
+      "id": "tag-row-2",
+      "title": "More on {{tag_label}}",
+      "type": "tag-random",
+      "audience": "members",
+      "layout": "rail",
+      "seed": "weekly",
+      "candidate_pool": "top-20-by-count",
+      "exclude": [
+        "repair-and-restoration",
+        "loothprints",
+        "video",
+        "loothing",
+        "all-videos",
+        "legacy-post"
+      ],
+      "slot": 1,
+      "query": {
+        "sort": "newest",
+        "limit": 10
+      }
+    },
+    {
+      "id": "sponsors",
+      "title": "Our Sponsors",
+      "type": "sponsors",
+      "audience": "both",
+      "layout": "sponsors",
+      "column": "right"
+    }
+  ],
+  "signup_banner": {
+    "title": "Join the Looth community",
+    "body": "Sign up for full access to articles, videos, and the forum.",
+    "cta_label": "Join",
+    "cta_url": "https://looth.live/membership"
+  }
+}

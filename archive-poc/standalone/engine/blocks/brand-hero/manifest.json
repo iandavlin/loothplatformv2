@@ -1,0 +1,49 @@
+{
+  "name": "brand-hero",
+  "version": 1,
+  "selector": ".lg-brand-hero",
+  "description": "Sponsor-page hero. Reads the sponsor record from $ctx['sponsor'] (resolved from the layout's sponsor key / Lane-A API): optional hero banner image, brand logo, brand name, a social-icon row (facebook / instagram / youtube / website), and a CTA strip (Visit Website / Visit Forum / Related Content). Auto-themes from the article root's --brand-* vars. Every piece degrades gracefully when its field is null — a sparse sponsor renders just the parts it has, never a broken image or empty bar. Page-level block (the top of a sponsor page); not for inline article use.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "show_hero_image": {
+        "type": "boolean",
+        "default": true,
+        "description": "Render sponsor.hero.url as a full-bleed banner above the brand bar. Skipped when the sponsor has no hero image."
+      },
+      "tagline": {
+        "type": "string",
+        "default": "",
+        "description": "Optional short line shown under the brand name (inline-editable). Falls back to sponsor.hero.caption when empty."
+      },
+      "related_label": {
+        "type": "string",
+        "default": "Related Content",
+        "description": "Label for the tag_url CTA button."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": ["margin-block"],
+    "text": ["font-family"]
+  },
+  "defaults": {
+    "container": {
+      "margin-block": "0 0"
+    },
+    "text": {
+      "font-family": "var(--lg-font-sans)"
+    }
+  },
+  "variants": {
+    "variant-1": { "extends": "defaults" }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["tagline"],
+    "variant_prop": "variant",
+    "variant_options": ["variant-1"],
+    "pill_buttons": ["move-up", "move-down", "edit", "delete"]
+  }
+}

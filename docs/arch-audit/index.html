@@ -1,0 +1,96 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Looth dev — serving & DB audit</title>
+<link rel="stylesheet" href="audit.css">
+</head><body>
+<nav class="topnav"><div class="inner">
+  <b>Click-path</b>
+  <a class="pill on" href="index.html">Overview</a>
+  <a class="pill" href="path-frontpage.html">Front page</a>
+  <a class="pill" href="path-search.html">Archive search</a>
+  <a class="pill" href="path-hub.html">Open the Hub</a>
+  <a class="pill" href="path-cpt.html">Click → CPT</a>
+  <a class="pill" href="path-discussion.html">Click → discussion</a>
+</div></nav>
+<div class="wrap">
+
+<h1>How a user is served — ground-truth audit</h1>
+<p class="sub">dev.loothgroup.com · derived only from nginx, FPM pools, app code &amp; live DBs (no docs/handoffs) · 2026-06-02</p>
+<p class="lead">The site is a <b>strangler</b>: one nginx front door behind a cookie gate fans every URL out to one of
+<b>seven PHP-FPM pools</b>, each its own app with its own database. WordPress is now just one tenant among several —
+most user-facing surfaces are standalone apps that <b>bypass WP entirely</b>.</p>
+
+<div class="legend">
+  <span><i style="background:#9aa7b8"></i>nginx + cookie gate</span>
+  <span><i style="background:#b07cff"></i>FPM pool</span>
+  <span><i style="background:#5ed29a"></i>app code</span>
+  <span><i style="background:#f0883e"></i>MariaDB</span>
+  <span><i style="background:#2bb6b0"></i>Postgres</span>
+  <span><i style="background:#9aa7b8"></i>SQLite</span>
+</div>
+
+<h2>The five click-paths</h2>
+<div class="grid">
+  <a class="card" href="path-frontpage.html"><div class="n">PATH 1</div><div class="h">Open the front page</div><div class="d"><code>/</code> → 302 → archive-poc feed (SQLite). WP page 116 is bypassed.</div></a>
+  <a class="card" href="path-search.html"><div class="n">PATH 2</div><div class="h">Search the archive</div><div class="d"><code>/archive-api/v0/search</code> → SQLite FTS5 → JSON → JS grid.</div></a>
+  <a class="card" href="path-hub.html"><div class="n">PATH 3</div><div class="h">Open the Hub</div><div class="d"><code>/hub/</code> → bb-mirror → Postgres <code>looth.forums</code>.</div></a>
+  <a class="card" href="path-cpt.html"><div class="n">PATH 4</div><div class="h">Click through to a CPT</div><div class="d"><code>/post-imgcap/&lt;slug&gt;/</code> → standalone blob, WP fallback.</div></a>
+  <a class="card" href="path-discussion.html"><div class="n">PATH 5</div><div class="h">Click through to a discussion</div><div class="d"><code>/hub/&lt;forum&gt;/&lt;topic&gt;/</code> → Postgres <code>looth.forums</code>.</div></a>
+</div>
+
+<h2>The front door — 7 FPM pools</h2>
+<table>
+<tr><th>FPM pool / socket</th><th>Runs as</th><th>App</th><th>Owns these paths</th></tr>
+<tr><td class="mono">looth-dev</td><td class="mono">looth-dev</td><td>WordPress core</td><td><code>/wp-*</code>, all unclaimed paths, + the loopback sync/auth endpoints for the strangler apps</td></tr>
+<tr><td class="mono">archive-poc</td><td class="mono">archive-poc</td><td>Archive + feed + CPT render</td><td><code>/archive-poc/</code> <code>/archive/</code> <code>/front-page/</code> <code>/article/ /video/ /post-imgcap/…</code></td></tr>
+<tr><td class="mono">bb-mirror</td><td class="mono">bb-mirror</td><td>Forums (“the Hub”)</td><td><code>/hub/</code> (+ legacy <code>/forum(s)/</code> 301→hub)</td></tr>
+<tr><td class="mono">profile-app</td><td class="mono">profile-app</td><td>Member profiles</td><td><code>/u/&lt;slug&gt;</code> <code>/p/&lt;slug&gt;</code> <code>/profile/edit</code> <code>/profile-api/v0/</code></td></tr>
+<tr><td class="mono">events</td><td class="mono">events</td><td>Event listing</td><td><code>/events/</code></td></tr>
+<tr><td class="mono">membership</td><td class="mono">membership</td><td>Patreon/Stripe pages</td><td><code>/join/ /connect-your-patreon/ /membership-guide/ /manage-subscription/</code></td></tr>
+<tr><td class="mono">lg-billing-dev</td><td class="mono">ccdev</td><td>Stripe billing (Slim)</td><td><code>/billing</code> (gate-exempt; own token auth)</td></tr>
+</table>
+<p class="note" style="color:var(--faint);margin-top:8px">Cookie gate: every path requires the <code>loothdev_auth</code> cookie (minted at <code>/claim?t=…</code>) except <code>/billing</code>, <code>/wp-json/lg-member-sync|loothdev|looth-internal</code>, <code>/.well-known</code>, <code>/thumb</code> (basic-auth), and loopback-only sync endpoints.</p>
+
+<h2>Database topology &amp; sprawl</h2>
+<div class="callout">
+  <h3>⚠ Split-brain on the MariaDB layer</h3>
+  <p>WordPress core serves from <b>looth_import</b> (the live clone). But every satellite that reads WP’s MariaDB
+  <i>directly</i> — <b>events</b>, <b>profile-app</b>’s WP-user bridge, and <b>lg-stripe-billing</b> — is still pointed at
+  <b>looth_dev</b>, the older fixture DB. They are reading a different, staler WordPress than the one WordPress itself serves.</p>
+  <p>Two more dupes: the Postgres <code>looth.discovery</code> schema is a <b>half-finished SQLite→PG migration</b> (started by a chat that ran out of context) — its <code>article_blobs</code> (299) is live and serves CPT pages, while its <code>content_item</code> (1,830) duplicates the SQLite search index; both run in parallel. And member <b>identity is mirrored across three stores</b> — SQLite <code>person</code>, PG <code>forums.person</code>, and PG <code>profile_app.users</code>.</p>
+</div>
+
+<div class="map">
+  <div class="engcol">
+    <h4><span class="swatch" style="background:var(--maria)"></span>MariaDB</h4>
+    <div class="sub" style="color:var(--mute)">localhost · ~2.0 GB / 722 tables</div>
+    <div class="dbbox warn"><div class="nm">looth_import <span class="stale-tag" style="border-color:#2bb6b0;color:#2bb6b0">WP live-clone</span></div>
+      <div class="meta">290 tbl · 827 MB</div><div class="consumers">→ WordPress core (the DB WP actually serves)</div></div>
+    <div class="dbbox warn"><div class="nm">looth_dev <span class="stale-tag">stale fixture</span></div>
+      <div class="meta">285 tbl · 1,076 MB</div><div class="consumers">→ events · profile-app bridge · lg-billing · bb whoami-ref<br><b>mismatch vs WP’s looth_import</b></div></div>
+    <div class="dbbox"><div class="nm">loothtool_dev</div><div class="meta">121 tbl · 62 MB</div><div class="consumers">→ dev.loothtool WP</div></div>
+    <div class="dbbox good"><div class="nm">lg_membership</div><div class="meta">26 tbl · 1.7 MB</div><div class="consumers">→ billing + poller + profile-app (clean, shared sink)</div></div>
+  </div>
+  <div class="engcol">
+    <h4><span class="swatch" style="background:var(--pg)"></span>PostgreSQL</h4>
+    <div class="sub" style="color:var(--mute)">peer-auth · /var/run/postgresql</div>
+    <div class="dbbox good"><div class="nm">looth → schema forums</div><div class="meta">9 tbl · topic 1,262 · reply 4,900 · attachment 1,721</div><div class="consumers">→ bb-mirror (the Hub) — single source, clean</div></div>
+    <div class="dbbox warn"><div class="nm">looth → schema discovery <span class="stale-tag" style="border-color:#e0b341;color:#e0b341">dup</span></div><div class="meta">article_blobs 299 (LIVE — serves CPT standalone) · content_item 1,830</div><div class="consumers">→ archive-poc CPT render. A partial SQLite→PG migration (started by a chat that ran out of context); content_item duplicates the SQLite search index — both live.</div></div>
+    <div class="dbbox good"><div class="nm">profile_app (public)</div><div class="meta">27 tbl · users 1,815 · profiles 666 · wp_user_bridge 1,612</div><div class="consumers">→ profile-app — single source, clean</div></div>
+  </div>
+  <div class="engcol">
+    <h4><span class="swatch" style="background:var(--sqlite)"></span>SQLite</h4>
+    <div class="sub" style="color:var(--mute)">on-disk file</div>
+    <div class="dbbox good"><div class="nm">archive-poc/index.sqlite</div><div class="meta">9.9 MB · content_item 1,954 · content_fts (FTS5) · person 1,815</div><div class="consumers">→ archive-poc feed + search. <b>Derived</b> from WP via save_post → loopback sync → indexer.</div></div>
+    <div class="dbbox"><div class="nm" style="color:var(--faint)">CPT blobs live in Postgres</div><div class="meta">standalone <code>/post-imgcap/…</code> reads <code>discovery.article_blobs</code> (see PG col), not SQLite</div><div class="consumers">→ WP fallback on blob miss</div></div>
+  </div>
+</div>
+
+<div class="foot">
+  Identity flows: strangler apps resolve “who is the viewer?” via a loopback to WordPress
+  <code>/wp-json/looth/v1/whoami</code> (cached ~45s in <code>/dev/shm</code>); profile-app additionally mints a JWT
+  <code>looth_id</code> on first WP login. So WP (on <code>looth_import</code>) remains the identity authority even though the
+  apps store their own copies of <code>person</code>/<code>users</code>.
+</div>
+
+</div></body></html>

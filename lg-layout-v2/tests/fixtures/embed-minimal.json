@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "_meta": {
+    "title": "embed — minimal fixture",
+    "post_id": 1,
+    "post_type": "post-imgcap",
+    "fixture_purpose": "Three embed variants: 16x9 default, 1x1 square, 9x16 vertical. CLI harness has no WP oEmbed so each renders as the fallback link with the right aspect-ratio reservation."
+  },
+  "blocks": [
+    { "type": "embed", "id": "e1", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "caption": "Acoustic Guitar Builders Club — open discussion." },
+    { "type": "embed", "id": "e2", "url": "https://vimeo.com/76979871",                  "ratio": "1x1" },
+    { "type": "embed", "id": "e3", "url": "https://twitter.com/jack/status/20",         "ratio": "9x16", "caption": "Vertical aspect-ratio test." }
+  ]
+}

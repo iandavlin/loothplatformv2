@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Archive (POC) — Looth Group</title>
+<link rel="stylesheet" href="archive.css">
+</head>
+<body>
+<main class="arc-page">
+  <h1 class="arc-h">archive <span class="arc-sub">poc</span></h1>
+
+  <form class="topbar" id="topbar" autocomplete="off">
+    <svg class="topbar__icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b6f6b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="q" name="q" type="search" placeholder="Search the archive…" />
+    <select id="sort" class="sort">
+      <option value="newest">Newest</option>
+      <option value="liked">Most liked</option>
+      <option value="active">Most active</option>
+      <option value="oldest">Oldest</option>
+      <option value="relevance">Best match</option>
+    </select>
+  </form>
+
+  <nav class="tabs" id="tabs" aria-label="Content type"></nav>
+
+  <section class="subfilters" id="subfilters" hidden>
+    <span class="lbl">Tags:</span>
+    <div class="pills" id="tag-pills"></div>
+    <label class="access"><input type="checkbox" id="public-only"> Public only</label>
+  </section>
+
+  <p class="results-meta" id="results-meta"></p>
+
+  <section class="cards" id="cards" aria-live="polite"></section>
+
+  <div class="loadmore">
+    <button id="loadmore" type="button" hidden>Load more</button>
+    <span id="loadmore-status"></span>
+  </div>
+</main>
+<script src="archive.js"></script>
+</body>
+</html>

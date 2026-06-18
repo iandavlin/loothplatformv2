@@ -1,0 +1,118 @@
+{
+  "name": "embed",
+  "version": 1,
+  "selector": ".lg-embed",
+  "description": "Third-party media embed (YouTube, Vimeo, Twitter, SoundCloud, etc.) via URL. Aspect-ratio reservation gives zero cumulative layout shift.",
+  "schema": {
+    "props": {
+      "url": {
+        "type": "string",
+        "default": "",
+        "description": "Source URL. Resolved at render time via WP oEmbed cache."
+      },
+      "ratio": {
+        "type": "string",
+        "default": "16x9",
+        "enum": [
+          "16x9",
+          "4x3",
+          "1x1",
+          "9x16",
+          "21x9"
+        ],
+        "description": "Aspect ratio for the reserved box. Authoring pill cycles through these."
+      },
+      "caption": {
+        "type": "string",
+        "default": "",
+        "description": "Optional caption below the embed. Plain text, escaped."
+      },
+      "variant": {
+        "type": "string",
+        "default": "variant-1",
+        "enum": ["variant-1", "variant-2"],
+        "description": "Visual style. variant-1 = framed (cream bg + sage border, current default). variant-2 = borderless (transparent, no chrome — just the embed)."
+      }
+    },
+    "required": [
+      "url"
+    ]
+  },
+  "vars": {
+    "container": [
+      "padding",
+      "margin-block",
+      "bg",
+      "border",
+      "radius",
+      "shadow",
+      "gap"
+    ],
+    "text": [
+      "color",
+      "link-color",
+      "font-family",
+      "font-size",
+      "font-weight",
+      "line-height",
+      "letter-spacing",
+      "text-align"
+    ]
+  },
+  "defaults": {
+    "container": {
+      "padding": "12px 16px",
+      "margin-block": "16px",
+      "bg": "var(--lg-cream)",
+      "border": "1px solid var(--lg-sage-3)",
+      "radius": "8px",
+      "shadow": "none",
+      "gap": "12px"
+    },
+    "text": {
+      "color": "var(--lg-ink)",
+      "link-color": "var(--lg-sage)",
+      "font-family": "var(--lg-font-sans)",
+      "font-size": "15px",
+      "font-weight": "400",
+      "line-height": "1.5",
+      "letter-spacing": "normal",
+      "text-align": "left"
+    }
+  },
+  "variants": {
+    "variant-1": {
+      "extends": "defaults"
+    },
+    "variant-2": {
+      "extends": "defaults",
+      "container": {
+        "padding": "0",
+        "bg": "transparent",
+        "border": "none",
+        "radius": "0"
+      }
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": [
+      "caption"
+    ],
+    "custom_picker": "embed-url",
+    "variant_prop": "variant",
+    "pill_buttons": [
+      "up",
+      "down",
+      "edit",
+      "change",
+      "ratio",
+      "variant",
+      "tier",
+      "delete"
+    ]
+  },
+  "context_overrides": [
+    "columns"
+  ]
+}

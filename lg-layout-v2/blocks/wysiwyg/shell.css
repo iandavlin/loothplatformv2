@@ -1,0 +1,62 @@
+/* wysiwyg — structural CSS only. Every chrome property flows through a CSS
+   variable declared in manifest.json. The cascade layers
+   (block-defaults → context → dash) resolve the effective value. */
+
+@layer block-shell {
+  .lg-wysiwyg {
+    /* Block-level container. flow-root establishes a new block formatting
+       context that contains floats inside this block — without it, an
+       image with .alignright/.alignleft "escapes" the wysiwyg and pushes
+       subsequent blocks (embeds, images, dividers) into wrapping around
+       it. flow-root gives author-intended alignment inside the wysiwyg
+       and clean stacking between wysiwyg and the next block. */
+    display: flow-root;
+    padding: var(--lg-padding, 0);
+    margin-block: var(--lg-margin-block, 0);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+
+    /* Text. The author's HTML inside inherits these. */
+    color: var(--lg-color, inherit);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, inherit);
+    font-weight: var(--lg-font-weight, 400);
+    line-height: var(--lg-line-height, 1.6);
+    letter-spacing: var(--lg-letter-spacing, normal);
+    text-align: var(--lg-text-align, left);
+  }
+
+  /* Anchor color — separate var so authors can override link color
+     independent of body color. Default inherits, but the manifest sets
+     a brand-link default. */
+  .lg-wysiwyg a {
+    color: var(--lg-link-color, inherit);
+  }
+
+  /* The author's TinyMCE output contains <p>, <h2>, <h3>, <ul>, <ol>, <a>,
+     <strong>, <em>. We don't reset margins on these — the browser's
+     default vertical rhythm is fine for editorial body copy. If a future
+     site needs tighter rhythm, override via the dash text vars. */
+
+  /* Images inserted via WP's media library carry .alignleft, .alignright,
+     .aligncenter, or .alignnone. Honor those classes the way the classic
+     editor's WYSIWYG preview does — text wraps around floated images.
+     The wysiwyg's flow-root above keeps the float contained so it doesn't
+     bleed into subsequent blocks. Floated images are capped at 50% of
+     the wysiwyg's content width to leave room for text to actually wrap. */
+  .lg-wysiwyg img {
+    max-width: 100%;
+    height: auto;
+  }
+  .lg-wysiwyg img.alignleft  { float: left;  margin: 0 1.25em 0.75em 0; max-width: 50%; }
+  .lg-wysiwyg img.alignright { float: right; margin: 0 0 0.75em 1.25em; max-width: 50%; }
+  .lg-wysiwyg img.aligncenter { display: block; margin-inline: auto; }
+  .lg-wysiwyg img.alignnone   { display: block; }
+  /* WP also sometimes wraps an image in <a class="alignright">. Apply the
+     same float to the link wrapper so the inner image floats with it. */
+  .lg-wysiwyg .alignleft  { float: left;  margin: 0 1.25em 0.75em 0; }
+  .lg-wysiwyg .alignright { float: right; margin: 0 0 0.75em 1.25em; }
+  .lg-wysiwyg .aligncenter { display: block; margin-inline: auto; text-align: center; }
+}

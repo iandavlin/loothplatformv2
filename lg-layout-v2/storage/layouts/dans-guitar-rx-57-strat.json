@@ -1,0 +1,285 @@
+{
+  "schema": 1,
+  "_meta": {
+    "source": "/home/ubuntu/projects/VG 0524 Dan's Guitar Rx '57 Strat  Erlewine.pdf",
+    "title": "Battle-Scarred — A '57 Strat Goes Under the Knife",
+    "byline": "Dan Erlewine",
+    "publication": "Vintage Guitar Magazine, May 2024 (Dan's Guitar Rx column)",
+    "translated_at": "2026-05-23",
+    "notes": [
+      "VG reprint variant per write-article-v2 skill: credit wysiwyg under post-header, numbered figures, parts callout, VG-promo callout, post-footer.",
+      "Image prose lives in `image_text` (canonical prop). Earlier draft incorrectly used `caption`/`description` (deprecated); render dropped those silently.",
+      "Pairing: portrait figs grouped via columns (1+2, 3+4, 5+6, 7+8, 10+11). Solos: hero, 9 (odd portrait), 12 (closing).",
+      "Image IDs preserved from the prior upload pass: hero=69373, figs by prop number."
+    ]
+  },
+  "blocks": [
+    {
+      "type": "post-header",
+      "title": "Battle-Scarred: A '57 Strat Goes Under the Knife",
+      "tagline": "B.K. Vaught walked in with a heavily modified, refinished '57 Strat. We put a three-person team on it — strip the paint, replace the decal, narrow the bridge spacing, and bring it back to playable.",
+      "featured_image_id": 69373,
+      "show_byline": true,
+      "show_categories": true,
+      "show_tags": true
+    },
+    {
+      "type": "callout",
+      "variant": "note",
+      "body": "<p><em>Reprinted with permission from <a href=\"https://www.vintageguitar.com\">Vintage Guitar Magazine</a>, May 2024. Originally appeared in Dan Erlewine's <a href=\"https://www.vintageguitar.com/author/dan-erlewine/\">Dan's Guitar Rx</a> column.</em></p>"
+    },
+    {
+      "type": "image",
+      "image_id": 69373,
+      "alt": "Original neck plate close-up on a Fiesta Red Strat body, showing knife-scratched 'USA FLMC' engraving and serial 023009.",
+      "image_text": "Neck plate — knife-scratched 'USA FLMC', serial 023009.",
+      "aspect": "1/1",
+      "focal_x": 50,
+      "focal_y": 30
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<p>B.K. Vaught recently walked into my shop with a vintage Strat that had been modified and refinished. While its changes represented a bit of American history, the guitar deserved to be restored.</p>\n<p>B.K. got it in the spring of 2022, while helping sort the estate of an uncle who had passed away. Among his belongings were dozens of guitars including a '53 Gibson J-45, a '60s Gretsch Chet Atkins Tennessean, and an assortment of '80s Fenders. This one caught B.K.'s attention because of the wear on its fretboard.</p>\n<p>After he posted pictures online, someone suggested it might be a '57 Strat, so he took it to Gruhn Guitars for evaluation, and they confirmed the body was indeed from '57, while the neck had been modified and some components were original.</p>\n<p>Cryptic knife-scratched engravings on the neck plate suggest it once belonged to a member of the U.S. Marine Corp, and it was oversprayed with what may have been an attempt at Fiesta Red, including an off-center stinger on the back of the headstock.</p>\n<p>B.K. turned it over with instructions to strip the finish, replace the headstock decal, and do whatever else was needed to make it playable (and look closer to original). As you'll see, there was a lot to do, so I created a three-person team.</p>",
+      "style": "panel"
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69370,
+              "number": "1",
+              "alt": "Gloved hand brushing chemical stripper onto a red peghead, USA FLMC partially visible on the exposed wood.",
+              "image_text": "Chemical stripping the peghead.\n\nElyse Kautz started by using chemical stripper to remove paint from the peghead, starting on the back. She soon discovered why someone might have painted it; carved into the maple were the letters \"USA\" and \"FLMC,\" matching the neck plate. To keep stripper from getting into the holes and perhaps leeching into the wood, she wedged dowel plugs into the tuner holes. Many colors — especially red — can float out of the wood and bleed into the new clear lacquer that will be sprayed over the area."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69377,
+              "number": "2",
+              "alt": "Stripped peghead from above on a wood floor, light golden-amber tone after first tint coat.",
+              "image_text": "Scraped, sanded, and lightly tinted.\n\nAfter the peghead was cleaned and dried, Elyse scraped and sanded the letters. After air-brushing some tint over the bare wood, it looked old and worn, like it should."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69372,
+              "number": "3",
+              "alt": "Stripped peghead on a green workbench, showing damage at the first tuner hole and red pigment still in the grain.",
+              "image_text": "Chips at the first tuner hole; red pigment still showing.\n\nThe paint also hid two large chips in the first tuner hole, likely from someone using the wrong tool to remove the original bushings. They had filled the chips with glue and just painted over it. I bleached the head twice after stripping it but you can still see how red pigment remained in the wood."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69371,
+              "number": "4",
+              "alt": "Peghead after maple filler at the first tuner hole, with golden-brown shader airbrushed over the bare wood.",
+              "image_text": "Maple fill, then golden-brown shader to mute the red.\n\nI filled the chips with maple then used an air brush to spray thin coats of golden brown/amber \"shader\" (clear Colortone stain mixed with lacquer thinner and a splash of clear lacquer) to hide some of the red. It also added an antique effect."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69378,
+              "number": "5",
+              "alt": "Red Strat body with pickguard removed; existing harness laid out across the routes.",
+              "image_text": "Pickguard out, cavities shielded with copper foil.\n\nThe pickguard and body cavities were shielded with copper foil. Because Gene Imbody had to rewire the pickup harness, we ditched the pickguard and used a StewMac aged-white pickguard and pickup covers."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69379,
+              "number": "6",
+              "alt": "Two aged single-coil Strat pickups laid out on a green surface, leads showing original cloth-covered wiring.",
+              "image_text": "Original middle and bridge; Duncan in for the neck.\n\nThe middle and bridge pickup were original, but the neck was a replacement that Gene swapped for a Duncan Vintage Staggered '50s he had on-hand."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69374,
+              "number": "7",
+              "alt": "Gene Imbody soldering the pickup harness with a paper-in-oil cap and five-way selector visible.",
+              "image_text": "Wiring the harness.\n\nHe wired the pickups and harness with an Emerson paper-in-oil cap, StewMac CTS pots, and a five-way selector. After measuring the resistance of all three pickups, he decided to use the Duncan at the bridge and put the original bridge pickup at the neck. He had to flip polarity on the Duncan to make it match, but together, they sound like a dream."
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69375,
+              "number": "8",
+              "alt": "Hands installing vintage-style tuners with bushings into the freshly tinted peghead.",
+              "image_text": "Bushings and tuners installed.\n\nElyse gathered parts then installed the bushings and tuners."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "image_id": 69376,
+      "number": "9",
+      "alt": "Finished peghead with a Fender Custom Shop decal applied; T, O, C deliberately chipped for a roadworn look.",
+      "image_text": "Fender Custom Shop decal applied (and lightly chipped to match).\n\nI installed the string tree then applied the decal sent by the great folks at the Fender Custom Shop, who sent an appropriate version. While I was applying it, the middle of \"Stratocaster\" got twisted. I managed to unwind it, but the letters T, O, and C were damaged. After it dried, I chipped off what was left and chipped a few other places to make it look roadworn."
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69380,
+              "number": "10",
+              "alt": "Ruler laid across the Callaham V/N Strat Bridge saddles showing 2 1/16-inch string spacing.",
+              "image_text": "Callaham V/N bridge: 2 1/16\" string spacing.\n\nStrats from this era have fretboards that are narrower than most, enough so the strings are close to falling off the edges of the frets — especially up the fretboard. Adding fuel, this one was re-fretted and the ends were bevelled so steep that the frets had even less playing surface. The solution? Callaham's V/N Strat Bridge, which has the standard 2 7/32\" mounting spacing, but narrower 2 1/16\" string spacing…"
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "image",
+              "image_id": 69381,
+              "number": "11",
+              "alt": "Ruler laid across the original Fender bridge saddles showing 2 3/16-inch string spacing.",
+              "image_text": "Original bridge: 2 3/16\" string spacing.\n\n…versus the original's 2 3/16\". The wider native spacing is exactly what the narrow neck couldn't accommodate without strings drifting off the fret edges."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "image",
+      "image_id": 69382,
+      "number": "12",
+      "alt": "B.K. Vaught standing outdoors holding the restored '57 Strat in Fiesta Red with the new aged-white pickguard.",
+      "image_text": "The finished '57 with its proud owner, B.K. Vaught.\n\nWith a new bridge and bone nut, the '57 Strat is now playing great in the hands of its proud owner."
+    },
+    {
+      "type": "callout",
+      "variant": "data",
+      "title": "Parts & tools used",
+      "items": [
+        {
+          "icon": "globe",
+          "label": "StewMac",
+          "url": "https://www.stewmac.com/",
+          "description": "Aged-white pickguard, pickup covers, CTS pots, Colortone stain."
+        },
+        {
+          "icon": "globe",
+          "label": "Callaham Guitars",
+          "url": "https://www.callahamguitars.com/",
+          "description": "V/N Strat Bridge — 2 7/32\" mounting / 2 1/16\" string spacing."
+        },
+        {
+          "icon": "globe",
+          "label": "Emerson Custom",
+          "url": "https://www.emersoncustom.com/",
+          "description": "Paper-in-oil tone cap."
+        },
+        {
+          "icon": "globe",
+          "label": "Seymour Duncan Vintage Staggered '50s",
+          "url": "https://www.seymourduncan.com/single-products/ssl-1-vintage-staggered-strat-pickup",
+          "description": "Neck pickup replacement (sometimes used at bridge after polarity flip)."
+        },
+        {
+          "icon": "globe",
+          "label": "Fender Custom Shop",
+          "url": "https://shop.fender.com/en-US/custom-shop/",
+          "description": "Sent a period-appropriate Stratocaster decal."
+        },
+        {
+          "icon": "globe",
+          "label": "Gruhn Guitars",
+          "url": "https://www.gruhn.com/",
+          "description": "Vintage authentication — confirmed the body was '57."
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "columns": [
+        {
+          "blocks": [
+            {
+              "type": "wysiwyg",
+              "html": "<p style=\"margin:0;text-align:center\"><a href=\"https://www.vintageguitar.com\" rel=\"noopener\" target=\"_blank\"><img src=\"https://store.vintageguitar.com/pub/media/catalog/product/cache/2c60e50512ed11026ef84535aaf8e02f/2/0/2024_05may_store_1.jpg\" alt=\"Vintage Guitar Magazine — May 2024 cover\" loading=\"lazy\" style=\"max-width:240px;width:100%;height:auto;border:1px solid #e7e3da\" /></a></p>"
+            }
+          ]
+        },
+        {
+          "blocks": [
+            {
+              "type": "callout",
+              "variant": "links",
+              "title": "Read more in Vintage Guitar",
+              "items": [
+                {
+                  "icon": "globe",
+                  "label": "vintageguitar.com",
+                  "url": "https://www.vintageguitar.com",
+                  "description": "Monthly print + digital. 25,700+ subscribers."
+                },
+                {
+                  "icon": "link",
+                  "label": "Dan's Guitar Rx column archive",
+                  "url": "https://www.vintageguitar.com/author/dan-erlewine/",
+                  "description": "Every column Dan has written since 2004."
+                },
+                {
+                  "icon": "globe",
+                  "label": "Dan Erlewine Guitars",
+                  "url": "https://danerlewine.com/",
+                  "description": "Dan's own site."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "post-footer",
+      "show_author": true,
+      "show_related": true
+    }
+  ]
+}

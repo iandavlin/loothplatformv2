@@ -1,0 +1,67 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Path 4 — Click through to a CPT</title><link rel="stylesheet" href="audit.css">
+</head><body>
+<nav class="topnav"><div class="inner">
+  <b>Click-path</b>
+  <a class="pill" href="index.html">Overview</a>
+  <a class="pill" href="path-frontpage.html">Front page</a>
+  <a class="pill" href="path-search.html">Archive search</a>
+  <a class="pill" href="path-hub.html">Open the Hub</a>
+  <a class="pill on" href="path-cpt.html">Click → CPT</a>
+  <a class="pill" href="path-discussion.html">Click → discussion</a>
+</div></nav>
+<div class="wrap">
+
+<h1>Path 4 — User clicks through to a CPT</h1>
+<p class="sub">GET <code>/post-imgcap/&lt;slug&gt;/</code> (also <code>/article/ /video/ /sponsor/ /loothprint/ /document/&lt;id&gt;/ …</code>)</p>
+<p class="lead">Managed content types are <b>strangled</b>: nginx routes the permalink to the archive-poc <b>standalone renderer</b>,
+which serves a pre-materialized layout. Only on a cache miss does it hand back to WordPress, where <b>lg-layout-v2</b>
+builds the page from the <code>_lg_layout_v2</code> post-meta. Two render engines, one URL.</p>
+
+<div class="flow">
+  <div class="step browser"><div class="lyr">Browser</div><div class="ttl">GET /post-imgcap/f5-mandolin-binding-repair/</div></div>
+  <div class="arrow">↓</div>
+
+  <div class="step nginx"><div class="lyr">nginx · cookie gate</div><div class="ttl">regex <code>^/(post-imgcap|post-type-videos|sponsor-post|loothprint|…)/(slug)/$</code></div>
+    <div class="meta">sets LG_POST_TYPE + LG_SLUG → fastcgi to archive-poc</div>
+    <div class="note">?lg_edit or ?lg_comments → rewrite to /index.php (hands off to WP editor/comments instead).</div></div>
+  <div class="arrow">↓ <small>fastcgi_pass</small></div>
+
+  <div class="step fpm"><div class="lyr">FPM pool</div><div class="ttl">php8.3-fpm-archive-poc.sock</div></div>
+  <div class="arrow">↓</div>
+
+  <div class="step app"><div class="lyr">App · standalone render</div><div class="ttl">archive-poc/standalone/render.php</div>
+    <div class="meta">connects as DB user <code>archive-poc</code> (peer-auth) · 1 fresh conn per request</div></div>
+  <div class="arrow">↓ <small>PDO · Postgres</small></div>
+
+  <div class="step app" style="--c:var(--pg)"><div class="lyr">Database · Postgres (fast path)</div><div class="ttl">looth · schema discovery · article_blobs</div>
+    <div class="meta">SELECT blob FROM article_blobs WHERE post_type=:pt AND slug=:sl &nbsp;(299 blobs)</div></div>
+
+  <div class="branch">
+    <div class="arrow" style="margin-left:0">↓ <small>HIT</small></div>
+    <div class="step render"><div class="lyr">Render · fast path</div><div class="ttl">serve materialized HTML → browser</div>
+      <div class="note">No WordPress touched. This is the common case.</div></div>
+    <div class="arrow" style="margin-left:0;margin-top:14px">↓ <small>MISS — X-Accel-Redirect /__wp_render&lt;permalink&gt;</small></div>
+    <div class="step fpm"><div class="lyr">FPM pool · fallback</div><div class="ttl">php8.3-fpm-looth-dev.sock</div>
+      <div class="meta">nginx internal location /__wp_render → WordPress index.php</div></div>
+    <div class="arrow" style="margin-left:0">↓</div>
+    <div class="step app"><div class="lyr">WordPress + plugin</div><div class="ttl">lg-layout-v2 · WpRenderer::filter_content()</div>
+      <div class="meta">template_include → single-v2.php · the_content (prio 9) renders the layout</div></div>
+    <div class="arrow" style="margin-left:0">↓ <small>SQL</small></div>
+    <div class="step app" style="--c:var(--maria)"><div class="lyr">Database · MariaDB</div><div class="ttl">looth_import · wp_posts ⋈ wp_postmeta</div>
+      <div class="meta">meta_key=_lg_layout_v2 (JSON layout) + _lg_layout_v2_rendered_at (cache epoch) · tier via wp_term_relationships</div>
+      <div class="note">Anonymous → cached HTML per (post_id+epoch); logged-in → rendered fresh.</div></div>
+  </div>
+</div>
+
+<div class="touched">
+  <h3>Databases touched</h3>
+  <div class="dbrow">
+    <span class="db pg"><span class="dot"></span><span class="eng">Postgres</span><b>looth.discovery.article_blobs</b> <span class="eng">(fast path)</span></span>
+    <span class="db maria"><span class="dot"></span><span class="eng">MariaDB</span><b>looth_import</b> <span class="eng">(WP fallback)</span></span>
+  </div>
+  <p class="note" style="color:var(--faint);margin-top:9px">The CPT body’s source of truth is WordPress (<code>_lg_layout_v2</code> on <b>looth_import</b>); the standalone blob is a cache of it.</p>
+</div>
+
+</div></body></html>

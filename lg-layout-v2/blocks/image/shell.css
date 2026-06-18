@@ -1,0 +1,441 @@
+/* image-caption — structural CSS only.
+   Every chrome property flows through a CSS variable declared in
+   manifest.json. The cascade layers (block-defaults → context → dash) resolve
+   the effective value. No bare colors, fonts, paddings, etc. anywhere. */
+
+@layer block-shell {
+  .lg-image {
+    display: grid;
+    gap: var(--lg-gap, 12px);
+
+    padding: var(--lg-padding, 0);
+    margin-block: var(--lg-margin-block, 0);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+
+    color: var(--lg-color, inherit);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, inherit);
+    font-weight: var(--lg-font-weight, 400);
+    line-height: var(--lg-line-height, 1.5);
+    letter-spacing: var(--lg-letter-spacing, normal);
+    text-align: var(--lg-text-align, left);
+  }
+
+  .lg-image a {
+    color: var(--lg-link-color, inherit);
+  }
+
+  /* .lg-image__image hosts both the <img> and the absolutely-positioned
+     popout panel. Position context lives here, not on the outer figure,
+     so the popout aligns to the photo's edges (not the figcaption's). */
+  .lg-image__image {
+    margin: 0;
+    position: relative;
+    overflow: visible;          /* keep visible so the popout can escape laterally */
+  }
+
+  /* .lg-image__frame wraps just the <img> (and badge) so the hover zoom
+     stays bounded AND the border-radius clips the scaled-up corners.
+     Without this wrapper either the zoom escaped the figure (single
+     image) or the radius got clipped off (columns image, where the
+     wrapper forced overflow:hidden but the radius lived on the img). */
+  .lg-image__frame {
+    position: relative;
+    overflow: hidden;
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+    line-height: 0;             /* drop the inline-image baseline gap */
+    /* Hover affordance lives on the frame, not the img — scaling the img
+       got clipped by overflow:hidden and looked like a stutter. Now the
+       hover reads as the photo settling into the page: nudge down 2px
+       and compress the shadow so the photo looks pressed instead of
+       lifted. If no resting shadow is configured the translate is still
+       a subtle "I'm interactive" cue without any visual jank. */
+    transition: box-shadow 200ms ease-out, transform 200ms ease-out;
+  }
+  .lg-image:hover .lg-image__frame {
+    transform: translateY(2px);
+    box-shadow: var(--lg-shadow-hover, 0 2px 6px rgba(0, 0, 0, 0.15));
+  }
+
+  .lg-image__img {
+    display: block;
+    width: 100%;
+    height: auto;
+    /* zoom cursor stays — still hints at the lightbox click target. */
+    cursor: zoom-in;
+  }
+  /* When an aspect crop is applied the frame has a fixed aspect-ratio box.
+     The img needs to fill that box (width:100% AND height:100%) so that
+     object-fit: cover + object-position from the inline style actually
+     crop within the frame. With height:auto the img grew to its natural
+     aspect, object-fit/position became no-ops, and only the top of the
+     source was visible (clipped by frame's overflow:hidden). */
+  .lg-image--has-aspect .lg-image__img {
+    height: 100%;
+  }
+
+  /* Slide-out popout panel — the SHORT attached caption sits absolutely
+     to the left of the photo, off-canvas by default. On figure hover it
+     slides in. Below 960px viewport it stays hidden — the lightbox is
+     the fallback surface (tap the image). The popout is the "what was
+     this image, again?" reminder while the long figcaption tells the
+     story underneath. */
+  /* Popout vertically centers on the side of the photo (top: 50% +
+     translateY(-50%)). translateX carries the slide-in animation;
+     translateY stays fixed in both states. */
+  /* Hover popout disabled — the long figcaption underneath the image already
+     conveys the same info; the popout was distracting. Kept the rule shell
+     in case authors want to opt back in via a future variant. */
+  .lg-image__popout { display: none; }
+
+  .lg-image--has-popout:hover .lg-image__popout {
+    opacity: 1;
+    transform: translate(0, -50%);
+    pointer-events: auto;
+  }
+
+  /* In a 2-column row, mirror the popout side: left image → popout on
+     the left (default), right image → popout on the right. Symmetrical
+     and avoids overlapping the partner image. In a 3-column row, the
+     middle column's popout overlaps either neighbor — hide it; lightbox
+     is the fallback. */
+  .lg-columns__col:not(:first-child) .lg-image__popout {
+    right: auto;
+    left: calc(100% + 16px);
+    transform: translate(12px, -50%);
+  }
+  .lg-columns__col:not(:first-child) .lg-image--has-popout:hover .lg-image__popout {
+    transform: translate(0, -50%);
+  }
+  .lg-columns--3 .lg-columns__col:nth-child(2) .lg-image__popout { display: none; }
+
+  @media (max-width: 960px) {
+    .lg-image__popout { display: none; }
+  }
+
+  /* Phone: drop the focal crop. Author-set `aspect` writes inline
+     `aspect-ratio` on the frame and `object-fit: cover; object-position:`
+     on the img, so only !important can override. On narrow viewports the
+     image runs natural aspect, full width — no squeeze, no crop. Lightbox
+     is also disabled on phone (lg-front.js), so the zoom-in cursor is
+     misleading; swap it out. */
+  @media (max-width: 767px) {
+    .lg-image--has-aspect .lg-image__frame {
+      aspect-ratio: auto !important;
+    }
+    .lg-image--has-aspect .lg-image__img {
+      height: auto !important;
+      object-fit: contain !important;
+      object-position: center !important;
+    }
+    .lg-image__img { cursor: default; }
+  }
+
+  /* Corner badge — small overlay anchored top-left of the photo. Every
+     chrome property reads from a CSS var so the dash's "Number badge"
+     sub-target panel can re-skin it (bg, color, font, padding, radius,
+     shadow).
+     Layout: inline-flex with min-width = min-height makes the badge
+     square by default for single-digit numbers, so `--lg-radius: 50%`
+     in the dash yields an actual circle (not an ellipse). Multi-digit
+     ("10", "11", "12") expand the width to a pill with rounded ends
+     at 50% radius, which reads as intentional rather than broken.
+     Position is intentionally fixed top-left; per-instance corner
+     control would be a future enum prop. */
+  .lg-image__badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    pointer-events: none;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    min-height: 28px;
+    box-sizing: border-box;
+    line-height: 1;
+
+    padding: var(--lg-padding, 0 6px);
+    background: var(--lg-bg, #1d2327);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 3px);
+    box-shadow: var(--lg-shadow, none);
+
+    color: var(--lg-color, #fff);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, 13px);
+    font-weight: var(--lg-font-weight, 700);
+    letter-spacing: var(--lg-letter-spacing, 0.04em);
+  }
+
+  /* Both caption surfaces (short fallback + long multi-paragraph) read
+     the same text vars as the rest of the block, so the dash's text
+     panel actually controls them. Defaults match the previous hard-coded
+     values to preserve current rendering. */
+  /* Broken-file placeholder for image blocks. Triggered by lg-front.js
+     when the <img> 404s (typical on dev where /wp-content/uploads/ may
+     not be fully synced). Matches the gallery-tile placeholder treatment
+     so a half-empty page reads as "waiting for uploads," not "broken." */
+  .lg-image__frame.lg-img-missing {
+    background: var(--lg-cream, #fbfbf8);
+    border: 1px dashed var(--lg-sage-3, #d4e0b8);
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lg-image__frame.lg-img-missing .lg-image__img {
+    /* The img tag is still in the DOM (for re-load when uploads sync)
+       but we hide the visual broken icon while the placeholder shows. */
+    visibility: hidden;
+  }
+  .lg-image__frame.lg-img-missing::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8c08c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='14' rx='2'/><circle cx='9' cy='11' r='1.5'/><path d='M21 17l-5-5-4 4-3-3-6 6'/></svg>");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 36px 36px;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+
+  .lg-image__caption {
+    margin: 0;
+    color: var(--lg-color, inherit);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, 18px);
+    font-weight: var(--lg-font-weight, 400);
+    line-height: var(--lg-line-height, 1.5);
+    letter-spacing: var(--lg-letter-spacing, normal);
+    text-align: var(--lg-text-align, left);
+  }
+  /* Long-form figcaption with multi-paragraph prose. The first <p> sits
+     flush with the image; subsequent paragraphs get internal spacing.
+     Reads as body copy, not a caption — but lives inside the figure for
+     semantic + accessibility correctness. */
+  .lg-image__caption--long > p { margin: 0 0 0.7em; }
+  .lg-image__caption--long > p:last-child { margin-bottom: 0; }
+
+  /* Editor-only: empty-caption placeholder. render.php emits the figcaption
+     even when image_text is blank (editor_mode only) so authors have a
+     clickable target to start a caption. data-lg-edit-prop exists only in
+     editor mode, so readers never see this; the placeholder vanishes the
+     moment text is typed (node is no longer :empty). */
+  .lg-image__caption[data-lg-edit-prop="image_text"]:empty {
+    display: block;
+    min-height: 1.4em;
+    cursor: text;
+  }
+  .lg-image__caption[data-lg-edit-prop="image_text"]:empty::before {
+    content: "Add a caption\2026";
+    opacity: 0.45;
+    font-style: italic;
+  }
+
+  /* In a columns context (≥769px viewport — see columns/shell.css for
+     the stack breakpoint) the image figure stretches to match the
+     column's height. The image fills its slot with object-fit: cover so
+     the visual balance with text-heavy columns reads as "even row." The
+     caption stays at its natural height beneath the image. Below the
+     stack breakpoint, columns collapse to one column anyway, so the
+     fill-cover behavior would be both unnecessary and visually wrong —
+     it gets unset in the mobile block below. */
+  @media (min-width: 769px) {
+    /* Default column behavior: stretch the image to fill the column height
+       so paired image+text rows align bottom edges. Skipped when the image
+       has its own explicit `aspect` set — that ratio defines the height
+       and we don't want the column-stretch override to fight it. */
+    .lg-columns__col > .lg-image:not(.lg-image--has-aspect) {
+      height: 100%;
+      grid-template-rows: 1fr auto;
+    }
+    .lg-columns__col > .lg-image:not(.lg-image--has-aspect) .lg-image__image,
+    .lg-columns__col > .lg-image:not(.lg-image--has-aspect) .lg-image__frame {
+      height: 100%;
+    }
+    .lg-columns__col > .lg-image:not(.lg-image--has-aspect) .lg-image__img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    /* aspect-set images-in-columns: aspect-ratio drives the frame height,
+       img fills via the inline object-fit/position styles from render.php.
+       Frame width is capped by the column. Width:100% on the img keeps
+       it filling the frame horizontally before the cover crop kicks in. */
+    .lg-columns__col > .lg-image--has-aspect .lg-image__img {
+      width: 100%;
+    }
+  }
+
+
+  /* ── Lightbox (page-level, JS-injected) ──────────────────────────
+     The lightbox is created by lg-front.js on first open and lives at
+     <body> level. Lives in image/shell.css because the image block
+     owns its trigger and the styling is tied to image presentation. */
+  .lg-lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 16, 14, 0.88);
+    z-index: 99998;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+  }
+  .lg-lightbox.is-open { display: flex; }
+  body.lg-lightbox-open { overflow: hidden; }
+
+  /* Round chip with dark backdrop so it's visible against any photo content,
+     matching the prev/next arrow styling for consistency. */
+  .lg-lightbox__close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    border: 0;
+    color: #fff;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0 4px 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lg-lightbox__close:hover { background: rgba(0, 0, 0, 0.8); color: var(--lg-amber, #ecb351); }
+
+  /* Prev / next nav arrows — fixed to viewport edges so they don't fight
+     the figure for space. Hidden via inline style when gallery.length=1. */
+  .lg-lightbox__nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.45);
+    border: 0;
+    color: #fff;
+    font-size: 48px;
+    line-height: 1;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0 6px 0;
+    z-index: 2;
+  }
+  .lg-lightbox__nav:hover { background: rgba(0, 0, 0, 0.75); color: var(--lg-amber, #ecb351); }
+  .lg-lightbox__nav--prev { left: 16px; }
+  .lg-lightbox__nav--next { right: 16px; }
+
+  .lg-lightbox__counter {
+    color: #fff;
+    opacity: 0.55;
+    font-size: 12px;
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  /* Single-column centered layout. No reserved right-side desc column —
+     the image gets the full lightbox space and centers in both axes. */
+  .lg-lightbox__inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+  }
+  .lg-lightbox__figure {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    max-height: calc(100vh - 64px);
+  }
+  /* No background; wheel-zoom uses transform on this element. transform-origin
+     is 0 0 (top-left) so the JS math `pan += cursor * (1 - ratio)` keeps the
+     pixel under the cursor pinned during zoom — derived from the affine
+     screen = local*scale + pan with origin at 0,0. */
+  .lg-lightbox__img {
+    max-width: 100%;
+    max-height: calc(100vh - 64px);
+    object-fit: contain;
+    transform: translate(0, 0) scale(1);
+    transform-origin: 0 0;
+    transition: transform 80ms ease-out;
+    cursor: zoom-in;
+    will-change: transform;
+    /* Belt-and-suspenders against the browser starting a native image-drag,
+       which would preempt our pointer-based pan. JS also calls preventDefault
+       on dragstart; this kills the gesture in Safari/WebKit which sometimes
+       ignores the JS path. */
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+  .lg-lightbox__img.is-zoomed { cursor: grab; }
+  .lg-lightbox__img.is-panning { cursor: grabbing; transition: none; }
+  /* Lightbox caption — pulled from the WP attachment's post_excerpt, so it
+     travels with the image file rather than the article. Positioned outside
+     the figure as a fixed strip pinned to the bottom of the viewport so it
+     never gets clipped by tall portrait images that fill the height. */
+  .lg-lightbox__caption {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    max-width: min(960px, 80vw);
+    color: #fff;
+    font-size: 17px;
+    font-weight: 500;
+    line-height: 1.45;
+    text-align: center;
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.82);
+    padding: 12px 22px;
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 1;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  }
+  .lg-lightbox__caption:empty { display: none; }
+
+  /* First-open help chip — sits below the close button, top-right. Fades
+     out on first wheel-zoom or after 5s (handled in lg-front.js). */
+  .lg-lightbox__hint {
+    position: fixed;
+    top: 76px;
+    right: 16px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.5);
+    font-size: 12px;
+    line-height: 1.4;
+    padding: 6px 12px;
+    border-radius: 999px;
+    opacity: 0.85;
+    transition: opacity 400ms ease;
+    pointer-events: none;
+    z-index: 2;
+    max-width: min(420px, 70vw);
+    text-align: center;
+  }
+  .lg-lightbox__hint.is-dismissed { opacity: 0; }
+  /* The old long-desc panel is gone — the per-instance text lives in the
+     article figcaption only. */
+  .lg-lightbox__desc { display: none; }
+}

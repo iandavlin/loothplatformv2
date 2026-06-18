@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "_meta": {
+    "source": "https://youtu.be/icEES7djzvs",
+    "translated_at": "2026-06-08",
+    "notes": "Looth Group Live video post (post-type-videos). UNGATED — no tier term, no gated_tier on the embed. Chapter anchors are plain <a> (clickable for all), NOT lg-ts-link, since the video is public. Portable/older block set (post-header, wysiwyg, embed, section-heading, callout, post-footer) for live-engine compatibility."
+  },
+  "blocks": [
+    {
+      "type": "post-header",
+      "tagline": "Andy Bree, Ryan Hyde, and Kyle Laganella of Braxton & Hyde, Philadelphia Fretworks on joining forces to build a shared lutherie business under one roof.",
+      "show_read_time": true,
+      "variant": "variant-1"
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<p>Throughout our <em>Loothing for Dollars</em> series, we&rsquo;ve explored the various ways pros in our craft make the business work&mdash;from home-based setups and commercial spaces to loothing on the road or in retail.</p><p>In this month&rsquo;s episode, we&rsquo;re diving into a unique, loosely knit cooperative model. Join us as we sit down with Andy Bree, Ryan Hyde, and Kyle Laganella of Braxton &amp; Hyde, Philadelphia Fretworks to see how they joined forces to turn their individual career goals into a successful shared lutherie business. These three looths have found a way to bridge their individual needs by joining forces. We&rsquo;ll explore how this unique partnership keeps their loothing careers thriving.</p><p><em>Aired on Looth Group Live, Sunday, April 19th, 2026.</em></p>"
+    },
+    {
+      "type": "embed",
+      "url": "https://youtu.be/icEES7djzvs",
+      "caption": "Loothing for Dollars: The Multiple-Looth Shop"
+    },
+    {
+      "type": "section-heading",
+      "text": "Chapters",
+      "level": "h3"
+    },
+    {
+      "type": "callout",
+      "variant": "links",
+      "items": [
+        { "icon": "youtube", "label": "00:00:00 — Introduction: The Multi-Luth Shop Concept", "url": "https://youtu.be/icEES7djzvs?t=0s" },
+        { "icon": "youtube", "label": "00:05:07 — Ryan Hyde: Origin Story & Working for Victor Baker", "url": "https://youtu.be/icEES7djzvs?t=307s" },
+        { "icon": "youtube", "label": "00:12:48 — Ryan at Ken Smith Guitars & Industrial Design School", "url": "https://youtu.be/icEES7djzvs?t=768s" },
+        { "icon": "youtube", "label": "00:20:16 — Kyle Laganella: From Touring Musician to Galloup School", "url": "https://youtu.be/icEES7djzvs?t=1216s" },
+        { "icon": "youtube", "label": "00:27:05 — Kyle Post-Galloup: Working with Tim Hanky & Starting Philadelphia Fretworks", "url": "https://youtu.be/icEES7djzvs?t=1625s" },
+        { "icon": "youtube", "label": "00:35:04 — Andy Bree: Music Career, Eastern School of Fret & Getting Started", "url": "https://youtu.be/icEES7djzvs?t=2104s" },
+        { "icon": "youtube", "label": "00:43:29 — How the Three Came Together Under One Roof", "url": "https://youtu.be/icEES7djzvs?t=2609s" },
+        { "icon": "youtube", "label": "00:52:08 — The LLC Structure: Braxton & Hyde DBA & Business Organization", "url": "https://youtu.be/icEES7djzvs?t=3128s" },
+        { "icon": "youtube", "label": "01:00:02 — Rent, Revenue Split & How Money Flows Through the Shop", "url": "https://youtu.be/icEES7djzvs?t=3602s" },
+        { "icon": "youtube", "label": "01:05:36 — Shared Tools, Shop Expenses & Buying New Equipment", "url": "https://youtu.be/icEES7djzvs?t=3936s" },
+        { "icon": "youtube", "label": "01:10:48 — Scheduling, Online Calendar & Wait List System", "url": "https://youtu.be/icEES7djzvs?t=4248s" },
+        { "icon": "youtube", "label": "01:19:06 — Customer Assignment, Quality Control & Checking Each Other's Work", "url": "https://youtu.be/icEES7djzvs?t=4746s" },
+        { "icon": "youtube", "label": "01:29:00 — Shop Cleanliness, Delegation & Day-to-Day Management", "url": "https://youtu.be/icEES7djzvs?t=5340s" },
+        { "icon": "youtube", "label": "01:37:23 — Pricing, Rate Sheet & the 85/15 Revenue Split", "url": "https://youtu.be/icEES7djzvs?t=5843s" },
+        { "icon": "youtube", "label": "01:43:28 — Handling Difficult Customers & Tag-Team Approach", "url": "https://youtu.be/icEES7djzvs?t=6208s" },
+        { "icon": "youtube", "label": "01:54:47 — Intake Fee, Appointment Throttling & Calendar Management", "url": "https://youtu.be/icEES7djzvs?t=6887s" },
+        { "icon": "youtube", "label": "02:12:00 — Shop Tour: Kyle's Bench, Ryan's Area & Andy's Workspace", "url": "https://youtu.be/icEES7djzvs?t=7920s" },
+        { "icon": "youtube", "label": "02:40:00 — Distractions, Shop Culture & Where It Could Go Next", "url": "https://youtu.be/icEES7djzvs?t=9600s" }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "links",
+      "title": "Braxton & Hyde, Philadelphia Fretworks",
+      "items": [
+        { "icon": "globe", "label": "braxtonandhyde.com", "url": "https://braxtonandhyde.com/", "description": "Full-service fretted-instrument repair & instruction — 1901 S 9th St, Philadelphia" },
+        { "icon": "instagram", "label": "braxtonandhyde", "url": "https://www.instagram.com/braxtonandhyde/", "description": "Shop builds, repairs & day-to-day" },
+        { "icon": "instagram", "label": "philadelphia_fretworks", "url": "https://www.instagram.com/philadelphia_fretworks/", "description": "Kyle Laganella's bench" },
+        { "icon": "facebook", "label": "Braxton & Hyde on Facebook", "url": "https://www.facebook.com/braxtonguitars" }
+      ]
+    },
+    {
+      "type": "post-footer",
+      "show_author": true,
+      "show_related": true,
+      "show_share": true
+    }
+  ]
+}

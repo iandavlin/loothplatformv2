@@ -1,0 +1,108 @@
+{
+  "name": "callout",
+  "version": 2,
+  "selector": ".lg-callout",
+  "description": "Structured aside with a title and a repeating list of items (icon + label + url + optional description). Six role-named variants pick the layout shape and accent color: links, files, people (avatars), data (dense), note (prose), quote (pull-quote).",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "title": {
+        "type": "string",
+        "default": "",
+        "description": "Short uppercase eyebrow above the items list (e.g. 'Reach Tim', 'Downloads', 'Guests in this piece'). Empty = no title row."
+      },
+      "items": {
+        "type": "array_of_objects",
+        "default": [],
+        "description": "Rows. Each row has an icon key, a label, a URL, and an optional description. Files variant additionally honors ext/size; people variant honors image_url/initials. Ignored by note/quote variants.",
+        "items": {
+          "props": {
+            "icon":        { "type": "string", "default": "link", "description": "Icon key from the Icons palette (globe, instagram, facebook, youtube, x, github, linktree, email, phone, file, file-pdf, file-zip, file-dxf, avatar, link). Unknown keys fall back to 'link'." },
+            "label":       { "type": "string", "default": "", "description": "Primary text shown on the row." },
+            "url":         { "type": "string", "default": "", "description": "Destination URL. Empty rows are skipped at render time." },
+            "description": { "type": "string", "default": "", "description": "Optional secondary line under the label." },
+            "ext":         { "type": "string", "default": "", "description": "files-variant only: file-type badge text (e.g. PDF, ZIP, DXF)." },
+            "size":        { "type": "string", "default": "", "description": "files-variant only: human-readable file size (e.g. '412 KB')." },
+            "image_url":   { "type": "string", "default": "", "description": "people-variant only: avatar image URL. If absent, initials are used." },
+            "initials":    { "type": "string", "default": "", "description": "people-variant only: 1–2 letter fallback when no image_url is set." }
+          }
+        }
+      },
+      "body": {
+        "type": "string",
+        "format": "html",
+        "default": "",
+        "description": "Long-form HTML for variants `note` and `quote`. Authored via TinyMCE in the metabox repeater UI (Phase B); for now, paste-JSON. Sanitized with wp_kses_post on save. Ignored by list-style variants."
+      },
+      "attribution": {
+        "type": "string",
+        "default": "",
+        "description": "quote-variant only: short attribution line shown below the pull-quote."
+      },
+      "variant": {
+        "type": "string",
+        "default": "links",
+        "enum": ["links", "files", "people", "data", "note", "quote"],
+        "description": "Role-named visual treatment. links/files/people/data render items as a list. note renders body as prose. quote renders body as a large italic pull-quote with attribution."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": ["padding", "margin-block", "bg", "border-color", "radius"],
+    "text": ["title-color", "accent-color"]
+  },
+  "defaults": {
+    "container": {
+      "padding": "18px 24px 18px 26px",
+      "margin-block": "22px",
+      "bg": "#fdfbf4",
+      "border-color": "#ecb351",
+      "radius": "8px"
+    },
+    "text": {
+      "title-color": "#b8842b",
+      "accent-color": "#b8842b"
+    }
+  },
+  "variants": {
+    "links":  { "extends": "defaults" },
+    "files":  {
+      "extends": "defaults",
+      "container": { "bg": "#fdf7e8" }
+    },
+    "people": {
+      "extends": "defaults",
+      "container": { "bg": "#f3f6ec", "border-color": "#87986a" },
+      "text": { "title-color": "#586b3f", "accent-color": "#586b3f" }
+    },
+    "data": {
+      "extends": "defaults",
+      "container": { "bg": "#f7f5f0", "border-color": "#323532" },
+      "text": { "title-color": "#323532", "accent-color": "#323532" }
+    },
+    "note": {
+      "extends": "defaults",
+      "container": { "bg": "#fdfaf0" }
+    },
+    "quote": {
+      "extends": "defaults",
+      "container": { "bg": "#fdfaf0", "padding": "24px 28px 22px 32px" }
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["title", "body", "attribution"],
+    "custom_picker": null,
+    "variant_prop": "variant",
+    "pill_buttons": [
+      "up",
+      "down",
+      "edit",
+      "change",
+      "variant",
+      "tier",
+      "delete"
+    ]
+  }
+}

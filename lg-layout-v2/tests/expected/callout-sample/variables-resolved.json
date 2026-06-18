@@ -1,0 +1,488 @@
+[
+    {
+        "id": "b_links",
+        "type": "callout",
+        "resolution": {
+            "container": {
+                "padding": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "18px 24px 18px 26px"
+                        }
+                    ],
+                    "effective": "18px 24px 18px 26px"
+                },
+                "margin-block": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "22px"
+                        }
+                    ],
+                    "effective": "22px"
+                },
+                "bg": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#fdfbf4"
+                        }
+                    ],
+                    "effective": "#fdfbf4"
+                },
+                "border-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#ecb351"
+                        }
+                    ],
+                    "effective": "#ecb351"
+                },
+                "radius": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "8px"
+                        }
+                    ],
+                    "effective": "8px"
+                }
+            },
+            "text": {
+                "title-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#b8842b"
+                        }
+                    ],
+                    "effective": "#b8842b"
+                },
+                "accent-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#b8842b"
+                        }
+                    ],
+                    "effective": "#b8842b"
+                }
+            }
+        }
+    },
+    {
+        "id": "b_files",
+        "type": "callout",
+        "resolution": {
+            "container": {
+                "padding": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "18px 24px 18px 26px"
+                        }
+                    ],
+                    "effective": "18px 24px 18px 26px"
+                },
+                "margin-block": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "22px"
+                        }
+                    ],
+                    "effective": "22px"
+                },
+                "bg": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#fdfbf4"
+                        },
+                        {
+                            "layer": "variant(files)",
+                            "value": "#fdf7e8"
+                        }
+                    ],
+                    "effective": "#fdf7e8"
+                },
+                "border-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#ecb351"
+                        }
+                    ],
+                    "effective": "#ecb351"
+                },
+                "radius": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "8px"
+                        }
+                    ],
+                    "effective": "8px"
+                }
+            },
+            "text": {
+                "title-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#b8842b"
+                        }
+                    ],
+                    "effective": "#b8842b"
+                },
+                "accent-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#b8842b"
+                        }
+                    ],
+                    "effective": "#b8842b"
+                }
+            }
+        }
+    },
+    {
+        "id": "b_people",
+        "type": "callout",
+        "resolution": {
+            "container": {
+                "padding": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "18px 24px 18px 26px"
+                        }
+                    ],
+                    "effective": "18px 24px 18px 26px"
+                },
+                "margin-block": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "22px"
+                        }
+                    ],
+                    "effective": "22px"
+                },
+                "bg": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#fdfbf4"
+                        },
+                        {
+                            "layer": "variant(people)",
+                            "value": "#f3f6ec"
+                        }
+                    ],
+                    "effective": "#f3f6ec"
+                },
+                "border-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#ecb351"
+                        },
+                        {
+                            "layer": "variant(people)",
+                            "value": "#87986a"
+                        }
+                    ],
+                    "effective": "#87986a"
+                },
+                "radius": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "8px"
+                        }
+                    ],
+                    "effective": "8px"
+                }
+            },
+            "text": {
+                "title-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#b8842b"
+                        },
+                        {
+                            "layer": "variant(people)",
+                            "value": "#586b3f"
+                        }
+                    ],
+                    "effective": "#586b3f"
+                },
+                "accent-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#b8842b"
+                        },
+                        {
+                            "layer": "variant(people)",
+                            "value": "#586b3f"
+                        }
+                    ],
+                    "effective": "#586b3f"
+                }
+            }
+        }
+    },
+    {
+        "id": "b_data",
+        "type": "callout",
+        "resolution": {
+            "container": {
+                "padding": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "18px 24px 18px 26px"
+                        }
+                    ],
+                    "effective": "18px 24px 18px 26px"
+                },
+                "margin-block": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "22px"
+                        }
+                    ],
+                    "effective": "22px"
+                },
+                "bg": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#fdfbf4"
+                        },
+                        {
+                            "layer": "variant(data)",
+                            "value": "#f7f5f0"
+                        }
+                    ],
+                    "effective": "#f7f5f0"
+                },
+                "border-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#ecb351"
+                        },
+                        {
+                            "layer": "variant(data)",
+                            "value": "#323532"
+                        }
+                    ],
+                    "effective": "#323532"
+                },
+                "radius": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "8px"
+                        }
+                    ],
+                    "effective": "8px"
+                }
+            },
+            "text": {
+                "title-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#b8842b"
+                        },
+                        {
+                            "layer": "variant(data)",
+                            "value": "#323532"
+                        }
+                    ],
+                    "effective": "#323532"
+                },
+                "accent-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#b8842b"
+                        },
+                        {
+                            "layer": "variant(data)",
+                            "value": "#323532"
+                        }
+                    ],
+                    "effective": "#323532"
+                }
+            }
+        }
+    },
+    {
+        "id": "b_note",
+        "type": "callout",
+        "resolution": {
+            "container": {
+                "padding": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "18px 24px 18px 26px"
+                        }
+                    ],
+                    "effective": "18px 24px 18px 26px"
+                },
+                "margin-block": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "22px"
+                        }
+                    ],
+                    "effective": "22px"
+                },
+                "bg": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#fdfbf4"
+                        },
+                        {
+                            "layer": "variant(note)",
+                            "value": "#fdfaf0"
+                        }
+                    ],
+                    "effective": "#fdfaf0"
+                },
+                "border-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#ecb351"
+                        }
+                    ],
+                    "effective": "#ecb351"
+                },
+                "radius": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "8px"
+                        }
+                    ],
+                    "effective": "8px"
+                }
+            },
+            "text": {
+                "title-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#b8842b"
+                        }
+                    ],
+                    "effective": "#b8842b"
+                },
+                "accent-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#b8842b"
+                        }
+                    ],
+                    "effective": "#b8842b"
+                }
+            }
+        }
+    },
+    {
+        "id": "b_quote",
+        "type": "callout",
+        "resolution": {
+            "container": {
+                "padding": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "18px 24px 18px 26px"
+                        },
+                        {
+                            "layer": "variant(quote)",
+                            "value": "24px 28px 22px 32px"
+                        }
+                    ],
+                    "effective": "24px 28px 22px 32px"
+                },
+                "margin-block": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "22px"
+                        }
+                    ],
+                    "effective": "22px"
+                },
+                "bg": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#fdfbf4"
+                        },
+                        {
+                            "layer": "variant(quote)",
+                            "value": "#fdfaf0"
+                        }
+                    ],
+                    "effective": "#fdfaf0"
+                },
+                "border-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#ecb351"
+                        }
+                    ],
+                    "effective": "#ecb351"
+                },
+                "radius": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "8px"
+                        }
+                    ],
+                    "effective": "8px"
+                }
+            },
+            "text": {
+                "title-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#b8842b"
+                        }
+                    ],
+                    "effective": "#b8842b"
+                },
+                "accent-color": {
+                    "trail": [
+                        {
+                            "layer": "block-defaults",
+                            "value": "#b8842b"
+                        }
+                    ],
+                    "effective": "#b8842b"
+                }
+            }
+        }
+    }
+]

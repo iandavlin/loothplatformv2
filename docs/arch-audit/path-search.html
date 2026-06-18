@@ -1,0 +1,66 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Path 2 — Archive search</title><link rel="stylesheet" href="audit.css">
+</head><body>
+<nav class="topnav"><div class="inner">
+  <b>Click-path</b>
+  <a class="pill" href="index.html">Overview</a>
+  <a class="pill" href="path-frontpage.html">Front page</a>
+  <a class="pill on" href="path-search.html">Archive search</a>
+  <a class="pill" href="path-hub.html">Open the Hub</a>
+  <a class="pill" href="path-cpt.html">Click → CPT</a>
+  <a class="pill" href="path-discussion.html">Click → discussion</a>
+</div></nav>
+<div class="wrap">
+
+<h1>Path 2 — User searches the archive</h1>
+<p class="sub">type a query on <code>/archive-poc/</code> or <code>/archive/</code></p>
+<p class="lead">Search is a client-side <code>fetch</code> to the archive-poc JSON API, answered by a <b>SQLite FTS5</b> full-text query.
+No WordPress, no SQL <code>LIKE</code> table-scan — a Porter-stemmed FTS index with BM25 ranking and faceting.</p>
+
+<div class="flow">
+  <div class="step browser"><div class="lyr">Browser · JS</div><div class="ttl">archive.js → fetch()</div>
+    <div class="meta">GET /archive-api/v0/search?q=mandolin&amp;kind=article&amp;tier=public&amp;sort=relevance</div>
+    <div class="note">Query state mirrors the URL (?q=&amp;kind=&amp;tag=&amp;author_id=&amp;sort=&amp;page=); credentials: same-origin.</div></div>
+  <div class="arrow">↓</div>
+
+  <div class="step nginx"><div class="lyr">nginx · cookie gate</div><div class="ttl">location <code>^~ /archive-api/v0/</code></div>
+    <div class="meta">rewrite /search → search.php · requires $loothdev_is_authorized (search is public-read)</div></div>
+  <div class="arrow">↓ <small>fastcgi_pass</small></div>
+
+  <div class="step fpm"><div class="lyr">FPM pool</div><div class="ttl">php8.3-fpm-archive-poc.sock</div></div>
+  <div class="arrow">↓</div>
+
+  <div class="step app"><div class="lyr">App · API</div><div class="ttl">archive-poc/api/v0/search.php</div>
+    <div class="meta">parse q/filters → fts_quote(q) → build WHERE → PDO query (query_only=ON)</div></div>
+  <div class="arrow">↓ <small>FTS5 MATCH</small></div>
+
+  <div class="step app" style="--c:var(--sqlite)"><div class="lyr">Database · SQLite</div><div class="ttl">index.sqlite · content_item ⋈ content_fts</div>
+    <div class="meta">… JOIN content_fts f ON f.rowid=ci.id WHERE content_fts MATCH ? &nbsp;ORDER BY bm25(content_fts)</div>
+    <div class="note">+ a second pass over the unlimited result set to build facet counts (kind / tier / tag / author); tags bulk-loaded from content_tag ⋈ tag.</div></div>
+  <div class="arrow">↓</div>
+
+  <div class="step render"><div class="lyr">Render</div><div class="ttl">JSON { items[], facets{}, total } → JS paints grid + facet rail</div>
+    <div class="meta">each item.url → /article/&lt;slug&gt;/ etc. (continues into Path 4)</div></div>
+</div>
+
+<div class="touched">
+  <h3>Databases touched</h3>
+  <div class="dbrow">
+    <span class="db sqlite"><span class="dot"></span><span class="eng">SQLite</span><b>archive-poc/index.sqlite</b></span>
+  </div>
+  <h3 style="margin-top:14px">How the index gets populated (write path)</h3>
+  <div class="flow" style="margin-top:6px">
+    <div class="step" style="--c:var(--maria)"><div class="lyr">WordPress · looth_import</div><div class="ttl">editor saves a post / bbPress topic</div>
+      <div class="meta">save_post, edit_post, bbp_new_topic/reply … (priority 99)</div></div>
+    <div class="arrow">↓ <small>mu-plugin, non-blocking</small></div>
+    <div class="step nginx"><div class="lyr">loopback</div><div class="ttl">POST 127.0.0.1 /archive-api/v0/_sync</div>
+      <div class="meta">allow 127.0.0.1 only · runs on the <b>looth-dev</b> pool (needs WP loaded)</div></div>
+    <div class="arrow">↓</div>
+    <div class="step app"><div class="lyr">indexer</div><div class="ttl">archive-poc/bin/indexer.php</div>
+      <div class="meta">map post_type→kind, extract text, resolve author/tier/tags → upsert content_item + content_fts</div></div>
+  </div>
+  <p class="note" style="color:var(--faint);margin-top:9px">Note the asymmetry: WP writes from <b>looth_import</b>, but the events/profile/billing satellites read <b>looth_dev</b> — see Overview.</p>
+</div>
+
+</div></body></html>

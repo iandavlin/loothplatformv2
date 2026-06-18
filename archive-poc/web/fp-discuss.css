@@ -1,0 +1,85 @@
+/*
+ * fp-discuss.css — front-page discussion-modal support.
+ *
+ * The modal reuses the REAL /hub/forums.css for its component styling (the
+ * #lg-dmodal chrome, .reply-stub thread, .ntm-* / #frm-* composer, .fcr
+ * reactions) so it stays byte-identical to the Hub modal with zero fork-drift.
+ * Those rules are all class-namespaced and don't bleed.
+ *
+ * BUT forums.css also carries a handful of DOCUMENT-LEVEL element rules
+ * (:root tokens, body, a, h1–h4, img) that WOULD restyle this gated homepage.
+ * This sheet is loaded AFTER forums.css and re-asserts the archive-poc front
+ * page's own globals so loading forums.css for the modal is side-effect free.
+ * Source of truth for the modal component rules: /hub/forums.css.
+ */
+
+/* — restore the 3 design tokens whose values differ from forums.css — */
+:root {
+  --lg-ink:    #323532;
+  --lg-mute:   #6b6f6b;
+  --lg-sage-d: #6b7c52;
+}
+
+/* — restore document-level element styling forums.css would clobber — */
+html, body {
+  background: #efece6;
+  color: var(--lg-charcoal);
+  font-family: var(--lg-font-sans);
+}
+a { color: var(--lg-sage-d); }
+a:hover { text-decoration: underline; }
+h1, h2, h3, h4 { font: revert; }
+img { max-width: revert; display: revert; }
+
+/* The modal's own content keeps forums.css styling (higher-specificity
+   #lg-dmodal / .lg-dmodal__body rules win over the bare resets above). */
+
+/* Make sure the modal sits above the shared sticky site header. */
+#lg-dmodal { z-index: 4000; }
+
+/*
+ * Mobile modal (<=640). forums.css styles #lg-dmodal ONLY at >=641 (the Hub's
+ * §4e modal is desktop-only; mobile keeps the Hub sheet). The front-page modal
+ * must work at every width — the whole point is read+reply WITHOUT leaving the
+ * page — so provide the small-screen overlay here as a full-height sheet. The
+ * thread/composer internals (.reply-stub, .fcr, .ntm-*) are styled unconditionally
+ * by forums.css, so only the #lg-dmodal chrome needs a mobile shape.
+ */
+@media (max-width: 640px) {
+  #lg-dmodal { position: fixed; inset: 0; z-index: 4000; display: flex; flex-direction: column; }
+  #lg-dmodal[hidden] { display: none; }
+  #lg-dmodal .lg-dmodal__back { position: absolute; inset: 0; background: rgba(10, 12, 10, .58); }
+  #lg-dmodal .lg-dmodal__panel {
+    position: relative; z-index: 1; margin-top: auto; width: 100%; max-height: 94vh;
+    display: flex; flex-direction: column;
+    background: var(--lg-card-bg, #fff); color: var(--lg-ink);
+    border-radius: 16px 16px 0 0; box-shadow: 0 -8px 40px rgba(0, 0, 0, .32);
+  }
+  #lg-dmodal .lg-dmodal__head {
+    display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
+    padding: 13px 14px; border-bottom: 1px solid var(--lg-line, #e4e7d8);
+  }
+  #lg-dmodal .lg-dmodal__title {
+    flex: 1; min-width: 0; margin: 0; font: 700 17px/1.3 var(--lg-font-serif);
+    color: var(--lg-ink); overflow: hidden; text-overflow: ellipsis;
+  }
+  #lg-dmodal .lg-dmodal__size { display: none; }            /* size cycler is a desktop affordance */
+  #lg-dmodal .lg-dmodal__x {
+    flex: 0 0 auto; border: 0; background: none; cursor: pointer;
+    font-size: 26px; line-height: 1; padding: 2px 6px; color: var(--lg-mute);
+  }
+  #lg-dmodal .lg-dmodal__scroll {
+    flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 14px 15px 28px;
+  }
+  #lg-dmodal .lg-dmodal__meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  #lg-dmodal .lg-dmodal__meta .fc-avatar img,
+  #lg-dmodal .lg-dmodal__meta .fc-avatar .avatar-init { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+  #lg-dmodal .lg-dmodal__meta-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  #lg-dmodal .lg-dmodal__meta .fc-author__name { font-weight: 700; color: var(--lg-ink); }
+  #lg-dmodal .lg-dmodal__meta .fc-time { font-size: 12.5px; color: var(--lg-mute); }
+  #lg-dmodal .lg-dmodal__body { font-size: 15.5px; line-height: 1.6; color: var(--lg-ink); margin-bottom: 8px; }
+  #lg-dmodal .lg-dmodal__body img { max-width: 100%; height: auto; border-radius: 10px; }
+  #lg-dmodal .lg-dmodal__opacts { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 6px 0 4px; }
+  #lg-dmodal .lg-dmodal__note { padding: 18px 4px; color: var(--lg-mute); font: 14px/1.5 var(--lg-font-sans); }
+}

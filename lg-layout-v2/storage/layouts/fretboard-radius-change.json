@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "_meta": {
+    "source": "/home/ubuntu/projects/lg-legacy-source-post-70028.json",
+    "translated_at": "2026-05-23",
+    "featured_image_id": 43864,
+    "target_post_id_dev": 43866,
+    "notes": "14 portrait figures paired per source layout. YouTube embed sits between figs 13 and 14. Parts list lifted into files-variant callout (StewMac affiliate links)."
+  },
+  "blocks": [
+    {
+      "type": "post-header",
+      "image_id": 43864,
+      "tagline": "Stepping down a half-dozen Strat and Tele necks from 7¼\" to 9.5\" — with no fretboard to hide behind.",
+      "show_read_time": true
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<p>In 2018/2019 we made a half-dozen Strat and Tele necks from what, to me, was special wood: some very old Honduras mahogany I had saved for over 40 years, and some spalted maple that I got from the Amish nearby. The necks are skunk-stripe-style and made with a 7¼\" radius. These are still destined for several guitars I am making, but since then I have decided I want them to have a 9.5\" radius for various fretting and setup reasons. These necks have shop-made single action rods — some heel-adjustable, some peg-head-adjustable.</p><p>Since the necks have no fretboard, and side dots that are much lower than the fretboard edges, and thick tortoise fret dot markers, there was plenty of room to make it work.</p>"
+    },
+    {
+      "type": "section-heading",
+      "level": "h2",
+      "text": "Leveling the center, then widening out"
+    },
+    {
+      "type": "columns",
+      "columns": [
+        { "blocks": [ { "type": "image", "image_id": 43851, "alt": "Sanding the center with narrow sandpaper on a 4-inch radius block", "number": "1", "image_text": "Starting narrow on a 4\" block.\n\nI started leveling in the center with 120-grit on a 4\" radius block using three different widths of sandpaper, from narrow . . ." } ] },
+        { "blocks": [ { "type": "image", "image_id": 43852, "alt": "Wider sandpaper width on the radius block", "number": "2", "image_text": "Stepping up to a wider strip.\n\n. . . to wider . . ." } ] }
+      ]
+    },
+    {
+      "type": "columns",
+      "columns": [
+        { "blocks": [ { "type": "image", "image_id": 43853, "alt": "Full-width sandpaper coverage across the fretboard", "number": "3", "image_text": "Full coverage at last.\n\n. . . to full coverage, in order to “knock down” the high center quickly but gradually, without touching the outer edges of the fretboard until I switched to full width." } ] },
+        { "blocks": [ { "type": "image", "image_id": 43854, "alt": "Marking surface and scraping with a radius gauge scraper", "number": "4", "image_text": "Marking, sanding, scraping.\n\nI continued marking the surface, sanding with 120-grit on a 4\" block and also scraping in areas — end to end — with a scraper made from a radius gauge." } ] }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "quote",
+      "body": "<p>The radius gauge scraper trick: sharpen the flat sides with a smooth mill-file and it becomes a precision curved scraper that blends sanding facets beautifully.</p>"
+    },
+    {
+      "type": "section-heading",
+      "level": "h3",
+      "text": "Turning a radius gauge into a scraper"
+    },
+    {
+      "type": "columns",
+      "columns": [
+        { "blocks": [ { "type": "image", "image_id": 43855, "alt": "Sharpening the flat sides of a StewMac steel radius gauge", "number": "5", "image_text": "Sharpening the flats.\n\nI sharpened the flat sides of an SM steel radius gauge . . ." } ] },
+        { "blocks": [ { "type": "image", "image_id": 43856, "alt": "Filing the radius gauge edge sharp with a mill file", "number": "6", "image_text": "Filing the edge.\n\n. . . filed the edge sharp with a smooth mill-file . . ." } ] }
+      ]
+    },
+    {
+      "type": "image",
+      "image_id": 43857,
+      "alt": "Radius gauge being used as a curved scraper",
+      "number": "7",
+      "image_text": "A purpose-built curved scraper.\n\n. . . and it makes a good scraper."
+    },
+    { "type": "divider", "variant": "dots" },
+    {
+      "type": "section-heading",
+      "level": "h3",
+      "text": "Hunting down a high spot"
+    },
+    {
+      "type": "columns",
+      "columns": [
+        { "blocks": [ { "type": "image", "image_id": 43858, "alt": "Penciling over a small rise on the bass side of the neck", "number": "8", "image_text": "Pencil over the rise.\n\nThere was a small rise on the bass side way up the neck; I penciled over it." } ] },
+        { "blocks": [ { "type": "image", "image_id": 43859, "alt": "Masking tape applied to sanding block to isolate the penciled area", "number": "9", "image_text": "Masking the block.\n\nThen I put masking tape on the sanding block, exposing only the penciled area to be sanded." } ] }
+      ]
+    },
+    {
+      "type": "columns",
+      "columns": [
+        { "blocks": [ { "type": "image", "image_id": 43860, "alt": "Rise eliminated after targeted sanding", "number": "10", "image_text": "Almost there.\n\nIt didn’t take much sanding to eliminate the rise." } ] },
+        { "blocks": [ { "type": "image", "image_id": 43861, "alt": "Rise completely gone after light sanding", "number": "11", "image_text": "Gone in a minute.\n\nGone in a minute!" } ] }
+      ]
+    },
+    { "type": "divider", "variant": "dots" },
+    {
+      "type": "section-heading",
+      "level": "h3",
+      "text": "Cross-sanding to blend it all in"
+    },
+    {
+      "type": "columns",
+      "columns": [
+        { "blocks": [ { "type": "image", "image_id": 43862, "alt": "Cross-sanding with a full-length radius beam starting on the near side", "number": "12", "image_text": "Cross-sanding, near side.\n\nThen, with a full-length radius beam covered the full length with 120-grit, I sanded crosswise to smooth in all the sanding and scraping spots. Holding the beam firm and rigid, moving with stiff elbows and square shoulders, I’d start on the near side . . ." } ] },
+        { "blocks": [ { "type": "image", "image_id": 43863, "alt": "Continuing cross-sanding to the far side and back", "number": "13", "image_text": "…and back to the far side.\n\n. . . and go to the far side, back and forth." } ] }
+      ]
+    },
+    {
+      "type": "embed",
+      "url": "https://www.youtube.com/watch?v=feDCvOtWGQo",
+      "caption": "Dan demonstrating the cross-sanding stroke with a full-length radius beam."
+    },
+    {
+      "type": "image",
+      "image_id": 43865,
+      "alt": "Switching back to lengthwise sanding with progressively finer grits",
+      "number": "14",
+      "image_text": "Finishing lengthwise through the grits.\n\nWhen my remaining pencil lines were almost gone, I switched back to a 4\" block going lengthwise, using 120, 220, and 320-grit sandpaper."
+    },
+    {
+      "type": "callout",
+      "variant": "files",
+      "title": "Parts & tools used",
+      "items": [
+        { "icon": "link", "label": "StewMac Steel Radius Gauges", "url": "https://stewmac.sjv.io/steel-radius-gauges", "description": "The gauge sharpened into a curved scraper in steps 5–7." },
+        { "icon": "link", "label": "Radius Blocks (Wood)", "url": "https://stewmac.sjv.io/radius-blocks-wood", "description": "4\" blocks used for the initial leveling and final lengthwise pass." },
+        { "icon": "link", "label": "Aluminum Sanding Beams", "url": "https://stewmac.sjv.io/aluminum-radiused-sandingbeams", "description": "Full-length radius beam for the cross-sanding blend." }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "links",
+      "title": "Dan Erlewine · Author",
+      "items": [
+        { "icon": "globe", "label": "stewmac.com/dan-erlewine", "url": "https://www.stewmac.com/luthier-tools-and-supplies/brands/dan-erlewine/", "description": "Dan’s tools, books, and how-to videos at StewMac." },
+        { "icon": "youtube", "label": "StewMac on YouTube", "url": "https://www.youtube.com/@stewmac", "description": "Where the cross-sanding clip and decades of Dan’s videos live." }
+      ]
+    },
+    {
+      "type": "post-footer",
+      "show_author": true,
+      "show_related": true
+    }
+  ]
+}

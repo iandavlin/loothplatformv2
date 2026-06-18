@@ -1,0 +1,149 @@
+/* Brand-hero block — sponsor-page hero (banner + brand bar + CTA strip).
+   inherits_global: false. All color comes from the article root's brand vars
+   (--brand-primary / --brand-secondary / --brand-header, each with an -ink
+   companion), emitted by the Renderer from the sponsor's colors. Every var has
+   a sage/neutral fallback so a sponsor with null colors (e.g. gluboost) still
+   renders a coherent bar instead of unstyled boxes. */
+
+@layer block-shell {
+  .lg-brand-hero {
+    margin: 0;
+    margin-block: var(--lg-margin-block, 0 0);
+    font-family: var(--lg-font-family, var(--lg-font-sans));
+    /* Full-bleed escape: the hero spans the viewport like the post-header,
+       breaking out of the article's readable column. */
+    width: 100vw;
+    max-width: 100vw;
+    margin-inline: calc(50% - 50vw);
+  }
+
+  /* ── Banner image ─────────────────────────────────────────────── */
+  .lg-brand-hero__banner {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 6;
+    overflow: hidden;
+    background: var(--brand-header, #1a1a1a);
+  }
+  .lg-brand-hero__banner-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* ── Brand identity bar ───────────────────────────────────────── */
+  .lg-brand-hero__bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 18px clamp(16px, 5vw, 64px);
+    background: var(--brand-header, #1a1a1a);
+    color: var(--brand-header-ink, #ffffff);
+    border-bottom: 4px solid var(--brand-primary, #87986a);
+  }
+  .lg-brand-hero__logo {
+    flex: 0 0 auto;
+    width: 84px;
+    height: 84px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+    border: 2px solid var(--brand-primary, #87986a);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lg-brand-hero__logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .lg-brand-hero__id {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .lg-brand-hero__name {
+    margin: 0;
+    font-size: clamp(22px, 4vw, 34px);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: 0.01em;
+    color: inherit;
+  }
+  .lg-brand-hero__tagline {
+    margin: 6px 0 0;
+    font-size: 15px;
+    line-height: 1.4;
+    opacity: 0.78;
+    color: inherit;
+  }
+  .lg-brand-hero__socials {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .lg-brand-hero__socials a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    /* Icon contrasts the CHIP background (--brand-secondary), not the bar —
+       so a dark-secondary sponsor gets light icons and vice-versa. */
+    color: var(--brand-secondary-ink, #ffffff);
+    background: var(--brand-secondary, #87986a);
+    transition: transform .15s ease, filter .15s ease;
+  }
+  .lg-brand-hero__socials a:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.12);
+  }
+  .lg-brand-hero__socials svg { width: 19px; height: 19px; }
+
+  /* ── CTA strip ────────────────────────────────────────────────── */
+  .lg-brand-hero__cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px clamp(16px, 5vw, 64px);
+    background: color-mix(in srgb, var(--brand-header, #1a1a1a) 8%, #ffffff);
+    border-bottom: 1px solid color-mix(in srgb, var(--brand-header, #1a1a1a) 14%, #ffffff);
+  }
+  .lg-brand-hero__cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    background: var(--brand-primary, #87986a);
+    color: var(--brand-primary-ink, #ffffff);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .lg-brand-hero__cta-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0,0,0,.18);
+  }
+  .lg-brand-hero__cta-btn svg { width: 17px; height: 17px; }
+
+  /* ── Mobile ───────────────────────────────────────────────────── */
+  @media (max-width: 700px) {
+    .lg-brand-hero__banner { aspect-ratio: 16 / 9; }
+    .lg-brand-hero__bar {
+      flex-wrap: wrap;
+      gap: 14px;
+      padding: 16px 18px;
+    }
+    .lg-brand-hero__logo { width: 64px; height: 64px; }
+    .lg-brand-hero__id { flex: 1 1 60%; }
+    .lg-brand-hero__socials { flex: 1 1 100%; order: 3; justify-content: flex-start; }
+    .lg-brand-hero__cta { padding: 14px 18px; }
+    .lg-brand-hero__cta-btn { flex: 1 1 auto; justify-content: center; }
+  }
+}

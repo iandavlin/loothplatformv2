@@ -1,0 +1,9 @@
+{
+  "gameUrl": "https://loothgroup.com/guitardle",
+  "pinnedSequence": [53, 129, 273, 245, 126, 103, 6],
+  "menuLinks": [
+    { "label": "Looth Group Feed", "url": "https://loothgroup.com" },
+    { "label": "Keep informed on Looth Group happenings", "url": "https://loothgroup.com/looth-group-weekly/" },
+    { "label": "Join the Looth Group", "url": "https://www.patreon.com/c/theloothgroup/membership" }
+  ]
+}

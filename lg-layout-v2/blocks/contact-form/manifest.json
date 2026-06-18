@@ -1,0 +1,50 @@
+{
+  "name": "contact-form",
+  "version": 1,
+  "selector": ".lg-contact-form",
+  "description": "Sponsor-page lead-gen form (replaces the old [fluentform id=13]). Native name / email / message fields that POST to the sponsor-contact endpoint, which emails sponsor.email (the durable bridge key). The sponsor slug + recipient are carried in hidden fields so the endpoint never trusts a client-supplied address. When sponsor.email is present a 'or email us directly' mailto: fallback renders so the form is never a dead end; when it's null the form is suppressed (no recipient to send to). Auto-themes via --brand-primary. NOTE: the POST endpoint (POST /archive-api/v0/sponsor-contact { slug, name, email, message }) is the one server-side piece this block depends on.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "heading": {
+        "type": "string",
+        "default": "Get in touch",
+        "description": "Section heading (inline-editable)."
+      },
+      "blurb": {
+        "type": "string",
+        "default": "",
+        "description": "Optional intro line under the heading (inline-editable)."
+      },
+      "action": {
+        "type": "string",
+        "default": "/archive-api/v0/sponsor-contact",
+        "description": "Form POST endpoint. Receives { slug, name, email, message } and emails the sponsor. Override only if the endpoint path changes."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": ["margin-block", "padding"],
+    "text": ["font-family"]
+  },
+  "defaults": {
+    "container": {
+      "margin-block": "32px",
+      "padding": "0"
+    },
+    "text": {
+      "font-family": "var(--lg-font-sans)"
+    }
+  },
+  "variants": {
+    "variant-1": { "extends": "defaults" }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["heading", "blurb"],
+    "variant_prop": "variant",
+    "variant_options": ["variant-1"],
+    "pill_buttons": ["move-up", "move-down", "edit", "delete"]
+  }
+}

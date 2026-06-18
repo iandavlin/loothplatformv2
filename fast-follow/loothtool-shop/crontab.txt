@@ -1,0 +1,2 @@
+# buck crontab — Loothtool shop-bubble feed (STASHED, not active on the new box)
+07 * * * * /home/buck/bin/refresh-shop-feed.sh >> /home/buck/logs/shop-feed.log 2>&1

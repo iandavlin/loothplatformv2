@@ -1,0 +1,2781 @@
+{
+    "exported_at": "2026-05-20T21:36:26+00:00",
+    "post": {
+        "ID": 69314,
+        "post_type": "post-imgcap",
+        "post_title": "test",
+        "post_name": "test-4",
+        "post_status": "publish",
+        "post_date": "2026-05-20 14:38:08",
+        "post_modified": "2026-05-20 14:38:08",
+        "post_author": 1,
+        "post_excerpt": "",
+        "post_content": "",
+        "permalink": "https://dev.loothgroup.com/post-imgcap/test-4/"
+    },
+    "author": {
+        "ID": 1,
+        "display_name": "Ian B Davlin The Looth Group",
+        "user_login": "iandavlin",
+        "user_email": "ian.davlin@gmail.com",
+        "roles": [
+            "administrator",
+            "bbp_keymaster",
+            "looth1"
+        ],
+        "meta": {
+            "nickname": "ianhatesguitars",
+            "first_name": "Ian",
+            "last_name": "Davlin",
+            "description": "Why Would You Need Lorem Ipsum?\nLoremipsum comes in handy when you need to showcase the design of a page before adding content. When you add readable content, the reader is distracted from the design of the pages and they concentrate on the content. With lorem ipsum, the reader can see a normal distribution of letters, allowing them to enjoy the design of the pages. Without lorem ipsum, the designer would use terms such “Content Here” or add the real content, and that would distract the reader from the design.\n\nToday, desktop publishing packages make use of lorem ipsum in their design template. Again, if you search “lorem ipsum,” you might come across so many websites still in their initial stages, which are yet to add the real content they need for their websites.\n\nOver the years, different versions of the lorem ipsum have come up. Some texts are available by accident while others add humor to the text. Either way, the lorem ipsum meaning of the text is still vague as the text doesn’t make any sense.\n\nLorem Ipsum through The Years\nWhen you see lorem ipsum for the first time, you might be tempted to translate it to see what it means. The lorem ipsum meaning will frustrate you because there is nothing in the text, but gibberish. There is no real sense in the text, but a mix of different words that are not even related.\n\nLorem is a word that is not even a real Latin word. It comes from the word dolorem, which translates to pain and suffering. Luckily, you do not need to know the meaning of lorem ipsum to use it in your work. Where did this blend of unrelated words come from?",
+            "rich_editing": "true",
+            "syntax_highlighting": "true",
+            "comment_shortcuts": "false",
+            "admin_color": "fresh",
+            "use_ssl": "0",
+            "show_admin_bar_front": "false",
+            "locale": "",
+            "wp_user_level": "10",
+            "dismissed_wp_pointers": "plugin_editor_notice,xyz140,theme_editor_notice,wc_services_new_carrier_dhl_express,wc_services_labels_metabox",
+            "show_welcome_panel": "0",
+            "wp_user-settings": "editor=html&libraryContent=browse&posts_list_mode=list&mfold=o",
+            "wp_user-settings-time": "1779066122",
+            "wp_dashboard_quick_press_last_post_id": "69045",
+            "community-events-location": {
+                "ip": "173.63.87.0"
+            },
+            "wp_persisted_preferences": {
+                "core/edit-site": {
+                    "welcomeGuide": false,
+                    "welcomeGuideStyles": false
+                },
+                "_modified": "2026-03-19T10:41:26.675Z",
+                "core/edit-post": {
+                    "welcomeGuide": false,
+                    "welcomeGuideTemplate": false,
+                    "disableEditorsKitColorsFormats": true,
+                    "disableEditorsKitHighlightFormats": true,
+                    "themeStyles": false
+                },
+                "core/edit-widgets": {
+                    "isComplementaryAreaVisible": true,
+                    "welcomeGuide": false
+                },
+                "core/customize-widgets": {
+                    "welcomeGuide": false,
+                    "keepCaretInsideBlock": true,
+                    "fixedToolbar": true
+                },
+                "core": {
+                    "isInspectorControlsTabsHintVisible": false,
+                    "openPanels": [
+                        "featured-image",
+                        "discussion-panel",
+                        "taxonomy-panel-post_tag",
+                        "post-status",
+                        "taxonomy-panel-category",
+                        "taxonomy-panel-all-content",
+                        "taxonomy-panel-shared_category",
+                        "taxonomy-panel-video-type",
+                        "wp-statistics-post-summary/wp-statistics-post-summary-panel",
+                        "taxonomy-panel-tier"
+                    ],
+                    "isComplementaryAreaVisible": true
+                }
+            },
+            "bp_xprofile_visibility_levels": {
+                "1": "public",
+                "4": "public",
+                "2": "public",
+                "3": "public",
+                "6": "public",
+                "7": "public",
+                "8": "public",
+                "9": "public",
+                "10": "public",
+                "11": "public",
+                "12": "public",
+                "13": "public",
+                "20": "public",
+                "21": "public",
+                "24": "public",
+                "25": "public",
+                "27": "public",
+                "28": "public",
+                "29": "public",
+                "30": "public",
+                "31": "public",
+                "32": "public",
+                "33": "public",
+                "34": "public",
+                "35": "public",
+                "36": "public",
+                "37": "public",
+                "38": "public",
+                "26": "public",
+                "39": "public",
+                "42": "public",
+                "40": "public",
+                "43": "public",
+                "44": "public",
+                "45": "public",
+                "47": "public",
+                "48": "public",
+                "49": "public",
+                "50": "public",
+                "51": "public",
+                "52": "public",
+                "53": "public",
+                "54": "public",
+                "55": "public",
+                "56": "public",
+                "57": "public",
+                "58": "public",
+                "59": "public",
+                "60": "public",
+                "61": "public",
+                "62": "public",
+                "63": "public",
+                "64": "public",
+                "65": "public",
+                "67": "public",
+                "68": "public",
+                "69": "public",
+                "70": "public",
+                "71": "public",
+                "18": "public",
+                "19": "public",
+                "22": "public",
+                "23": "public",
+                "66": "public",
+                "72": "public",
+                "76": "public",
+                "79": "public",
+                "80": "public",
+                "81": "public",
+                "82": "public",
+                "96": "public",
+                "99": "public",
+                "100": "public",
+                "95": "public",
+                "94": "public",
+                "103": "public",
+                "102": "public",
+                "101": "public",
+                "104": "public",
+                "105": "public",
+                "117": "public",
+                "118": "public",
+                "119": "public",
+                "116": "public",
+                "126": "public",
+                "129": "public",
+                "127": "public",
+                "130": "public",
+                "131": "public",
+                "84": "public",
+                "85": "public",
+                "86": "public",
+                "87": "public",
+                "140": "public",
+                "144": "public",
+                "142": "public",
+                "147": "public",
+                "149": "public",
+                "152": "public",
+                "156": "public",
+                "154": "public",
+                "159": "public",
+                "161": "public",
+                "164": "public",
+                "166": "public",
+                "165": "public",
+                "167": "public",
+                "168": "public",
+                "169": "public",
+                "174": "public",
+                "175": "public",
+                "176": "public",
+                "172": "public",
+                "173": "public",
+                "177": "public",
+                "178": "public",
+                "179": "public",
+                "180": "public",
+                "181": "public",
+                "182": "public",
+                "171": "public",
+                "89": "public",
+                "136": "public",
+                "137": "public",
+                "138": "public",
+                "139": "public",
+                "183": "public",
+                "185": "public",
+                "184": "public",
+                "186": "public",
+                "187": "public",
+                "110": "public",
+                "113": "public",
+                "108": "public",
+                "106": "public",
+                "266": "public",
+                "272": "public",
+                "273": "public",
+                "93": "public"
+            },
+            "bb_read_notification_migration": "1",
+            "wp_metaboxhidden_nav-menus": [],
+            "bb_profile_slug": "5599a526",
+            "last_activity": "2026-05-20 19:35:09",
+            "bb_profile_long_slug_a48b8b154b1d7ddda9de0ee26c8a4c3a5221be5d": "1",
+            "bb_profile_slug_5599a526": "1",
+            "geocode_4": "40.848719,-74.0205575",
+            "_mpp_wall_photo_gallery_id": "238",
+            "wptrt_notice_dismissed_membershiply_notification_delay": "1686685366",
+            "wptrt_notice_dismissed_membershiply_notification_start_delay": "1686598965",
+            "wp__bbp_last_posted": "1687350401",
+            "wp__bbp_topic_count": "3",
+            "jetpack_tracks_wpcom_id": "61136718",
+            "wp__bbp_reply_count": "3",
+            "my-jetpack-cache-date": "1704061822",
+            "pm_group": [
+                "1"
+            ],
+            "rm_user_status": "0",
+            "bp_favorite_activities": [
+                53,
+                80,
+                23,
+                134,
+                143,
+                180,
+                178,
+                266,
+                267,
+                283,
+                278,
+                285,
+                370,
+                445,
+                437,
+                537,
+                575,
+                587,
+                612,
+                618,
+                609,
+                621,
+                627,
+                654,
+                647,
+                725,
+                724,
+                723,
+                722,
+                721,
+                719,
+                760,
+                766,
+                763,
+                762,
+                777,
+                761,
+                814,
+                815,
+                835,
+                1122,
+                1146,
+                1190,
+                1183,
+                1175,
+                1167,
+                1199,
+                1196,
+                1221,
+                1218,
+                1215,
+                1212,
+                1194,
+                1227,
+                1226,
+                1225,
+                1230,
+                1249,
+                1206,
+                1204,
+                1285,
+                1289,
+                1296,
+                1293,
+                1310,
+                1340,
+                1341,
+                1343,
+                1344,
+                1349,
+                1371,
+                1347,
+                1394,
+                1420,
+                1419,
+                1418,
+                1627,
+                1652,
+                1653,
+                1654,
+                1661,
+                1690,
+                1692,
+                1714,
+                1728,
+                1732,
+                1693,
+                1735,
+                1757,
+                1761,
+                1782,
+                1786,
+                1791,
+                1781,
+                1821,
+                1822,
+                1830,
+                1829,
+                1827,
+                1826,
+                1825,
+                1882,
+                1888,
+                1897,
+                1896,
+                1895,
+                1894,
+                1917,
+                1913,
+                1916,
+                1906,
+                1931,
+                1927,
+                1926,
+                1925,
+                1924,
+                1923,
+                1922,
+                1921,
+                1936,
+                1887,
+                1952,
+                1946,
+                1966,
+                1975,
+                2029,
+                2042,
+                2050,
+                2046,
+                2062,
+                2075,
+                2074,
+                2089,
+                2092,
+                2099,
+                2112,
+                2114,
+                2119,
+                2113,
+                2130,
+                2132,
+                2145,
+                2148,
+                2149,
+                2154,
+                2160,
+                2184,
+                2221,
+                2219,
+                2215,
+                2233,
+                2236,
+                2239,
+                2238,
+                2245,
+                2259,
+                2289,
+                2366,
+                2389,
+                2399,
+                2413,
+                2451,
+                2463,
+                2484,
+                2478,
+                2479,
+                2492,
+                2491,
+                2499,
+                2505,
+                2504,
+                2515,
+                2525,
+                2523,
+                "2612",
+                "2644",
+                "2650",
+                "2649",
+                "2652",
+                "2692",
+                "2690",
+                "2686",
+                "2685",
+                "2684",
+                "2716",
+                "2715",
+                "2758",
+                "2797",
+                "2794",
+                "2815",
+                "2806",
+                "2801",
+                "2807",
+                "2848",
+                "2878",
+                "2900",
+                "2914",
+                "2911",
+                "2907",
+                "2904",
+                "2922",
+                "2929",
+                "2920",
+                "2934",
+                "2953",
+                "2987",
+                "2985",
+                "2997",
+                "3007",
+                "3003",
+                "3023",
+                "2998",
+                "3057",
+                "3058",
+                "3114",
+                "3151",
+                "3194",
+                "3216",
+                "3213",
+                "3207",
+                "3235",
+                "3285",
+                "3276",
+                "3364",
+                "3402",
+                "3411",
+                "3407",
+                "3421",
+                "3444",
+                "3440",
+                "3454",
+                "3457",
+                "3448",
+                "3447",
+                "3465",
+                "3547",
+                "3569",
+                "3571",
+                "3592",
+                "3593",
+                "3382",
+                "3619",
+                "3633",
+                "3630",
+                "3637",
+                "3666",
+                "3663",
+                "3660",
+                "3657",
+                "3654",
+                "3651",
+                "3648",
+                "3645",
+                "3642",
+                "3675",
+                "3673",
+                "3669",
+                "3698",
+                "3703",
+                "3701",
+                "3710",
+                "3708",
+                "3718",
+                "3717",
+                "3716",
+                "3725",
+                "3735",
+                "3730",
+                "3726",
+                "3784",
+                "3813",
+                "3827",
+                "3826",
+                "3817",
+                "3852",
+                "3853",
+                "3870",
+                "3878",
+                "3911",
+                "3916",
+                "3915",
+                "3914",
+                "3969",
+                "4011",
+                "4010",
+                "4006",
+                "4031",
+                "4053",
+                "4071",
+                "4080",
+                "4083",
+                "4139",
+                "4148",
+                "4118",
+                "4168",
+                "4163",
+                "4170",
+                "4169",
+                "4183",
+                "4184",
+                "4185",
+                "4186",
+                "4187",
+                "4190",
+                "4189",
+                "4191",
+                "4194",
+                "4202",
+                "4215",
+                "4219",
+                "4223",
+                "4195",
+                "4292",
+                "4298",
+                "4310",
+                "4322",
+                "4328",
+                "4331",
+                "4334",
+                "4335",
+                "4339",
+                "4377",
+                "4386",
+                "4393",
+                "4381",
+                "4398",
+                "4402",
+                "4413",
+                "4419",
+                "4433"
+            ],
+            "wc_last_active": "1773020810",
+            "meta-box-order_product": {
+                "acf_after_title": "",
+                "side": "wp-statistics-post-summary-widget,fea-hide-page,patron-only-advanced-meta-box,submitdiv,postimagediv,woocommerce-product-images,product_catdiv,tagsdiv-product_tag,pageparentdiv,patron-only-custom-banner,patreon-level,patron-only-meta-box",
+                "normal": "wp-statistics-post-visitors-locked-widget,woocommerce-product-data,,slugdiv,postexcerpt,sellerdiv,pf_size_chart",
+                "advanced": ""
+            },
+            "last_update": "1767202716",
+            "woocommerce_admin_task_list_tracked_started_tasks": "{\"appearance\":1}",
+            "patreon-wordpress-advanced-options-toggle": "on",
+            "_woocommerce_persistent_cart_1": {
+                "cart": []
+            },
+            "_wcs_subscription_ids_cache": [],
+            "billing_first_name": "Ian",
+            "billing_last_name": "Davlin",
+            "billing_company": "",
+            "billing_address_1": "",
+            "billing_address_2": "",
+            "billing_city": "",
+            "billing_postcode": "",
+            "billing_country": "",
+            "billing_state": "",
+            "billing_phone": "",
+            "billing_email": "ian.davlin@gmail.com",
+            "shipping_first_name": "",
+            "shipping_last_name": "",
+            "shipping_company": "",
+            "shipping_address_1": "",
+            "shipping_address_2": "",
+            "shipping_city": "",
+            "shipping_postcode": "",
+            "shipping_country": "",
+            "shipping_state": "",
+            "shipping_phone": "",
+            "nav_menu_recently_edited": "178",
+            "managenav-menuscolumnshidden": [
+                "title-attribute",
+                "css-classes",
+                "xfn",
+                "description"
+            ],
+            "todo_mail_setting": "no",
+            "_bp_attachments_userfiles_size": "13053876",
+            "cb_p6_patreon_user": "",
+            "w3tc_features_seen": [
+                "alwayscached",
+                "defer-scripts",
+                "pagespeed",
+                "preload-requests",
+                "remove-cssjs"
+            ],
+            "bpbm_last_activity": "2023-08-08 12:05:02",
+            "bp-better-messages-last-notified": {
+                "26": "60",
+                "11": "63",
+                "25": "73",
+                "18": "75",
+                "20": "74",
+                "1": "400",
+                "29": "158",
+                "12": "135",
+                "17": "153",
+                "32": "248",
+                "35": "213",
+                "39": "219",
+                "38": "223",
+                "43": "293",
+                "31": "252",
+                "21": "273",
+                "34": "452",
+                "52": "359",
+                "53": "360",
+                "60": "395",
+                "54": "421"
+            },
+            "bb_user_topic_reply_draft": {
+                "draft_reply_4888_4890": {
+                    "object": "reply",
+                    "data_key": "draft_reply_4888_4890",
+                    "data": {
+                        "bbp_reply_content": "<p>That is a smart move going between the frets. I&nbsp;</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "4888",
+                        "bbp_reply_to": "4890",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_reply_5051": {
+                    "object": "reply",
+                    "data_key": "draft_reply_5051",
+                    "data": {
+                        "bbp_reply_content": "<p>To <span class=\"atwho-inserted\" data-atwho-at-query=\"@nic\">@patreon_66002687</span>&nbsp;'s po</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "5051",
+                        "bbp_reply_to": "0",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_reply_5055_5179": {
+                    "object": "reply",
+                    "data_key": "draft_reply_5055_5179",
+                    "data": {
+                        "bbp_reply_content": "<p>Would this be a good thing to post as a sticky to this forum&nbsp;</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "5055",
+                        "bbp_reply_to": "5179",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": "true"
+                },
+                "draft_reply_5413": {
+                    "object": "reply",
+                    "data_key": "draft_reply_5413",
+                    "data": {
+                        "bbp_reply_content": "https://www.patreon.com/posts/ding-kings-sg-up-63416116<br><br>This is really pretty similar in concept.&nbsp;",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "dingkings, finish, gibson",
+                        "link_preview_data": "{\"link_url\":\"https://www.patreon.com/posts/ding-kings-sg-up-63416116\",\"link_title\":\"Just a moment...\",\"link_description\":\"Just a moment...\",\"link_embed\":false,\"link_image\":\"\",\"link_image_index_save\":0}",
+                        "bbp_topic_id": "5413",
+                        "bbp_reply_to": "0",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": "",
+                        "bb_link_url": "{\"embed\":0,\"url\":\"https://www.patreon.com/posts/ding-kings-sg-up-63416116\",\"link_image_index_save\":0}"
+                    },
+                    "post_action": "update",
+                    "is_content_valid": "true"
+                },
+                "draft_reply_12542": {
+                    "object": "reply",
+                    "data_key": "draft_reply_12542",
+                    "data": {
+                        "bbp_reply_content": "<p>gfdgws</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "12542",
+                        "bbp_reply_to": "0",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_reply_15590_15603": {
+                    "object": "reply",
+                    "data_key": "draft_reply_15590_15603",
+                    "data": {
+                        "bbp_reply_content": "<p>These&nbsp;</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "fretting,help,Prewar martin,Refret",
+                        "bbp_topic_tags_dropdown": [
+                            "fretting",
+                            "help",
+                            "Prewar martin",
+                            "Refret"
+                        ],
+                        "link_preview_data": "",
+                        "bbp_topic_id": "15590",
+                        "bbp_reply_to": "15603",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_reply_23869_23880": {
+                    "object": "reply",
+                    "data_key": "draft_reply_23869_23880",
+                    "data": {
+                        "bbp_reply_content": "<p>I am too. I commondered your profile and it did the same thing to me. I changed a couple things in the back end and now it works.&nbsp;</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "23869",
+                        "bbp_reply_to": "23880",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": "true"
+                },
+                "draft_reply_27931_27942": {
+                    "object": "reply",
+                    "data_key": "draft_reply_27931_27942",
+                    "data": {
+                        "bbp_reply_content": "<p>Do you have a printer ?&nbsp;</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "27931",
+                        "bbp_reply_to": "27942",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_reply_31056": {
+                    "object": "reply",
+                    "data_key": "draft_reply_31056",
+                    "data": {
+                        "bbp_reply_content": "<p>This looks like the type of thing you migh</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "31056",
+                        "bbp_reply_to": "0",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_reply_31226_31267": {
+                    "object": "reply",
+                    "data_key": "draft_reply_31226_31267",
+                    "data": {
+                        "bbp_reply_content": "<p>Thi</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "31226",
+                        "bbp_reply_to": "31267",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": "true"
+                },
+                "draft_reply_32967": {
+                    "object": "reply",
+                    "data_key": "draft_reply_32967",
+                    "data": {
+                        "bbp_reply_content": "<p>Something is bubbling out of my brain about soaking in acetone. That could be for resin.&nbsp;</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "32967",
+                        "bbp_reply_to": "0",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": "true"
+                },
+                "draft_reply_43019_44016": {
+                    "object": "reply",
+                    "data_key": "draft_reply_43019_44016",
+                    "data": {
+                        "bbp_reply_content": "<p>Hey,&nbsp;</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "43019",
+                        "bbp_reply_to": "44016",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_reply_43019": {
+                    "object": "reply",
+                    "data_key": "draft_reply_43019",
+                    "data": {
+                        "bbp_reply_content": "<p>The only thing I might add to this is that 320, depending on brand, might be a little fine. You could try adding a pass with Red Scotchbrite over the top. That’s a good move regardless because it gets all shinies gone. Maybe also add a shellac coat before color.&nbsp;</p><p>This sounds like some horseshit though. If it were me i’d try a different finish out of superstition.</p><p><br></p><p><span class=\"atwho-inserted\" data-atwho-at-query=\"@jeff\" contenteditable=\"false\">@patreon_29456951</span>&nbsp;any of this make any sense&nbsp;</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "43019",
+                        "bbp_reply_to": "0",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": "true"
+                },
+                "draft_reply_45122_45136": {
+                    "object": "reply",
+                    "data_key": "draft_reply_45122_45136",
+                    "data": {
+                        "bbp_reply_content": "<p>Not trying</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "45122",
+                        "bbp_reply_to": "45136",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_reply_46532_46701": {
+                    "object": "reply",
+                    "data_key": "draft_reply_46532_46701",
+                    "data": {
+                        "bbp_reply_content": "<p>Yes, we can take&nbsp;</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "tools",
+                        "bbp_topic_tags_dropdown": "tools",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "46532",
+                        "bbp_reply_to": "46701",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": "true"
+                },
+                "draft_reply_51147": {
+                    "object": "reply",
+                    "data_key": "draft_reply_51147",
+                    "data": {
+                        "bbp_reply_content": "<p>Ive never seen one, but the original tang nipper was just a sheet metal nibbler with a groove for the fret. I believe that there are a few different nibblers out there both electric and pneumatic.&nbsp;</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "51147",
+                        "bbp_reply_to": "0",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": "true"
+                },
+                "draft_reply_52669": {
+                    "object": "reply",
+                    "data_key": "draft_reply_52669",
+                    "data": {
+                        "bbp_reply_content": "",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "52669",
+                        "bbp_reply_to": "0",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_reply_55628_55725": {
+                    "object": "reply",
+                    "data_key": "draft_reply_55628_55725",
+                    "data": {
+                        "bbp_reply_content": "",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "55628",
+                        "bbp_reply_to": "55725",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_discussion_3818": {
+                    "object": "topic",
+                    "data_key": "draft_discussion_3818",
+                    "data": {
+                        "bbp_topic_title": "",
+                        "bbp_topic_content": "",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "bbp_stick_topic": "unstick",
+                        "link_preview_data": "",
+                        "bbp_forum_id": "3818",
+                        "action": "bbp-new-topic",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_discussion_3876": {
+                    "object": "topic",
+                    "data_key": "draft_discussion_3876",
+                    "data": {
+                        "bbp_topic_title": "",
+                        "bbp_topic_content": "",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "bbp_stick_topic": "unstick",
+                        "link_preview_data": "",
+                        "bbp_forum_id": "3876",
+                        "action": "bbp-new-topic",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_reply_57951_58058": {
+                    "object": "reply",
+                    "data_key": "draft_reply_57951_58058",
+                    "data": {
+                        "bbp_reply_content": "<p>James,&nbsp;</p><p><br></p><p>hit me with the pdf and I'll attach it to this post.</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "57951",
+                        "bbp_reply_to": "58058",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": "true"
+                },
+                "draft_reply_58347_58459": {
+                    "object": "reply",
+                    "data_key": "draft_reply_58347_58459",
+                    "data": {
+                        "bbp_reply_content": "<p>Looks like it's getting dark where the naptha is penetrating the lacquer, which means that it's probably going to get dark when the lacquer penetrates.&nbsp;</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "bbp_topic_subscription": "bbp_subscribe",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "58347",
+                        "bbp_reply_to": "58459",
+                        "action": "bbp-new-reply"
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_discussion_58452": {
+                    "object": "topic",
+                    "data_key": "draft_discussion_58452",
+                    "data": {
+                        "bbp_topic_title": "",
+                        "bbp_topic_content": "<p><b>December Get Together in Real life</b></p><p>The DMV Local Looth gathering is happening. Whether you’re a professional luthier, a hobbyist, or just starting out, this is a great opportunity to meet like-minded people, share knowledge, and grow as a community. Dec. 6th</p><p>Our resident neuroscientist Matt Fagan will walk us through a recent repair that felt like Dante’s inferno.</p><p><a target=\"_blank\" href=\"https://portal.nova-labs.org/event-6400553/Registration?brid=QyBx_FFNcuWy52b9jxzpiQ\" rel=\"nofollow\">https://portal.nova-labs.org/event-6400553/Registration?brid=QyBx_FFNcuWy52b9jxzpiQ</a> – the sign up is a little confusing. You do not have to be a member of Nova Labs.</p><p>We’ll meet at 4pm in the Classroom 1. Please park on the roof. At 4:15 we will make some introductions and then do our show and tell. If all goes well we will move into the Woodshop and demo some things with hand tools (no power tools allowed due to liability) . Please bring a pair of safety glasses. Also, while in the Woodshop, folks might be using power tools, so feel free to also bring some ear plugs too.</p><p>Was thinking we could grab dinner nearby afterwards.</p><p>Email Kalimar Maia if you have question about anything <a href=\"mailto:kalimar.maia@nova-labs.org\" rel=\"nofollow\">kalimar.maia@nova-labs.org</a></p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "bbp_stick_topic": "unstick",
+                        "link_preview_data": "{\"link_url\":\"https://portal.nova-labs.org/event-6400553/Registration?brid=QyBx_FFNcuWy52b9jxzpiQ\"\",\"link_title\":\"Nova Labs - WW_O: DMV Local Looth Group\",\"link_description\":\"Sign up through the new Events Portal\",\"link_embed\":false,\"link_image\":\"\",\"link_image_index_save\":0}",
+                        "bbp_forum_id": "58452",
+                        "action": "bbp-new-topic",
+                        "bbp_topic_subscription": "",
+                        "bb_link_url": "{\"embed\":0,\"url\":\"https://portal.nova-labs.org/event-6400553/Registration?brid=QyBx_FFNcuWy52b9jxzpiQ\"\",\"link_image_index_save\":0}"
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_discussion_3823": {
+                    "object": "topic",
+                    "data_key": "draft_discussion_3823",
+                    "data": {
+                        "bbp_topic_title": "TITLE",
+                        "bbp_topic_content": "<p>stuff</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "bbp_stick_topic": "unstick",
+                        "link_preview_data": "",
+                        "bbp_forum_id": "3823",
+                        "action": "bbp-new-topic",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": "true"
+                },
+                "draft_reply_67362": {
+                    "object": "reply",
+                    "data_key": "draft_reply_67362",
+                    "data": {
+                        "bbp_reply_content": "",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "67362",
+                        "bbp_reply_to": "0",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_reply_67952_67955": {
+                    "object": "reply",
+                    "data_key": "draft_reply_67952_67955",
+                    "data": {
+                        "bbp_reply_content": "",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "weeklyyes",
+                        "bbp_topic_tags_dropdown": "weeklyyes",
+                        "link_preview_data": "",
+                        "bbp_topic_id": "67952",
+                        "bbp_reply_to": "67955",
+                        "action": "bbp-new-reply",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                },
+                "draft_discussion_3845": {
+                    "object": "topic",
+                    "data_key": "draft_discussion_3845",
+                    "data": {
+                        "bbp_topic_title": "Title",
+                        "bbp_topic_content": "<p>jfsdlkds;&nbsp;</p>",
+                        "bbp_media": "",
+                        "bbp_document": "",
+                        "bbp_topic_tags": "",
+                        "bbp_stick_topic": "unstick",
+                        "link_preview_data": "",
+                        "bbp_forum_id": "3845",
+                        "action": "bbp-new-topic",
+                        "bbp_topic_subscription": ""
+                    },
+                    "post_action": "update",
+                    "is_content_valid": true
+                }
+            },
+            "wpf-acp-toggle": "close",
+            "bbgs_search_string": "",
+            "wp_media_library_mode": "list",
+            "closedpostboxes_attachment": [],
+            "metaboxhidden_attachment": [
+                "commentstatusdiv",
+                "commentsdiv",
+                "slugdiv",
+                "authordiv"
+            ],
+            "meta-box-order_attachment": {
+                "side": "submitdiv,s3-actions,patreon-level",
+                "normal": "commentstatusdiv,commentsdiv,slugdiv,authordiv",
+                "advanced": ""
+            },
+            "screen_layout_attachment": "2",
+            "account_status": "approved",
+            "um_member_directory_data": {
+                "account_status": "approved",
+                "hide_in_members": false,
+                "profile_photo": false,
+                "cover_photo": false,
+                "verified": false
+            },
+            "um_user_profile_url_slug_user_login": "iandavlin",
+            "_is_featured": "1",
+            "meta-box-order_post": {
+                "acf_after_title": "",
+                "side": "patron-only-advanced-meta-box,formatdiv,submitdiv,categorydiv,patreon-level,tagsdiv-post_tag,pageparentdiv,classic-editor-switch-editor,postimagediv,patron-only-custom-banner,patron-only-meta-box",
+                "normal": "acf-group_65494b7ced810,postexcerpt,trackbacksdiv,commentstatusdiv,slugdiv,authordiv",
+                "advanced": ""
+            },
+            "screen_layout_post": "2",
+            "exs_dismissed_notice_100": "1",
+            "bp_latest_update": {
+                "id": 1137,
+                "content": "test 3"
+            },
+            "rtmedia_counts_1": [
+                {
+                    "photo": "1",
+                    "video": "0",
+                    "music": "0",
+                    "album": "0"
+                }
+            ],
+            "meta-box-order_visitor-statistics_page_wsm_traffic": {
+                "left": "wsm_genStats",
+                "right": "wsm_todaysStats,wsm_geoLocation",
+                "bottom": "wsm_lastDays"
+            },
+            "field_set_count_3": "4",
+            "_wpf_member_obj": {
+                "ID": "1",
+                "user_login": "iandavlin",
+                "user_pass": "$P$BWXb8kynkWC749/kVGCW/ES85wk9Zd.",
+                "user_nicename": "iandavlin",
+                "user_email": "ian.davlin@gmail.com",
+                "user_url": "https://dev.loothgroup.com",
+                "user_registered": "2023-06-10 18:06:52",
+                "user_activation_key": "",
+                "user_status": "0",
+                "display_name": "Ian Davlin The Looth Group",
+                "userid": "1",
+                "title": "Member",
+                "groupid": "1",
+                "secondary_groupids": "",
+                "avatar": "",
+                "cover": "//dev.loothgroup.com/wp-content/uploads/wpforo/covers/iandavlin_1.jpg",
+                "posts": "13",
+                "topics": "3",
+                "questions": "0",
+                "answers": "2",
+                "comments": "3",
+                "reactions_in": "{\"up\":8,\"down\":0}",
+                "reactions_out": "{\"up\":21,\"down\":0}",
+                "points": "23",
+                "custom_points": "0",
+                "online_time": "1691777548",
+                "timezone": "",
+                "location": "",
+                "signature": null,
+                "about": "",
+                "occupation": null,
+                "status": "active",
+                "is_email_confirmed": "0",
+                "is_mention_muted": "0",
+                "fields": null,
+                "name": "Admin",
+                "cans": "a:36:{s:2:\"mf\";i:1;s:2:\"ms\";i:1;s:2:\"mt\";i:1;s:2:\"mp\";i:1;s:3:\"mth\";i:1;s:2:\"vm\";i:1;s:3:\"aum\";i:1;s:2:\"em\";i:1;s:3:\"vmg\";i:1;s:3:\"aup\";i:1;s:4:\"vmem\";i:1;s:9:\"view_stat\";i:1;s:4:\"vprf\";i:1;s:4:\"vpra\";i:1;s:4:\"vprs\";i:1;s:2:\"bm\";i:1;s:2:\"dm\";i:1;s:3:\"upc\";i:1;s:3:\"upa\";i:1;s:3:\"ups\";i:1;s:2:\"va\";i:1;s:3:\"vmu\";i:1;s:3:\"vmm\";i:1;s:3:\"vmt\";i:1;s:4:\"vmct\";i:1;s:3:\"vmr\";i:1;s:3:\"vmw\";i:1;s:4:\"vmsn\";i:1;s:4:\"vmrd\";i:1;s:3:\"vml\";i:1;s:3:\"vmo\";i:1;s:3:\"vms\";i:1;s:4:\"vmam\";i:1;s:4:\"vwpm\";i:1;s:3:\"caa\";i:1;s:12:\"vt_add_topic\";i:1;}",
+                "description": "",
+                "utitle": "Admin",
+                "role": "administrator",
+                "access": "full",
+                "color": "#FF3333",
+                "visible": "1",
+                "secondary": "0",
+                "is_default": "0",
+                "umeta_id": "3",
+                "user_id": "1",
+                "meta_key": "last_name",
+                "meta_value": "The Looth Group",
+                "group_name": "Admin",
+                "group_color": "#FF3333",
+                "first_name": "Ian Davlin",
+                "last_name": "The Looth Group"
+            },
+            "meta-box-order_bp-email": {
+                "side": "submitdiv,tagsdiv-bp-email-type",
+                "normal": "postexcerpt,postcustom,slugdiv",
+                "advanced": ""
+            },
+            "screen_layout_bp-email": "2",
+            "closed_notices": [
+                1,
+                2,
+                3,
+                4,
+                5
+            ],
+            "wp__bbp_favorites": "4396",
+            "wp__bbp_subscriptions": "4493,30912,35576,58035,58347,60450,60696,66434,67016,67993,68441,68380",
+            "wp__bbp_forum_subscriptions": "3876,4829,67776",
+            "closedpostboxes_visitor-statistics_page_wsm_traffic": [
+                "wsm_geoLocation"
+            ],
+            "metaboxhidden_visitor-statistics_page_wsm_traffic": [],
+            "elementor_introduction": {
+                "ai-get-started-announcement": true,
+                "e-apps": true,
+                "globals_introduction": true,
+                "exit_to": true,
+                "favorites-notice": true,
+                "ai_get_started": true,
+                "copilot-promotion-opt-in-feedback": true,
+                "ai_promotion_introduction_media-edit": true,
+                "ai_promotion_introduction_container": true,
+                "ai_promotion_introduction_code": true,
+                "ai_promotion_introduction_textarea": true,
+                "ai_promotion_introduction_media": true,
+                "kit_elements_defaults_create_dialog": true,
+                "ai-context-layout-promotion": true
+            },
+            "announcements_user_counter": "1",
+            "wp_elementor_connect_common_data": [],
+            "gd_user_favourite_post": [
+                5848
+            ],
+            "field_set_count_6": "2",
+            "geocode_96": "40.8342669,-74.00875049999999",
+            "field_set_count_10": "2",
+            "field_set_count_8": "1",
+            "closedpostboxes_bp-member-type": [
+                "bp-member-type-label-color"
+            ],
+            "metaboxhidden_bp-member-type": [],
+            "field_set_count_12": "1",
+            "field_set_count_13": "7",
+            "meta-box-order_visitor-statistics_page_wsm_content": {
+                "left": "wsm_contentURL",
+                "right": "wsm_contentStatFilter",
+                "bottom": "wsm_contentURLStats"
+            },
+            "closedpostboxes_visitor-statistics_page_wsm_content": [],
+            "metaboxhidden_visitor-statistics_page_wsm_content": [],
+            "field_set_count_14": "1",
+            "dismissed_template_files_notice": "1",
+            "_woocommerce_tracks_anon_id": "woo:Z5hi8Bgs5E0Fo3c//joAEiIU",
+            "elementor_admin_notices": {
+                "design_not_appearing": {
+                    "is_viewed": false,
+                    "meta": {
+                        "version": "3.25.11"
+                    }
+                },
+                "experiment_promotion": {
+                    "is_viewed": true,
+                    "meta": []
+                },
+                "elementor-pro-forms-submissions": {
+                    "is_viewed": true,
+                    "meta": []
+                }
+            },
+            "submitted::": "-474",
+            "submitted::elementor_660ec24": "14",
+            "tribe-dismiss-notice-time-archive-slug-conflict": "1699788482",
+            "tribe-dismiss-notice": "archive-slug-conflict",
+            "tribe-dismiss-notice-time-event-tickets-install": "1699788556",
+            "manageedit-acf-post-typecolumnshidden": [
+                "acf-key"
+            ],
+            "acf_user_settings": {
+                "post-type-first-run": true,
+                "taxonomies-first-run": true,
+                "options-pages-first-run": true,
+                "show_field_keys": "1"
+            },
+            "manageedit-acf-taxonomycolumnshidden": [
+                "acf-key"
+            ],
+            "manageedit-acf-ui-options-pagecolumnshidden": [
+                "acf-key"
+            ],
+            "submitted::acf-form": "16",
+            "submitted::form_65522ec6e1eb7": "3",
+            "submitted::form65522ec6e1eb7": "-2",
+            "closedpostboxes_acf-post-type": [],
+            "metaboxhidden_acf-post-type": [
+                "slugdiv"
+            ],
+            "closedpostboxes_acf-taxonomy": [],
+            "metaboxhidden_acf-taxonomy": [
+                "slugdiv"
+            ],
+            "submitted::form_6553af28a38f0": "1",
+            "ecs_instalation": "1700074495",
+            "ecs_notification_verification": "2023-11-16",
+            "elementor_preferences": {
+                "exit_to": "dashboard",
+                "copilot": "off"
+            },
+            "submitted::elementor_decabcc": "14",
+            "submitted::elementor_758fc16": "15",
+            "submitted::elementor758fc16": "-15",
+            "submitted::elementor_d3b6afb": "1",
+            "submitted::elementor_9ab5327": "3",
+            "meta-box-order_pending": {
+                "normal": "acf-group_6558ea670ecc6,acf-group_6556573ebef47",
+                "advanced": "",
+                "acf_after_title": "",
+                "side": "patron-only-advanced-meta-box,patron-only-custom-banner,patreon-level,patron-only-meta-box"
+            },
+            "submitted::elementor_56d11de": "1",
+            "submitted::form_655bd648a03d3": "10",
+            "submitted::form655bd648a03d3": "-7",
+            "submitted::elementor_75d0f59": "2",
+            "submitted::elementor_8426de0": "1",
+            "submitted::10126": "1",
+            "submitted::form_655ca612ab1a4": "1",
+            "submitted::elementor_e2d6d7f": "5",
+            "submitted::elementor_c118066": "17",
+            "submitted::elementorc118066": "-17",
+            "content_control_reviews_dismissed_triggers": {
+                "time_installed": "30"
+            },
+            "content_control_reviews_last_dismissed": "2024-02-19 15:18:19",
+            "submitted::elementor_e151bc8": "4",
+            "submitted::elementor_b82031f": "3",
+            "submitted::elementorb82031f": "-3",
+            "submitted::elementor_c2b5191": "1",
+            "submitted::elementor_c774e60": "6",
+            "submitted::elementor_2576a28": "1",
+            "submitted::elementor_4643cd6": "5",
+            "roc_dismissed_pro_release_notice": "1",
+            "uagb-admin-rating": "notice-dismissed",
+            "uagb-classic-editor": "notice-dismissed",
+            "cb_p6_a1_vip_user": "yes",
+            "cb_p6_a1_patreon_level": "11",
+            "wp_classic-editor-settings": "classic",
+            "hide_admin_area": "",
+            "wp_elementor_pro_enable_notes_notifications": "1",
+            "manageedit-postcolumnshidden": [
+                "will_expire"
+            ],
+            "submitted::elementor_bbc9bf1": "3",
+            "submitted::elementorbbc9bf1": "-2",
+            "wpuf_postlock": "no",
+            "wpuf_lock_cause": "",
+            "wpuf_edit_postlock": "no",
+            "wpuf_edit_post_lock_cause": "",
+            "_pack_assign_notification": "false",
+            "phone": "",
+            "facebook": "",
+            "twitter": "",
+            "linkedin": "",
+            "instagram": "",
+            "submitted::elementorc774e60": "-5",
+            "submitted::elementore151bc8": "-4",
+            "submitted::form_657c45b0e2b63": "4",
+            "closedpostboxes_loothprint": [],
+            "metaboxhidden_loothprint": [
+                "slugdiv"
+            ],
+            "user_url": "https://www.facebook.com/profile.php?id=100090399816475",
+            "_user_url": "field_6592fa2ccbd8c",
+            "bb_layout_view": {
+                "members": "list"
+            },
+            "_e_notifications_dismissed": [
+                "display-conditions-3.19",
+                "element-manager-permissions-3.19",
+                "akismet-3.19",
+                "image-optimizer-3.19",
+                "ai-variations-in-template-library-3.19",
+                "5-star-rating-prompt",
+                "taxonomy-filter-multi-select-3.18",
+                "loop-taxonomy-query-3.21",
+                "performance-boost-3.21",
+                "ai-personal-assistant-3.21",
+                "display-conditions-dynamic-content-3.20",
+                "display-conditions-or-logic-3.20",
+                "site-mailer-introducing",
+                "variable-fonts-3.24",
+                "floating-bars-3.24",
+                "ai-featured-image",
+                "search-widget-3.23",
+                "floating-buttons-3.23",
+                "link-in-bio-3.23",
+                "nested-elements-3.23",
+                "element-caching-3.22",
+                "off-canvas-3.22",
+                "elementor-add-ons",
+                "css-loading-3.25"
+            ],
+            "elementor_dismissed_editor_notices": [
+                "image-optimization-once",
+                "image_optimizer_hint"
+            ],
+            "woocommerce_admin_variable_product_tour_shown": "",
+            "woocommerce_admin_wc_payments_overview_inbox_last_read": "1707177045979",
+            "woocommerce_admin_activity_panel_inbox_last_read": "",
+            "woocommerce_admin_activity_panel_reviews_last_read": "",
+            "woocommerce_admin_categories_report_columns": "",
+            "woocommerce_admin_coupons_report_columns": "",
+            "woocommerce_admin_customers_report_columns": "",
+            "woocommerce_admin_orders_report_columns": "",
+            "woocommerce_admin_products_report_columns": "",
+            "woocommerce_admin_revenue_report_columns": "",
+            "woocommerce_admin_taxes_report_columns": "",
+            "woocommerce_admin_variations_report_columns": "",
+            "woocommerce_admin_dashboard_sections": "",
+            "woocommerce_admin_dashboard_chart_type": "",
+            "woocommerce_admin_dashboard_chart_interval": "",
+            "woocommerce_admin_dashboard_leaderboard_rows": "",
+            "woocommerce_admin_homepage_layout": "",
+            "woocommerce_admin_homepage_stats": "",
+            "woocommerce_admin_android_app_banner_dismissed": "",
+            "wp_wc_stripe_customer_test": "cus_PWwHOTbHFh5d2Y",
+            "wcpay_currency": "USD",
+            "wp_wc_stripe_customer_live": "cus_PXTp30C6UhxbJy",
+            "jetpack_tracks_anon_id": "woo:Z5hi8Bgs5E0Fo3c//joAEiIU",
+            "submitted::elementor2576a28": "-1",
+            "submitted::elementor4643cd6": "-1",
+            "wp_statistics_date_filter": {
+                "browsers": "filter|30days",
+                "platforms": "filter|30days",
+                "referring": "filter|yesterday",
+                "hits": "filter|this_month",
+                "search": "filter|last_week",
+                "pages": "filter|today",
+                "devices": "filter|30days",
+                "models": "filter|30days",
+                "hitsmap": "filter|today"
+            },
+            "wp_statistics": {
+                "dashboard_set": "14.5.2"
+            },
+            "metaboxhidden_dashboard": [
+                "wp-statistics-summary-widget",
+                "wp-statistics-browsers-widget",
+                "wp-statistics-platforms-widget",
+                "wp-statistics-devices-widget",
+                "wp-statistics-models-widget",
+                "wp-statistics-countries-widget",
+                "wp-statistics-referring-widget",
+                "wp-statistics-hits-widget",
+                "wp-statistics-search-widget",
+                "wp-statistics-pages-widget",
+                "wp-statistics-top-visitors-widget",
+                "wp-statistics-recent-widget",
+                "wp-statistics-hitsmap-widget",
+                "wp-statistics-useronline-widget",
+                "wp-statistics-words-widget",
+                "wp-statistics-summary-widget",
+                "wp-statistics-browsers-widget",
+                "wp-statistics-platforms-widget",
+                "wp-statistics-devices-widget",
+                "wp-statistics-models-widget",
+                "wp-statistics-countries-widget",
+                "wp-statistics-referring-widget",
+                "wp-statistics-hits-widget",
+                "wp-statistics-search-widget",
+                "wp-statistics-pages-widget",
+                "wp-statistics-top-visitors-widget",
+                "wp-statistics-recent-widget",
+                "wp-statistics-hitsmap-widget",
+                "wp-statistics-useronline-widget",
+                "wp-statistics-words-widget",
+                "wp-statistics-summary-widget",
+                "wp-statistics-browsers-widget",
+                "wp-statistics-platforms-widget",
+                "wp-statistics-devices-widget",
+                "wp-statistics-models-widget",
+                "wp-statistics-countries-widget",
+                "wp-statistics-referring-widget",
+                "wp-statistics-hits-widget",
+                "wp-statistics-search-widget",
+                "wp-statistics-pages-widget",
+                "wp-statistics-top-visitors-widget",
+                "wp-statistics-recent-widget",
+                "wp-statistics-hitsmap-widget",
+                "wp-statistics-useronline-widget",
+                "wp-statistics-words-widget",
+                "wp-statistics-summary-widget",
+                "wp-statistics-browsers-widget",
+                "wp-statistics-platforms-widget",
+                "wp-statistics-devices-widget",
+                "wp-statistics-models-widget",
+                "wp-statistics-countries-widget",
+                "wp-statistics-referring-widget",
+                "wp-statistics-hits-widget",
+                "wp-statistics-search-widget",
+                "wp-statistics-pages-widget",
+                "wp-statistics-top-visitors-widget",
+                "wp-statistics-recent-widget",
+                "wp-statistics-hitsmap-widget",
+                "wp-statistics-useronline-widget",
+                "wp-statistics-words-widget"
+            ],
+            "closedpostboxes_acf-ui-options-page": [],
+            "metaboxhidden_acf-ui-options-page": [
+                "slugdiv"
+            ],
+            "meta-box-order_loothprint": {
+                "acf_after_title": "",
+                "side": "fea-hide-page,submitdiv,tierdiv,tagsdiv-post_tag,loothprint_typediv,pageparentdiv,classic-editor-switch-editor,postimagediv,shared_categorydiv,tagsdiv-featured",
+                "normal": "acf-group_689022f8cc674,acf-group_68498d60b2b0d,acf-group_685c4bedc1eb6,acf-group_68766e1d03425,acf-group_65d4a1c68b83c,acf-group_67125fdf391b0,acf-group_67252b0c24c94,acf-group_664b27df4fda5,acf-group_672fe815d285a,acf-group_6547d86d9073b,commentstatusdiv,slugdiv,authordiv",
+                "advanced": "ame-cpe-content-permissions"
+            },
+            "screen_layout_loothprint": "2",
+            "closedpostboxes_acf-field-group": [
+                "patron-only-meta-box"
+            ],
+            "metaboxhidden_acf-field-group": [],
+            "closedpostboxes_post-type-videos": [
+                "acf-group_685c667604520"
+            ],
+            "metaboxhidden_post-type-videos": [
+                "slugdiv"
+            ],
+            "submitted::elementor660ec24": "-1",
+            "closedpostboxes_toplevel_page_wps_overview_page": [
+                "wp-statistics-top-visitors-widget"
+            ],
+            "metaboxhidden_toplevel_page_wps_overview_page": [],
+            "search_filter_v3_coming_soon_ignore": "1",
+            "search-filter-show-welcome-notice": "1",
+            "closedpostboxes_search-filter-widget": [
+                "wp-statistics-post-widget"
+            ],
+            "metaboxhidden_search-filter-widget": [
+                "slugdiv"
+            ],
+            "closedpostboxes_useful_links": [],
+            "metaboxhidden_useful_links": [
+                "slugdiv"
+            ],
+            "meta-box-order_useful_links": {
+                "acf_after_title": "",
+                "side": "patron-only-advanced-meta-box,submitdiv,tagsdiv-post_tag,shared_categorydiv,useful_linkdiv,pageparentdiv,patron-only-custom-banner,patreon-level,classic-editor-switch-editor,patron-only-meta-box,postimagediv",
+                "normal": "acf-group_656f046fb1e79,wp-statistics-post-widget,acf-group_65d3be1814cd6,postexcerpt,commentstatusdiv,slugdiv",
+                "advanced": ""
+            },
+            "screen_layout_useful_links": "2",
+            "closedpostboxes_users_page_bp-profile-edit": [],
+            "metaboxhidden_users_page_bp-profile-edit": [],
+            "dismissed_update_notice": "1",
+            "wp_mail_smtp_dash_widget_lite_hide_email_alerts_banner": "1",
+            "_last_login": "2026-05-10 12:16:07",
+            "closedpostboxes_page": [
+                "wp-statistics-post-summary-widget"
+            ],
+            "metaboxhidden_page": [
+                "patron-only-advanced-meta-box",
+                "patron-only-custom-banner",
+                "patreon-level",
+                "patron-only-meta-box"
+            ],
+            "author_url_": "https://patreon.com/theloothgroup",
+            "_author_url_": "field_6564b5d89c642",
+            "meta-box-order_search-filter-widget": {
+                "acf_after_title": "",
+                "side": "wp-statistics-post-summary-widget,patron-only-advanced-meta-box,search-filter-cache,submitdiv,patron-only-custom-banner,patron-only-meta-box,search-filter-shortcodes",
+                "normal": "wp-statistics-post-widget,search-filter-settings-box,slugdiv",
+                "advanced": "search-filter-available-fields,search-filter-search-form"
+            },
+            "screen_layout_search-filter-widget": "2",
+            "submitted::27014:elementor_0bcb64b": "8",
+            "submitted::27014:elementor0bcb64b": "-8",
+            "submitted::27014:elementor_f7883ae": "6",
+            "submitted::27014_elementor_f7883ae": "8",
+            "submitted::28453_elementor_3ed5927": "2",
+            "closedpostboxes_user-profile": [
+                "wp-statistics-post-widget"
+            ],
+            "metaboxhidden_user-profile": [
+                "slugdiv"
+            ],
+            "meta-box-order_user-profile": {
+                "acf_after_title": "",
+                "side": "patron-only-advanced-meta-box,submitdiv,languagediv,member-typediv,regiondiv,patron-only-custom-banner,patreon-level,classic-editor-switch-editor,patron-only-meta-box,postimagediv",
+                "normal": "wp-statistics-post-widget,acf-group_666850070f0d0,acf-group_656f046fb1e79,slugdiv",
+                "advanced": ""
+            },
+            "screen_layout_user-profile": "2",
+            "meta-box-order_acf-field-group": {
+                "side": "patron-only-advanced-meta-box,patron-only-custom-banner,patron-only-meta-box",
+                "normal": "acf-field-group-fields,acf-field-group-options,slugdiv",
+                "advanced": ""
+            },
+            "screen_layout_acf-field-group": "1",
+            "message_token": "MhY(29!JCPju",
+            "image_test": "28506",
+            "_image_test": "field_666f82a85352e",
+            "submitted::27014:elementorf7883ae": "-6",
+            "woocommerce_admin_launch_your_store_tour_hidden": "yes",
+            "submitted::fea_admin_uploads_privacy": "6",
+            "submitted::27014elementorf7883ae": "-8",
+            "pmpro_archived_notifications": {
+                "initial_notification_delay": "2024-09-10T19:25:05-04:00"
+            },
+            "pmpro_visits": {
+                "last": "September 26, 2024",
+                "thisdate": "2024-26-09",
+                "week": 13,
+                "thisweek": "39",
+                "month": 80,
+                "thismonth": "9",
+                "ytd": 80,
+                "thisyear": "2024",
+                "alltime": 80,
+                "today": 0
+            },
+            "pmpro_views": {
+                "last": "September 26, 2024",
+                "thisdate": "2024-26-09",
+                "week": 505,
+                "thisweek": "39",
+                "month": 1790,
+                "thismonth": "9",
+                "ytd": 1790,
+                "thisyear": "2024",
+                "alltime": 1790,
+                "today": 0
+            },
+            "managememberships_page_pmpro-memberslistcolumnshidden": [
+                "ID",
+                "first_name",
+                "last_name",
+                "membership_id",
+                "joindate"
+            ],
+            "pmpro_logins": {
+                "last": "September 25, 2024",
+                "thisdate": "2024-25-09",
+                "week": 5,
+                "thisweek": "39",
+                "month": 28,
+                "thismonth": "9",
+                "ytd": 28,
+                "thisyear": "2024",
+                "alltime": 28,
+                "today": 0
+            },
+            "bp_new_mention_count": "71",
+            "bp_new_mentions": [
+                8601,
+                8647,
+                8855,
+                8868,
+                9082,
+                9103,
+                9358,
+                9359,
+                9622,
+                9741,
+                9883,
+                9975,
+                9979,
+                9982,
+                9989,
+                10247,
+                10297,
+                10335,
+                10435,
+                10454,
+                10561,
+                10563,
+                10680,
+                10805,
+                10914,
+                11182,
+                11426,
+                11448,
+                11679,
+                11868,
+                12142,
+                12184,
+                12187,
+                12182,
+                12188,
+                12192,
+                12195,
+                12205,
+                12206,
+                12208,
+                14461,
+                14476,
+                14489,
+                14546,
+                14663,
+                14689,
+                14742,
+                14792,
+                14846,
+                14935,
+                15100,
+                15115,
+                15164,
+                15179,
+                15182,
+                15224,
+                15225,
+                15407,
+                15424,
+                15540,
+                15634,
+                15809,
+                15904,
+                15909,
+                16059,
+                16068,
+                16356,
+                18522,
+                18524,
+                18652,
+                18755
+            ],
+            "pmpro_stripe_customerid": "cus_QpFdkatVCJU6Iv",
+            "meta-box-order_sponsor": {
+                "acf_after_title": "",
+                "side": "fea-hide-page,patron-only-advanced-meta-box,submitdiv,pageparentdiv,formatdiv,patron-only-custom-banner,patreon-level,classic-editor-switch-editor,patron-only-meta-box,postimagediv",
+                "normal": "slugdiv,authordiv",
+                "advanced": ""
+            },
+            "screen_layout_sponsor": "2",
+            "submitted::33478_elementor_a9c38f1": "1",
+            "brand_name": " Davco World Enterprises",
+            "_brand_name": "field_66f943e641eb1",
+            "brand_primary_color_1": "#03680a",
+            "_brand_primary_color_1": "field_66f9451241eb3",
+            "brand_secondary_color_": "#ee8420",
+            "_brand_secondary_color_": "field_66f94573f8e9f",
+            "brand_instagram": "https://www.instagram.com/ianhatesguitars/?hl=en",
+            "_brand_instagram": "field_66f945a2f8ea0",
+            "brand_facebook": "",
+            "_brand_facebook": "field_66f945bef8ea1",
+            "brand_youtube": "",
+            "_brand_youtube": "field_66f945caf8ea2",
+            "brand_hero_youtube_link_": "",
+            "_brand_hero_youtube_link_": "field_66f94683f8ea3",
+            "brand_website": "https://dev.loothgroup.com",
+            "_brand_website": "field_66f962f4261f3",
+            "brand-logo1": "33488",
+            "_brand-logo1": "field_66f96aebdbe69",
+            "brand_email": "ian.davlin@gmail.com",
+            "_brand_email": "field_66f9c7b973bb9",
+            "tlg_sponsor_page_url": "",
+            "_tlg_sponsor_page_url": "field_66faca6c0b4ab",
+            "brand_image_gallery_": [
+                "32677",
+                "32676",
+                "32675"
+            ],
+            "_brand_image_gallery_": "field_66fbd4fc686ca",
+            "brand_hero_image": "32538",
+            "_brand_hero_image": "field_66fbf514795b4",
+            "brand_hero_image_title_": "",
+            "_brand_hero_image_title_": "field_66fbf52d795b5",
+            "brand_hero_image_caption": "",
+            "_brand_hero_image_caption": "field_66fbf549795b6",
+            "wp_elementor_enable_ai": "1",
+            "author_image": "33488",
+            "_author_image": "field_66fdadac7d5cf",
+            "author_instagram": "https://www.instagram.com/ianhatesguitars/?hl=en",
+            "_author_instagram": "field_684018e8ec7b9",
+            "author_youtube": "https://www.youtube.com/@theloothgroup",
+            "_author_youtube": "field_68401a9eec7bd",
+            "author_facebook": "https://www.facebook.com/ian.davlin/",
+            "_author_facebook": "field_68401922ec7ba",
+            "author_link_tree": "",
+            "_author_link_tree": "field_66fdaed57d5d5",
+            "author_website": "https://ianhatesguitars.com",
+            "_author_website": "field_68401939ec7bb",
+            "author_about": "Poppin' necks and cashin' checks is wut I used to do. ",
+            "_author_about": "field_66fdae8d7d5d4",
+            "brand_about_": "",
+            "_brand_about_": "field_66fc7ddd50790",
+            "closedpostboxes_buddyboss_page_bp-groups": [],
+            "metaboxhidden_buddyboss_page_bp-groups": [],
+            "meta-box-order_coe-questions": {
+                "acf_after_title": "",
+                "side": "wp-statistics-post-summary-widget,fea-hide-page,patron-only-advanced-meta-box,submitdiv,patron-only-custom-banner,patreon-level,classic-editor-switch-editor,patron-only-meta-box,postimagediv",
+                "normal": "wp-statistics-post-widget,acf-group_66b5ec8e0f99c,commentstatusdiv,acf-group_67070acfe46c0,slugdiv,authordiv",
+                "advanced": ""
+            },
+            "screen_layout_coe-questions": "2",
+            "closedpostboxes_coe-questions": [],
+            "metaboxhidden_coe-questions": [
+                "slugdiv"
+            ],
+            "submitted::7270_elementor_660ec24": "6",
+            "submitted::34764_elementor_9b36a50": "24",
+            "member_shop_name_": "Davco Global Guitar Solutions",
+            "_member_shop_name_": "field_670901cde77e0",
+            "make_shop_location_available_to_the_general_public": "0",
+            "_make_shop_location_available_to_the_general_public": "field_67090201e77e1",
+            "make_shop_location_available_to_other_members": "",
+            "_make_shop_location_available_to_other_members": "field_670902b9e77e2",
+            "member_shop_location": {
+                "address": "Ridgefield Park, NJ, USA",
+                "lat": 40.8570442,
+                "lng": -74.0215285,
+                "zoom": 14,
+                "place_id": "ChIJyz5r0GX3wokRmqLYAAXoERQ",
+                "name": "Ridgefield Park",
+                "city": "Ridgefield Park",
+                "state": "New Jersey",
+                "state_short": "NJ",
+                "country": "United States",
+                "country_short": "US"
+            },
+            "_member_shop_location": "field_67090341e77e3",
+            "member_shop_work_performed": "",
+            "_member_shop_work_performed": "field_670bccb008964",
+            "make_shop_information_available_to_potential_customers": [
+                "Yes"
+            ],
+            "_make_shop_information_available_to_potential_customers": "field_670a61c3f2978",
+            "shop_email": "ian.davlin@gmail.com",
+            "_shop_email": "field_670a6a0fe951b",
+            "shop_phone_number": "914-486-2523",
+            "_shop_phone_number": "field_670d0140e1fc3",
+            "shop_hours__appointment_only__mix": "Hours and/or Appointments",
+            "_shop_hours__appointment_only__mix": "field_670a7308e951d",
+            "appointment_information": "email Ian at ian.davlin@gmail.com",
+            "_appointment_information": "field_670a940b71af5",
+            "appointment_link": "https://farts.butt",
+            "_appointment_link": "field_670a958344533",
+            "submitted::34764_elementor_026a8ef": "2",
+            "member_shop_work_performed_": [
+                "1465"
+            ],
+            "_member_shop_work_performed_": "field_670aa8c5b433f",
+            "member_shop_warranty_status": [
+                "1480"
+            ],
+            "_member_shop_warranty_status": "field_670aa943b4340",
+            "member_shop_instrument_serviced_": [
+                "1471",
+                "1474",
+                "1472",
+                "1470",
+                "1473"
+            ],
+            "_member_shop_instrument_serviced_": "field_670aa9f7b4341",
+            "submitted::34764_elementor_d363c10": "2",
+            "shop_pics_": [
+                "24556",
+                "16097"
+            ],
+            "_shop_pics_": "field_670a9ee01d316",
+            "work_portfolio_": [
+                "31611",
+                "31460",
+                "34965"
+            ],
+            "_work_portfolio_": "field_670a9fa61d317",
+            "hero_image": "34965",
+            "_hero_image": "field_670a9fbf1d318",
+            "hero_youtube_link": "https://youtu.be/zelMCLgIAwQ",
+            "_hero_youtube_link": "field_670aa0801d319",
+            "shop_monday": "Hours",
+            "_shop_monday": "field_670a73eec990a",
+            "monday_appointment_only_": "0",
+            "_monday_appointment_only_": "field_670a74eac990e",
+            "monday_open_": "10:00",
+            "_monday_open_": "field_670a7467c990c",
+            "monday_close": "18:00",
+            "_monday_close": "field_670a74b5c990d",
+            "shop_tuesday": "Closed",
+            "_shop_tuesday": "field_670a786286b1f",
+            "shop_wednesday": "Closed",
+            "_shop_wednesday": "field_670a7c04df902",
+            "shop_thursday": "Closed",
+            "_shop_thursday": "field_670a8f07abbc9",
+            "shop_friday": "Closed",
+            "_shop_friday": "field_670a90d1f7048",
+            "shop_saturday": "Hours",
+            "_shop_saturday": "field_670a91c1f7051",
+            "saturday_appointment_only": "0",
+            "_saturday_appointment_only": "field_670a91edf7053",
+            "shop_sunday": "Hours",
+            "_shop_sunday": "field_670a92e2852ed",
+            "tuesday_appointment_only": "1",
+            "_tuesday_appointment_only": "field_670a7920c1c72",
+            "tuesday_open": "13:29",
+            "_tuesday_open": "field_670a79bcc1c74",
+            "tuesday_close": "13:29",
+            "_tuesday_close": "field_670a7a08c1c76",
+            "wednesday_appointment_only_": "0",
+            "_wednesday_appointment_only_": "field_670a7c6cdf904",
+            "wednesday_open": "13:42",
+            "_wednesday_open": "field_670a7cb7df906",
+            "wednesday_close": "13:43",
+            "_wednesday_close": "field_670a7cfbdf908",
+            "thursday_appointment_only_": "0",
+            "_thursday_appointment_only_": "field_670a8f40abbcb",
+            "thursday_open_": "15:04",
+            "_thursday_open_": "field_670a8fd9abbcd",
+            "thursday_close": "15:05",
+            "_thursday_close": "field_670a902dabbcf",
+            "friday_appointment_only": "1",
+            "_friday_appointment_only": "field_670a90f9f704a",
+            "friday_open": "15:09",
+            "_friday_open": "field_670a9134f704c",
+            "friday_close": "15:10",
+            "_friday_close": "field_670a9160f704e",
+            "saturday_open": "15:14",
+            "_saturday_open": "field_670a9228f7055",
+            "saturday_close": "15:16",
+            "_saturday_close": "field_670a92ac852ea",
+            "sunday_appointment_only": "1",
+            "_sunday_appointment_only": "field_670a931c852ef",
+            "sunday_open": "15:19",
+            "_sunday_open": "field_670a937e226dd",
+            "sunday_close": "15:21",
+            "_sunday_close": "field_670a93ca226df",
+            "submitted::34764_elementor_7894e16": "1",
+            "shop_pet_name_": "Kevin",
+            "_shop_pet_name_": "field_670aaec23f3cd",
+            "shop_pet_hero_image": "35067",
+            "_shop_pet_hero_image": "field_670aae5956202",
+            "shop_pet_type": "1476",
+            "_shop_pet_type": "field_670aae983f3cc",
+            "shop_pet_about_": "Kevin Bartholomew Davlin is a solid fella. ",
+            "_shop_pet_about_": "field_670aaf153f3ce",
+            "submitted::34764_elementor_57aca27": "1",
+            "shop_website": "",
+            "_shop_website": "field_670aaf5e13133",
+            "shop_instagram_": "https://booger.com",
+            "_shop_instagram_": "field_670aafae13134",
+            "shop_facebook": "",
+            "_shop_facebook": "field_670aafcf13135",
+            "shop_youtube": "",
+            "_shop_youtube": "field_670aaff013136",
+            "shop_linktree": "",
+            "_shop_linktree": "field_670ab00f13137",
+            "submitted::34764_elementor_370eeed": "7",
+            "do_you_have_a_business_to_promote": "0",
+            "_do_you_have_a_business_to_promote": "field_6668538eb19f9",
+            "Publicly_Display_Your_Member_Profile": "0",
+            "_Publicly_Display_Your_Member_Profile": "field_666af03a7d8fa",
+            "Display_Your_Member_Profile_to_Other_Members_": "0",
+            "_Display_Your_Member_Profile_to_Other_Members_": "field_666af0497d8fb",
+            "your_name": "",
+            "_your_name": "field_666888bc959ee",
+            "Publicly_Display_Your_Email": "0",
+            "_Publicly_Display_Your_Email": "field_666af1fe7d8fd",
+            "Publicly_Display_Your_Email_copy": "0",
+            "_Publicly_Display_Your_Email_copy": "field_666c236e7f946",
+            "tell_us_about_yourself": "",
+            "_tell_us_about_yourself": "field_6668a51e68b7b",
+            "display_you_location_": "0",
+            "_display_you_location_": "field_66687d8d39d37",
+            "languages": "",
+            "_languages": "field_66687b9ee503d",
+            "Your_Areas_of_Interest_or_Expertise_": "",
+            "_Your_Areas_of_Interest_or_Expertise_": "field_6668599cbc946",
+            "_instagram": "field_66687ed55a31a",
+            "_facebook": "field_66687ee35a31b",
+            "youtube": "",
+            "_youtube": "field_66687ee55a31c",
+            "Publicly_Display_a_Gallery_of_Your_ShopBusiness": "0",
+            "_Publicly_Display_a_Gallery_of_Your_ShopBusiness": "field_666af54a9810f",
+            "publicly_display_a_gallery_of_pictures_of_your_projects_": "0",
+            "_publicly_display_a_gallery_of_pictures_of_your_projects_": "field_666af58898110",
+            "banner_image_for_header": "",
+            "_banner_image_for_header": "field_666886dd62f62",
+            "add_hero_image__": "0",
+            "_add_hero_image__": "field_666b7297df7a0",
+            "member_shop_instruments_serviced": "",
+            "_member_shop_instruments_serviced": "field_670bcc3a08963",
+            "shop_warranty_status": "",
+            "_shop_warranty_status": "field_670bcd1f08966",
+            "shop_pet_": "",
+            "_shop_pet_": "field_670bcd0008965",
+            "date_posted": "",
+            "_date_posted": "field_670bd14996d8c",
+            "Sponsor_Forum_Shortcode": "",
+            "_Sponsor_Forum_Shortcode": "field_6702934dd8813",
+            "submitted::34764elementor370eeed": "-7",
+            "submitted::34764_elementor_c6d1ee5": "1",
+            "shop_page_post_date": "2024-10-16",
+            "_shop_page_post_date": "field_670bdd85c99a2",
+            "submitted::34764elementorc6d1ee5": "-1",
+            "submitted::34764_elementor_44dd0e3": "1",
+            "submitted::34764_elementor_79f0c25": "1",
+            "submitted::35319_elementor_ab5fb49": "22",
+            "submitted::35319elementorab5fb49": "-17",
+            "submitted::35319_elementor_b2a34ad": "16",
+            "submitted::35319_elementor_429fa56": "8",
+            "shop_name": "Ian Hates Guitars",
+            "_shop_name": "field_670d0120e1fc2",
+            "shop_email_": "ian.davlin@gmail.com",
+            "_shop_email_": "field_670d015ae1fc4",
+            "shop_location": {
+                "address": "Ridgefield Park, NJ 07660, USA",
+                "lat": 40.851833,
+                "lng": -74.0211989,
+                "zoom": 14,
+                "place_id": "ChIJ74QIVkD3wokR47zc3RHJYPc",
+                "name": "07660",
+                "city": "Ridgefield Park",
+                "state": "New Jersey",
+                "state_short": "NJ",
+                "post_code": "07660",
+                "country": "United States",
+                "country_short": "US"
+            },
+            "_shop_location": "field_670d0259e1fc5",
+            "submitted::35319_elementor_66e2785": "1",
+            "submitted::35319_elementor_a1e090a": "1",
+            "shop_logo_": "33488",
+            "_shop_logo_": "field_670d06d2cb0d4",
+            "submitted::35319_elementor_55dad1b": "1",
+            "member_shop_public_view_toggle_": "1",
+            "_member_shop_public_view_toggle_": "field_670d470fa1031",
+            "submitted::35319_elementor_55b5d57": "7",
+            "submitted::35319_elementor_5ed47ce": "4",
+            "submitted::35319_elementor_8d52838": "7",
+            "member_shop_hero_image": "34783",
+            "_member_shop_hero_image": "field_670a9fbf1d318",
+            "submitted::36072_elementor_8ab08f4": "5",
+            "submitted::35319_elementor_9953d30": "2",
+            "submitted::35319_elementor_11f37b6": "35",
+            "submitted::36072_elementor_5017ebd": "24",
+            "submitted::36072_elementor_9331a2b": "3",
+            "submitted::36072_elementor_89cde3b": "1",
+            "submitted::36072_elementor_5a63a49": "1",
+            "submitted::36019_elementor_3f44c87": "1",
+            "submitted::36019_elementor_159652d": "2",
+            "submitted::36019_elementor_2af46c6": "6",
+            "submitted::36019_elementor_852196b": "11",
+            "submitted::32959_elementor_948b83b": "4",
+            "submitted::fea_admin_dashboard": "1",
+            "submitted::36072elementor8ab08f4": "-4",
+            "closedpostboxes_member-benefit": [
+                "wp-statistics-post-widget"
+            ],
+            "metaboxhidden_member-benefit": [
+                "commentstatusdiv",
+                "slugdiv"
+            ],
+            "submitted::35319_elementor_5bb8a92": "1",
+            "does_your_shop_have_hours_or_appointment_info_to_list__": "1",
+            "_does_your_shop_have_hours_or_appointment_info_to_list__": "field_6724e8a0fc8d2",
+            "submitted::17323_elementor_4cd6344": "7",
+            "submitted::30356_elementor_241d4c2": "1",
+            "submitted::15394_elementor_e151bc8": "1",
+            "submitted::15394elementore151bc8": "0",
+            "meta-box-order_post-type-videos": {
+                "acf_after_title": "",
+                "side": "submitdiv,postimagediv,tierdiv,formatdiv,fea-hide-page,categorydiv,tagsdiv-post_tag,shared_categorydiv,video-typediv,pageparentdiv,tagsdiv-featured,classic-editor-switch-editor",
+                "normal": "acf-group_674c6faf5b56c,acf-group_685c667604520,acf-group_685c4bedc1eb6,acf-group_68766e1d03425,acf-group_65494b7ced810,acf-group_67252b0c24c94,acf-group_65d4a1c68b83c,acf-group_6650b338e761a,acf-group_664b27df4fda5,acf-group_666c46dc48335,acf-group_67125fdf391b0,acf-group_672fe815d285a,commentstatusdiv,slugdiv,revisionsdiv,commentsdiv",
+                "advanced": "ame-cpe-content-permissions"
+            },
+            "screen_layout_post-type-videos": "2",
+            "submitted::15429_elementor_d3aa2eb": "1",
+            "submitted::35319_elementor_7af9398": "1",
+            "submitted::35319_elementor_245a511": "1",
+            "submitted::35319_elementor_45070c7": "1",
+            "submitted::35319_elementor_3131942": "2",
+            "submitted::35319_elementor_bd37205": "1",
+            "submitted::35319_elementor_1103a5d": "2",
+            "submitted::35319_elementor_e10a3c6": "1",
+            "meta-box-order_admin_form": {
+                "acf_after_title": "",
+                "side": "wp-statistics-post-summary-widget,fea-hide-page,patron-only-advanced-meta-box,submitdiv,pageparentdiv,patron-only-custom-banner,patreon-level,patron-only-meta-box",
+                "normal": "wp-statistics-post-widget,slugdiv,acf-field-group-fields,acf-field-group-options",
+                "advanced": ""
+            },
+            "screen_layout_admin_form": "2",
+            "closedpostboxes_admin_form": [],
+            "metaboxhidden_admin_form": [],
+            "submitted::form_6736768b61172": "28",
+            "submitted::40790_elementor_39b77386": "2",
+            "submitted::40790elementor39b77386": "-2",
+            "wp_bfu_upgrade_notice_dismissed": "1",
+            "submitted::32959_elementor_c90a3d8": "1",
+            "submitted::36026_elementor_7609323": "37",
+            "tlwp_feedback_do_not_ask_again": "1",
+            "tlwp_feedback_do_not_ask_again_time": "1733088560",
+            "multivendorx_wp_review_request": "true",
+            "closedpostboxes_post-imgcap": [
+                "categorydiv",
+                "acf-group_664b27df4fda5",
+                "postexcerpt"
+            ],
+            "metaboxhidden_post-imgcap": [
+                "slugdiv"
+            ],
+            "submitted::15394_elementor_419f31e": "1",
+            "admin_category_commission": [],
+            "dokan_store_name": "The Looth Group",
+            "dokan_enable_selling": "yes",
+            "meta-box-order_shorty": {
+                "acf_after_title": "",
+                "side": "fea-hide-page,patron-only-advanced-meta-box,submitdiv,tagsdiv-post_tag,shared_categorydiv,pageparentdiv,patron-only-custom-banner,patreon-level,classic-editor-switch-editor,patron-only-meta-box,postimagediv",
+                "normal": "acf-group_65ef23035a29b,acf-group_666c46dc48335,acf-group_6650b338e761a,acf-group_6717e1c9b7383,acf-group_67252b0c24c94,acf-group_664b27df4fda5,acf-group_672fe815d285a,postexcerpt,commentstatusdiv,slugdiv,authordiv",
+                "advanced": ""
+            },
+            "screen_layout_shorty": "2",
+            "wp_statistics_metabox_date_filter": {
+                "wp-statistics-hits-widget": "filter|this_week",
+                "wp-statistics-pages-widget": "filter|yesterday"
+            },
+            "submitted::7270elementor660ec24": "-1",
+            "dokan_feature_seller": "no",
+            "dokan_publishing": "no",
+            "dokan_admin_percentage": "",
+            "dokan_admin_additional_fee": "",
+            "dokan_profile_settings": {
+                "store_name": "The Looth Group",
+                "social": {
+                    "fb": "",
+                    "youtube": "",
+                    "twitter": "",
+                    "linkedin": "",
+                    "pinterest": "",
+                    "instagram": ""
+                },
+                "payment": {
+                    "paypal": {
+                        "0": "email",
+                        "email": ""
+                    },
+                    "bank": {
+                        "ac_name": "",
+                        "ac_type": "",
+                        "ac_number": "",
+                        "bank_name": "",
+                        "bank_addr": "",
+                        "routing_number": "",
+                        "iban": "",
+                        "swift": ""
+                    }
+                },
+                "phone": "",
+                "show_email": "no",
+                "address": {
+                    "street_1": "",
+                    "street_2": "",
+                    "city": "",
+                    "zip": "",
+                    "state": "",
+                    "country": ""
+                },
+                "location": "",
+                "banner": 44393,
+                "icon": 0,
+                "gravatar": 31276,
+                "enable_tnc": "off",
+                "store_tnc": "",
+                "show_min_order_discount": "no",
+                "store_seo": [],
+                "dokan_store_time_enabled": "no",
+                "dokan_store_open_notice": "Store is open",
+                "dokan_store_close_notice": "Store is closed"
+            },
+            "screen_layout_product": "2",
+            "submitted::20157elementorb0bee2d": "0",
+            "ame_rui_first_login_done": "1",
+            "closedpostboxes_document": [
+                "wp-statistics-post-summary-widget"
+            ],
+            "metaboxhidden_document": [
+                "slugdiv"
+            ],
+            "closedpostboxes_sponsor-product": [
+                "wp-statistics-post-summary-widget"
+            ],
+            "metaboxhidden_sponsor-product": [
+                "slugdiv"
+            ],
+            "meta-box-order_sponsor-product": {
+                "acf_after_title": "",
+                "side": "wp-statistics-post-summary-widget,fea-hide-page,patron-only-advanced-meta-box,submitdiv,tagsdiv-sponsor-post-type,patron-only-custom-banner,patreon-level,classic-editor-switch-editor,patron-only-meta-box,postimagediv",
+                "normal": "acf-group_67d46340db733,slugdiv,authordiv",
+                "advanced": ""
+            },
+            "screen_layout_sponsor-product": "2",
+            "closedpostboxes_forum": [
+                "wp-statistics-post-summary-widget"
+            ],
+            "metaboxhidden_forum": [
+                "slugdiv"
+            ],
+            "closedpostboxes_sponsor-post": [],
+            "metaboxhidden_sponsor-post": [
+                "slugdiv"
+            ],
+            "closedpostboxes_freebies": [
+                "wp-statistics-post-summary-widget"
+            ],
+            "metaboxhidden_freebies": [
+                "slugdiv"
+            ],
+            "meta-box-order_loothcuts": {
+                "acf_after_title": "",
+                "side": "fea-hide-page,patron-only-advanced-meta-box,submitdiv,tagsdiv-post_tag,shared_categorydiv,loothcut_typediv,tierdiv,pageparentdiv,patron-only-custom-banner,patreon-level,classic-editor-switch-editor,patron-only-meta-box,postimagediv",
+                "normal": "acf-group_65ce6f595dfed,acf-group_65d4a1c68b83c,acf-group_67252b0c24c94,acf-group_664b27df4fda5,acf-group_672fe815d285a,commentstatusdiv,commentsdiv,acf-group_6717e1c9b7383,slugdiv,authordiv,revisionsdiv",
+                "advanced": "ame-cpe-content-permissions"
+            },
+            "screen_layout_loothcuts": "2",
+            "closedpostboxes_loothcuts": [],
+            "metaboxhidden_loothcuts": [
+                "slugdiv"
+            ],
+            "submitted::51166_elementor_749874e": "18",
+            "author_looth_group_profile": "",
+            "_author_looth_group_profile": "field_68401ae8ec7be",
+            "author_linktree": "",
+            "_author_linktree": "field_6840195cec7bc",
+            "wp_wpse_sheet_sessions": {
+                "post": [],
+                "post-type-videos": {
+                    "keyword": "al "
+                },
+                "loothprint": [],
+                "post-imgcap": [],
+                "useful_links": [],
+                "member-benefit": [],
+                "shorty": [],
+                "user": []
+            },
+            "wpse_has_saved_sheet": "1",
+            "closedpostboxes_shorty": [
+                "wp-statistics-post-summary-widget"
+            ],
+            "metaboxhidden_shorty": [
+                "slugdiv"
+            ],
+            "submitted::46314_elementor_4a14732": "157",
+            "submitted::46314_elementor_46112f0": "2",
+            "meta-box-order_post-imgcap": {
+                "acf_after_title": "",
+                "side": "fea-hide-page,submitdiv,tagsdiv-post_tag,postimagediv,article-typediv,shared_categorydiv,tagsdiv-featured,categorydiv,tierdiv,pageparentdiv,classic-editor-switch-editor",
+                "normal": "acf-group_685c4bedc1eb6,acf-group_68766e1d03425,acf-group_655e1bb5ee027,acf-group_65d4a1c68b83c,acf-group_666c46dc48335,acf-group_67125fdf391b0,acf-group_6650b338e761a,acf-group_67252b0c24c94,acf-group_664b27df4fda5,acf-group_672fe815d285a,postexcerpt,commentstatusdiv,slugdiv",
+                "advanced": "ame-cpe-content-permissions,authordiv"
+            },
+            "screen_layout_post-imgcap": "2",
+            "submitted::fea_admin_submissions": "3",
+            "submitted::36072_elementor_252deb6": "4",
+            "submitted::36072_elementor_ca68769": "4",
+            "submitted::36072_elementor_8ccafea": "1",
+            "submitted::53405_elementor_749874e": "3",
+            "submitted::53405_elementor_635bd47": "1",
+            "submitted::53405_elementor_dbb4e5c": "10",
+            "submitted::53405_elementor_392772e": "2",
+            "submitted::37635_elementor_f83b28e": "1",
+            "submitted::37635_elementor_fc478cc": "3",
+            "submitted::37635_elementor_6473d01": "1",
+            "submitted::37635_elementor_74107ab": "1",
+            "submitted::37635_elementor_f8e5fe3": "5",
+            "wpse_last_column_group": {
+                "loothprint": "loothprints",
+                "post-type-videos": "related-links",
+                "shorty": "shorties",
+                "post-imgcap": "article",
+                "member-benefit": "bene"
+            },
+            "brand_third_color_header_color": "#000000",
+            "_brand_third_color_header_color": "field_6812505ad5eb4",
+            "sponsor_forum_url": "",
+            "_sponsor_forum_url": "field_67e30c2794840",
+            "brand_tag": "",
+            "_brand_tag": "field_681237f528ecc",
+            "sponsor_contact_form_short_code": "",
+            "_sponsor_contact_form_short_code": "field_6812502ba2f91",
+            "submitted::55875_elementor_10a8527": "1",
+            "submitted::33512_elementor_d0654ac": "2",
+            "submitted::47803_elementor_dd7739b": "2",
+            "submitted::31334elementor79e16bd": "-1",
+            "last_login": "1779306505",
+            "woocommerce_admin_pes_incentive_dismissed": {
+                "woopayments": [
+                    {
+                        "id": "wcpay-promo-2023-switch-discount__wc_settings_payments",
+                        "context": "wc_settings_payments__modal",
+                        "timestamp": 1758105276
+                    }
+                ]
+            },
+            "bffu_notice_bffu_pro_upgrade": "dismissed",
+            "draft_user_1": {
+                "object": "user",
+                "data_key": "draft_user_1",
+                "data": {
+                    "id": "",
+                    "user_id": "1",
+                    "item_id": "0",
+                    "item_name": "",
+                    "object": "user",
+                    "content": "",
+                    "post_title": "",
+                    "privacy": "loggedin",
+                    "privacy_modal": "general",
+                    "edit_activity": "false",
+                    "group_image": "",
+                    "link_image_index_save": "0",
+                    "can_schedule_in_feed": "true",
+                    "can_create_poll_activity": "true",
+                    "can_upload_post_feature_image": "true",
+                    "link_embed": "false",
+                    "has_topic_selector": "true",
+                    "group_name": "",
+                    "group-privacy": ""
+                },
+                "post_action": "update",
+                "allow_delete_media": "true",
+                "display_post": "",
+                "is_discard_draft_activity": "false",
+                "allow_delete_post_feature_image": "true"
+            },
+            "as3cf_dismissed_notices": [
+                "elementor_analyze_and_repair_completed",
+                "as3cf_tool_errors_downloader"
+            ],
+            "as3cfpro-dismiss-licence-notice": "1",
+            "_elementor_structure_popup_dismissed": "1",
+            "plugin_image_optimization_first_time": "2025-12-01 07:45:41",
+            "submitted::61613_elementor_be49e0a": "2",
+            "submitted::61758_elementor_65c844b7": "2",
+            "submitted::61768_elementor_88d1954": "3",
+            "submitted::61772_elementor_be49e0a": "17",
+            "submitted::61772_elementor_76bafb5": "69",
+            "submitted::61772_elementor_c2df7e9": "1",
+            "submitted::61772elementorbe49e0a": "-18",
+            "submitted::form_693ec228a03b6": "10",
+            "submitted::form_693ec4bd9090e": "19",
+            "submitted::form_693ec601c0e25": "1",
+            "submitted::form_693ece9cca96a": "1",
+            "submitted::61772_elementor_c6cd45a": "1",
+            "submitted::61772elementorc6cd45a": "-1",
+            "submitted::62816_elementor_b1b7683": "3",
+            "submitted::62816_elementor_906b228": "5",
+            "submitted::63894_elementor_14d1792": "1",
+            "submitted::63894_elementor_288d166": "1",
+            "submitted::63894elementor14d1792": "-1",
+            "submitted::62816_elementor_2a563eb": "12",
+            "submitted::62816_elementor_a2c10cd": "6",
+            "submitted::62816_elementor_0c19696": "5",
+            "submitted::62816_elementor_d20a41f": "7",
+            "submitted::62816_elementor_5ef6ca8": "3",
+            "submitted::62816_elementor_22e0dbf": "3",
+            "submitted::62816_elementor_d67a9ab": "3",
+            "submitted::62816_elementor_9a6b649": "1",
+            "submitted::64493_elementor_5ab6958": "6",
+            "closedpostboxes_mp2t_directory": [
+                "acf-group_mp2t_51_workspace_vibe"
+            ],
+            "metaboxhidden_mp2t_directory": [
+                "slugdiv"
+            ],
+            "total_friend_count": "1282",
+            "total_group_count": "19",
+            "submitted::33512elementord0654ac": "-1",
+            "submitted::47803elementordd7739b": "-1",
+            "closedpostboxes_member-directory": [],
+            "metaboxhidden_member-directory": [
+                "slugdiv"
+            ],
+            "submitted::65864_elementor_eec8f6c": "64",
+            "submitted::65864_elementor_77999a2": "49",
+            "meta-box-order_dashboard": {
+                "normal": "dashboard_rediscache,vg_sheet_editor_usage_stats,e-dashboard-overview,dashboard_site_health,dashboard_right_now,dashboard_activity,fluentform_stat_widget,dashboard_widget_burst,bbp-dashboard-right-now,fluentsmtp_reports_widget",
+                "side": "dashboard_quick_press,dashboard_primary",
+                "column3": "",
+                "column4": ""
+            },
+            "submitted::51166_elementor_455de64": "4",
+            "submitted::65864_elementor_723c19d": "2",
+            "submitted::65864_elementor_8c5d8f3": "1",
+            "meta-box-order_event": {
+                "acf_after_title": "",
+                "side": "lg_er_lead_time,lg_er_campaign_status,lg_er_archive_status,tierdiv,fea-hide-page,submitdiv,event-typediv,languagediv,regiondiv,pageparentdiv,expirationdatediv,classic-editor-switch-editor,postimagediv",
+                "normal": "acf-group_66579f82158e1,acf-group_674c6faf5b56c,acf-group_67125fdf391b0,acf-group_6650b338e761a,slugdiv,authordiv,revisionsdiv",
+                "advanced": "ame-cpe-content-permissions"
+            },
+            "screen_layout_event": "2",
+            "stripe_customer_id": "cus_UNsRmZ4z8aRNU2",
+            "stripe_subscription_id": "sub_1TP6gMHg6gcIV22bOSy8nt1C",
+            "payment_source": "stripe",
+            "_lgms_has_gifts": "1",
+            "lg_avatar_attachment_id": "69146"
+        }
+    },
+    "taxonomies": {
+        "shared_category": [
+            {
+                "id": 1946,
+                "slug": "marketing",
+                "name": "Marketing"
+            }
+        ]
+    },
+    "attachments": [],
+    "postmeta_raw": {
+        "classic-editor-remember": [
+            "classic-editor"
+        ],
+        "_edit_lock": [
+            "1779302175:1"
+        ],
+        "_edit_last": [
+            "1"
+        ],
+        "patreon-level": [
+            "0"
+        ],
+        "_wp_page_template": [
+            "default"
+        ],
+        "fea_limit_visibilty": [
+            "0"
+        ],
+        "_ame_cpe_post_policy": [
+            "{\"accessProtection\":{\"active\":\"replace\"}}"
+        ],
+        "do_you_have_a_pdf_to_display__": [
+            "0"
+        ],
+        "_do_you_have_a_pdf_to_display__": [
+            "field_68766e1f5bea4"
+        ],
+        "add_repeater_fields__click_no_if_only_using_": [
+            "1"
+        ],
+        "_add_repeater_fields__click_no_if_only_using_": [
+            "field_676199d4411af"
+        ],
+        "img_cap_images_and_captions_repeater_0_add_a_single_image__": [
+            "0"
+        ],
+        "_img_cap_images_and_captions_repeater_0_add_a_single_image__": [
+            "field_673207182fe94"
+        ],
+        "img_cap_images_and_captions_repeater_0_add_an_image_gallery__": [
+            "0"
+        ],
+        "_img_cap_images_and_captions_repeater_0_add_an_image_gallery__": [
+            "field_673207ba2fe96"
+        ],
+        "img_cap_images_and_captions_repeater_0_add_a_text_area__": [
+            "0"
+        ],
+        "_img_cap_images_and_captions_repeater_0_add_a_text_area__": [
+            "field_6732073d2fe95"
+        ],
+        "img_cap_images_and_captions_repeater_0_add_a_youtube_or_instagram_link__": [
+            "0"
+        ],
+        "_img_cap_images_and_captions_repeater_0_add_a_youtube_or_instagram_link__": [
+            "field_673207e22fe97"
+        ],
+        "img_cap_images_and_captions_repeater": [
+            "1"
+        ],
+        "_img_cap_images_and_captions_repeater": [
+            "field_655e1d07e3bc2"
+        ],
+        "category": [
+            [
+                "1946"
+            ]
+        ],
+        "_category": [
+            "field_65a559e54a2da"
+        ],
+        "post_tip_link_radio": [
+            "No"
+        ],
+        "_post_tip_link_radio": [
+            "field_666c46dd8691c"
+        ],
+        "post_addon_gallery_radio": [
+            "No"
+        ],
+        "_post_addon_gallery_radio": [
+            "field_6650b338f18d9"
+        ],
+        "post_related_link_radio_parts": [
+            "0"
+        ],
+        "_post_related_link_radio_parts": [
+            "field_67252b0c2d18c"
+        ],
+        "post_related_link_radio": [
+            "0"
+        ],
+        "_post_related_link_radio": [
+            "field_664b27df57fb9"
+        ],
+        "do_you_have_files_to_upload_for_this_post__": [
+            "no"
+        ],
+        "_do_you_have_files_to_upload_for_this_post__": [
+            "field_672ffe3a4bec3"
+        ],
+        "_elementor_page_assets": [
+            []
+        ]
+    },
+    "acf": {
+        "do_you_have_a_pdf_to_display__": false,
+        "add_repeater_fields__click_no_if_only_using_": true,
+        "img_cap_images_and_captions_repeater": [
+            {
+                "add_a_single_image__": false,
+                "img_cap_repeater_image": false,
+                "add_an_image_gallery__": false,
+                "gallery43": false,
+                "add_a_text_area__": false,
+                "img_cap_repeater_text": "",
+                "add_a_youtube_or_instagram_link__": false,
+                "repeater_oembed": null
+            }
+        ],
+        "category": [
+            1946
+        ],
+        "post_tip_link_radio": "No",
+        "post_addon_gallery_radio": "No",
+        "post_related_link_radio_parts": false,
+        "post_related_link_radio": false,
+        "do_you_have_files_to_upload_for_this_post__": "no"
+    },
+    "media_resolved": {
+        "32538": {
+            "id": 32538,
+            "url": "https://dev.loothgroup.com/wp-content/uploads/2024/09/coe-bridgeplate-1.jpeg",
+            "alt": "",
+            "mime": "image/jpeg",
+            "sizes": {
+                "medium": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/09/coe-bridgeplate-225x300-1.jpeg",
+                    "width": 225,
+                    "height": 300
+                },
+                "large": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/09/coe-bridgeplate-768x1024-1.jpeg",
+                    "width": 768,
+                    "height": 1024
+                },
+                "thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/09/coe-bridgeplate-150x150-1.jpeg",
+                    "width": 150,
+                    "height": 150
+                },
+                "medium_large": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/09/coe-bridgeplate-768x1024.jpeg",
+                    "width": 768,
+                    "height": 1024
+                },
+                "post-thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/09/coe-bridgeplate-624x832-1.jpeg",
+                    "width": 624,
+                    "height": 832
+                },
+                "woocommerce_thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/09/coe-bridgeplate-300x300-1.jpeg",
+                    "width": 300,
+                    "height": 300
+                },
+                "woocommerce_single": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/09/coe-bridgeplate-600x800-1.jpeg",
+                    "width": 600,
+                    "height": 800
+                },
+                "woocommerce_gallery_thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/09/coe-bridgeplate-100x100-1.jpeg",
+                    "width": 100,
+                    "height": 100
+                }
+            },
+            "filesize": 209358
+        },
+        "33488": {
+            "id": 33488,
+            "url": "https://dev.loothgroup.com/wp-content/uploads/2024/10/Untitled-design-1.jpg",
+            "alt": "",
+            "mime": "image/jpeg",
+            "sizes": {
+                "medium": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/Untitled-design-300x300-1.jpg",
+                    "width": 300,
+                    "height": 300
+                },
+                "large": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/Untitled-design-1024x1024-1.jpg",
+                    "width": 1024,
+                    "height": 1024
+                },
+                "thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/Untitled-design-150x150-1.jpg",
+                    "width": 150,
+                    "height": 150
+                },
+                "medium_large": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/Untitled-design-768x768-1.jpg",
+                    "width": 768,
+                    "height": 768
+                },
+                "post-thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/Untitled-design-624x624-1.jpg",
+                    "width": 624,
+                    "height": 624
+                },
+                "woocommerce_thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/Untitled-design-300x300.jpg",
+                    "width": 300,
+                    "height": 300
+                },
+                "woocommerce_single": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/Untitled-design-600x600-1.jpg",
+                    "width": 600,
+                    "height": 600
+                },
+                "woocommerce_gallery_thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/Untitled-design-100x100-1.jpg",
+                    "width": 100,
+                    "height": 100
+                },
+                "elementor_custom_1920x1080": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/elementor/thumbs/Untitled-design-1.jpg",
+                    "width": 1920,
+                    "height": 1080
+                }
+            },
+            "filesize": 84513
+        },
+        "35067": {
+            "id": 35067,
+            "url": "https://dev.loothgroup.com/wp-content/uploads/2024/10/unnamed-3-1.jpg",
+            "alt": "",
+            "mime": "image/jpeg",
+            "sizes": {
+                "medium": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/unnamed-3-300x300-1.jpg",
+                    "width": 300,
+                    "height": 300
+                },
+                "thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/unnamed-3-150x150-1.jpg",
+                    "width": 150,
+                    "height": 150
+                },
+                "post-thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/unnamed-3-624x624-1.jpg",
+                    "width": 624,
+                    "height": 624
+                },
+                "woocommerce_thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/unnamed-3-300x300.jpg",
+                    "width": 300,
+                    "height": 300
+                },
+                "woocommerce_single": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/unnamed-3-600x600-1.jpg",
+                    "width": 600,
+                    "height": 600
+                },
+                "woocommerce_gallery_thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/unnamed-3-100x100-1.jpg",
+                    "width": 100,
+                    "height": 100
+                }
+            },
+            "filesize": 224174
+        },
+        "34783": {
+            "id": 34783,
+            "url": "https://dev.loothgroup.com/wp-content/uploads/2024/10/IMG_9399-1.webp",
+            "alt": "",
+            "mime": "image/webp",
+            "sizes": {
+                "medium": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/IMG_9399-300x225-1.webp",
+                    "width": 300,
+                    "height": 225
+                },
+                "large": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/IMG_9399-1024x768-1.webp",
+                    "width": 1024,
+                    "height": 768
+                },
+                "thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/IMG_9399-150x150-1.webp",
+                    "width": 150,
+                    "height": 150
+                },
+                "medium_large": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/IMG_9399-768x576-1.webp",
+                    "width": 768,
+                    "height": 576
+                },
+                "post-thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/IMG_9399-624x468-1.webp",
+                    "width": 624,
+                    "height": 468
+                },
+                "woocommerce_thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/IMG_9399-300x300-1.webp",
+                    "width": 300,
+                    "height": 300
+                },
+                "woocommerce_single": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/IMG_9399-600x450-1.webp",
+                    "width": 600,
+                    "height": 450
+                },
+                "woocommerce_gallery_thumbnail": {
+                    "url": "https://dev.loothgroup.com/wp-content/uploads//var/www/html/wp-content/uploads/2024/10/IMG_9399-100x100-1.webp",
+                    "width": 100,
+                    "height": 100
+                }
+            },
+            "filesize": 125182
+        },
+        "69146": {
+            "id": 69146,
+            "url": "https://dev.loothgroup.com/wp-content/uploads/2026/05/277419230_675815530236990_3632613312765094745_n.jpg",
+            "alt": "",
+            "mime": "image/jpeg",
+            "sizes": [],
+            "filesize": 2683
+        }
+    },
+    "rendered_html": ""
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run BB-mirror reconciliation every 10 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+AccuracySec=30s
+Unit=bb-mirror-reconcile.service
+
+[Install]
+WantedBy=timers.target

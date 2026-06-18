@@ -1,0 +1,1 @@
+/home/ubuntu/.claude/skills/write-article-v2/SKILL.md

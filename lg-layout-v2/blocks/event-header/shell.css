@@ -1,0 +1,168 @@
+/* event-header — when/where/attend strip for the `event` CPT.
+   Main selector carries the container + text chrome (manifest vars).
+   Sub-elements (date pill, type chips, join CTA, gate card) take their
+   colors from brand tokens so they recolor coherently with the variant's
+   --lg-link-color. Per-variant link-color comes from manifest.variants
+   (block-defaults layer). */
+
+@layer block-shell {
+  .lg-event-header {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    /* container chrome — all via manifest vars */
+    padding: var(--lg-padding, 20px 24px);
+    margin-block: var(--lg-margin-block, 0 28px);
+    background: var(--lg-bg, var(--lg-cream, #fbfbf8));
+    border: var(--lg-border, 1px solid var(--lg-sage-3, #d4e0b8));
+    border-radius: var(--lg-radius, 12px);
+    box-shadow: var(--lg-shadow, none);
+
+    /* text chrome — all via manifest vars */
+    color: var(--lg-color, var(--lg-ink, #323532));
+    font-family: var(--lg-font-family, var(--lg-font-sans, system-ui));
+    font-size: var(--lg-font-size, 18px);
+    font-weight: var(--lg-font-weight, 600);
+    line-height: var(--lg-line-height, 1.4);
+  }
+
+  /* ── when row: date pill + detail column ─────────────────────────── */
+  .lg-event-header__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+  }
+
+  /* Date pill — accent background tracks the variant's link-color. */
+  .lg-event-header__pill {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: clamp(54px, 14vw, 64px);
+    min-height: clamp(54px, 14vw, 64px);
+    padding: 8px 4px;
+    border-radius: 10px;
+    background: var(--lg-link-color, var(--lg-amber, #ecb351));
+    color: var(--lg-on-dark, #ffffff);
+    box-shadow: var(--lg-shadow-soft, 0 1px 3px rgba(0,0,0,0.08));
+  }
+  .lg-event-header__pill-mon {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .lg-event-header__pill-day {
+    font-family: var(--lg-font-serif, Georgia, serif);
+    font-size: clamp(26px, 7vw, 30px);
+    font-weight: 700;
+    line-height: 1.05;
+  }
+
+  .lg-event-header__detail {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .lg-event-header__date {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+  .lg-event-header__region {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--lg-ink, #323532);
+  }
+  .lg-event-header__pin {
+    opacity: 0.8;
+  }
+
+  /* Type chips — soft sage fill, no bullets. */
+  .lg-event-header__types {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .lg-event-header__type {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--lg-sage-3, #d4e0b8);
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+
+  /* ── join CTA — satisfied viewers ───────────────────────────────── */
+  .lg-event-header__join {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    align-self: flex-start;
+    padding: 11px 20px;
+    border-radius: 8px;
+    background: var(--lg-link-color, var(--lg-amber, #ecb351));
+    color: var(--lg-on-dark, #ffffff);
+    font-size: 15px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .lg-event-header__join:hover {
+    box-shadow: var(--lg-shadow-card, 0 4px 8px rgba(0,0,0,0.08));
+    transform: translateY(-1px);
+  }
+  .lg-event-header__join-icon {
+    font-size: 12px;
+  }
+
+  /* ── gate card — under-tier viewers ─────────────────────────────── */
+  .lg-event-header__gate {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    background: var(--lg-cream-warm, #f7f5f2);
+    border: 1px dashed var(--lg-sage-2, #99b27e);
+  }
+  .lg-event-header__gate-msg {
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--lg-ink, #323532);
+  }
+  .lg-event-header__lock {
+    opacity: 0.7;
+  }
+  .lg-event-header__upgrade {
+    align-self: flex-start;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    color: var(--lg-link-color, var(--lg-amber, #ecb351));
+  }
+  .lg-event-header__upgrade:hover {
+    text-decoration: underline;
+  }
+  /* Responsive sizing is handled via clamp() on the pill above + flex-wrap,
+     so no @media block is needed (the linter's M5 parser can't scope one). */
+}

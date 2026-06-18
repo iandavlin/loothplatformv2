@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "_meta": {
+    "source": "user paste 2026-05-26 \u2014 YouTube IZT5n0aWW3c",
+    "translated_at": "2026-05-26",
+    "notes": "Video post. Looth Lite gated embed. Chapter timestamps as separate <p> anchors with class lg-ts-link \u2014 dash CSS should grey + pointer-events:none for non-members to close the gate-bypass via YouTube."
+  },
+  "blocks": [
+    {
+      "type": "post-header",
+      "tagline": "Ian sits down with Anders Nicklasson of True Temperament to trace the 20-year arc behind the squiggly frets \u2014 how the temperament was developed by ear, what luthiers can buy today, and why three-chord players hear the difference first.",
+      "show_read_time": true
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<p>Aired on <em>Looth Group Live</em>, Friday, April 10th, 2026.</p>"
+    },
+    {
+      "type": "embed",
+      "url": "https://youtu.be/IZT5n0aWW3c",
+      "gated_tier": "looth-lite"
+    },
+    {
+      "type": "section-heading",
+      "level": "h3",
+      "text": "Chapters"
+    },
+    {
+      "type": "wysiwyg",
+      "html": "<p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=0s\"><strong>00:00:00</strong> &mdash; Introduction & The 20-Year Journey to True Temperament Frets</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=134s\"><strong>00:02:14</strong> &mdash; How the Temperament Was Developed & Dialed In by Ear</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=263s\"><strong>00:04:23</strong> &mdash; Nut & Bridge: Straight Lines With All Compensation in the Frets</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=353s\"><strong>00:05:53</strong> &mdash; What Luthiers Can Buy: Fretboards, Necks & Custom Options</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=482s\"><strong>00:08:02</strong> &mdash; Serviceability: Leveling, Crowning & Replacing Frets</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=667s\"><strong>00:11:07</strong> &mdash; Q&A \u2014 Playing in All Keys, String Gauge & Acoustic Guitars</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=857s\"><strong>00:14:17</strong> &mdash; Cort Collaboration & How True Temperament Raises Guitar Value</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=1193s\"><strong>00:19:53</strong> &mdash; Steve Vai, Strandberg & How Artist Relationships Began</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=1340s\"><strong>00:22:20</strong> &mdash; Player Learning Curve, Bending & Playing With Other Musicians</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=1513s\"><strong>00:25:13</strong> &mdash; Conversions, Service Points & Peterson Tuner Integration</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=1812s\"><strong>00:30:12</strong> &mdash; Factory Tour & How Guitar Production Came About</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=2298s\"><strong>00:38:18</strong> &mdash; What Temperament Is It? Just Intonation vs Equal Temperament</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=2506s\"><strong>00:41:46</strong> &mdash; Historical Context: Gut Frets, Piano & Why We Forgot Just Intonation</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=2875s\"><strong>00:47:55</strong> &mdash; Who Benefits Most: Three-Chord Players & Distorted Sounds</a></p><p><a class=\"lg-ts-link\" href=\"https://youtu.be/IZT5n0aWW3c?t=3180s\"><strong>00:53:00</strong> &mdash; Can Players Hear the Difference & Closing Q&A</a></p>"
+    },
+    {
+      "type": "callout",
+      "variant": "links",
+      "title": "Anders Nicklasson \u00b7 Guest",
+      "items": [
+        {
+          "icon": "globe",
+          "label": "truetemperament.com",
+          "url": "https://truetemperament.com/",
+          "description": "True Temperament \u2014 intonation frets, fretboards & necks."
+        },
+        {
+          "icon": "instagram",
+          "label": "true_temperament",
+          "url": "https://www.instagram.com/true_temperament/"
+        },
+        {
+          "icon": "link",
+          "label": "Company history",
+          "url": "https://truetemperament.com/history/",
+          "description": "Founder Anders Thidell's 15-year R&D, the Paul Guy collaboration, and the modern relaunch."
+        },
+        {
+          "icon": "link",
+          "label": "Anders on LinkedIn",
+          "url": "https://www.linkedin.com/in/andersnicklasson/",
+          "description": "CMO, True Temperament AB."
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "variant": "data",
+      "title": "Where luthiers buy",
+      "items": [
+        {
+          "icon": "link",
+          "label": "True Temperament necks for S-Style",
+          "url": "https://www.stewmac.com/parts-and-hardware/necks/true-temperament-necks-for-s-style-guitar/",
+          "description": "StewMac \u2014 roasted maple bolt-on, Strat heel."
+        },
+        {
+          "icon": "link",
+          "label": "True Temperament necks for T-Style",
+          "url": "https://www.stewmac.com/parts-and-hardware/necks/true-temperament-necks-for-t-style-guitar/",
+          "description": "StewMac \u2014 bolt-on, Tele heel."
+        },
+        {
+          "icon": "link",
+          "label": "Tuning a True Temperament neck",
+          "url": "https://www.stewmac.com/video-and-ideas/online-resources/neck-building-and-repair-and-setup/tuning-a-true-temperament-neck/",
+          "description": "StewMac how-to \u2014 setup walkthrough."
+        }
+      ]
+    },
+    {
+      "type": "post-footer"
+    }
+  ]
+}

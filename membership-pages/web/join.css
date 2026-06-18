@@ -1,0 +1,72 @@
+/* /join/ — public Patreon onboarding entry styles.
+ *
+ * Mirrors the /manage-subscription/ card/pill/CTA language on the shared shell.
+ * Card modifier classes (--success / --already / --error / --pending / --start)
+ * drive the left-border accent; pill modifiers (--ok / --warn) the badge color.
+ */
+
+.lg-join__main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+}
+
+.lg-join__head { text-align: center; margin: 0 0 2rem; }
+.lg-join__title { margin: 0; font-size: 1.75rem; font-weight: 700; }
+
+.lg-join__card {
+    border: 1px solid rgba(0,0,0,.08);
+    border-left: 4px solid #aaa;
+    border-radius: 8px;
+    padding: 1.5rem 1.75rem;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.lg-join__card--start    { border-left-color: #2563eb; text-align: center; }
+.lg-join__card--success  { border-left-color: #16a34a; }
+.lg-join__card--already  { border-left-color: #2563eb; }
+.lg-join__card--error    { border-left-color: #dc2626; }
+.lg-join__card--pending  { border-left-color: #f59e0b; }
+
+.lg-join__card p { margin: 0 0 1rem; }
+.lg-join__card p:last-child { margin-bottom: 0; }
+
+.lg-join__pill {
+    display: inline-block;
+    margin: 0 0 .85rem;
+    padding: .25rem .7rem;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    background: #f5f5f5;
+    color: #555;
+}
+.lg-join__pill--ok   { background: #dcfce7; color: #14532d; }
+.lg-join__pill--warn { background: #fef3c7; color: #92400e; }
+
+.lg-join__cta {
+    display: inline-block;
+    padding: .6rem 1.4rem;
+    border-radius: 6px;
+    background: #1a1a1a;
+    color: #fff;
+    text-decoration: none;
+    font-weight: 600;
+}
+.lg-join__cta:hover { background: #333; }
+
+/* Funnel slots (the seam). Primary = big CTA; secondary = light nudge. */
+.lg-join__lede { font-size: 1.05rem; margin: 0 0 1.5rem; }
+.lg-join__primary { margin: 0 0 1.1rem; }
+.lg-join__cta--primary { font-size: 1.05rem; padding: .75rem 1.7rem; }
+.lg-join__secondary { margin: 0; color: #666; font-size: .95rem; }
+
+.lg-join__link { color: #2563eb; text-decoration: none; }
+.lg-join__link:hover { text-decoration: underline; }
+
+/* Connect-your-Patreon instruction steps (Ian 2026-06-12) */
+.lg-join__steps { margin: 18px 0 22px; padding-left: 22px; display: grid; gap: 12px;
+  font-size: 15.5px; line-height: 1.55; color: var(--lg-ink, #323532); }
+.lg-join__steps li::marker { font-weight: 700; color: var(--lg-sage-d, #6b7c52); }

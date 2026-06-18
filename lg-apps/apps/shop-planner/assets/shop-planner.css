@@ -1,0 +1,33 @@
+/* ============================================
+   LG App: The Roadman Shop Planner — App-specific styles
+   Base modal/button/sidebar styles are in lgapps-base.css
+   ============================================ */
+
+/* Instagram credit link in header */
+.lgapps-modal-title a:hover {
+  opacity: 1 !important;
+  text-decoration: underline !important;
+}
+
+/* Canvas container */
+.lgsp-canvas-container {
+  flex: 1;
+  min-width: 300px;
+  border-right: 1px solid var(--lgapps-gray-300);
+  background: var(--lgapps-white);
+  display: flex;
+  position: relative;
+}
+
+#lgsp-layoutCanvas {
+  flex: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+/* PDF header input — slightly wider */
+#lgsp-pdfHeader {
+  max-width: 140px;
+}

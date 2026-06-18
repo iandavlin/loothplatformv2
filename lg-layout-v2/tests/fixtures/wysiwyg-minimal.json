@@ -1,0 +1,16 @@
+{
+    "schema": 1,
+    "_meta": {
+        "title": "wysiwyg \u2014 minimal fixture",
+        "post_id": 1,
+        "post_type": "post-imgcap",
+        "fixture_purpose": "Minimal valid wysiwyg block. Renders the block in isolation for snapshot testing."
+    },
+    "blocks": [
+        {
+            "type": "wysiwyg",
+            "id": "b_minimal",
+            "html": "<p>Looth Group restores beat-up Strats. We bring an iron lung to every job.</p><h2>Why this matters</h2><p>The instruments outlast their owners, and the marks they carry are <em>part</em> of the music. Stripping a 60-year-old finish reveals more than wood — it shows a chain of hands.</p><ul><li>Original neck plate matches the body cavity stamp.</li><li>Pickup magnets are not original.</li><li>The peghead carries hand-carved initials.</li></ul>"
+        }
+    ]
+}

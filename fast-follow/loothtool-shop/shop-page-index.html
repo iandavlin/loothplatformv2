@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loothtool — Shop luthier tools &amp; gear</title>
+<meta name="description" content="Bench-tested jigs, fixtures and tools made by working luthiers in the Looth community.">
+<link rel="stylesheet" href="/srv/lg-shared/site-header.css" onerror="this.remove()">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+  /* The Loot — standalone shop page, skinned to match loothtool.com's CURRENT
+     theme (loothtool-wordpress-theme tokens): hero gradient #021C1E→#004445,
+     teal accent #2C7873 (--lt-red), mint #6FB98F (--lt-gold), #f1f1f1 body +
+     white cards, Barlow Condensed headings + Inter body (webfonts above —
+     house rule). Dark mode follows the APP theme toggle
+     (html[data-lguser-theme="dark"]) but uses the Loothtool dark palette.
+     Catalog is fetched live from /shop-feed.json. No deps, no emoji. */
+  :root{
+    --cream:#ffffff; --paper:#fff; --sage:#2C7873; --sage-d:#004445; --sage-tint:#ddeae6;
+    --amber:#6FB98F; --rust:#2C7873; --charcoal:#000; --ink:#1a1a1a; --mute:#595959; --line:#e6e6e6;
+    --serif:'Barlow Condensed','Arial Narrow',Impact,sans-serif; --sans:'Inter',system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --app-bg:#f1f1f1; --card:var(--paper); --t-ink:var(--charcoal); --t-body:var(--ink);
+    --t-mute:var(--mute); --hair:var(--line); --img-bg:#f1f1f1; --now:#000;
+  }
+  html[data-lguser-theme="dark"]{
+    --app-bg:#021C1E; --card:#0b2528; --t-ink:#ddeae6; --t-body:#c7d8d2; --t-mute:#8aa79e;
+    --hair:rgba(111,185,143,.22); --img-bg:#0e2d30; --now:#6FB98F;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--app-bg);color:var(--t-body);font-family:var(--sans);
+    padding-bottom:calc(78px + env(safe-area-inset-bottom,0px))} /* clear the app bottom nav */
+  .wrap{max-width:1080px;margin:0 auto}
+
+  /* ===== sticky header ===== */
+  .hd{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--app-bg) 88%,transparent);
+    backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);
+    border-bottom:1px solid var(--hair)}
+  .hd__in{max-width:1080px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:12px 16px}
+  .hd__brand{display:flex;align-items:center;gap:10px;line-height:1}
+  /* official Loothtool wordmark (Buck 2026-06-11) — wide amber art, tagline built in */
+  .hd__wordmark{height:34px;width:auto;display:block;flex:0 0 auto}
+  .hd__sp{margin-left:auto}
+  .hd__search{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--hair);
+    border-radius:999px;padding:8px 14px;min-width:0;max-width:280px;flex:1 1 200px}
+  .hd__search svg{width:17px;height:17px;flex:0 0 auto;fill:none;stroke:var(--t-mute);stroke-width:2;stroke-linecap:round}
+  /* !important + the #q id: the app dark pass forces background:#222629 on all
+     inputs with !important, and its html[data-…] input selector outguns a
+     class-only rule — keep the input invisible inside the pill in both themes */
+  .hd__search input#q{border:0!important;outline:0;box-shadow:none!important;background:transparent!important;color:var(--t-ink)!important;font:14px/1 var(--sans);width:100%;min-width:0}
+  .hd__search input::placeholder{color:var(--t-mute)}
+  @media (max-width:560px){.hd__search{max-width:none}}
+
+  /* ===== hero ===== */
+  .hero{position:relative;overflow:hidden;margin:16px 16px 0;border-radius:22px;padding:26px 22px 22px;
+    color:#fff;background:linear-gradient(135deg,#021C1E 0%,#004445 100%);
+    box-shadow:0 12px 30px rgba(2,28,30,.3)}
+  .hero__glow{position:absolute;top:-60px;left:-40px;width:240px;height:240px;border-radius:50%;
+    background:radial-gradient(circle,rgba(111,185,143,.4),rgba(111,185,143,0) 70%);pointer-events:none}
+  .hero__eyebrow{position:relative;font:800 11px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:#6FB98F}
+  .hero__h{position:relative;font-family:var(--serif);font-weight:700;font-size:clamp(29px,7.4vw,42px);line-height:1.06;
+    text-transform:uppercase;letter-spacing:.04em;margin:10px 0 0}
+  .hero__p{position:relative;font:500 14.5px/1.5 var(--sans);color:#aec8c0;margin:9px 0 0;max-width:46ch}
+  .hero__cta{position:relative;display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:999px;cursor:pointer;
+    font:800 14px/1 var(--sans);padding:12px 18px;text-decoration:none}
+  .btn--cream{background:#fff;color:var(--sage-d);box-shadow:0 4px 14px rgba(2,28,30,.25)}
+  .btn--ghost{background:rgba(255,255,255,.14);color:#fff}
+  .btn--sage{background:var(--sage-d);color:#fff}
+  .btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ===== trust ===== */
+  .trust{display:flex;gap:8px;flex-wrap:wrap;padding:14px 16px 0}
+  .trust__i{display:inline-flex;align-items:center;gap:7px;font:600 12px/1 var(--sans);color:var(--t-body);
+    background:var(--card);border:1px solid var(--hair);border-radius:999px;padding:9px 13px}
+  .trust__i svg{width:14px;height:14px;fill:none;stroke:#2C7873;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ===== section ===== */
+  .sec{margin-top:24px}
+  .sec__hd{max-width:1080px;margin:0 auto;display:flex;align-items:baseline;gap:8px;padding:0 16px 12px}
+  .sec__t{font-family:var(--serif);font-weight:700;font-size:21px;text-transform:uppercase;letter-spacing:.04em;color:var(--t-ink)}
+  .sec__more{margin-left:auto;font:700 12.5px/1 var(--sans);color:var(--sage-d);text-decoration:none;cursor:pointer}
+
+  /* ===== category chips ===== */
+  .cats{max-width:1080px;margin:0 auto;display:flex;gap:8px;overflow-x:auto;padding:0 16px 2px;scrollbar-width:none}
+  .cats::-webkit-scrollbar{display:none}
+  .cat{flex:0 0 auto;border:1px solid var(--hair);background:var(--card);color:var(--t-body);border-radius:999px;
+    padding:9px 15px;font:700 13px/1 var(--sans);cursor:pointer;white-space:nowrap}
+  .cat.on{background:var(--sage-d);border-color:var(--sage-d);color:#fff}
+
+  /* ===== rails + grids ===== */
+  .rail{display:flex;gap:14px;overflow-x:auto;padding:0 16px 8px;scrollbar-width:none}
+  .rail::-webkit-scrollbar{display:none}
+  .rail .card{flex:0 0 56%;max-width:230px}
+  .grid{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;padding:12px 16px 0}
+
+  /* ===== product card ===== */
+  .card{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--hair);border-radius:16px;
+    overflow:hidden;text-decoration:none;color:inherit;position:relative;transition:transform .15s ease,box-shadow .15s ease}
+  .card:hover{transform:translateY(-3px);box-shadow:0 12px 26px rgba(26,29,26,.16)}
+  .card__imgw{position:relative;aspect-ratio:1/1;background:var(--img-bg);overflow:hidden}
+  .card__img{width:100%;height:100%;object-fit:cover;display:block}
+  .card__maker{position:absolute;left:8px;top:8px;font:700 10px/1 var(--sans);background:color-mix(in srgb,var(--card) 86%,transparent);
+    backdrop-filter:blur(4px);color:var(--t-ink);border:1px solid var(--hair);border-radius:999px;padding:5px 9px;
+    max-width:80%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card__badge{position:absolute;right:8px;top:8px;font:800 10px/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;
+    background:var(--rust);color:#fff;border-radius:6px;padding:5px 7px}
+  .card__b{padding:11px 12px 13px;display:flex;flex-direction:column;gap:6px;flex:1 1 auto}
+  .card__name{font:600 13.5px/1.3 var(--sans);color:var(--t-ink);display:-webkit-box;-webkit-line-clamp:2;
+    -webkit-box-orient:vertical;overflow:hidden;min-height:2.6em}
+  .card__price{display:flex;align-items:baseline;gap:7px;margin-top:auto}
+  .card__now{font:800 15px/1 var(--sans);color:var(--now)}
+  .card__was{font:600 12px/1 var(--sans);color:var(--t-mute);text-decoration:line-through}
+  .card__bulk{font:600 11px/1.2 var(--sans);color:var(--sage-d)}
+  html[data-lguser-theme="dark"] .card__bulk{color:#6FB98F}
+  /* #004445 accents vanish on the #021C1E dark bg — lift them */
+  html[data-lguser-theme="dark"] .sec__more{color:#6FB98F}
+  html[data-lguser-theme="dark"] .cat.on{background:#2C7873;border-color:#2C7873}
+  html[data-lguser-theme="dark"] .btn--sage{background:#2C7873}
+
+  /* ===== makers ===== */
+  /* centered like the loothtool.com shops row ("safe" falls back to flex-start
+     when the row overflows on a phone, so nothing gets clipped) */
+  .makers{max-width:1080px;margin:0 auto;display:flex;gap:12px;overflow-x:auto;padding:0 16px 6px;scrollbar-width:none;justify-content:safe center}
+  .makers::-webkit-scrollbar{display:none}
+  .maker{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:8px;width:80px;text-align:center;
+    text-decoration:none;color:inherit}
+  .maker__av{width:62px;height:62px;border-radius:50%;display:flex;align-items:center;justify-content:center;overflow:hidden;
+    font:700 18px/1 var(--serif);color:#fff;box-shadow:0 4px 12px rgba(2,28,30,.2)}
+  .maker__av img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+  .maker__n{font:600 11px/1.25 var(--sans);color:var(--t-body)}
+
+  /* ===== status / end ===== */
+  .status{max-width:1080px;margin:0 auto;text-align:center;color:var(--t-mute);padding:48px 16px;font:500 14px/1.5 var(--sans)}
+  .end{margin:26px 16px 0;border-radius:20px;border:1px solid var(--hair);background:var(--card);padding:24px 20px;text-align:center}
+  .end__h{font-family:var(--serif);font-weight:700;font-size:21px;text-transform:uppercase;letter-spacing:.04em;color:var(--t-ink)}
+  .end__p{font:500 13px/1.5 var(--sans);color:var(--t-mute);margin:7px 0 15px}
+</style>
+</head>
+<body>
+  <header class="hd">
+    <div class="hd__in">
+      <div class="hd__brand">
+        <img class="hd__wordmark" src="/shop-img/loothtool-logo.png?v=2" alt="Loothtool — luthier tools marketplace">
+      </div>
+      <div class="hd__sp"></div>
+      <label class="hd__search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <input id="q" type="search" placeholder="Search tools, makers…" autocomplete="off" aria-label="Search the shop">
+      </label>
+    </div>
+  </header>
+
+  <section class="hero">
+    <span class="hero__glow"></span>
+    <div class="hero__eyebrow">Made on the bench</div>
+    <h1 class="hero__h">Tools by luthiers,<br>for luthiers.</h1>
+    <p class="hero__p">Jigs, fixtures and shop-tested gear from the makers in our community — the stuff you can't buy at the big-box store.</p>
+    <div class="hero__cta">
+      <a class="btn btn--cream" href="#sale">See what's on sale
+        <svg viewBox="0 0 24 24"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></a>
+      <a class="btn btn--ghost" href="#all">Shop all</a>
+    </div>
+  </section>
+
+  <div class="trust">
+    <span class="trust__i"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Built by working luthiers</span>
+    <span class="trust__i"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Secure checkout on Loothtool</span>
+    <span class="trust__i"><svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>Ships from the maker</span>
+  </div>
+
+  <section class="sec" id="sale" hidden>
+    <div class="sec__hd"><span class="sec__t">On sale now</span><a class="sec__more" href="#all">See all</a></div>
+    <div class="rail" id="saleRail"></div>
+  </section>
+
+  <section class="sec" id="makersSec" hidden>
+    <div class="sec__hd"><span class="sec__t">Shop the makers</span></div>
+    <div class="makers" id="makers"></div>
+  </section>
+
+  <section class="sec" id="all">
+    <div class="sec__hd"><span class="sec__t">All gear</span><span class="sec__more" id="count"></span></div>
+    <div class="cats" id="cats"></div>
+    <div class="grid" id="grid"><div class="status">Loading the shop…</div></div>
+  </section>
+
+  <div class="end">
+    <div class="end__h">Make something today.</div>
+    <div class="end__p" id="endP">Tools from the makers in the Looth community.</div>
+    <a class="btn btn--sage" href="https://loothtool.com/shop" target="_blank" rel="noopener">Browse the full marketplace
+      <svg viewBox="0 0 24 24"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></a>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+  var FEED_URL='/shop-feed.json', SHOP_HOME='https://loothtool.com/shop';
+  var grid=document.getElementById('grid');
+
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function parsePrice(raw){
+    raw=String(raw||''); var o={now:'',was:'',bulk:'',pct:0};
+    var bulk=/Buy\s+\d+\s+to get\s+[\d.]+%\s+discount/i.exec(raw);
+    if(bulk) o.bulk=bulk[0].replace(/\s+/g,' ').replace('to get','→').replace(' discount',' off');
+    var sale=/Original price was:\s*\$?([\d.,]+)\.?\s*\$?([\d.,]+)\s*Current price is:\s*\$?([\d.,]+)/i.exec(raw);
+    if(sale){o.was='$'+sale[1];o.now='$'+sale[3];var w=parseFloat(sale[1]),n=parseFloat(sale[3]);if(w>0&&n>0)o.pct=Math.round((w-n)/w*100);return o;}
+    var range=/\$([\d.,]+)\s*[–-]\s*\$([\d.,]+)/.exec(raw);
+    if(range){o.now='$'+range[1]+'–$'+range[2];return o;}
+    var one=/\$([\d.,]+)/.exec(raw); o.now=one?'$'+one[1]:''; return o;
+  }
+  function categoryOf(name){
+    var n=(name||'').toLowerCase();
+    if(/fret|radius|truss|tang/.test(n))return 'Fretwork';
+    if(/solder|humbucker|signal|jack|hollowbody|wiring|pickguard|gluck/.test(n))return 'Wiring';
+    if(/buff|gluboost|glu|tint|finish/.test(n))return 'Finishing';
+    if(/gauge|feeler|relief|scribe|saddle|nut|measur/.test(n))return 'Measuring';
+    if(/jig|router|base|workstation|neck rest|hold down|station/.test(n))return 'Jigs & Bases';
+    return 'Hand Tools';
+  }
+  var MK={'Looth Prints':'#6b7c52','VL Guitar Repair':'#c66845','String Pluckery':'#b98a3e','Austin Ribbon Microphones':'#7d8a5c','J.B. Jewitt Co., Inc':'#5c6c45','Whittlesticks':'#9a6a3e','Guitar Specialist, Inc.':'#8a8550'};
+  function mkColor(v){return MK[v]||'#2C7873';}
+  function mkShort(v){return (v||'').replace(/,? (Inc|Co)\.?.*$/,'').replace(' Guitar Repair','');}
+  function initials(v){return (v||'?').split(/\s+/).map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase();}
+
+  var PRODUCTS=[], CATS=['All','Fretwork','Measuring','Wiring','Finishing','Jigs & Bases','Hand Tools'], curCat='All', curQ='';
+
+  function cardHTML(p){
+    var badge=p.pct?'<span class="card__badge">-'+p.pct+'%</span>':'';
+    var price='<span class="card__now">'+esc(p.now)+'</span>'+(p.was?'<span class="card__was">'+esc(p.was)+'</span>':'');
+    var bulk=p.bulk?'<span class="card__bulk">'+esc(p.bulk)+'</span>':'';
+    return '<a class="card" href="'+esc(p.url||SHOP_HOME)+'" target="_blank" rel="noopener">'+
+      '<div class="card__imgw"><img class="card__img" src="'+esc(p.image||'')+'" alt="" loading="lazy" decoding="async">'+
+      '<span class="card__maker">'+esc(mkShort(p.vendor))+'</span>'+badge+'</div>'+
+      '<div class="card__b"><div class="card__name">'+esc(p.name)+'</div>'+
+      '<div class="card__price">'+price+'</div>'+bulk+'</div></a>';
+  }
+  function drawCats(){
+    document.getElementById('cats').innerHTML=CATS.map(function(c){return '<button class="cat'+(c===curCat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</button>';}).join('');
+    Array.prototype.forEach.call(document.querySelectorAll('.cat'),function(b){b.addEventListener('click',function(){curCat=b.getAttribute('data-c');drawCats();drawGrid();});});
+  }
+  function drawGrid(){
+    var list=PRODUCTS.filter(function(p){
+      if(curCat!=='All'&&p.cat!==curCat)return false;
+      if(curQ&&(p.name+' '+p.vendor).toLowerCase().indexOf(curQ)<0)return false;
+      return true;
+    });
+    document.getElementById('count').textContent=list.length+' item'+(list.length===1?'':'s');
+    grid.innerHTML=list.length?list.map(cardHTML).join(''):'<div class="status">'+(curQ?'No matches for "'+esc(curQ)+'".':'Nothing here yet.')+'</div>';
+  }
+  function drawSale(){
+    var sale=PRODUCTS.filter(function(p){return p.was;});
+    if(!sale.length)return;
+    document.getElementById('sale').hidden=false;
+    document.getElementById('saleRail').innerHTML=sale.map(cardHTML).join('');
+  }
+  function drawMakers(){
+    // The lineup mirrors loothtool.com's home shops carousel (Buck 2026-06-11):
+    // VL Guitar Repair in the middle, FretGuru left out until he lists products.
+    // Lineup makers show even with no products in the feed (tile links to their
+    // store); any new feed vendor not listed is appended at the end.
+    var LINEUP=['String Pluckery','Artisan Toolcraft','Whittlesticks','VL Guitar Repair','Looth Prints','Austin Ribbon Microphones'];
+    var seen={},list=[],inFeed={};
+    PRODUCTS.forEach(function(p){if(p.vendor)inFeed[p.vendor]=1;});
+    LINEUP.forEach(function(v){if(VENDOR_LOGOS[v]||inFeed[v]){seen[v]=1;list.push(v);}});
+    PRODUCTS.forEach(function(p){if(p.vendor&&!seen[p.vendor]){seen[p.vendor]=1;list.push(p.vendor);}});
+    if(!list.length)return;
+    document.getElementById('makersSec').hidden=false;
+    document.getElementById('makers').innerHTML=list.map(function(v){
+      // real store logo (mirrored from Loothtool by refresh-shop-feed) when we have
+      // one; colored-initials circle as the fallback. Tapping a maker goes to THEIR
+      // store page (Buck 2026-06-11: "my shop took me to the general shop").
+      var rec=VENDOR_LOGOS[v]||{};
+      if(typeof rec==='string')rec={logo:rec};
+      var logo=rec.logo, url=rec.url||'https://loothtool.com/shop';
+      var av=logo
+        ? '<span class="maker__av" style="background:'+mkColor(v)+'"><img src="'+esc(logo)+'" alt="" loading="lazy" '+
+          'onerror="this.parentNode.textContent=\''+esc(initials(v))+'\'"></span>'
+        : '<span class="maker__av" style="background:'+mkColor(v)+'">'+esc(initials(v))+'</span>';
+      // full store name on the tile (loothtool.com shows "VL Guitar Repair",
+      // not the "VL" shorthand the product cards use)
+      return '<a class="maker" href="'+esc(url)+'" target="_blank" rel="noopener">'+av+
+        '<span class="maker__n">'+esc(v)+'</span></a>';
+    }).join('');
+    document.getElementById('endP').textContent=PRODUCTS.length+' tools and counting, from '+list.length+' makers in the Looth community.';
+  }
+  function ingest(arr){
+    PRODUCTS=(arr||[]).map(function(p){var pr=parsePrice(p.price);return {name:p.name,vendor:p.vendor,image:p.image,url:p.url,cat:categoryOf(p.name),now:pr.now,was:pr.was,bulk:pr.bulk,pct:pr.pct};});
+    drawSale();drawMakers();drawCats();drawGrid();
+  }
+
+  document.getElementById('q').addEventListener('input',function(){curQ=this.value.trim().toLowerCase();drawGrid();});
+
+  // store logos map (name -> /shop-img/vendor-*.ext), mirrored from Loothtool's
+  // Dokan stores by refresh-shop-feed; missing/failed fetch just means initials.
+  var VENDOR_LOGOS={};
+  var logosP=fetch('/shop-vendors.json',{credentials:'same-origin',cache:'no-cache'})
+    .then(function(r){return r.ok?r.json():{};})
+    .then(function(j){VENDOR_LOGOS=j||{};})
+    .catch(function(){});
+
+  fetch(FEED_URL,{credentials:'same-origin',cache:'no-cache'})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      var arr=Array.isArray(d)?d:(d&&d.items)||[];
+      if(!arr.length){grid.innerHTML='<div class="status">The shop is restocking — check back soon.</div>';return;}
+      logosP.then(function(){ingest(arr);});
+    })
+    .catch(function(){grid.innerHTML='<div class="status">Couldn’t load the shop right now. <a href="'+SHOP_HOME+'" style="color:var(--sage-d)">Browse on Loothtool &rarr;</a></div>';});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- Standalone branded 403. On dev this is mostly the cookie gate (bots /
+     unclaimed devices); on live it covers genuinely forbidden paths. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Members only — Looth Group</title>
+<style>
+  :root { --sage:#87986a; --sage-d:#6b7c52; --ink:#1d2117; --mute:#6b6f6b; --cream:#faf7f2; --line:#e4e6e0; }
+  * { box-sizing:border-box; margin:0; }
+  html,body { height:100%; }
+  body { background:var(--cream); color:var(--ink); font:16px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+         display:flex; align-items:center; justify-content:center; padding:24px; }
+  .card { max-width:520px; width:100%; background:#fff; border:1px solid var(--line); border-radius:18px;
+          padding:42px 38px; text-align:center; box-shadow:0 2px 6px rgba(26,32,23,.07), 0 14px 38px rgba(26,32,23,.10); }
+  .brand { display:inline-flex; align-items:center; gap:10px; margin-bottom:22px; text-decoration:none; color:var(--ink); }
+  .brand img { width:36px; height:36px; border-radius:9px; }
+  .brand strong { font:700 19px/1 Georgia,"Times New Roman",serif; }
+  .lock { font-size:46px; line-height:1; }
+  h1 { font:700 24px/1.25 Georgia,serif; margin:14px 0 10px; }
+  p { color:var(--mute); margin-bottom:26px; }
+  .links { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+  .links a { display:inline-block; padding:11px 18px; border-radius:999px; text-decoration:none; font:600 14px/1 inherit; }
+  .links a.primary { background:var(--sage); color:#fff; }
+  .links a.primary:hover { background:var(--sage-d); }
+  .links a.ghost { color:var(--ink); border:1.5px solid var(--line); background:#fff; }
+  .links a.ghost:hover { border-color:var(--sage); }
+  @media (prefers-color-scheme: dark) {
+    body { background:#15171a; color:#e5e7e1; }
+    .card { background:#1d211b; border-color:#2e3429; }
+    .brand { color:#e5e7e1; } h1 { color:#e5e7e1; }
+    .links a.ghost { color:#e5e7e1; background:transparent; border-color:#2e3429; }
+  }
+</style>
+</head>
+<body>
+  <main class="card">
+    <a class="brand" href="/"><img src="/icons/icon-192.png" alt="" onerror="this.style.display='none'"><strong>Looth Group</strong></a>
+    <div class="lock">&#128274;</div>
+    <h1>This area isn&rsquo;t open</h1>
+    <p>You don&rsquo;t have access to this page from here. If you&rsquo;re a member, sign in and try again.</p>
+    <nav class="links">
+      <a class="primary" href="/wp-login.php">Sign in</a>
+      <a class="ghost" href="/front-page/">Front page</a>
+    </nav>
+  </main>
+</body>
+</html>

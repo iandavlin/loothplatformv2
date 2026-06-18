@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "_meta": {
+    "title": "Looth PRO - Les Paul: Repair and Touchup, Part 3",
+    "post_id": 68879,
+    "converted_from": "legacy event (BuddyBoss template + ACF postmeta)",
+    "conversion_notes": "PoC for the events→v2 migration. The legacy body carried the Zoom link publicly as an <h1>ZOOM LINK</h1> anchor — stripped here and moved into the gated event-header CTA so the only gated thing is the Zoom link. Date/time/region/event-type/zoom are read LIVE from postmeta by event-header (no props baked), so the showrunner Sheet pipeline stays the source of truth."
+  },
+  "blocks": [
+    {
+      "type": "post-header",
+      "id": "ev68879_header",
+      "variant": "variant-1",
+      "show_read_time": false
+    },
+    {
+      "type": "event-header",
+      "id": "ev68879_when",
+      "variant": "variant-1"
+    },
+    {
+      "type": "wysiwyg",
+      "id": "ev68879_body",
+      "style": "plain",
+      "html": "<p>Ian Davlin is marching forward with the Les Paul's Hagstrodectemy. Next up is leveling the wood replacement and testing some notions in replicating some of the lacquer checking with modern lacquer formulated for checking.</p>\n<h2>Host Links</h2>\n<h3>Ian Davlin</h3>\n<ul>\n<li><strong>Website:</strong> <a href=\"https://dev.loothgroup.com\" target=\"_blank\" rel=\"noopener noreferrer\">https://dev.loothgroup.com</a></li>\n<li><strong>Instagram:</strong> <a href=\"https://www.instagram.com/ianhatesguitars\" target=\"_blank\" rel=\"noopener noreferrer\">https://www.instagram.com/ianhatesguitars</a></li>\n<li><strong>YouTube:</strong> <a href=\"https://www.youtube.com/@theloothgroup\" target=\"_blank\" rel=\"noopener noreferrer\">https://www.youtube.com/@theloothgroup</a></li>\n<li><strong>Patreon:</strong> <a href=\"https://www.patreon.com/theloothgroup\" target=\"_blank\" rel=\"noopener noreferrer\">https://www.patreon.com/theloothgroup</a></li>\n</ul>"
+    },
+    {
+      "type": "post-footer",
+      "id": "ev68879_footer"
+    }
+  ]
+}
