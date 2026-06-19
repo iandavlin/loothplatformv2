@@ -1,7 +1,8 @@
 # GIT-PROTOCOL.md — How we use git for loothplatformv2
 
-**Status:** seeded skeleton. Sections below are headers to fill over time as decisions
-land. Only the **Decided** section is authoritative today.
+**Status:** the filled sections (Decided, Branch naming, Commit message style, Review &
+merge gate, What is / isn't tracked, Multi-box / worktree handling) are authoritative. The
+remaining `_(to fill)_` headers fill as decisions land.
 
 ---
 
@@ -14,8 +15,9 @@ WP-core / uploads are gitignored and box-local.
 **Workflow = branch-per-task + Ian approves merge** (Ian is a git novice and wants to be
 walked through each gate):
 
-1. **Edit only in the repo clone** (`dev2:~/loothplatformv2`) — never the legacy
-   `dev1:~/projects` tree.
+1. **Edit in a per-lane git worktree off `main`** — never the legacy `dev1:~/projects`
+   tree, and never the canonical clone's own working tree directly (refined 6/19 — see
+   *Multi-box / worktree handling* below).
 2. **One short-lived branch per task** (e.g. `avatar-consolidation`, `sacred-docs`).
 3. **Commit small, TESTED increments** on the branch. Commit ≠ push.
 4. **Before any push/merge, show Ian the commits + diffstat** for joint review. No silent
@@ -29,17 +31,33 @@ protects every box.
 ---
 
 ## Branch naming
-_(to fill: convention for task branches, who deletes merged branches)_
+Short kebab-case, one per task, named for the work (`avatar-v3`, `secrets-dash`,
+`serve-assets-fix`). Branch off `main`. The keeper deletes branches once merged
+(`git branch -d`). No long-lived feature branches — keep them short so `main` is the
+shared truth.
 
 ## Commit message style
-_(to fill: prefix-by-area convention, e.g. `profile-app: …`, `platform: …`, `docs: …`)_
+Area-prefix, imperative: `profile-app:`, `platform:`, `archive-poc:`, `docs(atlas):`,
+`gitignore:`. One logical, tested change per commit (commit ≠ push). End every commit with
+the `Co-Authored-By:` trailer.
 
 ## Review & merge gate
-_(to fill: exact "show commits + diffstat" ritual, merge vs rebase, fast-forward policy)_
+Before any push or merge to `main`: show Ian the commits + `git diff --stat`. Merge with
+`--no-ff` (one clear merge commit per lane) only after his OK; delete the branch after.
+Never silent-push. Boxes only ever *pull* `main`, so a mistake kept off `main` reaches no box.
 
 ## What is / isn't tracked
-_(to fill: pointer to `.gitignore`; runtime files that are tracked-but-locally-modified
-(e.g. archive-poc config.json/index.sqlite) and how `git pull` handles them — stash/restore)_
+Source is tracked; **runtime + secrets are not** (see `.gitignore` + per-dir ignores):
+- archive-poc `index.sqlite` (box-local revert mirror) and `web/assets/*.css|*.js`
+  (lazily-generated content-hashed bundles) — gitignored; the serve tree must make these
+  paths **writable by the `archive-poc` user** (`chown archive-poc:www-data` + `chmod 2775`,
+  or ACL). A non-writable `web/assets` makes the renderer inline ~105 KB CSS/page instead of
+  linking a cached bundle (heavier, not broken).
+- `config.json` is tracked but app-writable (ACL); a `git pull` that would clobber it must
+  stash/restore.
+- Secrets (`/etc/looth/*`, R2 tokens, JWT keys, certs) — never in git; provisioned per box.
+- **Rule:** a fresh clone must REPRODUCE the live render. If it doesn't, the gap is a
+  gitignored runtime dependency or a non-writable runtime dir — provision it, don't commit it.
 
 ## Deploy from git
 _(to fill: the `git pull` ritual per box, symlink-farm repoint, what restart/cache-flush
@@ -48,9 +66,21 @@ follows a pull)_
 ## Secrets & box-local files
 _(to fill: `/etc/looth/*`, R2 tokens, JWT keys, certs — never in git; per-box provisioning)_
 
-## Multi-box / worktree handling
-_(to fill: dev2 canonical vs dev3 deploy-test; the bb-mirror bespoke-cutover worktree
-de-fork; how clones stay in sync)_
+## Multi-box / worktree handling (decided 6/19)
+**One canonical clone, per-lane worktrees, a separate serve clone.**
+- **Canonical clone** `dev2:~/loothplatformv2` stays checked out on `main`, clean. It is the
+  keeper's reference + the merge target. **No lane edits it directly** — that caused the
+  shared-tree collisions (live edits leaking to the served site; commits landing on whatever
+  branch happened to be checked out).
+- **Per-lane worktree** — each task gets its own working tree off `main`:
+  `git worktree add ~/worktrees/lpv2-<task> -b <task> main`. Edit + commit there; the keeper
+  reviews + merges to `main`; then `git worktree remove ~/worktrees/lpv2-<task>`. Worktrees
+  share the one `.git` (cheap, no full clone) but each has its own branch + working tree, so
+  lanes never step on each other or the canonical clone. (The keeper already uses this for
+  doc edits while the clone sits on another branch.)
+- **Serving** comes from a SEPARATE pristine clone on `main` (never a lane/edit tree), so the
+  live site never serves uncommitted work — see SYSTEM-MAP §13.
+- dev3 = deploy-test box with its own clone; every box only *pulls* `main`.
 
 ## Cut / live procedures
 _(to fill: Phase-11 in-place swaps on dev2, DNS flip — cross-ref docs/PHASE-11-CUT-RUNBOOK.md)_
