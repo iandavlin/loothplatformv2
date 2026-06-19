@@ -299,6 +299,15 @@ Cloudflare R2 (S3 API), endpoint `…2b34fc01….r2.cloudflarestorage.com`.
   in `/etc/looth/profile-r2` + a dead token was exactly the 6/18 false alarm. Verify with
   object put/get/delete to the EXACT name, NEVER by listing (scoped tokens 403 on list by
   design). Tokens are IP-locked to the dev boxes.
+- **Account-wide READ key for lanes ("tight butterfly"):** a Cloudflare REST API token
+  scoped to R2 Storage: **Read** at `/etc/looth/cf-api-token` (root:root, box-local,
+  gitignored). It is the ONE token that lists every bucket + reads usage account-wide (does
+  NOT hit the 403-on-list trap). Read-only — cannot write/delete. Lanes (run as ubuntu,
+  passwordless sudo) use it via `sudo /usr/local/sbin/lg-secrets-helper buckets` (live
+  inventory) or `… reveal cf-api-token`; direct CF API at
+  `https://api.cloudflare.com/client/v4/accounts/2b34fc01f7fc32230a76c1490ac64b13/r2/buckets`.
+  NEVER commit or paste the value. For OBJECT bytes use the `r2up` S3 remote instead.
+  Declared in the secrets manifest as `cf-api-token`.
 - ⚠️ **Profile media is currently served from LOCAL disk** (`/srv/profile-app-media`, see
   §4/§8), NOT from R2. The avatar consolidation (6/19, branch `avatar-consolidation`,
   commit 4f39f41) re-derived every avatar (BB upload → real gravatar via d=404 probe →
