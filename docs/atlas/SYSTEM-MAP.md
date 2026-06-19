@@ -363,14 +363,19 @@ NOW:
 - A pristine serve clone (no chat edits) is the right serve root — built + staged at
   **`~/loothplatformv2-serve`** (on `main`, not serving).
 
-**🚩 BLOCKER — a fresh `git clone` of `main` does NOT reproduce the live render.** Verified:
-`/post-imgcap/a-repair-…` renders 44762 B from `~/projects` (lean standalone renderer) but
-170896 B from a fresh clone. Root cause: the standalone renderer depends on **built,
-content-hashed CSS bundles** `archive-poc/web/assets/lg-v2-bundle.<hash>.css` that are
-**NOT committed** (build artifacts); a fresh clone lacks them → fallback render. So
-"deploy = git pull" is **false for archive-poc until** the bundle build runs on deploy (the
-known "bundle regen + epoch bump" step) or the artifacts are committed. **Resolve before any
-real serve-from-git cut.**
+**✅ RESOLVED — archive-poc render reproduces from a fresh clone (was the "bundle" scare).**
+It is NOT a build step. `render.php` (`lg_standalone_css_href` / `_front_js_href`) lazily
+generates the content-hashed CSS/JS bundle into `archive-poc/web/assets/` on first request
+and links it (lean ~44 KB page); **on write failure it falls back to inlining ~105 KB of CSS
+per page** (the "170 KB render" from the fresh clone). The fresh clone's `web/assets/` was
+owned `ubuntu` → not writable by the `archive-poc` user → inline fallback. Same content,
+heavier, not broken. **Fix = provision `archive-poc/web/assets/` writable by `archive-poc`
+per serve tree** (`chown archive-poc:www-data` + `chmod 2775`, matching live; same runtime-
+provision class as the sqlite/config ACL) **+ gitignore the runtime bundles** (`*.css *.js`
+in `web/assets/.gitignore`; the stale committed `lg-v2-front.<hash>.js` was untracked).
+PROVEN 6/19: writable dir → fresh clone rendered the article at **44763 B, byte-identical to
+`~/projects`**, and the renderer wrote the bundle on first hit (assets 0→1). No build, no
+committed artifacts.
 
 **🚩 HAZARD — shared edit tree.** `~/loothplatformv2` is one working tree multiple lane
 chats edit live. On 6/19 the avatar lane's `me-avatar.php` changed *under* the running site
@@ -410,9 +415,9 @@ is tracked + ACL-writable.
 
 - **Avatar reader-repoint PENDING** (§11): bucket has the consolidated set; hub +
   WP get_avatar still read the old source.
-- **Serve-from-git blocked** (§13): fresh clone of `main` doesn't reproduce the archive-poc
-  render — uncommitted built CSS bundles (`web/assets/lg-v2-bundle.<hash>.css`). Needs
-  bundle-regen-on-deploy (or commit artifacts) before migrating. Tested + reverted 6/19.
+- **Serve-from-git gates** (§13): #1 archive-poc render — ✅ RESOLVED (provision `web/assets`
+  writable per serve tree + gitignore runtime bundles; proven byte-identical). Remaining:
+  per-lane worktrees, flip serving to a pristine `main` clone, bb-mirror de-fork.
 - **Shared edit tree** (§13): lanes share one working tree → live edits leak + commits land
   on the wrong branch. Needs per-lane worktrees before serve-from-git.
 - **bb-mirror worktree fork** (`bespoke-cutover`) — de-fork + merge to main before repo-serve.
