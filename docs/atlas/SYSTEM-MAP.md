@@ -197,6 +197,7 @@ from each file's header:
 | `buddyboss-performance-api.php` | BuddyBoss MU perf shim. |
 | `burst_rest_api_optimizer.php` | REST API optimizer. |
 | `loothdev-sheets-bridge.php` (+ `.gs.txt`) | REST endpoints for the Showrunner Google Sheet → `event` CPT bridge. |
+| `lg-secrets-dash.php` | WP admin "Looth Secrets" dashboard — bucket-first R2 + Patreon secrets manager w/ live CF bucket inventory; shells to the root `lg-secrets-helper`, holds no values. **Repo-symlinked** from `platform/mu-plugins/`. |
 | `looth-vendor/` | shared vendored libs (JWT etc.). |
 
 Inactive/removed (leave as-is): `lg-user-audit.php.removed-20260609`, `*.bak-*`.
@@ -308,13 +309,14 @@ Cloudflare R2 (S3 API), endpoint `…2b34fc01….r2.cloudflarestorage.com`.
   `https://api.cloudflare.com/client/v4/accounts/2b34fc01f7fc32230a76c1490ac64b13/r2/buckets`.
   NEVER commit or paste the value. For OBJECT bytes use the `r2up` S3 remote instead.
   Declared in the secrets manifest as `cf-api-token`.
-- ⚠️ **Profile media is currently served from LOCAL disk** (`/srv/profile-app-media`, see
-  §4/§8), NOT from R2. The avatar consolidation (6/19, branch `avatar-consolidation`,
-  commit 4f39f41) re-derived every avatar (BB upload → real gravatar via d=404 probe →
-  colored-letter floor) and wrote the single-source set **into the R2 bucket**, but the
-  **reader-repoint is still PENDING** (hub `forums.person.avatar_url` + WP `get_avatar`
-  must point at the profile-app/R2 URL). Until repointed, the bucket is the staged future
-  source, not the live path.
+- **Avatar consolidation v3 — DONE** (on `main`, commit `08fc093`): re-derived all 1910
+  avatars (639 BB upload → 69 real-gravatar via d=404 probe → 1194 colored-letter floor),
+  single-source in R2 `loothgroup-2-0-profile-dev`, compressed to webp (bucket 26.5 → 7.9 MiB),
+  reconcile = 0 missing. `me-avatar.php` now optimizes + verifies-before-commit on every
+  future upload, so new uploads land compressed in the bucket via the hardened path.
+  ⚠️ Profile media bytes are still served from LOCAL disk (`/srv/profile-app-media`, X-Accel,
+  see §4/§8). **Open to verify:** whether hub `forums.person.avatar_url` + WP `get_avatar`
+  read the consolidated bucket path, and whether serving moves from local disk → R2.
 
 ---
 
