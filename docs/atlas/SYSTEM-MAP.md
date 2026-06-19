@@ -337,23 +337,35 @@ Cloudflare R2 (S3 API), endpoint `…2b34fc01….r2.cloudflarestorage.com`.
 
 ## 13. Serve-from-repo / symlink farm status
 
-**The repo is NOT yet the serve root on dev2.** Verified: the only thing dev2 serves out
-of `~/loothplatformv2` is the single mu-plugin `lg-siteurl-from-env.php`. Everything else
-still serves from the legacy trees:
+**Mostly DONE on dev2 as of 2026-06-19** (serve-from-repo flip, Phases A+B). dev2 now
+serves these out of the repo `~/loothplatformv2` (verified byte-identical to the prior
+`~/projects` source — only stray `.bak`/cruft differed):
 
-- `/srv/{profile-app,archive-poc,events,lg-shared}` → `~/projects/*`
-- `/srv/bb-mirror` → `~/worktrees/bespoke-cutover/bb-mirror` (a fork/worktree)
-- WP plugins `lg-layout-v2, lg-legacy-import, lg-snippets, lg-layout` → `~/projects/*`
+- `/srv/{profile-app,events,lg-shared,archive-poc}` → `~/loothplatformv2/*`
+- WP plugins `lg-layout-v2, lg-legacy-import, lg-snippets` → `~/loothplatformv2/*`
+- mu-plugin `lg-siteurl-from-env.php` → repo (was already)
 
-So "deploy = git pull serves everything" is the **goal, not the current dev2 state**.
-(dev3 has Group-A symlinks proven against its clone; dev2 is still on `~/projects`.)
-Folding dev2 onto the repo = repoint these symlinks at `~/loothplatformv2/<app>` and
-de-fork bb-mirror. This is the largest outstanding consolidation task.
+archive-poc runtime: the box-local `index.sqlite` is **seeded into the repo tree**
+(gitignored, owned `archive-poc:www-data`) and the repo `archive-poc/` dir carries an ACL
+`u:archive-poc:rwx` so the app can write the sqlite + WAL sidecars while git ownership
+stays `ubuntu`. `config.json` is tracked + ACL-writable.
 
-> ⚠️ The 3-days-old memory `project_dev2_build` claims A.3 made dev2 serve everything from
-> `~/git/looth-platform` on a single checkout. **That is not the current truth** — no such
-> path/topology exists on dev2 now; it serves from `~/projects` + the worktree as above.
-> Trust this section over that memory.
+**Still on legacy trees (NOT yet repo-served):**
+- `/srv/bb-mirror` → `~/worktrees/bespoke-cutover/bb-mirror` — **HELD.** Source is
+  identical to the repo, but it's served from the `bespoke-cutover` *branch/worktree* where
+  the hub chat actively commits. De-fork = merge `bespoke-cutover` → `main` + move the hub
+  chat onto the repo, THEN flip. Coordinated step, not done.
+- WP plugin `lg-layout` (old) → `~/projects/lg-layout` — not in the repo; left as-is.
+
+**Backout:** `~/loothplatformv2-serve-rollback.sh` (on dev2) re-points every flipped
+symlink to its pre-flip `~/projects` target + reloads php-fpm/nginx (~5 s).
+
+**Served branch caveat:** the clone is currently checked out on `sacred-docs` (app source
+== `main`; only `docs/atlas` + a gitignore line differ). After merge, `git checkout main`.
+
+> ⚠️ The older memory `project_dev2_build` claimed A.3 served everything from
+> `~/git/looth-platform` on a single checkout — that path/topology never existed on dev2.
+> The real flip is the one above (into `~/loothplatformv2`). Trust this section.
 
 ---
 
@@ -364,9 +376,10 @@ de-fork bb-mirror. This is the largest outstanding consolidation task.
 - **What IS in the repo:** app source (profile-app, archive-poc, bb-mirror, events,
   lg-stripe-billing, thumbnails), WP plugins source, mu-plugins (`platform/mu-plugins`),
   webroot static layer, infra/tools/docs.
-- **What is NOT repo-served yet (dev2):** all the `/srv` + plugin symlinks still point at
-  `~/projects` / the worktree (see §13). So on dev2, `git pull` updates the clone but does
-  NOT change what's served until the symlinks are repointed.
+- **Repo-served on dev2 (since 6/19):** profile-app, events, lg-shared, archive-poc + the
+  lg-layout-v2/lg-legacy-import/lg-snippets plugins now serve from the repo (see §13), so
+  `git pull` deploys them. **Still NOT repo-served:** bb-mirror (worktree fork, held) and
+  the old `lg-layout` plugin.
 - **Cut model (Ian 6/16):** dev2 IS the box we flip `loothgroup.com` → ; no ground-up
   rebuild. Cut = apply Phase-11 swaps IN PLACE (live salts + JWT keypair, gate off, URL
   rewrite, webhook re-point, R2 live names/token) + flip DNS. The serve-from-repo
@@ -378,8 +391,8 @@ de-fork bb-mirror. This is the largest outstanding consolidation task.
 
 - **Avatar reader-repoint PENDING** (§11): bucket has the consolidated set; hub +
   WP get_avatar still read the old source.
-- **Serve-from-repo not done on dev2** (§13): symlinks still on `~/projects` + worktree.
-- **bb-mirror is a worktree fork** (`bespoke-cutover`) — de-fork before repo-serve.
+- **Serve-from-repo: bb-mirror still pending** (§13): 7 apps/plugins flipped to repo 6/19;
+  bb-mirror held (worktree fork `bespoke-cutover` — de-fork + merge to main first).
 - **MySQL `looth_dev` vs `looth_import` drift** (§10) — one billing config still names
   `looth_dev`.
 - **PG ownership drift** (§10) — `practice_*`/`user_mutes` owned by `postgres`.
