@@ -42,3 +42,7 @@ live-bundle/v2-layouts-bundle.json
 *.bak-*
 *.bak.*
 /Code_v2-*.gs
+
+# serve-from-repo: archive-poc runtime sqlite (box-local, never track)
+/archive-poc/index.sqlite
+/archive-poc/index.sqlite-*
