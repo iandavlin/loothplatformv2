@@ -1,35 +1,35 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/_bootstrap.php';
+require_once __DIR__ . '/../../src/ImageOptimize.php';
 
 /**
  * Avatar single-source upload. POST /profile-api/v0/me/avatar (multipart;
- * field name "avatar"). Validates a real jpeg/png/webp ≤ 5 MB, writes the bytes
- * to the app-owned store, bumps users.avatar_version, sets users.avatar_url to
- * the versioned served URL, and purges /whoami so every mirror re-pulls.
+ * field name "avatar"). Validates a real jpeg/png/webp ≤ 5 MB, COMPRESSES it
+ * (cap 512px, WebP q82 via ImageOptimize), writes the bytes to the app-owned
+ * store, bumps users.avatar_version, sets users.avatar_url to the versioned
+ * served URL, and purges /whoami so every mirror re-pulls.
  *
- *   store:  <LG_AVATAR_STORE>/<uuid>/<version>.<ext>     (NOT wp-content)
- *   serve:  /profile-media/avatars/<uuid>/<version>.<ext>?v=<version>
+ *   store:  R2 avatars/<uuid>/<version>.webp   (local fallback if R2 disabled)
+ *   serve:  /profile-media/avatars/<uuid>/<version>.webp?v=<version>
+ *
+ * The R2 write is VERIFIED (put + exists) before avatar_url advances — a put
+ * that 2xx-but-didn't-land, or a mis-wired bucket, must never leave the row
+ * pointing at a missing object (the failure that orphaned avatars at a repoint).
  *
  * NOTE TO COORDINATOR (provision before this works):
  *   1. mkdir -p /srv/profile-app-media/avatars && chown to the profile-app FPM
  *      pool user (the one running php8.3-fpm-profile-app.sock); mode 0775.
  *   2. nginx: serve /profile-media/avatars/ from that dir (cookie-gated like the
- *      other static assets), e.g.:
- *        location ^~ /profile-media/avatars/ {
- *            if ($loothdev_is_authorized != 1) { return 403; }
- *            alias /srv/profile-app-media/avatars/;
- *            try_files $uri =404; expires 30d; add_header Cache-Control "public";
- *        }
+ *      other static assets).
  *   3. nginx route for the endpoint (mirror me-craft): rewrite
  *      "^/profile-api/v0/me/avatar/?$" /profile-api/v0/me-avatar.php last; + allowlist.
- *   (LG_AVATAR_* are consts here because config.php is shim-shared — move them to
- *    config.php when convenient.)
  */
 
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Cache;
 use Looth\ProfileApp\Db;
+use Looth\ProfileApp\ImageOptimize;
 use Looth\ProfileApp\Media;
 use Looth\ProfileApp\Provision;
 use Looth\ProfileApp\R2;
@@ -92,10 +92,24 @@ $vstmt = $pg->prepare('UPDATE users SET avatar_version = COALESCE(avatar_version
 $vstmt->execute([':i' => (int)$user['id']]);
 $ver = (int) $vstmt->fetchColumn();
 
-$fn = $ver . '.' . $ext;
+// Compress / cap at write time (cap 512px, WebP q82). Fall back to the raw
+// upload only if the bytes are un-decodable, so a valid avatar is never dropped.
+$raw = @file_get_contents($tmp);
+if ($raw === false) profile_app_json(500, ['error' => 'read_failed']);
+$mime = (string)($info['mime'] ?? 'application/octet-stream');
+try {
+    [$bytes, $ext] = ImageOptimize::avatar($raw);
+    $mime = 'image/webp';
+} catch (\Throwable $e) {
+    $bytes = $raw;                          // keep $ext from the validated mime
+    error_log('[me-avatar] optimize fallback (raw .' . $ext . '): ' . $e->getMessage());
+}
+
+$fn  = $ver . '.' . $ext;
+$key = 'avatars/' . $uuid . '/' . $fn;
 if (R2::enabled()) {
-    $bytes = @file_get_contents($tmp);
-    if ($bytes === false || !R2::put('avatars/' . $uuid . '/' . $fn, $bytes, (string)($info['mime'] ?? 'application/octet-stream'))) {
+    // Verify the object is really there before advancing avatar_url.
+    if (!R2::put($key, $bytes, $mime) || !R2::exists($key)) {
         profile_app_json(500, ['error' => 'write_failed']);
     }
 } else {
@@ -104,7 +118,7 @@ if (R2::enabled()) {
         profile_app_json(500, ['error' => 'store_unwritable', 'hint' => 'provision ' . LG_AVATAR_STORE . ' (chown to the FPM user)']);
     }
     $dest = $dir . '/' . $fn;
-    if (!@move_uploaded_file($tmp, $dest)) profile_app_json(500, ['error' => 'write_failed']);
+    if (@file_put_contents($dest, $bytes) === false) profile_app_json(500, ['error' => 'write_failed']);
     @chmod($dest, 0644);
 }
 
