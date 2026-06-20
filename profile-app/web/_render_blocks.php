@@ -685,8 +685,13 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
         echo '<div class="lg-loc__line">' . looth_h((string)$disp['text']) . '</div>';
     }
     if ($disp !== null && $disp['lat'] !== null) {
+        // Owner viewing their own exact pin gets a DRAGGABLE marker to fine-tune the
+        // placement (saved via the {pin} path, which reverse-geocodes for the coarse
+        // label). Visitors / coarse precision keep a static marker.
+        $ownerPin = $isOwner && ((string)$disp['kind'] === 'exact');
         echo '<div class="lg-loc__map" data-kind="' . looth_h((string)$disp['kind']) . '"'
            . ' data-zoom="' . (int)$disp['zoom'] . '"'
+           . ($ownerPin ? ' data-owner-pin="1"' : '')
            . ' data-lat="' . looth_h((string)$disp['lat']) . '" data-lng="' . looth_h((string)$disp['lng']) . '"></div>';
     }
 
@@ -705,7 +710,10 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
         }
         echo '<div class="lg-loc__edit" id="lg-loc-edit">'
            . '<button type="button" class="lg-link__add lg-loc__change">'
-           . ($has ? 'Change location' : 'Set your location') . '</button></div>';
+           . ($has ? 'Change location' : 'Set your location') . '</button>'
+           . '<p class="lg-loc__hint">Type your address and it’s listed exactly as you enter it. '
+           . 'We’ll drop the map pin automatically — if we can’t find it, you can drag the pin to your spot.</p>'
+           . '</div>';
         if ($has) {
             echo '<div class="lg-loc__aud">'
                . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">Members see</span> '

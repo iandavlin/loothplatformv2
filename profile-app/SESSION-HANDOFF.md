@@ -1,56 +1,48 @@
-# profile-app — Session Handoff (2026-06-01)
+# profile-app — Session Handoff
 
-> ⚠️ **SNAPSHOT — verify every open/queued to-do against `git log` before working it (flagged 2026-06-15).** Items marked open/TODO/next here may already be shipped — a lane re-did a done task off this file. Source of truth = `git log` + `tools/gates/run-all.sh`, not these bullets.
+**Last refreshed: 2026-06-20.** Keep this file SHORT and current. When it goes
+stale, rotate it: `git mv SESSION-HANDOFF.md handoffs/YYYY-MM-DD[-suffix].md`,
+add a SUPERSEDED banner to the rotated copy, and write a fresh pointer here.
+(Convention: `projects/CLAUDE.md` → "Handoffs rotate per-project.")
 
-> **The map + editor chats are RETIRED (2026-06-01).** Their work is committed;
-> the tree is clean. **`buck` now owns profile-app's profile + member-map lanes**,
-> working from his own clone (`~buck/looth-platform`), git-native per
-> `docs/STRANGLER-COORDINATION.md` §0e. Do NOT resume the old chats — new work on
-> these files routes through buck + the coordinator.
->
-> Prior handoff (slice 0–3.5 + backfills, chat a847d1aa):
-> `handoffs/2026-05-29-retirement-a847d1aa.md`.
+## ⚠️ Read this before trusting ANY handoff
+- **Source of truth = the live code on dev2 + `git log`**, never a handoff's
+  to-do bullets. Handoffs drift; a lane has re-done shipped work off a stale list.
+- **Environment:** all dev work is on **dev2** (`dev2.loothgroup.com`, EIP
+  34.193.244.53). The **old dev box (50.19.198.38) is DECOMMISSIONED** (Ian, 6/20).
+- **Workflow is git-native off `main`:** lanes edit in their own worktree
+  (`git worktree add ~/worktrees/<lane> -b <lane> main`), commit small tested
+  increments, and route to `main` through the **keeper** (no self-push, no
+  self-merge). The old **buck-clone / `buck.dev.loothgroup.com` preview /
+  coordinator-merge** flow is DEAD — ignore any handoff that assumes it.
+- Pre-2026-06-20 handoffs in `handoffs/` are historical only (old-box era).
 
-## Retired chats (tombstones)
+## Where the code is
+- Serve clone (renders live dev2): `~/loothplatformv2-serve/profile-app`
+- Edit clone / worktrees: `~/loothplatformv2`, `~/worktrees/<lane>` (both on `main`)
+- WP-CLI: `sudo -u looth-dev wp --path=/var/www/dev …`
 
-**profile-app map — RETIRED 2026-06-01.** Committed, tree clean. Last work:
-anonymized pins for hidden members (`2a3ec2e`), facets list only in-use tags
-(`330c83e`), location→private off the map (`5ed0e9b`). Successor: buck.
-Unfinished: none known.
+## Current surface (verify against code before working)
+- `/u/<handle>` public profile → `web/u.php` → `looth_render_profile_blocks()`
+  in `web/_render_blocks.php`. Live block set: **header** (identity/avatar/
+  at-a-glance) + owner **Business pill**, then body blocks in owner-chosen order:
+  about · location · skills · services · instruments · music · gallery · resume ·
+  connect · socials.
+- `/p/<slug>` practice/business page → `web/p.php` → `looth_render_practice_blocks()`
+  (practice-header + about/location/dropoffs/hours/links/staff).
+- Owner controls: inline per-block privacy chips (pmp) + View-as (Public/Member/Me).
+- Editor: `web/edit.js`, styling `web/directory.css`.
+- Identity via `/profile-api/v0/whoami` (self) + `/users` (others), keyed on
+  `user_uuid`; data in the profile-app Postgres DB (NOT WP/BuddyBoss). Tier =
+  WP roles. **Keep the location render patch (2-decimal + text fallback) intact.**
 
-**profile-app editor — RETIRED 2026-06-01.** Committed, tree clean. Successor:
-buck. **Handed off:** the View-as ↔ header-card CSS gap (profile-app web CSS) —
-buck takes it after location-default.
+## Lane boundaries
+profile-app owns pages/blocks/editor. **Members-MAP sorting** and the
+**front-page composition** are SEPARATE lanes (own worktrees: `map-sort-buttons`,
+`frontpage`) — coordinate, don't collide. Cross-cutting changes route via the keeper.
 
-## Ownership + workflow
-- **buck** drives profile (`web/u.php`, `web/p.php`, `web/_render_blocks.php`,
-  `/profile-api/v0/me-*`) + member map (`web/directory-members.php`,
-  `api/v0/directory-members.php`).
-- Git-native: buck branches/commits in his clone; coordinator fetches, reviews,
-  merges to `main`, pushes, deploys (incl. anything needing sudo — e.g. applying
-  a migration as the `profile-app` pg role).
-- **Preview:** `https://buck.dev.loothgroup.com/{directory/members/,u/<slug>,p/<slug>}`
-  serves buck's clone's `web/` via the profile-app FPM pool (shared dev DB). `web/`
-  previews live; `src/`+`vendor/` load from the shared tree (src changes need a merge).
-
-## Recent state on main (so you're not surprised)
-- `looth_id` mint bounce on directory + profile for logged-in WP users without a
-  `looth_id` — shared helper `looth_issue_bounce_if_needed()` in `config.php`
-  (`f78b869`); `*.dev.loothgroup.com`→dev env detection (`c7b2e0e`).
-- `GET /profile-api/v0/users?wp_ids=` shipped (`a80dd1e`) — author-bio for WP consumers.
-
-## buck's queue — ✅ BOTH DONE (2026-06-15 reconcile; do NOT re-work — verify against git first)
-1. ~~**location-default**~~ — ✅ DONE: `32632a3` (buck, 6/3) shipped
-   `profile-app/sql/2026-06-01-location-legacy-defaults.sql` (idempotent members/city defaults for new members).
-2. ~~**View-as ↔ header-card CSS gap**~~ — ✅ DONE: `e7b0412` (6/11, "View-as chrome fix").
-
-## Onboarding (profile is a light lane — see STRANGLER-COORDINATION.md §3n)
-New-member Patreon onboarding touches profile at: provisioning (the
-`/profile-api/v0/hooks/user-created` path must fire for Patreon-created users — VERIFY),
-new-member defaults (= the location-default task), post-onboard landing → `/profile/edit`,
-and tier reflection (Arbiter role → looth_id → whoami → tier pill/gating).
-
-## Escalation (buck has no sudo)
-sudo queue `/srv/lg-sudo-queue/REQUESTS.md` (devmsgs the coordinator); chrome-dev is
-passwordless-restartable for `%loothdevs`. Talk to the coordinator via devmsg
-(`msg send ubuntu "…"`). Full bootstrap: `~buck/.claude/CLAUDE.md`.
+## History
+Detailed phase/slice records: `handoffs/` (esp.
+`2026-06-01-old-dev-box-buck-era.md` for the buck/spine-build era — superseded).
+Phase-1 build records: `PHASE-1-CHECKLIST.md` + `docs/plan-profile-2.0-phase1-build.md`,
+`docs/plan-profile-block-system.md` (verify "done" items against `git log`).

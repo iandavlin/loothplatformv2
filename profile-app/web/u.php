@@ -232,7 +232,21 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 /* location audience precision controls (owner) */
 .lg-loc__line{display:flex;align-items:center;gap:9px;font-size:calc(15px*var(--lg-read-scale,1));color:var(--lg-ink)}
 .lg-loc__empty{font-size:calc(13.5px*var(--lg-read-scale,1));color:var(--lg-mute);margin:10px 0 0}
+.lg-loc__hint{font:400 calc(12px*var(--lg-read-scale,1))/1.45 var(--lg-font-sans);color:var(--lg-mute);margin:7px 0 0;max-width:46ch}
 .lg-loc__edit{position:relative;margin-top:12px}
+/* location editor panel (owner) — verbatim address bar + drag-a-pin fallback */
+.lg-locedit{margin-top:12px;padding:13px;border:1px solid var(--lg-line);border-radius:12px;background:var(--lg-cream)}
+.lg-locedit__help{font:400 calc(13px*var(--lg-read-scale,1))/1.5 var(--lg-font-sans);color:var(--lg-mute);margin:0 0 10px}
+.lg-locedit__help b{color:var(--lg-ink);font-weight:600}
+.lg-locedit__row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lg-locedit__in{flex:1 1 220px;min-width:0;font:500 calc(13.5px*var(--lg-read-scale,1))/1.4 var(--lg-font-sans);color:var(--lg-ink);background:#fff;border:1px solid var(--lg-line);border-radius:9px;padding:9px 11px}
+.lg-locedit__in:focus{outline:none;border-color:var(--lg-sage)}
+.lg-locedit__cancel,.lg-locedit__cancel2{font:600 calc(12.5px*var(--lg-read-scale,1))/1 var(--lg-font-sans);color:var(--lg-mute);background:none;border:0;cursor:pointer;padding:8px 6px}
+.lg-locedit__cancel:hover,.lg-locedit__cancel2:hover{color:var(--lg-ink)}
+.lg-locedit__status{font:400 calc(12.5px*var(--lg-read-scale,1))/1.45 var(--lg-font-sans);color:var(--lg-mute);margin-top:8px}
+.lg-locedit__status:empty{display:none}
+.lg-locedit__status .lg-locedit__help{margin:0 0 10px}
+.lg-locedit__map{margin-top:10px}
 .lg-loc__addr{font:500 calc(13.5px*var(--lg-read-scale,1))/1.4 var(--lg-font-sans);color:var(--lg-charcoal);margin-top:8px}
 .lg-loc__hours{font:600 calc(12.5px*var(--lg-read-scale,1))/1.3 var(--lg-font-sans);color:var(--lg-sage-d);margin-top:4px}
 .lg-loc__note{font:400 calc(13px*var(--lg-read-scale,1))/1.45 var(--lg-font-sans);color:var(--lg-mute);margin-top:5px}
@@ -466,6 +480,22 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-gphoto__rm:hover{background:var(--lg-rust)}
 .lg-gphoto__add{aspect-ratio:1;border:2px dashed var(--lg-sage-3);background:none;border-radius:10px;cursor:pointer;color:var(--lg-sage-3);font:300 34px/1 var(--lg-font-sans);display:flex;align-items:center;justify-content:center;text-align:center;padding:6px;transition:background .15s,border-color .15s,color .15s}
 .lg-gphoto__add:hover{background:var(--lg-sage-tint);border-color:var(--lg-sage);color:var(--lg-sage-d)}
+/* gallery — lightbox (all viewers): click a photo to view it full-size */
+.lg-gphoto img{cursor:zoom-in}
+.lg-lightbox{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;transition:opacity .15s ease}
+.lg-lightbox.is-open{opacity:1}
+.lg-lightbox__fig{margin:0;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;align-items:center;gap:10px}
+.lg-lightbox__img{max-width:96vw;max-height:84vh;width:auto;height:auto;object-fit:contain;border-radius:6px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.lg-lightbox__cap{font:500 calc(13.5px*var(--lg-read-scale,1))/1.4 var(--lg-font-sans);color:#fff;text-align:center;max-width:80ch;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.lg-lightbox__cap:empty{display:none}
+.lg-lightbox__close,.lg-lightbox__nav{position:absolute;border:0;background:rgba(0,0,0,.45);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.lg-lightbox__close:hover,.lg-lightbox__nav:hover{background:rgba(0,0,0,.75)}
+.lg-lightbox__close{top:18px;right:20px;width:42px;height:42px;font:300 26px/1 var(--lg-font-sans)}
+.lg-lightbox__nav{top:50%;transform:translateY(-50%);width:48px;height:48px;font:300 34px/1 var(--lg-font-sans)}
+.lg-lightbox__prev{left:18px}
+.lg-lightbox__next{right:18px}
+.lg-lightbox__nav[hidden]{display:none}
+@media (max-width:560px){.lg-lightbox__nav{width:40px;height:40px;font-size:28px}.lg-lightbox__prev{left:6px}.lg-lightbox__next{right:6px}}
 /* gallery — owner: display-mode toggle */
 .lg-gmode{display:inline-flex;gap:0;margin:0 0 12px;border:1px solid var(--lg-line);border-radius:999px;padding:2px;background:var(--lg-card-bg,#fff)}
 .lg-gmode__btn{border:0;background:transparent;font:600 calc(12px*var(--lg-read-scale,1))/1 var(--lg-font-sans);color:var(--lg-mute);padding:6px 14px;border-radius:999px;cursor:pointer}
@@ -741,7 +771,23 @@ window.addEventListener('load', function () {
       doubleClickZoom: true, boxZoom: true, keyboard: true, touchZoom: true }).setView([lat, lng], zoom);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
-    if (exact) { L.marker([lat, lng]).addTo(map); }
+    if (exact) {
+      // Owner viewing their own exact pin can DRAG it to fine-tune, saved via {pin}
+      // (server reverse-geocodes for the coarse label). Visitors get a static marker.
+      var ownerPin = el.getAttribute('data-owner-pin') === '1';
+      var marker = L.marker([lat, lng], { draggable: ownerPin }).addTo(map);
+      if (ownerPin) {
+        marker.bindTooltip('Drag to adjust your location', { direction: 'top' });
+        marker.on('dragend', function () {
+          var ll = marker.getLatLng();
+          fetch('/profile-api/v0/me/location', { method: 'PUT', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin: { lat: ll.lat, lng: ll.lng } }) })
+            .then(function (r) { if (r.ok) location.reload(); else alert('Could not save the new pin.'); })
+            .catch(function () { alert('Could not save the new pin.'); });
+        });
+      }
+    }
     else {
       var rad = zoom <= 8 ? 35000 : 1500;   // state-level vs town-level blur
       L.circle([lat, lng], { radius: rad, color: '#87986a', fillColor: '#87986a', fillOpacity: 0.18, weight: 1 }).addTo(map);
@@ -1267,64 +1313,133 @@ window.lgSortable = function (container, opts) {
 </script>
 
 <script>
-/* Location editor (owner/Me) — set / change the actual location. Search OSM Nominatim via
-   /me/location/search (server-proxied, IP-biased, no API key), pick a result → PUT
-   /me/location {nominatim:<raw>} → reload. Zero results → "save as text" escape hatch. */
+/* Location editor (owner/Me) — verbatim address bar + drag-a-pin fallback.
+   Type the address, press Enter → PUT /me/location {address:"…"}. The server stores
+   the text VERBATIM (no picker, no autocomplete) and forward-geocodes server-side to
+   drop the map pin. If it can't place it (geocoded:false), a draggable Leaflet pin
+   appears, centered on the server's suggested center → PUT {pin:{lat,lng}} → reload. */
 (function () {
   var wrap = document.getElementById('lg-loc-edit');
   if (!wrap) return;
   var btn = wrap.querySelector('.lg-loc__change');
+  if (!btn) return;
 
-  function save(body) {
+  function put(body) {
     return fetch('/profile-api/v0/me/location', { method: 'PUT', credentials: 'include',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      .then(function (r) { return r.ok; });
+      .then(function (r) {
+        return r.json().then(function (j) { return { ok: r.ok, j: j }; },
+                             function () { return { ok: r.ok, j: {} }; });
+      });
   }
 
+  // Leaflet is loaded deferred in <head>; by interaction time it's usually ready.
+  // Poll briefly, then call back regardless (the callback guards for !window.L).
+  function ensureLeaflet(cb) {
+    var n = 0;
+    (function wait() {
+      if (window.L || n++ > 50) return cb();   // ~5s ceiling
+      setTimeout(wait, 100);
+    })();
+  }
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, ''); }
+
+  var hint = wrap.querySelector('.lg-loc__hint');
+
   btn.addEventListener('click', function () {
-    if (wrap.querySelector('.lg-craft-search')) return;
+    if (wrap.querySelector('.lg-locedit')) return;
     btn.style.display = 'none';
-    var box = document.createElement('span'); box.className = 'lg-craft-search';
-    var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Search a city or address…';
-    var res = document.createElement('div'); res.className = 'lg-craft-results'; res.style.display = 'none';
-    box.appendChild(inp); box.appendChild(res); wrap.appendChild(box); inp.focus();
+    if (hint) hint.style.display = 'none';
 
-    var timer = null, lastQ = '';
-    function close() { box.remove(); btn.style.display = ''; }
-    function pick(body) { save(body).then(function (ok) { if (ok) location.reload(); else alert('Could not save location.'); }); }
+    var panel = document.createElement('div'); panel.className = 'lg-locedit';
+    panel.innerHTML =
+      '<p class="lg-locedit__help">Type your address and press <b>Enter</b>. It’s listed ' +
+      'exactly as you write it, and we’ll place you on the map automatically. ' +
+      'If we can’t find it, drag the pin to your spot.</p>' +
+      '<div class="lg-locedit__row">' +
+        '<input type="text" class="lg-locedit__in" placeholder="123 Main St, City, State" autocomplete="off">' +
+        '<button type="button" class="lg-link__add lg-locedit__save">Save</button>' +
+        '<button type="button" class="lg-locedit__cancel" aria-label="Cancel">Cancel</button>' +
+      '</div>' +
+      '<div class="lg-locedit__status" aria-live="polite"></div>';
+    wrap.appendChild(panel);
 
-    function run() {
-      var q = inp.value.trim();
-      if (q === lastQ) return; lastQ = q;
-      if (q.length < 3) { res.style.display = 'none'; return; }
-      fetch('/profile-api/v0/me/location/search?q=' + encodeURIComponent(q), { credentials: 'include' })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          if (inp.value.trim() !== q) return;                 // stale
-          res.innerHTML = '';
-          var items = (d && d.items) || [];
-          items.slice(0, 6).forEach(function (it) {
-            var b = document.createElement('button'); b.type = 'button';
-            b.innerHTML = '<span>' + (it.short ? it.short.replace(/[&<>"]/g, '') : '') + '</span>';
-            b.title = it.display_name || '';
-            b.addEventListener('click', function () { pick({ nominatim: it.raw }); });
-            res.appendChild(b);
-          });
-          if (!items.length) {                                // escape hatch: save freeform text
-            var t = document.createElement('button'); t.type = 'button'; t.className = 'lg-cat-new';
-            t.innerHTML = '<span>No match — use “' + q.replace(/[&<>"]/g, '') + '” as text</span><span class="t">text</span>';
-            t.addEventListener('click', function () { pick({ text_only: q }); });
-            res.appendChild(t);
-          }
-          res.style.display = 'block';
-        })
-        .catch(function () { res.innerHTML = '<div class="none">Search unavailable.</div>'; res.style.display = 'block'; });
+    var inp     = panel.querySelector('.lg-locedit__in');
+    var saveBtn = panel.querySelector('.lg-locedit__save');
+    var status  = panel.querySelector('.lg-locedit__status');
+    inp.focus();
+
+    var busy = false;
+    function close() { panel.remove(); btn.style.display = ''; if (hint) hint.style.display = ''; }
+    panel.querySelector('.lg-locedit__cancel').addEventListener('click', close);
+
+    function submitAddress() {
+      var v = inp.value.trim();
+      if (!v || busy) return;
+      busy = true; saveBtn.disabled = true; inp.disabled = true;
+      status.textContent = 'Saving…';
+      put({ address: v }).then(function (res) {
+        if (!res.ok) {
+          busy = false; saveBtn.disabled = false; inp.disabled = false;
+          status.textContent = 'Could not save — please try again.';
+          return;
+        }
+        if (res.j && res.j.geocoded) { location.reload(); return; }   // placed → done
+        showPinDragger(v, (res.j && res.j.center) || { lat: 39.8283, lng: -98.5795, zoom: 4 });
+      });
     }
-    inp.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 320); });   // debounce (Nominatim politeness)
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
-    document.addEventListener('click', function onDoc(e) {
-      if (!box.contains(e.target) && e.target !== btn) { close(); document.removeEventListener('click', onDoc); }
+
+    inp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); submitAddress(); }
+      else if (e.key === 'Escape') { close(); }
     });
+    saveBtn.addEventListener('click', submitAddress);
+
+    // Fallback: we kept the verbatim address but couldn't geocode it — let the owner
+    // place the pin by hand. Saved via {pin}, which reverse-geocodes server-side so
+    // the City/State coarse label still works.
+    function showPinDragger(addrText, center) {
+      panel.querySelector('.lg-locedit__row').style.display = 'none';
+      status.innerHTML = '<p class="lg-locedit__help">Saved “<b>' + esc(addrText) +
+        '</b>”, but we couldn’t place it on the map. Drag the pin to your exact ' +
+        'spot (or click the map), then <b>Save pin</b>.</p>';
+
+      var mapEl = document.createElement('div'); mapEl.className = 'lg-loc__pin lg-locedit__map';
+      panel.appendChild(mapEl);
+      var actions = document.createElement('div'); actions.className = 'lg-locedit__row';
+      actions.innerHTML =
+        '<button type="button" class="lg-link__add lg-locedit__pinsave">Save pin</button>' +
+        '<button type="button" class="lg-locedit__cancel2">Cancel</button>';
+      panel.appendChild(actions);
+      actions.querySelector('.lg-locedit__cancel2').addEventListener('click', close);
+
+      ensureLeaflet(function () {
+        if (!window.L) { status.textContent = 'Map unavailable — please try again later.'; return; }
+        var map = L.map(mapEl, { zoomControl: true, scrollWheelZoom: false })
+          .setView([center.lat, center.lng], center.zoom || 11);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+        var marker = L.marker([center.lat, center.lng], { draggable: true }).addTo(map);
+        marker.bindTooltip('Drag me to your spot', { direction: 'top' }).openTooltip();
+        map.on('click', function (e) { marker.setLatLng(e.latlng); });   // tap the map to move the pin
+        setTimeout(function () { map.invalidateSize(); }, 60);           // panel just inserted
+
+        var pinBtn = actions.querySelector('.lg-locedit__pinsave');
+        var saving = false;
+        function savePin() {
+          if (saving) return;
+          saving = true; pinBtn.disabled = true;
+          var ll = marker.getLatLng();
+          put({ pin: { lat: ll.lat, lng: ll.lng } }).then(function (res) {
+            if (res.ok) location.reload();
+            else { saving = false; pinBtn.disabled = false; alert('Could not save pin.'); }
+          });
+        }
+        marker.on('dragend', savePin);                 // drop the pin → save (keeper-requested)
+        pinBtn.addEventListener('click', savePin);     // explicit commit (after tap-to-move)
+      });
+    }
   });
 })();
 
@@ -1774,6 +1889,92 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
   if (addBtn) addBtn.addEventListener('click', function (e) { e.stopPropagation(); document.getElementById('lg-light-menu') ? closeMenu() : openMenu(); });
 })();
 </script>
+<?php endif; /* close owner-only region: the lightbox below must render for ALL viewers */ ?>
+
+<script>
+/* Gallery lightbox (all viewers) — click any photo to view it full-size, with
+   prev/next across the gallery, caption, and ESC / backdrop / × to close. The
+   owner's remove (×) and add (＋) controls never trigger it. Loads the raw
+   data-url (capped at w=1600 via the media resizer), not the grid thumbnail. */
+(function () {
+  var photos = [];
+  function collect() { photos = Array.prototype.slice.call(document.querySelectorAll('.lg-gphoto[data-url]')); }
+
+  function big(url) { return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'w=1600'; }
+
+  var box = null, imgEl = null, capEl = null, prevBtn = null, nextBtn = null, idx = 0;
+
+  function build() {
+    box = document.createElement('div');
+    box.className = 'lg-lightbox';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.innerHTML =
+      '<button type="button" class="lg-lightbox__close" aria-label="Close">×</button>' +
+      '<button type="button" class="lg-lightbox__nav lg-lightbox__prev" aria-label="Previous photo">‹</button>' +
+      '<figure class="lg-lightbox__fig"><img class="lg-lightbox__img" alt=""><figcaption class="lg-lightbox__cap"></figcaption></figure>' +
+      '<button type="button" class="lg-lightbox__nav lg-lightbox__next" aria-label="Next photo">›</button>';
+    document.body.appendChild(box);
+    imgEl   = box.querySelector('.lg-lightbox__img');
+    capEl   = box.querySelector('.lg-lightbox__cap');
+    prevBtn = box.querySelector('.lg-lightbox__prev');
+    nextBtn = box.querySelector('.lg-lightbox__next');
+    box.addEventListener('click', function (e) { if (e.target === box || e.target.closest('.lg-lightbox__close')) close(); });
+    prevBtn.addEventListener('click', function (e) { e.stopPropagation(); step(-1); });
+    nextBtn.addEventListener('click', function (e) { e.stopPropagation(); step(1); });
+  }
+
+  function show(i) {
+    collect();                                   // re-read (owner may have added/removed)
+    if (!photos.length) { close(); return; }
+    idx = (i + photos.length) % photos.length;
+    var el  = photos[idx];
+    var url = el.getAttribute('data-url') || '';
+    var cap = el.querySelector('figcaption');
+    var capText = cap ? cap.textContent : '';
+    imgEl.src = big(url);
+    imgEl.alt = capText;
+    capEl.textContent = capText;
+    var multi = photos.length > 1;
+    prevBtn.hidden = !multi; nextBtn.hidden = !multi;
+  }
+  function step(d) { show(idx + d); }
+
+  function open(i) {
+    if (!box) build();
+    show(i);
+    requestAnimationFrame(function () { if (box) box.classList.add('is-open'); });
+    document.addEventListener('keydown', onKey);
+  }
+  function close() {
+    if (!box) return;
+    box.classList.remove('is-open');
+    document.removeEventListener('keydown', onKey);
+    var dying = box; box = null;
+    setTimeout(function () { dying.remove(); }, 160);
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowLeft') step(-1);
+    else if (e.key === 'ArrowRight') step(1);
+  }
+
+  // Capture-phase delegation on the document: immune to where the gallery sits in
+  // the DOM, to script/DOM load-order, and to any intermediate handler that stops
+  // propagation. Works in grid + carousel; owner ×/＋ and lightbox-internal clicks
+  // are excluded. (Was a per-container bubble binding that didn't fire — defect fix.)
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('.lg-lightbox')) return;                       // clicks inside the overlay
+    if (e.target.closest('.lg-gphoto__rm') || e.target.closest('.lg-gphoto__add')) return;
+    var fig = e.target.closest('.lg-gphoto[data-url]');
+    if (!fig) return;
+    collect();
+    var i = photos.indexOf(fig);
+    if (i >= 0) { e.preventDefault(); open(i); }
+  }, true);
+})();
+</script>
+<?php if ($isOwner): /* reopen owner-only region for the gallery editor below */ ?>
 
 <script>
 /* Gallery editor (owner/Me) — multi-upload (POST me-gallery) + remove (PUT list). */
