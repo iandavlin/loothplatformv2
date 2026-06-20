@@ -291,9 +291,11 @@ Cloudflare R2 (S3 API), endpoint `…2b34fc01….r2.cloudflarestorage.com`.
 | WP/forum uploads | `loothgroup-uploads-dev` (FUSE-mounted clone) | **`loothgroup2-0`** |
 
 The two live buckets (`loothgroup2-0-profile-bucket`, `loothgroup2-0`) are **read-only from
-dev** — we only GET from live, PUT to the dev clone. Live read = rclone `r2live` (cred-live);
-⚠️ as of 6/20 `r2live` 403s on its own declared buckets (needs CF re-issue / IP-allow). The
-recurring "dev image missing → pull from live" procedure is **`docs/atlas/R2-TOPOFF.md`**.
+dev** — we only GET from live, write the dev clone. Live read = rclone `r2live`, wired (6/20)
+with S3 creds **derived from the `cfat_` token** `/etc/looth/cf-api-token` (Access Key ID =
+token id from account-level verify; Secret = `sha256(token value)`). The recurring "dev image
+missing → pull from live" procedure (incl. the write-THROUGH-the-FUSE-mount step) is
+**`docs/atlas/R2-TOPOFF.md`**.
 
 - **Working dev token = the rclone `r2up` remote** (write on both dev buckets, correctly
   403s the live bucket). On dev2, `/etc/looth/profile-r2` is now
