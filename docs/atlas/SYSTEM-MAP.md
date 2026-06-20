@@ -348,48 +348,42 @@ Cloudflare R2 (S3 API), endpoint `…2b34fc01….r2.cloudflarestorage.com`.
 
 ## 13. Serve-from-repo / symlink farm status
 
-**Current state: serving from `~/projects` (legacy trees). Serve-from-git was TESTED on
-2026-06-19 and REVERTED** (Ian's call — let the active lanes finish first). What dev2 serves
-NOW:
+**Current state (2026-06-20): serve-from-git is LIVE for 7 of 8 app surfaces**, from a
+pristine `main` clone. The architecture (three trees, never conflated):
 
-- `/srv/{profile-app,archive-poc,events,lg-shared}` → `~/projects/*`
-- `/srv/bb-mirror` → `~/worktrees/bespoke-cutover/bb-mirror` (worktree fork)
-- WP plugins `lg-layout-v2, lg-legacy-import, lg-snippets, lg-layout` → `~/projects/*`
-- mu-plugin `lg-siteurl-from-env.php` → repo (the only repo-served file)
+- **Canonical / edit clone** `~/loothplatformv2` — on `main`, clean. The keeper's reference +
+  merge target. **No lane edits it directly;** lanes work in per-lane worktrees off `main`
+  (`git worktree add ~/worktrees/lpv2-<task> -b <task> main`). See GIT-PROTOCOL.
+- **Pristine serve clone** `~/loothplatformv2-serve` — on `main`, never hand-edited. **This is
+  what `/srv` points at.** Deploy = `git pull` here + reload php-fpm.
+- **Served from the serve clone:** `/srv/{profile-app,events,lg-shared,archive-poc}` + WP
+  plugins `lg-layout-v2, lg-legacy-import, lg-snippets` + mu-plugin `lg-siteurl-from-env.php`.
+- **Still on legacy:** `/srv/bb-mirror` → `~/worktrees/bespoke-cutover/bb-mirror` (gate #4,
+  de-fork pending — hub lane); old `lg-layout` plugin → `~/projects` (not in repo).
+- **Rollback:** `~/loothplatformv2-serve-rollback.sh` re-points everything to `~/projects` +
+  reloads (~5 s). Verified flip 6/20: routes 200, article externalized at **44762 B**, no fatals.
 
-**What the 6/19 test proved (keep — informs the real migration):**
-- The symlink flip itself is clean + instantly reversible
-  (`~/loothplatformv2-serve-rollback.sh`, ~5 s).
-- A pristine serve clone (no chat edits) is the right serve root — built + staged at
-  **`~/loothplatformv2-serve`** (on `main`, not serving).
+**Serve-tree runtime provisioning (per box, box-local, NOT git):**
+- `archive-poc/index.sqlite` — gitignored revert mirror; seed from a known-good copy; may be
+  owned `archive-poc:www-data` (git never touches it).
+- `archive-poc/web/assets/` — runtime bundle cache. Keep dir **owned `ubuntu`** (so `git pull`
+  can update its tracked `.gitignore`) and grant write via **ACL, NOT chown**:
+  `setfacl -m u:archive-poc:rwx web/assets && setfacl -d -m u:archive-poc:rwx web/assets`.
+  ⚠️ chown-ing it to archive-poc **breaks `git pull`** (the lane-owned-subdir trap — git as
+  ubuntu can't unlink files in an archive-poc-owned dir).
+- `archive-poc/` dir + `config.json` — git owns; grant archive-poc write via ACL
+  (`u:archive-poc:rwx` on the dir for sqlite WAL sidecars, `:rw` on config.json).
+- **The rule everywhere: tracked paths stay git-owned (`ubuntu`); runtime write is ACL.**
 
-**✅ RESOLVED — archive-poc render reproduces from a fresh clone (was the "bundle" scare).**
-It is NOT a build step. `render.php` (`lg_standalone_css_href` / `_front_js_href`) lazily
-generates the content-hashed CSS/JS bundle into `archive-poc/web/assets/` on first request
-and links it (lean ~44 KB page); **on write failure it falls back to inlining ~105 KB of CSS
-per page** (the "170 KB render" from the fresh clone). The fresh clone's `web/assets/` was
-owned `ubuntu` → not writable by the `archive-poc` user → inline fallback. Same content,
-heavier, not broken. **Fix = provision `archive-poc/web/assets/` writable by `archive-poc`
-per serve tree** (`chown archive-poc:www-data` + `chmod 2775`, matching live; same runtime-
-provision class as the sqlite/config ACL) **+ gitignore the runtime bundles** (`*.css *.js`
-in `web/assets/.gitignore`; the stale committed `lg-v2-front.<hash>.js` was untracked).
-PROVEN 6/19: writable dir → fresh clone rendered the article at **44763 B, byte-identical to
-`~/projects`**, and the renderer wrote the bundle on first hit (assets 0→1). No build, no
-committed artifacts.
+**Gate #1 (why a fresh clone reproduces the render):** `render.php` lazily generates the
+content-hashed CSS/JS bundle into `web/assets/` and links it (~44 KB page); on write failure
+it inlines ~105 KB CSS/page (the "170 KB" fallback). Bundles are gitignored (`*.css *.js`),
+regenerated on first request when the dir is ACL-writable. No build step, no committed
+artifacts. PROVEN byte-identical.
 
-**🚩 HAZARD — shared edit tree.** `~/loothplatformv2` is one working tree multiple lane
-chats edit live. On 6/19 the avatar lane's `me-avatar.php` changed *under* the running site
-during the test, and the avatar lane's commit `a94ca23` landed on whatever branch the clone
-was checked out on (`sacred-docs`). **Fix for the real migration: per-lane git worktrees/
-clones** (chats never share one working tree) + serve only from the pristine clone.
-
-archive-poc runtime handling (for when we migrate): seed box-local `index.sqlite` into the
-serve tree + ACL `u:archive-poc:rwx` on its dir (git ownership stays `ubuntu`); `config.json`
-is tracked + ACL-writable.
-
-> ⚠️ The older memory `project_dev2_build` claimed A.3 served everything from
-> `~/git/looth-platform` on a single checkout — that path never existed on dev2. The 6/19
-> test (into `~/loothplatformv2`/`~/loothplatformv2-serve`) is the real attempt; reverted.
+> ⚠️ The older memory `project_dev2_build` claimed A.3 served from `~/git/looth-platform` —
+> that path never existed. The real serve-from-git is this: edit clone + per-lane worktrees +
+> the `~/loothplatformv2-serve` pristine clone.
 
 ---
 
@@ -400,10 +394,10 @@ is tracked + ACL-writable.
 - **What IS in the repo:** app source (profile-app, archive-poc, bb-mirror, events,
   lg-stripe-billing, thumbnails), WP plugins source, mu-plugins (`platform/mu-plugins`),
   webroot static layer, infra/tools/docs.
-- **Not yet repo-served (as of 6/19):** dev2 still serves everything from `~/projects` +
-  the bb-mirror worktree. A serve-from-git flip was tested 6/19 and reverted (see §13). So
-  `git pull` updates clones but does not change what's served. Real migration is gated on
-  the bundle-build blocker (§13) + per-lane worktrees.
+- **Repo-served (LIVE 6/20):** `/srv/{profile-app,events,lg-shared,archive-poc}` + the
+  lg-layout-v2/lg-legacy-import/lg-snippets plugins serve from the pristine `~/loothplatformv2-serve`
+  clone on `main` (§13). **Deploy these = `git pull` in the serve clone + reload php-fpm.**
+  Only `bb-mirror` (worktree fork) + the old `lg-layout` plugin remain off-repo.
 - **Cut model (Ian 6/16):** dev2 IS the box we flip `loothgroup.com` → ; no ground-up
   rebuild. Cut = apply Phase-11 swaps IN PLACE (live salts + JWT keypair, gate off, URL
   rewrite, webhook re-point, R2 live names/token) + flip DNS. The serve-from-repo
@@ -415,12 +409,11 @@ is tracked + ACL-writable.
 
 - **Avatar reader-repoint PENDING** (§11): bucket has the consolidated set; hub +
   WP get_avatar still read the old source.
-- **Serve-from-git gates** (§13): #1 archive-poc render — ✅ RESOLVED (provision `web/assets`
-  writable per serve tree + gitignore runtime bundles; proven byte-identical). Remaining:
-  per-lane worktrees, flip serving to a pristine `main` clone, bb-mirror de-fork.
-- **Shared edit tree** (§13): lanes share one working tree → live edits leak + commits land
-  on the wrong branch. Needs per-lane worktrees before serve-from-git.
-- **bb-mirror worktree fork** (`bespoke-cutover`) — de-fork + merge to main before repo-serve.
+- **Serve-from-git gates** (§13): #1 render fix, #2 per-lane worktrees, #3 flip serving to the
+  pristine `main` clone — ✅ ALL DONE (LIVE 6/20). **#4 remaining: bb-mirror de-fork** (still
+  served from the `bespoke-cutover` worktree; merge to `main` + move the hub lane onto the repo).
+- **At-cut provisioning must re-apply the serve-tree ACLs** (§13): `web/assets` + archive-poc
+  dir/config/sqlite write via ACL (never chown tracked paths — breaks `git pull`).
 - **MySQL `looth_dev` vs `looth_import` drift** (§10) — one billing config still names
   `looth_dev`.
 - **PG ownership drift** (§10) — `practice_*`/`user_mutes` owned by `postgres`.
