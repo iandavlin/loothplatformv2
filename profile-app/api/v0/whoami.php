@@ -30,9 +30,11 @@ if ($etag && ($_SERVER['HTTP_IF_NONE_MATCH'] ?? '') === $etag) {
     http_response_code(304);
     header('ETag: ' . $etag);
     header('Cache-Control: private, max-age=' . (\Looth\ProfileApp\Cache::WHOAMI_TTL));
+    header('Vary: Cookie');
     exit;
 }
 
 if ($etag) header('ETag: ' . $etag);
 header('Cache-Control: private, max-age=' . (\Looth\ProfileApp\Cache::WHOAMI_TTL));
+    header('Vary: Cookie');
 profile_app_json(200, $payload);
