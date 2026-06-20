@@ -125,6 +125,14 @@ if (!function_exists('get_post_meta')) {
             $m = lg_pc()['media'][(string) $post_id] ?? lg_pc()['media'][$post_id] ?? [];
             return (string) ($m['alt'] ?? '');
         }
+        // Baked post meta (event-header date/time/zoom, etc.) — served ONLY from
+        // the materialized PostContext; never a live DB query (the per-block
+        // queries standalone exists to avoid). Mirrors media/alt-text above.
+        $baked = lg_pc()['meta'] ?? [];
+        if ($key !== '' && array_key_exists($key, $baked)) {
+            $v = $baked[$key];
+            return $single ? $v : [$v];
+        }
         return $single ? '' : [];
     }
 }

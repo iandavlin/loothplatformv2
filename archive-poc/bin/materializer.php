@@ -35,9 +35,20 @@ if (!defined('ABSPATH')) {
     return;
 }
 
-/** Taxonomies the post-header surfaces (tier prominently + the bottom strip).
- *  Mirrors blocks/post-header/render.php's tier + bottom-taxes set. */
-const LG_MAT_TERM_TAXONOMIES = ['tier', 'shared_category', 'article-type', 'post_tag', 'series'];
+/** Taxonomies the post-header surfaces (tier prominently + the bottom strip),
+ *  plus event-header's region + event-type chips (read via get_the_terms in
+ *  standalone, served from the baked terms map). */
+const LG_MAT_TERM_TAXONOMIES = ['tier', 'shared_category', 'article-type', 'post_tag', 'series', 'region', 'event-type'];
+
+/** Post meta the standalone blocks read via get_post_meta (event-header
+ *  date / time / zoom). Baked into post_context.meta and served by wp-shim from
+ *  that baked map ONLY — never a live DB query at render (standalone perf rule).
+ *  Mirrors lg-layout-v2 Plugin::EVENT_RENDER_META. */
+const LG_MAT_POST_META_KEYS = [
+    'events_start_date_and_time_',
+    'time_of_event',
+    'zoom_url_for_looth_group_virtual_event',
+];
 
 /** Author user-meta the post-header / post-footer read. NOT `author_image` —
  *  the avatar is pre-resolved into post_context.author.avatar_url, and leaving
@@ -133,6 +144,13 @@ function lg_materialize_build_blob(int $post_id): ?array {
             ];
         }
         if ($rows) $terms[$tax] = $rows;
+    }
+
+    // ── Post meta the standalone blocks read live (event-header date/time/zoom).
+    $post_meta = [];
+    foreach (LG_MAT_POST_META_KEYS as $mk) {
+        $mv = get_post_meta($post_id, $mk, true);
+        if (is_string($mv) && $mv !== '') $post_meta[$mk] = $mv;
     }
 
     // ── post_tier (gating) — first non-public slug, mirrors WpRenderer ─────
@@ -249,6 +267,7 @@ function lg_materialize_build_blob(int $post_id): ?array {
         ],
         'featured_image' => $featured,
         'terms'          => $terms,
+        'meta'           => $post_meta,
         'media'          => $media,
         'options'        => $options,
     ];
