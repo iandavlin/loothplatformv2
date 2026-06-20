@@ -213,29 +213,41 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
 function hub_render_shows_chip(PDO $db, array $filters, string $sort = 'new'): void
 {
     $shows = hub_show_terms($db);
-    if (!$shows) return;                          // nothing materialized -> no chip
+    if (!$shows) return;                          // nothing materialized -> no trigger
     $active = (string)($filters['show'] ?? '');
     $base   = LG_BB_MIRROR_PUBLIC_PATH . '/?sort=' . urlencode($sort);
     $label  = ($active !== '' && isset(HUB_SHOW_TERMS[$active])) ? HUB_SHOW_TERMS[$active] : 'Shows';
     ?>
-    <details class="lg-shows" data-lg-shows>
-      <summary class="lg-shows__chip<?= $active !== '' ? ' is-active' : '' ?>" aria-label="Filter by show">
-        <span class="lg-shows__icon" aria-hidden="true">&#9654;</span>
-        <span class="lg-shows__tx"><?= htmlspecialchars($label) ?></span>
-      </summary>
-      <div class="lg-shows__menu" role="menu">
-        <?php if ($active !== ''): ?>
-          <a class="lg-shows__item lg-shows__clear" role="menuitem" href="<?= htmlspecialchars($base) ?>">&times; Clear show</a>
-        <?php endif; ?>
+    <button class="lg-shows-btn<?= $active !== '' ? ' is-active' : '' ?>" type="button"
+            data-lg-shows-open aria-haspopup="dialog" aria-label="Filter by show">
+      <span class="lg-shows-btn__ico" aria-hidden="true">&#9654;</span>
+      <span class="lg-shows-btn__tx"><?= htmlspecialchars($label) ?></span>
+    </button>
+    <dialog class="lg-shows-modal" id="lg-shows-modal" aria-label="Filter by show">
+      <div class="lg-shows-modal__h">
+        <h2>Shows</h2>
+        <form method="dialog"><button class="lg-shows-modal__x" type="submit" aria-label="Close">&times;</button></form>
+      </div>
+      <p class="lg-shows-modal__sub">Filter the feed to one show (video series).</p>
+      <div class="lg-shows-modal__grid">
+        <a class="lg-shows-modal__item is-all" href="<?= htmlspecialchars($base) ?>">&#8635; All videos<?= $active !== '' ? ' &middot; clear show' : '' ?></a>
         <?php foreach ($shows as $sh): $on = ($sh['slug'] === $active); ?>
-          <a class="lg-shows__item<?= $on ? ' is-on' : '' ?>" role="menuitem"
+          <a class="lg-shows-modal__item<?= $on ? ' is-on' : '' ?>"
              href="<?= htmlspecialchars($base . '&show=' . urlencode($sh['slug'])) ?>">
-            <span class="lg-shows__name"><?= htmlspecialchars($sh['label']) ?></span>
-            <span class="lg-shows__n"><?= (int)$sh['count'] ?></span>
+            <span class="lg-shows-modal__name"><?= htmlspecialchars($sh['label']) ?></span>
+            <span class="lg-shows-modal__n"><?= (int)$sh['count'] ?></span>
           </a>
         <?php endforeach; ?>
       </div>
-    </details>
+    </dialog>
+    <script>
+    (function(){var t=document.querySelector('[data-lg-shows-open]'),d=document.getElementById('lg-shows-modal');
+      if(!t||!d||!d.showModal)return;
+      t.addEventListener('click',function(){d.showModal();});
+      d.addEventListener('click',function(e){var r=d.getBoundingClientRect();
+        if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();});
+    })();
+    </script>
     <?php
 }
 
