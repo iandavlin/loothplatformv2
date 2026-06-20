@@ -171,19 +171,56 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
                || !empty($filters['authors']) || !empty($filters['q']) || $active_show !== ''
                || !empty($muted['types']) || !empty($muted['cats']) || !empty($muted['leaves']);
 
-    // adv-A (Ian 2026-06-20): filter sections render as stacked ACCORDIONS (rows)
-    // inside the Advanced Search modal - Shows folded in alongside Type + Categories.
-    // Independent <details> (no shared name) so several can be open at once.
+    // adv-A polish (Ian 2026-06-20): exclusive accordion (shared name=) opening
+    // COMPACT (no section open by default); each section colour-anchored
+    // (Type=sage / Categories=amber / Shows=rust) via icon + left-rule + count
+    // pill; expanded items render as a compact multi-col grid (see forums.css).
+    $ICO = [
+      'type'  => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
+      'cat'   => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6h6l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H3z"/></svg>',
+      'shows' => '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+    ];
     ?>
     <div class="hub-rail hub-rail--acc">
       <?php if ($any_active): ?>
         <a class="hub-rail__reset" href="<?= hub_reset_url($sort) ?>">&times; Reset all filters</a>
       <?php endif; ?>
 
+      <details class="hub-rail__sec hub-rail__sec--type" name="hub-adv-sec">
+        <summary class="hub-rail__sech">
+          <span class="hub-rail__ico" aria-hidden="true"><?= $ICO['type'] ?></span>
+          <span class="hub-rail__sectx">Type</span>
+          <span class="hub-rail__secn"><?= $type_n ?> kinds</span>
+          <span class="hub-rail__chev" aria-hidden="true">&#9656;</span>
+        </summary>
+        <div class="hub-rail__secbody hub-rail__secbody--grid">
+          <?php foreach ($type_order as $key):
+            if (!isset($types[$key])) continue;
+            hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
+          endforeach; ?>
+        </div>
+      </details>
+
+      <details class="hub-rail__sec hub-rail__sec--cat" name="hub-adv-sec">
+        <summary class="hub-rail__sech">
+          <span class="hub-rail__ico" aria-hidden="true"><?= $ICO['cat'] ?></span>
+          <span class="hub-rail__sectx">Categories</span>
+          <span class="hub-rail__chev" aria-hidden="true">&#9656;</span>
+        </summary>
+        <div class="hub-rail__secbody" id="hub-cat-accordion">
+          <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
+        </div>
+      </details>
+
       <?php if ($shows): ?>
-      <details class="hub-rail__sec" open>
-        <summary class="hub-rail__sech"><span class="hub-rail__chev" aria-hidden="true">&#9656;</span> Shows <span class="hub-rail__secn"><?= count($shows) ?> series</span></summary>
-        <div class="hub-rail__secbody">
+      <details class="hub-rail__sec hub-rail__sec--shows" name="hub-adv-sec">
+        <summary class="hub-rail__sech">
+          <span class="hub-rail__ico" aria-hidden="true"><?= $ICO['shows'] ?></span>
+          <span class="hub-rail__sectx">Shows</span>
+          <span class="hub-rail__secn"><?= count($shows) ?> series</span>
+          <span class="hub-rail__chev" aria-hidden="true">&#9656;</span>
+        </summary>
+        <div class="hub-rail__secbody hub-rail__secbody--grid">
           <?php foreach ($shows as $sh):
             $son = ($sh['slug'] === $active_show);
             $sf  = $filters; $sf['show'] = $son ? '' : $sh['slug'];
@@ -196,23 +233,6 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
         </div>
       </details>
       <?php endif; ?>
-
-      <details class="hub-rail__sec">
-        <summary class="hub-rail__sech"><span class="hub-rail__chev" aria-hidden="true">&#9656;</span> Type <span class="hub-rail__secn"><?= $type_n ?> kinds</span></summary>
-        <div class="hub-rail__secbody">
-          <?php foreach ($type_order as $key):
-            if (!isset($types[$key])) continue;
-            hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
-          endforeach; ?>
-        </div>
-      </details>
-
-      <details class="hub-rail__sec">
-        <summary class="hub-rail__sech"><span class="hub-rail__chev" aria-hidden="true">&#9656;</span> Categories</summary>
-        <div class="hub-rail__secbody" id="hub-cat-accordion">
-          <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
-        </div>
-      </details>
     </div>
     <?php
 }

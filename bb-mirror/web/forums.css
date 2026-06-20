@@ -4297,29 +4297,44 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   color: #b3261e; font-weight: 600; }
 
 
-/* ── Advanced Search modal: exposed search bars + filter accordions (adv-A, Ian 2026-06-20).
-   The Shows trigger/centre-dialog is retired — Shows is now an accordion inside the
-   #hub-fmodal Advanced Search modal alongside Type + Categories. */
-.hub-fmodal__search{display:flex;gap:10px;margin:0 0 8px}
+/* ── Advanced Search modal: exposed search bars + COLOUR-ANCHORED accordions
+   (adv-A polish, Ian 2026-06-20). Shows is an accordion inside #hub-fmodal with
+   Type + Categories; exclusive (single-open via forums.js name=), opens compact,
+   items in a compact multi-col grid. Section colours = brand tokens only. */
+.hub-fmodal__search{display:flex;gap:10px;margin:0 0 10px}
 .hub-fmodal__search .feed-toolbar-search{display:flex;gap:10px;flex:1 1 auto;margin:0;width:100%}
 .hub-fmodal__search .hub-tsearch{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;padding:9px 14px}
 .hub-fmodal__search .hub-tsearch__ico{color:var(--lg-mute,#6b6f6b);flex:0 0 auto}
 .hub-fmodal__search .hub-tsearch__in{flex:1 1 auto;border:0;outline:0;background:none;font:14px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#323532);min-width:0;width:auto}
 .hub-fmodal__search .hub-suggest{position:relative}
 @media (max-width:560px){.hub-fmodal__search,.hub-fmodal__search .feed-toolbar-search{flex-direction:column}}
-/* accordion sections (Shows / Type / Categories) */
-.hub-rail--acc .hub-rail__reset{display:inline-block;margin:2px 0 8px;color:var(--lg-clay,#c66845);font-weight:700;text-decoration:none}
-.hub-rail--acc .hub-rail__sec{border-top:1px solid var(--lg-line,#e3ddd0)}
-.hub-rail--acc .hub-rail__sech{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:14px 2px;font:800 14.5px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a)}
+
+.hub-rail--acc .hub-rail__reset{display:inline-block;margin:0 0 8px;color:var(--lg-rust,#c66845);font-weight:700;text-decoration:none}
+/* per-section colour tokens (brand only): --sec accent, --secink ink-on-accent,
+   --sect light tint bg, --secdk dark AA-safe ink on the tint */
+.hub-rail--acc .hub-rail__sec--type {--sec:var(--lg-sage-d,#6b7c52);--secink:#fff;--sect:rgba(107,124,82,.13);--secdk:#4c5a39}
+.hub-rail--acc .hub-rail__sec--cat  {--sec:var(--lg-amber,#ecb351);--secink:#3a2a06;--sect:rgba(236,179,81,.20);--secdk:#6e4f12}
+.hub-rail--acc .hub-rail__sec--shows{--sec:var(--lg-rust,#c66845);--secink:#fff;--sect:rgba(198,104,69,.13);--secdk:#8f3f2a}
+.hub-rail--acc .hub-rail__sec{border:0}
+/* section header = navigation anchor: colour left-rule + icon + tinted bar + count pill */
+.hub-rail--acc .hub-rail__sech{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;
+  margin:8px 0;padding:11px 13px;border-left:4px solid var(--sec);border-radius:0 10px 10px 0;background:var(--sect);
+  font:800 14.5px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);color:var(--lg-ink,#1a1d1a)}
 .hub-rail--acc .hub-rail__sech::-webkit-details-marker{display:none}
-.hub-rail--acc .hub-rail__chev{color:var(--lg-sage-d,#6b7c52);font-size:12px;transition:transform .15s}
+.hub-rail--acc .hub-rail__sech:hover{filter:brightness(.97)}
+.hub-rail--acc .hub-rail__ico{display:inline-flex;width:18px;height:18px;color:var(--secdk);flex:0 0 auto}
+.hub-rail--acc .hub-rail__ico svg{width:100%;height:100%}
+.hub-rail--acc .hub-rail__sectx{margin-right:auto}
+.hub-rail--acc .hub-rail__secn{background:var(--sec);color:var(--secink);border-radius:999px;padding:3px 10px;font:700 11.5px/1 var(--lg-font-sans,system-ui,sans-serif)}
+.hub-rail--acc .hub-rail__chev{color:var(--secdk);font-size:11px;transition:transform .15s}
 .hub-rail--acc .hub-rail__sec[open]>.hub-rail__sech .hub-rail__chev{transform:rotate(90deg)}
-.hub-rail--acc .hub-rail__secn{margin-left:auto;color:var(--lg-mute,#6b6f6b);font:600 12px/1 var(--lg-font-sans,system-ui,sans-serif)}
-.hub-rail--acc .hub-rail__secbody{padding:2px 0 14px;display:flex;flex-direction:column;gap:6px}
-.hub-rail--acc .hub-rail__secbody .hub-rail__row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border:1px solid var(--lg-line,#e3ddd0);border-radius:10px;background:#fff;margin:0}
-.hub-rail--acc .hub-rail__secbody .hub-rail__row.is-on{border-color:var(--lg-sage,#87986a);background:var(--lguser-pill,#dde6c7)}
-.hub-rail--acc .hub-rail__secbody .hub-rail__nm{text-decoration:none;color:var(--lg-ink,#323532);font:600 13px/1.25 var(--lg-font-sans,system-ui,sans-serif);flex:1 1 auto}
-.hub-rail--acc .hub-rail__secbody .hub-rail__row.is-on .hub-rail__nm{color:var(--lguser-accent-d,#52613d)}
-.hub-rail--acc .hub-rail__secbody .hub-rail__ct{flex:0 0 auto;color:var(--lg-mute,#6b6f6b);font:600 12px/1 var(--lg-font-sans,system-ui,sans-serif);background:var(--lg-sage-tint,#eef2e3);border-radius:999px;padding:4px 9px}
-/* Categories: nested <details> parents/leaves keep their existing .hub-acc styling. */
+/* body: compact multi-col grid for Type/Shows; Categories stays a column (hierarchy) */
+.hub-rail--acc .hub-rail__secbody{padding:0 0 12px}
+.hub-rail--acc .hub-rail__secbody--grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:7px}
+.hub-rail--acc .hub-rail__secbody--grid .hub-rail__row{padding:7px 10px}
+/* items: tinted count badge in the section hue so rows feel grouped, not identical */
+.hub-rail--acc .hub-rail__secbody .hub-rail__row{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--lg-line,#e3ddd0);border-radius:9px;background:#fff;margin:0}
+.hub-rail--acc .hub-rail__secbody .hub-rail__row.is-on{border-color:var(--sec);background:var(--sect)}
+.hub-rail--acc .hub-rail__secbody .hub-rail__nm{flex:1 1 auto;min-width:0;text-decoration:none;color:var(--lg-ink,#323532);font:600 12.5px/1.2 var(--lg-font-sans,system-ui,sans-serif);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hub-rail--acc .hub-rail__secbody .hub-rail__ct{flex:0 0 auto;background:var(--sect);color:var(--secdk);border-radius:999px;padding:3px 8px;font:700 11px/1 var(--lg-font-sans,system-ui,sans-serif)}
 .hub-rail--acc .hub-acc__leaves{margin:4px 0 6px 16px}
