@@ -213,16 +213,17 @@ from `/srv/<app>` symlinks. Storage verified live.
 |-----|--------|-------------|---------|
 | **profile-app** | identity/profile/map: `/u/*`, `/profile-api/v0/*`, `/profile-media/*`, `/directory/members` | `/srv/profile-app` → `~/projects/profile-app` | **PG `profile_app`** (31 tables) + media on **local disk** `/srv/profile-app-media/{avatars,banners,gallery,resumes}` (served via X-Accel) |
 | **archive-poc** | the new front `/`, hub feed/search, comments/reactions, guitardle, saved posts; standalone CPT renderer | `/srv/archive-poc` → `~/projects/archive-poc` | **PG `looth.discovery`** (12 tables) — primary reads+writes. **`index.sqlite` (11 MB) still present** as the legacy/revert mirror (dual-write era; retirement held pending soak). `config.json` = sponsors + app config. |
-| **bb-mirror** | `/hub/`, forum read/write API, SEO redirects | `/srv/bb-mirror` → **`~/worktrees/bespoke-cutover/bb-mirror`** | **PG `looth.forums`** (9 tables) |
+| **bb-mirror** | `/hub/`, forum read/write API, SEO redirects | `/srv/bb-mirror` → `~/loothplatformv2-serve/bb-mirror` (serve clone, since 6/20) | **PG `looth.forums`** (9 tables) |
 | **events** | `/events/` | `/srv/events` → `~/projects/events` | reads WP `event` CPT / shared PG |
 | **lg-stripe-billing** | `/billing*` (gate-exempt) | `/srv/lg-stripe-billing` (real dir, `www-data`) | **MySQL `lg_membership`** |
 | **membership-pages** | membership WP pages | `/srv/membership` (membership user) | WP |
 | **thumb-app** | `/thumb/` image resizer/thumbnailer | `/srv/thumb-app` (real dir, uid 1004) | local `config.json` + assets |
 | **lg-shell / lg-shared** | the ONE canonical site header `/srv/lg-shared/site-header.php` + `lg-env.php` helper; all consumers populate `$ctx` from `/whoami` | `/srv/lg-shared` → `~/projects/lg-shared` | n/a (template lib) |
 
-⚠️ **bb-mirror serves from a worktree** (`bespoke-cutover` branch), not `~/projects` and
-not the repo. This is the hub/bespoke fork (single-coordinator). Folding it into the repo
-is outstanding serve-topology work.
+**Serve paths updated 6/20:** the `→ ~/projects/*` shown above is the pre-migration audit.
+**All 5 repo apps — profile-app, archive-poc, events, lg-shared, bb-mirror — now symlink to
+the pristine serve clone `~/loothplatformv2-serve`** (deploy = `git pull` there; see §13).
+`lg-stripe-billing` / `membership-pages` / `thumb-app` are separate real dirs, not repo-served.
 
 ---
 
@@ -356,12 +357,22 @@ pristine `main` clone. The architecture (three trees, never conflated):
   (`git worktree add ~/worktrees/lpv2-<task> -b <task> main`). See GIT-PROTOCOL.
 - **Pristine serve clone** `~/loothplatformv2-serve` — on `main`, never hand-edited. **This is
   what `/srv` points at.** Deploy = `git pull` here + reload php-fpm.
-- **Served from the serve clone:** `/srv/{profile-app,events,lg-shared,archive-poc}` + WP
-  plugins `lg-layout-v2, lg-legacy-import, lg-snippets` + mu-plugin `lg-siteurl-from-env.php`.
-- **Still on legacy:** `/srv/bb-mirror` → `~/worktrees/bespoke-cutover/bb-mirror` (gate #4,
-  de-fork pending — hub lane); old `lg-layout` plugin → `~/projects` (not in repo).
+- **Served from the serve clone (100%, since 6/20):** `/srv/{profile-app,events,lg-shared,
+  archive-poc,bb-mirror}` + WP plugins `lg-layout-v2, lg-legacy-import, lg-snippets` +
+  mu-plugins `lg-siteurl-from-env.php`, `lg-secrets-dash.php`. Nothing app-facing serves off
+  `~/projects` anymore (the old `lg-layout` plugin is legacy/unused, left as-is).
+- **bb-mirror de-fork DONE (6/20):** it used to serve from a worktree of the OLD
+  `looth-platform` repo; `loothplatformv2/bb-mirror` was content-identical (0 diff) to what it
+  served, so the flip was **commit-free** — the stale `bespoke-cutover` commit history was NOT
+  merged into `main` (it predated live tweaks and would have regressed). `/hub/` is a dynamic
+  feed (±8 KB/req) so it can't be byte-compared; the only non-feed delta is the asset
+  cache-buster `?v=<mtime>` on `forums.css/js` (content byte-identical) — i.e. the normal
+  cache-bust-on-deploy, a one-time client re-fetch. bb-mirror needs no in-tree runtime
+  (env-driven `config.php`, writes only to PG `forums`). The old repo + worktree are retired
+  (kept as a safety net, not deleted).
 - **Rollback:** `~/loothplatformv2-serve-rollback.sh` re-points everything to `~/projects` +
-  reloads (~5 s). Verified flip 6/20: routes 200, article externalized at **44762 B**, no fatals.
+  the bb-mirror worktree, reloads (~5 s). Verified 6/20: all routes 200, article externalized
+  at **44762 B**, `/hub/` 200, WP loads, no fatals.
 
 **Serve-tree runtime provisioning (per box, box-local, NOT git):**
 - `archive-poc/index.sqlite` — gitignored revert mirror; seed from a known-good copy; may be
@@ -409,9 +420,10 @@ artifacts. PROVEN byte-identical.
 
 - **Avatar reader-repoint PENDING** (§11): bucket has the consolidated set; hub +
   WP get_avatar still read the old source.
-- **Serve-from-git gates** (§13): #1 render fix, #2 per-lane worktrees, #3 flip serving to the
-  pristine `main` clone — ✅ ALL DONE (LIVE 6/20). **#4 remaining: bb-mirror de-fork** (still
-  served from the `bespoke-cutover` worktree; merge to `main` + move the hub lane onto the repo).
+- **Serve-from-git — ✅ COMPLETE (6/20):** all app surfaces serve from the pristine
+  `~/loothplatformv2-serve` clone (incl. bb-mirror + both mu-plugins); deploy = `git pull`.
+  No serve-from-git gaps remain. (bb-mirror flip was commit-free; stale `bespoke-cutover`
+  history was NOT merged.)
 - **At-cut provisioning must re-apply the serve-tree ACLs** (§13): `web/assets` + archive-poc
   dir/config/sqlite write via ACL (never chown tracked paths — breaks `git pull`).
 - **MySQL `looth_dev` vs `looth_import` drift** (§10) — one billing config still names
