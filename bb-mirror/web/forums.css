@@ -4230,12 +4230,12 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
     position:absolute;left:50%;top:11px;transform:translateX(-50%);
     display:inline-flex;align-items:center;gap:8px;width:auto;height:auto;min-width:0;
     padding:11px 24px;border-radius:999px;white-space:nowrap;cursor:pointer;margin:0;z-index:3;
-    background:var(--grass,#3a9d4e);color:#fff;border:0;letter-spacing:.01em;
+    background:var(--lg-sage,#87986a);color:#fff;border:0;letter-spacing:.01em;
     font:700 14.5px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);
-    box-shadow:0 3px 12px rgba(58,157,78,.36);
+    box-shadow:0 3px 12px rgba(107,124,82,.36);
     transition:background .12s,transform .1s,box-shadow .15s;
   }
-  .feed-page .feed-sort-bar > .lg-newpost:hover{background:#33893f;transform:translateX(-50%) translateY(-1px);box-shadow:0 6px 18px rgba(58,157,78,.42)}
+  .feed-page .feed-sort-bar > .lg-newpost:hover{background:var(--lg-sage-d,#6b7c52);transform:translateX(-50%) translateY(-1px);box-shadow:0 6px 18px rgba(107,124,82,.42)}
   .feed-page .feed-sort-bar > .lg-newpost:active{transform:translateX(-50%) scale(.97)}
 }
 
