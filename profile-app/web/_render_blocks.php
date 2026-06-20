@@ -685,8 +685,13 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
         echo '<div class="lg-loc__line">' . looth_h((string)$disp['text']) . '</div>';
     }
     if ($disp !== null && $disp['lat'] !== null) {
+        // Owner viewing their own exact pin gets a DRAGGABLE marker to fine-tune the
+        // placement (saved via the {pin} path, which reverse-geocodes for the coarse
+        // label). Visitors / coarse precision keep a static marker.
+        $ownerPin = $isOwner && ((string)$disp['kind'] === 'exact');
         echo '<div class="lg-loc__map" data-kind="' . looth_h((string)$disp['kind']) . '"'
            . ' data-zoom="' . (int)$disp['zoom'] . '"'
+           . ($ownerPin ? ' data-owner-pin="1"' : '')
            . ' data-lat="' . looth_h((string)$disp['lat']) . '" data-lng="' . looth_h((string)$disp['lng']) . '"></div>';
     }
 

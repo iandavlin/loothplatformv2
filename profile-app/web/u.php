@@ -771,7 +771,23 @@ window.addEventListener('load', function () {
       doubleClickZoom: true, boxZoom: true, keyboard: true, touchZoom: true }).setView([lat, lng], zoom);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
-    if (exact) { L.marker([lat, lng]).addTo(map); }
+    if (exact) {
+      // Owner viewing their own exact pin can DRAG it to fine-tune, saved via {pin}
+      // (server reverse-geocodes for the coarse label). Visitors get a static marker.
+      var ownerPin = el.getAttribute('data-owner-pin') === '1';
+      var marker = L.marker([lat, lng], { draggable: ownerPin }).addTo(map);
+      if (ownerPin) {
+        marker.bindTooltip('Drag to adjust your location', { direction: 'top' });
+        marker.on('dragend', function () {
+          var ll = marker.getLatLng();
+          fetch('/profile-api/v0/me/location', { method: 'PUT', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin: { lat: ll.lat, lng: ll.lng } }) })
+            .then(function (r) { if (r.ok) location.reload(); else alert('Could not save the new pin.'); })
+            .catch(function () { alert('Could not save the new pin.'); });
+        });
+      }
+    }
     else {
       var rad = zoom <= 8 ? 35000 : 1500;   // state-level vs town-level blur
       L.circle([lat, lng], { radius: rad, color: '#87986a', fillColor: '#87986a', fillOpacity: 0.18, weight: 1 }).addTo(map);
@@ -1405,18 +1421,23 @@ window.lgSortable = function (container, opts) {
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
           { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
         var marker = L.marker([center.lat, center.lng], { draggable: true }).addTo(map);
-        map.on('click', function (e) { marker.setLatLng(e.latlng); });
-        setTimeout(function () { map.invalidateSize(); }, 60);   // panel just inserted
+        marker.bindTooltip('Drag me to your spot', { direction: 'top' }).openTooltip();
+        map.on('click', function (e) { marker.setLatLng(e.latlng); });   // tap the map to move the pin
+        setTimeout(function () { map.invalidateSize(); }, 60);           // panel just inserted
 
         var pinBtn = actions.querySelector('.lg-locedit__pinsave');
-        pinBtn.addEventListener('click', function () {
+        var saving = false;
+        function savePin() {
+          if (saving) return;
+          saving = true; pinBtn.disabled = true;
           var ll = marker.getLatLng();
-          pinBtn.disabled = true;
           put({ pin: { lat: ll.lat, lng: ll.lng } }).then(function (res) {
             if (res.ok) location.reload();
-            else { pinBtn.disabled = false; alert('Could not save pin.'); }
+            else { saving = false; pinBtn.disabled = false; alert('Could not save pin.'); }
           });
-        });
+        }
+        marker.on('dragend', savePin);                 // drop the pin → save (keeper-requested)
+        pinBtn.addEventListener('click', savePin);     // explicit commit (after tap-to-move)
       });
     }
   });
@@ -1877,8 +1898,6 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
 (function () {
   var photos = [];
   function collect() { photos = Array.prototype.slice.call(document.querySelectorAll('.lg-gphoto[data-url]')); }
-  collect();
-  if (!photos.length) return;
 
   function big(url) { return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'w=1600'; }
 
@@ -1939,18 +1958,19 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
     else if (e.key === 'ArrowRight') step(1);
   }
 
-  // Delegate per gallery container so owner add/remove clicks are excluded and
-  // carousel mode works too (figures live inside .lg-gallery in both modes).
-  Array.prototype.forEach.call(document.querySelectorAll('.lg-gallery'), function (gal) {
-    gal.addEventListener('click', function (e) {
-      if (e.target.closest('.lg-gphoto__rm') || e.target.closest('.lg-gphoto__add')) return;
-      var fig = e.target.closest('.lg-gphoto[data-url]');
-      if (!fig) return;
-      collect();
-      var i = photos.indexOf(fig);
-      if (i >= 0) { e.preventDefault(); open(i); }
-    });
-  });
+  // Capture-phase delegation on the document: immune to where the gallery sits in
+  // the DOM, to script/DOM load-order, and to any intermediate handler that stops
+  // propagation. Works in grid + carousel; owner ×/＋ and lightbox-internal clicks
+  // are excluded. (Was a per-container bubble binding that didn't fire — defect fix.)
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('.lg-lightbox')) return;                       // clicks inside the overlay
+    if (e.target.closest('.lg-gphoto__rm') || e.target.closest('.lg-gphoto__add')) return;
+    var fig = e.target.closest('.lg-gphoto[data-url]');
+    if (!fig) return;
+    collect();
+    var i = photos.indexOf(fig);
+    if (i >= 0) { e.preventDefault(); open(i); }
+  }, true);
 })();
 </script>
 
