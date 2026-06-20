@@ -290,6 +290,15 @@ Cloudflare R2 (S3 API), endpoint `…2b34fc01….r2.cloudflarestorage.com`.
 | profile media (avatars etc.) | `loothgroup-2-0-profile-dev` | **`loothgroup2-0-profile-bucket`** |
 | WP/forum uploads | `loothgroup-uploads-dev` (FUSE-mounted clone) | **`loothgroup2-0`** |
 
+> **CUT REWIRE — 2026-06-20 (dev2 = the cut box):** dev2 is now **fused to BOTH live buckets,
+> read-write** — no longer the dev clones. The uploads FUSE mount (`r2-uploads-dev.service`)
+> points at `r2up:loothgroup2-0` and `/etc/looth/profile-r2` at `loothgroup2-0-profile-bucket`,
+> each with its own live S3 token (content `5e3881c1…`, profile `2bad6a3f…`) lifted from the
+> live AMI (dev3) and **IP-allowlisted to dev2 `54.146.118.131`**. Verified RW via object
+> put/get/delete + write-through-mount. Pre-rewire configs backed up
+> `*.bak-prelive-20260620-034618` (rclone.conf, the mount unit, profile-r2). The table above is
+> the pre-cut (dev1 / clone) state; on dev2 both columns now resolve to the LIVE bucket, RW.
+
 The two live buckets (`loothgroup2-0-profile-bucket`, `loothgroup2-0`) are **read-only from
 dev** — we only GET from live, write the dev clone. Live read = rclone `r2live`, wired (6/20)
 with S3 creds **derived from the `cfat_` token** `/etc/looth/cf-api-token` (Access Key ID =
@@ -300,7 +309,7 @@ missing → pull from live" procedure (incl. the write-THROUGH-the-FUSE-mount st
 - **Working dev token = the rclone `r2up` remote** (write on both dev buckets, correctly
   403s the live bucket). On dev2, `/etc/looth/profile-r2` is now
   `bucket=loothgroup-2-0-profile-dev` + r2up key/secret (fixed 2026-06-19, backups kept).
-  Box-local secret (gitignored) → re-provision per box; swap to live name + live token at cut.
+  Box-local secret (gitignored) → re-provision per box. **DONE on dev2 (6/20):** swapped to `bucket=loothgroup2-0-profile-bucket` + the live profile token; dev2 writes live.
 - **WP uploads** are mounted: `wp-content/uploads` → `/mnt/loothgroup-uploads-dev`, an
   rclone FUSE mount of the R2 clone (rw, `--allow-other`).
 - **THE 403 TRAP (the #1 mistake):** a scoped token hitting the WRONG bucket NAME returns
