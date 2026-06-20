@@ -83,12 +83,28 @@ What is driven off `LG_PUBLIC_HOST` instead of being stored per-box:
   is the ONE file currently symlinked from the repo — see §13.)
 - **Patreon OAuth redirect** — same plugin filters `pre_option_lgpo_redirect_uri` to
   `https://$LG_PUBLIC_HOST/patreon-callback`.
-- **App public host** — every app FPM pool sets `env[LG_<APP>_PUBLIC_HOST]=dev2.loothgroup.com`
-  and `env[LG_<APP>_ENV]=dev`; apps build absolute URLs / cookie-domain / JWT-iss from it.
+- **App public host (⚠️ NOT auto-derived — hand-duplicated):** the 4 standalone apps build
+  absolute URLs / cookie-domain / JWT-iss from a **hardcoded** `env[LG_<APP>_PUBLIC_HOST]` in
+  their OWN FPM pool — they do NOT read `/etc/looth/env`. So `LG_PUBLIC_HOST` is *not* a single
+  knob for the apps: changing the public host means editing `/etc/looth/env` **AND all 6 pool
+  lines** then `systemctl restart php8.3-fpm` — `archive-poc.conf`, `bb-mirror.conf`,
+  `events.conf`, `membership.conf`, `looth-dev.conf` (×2: archive-poc + bb-mirror). Only WP's
+  `siteurl`/`home` truly follow `/etc/looth/env` (via the mu-plugin).
+  **Cut 2026-06-20:** all 7 pin points flipped `dev2.loothgroup.com` → `loothgroup.com`.
+  **Consolidation TODO (why aren't these in the env file?):** they should derive from the one
+  env — e.g. `EnvironmentFile=/etc/looth/env` on the `php8.3-fpm` unit, or apps reading
+  `lg_env('PUBLIC_HOST')` via `/srv/lg-shared/lg-env.php` — so the host is genuinely one knob.
 - Fallback: if the env host is absent, the plugin leaves the stored DB option untouched.
 
 **Still box-local by nature (cannot be env-driven):** nginx `server_name` + TLS cert path,
 `/etc/looth/*` secrets, the gate token. These are re-provisioned per box at standup/cut.
+⚠️ **Cert gap (cut blocker):** dev2's LE cert covers only `dev2.loothgroup.com` (webroot
+HTTP-01). A cert for `loothgroup.com` can't be issued by HTTP-01 while the apex still points at
+Cloudflare/live, and the on-box `cf-api-token` is R2-scoped (no DNS/SSL). Options before the
+CF-origin flip: a **Cloudflare Origin Certificate** (dashboard → SSL/TLS → Origin Server,
+covers apex + `*.loothgroup.com`, trusted by CF "Full (strict)") installed on dev2, OR a CF API
+token with DNS:Edit for LE DNS-01. If CF SSL mode is "Full" (non-strict)/"Flexible", a cert
+mismatch/HTTP origin is tolerated and this is moot.
 
 ---
 
