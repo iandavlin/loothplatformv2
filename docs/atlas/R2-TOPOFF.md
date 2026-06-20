@@ -28,14 +28,18 @@ dev clone bucket.
 
 Live read = rclone remote **`r2live`** (cred `cred-live`, declared for the live buckets).
 
-**STATUS 2026-06-20: `r2live` is NON-FUNCTIONAL from dev** — `HeadObject` returns
-`403 Forbidden` on its own declared live buckets, from dev2's IP. Cause is one of: the token
-lacks Object Read on those buckets, OR it's IP-locked to an IP that isn't the dev boxes.
-**This is a Cloudflare-dashboard fix (Ian):** R2 → API Tokens → the live-read token →
-confirm "Applied to" includes `loothgroup2-0-profile-bucket` + `loothgroup2-0` with **Object
-Read**; clear/extend IP filtering to include the dev boxes (50.19.198.38, 54.146.118.131,
-52.1.50.54); re-issue; paste the new **Access Key ID + Secret** → I drop them into rclone
-remote `r2live`.
+**STATUS 2026-06-20: `r2live` holds the WRONG token.** Its Access Key ID is
+`d0b3676756eb67e37859780e7345c3bb`, and it returns a **bare `Forbidden: Forbidden` on EVERY
+bucket** (incl. dev ones it should own) from dev2 → that's the IP-block/revoked signature
+(see decode above), NOT a scope problem. So `d0b367` is an **old/revoked token**, not the
+new `dev-read-only-live-buckets` token Ian configured (Object Read on `loothgroup2-0` +
+`loothgroup2-0-profile-bucket`, IP-allow 50.19.198.38 + 54.146.118.131).
+
+**To finish: get the NEW token's S3 credentials and put them in `r2live`.** The new token's
+**Access Key ID + Secret Access Key** are shown in Cloudflare R2 → **Manage R2 API Tokens →
+the token → "Use the following credentials for S3 clients"** (NOT the `cfat_` token value,
+NOT a sha256 derivation). Then `rclone config update r2live access_key_id <AKID>
+secret_access_key <SECRET>` and re-probe (expect `NoSuchKey`, not `Forbidden`).
 
 **▶ FILL IN once a remote actually reads live (verified by the probe below):**
 ```
@@ -49,9 +53,29 @@ That is NOT "no access." Probe a **HeadObject on a nonexistent key** and read th
 ```bash
 rclone cat <remote>:<bucket>/_zzprobe_nonexistent_$RANDOM 2>&1
 ```
-- `403 Forbidden` / `AccessDenied` → token CANNOT read this bucket.
-- `404` / `NoSuchKey` / `object not found` → token CAN read it (object's just absent). ✅
-- `401 Unauthorized` → the key is dead/invalid.
+**Decode the EXACT S3 error (don't lump them — they mean different things):**
+- `404` / `NoSuchKey` / `object not found` → token CAN read this bucket (object just absent). ✅
+- `AccessDenied` → key is valid + IP-allowed, but the token lacks permission/scope on this
+  bucket/op. Fix = widen the token's bucket scope or permission.
+- **bare `Forbidden: Forbidden`** (no S3 error code) on EVERY bucket, even ones it owns →
+  **IP-block or revoked/deleted token.** Cloudflare denies *before* checking scope. Fix =
+  add this box's egress IP to the token's allowlist, OR the token is dead → use a live one.
+- `SignatureDoesNotMatch` → the **secret** in rclone is wrong (Access Key ID may be fine).
+- `401 Unauthorized` → the Access Key ID itself is unknown/dead.
+
+## Wiring a (new) R2 token into rclone — the part my instincts get wrong
+
+**R2 S3 access = an Access Key ID + a Secret Access Key. These are NOT the same as the
+`cfat_…` CF API token, and you CANNOT derive them from it (sha256 of the token is a myth that
+won't authenticate).** When you create an R2 token in the dashboard, Cloudflare shows, under
+**"Use the following credentials for S3 clients"**, an **Access Key ID** + **Secret Access
+Key** — copy BOTH. Then:
+```bash
+rclone config update r2live access_key_id <NEW_AKID> secret_access_key <NEW_SECRET>
+# verify with the object probe above; expect NoSuchKey on a random key (not Forbidden)
+```
+The `cfat_` token at `/etc/looth/cf-api-token` is management-only (it lists *buckets* via
+`api.cloudflare.com`) — it can NEVER read object bytes. Don't reach for it here.
 
 ## The top-off procedure (run on dev2)
 
