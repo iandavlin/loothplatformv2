@@ -139,12 +139,17 @@
 
   // Hub search: LIVE in-page filter only — no quick-jump dropdown (the feed IS
   // the result). Author box keeps its autocomplete below.
-  var qIn = wrap.querySelector('[data-hub-search]');
-  if (qIn) {
-    qIn.addEventListener('input', debounce(function () { liveSearch(qIn.value.trim()); }, 280));
-    // Enter: just live-filter (don't reload the whole page).
-    qIn.closest('form').addEventListener('submit', function (e) { e.preventDefault(); liveSearch(qIn.value.trim()); });
-  }
+  // Live in-page filter for EVERY hub q field — the modal's "Search the Hub" AND
+  // the quick-search bubble on the bar (Ian 2026-06-20). One liveSearch() path;
+  // fields mirror each other so opening Adv Search keeps what was typed.
+  var qFields = document.querySelectorAll('[data-hub-search]');
+  function syncQ(val, except) { qFields.forEach(function (n) { if (n !== except && n.value !== val) n.value = val; }); }
+  qFields.forEach(function (qf) {
+    qf.addEventListener('input', debounce(function () { var v = qf.value.trim(); syncQ(qf.value, qf); liveSearch(v); }, 280));
+    var form = qf.closest('form');
+    // Enter: live-filter only (don't reload the whole page).
+    if (form) form.addEventListener('submit', function (e) { e.preventDefault(); var v = qf.value.trim(); syncQ(qf.value, qf); liveSearch(v); });
+  });
 
   var aIn  = wrap.querySelector('[data-hub-author]');
   var aBox = wrap.querySelector('[data-hub-suggest="author"]');

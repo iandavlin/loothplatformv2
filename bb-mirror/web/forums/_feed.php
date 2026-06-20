@@ -1323,11 +1323,19 @@ $header_cat = $scoped_forum
         <?php endif; ?>
       </div>
       <div class="zR">
-        <?php /* Search opens the Advanced Search modal: .lg-filters-chip is the
-                 existing forums.js opener for #hub-fmodal (no JS change). */ ?>
+        <?php /* Quick-search bubble = the fast path: same name=q + data-hub-search
+                 field as the modal's "Search the Hub", so hub-filters.js live-filters
+                 the feed in place and mirrors the modal field. No-JS: plain ?q GET. */ ?>
+        <form class="hub-tsearch hub-tsearch--q lg-quickq" method="get" action="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/') ?>" role="search" autocomplete="off">
+          <span class="hub-tsearch__ico" aria-hidden="true">&#9906;</span>
+          <input class="hub-tsearch__in" name="q" type="search" placeholder="Search the Hub&hellip;"
+                 value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>" aria-label="Search the Hub" data-hub-search autocomplete="off">
+        </form>
+        <?php /* Adv Search opens the full modal: .lg-filters-chip is the existing
+                 forums.js opener for #hub-fmodal (no JS change). */ ?>
         <button type="button" class="lg-filters-chip lg-searchbtn" aria-haspopup="dialog" aria-label="Open advanced search">
           <span class="lg-searchbtn__ico" aria-hidden="true">&#9906;</span>
-          <span class="lg-filters-chip__tx">Search</span>
+          <span class="lg-filters-chip__tx">Adv Search</span>
         </button>
       </div>
     <?php else: ?>

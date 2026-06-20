@@ -4214,7 +4214,15 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 }
 .hub-fmodal-page .feed-sort-bar .zL{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
 .hub-fmodal-page .feed-sort-bar .zM{display:flex;justify-content:center}
-.hub-fmodal-page .feed-sort-bar .zR{display:flex;justify-content:flex-end}
+.hub-fmodal-page .feed-sort-bar .zR{display:flex;justify-content:flex-end;align-items:center;gap:8px;min-width:0}
+/* quick-search bubble on the bar (fast path; shares the modal's q field) */
+.hub-fmodal-page .feed-sort-bar .lg-quickq{display:flex;align-items:center;gap:8px;flex:1 1 auto;max-width:300px;min-width:0;margin:0;
+  background:#fff;border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;padding:8px 14px}
+.hub-fmodal-page .feed-sort-bar .lg-quickq:focus-within{border-color:var(--lg-sage,#87986a);box-shadow:0 0 0 2px rgba(135,152,106,.18)}
+.hub-fmodal-page .feed-sort-bar .lg-quickq .hub-tsearch__ico{color:var(--lg-mute,#6b6f6b);flex:0 0 auto;font-size:14px;line-height:1}
+.hub-fmodal-page .feed-sort-bar .lg-quickq .hub-tsearch__in{flex:1 1 auto;min-width:0;width:auto;border:0;outline:0;background:none;
+  font:14px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);color:var(--lg-ink,#323532)}
+.hub-fmodal-page .feed-sort-bar .lg-quickq .hub-suggest{display:none}
 /* compose: in-flow, compact, sage, labelled. KEEPS .lg-newpost/.forum-header__new-post
    + data-ntm-open hooks. right/bottom:auto neutralises the .forum-header__new-post base. */
 .hub-fmodal-page .feed-sort-bar .lg-newpost{
