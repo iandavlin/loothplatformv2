@@ -47,9 +47,9 @@ function lg_secrets_buckets(): array {
         ['name' => 'loothgroup-2-0-profile-dev',   'env' => 'dev',  'cred' => 'cred-profile', 'verified' => true],
         ['name' => 'loothgroup-uploads-dev',       'env' => 'dev',  'cred' => 'cred-profile', 'verified' => true],
         ['name' => 'loothgroup-backups',           'env' => 'ops',  'cred' => 'cred-backups', 'verified' => false],
-        ['name' => 'loothgroup2-0-profile-bucket', 'env' => 'live', 'cred' => 'cred-live',    'verified' => false],
-        ['name' => 'loothgroup2-0',                'env' => 'live', 'cred' => 'cred-live',    'verified' => false],
-        ['name' => 'loothgroup',                   'env' => 'live', 'cred' => 'cred-live',    'verified' => false],
+        ['name' => 'loothgroup2-0-profile-bucket', 'env' => 'live', 'access' => 'ro', 'cred' => 'cred-live',    'verified' => false],
+        ['name' => 'loothgroup2-0',                'env' => 'live', 'access' => 'ro', 'cred' => 'cred-live',    'verified' => false],
+        ['name' => 'loothgroup',                   'env' => 'live', 'access' => 'ro', 'cred' => 'cred-live',    'verified' => false],
         ['name' => 'test-dev',                     'env' => 'test', 'cred' => 'cred-test',    'verified' => false],
     ];
 }
