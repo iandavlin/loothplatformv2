@@ -638,15 +638,30 @@ final class Block
             return ['text' => $text, 'lat' => $lat, 'lng' => $lng, 'zoom' => 15, 'kind' => 'exact'];
         }
         if ($precision === 'city') {
-            $text = trim(implode(', ', array_filter([$city, $region]))) ?: (string)($place['text'] ?? '');
+            $text = self::coarseText(trim(implode(', ', array_filter([$city, $region]))), $place, $lat);
             // 2-decimal (~1.1km), NOT 1 (~11km): 1-decimal landed city pins in the
             // East River (renderLocation cutover patch, Ian 5/26 — Evan Gluck's pin).
             return ['text' => $text, 'lat' => self::coarsen($lat, self::DP_NEIGHBORHOOD), 'lng' => self::coarsen($lng, self::DP_NEIGHBORHOOD), 'zoom' => 11, 'kind' => 'coarse'];
         }
-        // state — same text fallback as city: snapshot-migrated / text-only rows have
-        // NULL components and must render their literal text, not an empty string.
-        $text = trim(implode(', ', array_filter([$region, $country]))) ?: (string)($place['text'] ?? '');
+        // state — same coarse-text rule as city.
+        $text = self::coarseText(trim(implode(', ', array_filter([$region, $country]))), $place, $lat);
         return ['text' => $text, 'lat' => self::coarsen($lat, 0), 'lng' => self::coarsen($lng, 0), 'zoom' => 6, 'kind' => 'coarse'];
+    }
+
+    /**
+     * Coarse-precision (city/state) text rule. Prefer the structured coarse label
+     * ("City, Region" / "Region, Country"). Fall back to the row's literal text ONLY
+     * for text-only rows (no pin) — those are snapshot-migrated coarse place names and
+     * must render their literal text rather than an empty string. When a PIN is present
+     * the literal text may be a VERBATIM STREET ADDRESS, which must NEVER surface at
+     * coarse precision (privacy: the City/State dial promises not to leak the street).
+     * If structured labels are missing on a pinned row, render no text — just the
+     * coarsened map — never the verbatim string.
+     */
+    private static function coarseText(string $coarse, array $place, $lat): string
+    {
+        if ($coarse !== '') return $coarse;
+        return $lat === null ? (string)($place['text'] ?? '') : '';
     }
 
     /** Validate an incoming precision level; returns it or null. */

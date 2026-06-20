@@ -232,7 +232,21 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 /* location audience precision controls (owner) */
 .lg-loc__line{display:flex;align-items:center;gap:9px;font-size:calc(15px*var(--lg-read-scale,1));color:var(--lg-ink)}
 .lg-loc__empty{font-size:calc(13.5px*var(--lg-read-scale,1));color:var(--lg-mute);margin:10px 0 0}
+.lg-loc__hint{font:400 calc(12px*var(--lg-read-scale,1))/1.45 var(--lg-font-sans);color:var(--lg-mute);margin:7px 0 0;max-width:46ch}
 .lg-loc__edit{position:relative;margin-top:12px}
+/* location editor panel (owner) — verbatim address bar + drag-a-pin fallback */
+.lg-locedit{margin-top:12px;padding:13px;border:1px solid var(--lg-line);border-radius:12px;background:var(--lg-cream)}
+.lg-locedit__help{font:400 calc(13px*var(--lg-read-scale,1))/1.5 var(--lg-font-sans);color:var(--lg-mute);margin:0 0 10px}
+.lg-locedit__help b{color:var(--lg-ink);font-weight:600}
+.lg-locedit__row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lg-locedit__in{flex:1 1 220px;min-width:0;font:500 calc(13.5px*var(--lg-read-scale,1))/1.4 var(--lg-font-sans);color:var(--lg-ink);background:#fff;border:1px solid var(--lg-line);border-radius:9px;padding:9px 11px}
+.lg-locedit__in:focus{outline:none;border-color:var(--lg-sage)}
+.lg-locedit__cancel,.lg-locedit__cancel2{font:600 calc(12.5px*var(--lg-read-scale,1))/1 var(--lg-font-sans);color:var(--lg-mute);background:none;border:0;cursor:pointer;padding:8px 6px}
+.lg-locedit__cancel:hover,.lg-locedit__cancel2:hover{color:var(--lg-ink)}
+.lg-locedit__status{font:400 calc(12.5px*var(--lg-read-scale,1))/1.45 var(--lg-font-sans);color:var(--lg-mute);margin-top:8px}
+.lg-locedit__status:empty{display:none}
+.lg-locedit__status .lg-locedit__help{margin:0 0 10px}
+.lg-locedit__map{margin-top:10px}
 .lg-loc__addr{font:500 calc(13.5px*var(--lg-read-scale,1))/1.4 var(--lg-font-sans);color:var(--lg-charcoal);margin-top:8px}
 .lg-loc__hours{font:600 calc(12.5px*var(--lg-read-scale,1))/1.3 var(--lg-font-sans);color:var(--lg-sage-d);margin-top:4px}
 .lg-loc__note{font:400 calc(13px*var(--lg-read-scale,1))/1.45 var(--lg-font-sans);color:var(--lg-mute);margin-top:5px}
@@ -1267,64 +1281,128 @@ window.lgSortable = function (container, opts) {
 </script>
 
 <script>
-/* Location editor (owner/Me) — set / change the actual location. Search OSM Nominatim via
-   /me/location/search (server-proxied, IP-biased, no API key), pick a result → PUT
-   /me/location {nominatim:<raw>} → reload. Zero results → "save as text" escape hatch. */
+/* Location editor (owner/Me) — verbatim address bar + drag-a-pin fallback.
+   Type the address, press Enter → PUT /me/location {address:"…"}. The server stores
+   the text VERBATIM (no picker, no autocomplete) and forward-geocodes server-side to
+   drop the map pin. If it can't place it (geocoded:false), a draggable Leaflet pin
+   appears, centered on the server's suggested center → PUT {pin:{lat,lng}} → reload. */
 (function () {
   var wrap = document.getElementById('lg-loc-edit');
   if (!wrap) return;
   var btn = wrap.querySelector('.lg-loc__change');
+  if (!btn) return;
 
-  function save(body) {
+  function put(body) {
     return fetch('/profile-api/v0/me/location', { method: 'PUT', credentials: 'include',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      .then(function (r) { return r.ok; });
+      .then(function (r) {
+        return r.json().then(function (j) { return { ok: r.ok, j: j }; },
+                             function () { return { ok: r.ok, j: {} }; });
+      });
   }
 
+  // Leaflet is loaded deferred in <head>; by interaction time it's usually ready.
+  // Poll briefly, then call back regardless (the callback guards for !window.L).
+  function ensureLeaflet(cb) {
+    var n = 0;
+    (function wait() {
+      if (window.L || n++ > 50) return cb();   // ~5s ceiling
+      setTimeout(wait, 100);
+    })();
+  }
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, ''); }
+
+  var hint = wrap.querySelector('.lg-loc__hint');
+
   btn.addEventListener('click', function () {
-    if (wrap.querySelector('.lg-craft-search')) return;
+    if (wrap.querySelector('.lg-locedit')) return;
     btn.style.display = 'none';
-    var box = document.createElement('span'); box.className = 'lg-craft-search';
-    var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Search a city or address…';
-    var res = document.createElement('div'); res.className = 'lg-craft-results'; res.style.display = 'none';
-    box.appendChild(inp); box.appendChild(res); wrap.appendChild(box); inp.focus();
+    if (hint) hint.style.display = 'none';
 
-    var timer = null, lastQ = '';
-    function close() { box.remove(); btn.style.display = ''; }
-    function pick(body) { save(body).then(function (ok) { if (ok) location.reload(); else alert('Could not save location.'); }); }
+    var panel = document.createElement('div'); panel.className = 'lg-locedit';
+    panel.innerHTML =
+      '<p class="lg-locedit__help">Type your address and press <b>Enter</b>. It’s listed ' +
+      'exactly as you write it, and we’ll place you on the map automatically. ' +
+      'If we can’t find it, drag the pin to your spot.</p>' +
+      '<div class="lg-locedit__row">' +
+        '<input type="text" class="lg-locedit__in" placeholder="123 Main St, City, State" autocomplete="off">' +
+        '<button type="button" class="lg-link__add lg-locedit__save">Save</button>' +
+        '<button type="button" class="lg-locedit__cancel" aria-label="Cancel">Cancel</button>' +
+      '</div>' +
+      '<div class="lg-locedit__status" aria-live="polite"></div>';
+    wrap.appendChild(panel);
 
-    function run() {
-      var q = inp.value.trim();
-      if (q === lastQ) return; lastQ = q;
-      if (q.length < 3) { res.style.display = 'none'; return; }
-      fetch('/profile-api/v0/me/location/search?q=' + encodeURIComponent(q), { credentials: 'include' })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          if (inp.value.trim() !== q) return;                 // stale
-          res.innerHTML = '';
-          var items = (d && d.items) || [];
-          items.slice(0, 6).forEach(function (it) {
-            var b = document.createElement('button'); b.type = 'button';
-            b.innerHTML = '<span>' + (it.short ? it.short.replace(/[&<>"]/g, '') : '') + '</span>';
-            b.title = it.display_name || '';
-            b.addEventListener('click', function () { pick({ nominatim: it.raw }); });
-            res.appendChild(b);
-          });
-          if (!items.length) {                                // escape hatch: save freeform text
-            var t = document.createElement('button'); t.type = 'button'; t.className = 'lg-cat-new';
-            t.innerHTML = '<span>No match — use “' + q.replace(/[&<>"]/g, '') + '” as text</span><span class="t">text</span>';
-            t.addEventListener('click', function () { pick({ text_only: q }); });
-            res.appendChild(t);
-          }
-          res.style.display = 'block';
-        })
-        .catch(function () { res.innerHTML = '<div class="none">Search unavailable.</div>'; res.style.display = 'block'; });
+    var inp     = panel.querySelector('.lg-locedit__in');
+    var saveBtn = panel.querySelector('.lg-locedit__save');
+    var status  = panel.querySelector('.lg-locedit__status');
+    inp.focus();
+
+    var busy = false;
+    function close() { panel.remove(); btn.style.display = ''; if (hint) hint.style.display = ''; }
+    panel.querySelector('.lg-locedit__cancel').addEventListener('click', close);
+
+    function submitAddress() {
+      var v = inp.value.trim();
+      if (!v || busy) return;
+      busy = true; saveBtn.disabled = true; inp.disabled = true;
+      status.textContent = 'Saving…';
+      put({ address: v }).then(function (res) {
+        if (!res.ok) {
+          busy = false; saveBtn.disabled = false; inp.disabled = false;
+          status.textContent = 'Could not save — please try again.';
+          return;
+        }
+        if (res.j && res.j.geocoded) { location.reload(); return; }   // placed → done
+        showPinDragger(v, (res.j && res.j.center) || { lat: 39.8283, lng: -98.5795, zoom: 4 });
+      });
     }
-    inp.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 320); });   // debounce (Nominatim politeness)
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
-    document.addEventListener('click', function onDoc(e) {
-      if (!box.contains(e.target) && e.target !== btn) { close(); document.removeEventListener('click', onDoc); }
+
+    inp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); submitAddress(); }
+      else if (e.key === 'Escape') { close(); }
     });
+    saveBtn.addEventListener('click', submitAddress);
+
+    // Fallback: we kept the verbatim address but couldn't geocode it — let the owner
+    // place the pin by hand. Saved via {pin}, which reverse-geocodes server-side so
+    // the City/State coarse label still works.
+    function showPinDragger(addrText, center) {
+      panel.querySelector('.lg-locedit__row').style.display = 'none';
+      status.innerHTML = '<p class="lg-locedit__help">Saved “<b>' + esc(addrText) +
+        '</b>”, but we couldn’t place it on the map. Drag the pin to your exact ' +
+        'spot (or click the map), then <b>Save pin</b>.</p>';
+
+      var mapEl = document.createElement('div'); mapEl.className = 'lg-loc__pin lg-locedit__map';
+      panel.appendChild(mapEl);
+      var actions = document.createElement('div'); actions.className = 'lg-locedit__row';
+      actions.innerHTML =
+        '<button type="button" class="lg-link__add lg-locedit__pinsave">Save pin</button>' +
+        '<button type="button" class="lg-locedit__cancel2">Cancel</button>';
+      panel.appendChild(actions);
+      actions.querySelector('.lg-locedit__cancel2').addEventListener('click', close);
+
+      ensureLeaflet(function () {
+        if (!window.L) { status.textContent = 'Map unavailable — please try again later.'; return; }
+        var map = L.map(mapEl, { zoomControl: true, scrollWheelZoom: false })
+          .setView([center.lat, center.lng], center.zoom || 11);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+        var marker = L.marker([center.lat, center.lng], { draggable: true }).addTo(map);
+        map.on('click', function (e) { marker.setLatLng(e.latlng); });
+        setTimeout(function () { map.invalidateSize(); }, 60);   // panel just inserted
+
+        var pinBtn = actions.querySelector('.lg-locedit__pinsave');
+        pinBtn.addEventListener('click', function () {
+          var ll = marker.getLatLng();
+          pinBtn.disabled = true;
+          put({ pin: { lat: ll.lat, lng: ll.lng } }).then(function (res) {
+            if (res.ok) location.reload();
+            else { pinBtn.disabled = false; alert('Could not save pin.'); }
+          });
+        });
+      });
+    }
   });
 })();
 

@@ -6,6 +6,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';   // not in config.php'
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Block;
 use Looth\ProfileApp\Db;
+use Looth\ProfileApp\GeoIP;
 use Looth\ProfileApp\Profile;
 
 $user   = Auth::requireUser();
@@ -36,28 +37,86 @@ if ($method !== 'PUT') profile_app_json(405, ['error' => 'method_not_allowed']);
 $in = json_decode(file_get_contents('php://input') ?: '', true);
 if (!is_array($in)) profile_app_json(400, ['error' => 'invalid_json']);
 
-// Three accepted shapes — at most one per call:
+// Accepted shapes — at most one location-setting shape per call:
 //
-//   1. Picker pick (Nominatim row):
+//   1. Verbatim address (the editor's primary path):
+//      { address: "<exactly what the owner typed>" }
+//      → location_text is stored VERBATIM; we forward-geocode server-side to drop
+//        the pin + fill structured city/region (so the privacy-coarsening ladder
+//        works). Response carries { geocoded: true|false }; on false the editor
+//        shows a drag-a-pin fallback (saved via {pin}).
+//
+//   2. Picker pick (Nominatim row) — legacy autocomplete path, still accepted:
 //      { nominatim: { display_name, lat, lon, address: {...} } }
 //
-//   2. Text-only escape hatch (zero-results "save anyway"):
+//   3. Text-only escape hatch (no geocode at all):
 //      { text_only: "<freeform text>" }
 //
-//   3. Visibility toggle (single-field autosave):
+//   4. Visibility toggle (single-field autosave):
 //      { location_visibility: 'public' | 'members' | 'private' }
 //
 // Any combination is allowed in one call (the editor sends them separately
 // in practice, but we don't enforce that here).
 
+$address     = $in['address']             ?? null;
 $nominatim   = $in['nominatim']           ?? null;
 $textOnly    = $in['text_only']           ?? null;
 $visibility  = $in['location_visibility'] ?? null;
+$hasAddress  = is_string($address) && trim($address) !== '';
 
-$set    = [];
-$params = [':id' => (int)$user['id']];
+$set      = [];
+$params   = [':id' => (int)$user['id']];
+$geocoded = null;   // null = this call didn't set an address; true/false otherwise
+
+// 1. Verbatim address + server-side forward-geocode. The owner's typed string is
+//    the listed address (stored verbatim, NOT replaced by Nominatim's display_name).
+if ($hasAddress) {
+    if (!empty($set)) profile_app_json(400, ['error' => 'conflicting_fields']);
+    $addr = trim($address);
+    if (mb_strlen($addr) > 300) profile_app_json(400, ['error' => 'address_too_long']);
+    $geo = looth_geocode_forward($addr);
+
+    $set[] = 'location_text     = :text';
+    $params[':text'] = $addr;                          // VERBATIM — what the owner typed
+
+    if ($geo !== null) {
+        // Confident placement: drop the pin and fill structured columns so City/State
+        // viewers get a real coarse label (never the verbatim street).
+        $set[] = 'lat               = :lat';
+        $set[] = 'lng               = :lng';
+        $set[] = 'location_country  = :country';
+        $set[] = 'location_region   = :region';
+        $set[] = 'location_city     = :city';
+        $set[] = 'location_postcode = :postcode';
+        $set[] = 'place_id          = NULL';
+        $set[] = 'place_result      = :raw::jsonb';
+        $params += [
+            ':lat'      => $geo['lat'],
+            ':lng'      => $geo['lng'],
+            ':country'  => $geo['country'],
+            ':region'   => $geo['region'],
+            ':city'     => $geo['city'],
+            ':postcode' => $geo['postcode'],
+            ':raw'      => json_encode($geo['raw'], JSON_UNESCAPED_SLASHES),
+        ];
+        $geocoded = true;
+    } else {
+        // Couldn't place it — clear any stale pin/structured data. The editor shows
+        // the drag-a-pin fallback, which saves via {pin} (reverse-geocoded there).
+        $set[] = 'lat               = NULL';
+        $set[] = 'lng               = NULL';
+        $set[] = 'location_country  = NULL';
+        $set[] = 'location_region   = NULL';
+        $set[] = 'location_city     = NULL';
+        $set[] = 'location_postcode = NULL';
+        $set[] = 'place_id          = NULL';
+        $set[] = 'place_result      = NULL';
+        $geocoded = false;
+    }
+}
 
 if (is_array($nominatim)) {
+    if (!empty($set)) profile_app_json(400, ['error' => 'conflicting_fields']);
     $parsed = parse_nominatim($nominatim);
     if ($parsed === null) profile_app_json(400, ['error' => 'invalid_nominatim_row']);
     $set[] = 'location_text     = :text';
@@ -145,8 +204,8 @@ if (array_key_exists('public_precision', $in)) {
 }
 
 if (array_key_exists('pin', $in)) {
-    if ($nominatim !== null || (is_string($textOnly) && trim($textOnly) !== '')) {
-        profile_app_json(400, ['error' => 'conflicting_fields']);   // pin + place/text all set lat/lng
+    if ($hasAddress || $nominatim !== null || (is_string($textOnly) && trim($textOnly) !== '')) {
+        profile_app_json(400, ['error' => 'conflicting_fields']);   // pin + address/place/text all set lat/lng
     }
     $pin = $in['pin'];
     if (!is_array($pin) || !isset($pin['lat'], $pin['lng']) || !is_numeric($pin['lat']) || !is_numeric($pin['lng'])) {
@@ -161,6 +220,26 @@ if (array_key_exists('pin', $in)) {
     $set[] = 'lng = :plng';
     $params[':plat'] = $plat;
     $params[':plng'] = $plng;
+
+    // Reverse-geocode the hand-dropped pin (best-effort) so the coarsening ladder
+    // (City/State viewers) gets a real city/region label instead of falling through
+    // to the verbatim street text. If it fails, locationDisplay's pin-present guard
+    // still prevents any verbatim-text leak at coarse precision.
+    $rev = looth_geocode_reverse($plat, $plng);
+    if ($rev !== null) {
+        $set[] = 'location_country  = :rcountry';
+        $set[] = 'location_region   = :rregion';
+        $set[] = 'location_city     = :rcity';
+        $set[] = 'location_postcode = :rpostcode';
+        $set[] = 'place_result      = :rraw::jsonb';
+        $params += [
+            ':rcountry'  => $rev['country'],
+            ':rregion'   => $rev['region'],
+            ':rcity'     => $rev['city'],
+            ':rpostcode' => $rev['postcode'],
+            ':rraw'      => json_encode($rev['raw'], JSON_UNESCAPED_SLASHES),
+        ];
+    }
 }
 
 // Owner-set extras (address detail / hours / note) — stored in profile_sections
@@ -185,8 +264,19 @@ if (!empty($set)) {
 }
 
 // Return the re-assembled block so the editor (and the round-trip test) can read
-// back both tiers in one call.
-profile_app_json(200, ['ok' => true, 'location' => Block::loadLocation((int)$user['id'])]);
+// back both tiers in one call. For an {address} call, also tell the editor whether
+// we placed the pin; on a miss, hand it a sensible center for the drag-a-pin map.
+$resp = ['ok' => true, 'location' => Block::loadLocation((int)$user['id'])];
+if ($geocoded !== null) {
+    $resp['geocoded'] = $geocoded;
+    if (!$geocoded) {
+        $p = GeoIP::lookup(GeoIP::callerIp());
+        $resp['center'] = $p !== null
+            ? ['lat' => (float)$p[0], 'lng' => (float)$p[1], 'zoom' => 11]
+            : ['lat' => 39.8283, 'lng' => -98.5795, 'zoom' => 4];   // continental-US fallback
+    }
+}
+profile_app_json(200, $resp);
 
 
 /**
@@ -212,5 +302,78 @@ function parse_nominatim(array $row): ?array
         'region'   => $a['state']    ?? $a['region'] ?? null,
         'city'     => $city,
         'postcode' => $a['postcode'] ?? null,
+    ];
+}
+
+/**
+ * Polite server-side Nominatim GET — mirrors me-location-search.php's proxy
+ * semantics (User-Agent required by the usage policy, short timeout, ignore_errors).
+ * Returns the decoded JSON (array) or null on any failure (unreachable / non-200 /
+ * bad JSON), so callers fail soft to the drag-a-pin path.
+ */
+function looth_nominatim_get(string $endpoint, array $query): ?array
+{
+    $host = getenv('LOOTH_NOMINATIM_HOST') ?: 'https://nominatim.openstreetmap.org';
+    $ua   = 'looth-profile-app/0.3 (admin: ian.davlin@gmail.com)';
+    $url  = $host . $endpoint . '?' . http_build_query($query);
+    $ctx  = stream_context_create(['http' => [
+        'method'        => 'GET',
+        'header'        => "User-Agent: $ua\r\nAccept: application/json\r\n",
+        'timeout'       => 4,
+        'ignore_errors' => true,
+    ]]);
+    $body = @file_get_contents($url, false, $ctx);
+    if ($body === false) return null;
+    $status = 0;
+    if (!empty($http_response_header)) {
+        foreach ($http_response_header as $h) {
+            if (preg_match('#^HTTP/\S+\s+(\d+)#', $h, $m)) { $status = (int)$m[1]; break; }
+        }
+    }
+    if ($status !== 200) return null;
+    $j = json_decode($body, true);
+    return is_array($j) ? $j : null;
+}
+
+/**
+ * Forward-geocode a verbatim address string → parse_nominatim shape, or null when
+ * Nominatim returns nothing usable (→ the editor's drag-a-pin fallback). IP-biased
+ * viewbox like the autocomplete proxy. The raw top row rides along under 'raw'.
+ */
+function looth_geocode_forward(string $q): ?array
+{
+    $query = ['q' => $q, 'format' => 'json', 'addressdetails' => 1, 'limit' => 1];
+    $pin = GeoIP::lookup(GeoIP::callerIp());
+    if ($pin !== null) {
+        $query['viewbox'] = GeoIP::viewboxAround((float)$pin[0], (float)$pin[1], 500);
+        $query['bounded'] = 0;
+    }
+    $rows = looth_nominatim_get('/search', $query);
+    if (!is_array($rows) || !isset($rows[0]) || !is_array($rows[0])) return null;
+    $parsed = parse_nominatim($rows[0]);
+    if ($parsed === null || $parsed['lat'] === null || $parsed['lng'] === null) return null;
+    $parsed['raw'] = $rows[0];
+    return $parsed;
+}
+
+/**
+ * Reverse-geocode a hand-dropped pin → structured city/region/country/postcode
+ * (best-effort, null on failure). Feeds the coarsening ladder so City/State viewers
+ * get a real coarse label rather than the owner's verbatim street text.
+ */
+function looth_geocode_reverse(float $lat, float $lng): ?array
+{
+    $row = looth_nominatim_get('/reverse', [
+        'lat' => $lat, 'lon' => $lng, 'format' => 'json', 'addressdetails' => 1, 'zoom' => 14,
+    ]);
+    if (!is_array($row) || !isset($row['address']) || !is_array($row['address'])) return null;
+    $a = $row['address'];
+    $city = $a['city'] ?? $a['town'] ?? $a['village'] ?? $a['hamlet'] ?? $a['suburb'] ?? null;
+    return [
+        'country'  => $a['country'] ?? null,
+        'region'   => $a['state']   ?? $a['region'] ?? null,
+        'city'     => $city,
+        'postcode' => $a['postcode'] ?? null,
+        'raw'      => $row,
     ];
 }

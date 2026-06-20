@@ -705,7 +705,10 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
         }
         echo '<div class="lg-loc__edit" id="lg-loc-edit">'
            . '<button type="button" class="lg-link__add lg-loc__change">'
-           . ($has ? 'Change location' : 'Set your location') . '</button></div>';
+           . ($has ? 'Change location' : 'Set your location') . '</button>'
+           . '<p class="lg-loc__hint">Type your address and it’s listed exactly as you enter it. '
+           . 'We’ll drop the map pin automatically — if we can’t find it, you can drag the pin to your spot.</p>'
+           . '</div>';
         if ($has) {
             echo '<div class="lg-loc__aud">'
                . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">Members see</span> '
