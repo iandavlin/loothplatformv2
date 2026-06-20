@@ -4205,13 +4205,28 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
    mirrors the existing mobile banner-hide. (Buck pre-launch 2026-06-11) */
 @media (min-width:641px){
   .feed-page .forum-header--hub{display:none}
+
+  /* Compose affordance: the New-post pill becomes a big green "+" circle, dead-
+     centre on the sort bar (Ian 2026-06-20). We KEEP the element + its
+     data-ntm-open / .lg-newpost hooks (the mobile overlay clones + opens on
+     them) and only restyle for desktop: the "+ New post" text is zeroed and a +
+     glyph drawn via ::before, so the server label (still used by the mobile
+     pill) is never touched. The bar is the positioning context. */
+  .feed-page .feed-sort-bar{position:relative;min-height:48px}
   .feed-page .feed-sort-bar > .lg-newpost{
-    display:inline-flex;align-items:center;gap:5px;position:static;width:auto;height:auto;
-    background:var(--lguser-accent-d,#52613d);color:#fff;border:0;border-radius:999px;
-    padding:8px 15px;font:700 13px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);
-    white-space:nowrap;margin:0;box-shadow:none;transform:none;cursor:pointer;
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    display:inline-flex;align-items:center;justify-content:center;gap:0;
+    width:46px;height:46px;min-width:0;padding:0;border-radius:50%;
+    background:#3a9d4e;color:#fff;border:0;box-shadow:0 2px 9px rgba(26,29,26,.24);
+    font-size:0;line-height:0;white-space:nowrap;margin:0;cursor:pointer;z-index:3;
+    transition:background .12s,transform .1s,box-shadow .15s;
   }
-  .feed-page .feed-sort-bar > .lg-newpost:hover{background:var(--lguser-accent,#6b7c52)}
+  .feed-page .feed-sort-bar > .lg-newpost::before{
+    content:"+";display:block;
+    font:300 30px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);
+  }
+  .feed-page .feed-sort-bar > .lg-newpost:hover{background:#33893f;box-shadow:0 4px 14px rgba(26,29,26,.28)}
+  .feed-page .feed-sort-bar > .lg-newpost:active{transform:translate(-50%,-50%) scale(.93)}
 }
 
 /* ── Modal image lightbox (forums.js §10, Ian 2026-06-11) ── */
@@ -4266,3 +4281,41 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 .ntm-status.lg-msg-error, .frm-status.lg-msg-error, .lg-msg-error,
 .reply-form__status.lg-msg-error, .post-edit__status.lg-msg-error {
   color: #b3261e; font-weight: 600; }
+
+
+/* ── Desktop "Shows" filter chip (video-type dropdown) — Ian 2026-06-20 ───────
+   Native <details> pill that sits next to Filters in the sort bar. DESKTOP ONLY:
+   the @media(min-width:641px) gate + the <=640 hide below keep the mobile overlay
+   bar (its own Filters chip + new-post pill) completely untouched. */
+@media (min-width:641px){
+  .feed-page .feed-sort-bar .lg-shows{position:relative;display:inline-block;margin-right:2px}
+  .feed-page .feed-sort-bar .lg-shows__chip{
+    list-style:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+    background:var(--lguser-accent,#6b7c52);color:#fff;border:0;border-radius:999px;padding:6px 13px;
+    font:600 13px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);white-space:nowrap;
+  }
+  .feed-page .feed-sort-bar .lg-shows__chip::-webkit-details-marker{display:none}
+  .feed-page .feed-sort-bar .lg-shows__chip::marker{content:"";font-size:0}
+  .feed-page .feed-sort-bar .lg-shows__icon{font-size:9px;line-height:1}
+  .feed-page .feed-sort-bar .lg-shows__chip.is-active,
+  .feed-page .feed-sort-bar .lg-shows[open] .lg-shows__chip{background:var(--lguser-accent-d,#52613d)}
+  .feed-page .feed-sort-bar .lg-shows[open] .lg-shows__icon{transform:rotate(90deg)}
+  .feed-page .feed-sort-bar .lg-shows__menu{
+    position:absolute;top:calc(100% + 6px);left:0;z-index:60;min-width:248px;max-height:62vh;overflow:auto;
+    background:#fff;border:1px solid var(--lg-line,#e3ddd0);border-radius:12px;
+    box-shadow:0 12px 32px rgba(26,29,26,.18);padding:6px;
+  }
+  .feed-page .feed-sort-bar .lg-shows__item{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;
+    padding:8px 10px;border-radius:8px;text-decoration:none;color:var(--lg-ink,#323532);
+    font:600 13px/1.2 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);
+  }
+  .feed-page .feed-sort-bar .lg-shows__item:hover{background:var(--lg-sage-tint,#eef2e3);text-decoration:none}
+  .feed-page .feed-sort-bar .lg-shows__item.is-on{background:var(--lguser-pill,#dde6c7);color:var(--lguser-accent-d,#52613d)}
+  .feed-page .feed-sort-bar .lg-shows__n{flex:0 0 auto;color:var(--lg-mute,#6b6f6b);font-weight:500;font-size:12px}
+  .feed-page .feed-sort-bar .lg-shows__clear{color:var(--lg-clay,#c66845);font-weight:700;justify-content:flex-start}
+}
+/* Mobile: Shows is desktop-only — hide it so the overlay bar is unchanged. */
+@media (max-width:640px){
+  .feed-page .feed-sort-bar .lg-shows{display:none!important}
+}
