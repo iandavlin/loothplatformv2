@@ -42,6 +42,28 @@ final class WelcomeMailer
             return false;
         }
 
+        // Guard against re-welcoming ESTABLISHED members. The welcome is for
+        // people who just joined. If a role-state perturbation — a DB reload that
+        // wiped roles, an admin role edit (AdminRoleCapture), or a reconcile sweep
+        // recomputing tiers — makes a long-standing member momentarily look "newly
+        // upgraded", Arbiter::isUpgradeToPaid() returns true and we land here for an
+        // account that is months or years old. Real new members are welcomed within
+        // days of registering; anything older is a glitch, not an upgrade. Skip it,
+        // and stamp the sentinel so the next sweep does not re-evaluate (self-healing:
+        // a fresh box with no backfill still converges to no-resend after one sweep).
+        // Threshold is filterable; raise it for support recoveries if ever needed.
+        $maxAgeDays = (int) apply_filters( 'lgms_welcome_max_account_age_days', 14 );
+        $registeredTs = strtotime( (string) $user->user_registered );
+        if ( $maxAgeDays > 0 && $registeredTs !== false
+            && ( time() - $registeredTs ) > $maxAgeDays * DAY_IN_SECONDS ) {
+            error_log( sprintf(
+                'LGMS WelcomeMailer: skipped established account %d (registered %s) — not a new upgrade, no welcome sent',
+                $wpUserId, (string) $user->user_registered
+            ) );
+            update_user_meta( $wpUserId, '_lg_welcome_email_sent_at', 'skipped-established:' . gmdate( 'c' ) );
+            return false;
+        }
+
         $name = trim( (string) ( $user->display_name ?: $user->first_name ?: $user->user_login ) );
         $body = self::renderBody( $name, $tier, $user );
         if ( $body === null ) {
