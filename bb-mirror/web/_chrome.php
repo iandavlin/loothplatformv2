@@ -568,18 +568,25 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
          AND Types both visible — in a dialog the sort-bar "Filters" chip opens.
          Server-rendered, link-driven (zero-JS filtering still round-trips);
          forums.js only opens/closes the shell. All viewports. */ ?>
-<div class="hub-fmodal" id="hub-fmodal" hidden role="dialog" aria-modal="true" aria-label="Hub filters">
+<div class="hub-fmodal" id="hub-fmodal" hidden role="dialog" aria-modal="true" aria-label="Advanced Search">
   <div class="hub-fmodal__back" data-hub-fmodal-close></div>
   <div class="hub-fmodal__panel" tabindex="-1">
     <header class="hub-fmodal__head">
-      <h2 class="hub-fmodal__title">Filters</h2>
-      <p class="hub-fmodal__help">Tap a name to filter the feed.</p>
-      <button type="button" class="hub-fmodal__x" data-hub-fmodal-close aria-label="Close filters">&times;</button>
+      <h2 class="hub-fmodal__title">Advanced Search</h2>
+      <p class="hub-fmodal__help">Search the Hub or by author, or tap a filter to narrow the feed.</p>
+      <button type="button" class="hub-fmodal__x" data-hub-fmodal-close aria-label="Close">&times;</button>
     </header>
     <div class="hub-fmodal__body">
       <?php
         $__r = $GLOBALS['__bb_hub_rail'];
-        hub_render_rail($__r['facets'], $__r['filters'], $__r['muted'] ?? ['types' => [], 'cats' => []], $__r['sort'] ?? 'new', $__r['tree'] ?? []);
+        // Advanced Search (Ian 2026-06-20): the two search bars are EXPOSED at the
+        // top (always visible); filters live in the accordions below (Shows folded in).
+        if (function_exists('hub_render_toolbar_search')) {
+          echo '<div class="hub-fmodal__search">';
+          hub_render_toolbar_search($__r['filters'], $__r['sort'] ?? 'new');
+          echo '</div>';
+        }
+        hub_render_rail($__r['facets'], $__r['filters'], $__r['muted'] ?? ['types' => [], 'cats' => []], $__r['sort'] ?? 'new', $__r['tree'] ?? [], $__r['shows'] ?? []);
       ?>
     </div>
   </div>

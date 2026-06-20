@@ -27,6 +27,7 @@ function hub_url(array $filters, string $sort = 'new'): string
     if (!empty($filters['authors']))            $qs['author'] = implode(',', $filters['authors']);
     if (!empty($filters['q']))                  $qs['q']      = $filters['q'];
     if (!empty($filters['saved']))              $qs['saved']  = 1;
+    if (!empty($filters['show']))               $qs['show']   = $filters['show'];
     $base = LG_BB_MIRROR_PUBLIC_PATH . '/';
     return htmlspecialchars($qs ? $base . '?' . http_build_query($qs) : $base);
 }
@@ -158,47 +159,60 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
 }
 
 /** Render the control rail into the left-nav slot. */
-function hub_render_rail(array $facets, array $filters, array $muted, string $sort = 'new', array $tree = []): void
+function hub_render_rail(array $facets, array $filters, array $muted, string $sort = 'new', array $tree = [], array $shows = []): void
 {
     $types = $facets['types'] ?? [];
-
     $type_order = array_keys(HUB_TYPE_LABELS);
     foreach (array_keys($types) as $k) if (!in_array($k, $type_order, true)) $type_order[] = $k;
+    $type_n = 0; foreach ($type_order as $k) if (isset($types[$k])) $type_n++;
 
+    $active_show = (string)($filters['show'] ?? '');
     $any_active = !empty($filters['types']) || !empty($filters['cats']) || !empty($filters['leaves'])
-               || !empty($filters['authors']) || !empty($filters['q'])
+               || !empty($filters['authors']) || !empty($filters['q']) || $active_show !== ''
                || !empty($muted['types']) || !empty($muted['cats']) || !empty($muted['leaves']);
 
-    // BOTH sections visible at once, side by side — the segmented Type/Categories
-    // radio toggle is retired (Ian 2026-06-11: "both open, no toggle"); the rail
-    // now renders inside the centered filters modal (_chrome.php) and the modal
-    // body lays the two columns out via .hub-rail__cols.
-    // (Rail "Saved posts" entry removed 2026-06-11, Ian — the Saved pill in the
-    // sort bar is now the one Saved affordance. hub_saved_url() stays for the pill.)
+    // adv-A (Ian 2026-06-20): filter sections render as stacked ACCORDIONS (rows)
+    // inside the Advanced Search modal - Shows folded in alongside Type + Categories.
+    // Independent <details> (no shared name) so several can be open at once.
     ?>
-    <div class="hub-rail">
+    <div class="hub-rail hub-rail--acc">
       <?php if ($any_active): ?>
         <a class="hub-rail__reset" href="<?= hub_reset_url($sort) ?>">&times; Reset all filters</a>
       <?php endif; ?>
 
-      <div class="hub-rail__cols">
-        <section class="hub-rail__col hub-rail__col--cat" aria-label="Filter by category">
-          <h3 class="hub-rail__colh">Categories</h3>
-          <div class="hub-rail__group" id="hub-cat-accordion">
-            <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
+      <?php if ($shows): ?>
+      <details class="hub-rail__sec" open>
+        <summary class="hub-rail__sech"><span class="hub-rail__chev" aria-hidden="true">&#9656;</span> Shows <span class="hub-rail__secn"><?= count($shows) ?> series</span></summary>
+        <div class="hub-rail__secbody">
+          <?php foreach ($shows as $sh):
+            $son = ($sh['slug'] === $active_show);
+            $sf  = $filters; $sf['show'] = $son ? '' : $sh['slug'];
+          ?>
+          <div class="hub-rail__row<?= $son ? ' is-on' : '' ?>">
+            <a class="hub-rail__nm" href="<?= hub_url($sf, $sort) ?>"><?= htmlspecialchars($sh['label']) ?></a>
+            <span class="hub-rail__ct"><?= (int)$sh['count'] ?></span>
           </div>
-        </section>
+          <?php endforeach; ?>
+        </div>
+      </details>
+      <?php endif; ?>
 
-        <section class="hub-rail__col hub-rail__col--type" aria-label="Filter by type">
-          <h3 class="hub-rail__colh">Types</h3>
-          <div class="hub-rail__group">
-            <?php foreach ($type_order as $key):
-              if (!isset($types[$key])) continue;
-              hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
-            endforeach; ?>
-          </div>
-        </section>
-      </div>
+      <details class="hub-rail__sec">
+        <summary class="hub-rail__sech"><span class="hub-rail__chev" aria-hidden="true">&#9656;</span> Type <span class="hub-rail__secn"><?= $type_n ?> kinds</span></summary>
+        <div class="hub-rail__secbody">
+          <?php foreach ($type_order as $key):
+            if (!isset($types[$key])) continue;
+            hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
+          endforeach; ?>
+        </div>
+      </details>
+
+      <details class="hub-rail__sec">
+        <summary class="hub-rail__sech"><span class="hub-rail__chev" aria-hidden="true">&#9656;</span> Categories</summary>
+        <div class="hub-rail__secbody" id="hub-cat-accordion">
+          <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
+        </div>
+      </details>
     </div>
     <?php
 }
