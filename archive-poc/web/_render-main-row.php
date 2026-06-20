@@ -357,7 +357,8 @@ if (!function_exists('fp_img')) {
 <?php foreach ($row['items'] as $it):
         $author = $it['author_name'] ?: 'Member';
         $author_id = (int)($it['author_id'] ?? 0);
-        $avatar = 'https://picsum.photos/seed/lg-user-' . ($author_id ?: $it['id']) . '/64/64';
+        $avatar = (string)($it['avatar_url'] ?? '');
+        $av_initial = function_exists('mb_substr') ? mb_strtoupper(mb_substr($author, 0, 1)) : strtoupper(substr($author, 0, 1));
         $replies = (int)($it['reply_count'] ?? 0);
         $last = (int)($it['last_activity'] ?? 0);
         $is_stale = $last > 0 && (time() - $last) > 86400 * 30;
@@ -373,7 +374,7 @@ if (!function_exists('fp_img')) {
 ?>
         <a class="dcard" href="<?= h($it['url'] ?: '#') ?>"<?php if ($d_modal): ?> data-topic-id="<?= (int)($it['id'] ?? 0) ?>" data-forum="<?= h($d_forum) ?>" data-topic="<?= h($d_topic) ?>"<?php endif; ?>>
           <div class="dcard__head">
-            <img class="dcard__avatar" src="<?= h($avatar) ?>" alt="" width="32" height="32" loading="lazy" onerror="this.onerror=null;this.style.background='#87986a'">
+            <?php if ($avatar !== ''): ?><img class="dcard__avatar" src="<?= h($avatar) ?>" alt="" width="32" height="32" loading="lazy" onerror="this.onerror=null;this.removeAttribute('src');this.classList.add('dcard__avatar--ph')"><?php else: ?><span class="dcard__avatar dcard__avatar--ph" aria-hidden="true"><?= h($av_initial) ?></span><?php endif; ?>
             <span class="dcard__author"><?= h($author) ?></span>
           </div>
           <h3 class="dcard__title"><?= h($it['title']) ?></h3>

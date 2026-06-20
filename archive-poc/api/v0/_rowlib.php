@@ -295,6 +295,25 @@ function archive_poc_run_discussions(PDO $db, array $row, bool $is_member = fals
         unset($it);
     }
 
+    // Avatars: profile-app is the single source (forums.person.avatar_url is the
+    // decommissioned BuddyBoss path). Batch-resolve author wp_ids -> live webp
+    // avatar via the same loopback users endpoint the comments read path uses.
+    // Masked authors (author_id zeroed above) resolve to '' -> neutral fallback.
+    $av_ids = [];
+    foreach ($items as $it) { $aid = (int)($it['author_id'] ?? 0); if ($aid > 0) $av_ids[$aid] = true; }
+    $av_map = [];
+    if ($av_ids) {
+        require_once __DIR__ . '/_comments.php';
+        if (function_exists('lg_comments_profile_lookup')) {
+            foreach (lg_comments_profile_lookup('wp_ids', array_keys($av_ids)) as $card) {
+                $wid = (int)($card['wp_user_id'] ?? 0);
+                if ($wid > 0 && !empty($card['avatar_url'])) $av_map[$wid] = (string)$card['avatar_url'];
+            }
+        }
+    }
+    foreach ($items as &$it) { $it['avatar_url'] = $av_map[(int)($it['author_id'] ?? 0)] ?? ''; }
+    unset($it);
+
     return ['title' => $title, 'items' => $items, 'tag' => null, 'layout' => $layout, 'limit' => $limit];
 }
 

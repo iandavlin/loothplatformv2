@@ -1122,6 +1122,7 @@ body.view-grid .lg-chrome__back { display: inline-flex; }
 .dcard:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); border-color: var(--lg-sage); }
 .dcard__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .dcard__avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #d4ccb8; }
+.dcard__avatar--ph { display: inline-flex; align-items: center; justify-content: center; color: #5a5340; font-weight: 700; font-size: 14px; line-height: 1; text-transform: uppercase; }
 .dcard__author { font: 600 12px/1 var(--lg-font-sans); color: var(--lg-mute); }
 .dcard__title {
   /* DM Serif Display ships weight 400 only — faux-bold (700) smears at 16px.
