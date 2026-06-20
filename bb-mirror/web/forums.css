@@ -4227,7 +4227,7 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
      KEEPS the element + its data-ntm-open/.lg-newpost hooks + "+ New post" label
      (the mobile overlay clones + opens on them) -> desktop-only restyle. */
   .feed-page .feed-sort-bar > .lg-newpost{
-    position:absolute;left:50%;top:11px;transform:translateX(-50%);
+    position:absolute;left:50%;top:11px;right:auto;bottom:auto;transform:translateX(-50%);  /* override .forum-header__new-post right/bottom -> compact, not stretched */
     display:inline-flex;align-items:center;gap:8px;width:auto;height:auto;min-width:0;
     padding:11px 24px;border-radius:999px;white-space:nowrap;cursor:pointer;margin:0;z-index:3;
     background:var(--lg-sage,#87986a);color:#fff;border:0;letter-spacing:.01em;
