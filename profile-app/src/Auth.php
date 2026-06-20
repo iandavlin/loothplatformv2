@@ -23,9 +23,6 @@ final class Auth
         if (self::$cacheBuilt) return self::$lastClaims;
         self::$cacheBuilt = true;
 
-        $jwt = self::readToken();
-        if ($jwt === null) return null;
-
         if (self::$publicKey === null) {
             self::$publicKey = @file_get_contents(self::PUBLIC_KEY);
             if (!self::$publicKey) {
@@ -34,14 +31,55 @@ final class Auth
             }
         }
 
-        try {
-            $decoded = JWT::decode($jwt, new Key(self::$publicKey, 'RS256'));
-            self::$lastClaims = (array) $decoded;
-            return self::$lastClaims;
-        } catch (\Throwable $e) {
-            // Expired / signature mismatch / malformed — treat as anonymous.
-            return null;
+        // Issuer pinning (2026-06-20): reject tokens not minted for THIS host. A
+        // live looth_id (iss=https://loothgroup.com, cookie .loothgroup.com) leaks
+        // DOWN into a subdomain box (dev2.loothgroup.com), verifies (shared key),
+        // and can't be cleared by that box's logout -> stale "logged in" after
+        // logout. Scan every looth_id cookie so a parallel live login can't mask
+        // the real session. Absent env host -> check skipped (identical to before).
+        $expIss  = self::lgExpectedIss();
+        $primary = self::readToken();
+        $claims  = self::decodeWithIss($primary, $expIss);
+        if ($claims !== null) { self::$lastClaims = $claims; return $claims; }
+        if ($expIss !== null) {
+            foreach (self::lgCookieValues(self::COOKIE) as $t) {
+                if ($t === $primary) continue;
+                $c = self::decodeWithIss($t, $expIss);
+                if ($c !== null) { self::$lastClaims = $c; return $c; }
+            }
         }
+        return null;
+    }
+
+    /** Expected issuer for THIS box ('https://<host>'), or null if undeterminable. */
+    private static function lgExpectedIss(): ?string
+    {
+        if (!function_exists('lg_env') && is_file('/srv/lg-shared/lg-env.php')) require_once '/srv/lg-shared/lg-env.php';
+        if (function_exists('lg_env')) { $h = (string)(lg_env()['host'] ?? ''); if ($h !== '') return 'https://' . $h; }
+        return null;
+    }
+
+    /** Decode + verify sig/exp; enforce iss when known. Null on any failure. */
+    private static function decodeWithIss(?string $jwt, ?string $expIss): ?array
+    {
+        if ($jwt === null || $jwt === '') return null;
+        try { $claims = (array) JWT::decode($jwt, new Key(self::$publicKey, 'RS256')); }
+        catch (\Throwable $e) { return null; }
+        if ($expIss !== null && (string)($claims['iss'] ?? '') !== $expIss) return null;
+        return $claims;
+    }
+
+    /** All values for a cookie name from the raw Cookie header (handles dupes). */
+    private static function lgCookieValues(string $name): array
+    {
+        $raw = $_SERVER['HTTP_COOKIE'] ?? ''; if ($raw === '') return [];
+        $out = [];
+        foreach (explode(';', $raw) as $pair) {
+            $pair = trim($pair); $eq = strpos($pair, '=');
+            if ($eq === false || substr($pair, 0, $eq) !== $name) continue;
+            $out[] = rawurldecode(substr($pair, $eq + 1));
+        }
+        return $out;
     }
 
     /** Returns the profile-app user row for the bearer, or null if anonymous. */
