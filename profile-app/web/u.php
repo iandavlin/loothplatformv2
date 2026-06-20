@@ -480,6 +480,22 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-gphoto__rm:hover{background:var(--lg-rust)}
 .lg-gphoto__add{aspect-ratio:1;border:2px dashed var(--lg-sage-3);background:none;border-radius:10px;cursor:pointer;color:var(--lg-sage-3);font:300 34px/1 var(--lg-font-sans);display:flex;align-items:center;justify-content:center;text-align:center;padding:6px;transition:background .15s,border-color .15s,color .15s}
 .lg-gphoto__add:hover{background:var(--lg-sage-tint);border-color:var(--lg-sage);color:var(--lg-sage-d)}
+/* gallery — lightbox (all viewers): click a photo to view it full-size */
+.lg-gphoto img{cursor:zoom-in}
+.lg-lightbox{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;transition:opacity .15s ease}
+.lg-lightbox.is-open{opacity:1}
+.lg-lightbox__fig{margin:0;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;align-items:center;gap:10px}
+.lg-lightbox__img{max-width:96vw;max-height:84vh;width:auto;height:auto;object-fit:contain;border-radius:6px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.lg-lightbox__cap{font:500 calc(13.5px*var(--lg-read-scale,1))/1.4 var(--lg-font-sans);color:#fff;text-align:center;max-width:80ch;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.lg-lightbox__cap:empty{display:none}
+.lg-lightbox__close,.lg-lightbox__nav{position:absolute;border:0;background:rgba(0,0,0,.45);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.lg-lightbox__close:hover,.lg-lightbox__nav:hover{background:rgba(0,0,0,.75)}
+.lg-lightbox__close{top:18px;right:20px;width:42px;height:42px;font:300 26px/1 var(--lg-font-sans)}
+.lg-lightbox__nav{top:50%;transform:translateY(-50%);width:48px;height:48px;font:300 34px/1 var(--lg-font-sans)}
+.lg-lightbox__prev{left:18px}
+.lg-lightbox__next{right:18px}
+.lg-lightbox__nav[hidden]{display:none}
+@media (max-width:560px){.lg-lightbox__nav{width:40px;height:40px;font-size:28px}.lg-lightbox__prev{left:6px}.lg-lightbox__next{right:6px}}
 /* gallery — owner: display-mode toggle */
 .lg-gmode{display:inline-flex;gap:0;margin:0 0 12px;border:1px solid var(--lg-line);border-radius:999px;padding:2px;background:var(--lg-card-bg,#fff)}
 .lg-gmode__btn{border:0;background:transparent;font:600 calc(12px*var(--lg-read-scale,1))/1 var(--lg-font-sans);color:var(--lg-mute);padding:6px 14px;border-radius:999px;cursor:pointer}
@@ -1850,6 +1866,91 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
     document.addEventListener('click', onDoc);
   }
   if (addBtn) addBtn.addEventListener('click', function (e) { e.stopPropagation(); document.getElementById('lg-light-menu') ? closeMenu() : openMenu(); });
+})();
+</script>
+
+<script>
+/* Gallery lightbox (all viewers) — click any photo to view it full-size, with
+   prev/next across the gallery, caption, and ESC / backdrop / × to close. The
+   owner's remove (×) and add (＋) controls never trigger it. Loads the raw
+   data-url (capped at w=1600 via the media resizer), not the grid thumbnail. */
+(function () {
+  var photos = [];
+  function collect() { photos = Array.prototype.slice.call(document.querySelectorAll('.lg-gphoto[data-url]')); }
+  collect();
+  if (!photos.length) return;
+
+  function big(url) { return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'w=1600'; }
+
+  var box = null, imgEl = null, capEl = null, prevBtn = null, nextBtn = null, idx = 0;
+
+  function build() {
+    box = document.createElement('div');
+    box.className = 'lg-lightbox';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.innerHTML =
+      '<button type="button" class="lg-lightbox__close" aria-label="Close">×</button>' +
+      '<button type="button" class="lg-lightbox__nav lg-lightbox__prev" aria-label="Previous photo">‹</button>' +
+      '<figure class="lg-lightbox__fig"><img class="lg-lightbox__img" alt=""><figcaption class="lg-lightbox__cap"></figcaption></figure>' +
+      '<button type="button" class="lg-lightbox__nav lg-lightbox__next" aria-label="Next photo">›</button>';
+    document.body.appendChild(box);
+    imgEl   = box.querySelector('.lg-lightbox__img');
+    capEl   = box.querySelector('.lg-lightbox__cap');
+    prevBtn = box.querySelector('.lg-lightbox__prev');
+    nextBtn = box.querySelector('.lg-lightbox__next');
+    box.addEventListener('click', function (e) { if (e.target === box || e.target.closest('.lg-lightbox__close')) close(); });
+    prevBtn.addEventListener('click', function (e) { e.stopPropagation(); step(-1); });
+    nextBtn.addEventListener('click', function (e) { e.stopPropagation(); step(1); });
+  }
+
+  function show(i) {
+    collect();                                   // re-read (owner may have added/removed)
+    if (!photos.length) { close(); return; }
+    idx = (i + photos.length) % photos.length;
+    var el  = photos[idx];
+    var url = el.getAttribute('data-url') || '';
+    var cap = el.querySelector('figcaption');
+    var capText = cap ? cap.textContent : '';
+    imgEl.src = big(url);
+    imgEl.alt = capText;
+    capEl.textContent = capText;
+    var multi = photos.length > 1;
+    prevBtn.hidden = !multi; nextBtn.hidden = !multi;
+  }
+  function step(d) { show(idx + d); }
+
+  function open(i) {
+    if (!box) build();
+    show(i);
+    requestAnimationFrame(function () { if (box) box.classList.add('is-open'); });
+    document.addEventListener('keydown', onKey);
+  }
+  function close() {
+    if (!box) return;
+    box.classList.remove('is-open');
+    document.removeEventListener('keydown', onKey);
+    var dying = box; box = null;
+    setTimeout(function () { dying.remove(); }, 160);
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowLeft') step(-1);
+    else if (e.key === 'ArrowRight') step(1);
+  }
+
+  // Delegate per gallery container so owner add/remove clicks are excluded and
+  // carousel mode works too (figures live inside .lg-gallery in both modes).
+  Array.prototype.forEach.call(document.querySelectorAll('.lg-gallery'), function (gal) {
+    gal.addEventListener('click', function (e) {
+      if (e.target.closest('.lg-gphoto__rm') || e.target.closest('.lg-gphoto__add')) return;
+      var fig = e.target.closest('.lg-gphoto[data-url]');
+      if (!fig) return;
+      collect();
+      var i = photos.indexOf(fig);
+      if (i >= 0) { e.preventDefault(); open(i); }
+    });
+  });
 })();
 </script>
 
