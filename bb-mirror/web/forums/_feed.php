@@ -1323,6 +1323,7 @@ $header_cat = $scoped_forum
     <?php endif; ?>
     <?php // View toggles live under the header (in the sort bar) for all views. ?>
     <?php hub_render_view_toggles(); ?>
+    <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_shows_chip($db, $hub_filters, $sort_param); /* desktop "Shows" video-type filter; CSS hides <=640 */ ?>
     <button type="button" class="lg-filters-chip" aria-label="Open filters">
       <span class="corner-hamburger__icon" aria-hidden="true">&#9776;</span>
       <span class="lg-filters-chip__tx">Filters</span>

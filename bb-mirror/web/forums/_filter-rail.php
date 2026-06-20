@@ -51,6 +51,7 @@ function hub_query_params(): array
     if (!empty($f['authors'])) $out['author'] = implode(',', $f['authors']);
     if (!empty($f['q']))       $out['q']      = $f['q'];
     if (!empty($f['saved']))   $out['saved']  = '1';   // string: feed_sort_url() urlencode()s every value (strict_types → int fatals)
+    if (!empty($f['show']))    $out['show']   = $f['show'];   // single video-type term (Shows filter)
     return $out;
 }
 
@@ -199,6 +200,42 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
         </section>
       </div>
     </div>
+    <?php
+}
+
+/**
+ * Desktop "Shows" chip - a native <details> dropdown of the video-type shows
+ * (hub front door only; forums.css hides it <=640 so mobile is untouched).
+ * Picking a show navigates to ?show=<slug> (sort preserved, other filters
+ * cleared - Shows is a top-level browse mode). Active = the chip names the show
+ * + an x to clear. Zero JS (native <details>); the menu is server-rendered.
+ */
+function hub_render_shows_chip(PDO $db, array $filters, string $sort = 'new'): void
+{
+    $shows = hub_show_terms($db);
+    if (!$shows) return;                          // nothing materialized -> no chip
+    $active = (string)($filters['show'] ?? '');
+    $base   = LG_BB_MIRROR_PUBLIC_PATH . '/?sort=' . urlencode($sort);
+    $label  = ($active !== '' && isset(HUB_SHOW_TERMS[$active])) ? HUB_SHOW_TERMS[$active] : 'Shows';
+    ?>
+    <details class="lg-shows" data-lg-shows>
+      <summary class="lg-shows__chip<?= $active !== '' ? ' is-active' : '' ?>" aria-label="Filter by show">
+        <span class="lg-shows__icon" aria-hidden="true">&#9654;</span>
+        <span class="lg-shows__tx"><?= htmlspecialchars($label) ?></span>
+      </summary>
+      <div class="lg-shows__menu" role="menu">
+        <?php if ($active !== ''): ?>
+          <a class="lg-shows__item lg-shows__clear" role="menuitem" href="<?= htmlspecialchars($base) ?>">&times; Clear show</a>
+        <?php endif; ?>
+        <?php foreach ($shows as $sh): $on = ($sh['slug'] === $active); ?>
+          <a class="lg-shows__item<?= $on ? ' is-on' : '' ?>" role="menuitem"
+             href="<?= htmlspecialchars($base . '&show=' . urlencode($sh['slug'])) ?>">
+            <span class="lg-shows__name"><?= htmlspecialchars($sh['label']) ?></span>
+            <span class="lg-shows__n"><?= (int)$sh['count'] ?></span>
+          </a>
+        <?php endforeach; ?>
+      </div>
+    </details>
     <?php
 }
 
