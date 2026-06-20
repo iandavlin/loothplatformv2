@@ -1889,6 +1889,7 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
   if (addBtn) addBtn.addEventListener('click', function (e) { e.stopPropagation(); document.getElementById('lg-light-menu') ? closeMenu() : openMenu(); });
 })();
 </script>
+<?php endif; /* close owner-only region: the lightbox below must render for ALL viewers */ ?>
 
 <script>
 /* Gallery lightbox (all viewers) — click any photo to view it full-size, with
@@ -1973,6 +1974,7 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
   }, true);
 })();
 </script>
+<?php if ($isOwner): /* reopen owner-only region for the gallery editor below */ ?>
 
 <script>
 /* Gallery editor (owner/Me) — multi-upload (POST me-gallery) + remove (PUT list). */
