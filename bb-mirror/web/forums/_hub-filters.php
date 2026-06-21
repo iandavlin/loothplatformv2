@@ -49,6 +49,35 @@ const HUB_CAT_LABELS = [
     'general'     => 'General',
 ];
 
+// Video-type taxonomy terms surfaced by the desktop "Shows" filter. Authoritative
+// "what counts as a show" list (curated like HUB_TYPE_LABELS / HUB_CAT_LABELS, since
+// discovery.tag does not record the source taxonomy). slug => display label. Add a
+// row when a new show launches; the dropdown live-drops any show with zero video
+// items. 'all-videos' is the term's catch-all and intentionally omitted.
+const HUB_SHOW_TERMS = [
+    'doug-and-dan'                              => 'Doug and Dan',
+    'shop-tour'                                 => 'Shop Tour',
+    'interview'                                 => 'Interview',
+    'demo'                                      => 'Demo',
+    'tutorials'                                 => 'Tutorials',
+    'project-run-down'                          => 'Project Run Down',
+    'loothing-for-dollars'                      => 'Loothing for Dollars',
+    '3d-club'                                   => '3D Club',
+    'council-of-elders'                         => 'Council of Elders',
+    'practical-tube-amp-course'                 => 'Practical Tube Amp Course',
+    'ding-kings'                                => 'Ding Kings',
+    'vintage-schmintage'                        => 'Vintage Schmintage',
+    'how-did-you-do-that'                       => 'How Did You Do That?',
+    'marketing-club'                            => 'Marketing Club',
+    'acoustic-guitar-builders-club'             => 'Acoustic Guitar Builders Club',
+    'electric-guitar-builders-club'             => 'Electric Guitar Builders Club',
+    'design-and-testing-of-the-acoustic-guitar' => 'Design & Testing of the Acoustic Guitar',
+    'violin-repair-crash-course'                => 'Violin Repair Crash Course',
+    'proper-loothing'                           => 'Proper Loothing',
+    'hawfl'                                      => 'HAWFL',
+    'sponsor-event'                             => 'Sponsor Event',
+];
+
 function hub_type_label(string $key): string
 {
     return HUB_TYPE_LABELS[$key] ?? ucwords(str_replace(['_', '-'], ' ', $key));
@@ -220,7 +249,49 @@ function hub_filters_parse(): array
         'authors' => $csv('author'),                     // multi-select, by name (CSV)
         'q'       => trim((string)($_GET['q'] ?? '')),  // unified full-text query (AND dim)
         'saved'   => !empty($_GET['saved']),             // Saved-rail view (viewer's ☆ saves)
+        'show'    => hub_show_validate((string)($_GET['show'] ?? '')), // single video-type term (Shows filter)
     ];
+}
+
+/** Whitelist a ?show= slug to a known video-type term (else ''). */
+function hub_show_validate(string $slug): string
+{
+    $slug = trim($slug);
+    return ($slug !== '' && array_key_exists($slug, HUB_SHOW_TERMS)) ? $slug : '';
+}
+
+/**
+ * Shows facet (video-type taxonomy) for the desktop "Shows" dropdown.
+ * The video-type terms are already materialized into discovery.tag (archive
+ * indexer), so we count video items per known show slug in ONE PG pass - no WP
+ * call, anon-safe. Returns [['slug','label','count'], ...] sorted by count desc,
+ * dropping shows with no video items. HUB_SHOW_TERMS curates which tags are shows.
+ */
+function hub_show_terms(PDO $db): array
+{
+    $slugs = array_keys(HUB_SHOW_TERMS);
+    if (!$slugs) return [];
+    $ph = []; $binds = [];
+    foreach ($slugs as $i => $sg) { $ph[] = ":ss$i"; $binds[":ss$i"] = $sg; }
+    $sql = "SELECT t.slug, count(DISTINCT ci.id) AS n
+              FROM discovery.tag t
+              JOIN discovery.content_tag ct ON ct.tag_id = t.id
+              JOIN discovery.content_item ci ON ci.id = ct.content_id AND ci.kind = 'video'
+             WHERE t.slug IN (" . implode(',', $ph) . ")
+             GROUP BY t.slug";
+    $counts = [];
+    try {
+        $st = $db->prepare($sql);
+        $st->execute($binds);
+        foreach ($st->fetchAll() as $r) $counts[(string)$r['slug']] = (int)$r['n'];
+    } catch (\Throwable $e) { return []; }
+    $out = [];
+    foreach (HUB_SHOW_TERMS as $slug => $label) {
+        $n = $counts[$slug] ?? 0;
+        if ($n > 0) $out[] = ['slug' => $slug, 'label' => $label, 'count' => $n];
+    }
+    usort($out, fn($a, $b) => $b['count'] <=> $a['count']);
+    return $out;
 }
 
 /**
@@ -485,6 +556,18 @@ function hub_filter_where(array $filters, array $forum_cat_map, array $content_c
             $content_conds[] = 'FALSE'; // only Discussions chosen
         }
         $topic_conds[] = $want_disc ? 'TRUE' : 'FALSE';
+    }
+
+    // -- Shows: a single video-type taxonomy term (desktop "Shows" filter).
+    //    Video content only (a forum topic never carries a show), matched via the
+    //    already-materialized content_tag slug. The slug is whitelisted at parse
+    //    time (hub_show_validate), so it is always a known show. --
+    if (!empty($filters['show'])) {
+        $content_conds[] = "u.content_kind = 'video' AND u.topic_id IN ("
+            . "SELECT ct.content_id FROM discovery.content_tag ct "
+            . "JOIN discovery.tag t ON t.id = ct.tag_id WHERE t.slug = :show_slug)";
+        $binds[':show_slug'] = $filters['show'];
+        $topic_conds[] = 'FALSE';
     }
 
     // -- Category: topics by forum subtree, content by reconciled forum_label --

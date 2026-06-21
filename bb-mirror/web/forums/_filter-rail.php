@@ -27,6 +27,7 @@ function hub_url(array $filters, string $sort = 'new'): string
     if (!empty($filters['authors']))            $qs['author'] = implode(',', $filters['authors']);
     if (!empty($filters['q']))                  $qs['q']      = $filters['q'];
     if (!empty($filters['saved']))              $qs['saved']  = 1;
+    if (!empty($filters['show']))               $qs['show']   = $filters['show'];
     $base = LG_BB_MIRROR_PUBLIC_PATH . '/';
     return htmlspecialchars($qs ? $base . '?' . http_build_query($qs) : $base);
 }
@@ -51,6 +52,7 @@ function hub_query_params(): array
     if (!empty($f['authors'])) $out['author'] = implode(',', $f['authors']);
     if (!empty($f['q']))       $out['q']      = $f['q'];
     if (!empty($f['saved']))   $out['saved']  = '1';   // string: feed_sort_url() urlencode()s every value (strict_types → int fatals)
+    if (!empty($f['show']))    $out['show']   = $f['show'];   // single video-type term (Shows filter)
     return $out;
 }
 
@@ -157,48 +159,129 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
 }
 
 /** Render the control rail into the left-nav slot. */
-function hub_render_rail(array $facets, array $filters, array $muted, string $sort = 'new', array $tree = []): void
+function hub_render_rail(array $facets, array $filters, array $muted, string $sort = 'new', array $tree = [], array $shows = []): void
 {
     $types = $facets['types'] ?? [];
-
     $type_order = array_keys(HUB_TYPE_LABELS);
     foreach (array_keys($types) as $k) if (!in_array($k, $type_order, true)) $type_order[] = $k;
+    $type_n = 0; foreach ($type_order as $k) if (isset($types[$k])) $type_n++;
 
+    $active_show = (string)($filters['show'] ?? '');
     $any_active = !empty($filters['types']) || !empty($filters['cats']) || !empty($filters['leaves'])
-               || !empty($filters['authors']) || !empty($filters['q'])
+               || !empty($filters['authors']) || !empty($filters['q']) || $active_show !== ''
                || !empty($muted['types']) || !empty($muted['cats']) || !empty($muted['leaves']);
 
-    // BOTH sections visible at once, side by side — the segmented Type/Categories
-    // radio toggle is retired (Ian 2026-06-11: "both open, no toggle"); the rail
-    // now renders inside the centered filters modal (_chrome.php) and the modal
-    // body lays the two columns out via .hub-rail__cols.
-    // (Rail "Saved posts" entry removed 2026-06-11, Ian — the Saved pill in the
-    // sort bar is now the one Saved affordance. hub_saved_url() stays for the pill.)
+    // adv-A polish (Ian 2026-06-20): exclusive accordion (shared name=) opening
+    // COMPACT (no section open by default); each section colour-anchored
+    // (Type=sage / Categories=amber / Shows=rust) via icon + left-rule + count
+    // pill; expanded items render as a compact multi-col grid (see forums.css).
+    $ICO = [
+      'type'  => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
+      'cat'   => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6h6l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H3z"/></svg>',
+      'shows' => '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+    ];
     ?>
-    <div class="hub-rail">
+    <div class="hub-rail hub-rail--acc">
       <?php if ($any_active): ?>
         <a class="hub-rail__reset" href="<?= hub_reset_url($sort) ?>">&times; Reset all filters</a>
       <?php endif; ?>
 
-      <div class="hub-rail__cols">
-        <section class="hub-rail__col hub-rail__col--cat" aria-label="Filter by category">
-          <h3 class="hub-rail__colh">Categories</h3>
-          <div class="hub-rail__group" id="hub-cat-accordion">
-            <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
-          </div>
-        </section>
+      <details class="hub-rail__sec hub-rail__sec--type" name="hub-adv-sec">
+        <summary class="hub-rail__sech">
+          <span class="hub-rail__ico" aria-hidden="true"><?= $ICO['type'] ?></span>
+          <span class="hub-rail__sectx">Type</span>
+          <span class="hub-rail__secn"><?= $type_n ?> kinds</span>
+          <span class="hub-rail__chev" aria-hidden="true">&#9656;</span>
+        </summary>
+        <div class="hub-rail__secbody hub-rail__secbody--grid">
+          <?php foreach ($type_order as $key):
+            if (!isset($types[$key])) continue;
+            hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
+          endforeach; ?>
+        </div>
+      </details>
 
-        <section class="hub-rail__col hub-rail__col--type" aria-label="Filter by type">
-          <h3 class="hub-rail__colh">Types</h3>
-          <div class="hub-rail__group">
-            <?php foreach ($type_order as $key):
-              if (!isset($types[$key])) continue;
-              hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
-            endforeach; ?>
+      <details class="hub-rail__sec hub-rail__sec--cat" name="hub-adv-sec">
+        <summary class="hub-rail__sech">
+          <span class="hub-rail__ico" aria-hidden="true"><?= $ICO['cat'] ?></span>
+          <span class="hub-rail__sectx">Categories</span>
+          <span class="hub-rail__chev" aria-hidden="true">&#9656;</span>
+        </summary>
+        <div class="hub-rail__secbody" id="hub-cat-accordion">
+          <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
+        </div>
+      </details>
+
+      <?php if ($shows): ?>
+      <details class="hub-rail__sec hub-rail__sec--shows" name="hub-adv-sec">
+        <summary class="hub-rail__sech">
+          <span class="hub-rail__ico" aria-hidden="true"><?= $ICO['shows'] ?></span>
+          <span class="hub-rail__sectx">Shows</span>
+          <span class="hub-rail__secn"><?= count($shows) ?> series</span>
+          <span class="hub-rail__chev" aria-hidden="true">&#9656;</span>
+        </summary>
+        <div class="hub-rail__secbody hub-rail__secbody--grid">
+          <?php foreach ($shows as $sh):
+            $son = ($sh['slug'] === $active_show);
+            $sf  = $filters; $sf['show'] = $son ? '' : $sh['slug'];
+          ?>
+          <div class="hub-rail__row<?= $son ? ' is-on' : '' ?>">
+            <a class="hub-rail__nm" href="<?= hub_url($sf, $sort) ?>"><?= htmlspecialchars($sh['label']) ?></a>
+            <span class="hub-rail__ct"><?= (int)$sh['count'] ?></span>
           </div>
-        </section>
-      </div>
+          <?php endforeach; ?>
+        </div>
+      </details>
+      <?php endif; ?>
     </div>
+    <?php
+}
+
+/**
+ * Desktop "Shows" chip - a native <details> dropdown of the video-type shows
+ * (hub front door only; forums.css hides it <=640 so mobile is untouched).
+ * Picking a show navigates to ?show=<slug> (sort preserved, other filters
+ * cleared - Shows is a top-level browse mode). Active = the chip names the show
+ * + an x to clear. Zero JS (native <details>); the menu is server-rendered.
+ */
+function hub_render_shows_chip(PDO $db, array $filters, string $sort = 'new'): void
+{
+    $shows = hub_show_terms($db);
+    if (!$shows) return;                          // nothing materialized -> no trigger
+    $active = (string)($filters['show'] ?? '');
+    $base   = LG_BB_MIRROR_PUBLIC_PATH . '/?sort=' . urlencode($sort);
+    $label  = ($active !== '' && isset(HUB_SHOW_TERMS[$active])) ? HUB_SHOW_TERMS[$active] : 'Shows';
+    ?>
+    <button class="lg-shows-btn<?= $active !== '' ? ' is-active' : '' ?>" type="button"
+            data-lg-shows-open aria-haspopup="dialog" aria-label="Filter by show">
+      <span class="lg-shows-btn__ico" aria-hidden="true">&#9654;</span>
+      <span class="lg-shows-btn__tx"><?= htmlspecialchars($label) ?></span>
+    </button>
+    <dialog class="lg-shows-modal" id="lg-shows-modal" aria-label="Filter by show">
+      <div class="lg-shows-modal__h">
+        <h2>Shows</h2>
+        <form method="dialog"><button class="lg-shows-modal__x" type="submit" aria-label="Close">&times;</button></form>
+      </div>
+      <p class="lg-shows-modal__sub">Filter the feed to one show (video series).</p>
+      <div class="lg-shows-modal__grid">
+        <a class="lg-shows-modal__item is-all" href="<?= htmlspecialchars($base) ?>">&#8635; All videos<?= $active !== '' ? ' &middot; clear show' : '' ?></a>
+        <?php foreach ($shows as $sh): $on = ($sh['slug'] === $active); ?>
+          <a class="lg-shows-modal__item<?= $on ? ' is-on' : '' ?>"
+             href="<?= htmlspecialchars($base . '&show=' . urlencode($sh['slug'])) ?>">
+            <span class="lg-shows-modal__name"><?= htmlspecialchars($sh['label']) ?></span>
+            <span class="lg-shows-modal__n"><?= (int)$sh['count'] ?></span>
+          </a>
+        <?php endforeach; ?>
+      </div>
+    </dialog>
+    <script>
+    (function(){var t=document.querySelector('[data-lg-shows-open]'),d=document.getElementById('lg-shows-modal');
+      if(!t||!d||!d.showModal)return;
+      t.addEventListener('click',function(){d.showModal();});
+      d.addEventListener('click',function(e){var r=d.getBoundingClientRect();
+        if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();});
+    })();
+    </script>
     <?php
 }
 

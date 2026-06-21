@@ -4200,18 +4200,55 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   .feed-page .feed-card .fc-actions .fc-save.is-on { color: var(--lg-sage-d, #586b3f); }
 }
 
-/* Desktop hub: top banner removed on the FRONT-DOOR hub (scoped forums keep
-   theirs); the sort-bar New-post pill un-hides and sits right of Filters —
-   mirrors the existing mobile banner-hide. (Buck pre-launch 2026-06-11) */
-@media (min-width:641px){
-  .feed-page .forum-header--hub{display:none}
-  .feed-page .feed-sort-bar > .lg-newpost{
-    display:inline-flex;align-items:center;gap:5px;position:static;width:auto;height:auto;
-    background:var(--lguser-accent-d,#52613d);color:#fff;border:0;border-radius:999px;
-    padding:8px 15px;font:700 13px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);
-    white-space:nowrap;margin:0;box-shadow:none;transform:none;cursor:pointer;
-  }
-  .feed-page .feed-sort-bar > .lg-newpost:hover{background:var(--lguser-accent,#6b7c52)}
+/* Hub front-door bar (adv-A, Ian 2026-06-20): banner hidden; the sort bar is a
+   sticky 3-ZONE grid — sort pills (left) | "+ New post" (centre) | Search (right) —
+   one compact row when wide, stacking as it narrows. Scoped to .hub-fmodal-page so
+   scoped forums keep their legacy flat bar (and its mobile > selectors stay valid). */
+@media (min-width:641px){ .feed-page .forum-header--hub{display:none} }
+
+.hub-fmodal-page .feed-sort-bar{
+  position:sticky;top:60px;z-index:30;background:var(--lg-cream,#fbfbf8);
+  display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;
+  padding:12px 16px;margin-bottom:16px;border-radius:14px;
+  box-shadow:0 6px 14px -12px rgba(26,29,26,.5);
+}
+.hub-fmodal-page .feed-sort-bar .zL{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.hub-fmodal-page .feed-sort-bar .zM{display:flex;justify-content:center}
+.hub-fmodal-page .feed-sort-bar .zR{display:flex;justify-content:flex-end;align-items:center;gap:8px;min-width:0}
+/* quick-search bubble on the bar (fast path; shares the modal's q field) */
+.hub-fmodal-page .feed-sort-bar .lg-quickq{display:flex;align-items:center;gap:8px;flex:1 1 auto;max-width:300px;min-width:0;margin:0;
+  background:#fff;border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;padding:8px 14px}
+.hub-fmodal-page .feed-sort-bar .lg-quickq:focus-within{border-color:var(--lg-sage,#87986a);box-shadow:0 0 0 2px rgba(135,152,106,.18)}
+.hub-fmodal-page .feed-sort-bar .lg-quickq .hub-tsearch__ico{color:var(--lg-mute,#6b6f6b);flex:0 0 auto;font-size:14px;line-height:1}
+.hub-fmodal-page .feed-sort-bar .lg-quickq .hub-tsearch__in{flex:1 1 auto;min-width:0;width:auto;border:0;outline:0;background:none;
+  font:14px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);color:var(--lg-ink,#323532)}
+.hub-fmodal-page .feed-sort-bar .lg-quickq .hub-suggest{display:none}
+/* compose: in-flow, compact, sage, labelled. KEEPS .lg-newpost/.forum-header__new-post
+   + data-ntm-open hooks. right/bottom:auto neutralises the .forum-header__new-post base. */
+.hub-fmodal-page .feed-sort-bar .lg-newpost{
+  position:static;right:auto;bottom:auto;transform:none;
+  display:inline-flex;align-items:center;gap:8px;width:auto;height:auto;
+  padding:11px 24px;border-radius:999px;white-space:nowrap;cursor:pointer;margin:0;
+  background:var(--lg-sage,#87986a);color:#fff;border:0;letter-spacing:.01em;box-shadow:0 3px 12px rgba(107,124,82,.36);
+  font:700 14.5px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);
+  transition:background .12s,transform .1s,box-shadow .15s;
+}
+.hub-fmodal-page .feed-sort-bar .lg-newpost:hover{background:var(--lg-sage-d,#6b7c52);transform:translateY(-1px);box-shadow:0 6px 18px rgba(107,124,82,.42)}
+.hub-fmodal-page .feed-sort-bar .lg-newpost:active{transform:scale(.97)}
+/* Search button reuses the .lg-filters-chip opener; styled as an outline secondary. */
+.hub-fmodal-page .feed-sort-bar .lg-searchbtn{
+  display:inline-flex;align-items:center;gap:8px;cursor:pointer;white-space:nowrap;width:auto;height:auto;
+  background:#fff;border:1px solid var(--lg-sage,#87986a);color:var(--lg-sage-d,#586b3f);border-radius:999px;padding:9px 17px;
+  font:700 13px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);
+}
+.hub-fmodal-page .feed-sort-bar .lg-searchbtn:hover{background:var(--lg-sage-tint,#eef2e3)}
+.hub-fmodal-page .feed-sort-bar .lg-searchbtn__ico{font-size:14px;line-height:1}
+/* STACK as the bar narrows toward (and through) the mobile break; +New post stays on top. */
+@media (max-width:820px){
+  .hub-fmodal-page .feed-sort-bar{grid-template-columns:1fr;justify-items:center;gap:11px;padding:13px 14px}
+  .hub-fmodal-page .feed-sort-bar .zL{justify-content:center}
+  .hub-fmodal-page .feed-sort-bar .zR{justify-content:center}
+  .hub-fmodal-page .feed-sort-bar .zM{order:-1}
 }
 
 /* ── Modal image lightbox (forums.js §10, Ian 2026-06-11) ── */
@@ -4266,3 +4303,46 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 .ntm-status.lg-msg-error, .frm-status.lg-msg-error, .lg-msg-error,
 .reply-form__status.lg-msg-error, .post-edit__status.lg-msg-error {
   color: #b3261e; font-weight: 600; }
+
+
+/* ── Advanced Search modal: exposed search bars + COLOUR-ANCHORED accordions
+   (adv-A polish, Ian 2026-06-20). Shows is an accordion inside #hub-fmodal with
+   Type + Categories; exclusive (single-open via forums.js name=), opens compact,
+   items in a compact multi-col grid. Section colours = brand tokens only. */
+.hub-fmodal__search{display:flex;gap:10px;margin:0 0 10px}
+.hub-fmodal__search .feed-toolbar-search{display:flex;gap:10px;flex:1 1 auto;margin:0;width:100%}
+.hub-fmodal__search .hub-tsearch{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;padding:9px 14px}
+.hub-fmodal__search .hub-tsearch__ico{color:var(--lg-mute,#6b6f6b);flex:0 0 auto}
+.hub-fmodal__search .hub-tsearch__in{flex:1 1 auto;border:0;outline:0;background:none;font:14px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#323532);min-width:0;width:auto}
+.hub-fmodal__search .hub-suggest{position:relative}
+@media (max-width:560px){.hub-fmodal__search,.hub-fmodal__search .feed-toolbar-search{flex-direction:column}}
+
+.hub-rail--acc .hub-rail__reset{display:inline-block;margin:0 0 8px;color:var(--lg-rust,#c66845);font-weight:700;text-decoration:none}
+/* per-section colour tokens (brand only): --sec accent, --secink ink-on-accent,
+   --sect light tint bg, --secdk dark AA-safe ink on the tint */
+.hub-rail--acc .hub-rail__sec--type {--sec:var(--lg-sage-d,#6b7c52);--secink:#fff;--sect:rgba(107,124,82,.13);--secdk:#4c5a39}
+.hub-rail--acc .hub-rail__sec--cat  {--sec:var(--lg-amber,#ecb351);--secink:#3a2a06;--sect:rgba(236,179,81,.20);--secdk:#6e4f12}
+.hub-rail--acc .hub-rail__sec--shows{--sec:var(--lg-rust,#c66845);--secink:#fff;--sect:rgba(198,104,69,.13);--secdk:#8f3f2a}
+.hub-rail--acc .hub-rail__sec{border:0}
+/* section header = navigation anchor: colour left-rule + icon + tinted bar + count pill */
+.hub-rail--acc .hub-rail__sech{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;
+  margin:8px 0;padding:11px 13px;border-left:4px solid var(--sec);border-radius:0 10px 10px 0;background:var(--sect);
+  font:800 14.5px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);color:var(--lg-ink,#1a1d1a)}
+.hub-rail--acc .hub-rail__sech::-webkit-details-marker{display:none}
+.hub-rail--acc .hub-rail__sech:hover{filter:brightness(.97)}
+.hub-rail--acc .hub-rail__ico{display:inline-flex;width:18px;height:18px;color:var(--secdk);flex:0 0 auto}
+.hub-rail--acc .hub-rail__ico svg{width:100%;height:100%}
+.hub-rail--acc .hub-rail__sectx{margin-right:auto}
+.hub-rail--acc .hub-rail__secn{background:var(--sec);color:var(--secink);border-radius:999px;padding:3px 10px;font:700 11.5px/1 var(--lg-font-sans,system-ui,sans-serif)}
+.hub-rail--acc .hub-rail__chev{color:var(--secdk);font-size:11px;transition:transform .15s}
+.hub-rail--acc .hub-rail__sec[open]>.hub-rail__sech .hub-rail__chev{transform:rotate(90deg)}
+/* body: compact multi-col grid for Type/Shows; Categories stays a column (hierarchy) */
+.hub-rail--acc .hub-rail__secbody{padding:0 0 12px}
+.hub-rail--acc .hub-rail__secbody--grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:7px}
+.hub-rail--acc .hub-rail__secbody--grid .hub-rail__row{padding:7px 10px}
+/* items: tinted count badge in the section hue so rows feel grouped, not identical */
+.hub-rail--acc .hub-rail__secbody .hub-rail__row{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--lg-line,#e3ddd0);border-radius:9px;background:#fff;margin:0}
+.hub-rail--acc .hub-rail__secbody .hub-rail__row.is-on{border-color:var(--sec);background:var(--sect)}
+.hub-rail--acc .hub-rail__secbody .hub-rail__nm{flex:1 1 auto;min-width:0;text-decoration:none;color:var(--lg-ink,#323532);font:600 12.5px/1.2 var(--lg-font-sans,system-ui,sans-serif);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hub-rail--acc .hub-rail__secbody .hub-rail__ct{flex:0 0 auto;background:var(--sect);color:var(--secdk);border-radius:999px;padding:3px 8px;font:700 11px/1 var(--lg-font-sans,system-ui,sans-serif)}
+.hub-rail--acc .hub-acc__leaves{margin:4px 0 6px 16px}

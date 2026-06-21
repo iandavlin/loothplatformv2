@@ -625,7 +625,7 @@ if ($scoped_forum) {
     $hub_facets = hub_facet_counts($db, $content_tiers, $_forum_cat_map);
     $hub_leaf_labels = [];
     foreach ($hub_cat_tree as $_p) foreach ($_p['leaves'] as $_lf) $hub_leaf_labels[$_lf['key']] = $_lf['label'];
-    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'tree' => $hub_cat_tree, 'filters' => $hub_filters, 'muted' => $hub_muted, 'sort' => $sort_param];
+    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'tree' => $hub_cat_tree, 'filters' => $hub_filters, 'muted' => $hub_muted, 'sort' => $sort_param, 'shows' => hub_show_terms($db)];
 
     // Unified full-text search (q) — an AND dimension across BOTH worlds, applied
     // per-branch (FTS columns: topic.search_doc, content_item.tsv). websearch_to_
@@ -1285,10 +1285,10 @@ $header_cat = $scoped_forum
   <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_chipbar($hub_filters, $hub_muted, $sort_param, $hub_leaf_labels ?? [], $hub_cat_tree ?? []); ?>
 
   <!-- Sort bar (+ post button, right-aligned) -->
-  <nav class="feed-sort-bar" aria-label="Sort activity" data-lg-bar="1">
+  <nav class="feed-sort-bar<?= !empty($GLOBALS['__bb_hub_rail']) ? ' feed-sort-bar--zones' : '' ?>" aria-label="Sort activity" data-lg-bar="1">
+    <?php $lg_is_hub = !empty($GLOBALS['__bb_hub_rail']); ?>
     <?php
-      // The ACTIVE sort leads the pill row (Ian 2026-06-10); the rest keep
-      // their usual order. usort is stable on PHP 8.
+      // The ACTIVE sort leads the pill row (Ian 2026-06-10); usort is stable on PHP 8.
       $lg_sort_pills = [
           ['random', 'Random',   'lg-random-tab'],
           ['new',    'Newest',   ''],
@@ -1297,43 +1297,61 @@ $header_cat = $scoped_forum
       usort($lg_sort_pills, function ($a, $b) use ($sort_param) {
           return (int)($b[0] === $sort_param) <=> (int)($a[0] === $sort_param);
       });
+      // adv-A bar (Ian 2026-06-20): hub front door = 3 zones (sort | + New post | Search).
+      // Search reuses .lg-filters-chip so forums.js opens the Advanced Search modal
+      // (#hub-fmodal). Scoped forums keep the legacy flat bar below.
+      if ($lg_is_hub) echo '<div class="zL">';
       foreach ($lg_sort_pills as [$lg_sid, $lg_slabel, $lg_scls]):
         $lg_cls = trim($lg_scls . ($sort_param === $lg_sid ? ' active' : ''));
     ?>
     <a href="<?= feed_sort_url($lg_sid, $forum_slug) ?>"<?= $lg_cls !== '' ? ' class="' . $lg_cls . '"' : '' ?>><?= $lg_slabel ?></a>
     <?php endforeach; ?>
     <?php if ($viewer_logged_in):
-      // Saved pill (Ian 2026-06-11) — a VIEW toggle, not a sort: ?saved=1
-      // constrains the union to the viewer's ☆ saves (canonical view). Active
-      // = clickable to exit (CSS re-enables pointer-events). The lg-saved-pill
-      // class also tells the mobile overlay's ensureSavedPill not to insert
-      // its own copy. Logged-in only — anon has no saves.
+      // Saved pill (Ian 2026-06-11) — a VIEW toggle (?saved=1). .lg-saved-pill also
+      // tells the mobile overlay's ensureSavedPill not to insert its own copy.
       $lg_on_saved   = !empty($hub_filters['saved']);
-      // feed_sort_url() now folds the active `saved` filter into the URL (via
-      // hub_query_params), so strip it to get a clean toggle base — otherwise the
-      // ACTIVE pill links straight back to ?saved=1 and Saved can be selected but
-      // never un-selected (the toggle-off href pointed at itself).
       $lg_saved_href = preg_replace('/&(?:amp;)?saved=1\b/', '', feed_sort_url($sort_param, $forum_slug));
       $lg_saved_href .= $lg_on_saved ? '' : '&amp;saved=1';
     ?>
     <a href="<?= $lg_saved_href ?>" class="lg-saved-pill<?= $lg_on_saved ? ' active' : '' ?>">Saved</a>
     <?php endif; ?>
-    <?php if (!empty($GLOBALS['__bb_hub_rail'])): ?>
-      <?php hub_render_toolbar_search($hub_filters, $sort_param); ?>
-    <?php endif; ?>
-    <?php // View toggles live under the header (in the sort bar) for all views. ?>
-    <?php hub_render_view_toggles(); ?>
-    <button type="button" class="lg-filters-chip" aria-label="Open filters">
-      <span class="corner-hamburger__icon" aria-hidden="true">&#9776;</span>
-      <span class="lg-filters-chip__tx">Filters</span>
-    </button>
-    <?php if ($can_post && $is_postable_forum): ?>
-      <button class="feed-post-btn" type="button" data-ntm-open
-              data-forum-id="<?= (int)$scoped_forum['id'] ?>"
-              data-forum-slug="<?= htmlspecialchars($forum_slug) ?>">+ Post here</button>
-    <?php endif; ?>
-    <?php if ($can_post && !$is_postable_forum): ?>
-      <button class="forum-header__new-post lg-newpost" type="button" data-ntm-open aria-haspopup="dialog">+ New post</button>
+    <?php if ($lg_is_hub): ?>
+      </div><!-- /zL -->
+      <div class="zM">
+        <?php if ($can_post): /* compose: keeps data-ntm-open + .lg-newpost/.forum-header__new-post hooks (mobile overlay reads them) */ ?>
+        <button class="forum-header__new-post lg-newpost" type="button" data-ntm-open aria-haspopup="dialog">+ New post</button>
+        <?php endif; ?>
+      </div>
+      <div class="zR">
+        <?php /* Quick-search bubble = the fast path: same name=q + data-hub-search
+                 field as the modal's "Search the Hub", so hub-filters.js live-filters
+                 the feed in place and mirrors the modal field. No-JS: plain ?q GET. */ ?>
+        <form class="hub-tsearch hub-tsearch--q lg-quickq" method="get" action="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/') ?>" role="search" autocomplete="off">
+          <span class="hub-tsearch__ico" aria-hidden="true">&#9906;</span>
+          <input class="hub-tsearch__in" name="q" type="search" placeholder="Search the Hub&hellip;"
+                 value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>" aria-label="Search the Hub" data-hub-search autocomplete="off">
+        </form>
+        <?php /* Adv Search opens the full modal: .lg-filters-chip is the existing
+                 forums.js opener for #hub-fmodal (no JS change). */ ?>
+        <button type="button" class="lg-filters-chip lg-searchbtn" aria-haspopup="dialog" aria-label="Open advanced search">
+          <span class="lg-searchbtn__ico" aria-hidden="true">&#9906;</span>
+          <span class="lg-filters-chip__tx">Adv Search</span>
+        </button>
+      </div>
+    <?php else: ?>
+      <?php hub_render_view_toggles(); ?>
+      <button type="button" class="lg-filters-chip" aria-label="Open filters">
+        <span class="corner-hamburger__icon" aria-hidden="true">&#9776;</span>
+        <span class="lg-filters-chip__tx">Filters</span>
+      </button>
+      <?php if ($can_post && $is_postable_forum): ?>
+        <button class="feed-post-btn" type="button" data-ntm-open
+                data-forum-id="<?= (int)$scoped_forum['id'] ?>"
+                data-forum-slug="<?= htmlspecialchars($forum_slug) ?>">+ Post here</button>
+      <?php endif; ?>
+      <?php if ($can_post && !$is_postable_forum): ?>
+        <button class="forum-header__new-post lg-newpost" type="button" data-ntm-open aria-haspopup="dialog">+ New post</button>
+      <?php endif; ?>
     <?php endif; ?>
   </nav>
 
