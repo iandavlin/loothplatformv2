@@ -794,7 +794,7 @@ function lgpo_alert_failure( string $context, string $detail ): void {
         if ( $to === '' ) { $to = (string) get_option( 'admin_email', '' ); }
         if ( $to === '' ) return;
         $site = wp_specialchars_decode( (string) get_option( 'blogname' ), ENT_QUOTES );
-        wp_mail(
+        \LGMS\Mail::send(
             $to,
             "[{$site}] LGPO alert: {$context}",
             "Context: {$context}\n\nDetail:\n{$detail}\n\nReview: "
@@ -969,14 +969,15 @@ function lgpo_handle_callback() {
     // creator the patron backs, and the guard rejects any membership whose
     // campaign id != lgpo_campaign_id. Without pulling the campaign relationship,
     // each member's relationships.campaign.data.id is empty → the guard rejects
-    // EVERY self-connector as not_a_patron. fields[campaign]= keeps the payload to
-    // just the linkage id (we only need the id, never campaign attributes).
+    // EVERY self-connector as not_a_patron. The include alone populates that
+    // linkage id; do NOT add fields[campaign] — Patreon 400s on an empty
+    // fieldset ("Invalid value for parameter 'fields[campaign]'"), which would
+    // fail the whole identity fetch → ?onboarded=fail.
     $identity_url = 'https://www.patreon.com/api/oauth2/v2/identity'
         . '?include=memberships,memberships.currently_entitled_tiers,memberships.campaign'
         . '&fields%5Buser%5D=email,full_name,image_url'
         . '&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents,email,full_name'
-        . '&fields%5Btier%5D=title'
-        . '&fields%5Bcampaign%5D=';
+        . '&fields%5Btier%5D=title';
 
     $identity_response = wp_remote_get( $identity_url, array(
         'headers' => array(
@@ -1171,23 +1172,10 @@ function lgpo_handle_callback() {
     // them authenticated instead of bouncing to a password screen.
     lgpo_login_user( (int) $user_id );
 
-    // Still email a set-password link so they can log in again later without
-    // re-running the Patreon OAuth dance.
-    $reset_key  = get_password_reset_key( get_user_by( 'id', $user_id ) );
-    $reset_link = network_site_url( "wp-login.php?action=rp&key={$reset_key}&login=" . rawurlencode( $username ), 'login' );
-
-    $subject = 'Welcome to The Looth Group — Set Your Password';
-    $message = "Hey {$patreon_name},\n\n"
-        . "Your account on loothgroup.com has been created and linked to your Patreon membership. You're already logged in.\n\n"
-        . "Username: {$username}\n\n"
-        . "Set a password here so you can log back in anytime:\n{$reset_link}\n\n"
-        . "Welcome to the group.\n— Ian";
-
-    wp_mail( $patreon_email, $subject, $message );
-
-    lgpo_terminal( 'success', $state_payload,
-        'Your account has been created and you\'re now logged in! We\'ve also emailed a set-password link to <strong>' . esc_html( $patreon_email ) . '</strong> so you can log back in anytime.'
-    );
+    // New account: no emailed reset link. They're already logged in (above) —
+    // send them to the inline set-password welcome page (lgpo-set-password.php).
+    wp_safe_redirect( home_url( '/patreon-password/' ) );
+    exit;
 }
 
 /**
@@ -1251,7 +1239,7 @@ function lgpo_generate_username( $name, $email ) {
 
 function lgpo_notify_admin( $patreon_name, $patreon_email, $wp_username ) {
     $admin_email = get_option( 'lgpo_contact_email', get_option( 'admin_email' ) );
-    wp_mail( $admin_email, '[Looth Group] Patreon onboard collision needs review',
+    \LGMS\Mail::send( $admin_email, '[Looth Group] Patreon onboard collision needs review',
         "A Patreon member tried to onboard but their email collides with an existing WP account.\n\n"
         . "Patreon Name: {$patreon_name}\nPatreon Email: {$patreon_email}\nExisting WP User: {$wp_username}\n\n"
         . "Review: " . admin_url( 'options-general.php?page=lg-patreon-onboard' ) . "\n"

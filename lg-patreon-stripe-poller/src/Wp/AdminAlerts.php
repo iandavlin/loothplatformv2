@@ -43,7 +43,7 @@ final class AdminAlerts
             $html .= '<p>The customer\'s access has <strong>not</strong> been automatically revoked. Review in Stripe, then revoke access from the WP admin user profile if appropriate.</p>';
             $html .= '<p><a href="' . esc_url( $dispUrl ) . '">View dispute in Stripe &rarr;</a></p>';
 
-            wp_mail( $to, "[{$site}] Chargeback filed — {$amtLabel}", $html, [ 'Content-Type: text/html; charset=UTF-8' ] );
+            \LGMS\Mail::send( $to, "[{$site}] Chargeback filed — {$amtLabel}", $html, [ 'Content-Type: text/html; charset=UTF-8' ] );
         } catch ( \Throwable $_ ) {
             // Swallow — alert is best-effort.
         }
@@ -74,7 +74,7 @@ final class AdminAlerts
             $html .= '<p><strong>Context:</strong></p><table cellpadding="0" cellspacing="0">' . $rows . '</table>';
             $html .= '<p style="color:#666;font-size:0.9em;">Stack trace (top frame): ' . esc_html( $error->getFile() ) . ':' . (int) $error->getLine() . '</p>';
 
-            wp_mail( $to, $subject, $html, [ 'Content-Type: text/html; charset=UTF-8' ] );
+            \LGMS\Mail::send( $to, $subject, $html, [ 'Content-Type: text/html; charset=UTF-8' ] );
         } catch ( \Throwable $_ ) {
             // Swallow — alert is best-effort.
         }

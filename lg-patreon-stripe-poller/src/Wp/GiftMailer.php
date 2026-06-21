@@ -107,7 +107,7 @@ final class GiftMailer
             $count === 1 ? '' : 's'
         );
 
-        wp_mail( $toEmail, $subject, $body, [ 'Content-Type: text/html; charset=UTF-8' ] );
+        \LGMS\Mail::send( $toEmail, $subject, $body, [ 'Content-Type: text/html; charset=UTF-8' ] );
     }
 
     private function upsertContact( string $email, string $name ): void
@@ -242,7 +242,7 @@ final class GiftMailer
             $headers[] = 'Reply-To: ' . $replyTo;
         }
 
-        wp_mail( $recipientEmail, $subject, $body, $headers );
+        \LGMS\Mail::send( $recipientEmail, $subject, $body, $headers );
     }
 
     /**
@@ -342,7 +342,7 @@ final class GiftMailer
               . '<p>Thanks,<br>The Looth Team</p>'
               . '</body></html>';
 
-        wp_mail( $toEmail, $subject, $body, [ 'Content-Type: text/html; charset=UTF-8' ] );
+        \LGMS\Mail::send( $toEmail, $subject, $body, [ 'Content-Type: text/html; charset=UTF-8' ] );
     }
 
     private function renderTemplate( string $name, array $vars ): string

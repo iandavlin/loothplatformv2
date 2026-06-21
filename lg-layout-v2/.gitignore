@@ -1,5 +1,8 @@
-# Generated bundle — produced by WpAssets::regenerate_bundle()
-/assets/lg-layout-v2-bundle.css
+# Generated bundle — produced by WpAssets::regenerate_bundle().
+# Now COMMITTED so a fresh checkout serves CSS without a runtime regen pass.
+# It still self-heals: WpAssets::enqueue_bundle() lazy-regenerates if missing,
+# and the dash save handler rewrites it on brand/style change.
+# /assets/lg-layout-v2-bundle.css
 
 # Harness scratch output (compared against tests/expected snapshots)
 /tests/output/

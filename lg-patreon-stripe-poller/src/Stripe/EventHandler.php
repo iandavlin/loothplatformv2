@@ -255,7 +255,7 @@ final class EventHandler
             $subject = "Action needed: payment failed for your {$siteName} membership";
             $body    = "{$greeting}\n\nWe weren't able to process your payment for your {$siteName} membership. Your access is still active while we retry, but please update your payment method to avoid any interruption:\n\n{$updateUrl}\n\nIf you need help, just reply to this email.\n\n— The {$siteName} Team";
 
-            wp_mail( $email, $subject, $body );
+            \LGMS\Mail::send( $email, $subject, $body );
         }
 
         return "invoice.payment_failed: customer {$cid} — email sent, past_due retains access";
@@ -291,7 +291,7 @@ final class EventHandler
         $subject = "Your {$siteName} trial ends on {$endDate}";
         $body    = "{$greeting}\n\nYour {$siteName} trial ends on {$endDate}, at which point your card will be charged {$price}. If you'd like to keep going, no action is needed.\n\nIf you want to cancel or update your payment method first, you can do that here:\n\n{$manageUrl}\n\nIf you need help, just reply to this email.\n\n— The {$siteName} Team";
 
-        wp_mail( $email, $subject, $body );
+        \LGMS\Mail::send( $email, $subject, $body );
 
         return "customer.subscription.trial_will_end: customer {$customer['id']} — reminder sent for trial_end={$trialEnd}";
     }
