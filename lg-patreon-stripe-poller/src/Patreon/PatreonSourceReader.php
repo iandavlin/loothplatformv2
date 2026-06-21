@@ -22,8 +22,9 @@ namespace LGMS\Patreon;
 final class PatreonSourceReader
 {
     /**
-     * @return array{source:string,tier:string,tier_id:?string}|null
-     *   null = not Patreon-managed; otherwise the source record.
+     * @return array{source:string,tier:?string,tier_id:?string}|null
+     *   null = not Patreon-managed; otherwise the source record. 'tier' may be
+     *   null = patreon-managed but no active paid tier (lapsed / declined / free).
      */
     public static function readForUser( int $wpUserId ): ?array
     {
@@ -36,26 +37,35 @@ final class PatreonSourceReader
             return null;
         }
 
-        $user = get_userdata( $wpUserId );
-        if ( ! $user ) {
-            return null;
-        }
+        $tierId = get_user_meta( $wpUserId, 'lgpo_patreon_tier_id', true );
+        $tierId = is_string( $tierId ) && $tierId !== '' ? $tierId : null;
 
-        $roles = (array) $user->roles;
-        $tier  = 'looth1';
-        foreach ( [ 'looth3', 'looth2', 'looth1' ] as $r ) {
-            if ( in_array( $r, $roles, true ) ) {
-                $tier = $r;
-                break;
+        // Derive the tier from the Patreon API truth the sweep persists — the
+        // entitled tier_id mapped through lgpo_tier_map — NOT from $user->roles.
+        // Reading the current WP role was circular: the Arbiter would only ever
+        // hear back the role the member already had, so an upgrade could never
+        // apply (it could only ever confirm the status quo). A patreon-managed
+        // member with no mapped PAID tier (lapsed, declined, or free looth1)
+        // resolves to null, so the Arbiter performs a real downgrade instead of
+        // pinning the member at their current role.
+        $tier = null;
+        if ( $tierId !== null ) {
+            $map = get_option( 'lgpo_tier_map', [] );
+            if ( is_array( $map ) && isset( $map[ $tierId ] ) ) {
+                $mapped = (string) $map[ $tierId ];
+                // Only paid Patreon tiers are asserted by this source. looth1 is
+                // the free floor (treated as null); looth4 is comp/manual and is
+                // never granted via Patreon — leave it to its own source.
+                if ( $mapped === 'looth2' || $mapped === 'looth3' ) {
+                    $tier = $mapped;
+                }
             }
         }
-
-        $tierId = get_user_meta( $wpUserId, 'lgpo_patreon_tier_id', true );
 
         return [
             'source'  => 'patreon',
             'tier'    => $tier,
-            'tier_id' => is_string( $tierId ) && $tierId !== '' ? $tierId : null,
+            'tier_id' => $tierId,
         ];
     }
 }
