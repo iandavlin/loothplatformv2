@@ -997,16 +997,16 @@ class LGPO_Sync_Engine {
         // the ?: reads below; the next sweep enriches the nulls via the ON
         // DUPLICATE KEY UPDATE above.
         $member += [
-            patreon_user_id                 => null,
-            email                           => null,
-            full_name                       => null,
-            patron_status                   => null,
-            last_charge_status              => null,
-            last_charge_date                => null,
-            next_charge_date                => null,
-            will_pay_amount_cents           => null,
-            currently_entitled_amount_cents => null,
-            tier_labels                     => [],
+            'patreon_user_id'                 => null,
+            'email'                           => null,
+            'full_name'                       => null,
+            'patron_status'                   => null,
+            'last_charge_status'              => null,
+            'last_charge_date'                => null,
+            'next_charge_date'                => null,
+            'will_pay_amount_cents'           => null,
+            'currently_entitled_amount_cents' => null,
+            'tier_labels'                     => [],
         ];
         try {
             $pdo = \LGMS\Db::pdo();
