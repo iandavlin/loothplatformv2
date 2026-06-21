@@ -193,3 +193,65 @@ Patreon backing). The 1,834 Patreon-not-in-WP rows are not orphans (they have no
   here.
 - **dev2 role data was mutated** by the sweep runs (Arbiter writes) as expected per the brief — this is the
   dev2 sandbox; no live data touched. Served code was restored to its exact original SHA after testing.
+
+---
+
+## 6. ADDENDUM (2026-06-21) — decision reversal, LIVE deploy, dev2 reconcile test
+
+### 6.1 Decision: KEEP the suppression (efa7970 as-built)
+Ian's final call: keep `efa7970` exactly — `send_summary` emails **only when `applied>0` OR
+`errors>0`** (no-op hourly sweeps stay silent), plus the accuracy fix. (An intermediate "keep the
+hourly heartbeat" variant was prototyped and discarded per the later override.) Branch state:
+`efa7970` (fix) → `53ddf24` (this doc) → `54f21d7` (tolerance block, keeper cleanup).
+
+### 6.2 LIVE deploy — packaged, NOT run on live (Ian/keeper-held)
+- The poller is in `wp-content/plugins` (**not git-served**) and live's file is **ahead of main** by
+  the 18-line tolerance block — so a git pull / shipping main's file is **wrong** (would drop the
+  block). See `deploy/DEPLOY.md`.
+- Deliverable: `deploy/patch-sync-report.py` — a **self-verifying** in-place patcher (8 hunks, each
+  must match exactly once or it aborts) built from the `efa7970` diff. **Proven byte-exact**:
+  applying it to `git show main:…` reproduces `git show efa7970:…` identically; and all 8 hunks match
+  the live-equivalent served file (so the tolerance block is preserved). A prebuilt drop-in file
+  (`live-base + fix`) is also available on dev2 at `/tmp/deploy_engine.php`.
+- Ian's steps: backup → `python3 patch-sync-report.py <file>` → `php -l` → `sudo systemctl restart
+  php8.3-fpm`. Keep `simulate_emails` as-is; don't touch the hourly schedule.
+
+### 6.3 dev2 reconcile test — fix DEPLOYED on dev2, test RUN (sandbox; no email left the box)
+Safety gate first (asserted in-harness before any action): `simulate_emails=yes`, **no MTA**. The fix
+was deployed onto dev2's running poller (served SHA `9fbee2d…` → `f3460d3…`, `php8.3-fpm` restarted)
+and **left deployed** so Ian can keep testing (restore: `cp /tmp/served_orig_engine.bak <served>` —
+or just re-run the keeper reconcile).
+
+Method: picked 4 non-flapper, in-sync, Patreon-owned users (uids 699/1143/1149/167), forced their WP
+role to a wrong value (`looth1`), ran the sweep, captured the report via a `wp_mail` filter, then
+restored their roles.
+
+**Result — two things, both important:**
+1. **The report was ACCURATE** (the point of the fix): the 4 diverted users were **NOT** falsely
+   listed as "Applied" — they were correctly counted under **Reconciled (no net change)**. The report
+   listed only a genuine change under "Applied" and showed full counts
+   (`Fetched 3335 / Matched 1501 / Unchanged … / Errors 0`). **Pre-fix, the same sweep would have
+   printed "Applied: looth1 → looth3" for all four — a lie.** `emails_captured` were 100% simulated;
+   MTA absent. ✅
+2. **The roles did NOT reconcile back up (0/4)** — and this surfaced a **separate upstream bug** (NOT
+   in the report code, NOT my fix):
+   - `Arbiter::sync()` computes the winning tier from `RoleSourceWriter::readAllForUser()`, which
+     **overwrites the persisted `patreon` source with a live read from
+     `PatreonSourceReader::readForUser()`** (`src/Patreon/PatreonSourceReader.php`).
+   - That "live" reader derives the Patreon tier from the user's **current WP role**
+     (`$tier = highest of $user->roles`, lines ~17-21) — **not** from the Patreon API.
+   - Net: `apply_change()`'s `RoleSourceWriter::report('patreon', $target)` is **ignored** by the very
+     next `readAllForUser()`, and the Arbiter recomputes "patreon = the role the user already has".
+     **The sweep can DOWNGRADE (clear payment_source → tier drops) but cannot UPGRADE** a role above
+     its current value. Confirmed by direct probe: report `patreon=looth3` on a `looth1` user, then
+     `readAllForUser` still returns `looth1`, Arbiter winning `looth1`.
+   - **This is the real mechanism behind the original "Applied: 7, 0 actual changes" symptom** — the
+     7 were proposals the Arbiter could never enact. The report fix makes that visible/honest;
+     **fixing the reconcile itself is an Arbiter/PatreonSourceReader change in another lane.**
+
+**Keeper action items (cross-lane):**
+- Owner of `Arbiter` / `PatreonSourceReader`: decide whether `PatreonSourceReader` should read the
+  **Patreon API/`lgpo_patreon_tier_id`** truth instead of mirroring the current WP role, so the sweep
+  can actually apply upgrades. Until then, the poller only enforces downgrades.
+- Note: forcing roles via `set_role` also trips `AdminRoleCapture` (writes a `manual_admin` source),
+  which compounds the above — relevant for anyone hand-testing reconciles.
