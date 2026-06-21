@@ -456,7 +456,7 @@ final class RestController
             'Content-Type: text/html; charset=UTF-8',
         ];
 
-        $sent = wp_mail( $to, $subject, $html, $headers );
+        $sent = \LGMS\Mail::send( $to, $subject, $html, $headers );
         if ( ! $sent ) {
             return new WP_REST_Response( [ 'ok' => false, 'error' => 'Could not send your request. Please try again or email us directly.' ], 500 );
         }
@@ -1138,7 +1138,7 @@ final class RestController
             $hello = $name !== '' ? "Hi " . esc_html( $name ) . "," : "Hi,";
             $site  = (string) get_bloginfo( 'name' );
             $html  = '<p>' . $hello . '</p>' . $bodyHtml . '<p style="color:#666;font-size:0.9em;">Sent automatically by ' . esc_html( $site ) . ' &mdash; reply to this email if you have questions.</p>';
-            wp_mail(
+            \LGMS\Mail::send(
                 $email,
                 '[' . $site . '] ' . $subject,
                 $html,
@@ -1790,7 +1790,7 @@ final class RestController
                  . "Mark paid / denied on the portal:\n  {$resolveUrl}\n\n"
                  . "Or run `php bin/poll-retention.php` on the billing server for exact amounts.\n";
 
-        wp_mail( get_option( 'admin_email' ), $subject, $body );
+        \LGMS\Mail::send( get_option( 'admin_email' ), $subject, $body );
 
         return new WP_REST_Response( [
             'ok'              => true,

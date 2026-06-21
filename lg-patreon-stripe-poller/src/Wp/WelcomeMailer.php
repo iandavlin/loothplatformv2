@@ -50,7 +50,7 @@ final class WelcomeMailer
 
         $subject = sprintf( 'Welcome to %s — your membership is active', self::tierLabel( $tier ) );
 
-        $sent = wp_mail( $user->user_email, $subject, $body, self::headers() );
+        $sent = \LGMS\Mail::send( $user->user_email, $subject, $body, self::headers() );
         if ( $sent ) {
             update_user_meta( $wpUserId, '_lg_welcome_email_sent_at', gmdate( 'c' ) );
         } else {
@@ -92,7 +92,7 @@ final class WelcomeMailer
         }
 
         $subject = sprintf( '[TEST] Welcome to %s — your membership is active', self::tierLabel( $tier ) );
-        $sent    = wp_mail( $recipientEmail, $subject, $body, self::headers() );
+        $sent    = \LGMS\Mail::send( $recipientEmail, $subject, $body, self::headers() );
 
         if ( ! $sent ) {
             error_log( "LGMS WelcomeMailer test send: wp_mail returned false for {$recipientEmail}" );

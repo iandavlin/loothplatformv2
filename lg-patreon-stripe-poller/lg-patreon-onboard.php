@@ -794,7 +794,7 @@ function lgpo_alert_failure( string $context, string $detail ): void {
         if ( $to === '' ) { $to = (string) get_option( 'admin_email', '' ); }
         if ( $to === '' ) return;
         $site = wp_specialchars_decode( (string) get_option( 'blogname' ), ENT_QUOTES );
-        wp_mail(
+        \LGMS\Mail::send(
             $to,
             "[{$site}] LGPO alert: {$context}",
             "Context: {$context}\n\nDetail:\n{$detail}\n\nReview: "
@@ -1239,7 +1239,7 @@ function lgpo_generate_username( $name, $email ) {
 
 function lgpo_notify_admin( $patreon_name, $patreon_email, $wp_username ) {
     $admin_email = get_option( 'lgpo_contact_email', get_option( 'admin_email' ) );
-    wp_mail( $admin_email, '[Looth Group] Patreon onboard collision needs review',
+    \LGMS\Mail::send( $admin_email, '[Looth Group] Patreon onboard collision needs review',
         "A Patreon member tried to onboard but their email collides with an existing WP account.\n\n"
         . "Patreon Name: {$patreon_name}\nPatreon Email: {$patreon_email}\nExisting WP User: {$wp_username}\n\n"
         . "Review: " . admin_url( 'options-general.php?page=lg-patreon-onboard' ) . "\n"

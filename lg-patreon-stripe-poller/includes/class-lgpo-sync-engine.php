@@ -847,7 +847,7 @@ class LGPO_Sync_Engine {
 
         // Explicit UTF-8 so the "—" / "→" in messages never mojibake.
         $headers = [ 'Content-Type: text/plain; charset=UTF-8' ];
-        wp_mail( $admin_email, $subject, implode( "\n", $lines ), $headers );
+        \LGMS\Mail::send( $admin_email, $subject, implode( "\n", $lines ), $headers );
     }
 
     /* ------------------------------------------------------------------
