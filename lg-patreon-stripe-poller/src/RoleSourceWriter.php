@@ -41,15 +41,20 @@ final class RoleSourceWriter
             $out[ (string) $row['source'] ] = $row['tier'] !== null ? (string) $row['tier'] : null;
         }
 
-        // Merge Patreon adapter's view. Only present when LGPO owns the
-        // user (payment_source=patreon). PatreonSourceReader returns null
-        // otherwise — Stripe-owned users are never given a patreon row.
-        // Persisted lg_role_sources rows for 'patreon' (legacy / from
-        // earlier sessions) are overwritten by the live read so the
-        // Arbiter sees current truth.
-        $patreon = PatreonSourceReader::readForUser( $wpUserId );
-        if ( $patreon !== null ) {
-            $out['patreon'] = (string) $patreon['tier'];
+        // Surface a Patreon source ONLY when the sweep has not already
+        // persisted one. The sweep is the authority for Patreon: it writes the
+        // API-derived tier to the lg_role_sources 'patreon' row
+        // (RoleSourceWriter::report) on every poll. We must NOT overwrite that
+        // row here — the old code re-derived 'patreon' from the member's
+        // CURRENT WP role, which was circular and blocked upgrades (the Arbiter
+        // only ever heard back the role it had just written). The adapter is a
+        // fallback for a patreon-managed user with no persisted row yet (e.g. a
+        // fresh onboard before the first sweep); its tier may be null (lapsed).
+        if ( ! array_key_exists( 'patreon', $out ) ) {
+            $patreon = PatreonSourceReader::readForUser( $wpUserId );
+            if ( $patreon !== null ) {
+                $out['patreon'] = $patreon['tier'];
+            }
         }
 
         return $out;
