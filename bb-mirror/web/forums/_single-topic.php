@@ -19,6 +19,11 @@ declare(strict_types=1);
 // Logged-out contact scrub (Ian 2026-06-10) — see _anon-scrub.php. Included
 // by index.php (config already loaded).
 require_once __DIR__ . '/../_anon-scrub.php';
+// HOTFIX 2026-06-21: lg_bb_mirror_can_post() is defined in _reply-render.php.
+// Load it BEFORE the $lg_anon_view check below; otherwise function_exists()
+// is false on the single-topic full-page chain and every author is masked
+// to "Private member" (author_id 0) for logged-in members too.
+require_once __DIR__ . '/_reply-render.php';
 $lg_anon_view = function_exists('lg_bb_mirror_can_post') ? !lg_bb_mirror_can_post() : true;
 require __DIR__ . '/../_chrome.php';
 
