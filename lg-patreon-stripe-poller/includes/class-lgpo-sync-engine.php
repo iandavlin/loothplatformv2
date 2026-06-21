@@ -97,16 +97,19 @@ class LGPO_Sync_Engine {
         self::start_batch();
 
         $results = [
-            'applied'  => [],
-            'errors'   => [],
+            'applied'    => [],
+            'reconciled' => [],
+            'errors'     => [],
         ];
 
         foreach ( $approved as $change ) {
             $result = self::apply_change( $change );
-            if ( $result['success'] ) {
+            if ( ! $result['success'] ) {
+                $results['errors'][] = $result['message'];
+            } elseif ( ! empty( $result['changed'] ) ) {
                 $results['applied'][] = $result['message'];
             } else {
-                $results['errors'][] = $result['message'];
+                $results['reconciled'][] = $result['message'];
             }
         }
 
@@ -212,16 +215,19 @@ class LGPO_Sync_Engine {
         self::start_batch();
 
         $results = [
-            'applied' => [],
-            'errors'  => [],
+            'applied'    => [],
+            'reconciled' => [],
+            'errors'     => [],
         ];
 
         foreach ( $changes['updates'] as $change ) {
             $result = self::apply_change( $change );
-            if ( $result['success'] ) {
+            if ( ! $result['success'] ) {
+                $results['errors'][] = $result['message'];
+            } elseif ( ! empty( $result['changed'] ) ) {
                 $results['applied'][] = $result['message'];
             } else {
-                $results['errors'][] = $result['message'];
+                $results['reconciled'][] = $result['message'];
             }
         }
 
@@ -237,7 +243,7 @@ class LGPO_Sync_Engine {
             count( $results['errors'] ),
         ) );
 
-        self::send_summary( $results, true );
+        self::send_summary( $results, true, $changes['stats'] );
         delete_transient( self::LOCK_KEY );
     }
 
@@ -633,7 +639,7 @@ class LGPO_Sync_Engine {
             // Just set payment_source, no role change
             update_user_meta( $user_id, 'payment_source', 'patreon' );
             self::log_change( $user_id, $email, $change['current_role'], $change['current_role'], $old_payment_source, 'patreon', 'tag_only' );
-            return [ 'success' => true, 'message' => "{$email} — set payment_source=patreon (role unchanged)." ];
+            return [ 'success' => true, 'changed' => false, 'message' => "{$email} — set payment_source=patreon (role unchanged)." ];
         }
 
         // Bridge: report the Patreon opinion to lg_role_sources and let the
@@ -641,6 +647,8 @@ class LGPO_Sync_Engine {
         // 'looth1' from Patreon means "no active Patreon tier" — report null
         // so the arbiter can fall back to whatever Stripe says (or looth1).
         $patreon_tier = ( $new_role === 'looth1' ) ? null : $new_role;
+
+        $effective_before = $change['current_role'] ?? 'looth1';
 
         if ( class_exists( '\\LGMS\\RoleSourceWriter' ) && class_exists( '\\LGMS\\Arbiter' ) ) {
             \LGMS\RoleSourceWriter::report( (int) $user_id, 'patreon', $patreon_tier );
@@ -651,12 +659,33 @@ class LGPO_Sync_Engine {
             $user->set_role( $new_role );
         }
 
+        // Re-read the EFFECTIVE role after the arbiter merged the Patreon opinion
+        // with any other source (e.g. Stripe). The arbiter — not this proposal —
+        // decides the final role, so the report must reflect what ACTUALLY changed.
+        // Without this, a Patreon opinion the arbiter overrides (Stripe outranks
+        // Patreon, or a looth4/protected role) is re-proposed and re-reported as
+        // "applied" on every sweep forever — phantom-change spam.
+        $fresh           = get_userdata( $user_id );
+        $effective_after = 'looth1';
+        if ( $fresh ) {
+            foreach ( [ 'looth4', 'looth3', 'looth2', 'looth1' ] as $r ) {
+                if ( in_array( $r, (array) $fresh->roles, true ) ) {
+                    $effective_after = $r;
+                    break;
+                }
+            }
+        }
+        $changed = ( $effective_after !== $effective_before );
+
         if ( $new_role === 'looth1' ) {
-            // Downgrade: clear payment_source
+            // Downgrade proposal: clear payment_source (Patreon tier ended).
             delete_user_meta( $user_id, 'payment_source' );
-            self::log_change( $user_id, $email, $change['current_role'], 'looth1', $old_payment_source, '', 'downgrade' );
-            error_log( "LGPO Sync: Downgraded {$email} to looth1, cleared payment_source." );
-            return [ 'success' => true, 'message' => "{$email} — downgraded to looth1." ];
+            self::log_change( $user_id, $email, $effective_before, $effective_after, $old_payment_source, '', 'downgrade' );
+            error_log( "LGPO Sync: {$email} Patreon tier ended; effective {$effective_before} -> {$effective_after}." );
+            $msg = $changed
+                ? "{$email} — {$effective_before} → {$effective_after} (Patreon tier ended)."
+                : "{$email} — Patreon tier ended; effective role stays {$effective_after} (held by another source).";
+            return [ 'success' => true, 'changed' => $changed, 'message' => $msg ];
         }
 
         // Upgrade or change: set payment_source=patreon
@@ -667,9 +696,12 @@ class LGPO_Sync_Engine {
             update_user_meta( $user_id, 'lgpo_patreon_tier_id', sanitize_text_field( $change['tier_id'] ) );
         }
 
-        self::log_change( $user_id, $email, $change['current_role'], $new_role, $old_payment_source, 'patreon', $action );
-        error_log( "LGPO Sync: Updated {$email} to {$new_role}, set payment_source=patreon." );
-        return [ 'success' => true, 'message' => "{$email} — {$change['current_role']} → {$new_role}." ];
+        self::log_change( $user_id, $email, $effective_before, $effective_after, $old_payment_source, 'patreon', $action );
+        error_log( "LGPO Sync: {$email} proposed {$new_role}; effective {$effective_before} -> {$effective_after}." );
+        $msg = $changed
+            ? "{$email} — {$effective_before} → {$effective_after}."
+            : "{$email} — Patreon says {$new_role}; effective role stays {$effective_after} (held by another source).";
+        return [ 'success' => true, 'changed' => $changed, 'message' => $msg ];
     }
 
     /* ------------------------------------------------------------------
@@ -747,41 +779,75 @@ class LGPO_Sync_Engine {
     /**
      * Email the admin a sync summary.
      */
-    private static function send_summary( array $results, bool $is_auto ): void {
+    private static function send_summary( array $results, bool $is_auto, array $stats = [] ): void {
         $admin_email = get_option( 'admin_email' );
         if ( ! $admin_email ) {
             return;
         }
 
+        $applied    = $results['applied'] ?? [];
+        $errors     = $results['errors'] ?? [];
+        $reconciled = $results['reconciled'] ?? [];
+
+        // Only email when something actually changed or failed. A steady-state
+        // sweep (no net role changes, no errors) is a no-op and must NOT email
+        // admin every hour — unconditional send on no-op sweeps is the root
+        // cause of the hourly "Patreon Sync Report" noise.
+        if ( empty( $applied ) && empty( $errors ) ) {
+            return;
+        }
+
         $site_name = wp_specialchars_decode( get_option( 'blogname' ), ENT_QUOTES );
         $mode      = $is_auto ? 'Auto' : 'Manual';
-        $subject   = sprintf( '[%s] Patreon Sync Report (%s)', $site_name, $mode );
+        $subject   = sprintf(
+            '[%s] Patreon Sync Report (%s) — %d changed, %d errors',
+            $site_name, $mode, count( $applied ), count( $errors )
+        );
 
         $lines = [
             "Patreon Member Sync Report ({$mode})",
             '======================================',
             '',
-            sprintf( 'Applied:  %d', count( $results['applied'] ) ),
-            sprintf( 'Errors:   %d', count( $results['errors'] ) ),
         ];
 
-        if ( ! empty( $results['applied'] ) ) {
+        // Full pipeline stats. Previously the report printed only Applied/Errors
+        // and omitted fetched/matched/unchanged/skipped, making a real sweep look
+        // empty/broken. Include them when the caller supplies them.
+        if ( ! empty( $stats ) ) {
+            $lines[] = sprintf( 'Fetched from Patreon:  %d', $stats['total_fetched'] ?? 0 );
+            $lines[] = sprintf( 'Matched to WP users:   %d', $stats['matched'] ?? 0 );
+            $lines[] = sprintf( 'Unchanged:             %d', $stats['unchanged'] ?? 0 );
+            $lines[] = sprintf( 'Skipped (no WP acct):  %d', $stats['skipped_no_wp'] ?? 0 );
+            $lines[] = sprintf( 'Skipped (looth4):      %d', $stats['skipped_looth4'] ?? 0 );
+            $lines[] = sprintf( 'Skipped (stripe):      %d', $stats['skipped_stripe'] ?? 0 );
+            $lines[] = '';
+        }
+
+        $lines[] = sprintf( 'Role changes applied:  %d', count( $applied ) );
+        $lines[] = sprintf( 'Errors:                %d', count( $errors ) );
+        if ( ! empty( $reconciled ) ) {
+            $lines[] = sprintf( 'Reconciled (no net change): %d', count( $reconciled ) );
+        }
+
+        if ( ! empty( $applied ) ) {
             $lines[] = '';
             $lines[] = 'Applied:';
-            foreach ( $results['applied'] as $msg ) {
+            foreach ( $applied as $msg ) {
                 $lines[] = '  - ' . $msg;
             }
         }
 
-        if ( ! empty( $results['errors'] ) ) {
+        if ( ! empty( $errors ) ) {
             $lines[] = '';
             $lines[] = 'Errors:';
-            foreach ( $results['errors'] as $msg ) {
+            foreach ( $errors as $msg ) {
                 $lines[] = '  - ' . $msg;
             }
         }
 
-        wp_mail( $admin_email, $subject, implode( "\n", $lines ) );
+        // Explicit UTF-8 so the "—" / "→" in messages never mojibake.
+        $headers = [ 'Content-Type: text/plain; charset=UTF-8' ];
+        wp_mail( $admin_email, $subject, implode( "\n", $lines ), $headers );
     }
 
     /* ------------------------------------------------------------------
@@ -924,6 +990,24 @@ class LGPO_Sync_Engine {
      * Membership::statusFor() panel on Manage Subscription.
      */
     private static function upsert_patreon_member_row( int $wp_user_id, array $member ): void {
+        // Tolerate partial snapshots. The self-connect onboard builds $member from
+        // the self-token /identity response, which (unlike the creator-token
+        // members API the sweep uses) carries NO charge fields — so default every
+        // column here. Missing keys would otherwise raise "Undefined array key" on
+        // the ?: reads below; the next sweep enriches the nulls via the ON
+        // DUPLICATE KEY UPDATE above.
+        $member += [
+            patreon_user_id                 => null,
+            email                           => null,
+            full_name                       => null,
+            patron_status                   => null,
+            last_charge_status              => null,
+            last_charge_date                => null,
+            next_charge_date                => null,
+            will_pay_amount_cents           => null,
+            currently_entitled_amount_cents => null,
+            tier_labels                     => [],
+        ];
         try {
             $pdo = \LGMS\Db::pdo();
             $pdo->prepare(
