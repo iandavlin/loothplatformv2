@@ -990,6 +990,24 @@ class LGPO_Sync_Engine {
      * Membership::statusFor() panel on Manage Subscription.
      */
     private static function upsert_patreon_member_row( int $wp_user_id, array $member ): void {
+        // Tolerate partial snapshots. The self-connect onboard builds $member from
+        // the self-token /identity response, which (unlike the creator-token
+        // members API the sweep uses) carries NO charge fields — so default every
+        // column here. Missing keys would otherwise raise "Undefined array key" on
+        // the ?: reads below; the next sweep enriches the nulls via the ON
+        // DUPLICATE KEY UPDATE above.
+        $member += [
+            patreon_user_id                 => null,
+            email                           => null,
+            full_name                       => null,
+            patron_status                   => null,
+            last_charge_status              => null,
+            last_charge_date                => null,
+            next_charge_date                => null,
+            will_pay_amount_cents           => null,
+            currently_entitled_amount_cents => null,
+            tier_labels                     => [],
+        ];
         try {
             $pdo = \LGMS\Db::pdo();
             $pdo->prepare(
