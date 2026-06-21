@@ -368,6 +368,13 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', 
         $f = $filters; $f['q'] = '';
         $chips[] = ['Search', $filters['q'], hub_url($f, $sort)];
     }
+    if (!empty($filters['show'])) {
+        // Shows is a single ?show param (not a multiselect), but it gets the SAME
+        // removable active-filter chip + clear path as Type/Category (Ian 2026-06-21).
+        $f = $filters; $f['show'] = '';
+        $slabel = HUB_SHOW_TERMS[$filters['show']] ?? $filters['show'];
+        $chips[] = ['Show', $slabel, hub_url($f, $sort)];
+    }
     foreach ($filters['types'] as $v) $chips[] = ['Type', hub_type_label($v), hub_url(hub_toggle($filters, 'type', $v), $sort)];
     foreach ($filters['cats']  as $v) $chips[] = ['In',   hub_cat_label($v),  hub_url(hub_toggle($filters, 'cat',  $v), $sort), $v];
     foreach (($filters['leaves'] ?? []) as $v) $chips[] = ['In', $leaf_labels[$v] ?? $v, hub_url(hub_toggle($filters, 'leaf', $v), $sort)];
