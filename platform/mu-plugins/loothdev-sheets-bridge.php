@@ -177,6 +177,19 @@ function lgsb_create_or_update_event(WP_REST_Request $req) {
         if ($att_id) set_post_thumbnail($post_id, $att_id);
     }
 
+    // Final, BLOCKING re-bake of the standalone blob now that the featured image
+    // and all metas are committed. The async auto-materializer fires mid-create and
+    // can race (an early incomplete bake landing last); this guarantees the public
+    // /event/ render matches the just-published post.
+    wp_remote_post('https://127.0.0.1/archive-api/v0/_materialize', [
+        'method'    => 'POST',
+        'timeout'   => 8,
+        'blocking'  => true,
+        'sslverify' => false,
+        'headers'   => ['Host' => $_SERVER['HTTP_HOST'] ?? 'dev2.loothgroup.com', 'Content-Type' => 'application/json'],
+        'body'      => wp_json_encode(['post_id' => (int) $post_id, 'action' => 'upsert']),
+    ]);
+
     return new WP_REST_Response([
         'ok'         => true,
         'wp_post_id' => (int) $post_id,

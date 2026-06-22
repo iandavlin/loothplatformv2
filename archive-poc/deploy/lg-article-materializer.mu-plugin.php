@@ -78,6 +78,7 @@ add_action('wp_after_insert_post', function ($post_id, $post = null, $update = n
    both hooks still bakes once. */
 $lg_mat_meta_rebake = function ($meta_id, $post_id, $meta_key) {
     if ($meta_key === '_lg_layout_v2'
+        || $meta_key === '_thumbnail_id'   // featured image (bridge sets it LAST on publish) -> re-bake with the hero
         || (defined('LG_LAYOUT_V2_META_KEY') && $meta_key === LG_LAYOUT_V2_META_KEY)) {
         lg_materializer_dispatch((int) $post_id, 'upsert');
     }
