@@ -1358,20 +1358,28 @@ if (ssrPresent && !hasFilters) {
       const btn = form.querySelector('[type=submit]');
       btn.disabled = true; btn.textContent = 'Sending…';
       const fd = new FormData(form);
-      fd.set('action', 'feedback');
-      let ok = false, err = '';
+      let ok = false, err = '', hard = false;
       try {
-        const res = await fetch('/front-page/', { method: 'POST', body: fd, credentials: 'same-origin' });
+        const res = await fetch('/wp-json/looth/v1/bug-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ message: fd.get('message') || '', page_url: location.pathname })
+        });
         const j = await res.json().catch(() => ({}));
-        ok = !!j.ok; err = j.error || '';
-      } catch (_) {}
+        ok = !!j.ok; err = j.message || ''; hard = res.status >= 500;
+      } catch (_) { hard = true; }
       if (ok) {
         form.innerHTML = '<p class="fb-modal__done">Thanks — sent.</p>';
         setTimeout(close, 1800);
       } else {
         btn.disabled = false; btn.textContent = 'Send';
         status.hidden = false;
-        status.textContent = err || 'Could not send — try again later.';
+        if (hard) {
+          status.innerHTML = 'Oh no, there\'s a bug with bug reporting. Please email <a href="mailto:ian.davlin@gmail.com">ian.davlin@gmail.com</a>.';
+        } else {
+          status.textContent = err || 'Could not send — try again later.';
+        }
       }
     });
     modal.querySelector('textarea').focus();
