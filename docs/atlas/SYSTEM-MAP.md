@@ -192,10 +192,10 @@ from each file's header:
 
 | file | what it does |
 |------|--------------|
-| `lg-siteurl-from-env.php` | **The env plugin.** Drives siteurl/home/Patreon-redirect from `/etc/looth/env`. **Only repo-symlinked mu-plugin.** |
+| `lg-siteurl-from-env.php` | **The env plugin.** Drives siteurl/home/Patreon-redirect from `/etc/looth/env`. Repo-symlinked (one of: this, `lg-secrets-dash`, `lg-article-materializer`). |
 | `archive-poc-sync.php` | On managed-CPT publish/update/delete, POSTs `{post_id, action}` to archive-poc `/archive-api/v0/_sync` (feeds the discovery index). |
 | `bb-mirror-sync.php` | POSTs `{kind, id, action}` to bb-mirror `/bb-mirror-api/v0/_sync` (mirrors bbPress topics/replies into PG `forums`). |
-| `lg-article-materializer.php` | On managed-CPT change, POSTs `{post_id}` to materialize the standalone render blob (archive-poc renderer). |
+| `lg-article-materializer.php` | On managed-CPT publish/update (`wp_after_insert_post`), `_lg_layout_v2`/`_thumbnail_id` meta writes, or `tier` term change, POSTs `{post_id}` to `/archive-api/v0/_materialize` to (re)bake the standalone render blob. **Repo-symlinked** (serve clone). ⚠️ Was MISSING from dev2 until 2026-06-22 — NO managed CPT auto-materialized before that (audit-the-box catch). |
 | `profile-auth.php` | **JWT minter.** On WP login mints an RS256 JWT and drops it as the `looth_id` cookie. Reads the user's profile-app `slug` via the internal slug resolver to populate the claim. |
 | `profile-whoami-shim.php` | WP-shim proxying `GET /wp-json/looth/v1/whoami` → profile-app `/profile-api/v0/whoami` (same shape). The SLOW path; consumers should hit profile-app directly. |
 | `profile-sync.php` | On `user_register`, non-blocking POST to profile-app `/profile-api/v0/hooks/user-created` (provisions the profile row). |
@@ -212,7 +212,7 @@ from each file's header:
 | `bb-forum-author-delete.php` | Lets a member delete their OWN bbPress topics/replies. |
 | `buddyboss-performance-api.php` | BuddyBoss MU perf shim. |
 | `burst_rest_api_optimizer.php` | REST API optimizer. |
-| `loothdev-sheets-bridge.php` (+ `.gs.txt`) | REST endpoints for the Showrunner Google Sheet → `event` CPT bridge. |
+| `loothdev-sheets-bridge.php` (+ `.gs.txt`) | REST endpoints for the Showrunner Google Sheet → `event` CPT bridge. Accepts `zoom_url` → gated Join CTA. After publish (featured image + metas committed) does ONE **blocking** `_materialize` call so the standalone /event/ render is correct immediately (the async materializer races on multi-write creates). Standalone copy, NOT repo-symlinked (gap). |
 | `lg-secrets-dash.php` | WP admin "Looth Secrets" dashboard — bucket-first R2 + Patreon secrets manager w/ live CF bucket inventory; shells to the root `lg-secrets-helper`, holds no values. **Repo-symlinked** from `platform/mu-plugins/`. |
 | `looth-vendor/` | shared vendored libs (JWT etc.). |
 
