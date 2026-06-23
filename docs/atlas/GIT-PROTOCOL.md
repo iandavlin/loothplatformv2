@@ -46,6 +46,8 @@ Before any push or merge to `main`: show Ian the commits + `git diff --stat`. Me
 `--no-ff` (one clear merge commit per lane) only after his OK; delete the branch after.
 Never silent-push. Boxes only ever *pull* `main`, so a mistake kept off `main` reaches no box.
 
+**Definition of Done (the keeper checks this before merge):** see `REPO-MANDATE.md` §3 — repo-first (code+wiring+provisioning+docs all in repo), env-hygiene (box-varying values via `/etc/looth/env`, `env.template` updated), secrets out with a recipe + pointer, and “a clean box reproduces this from the repo alone.” A lane that doesn’t meet it doesn’t merge.
+
 ## What is / isn't tracked
 Source is tracked; **runtime + secrets are not** (see `.gitignore` + per-dir ignores):
 - archive-poc `index.sqlite` (box-local revert mirror) and `web/assets/*.css|*.js`
@@ -64,7 +66,7 @@ _(to fill: the `git pull` ritual per box, symlink-farm repoint, what restart/cac
 follows a pull)_
 
 ## Secrets & box-local files
-_(to fill: `/etc/looth/*`, R2 tokens, JWT keys, certs — never in git; per-box provisioning)_
+`/etc/looth/*`, R2 tokens, JWT keys, certs, DB contents, uploads, render caches — **never in git**. But per the repo-first mandate (`REPO-MANDATE.md`), each carries a repo obligation: an idempotent provisioning script/recipe to (re)create it + a documented pointer to where the real value lives. **Secret VALUE out; secret RECIPE in.** Box-varying config comes from `/etc/looth/env` via `lg_env()` — never hardcoded; the repo’s `env.template` documents every key. **Promotion dev→live = swap env values only, zero code edits.**
 
 ## Multi-box / worktree handling (decided 6/19)
 **One canonical clone, per-lane worktrees, a separate serve clone.**

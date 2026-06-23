@@ -71,6 +71,10 @@ LG_GATE_COOKIE=loothdev_auth
   `/srv/lg-shared/lg-env.php` (the `lg_env()` helper).
 - The two lines that matter at standup are `LG_ENV` and `LG_PUBLIC_HOST`; the rest name
   the DBs/paths so nothing is hardcoded.
+- **Repo carries `env.template`** (root) documenting every key + dev/live examples (secret
+  values redacted) — the source of truth for what this file must contain. Env-file hygiene is
+  policy: `docs/atlas/REPO-MANDATE.md`. Box-varying config reads from here via `lg_env()`;
+  nothing hardcoded.
 
 ---
 
