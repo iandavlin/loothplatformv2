@@ -1,3 +1,7 @@
+> **SUPERSEDED 2026-06-23** — dev1-era doc. The bridge is now repo-first + env-driven;
+> see [EVENT-SHEET-BRIDGE.md](EVENT-SHEET-BRIDGE.md) for the current pipeline, deploy,
+> and dev→live promotion. The app-password below was REDACTED (never commit secrets).
+
 # Showrunner Tracker → WordPress Event CPT — Cutover Doc
 
 **Date:** 2026-05-16
@@ -14,7 +18,7 @@ Let the Google Sheet "Looth Group Live — Showrunner Tracker" publish rows dire
 - **Email:** sheets-bot@loothgroup.com
 - **ID:** 1901
 - **Role:** Editor (has edit_posts / publish_posts / upload_files / manage_categories)
-- **Application password (label "Showrunner Tracker Sheet"):** `MbnW ZJe4 TVnO EIcT 6MYv A4DM` (paste without spaces)
+- **Application password (label "Showrunner Tracker Sheet"):** `<REDACTED — mint via platform/bin/provision-sheets-bot.sh; lives only in the Sheet Script Properties>` (paste without spaces)
 
 Store the app password in the Apps Script's Script Properties as `WP_APP_PASSWORD`. Username goes alongside as `WP_USERNAME = sheets-bot`.
 
@@ -95,7 +99,7 @@ The full updated Apps Script lives in [/home/ubuntu/projects/Showrunner Automati
 2. **Set credentials** — menu `🎙️ Looth Showrunners → Set WP Credentials…`. Enter:
    - Base URL: `https://dev.loothgroup.com`
    - Username: `sheets-bot`
-   - App password: `MbnWZJe4TVnOEIcT6MYvA4DM`
+   - App password: `<REDACTED-APP-PASSWORD>`
 3. **Test connection** — menu `Test WP Connection`. Should return a sample user.
 4. **Migrate Config sheet:**
    - Option A *(safe — preserves edits)*: manually add a header `WP User ID` to **cell D2** of the Config sheet. Leave column D blank for now.
@@ -130,7 +134,7 @@ Set/changed via the menu, never hard-coded in source.
 ## Quick test (curl) — known good
 
 ```
-AUTH=$(echo -n "sheets-bot:MbnWZJe4TVnOEIcT6MYvA4DM" | base64 -w0)
+AUTH=$(echo -n "sheets-bot:<REDACTED-APP-PASSWORD>" | base64 -w0)
 
 # user lookup
 curl -H "Authorization: Basic $AUTH" \
