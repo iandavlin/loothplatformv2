@@ -43,11 +43,15 @@ final class PurgeNotifier
         // its server block via Host header / TLS SNI, so we must override
         // both — otherwise the request falls into the default server and
         // the cookie gate fires. Parse the public hostname from
-        // LG_PROFILE_APP_PUBLIC_HOST (defaulting to dev.loothgroup.com on
-        // dev) so live can point at its own cert/hostname combo.
+        // LG_PROFILE_APP_PUBLIC_HOST, falling back to the box public host
+        // from /etc/looth/env via lg_env() (dev2.loothgroup.com on dev,
+        // loothgroup.com on live) so each box points at its own cert/host.
+        if ( ! function_exists( 'lg_env' ) && is_readable( '/srv/lg-shared/lg-env.php' ) ) {
+            require_once '/srv/lg-shared/lg-env.php';
+        }
         $publicHost = defined( 'LG_PROFILE_APP_PUBLIC_HOST' )
             ? (string) LG_PROFILE_APP_PUBLIC_HOST
-            : 'dev.loothgroup.com';
+            : ( ( function_exists( 'lg_env' ) ? lg_env() : [] )['host'] ?? 'dev2.loothgroup.com' );
 
         wp_remote_post( $base . self::ENDPOINT_PATH, [
             'blocking'  => false,
