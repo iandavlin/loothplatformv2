@@ -216,7 +216,7 @@ from each file's header:
 | `bb-forum-author-delete.php` | Lets a member delete their OWN bbPress topics/replies. |
 | `buddyboss-performance-api.php` | BuddyBoss MU perf shim. |
 | `burst_rest_api_optimizer.php` | REST API optimizer. |
-| `loothdev-sheets-bridge.php` (+ `.gs.txt`) | REST endpoints for the Showrunner Google Sheet → `event` CPT bridge. Accepts `zoom_url` → gated Join CTA. After publish (featured image + metas committed) does ONE **blocking** `_materialize` call so the standalone /event/ render is correct immediately (the async materializer races on multi-write creates). Standalone copy, NOT repo-symlinked (gap). |
+| `loothdev-sheets-bridge.php` (+ `.gs.txt`) | REST endpoints for the Showrunner Google Sheet → `event` CPT bridge. Accepts `zoom_url` → gated Join CTA. After publish (featured image + metas committed) does ONE **blocking** `_materialize` call so the standalone /event/ render is correct immediately (the async materializer races on multi-write creates). Repo-symlinked into WP mu-plugins via `platform/bin/install-sheets-bridge.sh` (deploy = git pull); _materialize host from `LG_PUBLIC_HOST` via `lg_env()`; bot provisioned by `platform/bin/provision-sheets-bot.sh`. See docs/EVENT-SHEET-BRIDGE.md. |
 | `lg-secrets-dash.php` | WP admin "Looth Secrets" dashboard — bucket-first R2 + Patreon secrets manager w/ live CF bucket inventory; shells to the root `lg-secrets-helper`, holds no values. **Repo-symlinked** from `platform/mu-plugins/`. |
 | `looth-vendor/` | shared vendored libs (JWT etc.). |
 
