@@ -8,6 +8,19 @@
 
 if (!defined('ABSPATH')) exit;
 
+/**
+ * Public/loopback host for the bridge's self-calls (the blocking _materialize
+ * below). Sourced from /etc/looth/env (LG_PUBLIC_HOST) via lg_env() so the BOX,
+ * not the code, decides it: dev2.loothgroup.com on dev, loothgroup.com on live,
+ * with ZERO code edits to promote. A box brought up without /etc/looth/env falls
+ * through to the literal guard (same absent-safe contract as lg-shared/lg-env.php).
+ */
+function lgsb_public_host(): string {
+    if (is_file('/srv/lg-shared/lg-env.php')) require_once '/srv/lg-shared/lg-env.php';
+    $e = function_exists('lg_env') ? lg_env() : [];
+    return (string)($e['host'] ?? '') ?: 'dev2.loothgroup.com';
+}
+
 add_action('rest_api_init', function () {
 
     register_rest_route('loothdev/v1', '/user-search', [
@@ -186,7 +199,7 @@ function lgsb_create_or_update_event(WP_REST_Request $req) {
         'timeout'   => 8,
         'blocking'  => true,
         'sslverify' => false,
-        'headers'   => ['Host' => $_SERVER['HTTP_HOST'] ?? 'dev2.loothgroup.com', 'Content-Type' => 'application/json'],
+        'headers'   => ['Host' => $_SERVER['HTTP_HOST'] ?? lgsb_public_host(), 'Content-Type' => 'application/json'],
         'body'      => wp_json_encode(['post_id' => (int) $post_id, 'action' => 'upsert']),
     ]);
 
