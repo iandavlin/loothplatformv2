@@ -338,9 +338,12 @@ final class UserLifecycle
             $errors[] = 'profile-identity: profile_hook_secret not set — bridge + /whoami identity NOT created.';
             return [ 'ok' => false, 'error' => 'no_secret' ];
         }
+        if ( ! function_exists( 'lg_env' ) && is_readable( '/srv/lg-shared/lg-env.php' ) ) {
+            require_once '/srv/lg-shared/lg-env.php';
+        }
         $publicHost = defined( 'LG_PROFILE_APP_PUBLIC_HOST' )
             ? (string) LG_PROFILE_APP_PUBLIC_HOST
-            : 'dev.loothgroup.com';
+            : ( ( function_exists( 'lg_env' ) ? lg_env() : [] )['host'] ?? 'dev2.loothgroup.com' );
 
         $body = wp_json_encode( [
             'wp_user_id'   => $wpUserId,
@@ -690,9 +693,12 @@ final class UserLifecycle
             return [ 'ok' => false, 'error' => 'not_configured' ];
         }
 
+        if ( ! function_exists( 'lg_env' ) && is_readable( '/srv/lg-shared/lg-env.php' ) ) {
+            require_once '/srv/lg-shared/lg-env.php';
+        }
         $publicHost = defined( 'LG_PROFILE_APP_PUBLIC_HOST' )
             ? (string) LG_PROFILE_APP_PUBLIC_HOST
-            : 'dev.loothgroup.com';
+            : ( ( function_exists( 'lg_env' ) ? lg_env() : [] )['host'] ?? 'dev2.loothgroup.com' );
 
         $resp = wp_remote_post( $base . self::ERASE_PATH, [
             'blocking'  => true,
