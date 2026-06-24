@@ -42,10 +42,11 @@
     person: '<circle cx="12" cy="8.5" r="3.8"/><path d="M5 20c0-3.6 3-6 7-6s7 2.4 7 6"/>'
   };
 
-  // Destinations shown in the Nav tray (the slide-up "Go to" sheet). These were
-  // the old bottom-bar tabs (Hub/Events/Members/Shop) plus Home + the items the
-  // mobile header used to hide (Messages/Alerts/Loothtool). `home:true` paints
-  // the accent tile. Shop opens its full page (Buck 2026-06-09). Order = grid.
+  // Destinations shown in the Nav tray (the slide-up "Go to" sheet) — pure
+  // PLACES only. Messages + Alerts(notifications) are personal, not destinations,
+  // so they live in the You sheet (Messages row + Notifications row), NOT here
+  // (Ian/keeper 2026-06-24). `home:true` paints the accent tile. Shop opens its
+  // full page (Buck 2026-06-09). Order = grid.
   var DESTS = [
     { key: 'home',     label: 'Home',      href: '/front-page/',         icon: ICONS.home, home: true },
     { key: 'hub',      label: 'Hub',       href: '/hub/',                icon: ICONS.hub },
@@ -53,8 +54,6 @@
     { key: 'members',  label: 'Members',   href: '/directory/members/',  icon: ICONS.members },
     { key: 'shop',     label: 'Shop',      href: '/shop/',               icon: ICONS.shop },
     { key: 'sponsors', label: 'Sponsors',  href: '/sponsors/',           icon: ICONS.sponsors },
-    { key: 'messages', label: 'Messages',  href: '/members/me/messages/',icon: ICONS.messages, messenger: true },
-    { key: 'alerts',   label: 'Alerts',    href: '/members/me/notifications/', icon: ICONS.alerts, notifs: true },
     { key: 'loothtool',label: 'Loothtool', href: 'https://loothtool.com/', icon: ICONS.loothtool, ext: true }
   ];
 
@@ -480,13 +479,29 @@
         '<span>Log out</span></a>';
     head.querySelector('.lt-sheet__name').textContent = name;
     sheet.appendChild(head);
-    // Upgrade to a NONCED one-tap logout (auth.php runs on the WP pool and can mint
-    // it) so we skip WordPress's "Do you really want to log out?" confirm page.
+    // Logout MUST carry a fresh WP nonce, or WordPress serves its "Do you really
+    // want to log out?" confirm page and the session quietly survives — the mobile
+    // "logout doesn't take" bug (Ian/keeper 2026-06-24). The header ships the plain
+    // un-nonced URL, so we mint a nonced one-tap URL from auth.php (WP pool). We
+    // pre-fetch it, but a fast tap can beat that fetch — so the click is ALSO
+    // intercepted: if the href isn't nonced yet, fetch a fresh URL and only THEN
+    // navigate. Once the real logout lands, WP redirects to a fresh (network-first)
+    // page that renders the anon header, so the nav + You sheet rebuild as anon.
     var loEl = head.querySelector('.lt-sheet__logout');
-    fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { if (d && d.logout_url && loEl) loEl.href = d.logout_url; })
-      .catch(function () {});
+    function freshLogoutUrl() {
+      return fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { return (d && d.logout_url) || null; });
+    }
+    freshLogoutUrl().then(function (url) { if (url && loEl) loEl.href = url; }).catch(function () {});
+    loEl.addEventListener('click', function (e) {
+      var href = loEl.getAttribute('href') || '';
+      if (/[?&]_wpnonce=/.test(href)) return;   // already nonced → real one-tap logout, let it through
+      e.preventDefault();                        // not nonced yet — never hit the confirm page
+      freshLogoutUrl()
+        .then(function (url) { window.location.href = url || href; })
+        .catch(function () { window.location.href = href; });
+    });
 
     // Pull-down-to-close: grab the handle (or the header) and drag down to dismiss
     // (Buck 2026-06-08 — previously only the backdrop tap closed it). A drag past a
@@ -646,12 +661,9 @@
       var here = navIsHere(d.key, path);
       if (here) a.classList.add('is-here');
       a.innerHTML = '<span class="lt-nico"><svg viewBox="0 0 24 24" aria-hidden="true">' + d.icon + '</svg></span><span>' + d.label + '</span>';
-      a.addEventListener('click', function (e) {
+      a.addEventListener('click', function () {
         closeNav();
-        // Messages → the messenger pull-up (no page nav) when it's loaded.
-        if (d.messenger && window.openMessenger) { e.preventDefault(); setTimeout(window.openMessenger, 200); return; }
-        // Alerts → the dedicated notifications off-canvas (Ian 2026-06-24).
-        if (d.notifs) { e.preventDefault(); setTimeout(openNotifSheet, 200); return; }
+        // Tray = destinations only; Messages/Alerts moved to the You sheet.
         if (!d.ext && !here) showTabSkeleton();   // perceived-speed bridge on real nav
       });
       grid.appendChild(a);
