@@ -26,6 +26,8 @@
     events: '<rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9h18"/><path d="M8 2.5v4M16 2.5v4"/>',
     members: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c0-3 2.6-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.6a3 3 0 0 1 0 5.4"/><path d="M17.5 14.6c2 .5 3.5 2.2 3.5 4.9"/>',
     shop: '<path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+    // Sponsors — a star (featured partners). fill:none + stroke inherited from the svg.
+    sponsors: '<path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.2l5.9-.8z"/>',
     // Home = the marketing front page (was unreachable on mobile before the
     // 3-button bar — the Hub header hides the logo). Lives top-left in the tray.
     home: '<path d="M3 11 12 3l9 8"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/>',
@@ -50,6 +52,7 @@
     { key: 'events',   label: 'Events',    href: '/events/',             icon: ICONS.events },
     { key: 'members',  label: 'Members',   href: '/directory/members/',  icon: ICONS.members },
     { key: 'shop',     label: 'Shop',      href: '/shop/',               icon: ICONS.shop },
+    { key: 'sponsors', label: 'Sponsors',  href: '/sponsors/',           icon: ICONS.sponsors },
     { key: 'messages', label: 'Messages',  href: '/members/me/messages/',icon: ICONS.messages, messenger: true },
     { key: 'alerts',   label: 'Alerts',    href: '/members/me/notifications/', icon: ICONS.alerts, notifs: true },
     { key: 'loothtool',label: 'Loothtool', href: 'https://loothtool.com/', icon: ICONS.loothtool, ext: true }
@@ -62,6 +65,12 @@
     var src = img && (img.currentSrc || img.getAttribute('src'));
     return src || '';
   }
+
+  // Auth signal, read from the server-rendered shared header: the account button
+  // (.lg-chrome__account) is emitted only for logged-in users; anon gets the
+  // Sign-in / Join cluster instead. It's in the initial HTML (and only display:none
+  // on mobile), so this is reliable at build time. (Ian 2026-06-24.)
+  function isAuthed() { return !!document.querySelector('.lg-chrome__account'); }
 
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
@@ -115,7 +124,13 @@
       // Consolidate to the bottom "You": hide the shared header's account bubble
       // on the app (mobile). Desktop keeps it. Avatar src is still readable for
       // the profile tab even while the button is display:none.
-      '.lg-chrome__account{display:none !important}}' +
+      '.lg-chrome__account{display:none !important}' +
+      // No hamburger on mobile (Ian 2026-06-24): the bottom-bar Nav tray is the
+      // sole mobile menu now. Hide the shared header's hamburger + its fold-down
+      // nav drawer. CSS-only — the canonical header markup is left untouched; this
+      // is the overlay layer (drawer destinations now live in the Nav tray).
+      '.lg-chrome__hamburger{display:none !important}' +
+      '.lg-chrome__nav{display:none !important}}' +
 
       // ---- Profile sheet (Instagram-style upward sheet from "You") ----
       '.lt-sheet-bd{position:fixed;inset:0;z-index:2147481300;background:rgba(26,29,26,.45);' +
@@ -150,6 +165,13 @@
         'font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);text-decoration:none;background:rgba(198,104,69,.06)}' +
       '.lt-sheet__logout:active{background:rgba(198,104,69,.18)}' +
       '.lt-sheet__logout svg{flex:0 0 auto}' +
+      // Sign in — the anon counterpart, same far-right slot as Log out but the
+      // sage "go" color instead of the warm sign-out color (Ian 2026-06-24).
+      '.lt-sheet__login{margin-left:auto;flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;' +
+        'padding:9px 13px;border:1px solid var(--lg-sage-d,#6b7c52);border-radius:999px;color:#fff;' +
+        'font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);text-decoration:none;background:var(--lg-sage-d,#52613d)}' +
+      '.lt-sheet__login:active{background:var(--lg-sage,#87986a)}' +
+      '.lt-sheet__login svg{flex:0 0 auto}' +
       '.lt-sheet__sech{font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase;' +
         'color:var(--lg-mute,#6b6f6b);padding:14px 6px 4px}' +
       // ---- Nav tray: "Go to" destinations grid (slide-up, same sheet infra) ----
@@ -360,24 +382,57 @@
   // ---- Profile sheet ----------------------------------------------------
   var SHEET_ID = 'looth-sheet', SHEET_BD_ID = 'looth-sheet-bd';
 
-  // Mirror the shared header's account-menu links so the sheet stays in sync
-  // with whatever those are (Archive / The Hub / Events / Members / Loothtool).
-  function accountLinks() {
-    var menu = document.querySelector('.lg-chrome__menu');
-    var acct = document.querySelector('.lg-chrome__account');
-    var opened = false;
-    if (!menu && acct) { acct.click(); menu = document.querySelector('.lg-chrome__menu'); opened = true; }
-    var out = [];
-    if (menu) {
-      [].slice.call(menu.querySelectorAll('a[href]')).forEach(function (a) {
-        var t = (a.textContent || '').replace(/\s+/g, ' ').trim();
-        // Archive is merged into the Hub now — drop it from the sheet. Loothtool
-        // too (Buck 2026-06-11): the bottom bar's Shop tab already covers it.
-        if (t && !/^(archive|loothtool)$/i.test(t)) out.push({ text: t, href: a.getAttribute('href') });
-      });
+  // Anon variant of the You sheet (Ian 2026-06-24): no profile / notifications /
+  // settings — just the account entry. Sign in sits top-right (mirroring the authed
+  // Log out slot); Join + Connect Patreon below. Hrefs are mirrored from the shared
+  // header's anon cluster so they stay in sync with the canonical URLs.
+  // (The destination menu that used to be mirrored into the sheet now lives solely
+  // in the Nav tray — no duplicate menus.)
+  function buildAnonSheet() {
+    var bd = document.createElement('div');
+    bd.id = SHEET_BD_ID; bd.className = 'lt-sheet-bd';
+    bd.addEventListener('click', closeSheet);
+
+    var sheet = document.createElement('div');
+    sheet.id = SHEET_ID; sheet.className = 'lt-sheet';
+    sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); sheet.setAttribute('aria-label', 'Account');
+
+    var grab = document.createElement('div'); grab.className = 'lt-sheet__grab';
+    sheet.appendChild(grab);
+
+    function hdrHref(sel, fallback) {
+      var el = document.querySelector(sel);
+      return (el && el.getAttribute('href')) || fallback;
     }
-    if (opened && acct) acct.click(); // restore closed state
-    return out;
+    var signinHref  = hdrHref('.lg-chrome__signin, .lg-chrome__menu-signin a', '/wp-login.php');
+    var joinHref    = hdrHref('.lg-chrome__join', 'https://www.patreon.com/c/theloothgroup/membership');
+    var connectHref = hdrHref('.lg-chrome__connect', '/connect-your-patreon/');
+
+    var head = document.createElement('div'); head.className = 'lt-sheet__head';
+    head.innerHTML =
+      '<span class="lt-sheet__avi"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#6b7c52" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.8"/><path d="M5 20c0-3.6 3-6 7-6s7 2.4 7 6"/></svg></span>' +
+      '<span class="lt-sheet__id"><span class="lt-sheet__name">Welcome</span>' +
+      '<span class="lt-sheet__view">Sign in to join the conversation</span></span>' +
+      '<a class="lt-sheet__login" href="' + String(signinHref).replace(/"/g, '&quot;') + '">' +
+        '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>' +
+        '<span>Sign in</span></a>';
+    sheet.appendChild(head);
+
+    var joinRow = document.createElement('a');
+    joinRow.className = 'lt-sheet__row';
+    joinRow.href = joinHref; joinRow.target = '_blank'; joinRow.rel = 'noopener';
+    joinRow.textContent = 'Join';
+    sheet.appendChild(joinRow);
+
+    var connRow = document.createElement('a');
+    connRow.className = 'lt-sheet__row';
+    connRow.href = connectHref;
+    connRow.textContent = 'Connect Patreon';
+    sheet.appendChild(connRow);
+
+    document.body.appendChild(bd);
+    document.body.appendChild(sheet);
+    return sheet;
   }
 
   function renderSettings(host) {
@@ -391,6 +446,9 @@
   function buildSheet() {
     var existing = document.getElementById(SHEET_ID);
     if (existing) return existing;
+    // Anon users get the minimal account sheet — no profile / notifications /
+    // settings (Ian 2026-06-24). Auth comes from the server-rendered header.
+    if (!isAuthed()) return buildAnonSheet();
 
     var bd = document.createElement('div');
     bd.id = SHEET_BD_ID; bd.className = 'lt-sheet-bd';
@@ -475,14 +533,17 @@
       window.addEventListener('touchend', up);
     })();
 
-    // notifications (Buck 2026-06-08): a section in the profile sheet, populated
-    // on open from /profile-api/v0/me/notifications/, with a quick Clear button.
-    var nH = document.createElement('div'); nH.className = 'lt-sheet__sech lt-notifs__h';
-    nH.innerHTML = '<span>Notifications</span><button type="button" class="lt-notifs__clear" data-notif-clearall>Clear</button>';
-    sheet.appendChild(nH);
-    nH.querySelector('[data-notif-clearall]').addEventListener('click', function () { markAllNotifsRead(true); });
-    var nBox = document.createElement('div'); nBox.className = 'lt-notifs'; nBox.id = 'lt-notifs';
-    sheet.appendChild(nBox);
+    // Notifications now live in their OWN off-canvas sheet (Ian 2026-06-24) — the
+    // You sheet just carries an entry row + unread badge; the list and the Clear
+    // button live over there, not on this card.
+    var notifRow = document.createElement('button');
+    notifRow.type = 'button';
+    notifRow.className = 'lt-sheet__row lt-sheet__row--notifs';
+    notifRow.style.cssText = 'display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:none;cursor:pointer';
+    notifRow.innerHTML = '<svg class="lt-row-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Notifications</span>' +
+      '<span class="lt-notif-rowbadge" hidden style="margin-left:auto;background:#e23b3b;color:#fff;border-radius:999px;font:700 11px/1 var(--lg-font-sans,system-ui,sans-serif);padding:3px 7px"></span>';
+    notifRow.addEventListener('click', function () { closeSheet(); setTimeout(openNotifSheet, 120); });
+    sheet.appendChild(notifRow);
 
     // Messages (Vanessa 2026-06-11): opens the Messenger-style chats pull-up
     // (messenger-sheet.js); unread count fed by social-counts on badge refresh.
@@ -505,14 +566,8 @@
     savedRow.innerHTML = '<svg class="lt-row-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg><span>Saved posts</span>';
     sheet.appendChild(savedRow);
 
-    // mirrored account-menu links
-    var navWrap = document.createElement('div'); navWrap.className = 'lt-sheet__nav';
-    accountLinks().forEach(function (l) {
-      var a = document.createElement('a'); a.className = 'lt-sheet__row';
-      a.href = l.href; a.textContent = l.text;
-      navWrap.appendChild(a);
-    });
-    if (navWrap.children.length) sheet.appendChild(navWrap);
+    // (Destination links removed from the You sheet — the Nav tray is the sole
+    // mobile menu now; no duplicate menus. Ian 2026-06-24.)
 
     // settings
     var setH = document.createElement('div'); setH.className = 'lt-sheet__sech'; setH.textContent = 'Settings';
@@ -532,7 +587,7 @@
     // refresh the settings panel so the active chips reflect current choices
     var setBody = sheet.querySelector('.lt-sheet__set');
     if (setBody) renderSettings(setBody);
-    loadSheetNotifs(sheet.querySelector('#lt-notifs'));   // refresh notifications each open
+    if (isAuthed()) refreshNotifBadge();   // sync the Notifications-row unread badge
     sheet.style.transform = '';   // clear any leftover drag transform so it opens cleanly
     void sheet.offsetHeight; // reflow so the transform transition runs
     if (bd) bd.classList.add('is-open');
@@ -564,7 +619,8 @@
            (key === 'hub'     && /^\/(hub|stream|archive)(\/|$)/.test(path)) ||
            (key === 'events'  && /^\/events(\/|$)/.test(path)) ||
            (key === 'members' && /^\/(directory|members)(\/|$)/.test(path)) ||
-           (key === 'shop'    && /^\/shop(\/|$)/.test(path));
+           (key === 'shop'    && /^\/shop(\/|$)/.test(path)) ||
+           (key === 'sponsors'&& /^\/sponsors(\/|$)/.test(path));
   }
   function buildNavTray() {
     var existing = document.getElementById(NAV_ID);
@@ -594,8 +650,8 @@
         closeNav();
         // Messages → the messenger pull-up (no page nav) when it's loaded.
         if (d.messenger && window.openMessenger) { e.preventDefault(); setTimeout(window.openMessenger, 200); return; }
-        // Alerts → the You sheet (notifications live there on mobile).
-        if (d.notifs) { e.preventDefault(); setTimeout(openSheet, 200); return; }
+        // Alerts → the dedicated notifications off-canvas (Ian 2026-06-24).
+        if (d.notifs) { e.preventDefault(); setTimeout(openNotifSheet, 200); return; }
         if (!d.ext && !here) showTabSkeleton();   // perceived-speed bridge on real nav
       });
       grid.appendChild(a);
@@ -626,6 +682,58 @@
   }
   function onNavKey(e) { if (e.key === 'Escape') closeNav(); }
 
+  // ---- Notifications sheet (dedicated off-canvas) ---------------------------
+  // Notifications moved out of the You sheet into their own slide-up (Ian
+  // 2026-06-24): the Nav-tray "Alerts" item and the You-sheet Notifications row
+  // both open it; Clear lives here, not on the You card. Reuses the .lt-sheet infra.
+  var NOTIF_ID = 'looth-notifsheet', NOTIF_BD_ID = 'looth-notifsheet-bd';
+  function buildNotifSheet() {
+    var existing = document.getElementById(NOTIF_ID);
+    if (existing) return existing;
+    var bd = document.createElement('div');
+    bd.id = NOTIF_BD_ID; bd.className = 'lt-sheet-bd';
+    bd.addEventListener('click', closeNotifSheet);
+
+    var sheet = document.createElement('div');
+    sheet.id = NOTIF_ID; sheet.className = 'lt-sheet';
+    sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); sheet.setAttribute('aria-label', 'Notifications');
+
+    var grab = document.createElement('div'); grab.className = 'lt-sheet__grab'; sheet.appendChild(grab);
+
+    var nH = document.createElement('div'); nH.className = 'lt-sheet__sech lt-notifs__h';
+    nH.innerHTML = '<span>Notifications</span><button type="button" class="lt-notifs__clear" data-notif-clearall>Clear</button>';
+    sheet.appendChild(nH);
+    nH.querySelector('[data-notif-clearall]').addEventListener('click', function () { markAllNotifsRead(true); });
+
+    var nBox = document.createElement('div'); nBox.className = 'lt-notifs'; nBox.id = 'lt-notifs';
+    sheet.appendChild(nBox);
+
+    document.body.appendChild(bd);
+    document.body.appendChild(sheet);
+    return sheet;
+  }
+  function openNotifSheet() {
+    var sheet = buildNotifSheet();
+    var bd = document.getElementById(NOTIF_BD_ID);
+    loadSheetNotifs(sheet.querySelector('#lt-notifs'));   // populate / refresh on open
+    sheet.style.transform = ''; void sheet.offsetHeight;
+    if (bd) bd.classList.add('is-open');
+    sheet.classList.add('is-open');
+    document.body.classList.add('lt-sheet-open');
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onNotifKey);
+  }
+  function closeNotifSheet() {
+    var sheet = document.getElementById(NOTIF_ID), bd = document.getElementById(NOTIF_BD_ID);
+    if (sheet) sheet.classList.remove('is-open');
+    if (bd) bd.classList.remove('is-open');
+    document.body.classList.remove('lt-sheet-open');
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', onNotifKey);
+    refreshNotifBadge();   // they may have read some
+  }
+  function onNotifKey(e) { if (e.key === 'Escape') closeNotifSheet(); }
+
   // ---- Notifications (badge on the You tab + section in the sheet) -----------
   function ntEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function ntRel(iso) {
@@ -651,11 +759,12 @@
   }
   // Open the real notifications surface (the shared social modal if present, else the page).
   function openNotifs() {
-    var bell = document.querySelector('.lg-chrome__icon-btn[aria-label="Notifications"], a[href="/members/me/notifications/"]');
-    if (bell) { closeSheet(); setTimeout(function () { bell.click(); }, 70); return; }
-    // No header bell (it's hidden on mobile) → expand the FULL list right here in
-    // the sheet; never navigate off to the desktop notifications page (Buck: stay
-    // in-app, no desktop pages).
+    // Defer to the shared header's notifications modal ONLY when its bell is
+    // actually visible (it's display:none on the Hub + other mobile chrome). When
+    // hidden, expand the FULL list right here in the notif sheet — never navigate
+    // off to the desktop notifications page (Buck: stay in-app, no desktop pages).
+    var bell = document.querySelector('.lg-chrome__icon-btn[aria-label="Notifications"]');
+    if (bell && bell.offsetParent !== null) { closeNotifSheet(); setTimeout(function () { bell.click(); }, 70); return; }
     var box = document.getElementById('lt-notifs');
     if (box) loadSheetNotifs(box, true);
   }
@@ -749,6 +858,9 @@
           var mu = (d.messages_unread || 0);
           if (mu > 0) { mb.textContent = capN(mu); mb.hidden = false; } else { mb.hidden = true; }
         }
+        // You-sheet Notifications-row badge (mirrors the unread count)
+        var nrb = document.querySelector('.lt-notif-rowbadge');
+        if (nrb) { if (n > 0) { nrb.textContent = capN(n); nrb.hidden = false; } else { nrb.hidden = true; } }
         var bdg = document.querySelector('#' + BAR_ID + ' .lt-badge');
         if (!bdg) return;
         if (n > 0) { bdg.textContent = capN(n); bdg.hidden = false; } else { bdg.hidden = true; }
