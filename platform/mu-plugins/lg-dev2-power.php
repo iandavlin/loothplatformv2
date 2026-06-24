@@ -30,6 +30,10 @@ function lg_dev2_aws(string $args): array {
 	if (!function_exists('exec')) return ['', 'exec() disabled on host'];
 	$bin = lg_dev2_aws_bin();
 	if (!$bin) return ['', 'aws CLI not found on host'];
+	// Credentials are supplied by the environment via the AWS CLI's standard
+	// discovery chain — a shared-credentials file in the FPM pool user's ~/.aws
+	// on this box, or an IAM instance role (IMDS) on the always-on live box. The
+	// plugin stays cred-source agnostic and portable; no path logic lives here.
 	$cmd = sprintf(
 		'timeout %d %s --region %s %s 2>&1',
 		LG_DEV2_TIMEOUT,
