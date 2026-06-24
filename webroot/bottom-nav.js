@@ -142,7 +142,12 @@
         'padding:0 16px calc(18px + env(safe-area-inset-bottom,0px));' +
         'font:14px/1.4 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",sans-serif);color:var(--lg-ink,#323532)}' +
       '.lt-sheet.is-open{transform:translateY(0)}' +
-      '.lt-sheet__grab{width:38px;height:4px;border-radius:999px;background:var(--lg-line,#e3ddd0);margin:9px auto 4px}' +
+      // Grab handle: visible bar stays 40x5, but content-box padding gives it a big
+      // (~100x32) forgiving tap/drag target — a plain tap on it closes the sheet
+      // (Ian 2026-06-24). cursor:pointer signals it's interactive.
+      '.lt-sheet__grab{width:40px;height:5px;border-radius:999px;background:var(--lg-line,#e3ddd0);' +
+        'margin:0 auto 2px;padding:13px 30px;box-sizing:content-box;background-clip:content-box;cursor:pointer;' +
+        'touch-action:none}' +
       '.lt-sheet__head{display:flex;align-items:center;gap:12px;padding:8px 2px 14px;' +
         'border-bottom:1px solid var(--lg-line,#e3ddd0)}' +
       '.lt-sheet__avi{width:46px;height:46px;border-radius:50%;overflow:hidden;flex:0 0 auto;' +
@@ -387,6 +392,59 @@
   // header's anon cluster so they stay in sync with the canonical URLs.
   // (The destination menu that used to be mirrored into the sheet now lives solely
   // in the Nav tray — no duplicate menus.)
+
+  // ---- Shared sheet dismissal (every .lt-sheet: You / anon / Nav tray / Notifs) --
+  // One forgiving close model for ALL sheets (Ian 2026-06-24: "trays are hard to
+  // close" — only the authed You sheet swiped before; the anon sheet + Nav tray +
+  // Notifs sheet had backdrop-tap/Esc only). Swipe DOWN to dismiss (from the grab /
+  // header / section-head anytime; from the body only when scrolled to the top, so
+  // normal scrolling isn't hijacked); a small pull OR a quick flick closes; a plain
+  // TAP on the grab handle closes too. Links & buttons stay tappable. Backdrop tap +
+  // Esc are wired separately by each sheet.
+  function enableSheetDrag(sheet, closeFn) {
+    var startY = 0, cur = 0, dragging = false, moved = false, onGrab = false, lastY = 0, lastT = 0, vy = 0;
+    function down(e) {
+      var t = e.target;
+      if (t.closest && t.closest('a, button')) return;            // keep links/buttons tappable
+      onGrab = !!(t.closest && t.closest('.lt-sheet__grab'));
+      var fromHandle = onGrab || (t.closest && t.closest('.lt-sheet__head, .lt-sheet__sech'));
+      if (!fromHandle && sheet.scrollTop > 0) return;             // body drag only at top
+      dragging = true; moved = false; cur = 0;
+      startY = lastY = (e.touches ? e.touches[0].clientY : e.clientY);
+      lastT = e.timeStamp || 0; vy = 0;
+      sheet.style.transition = 'none';
+    }
+    function move(e) {
+      if (!dragging) return;
+      var y = (e.touches ? e.touches[0].clientY : e.clientY), now = e.timeStamp || 0;
+      cur = Math.max(0, y - startY);
+      if (cur > 3) moved = true;
+      if (now > lastT) vy = (y - lastY) / (now - lastT);          // px/ms, +ve = downward
+      lastY = y; lastT = now;
+      sheet.style.transform = 'translateY(' + cur + 'px)';
+      if (cur > 4 && e.cancelable) e.preventDefault();           // suppress scroll once it's a drag
+    }
+    function up() {
+      if (!dragging) return;
+      dragging = false;
+      sheet.style.transition = '';
+      // close on: a modest pull (>56px), a quick downward flick, OR a tap on the grab
+      if (cur > 56 || vy > 0.5 || (!moved && onGrab)) {
+        sheet.style.transform = 'translateY(100%)';
+        closeFn();
+        setTimeout(function () { sheet.style.transform = ''; }, 340);
+      } else {
+        sheet.style.transform = '';                              // snap back open
+      }
+    }
+    sheet.addEventListener('mousedown', down);
+    sheet.addEventListener('touchstart', down, { passive: false });
+    window.addEventListener('mousemove', move);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('mouseup', up);
+    window.addEventListener('touchend', up);
+  }
+
   function buildAnonSheet() {
     var bd = document.createElement('div');
     bd.id = SHEET_BD_ID; bd.className = 'lt-sheet-bd';
@@ -429,6 +487,7 @@
     connRow.textContent = 'Connect Patreon';
     sheet.appendChild(connRow);
 
+    enableSheetDrag(sheet, closeSheet);
     document.body.appendChild(bd);
     document.body.appendChild(sheet);
     return sheet;
@@ -503,50 +562,8 @@
         .catch(function () { window.location.href = href; });
     });
 
-    // Pull-down-to-close: grab the handle (or the header) and drag down to dismiss
-    // (Buck 2026-06-08 — previously only the backdrop tap closed it). A drag past a
-    // threshold closes; a short drag snaps back. Links/buttons are left tappable.
-    (function () {
-      var startY = 0, cur = 0, dragging = false;
-      function down(e) {
-        if (e.target.closest && e.target.closest('a, button')) return;  // keep View-profile etc. tappable
-        // Start a drag from the grab/header anytime; from the body ONLY when the sheet
-        // is scrolled to the very top — so pulling down past the top dismisses it
-        // (overscroll-to-dismiss, Buck 2026-06-09) without hijacking normal scrolling.
-        var fromHandle = e.target.closest && e.target.closest('.lt-sheet__grab, .lt-sheet__head');
-        if (!fromHandle && sheet.scrollTop > 0) return;
-        dragging = true; cur = 0;
-        startY = (e.touches ? e.touches[0].clientY : e.clientY);
-        sheet.style.transition = 'none';
-      }
-      function move(e) {
-        if (!dragging) return;
-        var y = (e.touches ? e.touches[0].clientY : e.clientY);
-        cur = Math.max(0, y - startY);
-        sheet.style.transform = 'translateY(' + cur + 'px)';
-        if (cur > 4 && e.cancelable) e.preventDefault();   // suppress scroll once it's clearly a drag
-      }
-      function up() {
-        if (!dragging) return;
-        dragging = false;
-        sheet.style.transition = '';
-        if (cur > 90) {                                    // dragged far enough → close
-          sheet.style.transform = 'translateY(100%)';
-          closeSheet();
-          setTimeout(function () { sheet.style.transform = ''; }, 340);
-        } else {
-          sheet.style.transform = '';                      // snap back open
-        }
-      }
-      // Attach to the whole sheet (covers grab/head AND the scrollable body) so the
-      // body can initiate the pull only at scrollTop 0; move/up stay global.
-      sheet.addEventListener('mousedown', down);
-      sheet.addEventListener('touchstart', down, { passive: false });
-      window.addEventListener('mousemove', move);
-      window.addEventListener('touchmove', move, { passive: false });
-      window.addEventListener('mouseup', up);
-      window.addEventListener('touchend', up);
-    })();
+    // Swipe / tap-the-grab to dismiss (shared model — see enableSheetDrag).
+    enableSheetDrag(sheet, closeSheet);
 
     // Notifications now live in their OWN off-canvas sheet (Ian 2026-06-24) — the
     // You sheet just carries an entry row + unread badge; the list and the Clear
@@ -670,6 +687,7 @@
     });
     sheet.appendChild(grid);
 
+    enableSheetDrag(sheet, closeNav);
     document.body.appendChild(bd);
     document.body.appendChild(sheet);
     return sheet;
@@ -720,6 +738,7 @@
     var nBox = document.createElement('div'); nBox.className = 'lt-notifs'; nBox.id = 'lt-notifs';
     sheet.appendChild(nBox);
 
+    enableSheetDrag(sheet, closeNotifSheet);
     document.body.appendChild(bd);
     document.body.appendChild(sheet);
     return sheet;
