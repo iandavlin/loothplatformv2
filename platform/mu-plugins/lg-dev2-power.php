@@ -1,21 +1,21 @@
 <?php
 /**
- * Plugin Name: LG Dev2 Power (admin-only EC2 toggle)
- * Description: Admin-only start/stop/status for the dev2 EC2 box. Resolves dev2 by
- *   its stable Elastic IP (rebuild-proof — survives instance replacement, and the
- *   EIP stays associated while the box is stopped) and runs ec2 start/stop via the
- *   host's AWS CLI, authorized by the live box's IAM instance role (tag-scoped to
- *   dev2*). Serve from the always-on box (live). REST:
- *   /wp-json/looth/v1/dev2-power  (manage_options only, wp_rest nonce).
- *   Repo-served: symlink into wp-content/mu-plugins/ from the serve clone
- *   (deploy = git pull).
+ * Plugin Name: LG Dev2 Power (EC2 wake/sleep)
+ * Description: Start/stop/status for the dev2 EC2 sandbox box. Resolves dev2 by its
+ *   stable Elastic IP (rebuild-proof — survives instance replacement, and the EIP
+ *   stays associated while the box is stopped) and runs ec2 start/stop via the host's
+ *   AWS CLI, authorized by the always-on (live) box's IAM instance role on prod.
+ *   Surfaces: a front-end page at /dev2 (any logged-in user) and a wp-admin Tools page
+ *   (admins). REST: /wp-json/looth/v1/dev2-power — GET status, POST {action:on|off};
+ *   gated to is_user_logged_in() + wp_rest nonce (CSRF). Repo-served: symlink into
+ *   wp-content/mu-plugins/ from the serve clone (deploy = git pull).
  */
 
 if (!defined('ABSPATH')) exit;
 
 const LG_DEV2_EIP    = '34.193.244.53';
 const LG_DEV2_REGION = 'us-east-1';   // all Looth boxes live in us-east-1
-const LG_DEV2_TIMEOUT = 20;           // seconds; never let the admin page hang on aws
+const LG_DEV2_TIMEOUT = 20;           // seconds; never let the page hang on aws
 
 /** Locate a usable aws CLI on the host. */
 function lg_dev2_aws_bin(): ?string {
@@ -81,17 +81,26 @@ function lg_dev2_action(string $act): array {
 	return ['ok' => true, 'id' => $d['id'], 'action' => $act];
 }
 
+/* ----------------------------------------------------------------------- REST */
+
 add_action('rest_api_init', function () {
-	$admin = function () { return current_user_can('manage_options'); };
+	// Any logged-in WP user may wake/sleep dev2 (Ian's call); anon is blocked.
+	// On live "logged in" == every member — accepted. wp_rest nonce still required
+	// (CSRF) via the standard cookie-auth path.
+	$logged_in = function () {
+		return is_user_logged_in()
+			? true
+			: new WP_Error('rest_not_logged_in', 'You must be logged in.', ['status' => 401]);
+	};
 	register_rest_route('looth/v1', '/dev2-power', [
 		[
 			'methods'             => 'GET',
-			'permission_callback' => $admin,
+			'permission_callback' => $logged_in,
 			'callback'            => function () { return rest_ensure_response(lg_dev2_describe()); },
 		],
 		[
 			'methods'             => 'POST',
-			'permission_callback' => $admin,
+			'permission_callback' => $logged_in,
 			'callback'            => function ($req) {
 				$a = (string) $req->get_param('action');
 				if (!in_array($a, ['on', 'off'], true)) {
@@ -105,25 +114,23 @@ add_action('rest_api_init', function () {
 	]);
 });
 
-add_action('admin_menu', function () {
-	add_management_page('Dev2 Power', 'Dev2 Power', 'manage_options', 'lg-dev2-power', 'lg_dev2_power_page');
-});
+/* ----------------------------------------------------------------- shared UI */
 
-function lg_dev2_power_page(): void {
-	if (!current_user_can('manage_options')) wp_die('Forbidden');
-	$root  = esc_url_raw(rest_url('looth/v1/dev2-power'));
-	$nonce = wp_create_nonce('wp_rest');
+/**
+ * Echo the shared Status + Start/Stop/Refresh control and its driver script.
+ * Reused verbatim by the admin Tools page and the front-end /dev2 page, so the
+ * two surfaces never drift. Buttons carry the wp-admin `.button` classes; the
+ * front page ships a tiny stylesheet for them so it renders standalone too.
+ */
+function lg_dev2_ui_markup(string $root, string $nonce): void {
 	?>
-	<div class="wrap">
-		<h1>Dev2 Power</h1>
-		<p>Status: <strong id="d2state">&hellip;</strong> <span id="d2meta" style="color:#666"></span></p>
-		<p>
-			<button class="button button-primary" id="d2on">Start dev2</button>
-			<button class="button" id="d2off">Stop dev2</button>
-			<button class="button" id="d2refresh">Refresh</button>
-		</p>
-		<pre id="d2log" style="background:#1d2327;color:#7ad07a;padding:10px;max-height:220px;overflow:auto;border-radius:4px"></pre>
-	</div>
+	<p>Status: <strong id="d2state">&hellip;</strong> <span id="d2meta" style="color:#666"></span></p>
+	<p>
+		<button class="button button-primary" id="d2on">Start dev2</button>
+		<button class="button" id="d2off">Stop dev2</button>
+		<button class="button" id="d2refresh">Refresh</button>
+	</p>
+	<pre id="d2log" style="background:#1d2327;color:#7ad07a;padding:10px;max-height:220px;overflow:auto;border-radius:4px"></pre>
 	<script>
 	(function () {
 		var ROOT = <?php echo wp_json_encode($root); ?>, N = <?php echo wp_json_encode($nonce); ?>;
@@ -161,10 +168,83 @@ function lg_dev2_power_page(): void {
 				.catch(function (e) { log('error: ' + e); setButtons(false); });
 		}
 		document.getElementById('d2on').onclick = function () { act('on'); };
-		document.getElementById('d2off').onclick = function () { if (confirm('Stop dev2?')) act('off'); };
+		document.getElementById('d2off').onclick = function () { if (confirm('Stop dev2? This sleeps the box.')) act('off'); };
 		document.getElementById('d2refresh').onclick = refresh;
 		refresh();
 	})();
 	</script>
+	<?php
+}
+
+/* ------------------------------------------------------------- admin surface */
+
+add_action('admin_menu', function () {
+	add_management_page('Dev2 Power', 'Dev2 Power', 'manage_options', 'lg-dev2-power', 'lg_dev2_power_page');
+});
+
+function lg_dev2_power_page(): void {
+	if (!current_user_can('manage_options')) wp_die('Forbidden');
+	$root  = esc_url_raw(rest_url('looth/v1/dev2-power'));
+	$nonce = wp_create_nonce('wp_rest');
+	echo '<div class="wrap"><h1>Dev2 Power</h1>';
+	lg_dev2_ui_markup($root, $nonce);
+	echo '</div>';
+}
+
+/* ---------------------------------------------------------- front-end /dev2 */
+
+// Intercept exactly /dev2 (no rewrite rule to flush; touches no theme/template).
+// Any logged-in user gets the page; anon is bounced to wp-login with redirect back.
+// Priority -10: /dev2 is an is_404() to WP, and lg-error-pages.php renders the
+// branded 404 and exit()s at template_redirect priority 0 — we must claim the
+// path before it does.
+add_action('template_redirect', function () {
+	$path = trim((string) parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH), '/');
+	if ($path !== 'dev2') return;
+	if (!is_user_logged_in()) {
+		wp_safe_redirect(wp_login_url(home_url('/dev2')));
+		exit;
+	}
+	lg_dev2_front_page();
+	exit;
+}, -10);
+
+function lg_dev2_front_page(): void {
+	$root  = esc_url_raw(rest_url('looth/v1/dev2-power'));
+	$nonce = wp_create_nonce('wp_rest');
+	// WP resolved /dev2 as a 404 query before we claimed it; override that status.
+	status_header(200);
+	nocache_headers();
+	header('Content-Type: text/html; charset=utf-8');
+	?>
+<!doctype html>
+<html <?php language_attributes(); ?>>
+<head>
+	<meta charset="<?php bloginfo('charset'); ?>">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="robots" content="noindex,nofollow">
+	<title>Dev2 Power</title>
+	<style>
+		body { margin: 0; font: 16px/1.5 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; color: #1d2327; background: #f0f0f1; }
+		.d2wrap { max-width: 640px; margin: 8vh auto; padding: 28px 32px; background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+		h1 { margin: 0 0 4px; font-size: 24px; }
+		.sub { margin: 0 0 20px; color: #646970; }
+		.button { display: inline-block; cursor: pointer; font-size: 14px; line-height: 2.15; padding: 0 14px; margin: 0 6px 6px 0;
+			border: 1px solid #c3c4c7; border-radius: 4px; background: #f6f7f7; color: #2c3338; text-decoration: none; }
+		.button:hover { background: #f0f0f1; }
+		.button-primary { background: #2271b1; border-color: #2271b1; color: #fff; }
+		.button-primary:hover { background: #135e96; }
+		.button:disabled { opacity: .5; cursor: default; }
+		#d2state { text-transform: capitalize; }
+	</style>
+</head>
+<body>
+	<main class="d2wrap">
+		<h1>Dev2 Power</h1>
+		<p class="sub">Wake or sleep the dev2 sandbox box. Status &amp; Start are safe; Stop sleeps it.</p>
+		<?php lg_dev2_ui_markup($root, $nonce); ?>
+	</main>
+</body>
+</html>
 	<?php
 }
