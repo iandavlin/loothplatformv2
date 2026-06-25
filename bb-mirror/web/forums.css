@@ -4544,3 +4544,19 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   position: absolute !important; top: calc(100% + 4px) !important;
   right: 0 !important; left: auto !important; min-width: 168px !important; z-index: 70 !important;
 }
+
+/* ── FINAL v2 (hub-editdel, Ian 2026-06-25; popover + flex fix from websearch) ──
+   (1) Gaps: justify-content is defeated by ANY child with flex-grow or
+   margin-left:auto (MDN). Neutralize EVERY direct child of the row generically so
+   React/Reply/Edit group tightly — no need to know which legacy child grows.
+   (2) Edit/Delete menu is now a top-layer HTML Popover (see forums.js): style it
+   for both popover + the no-Popover-API fallback. */
+#lg-dmodal .lg-dmodal__acts > *,
+#lg-dmodal .lg-dmodal__opacts > * { flex: 0 0 auto !important; margin: 0 !important; }
+
+/* Popover menu: top layer, positioned under the Edit button by JS */
+.post__menu.dm-pop { position: fixed !important; inset: auto !important; margin: 0 !important; }
+.post__menu.dm-pop:not(:popover-open) { display: none !important; }
+.post__menu.dm-pop:popover-open { display: flex !important; flex-direction: column !important; }
+/* Fallback (no Popover API): JS toggles [hidden]; must beat the author display:flex */
+.post__menu.dm-pop[hidden] { display: none !important; }

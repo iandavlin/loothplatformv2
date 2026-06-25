@@ -2849,31 +2849,47 @@
     var authorId = parseInt(stub.getAttribute('data-author-id'), 10) || 0;
     var mine = auth && auth.wp_user_id && authorId === parseInt(auth.wp_user_id, 10);
     if (!mine && !(auth && auth.can_edit_others)) return;
-    // Sit in the action row (React/Reply) so all controls group together; fall back
-    // to the head only if the row hasn't been built yet.
+    // Sit in the action row (React/Reply) so all controls group together.
     var rowEl = stub.querySelector('.lg-dmodal__acts') || stub.querySelector('.reply-stub__head') || stub;
+    var pid = 'dm-pop-' + rid;
     var wrap = document.createElement('div');
     wrap.className = 'post__menu-wrap post__menu-wrap--rs';
+    // Edit/Delete menu = native HTML Popover (popover="auto"): renders in the TOP
+    // LAYER (no clipping / positioned-ancestor fights) and gets FREE light-dismiss
+    // — outside-click + Esc close it, so it can never get "stuck open" (Ian
+    // 2026-06-25). Positioned under the Edit button on open via getBoundingClientRect.
     wrap.innerHTML =
-      '<button type="button" class="post__menu-btn" aria-haspopup="true" aria-expanded="false" aria-label="Edit or delete">' +
+      '<button type="button" class="post__menu-btn" popovertarget="' + pid + '" aria-haspopup="menu" aria-label="Edit or delete">' +
         EDIT_SVG + '<span>Edit</span>' +
       '</button>' +
-      '<div class="post__menu" role="menu" hidden>' +
+      '<div id="' + pid + '" class="post__menu dm-pop" popover role="menu">' +
         '<button type="button" role="menuitem" class="post__menu-item dm-rs-edit">' + EDIT_SVG + '<span>Edit</span></button>' +
         '<button type="button" role="menuitem" class="post__menu-item post__menu-item--danger dm-rs-del">' + DEL_SVG + '<span>Delete</span></button>' +
       '</div>';
     rowEl.appendChild(wrap);
-    var trig = wrap.querySelector('.post__menu-btn');
-    var menu = wrap.querySelector('.post__menu');
-    trig.addEventListener('click', function (e) {
-      e.preventDefault(); e.stopPropagation();
-      var willOpen = menu.hidden;
-      dmCloseMenus();
-      menu.hidden = !willOpen;
-      trig.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-    });
-    wrap.querySelector('.dm-rs-edit').addEventListener('click', function () { dmCloseMenus(); dmReplyEdit(stub, rid); });
-    wrap.querySelector('.dm-rs-del').addEventListener('click', function () { dmCloseMenus(); dmReplyDelete(stub, rid); });
+    var btn  = wrap.querySelector('.post__menu-btn');
+    var menu = wrap.querySelector('.dm-pop');
+    var hasPopover = (typeof menu.showPopover === 'function');
+    if (hasPopover) {
+      // Anchor the top-layer popover under the Edit button, right-aligned.
+      menu.addEventListener('toggle', function (e) {
+        if (e.newState !== 'open') return;
+        var r = btn.getBoundingClientRect();
+        var mw = menu.offsetWidth || 170;
+        menu.style.top  = (r.bottom + 4) + 'px';
+        menu.style.left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8)) + 'px';
+      });
+    } else {
+      // Fallback (no Popover API): manual toggle + the document-level dismiss above.
+      menu.removeAttribute('popover'); btn.removeAttribute('popovertarget'); menu.hidden = true;
+      btn.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var willOpen = menu.hidden; dmCloseMenus(); menu.hidden = !willOpen;
+      });
+    }
+    function closeMenu() { try { if (hasPopover && menu.matches(':popover-open')) menu.hidePopover(); } catch (_) {} menu.hidden = true; }
+    wrap.querySelector('.dm-rs-edit').addEventListener('click', function () { closeMenu(); dmReplyEdit(stub, rid); });
+    wrap.querySelector('.dm-rs-del').addEventListener('click', function () { closeMenu(); dmReplyDelete(stub, rid); });
   }
 
   // Inline reply editor — Quill when present (seeded from the full stored body so
@@ -3106,7 +3122,9 @@
         var aId = parseInt(stub.getAttribute('data-author-id'), 10) || 0;
         if (myId && aId === myId) {
           var add = stub.querySelector('.fcr-add');   // the emoji "React" trigger
-          if (add) add.style.display = 'none';
+          // setProperty(..., 'important') so it beats the !important row CSS that
+          // forces .fcr-add display:inline-flex (Ian 2026-06-25 regression fix).
+          if (add) add.style.setProperty('display', 'none', 'important');
         }
       });
     });
