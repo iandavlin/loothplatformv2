@@ -4560,3 +4560,38 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 .post__menu.dm-pop:popover-open { display: flex !important; flex-direction: column !important; }
 /* Fallback (no Popover API): JS toggles [hidden]; must beat the author display:flex */
 .post__menu.dm-pop[hidden] { display: none !important; }
+
+/* ── v3 (hub-editdel, Ian 2026-06-25): "copy React" + content-sized row ─────────
+   Justification fix: a flex row sized to its CONTENT (inline-flex, width:auto) has
+   no free space, so a stretching / margin-left:auto child can't spread the buttons.
+   React + Reply + Edit then pack tight + uniform. Plus a fixed-position Edit/Delete
+   menu (no popover — placed from the button's screen rect; outside-click closes). */
+#lg-dmodal .lg-dmodal__acts,
+#lg-dmodal .lg-dmodal__opacts {
+  display: inline-flex !important; width: auto !important; max-width: 100% !important;
+  align-items: center !important; gap: 14px !important; flex-wrap: wrap !important;
+  justify-content: flex-start !important; padding-top: 4px !important;
+}
+#lg-dmodal .lg-dmodal__acts > *,
+#lg-dmodal .lg-dmodal__opacts > * { flex: 0 0 auto !important; margin: 0 !important; }
+
+/* .dm-uniact = the React button look, shared by Reply + Edit (copy React) */
+#lg-dmodal .dm-uniact {
+  display: inline-flex !important; align-items: center !important; gap: 5px !important;
+  width: auto !important; height: auto !important; min-width: 0 !important;
+  padding: 6px 9px !important; margin: 0 !important;
+  background: none !important; border: 0 !important; border-radius: 8px !important;
+  box-shadow: none !important; text-decoration: none !important;
+  color: var(--lg-mute, #6b6f6b) !important;
+  font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif) !important; cursor: pointer !important;
+}
+#lg-dmodal .dm-uniact:hover,
+#lg-dmodal .dm-uniact[aria-expanded="true"] {
+  background: rgba(0, 0, 0, .06) !important; color: var(--lguser-accent-d, #52613d) !important;
+}
+#lg-dmodal .dm-uniact svg { width: 15px !important; height: 15px !important; opacity: .9; }
+
+/* Fixed-position Edit/Delete menu (placed by JS; high z so it sits above the modal) */
+.post__menu.dm-pop2 { position: fixed !important; margin: 0 !important; z-index: 2147483600 !important; }
+.post__menu.dm-pop2[hidden] { display: none !important; }
+.post__menu.dm-pop2:not([hidden]) { display: flex !important; flex-direction: column !important; }

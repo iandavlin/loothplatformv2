@@ -2851,45 +2851,37 @@
     if (!mine && !(auth && auth.can_edit_others)) return;
     // Sit in the action row (React/Reply) so all controls group together.
     var rowEl = stub.querySelector('.lg-dmodal__acts') || stub.querySelector('.reply-stub__head') || stub;
-    var pid = 'dm-pop-' + rid;
     var wrap = document.createElement('div');
     wrap.className = 'post__menu-wrap post__menu-wrap--rs';
-    // Edit/Delete menu = native HTML Popover (popover="auto"): renders in the TOP
-    // LAYER (no clipping / positioned-ancestor fights) and gets FREE light-dismiss
-    // — outside-click + Esc close it, so it can never get "stuck open" (Ian
-    // 2026-06-25). Positioned under the Edit button on open via getBoundingClientRect.
+    // "Edit" button is a copy of the React button (.dm-uniact = same look); it
+    // toggles a small Edit/Delete menu. The menu is position:FIXED, placed from the
+    // button's screen rect on open — so it can't be clipped or mis-anchored, and a
+    // document-level outside-click/Esc closes it (no "stuck open"). (Ian 2026-06-25)
     wrap.innerHTML =
-      '<button type="button" class="post__menu-btn" popovertarget="' + pid + '" aria-haspopup="menu" aria-label="Edit or delete">' +
+      '<button type="button" class="post__menu-btn dm-uniact" aria-haspopup="menu" aria-expanded="false" aria-label="Edit or delete">' +
         EDIT_SVG + '<span>Edit</span>' +
       '</button>' +
-      '<div id="' + pid + '" class="post__menu dm-pop" popover role="menu">' +
+      '<div class="post__menu dm-pop2" role="menu" hidden>' +
         '<button type="button" role="menuitem" class="post__menu-item dm-rs-edit">' + EDIT_SVG + '<span>Edit</span></button>' +
         '<button type="button" role="menuitem" class="post__menu-item post__menu-item--danger dm-rs-del">' + DEL_SVG + '<span>Delete</span></button>' +
       '</div>';
     rowEl.appendChild(wrap);
     var btn  = wrap.querySelector('.post__menu-btn');
-    var menu = wrap.querySelector('.dm-pop');
-    var hasPopover = (typeof menu.showPopover === 'function');
-    if (hasPopover) {
-      // Anchor the top-layer popover under the Edit button, right-aligned.
-      menu.addEventListener('toggle', function (e) {
-        if (e.newState !== 'open') return;
-        var r = btn.getBoundingClientRect();
-        var mw = menu.offsetWidth || 170;
-        menu.style.top  = (r.bottom + 4) + 'px';
-        menu.style.left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8)) + 'px';
-      });
-    } else {
-      // Fallback (no Popover API): manual toggle + the document-level dismiss above.
-      menu.removeAttribute('popover'); btn.removeAttribute('popovertarget'); menu.hidden = true;
-      btn.addEventListener('click', function (e) {
-        e.preventDefault(); e.stopPropagation();
-        var willOpen = menu.hidden; dmCloseMenus(); menu.hidden = !willOpen;
-      });
+    var menu = wrap.querySelector('.dm-pop2');
+    function placeMenu() {
+      var r = btn.getBoundingClientRect();
+      var mw = menu.offsetWidth || 170;
+      menu.style.top  = (r.bottom + 4) + 'px';
+      menu.style.left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8)) + 'px';
     }
-    function closeMenu() { try { if (hasPopover && menu.matches(':popover-open')) menu.hidePopover(); } catch (_) {} menu.hidden = true; }
-    wrap.querySelector('.dm-rs-edit').addEventListener('click', function () { closeMenu(); dmReplyEdit(stub, rid); });
-    wrap.querySelector('.dm-rs-del').addEventListener('click', function () { closeMenu(); dmReplyDelete(stub, rid); });
+    btn.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var willOpen = menu.hidden;
+      dmCloseMenus();
+      if (willOpen) { menu.hidden = false; placeMenu(); btn.setAttribute('aria-expanded', 'true'); }
+    });
+    wrap.querySelector('.dm-rs-edit').addEventListener('click', function () { dmCloseMenus(); dmReplyEdit(stub, rid); });
+    wrap.querySelector('.dm-rs-del').addEventListener('click', function () { dmCloseMenus(); dmReplyDelete(stub, rid); });
   }
 
   // Inline reply editor — Quill when present (seeded from the full stored body so
@@ -3103,6 +3095,7 @@
       if (rb) {
         rb.setAttribute('data-topic-id', tid);
         rb.setAttribute('data-forum-id', fid);
+        rb.classList.add('dm-uniact');   // same button look as React + Edit
         row.appendChild(rb);
       }
       if (!row.childNodes.length) return;
