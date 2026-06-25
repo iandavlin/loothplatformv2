@@ -179,12 +179,21 @@
   .lg-hub-search,
   .lg-hub-search__panel{ display:none; }
 
+  /* Reclaim the empty mobile header (Ian/keeper 2026-06-25). On the hub every child
+     of the site header is hidden on mobile — logo/hamburger/aside (forums.css),
+     account (bottom-nav), and the legacy search pill (above) — leaving a vacant
+     ~60px sticky bar. Collapse it; the bottom-nav is the mobile nav. forums.css pins
+     .feed-sort-bar sticky at top:61px (the header's height), so with the header gone
+     we pull the bar up to the top — else a 61px gap remains. (pure mobile-hub.css) */
+  body.hub-fmodal-page #site-header.lg-chrome{ display:none; }
+
   /* 2 — sort bar = sort pills only; the dup search zone (.zR) and compose (.zM,
      owned by the bottom-nav FAB) are removed. .zR stays display:none rather than
-     removed so its .lg-filters-chip remains clickable as the modal opener. */
+     removed so its .lg-filters-chip remains clickable as the modal opener. Tighter
+     own-padding + top:0 now that the empty header above it is gone. */
   .hub-fmodal-page .feed-sort-bar{
     display:flex; align-items:center; gap:8px;
-    padding:10px 12px; margin-bottom:14px;
+    padding:6px 12px; margin-bottom:12px; top:0;
   }
   .hub-fmodal-page .feed-sort-bar .zM,
   .hub-fmodal-page .feed-sort-bar .zR{ display:none; }
