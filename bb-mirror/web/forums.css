@@ -4494,3 +4494,53 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   background: rgba(0, 0, 0, .06); color: var(--lguser-accent-d, #52613d);
 }
 #lg-dmodal .lg-dmodal__acts .post__menu-btn svg { width: 15px; height: 15px; opacity: .9; }
+
+/* ── FINAL desktop-modal action row (hub-editdel, Ian 2026-06-25) ─────────────
+   Authoritative: React + Reply + Edit are ONE identical light-text button style,
+   tightly grouped; Edit/Delete dropdown pinned UNDER the Edit button (was floating
+   far-left over the next reply, which also made it feel "stuck"). The base modal
+   rule renders Reply green/bold-700 — overridden here. Scoped #lg-dmodal; mobile
+   sheet untouched. !important because the base rules are specific + themed. */
+#lg-dmodal .lg-dmodal__acts,
+#lg-dmodal .lg-dmodal__opacts {
+  display: flex !important; align-items: center !important; justify-content: flex-start !important;
+  flex-wrap: wrap !important; gap: 2px !important; padding-top: 4px !important;
+}
+#lg-dmodal .lg-dmodal__acts .fcr-add,
+#lg-dmodal .lg-dmodal__acts .reply-stub__reply,
+#lg-dmodal .lg-dmodal__acts .post__menu-btn,
+#lg-dmodal .lg-dmodal__opacts .fcr-add,
+#lg-dmodal .lg-dmodal__opacts .feed-card__reply-cta,
+#lg-dmodal .lg-dmodal__opacts .post__menu-btn {
+  display: inline-flex !important; align-items: center !important; gap: 5px !important;
+  width: auto !important; height: auto !important; min-width: 0 !important;
+  margin: 0 !important; padding: 6px 9px !important;
+  background: none !important; border: 0 !important; border-radius: 8px !important;
+  box-shadow: none !important; text-decoration: none !important;
+  color: var(--lg-mute, #6b6f6b) !important;
+  font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif) !important;
+  cursor: pointer !important;
+}
+#lg-dmodal .lg-dmodal__acts .fcr-add:hover,
+#lg-dmodal .lg-dmodal__acts .reply-stub__reply:hover,
+#lg-dmodal .lg-dmodal__acts .post__menu-btn:hover,
+#lg-dmodal .lg-dmodal__acts .post__menu-btn[aria-expanded="true"],
+#lg-dmodal .lg-dmodal__opacts .fcr-add:hover,
+#lg-dmodal .lg-dmodal__opacts .feed-card__reply-cta:hover,
+#lg-dmodal .lg-dmodal__opacts .post__menu-btn:hover {
+  background: rgba(0, 0, 0, .06) !important; color: var(--lguser-accent-d, #52613d) !important;
+}
+#lg-dmodal .lg-dmodal__acts .post__menu-btn svg,
+#lg-dmodal .lg-dmodal__opacts .post__menu-btn svg { width: 15px !important; height: 15px !important; opacity: .9; }
+#lg-dmodal .fcr-add > span { font-size: 13px !important; font-weight: 600 !important; margin: 0 !important; }
+#lg-dmodal .fcr { flex: 0 0 auto !important; gap: 4px !important; }
+#lg-dmodal .fcr-chips { gap: 4px !important; }
+/* Pin the Edit/Delete dropdown under the Edit button */
+#lg-dmodal .post__menu-wrap--rs {
+  position: relative !important; top: auto !important; right: auto !important;
+  left: auto !important; bottom: auto !important; margin: 0 !important; display: inline-flex !important;
+}
+#lg-dmodal .post__menu-wrap--rs .post__menu {
+  position: absolute !important; top: calc(100% + 4px) !important;
+  right: 0 !important; left: auto !important; min-width: 168px !important; z-index: 70 !important;
+}
