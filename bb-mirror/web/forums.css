@@ -4420,3 +4420,40 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 @media (max-width: 640px) {
   .post__menu-wrap--rs .post__menu-btn { width: 32px; height: 32px; }  /* bigger touch target */
 }
+
+/* ── Direction-A comment meta-row — DESKTOP discussion modal (#lg-dmodal)
+   (hub-editdel, Ian 2026-06-25). The feed + mobile sheet already use the light
+   FB/IG row; the desktop modal still showed the chunky .fcr "React" pill. Harmonize
+   the modal's OP (.lg-dmodal__opacts) + reply (.lg-dmodal__acts) rows to one clean
+   meta-row: reaction-count chips + lightweight text React/Reply. The base
+   @media(min-width:641px) .feed-page .fcr-add pill rule is all-!important, so these
+   overrides are !important too. Scoped to #lg-dmodal — feed/mobile untouched. */
+#lg-dmodal .lg-dmodal__opacts,
+#lg-dmodal .lg-dmodal__acts {
+  gap: 4px 8px; flex-wrap: wrap; padding-top: 4px; align-items: center;
+}
+/* React trigger: filled pill -> light text action (FB "Like" weight) */
+#lg-dmodal .fcr-add {
+  height: auto !important; width: auto !important; min-width: 0 !important;
+  padding: 5px 8px !important; gap: 5px !important;
+  background: none !important; border: 0 !important; border-radius: 8px !important;
+  color: var(--lg-mute, #6b6f6b) !important;
+  font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif) !important;
+  transition: background .12s ease, color .12s ease !important;
+}
+#lg-dmodal .fcr-add:hover {
+  background: rgba(0, 0, 0, .06) !important;
+  color: var(--lguser-accent-d, #52613d) !important;
+}
+#lg-dmodal .fcr-add > span { font-size: 13px !important; font-weight: 600 !important; margin-left: 0 !important; }
+#lg-dmodal .fcr-add .fcr-emoji { font-size: 16px; }
+/* Reply text link matches React weight + color */
+#lg-dmodal .lg-dmodal__opacts .feed-card__reply-cta,
+#lg-dmodal .lg-dmodal__acts .reply-stub__reply,
+#lg-dmodal .reply-stub__reply {
+  color: var(--lg-mute, #6b6f6b) !important; font-weight: 600 !important;
+}
+#lg-dmodal .lg-dmodal__opacts .feed-card__reply-cta:hover,
+#lg-dmodal .reply-stub__reply:hover { color: var(--lguser-accent-d, #52613d) !important; }
+/* Count chips compact */
+#lg-dmodal .fcr-chips { gap: 4px; }
