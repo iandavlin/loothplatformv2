@@ -189,7 +189,33 @@ if ($method === 'PUT' || $method === 'DELETE') {
     if (is_wp_error($upd)) {
         reply_out(500, ['ok' => false, 'error' => 'server', 'message' => (string) $upd->get_error_message()]);
     }
-    // wp_update_post doesn't fire bbp_edit_reply, so sync the PG mirror explicitly.
+    // Attach newly-uploaded photos added during the edit (Ian 2026-06-25). The
+    // BuddyBoss reply PUT doesn't touch media, so — exactly like topic-media.php —
+    // drive bp_media_forums_new_post_media_save(): KEEP all existing reply photos +
+    // ADD the new uploads (no per-photo removal UX yet, so we never drop existing).
+    $add_atts = array_values(array_filter(array_map('intval', (array) ($body['media_ids'] ?? []))));
+    if ($add_atts && function_exists('bp_media_forums_new_post_media_save')) {
+        $media_objects = [];
+        $order = 0;
+        $csv = (string) get_post_meta($reply_id, 'bp_media_ids', true);
+        if ($csv !== '' && class_exists('BP_Media')) {
+            foreach (array_filter(array_map('intval', explode(',', $csv))) as $mid) {
+                $m   = new BP_Media($mid);
+                $att = (int) ($m->attachment_id ?? 0);
+                if (!$att) continue;
+                $media_objects[] = ['id' => $att, 'media_id' => $mid, 'name' => (string) ($m->title ?? ''), 'menu_order' => $order++];
+            }
+        }
+        foreach ($add_atts as $att) {
+            if (!wp_get_attachment_url($att)) continue;   // must be a real attachment
+            $media_objects[] = ['id' => $att, 'menu_order' => $order++];
+        }
+        $_POST['bbp_media'] = wp_json_encode($media_objects);
+        bp_media_forums_new_post_media_save($reply_id);
+        unset($_POST['bbp_media']);
+    }
+    // wp_update_post doesn't fire bbp_edit_reply, so sync the PG mirror explicitly
+    // (after the media save, so the re-materialized reply carries the new photos).
     if (function_exists('bb_mirror_sync_dispatch')) bb_mirror_sync_dispatch('reply', $reply_id, 'upsert');
     $fresh = get_post($reply_id);
     reply_out(200, [

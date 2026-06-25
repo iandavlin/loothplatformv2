@@ -1910,10 +1910,13 @@
         if (!content) { frmStatus.textContent = "Reply can't be empty."; frmFocus(); return; }
         frmSubmit.disabled = true; frmStatus.textContent = 'Saving…';
         var editId = frmEditReplyId;
+        var editPayload = { reply_id: editId, content: content };
+        var addedMedia = frmMediaIds.slice();                  // new uploads added during edit
+        if (addedMedia.length) editPayload.media_ids = addedMedia;
         fetch('/bb-mirror-api/v0/reply', {
           method: 'PUT', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },
-          body: JSON.stringify({ reply_id: editId, content: content }),
+          body: JSON.stringify(editPayload),
         })
           .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
           .then(function (res) {
@@ -1924,6 +1927,13 @@
               if (ex) ex.innerHTML = fresh;
               var eb = st.querySelector('.reply-stub__edit'); if (eb) eb.setAttribute('data-reply-raw', fresh);
             });
+            // New photo(s) attach as bbp_media (not inline) — the text-only in-place
+            // update can't show them, so reload the open discussion-modal thread.
+            if (addedMedia.length) {
+              var dm = document.getElementById('lg-dmodal');
+              var dtid = dm && !dm.hidden ? (dm.dataset.topicId || '') : '';
+              if (dtid) { try { document.dispatchEvent(new CustomEvent('lg:reply-posted', { detail: { topicId: parseInt(dtid, 10) } })); } catch (e) {} }
+            }
             frmSubmit.disabled = false;
             frmClose();
           })
