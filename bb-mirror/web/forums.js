@@ -3078,10 +3078,21 @@
       var col = bodyEl ? bodyEl.parentElement : stub;
       col.appendChild(row);
     });
-    // Author/mod ⋯ Edit+Delete per reply (cached auth; idempotent per stub).
+    // Per reply: author/mod ⋯ Edit+Delete + "no self-react" — hide the React
+    // trigger on the viewer's OWN replies (Ian 2026-06-25: you don't react to
+    // your own). Count chips stay (you can still SEE others' reactions). Cached
+    // auth; idempotent per stub.
     dmGetAuth(function (auth) {
       if (!auth || !auth.authenticated) return;
-      [].forEach.call(t.querySelectorAll('.reply-stub'), function (stub) { dmInjectReplyMenu(stub, auth); });
+      var myId = parseInt(auth.wp_user_id, 10) || 0;
+      [].forEach.call(t.querySelectorAll('.reply-stub'), function (stub) {
+        dmInjectReplyMenu(stub, auth);
+        var aId = parseInt(stub.getAttribute('data-author-id'), 10) || 0;
+        if (myId && aId === myId) {
+          var add = stub.querySelector('.fcr-add');   // the emoji "React" trigger
+          if (add) add.style.display = 'none';
+        }
+      });
     });
   }
 
