@@ -1715,6 +1715,8 @@
     var frmRestBase = frmForm.dataset.restBase || '/wp-json/buddyboss/v1';
 
     var frmNonce = null, frmName = 'You', frmState = 'idle', frmCard = null;
+    var frmEditReplyId = 0;                                   // >0 ⇒ editing that reply (PUT) vs creating (POST)
+    var frmSubmitLabel = (frmSubmit && frmSubmit.textContent.trim()) || 'Post reply';
 
     var frmEditorEl = document.getElementById('frm-editor');
     var frmQuill    = null;     // lazy Quill instance (same editor as new-topic)
@@ -1816,6 +1818,8 @@
         .catch(function () { frmSetState('anon'); });
     }
     function frmOpen(trigger) {
+      frmEditReplyId = 0;                                     // create mode (not edit)
+      if (frmSubmit) frmSubmit.textContent = frmSubmitLabel;
       // The card is the trigger's ancestor (used for the optimistic stub + to
       // source topic/forum when the trigger is a per-reply button).
       frmCard = trigger.closest('.feed-card');
@@ -1850,7 +1854,36 @@
       frmOverlay.hidden = true;
       document.body.classList.remove('ntm-active');
       frmStatus.textContent = '';
+      frmEditReplyId = 0;                                     // exit edit mode
+      if (frmSubmit) frmSubmit.textContent = frmSubmitLabel;  // restore "Post reply"
     }
+
+    // EDIT MODE — open this SAME composer (Quill modal) pre-filled to edit an
+    // existing reply, instead of the inline box (Ian 2026-06-25: "pop open the same
+    // quill editor used to make the reply"). Submit then PUTs vs POSTs. Exposed for
+    // the discussion-modal Edit button (dmReplyEdit). Mirrors lgNtmEditTopic.
+    window.lgFrmEditReply = function (replyId, bodyHtml) {
+      replyId = parseInt(replyId, 10) || 0;
+      if (!replyId) return;
+      frmEditReplyId = replyId;
+      frmParentId = 0; frmMentionSlug = ''; frmCard = null;
+      if (frmCtxTitle) { frmCtxTitle.textContent = '✎ Editing your reply'; frmContext.hidden = false; }
+      if (frmTopicId) frmTopicId.value = '';
+      if (frmForumId) frmForumId.value = '';
+      frmStatus.textContent = '';
+      frmResetEditor();
+      frmOverlay.hidden = false;
+      document.body.classList.add('ntm-active');
+      if (frmSubmit) frmSubmit.textContent = 'Save';
+      var seedTries = 0;
+      function frmSeedBody() {
+        if (frmQuill) { frmQuill.clipboard.dangerouslyPasteHTML(bodyHtml || ''); frmQuill.focus(); }
+        else if (frmContent) { frmContent.value = (bodyHtml || '').replace(/<img[^>]*>/gi, ''); }
+        else if (++seedTries < 40) { setTimeout(frmSeedBody, 80); return; }
+      }
+      if (frmState !== 'authed') { frmLoadAuth(); (function w(){ if (frmQuill || frmContent) frmSeedBody(); else if (++seedTries < 40) setTimeout(w, 80); })(); }
+      else { frmInitEditor(); setTimeout(frmSeedBody, 40); }
+    };
 
     // Delegated so it also works on lazily-loaded / optimistically-added cards.
     document.addEventListener('click', function (e) {
@@ -1872,6 +1905,31 @@
       var topicId = parseInt(frmTopicId.value, 10);
       var forumId = parseInt(frmForumId.value, 10);
       if (!content && !frmMediaIds.length) { frmStatus.textContent = "Reply can't be empty."; frmFocus(); return; }
+      // EDIT path: PUT the owned endpoint (author-or-mod), update the reply in place.
+      if (frmEditReplyId > 0) {
+        if (!content) { frmStatus.textContent = "Reply can't be empty."; frmFocus(); return; }
+        frmSubmit.disabled = true; frmStatus.textContent = 'Saving…';
+        var editId = frmEditReplyId;
+        fetch('/bb-mirror-api/v0/reply', {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },
+          body: JSON.stringify({ reply_id: editId, content: content }),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) { frmStatus.textContent = 'Error: ' + ((res.j && (res.j.message || res.j.error)) || 'failed'); frmSubmit.disabled = false; return; }
+            var fresh = (res.j && res.j.content_html) || content;
+            Array.prototype.forEach.call(document.querySelectorAll('.reply-stub[data-reply-id="' + editId + '"]'), function (st) {
+              var ex = st.querySelector('.reply-stub__excerpt') || st.querySelector('.reply-stub__body');
+              if (ex) ex.innerHTML = fresh;
+              var eb = st.querySelector('.reply-stub__edit'); if (eb) eb.setAttribute('data-reply-raw', fresh);
+            });
+            frmSubmit.disabled = false;
+            frmClose();
+          })
+          .catch(function (err) { frmStatus.textContent = 'Network error: ' + err.message; frmSubmit.disabled = false; });
+        return;
+      }
       if (!topicId) { frmStatus.textContent = 'Missing topic.'; return; }
       frmSubmit.disabled = true; frmStatus.textContent = 'Posting…';
       var frmPayload = { topic_id: topicId, forum_id: forumId };
@@ -2892,6 +2950,9 @@
     var bodyDiv = stub.querySelector('.reply-stub__body');
     var editBtn = stub.querySelector('.reply-stub__edit');
     var raw = (editBtn && editBtn.getAttribute('data-reply-raw')) || (excerpt ? excerpt.innerHTML : '');
+    // Open the SAME Quill composer modal used to CREATE replies, pre-filled (Ian
+    // 2026-06-25). The inline editor below is only a fallback if it's unavailable.
+    if (typeof window.lgFrmEditReply === 'function') { window.lgFrmEditReply(rid, raw); return; }
     var box = document.createElement('div');
     box.className = 'dm-rs-editbox';
     box.innerHTML =
