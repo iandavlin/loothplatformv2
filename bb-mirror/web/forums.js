@@ -1716,7 +1716,23 @@
 
     var frmNonce = null, frmName = 'You', frmState = 'idle', frmCard = null;
     var frmEditReplyId = 0;                                   // >0 ⇒ editing that reply (PUT) vs creating (POST)
+    var frmEditTopicId = 0;                                   // >0 ⇒ editing that TOPIC/OP (title+body) via this composer
+    var frmEditTopicForumId = 0;                              // forum of the topic under edit (for refresh/context)
+    var frmTopicHadMedia = false;                             // topic-edit: did the OP already have photos? (gates the media sync + reload)
     var frmSubmitLabel = (frmSubmit && frmSubmit.textContent.trim()) || 'Post reply';
+
+    // Title row + body label + heading — used to repurpose this reply composer as
+    // the OP editor (lgFrmEditTopic): the title field shows only in topic-edit mode.
+    var frmTitleWrap  = document.getElementById('frm-title-wrap');
+    var frmTitleInput = document.getElementById('frm-title');
+    var frmBodyLabel  = document.getElementById('frm-body-label');
+    var frmHeading    = document.getElementById('frm-heading');
+    function frmShowTitle(show) {
+      if (frmTitleWrap) frmTitleWrap.hidden = !show;
+      if (frmBodyLabel) frmBodyLabel.innerHTML = show
+        ? 'Body <span class="ntm-label__opt">(formatting, images &amp; links)</span>'
+        : 'Your reply <span class="ntm-label__opt">(formatting, images &amp; links)</span>';
+    }
 
     var frmEditorEl = document.getElementById('frm-editor');
     var frmQuill    = null;     // lazy Quill instance (same editor as new-topic)
@@ -1822,6 +1838,9 @@
     }
     function frmOpen(trigger) {
       frmEditReplyId = 0;                                     // create mode (not edit)
+      frmEditTopicId = 0; frmEditTopicForumId = 0;            // not a topic edit
+      frmShowTitle(false);                                    // replies have no title field
+      if (frmHeading) frmHeading.textContent = 'Reply';
       if (frmSubmit) frmSubmit.textContent = frmSubmitLabel;
       // The card is the trigger's ancestor (used for the optimistic stub + to
       // source topic/forum when the trigger is a per-reply button).
@@ -1858,6 +1877,10 @@
       document.body.classList.remove('ntm-active');
       frmStatus.textContent = '';
       frmEditReplyId = 0;                                     // exit edit mode
+      frmEditTopicId = 0; frmEditTopicForumId = 0;            // exit topic-edit mode
+      frmShowTitle(false);
+      if (frmHeading) frmHeading.textContent = 'Reply';
+      if (frmTitleInput) frmTitleInput.value = '';
       if (frmSubmit) frmSubmit.textContent = frmSubmitLabel;  // restore "Post reply"
     }
 
@@ -1869,6 +1892,9 @@
       replyId = parseInt(replyId, 10) || 0;
       if (!replyId) return;
       frmEditReplyId = replyId;
+      frmEditTopicId = 0; frmEditTopicForumId = 0;            // reply edit, not topic
+      frmShowTitle(false);                                    // replies have no title field
+      if (frmHeading) frmHeading.textContent = 'Edit reply';
       frmParentId = 0; frmMentionSlug = ''; frmCard = null;
       if (frmCtxTitle) { frmCtxTitle.textContent = '✎ Editing your reply'; frmContext.hidden = false; }
       if (frmTopicId) frmTopicId.value = '';
@@ -1908,6 +1934,84 @@
       frmSeedBody();
     };
 
+    // EDIT MODE (TOPIC/OP) — open this SAME Quill composer to edit the OP, unified
+    // with the reply edit above (Ian 2026-06-25: "new edit" — OP uses the same
+    // composer as replies, not the new-topic wizard). The title field shows here;
+    // submit PUTs the owned reply.php topic-edit path and (when photos changed)
+    // POSTs topic-media.php — exactly the endpoints the wizard used. Mirrors
+    // lgFrmEditReply; exposed for the discussion-modal OP Edit button.
+    window.lgFrmEditTopic = function (topicId, forumId, title, bodyHtml) {
+      topicId = parseInt(topicId, 10) || 0;
+      if (!topicId) return;
+      frmEditTopicId = topicId;
+      frmEditTopicForumId = parseInt(forumId, 10) || 0;
+      frmTopicHadMedia = false;                              // reset; set true below if the GET finds photos
+      frmEditReplyId = 0;                                     // topic edit, not reply
+      frmParentId = 0; frmMentionSlug = ''; frmCard = null;
+      frmShowTitle(true);                                     // OP edit shows the title field
+      if (frmHeading) frmHeading.textContent = 'Edit post';
+      if (frmCtxTitle) { frmCtxTitle.textContent = '✎ Editing your post'; frmContext.hidden = false; }
+      if (frmTitleInput) frmTitleInput.value = title || '';
+      if (frmTopicId) frmTopicId.value = '';
+      if (frmForumId) frmForumId.value = String(frmEditTopicForumId || '');
+      frmStatus.textContent = '';
+      frmResetEditor();
+      frmOverlay.hidden = false;
+      document.body.classList.add('ntm-active');
+      if (frmSubmit) frmSubmit.textContent = 'Save';
+      // Load the topic's existing photos as removable thumbs (same tray/keep-set
+      // machinery as the reply edit), via the endpoint that owns topic media.
+      fetch('/bb-mirror-api/v0/topic-media?topic_id=' + topicId, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.ok || !d.media || frmEditTopicId !== topicId) return;
+          frmEditMediaLoaded = true;
+          if (d.media.length) frmTopicHadMedia = true;        // had photos → sync removals + reload on save
+          d.media.forEach(function (m) { frmKeepMedia.push(m.media_id); frmTray.addThumb(m.thumb || m.url, m.media_id, frmKeepMedia); });
+        })
+        .catch(function () {});
+      var seedTries = 0;
+      function frmSeedTopicBody() {
+        if (frmQuill) {
+          frmQuill.setContents([]);
+          frmQuill.clipboard.dangerouslyPasteHTML(bodyHtml || '');
+          frmQuill.setSelection(frmQuill.getLength(), 0);
+          return;
+        }
+        if (typeof Quill !== 'undefined' && ++seedTries < 50) { setTimeout(frmSeedTopicBody, 60); return; }
+        if (frmContent) { frmContent.value = (bodyHtml || '').replace(/<img[^>]*>/gi, ''); }
+      }
+      if (frmState !== 'authed') frmLoadAuth(); else frmInitEditor();
+      frmSeedTopicBody();
+      // Title is the natural first field on an OP edit — focus it once visible.
+      setTimeout(function () { if (frmTitleInput && !frmTitleWrap.hidden) frmTitleInput.focus(); }, 40);
+    };
+
+    // Reflect an OP edit across the surfaces that may be showing it WITHOUT a
+    // reload (text-only): the open discussion modal's OP + every matching feed
+    // card's title/excerpt. Photo changes can't be shown in place, so those callers
+    // reload instead (see the submit handler).
+    function frmUpdateTopicInPlace(topicId, newTitle, newHtml) {
+      var dm = document.getElementById('lg-dmodal');
+      if (dm && !dm.hidden) {
+        var dmT = dm.querySelector('.lg-dmodal__title'); if (dmT && newTitle) dmT.textContent = newTitle;
+        var dmB = dm.querySelector('.lg-dmodal__body');
+        if (dmB && newHtml != null) { dmB.innerHTML = newHtml; if (window.bbProcessEmbeds) window.bbProcessEmbeds(dmB); }
+      }
+      Array.prototype.forEach.call(document.querySelectorAll('.feed-card[data-topic-id="' + topicId + '"]'), function (card) {
+        if (newTitle) {
+          var tA = card.querySelector('.fc-title a, .feed-card__title a, .fc-title, .feed-card__title');
+          if (tA) tA.textContent = newTitle;
+        }
+        if (newHtml != null) {
+          var ex = card.querySelector('.feed-card__op-excerpt, .fc-excerpt');
+          if (ex) { ex.innerHTML = newHtml; if (window.bbProcessEmbeds) window.bbProcessEmbeds(ex); }
+          var full = card.querySelector('.feed-card__full-body[data-loaded]');
+          if (full) { full.innerHTML = newHtml; if (window.bbProcessEmbeds) window.bbProcessEmbeds(full); }
+        }
+      });
+    }
+
     // Delegated so it also works on lazily-loaded / optimistically-added cards.
     document.addEventListener('click', function (e) {
       var t = e.target.closest('.feed-card__reply-cta[data-frm-open], .reply-stub__reply, .fc-composer__rich');
@@ -1927,6 +2031,51 @@
       var content = frmGetContent();
       var topicId = parseInt(frmTopicId.value, 10);
       var forumId = parseInt(frmForumId.value, 10);
+      // EDIT path (TOPIC/OP): the unified composer — title+body PUT the owned
+      // reply.php topic-edit endpoint (author-or-mod, IDOR-proof), and photos sync
+      // via topic-media.php when they changed (the SAME endpoints the new-topic
+      // wizard used). Must come BEFORE the generic empty-check (which is reply copy).
+      if (frmEditTopicId > 0) {
+        var tEditId = frmEditTopicId;
+        var tTitle  = (frmTitleInput && frmTitleInput.value.trim()) || '';
+        if (!content) { frmStatus.textContent = "Post can't be empty."; frmFocus(); return; }
+        if (!tTitle)  { frmStatus.textContent = 'Title is required.'; if (frmTitleInput) frmTitleInput.focus(); return; }
+        frmSubmit.disabled = true; frmStatus.textContent = 'Saving…';
+        var tAdded = frmMediaIds.slice();                      // new uploads added during edit
+        var tKeep  = frmKeepMedia.slice();                     // existing photos to keep
+        // Sync (+reload) only when the OP actually has/added photos — a text-only
+        // edit of a photo-less OP updates in place. (frmEditMediaLoaded is true even
+        // for a zero-photo GET, so gate on frmTopicHadMedia instead.)
+        var tMediaChanged = tAdded.length > 0 || frmTopicHadMedia;
+        fetch('/bb-mirror-api/v0/reply', {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },
+          body: JSON.stringify({ topic_id: tEditId, title: tTitle, content: content }),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) { frmStatus.textContent = 'Error: ' + ((res.j && (res.j.message || res.j.error)) || 'failed'); frmSubmit.disabled = false; return; }
+            var freshTitle = (res.j && res.j.title) || tTitle;
+            var freshHtml  = (res.j && res.j.content_html) || content;
+            if (tMediaChanged) {
+              // New/removed photos can't be reflected by the in-place text update,
+              // so sync them then RELOAD — exactly what the wizard edit did.
+              frmStatus.textContent = 'Saving photos…';
+              var finishReload = function () { try { location.reload(); } catch (e) { frmSubmit.disabled = false; frmClose(); } };
+              fetch('/bb-mirror-api/v0/topic-media', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },
+                body: JSON.stringify({ topic_id: tEditId, keep_media_ids: tKeep, add_upload_ids: tAdded }),
+              }).then(finishReload, finishReload);
+            } else {
+              frmUpdateTopicInPlace(tEditId, freshTitle, freshHtml);
+              frmSubmit.disabled = false;
+              frmClose();
+            }
+          })
+          .catch(function (err) { frmStatus.textContent = 'Network error: ' + err.message; frmSubmit.disabled = false; });
+        return;
+      }
       if (!content && !frmMediaIds.length) { frmStatus.textContent = "Reply can't be empty."; frmFocus(); return; }
       // EDIT path: PUT the owned endpoint (author-or-mod), update the reply in place.
       if (frmEditReplyId > 0) {
@@ -3274,9 +3423,12 @@
       del.type = 'button'; del.className = 'lg-dmodal__act lg-dmodal__del'; del.hidden = true;
       del.setAttribute('aria-label', 'Delete this post');
       del.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg> Delete';
-      // Edit the OP via the SAME composer as mobile (lgNtmEditTopic) — desktop
-      // shows the plain (non-wizard) composer pre-filled and PUTs. Gated to
-      // author/mod by the shared auth check below. (Ian 6/17, desktop parity)
+      // Edit the OP via the SAME Quill composer used to edit a reply
+      // (lgFrmEditTopic) — unified "new edit" (Ian 2026-06-25): the OP no longer
+      // opens the new-topic wizard. The composer shows the title field, pops over
+      // the still-open modal, and updates the OP in place on save. Falls back to
+      // the wizard only if the unified composer isn't present. Gated to author/mod
+      // by the shared auth check below.
       var edit = document.createElement('button');
       edit.type = 'button'; edit.className = 'lg-dmodal__act lg-dmodal__edit'; edit.hidden = true;
       edit.setAttribute('aria-label', 'Edit this post');
@@ -3293,11 +3445,19 @@
           edit.hidden = false;
           edit.addEventListener('click', function (ev) {
             ev.preventDefault(); ev.stopPropagation();
-            if (typeof window.lgNtmEditTopic !== 'function') return;
             var ttlEl = m.querySelector('.lg-dmodal__title');
             var ttl = ttlEl ? (ttlEl.textContent || '').trim() : '';
-            var cb = m.querySelector('[data-dm-close]'); if (cb) cb.click();   // close modal first
-            window.lgNtmEditTopic(tid, fid, ttl, body.innerHTML);              // body has the full fetched OP
+            // Unified composer: pop it OPEN over the modal (parity with reply edit);
+            // on save it updates the modal OP + card in place. body.innerHTML is the
+            // full fetched OP content.
+            if (typeof window.lgFrmEditTopic === 'function') {
+              window.lgFrmEditTopic(tid, fid, ttl, body.innerHTML);
+              return;
+            }
+            // Fallback: the old new-topic wizard (close the modal first).
+            if (typeof window.lgNtmEditTopic !== 'function') return;
+            var cb = m.querySelector('[data-dm-close]'); if (cb) cb.click();
+            window.lgNtmEditTopic(tid, fid, ttl, body.innerHTML);
           });
           del.addEventListener('click', function (ev) {
             ev.preventDefault(); ev.stopPropagation();

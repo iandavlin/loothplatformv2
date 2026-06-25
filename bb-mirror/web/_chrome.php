@@ -394,7 +394,14 @@ function bb_mirror_new_topic_modal(): void
           data-rest-base="<?= htmlspecialchars($rest_base) ?>">
       <input type="hidden" id="frm-topic-id" name="topic_id" value="">
       <input type="hidden" id="frm-forum-id" name="forum_id" value="">
-      <label class="ntm-label">Your reply <span class="ntm-label__opt">(formatting, images &amp; links)</span></label>
+      <!-- Title row — shown ONLY when editing a TOPIC/OP (lgFrmEditTopic), so the
+           same composer doubles as the OP editor; hidden for replies. -->
+      <div class="frm-title-wrap" id="frm-title-wrap" hidden>
+        <label class="ntm-label" for="frm-title">Title</label>
+        <input class="ntm-input" id="frm-title" name="title" type="text" maxlength="200"
+               placeholder="Post title" autocomplete="off">
+      </div>
+      <label class="ntm-label" id="frm-body-label">Your reply <span class="ntm-label__opt">(formatting, images &amp; links)</span></label>
       <!-- Quill mounts here (same editor as the new-topic modal); falls back to the textarea -->
       <div class="ntm-editor" id="frm-editor"></div>
       <textarea class="ntm-textarea ntm-textarea--fallback" id="frm-content" name="content" rows="5"

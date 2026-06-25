@@ -4634,3 +4634,9 @@ html[data-lguser-theme="dark"] .lg-fb-menu { background: #1f2420; border-color: 
 .lg-fb-menu__del { color: #c0392b; }
 html[data-lguser-theme="dark"] .lg-fb-menu__item { color: #e5e7e1; }
 html[data-lguser-theme="dark"] .lg-fb-menu__item:hover { background: rgba(255, 255, 255, .08); }
+
+/* OP-edit title row inside the unified reply composer (#frm-overlay). The field
+   reuses .ntm-input/.ntm-label; this just spaces it above the body label. Shown
+   only in topic-edit mode (lgFrmEditTopic toggles [hidden]). 2026-06-25 hub-editdel. */
+#frm-title-wrap { margin-bottom: var(--s3, 12px); }
+#frm-title-wrap .ntm-input { margin-top: var(--s1, 4px); }
