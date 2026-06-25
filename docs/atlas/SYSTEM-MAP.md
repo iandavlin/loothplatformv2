@@ -410,6 +410,13 @@ pristine `main` clone. The architecture (three trees, never conflated):
   the bb-mirror worktree, reloads (~5 s). Verified 6/20: all routes 200, article externalized
   at **44762 B**, `/hub/` 200, WP loads, no fatals.
 
+- **Docroot static overlay layer (`webroot/*.js`) — symlink-served on dev2 (6/25):**
+  the 14 overlay JS (`bottom-nav.js`, `pwa.js`, `hub-polish.js`, …) are now **symlinks** into
+  the serve clone, exactly like the `/srv/*` apps (previously hand-placed docroot copies — the
+  drift trap). Deploy = `git pull` in the serve clone, **zero docroot edits** (proven `2e5abad`,
+  2026-06-25). Live serves these as **real files** via `deploy/deploy.sh` (push, guarded). See
+  **OVERLAY-SERVE-DEPLOY.md**.
+
 **Serve-tree runtime provisioning (per box, box-local, NOT git):**
 - `archive-poc/index.sqlite` — gitignored revert mirror; seed from a known-good copy; may be
   owned `archive-poc:www-data` (git never touches it).
@@ -445,6 +452,11 @@ artifacts. PROVEN byte-identical.
   lg-layout-v2/lg-legacy-import/lg-snippets plugins serve from the pristine `~/loothplatformv2-serve`
   clone on `main` (§13). **Deploy these = `git pull` in the serve clone + reload php-fpm.**
   Only `bb-mirror` (worktree fork) + the old `lg-layout` plugin remain off-repo.
+- **Webroot overlay layer (6/25):** repo-authoritative, two serve models — **dev2 =
+  pull/symlink** (`git pull` serve clone, zero docroot edits), **live = push/rsync** via
+  `deploy/deploy.sh` (new `webroot` stanza, **guarded**: refuses any target whose overlays are
+  symlinks, so it can never clobber dev2's pull-driven rewire). Closes the old gap where the
+  docroot overlays had no repo-driven deploy. See **OVERLAY-SERVE-DEPLOY.md**.
 - **Cut model (Ian 6/16):** dev2 IS the box we flip `loothgroup.com` → ; no ground-up
   rebuild. Cut = apply Phase-11 swaps IN PLACE (live salts + JWT keypair, gate off, URL
   rewrite, webhook re-point, R2 live names/token) + flip DNS. The serve-from-repo
