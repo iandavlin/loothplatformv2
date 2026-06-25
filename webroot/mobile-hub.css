@@ -246,21 +246,29 @@
     min-width:0; max-width:100%; box-sizing:border-box;
   }
 
-  /* ───────────────────────── Mobile: full-screen search modal ───────────────────
+  /* ───────────────────────── Mobile: full-screen search TRAY ────────────────────
      forums.css gives #hub-fmodal z-index:240 — BELOW the bottom nav (2147481200) —
      so on mobile it rendered UNDER the nav. Lift it above everything and go edge-to-
-     edge (the conventional mobile search-overlay): the whole viewport is the modal,
-     dismissed by the prominent ✕ (the nav is covered while open). Desktop keeps the
-     centered dialog (untouched, >=641).  (hub-mobile-search lane, 2026-06-25) */
+     edge. It reads + dismisses as a slide-down TRAY (Ian 2026-06-25): no ✕ (it
+     confused people once drag-dismiss existed) — a grab handle signals "drag me
+     down"; bottom-nav.js's wireHubModalDrag translateY-tracks the panel and closes
+     past ~25%/flick by clicking the hidden [data-hub-fmodal-close]. Desktop keeps
+     the ✕ + centered dialog (untouched, >=641).  (hub-mobile-search lane) */
   .hub-fmodal{ z-index:2147481500; }    /* over the bottom nav (2147481200) + sheets */
   .hub-fmodal__panel{
     margin:0; width:100%; max-width:none; height:100vh; height:100dvh;
-    max-height:none; border:0; border-radius:0; box-shadow:none;
+    max-height:none; border:0; border-radius:14px 14px 0 0; box-shadow:none;
+    will-change:transform;
+  }
+  /* grab handle (the drag affordance now that the ✕ is gone) */
+  .hub-fmodal__panel::before{
+    content:""; position:absolute; top:8px; left:50%; transform:translateX(-50%);
+    width:40px; height:5px; border-radius:999px; background:var(--lg-line,#e3ddd0); z-index:3;
   }
   .hub-fmodal__back{ display:none; }     /* panel fills the viewport; no backdrop tap */
-  /* sticky head so the ✕ stays reachable while the body scrolls (keyboard up) */
-  .hub-fmodal__head{ position:sticky; top:0; z-index:1; background:var(--bg-card,#fbfaf6); padding:14px 14px 12px; }
-  .hub-fmodal__x{ font-size:30px; line-height:1; padding:6px 12px; }   /* a real tap target */
+  /* sticky head (the drag zone); extra top room so the title clears the grab handle */
+  .hub-fmodal__head{ position:sticky; top:0; z-index:1; background:var(--bg-card,#fbfaf6); padding:20px 14px 12px; }
+  .hub-fmodal__x{ display:none; }        /* no ✕ on mobile — kept in DOM as the drag-close target */
   .hub-fmodal__body{ padding:14px 14px 24px; }
 
   /* The modal is the ONE filter surface on mobile: hide the feed's active-filter

@@ -391,6 +391,8 @@
 
     // If we arrived via an off-hub "Search the Hub" tap (/hub/#search), open it.
     openHubSearchIfHash();
+    // Slide-down-to-dismiss on the full-screen mobile search tray (#hub-fmodal).
+    wireHubModalDrag();
   }
 
   // ---- Profile sheet ----------------------------------------------------
@@ -785,6 +787,77 @@
         try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
       }
     }, 80);
+  }
+
+  // ---- Mobile search tray: slide-DOWN-to-dismiss (Ian 2026-06-25) --------------
+  // On mobile the full-screen #hub-fmodal is a tray with NO visible x (hidden in
+  // mobile-hub.css) — it closes by dragging it down. Same tap-vs-drag model as
+  // enableSheetDrag, but the draggable is the PANEL and the scroll container is
+  // .hub-fmodal__body. Closing reuses forums.js: we click the hidden
+  // [data-hub-fmodal-close] (no forums.js edit), after a short slide-out. Desktop
+  // (>=641) keeps the x + centered dialog, so the gesture is inert there.
+  function wireHubModalDrag() {
+    var modal = document.getElementById('hub-fmodal');
+    if (!modal || modal.getAttribute('data-lg-drag')) return;
+    var panel = modal.querySelector('.hub-fmodal__panel');
+    if (!panel) return;
+    modal.setAttribute('data-lg-drag', '1');
+    var body = modal.querySelector('.hub-fmodal__body');
+    var SLOP = 6, FLICK = 0.35;
+    var startY = 0, cur = 0, tracking = false, claimed = false, fromHandle = false,
+        startScroll = 0, lastY = 0, lastT = 0, vy = 0;
+    function isMobile() { return window.matchMedia('(max-width:640px)').matches; }
+    function ptY(e) { return (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY; }
+    function close() {
+      // animate the tray out, then run forums.js's own close + reset for next open.
+      panel.style.transition = 'transform .3s ease';
+      panel.style.transform = 'translateY(100%)';
+      setTimeout(function () {
+        var x = modal.querySelector('[data-hub-fmodal-close]');
+        if (x) x.click(); else { modal.hidden = true; document.body.classList.remove('hub-fmodal-lock'); }
+        panel.style.transition = ''; panel.style.transform = '';
+      }, 300);
+    }
+    function down(e) {
+      if (!isMobile() || modal.hidden) return;
+      var t = e.target;
+      // never start a drag from inside an input/suggest — let typing/scroll work.
+      if (t.closest && t.closest('input, textarea, .hub-suggest')) { tracking = false; return; }
+      fromHandle = !!(t.closest && t.closest('.hub-fmodal__head'));
+      startY = lastY = ptY(e); startScroll = (body && body.scrollTop) || 0; lastT = e.timeStamp || 0;
+      cur = 0; vy = 0; tracking = true; claimed = false;
+    }
+    function move(e) {
+      if (!tracking) return;
+      var y = ptY(e), now = e.timeStamp || 0, dy = y - startY;
+      if (now > lastT) vy = (y - lastY) / (now - lastT);
+      lastY = y; lastT = now;
+      if (!claimed) {
+        if (Math.abs(dy) < SLOP) return;
+        var atTop = !body || (body.scrollTop <= 0 && startScroll <= 0);
+        if (dy > 0 && (fromHandle || atTop)) { claimed = true; panel.style.transition = 'none'; }
+        else { tracking = false; return; }
+      }
+      cur = Math.max(0, dy);
+      panel.style.transform = 'translateY(' + cur + 'px)';
+      if (e.cancelable) e.preventDefault();
+    }
+    function up() {
+      if (!tracking) return;
+      tracking = false;
+      if (!claimed) return;
+      claimed = false;
+      panel.style.transition = '';
+      var thresh = (panel.offsetHeight || window.innerHeight || 600) * 0.25;   // ~25% of the tray
+      if (cur > thresh || vy > FLICK) { close(); }
+      else { panel.style.transition = 'transform .25s ease'; panel.style.transform = ''; }   // snap back
+    }
+    panel.addEventListener('mousedown', down);
+    panel.addEventListener('touchstart', down, { passive: true });
+    window.addEventListener('mousemove', move);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('mouseup', up);
+    window.addEventListener('touchend', up);
   }
 
   // ---- Notifications sheet (dedicated off-canvas) ---------------------------
