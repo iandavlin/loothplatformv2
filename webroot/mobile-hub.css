@@ -259,10 +259,10 @@
   .hub-fmodal{ z-index:2147481500; }    /* over the bottom nav (2147481200) + sheets */
   .hub-fmodal__back{ display:block; }   /* show the dimmed backdrop in the top gap */
   .hub-fmodal__panel{
-    /* leave a ~32px gap (+ safe-area) above the tray that reveals the backdrop */
-    --lg-tray-gap: calc(env(safe-area-inset-top, 0px) + 32px);
+    /* leave a ~48px gap (+ safe-area) above the tray that reveals the backdrop */
+    --lg-tray-gap: calc(env(safe-area-inset-top, 0px) + 48px);
     margin:var(--lg-tray-gap) 0 0; width:100%; max-width:none;
-    height:calc(100vh - 32px); height:calc(100dvh - var(--lg-tray-gap));
+    height:calc(100vh - 48px); height:calc(100dvh - var(--lg-tray-gap));
     max-height:none; border:0; border-radius:16px 16px 0 0; box-shadow:0 -6px 24px rgba(26,29,26,.18);
     will-change:transform;
   }
