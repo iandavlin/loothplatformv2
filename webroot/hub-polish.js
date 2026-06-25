@@ -343,6 +343,10 @@
   // far-down posts never got the button = Buck's "works on some, not that exact post".)
   var excerptIO = null;
   function ensureExcerptReadMore(card) {
+    // No synthetic "Read more" on mobile anymore (Ian 2026-06-25): inline expansion
+    // is killed — the card tap opens the sheet to read the full post. (Was mobile-
+    // only; now inert, since desktop never created one either.)
+    return;
     if (!window.matchMedia('(max-width:640px)').matches) return;
     if (!card || card.getAttribute('data-lg-exrm')) return;
     if (card.querySelector('.feed-card__read-more:not(.lg-rm-syn)')) return;  // native read-more owns it
@@ -4070,6 +4074,20 @@
         openRepliesSheet(c, { toReplies: true });                        // "View N replies" → popup, thread on top
         return;
       }
+      // In-place post expanders are KILLED on mobile (Ian 2026-06-25): "Read more"
+      // (native + synthetic .lg-rm-syn) and the compact "Show full post" chevron now
+      // open the discussion sheet in READ mode (land on the OP, no composer auto-pop)
+      // instead of unclamping/expanding on the card. Capture + stopPropagation beats
+      // forums.js's read-more handler and the synthetic button's own toggle.
+      var rmExp = e.target.closest && e.target.closest('.feed-card__read-more, .lg-rm-syn, .feed-card__compact-expand');
+      if (rmExp) {
+        var cr = rmExp.closest('.feed-card');
+        if (cr && !cr.__lgRepLoading && !cr.__lgPreviewing) {
+          e.preventDefault(); e.stopPropagation();
+          openRepliesSheet(cr);                                          // read mode → land on the OP/post body
+          return;
+        }
+      }
       var lm = e.target.closest && e.target.closest('.replies-loadmore');
       if (lm) { var c2 = lm.closest('.feed-card'); if (c2 && !c2.__lgRepLoading) { e.preventDefault(); e.stopPropagation(); openRepliesSheet(c2, { toReplies: true }); } }
     }, true);                                                  // capture: own the tap, drive the loader ourselves
@@ -4315,6 +4333,11 @@
   // also fire and double-toggle. Cards with no read-more (content/articles whose
   // full text lives on their own page) are left to their normal tap behavior.
   function wirePostBodyExpand() {
+    // DISABLED on mobile (Ian 2026-06-25): no in-place excerpt/body expansion on the
+    // feed — the discussion sheet is the ONLY way to read a full post. With this
+    // inert, a topic excerpt/body tap falls through to keepContentOnHub, which opens
+    // openRepliesSheet (read mode). Kept as a no-op so the call site is untouched.
+    return;
     if (!window.matchMedia('(max-width:640px)').matches) return;   // mobile only — desktop keeps forums.js's native expand
     if (document.body.getAttribute('data-lg-postbody')) return;
     document.body.setAttribute('data-lg-postbody', '1');
