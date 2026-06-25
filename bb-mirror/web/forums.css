@@ -4457,3 +4457,40 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 #lg-dmodal .reply-stub__reply:hover { color: var(--lguser-accent-d, #52613d) !important; }
 /* Count chips compact */
 #lg-dmodal .fcr-chips { gap: 4px; }
+
+/* ── Desktop modal: React + Reply + Edit as three UNIFORM grouped buttons
+   (hub-editdel, Ian 2026-06-25). The Edit/Delete dropdown trigger moves OUT of the
+   detached top-right ⋯ and INTO the action row next to React & Reply; the dropdown
+   (which Ian likes) now hangs off it. Reply is pulled in next to React (no float).
+   Scoped to #lg-dmodal — mobile sheet (#looth-rep-sheet) deliberately untouched. */
+#lg-dmodal .lg-dmodal__acts { justify-content: flex-start; gap: 2px; flex-wrap: wrap; }
+#lg-dmodal .lg-dmodal__acts .fcr { flex: 0 0 auto; gap: 4px; }
+#lg-dmodal .reply-stub__head { padding-right: 0; }   /* ⋯ no longer lives here */
+
+/* Reply: next to React, uniform light-text button */
+#lg-dmodal .lg-dmodal__acts .reply-stub__reply,
+#lg-dmodal .lg-dmodal__acts .feed-card__reply-cta {
+  margin: 0 !important; padding: 5px 8px !important; border-radius: 8px !important;
+  background: none !important; color: var(--lg-mute, #6b6f6b) !important;
+  font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif) !important;
+}
+#lg-dmodal .lg-dmodal__acts .reply-stub__reply:hover,
+#lg-dmodal .lg-dmodal__acts .feed-card__reply-cta:hover {
+  background: rgba(0, 0, 0, .06) !important; color: var(--lguser-accent-d, #52613d) !important;
+}
+
+/* Edit trigger: in-flow in the row, styled like React/Reply (not a 32px round ⋯) */
+#lg-dmodal .lg-dmodal__acts .post__menu-wrap--rs {
+  position: relative; top: auto; right: auto; margin: 0; display: inline-flex;
+}
+#lg-dmodal .lg-dmodal__acts .post__menu-btn {
+  width: auto; height: auto; border-radius: 8px;
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px;
+  background: none; border: 0; color: var(--lg-mute, #6b6f6b);
+  font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif); cursor: pointer;
+}
+#lg-dmodal .lg-dmodal__acts .post__menu-btn:hover,
+#lg-dmodal .lg-dmodal__acts .post__menu-btn[aria-expanded="true"] {
+  background: rgba(0, 0, 0, .06); color: var(--lguser-accent-d, #52613d);
+}
+#lg-dmodal .lg-dmodal__acts .post__menu-btn svg { width: 15px; height: 15px; opacity: .9; }

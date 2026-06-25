@@ -2825,9 +2825,23 @@
     [].forEach.call(modal.querySelectorAll('.post__menu-wrap--rs .post__menu:not([hidden])'), function (mn) { mn.hidden = true; });
     [].forEach.call(modal.querySelectorAll('.post__menu-wrap--rs .post__menu-btn[aria-expanded="true"]'), function (b) { b.setAttribute('aria-expanded', 'false'); });
   }
+  // Bulletproof dismiss: any click that isn't on an open ⋯/Edit control closes the
+  // menu (the trigger stops propagation, so opening doesn't self-close). Wired once
+  // at document level so it fires no matter where the menu lives in the modal —
+  // fixes the "stuck open" menu (Ian 2026-06-25).
+  if (!window.__dmMenusDismissWired) {
+    window.__dmMenusDismissWired = true;
+    document.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('.post__menu-wrap--rs')) return;
+      dmCloseMenus();
+    });
+  }
 
-  // Inject the ⋯ menu into one reply-stub head — only if the viewer authored it
-  // OR can moderate. Idempotent (guards on an existing wrap).
+  // Bring Edit (the Edit/Delete dropdown trigger) INTO the reply's action row, next
+  // to React + Reply — three uniform buttons (Ian 2026-06-25: "react, reply and
+  // edit, 3 buttons together"). Only for the reply's author OR a moderator;
+  // idempotent. The dropdown (the part Ian likes) stays; it now hangs off the
+  // inline Edit button and dismisses cleanly.
   function dmInjectReplyMenu(stub, auth) {
     if (!stub || stub.querySelector('.post__menu-wrap--rs')) return;
     var rid = parseInt(stub.getAttribute('data-reply-id'), 10) || 0;
@@ -2835,18 +2849,20 @@
     var authorId = parseInt(stub.getAttribute('data-author-id'), 10) || 0;
     var mine = auth && auth.wp_user_id && authorId === parseInt(auth.wp_user_id, 10);
     if (!mine && !(auth && auth.can_edit_others)) return;
-    var head = stub.querySelector('.reply-stub__head') || stub;
+    // Sit in the action row (React/Reply) so all controls group together; fall back
+    // to the head only if the row hasn't been built yet.
+    var rowEl = stub.querySelector('.lg-dmodal__acts') || stub.querySelector('.reply-stub__head') || stub;
     var wrap = document.createElement('div');
     wrap.className = 'post__menu-wrap post__menu-wrap--rs';
     wrap.innerHTML =
-      '<button type="button" class="post__menu-btn" aria-haspopup="true" aria-expanded="false" aria-label="Reply options">' +
-        '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>' +
+      '<button type="button" class="post__menu-btn" aria-haspopup="true" aria-expanded="false" aria-label="Edit or delete">' +
+        EDIT_SVG + '<span>Edit</span>' +
       '</button>' +
       '<div class="post__menu" role="menu" hidden>' +
         '<button type="button" role="menuitem" class="post__menu-item dm-rs-edit">' + EDIT_SVG + '<span>Edit</span></button>' +
         '<button type="button" role="menuitem" class="post__menu-item post__menu-item--danger dm-rs-del">' + DEL_SVG + '<span>Delete</span></button>' +
       '</div>';
-    head.appendChild(wrap);
+    rowEl.appendChild(wrap);
     var trig = wrap.querySelector('.post__menu-btn');
     var menu = wrap.querySelector('.post__menu');
     trig.addEventListener('click', function (e) {
