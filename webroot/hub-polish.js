@@ -874,7 +874,7 @@
     var aviEl = document.createElement('span'); aviEl.className = 'lg-fb-myavi';
     if (avi) aviEl.innerHTML = '<img src="' + avi + '" alt="">';
     var wrap = document.createElement('div'); wrap.className = 'lg-fb-replywrap';
-    var ta = document.createElement('textarea'); ta.className = 'lg-fb-replyinput'; ta.rows = 1; ta.placeholder = 'Write a reply…';
+    var ta = document.createElement('textarea'); ta.className = 'lg-fb-replyinput'; ta.rows = 1; ta.placeholder = 'Write a reply…'; ta.setAttribute('autocomplete', 'off');
     var name = author ? (author.textContent || '').trim().split(/[\s,]/)[0] : '';
     if (name) ta.value = '@' + name + ' ';
     var send = document.createElement('button'); send.type = 'button'; send.className = 'lg-fb-send'; send.textContent = 'Post';
@@ -3452,7 +3452,7 @@
         '<div class="lrs-comp"><button class="lrs-replybtn" id="lrs-replybtn" type="button">' +
             '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17l-5-5 5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v1"/></svg><span>Reply</span></button>' +
           '<span class="lrs-comp__av" id="lrs-comp-av"></span>' +
-          '<div class="lrs-comp__wrap"><textarea class="lrs-comp__input" id="lrs-comp-input" rows="1" placeholder="Write a comment…"></textarea>' +
+          '<div class="lrs-comp__wrap"><textarea class="lrs-comp__input" id="lrs-comp-input" rows="1" autocomplete="off" placeholder="Write a comment…"></textarea>' +
           '<button class="lrs-comp__photo" id="lrs-comp-photo" type="button" aria-label="Add photo" title="Add photo">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
           '<button class="lrs-comp__send" id="lrs-comp-send" type="button" disabled>Post</button></div>' +

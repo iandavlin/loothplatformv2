@@ -691,7 +691,7 @@
         if (rawHtml) rseQuill.clipboard.dangerouslyPasteHTML(rawHtml);
         rseQuill.focus();
       } else {
-        editorEl.innerHTML = '<textarea class="rse-input"></textarea>';
+        editorEl.innerHTML = '<textarea class="rse-input" autocomplete="off"></textarea>';
         ta = editorEl.querySelector('.rse-input');
         ta.value = cur; ta.focus();
         ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
@@ -768,7 +768,7 @@
       var box = document.createElement('div');
       box.className = 'feed-card__inline-compose';
       box.innerHTML =
-        '<textarea class="fic-input" rows="1" placeholder="Reply to this thread…"></textarea>' +
+        '<textarea class="fic-input" rows="1" autocomplete="off" placeholder="Reply to this thread…"></textarea>' +
         '<button type="button" class="fic-send" disabled>Reply</button>' +
         '<div class="fic-status" role="status"></div>';
       (card.querySelector('.feed-card__replies') || card).appendChild(box);
@@ -2401,7 +2401,7 @@
     var box = document.createElement('div');
     box.className = 'post-edit';
     var titleHtml = (kind === 'topic')
-      ? '<input class="post-edit__title" type="text" value="">' : '';
+      ? '<input class="post-edit__title" type="text" autocomplete="off" value="">' : '';
     box.innerHTML =
       titleHtml +
       '<div class="post-edit__quill"></div>' +
@@ -2435,7 +2435,7 @@
       quill.root.innerHTML = body.innerHTML;   // seed from rendered body
     } else {
       ta = document.createElement('textarea');
-      ta.className = 'post-edit__fallback'; ta.rows = 6; ta.value = body.innerHTML;
+      ta.className = 'post-edit__fallback'; ta.rows = 6; ta.setAttribute('autocomplete', 'off'); ta.value = body.innerHTML;
       qEl.replaceWith(ta);
     }
 
@@ -3162,7 +3162,7 @@
       if (raw) quill.clipboard.dangerouslyPasteHTML(raw);
       quill.focus();
     } else {
-      qEl.innerHTML = '<textarea class="dm-rs-ta" rows="4"></textarea>';
+      qEl.innerHTML = '<textarea class="dm-rs-ta" rows="4" autocomplete="off"></textarea>';
       ta = qEl.querySelector('.dm-rs-ta');
       ta.value = (excerpt ? (excerpt.innerText || excerpt.textContent || '') : '').trim();
       ta.focus();

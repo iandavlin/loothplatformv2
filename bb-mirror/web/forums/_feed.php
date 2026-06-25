@@ -1619,7 +1619,7 @@ $header_cat = $scoped_forum
         <div class="fc-composer" data-topic-id="<?= $topic_id ?>" data-forum-id="<?= (int)$topic['forum_id'] ?>">
           <span class="fc-composer__av"><?= bb_mirror_avatar('You', 'you', 30, null) ?></span>
           <span class="fc-composer__wrap">
-            <input class="fc-composer__input" type="text" placeholder="Add a reply&hellip; &#9998; for formatting &amp; photos" aria-label="Add a reply">
+            <input class="fc-composer__input" type="text" autocomplete="off" placeholder="Add a reply&hellip; &#9998; for formatting &amp; photos" aria-label="Add a reply">
             <?php /* Expand into the full rich (Quill) reply editor — reuses the feed-reply
                      modal (image upload + formatting + nested-reply path). Carries topic/
                      forum so frmOpen() targets this thread. */ ?>

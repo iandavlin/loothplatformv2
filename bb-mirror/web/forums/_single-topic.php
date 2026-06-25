@@ -461,7 +461,7 @@ $fh_image      = $forum['header_image_url'] ?: null;
       </p>
     </div>
 
-    <form class="reply-form reply-form--authed" data-state="authed" hidden
+    <form class="reply-form reply-form--authed" data-state="authed" hidden autocomplete="off"
           method="post" action="/wp-json/buddyboss/v1/reply">
       <input type="hidden" name="topic_id" value="<?= (int)$topic['id'] ?>">
       <input type="hidden" name="forum_id" value="<?= (int)$forum['id'] ?>">
@@ -473,7 +473,7 @@ $fh_image      = $forum['header_image_url'] ?: null;
       <label class="reply-form__label">Add a reply</label>
       <!-- Quill mounts here (same editor as new-topic/feed reply); textarea is the fallback -->
       <div class="reply-form__editor" id="reply-editor"></div>
-      <textarea id="reply-content" name="content" rows="6"
+      <textarea id="reply-content" name="content" rows="6" autocomplete="off"
                 placeholder="Share your build, ask a question, drop a measurement…" hidden></textarea>
       <div class="reply-form__row">
         <button type="submit" class="reply-form__submit">Post reply</button>
