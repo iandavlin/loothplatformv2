@@ -4666,6 +4666,12 @@
       mo.observe(document.body || document.documentElement, { childList: true });
     } catch (e) {}
     window.addEventListener('popstate', function () {
+      // The image lightbox stacks ABOVE this modal and pushes its OWN history
+      // entry. While it's up (back gesture) or just closed (tap/✕ pops its entry
+      // via history.back), this pop belongs to IT — don't also close the modal.
+      var lb0 = document.getElementById('lg-lb');
+      if (lb0 && lb0.classList.contains('is-on')) return;
+      if (window.__lgLbPop && Date.now() - window.__lgLbPop < 600) return;
       var m = el();
       if (m && !m.hidden) { hist = false; var x = m.querySelector('[data-dm-close]'); if (x) x.click(); }
     });

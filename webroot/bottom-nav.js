@@ -41,7 +41,10 @@
     alerts: '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M10 21h4"/>',
     loothtool: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
     // Fallback only — the Profile tab shows the member's avatar when one exists.
-    person: '<circle cx="12" cy="8.5" r="3.8"/><path d="M5 20c0-3.6 3-6 7-6s7 2.4 7 6"/>'
+    person: '<circle cx="12" cy="8.5" r="3.8"/><path d="M5 20c0-3.6 3-6 7-6s7 2.4 7 6"/>',
+    // Back chevron (Nav tray top-left Back button, Ian 2026-06-25): a left-
+    // pointing chevron, fill:none + stroke inherited like the other glyphs.
+    back: '<path d="M15 5l-7 7 7 7"/>'
   };
 
   // Destinations shown in the Nav tray (the slide-up "Go to" sheet) — pure
@@ -178,6 +181,16 @@
         'font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);text-decoration:none;background:var(--lg-sage-d,#52613d)}' +
       '.lt-sheet__login:active{background:var(--lg-sage,#87986a)}' +
       '.lt-sheet__login svg{flex:0 0 auto}' +
+      // Back button (Ian 2026-06-25): top-left of the Nav tray, ABOVE the "Go to"
+      // header. Small but an easy tap (>=40px target via padding); a left chevron +
+      // "Back" label in the muted nav vocabulary, reusing the tray's sage tints.
+      '.lt-navback{display:inline-flex;align-items:center;gap:4px;margin:0 0 -4px;padding:9px 12px 9px 8px;' +
+        'border:0;background:none;cursor:pointer;-webkit-appearance:none;appearance:none;' +
+        '-webkit-tap-highlight-color:transparent;border-radius:10px;color:var(--lg-sage-d,#6b7c52);' +
+        'font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif)}' +
+      '.lt-navback:active{background:var(--lg-sage-tint,#eef2e3)}' +
+      '.lt-navback svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;' +
+        'stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}' +
       '.lt-sheet__sech{font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase;' +
         'color:var(--lg-mute,#6b6f6b);padding:14px 6px 4px}' +
       // The Search entry is a <button> tile rendered identically to the <a>
@@ -693,6 +706,18 @@
     sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); sheet.setAttribute('aria-label', 'Go to');
 
     var grab = document.createElement('div'); grab.className = 'lt-sheet__grab'; sheet.appendChild(grab);
+
+    // Back button (Ian 2026-06-25): top-left, above the "Go to" header. Goes back
+    // in history; if there's nowhere to go back to, falls through to the Hub root.
+    var back = document.createElement('button');
+    back.type = 'button'; back.className = 'lt-navback'; back.setAttribute('aria-label', 'Go back');
+    back.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.back + '</svg><span>Back</span>';
+    back.addEventListener('click', function () {
+      closeNav();
+      if (window.history && history.length > 1) { history.back(); }
+      else { location.href = '/hub/'; }
+    });
+    sheet.appendChild(back);
 
     var h = document.createElement('div'); h.className = 'lt-sheet__sech'; h.textContent = 'Go to'; sheet.appendChild(h);
 
