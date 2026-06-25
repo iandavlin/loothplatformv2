@@ -97,9 +97,22 @@
     var u = new URL(window.location.href);
     var cur = (u.searchParams.get('author') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
     if (cur.indexOf(name) === -1) cur.push(name);
-    u.searchParams.set('author', cur.join(','));
+    u.searchParams.set('author', cur.join(','));   // AND-combines: keeps q/type/cat already in the URL
     u.searchParams.delete('offset');
-    window.location.href = u.toString();
+    // The author field lives only inside #hub-fmodal. If the modal is open (the
+    // mobile search tray, or the desktop dialog), apply in-place via forums.js's
+    // a[href]->fmodalApply path — same as the facet links — so the tray STAYS OPEN
+    // and the chips refresh, instead of a full navigation that closes it (Ian
+    // 2026-06-25). NO forums.js edit: we just dispatch a click on a throwaway
+    // in-body <a href>, which forums.js's existing modal-body delegate catches.
+    var mbody = document.querySelector('#hub-fmodal:not([hidden]) .hub-fmodal__body');
+    if (mbody) {
+      var a = document.createElement('a');
+      a.href = u.pathname + u.search; a.style.display = 'none';
+      mbody.appendChild(a); a.click(); mbody.removeChild(a);
+    } else {
+      window.location.href = u.toString();
+    }
   }
 
   /* ---- primary: live in-page feed filter ---------------------------------- */
