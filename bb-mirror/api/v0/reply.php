@@ -36,8 +36,43 @@ function reply_out(int $code, array $body): void {
 }
 
 $method = $_SERVER['REQUEST_METHOD'] ?? '';
+
+// Resolve a forum post's photo set → [{media_id, url, thumb}] (shared by the GET
+// read below + the PUT keep/add media save). Mirrors topic-media.php's list.
+function reply_media_list(int $post_id): array {
+    $out = [];
+    $csv = (string) get_post_meta($post_id, 'bp_media_ids', true);
+    if ($csv === '' || !class_exists('BP_Media')) return $out;
+    foreach (array_filter(array_map('intval', explode(',', $csv))) as $mid) {
+        $m   = new BP_Media($mid);
+        $att = (int) ($m->attachment_id ?? 0);
+        if (!$att) continue;
+        $url   = wp_get_attachment_image_url($att, 'large') ?: wp_get_attachment_url($att);
+        $thumb = wp_get_attachment_image_url($att, 'thumbnail') ?: $url;
+        $out[] = [
+            'media_id' => $mid,
+            'att'      => $att,
+            'name'     => (string) ($m->title ?? ''),
+            'url'      => $url ?: null,
+            'thumb'    => $thumb ?: null,
+        ];
+    }
+    return $out;
+}
+
+// GET — read a reply's photo set so the edit composer can show removable thumbs
+// (Ian 2026-06-25). Read-only; no auth needed (returns only public media URLs).
+if ($method === 'GET') {
+    $reply_id = (int) ($_GET['reply_id'] ?? 0);
+    if ($reply_id <= 0) {
+        reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => 'reply_id is required.']);
+    }
+    $media = array_map(static fn($m) => ['media_id' => (int) $m['media_id'], 'url' => $m['url'], 'thumb' => $m['thumb']], reply_media_list($reply_id));
+    reply_out(200, ['ok' => true, 'reply_id' => $reply_id, 'media' => $media]);
+}
+
 if (!in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
-    reply_out(405, ['ok' => false, 'error' => 'method', 'message' => 'POST/PUT/DELETE only.']);
+    reply_out(405, ['ok' => false, 'error' => 'method', 'message' => 'GET/POST/PUT/DELETE only.']);
 }
 
 $uid = get_current_user_id();
@@ -189,25 +224,30 @@ if ($method === 'PUT' || $method === 'DELETE') {
     if (is_wp_error($upd)) {
         reply_out(500, ['ok' => false, 'error' => 'server', 'message' => (string) $upd->get_error_message()]);
     }
-    // Attach newly-uploaded photos added during the edit (Ian 2026-06-25). The
-    // BuddyBoss reply PUT doesn't touch media, so — exactly like topic-media.php —
-    // drive bp_media_forums_new_post_media_save(): KEEP all existing reply photos +
-    // ADD the new uploads (no per-photo removal UX yet, so we never drop existing).
+    // Manage photos on edit (Ian 2026-06-25). The BuddyBoss reply PUT doesn't touch
+    // media, so — exactly like topic-media.php — drive
+    // bp_media_forums_new_post_media_save(): it KEEPS matches, ADDS new, and
+    // bp_media_delete()s anything dropped. Client intent:
+    //   media_ids      = new upload/attachment ids to ADD
+    //   keep_media_ids = existing bp_media ids to KEEP (anything else is removed)
+    // keep_media_ids absent ⇒ keep ALL existing (add-only, back-compat). Present
+    // (incl. empty) ⇒ authoritative keep set, enabling per-photo removal.
     $add_atts = array_values(array_filter(array_map('intval', (array) ($body['media_ids'] ?? []))));
-    if ($add_atts && function_exists('bp_media_forums_new_post_media_save')) {
+    $has_keep = array_key_exists('keep_media_ids', (array) $body);
+    $keep_ids = $has_keep ? array_values(array_filter(array_map('intval', (array) $body['keep_media_ids']))) : [];
+    if (($add_atts || $has_keep) && function_exists('bp_media_forums_new_post_media_save')) {
+        $existing = reply_media_list($reply_id);
+        $by_mid   = [];
+        foreach ($existing as $e) $by_mid[(int) $e['media_id']] = $e;
+        $keep = $has_keep ? $keep_ids : array_keys($by_mid);   // explicit keep, else keep all
         $media_objects = [];
         $order = 0;
-        $csv = (string) get_post_meta($reply_id, 'bp_media_ids', true);
-        if ($csv !== '' && class_exists('BP_Media')) {
-            foreach (array_filter(array_map('intval', explode(',', $csv))) as $mid) {
-                $m   = new BP_Media($mid);
-                $att = (int) ($m->attachment_id ?? 0);
-                if (!$att) continue;
-                $media_objects[] = ['id' => $att, 'media_id' => $mid, 'name' => (string) ($m->title ?? ''), 'menu_order' => $order++];
-            }
+        foreach ($keep as $mid) {
+            if (empty($by_mid[$mid])) continue;                 // not ours / already gone
+            $media_objects[] = ['id' => (int) $by_mid[$mid]['att'], 'media_id' => $mid, 'name' => (string) $by_mid[$mid]['name'], 'menu_order' => $order++];
         }
         foreach ($add_atts as $att) {
-            if (!wp_get_attachment_url($att)) continue;   // must be a real attachment
+            if (!wp_get_attachment_url($att)) continue;          // must be a real attachment
             $media_objects[] = ['id' => $att, 'menu_order' => $order++];
         }
         $_POST['bbp_media'] = wp_json_encode($media_objects);

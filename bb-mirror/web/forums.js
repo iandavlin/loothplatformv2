@@ -1722,6 +1722,8 @@
     var frmQuill    = null;     // lazy Quill instance (same editor as new-topic)
     var frmMediaIds = [];       // bbp_media upload_ids for this reply
     var frmMediaPreviews = [];  // preview URLs, for the optimistic stub (no refresh)
+    var frmKeepMedia = [];      // edit mode: existing bp_media.id to KEEP (✕ removes)
+    var frmEditMediaLoaded = false; // edit mode: did we load the existing photo set?
     var frmParentId = 0;        // reply_to: set when replying to a specific reply (nested)
     var frmMentionSlug = '';    // BB nicename to auto-@mention (reply-to-reply only)
 
@@ -1791,6 +1793,7 @@
 
     function frmResetEditor() {
       frmTray.reset();          // clears frmMediaIds (in place) + the tray thumbs
+      frmKeepMedia.length = 0; frmEditMediaLoaded = false;   // clear edit-media state
       frmMediaPreviews = [];
       if (frmQuill) frmQuill.setText('');
       else if (frmContent) frmContent.value = '';
@@ -1875,6 +1878,16 @@
       frmOverlay.hidden = false;
       document.body.classList.add('ntm-active');
       if (frmSubmit) frmSubmit.textContent = 'Save';
+      // Load the reply's existing photos as removable thumbs (✕ drops the id from
+      // frmKeepMedia; on save we send the kept set so dropped photos are deleted).
+      fetch('/bb-mirror-api/v0/reply?reply_id=' + replyId, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.ok || !d.media || frmEditReplyId !== replyId) return;
+          frmEditMediaLoaded = true;
+          d.media.forEach(function (m) { frmKeepMedia.push(m.media_id); frmTray.addThumb(m.thumb || m.url, m.media_id, frmKeepMedia); });
+        })
+        .catch(function () {});
       var seedTries = 0;
       function frmSeedBody() {
         if (frmQuill) { frmQuill.clipboard.dangerouslyPasteHTML(bodyHtml || ''); frmQuill.focus(); }
@@ -1913,6 +1926,10 @@
         var editPayload = { reply_id: editId, content: content };
         var addedMedia = frmMediaIds.slice();                  // new uploads added during edit
         if (addedMedia.length) editPayload.media_ids = addedMedia;
+        // If we loaded the existing photo set, send the kept ids so any the user
+        // ✕'d are removed server-side (omit when we couldn't load it → keep all).
+        if (frmEditMediaLoaded) editPayload.keep_media_ids = frmKeepMedia.slice();
+        var mediaChanged = addedMedia.length > 0 || frmEditMediaLoaded;
         fetch('/bb-mirror-api/v0/reply', {
           method: 'PUT', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },
@@ -1927,9 +1944,9 @@
               if (ex) ex.innerHTML = fresh;
               var eb = st.querySelector('.reply-stub__edit'); if (eb) eb.setAttribute('data-reply-raw', fresh);
             });
-            // New photo(s) attach as bbp_media (not inline) — the text-only in-place
-            // update can't show them, so reload the open discussion-modal thread.
-            if (addedMedia.length) {
+            // Photo add/remove changes attachments (not inline body) — the text-only
+            // in-place update can't reflect them, so reload the discussion-modal thread.
+            if (mediaChanged) {
               var dm = document.getElementById('lg-dmodal');
               var dtid = dm && !dm.hidden ? (dm.dataset.topicId || '') : '';
               if (dtid) { try { document.dispatchEvent(new CustomEvent('lg:reply-posted', { detail: { topicId: parseInt(dtid, 10) } })); } catch (e) {} }
