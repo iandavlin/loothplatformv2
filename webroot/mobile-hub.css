@@ -195,7 +195,13 @@
     scrollbar-width:none; -webkit-overflow-scrolling:touch;
   }
   .hub-fmodal-page .feed-sort-bar .zL::-webkit-scrollbar{ display:none; }
-  .hub-fmodal-page .feed-sort-bar .zL > a{ flex:0 0 auto; padding:6px 10px; font-size:12px; }
+  /* three SMALL sort pills only (Ian 2026-06-25): tighter than build-2 (was
+     6px/10px · 12px). Newest / Random / Trending — nothing else in the bar. */
+  .hub-fmodal-page .feed-sort-bar .zL > a{ flex:0 0 auto; padding:4px 9px; font-size:11px; }
+  /* drop the Saved pill on mobile — Saved lives in the nav/You sheet, not the bar.
+     Server renders it in .zL (_feed.php:1316); the mobile overlay's ensureSavedPill
+     keys off its PRESENCE, so a CSS hide won't trigger a double-inject. */
+  .feed-page .feed-sort-bar .lg-saved-pill{ display:none; }
 
   /* 3 — slim sort-only strip (Ian 2026-06-25): also drop the "Filters" chip, the
      direct-child relocated-hamburger that hub-polish.js drops into the bar — its
@@ -220,12 +226,14 @@
      anchoring holds regardless of load order). */
   .hub-fmodal__search .hub-tsearch--author{ width:100%; position:relative; }
   .hub-fmodal__search .hub-tsearch--author .hub-tsearch__in{ width:auto; }
-  /* author suggest dropdown (Ian 2026-06-25 root cause): forums.css pins it
-     min-width:240px, which on a <240px panel forces it wider than the modal and
-     overflows RIGHT — so author picks "didn't work". Override min-width and render
-     it FULL-WIDTH directly below the input. */
+  /* author suggest dropdown (Ian 2026-06-25 root cause): forums.css:4317 flips the
+     in-modal .hub-suggest to position:RELATIVE, so it stays an in-flow flex item
+     beside the input AND keeps the base min-width:240px — blowing the panel wide.
+     Restore position:absolute so it overlays as a dropdown anchored to the field,
+     full-width below it, with the 240px floor removed. (canonical fix also added
+     to forums.css for desktop; this is the mobile belt.) */
   .hub-fmodal__search .hub-tsearch--author .hub-suggest{
-    top:100%; left:0; right:0; width:auto;
+    position:absolute; top:100%; left:0; right:0; width:auto;
     min-width:0; max-width:100%; box-sizing:border-box;
   }
 }
