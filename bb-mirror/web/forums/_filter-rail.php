@@ -360,7 +360,14 @@ function hub_render_author_header(array $h, array $filters, string $sort = 'new'
 }
 
 /** Render the active-filter + muted chip bar at the top of the feed. */
-function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', array $leaf_labels = [], array $tree = []): void
+// $outer_class (hub-mobile-search lane, 2026-06-25): the container class for the
+// chip bar. Defaults to 'hub-chipbar' (the feed bar). The mobile modal renders a
+// SECOND copy inside #hub-fmodal with a DISTINCT class ('hub-fmodal__chips') so it
+// is NOT a 2nd '.hub-chipbar' — otherwise fmodalApply's document.querySelector(
+// '.hub-chipbar') feed-swap would hijack the modal copy and stop refreshing the
+// desktop feed bar. The inner .hub-chip / .hub-chipbar__* classes are unchanged
+// (they style standalone), so both copies look identical.
+function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', array $leaf_labels = [], array $tree = [], string $outer_class = 'hub-chipbar'): void
 {
     // Active (transient) filter chips — removing returns to the unfiltered set.
     $chips = [];
@@ -404,7 +411,7 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', 
 
     if (!$chips && !$mchips) return;
     ?>
-    <div class="hub-chipbar">
+    <div class="<?= htmlspecialchars($outer_class) ?>">
       <?php if ($chips): ?>
         <span class="hub-chipbar__lab">Filters</span>
         <span class="hub-chipbar__and">AND</span>

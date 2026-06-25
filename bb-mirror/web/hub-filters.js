@@ -97,9 +97,22 @@
     var u = new URL(window.location.href);
     var cur = (u.searchParams.get('author') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
     if (cur.indexOf(name) === -1) cur.push(name);
-    u.searchParams.set('author', cur.join(','));
+    u.searchParams.set('author', cur.join(','));   // AND-combines: keeps q/type/cat already in the URL
     u.searchParams.delete('offset');
-    window.location.href = u.toString();
+    // The author field lives only inside #hub-fmodal. If the modal is open (the
+    // mobile search tray, or the desktop dialog), apply in-place via forums.js's
+    // a[href]->fmodalApply path — same as the facet links — so the tray STAYS OPEN
+    // and the chips refresh, instead of a full navigation that closes it (Ian
+    // 2026-06-25). NO forums.js edit: we just dispatch a click on a throwaway
+    // in-body <a href>, which forums.js's existing modal-body delegate catches.
+    var mbody = document.querySelector('#hub-fmodal:not([hidden]) .hub-fmodal__body');
+    if (mbody) {
+      var a = document.createElement('a');
+      a.href = u.pathname + u.search; a.style.display = 'none';
+      mbody.appendChild(a); a.click(); mbody.removeChild(a);
+    } else {
+      window.location.href = u.toString();
+    }
   }
 
   /* ---- primary: live in-page feed filter ---------------------------------- */
@@ -126,6 +139,20 @@
         if (cc && nc) cc.replaceWith(nc);
         else if (cc && !nc) cc.remove();
         else if (!cc && nc && page) page.insertBefore(nc, page.querySelector('.feed-sort-bar'));
+        // ALSO sync the in-modal chip bar (.hub-fmodal__chips) — the mobile search
+        // tray's filter surface (the feed .hub-chipbar above is hidden on <=640).
+        // Without this, a free-text q typed in the tray updated the feed but never
+        // showed a chip in the tray (Ian 2026-06-25). Swap ONLY this element (not the
+        // whole modal body) so the q input keeps focus mid-type. Desktop: it's
+        // display:none >=641, so this is a harmless no-op there.
+        var nmc = doc.querySelector('.hub-fmodal__chips');
+        var omc = document.querySelector('.hub-fmodal__chips');
+        if (omc && nmc) omc.replaceWith(nmc);
+        else if (omc && !nmc) omc.remove();
+        else if (!omc && nmc) {
+          var mb = document.querySelector('#hub-fmodal .hub-fmodal__body');
+          if (mb) mb.insertBefore(nmc, mb.firstChild);
+        }
         history.replaceState({}, '', u.toString());
         // let other scripts (comment modal, embeds) re-bind swapped-in cards
         document.dispatchEvent(new CustomEvent('hub:feed-updated'));

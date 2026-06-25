@@ -158,4 +158,126 @@
      and mobile-hub.js strips the class; this is the CSS belt so a stuck class can't
      re-densify the app-card before the JS runs. */
   html.hub-compact .feed-page .feed-card{ padding:14px 14px 8px; }
+
+  /* ───────────────────────────── Hub search: ONE mobile entry ───────────────────
+     The single mobile search affordance is the bottom-nav Nav-tray "Search the Hub"
+     row (webroot/bottom-nav.js), which opens the #hub-fmodal Advanced Search dialog.
+     Everything that duplicated it on mobile is removed here (Ian 2026-06-25):
+
+       1. the shared header's injected "Search the Hub" pill (hub-polish.js
+          .lg-hub-search) — ALL header search is gone on mobile;
+       2. the front-door sort bar's unadapted desktop search zone (.zR): a 2nd
+          quick-search input (.lg-quickq) + a cramped "Adv Search" button.
+
+     The sort bar then collapses to just its sort pills (one horizontally-scrollable
+     strip). The .zR Adv-Search button is hidden but KEPT IN THE DOM — bottom-nav.js
+     opens the modal by triggering its .lg-filters-chip click (no forums.js edit).
+     forums.css owns ≥641 and is untouched; this ≤640 sheet loads after it, so
+     source-order wins (no !important).  (hub-mobile-search lane, 2026-06-25) */
+
+  /* 1 — kill ALL header search on mobile (the injected live-search pill). */
+  .lg-hub-search,
+  .lg-hub-search__panel{ display:none; }
+
+  /* Reclaim the empty mobile header (Ian/keeper 2026-06-25). On the hub every child
+     of the site header is hidden on mobile — logo/hamburger/aside (forums.css),
+     account (bottom-nav), and the legacy search pill (above) — leaving a vacant
+     ~60px sticky bar. Collapse it; the bottom-nav is the mobile nav. forums.css pins
+     .feed-sort-bar sticky at top:61px (the header's height), so with the header gone
+     we pull the bar up to the top — else a 61px gap remains. (pure mobile-hub.css) */
+  body.hub-fmodal-page #site-header.lg-chrome{ display:none; }
+
+  /* 2 — sort bar = sort pills only; the dup search zone (.zR) and compose (.zM,
+     owned by the bottom-nav FAB) are removed. .zR stays display:none rather than
+     removed so its .lg-filters-chip remains clickable as the modal opener. Tighter
+     own-padding + top:0 now that the empty header above it is gone. */
+  .hub-fmodal-page .feed-sort-bar{
+    display:flex; align-items:center; gap:8px;
+    padding:6px 12px; margin-bottom:12px; top:0;
+  }
+  .hub-fmodal-page .feed-sort-bar .zM,
+  .hub-fmodal-page .feed-sort-bar .zR{ display:none; }
+  /* sort pills: one scrollable strip that takes the full row */
+  .hub-fmodal-page .feed-sort-bar .zL{
+    flex:1 1 auto; min-width:0; justify-content:flex-start;
+    flex-wrap:nowrap; gap:5px; overflow-x:auto;
+    scrollbar-width:none; -webkit-overflow-scrolling:touch;
+  }
+  .hub-fmodal-page .feed-sort-bar .zL::-webkit-scrollbar{ display:none; }
+  /* three SMALL sort pills only (Ian 2026-06-25): tighter than build-2 (was
+     6px/10px · 12px). Newest / Random / Trending — nothing else in the bar. */
+  .hub-fmodal-page .feed-sort-bar .zL > a{ flex:0 0 auto; padding:4px 9px; font-size:11px; }
+  /* drop the Saved pill on mobile — Saved lives in the nav/You sheet, not the bar.
+     Server renders it in .zL (_feed.php:1316); the mobile overlay's ensureSavedPill
+     keys off its PRESENCE, so a CSS hide won't trigger a double-inject. */
+  .feed-page .feed-sort-bar .lg-saved-pill{ display:none; }
+
+  /* 3 — slim sort-only strip (Ian 2026-06-25): also drop the "Filters" chip, the
+     direct-child relocated-hamburger that hub-polish.js drops into the bar — its
+     filters now live in the Advanced Search modal the tray Search tile opens. This
+     is a DIRECT-CHILD selector ('>'), so it never touches the hub's Adv-Search
+     opener, which is nested in .zR (kept display:none IN the DOM above as the
+     programmatic opener). Pure CSS — no forums.js change. */
+  .feed-page .feed-sort-bar > .lg-filters-chip{ display:none; }
+
+  /* ───────────────────────────── Advanced Search modal: mobile polish ───────────
+     #hub-fmodal is the desktop Advanced Search dialog, reused as-is on mobile. At
+     ≤560px forums.css already stacks the two search fields (q over author); these
+     additive rules fix the author field, which read poorly on a narrow viewport:
+     full-width inputs, a comfortable tap height, and a non-overflowing author
+     suggest dropdown.  (hub-mobile-search lane, 2026-06-25) */
+  .hub-fmodal__search .feed-toolbar-search{ width:100%; gap:10px; }
+  .hub-fmodal__search .hub-tsearch{ width:100%; min-width:0; padding:11px 14px; }
+  .hub-fmodal__search .hub-tsearch__in{ flex:1 1 auto; width:auto; min-width:0; font-size:16px; }
+  /* author field: same full-width treatment as the q field (desktop pins it 150px).
+     position:relative so the suggest dropdown anchors to THIS field, not a higher
+     ancestor (forums.css sets .hub-tsearch relative globally; restated here so the
+     anchoring holds regardless of load order). */
+  .hub-fmodal__search .hub-tsearch--author{ width:100%; position:relative; }
+  .hub-fmodal__search .hub-tsearch--author .hub-tsearch__in{ width:auto; }
+  /* author suggest dropdown (Ian 2026-06-25 root cause): forums.css:4317 flips the
+     in-modal .hub-suggest to position:RELATIVE, so it stays an in-flow flex item
+     beside the input AND keeps the base min-width:240px — blowing the panel wide.
+     Restore position:absolute so it overlays as a dropdown anchored to the field,
+     full-width below it, with the 240px floor removed. (canonical fix also added
+     to forums.css for desktop; this is the mobile belt.) */
+  .hub-fmodal__search .hub-tsearch--author .hub-suggest{
+    position:absolute; top:100%; left:0; right:0; width:auto;
+    min-width:0; max-width:100%; box-sizing:border-box;
+  }
+
+  /* ───────────────────────── Mobile: slide-down search TRAY ─────────────────────
+     forums.css gives #hub-fmodal z-index:240 — BELOW the bottom nav (2147481200) —
+     so on mobile it rendered UNDER the nav. Lift it above everything. It reads +
+     dismisses as a draggable TRAY (Ian 2026-06-25): a small GAP at the top reveals
+     the dimmed backdrop so it's clearly a sheet (not a full page); rounded top
+     corners + a grab handle signal "drag me down"; bottom-nav.js's wireHubModalDrag
+     translateY-tracks the panel and closes past ~25%/flick by clicking the hidden
+     [data-hub-fmodal-close]. No ✕ (it confused people once drag existed). The tray
+     still covers the bottom nav (spans the gap down to the bottom edge). Desktop
+     keeps the ✕ + centered dialog (untouched, >=641).  (hub-mobile-search lane) */
+  .hub-fmodal{ z-index:2147481500; }    /* over the bottom nav (2147481200) + sheets */
+  .hub-fmodal__back{ display:block; }   /* show the dimmed backdrop in the top gap */
+  .hub-fmodal__panel{
+    /* leave a ~48px gap (+ safe-area) above the tray that reveals the backdrop */
+    --lg-tray-gap: calc(env(safe-area-inset-top, 0px) + 48px);
+    margin:var(--lg-tray-gap) 0 0; width:100%; max-width:none;
+    height:calc(100vh - 48px); height:calc(100dvh - var(--lg-tray-gap));
+    max-height:none; border:0; border-radius:16px 16px 0 0; box-shadow:0 -6px 24px rgba(26,29,26,.18);
+    will-change:transform;
+  }
+  /* grab handle at the very top of the tray (the drag affordance; no ✕ now) */
+  .hub-fmodal__panel::before{
+    content:""; position:absolute; top:8px; left:50%; transform:translateX(-50%);
+    width:40px; height:5px; border-radius:999px; background:var(--lg-line,#e3ddd0); z-index:3;
+  }
+  /* sticky head (the drag zone); extra top room so the title clears the grab handle */
+  .hub-fmodal__head{ position:sticky; top:0; z-index:1; background:var(--bg-card,#fbfaf6); padding:20px 14px 12px; border-radius:16px 16px 0 0; }
+  .hub-fmodal__x{ display:none; }        /* no ✕ on mobile — kept in DOM as the drag-close target */
+  .hub-fmodal__body{ padding:14px 14px 24px; }
+
+  /* The modal is the ONE filter surface on mobile: hide the feed's active-filter
+     chip bar. The in-modal copy (.hub-fmodal__chips, distinct class) is the mobile
+     surface — it shows by default (forums.css only hides it >=641). */
+  .hub-fmodal-page .hub-chipbar{ display:none; }
 }

@@ -4316,6 +4316,27 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 .hub-fmodal__search .hub-tsearch__in{flex:1 1 auto;border:0;outline:0;background:none;font:14px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#323532);min-width:0;width:auto}
 .hub-fmodal__search .hub-suggest{position:relative}
 @media (max-width:560px){.hub-fmodal__search,.hub-fmodal__search .feed-toolbar-search{flex-direction:column}}
+/* Author suggest dropdown — ADDITIVE scoped override (hub-mobile-search lane,
+   Ian 2026-06-25). The rule above makes the in-modal .hub-suggest position:relative,
+   so the author dropdown stays an in-flow flex item beside the input and keeps the
+   base .hub-suggest min-width:240px (line ~3710) — together they blow the modal
+   panel wide on DESKTOP too. Re-anchor JUST the author dropdown as an absolute
+   overlay below its field, full-width, no 240px floor. No refactor of the rules
+   above. (forums.css is shared w/ hub-editdel + hub-card-sep.) */
+.hub-fmodal__search .hub-tsearch--author{position:relative}
+.hub-fmodal__search .hub-tsearch--author .hub-suggest{
+  position:absolute;top:100%;left:0;right:0;width:auto;min-width:0;max-width:100%;box-sizing:border-box}
+
+/* In-modal active-filter chip bar — ADDITIVE (hub-mobile-search lane, 2026-06-25).
+   A 2nd copy of hub_render_chipbar() rendered into .hub-fmodal__body with the
+   distinct class .hub-fmodal__chips (so it is NOT a .hub-chipbar). Same container
+   layout as the feed bar; the inner .hub-chip / .hub-chipbar__* classes style
+   standalone. MOBILE-ONLY surface: hidden on desktop (>=641), where the feed
+   chipbar stays the unchanged surface. */
+.hub-fmodal__chips{display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+  margin:0 0 12px;padding:8px 12px;background:var(--lg-card-bg,#fff);
+  border:1px solid var(--lg-line,#dcd6c8);border-radius:12px}
+@media (min-width:641px){.hub-fmodal__chips{display:none}}
 
 .hub-rail--acc .hub-rail__reset{display:inline-block;margin:0 0 8px;color:var(--lg-rust,#c66845);font-weight:700;text-decoration:none}
 /* per-section colour tokens (brand only): --sec accent, --secink ink-on-accent,

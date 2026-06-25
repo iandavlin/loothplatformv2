@@ -33,6 +33,8 @@
     home: '<path d="M3 11 12 3l9 8"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/>',
     // Nav button: a 2x2 grid (opens the destinations tray).
     grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
+    // Search the Hub — opens the #hub-fmodal Advanced Search dialog (Nav tray row).
+    search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
     // Big center Post button.
     plus: '<path d="M12 5v14M5 12h14"/>',
     messages: '<path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 9 9 0 0 1-3.2-.6L4 21l1.9-4.4a8 8 0 0 1-1.4-4.6A8.4 8.4 0 0 1 13 3.7a8.4 8.4 0 0 1 8 7.8z"/>',
@@ -178,6 +180,11 @@
       '.lt-sheet__login svg{flex:0 0 auto}' +
       '.lt-sheet__sech{font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase;' +
         'color:var(--lg-mute,#6b6f6b);padding:14px 6px 4px}' +
+      // The Search entry is a <button> tile rendered identically to the <a>
+      // destination tiles (Ian 2026-06-25: a plain nav button, not a faux input) —
+      // reset the UA button chrome so it matches the anchors exactly.
+      'button.lt-navitem{background:none;border:0;cursor:pointer;width:100%;box-sizing:border-box;' +
+        '-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent}' +
       // ---- Nav tray: "Go to" destinations grid (slide-up, same sheet infra) ----
       '.lt-navgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:6px 0 4px}' +
       '.lt-navitem{display:flex;flex-direction:column;align-items:center;gap:7px;padding:13px 4px;' +
@@ -381,6 +388,11 @@
         } else if (++ptries > 20) { clearInterval(piv); }
       }, 150);
     }
+
+    // If we arrived via an off-hub "Search the Hub" tap (/hub/#search), open it.
+    openHubSearchIfHash();
+    // Slide-down-to-dismiss on the full-screen mobile search tray (#hub-fmodal).
+    wireHubModalDrag();
   }
 
   // ---- Profile sheet ----------------------------------------------------
@@ -681,10 +693,23 @@
     sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); sheet.setAttribute('aria-label', 'Go to');
 
     var grab = document.createElement('div'); grab.className = 'lt-sheet__grab'; sheet.appendChild(grab);
+
     var h = document.createElement('div'); h.className = 'lt-sheet__sech'; h.textContent = 'Go to'; sheet.appendChild(h);
 
     var grid = document.createElement('div'); grid.className = 'lt-navgrid';
     var path = location.pathname || '/';
+
+    // Search the Hub — the single mobile search entry (Ian 2026-06-25): the first
+    // tile, rendered exactly like the destination tiles but opening the #hub-fmodal
+    // Advanced Search dialog (off the hub front-door it routes to /hub/#search, which
+    // auto-opens the modal on arrival — openHubSearchIfHash).
+    var stile = document.createElement('button');
+    stile.type = 'button'; stile.className = 'lt-navitem';
+    stile.setAttribute('aria-haspopup', 'dialog'); stile.setAttribute('aria-label', 'Search the Hub');
+    stile.innerHTML = '<span class="lt-nico"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.search + '</svg></span><span>Search</span>';
+    stile.addEventListener('click', function () { closeNav(); openHubSearch(); });
+    grid.appendChild(stile);
+
     DESTS.forEach(function (d) {
       var a = document.createElement('a');
       a.className = 'lt-navitem' + (d.home ? ' lt-home' : '');
@@ -726,6 +751,114 @@
     document.removeEventListener('keydown', onNavKey);
   }
   function onNavKey(e) { if (e.key === 'Escape') closeNav(); }
+
+  // ---- Hub search (single entry; reuses #hub-fmodal Advanced Search) ----------
+  // The Nav tray's "Search the Hub" row is the only mobile search affordance. On
+  // the hub front-door the Advanced Search modal is already in the DOM, so we fire
+  // its canonical opener — the .lg-filters-chip click forums.js delegates on — with
+  // NO forums.js edit. Off-hub there is no modal, so we route to /hub/#search and
+  // let the destination page auto-open it on boot.
+  function openHubModal() {
+    var modal = document.getElementById('hub-fmodal');
+    if (!modal) return false;
+    if (modal.hidden) {
+      var chip = document.querySelector('.feed-sort-bar .lg-filters-chip') ||
+                 document.querySelector('.lg-filters-chip');
+      if (chip) chip.click();                          // forums.js delegate -> fmodalSet(true)
+      else { modal.hidden = false; document.body.classList.add('hub-fmodal-lock'); }  // fallback
+    }
+    return true;
+  }
+  function openHubSearch() {
+    if (openHubModal()) return;
+    location.href = '/hub/#search';
+  }
+  // Auto-open after an off-hub Search tap lands on /hub/#search. forums.js wires its
+  // .lg-filters-chip delegate on script run; poll briefly until the modal actually
+  // opens (or give up), then strip the hash so a reload doesn't re-trigger.
+  function openHubSearchIfHash() {
+    if ((location.hash || '') !== '#search') return;
+    var tries = 0;
+    var iv = setInterval(function () {
+      var modal = document.getElementById('hub-fmodal');
+      if (modal) openHubModal();
+      if ((modal && !modal.hidden) || ++tries > 30) {
+        clearInterval(iv);
+        try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+      }
+    }, 80);
+  }
+
+  // ---- Mobile search tray: slide-DOWN-to-dismiss (Ian 2026-06-25) --------------
+  // On mobile the full-screen #hub-fmodal is a tray with NO visible x (hidden in
+  // mobile-hub.css) — it closes by dragging it down. Same tap-vs-drag model as
+  // enableSheetDrag, but the draggable is the PANEL and the scroll container is
+  // .hub-fmodal__body. Closing reuses forums.js: we click the hidden
+  // [data-hub-fmodal-close] (no forums.js edit), after a short slide-out. Desktop
+  // (>=641) keeps the x + centered dialog, so the gesture is inert there.
+  function wireHubModalDrag() {
+    var modal = document.getElementById('hub-fmodal');
+    if (!modal || modal.getAttribute('data-lg-drag')) return;
+    var panel = modal.querySelector('.hub-fmodal__panel');
+    if (!panel) return;
+    modal.setAttribute('data-lg-drag', '1');
+    var body = modal.querySelector('.hub-fmodal__body');
+    var SLOP = 6, FLICK = 0.35;
+    var startY = 0, cur = 0, tracking = false, claimed = false, fromHandle = false,
+        startScroll = 0, lastY = 0, lastT = 0, vy = 0;
+    function isMobile() { return window.matchMedia('(max-width:640px)').matches; }
+    function ptY(e) { return (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY; }
+    function close() {
+      // animate the tray out, then run forums.js's own close + reset for next open.
+      panel.style.transition = 'transform .3s ease';
+      panel.style.transform = 'translateY(100%)';
+      setTimeout(function () {
+        var x = modal.querySelector('[data-hub-fmodal-close]');
+        if (x) x.click(); else { modal.hidden = true; document.body.classList.remove('hub-fmodal-lock'); }
+        panel.style.transition = ''; panel.style.transform = '';
+      }, 300);
+    }
+    function down(e) {
+      if (!isMobile() || modal.hidden) return;
+      var t = e.target;
+      // never start a drag from inside an input/suggest — let typing/scroll work.
+      if (t.closest && t.closest('input, textarea, .hub-suggest')) { tracking = false; return; }
+      fromHandle = !!(t.closest && t.closest('.hub-fmodal__head'));
+      startY = lastY = ptY(e); startScroll = (body && body.scrollTop) || 0; lastT = e.timeStamp || 0;
+      cur = 0; vy = 0; tracking = true; claimed = false;
+    }
+    function move(e) {
+      if (!tracking) return;
+      var y = ptY(e), now = e.timeStamp || 0, dy = y - startY;
+      if (now > lastT) vy = (y - lastY) / (now - lastT);
+      lastY = y; lastT = now;
+      if (!claimed) {
+        if (Math.abs(dy) < SLOP) return;
+        var atTop = !body || (body.scrollTop <= 0 && startScroll <= 0);
+        if (dy > 0 && (fromHandle || atTop)) { claimed = true; panel.style.transition = 'none'; }
+        else { tracking = false; return; }
+      }
+      cur = Math.max(0, dy);
+      panel.style.transform = 'translateY(' + cur + 'px)';
+      if (e.cancelable) e.preventDefault();
+    }
+    function up() {
+      if (!tracking) return;
+      tracking = false;
+      if (!claimed) return;
+      claimed = false;
+      panel.style.transition = '';
+      var thresh = (panel.offsetHeight || window.innerHeight || 600) * 0.25;   // ~25% of the tray
+      if (cur > thresh || vy > FLICK) { close(); }
+      else { panel.style.transition = 'transform .25s ease'; panel.style.transform = ''; }   // snap back
+    }
+    panel.addEventListener('mousedown', down);
+    panel.addEventListener('touchstart', down, { passive: true });
+    window.addEventListener('mousemove', move);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('mouseup', up);
+    window.addEventListener('touchend', up);
+  }
 
   // ---- Notifications sheet (dedicated off-canvas) ---------------------------
   // Notifications moved out of the You sheet into their own slide-up (Ian
