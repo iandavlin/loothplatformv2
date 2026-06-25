@@ -3293,9 +3293,11 @@
             .catch(function (err) { del.disabled = false; alert('Network error: ' + err.message); });
         });
       });
-      // Edit the OP (author/admin) — inline plain-text body editor -> PUT the topic.
-      // The modal OP is built client-side (no server edit control), so create it
-      // here alongside delete, gated to author (data-author-id) OR mod. Ian 6/17.
+      // Edit the OP (author/admin) — opens the SAME mobile composer used to edit a
+      // reply (openComposerSheet), now with a title field, pre-filled, photos
+      // loaded as removable thumbs; Save → owned topic PUT (+ topic-media). Unified
+      // "new edit" (Ian 2026-06-25): the OP no longer opens the 3-modal wizard.
+      // Gated to author (data-author-id) OR mod.
       var opForumId = parseInt(card.getAttribute('data-forum-id'), 10) || 0;
       var edit = document.createElement('button');
       edit.type = 'button'; edit.className = 'lrs-op__del lrs-op__edit'; edit.hidden = true;
@@ -3309,9 +3311,20 @@
         edit.hidden = false;
         edit.addEventListener('click', function (ev) {
           ev.preventDefault(); ev.stopPropagation();
-          // Edit the OP via the SAME 3-modal composer wizard, pre-filled (Ian 6/17).
           var tEl = document.querySelector('#looth-rep-sheet .lrs-t');
           var ttl = ((tEl && tEl.textContent) || '').trim();
+          // Plain-text body for the textarea composer (same flatten as reply edit;
+          // rich formatting is desktop-only, by design). body.innerHTML = fetched OP.
+          var bodyText = (body.innerHTML || '')
+            .replace(/<img[^>]*>/gi, '').replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n').replace(/<[^>]+>/g, '').trim();
+          if (typeof openComposerSheet === 'function') {
+            // Leave the replies sheet open BEHIND the composer (parity with reply
+            // edit); we reload on save anyway.
+            openComposerSheet({ editTopicId: tid, tid: tid, fid: opForumId, title: ttl, bodyText: bodyText, focus: true });
+            return;
+          }
+          // Fallback: the old new-topic wizard.
           if (typeof window.lgNtmEditTopic === 'function') {
             lrsClose();
             window.lgNtmEditTopic(tid, opForumId, ttl, body.innerHTML);
@@ -3558,6 +3571,9 @@
         '#looth-comp-sheet .lcp-input{width:100%;box-sizing:border-box;border:0;outline:0;background:none;resize:none;' +
           'font:17px/1.45 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);min-height:84px;max-height:200px;padding:10px 2px 6px}',
         '#looth-comp-sheet .lcp-input::placeholder{color:#9aa097}',
+        '#looth-comp-sheet .lcp-title{width:100%;box-sizing:border-box;margin:2px 0 6px;border:0;border-bottom:1px solid var(--lg-line,#e3e0d8);outline:0;background:none;' +
+          'font:700 17px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);padding:6px 2px}',
+        '#looth-comp-sheet .lcp-title::placeholder{color:#9aa097;font-weight:600}',
         '#looth-comp-sheet .lcp-row{display:flex;align-items:center;gap:10px;margin:0 0 10px;flex-wrap:wrap}',
         '#looth-comp-sheet .lcp-photo{flex:0 0 auto;border:0;background:none;cursor:pointer;color:var(--lg-sage-d,#6b7c52);padding:4px 2px;line-height:0}',
         '#looth-comp-sheet .lcp-photo svg{width:22px;height:22px}',
@@ -3578,6 +3594,8 @@
         D + ' #looth-comp-sheet .lcp-ctx{background:#243024;color:#b6c79a}',
         D + ' #looth-comp-sheet .lcp-input{color:#e5e7e1;background:none!important;border:0!important}',
         D + ' #looth-comp-sheet .lcp-input::placeholder{color:#7e857c}',
+        D + ' #looth-comp-sheet .lcp-title{color:#f2f4ee;border-bottom-color:#343a33}',
+        D + ' #looth-comp-sheet .lcp-title::placeholder{color:#7e857c}',
         D + ' #looth-comp-sheet .lcp-av{background:#262b30}',
         D + ' #looth-comp-sheet .lcp-pv img{border-color:#2c312d}',
         D + ' #looth-comp-sheet .lcp-post{background:var(--lg-sage-d,#6b7c52)}',
@@ -3593,6 +3611,10 @@
         '<div class="lcp-grab" aria-hidden="true"></div>' +
         '<div class="lcp-head"><span class="lcp-av" id="lcp-av"></span>' +
           '<div class="lcp-id"><div class="lcp-name" id="lcp-name">You</div><span class="lcp-ctx" id="lcp-ctx" hidden></span></div></div>' +
+        // Title row — shown ONLY when editing a TOPIC/OP (editTopicId), so this same
+        // composer doubles as the OP editor on mobile (parity with desktop). Hidden
+        // for replies. (Ian 2026-06-25, "new edit".)
+        '<input class="lcp-title" id="lcp-title" type="text" placeholder="Post title" maxlength="200" autocomplete="off" hidden>' +
         '<textarea class="lcp-input" id="lcp-input" rows="3" placeholder="Write a comment…"></textarea>' +
         '<div class="lcp-row">' +
           '<button class="lcp-photo" id="lcp-photo" type="button" aria-label="Add photo" title="Add photo">' +
@@ -3620,11 +3642,20 @@
       });
     })();
     var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post');
-    ta.addEventListener('input', function () {
-      var keepN = (sh.__lcpCtx && sh.__lcpCtx.keepMedia && sh.__lcpCtx.keepMedia.length) || 0;
+    var titleElW = sh.querySelector('#lcp-title');
+    // Enable Post/Save: topic edit needs BOTH a title and a body; everything else
+    // (reply create/edit) allows photo-only.
+    function lcpRecalcPost() {
+      var c = sh.__lcpCtx || {};
+      if (c.editTopicId) { post.disabled = !(ta.value.trim() && titleElW && titleElW.value.trim()); return; }
+      var keepN = (c.keepMedia && c.keepMedia.length) || 0;
       post.disabled = !ta.value.trim() && !lcpMediaIds.length && !keepN;
+    }
+    ta.addEventListener('input', function () {
+      lcpRecalcPost();
       ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
     });
+    if (titleElW) titleElW.addEventListener('input', lcpRecalcPost);
     post.addEventListener('click', function () { lcpSubmit(sh); });
     // photo attach — same canonical contract as the modal composer (media/upload → bbp_media)
     var photoBtn = sh.querySelector('#lcp-photo'), fileIn = sh.querySelector('#lcp-file');
@@ -3701,12 +3732,45 @@
     sh.querySelector('#lcp-status').textContent = '';
     sh.querySelector('#lcp-previews').innerHTML = '';
     lcpMediaIds.length = 0;
+    var titleEl = sh.querySelector('#lcp-title');
+    if (titleEl) { titleEl.value = ''; titleEl.hidden = true; }
     // ── EDIT MODE — reuse this composer to EDIT a reply (Ian 2026-06-25): pre-fill
     //    the text, label the button "Save", and load existing photos as removable
     //    thumbs below the input (✕ drops the id from keepMedia → removed on save). ──
     sh.__lcpCtx.editReplyId = parseInt(o.editReplyId, 10) || 0;
+    sh.__lcpCtx.editTopicId = parseInt(o.editTopicId, 10) || 0;
     sh.__lcpCtx.keepMedia   = [];
-    if (sh.__lcpCtx.editReplyId) {
+    if (sh.__lcpCtx.editTopicId) {
+      // ── TOPIC/OP edit — the SAME composer doubles as the OP editor (unified
+      //    "new edit", parity with desktop): show the title field, pre-fill
+      //    title + body, load existing photos as removable thumbs. Save → owned
+      //    reply.php topic PUT (+ topic-media.php for photos). ──
+      var teid = sh.__lcpCtx.editTopicId, pvElT = sh.querySelector('#lcp-previews');
+      ctx.hidden = false; ctx.textContent = '✎ Editing your post';
+      if (titleEl) { titleEl.hidden = false; titleEl.value = o.title || ''; }
+      ta.value = o.bodyText || '';
+      postBtn.textContent = 'Save';
+      postBtn.disabled = !(ta.value.trim() && titleEl && titleEl.value.trim());
+      fetch('/bb-mirror-api/v0/topic-media?topic_id=' + teid, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.ok || !d.media || sh.__lcpCtx.editTopicId !== teid) return;
+          if (d.media.length) sh.__lcpCtx.topicHadMedia = true;   // so removals get synced on save
+          d.media.forEach(function (m) {
+            sh.__lcpCtx.keepMedia.push(m.media_id);
+            var chip = document.createElement('span'); chip.className = 'lcp-pv';
+            chip.innerHTML = '<img src="' + String(m.thumb || m.url).replace(/"/g, '&quot;') + '" alt="">' +
+              '<button type="button" class="lcp-pv-x" aria-label="Remove photo">&times;</button>';
+            chip.querySelector('.lcp-pv-x').addEventListener('click', function () {
+              var ix = sh.__lcpCtx.keepMedia.indexOf(m.media_id);
+              if (ix > -1) sh.__lcpCtx.keepMedia.splice(ix, 1);
+              chip.remove();
+            });
+            pvElT.appendChild(chip);
+          });
+        })
+        .catch(function () {});
+    } else if (sh.__lcpCtx.editReplyId) {
       ctx.hidden = false; ctx.textContent = '✎ Editing your reply';
       ta.value = o.bodyText || '';
       postBtn.textContent = 'Save';
@@ -3756,6 +3820,43 @@
     var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post'), status = sh.querySelector('#lcp-status');
     var ctx = sh.__lcpCtx || {};
     var text = (ta.value || '').trim();
+    // TOPIC/OP edit → owned reply.php topic PUT (title+body), then topic-media.php
+    // for photo keep/add/remove (the SAME endpoints the wizard used). Reload after,
+    // since OP photos can't be patched in place on the mobile sheet.
+    if (ctx.editTopicId) {
+      var titleElS = sh.querySelector('#lcp-title');
+      var tTitle = (titleElS && titleElS.value.trim()) || '';
+      if (!text)   { status.textContent = "Post can't be empty."; return; }
+      if (!tTitle) { status.textContent = 'Title is required.'; if (titleElS) titleElS.focus(); return; }
+      post.disabled = true; status.textContent = 'Saving…';
+      lrsGetAuth(function (a) {
+        if (!a || !a.authenticated) { status.textContent = 'Sign in to edit.'; post.disabled = false; return; }
+        var teid  = ctx.editTopicId;
+        var added = lcpMediaIds.slice();
+        var keep  = (ctx.keepMedia || []).slice();
+        var syncPhotos = ctx.topicHadMedia || added.length > 0;
+        fetch('/bb-mirror-api/v0/reply', {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+          body: JSON.stringify({ topic_id: teid, title: tTitle, content: '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' })
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.error)) || 'Could not save.'; post.disabled = false; return; }
+            var finish = function () { try { location.reload(); } catch (e) { closeComposerSheet(); } };
+            if (syncPhotos) {
+              status.textContent = 'Saving photos…';
+              fetch('/bb-mirror-api/v0/topic-media', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+                body: JSON.stringify({ topic_id: teid, keep_media_ids: keep, add_upload_ids: added })
+              }).then(finish, finish);
+            } else { finish(); }
+          })
+          .catch(function () { status.textContent = 'Network error.'; post.disabled = false; });
+      });
+      return;
+    }
     // EDIT mode → PUT the owned endpoint (author-or-mod): content + new photos
     // (media_ids) + kept photos (keep_media_ids; removes the rest, no orphans).
     if (ctx.editReplyId) {
