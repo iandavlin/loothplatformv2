@@ -1,3 +1,4 @@
+// repo-served-proof: dev2 overlays are pull-driven from the monorepo (verified 2026-06-25)
 /* Looth PWA bootstrap — service-worker registration + mobile-only install banner.
    Loaded site-wide via a single <script src="/pwa.js" defer> injection. */
 (function () {
@@ -100,7 +101,7 @@
   // also owns the DESKTOP header settings gear (lg-set-gear -> LGSettings panel),
   // so it must load on ALL viewports; it self-gates internally (tab bar <=640,
   // gear >=641). Gating it mobile-only removed the desktop gear (Ian 6/11).
-  inject('looth-tabbar-js', '/bottom-nav.js?v=26');
+  inject('looth-tabbar-js', '/bottom-nav.js?v=27');
 
   if (mobileish) {
     inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=36');
