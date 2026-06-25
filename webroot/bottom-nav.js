@@ -799,31 +799,44 @@
   function wireHubModalDrag() {
     var modal = document.getElementById('hub-fmodal');
     if (!modal || modal.getAttribute('data-lg-drag')) return;
-    var panel = modal.querySelector('.hub-fmodal__panel');
-    if (!panel) return;
+    if (!modal.querySelector('.hub-fmodal__panel')) return;
     modal.setAttribute('data-lg-drag', '1');
-    var body = modal.querySelector('.hub-fmodal__body');
     var SLOP = 6, FLICK = 0.35;
     var startY = 0, cur = 0, tracking = false, claimed = false, fromHandle = false,
         startScroll = 0, lastY = 0, lastT = 0, vy = 0;
+    // Live-resolve the inner refs on EVERY use. fmodalApply (forums.js) swaps
+    // .hub-fmodal__body's innerHTML and liveSearch (hub-filters.js) replaceWith's
+    // .hub-fmodal__chips on every search/filter, so any once-captured child ref
+    // goes stale and the swipe-to-close silently dies (Ian 2026-06-25). The PANEL
+    // and #hub-fmodal element are never replaced today, but we delegate off the
+    // persistent #hub-fmodal and re-query the panel each time too, so the gesture
+    // survives even if a future re-render swaps the panel.
+    function getPanel() { return modal.querySelector('.hub-fmodal__panel'); }
+    function getBody() { return modal.querySelector('.hub-fmodal__body'); }
     function isMobile() { return window.matchMedia('(max-width:640px)').matches; }
     function ptY(e) { return (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY; }
     function close() {
+      var panel = getPanel();
       // animate the tray out, then run forums.js's own close + reset for next open.
-      panel.style.transition = 'transform .3s ease';
-      panel.style.transform = 'translateY(100%)';
+      if (panel) { panel.style.transition = 'transform .3s ease'; panel.style.transform = 'translateY(100%)'; }
       setTimeout(function () {
         var x = modal.querySelector('[data-hub-fmodal-close]');
         if (x) x.click(); else { modal.hidden = true; document.body.classList.remove('hub-fmodal-lock'); }
-        panel.style.transition = ''; panel.style.transform = '';
+        var p = getPanel();
+        if (p) { p.style.transition = ''; p.style.transform = ''; }
       }, 300);
     }
     function down(e) {
       if (!isMobile() || modal.hidden) return;
+      var panel = getPanel();
+      if (!panel) { tracking = false; return; }
       var t = e.target;
       // never start a drag from inside an input/suggest — let typing/scroll work.
       if (t.closest && t.closest('input, textarea, .hub-suggest')) { tracking = false; return; }
+      // only start from within the panel (back-drop taps are forums.js's close).
+      if (t.closest && !t.closest('.hub-fmodal__panel')) { tracking = false; return; }
       fromHandle = !!(t.closest && t.closest('.hub-fmodal__head'));
+      var body = getBody();
       startY = lastY = ptY(e); startScroll = (body && body.scrollTop) || 0; lastT = e.timeStamp || 0;
       cur = 0; vy = 0; tracking = true; claimed = false;
     }
@@ -834,12 +847,17 @@
       lastY = y; lastT = now;
       if (!claimed) {
         if (Math.abs(dy) < SLOP) return;
+        var body = getBody();
         var atTop = !body || (body.scrollTop <= 0 && startScroll <= 0);
-        if (dy > 0 && (fromHandle || atTop)) { claimed = true; panel.style.transition = 'none'; }
-        else { tracking = false; return; }
+        if (dy > 0 && (fromHandle || atTop)) {
+          claimed = true;
+          var panel = getPanel();
+          if (panel) panel.style.transition = 'none';
+        } else { tracking = false; return; }
       }
       cur = Math.max(0, dy);
-      panel.style.transform = 'translateY(' + cur + 'px)';
+      var p = getPanel();
+      if (p) p.style.transform = 'translateY(' + cur + 'px)';
       if (e.cancelable) e.preventDefault();
     }
     function up() {
@@ -847,13 +865,16 @@
       tracking = false;
       if (!claimed) return;
       claimed = false;
-      panel.style.transition = '';
-      var thresh = (panel.offsetHeight || window.innerHeight || 600) * 0.25;   // ~25% of the tray
+      var panel = getPanel();
+      if (panel) panel.style.transition = '';
+      var thresh = ((panel && panel.offsetHeight) || window.innerHeight || 600) * 0.25;   // ~25% of the tray
       if (cur > thresh || vy > FLICK) { close(); }
-      else { panel.style.transition = 'transform .25s ease'; panel.style.transform = ''; }   // snap back
+      else if (panel) { panel.style.transition = 'transform .25s ease'; panel.style.transform = ''; }   // snap back
     }
-    panel.addEventListener('mousedown', down);
-    panel.addEventListener('touchstart', down, { passive: true });
+    // Delegate the gesture START off the persistent #hub-fmodal element so it
+    // survives any inner re-render; move/up live on window (they always did).
+    modal.addEventListener('mousedown', down);
+    modal.addEventListener('touchstart', down, { passive: true });
     window.addEventListener('mousemove', move);
     window.addEventListener('touchmove', move, { passive: false });
     window.addEventListener('mouseup', up);

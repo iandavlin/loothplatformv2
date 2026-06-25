@@ -1186,6 +1186,7 @@
     if (qeKb) {
       qeKb.setAttribute('autocapitalize', 'sentences');
       qeKb.setAttribute('autocorrect', 'on');
+      qeKb.setAttribute('autocomplete', 'off');
       qeKb.setAttribute('spellcheck', 'true');
     }
 
