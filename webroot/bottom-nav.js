@@ -33,6 +33,8 @@
     home: '<path d="M3 11 12 3l9 8"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/>',
     // Nav button: a 2x2 grid (opens the destinations tray).
     grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
+    // Search the Hub — opens the #hub-fmodal Advanced Search dialog (Nav tray row).
+    search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
     // Big center Post button.
     plus: '<path d="M12 5v14M5 12h14"/>',
     messages: '<path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 9 9 0 0 1-3.2-.6L4 21l1.9-4.4a8 8 0 0 1-1.4-4.6A8.4 8.4 0 0 1 13 3.7a8.4 8.4 0 0 1 8 7.8z"/>',
@@ -178,6 +180,17 @@
       '.lt-sheet__login svg{flex:0 0 auto}' +
       '.lt-sheet__sech{font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase;' +
         'color:var(--lg-mute,#6b6f6b);padding:14px 6px 4px}' +
+      // ---- Nav tray: "Search the Hub" row — the SINGLE mobile search entry ----
+      // A pill that reads as a search box (the header pill + sort-bar search are
+      // killed in mobile-hub.css); tapping it opens the #hub-fmodal Advanced Search.
+      '.lt-searchrow{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;' +
+        'margin:6px 0 2px;padding:12px 15px;border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;' +
+        'background:var(--lg-sage-tint,#eef2e3);color:var(--lg-mute,#6b6f6b);cursor:pointer;' +
+        'font:600 14.5px/1 var(--lg-font-sans,system-ui,sans-serif);-webkit-tap-highlight-color:transparent}' +
+      '.lt-searchrow:active{background:#e4ebd3}' +
+      '.lt-searchrow svg{width:19px;height:19px;flex:0 0 auto;fill:none;stroke:var(--lg-sage-d,#6b7c52);' +
+        'stroke-width:2;stroke-linecap:round;stroke-linejoin:round}' +
+      '.lt-searchrow span{flex:1 1 auto}' +
       // ---- Nav tray: "Go to" destinations grid (slide-up, same sheet infra) ----
       '.lt-navgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:6px 0 4px}' +
       '.lt-navitem{display:flex;flex-direction:column;align-items:center;gap:7px;padding:13px 4px;' +
@@ -381,6 +394,9 @@
         } else if (++ptries > 20) { clearInterval(piv); }
       }, 150);
     }
+
+    // If we arrived via an off-hub "Search the Hub" tap (/hub/#search), open it.
+    openHubSearchIfHash();
   }
 
   // ---- Profile sheet ----------------------------------------------------
@@ -681,6 +697,17 @@
     sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); sheet.setAttribute('aria-label', 'Go to');
 
     var grab = document.createElement('div'); grab.className = 'lt-sheet__grab'; sheet.appendChild(grab);
+
+    // Search the Hub — the single mobile search entry (Ian 2026-06-25). Opens the
+    // existing #hub-fmodal Advanced Search dialog; off the hub front-door it routes
+    // to /hub/#search, which auto-opens the modal on arrival (openHubSearchIfHash).
+    var search = document.createElement('button');
+    search.type = 'button'; search.className = 'lt-searchrow';
+    search.setAttribute('aria-haspopup', 'dialog'); search.setAttribute('aria-label', 'Search the Hub');
+    search.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.search + '</svg><span>Search the Hub</span>';
+    search.addEventListener('click', function () { closeNav(); openHubSearch(); });
+    sheet.appendChild(search);
+
     var h = document.createElement('div'); h.className = 'lt-sheet__sech'; h.textContent = 'Go to'; sheet.appendChild(h);
 
     var grid = document.createElement('div'); grid.className = 'lt-navgrid';
@@ -726,6 +753,43 @@
     document.removeEventListener('keydown', onNavKey);
   }
   function onNavKey(e) { if (e.key === 'Escape') closeNav(); }
+
+  // ---- Hub search (single entry; reuses #hub-fmodal Advanced Search) ----------
+  // The Nav tray's "Search the Hub" row is the only mobile search affordance. On
+  // the hub front-door the Advanced Search modal is already in the DOM, so we fire
+  // its canonical opener — the .lg-filters-chip click forums.js delegates on — with
+  // NO forums.js edit. Off-hub there is no modal, so we route to /hub/#search and
+  // let the destination page auto-open it on boot.
+  function openHubModal() {
+    var modal = document.getElementById('hub-fmodal');
+    if (!modal) return false;
+    if (modal.hidden) {
+      var chip = document.querySelector('.feed-sort-bar .lg-filters-chip') ||
+                 document.querySelector('.lg-filters-chip');
+      if (chip) chip.click();                          // forums.js delegate -> fmodalSet(true)
+      else { modal.hidden = false; document.body.classList.add('hub-fmodal-lock'); }  // fallback
+    }
+    return true;
+  }
+  function openHubSearch() {
+    if (openHubModal()) return;
+    location.href = '/hub/#search';
+  }
+  // Auto-open after an off-hub Search tap lands on /hub/#search. forums.js wires its
+  // .lg-filters-chip delegate on script run; poll briefly until the modal actually
+  // opens (or give up), then strip the hash so a reload doesn't re-trigger.
+  function openHubSearchIfHash() {
+    if ((location.hash || '') !== '#search') return;
+    var tries = 0;
+    var iv = setInterval(function () {
+      var modal = document.getElementById('hub-fmodal');
+      if (modal) openHubModal();
+      if ((modal && !modal.hidden) || ++tries > 30) {
+        clearInterval(iv);
+        try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+      }
+    }, 80);
+  }
 
   // ---- Notifications sheet (dedicated off-canvas) ---------------------------
   // Notifications moved out of the You sheet into their own slide-up (Ian

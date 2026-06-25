@@ -159,25 +159,36 @@
      re-densify the app-card before the JS runs. */
   html.hub-compact .feed-page .feed-card{ padding:14px 14px 8px; }
 
-  /* ───────────────────────────── Hub toolbar: ONE mobile search ─────────────────
-     On mobile the shared site header injects the live "Search the Hub" pill
-     (hub-polish.js .lg-hub-search) — that is THE single mobile search entry point.
-     The front-door sort bar (.hub-fmodal-page .feed-sort-bar) otherwise renders the
-     DESKTOP search zone unadapted: a second "Search the Hub…" quick-search input PLUS
-     a cramped "Adv Search" button, stacked under the header pill (two search bars).
+  /* ───────────────────────────── Hub search: ONE mobile entry ───────────────────
+     The single mobile search affordance is the bottom-nav Nav-tray "Search the Hub"
+     row (webroot/bottom-nav.js), which opens the #hub-fmodal Advanced Search dialog.
+     Everything that duplicated it on mobile is removed here (Ian 2026-06-25):
 
-     Here we collapse that to one clean row: sorts (horizontally scrollable) on the
-     left, a single compact opener pinned right. The duplicate quick-search input is
-     hidden (header owns search); the opener is reskinned with a filter-funnel glyph
-     (was a locator-style glyph) so it reads as advanced-search / filters, not a 2nd
-     search box. forums.css owns ≥641 and is untouched; this ≤640 sheet loads after
-     it, so source-order wins (no !important).  (hub-mobile-search lane, 2026-06-25) */
+       1. the shared header's injected "Search the Hub" pill (hub-polish.js
+          .lg-hub-search) — ALL header search is gone on mobile;
+       2. the front-door sort bar's unadapted desktop search zone (.zR): a 2nd
+          quick-search input (.lg-quickq) + a cramped "Adv Search" button.
+
+     The sort bar then collapses to just its sort pills (one horizontally-scrollable
+     strip). The .zR Adv-Search button is hidden but KEPT IN THE DOM — bottom-nav.js
+     opens the modal by triggering its .lg-filters-chip click (no forums.js edit).
+     forums.css owns ≥641 and is untouched; this ≤640 sheet loads after it, so
+     source-order wins (no !important).  (hub-mobile-search lane, 2026-06-25) */
+
+  /* 1 — kill ALL header search on mobile (the injected live-search pill). */
+  .lg-hub-search,
+  .lg-hub-search__panel{ display:none; }
+
+  /* 2 — sort bar = sort pills only; the dup search zone (.zR) and compose (.zM,
+     owned by the bottom-nav FAB) are removed. .zR stays display:none rather than
+     removed so its .lg-filters-chip remains clickable as the modal opener. */
   .hub-fmodal-page .feed-sort-bar{
     display:flex; align-items:center; gap:8px;
     padding:10px 12px; margin-bottom:14px;
   }
-  .hub-fmodal-page .feed-sort-bar .zM{ display:none; }   /* compose = bottom-nav FAB on mobile */
-  /* sorts: one scrollable strip, compact so all four fit beside the opener at 360px+ */
+  .hub-fmodal-page .feed-sort-bar .zM,
+  .hub-fmodal-page .feed-sort-bar .zR{ display:none; }
+  /* sort pills: one scrollable strip that takes the full row */
   .hub-fmodal-page .feed-sort-bar .zL{
     flex:1 1 auto; min-width:0; justify-content:flex-start;
     flex-wrap:nowrap; gap:5px; overflow-x:auto;
@@ -185,23 +196,21 @@
   }
   .hub-fmodal-page .feed-sort-bar .zL::-webkit-scrollbar{ display:none; }
   .hub-fmodal-page .feed-sort-bar .zL > a{ flex:0 0 auto; padding:6px 10px; font-size:12px; }
-  .hub-fmodal-page .feed-sort-bar .zR{ flex:0 0 auto; justify-content:flex-end; }
-  /* duplicate quick-search bubble — header pill is the single search entry point */
-  .hub-fmodal-page .feed-sort-bar .lg-quickq{ display:none; }
-  /* advanced-search / filters opener — icon-only filter-funnel button (the label would
-     re-read as a 2nd "search"; aria-label="Open advanced search" carries the a11y name) */
-  .hub-fmodal-page .feed-sort-bar .lg-searchbtn{
-    width:38px; height:38px; padding:0; gap:0; justify-content:center; flex:0 0 auto;
+
+  /* ───────────────────────────── Advanced Search modal: mobile polish ───────────
+     #hub-fmodal is the desktop Advanced Search dialog, reused as-is on mobile. At
+     ≤560px forums.css already stacks the two search fields (q over author); these
+     additive rules fix the author field, which read poorly on a narrow viewport:
+     full-width inputs, a comfortable tap height, and a non-overflowing author
+     suggest dropdown.  (hub-mobile-search lane, 2026-06-25) */
+  .hub-fmodal__search .feed-toolbar-search{ width:100%; gap:10px; }
+  .hub-fmodal__search .hub-tsearch{ width:100%; min-width:0; padding:11px 14px; }
+  .hub-fmodal__search .hub-tsearch__in{ flex:1 1 auto; width:auto; min-width:0; font-size:16px; }
+  /* author field: same full-width treatment as the q field (desktop pins it 150px) */
+  .hub-fmodal__search .hub-tsearch--author{ width:100%; }
+  .hub-fmodal__search .hub-tsearch--author .hub-tsearch__in{ width:auto; }
+  /* author suggest dropdown: anchor to the field, never overflow the panel */
+  .hub-fmodal__search .hub-tsearch--author .hub-suggest{
+    left:0; right:0; width:auto; max-width:100%; box-sizing:border-box;
   }
-  .hub-fmodal-page .feed-sort-bar .lg-searchbtn .lg-filters-chip__tx{ display:none; }
-  .hub-fmodal-page .feed-sort-bar .lg-searchbtn .lg-searchbtn__ico{
-    display:inline-block; width:17px; height:17px; font-size:0; line-height:0;
-    background:center/17px no-repeat
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23586b3f' stroke-width='2' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M4 5h16l-6 7v6l-4 2v-8z'/%3E%3C/svg%3E");
-  }
-  /* NB: the opener still opens the existing #hub-fmodal "Advanced Search" dialog
-     (text + author search, Type / Category / Shows) — that IS the proper mobile
-     sheet/modal. It is left top-anchored on purpose: its max-height (82vh) ends
-     above the bottom-fixed PWA install banner / bottom-nav, so it never collides;
-     a bottom-anchored sheet would sit under them. forums.js owns its open/close. */
 }
