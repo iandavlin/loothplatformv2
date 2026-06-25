@@ -305,7 +305,7 @@ function bb_mirror_new_topic_modal(): void
       <a class="ntm-anon__link" href="<?= htmlspecialchars($login_url) ?>">Sign in</a>
     </div>
 
-    <form class="ntm-form" id="ntm-form" novalidate hidden
+    <form class="ntm-form" id="ntm-form" novalidate hidden autocomplete="off"
           data-rest-base="<?= htmlspecialchars($rest_base) ?>"
           data-current-forum="<?= $current_forum_id ?>"
           data-public-path="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>">
@@ -335,14 +335,14 @@ function bb_mirror_new_topic_modal(): void
       </div>
 
       <label class="ntm-label" for="ntm-title-in">Title</label>
-      <input class="ntm-input" id="ntm-title-in" name="title" type="text"
+      <input class="ntm-input" id="ntm-title-in" name="title" type="text" autocomplete="off"
              required placeholder="What's this about?">
 
       <label class="ntm-label">Body <span class="ntm-label__opt">(optional — formatting, images & links)</span></label>
       <!-- Quill mounts here; falls back to the plain textarea if Quill fails to load -->
       <div class="ntm-editor" id="ntm-editor"></div>
       <textarea class="ntm-textarea ntm-textarea--fallback" id="ntm-content" name="content" rows="6"
-                placeholder="Share details, ask a question…" hidden></textarea>
+                autocomplete="off" placeholder="Share details, ask a question…" hidden></textarea>
       <p class="ntm-paste-hint">Tip: paste a YouTube, Vimeo, or Instagram link on its own line to embed it.</p>
 
       <label class="ntm-label" for="ntm-tags">Tags <span class="ntm-label__opt">(optional, comma-separated)</span></label>
@@ -390,15 +390,22 @@ function bb_mirror_new_topic_modal(): void
       <a class="ntm-anon__link" href="<?= htmlspecialchars($login_url) ?>">Sign in</a>
     </div>
 
-    <form class="ntm-form" id="frm-form" novalidate hidden
+    <form class="ntm-form" id="frm-form" novalidate hidden autocomplete="off"
           data-rest-base="<?= htmlspecialchars($rest_base) ?>">
       <input type="hidden" id="frm-topic-id" name="topic_id" value="">
       <input type="hidden" id="frm-forum-id" name="forum_id" value="">
-      <label class="ntm-label">Your reply <span class="ntm-label__opt">(formatting, images &amp; links)</span></label>
+      <!-- Title row — shown ONLY when editing a TOPIC/OP (lgFrmEditTopic), so the
+           same composer doubles as the OP editor; hidden for replies. -->
+      <div class="frm-title-wrap" id="frm-title-wrap" hidden>
+        <label class="ntm-label" for="frm-title">Title</label>
+        <input class="ntm-input" id="frm-title" name="title" type="text" maxlength="200"
+               placeholder="Post title" autocomplete="off">
+      </div>
+      <label class="ntm-label" id="frm-body-label">Your reply <span class="ntm-label__opt">(formatting, images &amp; links)</span></label>
       <!-- Quill mounts here (same editor as the new-topic modal); falls back to the textarea -->
       <div class="ntm-editor" id="frm-editor"></div>
       <textarea class="ntm-textarea ntm-textarea--fallback" id="frm-content" name="content" rows="5"
-                placeholder="Share your thoughts…" hidden></textarea>
+                autocomplete="off" placeholder="Share your thoughts…" hidden></textarea>
       <p class="ntm-paste-hint">Tip: paste a YouTube, Vimeo, or Instagram link on its own line to embed it.</p>
       <?php /* Anonymous toggle REMOVED from replies 2026-06-10 (Ian: "we don't
                want anon replies. Just anon posts.") — anon stays on the

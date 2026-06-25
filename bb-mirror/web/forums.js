@@ -691,7 +691,7 @@
         if (rawHtml) rseQuill.clipboard.dangerouslyPasteHTML(rawHtml);
         rseQuill.focus();
       } else {
-        editorEl.innerHTML = '<textarea class="rse-input"></textarea>';
+        editorEl.innerHTML = '<textarea class="rse-input" autocomplete="off"></textarea>';
         ta = editorEl.querySelector('.rse-input');
         ta.value = cur; ta.focus();
         ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
@@ -768,7 +768,7 @@
       var box = document.createElement('div');
       box.className = 'feed-card__inline-compose';
       box.innerHTML =
-        '<textarea class="fic-input" rows="1" placeholder="Reply to this thread…"></textarea>' +
+        '<textarea class="fic-input" rows="1" autocomplete="off" placeholder="Reply to this thread…"></textarea>' +
         '<button type="button" class="fic-send" disabled>Reply</button>' +
         '<div class="fic-status" role="status"></div>';
       (card.querySelector('.feed-card__replies') || card).appendChild(box);
@@ -1715,11 +1715,31 @@
     var frmRestBase = frmForm.dataset.restBase || '/wp-json/buddyboss/v1';
 
     var frmNonce = null, frmName = 'You', frmState = 'idle', frmCard = null;
+    var frmEditReplyId = 0;                                   // >0 ⇒ editing that reply (PUT) vs creating (POST)
+    var frmEditTopicId = 0;                                   // >0 ⇒ editing that TOPIC/OP (title+body) via this composer
+    var frmEditTopicForumId = 0;                              // forum of the topic under edit (for refresh/context)
+    var frmTopicHadMedia = false;                             // topic-edit: did the OP already have photos? (gates the media sync + reload)
+    var frmSubmitLabel = (frmSubmit && frmSubmit.textContent.trim()) || 'Post reply';
+
+    // Title row + body label + heading — used to repurpose this reply composer as
+    // the OP editor (lgFrmEditTopic): the title field shows only in topic-edit mode.
+    var frmTitleWrap  = document.getElementById('frm-title-wrap');
+    var frmTitleInput = document.getElementById('frm-title');
+    var frmBodyLabel  = document.getElementById('frm-body-label');
+    var frmHeading    = document.getElementById('frm-heading');
+    function frmShowTitle(show) {
+      if (frmTitleWrap) frmTitleWrap.hidden = !show;
+      if (frmBodyLabel) frmBodyLabel.innerHTML = show
+        ? 'Body <span class="ntm-label__opt">(formatting, images &amp; links)</span>'
+        : 'Your reply <span class="ntm-label__opt">(formatting, images &amp; links)</span>';
+    }
 
     var frmEditorEl = document.getElementById('frm-editor');
     var frmQuill    = null;     // lazy Quill instance (same editor as new-topic)
     var frmMediaIds = [];       // bbp_media upload_ids for this reply
     var frmMediaPreviews = [];  // preview URLs, for the optimistic stub (no refresh)
+    var frmKeepMedia = [];      // edit mode: existing bp_media.id to KEEP (✕ removes)
+    var frmEditMediaLoaded = false; // edit mode: did we load the existing photo set?
     var frmParentId = 0;        // reply_to: set when replying to a specific reply (nested)
     var frmMentionSlug = '';    // BB nicename to auto-@mention (reply-to-reply only)
 
@@ -1789,6 +1809,7 @@
 
     function frmResetEditor() {
       frmTray.reset();          // clears frmMediaIds (in place) + the tray thumbs
+      frmKeepMedia.length = 0; frmEditMediaLoaded = false;   // clear edit-media state
       frmMediaPreviews = [];
       if (frmQuill) frmQuill.setText('');
       else if (frmContent) frmContent.value = '';
@@ -1816,6 +1837,11 @@
         .catch(function () { frmSetState('anon'); });
     }
     function frmOpen(trigger) {
+      frmEditReplyId = 0;                                     // create mode (not edit)
+      frmEditTopicId = 0; frmEditTopicForumId = 0;            // not a topic edit
+      frmShowTitle(false);                                    // replies have no title field
+      if (frmHeading) frmHeading.textContent = 'Reply';
+      if (frmSubmit) frmSubmit.textContent = frmSubmitLabel;
       // The card is the trigger's ancestor (used for the optimistic stub + to
       // source topic/forum when the trigger is a per-reply button).
       frmCard = trigger.closest('.feed-card');
@@ -1850,6 +1876,140 @@
       frmOverlay.hidden = true;
       document.body.classList.remove('ntm-active');
       frmStatus.textContent = '';
+      frmEditReplyId = 0;                                     // exit edit mode
+      frmEditTopicId = 0; frmEditTopicForumId = 0;            // exit topic-edit mode
+      frmShowTitle(false);
+      if (frmHeading) frmHeading.textContent = 'Reply';
+      if (frmTitleInput) frmTitleInput.value = '';
+      if (frmSubmit) frmSubmit.textContent = frmSubmitLabel;  // restore "Post reply"
+    }
+
+    // EDIT MODE — open this SAME composer (Quill modal) pre-filled to edit an
+    // existing reply, instead of the inline box (Ian 2026-06-25: "pop open the same
+    // quill editor used to make the reply"). Submit then PUTs vs POSTs. Exposed for
+    // the discussion-modal Edit button (dmReplyEdit). Mirrors lgNtmEditTopic.
+    window.lgFrmEditReply = function (replyId, bodyHtml) {
+      replyId = parseInt(replyId, 10) || 0;
+      if (!replyId) return;
+      frmEditReplyId = replyId;
+      frmEditTopicId = 0; frmEditTopicForumId = 0;            // reply edit, not topic
+      frmShowTitle(false);                                    // replies have no title field
+      if (frmHeading) frmHeading.textContent = 'Edit reply';
+      frmParentId = 0; frmMentionSlug = ''; frmCard = null;
+      if (frmCtxTitle) { frmCtxTitle.textContent = '✎ Editing your reply'; frmContext.hidden = false; }
+      if (frmTopicId) frmTopicId.value = '';
+      if (frmForumId) frmForumId.value = '';
+      frmStatus.textContent = '';
+      frmResetEditor();
+      frmOverlay.hidden = false;
+      document.body.classList.add('ntm-active');
+      if (frmSubmit) frmSubmit.textContent = 'Save';
+      // Load the reply's existing photos as removable thumbs (✕ drops the id from
+      // frmKeepMedia; on save we send the kept set so dropped photos are deleted).
+      fetch('/bb-mirror-api/v0/reply?reply_id=' + replyId, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.ok || !d.media || frmEditReplyId !== replyId) return;
+          frmEditMediaLoaded = true;
+          d.media.forEach(function (m) { frmKeepMedia.push(m.media_id); frmTray.addThumb(m.thumb || m.url, m.media_id, frmKeepMedia); });
+        })
+        .catch(function () {});
+      var seedTries = 0;
+      function frmSeedBody() {
+        if (frmQuill) {
+          frmQuill.setContents([]);                              // clear placeholder/blank state
+          frmQuill.clipboard.dangerouslyPasteHTML(bodyHtml || '');
+          frmQuill.setSelection(frmQuill.getLength(), 0);
+          frmQuill.focus();
+          return;
+        }
+        // Quill is the editor we actually show; WAIT for it to init before falling
+        // back to the plain textarea — #frm-content always exists in the DOM, so the
+        // old `else if (frmContent)` seeded the HIDDEN textarea and left Quill empty
+        // (the "edit text doesn't populate" bug, Ian 2026-06-25).
+        if (typeof Quill !== 'undefined' && ++seedTries < 50) { setTimeout(frmSeedBody, 60); return; }
+        if (frmContent) { frmContent.value = (bodyHtml || '').replace(/<img[^>]*>/gi, ''); }
+      }
+      if (frmState !== 'authed') frmLoadAuth(); else frmInitEditor();
+      frmSeedBody();
+    };
+
+    // EDIT MODE (TOPIC/OP) — open this SAME Quill composer to edit the OP, unified
+    // with the reply edit above (Ian 2026-06-25: "new edit" — OP uses the same
+    // composer as replies, not the new-topic wizard). The title field shows here;
+    // submit PUTs the owned reply.php topic-edit path and (when photos changed)
+    // POSTs topic-media.php — exactly the endpoints the wizard used. Mirrors
+    // lgFrmEditReply; exposed for the discussion-modal OP Edit button.
+    window.lgFrmEditTopic = function (topicId, forumId, title, bodyHtml) {
+      topicId = parseInt(topicId, 10) || 0;
+      if (!topicId) return;
+      frmEditTopicId = topicId;
+      frmEditTopicForumId = parseInt(forumId, 10) || 0;
+      frmTopicHadMedia = false;                              // reset; set true below if the GET finds photos
+      frmEditReplyId = 0;                                     // topic edit, not reply
+      frmParentId = 0; frmMentionSlug = ''; frmCard = null;
+      frmShowTitle(true);                                     // OP edit shows the title field
+      if (frmHeading) frmHeading.textContent = 'Edit post';
+      if (frmCtxTitle) { frmCtxTitle.textContent = '✎ Editing your post'; frmContext.hidden = false; }
+      if (frmTitleInput) frmTitleInput.value = title || '';
+      if (frmTopicId) frmTopicId.value = '';
+      if (frmForumId) frmForumId.value = String(frmEditTopicForumId || '');
+      frmStatus.textContent = '';
+      frmResetEditor();
+      frmOverlay.hidden = false;
+      document.body.classList.add('ntm-active');
+      if (frmSubmit) frmSubmit.textContent = 'Save';
+      // Load the topic's existing photos as removable thumbs (same tray/keep-set
+      // machinery as the reply edit), via the endpoint that owns topic media.
+      fetch('/bb-mirror-api/v0/topic-media?topic_id=' + topicId, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.ok || !d.media || frmEditTopicId !== topicId) return;
+          frmEditMediaLoaded = true;
+          if (d.media.length) frmTopicHadMedia = true;        // had photos → sync removals + reload on save
+          d.media.forEach(function (m) { frmKeepMedia.push(m.media_id); frmTray.addThumb(m.thumb || m.url, m.media_id, frmKeepMedia); });
+        })
+        .catch(function () {});
+      var seedTries = 0;
+      function frmSeedTopicBody() {
+        if (frmQuill) {
+          frmQuill.setContents([]);
+          frmQuill.clipboard.dangerouslyPasteHTML(bodyHtml || '');
+          frmQuill.setSelection(frmQuill.getLength(), 0);
+          return;
+        }
+        if (typeof Quill !== 'undefined' && ++seedTries < 50) { setTimeout(frmSeedTopicBody, 60); return; }
+        if (frmContent) { frmContent.value = (bodyHtml || '').replace(/<img[^>]*>/gi, ''); }
+      }
+      if (frmState !== 'authed') frmLoadAuth(); else frmInitEditor();
+      frmSeedTopicBody();
+      // Title is the natural first field on an OP edit — focus it once visible.
+      setTimeout(function () { if (frmTitleInput && !frmTitleWrap.hidden) frmTitleInput.focus(); }, 40);
+    };
+
+    // Reflect an OP edit across the surfaces that may be showing it WITHOUT a
+    // reload (text-only): the open discussion modal's OP + every matching feed
+    // card's title/excerpt. Photo changes can't be shown in place, so those callers
+    // reload instead (see the submit handler).
+    function frmUpdateTopicInPlace(topicId, newTitle, newHtml) {
+      var dm = document.getElementById('lg-dmodal');
+      if (dm && !dm.hidden) {
+        var dmT = dm.querySelector('.lg-dmodal__title'); if (dmT && newTitle) dmT.textContent = newTitle;
+        var dmB = dm.querySelector('.lg-dmodal__body');
+        if (dmB && newHtml != null) { dmB.innerHTML = newHtml; if (window.bbProcessEmbeds) window.bbProcessEmbeds(dmB); }
+      }
+      Array.prototype.forEach.call(document.querySelectorAll('.feed-card[data-topic-id="' + topicId + '"]'), function (card) {
+        if (newTitle) {
+          var tA = card.querySelector('.fc-title a, .feed-card__title a, .fc-title, .feed-card__title');
+          if (tA) tA.textContent = newTitle;
+        }
+        if (newHtml != null) {
+          var ex = card.querySelector('.feed-card__op-excerpt, .fc-excerpt');
+          if (ex) { ex.innerHTML = newHtml; if (window.bbProcessEmbeds) window.bbProcessEmbeds(ex); }
+          var full = card.querySelector('.feed-card__full-body[data-loaded]');
+          if (full) { full.innerHTML = newHtml; if (window.bbProcessEmbeds) window.bbProcessEmbeds(full); }
+        }
+      });
     }
 
     // Delegated so it also works on lazily-loaded / optimistically-added cards.
@@ -1871,7 +2031,93 @@
       var content = frmGetContent();
       var topicId = parseInt(frmTopicId.value, 10);
       var forumId = parseInt(frmForumId.value, 10);
+      // EDIT path (TOPIC/OP): the unified composer — title+body PUT the owned
+      // reply.php topic-edit endpoint (author-or-mod, IDOR-proof), and photos sync
+      // via topic-media.php when they changed (the SAME endpoints the new-topic
+      // wizard used). Must come BEFORE the generic empty-check (which is reply copy).
+      if (frmEditTopicId > 0) {
+        var tEditId = frmEditTopicId;
+        var tTitle  = (frmTitleInput && frmTitleInput.value.trim()) || '';
+        if (!content) { frmStatus.textContent = "Post can't be empty."; frmFocus(); return; }
+        if (!tTitle)  { frmStatus.textContent = 'Title is required.'; if (frmTitleInput) frmTitleInput.focus(); return; }
+        frmSubmit.disabled = true; frmStatus.textContent = 'Saving…';
+        var tAdded = frmMediaIds.slice();                      // new uploads added during edit
+        var tKeep  = frmKeepMedia.slice();                     // existing photos to keep
+        // Sync (+reload) only when the OP actually has/added photos — a text-only
+        // edit of a photo-less OP updates in place. (frmEditMediaLoaded is true even
+        // for a zero-photo GET, so gate on frmTopicHadMedia instead.)
+        var tMediaChanged = tAdded.length > 0 || frmTopicHadMedia;
+        fetch('/bb-mirror-api/v0/reply', {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },
+          body: JSON.stringify({ topic_id: tEditId, title: tTitle, content: content }),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) { frmStatus.textContent = 'Error: ' + ((res.j && (res.j.message || res.j.error)) || 'failed'); frmSubmit.disabled = false; return; }
+            var freshTitle = (res.j && res.j.title) || tTitle;
+            var freshHtml  = (res.j && res.j.content_html) || content;
+            if (tMediaChanged) {
+              // New/removed photos can't be reflected by the in-place text update,
+              // so sync them then RELOAD — exactly what the wizard edit did.
+              frmStatus.textContent = 'Saving photos…';
+              var finishReload = function () { try { location.reload(); } catch (e) { frmSubmit.disabled = false; frmClose(); } };
+              fetch('/bb-mirror-api/v0/topic-media', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },
+                body: JSON.stringify({ topic_id: tEditId, keep_media_ids: tKeep, add_upload_ids: tAdded }),
+              }).then(finishReload, finishReload);
+            } else {
+              frmUpdateTopicInPlace(tEditId, freshTitle, freshHtml);
+              frmSubmit.disabled = false;
+              frmClose();
+            }
+          })
+          .catch(function (err) { frmStatus.textContent = 'Network error: ' + err.message; frmSubmit.disabled = false; });
+        return;
+      }
       if (!content && !frmMediaIds.length) { frmStatus.textContent = "Reply can't be empty."; frmFocus(); return; }
+      // EDIT path: PUT the owned endpoint (author-or-mod), update the reply in place.
+      if (frmEditReplyId > 0) {
+        if (!content) { frmStatus.textContent = "Reply can't be empty."; frmFocus(); return; }
+        frmSubmit.disabled = true; frmStatus.textContent = 'Saving…';
+        var editId = frmEditReplyId;
+        var editPayload = { reply_id: editId, content: content };
+        var addedMedia = frmMediaIds.slice();                  // new uploads added during edit
+        if (addedMedia.length) editPayload.media_ids = addedMedia;
+        // If we loaded the existing photo set, send the kept ids so any the user
+        // ✕'d are removed server-side (omit when we couldn't load it → keep all).
+        if (frmEditMediaLoaded) editPayload.keep_media_ids = frmKeepMedia.slice();
+        var mediaChanged = addedMedia.length > 0 || frmEditMediaLoaded;
+        fetch('/bb-mirror-api/v0/reply', {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },
+          body: JSON.stringify(editPayload),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) { frmStatus.textContent = 'Error: ' + ((res.j && (res.j.message || res.j.error)) || 'failed'); frmSubmit.disabled = false; return; }
+            var fresh = (res.j && res.j.content_html) || content;
+            Array.prototype.forEach.call(document.querySelectorAll('.reply-stub[data-reply-id="' + editId + '"]'), function (st) {
+              var ex = st.querySelector('.reply-stub__excerpt') || st.querySelector('.reply-stub__body');
+              if (ex) ex.innerHTML = fresh;
+              var eb = st.querySelector('.reply-stub__edit'); if (eb) eb.setAttribute('data-reply-raw', fresh);
+            });
+            // Photo add/remove changes attachments (not inline body) — the text-only
+            // in-place update can't reflect them, so reload the discussion-modal thread.
+            if (mediaChanged) {
+              var dm = document.getElementById('lg-dmodal');
+              var rs = document.getElementById('looth-rep-sheet');   // mobile sheet
+              var dtid = (dm && !dm.hidden && dm.dataset.topicId) ? dm.dataset.topicId
+                       : (rs && rs.classList.contains('is-open') && rs.getAttribute('data-tid')) ? rs.getAttribute('data-tid') : '';
+              if (dtid) { try { document.dispatchEvent(new CustomEvent('lg:reply-posted', { detail: { topicId: parseInt(dtid, 10) } })); } catch (e) {} }
+            }
+            frmSubmit.disabled = false;
+            frmClose();
+          })
+          .catch(function (err) { frmStatus.textContent = 'Network error: ' + err.message; frmSubmit.disabled = false; });
+        return;
+      }
       if (!topicId) { frmStatus.textContent = 'Missing topic.'; return; }
       frmSubmit.disabled = true; frmStatus.textContent = 'Posting…';
       var frmPayload = { topic_id: topicId, forum_id: forumId };
@@ -2068,8 +2314,7 @@
       setState(authed);
       replyInitEditor();
       revealReplyButtons();
-      revealEditButtons(data.wp_user_id || 0, !!data.can_edit_others);
-      revealDeleteButtons(data.wp_user_id || 0, !!data.can_edit_others);
+      revealPostMenus(data.wp_user_id || 0, !!data.can_edit_others);
       if (seenTopicId > 0) {
         fetch('/bb-mirror-api/v0/mark-seen.php', {
           method: 'POST',
@@ -2098,16 +2343,51 @@
     });
   }
 
-  // ── 3c. Inline post editing (own posts; admins/mods edit all) ───────────────
-  function revealEditButtons(viewerId, canEditOthers) {
-    document.querySelectorAll('.post__edit-btn').forEach(function (btn) {
-      var authorId = parseInt(btn.dataset.authorId, 10) || 0;
-      var mine = viewerId > 0 && authorId === viewerId;
-      if (!mine && !canEditOthers) return;   // not allowed → leave hidden
-      btn.hidden = false;
-      btn.addEventListener('click', function () { startEdit(btn); });
+  // ── 3c. FB-style "⋯" post menu (own posts; admins/mods on all) ──────────────
+  // One overflow trigger per post (the OP + every reply) opens an Edit / Delete
+  // dropdown laid out like Facebook's post menu. The trigger is revealed only for
+  // the post's author OR a moderator; the owned /bb-mirror-api/v0/reply endpoint
+  // re-checks author-or-mod on every PUT/DELETE, so this gate is convenience only.
+  function closeAllPostMenus(except) {
+    document.querySelectorAll('.post__menu-wrap').forEach(function (w) {
+      if (w === except) return;
+      var menu = w.querySelector('.post__menu');
+      var trig = w.querySelector('.post__menu-btn');
+      if (menu) menu.hidden = true;
+      if (trig) trig.setAttribute('aria-expanded', 'false');
     });
   }
+  function revealPostMenus(viewerId, canEditOthers) {
+    document.querySelectorAll('.post__menu-wrap').forEach(function (wrap) {
+      var authorId = parseInt(wrap.dataset.authorId, 10) || 0;
+      var mine = viewerId > 0 && authorId === viewerId;
+      if (!mine && !canEditOthers) return;          // not allowed → stays hidden
+      wrap.hidden = false;
+      var trig    = wrap.querySelector('.post__menu-btn');
+      var menu    = wrap.querySelector('.post__menu');
+      var editBtn = wrap.querySelector('.post__edit-btn');
+      var delBtn  = wrap.querySelector('.post__delete-btn');
+      if (trig && menu) {
+        trig.addEventListener('click', function (e) {
+          e.preventDefault(); e.stopPropagation();
+          var willOpen = menu.hidden;
+          closeAllPostMenus(wrap);
+          menu.hidden = !willOpen;
+          trig.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        });
+      }
+      if (editBtn) editBtn.addEventListener('click', function () { closeAllPostMenus(); startEdit(editBtn); });
+      if (delBtn)  delBtn.addEventListener('click', function () { closeAllPostMenus(); confirmDelete(delBtn); });
+    });
+  }
+  // Dismiss any open ⋯ menu on outside-click or Escape (wired once for the page).
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.post__menu-wrap')) return;
+    closeAllPostMenus();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' || e.key === 'Esc') closeAllPostMenus();
+  });
 
   function startEdit(btn) {
     var post = btn.closest('.post');
@@ -2121,7 +2401,7 @@
     var box = document.createElement('div');
     box.className = 'post-edit';
     var titleHtml = (kind === 'topic')
-      ? '<input class="post-edit__title" type="text" value="">' : '';
+      ? '<input class="post-edit__title" type="text" autocomplete="off" value="">' : '';
     box.innerHTML =
       titleHtml +
       '<div class="post-edit__quill"></div>' +
@@ -2155,7 +2435,7 @@
       quill.root.innerHTML = body.innerHTML;   // seed from rendered body
     } else {
       ta = document.createElement('textarea');
-      ta.className = 'post-edit__fallback'; ta.rows = 6; ta.value = body.innerHTML;
+      ta.className = 'post-edit__fallback'; ta.rows = 6; ta.setAttribute('autocomplete', 'off'); ta.value = body.innerHTML;
       qEl.replaceWith(ta);
     }
 
@@ -2191,20 +2471,19 @@
       // rendered by the mirror (bb-mirror content images are attachments, not
       // inline <img>, so this is safe).
       html = html.replace(/<img[^>]*>/gi, '').replace(/<p>\s*<\/p>/gi, '').trim();
+      if (!html) { statusEl.textContent = "Can't be empty."; return; }
       saveBtn.disabled = true; statusEl.textContent = 'Saving…';
 
-      // New uploads attach via bbp_media; existing attachments are preserved.
-      var payload, url;
+      // Owned, author-or-mod endpoint (/bb-mirror-api/v0/reply) — the SAME gate as
+      // delete, IDOR-proof + nonce-checked server-side. Title+body only; existing
+      // photo attachments are preserved (wp_update_post doesn't touch bbp_media).
+      // Mirrors reply.php's reply-edit / topic-edit PUT contracts.
+      var url = '/bb-mirror-api/v0/reply', payload;
       if (kind === 'topic') {
-        url = restBase + '/topics/' + id;
-        payload = { id: id, parent: parseInt(btn.dataset.forumId, 10),
-                    title: box.querySelector('.post-edit__title').value.trim(), content: html };
+        payload = { topic_id: id, title: box.querySelector('.post-edit__title').value.trim(), content: html };
       } else {
-        url = restBase + '/reply/' + id;
-        payload = { id: id, topic_id: parseInt(btn.dataset.topicId, 10),
-                    forum_id: parseInt(btn.dataset.forumId, 10), content: html };
+        payload = { reply_id: id, content: html };
       }
-      if (editMediaIds.length) payload.bbp_media = editMediaIds;
 
       fetch(url, {
         method: 'PUT',
@@ -2233,21 +2512,11 @@
     });
   }
 
-  // ── 3d. Inline post deletion (own posts; admins/mods delete all) ────────────
-  // Mirrors the edit gate: a Delete button is revealed when the post is the
-  // viewer's own OR they hold edit_others (mod/admin). BB REST re-checks the
-  // delete_topic/delete_reply meta cap server-side, and the trash/delete hook
-  // propagates to pg via the sync mu-plugin, so the row drops from every view.
-  function revealDeleteButtons(viewerId, canEditOthers) {
-    document.querySelectorAll('.post__delete-btn').forEach(function (btn) {
-      var authorId = parseInt(btn.dataset.authorId, 10) || 0;
-      var mine = viewerId > 0 && authorId === viewerId;
-      if (!mine && !canEditOthers) return;   // not allowed → leave hidden
-      btn.hidden = false;
-      btn.addEventListener('click', function () { confirmDelete(btn); });
-    });
-  }
-
+  // ── 3d. Delete a post (own; admins/mods on all) — fired from the ⋯ menu. ────
+  // Hits the owned /bb-mirror-api/v0/reply endpoint (author-or-mod, IDOR-proof,
+  // nonce-checked); the bb→pg sync hook drops the row (and a topic's replies)
+  // from every view. The native BuddyBoss DELETE is mods-only, which is why we
+  // own the policy here.
   function confirmDelete(btn) {
     var kind = btn.dataset.delKind;                  // topic | reply
     var id   = parseInt(btn.dataset.delId, 10);
@@ -2255,20 +2524,21 @@
     var what = kind === 'topic' ? 'this entire topic' : 'this reply';
     if (!window.confirm('Delete ' + what + '? This can’t be undone.')) return;
 
-    var url  = '/wp-json/buddyboss/v1/' + (kind === 'topic' ? 'topics/' : 'reply/') + id;
-    var prev = btn.textContent;
-    btn.disabled = true; btn.textContent = 'Deleting…';
+    var url     = '/bb-mirror-api/v0/reply';
+    var payload = kind === 'topic' ? { topic_id: id } : { reply_id: id };
+    btn.disabled = true;
 
     fetch(url, {
       method: 'DELETE',
       credentials: 'same-origin',
-      headers: { 'X-WP-Nonce': nonce },
+      headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+      body: JSON.stringify(payload),
     })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; },
                                                function () { return { ok: r.ok, j: {} }; }); })
       .then(function (res) {
         if (!res.ok) {
-          btn.disabled = false; btn.textContent = prev;
+          btn.disabled = false;
           alert('Could not delete: ' + ((res.j && (res.j.message || res.j.code)) || 'failed'));
           return;
         }
@@ -2283,7 +2553,7 @@
         }
       })
       .catch(function (err) {
-        btn.disabled = false; btn.textContent = prev;
+        btn.disabled = false;
         alert('Network error: ' + err.message);
       });
   }
@@ -2774,6 +3044,191 @@
   var BASE = (window.LG_FORUM_BASE || '').toString().replace(/\/+$/, '');
   var modal = null;
 
+  // ── ⋯ Edit/Delete on modal REPLIES (hub-editdel, Ian 2026-06-25) ────────────
+  // The modal OP already has edit+delete (lg-dmodal__edit / __del below); replies
+  // didn't (that wiring was gated behind ?proto=cards). We inject a Facebook-style
+  // ⋯ menu per reply-stub in fbRows(), reusing the permalink's .post__menu* styles
+  // and the SAME owned endpoints (/bb-mirror-api/v0/reply PUT/DELETE — author-or-
+  // mod, IDOR-proof). Reveal rule matches the permalink: author-match OR
+  // can_edit_others. Server re-checks on every write, so this gate is convenience.
+  var EDIT_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  var DEL_SVG  = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
+
+  // Viewer auth/nonce, fetched once and cached (same endpoint the OP block uses).
+  var dmAuth = null, dmAuthPending = null;
+  function dmGetAuth(cb) {
+    if (dmAuth) { cb(dmAuth); return; }
+    if (dmAuthPending) { dmAuthPending.push(cb); return; }
+    dmAuthPending = [cb];
+    fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { dmAuth = d || { authenticated: false }; dmAuthPending.forEach(function (f) { f(dmAuth); }); dmAuthPending = null; })
+      .catch(function () { dmAuth = { authenticated: false }; dmAuthPending.forEach(function (f) { f(dmAuth); }); dmAuthPending = null; });
+  }
+
+  function dmCloseMenus() {
+    if (!modal) return;
+    [].forEach.call(modal.querySelectorAll('.post__menu-wrap--rs .post__menu:not([hidden])'), function (mn) { mn.hidden = true; });
+    [].forEach.call(modal.querySelectorAll('.post__menu-wrap--rs .post__menu-btn[aria-expanded="true"]'), function (b) { b.setAttribute('aria-expanded', 'false'); });
+  }
+  // Bulletproof dismiss: any click that isn't on an open ⋯/Edit control closes the
+  // menu (the trigger stops propagation, so opening doesn't self-close). Wired once
+  // at document level so it fires no matter where the menu lives in the modal —
+  // fixes the "stuck open" menu (Ian 2026-06-25).
+  if (!window.__dmMenusDismissWired) {
+    window.__dmMenusDismissWired = true;
+    document.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('.post__menu-wrap--rs')) return;
+      dmCloseMenus();
+    });
+  }
+
+  // Bring Edit (the Edit/Delete dropdown trigger) INTO the reply's action row, next
+  // to React + Reply — three uniform buttons (Ian 2026-06-25: "react, reply and
+  // edit, 3 buttons together"). Only for the reply's author OR a moderator;
+  // idempotent. The dropdown (the part Ian likes) stays; it now hangs off the
+  // inline Edit button and dismisses cleanly.
+  function dmInjectReplyMenu(stub, auth) {
+    if (!stub || stub.querySelector('.post__menu-wrap--rs')) return;
+    var rid = parseInt(stub.getAttribute('data-reply-id'), 10) || 0;
+    if (!rid) return;
+    var authorId = parseInt(stub.getAttribute('data-author-id'), 10) || 0;
+    var mine = auth && auth.wp_user_id && authorId === parseInt(auth.wp_user_id, 10);
+    if (!mine && !(auth && auth.can_edit_others)) return;
+    // Sit in the action row (React/Reply) so all controls group together.
+    var rowEl = stub.querySelector('.lg-dmodal__acts') || stub.querySelector('.reply-stub__head') || stub;
+    var wrap = document.createElement('div');
+    wrap.className = 'post__menu-wrap post__menu-wrap--rs';
+    // "Edit" button is a copy of the React button (.dm-uniact = same look); it
+    // toggles a small Edit/Delete menu. The menu is position:FIXED, placed from the
+    // button's screen rect on open — so it can't be clipped or mis-anchored, and a
+    // document-level outside-click/Esc closes it (no "stuck open"). (Ian 2026-06-25)
+    wrap.innerHTML =
+      '<button type="button" class="post__menu-btn dm-uniact" aria-haspopup="menu" aria-expanded="false" aria-label="Edit or delete">' +
+        EDIT_SVG + '<span>Edit</span>' +
+      '</button>' +
+      '<div class="post__menu dm-pop2" role="menu" hidden>' +
+        '<button type="button" role="menuitem" class="post__menu-item dm-rs-edit">' + EDIT_SVG + '<span>Edit</span></button>' +
+        '<button type="button" role="menuitem" class="post__menu-item post__menu-item--danger dm-rs-del">' + DEL_SVG + '<span>Delete</span></button>' +
+      '</div>';
+    rowEl.appendChild(wrap);
+    var btn  = wrap.querySelector('.post__menu-btn');
+    var menu = wrap.querySelector('.dm-pop2');
+    function placeMenu() {
+      var r = btn.getBoundingClientRect();
+      var mw = menu.offsetWidth || 170;
+      menu.style.top  = (r.bottom + 4) + 'px';
+      menu.style.left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8)) + 'px';
+    }
+    btn.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var willOpen = menu.hidden;
+      dmCloseMenus();
+      if (willOpen) { menu.hidden = false; placeMenu(); btn.setAttribute('aria-expanded', 'true'); }
+    });
+    wrap.querySelector('.dm-rs-edit').addEventListener('click', function () { dmCloseMenus(); dmReplyEdit(stub, rid); });
+    wrap.querySelector('.dm-rs-del').addEventListener('click', function () { dmCloseMenus(); dmReplyDelete(stub, rid); });
+  }
+
+  // Inline reply editor — Quill when present (seeded from the full stored body so
+  // formatting round-trips), plain textarea fallback. PUT /bb-mirror-api/v0/reply.
+  function dmReplyEdit(stub, rid) {
+    if (stub.querySelector('.dm-rs-editbox')) return;
+    var excerpt = stub.querySelector('.reply-stub__excerpt');
+    var bodyDiv = stub.querySelector('.reply-stub__body');
+    var editBtn = stub.querySelector('.reply-stub__edit');
+    var raw = (editBtn && editBtn.getAttribute('data-reply-raw')) || (excerpt ? excerpt.innerHTML : '');
+    // Open the SAME Quill composer modal used to CREATE replies, pre-filled (Ian
+    // 2026-06-25). The inline editor below is only a fallback if it's unavailable.
+    if (typeof window.lgFrmEditReply === 'function') { window.lgFrmEditReply(rid, raw); return; }
+    var box = document.createElement('div');
+    box.className = 'dm-rs-editbox';
+    box.innerHTML =
+      '<div class="dm-rs-quill"></div>' +
+      '<div class="dm-rs-row">' +
+        '<button type="button" class="dm-rs-save">Save</button>' +
+        '<button type="button" class="dm-rs-cancel">Cancel</button>' +
+        '<span class="dm-rs-status" aria-live="polite"></span>' +
+      '</div>';
+    if (bodyDiv) { bodyDiv.style.display = 'none'; bodyDiv.parentNode.insertBefore(box, bodyDiv.nextSibling); }
+    else { stub.appendChild(box); }
+    var qEl = box.querySelector('.dm-rs-quill');
+    var status = box.querySelector('.dm-rs-status');
+    var quill = null, ta = null;
+    if (typeof Quill !== 'undefined') {
+      quill = new Quill(qEl, { theme: 'snow', bounds: qEl, modules: { toolbar: [
+        ['bold', 'italic', 'underline'], ['blockquote'], [{ list: 'ordered' }, { list: 'bullet' }], ['link'], ['clean'],
+      ] } });
+      if (raw) quill.clipboard.dangerouslyPasteHTML(raw);
+      quill.focus();
+    } else {
+      qEl.innerHTML = '<textarea class="dm-rs-ta" rows="4" autocomplete="off"></textarea>';
+      ta = qEl.querySelector('.dm-rs-ta');
+      ta.value = (excerpt ? (excerpt.innerText || excerpt.textContent || '') : '').trim();
+      ta.focus();
+    }
+    box.querySelector('.dm-rs-cancel').addEventListener('click', function () {
+      box.remove(); if (bodyDiv) bodyDiv.style.display = '';
+    });
+    box.querySelector('.dm-rs-save').addEventListener('click', function () {
+      var html;
+      if (quill) {
+        html = quill.root.innerHTML;
+        if (html === '<p><br></p>') html = '';
+        // Strip inline preview <img> (parity with the other composers — reply
+        // images attach via media, not inline body HTML).
+        html = html.replace(/<img[^>]*>/gi, '').trim();
+      } else {
+        var txt = (ta.value || '').trim();
+        html = txt ? '<p>' + txt.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }).replace(/\n/g, '<br>') + '</p>' : '';
+      }
+      if (!html) { status.textContent = "Can't be empty."; return; }
+      status.textContent = 'Saving…';
+      dmGetAuth(function (a) {
+        if (!a || !a.nonce) { status.textContent = 'Not signed in.'; return; }
+        fetch('/bb-mirror-api/v0/reply', {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+          body: JSON.stringify({ reply_id: rid, content: html }),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.error)) || 'Could not save.'; return; }
+            var fresh = (res.j && res.j.content_html) || html;
+            if (excerpt) excerpt.innerHTML = fresh;
+            if (editBtn) editBtn.setAttribute('data-reply-raw', fresh);
+            box.remove(); if (bodyDiv) bodyDiv.style.display = '';
+            if (window.bbProcessEmbeds && bodyDiv) window.bbProcessEmbeds(bodyDiv);
+          })
+          .catch(function (err) { status.textContent = 'Network error: ' + err.message; });
+      });
+    });
+  }
+
+  // Delete a reply — confirm, DELETE /bb-mirror-api/v0/reply, drop the stub +
+  // reconcile the card's reply count.
+  function dmReplyDelete(stub, rid) {
+    if (!window.confirm('Delete this reply? This can’t be undone.')) return;
+    dmGetAuth(function (a) {
+      if (!a || !a.nonce) { alert('Not signed in.'); return; }
+      fetch('/bb-mirror-api/v0/reply', {
+        method: 'DELETE', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+        body: JSON.stringify({ reply_id: rid }),
+      })
+        .then(function (r) { return r.json().then(function (j) { return { s: r.status, ok: r.ok, j: j }; }, function () { return { s: r.status, ok: r.ok, j: {} }; }); })
+        .then(function (res) {
+          if (res.s === 403) { alert('You can only delete your own replies.'); return; }
+          if (!res.ok) { alert('Could not delete: ' + ((res.j && (res.j.message || res.j.error)) || 'failed')); return; }
+          var rep = modal && modal.querySelector('.lg-dmodal__replies .feed-card__replies-full');
+          var tid = modal && modal.dataset ? modal.dataset.topicId : null;
+          try { stub.remove(); } catch (e) {}
+          if (rep && tid) reconcileCount(rep, tid);
+        })
+        .catch(function (err) { alert('Network error: ' + err.message); });
+    });
+  }
+
   function deskt() {
     try { return window.matchMedia('(min-width:641px)').matches; } catch (e) { return false; }
   }
@@ -2797,7 +3252,8 @@
       '</div>';
     document.body.appendChild(modal);
     modal.addEventListener('click', function (e) {
-      if (e.target.closest('[data-dm-close]')) close();
+      if (e.target.closest('[data-dm-close]')) { close(); return; }
+      if (!e.target.closest('.post__menu-wrap--rs')) dmCloseMenus();   // dismiss any open reply ⋯ menu
     });
     // 3 panel sizes (Ian): S / M / L, cycled from the head, persisted per device.
     var SIZES = ['s', 'm', 'l'];
@@ -2888,12 +3344,31 @@
       if (rb) {
         rb.setAttribute('data-topic-id', tid);
         rb.setAttribute('data-forum-id', fid);
+        rb.classList.add('dm-uniact');   // same button look as React + Edit
         row.appendChild(rb);
       }
       if (!row.childNodes.length) return;
       var bodyEl = stub.querySelector('.reply-stub__body, .reply-stub__excerpt');
       var col = bodyEl ? bodyEl.parentElement : stub;
       col.appendChild(row);
+    });
+    // Per reply: author/mod ⋯ Edit+Delete + "no self-react" — hide the React
+    // trigger on the viewer's OWN replies (Ian 2026-06-25: you don't react to
+    // your own). Count chips stay (you can still SEE others' reactions). Cached
+    // auth; idempotent per stub.
+    dmGetAuth(function (auth) {
+      if (!auth || !auth.authenticated) return;
+      var myId = parseInt(auth.wp_user_id, 10) || 0;
+      [].forEach.call(t.querySelectorAll('.reply-stub'), function (stub) {
+        dmInjectReplyMenu(stub, auth);
+        var aId = parseInt(stub.getAttribute('data-author-id'), 10) || 0;
+        if (myId && aId === myId) {
+          var add = stub.querySelector('.fcr-add');   // the emoji "React" trigger
+          // setProperty(..., 'important') so it beats the !important row CSS that
+          // forces .fcr-add display:inline-flex (Ian 2026-06-25 regression fix).
+          if (add) add.style.setProperty('display', 'none', 'important');
+        }
+      });
     });
   }
 
@@ -2948,9 +3423,12 @@
       del.type = 'button'; del.className = 'lg-dmodal__act lg-dmodal__del'; del.hidden = true;
       del.setAttribute('aria-label', 'Delete this post');
       del.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg> Delete';
-      // Edit the OP via the SAME composer as mobile (lgNtmEditTopic) — desktop
-      // shows the plain (non-wizard) composer pre-filled and PUTs. Gated to
-      // author/mod by the shared auth check below. (Ian 6/17, desktop parity)
+      // Edit the OP via the SAME Quill composer used to edit a reply
+      // (lgFrmEditTopic) — unified "new edit" (Ian 2026-06-25): the OP no longer
+      // opens the new-topic wizard. The composer shows the title field, pops over
+      // the still-open modal, and updates the OP in place on save. Falls back to
+      // the wizard only if the unified composer isn't present. Gated to author/mod
+      // by the shared auth check below.
       var edit = document.createElement('button');
       edit.type = 'button'; edit.className = 'lg-dmodal__act lg-dmodal__edit'; edit.hidden = true;
       edit.setAttribute('aria-label', 'Edit this post');
@@ -2967,11 +3445,19 @@
           edit.hidden = false;
           edit.addEventListener('click', function (ev) {
             ev.preventDefault(); ev.stopPropagation();
-            if (typeof window.lgNtmEditTopic !== 'function') return;
             var ttlEl = m.querySelector('.lg-dmodal__title');
             var ttl = ttlEl ? (ttlEl.textContent || '').trim() : '';
-            var cb = m.querySelector('[data-dm-close]'); if (cb) cb.click();   // close modal first
-            window.lgNtmEditTopic(tid, fid, ttl, body.innerHTML);              // body has the full fetched OP
+            // Unified composer: pop it OPEN over the modal (parity with reply edit);
+            // on save it updates the modal OP + card in place. body.innerHTML is the
+            // full fetched OP content.
+            if (typeof window.lgFrmEditTopic === 'function') {
+              window.lgFrmEditTopic(tid, fid, ttl, body.innerHTML);
+              return;
+            }
+            // Fallback: the old new-topic wizard (close the modal first).
+            if (typeof window.lgNtmEditTopic !== 'function') return;
+            var cb = m.querySelector('[data-dm-close]'); if (cb) cb.click();
+            window.lgNtmEditTopic(tid, fid, ttl, body.innerHTML);
           });
           del.addEventListener('click', function (ev) {
             ev.preventDefault(); ev.stopPropagation();

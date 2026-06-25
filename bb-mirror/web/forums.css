@@ -4346,3 +4346,332 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 .hub-rail--acc .hub-rail__secbody .hub-rail__nm{flex:1 1 auto;min-width:0;text-decoration:none;color:var(--lg-ink,#323532);font:600 12.5px/1.2 var(--lg-font-sans,system-ui,sans-serif);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hub-rail--acc .hub-rail__secbody .hub-rail__ct{flex:0 0 auto;background:var(--sect);color:var(--secdk);border-radius:999px;padding:3px 8px;font:700 11px/1 var(--lg-font-sans,system-ui,sans-serif)}
 .hub-rail--acc .hub-acc__leaves{margin:4px 0 6px 16px}
+
+/* ── FB-style post overflow (⋯) menu — Edit/Delete on own posts + replies
+   (hub-editdel lane, Ian 2026-06-25). One trigger per post pinned top-right of
+   the post head; the dropdown anchors to it. Identical desktop + mobile; the
+   trigger is revealed by forums.js only for the author OR a moderator. ──────── */
+.post__head { position: relative; padding-right: 38px; }
+.post__menu-wrap { position: absolute; top: -3px; right: 0; }
+.post__menu-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0; margin: 0;
+  border: 0; border-radius: 50%; background: transparent;
+  color: var(--fg-muted, #6b6b6b); cursor: pointer; line-height: 0;
+  transition: background .15s ease, color .15s ease;
+}
+.post__menu-btn:hover,
+.post__menu-btn[aria-expanded="true"] {
+  background: rgba(0, 0, 0, .07);
+  color: var(--fg, #1c1c1c);
+}
+.post__menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 60;
+  min-width: 176px; padding: 6px;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-soft, rgba(0, 0, 0, .1));
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.post__menu-item {
+  display: flex; align-items: center; gap: 11px;
+  width: 100%; padding: 9px 11px;
+  border: 0; border-radius: 8px; background: transparent;
+  color: var(--fg, #1c1c1c);
+  font: 600 14.5px/1.2 var(--lg-font-sans, system-ui, sans-serif);
+  text-align: left; cursor: pointer;
+}
+.post__menu-item:hover { background: rgba(0, 0, 0, .06); }
+.post__menu-item svg { flex: 0 0 auto; opacity: .85; }
+.post__menu-item--danger { color: #c0392b; }
+.post__menu-item--danger:hover { background: rgba(192, 57, 43, .09); }
+
+@media (max-width: 640px) {
+  .post__menu { min-width: 208px; right: 0; }
+  .post__menu-item { padding: 12px 13px; font-size: 16px; }  /* bigger touch targets */
+}
+
+/* ── ⋯ Edit/Delete on modal reply stubs (hub-editdel, Ian 2026-06-25) ─────────
+   Reuses the FB-style .post__menu* dropdown; scoped to #lg-dmodal so the feed
+   teaser reply stubs are untouched. The wrap is injected into .reply-stub__head
+   by forums.js (dmInjectReplyMenu) only for the author or a moderator. */
+#lg-dmodal .reply-stub__head { position: relative; padding-right: 30px; }
+.post__menu-wrap--rs { top: -2px; right: 0; }
+.post__menu-wrap--rs .post__menu-btn { width: 28px; height: 28px; }
+
+/* Inline reply editor inside the modal */
+.dm-rs-editbox { margin: 6px 0 4px; }
+.dm-rs-editbox .dm-rs-quill { background: #fff; border-radius: 8px; }
+.dm-rs-editbox .dm-rs-ta {
+  width: 100%; box-sizing: border-box; padding: 8px;
+  border: 1px solid var(--border-soft, rgba(0, 0, 0, .15)); border-radius: 8px;
+  font: inherit; resize: vertical;
+}
+.dm-rs-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.dm-rs-save, .dm-rs-cancel {
+  border: 0; border-radius: 7px; padding: 6px 13px;
+  font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif); cursor: pointer;
+}
+.dm-rs-save { background: var(--accent, #3a5a40); color: #fff; }
+.dm-rs-cancel { background: rgba(0, 0, 0, .07); color: var(--fg, #1c1c1c); }
+.dm-rs-status { font-size: 12.5px; color: var(--fg-muted, #6b6b6b); }
+
+@media (max-width: 640px) {
+  .post__menu-wrap--rs .post__menu-btn { width: 32px; height: 32px; }  /* bigger touch target */
+}
+
+/* ── Direction-A comment meta-row — DESKTOP discussion modal (#lg-dmodal)
+   (hub-editdel, Ian 2026-06-25). The feed + mobile sheet already use the light
+   FB/IG row; the desktop modal still showed the chunky .fcr "React" pill. Harmonize
+   the modal's OP (.lg-dmodal__opacts) + reply (.lg-dmodal__acts) rows to one clean
+   meta-row: reaction-count chips + lightweight text React/Reply. The base
+   @media(min-width:641px) .feed-page .fcr-add pill rule is all-!important, so these
+   overrides are !important too. Scoped to #lg-dmodal — feed/mobile untouched. */
+#lg-dmodal .lg-dmodal__opacts,
+#lg-dmodal .lg-dmodal__acts {
+  gap: 4px 8px; flex-wrap: wrap; padding-top: 4px; align-items: center;
+}
+/* React trigger: filled pill -> light text action (FB "Like" weight) */
+#lg-dmodal .fcr-add {
+  height: auto !important; width: auto !important; min-width: 0 !important;
+  padding: 5px 8px !important; gap: 5px !important;
+  background: none !important; border: 0 !important; border-radius: 8px !important;
+  color: var(--lg-mute, #6b6f6b) !important;
+  font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif) !important;
+  transition: background .12s ease, color .12s ease !important;
+}
+#lg-dmodal .fcr-add:hover {
+  background: rgba(0, 0, 0, .06) !important;
+  color: var(--lguser-accent-d, #52613d) !important;
+}
+#lg-dmodal .fcr-add > span { font-size: 13px !important; font-weight: 600 !important; margin-left: 0 !important; }
+#lg-dmodal .fcr-add .fcr-emoji { font-size: 16px; }
+/* Reply text link matches React weight + color */
+#lg-dmodal .lg-dmodal__opacts .feed-card__reply-cta,
+#lg-dmodal .lg-dmodal__acts .reply-stub__reply,
+#lg-dmodal .reply-stub__reply {
+  color: var(--lg-mute, #6b6f6b) !important; font-weight: 600 !important;
+}
+#lg-dmodal .lg-dmodal__opacts .feed-card__reply-cta:hover,
+#lg-dmodal .reply-stub__reply:hover { color: var(--lguser-accent-d, #52613d) !important; }
+/* Count chips compact */
+#lg-dmodal .fcr-chips { gap: 4px; }
+
+/* ── Desktop modal: React + Reply + Edit as three UNIFORM grouped buttons
+   (hub-editdel, Ian 2026-06-25). The Edit/Delete dropdown trigger moves OUT of the
+   detached top-right ⋯ and INTO the action row next to React & Reply; the dropdown
+   (which Ian likes) now hangs off it. Reply is pulled in next to React (no float).
+   Scoped to #lg-dmodal — mobile sheet (#looth-rep-sheet) deliberately untouched. */
+#lg-dmodal .lg-dmodal__acts { justify-content: flex-start; gap: 2px; flex-wrap: wrap; }
+#lg-dmodal .lg-dmodal__acts .fcr { flex: 0 0 auto; gap: 4px; }
+#lg-dmodal .reply-stub__head { padding-right: 0; }   /* ⋯ no longer lives here */
+
+/* Reply: next to React, uniform light-text button */
+#lg-dmodal .lg-dmodal__acts .reply-stub__reply,
+#lg-dmodal .lg-dmodal__acts .feed-card__reply-cta {
+  margin: 0 !important; padding: 5px 8px !important; border-radius: 8px !important;
+  background: none !important; color: var(--lg-mute, #6b6f6b) !important;
+  font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif) !important;
+}
+#lg-dmodal .lg-dmodal__acts .reply-stub__reply:hover,
+#lg-dmodal .lg-dmodal__acts .feed-card__reply-cta:hover {
+  background: rgba(0, 0, 0, .06) !important; color: var(--lguser-accent-d, #52613d) !important;
+}
+
+/* Edit trigger: in-flow in the row, styled like React/Reply (not a 32px round ⋯) */
+#lg-dmodal .lg-dmodal__acts .post__menu-wrap--rs {
+  position: relative; top: auto; right: auto; margin: 0; display: inline-flex;
+}
+#lg-dmodal .lg-dmodal__acts .post__menu-btn {
+  width: auto; height: auto; border-radius: 8px;
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px;
+  background: none; border: 0; color: var(--lg-mute, #6b6f6b);
+  font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif); cursor: pointer;
+}
+#lg-dmodal .lg-dmodal__acts .post__menu-btn:hover,
+#lg-dmodal .lg-dmodal__acts .post__menu-btn[aria-expanded="true"] {
+  background: rgba(0, 0, 0, .06); color: var(--lguser-accent-d, #52613d);
+}
+#lg-dmodal .lg-dmodal__acts .post__menu-btn svg { width: 15px; height: 15px; opacity: .9; }
+
+/* ── FINAL desktop-modal action row (hub-editdel, Ian 2026-06-25) ─────────────
+   Authoritative: React + Reply + Edit are ONE identical light-text button style,
+   tightly grouped; Edit/Delete dropdown pinned UNDER the Edit button (was floating
+   far-left over the next reply, which also made it feel "stuck"). The base modal
+   rule renders Reply green/bold-700 — overridden here. Scoped #lg-dmodal; mobile
+   sheet untouched. !important because the base rules are specific + themed. */
+#lg-dmodal .lg-dmodal__acts,
+#lg-dmodal .lg-dmodal__opacts {
+  display: flex !important; align-items: center !important; justify-content: flex-start !important;
+  flex-wrap: wrap !important; gap: 2px !important; padding-top: 4px !important;
+}
+#lg-dmodal .lg-dmodal__acts .fcr-add,
+#lg-dmodal .lg-dmodal__acts .reply-stub__reply,
+#lg-dmodal .lg-dmodal__acts .post__menu-btn,
+#lg-dmodal .lg-dmodal__opacts .fcr-add,
+#lg-dmodal .lg-dmodal__opacts .feed-card__reply-cta,
+#lg-dmodal .lg-dmodal__opacts .post__menu-btn {
+  display: inline-flex !important; align-items: center !important; gap: 5px !important;
+  width: auto !important; height: auto !important; min-width: 0 !important;
+  margin: 0 !important; padding: 6px 9px !important;
+  background: none !important; border: 0 !important; border-radius: 8px !important;
+  box-shadow: none !important; text-decoration: none !important;
+  color: var(--lg-mute, #6b6f6b) !important;
+  font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif) !important;
+  cursor: pointer !important;
+}
+#lg-dmodal .lg-dmodal__acts .fcr-add:hover,
+#lg-dmodal .lg-dmodal__acts .reply-stub__reply:hover,
+#lg-dmodal .lg-dmodal__acts .post__menu-btn:hover,
+#lg-dmodal .lg-dmodal__acts .post__menu-btn[aria-expanded="true"],
+#lg-dmodal .lg-dmodal__opacts .fcr-add:hover,
+#lg-dmodal .lg-dmodal__opacts .feed-card__reply-cta:hover,
+#lg-dmodal .lg-dmodal__opacts .post__menu-btn:hover {
+  background: rgba(0, 0, 0, .06) !important; color: var(--lguser-accent-d, #52613d) !important;
+}
+#lg-dmodal .lg-dmodal__acts .post__menu-btn svg,
+#lg-dmodal .lg-dmodal__opacts .post__menu-btn svg { width: 15px !important; height: 15px !important; opacity: .9; }
+#lg-dmodal .fcr-add > span { font-size: 13px !important; font-weight: 600 !important; margin: 0 !important; }
+#lg-dmodal .fcr { flex: 0 0 auto !important; gap: 4px !important; }
+#lg-dmodal .fcr-chips { gap: 4px !important; }
+/* Pin the Edit/Delete dropdown under the Edit button */
+#lg-dmodal .post__menu-wrap--rs {
+  position: relative !important; top: auto !important; right: auto !important;
+  left: auto !important; bottom: auto !important; margin: 0 !important; display: inline-flex !important;
+}
+#lg-dmodal .post__menu-wrap--rs .post__menu {
+  position: absolute !important; top: calc(100% + 4px) !important;
+  right: 0 !important; left: auto !important; min-width: 168px !important; z-index: 70 !important;
+}
+
+/* ── FINAL v2 (hub-editdel, Ian 2026-06-25; popover + flex fix from websearch) ──
+   (1) Gaps: justify-content is defeated by ANY child with flex-grow or
+   margin-left:auto (MDN). Neutralize EVERY direct child of the row generically so
+   React/Reply/Edit group tightly — no need to know which legacy child grows.
+   (2) Edit/Delete menu is now a top-layer HTML Popover (see forums.js): style it
+   for both popover + the no-Popover-API fallback. */
+#lg-dmodal .lg-dmodal__acts > *,
+#lg-dmodal .lg-dmodal__opacts > * { flex: 0 0 auto !important; margin: 0 !important; }
+
+/* Popover menu: top layer, positioned under the Edit button by JS */
+.post__menu.dm-pop { position: fixed !important; inset: auto !important; margin: 0 !important; }
+.post__menu.dm-pop:not(:popover-open) { display: none !important; }
+.post__menu.dm-pop:popover-open { display: flex !important; flex-direction: column !important; }
+/* Fallback (no Popover API): JS toggles [hidden]; must beat the author display:flex */
+.post__menu.dm-pop[hidden] { display: none !important; }
+
+/* ── v3 (hub-editdel, Ian 2026-06-25): "copy React" + content-sized row ─────────
+   Justification fix: a flex row sized to its CONTENT (inline-flex, width:auto) has
+   no free space, so a stretching / margin-left:auto child can't spread the buttons.
+   React + Reply + Edit then pack tight + uniform. Plus a fixed-position Edit/Delete
+   menu (no popover — placed from the button's screen rect; outside-click closes). */
+#lg-dmodal .lg-dmodal__acts,
+#lg-dmodal .lg-dmodal__opacts {
+  display: inline-flex !important; width: auto !important; max-width: 100% !important;
+  align-items: center !important; gap: 14px !important; flex-wrap: wrap !important;
+  justify-content: flex-start !important; padding-top: 4px !important;
+}
+#lg-dmodal .lg-dmodal__acts > *,
+#lg-dmodal .lg-dmodal__opacts > * { flex: 0 0 auto !important; margin: 0 !important; }
+
+/* .dm-uniact = the React button look, shared by Reply + Edit (copy React) */
+#lg-dmodal .dm-uniact {
+  display: inline-flex !important; align-items: center !important; gap: 5px !important;
+  width: auto !important; height: auto !important; min-width: 0 !important;
+  padding: 6px 9px !important; margin: 0 !important;
+  background: none !important; border: 0 !important; border-radius: 8px !important;
+  box-shadow: none !important; text-decoration: none !important;
+  color: var(--lg-mute, #6b6f6b) !important;
+  font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif) !important; cursor: pointer !important;
+}
+#lg-dmodal .dm-uniact:hover,
+#lg-dmodal .dm-uniact[aria-expanded="true"] {
+  background: rgba(0, 0, 0, .06) !important; color: var(--lguser-accent-d, #52613d) !important;
+}
+#lg-dmodal .dm-uniact svg { width: 15px !important; height: 15px !important; opacity: .9; }
+
+/* Fixed-position Edit/Delete menu (placed by JS; high z so it sits above the modal) */
+.post__menu.dm-pop2 { position: fixed !important; margin: 0 !important; z-index: 2147483600 !important; }
+.post__menu.dm-pop2[hidden] { display: none !important; }
+.post__menu.dm-pop2:not([hidden]) { display: flex !important; flex-direction: column !important; }
+
+/* ── v3.1 (hub-editdel, Ian 2026-06-25): tighten the React bar (.fcr) ───────────
+   .fcr carries padding 9px 13px 2px + can grow wider than its content, which
+   spreads the OP row (the only row with a .fcr). Strip to content size + center it
+   so React sits flush in the uniform React/Reply/Edit group. */
+#lg-dmodal .lg-dmodal__opacts .fcr,
+#lg-dmodal .lg-dmodal__acts .fcr {
+  padding: 0 !important; gap: 6px !important; flex: 0 0 auto !important;
+  width: auto !important; max-width: max-content !important; align-self: center !important;
+}
+#lg-dmodal .lg-dmodal__opacts .fcr-chips,
+#lg-dmodal .lg-dmodal__acts .fcr-chips { margin: 0 !important; }
+
+/* ── Mobile/feed reply "Edit" button + Edit/Delete popup (hub-editdel, Ian
+   2026-06-25). The raw server pencil/trash stay in the DOM (data only) but hidden;
+   one "Edit" action sits in the lg-fb-actions row, revealed for own/mod, and opens
+   a small popup. ── */
+.lg-fb-modbtn--hide { display: none !important; }
+.lg-fb-act.lg-fb-more { display: none; cursor: pointer; }
+.feed--can-moderate .lg-fb-act.lg-fb-more,
+.reply-stub--mine .lg-fb-act.lg-fb-more { display: inline; }
+.lg-fb-actions .lg-fb-more::before { content: "·"; margin: 0 6px; color: #8a8d91; font-weight: 400; }
+.lg-fb-menu {
+  position: fixed; z-index: 2147483600; min-width: 168px; padding: 6px;
+  background: var(--bg-card, #fff); border: 1px solid var(--lg-line, rgba(0, 0, 0, .12));
+  border-radius: 12px; box-shadow: 0 8px 28px rgba(0, 0, 0, .22);
+  display: flex; flex-direction: column; gap: 2px;
+}
+html[data-lguser-theme="dark"] .lg-fb-menu { background: #1f2420; border-color: rgba(255, 255, 255, .12); }
+.lg-fb-menu__item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 11px 12px; border: 0; border-radius: 8px; background: none;
+  font: 600 15px/1 var(--lg-font-sans, system-ui, sans-serif); color: var(--lg-ink, #1a1d1a);
+  text-align: left; cursor: pointer;
+}
+.lg-fb-menu__item:hover, .lg-fb-menu__item:active { background: rgba(0, 0, 0, .06); }
+.lg-fb-menu__del { color: #c0392b; }
+html[data-lguser-theme="dark"] .lg-fb-menu__item { color: #e5e7e1; }
+html[data-lguser-theme="dark"] .lg-fb-menu__item:hover { background: rgba(255, 255, 255, .08); }
+
+/* OP-edit title row inside the unified reply composer (#frm-overlay). The field
+   reuses .ntm-input/.ntm-label; this just spaces it above the body label. Shown
+   only in topic-edit mode (lgFrmEditTopic toggles [hidden]). 2026-06-25 hub-editdel. */
+#frm-title-wrap { margin-bottom: var(--s3, 12px); }
+#frm-title-wrap .ntm-input { margin-top: var(--s1, 4px); }
+
+/* ── hub-editdel preview round 2 (Ian 2026-06-25) — mobile hub-discussion polish ── */
+
+/* #1 Reaction chips read icon-LEFT / number-RIGHT on EVERY surface. The scoped
+   `.feed-page .fcr-chip` row rule misses the OP reaction bar that hub-polish
+   RELOCATES into the mobile discussion sheet (#looth-rep-sheet sits OUTSIDE
+   .feed-page), so its image-glyph 👍 chip fell back to button defaults and stacked
+   its count above the icon. These unscoped rules normalize all chips regardless of
+   ancestry (desktop/.feed-page chips already match, so they're a no-op there). */
+.fcr-chip { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; line-height: 1; }
+.fcr-chip .fcr-img { display: inline-block; width: 18px; height: 18px; object-fit: contain; flex: 0 0 auto; vertical-align: middle; }
+.fcr-chip .fcr-emoji { font-size: 15px; line-height: 1; }
+.fcr-chip .fcr-n { line-height: 1; white-space: nowrap; }
+
+/* #4 Lightbox must sit ABOVE the mobile sheets (#looth-rep-sheet 2147483520,
+   content-sheet 2147483550, composer 2147483560). It was z-index:9999, so tapping
+   an image inside a sheet opened the lightbox BEHIND the sheet (invisible → "broken
+   on mobile"). Lift it above every overlay. */
+.lg-lightbox { z-index: 2147483646; }
+
+/* #3 Reply count surfaced in the card meta on mobile. Desktop already shows it via
+   the .fc-facepile pill + action bar, and the facepile is display:none ≤640, so the
+   count vanished on mobile. This compact count is a NEW direct-child card region —
+   mobile-hub.css's catch-all (.feed-card > * → full-width row, source order) stacks
+   it cleanly under the meta with no grid edit. Desktop hides it (facepile owns it). */
+.fc-replycount { display: none; }
+@media (max-width: 640px) {
+  .feed-page .fc-replycount {
+    display: inline-flex; align-items: center; gap: 5px; margin-top: 4px;
+    background: none; border: 0; padding: 0; cursor: pointer;
+    font: 600 12.5px/1 var(--lg-font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+    color: var(--lg-mute, var(--lguser-mute, #6b6f6b));
+  }
+  .feed-page .fc-replycount__ico { width: 15px; height: 15px; flex: 0 0 auto; }
+}

@@ -36,14 +36,59 @@ function reply_out(int $code, array $body): void {
 }
 
 $method = $_SERVER['REQUEST_METHOD'] ?? '';
+
+// Resolve a forum post's photo set → [{media_id, url, thumb}] (shared by the GET
+// read below + the PUT keep/add media save). Mirrors topic-media.php's list.
+function reply_media_list(int $post_id): array {
+    $out = [];
+    $csv = (string) get_post_meta($post_id, 'bp_media_ids', true);
+    if ($csv === '' || !class_exists('BP_Media')) return $out;
+    foreach (array_filter(array_map('intval', explode(',', $csv))) as $mid) {
+        $m   = new BP_Media($mid);
+        $att = (int) ($m->attachment_id ?? 0);
+        if (!$att) continue;
+        $url   = wp_get_attachment_image_url($att, 'large') ?: wp_get_attachment_url($att);
+        $thumb = wp_get_attachment_image_url($att, 'thumbnail') ?: $url;
+        $out[] = [
+            'media_id' => $mid,
+            'att'      => $att,
+            'name'     => (string) ($m->title ?? ''),
+            'url'      => $url ?: null,
+            'thumb'    => $thumb ?: null,
+        ];
+    }
+    return $out;
+}
+
+// GET — read a reply's photo set so the edit composer can show removable thumbs
+// (Ian 2026-06-25). Read-only; no auth needed (returns only public media URLs).
+if ($method === 'GET') {
+    $reply_id = (int) ($_GET['reply_id'] ?? 0);
+    if ($reply_id <= 0) {
+        reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => 'reply_id is required.']);
+    }
+    $media = array_map(static fn($m) => ['media_id' => (int) $m['media_id'], 'url' => $m['url'], 'thumb' => $m['thumb']], reply_media_list($reply_id));
+    reply_out(200, ['ok' => true, 'reply_id' => $reply_id, 'media' => $media]);
+}
+
 if (!in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
-    reply_out(405, ['ok' => false, 'error' => 'method', 'message' => 'POST/PUT/DELETE only.']);
+    reply_out(405, ['ok' => false, 'error' => 'method', 'message' => 'GET/POST/PUT/DELETE only.']);
 }
 
 $uid = get_current_user_id();
 if (!$uid) {
     reply_out(401, ['ok' => false, 'error' => 'auth', 'message' => 'Sign in to reply.']);
 }
+
+// Moderator/keymaster/admin — the authoritative "edit or delete anyone's post"
+// gate, used by every edit/delete branch below. auth.php's can_edit_others
+// mirrors this EXACTLY so the ⋯ menu UI-reveal and this server enforcement always
+// agree. 'administrator' is a role name (not a cap), so admins are caught via
+// 'manage_options'; 'moderate'/'keep_gate' cover the bbPress keymaster + gate
+// roles (Ian 2026-06-25).
+$is_mod_viewer = current_user_can('moderate')
+    || current_user_can('keep_gate')
+    || current_user_can('manage_options');
 
 $body = json_decode(file_get_contents('php://input') ?: '', true) ?: [];
 
@@ -70,7 +115,7 @@ if ($method === 'PUT' || $method === 'DELETE') {
         // Author-or-moderator; author taken from the stored post (IDOR-proof), then
         // the cap (author-scoped via the mu-plugin) is the authoritative gate.
         $t_is_author = ((int) $topic->post_author === (int) $uid);
-        $t_is_mod    = current_user_can('moderate') || current_user_can('keep_gate');
+        $t_is_mod    = $is_mod_viewer;
         if ((!$t_is_author && !$t_is_mod) || !current_user_can('delete_topic', $topic_id_del)) {
             reply_out(403, ['ok' => false, 'error' => 'forbidden', 'message' => 'You can only delete your own posts.']);
         }
@@ -82,6 +127,58 @@ if ($method === 'PUT' || $method === 'DELETE') {
         }
         if (function_exists('bb_mirror_sync_dispatch')) bb_mirror_sync_dispatch('topic', $topic_id_del, 'delete');
         reply_out(200, ['ok' => true, 'status' => 'deleted', 'topic_id' => $topic_id_del]);
+    }
+
+    // ── EDIT (PUT) a whole TOPIC (the OP title + body) — author-or-moderator,
+    //    mirrors the reply-edit PUT below (Ian 2026-06-25: members edit their own
+    //    posts via the FB-style ⋯ menu). The owned, IDOR-proof twin of the
+    //    topic-delete path above, so the Hub has ONE authoritative author-or-mod
+    //    gate for both topic edit and topic delete (vs. the native BuddyBoss
+    //    topics PUT, whose ownership rules we don't control). ────────────────────
+    if ($method === 'PUT' && (int) ($body['reply_id'] ?? 0) <= 0 && (int) ($body['topic_id'] ?? 0) > 0) {
+        $topic_id_edit = (int) $body['topic_id'];
+        if (!wp_verify_nonce((string) ($_SERVER['HTTP_X_WP_NONCE'] ?? ''), 'wp_rest')) {
+            reply_out(403, ['ok' => false, 'error' => 'nonce', 'message' => 'Session expired — reload and retry.']);
+        }
+        if (!function_exists('bbp_get_topic_post_type')) {
+            reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Forum engine unavailable.']);
+        }
+        $topic = get_post($topic_id_edit);
+        if (!$topic || $topic->post_type !== bbp_get_topic_post_type()) {
+            reply_out(404, ['ok' => false, 'error' => 'not_found', 'message' => 'Post not found.']);
+        }
+        // Author-or-moderator; the author is taken from the stored post (never the
+        // client — IDOR-proof), exactly like the reply-edit + topic-delete paths.
+        $t_is_author = ((int) $topic->post_author === (int) $uid);
+        $t_is_mod    = $is_mod_viewer;
+        if (!$t_is_author && !$t_is_mod) {
+            reply_out(403, ['ok' => false, 'error' => 'forbidden', 'message' => 'You can only edit your own posts.']);
+        }
+        $new_body  = trim((string) ($body['content'] ?? ''));
+        $new_title = trim((string) ($body['title'] ?? ''));
+        if ($new_body === '') {
+            reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Post can't be empty."]);
+        }
+        // wp_update_post kses-filters post_content (and sanitizes post_title) for
+        // users without unfiltered_html. Title is optional — keep the stored one
+        // when the client omits it (body-only edits).
+        $update = ['ID' => $topic_id_edit, 'post_content' => $new_body];
+        if ($new_title !== '') $update['post_title'] = $new_title;
+        $upd = wp_update_post($update, true);
+        if (is_wp_error($upd)) {
+            reply_out(500, ['ok' => false, 'error' => 'server', 'message' => (string) $upd->get_error_message()]);
+        }
+        // wp_update_post doesn't fire bbp_edit_topic, so sync the PG mirror
+        // explicitly ('upsert' is the same action the bbp_edit_topic hook maps to).
+        if (function_exists('bb_mirror_sync_dispatch')) bb_mirror_sync_dispatch('topic', $topic_id_edit, 'upsert');
+        $fresh = get_post($topic_id_edit);
+        reply_out(200, [
+            'ok'           => true,
+            'status'       => 'edited',
+            'topic_id'     => $topic_id_edit,
+            'title'        => (string) $fresh->post_title,
+            'content_html' => (string) apply_filters('bbp_get_topic_content', $fresh->post_content, $topic_id_edit),
+        ]);
     }
 
     $reply_id = (int) ($body['reply_id'] ?? 0);
@@ -102,7 +199,7 @@ if ($method === 'PUT' || $method === 'DELETE') {
     // Author-or-moderator. The reply author is taken from the stored post, never
     // the client (IDOR-proof) — same contract as the create path's flood check.
     $is_author = ((int) $reply->post_author === (int) $uid);
-    $is_mod    = current_user_can('moderate') || current_user_can('keep_gate');
+    $is_mod    = $is_mod_viewer;
     if (!$is_author && !$is_mod) {
         reply_out(403, ['ok' => false, 'error' => 'forbidden', 'message' => 'You can only edit or delete your own replies.']);
     }
@@ -119,15 +216,49 @@ if ($method === 'PUT' || $method === 'DELETE') {
     }
 
     // PUT — edit content. wp_update_post kses-filters for non-unfiltered_html users.
-    $new = trim((string) ($body['content'] ?? ''));
-    if ($new === '') {
+    // Media intent (computed first so a photo-only edit can drop the body text):
+    //   media_ids      = new upload/attachment ids to ADD
+    //   keep_media_ids = existing bp_media ids to KEEP (anything else is removed)
+    // keep_media_ids absent ⇒ keep ALL existing (add-only, back-compat). Present
+    // (incl. empty) ⇒ authoritative keep set, enabling per-photo removal.
+    $new      = trim((string) ($body['content'] ?? ''));
+    $add_atts = array_values(array_filter(array_map('intval', (array) ($body['media_ids'] ?? []))));
+    $has_keep = array_key_exists('keep_media_ids', (array) $body);
+    $keep_ids = $has_keep ? array_values(array_filter(array_map('intval', (array) $body['keep_media_ids']))) : [];
+    // Empty body is allowed only when photos remain (photo-only reply, like the
+    // create path); otherwise the reply must have text. (Ian 2026-06-25, mobile)
+    if ($new === '' && !$add_atts && !$keep_ids) {
         reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Reply can't be empty."]);
     }
     $upd = wp_update_post(['ID' => $reply_id, 'post_content' => $new], true);
     if (is_wp_error($upd)) {
         reply_out(500, ['ok' => false, 'error' => 'server', 'message' => (string) $upd->get_error_message()]);
     }
-    // wp_update_post doesn't fire bbp_edit_reply, so sync the PG mirror explicitly.
+    // Manage photos on edit (Ian 2026-06-25). The BuddyBoss reply PUT doesn't touch
+    // media, so — exactly like topic-media.php — drive
+    // bp_media_forums_new_post_media_save(): it KEEPS matches, ADDS new, and
+    // bp_media_delete()s anything dropped.
+    if (($add_atts || $has_keep) && function_exists('bp_media_forums_new_post_media_save')) {
+        $existing = reply_media_list($reply_id);
+        $by_mid   = [];
+        foreach ($existing as $e) $by_mid[(int) $e['media_id']] = $e;
+        $keep = $has_keep ? $keep_ids : array_keys($by_mid);   // explicit keep, else keep all
+        $media_objects = [];
+        $order = 0;
+        foreach ($keep as $mid) {
+            if (empty($by_mid[$mid])) continue;                 // not ours / already gone
+            $media_objects[] = ['id' => (int) $by_mid[$mid]['att'], 'media_id' => $mid, 'name' => (string) $by_mid[$mid]['name'], 'menu_order' => $order++];
+        }
+        foreach ($add_atts as $att) {
+            if (!wp_get_attachment_url($att)) continue;          // must be a real attachment
+            $media_objects[] = ['id' => $att, 'menu_order' => $order++];
+        }
+        $_POST['bbp_media'] = wp_json_encode($media_objects);
+        bp_media_forums_new_post_media_save($reply_id);
+        unset($_POST['bbp_media']);
+    }
+    // wp_update_post doesn't fire bbp_edit_reply, so sync the PG mirror explicitly
+    // (after the media save, so the re-materialized reply carries the new photos).
     if (function_exists('bb_mirror_sync_dispatch')) bb_mirror_sync_dispatch('reply', $reply_id, 'upsert');
     $fresh = get_post($reply_id);
     reply_out(200, [

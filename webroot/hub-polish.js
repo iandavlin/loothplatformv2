@@ -343,6 +343,10 @@
   // far-down posts never got the button = Buck's "works on some, not that exact post".)
   var excerptIO = null;
   function ensureExcerptReadMore(card) {
+    // No synthetic "Read more" on mobile anymore (Ian 2026-06-25): inline expansion
+    // is killed — the card tap opens the sheet to read the full post. (Was mobile-
+    // only; now inert, since desktop never created one either.)
+    return;
     if (!window.matchMedia('(max-width:640px)').matches) return;
     if (!card || card.getAttribute('data-lg-exrm')) return;
     if (card.querySelector('.feed-card__read-more:not(.lg-rm-syn)')) return;  // native read-more owns it
@@ -424,7 +428,12 @@
       if (e) { e.preventDefault(); e.stopPropagation(); }
       var isTopic = !!card.getAttribute('data-topic-id');
       if (window.matchMedia('(max-width:640px)').matches) {
-        if (isTopic) { openRepliesSheet(card, { toReplies: true }); return; }
+        // The action-row reply/comment is a REPLY intent → open the composer sheet
+        // IMMEDIATELY (focus:true), bypassing the pinned "Write a comment…" trigger
+        // bubble (Ian 2026-06-25: one tap, no in-between). The thread sheet still
+        // opens behind it for context + the post-success reload. ("View N replies",
+        // card-body taps, and the teaser stay view-only — no focus.)
+        if (isTopic) { openRepliesSheet(card, { toReplies: true, focus: true }); return; }
         var cmr = card.querySelector('[data-comments], .feed-card__comments-btn');
         if (cmr) { cmr.click(); return; }
         var cl = card.querySelector('.fc-title a, .feed-card__title a');
@@ -767,23 +776,45 @@
       col.appendChild(bubble);
 
       var actions = document.createElement('div'); actions.className = 'lg-fb-actions';
-      var like = document.createElement('span'); like.className = 'lg-fb-act lg-fb-like'; like.setAttribute('role', 'button'); like.textContent = 'Like';
+      // Surface the REAL reaction bar (server-rendered in .reply-stub__actions) at
+      // the START of the actions row — the same picker the cards/desktop modal use —
+      // instead of the old no-backend fake "Like" (Ian 2026-06-25: react controls in
+      // the modal). Scoped to the discussion SHEET so feed-card teaser replies are
+      // untouched. Fake Like stays as the fallback (no .fcr / not in the sheet).
+      var realFcr = stub.closest('#looth-rep-sheet') ? stub.querySelector('.reply-stub__actions .fcr') : null;
+      var like = null;
+      if (realFcr) { actions.appendChild(realFcr); }
+      else { like = document.createElement('span'); like.className = 'lg-fb-act lg-fb-like'; like.setAttribute('role', 'button'); like.textContent = 'Like'; actions.appendChild(like); }
       var reply = document.createElement('span'); reply.className = 'lg-fb-act lg-fb-reply'; reply.setAttribute('role', 'button'); reply.textContent = 'Reply';
-      actions.appendChild(like);
       actions.appendChild(reply);
       if (time) { time.classList.add('lg-fb-time'); actions.appendChild(time); }
       // Keep the server-rendered moderation controls (pencil/trash, revealed under
       // .feed--can-moderate + wired by wireModalModeration) — they live in the head
       // we are about to drop, so move them into the actions row (Buck 2026-06-10).
+      // Keep the (server-rendered) pencil/trash in the DOM for their
+      // data-reply-id/raw, but HIDE them — present ONE "Edit" button that opens an
+      // Edit/Delete popup like desktop (Ian 2026-06-25). Revealed under
+      // .feed--can-moderate by wireModalModeration (own reply OR mod).
       var modBtns = head.querySelectorAll('.reply-stub__edit, .reply-stub__trash');
-      for (var mb = 0; mb < modBtns.length; mb++) actions.appendChild(modBtns[mb]);
+      for (var mb = 0; mb < modBtns.length; mb++) { modBtns[mb].classList.add('lg-fb-modbtn--hide'); actions.appendChild(modBtns[mb]); }
+      if (modBtns.length) {
+        var more = document.createElement('span');
+        more.className = 'lg-fb-act lg-fb-more';
+        more.setAttribute('role', 'button');
+        more.textContent = 'Edit';
+        actions.appendChild(more);
+      }
       col.appendChild(actions);
 
       stub.insertBefore(col, head);
       if (avatar) stub.insertBefore(avatar, col);
       if (head.parentNode) head.remove();
+      // The real .fcr was moved into the actions row above → drop the now-empty
+      // server actions wrapper so it doesn't leave a stray flex child in the stub.
+      var leftover = stub.querySelector('.reply-stub__actions');
+      if (leftover && !leftover.querySelector('.fcr')) { try { leftover.remove(); } catch (e) {} }
 
-      like.addEventListener('click', function () { like.classList.toggle('is-on'); });
+      if (like) like.addEventListener('click', function () { like.classList.toggle('is-on'); });
       reply.addEventListener('click', function () { openReplyComposer(stub, author, col); });
 
       revealReplyImages(stub);
@@ -804,12 +835,16 @@
   function openReplyComposer(stub, author, col) {
     var rid = parseInt(stub.getAttribute('data-lg-replyto') || '0', 10);
     var aname = (stub.getAttribute('data-lg-replyto-author') || (author && author.textContent) || '').trim();
-    if (!rid || !window.matchMedia('(max-width:640px)').matches) { openReplyBox(col, author, stub); return; }
+    // Desktop keeps the inline @-box; MOBILE always opens the composer sheet — one
+    // tap, no intermediate inline "Write a reply…" bubble (Ian 2026-06-25). replyTo
+    // nests under the comment when known, else it posts as a top-level reply to the
+    // topic. (Was: no-rid fell back to the inline box on mobile too.)
+    if (!window.matchMedia('(max-width:640px)').matches) { openReplyBox(col, author, stub); return; }
     var sheet = stub.closest('#looth-rep-sheet');
     if (sheet) {
       openComposerSheet({
         tid: sheet.getAttribute('data-tid'), fid: sheet.getAttribute('data-fid'),
-        replyTo: rid, replyToName: aname, focus: true
+        replyTo: rid || 0, replyToName: rid ? aname : '', focus: true
       });
       return;
     }
@@ -822,11 +857,11 @@
       var sh = document.getElementById('looth-rep-sheet');
       openComposerSheet({
         tid: sh && sh.getAttribute('data-tid'), fid: sh && sh.getAttribute('data-fid'),
-        replyTo: rid, replyToName: aname, focus: true
+        replyTo: rid || 0, replyToName: rid ? aname : '', focus: true
       });
       return;
     }
-    openReplyBox(col, author, stub);
+    openReplyBox(col, author, stub);   // last resort: no sheet/card context
   }
 
   // Inline reply box (Facebook-style) under a comment, @mentioning its author.
@@ -839,7 +874,7 @@
     var aviEl = document.createElement('span'); aviEl.className = 'lg-fb-myavi';
     if (avi) aviEl.innerHTML = '<img src="' + avi + '" alt="">';
     var wrap = document.createElement('div'); wrap.className = 'lg-fb-replywrap';
-    var ta = document.createElement('textarea'); ta.className = 'lg-fb-replyinput'; ta.rows = 1; ta.placeholder = 'Write a reply…';
+    var ta = document.createElement('textarea'); ta.className = 'lg-fb-replyinput'; ta.rows = 1; ta.placeholder = 'Write a reply…'; ta.setAttribute('autocomplete', 'off');
     var name = author ? (author.textContent || '').trim().split(/[\s,]/)[0] : '';
     if (name) ta.value = '@' + name + ' ';
     var send = document.createElement('button'); send.type = 'button'; send.className = 'lg-fb-send'; send.textContent = 'Post';
@@ -3067,7 +3102,44 @@
       '#looth-rep-sheet .lrs-comp__pv-x{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border:0;border-radius:50%;background:rgba(26,29,26,.75);color:#fff;font:700 13px/20px sans-serif;cursor:pointer;padding:0}',
       '#looth-rep-sheet .lrs-comp__send:disabled{color:#b0b3b8;cursor:default}',
       '#looth-rep-sheet .lrs-comp__status{flex-basis:100%;font:12px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:#8a8d91;padding:2px 0 0 41px}',
-      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-comp{background:#1b1e21;border-color:#2c312d}'
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-comp{background:#1b1e21;border-color:#2c312d}',
+      // ── Reply BUTTON replaces the input pill (Ian 2026-06-25) — hide the legacy
+      //    avatar + input wrap; show one prominent filled button that triggers the
+      //    floating composer. ──
+      '#looth-rep-sheet .lrs-comp__av,#looth-rep-sheet .lrs-comp__wrap{display:none!important}',
+      '#looth-rep-sheet .lrs-replybtn{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:8px;' +
+        'border:0;border-radius:999px;cursor:pointer;padding:11px 16px;background:var(--lguser-accent,var(--lg-sage,#87986a));' +
+        'color:#fff;font:700 15px/1 var(--lg-font-sans,system-ui,sans-serif)}',
+      '#looth-rep-sheet .lrs-replybtn:active{background:var(--lguser-accent-d,var(--lg-sage-d,#586b3f))}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-replybtn{background:var(--lg-sage-d,#6b7c52);color:#f2f4ee}',
+      // ── React controls in the sheet (Ian 2026-06-25) — the .fcr reaction bar is
+      //    only styled under .feed-page; the sheet sits OUTSIDE it, so the cloned OP
+      //    bar + each reply's bar rendered unstyled/invisible. Mirror the essential
+      //    .feed-page .fcr* rules under #looth-rep-sheet so the picker + count chips
+      //    show and work (forums.js delegates .fcr clicks on document). ──
+      '#looth-rep-sheet .fcr{position:relative;display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}',
+      '#looth-rep-sheet .fcr-chips{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}',
+      '#looth-rep-sheet .fcr-chip{display:inline-flex;flex-direction:row;align-items:center;gap:4px;cursor:pointer;' +
+        'font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);padding:3px 9px 3px 7px;' +
+        'border:1px solid var(--lg-line,#cdd6ba);border-radius:999px;background:var(--lg-card-bg,#fff);color:var(--lg-mute,#6b6f6b)}',
+      '#looth-rep-sheet .fcr-chip.is-mine{background:var(--lg-sage-tint,#eef2e3);border-color:var(--lg-sage,#87986a);color:var(--lg-sage-d,#52613d)}',
+      '#looth-rep-sheet .fcr-chip .fcr-img{width:17px;height:17px}',
+      '#looth-rep-sheet .fcr-n{font-weight:600;font-variant-numeric:tabular-nums}',
+      '#looth-rep-sheet .fcr-add{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;' +
+        'width:34px;height:30px;border:1px solid var(--lg-line,#cdd6ba);border-radius:999px;background:var(--lg-card-bg,#fff);color:var(--lg-sage-d,#52613d);padding:0}',
+      '#looth-rep-sheet .fcr-add>span{font-size:12px;font-weight:700;margin-left:-1px}',
+      '#looth-rep-sheet .fcr-palette{position:absolute;left:0;bottom:calc(100% + 4px);z-index:20;display:flex;gap:2px;padding:6px;background:#fff;' +
+        'border:1px solid var(--lg-line,#cdd6ba);border-radius:14px;box-shadow:0 6px 22px rgba(26,29,26,.16);width:max-content;max-width:none}',
+      '#looth-rep-sheet .fcr-palette[hidden]{display:none}',
+      '#looth-rep-sheet .fcr-opt{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:0;background:none;padding:6px;border-radius:10px;font-size:22px;line-height:1;flex:0 0 auto}',
+      '#looth-rep-sheet .fcr-opt .fcr-img{width:24px;height:24px}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .fcr-chip,html[data-lguser-theme="dark"] #looth-rep-sheet .fcr-add{background:#262b30;border-color:#3a3f3a;color:#e5e7e1}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .fcr-palette{background:#2a2e31;border-color:#3a3f3a}',
+      // Replies now carry the REAL .fcr bar inline (fbStyleReply moves it into the
+      // actions row + drops the no-backend fake Like). Give the row room + sit the
+      // reaction bar tight against the Reply/time/Edit controls.
+      '#looth-rep-sheet .lg-fb-actions{flex-wrap:wrap;gap:6px 14px}',
+      '#looth-rep-sheet .lg-fb-actions .fcr{margin-right:2px}'
     ].join('\n');
     (document.head || document.documentElement).appendChild(s);
   }
@@ -3166,13 +3238,16 @@
     if (!body || !th) return;
     body.scrollTop += th.getBoundingClientRect().top - body.getBoundingClientRect().top - 6;
   }
-  function lrsLoadThread(tid) {
+  function lrsLoadThread(tid, sort) {
     var sh = document.getElementById('looth-rep-sheet'); if (!sh) return;
     // Replies land in #lrs-thread so reloading after a post keeps the OP above intact.
     var body = sh.querySelector('#lrs-thread') || sh.querySelector('#lrs-body'); if (!body) return;
     body.innerHTML = '<div class="lrs-note">Loading replies…</div>';
     var base = (window.LG_FORUM_BASE || '/forum').toString().replace(/\/+$/, '');
-    fetch(base + '/?replies=' + encodeURIComponent(tid), { credentials: 'same-origin' })
+    // Optional sort (newest|oldest) — the ?replies fragment re-emits its own sort bar
+    // with the active state, so passing &sort keeps the toggle correct after reload.
+    var url = base + '/?replies=' + encodeURIComponent(tid) + (sort ? '&sort=' + encodeURIComponent(sort) : '');
+    fetch(url, { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
       .then(function (html) {
         body.innerHTML = '<div class="feed-card__replies-full lg-rshow"></div>';
@@ -3184,6 +3259,25 @@
       })
       .catch(function () { body.innerHTML = '<div class="lrs-note">Couldn’t load replies right now.</div>'; });
   }
+  // Reply-sort toggle (Newest/Oldest) INSIDE the mobile discussion sheet must stay in
+  // the NEW system. The canonical forums.js handler (bubble phase) swaps in the RAW
+  // ?replies fragment — un-enhanced (no FB-style recompose / revealed photos /
+  // reactions) so it reads as the "legacy" thread (Ian 2026-06-25). Intercept in the
+  // CAPTURE phase (runs before that bubble handler) and re-run lrsLoadThread with the
+  // chosen sort, so replies re-render FB-style in place. Sheet-scoped: the inline feed
+  // + desktop modal keep the canonical handler.
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest) return;
+    var b = e.target.closest('.replies-sort__btn');
+    if (!b) return;
+    var sheet = e.target.closest('#looth-rep-sheet');
+    if (!sheet) return;                                       // not the mobile sheet → canonical handler
+    e.preventDefault(); e.stopPropagation();                  // beat forums.js's bubble handler either way
+    if (b.classList.contains('is-active')) return;            // already this sort → no-op
+    var tid = parseInt(sheet.getAttribute('data-tid'), 10) || 0;
+    if (!tid) return;
+    lrsLoadThread(tid, b.getAttribute('data-sort') || '');
+  }, true);
   // Lift the reply composer above the on-screen keyboard (visualViewport delta).
   function lrsAdjustKb() {
     var sh = document.getElementById('looth-rep-sheet');
@@ -3282,9 +3376,11 @@
             .catch(function (err) { del.disabled = false; alert('Network error: ' + err.message); });
         });
       });
-      // Edit the OP (author/admin) — inline plain-text body editor -> PUT the topic.
-      // The modal OP is built client-side (no server edit control), so create it
-      // here alongside delete, gated to author (data-author-id) OR mod. Ian 6/17.
+      // Edit the OP (author/admin) — opens the SAME mobile composer used to edit a
+      // reply (openComposerSheet), now with a title field, pre-filled, photos
+      // loaded as removable thumbs; Save → owned topic PUT (+ topic-media). Unified
+      // "new edit" (Ian 2026-06-25): the OP no longer opens the 3-modal wizard.
+      // Gated to author (data-author-id) OR mod.
       var opForumId = parseInt(card.getAttribute('data-forum-id'), 10) || 0;
       var edit = document.createElement('button');
       edit.type = 'button'; edit.className = 'lrs-op__del lrs-op__edit'; edit.hidden = true;
@@ -3298,9 +3394,20 @@
         edit.hidden = false;
         edit.addEventListener('click', function (ev) {
           ev.preventDefault(); ev.stopPropagation();
-          // Edit the OP via the SAME 3-modal composer wizard, pre-filled (Ian 6/17).
           var tEl = document.querySelector('#looth-rep-sheet .lrs-t');
           var ttl = ((tEl && tEl.textContent) || '').trim();
+          // Plain-text body for the textarea composer (same flatten as reply edit;
+          // rich formatting is desktop-only, by design). body.innerHTML = fetched OP.
+          var bodyText = (body.innerHTML || '')
+            .replace(/<img[^>]*>/gi, '').replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n').replace(/<[^>]+>/g, '').trim();
+          if (typeof openComposerSheet === 'function') {
+            // Leave the replies sheet open BEHIND the composer (parity with reply
+            // edit); we reload on save anyway.
+            openComposerSheet({ editTopicId: tid, tid: tid, fid: opForumId, title: ttl, bodyText: bodyText, focus: true });
+            return;
+          }
+          // Fallback: the old new-topic wizard.
           if (typeof window.lgNtmEditTopic === 'function') {
             lrsClose();
             window.lgNtmEditTopic(tid, opForumId, ttl, body.innerHTML);
@@ -3337,8 +3444,15 @@
         '<div class="lrs-grab" aria-hidden="true"></div>' +
         '<div class="lrs-hd"><span class="lrs-t"></span><button class="lrs-x" type="button" data-lrs-close aria-label="Close">&times;</button></div>' +
         '<div class="lrs-body" id="lrs-body"><div class="lrs-op" id="lrs-op" hidden></div><div id="lrs-thread"></div></div>' +
-        '<div class="lrs-comp"><span class="lrs-comp__av" id="lrs-comp-av"></span>' +
-          '<div class="lrs-comp__wrap"><textarea class="lrs-comp__input" id="lrs-comp-input" rows="1" placeholder="Write a comment…"></textarea>' +
+        // Compact Reply BUTTON (Ian 2026-06-25) — replaces the persistent "Write a
+        // comment…" input pill. Tapping it opens the floating composer sheet (the
+        // .lrs-comp click handler below), same one-tap behavior as the feed. The
+        // legacy pill/photo/send elements stay in the DOM (hidden via CSS) so the
+        // existing composer wiring below keeps its element refs.
+        '<div class="lrs-comp"><button class="lrs-replybtn" id="lrs-replybtn" type="button">' +
+            '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17l-5-5 5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v1"/></svg><span>Reply</span></button>' +
+          '<span class="lrs-comp__av" id="lrs-comp-av"></span>' +
+          '<div class="lrs-comp__wrap"><textarea class="lrs-comp__input" id="lrs-comp-input" rows="1" autocomplete="off" placeholder="Write a comment…"></textarea>' +
           '<button class="lrs-comp__photo" id="lrs-comp-photo" type="button" aria-label="Add photo" title="Add photo">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
           '<button class="lrs-comp__send" id="lrs-comp-send" type="button" disabled>Post</button></div>' +
@@ -3351,25 +3465,47 @@
       // grab/header down anytime, or overscroll-pull from the body when at the top.
       (function () {
         var cardEl = sh.querySelector('.lrs-card');
+        // Smooth swipe-dismiss (Ian 2026-06-25): the card FOLLOWS the finger during
+        // the drag (no transition), then on release either eases CLOSED past the
+        // threshold / on a fast flick, or springs BACK under it — never an instant cut.
+        var DRAG_EASE = 'transform .26s cubic-bezier(.32,.72,0,1)';
         function dragTo(dy) { cardEl.style.transition = 'none'; cardEl.style.transform = 'translateY(' + Math.max(0, dy) + 'px)'; }
-        function dragReset() { cardEl.style.transition = ''; cardEl.style.transform = ''; }
-        function dragEnd(dy) { dragReset(); if (dy > 110) lrsClose(); }
+        function dragReset() { cardEl.style.transition = ''; cardEl.style.transform = ''; }   // instant — mid-gesture cancels
+        function dragSnapBack() {                                  // released under threshold → ease home
+          cardEl.style.transition = DRAG_EASE; cardEl.style.transform = 'translateY(0)';
+          setTimeout(function () { cardEl.style.transition = ''; cardEl.style.transform = ''; }, 300);
+        }
+        function dragClose() {                                     // released past threshold → ease fully down, then tear down
+          cardEl.style.transition = DRAG_EASE; cardEl.style.transform = 'translateY(100%)';
+          var done = false;
+          var fin = function () { if (done) return; done = true; cardEl.style.transition = ''; cardEl.style.transform = ''; lrsClose(); };
+          cardEl.addEventListener('transitionend', fin, { once: true });
+          setTimeout(fin, 340);                                   // fallback if transitionend doesn't fire
+        }
+        // dy = distance dragged; vy = downward velocity (px/ms) at release. A fast
+        // flick closes even under the distance threshold (momentum-aware).
+        function dragEnd(dy, vy) { if (dy > 110 || vy > 0.55) dragClose(); else dragSnapBack(); }
         function attach(el, atTopGuard) {
           if (!el) return;
-          var sy = 0, dy = 0, on = false;
+          var sy = 0, dy = 0, on = false, lastY = 0, lastT = 0, vy = 0;
           el.addEventListener('touchstart', function (e) {
             if (atTopGuard && !atTopGuard()) { on = false; return; }
             sy = e.touches[0].clientY; dy = 0; on = true;
+            lastY = sy; lastT = e.timeStamp || 0; vy = 0;
           }, { passive: true });
           el.addEventListener('touchmove', function (e) {
             if (!on) return;
-            dy = e.touches[0].clientY - sy;
+            var y = e.touches[0].clientY;
+            dy = y - sy;
             if (dy <= 0) { if (atTopGuard) { on = false; dragReset(); } return; }   // pulled up → let the body scroll
             if (atTopGuard && !atTopGuard()) { on = false; dragReset(); return; }
+            var t = e.timeStamp || 0, dt = t - lastT;
+            if (dt > 0) vy = (y - lastY) / dt;                     // px per ms, downward positive
+            lastY = y; lastT = t;
             dragTo(dy);
             if (e.cancelable) e.preventDefault();
           }, { passive: false });
-          el.addEventListener('touchend', function () { if (!on) return; on = false; dragEnd(Math.max(0, dy)); });
+          el.addEventListener('touchend', function () { if (!on) return; on = false; dragEnd(Math.max(0, dy), vy); });
         }
         attach(sh.querySelector('.lrs-grab'), null);
         attach(sh.querySelector('.lrs-hd'), null);
@@ -3547,6 +3683,9 @@
         '#looth-comp-sheet .lcp-input{width:100%;box-sizing:border-box;border:0;outline:0;background:none;resize:none;' +
           'font:17px/1.45 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);min-height:84px;max-height:200px;padding:10px 2px 6px}',
         '#looth-comp-sheet .lcp-input::placeholder{color:#9aa097}',
+        '#looth-comp-sheet .lcp-title{width:100%;box-sizing:border-box;margin:2px 0 6px;border:0;border-bottom:1px solid var(--lg-line,#e3e0d8);outline:0;background:none;' +
+          'font:700 17px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);padding:6px 2px}',
+        '#looth-comp-sheet .lcp-title::placeholder{color:#9aa097;font-weight:600}',
         '#looth-comp-sheet .lcp-row{display:flex;align-items:center;gap:10px;margin:0 0 10px;flex-wrap:wrap}',
         '#looth-comp-sheet .lcp-photo{flex:0 0 auto;border:0;background:none;cursor:pointer;color:var(--lg-sage-d,#6b7c52);padding:4px 2px;line-height:0}',
         '#looth-comp-sheet .lcp-photo svg{width:22px;height:22px}',
@@ -3567,6 +3706,8 @@
         D + ' #looth-comp-sheet .lcp-ctx{background:#243024;color:#b6c79a}',
         D + ' #looth-comp-sheet .lcp-input{color:#e5e7e1;background:none!important;border:0!important}',
         D + ' #looth-comp-sheet .lcp-input::placeholder{color:#7e857c}',
+        D + ' #looth-comp-sheet .lcp-title{color:#f2f4ee;border-bottom-color:#343a33}',
+        D + ' #looth-comp-sheet .lcp-title::placeholder{color:#7e857c}',
         D + ' #looth-comp-sheet .lcp-av{background:#262b30}',
         D + ' #looth-comp-sheet .lcp-pv img{border-color:#2c312d}',
         D + ' #looth-comp-sheet .lcp-post{background:var(--lg-sage-d,#6b7c52)}',
@@ -3582,7 +3723,15 @@
         '<div class="lcp-grab" aria-hidden="true"></div>' +
         '<div class="lcp-head"><span class="lcp-av" id="lcp-av"></span>' +
           '<div class="lcp-id"><div class="lcp-name" id="lcp-name">You</div><span class="lcp-ctx" id="lcp-ctx" hidden></span></div></div>' +
-        '<textarea class="lcp-input" id="lcp-input" rows="3" placeholder="Write a comment…"></textarea>' +
+        // Title row — shown ONLY when editing a TOPIC/OP (editTopicId), so this same
+        // composer doubles as the OP editor on mobile (parity with desktop). Hidden
+        // for replies. (Ian 2026-06-25, "new edit".)
+        // autocomplete/autocorrect/autocapitalize/spellcheck off the strong iOS
+        // autofill accessory (🔑/💳/📍): this is a free-text comment/title, not a
+        // credential/contact field. The composer is a <div> (NOT a <form>), so iOS
+        // has no login/payment form to associate either. (Ian 2026-06-25, iPhone.)
+        '<input class="lcp-title" id="lcp-title" type="text" placeholder="Post title" maxlength="200" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true" hidden>' +
+        '<textarea class="lcp-input" id="lcp-input" rows="3" placeholder="Write a comment…" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true"></textarea>' +
         '<div class="lcp-row">' +
           '<button class="lcp-photo" id="lcp-photo" type="button" aria-label="Add photo" title="Add photo">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
@@ -3595,6 +3744,16 @@
     (document.body || document.documentElement).appendChild(sh);
     sh.addEventListener('click', function (e) { if (e.target.closest('[data-lcp-close]')) closeComposerSheet(); });
     var card = sh.querySelector('.lcp-card');
+    // Tap-off keyboard dismiss (Ian 2026-06-25, iPhone): tapping the sheet's
+    // NON-input chrome (header, grab handle, empty panel) blurs the input so iOS
+    // closes the keyboard WITHOUT closing the composer. Controls keep their focus/
+    // behavior; the backdrop ([data-lcp-close]) still closes the whole sheet
+    // (consistent with the tray).
+    card.addEventListener('click', function (e) {
+      if (e.target.closest('input, textarea, button, label, .lcp-previews')) return;
+      var inp = sh.querySelector('#lcp-input'); if (inp) inp.blur();
+      var ttl = sh.querySelector('#lcp-title'); if (ttl) ttl.blur();
+    });
     // drag the grab pill down to dismiss
     (function () {
       var grab = sh.querySelector('.lcp-grab'), sy = 0, dy = 0, on = false;
@@ -3609,10 +3768,20 @@
       });
     })();
     var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post');
+    var titleElW = sh.querySelector('#lcp-title');
+    // Enable Post/Save: topic edit needs BOTH a title and a body; everything else
+    // (reply create/edit) allows photo-only.
+    function lcpRecalcPost() {
+      var c = sh.__lcpCtx || {};
+      if (c.editTopicId) { post.disabled = !(ta.value.trim() && titleElW && titleElW.value.trim()); return; }
+      var keepN = (c.keepMedia && c.keepMedia.length) || 0;
+      post.disabled = !ta.value.trim() && !lcpMediaIds.length && !keepN;
+    }
     ta.addEventListener('input', function () {
-      post.disabled = !ta.value.trim() && !lcpMediaIds.length;
+      lcpRecalcPost();
       ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
     });
+    if (titleElW) titleElW.addEventListener('input', lcpRecalcPost);
     post.addEventListener('click', function () { lcpSubmit(sh); });
     // photo attach — same canonical contract as the modal composer (media/upload → bbp_media)
     var photoBtn = sh.querySelector('#lcp-photo'), fileIn = sh.querySelector('#lcp-file');
@@ -3684,10 +3853,78 @@
     else { ctx.hidden = true; }
     var ta = sh.querySelector('#lcp-input');
     ta.value = ''; ta.style.height = 'auto';
-    sh.querySelector('#lcp-post').disabled = true;
+    var postBtn = sh.querySelector('#lcp-post');
+    postBtn.disabled = true;
     sh.querySelector('#lcp-status').textContent = '';
     sh.querySelector('#lcp-previews').innerHTML = '';
     lcpMediaIds.length = 0;
+    var titleEl = sh.querySelector('#lcp-title');
+    if (titleEl) { titleEl.value = ''; titleEl.hidden = true; }
+    // ── EDIT MODE — reuse this composer to EDIT a reply (Ian 2026-06-25): pre-fill
+    //    the text, label the button "Save", and load existing photos as removable
+    //    thumbs below the input (✕ drops the id from keepMedia → removed on save). ──
+    sh.__lcpCtx.editReplyId = parseInt(o.editReplyId, 10) || 0;
+    sh.__lcpCtx.editTopicId = parseInt(o.editTopicId, 10) || 0;
+    sh.__lcpCtx.keepMedia   = [];
+    if (sh.__lcpCtx.editTopicId) {
+      // ── TOPIC/OP edit — the SAME composer doubles as the OP editor (unified
+      //    "new edit", parity with desktop): show the title field, pre-fill
+      //    title + body, load existing photos as removable thumbs. Save → owned
+      //    reply.php topic PUT (+ topic-media.php for photos). ──
+      var teid = sh.__lcpCtx.editTopicId, pvElT = sh.querySelector('#lcp-previews');
+      ctx.hidden = false; ctx.textContent = '✎ Editing your post';
+      if (titleEl) { titleEl.hidden = false; titleEl.value = o.title || ''; }
+      ta.value = o.bodyText || '';
+      postBtn.textContent = 'Save';
+      postBtn.disabled = !(ta.value.trim() && titleEl && titleEl.value.trim());
+      fetch('/bb-mirror-api/v0/topic-media?topic_id=' + teid, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.ok || !d.media || sh.__lcpCtx.editTopicId !== teid) return;
+          if (d.media.length) sh.__lcpCtx.topicHadMedia = true;   // so removals get synced on save
+          d.media.forEach(function (m) {
+            sh.__lcpCtx.keepMedia.push(m.media_id);
+            var chip = document.createElement('span'); chip.className = 'lcp-pv';
+            chip.innerHTML = '<img src="' + String(m.thumb || m.url).replace(/"/g, '&quot;') + '" alt="">' +
+              '<button type="button" class="lcp-pv-x" aria-label="Remove photo">&times;</button>';
+            chip.querySelector('.lcp-pv-x').addEventListener('click', function () {
+              var ix = sh.__lcpCtx.keepMedia.indexOf(m.media_id);
+              if (ix > -1) sh.__lcpCtx.keepMedia.splice(ix, 1);
+              chip.remove();
+            });
+            pvElT.appendChild(chip);
+          });
+        })
+        .catch(function () {});
+    } else if (sh.__lcpCtx.editReplyId) {
+      ctx.hidden = false; ctx.textContent = '✎ Editing your reply';
+      ta.value = o.bodyText || '';
+      postBtn.textContent = 'Save';
+      postBtn.disabled = !ta.value.trim();
+      var eid = sh.__lcpCtx.editReplyId, pvEl = sh.querySelector('#lcp-previews');
+      fetch('/bb-mirror-api/v0/reply?reply_id=' + eid, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.ok || !d.media || sh.__lcpCtx.editReplyId !== eid) return;
+          d.media.forEach(function (m) {
+            sh.__lcpCtx.keepMedia.push(m.media_id);
+            var chip = document.createElement('span'); chip.className = 'lcp-pv';
+            chip.innerHTML = '<img src="' + String(m.thumb || m.url).replace(/"/g, '&quot;') + '" alt="">' +
+              '<button type="button" class="lcp-pv-x" aria-label="Remove photo">&times;</button>';
+            chip.querySelector('.lcp-pv-x').addEventListener('click', function () {
+              var ix = sh.__lcpCtx.keepMedia.indexOf(m.media_id);
+              if (ix > -1) sh.__lcpCtx.keepMedia.splice(ix, 1);
+              chip.remove();
+              postBtn.disabled = !ta.value.trim() && !lcpMediaIds.length && !sh.__lcpCtx.keepMedia.length;
+            });
+            pvEl.appendChild(chip);
+          });
+          postBtn.disabled = !ta.value.trim() && !lcpMediaIds.length && !sh.__lcpCtx.keepMedia.length;
+        })
+        .catch(function () {});
+    } else {
+      postBtn.textContent = 'Post';
+    }
     sh.classList.add('is-open');
     // bring the latest replies into view in the modal behind, so the user reads
     // the conversation right above the composer while writing
@@ -3707,8 +3944,78 @@
   }
   function lcpSubmit(sh) {
     var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post'), status = sh.querySelector('#lcp-status');
-    var text = (ta.value || '').trim(); if (!text && !lcpMediaIds.length) return;
-    var ctx = sh.__lcpCtx || {}; var tid = ctx.tid; if (!tid) { status.textContent = 'Couldn’t find the post.'; return; }
+    var ctx = sh.__lcpCtx || {};
+    var text = (ta.value || '').trim();
+    // TOPIC/OP edit → owned reply.php topic PUT (title+body), then topic-media.php
+    // for photo keep/add/remove (the SAME endpoints the wizard used). Reload after,
+    // since OP photos can't be patched in place on the mobile sheet.
+    if (ctx.editTopicId) {
+      var titleElS = sh.querySelector('#lcp-title');
+      var tTitle = (titleElS && titleElS.value.trim()) || '';
+      if (!text)   { status.textContent = "Post can't be empty."; return; }
+      if (!tTitle) { status.textContent = 'Title is required.'; if (titleElS) titleElS.focus(); return; }
+      post.disabled = true; status.textContent = 'Saving…';
+      lrsGetAuth(function (a) {
+        if (!a || !a.authenticated) { status.textContent = 'Sign in to edit.'; post.disabled = false; return; }
+        var teid  = ctx.editTopicId;
+        var added = lcpMediaIds.slice();
+        var keep  = (ctx.keepMedia || []).slice();
+        var syncPhotos = ctx.topicHadMedia || added.length > 0;
+        fetch('/bb-mirror-api/v0/reply', {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+          body: JSON.stringify({ topic_id: teid, title: tTitle, content: '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' })
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.error)) || 'Could not save.'; post.disabled = false; return; }
+            var finish = function () { try { location.reload(); } catch (e) { closeComposerSheet(); } };
+            if (syncPhotos) {
+              status.textContent = 'Saving photos…';
+              fetch('/bb-mirror-api/v0/topic-media', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+                body: JSON.stringify({ topic_id: teid, keep_media_ids: keep, add_upload_ids: added })
+              }).then(finish, finish);
+            } else { finish(); }
+          })
+          .catch(function () { status.textContent = 'Network error.'; post.disabled = false; });
+      });
+      return;
+    }
+    // EDIT mode → PUT the owned endpoint (author-or-mod): content + new photos
+    // (media_ids) + kept photos (keep_media_ids; removes the rest, no orphans).
+    if (ctx.editReplyId) {
+      var keepN = (ctx.keepMedia && ctx.keepMedia.length) || 0;
+      if (!text && !lcpMediaIds.length && !keepN) { status.textContent = "Reply can't be empty."; return; }
+      post.disabled = true; status.textContent = 'Saving…';
+      lrsGetAuth(function (a) {
+        if (!a || !a.authenticated) { status.textContent = 'Sign in to edit.'; post.disabled = false; return; }
+        var payload = {
+          reply_id: ctx.editReplyId,
+          content: text ? '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' : '',
+          keep_media_ids: (ctx.keepMedia || []).slice()
+        };
+        if (lcpMediaIds.length) payload.media_ids = lcpMediaIds.slice();
+        fetch('/bb-mirror-api/v0/reply', {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+          body: JSON.stringify(payload)
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.error)) || 'Could not save.'; post.disabled = false; return; }
+            closeComposerSheet();
+            var rs = document.getElementById('looth-rep-sheet');
+            var rtid = rs && parseInt(rs.getAttribute('data-tid'), 10);
+            if (rs && rs.classList.contains('is-open') && rtid) lrsLoadThread(rtid);
+          })
+          .catch(function () { status.textContent = 'Network error.'; post.disabled = false; });
+      });
+      return;
+    }
+    if (!text && !lcpMediaIds.length) return;
+    var tid = ctx.tid; if (!tid) { status.textContent = 'Couldn’t find the post.'; return; }
     post.disabled = true; status.textContent = 'Posting…';
     lrsGetAuth(function (a) {
       if (!a || !a.authenticated) { status.textContent = 'Sign in to reply.'; post.disabled = false; return; }
@@ -3766,6 +4073,20 @@
         e.preventDefault(); e.stopPropagation();
         openRepliesSheet(c, { toReplies: true });                        // "View N replies" → popup, thread on top
         return;
+      }
+      // In-place post expanders are KILLED on mobile (Ian 2026-06-25): "Read more"
+      // (native + synthetic .lg-rm-syn) and the compact "Show full post" chevron now
+      // open the discussion sheet in READ mode (land on the OP, no composer auto-pop)
+      // instead of unclamping/expanding on the card. Capture + stopPropagation beats
+      // forums.js's read-more handler and the synthetic button's own toggle.
+      var rmExp = e.target.closest && e.target.closest('.feed-card__read-more, .lg-rm-syn, .feed-card__compact-expand');
+      if (rmExp) {
+        var cr = rmExp.closest('.feed-card');
+        if (cr && !cr.__lgRepLoading && !cr.__lgPreviewing) {
+          e.preventDefault(); e.stopPropagation();
+          openRepliesSheet(cr);                                          // read mode → land on the OP/post body
+          return;
+        }
       }
       var lm = e.target.closest && e.target.closest('.replies-loadmore');
       if (lm) { var c2 = lm.closest('.feed-card'); if (c2 && !c2.__lgRepLoading) { e.preventDefault(); e.stopPropagation(); openRepliesSheet(c2, { toReplies: true }); } }
@@ -4012,6 +4333,11 @@
   // also fire and double-toggle. Cards with no read-more (content/articles whose
   // full text lives on their own page) are left to their normal tap behavior.
   function wirePostBodyExpand() {
+    // DISABLED on mobile (Ian 2026-06-25): no in-place excerpt/body expansion on the
+    // feed — the discussion sheet is the ONLY way to read a full post. With this
+    // inert, a topic excerpt/body tap falls through to keepContentOnHub, which opens
+    // openRepliesSheet (read mode). Kept as a no-op so the call site is untouched.
+    return;
     if (!window.matchMedia('(max-width:640px)').matches) return;   // mobile only — desktop keeps forums.js's native expand
     if (document.body.getAttribute('data-lg-postbody')) return;
     document.body.setAttribute('data-lg-postbody', '1');
@@ -4380,80 +4706,86 @@
         });
       }
       mark();
-      try { new MutationObserver(mark).observe(document.body, { childList: true }); } catch (e) {}
+      // Watch the SUBTREE (throttled) — the mobile sheet (#looth-rep-sheet) and the
+      // desktop modal load their reply threads DEEP inside themselves, so a
+      // body-only (non-subtree) observer never fired for new stubs and own-reply
+      // edit/trash stayed hidden on mobile (Ian 2026-06-25).
+      var modPend = false;
+      try {
+        new MutationObserver(function () {
+          if (modPend) return; modPend = true;
+          requestAnimationFrame(function () { modPend = false; mark(); });
+        }).observe(document.body, { childList: true, subtree: true });
+      } catch (e) {}
     });
+    // ── Edit/Delete via a single "Edit" button → popup (Ian 2026-06-25, mobile
+    //    parity with desktop). Edit opens the mobile reply composer
+    //    (openComposerSheet) PRE-FILLED — text + add/remove real-attachment photos,
+    //    owned PUT (no orphans). Delete → owned endpoint. The raw pencil/trash stay
+    //    hidden in the DOM only for their data-reply-id / data-reply-raw. ──
+    var lgFbMenuEl = null, lgFbMenuStub = null;
+    function lgFbCloseMenus() { if (lgFbMenuEl) { try { lgFbMenuEl.remove(); } catch (e) {} lgFbMenuEl = null; lgFbMenuStub = null; } }
+    function lgFbReplyMeta(stub) {
+      var edEl = stub.querySelector('.reply-stub__edit');
+      var rid  = parseInt((edEl && edEl.getAttribute('data-reply-id')) || stub.getAttribute('data-reply-id') || '0', 10) || 0;
+      var raw  = (edEl && edEl.getAttribute('data-reply-raw')) || '';
+      var ex   = stub.querySelector('.reply-stub__excerpt');
+      var text = raw
+        ? raw.replace(/<img[^>]*>/gi, '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>\s*<p[^>]*>/gi, '\n\n').replace(/<[^>]+>/g, '').trim()
+        : (ex ? (ex.innerText || ex.textContent || '').trim() : '');
+      return { rid: rid, text: text };
+    }
+    function lgFbToggleMenu(btn) {
+      var stub = btn.closest('.reply-stub');
+      if (lgFbMenuEl && lgFbMenuStub === stub) { lgFbCloseMenus(); return; }
+      lgFbCloseMenus();
+      lgFbMenuStub = stub;
+      var m = document.createElement('div');
+      m.className = 'lg-fb-menu';
+      m.innerHTML =
+        '<button type="button" class="lg-fb-menu__item lg-fb-menu__edit">✎ Edit</button>' +
+        '<button type="button" class="lg-fb-menu__item lg-fb-menu__del">🗑 Delete</button>';
+      document.body.appendChild(m);
+      lgFbMenuEl = m;
+      var r = btn.getBoundingClientRect();
+      var mw = m.offsetWidth || 168;
+      m.style.top  = (r.bottom + 6) + 'px';
+      m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - mw - 8)) + 'px';
+    }
     document.addEventListener('click', function (ev) {
       if (!ev.target.closest) return;
-      var host = ev.target.closest('#lg-dmodal') || ev.target.closest('#looth-rep-sheet');
-      if (!host) return;
-      var tr = ev.target.closest('.reply-stub__trash');
-      var ed = ev.target.closest('.reply-stub__edit');
-      if (!tr && !ed) return;
+      var moreBtn = ev.target.closest('.lg-fb-more');
+      if (moreBtn) { ev.preventDefault(); ev.stopPropagation(); lgFbToggleMenu(moreBtn); return; }
+      var editItem = ev.target.closest('.lg-fb-menu__edit');
+      var delItem  = ev.target.closest('.lg-fb-menu__del');
+      if (!editItem && !delItem) { if (lgFbMenuEl) lgFbCloseMenus(); return; }
       ev.preventDefault(); ev.stopPropagation();
-      var btn = tr || ed;
-      var rid = parseInt(btn.getAttribute('data-reply-id'), 10);
-      if (!rid) return;
-      if (tr) {
-        if (!window.confirm('Trash this reply? This can\u2019t be undone.')) return;
-        lrsGetAuth(function (a) {
-          if (!a || !a.nonce) { alert('Not signed in.'); return; }
-          tr.disabled = true;
-          fetch(LRS_REPLY_BASE + '/reply/' + rid, { method: 'DELETE', credentials: 'same-origin', headers: { 'X-WP-Nonce': a.nonce } })
-            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
-            .then(function (res) {
-              if (!res.ok) { tr.disabled = false; alert('Could not trash: ' + ((res.j && (res.j.message || res.j.code)) || 'failed')); return; }
-              var stub = tr.closest('.reply-stub'); if (stub) stub.remove();
-            })
-            .catch(function (err) { tr.disabled = false; alert('Network error: ' + err.message); });
-        });
+      var stub = lgFbMenuStub; lgFbCloseMenus();
+      if (!stub) return;
+      var meta = lgFbReplyMeta(stub);
+      if (!meta.rid) return;
+      var sheet = stub.closest('#looth-rep-sheet');
+      if (editItem) {
+        if (typeof openComposerSheet === 'function') {
+          openComposerSheet({
+            tid: sheet ? sheet.getAttribute('data-tid') : '',
+            fid: sheet ? sheet.getAttribute('data-fid') : '',
+            editReplyId: meta.rid, bodyText: meta.text, focus: true
+          });
+        }
         return;
       }
-      // EDIT: inline plain-text box (the .reply-stub__editbox CSS already exists).
-      // data-reply-raw carries the full stored HTML; we edit the text and re-append
-      // any <img> tags on save so photos round-trip instead of being destroyed.
-      var stub = ed.closest('.reply-stub');
-      if (!stub || stub.querySelector('.reply-stub__editbox')) return;
-      var bodyDiv = stub.querySelector('.reply-stub__body');
-      var excerpt = stub.querySelector('.reply-stub__excerpt');
-      var raw = ed.getAttribute('data-reply-raw') || '';
-      var imgs = raw.match(/<img[^>]*>/gi) || [];
-      var cur = raw
-        ? raw.replace(/<img[^>]*>/gi, '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>\s*<p[^>]*>/gi, '\n\n').replace(/<[^>]+>/g, '').trim()
-        : (excerpt ? (excerpt.innerText || excerpt.textContent || '').trim() : '');
-      var tid = parseInt(host.dataset && host.dataset.topicId ? host.dataset.topicId : (host.getAttribute('data-tid') || '0'), 10);
-      var box = document.createElement('div');
-      box.className = 'reply-stub__editbox';
-      box.innerHTML =
-        '<textarea class="rse-input"></textarea>' +
-        '<div class="rse-row"><button type="button" class="rse-save">Save</button>' +
-        '<button type="button" class="rse-cancel">Cancel</button><span class="rse-status"></span></div>';
-      box.querySelector('.rse-input').value = cur;
-      if (bodyDiv) bodyDiv.style.display = 'none';
-      stub.appendChild(box);
-      var ta = box.querySelector('.rse-input'), status = box.querySelector('.rse-status');
-      ta.focus();
-      box.querySelector('.rse-cancel').addEventListener('click', function () { box.remove(); if (bodyDiv) bodyDiv.style.display = ''; });
-      box.querySelector('.rse-save').addEventListener('click', function () {
-        var text = (ta.value || '').trim();
-        if (!text && !imgs.length) { status.textContent = 'Can\u2019t be empty.'; return; }
-        var html = (text ? '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' : '') + imgs.join('');
-        status.textContent = 'Saving\u2026';
-        lrsGetAuth(function (a) {
-          if (!a || !a.nonce) { status.textContent = 'Not signed in.'; return; }
-          fetch(LRS_REPLY_BASE + '/reply/' + rid, {
-            method: 'PUT', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
-            body: JSON.stringify({ id: rid, topic_id: tid || undefined, content: html })
+      if (!window.confirm('Delete this reply? This can’t be undone.')) return;
+      lrsGetAuth(function (a) {
+        if (!a || !a.nonce) { alert('Not signed in.'); return; }
+        fetch('/bb-mirror-api/v0/reply', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce }, body: JSON.stringify({ reply_id: meta.rid }) })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (res.j && res.j.error === 'forbidden') { alert('You can only delete your own replies.'); return; }
+            if (!res.ok) { alert('Could not delete: ' + ((res.j && (res.j.message || res.j.error)) || 'failed')); return; }
+            try { stub.remove(); } catch (e) {}
           })
-            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
-            .then(function (res) {
-              if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not save.'; return; }
-              if (excerpt) excerpt.innerHTML = html;
-              ed.setAttribute('data-reply-raw', html);
-              box.remove(); if (bodyDiv) bodyDiv.style.display = '';
-            })
-            .catch(function (err) { status.textContent = 'Network error: ' + err.message; });
-        });
+          .catch(function (err) { alert('Network error: ' + err.message); });
       });
     });
   }
