@@ -216,8 +216,18 @@ if ($method === 'PUT' || $method === 'DELETE') {
     }
 
     // PUT — edit content. wp_update_post kses-filters for non-unfiltered_html users.
-    $new = trim((string) ($body['content'] ?? ''));
-    if ($new === '') {
+    // Media intent (computed first so a photo-only edit can drop the body text):
+    //   media_ids      = new upload/attachment ids to ADD
+    //   keep_media_ids = existing bp_media ids to KEEP (anything else is removed)
+    // keep_media_ids absent ⇒ keep ALL existing (add-only, back-compat). Present
+    // (incl. empty) ⇒ authoritative keep set, enabling per-photo removal.
+    $new      = trim((string) ($body['content'] ?? ''));
+    $add_atts = array_values(array_filter(array_map('intval', (array) ($body['media_ids'] ?? []))));
+    $has_keep = array_key_exists('keep_media_ids', (array) $body);
+    $keep_ids = $has_keep ? array_values(array_filter(array_map('intval', (array) $body['keep_media_ids']))) : [];
+    // Empty body is allowed only when photos remain (photo-only reply, like the
+    // create path); otherwise the reply must have text. (Ian 2026-06-25, mobile)
+    if ($new === '' && !$add_atts && !$keep_ids) {
         reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Reply can't be empty."]);
     }
     $upd = wp_update_post(['ID' => $reply_id, 'post_content' => $new], true);
@@ -227,14 +237,7 @@ if ($method === 'PUT' || $method === 'DELETE') {
     // Manage photos on edit (Ian 2026-06-25). The BuddyBoss reply PUT doesn't touch
     // media, so — exactly like topic-media.php — drive
     // bp_media_forums_new_post_media_save(): it KEEPS matches, ADDS new, and
-    // bp_media_delete()s anything dropped. Client intent:
-    //   media_ids      = new upload/attachment ids to ADD
-    //   keep_media_ids = existing bp_media ids to KEEP (anything else is removed)
-    // keep_media_ids absent ⇒ keep ALL existing (add-only, back-compat). Present
-    // (incl. empty) ⇒ authoritative keep set, enabling per-photo removal.
-    $add_atts = array_values(array_filter(array_map('intval', (array) ($body['media_ids'] ?? []))));
-    $has_keep = array_key_exists('keep_media_ids', (array) $body);
-    $keep_ids = $has_keep ? array_values(array_filter(array_map('intval', (array) $body['keep_media_ids']))) : [];
+    // bp_media_delete()s anything dropped.
     if (($add_atts || $has_keep) && function_exists('bp_media_forums_new_post_media_save')) {
         $existing = reply_media_list($reply_id);
         $by_mid   = [];

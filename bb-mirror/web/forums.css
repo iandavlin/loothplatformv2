@@ -4607,3 +4607,30 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 }
 #lg-dmodal .lg-dmodal__opacts .fcr-chips,
 #lg-dmodal .lg-dmodal__acts .fcr-chips { margin: 0 !important; }
+
+/* ── Mobile/feed reply "Edit" button + Edit/Delete popup (hub-editdel, Ian
+   2026-06-25). The raw server pencil/trash stay in the DOM (data only) but hidden;
+   one "Edit" action sits in the lg-fb-actions row, revealed for own/mod, and opens
+   a small popup. ── */
+.lg-fb-modbtn--hide { display: none !important; }
+.lg-fb-act.lg-fb-more { display: none; cursor: pointer; }
+.feed--can-moderate .lg-fb-act.lg-fb-more,
+.reply-stub--mine .lg-fb-act.lg-fb-more { display: inline; }
+.lg-fb-actions .lg-fb-more::before { content: "·"; margin: 0 6px; color: #8a8d91; font-weight: 400; }
+.lg-fb-menu {
+  position: fixed; z-index: 2147483600; min-width: 168px; padding: 6px;
+  background: var(--bg-card, #fff); border: 1px solid var(--lg-line, rgba(0, 0, 0, .12));
+  border-radius: 12px; box-shadow: 0 8px 28px rgba(0, 0, 0, .22);
+  display: flex; flex-direction: column; gap: 2px;
+}
+html[data-lguser-theme="dark"] .lg-fb-menu { background: #1f2420; border-color: rgba(255, 255, 255, .12); }
+.lg-fb-menu__item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 11px 12px; border: 0; border-radius: 8px; background: none;
+  font: 600 15px/1 var(--lg-font-sans, system-ui, sans-serif); color: var(--lg-ink, #1a1d1a);
+  text-align: left; cursor: pointer;
+}
+.lg-fb-menu__item:hover, .lg-fb-menu__item:active { background: rgba(0, 0, 0, .06); }
+.lg-fb-menu__del { color: #c0392b; }
+html[data-lguser-theme="dark"] .lg-fb-menu__item { color: #e5e7e1; }
+html[data-lguser-theme="dark"] .lg-fb-menu__item:hover { background: rgba(255, 255, 255, .08); }

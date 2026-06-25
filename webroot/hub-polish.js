@@ -775,8 +775,19 @@
       // Keep the server-rendered moderation controls (pencil/trash, revealed under
       // .feed--can-moderate + wired by wireModalModeration) — they live in the head
       // we are about to drop, so move them into the actions row (Buck 2026-06-10).
+      // Keep the (server-rendered) pencil/trash in the DOM for their
+      // data-reply-id/raw, but HIDE them — present ONE "Edit" button that opens an
+      // Edit/Delete popup like desktop (Ian 2026-06-25). Revealed under
+      // .feed--can-moderate by wireModalModeration (own reply OR mod).
       var modBtns = head.querySelectorAll('.reply-stub__edit, .reply-stub__trash');
-      for (var mb = 0; mb < modBtns.length; mb++) actions.appendChild(modBtns[mb]);
+      for (var mb = 0; mb < modBtns.length; mb++) { modBtns[mb].classList.add('lg-fb-modbtn--hide'); actions.appendChild(modBtns[mb]); }
+      if (modBtns.length) {
+        var more = document.createElement('span');
+        more.className = 'lg-fb-act lg-fb-more';
+        more.setAttribute('role', 'button');
+        more.textContent = 'Edit';
+        actions.appendChild(more);
+      }
       col.appendChild(actions);
 
       stub.insertBefore(col, head);
@@ -3610,7 +3621,8 @@
     })();
     var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post');
     ta.addEventListener('input', function () {
-      post.disabled = !ta.value.trim() && !lcpMediaIds.length;
+      var keepN = (sh.__lcpCtx && sh.__lcpCtx.keepMedia && sh.__lcpCtx.keepMedia.length) || 0;
+      post.disabled = !ta.value.trim() && !lcpMediaIds.length && !keepN;
       ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
     });
     post.addEventListener('click', function () { lcpSubmit(sh); });
@@ -3684,10 +3696,45 @@
     else { ctx.hidden = true; }
     var ta = sh.querySelector('#lcp-input');
     ta.value = ''; ta.style.height = 'auto';
-    sh.querySelector('#lcp-post').disabled = true;
+    var postBtn = sh.querySelector('#lcp-post');
+    postBtn.disabled = true;
     sh.querySelector('#lcp-status').textContent = '';
     sh.querySelector('#lcp-previews').innerHTML = '';
     lcpMediaIds.length = 0;
+    // ── EDIT MODE — reuse this composer to EDIT a reply (Ian 2026-06-25): pre-fill
+    //    the text, label the button "Save", and load existing photos as removable
+    //    thumbs below the input (✕ drops the id from keepMedia → removed on save). ──
+    sh.__lcpCtx.editReplyId = parseInt(o.editReplyId, 10) || 0;
+    sh.__lcpCtx.keepMedia   = [];
+    if (sh.__lcpCtx.editReplyId) {
+      ctx.hidden = false; ctx.textContent = '✎ Editing your reply';
+      ta.value = o.bodyText || '';
+      postBtn.textContent = 'Save';
+      postBtn.disabled = !ta.value.trim();
+      var eid = sh.__lcpCtx.editReplyId, pvEl = sh.querySelector('#lcp-previews');
+      fetch('/bb-mirror-api/v0/reply?reply_id=' + eid, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.ok || !d.media || sh.__lcpCtx.editReplyId !== eid) return;
+          d.media.forEach(function (m) {
+            sh.__lcpCtx.keepMedia.push(m.media_id);
+            var chip = document.createElement('span'); chip.className = 'lcp-pv';
+            chip.innerHTML = '<img src="' + String(m.thumb || m.url).replace(/"/g, '&quot;') + '" alt="">' +
+              '<button type="button" class="lcp-pv-x" aria-label="Remove photo">&times;</button>';
+            chip.querySelector('.lcp-pv-x').addEventListener('click', function () {
+              var ix = sh.__lcpCtx.keepMedia.indexOf(m.media_id);
+              if (ix > -1) sh.__lcpCtx.keepMedia.splice(ix, 1);
+              chip.remove();
+              postBtn.disabled = !ta.value.trim() && !lcpMediaIds.length && !sh.__lcpCtx.keepMedia.length;
+            });
+            pvEl.appendChild(chip);
+          });
+          postBtn.disabled = !ta.value.trim() && !lcpMediaIds.length && !sh.__lcpCtx.keepMedia.length;
+        })
+        .catch(function () {});
+    } else {
+      postBtn.textContent = 'Post';
+    }
     sh.classList.add('is-open');
     // bring the latest replies into view in the modal behind, so the user reads
     // the conversation right above the composer while writing
@@ -3707,8 +3754,41 @@
   }
   function lcpSubmit(sh) {
     var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post'), status = sh.querySelector('#lcp-status');
-    var text = (ta.value || '').trim(); if (!text && !lcpMediaIds.length) return;
-    var ctx = sh.__lcpCtx || {}; var tid = ctx.tid; if (!tid) { status.textContent = 'Couldn’t find the post.'; return; }
+    var ctx = sh.__lcpCtx || {};
+    var text = (ta.value || '').trim();
+    // EDIT mode → PUT the owned endpoint (author-or-mod): content + new photos
+    // (media_ids) + kept photos (keep_media_ids; removes the rest, no orphans).
+    if (ctx.editReplyId) {
+      var keepN = (ctx.keepMedia && ctx.keepMedia.length) || 0;
+      if (!text && !lcpMediaIds.length && !keepN) { status.textContent = "Reply can't be empty."; return; }
+      post.disabled = true; status.textContent = 'Saving…';
+      lrsGetAuth(function (a) {
+        if (!a || !a.authenticated) { status.textContent = 'Sign in to edit.'; post.disabled = false; return; }
+        var payload = {
+          reply_id: ctx.editReplyId,
+          content: text ? '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' : '',
+          keep_media_ids: (ctx.keepMedia || []).slice()
+        };
+        if (lcpMediaIds.length) payload.media_ids = lcpMediaIds.slice();
+        fetch('/bb-mirror-api/v0/reply', {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+          body: JSON.stringify(payload)
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.error)) || 'Could not save.'; post.disabled = false; return; }
+            closeComposerSheet();
+            var rs = document.getElementById('looth-rep-sheet');
+            var rtid = rs && parseInt(rs.getAttribute('data-tid'), 10);
+            if (rs && rs.classList.contains('is-open') && rtid) lrsLoadThread(rtid);
+          })
+          .catch(function () { status.textContent = 'Network error.'; post.disabled = false; });
+      });
+      return;
+    }
+    if (!text && !lcpMediaIds.length) return;
+    var tid = ctx.tid; if (!tid) { status.textContent = 'Couldn’t find the post.'; return; }
     post.disabled = true; status.textContent = 'Posting…';
     lrsGetAuth(function (a) {
       if (!a || !a.authenticated) { status.textContent = 'Sign in to reply.'; post.disabled = false; return; }
@@ -4392,88 +4472,74 @@
         }).observe(document.body, { childList: true, subtree: true });
       } catch (e) {}
     });
+    // ── Edit/Delete via a single "Edit" button → popup (Ian 2026-06-25, mobile
+    //    parity with desktop). Edit opens the mobile reply composer
+    //    (openComposerSheet) PRE-FILLED — text + add/remove real-attachment photos,
+    //    owned PUT (no orphans). Delete → owned endpoint. The raw pencil/trash stay
+    //    hidden in the DOM only for their data-reply-id / data-reply-raw. ──
+    var lgFbMenuEl = null, lgFbMenuStub = null;
+    function lgFbCloseMenus() { if (lgFbMenuEl) { try { lgFbMenuEl.remove(); } catch (e) {} lgFbMenuEl = null; lgFbMenuStub = null; } }
+    function lgFbReplyMeta(stub) {
+      var edEl = stub.querySelector('.reply-stub__edit');
+      var rid  = parseInt((edEl && edEl.getAttribute('data-reply-id')) || stub.getAttribute('data-reply-id') || '0', 10) || 0;
+      var raw  = (edEl && edEl.getAttribute('data-reply-raw')) || '';
+      var ex   = stub.querySelector('.reply-stub__excerpt');
+      var text = raw
+        ? raw.replace(/<img[^>]*>/gi, '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>\s*<p[^>]*>/gi, '\n\n').replace(/<[^>]+>/g, '').trim()
+        : (ex ? (ex.innerText || ex.textContent || '').trim() : '');
+      return { rid: rid, text: text };
+    }
+    function lgFbToggleMenu(btn) {
+      var stub = btn.closest('.reply-stub');
+      if (lgFbMenuEl && lgFbMenuStub === stub) { lgFbCloseMenus(); return; }
+      lgFbCloseMenus();
+      lgFbMenuStub = stub;
+      var m = document.createElement('div');
+      m.className = 'lg-fb-menu';
+      m.innerHTML =
+        '<button type="button" class="lg-fb-menu__item lg-fb-menu__edit">✎ Edit</button>' +
+        '<button type="button" class="lg-fb-menu__item lg-fb-menu__del">🗑 Delete</button>';
+      document.body.appendChild(m);
+      lgFbMenuEl = m;
+      var r = btn.getBoundingClientRect();
+      var mw = m.offsetWidth || 168;
+      m.style.top  = (r.bottom + 6) + 'px';
+      m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - mw - 8)) + 'px';
+    }
     document.addEventListener('click', function (ev) {
       if (!ev.target.closest) return;
-      var host = ev.target.closest('#lg-dmodal') || ev.target.closest('#looth-rep-sheet');
-      if (!host) return;
-      var tr = ev.target.closest('.reply-stub__trash');
-      var ed = ev.target.closest('.reply-stub__edit');
-      if (!tr && !ed) return;
+      var moreBtn = ev.target.closest('.lg-fb-more');
+      if (moreBtn) { ev.preventDefault(); ev.stopPropagation(); lgFbToggleMenu(moreBtn); return; }
+      var editItem = ev.target.closest('.lg-fb-menu__edit');
+      var delItem  = ev.target.closest('.lg-fb-menu__del');
+      if (!editItem && !delItem) { if (lgFbMenuEl) lgFbCloseMenus(); return; }
       ev.preventDefault(); ev.stopPropagation();
-      var btn = tr || ed;
-      var rid = parseInt(btn.getAttribute('data-reply-id'), 10);
-      if (!rid) return;
-      if (tr) {
-        if (!window.confirm('Trash this reply? This can\u2019t be undone.')) return;
-        lrsGetAuth(function (a) {
-          if (!a || !a.nonce) { alert('Not signed in.'); return; }
-          tr.disabled = true;
-          // Owned endpoint (author-or-mod, IDOR-proof) — same as desktop. The native
-          // BuddyBoss DELETE is mods-only and bypasses our gate; this also fires
-          // before_delete_post so the reply's media + attachments are cleaned up (no
-          // orphans). (Ian 2026-06-25: desktop/mobile must agree.)
-          fetch('/bb-mirror-api/v0/reply', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce }, body: JSON.stringify({ reply_id: rid }) })
-            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
-            .then(function (res) {
-              if (res.s === 403 || (res.j && res.j.error === 'forbidden')) { tr.disabled = false; alert('You can only delete your own replies.'); return; }
-              if (!res.ok) { tr.disabled = false; alert('Could not trash: ' + ((res.j && (res.j.message || res.j.error || res.j.code)) || 'failed')); return; }
-              var stub = tr.closest('.reply-stub'); if (stub) stub.remove();
-            })
-            .catch(function (err) { tr.disabled = false; alert('Network error: ' + err.message); });
-        });
+      var stub = lgFbMenuStub; lgFbCloseMenus();
+      if (!stub) return;
+      var meta = lgFbReplyMeta(stub);
+      if (!meta.rid) return;
+      var sheet = stub.closest('#looth-rep-sheet');
+      if (editItem) {
+        if (typeof openComposerSheet === 'function') {
+          openComposerSheet({
+            tid: sheet ? sheet.getAttribute('data-tid') : '',
+            fid: sheet ? sheet.getAttribute('data-fid') : '',
+            editReplyId: meta.rid, bodyText: meta.text, focus: true
+          });
+        }
         return;
       }
-      // EDIT — mirror desktop: open the SAME Quill composer (rich text + add/REMOVE
-      // photos via real attachments, owned endpoint, no orphaned media) instead of
-      // the inline plain-text box. The old inline path round-tripped images as inline
-      // <img> and removing one left the bp_media attachment orphaned. (Ian 2026-06-25)
-      var stub = ed.closest('.reply-stub');
-      if (!stub || stub.querySelector('.reply-stub__editbox')) return;
-      var bodyDiv = stub.querySelector('.reply-stub__body');
-      var excerpt = stub.querySelector('.reply-stub__excerpt');
-      var raw = ed.getAttribute('data-reply-raw') || '';
-      if (typeof window.lgFrmEditReply === 'function') {
-        window.lgFrmEditReply(rid, raw || (excerpt ? excerpt.innerHTML : ''));
-        return;
-      }
-      var imgs = raw.match(/<img[^>]*>/gi) || [];
-      var cur = raw
-        ? raw.replace(/<img[^>]*>/gi, '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>\s*<p[^>]*>/gi, '\n\n').replace(/<[^>]+>/g, '').trim()
-        : (excerpt ? (excerpt.innerText || excerpt.textContent || '').trim() : '');
-      var tid = parseInt(host.dataset && host.dataset.topicId ? host.dataset.topicId : (host.getAttribute('data-tid') || '0'), 10);
-      var box = document.createElement('div');
-      box.className = 'reply-stub__editbox';
-      box.innerHTML =
-        '<textarea class="rse-input"></textarea>' +
-        '<div class="rse-row"><button type="button" class="rse-save">Save</button>' +
-        '<button type="button" class="rse-cancel">Cancel</button><span class="rse-status"></span></div>';
-      box.querySelector('.rse-input').value = cur;
-      if (bodyDiv) bodyDiv.style.display = 'none';
-      stub.appendChild(box);
-      var ta = box.querySelector('.rse-input'), status = box.querySelector('.rse-status');
-      ta.focus();
-      box.querySelector('.rse-cancel').addEventListener('click', function () { box.remove(); if (bodyDiv) bodyDiv.style.display = ''; });
-      box.querySelector('.rse-save').addEventListener('click', function () {
-        var text = (ta.value || '').trim();
-        if (!text && !imgs.length) { status.textContent = 'Can\u2019t be empty.'; return; }
-        var html = (text ? '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' : '') + imgs.join('');
-        status.textContent = 'Saving\u2026';
-        lrsGetAuth(function (a) {
-          if (!a || !a.nonce) { status.textContent = 'Not signed in.'; return; }
-          fetch(LRS_REPLY_BASE + '/reply/' + rid, {
-            method: 'PUT', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
-            body: JSON.stringify({ id: rid, topic_id: tid || undefined, content: html })
+      if (!window.confirm('Delete this reply? This can’t be undone.')) return;
+      lrsGetAuth(function (a) {
+        if (!a || !a.nonce) { alert('Not signed in.'); return; }
+        fetch('/bb-mirror-api/v0/reply', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce }, body: JSON.stringify({ reply_id: meta.rid }) })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (res.j && res.j.error === 'forbidden') { alert('You can only delete your own replies.'); return; }
+            if (!res.ok) { alert('Could not delete: ' + ((res.j && (res.j.message || res.j.error)) || 'failed')); return; }
+            try { stub.remove(); } catch (e) {}
           })
-            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
-            .then(function (res) {
-              if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not save.'; return; }
-              if (excerpt) excerpt.innerHTML = html;
-              ed.setAttribute('data-reply-raw', html);
-              box.remove(); if (bodyDiv) bodyDiv.style.display = '';
-            })
-            .catch(function (err) { status.textContent = 'Network error: ' + err.message; });
-        });
+          .catch(function (err) { alert('Network error: ' + err.message); });
       });
     });
   }
