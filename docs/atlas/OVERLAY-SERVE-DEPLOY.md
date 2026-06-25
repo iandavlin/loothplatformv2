@@ -21,6 +21,17 @@ the repo). As of **2026-06-25** the serve model is explicit and differs per box:
   pull alone (commit `2e5abad`).
 - **Cache-bust** is the `?v=N` strings inside `pwa.js` (filenames never change). Bump on change.
 
+## CSS overlays are in the same farm (don't let one drift out)
+
+`webroot/` also holds **CSS** overlays (e.g. `mobile-hub.css`) -- repo-authoritative and symlinked
+into the docroot exactly like the JS. They are NOT in the JS list at the top, which is how
+`mobile-hub.css` got missed: on **2026-06-25** it was found as a **stale standalone real file** at
+`/var/www/dev/mobile-hub.css` (a Jun-7 copy) shadowing the repo -- so weeks of edits to the repo
+copy never served. Fixed by symlinking it into the serve clone like its siblings (backup left at
+`/var/www/dev/mobile-hub.css.bak-realfile-shadow-20260625`). **Provisioning rule:** the dev2 symlink
+farm must include EVERY repo `webroot/` overlay (JS *and* CSS); a real file in the docroot that has
+a repo twin is always the drift bug, never intentional.
+
 ## The guard (deploy.sh)
 
 `deploy/deploy.sh --apply` now also rsyncs `webroot/` → the live docroot, BUT it **refuses any
@@ -55,6 +66,32 @@ Reach live from the keeper box: `ssh live` (→ `54.157.13.77`).
    changed `?v` URLs.
 
 **Rollback:** restore the docroot backup + `sudo systemctl reload php8.3-fpm`.
+
+## Preview slots (parallel preview surfaces)
+
+The ONE pristine serve clone doubles as the preview surface (flip a branch onto it to look at WIP),
+which serializes previews to one-at-a-time. **Preview slots** break that: a dedicated surface = its
+own clone + FPM pool + nginx vhost, reusing the shared dev2 backend, so a second branch previews
+without touching the serve clone. (DELIVERY-ARCH-PROPOSAL step (a), realized as a fixed slot.)
+
+**slot-A -- `preview-a.dev2.loothgroup.com`** (first slot, 2026-06-25):
+
+| Piece | Value |
+|-------|-------|
+| Clone | `~/preview-slots/slot-a` -- `git -C ... fetch && checkout <branch>` to preview |
+| FPM pool | `bb-preview-a` -> `php8.3-fpm-bb-preview-a.sock` (user `bb-mirror`, env `LG_BB_MIRROR_PUBLIC_HOST=preview-a.dev2...`) |
+| nginx | `sites-available/preview-a.dev2.loothgroup.com.conf` = copy of the dev2 vhost; bb-mirror include swapped -> `snippets/strangler-bb-mirror-preview-a.conf` (repoints `/hub/` + `/bb-mirror-api/` -> slot-a + the bb-mirror frontend socket -> bb-preview-a) |
+| Backend | REUSES dev2's WP/looth-dev pool, archive-poc front, PG, R2 -- **only the Hub code differs** |
+| DNS | `preview-a.dev2.loothgroup.com` -> `34.193.244.53` (grey-cloud / DNS-only; managed in Cloudflare) |
+| TLS | LE cert via `certbot --nginx` (auto-renew). Requires SG `dev2-direct-web` (`sg-02b6d0506402aa626`) inbound **80** open to `0.0.0.0/0` for ACME HTTP-01 -- LEAVE OPEN (renewal needs it). |
+
+**Preview a branch in the slot:** `git -C ~/preview-slots/slot-a fetch && git checkout <branch>` +
+`sudo systemctl reload php8.3-fpm` (pool is ondemand). The serve clone is never involved.
+
+**Why slot-a's code renders** (not the serve clone's): bb-mirror includes are all `__DIR__`-relative
+(`index.php` -> `_single-topic.php` -> reactions), so `SCRIPT_FILENAME` pointed at slot-a renders
+slot-a's tree; `LG_BB_MIRROR_APP_ROOT=/srv/bb-mirror` is only the schema-file path, not request
+rendering. Add slot-B (`preview-b.dev2`, own pool) the same way when a third parallel preview is needed.
 
 ## Footguns
 - `deploy.sh --apply` syncs **all** app subtrees + the full webroot — always backup + dry-run/diff
