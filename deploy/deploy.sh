@@ -35,6 +35,21 @@ rs "$REPO/platform/nginx/"   "/etc/nginx/snippets/"
 rs "$REPO/platform/fpm/"     "/etc/php/8.3/fpm/pool.d/"
 rs "$REPO/platform/systemd/" "/etc/systemd/system/"
 
+# --- webroot static overlay layer → live docroot (PUSH model; standalone: webroot/deploy.sh) ---
+# Live serves real files here; dev2 serves them via SYMLINKS into the serve clone (pull-driven).
+# GUARD: if the target already serves overlays via symlink, this is a pull-driven box (dev2) and
+# rsync -a would replace the symlinks with file copies, silently undoing the repo-serve rewire.
+# So refuse — dev2 is pull-only; only live (real files) gets the push. WEBROOT_PATH overrides $WP.
+WEBROOT_TARGET="${WEBROOT_PATH:-$WP}"
+if [ -L "$WEBROOT_TARGET/bottom-nav.js" ] || [ -L "$WEBROOT_TARGET/pwa.js" ]; then
+  echo "SKIP webroot: '$WEBROOT_TARGET' serves overlays via symlink (pull-driven / dev2) — refusing rsync (would clobber the symlink rewire)."
+else
+  rsync -a $DRY --chown="${WEBROOT_OWNER:-looth-dev}:${WEBROOT_OWNER:-looth-dev}" \
+    --exclude='README.md' --exclude='deploy.sh' --exclude='.gitignore' \
+    --exclude='*.bak*' --exclude='vendor' --exclude='node_modules' \
+    "$REPO/webroot/" "$WEBROOT_TARGET/"
+fi
+
 if [ -z "$DRY" ]; then
   echo "--- post-deploy ---"
   echo "chown app dirs to their service users; provision /etc/lg-* secrets (see MANIFEST)"
