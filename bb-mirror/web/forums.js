@@ -1890,12 +1890,22 @@
         .catch(function () {});
       var seedTries = 0;
       function frmSeedBody() {
-        if (frmQuill) { frmQuill.clipboard.dangerouslyPasteHTML(bodyHtml || ''); frmQuill.focus(); }
-        else if (frmContent) { frmContent.value = (bodyHtml || '').replace(/<img[^>]*>/gi, ''); }
-        else if (++seedTries < 40) { setTimeout(frmSeedBody, 80); return; }
+        if (frmQuill) {
+          frmQuill.setContents([]);                              // clear placeholder/blank state
+          frmQuill.clipboard.dangerouslyPasteHTML(bodyHtml || '');
+          frmQuill.setSelection(frmQuill.getLength(), 0);
+          frmQuill.focus();
+          return;
+        }
+        // Quill is the editor we actually show; WAIT for it to init before falling
+        // back to the plain textarea — #frm-content always exists in the DOM, so the
+        // old `else if (frmContent)` seeded the HIDDEN textarea and left Quill empty
+        // (the "edit text doesn't populate" bug, Ian 2026-06-25).
+        if (typeof Quill !== 'undefined' && ++seedTries < 50) { setTimeout(frmSeedBody, 60); return; }
+        if (frmContent) { frmContent.value = (bodyHtml || '').replace(/<img[^>]*>/gi, ''); }
       }
-      if (frmState !== 'authed') { frmLoadAuth(); (function w(){ if (frmQuill || frmContent) frmSeedBody(); else if (++seedTries < 40) setTimeout(w, 80); })(); }
-      else { frmInitEditor(); setTimeout(frmSeedBody, 40); }
+      if (frmState !== 'authed') frmLoadAuth(); else frmInitEditor();
+      frmSeedBody();
     };
 
     // Delegated so it also works on lazily-loaded / optimistically-added cards.
