@@ -806,6 +806,83 @@ function lgpo_alert_failure( string $context, string $detail ): void {
 }
 
 /**
+ * Member-facing failure notification (§ settled-design item 5).
+ *
+ * On ANY failure in the provision / bridge / role pipeline (onboard account
+ * creation, the hourly sweep's role apply, or the email mirror), do two things:
+ *   1. Reassure the affected MEMBER at their Patreon email — "we're aware and
+ *      working on it, nothing to do" — so a transient glitch never reads as
+ *      silent neglect.
+ *   2. Alert Ian (lgpo_contact_email, falling back to admin_email) with the
+ *      technical detail so it can actually be fixed.
+ *
+ * Best-effort and never throws (callers are mid-pipeline). On dev2 both mails
+ * are captured by mailpit; live uses real SMTP.
+ *
+ * @param string $patron_email Patreon email of the affected member ('' to skip
+ *                             the member mail — e.g. a pre-identity failure).
+ * @param string $patron_name  Display name for the greeting (optional).
+ * @param string $context      Short machine tag, e.g. 'sync.role_apply_failed'.
+ * @param string $detail       Technical detail for Ian's email.
+ * @param int    $wp_user_id   Affected WP user id (0 if none).
+ */
+function lgpo_notify_failure( string $patron_email, string $patron_name, string $context, string $detail, int $wp_user_id = 0 ): void {
+    error_log( "LGPO FAILURE [{$context}] user#{$wp_user_id} {$patron_email}: {$detail}" );
+    $site = wp_specialchars_decode( (string) get_option( 'blogname' ), ENT_QUOTES );
+
+    // These notifications are INTENTIONAL and must survive the poller mail
+    // killswitch (which otherwise suppresses every wp_mail originating in this
+    // plugin). The X-LG-Poller-Intent header is the agreed bypass marker — see
+    // mu-plugins/lg-poller-mail-killswitch.php. The bulk hourly sync report and
+    // welcome mails carry NO such header, so they stay suppressed.
+    $headers = [ 'Content-Type: text/plain; charset=UTF-8', 'X-LG-Poller-Intent: notify' ];
+
+    // 1) Reassure the member.
+    $patron_email = trim( $patron_email );
+    if ( $patron_email !== '' && is_email( $patron_email ) ) {
+        try {
+            $greeting = $patron_name !== '' ? ( 'Hi ' . $patron_name . ',' ) : 'Hi,';
+            wp_mail(
+                $patron_email,
+                "We're sorting out your Looth Group membership",
+                $greeting . "\n\n"
+                . "We hit a small snag while syncing your Looth Group membership, and we're already on it — "
+                . "there's nothing you need to do. Your access will update automatically once it's sorted. "
+                . "If anything still looks off in a day or two, just reply to this email and we'll take care of it.\n\n"
+                . "— The Looth Group team\n",
+                $headers
+            );
+        } catch ( \Throwable $_ ) {
+            // best-effort
+        }
+    }
+
+    // 2) Alert Ian.
+    try {
+        $to = (string) get_option( 'lgpo_contact_email', '' );
+        if ( $to === '' ) { $to = (string) get_option( 'admin_email', '' ); }
+        if ( $to === '' ) { return; }
+        wp_mail(
+            $to,
+            "[{$site}] LGPO member-sync failure: {$context}",
+            "A failure occurred in the Patreon provision / bridge / role pipeline.\n\n"
+            . "Context:      {$context}\n"
+            . "WP user id:   " . ( $wp_user_id ?: 'n/a' ) . "\n"
+            . "Patron email: " . ( $patron_email !== '' ? $patron_email : 'n/a' ) . "\n"
+            . "Patron name:  " . ( $patron_name !== '' ? $patron_name : 'n/a' ) . "\n\n"
+            . "Detail:\n{$detail}\n\n"
+            . ( $patron_email !== '' && is_email( $patron_email )
+                ? "The member has been emailed a 'we're aware and working on it' note.\n"
+                : "No member email was available, so only this alert was sent.\n" )
+            . "Review: " . admin_url( 'options-general.php?page=lg-patreon-onboard' ) . "\n",
+            $headers
+        );
+    } catch ( \Throwable $_ ) {
+        // best-effort
+    }
+}
+
+/**
  * Persist a Patreon OAuth-token response (creator scope) to the lgpo_creator_*
  * options. Takes the full body returned by Patreon's /api/oauth2/token
  * endpoint (auth_code or refresh_token grants) and stores:
@@ -987,12 +1064,17 @@ function lgpo_handle_callback() {
     ) );
 
     if ( is_wp_error( $identity_response ) ) {
+        lgpo_notify_failure( '', '', 'onboard.identity_fetch_failed',
+            'Patreon /identity request failed during onboard: ' . $identity_response->get_error_message(), 0 );
         lgpo_terminal( 'fail', $state_payload, 'Could not fetch your Patreon profile. Please try again later.' );
     }
 
     $identity_body = json_decode( wp_remote_retrieve_body( $identity_response ), true );
 
     if ( empty( $identity_body['data']['id'] ) ) {
+        lgpo_notify_failure( '', '', 'onboard.identity_parse_failed',
+            'Patreon /identity returned no data.id during onboard (HTTP '
+            . wp_remote_retrieve_response_code( $identity_response ) . ').', 0 );
         lgpo_terminal( 'fail', $state_payload, 'Could not read your Patreon profile data. Please try again.' );
     }
 
@@ -1149,6 +1231,14 @@ function lgpo_handle_callback() {
     ) );
 
     if ( is_wp_error( $user_id ) ) {
+        lgpo_notify_failure(
+            $patreon_email,
+            $patreon_name,
+            'onboard.user_insert_failed',
+            'wp_insert_user failed creating an account for Patreon user ' . $patreon_user_id
+            . ': ' . $user_id->get_error_message(),
+            0
+        );
         lgpo_terminal( 'fail', $state_payload, 'Could not create your account: ' . $user_id->get_error_message() );
     }
 

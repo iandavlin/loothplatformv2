@@ -24,9 +24,21 @@ final class Arbiter
             return [ 'ok' => false, 'reason' => 'no such WP user' ];
         }
 
-        // Protected — never touch.
+        // Protected — never downgrade a looth4 (comp/manual) user from a source.
+        // But STILL enforce single-tier: a looth4 holder must not also carry a
+        // lower looth1..3 role. The looth4 comp-timer historically stripped
+        // looth4 and left looth1 behind (and a later Patreon sub then added
+        // looth3 on top) — the root of the double-role bug. De-dupe down to
+        // looth4 here, then leave looth4 itself untouched.
         if ( in_array( 'looth4', $user->roles, true ) ) {
-            return [ 'ok' => true, 'reason' => 'looth4 protected, skipped' ];
+            $deduped = false;
+            foreach ( [ 'looth1', 'looth2', 'looth3' ] as $lower ) {
+                if ( in_array( $lower, $user->roles, true ) ) {
+                    $user->remove_role( $lower );
+                    $deduped = true;
+                }
+            }
+            return [ 'ok' => true, 'reason' => $deduped ? 'looth4 protected, deduped lower tiers' : 'looth4 protected, skipped' ];
         }
 
         // Stripe-source coexistence guard (mirrors LGPO's existing skip):
@@ -45,18 +57,30 @@ final class Arbiter
         $sources = RoleSourceWriter::readAllForUser( $wpUserId );
         $winning = self::computeWinningTier( $sources );
 
-        // Remove existing tier roles that aren't the winner.
-        // looth1 is the default-for-everyone starter tier — it is never
-        // backed by a payment source (gift buyers + every other registered
-        // user start there) so Arbiter must NOT remove it. UserProvisioner
-        // grants it on signup; from then on it's sticky. Removing it on
-        // every tick would strip gift-management capability from every
-        // standalone gift buyer right after they signed up.
+        // SINGLE-TIER ENFORCEMENT (de-dupe). A user must never hold two or more
+        // looth1..4 roles at once. Remove every tier role that isn't the winner.
+        //
+        // The fix for the double-role bug is that looth1 is NO LONGER skipped
+        // here when a real winner exists: previously looth1 was treated as a
+        // sticky starter tier and left in place, which let a paid tier (looth3)
+        // coexist with looth1. All four looth roles carry IDENTICAL caps —
+        // including manage_gift_codes (Plugin.php grants GIFT_CAP to every tier)
+        // — so stripping looth1 off an upgraded user loses no capability; the
+        // old "would strip gift-management" concern no longer holds.
+        //
+        // Starter-tier protection is preserved for the no-source case: when
+        // $winning === null the user has ZERO role-source rows (e.g. a
+        // standalone gift buyer who only ever had the UserProvisioner-granted
+        // looth1), so we keep looth1 and only shed stale paid roles — never
+        // strip the user down to no tier at all.
         foreach ( self::TIER_ROLES as $role ) {
-            if ( $role === 'looth1' ) {
+            if ( $role === $winning ) {
                 continue;
             }
-            if ( in_array( $role, $user->roles, true ) && $role !== $winning ) {
+            if ( $role === 'looth1' && $winning === null ) {
+                continue;
+            }
+            if ( in_array( $role, $user->roles, true ) ) {
                 $user->remove_role( $role );
             }
         }
