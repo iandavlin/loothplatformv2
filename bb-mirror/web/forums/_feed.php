@@ -1550,6 +1550,17 @@ $header_cat = $scoped_forum
         <nav class="fc-category lg-card-cat"><?= htmlspecialchars($topic['forum_title'], ENT_QUOTES, 'UTF-8') ?></nav>
       <?php endif; ?>
       <time class="fc-time lg-card-time"><?= $start_time ?></time>
+      <?php /* Reply count surfaced in the card meta — MOBILE only (CSS-gated; desktop
+               shows it via .fc-facepile + the action bar). NEW direct-child region so
+               mobile-hub.css's catch-all stacks it as its own row. Tapping the topic
+               card already opens the thread, so no own handler is needed. (hub-editdel,
+               Ian 2026-06-25.) */ ?>
+      <?php if ($reply_count > 0): ?>
+        <span class="fc-replycount" aria-label="<?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?>">
+          <svg class="fc-replycount__ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg>
+          <?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?>
+        </span>
+      <?php endif; ?>
       <?php /* fc-activity beacon removed per Ian 6/7 — the "active … ago" pulse-dot
                was noise on the cards. CSS rules (.fc-activity/.fc-pulse) left in place
                but now unused. */ ?>

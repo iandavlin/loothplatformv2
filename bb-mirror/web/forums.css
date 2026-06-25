@@ -4640,3 +4640,38 @@ html[data-lguser-theme="dark"] .lg-fb-menu__item:hover { background: rgba(255, 2
    only in topic-edit mode (lgFrmEditTopic toggles [hidden]). 2026-06-25 hub-editdel. */
 #frm-title-wrap { margin-bottom: var(--s3, 12px); }
 #frm-title-wrap .ntm-input { margin-top: var(--s1, 4px); }
+
+/* ── hub-editdel preview round 2 (Ian 2026-06-25) — mobile hub-discussion polish ── */
+
+/* #1 Reaction chips read icon-LEFT / number-RIGHT on EVERY surface. The scoped
+   `.feed-page .fcr-chip` row rule misses the OP reaction bar that hub-polish
+   RELOCATES into the mobile discussion sheet (#looth-rep-sheet sits OUTSIDE
+   .feed-page), so its image-glyph 👍 chip fell back to button defaults and stacked
+   its count above the icon. These unscoped rules normalize all chips regardless of
+   ancestry (desktop/.feed-page chips already match, so they're a no-op there). */
+.fcr-chip { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; line-height: 1; }
+.fcr-chip .fcr-img { display: inline-block; width: 18px; height: 18px; object-fit: contain; flex: 0 0 auto; vertical-align: middle; }
+.fcr-chip .fcr-emoji { font-size: 15px; line-height: 1; }
+.fcr-chip .fcr-n { line-height: 1; white-space: nowrap; }
+
+/* #4 Lightbox must sit ABOVE the mobile sheets (#looth-rep-sheet 2147483520,
+   content-sheet 2147483550, composer 2147483560). It was z-index:9999, so tapping
+   an image inside a sheet opened the lightbox BEHIND the sheet (invisible → "broken
+   on mobile"). Lift it above every overlay. */
+.lg-lightbox { z-index: 2147483646; }
+
+/* #3 Reply count surfaced in the card meta on mobile. Desktop already shows it via
+   the .fc-facepile pill + action bar, and the facepile is display:none ≤640, so the
+   count vanished on mobile. This compact count is a NEW direct-child card region —
+   mobile-hub.css's catch-all (.feed-card > * → full-width row, source order) stacks
+   it cleanly under the meta with no grid edit. Desktop hides it (facepile owns it). */
+.fc-replycount { display: none; }
+@media (max-width: 640px) {
+  .feed-page .fc-replycount {
+    display: inline-flex; align-items: center; gap: 5px; margin-top: 4px;
+    background: none; border: 0; padding: 0; cursor: pointer;
+    font: 600 12.5px/1 var(--lg-font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+    color: var(--lg-mute, var(--lguser-mute, #6b6f6b));
+  }
+  .feed-page .fc-replycount__ico { width: 15px; height: 15px; flex: 0 0 auto; }
+}

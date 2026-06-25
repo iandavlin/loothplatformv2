@@ -3177,13 +3177,16 @@
     if (!body || !th) return;
     body.scrollTop += th.getBoundingClientRect().top - body.getBoundingClientRect().top - 6;
   }
-  function lrsLoadThread(tid) {
+  function lrsLoadThread(tid, sort) {
     var sh = document.getElementById('looth-rep-sheet'); if (!sh) return;
     // Replies land in #lrs-thread so reloading after a post keeps the OP above intact.
     var body = sh.querySelector('#lrs-thread') || sh.querySelector('#lrs-body'); if (!body) return;
     body.innerHTML = '<div class="lrs-note">Loading replies…</div>';
     var base = (window.LG_FORUM_BASE || '/forum').toString().replace(/\/+$/, '');
-    fetch(base + '/?replies=' + encodeURIComponent(tid), { credentials: 'same-origin' })
+    // Optional sort (newest|oldest) — the ?replies fragment re-emits its own sort bar
+    // with the active state, so passing &sort keeps the toggle correct after reload.
+    var url = base + '/?replies=' + encodeURIComponent(tid) + (sort ? '&sort=' + encodeURIComponent(sort) : '');
+    fetch(url, { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
       .then(function (html) {
         body.innerHTML = '<div class="feed-card__replies-full lg-rshow"></div>';
@@ -3195,6 +3198,25 @@
       })
       .catch(function () { body.innerHTML = '<div class="lrs-note">Couldn’t load replies right now.</div>'; });
   }
+  // Reply-sort toggle (Newest/Oldest) INSIDE the mobile discussion sheet must stay in
+  // the NEW system. The canonical forums.js handler (bubble phase) swaps in the RAW
+  // ?replies fragment — un-enhanced (no FB-style recompose / revealed photos /
+  // reactions) so it reads as the "legacy" thread (Ian 2026-06-25). Intercept in the
+  // CAPTURE phase (runs before that bubble handler) and re-run lrsLoadThread with the
+  // chosen sort, so replies re-render FB-style in place. Sheet-scoped: the inline feed
+  // + desktop modal keep the canonical handler.
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest) return;
+    var b = e.target.closest('.replies-sort__btn');
+    if (!b) return;
+    var sheet = e.target.closest('#looth-rep-sheet');
+    if (!sheet) return;                                       // not the mobile sheet → canonical handler
+    e.preventDefault(); e.stopPropagation();                  // beat forums.js's bubble handler either way
+    if (b.classList.contains('is-active')) return;            // already this sort → no-op
+    var tid = parseInt(sheet.getAttribute('data-tid'), 10) || 0;
+    if (!tid) return;
+    lrsLoadThread(tid, b.getAttribute('data-sort') || '');
+  }, true);
   // Lift the reply composer above the on-screen keyboard (visualViewport delta).
   function lrsAdjustKb() {
     var sh = document.getElementById('looth-rep-sheet');
