@@ -44,6 +44,30 @@ if (!function_exists('lg_embed_yt_best_poster')) {
     }
 }
 
+/**
+ * Featured-image poster, preferred over provider (YT/Vimeo) thumbnails.
+ * One-origin, sized + srcset — no cross-domain thumbnail hop, and immune to
+ * YouTube's missing-maxresdefault grey placeholder. Returns [src, srcset,
+ * sizes]; src is '' when the post has no featured image (caller falls back).
+ */
+if (!function_exists('lg_embed_featured_poster')) {
+    function lg_embed_featured_poster(array $ctx): array {
+        $postId = (int) ($ctx['post_id'] ?? 0);
+        if ($postId <= 0 || !function_exists('get_post_thumbnail_id')) return ['', '', ''];
+        $thumbId = (int) get_post_thumbnail_id($postId);
+        if ($thumbId <= 0 || !function_exists('wp_get_attachment_image_url')) return ['', '', ''];
+        $src = (string) (wp_get_attachment_image_url($thumbId, 'large') ?: '');
+        if ($src === '') return ['', '', ''];
+        $srcset = function_exists('wp_get_attachment_image_srcset')
+            ? (string) (wp_get_attachment_image_srcset($thumbId, 'large') ?: '')
+            : '';
+        $sizes = ($srcset !== '' && function_exists('wp_get_attachment_image_sizes'))
+            ? (string) (wp_get_attachment_image_sizes($thumbId, 'large') ?: '100vw')
+            : '100vw';
+        return [$src, $srcset, $sizes];
+    }
+}
+
 $url     = is_string($args['url']     ?? null) ? trim((string) $args['url'])     : '';
 $ratio   = is_string($args['ratio']   ?? null) ? trim((string) $args['ratio'])   : '16x9';
 $caption = is_string($args['caption'] ?? null) ? (string) $args['caption']       : '';
@@ -153,12 +177,29 @@ if ($ytId !== '') {
        Probe once (HEAD, cached 7d) and step down maxres -> sd -> hq; hqdefault
        always exists and is the guaranteed src floor. object-fit:cover crops
        the 4:3 fallbacks' letterbox bars to the 16:9 frame, so they look clean. */
-    $thumbLo = "https://i.ytimg.com/vi/{$safeYtId}/hqdefault.jpg";
-    [$thumbHi, $hiW] = lg_embed_yt_best_poster($ytId);
+    /* Poster source — FEATURED IMAGE PREFERRED (Ian 2026-06-25, perf):
+       one-origin + sized/srcset, no cross-domain ytimg hop, and it sidesteps
+       the missing-maxresdefault grey-placeholder case on club/unlisted/low-res
+       uploads. Fall back to the provider thumbnail (probed maxres -> sd -> hq,
+       hqdefault floor) only when the post has no featured image. Matches the
+       gate-card poster behavior. */
+    [$featSrc, $featSrcset, $featSizes] = lg_embed_featured_poster($ctx);
+    if ($featSrc !== '') {
+        $posterSrc    = htmlspecialchars($featSrc, ENT_QUOTES, 'UTF-8');
+        $posterSrcset = $featSrcset !== '' ? htmlspecialchars($featSrcset, ENT_QUOTES, 'UTF-8') : '';
+        $posterSizes  = htmlspecialchars($featSizes !== '' ? $featSizes : '100vw', ENT_QUOTES, 'UTF-8');
+    } else {
+        $thumbLo = "https://i.ytimg.com/vi/{$safeYtId}/hqdefault.jpg";
+        [$thumbHi, $hiW] = lg_embed_yt_best_poster($ytId);
+        $posterSrc    = htmlspecialchars($thumbLo, ENT_QUOTES, 'UTF-8');
+        $posterSrcset = htmlspecialchars($thumbHi, ENT_QUOTES, 'UTF-8') . ' ' . (int) $hiW . 'w, '
+                      . htmlspecialchars($thumbLo, ENT_QUOTES, 'UTF-8') . ' 480w';
+        $posterSizes  = '100vw';
+    }
     ?>
 <figure class="lg-embed lg-embed--<?= $variant ?> lg-embed--youtube<?= $isShorts ? ' lg-embed--shorts' : '' ?>">
   <div class="lg-embed__frame lg-embed__facade" style="aspect-ratio: <?= $aspectCss ?>;" data-yt-id="<?= $safeYtId ?>" data-yt-start="<?= (int) $ytStart ?>">
-    <img class="lg-embed__poster" src="<?= htmlspecialchars($thumbLo, ENT_QUOTES, 'UTF-8') ?>" srcset="<?= htmlspecialchars($thumbHi, ENT_QUOTES, 'UTF-8') ?> <?= (int) $hiW ?>w, <?= htmlspecialchars($thumbLo, ENT_QUOTES, 'UTF-8') ?> 480w" sizes="100vw" loading="lazy" alt="" />
+    <img class="lg-embed__poster" src="<?= $posterSrc ?>"<?= $posterSrcset !== '' ? ' srcset="' . $posterSrcset . '"' : '' ?> sizes="<?= $posterSizes ?>" loading="lazy" alt="" />
     <button type="button" class="lg-embed__play" aria-label="Play video"><?= $playSvg ?></button>
   </div>
 <?php if ($caption !== ''): ?>
@@ -173,8 +214,12 @@ if ($ytId !== '') {
    Thumbnail URL fetched once via Vimeo oembed, cached 12h. */
 if ($vimeoId !== '') {
     $safeVimeoId = htmlspecialchars($vimeoId, ENT_QUOTES, 'UTF-8');
+    /* FEATURED IMAGE PREFERRED (see YouTube branch). When the post has a
+       featured image we skip the Vimeo oembed hop entirely; only fall back to
+       the provider thumbnail (cached 12h) when none is set. */
+    [$featSrc, $featSrcset, $featSizes] = lg_embed_featured_poster($ctx);
     $thumb = '';
-    if (function_exists('get_transient')) {
+    if ($featSrc === '' && function_exists('get_transient')) {
         $tk = 'lg_v2_vimeo_thumb_' . $vimeoId;
         $cached = get_transient($tk);
         if (is_string($cached) && $cached !== '') {
@@ -193,7 +238,9 @@ if ($vimeoId !== '') {
     ?>
 <figure class="lg-embed lg-embed--<?= $variant ?> lg-embed--vimeo">
   <div class="lg-embed__frame lg-embed__facade" style="aspect-ratio: <?= $aspectCss ?>;" data-vimeo-id="<?= $safeVimeoId ?>">
-<?php if ($thumb !== ''): ?>
+<?php if ($featSrc !== ''): ?>
+    <img class="lg-embed__poster" src="<?= htmlspecialchars($featSrc, ENT_QUOTES, 'UTF-8') ?>"<?php if ($featSrcset !== ''): ?> srcset="<?= htmlspecialchars($featSrcset, ENT_QUOTES, 'UTF-8') ?>" sizes="<?= htmlspecialchars($featSizes !== '' ? $featSizes : '100vw', ENT_QUOTES, 'UTF-8') ?>"<?php endif; ?> loading="lazy" alt="" />
+<?php elseif ($thumb !== ''): ?>
     <img class="lg-embed__poster" src="<?= htmlspecialchars($thumb, ENT_QUOTES, 'UTF-8') ?>" loading="lazy" alt="" />
 <?php endif; ?>
     <button type="button" class="lg-embed__play" aria-label="Play video"><?= $playSvg ?></button>
