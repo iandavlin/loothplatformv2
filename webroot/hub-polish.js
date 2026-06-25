@@ -772,9 +772,16 @@
       col.appendChild(bubble);
 
       var actions = document.createElement('div'); actions.className = 'lg-fb-actions';
-      var like = document.createElement('span'); like.className = 'lg-fb-act lg-fb-like'; like.setAttribute('role', 'button'); like.textContent = 'Like';
+      // Surface the REAL reaction bar (server-rendered in .reply-stub__actions) at
+      // the START of the actions row — the same picker the cards/desktop modal use —
+      // instead of the old no-backend fake "Like" (Ian 2026-06-25: react controls in
+      // the modal). Scoped to the discussion SHEET so feed-card teaser replies are
+      // untouched. Fake Like stays as the fallback (no .fcr / not in the sheet).
+      var realFcr = stub.closest('#looth-rep-sheet') ? stub.querySelector('.reply-stub__actions .fcr') : null;
+      var like = null;
+      if (realFcr) { actions.appendChild(realFcr); }
+      else { like = document.createElement('span'); like.className = 'lg-fb-act lg-fb-like'; like.setAttribute('role', 'button'); like.textContent = 'Like'; actions.appendChild(like); }
       var reply = document.createElement('span'); reply.className = 'lg-fb-act lg-fb-reply'; reply.setAttribute('role', 'button'); reply.textContent = 'Reply';
-      actions.appendChild(like);
       actions.appendChild(reply);
       if (time) { time.classList.add('lg-fb-time'); actions.appendChild(time); }
       // Keep the server-rendered moderation controls (pencil/trash, revealed under
@@ -798,8 +805,12 @@
       stub.insertBefore(col, head);
       if (avatar) stub.insertBefore(avatar, col);
       if (head.parentNode) head.remove();
+      // The real .fcr was moved into the actions row above → drop the now-empty
+      // server actions wrapper so it doesn't leave a stray flex child in the stub.
+      var leftover = stub.querySelector('.reply-stub__actions');
+      if (leftover && !leftover.querySelector('.fcr')) { try { leftover.remove(); } catch (e) {} }
 
-      like.addEventListener('click', function () { like.classList.toggle('is-on'); });
+      if (like) like.addEventListener('click', function () { like.classList.toggle('is-on'); });
       reply.addEventListener('click', function () { openReplyComposer(stub, author, col); });
 
       revealReplyImages(stub);
@@ -3087,7 +3098,44 @@
       '#looth-rep-sheet .lrs-comp__pv-x{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border:0;border-radius:50%;background:rgba(26,29,26,.75);color:#fff;font:700 13px/20px sans-serif;cursor:pointer;padding:0}',
       '#looth-rep-sheet .lrs-comp__send:disabled{color:#b0b3b8;cursor:default}',
       '#looth-rep-sheet .lrs-comp__status{flex-basis:100%;font:12px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:#8a8d91;padding:2px 0 0 41px}',
-      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-comp{background:#1b1e21;border-color:#2c312d}'
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-comp{background:#1b1e21;border-color:#2c312d}',
+      // ── Reply BUTTON replaces the input pill (Ian 2026-06-25) — hide the legacy
+      //    avatar + input wrap; show one prominent filled button that triggers the
+      //    floating composer. ──
+      '#looth-rep-sheet .lrs-comp__av,#looth-rep-sheet .lrs-comp__wrap{display:none!important}',
+      '#looth-rep-sheet .lrs-replybtn{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:8px;' +
+        'border:0;border-radius:999px;cursor:pointer;padding:11px 16px;background:var(--lguser-accent,var(--lg-sage,#87986a));' +
+        'color:#fff;font:700 15px/1 var(--lg-font-sans,system-ui,sans-serif)}',
+      '#looth-rep-sheet .lrs-replybtn:active{background:var(--lguser-accent-d,var(--lg-sage-d,#586b3f))}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-replybtn{background:var(--lg-sage-d,#6b7c52);color:#f2f4ee}',
+      // ── React controls in the sheet (Ian 2026-06-25) — the .fcr reaction bar is
+      //    only styled under .feed-page; the sheet sits OUTSIDE it, so the cloned OP
+      //    bar + each reply's bar rendered unstyled/invisible. Mirror the essential
+      //    .feed-page .fcr* rules under #looth-rep-sheet so the picker + count chips
+      //    show and work (forums.js delegates .fcr clicks on document). ──
+      '#looth-rep-sheet .fcr{position:relative;display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}',
+      '#looth-rep-sheet .fcr-chips{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}',
+      '#looth-rep-sheet .fcr-chip{display:inline-flex;flex-direction:row;align-items:center;gap:4px;cursor:pointer;' +
+        'font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);padding:3px 9px 3px 7px;' +
+        'border:1px solid var(--lg-line,#cdd6ba);border-radius:999px;background:var(--lg-card-bg,#fff);color:var(--lg-mute,#6b6f6b)}',
+      '#looth-rep-sheet .fcr-chip.is-mine{background:var(--lg-sage-tint,#eef2e3);border-color:var(--lg-sage,#87986a);color:var(--lg-sage-d,#52613d)}',
+      '#looth-rep-sheet .fcr-chip .fcr-img{width:17px;height:17px}',
+      '#looth-rep-sheet .fcr-n{font-weight:600;font-variant-numeric:tabular-nums}',
+      '#looth-rep-sheet .fcr-add{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;' +
+        'width:34px;height:30px;border:1px solid var(--lg-line,#cdd6ba);border-radius:999px;background:var(--lg-card-bg,#fff);color:var(--lg-sage-d,#52613d);padding:0}',
+      '#looth-rep-sheet .fcr-add>span{font-size:12px;font-weight:700;margin-left:-1px}',
+      '#looth-rep-sheet .fcr-palette{position:absolute;left:0;bottom:calc(100% + 4px);z-index:20;display:flex;gap:2px;padding:6px;background:#fff;' +
+        'border:1px solid var(--lg-line,#cdd6ba);border-radius:14px;box-shadow:0 6px 22px rgba(26,29,26,.16);width:max-content;max-width:none}',
+      '#looth-rep-sheet .fcr-palette[hidden]{display:none}',
+      '#looth-rep-sheet .fcr-opt{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:0;background:none;padding:6px;border-radius:10px;font-size:22px;line-height:1;flex:0 0 auto}',
+      '#looth-rep-sheet .fcr-opt .fcr-img{width:24px;height:24px}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .fcr-chip,html[data-lguser-theme="dark"] #looth-rep-sheet .fcr-add{background:#262b30;border-color:#3a3f3a;color:#e5e7e1}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .fcr-palette{background:#2a2e31;border-color:#3a3f3a}',
+      // Replies now carry the REAL .fcr bar inline (fbStyleReply moves it into the
+      // actions row + drops the no-backend fake Like). Give the row room + sit the
+      // reaction bar tight against the Reply/time/Edit controls.
+      '#looth-rep-sheet .lg-fb-actions{flex-wrap:wrap;gap:6px 14px}',
+      '#looth-rep-sheet .lg-fb-actions .fcr{margin-right:2px}'
     ].join('\n');
     (document.head || document.documentElement).appendChild(s);
   }
@@ -3392,7 +3440,14 @@
         '<div class="lrs-grab" aria-hidden="true"></div>' +
         '<div class="lrs-hd"><span class="lrs-t"></span><button class="lrs-x" type="button" data-lrs-close aria-label="Close">&times;</button></div>' +
         '<div class="lrs-body" id="lrs-body"><div class="lrs-op" id="lrs-op" hidden></div><div id="lrs-thread"></div></div>' +
-        '<div class="lrs-comp"><span class="lrs-comp__av" id="lrs-comp-av"></span>' +
+        // Compact Reply BUTTON (Ian 2026-06-25) — replaces the persistent "Write a
+        // comment…" input pill. Tapping it opens the floating composer sheet (the
+        // .lrs-comp click handler below), same one-tap behavior as the feed. The
+        // legacy pill/photo/send elements stay in the DOM (hidden via CSS) so the
+        // existing composer wiring below keeps its element refs.
+        '<div class="lrs-comp"><button class="lrs-replybtn" id="lrs-replybtn" type="button">' +
+            '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17l-5-5 5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v1"/></svg><span>Reply</span></button>' +
+          '<span class="lrs-comp__av" id="lrs-comp-av"></span>' +
           '<div class="lrs-comp__wrap"><textarea class="lrs-comp__input" id="lrs-comp-input" rows="1" placeholder="Write a comment…"></textarea>' +
           '<button class="lrs-comp__photo" id="lrs-comp-photo" type="button" aria-label="Add photo" title="Add photo">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
@@ -3406,25 +3461,47 @@
       // grab/header down anytime, or overscroll-pull from the body when at the top.
       (function () {
         var cardEl = sh.querySelector('.lrs-card');
+        // Smooth swipe-dismiss (Ian 2026-06-25): the card FOLLOWS the finger during
+        // the drag (no transition), then on release either eases CLOSED past the
+        // threshold / on a fast flick, or springs BACK under it — never an instant cut.
+        var DRAG_EASE = 'transform .26s cubic-bezier(.32,.72,0,1)';
         function dragTo(dy) { cardEl.style.transition = 'none'; cardEl.style.transform = 'translateY(' + Math.max(0, dy) + 'px)'; }
-        function dragReset() { cardEl.style.transition = ''; cardEl.style.transform = ''; }
-        function dragEnd(dy) { dragReset(); if (dy > 110) lrsClose(); }
+        function dragReset() { cardEl.style.transition = ''; cardEl.style.transform = ''; }   // instant — mid-gesture cancels
+        function dragSnapBack() {                                  // released under threshold → ease home
+          cardEl.style.transition = DRAG_EASE; cardEl.style.transform = 'translateY(0)';
+          setTimeout(function () { cardEl.style.transition = ''; cardEl.style.transform = ''; }, 300);
+        }
+        function dragClose() {                                     // released past threshold → ease fully down, then tear down
+          cardEl.style.transition = DRAG_EASE; cardEl.style.transform = 'translateY(100%)';
+          var done = false;
+          var fin = function () { if (done) return; done = true; cardEl.style.transition = ''; cardEl.style.transform = ''; lrsClose(); };
+          cardEl.addEventListener('transitionend', fin, { once: true });
+          setTimeout(fin, 340);                                   // fallback if transitionend doesn't fire
+        }
+        // dy = distance dragged; vy = downward velocity (px/ms) at release. A fast
+        // flick closes even under the distance threshold (momentum-aware).
+        function dragEnd(dy, vy) { if (dy > 110 || vy > 0.55) dragClose(); else dragSnapBack(); }
         function attach(el, atTopGuard) {
           if (!el) return;
-          var sy = 0, dy = 0, on = false;
+          var sy = 0, dy = 0, on = false, lastY = 0, lastT = 0, vy = 0;
           el.addEventListener('touchstart', function (e) {
             if (atTopGuard && !atTopGuard()) { on = false; return; }
             sy = e.touches[0].clientY; dy = 0; on = true;
+            lastY = sy; lastT = e.timeStamp || 0; vy = 0;
           }, { passive: true });
           el.addEventListener('touchmove', function (e) {
             if (!on) return;
-            dy = e.touches[0].clientY - sy;
+            var y = e.touches[0].clientY;
+            dy = y - sy;
             if (dy <= 0) { if (atTopGuard) { on = false; dragReset(); } return; }   // pulled up → let the body scroll
             if (atTopGuard && !atTopGuard()) { on = false; dragReset(); return; }
+            var t = e.timeStamp || 0, dt = t - lastT;
+            if (dt > 0) vy = (y - lastY) / dt;                     // px per ms, downward positive
+            lastY = y; lastT = t;
             dragTo(dy);
             if (e.cancelable) e.preventDefault();
           }, { passive: false });
-          el.addEventListener('touchend', function () { if (!on) return; on = false; dragEnd(Math.max(0, dy)); });
+          el.addEventListener('touchend', function () { if (!on) return; on = false; dragEnd(Math.max(0, dy), vy); });
         }
         attach(sh.querySelector('.lrs-grab'), null);
         attach(sh.querySelector('.lrs-hd'), null);

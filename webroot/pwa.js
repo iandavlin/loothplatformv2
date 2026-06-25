@@ -66,7 +66,7 @@
 
   if (onHub) {
     // Hub feed visual polish (app-card feed, desktop mosaic, action row …).
-    inject('looth-hub-polish-js', '/hub-polish.js?v=217', true);
+    inject('looth-hub-polish-js', '/hub-polish.js?v=218', true);
     // Hub infinite scroll (auto-append older feed items at the bottom).
     inject('looth-hub-infinite-js', '/hub-infinite.js?v=4');
     // Spotlight sponsor cards in the feed (Ian+Buck greenlight 2026-06-11).
