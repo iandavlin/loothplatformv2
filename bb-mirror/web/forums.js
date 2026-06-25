@@ -2798,6 +2798,164 @@
   var BASE = (window.LG_FORUM_BASE || '').toString().replace(/\/+$/, '');
   var modal = null;
 
+  // ── ⋯ Edit/Delete on modal REPLIES (hub-editdel, Ian 2026-06-25) ────────────
+  // The modal OP already has edit+delete (lg-dmodal__edit / __del below); replies
+  // didn't (that wiring was gated behind ?proto=cards). We inject a Facebook-style
+  // ⋯ menu per reply-stub in fbRows(), reusing the permalink's .post__menu* styles
+  // and the SAME owned endpoints (/bb-mirror-api/v0/reply PUT/DELETE — author-or-
+  // mod, IDOR-proof). Reveal rule matches the permalink: author-match OR
+  // can_edit_others. Server re-checks on every write, so this gate is convenience.
+  var EDIT_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  var DEL_SVG  = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
+
+  // Viewer auth/nonce, fetched once and cached (same endpoint the OP block uses).
+  var dmAuth = null, dmAuthPending = null;
+  function dmGetAuth(cb) {
+    if (dmAuth) { cb(dmAuth); return; }
+    if (dmAuthPending) { dmAuthPending.push(cb); return; }
+    dmAuthPending = [cb];
+    fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { dmAuth = d || { authenticated: false }; dmAuthPending.forEach(function (f) { f(dmAuth); }); dmAuthPending = null; })
+      .catch(function () { dmAuth = { authenticated: false }; dmAuthPending.forEach(function (f) { f(dmAuth); }); dmAuthPending = null; });
+  }
+
+  function dmCloseMenus() {
+    if (!modal) return;
+    [].forEach.call(modal.querySelectorAll('.post__menu-wrap--rs .post__menu:not([hidden])'), function (mn) { mn.hidden = true; });
+    [].forEach.call(modal.querySelectorAll('.post__menu-wrap--rs .post__menu-btn[aria-expanded="true"]'), function (b) { b.setAttribute('aria-expanded', 'false'); });
+  }
+
+  // Inject the ⋯ menu into one reply-stub head — only if the viewer authored it
+  // OR can moderate. Idempotent (guards on an existing wrap).
+  function dmInjectReplyMenu(stub, auth) {
+    if (!stub || stub.querySelector('.post__menu-wrap--rs')) return;
+    var rid = parseInt(stub.getAttribute('data-reply-id'), 10) || 0;
+    if (!rid) return;
+    var authorId = parseInt(stub.getAttribute('data-author-id'), 10) || 0;
+    var mine = auth && auth.wp_user_id && authorId === parseInt(auth.wp_user_id, 10);
+    if (!mine && !(auth && auth.can_edit_others)) return;
+    var head = stub.querySelector('.reply-stub__head') || stub;
+    var wrap = document.createElement('div');
+    wrap.className = 'post__menu-wrap post__menu-wrap--rs';
+    wrap.innerHTML =
+      '<button type="button" class="post__menu-btn" aria-haspopup="true" aria-expanded="false" aria-label="Reply options">' +
+        '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>' +
+      '</button>' +
+      '<div class="post__menu" role="menu" hidden>' +
+        '<button type="button" role="menuitem" class="post__menu-item dm-rs-edit">' + EDIT_SVG + '<span>Edit</span></button>' +
+        '<button type="button" role="menuitem" class="post__menu-item post__menu-item--danger dm-rs-del">' + DEL_SVG + '<span>Delete</span></button>' +
+      '</div>';
+    head.appendChild(wrap);
+    var trig = wrap.querySelector('.post__menu-btn');
+    var menu = wrap.querySelector('.post__menu');
+    trig.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var willOpen = menu.hidden;
+      dmCloseMenus();
+      menu.hidden = !willOpen;
+      trig.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+    wrap.querySelector('.dm-rs-edit').addEventListener('click', function () { dmCloseMenus(); dmReplyEdit(stub, rid); });
+    wrap.querySelector('.dm-rs-del').addEventListener('click', function () { dmCloseMenus(); dmReplyDelete(stub, rid); });
+  }
+
+  // Inline reply editor — Quill when present (seeded from the full stored body so
+  // formatting round-trips), plain textarea fallback. PUT /bb-mirror-api/v0/reply.
+  function dmReplyEdit(stub, rid) {
+    if (stub.querySelector('.dm-rs-editbox')) return;
+    var excerpt = stub.querySelector('.reply-stub__excerpt');
+    var bodyDiv = stub.querySelector('.reply-stub__body');
+    var editBtn = stub.querySelector('.reply-stub__edit');
+    var raw = (editBtn && editBtn.getAttribute('data-reply-raw')) || (excerpt ? excerpt.innerHTML : '');
+    var box = document.createElement('div');
+    box.className = 'dm-rs-editbox';
+    box.innerHTML =
+      '<div class="dm-rs-quill"></div>' +
+      '<div class="dm-rs-row">' +
+        '<button type="button" class="dm-rs-save">Save</button>' +
+        '<button type="button" class="dm-rs-cancel">Cancel</button>' +
+        '<span class="dm-rs-status" aria-live="polite"></span>' +
+      '</div>';
+    if (bodyDiv) { bodyDiv.style.display = 'none'; bodyDiv.parentNode.insertBefore(box, bodyDiv.nextSibling); }
+    else { stub.appendChild(box); }
+    var qEl = box.querySelector('.dm-rs-quill');
+    var status = box.querySelector('.dm-rs-status');
+    var quill = null, ta = null;
+    if (typeof Quill !== 'undefined') {
+      quill = new Quill(qEl, { theme: 'snow', bounds: qEl, modules: { toolbar: [
+        ['bold', 'italic', 'underline'], ['blockquote'], [{ list: 'ordered' }, { list: 'bullet' }], ['link'], ['clean'],
+      ] } });
+      if (raw) quill.clipboard.dangerouslyPasteHTML(raw);
+      quill.focus();
+    } else {
+      qEl.innerHTML = '<textarea class="dm-rs-ta" rows="4"></textarea>';
+      ta = qEl.querySelector('.dm-rs-ta');
+      ta.value = (excerpt ? (excerpt.innerText || excerpt.textContent || '') : '').trim();
+      ta.focus();
+    }
+    box.querySelector('.dm-rs-cancel').addEventListener('click', function () {
+      box.remove(); if (bodyDiv) bodyDiv.style.display = '';
+    });
+    box.querySelector('.dm-rs-save').addEventListener('click', function () {
+      var html;
+      if (quill) {
+        html = quill.root.innerHTML;
+        if (html === '<p><br></p>') html = '';
+        // Strip inline preview <img> (parity with the other composers — reply
+        // images attach via media, not inline body HTML).
+        html = html.replace(/<img[^>]*>/gi, '').trim();
+      } else {
+        var txt = (ta.value || '').trim();
+        html = txt ? '<p>' + txt.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }).replace(/\n/g, '<br>') + '</p>' : '';
+      }
+      if (!html) { status.textContent = "Can't be empty."; return; }
+      status.textContent = 'Saving…';
+      dmGetAuth(function (a) {
+        if (!a || !a.nonce) { status.textContent = 'Not signed in.'; return; }
+        fetch('/bb-mirror-api/v0/reply', {
+          method: 'PUT', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+          body: JSON.stringify({ reply_id: rid, content: html }),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.error)) || 'Could not save.'; return; }
+            var fresh = (res.j && res.j.content_html) || html;
+            if (excerpt) excerpt.innerHTML = fresh;
+            if (editBtn) editBtn.setAttribute('data-reply-raw', fresh);
+            box.remove(); if (bodyDiv) bodyDiv.style.display = '';
+            if (window.bbProcessEmbeds && bodyDiv) window.bbProcessEmbeds(bodyDiv);
+          })
+          .catch(function (err) { status.textContent = 'Network error: ' + err.message; });
+      });
+    });
+  }
+
+  // Delete a reply — confirm, DELETE /bb-mirror-api/v0/reply, drop the stub +
+  // reconcile the card's reply count.
+  function dmReplyDelete(stub, rid) {
+    if (!window.confirm('Delete this reply? This can’t be undone.')) return;
+    dmGetAuth(function (a) {
+      if (!a || !a.nonce) { alert('Not signed in.'); return; }
+      fetch('/bb-mirror-api/v0/reply', {
+        method: 'DELETE', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+        body: JSON.stringify({ reply_id: rid }),
+      })
+        .then(function (r) { return r.json().then(function (j) { return { s: r.status, ok: r.ok, j: j }; }, function () { return { s: r.status, ok: r.ok, j: {} }; }); })
+        .then(function (res) {
+          if (res.s === 403) { alert('You can only delete your own replies.'); return; }
+          if (!res.ok) { alert('Could not delete: ' + ((res.j && (res.j.message || res.j.error)) || 'failed')); return; }
+          var rep = modal && modal.querySelector('.lg-dmodal__replies .feed-card__replies-full');
+          var tid = modal && modal.dataset ? modal.dataset.topicId : null;
+          try { stub.remove(); } catch (e) {}
+          if (rep && tid) reconcileCount(rep, tid);
+        })
+        .catch(function (err) { alert('Network error: ' + err.message); });
+    });
+  }
+
   function deskt() {
     try { return window.matchMedia('(min-width:641px)').matches; } catch (e) { return false; }
   }
@@ -2821,7 +2979,8 @@
       '</div>';
     document.body.appendChild(modal);
     modal.addEventListener('click', function (e) {
-      if (e.target.closest('[data-dm-close]')) close();
+      if (e.target.closest('[data-dm-close]')) { close(); return; }
+      if (!e.target.closest('.post__menu-wrap--rs')) dmCloseMenus();   // dismiss any open reply ⋯ menu
     });
     // 3 panel sizes (Ian): S / M / L, cycled from the head, persisted per device.
     var SIZES = ['s', 'm', 'l'];
@@ -2918,6 +3077,11 @@
       var bodyEl = stub.querySelector('.reply-stub__body, .reply-stub__excerpt');
       var col = bodyEl ? bodyEl.parentElement : stub;
       col.appendChild(row);
+    });
+    // Author/mod ⋯ Edit+Delete per reply (cached auth; idempotent per stub).
+    dmGetAuth(function (auth) {
+      if (!auth || !auth.authenticated) return;
+      [].forEach.call(t.querySelectorAll('.reply-stub'), function (stub) { dmInjectReplyMenu(stub, auth); });
     });
   }
 

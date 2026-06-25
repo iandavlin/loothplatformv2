@@ -4391,3 +4391,32 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   .post__menu { min-width: 208px; right: 0; }
   .post__menu-item { padding: 12px 13px; font-size: 16px; }  /* bigger touch targets */
 }
+
+/* ── ⋯ Edit/Delete on modal reply stubs (hub-editdel, Ian 2026-06-25) ─────────
+   Reuses the FB-style .post__menu* dropdown; scoped to #lg-dmodal so the feed
+   teaser reply stubs are untouched. The wrap is injected into .reply-stub__head
+   by forums.js (dmInjectReplyMenu) only for the author or a moderator. */
+#lg-dmodal .reply-stub__head { position: relative; padding-right: 30px; }
+.post__menu-wrap--rs { top: -2px; right: 0; }
+.post__menu-wrap--rs .post__menu-btn { width: 28px; height: 28px; }
+
+/* Inline reply editor inside the modal */
+.dm-rs-editbox { margin: 6px 0 4px; }
+.dm-rs-editbox .dm-rs-quill { background: #fff; border-radius: 8px; }
+.dm-rs-editbox .dm-rs-ta {
+  width: 100%; box-sizing: border-box; padding: 8px;
+  border: 1px solid var(--border-soft, rgba(0, 0, 0, .15)); border-radius: 8px;
+  font: inherit; resize: vertical;
+}
+.dm-rs-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.dm-rs-save, .dm-rs-cancel {
+  border: 0; border-radius: 7px; padding: 6px 13px;
+  font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif); cursor: pointer;
+}
+.dm-rs-save { background: var(--accent, #3a5a40); color: #fff; }
+.dm-rs-cancel { background: rgba(0, 0, 0, .07); color: var(--fg, #1c1c1c); }
+.dm-rs-status { font-size: 12.5px; color: var(--fg-muted, #6b6b6b); }
+
+@media (max-width: 640px) {
+  .post__menu-wrap--rs .post__menu-btn { width: 32px; height: 32px; }  /* bigger touch target */
+}
