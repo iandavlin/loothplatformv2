@@ -1958,7 +1958,9 @@
             // in-place update can't reflect them, so reload the discussion-modal thread.
             if (mediaChanged) {
               var dm = document.getElementById('lg-dmodal');
-              var dtid = dm && !dm.hidden ? (dm.dataset.topicId || '') : '';
+              var rs = document.getElementById('looth-rep-sheet');   // mobile sheet
+              var dtid = (dm && !dm.hidden && dm.dataset.topicId) ? dm.dataset.topicId
+                       : (rs && rs.classList.contains('is-open') && rs.getAttribute('data-tid')) ? rs.getAttribute('data-tid') : '';
               if (dtid) { try { document.dispatchEvent(new CustomEvent('lg:reply-posted', { detail: { topicId: parseInt(dtid, 10) } })); } catch (e) {} }
             }
             frmSubmit.disabled = false;

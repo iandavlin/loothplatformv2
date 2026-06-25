@@ -4398,24 +4398,34 @@
         lrsGetAuth(function (a) {
           if (!a || !a.nonce) { alert('Not signed in.'); return; }
           tr.disabled = true;
-          fetch(LRS_REPLY_BASE + '/reply/' + rid, { method: 'DELETE', credentials: 'same-origin', headers: { 'X-WP-Nonce': a.nonce } })
+          // Owned endpoint (author-or-mod, IDOR-proof) — same as desktop. The native
+          // BuddyBoss DELETE is mods-only and bypasses our gate; this also fires
+          // before_delete_post so the reply's media + attachments are cleaned up (no
+          // orphans). (Ian 2026-06-25: desktop/mobile must agree.)
+          fetch('/bb-mirror-api/v0/reply', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce }, body: JSON.stringify({ reply_id: rid }) })
             .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
             .then(function (res) {
-              if (!res.ok) { tr.disabled = false; alert('Could not trash: ' + ((res.j && (res.j.message || res.j.code)) || 'failed')); return; }
+              if (res.s === 403 || (res.j && res.j.error === 'forbidden')) { tr.disabled = false; alert('You can only delete your own replies.'); return; }
+              if (!res.ok) { tr.disabled = false; alert('Could not trash: ' + ((res.j && (res.j.message || res.j.error || res.j.code)) || 'failed')); return; }
               var stub = tr.closest('.reply-stub'); if (stub) stub.remove();
             })
             .catch(function (err) { tr.disabled = false; alert('Network error: ' + err.message); });
         });
         return;
       }
-      // EDIT: inline plain-text box (the .reply-stub__editbox CSS already exists).
-      // data-reply-raw carries the full stored HTML; we edit the text and re-append
-      // any <img> tags on save so photos round-trip instead of being destroyed.
+      // EDIT — mirror desktop: open the SAME Quill composer (rich text + add/REMOVE
+      // photos via real attachments, owned endpoint, no orphaned media) instead of
+      // the inline plain-text box. The old inline path round-tripped images as inline
+      // <img> and removing one left the bp_media attachment orphaned. (Ian 2026-06-25)
       var stub = ed.closest('.reply-stub');
       if (!stub || stub.querySelector('.reply-stub__editbox')) return;
       var bodyDiv = stub.querySelector('.reply-stub__body');
       var excerpt = stub.querySelector('.reply-stub__excerpt');
       var raw = ed.getAttribute('data-reply-raw') || '';
+      if (typeof window.lgFrmEditReply === 'function') {
+        window.lgFrmEditReply(rid, raw || (excerpt ? excerpt.innerHTML : ''));
+        return;
+      }
       var imgs = raw.match(/<img[^>]*>/gi) || [];
       var cur = raw
         ? raw.replace(/<img[^>]*>/gi, '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>\s*<p[^>]*>/gi, '\n\n').replace(/<[^>]+>/g, '').trim()
