@@ -3077,6 +3077,11 @@
     e.stopPropagation();   // beat the legacy inline-expand handlers
     open(card);
   }, true);
+
+  // §4f deep-link router opens the discussion modal programmatically (a real
+  // in-feed card, or a synthetic card built from a cold standalone fetch). Tail
+  // export keeps it out of open()'s body (hub-editdel owns that). Ian 2026-06-25.
+  window.lgDmodalOpen = open;
 })();
 
 /* ── §9 Pinned mosaic columns (desktop) ─────────────────────────────────────
@@ -3313,4 +3318,233 @@
     box.querySelector('.lg-imglb__img').src = fullSrc(img);
     box.hidden = false;
   }, true);
+})();
+
+/* ── §4f. Topic deep-linking (hub-topic-deeplink, Ian 2026-06-25) ─────────────
+   Makes the §4e discussion-modal state addressable by URL — ADDITIVE, drives the
+   modal via the §4e tail export (window.lgDmodalOpen) + the existing
+   [data-dm-close] idiom, never reaching into open()/close().
+     1. open  → pushState /hub/?topic=<forum-slug>/<topic-slug> (copyable URL).
+     2. load  → ?topic= auto-opens the modal: a loaded card if present, else a
+                standalone fetch of the canonical permalink poured into a
+                synthetic card (the cold deep-link path).
+     3. Back  → closes the modal, returning to the feed URL.
+   URL shape: a query param on the FEED route (the feed ignores unknown params),
+   so the canonical permalink /hub/<forum>/<topic>/ stays the untouched
+   standalone/share/no-JS page. Desktop only (§4e is >=641); on mobile a ?topic=
+   deep-link redirects to that canonical permalink. History bookkeeping is
+   flag-free: every decision reads the live URL (is ?topic present?), which is
+   race-proof against the async MutationObserver. */
+(function () {
+  'use strict';
+  var FORUM_BASE = (window.LG_FORUM_BASE || '/hub').toString().replace(/\/+$/, '');
+
+  function deskt() {
+    try { return window.matchMedia('(min-width:641px)').matches; } catch (e) { return false; }
+  }
+  function dmodal() { return document.getElementById('lg-dmodal'); }
+  function hasTopicParam() { return /[?&]topic=/.test(location.search); }
+
+  // ?topic=<forum-slug>/<topic-slug>  →  {forum, topic} | null
+  function parseTopicParam() {
+    var m = /[?&]topic=([^&#]+)/.exec(location.search);
+    if (!m) return null;
+    var v = decodeURIComponent(m[1]).replace(/^\/+|\/+$/g, '');
+    var parts = v.split('/').filter(Boolean);
+    return parts.length >= 2 ? { forum: parts[0], topic: parts[1] } : null;
+  }
+  // Canonical standalone permalink for a {forum, topic}.
+  function permalink(ft) { return FORUM_BASE + '/' + ft.forum + '/' + ft.topic + '/'; }
+  // The ?topic= address-bar URL, scoped to the CURRENT feed path (so Back returns
+  // there) and preserving any existing query (sort/q/saved…).
+  function topicUrl(ft) {
+    var qs = new URLSearchParams(location.search);
+    qs.set('topic', ft.forum + '/' + ft.topic);
+    return location.pathname + '?' + qs.toString();
+  }
+  function feedUrlNoTopic() {
+    var qs = new URLSearchParams(location.search);
+    qs.delete('topic');
+    var s = qs.toString();
+    return location.pathname + (s ? '?' + s : '');
+  }
+
+  // Slug pair for a LOADED topic card (its data-href is the canonical permalink).
+  function ftForLoadedTopic(tid) {
+    var c = document.querySelector('.feed-card--topic[data-topic-id="' + tid + '"]');
+    return c ? ftFromHref(c.getAttribute('data-href')) : null;
+  }
+  function ftFromHref(href) {
+    if (!href) return null;
+    var path = href.replace(/^https?:\/\/[^/]+/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+    if (FORUM_BASE && path.indexOf(FORUM_BASE) === 0) path = path.slice(FORUM_BASE.length);
+    var parts = path.split('/').filter(Boolean);
+    return parts.length >= 2 ? { forum: parts[0], topic: parts[1] } : null;
+  }
+  // A loaded card whose permalink matches {forum, topic} (string scan — slugs may
+  // carry characters that aren't attribute-selector safe).
+  function cardForFt(ft) {
+    var want = '/' + ft.forum + '/' + ft.topic + '/';
+    var cards = document.querySelectorAll('.feed-card--topic[data-href]');
+    for (var i = 0; i < cards.length; i++) {
+      var h = (cards[i].getAttribute('data-href') || '').replace(/[?#].*$/, '');
+      if (h.slice(-want.length) === want) return cards[i];
+    }
+    return null;
+  }
+
+  // ── Open routing ───────────────────────────────────────────────────────────
+  function openTopic(ft) {
+    var card = cardForFt(ft);
+    if (card && typeof window.lgDmodalOpen === 'function') { window.lgDmodalOpen(card); return; }
+    fetchStandalone(ft);   // cold: not in the feed yet (infinite-scroll hasn't reached it)
+  }
+
+  // Cold deep-link: fetch the canonical standalone page, scrape its OP into a
+  // synthetic feed-card carrying exactly the attrs/selectors §4e open() reads
+  // (incl. the .fc-actions .fcr reaction bar _single-topic.php now renders), then
+  // hand it to open() — which hydrates ?body=/?replies= by id identically to a
+  // normal card-clone open. Hard failure falls back to the real page.
+  function fetchStandalone(ft) {
+    fetch(permalink(ft), { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (html) {
+        if (!html) return fail(ft);
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var op = doc.querySelector('.post--op');
+        var card = op && buildSyntheticCard(doc, op, ft);
+        if (!card || typeof window.lgDmodalOpen !== 'function') return fail(ft);
+        window.lgDmodalOpen(card);
+      })
+      .catch(function () { fail(ft); });
+  }
+  function fail(ft) { location.href = permalink(ft); }   // graceful: the real page
+
+  function el(tag, cls, html) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (html != null) e.innerHTML = html;
+    return e;
+  }
+  function buildSyntheticCard(doc, op, ft) {
+    // IDs come off the OP edit button (server-rendered even when hidden), with the
+    // #topic-<id> anchor as the fallback for the topic id.
+    var editBtn = op.querySelector('.post__edit-btn');
+    var tid = editBtn && editBtn.getAttribute('data-edit-id');
+    var fid = editBtn && editBtn.getAttribute('data-forum-id');
+    var aid = editBtn && editBtn.getAttribute('data-author-id');
+    if (!tid) { var mm = /topic-(\d+)/.exec(op.id || ''); tid = mm && mm[1]; }
+    if (!tid) return null;
+
+    var card = document.createElement('article');
+    card.className = 'feed-card feed-card--topic';
+    card.setAttribute('data-topic-id', tid);
+    if (fid) card.setAttribute('data-forum-id', fid);
+    if (aid) card.setAttribute('data-author-id', aid);
+    card.setAttribute('data-href', permalink(ft));
+
+    var avatar = op.querySelector('.post__avatar');
+    card.appendChild(el('span', 'fc-avatar lg-card-avatar', avatar ? avatar.innerHTML : ''));
+
+    var author = op.querySelector('.post__author');
+    var fcAuthor = el('div', 'fc-author', '');
+    var nameWrap = el('span', 'fc-author__name lg-card-author', '');
+    if (author) nameWrap.appendChild(author.cloneNode(true));
+    fcAuthor.appendChild(nameWrap);
+    card.appendChild(fcAuthor);
+
+    var time = op.querySelector('.post__time');
+    card.appendChild(el('time', 'fc-time lg-card-time', time ? time.innerHTML : ''));
+
+    var titleEl = doc.querySelector('.topic-header__title');
+    card.appendChild(el('h3', 'fc-title feed-card__title', titleEl ? titleEl.textContent : 'Discussion'));
+
+    // Instant excerpt placeholder; open() replaces it with the full ?body= fetch.
+    var bodyEl = op.querySelector('.post__body');
+    var exc = el('div', 'fc-excerpt feed-card__op', '');
+    exc.appendChild(el('p', 'feed-card__op-excerpt', bodyEl ? bodyEl.innerHTML : ''));
+    card.appendChild(exc);
+
+    // The reaction bar — same .fc-actions .fcr markup the feed card carries; open()
+    // clones it into the modal for full OP reaction parity.
+    var fcr = op.querySelector('.fc-actions .fcr') || doc.querySelector('.fc-actions .fcr');
+    var acts = el('div', 'fc-actions', '');
+    if (fcr) acts.appendChild(fcr.cloneNode(true));
+    card.appendChild(acts);
+
+    return card;
+  }
+
+  // ── Address-bar sync (modal open/close → history) ────────────────────────────
+  // Watch only #lg-dmodal's own `hidden` attribute (the modal is created lazily on
+  // first open, appended directly to <body>, so we wait for it via a cheap
+  // body-childList observer, then narrow to its hidden attribute).
+  var wasOpen = false, attrObs = null;
+  function check() {
+    var m = dmodal();
+    var isOpen = !!(m && !m.hidden);
+    if (isOpen === wasOpen) return;
+    wasOpen = isOpen;
+    if (isOpen) onOpened(); else onClosed();
+  }
+  function onOpened() {
+    var m = dmodal();
+    var tid = m && m.dataset.topicId;
+    if (!tid) return;
+    if (hasTopicParam()) return;                 // routed open (load/popstate) → URL already correct
+    var ft = ftForLoadedTopic(tid);
+    if (ft) history.pushState({ lgTopic: ft.forum + '/' + ft.topic }, '', topicUrl(ft));
+  }
+  function onClosed() {
+    if (!hasTopicParam()) return;                // closed BY popstate (URL already feed) → leave history alone
+    if (history.state && history.state.lgTopic) history.back();   // UI close → drop the modal entry
+    else history.replaceState({}, '', feedUrlNoTopic());          // defensive: no modal entry to pop
+  }
+  function attachAttrObs(m) {
+    attrObs = new MutationObserver(check);
+    attrObs.observe(m, { attributes: true, attributeFilter: ['hidden'] });
+    check();
+  }
+  function setupModalObserver() {
+    var m = dmodal();
+    if (m) { attachAttrObs(m); return; }
+    var bodyObs = new MutationObserver(function () {
+      var n = dmodal();
+      if (n) { bodyObs.disconnect(); attachAttrObs(n); }
+    });
+    bodyObs.observe(document.body, { childList: true });
+  }
+
+  // ── Back / Forward ───────────────────────────────────────────────────────────
+  function onPopState() {
+    var ft = parseTopicParam();
+    var m = dmodal();
+    var open = !!(m && !m.hidden);
+    if (ft && deskt()) {
+      if (!open) openTopic(ft);                  // forward into a topic state → reopen
+    } else if (open) {
+      var cb = m.querySelector('[data-dm-close]');   // back to feed → close via the §4e idiom
+      if (cb) cb.click();
+    }
+  }
+
+  // ── Page-load routing ────────────────────────────────────────────────────────
+  function routeFromUrl() {
+    var ft = parseTopicParam();
+    if (!ft) return;
+    if (!deskt()) { location.replace(permalink(ft)); return; }   // mobile → canonical page
+    // Seat a feed entry beneath the modal so Back returns to the feed (not off-site),
+    // then layer the modal entry on top and open.
+    history.replaceState({}, '', feedUrlNoTopic());
+    history.pushState({ lgTopic: ft.forum + '/' + ft.topic }, '', topicUrl(ft));
+    openTopic(ft);
+  }
+
+  function boot() {
+    setupModalObserver();
+    window.addEventListener('popstate', onPopState);
+    routeFromUrl();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();
