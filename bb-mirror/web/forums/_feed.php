@@ -625,7 +625,7 @@ if ($scoped_forum) {
     $hub_facets = hub_facet_counts($db, $content_tiers, $_forum_cat_map);
     $hub_leaf_labels = [];
     foreach ($hub_cat_tree as $_p) foreach ($_p['leaves'] as $_lf) $hub_leaf_labels[$_lf['key']] = $_lf['label'];
-    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'tree' => $hub_cat_tree, 'filters' => $hub_filters, 'muted' => $hub_muted, 'sort' => $sort_param, 'shows' => hub_show_terms($db)];
+    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'tree' => $hub_cat_tree, 'filters' => $hub_filters, 'muted' => $hub_muted, 'sort' => $sort_param, 'shows' => hub_show_terms($db), 'leaf_labels' => $hub_leaf_labels];
 
     // Unified full-text search (q) — an AND dimension across BOTH worlds, applied
     // per-branch (FTS columns: topic.search_doc, content_item.tsv). websearch_to_

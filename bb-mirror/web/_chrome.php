@@ -579,6 +579,18 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
     <div class="hub-fmodal__body">
       <?php
         $__r = $GLOBALS['__bb_hub_rail'];
+        // Active-filter chips (hub-mobile-search lane, 2026-06-25): surface the SAME
+        // persistent, individually-clearable chip bar here, ABOVE the search inputs,
+        // so on mobile the modal is the one place for ALL filters (query + author +
+        // category). Distinct outer class 'hub-fmodal__chips' (NOT .hub-chipbar) keeps
+        // fmodalApply's feed-bar swap from being hijacked. The per-chip × / "Reset all"
+        // are server <a href> handled by the existing forums.js a[href]->fmodalApply
+        // path; the modal body innerHTML-swap keeps them fresh — no forums.js change.
+        // CSS shows this only on mobile (forums.css hides it >=641); the feed chipbar
+        // is the desktop surface (unchanged).
+        if (function_exists('hub_render_chipbar')) {
+          hub_render_chipbar($__r['filters'], $__r['muted'] ?? ['types' => [], 'cats' => []], $__r['sort'] ?? 'new', $__r['leaf_labels'] ?? [], $__r['tree'] ?? [], 'hub-fmodal__chips');
+        }
         // Advanced Search (Ian 2026-06-20): the two search bars are EXPOSED at the
         // top (always visible); filters live in the accordions below (Shows folded in).
         if (function_exists('hub_render_toolbar_search')) {
