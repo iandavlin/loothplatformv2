@@ -4380,7 +4380,17 @@
         });
       }
       mark();
-      try { new MutationObserver(mark).observe(document.body, { childList: true }); } catch (e) {}
+      // Watch the SUBTREE (throttled) — the mobile sheet (#looth-rep-sheet) and the
+      // desktop modal load their reply threads DEEP inside themselves, so a
+      // body-only (non-subtree) observer never fired for new stubs and own-reply
+      // edit/trash stayed hidden on mobile (Ian 2026-06-25).
+      var modPend = false;
+      try {
+        new MutationObserver(function () {
+          if (modPend) return; modPend = true;
+          requestAnimationFrame(function () { modPend = false; mark(); });
+        }).observe(document.body, { childList: true, subtree: true });
+      } catch (e) {}
     });
     document.addEventListener('click', function (ev) {
       if (!ev.target.closest) return;
