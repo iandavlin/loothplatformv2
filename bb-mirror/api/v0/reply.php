@@ -45,6 +45,16 @@ if (!$uid) {
     reply_out(401, ['ok' => false, 'error' => 'auth', 'message' => 'Sign in to reply.']);
 }
 
+// Moderator/keymaster/admin — the authoritative "edit or delete anyone's post"
+// gate, used by every edit/delete branch below. auth.php's can_edit_others
+// mirrors this EXACTLY so the ⋯ menu UI-reveal and this server enforcement always
+// agree. 'administrator' is a role name (not a cap), so admins are caught via
+// 'manage_options'; 'moderate'/'keep_gate' cover the bbPress keymaster + gate
+// roles (Ian 2026-06-25).
+$is_mod_viewer = current_user_can('moderate')
+    || current_user_can('keep_gate')
+    || current_user_can('manage_options');
+
 $body = json_decode(file_get_contents('php://input') ?: '', true) ?: [];
 
 // ── EDIT (PUT) / DELETE — own reply OR moderator (Ian 2026-06-11: members can
@@ -70,7 +80,7 @@ if ($method === 'PUT' || $method === 'DELETE') {
         // Author-or-moderator; author taken from the stored post (IDOR-proof), then
         // the cap (author-scoped via the mu-plugin) is the authoritative gate.
         $t_is_author = ((int) $topic->post_author === (int) $uid);
-        $t_is_mod    = current_user_can('moderate') || current_user_can('keep_gate');
+        $t_is_mod    = $is_mod_viewer;
         if ((!$t_is_author && !$t_is_mod) || !current_user_can('delete_topic', $topic_id_del)) {
             reply_out(403, ['ok' => false, 'error' => 'forbidden', 'message' => 'You can only delete your own posts.']);
         }
@@ -105,7 +115,7 @@ if ($method === 'PUT' || $method === 'DELETE') {
         // Author-or-moderator; the author is taken from the stored post (never the
         // client — IDOR-proof), exactly like the reply-edit + topic-delete paths.
         $t_is_author = ((int) $topic->post_author === (int) $uid);
-        $t_is_mod    = current_user_can('moderate') || current_user_can('keep_gate');
+        $t_is_mod    = $is_mod_viewer;
         if (!$t_is_author && !$t_is_mod) {
             reply_out(403, ['ok' => false, 'error' => 'forbidden', 'message' => 'You can only edit your own posts.']);
         }
@@ -154,7 +164,7 @@ if ($method === 'PUT' || $method === 'DELETE') {
     // Author-or-moderator. The reply author is taken from the stored post, never
     // the client (IDOR-proof) — same contract as the create path's flood check.
     $is_author = ((int) $reply->post_author === (int) $uid);
-    $is_mod    = current_user_can('moderate') || current_user_can('keep_gate');
+    $is_mod    = $is_mod_viewer;
     if (!$is_author && !$is_mod) {
         reply_out(403, ['ok' => false, 'error' => 'forbidden', 'message' => 'You can only edit or delete your own replies.']);
     }

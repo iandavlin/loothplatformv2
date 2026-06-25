@@ -44,11 +44,16 @@ if (!$uid) {
 }
 
 $u = wp_get_current_user();
-// can_edit_others → moderators/admins (edit_others_topics maps to keep_gate /
-// bbp_moderator). Drives the "edit any post" UI; BB REST re-checks server-side.
-$can_edit_others = current_user_can('edit_others_topics')
-    || current_user_can('moderate')
-    || current_user_can('administrator');
+// can_edit_others → moderators/keymasters/admins. Drives the "⋯ Edit/Delete on
+// ANY post" UI-reveal (revealPostMenus in forums.js). This MUST mirror reply.php's
+// write gate exactly, so the menu never shows on a post the server would then 403
+// (Ian 2026-06-25). NB: 'administrator' is a ROLE name, not a cap —
+// current_user_can('administrator') is generally false, which is why admins lost
+// see-all on replies; 'manage_options' is the real admin capability. 'moderate' /
+// 'keep_gate' cover the bbPress keymaster + gate-keeper roles.
+$can_edit_others = current_user_can('moderate')
+    || current_user_can('keep_gate')
+    || current_user_can('manage_options');
 echo json_encode([
     'authenticated'   => true,
     'wp_user_id'      => (int)$uid,
