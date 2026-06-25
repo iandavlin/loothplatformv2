@@ -2736,6 +2736,10 @@ body.lg-modal-open { overflow: hidden; }
 .vpromo__video, .vpromo__copy {
   display: flex;
   flex-direction: column;
+  /* Grid items must be allowed to shrink below their content min-width, or a
+     wide child (the guitardle weekly-board with long leader names) forces the
+     column - and the page - wider than the viewport. See gdle min-width:0 below. */
+  min-width: 0;
 }
 .vpromo__copy > :last-child { margin-top: auto; padding-top: 12px; }
 .row--video-promo--video-left .vpromo {
@@ -2842,7 +2846,9 @@ body.lg-modal-open { overflow: hidden; }
 }
 
 @media (max-width: 720px) {
-  .vpromo { grid-template-columns: 1fr; }
+  /* minmax(0,..) floor - bare 1fr's auto minimum lets a wide child force
+     horizontal overflow (text then clips at the right edge on phones). */
+  .vpromo { grid-template-columns: minmax(0, 1fr); }
   /* On mobile, video first per spec — regardless of desktop side */
   .row--video-promo--video-left .vpromo__video,
   .row--video-promo--video-right .vpromo__video { order: 0; }
@@ -3661,7 +3667,7 @@ body.gdle-modal-lock { overflow: hidden; }
 .gdle-side-row:nth-child(even) { background: #F3F7E9; }
 .gdle-side-row.is-first { background: #FBF3DF; font-weight: 600; }
 .gdle-side-row__rank { flex: 0 0 24px; text-align: center; font-weight: 600; color: #87986A; }
-.gdle-side-row__name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gdle-side-row__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gdle-side-row__pts { flex: 0 0 auto; font-size: 12px; color: #78895B; }
 .gdle-side-empty { font-size: 13px; color: #78895B; margin: 4px 0; }
 .gdle-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
@@ -3713,6 +3719,14 @@ html[data-lguser-theme="dark"] .gdle-side-empty { color: #9aab7f; }
 html[data-lguser-theme="dark"] .gdle-stack__btn { background: #1d211b; border-color: #2e3429; }
 html[data-lguser-theme="dark"] .gdle-stack__title { color: #e5e7e1; }
 .gdle-block--stack .gdle-promo__board { width: 100%; }
+/* The stacked block and its grid children must shrink below their content
+   min-width too, else the weekly-top-5 board (min-content driven by long leader
+   names) forces the vpromo column - and the page - wider than a phone viewport.
+   Pairs with .gdle-side-row__name min-width:0 above (lets names truncate). */
+.gdle-block--stack,
+.gdle-block--stack .gdle-stack__btn,
+.gdle-block--stack .gdle-promo__board,
+.gdle-block--stack .gdle-side-board { min-width: 0; }
 
 /* Mobile: the stacked Guitardle (play button + weekly top-5) rides UNDER the
    featured video inside the What's-New container, so on phones its full-height

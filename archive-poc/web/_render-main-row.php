@@ -374,7 +374,7 @@ if (!function_exists('fp_img')) {
 ?>
         <a class="dcard" href="<?= h($it['url'] ?: '#') ?>"<?php if ($d_modal): ?> data-topic-id="<?= (int)($it['id'] ?? 0) ?>" data-forum="<?= h($d_forum) ?>" data-topic="<?= h($d_topic) ?>"<?php endif; ?>>
           <div class="dcard__head">
-            <?php if ($avatar !== ''): ?><img class="dcard__avatar" src="<?= h($avatar) ?>" alt="" width="32" height="32" loading="lazy" onerror="this.onerror=null;this.removeAttribute('src');this.classList.add('dcard__avatar--ph')"><?php else: ?><span class="dcard__avatar dcard__avatar--ph" aria-hidden="true"><?= h($av_initial) ?></span><?php endif; ?>
+            <?php if ($avatar !== ''): ?><img class="dcard__avatar" src="<?= h($avatar) ?>" alt="" width="32" height="32" loading="lazy" data-ini="<?= h($av_initial) ?>" onerror="this.onerror=null;var s=document.createElement('span');s.className='dcard__avatar dcard__avatar--ph';s.setAttribute('aria-hidden','true');s.textContent=this.dataset.ini||'';this.replaceWith(s)"><?php else: ?><span class="dcard__avatar dcard__avatar--ph" aria-hidden="true"><?= h($av_initial) ?></span><?php endif; ?>
             <span class="dcard__author"><?= h($author) ?></span>
           </div>
           <h3 class="dcard__title"><?= h($it['title']) ?></h3>
