@@ -4595,3 +4595,15 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 .post__menu.dm-pop2 { position: fixed !important; margin: 0 !important; z-index: 2147483600 !important; }
 .post__menu.dm-pop2[hidden] { display: none !important; }
 .post__menu.dm-pop2:not([hidden]) { display: flex !important; flex-direction: column !important; }
+
+/* ── v3.1 (hub-editdel, Ian 2026-06-25): tighten the React bar (.fcr) ───────────
+   .fcr carries padding 9px 13px 2px + can grow wider than its content, which
+   spreads the OP row (the only row with a .fcr). Strip to content size + center it
+   so React sits flush in the uniform React/Reply/Edit group. */
+#lg-dmodal .lg-dmodal__opacts .fcr,
+#lg-dmodal .lg-dmodal__acts .fcr {
+  padding: 0 !important; gap: 6px !important; flex: 0 0 auto !important;
+  width: auto !important; max-width: max-content !important; align-self: center !important;
+}
+#lg-dmodal .lg-dmodal__opacts .fcr-chips,
+#lg-dmodal .lg-dmodal__acts .fcr-chips { margin: 0 !important; }
