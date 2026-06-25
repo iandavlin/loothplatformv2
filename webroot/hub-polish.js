@@ -424,7 +424,12 @@
       if (e) { e.preventDefault(); e.stopPropagation(); }
       var isTopic = !!card.getAttribute('data-topic-id');
       if (window.matchMedia('(max-width:640px)').matches) {
-        if (isTopic) { openRepliesSheet(card, { toReplies: true }); return; }
+        // The action-row reply/comment is a REPLY intent → open the composer sheet
+        // IMMEDIATELY (focus:true), bypassing the pinned "Write a comment…" trigger
+        // bubble (Ian 2026-06-25: one tap, no in-between). The thread sheet still
+        // opens behind it for context + the post-success reload. ("View N replies",
+        // card-body taps, and the teaser stay view-only — no focus.)
+        if (isTopic) { openRepliesSheet(card, { toReplies: true, focus: true }); return; }
         var cmr = card.querySelector('[data-comments], .feed-card__comments-btn');
         if (cmr) { cmr.click(); return; }
         var cl = card.querySelector('.fc-title a, .feed-card__title a');
@@ -815,12 +820,16 @@
   function openReplyComposer(stub, author, col) {
     var rid = parseInt(stub.getAttribute('data-lg-replyto') || '0', 10);
     var aname = (stub.getAttribute('data-lg-replyto-author') || (author && author.textContent) || '').trim();
-    if (!rid || !window.matchMedia('(max-width:640px)').matches) { openReplyBox(col, author, stub); return; }
+    // Desktop keeps the inline @-box; MOBILE always opens the composer sheet — one
+    // tap, no intermediate inline "Write a reply…" bubble (Ian 2026-06-25). replyTo
+    // nests under the comment when known, else it posts as a top-level reply to the
+    // topic. (Was: no-rid fell back to the inline box on mobile too.)
+    if (!window.matchMedia('(max-width:640px)').matches) { openReplyBox(col, author, stub); return; }
     var sheet = stub.closest('#looth-rep-sheet');
     if (sheet) {
       openComposerSheet({
         tid: sheet.getAttribute('data-tid'), fid: sheet.getAttribute('data-fid'),
-        replyTo: rid, replyToName: aname, focus: true
+        replyTo: rid || 0, replyToName: rid ? aname : '', focus: true
       });
       return;
     }
@@ -833,11 +842,11 @@
       var sh = document.getElementById('looth-rep-sheet');
       openComposerSheet({
         tid: sh && sh.getAttribute('data-tid'), fid: sh && sh.getAttribute('data-fid'),
-        replyTo: rid, replyToName: aname, focus: true
+        replyTo: rid || 0, replyToName: rid ? aname : '', focus: true
       });
       return;
     }
-    openReplyBox(col, author, stub);
+    openReplyBox(col, author, stub);   // last resort: no sheet/card context
   }
 
   // Inline reply box (Facebook-style) under a comment, @mentioning its author.
@@ -3636,8 +3645,12 @@
         // Title row — shown ONLY when editing a TOPIC/OP (editTopicId), so this same
         // composer doubles as the OP editor on mobile (parity with desktop). Hidden
         // for replies. (Ian 2026-06-25, "new edit".)
-        '<input class="lcp-title" id="lcp-title" type="text" placeholder="Post title" maxlength="200" autocomplete="off" hidden>' +
-        '<textarea class="lcp-input" id="lcp-input" rows="3" placeholder="Write a comment…"></textarea>' +
+        // autocomplete/autocorrect/autocapitalize/spellcheck off the strong iOS
+        // autofill accessory (🔑/💳/📍): this is a free-text comment/title, not a
+        // credential/contact field. The composer is a <div> (NOT a <form>), so iOS
+        // has no login/payment form to associate either. (Ian 2026-06-25, iPhone.)
+        '<input class="lcp-title" id="lcp-title" type="text" placeholder="Post title" maxlength="200" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true" hidden>' +
+        '<textarea class="lcp-input" id="lcp-input" rows="3" placeholder="Write a comment…" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true"></textarea>' +
         '<div class="lcp-row">' +
           '<button class="lcp-photo" id="lcp-photo" type="button" aria-label="Add photo" title="Add photo">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
@@ -3650,6 +3663,16 @@
     (document.body || document.documentElement).appendChild(sh);
     sh.addEventListener('click', function (e) { if (e.target.closest('[data-lcp-close]')) closeComposerSheet(); });
     var card = sh.querySelector('.lcp-card');
+    // Tap-off keyboard dismiss (Ian 2026-06-25, iPhone): tapping the sheet's
+    // NON-input chrome (header, grab handle, empty panel) blurs the input so iOS
+    // closes the keyboard WITHOUT closing the composer. Controls keep their focus/
+    // behavior; the backdrop ([data-lcp-close]) still closes the whole sheet
+    // (consistent with the tray).
+    card.addEventListener('click', function (e) {
+      if (e.target.closest('input, textarea, button, label, .lcp-previews')) return;
+      var inp = sh.querySelector('#lcp-input'); if (inp) inp.blur();
+      var ttl = sh.querySelector('#lcp-title'); if (ttl) ttl.blur();
+    });
     // drag the grab pill down to dismiss
     (function () {
       var grab = sh.querySelector('.lcp-grab'), sy = 0, dy = 0, on = false;
