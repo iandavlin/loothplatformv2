@@ -394,51 +394,66 @@
   // in the Nav tray — no duplicate menus.)
 
   // ---- Shared sheet dismissal (every .lt-sheet: You / anon / Nav tray / Notifs) --
-  // One forgiving close model for ALL sheets (Ian 2026-06-24: "trays are hard to
-  // close" — only the authed You sheet swiped before; the anon sheet + Nav tray +
-  // Notifs sheet had backdrop-tap/Esc only). Swipe DOWN to dismiss (from the grab /
-  // header / section-head anytime; from the body only when scrolled to the top, so
-  // normal scrolling isn't hijacked); a small pull OR a quick flick closes; a plain
-  // TAP on the grab handle closes too. Links & buttons stay tappable. Backdrop tap +
-  // Esc are wired separately by each sheet.
+  // One forgiving close model for ALL sheets. Tap-vs-drag claim model (Ian 2026-06-25:
+  // the You sheet was still "sticky" because its body is wall-to-wall rows/chips —
+  // the old handler bailed on any press that landed on an <a>/<button>, so a swipe
+  // starting on content never began a dismiss; the short Nav tray felt fine only
+  // because you grab its top). Now we START TRACKING on every press (links included)
+  // but only CLAIM the gesture as a dismiss once the finger moves DOWN past a small
+  // slop AND it's eligible — eligible = from the grab/header/section-head, or the
+  // inner scroll is at the very top (scrollTop<=0). An upward move, or a downward
+  // move while scrolled, is released back to native scrolling. A plain tap is never
+  // claimed, so the row/link/chip under it still fires; a tap on the grab closes.
   function enableSheetDrag(sheet, closeFn) {
-    var startY = 0, cur = 0, dragging = false, moved = false, onGrab = false, lastY = 0, lastT = 0, vy = 0;
+    var SLOP = 6, THRESH = 48, FLICK = 0.35;
+    var startY = 0, cur = 0, tracking = false, claimed = false, onGrab = false, fromHandle = false,
+        startScroll = 0, lastY = 0, lastT = 0, vy = 0;
+    function ptY(e) { return (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY; }
     function down(e) {
       var t = e.target;
-      if (t.closest && t.closest('a, button')) return;            // keep links/buttons tappable
       onGrab = !!(t.closest && t.closest('.lt-sheet__grab'));
-      var fromHandle = onGrab || (t.closest && t.closest('.lt-sheet__head, .lt-sheet__sech'));
-      if (!fromHandle && sheet.scrollTop > 0) return;             // body drag only at top
-      dragging = true; moved = false; cur = 0;
-      startY = lastY = (e.touches ? e.touches[0].clientY : e.clientY);
-      lastT = e.timeStamp || 0; vy = 0;
-      sheet.style.transition = 'none';
+      fromHandle = onGrab || !!(t.closest && t.closest('.lt-sheet__head, .lt-sheet__sech'));
+      startY = lastY = ptY(e); startScroll = sheet.scrollTop || 0; lastT = e.timeStamp || 0;
+      cur = 0; vy = 0; tracking = true; claimed = false;
+      // NB: don't kill the transition or transform yet — only once a drag is claimed,
+      // so taps and inner scrolls are left completely untouched.
     }
     function move(e) {
-      if (!dragging) return;
-      var y = (e.touches ? e.touches[0].clientY : e.clientY), now = e.timeStamp || 0;
-      cur = Math.max(0, y - startY);
-      if (cur > 3) moved = true;
+      if (!tracking) return;
+      var y = ptY(e), now = e.timeStamp || 0, dy = y - startY;
       if (now > lastT) vy = (y - lastY) / (now - lastT);          // px/ms, +ve = downward
       lastY = y; lastT = now;
+      if (!claimed) {
+        if (Math.abs(dy) < SLOP) return;                          // not enough movement to decide
+        // Claim a downward dismiss only when eligible; otherwise release to native
+        // scroll (so the You sheet's content still scrolls normally).
+        var eligible = fromHandle || (sheet.scrollTop <= 0 && startScroll <= 0);
+        if (dy > 0 && eligible) { claimed = true; sheet.style.transition = 'none'; }
+        else { tracking = false; return; }
+      }
+      cur = Math.max(0, dy);
       sheet.style.transform = 'translateY(' + cur + 'px)';
-      if (cur > 4 && e.cancelable) e.preventDefault();           // suppress scroll once it's a drag
+      if (e.cancelable) e.preventDefault();                       // own the gesture (also swallows the trailing tap on touch)
     }
     function up() {
-      if (!dragging) return;
-      dragging = false;
-      sheet.style.transition = '';
-      // close on: a modest pull (>56px), a quick downward flick, OR a tap on the grab
-      if (cur > 56 || vy > 0.5 || (!moved && onGrab)) {
-        sheet.style.transform = 'translateY(100%)';
-        closeFn();
-        setTimeout(function () { sheet.style.transform = ''; }, 340);
-      } else {
-        sheet.style.transform = '';                              // snap back open
+      if (!tracking) return;
+      tracking = false;
+      if (claimed) {
+        claimed = false;
+        sheet.style.transition = '';
+        if (cur > THRESH || vy > FLICK) {                         // a modest pull OR a quick flick
+          sheet.style.transform = 'translateY(100%)';
+          closeFn();
+          setTimeout(function () { sheet.style.transform = ''; }, 340);
+        } else {
+          sheet.style.transform = '';                            // snap back open
+        }
+      } else if (onGrab) {
+        closeFn();                                                // a plain tap on the grab handle closes
       }
     }
     sheet.addEventListener('mousedown', down);
-    sheet.addEventListener('touchstart', down, { passive: false });
+    sheet.addEventListener('touchstart', down, { passive: true });
     window.addEventListener('mousemove', move);
     window.addEventListener('touchmove', move, { passive: false });
     window.addEventListener('mouseup', up);
