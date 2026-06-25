@@ -4346,3 +4346,48 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 .hub-rail--acc .hub-rail__secbody .hub-rail__nm{flex:1 1 auto;min-width:0;text-decoration:none;color:var(--lg-ink,#323532);font:600 12.5px/1.2 var(--lg-font-sans,system-ui,sans-serif);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hub-rail--acc .hub-rail__secbody .hub-rail__ct{flex:0 0 auto;background:var(--sect);color:var(--secdk);border-radius:999px;padding:3px 8px;font:700 11px/1 var(--lg-font-sans,system-ui,sans-serif)}
 .hub-rail--acc .hub-acc__leaves{margin:4px 0 6px 16px}
+
+/* ── FB-style post overflow (⋯) menu — Edit/Delete on own posts + replies
+   (hub-editdel lane, Ian 2026-06-25). One trigger per post pinned top-right of
+   the post head; the dropdown anchors to it. Identical desktop + mobile; the
+   trigger is revealed by forums.js only for the author OR a moderator. ──────── */
+.post__head { position: relative; padding-right: 38px; }
+.post__menu-wrap { position: absolute; top: -3px; right: 0; }
+.post__menu-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0; margin: 0;
+  border: 0; border-radius: 50%; background: transparent;
+  color: var(--fg-muted, #6b6b6b); cursor: pointer; line-height: 0;
+  transition: background .15s ease, color .15s ease;
+}
+.post__menu-btn:hover,
+.post__menu-btn[aria-expanded="true"] {
+  background: rgba(0, 0, 0, .07);
+  color: var(--fg, #1c1c1c);
+}
+.post__menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 60;
+  min-width: 176px; padding: 6px;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-soft, rgba(0, 0, 0, .1));
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.post__menu-item {
+  display: flex; align-items: center; gap: 11px;
+  width: 100%; padding: 9px 11px;
+  border: 0; border-radius: 8px; background: transparent;
+  color: var(--fg, #1c1c1c);
+  font: 600 14.5px/1.2 var(--lg-font-sans, system-ui, sans-serif);
+  text-align: left; cursor: pointer;
+}
+.post__menu-item:hover { background: rgba(0, 0, 0, .06); }
+.post__menu-item svg { flex: 0 0 auto; opacity: .85; }
+.post__menu-item--danger { color: #c0392b; }
+.post__menu-item--danger:hover { background: rgba(192, 57, 43, .09); }
+
+@media (max-width: 640px) {
+  .post__menu { min-width: 208px; right: 0; }
+  .post__menu-item { padding: 12px 13px; font-size: 16px; }  /* bigger touch targets */
+}

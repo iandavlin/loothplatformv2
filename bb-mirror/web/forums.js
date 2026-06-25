@@ -2068,8 +2068,7 @@
       setState(authed);
       replyInitEditor();
       revealReplyButtons();
-      revealEditButtons(data.wp_user_id || 0, !!data.can_edit_others);
-      revealDeleteButtons(data.wp_user_id || 0, !!data.can_edit_others);
+      revealPostMenus(data.wp_user_id || 0, !!data.can_edit_others);
       if (seenTopicId > 0) {
         fetch('/bb-mirror-api/v0/mark-seen.php', {
           method: 'POST',
@@ -2098,16 +2097,51 @@
     });
   }
 
-  // ── 3c. Inline post editing (own posts; admins/mods edit all) ───────────────
-  function revealEditButtons(viewerId, canEditOthers) {
-    document.querySelectorAll('.post__edit-btn').forEach(function (btn) {
-      var authorId = parseInt(btn.dataset.authorId, 10) || 0;
-      var mine = viewerId > 0 && authorId === viewerId;
-      if (!mine && !canEditOthers) return;   // not allowed → leave hidden
-      btn.hidden = false;
-      btn.addEventListener('click', function () { startEdit(btn); });
+  // ── 3c. FB-style "⋯" post menu (own posts; admins/mods on all) ──────────────
+  // One overflow trigger per post (the OP + every reply) opens an Edit / Delete
+  // dropdown laid out like Facebook's post menu. The trigger is revealed only for
+  // the post's author OR a moderator; the owned /bb-mirror-api/v0/reply endpoint
+  // re-checks author-or-mod on every PUT/DELETE, so this gate is convenience only.
+  function closeAllPostMenus(except) {
+    document.querySelectorAll('.post__menu-wrap').forEach(function (w) {
+      if (w === except) return;
+      var menu = w.querySelector('.post__menu');
+      var trig = w.querySelector('.post__menu-btn');
+      if (menu) menu.hidden = true;
+      if (trig) trig.setAttribute('aria-expanded', 'false');
     });
   }
+  function revealPostMenus(viewerId, canEditOthers) {
+    document.querySelectorAll('.post__menu-wrap').forEach(function (wrap) {
+      var authorId = parseInt(wrap.dataset.authorId, 10) || 0;
+      var mine = viewerId > 0 && authorId === viewerId;
+      if (!mine && !canEditOthers) return;          // not allowed → stays hidden
+      wrap.hidden = false;
+      var trig    = wrap.querySelector('.post__menu-btn');
+      var menu    = wrap.querySelector('.post__menu');
+      var editBtn = wrap.querySelector('.post__edit-btn');
+      var delBtn  = wrap.querySelector('.post__delete-btn');
+      if (trig && menu) {
+        trig.addEventListener('click', function (e) {
+          e.preventDefault(); e.stopPropagation();
+          var willOpen = menu.hidden;
+          closeAllPostMenus(wrap);
+          menu.hidden = !willOpen;
+          trig.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        });
+      }
+      if (editBtn) editBtn.addEventListener('click', function () { closeAllPostMenus(); startEdit(editBtn); });
+      if (delBtn)  delBtn.addEventListener('click', function () { closeAllPostMenus(); confirmDelete(delBtn); });
+    });
+  }
+  // Dismiss any open ⋯ menu on outside-click or Escape (wired once for the page).
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.post__menu-wrap')) return;
+    closeAllPostMenus();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' || e.key === 'Esc') closeAllPostMenus();
+  });
 
   function startEdit(btn) {
     var post = btn.closest('.post');
@@ -2191,20 +2225,19 @@
       // rendered by the mirror (bb-mirror content images are attachments, not
       // inline <img>, so this is safe).
       html = html.replace(/<img[^>]*>/gi, '').replace(/<p>\s*<\/p>/gi, '').trim();
+      if (!html) { statusEl.textContent = "Can't be empty."; return; }
       saveBtn.disabled = true; statusEl.textContent = 'Saving…';
 
-      // New uploads attach via bbp_media; existing attachments are preserved.
-      var payload, url;
+      // Owned, author-or-mod endpoint (/bb-mirror-api/v0/reply) — the SAME gate as
+      // delete, IDOR-proof + nonce-checked server-side. Title+body only; existing
+      // photo attachments are preserved (wp_update_post doesn't touch bbp_media).
+      // Mirrors reply.php's reply-edit / topic-edit PUT contracts.
+      var url = '/bb-mirror-api/v0/reply', payload;
       if (kind === 'topic') {
-        url = restBase + '/topics/' + id;
-        payload = { id: id, parent: parseInt(btn.dataset.forumId, 10),
-                    title: box.querySelector('.post-edit__title').value.trim(), content: html };
+        payload = { topic_id: id, title: box.querySelector('.post-edit__title').value.trim(), content: html };
       } else {
-        url = restBase + '/reply/' + id;
-        payload = { id: id, topic_id: parseInt(btn.dataset.topicId, 10),
-                    forum_id: parseInt(btn.dataset.forumId, 10), content: html };
+        payload = { reply_id: id, content: html };
       }
-      if (editMediaIds.length) payload.bbp_media = editMediaIds;
 
       fetch(url, {
         method: 'PUT',
@@ -2233,21 +2266,11 @@
     });
   }
 
-  // ── 3d. Inline post deletion (own posts; admins/mods delete all) ────────────
-  // Mirrors the edit gate: a Delete button is revealed when the post is the
-  // viewer's own OR they hold edit_others (mod/admin). BB REST re-checks the
-  // delete_topic/delete_reply meta cap server-side, and the trash/delete hook
-  // propagates to pg via the sync mu-plugin, so the row drops from every view.
-  function revealDeleteButtons(viewerId, canEditOthers) {
-    document.querySelectorAll('.post__delete-btn').forEach(function (btn) {
-      var authorId = parseInt(btn.dataset.authorId, 10) || 0;
-      var mine = viewerId > 0 && authorId === viewerId;
-      if (!mine && !canEditOthers) return;   // not allowed → leave hidden
-      btn.hidden = false;
-      btn.addEventListener('click', function () { confirmDelete(btn); });
-    });
-  }
-
+  // ── 3d. Delete a post (own; admins/mods on all) — fired from the ⋯ menu. ────
+  // Hits the owned /bb-mirror-api/v0/reply endpoint (author-or-mod, IDOR-proof,
+  // nonce-checked); the bb→pg sync hook drops the row (and a topic's replies)
+  // from every view. The native BuddyBoss DELETE is mods-only, which is why we
+  // own the policy here.
   function confirmDelete(btn) {
     var kind = btn.dataset.delKind;                  // topic | reply
     var id   = parseInt(btn.dataset.delId, 10);
@@ -2255,20 +2278,21 @@
     var what = kind === 'topic' ? 'this entire topic' : 'this reply';
     if (!window.confirm('Delete ' + what + '? This can’t be undone.')) return;
 
-    var url  = '/wp-json/buddyboss/v1/' + (kind === 'topic' ? 'topics/' : 'reply/') + id;
-    var prev = btn.textContent;
-    btn.disabled = true; btn.textContent = 'Deleting…';
+    var url     = '/bb-mirror-api/v0/reply';
+    var payload = kind === 'topic' ? { topic_id: id } : { reply_id: id };
+    btn.disabled = true;
 
     fetch(url, {
       method: 'DELETE',
       credentials: 'same-origin',
-      headers: { 'X-WP-Nonce': nonce },
+      headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+      body: JSON.stringify(payload),
     })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; },
                                                function () { return { ok: r.ok, j: {} }; }); })
       .then(function (res) {
         if (!res.ok) {
-          btn.disabled = false; btn.textContent = prev;
+          btn.disabled = false;
           alert('Could not delete: ' + ((res.j && (res.j.message || res.j.code)) || 'failed'));
           return;
         }
@@ -2283,7 +2307,7 @@
         }
       })
       .catch(function (err) {
-        btn.disabled = false; btn.textContent = prev;
+        btn.disabled = false;
         alert('Network error: ' + err.message);
       });
   }

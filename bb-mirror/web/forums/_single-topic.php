@@ -167,6 +167,44 @@ function avatar_letter(string $name): string {
     return strtoupper(mb_substr(trim($name) ?: '?', 0, 1));
 }
 
+// FB-style "⋯" overflow menu (Edit + Delete) for one post — the OP or any reply.
+// Rendered HIDDEN; forums.js reveals the trigger only for the post's author OR a
+// moderator (viewer identity comes from /bb-mirror-api/v0/auth.php). The owned
+// write endpoint (/bb-mirror-api/v0/reply, PUT/DELETE) re-checks author-or-mod on
+// every request, so this UI gate is convenience, not security. Edit/Delete carry
+// the SAME data-attributes the existing startEdit/confirmDelete handlers read.
+function lg_post_menu_icon(string $which): string {
+    if ($which === 'edit') {
+        return '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+    }
+    return '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
+}
+function lg_post_menu(string $kind, int $id, int $author_id, array $opts = []): void {
+    $topic_id = (int)($opts['topic_id'] ?? 0);
+    $forum_id = (int)($opts['forum_id'] ?? 0);
+    $title    = (string)($opts['title'] ?? '');
+    echo '<div class="post__menu-wrap" data-author-id="' . $author_id . '" hidden>';
+    echo   '<button type="button" class="post__menu-btn" aria-haspopup="true" aria-expanded="false" aria-label="Post options">';
+    echo     '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>';
+    echo   '</button>';
+    echo   '<div class="post__menu" role="menu" hidden>';
+    echo     '<button type="button" role="menuitem" class="post__menu-item post__edit-btn"'
+           . ' data-edit-kind="' . htmlspecialchars($kind, ENT_QUOTES) . '"'
+           . ' data-edit-id="' . $id . '"'
+           . ' data-author-id="' . $author_id . '"'
+           . ($topic_id ? ' data-topic-id="' . $topic_id . '"' : '')
+           . ($forum_id ? ' data-forum-id="' . $forum_id . '"' : '')
+           . ($kind === 'topic' ? ' data-title="' . htmlspecialchars($title, ENT_QUOTES) . '"' : '')
+           . '>' . lg_post_menu_icon('edit') . '<span>Edit</span></button>';
+    echo     '<button type="button" role="menuitem" class="post__menu-item post__menu-item--danger post__delete-btn"'
+           . ' data-del-kind="' . htmlspecialchars($kind, ENT_QUOTES) . '"'
+           . ' data-del-id="' . $id . '"'
+           . ' data-author-id="' . $author_id . '"'
+           . '>' . lg_post_menu_icon('delete') . '<span>Delete</span></button>';
+    echo   '</div>';
+    echo '</div>';
+}
+
 // Render the attachment gallery for one parent post (topic or reply).
 // Images become a flex row of thumbnails linking to the original URL;
 // non-image mimes get a download chip.
@@ -269,6 +307,10 @@ function render_reply(
             </span>
           <?php endif; ?>
           <time class="post__time" datetime="<?= $dt_attr ?>"><?= $created ?></time>
+          <?php lg_post_menu('reply', (int)$r['id'], (int)($r['author_id'] ?? 0), [
+              'topic_id' => (int)($GLOBALS['topic_id'] ?? 0),
+              'forum_id' => (int)($GLOBALS['forum']['id'] ?? 0),
+          ]); ?>
         </div>
         <div class="post__body"><?= $lg_anon_view ? lg_scrub_anon_contacts((string)$r['content_html']) : $r['content_html'] /* sanitized at sync write */ ?></div>
         <?php render_attachments($GLOBALS['att_map']['reply'][(int)$r['id']] ?? []); ?>
@@ -276,16 +318,6 @@ function render_reply(
           <button type="button" class="post__reply-btn" data-reply-to="<?= (int)$r['id'] ?>"
                   data-reply-to-author="<?= htmlspecialchars($r['author_name'] ?: 'Anonymous') ?>"
                   hidden>Reply</button>
-          <button type="button" class="post__edit-btn" hidden
-                  data-edit-kind="reply"
-                  data-edit-id="<?= (int)$r['id'] ?>"
-                  data-author-id="<?= (int)($r['author_id'] ?? 0) ?>"
-                  data-topic-id="<?= (int)($GLOBALS['topic_id'] ?? 0) ?>"
-                  data-forum-id="<?= (int)($GLOBALS['forum']['id'] ?? 0) ?>">Edit</button>
-          <button type="button" class="post__delete-btn" hidden
-                  data-del-kind="reply"
-                  data-del-id="<?= (int)$r['id'] ?>"
-                  data-author-id="<?= (int)($r['author_id'] ?? 0) ?>">Delete</button>
         </div>
       </div>
     </div>
@@ -381,21 +413,13 @@ $fh_image      = $forum['header_image_url'] ?: null;
             <span class="badge badge--mod">MOD</span>
           <?php endif; ?>
           <time class="post__time" datetime="<?= $op_dt ?>"><?= $op_created ?></time>
+          <?php lg_post_menu('topic', (int)$topic['id'], (int)($topic['author_id'] ?? 0), [
+              'forum_id' => (int)$forum['id'],
+              'title'    => (string)$topic['title'],
+          ]); ?>
         </div>
         <div class="post__body"><?= $lg_anon_view ? lg_scrub_anon_contacts((string)$topic['content_html']) : $topic['content_html'] /* sanitized at sync write */ ?></div>
         <?php render_attachments($att_map['topic'][$topic_id] ?? []); ?>
-        <div class="post__actions">
-          <button type="button" class="post__edit-btn" hidden
-                  data-edit-kind="topic"
-                  data-edit-id="<?= (int)$topic['id'] ?>"
-                  data-author-id="<?= (int)($topic['author_id'] ?? 0) ?>"
-                  data-forum-id="<?= (int)$forum['id'] ?>"
-                  data-title="<?= htmlspecialchars((string)$topic['title'], ENT_QUOTES) ?>">Edit</button>
-          <button type="button" class="post__delete-btn" hidden
-                  data-del-kind="topic"
-                  data-del-id="<?= (int)$topic['id'] ?>"
-                  data-author-id="<?= (int)($topic['author_id'] ?? 0) ?>">Delete</button>
-        </div>
       </div>
     </div>
   </div>

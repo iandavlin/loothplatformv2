@@ -84,6 +84,58 @@ if ($method === 'PUT' || $method === 'DELETE') {
         reply_out(200, ['ok' => true, 'status' => 'deleted', 'topic_id' => $topic_id_del]);
     }
 
+    // ── EDIT (PUT) a whole TOPIC (the OP title + body) — author-or-moderator,
+    //    mirrors the reply-edit PUT below (Ian 2026-06-25: members edit their own
+    //    posts via the FB-style ⋯ menu). The owned, IDOR-proof twin of the
+    //    topic-delete path above, so the Hub has ONE authoritative author-or-mod
+    //    gate for both topic edit and topic delete (vs. the native BuddyBoss
+    //    topics PUT, whose ownership rules we don't control). ────────────────────
+    if ($method === 'PUT' && (int) ($body['reply_id'] ?? 0) <= 0 && (int) ($body['topic_id'] ?? 0) > 0) {
+        $topic_id_edit = (int) $body['topic_id'];
+        if (!wp_verify_nonce((string) ($_SERVER['HTTP_X_WP_NONCE'] ?? ''), 'wp_rest')) {
+            reply_out(403, ['ok' => false, 'error' => 'nonce', 'message' => 'Session expired — reload and retry.']);
+        }
+        if (!function_exists('bbp_get_topic_post_type')) {
+            reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Forum engine unavailable.']);
+        }
+        $topic = get_post($topic_id_edit);
+        if (!$topic || $topic->post_type !== bbp_get_topic_post_type()) {
+            reply_out(404, ['ok' => false, 'error' => 'not_found', 'message' => 'Post not found.']);
+        }
+        // Author-or-moderator; the author is taken from the stored post (never the
+        // client — IDOR-proof), exactly like the reply-edit + topic-delete paths.
+        $t_is_author = ((int) $topic->post_author === (int) $uid);
+        $t_is_mod    = current_user_can('moderate') || current_user_can('keep_gate');
+        if (!$t_is_author && !$t_is_mod) {
+            reply_out(403, ['ok' => false, 'error' => 'forbidden', 'message' => 'You can only edit your own posts.']);
+        }
+        $new_body  = trim((string) ($body['content'] ?? ''));
+        $new_title = trim((string) ($body['title'] ?? ''));
+        if ($new_body === '') {
+            reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Post can't be empty."]);
+        }
+        // wp_update_post kses-filters post_content (and sanitizes post_title) for
+        // users without unfiltered_html. Title is optional — keep the stored one
+        // when the client omits it (body-only edits).
+        $update = ['ID' => $topic_id_edit, 'post_content' => $new_body];
+        if ($new_title !== '') $update['post_title'] = $new_title;
+        $upd = wp_update_post($update, true);
+        if (is_wp_error($upd)) {
+            reply_out(500, ['ok' => false, 'error' => 'server', 'message' => (string) $upd->get_error_message()]);
+        }
+        // wp_update_post doesn't fire bbp_edit_topic, so sync the PG mirror
+        // explicitly ('upsert' is the same action the bbp_edit_topic hook maps to).
+        if (function_exists('bb_mirror_sync_dispatch')) bb_mirror_sync_dispatch('topic', $topic_id_edit, 'upsert');
+        $fresh = get_post($topic_id_edit);
+        reply_out(200, [
+            'ok'           => true,
+            'status'       => 'edited',
+            'topic_id'     => $topic_id_edit,
+            'title'        => (string) $fresh->post_title,
+            'content_html' => (string) apply_filters('bbp_get_topic_content', $fresh->post_content, $topic_id_edit),
+        ]);
+    }
+
     $reply_id = (int) ($body['reply_id'] ?? 0);
     if ($reply_id <= 0) {
         reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => 'reply_id is required.']);
