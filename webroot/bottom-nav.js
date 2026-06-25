@@ -180,17 +180,11 @@
       '.lt-sheet__login svg{flex:0 0 auto}' +
       '.lt-sheet__sech{font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase;' +
         'color:var(--lg-mute,#6b6f6b);padding:14px 6px 4px}' +
-      // ---- Nav tray: "Search the Hub" row — the SINGLE mobile search entry ----
-      // A pill that reads as a search box (the header pill + sort-bar search are
-      // killed in mobile-hub.css); tapping it opens the #hub-fmodal Advanced Search.
-      '.lt-searchrow{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;' +
-        'margin:6px 0 2px;padding:12px 15px;border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;' +
-        'background:var(--lg-sage-tint,#eef2e3);color:var(--lg-mute,#6b6f6b);cursor:pointer;' +
-        'font:600 14.5px/1 var(--lg-font-sans,system-ui,sans-serif);-webkit-tap-highlight-color:transparent}' +
-      '.lt-searchrow:active{background:#e4ebd3}' +
-      '.lt-searchrow svg{width:19px;height:19px;flex:0 0 auto;fill:none;stroke:var(--lg-sage-d,#6b7c52);' +
-        'stroke-width:2;stroke-linecap:round;stroke-linejoin:round}' +
-      '.lt-searchrow span{flex:1 1 auto}' +
+      // The Search entry is a <button> tile rendered identically to the <a>
+      // destination tiles (Ian 2026-06-25: a plain nav button, not a faux input) —
+      // reset the UA button chrome so it matches the anchors exactly.
+      'button.lt-navitem{background:none;border:0;cursor:pointer;width:100%;box-sizing:border-box;' +
+        '-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent}' +
       // ---- Nav tray: "Go to" destinations grid (slide-up, same sheet infra) ----
       '.lt-navgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:6px 0 4px}' +
       '.lt-navitem{display:flex;flex-direction:column;align-items:center;gap:7px;padding:13px 4px;' +
@@ -698,20 +692,22 @@
 
     var grab = document.createElement('div'); grab.className = 'lt-sheet__grab'; sheet.appendChild(grab);
 
-    // Search the Hub — the single mobile search entry (Ian 2026-06-25). Opens the
-    // existing #hub-fmodal Advanced Search dialog; off the hub front-door it routes
-    // to /hub/#search, which auto-opens the modal on arrival (openHubSearchIfHash).
-    var search = document.createElement('button');
-    search.type = 'button'; search.className = 'lt-searchrow';
-    search.setAttribute('aria-haspopup', 'dialog'); search.setAttribute('aria-label', 'Search the Hub');
-    search.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.search + '</svg><span>Search the Hub</span>';
-    search.addEventListener('click', function () { closeNav(); openHubSearch(); });
-    sheet.appendChild(search);
-
     var h = document.createElement('div'); h.className = 'lt-sheet__sech'; h.textContent = 'Go to'; sheet.appendChild(h);
 
     var grid = document.createElement('div'); grid.className = 'lt-navgrid';
     var path = location.pathname || '/';
+
+    // Search the Hub — the single mobile search entry (Ian 2026-06-25): the first
+    // tile, rendered exactly like the destination tiles but opening the #hub-fmodal
+    // Advanced Search dialog (off the hub front-door it routes to /hub/#search, which
+    // auto-opens the modal on arrival — openHubSearchIfHash).
+    var stile = document.createElement('button');
+    stile.type = 'button'; stile.className = 'lt-navitem';
+    stile.setAttribute('aria-haspopup', 'dialog'); stile.setAttribute('aria-label', 'Search the Hub');
+    stile.innerHTML = '<span class="lt-nico"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.search + '</svg></span><span>Search</span>';
+    stile.addEventListener('click', function () { closeNav(); openHubSearch(); });
+    grid.appendChild(stile);
+
     DESTS.forEach(function (d) {
       var a = document.createElement('a');
       a.className = 'lt-navitem' + (d.home ? ' lt-home' : '');

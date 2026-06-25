@@ -197,6 +197,14 @@
   .hub-fmodal-page .feed-sort-bar .zL::-webkit-scrollbar{ display:none; }
   .hub-fmodal-page .feed-sort-bar .zL > a{ flex:0 0 auto; padding:6px 10px; font-size:12px; }
 
+  /* 3 — slim sort-only strip (Ian 2026-06-25): also drop the "Filters" chip, the
+     direct-child relocated-hamburger that hub-polish.js drops into the bar — its
+     filters now live in the Advanced Search modal the tray Search tile opens. This
+     is a DIRECT-CHILD selector ('>'), so it never touches the hub's Adv-Search
+     opener, which is nested in .zR (kept display:none IN the DOM above as the
+     programmatic opener). Pure CSS — no forums.js change. */
+  .feed-page .feed-sort-bar > .lg-filters-chip{ display:none; }
+
   /* ───────────────────────────── Advanced Search modal: mobile polish ───────────
      #hub-fmodal is the desktop Advanced Search dialog, reused as-is on mobile. At
      ≤560px forums.css already stacks the two search fields (q over author); these
@@ -206,11 +214,18 @@
   .hub-fmodal__search .feed-toolbar-search{ width:100%; gap:10px; }
   .hub-fmodal__search .hub-tsearch{ width:100%; min-width:0; padding:11px 14px; }
   .hub-fmodal__search .hub-tsearch__in{ flex:1 1 auto; width:auto; min-width:0; font-size:16px; }
-  /* author field: same full-width treatment as the q field (desktop pins it 150px) */
-  .hub-fmodal__search .hub-tsearch--author{ width:100%; }
+  /* author field: same full-width treatment as the q field (desktop pins it 150px).
+     position:relative so the suggest dropdown anchors to THIS field, not a higher
+     ancestor (forums.css sets .hub-tsearch relative globally; restated here so the
+     anchoring holds regardless of load order). */
+  .hub-fmodal__search .hub-tsearch--author{ width:100%; position:relative; }
   .hub-fmodal__search .hub-tsearch--author .hub-tsearch__in{ width:auto; }
-  /* author suggest dropdown: anchor to the field, never overflow the panel */
+  /* author suggest dropdown (Ian 2026-06-25 root cause): forums.css pins it
+     min-width:240px, which on a <240px panel forces it wider than the modal and
+     overflows RIGHT — so author picks "didn't work". Override min-width and render
+     it FULL-WIDTH directly below the input. */
   .hub-fmodal__search .hub-tsearch--author .hub-suggest{
-    left:0; right:0; width:auto; max-width:100%; box-sizing:border-box;
+    top:100%; left:0; right:0; width:auto;
+    min-width:0; max-width:100%; box-sizing:border-box;
   }
 }
