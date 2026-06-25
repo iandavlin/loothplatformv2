@@ -100,7 +100,7 @@
   // also owns the DESKTOP header settings gear (lg-set-gear -> LGSettings panel),
   // so it must load on ALL viewports; it self-gates internally (tab bar <=640,
   // gear >=641). Gating it mobile-only removed the desktop gear (Ian 6/11).
-  inject('looth-tabbar-js', '/bottom-nav.js?v=23');
+  inject('looth-tabbar-js', '/bottom-nav.js?v=26');
 
   if (mobileish) {
     inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=36');
