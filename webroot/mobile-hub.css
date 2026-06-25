@@ -246,28 +246,33 @@
     min-width:0; max-width:100%; box-sizing:border-box;
   }
 
-  /* ───────────────────────── Mobile: full-screen search TRAY ────────────────────
+  /* ───────────────────────── Mobile: slide-down search TRAY ─────────────────────
      forums.css gives #hub-fmodal z-index:240 — BELOW the bottom nav (2147481200) —
-     so on mobile it rendered UNDER the nav. Lift it above everything and go edge-to-
-     edge. It reads + dismisses as a slide-down TRAY (Ian 2026-06-25): no ✕ (it
-     confused people once drag-dismiss existed) — a grab handle signals "drag me
-     down"; bottom-nav.js's wireHubModalDrag translateY-tracks the panel and closes
-     past ~25%/flick by clicking the hidden [data-hub-fmodal-close]. Desktop keeps
-     the ✕ + centered dialog (untouched, >=641).  (hub-mobile-search lane) */
+     so on mobile it rendered UNDER the nav. Lift it above everything. It reads +
+     dismisses as a draggable TRAY (Ian 2026-06-25): a small GAP at the top reveals
+     the dimmed backdrop so it's clearly a sheet (not a full page); rounded top
+     corners + a grab handle signal "drag me down"; bottom-nav.js's wireHubModalDrag
+     translateY-tracks the panel and closes past ~25%/flick by clicking the hidden
+     [data-hub-fmodal-close]. No ✕ (it confused people once drag existed). The tray
+     still covers the bottom nav (spans the gap down to the bottom edge). Desktop
+     keeps the ✕ + centered dialog (untouched, >=641).  (hub-mobile-search lane) */
   .hub-fmodal{ z-index:2147481500; }    /* over the bottom nav (2147481200) + sheets */
+  .hub-fmodal__back{ display:block; }   /* show the dimmed backdrop in the top gap */
   .hub-fmodal__panel{
-    margin:0; width:100%; max-width:none; height:100vh; height:100dvh;
-    max-height:none; border:0; border-radius:14px 14px 0 0; box-shadow:none;
+    /* leave a ~32px gap (+ safe-area) above the tray that reveals the backdrop */
+    --lg-tray-gap: calc(env(safe-area-inset-top, 0px) + 32px);
+    margin:var(--lg-tray-gap) 0 0; width:100%; max-width:none;
+    height:calc(100vh - 32px); height:calc(100dvh - var(--lg-tray-gap));
+    max-height:none; border:0; border-radius:16px 16px 0 0; box-shadow:0 -6px 24px rgba(26,29,26,.18);
     will-change:transform;
   }
-  /* grab handle (the drag affordance now that the ✕ is gone) */
+  /* grab handle at the very top of the tray (the drag affordance; no ✕ now) */
   .hub-fmodal__panel::before{
     content:""; position:absolute; top:8px; left:50%; transform:translateX(-50%);
     width:40px; height:5px; border-radius:999px; background:var(--lg-line,#e3ddd0); z-index:3;
   }
-  .hub-fmodal__back{ display:none; }     /* panel fills the viewport; no backdrop tap */
   /* sticky head (the drag zone); extra top room so the title clears the grab handle */
-  .hub-fmodal__head{ position:sticky; top:0; z-index:1; background:var(--bg-card,#fbfaf6); padding:20px 14px 12px; }
+  .hub-fmodal__head{ position:sticky; top:0; z-index:1; background:var(--bg-card,#fbfaf6); padding:20px 14px 12px; border-radius:16px 16px 0 0; }
   .hub-fmodal__x{ display:none; }        /* no ✕ on mobile — kept in DOM as the drag-close target */
   .hub-fmodal__body{ padding:14px 14px 24px; }
 
