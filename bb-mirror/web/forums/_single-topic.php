@@ -429,9 +429,19 @@ $fh_image      = $forum['header_image_url'] ?: null;
     </div>
   </div>
 
+  <?php $lg_topic_share_url = $public_path . '/' . $forum['slug'] . '/' . $topic['slug'] . '/'; ?>
   <div class="thread__util">
     <span><?= $reply_count ?> repl<?= $reply_count === 1 ? 'y' : 'ies' ?></span>
-    <span class="star">★</span>
+    <div class="thread__util-acts">
+      <?php if (function_exists('feed_save_btn')) feed_save_btn('topic', (int)$topic['id']); ?>
+      <button type="button" class="lg-share-btn" data-share-topic
+              data-share-url="<?= htmlspecialchars($lg_topic_share_url, ENT_QUOTES) ?>"
+              data-share-title="<?= htmlspecialchars((string)$topic['title'], ENT_QUOTES) ?>"
+              aria-label="Share" title="Share">
+        <svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+        <span class="lg-share-btn__lbl">Share</span>
+      </button>
+    </div>
   </div>
 
   <!-- OP post -->

@@ -500,3 +500,34 @@ if (!function_exists('feed_reactions_bar')) {
            . '</div>';
     }
 }
+
+
+// Save / bookmark toggle — shared here (not _feed.php) so the standalone
+// single-topic page (which loads _reply-render.php, NOT _feed.php) can emit the
+// same .fc-save button forums.js hydrates. Binary per-card save ->
+// discovery.saved_posts via the WP-cookie door (/archive-api/v0/save-post).
+// Logged-out viewers get the button but the GET resolves anon -> it stays inert.
+// Guarded so _feed.php's historical definition (now removed) can't double-declare.
+if (!function_exists('feed_save_btn')) {
+    function feed_save_btn(string $postType, int $itemId): void
+    {
+        static $ICO = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.6l2.95 5.98 6.6.96-4.77 4.65 1.13 6.57L12 17.66 6.09 20.76l1.13-6.57L2.45 9.54l6.6-.96z"/></svg>';
+        echo '<button type="button" class="fc-save" data-save data-post-type="' . htmlspecialchars($postType, ENT_QUOTES)
+           . '" data-item-id="' . $itemId . '" aria-pressed="false" aria-label="Save" title="Save">'
+           . $ICO . '<span class="fc-save__lbl">Save</span></button>';
+    }
+}
+
+// Inline SHARE control (desktop feed cards) — a bare [data-share-topic] marker;
+// the forums.js desktop SHARE module (window.lgShareTopic) reads the closest card's
+// data-share-url (+ .fc-title text) and runs the Web Share API w/ copy-link fallback.
+// Desktop-only by CSS (.fc-share shown @ >=641); mobile cards keep hub-polish.js's own
+// lg-act-share. Shared here so any card-rendering partial can emit it.
+if (!function_exists('feed_share_btn')) {
+    function feed_share_btn(): void
+    {
+        static $ICO = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
+        echo '<button type="button" class="fc-share" data-share-topic aria-label="Share" title="Share">'
+           . $ICO . '<span class="fc-share__lbl">Share</span></button>';
+    }
+}

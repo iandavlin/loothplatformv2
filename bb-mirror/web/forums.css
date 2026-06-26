@@ -562,6 +562,43 @@ img { max-width: 100%; display: block; }
 .thread__util .star { font-size: 16px; cursor: pointer; }
 .thread__util .star--on { color: var(--gate-lite); }
 
+/* Discussion topic action row (standalone single-topic page): save (fc-save,
+   hydrated by forums.js) + share (lg-share-btn, delegated [data-share-topic]).
+   The dead ★ span was replaced by feed_save_btn() + a Share control. This row is
+   the standalone page chrome (not a feed card), so styled globally in forums.css
+   like .thread__util above — NOT in mobile-hub.css (Buck's feed-card layer). */
+.thread__util-acts { display: flex; align-items: center; gap: 12px; }
+.thread__util .fc-save,
+.thread__util .lg-share-btn {
+  -webkit-appearance: none; appearance: none;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 0; padding: 2px 4px; box-shadow: none;
+  font: 600 12px/1 var(--lg-font-sans, var(--font-body)); color: var(--lg-mute, var(--fg-muted));
+  cursor: pointer; transition: color .12s;
+}
+.thread__util .fc-save .ico,
+.thread__util .lg-share-btn .ico { width: 16px; height: 16px; flex: 0 0 auto; }
+.thread__util .fc-save:hover,
+.thread__util .lg-share-btn:hover { color: var(--lg-sage-d, #586b3f); }
+.thread__util .fc-save.is-saved { color: var(--lg-sage-d, #586b3f); }
+.thread__util .fc-save.is-saved .ico { fill: currentColor; }
+body.fc-save-anon .thread__util .fc-save { display: none; }  /* logged-out → no save affordance */
+
+/* Share confirmation toast (desktop SHARE module, forums.js) — shown on copy-link
+   fallback when the Web Share sheet is unavailable. Global (overlay), forums.css. */
+.lg-share-toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 12px);
+  z-index: 100000; background: var(--lg-ink, #23291f); color: #fff;
+  font: 600 13px/1.2 var(--font-body); padding: 10px 16px; border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.28); opacity: 0; pointer-events: none;
+  transition: opacity .22s ease, transform .22s ease; max-width: 80vw;
+}
+.lg-share-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+
+/* Inline feed-card SHARE (desktop only) — hidden by default so mobile cards keep
+   hub-polish.js's lg-act-share; shown @ >=641 in the .fc-actions row (forums.css). */
+.feed-page .fc-share { display: none; }
+
 .thread {
   display: grid;
   gap: var(--s4);
@@ -3886,6 +3923,13 @@ body:has(.feed-page) #bb-ham{display:none}
   .feed-page .fc-save.is-saved { color:var(--lg-sage-d,#586b3f); }
   .feed-page .fc-save.is-saved .ico { fill:currentColor; }
   body.fc-save-anon .feed-page .fc-save { display:none; }   /* logged-out → no save affordance */
+  /* fc-share — inline Share on the desktop feed-card action row. Mirrors fc-save's
+     look; wired by the delegated [data-share-topic] handler (window.lgShareTopic). */
+  .feed-page .fc-share { -webkit-appearance:none; appearance:none;
+    display:inline-flex; align-items:center; gap:4px; background:none; border:0; padding:2px 3px;
+    font:600 12px/1 var(--lg-font-sans); color:var(--lg-mute); cursor:pointer; transition:color .12s; }
+  .feed-page .fc-share .ico { width:16px; height:16px; flex:0 0 auto; }
+  .feed-page .fc-share:hover { color:var(--lg-sage-d,#586b3f); }
   .feed-page .fc-replies { grid-area:replies; min-width:0; margin-top:6px; }
   /* fc-composer — persistent, pinned to the card bottom (full-bleed) */
   .feed-page .fc-composer{ display:flex; grid-area:composer; align-items:center; gap:9px;

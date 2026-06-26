@@ -2996,6 +2996,70 @@
   }
 })();
 
+/* ─── Desktop SHARE (discussion topics) — Web Share API w/ copy-link
+   fallback, pointed at the canonical /hub/<forum>/<topic>/ link (data-share-url).
+   Delegated on [data-share-topic] so it covers BOTH the standalone single-topic
+   .thread__util button AND the #lg-dmodal modal action-row button. The mobile
+   feed-card share lives in hub-polish.js (overlay). ──────────────────── */
+(function () {
+  'use strict';
+  function toast(msg) {
+    try {
+      var t = document.createElement('div');
+      t.className = 'lg-share-toast'; t.setAttribute('role', 'status'); t.textContent = msg;
+      document.body.appendChild(t);
+      requestAnimationFrame(function () { t.classList.add('is-on'); });
+      setTimeout(function () {
+        t.classList.remove('is-on');
+        setTimeout(function () { try { t.remove(); } catch (e) {} }, 280);
+      }, 2200);
+    } catch (e) {}
+  }
+  function legacyCopy(url) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = url; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, url.length);
+      var ok = document.execCommand('copy'); document.body.removeChild(ta); return ok;
+    } catch (e) { return false; }
+  }
+  function copyLink(url) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(
+        function () { toast('Link copied'); },
+        function () { toast(legacyCopy(url) ? 'Link copied' : 'Couldn’t copy link'); }
+      );
+    } else { toast(legacyCopy(url) ? 'Link copied' : 'Couldn’t copy link'); }
+  }
+  function share(url, title) {
+    var abs = url;
+    try { abs = new URL(url, location.href).href; } catch (e) {}   // canonical -> absolute for sharing
+    try {
+      if (navigator.share) {
+        navigator.share({ title: title || document.title, url: abs }).catch(function (err) {
+          if (err && err.name === 'AbortError') return;            // user dismissed — no toast
+          copyLink(abs);
+        });
+      } else { copyLink(abs); }
+    } catch (e) { copyLink(abs); }
+  }
+  window.lgShareTopic = share;
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-share-topic]');
+    if (!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    // url/title come from the button's own attrs (single-topic + modal Share) OR,
+    // for the inline feed-card Share, the closest card's data-share-url + .fc-title.
+    var host = btn.getAttribute('data-share-url') ? btn : btn.closest('[data-share-url]');
+    var url = host ? host.getAttribute('data-share-url') : '';
+    if (!url) { var dh = btn.closest('[data-href]'); url = dh ? dh.getAttribute('data-href') : ''; }
+    if (!url) return;
+    var title = btn.getAttribute('data-share-title') || (host && host.getAttribute('data-share-title')) || '';
+    if (!title) { var card = btn.closest('.feed-card'); var ti = card && card.querySelector('.fc-title'); title = ti ? (ti.textContent || '').trim() : ''; }
+    share(url, title);
+  });
+})();
+
 /* ─── Cooler card: persistent reply composer (fc-composer) + face-pile (fc-facepile)
    Always-on (NOT proto-gated). Composer posts via the existing /reply path; the
    face-pile opens the thread. Desktop-only by CSS (display:none ≤640) until Buck's
@@ -3467,6 +3531,22 @@
     opacts.className = 'lg-dmodal__opacts';
     opacts.innerHTML = '<button type="button" class="lg-dmodal__act feed-card__reply-cta" data-frm-open' +
       ' data-topic-id="' + tid + '" data-forum-id="' + fid + '">&#8617; Reply</button>';
+    // Share the discussion — canonical /hub/<forum>/<topic>/ link off the card
+    // (data-share-url, _feed.php; data-href fallback). Web Share API w/ copy-link
+    // fallback via the delegated [data-share-topic] handler (desktop SHARE module
+    // below). Desktop-modal parity with the mobile sheet's Share (hub-polish.js).
+    (function () {
+      var shareUrl = card.getAttribute('data-share-url') || card.getAttribute('data-href') || '';
+      if (!shareUrl) return;
+      var sh = document.createElement('button');
+      sh.type = 'button'; sh.className = 'lg-dmodal__act lg-dmodal__share';
+      sh.setAttribute('data-share-topic', '');
+      sh.setAttribute('data-share-url', shareUrl);
+      sh.setAttribute('data-share-title', m.querySelector('.lg-dmodal__title') ? m.querySelector('.lg-dmodal__title').textContent.trim() : 'Discussion');
+      sh.setAttribute('aria-label', 'Share');
+      sh.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg> Share';
+      opacts.appendChild(sh);
+    })();
     // React to the OP itself (Ian 2026-06-11): clone the card's topic reaction
     // bar — same target, same store; §4d's delegated handlers work on the
     // clone and doReact mirrors counts to every bar for the target, so the
@@ -3621,7 +3701,7 @@
       // expand (Ian 6/16 — no surprise card-grow). Genuine controls self-handle;
       // read-more + compact-caret + bare chrome now all route to the modal (they used
       // to fall through to the bubble-phase expanders at forums.js §224/§2b/§compact).
-      if (e.target.closest('input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, [data-comments], .fc-composer, .reply-stub, .fc-cover--video, a[href*="/u/"]')) return;
+      if (e.target.closest('input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, .fc-actions, [data-comments], .fc-composer, .reply-stub, .fc-cover--video, a[href*="/u/"]')) return;
     }
     e.preventDefault();
     e.stopPropagation();   // beat the legacy inline-expand handlers
