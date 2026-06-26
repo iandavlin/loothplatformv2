@@ -66,7 +66,7 @@
 
   if (onHub) {
     // Hub feed visual polish (app-card feed, desktop mosaic, action row …).
-    inject('looth-hub-polish-js', '/hub-polish.js?v=223', true);
+    inject('looth-hub-polish-js', '/hub-polish.js?v=226', true);
     // Hub infinite scroll (auto-append older feed items at the bottom).
     inject('looth-hub-infinite-js', '/hub-infinite.js?v=4');
     // Spotlight sponsor cards in the feed (Ian+Buck greenlight 2026-06-11).
@@ -100,7 +100,7 @@
   // also owns the DESKTOP header settings gear (lg-set-gear -> LGSettings panel),
   // so it must load on ALL viewports; it self-gates internally (tab bar <=640,
   // gear >=641). Gating it mobile-only removed the desktop gear (Ian 6/11).
-  inject('looth-tabbar-js', '/bottom-nav.js?v=29');
+  inject('looth-tabbar-js', '/bottom-nav.js?v=31');
 
   if (mobileish) {
     inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=36');
