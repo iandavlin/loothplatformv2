@@ -4978,8 +4978,9 @@ final class Shortcodes
         $nextDate  = $alt['next_charge_at'] !== null
                         ? self::shortDate( (string) $alt['next_charge_at'] )
                         : '';
+        $interval  = $alt['interval'] ?? null;
         $amount    = $alt['amount_cents'] !== null
-                        ? '$' . number_format( $alt['amount_cents'] / 100, 2 )
+                        ? '$' . number_format( $alt['amount_cents'] / 100, 2 ) . ( $interval ? ' / ' . $interval : '' )
                         : '';
 
         ob_start();

@@ -1053,7 +1053,7 @@ function lgpo_handle_callback() {
     $identity_url = 'https://www.patreon.com/api/oauth2/v2/identity'
         . '?include=memberships,memberships.currently_entitled_tiers,memberships.campaign'
         . '&fields%5Buser%5D=email,full_name,image_url'
-        . '&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents,email,full_name'
+        . '&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents,pledge_cadence,email,full_name'
         . '&fields%5Btier%5D=title';
 
     $identity_response = wp_remote_get( $identity_url, array(
@@ -1145,6 +1145,7 @@ function lgpo_handle_callback() {
         'full_name'                       => $patreon_name,
         'patron_status'                   => $membership['attributes']['patron_status'] ?? 'active_patron',
         'currently_entitled_amount_cents' => $membership['attributes']['currently_entitled_amount_cents'] ?? null,
+        'pledge_cadence'                  => $membership['attributes']['pledge_cadence'] ?? null,
         'tier_labels'                     => $tier_label ? array( $tier_label ) : array(),
         // The OAuth identity response carries no charge history — leave null;
         // the next creator-token sweep enriches these on its pass.

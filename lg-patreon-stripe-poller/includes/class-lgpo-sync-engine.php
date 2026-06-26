@@ -385,7 +385,7 @@ class LGPO_Sync_Engine {
     private static function build_members_url( string $campaign_id, ?string $cursor ): string {
         $params = [
             'include'        => 'currently_entitled_tiers,user',
-            'fields[member]' => 'patron_status,email,full_name,last_charge_status,last_charge_date,next_charge_date,will_pay_amount_cents,currently_entitled_amount_cents',
+            'fields[member]' => 'patron_status,email,full_name,last_charge_status,last_charge_date,next_charge_date,will_pay_amount_cents,currently_entitled_amount_cents,pledge_cadence',
             'fields[tier]'   => 'title,amount_cents',
             'fields[user]'   => 'email,full_name',
             'page[count]'    => self::PAGE_SIZE,
@@ -463,6 +463,7 @@ class LGPO_Sync_Engine {
             'next_charge_date'                   => $attrs['next_charge_date'] ?? null,
             'will_pay_amount_cents'              => isset( $attrs['will_pay_amount_cents'] ) ? (int) $attrs['will_pay_amount_cents'] : null,
             'currently_entitled_amount_cents'    => isset( $attrs['currently_entitled_amount_cents'] ) ? (int) $attrs['currently_entitled_amount_cents'] : null,
+            'pledge_cadence'                     => isset( $attrs['pledge_cadence'] ) ? (int) $attrs['pledge_cadence'] : null,
             'tier_ids'                           => $tier_ids,
             'tier_labels'                        => $tier_labels,
             'patreon_user_id'                    => $patreon_user_id,
@@ -1156,6 +1157,7 @@ class LGPO_Sync_Engine {
             'next_charge_date'                => null,
             'will_pay_amount_cents'           => null,
             'currently_entitled_amount_cents' => null,
+            'pledge_cadence'                  => null,
             'tier_labels'                     => [],
         ];
         try {
@@ -1164,8 +1166,8 @@ class LGPO_Sync_Engine {
                 'INSERT INTO lg_patreon_members
                     (wp_user_id, patreon_user_id, email, full_name, patron_status,
                      last_charge_status, last_charge_date, next_charge_date,
-                     will_pay_amount_cents, currently_entitled_amount_cents, tier_label)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     will_pay_amount_cents, currently_entitled_amount_cents, pledge_cadence, tier_label)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE
                     patreon_user_id                 = VALUES(patreon_user_id),
                     email                           = VALUES(email),
@@ -1176,6 +1178,7 @@ class LGPO_Sync_Engine {
                     next_charge_date                = VALUES(next_charge_date),
                     will_pay_amount_cents           = VALUES(will_pay_amount_cents),
                     currently_entitled_amount_cents = VALUES(currently_entitled_amount_cents),
+                    pledge_cadence                  = VALUES(pledge_cadence),
                     tier_label                      = VALUES(tier_label)'
             )->execute( [
                 $wp_user_id,
@@ -1188,6 +1191,7 @@ class LGPO_Sync_Engine {
                 self::normalize_datetime( $member['next_charge_date'] ?? null ),
                 $member['will_pay_amount_cents'] ?? null,
                 $member['currently_entitled_amount_cents'] ?? null,
+                $member['pledge_cadence'] ?? null,
                 ( $member['tier_labels'][0] ?? null ) ?: null,
             ] );
         } catch ( \Throwable $e ) {
