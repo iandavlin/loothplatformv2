@@ -41,7 +41,10 @@
     alerts: '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M10 21h4"/>',
     loothtool: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
     // Fallback only — the Profile tab shows the member's avatar when one exists.
-    person: '<circle cx="12" cy="8.5" r="3.8"/><path d="M5 20c0-3.6 3-6 7-6s7 2.4 7 6"/>'
+    person: '<circle cx="12" cy="8.5" r="3.8"/><path d="M5 20c0-3.6 3-6 7-6s7 2.4 7 6"/>',
+    // Back chevron (Nav tray top-left Back button, Ian 2026-06-25): a left-
+    // pointing chevron, fill:none + stroke inherited like the other glyphs.
+    back: '<path d="M15 5l-7 7 7 7"/>'
   };
 
   // Destinations shown in the Nav tray (the slide-up "Go to" sheet) — pure
@@ -178,6 +181,16 @@
         'font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);text-decoration:none;background:var(--lg-sage-d,#52613d)}' +
       '.lt-sheet__login:active{background:var(--lg-sage,#87986a)}' +
       '.lt-sheet__login svg{flex:0 0 auto}' +
+      // Back button (Ian 2026-06-25): top-left of the Nav tray, ABOVE the "Go to"
+      // header. Small but an easy tap (>=40px target via padding); a left chevron +
+      // "Back" label in the muted nav vocabulary, reusing the tray's sage tints.
+      '.lt-navback{display:inline-flex;align-items:center;gap:4px;margin:0 0 -4px;padding:9px 12px 9px 8px;' +
+        'border:0;background:none;cursor:pointer;-webkit-appearance:none;appearance:none;' +
+        '-webkit-tap-highlight-color:transparent;border-radius:10px;color:var(--lg-sage-d,#6b7c52);' +
+        'font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif)}' +
+      '.lt-navback:active{background:var(--lg-sage-tint,#eef2e3)}' +
+      '.lt-navback svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;' +
+        'stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}' +
       '.lt-sheet__sech{font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase;' +
         'color:var(--lg-mute,#6b6f6b);padding:14px 6px 4px}' +
       // The Search entry is a <button> tile rendered identically to the <a>
@@ -694,6 +707,18 @@
 
     var grab = document.createElement('div'); grab.className = 'lt-sheet__grab'; sheet.appendChild(grab);
 
+    // Back button (Ian 2026-06-25): top-left, above the "Go to" header. Goes back
+    // in history; if there's nowhere to go back to, falls through to the Hub root.
+    var back = document.createElement('button');
+    back.type = 'button'; back.className = 'lt-navback'; back.setAttribute('aria-label', 'Go back');
+    back.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.back + '</svg><span>Back</span>';
+    back.addEventListener('click', function () {
+      closeNav();
+      if (window.history && history.length > 1) { history.back(); }
+      else { location.href = '/hub/'; }
+    });
+    sheet.appendChild(back);
+
     var h = document.createElement('div'); h.className = 'lt-sheet__sech'; h.textContent = 'Go to'; sheet.appendChild(h);
 
     var grid = document.createElement('div'); grid.className = 'lt-navgrid';
@@ -799,31 +824,44 @@
   function wireHubModalDrag() {
     var modal = document.getElementById('hub-fmodal');
     if (!modal || modal.getAttribute('data-lg-drag')) return;
-    var panel = modal.querySelector('.hub-fmodal__panel');
-    if (!panel) return;
+    if (!modal.querySelector('.hub-fmodal__panel')) return;
     modal.setAttribute('data-lg-drag', '1');
-    var body = modal.querySelector('.hub-fmodal__body');
     var SLOP = 6, FLICK = 0.35;
     var startY = 0, cur = 0, tracking = false, claimed = false, fromHandle = false,
         startScroll = 0, lastY = 0, lastT = 0, vy = 0;
+    // Live-resolve the inner refs on EVERY use. fmodalApply (forums.js) swaps
+    // .hub-fmodal__body's innerHTML and liveSearch (hub-filters.js) replaceWith's
+    // .hub-fmodal__chips on every search/filter, so any once-captured child ref
+    // goes stale and the swipe-to-close silently dies (Ian 2026-06-25). The PANEL
+    // and #hub-fmodal element are never replaced today, but we delegate off the
+    // persistent #hub-fmodal and re-query the panel each time too, so the gesture
+    // survives even if a future re-render swaps the panel.
+    function getPanel() { return modal.querySelector('.hub-fmodal__panel'); }
+    function getBody() { return modal.querySelector('.hub-fmodal__body'); }
     function isMobile() { return window.matchMedia('(max-width:640px)').matches; }
     function ptY(e) { return (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY; }
     function close() {
+      var panel = getPanel();
       // animate the tray out, then run forums.js's own close + reset for next open.
-      panel.style.transition = 'transform .3s ease';
-      panel.style.transform = 'translateY(100%)';
+      if (panel) { panel.style.transition = 'transform .3s ease'; panel.style.transform = 'translateY(100%)'; }
       setTimeout(function () {
         var x = modal.querySelector('[data-hub-fmodal-close]');
         if (x) x.click(); else { modal.hidden = true; document.body.classList.remove('hub-fmodal-lock'); }
-        panel.style.transition = ''; panel.style.transform = '';
+        var p = getPanel();
+        if (p) { p.style.transition = ''; p.style.transform = ''; }
       }, 300);
     }
     function down(e) {
       if (!isMobile() || modal.hidden) return;
+      var panel = getPanel();
+      if (!panel) { tracking = false; return; }
       var t = e.target;
       // never start a drag from inside an input/suggest — let typing/scroll work.
       if (t.closest && t.closest('input, textarea, .hub-suggest')) { tracking = false; return; }
+      // only start from within the panel (back-drop taps are forums.js's close).
+      if (t.closest && !t.closest('.hub-fmodal__panel')) { tracking = false; return; }
       fromHandle = !!(t.closest && t.closest('.hub-fmodal__head'));
+      var body = getBody();
       startY = lastY = ptY(e); startScroll = (body && body.scrollTop) || 0; lastT = e.timeStamp || 0;
       cur = 0; vy = 0; tracking = true; claimed = false;
     }
@@ -834,12 +872,17 @@
       lastY = y; lastT = now;
       if (!claimed) {
         if (Math.abs(dy) < SLOP) return;
+        var body = getBody();
         var atTop = !body || (body.scrollTop <= 0 && startScroll <= 0);
-        if (dy > 0 && (fromHandle || atTop)) { claimed = true; panel.style.transition = 'none'; }
-        else { tracking = false; return; }
+        if (dy > 0 && (fromHandle || atTop)) {
+          claimed = true;
+          var panel = getPanel();
+          if (panel) panel.style.transition = 'none';
+        } else { tracking = false; return; }
       }
       cur = Math.max(0, dy);
-      panel.style.transform = 'translateY(' + cur + 'px)';
+      var p = getPanel();
+      if (p) p.style.transform = 'translateY(' + cur + 'px)';
       if (e.cancelable) e.preventDefault();
     }
     function up() {
@@ -847,13 +890,16 @@
       tracking = false;
       if (!claimed) return;
       claimed = false;
-      panel.style.transition = '';
-      var thresh = (panel.offsetHeight || window.innerHeight || 600) * 0.25;   // ~25% of the tray
+      var panel = getPanel();
+      if (panel) panel.style.transition = '';
+      var thresh = ((panel && panel.offsetHeight) || window.innerHeight || 600) * 0.25;   // ~25% of the tray
       if (cur > thresh || vy > FLICK) { close(); }
-      else { panel.style.transition = 'transform .25s ease'; panel.style.transform = ''; }   // snap back
+      else if (panel) { panel.style.transition = 'transform .25s ease'; panel.style.transform = ''; }   // snap back
     }
-    panel.addEventListener('mousedown', down);
-    panel.addEventListener('touchstart', down, { passive: true });
+    // Delegate the gesture START off the persistent #hub-fmodal element so it
+    // survives any inner re-render; move/up live on window (they always did).
+    modal.addEventListener('mousedown', down);
+    modal.addEventListener('touchstart', down, { passive: true });
     window.addEventListener('mousemove', move);
     window.addEventListener('touchmove', move, { passive: false });
     window.addEventListener('mouseup', up);

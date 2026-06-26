@@ -1186,6 +1186,7 @@
     if (qeKb) {
       qeKb.setAttribute('autocapitalize', 'sentences');
       qeKb.setAttribute('autocorrect', 'on');
+      qeKb.setAttribute('autocomplete', 'off');
       qeKb.setAttribute('spellcheck', 'true');
     }
 
@@ -4400,19 +4401,15 @@
     lgScrollY = document.body.style.overflow; document.body.style.overflow = 'hidden';
     // Push a history entry so the phone's back gesture/button CLOSES the lightbox
     // instead of navigating away (which on a PWA reads as "the app closed").
-    if (!lgHist) { try { history.pushState({ lgLb: 1 }, ''); lgHist = true; } catch (e) {} }
   }
   function lgCloseLb(fromPop) {
     if (!lgLb) return;
     // Stamp every close so the sheets' popstate handlers can tell "this pop
     // belongs to the lightbox" (its pushed entry) from a real back-out.
-    window.__lgLbPop = Date.now();
     lgLb.classList.remove('is-on'); lgImg.removeAttribute('src');
     document.body.style.overflow = lgScrollY || '';
     // If we pushed a history entry and this close came from a tap/✕/Esc (not the
     // back gesture itself), pop our entry back off so history stays balanced.
-    if (lgHist && !fromPop) { lgHist = false; try { history.back(); } catch (e) {} }
-    else { lgHist = false; }
   }
   function wireLbGestures() {
     var startDist = 0, startS = 1, sox = 0, soy = 0, pinch = false;
@@ -4451,6 +4448,13 @@
     lgLb.addEventListener('click', function (e) { if (e.target === lgImg || e.target === lgLb) lgCloseLb(); }); // mouse fallback
   }
   function wireImageLightbox() {
+    // DISABLED 2026-06-26 (Ian): the custom mobile image lightbox (#lg-lb) is
+    // retired. On mobile, tapping a Hub image no longer opens a fullscreen
+    // overlay — the image stays inline and the user pinch-zooms the page
+    // natively. Returning here skips the capture-phase click interceptor that
+    // called lgOpenLb(). Desktop never reached this code (mobile-only guard
+    // below) and keeps forums.js's native .lg-lightbox unchanged.
+    // RE-ENABLED 2026-06-26 (Ian): history-free close (no pushState/popstate).
     if (!window.matchMedia('(max-width:640px)').matches) return;     // mobile only
     if (document.body.getAttribute('data-lg-imglb')) return;
     document.body.setAttribute('data-lg-imglb', '1');
@@ -4480,7 +4484,6 @@
     }, true);   // capture: beat keepContentOnHub + forums.js
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') lgCloseLb(); });
     // Back gesture / button → close the lightbox (our pushed entry is being popped).
-    window.addEventListener('popstate', function () { if (lgLb && lgLb.classList.contains('is-on')) lgCloseLb(true); });
   }
 
   // ── Hub filter drawer (RETIRED 2026-06-11) ──────────────────────────────────
@@ -4665,6 +4668,12 @@
       mo.observe(document.body || document.documentElement, { childList: true });
     } catch (e) {}
     window.addEventListener('popstate', function () {
+      // The image lightbox stacks ABOVE this modal and pushes its OWN history
+      // entry. While it's up (back gesture) or just closed (tap/✕ pops its entry
+      // via history.back), this pop belongs to IT — don't also close the modal.
+      var lb0 = document.getElementById('lg-lb');
+      if (lb0 && lb0.classList.contains('is-on')) return;
+      if (window.__lgLbPop && Date.now() - window.__lgLbPop < 600) return;
       var m = el();
       if (m && !m.hidden) { hist = false; var x = m.querySelector('[data-dm-close]'); if (x) x.click(); }
     });
@@ -4960,6 +4969,13 @@
    - gesturestart/gesturechange preventDefault (iOS Safari ignores
      user-scalable=no since iOS 10; this is the only lever it respects) */
 (function () {
+  // DISABLED 2026-06-26 (Ian): native pinch-to-zoom is now ENABLED page-wide on
+  // mobile (images AND text). The old anti-zoom block below rewrote the viewport
+  // to maximum-scale=1,user-scalable=no and blocked gesturestart / 2-finger
+  // touchmove / set touch-action:pan-x pan-y — all of which killed pinch-zoom.
+  // Short-circuited so the phone's native zoom works. Desktop was never affected.
+  return;
+  /* eslint-disable */
   if (!window.matchMedia('(max-width:640px)').matches) return;
   var m = document.querySelector('meta[name="viewport"]');
   if (!m) {

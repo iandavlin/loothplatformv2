@@ -1478,11 +1478,13 @@ body.fcr-anon .feed-page .fcr-chip { pointer-events: none; }
 .feed-card__inline-compose { display: none; gap: 8px; align-items: flex-start; margin-top: 10px;
   padding-top: 10px; border-top: 1px solid var(--lg-line); }
 .feed--proto .feed-card--max .feed-card__inline-compose { display: flex; flex-wrap: wrap; }
-.feed-card__inline-compose .fic-input { flex: 1 1 auto; min-width: 0; resize: none; border: 1px solid var(--lg-line);
-  border-radius: 16px; padding: 9px 14px; font: inherit; font-size: 14px; background: var(--bg-card); color: var(--lg-ink);
-  max-height: 160px; }
-.feed-card__inline-compose .fic-send { flex: 0 0 auto; border: 0; border-radius: 999px; cursor: pointer;
-  background: var(--lg-sage-d); color: #fff; font: 700 13px/1 var(--lg-font-sans); padding: 9px 16px; }
+.feed-card__inline-compose .fic-input { flex: 1 1 100%; min-width: 0; resize: vertical; border: 1px solid var(--lg-line);
+  border-radius: 16px; padding: 11px 14px; font: inherit; font-size: 15px; line-height: 1.45; background: var(--bg-card); color: var(--lg-ink);
+  min-height: 44px; max-height: 220px; box-sizing: border-box; }
+/* Reply button gets its own row beneath the input (not cramped beside it), with a
+   comfortable touch target; right-aligned on its row like the other hub composers. */
+.feed-card__inline-compose .fic-send { flex: 0 0 auto; margin-left: auto; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--lg-sage-d); color: #fff; font: 700 14px/1 var(--lg-font-sans); padding: 11px 22px; min-height: 40px; }
 .feed-card__inline-compose .fic-send:disabled { opacity: .5; cursor: default; }
 .feed-card__inline-compose .fic-status { flex: 1 0 100%; font-size: 12px; color: var(--lg-mute); }
 .feed-card__inline-compose .fic-status:empty { display: none; }
@@ -2496,7 +2498,22 @@ html[data-lguser-theme="dark"] .ntm-overlay {
 }
 
 @media (max-width: 600px) {
-  .ntm-dialog { padding: var(--s4); }
+  /* Roomier reply/comment modal on phones: fill the viewport so the editor is
+     comfortable to type in, instead of a tiny centered box. */
+  .ntm-overlay { align-items: stretch; }
+  .ntm-dialog {
+    padding: var(--s4);
+    width: 100%;
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+  }
+  /* Submit button stops sitting cramped beside Cancel — Post goes full-width on
+     its own line; Cancel sits below it. Status spans the row above. */
+  .ntm-row { flex-direction: column; align-items: stretch; }
+  .ntm-submit,
+  .ntm-cancel { width: 100%; padding: 13px var(--s4); font-size: 15px; }
+  .ntm-status { order: -1; flex: 1 0 100%; text-align: center; }
 }
 
 /* ══════════════════════════════════════════════════════════

@@ -14,6 +14,22 @@
   // future rename) a one-line config change. Fallback matches the launch base.
   var FORUM_BASE = (window.LG_FORUM_BASE || '/forum').replace(/\/+$/, '');
 
+  // Quiet iOS Safari's AutoFill accessory bar (key/card/contact chips) on the
+  // Quill rich editors. Quill builds .ql-editor as a bare contenteditable with NO
+  // autocomplete attr, so the input/textarea autocomplete=off sweep never reached
+  // it and the bar returned on the mobile composer body. Set it post-mount on the
+  // generated editor (and re-tune correct/capitalize). Auth fields are untouched.
+  function lgQuillNoAutofill(mountEl) {
+    try {
+      var qe = mountEl && mountEl.querySelector('.ql-editor');
+      if (!qe) return;
+      qe.setAttribute('autocomplete', 'off');
+      qe.setAttribute('autocorrect', 'on');
+      qe.setAttribute('autocapitalize', 'sentences');
+      qe.setAttribute('spellcheck', 'true');
+    } catch (e) {}
+  }
+
   // ── Shared composer image tray (desktop ≥641 only) ───────────────────────
   // Out-of-body attachment tray = the SINGLE source of truth for bbp_media.
   // Each uploaded image becomes a thumb with a ✕ that splices its id out of the
@@ -282,6 +298,13 @@
     function imgExt(href) { return href && /\.(jpe?g|png|gif|webp|avif)(\?|#|$)/i.test(href); }
 
     document.addEventListener('click', function (e) {
+      // DESKTOP ONLY (Ian 2026-06-26): mobile retired its custom image lightbox
+      // (#lg-lb in hub-polish) in favour of the phone's NATIVE pinch-to-zoom.
+      // hub-polish used to swallow these clicks in capture before this handler
+      // ran; now that it no longer does, gate this native .lg-lightbox to desktop
+      // so tapping an image on mobile leaves it inline (page pinch-zoom) instead
+      // of opening this overlay. Desktop behaviour is unchanged.
+      if (window.matchMedia('(max-width:640px)').matches) return;
       // 1) attachment-gallery image (wrapped in a.attachment--image → full-res href)
       var alink = e.target.closest('a.attachment--image');
       if (alink) { e.preventDefault(); openLb(alink.getAttribute('href')); return; }
@@ -688,6 +711,7 @@
             handlers: { image: rseImageHandler },
           } },
         });
+  lgQuillNoAutofill(editorEl);
         if (rawHtml) rseQuill.clipboard.dangerouslyPasteHTML(rawHtml);
         rseQuill.focus();
       } else {
@@ -1346,6 +1370,7 @@
           },
         },
       });
+      lgQuillNoAutofill(ntmEditorEl);
     }
 
     // Image button → file picker → upload to BB → tray thumb (desktop) or inline
@@ -1782,6 +1807,7 @@
           handlers: { image: frmImageHandler },
         } },
       });
+      lgQuillNoAutofill(frmEditorEl);
     }
 
     // Image button → upload to BB media → tray thumb (desktop) / inline (mobile).
@@ -2302,6 +2328,7 @@
     [loading, anon, authed].forEach(function (s) {
       if (s === stateEl) show(s); else hide(s);
     });
+    lgQuillNoAutofill(replyEditorEl);
   }
 
   var nonce = null;
@@ -2432,6 +2459,7 @@
           ['link','image'], ['clean'] ],
         handlers: { image: editImageHandler },
       } } });
+      lgQuillNoAutofill(qEl);
       quill.root.innerHTML = body.innerHTML;   // seed from rendered body
     } else {
       ta = document.createElement('textarea');
@@ -3159,6 +3187,7 @@
       quill = new Quill(qEl, { theme: 'snow', bounds: qEl, modules: { toolbar: [
         ['bold', 'italic', 'underline'], ['blockquote'], [{ list: 'ordered' }, { list: 'bullet' }], ['link'], ['clean'],
       ] } });
+      lgQuillNoAutofill(qEl);
       if (raw) quill.clipboard.dangerouslyPasteHTML(raw);
       quill.focus();
     } else {
