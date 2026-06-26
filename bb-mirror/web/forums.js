@@ -298,6 +298,13 @@
     function imgExt(href) { return href && /\.(jpe?g|png|gif|webp|avif)(\?|#|$)/i.test(href); }
 
     document.addEventListener('click', function (e) {
+      // DESKTOP ONLY (Ian 2026-06-26): mobile retired its custom image lightbox
+      // (#lg-lb in hub-polish) in favour of the phone's NATIVE pinch-to-zoom.
+      // hub-polish used to swallow these clicks in capture before this handler
+      // ran; now that it no longer does, gate this native .lg-lightbox to desktop
+      // so tapping an image on mobile leaves it inline (page pinch-zoom) instead
+      // of opening this overlay. Desktop behaviour is unchanged.
+      if (window.matchMedia('(max-width:640px)').matches) return;
       // 1) attachment-gallery image (wrapped in a.attachment--image → full-res href)
       var alink = e.target.closest('a.attachment--image');
       if (alink) { e.preventDefault(); openLb(alink.getAttribute('href')); return; }
