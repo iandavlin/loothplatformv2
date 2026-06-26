@@ -18,7 +18,34 @@
   .dir-filterbar .filt,
   .dir-filterbar .filt.radiusbox,
   .dir-filterbar .filt.sortbox { flex: 1 1 100%; }
-  .dir-sort, .dir-sort button { width: 100%; }
+
+  /* Sort is now a multi-option control (Newest/Oldest/A–Z/Z–A/Near me/Online):
+   * wrap the buttons into a full-width grid of equal pills instead of one tall
+   * stacked column. The segmented look gives way to a tidy chip row on mobile. */
+  .dir-sort {
+    width: 100%; display: flex; flex-wrap: wrap; gap: 6px;
+    border: 0; border-radius: 0; overflow: visible;
+  }
+  .dir-sort button {
+    flex: 1 1 28%; width: auto; min-width: 0; text-align: center;
+    border: 1px solid var(--lg-line); border-radius: 8px; padding: 9px 8px;
+  }
+  /* The segmented divider rule from desktop doesn't apply once each button is its
+   * own bordered pill. */
+  .dir-sort button + button { border-left: 1px solid var(--lg-line); }
+
+  /* View toggle: keep it right-aligned but give the header room to wrap on narrow
+   * screens so the title + toggle don't collide. */
+  .dir-header { flex-wrap: wrap; }
+  .dir-viewtoggle button { padding: 8px 16px; }
+
+  /* Numbered pager: larger tap targets, centered, wraps. */
+  .dir-pager { gap: 8px; }
+  .dir-page { min-width: 42px; padding: 10px 13px; }
+
+  /* Cards mode: force a single column on phones (the desktop grid in directory.css
+   * uses auto-fill minmax(280px,1fr) which could fit 2 columns on wider ≤640 widths). */
+  body.dir--cards #dir-results { grid-template-columns: 1fr; gap: 14px; }
 
   /* Lock the map to the top so it stays visible while the filters + member list
    * scroll underneath (app-style). The site header (.lg-chrome) is sticky at

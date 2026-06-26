@@ -92,7 +92,12 @@ $creds  = isset($_GET['cred'])  ? (array)$_GET['cred']  : [];
 $page   = max(1, (int)($_GET['page'] ?? 1));
 $pageSize = isset($_GET['page_size']) ? max(1, min(200, (int)$_GET['page_size'])) : 20;
 $offset   = ($page - 1) * $pageSize;
-$sort   = ($_GET['sort'] ?? 'joined_asc') === 'joined_desc' ? 'joined_desc' : 'joined_asc';
+// Sort whitelist (mapless card mode adds A–Z/Z–A, nearest-first, and most/least
+// recently online). 'distance_asc' only ranks when a location is set; the two
+// 'online_*' modes need the OPTIONAL users.last_seen_at column (detected below)
+// and fall back to join-date until that dependency lands — never a faked time.
+$sortOpts = ['joined_asc', 'joined_desc', 'name_asc', 'name_desc', 'distance_asc', 'online_desc', 'online_asc'];
+$sort   = in_array(($_GET['sort'] ?? ''), $sortOpts, true) ? (string)$_GET['sort'] : 'joined_asc';
 // Single-member fetch: the map pin popup lazy-loads ONE member's full card by slug
 // (Ian 6/15). Additive — constrains the list query to that slug; every existing
 // visibility/precision guard below still applies, so a slug fetch can never expose
@@ -101,6 +106,15 @@ $slug   = isset($_GET['slug']) ? trim((string)$_GET['slug']) : '';
 if ($slug !== '') { $page = 1; $offset = 0; $pageSize = 1; }
 
 $pg = Db::pg();
+
+// "Most recently online" backing column is an OPTIONAL dependency: populated from
+// BuddyPress wp_usermeta.last_activity via the wp_user_bridge (see the
+// directory-mapless handoff). Detect once so online_* sorts degrade to join-date
+// until the column + sync land — the endpoint never fabricates a presence time.
+$hasLastSeen = (bool)$pg->query(
+    "SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'users' AND column_name = 'last_seen_at')"
+)->fetchColumn();
 
 $wheres = [
     'EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = u.id)',
@@ -155,8 +169,17 @@ if ($creds) {
 }
 
 $selectDistance = '';
-// Default: oldest join date first. A location filter overrides with distance ASC (below).
-$orderBy = $sort === 'joined_desc' ? 'u.created_at DESC, u.id DESC' : 'u.created_at ASC, u.id ASC';
+// Base ordering from the sort whitelist. 'distance_asc' is resolved inside the
+// location block below (it needs the computed distance column); online_* fall
+// back to join-date when last_seen_at is absent.
+switch ($sort) {
+    case 'joined_desc': $orderBy = 'u.created_at DESC, u.id DESC'; break;
+    case 'name_asc':    $orderBy = 'lower(u.display_name) ASC, u.id ASC'; break;
+    case 'name_desc':   $orderBy = 'lower(u.display_name) DESC, u.id DESC'; break;
+    case 'online_desc': $orderBy = $hasLastSeen ? 'u.last_seen_at DESC NULLS LAST, u.id DESC' : 'u.created_at DESC, u.id DESC'; break;
+    case 'online_asc':  $orderBy = $hasLastSeen ? 'u.last_seen_at ASC  NULLS LAST, u.id ASC'  : 'u.created_at ASC,  u.id ASC';  break;
+    default:            $orderBy = 'u.created_at ASC, u.id ASC';   // joined_asc + distance_asc (pre-location)
+}
 if ($lat !== null && $lng !== null) {
     // earthdistance: point(lng, lat) <@> point(lng, lat) returns miles.
     //
@@ -200,7 +223,10 @@ if ($lat !== null && $lng !== null) {
     $wheres[] = "(u.lat IS NOT NULL AND u.lng IS NOT NULL AND ($pt <@> point(:lng, :lat)) <= :radius
                   AND (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb)
                   AND (u.id = :vuid OR COALESCE(u.location_members_precision, 'city') <> 'private'))";
-    $orderBy  = 'distance_mi ASC';
+    // "Near me" ranks by distance; any OTHER sort (A–Z, newest, online…) still
+    // works WITHIN the radius filter, so a location search isn't forced to
+    // distance order anymore.
+    if ($sort === 'distance_asc') $orderBy = 'distance_mi ASC';
     $params[':lat'] = $lat; $params[':lng'] = $lng; $params[':radius'] = $radius;
 }
 
