@@ -245,6 +245,18 @@ from `/srv/<app>` symlinks. Storage verified live.
 the pristine serve clone `~/loothplatformv2-serve`** (deploy = `git pull` there; see §13).
 `lg-stripe-billing` / `membership-pages` / `thumb-app` are separate real dirs, not repo-served.
 
+**⚠️ Preview-a (the dirty preview) covers ONLY bb-mirror.** The `preview-a.dev2.loothgroup.com`
+slot overrides just the hub surface — its own `bb-preview-a` FPM pool serves
+`~/preview-slots/slot-a/bb-mirror` (the `integration` branch). **archive-poc is NOT isolated by the
+slot:** managed-CPT pages (`/post-type-videos/*` etc.), the standalone CPT renderer, the front feed
+`/`, and search all route through the *shared* `strangler-archive-poc.conf` to a hard-coded
+`/srv/archive-poc` (= the clean serve tree, `~/loothplatformv2-serve/archive-poc`) on the shared
+`archive-poc` FPM pool — regardless of which slot you hit. **Consequence:** an archive-poc change
+merged into `integration` is invisible on preview-a. To eyeball an archive-poc fix you must deploy
+the file onto the serve tree (`~/loothplatformv2-serve/archive-poc/...` + `systemctl reload
+php8.3-fpm`), which dirties the clean serve until you revert (`git checkout --`) or fold to main.
+(Cost a full review round on the lg-layout-v2 facade-poster fix, 2026-06-26.)
+
 ---
 
 ## 9. PHP-FPM pools
