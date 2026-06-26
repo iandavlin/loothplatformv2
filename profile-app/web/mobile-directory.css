@@ -43,6 +43,10 @@
   .dir-pager { gap: 8px; }
   .dir-page { min-width: 42px; padding: 10px 13px; }
 
+  /* Cards mode: force a single column on phones (the desktop grid in directory.css
+   * uses auto-fill minmax(280px,1fr) which could fit 2 columns on wider ≤640 widths). */
+  body.dir--cards #dir-results { grid-template-columns: 1fr; gap: 14px; }
+
   /* Lock the map to the top so it stays visible while the filters + member list
    * scroll underneath (app-style). The site header (.lg-chrome) is sticky at
    * top:0 / 61px tall, so the map pins just below it. */

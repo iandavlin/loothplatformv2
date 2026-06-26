@@ -33,6 +33,24 @@
   if (path.indexOf('/directory') !== 0) return;
   function isMobile() { return window.matchMedia('(max-width:640px)').matches; }
   if (isMobile()) return;                       // mobile owns its own layer
+
+  // ---- gate: Cards (mapless) mode ----
+  // The "Map ⇄ Cards" toggle renders the directory in a map-LESS card grid; the
+  // server marks that with body.dir--cards (and the URL carries ?view=cards). This
+  // whole layer is a MAP enhancement — it wraps the DOM in a map-split, buries the
+  // sort pills in a Filters popover, and floats a search bar over the map. In Cards
+  // mode there is no map, so it would destroy the layout and hide the sort controls.
+  // Bail out entirely and leave the native inline filterbar + card grid intact. The
+  // toggle does a full navigation, so the body class is authoritative at load time
+  // and we never need to tear a takeover back down.
+  function isCardsMode() {
+    try {
+      if (document.body && document.body.classList.contains('dir--cards')) return true;
+      return new URLSearchParams(location.search).get('view') === 'cards';
+    } catch (e) { return false; }
+  }
+  if (isCardsMode()) return;
+
   window.__loothDirDesktop = true;
 
   document.documentElement.classList.add('lgdd');

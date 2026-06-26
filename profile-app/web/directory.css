@@ -106,6 +106,21 @@ body { background: var(--lg-cream); color: var(--lg-ink); }
 /* Mapless mode: drop the map entirely so the cards own the viewport. */
 body.dir--cards .dir-map { display: none; }
 
+/* Cards mode reflow (Bug fix): without the map, #dir-results must reclaim the full
+ * .dir-app width as a responsive card grid. The base .dir-results (shared with the
+ * map/list surface) is a single narrow column; here we lay the cards out edge-to-edge
+ * across the centered 1180px .dir-app. minmax(280px, 1fr) keeps cards a comfortable
+ * width and auto-fill packs as many columns as fit, collapsing to one column on
+ * narrow viewports. (Desktop's directory-desktop.js does NOT run in cards mode — it
+ * bails on body.dir--cards — so its html.lgdd .dir-results flex-column never applies.)
+ * mobile-directory.css (≤640) overrides this to a single column. */
+body.dir--cards #dir-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
 /* Disabled sort (e.g. "Near me" with no location set). */
 .dir-sort button:disabled { opacity: .45; cursor: not-allowed; }
 

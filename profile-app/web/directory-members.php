@@ -571,23 +571,22 @@ function applyFilters() {
   window.history.replaceState({}, '', urlFor(1));
 }
 
-// Toggle map ⇄ cards. Cards mode hides the map and swaps Load-more for the pager;
-// map mode (re)loads pins. The list itself is identical (same privacy-gated
-// endpoint), so cards can never expose what the map hides.
+// Toggle map ⇄ cards. This does a FULL navigation (not a client-side swap) on
+// purpose: the desktop enhancement layer (directory-desktop.js) wraps the DOM in
+// a map-split + buries the filterbar in Map mode and must be ABSENT in Cards mode.
+// Tearing that takeover down/up live is fragile, so we reload — the server then
+// renders the correct body class (dir--cards / dir--map) and the desktop layer
+// gates itself off cleanly in Cards mode. The view param is always pinned so the
+// reloaded page lands in the chosen mode (and the localStorage restore below
+// never fires again → no reload loop).
+function urlForView(view, page) {
+  const sp = filterQs(); sp.set('page', page || 1); sp.set('view', view);
+  return '/directory/members?' + sp.toString();
+}
 function setView(view) {
   if ((view !== 'map' && view !== 'cards') || view === dirView) return;
-  dirView = view;
-  document.body.classList.toggle('dir--cards', view === 'cards');
-  document.body.classList.toggle('dir--map',   view === 'map');
-  document.querySelectorAll('#dir-viewtoggle button').forEach(b => {
-    const on = b.dataset.view === view;
-    b.classList.toggle('on', on);
-    b.setAttribute('aria-pressed', on ? 'true' : 'false');
-  });
-  if (view === 'map') { initDirMap(); loadPins(); }   // refresh pins for current filters
-  updatePageControls();
-  window.history.replaceState({}, '', urlFor(curPage));
   try { localStorage.setItem('dirView', view); } catch (_) {}
+  window.location.assign(urlForView(view, curPage));
 }
 // Enable "Near me" only when a location is set (it ranks by distance).
 function updateSortAvail() {
