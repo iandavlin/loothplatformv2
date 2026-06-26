@@ -30,6 +30,36 @@
     } catch (e) {}
   }
 
+  // Strip images out of a stored post/reply body before it's seeded into Quill.
+  // bb-mirror content images are ATTACHMENTS (bbp_media), surfaced as removable
+  // thumbnails in the composer tray below the editor — NOT inline <img> in the
+  // body. When editing, the rendered body HTML still carries those <img> (and the
+  // <figure>/<a class="attachment--image"> wrappers the mirror renders them in),
+  // so pasting the raw body straight into Quill leaks the image into the editor
+  // body (Ian: image shows both inside Quill AND as a thumb below). Drop the image
+  // markup here so Quill receives text/formatting only; the tray owns the images.
+  function lgStripBodyImages(html) {
+    if (!html) return html || '';
+    try {
+      var tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      // Remove attachment-image wrappers (figure / a.attachment--image) whole, then
+      // any stray <img>, so no empty wrapper shell or caption frame is left behind.
+      Array.prototype.forEach.call(
+        tmp.querySelectorAll('figure, a.attachment--image, .attachment--image, .wp-block-image'),
+        function (el) {
+          if (el.querySelector && el.querySelector('img')) el.remove();
+          else if (el.tagName === 'IMG') el.remove();
+        }
+      );
+      Array.prototype.forEach.call(tmp.querySelectorAll('img'), function (img) { img.remove(); });
+      return tmp.innerHTML;
+    } catch (e) {
+      // Fallback: regex strip (matches the legacy textarea-fallback behavior).
+      return html.replace(/<img[^>]*>/gi, '');
+    }
+  }
+
   // ── Shared composer image tray (desktop ≥641 only) ───────────────────────
   // Out-of-body attachment tray = the SINGLE source of truth for bbp_media.
   // Each uploaded image becomes a thumb with a ✕ that splices its id out of the
@@ -1462,9 +1492,10 @@
       if (ntmHdE) ntmHdE.textContent = 'Edit post';    // wizard says "Edit post" (Ian 6/17)
       if (ntmTitleIn) ntmTitleIn.value = title || '';
       if (ntmContentEl) ntmContentEl.value = (bodyHtml || '').replace(/<img[^>]*>/gi, '');
+      var ntmSeedHtml = lgStripBodyImages(bodyHtml || '');
       var seedTries = 0;
       (function seed() {
-        if (ntmQuill) { ntmQuill.root.innerHTML = bodyHtml || '<p><br></p>'; }
+        if (ntmQuill) { ntmQuill.root.innerHTML = ntmSeedHtml || '<p><br></p>'; }
         else if (++seedTries < 30) setTimeout(seed, 100);
       })();
       // Load the topic's EXISTING photos as removable thumbs so they can be deleted
@@ -1940,11 +1971,12 @@
           d.media.forEach(function (m) { frmKeepMedia.push(m.media_id); frmTray.addThumb(m.thumb || m.url, m.media_id, frmKeepMedia); });
         })
         .catch(function () {});
+      var frmSeedHtml = lgStripBodyImages(bodyHtml || '');
       var seedTries = 0;
       function frmSeedBody() {
         if (frmQuill) {
           frmQuill.setContents([]);                              // clear placeholder/blank state
-          frmQuill.clipboard.dangerouslyPasteHTML(bodyHtml || '');
+          frmQuill.clipboard.dangerouslyPasteHTML(frmSeedHtml || '');
           frmQuill.setSelection(frmQuill.getLength(), 0);
           frmQuill.focus();
           return;
@@ -1996,11 +2028,12 @@
           d.media.forEach(function (m) { frmKeepMedia.push(m.media_id); frmTray.addThumb(m.thumb || m.url, m.media_id, frmKeepMedia); });
         })
         .catch(function () {});
+      var frmTopicSeedHtml = lgStripBodyImages(bodyHtml || '');
       var seedTries = 0;
       function frmSeedTopicBody() {
         if (frmQuill) {
           frmQuill.setContents([]);
-          frmQuill.clipboard.dangerouslyPasteHTML(bodyHtml || '');
+          frmQuill.clipboard.dangerouslyPasteHTML(frmTopicSeedHtml || '');
           frmQuill.setSelection(frmQuill.getLength(), 0);
           return;
         }
@@ -2460,10 +2493,12 @@
         handlers: { image: editImageHandler },
       } } });
       lgQuillNoAutofill(qEl);
-      quill.root.innerHTML = body.innerHTML;   // seed from rendered body
+      // Seed text/formatting only — drop attachment images from the body so they
+      // don't leak inline (they live in bbp_media, not the body). (Ian 2026-06-26)
+      quill.root.innerHTML = lgStripBodyImages(body.innerHTML);
     } else {
       ta = document.createElement('textarea');
-      ta.className = 'post-edit__fallback'; ta.rows = 6; ta.setAttribute('autocomplete', 'off'); ta.value = body.innerHTML;
+      ta.className = 'post-edit__fallback'; ta.rows = 6; ta.setAttribute('autocomplete', 'off'); ta.value = lgStripBodyImages(body.innerHTML);
       qEl.replaceWith(ta);
     }
 
@@ -3188,7 +3223,7 @@
         ['bold', 'italic', 'underline'], ['blockquote'], [{ list: 'ordered' }, { list: 'bullet' }], ['link'], ['clean'],
       ] } });
       lgQuillNoAutofill(qEl);
-      if (raw) quill.clipboard.dangerouslyPasteHTML(raw);
+      if (raw) quill.clipboard.dangerouslyPasteHTML(lgStripBodyImages(raw));
       quill.focus();
     } else {
       qEl.innerHTML = '<textarea class="dm-rs-ta" rows="4" autocomplete="off"></textarea>';
