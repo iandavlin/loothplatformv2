@@ -18,9 +18,19 @@ $lat    = isset($qs['lat']) ? (float)$qs['lat']    : null;
 $lng    = isset($qs['lng']) ? (float)$qs['lng']    : null;
 $radius = isset($qs['radius']) ? (int)$qs['radius'] : 50;
 $locTxt = (string)($qs['loc'] ?? '');
-$sort   = ($qs['sort'] ?? 'joined_asc') === 'joined_desc' ? 'joined_desc' : 'joined_asc';
+// Sort + view whitelists kept in lockstep with api/v0/directory-members.php.
+$sortOpts = ['joined_asc', 'joined_desc', 'name_asc', 'name_desc', 'distance_asc', 'online_desc', 'online_asc'];
+$sort   = in_array(($qs['sort'] ?? ''), $sortOpts, true) ? (string)$qs['sort'] : 'joined_asc';
+$view   = ($qs['view'] ?? '') === 'cards' ? 'cards' : 'map';   // mapless card mode toggle
 
 $pg = Db::pg();
+// "Most recently online" sort only appears once its backing column exists
+// (users.last_seen_at, fed from BuddyPress last_activity — see handoff). Until
+// then the button is hidden rather than showing an empty/fabricated ordering.
+$hasOnline = (bool)$pg->query(
+    "SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'users' AND column_name = 'last_seen_at')"
+)->fetchColumn();
 // Only surface tags that at least one member actually uses — an option that
 // matches zero members is noise. The EXISTS clauses mirror each filter's own
 // match semantics below (instruments/skills count both the full list AND
@@ -79,7 +89,7 @@ $_whoami = Whoami::resolve();
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
 </head>
-<body class="<?= ($_whoami['authenticated'] ?? false) ? '' : 'dir--anon' ?>">
+<body class="<?= ($_whoami['authenticated'] ?? false) ? '' : 'dir--anon' ?> <?= $view === 'cards' ? 'dir--cards' : 'dir--map' ?>">
 <?php
 lg_shared_render_site_header([
     'logo_url'      => LG_PROFILE_APP_LOGO_URL,
@@ -97,7 +107,12 @@ lg_shared_render_site_header([
     'logout_url'    => ($_whoami['authenticated'] ?? false) ? '/wp-login.php?action=logout' : null,
 ]);
 ?>
-<div class="dir-header">Members <span class="dir-meta" id="dir-meta">loading…</span></div>
+<div class="dir-header">Members <span class="dir-meta" id="dir-meta">loading…</span>
+  <div class="dir-viewtoggle" id="dir-viewtoggle" role="group" aria-label="Map or card view">
+    <button type="button" data-view="map"   class="<?= $view==='map'?'on':'' ?>" aria-pressed="<?= $view==='map'?'true':'false' ?>">Map</button>
+    <button type="button" data-view="cards" class="<?= $view==='cards'?'on':'' ?>" aria-pressed="<?= $view==='cards'?'true':'false' ?>">Cards</button>
+  </div>
+</div>
 <div id="dir-map" class="dir-map" aria-hidden="true"></div>
 <?php if (!($_whoami['authenticated'] ?? false)): ?>
 <?php /* Strava-pattern anon map (Ian 6/12): real aggregated density, zero
@@ -141,10 +156,16 @@ lg_shared_render_site_header([
   <?php if ($msCatalogs['music']): ?><div class="filt"><span class="flab">Music</span><div class="ms" data-ms="music" data-ph="Any genre…"></div></div><?php endif; ?>
   <?php if ($msCatalogs['cred']): ?><div class="filt"><span class="flab">Credentials</span><div class="ms" data-ms="cred" data-ph="Any credential…"></div></div><?php endif; ?>
   <div class="filt sortbox">
-    <span class="flab">Joined</span>
-    <div class="dir-sort" id="dir-sort" role="group" aria-label="Sort by join date">
-      <button type="button" data-sort="joined_asc"  class="<?= $sort==='joined_asc'?'on':'' ?>">Oldest</button>
+    <span class="flab">Sort</span>
+    <div class="dir-sort" id="dir-sort" role="group" aria-label="Sort members">
       <button type="button" data-sort="joined_desc" class="<?= $sort==='joined_desc'?'on':'' ?>">Newest</button>
+      <button type="button" data-sort="joined_asc"  class="<?= $sort==='joined_asc'?'on':'' ?>">Oldest</button>
+      <button type="button" data-sort="name_asc"    class="<?= $sort==='name_asc'?'on':'' ?>">A&ndash;Z</button>
+      <button type="button" data-sort="name_desc"   class="<?= $sort==='name_desc'?'on':'' ?>">Z&ndash;A</button>
+      <button type="button" data-sort="distance_asc" data-needs-loc="1" class="<?= $sort==='distance_asc'?'on':'' ?>">Near me</button>
+      <?php if ($hasOnline): ?>
+      <button type="button" data-sort="online_desc" class="<?= $sort==='online_desc'?'on':'' ?>">Online</button>
+      <?php endif; ?>
     </div>
   </div>
 </div>
@@ -153,6 +174,7 @@ lg_shared_render_site_header([
   <main>
     <div class="dir-results" id="dir-results"></div>
     <button class="btn dir-load-more" id="dir-more" hidden>Load more</button>
+    <nav class="dir-pager" id="dir-pager" aria-label="Member pages" hidden></nav>
   </main>
 </div>
 
@@ -166,7 +188,18 @@ const state = {
 };
 let curPage = 1;
 let curSort = <?= json_encode($sort) ?>;
+let dirView = <?= json_encode($view) ?>;            // 'map' | 'cards' (mapless)
+let curTotal = 0, curPageSize = 20, curHasMore = false;
+const DIR_HAS_ONLINE = <?= json_encode($hasOnline) ?>;
 const DIR_ME_SLUG = <?= json_encode($_whoami['slug'] ?? null, JSON_UNESCAPED_SLASHES) ?>;
+
+// Canonical URL for a given page, carrying the active view so a reload/share
+// reopens in the same mode. Shared by applyFilters + the pager.
+function urlFor(page) {
+  const sp = filterQs(); sp.set('page', page);
+  if (dirView === 'cards') sp.set('view', 'cards');
+  return '/directory/members?' + sp.toString();
+}
 
 function escH(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 // Some stored names/locations arrive already HTML-entity-encoded (e.g. "Repair &amp; Restoration").
@@ -464,8 +497,60 @@ async function loadPage(page, append) {
   const d = await res.json();
   document.getElementById('dir-meta').textContent = `${d.total} member${d.total===1?'':'s'} matching`;
   renderResults(d.items || [], append);
-  document.getElementById('dir-more').hidden = !d.has_more;
-  curPage = page;
+  curPage     = d.page || page;
+  curTotal    = d.total || 0;
+  curPageSize = d.page_size || curPageSize;
+  curHasMore  = !!d.has_more;
+  updatePageControls();
+}
+
+// Map mode keeps the "Load more" append flow; cards (mapless) mode shows a real
+// numbered pager — both ride the same buildQs(page) query layer, no infinite scroll.
+function updatePageControls() {
+  const more = document.getElementById('dir-more');
+  const pager = document.getElementById('dir-pager');
+  if (dirView === 'cards') {
+    more.hidden = true;
+    renderPager(pager, curPage, Math.max(1, Math.ceil(curTotal / Math.max(1, curPageSize))));
+  } else {
+    pager.hidden = true; pager.innerHTML = '';
+    more.hidden = !curHasMore;
+  }
+}
+// Page numbers to show: first, last, and a ±1 window around the current page,
+// with '…' gaps. Keeps the control compact at "all members" scale.
+function pageWindow(page, pages) {
+  const out = [], lo = Math.max(2, page - 1), hi = Math.min(pages - 1, page + 1);
+  out.push(1);
+  if (lo > 2) out.push('…');
+  for (let p = lo; p <= hi; p++) out.push(p);
+  if (hi < pages - 1) out.push('…');
+  if (pages > 1) out.push(pages);
+  return out;
+}
+function renderPager(nav, page, pages) {
+  if (pages <= 1) { nav.hidden = true; nav.innerHTML = ''; return; }
+  nav.innerHTML = ''; nav.hidden = false;
+  const mk = (label, target, o = {}) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'dir-page' + (o.cur ? ' is-cur' : '') + (o.gap ? ' is-gap' : '');
+    b.textContent = label;
+    if (o.cur) b.setAttribute('aria-current', 'page');
+    if (o.disabled || o.gap || o.cur) b.disabled = true;
+    else b.addEventListener('click', () => gotoPage(target));
+    return b;
+  };
+  nav.appendChild(mk('‹ Prev', page - 1, { disabled: page <= 1 }));
+  pageWindow(page, pages).forEach(p =>
+    nav.appendChild(p === '…' ? mk('…', 0, { gap: true }) : mk(String(p), p, { cur: p === page })));
+  nav.appendChild(mk('Next ›', page + 1, { disabled: page >= pages }));
+}
+function gotoPage(p) {
+  if (p < 1 || p === curPage) return;
+  loadPage(p, false);
+  window.history.replaceState({}, '', urlFor(p));
+  document.getElementById('dir-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // All matching members' pins (not just the current page) — plotted on the map.
@@ -482,8 +567,38 @@ async function loadPins() {
 
 function applyFilters() {
   loadPage(1, false);
-  loadPins();
-  window.history.replaceState({}, '', '/directory/members?' + buildQs(1));
+  if (dirView === 'map') loadPins();   // no pin feed in mapless card mode
+  window.history.replaceState({}, '', urlFor(1));
+}
+
+// Toggle map ⇄ cards. Cards mode hides the map and swaps Load-more for the pager;
+// map mode (re)loads pins. The list itself is identical (same privacy-gated
+// endpoint), so cards can never expose what the map hides.
+function setView(view) {
+  if ((view !== 'map' && view !== 'cards') || view === dirView) return;
+  dirView = view;
+  document.body.classList.toggle('dir--cards', view === 'cards');
+  document.body.classList.toggle('dir--map',   view === 'map');
+  document.querySelectorAll('#dir-viewtoggle button').forEach(b => {
+    const on = b.dataset.view === view;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  if (view === 'map') { initDirMap(); loadPins(); }   // refresh pins for current filters
+  updatePageControls();
+  window.history.replaceState({}, '', urlFor(curPage));
+  try { localStorage.setItem('dirView', view); } catch (_) {}
+}
+// Enable "Near me" only when a location is set (it ranks by distance).
+function updateSortAvail() {
+  const hasLoc = !!(document.getElementById('dir-lat').value && document.getElementById('dir-lng').value);
+  document.querySelectorAll('#dir-sort button[data-needs-loc]').forEach(b => {
+    b.disabled = !hasLoc;
+    b.title = hasLoc ? '' : 'Set a location to sort by distance';
+  });
+}
+function setSortButtons(sort) {
+  document.querySelectorAll('#dir-sort button').forEach(b => b.classList.toggle('on', b.dataset.sort === sort));
 }
 
 // Wire up controls.
@@ -493,11 +608,20 @@ document.getElementById('dir-more').addEventListener('click', () => loadPage(cur
 const viewSel = document.getElementById('dir-view');
 if (viewSel) viewSel.addEventListener('change', () => { viewFilter = viewSel.value; plotPins(lastPins); });
 document.querySelectorAll('#dir-sort button').forEach(btn => btn.addEventListener('click', () => {
-  if (curSort === btn.dataset.sort) return;
+  if (btn.disabled || curSort === btn.dataset.sort) return;
   curSort = btn.dataset.sort;
-  document.querySelectorAll('#dir-sort button').forEach(b => b.classList.toggle('on', b === btn));
+  setSortButtons(curSort);
   applyFilters();
 }));
+// Map ⇄ Cards toggle.
+document.querySelectorAll('#dir-viewtoggle button').forEach(b =>
+  b.addEventListener('click', () => setView(b.dataset.view)));
+updateSortAvail();
+// Restore the last-used view when the URL didn't pin one (so a member who prefers
+// cards keeps it). Done before the first paint's control wiring takes effect.
+if (!new URLSearchParams(location.search).has('view')) {
+  try { const v = localStorage.getItem('dirView'); if (v === 'cards' || v === 'map') setView(v); } catch (_) {}
+}
 
 // Map setup — Leaflet + OpenStreetMap (no API key needed) + marker clustering.
 const DIR_AUTHED = <?= json_encode((bool)($_whoami['authenticated'] ?? false)) ?>;
@@ -682,8 +806,8 @@ function plotPins(pins) {
   if (pts.length) dirMap.fitBounds(pts, {padding: [32, 32], maxZoom: 10});
 }
 
-// Initialize map + first list load.
-document.addEventListener('DOMContentLoaded', () => { initDirMap(); loadPage(1, false); });
+// Initialize map (map mode only) + first list load.
+document.addEventListener('DOMContentLoaded', () => { if (dirView === 'map') initDirMap(); loadPage(1, false); });
 
 // Location autocomplete via OSM Nominatim (server-proxied /me/location/search) — replaces the
 // broken Google Places widget. Fills #dir-lat/#dir-lng on pick, then applyFilters(). No API key.
@@ -700,7 +824,13 @@ document.addEventListener('DOMContentLoaded', () => { initDirMap(); loadPage(1, 
     document.getElementById('dir-lat').value = lat;
     document.getElementById('dir-lng').value = lng;
     if (label) input.value = label;
-    close(); applyFilters();
+    close();
+    // Picking a location implies "near me" intent (mirrors the old behavior where
+    // a location forced distance order); the viewer can still switch sort after.
+    curSort = 'distance_asc';
+    setSortButtons(curSort);
+    updateSortAvail();
+    applyFilters();
   }
   function summarize(row) {
     const a = row.address || {};
@@ -737,6 +867,8 @@ document.addEventListener('DOMContentLoaded', () => { initDirMap(); loadPage(1, 
   input.addEventListener('input', () => {
     document.getElementById('dir-lat').value = '';
     document.getElementById('dir-lng').value = '';            // typing invalidates the previous pin
+    if (curSort === 'distance_asc') { curSort = 'joined_desc'; setSortButtons(curSort); }  // can't rank by distance with no location
+    updateSortAvail();
     clearTimeout(timer); timer = setTimeout(run, 500);        // debounce (Nominatim ≤1 req/sec policy)
   });
   input.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });

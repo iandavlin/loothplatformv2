@@ -88,7 +88,38 @@ body { background: var(--lg-cream); color: var(--lg-ink); }
 .dir-header {
   background: var(--lg-cream); border-bottom: 1px solid var(--lg-line);
   font: 700 22px/1.15 var(--lg-font-serif); color: var(--lg-charcoal);
+  display: flex; align-items: center; gap: 12px;
 }
+
+/* Map ⇄ Cards toggle (mapless card mode). Pushed to the right edge of the header. */
+.dir-viewtoggle {
+  margin-left: auto; display: inline-flex; flex: 0 0 auto;
+  border: 1px solid var(--lg-line); border-radius: 8px; overflow: hidden;
+}
+.dir-viewtoggle button {
+  border: 0; background: #fff; padding: 7px 15px; cursor: pointer;
+  font: 600 12px/1 var(--lg-font-sans); color: var(--lg-mute); white-space: nowrap;
+}
+.dir-viewtoggle button + button { border-left: 1px solid var(--lg-line); }
+.dir-viewtoggle button.on { background: var(--lg-sage-d, #6b7c52); color: #fff; }
+
+/* Mapless mode: drop the map entirely so the cards own the viewport. */
+body.dir--cards .dir-map { display: none; }
+
+/* Disabled sort (e.g. "Near me" with no location set). */
+.dir-sort button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Real numbered pager for card mode (not infinite scroll). */
+.dir-pager { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 26px auto 8px; }
+.dir-page {
+  min-width: 38px; padding: 8px 12px; border: 1px solid var(--lg-line); background: #fff;
+  border-radius: 8px; font: 600 13px/1 var(--lg-font-sans); color: var(--lg-ink); cursor: pointer;
+}
+.dir-page:hover:not(:disabled) { border-color: var(--lg-sage); }
+.dir-page.is-cur { background: var(--lg-sage-d, #6b7c52); border-color: var(--lg-sage-d, #6b7c52); color: #fff; }
+.dir-page:disabled { cursor: default; }
+.dir-page.is-gap { border: 0; background: none; opacity: .6; padding-left: 4px; padding-right: 4px; }
+.dir-page[disabled]:not(.is-cur):not(.is-gap) { opacity: .4; }
 .dir-meta { font: 400 13px/1 var(--lg-font-sans); color: var(--lg-mute); }
 .dir-filterbar { background: var(--lg-cream); border-bottom-color: var(--lg-line); }
 .dir-filterbar .flab { color: var(--lg-mute); }
