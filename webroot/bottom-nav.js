@@ -328,7 +328,7 @@
     var trigger = document.querySelector('[data-ntm-open]');
     if (trigger) { trigger.click(); return; }
     showTabSkeleton();
-    try { window.location.assign('/hub/'); } catch (e) { window.location.href = '/hub/'; }
+    try { window.location.assign('/hub/?compose=1'); } catch (e) { window.location.href = '/hub/?compose=1'; }
   }
 
   // 3-button bar: Nav (tray) · Post (modal) · You (profile sheet). Replaces the
@@ -1200,9 +1200,27 @@
     }, 150);
   }
 
+  // Arrived at the Hub from another page via the Post button (?compose=1):
+  // auto-open the SAME composer modal openComposer() fires, so the user never
+  // has to tap + a second time. Polls for the forums.js-injected trigger since
+  // it mounts after us, then strips the param so back/refresh won't re-pop it.
+  function maybeAutoCompose() {
+    if (!/[?&]compose=1(?:&|$)/.test(location.search)) return;
+    if (!/^\/hub(\/|$)/.test(location.pathname || '')) return;
+    var tries = 0;
+    var iv = setInterval(function () {
+      var trigger = document.querySelector('[data-ntm-open]');
+      if (trigger) {
+        clearInterval(iv);
+        trigger.click();
+        try { history.replaceState(null, '', location.pathname); } catch (e) {}
+      } else if (++tries > 40) { clearInterval(iv); }
+    }, 150);
+  }
+
   function start() {
-    if (document.body) { build(); startDesktopSettings(); }
-    else document.addEventListener('DOMContentLoaded', function () { build(); startDesktopSettings(); });
+    if (document.body) { build(); startDesktopSettings(); maybeAutoCompose(); }
+    else document.addEventListener('DOMContentLoaded', function () { build(); startDesktopSettings(); maybeAutoCompose(); });
   }
   start();
 })();
