@@ -101,8 +101,59 @@ final class WpAssets
         /* Lazy-regenerate if missing (e.g. fresh install without activation hook ran) */
         if (!is_file($bundlePath)) self::regenerate_bundle();
 
-        $ver = is_file($bundlePath) ? (string) filemtime($bundlePath) : LG_LAYOUT_V2_VERSION;
-        wp_enqueue_style('lg-layout-v2', $bundleUrl, [], $ver);
+        /* Happy path: the generated bundle is on disk and readable. Enqueue it
+           as an external, cacheable <link> — filemtime is the cache-buster so
+           it caches hard across requests. This is the preferred path; the
+           inline fallback below only fires when the file can't be served. */
+        if (is_file($bundlePath) && is_readable($bundlePath)) {
+            $ver = (string) filemtime($bundlePath);
+            wp_enqueue_style('lg-layout-v2', $bundleUrl, [], $ver);
+            return;
+        }
+
+        /* Fallback: the bundle file is missing or unreadable — e.g. the assets
+           dir isn't writable by the PHP user, so regenerate_bundle() can't
+           create it (a real, host-dependent condition we log in debug.log).
+           Rather than enqueue a <link> to a 404 — which strips every block's
+           SVG-sizing CSS and balloons the viewBox-only icon SVGs to viewport
+           width (the "blue blob" in the ?lg_edit=1 / WP-template path) — emit
+           the freshly-built CSS inline.
+
+           wp_register_style(src=false) + wp_add_inline_style prints a plain
+           <style> with no network dependency, so the sizing rules are always
+           present regardless of filesystem perms or host. Isolate.php
+           allowlists the 'lg-layout-v2' handle and explicitly skips layer-
+           wrapping it, so the inline payload survives the isolation pass
+           untouched. (Verified on WP 6.9.4: a false-src handle still emits its
+           inline 'after' data.) */
+        wp_register_style('lg-layout-v2', false, [], LG_LAYOUT_V2_VERSION);
+        wp_enqueue_style('lg-layout-v2');
+        wp_add_inline_style('lg-layout-v2', self::build_css());
+    }
+
+    /**
+     * Build the full @layer bundle CSS string from current manifests + brand
+     * palette + dash overrides. Single source of truth shared by
+     * regenerate_bundle() (which writes it to disk) and enqueue_bundle()'s
+     * inline fallback (which prints it directly) so the two can never drift.
+     *
+     * $brandOverride / $styleOption mirror regenerate_bundle(): pass the
+     * freshly-sanitized arrays from the dash save handler to sidestep stale
+     * object-cache reads; pass null to read the saved options.
+     */
+    public static function build_css(?array $brandOverride = null, ?array $styleOption = null): string
+    {
+        $manifests = Manifest::all();
+        if ($brandOverride === null) {
+            $brandOverride = get_option(LG_LAYOUT_V2_BRAND_OPTION, []);
+        }
+        $brandTokens = Theme::resolve(is_array($brandOverride) ? $brandOverride : []);
+        if ($styleOption === null) {
+            $styleOption = get_option(LG_LAYOUT_V2_STYLE_OPTION, []);
+        }
+        $dashOverrides = is_array($styleOption) ? $styleOption : [];
+
+        return CssBuilder::build($manifests, $brandTokens, $dashOverrides);
     }
 
     /**
@@ -116,22 +167,11 @@ final class WpAssets
      */
     public static function regenerate_bundle(?array $brandOverride = null, ?array $styleOption = null): bool
     {
-        $manifests = Manifest::all();
-        /* When called from the dash save handler, the freshly-sanitized
-           arrays are passed in directly to sidestep stale object-cache
-           reads (some hosts' Redis drop-ins return last-cached alloptions
-           inside the same request that just wrote to them). When called
-           from CLI / first-load, fall through to get_option as before. */
-        if ($brandOverride === null) {
-            $brandOverride = get_option(LG_LAYOUT_V2_BRAND_OPTION, []);
-        }
-        $brandTokens = Theme::resolve(is_array($brandOverride) ? $brandOverride : []);
-        if ($styleOption === null) {
-            $styleOption = get_option(LG_LAYOUT_V2_STYLE_OPTION, []);
-        }
-        $dashOverrides = is_array($styleOption) ? $styleOption : [];
-
-        $css = CssBuilder::build($manifests, $brandTokens, $dashOverrides);
+        /* Built via the shared helper so the on-disk bundle and the inline
+           fallback (enqueue_bundle) can never drift. The sanitized-array
+           params are forwarded for the dash save-handler's stale-cache
+           sidestep — see build_css(). */
+        $css = self::build_css($brandOverride, $styleOption);
 
         $bundlePath = LG_LAYOUT_V2_DIR . LG_LAYOUT_V2_BUNDLE_CSS;
         $dir = dirname($bundlePath);
