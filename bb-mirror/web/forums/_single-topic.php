@@ -319,6 +319,12 @@ function render_reply(
                   data-reply-to-author="<?= htmlspecialchars($r['author_name'] ?: 'Anonymous') ?>"
                   hidden>Reply</button>
         </div>
+        <?php /* Per-reply engagement bar — same .fc-actions .fcr surface as the OP
+                 bar / feed card; forums.js §4d wires .fcr generically so clicks
+                 round-trip once the bar is in the DOM. Reply reactions 2026-06-26. */ ?>
+        <div class="fc-actions">
+          <?php if (function_exists('feed_reactions_bar')) feed_reactions_bar('reply', (int)$r['id'], $GLOBALS['rx_replies']['reply:' . (int)$r['id']] ?? []); ?>
+        </div>
       </div>
     </div>
     <?php
@@ -363,6 +369,20 @@ try {
     $op_rx_counts = $op_rx_map['topic:' . (int)$topic['id']] ?? [];
 } catch (\Throwable $e) {
     $op_rx_counts = []; // store/grant unreadable → omit reactions, keep the page
+}
+
+// ── Per-reply reaction counts — one batched read for the whole thread, same
+// shared count contract as the OP bar. render_reply() reads $GLOBALS['rx_replies']
+// (like att_map). Try/catch so a missing grant degrades to bare replies. ──
+$rx_replies = [];
+try {
+    if ($reply_ids) {
+        $rx_replies = lg_card_reactions_for_items($db, array_map(
+            fn($id) => ['post_type' => 'reply', 'item_id' => $id], $reply_ids
+        ));
+    }
+} catch (\Throwable $e) {
+    $rx_replies = []; // store/grant unreadable → omit reply reactions, keep the page
 }
 
 // Forum-header context for the post page (category accent + parent breadcrumb).
