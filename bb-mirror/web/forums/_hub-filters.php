@@ -250,6 +250,7 @@ function hub_filters_parse(): array
         'q'       => trim((string)($_GET['q'] ?? '')),  // unified full-text query (AND dim)
         'saved'   => !empty($_GET['saved']),             // Saved-rail view (viewer's ☆ saves)
         'show'    => hub_show_validate((string)($_GET['show'] ?? '')), // single video-type term (Shows filter)
+        'tag'     => hub_slugify((string)($_GET['tag'] ?? '')),  // single exact-tag facet (cross-world), normalized to a slug
     ];
 }
 
@@ -292,6 +293,64 @@ function hub_show_terms(PDO $db): array
     }
     usort($out, fn($a, $b) => $b['count'] <=> $a['count']);
     return $out;
+}
+
+/**
+ * Active-tag facet (cross-world exact-tag count) for the chipbar.
+ * Given the active ?tag slug, counts CONTENT items (via the content_tag slug,
+ * tier-gated, same exclusions as the feed) + forum TOPICS (via the normalized
+ * topic.tags label) carrying that slug, and resolves a display label. Returns
+ * ['slug','label','count'] or null for an empty slug. Label prefers the canonical
+ * discovery.tag.label (content world is slugged+labelled); falls back to a
+ * de-slugified form for topic-only tags. ONE pass per world; anon-safe.
+ *
+ * Scope note: this is the "active-tag-only" count the build ships first (per
+ * TAG-SEARCH-SCOPE.md §4 Option A) — enough for the chipbar to show/remove the
+ * tag. Full per-tag facet listing is deferred.
+ */
+function hub_tag_terms(PDO $db, string $slug, array $content_tiers): ?array
+{
+    $slug = trim($slug);
+    if ($slug === '') return null;
+
+    // Canonical label from the content tag store (slug is UNIQUE there).
+    $label = '';
+    try {
+        $ls = $db->prepare("SELECT label FROM discovery.tag WHERE slug = :s LIMIT 1");
+        $ls->execute([':s' => $slug]);
+        $label = (string)($ls->fetchColumn() ?: '');
+    } catch (\Throwable $e) { /* fall through to de-slug */ }
+    if ($label === '') $label = ucwords(str_replace('-', ' ', $slug)); // topic-only / fallback
+
+    // Content count (tier-gated; mirrors the feed's kind exclusions).
+    $cn = 0;
+    try {
+        $tph = [];
+        foreach ($content_tiers as $i => $t) $tph[] = ':tt' . $i;
+        $tin = $tph ? implode(',', $tph) : "''";
+        $cs = $db->prepare("SELECT count(DISTINCT ci.id) FROM discovery.content_item ci
+                              JOIN discovery.content_tag ct ON ct.content_id = ci.id
+                              JOIN discovery.tag t ON t.id = ct.tag_id
+                             WHERE t.slug = :s AND ci.tier IN ($tin)
+                               AND ci.kind NOT IN ('event','misc')");
+        $cs->bindValue(':s', $slug);
+        foreach ($content_tiers as $i => $t) $cs->bindValue(':tt' . $i, $t);
+        $cs->execute();
+        $cn = (int)$cs->fetchColumn();
+    } catch (\Throwable $e) { /* leave 0 */ }
+
+    // Topic count (normalized-label match; same public/status guard as the feed).
+    $tn = 0;
+    try {
+        $ts = $db->prepare("SELECT count(*) FROM topic tp JOIN forum f ON f.id = tp.forum_id
+                             WHERE tp.status='publish' AND f.visibility='public' AND tp.forum_id NOT IN (3876)
+                               AND EXISTS (SELECT 1 FROM unnest(tp.tags) x
+                                           WHERE trim(both '-' from regexp_replace(lower(x), '[^a-z0-9]+', '-', 'g')) = :s)");
+        $ts->execute([':s' => $slug]);
+        $tn = (int)$ts->fetchColumn();
+    } catch (\Throwable $e) { /* leave 0 */ }
+
+    return ['slug' => $slug, 'label' => $label, 'count' => $cn + $tn];
 }
 
 /**
@@ -568,6 +627,22 @@ function hub_filter_where(array $filters, array $forum_cat_map, array $content_c
             . "JOIN discovery.tag t ON t.id = ct.tag_id WHERE t.slug = :show_slug)";
         $binds[':show_slug'] = $filters['show'];
         $topic_conds[] = 'FALSE';
+    }
+
+    // -- Tag: exact-tag facet, CROSS-WORLD (single select). Content reuses the
+    //    proven Shows clause over the materialized content_tag slug; topics match
+    //    a normalized topic.tags label, slugified at query time to the SAME rule
+    //    as hub_slugify() (lower; punct→'-'; trim '-'), so the two stores unify on
+    //    one canonical slug. The slug is normalized at parse time, so it is always
+    //    [a-z0-9-]. Distinct binds per branch (PDO emulation off can't reuse). --
+    if (!empty($filters['tag'])) {
+        $content_conds[] = "u.topic_id IN ("
+            . "SELECT ct.content_id FROM discovery.content_tag ct "
+            . "JOIN discovery.tag t ON t.id = ct.tag_id WHERE t.slug = :tag_c)";
+        $binds[':tag_c'] = $filters['tag'];
+        $topic_conds[] = "EXISTS (SELECT 1 FROM unnest(u.tags) AS _tg "
+            . "WHERE trim(both '-' from regexp_replace(lower(_tg), '[^a-z0-9]+', '-', 'g')) = :tag_t)";
+        $binds[':tag_t'] = $filters['tag'];
     }
 
     // -- Category: topics by forum subtree, content by reconciled forum_label --

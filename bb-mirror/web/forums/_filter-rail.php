@@ -28,6 +28,7 @@ function hub_url(array $filters, string $sort = 'new'): string
     if (!empty($filters['q']))                  $qs['q']      = $filters['q'];
     if (!empty($filters['saved']))              $qs['saved']  = 1;
     if (!empty($filters['show']))               $qs['show']   = $filters['show'];
+    if (!empty($filters['tag']))                $qs['tag']    = $filters['tag'];   // single exact-tag facet (slug)
     $base = LG_BB_MIRROR_PUBLIC_PATH . '/';
     return htmlspecialchars($qs ? $base . '?' . http_build_query($qs) : $base);
 }
@@ -53,6 +54,7 @@ function hub_query_params(): array
     if (!empty($f['q']))       $out['q']      = $f['q'];
     if (!empty($f['saved']))   $out['saved']  = '1';   // string: feed_sort_url() urlencode()s every value (strict_types → int fatals)
     if (!empty($f['show']))    $out['show']   = $f['show'];   // single video-type term (Shows filter)
+    if (!empty($f['tag']))     $out['tag']    = $f['tag'];    // single exact-tag facet (slug)
     return $out;
 }
 
@@ -381,6 +383,14 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', 
         $f = $filters; $f['show'] = '';
         $slabel = HUB_SHOW_TERMS[$filters['show']] ?? $filters['show'];
         $chips[] = ['Show', $slabel, hub_url($f, $sort)];
+    }
+    if (!empty($filters['tag'])) {
+        // Single ?tag facet (cross-world exact tag) — removable active-filter chip
+        // like Show. Display label comes from the stashed active-tag term (canonical
+        // discovery.tag.label, else de-slugified); falls back to the raw slug.
+        $f = $filters; $f['tag'] = '';
+        $tlabel = $GLOBALS['__bb_hub_rail']['tag']['label'] ?? $filters['tag'];
+        $chips[] = ['Tag', $tlabel, hub_url($f, $sort)];
     }
     foreach ($filters['types'] as $v) $chips[] = ['Type', hub_type_label($v), hub_url(hub_toggle($filters, 'type', $v), $sort)];
     foreach ($filters['cats']  as $v) $chips[] = ['In',   hub_cat_label($v),  hub_url(hub_toggle($filters, 'cat',  $v), $sort), $v];

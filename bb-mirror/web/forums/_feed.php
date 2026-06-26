@@ -625,7 +625,7 @@ if ($scoped_forum) {
     $hub_facets = hub_facet_counts($db, $content_tiers, $_forum_cat_map);
     $hub_leaf_labels = [];
     foreach ($hub_cat_tree as $_p) foreach ($_p['leaves'] as $_lf) $hub_leaf_labels[$_lf['key']] = $_lf['label'];
-    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'tree' => $hub_cat_tree, 'filters' => $hub_filters, 'muted' => $hub_muted, 'sort' => $sort_param, 'shows' => hub_show_terms($db), 'leaf_labels' => $hub_leaf_labels];
+    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'tree' => $hub_cat_tree, 'filters' => $hub_filters, 'muted' => $hub_muted, 'sort' => $sort_param, 'shows' => hub_show_terms($db), 'leaf_labels' => $hub_leaf_labels, 'tag' => hub_tag_terms($db, (string)($hub_filters['tag'] ?? ''), $content_tiers)];
 
     // Unified full-text search (q) — an AND dimension across BOTH worlds, applied
     // per-branch (FTS columns: topic.search_doc, content_item.tsv). websearch_to_
@@ -823,10 +823,12 @@ foreach ($topics as $_r) if (($_r['card_type'] ?? 'topic') === 'content' && !emp
 if ($content_ids) {
     $idlist = implode(',', array_values(array_unique($content_ids)));
     try {
-        $tgst = $db->query("SELECT ct.content_id, t.label FROM discovery.content_tag ct
+        // Carry the REAL slug (not slugify(label)) so the chip's ?tag= facet is an
+        // exact content match — 67/1846 tags have slug <> slugify(label).
+        $tgst = $db->query("SELECT ct.content_id, t.label, t.slug FROM discovery.content_tag ct
                               JOIN discovery.tag t ON t.id = ct.tag_id
                              WHERE ct.content_id IN ($idlist) ORDER BY ct.content_id, t.label");
-        foreach ($tgst->fetchAll() as $row) $content_tags[(int)$row['content_id']][] = (string)$row['label'];
+        foreach ($tgst->fetchAll() as $row) $content_tags[(int)$row['content_id']][] = ['label' => (string)$row['label'], 'slug' => (string)$row['slug']];
     } catch (\Throwable $e) { $content_tags = []; } // missing grant -> no tags, never a 500
 }
 
@@ -1125,15 +1127,30 @@ function feed_parse_pg_array(?string $lit): array
     return $out;
 }
 
-// Render forum tag chips (topic tags) — links to a tag search.
+// Render tag chips — each links to the exact-tag facet (?tag=<slug>), NOT the
+// old /?q= full-text search (which was blind to topic.tags; see TAG-SEARCH-SCOPE.md).
+// Each $tag is either:
+//   - a string  → a topic label; the slug is derived with hub_slugify() (the same
+//                 normalization the topic-side WHERE applies), display = the label.
+//   - an array  → ['label'=>display, 'slug'=>canonical] → content chips carry the
+//                 REAL discovery.tag.slug (67/1846 differ from slugify(label), so
+//                 we must use the stored slug for an exact content-facet match).
 function feed_render_tags(array $tags): void
 {
     if (!$tags) return;
     echo '<div class="fc-tags feed-card__tags">';
     foreach ($tags as $tag) {
-        $url = LG_BB_MIRROR_PUBLIC_PATH . '/?q=' . urlencode($tag);
-        echo '<a class="fc-tag tag-chip" href="' . htmlspecialchars($url) . '">'
-           . htmlspecialchars($tag) . '</a>';
+        if (is_array($tag)) {
+            $label = (string)($tag['label'] ?? '');
+            $slug  = (string)($tag['slug']  ?? '');
+        } else {
+            $label = (string)$tag;
+            $slug  = hub_slugify($label);
+        }
+        if ($label === '' || $slug === '') continue;
+        $url = hub_url(['tag' => $slug]);   // hub_url() htmlspecialchars's its return
+        echo '<a class="fc-tag tag-chip" href="' . $url . '">'
+           . htmlspecialchars($label) . '</a>';
     }
     echo '</div>';
 }
