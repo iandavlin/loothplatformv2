@@ -203,33 +203,58 @@
   // Live in-page filter for EVERY hub q field — the modal's "Search the Hub" AND
   // the quick-search bubble on the bar (Ian 2026-06-20). One liveSearch() path;
   // fields mirror each other so opening Adv Search keeps what was typed.
-  var qFields = document.querySelectorAll('[data-hub-search]');
-  function syncQ(val, except) { qFields.forEach(function (n) { if (n !== except && n.value !== val) n.value = val; }); }
-  qFields.forEach(function (qf) {
-    qf.addEventListener('input', debounce(function () { var v = qf.value.trim(); syncQ(qf.value, qf); liveSearch(v); }, 280));
-    var form = qf.closest('form');
-    // Enter: live-filter only (don't reload the whole page).
-    if (form) form.addEventListener('submit', function (e) { e.preventDefault(); var v = qf.value.trim(); syncQ(qf.value, qf); liveSearch(v); });
-  });
-
-  var aIn  = wrap.querySelector('[data-hub-author]');
-  var aBox = wrap.querySelector('[data-hub-suggest="author"]');
-  if (aIn && aBox) wireDropdown(aIn, aBox, 'author', addAuthor);
-
-  var tIn  = wrap.querySelector('[data-hub-tag]');
-  var tBox = wrap.querySelector('[data-hub-suggest="tag"]');
-  if (tIn && tBox) {
-    wireDropdown(tIn, tBox, 'tag', applyTag);
-    // AUTOCOMPLETE-ONLY: block the plain GET submit so Enter with no suggestion
-    // selected never applies free text (the dropdown's Enter still picks the
-    // active/top row via wireDropdown's keydown). Fail-closed.
-    var tForm = tIn.closest('form');
-    if (tForm) tForm.addEventListener('submit', function (e) { e.preventDefault(); });
+  // syncQ re-queries the q fields live: the Advanced Search modal's body is
+  // innerHTML-swapped on every in-modal apply (fmodalApply), which REPLACES the
+  // q/author/tag nodes — a captured-once NodeList would point at dead elements.
+  function syncQ(val, except) {
+    document.querySelectorAll('[data-hub-search]').forEach(function (n) {
+      if (n !== except && n.value !== val) n.value = val;
+    });
   }
 
+  // Wire (idempotently) the q / author / tag search fields. Re-runnable because
+  // fmodalApply blows away the modal body DOM on each pick; without re-wiring the
+  // FRESH author/tag inputs have no autocomplete listeners, so picking a SECOND
+  // tag/author silently no-ops (Ian: "still can't do more than one tag search").
+  // The per-node data-hub-wired guard makes a second call over surviving nodes a
+  // no-op, so only the swapped-in fields get (re)bound.
+  function wireSearchUI() {
+    document.querySelectorAll('[data-hub-search]').forEach(function (qf) {
+      if (qf.dataset.hubWired) return;
+      qf.dataset.hubWired = '1';
+      qf.addEventListener('input', debounce(function () { var v = qf.value.trim(); syncQ(qf.value, qf); liveSearch(v); }, 280));
+      var form = qf.closest('form');
+      // Enter: live-filter only (don't reload the whole page).
+      if (form) form.addEventListener('submit', function (e) { e.preventDefault(); var v = qf.value.trim(); syncQ(qf.value, qf); liveSearch(v); });
+    });
+
+    var aIn  = document.querySelector('[data-hub-author]');
+    var aBox = aIn && aIn.closest('.feed-toolbar-search') && aIn.closest('.feed-toolbar-search').querySelector('[data-hub-suggest="author"]');
+    if (aIn && aBox && !aIn.dataset.hubWired) { aIn.dataset.hubWired = '1'; wireDropdown(aIn, aBox, 'author', addAuthor); }
+
+    var tIn  = document.querySelector('[data-hub-tag]');
+    var tBox = tIn && tIn.closest('.feed-toolbar-search') && tIn.closest('.feed-toolbar-search').querySelector('[data-hub-suggest="tag"]');
+    if (tIn && tBox && !tIn.dataset.hubWired) {
+      tIn.dataset.hubWired = '1';
+      wireDropdown(tIn, tBox, 'tag', applyTag);
+      // AUTOCOMPLETE-ONLY: block the plain GET submit so Enter with no suggestion
+      // selected never applies free text (the dropdown's Enter still picks the
+      // active/top row via wireDropdown's keydown). Fail-closed.
+      var tForm = tIn.closest('form');
+      if (tForm) tForm.addEventListener('submit', function (e) { e.preventDefault(); });
+    }
+  }
+  wireSearchUI();
+  // Re-wire the FRESH author/tag/q fields after the Advanced Search modal body is
+  // innerHTML-swapped (forums.js fmodalApply) — this is what lets you stack a 2nd,
+  // 3rd… tag from inside the modal.
+  document.addEventListener('hub:fmodal-body-swapped', wireSearchUI);
+
+  // Outside-click closes any open suggest dropdown (delegated on document, so it
+  // survives modal-body swaps without re-binding).
   document.addEventListener('click', function (e) {
     if (!e.target.closest('.hub-tsearch')) {
-      wrap.querySelectorAll('.hub-suggest').forEach(function (b) { hide(b); });
+      document.querySelectorAll('.feed-toolbar-search .hub-suggest').forEach(function (b) { hide(b); });
     }
   });
 })();

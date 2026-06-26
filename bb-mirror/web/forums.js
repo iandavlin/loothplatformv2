@@ -494,7 +494,15 @@
           document.dispatchEvent(new CustomEvent('lg:hub-feed-swapped'));
         }
         var nb = doc.querySelector('.hub-fmodal__body');
-        if (mbody && nb) mbody.innerHTML = nb.innerHTML;
+        if (mbody && nb) {
+          mbody.innerHTML = nb.innerHTML;
+          // The modal body just got a fresh DOM (incl. the author/tag search
+          // fields). Their autocomplete listeners were bound to the OLD nodes
+          // and died with that innerHTML swap — so picking a SECOND tag/author
+          // silently did nothing (Ian: "can't do more than one tag"). Tell
+          // hub-filters.js to re-wire the now-fresh fields.
+          document.dispatchEvent(new CustomEvent('hub:fmodal-body-swapped'));
+        }
         var oldC = document.querySelector('.hub-chipbar'), newC = doc.querySelector('.hub-chipbar');
         if (oldC && newC) oldC.replaceWith(document.importNode(newC, true));
         else if (oldC && !newC) oldC.remove();
