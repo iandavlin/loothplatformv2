@@ -595,6 +595,10 @@ body.fc-save-anon .thread__util .fc-save { display: none; }  /* logged-out → n
 }
 .lg-share-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
 
+/* Inline feed-card SHARE (desktop only) — hidden by default so mobile cards keep
+   hub-polish.js's lg-act-share; shown @ >=641 in the .fc-actions row (forums.css). */
+.feed-page .fc-share { display: none; }
+
 .thread {
   display: grid;
   gap: var(--s4);
@@ -3919,6 +3923,13 @@ body:has(.feed-page) #bb-ham{display:none}
   .feed-page .fc-save.is-saved { color:var(--lg-sage-d,#586b3f); }
   .feed-page .fc-save.is-saved .ico { fill:currentColor; }
   body.fc-save-anon .feed-page .fc-save { display:none; }   /* logged-out → no save affordance */
+  /* fc-share — inline Share on the desktop feed-card action row. Mirrors fc-save's
+     look; wired by the delegated [data-share-topic] handler (window.lgShareTopic). */
+  .feed-page .fc-share { -webkit-appearance:none; appearance:none;
+    display:inline-flex; align-items:center; gap:4px; background:none; border:0; padding:2px 3px;
+    font:600 12px/1 var(--lg-font-sans); color:var(--lg-mute); cursor:pointer; transition:color .12s; }
+  .feed-page .fc-share .ico { width:16px; height:16px; flex:0 0 auto; }
+  .feed-page .fc-share:hover { color:var(--lg-sage-d,#586b3f); }
   .feed-page .fc-replies { grid-area:replies; min-width:0; margin-top:6px; }
   /* fc-composer — persistent, pinned to the card bottom (full-bleed) */
   .feed-page .fc-composer{ display:flex; grid-area:composer; align-items:center; gap:9px;

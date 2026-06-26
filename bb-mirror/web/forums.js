@@ -3048,9 +3048,15 @@
     var btn = e.target.closest && e.target.closest('[data-share-topic]');
     if (!btn) return;
     e.preventDefault(); e.stopPropagation();
-    var url = btn.getAttribute('data-share-url');
+    // url/title come from the button's own attrs (single-topic + modal Share) OR,
+    // for the inline feed-card Share, the closest card's data-share-url + .fc-title.
+    var host = btn.getAttribute('data-share-url') ? btn : btn.closest('[data-share-url]');
+    var url = host ? host.getAttribute('data-share-url') : '';
+    if (!url) { var dh = btn.closest('[data-href]'); url = dh ? dh.getAttribute('data-href') : ''; }
     if (!url) return;
-    share(url, btn.getAttribute('data-share-title') || '');
+    var title = btn.getAttribute('data-share-title') || (host && host.getAttribute('data-share-title')) || '';
+    if (!title) { var card = btn.closest('.feed-card'); var ti = card && card.querySelector('.fc-title'); title = ti ? (ti.textContent || '').trim() : ''; }
+    share(url, title);
   });
 })();
 

@@ -517,3 +517,17 @@ if (!function_exists('feed_save_btn')) {
            . $ICO . '<span class="fc-save__lbl">Save</span></button>';
     }
 }
+
+// Inline SHARE control (desktop feed cards) — a bare [data-share-topic] marker;
+// the forums.js desktop SHARE module (window.lgShareTopic) reads the closest card's
+// data-share-url (+ .fc-title text) and runs the Web Share API w/ copy-link fallback.
+// Desktop-only by CSS (.fc-share shown @ >=641); mobile cards keep hub-polish.js's own
+// lg-act-share. Shared here so any card-rendering partial can emit it.
+if (!function_exists('feed_share_btn')) {
+    function feed_share_btn(): void
+    {
+        static $ICO = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
+        echo '<button type="button" class="fc-share" data-share-topic aria-label="Share" title="Share">'
+           . $ICO . '<span class="fc-share__lbl">Share</span></button>';
+    }
+}

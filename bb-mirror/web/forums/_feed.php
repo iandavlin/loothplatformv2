@@ -1409,7 +1409,7 @@ $header_cat = $scoped_forum
              feed-card__* / lg-card-* classes ride along as forums.js behavior hooks. */ ?>
     <article class="feed-card feed-card--content<?= $c_is_gated ? ' feed-card--gated feed-card--gated-' . htmlspecialchars($c_tier) : '' ?>" data-lg-card="1"
              data-id="<?= $c_id ?>" data-type="<?= htmlspecialchars($c_kind) ?>"
-             data-href="<?= htmlspecialchars($c_url) ?>" data-gated="<?= $c_is_gated ? '1' : '0' ?>"
+             data-href="<?= htmlspecialchars($c_url) ?>" data-share-url="<?= htmlspecialchars($c_url) ?>" data-gated="<?= $c_is_gated ? '1' : '0' ?>"
              data-cat="<?= htmlspecialchars($c_cat) ?>" data-kind="<?= htmlspecialchars($c_kind) ?>"
              data-post-type="<?= htmlspecialchars($c_cpt, ENT_QUOTES) ?>" data-item-id="<?= $c_id ?>">
       <span class="fc-avatar lg-card-avatar"><?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 40, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?></span>
@@ -1453,6 +1453,7 @@ $header_cat = $scoped_forum
           <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_reactions_bar($c_cpt, $c_id, $card_reaction_counts[$c_cpt . ':' . $c_id] ?? []); ?>
           <?php feed_action_bar(0, 'Comment'); ?>
           <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_save_btn($c_cpt, $c_id); ?>
+          <?php feed_share_btn(); ?>
           <?php if ($c_can_comment): ?>
             <button type="button" class="feed-card__comments-btn" data-comments
                     data-post-type="<?= htmlspecialchars($c_cpt, ENT_QUOTES) ?>" data-item-id="<?= $c_id ?>"
@@ -1582,6 +1583,7 @@ $header_cat = $scoped_forum
         <?php feed_reactions_bar('topic', $topic_id, $card_reaction_counts['topic:' . $topic_id] ?? []); ?>
         <?php feed_action_bar($reply_count); ?>
         <?php feed_save_btn('topic', $topic_id); ?>
+        <?php feed_share_btn(); ?>
         <?= $reply_cta /* card-level CTA: now hidden by CSS (composer is the reply entry, Ian) but KEPT as the topic/forum data-source that nested reply buttons read via frmOpen() */ ?>
         <?php /* expand-all RETIRED (Ian): SPLIT into "Read more" (full post BODY only,
                  in the .fc-excerpt block above) + the reply-count control (.fc-facepile →
