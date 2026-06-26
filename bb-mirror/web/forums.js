@@ -3701,7 +3701,7 @@
       // expand (Ian 6/16 — no surprise card-grow). Genuine controls self-handle;
       // read-more + compact-caret + bare chrome now all route to the modal (they used
       // to fall through to the bubble-phase expanders at forums.js §224/§2b/§compact).
-      if (e.target.closest('input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, [data-comments], .fc-composer, .reply-stub, .fc-cover--video, a[href*="/u/"]')) return;
+      if (e.target.closest('input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, .fc-actions, [data-comments], .fc-composer, .reply-stub, .fc-cover--video, a[href*="/u/"]')) return;
     }
     e.preventDefault();
     e.stopPropagation();   // beat the legacy inline-expand handlers
