@@ -319,6 +319,12 @@ function render_reply(
                   data-reply-to-author="<?= htmlspecialchars($r['author_name'] ?: 'Anonymous') ?>"
                   hidden>Reply</button>
         </div>
+        <?php /* Per-reply engagement bar — same .fc-actions .fcr surface as the OP
+                 bar / feed card; forums.js §4d wires .fcr generically so clicks
+                 round-trip once the bar is in the DOM. Reply reactions 2026-06-26. */ ?>
+        <div class="fc-actions">
+          <?php if (function_exists('feed_reactions_bar')) feed_reactions_bar('reply', (int)$r['id'], $GLOBALS['rx_replies']['reply:' . (int)$r['id']] ?? []); ?>
+        </div>
       </div>
     </div>
     <?php
@@ -348,6 +354,36 @@ $op_created = fmt_ts_single($topic['created_at']);
 $op_dt      = fmt_ts_dt($topic['created_at']);
 $reply_count = (int)$topic['reply_count'];
 $public_path = LG_BB_MIRROR_PUBLIC_PATH;
+
+// ── OP reaction bar (deep-link full-parity, hub-topic-deeplink 2026-06-25) ──
+// Render the SAME .fc-actions .fcr engagement bar the feed card emits, via the
+// shared count contract (lg_card_reactions_for_items) + shared renderer
+// (feed_reactions_bar). Gives the standalone page working reactions AND lets the
+// §4e modal's cold-fetch deep-link clone the bar for full parity with a normal
+// card-clone open. Try/catch so a missing grant degrades to "no bar".
+$op_rx_counts = [];
+try {
+    require_once __DIR__ . '/../../../archive-poc/api/v0/_reactions.php'; // count contract + palette
+    require_once __DIR__ . '/_reply-render.php';                          // feed_reactions_bar + glyphs
+    $op_rx_map    = lg_card_reactions_for_items($db, [['post_type' => 'topic', 'item_id' => (int)$topic['id']]]);
+    $op_rx_counts = $op_rx_map['topic:' . (int)$topic['id']] ?? [];
+} catch (\Throwable $e) {
+    $op_rx_counts = []; // store/grant unreadable → omit reactions, keep the page
+}
+
+// ── Per-reply reaction counts — one batched read for the whole thread, same
+// shared count contract as the OP bar. render_reply() reads $GLOBALS['rx_replies']
+// (like att_map). Try/catch so a missing grant degrades to bare replies. ──
+$rx_replies = [];
+try {
+    if ($reply_ids) {
+        $rx_replies = lg_card_reactions_for_items($db, array_map(
+            fn($id) => ['post_type' => 'reply', 'item_id' => $id], $reply_ids
+        ));
+    }
+} catch (\Throwable $e) {
+    $rx_replies = []; // store/grant unreadable → omit reply reactions, keep the page
+}
 
 // Forum-header context for the post page (category accent + parent breadcrumb).
 $fcat_rows  = $db->query("SELECT id, slug, parent_forum_id FROM forum WHERE visibility='public' AND status IN ('open','closed')")->fetchAll();
@@ -420,6 +456,13 @@ $fh_image      = $forum['header_image_url'] ?: null;
         </div>
         <div class="post__body"><?= $lg_anon_view ? lg_scrub_anon_contacts((string)$topic['content_html']) : $topic['content_html'] /* sanitized at sync write */ ?></div>
         <?php render_attachments($att_map['topic'][$topic_id] ?? []); ?>
+        <?php /* Engagement bar — same .fc-actions .fcr surface the feed card emits
+                 (_feed.php), so the §4e modal cold-fetch can clone it for full OP
+                 reaction parity, and the standalone page itself becomes reactable
+                 (forums.js §4d wires .fcr generically). Ian 2026-06-25. */ ?>
+        <div class="fc-actions">
+          <?php if (function_exists('feed_reactions_bar')) feed_reactions_bar('topic', (int)$topic['id'], $op_rx_counts); ?>
+        </div>
       </div>
     </div>
   </div>
