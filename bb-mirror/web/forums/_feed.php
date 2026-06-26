@@ -1159,19 +1159,9 @@ function feed_action_bar(int $reply_count, string $zero_label = 'Reply'): void
        . '</div>';
 }
 
-// Save / bookmark toggle (☆) — binary per-card save → discovery.saved_posts via the
-// WP-cookie door (/archive-api/v0/save-post, sibling of card-react). Server-renders the
-// inert star button; forums.js hydrates the viewer's saved-state (batch GET resolves
-// auth+nonce+my_saves) and wires the optimistic toggle (POST). Logged-out viewers get
-// the button but the GET resolves anon → no nonce → it stays inert. Only emitted for
-// savable types (LG_HUB_REACT_TYPES == save-post.php's LG_SAVE_TYPES, incl. 'topic').
-function feed_save_btn(string $postType, int $itemId): void
-{
-    static $ICO = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.6l2.95 5.98 6.6.96-4.77 4.65 1.13 6.57L12 17.66 6.09 20.76l1.13-6.57L2.45 9.54l6.6-.96z"/></svg>';
-    echo '<button type="button" class="fc-save" data-save data-post-type="' . htmlspecialchars($postType, ENT_QUOTES)
-       . '" data-item-id="' . $itemId . '" aria-pressed="false" aria-label="Save" title="Save">'
-       . $ICO . '<span class="fc-save__lbl">Save</span></button>';
-}
+// feed_save_btn() now lives in _reply-render.php (the shared partial, required at
+// the "-- Helpers --" include below) so the standalone single-topic page — which
+// loads _reply-render.php but NOT _feed.php — can emit the same save button.
 
 // feed_rx_glyph() + feed_reactions_bar() now live in _reply-render.php (the shared
 // partial) so the lazy full-thread endpoint can emit reply reactions too. Required
@@ -1534,7 +1524,7 @@ $header_cat = $scoped_forum
         : '';
     ?>
     <article class="feed-card feed-card--topic" data-lg-card="1"
-             data-id="<?= $topic_id ?>" data-type="discussion" data-href="<?= $turl ?>" data-gated="0"
+             data-id="<?= $topic_id ?>" data-type="discussion" data-href="<?= $turl ?>" data-share-url="<?= $turl ?>" data-gated="0"
              data-cat="<?= htmlspecialchars($cat_key) ?>" data-topic-id="<?= $topic_id ?>" data-forum-id="<?= (int)$topic['forum_id'] ?>" data-author-id="<?= (int)($topic['author_id'] ?? 0) ?>" data-reply-count="<?= $reply_count ?>">
       <?php $av_href = $author_slug ? '/u/' . rawurlencode((string)$author_slug) : null;
             $av_t    = bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 40, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null); ?>

@@ -460,7 +460,9 @@
     var share = row.querySelector('.lg-act-share');
     if (share) share.addEventListener('click', function () {
       var link = card.querySelector('.feed-card__title a');
-      var url = link ? link.href : location.href;
+      // DISCUSSION cards carry the canonical /hub/<forum>/<topic>/ permalink on
+      // data-share-url (_feed.php); prefer it. CPT cards have none -> title href.
+      var url = card.getAttribute('data-share-url') || (link ? link.href : location.href);
       var title = link ? (link.textContent || '').trim() : 'Looth Hub';
       function legacyCopy() {
         try {

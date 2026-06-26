@@ -500,3 +500,20 @@ if (!function_exists('feed_reactions_bar')) {
            . '</div>';
     }
 }
+
+
+// Save / bookmark toggle — shared here (not _feed.php) so the standalone
+// single-topic page (which loads _reply-render.php, NOT _feed.php) can emit the
+// same .fc-save button forums.js hydrates. Binary per-card save ->
+// discovery.saved_posts via the WP-cookie door (/archive-api/v0/save-post).
+// Logged-out viewers get the button but the GET resolves anon -> it stays inert.
+// Guarded so _feed.php's historical definition (now removed) can't double-declare.
+if (!function_exists('feed_save_btn')) {
+    function feed_save_btn(string $postType, int $itemId): void
+    {
+        static $ICO = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.6l2.95 5.98 6.6.96-4.77 4.65 1.13 6.57L12 17.66 6.09 20.76l1.13-6.57L2.45 9.54l6.6-.96z"/></svg>';
+        echo '<button type="button" class="fc-save" data-save data-post-type="' . htmlspecialchars($postType, ENT_QUOTES)
+           . '" data-item-id="' . $itemId . '" aria-pressed="false" aria-label="Save" title="Save">'
+           . $ICO . '<span class="fc-save__lbl">Save</span></button>';
+    }
+}
