@@ -132,6 +132,8 @@ CREATE TABLE IF NOT EXISTS topic (
 
   search_doc        tsvector,
 
+  tags              TEXT[],                                  -- denormalized bbPress topic-tag labels (WP-sourced via the mirror sync); free-text, no slug. Powers the cross-world exact-tag facet (?tag=, see TAG-SEARCH-SCOPE.md). NOT in search_doc.
+
   created_at        TIMESTAMPTZ NOT NULL,
   modified_at       TIMESTAMPTZ NOT NULL,
   sync_at           TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -141,6 +143,12 @@ CREATE INDEX IF NOT EXISTS idx_topic_forum_sticky ON topic (forum_id, sticky_kin
 CREATE INDEX IF NOT EXISTS idx_topic_author       ON topic (author_id);
 CREATE INDEX IF NOT EXISTS idx_topic_status       ON topic (status);
 CREATE INDEX IF NOT EXISTS idx_topic_search       ON topic USING GIN (search_doc);
+-- Topic-tag facet (?tag=). topic.tags was added ad-hoc (no prior declaration);
+-- folded back in above. GIN supports exact element / @> membership (e.g.
+-- tags @> ARRAY['councilyes']); the live feed's NORMALIZED match (slugify each
+-- element) is a seq scan — fine at ~1.3k topics, this index is forward-looking
+-- for the exact-element path and for scale. See TAG-SEARCH-SCOPE.md §4.
+CREATE INDEX IF NOT EXISTS idx_topic_tags         ON topic USING GIN (tags);
 
 -- ============================================================================
 -- reply (parent_reply_id is the rename of SQLite's reply_to_id)
@@ -184,6 +192,16 @@ CREATE INDEX IF NOT EXISTS idx_reply_search        ON reply USING GIN (search_do
 -- ============================================================================
 ALTER TABLE topic ADD COLUMN IF NOT EXISTS is_anon BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE reply ADD COLUMN IF NOT EXISTS is_anon BOOLEAN NOT NULL DEFAULT false;
+
+-- ============================================================================
+-- Topic tags (cross-world exact-tag facet, tag-search-build lane)
+-- Idempotent ADD for installs created before topic.tags was declared (it was
+-- added ad-hoc on dev2/prod with no migration in repo — this folds it back in
+-- per the monorepo mandate). Populated by the bb-mirror sync from the bbPress
+-- topic-tag taxonomy. The GIN index backs the ?tag= facet. See TAG-SEARCH-SCOPE.md.
+-- ============================================================================
+ALTER TABLE topic ADD COLUMN IF NOT EXISTS tags TEXT[];
+CREATE INDEX IF NOT EXISTS idx_topic_tags ON topic USING GIN (tags);
 
 -- ============================================================================
 -- forum_subscription

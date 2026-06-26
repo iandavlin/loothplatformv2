@@ -280,4 +280,18 @@
      chip bar. The in-modal copy (.hub-fmodal__chips, distinct class) is the mobile
      surface — it shows by default (forums.css only hides it >=641). */
   .hub-fmodal-page .hub-chipbar{ display:none; }
+
+  /* Advanced Search tag bubble (tag-search lane, 2026-06-26). Stack the search
+     fields; the #tag field gets its OWN full-width row, and its dropdown is
+     re-anchored absolute UNDER the field (the shared forums.css base leaves
+     .hub-suggest position:relative, which on a phone renders as a detached rounded
+     "oval" pushing the layout). Active #tag chips live in .hub-fmodal__chips, which
+     already wraps. */
+  .hub-fmodal__search,
+  .hub-fmodal__search .feed-toolbar-search,
+  .hub-fmodal__search .feed-toolbar-search__row{ flex-direction:column; gap:8px; }
+  .hub-fmodal__search .hub-tsearch--tag{ width:100%; position:relative; }
+  .hub-fmodal__search .hub-tsearch--tag .hub-suggest{
+    position:absolute; top:100%; left:0; right:0; width:auto; min-width:0; max-width:100%;
+    box-sizing:border-box; margin-top:5px; }
 }

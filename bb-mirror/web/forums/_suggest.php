@@ -5,6 +5,8 @@ declare(strict_types=1);
  *
  *   /hub/?suggest=hub&q=<text>     -> live search: matching posts + content
  *   /hub/?suggest=author&q=<text>  -> author autocomplete: matching names
+ *   /hub/?suggest=tag&q=<text>     -> tag autocomplete: matching REAL tags
+ *                                     (cross-world), driving the ?tag= facet
  *
  * Unified across forums.topic + discovery.content_item; content is tier-gated to
  * the viewer (same absence model as the feed). Cheap ILIKE substring match —
@@ -16,8 +18,12 @@ require_once __DIR__ . '/_hub-filters.php';
 header('Content-Type: application/json; charset=utf-8');
 header('X-Robots-Tag: noindex');
 
-$mode = ($_GET['suggest'] ?? '') === 'author' ? 'author' : 'hub';
+$sg   = (string)($_GET['suggest'] ?? '');
+$mode = $sg === 'author' ? 'author' : ($sg === 'tag' ? 'tag' : 'hub');
 $q    = trim((string)($_GET['q'] ?? ''));
+// Tag field carries a DISPLAY-ONLY leading '#'; strip it before matching (the
+// client strips too, this is belt-and-braces) so "#neck" matches "neck reset".
+if ($mode === 'tag') $q = ltrim($q, '#');
 if (mb_strlen($q) < 2) { echo json_encode(['q' => $q, 'mode' => $mode, 'results' => []]); return; }
 
 $db   = bb_mirror_db();
@@ -80,6 +86,66 @@ if ($mode === 'author') {
             'n'          => (int)$r['n'],
             'avatar_url' => $r['avatar_url'] !== null ? (string)$r['avatar_url'] : null,
         ];
+    }
+} elseif ($mode === 'tag') {
+    // Tag autocomplete — REAL tags only (this drives the exact ?tag= facet;
+    // there is NO free-type apply, so we only ever surface tags that exist).
+    // CROSS-WORLD + slug reconciliation (TAG-SEARCH-SCOPE.md): content tags carry
+    // a canonical slug+label (discovery.tag); forum topic tags are free-text
+    // labels normalized to a slug at query time with the SAME rule as
+    // hub_slugify(). The data-pick the client applies is the STORED canonical
+    // slug, so the 67/1846 slug≠slugify(label) cases ("Gerry's Picks"→
+    // gerrys-picks) resolve correctly. Merge by slug in PHP; sum counts; prefer
+    // the canonical content label. Returns [{label, slug, n}].
+    $bySlug = [];
+    // -- content tags (tier-gated; canonical slug + label) --
+    $cs = $db->prepare("
+        SELECT t.slug, t.label, count(DISTINCT ci.id) AS n
+          FROM discovery.tag t
+          JOIN discovery.content_tag j ON j.tag_id = t.id
+          JOIN discovery.content_item ci ON ci.id = j.content_id
+         WHERE ci.tier IN ($tin) AND ci.kind NOT IN ('event','misc')
+           AND (t.label ILIKE :clike OR t.slug ILIKE :cslug)
+         GROUP BY t.slug, t.label
+         ORDER BY n DESC
+         LIMIT 40");
+    $cs->bindValue(':clike', $like);
+    $cs->bindValue(':cslug', $like);
+    foreach ($tiers as $i => $t) $cs->bindValue(':t' . $i, $t);
+    $cs->execute();
+    foreach ($cs->fetchAll() as $r) {
+        $slug = (string)$r['slug'];
+        if ($slug === '') continue;
+        $bySlug[$slug] = ['slug' => $slug, 'label' => (string)$r['label'], 'n' => (int)$r['n']];
+    }
+    // -- forum topic tags (free-text label → normalized slug; public topics) --
+    $ts = $db->prepare("
+        SELECT slug, label, count(*) AS n FROM (
+            SELECT trim(both '-' from regexp_replace(lower(x), '[^a-z0-9]+', '-', 'g')) AS slug,
+                   x AS label
+              FROM topic tp JOIN forum f ON f.id = tp.forum_id, unnest(tp.tags) x
+             WHERE tp.status = 'publish' AND f.visibility = 'public' AND tp.forum_id NOT IN (3876)
+        ) s
+         WHERE s.slug <> '' AND (s.label ILIKE :tlike OR s.slug ILIKE :tslug)
+         GROUP BY s.slug, s.label
+         ORDER BY n DESC
+         LIMIT 80");
+    $ts->bindValue(':tlike', $like);
+    $ts->bindValue(':tslug', $like);
+    $ts->execute();
+    foreach ($ts->fetchAll() as $r) {
+        $slug = (string)$r['slug'];
+        if ($slug === '') continue;
+        if (isset($bySlug[$slug])) {
+            $bySlug[$slug]['n'] += (int)$r['n']; // cross-world: keep canonical content label, sum counts
+        } else {
+            $bySlug[$slug] = ['slug' => $slug, 'label' => (string)$r['label'], 'n' => (int)$r['n']];
+        }
+    }
+    $rows = array_values($bySlug);
+    usort($rows, fn($a, $b) => ($b['n'] <=> $a['n']) ?: strcmp($a['label'], $b['label']));
+    foreach (array_slice($rows, 0, 8) as $r) {
+        $results[] = ['label' => (string)$r['label'], 'slug' => (string)$r['slug'], 'n' => (int)$r['n']];
     }
 } else {
     // Live search: topics (build /hub/<forum>/<topic>/) + content (url column).

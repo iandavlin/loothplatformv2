@@ -28,6 +28,7 @@ function hub_url(array $filters, string $sort = 'new'): string
     if (!empty($filters['q']))                  $qs['q']      = $filters['q'];
     if (!empty($filters['saved']))              $qs['saved']  = 1;
     if (!empty($filters['show']))               $qs['show']   = $filters['show'];
+    if (!empty($filters['tags']))               $qs['tag']    = implode(',', $filters['tags']);   // multi exact-tag facet (CSV of slugs)
     $base = LG_BB_MIRROR_PUBLIC_PATH . '/';
     return htmlspecialchars($qs ? $base . '?' . http_build_query($qs) : $base);
 }
@@ -53,6 +54,7 @@ function hub_query_params(): array
     if (!empty($f['q']))       $out['q']      = $f['q'];
     if (!empty($f['saved']))   $out['saved']  = '1';   // string: feed_sort_url() urlencode()s every value (strict_types → int fatals)
     if (!empty($f['show']))    $out['show']   = $f['show'];   // single video-type term (Shows filter)
+    if (!empty($f['tags']))    $out['tag']    = implode(',', $f['tags']);    // multi exact-tag facet (CSV of slugs)
     return $out;
 }
 
@@ -297,6 +299,7 @@ function hub_render_toolbar_search(array $filters, string $sort = 'new'): void
         if (!in_array('type', $skip, true)   && !empty($filters['types']))   $h .= '<input type="hidden" name="type" value="' . htmlspecialchars(implode(',', $filters['types'])) . '">';
         if (!in_array('cat', $skip, true)    && !empty($filters['cats']))    $h .= '<input type="hidden" name="cat" value="'  . htmlspecialchars(implode(',', $filters['cats']))  . '">';
         if (!in_array('author', $skip, true) && !empty($filters['authors'])) $h .= '<input type="hidden" name="author" value="' . htmlspecialchars(implode(',', $filters['authors'])) . '">';
+        if (!in_array('tag', $skip, true)    && !empty($filters['tags']))    $h .= '<input type="hidden" name="tag" value="'  . htmlspecialchars(implode(',', $filters['tags']))  . '">';
         if ($sort !== 'new')                                                 $h .= '<input type="hidden" name="sort" value="' . htmlspecialchars($sort) . '">';
         return $h;
     };
@@ -305,20 +308,36 @@ function hub_render_toolbar_search(array $filters, string $sort = 'new'): void
     // no-JS fallback: the q form plain-searches; the author form sets one author).
     ?>
     <div class="feed-toolbar-search" data-hub-suggest-base="<?= $action ?>">
-      <form class="hub-tsearch hub-tsearch--q" method="get" action="<?= $action ?>" role="search" autocomplete="off">
-        <?= $keep(['author']) ?>
-        <span class="hub-tsearch__ico" aria-hidden="true">&#9906;</span>
-        <input class="hub-tsearch__in" name="q" type="search" placeholder="Search the Hub…"
-               value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>" autocomplete="off"
-               aria-label="Search the Hub" data-hub-search>
-      </form>
-      <form class="hub-tsearch hub-tsearch--author" method="get" action="<?= $action ?>" role="search" autocomplete="off">
-        <?= $keep(['author']) ?>
-        <span class="hub-tsearch__ico" aria-hidden="true">&#128100;</span>
-        <?php /* "Search by author…" canonical (hub-polish's client rename now no-ops) */ ?>
-        <input class="hub-tsearch__in" name="author" type="search" placeholder="Search by author…"
-               value="" autocomplete="off" aria-label="Search by author" data-hub-author>
-        <div class="hub-suggest" data-hub-suggest="author" hidden></div>
+      <div class="feed-toolbar-search__row">
+        <form class="hub-tsearch hub-tsearch--q" method="get" action="<?= $action ?>" role="search" autocomplete="off">
+          <?= $keep(['author']) ?>
+          <span class="hub-tsearch__ico" aria-hidden="true">&#9906;</span>
+          <input class="hub-tsearch__in" name="q" type="search" placeholder="Search the Hub…"
+                 value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>" autocomplete="off"
+                 aria-label="Search the Hub" data-hub-search>
+        </form>
+        <form class="hub-tsearch hub-tsearch--author" method="get" action="<?= $action ?>" role="search" autocomplete="off">
+          <?= $keep(['author']) ?>
+          <span class="hub-tsearch__ico" aria-hidden="true">&#128100;</span>
+          <?php /* "Search by author…" canonical (hub-polish's client rename now no-ops) */ ?>
+          <input class="hub-tsearch__in" name="author" type="search" placeholder="Search by author…"
+                 value="" autocomplete="off" aria-label="Search by author" data-hub-author>
+          <div class="hub-suggest" data-hub-suggest="author" hidden></div>
+        </form>
+      </div>
+      <?php /* Tag autocomplete (Ian 2026-06-26): on its OWN full-width row below the
+               two search fields (the dropdown anchors directly under it). AUTOCOMPLETE-
+               ONLY — selecting a real tag from the dropdown APPENDS ?tag=<slug> (JS,
+               multi-tag AND); there is no apply-arbitrary-text path (that's the q box).
+               name="tagq" is inert (hub_filters_parse ignores it), so a no-JS / no-match
+               Enter applies NOTHING (fail-closed). The leading "#" is a DISPLAY-ONLY
+               affordance (placeholder + icon); slugs stay bare. */ ?>
+      <form class="hub-tsearch hub-tsearch--tag" method="get" action="<?= $action ?>" role="search" autocomplete="off">
+        <?= $keep([]) ?>
+        <span class="hub-tsearch__ico hub-tsearch__hash" aria-hidden="true">#</span>
+        <input class="hub-tsearch__in" name="tagq" type="search" placeholder="search tags…"
+               value="" autocomplete="off" aria-label="Search tags" data-hub-tag>
+        <div class="hub-suggest" data-hub-suggest="tag" hidden></div>
       </form>
     </div>
     <?php
@@ -381,6 +400,16 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', 
         $f = $filters; $f['show'] = '';
         $slabel = HUB_SHOW_TERMS[$filters['show']] ?? $filters['show'];
         $chips[] = ['Show', $slabel, hub_url($f, $sort)];
+    }
+    // Multi ?tag facet (cross-world exact tags, AND) — one removable chip per tag,
+    // mirroring multi-author. Removing one drops just that tag. Display label from
+    // the stashed term map (canonical discovery.tag.label, else de-slugified);
+    // falls back to the raw slug. Leading '#' is DISPLAY-ONLY; slug in $f stays bare.
+    $tag_terms = $GLOBALS['__bb_hub_rail']['tags'] ?? [];
+    foreach (($filters['tags'] ?? []) as $tg) {
+        $f = $filters; $f['tags'] = array_values(array_diff($filters['tags'], [$tg]));
+        $tlabel = $tag_terms[$tg]['label'] ?? $tg;
+        $chips[] = ['Tag', '#' . $tlabel, hub_url($f, $sort)];
     }
     foreach ($filters['types'] as $v) $chips[] = ['Type', hub_type_label($v), hub_url(hub_toggle($filters, 'type', $v), $sort)];
     foreach ($filters['cats']  as $v) $chips[] = ['In',   hub_cat_label($v),  hub_url(hub_toggle($filters, 'cat',  $v), $sort), $v];
