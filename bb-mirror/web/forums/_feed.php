@@ -625,7 +625,7 @@ if ($scoped_forum) {
     $hub_facets = hub_facet_counts($db, $content_tiers, $_forum_cat_map);
     $hub_leaf_labels = [];
     foreach ($hub_cat_tree as $_p) foreach ($_p['leaves'] as $_lf) $hub_leaf_labels[$_lf['key']] = $_lf['label'];
-    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'tree' => $hub_cat_tree, 'filters' => $hub_filters, 'muted' => $hub_muted, 'sort' => $sort_param, 'shows' => hub_show_terms($db), 'leaf_labels' => $hub_leaf_labels, 'tag' => hub_tag_terms($db, (string)($hub_filters['tag'] ?? ''), $content_tiers)];
+    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'tree' => $hub_cat_tree, 'filters' => $hub_filters, 'muted' => $hub_muted, 'sort' => $sort_param, 'shows' => hub_show_terms($db), 'leaf_labels' => $hub_leaf_labels, 'tags' => hub_tag_terms($db, $hub_filters['tags'] ?? [], $content_tiers)];
 
     // Unified full-text search (q) — an AND dimension across BOTH worlds, applied
     // per-branch (FTS columns: topic.search_doc, content_item.tsv). websearch_to_
@@ -1138,6 +1138,14 @@ function feed_parse_pg_array(?string $lit): array
 function feed_render_tags(array $tags): void
 {
     if (!$tags) return;
+    // Multi-tag AND: a card chip APPENDS its slug to the viewer's current tag set
+    // (+ preserves the rest of the active filters + sort), so clicking accumulates
+    // (matching the autocomplete's append). Off the hub (scoped forum, no rail) the
+    // base set is empty, so the chip just navigates to that one tag.
+    $rail = $GLOBALS['__bb_hub_rail'] ?? null;
+    $base = is_array($rail['filters'] ?? null) ? $rail['filters'] : [];
+    $bsort = (string)($rail['sort'] ?? 'new');
+    $cur  = is_array($base['tags'] ?? null) ? $base['tags'] : [];
     echo '<div class="fc-tags feed-card__tags">';
     foreach ($tags as $tag) {
         if (is_array($tag)) {
@@ -1148,7 +1156,9 @@ function feed_render_tags(array $tags): void
             $slug  = hub_slugify($label);
         }
         if ($label === '' || $slug === '') continue;
-        $url = hub_url(['tag' => $slug]);   // hub_url() htmlspecialchars's its return
+        $f = $base;
+        $f['tags'] = array_values(array_unique(array_merge($cur, [$slug])));
+        $url = hub_url($f, $bsort);   // hub_url() htmlspecialchars's its return
         echo '<a class="fc-tag tag-chip" href="' . $url . '">'
            . htmlspecialchars($label) . '</a>';
     }

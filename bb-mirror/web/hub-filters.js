@@ -126,15 +126,18 @@
     }
   }
 
-  // Apply a picked tag -> ?tag=<slug> (single-select facet; replaces any active
-  // tag). Mirrors addAuthor's in-place apply so the Advanced Search modal stays
-  // open and the chip bar refreshes (forums.js's a[href]->fmodalApply path); a
-  // full nav only when no modal is open. The '#' is display-only — slug stays bare.
+  // Apply a picked tag -> APPEND its slug to the ?tag CSV (multi-tag AND; mirrors
+  // addAuthor). Dedupes, so re-picking an active tag is a no-op. In-place apply so
+  // the Advanced Search modal stays open and the chip bar refreshes (forums.js's
+  // a[href]->fmodalApply path); a full nav only when no modal is open. The '#' is
+  // display-only — slug stays bare.
   function applyTag(slug) {
     slug = String(slug).replace(/^#+/, '').trim();
     if (!slug) return;                              // fail-closed: never apply empty
     var u = new URL(window.location.href);
-    u.searchParams.set('tag', slug);
+    var cur = (u.searchParams.get('tag') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (cur.indexOf(slug) === -1) cur.push(slug);   // AND-combine; dedupe
+    u.searchParams.set('tag', cur.join(','));
     u.searchParams.delete('offset');
     var mbody = document.querySelector('#hub-fmodal:not([hidden]) .hub-fmodal__body');
     if (mbody) {

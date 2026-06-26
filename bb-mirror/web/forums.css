@@ -4337,6 +4337,17 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 .hub-fmodal__search .hub-tsearch--author .hub-suggest{
   position:absolute;top:100%;left:0;right:0;width:auto;min-width:0;max-width:100%;box-sizing:border-box}
 
+/* #tag field on its OWN full-width row below q+author, dropdown anchored under it
+   (tag-search lane, 2026-06-26). Mirrors the author re-anchor above: without it the
+   tag .hub-suggest stays position:relative (in-flow) and renders as a detached
+   rounded "oval", and the 3 fields cram at flex:1. Desktop (>=641); mobile pass
+   lives in mobile-hub.css. */
+.hub-fmodal__search .feed-toolbar-search{flex-wrap:wrap}
+.hub-fmodal__search .feed-toolbar-search__row{display:flex;gap:10px;flex:1 1 100%;min-width:0}
+.hub-fmodal__search .feed-toolbar-search__row .hub-tsearch{flex:1 1 0;min-width:0}
+.hub-fmodal__search .hub-tsearch--tag{flex:1 1 100%;width:100%;position:relative}
+.hub-fmodal__search .hub-tsearch--tag .hub-suggest{position:absolute;top:100%;left:0;right:0;width:auto;min-width:0;max-width:100%;box-sizing:border-box;margin-top:5px}
+
 /* In-modal active-filter chip bar — ADDITIVE (hub-mobile-search lane, 2026-06-25).
    A 2nd copy of hub_render_chipbar() rendered into .hub-fmodal__body with the
    distinct class .hub-fmodal__chips (so it is NOT a .hub-chipbar). Same container

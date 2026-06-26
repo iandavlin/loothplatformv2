@@ -250,7 +250,10 @@ function hub_filters_parse(): array
         'q'       => trim((string)($_GET['q'] ?? '')),  // unified full-text query (AND dim)
         'saved'   => !empty($_GET['saved']),             // Saved-rail view (viewer's ☆ saves)
         'show'    => hub_show_validate((string)($_GET['show'] ?? '')), // single video-type term (Shows filter)
-        'tag'     => hub_slugify((string)($_GET['tag'] ?? '')),  // single exact-tag facet (cross-world), normalized to a slug
+        // Multi exact-tag facet (cross-world), AND semantics — mirrors authors:
+        // ?tag=frets,nut -> ['frets','nut']. Each CSV item normalized to a slug,
+        // deduped, empties dropped.
+        'tags'    => array_values(array_unique(array_filter(array_map('hub_slugify', $csv('tag'))))),
     ];
 }
 
@@ -296,19 +299,33 @@ function hub_show_terms(PDO $db): array
 }
 
 /**
- * Active-tag facet (cross-world exact-tag count) for the chipbar.
- * Given the active ?tag slug, counts CONTENT items (via the content_tag slug,
- * tier-gated, same exclusions as the feed) + forum TOPICS (via the normalized
- * topic.tags label) carrying that slug, and resolves a display label. Returns
- * ['slug','label','count'] or null for an empty slug. Label prefers the canonical
- * discovery.tag.label (content world is slugged+labelled); falls back to a
- * de-slugified form for topic-only tags. ONE pass per world; anon-safe.
- *
- * Scope note: this is the "active-tag-only" count the build ships first (per
- * TAG-SEARCH-SCOPE.md §4 Option A) — enough for the chipbar to show/remove the
- * tag. Full per-tag facet listing is deferred.
+ * Resolve the active tags' display labels (+ counts) for the chipbar, as a map
+ * slug => ['slug','label','count']. Multi-tag (AND) facet — one entry per
+ * selected slug (deduped). Mirrors how the multi-author filter resolves names;
+ * the chipbar renders one removable #<label> chip per entry. Empty input -> [].
  */
-function hub_tag_terms(PDO $db, string $slug, array $content_tiers): ?array
+function hub_tag_terms(PDO $db, array $slugs, array $content_tiers): array
+{
+    $out = [];
+    foreach ($slugs as $sg) {
+        $sg = trim((string)$sg);
+        if ($sg === '' || isset($out[$sg])) continue;
+        $t = hub_tag_term($db, $sg, $content_tiers);
+        if ($t) $out[$sg] = $t;
+    }
+    return $out;
+}
+
+/**
+ * Active-tag facet (cross-world exact-tag count) for one slug.
+ * Counts CONTENT items (via the content_tag slug, tier-gated, same exclusions as
+ * the feed) + forum TOPICS (via the normalized topic.tags label) carrying that
+ * slug, and resolves a display label. Returns ['slug','label','count'] or null
+ * for an empty slug. Label prefers the canonical discovery.tag.label (content
+ * world is slugged+labelled); falls back to a de-slugified form for topic-only
+ * tags. ONE pass per world; anon-safe.
+ */
+function hub_tag_term(PDO $db, string $slug, array $content_tiers): ?array
 {
     $slug = trim($slug);
     if ($slug === '') return null;
@@ -629,20 +646,25 @@ function hub_filter_where(array $filters, array $forum_cat_map, array $content_c
         $topic_conds[] = 'FALSE';
     }
 
-    // -- Tag: exact-tag facet, CROSS-WORLD (single select). Content reuses the
-    //    proven Shows clause over the materialized content_tag slug; topics match
-    //    a normalized topic.tags label, slugified at query time to the SAME rule
-    //    as hub_slugify() (lower; punct→'-'; trim '-'), so the two stores unify on
-    //    one canonical slug. The slug is normalized at parse time, so it is always
-    //    [a-z0-9-]. Distinct binds per branch (PDO emulation off can't reuse). --
-    if (!empty($filters['tag'])) {
-        $content_conds[] = "u.topic_id IN ("
-            . "SELECT ct.content_id FROM discovery.content_tag ct "
-            . "JOIN discovery.tag t ON t.id = ct.tag_id WHERE t.slug = :tag_c)";
-        $binds[':tag_c'] = $filters['tag'];
-        $topic_conds[] = "EXISTS (SELECT 1 FROM unnest(u.tags) AS _tg "
-            . "WHERE trim(both '-' from regexp_replace(lower(_tg), '[^a-z0-9]+', '-', 'g')) = :tag_t)";
-        $binds[':tag_t'] = $filters['tag'];
+    // -- Tag: exact-tag facet, CROSS-WORLD, MULTI-select with AND semantics — a
+    //    post must carry ALL selected tags. Content reuses the proven Shows clause
+    //    over the materialized content_tag slug; topics match a normalized
+    //    topic.tags label, slugified at query time to the SAME rule as
+    //    hub_slugify() (lower; punct→'-'; trim '-'), so the two stores unify on one
+    //    canonical slug. One content_cond + one topic_cond PER tag — both are AND'd
+    //    within their world (see the assembly below), so this is contains-ALL. The
+    //    slugs are normalized at parse time ([a-z0-9-]); distinct binds per tag &
+    //    branch (PDO emulation off can't reuse a placeholder). Fail-closed. --
+    if (!empty($filters['tags'])) {
+        foreach ($filters['tags'] as $i => $tg) {
+            $content_conds[] = "u.topic_id IN ("
+                . "SELECT ct.content_id FROM discovery.content_tag ct "
+                . "JOIN discovery.tag t ON t.id = ct.tag_id WHERE t.slug = :tag_c$i)";
+            $binds[":tag_c$i"] = $tg;
+            $topic_conds[] = "EXISTS (SELECT 1 FROM unnest(u.tags) AS _tg "
+                . "WHERE trim(both '-' from regexp_replace(lower(_tg), '[^a-z0-9]+', '-', 'g')) = :tag_t$i)";
+            $binds[":tag_t$i"] = $tg;
+        }
     }
 
     // -- Category: topics by forum subtree, content by reconciled forum_label --
