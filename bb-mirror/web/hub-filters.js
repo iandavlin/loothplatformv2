@@ -43,6 +43,9 @@
   function wireDropdown(input, box, mode, onPick) {
     var run = debounce(function () {
       var q = input.value.trim();
+      // Tag field's leading '#' is a display affordance only — strip before the
+      // lookup + highlight so "#neck" matches "neck reset" (slugs stay bare).
+      if (mode === 'tag') q = q.replace(/^#+/, '');
       if (q.length < 2) { hide(box); return; }
       fetch(BASE + '/?suggest=' + mode + '&q=' + encodeURIComponent(q), { credentials: 'same-origin' })
         .then(function (r) { return r.json(); })
@@ -53,6 +56,14 @@
               return '<button type="button" class="hub-suggest__item" role="option" data-pick="' + esc(it.name) + '">' +
                      avatarHtml(it) +
                      '<span class="hub-suggest__name">' + highlight(it.name, q) + '</span>' +
+                     '<span class="hub-suggest__n">' + it.n + (it.n === 1 ? ' post' : ' posts') + '</span></button>';
+            }
+            if (mode === 'tag') {
+              // data-pick carries the STORED canonical slug (server-resolved, so the
+              // slug≠slugify(label) cases work); the leading '#' is display-only.
+              return '<button type="button" class="hub-suggest__item" role="option" data-pick="' + esc(it.slug) + '">' +
+                     '<span class="hub-suggest__hash" aria-hidden="true">#</span>' +
+                     '<span class="hub-suggest__name">' + highlight(it.label, q) + '</span>' +
                      '<span class="hub-suggest__n">' + it.n + (it.n === 1 ? ' post' : ' posts') + '</span></button>';
             }
             var label = it.kind === 'discussion' ? 'Discussion' : it.kind;
@@ -105,6 +116,26 @@
     // and the chips refresh, instead of a full navigation that closes it (Ian
     // 2026-06-25). NO forums.js edit: we just dispatch a click on a throwaway
     // in-body <a href>, which forums.js's existing modal-body delegate catches.
+    var mbody = document.querySelector('#hub-fmodal:not([hidden]) .hub-fmodal__body');
+    if (mbody) {
+      var a = document.createElement('a');
+      a.href = u.pathname + u.search; a.style.display = 'none';
+      mbody.appendChild(a); a.click(); mbody.removeChild(a);
+    } else {
+      window.location.href = u.toString();
+    }
+  }
+
+  // Apply a picked tag -> ?tag=<slug> (single-select facet; replaces any active
+  // tag). Mirrors addAuthor's in-place apply so the Advanced Search modal stays
+  // open and the chip bar refreshes (forums.js's a[href]->fmodalApply path); a
+  // full nav only when no modal is open. The '#' is display-only — slug stays bare.
+  function applyTag(slug) {
+    slug = String(slug).replace(/^#+/, '').trim();
+    if (!slug) return;                              // fail-closed: never apply empty
+    var u = new URL(window.location.href);
+    u.searchParams.set('tag', slug);
+    u.searchParams.delete('offset');
     var mbody = document.querySelector('#hub-fmodal:not([hidden]) .hub-fmodal__body');
     if (mbody) {
       var a = document.createElement('a');
@@ -181,6 +212,17 @@
   var aIn  = wrap.querySelector('[data-hub-author]');
   var aBox = wrap.querySelector('[data-hub-suggest="author"]');
   if (aIn && aBox) wireDropdown(aIn, aBox, 'author', addAuthor);
+
+  var tIn  = wrap.querySelector('[data-hub-tag]');
+  var tBox = wrap.querySelector('[data-hub-suggest="tag"]');
+  if (tIn && tBox) {
+    wireDropdown(tIn, tBox, 'tag', applyTag);
+    // AUTOCOMPLETE-ONLY: block the plain GET submit so Enter with no suggestion
+    // selected never applies free text (the dropdown's Enter still picks the
+    // active/top row via wireDropdown's keydown). Fail-closed.
+    var tForm = tIn.closest('form');
+    if (tForm) tForm.addEventListener('submit', function (e) { e.preventDefault(); });
+  }
 
   document.addEventListener('click', function (e) {
     if (!e.target.closest('.hub-tsearch')) {

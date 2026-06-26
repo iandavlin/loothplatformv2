@@ -299,6 +299,7 @@ function hub_render_toolbar_search(array $filters, string $sort = 'new'): void
         if (!in_array('type', $skip, true)   && !empty($filters['types']))   $h .= '<input type="hidden" name="type" value="' . htmlspecialchars(implode(',', $filters['types'])) . '">';
         if (!in_array('cat', $skip, true)    && !empty($filters['cats']))    $h .= '<input type="hidden" name="cat" value="'  . htmlspecialchars(implode(',', $filters['cats']))  . '">';
         if (!in_array('author', $skip, true) && !empty($filters['authors'])) $h .= '<input type="hidden" name="author" value="' . htmlspecialchars(implode(',', $filters['authors'])) . '">';
+        if (!in_array('tag', $skip, true)    && !empty($filters['tag']))     $h .= '<input type="hidden" name="tag" value="'  . htmlspecialchars((string)$filters['tag'])  . '">';
         if ($sort !== 'new')                                                 $h .= '<input type="hidden" name="sort" value="' . htmlspecialchars($sort) . '">';
         return $h;
     };
@@ -321,6 +322,19 @@ function hub_render_toolbar_search(array $filters, string $sort = 'new'): void
         <input class="hub-tsearch__in" name="author" type="search" placeholder="Search by author…"
                value="" autocomplete="off" aria-label="Search by author" data-hub-author>
         <div class="hub-suggest" data-hub-suggest="author" hidden></div>
+      </form>
+      <?php /* Tag autocomplete (Ian 2026-06-26): AUTOCOMPLETE-ONLY — selecting a
+               real tag from the dropdown applies ?tag=<slug> (JS); there is no
+               apply-arbitrary-text path (that's the q box). name="tagq" is inert
+               (hub_filters_parse ignores it), so a no-JS / no-match Enter applies
+               NOTHING (fail-closed). The leading "#" is a DISPLAY-ONLY affordance
+               (placeholder + icon); slugs stay bare. */ ?>
+      <form class="hub-tsearch hub-tsearch--tag" method="get" action="<?= $action ?>" role="search" autocomplete="off">
+        <?= $keep([]) ?>
+        <span class="hub-tsearch__ico hub-tsearch__hash" aria-hidden="true">#</span>
+        <input class="hub-tsearch__in" name="tagq" type="search" placeholder="search tags…"
+               value="" autocomplete="off" aria-label="Search tags" data-hub-tag>
+        <div class="hub-suggest" data-hub-suggest="tag" hidden></div>
       </form>
     </div>
     <?php
@@ -390,7 +404,8 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', 
         // discovery.tag.label, else de-slugified); falls back to the raw slug.
         $f = $filters; $f['tag'] = '';
         $tlabel = $GLOBALS['__bb_hub_rail']['tag']['label'] ?? $filters['tag'];
-        $chips[] = ['Tag', $tlabel, hub_url($f, $sort)];
+        // Leading '#' is DISPLAY-ONLY (the tag affordance); the slug in $f stays bare.
+        $chips[] = ['Tag', '#' . $tlabel, hub_url($f, $sort)];
     }
     foreach ($filters['types'] as $v) $chips[] = ['Type', hub_type_label($v), hub_url(hub_toggle($filters, 'type', $v), $sort)];
     foreach ($filters['cats']  as $v) $chips[] = ['In',   hub_cat_label($v),  hub_url(hub_toggle($filters, 'cat',  $v), $sort), $v];

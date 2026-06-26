@@ -3704,6 +3704,14 @@ body.hub-fmodal-lock { overflow: hidden; }
 .hub-tsearch__in { border: 0; background: transparent; outline: none;
   font: 500 13px/1 var(--lg-font-sans); color: var(--lg-ink); width: 132px; }
 .hub-tsearch--author .hub-tsearch__in { width: 150px; }  /* fits "Search by author…" — was 116, clipped */
+/* Tag autocomplete bubble (Ian 2026-06-26) — mirrors the author field; the leading
+   '#' is a display-only affordance. All-viewport like the other search fields
+   (the Advanced Search fmodal shows on every width); no mobile-hub.css changes. */
+.hub-tsearch--tag .hub-tsearch__in { width: 150px; }
+.hub-tsearch__hash { font: 700 14px/1 var(--lg-font-sans); color: var(--lg-sage-d, #6b7c52); }
+.hub-suggest__hash { flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 6px; background: var(--lg-sage-tint, #eef2e3);
+  color: var(--lg-sage-d, #6b7c52); font: 700 13px/1 var(--lg-font-sans); }
 .hub-tsearch__in::placeholder { color: var(--lg-mute); }
 .hub-tsearch { position: relative; }
 .hub-tsearch:focus-within { border-color: var(--lg-sage-d, #6b7c52); }
