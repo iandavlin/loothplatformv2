@@ -735,6 +735,81 @@ class LGPO_Sync_Engine {
         }
         update_user_meta( $user->ID, 'lgpo_patreon_email', $patreon_email );
         error_log( sprintf( 'LGPO Sync: mirrored WP email #%d -> %s', $user->ID, $patreon_email ) );
+
+        // Freeze the identity uuid the FIRST time a real email lands so /whoami
+        // resolves (the JWT minter hard-throws on a missing _looth_uuid -> anon).
+        // Immutable: no-op if already set (a later email change must NOT re-derive).
+        self::stamp_looth_uuid( $user->ID, $patreon_email );
+    }
+
+    /**
+     * Freeze the profile-app identity uuid (`_looth_uuid`) for a WP user the FIRST
+     * time a real email lands, so the JWT minter (profile-auth.php) resolves
+     * `/whoami` instead of falling back to anon. Without it a re-keyed / backfilled
+     * blank-email account gets a role but stays anon at the identity layer (the
+     * minter refuses to recompute from email and hard-throws on a missing uuid).
+     *
+     * Mirrors profile-sync.php`s `user_register` stamp EXACTLY: same canonical
+     * derivation UUIDv5( LOOTH_AUTH_NAMESPACE, lower(trim(email)) ) — the namespace
+     * is identical to profile-app`s LOOTH_IDENTITY_NAMESPACE — so the value equals
+     * the uuid profile-app froze in Postgres at create. Prefers the canonical
+     * looth_auth_compute_uuid() (loaded by the profile-auth mu-plugin in any full
+     * WP boot: cron / admin / wp-cli eval-file); the self-contained v5 fallback is
+     * used only if that function is somehow absent, and is byte-identical.
+     *
+     * IMMUTABLE — never overwrites an existing uuid. The uuid is frozen at the
+     * CREATE / first email; a later email change must keep the original (re-deriving
+     * from the new email would mint a `sub` that no longer matches the frozen
+     * users.uuid -> broken identity). Only stamps when `_looth_uuid` is absent and a
+     * valid email exists. Authoritative drift reconciler stays profile-app
+     * bin/backfill-looth-uuid.php (reads users.uuid straight from Postgres).
+     *
+     * @return string the uuid now stored (pre-existing or newly stamped), or `` if none.
+     */
+    public static function stamp_looth_uuid( int $user_id, string $email ): string {
+        if ( $user_id <= 0 ) {
+            return '';
+        }
+        $existing = (string) get_user_meta( $user_id, '_looth_uuid', true );
+        if ( $existing !== '' ) {
+            return $existing; // immutable — never re-derive on an email change
+        }
+        $email = strtolower( trim( $email ) );
+        if ( $email === '' || ! is_email( $email ) ) {
+            return '';
+        }
+        if ( function_exists( 'looth_auth_compute_uuid' ) ) {
+            $uuid = looth_auth_compute_uuid( $email );
+        } else {
+            $uuid = self::compute_looth_uuid_v5( $email );
+            error_log( 'LGPO stamp_looth_uuid: canonical looth_auth_compute_uuid() absent — used identical v5 fallback for #' . $user_id );
+        }
+        update_user_meta( $user_id, '_looth_uuid', $uuid );
+        error_log( sprintf( 'LGPO stamp_looth_uuid: stamped _looth_uuid %s for #%d', $uuid, $user_id ) );
+        return $uuid;
+    }
+
+    /**
+     * Self-contained UUIDv5 — byte-identical to looth_auth_compute_uuid()
+     * (Ramsey\Uuid::uuid5) for the same namespace + name. Fallback only. Namespace
+     * == LOOTH_AUTH_NAMESPACE (profile-auth.php) == LOOTH_IDENTITY_NAMESPACE
+     * (profile-app config) == eaef23f7-9bc9-4a95-ac49-ffff632e6646.
+     */
+    private static function compute_looth_uuid_v5( string $name ): string {
+        $ns_hex = str_replace( '-', '', 'eaef23f7-9bc9-4a95-ac49-ffff632e6646' );
+        $ns_bin = '';
+        for ( $i = 0; $i < strlen( $ns_hex ); $i += 2 ) {
+            $ns_bin .= chr( hexdec( substr( $ns_hex, $i, 2 ) ) );
+        }
+        $hash = sha1( $ns_bin . $name );
+        return sprintf(
+            '%08s-%04s-%04x-%04x-%12s',
+            substr( $hash, 0, 8 ),
+            substr( $hash, 8, 4 ),
+            ( hexdec( substr( $hash, 12, 4 ) ) & 0x0fff ) | 0x5000,
+            ( hexdec( substr( $hash, 16, 4 ) ) & 0x3fff ) | 0x8000,
+            substr( $hash, 20, 12 )
+        );
     }
 
     /* ------------------------------------------------------------------

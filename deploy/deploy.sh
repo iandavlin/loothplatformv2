@@ -28,7 +28,15 @@ for pl in lg-layout-v2 lg-legacy-import lg-patreon-stripe-poller; do
 done
 
 # --- mu-plugins → wp-content/mu-plugins (FLAT .php; lg-membership-chrome dir needs its loader) ---
-rs "$REPO/platform/mu-plugins/" "$WP/wp-content/mu-plugins/"
+# DEV-ONLY EXCLUSION (marker-driven): never ship files tagged `@lg-dev-only` to live
+# (mail killswitch, dev-mail containment, looth1-bounce disabler, dev2 power, secrets dash).
+# Future dev-only files auto-exclude — just add the @lg-dev-only tag to the file header.
+mu_excludes=( --exclude='*.bak*' --exclude='vendor' --exclude='node_modules' )
+while IFS= read -r _devonly; do
+  [ -n "$_devonly" ] && mu_excludes+=( --exclude="$(basename "$_devonly")" )
+done < <(grep -rlF '@lg-dev-only' "$REPO/platform/mu-plugins/" 2>/dev/null || true)
+echo "mu-plugins dev-only excludes: $(printf '%s ' "${mu_excludes[@]}" | grep -oE -- '--exclude=[^ ]+\.php' | sed 's/--exclude=//' | tr '\n' ' ' || true)"
+rsync -a $DRY "${mu_excludes[@]}" "$REPO/platform/mu-plugins/" "$WP/wp-content/mu-plugins/"
 
 # --- server config ---
 rs "$REPO/platform/nginx/"   "/etc/nginx/snippets/"

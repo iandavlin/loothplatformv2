@@ -80,6 +80,13 @@ final class Plugin
 
     public static function boot(): void
     {
+        // Mail gate — hold poller-originated BULK member/billing mail until the
+        // lgms_poller_mail_enabled option is explicitly ON. Read at runtime, so it
+        // flips at launch with NO redeploy; intentional notices bypass it. This is
+        // the live-safe replacement for the dev-only lg-poller-mail-killswitch
+        // mu-plugin (which is @lg-dev-only and excluded from the live deploy).
+        add_filter( 'pre_wp_mail', [ self::class, 'gateOutboundMail' ], 10, 2 );
+
         // Register a custom 5-minute cron interval (WP only ships hourly,
         // twicedaily, daily). Used by the reconcile-pending sweep.
         add_filter( 'cron_schedules', [ self::class, 'registerCronSchedule' ] );
@@ -191,6 +198,47 @@ final class Plugin
      * discovery) never orphan. Skips the user we're already tearing down (our
      * own teardown calls wp_delete_user) to avoid re-entrancy.
      */
+    /**
+     * Mail gate (pre_wp_mail). Holds poller-originated BULK member/billing mail
+     * (welcome / membership / hourly sync report) OFF until the option
+     * `lgms_poller_mail_enabled` is explicitly truthy. Read live, so Ian flips it
+     * ON at launch with NO redeploy. Replaces the dev-only killswitch mu-plugin
+     * with a flag the poller itself honors, so the control ships to live.
+     *
+     * FAIL-CLOSED: option absent/falsey => suppress (member/billing mail stays OFF
+     * while Stripe is in R&D). INTENTIONAL notices (provision/bridge/role failure
+     * alerts + the member "we're aware" note) carry `X-LG-Poller-Intent: notify`
+     * and ALWAYS pass — they must reach members + Ian regardless of the bulk flag.
+     * Only mail whose call stack runs through THIS plugin is ever suppressed;
+     * non-poller site mail is never touched. On dev this is belt-and-braces with
+     * lg-dev-mail-containment (which still routes anything that sends to mailpit).
+     *
+     * @param  null|bool $short pre_wp_mail short-circuit (null = proceed).
+     * @param  array     $atts  wp_mail() atts ('headers','subject',...).
+     * @return null|bool        false suppresses; $short (null) proceeds normally.
+     */
+    public static function gateOutboundMail( $short, $atts )
+    {
+        // Intentional notifications always send (member reassurance + Ian alerts).
+        $headers = is_array( $atts ) ? ( $atts['headers'] ?? '' ) : '';
+        $flat    = is_array( $headers ) ? implode( "\n", $headers ) : (string) $headers;
+        if ( stripos( $flat, 'X-LG-Poller-Intent' ) !== false ) {
+            return $short;
+        }
+        // Flag ON => bulk mail flows normally.
+        if ( (bool) get_option( 'lgms_poller_mail_enabled', false ) ) {
+            return $short;
+        }
+        // Flag OFF/absent => suppress ONLY mail originating in this plugin.
+        foreach ( debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS ) as $frame ) {
+            if ( ! empty( $frame['file'] ) && strpos( $frame['file'], '/lg-patreon-stripe-poller/' ) !== false ) {
+                error_log( 'LGPO mail-gate: suppressed (lgms_poller_mail_enabled OFF) — ' . ( is_array( $atts ) ? ( $atts['subject'] ?? '' ) : '' ) );
+                return false;
+            }
+        }
+        return $short;
+    }
+
     public static function onDeletedUser( int $wpUserId ): void
     {
         if ( UserLifecycle::isHandling( $wpUserId ) ) {

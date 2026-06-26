@@ -65,14 +65,56 @@ out. Review the proposal list before applying; hand-resolve the ambiguous block.
 
 ---
 
-## After applying
+## After applying — finish the IDENTITY step, then smoke the REAL accounts
 
-- Smoke a couple of affected users' `/whoami` and confirm a single tier role.
-- The hourly sweep takes over from here: it now backfills the Patreon-ID link on
-  any email-matched account and mirrors the email every pass, so this backfill is
-  a one-time catch-up, not a recurring need.
+The backfill seeds the role + email bridge AND now freezes the identity uuid.
+Finish identity and verify on the actual accounts (not "a couple"):
+
+1. **`_looth_uuid` is auto-stamped by this script.** Right after it sets
+   `user_email` it calls `LGPO_Sync_Engine::stamp_looth_uuid()`, which freezes
+   `_looth_uuid` = UUIDv5(LOOTH_IDENTITY_NAMESPACE / LOOTH_AUTH_NAMESPACE,
+   `lower(trim(email))`) — the exact value the JWT minter reads. Without it a
+   re-keyed/backfilled account has a role but `/whoami` is **anon**. The hourly
+   sweep's `sync_wp_email` stamps the same way the first time it mirrors an email,
+   so future re-keys self-heal. The stamp is **immutable** — a later Patreon email
+   change does NOT re-derive it (the frozen uuid must keep matching profile-app's
+   `users.uuid`).
+2. **Run the authoritative reconciler** `profile-app/bin/backfill-looth-uuid.php`
+   AFTER this script, as a belt step — it reads `users.uuid` straight from Postgres
+   and is the source of truth for any account whose frozen uuid came from an
+   earlier/different email than the one just mirrored.
+3. **Smoke `/whoami` on EVERY backfilled account** (each `linked #N` in the apply
+   log, not a sample): each must resolve to a real member identity (NOT anon) with
+   a single tier role. A still-anon result means the uuid didn't land — re-check
+   steps 1–2 for that user before relying on it.
+4. The hourly sweep takes over: it backfills the Patreon-ID link on any
+   email-matched account and mirrors the email + stamps the uuid every pass, so
+   this backfill is a one-time catch-up, not a recurring need.
+
 - **Note on the 30 blanks & login:** accounts created *before* the
   password-at-onboarding change carry an old random password, so email/password
   login won't work for them until a password reset — but **Patreon OAuth login
   still covers them** (they log in with "Log in with Patreon"), so no action is
   required for access; only note it if one asks to use email/password.
+
+## Mail posture on live — held OFF by a FLAG, not a hardcoded file
+
+Member/billing mail (welcome / membership / the hourly sync report) is held OFF on
+live while Stripe is in R&D — via the runtime option **`lgms_poller_mail_enabled`**,
+NOT the dev-only `lg-poller-mail-killswitch.php` mu-plugin (that file is
+`@lg-dev-only` and is excluded from the live deploy by `deploy/deploy.sh`'s
+marker-driven filter).
+
+The poller reads the flag at runtime (`Plugin::gateOutboundMail`, a `pre_wp_mail`
+gate), so it flips at launch with **no redeploy**:
+- **Option absent / `0` → poller bulk mail is suppressed** (fail-closed; the
+  posture we want now).
+- **Intentional notices** — provision/bridge/role failure alerts + the member
+  "we're aware" note, tagged `X-LG-Poller-Intent: notify` — **always send**; they
+  must reach members + Ian regardless of the flag.
+- **At launch (Ian, on live):** `wp option update lgms_poller_mail_enabled 1` to
+  turn member/billing mail ON; set back to `0` (or delete) to hold it again.
+
+Non-poller site mail is never touched (the gate only fires on mail originating in
+this plugin). On dev, `lg-dev-mail-containment` additionally routes anything that
+does send to mailpit.

@@ -75,19 +75,21 @@ pushes the standalone apps to `/srv` on live.
    only because main was behind live; with main==prod they are a foot-gun). Flag, don't delete
    blind — keeper review.
 
-## ⚠️ Deploy-safety gap to resolve before any prod file-sync (keeper)
-`deploy.sh` line 31 blanket-rsyncs **all** `platform/mu-plugins/*.php` → `wp-content/mu-plugins/`
-with **no dev-only exclusion**. Several plugins there are **dev2-ONLY and prod-dangerous**:
+## ✅ Deploy-safety: dev-only mu-plugins excluded from the live sync (RESOLVED 2026-06-26, Q7)
+`deploy.sh` now builds a **marker-driven** exclude list from every file containing the
+`@lg-dev-only` header tag, so dev2-ONLY / prod-dangerous mu-plugins never reach live (future
+dev-only files auto-exclude — just add the tag). Verified by dry-run rsync: these 5 are excluded,
+20 legit mu-plugins still ship:
 
 - `lg-poller-mail-killswitch.php` (suppresses poller mail — would mute live notifications)
 - `lg-dev-disable-looth1-bounce.php` (opens looth1 login — gated by design on live)
 - `lg-dev-mail-containment.php` (redirects ALL mail to mailpit — would blackhole live email)
-- `lg-dev2-power.php` (dev2 EC2 wake/sleep — meaningless/again-confusing on live)
+- `lg-dev2-power.php` (dev2 EC2 wake/sleep — meaningless/confusing on live)
+- `lg-secrets-dash.php` (secret-bearing dev tool — never ship to live)
 
-**Action:** add an explicit dev-only **exclude list** to `deploy.sh` (and `deploy/MANIFEST.md`)
-keyed on the `@lg-dev-only` header tag, so these never reach live. This lane only *flags* it (it
-touches the cut mechanism = keeper-owned); the two newly-folded plugins above carry the
-`@lg-dev-only` tag ready for that filter.
+Live member/billing mail is held OFF separately via the runtime `lgms_poller_mail_enabled` flag
+(poller `Plugin::gateOutboundMail`), NOT the excluded killswitch — see the remediation README
+“Mail posture on live.”
 
 ## Verify (post file-sync, no email)
 - Admin login works; `/whoami` unaffected (the poller backs the tier/role bridge).

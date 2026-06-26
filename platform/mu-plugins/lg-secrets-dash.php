@@ -1,6 +1,7 @@
 <?php
 /**
  * Plugin Name: Looth Secrets Dashboard
+ * @lg-dev-only EXCLUDED from live deploy (deploy.sh marker filter). Secret-bearing dev tool — never ship to live.
  * Description: Bucket-first R2 + Patreon secrets manager. Credentials deduped (each key shown
  *              once; one edit rewrites every location). Live bucket inventory via Cloudflare API
  *              when a Read token is present. All privilege is in the root-owned lg-secrets-helper.

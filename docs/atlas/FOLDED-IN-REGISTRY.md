@@ -18,8 +18,17 @@ patchers; the monorepo poller was an orphan. This lane made the monorepo the sin
 | Poller runtime hand-patches (≈18 files) | standalone repo box-uncommitted + prior captures | `lg-patreon-stripe-poller/` on `main` (already present — P1 confirmed byte-equal to running prod, **zero missing**) | review-after 2027-06-26; superseded once standalone repo is archived |
 | `poller-role-fix` (single-tier enforcement, Patreon-ID bridge, email mirror, failure notices, `deploy/remediation/*`) | branch `poller-role-fix` `3daa257` | lane branch `poller-monorepo-reconcile` (cherry-pick `a6af334`) — **not yet merged to main** | folds clean, net-new to main, no dup; keeper sequences merge |
 | `poller-annual-cadence` (Patreon `pledge_cadence` → annual display) | branch `poller-annual-cadence` `0bfd681` | lane branch (cherry-pick `963d6cb`) — **not yet merged** | folds clean; order vs role-fix irrelevant (A==B identical trees) |
-| `lg-poller-mail-killswitch.php` (dev2-ONLY) | deployed-but-unrepo'd dev2 `wp-content/mu-plugins/` | `platform/mu-plugins/` | `@lg-dev-only`; review-after 2027-06-26; **must be excluded from prod deploy** |
-| `lg-dev-disable-looth1-bounce.php` (dev2-ONLY) | deployed-but-unrepo'd dev2 `wp-content/mu-plugins/` | `platform/mu-plugins/` | `@lg-dev-only`; review-after 2027-06-26; **must be excluded from prod deploy** |
+| `lg-poller-mail-killswitch.php` (dev2-ONLY) | deployed-but-unrepo'd dev2 `wp-content/mu-plugins/` | `platform/mu-plugins/` | `@lg-dev-only`; review-after 2027-06-26; **excluded from live deploy** (Q7 marker filter) |
+| `lg-dev-disable-looth1-bounce.php` (dev2-ONLY) | deployed-but-unrepo'd dev2 `wp-content/mu-plugins/` | `platform/mu-plugins/` | `@lg-dev-only`; review-after 2027-06-26; **excluded from live deploy** (Q7 marker filter) |
+
+### 2026-06-26 audit-remediation (poller-monorepo-reconcile, post-audit) — on lane branch, NOT merged
+Closes the audit blockers Q5 + Q7 and the mail posture (#3); lifecycle proven on the dev DB.
+
+| Change | Files | Note |
+|---|---|---|
+| **Q5** identity uuid auto-stamp | `includes/class-lgpo-sync-engine.php` (`stamp_looth_uuid` + call in `sync_wp_email`), `deploy/remediation/backfill-blank-emails.php` | freezes `_looth_uuid` after a real email lands so `/whoami` resolves; canonical `looth_auth_compute_uuid` + identical v5 fallback; **immutable** (never re-derives on an email change). Derivation proven byte-equal to the stored uuid; full anon to resolve to email-change lifecycle proven on dev (reversible test acct). |
+| **Q7** dev-only deploy exclusion | `deploy/deploy.sh` (marker-driven), `platform/mu-plugins/{lg-dev2-power,lg-secrets-dash,lg-dev-mail-containment}.php` (`@lg-dev-only`) | 5 dev-only plugins excluded from the live sync (dry-run verified; 20 legit ship). Also tagged `lg-dev-mail-containment.php` (was untagged) so the net-result list holds. |
+| **#3** mail OFF on live via flag | `src/Plugin.php` (`gateOutboundMail` pre_wp_mail gate), `deploy/remediation/README.md` | poller reads `lgms_poller_mail_enabled` at runtime (fail-closed; intent-tagged notices bypass); flip ON at launch with no redeploy. Replaces the hardcoded dev killswitch (now `@lg-dev-only`/excluded). |
 
 ### Reconciled — already in repo (NOT re-folded)
 - `lg-bug-report.php` — already repo'd at `bug-report/lg-bug-report.php` (served via symlink); deployed == repo.

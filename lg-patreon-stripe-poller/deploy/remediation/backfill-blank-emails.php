@@ -140,6 +140,11 @@ foreach ( $proposals as $p ) {
         } else {
             wp_update_user( [ 'ID' => $id, 'user_email' => $p['email'] ] );
             update_user_meta( $id, 'lgpo_patreon_email', $p['email'] );
+            // Freeze the identity uuid so /whoami resolves on this backfilled
+            // account (else: role present but anon at the identity layer).
+            if ( method_exists( 'LGPO_Sync_Engine', 'stamp_looth_uuid' ) ) {
+                LGPO_Sync_Engine::stamp_looth_uuid( $id, $p['email'] );
+            }
         }
     }
     // apply role via the same snapshot path the sweep uses, then arbiter
