@@ -410,7 +410,12 @@
         if (!src) return;
         e.preventDefault();
         var iframe = document.createElement('iframe');
-        iframe.src = src;
+        /* Set the permissions policy + insert into the DOM BEFORE assigning src,
+           then load. If src is set first (old order), the load can begin before
+           the allow="autoplay" policy is in effect, so the tap's user-activation
+           doesn't carry into the cross-origin YouTube player and iOS needs a
+           SECOND tap to start it (Ian 2026-06-17). allow → append → src keeps it
+           a single tap. (Gating is server-side — untouched.) */
         iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; web-share');
         iframe.setAttribute('allowfullscreen', '');
         iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
@@ -419,6 +424,7 @@
            fills the frame via .lg-embed__frame iframe { inset: 0; ... }. */
         facade.classList.add('is-playing');
         facade.appendChild(iframe);
+        iframe.src = src;
     });
 
     /* ── Share row: copy-link button ─────────────────────────────
