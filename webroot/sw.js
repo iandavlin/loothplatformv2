@@ -3,7 +3,7 @@
    cache-first only for our own /icons/ assets; offline.html fallback.
    Plus Web Push: a `push` handler renders the notification and a
    `notificationclick` handler focuses/opens the target URL. */
-const CACHE = 'looth-pwa-v2';
+const CACHE = 'looth-pwa-v3';
 const SHELL = ['/offline.html', '/icons/icon-192.png'];
 
 self.addEventListener('install', (event) => {
@@ -25,8 +25,17 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   if (req.mode === 'navigate') {
+    // Network-first, but absorb a transient blip: one mobile radio gap / DNS
+    // hiccup used to dead-end the user on offline.html (no retry) even when the
+    // network was fine a moment later. Retry once after a short pause before
+    // falling back, so the false "You're offline" page stops firing on a single
+    // dropped request. (hub-reconnect lane 2026-06-25.)
     event.respondWith(
-      fetch(req).catch(() => caches.match(req).then((r) => r || caches.match('/offline.html')))
+      fetch(req).catch(() =>
+        new Promise((res) => setTimeout(res, 350))
+          .then(() => fetch(req))
+          .catch(() => caches.match(req).then((r) => r || caches.match('/offline.html')))
+      )
     );
     return;
   }
