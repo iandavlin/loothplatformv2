@@ -1382,7 +1382,7 @@
         '.lg-fbc-dots{display:flex;gap:6px;justify-content:center;margin:0 0 12px}' +
         '.lg-fbc-dots i{width:7px;height:7px;border-radius:50%;background:var(--border,#dcd7ca);transition:all .18s ease}' +
         '.lg-fbc-dots i.on{background:var(--lguser-accent,#6b7c52);width:22px;border-radius:4px}' +
-        '.lg-fbc-nav{display:flex;align-items:center;gap:10px;margin-top:14px}' +
+        '.lg-fbc-nav{display:flex;align-items:center;gap:10px;margin:2px 0 14px}' +
         '.lg-fbc-nav__sp{flex:1 1 auto}' +
         '.lg-fbc-nav button{font:700 15px/1 var(--lg-font-sans,system-ui,sans-serif);border-radius:999px;' +
           'padding:12px 22px;cursor:pointer;border:0}' +
@@ -1466,8 +1466,8 @@
 
       var anchor = wActions || (wSubmit && wSubmit.parentNode) || form;
       anchor.parentNode ? anchor.parentNode.insertBefore(wDots, anchor) : form.appendChild(wDots);
-      anchor.parentNode ? anchor.parentNode.insertBefore(wSteps, anchor) : form.appendChild(wSteps);
       anchor.parentNode ? anchor.parentNode.insertBefore(wNav, anchor) : form.appendChild(wNav);
+      anchor.parentNode ? anchor.parentNode.insertBefore(wSteps, anchor) : form.appendChild(wSteps);
       if (wActions) wActions.style.display = 'none';    // original Post/Cancel row retired
 
       var wCur = 1;
@@ -4973,8 +4973,8 @@
   // mobile (images AND text). The old anti-zoom block below rewrote the viewport
   // to maximum-scale=1,user-scalable=no and blocked gesturestart / 2-finger
   // touchmove / set touch-action:pan-x pan-y — all of which killed pinch-zoom.
-  // Short-circuited so the phone's native zoom works. Desktop was never affected.
-  return;
+  // RE-ENABLED 2026-06-26 (Ian): native page-zoom broke Add-post composer
+  // (auto-zoom-on-focus, no zoom-back). Anti-zoom guard restored.
   /* eslint-disable */
   if (!window.matchMedia('(max-width:640px)').matches) return;
   var m = document.querySelector('meta[name="viewport"]');
@@ -4997,4 +4997,41 @@
   document.addEventListener('touchmove', function (e) {
     if (e.touches.length > 1) e.preventDefault();
   }, { passive: false });
+})();
+
+
+/* ---- lg-ios-modal-scroll-lock (2026-06-26, Ian: modal scrolls off-screen on Chrome/iOS) ----
+   iOS WebKit ignores body{overflow:hidden}, so a position:fixed modal gets
+   dragged out of view when the page behind it scrolls or the keyboard opens.
+   Lock the body with position:fixed (preserving scroll position) whenever
+   forums.js raises a modal lock-class. Mobile only; desktop keeps overflow:hidden. */
+(function () {
+  var LOCK_CLASSES = ['ntm-active', 'hub-fmodal-lock'];
+  var savedY = 0, locked = false;
+  function wantLock() {
+    if (!window.matchMedia('(max-width:640px)').matches) return false;
+    for (var i = 0; i < LOCK_CLASSES.length; i++) {
+      if (document.body.classList.contains(LOCK_CLASSES[i])) return true;
+    }
+    return false;
+  }
+  function apply() {
+    var want = wantLock();
+    if (want && !locked) {
+      savedY = window.scrollY || window.pageYOffset || 0;
+      var b = document.body.style;
+      b.position = 'fixed'; b.top = (-savedY) + 'px';
+      b.left = '0'; b.right = '0'; b.width = '100%';
+      locked = true;
+    } else if (!want && locked) {
+      var s = document.body.style;
+      s.position = ''; s.top = ''; s.left = ''; s.right = ''; s.width = '';
+      window.scrollTo(0, savedY);
+      locked = false;
+    }
+  }
+  try {
+    var mo = new MutationObserver(apply);
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  } catch (e) {}
 })();
