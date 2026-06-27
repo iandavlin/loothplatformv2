@@ -794,11 +794,20 @@ function lgpo_alert_failure( string $context, string $detail ): void {
         if ( $to === '' ) { $to = (string) get_option( 'admin_email', '' ); }
         if ( $to === '' ) return;
         $site = wp_specialchars_decode( (string) get_option( 'blogname' ), ENT_QUOTES );
+        // Operator failure alert is INTENTIONAL and must survive the poller mail
+        // gate (gateOutboundMail). Without the X-LG-Poller-Intent marker this
+        // wp_mail() is poller-framed and gets suppressed while
+        // lgms_poller_mail_enabled is off — so a live poll failure would alert
+        // no one. Same always-deliver bypass lgpo_notify_failure already uses;
+        // the bulk-mail suppression (master switch lgms_poller_mail_enabled) is
+        // unchanged for routine mail.
+        $headers = [ 'Content-Type: text/plain; charset=UTF-8', 'X-LG-Poller-Intent: notify' ];
         wp_mail(
             $to,
             "[{$site}] LGPO alert: {$context}",
             "Context: {$context}\n\nDetail:\n{$detail}\n\nReview: "
-            . admin_url( 'options-general.php?page=lg-patreon-onboard' ) . "\n"
+            . admin_url( 'options-general.php?page=lg-patreon-onboard' ) . "\n",
+            $headers
         );
     } catch ( \Throwable $_ ) {
         // best-effort
