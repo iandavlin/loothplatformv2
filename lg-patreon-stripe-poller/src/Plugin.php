@@ -38,6 +38,14 @@ final class Plugin
     // gift_codes management; the looth1+ list is the canonical set.
     public const GIFT_CAPABLE_ROLES = [ 'looth1', 'looth2', 'looth3', 'looth4', 'administrator' ];
 
+    /**
+     * Bumped whenever the idempotent installer (maybeInstall) needs to re-run
+     * its one-time work (schema/caps/pages). Stored in the `lgpo_schema_version`
+     * option; on a fresh MUST-USE load (no register_activation_hook fires) the
+     * installer self-applies once when the stored version differs.
+     */
+    public const INSTALL_VERSION = '2.0.0-mu1';
+
     public static function activate(): void
     {
         Schema::apply();
@@ -46,6 +54,45 @@ final class Plugin
 
         if ( ! wp_next_scheduled( self::CRON_HOOK ) ) {
             wp_schedule_event( time() + 60, self::CRON_SCHEDULE, self::CRON_HOOK );
+        }
+    }
+
+    /**
+     * Idempotent self-install — the MUST-USE replacement for activate().
+     *
+     * register_activation_hook NEVER fires for an mu-plugin, so the one-time
+     * install work (DB schema, gift capability, membership pages) must run from
+     * a normal request. Hooked on `init` (priority 1) by boot(). Gated by the
+     * `lgpo_schema_version` option so it only does real work once per
+     * INSTALL_VERSION; every individual step is itself idempotent
+     * (CREATE TABLE IF NOT EXISTS / add_cap no-op / Pages::ensureAll existence
+     * check), so a concurrent double-run on the first post-deploy request is safe.
+     *
+     * Deactivation teardown (cron unschedule) is intentionally NOT mirrored: an
+     * mu-plugin is permanent and never deactivates, so the tick + sweep crons
+     * must keep running. The real off-switches are the runtime option gates
+     * (lgms_poller_mail_enabled, lgms_stripe_frozen, lgpo_auto_sync_enabled).
+     */
+    public static function maybeInstall(): void
+    {
+        if ( get_option( 'lgpo_schema_version', '' ) === self::INSTALL_VERSION ) {
+            return;
+        }
+
+        try {
+            Schema::apply();
+            self::registerGiftCapability();
+            Wp\Pages::ensureAll();
+            // Rewrite rules are (re)registered every request on 'init'
+            // (lgpo_register_rewrite); flush once now via the deferred init@9999
+            // handler instead of flushing mid-install.
+            set_transient( 'lgms_pending_rewrite_flush', 1, HOUR_IN_SECONDS );
+            update_option( 'lgpo_schema_version', self::INSTALL_VERSION, false );
+            error_log( 'LGPO mu-install: idempotent self-install applied -> ' . self::INSTALL_VERSION );
+        } catch ( \Throwable $e ) {
+            // Never fatal the request on a transient install hiccup; it retries
+            // next load because the version option stays unwritten.
+            error_log( 'LGPO mu-install FAILED (will retry next load): ' . $e->getMessage() );
         }
     }
 
@@ -80,9 +127,22 @@ final class Plugin
 
     public static function boot(): void
     {
+        // Mail gate — hold poller-originated BULK member/billing mail until the
+        // lgms_poller_mail_enabled option is explicitly ON. Read at runtime, so it
+        // flips at launch with NO redeploy; intentional notices bypass it. This is
+        // the live-safe replacement for the dev-only lg-poller-mail-killswitch
+        // mu-plugin (which is @lg-dev-only and excluded from the live deploy).
+        add_filter( 'pre_wp_mail', [ self::class, 'gateOutboundMail' ], 10, 2 );
+
         // Register a custom 5-minute cron interval (WP only ships hourly,
         // twicedaily, daily). Used by the reconcile-pending sweep.
         add_filter( 'cron_schedules', [ self::class, 'registerCronSchedule' ] );
+
+        // MUST-USE self-install. register_activation_hook never fires for an
+        // mu-plugin, so run the (version-gated, idempotent) install work early
+        // on 'init' — before rewrite registration (10), cron reschedule (99),
+        // and the deferred rewrite flush (9999).
+        add_action( 'init', [ self::class, 'maybeInstall' ], 1 );
 
         // Self-heal the scheduled event's interval. If a previous version
         // of the plugin scheduled the tick on 'hourly', migrate to the new
@@ -191,6 +251,47 @@ final class Plugin
      * discovery) never orphan. Skips the user we're already tearing down (our
      * own teardown calls wp_delete_user) to avoid re-entrancy.
      */
+    /**
+     * Mail gate (pre_wp_mail). Holds poller-originated BULK member/billing mail
+     * (welcome / membership / hourly sync report) OFF until the option
+     * `lgms_poller_mail_enabled` is explicitly truthy. Read live, so Ian flips it
+     * ON at launch with NO redeploy. Replaces the dev-only killswitch mu-plugin
+     * with a flag the poller itself honors, so the control ships to live.
+     *
+     * FAIL-CLOSED: option absent/falsey => suppress (member/billing mail stays OFF
+     * while Stripe is in R&D). INTENTIONAL notices (provision/bridge/role failure
+     * alerts + the member "we're aware" note) carry `X-LG-Poller-Intent: notify`
+     * and ALWAYS pass — they must reach members + Ian regardless of the bulk flag.
+     * Only mail whose call stack runs through THIS plugin is ever suppressed;
+     * non-poller site mail is never touched. On dev this is belt-and-braces with
+     * lg-dev-mail-containment (which still routes anything that sends to mailpit).
+     *
+     * @param  null|bool $short pre_wp_mail short-circuit (null = proceed).
+     * @param  array     $atts  wp_mail() atts ('headers','subject',...).
+     * @return null|bool        false suppresses; $short (null) proceeds normally.
+     */
+    public static function gateOutboundMail( $short, $atts )
+    {
+        // Intentional notifications always send (member reassurance + Ian alerts).
+        $headers = is_array( $atts ) ? ( $atts['headers'] ?? '' ) : '';
+        $flat    = is_array( $headers ) ? implode( "\n", $headers ) : (string) $headers;
+        if ( stripos( $flat, 'X-LG-Poller-Intent' ) !== false ) {
+            return $short;
+        }
+        // Flag ON => bulk mail flows normally.
+        if ( (bool) get_option( 'lgms_poller_mail_enabled', false ) ) {
+            return $short;
+        }
+        // Flag OFF/absent => suppress ONLY mail originating in this plugin.
+        foreach ( debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS ) as $frame ) {
+            if ( ! empty( $frame['file'] ) && strpos( $frame['file'], '/lg-patreon-stripe-poller/' ) !== false ) {
+                error_log( 'LGPO mail-gate: suppressed (lgms_poller_mail_enabled OFF) — ' . ( is_array( $atts ) ? ( $atts['subject'] ?? '' ) : '' ) );
+                return false;
+            }
+        }
+        return $short;
+    }
+
     public static function onDeletedUser( int $wpUserId ): void
     {
         if ( UserLifecycle::isHandling( $wpUserId ) ) {

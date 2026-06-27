@@ -2,6 +2,20 @@
 
 declare(strict_types=1);
 
+/*
+ * ===========================================================================
+ * STRIPE R&D PAUSED — resume here when the Stripe system restarts.
+ * ---------------------------------------------------------------------------
+ * The Stripe alpha is decommissioned behind a real off-switch at the cron
+ * entrypoint. LGMS\Tick::run() skips Pass 1 (the Stripe poll) whenever
+ * get_option('lgms_stripe_frozen') is truthy, and that option DEFAULTS TRUE.
+ * While frozen NOTHING in src/Stripe/ executes on the tick — no API call, no
+ * EventHandler wp_mail(). To resume: set lgms_stripe_frozen to a falsey value,
+ * then re-validate this path before relying on it. The companion repo
+ * lg-stripe-billing carries the same pause note.
+ * ===========================================================================
+ */
+
 namespace LGMS\Stripe;
 
 use RuntimeException;

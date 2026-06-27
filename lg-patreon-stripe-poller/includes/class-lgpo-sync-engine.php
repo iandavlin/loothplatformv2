@@ -252,6 +252,22 @@ class LGPO_Sync_Engine {
      * ----------------------------------------------------------------*/
 
     /**
+     * Public roster fetch — returns the normalized active-member list (same
+     * shape compare_member consumes: email, full_name, patreon_user_id, tiers).
+     * Used by the prepared remediation backfill (deploy/remediation) to name-
+     * match the legacy blank-email accounts. Returns null on config / API error.
+     *
+     * @return array|null
+     */
+    public static function fetch_member_roster(): ?array {
+        $config = self::validate_config();
+        if ( isset( $config['error'] ) ) {
+            return null;
+        }
+        return self::fetch_all_members( $config['token'], $config['campaign_id'] );
+    }
+
+    /**
      * Fetch all campaign members, handling pagination.
      *
      * @return array|null Array of normalized member records, or null on failure.
@@ -369,7 +385,7 @@ class LGPO_Sync_Engine {
     private static function build_members_url( string $campaign_id, ?string $cursor ): string {
         $params = [
             'include'        => 'currently_entitled_tiers,user',
-            'fields[member]' => 'patron_status,email,full_name,last_charge_status,last_charge_date,next_charge_date,will_pay_amount_cents,currently_entitled_amount_cents',
+            'fields[member]' => 'patron_status,email,full_name,last_charge_status,last_charge_date,next_charge_date,will_pay_amount_cents,currently_entitled_amount_cents,pledge_cadence',
             'fields[tier]'   => 'title,amount_cents',
             'fields[user]'   => 'email,full_name',
             'page[count]'    => self::PAGE_SIZE,
@@ -447,6 +463,7 @@ class LGPO_Sync_Engine {
             'next_charge_date'                   => $attrs['next_charge_date'] ?? null,
             'will_pay_amount_cents'              => isset( $attrs['will_pay_amount_cents'] ) ? (int) $attrs['will_pay_amount_cents'] : null,
             'currently_entitled_amount_cents'    => isset( $attrs['currently_entitled_amount_cents'] ) ? (int) $attrs['currently_entitled_amount_cents'] : null,
+            'pledge_cadence'                     => isset( $attrs['pledge_cadence'] ) ? (int) $attrs['pledge_cadence'] : null,
             'tier_ids'                           => $tier_ids,
             'tier_labels'                        => $tier_labels,
             'patreon_user_id'                    => $patreon_user_id,
@@ -461,10 +478,33 @@ class LGPO_Sync_Engine {
      * Compare a single Patreon member against WP and record the result.
      */
     private static function compare_member( array $member, array $tier_to_role, array &$changes ): void {
-        $email = $member['email'];
+        $email           = $member['email'];
+        $patreon_user_id = (string) ( $member['patreon_user_id'] ?? '' );
 
-        // Find WP user by email
-        $user = get_user_by( 'email', $email );
+        // RE-KEY THE BRIDGE ON THE STABLE PATREON USER ID, not the email.
+        // Email is mutable and frequently blank on legacy accounts: the ~30
+        // active patrons whose same-name WP account carried a BLANK email never
+        // matched here (get_user_by('email','') === false) and so never got a
+        // role. Match by Patreon ID first; fall back to email only for accounts
+        // not yet linked, and backfill the ID meta when we match by email so
+        // every later pass keys on the stable ID. (Tier / whoami already key on
+        // the WP user id, so email becomes non-load-bearing.)
+        $user       = null;
+        $matched_by = '';
+        if ( $patreon_user_id !== '' && function_exists( 'lgpo_get_user_by_patreon_id' ) ) {
+            $user = lgpo_get_user_by_patreon_id( $patreon_user_id );
+            if ( $user ) {
+                $matched_by = 'patreon_id';
+            }
+        }
+        if ( ! $user && $email !== '' ) {
+            $by_email = get_user_by( 'email', $email );
+            if ( $by_email ) {
+                $user       = $by_email;
+                $matched_by = 'email';
+            }
+        }
+
         if ( ! $user ) {
             $changes['stats']['skipped_no_wp']++;
             $changes['skipped'][] = [
@@ -478,10 +518,25 @@ class LGPO_Sync_Engine {
         $user_id       = $user->ID;
         $current_roles = (array) $user->roles;
 
+        // Backfill the Patreon-ID link on an email-matched account so every
+        // future pass keys on the stable ID (and the email can then drift /
+        // be mirrored freely below).
+        if ( $matched_by === 'email' && $patreon_user_id !== ''
+             && (string) get_user_meta( $user_id, 'lgpo_patreon_user_id', true ) !== $patreon_user_id ) {
+            update_user_meta( $user_id, 'lgpo_patreon_user_id', sanitize_text_field( $patreon_user_id ) );
+        }
+
         // Persist the rich Patreon data for every matched WP user, regardless
         // of role-change decisions below. The Manage Subscription panel reads
         // from this row via Membership::statusFor().
         self::upsert_patreon_member_row( $user_id, $member );
+
+        // WP email = live mirror of the patron's current Patreon email,
+        // overwritten every pass (Item 3). Safe because login is Patreon OAuth,
+        // not email/password — changing the email can't lock anyone out. On a
+        // uniqueness collision (email already on a different WP user) it skips
+        // the write and alerts the patron + Ian instead.
+        self::sync_wp_email( $user, $member, $changes );
 
         // Skip looth4 always
         if ( in_array( 'looth4', $current_roles, true ) || in_array( 'administrator', $current_roles, true ) ) {
@@ -604,6 +659,160 @@ class LGPO_Sync_Engine {
     }
 
     /* ------------------------------------------------------------------
+     * Email mirror (Item 3)
+     * ----------------------------------------------------------------*/
+
+    /**
+     * Keep the WP user_email as a live mirror of the patron's CURRENT Patreon
+     * email, overwritten on every pass. Email is communication-only — login is
+     * Patreon OAuth (wp_set_auth_cookie), so rewriting the WP email can never
+     * lock a member out.
+     *
+     * EXCEPTION — uniqueness collision: WP requires a unique user_email. If the
+     * Patreon email is already held by a DIFFERENT WP user (a duplicate / split
+     * account), we must NOT write it (it would clobber / fail against the other
+     * account). Skip the write and alert: reassure the patron + email Ian the
+     * details (Item 5).
+     *
+     * Administrators are never touched.
+     */
+    private static function sync_wp_email( \WP_User $user, array $member, array &$changes ): void {
+        $patreon_email = strtolower( trim( (string) ( $member['email'] ?? '' ) ) );
+        if ( $patreon_email === '' || ! is_email( $patreon_email ) ) {
+            return;
+        }
+        // Never overwrite a privileged account's email over poller data.
+        if ( user_can( $user, 'manage_options' ) ) {
+            return;
+        }
+        if ( strtolower( trim( (string) $user->user_email ) ) === $patreon_email ) {
+            return; // already mirrored
+        }
+
+        // Uniqueness check.
+        $owner = get_user_by( 'email', $patreon_email );
+        if ( $owner && (int) $owner->ID !== (int) $user->ID ) {
+            if ( function_exists( 'lgpo_notify_failure' ) ) {
+                lgpo_notify_failure(
+                    $patreon_email,
+                    (string) ( $member['full_name'] ?? '' ),
+                    'sync.email_collision',
+                    sprintf(
+                        "Could not mirror the WP email for Patreon user %s (%s).\n"
+                        . "Their current Patreon email %s already belongs to a DIFFERENT WP account "
+                        . "(#%d / %s). This is a duplicate / split account that needs a manual merge — "
+                        . "the email was NOT changed and the member keeps their existing access.",
+                        (string) ( $member['patreon_user_id'] ?? '?' ),
+                        (string) ( $member['full_name'] ?? '?' ),
+                        $patreon_email,
+                        (int) $owner->ID,
+                        $owner->user_login
+                    ),
+                    (int) $user->ID
+                );
+            }
+            $changes['skipped'][] = [
+                'email'  => $patreon_email,
+                'reason' => 'Email collision (already on WP #' . (int) $owner->ID . ') — not written',
+            ];
+            return;
+        }
+
+        // Safe to mirror.
+        $res = wp_update_user( [ 'ID' => $user->ID, 'user_email' => $patreon_email ] );
+        if ( is_wp_error( $res ) ) {
+            error_log( 'LGPO Sync: email mirror failed for #' . $user->ID . ': ' . $res->get_error_message() );
+            if ( function_exists( 'lgpo_notify_failure' ) ) {
+                lgpo_notify_failure(
+                    $patreon_email,
+                    (string) ( $member['full_name'] ?? '' ),
+                    'sync.email_update_failed',
+                    'wp_update_user failed setting email for WP #' . $user->ID . ': ' . $res->get_error_message(),
+                    (int) $user->ID
+                );
+            }
+            return;
+        }
+        update_user_meta( $user->ID, 'lgpo_patreon_email', $patreon_email );
+        error_log( sprintf( 'LGPO Sync: mirrored WP email #%d -> %s', $user->ID, $patreon_email ) );
+
+        // Freeze the identity uuid the FIRST time a real email lands so /whoami
+        // resolves (the JWT minter hard-throws on a missing _looth_uuid -> anon).
+        // Immutable: no-op if already set (a later email change must NOT re-derive).
+        self::stamp_looth_uuid( $user->ID, $patreon_email );
+    }
+
+    /**
+     * Freeze the profile-app identity uuid (`_looth_uuid`) for a WP user the FIRST
+     * time a real email lands, so the JWT minter (profile-auth.php) resolves
+     * `/whoami` instead of falling back to anon. Without it a re-keyed / backfilled
+     * blank-email account gets a role but stays anon at the identity layer (the
+     * minter refuses to recompute from email and hard-throws on a missing uuid).
+     *
+     * Mirrors profile-sync.php`s `user_register` stamp EXACTLY: same canonical
+     * derivation UUIDv5( LOOTH_AUTH_NAMESPACE, lower(trim(email)) ) — the namespace
+     * is identical to profile-app`s LOOTH_IDENTITY_NAMESPACE — so the value equals
+     * the uuid profile-app froze in Postgres at create. Prefers the canonical
+     * looth_auth_compute_uuid() (loaded by the profile-auth mu-plugin in any full
+     * WP boot: cron / admin / wp-cli eval-file); the self-contained v5 fallback is
+     * used only if that function is somehow absent, and is byte-identical.
+     *
+     * IMMUTABLE — never overwrites an existing uuid. The uuid is frozen at the
+     * CREATE / first email; a later email change must keep the original (re-deriving
+     * from the new email would mint a `sub` that no longer matches the frozen
+     * users.uuid -> broken identity). Only stamps when `_looth_uuid` is absent and a
+     * valid email exists. Authoritative drift reconciler stays profile-app
+     * bin/backfill-looth-uuid.php (reads users.uuid straight from Postgres).
+     *
+     * @return string the uuid now stored (pre-existing or newly stamped), or `` if none.
+     */
+    public static function stamp_looth_uuid( int $user_id, string $email ): string {
+        if ( $user_id <= 0 ) {
+            return '';
+        }
+        $existing = (string) get_user_meta( $user_id, '_looth_uuid', true );
+        if ( $existing !== '' ) {
+            return $existing; // immutable — never re-derive on an email change
+        }
+        $email = strtolower( trim( $email ) );
+        if ( $email === '' || ! is_email( $email ) ) {
+            return '';
+        }
+        if ( function_exists( 'looth_auth_compute_uuid' ) ) {
+            $uuid = looth_auth_compute_uuid( $email );
+        } else {
+            $uuid = self::compute_looth_uuid_v5( $email );
+            error_log( 'LGPO stamp_looth_uuid: canonical looth_auth_compute_uuid() absent — used identical v5 fallback for #' . $user_id );
+        }
+        update_user_meta( $user_id, '_looth_uuid', $uuid );
+        error_log( sprintf( 'LGPO stamp_looth_uuid: stamped _looth_uuid %s for #%d', $uuid, $user_id ) );
+        return $uuid;
+    }
+
+    /**
+     * Self-contained UUIDv5 — byte-identical to looth_auth_compute_uuid()
+     * (Ramsey\Uuid::uuid5) for the same namespace + name. Fallback only. Namespace
+     * == LOOTH_AUTH_NAMESPACE (profile-auth.php) == LOOTH_IDENTITY_NAMESPACE
+     * (profile-app config) == eaef23f7-9bc9-4a95-ac49-ffff632e6646.
+     */
+    private static function compute_looth_uuid_v5( string $name ): string {
+        $ns_hex = str_replace( '-', '', 'eaef23f7-9bc9-4a95-ac49-ffff632e6646' );
+        $ns_bin = '';
+        for ( $i = 0; $i < strlen( $ns_hex ); $i += 2 ) {
+            $ns_bin .= chr( hexdec( substr( $ns_hex, $i, 2 ) ) );
+        }
+        $hash = sha1( $ns_bin . $name );
+        return sprintf(
+            '%08s-%04s-%04x-%04x-%12s',
+            substr( $hash, 0, 8 ),
+            substr( $hash, 8, 4 ),
+            ( hexdec( substr( $hash, 12, 4 ) ) & 0x0fff ) | 0x5000,
+            ( hexdec( substr( $hash, 16, 4 ) ) & 0x3fff ) | 0x8000,
+            substr( $hash, 20, 12 )
+        );
+    }
+
+    /* ------------------------------------------------------------------
      * Apply a single change
      * ----------------------------------------------------------------*/
 
@@ -651,8 +860,25 @@ class LGPO_Sync_Engine {
         $effective_before = $change['current_role'] ?? 'looth1';
 
         if ( class_exists( '\\LGMS\\RoleSourceWriter' ) && class_exists( '\\LGMS\\Arbiter' ) ) {
-            \LGMS\RoleSourceWriter::report( (int) $user_id, 'patreon', $patreon_tier );
-            \LGMS\Arbiter::sync( (int) $user_id );
+            // Any failure in the bridge / role pipeline reassures the member and
+            // alerts Ian (Item 5), then surfaces as a sweep error.
+            try {
+                \LGMS\RoleSourceWriter::report( (int) $user_id, 'patreon', $patreon_tier );
+                \LGMS\Arbiter::sync( (int) $user_id );
+            } catch ( \Throwable $e ) {
+                error_log( 'LGPO Sync: role apply failed for ' . $email . ' (#' . $user_id . '): ' . $e->getMessage() );
+                if ( function_exists( 'lgpo_notify_failure' ) ) {
+                    lgpo_notify_failure(
+                        $email,
+                        (string) ( $change['full_name'] ?? '' ),
+                        'sync.role_apply_failed',
+                        'Arbiter/RoleSourceWriter threw applying Patreon tier ' . $new_role
+                        . ' to WP #' . $user_id . ': ' . $e->getMessage(),
+                        (int) $user_id
+                    );
+                }
+                return [ 'success' => false, 'message' => "{$email} — role apply failed: " . $e->getMessage() ];
+            }
         } else {
             // Fallback if the LGMS\* namespace isn't loaded — write directly.
             error_log( 'LGPO Sync: LGMS namespace unavailable, falling back to direct set_role.' );
@@ -1006,6 +1232,7 @@ class LGPO_Sync_Engine {
             'next_charge_date'                => null,
             'will_pay_amount_cents'           => null,
             'currently_entitled_amount_cents' => null,
+            'pledge_cadence'                  => null,
             'tier_labels'                     => [],
         ];
         try {
@@ -1014,8 +1241,8 @@ class LGPO_Sync_Engine {
                 'INSERT INTO lg_patreon_members
                     (wp_user_id, patreon_user_id, email, full_name, patron_status,
                      last_charge_status, last_charge_date, next_charge_date,
-                     will_pay_amount_cents, currently_entitled_amount_cents, tier_label)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     will_pay_amount_cents, currently_entitled_amount_cents, pledge_cadence, tier_label)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE
                     patreon_user_id                 = VALUES(patreon_user_id),
                     email                           = VALUES(email),
@@ -1026,6 +1253,7 @@ class LGPO_Sync_Engine {
                     next_charge_date                = VALUES(next_charge_date),
                     will_pay_amount_cents           = VALUES(will_pay_amount_cents),
                     currently_entitled_amount_cents = VALUES(currently_entitled_amount_cents),
+                    pledge_cadence                  = VALUES(pledge_cadence),
                     tier_label                      = VALUES(tier_label)'
             )->execute( [
                 $wp_user_id,
@@ -1038,6 +1266,7 @@ class LGPO_Sync_Engine {
                 self::normalize_datetime( $member['next_charge_date'] ?? null ),
                 $member['will_pay_amount_cents'] ?? null,
                 $member['currently_entitled_amount_cents'] ?? null,
+                $member['pledge_cadence'] ?? null,
                 ( $member['tier_labels'][0] ?? null ) ?: null,
             ] );
         } catch ( \Throwable $e ) {

@@ -1,6 +1,7 @@
 <?php
 /**
  * Plugin Name: LG Dev Mail Containment (dev2 ONLY)
+ * @lg-dev-only EXCLUDED from live deploy (deploy.sh marker filter). Forces mail→mailpit; env-inert on live but must not ship.
  * Description: Hard guarantee that on the dev box NO outbound email can reach a
  *   real inbox. Intercepts wp_mail BEFORE FluentSMTP can route it to Amazon SES
  *   (SES rides HTTPS:443 and is therefore NOT blocked by the outbound-SMTP

@@ -84,6 +84,7 @@ final class Membership
                 'status_label'   => self::statusLabel( self::mapStripeStatus( $rawStatus ) ),
                 'tier'           => null, // Resolved in shortcode via tierLabelForPrice()
                 'amount_cents'   => null,
+                'interval'       => null,
                 'next_charge_at' => $row['current_period_end'] ?: null,
                 'manage_url'     => null, // Stripe portal handled by existing buttons
                 'raw'            => $row,
@@ -99,7 +100,7 @@ final class Membership
         try {
             $stmt = Db::pdo()->prepare(
                 'SELECT patron_status, last_charge_status, last_charge_date, next_charge_date,
-                        will_pay_amount_cents, currently_entitled_amount_cents, tier_label,
+                        will_pay_amount_cents, currently_entitled_amount_cents, pledge_cadence, tier_label,
                         patreon_user_id, synced_at
                  FROM lg_patreon_members WHERE wp_user_id = ?'
             );
@@ -123,6 +124,7 @@ final class Membership
                                         : ( $row['currently_entitled_amount_cents'] !== null
                                             ? (int) $row['currently_entitled_amount_cents']
                                             : null ),
+                'interval'       => self::cadenceToInterval( $row['pledge_cadence'] ?? null ),
                 'next_charge_at' => $row['next_charge_date'] ?: null,
                 'manage_url'     => self::patreonManageUrl(),
                 'raw'            => $row,
@@ -152,6 +154,7 @@ final class Membership
                 'status_label'   => self::statusLabel( 'active' ),
                 'tier'           => $row['tier'] ?: null,
                 'amount_cents'   => null,
+                'interval'       => null,
                 'next_charge_at' => null,
                 'manage_url'     => null,
                 'raw'            => $row,
@@ -199,6 +202,20 @@ final class Membership
         };
     }
 
+    /**
+     * Map a Patreon pledge_cadence (months between charges; 1 = monthly,
+     * 12 = annual) to a Stripe-style interval string. Null when unknown
+     * (e.g. a row synced before pledge_cadence was captured) so the display
+     * omits the suffix rather than guessing.
+     */
+    private static function cadenceToInterval( $cadence ): ?string
+    {
+        if ( $cadence === null || (int) $cadence <= 0 ) {
+            return null;
+        }
+        return (int) $cadence >= 12 ? 'year' : 'month';
+    }
+
     private static function patreonManageUrl(): ?string
     {
         $url = trim( (string) get_option( 'lgpo_patreon_link', '' ) );
@@ -217,6 +234,7 @@ final class Membership
             'status_label'   => self::statusLabel( 'none' ),
             'tier'           => null,
             'amount_cents'   => null,
+            'interval'       => null,
             'next_charge_at' => null,
             'manage_url'     => null,
             'raw'            => [],

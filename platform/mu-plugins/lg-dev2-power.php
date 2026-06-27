@@ -1,6 +1,7 @@
 <?php
 /**
  * Plugin Name: LG Dev2 Power (EC2 wake/sleep)
+ * @lg-dev-only EXCLUDED from live deploy (deploy.sh marker filter). dev2 EC2 control — useless/confusing on live.
  * Description: Start/stop/status for the dev2 EC2 sandbox box. Resolves dev2 by its
  *   stable Elastic IP (rebuild-proof — survives instance replacement, and the EIP
  *   stays associated while the box is stopped) and runs ec2 start/stop via the host's

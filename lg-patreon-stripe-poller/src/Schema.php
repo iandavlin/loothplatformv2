@@ -38,6 +38,7 @@ final class Schema
                 next_charge_date                DATETIME        NULL,
                 will_pay_amount_cents           INT             NULL,
                 currently_entitled_amount_cents INT             NULL,
+                pledge_cadence                  SMALLINT        NULL,
                 tier_label                      VARCHAR(255)    NULL,
                 synced_at                       DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
                                                                     ON UPDATE CURRENT_TIMESTAMP,
