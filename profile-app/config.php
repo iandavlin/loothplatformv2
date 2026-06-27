@@ -101,17 +101,11 @@ if ($env === 'live') {
     $d_billing_db = 'lg_membership';
 }
 
-// Shared env wins; branch default is the ?? fallback.
+// Shared env wins; branch default is the ?? fallback. APP_ROOT stays branch-derived
+// (no shared key — /srv/profile-app is a valid symlink on the prod box).
 define('LG_PROFILE_APP_HOST',             $shared['host']             ?? $d_host);
 define('LG_PROFILE_APP_WP_PATH',          $shared['wp_path']          ?? $d_wp_path);
-// APP_ROOT = the directory holding THIS config.php (the app/code root) in EVERY
-// tree: /srv/profile-app, the preview slot (~/preview-slots/slot-a/profile-app),
-// or ~/projects/profile-app. Derive it from realpath(__DIR__) so the src/* CLASSES
-// always load from the SAME tree that served the view — instead of pinning to one
-// clone. Pinning was the /whoami split-clone footgun: a slot- or lane-served view
-// would load its classes back from /srv (= main), so slot edits silently never
-// rendered. ONLY the code root is de-pinned; data/media roots + DSNs stay absolute.
-define('LG_PROFILE_APP_APP_ROOT',         realpath(__DIR__) ?: $d_app_root);
+define('LG_PROFILE_APP_APP_ROOT',         $d_app_root);
 define('LG_PROFILE_APP_PG_DSN',           'pgsql:host=/var/run/postgresql;dbname=' . ($shared['pg_db_profile'] ?? 'profile_app'));
 define('LG_PROFILE_APP_MYSQL_DB',         $shared['mysql_db']         ?? $d_mysql_db);
 define('LG_PROFILE_APP_MYSQL_BILLING_DB', $shared['mysql_billing_db'] ?? $d_billing_db);
