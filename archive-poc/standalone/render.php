@@ -102,6 +102,19 @@ $postContext = $blob['post_context'];
 // so get_post_type() (post-header type badge) resolves correctly.
 $postContext['post_type'] = $postType;
 
+// SEO meta-description source: the curated content_item.excerpt (one indexed
+// read by permalink). Far cleaner than scraping the rendered article, whose
+// first text is the post-header type/tier badge chrome + a repeated title.
+$postContext['_seo_excerpt'] = '';
+try {
+    $exStmt = lg_archive_poc_pdo()->prepare('SELECT excerpt FROM content_item WHERE url = :u LIMIT 1');
+    $exStmt->execute([':u' => (string) ($postContext['permalink'] ?? '')]);
+    $postContext['_seo_excerpt'] = (string) ($exStmt->fetchColumn() ?: '');
+} catch (\Throwable $e) {
+    // Non-fatal: lg_standalone_page() falls back to stripping $articleHtml.
+    error_log('lg-render: seo excerpt lookup: ' . $e->getMessage());
+}
+
 /* ── Proof mode (CLI only) ───────────────────────────────────────────── */
 if ($IS_CLI && in_array('--proof', $argv ?? [], true)) {
     exit(lg_standalone_proof($layout, $postContext, $blob));
@@ -383,7 +396,54 @@ function lg_standalone_front_js_href(): string {
 }
 
 function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs, string $editUrl = '', string $commentsUrl = '', int $commentsCount = 0): string {
-    $title = htmlspecialchars((string) ($pc['title'] ?? 'Looth Group'), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
+    // Title: the stored title is ALREADY HTML-entity-encoded (e.g. a curly
+    // apostrophe arrives as `&#8217;`). htmlspecialchars() alone re-escapes the
+    // `&` → `&amp;#8217;`, which shows as literal garbage in the <title> and
+    // search snippet. Decode once to the real character, THEN escape once.
+    $titleRaw = html_entity_decode((string) ($pc['title'] ?? 'Looth Group'), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $title    = htmlspecialchars($titleRaw, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
+
+    // ── SEO <head> data (dependency-free; covers the 642 indexable content URLs) ──
+    $seoPath  = parse_url((string) ($pc['permalink'] ?? ''), PHP_URL_PATH) ?: '/';
+    $seoCanon = LG_ARCHIVE_POC_CANONICAL_BASE . $seoPath;        // per-env baked host
+    // Description: prefer the curated excerpt (set in the routing flow above);
+    // else flatten the rendered article to plain text. For gated posts
+    // $articleHtml is the public teaser (and the page is noindex anyway), so
+    // nothing private leaks. Trim to ~155 chars below.
+    $seoDescRaw = trim(html_entity_decode((string) ($pc['_seo_excerpt'] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    if ($seoDescRaw === '') {
+        $seoDescRaw = trim(preg_replace('/\s+/', ' ',
+            html_entity_decode(strip_tags($articleHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+    }
+    $seoDescRaw = trim(preg_replace('/\s+/', ' ', $seoDescRaw));
+    if ($seoDescRaw === '') $seoDescRaw = $titleRaw;
+    if (function_exists('mb_strlen') && mb_strlen($seoDescRaw) > 160) {
+        $seoDescRaw = rtrim(mb_substr($seoDescRaw, 0, 157)) . '…';
+    }
+    $seoDesc   = htmlspecialchars($seoDescRaw, ENT_QUOTES, 'UTF-8');
+    $seoImg    = (string) ($pc['featured_image']['url'] ?? '');
+    $seoImgEsc = htmlspecialchars($seoImg, ENT_QUOTES, 'UTF-8');
+    $seoCanEsc = htmlspecialchars($seoCanon, ENT_QUOTES, 'UTF-8');
+    $seoAuthor = (string) ($pc['author']['display_name'] ?? '');
+    $seoIsVideo = ($pc['post_type'] ?? '') === 'post-type-videos';
+    $seoOgType  = $seoIsVideo ? 'video.other' : 'article';
+    $seoDateIso = '';
+    if (!empty($pc['date'])) { $ts = strtotime((string) $pc['date']); if ($ts) $seoDateIso = date('c', $ts); }
+    // JSON-LD: VideoObject needs name+description+thumbnailUrl+uploadDate to be
+    // valid, so only use it when all are present; else Article (always valid).
+    $seoLdType = ($seoIsVideo && $seoImg !== '' && $seoDateIso !== '') ? 'VideoObject' : 'Article';
+    $seoLd = [
+        '@context' => 'https://schema.org',
+        '@type'    => $seoLdType,
+        ($seoLdType === 'VideoObject' ? 'name' : 'headline') => $titleRaw,
+        'url'              => $seoCanon,
+        'mainEntityOfPage' => $seoCanon,
+    ];
+    if ($seoDescRaw !== '')   $seoLd['description'] = $seoDescRaw;
+    if ($seoImg !== '')       $seoLd[$seoLdType === 'VideoObject' ? 'thumbnailUrl' : 'image'] = $seoImg;
+    if ($seoDateIso !== '')   $seoLd[$seoLdType === 'VideoObject' ? 'uploadDate' : 'datePublished'] = $seoDateIso;
+    if ($seoAuthor !== '')    $seoLd['author'] = ['@type' => 'Person', 'name' => $seoAuthor];
+    $seoLd['publisher'] = ['@type' => 'Organization', 'name' => 'The Looth Group'];
     // Embed/modal mode (?embed=1): render the article + comments WITHOUT the shared
     // site-header/footer chrome, so the Hub can iframe a content card into a modal with
     // no double header. Default OFF — the normal full standalone page (and the desktop
@@ -401,6 +461,20 @@ function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $a
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= $title ?> — Looth Group</title>
 <meta name="robots" content="<?= $tier === 'public' ? 'index, follow' : 'noindex, follow' ?>">
+<meta name="description" content="<?= $seoDesc ?>">
+<link rel="canonical" href="<?= $seoCanEsc ?>">
+<meta property="og:type" content="<?= $seoOgType ?>">
+<meta property="og:title" content="<?= $title ?>">
+<meta property="og:description" content="<?= $seoDesc ?>">
+<meta property="og:url" content="<?= $seoCanEsc ?>">
+<?php if ($seoImg !== ''): ?><meta property="og:image" content="<?= $seoImgEsc ?>">
+<?php endif; ?><meta property="og:site_name" content="Looth Group">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="<?= $title ?>">
+<meta name="twitter:description" content="<?= $seoDesc ?>">
+<?php if ($seoImg !== ''): ?><meta name="twitter:image" content="<?= $seoImgEsc ?>">
+<?php endif; ?>
+<script type="application/ld+json"><?= json_encode($seoLd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <?php $cssHref = lg_standalone_css_href($css); ?>
 <?php if ($cssHref !== ''): ?>
