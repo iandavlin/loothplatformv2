@@ -245,17 +245,33 @@ from `/srv/<app>` symlinks. Storage verified live.
 the pristine serve clone `~/loothplatformv2-serve`** (deploy = `git pull` there; see §13).
 `lg-stripe-billing` / `membership-pages` / `thumb-app` are separate real dirs, not repo-served.
 
-**⚠️ Preview-a (the dirty preview) covers ONLY bb-mirror.** The `preview-a.dev2.loothgroup.com`
-slot overrides just the hub surface — its own `bb-preview-a` FPM pool serves
-`~/preview-slots/slot-a/bb-mirror` (the `integration` branch). **archive-poc is NOT isolated by the
-slot:** managed-CPT pages (`/post-type-videos/*` etc.), the standalone CPT renderer, the front feed
-`/`, and search all route through the *shared* `strangler-archive-poc.conf` to a hard-coded
-`/srv/archive-poc` (= the clean serve tree, `~/loothplatformv2-serve/archive-poc`) on the shared
-`archive-poc` FPM pool — regardless of which slot you hit. **Consequence:** an archive-poc change
-merged into `integration` is invisible on preview-a. To eyeball an archive-poc fix you must deploy
-the file onto the serve tree (`~/loothplatformv2-serve/archive-poc/...` + `systemctl reload
-php8.3-fpm`), which dirties the clean serve until you revert (`git checkout --`) or fold to main.
-(Cost a full review round on the lg-layout-v2 facade-poster fix, 2026-06-26.)
+**✅ Preview-a is now a FAITHFUL preview of ALL dynamic surfaces (true-preview lane, 2026-06-27).**
+The `preview-a.dev2.loothgroup.com` vhost includes `*-preview-a.conf` variants for EVERY app —
+profile-app, archive-poc, events, membership, bb-mirror — each repointing `SCRIPT_FILENAME`/`alias`
+from `/srv/<app>` (or `~/projects/membership-pages`) → `~/preview-slots/slot-a/<app>` on the SAME
+existing FPM pool (no new pools; bb-mirror keeps its dedicated `bb-preview-a` pool). Webroot static
+(`/*.js`,`/*.css`…) is served slot-first via `strangler-webroot-preview-a.conf` (which SUBSUMES the
+vhost generic static block; try_files the slot `webroot/` then falls back to the shared docroot).
+So the slot's `integration` branch now drives every dynamic view — front feed `/`, `/hub/`,
+`/directory/members`, `/u/`, `/p/`, `/events/`, `/whoami`, membership pages — not just the hub.
+
+- **Keystone de-pin:** `profile-app/config.php` now derives `LG_PROFILE_APP_APP_ROOT` from
+  `realpath(__DIR__)` (was hard-pinned to `~/projects/profile-app`). config.php sits at the app root
+  in EVERY tree, so the `src/*` CLASSES load from the SAME tree that served the view. Before this, a
+  slot-served view loaded its classes back from `/srv`(=main) → slot edits silently never rendered,
+  and a serve-clone flip could fatal `/whoami` site-wide. **vendor/ is gitignored** → the slot needs
+  its own `profile-app/vendor` (copied from `~/projects/profile-app/vendor`; composer is fully
+  relocatable, runtime `__DIR__`-relative, no app PSR-4). NOTE for the eventual main-merge: the serve
+  clone `~/loothplatformv2-serve/profile-app` will then ALSO need a `vendor/` or `/whoami` breaks.
+- **archive-poc** keeps `LG_ARCHIVE_POC_APP_ROOT` pinned ON PURPOSE — it drives DATA (index.sqlite,
+  config.json), not code; the code + front-feed rows.json load via `__DIR__` → render from the slot.
+  events/membership configs have no pin and are `__DIR__`-relative.
+- **Out of scope (shared docroot, not branch-isolatable):** WP core/theme under `/var/www/dev`, and
+  the deliberately-shared chrome `/srv/lg-shared/site-header.php` (lg-shell owns ONE header).
+- **Source-of-truth:** the preview snippets are repo-tracked under `platform/nginx/*-preview-a.conf`
+  (deploy = copy to `/etc/nginx/snippets/`). The include swap is in the preview-a vhost ONLY — the
+  main dev2 vhost and the shared `strangler-*.conf` are untouched. (Lane branch `true-preview`,
+  keeper-gated; the `/whoami`-critical config de-pin merges to main only with keeper approval.)
 
 ---
 
