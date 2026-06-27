@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/_bootstrap.php';
+require_once __DIR__ . '/../../src/ImageOptimize.php';
 
 /**
  * Banner image upload — wide hero strip at the top of the profile header card.
@@ -36,6 +37,7 @@ require_once __DIR__ . '/_bootstrap.php';
 
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Db;
+use Looth\ProfileApp\ImageOptimize;
 use Looth\ProfileApp\Media;
 use Looth\ProfileApp\R2;
 
@@ -81,10 +83,23 @@ $bvs = Db::pg()->prepare('UPDATE users SET banner_version = COALESCE(banner_vers
 $bvs->execute([':i' => $uid]);
 $ver = (int) $bvs->fetchColumn();
 
+// Compress / cap / auto-orient at write time (cap 1600px, WebP q82). Fall back
+// to the raw upload only if the bytes are un-decodable, so a valid banner is
+// never dropped — same contract as the avatar/gallery paths.
+$raw = @file_get_contents($tmp);
+if ($raw === false) profile_app_json(500, ['error' => 'read_failed']);
+$mime = (string)($info['mime'] ?? 'application/octet-stream');
+try {
+    [$bytes, $ext] = ImageOptimize::banner($raw);
+    $mime = 'image/webp';
+} catch (\Throwable $e) {
+    $bytes = $raw;                          // keep $ext from the validated mime
+    error_log('[me-banner] optimize fallback (raw .' . $ext . '): ' . $e->getMessage());
+}
+
 $fn = $ver . '.' . $ext;
 if (R2::enabled()) {
-    $bytes = @file_get_contents($tmp);
-    if ($bytes === false || !R2::put('banners/' . $uuid . '/' . $fn, $bytes, (string)($info['mime'] ?? 'application/octet-stream'))) {
+    if (!R2::put('banners/' . $uuid . '/' . $fn, $bytes, $mime)) {
         profile_app_json(500, ['error' => 'write_failed']);
     }
 } else {
@@ -93,7 +108,7 @@ if (R2::enabled()) {
         profile_app_json(500, ['error' => 'store_unwritable', 'hint' => 'provision ' . LG_BANNER_STORE . ' (chown to the FPM user)']);
     }
     $dest = $dir . '/' . $fn;
-    if (!@move_uploaded_file($tmp, $dest)) profile_app_json(500, ['error' => 'write_failed']);
+    if (@file_put_contents($dest, $bytes) === false) profile_app_json(500, ['error' => 'write_failed']);
     @chmod($dest, 0644);
 }
 

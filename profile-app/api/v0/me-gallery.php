@@ -1,19 +1,27 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/_bootstrap.php';
+require_once __DIR__ . '/../../src/ImageOptimize.php';
 
 /**
  * Gallery block — image grid in the app-owned media store. Owner-only writes.
  *   GET  → the assembled gallery block (Block::loadGallery).
- *   POST → multipart "image" (jpeg/png/webp ≤5MB): store bytes, append to the list.
+ *   POST → multipart "image" (jpeg/png/webp ≤5MB): COMPRESS (cap 1600px, WebP
+ *          q82, auto-oriented via ImageOptimize), store bytes, append to the list.
  *   PUT  → { images: [{url,caption}], visibility? } — replace the list (remove/reorder/caption/vis).
  *
- * Store:  <LG_GALLERY_STORE>/<uuid>/<rand>.<ext>   served at /profile-media/gallery/<uuid>/<rand>.<ext>
+ * Store:  <LG_GALLERY_STORE>/<uuid>/<rand>.webp   served at /profile-media/gallery/<uuid>/<rand>.webp
  * (nginx serves /profile-media/ from /srv/profile-app-media/, cookie-gated.)
+ *
+ * Compression mirrors the avatar path (me-avatar.php): a multi-MB phone capture
+ * was previously stored at FULL original size and orientation — galleries now
+ * cap+orient at write so the stored original is never larger than the 1600px
+ * carousel ever serves, and EXIF-rotated phone photos store upright.
  */
 
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Block;
+use Looth\ProfileApp\ImageOptimize;
 use Looth\ProfileApp\R2;
 
 const LG_GALLERY_STORE = '/srv/profile-app-media/gallery';
@@ -45,10 +53,23 @@ if ($method === 'POST') {
     $current = Block::loadGallery($uid)['images'];
     if (count($current) >= Block::GALLERY_MAX) profile_app_json(400, ['error' => 'gallery_full', 'max' => Block::GALLERY_MAX]);
 
+    // Compress / cap / auto-orient at write time (cap 1600px, WebP q82). Fall back
+    // to the raw upload only if the bytes are un-decodable, so a valid photo is
+    // never dropped — same contract as the avatar path.
+    $raw = @file_get_contents($tmp);
+    if ($raw === false) profile_app_json(500, ['error' => 'read_failed']);
+    $mime = (string)($info['mime'] ?? 'application/octet-stream');
+    try {
+        [$bytes, $ext] = ImageOptimize::gallery($raw);
+        $mime = 'image/webp';
+    } catch (\Throwable $e) {
+        $bytes = $raw;                          // keep $ext from the validated mime
+        error_log('[me-gallery] optimize fallback (raw .' . $ext . '): ' . $e->getMessage());
+    }
+
     $fn = bin2hex(random_bytes(8)) . '.' . $ext;
     if (R2::enabled()) {
-        $bytes = @file_get_contents($tmp);
-        if ($bytes === false || !R2::put('gallery/' . $uuid . '/' . $fn, $bytes, (string)$info['mime'])) {
+        if (!R2::put('gallery/' . $uuid . '/' . $fn, $bytes, $mime)) {
             profile_app_json(500, ['error' => 'write_failed']);
         }
     } else {
@@ -57,7 +78,7 @@ if ($method === 'POST') {
             profile_app_json(500, ['error' => 'store_unwritable', 'hint' => 'provision ' . LG_GALLERY_STORE]);
         }
         $dest = $dir . '/' . $fn;
-        if (!@move_uploaded_file($tmp, $dest)) profile_app_json(500, ['error' => 'write_failed']);
+        if (@file_put_contents($dest, $bytes) === false) profile_app_json(500, ['error' => 'write_failed']);
         @chmod($dest, 0644);
     }
 
