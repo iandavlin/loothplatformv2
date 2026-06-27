@@ -46,27 +46,41 @@ final class Tick
         try {
 
         // Pass 1: Stripe poll
-        try {
-            $client  = new StripeClient();
-            $handler = new StripeEventHandler( $client );
-            $poller  = new StripePoller( $client, $handler );
-            $result  = $poller->poll();
+        //
+        // Stripe R&D paused — resume here when the Stripe system restarts.
+        // The Stripe alpha is decommissioned behind a real off-switch:
+        // get_option('lgms_stripe_frozen') DEFAULTS TRUE (frozen). While frozen
+        // the Stripe poll is skipped entirely — no StripeClient is constructed,
+        // no Stripe API call is made, and EventHandler's wp_mail() can never
+        // fire. Set the option to a falsey value to resume Stripe polling.
+        if ( (bool) get_option( 'lgms_stripe_frozen', true ) ) {
             @file_put_contents( $log, sprintf(
-                "[%s] stripe poll: status=%s processed=%d cursor=%s\n",
-                gmdate( 'c' ),
-                $result['status'],
-                $result['processed'],
-                $result['cursor'] ?? '(none)',
+                "[%s] stripe poll SKIPPED: lgms_stripe_frozen (Stripe R&D paused)\n",
+                gmdate( 'c' )
             ), FILE_APPEND );
-            foreach ( $result['log'] as $entry ) {
-                @file_put_contents( $log, "  {$entry}\n", FILE_APPEND );
+        } else {
+            try {
+                $client  = new StripeClient();
+                $handler = new StripeEventHandler( $client );
+                $poller  = new StripePoller( $client, $handler );
+                $result  = $poller->poll();
+                @file_put_contents( $log, sprintf(
+                    "[%s] stripe poll: status=%s processed=%d cursor=%s\n",
+                    gmdate( 'c' ),
+                    $result['status'],
+                    $result['processed'],
+                    $result['cursor'] ?? '(none)',
+                ), FILE_APPEND );
+                foreach ( $result['log'] as $entry ) {
+                    @file_put_contents( $log, "  {$entry}\n", FILE_APPEND );
+                }
+            } catch ( Throwable $e ) {
+                @file_put_contents( $log, sprintf(
+                    "[%s] stripe poll FAILED: %s\n",
+                    gmdate( 'c' ),
+                    $e->getMessage(),
+                ), FILE_APPEND );
             }
-        } catch ( Throwable $e ) {
-            @file_put_contents( $log, sprintf(
-                "[%s] stripe poll FAILED: %s\n",
-                gmdate( 'c' ),
-                $e->getMessage(),
-            ), FILE_APPEND );
         }
 
         // Pass 1.5: expiry sweep — revoke elapsed gift-code entitlements
