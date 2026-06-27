@@ -27,11 +27,11 @@ $slug = $_GET['slug'] ?? '';
 if (!is_string($slug) || $slug === '') { http_response_code(404); echo 'not found'; exit; }
 
 $pg = Db::pg();
-$q = $pg->prepare('SELECT id, uuid, display_name, slug, profile_visibility FROM users WHERE slug = :s');
+$q = $pg->prepare('SELECT id, uuid, display_name, slug, profile_visibility, avatar_url, at_a_glance, business_name FROM users WHERE slug = :s');
 $q->execute([':s' => $slug]);
 $row = $q->fetch();
 if (!$row && ctype_digit($slug)) {
-    $q = $pg->prepare('SELECT id, uuid, display_name, slug, profile_visibility FROM users WHERE id = :i');
+    $q = $pg->prepare('SELECT id, uuid, display_name, slug, profile_visibility, avatar_url, at_a_glance, business_name FROM users WHERE id = :i');
     $q->execute([':i' => (int)$slug]);
     $row = $q->fetch();
 }
@@ -113,12 +113,59 @@ if ($isOwner || $adminEditing) {
         if ($dv === 'public' || $dv === 'member') $discussionVis = $dv;
     }
 }
+
+// ── SEO <head> data (dependency-free; covers up to 1,915 public profile URLs) ──
+// Location is deliberately OMITTED: location_visibility is 'members' for ~all
+// users, so surfacing it in the public head would leak a members-only field.
+$seoHost   = $_SERVER['HTTP_HOST'] ?? 'loothgroup.com';
+$seoCanon  = 'https://' . $seoHost . '/u/' . rawurlencode($slugSafe);
+$seoBiz    = trim((string) ($row['business_name'] ?? ''));
+$seoGlance = trim((string) ($row['at_a_glance'] ?? ''));
+$seoDescRaw = $seoGlance !== ''
+    ? $seoGlance
+    : $displayName . ($seoBiz !== '' ? ' — ' . $seoBiz : '')
+        . ' on The Looth Group, the community for luthiers, instrument builders, and repair specialists.';
+$seoDescRaw = trim(preg_replace('/\s+/', ' ', $seoDescRaw));
+if (function_exists('mb_strlen') && mb_strlen($seoDescRaw) > 160) {
+    $seoDescRaw = rtrim(mb_substr($seoDescRaw, 0, 157)) . '…';
+}
+$seoAvatar = trim((string) ($row['avatar_url'] ?? ''));
+if ($seoAvatar !== '' && $seoAvatar[0] === '/') $seoAvatar = 'https://' . $seoHost . $seoAvatar;
+// Thin auto-generated patreon_<NNNNN> placeholders: noindex (matches the sitemap
+// exclusion) so Google skips ~1,639 near-empty pages. Real profiles index normally.
+$seoIndex = !preg_match('/^patreon_[0-9]+$/', $slugSafe);
+$seoLd = [
+    '@context'   => 'https://schema.org',
+    '@type'      => 'ProfilePage',
+    'mainEntity' => array_filter([
+        '@type'    => 'Person',
+        'name'     => $displayName,
+        'url'      => $seoCanon,
+        'image'    => $seoAvatar !== '' ? $seoAvatar : null,
+        'worksFor' => $seoBiz !== '' ? ['@type' => 'Organization', 'name' => $seoBiz] : null,
+    ], fn($v) => $v !== null),
+];
 ?>
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= looth_h($displayName) ?> · Looth</title>
+<meta name="robots" content="<?= $seoIndex ? 'index, follow' : 'noindex, follow' ?>">
+<meta name="description" content="<?= looth_h($seoDescRaw) ?>">
+<link rel="canonical" href="<?= looth_h($seoCanon) ?>">
+<meta property="og:type" content="profile">
+<meta property="og:title" content="<?= looth_h($displayName) ?> · Looth">
+<meta property="og:description" content="<?= looth_h($seoDescRaw) ?>">
+<meta property="og:url" content="<?= looth_h($seoCanon) ?>">
+<?php if ($seoAvatar !== ''): ?><meta property="og:image" content="<?= looth_h($seoAvatar) ?>">
+<?php endif; ?><meta property="og:site_name" content="Looth Group">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="<?= looth_h($displayName) ?> · Looth">
+<meta name="twitter:description" content="<?= looth_h($seoDescRaw) ?>">
+<?php if ($seoAvatar !== ''): ?><meta name="twitter:image" content="<?= looth_h($seoAvatar) ?>">
+<?php endif; ?>
+<script type="application/ld+json"><?= json_encode($seoLd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
 <?php if ($adminEditing): ?>
 <script>
 /* Admin-edit transport shim: every editor save targets /profile-api/v0/me/*;
