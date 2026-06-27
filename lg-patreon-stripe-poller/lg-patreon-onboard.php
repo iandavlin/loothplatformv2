@@ -11,14 +11,19 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'LGPO_VERSION', '2.4.2' );
-define( 'LGPO_PLUGIN_FILE', __FILE__ );
-define( 'LGPO_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
-define( 'LGPO_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+// Path/URL constants are guarded with !defined() because this plugin now ships
+// as a MUST-USE plugin: the mu-plugins/ root loader
+// (mu-plugins/lg-patreon-stripe-poller.php) pins LGPO_PLUGIN_FILE/DIR/URL to the
+// subfolder before require_once'ing this file. plugin_dir_path/url resolve
+// correctly under mu-plugins too, so a direct (regular-plugin) load still works.
+if ( ! defined( 'LGPO_VERSION' ) )     define( 'LGPO_VERSION', '2.4.2' );
+if ( ! defined( 'LGPO_PLUGIN_FILE' ) ) define( 'LGPO_PLUGIN_FILE', __FILE__ );
+if ( ! defined( 'LGPO_PLUGIN_DIR' ) )  define( 'LGPO_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+if ( ! defined( 'LGPO_PLUGIN_URL' ) )  define( 'LGPO_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
 // Alias for the LGMS\* code paths (Stripe poller, arbiter, REST endpoints).
 // They originated in a separate `lg-member-sync` plugin and were folded in here.
-define( 'LGMS_PLUGIN_DIR', LGPO_PLUGIN_DIR );
+if ( ! defined( 'LGMS_PLUGIN_DIR' ) )  define( 'LGMS_PLUGIN_DIR', LGPO_PLUGIN_DIR );
 
 // Composer autoload for the LGMS\* namespace (Stripe poller + arbiter + provisioner).
 if ( file_exists( LGPO_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
