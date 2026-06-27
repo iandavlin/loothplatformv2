@@ -422,7 +422,10 @@ function row_jsonld(array $row): string {
 $hero = $rendered_rows[0]['items'][0] ?? null;
 $og_image = $hero ? thumb_url($hero) : LG_FALLBACK_IMG;
 
-$canonical = LG_ARCHIVE_POC_CANONICAL_BASE.'/front-page/';
+// Home serves at `/` (with `/front-page/` as an alias). Canonical must be the
+// real root `/`, not the alias, so Google consolidates on `/` and doesn't split
+// or drop the homepage.
+$canonical = LG_ARCHIVE_POC_CANONICAL_BASE.'/';
 
 // Pre-baked window.__ROWS__ so JS can hydrate without re-fetching.
 $client_state = [

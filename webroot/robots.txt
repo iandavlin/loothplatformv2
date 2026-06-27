@@ -1,3 +1,13 @@
 User-agent: *
-Disallow: /
+Allow: /
+Disallow: /archive-api/
+Disallow: /profile-api/
+Disallow: /bb-mirror-api/
+Disallow: /claim
+Disallow: /claim-tester
+Disallow: /thumb/
+Disallow: /mailpit/
+Disallow: /*?lg_edit=1
+Disallow: /*?lg_comments=1
 
+Sitemap: https://loothgroup.com/sitemap.xml

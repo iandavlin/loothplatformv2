@@ -63,12 +63,14 @@ echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
 
 try {
     if ($section === 'static') {
+        // Only advertise URLs that are index,follow at the page level. /archive/
+        // and /calendar/ are noindex (search/thin); /about/ + /sponsors/ are
+        // noindex placeholder stubs (the shared _page-shell hard-codes noindex).
+        // Listing a noindex URL in the sitemap is a self-contradiction Google
+        // flags — drop them here. When /about/ + /sponsors/ get real copy and are
+        // flipped to index (add an $index param to lg_page_open), re-add them.
         $emit('/', null, 'daily');
         $emit('/hub/', null, 'daily');
-        $emit('/archive/', null, 'daily');
-        $emit('/calendar/', null, 'weekly');
-        $emit('/sponsors/', null, 'weekly');
-        $emit('/about/', null, 'monthly');
 
     } elseif ($section === 'content') {
         $db = lg_archive_poc_pdo(); // looth, search_path = discovery
@@ -96,6 +98,11 @@ try {
               FROM users
              WHERE profile_visibility = 'public'
                AND slug IS NOT NULL AND slug <> ''
+               -- Exclude auto-generated patreon_<NNNNN> placeholder slugs
+               -- (~1,639 of 1,915): thin/empty profiles that burn crawl budget
+               -- and risk a thin-content penalty. /u.php noindexes the same set,
+               -- so sitemap and page-level robots agree.
+               AND slug !~ '^patreon_[0-9]+$'
              ORDER BY updated_at DESC
         ");
         foreach ($rows as $r) {
