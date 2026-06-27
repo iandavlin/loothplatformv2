@@ -1,3 +1,8 @@
+> ⛔ **STRIPE R&D PAUSED (Ian, 2026-06-11) — resume here when the Stripe system restarts.**
+> The Patreon+Stripe poller gates Stripe behind `lgms_stripe_frozen` (default TRUE = frozen);
+> see `lg-patreon-stripe-poller` (commit 387adc6) for the freeze + "R&D paused" code banners.
+> Do NOT resume the billing checklist or wire live Stripe until Ian re-opens it.
+
 # Pickup — lg-stripe-billing
 
 *Updated: 2026-05-09 (session 16)*
