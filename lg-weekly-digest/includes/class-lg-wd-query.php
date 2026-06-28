@@ -307,6 +307,33 @@ class LG_WD_Query {
         return array_map( fn( $p ) => self::normalize_post( $p, $excerpt_length ), $posts );
     }
 
+    /**
+     * Canonical Hub URL for forum content. bbPress topics/replies otherwise emit the legacy
+     * BuddyBoss /groups/.../forum/topic/<slug>/ permalink, which only reaches the Hub via a
+     * fragile nginx->bb-mirror->301 chain that silently falls to the bare /hub/ feed when a
+     * topic is missing/stale in the PG mirror. Build /hub/<forum>/<topic>/ directly at source.
+     * Non-forum post types keep get_permalink().
+     */
+    public static function hub_url( \WP_Post $post ): string {
+        if ( $post->post_type === 'topic' && function_exists( 'bbp_get_topic_forum_id' ) ) {
+            $forum_id   = (int) bbp_get_topic_forum_id( $post->ID );
+            $forum_slug = $forum_id ? get_post_field( 'post_name', $forum_id ) : '';
+            if ( $forum_slug && $post->post_name ) {
+                return home_url( '/hub/' . $forum_slug . '/' . $post->post_name . '/' );
+            }
+        }
+        if ( $post->post_type === 'reply' && function_exists( 'bbp_get_reply_topic_id' ) ) {
+            $topic_id   = (int) bbp_get_reply_topic_id( $post->ID );
+            $forum_id   = ( $topic_id && function_exists( 'bbp_get_topic_forum_id' ) ) ? (int) bbp_get_topic_forum_id( $topic_id ) : 0;
+            $forum_slug = $forum_id ? get_post_field( 'post_name', $forum_id ) : '';
+            $topic_slug = $topic_id ? get_post_field( 'post_name', $topic_id ) : '';
+            if ( $forum_slug && $topic_slug ) {
+                return home_url( '/hub/' . $forum_slug . '/' . $topic_slug . '/' );
+            }
+        }
+        return get_permalink( $post );
+    }
+
     public static function normalize_post( \WP_Post $post, int $excerpt_length = 20 ): array {
         $thumb_url = has_post_thumbnail( $post->ID )
             ? get_the_post_thumbnail_url( $post->ID, 'large' )
@@ -324,7 +351,7 @@ class LG_WD_Query {
         return [
             'id'         => $post->ID,
             'title'      => get_the_title( $post ),
-            'url'        => get_permalink( $post ),
+            'url'        => self::hub_url( $post ),
             'excerpt'    => self::clean_excerpt( $post, $excerpt_length ),
             'thumb_url'  => $thumb_url,
             'date'       => get_the_date( 'M j', $post ),
