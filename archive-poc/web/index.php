@@ -809,6 +809,41 @@ foreach ($main_rows as $row):
           <?php /* Weekly Digest entry — BOTH audiences (Ian 6/12); /weekly/ is
                    members-gated server-side, so anon clicking through gets the
                    sign-in card (a join nudge, not a leak). */ ?>
+          <?php if (!$is_member): ?>
+          <?php /* Weekly-email signup on the front page (Ian 6/12 "offer it to
+                   logged out"): non-members capture their email into the CRM
+                   with double opt-in via the live lg_weekly_signup handler
+                   (mu-plugins/lg-event-reminders.php, FluentCRM list 7).
+                   Members are auto-subscribed at registration, so they see only
+                   the Read link below. Mirrors the /weekly/ page subscribe bar
+                   (the old WP [weekly_digest] shortcode modal does not render on
+                   this standalone front page, so the button was missing here). */ ?>
+          <form class="lg-bento__wksub" id="lg-wk-fp-sub">
+            <div class="lg-bento__wksub-txt"><b>&#128236; Get the Weekly Digest by email</b>
+              <small>Free &mdash; luthier events, new videos, and shop talk, every week.</small></div>
+            <input type="text" name="website" class="lg-bento__wksub-hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+            <div class="lg-bento__wksub-row">
+              <input type="email" name="email" required placeholder="you@example.com" aria-label="Email address">
+              <button type="submit">Subscribe</button>
+            </div>
+          </form>
+          <script>
+          (function(){var f=document.getElementById('lg-wk-fp-sub');if(!f)return;
+            f.addEventListener('submit',function(e){e.preventDefault();
+              var b=f.querySelector('button');b.disabled=true;b.textContent='Subscribing\u2026';
+              var data=new URLSearchParams();data.set('action','lg_weekly_signup');
+              data.set('email',f.email.value);data.set('website',f.website.value);
+              fetch('/wp-admin/admin-ajax.php',{method:'POST',credentials:'same-origin',
+                headers:{'Content-Type':'application/x-www-form-urlencoded'},body:data.toString()})
+              .then(function(r){return r.json()}).then(function(j){
+                if(j&&j.ok){f.innerHTML='<div class="lg-bento__wksub-txt"><b>'+
+                  (j.state==='subscribed'?'You\u2019re subscribed \u2713':'Check your inbox \u2709')+'</b><small>'+
+                  (j.state==='subscribed'?'The next digest will land in your inbox.':'Click the confirmation link we just sent and you\u2019re in.')+'</small></div>';}
+                else{b.disabled=false;b.textContent='Subscribe';alert(j&&j.error==='bad_email'?'That email doesn\u2019t look right.':'Could not subscribe \u2014 try again.');}
+              }).catch(function(){b.disabled=false;b.textContent='Subscribe';});
+            });})();
+          </script>
+          <?php endif; ?>
           <a class="lg-bento__weekly" href="/weekly/">
             <span class="lg-bento__weekly-ico" aria-hidden="true">&#128236;</span>
             <span class="lg-bento__weekly-txt"><b>Weekly Digest</b>
