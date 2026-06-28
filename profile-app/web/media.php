@@ -23,6 +23,42 @@ require_once __DIR__ . '/../config.php';
 use Looth\ProfileApp\Visibility;
 use Looth\ProfileApp\R2;
 
+/**
+ * EXIF orientation (1..8) of JPEG $bytes — or 1 when none / not JPEG / no exif ext.
+ * GD strips and IGNORES EXIF orientation, so the ?w= resizer must bake it in or a
+ * phone photo (orientation 6/8) serves sideways. webp/png originals carry no EXIF
+ * orientation here, so they return 1 and are left untouched (the avatar/gallery
+ * upload path already stores upright webp via ImageOptimize).
+ */
+function lg_media_exif_orientation(string $bytes): int
+{
+    if (!function_exists('exif_read_data')) return 1;
+    if (strncmp($bytes, "\xFF\xD8", 2) !== 0) return 1;                   // JPEG SOI only
+    $exif = @exif_read_data('data://image/jpeg;base64,' . base64_encode($bytes));
+    $o = (is_array($exif) && isset($exif['Orientation'])) ? (int)$exif['Orientation'] : 1;
+    return ($o >= 1 && $o <= 8) ? $o : 1;
+}
+
+/**
+ * Bake an EXIF orientation into GD pixels (mirrors ImageOptimize::applyOrientation
+ * on the Imagick side). GD imagerotate is COUNTER-clockwise, so EXIF 6 (display
+ * needs +90 CW) = imagerotate(-90). Flip cases mutate in place and return the same
+ * resource; rotate cases return a NEW resource — the caller frees the original then.
+ */
+function lg_media_gd_orient($im, int $o)
+{
+    switch ($o) {
+        case 2: imageflip($im, IMG_FLIP_HORIZONTAL); return $im;
+        case 3: return imagerotate($im, 180, 0);
+        case 4: imageflip($im, IMG_FLIP_VERTICAL); return $im;
+        case 5: imageflip($im, IMG_FLIP_HORIZONTAL); return imagerotate($im, -90, 0);
+        case 6: return imagerotate($im, -90, 0);
+        case 7: imageflip($im, IMG_FLIP_HORIZONTAL); return imagerotate($im, 90, 0);
+        case 8: return imagerotate($im, 90, 0);
+        default: return $im;
+    }
+}
+
 $path = (string)($_GET['path'] ?? '');
 if (!preg_match('#^(avatars|banners|gallery|resumes)/([0-9a-fA-F-]{36})/([A-Za-z0-9][A-Za-z0-9._ -]*)$#', $path, $m)
     || str_contains($m[3], '..')) {
@@ -77,6 +113,13 @@ if ($resizable) {
                     try {
                         $im = @imagecreatefromstring($bytes);
                         if ($im) {
+                            // Bake EXIF orientation BEFORE measuring/resampling so a
+                            // phone-JPEG original resizes upright (GD ignores EXIF).
+                            $exifO = lg_media_exif_orientation($bytes);
+                            if ($exifO > 1) {
+                                $rot = lg_media_gd_orient($im, $exifO);
+                                if ($rot && $rot !== $im) { imagedestroy($im); $im = $rot; }
+                            }
                             $ow = imagesx($im); $oh = imagesy($im);
                             if ($ow > $w) {
                                 $nh = (int)round($oh * $w / $ow);
