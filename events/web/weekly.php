@@ -60,7 +60,7 @@ if ($slug !== '') {
     if (!$issue) { http_response_code(404); }
     else {
         $title = (string)$issue['post']['post_title'] . ' — The Looth Group';
-        $emailHtml = lg_weekly_campaign_html($db, $issue['data'], !$authed);
+        $emailHtml = lg_weekly_campaign_html($db, $issue['data'], !$authed, (string)$issue['post']['post_title']);
         // LEAD (current, unsent) issue has no sent FluentCRM body → render the
         // email on the fly from the issue's section data so the lead previews
         // as the real email instead of the plain web-card fallback (Ian 6/14).

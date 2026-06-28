@@ -132,15 +132,36 @@ function lg_weekly_latest_slug(PDO $db): string
  * isolated iframe so it displays "just like the email" (Ian 6/12) — with the
  * email-only unsubscribe footer line removed.
  */
-function lg_weekly_campaign_html(PDO $db, array $issueData, bool $maskAuthors = false): string
+function lg_weekly_campaign_html(PDO $db, array $issueData, bool $maskAuthors = false, string $expectTitle = ''): string
 {
     $cid = (int)($issueData['campaign_id'] ?? 0);
     if ($cid < 1) return '';
-    $st = $db->prepare("SELECT email_body FROM wp_fc_campaigns WHERE id = :i");
+    $st = $db->prepare("SELECT title, email_body FROM wp_fc_campaigns WHERE id = :i");
     $st->execute([':i' => $cid]);
-    $html = (string)($st->fetchColumn() ?: '');
+    $row = $st->fetch();
+    if (!$row) return '';
+    // Campaign-id drift guard: a dev DB reload recycles FluentCRM campaign IDs,
+    // so a stored campaign_id can resolve to an UNRELATED campaign (e.g. an
+    // "Event Reminder: ..." blast) that would then render in place of the digest
+    // in the /weekly/ archive. The sender always names the campaign after the
+    // issue (campaign_title = issue title), so only trust the stored campaign
+    // when its title matches this issue; otherwise return '' and let the caller
+    // rebuild the email from the issue's own curated sections (digest-shaped).
+    if ($expectTitle !== ''
+        && lg_weekly_norm_title((string)($row['title'] ?? '')) !== lg_weekly_norm_title($expectTitle)) {
+        return '';
+    }
+    $html = (string)($row['email_body'] ?? '');
     if ($html === '') return '';
     return lg_weekly_email_chrome($html, $maskAuthors);
+}
+
+/** Normalize a campaign/issue title for tolerant equality (entities, whitespace, case). */
+function lg_weekly_norm_title(string $s): string
+{
+    $s = html_entity_decode($s, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $s = preg_replace('/\s+/u', ' ', $s) ?? $s;
+    return trim(function_exists('mb_strtolower') ? mb_strtolower($s, 'UTF-8') : strtolower($s));
 }
 
 /**
