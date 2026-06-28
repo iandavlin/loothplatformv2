@@ -236,14 +236,14 @@ from `/srv/<app>` symlinks. Storage verified live.
 | **bb-mirror** | `/hub/`, forum read/write API, SEO redirects | `/srv/bb-mirror` → `~/loothplatformv2-serve/bb-mirror` (serve clone, since 6/20) | **PG `looth.forums`** (9 tables) |
 | **events** | `/events/` | `/srv/events` → `~/projects/events` | reads WP `event` CPT / shared PG |
 | **lg-stripe-billing** | `/billing*` (gate-exempt) | `/srv/lg-stripe-billing` (real dir, `www-data`) | **MySQL `lg_membership`** |
-| **membership-pages** | membership WP pages | `/srv/membership` (membership user) | WP |
+| **membership-pages** | membership/Stripe WP pages — single `router.php` (manage-subscription, join, lgjoin, connect-your-patreon, welcome, lggift/lggift-buy/my-gifts, affiliate-earnings, request-refund, membership-guide, …) | `/srv/membership-pages` → `~/loothplatformv2-serve/membership-pages` (serve clone, since **6/28**) | WP MySQL (RO) + poller MySQL |
 | **thumb-app** | `/thumb/` image resizer/thumbnailer | `/srv/thumb-app` (real dir, uid 1004) | local `config.json` + assets |
 | **lg-shell / lg-shared** | the ONE canonical site header `/srv/lg-shared/site-header.php` + `lg-env.php` helper; all consumers populate `$ctx` from `/whoami` | `/srv/lg-shared` → `~/projects/lg-shared` | n/a (template lib) |
 
 **Serve paths updated 6/20:** the `→ ~/projects/*` shown above is the pre-migration audit.
 **All 5 repo apps — profile-app, archive-poc, events, lg-shared, bb-mirror — now symlink to
 the pristine serve clone `~/loothplatformv2-serve`** (deploy = `git pull` there; see §13).
-`lg-stripe-billing` / `membership-pages` / `thumb-app` are separate real dirs, not repo-served.
+`lg-stripe-billing` / `thumb-app` are separate real dirs, not repo-served. **`membership-pages` now serves from the serve clone too** (`/srv/membership-pages`, lane `serve-consolidate-membership` 6/28) — off the dead `~/projects` repo.
 
 **✅ Preview-a is now a FAITHFUL preview of ALL dynamic surfaces (true-preview lane, 2026-06-27).**
 The `preview-a.dev2.loothgroup.com` vhost includes `*-preview-a.conf` variants for EVERY app —
@@ -421,10 +421,15 @@ pristine `main` clone. The architecture (three trees, never conflated):
   (`git worktree add ~/worktrees/lpv2-<task> -b <task> main`). See GIT-PROTOCOL.
 - **Pristine serve clone** `~/loothplatformv2-serve` — on `main`, never hand-edited. **This is
   what `/srv` points at.** Deploy = `git pull` here + reload php-fpm.
-- **Served from the serve clone (100%, since 6/20):** `/srv/{profile-app,events,lg-shared,
-  archive-poc,bb-mirror}` + WP plugins `lg-layout-v2, lg-legacy-import, lg-snippets` +
-  mu-plugins `lg-siteurl-from-env.php`, `lg-secrets-dash.php`. Nothing app-facing serves off
-  `~/projects` anymore (the old `lg-layout` plugin is legacy/unused, left as-is).
+- **Served from the serve clone (since 6/20; membership-pages + the `/v2/` lg-layout-v2
+  asset mount folded in 6/28):** `/srv/{profile-app,events,lg-shared,archive-poc,bb-mirror,
+  membership-pages,lg-layout-v2}` + WP plugins `lg-layout-v2, lg-legacy-import, lg-snippets` +
+  mu-plugins `lg-siteurl-from-env.php`, `lg-secrets-dash.php`. **6/28 (lane
+  `serve-consolidate-membership`):** the last two app-facing surfaces still on the dead
+  `~/projects` repo — ALL membership pages (`strangler-membership.conf` `alias` +
+  `SCRIPT_FILENAME`) and the `/v2/` asset alias (in the site vhost) — were repointed to `/srv`.
+  Nothing app-facing serves off `~/projects` anymore (the old `lg-layout` plugin is
+  legacy/unused, left as-is). See **SERVE-CONSOLIDATE-MEMBERSHIP-RUNBOOK.md**.
 - **bb-mirror de-fork DONE (6/20):** it used to serve from a worktree of the OLD
   `looth-platform` repo; `loothplatformv2/bb-mirror` was content-identical (0 diff) to what it
   served, so the flip was **commit-free** — the stale `bespoke-cutover` commit history was NOT
@@ -476,10 +481,12 @@ artifacts. PROVEN byte-identical.
 - **What IS in the repo:** app source (profile-app, archive-poc, bb-mirror, events,
   lg-stripe-billing, thumbnails), WP plugins source, mu-plugins (`platform/mu-plugins`),
   webroot static layer, infra/tools/docs.
-- **Repo-served (LIVE 6/20):** `/srv/{profile-app,events,lg-shared,archive-poc}` + the
+- **Repo-served (LIVE 6/20; membership-pages + `/v2/` asset mount added 6/28):**
+  `/srv/{profile-app,events,lg-shared,archive-poc,bb-mirror,membership-pages,lg-layout-v2}` + the
   lg-layout-v2/lg-legacy-import/lg-snippets plugins serve from the pristine `~/loothplatformv2-serve`
   clone on `main` (§13). **Deploy these = `git pull` in the serve clone + reload php-fpm.**
-  Only `bb-mirror` (worktree fork) + the old `lg-layout` plugin remain off-repo.
+  The dead `~/projects` (branch `lane-profile-app`, retired `iandavlin/looth-platform`) is no
+  longer in any serve path; only the old `lg-layout` plugin remains legacy/unused.
 - **Webroot overlay layer (6/25):** repo-authoritative, two serve models — **dev2 =
   pull/symlink** (`git pull` serve clone, zero docroot edits), **live = push/rsync** via
   `deploy/deploy.sh` (new `webroot` stanza, **guarded**: refuses any target whose overlays are
@@ -496,10 +503,13 @@ artifacts. PROVEN byte-identical.
 
 - **Avatar reader-repoint PENDING** (§11): bucket has the consolidated set; hub +
   WP get_avatar still read the old source.
-- **Serve-from-git — ✅ COMPLETE (6/20):** all app surfaces serve from the pristine
-  `~/loothplatformv2-serve` clone (incl. bb-mirror + both mu-plugins); deploy = `git pull`.
-  No serve-from-git gaps remain. (bb-mirror flip was commit-free; stale `bespoke-cutover`
-  history was NOT merged.)
+- **Serve-from-git — ✅ COMPLETE (6/20; final two surfaces folded 6/28):** all app surfaces
+  serve from the pristine `~/loothplatformv2-serve` clone (incl. bb-mirror + both mu-plugins);
+  deploy = `git pull`. **6/28 (lane `serve-consolidate-membership`)** closed the last gap: the
+  membership pages (`strangler-membership.conf`) and the `/v2/` lg-layout-v2 asset alias still
+  pointed at the dead `~/projects` repo and are now on `/srv` (serve clone). See
+  **SERVE-CONSOLIDATE-MEMBERSHIP-RUNBOOK.md**. No serve-from-git gaps remain. (bb-mirror flip was
+  commit-free; stale `bespoke-cutover` history was NOT merged.)
 - **At-cut provisioning must re-apply the serve-tree ACLs** (§13): `web/assets` + archive-poc
   dir/config/sqlite write via ACL (never chown tracked paths — breaks `git pull`).
 - **MySQL `looth_dev` vs `looth_import` drift** (§10) — one billing config still names
