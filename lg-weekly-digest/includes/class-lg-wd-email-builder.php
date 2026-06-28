@@ -161,11 +161,14 @@ class LG_WD_Email_Builder {
         $nicename = get_the_author_meta( 'user_nicename', $author_id );
         $url      = '';
 
-        // bbPress topic → BuddyBoss member forums tab (/members/{slug}/forums/)
-        if ( get_post_type( $post_id ) === 'topic' && function_exists( 'bp_core_get_user_domain' ) ) {
-            $member_url = bp_core_get_user_domain( $author_id );
-            if ( $member_url ) {
-                $url = trailingslashit( $member_url ) . 'forums/';
+        // bbPress topic -> author's public profile (/u/<slug>) in the new system.
+        // Prefer the healed _looth_slug mirror; fall back to user_nicename (same
+        // convention lg-membership-chrome uses for the account chip).
+        if ( get_post_type( $post_id ) === 'topic' ) {
+            $slug = get_user_meta( $author_id, '_looth_slug', true );
+            if ( ! $slug ) { $slug = $nicename; }
+            if ( $slug ) {
+                $url = home_url( '/u/' . rawurlencode( $slug ) );
             }
         }
 
