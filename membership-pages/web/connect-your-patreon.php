@@ -68,7 +68,7 @@ $asset_v = (string) (@filemtime(__DIR__ . '/join.css') ?: '1');
 
         <section class="lg-join__card lg-join__card--success">
             <p class="lg-join__pill lg-join__pill--ok">Account linked</p>
-            <p>Your Patreon is linked. <strong>Check your email to set a password</strong>, then you're in.</p>
+            <p>Your Patreon is linked and you're logged in. <strong>Set a password</strong> so you can sign in directly next time &mdash; or skip it and just reconnect with Patreon whenever you like.</p>
             <p><a class="lg-join__cta" href="<?= $h($manage_url) ?>">Go to your membership &rarr;</a></p>
         </section>
 
@@ -104,8 +104,8 @@ $asset_v = (string) (@filemtime(__DIR__ . '/join.css') ?: '1');
             <ol class="lg-join__steps">
                 <li><strong>Make sure your pledge is active.</strong> Your membership itself lives on Patreon — if you haven't joined yet, <a class="lg-join__link" href="<?= $h($become_patron) ?>" target="_blank" rel="noopener">join on Patreon</a> first, then come back here.</li>
                 <li><strong>Click the button below</strong> and authorize with the <em>same Patreon account</em> you pledge with. You'll bounce to Patreon and right back.</li>
-                <li><strong>Check your email.</strong> We create your Looth account on the spot and send a link to set your password — it usually arrives within a couple of minutes (peek at spam if not).</li>
-                <li><strong>Sign in.</strong> Your content opens up as soon as you set the password and sign in — no waiting period.</li>
+                <li><strong>Set your password.</strong> We create your Looth account on the spot and log you straight in — then we'll show you a quick page to set a password so you can sign in directly next time (you can skip it and just reconnect with Patreon instead).</li>
+                <li><strong>You're in.</strong> Your content opens up the moment you connect — no email, no waiting period.</li>
             </ol>
 
             <div class="lg-join__primary">

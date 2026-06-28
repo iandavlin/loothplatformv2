@@ -75,7 +75,7 @@ $asset_v = (string) (@filemtime(__DIR__ . '/join.css') ?: '1');
 
         <section class="lg-join__card lg-join__card--success">
             <p class="lg-join__pill lg-join__pill--ok">Account linked</p>
-            <p>Your Patreon is linked. <strong>Check your email to set a password</strong>, then you're in.</p>
+            <p>Your Patreon is linked and you're logged in. <strong>Set a password</strong> so you can sign in directly next time &mdash; or skip it and just reconnect with Patreon whenever you like.</p>
             <p><a class="lg-join__cta" href="<?= $h($manage_url) ?>">Go to your membership &rarr;</a></p>
         </section>
 
