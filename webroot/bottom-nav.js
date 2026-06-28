@@ -507,7 +507,6 @@
 
     var head = document.createElement('div'); head.className = 'lt-sheet__head';
     head.innerHTML =
-      '<span class="lt-sheet__avi"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#6b7c52" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.8"/><path d="M5 20c0-3.6 3-6 7-6s7 2.4 7 6"/></svg></span>' +
       '<span class="lt-sheet__id"><span class="lt-sheet__name">Welcome</span>' +
       '<span class="lt-sheet__view">Sign in to join the conversation</span></span>' +
       '<a class="lt-sheet__login" href="' + String(signinHref).replace(/"/g, '&quot;') + '">' +
