@@ -9,7 +9,7 @@ One-time Patreon OAuth onboarding plugin for The Looth Group. Creates WordPress 
 3. Plugin verifies they're an active patron of your campaign
 4. Checks their tier → maps to WordPress role (looth1–looth4)
 5. Creates their WordPress account
-6. Sends them a password-setup email
+6. Logs them in and sends them to the inline /patreon-password/ set-password page (no email)
 7. Stores Patreon User ID as the identity anchor (NOT email)
 
 ## What It Handles

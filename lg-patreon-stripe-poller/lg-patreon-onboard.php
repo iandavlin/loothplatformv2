@@ -570,7 +570,7 @@ function lgpo_query_vars( $vars ) {
  *
  * The callback at /patreon-callback/ will redirect back to <return>?onboarded=<state>
  * on a terminal outcome, with state ∈ {
- *   success           — new account created, password-setup email sent
+ *   success           — new account created, logged in, sent to inline /patreon-password/ set-password page (no email)
  *   already_onboarded — patreon_user_id already maps to a WP user
  *   not_a_patron      — OAuth succeeded but no active Looth Group membership
  *   email_collision   — email matches an existing WP user; manual review queued
@@ -709,7 +709,7 @@ function lgpo_onboard_copy( string $status ): array {
         'success' => [
             'ok'    => true,
             'title' => 'Welcome to The Looth Group',
-            'body'  => "Your account is set up and you're logged in now. We've emailed a set-password link so you can sign back in anytime.",
+            'body'  => "Your account is set up and you're logged in now. Set a password so you can sign in directly next time — or skip it and just reconnect with Patreon whenever you like.",
         ],
         'already_onboarded' => [
             'ok'    => true,

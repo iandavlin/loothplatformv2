@@ -46,9 +46,37 @@ add_action('init', function () {
     $e      = $_GET['pwerr'] ?? '';
     $emsg   = $e === 'short' ? 'Password must be at least 8 characters.'
             : ($e === 'mismatch' ? "Those passwords don't match." : ($e === 'expired' ? 'That form expired &mdash; please try again.' : ''));
+
+    // Canonical shared site chrome — same require + $ctx-up-top pattern as
+    // membership-pages/web/manage-subscription.php. lg-shell owns these partials;
+    // we only populate $ctx. We're inside WP (mu-plugin), so $ctx comes from the
+    // platform-wide in-process viewer builder lg_membership_chrome_viewer()
+    // (lg-membership-chrome.php) — the same identity BB/membership chrome feed the
+    // shared header — instead of the curl-to-/whoami helper the STANDALONE
+    // membership pages use. Reuse, not reinvent. Fallback keeps the page alive if
+    // that mu-plugin is ever absent (viewer is always logged in — guarded above).
+    require '/srv/lg-shared/site-header.php';
+    require '/srv/lg-shared/site-footer.php';
+    $ctx = function_exists('lg_membership_chrome_viewer')
+        ? lg_membership_chrome_viewer()
+        : [
+            'authenticated' => true,
+            'tier'          => 'public',
+            'display_name'  => (string) $u->display_name,
+            'avatar_url'    => (string) get_avatar_url($uid, ['size' => 96]),
+            'capabilities'  => ['manage_options' => user_can($uid, 'manage_options')],
+            'msg_unread'    => null,
+            'notif_unread'  => null,
+            'active_nav'    => '',
+            'logout_url'    => wp_logout_url(home_url('/')),
+            'profile_url'   => $cont,
+        ];
+    $css_ver = @filemtime('/srv/lg-shared/site-header.css') ?: '1';
+
     status_header(200); nocache_headers(); header('Content-Type: text/html; charset=utf-8');
     $eye = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
     ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Looth Group</title>
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?php echo $css_ver; ?>">
 <style>
   body{font-family:system-ui,sans-serif;background:#f6f6f2;margin:0;color:#1A1E12}
   .wrap{max-width:560px;margin:56px auto;padding:0 1.25em}
@@ -65,7 +93,9 @@ add_action('init', function () {
   .skip{display:inline-block;margin-top:1.4em;color:#1A1E12}
   label{font-size:.92em;font-weight:600;display:block;margin-top:.5em}
 </style></head>
-<body><div class="wrap">
+<body>
+<?php if (function_exists('lg_shared_render_site_header')) lg_shared_render_site_header($ctx); ?>
+<div class="wrap">
   <h2><?php echo $change ? 'Change your password' : 'Welcome, ' . esc_html($first) . '!'; ?></h2>
   <div class="card">
     <?php if ($change): ?>
@@ -92,6 +122,7 @@ add_action('init', function () {
   </div>
   <a class="skip" href="<?php echo esc_url($cont); ?>">Skip &mdash; continue to my profile &rarr;</a>
 </div>
+<?php if (function_exists('lg_shared_render_site_footer')) lg_shared_render_site_footer(); ?>
 <script>
 (function(){
   var p1=document.getElementById('p1'),p2=document.getElementById('p2'),go=document.getElementById('go'),err=document.getElementById('err');
