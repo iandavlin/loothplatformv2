@@ -527,6 +527,17 @@
     connRow.textContent = 'Connect Patreon';
     sheet.appendChild(connRow);
 
+    // Reset password (Ian 2026-06-28): the only password action a logged-OUT viewer
+    // can take -- a recovery affordance for people locked out, NOT an in-session
+    // change (there is no session). Canonical WP lost-password URL, same one
+    // wp_lostpassword_url() / snippet 86's $manage_password_url emit. Sits last,
+    // low-emphasis, below the Join / Connect CTAs so it does not outrank them.
+    var pwRow = document.createElement('a');
+    pwRow.className = 'lt-sheet__row';
+    pwRow.href = '/wp-login.php?action=lostpassword';
+    pwRow.textContent = 'Reset password';
+    sheet.appendChild(pwRow);
+
     enableSheetDrag(sheet, closeSheet);
     document.body.appendChild(bd);
     document.body.appendChild(sheet);
