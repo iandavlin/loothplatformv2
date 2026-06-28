@@ -317,7 +317,7 @@ function lg_shared_render_site_header(array $ctx): void
             </li>
             <?php /* Patreon-member-facing — always visible to logged-in members */ ?>
             <li role="none">
-              <a role="menuitem" href="/manage-subscription/">Manage Subscription</a>
+              <a role="menuitem" href="/manage-subscription/">Manage Account</a>
             </li>
             <?php /* "Connect Your Patreon" removed from the logged-in account menu (Ian 6/16):
                      connected members don't need it; the anon connect door lives elsewhere. */ ?>

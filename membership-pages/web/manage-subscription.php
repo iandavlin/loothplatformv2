@@ -75,7 +75,7 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Manage Subscription — The Looth Group</title>
+<title>Manage Account — The Looth Group</title>
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <link rel="stylesheet" href="<?= $h(LG_MEMBERSHIP_PUBLIC_PATH) ?>/manage-subscription.css?v=<?= $h($asset_v) ?>">
 </head>
@@ -85,7 +85,7 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
 
 <main id="lg-main" class="lg-manage-sub__main">
     <header class="lg-manage-sub__head">
-        <h1 class="lg-manage-sub__title">Manage Subscription</h1>
+        <h1 class="lg-manage-sub__title">Manage Account</h1>
     </header>
 
     <?php if ($is_anon): ?>
