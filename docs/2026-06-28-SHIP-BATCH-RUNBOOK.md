@@ -1,5 +1,9 @@
 # 2026-06-28 SHIP BATCH — Live Cutover Runbook (umbrella)
 
+> **Deploy = everything it takes to make live CLEAN and functioning** — ship + verify + decommission
+> what it replaced + remove orphaned/stale artifacts. The job is not done until live carries no dead
+> weight from the change (see §8). This is a standing definition, not a one-off.
+
 Ships the full 8-commit batch merged to `main` (`origin fcfba93 → 275b1cd`) to **LIVE** in one
 ordered motion. **Keeper-gated** — nothing here runs on live without Ian's OK; live = hand-Ian bash.
 
@@ -86,3 +90,30 @@ login OK + `/whoami` 200**.
 ## 7. Full rollback
 Per-step rollbacks above + the SERVE-CONSOLIDATE one-shot. The dead `~/projects` repo stays in place
 as the membership safety net.
+
+## 8. Decommission — leave live CLEAN (part of the deploy, not optional)
+Deploy is "done" only when the replaced artifacts are gone and live carries no dead weight. After §6
+is green and a short **soak** (rollback window closed — Ian's call, e.g. 24–72h):
+
+- **Remove the orphaned `~/projects` serve checkout** (LIVE **and** dev2). It is the retired
+  `looth-platform` / `lane-profile-app` repo; post-cut **nothing** serves from it (verified: no
+  nginx/fpm/router bindings — membership-pages + `/v2` were the last two surfaces). It was the
+  rollback net DURING the cut; once soaked, it goes.
+  ```bash
+  ls -la /home/ubuntu/projects                 # CONFIRM it is purely the dead looth-platform checkout
+  cat /home/ubuntu/projects/.git/HEAD          # -> refs/heads/lane-profile-app
+  git -C /home/ubuntu/projects bundle create ~/looth-platform-FINAL-$(date +%Y%m%d).bundle --all  # final safety bundle
+  sudo rm -rf /home/ubuntu/projects            # only after the bundle + Ian OK
+  ```
+  **Guard:** if `~/projects` holds anything beyond the dead repo, remove only the orphaned subtrees
+  (`membership-pages`, `lg-layout-v2`) — never blind-`rm` a dir with live-needed loose files.
+- **Archive the retired GitHub repo** `iandavlin/looth-platform` (a backup bundle already exists on
+  the keeper box; this is the long-pending GitHub-side archive).
+- **Delete the stray duplicate** `lg-shell/lg-shared/site-header.php` in the repo (dead copy of the
+  canonical `lg-shared/site-header.php` — confirmed not served).
+- **Clean cut-time backups** once soak passes: `*.bak-serveconsol-*`, `*.bak-ship-*` on live.
+- **Docs:** update `docs/atlas/SYSTEM-MAP.md` to record `~/projects` **removed** from the serve path
+  (currently marked "repointed" — mark fully decommissioned).
+
+**Verify CLEAN:** `grep -rn '/home/ubuntu/projects' /etc/nginx /etc/php/8.3/fpm` returns nothing;
+`ls /home/ubuntu/projects` absent (or only non-served remnants); all §6 routes still `200`.
