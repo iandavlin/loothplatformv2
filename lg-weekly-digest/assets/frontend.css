@@ -1,0 +1,732 @@
+/* LG Weekly Digest — Frontend Archive Styles */
+/* Brand: Gold #ECB351, Mint #87986A/#D4E0B8, Dark #2B2318, Mid #5C4E3A, Light #FAF6EE */
+
+.lg-wd-fe-archive {
+  max-width: 1200px;
+  margin: 20px auto 0;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #5C4E3A;
+}
+
+/* ── Two-column layout ──────────────────────────────────── */
+
+.lg-wd-fe-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 32px;
+  align-items: start;
+}
+.lg-wd-fe-layout:not(:has(.lg-wd-fe-sidebar)) {
+  grid-template-columns: 1fr;
+}
+
+.lg-wd-fe-main {
+  min-width: 0;
+}
+
+/* ── Issue wrapper ───────────────────────────────────────── */
+
+.lg-wd-fe-issue {
+  background: #FAF6EE;
+  border: 1px solid rgba(92,78,58,0.12);
+  border-radius: 10px;
+  margin-bottom: 36px;
+  overflow: hidden;
+}
+
+.lg-wd-fe-issue-header {
+  background: #2B2318;
+  padding: 24px 28px;
+  text-align: center;
+}
+
+.lg-wd-fe-issue-title {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #ECB351;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin: 0 0 4px;
+}
+
+.lg-wd-fe-issue-date {
+  font-size: 13px;
+  color: #87986A;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* ── Issue link cards (past issues in archive) ──────────── */
+
+a.lg-wd-fe-issue-link {
+  display: block;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  border-left: 4px solid #ECB351;
+}
+
+a.lg-wd-fe-issue-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(43,35,24,0.15);
+  border-left-color: #87986A;
+}
+
+a.lg-wd-fe-issue-link .lg-wd-fe-issue-header {
+  background: #3a3028;
+  padding: 18px 24px;
+}
+
+a.lg-wd-fe-issue-link .lg-wd-fe-issue-title {
+  font-size: 17px;
+  margin: 0 0 2px;
+}
+
+a.lg-wd-fe-issue-link .lg-wd-fe-issue-date {
+  margin: 0;
+}
+
+/* ── Issue body ──────────────────────────────────────────── */
+
+.lg-wd-fe-body {
+  padding: 28px;
+}
+
+/* ── Group header (gold line) ────────────────────────────── */
+
+.lg-wd-fe-group-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 36px 0 12px;
+}
+
+.lg-wd-fe-group-label {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #2B2318;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+.lg-wd-fe-group-line {
+  flex: 1;
+  height: 2px;
+  background: #ECB351;
+}
+
+/* ── Section header ──────────────────────────────────────── */
+
+.lg-wd-fe-section {
+  margin-bottom: 8px;
+}
+
+.lg-wd-fe-section-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.lg-wd-fe-section-label {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #2B2318;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+.lg-wd-fe-section-line {
+  flex: 1;
+  height: 2px;
+  background: #ECB351;
+}
+
+.lg-wd-fe-subheading {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #87986A;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 0 0 14px;
+}
+
+/* ── Section divider ─────────────────────────────────────── */
+
+.lg-wd-fe-divider {
+  border: none;
+  clear: both;
+  height: 1px;
+  background: #D4E0B8;
+  max-width: 40%;
+  margin: 28px auto;
+}
+
+/* ── Card layout ─────────────────────────────────────────── */
+
+.lg-wd-fe-card {
+  display: flex;
+  gap: 16px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #EAE5DC;
+}
+
+.lg-wd-fe-card:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.lg-wd-fe-card-thumb {
+  flex-shrink: 0;
+  width: 200px;
+  display: block;
+  line-height: 0;
+}
+
+.lg-wd-fe-card-thumb img {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+  object-fit: cover;
+}
+
+.lg-wd-fe-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.lg-wd-fe-card-title {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: #2B2318;
+  text-decoration: none;
+  display: block;
+  line-height: 1.35;
+  margin-bottom: 4px;
+}
+
+.lg-wd-fe-card-title:hover {
+  color: #ECB351;
+}
+
+.lg-wd-fe-card-excerpt {
+  font-size: 15px;
+  color: #5C4E3A;
+  line-height: 1.55;
+  margin: 6px 0 0;
+}
+
+.lg-wd-fe-card-meta {
+  font-size: 14px;
+  color: #aaa;
+  margin: 6px 0 0;
+}
+
+.lg-wd-fe-author-link {
+  color: #87986A;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.lg-wd-fe-author-link:hover {
+  text-decoration: underline;
+}
+
+.lg-wd-fe-author {
+  color: #87986A;
+}
+
+/* ── Event specifics ─────────────────────────────────────── */
+
+.lg-wd-fe-event-date {
+  font-size: 15px;
+  color: #5C4E3A;
+  margin: 2px 0 4px;
+}
+
+.lg-wd-fe-tier {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.lg-wd-fe-tier--looth\ pro {
+  background: #ECB351;
+  color: #2B2318;
+}
+
+.lg-wd-fe-tier--looth\ lite {
+  background: #D4E0B8;
+  color: #5C4E3A;
+}
+
+.lg-wd-fe-tier--public {
+  background: #FAF6EE;
+  color: #5C4E3A;
+  border: 1px solid #D4E0B8;
+}
+
+.lg-wd-fe-location {
+  color: #87986A;
+}
+
+.lg-wd-fe-calendar-link {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ECB351;
+  text-decoration: none;
+  padding: 4px 12px;
+  border: 1px solid #ECB351;
+  border-radius: 12px;
+  margin-top: 6px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.lg-wd-fe-calendar-link:hover {
+  background: #ECB351;
+  color: #2B2318;
+}
+
+/* ── Sponsor specifics ───────────────────────────────────── */
+
+.lg-wd-fe-sponsor {
+  border-left: 3px solid #ECB351;
+  padding-left: 16px;
+}
+
+.lg-wd-fe-sponsor-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #2B2318;
+  border-bottom: 2px solid #ECB351;
+  display: inline-block;
+  padding-bottom: 1px;
+  margin: 0 0 6px;
+}
+
+.lg-wd-fe-sponsor-cta {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ECB351;
+  text-decoration: none;
+  display: inline-block;
+  margin-top: 8px;
+}
+
+.lg-wd-fe-sponsor-cta:hover {
+  text-decoration: underline;
+}
+
+/* ── List layout ─────────────────────────────────────────── */
+
+.lg-wd-fe-list-item {
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #EAE5DC;
+}
+
+.lg-wd-fe-list-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.lg-wd-fe-list-title {
+  font-size: 17px;
+  font-weight: 500;
+  color: #2B2318;
+  text-decoration: none;
+  display: block;
+  margin-bottom: 3px;
+  line-height: 1.4;
+}
+
+.lg-wd-fe-list-title:hover {
+  color: #ECB351;
+}
+
+/* ── Full text & HTML block ──────────────────────────────── */
+
+.lg-wd-fe-full-text,
+.lg-wd-fe-html-block {
+  font-size: 15px;
+  overflow: hidden;
+  clear: both;
+  color: #5C4E3A;
+  line-height: 1.65;
+  margin-bottom: 12px;
+}
+
+.lg-wd-fe-full-text img,
+.lg-wd-fe-html-block img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.lg-wd-fe-html-block a {
+  color: #87986A;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.lg-wd-fe-html-block a:hover {
+  text-decoration: underline;
+}
+
+/* ── Empty state ─────────────────────────────────────────── */
+
+.lg-wd-fe-empty {
+  text-align: center;
+  color: #aaa;
+  font-style: italic;
+  padding: 40px 20px;
+}
+
+/* ── Pagination ──────────────────────────────────────────── */
+
+.lg-wd-fe-pagination {
+  text-align: center;
+  padding: 20px 0 10px;
+}
+
+.lg-wd-fe-pagination a,
+.lg-wd-fe-pagination span {
+  display: inline-block;
+  padding: 8px 16px;
+  margin: 0 3px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+}
+
+.lg-wd-fe-pagination a {
+  background: #FAF6EE;
+  color: #5C4E3A;
+  border: 1px solid rgba(92,78,58,0.15);
+}
+
+.lg-wd-fe-pagination a:hover {
+  background: #ECB351;
+  color: #2B2318;
+  border-color: #ECB351;
+}
+
+.lg-wd-fe-pagination .current {
+  background: #2B2318;
+  color: #ECB351;
+  border: 1px solid #2B2318;
+}
+
+.lg-wd-fe-pagination .dots {
+  border: none;
+  background: none;
+  color: #aaa;
+}
+
+/* ── Header image ────────────────────────────────────────── */
+
+.lg-wd-fe-header-img {
+  max-width: 300px;
+  width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+/* ── Hero band (gold) ───────────────────────────────────── */
+
+.lg-wd-fe-hero {
+  background: #ECB351;
+  padding: 10px 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lg-wd-fe-hero-left {
+  font-size: 13px;
+  font-weight: 700;
+  color: #2B2318;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+.lg-wd-fe-hero-right {
+  font-size: 13px;
+  color: #5C4E3A;
+}
+
+/* ── Intro text ─────────────────────────────────────────── */
+
+.lg-wd-fe-intro {
+  font-size: 17px;
+  color: #5C4E3A;
+  line-height: 1.6;
+  margin: 0;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #ECB351;
+}
+
+/* ── Signoff ────────────────────────────────────────────── */
+
+.lg-wd-fe-signoff {
+  padding: 0 28px 28px;
+  text-align: center;
+}
+
+.lg-wd-fe-signoff p {
+  font-size: 16px;
+  color: #5C4E3A;
+  font-style: italic;
+  line-height: 1.6;
+  margin: 0;
+  padding-top: 20px;
+  border-top: 1px solid #E2DDD3;
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
+
+.lg-wd-fe-footer {
+  background: #2B2318;
+  padding: 28px 24px;
+  text-align: center;
+  border-radius: 0 0 10px 10px;
+}
+
+.lg-wd-fe-footer-brand {
+  font-family: Georgia, 'Times New Roman', serif;
+  color: #ECB351;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin: 0 0 14px;
+}
+
+.lg-wd-fe-footer-links {
+  margin: 0 0 14px;
+}
+
+.lg-wd-fe-footer-links a {
+  color: #87986A;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.lg-wd-fe-footer-links a:hover {
+  text-decoration: underline;
+}
+
+.lg-wd-fe-footer-sep {
+  color: #5C4E3A;
+  margin: 0 10px;
+}
+
+.lg-wd-fe-footer-tagline {
+  font-size: 13px;
+  color: #5C4E3A;
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* ── Subscribe button ───────────────────────────────────── */
+
+.lg-wd-fe-subscribe-btn {
+  background: #2B2318;
+  color: #ECB351;
+  border: 2px solid #ECB351;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  padding: 7px 20px;
+  border-radius: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(43,35,24,0.35);
+  transition: background 0.2s, color 0.2s, transform 0.1s, box-shadow 0.2s;
+}
+
+.lg-wd-fe-subscribe-btn:hover {
+  background: #ECB351;
+  color: #2B2318;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(236,179,81,0.4);
+}
+
+/* Pulse animation — fires twice on load then stops */
+@keyframes lg-wd-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(43,35,24,0.35); }
+  50% { transform: scale(1.08); box-shadow: 0 4px 18px rgba(236,179,81,0.5); }
+}
+
+.lg-wd-fe-subscribe-pulse {
+  animation: lg-wd-pulse 0.8s ease-in-out 2;
+}
+
+/* ── Subscribe modal ────────────────────────────────────── */
+
+.lg-wd-fe-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(43,35,24,0.6);
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.lg-wd-fe-modal {
+  background: #FAF6EE;
+  border-radius: 10px;
+  max-width: 500px;
+  width: 100%;
+  padding: 36px 32px;
+  position: relative;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+}
+
+.lg-wd-fe-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #aaa;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.lg-wd-fe-modal-close:hover {
+  color: #2B2318;
+}
+
+.lg-wd-fe-modal-title {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #2B2318;
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+.lg-wd-fe-modal-desc {
+  font-size: 15px;
+  color: #5C4E3A;
+  text-align: center;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+/* Hide the theme's default title — we render our own header */
+body.single-weekly_email .entry-title {
+  display: none;
+}
+
+/* ── Sitewide widget styling (creamy containers) ─────────── */
+
+.widget-area .widget,
+aside .widget,
+.sidebar .widget {
+  background: #FAF6EE;
+  border: 1px solid rgba(92,78,58,0.12);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.widget-area .widget-title,
+.widget-area .widgettitle,
+aside .widget-title,
+aside .widgettitle,
+.sidebar .widget-title,
+.sidebar .widgettitle {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: #2B2318;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #ECB351;
+}
+
+/* ── Digest sidebar layout ───────────────────────────────── */
+
+.lg-wd-fe-sidebar {
+  position: sticky;
+  top: 80px;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 960px) {
+  .lg-wd-fe-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .lg-wd-fe-sidebar {
+    position: static;
+  }
+}
+
+@media (max-width: 768px) {
+  .lg-wd-fe-body { padding: 20px; }
+  .lg-wd-fe-issue-header { padding: 20px; }
+  .lg-wd-fe-hero { padding: 10px 20px; }
+  .lg-wd-fe-signoff { padding: 0 20px 24px; }
+  .lg-wd-fe-footer { padding: 20px; }
+}
+
+@media (max-width: 600px) {
+  .lg-wd-fe-card {
+    flex-direction: column;
+  }
+
+  .lg-wd-fe-card-thumb {
+    width: 100%;
+  }
+
+  .lg-wd-fe-body { padding: 16px; }
+  .lg-wd-fe-issue-header { padding: 16px; }
+  .lg-wd-fe-hero { padding: 8px 16px; flex-direction: column; text-align: center; gap: 2px; }
+  .lg-wd-fe-signoff { padding: 0 16px 20px; }
+  .lg-wd-fe-footer { padding: 16px; }
+
+  .lg-wd-fe-group-label,
+  .lg-wd-fe-section-label {
+    font-size: 16px;
+    letter-spacing: 1px;
+  }
+
+  .lg-wd-fe-issue-title {
+    font-size: 18px;
+    letter-spacing: 1px;
+  }
+}
