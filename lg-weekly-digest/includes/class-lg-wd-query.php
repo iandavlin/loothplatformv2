@@ -319,7 +319,7 @@ class LG_WD_Query {
             $forum_id   = (int) bbp_get_topic_forum_id( $post->ID );
             $forum_slug = $forum_id ? get_post_field( 'post_name', $forum_id ) : '';
             if ( $forum_slug && $post->post_name ) {
-                return home_url( '/hub/' . $forum_slug . '/' . $post->post_name . '/' );
+                return add_query_arg( 'topic', $forum_slug . '/' . $post->post_name, home_url( '/hub/' ) );
             }
         }
         if ( $post->post_type === 'reply' && function_exists( 'bbp_get_reply_topic_id' ) ) {
@@ -328,7 +328,7 @@ class LG_WD_Query {
             $forum_slug = $forum_id ? get_post_field( 'post_name', $forum_id ) : '';
             $topic_slug = $topic_id ? get_post_field( 'post_name', $topic_id ) : '';
             if ( $forum_slug && $topic_slug ) {
-                return home_url( '/hub/' . $forum_slug . '/' . $topic_slug . '/' );
+                return add_query_arg( 'topic', $forum_slug . '/' . $topic_slug, home_url( '/hub/' ) );
             }
         }
         return get_permalink( $post );
