@@ -278,6 +278,59 @@ jQuery( function ( $ ) {
         $( 'body' ).css( 'overflow', '' );
     });
 
+    // ── Download PDF ───────────────────────────────────────────────────────────
+
+    $( '#lg-wd-pdf-btn' ).on( 'click', function () {
+        const $btn    = $( this );
+        const issueId = $( '#lg-wd-issue-id' ).val();
+        if ( ! issueId ) return;
+
+        setLoading( $btn, true );
+
+        const body = new URLSearchParams( {
+            action:    'lg_wd_compose_pdf',
+            nonce,
+            issue_id:  issueId,
+            sections:  JSON.stringify( collectSections() ),
+            date_from: $( '#lg-wd-date-from' ).val(),
+            date_to:   $( '#lg-wd-date-to' ).val(),
+        } );
+
+        fetch( ajaxUrl, { method: 'POST', body, credentials: 'same-origin' } )
+            .then( async function ( resp ) {
+                const ct = resp.headers.get( 'content-type' ) || '';
+                if ( ct.indexOf( 'application/pdf' ) === -1 ) {
+                    let msg = 'PDF generation failed.';
+                    try { const j = await resp.json(); msg = j.data || msg; } catch ( e ) {}
+                    throw new Error( msg );
+                }
+
+                const cd = resp.headers.get( 'content-disposition' ) || '';
+                const m  = cd.match( /filename="([^"]+)"/ );
+                const fname = m ? m[1] : 'weekly-digest.pdf';
+                const imgs  = resp.headers.get( 'x-lg-wd-images' ) || '';
+
+                const blob = await resp.blob();
+                const url  = URL.createObjectURL( blob );
+                const a    = document.createElement( 'a' );
+                a.href = url;
+                a.download = fname;
+                document.body.appendChild( a );
+                a.click();
+                a.remove();
+                URL.revokeObjectURL( url );
+
+                const kb = Math.round( blob.size / 1024 );
+                showResponse( '✓ PDF downloaded (' + kb + ' KB' + ( imgs ? ', ' + imgs + ' images' : '' ) + ')', 'success' );
+            } )
+            .catch( function ( err ) {
+                showResponse( '✗ ' + err.message, 'error' );
+            } )
+            .finally( function () {
+                setLoading( $btn, false );
+            } );
+    });
+
     // ── Test Send ────────────────────────────────────────────────────────────
 
     $( '#lg-wd-test-btn' ).on( 'click', function () {

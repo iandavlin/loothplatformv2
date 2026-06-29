@@ -15,6 +15,7 @@ class LG_WD_Compose {
         add_action( 'wp_ajax_lg_wd_compose_populate',    [ __CLASS__, 'ajax_populate' ] );
         add_action( 'wp_ajax_lg_wd_compose_search',      [ __CLASS__, 'ajax_search' ] );
         add_action( 'wp_ajax_lg_wd_compose_preview',     [ __CLASS__, 'ajax_preview' ] );
+        add_action( 'wp_ajax_lg_wd_compose_pdf',         [ __CLASS__, 'ajax_pdf' ] );
         add_action( 'wp_ajax_lg_wd_compose_test_send',   [ __CLASS__, 'ajax_test_send' ] );
         add_action( 'wp_ajax_lg_wd_compose_send',        [ __CLASS__, 'ajax_send' ] );
         add_action( 'wp_ajax_lg_wd_compose_new_issue',   [ __CLASS__, 'ajax_new_issue' ] );
@@ -238,6 +239,7 @@ class LG_WD_Compose {
           <div class="lg-wd-card" style="margin-top:16px;">
             <div class="lg-wd-card-body" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <button class="button lg-wd-btn-secondary" id="lg-wd-preview-btn">Preview Email</button>
+              <button class="button lg-wd-btn-secondary" id="lg-wd-pdf-btn" title="Download a print-ready PDF with all images embedded (for posting to Patreon)">Download PDF</button>
 
               <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
                 <input type="email" id="lg-wd-test-email" placeholder="test@email.com"
@@ -584,6 +586,43 @@ class LG_WD_Compose {
         } else {
             wp_send_json_error( $result['message'] );
         }
+    }
+
+    // ── AJAX: Download PDF ────────────────────────────────────────────────────
+
+    /**
+     * Generate a print-ready PDF of the current issue (images embedded) and
+     * stream it as a download. Admin-only (same cap as compose). On error we
+     * fall back to a JSON response so the JS can surface the message.
+     */
+    public static function ajax_pdf(): void {
+        check_ajax_referer( 'lg_wd_compose', 'nonce' );
+        if ( ! current_user_can( self::CAP ) ) wp_send_json_error( 'Unauthorized' );
+
+        $issue_id = absint( $_POST['issue_id'] ?? 0 );
+        if ( ! $issue_id ) wp_send_json_error( 'No issue ID.' );
+
+        // Save current (possibly unsaved) compose state first, like Preview.
+        self::save_from_post( $issue_id );
+
+        $result = LG_WD_PDF::build_for_issue( $issue_id );
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( $result->get_error_message() );
+        }
+
+        // Drop any buffered output so the binary stream is clean.
+        while ( ob_get_level() > 0 ) { ob_end_clean(); }
+
+        nocache_headers();
+        header( 'Content-Type: application/pdf' );
+        header( 'Content-Disposition: attachment; filename="' . $result['filename'] . '"' );
+        header( 'Content-Length: ' . strlen( $result['pdf'] ) );
+        header( 'X-LG-WD-Images: ' . $result['img_embedded'] . '/' . $result['img_total'] );
+        if ( ! empty( $result['img_missing'] ) ) {
+            header( 'X-LG-WD-Images-Missing: ' . count( $result['img_missing'] ) );
+        }
+        echo $result['pdf'];
+        exit;
     }
 
     // ── AJAX: Test send ─────────────────────────────────────────────────────
