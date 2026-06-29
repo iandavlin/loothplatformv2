@@ -115,3 +115,50 @@ function lg_weekly_signup_handler() {
         wp_send_json(['ok' => false, 'error' => 'crm_error'], 500);
     }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Weekly Digest (members' list) on/off — for the Manage Account page.
+ * Mirrors the event-reminder toggle above, but for the members' Weekly Digest
+ * FluentCRM list (id 3 — the list the weekly campaign sends to). Logged-in only,
+ * cookie-auth via admin-ajax, same-origin checked (lg_evr_user()), idempotent.
+ * ───────────────────────────────────────────────────────────────────────── */
+const LG_WEEKLY_MEMBER_LIST_ID = 3;   // wp_fc_lists: members' Weekly Digest list
+
+function lg_weekly_member_is_on(string $email): bool {
+    $c = FluentCrmApi('contacts')->getContact($email);
+    if (!$c) return false;
+    $ids = array_map('intval', $c->lists->pluck('id')->toArray());
+    return in_array(LG_WEEKLY_MEMBER_LIST_ID, $ids, true);
+}
+
+/** GET state — the toggle renders its real CRM state on page load. */
+add_action('wp_ajax_lg_weekly_member_state', function () {
+    $u = lg_evr_user();
+    try { wp_send_json(['ok' => true, 'on' => lg_weekly_member_is_on($u->user_email)]); }
+    catch (\Throwable $e) { wp_send_json(['ok' => false, 'error' => 'crm_error'], 500); }
+});
+
+/** TOGGLE — on adds to the members' weekly list, off detaches (both ways). */
+add_action('wp_ajax_lg_weekly_member_toggle', function () {
+    $u    = lg_evr_user();
+    $want = (string)($_POST['on'] ?? '1') === '1';
+    try {
+        $api = FluentCrmApi('contacts');
+        if ($want) {
+            $api->createOrUpdate([
+                'email'      => $u->user_email,
+                'first_name' => $u->first_name ?: $u->display_name,
+                'status'     => 'subscribed',
+                'lists'      => [LG_WEEKLY_MEMBER_LIST_ID],
+            ]);
+        } else {
+            $c = $api->getContact($u->user_email);
+            if ($c) $c->detachLists([LG_WEEKLY_MEMBER_LIST_ID]);
+        }
+        wp_send_json(['ok' => true, 'on' => lg_weekly_member_is_on($u->user_email)]);
+    } catch (\Throwable $e) {
+        error_log('[lg-event-reminders] weekly-member: ' . $e->getMessage());
+        wp_send_json(['ok' => false, 'error' => 'crm_error'], 500);
+    }
+});
+

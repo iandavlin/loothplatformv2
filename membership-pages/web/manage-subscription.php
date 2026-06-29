@@ -163,6 +163,59 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
 
     <?php endif; ?>
 
+    <?php if (!$is_anon): ?>
+    <section class="lg-manage-sub__card lg-manage-sub__prefs" id="lg-email-prefs" aria-label="Email preferences">
+        <h2 class="lg-manage-sub__prefs-title">Email preferences</h2>
+        <div class="lg-pref-row">
+            <span class="lg-pref-row__txt"><b>Weekly Digest</b><small>The members&rsquo; weekly round-up &mdash; news, events, highlights.</small></span>
+            <label class="lg-switch"><input type="checkbox" id="lg-pref-weekly" disabled><span class="lg-switch__track"></span></label>
+        </div>
+        <div class="lg-pref-row">
+            <span class="lg-pref-row__txt"><b>Event Reminders</b><small>A heads-up email before events you might want to catch.</small></span>
+            <label class="lg-switch"><input type="checkbox" id="lg-pref-events" disabled><span class="lg-switch__track"></span></label>
+        </div>
+        <p class="lg-pref-note"><small>Changes save automatically.</small></p>
+    </section>
+    <style>
+    .lg-manage-sub__prefs{margin-top:18px}
+    .lg-manage-sub__prefs-title{font-size:1.05rem;margin:0 0 6px}
+    .lg-pref-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--lg-line,#e3e1d8)}
+    .lg-pref-row__txt b{display:block}
+    .lg-pref-row__txt small{color:var(--lg-mute,#6b6f63)}
+    .lg-switch{position:relative;display:inline-block;width:46px;height:26px;flex:0 0 auto}
+    .lg-switch input{position:absolute;opacity:0;width:0;height:0}
+    .lg-switch__track{position:absolute;inset:0;background:#c9cdbf;border-radius:999px;transition:.2s;cursor:pointer}
+    .lg-switch__track:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+    .lg-switch input:checked+.lg-switch__track{background:var(--lg-sage-d,#6b7c52)}
+    .lg-switch input:checked+.lg-switch__track:before{transform:translateX(20px)}
+    .lg-switch input:disabled+.lg-switch__track{opacity:.55;cursor:not-allowed}
+    .lg-pref-note{margin:10px 0 0;color:var(--lg-mute,#6b6f63)}
+    </style>
+    <script>
+    (function(){
+      function post(action, on){
+        var d=new URLSearchParams(); d.set('action',action); if(on!==null) d.set('on',on);
+        return fetch('/wp-admin/admin-ajax.php',{method:'POST',credentials:'same-origin',
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},body:d.toString()})
+          .then(function(r){return r.json();});
+      }
+      function wire(id, stateAction, toggleAction){
+        var inp=document.getElementById(id); if(!inp) return;
+        post(stateAction,null).then(function(j){ if(j&&j.ok){inp.checked=!!j.on;inp.disabled=false;} }).catch(function(){});
+        inp.addEventListener('change',function(){
+          var want=inp.checked; inp.disabled=true;
+          post(toggleAction, want?'1':'0').then(function(j){
+            if(j&&j.ok){inp.checked=!!j.on;} else {inp.checked=!want;alert('Could not save — try again.');}
+            inp.disabled=false;
+          }).catch(function(){inp.checked=!want;inp.disabled=false;alert('Network error — try again.');});
+        });
+      }
+      wire('lg-pref-weekly','lg_weekly_member_state','lg_weekly_member_toggle');
+      wire('lg-pref-events','lg_event_reminder_state','lg_event_reminder_signup');
+    })();
+    </script>
+    <?php endif; ?>
+
     <p class="lg-manage-sub__poc-note">
         <small>Read-only at launch. Stripe-side controls (plan change, immediate cancel, refund request) ship with the Stripe-A-later phase.</small>
     </p>
