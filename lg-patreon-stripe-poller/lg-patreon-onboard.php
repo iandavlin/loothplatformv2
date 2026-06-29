@@ -1233,7 +1233,67 @@ function lgpo_handle_callback() {
         );
     }
 
-    // No existing account by Patreon id or email — create a new one.
+    // Skeleton-account adopt (dedupe). A bulk-imported / DB-reloaded account whose
+    // Patreon id is encoded in its user_login (`patreon_<id>`) but never got the
+    // linkage meta or email written is invisible to BOTH guards above — no
+    // lgpo_patreon_user_id meta (so not matched by id) and a blank / non-matching
+    // user_email (so not matched by email). Without this it falls through and MINTS
+    // A DUPLICATE — the exact split-identity bug the skeleton reconciler cleans up.
+    // The Patreon id is literally in the username, so this is a DETERMINISTIC match
+    // (not a fuzzy name guess): ADOPT that account instead of minting. Same guards
+    // as the email path — never hand an admin session out over OAuth, and mirror
+    // the email only when WP's unique-email constraint allows it.
+    $skeleton = get_user_by( 'login', 'patreon_' . $patreon_user_id );
+    if ( $skeleton ) {
+        $contact_email = get_option( 'lgpo_contact_email', 'ian.davlin@gmail.com' );
+
+        // Never adopt an admin account over OAuth — route to human review.
+        if ( user_can( $skeleton, 'manage_options' ) ) {
+            lgpo_add_pending( array(
+                'patreon_user_id' => $patreon_user_id, 'patreon_email' => $patreon_email,
+                'patreon_name' => $patreon_name, 'tier_id' => $tier_id,
+                'wp_user_id' => $skeleton->ID, 'reason' => 'admin_collision',
+            ) );
+            lgpo_notify_admin( $patreon_name, $patreon_email, $skeleton->user_login );
+            lgpo_terminal( 'email_collision', $state_payload,
+                'There\'s already an account associated with this membership that we can\'t connect automatically. '
+                . 'Please contact <a href="mailto:' . esc_attr( $contact_email ) . '">' . esc_html( $contact_email ) . '</a> to get this sorted out.'
+            );
+        }
+
+        // Mirror the Patreon email onto the (typically blank) skeleton, with the
+        // SAME uniqueness guard the sweep's sync_wp_email uses: if a DIFFERENT WP
+        // user already holds this email, keep the link but DON'T overwrite the
+        // email (it would break WP's unique-email constraint / clobber the other
+        // account) — flag for a human merge. lgpo_adopt_existing_user() stamps the
+        // meta + role + row + login but does NOT touch user_email, so the blank
+        // skeleton needs this explicit mirror (+ the _looth_uuid freeze so /whoami
+        // resolves instead of falling back to anon).
+        $cur_email = strtolower( trim( (string) $skeleton->user_email ) );
+        $new_email = strtolower( trim( (string) $patreon_email ) );
+        if ( $new_email !== '' && is_email( $new_email ) && $cur_email !== $new_email ) {
+            $owner = get_user_by( 'email', $new_email );
+            if ( $owner && (int) $owner->ID !== (int) $skeleton->ID ) {
+                lgpo_notify_failure( $patreon_email, $patreon_name, 'onboard.skeleton_email_collision',
+                    'Adopted skeleton account #' . $skeleton->ID . ' (patreon_' . $patreon_user_id . ') but its Patreon email '
+                    . $patreon_email . ' already belongs to WP #' . $owner->ID . ' — email NOT mirrored, link kept.', (int) $skeleton->ID );
+            } else {
+                wp_update_user( array( 'ID' => $skeleton->ID, 'user_email' => $patreon_email ) );
+                if ( class_exists( 'LGPO_Sync_Engine' ) && method_exists( 'LGPO_Sync_Engine', 'stamp_looth_uuid' ) ) {
+                    LGPO_Sync_Engine::stamp_looth_uuid( (int) $skeleton->ID, $patreon_email );
+                }
+            }
+        }
+
+        // Stamp linkage meta, apply the tier through the arbiter, write the
+        // membership snapshot, and log them in — the shared adopt path.
+        lgpo_adopt_existing_user( $skeleton, $patreon_user_id, $patreon_email, $tier_id, $wp_role, $member_snapshot );
+        lgpo_terminal( 'adopted', $state_payload,
+            'We connected your Patreon membership to your existing Looth Group account and logged you in. Your access level has been updated.'
+        );
+    }
+
+    // No existing account by Patreon id, email, or skeleton username — create one.
     $username = lgpo_generate_username( $patreon_name, $patreon_email );
     $password = wp_generate_password( 24, true, true );
 
