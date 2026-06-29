@@ -30,15 +30,9 @@ final class Social
     /** Returns the actions HTML (may be ''), self-contained incl. its one-time CSS+JS. */
     public static function renderProfileActions(?string $viewerUuid, string $profileUuid): string
     {
-        // Own page → no buttons. Logged-out → an auth-gated Connect CTA.
-        if ($viewerUuid !== null && $viewerUuid === $profileUuid) return '';
-
-        if ($viewerUuid === null) {
-            return self::wrap(
-                self::btn('Connect', ['data-lg-social' => 'connect', 'data-requires-auth' => '1']),
-                ''
-            );
-        }
+        // Own page or logged-out viewer: no actions at all. Anon cannot connect;
+        // the auth-gated Connect CTA was removed per Ian 2026-06-29.
+        if ($viewerUuid === null || $viewerUuid === $profileUuid) return '';
 
         $edge   = Connections::stateWithId($viewerUuid, $profileUuid);
         $state  = $edge['state'];
