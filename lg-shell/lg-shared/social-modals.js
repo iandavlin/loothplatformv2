@@ -38,6 +38,19 @@ function esc(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+/* Linkify http/https URLs in user text. XSS-safe: ESCAPE first (esc), then wrap
+   bare http(s) URL substrings in anchors. No unescaped input is ever injected;
+   no bare-domain autolink (http/https only). Render-only - storage stays raw. */
+function linkifyText(s) {
+  return esc(s).replace(/https?:\/\/[^\s<]+/g, function (url) {
+    var trail = '';
+    var m = url.match(/[)\].,;:!?'&]+$/);   /* drop trailing punctuation / dangling entities */
+    if (m) { trail = url.slice(url.length - m[0].length); url = url.slice(0, url.length - m[0].length); }
+    if (!url) { return trail; }
+    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer nofollow ugc">' + url + '</a>' + trail;
+  });
+}
 function capCount(n) {
   n = parseInt(n, 10) || 0;
   return n > 9 ? '9+' : (n > 0 ? String(n) : '');
@@ -298,7 +311,7 @@ function openThread(threadUuid) {
         msgs.innerHTML = messages.map(function (m) {
           var mine = !peerSet[m.sender_uuid];
           return '<div class="lg-msg__msg' + (mine ? ' lg-msg__msg--mine' : '') + '">'
-            + '<p class="lg-msg__msg-text">' + esc(m.body || '') + '</p>'
+            + '<p class="lg-msg__msg-text">' + linkifyText(m.body || '') + '</p>'
             + '<span class="lg-msg__msg-time">' + relTime(m.created_at) + '</span>'
             + '</div>';
         }).join('');
