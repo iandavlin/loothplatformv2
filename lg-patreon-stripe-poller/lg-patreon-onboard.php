@@ -1207,6 +1207,17 @@ function lgpo_handle_callback() {
                 'wp_user_id' => $existing_by_email->ID, 'reason' => 'different_patreon_id',
             ) );
             lgpo_notify_admin( $patreon_name, $patreon_email, $existing_by_email->user_login );
+            // Decoupled real-person-blocked signal — lg-login-monitor listens and
+            // alerts Ian. Emitting an action (vs emailing inline) keeps onboard
+            // free of notification policy. Fired before the terminal, which exits.
+            do_action( 'lg_login_blocked', array(
+                'surface'         => 'patreon',
+                'reason'          => 'different_patreon_id',
+                'patreon_user_id' => $patreon_user_id,
+                'patreon_email'   => $patreon_email,
+                'patreon_name'    => $patreon_name,
+                'wp_user_id'      => $existing_by_email->ID,
+            ) );
             lgpo_terminal( 'email_collision', $state_payload,
                 'There\'s already an account associated with your email address that is linked to a different Patreon account. '
                 . 'Please contact <a href="mailto:' . esc_attr( $contact_email ) . '">' . esc_html( $contact_email ) . '</a> to get this sorted out.'
@@ -1220,6 +1231,15 @@ function lgpo_handle_callback() {
                 'wp_user_id' => $existing_by_email->ID, 'reason' => 'admin_collision',
             ) );
             lgpo_notify_admin( $patreon_name, $patreon_email, $existing_by_email->user_login );
+            // Decoupled real-person-blocked signal — see note above.
+            do_action( 'lg_login_blocked', array(
+                'surface'         => 'patreon',
+                'reason'          => 'admin_collision',
+                'patreon_user_id' => $patreon_user_id,
+                'patreon_email'   => $patreon_email,
+                'patreon_name'    => $patreon_name,
+                'wp_user_id'      => $existing_by_email->ID,
+            ) );
             lgpo_terminal( 'email_collision', $state_payload,
                 'There\'s already an account associated with this email address. '
                 . 'Please contact <a href="mailto:' . esc_attr( $contact_email ) . '">' . esc_html( $contact_email ) . '</a> to get this sorted out.'
@@ -1255,6 +1275,15 @@ function lgpo_handle_callback() {
                 'wp_user_id' => $skeleton->ID, 'reason' => 'admin_collision',
             ) );
             lgpo_notify_admin( $patreon_name, $patreon_email, $skeleton->user_login );
+            // Decoupled real-person-blocked signal — see note above.
+            do_action( 'lg_login_blocked', array(
+                'surface'         => 'patreon',
+                'reason'          => 'admin_collision',
+                'patreon_user_id' => $patreon_user_id,
+                'patreon_email'   => $patreon_email,
+                'patreon_name'    => $patreon_name,
+                'wp_user_id'      => $skeleton->ID,
+            ) );
             lgpo_terminal( 'email_collision', $state_payload,
                 'There\'s already an account associated with this membership that we can\'t connect automatically. '
                 . 'Please contact <a href="mailto:' . esc_attr( $contact_email ) . '">' . esc_html( $contact_email ) . '</a> to get this sorted out.'
