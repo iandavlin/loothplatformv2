@@ -26,6 +26,13 @@
  * admins and the non-matching placeholders `deleted-member` / the `670aa65904420`
  * hex-timestamp oddball are excluded by construction):
  *
+ *   pid ALREADY held by another WP account (lgpo_patreon_user_id meta)
+ *     -> DUPLICATE: that account is the canonical home (the Patreon id is the
+ *        identity source of truth; typically the newer fully-onboarded account).
+ *        The skeleton is a stale duplicate — REPORT it for manual retirement and
+ *        write NOTHING. Checked before roster classification, so a dup is never
+ *        linked even if its id happens to be in the roster.
+ *
  *   pid in active roster
  *     -> LINK: stamp lgpo_patreon_user_id, mirror user_email from the roster
  *        (reusing sync_wp_email's guards — skip on a uniqueness collision and
@@ -210,7 +217,16 @@ printf( "Roster: %d members (%d active). Mode: %s\n\n", count( $roster ), $activ
 // PHP so an EMPTY meta value counts as missing too (get_user_meta returns '').
 $rows = $wpdb->get_results( "SELECT ID, user_login, user_email FROM {$wpdb->users} WHERE user_login REGEXP '^patreon_[0-9]+$' ORDER BY ID" );
 
-$link = []; $flag = []; $stamp = []; $skip_admin = []; $already = 0;
+$link = []; $flag = []; $stamp = []; $dup = []; $skip_admin = []; $already = 0;
+
+// Pre-index every Patreon id already claimed by a WP account (the identity source
+// of truth). A skeleton whose id is already held elsewhere is a DUPLICATE — the
+// other account (typically the newer, fully-onboarded one) is the canonical home;
+// re-stamping the stale skeleton would split identity again. So: never link it.
+$claimed_pid = [];
+foreach ( $wpdb->get_results( "SELECT user_id, meta_value AS v FROM {$wpdb->usermeta} WHERE meta_key = 'lgpo_patreon_user_id' AND meta_value <> ''" ) as $cr ) {
+    $claimed_pid[ (string) $cr->v ][] = (int) $cr->user_id;
+}
 
 foreach ( $rows as $r ) {
     $id = (int) $r->ID;
@@ -224,6 +240,14 @@ foreach ( $rows as $r ) {
     $blank  = ( trim( (string) $u->user_email ) === '' );
     $member = $by_pid[ $pid ] ?? null;
     $rec = [ 'id' => $id, 'pid' => $pid, 'login' => $u->user_login, 'email' => $u->user_email, 'blank' => $blank, 'member' => $member ];
+
+    // Patreon id already claimed by another WP account? -> DUPLICATE, never link/stamp.
+    $owner_ids = array_values( array_diff( $claimed_pid[ $pid ] ?? [], [ $id ] ) );
+    if ( $owner_ids ) {
+        $rec['owner'] = $owner_ids[0];
+        $dup[] = $rec;
+        continue;
+    }
 
     if ( $member !== null ) {
         $link[] = $rec;
@@ -269,6 +293,12 @@ foreach ( $flag as $p ) {
     printf( "  #%-6d %-24s  patreon %s\n", $p['id'], $p['login'], $p['pid'] );
 }
 
+printf( "\nDUPLICATE — Patreon id ALREADY held by another WP account (skeleton is a stale dup; canonical = owner; NOT linked) — %d:\n", count( $dup ) );
+foreach ( array_slice( $dup, 0, 25 ) as $p ) {
+    printf( "  #%-6d %-24s  patreon %s  ->  canonical WP #%d\n", $p['id'], $p['login'], $p['pid'], $p['owner'] );
+}
+if ( count( $dup ) > 25 ) { printf( "  … and %d more\n", count( $dup ) - 25 ); }
+
 printf( "\nEDGE — blank-email + unlinked, NOT a patreon_<id> username (manual review, untouched) — %d:\n", count( $edge ) );
 foreach ( array_slice( $edge, 0, 25 ) as $p ) {
     printf( "  #%-6d %s\n", $p['id'], $p['login'] );
@@ -277,8 +307,8 @@ if ( count( $edge ) > 25 ) { printf( "  … and %d more\n", count( $edge ) - 25 
 
 if ( ! empty( $skip_admin ) ) { printf( "\nSKIPPED admins (never auto-linked): %s\n", implode( ', ', array_map( fn( $i ) => '#' . $i, $skip_admin ) ) ); }
 
-printf( "\nSummary: LINK %d, STAMP-META %d, FLAG %d, EDGE %d, already-linked %d, admin-skip %d.\n",
-    count( $link ), count( $stamp ), count( $flag ), count( $edge ), $already, count( $skip_admin ) );
+printf( "\nSummary: LINK %d, STAMP-META %d, FLAG %d, DUPLICATE %d, EDGE %d, already-linked %d, admin-skip %d.\n",
+    count( $link ), count( $stamp ), count( $flag ), count( $dup ), count( $edge ), $already, count( $skip_admin ) );
 
 if ( $MODE !== 'apply' ) {
     echo "\nREVIEW ONLY — no writes. Re-run with `apply` to execute.\n";
