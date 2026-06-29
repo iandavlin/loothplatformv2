@@ -90,6 +90,17 @@ function lg_bug_report_identity(): ?array {
 		}
 	}
 
+	// (3) Cookie-independent email fallback. On a JWT-only surface there is no
+	//     WP auth cookie, so (2) above leaves the email empty even for members
+	//     who have one. The JWT already gave us a trusted wp_user_id — look the
+	//     email up directly by that id. Anon (wp_user_id 0) stays blank.
+	if ( $id['email'] === '' && $id['wp_user_id'] > 0 && function_exists( 'get_userdata' ) ) {
+		$u = get_userdata( (int) $id['wp_user_id'] );
+		if ( $u && $u->user_email !== '' ) {
+			$id['email'] = (string) $u->user_email;
+		}
+	}
+
 	// Logged-in proof: either a verified JWT (wp_user_id/uuid set) OR a WP user.
 	$logged_in = $id['wp_user_id'] > 0 || $id['user_uuid'] !== '';
 	return $logged_in ? $id : null;
