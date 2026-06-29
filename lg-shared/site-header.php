@@ -214,21 +214,73 @@ function lg_shared_render_site_header(array $ctx): void
   .lg-chrome .lg-chrome__has-sub:hover > ul.lg-chrome__submenu,
   .lg-chrome .lg-chrome__has-sub:focus-within > ul.lg-chrome__submenu { display: block; }
 }
-/* Mobile drawer (≤820): the nav is a vertical panel — flow the submenu inline
-   (indented) under "The Hub" and open it ONLY via the caret. Hover/focus-within
-   open rules above are scoped to ≥821, so they never fire here. */
+/* Mobile (≤820): the desktop dropdown is replaced by a tap-opened MODAL picker
+   (.lg-hubmenu below + the script). Both the caret and the inline dropdown are
+   suppressed here so "The Hub" link itself is the only affordance — first tap
+   opens the picker, a second tap falls through to /hub/. Deliberate split:
+   desktop keeps the hover/focus dropdown, mobile gets the modal. */
 @media (max-width: 820px) {
-  .lg-chrome .lg-chrome__has-sub { display: flex; flex-wrap: wrap; align-items: center; width: 100%; }
-  .lg-chrome .lg-chrome__has-sub > a { flex: 1; }
-  .lg-chrome__sub-toggle { width: 44px; height: 44px; }
-  .lg-chrome ul.lg-chrome__submenu {
-    position: static; top: auto; min-width: 0; width: 100%;
-    box-shadow: none !important; border: 0 !important; border-radius: 0 !important;
-    padding: 2px 0 6px 12px !important;
+  .lg-chrome .lg-chrome__has-sub { display: flex; align-items: center; width: 100%; }
+  .lg-chrome .lg-chrome__has-sub > a { flex: 1 1 auto; }
+  /* No caret on mobile — the link is the trigger. */
+  .lg-chrome__sub-toggle { display: none !important; }
+  /* The desktop dropdown list never flows inline on mobile (the modal owns it). */
+  .lg-chrome .lg-chrome__has-sub[data-open] > ul.lg-chrome__submenu { display: none !important; }
+  /* Armed: while the picker is open the Hub link is highlighted; the header rule
+     below lifts it above the modal so a 2nd tap reaches /hub/. */
+  .lg-chrome .lg-chrome__has-sub.is-armed > a {
+    background: var(--lg-sage-tint) !important; color: var(--lg-sage-d) !important;
+    border-radius: 8px;
   }
-  .lg-chrome ul.lg-chrome__submenu::before { content: none; }
-  .lg-chrome ul.lg-chrome__submenu a { padding: 10px 14px !important; }
+  /* Focus the drawer on the Hub button while the picker is up (no sheet overlap). */
+  .lg-chrome--hubmenu-open .lg-chrome__menu > li:not(.lg-chrome__has-sub) { display: none; }
 }
+/* Lift the whole header (and the armed Hub link with it) above the modal backdrop
+   while the picker is open, so tapping the Hub link again lands on the link
+   (→ /hub/) rather than the dimmer. The header already owns a stacking context
+   (backdrop-filter), so this is only a level change; the class is added on mobile
+   only. */
+.lg-chrome.lg-chrome--hubmenu-open { z-index: 360; }
+
+/* ---- Mobile Hub content-type picker (modal). Mobile-only; the desktop dropdown
+   above is untouched. Bottom sheet in the house modal style; rendered for anon +
+   authed because the Hub is public. Items mirror $hub_types (→ HUB_TYPE_LABELS). ---- */
+.lg-hubmenu { position: fixed; inset: 0; z-index: 300; display: flex; align-items: flex-end; justify-content: center; }
+.lg-hubmenu[hidden] { display: none; }
+.lg-hubmenu__backdrop { position: absolute; inset: 0; background: rgba(26,29,26,0.45); backdrop-filter: blur(3px); }
+.lg-hubmenu__sheet {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 560px; max-height: 72vh;
+  display: flex; flex-direction: column;
+  background: #fff; border-radius: 16px 16px 0 0;
+  box-shadow: 0 -6px 28px rgba(0,0,0,0.18);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  animation: lg-hubmenu-rise .18s ease;
+}
+@keyframes lg-hubmenu-rise { from { transform: translateY(14px); opacity: .5; } to { transform: none; opacity: 1; } }
+.lg-hubmenu__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 18px; border-bottom: 1px solid var(--lg-line, #e3ddd0); flex: 0 0 auto;
+}
+.lg-hubmenu__title { flex: 1; margin: 0; font: 700 16px/1.2 var(--lg-font-sans, system-ui); color: var(--lg-ink, #323532); }
+.lg-hubmenu__close {
+  appearance: none; background: transparent; border: 0; cursor: pointer; padding: 0;
+  width: 32px; height: 32px; border-radius: 50%; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--lg-mute, #6b6f6b);
+}
+.lg-hubmenu__close:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-ink, #323532); }
+.lg-hubmenu__list { list-style: none; margin: 0; padding: 8px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.lg-hubmenu__list li { margin: 0; }
+.lg-hubmenu__item {
+  display: block; padding: 14px; border-radius: 10px;
+  font: 600 15px/1.2 var(--lg-font-sans, system-ui);
+  color: var(--lg-ink, #323532); text-decoration: none;
+}
+.lg-hubmenu__item:hover, .lg-hubmenu__item:focus { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #6b7c52); outline: none; }
+.lg-hubmenu__item--all { font-weight: 800; }
+/* Hard guard: the picker never appears on desktop (desktop uses the dropdown). */
+@media (min-width: 821px) { .lg-hubmenu { display: none !important; } }
 </style>
 <a href="#lg-main" class="skip-link">Skip to content</a>
 
@@ -298,14 +350,16 @@ function lg_shared_render_site_header(array $ctx): void
         foreach ($nav_items as $slug => [$href, $label]):
             $is_active = ($active_nav === $slug);
             if ($slug === 'hub'):
-                // The label stays a plain link to /hub/ (all content); the caret
-                // is a SEPARATE control, so tapping "The Hub" still navigates
-                // while the caret opens the type list. Desktop opens on
-                // hover/focus (CSS); touch + the mobile drawer use the caret
-                // toggle (JS sets [data-open]). $ctx-driven, consumer-only.
+                // "The Hub" carries a content-type submenu, split by viewport:
+                //   • Desktop (≥821): the caret opens a dropdown on hover / focus /
+                //     click (CSS + the sub-toggle JS); the link itself navigates.
+                //   • Mobile (≤820): the caret is hidden and the link is a dual-tap
+                //     trigger — first tap opens the .lg-hubmenu MODAL (rendered after
+                //     </header>), a second tap falls through to /hub/. JS keys off
+                //     data-lg-hub-link. Items in both surfaces mirror $hub_types.
                 ?>
         <li class="lg-chrome__has-sub" data-lg-hassub>
-          <a href="<?= $h($href) ?>"<?= $is_active ? ' class="is-active" aria-current="page"' : '' ?>><?= $h($label) ?></a>
+          <a href="<?= $h($href) ?>" data-lg-hub-link aria-expanded="false"<?= $is_active ? ' class="is-active" aria-current="page"' : '' ?>><?= $h($label) ?></a>
           <button class="lg-chrome__sub-toggle" type="button"
                   aria-expanded="false" aria-controls="lg-hub-submenu"
                   aria-label="Browse the Hub by content type" data-lg-sub-toggle>
@@ -492,6 +546,33 @@ function lg_shared_render_site_header(array $ctx): void
   </div><!-- .lg-chrome__inner -->
 </header>
 
+<?php /* Mobile Hub content-type picker (modal). Opened by the FIRST tap on "The
+         Hub" in the drawer (≤820); a SECOND tap on the link falls through to
+         /hub/. Desktop uses the dropdown above and never opens this. Rendered for
+         everyone — the Hub is public. Items mirror $hub_types (→ HUB_TYPE_LABELS)
+         so the picker and the dropdown read identically. */ ?>
+<div class="lg-hubmenu" id="lg-hubmenu" hidden aria-hidden="true"
+     role="dialog" aria-modal="true" aria-label="Browse the Hub by content type">
+  <div class="lg-hubmenu__backdrop" data-lg-hubmenu-close></div>
+  <div class="lg-hubmenu__sheet" role="document">
+    <div class="lg-hubmenu__head">
+      <h2 class="lg-hubmenu__title">Browse the Hub</h2>
+      <button class="lg-hubmenu__close" type="button" aria-label="Close" data-lg-hubmenu-close>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+             stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <ul class="lg-hubmenu__list">
+      <li><a class="lg-hubmenu__item lg-hubmenu__item--all" href="/hub/">Everything</a></li>
+      <?php foreach ($hub_types as $tkey => $tlabel): ?>
+      <li><a class="lg-hubmenu__item" href="<?= $h('/hub/?type=' . rawurlencode($tkey)) ?>"><?= $h($tlabel) ?></a></li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
+</div>
+
 <script>
 (function () {
   /* Mobile nav toggle */
@@ -604,6 +685,62 @@ function lg_shared_render_site_header(array $ctx): void
         if (e.key === 'Escape' && li.hasAttribute('data-open')) { closeSub(); tgl.focus(); }
       });
     })(subToggles[si]);
+  }
+
+  /* Mobile Hub picker (dual-tap modal). On phones/tablets (≤820) the "The Hub"
+     link opens a content-type MODAL instead of navigating; a SECOND tap on the
+     (now lifted) Hub link — without choosing a type — falls through to /hub/.
+     Desktop keeps the dropdown, so this is gated off entirely ≥821. Null-safe.
+     hdr / btn are the header + hamburger declared at the top of this IIFE. */
+  var hubMq    = window.matchMedia('(max-width: 820px)');
+  var hubLi    = document.querySelector('[data-lg-hassub]');
+  var hubLink  = hubLi ? hubLi.querySelector('[data-lg-hub-link]') : null;
+  var hubModal = document.getElementById('lg-hubmenu');
+  if (hdr && hubLi && hubLink && hubModal) {
+    var hubMenuOpen = function () { return !hubModal.hidden; };
+
+    var openHubMenu = function () {
+      hubModal.hidden = false;
+      hubModal.setAttribute('aria-hidden', 'false');
+      hdr.classList.add('lg-chrome--hubmenu-open');
+      hubLi.classList.add('is-armed');
+      hubLink.setAttribute('aria-expanded', 'true');
+      document.body.classList.add('lg-sm-open');   // reuse the social-modal scroll lock
+      var first = hubModal.querySelector('.lg-hubmenu__item');
+      if (first) first.focus();
+    };
+
+    var closeHubMenu = function () {
+      hubModal.hidden = true;
+      hubModal.setAttribute('aria-hidden', 'true');
+      hdr.classList.remove('lg-chrome--hubmenu-open');
+      hubLi.classList.remove('is-armed');
+      hubLink.setAttribute('aria-expanded', 'false');
+      document.body.classList.remove('lg-sm-open');
+    };
+
+    hubLink.addEventListener('click', function (e) {
+      if (!hubMq.matches) return;                    // desktop: normal link + caret dropdown
+      if (hubMenuOpen()) { closeHubMenu(); return; } // 2nd tap → fall through to /hub/
+      e.preventDefault();                            // 1st tap → reveal the picker
+      openHubMenu();
+    });
+
+    // Dismiss WITHOUT navigating: backdrop, close button, Escape.
+    var hubClosers = hubModal.querySelectorAll('[data-lg-hubmenu-close]');
+    for (var hc = 0; hc < hubClosers.length; hc++) {
+      hubClosers[hc].addEventListener('click', function (e) {
+        e.preventDefault(); closeHubMenu(); hubLink.focus();
+      });
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && hubMenuOpen()) { closeHubMenu(); hubLink.focus(); }
+    });
+    // Toggling the hamburger or crossing back to desktop tears the picker down.
+    if (btn) btn.addEventListener('click', function () { if (hubMenuOpen()) closeHubMenu(); });
+    if (hubMq.addEventListener) {
+      hubMq.addEventListener('change', function (ev) { if (!ev.matches && hubMenuOpen()) closeHubMenu(); });
+    }
   }
 })();
 </script>
