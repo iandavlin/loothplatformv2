@@ -75,6 +75,10 @@ class LG_WD_PDF {
         $stats = [ 'total' => 0, 'embedded' => 0, 'missing' => [] ];
         $html  = self::stage_images( $html, $workdir, $stats );
 
+        // Render as ONE continuous tall page (no letter pagination): inject a
+        // script that sizes @page to the measured content box.
+        $html = self::inject_single_page_script( $html );
+
         $pdf = self::render_pdf( $html, $workdir );
         self::rrmdir( $workdir );
         if ( is_wp_error( $pdf ) ) return $pdf;
@@ -96,6 +100,48 @@ class LG_WD_PDF {
         // Always return a trailing-slashed path — callers concatenate file names
         // directly onto it (e.g. $workdir . 'img-1.png').
         return trailingslashit( $dir );
+    }
+
+    /** Max single-page height in CSS px (~200in @96dpi). Chrome paginates by
+     *  @page, so anything taller spills to a second page. */
+    const MAX_PAGE_PX = 14400;
+
+    /**
+     * Make the PDF render as ONE continuous tall page instead of letter
+     * pagination. Injects a script that, after all images have loaded,
+     * measures the email content box and sets @page { size: width × height }.
+     * Chrome then produces a single page exactly as tall as the content
+     * (capped at MAX_PAGE_PX). A small buffer avoids a sub-pixel spill onto a
+     * phantom second page.
+     */
+    private static function inject_single_page_script( string $html ): string {
+        $cap = (int) apply_filters( 'lg_wd_pdf_max_height_px', self::MAX_PAGE_PX );
+
+        // NB: images are force-loaded (loading=eager) before measuring, because
+        // a lazily-loaded image below the fold would otherwise be 0-height at
+        // measure time and the page would be cut short.
+        $js = '<script>(function(){'
+            . 'function m(){'
+            . 'var c=document.querySelector(".email-container")||document.body;'
+            . 'var r=c.getBoundingClientRect();'
+            . 'var w=Math.ceil(r.width);'
+            . 'var h=Math.min(Math.ceil(Math.max(document.body.scrollHeight,r.bottom))+16,' . $cap . ');'
+            . 'var s=document.createElement("style");'
+            . 's.textContent="@page{size:"+w+"px "+h+"px;margin:0}html,body{margin:0;padding:0;background:#FAF6EE}";'
+            . 'document.head.appendChild(s);'
+            . '}'
+            . 'var imgs=[].slice.call(document.images);'
+            . 'imgs.forEach(function(i){try{i.loading="eager";}catch(e){}});'
+            . 'var p=imgs.filter(function(i){return !i.complete;});'
+            . 'if(!p.length){m();return;}'
+            . 'var d=0;p.forEach(function(i){var f=function(){if(++d>=p.length)m();};'
+            . 'i.addEventListener("load",f);i.addEventListener("error",f);});'
+            . '})();</script>';
+
+        if ( stripos( $html, '</body>' ) !== false ) {
+            return str_ireplace( '</body>', $js . '</body>', $html );
+        }
+        return $html . $js;
     }
 
     private static function filename_for( int $issue_id, string $subject ): string {
@@ -324,12 +370,19 @@ class LG_WD_PDF {
         // writable work dir (Chrome writes its temp profile + config there),
         // and the whole thing is wrapped in `timeout` as a final backstop.
         // All images are local files, so no network/CDN/gate fetch is needed.
+        //
+        // --window-size 1000 wide lets the 960px email container reach its full
+        // design width before measuring. --virtual-time-budget +
+        // --run-all-compositor-stages-before-draw give the injected
+        // measure-and-size-@page script time to run (after images load) before
+        // Chrome prints, so the single-tall-page sizing takes effect.
         $hard_timeout = (int) apply_filters( 'lg_wd_pdf_timeout', 60 );
 
         $cmd = sprintf(
             'HOME=%1$s TMPDIR=%1$s timeout %4$d %2$s --headless --no-sandbox '
-            . '--disable-gpu --disable-dev-shm-usage --no-pdf-header-footer '
-            . '--print-to-pdf=%3$s %5$s 2>&1',
+            . '--disable-gpu --disable-dev-shm-usage --window-size=1000,1400 '
+            . '--run-all-compositor-stages-before-draw --virtual-time-budget=15000 '
+            . '--no-pdf-header-footer --print-to-pdf=%3$s %5$s 2>&1',
             escapeshellarg( $workdir ),
             escapeshellarg( $chrome ),
             escapeshellarg( $pdf_file ),
