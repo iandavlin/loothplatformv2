@@ -163,6 +163,72 @@ function lg_shared_render_site_header(array $ctx): void
 .lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout:focus {
   background: #fdf0ec !important; color: #c66845 !important;
 }
+
+/* Hub content-type submenu — a desktop dropdown (hover / keyboard focus / click)
+   that becomes an inline indented list inside the mobile drawer. Scoped under
+   .lg-chrome + !important so a PAGE theme (BB / archive.css) that styles ul/li/a
+   inside the chrome can't bleed in — same defensive posture as the account menu. */
+.lg-chrome .lg-chrome__has-sub { position: relative; display: inline-flex; align-items: center; gap: 2px; }
+.lg-chrome ul.lg-chrome__submenu,
+.lg-chrome ul.lg-chrome__submenu li { list-style: none !important; }
+.lg-chrome__sub-toggle {
+  appearance: none; -webkit-appearance: none; background: transparent; border: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 30px; padding: 0; margin: 0;
+  color: var(--lg-ink); cursor: pointer; border-radius: 6px;
+}
+.lg-chrome__sub-toggle:hover { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+.lg-chrome__sub-toggle svg { transition: transform .15s ease; }
+.lg-chrome .lg-chrome__has-sub[data-open] .lg-chrome__sub-toggle svg { transform: rotate(180deg); }
+
+.lg-chrome ul.lg-chrome__submenu {
+  display: none;
+  position: absolute; top: 100%; left: 0;
+  min-width: 200px; margin: 0 !important; padding: 6px !important;
+  background: #fff !important; border: 1px solid var(--lg-line) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06) !important;
+  z-index: 200;
+}
+/* Invisible bridge over the visual gap so a mouse travelling from the caret to
+   the dropdown doesn't cross a dead zone and drop the :hover. */
+.lg-chrome ul.lg-chrome__submenu::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px;
+}
+.lg-chrome ul.lg-chrome__submenu li { margin: 0 !important; }
+.lg-chrome ul.lg-chrome__submenu a {
+  display: block !important;
+  padding: 9px 12px !important; border-radius: 6px !important;
+  font: 600 13px/1 var(--lg-font-sans) !important;
+  color: var(--lg-ink) !important; text-decoration: none !important;
+  white-space: nowrap !important; background: transparent !important;
+}
+.lg-chrome ul.lg-chrome__submenu a:hover,
+.lg-chrome ul.lg-chrome__submenu a:focus {
+  background: var(--lg-sage-tint) !important; color: var(--lg-sage-d) !important;
+}
+/* Click / touch toggle — works at every width. */
+.lg-chrome .lg-chrome__has-sub[data-open] > ul.lg-chrome__submenu { display: block; }
+/* Desktop only: hover + keyboard focus also reveal the dropdown. */
+@media (min-width: 821px) {
+  .lg-chrome .lg-chrome__has-sub:hover > ul.lg-chrome__submenu,
+  .lg-chrome .lg-chrome__has-sub:focus-within > ul.lg-chrome__submenu { display: block; }
+}
+/* Mobile drawer (≤820): the nav is a vertical panel — flow the submenu inline
+   (indented) under "The Hub" and open it ONLY via the caret. Hover/focus-within
+   open rules above are scoped to ≥821, so they never fire here. */
+@media (max-width: 820px) {
+  .lg-chrome .lg-chrome__has-sub { display: flex; flex-wrap: wrap; align-items: center; width: 100%; }
+  .lg-chrome .lg-chrome__has-sub > a { flex: 1; }
+  .lg-chrome__sub-toggle { width: 44px; height: 44px; }
+  .lg-chrome ul.lg-chrome__submenu {
+    position: static; top: auto; min-width: 0; width: 100%;
+    box-shadow: none !important; border: 0 !important; border-radius: 0 !important;
+    padding: 2px 0 6px 12px !important;
+  }
+  .lg-chrome ul.lg-chrome__submenu::before { content: none; }
+  .lg-chrome ul.lg-chrome__submenu a { padding: 10px 14px !important; }
+}
 </style>
 <a href="#lg-main" class="skip-link">Skip to content</a>
 
@@ -200,11 +266,66 @@ function lg_shared_render_site_header(array $ctx): void
             'members'  => ['/directory/members/', 'The Map'],
             'sponsors' => ['/sponsors/',          'Sponsors'],
         ];
+
+        // "The Hub" carries a content-type submenu. The Hub feed (bb-mirror)
+        // already filters on a ?type=<kind> CSV param, so each item deep-links
+        // to one content kind. SOURCE OF TRUTH for this list/labels/order is
+        // bb-mirror/web/forums/_hub-filters.php → HUB_TYPE_LABELS (the SAME
+        // facets the Hub's own filter rail renders). 'event' and 'misc' are
+        // deliberately omitted: the Hub feed itself excludes them
+        // (kind NOT IN ('event','misc')) and Events have their own top-level
+        // nav item (/events/). Gating stays the Hub's job — below-tier items
+        // render as locked teasers server-side (absence model), so a deep-link
+        // exposes no payload. Keep in sync if a new feed-facing CPT launches.
+        $hub_types = [
+            'discussions'  => 'Discussions',
+            'video'        => 'Videos',
+            'article'      => 'Articles',
+            'loothprint'   => 'Loothprints',
+            // Labels mirror HUB_TYPE_LABELS so the submenu and the Hub's own
+            // filter rail read identically — EXCEPT sponsor-post, which the rail
+            // calls "Sponsors". Here that would collide with the top-level
+            // "Sponsors" nav item (the /sponsors/ directory), so we use the CPT's
+            // own registered label "Sponsor Posts" to disambiguate the two.
+            'sponsor-post' => 'Sponsor Posts',
+            'useful_links' => 'Useful Links',
+            'shorty'       => 'Shorts',
+            'benefit'      => 'Benefits',
+            'loothcuts'    => 'Loothcuts',
+            'document'     => 'Documents',
+        ];
+
         foreach ($nav_items as $slug => [$href, $label]):
             $is_active = ($active_nav === $slug);
-            ?>
+            if ($slug === 'hub'):
+                // The label stays a plain link to /hub/ (all content); the caret
+                // is a SEPARATE control, so tapping "The Hub" still navigates
+                // while the caret opens the type list. Desktop opens on
+                // hover/focus (CSS); touch + the mobile drawer use the caret
+                // toggle (JS sets [data-open]). $ctx-driven, consumer-only.
+                ?>
+        <li class="lg-chrome__has-sub" data-lg-hassub>
+          <a href="<?= $h($href) ?>"<?= $is_active ? ' class="is-active" aria-current="page"' : '' ?>><?= $h($label) ?></a>
+          <button class="lg-chrome__sub-toggle" type="button"
+                  aria-expanded="false" aria-controls="lg-hub-submenu"
+                  aria-label="Browse the Hub by content type" data-lg-sub-toggle>
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                 stroke="currentColor" stroke-width="2.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <ul class="lg-chrome__submenu" id="lg-hub-submenu">
+            <li><a href="/hub/">Everything</a></li>
+            <?php foreach ($hub_types as $tkey => $tlabel): ?>
+            <li><a href="<?= $h('/hub/?type=' . rawurlencode($tkey)) ?>"><?= $h($tlabel) ?></a></li>
+            <?php endforeach; ?>
+          </ul>
+        </li>
+        <?php else: ?>
         <li><a href="<?= $h($href) ?>"<?= $is_active ? ' class="is-active" aria-current="page"' : '' ?>><?= $h($label) ?></a></li>
-        <?php endforeach; ?>
+        <?php endif;
+        endforeach; ?>
         <li><a href="https://loothtool.com/">Loothtool</a></li>
         <?php if (!$authenticated): /* Phone-condense (≤640) hides the header
               Sign-in button, which left anon phones with NO sign-in path —
@@ -452,6 +573,37 @@ function lg_shared_render_site_header(array $ctx): void
         if (prev) prev.focus();
       }
     });
+  }
+
+  /* Hub content-type submenu: the caret toggles the dropdown for touch users and
+     inside the mobile drawer. Desktop mouse/keyboard also open it via CSS
+     (:hover / :focus-within), so this is purely additive — null-safe if the Hub
+     item isn't rendered. */
+  var subToggles = document.querySelectorAll('[data-lg-sub-toggle]');
+  for (var si = 0; si < subToggles.length; si++) {
+    (function (tgl) {
+      var li = tgl.closest ? tgl.closest('[data-lg-hassub]') : null;
+      if (!li) return;
+      function closeSub() { li.removeAttribute('data-open'); tgl.setAttribute('aria-expanded', 'false'); }
+      tgl.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (li.hasAttribute('data-open')) {
+          closeSub();
+        } else {
+          li.setAttribute('data-open', '');
+          tgl.setAttribute('aria-expanded', 'true');
+        }
+      });
+      // Close when clicking outside the Hub item.
+      document.addEventListener('click', function (e) {
+        if (!li.contains(e.target)) closeSub();
+      });
+      // Close on Escape, return focus to the caret.
+      li.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && li.hasAttribute('data-open')) { closeSub(); tgl.focus(); }
+      });
+    })(subToggles[si]);
   }
 })();
 </script>
