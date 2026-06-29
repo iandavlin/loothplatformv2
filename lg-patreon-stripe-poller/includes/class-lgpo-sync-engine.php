@@ -481,14 +481,19 @@ class LGPO_Sync_Engine {
         $email           = $member['email'];
         $patreon_user_id = (string) ( $member['patreon_user_id'] ?? '' );
 
-        // RE-KEY THE BRIDGE ON THE STABLE PATREON USER ID, not the email.
-        // Email is mutable and frequently blank on legacy accounts: the ~30
-        // active patrons whose same-name WP account carried a BLANK email never
-        // matched here (get_user_by('email','') === false) and so never got a
-        // role. Match by Patreon ID first; fall back to email only for accounts
-        // not yet linked, and backfill the ID meta when we match by email so
-        // every later pass keys on the stable ID. (Tier / whoami already key on
-        // the WP user id, so email becomes non-load-bearing.)
+        // RE-KEY THE BRIDGE ON THE STABLE PATREON USER ID for MATCHING only.
+        // Match by Patreon ID first because email is mutable and was blank on
+        // ~30 legacy accounts (get_user_by('email','') never matched them, so
+        // they never got a role); fall back to email for accounts not yet
+        // linked, and backfill the ID meta on an email match so every later
+        // pass keys on the stable ID.
+        //
+        // The email is NOT optional and is NEVER non-load-bearing: it is the
+        // user's LOGIN CREDENTIAL and MUST be captured. sync_wp_email() below
+        // mirrors the patron's current Patreon email onto the WP user every
+        // pass; a blank user_email is a DEFECT to fix (backfill-blank-emails.php),
+        // not an acceptable steady state. Do not reintroduce the idea that the
+        // email is dispensable.
         $user       = null;
         $matched_by = '';
         if ( $patreon_user_id !== '' && function_exists( 'lgpo_get_user_by_patreon_id' ) ) {
@@ -679,6 +684,12 @@ class LGPO_Sync_Engine {
     private static function sync_wp_email( \WP_User $user, array $member, array &$changes ): void {
         $patreon_email = strtolower( trim( (string) ( $member['email'] ?? '' ) ) );
         if ( $patreon_email === '' || ! is_email( $patreon_email ) ) {
+            // Patreon returned no usable email for this patron. Log it — a
+            // missing login credential must be VISIBLE, never silently dropped.
+            error_log( sprintf(
+                'LGPO Sync: no Patreon email to mirror for WP #%d (patron %s) — login credential missing, investigate.',
+                $user->ID, (string) ( $member['patreon_user_id'] ?? '?' )
+            ) );
             return;
         }
         // Never overwrite a privileged account's email over poller data.

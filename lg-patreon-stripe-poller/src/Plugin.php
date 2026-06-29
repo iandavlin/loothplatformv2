@@ -44,7 +44,7 @@ final class Plugin
      * option; on a fresh MUST-USE load (no register_activation_hook fires) the
      * installer self-applies once when the stored version differs.
      */
-    public const INSTALL_VERSION = '2.0.0-mu1';
+    public const INSTALL_VERSION = '2.0.0-mu2';
 
     public static function activate(): void
     {

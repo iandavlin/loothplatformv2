@@ -110,5 +110,25 @@ final class Schema
                 KEY idx_requested  (requested_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         SQL);
+
+        // ---------------------------------------------------------------
+        // Column migrations. `CREATE TABLE IF NOT EXISTS` above is a no-op on a
+        // table that already exists, so any column added AFTER a table's first
+        // creation must be applied explicitly or a long-lived box drifts from
+        // the CREATE definitions above. `ADD COLUMN IF NOT EXISTS` (MariaDB /
+        // MySQL 8) is itself idempotent — safe to run on every install pass.
+        // Add one line per post-creation column. (2026-06 pledge_cadence
+        // incident: the column shipped in the CREATE + the upsert but never
+        // reached existing tables, so every membership write/read failed.)
+        $migrations = [
+            'ALTER TABLE lg_patreon_members ADD COLUMN IF NOT EXISTS pledge_cadence SMALLINT NULL AFTER currently_entitled_amount_cents',
+        ];
+        foreach ( $migrations as $mig ) {
+            try {
+                $pdo->exec( $mig );
+            } catch ( \Throwable $e ) {
+                error_log( 'LGMS Schema migration skipped (' . $e->getMessage() . '): ' . $mig );
+            }
+        }
     }
 }
