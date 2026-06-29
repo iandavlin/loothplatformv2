@@ -28,6 +28,7 @@ require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-issue.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-query.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-email-builder.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-sender.php';
+require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-pdf.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-admin.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-compose.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-cron.php';
