@@ -1,8 +1,8 @@
 # Poller role-fix — LIVE remediation plans (PREPARED, do NOT auto-run)
 
-Two one-time scripts that clean up the existing data damage on **live**. They are
+Three one-time scripts that clean up the existing data damage on **live**. They are
 **not** wired into cron and are **not** run by the lane — Ian runs them by hand on
-live after the code in branch `poller-role-fix` is deployed. Both default to a
+live after the engine code they depend on is deployed. All default to a
 **dry-run / review** mode and only mutate when passed `apply`.
 
 Run as the live WP system user, from the plugin's `deploy/remediation/` dir:
@@ -17,10 +17,15 @@ sudo -u looth-live wp eval-file dedupe-multirole.php apply    # execute
 
 sudo -u looth-live wp eval-file backfill-blank-emails.php       # review
 sudo -u looth-live wp eval-file backfill-blank-emails.php apply # execute
+
+sudo -u looth-live wp eval-file reconcile-patreon-skeletons.php             # review
+sudo -u looth-live wp eval-file reconcile-patreon-skeletons.php apply       # execute (prints a batch id)
+sudo -u looth-live wp eval-file reconcile-patreon-skeletons.php revert <id> # undo that batch
 ```
 
 Take a DB backup first (`wp db export` of `wp_usermeta`, `wp_users`, and
-`lg_role_sources`). Neither script deletes or creates users.
+`lg_role_sources`; for the reconciler also dump `lg_patreon_members` from the
+`lg_membership` DB). None of these scripts delete or create users.
 
 ---
 
@@ -63,7 +68,88 @@ On `apply`, for each proposed link it:
 Safe because login is Patreon OAuth — rewriting `user_email` cannot lock anyone
 out. Review the proposal list before applying; hand-resolve the ambiguous block.
 
----
+## 3. `reconcile-patreon-skeletons.php` — the ~80 hard-locked + ~149 mis-linked skeletons
+
+Fixes the **skeleton accounts** a bulk import / DB-reload created: `user_login =
+patreon_<id>` (the Patreon user id is IN the username) but the
+`lgpo_patreon_user_id` meta was never written and `user_email` left blank. The
+hourly sweep keys on that META (then email), so these are invisible to it — never
+linked, never get their email mirrored, never get a role → hard-locked out. This
+recovers the Patreon id **deterministically** by parsing the username (it is *not*
+the fuzzy name-match of #2 — that handles the non-skeleton legacy accounts), then
+roster-confirms it.
+
+**Prerequisite:** the deployed plugin must carry `LGPO_Sync_Engine::fetch_member_roster()`
+**and** `::stamp_looth_uuid()` (the re-key-on-Patreon-ID engine work). Verify before
+running:
+
+```bash
+sudo -u looth-live wp eval 'var_dump(
+  method_exists("LGPO_Sync_Engine","fetch_member_roster"),
+  method_exists("LGPO_Sync_Engine","stamp_looth_uuid"));'   # must be true, true
+```
+
+Per skeleton account (`user_login REGEXP '^patreon_[0-9]+$'` AND missing meta;
+admins + non-matching placeholders are excluded by construction):
+
+| Situation | Action |
+|---|---|
+| id **in** the active roster | **LINK**: stamp `lgpo_patreon_user_id`, mirror `user_email` from the roster (uniqueness-guarded; freezes `_looth_uuid` so `/whoami` resolves), write the `lg_patreon_members` row → Manage Account renders **ACTIVE** immediately |
+| id **not** in roster, **blank** email | **FLAG** (lapsed / left Patreon) — writes nothing; never blind-links |
+| id **not** in roster, email **present** (the ~149) | **STAMP-META** only — stamps `lgpo_patreon_user_id` so every future sweep keys on the stable id |
+
+The **role is intentionally not applied here.** Once the meta is stamped the next
+hourly sweep sees the account and grants the correct tier — which keeps this
+script's writes (meta + email + row) exactly the set the journal can reverse.
+
+**Reversible.** `apply` records a per-account journal under a printed **batch id**
+(stored in the `lgpo_reconcile_journal_<batch>` / `lgpo_reconcile_batches`
+options, autoload off). `revert <batch-id>` restores each account exactly — clears
+the meta it stamped (only where it was absent before), restores the prior
+`user_email` (a blank prior restores to blank), and deletes the `lg_patreon_members`
+row **only if** that apply inserted it. Revert is idempotent (re-running a
+reverted batch is a no-op) and interruption-safe (a killed revert re-runs cleanly).
+Run `revert` with no batch id to list known batches and their state. Revert does
+**not** undo a tier role a later sweep may have granted from the now-cleared meta —
+if a sweep already ran, settle roles afterward with `dedupe-multirole.php` / the
+arbiter.
+
+### Live runbook
+
+1. **Backup** (see top) — include `lg_patreon_members` from the `lg_membership` DB.
+2. **Prerequisite check** (the `method_exists` snippet above) — both `true`.
+3. **Review:** `… reconcile-patreon-skeletons.php`. Sanity-check the counts — `LINK`
+   should ≈ the active blank-email patrons (~80), `STAMP-META` ≈ 149, `FLAG` = the
+   lapsed ones, `EDGE` = the 2 non-skeleton oddballs (left untouched — see below).
+4. **Apply:** `… reconcile-patreon-skeletons.php apply`. **Record the batch id it
+   prints** (needed for revert).
+5. **Grant roles:** let the next hourly sweep run, or trigger it, so the `LINK`
+   accounts get their tier (the script deliberately leaves roles to the sweep).
+6. **Smoke `/whoami` on EVERY linked account** — each must resolve to a real member
+   identity (not anon) with a single tier role. A still-anon result means the uuid
+   didn't land for that user.
+7. **If anything is wrong:** `… reconcile-patreon-skeletons.php revert <batch-id>`
+   (ideally before the sweep grants roles, for a clean undo).
+
+> **Mail note:** mirroring a blank → real `user_email` makes WP core try to send its
+> "email changed" notice to the *old* (blank) address, which fails harmlessly (a
+> `503 Bad sequence` to the local mail sink on dev). On live, member/billing mail is
+> gated OFF by `lgms_poller_mail_enabled`, and the reconciler sends nothing
+> intentionally — so this is noise, not a member-facing email.
+
+### The two EDGE accounts (investigated — left untouched)
+
+The reconciler enumerates strictly `^patreon_[0-9]+$`, so neither of the two
+"blank-email + unlinked" oddballs is auto-linked; both are listed under **EDGE** for
+manual review:
+
+- **`670aa65904420`** — *not* a `patreon_<id>` account: the login is a **hex Unix
+  timestamp** (`0x670aa659` = `1728743001` ≈ its `user_registered` of 2024-10-12),
+  i.e. a fallback username minted when an import had no Patreon id / name / email to
+  work from. Blank email, no recoverable id → there is nothing to deterministically
+  link it to. Leave it for a hand merge (or delete if confirmed junk); it is **not**
+  one of the locked-out patrons.
+- **`deleted-member`** — a placeholder/tombstone login, explicitly skipped.
 
 ## After applying — finish the IDENTITY step, then smoke the REAL accounts
 
