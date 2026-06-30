@@ -35,7 +35,6 @@ $rows = $pg->query("
       FROM users u
      WHERE u.archived_at IS NULL
        AND u.lat IS NOT NULL AND u.lng IS NOT NULL
-       AND EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = u.id)
        AND (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb)
        AND u.profile_visibility = 'public'                                 -- master switch: private = owner-only everywhere
        AND COALESCE(u.location_members_precision, 'city') <> 'private'     -- members-private = off every map (ruling 4 exception)

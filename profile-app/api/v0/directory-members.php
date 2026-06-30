@@ -117,7 +117,6 @@ $hasLastSeen = (bool)$pg->query(
 )->fetchColumn();
 
 $wheres = [
-    'EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = u.id)',
     'u.archived_at IS NULL',
     // MASTER SWITCH (Visibility model): a private profile is owner-only —
     // no card, no pin, no teaser dot, for members too; admins excepted.
