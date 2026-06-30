@@ -52,6 +52,23 @@ $action = (string)($body['action'] ?? 'upsert');
 
 $db = bb_mirror_db(readonly: false);
 
+// For reply mutations, capture the parent topic up front so we can refresh its
+// stored reply_count after the row change. bbPress never bumps a topic's
+// post_modified_gmt on reply add/remove, so nothing else re-materializes the
+// parent and its count drifts (card shows "0 replies" while the live facepile
+// shows avatars). Read from the existing pg reply row first (covers edit /
+// trash / spam / restore / delete — captured BEFORE the delete runs), then fall
+// back to WP meta for a brand-new reply whose pg row doesn't exist yet.
+$reply_topic_id = 0;
+if ($kind === 'reply') {
+    $st = $db->prepare("SELECT topic_id FROM reply WHERE id = ?");
+    $st->execute([$id]);
+    $reply_topic_id = (int)($st->fetchColumn() ?: 0);
+    if ($reply_topic_id <= 0) {
+        $reply_topic_id = (int) get_post_meta($id, '_bbp_topic_id', true);
+    }
+}
+
 try {
     switch ([$kind, $action]) {
         case ['forum', 'upsert']:        bb_mirror_upsert_forum($id, $db); break;
@@ -109,6 +126,13 @@ try {
 
         default:
             http_response_code(400); exit("unknown kind/action: $kind/$action");
+    }
+
+    // Reply add/remove/edit changed the parent topic's published-reply tally —
+    // recompute its stored reply_count so the card pill + facepile count stay
+    // truthful (the facepile avatars are already live).
+    if ($kind === 'reply' && $reply_topic_id > 0) {
+        bb_mirror_refresh_topic_reply_count($reply_topic_id, $db);
     }
 } catch (Throwable $e) {
     error_log("[bb-mirror _sync] $kind#$id $action: " . $e->getMessage());
