@@ -173,18 +173,21 @@ function lg_activity_route(WP_REST_Request $req) {
     global $wpdb;
     $limit  = max(1, min(50, (int) $req->get_param('limit')));
     $before = (int) $req->get_param('before');
-    // Member detection via cookie presence — matches the archive-poc page-side
-// audience check. Doesn't trust the cookie for any privileged action; only
-// gates which activity items get included in the JSON payload.
-$is_member = false;
-foreach (array_keys($_COOKIE) as $cn) {
-    if (str_starts_with($cn, 'wordpress_logged_in_')) { $is_member = true; break; }
-}
+    // Member detection by VALIDATING the logged-in cookie (HMAC signature +
+    // expiry) — NOT by cookie-NAME presence. A junk `wordpress_logged_in_*`
+    // cookie used to flip the audience to "member" and leak gated / private-group
+    // rows to anyone who set one (infra lane 2026-06-13, reproduced end-to-end).
+    // wp_validate_auth_cookie() returns the user id on a genuine cookie, else false.
+    $is_member = ( wp_validate_auth_cookie( '', 'logged_in' ) !== false );
 
     // Cache key includes audience + cursor + limit
     $cache_key = 'lg_act_' . ($is_member ? 'm' : 'p') . "_{$before}_{$limit}";
     $cached = get_transient($cache_key);
-    if (is_array($cached)) return rest_ensure_response($cached);
+    if (is_array($cached)) {
+        $resp = rest_ensure_response($cached);
+        $resp->header('X-LG-Activity-Audience', $is_member ? 'member' : 'public');
+        return $resp;
+    }
 
     $items = [];
 
@@ -289,7 +292,9 @@ foreach (array_keys($_COOKIE) as $cn) {
 
     $payload = ['items' => $items, 'limit' => $limit, 'before' => $before];
     set_transient($cache_key, $payload, 30);
-    return rest_ensure_response($payload);
+    $resp = rest_ensure_response($payload);
+    $resp->header('X-LG-Activity-Audience', $is_member ? 'member' : 'public');
+    return $resp;
 }
 
 /** First BuddyBoss media attachment image for a post — forum posts attach

@@ -186,7 +186,21 @@ add_action( 'rest_api_init', static function () {
                 return new WP_REST_Response( [ 'error' => 'not_logged_in' ], 401 );
             }
             wp_set_current_user( $uid );
-            return new WP_REST_Response( [ 'nonce' => wp_create_nonce( 'wp_rest' ) ] );
+
+            // Optional ?action=<name> mints a nonce for that action instead of
+            // the default wp_rest. Whitelisted; the lgms_test_* QA-tool nonces
+            // require manage_options (the admin-only /test-checklist/ surface
+            // drives admin-ajax.php with these action nonces).
+            $action = isset( $_GET['action'] ) ? (string) $_GET['action'] : '';
+            if ( $action === '' ) { $action = 'wp_rest'; }
+            $allowed = [ 'wp_rest', 'lgms_test_feedback', 'lgms_test_wipe' ];
+            if ( ! in_array( $action, $allowed, true ) ) {
+                return new WP_REST_Response( [ 'error' => 'action_not_allowed' ], 400 );
+            }
+            if ( strpos( $action, 'lgms_test_' ) === 0 && ! current_user_can( 'manage_options' ) ) {
+                return new WP_REST_Response( [ 'error' => 'forbidden' ], 403 );
+            }
+            return new WP_REST_Response( [ 'nonce' => wp_create_nonce( $action ), 'action' => $action ] );
         },
     ] );
 } );

@@ -27,13 +27,21 @@ if (!defined('ABSPATH')) exit;
 
 require_once __DIR__ . '/looth-vendor/autoload.php';
 
+// Derive the public host from the shared env so the cookie domain + issuer
+// auto-correct per box (dev1→.dev.loothgroup.com, dev2→.dev2.loothgroup.com,
+// prod→.loothgroup.com). Absent-safe: on a box WITHOUT /etc/looth/env the
+// fallback is the current dev literal, so behavior is byte-identical to today.
+if (is_file('/srv/lg-shared/lg-env.php')) require_once '/srv/lg-shared/lg-env.php';
+$lg_shared = function_exists('lg_env') ? lg_env() : [];
+$lg_host   = $lg_shared['host'] ?? 'dev.loothgroup.com';   // fallback = dev literal → absent-env behaves EXACTLY as before
+
 const LOOTH_AUTH_NAMESPACE      = 'eaef23f7-9bc9-4a95-ac49-ffff632e6646';
 const LOOTH_AUTH_COOKIE         = 'looth_id';
-const LOOTH_AUTH_COOKIE_DOMAIN  = '.dev.loothgroup.com';      // dev — adjust per env at deploy time
+define('LOOTH_AUTH_COOKIE_DOMAIN', '.' . $lg_host);          // env-derived; const can't take a runtime expr
 const LOOTH_AUTH_TTL_SECONDS    = 30 * 24 * 60 * 60;          // 30 days
 const LOOTH_AUTH_PRIVATE_KEY    = '/etc/looth/jwt-private.pem';
 const LOOTH_AUTH_PUBLIC_KEY     = '/etc/looth/jwt-public.pem';   // 644 root:root — readable
-const LOOTH_AUTH_ISS            = 'https://dev.loothgroup.com';
+define('LOOTH_AUTH_ISS', 'https://' . $lg_host);             // env-derived; const can't take a runtime expr
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
@@ -84,7 +92,7 @@ function looth_auth_slug_for_user(WP_User $user): string {
     if (!is_string($secret) || $secret === '') return '';
     $secret = trim($secret);
 
-    $host = $_SERVER['HTTP_HOST'] ?? 'dev.loothgroup.com';
+    $host = $_SERVER['HTTP_HOST'] ?? $GLOBALS['lg_host'] ?? 'dev.loothgroup.com';
     $ch = curl_init('https://127.0.0.1/profile-api/v0/internal/slug?wp_user_id=' . $wpId);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
@@ -291,7 +299,7 @@ add_action('admin_bar_menu', function (WP_Admin_Bar $bar) {
     $bar->add_node([
         'id'    => 'looth-my-profile',
         'title' => 'My Profile',
-        'href'  => 'https://dev.loothgroup.com/profile/edit',
+        'href'  => LOOTH_AUTH_ISS . '/profile/edit',
         'meta'  => ['title' => 'Edit your Looth profile'],
     ]);
 }, 80);
@@ -343,7 +351,7 @@ add_action('rest_api_init', function () {
             if (!is_string($return) || $return === '' || $return[0] !== '/') {
                 $return = '/profile/edit';
             }
-            $back = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'dev.loothgroup.com') . $return;
+            $back = 'https://' . ($_SERVER['HTTP_HOST'] ?? $GLOBALS['lg_host'] ?? 'dev.loothgroup.com') . $return;
             if (!is_user_logged_in()) {
                 $login = wp_login_url($back);
                 wp_redirect($login); exit;
