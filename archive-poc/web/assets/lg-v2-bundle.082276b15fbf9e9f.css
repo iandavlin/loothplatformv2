@@ -1,0 +1,3288 @@
+/* lg-layout-v2 — generated bundle. Do not edit by hand. */
+@layer legacy, reset, theme, block-shell, block-defaults, context, dash;
+
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; }
+  .lg-article img, .lg-article video { max-width: 100%; }
+  figure { margin: 0; }
+}
+
+@layer theme {
+  :root {
+    --lg-amber: #ecb351;
+    --lg-amber-border: rgba(236, 179, 81, 0.85);
+    --lg-article-max: clamp(20rem, 88vw, 1040px);
+    --lg-article-max-wide: clamp(20rem, 96vw, 1320px);
+    --lg-article-padding-inline: clamp(16px, 4vw, 48px);
+    --lg-charcoal: #1a1d1a;
+    --lg-cream: #fbfbf8;
+    --lg-cream-tint: #f7dcb4;
+    --lg-cream-warm: #f4f1e8;
+    --lg-font-sans: 'Jost', system-ui, -apple-system, sans-serif;
+    --lg-font-serif: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+    --lg-ink: #323532;
+    --lg-on-dark: #ffffff;
+    --lg-overlay-scrim: linear-gradient(to top, rgba(0, 0, 0, 0.65), transparent);
+    --lg-sage: #87986a;
+    --lg-sage-1: #c2d5aa;
+    --lg-sage-2: #99b27e;
+    --lg-sage-3: #d4e0b8;
+    --lg-sage-translucent: rgba(135, 152, 106, 0.55);
+    --lg-shadow-badge: 0 4px 12px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2);
+    --lg-shadow-card: 0 4px 8px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+    --lg-shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.1);
+    --lg-shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+  .lg-article {
+    max-width: var(--lg-article-max);
+    margin-inline: auto;
+    padding-inline: var(--lg-article-padding-inline);
+  }
+  .lg-article > .lg-post-header,
+  .lg-article > .lg-post-footer,
+  .lg-article > .lg-fullbleed {
+    width: 100vw;
+    max-width: 100vw;
+    margin-inline: calc(50% - 50vw);
+  }
+  .lg-article > .lg-wider {
+    max-width: var(--lg-article-max-wide);
+    margin-inline: auto;
+  }
+  @media (max-width: 767px) {
+    .lg-article { max-width: 100%; }
+  }
+}
+
+/* ── block-shell layer ─────────────────────────────────── */
+/* callout */
+/* callout — structured aside with six role-named variants.
+   List variants (links / files / people / data) render items[] as a <ul>.
+   Prose variants (note / quote) render a string body. The shell is shared;
+   per-variant rules in this layer adjust the item shape + colors.
+
+   Container colors (bg, border-color, padding, radius, margin) come from
+   manifest vars (block-defaults layer). Per-variant *layout* lives below.
+*/
+
+@layer block-shell {
+  .lg-callout {
+    display: block;
+    position: relative;
+    padding: var(--lg-padding, 18px 24px 18px 26px);
+    margin-block: var(--lg-margin-block, 22px);
+    background: var(--lg-bg, #fdfbf4);
+    border: 1px solid var(--lg-tags-border, #e7e3da);
+    border-left: 5px solid var(--lg-border-color, #ecb351);
+    border-radius: var(--lg-radius, 8px);
+    color: var(--lg-charcoal, #1a1d1a);
+    font-family: var(--lg-font-sans, system-ui);
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  /* Chapter timestamp deep-links (& any callout body link). Color flows from the
+     block's dash-adjustable link-color (--lg-link-color); on-brand sage fallback. */
+  .lg-callout .lg-ts-link {
+    color: var(--lg-link-color, #6b7c52);
+    text-decoration: none;
+  }
+  .lg-callout .lg-ts-link:hover { text-decoration: underline; }
+
+  /* Eyebrow title — short uppercase label above the items list. */
+  .lg-callout__title {
+    margin: 0 0 12px;
+    font: 700 11px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--lg-title-color, #b8842b);
+  }
+
+  /* Items list — no bullets, dashed dividers between rows. */
+  .lg-callout__items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .lg-callout__items li + li {
+    border-top: 1px dashed var(--lg-tags-border, #e7e3da);
+  }
+
+  .lg-callout__row {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    padding: 10px 0;
+    color: var(--lg-charcoal, #1a1d1a);
+    text-decoration: none;
+  }
+  .lg-callout__row:hover {
+    color: var(--lg-accent-color, #b8842b);
+  }
+  .lg-callout__row:hover .lg-callout__label {
+    text-decoration: underline;
+  }
+
+  .lg-callout__icon {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    color: var(--lg-accent-color, #b8842b);
+    opacity: 0.88;
+  }
+  .lg-callout__icon svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+  }
+
+  .lg-callout__text {
+    display: block;
+    min-width: 0;   /* allow truncation inside grid */
+  }
+  .lg-callout__label {
+    display: block;
+    font: 600 15px/1.3 var(--lg-font-sans, system-ui);
+  }
+  .lg-callout__meta {
+    display: block;
+    font: 400 13px/1.3 var(--lg-font-sans, system-ui);
+    color: #7a7c75;
+    margin-top: 2px;
+  }
+
+  .lg-callout__chev {
+    color: #9c9b91;
+    opacity: 0.6;
+    transition: transform 0.15s, color 0.15s, opacity 0.15s;
+  }
+  .lg-callout__chev svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+  }
+  .lg-callout__row:hover .lg-callout__chev {
+    color: var(--lg-accent-color, #b8842b);
+    opacity: 1;
+    transform: translateX(2px);
+  }
+
+  /* ── files variant — solid amber ext badge + size on the right ── */
+  .lg-callout--files .lg-callout__filemeta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .lg-callout--files .lg-callout__ext {
+    font: 700 10px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: var(--lg-amber, #ecb351);
+    color: var(--lg-ink, #323532);
+    padding: 3px 6px;
+    border-radius: 3px;
+  }
+  .lg-callout--files .lg-callout__size {
+    font: 600 12px/1 var(--lg-font-sans, system-ui);
+    color: #7a7c75;
+  }
+
+  /* ── people variant — circular avatar in a bigger slot ── */
+  .lg-callout--people .lg-callout__row {
+    grid-template-columns: 48px 1fr auto;
+  }
+  .lg-callout--people .lg-callout__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #fff;
+    overflow: hidden;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  }
+  .lg-callout--people .lg-callout__icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+  }
+  .lg-callout--people .lg-callout__initials {
+    font: 700 16px/1 var(--lg-font-serif, Georgia, serif);
+    color: var(--lg-accent-color, #586b3f);
+  }
+
+  /* ── data variant — slightly tighter rows + ink-tinted dividers ── */
+  .lg-callout--data .lg-callout__row {
+    padding: 8px 0;
+  }
+  .lg-callout--data .lg-callout__items li + li {
+    border-top-color: #dad7cc;
+  }
+  .lg-callout--data .lg-callout__icon {
+    color: #666864;
+  }
+
+  /* ── note variant — prose, no items ── */
+  .lg-callout--note .lg-callout__body {
+    margin: 0;
+    font: 400 15px/1.55 var(--lg-font-serif, Georgia, serif);
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+  .lg-callout--note .lg-callout__body :first-child { margin-top: 0; }
+  .lg-callout--note .lg-callout__body :last-child  { margin-bottom: 0; }
+  .lg-callout--note .lg-callout__body p { margin: 0 0 10px; }
+  .lg-callout--note .lg-callout__body p:last-child { margin-bottom: 0; }
+
+  /* ── quote variant — large italic pull-quote + attribution ── */
+  .lg-callout--quote .lg-callout__quote {
+    margin: 0 0 12px;
+    font: italic 400 22px/1.4 var(--lg-font-serif, Georgia, serif);
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+  .lg-callout--quote .lg-callout__quote :first-child { margin-top: 0; }
+  .lg-callout--quote .lg-callout__quote :last-child  { margin-bottom: 0; }
+  .lg-callout--quote .lg-callout__quote p { margin: 0 0 0.5em; }
+  .lg-callout--quote .lg-callout__attr {
+    font: 600 13px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--lg-accent-color, #b8842b);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 520px) {
+    .lg-callout {
+      padding: 14px 16px 14px 18px;
+    }
+    .lg-callout--people .lg-callout__row {
+      grid-template-columns: 40px 1fr auto;
+    }
+    .lg-callout--people .lg-callout__icon {
+      width: 36px;
+      height: 36px;
+    }
+  }
+}
+
+/* columns */
+/* columns — a one-level container. Emits .lg-columns with .lg-columns--N
+   modifier for the grid template, and a .lg-columns__col wrapper per
+   column holding the round-robin-distributed children. Stacks vertically
+   below 720px. No card chrome — columns is structure, not decoration. */
+
+@layer block-shell {
+  .lg-columns {
+    display: grid;
+    gap: var(--lg-gap, 24px);
+    margin-block: var(--lg-margin-block, 32px);
+
+    /* Optional chrome — defaults are no-ops so existing plain rows render
+       unchanged. variant-2 and variant-3 override these via modifier-class
+       selectors emitted by the CSS bundler from manifest.variants. */
+    padding: var(--lg-padding, 0);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+  }
+
+  /* One rule per supported column count. Enum-bound at the manifest
+     level so we don't need a generic --lg-col-count CSS variable. */
+  .lg-columns--2 { grid-template-columns: repeat(2, 1fr); }
+  .lg-columns--3 { grid-template-columns: repeat(3, 1fr); }
+
+  /* Each column is a vertical stack of its assigned children. The flex
+     gap mirrors the manifest's gap var so horizontal + vertical rhythm
+     match without an extra knob. */
+  .lg-columns__col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lg-gap, 24px);
+    min-width: 0;   /* lets long content (long URLs, wide images) shrink to col width */
+  }
+
+  /* Stack on narrow viewports. 768px is the standard mobile breakpoint —
+     covers phones in any orientation and small tablets in portrait. Below
+     this width a 2-column layout cell becomes too cramped for an image
+     plus its multi-paragraph figcaption to read comfortably; better to
+     give each its full width and let the article scroll. */
+  @media (max-width: 768px) {
+    .lg-columns--2,
+    .lg-columns--3 { grid-template-columns: 1fr; }
+  }
+}
+
+/* divider */
+/* divider — a real <hr> element with brand-themed styling. The default
+   variant draws a single line using the container's --lg-border. The dots
+   variant replaces the line with three centered sage dots (via ::before
+   pseudo-content). The space variant just contributes margin-block. */
+
+@layer block-shell {
+  .lg-divider {
+    /* <hr> reset — strip every UA default; we draw the line ourselves
+       from a single --lg-color, with --lg-margin-block for spacing.
+       Nothing else is exposed because a divider isn't a container. */
+    appearance: none;
+    border: none;
+    width: 100%;
+    height: 0;
+    padding: 0;
+    background: transparent;
+
+    margin-block: var(--lg-margin-block, 32px);
+    border-top: 1px solid var(--lg-color, var(--lg-sage-3));
+  }
+
+  /* Dots variant — three centered dots, color from --lg-color. */
+  .lg-divider--dots {
+    border-top: none;
+    height: 6px;
+    background:
+      radial-gradient(circle, var(--lg-color, var(--lg-sage)) 2px, transparent 2.5px) center / 24px 6px no-repeat,
+      radial-gradient(circle, var(--lg-color, var(--lg-sage)) 2px, transparent 2.5px) calc(50% - 24px) center / 24px 6px no-repeat,
+      radial-gradient(circle, var(--lg-color, var(--lg-sage)) 2px, transparent 2.5px) calc(50% + 24px) center / 24px 6px no-repeat;
+  }
+
+  /* Space variant — invisible. Just the margin-block contributes vertical
+     air; the <hr> itself collapses to zero height with no rule. */
+  .lg-divider--space {
+    border-top: none;
+  }
+}
+
+/* download */
+/* download — a downloadable-file card: icon · (label + description + ext/size
+   badge) · download button. The premium deliverable for loothprints and any
+   post with an attached file.
+
+   Container chrome (bg, border, padding, radius, margin, gap) comes from the
+   manifest vars (block-defaults layer). The download button's chrome comes
+   from the `button` sub-target's vars. Structural layout lives here.
+
+   The locked counterpart — `.lg-gate-cta--download`, shown to non-members —
+   is styled in blocks/paywall/shell.css alongside the other gate-CTA variants,
+   so the two cards read as a matched pair.
+*/
+
+@layer block-shell {
+  .lg-download {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;            /* button wraps under the text when the row
+                                   can't fit it — graceful narrow-viewport
+                                   fallback without a block-scoped @media */
+    gap: var(--lg-gap, 14px);
+    padding: var(--lg-padding, 16px 18px);
+    margin-block: var(--lg-margin-block, 20px);
+    background: var(--lg-bg, var(--lg-cream, #f0eee8));
+    border: var(--lg-border, 1px solid var(--lg-sage-3, #d4e0b8));
+    border-radius: var(--lg-radius, 10px);
+    box-shadow: var(--lg-shadow, none);
+    color: var(--lg-color, var(--lg-ink, #323532));
+    font-family: var(--lg-font-family, var(--lg-font-sans, system-ui));
+    text-align: var(--lg-text-align, left);
+  }
+
+  /* File-type glyph in a soft sage chip on the left. */
+  .lg-download__icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--lg-sage-1, rgba(135, 152, 106, 0.14));
+    color: var(--lg-sage, #6b7c52);
+  }
+  .lg-download__icon svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  /* Text column grows to fill the space between icon and button. min-width:0
+     lets a long label ellipsize instead of forcing the button off-card. */
+  .lg-download__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .lg-download__label {
+    font-size: var(--lg-font-size, 16px);
+    font-weight: var(--lg-font-weight, 600);
+    line-height: var(--lg-line-height, 1.45);
+    letter-spacing: var(--lg-letter-spacing, normal);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lg-download__desc {
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--lg-slate, #6f8fa6);
+  }
+
+  /* ext · size — a small uppercase meta row beneath the description. The dot
+     separator only appears when both pieces are present. */
+  .lg-download__meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--lg-sage, #6b7c52);
+  }
+  .lg-download__ext + .lg-download__size::before {
+    content: "·";
+    margin-right: 8px;
+    opacity: 0.6;
+  }
+
+  /* Download button — chrome from the `button` sub-target vars. */
+  .lg-download__btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--lg-padding, 10px 18px);
+    background: var(--lg-bg, var(--lg-ink, #323532));
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 999px);
+    box-shadow: var(--lg-shadow, none);
+    color: var(--lg-color, var(--lg-cream, #f0eee8));
+    font-family: var(--lg-font-family, var(--lg-font-sans, system-ui));
+    font-size: var(--lg-font-size, 14px);
+    font-weight: var(--lg-font-weight, 600);
+    letter-spacing: var(--lg-letter-spacing, 0.02em);
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: filter 150ms ease-out, transform 150ms ease-out;
+  }
+  .lg-download__btn:hover {
+    filter: brightness(1.12);
+    transform: translateY(-1px);
+  }
+
+  /* Editor-only placeholder: a freshly-inserted block with no file_id renders
+     a non-interactive "No file yet" chip in place of the real button so the
+     card still has a visible edit host (set file_id in the block editor). */
+  .lg-download__btn--placeholder {
+    cursor: default;
+    opacity: 0.55;
+    filter: none;
+  }
+  .lg-download--empty {
+    border-style: dashed;
+  }
+}
+
+/* embed */
+/* embed — structural CSS only. The outer figure carries chrome; the
+   .lg-embed__frame inside enforces aspect ratio via the CSS aspect-ratio
+   property. Authors set a numeric ratio via the `ratio` prop ("16x9"); the
+   renderer translates that into the CSS shorthand "16/9" applied inline
+   on the frame element (only inline-style we tolerate — it's content-
+   derived, not author-typed). */
+
+@layer block-shell {
+  .lg-embed {
+    /* Container */
+    display: grid;
+    gap: var(--lg-gap, 12px);
+
+    padding: var(--lg-padding, 0);
+    margin-block: var(--lg-margin-block, 0);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+
+    /* Text (caption) */
+    color: var(--lg-color, inherit);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, inherit);
+    font-weight: var(--lg-font-weight, 400);
+    line-height: var(--lg-line-height, 1.5);
+    letter-spacing: var(--lg-letter-spacing, normal);
+    text-align: var(--lg-text-align, left);
+  }
+
+  .lg-embed a {
+    color: var(--lg-link-color, inherit);
+  }
+
+  /* The frame box — reserves vertical space at the requested ratio so the
+     iframe loads into pre-allocated layout. Zero CLS. The aspect-ratio
+     value is applied inline by render.php (the only inline style we allow,
+     because it's a fully-validated content prop). */
+  .lg-embed__frame {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  /* Inner iframe / video element fills the frame box completely. */
+  .lg-embed__frame iframe,
+  .lg-embed__frame video,
+  .lg-embed__frame embed {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  /* Fallback link rendered when oEmbed didn't resolve (provider missing,
+     network failure, etc.). Center-aligned link to the source URL. */
+  .lg-embed__fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 16px;
+  }
+
+  .lg-embed__caption {
+    margin: 0;
+  }
+
+  /* Instagram variant: blockquote+iframe set their own width (max 658px,
+     min 326px). Without intervention the grid leaves them flush-left in
+     a wider column. Centering the grid items puts the embed in the
+     middle of the figure regardless of column width. The aspect-ratio
+     `ratio` prop is intentionally ignored here — IG's iframe sizes its
+     own height from content (carousels vary, reels are taller). */
+  .lg-embed--instagram { justify-items: center; }
+  .lg-embed--instagram .instagram-media,
+  .lg-embed--instagram iframe.instagram-media-rendered { width: 100% !important; max-width: 658px; }
+
+  /* ── Facade: lite YouTube / Vimeo ─────────────────────────────────
+     Static thumbnail with a play-button overlay. No iframe (and no
+     YouTube/Vimeo JS) loads until the user clicks. lg-front.js handles
+     the click — replaces the facade contents with a real iframe. */
+  .lg-embed__facade {
+    cursor: pointer;
+    background: #000;
+  }
+  .lg-embed__poster {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: filter 200ms ease;
+  }
+  .lg-embed__facade:hover .lg-embed__poster { filter: brightness(0.88); }
+
+  .lg-embed__play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 68px;
+    height: 48px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    display: block;
+    transition: transform 200ms ease, filter 200ms ease;
+  }
+  .lg-embed__play svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .lg-embed__play .lg-embed__play-bg {
+    fill: #212121;
+    fill-opacity: 0.82;
+    transition: fill 150ms ease, fill-opacity 150ms ease;
+  }
+  .lg-embed__facade:hover .lg-embed__play {
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+  .lg-embed__facade:hover .lg-embed__play .lg-embed__play-bg {
+    fill: #f00;          /* YouTube red on hover (vimeo gets blue via override) */
+    fill-opacity: 1;
+  }
+  .lg-embed--vimeo .lg-embed__facade:hover .lg-embed__play .lg-embed__play-bg {
+    fill: #00adef;       /* Vimeo brand blue */
+  }
+
+  /* When JS swaps the facade for an iframe, drop the cursor + hover state */
+  .lg-embed__facade.is-playing { cursor: default; background: #000; }
+  .lg-embed__facade.is-playing .lg-embed__poster,
+  .lg-embed__facade.is-playing .lg-embed__play { display: none; }
+}
+
+/* event-header */
+/* event-header — when/where/attend strip for the `event` CPT.
+   Main selector carries the container + text chrome (manifest vars).
+   Sub-elements (date pill, type chips, join CTA, gate card) take their
+   colors from brand tokens so they recolor coherently with the variant's
+   --lg-link-color. Per-variant link-color comes from manifest.variants
+   (block-defaults layer). */
+
+@layer block-shell {
+  .lg-event-header {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    /* container chrome — all via manifest vars */
+    padding: var(--lg-padding, 20px 24px);
+    margin-block: var(--lg-margin-block, 0 28px);
+    background: var(--lg-bg, var(--lg-cream, #fbfbf8));
+    border: var(--lg-border, 1px solid var(--lg-sage-3, #d4e0b8));
+    border-radius: var(--lg-radius, 12px);
+    box-shadow: var(--lg-shadow, none);
+
+    /* text chrome — all via manifest vars */
+    color: var(--lg-color, var(--lg-ink, #323532));
+    font-family: var(--lg-font-family, var(--lg-font-sans, system-ui));
+    font-size: var(--lg-font-size, 18px);
+    font-weight: var(--lg-font-weight, 600);
+    line-height: var(--lg-line-height, 1.4);
+  }
+
+  /* ── when row: date pill + detail column ─────────────────────────── */
+  .lg-event-header__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+  }
+
+  /* Date pill — accent background tracks the variant's link-color. */
+  .lg-event-header__pill {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: clamp(54px, 14vw, 64px);
+    min-height: clamp(54px, 14vw, 64px);
+    padding: 8px 4px;
+    border-radius: 10px;
+    background: var(--lg-link-color, var(--lg-amber, #ecb351));
+    color: var(--lg-on-dark, #ffffff);
+    box-shadow: var(--lg-shadow-soft, 0 1px 3px rgba(0,0,0,0.08));
+  }
+  .lg-event-header__pill-mon {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .lg-event-header__pill-day {
+    font-family: var(--lg-font-serif, Georgia, serif);
+    font-size: clamp(26px, 7vw, 30px);
+    font-weight: 700;
+    line-height: 1.05;
+  }
+
+  .lg-event-header__detail {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .lg-event-header__date {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+  .lg-event-header__region {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--lg-ink, #323532);
+  }
+  .lg-event-header__pin {
+    opacity: 0.8;
+  }
+
+  /* Type chips — soft sage fill, no bullets. */
+  .lg-event-header__types {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .lg-event-header__type {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--lg-sage-3, #d4e0b8);
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+
+  /* ── join CTA — satisfied viewers ───────────────────────────────── */
+  .lg-event-header__join {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    align-self: flex-start;
+    padding: 11px 20px;
+    border-radius: 8px;
+    background: var(--lg-link-color, var(--lg-amber, #ecb351));
+    color: var(--lg-on-dark, #ffffff);
+    font-size: 15px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .lg-event-header__join:hover {
+    box-shadow: var(--lg-shadow-card, 0 4px 8px rgba(0,0,0,0.08));
+    transform: translateY(-1px);
+  }
+  .lg-event-header__join-icon {
+    font-size: 12px;
+  }
+
+  /* ── gate card — under-tier viewers ─────────────────────────────── */
+  .lg-event-header__gate {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    background: var(--lg-cream-warm, #f7f5f2);
+    border: 1px dashed var(--lg-sage-2, #99b27e);
+  }
+  .lg-event-header__gate-msg {
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--lg-ink, #323532);
+  }
+  .lg-event-header__lock {
+    opacity: 0.7;
+  }
+  .lg-event-header__upgrade {
+    align-self: flex-start;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    color: var(--lg-link-color, var(--lg-amber, #ecb351));
+  }
+  .lg-event-header__upgrade:hover {
+    text-decoration: underline;
+  }
+  /* Responsive sizing is handled via clamp() on the pill above + flex-wrap,
+     so no @media block is needed (the linter's M5 parser can't scope one). */
+}
+
+/* gallery */
+/* Gallery block — N-column tile grid (default 3) of lightbox-tagged photos.
+   inherits_global: false in the manifest, so dash typography doesn't override
+   the block's own font sizes for the optional figcaption. */
+
+@layer block-shell {
+  .lg-gallery {
+    margin: 0;
+    padding: var(--lg-padding, 0);
+    margin-block: var(--lg-margin-block, 24px);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+    color: var(--lg-color, var(--lg-ink));
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Grid layout — uniform tiles, object-fit: cover so the row reads as an
+     even strip even when source aspect ratios vary. Column count is encoded
+     as a modifier class (`lg-gallery--cols-N`) rather than a custom prop so
+     the linter doesn't flag an undeclared CSS var, and the responsive
+     overrides below can target each case explicitly. */
+  .lg-gallery--grid .lg-gallery__grid {
+    display: grid;
+    gap: var(--lg-gap, 12px);
+  }
+  .lg-gallery--cols-2 .lg-gallery__grid { grid-template-columns: repeat(2, 1fr); }
+  .lg-gallery--cols-3 .lg-gallery__grid { grid-template-columns: repeat(3, 1fr); }
+  .lg-gallery--cols-4 .lg-gallery__grid { grid-template-columns: repeat(4, 1fr); }
+  .lg-gallery--grid .lg-gallery__tile {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 4px);
+    box-shadow: var(--lg-shadow, none);
+    background: #000;
+  }
+  .lg-gallery--grid .lg-gallery__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    cursor: zoom-in;
+    transition: transform 220ms ease;
+  }
+  .lg-gallery--grid .lg-gallery__tile:hover .lg-gallery__img {
+    transform: scale(1.03);
+  }
+
+  /* Masonry layout — CSS column-count. Items flow top-to-bottom in each
+     column, preserving natural aspect ratios. Cheap, well-supported, and
+     looks Pinterest-ish without JS. break-inside: avoid keeps tiles intact. */
+  .lg-gallery--masonry .lg-gallery__grid {
+    column-gap: var(--lg-gap, 12px);
+  }
+  .lg-gallery--masonry.lg-gallery--cols-2 .lg-gallery__grid { column-count: 2; }
+  .lg-gallery--masonry.lg-gallery--cols-3 .lg-gallery__grid { column-count: 3; }
+  .lg-gallery--masonry.lg-gallery--cols-4 .lg-gallery__grid { column-count: 4; }
+  .lg-gallery--masonry .lg-gallery__tile {
+    break-inside: avoid;
+    margin-bottom: var(--lg-gap, 12px);
+    border-radius: var(--lg-radius, 4px);
+    overflow: hidden;
+    box-shadow: var(--lg-shadow, none);
+  }
+  .lg-gallery--masonry .lg-gallery__img {
+    width: 100%;
+    height: auto;
+    display: block;
+    cursor: zoom-in;
+    transition: transform 220ms ease;
+  }
+  .lg-gallery--masonry .lg-gallery__tile:hover .lg-gallery__img {
+    transform: scale(1.02);
+  }
+
+  /* Carousel layout — horizontal scroll-snap strip with prev/next nav arrows.
+     Tile width is fixed; height tracks the row. The wrap is position:relative
+     so the absolutely-positioned arrows anchor to it. Native overflow-x with
+     scroll-snap gives smooth keyboard + touch scrolling for free. */
+  .lg-gallery--carousel .lg-gallery__carousel-wrap {
+    position: relative;
+  }
+  .lg-gallery--carousel .lg-gallery__grid {
+    display: flex;
+    gap: var(--lg-gap, 12px);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    padding-bottom: 8px;
+  }
+  .lg-gallery--carousel .lg-gallery__tile {
+    flex: 0 0 auto;
+    width: clamp(220px, 28vw, 360px);
+    aspect-ratio: 4 / 3;
+    scroll-snap-align: start;
+    overflow: hidden;
+    border-radius: var(--lg-radius, 4px);
+    background: #000;
+  }
+  .lg-gallery--carousel .lg-gallery__tile--placeholder {
+    aspect-ratio: 4 / 3;
+  }
+  .lg-gallery--carousel .lg-gallery__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    cursor: zoom-in;
+  }
+  /* Nav arrows — round dark chips at the row's left/right edges. Pointer
+     events only on the buttons; the wrap behind stays scrollable. */
+  .lg-gallery__nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 0;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0 4px 0;
+    transition: background 120ms ease, opacity 120ms ease;
+  }
+  .lg-gallery__nav:hover { background: rgba(0, 0, 0, 0.8); }
+  .lg-gallery__nav--prev { left: 8px; }
+  .lg-gallery__nav--next { right: 8px; }
+  /* Disabled state — JS toggles .is-at-start / .is-at-end on the wrap to
+     dim the arrow that has nowhere to go. */
+  .lg-gallery__carousel-wrap.is-at-start .lg-gallery__nav--prev,
+  .lg-gallery__carousel-wrap.is-at-end   .lg-gallery__nav--next {
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  /* Responsive — collapse cols on narrow viewports regardless of the
+     authored count, since 3–4 columns of squares at <600px is unreadable. */
+  @media (max-width: 960px) {
+    .lg-gallery--grid    .lg-gallery__grid { grid-template-columns: repeat(2, 1fr); }
+    .lg-gallery--masonry .lg-gallery__grid { column-count: 2; }
+  }
+  @media (max-width: 560px) {
+    .lg-gallery--grid    .lg-gallery__grid { grid-template-columns: 1fr; }
+    .lg-gallery--masonry .lg-gallery__grid { column-count: 1; }
+  }
+
+  /* Broken-file fallback — when a gallery tile's img 404s at load time
+     (typical on dev), JS adds .lg-img-missing to the tile so it picks up
+     the same placeholder treatment as an empty slot. img stays in DOM
+     so it reloads automatically if the file later syncs. */
+  .lg-gallery__tile.lg-img-missing { background: var(--lg-cream, #fbfbf8); border: 1px dashed var(--lg-sage-3, #d4e0b8); }
+  .lg-gallery__tile.lg-img-missing .lg-gallery__img { visibility: hidden; }
+  .lg-gallery__tile.lg-img-missing::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8c08c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='14' rx='2'/><circle cx='9' cy='11' r='1.5'/><path d='M21 17l-5-5-4 4-3-3-6 6'/></svg>");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 36px 36px;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+
+  /* Placeholder tile — shown for missing/invalid attachment IDs and for the
+     "fill to 3-image minimum" padding. Reads as an obvious empty slot, not
+     a broken image. Sage outline + camera icon at low contrast keeps it
+     unobtrusive but legible against page bg. */
+  .lg-gallery__tile--placeholder {
+    background: var(--lg-cream, #fbfbf8);
+    border: 1px dashed var(--lg-sage-3, #d4e0b8);
+    color: var(--lg-sage-2, #a8c08c);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+  }
+  .lg-gallery--grid .lg-gallery__tile--placeholder { aspect-ratio: 1 / 1; }
+  .lg-gallery__placeholder-icon {
+    width: 36px;
+    height: 36px;
+    opacity: 0.7;
+  }
+
+  .lg-gallery__caption {
+    margin: 0;
+    color: var(--lg-color, inherit);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, 16px);
+    font-weight: var(--lg-font-weight, 400);
+    line-height: var(--lg-line-height, 1.5);
+    letter-spacing: var(--lg-letter-spacing, normal);
+    text-align: var(--lg-text-align, left);
+  }
+  .lg-gallery__caption > p { margin: 0 0 0.7em; }
+  .lg-gallery__caption > p:last-child { margin-bottom: 0; }
+
+  /* In a columns context, the gallery shrinks to fit the column width. The
+     responsive collapse handles narrow cases; nothing else needed here. */
+  .lg-columns__col > .lg-gallery {
+    margin-block: 0;
+  }
+}
+
+/* image */
+/* image-caption — structural CSS only.
+   Every chrome property flows through a CSS variable declared in
+   manifest.json. The cascade layers (block-defaults → context → dash) resolve
+   the effective value. No bare colors, fonts, paddings, etc. anywhere. */
+
+@layer block-shell {
+  .lg-image {
+    display: grid;
+    gap: var(--lg-gap, 12px);
+
+    padding: var(--lg-padding, 0);
+    margin-block: var(--lg-margin-block, 0);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+
+    color: var(--lg-color, inherit);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, inherit);
+    font-weight: var(--lg-font-weight, 400);
+    line-height: var(--lg-line-height, 1.5);
+    letter-spacing: var(--lg-letter-spacing, normal);
+    text-align: var(--lg-text-align, left);
+  }
+
+  .lg-image a {
+    color: var(--lg-link-color, inherit);
+  }
+
+  /* .lg-image__image hosts both the <img> and the absolutely-positioned
+     popout panel. Position context lives here, not on the outer figure,
+     so the popout aligns to the photo's edges (not the figcaption's). */
+  .lg-image__image {
+    margin: 0;
+    position: relative;
+    overflow: visible;          /* keep visible so the popout can escape laterally */
+  }
+
+  /* .lg-image__frame wraps just the <img> (and badge) so the hover zoom
+     stays bounded AND the border-radius clips the scaled-up corners.
+     Without this wrapper either the zoom escaped the figure (single
+     image) or the radius got clipped off (columns image, where the
+     wrapper forced overflow:hidden but the radius lived on the img). */
+  .lg-image__frame {
+    position: relative;
+    overflow: hidden;
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+    line-height: 0;             /* drop the inline-image baseline gap */
+    /* Hover affordance lives on the frame, not the img — scaling the img
+       got clipped by overflow:hidden and looked like a stutter. Now the
+       hover reads as the photo settling into the page: nudge down 2px
+       and compress the shadow so the photo looks pressed instead of
+       lifted. If no resting shadow is configured the translate is still
+       a subtle "I'm interactive" cue without any visual jank. */
+    transition: box-shadow 200ms ease-out, transform 200ms ease-out;
+  }
+  .lg-image:hover .lg-image__frame {
+    transform: translateY(2px);
+    box-shadow: var(--lg-shadow-hover, 0 2px 6px rgba(0, 0, 0, 0.15));
+  }
+
+  .lg-image__img {
+    display: block;
+    width: 100%;
+    height: auto;
+    /* zoom cursor stays — still hints at the lightbox click target. */
+    cursor: zoom-in;
+  }
+  /* When an aspect crop is applied the frame has a fixed aspect-ratio box.
+     The img needs to fill that box (width:100% AND height:100%) so that
+     object-fit: cover + object-position from the inline style actually
+     crop within the frame. With height:auto the img grew to its natural
+     aspect, object-fit/position became no-ops, and only the top of the
+     source was visible (clipped by frame's overflow:hidden). */
+  .lg-image--has-aspect .lg-image__img {
+    height: 100%;
+  }
+
+  /* Slide-out popout panel — the SHORT attached caption sits absolutely
+     to the left of the photo, off-canvas by default. On figure hover it
+     slides in. Below 960px viewport it stays hidden — the lightbox is
+     the fallback surface (tap the image). The popout is the "what was
+     this image, again?" reminder while the long figcaption tells the
+     story underneath. */
+  /* Popout vertically centers on the side of the photo (top: 50% +
+     translateY(-50%)). translateX carries the slide-in animation;
+     translateY stays fixed in both states. */
+  /* Hover popout disabled — the long figcaption underneath the image already
+     conveys the same info; the popout was distracting. Kept the rule shell
+     in case authors want to opt back in via a future variant. */
+  .lg-image__popout { display: none; }
+
+  .lg-image--has-popout:hover .lg-image__popout {
+    opacity: 1;
+    transform: translate(0, -50%);
+    pointer-events: auto;
+  }
+
+  /* In a 2-column row, mirror the popout side: left image → popout on
+     the left (default), right image → popout on the right. Symmetrical
+     and avoids overlapping the partner image. In a 3-column row, the
+     middle column's popout overlaps either neighbor — hide it; lightbox
+     is the fallback. */
+  .lg-columns__col:not(:first-child) .lg-image__popout {
+    right: auto;
+    left: calc(100% + 16px);
+    transform: translate(12px, -50%);
+  }
+  .lg-columns__col:not(:first-child) .lg-image--has-popout:hover .lg-image__popout {
+    transform: translate(0, -50%);
+  }
+  .lg-columns--3 .lg-columns__col:nth-child(2) .lg-image__popout { display: none; }
+
+  @media (max-width: 960px) {
+    .lg-image__popout { display: none; }
+  }
+
+  /* Phone: drop the focal crop. Author-set `aspect` writes inline
+     `aspect-ratio` on the frame and `object-fit: cover; object-position:`
+     on the img, so only !important can override. On narrow viewports the
+     image runs natural aspect, full width — no squeeze, no crop. Lightbox
+     is also disabled on phone (lg-front.js), so the zoom-in cursor is
+     misleading; swap it out. */
+  @media (max-width: 767px) {
+    .lg-image--has-aspect .lg-image__frame {
+      aspect-ratio: auto !important;
+    }
+    .lg-image--has-aspect .lg-image__img {
+      height: auto !important;
+      object-fit: contain !important;
+      object-position: center !important;
+    }
+    .lg-image__img { cursor: default; }
+  }
+
+  /* Corner badge — small overlay anchored top-left of the photo. Every
+     chrome property reads from a CSS var so the dash's "Number badge"
+     sub-target panel can re-skin it (bg, color, font, padding, radius,
+     shadow).
+     Layout: inline-flex with min-width = min-height makes the badge
+     square by default for single-digit numbers, so `--lg-radius: 50%`
+     in the dash yields an actual circle (not an ellipse). Multi-digit
+     ("10", "11", "12") expand the width to a pill with rounded ends
+     at 50% radius, which reads as intentional rather than broken.
+     Position is intentionally fixed top-left; per-instance corner
+     control would be a future enum prop. */
+  .lg-image__badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    pointer-events: none;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    min-height: 28px;
+    box-sizing: border-box;
+    line-height: 1;
+
+    padding: var(--lg-padding, 0 6px);
+    background: var(--lg-bg, #1d2327);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 3px);
+    box-shadow: var(--lg-shadow, none);
+
+    color: var(--lg-color, #fff);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, 13px);
+    font-weight: var(--lg-font-weight, 700);
+    letter-spacing: var(--lg-letter-spacing, 0.04em);
+  }
+
+  /* Both caption surfaces (short fallback + long multi-paragraph) read
+     the same text vars as the rest of the block, so the dash's text
+     panel actually controls them. Defaults match the previous hard-coded
+     values to preserve current rendering. */
+  /* Broken-file placeholder for image blocks. Triggered by lg-front.js
+     when the <img> 404s (typical on dev where /wp-content/uploads/ may
+     not be fully synced). Matches the gallery-tile placeholder treatment
+     so a half-empty page reads as "waiting for uploads," not "broken." */
+  .lg-image__frame.lg-img-missing {
+    background: var(--lg-cream, #fbfbf8);
+    border: 1px dashed var(--lg-sage-3, #d4e0b8);
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lg-image__frame.lg-img-missing .lg-image__img {
+    /* The img tag is still in the DOM (for re-load when uploads sync)
+       but we hide the visual broken icon while the placeholder shows. */
+    visibility: hidden;
+  }
+  .lg-image__frame.lg-img-missing::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8c08c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='14' rx='2'/><circle cx='9' cy='11' r='1.5'/><path d='M21 17l-5-5-4 4-3-3-6 6'/></svg>");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 36px 36px;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+
+  .lg-image__caption {
+    margin: 0;
+    color: var(--lg-color, inherit);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, 18px);
+    font-weight: var(--lg-font-weight, 400);
+    line-height: var(--lg-line-height, 1.5);
+    letter-spacing: var(--lg-letter-spacing, normal);
+    text-align: var(--lg-text-align, left);
+  }
+  /* Long-form figcaption with multi-paragraph prose. The first <p> sits
+     flush with the image; subsequent paragraphs get internal spacing.
+     Reads as body copy, not a caption — but lives inside the figure for
+     semantic + accessibility correctness. */
+  .lg-image__caption--long > p { margin: 0 0 0.7em; }
+  .lg-image__caption--long > p:last-child { margin-bottom: 0; }
+
+  /* In a columns context (≥769px viewport — see columns/shell.css for
+     the stack breakpoint) the image figure stretches to match the
+     column's height. The image fills its slot with object-fit: cover so
+     the visual balance with text-heavy columns reads as "even row." The
+     caption stays at its natural height beneath the image. Below the
+     stack breakpoint, columns collapse to one column anyway, so the
+     fill-cover behavior would be both unnecessary and visually wrong —
+     it gets unset in the mobile block below. */
+  @media (min-width: 769px) {
+    /* Default column behavior: stretch the image to fill the column height
+       so paired image+text rows align bottom edges. Skipped when the image
+       has its own explicit `aspect` set — that ratio defines the height
+       and we don't want the column-stretch override to fight it. */
+    .lg-columns__col > .lg-image:not(.lg-image--has-aspect) {
+      height: 100%;
+      grid-template-rows: 1fr auto;
+    }
+    .lg-columns__col > .lg-image:not(.lg-image--has-aspect) .lg-image__image,
+    .lg-columns__col > .lg-image:not(.lg-image--has-aspect) .lg-image__frame {
+      height: 100%;
+    }
+    .lg-columns__col > .lg-image:not(.lg-image--has-aspect) .lg-image__img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    /* aspect-set images-in-columns: aspect-ratio drives the frame height,
+       img fills via the inline object-fit/position styles from render.php.
+       Frame width is capped by the column. Width:100% on the img keeps
+       it filling the frame horizontally before the cover crop kicks in. */
+    .lg-columns__col > .lg-image--has-aspect .lg-image__img {
+      width: 100%;
+    }
+  }
+
+
+  /* ── Lightbox (page-level, JS-injected) ──────────────────────────
+     The lightbox is created by lg-front.js on first open and lives at
+     <body> level. Lives in image/shell.css because the image block
+     owns its trigger and the styling is tied to image presentation. */
+  .lg-lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 16, 14, 0.88);
+    z-index: 99998;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+  }
+  .lg-lightbox.is-open { display: flex; }
+  body.lg-lightbox-open { overflow: hidden; }
+
+  /* Round chip with dark backdrop so it's visible against any photo content,
+     matching the prev/next arrow styling for consistency. */
+  .lg-lightbox__close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    border: 0;
+    color: #fff;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0 4px 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lg-lightbox__close:hover { background: rgba(0, 0, 0, 0.8); color: var(--lg-amber, #ecb351); }
+
+  /* Prev / next nav arrows — fixed to viewport edges so they don't fight
+     the figure for space. Hidden via inline style when gallery.length=1. */
+  .lg-lightbox__nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.45);
+    border: 0;
+    color: #fff;
+    font-size: 48px;
+    line-height: 1;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0 6px 0;
+    z-index: 2;
+  }
+  .lg-lightbox__nav:hover { background: rgba(0, 0, 0, 0.75); color: var(--lg-amber, #ecb351); }
+  .lg-lightbox__nav--prev { left: 16px; }
+  .lg-lightbox__nav--next { right: 16px; }
+
+  .lg-lightbox__counter {
+    color: #fff;
+    opacity: 0.55;
+    font-size: 12px;
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  /* Single-column centered layout. No reserved right-side desc column —
+     the image gets the full lightbox space and centers in both axes. */
+  .lg-lightbox__inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+  }
+  .lg-lightbox__figure {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    max-height: calc(100vh - 64px);
+  }
+  /* No background; wheel-zoom uses transform on this element. transform-origin
+     is 0 0 (top-left) so the JS math `pan += cursor * (1 - ratio)` keeps the
+     pixel under the cursor pinned during zoom — derived from the affine
+     screen = local*scale + pan with origin at 0,0. */
+  .lg-lightbox__img {
+    max-width: 100%;
+    max-height: calc(100vh - 64px);
+    object-fit: contain;
+    transform: translate(0, 0) scale(1);
+    transform-origin: 0 0;
+    transition: transform 80ms ease-out;
+    cursor: zoom-in;
+    will-change: transform;
+    /* Belt-and-suspenders against the browser starting a native image-drag,
+       which would preempt our pointer-based pan. JS also calls preventDefault
+       on dragstart; this kills the gesture in Safari/WebKit which sometimes
+       ignores the JS path. */
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+  .lg-lightbox__img.is-zoomed { cursor: grab; }
+  .lg-lightbox__img.is-panning { cursor: grabbing; transition: none; }
+  /* Lightbox caption — pulled from the WP attachment's post_excerpt, so it
+     travels with the image file rather than the article. Positioned outside
+     the figure as a fixed strip pinned to the bottom of the viewport so it
+     never gets clipped by tall portrait images that fill the height. */
+  .lg-lightbox__caption {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    max-width: min(960px, 80vw);
+    color: #fff;
+    font-size: 17px;
+    font-weight: 500;
+    line-height: 1.45;
+    text-align: center;
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.82);
+    padding: 12px 22px;
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 1;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  }
+  .lg-lightbox__caption:empty { display: none; }
+
+  /* First-open help chip — sits below the close button, top-right. Fades
+     out on first wheel-zoom or after 5s (handled in lg-front.js). */
+  .lg-lightbox__hint {
+    position: fixed;
+    top: 76px;
+    right: 16px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.5);
+    font-size: 12px;
+    line-height: 1.4;
+    padding: 6px 12px;
+    border-radius: 999px;
+    opacity: 0.85;
+    transition: opacity 400ms ease;
+    pointer-events: none;
+    z-index: 2;
+    max-width: min(420px, 70vw);
+    text-align: center;
+  }
+  .lg-lightbox__hint.is-dismissed { opacity: 0; }
+  /* The old long-desc panel is gone — the per-instance text lives in the
+     article figcaption only. */
+  .lg-lightbox__desc { display: none; }
+}
+
+/* paywall */
+/* paywall — section gate.
+
+   This file owns CSS for two related surfaces:
+     1. .lg-paywall              — the divider line members see in place of
+                                   the cut. Translated directly from the
+                                   mockup at /var/www/dev/mockups/gate-cta.html.
+     2. .lg-gate-cta              — the "members-only" placeholder card,
+                                   emitted by src/GateCta.php whenever a
+                                   gated_tier block or a paywall block
+                                   would have been rendered to a non-member.
+                                   Three variants: --embed (gated video),
+                                   --download (gated file), --paywall (cut).
+*/
+
+@layer block-shell {
+
+  /* ── 1. The divider — what MEMBERS see ─────────────────────────── */
+  .lg-paywall {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 16px;
+    align-items: center;
+    margin-block: var(--lg-margin-block, 32px);
+  }
+  .lg-paywall__rule {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--lg-rule-color, var(--lg-amber-dark, #b8842b)) 50%, transparent);
+  }
+  .lg-paywall__label {
+    font: 700 10px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--lg-label-color, var(--lg-amber-dark, #b8842b));
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .lg-paywall__label::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--lg-amber, #ecb351);
+  }
+
+  /* ── 2. The CTA card — what NON-MEMBERS see ────────────────────── */
+  /* Shared chrome */
+  .lg-gate-cta {
+    position: relative;
+    margin: 22px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--lg-tags-border, #e7e3da);
+  }
+
+  /* ── 2a. EMBED variant — gated video ───────────────── */
+  .lg-gate-cta--embed {
+    aspect-ratio: 16 / 9;
+    background: #1a1d1a center/cover no-repeat;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__poster {
+    position: absolute; inset: 0;
+    background: center/cover no-repeat;
+    filter: grayscale(0.85) blur(2px) brightness(0.55);
+    transform: scale(1.05);
+  }
+  .lg-gate-cta--embed .lg-gate-cta__scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 100%);
+  }
+  /* Play-button overlay so the viewer reads it as a missing VIDEO. */
+  .lg-gate-cta--embed .lg-gate-cta__play {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, calc(-50% - 36px));
+    width: 84px; height: 84px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    display: grid; place-items: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+  .lg-gate-cta--embed .lg-gate-cta__play::before {
+    content: "";
+    display: block;
+    width: 0; height: 0;
+    border-left: 24px solid #fff;
+    border-top: 15px solid transparent;
+    border-bottom: 15px solid transparent;
+    margin-left: 6px;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__body {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 24px 28px 26px;
+    color: var(--lg-on-dark, #fff);
+    text-align: center;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__eyebrow {
+    font: 700 10px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--lg-amber, #ecb351);
+    margin-bottom: 8px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__eyebrow::before {
+    content: "";
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--lg-amber, #ecb351);
+    display: inline-block;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__headline {
+    font: 700 22px/1.2 var(--lg-font-serif, Georgia, serif);
+    margin: 0 0 8px;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__text {
+    font: 400 14px/1.5 var(--lg-font-sans, system-ui);
+    margin: 0 auto 16px;
+    max-width: 480px;
+    color: rgba(255, 255, 255, 0.88);
+  }
+  .lg-gate-cta--embed .lg-gate-cta__btn {
+    display: inline-block;
+    padding: 11px 22px;
+    border-radius: 6px;
+    background: var(--lg-amber, #ecb351);
+    color: var(--lg-ink, #323532);
+    font: 700 13px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+  .lg-gate-cta--embed .lg-gate-cta__btn:hover {
+    background: var(--lg-on-dark, #fff);
+  }
+
+  /* ── 2b. DOWNLOAD variant — compact mid-article card ───────────── */
+  .lg-gate-cta--download {
+    background: var(--lg-paper-2, #fdfbf4);
+    border-left: 5px solid var(--lg-amber, #ecb351);
+    padding: 18px 22px;
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    gap: 18px;
+    align-items: center;
+  }
+  .lg-gate-cta--download .lg-gate-cta__icon {
+    width: 48px; height: 48px;
+    display: grid; place-items: center;
+    background: var(--lg-amber, #ecb351);
+    color: var(--lg-ink, #323532);
+    border-radius: 6px;
+  }
+  .lg-gate-cta--download .lg-gate-cta__icon svg {
+    width: 26px; height: 26px;
+  }
+  .lg-gate-cta--download .lg-gate-cta__body {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .lg-gate-cta--download .lg-gate-cta__eyebrow {
+    font: 700 10px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--lg-amber-dark, #b8842b);
+    margin-bottom: 4px;
+  }
+  .lg-gate-cta--download .lg-gate-cta__headline {
+    font: 700 15px/1.3 var(--lg-font-sans, system-ui);
+    color: var(--lg-charcoal, #1a1d1a);
+    margin: 0;
+  }
+  .lg-gate-cta--download .lg-gate-cta__text {
+    font: 400 13px/1.4 var(--lg-font-sans, system-ui);
+    color: #5a5d57;
+    margin: 2px 0 0;
+  }
+  .lg-gate-cta--download .lg-gate-cta__btn {
+    padding: 9px 18px;
+    border-radius: 6px;
+    background: var(--lg-ink, #323532);
+    color: var(--lg-on-dark, #fff);
+    font: 600 12px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .lg-gate-cta--download .lg-gate-cta__btn:hover {
+    background: var(--lg-amber-dark, #b8842b);
+  }
+
+  /* ── 2c. PAYWALL variant — end-of-article large card ───────────── */
+  .lg-gate-cta--paywall {
+    position: relative;
+    aspect-ratio: 21 / 9;
+    min-height: 280px;
+    background: #1a1d1a center/cover no-repeat;
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__poster {
+    position: absolute; inset: 0;
+    background: center/cover no-repeat;
+    filter: grayscale(0.7) blur(4px) brightness(0.5);
+    transform: scale(1.06);
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.78) 100%);
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 44px 28px;
+    color: var(--lg-on-dark, #fff);
+    min-height: 280px;
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__eyebrow {
+    font: 700 11px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--lg-amber, #ecb351);
+    margin-bottom: 14px;
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__headline {
+    font: 700 28px/1.15 var(--lg-font-serif, Georgia, serif);
+    margin: 0 0 10px;
+    max-width: 540px;
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__text {
+    font: 400 15px/1.55 var(--lg-font-sans, system-ui);
+    max-width: 520px;
+    margin: 0 0 22px;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__btn {
+    display: inline-block;
+    padding: 13px 28px;
+    border-radius: 6px;
+    background: var(--lg-amber, #ecb351);
+    color: var(--lg-ink, #323532);
+    font: 700 14px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+  .lg-gate-cta--paywall .lg-gate-cta__btn:hover {
+    background: var(--lg-on-dark, #fff);
+  }
+
+  /* ── Fallback when no featured image (embed/paywall) ──── */
+  .lg-gate-cta--embed:not(.has-poster),
+  .lg-gate-cta--paywall:not(.has-poster) {
+    background: linear-gradient(135deg, var(--lg-amber-dark, #b8842b), var(--lg-charcoal, #1a1d1a));
+  }
+  .lg-gate-cta--embed:not(.has-poster) .lg-gate-cta__poster,
+  .lg-gate-cta--paywall:not(.has-poster) .lg-gate-cta__poster {
+    display: none;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 520px) {
+    .lg-gate-cta--embed .lg-gate-cta__play {
+      width: 64px; height: 64px;
+      transform: translate(-50%, calc(-50% - 28px));
+    }
+    .lg-gate-cta--embed .lg-gate-cta__play::before {
+      border-left-width: 18px;
+      border-top-width: 12px;
+      border-bottom-width: 12px;
+    }
+    .lg-gate-cta--embed .lg-gate-cta__headline { font-size: 18px; }
+    .lg-gate-cta--paywall .lg-gate-cta__headline { font-size: 22px; }
+    .lg-gate-cta--download {
+      grid-template-columns: 1fr;
+      gap: 14px;
+      text-align: center;
+    }
+    .lg-gate-cta--download .lg-gate-cta__icon { justify-self: center; }
+  }
+}
+
+/* post-footer */
+/* post-footer — author card + 'Keep reading' related grid. Mirrors the
+   post-header's accent palette so the article reads as one piece top-to-
+   tail. Responsive: stacks on mobile, side-by-side on tablet+. */
+
+@layer block-shell {
+  .lg-post-footer {
+    padding: var(--lg-padding, 16px 24px 48px);
+    margin-block: var(--lg-margin-block, 48px 0);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+    color: var(--lg-color, var(--lg-charcoal, #1a1d1a));
+    font-family: var(--lg-font-family, var(--lg-font-sans));
+  }
+
+  /* End-of-article dotted divider — soft visual close. */
+  .lg-post-footer__end {
+    max-width: 720px;
+    margin: 24px auto 36px;
+    height: 6px;
+    position: relative;
+    background:
+      radial-gradient(circle 3px at  5% 50%, var(--lg-ink, #323532) 50%, transparent 51%),
+      radial-gradient(circle 3px at 35% 50%, var(--lg-ink, #323532) 50%, transparent 51%),
+      radial-gradient(circle 3px at 65% 50%, var(--lg-ink, #323532) 50%, transparent 51%),
+      radial-gradient(circle 3px at 95% 50%, var(--lg-ink, #323532) 50%, transparent 51%);
+    background-repeat: no-repeat;
+    opacity: 0.35;
+  }
+
+  /* ── Share row ──────────────────────────────────────────────── */
+  /* The post-footer is intentionally full-bleed so the related-posts grid
+     can stretch wider than the article column on big screens. The share
+     row should NOT — it belongs inside the article column. Same constraint
+     the author card uses elsewhere in this stylesheet. */
+  .lg-post-footer__share {
+    max-width: var(--lg-article-max);
+    margin: 0 auto 18px;
+    padding-inline: var(--lg-article-padding-inline);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-block: 14px;
+    border-top: 1px solid var(--lg-tags-border, #e7e3da);
+    border-bottom: 1px solid var(--lg-tags-border, #e7e3da);
+  }
+  .lg-post-footer__share-label {
+    font: 700 11px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--lg-amber-dark, #b8842b);
+    margin-right: 4px;
+  }
+  .lg-post-footer__share-btn {
+    appearance: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--lg-tags-border, #e7e3da);
+    background: transparent;
+    color: var(--lg-ink, #323532);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s;
+  }
+  .lg-post-footer__share-btn svg { width: 18px; height: 18px; display: block; }
+  .lg-post-footer__share-btn:hover {
+    background: var(--lg-amber, #ecb351);
+    color: var(--lg-ink, #323532);
+    border-color: var(--lg-amber, #ecb351);
+    transform: translateY(-1px);
+  }
+  .lg-post-footer__share-btn--copy.is-copied {
+    background: var(--lg-sage, #87986a);
+    color: #fff;
+    border-color: var(--lg-sage, #87986a);
+  }
+
+  /* ── Author card ────────────────────────────────────────────── */
+  .lg-post-footer__author {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: var(--lg-article-max);   /* lock to the article body width */
+    margin: 0 auto 48px;
+    padding: 28px;
+    background: var(--lg-paper, #f7f5f2);
+    border: 1px solid var(--lg-tags-border, #e7e3da);
+    border-radius: 12px;
+  }
+  /* Top inline row: avatar | (pub + name stacked) | socials */
+  .lg-post-footer__author-head {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .lg-post-footer__id {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  /* Bio spans the full card width below the head row. */
+  .lg-post-footer__author-body {
+    width: 100%;
+  }
+
+  /* Pencil on the author card — visible only to admins / the post author
+     (CSS gate via body.lg-can-edit). Opens a textarea modal that PUTs to
+     the user-meta REST endpoint for `author_about`. */
+  .lg-post-footer__author-edit {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    appearance: none;
+    border: 0;
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--lg-ink, #323532);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 150ms ease, background 150ms ease;
+  }
+  .lg-post-footer__author-edit svg { width: 14px; height: 14px; }
+  body.lg-can-edit .lg-post-footer__author:hover .lg-post-footer__author-edit,
+  body.lg-can-edit .lg-post-footer__author-edit:focus,
+  body.lg-can-edit .lg-post-footer__author-edit:hover {
+    opacity: 1;
+    visibility: visible;
+  }
+  .lg-post-footer__author-edit:hover { background: var(--lg-amber, #ecb351); color: var(--lg-ink, #323532); }
+  .lg-post-footer__avatar {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #fff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.10);
+  }
+  .lg-post-footer__pub {
+    font: 600 11px/1 var(--lg-font-sans);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--lg-link-color, var(--lg-amber, #ecb351));
+    margin-bottom: 8px;
+  }
+  .lg-post-footer__name {
+    margin: 0 0 4px;
+    font: 700 22px/1.2 var(--lg-font-sans);
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+  .lg-post-footer__bio {
+    margin: 0;
+    font: 400 15px/1.55 var(--lg-font-serif);
+    color: #4a4f4a;
+  }
+  .lg-post-footer__cta {
+    display: inline-block;
+    margin-top: 12px;
+    font: 600 13px/1 var(--lg-font-sans);
+    color: var(--lg-ink, #323532);
+    border-bottom: 1px solid var(--lg-ink, #323532);
+    text-decoration: none;
+    padding-bottom: 2px;
+  }
+  .lg-post-footer__cta:hover {
+    color: var(--lg-link-color, var(--lg-amber, #ecb351));
+    border-bottom-color: var(--lg-link-color, var(--lg-amber, #ecb351));
+  }
+  .lg-post-footer__links {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .lg-post-footer__links a {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--lg-ink, #323532);
+    color: #fff;
+    text-decoration: none;
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .lg-post-footer__links a:hover {
+    background: var(--lg-link-color, var(--lg-amber, #ecb351));
+    color: var(--lg-ink, #323532);
+  }
+  .lg-post-footer__links svg { width: 18px; height: 18px; }
+
+  /* ── Related grid ───────────────────────────────────────────── */
+  .lg-post-footer__related-h {
+    max-width: var(--lg-article-max);
+    margin: 0 auto 18px;
+    font: 600 11px/1 var(--lg-font-sans);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #6b6f6b;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .lg-post-footer__related-h::before,
+  .lg-post-footer__related-h::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--lg-tags-border, #ddd6c4);
+  }
+
+  /* Carousel shell — track is scroll-snap, arrows scroll one card at a time. */
+  .lg-post-footer__carousel {
+    position: relative;
+    max-width: var(--lg-article-max);
+    margin: 0 auto;
+  }
+  .lg-post-footer__related-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(260px, 1fr);
+    gap: 20px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    padding-block: 4px;          /* room for card hover lift */
+    padding-inline: 4px;
+  }
+  .lg-post-footer__related-grid::-webkit-scrollbar { display: none; }
+  .lg-post-footer__card {
+    display: block;
+    background: #fff;
+    border: 1px solid var(--lg-tags-border, #ece8df);
+    border-radius: 10px;
+    text-decoration: none;
+    color: inherit;
+    overflow: hidden;
+    transition: transform 200ms ease, box-shadow 200ms ease;
+    scroll-snap-align: start;
+  }
+  .lg-post-footer__card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.08);
+  }
+  .lg-post-footer__card-img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    display: block;
+    background: #efece6;
+  }
+  .lg-post-footer__card-body { padding: 14px 16px 18px; }
+  .lg-post-footer__card-author {
+    font: 600 11px/1 var(--lg-font-sans);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--lg-sage, #87986a);
+    margin-bottom: 8px;
+  }
+  .lg-post-footer__card-title {
+    margin: 0;
+    font: 700 17px/1.25 var(--lg-font-serif);
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+
+  /* Carousel arrow buttons — sit just inside the track edges, hidden when
+     there's nothing to scroll (track JS toggles aria-disabled). */
+  .lg-post-footer__carousel-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    border: 1px solid var(--lg-tags-border, #ece8df);
+    background: #fff;
+    color: var(--lg-charcoal, #1a1d1a);
+    font: 700 22px/1 var(--lg-font-serif);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    transition: opacity 150ms ease, transform 200ms ease;
+  }
+  .lg-post-footer__carousel-btn:hover { transform: translateY(-50%) scale(1.05); }
+  .lg-post-footer__carousel-btn--prev { left: -8px; }
+  .lg-post-footer__carousel-btn--next { right: -8px; }
+  /* lg-front.js toggles is-at-start/is-at-end on the wrap as the track scrolls. */
+  .lg-post-footer__carousel.is-at-start .lg-post-footer__carousel-btn--prev,
+  .lg-post-footer__carousel.is-at-end   .lg-post-footer__carousel-btn--next {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* ── Comments ───────────────────────────────────────────────── */
+  .lg-post-footer__comments {
+    max-width: var(--lg-article-max);
+    margin: 56px auto 0;
+  }
+  .lg-comments__title {
+    font: 600 11px/1 var(--lg-font-sans);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #6b6f6b;
+    text-align: center;
+    margin: 0 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .lg-comments__title::before,
+  .lg-comments__title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--lg-tags-border, #ddd6c4);
+  }
+
+  /* Form */
+  .lg-comment-form { margin-bottom: 32px; }
+  .lg-comment-form__reply-title { display: none; }
+  .lg-comment-form__field { margin: 0 0 12px; }
+  .lg-comment-form__field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 96px;
+    padding: 12px 14px;
+    border: 1px solid var(--lg-tags-border, #ece8df);
+    border-radius: 8px;
+    font: 400 15px/1.5 var(--lg-font-sans);
+    color: var(--lg-charcoal, #1a1d1a);
+    background: #fff;
+    resize: vertical;
+  }
+  .lg-comment-form__field textarea:focus {
+    outline: none;
+    border-color: var(--lg-sage, #87986a);
+    box-shadow: 0 0 0 3px rgba(135, 152, 106, 0.18);
+  }
+  .lg-comment-form__submit,
+  .lg-comments .submit {
+    appearance: none;
+    border: 0;
+    background: var(--lg-charcoal, #1a1d1a);
+    color: #fff;
+    font: 600 13px/1 var(--lg-font-sans);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 12px 22px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: opacity 150ms ease;
+  }
+  .lg-comment-form__submit:hover,
+  .lg-comments .submit:hover { opacity: 0.88; }
+
+  /* Comment list */
+  .lg-comments__list,
+  .lg-comments__list .children {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .lg-comments__list .children {
+    margin-left: 56px;
+    padding-left: 16px;
+    border-left: 2px solid var(--lg-tags-border, #ece8df);
+  }
+  .lg-comment { margin: 0 0 20px; }
+  .lg-comment__body {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  .lg-comment__avatar img {
+    width: 48px;
+    height: 48px;
+    border-radius: 999px;
+    display: block;
+  }
+  .lg-comment__main { min-width: 0; }
+  .lg-comment__meta {
+    font: 400 13px/1.4 var(--lg-font-sans);
+    color: #6b6f6b;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .lg-comment__author {
+    font-weight: 700;
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+  .lg-comment__author a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .lg-comment__author a:hover { text-decoration: underline; }
+  .lg-comment__sep { opacity: 0.5; }
+  .lg-comment__pending {
+    font-style: italic;
+    color: var(--lg-amber, #c08a2f);
+    margin-left: 6px;
+  }
+  .lg-comment__content {
+    font: 400 15px/1.55 var(--lg-font-sans);
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+  .lg-comment__content p { margin: 0 0 8px; }
+  .lg-comment__content p:last-child { margin-bottom: 0; }
+  .lg-comment__reply { margin-top: 6px; }
+  .lg-comment__reply a {
+    font: 600 12px/1 var(--lg-font-sans);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--lg-sage, #87986a);
+    text-decoration: none;
+  }
+  .lg-comment__reply a:hover { text-decoration: underline; }
+  .lg-comments__closed {
+    font: 400 14px/1.4 var(--lg-font-sans);
+    color: #6b6f6b;
+    text-align: center;
+    margin-top: 16px;
+  }
+
+  /* ── Responsive breakpoints ─────────────────────────────────── */
+
+  /* Mobile-default: tighter spacing, smaller avatar, socials wrap below */
+  @media (max-width: 759px) {
+    .lg-post-footer__author { gap: 14px; padding: 18px; }
+    .lg-post-footer__author-head { flex-wrap: wrap; gap: 14px; }
+    .lg-post-footer__avatar { width: 64px; height: 64px; }
+    .lg-post-footer__name { font-size: 18px; }
+    .lg-post-footer__links { width: 100%; }
+  }
+
+  /* Tablet+ : wider carousel cards */
+  @media (min-width: 760px) {
+    .lg-post-footer__related-grid { grid-auto-columns: minmax(300px, calc((100% - 40px) / 3)); }
+  }
+
+  /* Laptop+ : roomier author card padding, bigger card images */
+  @media (min-width: 1024px) {
+    .lg-post-footer__author { padding: 32px 36px; }
+    .lg-post-footer__card-img { height: 180px; }
+  }
+
+  /* Large monitors : slightly wider canvas, larger title */
+  @media (min-width: 1440px) {
+    .lg-post-footer__name { font-size: 24px; }
+    .lg-post-footer__card-title { font-size: 18px; }
+    .lg-post-footer__card-img { height: 200px; }
+  }
+}
+
+/* post-header */
+/* post-header — full-bleed hero with gradient scrim + title + byline,
+   followed by a tags strip. Responsive across mobile / tablet / laptop /
+   large monitors. Mobile-first; breakpoints add room for the photo and
+   bigger type as the viewport grows. */
+
+@layer block-shell {
+  .lg-post-header {
+    position: relative;
+    margin-block: var(--lg-margin-block, 0 32px);
+    background: var(--lg-bg, transparent);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+    overflow: hidden;
+  }
+
+  /* ── Hero photo + scrim ────────────────────────────────────── */
+  .lg-post-header__hero {
+    position: relative;
+    overflow: hidden;
+    background: #0e110d;
+  }
+  .lg-post-header__photo {
+    display: block;
+    width: 100%;
+    height: clamp(320px, 56vh, 720px);
+    object-fit: cover;
+    object-position: var(--lg-post-header-focal, center);
+  }
+  .lg-post-header__scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.25) 0%,
+      rgba(0, 0, 0, 0.00) 18%,
+      rgba(0, 0, 0, 0.00) 30%,
+      rgba(0, 0, 0, 0.55) 65%,
+      rgba(0, 0, 0, 0.88) 100%
+    );
+    pointer-events: none;
+  }
+
+  /* ── Body (title + byline) overlaid on the photo ───────────── */
+  .lg-post-header__body {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 24px 24px 28px;
+    color: var(--lg-color, #fff);
+    z-index: 2;
+  }
+  .lg-post-header__inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  /* Eyebrow strip — small slot at the TOP of the photo for the tier
+     chip alone (single most important piece of meta: "is this for me?").
+     Mirrors __body's left/right padding for visual alignment. */
+  .lg-post-header__eyebrow {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 18px 24px 0;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    pointer-events: none;
+  }
+  .lg-post-header__eyebrow > * { pointer-events: auto; }
+  .lg-post-header__eyebrow .lg-post-header__chip {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  }
+
+  /* Chips row — categories + tags. Now lives OUTSIDE the photo on a cream
+     meta-strip ground below the hero. Tier is in the eyebrow, not here. */
+  .lg-post-header__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+  }
+  .lg-post-header__meta-strip {
+    background: var(--lg-paper, #f4f1e8);
+    border-bottom: 1px solid var(--lg-tags-border, #e7e3da);
+  }
+  .lg-post-header__meta-strip-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 14px 24px;
+  }
+  /* Meta-strip chips render on the light ground — flip from
+     transparent-white to outlined-ink so they read on cream. */
+  .lg-post-header__meta-strip .lg-post-header__chip {
+    background: #fff;
+    color: var(--lg-ink, #323532);
+    border: 1px solid var(--lg-tags-border, #e7e3da);
+  }
+  .lg-post-header__meta-strip .lg-post-header__chip:hover {
+    background: var(--lg-cream, #fffaf0);
+    border-color: var(--lg-ink, #323532);
+    transform: translateY(-1px);
+  }
+  .lg-post-header__chip {
+    display: inline-block;
+    padding: 5px 11px;
+    border-radius: 999px;
+    font: 700 10px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-decoration: none;
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.20);
+    transition: transform 120ms ease, background 120ms ease;
+  }
+  .lg-post-header__chip:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.28); }
+
+  /* Tier chip — distinct color so the post's required tier reads as
+     "this is the access level for this article", not as a tag. Per-slug
+     palette below; falls back to the generic chip style for unknown
+     tiers so nothing breaks if a new slug appears. */
+  .lg-post-header__chip--tier { border-color: transparent; }
+  .lg-post-header__chip--tier--looth-lite  { background: var(--lg-amber, #ecb351); color: var(--lg-ink, #323532); }
+  .lg-post-header__chip--tier--looth-pro   { background: var(--lg-sage,  #87986a); color: #fff; }
+  .lg-post-header__chip--tier--looth-club  { background: #e8d4a3;                  color: var(--lg-ink, #323532); }
+  .lg-post-header__chip--tier--looth-group { background: #1a1d1a;                  color: var(--lg-amber, #ecb351); }
+  .lg-post-header__chip--tier--public      { background: rgba(255,255,255,0.85);   color: var(--lg-ink, #323532); }
+
+  .lg-post-header__title {
+    margin: 0;
+    font-family: var(--lg-font-family, var(--lg-font-serif));
+    font-weight: var(--lg-font-weight, 700);
+    font-size: clamp(28px, 5vw, 60px);
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+    color: inherit;
+    text-wrap: balance;
+    /* Pop against busy / light photos. Layered shadow: tight crisp drop
+       for edge definition + soft wide drop for figure-from-ground separation. */
+    text-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.55),
+      0 2px 10px rgba(0, 0, 0, 0.45);
+  }
+  .lg-post-header__tagline {
+    margin: 0;
+    max-width: 720px;
+    font: 400 clamp(15px, 1.4vw, 19px)/1.5 var(--lg-font-serif);
+    color: rgba(255, 255, 255, 0.92);
+    font-style: italic;
+    text-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.55),
+      0 1px 8px rgba(0, 0, 0, 0.35);
+  }
+
+  /* ── Byline row: avatar | id | meta | links ────────────────── */
+  .lg-post-header__byline {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .lg-post-header__avatar-link {
+    flex-shrink: 0;
+    display: inline-block;
+    line-height: 0;
+    border-radius: 50%;
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+  .lg-post-header__avatar-link:hover {
+    transform: scale(1.04);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  }
+  .lg-post-header__avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.30);
+    flex-shrink: 0;
+    display: block;
+  }
+  .lg-post-header__id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .lg-post-header__name {
+    font: 700 15px/1.2 var(--lg-font-sans, system-ui);
+    color: #fff;
+    white-space: nowrap;
+  }
+  .lg-post-header__pub {
+    font: 600 10px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--lg-link-color, var(--lg-amber, #ecb351));
+    margin-top: 4px;
+  }
+  .lg-post-header__meta {
+    font: 400 13px/1.4 var(--lg-font-sans, system-ui);
+    color: rgba(255, 255, 255, 0.78);
+    margin-left: auto;
+  }
+  .lg-post-header__meta sep::before { content: " · "; opacity: 0.6; }
+  .lg-post-header__links {
+    display: flex;
+    gap: 8px;
+    margin-left: 4px;
+  }
+  .lg-post-header__links a {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .lg-post-header__links a:hover {
+    background: var(--lg-link-color, var(--lg-amber, #ecb351));
+    color: var(--lg-ink, #323532);
+  }
+  .lg-post-header__links svg { width: 18px; height: 18px; }
+
+  /* ─────────────────────────────────────────────────────────────
+     Responsive breakpoints
+     ─────────────────────────────────────────────────────────────
+     Mobile-first defaults above; each breakpoint stretches the photo,
+     bumps the title, and gives the byline + tags more breathing room.
+  */
+
+  /* Mobile: drop the focal crop on the hero and stack title + meta on a
+     cream ground BELOW the photo. The overlay-on-photo treatment was
+     unreadable on narrow viewports (title + chip collided over a busy
+     image); on small screens the photo runs natural-aspect and the body
+     reads on solid paper. */
+  @media (max-width: 767px) {
+    .lg-post-header__photo {
+      height: auto;
+      object-fit: unset;
+      object-position: unset;
+    }
+    .lg-post-header__scrim { display: none; }
+    .lg-post-header__eyebrow {
+      position: static;
+      padding: 12px 16px 0;
+    }
+    .lg-post-header__body {
+      position: static;
+      padding: 14px 16px 20px;
+      background: var(--lg-paper, #f4f1e8);
+      color: var(--lg-ink, #323532);
+    }
+    .lg-post-header__inner { gap: 12px; }
+    .lg-post-header__title,
+    .lg-post-header__tagline,
+    .lg-post-header__name {
+      color: var(--lg-ink, #323532);
+      text-shadow: none;
+    }
+    .lg-post-header__tagline { color: rgba(50, 53, 50, 0.85); }
+    .lg-post-header__meta    { color: rgba(50, 53, 50, 0.72); }
+    .lg-post-header__avatar  { border-color: rgba(50, 53, 50, 0.18); }
+    .lg-post-header__links a {
+      background: rgba(0, 0, 0, 0.08);
+      color: var(--lg-ink, #323532);
+    }
+    .lg-post-header__eyebrow .lg-post-header__chip { box-shadow: none; }
+  }
+
+  /* Mid: portrait tablets / small laptops */
+  @media (min-width: 768px) {
+    .lg-post-header__photo { height: clamp(420px, 58vh, 720px); }
+    .lg-post-header__body  { padding: 32px 32px 36px; }
+  }
+
+  /* Laptop / large tablet */
+  @media (min-width: 1024px) {
+    .lg-post-header__photo { height: clamp(480px, 62vh, 760px); }
+    .lg-post-header__body  { padding: 40px 48px 44px; }
+    .lg-post-header__title { line-height: 1.05; }
+    .lg-post-header__avatar { width: 72px; height: 72px; }
+    .lg-post-header__name  { font-size: 16px; }
+    .lg-post-header__meta  { font-size: 14px; }
+  }
+
+  /* Large monitors */
+  @media (min-width: 1440px) {
+    .lg-post-header__photo { height: clamp(560px, 64vh, 820px); }
+    .lg-post-header__body  { padding: 48px 64px 52px; }
+    .lg-post-header__inner { max-width: 1320px; }
+    .lg-post-header__avatar { width: 80px; height: 80px; }
+    .lg-post-header__links a { width: 40px; height: 40px; }
+    .lg-post-header__links svg { width: 20px; height: 20px; }
+  }
+
+  /* Ultra-wide */
+  @media (min-width: 1920px) {
+    .lg-post-header__inner { max-width: 1480px; }
+    .lg-post-header__photo { height: clamp(620px, 60vh, 880px); }
+  }
+
+  /* ── Sponsor variant ────────────────────────────────────────────
+     Layout (Variant A): full-width hero image → title bar → brand
+     strip with accent border → dark CTA strip → tags.
+     Dynamic colors (title bg, logo border, icon color, accent border)
+     are applied as inline styles by render.php from brand_* user meta. */
+
+  /* Hero: full-bleed image, no overlay. Tier chips sit at bottom-left. */
+  .lg-post-header__spr-hero {
+    position: relative;
+    line-height: 0;
+  }
+  .lg-post-header__spr-hero img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 360px;
+    object-fit: cover;
+  }
+  .lg-post-header--sponsor .lg-post-header__eyebrow {
+    position: absolute;
+    bottom: 10px;
+    left: 16px;
+    padding: 0;
+    background: transparent;
+  }
+  /* When there's no hero image, eyebrow renders in normal flow. */
+  .lg-post-header__eyebrow--static {
+    position: static;
+    padding: 12px 20px 0;
+    background: var(--lg-paper, #f4f1e8);
+  }
+
+  /* Title bar: brand_third_color_header_color bg (inline), no float. */
+  .lg-post-header__spr-title {
+    padding: 20px 24px 22px;
+  }
+  .lg-post-header--sponsor .lg-post-header__title {
+    margin: 0;
+    font-family: var(--lg-font-sans, system-ui);
+    font-size: clamp(20px, 3vw, 28px);
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    text-shadow: none;
+    text-wrap: balance;
+  }
+  .lg-post-header--sponsor .lg-post-header__tagline {
+    margin: 6px 0 0;
+    font-size: 15px;
+    font-style: italic;
+    line-height: 1.5;
+    text-shadow: none;
+  }
+
+  /* Brand row: logo circle | id (label + name) | social icons
+     border-bottom-color set inline from brand_primary_color_1. */
+  .lg-post-header__spr-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 14px 24px;
+    background: #fff;
+    border-bottom: 3px solid #eee; /* overridden by inline style */
+  }
+  .lg-post-header__spr-logo {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid currentColor; /* overridden by inline border-color */
+    flex-shrink: 0;
+    background: #f9f9f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lg-post-header__spr-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 4px;
+  }
+  .lg-post-header__spr-id {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+  .lg-post-header__spr-label {
+    font: 400 11px/1 var(--lg-font-sans, system-ui);
+    color: #999;
+    letter-spacing: 0.04em;
+  }
+  .lg-post-header__spr-name {
+    font: 700 16px/1.2 var(--lg-font-sans, system-ui);
+    color: var(--lg-ink, #323532);
+  }
+  .lg-post-header__spr-socials {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+  .lg-post-header__spr-socials a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    color: inherit;
+    text-decoration: none;
+    transition: background 140ms ease, color 140ms ease;
+  }
+  .lg-post-header__spr-socials a:hover { background: rgba(0, 0, 0, 0.07); }
+  .lg-post-header__spr-socials svg { width: 20px; height: 20px; }
+
+  /* CTA strip: dark bar with equal action columns */
+  .lg-post-header__spr-cta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    background: #0f0f0f;
+  }
+  .lg-post-header__spr-cta a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 20px 12px;
+    color: #F1DE8C;
+    text-decoration: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    transition: transform 160ms ease, background 160ms ease;
+  }
+  .lg-post-header__spr-cta a:last-child { border-right: none; }
+  .lg-post-header__spr-cta a:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: scale(1.04);
+  }
+  .lg-post-header__spr-cta svg { width: 26px; height: 26px; }
+  .lg-post-header__spr-cta span {
+    font: 600 11px/1.2 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  /* Sponsor variant responsive */
+  @media (max-width: 767px) {
+    .lg-post-header__spr-hero img { max-height: none; }
+    .lg-post-header__spr-title { padding: 16px 16px 18px; }
+    .lg-post-header__spr-brand { padding: 12px 16px; }
+    .lg-post-header__spr-socials { margin-left: 0; }
+    .lg-post-header__spr-cta { grid-template-columns: 1fr 1fr; }
+    .lg-post-header__spr-cta a { border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+  }
+}
+
+/* section-heading */
+/* section-heading — boxed section break. Container chrome + per-level
+   typography. The level modifier (`--h2/--h3/--h4`) drives font-size +
+   weight; the variant modifier (`--variant-1/--variant-2`) drives the
+   box's color palette. Both stack on the same element. */
+
+@layer block-shell {
+  .lg-section-heading {
+    display: block;
+    padding: var(--lg-padding, 0);
+    margin-block: var(--lg-margin-block, 24px);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+
+    color: var(--lg-color, inherit);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, 24px);
+    font-weight: var(--lg-font-weight, 600);
+    line-height: var(--lg-line-height, 1.25);
+    letter-spacing: var(--lg-letter-spacing, normal);
+    text-align: var(--lg-text-align, left);
+  }
+
+  .lg-section-heading a {
+    color: var(--lg-link-color, inherit);
+  }
+
+  /* Per-level sizing — lives in shell.css (not manifest.variants) because
+     it's tag/structure, not user-pickable visual style. */
+}
+
+/* Per-level sizing — intentionally OUTSIDE @layer block-shell so it wins
+   against the per-block defaults emitted into @layer block-defaults from
+   manifest.defaults.text.font-size. Without this, the manifest's 24px
+   default would override the level modifier and h2/h3/h4 would all look
+   the same. Levels mirror the post-header title (serif, heavy, tight). */
+.lg-section-heading--h2 {
+  --lg-font-family: var(--lg-font-serif);
+  --lg-font-size: clamp(28px, 5vw, 60px);
+  --lg-font-weight: 700;
+  --lg-line-height: 1.08;
+  --lg-letter-spacing: -0.015em;
+}
+.lg-section-heading--h3 {
+  --lg-font-family: var(--lg-font-serif);
+  --lg-font-size: clamp(22px, 3.2vw, 38px);
+  --lg-font-weight: 700;
+  --lg-line-height: 1.12;
+  --lg-letter-spacing: -0.015em;
+}
+.lg-section-heading--h4 {
+  --lg-font-family: var(--lg-font-serif);
+  --lg-font-size: clamp(18px, 2.2vw, 26px);
+  --lg-font-weight: 700;
+  --lg-line-height: 1.2;
+  --lg-letter-spacing: -0.01em;
+}
+
+/* transcript */
+/* transcript — collapsible HTML body for long-form transcript prose.
+   Built on native <details>/<summary> so content stays in the DOM at all
+   times (crawler-friendly) while collapsed by default for short pages.
+   Style cues match the callout family — same border-left rail, same
+   chevron-on-hover language — so transcripts feel like a sibling of
+   the existing structured asides. */
+
+@layer block-shell {
+  .lg-transcript {
+    display: block;
+    margin-block: var(--lg-margin-block, 24px);
+    background: var(--lg-bg, transparent);
+    border: 1px solid var(--lg-border-color, #e7e3da);
+    border-radius: var(--lg-radius, 8px);
+    padding: var(--lg-padding, 0);
+    color: var(--lg-color, var(--lg-charcoal, #1a1d1a));
+    font-family: var(--lg-font-family, var(--lg-font-serif));
+    font-size: var(--lg-font-size, 16px);
+    line-height: var(--lg-line-height, 1.6);
+    overflow: hidden;
+  }
+
+  /* Summary — the clickable label that toggles the accordion. */
+  .lg-transcript__label {
+    cursor: pointer;
+    list-style: none;
+    padding: 14px 18px;
+    font: 600 13px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--lg-label-color, var(--lg-ink, #323532));
+    background: var(--lg-cream, #fbfbf8);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .lg-transcript__label:hover {
+    background: var(--lg-cream-warm, #f7f5f2);
+  }
+  /* Strip the default marker across browsers — we draw our own chevron. */
+  .lg-transcript__label::-webkit-details-marker { display: none; }
+  .lg-transcript__label::marker { content: ''; }
+
+  /* Chevron — rotates on open. Uses currentColor so it tracks label color. */
+  .lg-transcript__label::after {
+    content: '';
+    width: 10px;
+    height: 10px;
+    margin-left: auto;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 0.18s ease;
+    flex: 0 0 auto;
+  }
+  .lg-transcript[open] > .lg-transcript__label::after {
+    transform: rotate(-135deg);
+  }
+
+  /* Body — transcript prose. Inherits typography from container so authors
+     get serif paragraphs by default. */
+  .lg-transcript__body {
+    padding: 18px 22px 22px;
+    border-top: 1px solid var(--lg-border-color, #e7e3da);
+  }
+  .lg-transcript__body :first-child { margin-top: 0; }
+  .lg-transcript__body :last-child  { margin-bottom: 0; }
+  .lg-transcript__body p {
+    margin: 0 0 0.85em;
+  }
+  .lg-transcript__body p:last-child { margin-bottom: 0; }
+  .lg-transcript__body a {
+    color: var(--lg-amber, #ecb351);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+  /* Timestamp-style first-of-line emphasis (e.g. <strong>00:14:32</strong>
+     at the start of a paragraph). No layout impact — just a hint that
+     timestamps belong in <strong>. */
+  .lg-transcript__body strong {
+    font-weight: 600;
+    color: var(--lg-ink, #323532);
+  }
+
+  @media (max-width: 520px) {
+    .lg-transcript__label { padding: 12px 14px; font-size: 12px; }
+    .lg-transcript__body  { padding: 14px 16px 18px; }
+  }
+}
+
+/* wysiwyg */
+/* wysiwyg — structural CSS only. Every chrome property flows through a CSS
+   variable declared in manifest.json. The cascade layers
+   (block-defaults → context → dash) resolve the effective value. */
+
+@layer block-shell {
+  .lg-wysiwyg {
+    /* Block-level container. flow-root establishes a new block formatting
+       context that contains floats inside this block — without it, an
+       image with .alignright/.alignleft "escapes" the wysiwyg and pushes
+       subsequent blocks (embeds, images, dividers) into wrapping around
+       it. flow-root gives author-intended alignment inside the wysiwyg
+       and clean stacking between wysiwyg and the next block. */
+    display: flow-root;
+    padding: var(--lg-padding, 0);
+    margin-block: var(--lg-margin-block, 0);
+    background: var(--lg-bg, transparent);
+    border: var(--lg-border, none);
+    border-radius: var(--lg-radius, 0);
+    box-shadow: var(--lg-shadow, none);
+
+    /* Text. The author's HTML inside inherits these. */
+    color: var(--lg-color, inherit);
+    font-family: var(--lg-font-family, inherit);
+    font-size: var(--lg-font-size, inherit);
+    font-weight: var(--lg-font-weight, 400);
+    line-height: var(--lg-line-height, 1.6);
+    letter-spacing: var(--lg-letter-spacing, normal);
+    text-align: var(--lg-text-align, left);
+  }
+
+  /* Anchor color — separate var so authors can override link color
+     independent of body color. Default inherits, but the manifest sets
+     a brand-link default. */
+  .lg-wysiwyg a {
+    color: var(--lg-link-color, inherit);
+  }
+
+  /* The author's TinyMCE output contains <p>, <h2>, <h3>, <ul>, <ol>, <a>,
+     <strong>, <em>. We don't reset margins on these — the browser's
+     default vertical rhythm is fine for editorial body copy. If a future
+     site needs tighter rhythm, override via the dash text vars. */
+
+  /* Images inserted via WP's media library carry .alignleft, .alignright,
+     .aligncenter, or .alignnone. Honor those classes the way the classic
+     editor's WYSIWYG preview does — text wraps around floated images.
+     The wysiwyg's flow-root above keeps the float contained so it doesn't
+     bleed into subsequent blocks. Floated images are capped at 50% of
+     the wysiwyg's content width to leave room for text to actually wrap. */
+  .lg-wysiwyg img {
+    max-width: 100%;
+    height: auto;
+  }
+  .lg-wysiwyg img.alignleft  { float: left;  margin: 0 1.25em 0.75em 0; max-width: 50%; }
+  .lg-wysiwyg img.alignright { float: right; margin: 0 0 0.75em 1.25em; max-width: 50%; }
+  .lg-wysiwyg img.aligncenter { display: block; margin-inline: auto; }
+  .lg-wysiwyg img.alignnone   { display: block; }
+  /* WP also sometimes wraps an image in <a class="alignright">. Apply the
+     same float to the link wrapper so the inner image floats with it. */
+  .lg-wysiwyg .alignleft  { float: left;  margin: 0 1.25em 0.75em 0; }
+  .lg-wysiwyg .alignright { float: right; margin: 0 0 0.75em 1.25em; }
+  .lg-wysiwyg .aligncenter { display: block; margin-inline: auto; text-align: center; }
+}
+
+
+@layer block-defaults {
+  .lg-callout {
+    --lg-padding: 18px 24px 18px 26px;
+    --lg-margin-block: 22px;
+    --lg-bg: #fdfbf4;
+    --lg-border-color: #ecb351;
+    --lg-radius: 8px;
+    --lg-title-color: #b8842b;
+    --lg-accent-color: #b8842b;
+  }
+  .lg-callout--files {
+    --lg-bg: #fdf7e8;
+  }
+  .lg-callout--people {
+    --lg-bg: #f3f6ec;
+    --lg-border-color: #87986a;
+    --lg-title-color: #586b3f;
+    --lg-accent-color: #586b3f;
+  }
+  .lg-callout--data {
+    --lg-bg: #f7f5f0;
+    --lg-border-color: #323532;
+    --lg-title-color: #323532;
+    --lg-accent-color: #323532;
+  }
+  .lg-callout--note {
+    --lg-bg: #fdfaf0;
+  }
+  .lg-callout--quote {
+    --lg-padding: 24px 28px 22px 32px;
+    --lg-bg: #fdfaf0;
+  }
+  .lg-columns {
+    --lg-padding: 0;
+    --lg-margin-block: 32px;
+    --lg-gap: 24px;
+    --lg-bg: transparent;
+    --lg-border: none;
+    --lg-radius: 0;
+    --lg-shadow: none;
+  }
+  .lg-columns--variant-2 {
+    --lg-padding: 20px;
+    --lg-bg: var(--lg-cream, #fbfbf8);
+    --lg-border: 1px solid var(--lg-sage-3, #d4e0b8);
+    --lg-radius: 8px;
+  }
+  .lg-columns--variant-3 {
+    --lg-padding: 20px;
+    --lg-bg: var(--lg-ink, #323532);
+    --lg-radius: 8px;
+  }
+  .lg-divider {
+    --lg-margin-block: 32px;
+    --lg-color: var(--lg-sage-3);
+  }
+  .lg-divider--dots {
+    --lg-color: var(--lg-sage);
+  }
+  .lg-divider--space {
+    --lg-margin-block: 48px;
+  }
+  .lg-download {
+    --lg-padding: 16px 18px;
+    --lg-margin-block: 20px;
+    --lg-bg: var(--lg-cream);
+    --lg-border: 1px solid var(--lg-sage-3);
+    --lg-radius: 10px;
+    --lg-shadow: none;
+    --lg-gap: 14px;
+    --lg-color: var(--lg-ink);
+    --lg-font-family: var(--lg-font-sans);
+    --lg-font-size: 16px;
+    --lg-font-weight: 400;
+    --lg-line-height: 1.45;
+    --lg-letter-spacing: normal;
+    --lg-text-align: left;
+  }
+  .lg-download--variant-2 {
+    --lg-padding: 16px 18px;
+    --lg-bg: #fff;
+    --lg-border: 1px solid var(--lg-ink, #323532);
+    --lg-radius: 2px;
+    --lg-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  }
+  .lg-download .lg-download__btn {
+    --lg-padding: 10px 18px;
+    --lg-bg: var(--lg-ink, #323532);
+    --lg-border: none;
+    --lg-radius: 999px;
+    --lg-shadow: none;
+    --lg-color: var(--lg-cream, #f0eee8);
+    --lg-font-family: var(--lg-font-sans);
+    --lg-font-size: 14px;
+    --lg-font-weight: 600;
+    --lg-letter-spacing: 0.02em;
+  }
+  .lg-embed {
+    --lg-padding: 12px 16px;
+    --lg-margin-block: 16px;
+    --lg-bg: var(--lg-cream);
+    --lg-border: 1px solid var(--lg-sage-3);
+    --lg-radius: 8px;
+    --lg-shadow: none;
+    --lg-gap: 12px;
+    --lg-color: var(--lg-ink);
+    --lg-link-color: var(--lg-sage);
+    --lg-font-family: var(--lg-font-sans);
+    --lg-font-size: 15px;
+    --lg-font-weight: 400;
+    --lg-line-height: 1.5;
+    --lg-letter-spacing: normal;
+    --lg-text-align: left;
+  }
+  .lg-embed--variant-2 {
+    --lg-padding: 0;
+    --lg-bg: transparent;
+    --lg-border: none;
+    --lg-radius: 0;
+  }
+  .lg-event-header {
+    --lg-padding: 20px 24px;
+    --lg-margin-block: 0 28px;
+    --lg-bg: var(--lg-cream, #fbfbf8);
+    --lg-border: 1px solid var(--lg-sage-3, #d4e0b8);
+    --lg-radius: 12px;
+    --lg-shadow: none;
+    --lg-color: var(--lg-ink, #323532);
+    --lg-link-color: var(--lg-amber, #ecb351);
+    --lg-font-family: var(--lg-font-sans, system-ui);
+    --lg-font-size: 18px;
+    --lg-font-weight: 600;
+    --lg-line-height: 1.4;
+  }
+  .lg-event-header--variant-2 {
+    --lg-link-color: var(--lg-sage, #87986a);
+  }
+  .lg-event-header--variant-3 {
+    --lg-link-color: var(--lg-charcoal, #1a1d1a);
+  }
+  .lg-gallery {
+    --lg-padding: 0;
+    --lg-margin-block: 24px;
+    --lg-gap: 12px;
+    --lg-bg: transparent;
+    --lg-border: none;
+    --lg-radius: 0;
+    --lg-shadow: none;
+    --lg-color: var(--lg-ink);
+    --lg-font-family: var(--lg-font-sans);
+    --lg-font-size: 16px;
+    --lg-font-weight: 400;
+    --lg-line-height: 1.5;
+    --lg-letter-spacing: normal;
+    --lg-text-align: left;
+  }
+  .lg-gallery--variant-2 {
+    --lg-padding: 16px;
+    --lg-gap: 16px;
+    --lg-bg: var(--lg-cream, #fbfbf8);
+    --lg-border: 1px solid var(--lg-sage-3, #d4e0b8);
+    --lg-radius: 8px;
+  }
+  .lg-gallery .lg-gallery__tile {
+    --lg-border: none;
+    --lg-radius: 4px;
+    --lg-shadow: none;
+  }
+  .lg-image {
+    --lg-padding: 12px 16px;
+    --lg-margin-block: 16px;
+    --lg-bg: var(--lg-cream);
+    --lg-border: 1px solid var(--lg-sage-3);
+    --lg-radius: 8px;
+    --lg-shadow: none;
+    --lg-gap: 12px;
+    --lg-color: var(--lg-ink);
+    --lg-link-color: var(--lg-sage);
+    --lg-font-family: var(--lg-font-sans);
+    --lg-font-size: 18px;
+    --lg-font-weight: 400;
+    --lg-line-height: 1.5;
+    --lg-letter-spacing: normal;
+    --lg-text-align: left;
+  }
+  .lg-image--variant-2 {
+    --lg-padding: 10px 10px 14px;
+    --lg-bg: #fff;
+    --lg-border: 1px solid var(--lg-ink, #323532);
+    --lg-radius: 2px;
+    --lg-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  }
+  .lg-image .lg-image__frame {
+    --lg-border: none;
+    --lg-radius: 0;
+    --lg-shadow: none;
+  }
+  .lg-image .lg-image__badge {
+    --lg-padding: 0 6px;
+    --lg-bg: var(--lg-ink);
+    --lg-border: none;
+    --lg-radius: 3px;
+    --lg-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    --lg-color: var(--lg-cream);
+    --lg-font-family: var(--lg-font-sans);
+    --lg-font-size: 13px;
+    --lg-font-weight: 700;
+    --lg-letter-spacing: 0.04em;
+  }
+  .lg-paywall {
+    --lg-margin-block: 32px;
+    --lg-rule-color: var(--lg-amber-dark, #b8842b);
+    --lg-label-color: var(--lg-amber-dark, #b8842b);
+  }
+  .lg-post-footer {
+    --lg-padding: 16px 24px 48px;
+    --lg-margin-block: 48px 0;
+    --lg-bg: transparent;
+    --lg-border: none;
+    --lg-radius: 0;
+    --lg-shadow: none;
+    --lg-color: var(--lg-charcoal);
+    --lg-link-color: var(--lg-amber, #ecb351);
+    --lg-font-family: var(--lg-font-sans);
+  }
+  .lg-post-footer--variant-2 {
+    --lg-link-color: var(--lg-sage, #87986a);
+  }
+  .lg-post-footer--variant-3 {
+    --lg-link-color: var(--lg-cream, #fbfbf8);
+  }
+  .lg-post-header {
+    --lg-padding: 0;
+    --lg-margin-block: 0 32px;
+    --lg-bg: transparent;
+    --lg-radius: 0;
+    --lg-shadow: none;
+    --lg-color: #ffffff;
+    --lg-link-color: var(--lg-amber, #ecb351);
+    --lg-font-family: var(--lg-font-serif);
+    --lg-font-size: 44px;
+    --lg-font-weight: 700;
+  }
+  .lg-post-header--variant-2 {
+    --lg-link-color: var(--lg-sage-3, #d4e0b8);
+  }
+  .lg-post-header--variant-3 {
+    --lg-link-color: var(--lg-cream, #fbfbf8);
+  }
+  .lg-section-heading {
+    --lg-padding: 0;
+    --lg-margin-block: 24px;
+    --lg-bg: transparent;
+    --lg-border: none;
+    --lg-radius: 0;
+    --lg-shadow: none;
+    --lg-color: var(--lg-charcoal, #1a1d1a);
+    --lg-link-color: var(--lg-sage, #87986a);
+    --lg-font-family: var(--lg-font-serif);
+    --lg-font-size: 24px;
+    --lg-font-weight: 600;
+    --lg-line-height: 1.25;
+    --lg-letter-spacing: -0.01em;
+    --lg-text-align: left;
+  }
+  .lg-section-heading--variant-2 {
+    --lg-padding: 16px 20px;
+    --lg-bg: var(--lg-cream, #fbfbf8);
+    --lg-border: 1px solid var(--lg-sage-3, #d4e0b8);
+    --lg-radius: 8px;
+  }
+  .lg-section-heading--variant-3 {
+    --lg-padding: 16px 20px;
+    --lg-bg: var(--lg-ink, #323532);
+    --lg-radius: 8px;
+    --lg-color: var(--lg-amber, #ecb351);
+  }
+  .lg-transcript {
+    --lg-padding: 0;
+    --lg-margin-block: 24px;
+    --lg-bg: transparent;
+    --lg-border-color: #e7e3da;
+    --lg-radius: 8px;
+    --lg-color: var(--lg-charcoal, #1a1d1a);
+    --lg-label-color: var(--lg-ink, #323532);
+    --lg-font-family: var(--lg-font-serif);
+    --lg-font-size: 16px;
+    --lg-line-height: 1.6;
+  }
+  .lg-wysiwyg {
+    --lg-padding: 0;
+    --lg-margin-block: 16px;
+    --lg-bg: transparent;
+    --lg-border: none;
+    --lg-radius: 0;
+    --lg-shadow: none;
+    --lg-color: var(--lg-ink);
+    --lg-link-color: var(--lg-sage);
+    --lg-font-family: var(--lg-font-sans);
+    --lg-font-size: 17px;
+    --lg-font-weight: 400;
+    --lg-line-height: 1.6;
+    --lg-letter-spacing: normal;
+    --lg-text-align: left;
+  }
+  .lg-wysiwyg--panel {
+    --lg-padding: 20px 24px;
+    --lg-bg: var(--lg-cream, #fbfbf8);
+    --lg-border: 1px solid var(--lg-sage-3, #d4e0b8);
+    --lg-radius: 8px;
+  }
+}
+
+@layer context {
+  .lg-columns__col > .lg-embed,
+  .lg-columns__col > .lg-event-header,
+  .lg-columns__col > .lg-gallery,
+  .lg-columns__col > .lg-image,
+  .lg-columns__col > .lg-section-heading,
+  .lg-columns__col > .lg-wysiwyg {
+    --lg-padding: 0;
+    --lg-margin-block: 0;
+    --lg-bg: transparent;
+    --lg-border: none;
+    --lg-shadow: none;
+  }
+}
+
+@layer dash {
+  :where(.lg-download, .lg-embed, .lg-image, .lg-wysiwyg) {
+    --lg-margin-block: 4px;
+    --lg-shadow: none;
+  }
+  .lg-callout {
+    --lg-accent-color: #87986a;
+  }
+  .lg-image {
+    --lg-margin-block: 8px;
+    --lg-color: #1a1d1a;
+    --lg-link-color: #ecb351;
+    --lg-font-family: var(--lg-font-sans);
+    --lg-font-size: 18px;
+    --lg-font-weight: 500;
+  }
+  .lg-image--variant-1 {
+    --lg-padding: 10px;
+    --lg-margin-block: 8px;
+    --lg-bg: #f4f1e8;
+    border-top-width: 0px;
+    border-right-width: 0px;
+    border-bottom-width: 2px;
+    border-left-width: 0px;
+    border-style: solid;
+    border-color: #ecb351;
+    --lg-shadow: var(--lg-shadow-soft);
+  }
+  .lg-image--variant-2 {
+    --lg-padding: 10px;
+    --lg-margin-block: 8px;
+    --lg-bg: transparent;
+    --lg-border: 0px solid #d4e0b8;
+    --lg-shadow: none;
+  }
+  .lg-image .lg-image__frame {
+    --lg-radius: 8px;
+    --lg-shadow: var(--lg-shadow-card);
+  }
+  .lg-image .lg-image__badge {
+    --lg-bg: #f4f1e8;
+    --lg-border: 2px solid #ecb351;
+    --lg-radius: 139px;
+    --lg-color: #1a1d1a;
+    --lg-font-family: var(--lg-font-sans);
+    --lg-font-size: 13px;
+    --lg-font-weight: 500;
+  }
+  .lg-wysiwyg {
+    --lg-padding: 16px;
+    --lg-margin-block: 20px;
+    --lg-font-family: var(--lg-font-sans);
+    --lg-font-size: 19px;
+    --lg-font-weight: 500;
+  }
+  .lg-wysiwyg--panel {
+    --lg-padding: 12px 24px;
+    --lg-bg: #f4f1e8;
+    border-top-width: 0px;
+    border-right-width: 0px;
+    border-bottom-width: 2px;
+    border-left-width: 0px;
+    border-style: solid;
+    border-color: #ecb351;
+    --lg-shadow: var(--lg-shadow-soft);
+  }
+}
