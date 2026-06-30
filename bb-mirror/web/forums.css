@@ -2538,6 +2538,141 @@ html[data-lguser-theme="dark"] .ntm-overlay {
   .ntm-dialog { padding: var(--s4); }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   DESKTOP POSTING WIZARD (hub-post-wizard, Ian 2026-06-29)
+   ──────────────────────────────────────────────────────────────────────────
+   Styles the 4-step reshape of #ntm-form. EVERYTHING is scoped under
+   .ntm-wizard, a class forums.js adds to #ntm-overlay ONLY on desktop (≥641).
+   So none of this touches the mobile composer (Buck's fbStyleComposer) or the
+   pre-wizard flat form — the deliberate desktop/mobile split is preserved.
+   Colours reuse the modal's pinned tokens so light/dark mode follow for free.
+   ════════════════════════════════════════════════════════════════════════ */
+.ntm-wizard .ntm-dialog { width: min(680px, calc(100vw - var(--s8))); }
+
+/* Category colour palette — one --lgw-cat per category index (mod 8). Applied to
+   any element carrying data-cat-color (accordion section, selection chip, review
+   chip); descendants (leaf rows) inherit it. */
+.ntm-wizard [data-cat-color="0"] { --lgw-cat: #6b7c52; }   /* sage / brand   */
+.ntm-wizard [data-cat-color="1"] { --lgw-cat: #4f7d86; }   /* teal           */
+.ntm-wizard [data-cat-color="2"] { --lgw-cat: #8a6d3b; }   /* ochre          */
+.ntm-wizard [data-cat-color="3"] { --lgw-cat: #7d5260; }   /* mauve          */
+.ntm-wizard [data-cat-color="4"] { --lgw-cat: #51618a; }   /* indigo         */
+.ntm-wizard [data-cat-color="5"] { --lgw-cat: #5f8a4f; }   /* leaf           */
+.ntm-wizard [data-cat-color="6"] { --lgw-cat: #a8743a; }   /* rust           */
+.ntm-wizard [data-cat-color="7"] { --lgw-cat: #5b5f8a; }   /* slate-violet   */
+
+/* ── Progress rail ──────────────────────────────────────────────────────── */
+.lgw-rail { display: flex; gap: var(--s2); margin: 0 0 var(--s1); }
+.lgw-rail__step {
+  flex: 1; display: flex; align-items: center; gap: 7px;
+  background: none; border: 0; border-bottom: 2px solid var(--border);
+  padding: 4px 2px 9px; cursor: pointer; text-align: left;
+  font: 600 12.5px var(--font-body); color: var(--fg-soft);
+}
+.lgw-rail__num {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 999px;
+  background: var(--border); color: var(--bg-card);
+  font: 700 11px var(--font-body);
+}
+.lgw-rail__lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lgw-rail__step.is-current { color: var(--fg); border-bottom-color: var(--accent); }
+.lgw-rail__step.is-current .lgw-rail__num,
+.lgw-rail__step.is-done .lgw-rail__num { background: var(--accent); color: #fff; }
+.lgw-rail__step.is-done { color: var(--fg-muted); border-bottom-color: var(--accent); }
+.lgw-rail__step:disabled { cursor: default; }
+
+/* ── Step panes (one visible at a time) ─────────────────────────────────── */
+.lgw-step { display: none; flex-direction: column; gap: var(--s3); }
+.lgw-step.is-active { display: flex; animation: lgw-fade .18s ease; }
+@keyframes lgw-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ── Step 1: filter + colour-coded category accordion ───────────────────── */
+.lgw-filter {
+  width: 100%; box-sizing: border-box;
+  padding: var(--s2) var(--s3); border: 1px solid var(--border);
+  border-radius: var(--r-sm); font: 14px var(--font-body);
+  background: var(--bg); color: var(--fg);
+}
+.lgw-filter:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+.lgw-sel { display: flex; align-items: center; gap: 8px; font: 600 12.5px var(--font-body); color: var(--fg-muted); }
+.lgw-sel[hidden] { display: none; }   /* author display:flex would otherwise beat the [hidden] default */
+.lgw-sel__chip, .lgw-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 3px 11px; border-radius: 999px;
+  font: 600 12.5px var(--font-body); color: var(--fg);
+  background: color-mix(in srgb, var(--lgw-cat, #6b7c52) 16%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--lgw-cat, #6b7c52) 42%, transparent);
+}
+.lgw-sel__chip::before, .lgw-chip::before {
+  content: ""; width: 9px; height: 9px; border-radius: 999px; background: var(--lgw-cat, #6b7c52);
+}
+.ntm-wizard .ntm-forumlist { padding: 0; max-height: 300px; }
+.lgw-acc { --lgw-cat: #6b7c52; border-left: 3px solid var(--lgw-cat); }
+.lgw-acc + .lgw-acc { border-top: 1px solid var(--border); }
+.lgw-acc__head {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  background: none; border: 0; padding: 9px var(--s3); cursor: pointer;
+  font: 700 12px var(--font-body); color: var(--fg); text-align: left;
+}
+.lgw-acc__head:hover { background: color-mix(in srgb, var(--lgw-cat) 9%, transparent); }
+.lgw-acc__sw { flex: none; width: 12px; height: 12px; border-radius: 3px; background: var(--lgw-cat); }
+.lgw-acc__name { flex: 1; text-transform: uppercase; letter-spacing: .05em; }
+.lgw-acc__count {
+  font: 600 11px var(--font-body); color: var(--fg-muted);
+  background: var(--lg-sage-tint); padding: 1px 8px; border-radius: 999px;
+}
+.lgw-acc__chev { color: var(--fg-soft); font-size: 11px; transition: transform .15s ease; }
+.lgw-acc.is-open .lgw-acc__chev { transform: rotate(90deg); }
+.lgw-acc__body { padding: 2px 0 6px; }
+.lgw-acc .ntm-fl__leaf { margin: 0 var(--s2); }
+.lgw-acc .ntm-fl__leaf.is-selected,
+.lgw-acc .ntm-fl__leaf:has(input:checked) {
+  background: color-mix(in srgb, var(--lgw-cat) 15%, transparent);
+  box-shadow: inset 3px 0 0 var(--lgw-cat);
+  font-weight: 700;
+}
+.lgw-noresults { padding: var(--s3); text-align: center; color: var(--fg-soft); font: 13px var(--font-body); }
+
+/* ── Step 3: photos control ─────────────────────────────────────────────── */
+.lgw-photos { display: flex; flex-direction: column; gap: 8px; }
+.lgw-addphoto {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border: 1px dashed var(--border); border-radius: var(--r-sm);
+  background: var(--bg); color: var(--fg-muted); font: 600 13px var(--font-body); cursor: pointer;
+}
+.lgw-addphoto:hover { border-color: var(--accent); color: var(--fg); }
+.lgw-photos__note { margin: 0; font: 12px var(--font-body); color: var(--fg-soft); }
+
+/* ── Step 4: review summary ─────────────────────────────────────────────── */
+.lgw-review { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
+.lgw-rv { display: grid; grid-template-columns: 92px 1fr auto; align-items: center; gap: var(--s3); padding: 11px var(--s3); }
+.lgw-rv + .lgw-rv { border-top: 1px solid var(--border); }
+.lgw-rv__k { font: 700 11px var(--font-body); text-transform: uppercase; letter-spacing: .06em; color: var(--fg-soft); }
+.lgw-rv__v { font: 500 14px var(--font-body); color: var(--fg); min-width: 0; overflow-wrap: anywhere; }
+.lgw-rv__edit { background: none; border: 0; color: var(--accent); font: 600 12.5px var(--font-body); cursor: pointer; padding: 2px 4px; }
+.lgw-rv__edit:hover { text-decoration: underline; }
+
+/* ── Footer (Cancel · status · Back / Next / Post) ──────────────────────── */
+.lgw-foot { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s1); padding-top: var(--s3); border-top: 1px solid var(--border); }
+.lgw-foot__status { min-height: 16px; }
+.ntm-wizard .ntm-status { flex: none; }
+.lgw-foot__btns { display: flex; align-items: center; gap: var(--s2); }
+.lgw-foot__btns .ntm-cancel { margin-right: auto; }   /* Cancel pinned left */
+.lgw-btn { padding: var(--s2) var(--s4); border-radius: var(--r-sm); font: 600 14px var(--font-body); cursor: pointer; border: 1px solid transparent; }
+.lgw-btn--ghost { background: none; border-color: var(--border); color: var(--fg-muted); }
+.lgw-btn--ghost:hover { border-color: var(--fg-muted); color: var(--fg); }
+.lgw-btn--primary { background: var(--accent); color: #fff; }
+.lgw-btn--primary:hover:not(:disabled) { background: var(--accent-hover, #6b3820); }
+.lgw-btn--primary:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Photos have their own step → hide the Quill toolbar's image button on desktop
+   (shared Quill config untouched, so mobile keeps its image button). */
+.ntm-wizard .ntm-form .ql-toolbar .ql-image { display: none; }
+/* The tray helper's auto "Supported images" hint mounts under the editor (Write
+   step); the Photos step carries its own note, so suppress the duplicate here. */
+.ntm-wizard .lg-mtray-hint { display: none; }
+
 /* ══════════════════════════════════════════════════════════
    NAV ACCORDION
    ══════════════════════════════════════════════════════════ */
