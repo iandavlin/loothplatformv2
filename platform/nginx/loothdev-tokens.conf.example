@@ -1,0 +1,17 @@
+# === BOX-LOCAL dev gate tokens — TEMPLATE (NOT the real file) ===
+# The main vhost (platform/nginx/dev2.loothgroup.com.conf) `include`s
+# /etc/nginx/snippets/loothdev-tokens.conf for the two dev-gate secrets. That file
+# is a per-box, root-owned secret and is NEVER committed. To provision a box:
+#
+#   sudo install -m 644 -o root -g root /dev/stdin \
+#       /etc/nginx/snippets/loothdev-tokens.conf <<'EOF'
+#   set $loothdev_token "<REAL_DEV_GATE_TOKEN>";
+#   set $loothdev_tester_token "<REAL_TESTER_TOKEN>";
+#   EOF
+#   sudo nginx -t && sudo systemctl reload nginx
+#
+# On a GATE-FREE box (live/cutover) the tokens are unused (the gate map in
+# conf.d/loothdev-auth.conf returns $loothdev_is_authorized=1), but the vhost still
+# `include`s this file, so it must exist — set the two vars to any non-empty placeholder.
+set $loothdev_token "REPLACE_WITH_DEV_GATE_TOKEN";
+set $loothdev_tester_token "REPLACE_WITH_TESTER_TOKEN";
