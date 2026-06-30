@@ -18,6 +18,12 @@
  *   [[project_dev2_mail_containment_guard]].
  */
 if (!defined('ABSPATH')) return;
+
+// Self-disable wherever poller mail is INTENTIONALLY enabled (live, where
+// lgms_poller_mail_enabled is ON): the poller's own mail-gate then governs
+// delivery and this belt-and-braces suppressor must NOT block it. Active only
+// where mail is OFF (dev) -> this ONE file is safe to ship everywhere (single pull).
+if ( (bool) get_option( 'lgms_poller_mail_enabled', false ) ) { return; }
 add_filter('pre_wp_mail', function ($short, $atts) {
     // Allow-list: anything explicitly marked as an intentional poller
     // notification passes through, even though it originates in the plugin.
