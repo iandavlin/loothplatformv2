@@ -444,6 +444,59 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
     bb_mirror_sync_attachments($id, 'reply', $db, (string)$p->post_content);
 }
 
+/**
+ * Recompute a single topic's stored reply_count from the authoritative source
+ * (WP published replies — the SAME source as bb_mirror_upsert_topic's
+ * $real_reply_count above).
+ *
+ * Why this is needed: bbPress does NOT bump a topic's post_modified_gmt when a
+ * reply is added/removed — it only touches the reply post + the topic's
+ * _bbp_* meta. So neither the per-reply _sync (which upserts the reply row but
+ * never the parent topic) nor bin/reconcile.php's modified-since delta-walk
+ * re-materializes the parent topic, and topic.reply_count drifts. The card then
+ * shows "0 replies" while the live facepile (a direct query over the reply
+ * table) shows avatars. Call this on every reply mutation. WP-sourced (not a
+ * COUNT over the pg reply table) so orphaned pg reply rows — replies trashed in
+ * WP whose delete never propagated — can't inflate the count.
+ */
+function bb_mirror_refresh_topic_reply_count(int $topic_id, PDO $db): void {
+    if ($topic_id <= 0) return;
+    $real = (int)$GLOBALS['wpdb']->get_var($GLOBALS['wpdb']->prepare(
+        "SELECT COUNT(*) FROM {$GLOBALS['wpdb']->posts}
+          WHERE post_type='reply' AND post_status='publish' AND post_parent=%d", $topic_id));
+    $db->prepare("UPDATE topic SET reply_count = ?, sync_at = ? WHERE id = ?")
+       ->execute([$real, bb_mirror_ts(time()), $topic_id]);
+}
+
+/**
+ * Sitewide reply_count rollup: recompute every topic's stored reply_count from
+ * WP published replies in a single grouped query, writing only the rows that
+ * drifted. Used by bin/reconcile.php (belt-and-suspenders) and
+ * bin/backfill-reply-count.php (one-time historical catch-up). Idempotent;
+ * returns the number of topics corrected.
+ */
+function bb_mirror_refresh_all_reply_counts(PDO $db): int {
+    $rows = $GLOBALS['wpdb']->get_results(
+        "SELECT post_parent AS topic_id, COUNT(*) AS c
+           FROM {$GLOBALS['wpdb']->posts}
+          WHERE post_type='reply' AND post_status='publish'
+          GROUP BY post_parent", ARRAY_A);
+    $real = [];
+    foreach ($rows as $r) $real[(int)$r['topic_id']] = (int)$r['c'];
+
+    $upd = $db->prepare("UPDATE topic SET reply_count = ?, sync_at = ? WHERE id = ?");
+    $ts  = bb_mirror_ts(time());
+    $fixed = 0;
+    foreach ($db->query("SELECT id, reply_count FROM topic")->fetchAll() as $t) {
+        $want = $real[(int)$t['id']] ?? 0;     // topics with no published replies → 0
+        if ((int)$t['reply_count'] !== $want) {
+            $upd->execute([$want, $ts, (int)$t['id']]);
+            $fixed++;
+        }
+    }
+    return $fixed;
+}
+
 function bb_mirror_upsert_bp_group(int $id, PDO $db): void {
     global $wpdb;
     $g = $wpdb->get_row($wpdb->prepare(

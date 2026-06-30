@@ -85,6 +85,16 @@ foreach (['forum', 'topic', 'reply'] as $kind) {
     echo "  {$counts[$kind]} {$kind}(s)\n";
 }
 
+// ---------- reply_count rollup --------------------------------------------
+// bbPress doesn't bump a topic's post_modified_gmt when a reply is added or
+// removed, so the delta-walk above never re-materializes the parent topic and
+// its stored reply_count drifts (card shows "0 replies" while the live facepile
+// shows avatars). Recompute every topic's reply_count from WP published replies
+// (authoritative). Idempotent — only drifted rows are written.
+echo "Refreshing topic reply_count...\n";
+$rc_fixed = bb_mirror_refresh_all_reply_counts($db);
+echo "  $rc_fixed topic(s) corrected\n";
+
 // ---------- rollup refresh ------------------------------------------------
 // Both rollups: ancestor chains are shallow, descendant trees too. Cheap to
 // re-run sitewide; saves us from drift if per-row sync missed an ancestor
