@@ -41,19 +41,29 @@
 
 if (!defined('ABSPATH')) exit;
 
+if (is_file('/srv/lg-shared/lg-env.php')) require_once '/srv/lg-shared/lg-env.php';
+
 const BB_MIRROR_SYNC_URL = 'https://127.0.0.1/bb-mirror-api/v0/_sync';
 
 if (!function_exists('bb_mirror_sync_host')) {
 /**
- * Resolve the loopback Host header per box. An explicit override wins (set
- * BB_MIRROR_SYNC_HOST_OVERRIDE via wp-config, or a BB_MIRROR_SYNC_HOST env var);
- * otherwise detect from the request host, mirroring ArchivePocDash::resolve_host.
- * Dev requests carry a dev.* / claude.loothgroup HTTP_HOST → dev; everything else
- * → live. Behavior-neutral on dev, points at the live host on live. */
+ * Resolve the loopback Host header per box. Precedence:
+ *   1. BB_MIRROR_SYNC_HOST_OVERRIDE define (wp-config escape hatch)
+ *   2. BB_MIRROR_SYNC_HOST env var (escape hatch)
+ *   3. /etc/looth/env shared host via lg_env() -- the box-static migration source
+ *      (dev1->dev.loothgroup.com, dev2->dev2.loothgroup.com, prod->loothgroup.com)
+ *   4. request-host detection (dev.* / claude.loothgroup -> dev, else live)
+ *   5. 'loothgroup.com' final fallback
+ * lg_env() is the preferred source (matches the live deployed form); the override
+ * hooks + request detection are retained from origin/main so no escape hatch is lost. */
 function bb_mirror_sync_host(): string {
     if (defined('BB_MIRROR_SYNC_HOST_OVERRIDE')) return (string) constant('BB_MIRROR_SYNC_HOST_OVERRIDE');
     $env = getenv('BB_MIRROR_SYNC_HOST');
     if ($env !== false && $env !== '') return $env;
+    if (function_exists('lg_env')) {
+        $h = lg_env()['host'] ?? '';
+        if ($h !== '') return $h;
+    }
     $host = $_SERVER['HTTP_HOST'] ?? '';
     if (str_contains($host, 'dev.') || str_contains($host, 'claude.loothgroup')) {
         return 'dev.loothgroup.com';
