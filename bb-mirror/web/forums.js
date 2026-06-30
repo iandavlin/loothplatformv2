@@ -100,12 +100,20 @@
       opts.editorEl.parentNode.insertBefore(hintEl, opts.editorEl.nextSibling);
     }
     function ensureTray() {
-      if (tray || !opts.editorEl || !opts.editorEl.parentNode) return tray;
+      if (tray || !opts.editorEl) return tray;
+      // Desktop wizard (hub-post-wizard, ≥641) relocates the tray into its own
+      // Photos step via opts.trayMount (a getter returning the container). When
+      // it returns null/absent — i.e. mobile, the reply/edit composers, or a
+      // pre-wizard desktop window — we keep the byte-for-byte inline placement
+      // under the editor. So the tray contract is unchanged everywhere else.
+      var mount = (typeof opts.trayMount === 'function') ? opts.trayMount() : null;
+      if (!mount && !opts.editorEl.parentNode) return tray;
       tray = document.createElement('div');
       tray.className = 'lg-mtray';
       tray.hidden = true;
+      if (mount) mount.appendChild(tray);
       // Insert above the hint line so order reads: editor → tray → hint.
-      opts.editorEl.parentNode.insertBefore(tray, hintEl || opts.editorEl.nextSibling);
+      else opts.editorEl.parentNode.insertBefore(tray, hintEl || opts.editorEl.nextSibling);
       return tray;
     }
     function fail(msg) {
@@ -1378,6 +1386,8 @@
     var ntmEditHadMedia = false;// edit mode: did the topic have photos at open (so we always sync)
     var ntmRestBase  = ntmForm.dataset.restBase || '/wp-json/buddyboss/v1';
     var ntmEditorEl  = document.getElementById('ntm-editor');
+    var ntmWiz       = null;     // desktop (≥641) step-wizard controller, built below; null on mobile
+    var ntmWizPhotoMount = null; // Step-3 "Photos" container the image tray mounts into (desktop only)
 
     // Lazy-init Quill on first authed open. Falls back to the plain textarea
     // if the CDN script didn't load.
@@ -1423,6 +1433,9 @@
       // show as removable thumbs there (hub-polish relocates the tray). The mobile
       // composer reads ntmMediaIds for bbp_media on submit either way. (Ian 6/17)
       forceTray: true,
+      // Desktop wizard (≥641): mount the thumb tray inside Step 3 "Photos".
+      // Returns null on mobile / before the wizard builds → inline placement.
+      trayMount: function () { return ntmWizPhotoMount; },
       getNonce: function (cb) { cb(ntmNonce); },
       insertInline: function (url) {
         var range = ntmQuill.getSelection(true);
@@ -1458,6 +1471,7 @@
     // Focus the title once a forum is chosen, else the picker (checked row or first).
     function ntmFocusEntry() {
       if (ntmForm.hidden) return;
+      if (ntmWiz) { ntmWiz.focusCurrent(); return; }   // desktop: focus the active step, not the (hidden) title
       if (ntmGetForum()) { ntmTitleIn.focus(); return; }
       var first = ntmForumList && ntmForumList.querySelector('input[name="forum_id"]');
       (first || ntmTitleIn).focus();
@@ -1466,6 +1480,7 @@
     function ntmShowOverlay(overrideForumId) {
       ntmOverlay.hidden = false;
       document.body.classList.add('ntm-active');
+      if (ntmWiz) ntmWiz.onOpen();   // desktop: rewind the step-wizard to Step 1 each open
       // Heading mode: a fresh open is "New post". Edit mode sets ntmEditId BEFORE
       // calling us (ntmOpenForEdit), then overrides the heading to "Edit post" —
       // so leave it alone when already in edit mode. (Ian 6/17)
@@ -1578,6 +1593,364 @@
       html = html.replace(/<p>\s*<\/p>/gi, '').trim();
       return html;
     }
+
+    // ── Desktop posting wizard (hub-post-wizard, Ian 2026-06-29) ───────────────
+    // Reshapes the one-long #ntm-form into a 4-step modal flow — Where → Write →
+    // Photos & details → Review — with Back / Next / Post. PRESENTATION ONLY: it
+    // moves the EXISTING fields into step panes and lets the SAME #ntm-form submit
+    // handler run on the final step, so posting behaviour, the image tray, Quill,
+    // edit-mode and Buck's mobile reader of #ntm-form are all untouched. Desktop-
+    // gated (≥641): on mobile this never runs and the flat form is served exactly
+    // as before — the deliberate desktop/mobile composer split stays intact. Step 1
+    // replaces the ~40-row radio list with a compact, colour-coded category
+    // accordion + live filter (the radios stay as the hidden source of truth).
+    function buildNtmWizard() {
+      if (!window.matchMedia('(min-width:641px)').matches) return null;   // DESKTOP ONLY
+      var dialog = ntmOverlay.querySelector('.ntm-dialog');
+      if (!ntmForm || !ntmForumList || !dialog) return null;
+      ntmOverlay.classList.add('ntm-wizard');
+
+      var STEPS = [
+        { n: 1, label: 'Where' },
+        { n: 2, label: 'Write' },
+        { n: 3, label: 'Photos' },
+        { n: 4, label: 'Review' },
+      ];
+      var cur = 1;
+      var tagsIn = document.getElementById('ntm-tags');
+      var anonChk = document.getElementById('ntm-anon-check');
+
+      function mk(tag, cls, html) {
+        var e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (html != null) e.innerHTML = html;
+        return e;
+      }
+
+      // — Capture the existing field nodes BEFORE we move anything —
+      var forumLabel = document.getElementById('ntm-forum-label');
+      var titleLabel = ntmForm.querySelector('label[for="ntm-title-in"]');
+      var bodyLabel  = ntmEditorEl.previousElementSibling;
+      if (!(bodyLabel && bodyLabel.classList && bodyLabel.classList.contains('ntm-label'))) {
+        bodyLabel = null;   // markup drift — skip rather than move the wrong node
+      }
+      var contentFb = document.getElementById('ntm-content');
+      var pasteHint = ntmForm.querySelector('.ntm-paste-hint');
+      var tagsLabel = ntmForm.querySelector('label[for="ntm-tags"]');
+      var quickTags = document.getElementById('ntm-quicktags');
+      var anonToggle = ntmForm.querySelector('.ntm-anon');
+      var row = ntmForm.querySelector('.ntm-row');   // holds Post / Cancel / status
+
+      // — Progress rail (clickable) + 4 panes + footer; all INSIDE the form so they
+      //   hide together with it in the loading / signed-out states —
+      var rail = mk('div', 'lgw-rail');
+      STEPS.forEach(function (s) {
+        var d = mk('button', 'lgw-rail__step',
+          '<span class="lgw-rail__num">' + s.n + '</span>' +
+          '<span class="lgw-rail__lbl">' + s.label + '</span>');
+        d.type = 'button';
+        d.dataset.go = s.n;
+        rail.appendChild(d);
+      });
+      var panes = {};
+      STEPS.forEach(function (s) { panes[s.n] = mk('div', 'lgw-step'); panes[s.n].dataset.step = s.n; });
+
+      var foot = mk('div', 'lgw-foot');
+      var footStatus = mk('div', 'lgw-foot__status');
+      var footBtns = mk('div', 'lgw-foot__btns');
+      var btnBack = mk('button', 'lgw-btn lgw-btn--ghost', '← Back'); btnBack.type = 'button';
+      var btnNext = mk('button', 'lgw-btn lgw-btn--primary', 'Next →'); btnNext.type = 'button';
+      foot.appendChild(footStatus); foot.appendChild(footBtns);
+
+      // — Assemble the form: rail, panes, footer —
+      ntmForm.insertBefore(rail, ntmForm.firstChild);
+      ntmForm.appendChild(panes[1]);
+      ntmForm.appendChild(panes[2]);
+      ntmForm.appendChild(panes[3]);
+      ntmForm.appendChild(panes[4]);
+      ntmForm.appendChild(foot);
+
+      // STEP 1 — Where: filter + colour-coded category accordion + selection line.
+      var filter = mk('input', 'lgw-filter'); filter.type = 'search';
+      filter.setAttribute('placeholder', 'Filter forums…');
+      filter.setAttribute('aria-label', 'Filter forums');
+      filter.setAttribute('autocomplete', 'off');
+      var selWrap = mk('div', 'lgw-sel'); selWrap.hidden = true;
+      selWrap.innerHTML = '<span class="lgw-sel__pre">Posting to</span> <span class="lgw-sel__chip"></span>';
+      var selChip = selWrap.querySelector('.lgw-sel__chip');
+      var noRes = mk('p', 'lgw-noresults', 'No forums match that.'); noRes.hidden = true;
+      if (forumLabel) panes[1].appendChild(forumLabel);
+      panes[1].appendChild(filter);
+      panes[1].appendChild(selWrap);
+      panes[1].appendChild(ntmForumList);   // the radiogroup container (kept; insides rebuilt)
+      panes[1].appendChild(noRes);
+
+      // Rebuild #ntm-forum's flat [cat, leaf, leaf, …] into accordion sections.
+      var sections = [];
+      (function buildAccordion() {
+        var kids = [].slice.call(ntmForumList.children);
+        var sec = null, ci = -1;
+        kids.forEach(function (el) {
+          if (el.classList && el.classList.contains('ntm-fl__cat')) {
+            ci++;
+            sec = mk('div', 'lgw-acc');
+            sec.dataset.catColor = (ci % 8);
+            var head = mk('button', 'lgw-acc__head',
+              '<span class="lgw-acc__sw" aria-hidden="true"></span>' +
+              '<span class="lgw-acc__name"></span>' +
+              '<span class="lgw-acc__count"></span>' +
+              '<span class="lgw-acc__chev" aria-hidden="true">▸</span>');
+            head.type = 'button';
+            head.setAttribute('aria-expanded', 'false');
+            head.querySelector('.lgw-acc__name').textContent = el.textContent;
+            var body = mk('div', 'lgw-acc__body'); body.hidden = true;
+            sec.appendChild(head); sec.appendChild(body);
+            sec._head = head; sec._body = body; sec._n = 0;
+            sections.push(sec);
+          } else if (el.classList && el.classList.contains('ntm-fl__leaf')) {
+            if (!sec) {   // a leaf before any header (shouldn't happen) → General bucket
+              ci++; sec = mk('div', 'lgw-acc'); sec.dataset.catColor = (ci % 8);
+              var h2 = mk('button', 'lgw-acc__head',
+                '<span class="lgw-acc__sw" aria-hidden="true"></span>' +
+                '<span class="lgw-acc__name">General</span>' +
+                '<span class="lgw-acc__count"></span>' +
+                '<span class="lgw-acc__chev" aria-hidden="true">▸</span>');
+              h2.type = 'button'; h2.setAttribute('aria-expanded', 'false');
+              var b2 = mk('div', 'lgw-acc__body'); b2.hidden = true;
+              sec.appendChild(h2); sec.appendChild(b2);
+              sec._head = h2; sec._body = b2; sec._n = 0;
+              sections.push(sec);
+            }
+            sec._body.appendChild(el);   // MOVE the leaf (radio inside) into the section
+            sec._n++;
+          }
+        });
+        ntmForumList.innerHTML = '';     // leftover header divs (text already captured)
+        sections.forEach(function (s) {
+          s._head.querySelector('.lgw-acc__count').textContent = s._n;
+          ntmForumList.appendChild(s);
+        });
+      })();
+
+      function setSection(sec, open) {
+        sec._body.hidden = !open;
+        sec.classList.toggle('is-open', !!open);
+        sec._head.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+      function openOnly(sec) { sections.forEach(function (s) { setSection(s, s === sec); }); }
+      function selectedSection() {
+        var c = ntmForumList.querySelector('input[name="forum_id"]:checked');
+        return c ? c.closest('.lgw-acc') : null;
+      }
+
+      // Head click → single-open toggle (keeps the picker compact).
+      ntmForumList.addEventListener('click', function (e) {
+        var head = e.target.closest('.lgw-acc__head');
+        if (!head) return;
+        var sec = head.closest('.lgw-acc');
+        if (sec.classList.contains('is-open')) setSection(sec, false);
+        else openOnly(sec);
+      });
+
+      // Selecting a leaf radio (user click OR programmatic ntmSetForum→change).
+      function reflectSelection() {
+        var checked = ntmForumList.querySelector('input[name="forum_id"]:checked');
+        [].forEach.call(ntmForumList.querySelectorAll('.ntm-fl__leaf'), function (l) {
+          l.classList.toggle('is-selected', !!(checked && l.contains(checked)));
+        });
+        if (checked) {
+          var leaf = checked.closest('.ntm-fl__leaf');
+          var sec = checked.closest('.lgw-acc');
+          var titleSpan = leaf && leaf.querySelector('.ntm-fl__title');
+          selChip.textContent = titleSpan ? titleSpan.textContent : (leaf ? leaf.textContent.trim() : '');
+          selChip.dataset.catColor = sec ? sec.dataset.catColor : '';
+          selWrap.hidden = false;
+          if (sec && !filter.value.trim()) openOnly(sec);   // reveal the chosen one
+        } else {
+          selWrap.hidden = true;
+        }
+        updateNav();
+      }
+      ntmForumList.addEventListener('change', function (e) {
+        if (e.target && e.target.name === 'forum_id') reflectSelection();
+      });
+
+      function applyFilter() {
+        var q = (filter.value || '').trim().toLowerCase();
+        var anyShown = false;
+        sections.forEach(function (sec) {
+          var hit = false;
+          [].forEach.call(sec._body.querySelectorAll('.ntm-fl__leaf'), function (leaf) {
+            var t = leaf.querySelector('.ntm-fl__title');
+            var txt = (t ? t.textContent : leaf.textContent).toLowerCase();
+            var m = !q || txt.indexOf(q) > -1;
+            leaf.style.display = m ? '' : 'none';
+            if (m) hit = true;
+          });
+          sec.style.display = hit ? '' : 'none';
+          if (hit) anyShown = true;
+          if (q) setSection(sec, hit);     // expand every matching section while searching
+        });
+        if (!q) {                          // cleared → collapse, reveal the selected one
+          sections.forEach(function (s) { setSection(s, false); });
+          var ss = selectedSection(); if (ss) openOnly(ss);
+        }
+        noRes.hidden = anyShown;
+      }
+      filter.addEventListener('input', applyFilter);
+
+      // STEP 2 — Write: title + body editor (image button hidden via CSS; photos
+      // have their own step). Move the existing nodes in reading order.
+      if (titleLabel) panes[2].appendChild(titleLabel);
+      panes[2].appendChild(ntmTitleIn);
+      if (bodyLabel) panes[2].appendChild(bodyLabel);
+      panes[2].appendChild(ntmEditorEl);
+      if (contentFb) panes[2].appendChild(contentFb);
+      if (pasteHint) panes[2].appendChild(pasteHint);
+
+      // STEP 3 — Photos & details: a dedicated photo control (same upload tray),
+      // then tags + quick-tags + the anonymous toggle.
+      var photoWrap = mk('div', 'lgw-photos',
+        '<span class="ntm-label">Photos <span class="ntm-label__opt">(optional)</span></span>');
+      var addBtn = mk('button', 'lgw-addphoto', '<span aria-hidden="true">＋</span> Add photo'); addBtn.type = 'button';
+      var trayMount = mk('div', 'lgw-tray-mount');
+      ntmWizPhotoMount = trayMount;          // the shared tray helper appends .lg-mtray here
+      var pNote = mk('p', 'lgw-photos__note', 'Supported: JPG, PNG, GIF.');
+      addBtn.addEventListener('click', function () { ntmTray.handler(); });
+      photoWrap.appendChild(addBtn);
+      photoWrap.appendChild(trayMount);
+      photoWrap.appendChild(pNote);
+      panes[3].appendChild(photoWrap);
+      if (tagsLabel) panes[3].appendChild(tagsLabel);
+      if (tagsIn) panes[3].appendChild(tagsIn);
+      if (quickTags) panes[3].appendChild(quickTags);
+      if (anonToggle) panes[3].appendChild(anonToggle);
+
+      // STEP 4 — Review: read-only summary with per-row "Edit" jump-backs.
+      var review = mk('div', 'lgw-review');
+      panes[4].appendChild(review);
+
+      function rvRow(label, valueNode, jumpStep) {
+        var r = mk('div', 'lgw-rv');
+        var k = mk('div', 'lgw-rv__k', label);
+        var v = mk('div', 'lgw-rv__v');
+        if (typeof valueNode === 'string') v.textContent = valueNode;
+        else if (valueNode) v.appendChild(valueNode);
+        var edit = mk('button', 'lgw-rv__edit', 'Edit'); edit.type = 'button';
+        edit.addEventListener('click', function () { goTo(jumpStep); });
+        r.appendChild(k); r.appendChild(v); r.appendChild(edit);
+        return r;
+      }
+      function populateReview() {
+        review.innerHTML = '';
+        var checked = ntmForumList.querySelector('input[name="forum_id"]:checked');
+        var leaf = checked && checked.closest('.ntm-fl__leaf');
+        var sec = checked && checked.closest('.lgw-acc');
+        var fTitle = leaf ? (leaf.querySelector('.ntm-fl__title') || leaf).textContent.trim() : '—';
+        var chip = mk('span', 'lgw-chip', fTitle);
+        if (sec) chip.dataset.catColor = sec.dataset.catColor;
+        review.appendChild(rvRow('Forum', chip, 1));
+
+        review.appendChild(rvRow('Title', ntmTitleIn.value.trim() || '—', 2));
+
+        var bodyTxt = ntmGetContent().replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (bodyTxt.length > 220) bodyTxt = bodyTxt.slice(0, 220) + '…';
+        review.appendChild(rvRow('Body', bodyTxt || 'No body text', 2));
+
+        var nPhotos = ntmMediaIds.length + (ntmEditId ? ntmKeepMedia.length : 0);
+        review.appendChild(rvRow('Photos', nPhotos ? (nPhotos + (nPhotos === 1 ? ' photo' : ' photos')) : 'None', 3));
+
+        var tg = (tagsIn && tagsIn.value.trim()) || '';
+        review.appendChild(rvRow('Tags', tg || 'None', 3));
+
+        review.appendChild(rvRow('Visibility', (anonChk && anonChk.checked) ? 'Anonymous — name & avatar hidden' : 'Posted as you', 3));
+      }
+
+      // — Footer wiring: Cancel · status · Back / Next / Post —
+      if (ntmStatus) footStatus.appendChild(ntmStatus);   // status visible across all steps
+      if (ntmCancel) footBtns.appendChild(ntmCancel);
+      footBtns.appendChild(btnBack);
+      footBtns.appendChild(btnNext);
+      if (ntmSubmit) footBtns.appendChild(ntmSubmit);     // type=submit → existing handler
+      if (row && row.parentNode) row.parentNode.removeChild(row);   // drop the emptied .ntm-row
+
+      function msg(t) { if (ntmStatus) ntmStatus.textContent = t || ''; }
+      function stepValid(step) {
+        if (step === 1) return !!ntmGetForum();
+        if (step === 2) return !!ntmTitleIn.value.trim();
+        return true;
+      }
+      function canLeave(step) {
+        if (stepValid(step)) return true;
+        if (step === 1) { msg('Pick a forum to continue.'); var ss = selectedSection(); filter.focus(); }
+        else if (step === 2) { msg('Add a title to continue.'); ntmTitleIn.focus(); }
+        return false;
+      }
+      function updateNav() {
+        btnBack.style.display = (cur === 1) ? 'none' : '';
+        var last = (cur === 4);
+        btnNext.style.display = last ? 'none' : '';
+        if (ntmSubmit) ntmSubmit.style.display = last ? '' : 'none';
+        btnNext.disabled = !stepValid(cur);
+      }
+      function focusStep() {
+        if (ntmForm.hidden) return;
+        if (cur === 1) filter.focus();
+        else if (cur === 2) ntmTitleIn.focus();
+        else if (cur === 3 && tagsIn) { /* leave focus free — photo button is primary */ }
+      }
+      function goTo(n) {
+        n = Math.max(1, Math.min(STEPS.length, n));
+        cur = n;
+        STEPS.forEach(function (s) { panes[s.n].classList.toggle('is-active', s.n === n); });
+        [].forEach.call(rail.children, function (d) {
+          var dn = parseInt(d.dataset.go, 10);
+          d.classList.toggle('is-current', dn === n);
+          d.classList.toggle('is-done', dn < n);
+        });
+        msg('');
+        if (n === 4) {
+          populateReview();
+          if (ntmSubmit) ntmSubmit.textContent = ntmEditId ? 'Save changes' : 'Post';
+        }
+        updateNav();
+        setTimeout(focusStep, 30);
+      }
+
+      btnNext.addEventListener('click', function () { if (canLeave(cur)) goTo(cur + 1); });
+      btnBack.addEventListener('click', function () { goTo(cur - 1); });
+      // Rail: jump back freely; jump forward only through valid steps.
+      rail.addEventListener('click', function (e) {
+        var d = e.target.closest('.lgw-rail__step'); if (!d) return;
+        var n = parseInt(d.dataset.go, 10);
+        if (n <= cur) { goTo(n); return; }
+        for (var i = cur; i < n; i++) { if (!canLeave(i)) { goTo(i); return; } }
+        goTo(n);
+      });
+      ntmTitleIn.addEventListener('input', function () { if (cur === 2) updateNav(); });
+
+      // Enter advances instead of submitting, except on the final step. Textareas
+      // and the Quill editor keep Enter for newlines.
+      ntmForm.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        var t = e.target;
+        if (t && (t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        if (cur < STEPS.length) { e.preventDefault(); if (canLeave(cur)) goTo(cur + 1); }
+      });
+
+      // Each open rewinds to Step 1 (covers fresh posts, "Post here", ?compose, and
+      // edit-mode — which pre-fills fields then calls ntmShowOverlay).
+      function onOpen() {
+        filter.value = '';
+        applyFilter();
+        reflectSelection();
+        goTo(1);
+      }
+
+      goTo(1);
+      return { onOpen: onOpen, focusCurrent: function () { setTimeout(focusStep, 0); }, goTo: goTo };
+    }
+    ntmWiz = buildNtmWizard();   // null on mobile → flat form served unchanged
 
     if (ntmOpen) ntmOpen.addEventListener('click', function () { ntmShowOverlay(null); });
     ntmCancel.addEventListener('click', ntmHideOverlay);
