@@ -1,3 +1,7 @@
 *.css
 *.js
 *.tmp.*
+
+# lg-v2 bundles committed for single-pull completeness (built from lg-layout-v2; rebuild+commit on layout change)
+!lg-v2-bundle.*.css
+!lg-v2-front.*.js
