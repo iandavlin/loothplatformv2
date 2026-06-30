@@ -330,12 +330,17 @@ if (!empty($_GET['pins'])) {
     profile_app_json(200, ['pins' => $pins, 'total' => count($pins)]);
 }
 
+// Admin-only: the member's WP user id (for the directory's "Edit in WP admin" jump).
+// Resolved via wp_user_bridge (PK on user_id, so 1 row per member -> no fan-out).
+// The join + select run ONLY for admins, so wp_user_id can never reach a non-admin payload.
+$bridgeSelect = $isAdmin ? ', b.wp_user_id AS wp_user_id' : '';
+$bridgeJoin   = $isAdmin ? "\n        LEFT JOIN wp_user_bridge b ON b.user_id = u.id" : '';
 $sql = "SELECT u.id, u.uuid, u.display_name, u.avatar_url, u.banner_url, u.header_lights, u.profile_visibility,
                u.location_text, u.location_address, u.location_city, u.location_region, u.location_country, u.location_postcode,
                u.lat, u.lng, u.location_members_precision, u.location_public_precision, u.slug,
                (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb) AS loc_on_profile
-               $selectDistance
-        FROM users u
+               $selectDistance$bridgeSelect
+        FROM users u$bridgeJoin
         WHERE " . implode(' AND ', $listWheres) . "
         ORDER BY $orderBy
         LIMIT $pageSize OFFSET $offset";
@@ -427,7 +432,7 @@ if ($rows) {
         // (Per-member anonymous teaser CARDS removed, Ian 6/12 pm: anon non-opt-ins
         // appear only as coarse dots in the pin feed — the stack is visible profiles only.)
 
-        $results[] = [
+        $card = [
             'uuid'         => $r['uuid'],
             'slug'         => $r['slug'] ?: (string)$subjectId,
             'display_name' => $r['display_name'],
@@ -441,6 +446,14 @@ if ($rows) {
             'lights'       => Block::mapHeaderLights($r['header_lights'] ?? null),
             'distance_mi'  => $dist,
         ];
+        // Admin-only: the member's WP user id, so the card can render an "Edit in WP
+        // admin" jump (Ian prunes junk accounts from the directory). $r['wp_user_id']
+        // only exists when $isAdmin (the bridge join/select above is admin-gated), so
+        // this key NEVER appears in a non-admin payload.
+        if ($isAdmin && isset($r['wp_user_id'])) {
+            $card['wp_user_id'] = (int)$r['wp_user_id'];
+        }
+        $results[] = $card;
     }
 }
 

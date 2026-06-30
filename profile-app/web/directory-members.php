@@ -357,8 +357,16 @@ function dirCardHTML(it) {
   if (cx && cx.state === 'accepted' && it.uuid) {
     msgBtn = `<button type="button" class="dir-msg" data-msg-uuid="${escH(it.uuid)}">Message</button>`;
   }
+  // Admin-only corner chip: jumps to the member's WP user-edit page so Ian can prune
+  // junk accounts straight from the directory. The API sends wp_user_id ONLY to admin
+  // viewers, so this never renders for a member. Sibling of .dir-card__main (not nested),
+  // so the card's first-click-zoom / second-click-open handler ignores it.
+  let adminBtn = '';
+  if (it.wp_user_id) {
+    adminBtn = `<a class="dir-admin-edit" href="/wp-admin/user-edit.php?user_id=${encodeURIComponent(it.wp_user_id)}" target="_blank" rel="noopener" title="Edit in WP admin" aria-label="Edit in WP admin">Admin</a>`;
+  }
   return `
-  <div class="dir-card">
+  <div class="dir-card">${adminBtn}
     <a class="dir-card__main" href="/u/${escH(it.slug)}" data-slug="${escH(it.slug)}">
       ${banner}
       <div class="row1">
@@ -402,7 +410,12 @@ function renderResults(items, append) {
     '.dir-msg:hover{filter:brightness(.95)}' +
     '.dir-connect--pending_out,.dir-connect--accepted{background:#fff;color:var(--lg-sage-d,#6b7c52)}' +
     '.dir-connect--pending_in{background:var(--lg-amber,#ecb351);border-color:var(--lg-amber,#ecb351);color:#1a1d1a}' +
-    '.dir-connect[disabled]{opacity:.7;cursor:default}';
+    '.dir-connect[disabled]{opacity:.7;cursor:default}' +
+    '.dir-card{position:relative}' +
+    '.dir-admin-edit{position:absolute;top:8px;right:8px;z-index:5;display:inline-flex;align-items:center;' +
+    'font:600 11px/1 var(--lg-font-sans,system-ui,sans-serif);color:#fff;background:rgba(20,22,20,.72);' +
+    'border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:4px 9px;text-decoration:none;cursor:pointer}' +
+    '.dir-admin-edit:hover{background:#1a1d1a}';
   document.head.appendChild(s);
 })();
 
