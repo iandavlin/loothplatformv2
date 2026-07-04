@@ -973,7 +973,19 @@ async function init() {
     // the auth handshake lands, lock the board if the server already has a
     // row — even if a fresh local game snuck in a move or two meanwhile.
     scoreSyncPromise.then(() => {
-        if (scoreAuth.authenticated && scoreAuth.today && !state.gameOver) {
+        // Lock to the already-played recap ONLY when the server's recorded
+        // result is for the puzzle currently on screen. The row's day is the
+        // server's UTC CURRENT_DATE; the puzzle the player sees is keyed to
+        // their LOCAL date (todayString / loadPhrase). Those differ by a day for
+        // a member west of UTC who plays in the evening (after UTC-midnight) —
+        // their play is recorded under tomorrow's UTC date, so the next local
+        // morning the server reports a "today" row and we'd reveal that day's
+        // UNPLAYED phrase ("words filled in before play"). Matching on phrase_id
+        // ties the lock to the actual puzzle, not to a date the two clocks
+        // disagree about; the same-day anti-replay case still matches and locks.
+        if (scoreAuth.authenticated && scoreAuth.today
+            && scoreAuth.today.phrase_id === PHRASE_ID
+            && !state.gameOver) {
             localStorage.setItem('guitardle_lastPlayed', todayString());
             showAlreadyPlayed(scoreAuth.today);
         }

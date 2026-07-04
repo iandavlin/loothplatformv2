@@ -49,11 +49,17 @@ if ($method === 'GET') {
     $today = null;
     try {
         $st = lg_comments_pdo()->prepare(
-            'SELECT won, moves, streak FROM guitardle_results
+            'SELECT phrase_id, won, moves, streak FROM guitardle_results
              WHERE wp_user_id = ? AND play_date = CURRENT_DATE');
         $st->execute([$uid]);
         if ($row = $st->fetch(PDO::FETCH_ASSOC)) {
-            $today = ['won' => (bool) $row['won'], 'moves' => (int) $row['moves'],
+            // phrase_id lets the client confirm the recorded row is for the
+            // puzzle on screen before locking — play_date is the server's UTC
+            // day, which can be a day off the player's local day (see game.js
+            // init server-lock). Without it a west-of-UTC member sees an
+            // unplayed phrase revealed the morning after an evening play.
+            $today = ['phrase_id' => (int) $row['phrase_id'],
+                      'won' => (bool) $row['won'], 'moves' => (int) $row['moves'],
                       'streak' => (int) $row['streak']];
         }
     } catch (Throwable $e) {
