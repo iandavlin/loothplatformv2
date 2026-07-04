@@ -546,6 +546,13 @@ function confirmGuess() {
         .map(t => t.textContent.trim().toUpperCase())
         .join('');
 
+    // The single guess attempt costs a move (brief: every distinct action — a
+    // reveal, a vowel purchase, OR the guess — is one move). Counted here on
+    // Confirm only, so cancelling guess mode stays penalty-free. Without this a
+    // blind correct guess scored 0 ("Solved in 0 moves", empty score bar); the
+    // floor is now 1.
+    incrementMoves();
+
     if (guessed === PHRASE_LETTERS) {
         handleWin();
     } else {
