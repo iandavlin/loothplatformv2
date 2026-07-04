@@ -42,6 +42,7 @@ add_action('init', function () {
     $change = isset($_GET['change']);
     $first  = trim((string) ($u->first_name ?? '')) ?: trim(explode(' ', (string) $u->display_name)[0] ?? '') ?: 'there';
     $pemail = (string) (get_user_meta($uid, 'lgpo_patreon_email', true) ?: ($u->user_email ?? ''));
+    $uname  = (string) (($u->user_email ?? '') !== '' ? $u->user_email : $u->user_login); // what managers key the entry on
     $nonce  = wp_create_nonce('lgpo_set_password');
     $e      = $_GET['pwerr'] ?? '';
     $emsg   = $e === 'short' ? 'Password must be at least 8 characters.'
@@ -92,6 +93,7 @@ add_action('init', function () {
   .err{color:#b3361f;margin:.4em 0 0;min-height:1.1em;font-size:.92em}
   .skip{display:inline-block;margin-top:1.4em;color:#1A1E12}
   label{font-size:.92em;font-weight:600;display:block;margin-top:.5em}
+  .pwuser{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
 </style></head>
 <body>
 <?php if (function_exists('lg_shared_render_site_header')) lg_shared_render_site_header($ctx); ?>
@@ -100,12 +102,17 @@ add_action('init', function () {
   <div class="card">
     <?php if ($change): ?>
       <p>Update the password for your Looth Group account.</p>
+      <p class="pemail">Heads up: changing your password signs you out on your other devices &mdash; sign in there with the new password and update any saved passwords.</p>
     <?php else: ?>
       <p>You're connected and <strong>logged in.</strong> Set a password so you can sign in directly next time &mdash; or skip it and just reconnect with Patreon whenever you like.</p>
     <?php endif; ?>
     <?php if ($pemail !== ''): ?><p class="pemail">Patreon email: <strong><?php echo esc_html($pemail); ?></strong></p><?php endif; ?>
     <form method="post" action="/patreon-password/<?php echo $change ? '?change=1' : ''; ?>" id="pwform">
       <input type="hidden" name="_lgpo_pw" value="<?php echo esc_attr($nonce); ?>">
+      <?php // Visually-hidden username: lets password managers UPDATE the saved
+            // entry for this account instead of keeping the old password
+            // (type=hidden is ignored by managers; off-screen text is the pattern). ?>
+      <input type="text" name="lgpo_login" value="<?php echo esc_attr($uname); ?>" autocomplete="username" readonly tabindex="-1" aria-hidden="true" class="pwuser">
       <label for="p1">New password</label>
       <div class="pwrow">
         <input id="p1" type="password" name="lgpo_password" minlength="8" autocomplete="new-password" required placeholder="At least 8 characters">

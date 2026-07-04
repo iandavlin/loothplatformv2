@@ -6,9 +6,9 @@
  *   stable Elastic IP (rebuild-proof — survives instance replacement, and the EIP
  *   stays associated while the box is stopped) and runs ec2 start/stop via the host's
  *   AWS CLI, authorized by the always-on (live) box's IAM instance role on prod.
- *   Surfaces: a front-end page at /dev2 (any logged-in user) and a wp-admin Tools page
- *   (admins). REST: /wp-json/looth/v1/dev2-power — GET status, POST {action:on|off};
- *   gated to is_user_logged_in() + wp_rest nonce (CSRF). Repo-served: symlink into
+ *   Surfaces: a front-end page at /dev2 (ADMINS only, 2026-07-04) and a wp-admin Tools
+ *   page (admins). REST: /wp-json/looth/v1/dev2-power — GET status, POST {action:on|off};
+ *   gated to current_user_can('manage_options') + wp_rest nonce (CSRF). Repo-served: symlink into
  *   wp-content/mu-plugins/ from the serve clone (deploy = git pull).
  */
 
@@ -85,23 +85,23 @@ function lg_dev2_action(string $act): array {
 /* ----------------------------------------------------------------------- REST */
 
 add_action('rest_api_init', function () {
-	// Any logged-in WP user may wake/sleep dev2 (Ian's call); anon is blocked.
-	// On live "logged in" == every member — accepted. wp_rest nonce still required
-	// (CSRF) via the standard cookie-auth path.
-	$logged_in = function () {
+	// ADMINS ONLY (Ian 2026-07-04; was any-logged-in-member — members could
+	// power-cycle the dev box from live). wp_rest nonce still required (CSRF).
+	$admin_only = function () {
+		if (current_user_can('manage_options')) return true;
 		return is_user_logged_in()
-			? true
+			? new WP_Error('rest_forbidden', 'Admins only.', ['status' => 403])
 			: new WP_Error('rest_not_logged_in', 'You must be logged in.', ['status' => 401]);
 	};
 	register_rest_route('looth/v1', '/dev2-power', [
 		[
 			'methods'             => 'GET',
-			'permission_callback' => $logged_in,
+			'permission_callback' => $admin_only,
 			'callback'            => function () { return rest_ensure_response(lg_dev2_describe()); },
 		],
 		[
 			'methods'             => 'POST',
-			'permission_callback' => $logged_in,
+			'permission_callback' => $admin_only,
 			'callback'            => function ($req) {
 				$a = (string) $req->get_param('action');
 				if (!in_array($a, ['on', 'off'], true)) {
@@ -195,7 +195,7 @@ function lg_dev2_power_page(): void {
 /* ---------------------------------------------------------- front-end /dev2 */
 
 // Intercept exactly /dev2 (no rewrite rule to flush; touches no theme/template).
-// Any logged-in user gets the page; anon is bounced to wp-login with redirect back.
+// Admins only (2026-07-04); anon is bounced to wp-login, non-admins to home.
 // Priority -10: /dev2 is an is_404() to WP, and lg-error-pages.php renders the
 // branded 404 and exit()s at template_redirect priority 0 — we must claim the
 // path before it does.
@@ -204,6 +204,10 @@ add_action('template_redirect', function () {
 	if ($path !== 'dev2') return;
 	if (!is_user_logged_in()) {
 		wp_safe_redirect(wp_login_url(home_url('/dev2')));
+		exit;
+	}
+	if (!current_user_can('manage_options')) {
+		wp_safe_redirect(home_url('/'));
 		exit;
 	}
 	lg_dev2_front_page();
