@@ -312,7 +312,7 @@ function render_reply(
               'forum_id' => (int)($GLOBALS['forum']['id'] ?? 0),
           ]); ?>
         </div>
-        <div class="post__body"><?= $lg_anon_view ? lg_scrub_anon_contacts((string)$r['content_html']) : $r['content_html'] /* sanitized at sync write */ ?></div>
+        <div class="post__body"><?= ($GLOBALS['lg_anon_view'] ?? true) ? lg_scrub_anon_contacts((string)$r['content_html']) : $r['content_html'] /* sanitized at sync write */ ?></div>
         <?php render_attachments($GLOBALS['att_map']['reply'][(int)$r['id']] ?? []); ?>
         <div class="post__actions">
           <button type="button" class="post__reply-btn" data-reply-to="<?= (int)$r['id'] ?>"

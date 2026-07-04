@@ -152,7 +152,7 @@ function bb_mirror_left_nav(): void
       </a>
 
       <?php
-      $render_link = function (array $f, string $extra_class = ''): void {
+      $render_link = function (array $f, string $extra_class = '') use ($active, $active_forum_id): void {
           $href    = htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/' . $f['slug'] . '/');
           $is_act  = $active_forum_id !== null
               ? ((int)$f['id'] === $active_forum_id)
