@@ -216,18 +216,26 @@ let scoreSyncPromise = Promise.resolve();
 function initScoreSync() {
     scoreSyncPromise = (async () => {
         try {
-            const res = await fetch(SCORE_API, { credentials: 'same-origin' });
+            // Pass our LOCAL day so the server looks up the row for the day the
+            // player is actually on, not its UTC day (the two can differ — see
+            // postScore / guitardle-score.php).
+            const res = await fetch(`${SCORE_API}?local_date=${todayString()}`, { credentials: 'same-origin' });
             if (res.ok) scoreAuth = await res.json();
         } catch (e) { /* offline/anon — local play unaffected */ }
     })();
 }
 
-// Record today's result for a logged-in member. Server keys on (user, date) and
-// keeps the FIRST result, so a replay from a cleared browser can't overwrite.
+// Record today's result for a logged-in member. Server keys on (user, local day)
+// and keeps the FIRST result, so a replay from a cleared browser can't overwrite.
 // Waits for the auth handshake — a forfeit fires at page load, which can be
 // before initScoreSync() resolves.
 function postScore(won, streak) {
-    const moves = state.moves;
+    const moves     = state.moves;
+    // The player's LOCAL calendar day — captured now (game end), not on the
+    // server, so the row is keyed to the day they actually played. The DB is
+    // UTC, so an evening play west of UTC would otherwise land under UTC's
+    // tomorrow. Server clamps this to ±1 day of its UTC date (anti-abuse).
+    const localDate = todayString();
     scoreSyncPromise.then(() => {
         if (!scoreAuth.authenticated || !scoreAuth.nonce) return;
         return fetch(SCORE_API, {
@@ -235,11 +243,12 @@ function postScore(won, streak) {
             credentials: 'same-origin',
             headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
             body: JSON.stringify({
-                phrase_id: PHRASE_ID,
-                won:       !!won,
-                moves:     moves,
-                streak:    streak,
-                hardcore:  HARDCORE,   // 2× points on the weekly board
+                phrase_id:  PHRASE_ID,
+                won:        !!won,
+                moves:      moves,
+                streak:     streak,
+                local_date: localDate,
+                hardcore:   HARDCORE,   // 2× points on the weekly board
             }),
         });
     }).catch(() => {});

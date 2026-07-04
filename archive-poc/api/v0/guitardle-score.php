@@ -8,16 +8,19 @@
  * unbridged member is anon to /whoami but has a valid WP cookie. Anonymous
  * players never hit this with effect — the game plays local-only for them.
  *
- *   GET  → { authenticated:false }
- *        | { authenticated:true, wp_user_id, nonce, today: {won,moves,streak}|null }
- *   POST { phrase_id, won, moves, streak, _wpnonce (or X-WP-Nonce header) }
- *        → { ok:true, recorded:bool }   recorded=false → already had a row today
+ *   GET [?local_date=YYYY-MM-DD]
+ *        → { authenticated:false }
+ *        | { authenticated:true, wp_user_id, nonce, today: {phrase_id,won,moves,streak}|null }
+ *   POST { phrase_id, won, moves, streak, local_date, _wpnonce (or X-WP-Nonce header) }
+ *        → { ok:true, recorded:bool }   recorded=false → already had a row that day
  *
  * IDOR-proof like the comment/reaction doors: the player is get_current_user_id()
- * — never client-supplied. One row per member per server-day; the FIRST result
+ * — never client-supplied. One row per member per LOCAL day; the FIRST result
  * wins (ON CONFLICT DO NOTHING) so a replay from a cleared browser can't
- * overwrite. This table is the future leaderboard's source of truth; the
- * leaderboard UI ships later.
+ * overwrite. play_date is keyed on the player's LOCAL calendar day (the client
+ * sends it), not the DB's UTC CURRENT_DATE — see lg_gdle_local_date() for the
+ * ±1-day anti-abuse window. This table is the future leaderboard's source of
+ * truth; the leaderboard UI ships later.
  */
 
 declare(strict_types=1);
@@ -39,6 +42,25 @@ function lg_gdle_json($payload, int $code = 200): void {
     exit;
 }
 
+// Resolve the player's LOCAL calendar day into a play_date. Players live in
+// local time but the DB runs in UTC, so a result keyed on CURRENT_DATE can land
+// a calendar day off the day actually played — a US-Pacific evening is already
+// "tomorrow" in UTC. The client sends its own date (YYYY-MM-DD); we honour it
+// only when it is a real date within ±1 day of the server's UTC date. That
+// window covers every real timezone (max UTC offset is well under 24h, so a
+// local day differs from the UTC day by at most one) while blocking a spoofed
+// date from back/forward-dating to replay or stuff the board. Returns the
+// validated date, or null when absent / malformed / out of range.
+function lg_gdle_local_date($raw): ?string {
+    if (!is_string($raw) || !preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $raw, $m)) return null;
+    if (!checkdate((int) $m[2], (int) $m[3], (int) $m[1])) return null;
+    $client = strtotime($raw . ' 00:00:00 UTC');
+    $server = strtotime(gmdate('Y-m-d') . ' 00:00:00 UTC');
+    if ($client === false || $server === false) return null;
+    $diffDays = (int) round(($client - $server) / 86400);
+    return ($diffDays >= -1 && $diffDays <= 1) ? $raw : null;
+}
+
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $uid    = (int) get_current_user_id();
 
@@ -48,10 +70,14 @@ if ($method === 'GET') {
 
     $today = null;
     try {
+        // The row for the player's LOCAL day (falls back to the UTC day when no
+        // valid ?local_date is supplied). Read-only + own-row-only, so an
+        // out-of-range date just falls back rather than erroring the page.
+        $playDate = lg_gdle_local_date($_GET['local_date'] ?? null) ?? gmdate('Y-m-d');
         $st = lg_comments_pdo()->prepare(
             'SELECT phrase_id, won, moves, streak FROM guitardle_results
-             WHERE wp_user_id = ? AND play_date = CURRENT_DATE');
-        $st->execute([$uid]);
+             WHERE wp_user_id = ? AND play_date = ?::date');
+        $st->execute([$uid, $playDate]);
         if ($row = $st->fetch(PDO::FETCH_ASSOC)) {
             // phrase_id lets the client confirm the recorded row is for the
             // puzzle on screen before locking — play_date is the server's UTC
@@ -109,13 +135,26 @@ if ($moves < 1 || $moves > 99 || $phraseId < 0 || $phraseId > 100000) {
     lg_gdle_json(['ok' => false, 'error' => 'bad_request'], 400);
 }
 
+// Effective day = the player's LOCAL calendar day. A supplied-but-invalid or
+// out-of-window date is an abuse attempt (back/forward-dating to replay or stuff
+// the board) → reject. An ABSENT date falls back to the server UTC day so an
+// older cached client still records honestly.
+$rawLocal = $body['local_date'] ?? null;
+$playDate = lg_gdle_local_date($rawLocal);
+if ($playDate === null) {
+    if ($rawLocal !== null && $rawLocal !== '') {
+        lg_gdle_json(['ok' => false, 'error' => 'bad_date'], 400);
+    }
+    $playDate = gmdate('Y-m-d');
+}
+
 // ---- Record (first result of the day wins) ----------------------------------
 try {
     $st = lg_comments_pdo()->prepare(
         'INSERT INTO guitardle_results (wp_user_id, play_date, phrase_id, won, moves, streak, hardcore)
-         VALUES (?, CURRENT_DATE, ?, ?, ?, ?, ?)
+         VALUES (?, ?::date, ?, ?, ?, ?, ?)
          ON CONFLICT (wp_user_id, play_date) DO NOTHING');
-    $st->execute([$uid, $phraseId, $won ? 'true' : 'false', $moves, $streak, $hardcore ? 'true' : 'false']);
+    $st->execute([$uid, $playDate, $phraseId, $won ? 'true' : 'false', $moves, $streak, $hardcore ? 'true' : 'false']);
     $recorded = $st->rowCount() > 0;
 } catch (Throwable $e) {
     error_log('[lg-guitardle] ' . $e->getMessage());
