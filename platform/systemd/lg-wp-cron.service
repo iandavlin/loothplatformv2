@@ -1,0 +1,7 @@
+[Unit]
+Description=Run due WordPress cron events
+
+[Service]
+Type=oneshot
+User=looth-dev
+ExecStart=/usr/local/bin/wp cron event run --due-now --path=/var/www/dev

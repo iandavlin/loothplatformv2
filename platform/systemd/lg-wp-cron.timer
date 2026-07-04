@@ -1,0 +1,9 @@
+[Unit]
+Description=WP cron tick (server cron; wp-config sets DISABLE_WP_CRON)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target
