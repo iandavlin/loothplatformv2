@@ -160,6 +160,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/GeoIP.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Cache.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Whoami.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/R2.php';      // R2 (S3) client for profile media originals
+require_once LG_PROFILE_APP_APP_ROOT . '/src/MessageR2.php'; // R2 (S3) client for DM image attachments (SEPARATE bucket)
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Media.php';   // confined GC of an owned media file + resizer cache twins
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';   // profile-2.0 spine (centralized per coordinator ask)
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Visibility.php'; // THE visibility decision point (Ian 6/12 refactor)
