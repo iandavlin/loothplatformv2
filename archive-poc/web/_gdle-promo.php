@@ -54,6 +54,7 @@ for ($gdle_i = 1; $gdle_i <= 5; $gdle_i++) {
     <aside class="gdle-card gdle-promo__board" aria-label="Guitardle weekly top 5">
       <h3 class="gdle-card__title">🏆 Weekly top 5</h3>
       <ol class="gdle-side-board" id="gdle-side-board"><?= $gdle_slots ?></ol>
+      <p class="gdle-side-champ" id="gdle-side-champ" hidden></p>
     </aside>
   <?php else: ?>
     <div class="gdle-promo">
@@ -65,6 +66,7 @@ for ($gdle_i = 1; $gdle_i <= 5; $gdle_i++) {
       <aside class="gdle-card gdle-promo__board" aria-label="Guitardle weekly top 5">
         <h3 class="gdle-card__title">🏆 Weekly top 5</h3>
         <ol class="gdle-side-board" id="gdle-side-board"><?= $gdle_slots ?></ol>
+        <p class="gdle-side-champ" id="gdle-side-champ" hidden></p>
       </aside>
     </div>
   <?php endif; ?>
@@ -73,6 +75,10 @@ for ($gdle_i = 1; $gdle_i <= 5; $gdle_i++) {
     /* Open-spot placeholder slots (inline so this partial stays self-contained
        and archive.css — which has another lane's WIP — goes untouched). */
     .gdle-side-row--open { opacity: .55; font-style: italic; }
+    .gdle-side-champ { margin: .55em 0 0; font-size: .85em; color: #3c4a28;
+      border-top: 1px solid rgba(135,152,106,.4); padding-top: .5em;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gdle-side-champ a { color: inherit; font-weight: 600; }
     .gdle-side-row--open .gdle-side-row__rank { color: #b3bfa0; }
   </style>
 
@@ -117,7 +123,7 @@ for ($gdle_i = 1; $gdle_i <= 5; $gdle_i++) {
       }
 
       function fillBoard() {
-          fetch('/archive-api/v0/guitardle-board', { credentials: 'same-origin' })
+          fetch('/archive-api/v0/guitardle-board?champion=1', { credentials: 'same-origin' })
               .then(function (r) { return r.ok ? r.json() : null; })
               .then(function (b) {
                   if (!b) return;
@@ -141,6 +147,19 @@ for ($gdle_i = 1; $gdle_i <= 5; $gdle_i++) {
                       list.appendChild(li);
                   });
                   for (var i = leaders.length; i < 5; i++) list.appendChild(openSlot(i));
+                  // Last week's champion (Ian 7/05) — same graceful-absence
+                  // rule as the in-game strip: no champion → line stays hidden.
+                  var champEl = document.getElementById('gdle-side-champ');
+                  if (champEl && b.champion && b.champion.name) {
+                      champEl.textContent = '';
+                      champEl.append('👑 Last week\u2019s champ: ');
+                      var cn = document.createElement(b.champion.profile_url ? 'a' : 'span');
+                      cn.textContent = b.champion.name;
+                      if (b.champion.profile_url) cn.href = b.champion.profile_url;
+                      champEl.appendChild(cn);
+                      if (b.champion.points > 0) champEl.append(' \u00b7 ' + b.champion.points + ' pts');
+                      champEl.hidden = false;
+                  }
               }).catch(function () {});
       }
 
