@@ -162,6 +162,62 @@ body {
 }
 
 /* ============================================================
+   LAST WEEK'S CHAMPION STRIP (above the score display)
+   ============================================================ */
+.champ-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 12px;
+    background: #FBF3DF;                    /* same warm tint as the board's #1 row */
+    border-bottom: 1px solid var(--green-bg-2);
+    font-size: 0.85rem;
+    color: var(--text-dark);
+}
+
+.champ-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.champ-text a {
+    color: var(--green-card);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.champ-text a:hover { text-decoration: underline; }
+
+.champ-meta {
+    color: #78895B;
+    font-size: 0.82rem;
+}
+
+.champ-board-btn {
+    flex: 0 0 auto;
+    border: 1.5px solid var(--green-header);
+    background: var(--white);
+    color: var(--green-card);
+    border-radius: 999px;
+    padding: 3px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+.champ-board-btn:hover { background: var(--green-bg-1); }
+
+@media (max-width: 499px) {
+    .champ-strip { padding: 6px 10px; font-size: 0.8rem; }
+    .champ-board-btn { padding: 3px 10px; }
+}
+
+/* ============================================================
    HEADER
    ============================================================ */
 .game-header {

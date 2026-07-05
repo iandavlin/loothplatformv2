@@ -7,13 +7,29 @@
  * discovery.guitardle_results joined to discovery.person for display names.
  *
  * Score math (Ian 6/11): each WIN is worth (11 − moves) points, floor 1 —
- * DOUBLED for hardcore-mode wins; a loss is 0. Weekly score = sum of points, week = ISO week (resets Monday).
+ * DOUBLED for hardcore-mode wins; a loss is 0. Weekly score = sum of points.
  * Ties: fewer total moves on wins, then who got there first.
+ *
+ * WEEK DEFINITION (Ian 7/04 champion feature): a week is ISO Monday→Sunday
+ * over play_date — and play_date is the PLAYER'S LOCAL calendar day (see
+ * guitardle-score.php), so the board groups the days players actually saw,
+ * not UTC days. Which week is "current" is anchored on the requester's own
+ * local day: the client passes ?local_date, validated with the same ±1-day
+ * clamp as the score API (fallback: the server's UTC day). The window is
+ * bounded on BOTH sides — an east-of-UTC player's Monday rows must not bleed
+ * into the prior week's board on a UTC Sunday.
  *
  * Full ranked list — no top-N cap (Ian: "do the entire count").
  *
- *   GET → { week_start: 'YYYY-MM-DD', leaders: [{rank, name, points, wins,
- *           best_moves}] }
+ *   GET [?week=current|last] [?local_date=YYYY-MM-DD] [?champion=1]
+ *     → { week, week_start, week_end, leaders: [{rank, name, profile_url,
+ *         points, wins, best_moves}], champion?: {name, profile_url, points,
+ *         wins}|null }
+ *
+ *   week      window shown (default current); 'last' = the week before.
+ *   champion  include rank-1 of the week BEFORE the shown week (the game
+ *             page fetches week=current&champion=1 → last week's champion
+ *             plus this week's full board in ONE request).
  *
  * Exposes display names + counts only — no ids, no per-day history.
  */
@@ -31,9 +47,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
     exit;
 }
 
-try {
-    $pdo = lg_likes_pdo();
-    $st  = $pdo->query(
+// Twin of lg_gdle_local_date() in guitardle-score.php (kept in sync by hand —
+// that file boots WP on another pool, so they can't share an include cheaply):
+// honour a client-supplied YYYY-MM-DD only when it's a real date within ±1 day
+// of the server's UTC date; anything else → null (caller falls back to UTC).
+function lg_gdle_board_local_date($raw): ?string {
+    if (!is_string($raw) || !preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $raw, $m)) return null;
+    if (!checkdate((int) $m[2], (int) $m[3], (int) $m[1])) return null;
+    $client = strtotime($raw . ' 00:00:00 UTC');
+    $server = strtotime(gmdate('Y-m-d') . ' 00:00:00 UTC');
+    if ($client === false || $server === false) return null;
+    $diffDays = (int) round(($client - $server) / 86400);
+    return ($diffDays >= -1 && $diffDays <= 1) ? $raw : null;
+}
+
+// Ranked winners for one bounded week window [start, endExcl).
+function lg_gdle_week_rows(PDO $pdo, string $start, string $endExcl): array {
+    $st = $pdo->prepare(
         "SELECT r.wp_user_id,
                 COALESCE(NULLIF(p.display_name, ''), 'Member') AS name,
                 SUM(GREATEST(11 - r.moves, 1) * (CASE WHEN r.hardcore THEN 2 ELSE 1 END)) FILTER (WHERE r.won)::int AS points,
@@ -42,44 +72,95 @@ try {
                 MIN(r.moves) FILTER (WHERE r.won)::int                   AS best_moves
          FROM guitardle_results r
          LEFT JOIN person p ON p.id = r.wp_user_id
-         WHERE r.play_date >= date_trunc('week', CURRENT_DATE)::date
+         WHERE r.play_date >= ?::date AND r.play_date < ?::date
          GROUP BY r.wp_user_id, p.display_name
          HAVING COUNT(*) FILTER (WHERE r.won) > 0
          ORDER BY points DESC, win_moves ASC, MIN(r.created_at) ASC");
-    $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $st->execute([$start, $endExcl]);
+    return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
 
-    $weekStart = $pdo->query("SELECT date_trunc('week', CURRENT_DATE)::date")->fetchColumn();
+try {
+    $pdo = lg_likes_pdo();
+
+    // Anchor day → Monday of its ISO week (all math in whole UTC days).
+    $anchor = lg_gdle_board_local_date($_GET['local_date'] ?? null) ?? gmdate('Y-m-d');
+    $ts     = strtotime($anchor . ' 00:00:00 UTC');
+    $monTs  = $ts - (((int) gmdate('N', $ts)) - 1) * 86400;
+
+    $week = (($_GET['week'] ?? 'current') === 'last') ? 'last' : 'current';
+    if ($week === 'last') $monTs -= 7 * 86400;
+
+    $weekStart   = gmdate('Y-m-d', $monTs);
+    $weekEndExcl = gmdate('Y-m-d', $monTs + 7 * 86400);
+    $weekEnd     = gmdate('Y-m-d', $monTs + 6 * 86400);   // inclusive Sunday, for display
+
+    $rows = lg_gdle_week_rows($pdo, $weekStart, $weekEndExcl);
+
+    // Champion = rank 1 of the week before the shown week.
+    $wantChampion = !empty($_GET['champion']);
+    $champRow     = null;
+    if ($wantChampion) {
+        $champRows = lg_gdle_week_rows($pdo, gmdate('Y-m-d', $monTs - 7 * 86400), $weekStart);
+        $champRow  = $champRows[0] ?? null;
+    }
 
     // Names + profile links from profile-app (the identity source; its slugs
-    // are NOT WP nicenames). Best effort: on any miss, fall back to the
-    // person-mirror name with no link.
+    // are NOT WP nicenames). One batched lookup for leaders + champion. Best
+    // effort: on any miss, fall back to the person-mirror name with no link.
+    $ids = array_column($rows, 'wp_user_id');
+    if ($champRow) $ids[] = $champRow['wp_user_id'];
     $profiles = [];
     try {
-        foreach (lg_comments_profile_lookup('wp_ids', array_column($rows, 'wp_user_id')) as $it) {
+        foreach (lg_comments_profile_lookup('wp_ids', array_values(array_unique($ids))) as $it) {
             $wid = (int) ($it['wp_user_id'] ?? 0);
             if ($wid > 0) $profiles[$wid] = $it;
         }
     } catch (Throwable $e) { /* board still renders unlinked */ }
 
-    $leaders = [];
-    foreach ($rows as $i => $r) {
+    $resolve = function (array $r) use ($profiles): array {
         $prof = $profiles[(int) $r['wp_user_id']] ?? null;
         $name = $prof['display_name'] ?? null;
         if (!is_string($name) || $name === '') {
             $name = html_entity_decode((string) $r['name'], ENT_QUOTES | ENT_HTML5, 'UTF-8');
         }
         $slug = isset($prof['slug']) && is_string($prof['slug']) && $prof['slug'] !== '' ? $prof['slug'] : null;
+        return [$name, $slug !== null ? '/u/' . rawurlencode($slug) : null];
+    };
+
+    $leaders = [];
+    foreach ($rows as $i => $r) {
+        [$name, $url] = $resolve($r);
         $leaders[] = [
             'rank'        => $i + 1,
             'name'        => $name,
-            'profile_url' => $slug !== null ? '/u/' . rawurlencode($slug) : null,
+            'profile_url' => $url,
             'points'      => (int) $r['points'],
             'wins'        => (int) $r['wins'],
             'best_moves'  => (int) $r['best_moves'],
         ];
     }
-    echo json_encode(['week_start' => $weekStart, 'leaders' => $leaders],
-                     JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+    $payload = [
+        'week'       => $week,
+        'week_start' => $weekStart,
+        'week_end'   => $weekEnd,
+        'leaders'    => $leaders,
+    ];
+    if ($wantChampion) {
+        $champion = null;
+        if ($champRow) {
+            [$name, $url] = $resolve($champRow);
+            $champion = [
+                'name'        => $name,
+                'profile_url' => $url,
+                'points'      => (int) $champRow['points'],
+                'wins'        => (int) $champRow['wins'],
+            ];
+        }
+        $payload['champion'] = $champion;
+    }
+    echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     error_log('[lg-guitardle-board] ' . $e->getMessage());
     http_response_code(500);

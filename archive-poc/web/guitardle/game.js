@@ -819,6 +819,8 @@ function attachKeyboardListeners() {
 // so it doesn't need its own navigation. Its slot shows the weekly #1 (crown).
 function initMenuBar() {
     document.getElementById('btn-board').addEventListener('click', openBoard);
+    // The champion strip's button opens the same weekly-leaders overlay.
+    document.getElementById('btn-champ-board').addEventListener('click', openBoard);
 
     // Stats
     document.getElementById('btn-stats').addEventListener('click', () => {
@@ -835,12 +837,77 @@ function initMenuBar() {
 // list, no cap. The front page's side panel shows the same board.
 let boardData = null;
 
+// Rows the modal renders per scroll-chunk. The API returns the FULL ranked
+// list in one response (Ian: entire count — the JSON is small); the chunking
+// only bounds DOM work so the overlay opens instantly on mobile.
+const BOARD_PAGE = 25;
+
 async function initBoard() {
     try {
-        const res = await fetch(BOARD_API, { credentials: 'same-origin' });
+        // champion=1 → last week's rank-1 rides along with this week's board
+        // in ONE request. local_date anchors "this week" to the day the
+        // player is actually on (same rule as the score API — play_date is
+        // local days, so week windows must be too).
+        const res = await fetch(`${BOARD_API}?champion=1&local_date=${todayString()}`,
+                                { credentials: 'same-origin' });
         if (!res.ok) return;
         boardData = await res.json();
+        renderChampStrip();
     } catch (e) { /* board is decoration — never block the game */ }
+}
+
+// "Last week's champion" strip above the score display. Hidden until the
+// board fetch lands; shown even when last week had no winner (the strip is
+// also where the Leaderboard button lives, so it must not vanish).
+function renderChampStrip() {
+    const strip = document.getElementById('champ-strip');
+    const text  = document.getElementById('champ-text');
+    if (!strip || !text || !boardData) return;
+
+    const c = boardData.champion;
+    text.textContent = '';
+    if (c) {
+        text.append('🏆 Last week’s champion: ');
+        // Name links to the member's profile when we have one. target=_top:
+        // this page is usually iframed by the front page — navigate the
+        // whole tab, not the game frame.
+        const name = document.createElement(c.profile_url ? 'a' : 'strong');
+        name.textContent = c.name;
+        if (c.profile_url) {
+            name.href = c.profile_url;
+            name.target = '_top';
+        }
+        const meta = document.createElement('span');
+        meta.className = 'champ-meta';
+        meta.textContent = ` · ${c.points} pt${c.points === 1 ? '' : 's'}`;
+        text.append(name, meta);
+    } else {
+        text.append('🏆 No champion last week — take the crown!');
+    }
+    strip.style.display = '';
+}
+
+function renderBoardRow(l, i) {
+    const li = document.createElement('li');
+    li.className = 'board-row' + (i === 0 ? ' board-row--first' : '');
+    const rank = document.createElement('span');
+    rank.className = 'board-rank';
+    rank.textContent = i === 0 ? '👑' : String(i + 1);
+    // Name links to the member's profile when we have one. target=_top:
+    // this page is usually iframed by the front page — navigate the
+    // whole tab, not the game frame.
+    const name = document.createElement(l.profile_url ? 'a' : 'span');
+    name.className = 'board-name';
+    name.textContent = l.name;
+    if (l.profile_url) {
+        name.href = l.profile_url;
+        name.target = '_top';
+    }
+    const meta = document.createElement('span');
+    meta.className = 'board-meta';
+    meta.textContent = `${l.points} pt${l.points === 1 ? '' : 's'} · ${l.wins} win${l.wins === 1 ? '' : 's'}`;
+    li.append(rank, name, meta);
+    return li;
 }
 
 function openBoard() {
@@ -849,29 +916,27 @@ function openBoard() {
     const leaders = (boardData && boardData.leaders) || [];
 
     list.innerHTML = '';
+    list.scrollTop = 0;
     empty.style.display = leaders.length ? 'none' : '';
-    leaders.forEach((l, i) => {
-        const li = document.createElement('li');
-        li.className = 'board-row' + (i === 0 ? ' board-row--first' : '');
-        const rank = document.createElement('span');
-        rank.className = 'board-rank';
-        rank.textContent = i === 0 ? '👑' : String(i + 1);
-        // Name links to the member's profile when we have one. target=_top:
-        // this page is usually iframed by the front page — navigate the
-        // whole tab, not the game frame.
-        const name = document.createElement(l.profile_url ? 'a' : 'span');
-        name.className = 'board-name';
-        name.textContent = l.name;
-        if (l.profile_url) {
-            name.href = l.profile_url;
-            name.target = '_top';
+
+    // Lazy render: first page now, top up whenever the list scrolls near its
+    // bottom. onscroll assignment (not addEventListener) so a re-open
+    // replaces the previous open's closure instead of stacking listeners.
+    let rendered = 0;
+    const renderChunk = () => {
+        const frag = document.createDocumentFragment();
+        for (const end = Math.min(rendered + BOARD_PAGE, leaders.length); rendered < end; rendered++) {
+            frag.appendChild(renderBoardRow(leaders[rendered], rendered));
         }
-        const meta = document.createElement('span');
-        meta.className = 'board-meta';
-        meta.textContent = `${l.points} pt${l.points === 1 ? '' : 's'} · ${l.wins} win${l.wins === 1 ? '' : 's'}`;
-        li.append(rank, name, meta);
-        list.appendChild(li);
-    });
+        list.appendChild(frag);
+    };
+    renderChunk();
+    list.onscroll = () => {
+        if (rendered < leaders.length
+            && list.scrollTop + list.clientHeight >= list.scrollHeight - 60) {
+            renderChunk();
+        }
+    };
 
     document.getElementById('overlay-board').style.display = 'flex';
 }

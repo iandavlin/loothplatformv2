@@ -113,6 +113,16 @@
             </div>
         </nav>
 
+        <!-- Last week's champion (Ian 7/04) — sits ABOVE the score display
+             (the move counter in the game header). Populated by game.js from
+             the board API's champion block; stays hidden until that data
+             lands, so a failed fetch costs nothing. The button opens the same
+             weekly-leaders overlay as the menu-bar trophy. -->
+        <div class="champ-strip" id="champ-strip" style="display:none">
+            <span class="champ-text" id="champ-text"></span>
+            <button class="champ-board-btn" type="button" id="btn-champ-board">Leaderboard</button>
+        </div>
+
         <header class="game-header">
             <div class="header-inner">
                 <img src="assets/guitardle_logo.png" alt="Guitardle" class="logotype-img">
