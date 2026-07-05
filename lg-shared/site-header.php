@@ -837,5 +837,19 @@ function lg_shared_render_site_header(array $ctx): void
 <script src="/lg-shared/social-modals.js?v=<?= @filemtime(__DIR__ . '/social-modals.js') ?: '1' ?>" defer></script>
 <?php endif; ?>
 <?php
+// impact.com affiliate tracking (Stewmac, P-A3499220). Single source for EVERY
+// surface: standalone apps (front/hub/profiles/events/membership) never fire
+// wp_head, so this lives in the shared chrome. The old wp_head copy (Code
+// Snippets DB row "Stewmac Affiliate Catcher") must stay disabled or WP
+// pages that render this chrome double-fire.
+static $lg_impact_emitted = false;
+if (!$lg_impact_emitted): $lg_impact_emitted = true; ?>
+<script type="text/javascript">
+(function(i,m,p,a,c,t){c.ire_o=p;c[p]=c[p]||function(){(c[p].a=c[p].a||[]).push(arguments)};t=a.createElement(m);var z=a.getElementsByTagName(m)[0];t.async=1;t.src=i;z.parentNode.insertBefore(t,z)})('https://utt.impactcdn.com/P-A3499220-b563-4611-8e0e-c45cc7df6ab61.js','script','impactStat',document,window);
+impactStat('transformLinks');
+impactStat('trackImpression');
+</script>
+<?php endif; ?>
+<?php
 } // end function
 } // end if !function_exists
