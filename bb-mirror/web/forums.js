@@ -4342,8 +4342,11 @@
      3. Back  → closes the modal, returning to the feed URL.
    URL shape: a query param on the FEED route (the feed ignores unknown params),
    so the canonical permalink /hub/<forum>/<topic>/ stays the untouched
-   standalone/share/no-JS page. Desktop only (§4e is >=641); on mobile a ?topic=
-   deep-link redirects to that canonical permalink. History bookkeeping is
+   standalone/share/no-JS page. ONE contract, both surfaces (hub-deeplinks lane
+   2026-07-05): ≥641 the §4e dmodal, ≤640 the hub-polish.js #looth-rep-sheet via
+   its window.lgOpenTopicMobile export (no opener → legacy redirect to the
+   canonical page). The sheet stamps the same URL itself through the
+   window.lgTopicDeepLink helpers exported at the tail. History bookkeeping is
    flag-free: every decision reads the live URL (is ?topic present?), which is
    race-proof against the async MutationObserver. */
 (function () {
@@ -4366,6 +4369,10 @@
   }
   // Canonical standalone permalink for a {forum, topic}.
   function permalink(ft) { return FORUM_BASE + '/' + ft.forum + '/' + ft.topic + '/'; }
+  // The SHARE payload: the clean feed deep-link (no sort/q/… baggage), encoded
+  // exactly like the address-bar shape (URLSearchParams %2F) and the weekly
+  // digest's add_query_arg links.
+  function shareUrl(ft) { return FORUM_BASE + '/?topic=' + encodeURIComponent(ft.forum + '/' + ft.topic); }
   // The ?topic= address-bar URL, scoped to the CURRENT feed path (so Back returns
   // there) and preserving any existing query (sort/q/saved…).
   function topicUrl(ft) {
@@ -4410,13 +4417,26 @@
     if (card && typeof window.lgDmodalOpen === 'function') { window.lgDmodalOpen(card); return; }
     fetchStandalone(ft);   // cold: not in the feed yet (infinite-scroll hasn't reached it)
   }
+  // Mobile twin: same routing, opener = hub-polish.js's sheet export. hub-polish
+  // is an overlay script that can land after us on a cold load — poll briefly;
+  // still absent → the pre-lane behavior (redirect to the canonical page).
+  function openTopicMobile(ft, tries) {
+    if (typeof window.lgOpenTopicMobile !== 'function') {
+      if ((tries || 0) >= 25) { location.replace(permalink(ft)); return; }
+      setTimeout(function () { openTopicMobile(ft, (tries || 0) + 1); }, 120);
+      return;
+    }
+    var card = cardForFt(ft);
+    if (card) { window.lgOpenTopicMobile(card); return; }
+    fetchStandalone(ft, window.lgOpenTopicMobile);
+  }
 
   // Cold deep-link: fetch the canonical standalone page, scrape its OP into a
   // synthetic feed-card carrying exactly the attrs/selectors §4e open() reads
   // (incl. the .fc-actions .fcr reaction bar _single-topic.php now renders), then
   // hand it to open() — which hydrates ?body=/?replies= by id identically to a
   // normal card-clone open. Hard failure falls back to the real page.
-  function fetchStandalone(ft) {
+  function fetchStandalone(ft, opener) {
     fetch(permalink(ft), { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
       .then(function (html) {
@@ -4424,8 +4444,9 @@
         var doc = new DOMParser().parseFromString(html, 'text/html');
         var op = doc.querySelector('.post--op');
         var card = op && buildSyntheticCard(doc, op, ft);
-        if (!card || typeof window.lgDmodalOpen !== 'function') return fail(ft);
-        window.lgDmodalOpen(card);
+        var fn = opener || window.lgDmodalOpen;
+        if (!card || typeof fn !== 'function') return fail(ft);
+        fn(card);
       })
       .catch(function () { fail(ft); });
   }
@@ -4453,6 +4474,7 @@
     if (fid) card.setAttribute('data-forum-id', fid);
     if (aid) card.setAttribute('data-author-id', aid);
     card.setAttribute('data-href', permalink(ft));
+    card.setAttribute('data-share-url', shareUrl(ft));   // Share = the deep link (parity with _feed.php cards)
 
     var avatar = op.querySelector('.post__avatar');
     card.appendChild(el('span', 'fc-avatar lg-card-avatar', avatar ? avatar.innerHTML : ''));
@@ -4536,6 +4558,11 @@
     } else if (open) {
       var cb = m.querySelector('[data-dm-close]');   // back to feed → close via the §4e idiom
       if (cb) cb.click();
+    } else if (ft) {
+      // Mobile forward into a topic state → reopen the sheet. The close direction
+      // (back to feed) is hub-polish's own popstate handler — don't double-handle.
+      var sh = document.getElementById('looth-rep-sheet');
+      if (!sh || !sh.classList.contains('is-open')) openTopicMobile(ft);
     }
   }
 
@@ -4543,13 +4570,21 @@
   function routeFromUrl() {
     var ft = parseTopicParam();
     if (!ft) return;
-    if (!deskt()) { location.replace(permalink(ft)); return; }   // mobile → canonical page
-    // Seat a feed entry beneath the modal so Back returns to the feed (not off-site),
-    // then layer the modal entry on top and open.
+    // Seat a feed entry beneath the topic state so Back returns to the feed (not
+    // off-site), then layer the topic entry on top and open — the SAME two-entry
+    // stack on both surfaces (the sheet sees ?topic already set and adopts the
+    // entry instead of pushing its own).
     history.replaceState({}, '', feedUrlNoTopic());
     history.pushState({ lgTopic: ft.forum + '/' + ft.topic }, '', topicUrl(ft));
-    openTopic(ft);
+    if (deskt()) openTopic(ft); else openTopicMobile(ft);
   }
+
+  // ONE deep-link contract, exported — hub-polish.js's sheet stamps the same
+  // ?topic= URL/state with these instead of growing a second parser.
+  window.lgTopicDeepLink = {
+    parse: parseTopicParam, hasParam: hasTopicParam, ftFromHref: ftFromHref,
+    urlFor: topicUrl, shareUrl: shareUrl, feedUrl: feedUrlNoTopic, permalink: permalink
+  };
 
   function boot() {
     setupModalObserver();
