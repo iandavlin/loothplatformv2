@@ -29,6 +29,9 @@
   var API = '/profile-api/v0';
   var sheet = null, curThread = null, curPeer = null, pollT = null, listPollT = null;
   var threadsCache = [];
+  var pendingFile = null;                       // staged image attachment for the next send
+  var ATTACH_MAX = 5 * 1024 * 1024;
+  var ATTACH_TYPES = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1 };
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -106,8 +109,16 @@
       '#looth-msgr .mg-b--me{align-self:flex-end;background:var(--lg-sage,#87986a);color:#fff;border-bottom-right-radius:6px}',
       '#looth-msgr .mg-day{align-self:center;font:600 11px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b);padding:10px 0 6px}',
       // composer (keyboard-aware)
-      '#looth-msgr .mg-comp{flex:0 0 auto;display:flex;align-items:flex-end;gap:8px;padding:9px 12px calc(9px + env(safe-area-inset-bottom,0px));' +
+      '#looth-msgr .mg-comp{flex:0 0 auto;display:flex;flex-direction:column;gap:8px;padding:9px 12px calc(9px + env(safe-area-inset-bottom,0px));' +
         'border-top:1px solid var(--lg-line,#e3ddd0);background:var(--lg-cream,#fbfbf8);will-change:transform;transition:transform .18s ease}',
+      '#looth-msgr .mg-comprow{display:flex;align-items:flex-end;gap:8px}',
+      '#looth-msgr .mg-attach-btn{flex:0 0 auto;border:0;background:none;cursor:pointer;color:var(--lg-sage-d,#52613d);padding:6px;display:inline-flex;align-items:center;justify-content:center}',
+      '#looth-msgr .mg-attach-prev{display:flex;padding:2px 2px 0}',
+      '#looth-msgr .mg-attach-thumb{position:relative;width:72px;height:72px;border-radius:12px;overflow:hidden}',
+      '#looth-msgr .mg-attach-thumb img{width:100%;height:100%;object-fit:cover;display:block}',
+      '#looth-msgr .mg-attach-x{position:absolute;top:3px;right:3px;width:22px;height:22px;border:0;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font:700 14px/1 system-ui;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center}',
+      '#looth-msgr .mg-img{display:block;max-width:200px;border-radius:16px;overflow:hidden}',
+      '#looth-msgr .mg-img img{display:block;width:100%;height:auto;max-height:260px;object-fit:cover;border-radius:16px;background:var(--lguser-bubble,#eceff3)}',
       '#looth-msgr .mg-compwrap{flex:1 1 auto;min-width:0;display:flex;align-items:flex-end;background:var(--lguser-bubble,#eceff3);border-radius:20px;padding:6px 8px 6px 14px}',
       '#looth-msgr .mg-in{flex:1 1 auto;min-width:0;border:0;background:none;outline:none;resize:none;' +
         'font:15px/1.4 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);max-height:110px;padding:4px 0}',
@@ -151,9 +162,19 @@
           '<div class="mg-chd"><button class="mg-backbtn" type="button" data-mg-home aria-label="Back">‹</button>' +
             '<span class="mg-avi" id="mg-chavi"></span><span class="mg-chname" id="mg-chname"></span></div>' +
           '<div class="mg-msgs" id="mg-msgs"></div>' +
-          '<div class="mg-comp"><div class="mg-compwrap">' +
-            '<textarea class="mg-in" id="mg-in" rows="1" placeholder="Message…"></textarea>' +
-            '<button class="mg-send" id="mg-send" type="button" disabled>Send</button></div></div>' +
+          '<div class="mg-comp">' +
+            '<div class="mg-attach-prev" id="mg-attach-prev" hidden><div class="mg-attach-thumb">' +
+              '<img id="mg-attach-img" alt=""><button type="button" class="mg-attach-x" id="mg-attach-x" aria-label="Remove photo">✕</button></div></div>' +
+            '<div class="mg-comprow">' +
+              '<input type="file" id="mg-attach-in" accept="image/jpeg,image/png,image/webp" hidden>' +
+              '<button class="mg-attach-btn" id="mg-attach-btn" type="button" aria-label="Attach photo">' +
+                '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg></button>' +
+              '<div class="mg-compwrap">' +
+                '<textarea class="mg-in" id="mg-in" rows="1" placeholder="Message…"></textarea>' +
+                '<button class="mg-send" id="mg-send" type="button" disabled>Send</button></div>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
       '</div>';
     (document.body || document.documentElement).appendChild(sheet);
@@ -180,11 +201,18 @@
     // composer: grow + send
     var ta = sheet.querySelector('#mg-in'), send = sheet.querySelector('#mg-send');
     ta.addEventListener('input', function () {
-      send.disabled = !ta.value.trim();
+      send.disabled = !ta.value.trim() && !pendingFile;   // text OR a staged image enables send
       ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 110) + 'px';
     });
     ta.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } });
     send.addEventListener('click', doSend);
+    // image attachment: paperclip opens picker, change stages a preview, ✕ clears
+    var attBtn = sheet.querySelector('#mg-attach-btn'), attIn = sheet.querySelector('#mg-attach-in'), attX = sheet.querySelector('#mg-attach-x');
+    if (attBtn && attIn) {
+      attBtn.addEventListener('click', function () { attIn.click(); });
+      attIn.addEventListener('change', function () { stageFile(attIn.files && attIn.files[0]); });
+    }
+    if (attX) attX.addEventListener('click', clearFile);
     // keyboard-aware composer lift
     function kb() {
       var comp = sheet.querySelector('.mg-comp');
@@ -207,6 +235,27 @@
     if (p && p.avatar_url) return '<img src="' + esc(p.avatar_url) + '" alt="">';
     var n = (p && p.name || '?').trim();
     return esc(n.split(/\s+/).map(function (w) { return w[0] || ''; }).join('').slice(0, 2).toUpperCase());
+  }
+
+  function clearFile() {
+    pendingFile = null;
+    if (!sheet) return;
+    var inp = sheet.querySelector('#mg-attach-in'); if (inp) inp.value = '';
+    var img = sheet.querySelector('#mg-attach-img');
+    if (img) { if (img.src && img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src); img.removeAttribute('src'); }
+    var prev = sheet.querySelector('#mg-attach-prev'); if (prev) prev.hidden = true;
+    var ta = sheet.querySelector('#mg-in'), send = sheet.querySelector('#mg-send');
+    if (send) send.disabled = !(ta && ta.value.trim());
+  }
+  function stageFile(file) {
+    if (!file) return;
+    if (!ATTACH_TYPES[file.type]) { alert('Please choose a JPEG, PNG, or WebP image.'); return; }
+    if (file.size > ATTACH_MAX)   { alert('That image is larger than 5 MB — please choose a smaller one.'); return; }
+    pendingFile = file;
+    var img = sheet.querySelector('#mg-attach-img');
+    if (img) { if (img.src && img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src); img.src = URL.createObjectURL(file); }
+    var prev = sheet.querySelector('#mg-attach-prev'); if (prev) prev.hidden = false;
+    var send = sheet.querySelector('#mg-send'); if (send) send.disabled = false;
   }
 
   function renderThreads(q) {
@@ -267,9 +316,17 @@
     box.innerHTML = (msgs || []).map(function (m) {
       var mine = !peerSet[m.sender_uuid];                     // mine = sender not among peers
       var day = String(m.created_at || '').slice(0, 10);
-      var sep = '';
-      if (day && day !== lastDay) { lastDay = day; sep = '<div class="mg-day">' + esc(day) + '</div>'; }
-      return sep + '<div class="mg-b ' + (mine ? 'mg-b--me' : 'mg-b--them') + '">' + esc(m.body || '') + '</div>';
+      var h = '';
+      if (day && day !== lastDay) { lastDay = day; h += '<div class="mg-day">' + esc(day) + '</div>'; }
+      // image attachment (access-controlled URL) — tap to open full size
+      if (m.media_url) {
+        h += '<a class="mg-img" style="align-self:' + (mine ? 'flex-end' : 'flex-start') + '" href="' +
+             esc(m.media_url) + '" target="_blank" rel="noopener noreferrer"><img src="' +
+             esc(m.media_url) + '" alt="Photo" loading="lazy"></a>';
+      }
+      // body optional when an image is present (image-only message)
+      if (m.body) h += '<div class="mg-b ' + (mine ? 'mg-b--me' : 'mg-b--them') + '">' + esc(m.body) + '</div>';
+      return h;
     }).join('');
     box.scrollTop = box.scrollHeight;
   }
@@ -296,6 +353,7 @@
     sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Loading…</div>';
     sheet.querySelector('#mg-chat').classList.add('is-on');
     var ta = sheet.querySelector('#mg-in'); ta.value = ''; ta.style.height = 'auto';
+    clearFile();
     sheet.querySelector('#mg-send').disabled = true;
     loadThread(uuid);
     if (pollT) clearInterval(pollT);
@@ -316,6 +374,7 @@
         if (hit) { openThread(hit.uuid, (hit.peers || [])[0]); return; }
         // no thread yet — fresh chat, first send POSTs {to_uuid}
         curThread = null; curPeer = { uuid: userUuid, name: name || 'Member', avatar_url: avatarUrl || '' };
+        clearFile();
         sheet.querySelector('#mg-chname').textContent = curPeer.name;
         sheet.querySelector('#mg-chavi').innerHTML = avi(curPeer);
         sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Say hi — this starts your chat.</div>';
@@ -327,8 +386,13 @@
 
   function doSend() {
     var ta = sheet.querySelector('#mg-in'), send = sheet.querySelector('#mg-send');
-    var text = (ta.value || '').trim(); if (!text) return;
+    var text = (ta.value || '').trim();
+    if (!text && !pendingFile) return;                         // need text OR an image
+    if (!curThread && !(curPeer && curPeer.uuid)) return;
     send.disabled = true;
+
+    if (pendingFile) { sendWithFile(text, ta, send); return; }
+
     var url, body;
     if (curThread) { url = API + '/me/messages/' + encodeURIComponent(curThread); body = { body: text }; }
     else if (curPeer && curPeer.uuid) { url = API + '/me/messages/'; body = { to_uuid: curPeer.uuid, body: text }; }
@@ -356,6 +420,50 @@
         if (curThread) loadThread(curThread, true);
       })
       .catch(function () { b.style.opacity = '.4'; send.disabled = false; });
+  }
+
+  /* multipart send when a photo is staged. Reply → /me/messages/<uuid>/image;
+     first message → /me/messages/image with to_uuid. Optimistic image bubble; the
+     staged file is kept on failure so Send retries it. */
+  function sendWithFile(text, ta, send) {
+    var file = pendingFile;
+    var fd = new FormData();
+    fd.append('image', file);
+    if (text) fd.append('body', text);
+    var url;
+    if (curThread) { url = API + '/me/messages/' + encodeURIComponent(curThread) + '/image'; }
+    else { url = API + '/me/messages/image'; fd.append('to_uuid', curPeer.uuid); }
+
+    var box = sheet.querySelector('#mg-msgs');
+    if (box.querySelector('.mg-empty')) box.innerHTML = '';
+    var a = document.createElement('a'); a.className = 'mg-img'; a.style.alignSelf = 'flex-end';
+    var im = document.createElement('img'); im.src = URL.createObjectURL(file); a.appendChild(im);
+    box.appendChild(a);
+    var tb = null;
+    if (text) { tb = document.createElement('div'); tb.className = 'mg-b mg-b--me'; tb.textContent = text; box.appendChild(tb); }
+    box.scrollTop = box.scrollHeight;
+    var savedText = text;
+    ta.value = ''; ta.style.height = 'auto';
+    var prev = sheet.querySelector('#mg-attach-prev'); if (prev) prev.hidden = true;  // hide strip in-flight
+
+    fetch(url, { method: 'POST', credentials: 'include', body: fd })   // no Content-Type → browser sets boundary
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+      .then(function (res) {
+        if (!res.ok) {                                  // keep staged file + text for retry
+          a.style.opacity = '.4'; if (tb) tb.style.opacity = '.4';
+          ta.value = savedText; if (prev) prev.hidden = false; send.disabled = false;
+          return;
+        }
+        clearFile();                                    // success — drop staged file + preview
+        var newUuid = res.j && (res.j.thread_uuid || (res.j.thread && res.j.thread.uuid) || res.j.uuid);
+        if (!curThread && newUuid) {
+          curThread = newUuid;
+          if (pollT) clearInterval(pollT);
+          pollT = setInterval(function () { if (curThread === newUuid) loadThread(newUuid, true); }, 8000);
+        }
+        if (curThread) loadThread(curThread, true);
+      })
+      .catch(function () { a.style.opacity = '.4'; if (tb) tb.style.opacity = '.4'; if (prev) prev.hidden = false; send.disabled = false; });
   }
 
   var msgrHist = false;
