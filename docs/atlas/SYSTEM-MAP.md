@@ -1,5 +1,12 @@
 # SYSTEM-MAP.md — How the Looth platform actually works, end to end
 
+> ⚠️ **2026-07-04 staleness note (keeper):** read **OPERATOR.md** first — it is the current
+> orientation. Known-stale here: §1 box table (the cut happened: live = promoted rehearsal box,
+> dev2 rebuilt twice since), §13/§14 (the `~/loothplatformv2-serve` clone is RETIRED — everything
+> now serves from `~/loothplatformv2-clean` @ origin/main on BOTH boxes), §11 (R2 narrative is
+> layered pre/post-cut; current wiring: dev2=dev buckets, live=live buckets). Deep detail in the
+> unflagged sections is still accurate.
+
 **Status:** net-new audit, written from live inspection of **dev2** (the CANONICAL box
 that becomes live), 2026-06-19. Verified against the running system, **not** copied from
 older docs. Where this disagrees with an older doc, this wins — re-verify before trusting
