@@ -802,16 +802,34 @@ function lg_shared_render_site_header(array $ctx): void
       <div id="lg-msg-detail" class="lg-msg-detail" hidden>
         <div class="lg-msg__messages" id="lg-msg-messages"></div>
         <div class="lg-msg__compose" id="lg-msg-compose">
-          <textarea id="lg-msg-reply-input" class="lg-msg__reply-input"
-                    placeholder="Reply... (Enter to send, Shift+Enter for newline)"
-                    rows="2"></textarea>
-          <button class="lg-msg__send-btn" data-lg-send-reply aria-label="Send">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-          </button>
+          <!-- staged image preview (above the input); shown only when a photo is picked -->
+          <div class="lg-msg__attach-preview" id="lg-msg-attach-preview" hidden>
+            <div class="lg-msg__attach-thumb">
+              <img id="lg-msg-attach-img" alt="Attachment preview">
+              <button type="button" class="lg-msg__attach-remove" data-lg-attach-remove
+                      aria-label="Remove photo">&times;</button>
+            </div>
+          </div>
+          <div class="lg-msg__compose-row">
+            <input type="file" id="lg-msg-attach-input" class="lg-msg__attach-input"
+                   accept="image/jpeg,image/png,image/webp" hidden>
+            <button type="button" class="lg-msg__attach-btn" data-lg-attach aria-label="Attach photo" title="Attach photo">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/>
+              </svg>
+            </button>
+            <textarea id="lg-msg-reply-input" class="lg-msg__reply-input"
+                      placeholder="Reply... (Enter to send, Shift+Enter for newline)"
+                      rows="2"></textarea>
+            <button class="lg-msg__send-btn" data-lg-send-reply aria-label="Send">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                   stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>

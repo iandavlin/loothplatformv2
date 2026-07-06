@@ -22,11 +22,12 @@ final class Messaging
         $pg = Db::pg();
         $st = $pg->prepare(
             "SELECT t.id, t.uuid, t.subject, t.last_message_at, mr.unread_count,
-                    lm.body AS last_body, lm.created_at AS last_at, lm.sender_uuid AS last_sender
+                    lm.body AS last_body, lm.media_url AS last_media,
+                    lm.created_at AS last_at, lm.sender_uuid AS last_sender
                FROM message_recipients mr
                JOIN message_threads t ON t.id = mr.thread_id
                LEFT JOIN LATERAL (
-                    SELECT body, created_at, sender_uuid FROM messages m
+                    SELECT body, media_url, created_at, sender_uuid FROM messages m
                      WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1
                ) lm ON true
               WHERE mr.user_uuid = :u AND mr.is_deleted = false
@@ -44,14 +45,17 @@ final class Messaging
 
         return array_map(static function (array $r) use ($peers): array {
             $body = (string)($r['last_body'] ?? '');
+            // Image-only last message → a photo glyph snippet (no body text to show).
+            $snippet = trim($body) === '' && !empty($r['last_media'])
+                ? '📷 Photo'
+                : (mb_strlen($body) > self::SNIPPET ? mb_substr($body, 0, self::SNIPPET) . '…' : $body);
             return [
                 'id'              => (int)$r['id'],
                 'uuid'            => $r['uuid'],
                 'subject'         => $r['subject'],
                 'last_message_at' => $r['last_message_at'],
                 'unread_count'    => (int)$r['unread_count'],
-                'last_snippet'    => mb_strlen($body) > self::SNIPPET
-                                     ? mb_substr($body, 0, self::SNIPPET) . '…' : $body,
+                'last_snippet'    => $snippet,
                 'last_sender'     => $r['last_sender'],
                 'peers'           => $peers[(int)$r['id']] ?? [],
             ];
@@ -95,7 +99,7 @@ final class Messaging
         if (!$thread) return ['ok' => false, 'error' => 'not_found'];
 
         $msgs = $pg->prepare(
-            "SELECT id, sender_uuid, body, created_at FROM messages
+            "SELECT id, sender_uuid, body, created_at, media_url, media_mime, media_w, media_h FROM messages
               WHERE thread_id = :t ORDER BY created_at ASC LIMIT :lim"
         );
         $msgs->bindValue(':t', $threadId, \PDO::PARAM_INT);
@@ -125,22 +129,17 @@ final class Messaging
      * Send a message. $threadId set → reply in that thread; else start/find the
      * 1:1 thread with $toUuid. Connections-only gate on NEW conversations.
      */
-    public static function send(string $senderUuid, ?int $threadId, ?string $toUuid, string $body): array
+    public static function send(string $senderUuid, ?int $threadId, ?string $toUuid, string $body, ?array $media = null): array
     {
         $body = trim($body);
-        if ($body === '') return ['ok' => false, 'error' => 'empty_body'];
+        // Empty body is allowed ONLY when an image is attached (image-only message).
+        if ($body === '' && !$media) return ['ok' => false, 'error' => 'empty_body'];
         $pg = Db::pg();
 
         if ($threadId !== null) {
-            if (!self::isRecipient($senderUuid, $threadId)) {
-                return ['ok' => false, 'error' => 'not_a_recipient'];
-            }
-            // 1:1 reply must still satisfy the connection gate (peer may have blocked).
-            $peers = self::recipientUuids($threadId, $senderUuid);
-            if (count($peers) === 1 && !Connections::canMessage($senderUuid, $peers[0])) {
-                return ['ok' => false, 'error' => 'not_connected'];
-            }
-            return self::insertMessage($threadId, $senderUuid, $body);
+            $gate = self::canSendTo($senderUuid, $threadId);
+            if (!$gate['ok']) return $gate;
+            return self::insertMessage($threadId, $senderUuid, $body, $media);
         }
 
         if (!$toUuid) return ['ok' => false, 'error' => 'no_recipient'];
@@ -151,13 +150,63 @@ final class Messaging
         $pg->beginTransaction();
         try {
             $tid = self::findPairThread($senderUuid, $toUuid) ?? self::createThread([$senderUuid, $toUuid]);
-            $res = self::insertMessage($tid, $senderUuid, $body);
+            $res = self::insertMessage($tid, $senderUuid, $body, $media);
             $pg->commit();
             return $res;
         } catch (\Throwable $e) {
             $pg->rollBack();
             return ['ok' => false, 'error' => 'send_failed'];
         }
+    }
+
+    /**
+     * Reply gate for an EXISTING thread (recipient + 1:1 connection check), without
+     * inserting. Extracted so the image upload endpoint can authorize a reply BEFORE
+     * it stores any bytes (never store an attachment for a non-participant). send()
+     * uses the same gate, so the two paths can never diverge.
+     */
+    public static function canSendTo(string $senderUuid, int $threadId): array
+    {
+        if (!self::isRecipient($senderUuid, $threadId)) {
+            return ['ok' => false, 'error' => 'not_a_recipient'];
+        }
+        // 1:1 reply must still satisfy the connection gate (peer may have blocked).
+        $peers = self::recipientUuids($threadId, $senderUuid);
+        if (count($peers) === 1 && !Connections::canMessage($senderUuid, $peers[0])) {
+            return ['ok' => false, 'error' => 'not_connected'];
+        }
+        return ['ok' => true];
+    }
+
+    /** Is $viewerUuid a participant of $threadId? Public gate for the media proxy. */
+    public static function isParticipant(string $viewerUuid, int $threadId): bool
+    {
+        return self::isRecipient($viewerUuid, $threadId);
+    }
+
+    /**
+     * Find/create the 1:1 thread with $toUuid WITHOUT sending — used by the image
+     * upload endpoint to learn the thread uuid (for the R2 key + served path)
+     * before the bytes are stored. Connections gate identical to send().
+     * Returns ['ok'=>true,'thread_id','thread_uuid'] or an error array.
+     */
+    public static function ensurePairThread(string $senderUuid, string $toUuid): array
+    {
+        if (!Connections::canMessage($senderUuid, $toUuid)) {
+            return ['ok' => false, 'error' => 'not_connected'];
+        }
+        $pg = Db::pg();
+        $pg->beginTransaction();
+        try {
+            $tid = self::findPairThread($senderUuid, $toUuid) ?? self::createThread([$senderUuid, $toUuid]);
+            $pg->commit();
+        } catch (\Throwable $e) {
+            $pg->rollBack();
+            return ['ok' => false, 'error' => 'thread_failed'];
+        }
+        $st = $pg->prepare('SELECT uuid FROM message_threads WHERE id = :t');
+        $st->execute([':t' => $tid]);
+        return ['ok' => true, 'thread_id' => $tid, 'thread_uuid' => (string)$st->fetchColumn()];
     }
 
     /** Recipient uuids of a thread other than $exceptUuid. */
@@ -206,15 +255,23 @@ final class Messaging
      * (the message badge). Sender's own recipient row stays read. DMs do NOT raise a
      * bell notification — the message badge is the sole DM signal (Ian, 2026-05-31).
      */
-    private static function insertMessage(int $threadId, string $senderUuid, string $body): array
+    private static function insertMessage(int $threadId, string $senderUuid, string $body, ?array $media = null): array
     {
         $pg = Db::pg();
 
         $st = $pg->prepare(
-            'INSERT INTO messages (thread_id, sender_uuid, body)
-             VALUES (:t, :s, :b) RETURNING id, created_at'
+            'INSERT INTO messages (thread_id, sender_uuid, body, media_url, media_mime, media_w, media_h)
+             VALUES (:t, :s, :b, :mu, :mm, :mw, :mh) RETURNING id, created_at'
         );
-        $st->execute([':t' => $threadId, ':s' => $senderUuid, ':b' => $body]);
+        $st->execute([
+            ':t'  => $threadId,
+            ':s'  => $senderUuid,
+            ':b'  => $body,
+            ':mu' => $media['url']  ?? null,
+            ':mm' => $media['mime'] ?? null,
+            ':mw' => isset($media['w']) ? (int)$media['w'] : null,
+            ':mh' => isset($media['h']) ? (int)$media['h'] : null,
+        ]);
         $msg = $st->fetch();
 
         $pg->prepare('UPDATE message_threads SET last_message_at = now() WHERE id = :t')
@@ -235,6 +292,7 @@ final class Messaging
             'thread_id'  => $threadId,
             'message_id' => (int)$msg['id'],
             'created_at' => $msg['created_at'],
+            'media_url'  => $media['url'] ?? null,
         ];
     }
 

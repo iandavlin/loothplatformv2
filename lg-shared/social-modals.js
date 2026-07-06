@@ -31,6 +31,11 @@
 var API = '/profile-api/v0';
 var currentThreadUuid = null;  // opaque thread uuid → replies POST /me/messages/<uuid>
 var pendingPeerUuid   = null;  // target USER uuid for a not-yet-existing thread (new DM)
+var pendingAttachFile = null;  // staged image File for the next send (image attachment)
+
+/* image attachment limits — mirror the upload endpoint (jpeg/png/webp ≤5MB) */
+var ATTACH_MAX   = 5 * 1024 * 1024;
+var ATTACH_TYPES = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1 };
 
 /* ── helpers ── */
 function esc(s) {
@@ -238,6 +243,7 @@ function loadThreadList() {
   if (!list) return;
   currentThreadUuid = null;
   pendingPeerUuid   = null;
+  clearAttach();
   list.hidden = false;
   if (detail) detail.hidden = true;
   /* show back button only when in detail */
@@ -294,6 +300,7 @@ function openThread(threadUuid) {
   if (!detail || !msgs) return;
   currentThreadUuid = threadUuid;
   pendingPeerUuid   = null;
+  clearAttach();
   showDetailPane();
   msgs.innerHTML = '<p class="lg-sm__status">Loading...</p>';
 
@@ -310,10 +317,16 @@ function openThread(threadUuid) {
       } else {
         msgs.innerHTML = messages.map(function (m) {
           var mine = !peerSet[m.sender_uuid];
-          return '<div class="lg-msg__msg' + (mine ? ' lg-msg__msg--mine' : '') + '">'
-            + '<p class="lg-msg__msg-text">' + linkifyText(m.body || '') + '</p>'
-            + '<span class="lg-msg__msg-time">' + relTime(m.created_at) + '</span>'
-            + '</div>';
+          var h = '<div class="lg-msg__msg' + (mine ? ' lg-msg__msg--mine' : '') + '">';
+          /* image attachment (access-controlled URL): tap to open full size */
+          if (m.media_url) {
+            h += '<a class="lg-msg__msg-media" href="' + esc(m.media_url) + '" target="_blank" rel="noopener noreferrer">'
+               + '<img src="' + esc(m.media_url) + '" alt="Photo" loading="lazy"></a>';
+          }
+          /* body is optional when an image is present (image-only message) */
+          if (m.body) h += '<p class="lg-msg__msg-text">' + linkifyText(m.body) + '</p>';
+          h += '<span class="lg-msg__msg-time">' + relTime(m.created_at) + '</span></div>';
+          return h;
         }).join('');
         msgs.scrollTop = msgs.scrollHeight;
       }
@@ -332,6 +345,7 @@ function openDmWithUser(peerUuid) {
   var msgs    = document.getElementById('lg-msg-messages');
   var compose = document.getElementById('lg-msg-compose');
   if (!msgs) return;
+  clearAttach();
   showDetailPane();
   msgs.innerHTML = '<p class="lg-sm__status">Loading...</p>';
   fetch(API + '/me/messages/', { credentials: 'include' })
@@ -356,11 +370,42 @@ function openDmWithUser(peerUuid) {
     });
 }
 
+/* ── image attachment (compose) ── */
+function clearAttach() {
+  pendingAttachFile = null;
+  var inp = document.getElementById('lg-msg-attach-input');
+  if (inp) inp.value = '';
+  var img = document.getElementById('lg-msg-attach-img');
+  if (img) {
+    if (img.src && img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src);
+    img.removeAttribute('src');
+  }
+  var prev = document.getElementById('lg-msg-attach-preview');
+  if (prev) prev.hidden = true;
+}
+function stageAttach(file) {
+  if (!file) return;
+  if (!ATTACH_TYPES[file.type]) { alert('Please choose a JPEG, PNG, or WebP image.'); return; }
+  if (file.size > ATTACH_MAX)   { alert('That image is larger than 5 MB — please choose a smaller one.'); return; }
+  pendingAttachFile = file;
+  var img = document.getElementById('lg-msg-attach-img');
+  if (img) {
+    if (img.src && img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src);
+    img.src = URL.createObjectURL(file);
+  }
+  var prev = document.getElementById('lg-msg-attach-preview');
+  if (prev) prev.hidden = false;
+}
+
 function sendReply() {
   if (!currentThreadUuid && !pendingPeerUuid) return;
   var input = document.getElementById('lg-msg-reply-input');
   var text  = input ? input.value.trim() : '';
-  if (!text) return;
+  /* require text OR an image (image-only messages are allowed) */
+  if (!text && !pendingAttachFile) return;
+
+  if (pendingAttachFile) { sendWithAttachment(text); return; }
+
   var saved = text;
   input.value    = '';
   input.disabled = true;
@@ -388,6 +433,41 @@ function sendReply() {
       return openDmWithUser(newDmPeer);
     })
     .catch(function () { if (input) input.value = saved; })
+    .then(function () { if (input) { input.disabled = false; input.focus(); } });
+}
+
+/* Multipart send when a photo is staged. Reply → /me/messages/<uuid>/image;
+   first message → /me/messages/image with to_uuid (creates the thread). Body is
+   the optional caption. On failure, the staged file + text are kept for retry. */
+function sendWithAttachment(text) {
+  var input = document.getElementById('lg-msg-reply-input');
+  var file  = pendingAttachFile;
+  if (!file) return;
+
+  var fd = new FormData();
+  fd.append('image', file);
+  if (text) fd.append('body', text);
+
+  var url, newDmPeer = pendingPeerUuid;
+  if (currentThreadUuid) {
+    url = API + '/me/messages/' + encodeURIComponent(currentThreadUuid) + '/image';
+  } else {
+    url = API + '/me/messages/image';
+    fd.append('to_uuid', pendingPeerUuid);
+  }
+
+  if (input) input.disabled = true;
+  /* NB: no Content-Type header — the browser sets the multipart boundary. */
+  fetch(url, { method: 'POST', credentials: 'include', body: fd })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json().catch(function () { return {}; }); })
+    .then(function () {
+      if (input) input.value = '';
+      clearAttach();
+      if (currentThreadUuid) return openThread(currentThreadUuid);
+      pendingPeerUuid = null;
+      return openDmWithUser(newDmPeer);
+    })
+    .catch(function () { /* keep staged file + text for retry */ })
     .then(function () { if (input) { input.disabled = false; input.focus(); } });
 }
 
@@ -560,12 +640,22 @@ if (notifReadAllBtn) notifReadAllBtn.addEventListener('click', markAllNotifsRead
 var connSearch = document.getElementById('lg-conn-search');
 if (connSearch) connSearch.addEventListener('input', function () { renderAccepted(connSearch.value); });
 
+/* image attachment: paperclip opens the file picker; change stages a preview */
+var attachBtn   = document.querySelector('[data-lg-attach]');
+var attachInput = document.getElementById('lg-msg-attach-input');
+if (attachBtn && attachInput) {
+  attachBtn.addEventListener('click', function () { attachInput.click(); });
+  attachInput.addEventListener('change', function () { stageAttach(attachInput.files && attachInput.files[0]); });
+}
+
 document.addEventListener('click', function (e) {
   var t = e.target;
   if ((t.hasAttribute && t.hasAttribute('data-lg-thread-back')) ||
       (t.closest && t.closest('[data-lg-thread-back]'))) { loadThreadList(); }
   if ((t.hasAttribute && t.hasAttribute('data-lg-send-reply')) ||
       (t.closest && t.closest('[data-lg-send-reply]')))  { sendReply(); }
+  if ((t.hasAttribute && t.hasAttribute('data-lg-attach-remove')) ||
+      (t.closest && t.closest('[data-lg-attach-remove]'))) { clearAttach(); }
 });
 document.addEventListener('keydown', function (e) {
   if (e.key === 'Enter' && !e.shiftKey &&
