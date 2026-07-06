@@ -62,6 +62,15 @@ final class UserProvisioner
         self::writeBridge( $customerId, (int) $userId );
         self::sendWelcomeEmail( (int) $userId );
 
+        // Operator notice (Ian only): a brand-new member account was minted by
+        // the Stripe pipeline. Tier is unknown at provision time — the caller
+        // (Sync::customer) reports the entitlement and runs the Arbiter right
+        // after this returns — so pass null ("looth1 initial"). function_exists
+        // guard matches the engine's lgpo_alert_failure call style.
+        if ( function_exists( 'lgpo_notify_onboard' ) ) {
+            lgpo_notify_onboard( (int) $userId, (string) ( $name ?: $username ), $email, null, 'stripe (provisioner)' );
+        }
+
         // Initial tier grant. Fire so the cache-invalidation hook can
         // primes profile-app's /whoami cache for the new account.
         do_action( 'looth_tier_changed', (int) $userId, null, 'looth1', 'new' );

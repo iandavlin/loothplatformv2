@@ -820,6 +820,45 @@ function lgpo_alert_failure( string $context, string $detail ): void {
 }
 
 /**
+ * Operator notification: a member completed onboarding. Emails Ian
+ * (lgpo_contact_email, falling back to admin_email) — who, tier, source —
+ * once per onboard. Fired from the three provisioning terminals:
+ *   - Patreon OAuth callback, fresh account mint
+ *   - Patreon OAuth callback, FIRST adopt of an existing account
+ *     (lgpo_adopt_existing_user runs on every returning login too, so the
+ *     caller gates on lgpo_onboarded_at being absent beforehand)
+ *   - Stripe UserProvisioner::findOrProvision, fresh account mint
+ *
+ * Operator-only: nothing here touches the member-facing flow. Tagged
+ * X-LG-Poller-Intent: notify so it survives the poller mail gate +
+ * killswitch regardless of lgms_poller_mail_enabled (which stays OFF).
+ * Best-effort and never throws (callers are mid-onboard).
+ */
+function lgpo_notify_onboard( int $wp_user_id, string $display_name, string $email, ?string $tier, string $source ): void {
+    error_log( "LGPO ONBOARD [{$source}] user#{$wp_user_id} {$email} tier=" . ( $tier ?? 'looth1 (initial)' ) );
+    try {
+        $to = (string) get_option( 'lgpo_contact_email', '' );
+        if ( $to === '' ) { $to = (string) get_option( 'admin_email', '' ); }
+        if ( $to === '' ) return;
+        $site    = wp_specialchars_decode( (string) get_option( 'blogname' ), ENT_QUOTES );
+        $who     = trim( $display_name ) !== '' ? $display_name : $email;
+        $headers = [ 'Content-Type: text/plain; charset=UTF-8', 'X-LG-Poller-Intent: notify' ];
+        wp_mail(
+            $to,
+            "[{$site}] New member onboarded: {$who}",
+            "A member completed onboarding.\n\n"
+            . "Who:    {$display_name} <{$email}> (WP #{$wp_user_id})\n"
+            . "Tier:   " . ( $tier ?? 'looth1 (initial — arbiter may upgrade on first sweep)' ) . "\n"
+            . "Source: {$source}\n\n"
+            . "Profile: " . admin_url( 'user-edit.php?user_id=' . $wp_user_id ) . "\n",
+            $headers
+        );
+    } catch ( \Throwable $_ ) {
+        // best-effort
+    }
+}
+
+/**
  * Member-facing failure notification (§ settled-design item 5).
  *
  * On ANY failure in the provision / bridge / role pipeline (onboard account
@@ -1362,6 +1401,9 @@ function lgpo_handle_callback() {
     // sees it on later cross-source merges (e.g. user later signs up for Stripe).
     lgpo_apply_role_via_arbiter( (int) $user_id, $wp_role );
 
+    // Operator notice (Ian only, best-effort — never blocks the member flow).
+    lgpo_notify_onboard( (int) $user_id, (string) $patreon_name, (string) $patreon_email, $wp_role, 'patreon (new account)' );
+
     // Log them straight in (lifecycle G1) — they connected via Patreon, so land
     // them authenticated instead of bouncing to a password screen.
     lgpo_login_user( (int) $user_id );
@@ -1402,11 +1444,20 @@ function lgpo_adopt_existing_user( $user, $patreon_user_id, $patreon_email, $tie
     update_user_meta( $user->ID, 'lgpo_patreon_user_id', $patreon_user_id );
     update_user_meta( $user->ID, 'lgpo_patreon_email', $patreon_email );
     update_user_meta( $user->ID, 'lgpo_patreon_tier_id', $tier_id );
-    if ( ! get_user_meta( $user->ID, 'lgpo_onboarded_at', true ) ) {
+    // First-ever onboard of this account? (This function also runs on every
+    // RETURNING Patreon login — the by-id "already_onboarded" terminal — so
+    // the onboarded_at stamp is the one-shot marker that keeps the operator
+    // notification below to exactly one email per member.)
+    $first_onboard = ! get_user_meta( $user->ID, 'lgpo_onboarded_at', true );
+    if ( $first_onboard ) {
         update_user_meta( $user->ID, 'lgpo_onboarded_at', current_time( 'mysql' ) );
     }
     update_user_meta( $user->ID, 'payment_source', 'patreon' );
     lgpo_apply_role_via_arbiter( (int) $user->ID, $wp_role );
+    if ( $first_onboard ) {
+        // Operator notice (Ian only, best-effort — never blocks the member flow).
+        lgpo_notify_onboard( (int) $user->ID, (string) $user->display_name, (string) $user->user_email, $wp_role, 'patreon (adopted existing account)' );
+    }
     // Full membership snapshot so the member is provisioned NOW, not next sweep.
     if ( ! empty( $member_snapshot ) && class_exists( 'LGPO_Sync_Engine' ) ) {
         LGPO_Sync_Engine::record_patreon_member( (int) $user->ID, $member_snapshot );
