@@ -114,6 +114,10 @@
       '#looth-msgr .mg-comprow{display:flex;align-items:flex-end;gap:8px}',
       '#looth-msgr .mg-attach-btn{flex:0 0 auto;border:0;background:none;cursor:pointer;color:var(--lg-sage-d,#52613d);padding:6px;display:inline-flex;align-items:center;justify-content:center}',
       '#looth-msgr .mg-attach-prev{display:flex;padding:2px 2px 0}',
+      // display:flex beats the UA [hidden] rule — without the counter-rule the empty
+      // strip (src-less thumb + stray ✕) renders permanently above the composer.
+      '#looth-msgr .mg-attach-prev[hidden]{display:none}',
+      '#looth-msgr .mg-send-error{color:var(--lg-error,#b3261e);font:12px/1.4 var(--lg-font-sans,system-ui,sans-serif);padding:0 4px}',
       '#looth-msgr .mg-attach-thumb{position:relative;width:72px;height:72px;border-radius:12px;overflow:hidden}',
       '#looth-msgr .mg-attach-thumb img{width:100%;height:100%;object-fit:cover;display:block}',
       '#looth-msgr .mg-attach-x{position:absolute;top:3px;right:3px;width:22px;height:22px;border:0;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font:700 14px/1 system-ui;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center}',
@@ -237,8 +241,25 @@
     return esc(n.split(/\s+/).map(function (w) { return w[0] || ''; }).join('').slice(0, 2).toUpperCase());
   }
 
+  /* visible failure state for the attach send — silent dimming alone left users
+     blind to failures (parity with the desktop modal's .lg-msg__send-error) */
+  function setSendError(msg) {
+    if (!sheet) return;
+    var comp = sheet.querySelector('.mg-comp');
+    if (!comp) return;
+    var el = comp.querySelector('.mg-send-error');
+    if (!msg) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'mg-send-error';
+      el.setAttribute('role', 'alert');
+      comp.insertBefore(el, comp.firstChild);
+    }
+    el.textContent = msg;
+  }
   function clearFile() {
     pendingFile = null;
+    setSendError(null);
     if (!sheet) return;
     var inp = sheet.querySelector('#mg-attach-in'); if (inp) inp.value = '';
     var img = sheet.querySelector('#mg-attach-img');
@@ -251,6 +272,7 @@
     if (!file) return;
     if (!ATTACH_TYPES[file.type]) { alert('Please choose a JPEG, PNG, or WebP image.'); return; }
     if (file.size > ATTACH_MAX)   { alert('That image is larger than 5 MB — please choose a smaller one.'); return; }
+    setSendError(null);
     pendingFile = file;
     var img = sheet.querySelector('#mg-attach-img');
     if (img) { if (img.src && img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src); img.src = URL.createObjectURL(file); }
@@ -444,16 +466,18 @@
     box.scrollTop = box.scrollHeight;
     var savedText = text;
     ta.value = ''; ta.style.height = 'auto';
+    setSendError(null);
     var prev = sheet.querySelector('#mg-attach-prev'); if (prev) prev.hidden = true;  // hide strip in-flight
 
+    var failed = function () {                          // keep staged file + text for retry, but SAY it failed
+      a.style.opacity = '.4'; if (tb) tb.style.opacity = '.4';
+      ta.value = savedText; if (prev) prev.hidden = false; send.disabled = false;
+      setSendError("Couldn't send your photo — nothing was posted. Tap Send to retry.");
+    };
     fetch(url, { method: 'POST', credentials: 'include', body: fd })   // no Content-Type → browser sets boundary
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
       .then(function (res) {
-        if (!res.ok) {                                  // keep staged file + text for retry
-          a.style.opacity = '.4'; if (tb) tb.style.opacity = '.4';
-          ta.value = savedText; if (prev) prev.hidden = false; send.disabled = false;
-          return;
-        }
+        if (!res.ok) { failed(); return; }
         clearFile();                                    // success — drop staged file + preview
         var newUuid = res.j && (res.j.thread_uuid || (res.j.thread && res.j.thread.uuid) || res.j.uuid);
         if (!curThread && newUuid) {
@@ -463,7 +487,7 @@
         }
         if (curThread) loadThread(curThread, true);
       })
-      .catch(function () { a.style.opacity = '.4'; if (tb) tb.style.opacity = '.4'; if (prev) prev.hidden = false; send.disabled = false; });
+      .catch(failed);
   }
 
   var msgrHist = false;

@@ -371,8 +371,25 @@ function openDmWithUser(peerUuid) {
 }
 
 /* ── image attachment (compose) ── */
+/* Visible failure state for the attach send — created on demand, cleared on any
+   success / re-stage / navigation. Silent-catch left users blind (Ian 7/06: hammered
+   Send into repeated failing POSTs with zero feedback). */
+function setAttachError(msg) {
+  var compose = document.getElementById('lg-msg-compose');
+  if (!compose) return;
+  var el = compose.querySelector('.lg-msg__send-error');
+  if (!msg) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('p');
+    el.className = 'lg-msg__send-error';
+    el.setAttribute('role', 'alert');
+    compose.insertBefore(el, compose.firstChild);
+  }
+  el.textContent = msg;
+}
 function clearAttach() {
   pendingAttachFile = null;
+  setAttachError(null);
   var inp = document.getElementById('lg-msg-attach-input');
   if (inp) inp.value = '';
   var img = document.getElementById('lg-msg-attach-img');
@@ -387,6 +404,7 @@ function stageAttach(file) {
   if (!file) return;
   if (!ATTACH_TYPES[file.type]) { alert('Please choose a JPEG, PNG, or WebP image.'); return; }
   if (file.size > ATTACH_MAX)   { alert('That image is larger than 5 MB — please choose a smaller one.'); return; }
+  setAttachError(null);
   pendingAttachFile = file;
   var img = document.getElementById('lg-msg-attach-img');
   if (img) {
@@ -438,10 +456,15 @@ function sendReply() {
 
 /* Multipart send when a photo is staged. Reply → /me/messages/<uuid>/image;
    first message → /me/messages/image with to_uuid (creates the thread). Body is
-   the optional caption. On failure, the staged file + text are kept for retry. */
+   the optional caption. On failure, the staged file + text are kept for retry.
+   In-flight lockout: without it every extra Send click fired ANOTHER POST of the
+   same staged file (5 clicks = 5 uploads — Ian's repeated-404 storm on 7/06). */
+var attachSending = false;
 function sendWithAttachment(text) {
-  var input = document.getElementById('lg-msg-reply-input');
-  var file  = pendingAttachFile;
+  if (attachSending) return;
+  var input   = document.getElementById('lg-msg-reply-input');
+  var sendBtn = document.querySelector('[data-lg-send-reply]');
+  var file    = pendingAttachFile;
   if (!file) return;
 
   var fd = new FormData();
@@ -456,7 +479,10 @@ function sendWithAttachment(text) {
     fd.append('to_uuid', pendingPeerUuid);
   }
 
-  if (input) input.disabled = true;
+  attachSending = true;
+  setAttachError(null);
+  if (input)   input.disabled   = true;
+  if (sendBtn) sendBtn.disabled = true;
   /* NB: no Content-Type header — the browser sets the multipart boundary. */
   fetch(url, { method: 'POST', credentials: 'include', body: fd })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json().catch(function () { return {}; }); })
@@ -467,8 +493,15 @@ function sendWithAttachment(text) {
       pendingPeerUuid = null;
       return openDmWithUser(newDmPeer);
     })
-    .catch(function () { /* keep staged file + text for retry */ })
-    .then(function () { if (input) { input.disabled = false; input.focus(); } });
+    .catch(function () {
+      /* keep staged file + text for retry, but SAY it failed */
+      setAttachError("Couldn't send your photo — nothing was posted. Tap Send to retry.");
+    })
+    .then(function () {
+      attachSending = false;
+      if (sendBtn) sendBtn.disabled = false;
+      if (input) { input.disabled = false; input.focus(); }
+    });
 }
 
 /* lg:open-dm dispatched by Social::renderProfileActions() on /u/ pages AND by the
