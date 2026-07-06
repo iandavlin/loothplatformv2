@@ -62,9 +62,14 @@ jQuery( function ( $ ) {
      * Returns a JSON-serializable array.
      */
     function collectSections() {
-        // Sync all TinyMCE editors to their textareas before collecting
+        // Sync VISIBLE TinyMCE editors to their textareas before collecting.
+        // Never a blanket triggerSave(): when the user works in the Text tab
+        // the TinyMCE instance still exists (hidden) holding stale content, and
+        // triggerSave() would overwrite the textarea — losing pasted HTML.
         if ( typeof tinyMCE !== 'undefined' ) {
-            tinyMCE.triggerSave();
+            $.each( tinyMCE.editors, function ( i, ed ) {
+                if ( ed && ! ed.isHidden() ) { ed.save(); }
+            });
         }
 
         const sections = [];
@@ -106,9 +111,13 @@ jQuery( function ( $ ) {
 
             if ( isHtmlBlock ) {
                 const editorId = $sec.data( 'editor-id' );
-                // Try TinyMCE first (visual mode), fall back to textarea (text mode)
+                // Visible TinyMCE (Visual tab) → getContent(). Hidden or absent
+                // (Text tab) → the textarea holds the user's markup; the hidden
+                // TinyMCE instance never saw it and must not win.
                 const editor = typeof tinyMCE !== 'undefined' ? tinyMCE.get( editorId ) : null;
-                entry.html_content = editor ? editor.getContent() : $( '#' + editorId ).val() || '';
+                entry.html_content = ( editor && ! editor.isHidden() )
+                    ? editor.getContent()
+                    : ( $( '#' + editorId ).val() || '' );
                 entry.html_header  = $sec.find( '.lg-wd-html-header-input' ).val() || '';
             }
 

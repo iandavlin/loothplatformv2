@@ -2,7 +2,13 @@
 /**
  * Section template: HTML Block (WYSIWYG message)
  * Renders user-supplied HTML content with inline styles matching the email design.
- * Sanitized via wp_kses with email-safe tags.
+ *
+ * Sanitization contract: html_content is stored through wp_kses_post() at save
+ * (LG_WD_Compose), and the SAME filter is applied here. Render must never be
+ * stricter than save — a narrower render-time allow-list silently strips
+ * email-table markup (tbody/thead, td bgcolor/height, font, center …) that the
+ * composer accepted, so pasted job-board style blocks arrive mangled in the
+ * sent email. wp_kses_post keeps all email-safe table markup.
  *
  * Variables: $item (array with 'html_content' key), $settings (array)
  */
@@ -11,34 +17,7 @@ defined( 'ABSPATH' ) || exit;
 $html = $item['html_content'] ?? '';
 if ( ! $html ) return;
 
-// Allowed HTML tags safe for email clients
-$allowed = [
-    'p'      => [ 'style' => [] ],
-    'div'    => [ 'style' => [] ],
-    'span'   => [ 'style' => [] ],
-    'strong' => [ 'style' => [] ],
-    'b'      => [],
-    'em'     => [ 'style' => [] ],
-    'i'      => [],
-    'a'      => [ 'href' => [], 'style' => [], 'target' => [] ],
-    'br'     => [],
-    'ul'     => [ 'style' => [] ],
-    'ol'     => [ 'style' => [] ],
-    'li'     => [ 'style' => [] ],
-    'h1'     => [ 'style' => [] ],
-    'h2'     => [ 'style' => [] ],
-    'h3'     => [ 'style' => [] ],
-    'h4'     => [ 'style' => [] ],
-    'img'    => [ 'src' => [], 'alt' => [], 'width' => [], 'height' => [], 'style' => [] ],
-    'table'  => [ 'width' => [], 'cellpadding' => [], 'cellspacing' => [], 'border' => [], 'style' => [], 'align' => [] ],
-    'tr'     => [ 'style' => [] ],
-    'td'     => [ 'width' => [], 'style' => [], 'valign' => [], 'align' => [], 'colspan' => [] ],
-    'th'     => [ 'width' => [], 'style' => [], 'valign' => [], 'align' => [], 'colspan' => [] ],
-    'hr'     => [ 'style' => [] ],
-    'blockquote' => [ 'style' => [] ],
-];
-
-$content = wp_kses( $html, $allowed );
+$content = wp_kses_post( $html );
 
 // Apply inline styles to match the email's typography
 // Paragraphs

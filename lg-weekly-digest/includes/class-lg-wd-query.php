@@ -10,6 +10,9 @@ defined( 'ABSPATH' ) || exit;
  */
 class LG_WD_Query {
 
+    /** Post-meta cache key for the resolved 16:9 YouTube thumb (see video_thumb_fix). */
+    const YT_THUMB_META = '_lg_wd_yt_thumb';
+
     // ── Mode 1: Auto-populate ────────────────────────────────────────────────
 
     /**
@@ -346,6 +349,9 @@ class LG_WD_Query {
             }
         }
 
+        // Video posts: swap letterboxed 4:3 stills for a true 16:9 source
+        $thumb_url = self::video_thumb_fix( $post, $thumb_url );
+
         $tier = self::get_tier( $post->ID );
 
         return [
@@ -360,6 +366,116 @@ class LG_WD_Query {
             'tier_slug'  => $tier['slug'],
             'tier_label' => $tier['label'],
         ];
+    }
+
+    // ── Video thumbnail rescue ───────────────────────────────────────────────
+
+    /**
+     * Rescue letterboxed video thumbnails ("black bands top/bottom").
+     *
+     * The video ingest historically saved hero images from YouTube's 4:3
+     * stills (sddefault 640x480 / hqdefault 480x360), which carry the 16:9
+     * frame letterboxed inside — black bars baked into the file. The email
+     * card renders thumbs at natural aspect, so the bars show (and the same
+     * thumb_url feeds the web view and the PDF).
+     *
+     * When the stored thumb is missing or letterbox-suspect AND the post has a
+     * resolvable YouTube ID, use a true 16:9 source instead: maxresdefault
+     * (1280x720) when it exists, else mqdefault (320x180 — always present, no
+     * bars). The probe result is cached in post meta so the HTTP HEAD runs at
+     * most once per post; a later hand-set 16:9 featured image always wins
+     * because non-suspect thumbs return before the cache is consulted.
+     */
+    private static function video_thumb_fix( \WP_Post $post, string $thumb_url ): string {
+        if ( $thumb_url && ! self::thumb_is_letterbox_suspect( $post, $thumb_url ) ) {
+            return $thumb_url;
+        }
+
+        $cached = get_post_meta( $post->ID, self::YT_THUMB_META, true );
+        if ( is_string( $cached ) && $cached !== '' ) {
+            return $cached;
+        }
+
+        $yt_id = self::youtube_id_for_post( $post );
+        if ( ! $yt_id ) {
+            return $thumb_url;
+        }
+
+        $base     = 'https://i.ytimg.com/vi/' . rawurlencode( $yt_id ) . '/';
+        $resolved = $base . 'mqdefault.jpg'; // 320x180, exists for every video
+
+        $head = wp_remote_head( $base . 'maxresdefault.jpg', [ 'timeout' => 3 ] );
+        if ( is_wp_error( $head ) ) {
+            // Network hiccup: use what we have this render, don't cache a guess.
+            return $thumb_url ?: $resolved;
+        }
+        if ( 200 === (int) wp_remote_retrieve_response_code( $head ) ) {
+            $resolved = $base . 'maxresdefault.jpg';
+        }
+
+        update_post_meta( $post->ID, self::YT_THUMB_META, $resolved );
+        return $resolved;
+    }
+
+    /**
+     * Is this thumb likely a letterboxed 4:3 YouTube-derived still?
+     * - Any URL to YouTube's 4:3 stills (default/hqdefault/sddefault) is.
+     * - For VIDEO posts only, a featured image with a 4:3-ish aspect is
+     *   (the ingest re-encoded sddefault to <slug>-hero.webp at 640x480).
+     *   Other CPTs keep their 4:3 photos — those are legitimate.
+     */
+    private static function thumb_is_letterbox_suspect( \WP_Post $post, string $thumb_url ): bool {
+        if ( preg_match( '#(?:i\.ytimg\.com|img\.youtube\.com)/vi/[^/]+/(?:default|hqdefault|sddefault)\.jpg#i', $thumb_url ) ) {
+            return true;
+        }
+
+        if ( $post->post_type !== 'post-type-videos' ) {
+            return false;
+        }
+
+        $thumb_id = (int) get_post_thumbnail_id( $post->ID );
+        if ( ! $thumb_id ) {
+            return false;
+        }
+        $meta = wp_get_attachment_metadata( $thumb_id );
+        $w    = (int) ( $meta['width'] ?? 0 );
+        $h    = (int) ( $meta['height'] ?? 0 );
+
+        return $w > 0 && $h > 0 && ( $w / $h ) < 1.55;
+    }
+
+    /**
+     * Find the post's YouTube video ID. Managed video posts carry the source
+     * URL in _lg_layout_v2 meta (_meta.source; meta may be a JSON string from
+     * the FE editor or an array from CLI import) — fall back to scanning the
+     * whole layout and post_content for any YouTube URL/still.
+     */
+    private static function youtube_id_for_post( \WP_Post $post ): string {
+        $haystacks = [];
+
+        $layout = get_post_meta( $post->ID, '_lg_layout_v2', true );
+        if ( is_string( $layout ) && $layout !== '' ) {
+            $decoded = json_decode( $layout, true );
+            $layout  = is_array( $decoded ) ? $decoded : [];
+        }
+        if ( is_array( $layout ) && $layout ) {
+            $haystacks[] = (string) ( $layout['_meta']['source'] ?? '' );
+            // Unescaped slashes so youtu.be/<id> URLs inside blocks (embed,
+            // callout chapter links …) stay regex-matchable.
+            $haystacks[] = (string) wp_json_encode( $layout, JSON_UNESCAPED_SLASHES );
+        }
+        $haystacks[] = (string) $post->post_content;
+
+        foreach ( $haystacks as $haystack ) {
+            if ( $haystack === '' ) {
+                continue;
+            }
+            if ( preg_match( '#(?:youtu\.be/|youtube\.com/(?:watch\?[^"\'\s]*v=|embed/|shorts/)|(?:i\.ytimg\.com|img\.youtube\.com)/vi/)([A-Za-z0-9_-]{11})#', $haystack, $m ) ) {
+                return $m[1];
+            }
+        }
+
+        return '';
     }
 
     /**

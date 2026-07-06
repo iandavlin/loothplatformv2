@@ -3,7 +3,7 @@
  * Plugin Name: LG Weekly Digest
  * Plugin URI:  https://loothgroup.com
  * Description: Curated weekly digest email with pluggable sender support. Compose issues from any registered CPT, preview inline, and send via FluentCRM or wp_mail.
- * Version:     3.0.0
+ * Version:     3.0.1
  * Author:      The Looth Group
  * License:     GPL-2.0+
  */
@@ -13,7 +13,7 @@ defined( 'ABSPATH' ) || exit;
 // ─────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────
-define( 'LG_WD_VERSION',    '3.0.0' );
+define( 'LG_WD_VERSION',    '3.0.1' );
 define( 'LG_WD_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LG_WD_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'LG_WD_OPTION_KEY', 'lg_wd_settings' );
