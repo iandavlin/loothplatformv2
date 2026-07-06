@@ -110,7 +110,10 @@ lg_shared_render_site_header([
 <div class="dir-header">Members <span class="dir-meta" id="dir-meta">loading…</span>
   <div class="dir-viewtoggle" id="dir-viewtoggle" role="group" aria-label="Map or card view">
     <button type="button" data-view="map"   class="<?= $view==='map'?'on':'' ?>" aria-pressed="<?= $view==='map'?'true':'false' ?>">Map</button>
-    <button type="button" data-view="cards" class="<?= $view==='cards'?'on':'' ?>" aria-pressed="<?= $view==='cards'?'true':'false' ?>">Cards</button>
+    <?php /* One mode, two labels: desktop says "Cards", ≤640 says "List" (mobile
+             idiom — same view=cards, same localStorage.dirView contract). Span
+             pair swapped by directory.css / mobile-directory.css. */ ?>
+    <button type="button" data-view="cards" class="<?= $view==='cards'?'on':'' ?>" aria-pressed="<?= $view==='cards'?'true':'false' ?>"><span class="vt-dt">Cards</span><span class="vt-mb">List</span></button>
   </div>
 </div>
 <div id="dir-map" class="dir-map" aria-hidden="true"></div>

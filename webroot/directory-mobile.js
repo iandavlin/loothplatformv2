@@ -32,6 +32,23 @@
   if (path.indexOf('/directory') !== 0) return;
   function isMobile() { return window.matchMedia('(max-width:640px)').matches; }
   if (!isMobile()) return;
+
+  // ---- gate: Cards/List (mapless) mode — parity with directory-desktop.js ----
+  // In cards mode there is no map (the server hides #dir-map and never inits
+  // Leaflet), so the full-stage takeover below would strand the user on a blank
+  // band with the chrome — and the Map⇄List toggle — hidden. Bail and let the
+  // canonical markup + mobile-directory.css render the plain list: header with
+  // the view toggle, stacked filterbar, single-column cards, numbered pager.
+  // The toggle full-navigates between modes, so the body class is authoritative
+  // at load time (this script is injected post-DOMContentLoaded).
+  function isCardsMode() {
+    try {
+      if (document.body && document.body.classList.contains('dir--cards')) return true;
+      return new URLSearchParams(location.search).get('view') === 'cards';
+    } catch (e) { return false; }
+  }
+  if (isCardsMode()) return;
+
   window.__loothDirMobile = true;
 
   // Buck 2026-06-08: on the members page the shared top bar is HIDDEN so the map
@@ -352,14 +369,37 @@
     sheetEl.id = 'lgdm-sheet';
     sheetEl.innerHTML =
       '<div class="lgdm-grab" id="lgdm-grab"><span class="lgdm-grab__bar"></span></div>' +
-      '<div class="lgdm-shd"><span class="lgdm-shd__ttl">Members <span class="lgdm-shd__meta" id="lgdm-meta"></span></span></div>';
+      '<div class="lgdm-shd"><span class="lgdm-shd__ttl">Members <span class="lgdm-shd__meta" id="lgdm-meta"></span></span>' +
+        '<div class="lgdm-vt" id="lgdm-vt" role="group" aria-label="Map or list view">' +
+          '<button type="button" data-v="map" class="on" aria-pressed="true">Map</button>' +
+          '<button type="button" data-v="cards" aria-pressed="false">List</button>' +
+        '</div></div>';
     document.body.appendChild(sheetEl);
+
+    // Map ⇄ List toggle. This layer hides .dir-header (and with it the canonical
+    // Map⇄Cards control), which is what stranded phones in one mode — so the
+    // sheet header carries the mobile control. Same contract as the header
+    // toggle: canonical setView() persists localStorage.dirView and
+    // full-navigates with ?view= pinned and filters carried; the fallback
+    // reproduces exactly that when the page globals are unavailable.
+    var vt = document.getElementById('lgdm-vt');
+    if (vt) vt.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('button[data-v]');
+      if (!b || b.dataset.v !== 'cards') return;        // 'map' is the current mode in this layer
+      e.preventDefault(); e.stopPropagation();
+      try { if (typeof setView === 'function') { setView('cards'); return; } } catch (e2) {}
+      try { localStorage.setItem('dirView', 'cards'); } catch (e3) {}
+      window.location.assign('/directory/members?view=cards');
+    });
     // Move the real results app inside the sheet (scroll area).
     sheetEl.appendChild(dirApp);
     setFrac(SNAP.half);                               // default: half
 
     var grab = document.getElementById('lgdm-grab');
     function down(e) {
+      // Taps on the Map⇄List toggle are clicks, not drags — preventDefault here
+      // would swallow the click on touch devices.
+      if (e.target && e.target.closest && e.target.closest('.lgdm-vt')) return;
       dragging = true; sheetEl.classList.add('dragging');
       startY = (e.touches ? e.touches[0].clientY : e.clientY);
       startFrac = parseFloat(sheetEl.dataset.frac || SNAP.half);
@@ -607,7 +647,12 @@
       '#lgdm-sheet.dragging{transition:none}',
       '.lgdm-grab{flex:0 0 auto;display:flex;justify-content:center;padding:9px 0 5px;cursor:grab;touch-action:none}',
       '.lgdm-grab__bar{width:42px;height:5px;border-radius:3px;background:#cfcabb}',
-      '.lgdm-shd{flex:0 0 auto;padding:2px 16px 10px;border-bottom:1px solid var(--lg-line,#e3ddd0)}',
+      '.lgdm-shd{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 12px 8px 16px;border-bottom:1px solid var(--lg-line,#e3ddd0)}',
+      /* Map ⇄ List segmented control — right edge of the sheet header, ≥40px tap targets,
+         visible at every snap incl. the hidden pull-tab state */
+      '.lgdm-vt{flex:0 0 auto;display:flex;border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;overflow:hidden;background:#fff}',
+      '.lgdm-vt button{border:0;background:none;font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b);padding:0 16px;min-height:40px;cursor:pointer}',
+      '.lgdm-vt button.on{background:var(--lg-sage-d,#6b7c52);color:#fff}',
       '.lgdm-shd__ttl{font:700 17px/1.1 var(--lg-font-serif,Georgia,serif);color:var(--lg-charcoal,#1a1d1a)}',
       '.lgdm-shd__meta{font:13px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b);font-weight:400;margin-left:2px}',
       /* the relocated results app becomes the scroll area */

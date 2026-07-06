@@ -102,6 +102,8 @@ body { background: var(--lg-cream); color: var(--lg-ink); }
 }
 .dir-viewtoggle button + button { border-left: 1px solid var(--lg-line); }
 .dir-viewtoggle button.on { background: var(--lg-sage-d, #6b7c52); color: #fff; }
+/* Cards-button label pair: desktop shows "Cards"; mobile-directory.css flips to "List". */
+.dir-viewtoggle .vt-mb { display: none; }
 
 /* Mapless mode: drop the map entirely so the cards own the viewport. */
 body.dir--cards .dir-map { display: none; }

@@ -38,6 +38,17 @@
    * screens so the title + toggle don't collide. */
   .dir-header { flex-wrap: wrap; }
   .dir-viewtoggle button { padding: 8px 16px; }
+  /* ≤640 the cards mode is presented as "List" (mobile idiom; same view=cards +
+   * localStorage.dirView contract — only the label differs from desktop's "Cards"). */
+  .dir-viewtoggle .vt-dt { display: none; }
+  .dir-viewtoggle .vt-mb { display: inline; }
+
+  /* Anon join CTA: clear the bottom tab bar (54px + safe area) and, in map mode,
+   * beat the results sheet (z 1400) — at desktop z 1100 it sat buried behind it. */
+  .dir-join-card {
+    bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+    z-index: 1450;
+  }
 
   /* Numbered pager: larger tap targets, centered, wraps. */
   .dir-pager { gap: 8px; }
