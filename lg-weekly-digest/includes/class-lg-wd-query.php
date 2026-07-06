@@ -460,7 +460,9 @@ class LG_WD_Query {
         }
         if ( is_array( $layout ) && $layout ) {
             $haystacks[] = (string) ( $layout['_meta']['source'] ?? '' );
-            $haystacks[] = (string) wp_json_encode( $layout );
+            // Unescaped slashes so youtu.be/<id> URLs inside blocks (embed,
+            // callout chapter links …) stay regex-matchable.
+            $haystacks[] = (string) wp_json_encode( $layout, JSON_UNESCAPED_SLASHES );
         }
         $haystacks[] = (string) $post->post_content;
 
