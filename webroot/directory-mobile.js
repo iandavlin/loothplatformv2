@@ -98,15 +98,41 @@
     try { if (typeof dirMap !== 'undefined' && dirMap && dirMap.invalidateSize) dirMap.invalidateSize(true); } catch (e) {}
   }
 
-  // Default map view: center on Dan Erlewine's shop (Athens, OH) on first load —
-  // Buck 2026-06-08. Waits for the page's pin load (its world-fit fitBounds) then
-  // overrides it ONCE; skips if the user has already searched a location.
+  // Default map view: the visitor's approximate (IP) location framed at ~100
+  // miles, when Cloudflare's visitor-location headers reached the server —
+  // directory-members.php validates/clamps them into data-geo-* attrs on
+  // #dir-map. Headers absent/invalid (transform off, non-CF hit, unknown IP)
+  // → Dan Erlewine's shop (Athens, OH — Buck 2026-06-08) exactly as before.
+  // Same machinery either way: waits for the page's pin load (its world-fit
+  // fitBounds) then overrides it ONCE; skips if the user already searched.
+  function visitorGeo() {
+    try {
+      var el = document.getElementById('dir-map');
+      if (!el) return null;
+      var la = parseFloat(el.getAttribute('data-geo-lat')),
+          ln = parseFloat(el.getAttribute('data-geo-lng'));
+      if (!isFinite(la) || !isFinite(ln) || la < -90 || la > 90 || ln < -180 || ln > 180) return null;
+      return { lat: la, lng: ln };
+    } catch (e) { return null; }
+  }
   function centerOnDefault() {
-    var DAN = { lat: 39.3, lng: -82.1, z: 8 }, tries = 0;
+    var DAN = { lat: 39.3, lng: -82.1, z: 8 }, geo = visitorGeo(), tries = 0;
     function searched() { var loc = document.getElementById('dir-loc'), lat = document.getElementById('dir-lat'); return (loc && loc.value.trim()) || (lat && lat.value); }
     function place() {
       if (searched()) return;
-      try { if (typeof dirMap !== 'undefined' && dirMap) { dirMap.stop(); dirMap.setView([DAN.lat, DAN.lng], DAN.z, { animate: false }); } } catch (e) {}
+      try {
+        if (typeof dirMap === 'undefined' || !dirMap) return;
+        dirMap.stop();
+        if (geo) {
+          // ±100 mi box: 1° lat ≈ 69 mi; 1° lng ≈ 69·cos(lat) mi. Floor the
+          // cosine so extreme latitudes can't stretch the box to a world view.
+          var dLat = 100 / 69;
+          var dLng = 100 / (69 * Math.max(0.2, Math.cos(geo.lat * Math.PI / 180)));
+          dirMap.fitBounds([[geo.lat - dLat, geo.lng - dLng], [geo.lat + dLat, geo.lng + dLng]], { animate: false });
+        } else {
+          dirMap.setView([DAN.lat, DAN.lng], DAN.z, { animate: false });
+        }
+      } catch (e) {}
     }
     (function tick() {
       if (window.__lgDirCentered) return;
@@ -115,7 +141,7 @@
       try { hasPins = (typeof pinMarkerBySlug !== 'undefined' && pinMarkerBySlug && Object.keys(pinMarkerBySlug).length > 0); } catch (e) {}
       if (typeof dirMap !== 'undefined' && dirMap && dirMap.setView && hasPins) {
         window.__lgDirCentered = true;
-        place();                       // cancel the in-flight world fitBounds + center on Dan
+        place();                       // cancel the in-flight world fitBounds + apply the default view
         setTimeout(place, 500);        // re-assert past the fitBounds animation
         setTimeout(place, 1100);       // …and any late second fit
         return;

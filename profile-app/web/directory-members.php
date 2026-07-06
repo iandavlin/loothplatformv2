@@ -120,7 +120,27 @@ lg_shared_render_site_header([
     <button type="button" data-view="cards" class="<?= $view==='cards'?'on':'' ?>" aria-pressed="<?= $view==='cards'?'true':'false' ?>"><span class="vt-dt">Cards</span><span class="vt-mb">List</span></button>
   </div>
 </div>
-<div id="dir-map" class="dir-map" aria-hidden="true"></div>
+<?php
+// Visitor's approximate coords from Cloudflare's "Add visitor location headers"
+// managed transform (zone toggle; absent until Ian enables it → attrs simply
+// don't render and the map keeps its current default view). Consumed by the
+// MOBILE layer only (directory-mobile.js geo-init); desktop ignores the attrs.
+// Untrusted input: floats only, clamped to valid ranges, both-or-neither, and
+// (0,0) — Cloudflare's "unknown" — dropped.
+$geoLat = $geoLng = null;
+if (isset($_SERVER['HTTP_CF_IPLATITUDE'], $_SERVER['HTTP_CF_IPLONGITUDE'])
+    && is_numeric($_SERVER['HTTP_CF_IPLATITUDE']) && is_numeric($_SERVER['HTTP_CF_IPLONGITUDE'])) {
+    $la = (float)$_SERVER['HTTP_CF_IPLATITUDE'];
+    $ln = (float)$_SERVER['HTTP_CF_IPLONGITUDE'];
+    if ($la >= -90 && $la <= 90 && $ln >= -180 && $ln <= 180 && !($la === 0.0 && $ln === 0.0)) {
+        $geoLat = $la;
+        $geoLng = $ln;
+    }
+}
+?>
+<div id="dir-map" class="dir-map" aria-hidden="true"<?= $geoLat !== null
+    ? ' data-geo-lat="' . sprintf('%.4F', $geoLat) . '" data-geo-lng="' . sprintf('%.4F', $geoLng) . '"'
+    : '' ?>></div>
 <?php if (!($_whoami['authenticated'] ?? false)): ?>
 <?php /* Strava-pattern anon map (Ian 6/12): real aggregated density, zero
          identity; this card is the unlock moment. */ ?>
