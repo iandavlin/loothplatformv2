@@ -9,5 +9,7 @@ Disallow: /thumb/
 Disallow: /mailpit/
 Disallow: /*?lg_edit=1
 Disallow: /*?lg_comments=1
+# Faceted Hub filter URLs (sort/cat/leaf combinations) — infinite crawl space, never indexable
+Disallow: /hub/?
 
 Sitemap: https://loothgroup.com/sitemap.xml
