@@ -1014,11 +1014,26 @@ class LGPO_Sync_Engine {
      * ----------------------------------------------------------------*/
 
     /**
-     * Email the admin a sync summary.
+     * Email Ian a role-change digest for the sync run.
+     *
+     * Sends ONLY when at least one role change actually APPLIED (effective
+     * role transitioned) — never on steady-state sweeps, and not on
+     * errors-only sweeps either: persistent per-member errors would repeat
+     * hourly (the exact noise this gate exists to prevent), and role-apply
+     * failures already alert Ian individually via lgpo_notify_failure.
+     *
+     * Recipient is lgpo_contact_email (Ian), falling back to admin_email —
+     * same resolution as lgpo_alert_failure. Tagged X-LG-Poller-Intent:
+     * notify so it passes the poller mail gate (Plugin::gateOutboundMail)
+     * and the killswitch mu-plugin regardless of lgms_poller_mail_enabled;
+     * that flag governs member-facing bulk mail and stays untouched.
      */
     private static function send_summary( array $results, bool $is_auto, array $stats = [] ): void {
-        $admin_email = get_option( 'admin_email' );
-        if ( ! $admin_email ) {
+        $to = (string) get_option( 'lgpo_contact_email', '' );
+        if ( $to === '' ) {
+            $to = (string) get_option( 'admin_email', '' );
+        }
+        if ( $to === '' ) {
             return;
         }
 
@@ -1026,11 +1041,7 @@ class LGPO_Sync_Engine {
         $errors     = $results['errors'] ?? [];
         $reconciled = $results['reconciled'] ?? [];
 
-        // Only email when something actually changed or failed. A steady-state
-        // sweep (no net role changes, no errors) is a no-op and must NOT email
-        // admin every hour — unconditional send on no-op sweeps is the root
-        // cause of the hourly "Patreon Sync Report" noise.
-        if ( empty( $applied ) && empty( $errors ) ) {
+        if ( empty( $applied ) ) {
             return;
         }
 
@@ -1083,8 +1094,10 @@ class LGPO_Sync_Engine {
         }
 
         // Explicit UTF-8 so the "—" / "→" in messages never mojibake.
-        $headers = [ 'Content-Type: text/plain; charset=UTF-8' ];
-        wp_mail( $admin_email, $subject, implode( "\n", $lines ), $headers );
+        // X-LG-Poller-Intent: notify = the agreed operator-notification bypass
+        // marker (see lgpo_alert_failure / Plugin::gateOutboundMail).
+        $headers = [ 'Content-Type: text/plain; charset=UTF-8', 'X-LG-Poller-Intent: notify' ];
+        wp_mail( $to, $subject, implode( "\n", $lines ), $headers );
     }
 
     /* ------------------------------------------------------------------
