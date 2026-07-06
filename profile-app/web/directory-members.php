@@ -83,11 +83,15 @@ $_whoami = Whoami::resolve();
 <link rel="stylesheet" href="/profile/edit/directory.css?v=<?= @filemtime(__DIR__ . '/directory.css') ?: '1' ?>">
 <!-- 640 split: mobile (≤640) overrides, Buck-owned, media-gated so they paint on first load without a JS-injection flash. -->
 <link rel="stylesheet" media="(max-width:640px)" href="/profile/edit/mobile-directory.css?v=<?= @filemtime(__DIR__ . '/mobile-directory.css') ?: '1' ?>">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
+<?php /* Leaflet 1.9.4 + markercluster 1.5.3, vendored (webroot/lib/leaflet — monorepo
+         law: no unpkg CDN runtime dependency). NOTE for future bumps: deploy.sh's
+         webroot rsync EXCLUDES 'vendor', hence lib/. Other surfaces (u.php, p.php,
+         fp-map.js, profile/practice-sheet.js) still load unpkg — migrate separately. */ ?>
+<link rel="stylesheet" href="/lib/leaflet/leaflet.css">
+<link rel="stylesheet" href="/lib/leaflet/MarkerCluster.css">
+<link rel="stylesheet" href="/lib/leaflet/MarkerCluster.Default.css">
+<script src="/lib/leaflet/leaflet.js"></script>
+<script src="/lib/leaflet/leaflet.markercluster.js"></script>
 </head>
 <body class="<?= ($_whoami['authenticated'] ?? false) ? '' : 'dir--anon' ?> <?= $view === 'cards' ? 'dir--cards' : 'dir--map' ?>">
 <?php
