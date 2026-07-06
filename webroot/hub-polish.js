@@ -3205,7 +3205,14 @@
       return;
     }
     var sh = document.getElementById('looth-rep-sheet');
-    if (sh && sh.classList.contains('is-open')) lrsClose(true);
+    if (sh && sh.classList.contains('is-open')) {
+      // Flag-free per the §4f doctrine: only close when the live URL left the
+      // topic state. A pop INTO ?topic= (forward-nav) may have just (re)opened
+      // the sheet via forums.js's own popstate handler — leave it alone.
+      var popDl = window.lgTopicDeepLink;
+      if (popDl && popDl.hasParam()) return;
+      lrsClose(true);
+    }
   });
   function lrsEnhance(full) { try { revealReplyImages(full); enhanceReplyReactions(full); } catch (e) {} }
   // The sheet shows the WHOLE drained thread — that rendered count is the truth
