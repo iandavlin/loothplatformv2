@@ -429,7 +429,9 @@ $fh_image      = $forum['header_image_url'] ?: null;
     </div>
   </div>
 
-  <?php $lg_topic_share_url = $public_path . '/' . $forum['slug'] . '/' . $topic['slug'] . '/'; ?>
+  <?php // Share hands out the FEED DEEP LINK (?topic= → dmodal/sheet over /hub/),
+        // not this page's own permalink — this canonical page stays for SEO/no-JS.
+        $lg_topic_share_url = $public_path . '/?topic=' . rawurlencode($forum['slug'] . '/' . $topic['slug']); ?>
   <div class="thread__util">
     <span><?= $reply_count ?> repl<?= $reply_count === 1 ? 'y' : 'ies' ?></span>
     <div class="thread__util-acts">

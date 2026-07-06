@@ -1494,6 +1494,11 @@ $header_cat = $scoped_forum
     </article>
     <?php continue; endif;
       $turl        = feed_topic_url($topic);
+      // Share hands out the FEED DEEP LINK (?topic= → §4f dmodal on desktop, the
+      // hub-polish sheet on mobile), not the standalone page; data-href/<a href>
+      // keep the canonical /hub/<forum>/<topic>/ permalink for SEO + no-JS.
+      // Encoded-slash shape matches the digest's add_query_arg + pushState URLs.
+      $tshare      = htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/?topic=' . rawurlencode($topic['forum_slug'] . '/' . $topic['topic_slug']));
       $ctx         = feed_ctx($topic);
       $rtime       = $topic['event_time'] ? feed_rel_time($topic['event_time']) : '—';
       $start_time  = $topic['created_at'] ? feed_rel_time($topic['created_at']) : '—';
@@ -1552,7 +1557,7 @@ $header_cat = $scoped_forum
         : '';
     ?>
     <article class="feed-card feed-card--topic" data-lg-card="1"
-             data-id="<?= $topic_id ?>" data-type="discussion" data-href="<?= $turl ?>" data-share-url="<?= $turl ?>" data-gated="0"
+             data-id="<?= $topic_id ?>" data-type="discussion" data-href="<?= $turl ?>" data-share-url="<?= $tshare ?>" data-gated="0"
              data-cat="<?= htmlspecialchars($cat_key) ?>" data-topic-id="<?= $topic_id ?>" data-forum-id="<?= (int)$topic['forum_id'] ?>" data-author-id="<?= (int)($topic['author_id'] ?? 0) ?>" data-reply-count="<?= $reply_count ?>">
       <?php $av_href = $author_slug ? '/u/' . rawurlencode((string)$author_slug) : null;
             $av_t    = bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 40, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null); ?>

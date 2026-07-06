@@ -460,9 +460,12 @@
     var share = row.querySelector('.lg-act-share');
     if (share) share.addEventListener('click', function () {
       var link = card.querySelector('.feed-card__title a');
-      // DISCUSSION cards carry the canonical /hub/<forum>/<topic>/ permalink on
-      // data-share-url (_feed.php); prefer it. CPT cards have none -> title href.
+      // DISCUSSION cards carry the /hub/?topic=<forum>/<topic> DEEP LINK on
+      // data-share-url (_feed.php) — opens the dmodal/sheet over the feed;
+      // prefer it. Content cards carry their canonical post URL there instead.
       var url = card.getAttribute('data-share-url') || (link ? link.href : location.href);
+      try { url = new URL(url, location.href).href; } catch (e) {}   // clipboard fallback needs an absolute URL
+
       var title = link ? (link.textContent || '').trim() : 'Looth Hub';
       function legacyCopy() {
         try {
@@ -3173,7 +3176,17 @@
     var op = sh.querySelector('#lrs-op'); if (op) { op.innerHTML = ''; op.hidden = true; }
     // Phone back-gesture support (same pattern as the content sheet's lgCsHist).
     if (lrsHist && !fromPop) { lrsHist = false; try { history.back(); } catch (e) {} }
-    else { lrsHist = false; }
+    else {
+      lrsHist = false;
+      // Defensive twin of the dmodal's onClosed: UI close with no entry to pop but
+      // a ?topic= URL still up → scrub the param so the address bar is the feed again.
+      if (!fromPop) {
+        try {
+          var clDl = window.lgTopicDeepLink;
+          if (clDl && clDl.hasParam()) history.replaceState({}, '', clDl.feedUrl());
+        } catch (e) {}
+      }
+    }
   }
   window.addEventListener('popstate', function () {
     // The image lightbox stacks ABOVE the sheets and pushes its OWN history
@@ -3188,11 +3201,18 @@
     if (cs && cs.classList.contains('is-open')) {
       closeComposerSheet();
       var sh0 = document.getElementById('looth-rep-sheet');
-      if (sh0 && sh0.classList.contains('is-open') && lrsHist) { try { history.pushState({ lgRs: 1 }, ''); } catch (e) {} }
+      if (sh0 && sh0.classList.contains('is-open') && lrsHist) { try { history.pushState({ lgRs: 1 }, '', sh0.__lgTopicUrl || undefined); } catch (e) {} }   // keep the ?topic= URL on the re-pushed entry
       return;
     }
     var sh = document.getElementById('looth-rep-sheet');
-    if (sh && sh.classList.contains('is-open')) lrsClose(true);
+    if (sh && sh.classList.contains('is-open')) {
+      // Flag-free per the §4f doctrine: only close when the live URL left the
+      // topic state. A pop INTO ?topic= (forward-nav) may have just (re)opened
+      // the sheet via forums.js's own popstate handler — leave it alone.
+      var popDl = window.lgTopicDeepLink;
+      if (popDl && popDl.hasParam()) return;
+      lrsClose(true);
+    }
   });
   function lrsEnhance(full) { try { revealReplyImages(full); enhanceReplyReactions(full); } catch (e) {} }
   // The sheet shows the WHOLE drained thread — that rendered count is the truth
@@ -3608,7 +3628,24 @@
     var pv0 = sh.querySelector('#lrs-comp-previews'); if (pv0) pv0.innerHTML = '';
     lrsScroll = document.body.style.overflow; document.body.style.overflow = 'hidden';
     sh.classList.add('is-open');
-    if (!lrsHist) { try { history.pushState({ lgRs: 1 }, ''); lrsHist = true; } catch (e) {} }
+    // URL parity with the desktop dmodal (§4f contract in forums.js): the sheet's
+    // history entry carries /hub/?topic=<forum>/<topic> so the address bar is a
+    // copyable deep link and Back restores the feed URL. Routed opens (?topic
+    // already in the URL — cold deep-link / forward-nav, seated by §4f's
+    // routeFromUrl) ADOPT the existing entry instead of double-pushing. Cards
+    // with no parseable permalink (legacy/dynamic) keep the old bare entry.
+    if (!lrsHist) {
+      var lrsDl = window.lgTopicDeepLink;
+      var lrsFt = (lrsDl && card && card.getAttribute) ? lrsDl.ftFromHref(card.getAttribute('data-href')) : null;
+      try {
+        if (lrsDl && lrsDl.hasParam()) { sh.__lgTopicUrl = location.pathname + location.search; lrsHist = true; }
+        else if (lrsFt) {
+          sh.__lgTopicUrl = lrsDl.urlFor(lrsFt);
+          history.pushState({ lgRs: 1, lgTopic: lrsFt.forum + '/' + lrsFt.topic }, '', sh.__lgTopicUrl);
+          lrsHist = true;
+        } else { sh.__lgTopicUrl = ''; history.pushState({ lgRs: 1 }, ''); lrsHist = true; }
+      } catch (e) {}
+    }
     // Reply intent → open the FB-style composer sheet on top (focus is synchronous
     // within the originating tap so iOS honors the keyboard).
     if (opts && opts.focus) openComposerSheet({ tid: tid, fid: fid, title: ttl, focus: true });
@@ -3621,6 +3658,11 @@
     if (!tid) { (sh.querySelector('#lrs-thread') || sh.querySelector('#lrs-body')).innerHTML = '<div class="lrs-note">Couldn’t load replies.</div>'; return; }
     lrsLoadThread(tid);
   }
+  // Public sheet opener — forums.js §4f routes mobile ?topic= deep-links (cold
+  // load + forward-nav) here so a shared link opens the sheet over the feed
+  // instead of bouncing to the legacy page. Card = a .feed-card element, real or
+  // §4f-synthetic, carrying data-topic-id/data-forum-id/data-href.
+  window.lgOpenTopicMobile = function (card, opts) { openRepliesSheet(card, opts); };
   // Post a top-level reply to the topic, then reload the thread to show it.
   function lrsSubmit(sh) {
     var inp = sh.querySelector('#lrs-comp-input'), send = sh.querySelector('#lrs-comp-send'), status = sh.querySelector('#lrs-comp-status');
