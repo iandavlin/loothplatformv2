@@ -648,6 +648,14 @@ body.lg-sm-open { overflow: hidden; }
   color: #fff;
 }
 .lg-msg__send-btn:hover { background: var(--lg-sage-d, #6b7c52); }
+/* attach-send in-flight: spinner replaces the send icon (class set by social-modals.js) */
+.lg-msg__send-btn--sending svg { display: none; }
+.lg-msg__send-btn--sending::after {
+  content: ''; width: 14px; height: 14px;
+  border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%;
+  animation: lg-msg-send-spin .7s linear infinite;
+}
+@keyframes lg-msg-send-spin { to { transform: rotate(360deg); } }
 
 /* ── Connections ── */
 .lg-conn__section-h {

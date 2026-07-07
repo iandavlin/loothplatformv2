@@ -482,7 +482,13 @@ function sendWithAttachment(text) {
   attachSending = true;
   setAttachError(null);
   if (input)   input.disabled   = true;
-  if (sendBtn) sendBtn.disabled = true;
+  if (sendBtn) {
+    /* visible in-flight state (Ian 7/06): spinner replaces the send icon —
+       a disabled button alone reads as "nothing happened" during a slow upload */
+    sendBtn.disabled = true;
+    sendBtn.classList.add('lg-msg__send-btn--sending');
+    sendBtn.setAttribute('aria-busy', 'true');
+  }
   /* NB: no Content-Type header — the browser sets the multipart boundary. */
   fetch(url, { method: 'POST', credentials: 'include', body: fd })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json().catch(function () { return {}; }); })
@@ -499,7 +505,11 @@ function sendWithAttachment(text) {
     })
     .then(function () {
       attachSending = false;
-      if (sendBtn) sendBtn.disabled = false;
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.classList.remove('lg-msg__send-btn--sending');
+        sendBtn.removeAttribute('aria-busy');
+      }
       if (input) { input.disabled = false; input.focus(); }
     });
 }
