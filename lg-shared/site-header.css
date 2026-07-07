@@ -614,6 +614,15 @@ body.lg-sm-open { overflow: hidden; }
 }
 .lg-msg__attach-btn:hover { background: var(--lg-sage-tint, #eef2e3); }
 .lg-msg__attach-preview { display: flex; }
+/* display:flex above beats the UA [hidden] rule (same trap as .lg-msg-detail, Buck
+   6/11) — without this counter-rule the EMPTY preview strip renders permanently:
+   a src-less 84px img = broken thumb + "Attachment preview" alt (Ian 7/06). */
+.lg-msg__attach-preview[hidden] { display: none; }
+/* attach-send failure state (set by social-modals.js on upload failure) */
+.lg-msg__send-error {
+  margin: 0; color: var(--lg-error, #b3261e);
+  font: 12px/1.4 var(--lg-font-sans, system-ui, sans-serif);
+}
 .lg-msg__attach-thumb { position: relative; width: 84px; height: 84px; border-radius: 10px; overflow: hidden; }
 .lg-msg__attach-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .lg-msg__attach-remove {
