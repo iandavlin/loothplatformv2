@@ -10,6 +10,10 @@ packs-team/
 # Build artifacts / regenerable
 *.zip
 vendor/
+# profile-app ships its vendor (pure-PHP ramsey/uuid + firebase/php-jwt + deps, ~1.4M):
+# APP_ROOT=__DIR__ means EVERY serving tree (checkout, preview slot) must be
+# class-complete on pull, no composer step (profileapp-depin lane, 2026-07-07).
+!/profile-app/vendor/
 node_modules/
 *.log
 
