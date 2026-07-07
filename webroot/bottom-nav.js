@@ -106,6 +106,9 @@
       'overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       // active state
       '#' + BAR_ID + ' .is-active{color:var(--lg-sage-d,#6b7c52)}' +
+      // Hub tab armed (its picker sheet is open above the bar): full-slot tint
+      // so the "press again to go to the Hub" state is unmissable.
+      '#' + BAR_ID + ' .lt-armed{color:var(--lg-sage-d,#6b7c52);background:var(--lg-sage-tint,#eef2e3)}' +
       '#' + BAR_ID + ' a:active,#' + BAR_ID + ' button:active{color:var(--lg-sage,#87986a)}' +
       // ---- Big center Post button (raised, always visible) ----
       '#' + BAR_ID + ' .lt-post{flex:0 0 auto;width:64px;color:#fff !important;justify-content:flex-start}' +
@@ -331,6 +334,55 @@
     try { window.location.assign('/hub/?compose=1'); } catch (e) { window.location.href = '/hub/?compose=1'; }
   }
 
+  // ---- Hub tab picker (nav-hub-cpt-modal lane) ------------------------------
+  // The shared header (site-header.php) renders ONE #lg-hubmenu content-type
+  // picker on every page and exposes window.lgHubMenu {open,close,isOpen}.
+  // Press 1 = open({nav:true}) → sheet floats above this bar (the bar and this
+  // tab stay visible/tappable; bar z-index beats the backdrop). Press 2 = close
+  // + fall through to the tab's plain /hub/ href. Backdrop / Escape / grab-tap /
+  // swipe close WITHOUT navigating (wired in the header + enableSheetDrag here).
+  function hubApi() { return window.lgHubMenu || null; }
+  function onHubTab(e) {
+    var api = hubApi();
+    if (!api) { showTabSkeleton(); return; }         // header API absent → plain nav
+    if (api.isOpen()) { api.close(); showTabSkeleton(); return; }  // press 2 → /hub/
+    e.preventDefault();                              // press 1 → summon the picker
+    api.open({ nav: true });
+  }
+  function wireHubTab(nav, hubBtn) {
+    // Armed state mirrors the picker (nav-mode opens only; the header's own
+    // ≤820 drawer entry never arms this tab).
+    document.addEventListener('lg:hubmenu-open', function (e) {
+      if (e.detail && e.detail.nav) { hubBtn.classList.add('lt-armed'); hubBtn.setAttribute('aria-expanded', 'true'); }
+    });
+    document.addEventListener('lg:hubmenu-close', function () {
+      hubBtn.classList.remove('lt-armed'); hubBtn.setAttribute('aria-expanded', 'false');
+    });
+    // Any OTHER bar button tapped while the picker is open: close it first
+    // (capture phase), then the button does its own normal thing.
+    nav.addEventListener('click', function (e) {
+      var api = hubApi();
+      if (!api || !api.isOpen()) return;
+      var ctl = e.target && e.target.closest ? e.target.closest('a,button') : null;
+      if (ctl && ctl !== hubBtn) api.close();
+    }, true);
+    // Born swipe-closable: the picker's grab bar carries .lt-sheet__grab, so
+    // the house claim-model drag applies as-is; its LIST is the inner scroller.
+    var hubModal = document.getElementById('lg-hubmenu');
+    var hubSheet = hubModal ? hubModal.querySelector('.lg-hubmenu__sheet') : null;
+    if (hubSheet) {
+      enableSheetDrag(hubSheet, function () { var api = hubApi(); if (api) api.close(); },
+                      hubModal.querySelector('.lg-hubmenu__list'));
+      // Type-item taps are full-page navs — bridge them with the same skeleton
+      // every bar tab shows (nav-mode opens only; the drawer door has no bar).
+      hubModal.addEventListener('click', function (e) {
+        var a = e.target && e.target.closest ? e.target.closest('.lg-hubmenu__item') : null;
+        if (a && hubModal.classList.contains('lg-hubmenu--nav')) showTabSkeleton();
+      });
+    }
+  }
+  // ---- end Hub tab picker ----------------------------------------------------
+
   // 3-button bar: Nav (tray) · Post (modal) · You (profile sheet). Replaces the
   // old 5 destination tabs — destinations moved into the Nav tray so the bar can
   // give Post a big, always-visible center action and restore a Home door
@@ -352,6 +404,22 @@
     navBtn.innerHTML = '<span class="lt-ico"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.grid + '</svg></span><span class="lt-lb">Nav</span>';
     navBtn.addEventListener('click', openNav);
     nav.appendChild(navBtn);
+
+    // ---- Hub tab (nav-hub-cpt-modal lane) — two-press contract: press 1
+    // summons the shared header's #lg-hubmenu content-type picker (the SAME
+    // modal + $hub_types list site-header.php renders on every page — never a
+    // second menu) floated above this bar; press 2 while it's open falls
+    // through to plain /hub/. All picker logic lives in onHubTab/wireHubTab. --
+    var hubBtn = document.createElement('a');
+    hubBtn.href = '/hub/';
+    hubBtn.setAttribute('aria-label', 'Hub');
+    hubBtn.setAttribute('aria-haspopup', 'dialog');
+    hubBtn.setAttribute('aria-expanded', 'false');
+    hubBtn.innerHTML = '<span class="lt-ico"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.hub + '</svg></span><span class="lt-lb">Hub</span>';
+    if (/^\/(hub|stream|archive)(\/|$)/.test(location.pathname || '')) { hubBtn.classList.add('is-active'); hubBtn.setAttribute('aria-current', 'page'); }
+    hubBtn.addEventListener('click', onHubTab);
+    nav.appendChild(hubBtn);
+    // ---- end Hub tab ------------------------------------------------------
 
     // Post (big center) — pops the existing composer modal
     var postBtn = document.createElement('button');
@@ -377,6 +445,7 @@
 
     (document.body || document.documentElement).appendChild(nav);
     document.body.classList.add('has-looth-tabbar');
+    wireHubTab(nav, hubBtn);   // Hub-tab picker state sync + swipe-close (fenced below)
 
     // Notification count badge on the You tab (Instagram-style).
     var youTab = nav.querySelector('a[href="/profile/edit"]');
@@ -429,7 +498,10 @@
   // inner scroll is at the very top (scrollTop<=0). An upward move, or a downward
   // move while scrolled, is released back to native scrolling. A plain tap is never
   // claimed, so the row/link/chip under it still fires; a tap on the grab closes.
-  function enableSheetDrag(sheet, closeFn) {
+  function enableSheetDrag(sheet, closeFn, scroller) {
+    // scroller: the inner scroll surface when it isn't the sheet itself (the
+    // Hub picker scrolls its LIST, not its sheet). Defaults to the sheet.
+    var sc = scroller || sheet;
     var SLOP = 6, THRESH = 48, FLICK = 0.35;
     var startY = 0, cur = 0, tracking = false, claimed = false, onGrab = false, fromHandle = false,
         startScroll = 0, lastY = 0, lastT = 0, vy = 0;
@@ -438,7 +510,7 @@
       var t = e.target;
       onGrab = !!(t.closest && t.closest('.lt-sheet__grab'));
       fromHandle = onGrab || !!(t.closest && t.closest('.lt-sheet__head, .lt-sheet__sech'));
-      startY = lastY = ptY(e); startScroll = sheet.scrollTop || 0; lastT = e.timeStamp || 0;
+      startY = lastY = ptY(e); startScroll = sc.scrollTop || 0; lastT = e.timeStamp || 0;
       cur = 0; vy = 0; tracking = true; claimed = false;
       // NB: don't kill the transition or transform yet — only once a drag is claimed,
       // so taps and inner scrolls are left completely untouched.
@@ -452,7 +524,7 @@
         if (Math.abs(dy) < SLOP) return;                          // not enough movement to decide
         // Claim a downward dismiss only when eligible; otherwise release to native
         // scroll (so the You sheet's content still scrolls normally).
-        var eligible = fromHandle || (sheet.scrollTop <= 0 && startScroll <= 0);
+        var eligible = fromHandle || (sc.scrollTop <= 0 && startScroll <= 0);
         if (dy > 0 && eligible) { claimed = true; sheet.style.transition = 'none'; }
         else { tracking = false; return; }
       }
