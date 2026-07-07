@@ -291,9 +291,13 @@ function lg_shared_render_site_header(array $ctx): void
 }
 /* Nav mode (summoned by the bottom tab bar's Hub tab via window.lgHubMenu):
    the sheet floats ABOVE the bar so the bar — including the Hub tab that
-   summoned it — stays visible and tappable. The bar's z-index (2147481200)
-   already beats the backdrop's 300, so only the sheet needs lifting: 54px =
-   the bar's content height (bottom-nav.js H); safe-area rides on the bar. */
+   summoned it — stays visible and tappable. 54px = the bar's content height
+   (bottom-nav.js H); safe-area rides on the bar. z-index: in nav mode the
+   picker must beat page-level fixed furniture (directory results sheet 1400,
+   its search bar 1200, hub sort rails, …) but stay UNDER the bar (2147481200)
+   and the bar's own trays (2147481300+) — 2147481100 threads that needle.
+   Drawer mode keeps the base 300 (header lifts itself to 360 above it). */
+.lg-hubmenu--nav { z-index: 2147481100; }
 .lg-hubmenu--nav .lg-hubmenu__sheet {
   margin-bottom: calc(54px + env(safe-area-inset-bottom, 0px));
   padding-bottom: 0;
@@ -783,6 +787,14 @@ function lg_shared_render_site_header(array $ctx): void
       e.preventDefault();                            // 1st tap → reveal the picker
       openHubMenu();
     });
+
+    // Grab-bar taps: the tap/drag semantics live in bottom-nav.js's
+    // enableSheetDrag (tap on the grab closes, drag dismisses/snaps back).
+    // This sheet hides INSTANTLY on close (no slide-out covering the finger
+    // like the .lt-sheet trays), so the tap's synthesized click would fall
+    // through onto whatever the page shows underneath — swallow it here.
+    var hubGrab = hubModal.querySelector('.lg-hubmenu__grab');
+    if (hubGrab) hubGrab.addEventListener('touchend', function (e) { if (e.cancelable) e.preventDefault(); });
 
     // Dismiss WITHOUT navigating: backdrop, close button, Escape.
     var hubClosers = hubModal.querySelectorAll('[data-lg-hubmenu-close]');
