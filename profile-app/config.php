@@ -83,29 +83,34 @@ define('LG_PROFILE_APP_ENV', $env);
 if ($env === 'live') {
     $d_host       = 'loothgroup.com';
     $d_wp_path    = '/var/www/html';
-    $d_app_root   = '/srv/profile-app';
     $d_mysql_db   = 'looth_live';
     $d_billing_db = 'lg_membership';
 } elseif ($env === 'dev2') {
     // Prod-candidate box: identical stack to dev, only the host differs.
     $d_host       = 'dev2.loothgroup.com';
     $d_wp_path    = '/var/www/dev';
-    $d_app_root   = '/home/ubuntu/projects/profile-app';
     $d_mysql_db   = 'looth_import';
     $d_billing_db = 'lg_membership';
 } else {
     $d_host       = 'dev.loothgroup.com';
     $d_wp_path    = '/var/www/dev';
-    $d_app_root   = '/home/ubuntu/projects/profile-app';
     $d_mysql_db   = 'looth_import';
     $d_billing_db = 'lg_membership';
 }
 
-// Shared env wins; branch default is the ?? fallback. APP_ROOT stays branch-derived
-// (no shared key — /srv/profile-app is a valid symlink on the prod box).
+// Shared env wins; branch default is the ?? fallback.
 define('LG_PROFILE_APP_HOST',             $shared['host']             ?? $d_host);
 define('LG_PROFILE_APP_WP_PATH',          $shared['wp_path']          ?? $d_wp_path);
-define('LG_PROFILE_APP_APP_ROOT',         $d_app_root);
+// APP_ROOT self-resolves to the tree ACTUALLY SERVING this request. __DIR__ is
+// symlink-resolved by PHP, so a script executed via /srv/profile-app/... resolves
+// to the checkout /srv points at; a preview-slot clone resolves to ITSELF. This is
+// the true-preview isolation keystone (926cd44) landed in main: src/* classes and
+// vendor/ ALWAYS load from the same tree that served the view — never from a
+// per-branch pinned path. (The old ~/projects/profile-app pin was a hand-synced
+// shadow tree; it 500'd live on 2026-07-06 when a deploy added a class the pin
+// didn't have. vendor/ is committed for this app — .gitignore exception — so every
+// checkout is class-complete with no composer step.)
+define('LG_PROFILE_APP_APP_ROOT',         __DIR__);
 define('LG_PROFILE_APP_PG_DSN',           'pgsql:host=/var/run/postgresql;dbname=' . ($shared['pg_db_profile'] ?? 'profile_app'));
 define('LG_PROFILE_APP_MYSQL_DB',         $shared['mysql_db']         ?? $d_mysql_db);
 define('LG_PROFILE_APP_MYSQL_BILLING_DB', $shared['mysql_billing_db'] ?? $d_billing_db);

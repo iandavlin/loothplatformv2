@@ -238,7 +238,7 @@ from `/srv/<app>` symlinks. Storage verified live.
 
 | app | serves | served from | storage |
 |-----|--------|-------------|---------|
-| **profile-app** | identity/profile/map: `/u/*`, `/profile-api/v0/*`, `/profile-media/*`, `/directory/members` | `/srv/profile-app` → `~/projects/profile-app` | **PG `profile_app`** (31 tables) + media on **local disk** `/srv/profile-app-media/{avatars,banners,gallery,resumes}` (served via X-Accel) |
+| **profile-app** | identity/profile/map: `/u/*`, `/profile-api/v0/*`, `/profile-media/*`, `/directory/members` | `/srv/profile-app` → the main checkout (`~/loothplatformv2-clean` since 7/04). **Classes + vendor self-resolve from the serving tree since 7/07** (`profileapp-depin` — before that, `src/*` loaded from the hand-synced `~/projects/profile-app` pin on BOTH boxes, which 500'd live 7/06) | **PG `profile_app`** (31 tables) + media on **local disk** `/srv/profile-app-media/{avatars,banners,gallery,resumes}` (served via X-Accel) |
 | **archive-poc** | the new front `/`, hub feed/search, comments/reactions, guitardle, saved posts; standalone CPT renderer | `/srv/archive-poc` → `~/projects/archive-poc` | **PG `looth.discovery`** (12 tables) — primary reads+writes. **`index.sqlite` (11 MB) still present** as the legacy/revert mirror (dual-write era; retirement held pending soak). `config.json` = sponsors + app config. |
 | **bb-mirror** | `/hub/`, forum read/write API, SEO redirects | `/srv/bb-mirror` → `~/loothplatformv2-serve/bb-mirror` (serve clone, since 6/20) | **PG `looth.forums`** (9 tables) |
 | **events** | `/events/` | `/srv/events` → `~/projects/events` | reads WP `event` CPT / shared PG |
@@ -262,14 +262,18 @@ vhost generic static block; try_files the slot `webroot/` then falls back to the
 So the slot's `integration` branch now drives every dynamic view — front feed `/`, `/hub/`,
 `/directory/members`, `/u/`, `/p/`, `/events/`, `/whoami`, membership pages — not just the hub.
 
-- **Keystone de-pin:** `profile-app/config.php` now derives `LG_PROFILE_APP_APP_ROOT` from
-  `realpath(__DIR__)` (was hard-pinned to `~/projects/profile-app`). config.php sits at the app root
-  in EVERY tree, so the `src/*` CLASSES load from the SAME tree that served the view. Before this, a
-  slot-served view loaded its classes back from `/srv`(=main) → slot edits silently never rendered,
-  and a serve-clone flip could fatal `/whoami` site-wide. **vendor/ is gitignored** → the slot needs
-  its own `profile-app/vendor` (copied from `~/projects/profile-app/vendor`; composer is fully
-  relocatable, runtime `__DIR__`-relative, no app PSR-4). NOTE for the eventual main-merge: the serve
-  clone `~/loothplatformv2-serve/profile-app` will then ALSO need a `vendor/` or `/whoami` breaks.
+- **Keystone de-pin — ✅ LANDED IN MAIN (`profileapp-depin`, 2026-07-07):** `profile-app/config.php`
+  derives `LG_PROFILE_APP_APP_ROOT` from `__DIR__` (symlink-resolved by PHP; was hard-pinned to
+  `~/projects/profile-app` on the dev/dev2 env branches — and live runs `LG_ENV=dev2`, so the pin
+  bound BOTH boxes). config.php sits at the app root in EVERY tree, so the `src/*` CLASSES load from
+  the SAME tree that served the view. Before this, a slot-served view loaded its classes back from
+  the pin → slot edits silently never rendered, and a deploy adding a class file the pin lacked
+  fatal'd live (2026-07-06, `MessageR2.php`). **vendor/ is now COMMITTED for profile-app**
+  (`.gitignore` exception `!/profile-app/vendor/`; pure-PHP ramsey/uuid + firebase/php-jwt, fully
+  relocatable, no app PSR-4) — every checkout/clone/slot is class-complete on `git pull`, no
+  composer step, no per-slot vendor copy. The old slot-copy note is obsolete. The pinned
+  `~/projects/profile-app` trees on both boxes are INERT — soak per the retirement plan
+  (profileapp-depin report), then keeper archives them.
 - **archive-poc** keeps `LG_ARCHIVE_POC_APP_ROOT` pinned ON PURPOSE — it drives DATA (index.sqlite,
   config.json), not code; the code + front-feed rows.json load via `__DIR__` → render from the slot.
   events/membership configs have no pin and are `__DIR__`-relative.
@@ -515,8 +519,23 @@ artifacts. PROVEN byte-identical.
   deploy = `git pull`. **6/28 (lane `serve-consolidate-membership`)** closed the last gap: the
   membership pages (`strangler-membership.conf`) and the `/v2/` lg-layout-v2 asset alias still
   pointed at the dead `~/projects` repo and are now on `/srv` (serve clone). See
-  **SERVE-CONSOLIDATE-MEMBERSHIP-RUNBOOK.md**. No serve-from-git gaps remain. (bb-mirror flip was
-  commit-free; stale `bespoke-cutover` history was NOT merged.)
+  **SERVE-CONSOLIDATE-MEMBERSHIP-RUNBOOK.md**. (bb-mirror flip was commit-free; stale
+  `bespoke-cutover` history was NOT merged.) ⚠️ "No serve-from-git gaps remain" was WRONG for
+  CLASS loading: nginx served profile-app's web/api from the checkout, but its `config.php`
+  loaded `src/*` from the hand-synced `~/projects/profile-app` pin — on live too (`LG_ENV=dev2`
+  there). That shadow-copy gap 500'd live 2026-07-06 and is **closed 7/07 (`profileapp-depin`:
+  `APP_ROOT=__DIR__` + committed vendor; §8 Keystone de-pin)**.
+- **bb-mirror carries the SAME class-pin pattern (OPEN):** `bb-mirror/config.php` defaults
+  `LG_BB_MIRROR_APP_ROOT` to `/home/ubuntu/projects/bb-mirror` on the dev/dev2 branches — live
+  runs `LG_ENV=dev2`, so bb-mirror classes/schema paths may resolve to a stale tree exactly like
+  profile-app did. Needs its own de-pin lane (verify what APP_ROOT actually feeds there first).
+  archive-poc's pin is DELIBERATE (data: index.sqlite/config.json — not code) and stays.
+- **Stand-up trap (dev2 rebuilds from live AMIs):** any box image cut before 7/07 carries the
+  pinned `~/projects/profile-app` tree. After this de-pin merges, the tree is inert everywhere —
+  a rebuilt box needs NO shadow-copy step; profile-app deploy = `git pull` + FPM reload, same as
+  every other repo app. Old runbooks mentioning hand-syncing `~/projects/profile-app` are stale
+  (e.g. `profile-app/nginx-snippet.conf`, `profile-app/deploy/LIVE-DEPLOY.md` — bootstrap-era,
+  banner'd/flagged in the profileapp-depin lane).
 - **At-cut provisioning must re-apply the serve-tree ACLs** (§13): `web/assets` + archive-poc
   dir/config/sqlite write via ACL (never chown tracked paths — breaks `git pull`).
 - **MySQL `looth_dev` vs `looth_import` drift** (§10) — one billing config still names
