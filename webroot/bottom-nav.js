@@ -106,9 +106,6 @@
       'overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       // active state
       '#' + BAR_ID + ' .is-active{color:var(--lg-sage-d,#6b7c52)}' +
-      // Hub tab armed (its picker sheet is open above the bar): full-slot tint
-      // so the "press again to go to the Hub" state is unmissable.
-      '#' + BAR_ID + ' .lt-armed{color:var(--lg-sage-d,#6b7c52);background:var(--lg-sage-tint,#eef2e3)}' +
       '#' + BAR_ID + ' a:active,#' + BAR_ID + ' button:active{color:var(--lg-sage,#87986a)}' +
       // ---- Big center Post button (raised, always visible) ----
       '#' + BAR_ID + ' .lt-post{flex:0 0 auto;width:64px;color:#fff !important;justify-content:flex-start}' +
@@ -334,37 +331,32 @@
     try { window.location.assign('/hub/?compose=1'); } catch (e) { window.location.href = '/hub/?compose=1'; }
   }
 
-  // ---- Hub tab picker (nav-hub-cpt-modal lane) ------------------------------
+  // ---- Hub picker via the Nav tray (hub-picker-in-tray lane) ----------------
   // The shared header (site-header.php) renders ONE #lg-hubmenu content-type
   // picker on every page and exposes window.lgHubMenu {open,close,isOpen}.
-  // Press 1 = open({nav:true}) → sheet floats above this bar (the bar and this
-  // tab stay visible/tappable; bar z-index beats the backdrop). Press 2 = close
-  // + fall through to the tab's plain /hub/ href. Backdrop / Escape / grab-tap /
-  // swipe close WITHOUT navigating (wired in the header + enableSheetDrag here).
+  // The tray's Hub tile summons it (see buildNavTray): tray closes, picker
+  // opens; the picker's "Everything" row covers plain /hub/. There is NO bar
+  // button (Ian 7/08: bar stays Nav | + | You). Backdrop / X / Escape /
+  // grab-tap / swipe all close WITHOUT navigating (header + enableSheetDrag).
+  // MOCK GATE: 'tray' = sibling-sheet flush-bottom at tray z (a);
+  //           'nav'  = float docked above the visible bar (b).
+  // The losing variant is stripped once Ian picks.
+  var HUB_PICKER_MODE = 'tray';
   function hubApi() { return window.lgHubMenu || null; }
-  function onHubTab(e) {
+  function openHubPicker() {
     var api = hubApi();
-    if (!api) { showTabSkeleton(); return; }         // header API absent → plain nav
-    if (api.isOpen()) { api.close(); showTabSkeleton(); return; }  // press 2 → /hub/
-    e.preventDefault();                              // press 1 → summon the picker
-    api.open({ nav: true });
+    if (!api) return false;                    // header API absent → tile just navigates
+    var opts = {}; opts[HUB_PICKER_MODE] = true;
+    api.open(opts);
+    return true;
   }
-  function wireHubTab(nav, hubBtn) {
-    // Armed state mirrors the picker (nav-mode opens only; the header's own
-    // ≤820 drawer entry never arms this tab).
-    document.addEventListener('lg:hubmenu-open', function (e) {
-      if (e.detail && e.detail.nav) { hubBtn.classList.add('lt-armed'); hubBtn.setAttribute('aria-expanded', 'true'); }
-    });
-    document.addEventListener('lg:hubmenu-close', function () {
-      hubBtn.classList.remove('lt-armed'); hubBtn.setAttribute('aria-expanded', 'false');
-    });
-    // Any OTHER bar button tapped while the picker is open: close it first
-    // (capture phase), then the button does its own normal thing.
-    nav.addEventListener('click', function (e) {
+  function wireHubPicker(nav) {
+    // A bar button tapped while the picker is open: close it first (capture
+    // phase), then the button does its own normal thing. (Only reachable in
+    // float mode — in tray mode the backdrop covers the bar and closes.)
+    nav.addEventListener('click', function () {
       var api = hubApi();
-      if (!api || !api.isOpen()) return;
-      var ctl = e.target && e.target.closest ? e.target.closest('a,button') : null;
-      if (ctl && ctl !== hubBtn) api.close();
+      if (api && api.isOpen()) api.close();
     }, true);
     // Born swipe-closable: the picker's grab bar carries .lt-sheet__grab, so
     // the house claim-model drag applies as-is; its LIST is the inner scroller.
@@ -374,14 +366,15 @@
       enableSheetDrag(hubSheet, function () { var api = hubApi(); if (api) api.close(); },
                       hubModal.querySelector('.lg-hubmenu__list'));
       // Type-item taps are full-page navs — bridge them with the same skeleton
-      // every bar tab shows (nav-mode opens only; the drawer door has no bar).
+      // every tray destination shows (bar viewports only; the ≤820 header
+      // drawer door has no bar and no skeleton).
       hubModal.addEventListener('click', function (e) {
         var a = e.target && e.target.closest ? e.target.closest('.lg-hubmenu__item') : null;
-        if (a && hubModal.classList.contains('lg-hubmenu--nav')) showTabSkeleton();
+        if (a && window.matchMedia(MOBILE_MQ).matches) showTabSkeleton();
       });
     }
   }
-  // ---- end Hub tab picker ----------------------------------------------------
+  // ---- end Hub picker via the Nav tray ----------------------------------------
 
   // 3-button bar: Nav (tray) · Post (modal) · You (profile sheet). Replaces the
   // old 5 destination tabs — destinations moved into the Nav tray so the bar can
@@ -404,22 +397,6 @@
     navBtn.innerHTML = '<span class="lt-ico"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.grid + '</svg></span><span class="lt-lb">Nav</span>';
     navBtn.addEventListener('click', openNav);
     nav.appendChild(navBtn);
-
-    // ---- Hub tab (nav-hub-cpt-modal lane) — two-press contract: press 1
-    // summons the shared header's #lg-hubmenu content-type picker (the SAME
-    // modal + $hub_types list site-header.php renders on every page — never a
-    // second menu) floated above this bar; press 2 while it's open falls
-    // through to plain /hub/. All picker logic lives in onHubTab/wireHubTab. --
-    var hubBtn = document.createElement('a');
-    hubBtn.href = '/hub/';
-    hubBtn.setAttribute('aria-label', 'Hub');
-    hubBtn.setAttribute('aria-haspopup', 'dialog');
-    hubBtn.setAttribute('aria-expanded', 'false');
-    hubBtn.innerHTML = '<span class="lt-ico"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.hub + '</svg></span><span class="lt-lb">Hub</span>';
-    if (/^\/(hub|stream|archive)(\/|$)/.test(location.pathname || '')) { hubBtn.classList.add('is-active'); hubBtn.setAttribute('aria-current', 'page'); }
-    hubBtn.addEventListener('click', onHubTab);
-    nav.appendChild(hubBtn);
-    // ---- end Hub tab ------------------------------------------------------
 
     // Post (big center) — pops the existing composer modal
     var postBtn = document.createElement('button');
@@ -445,7 +422,7 @@
 
     (document.body || document.documentElement).appendChild(nav);
     document.body.classList.add('has-looth-tabbar');
-    wireHubTab(nav, hubBtn);   // Hub-tab picker state sync + swipe-close (fenced below)
+    wireHubPicker(nav);   // Hub picker swipe-close + skeleton (fenced above; tray tile summons)
 
     // Notification count badge on the You tab (Instagram-style).
     var youTab = nav.querySelector('a[href="/profile/edit"]');
@@ -825,7 +802,11 @@
       var here = navIsHere(d.key, path);
       if (here) a.classList.add('is-here');
       a.innerHTML = '<span class="lt-nico"><svg viewBox="0 0 24 24" aria-hidden="true">' + d.icon + '</svg></span><span>' + d.label + '</span>';
-      a.addEventListener('click', function () {
+      a.addEventListener('click', function (e) {
+        // Hub tile deploys the content-type picker instead of navigating
+        // (hub-picker-in-tray lane) — its "Everything" row covers plain /hub/,
+        // so no destination is lost. Header API absent → plain /hub/ nav.
+        if (d.key === 'hub' && openHubPicker()) { e.preventDefault(); closeNav(); return; }
         closeNav();
         // Tray = destinations only; Messages/Alerts moved to the You sheet.
         if (!d.ext && !here) showTabSkeleton();   // perceived-speed bridge on real nav

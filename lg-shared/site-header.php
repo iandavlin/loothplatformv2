@@ -289,19 +289,23 @@ function lg_shared_render_site_header(array $ctx): void
   margin: 0 auto -8px; padding: 13px 30px; box-sizing: content-box; background-clip: content-box;
   cursor: pointer; touch-action: none; flex: 0 0 auto;
 }
-/* Nav mode (summoned by the bottom tab bar's Hub tab via window.lgHubMenu):
-   the sheet floats ABOVE the bar so the bar — including the Hub tab that
-   summoned it — stays visible and tappable. 54px = the bar's content height
-   (bottom-nav.js H); safe-area rides on the bar. z-index: in nav mode the
-   picker must beat page-level fixed furniture (directory results sheet 1400,
-   its search bar 1200, hub sort rails, …) but stay UNDER the bar (2147481200)
-   and the bar's own trays (2147481300+) — 2147481100 threads that needle.
+/* Float mode — open({nav:true}), mock-gate variant (b): the sheet docks ABOVE
+   the bottom tab bar, which stays visible and bright. 54px = the bar's content
+   height (bottom-nav.js H); safe-area rides on the bar. z-index: beats
+   page-level fixed furniture (directory results sheet 1400, its search bar
+   1200, hub sort rails, …) but stays UNDER the bar (2147481200) and the bar's
+   own trays (2147481300+) — 2147481100 threads that needle.
    Drawer mode keeps the base 300 (header lifts itself to 360 above it). */
 .lg-hubmenu--nav { z-index: 2147481100; }
 .lg-hubmenu--nav .lg-hubmenu__sheet {
   margin-bottom: calc(54px + env(safe-area-inset-bottom, 0px));
   padding-bottom: 0;
 }
+/* Tray mode — open({tray:true}), mock-gate variant (a): sibling-sheet idiom.
+   Flush bottom at the Nav tray's own level, replacing the tray like a
+   sub-sheet — the bar dims under the backdrop exactly as it does under the
+   tray it just swapped in for (.lt-sheet z 2147481400). */
+.lg-hubmenu--tray { z-index: 2147481400; }
 /* The content type you are ALREADY viewing (marked on open from location). */
 .lg-hubmenu__item.is-current {
   background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #6b7c52);
@@ -723,10 +727,11 @@ function lg_shared_render_site_header(array $ctx): void
      (now lifted) Hub link — without choosing a type — falls through to /hub/.
      Desktop keeps the dropdown, so this is gated off entirely ≥821. Null-safe.
      hdr / btn are the header + hamburger declared at the top of this IIFE.
-     The picker is ALSO summoned by the bottom tab bar's Hub tab (bottom-nav.js)
-     through window.lgHubMenu — open({nav:true}) floats the sheet above the bar
-     (.lg-hubmenu--nav) instead of flush-bottom. ONE modal, ONE $hub_types list,
-     two doors (parity gate: never a second hand-maintained menu). */
+     The picker is ALSO summoned by the Nav tray's Hub tile (bottom-nav.js)
+     through window.lgHubMenu — open({tray:true}) = sibling-sheet flush-bottom
+     at tray level (.lg-hubmenu--tray); open({nav:true}) = docked above the
+     visible bar (.lg-hubmenu--nav). ONE modal, ONE $hub_types list, two doors
+     (parity gate: never a second hand-maintained menu). */
   var hubMq    = window.matchMedia('(max-width: 820px)');
   var hubLi    = document.querySelector('[data-lg-hassub]');
   var hubLink  = hubLi ? hubLi.querySelector('[data-lg-hub-link]') : null;
@@ -754,6 +759,7 @@ function lg_shared_render_site_header(array $ctx): void
 
     var openHubMenu = function (opts) {
       hubModal.classList.toggle('lg-hubmenu--nav', !!(opts && opts.nav));
+      hubModal.classList.toggle('lg-hubmenu--tray', !!(opts && opts.tray));
       markHubCurrent();
       hubModal.hidden = false;
       hubModal.setAttribute('aria-hidden', 'false');
@@ -771,6 +777,7 @@ function lg_shared_render_site_header(array $ctx): void
       hubModal.hidden = true;
       hubModal.setAttribute('aria-hidden', 'true');
       hubModal.classList.remove('lg-hubmenu--nav');
+      hubModal.classList.remove('lg-hubmenu--tray');
       hdr.classList.remove('lg-chrome--hubmenu-open');
       hubLi.classList.remove('is-armed');
       hubLink.setAttribute('aria-expanded', 'false');
@@ -778,7 +785,7 @@ function lg_shared_render_site_header(array $ctx): void
       try { document.dispatchEvent(new CustomEvent('lg:hubmenu-close')); } catch (err) {}
     };
 
-    // Public door (bottom-nav.js Hub tab, or any future summoner).
+    // Public door (bottom-nav.js Nav-tray Hub tile, or any future summoner).
     window.lgHubMenu = { open: openHubMenu, close: closeHubMenu, isOpen: hubMenuOpen };
 
     hubLink.addEventListener('click', function (e) {
