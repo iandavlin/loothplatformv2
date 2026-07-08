@@ -468,8 +468,13 @@
     ta.value = ''; ta.style.height = 'auto';
     setSendError(null);
     var prev = sheet.querySelector('#mg-attach-prev'); if (prev) prev.hidden = true;  // hide strip in-flight
+    // visible in-flight state (Ian 7/06): a disabled "Send" alone reads as
+    // "nothing happened" during a slow upload
+    send.textContent = 'Sending…'; send.setAttribute('aria-busy', 'true');
+    var settle = function () { send.textContent = 'Send'; send.removeAttribute('aria-busy'); };
 
     var failed = function () {                          // keep staged file + text for retry, but SAY it failed
+      settle();
       a.style.opacity = '.4'; if (tb) tb.style.opacity = '.4';
       ta.value = savedText; if (prev) prev.hidden = false; send.disabled = false;
       setSendError("Couldn't send your photo — nothing was posted. Tap Send to retry.");
@@ -478,6 +483,7 @@
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
       .then(function (res) {
         if (!res.ok) { failed(); return; }
+        settle();
         clearFile();                                    // success — drop staged file + preview
         var newUuid = res.j && (res.j.thread_uuid || (res.j.thread && res.j.thread.uuid) || res.j.uuid);
         if (!curThread && newUuid) {
