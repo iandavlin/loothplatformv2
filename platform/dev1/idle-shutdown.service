@@ -1,0 +1,14 @@
+[Unit]
+Description=Auto-shutdown on inactivity (30 min idle)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/idle-shutdown-daemon.sh
+Restart=on-failure
+RestartSec=60
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
