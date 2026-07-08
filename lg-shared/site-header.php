@@ -247,7 +247,17 @@ function lg_shared_render_site_header(array $ctx): void
    authed because the Hub is public. Items mirror $hub_types (→ HUB_TYPE_LABELS). ---- */
 .lg-hubmenu { position: fixed; inset: 0; z-index: 300; display: flex; align-items: flex-end; justify-content: center; }
 .lg-hubmenu[hidden] { display: none; }
-.lg-hubmenu__backdrop { position: absolute; inset: 0; background: rgba(26,29,26,0.45); backdrop-filter: blur(3px); }
+/* Motion = the house .lt-sheet tray idiom (Ian 7/08: "slide away like the
+   other trays"): backdrop fades (.22s ease), sheet slides from/to the bottom
+   edge (.26s cubic-bezier(.32,.72,0,1)) — the SAME numbers as bottom-nav's
+   trays, one idiom everywhere. .is-open drives both; [hidden] is only the
+   resting state, applied by JS after the slide-out ends. The sliding sheet
+   also absorbs a grab-tap's synthesized click exactly like the other trays. */
+.lg-hubmenu__backdrop {
+  position: absolute; inset: 0; background: rgba(26,29,26,0.45); backdrop-filter: blur(3px);
+  opacity: 0; transition: opacity .22s ease;
+}
+.lg-hubmenu.is-open .lg-hubmenu__backdrop { opacity: 1; }
 .lg-hubmenu__sheet {
   position: relative; z-index: 1;
   width: 100%; max-width: 560px; max-height: 72vh;
@@ -255,9 +265,10 @@ function lg_shared_render_site_header(array $ctx): void
   background: #fff; border-radius: 16px 16px 0 0;
   box-shadow: 0 -6px 28px rgba(0,0,0,0.18);
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  animation: lg-hubmenu-rise .18s ease;
+  transform: translateY(100%);
+  transition: transform .26s cubic-bezier(.32,.72,0,1);
 }
-@keyframes lg-hubmenu-rise { from { transform: translateY(14px); opacity: .5; } to { transform: none; opacity: 1; } }
+.lg-hubmenu.is-open .lg-hubmenu__sheet { transform: translateY(0); }
 .lg-hubmenu__head {
   display: flex; align-items: center; gap: 8px;
   padding: 14px 18px; border-bottom: 1px solid var(--lg-line, #e3ddd0); flex: 0 0 auto;
@@ -289,22 +300,11 @@ function lg_shared_render_site_header(array $ctx): void
   margin: 0 auto -8px; padding: 13px 30px; box-sizing: content-box; background-clip: content-box;
   cursor: pointer; touch-action: none; flex: 0 0 auto;
 }
-/* Float mode — open({nav:true}), mock-gate variant (b): the sheet docks ABOVE
-   the bottom tab bar, which stays visible and bright. 54px = the bar's content
-   height (bottom-nav.js H); safe-area rides on the bar. z-index: beats
-   page-level fixed furniture (directory results sheet 1400, its search bar
-   1200, hub sort rails, …) but stays UNDER the bar (2147481200) and the bar's
-   own trays (2147481300+) — 2147481100 threads that needle.
-   Drawer mode keeps the base 300 (header lifts itself to 360 above it). */
-.lg-hubmenu--nav { z-index: 2147481100; }
-.lg-hubmenu--nav .lg-hubmenu__sheet {
-  margin-bottom: calc(54px + env(safe-area-inset-bottom, 0px));
-  padding-bottom: 0;
-}
-/* Tray mode — open({tray:true}), mock-gate variant (a): sibling-sheet idiom.
-   Flush bottom at the Nav tray's own level, replacing the tray like a
-   sub-sheet — the bar dims under the backdrop exactly as it does under the
-   tray it just swapped in for (.lt-sheet z 2147481400). */
+/* Tray mode — open({tray:true}), Ian's pick 7/08 (sibling-sheet): flush
+   bottom at the Nav tray's own level, replacing the tray like a sub-sheet —
+   the bar dims under the backdrop exactly as it does under the tray it just
+   swapped in for (.lt-sheet z 2147481400). Drawer mode (≤820 header door)
+   keeps the base 300 (header lifts itself to 360 above it). */
 .lg-hubmenu--tray { z-index: 2147481400; }
 /* The content type you are ALREADY viewing (marked on open from location). */
 .lg-hubmenu__item.is-current {
@@ -729,15 +729,18 @@ function lg_shared_render_site_header(array $ctx): void
      hdr / btn are the header + hamburger declared at the top of this IIFE.
      The picker is ALSO summoned by the Nav tray's Hub tile (bottom-nav.js)
      through window.lgHubMenu — open({tray:true}) = sibling-sheet flush-bottom
-     at tray level (.lg-hubmenu--tray); open({nav:true}) = docked above the
-     visible bar (.lg-hubmenu--nav). ONE modal, ONE $hub_types list, two doors
-     (parity gate: never a second hand-maintained menu). */
+     at tray level (.lg-hubmenu--tray, Ian's mock-gate pick 7/08). ONE modal,
+     ONE $hub_types list, two doors (parity gate: never a second menu). */
   var hubMq    = window.matchMedia('(max-width: 820px)');
   var hubLi    = document.querySelector('[data-lg-hassub]');
   var hubLink  = hubLi ? hubLi.querySelector('[data-lg-hub-link]') : null;
   var hubModal = document.getElementById('lg-hubmenu');
   if (hdr && hubLi && hubLink && hubModal) {
-    var hubMenuOpen = function () { return !hubModal.hidden; };
+    // "Open" = the .is-open class, NOT [hidden]: during the ~300ms slide-out
+    // the element is still un-hidden but already closing — a tap then should
+    // re-OPEN (first-tap branch), never fall through to navigation.
+    var hubMenuOpen = function () { return hubModal.classList.contains('is-open'); };
+    var hubCloseTimer = null;
 
     // Mark the item matching the CURRENT view (/hub/?type=<key>; bare /hub/ =
     // "Everything") so the menu shows where you already are. Re-checked on
@@ -758,11 +761,13 @@ function lg_shared_render_site_header(array $ctx): void
     };
 
     var openHubMenu = function (opts) {
-      hubModal.classList.toggle('lg-hubmenu--nav', !!(opts && opts.nav));
+      if (hubCloseTimer) { clearTimeout(hubCloseTimer); hubCloseTimer = null; }
       hubModal.classList.toggle('lg-hubmenu--tray', !!(opts && opts.tray));
       markHubCurrent();
       hubModal.hidden = false;
       hubModal.setAttribute('aria-hidden', 'false');
+      void hubModal.offsetHeight;                  // reflow so the slide-in runs (house idiom)
+      hubModal.classList.add('is-open');
       hdr.classList.add('lg-chrome--hubmenu-open');
       hubLi.classList.add('is-armed');
       hubLink.setAttribute('aria-expanded', 'true');
@@ -774,14 +779,18 @@ function lg_shared_render_site_header(array $ctx): void
     };
 
     var closeHubMenu = function () {
-      hubModal.hidden = true;
+      hubModal.classList.remove('is-open');        // slide-out starts (sheet + backdrop transition)
       hubModal.setAttribute('aria-hidden', 'true');
-      hubModal.classList.remove('lg-hubmenu--nav');
-      hubModal.classList.remove('lg-hubmenu--tray');
       hdr.classList.remove('lg-chrome--hubmenu-open');
       hubLi.classList.remove('is-armed');
       hubLink.setAttribute('aria-expanded', 'false');
       document.body.classList.remove('lg-sm-open');
+      if (hubCloseTimer) clearTimeout(hubCloseTimer);
+      hubCloseTimer = setTimeout(function () {     // rest ([hidden]) once the .26s slide ends
+        hubModal.hidden = true;
+        hubModal.classList.remove('lg-hubmenu--tray');
+        hubCloseTimer = null;
+      }, 300);
       try { document.dispatchEvent(new CustomEvent('lg:hubmenu-close')); } catch (err) {}
     };
 

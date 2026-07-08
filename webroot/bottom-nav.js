@@ -338,26 +338,16 @@
   // opens; the picker's "Everything" row covers plain /hub/. There is NO bar
   // button (Ian 7/08: bar stays Nav | + | You). Backdrop / X / Escape /
   // grab-tap / swipe all close WITHOUT navigating (header + enableSheetDrag).
-  // MOCK GATE: 'tray' = sibling-sheet flush-bottom at tray z (a);
-  //           'nav'  = float docked above the visible bar (b).
-  // The losing variant is stripped once Ian picks.
-  var HUB_PICKER_MODE = 'tray';
+  // Placement = tray-sibling per Ian's mock-gate pick 7/08: the picker replaces
+  // the tray flush-bottom at tray z ({tray:true} → .lg-hubmenu--tray), sliding
+  // in/out on the house .lt-sheet motion (the header owns those transitions).
+  // While open the backdrop covers the bar, so bar taps just close (backdrop).
   function hubApi() { return window.lgHubMenu || null; }
   function openHubPicker() {
     var api = hubApi();
-    if (!api) return false;                    // header API absent → tile just navigates
-    var opts = {}; opts[HUB_PICKER_MODE] = true;
-    api.open(opts);
-    return true;
+    if (api) api.open({ tray: true });
   }
-  function wireHubPicker(nav) {
-    // A bar button tapped while the picker is open: close it first (capture
-    // phase), then the button does its own normal thing. (Only reachable in
-    // float mode — in tray mode the backdrop covers the bar and closes.)
-    nav.addEventListener('click', function () {
-      var api = hubApi();
-      if (api && api.isOpen()) api.close();
-    }, true);
+  function wireHubPicker() {
     // Born swipe-closable: the picker's grab bar carries .lt-sheet__grab, so
     // the house claim-model drag applies as-is; its LIST is the inner scroller.
     var hubModal = document.getElementById('lg-hubmenu');
@@ -422,7 +412,7 @@
 
     (document.body || document.documentElement).appendChild(nav);
     document.body.classList.add('has-looth-tabbar');
-    wireHubPicker(nav);   // Hub picker swipe-close + skeleton (fenced above; tray tile summons)
+    wireHubPicker();   // Hub picker swipe-close + skeleton (fenced above; tray tile summons)
 
     // Notification count badge on the You tab (Instagram-style).
     var youTab = nav.querySelector('a[href="/profile/edit"]');
@@ -806,7 +796,14 @@
         // Hub tile deploys the content-type picker instead of navigating
         // (hub-picker-in-tray lane) — its "Everything" row covers plain /hub/,
         // so no destination is lost. Header API absent → plain /hub/ nav.
-        if (d.key === 'hub' && openHubPicker()) { e.preventDefault(); closeNav(); return; }
+        // Tray slides out first, picker slides in on the house sheet→sheet
+        // beat (cf. the You sheet's Notifications row: close + 120ms).
+        if (d.key === 'hub' && hubApi()) {
+          e.preventDefault();
+          closeNav();
+          setTimeout(openHubPicker, 120);
+          return;
+        }
         closeNav();
         // Tray = destinations only; Messages/Alerts moved to the You sheet.
         if (!d.ext && !here) showTabSkeleton();   // perceived-speed bridge on real nav
