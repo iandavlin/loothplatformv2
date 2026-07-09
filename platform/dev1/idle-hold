@@ -8,7 +8,7 @@
 # The hold file is honored by /usr/local/bin/idle-shutdown-daemon.sh:
 # numeric content = epoch expiry (the daemon deletes it once past due and
 # resumes); any other content, including an empty `touch`ed file, holds
-# indefinitely. Holding dev1 also holds dev2 -- the coupled dev2 stop only
+# indefinitely. This governs dev1 ONLY (dev2 self-governs; coupling removed 2026-07-08).
 # fires when dev1 idle-stops.
 set -uo pipefail
 
@@ -69,7 +69,7 @@ remove_hold() {
 
 show_status() {
     if [[ ! -f "$HOLD_FILE" ]]; then
-        echo "No hold -- auto-off is ARMED (dev1 stops after ~10m idle + 5m countdown; dev2 stops with it)."
+        echo "No hold -- auto-off is ARMED (dev1 stops after ~10m idle + 5m countdown)."
     else
         local content now
         content=$(tr -d '[:space:]' < "$HOLD_FILE" 2>/dev/null || true)
@@ -119,7 +119,7 @@ case "${1:-}" in
         if secs=$(parse_duration_secs "$1"); then
             expiry=$(( $(date +%s) + secs ))
             write_hold "$expiry"
-            echo "Hold set: dev1 (and dev2) auto-off paused until $(date -d "@${expiry}" '+%H:%M %Z') -- $(fmt_span "$secs") from now."
+            echo "Hold set: dev1 auto-off paused until $(date -d "@${expiry}" '+%H:%M %Z') -- $(fmt_span "$secs") from now."
             echo "The hold self-clears after that. 'idle-hold off' re-arms sooner; 'idle-hold' shows status."
             note_in_log "timed hold set by $(whoami) until $(date -d "@${expiry}" '+%Y-%m-%d %H:%M:%S') (arg: $1)"
         else
