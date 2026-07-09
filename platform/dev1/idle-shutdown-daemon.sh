@@ -244,12 +244,6 @@ while true; do
         if [[ -f "$COUNTDOWN_FILE" ]]; then
             log ">>> COUNTDOWN COMPLETE -- stopping instance <<<"
             cleanup_countdown
-            # Coupled: take dev2 down with this box (resolve by stable EIP; reload-proof; no-op if already stopped)
-            DEV2_ID=$(/snap/bin/aws ec2 describe-instances --filters "Name=ip-address,Values=34.193.244.53" --query "Reservations[].Instances[].InstanceId" --output text 2>/dev/null || true)
-            if [[ -n "${DEV2_ID:-}" && "$DEV2_ID" != "None" ]]; then
-                /snap/bin/aws ec2 stop-instances --instance-ids "$DEV2_ID" >> "$LOGFILE" 2>&1 || true
-                log ">>> dev2 ($DEV2_ID) stop sent (coupled with dev1 idle-shutdown) <<<"
-            fi
             $STOP_CMD >> "$LOGFILE" 2>&1
             log ">>> stop-instances command sent <<<"
             exit 0
