@@ -156,6 +156,20 @@ idle-hold           # status
 A plain `touch` of the hold file kept dev1 *and* dev2 up for two days in July
 2026. Timed holds exist so that cannot recur.
 
+## Tests
+
+| script | reads | run it |
+|---|---|---|
+| `tools/dev2-idle/selftest.sh` | nothing real — fixtures + a mocked `aws` | anywhere, incl. dev1. 22 assertions, ~60s |
+| `tools/dev2-idle/live-signals.sh` | the real journal, nginx log, and `/proc` | on dev2, before arming and after each rebuild. ~4 min |
+
+Neither can stop a box: the first mocks `aws` entirely, the second only ever
+invokes the daemon as `--check-once`.
+
+`live-signals.sh` is the one that catches a **box-specific** regression — a
+renamed unit, a moved heartbeat log, a new 60s timer that would pin the box
+awake. Run it after any rebuild.
+
 ## Test hooks
 
 Every path in the script is env-overridable, so it can be exercised against
