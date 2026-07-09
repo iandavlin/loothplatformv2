@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StartOnlyDev2Tagged",
+      "Effect": "Allow",
+      "Action": "ec2:StartInstances",
+      "Resource": "arn:aws:ec2:us-east-1:577668279429:instance/*",
+      "Condition": {
+        "StringLike": { "aws:ResourceTag/Name": "dev2*" }
+      }
+    }
+  ]
+}

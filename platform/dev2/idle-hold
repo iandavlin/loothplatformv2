@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# idle-hold -- manage the dev2 auto-off hold file (/tmp/no-idle-shutdown)
+#
+#   idle-hold            show status (armed / held until / held indefinitely)
+#   idle-hold 3h         pause auto-off for 3 hours (also: 30m, 2h30m, 90 = minutes)
+#   idle-hold off        remove the hold -- auto-off re-armed
+#
+# Set a hold before an unattended job so dev2 does not stop underneath it.
+# The hold file is honored by /usr/local/bin/dev2-idle-shutdown.sh: numeric
+# content = epoch expiry (the daemon deletes it once past due and resumes);
+# any other content, including an empty `touch`ed file, holds indefinitely.
+#
+# This governs dev2 ONLY. dev1 has its own daemon and its own copy of this
+# helper; the boxes were decoupled 2026-07-08 and neither stops the other.
+set -uo pipefail
+
+BOX="dev2"
+IDLE_DESC="stops after ~45m idle + 5m countdown"
+HOLD_FILE="/tmp/no-idle-shutdown"
+LOGFILE="/var/log/dev2-idle-shutdown.log"
+COUNTDOWN_FILE="/tmp/dev2-idle-countdown"
+
+note_in_log() {
+    local line="$(date '+%Y-%m-%d %H:%M:%S')   IDLE-HOLD: $1"
+    if [[ -w "$LOGFILE" ]]; then
+        echo "$line" >> "$LOGFILE"
+    elif sudo -n true 2>/dev/null; then
+        echo "$line" | sudo -n tee -a "$LOGFILE" >/dev/null 2>&1
+    fi
+    logger -t idle-hold "$1" 2>/dev/null || true
+}
+
+fmt_span() {
+    local secs=$1
+    if (( secs >= 3600 )); then
+        printf '%dh %dm' $(( secs / 3600 )) $(( (secs % 3600) / 60 ))
+    elif (( secs >= 60 )); then
+        printf '%dm' $(( secs / 60 ))
+    else
+        printf 'under a minute'
+    fi
+}
+
+# "2h30m" | "3h" | "45m" | bare number (minutes) -> seconds on stdout
+parse_duration_secs() {
+    local d=$1 h=0 m=0
+    if [[ "$d" =~ ^[0-9]+$ ]]; then
+        m=$(( 10#$d ))
+    elif [[ -n "$d" && "$d" =~ ^(([0-9]+)h)?(([0-9]+)m)?$ ]]; then
+        h=$(( 10#${BASH_REMATCH[2]:-0} ))
+        m=$(( 10#${BASH_REMATCH[4]:-0} ))
+    else
+        return 1
+    fi
+    (( h == 0 && m == 0 )) && return 1
+    echo $(( h * 3600 + m * 60 ))
+}
+
+write_hold() {
+    local expiry=$1
+    if ! { echo "$expiry" > "$HOLD_FILE"; } 2>/dev/null; then
+        echo "$expiry" | sudo -n tee "$HOLD_FILE" >/dev/null 2>&1 || {
+            echo "ERROR: cannot write $HOLD_FILE (try with sudo)." >&2; exit 1; }
+    fi
+}
+
+remove_hold() {
+    if ! rm -f "$HOLD_FILE" 2>/dev/null; then
+        sudo -n rm -f "$HOLD_FILE" 2>/dev/null || {
+            echo "ERROR: cannot remove $HOLD_FILE (try with sudo)." >&2; exit 1; }
+    fi
+}
+
+show_status() {
+    if [[ ! -f "$HOLD_FILE" ]]; then
+        echo "No hold -- auto-off is ARMED (${BOX} ${IDLE_DESC})."
+    else
+        local content now
+        content=$(tr -d '[:space:]' < "$HOLD_FILE" 2>/dev/null || true)
+        now=$(date +%s)
+        if [[ "$content" =~ ^[0-9]+$ ]]; then
+            local expiry=$(( 10#$content ))
+            if (( now < expiry )); then
+                echo "HELD until $(date -d "@${expiry}" '+%H:%M %Z on %a %Y-%m-%d') -- $(fmt_span $(( expiry - now ))) left."
+                echo "Re-arm sooner with: idle-hold off"
+            else
+                echo "Hold EXPIRED at $(date -d "@${expiry}" '+%H:%M %Z on %Y-%m-%d') -- daemon clears it and re-arms within ~60s."
+            fi
+        else
+            echo "HELD indefinitely (hold file content: '${content:-empty}') -- auto-off stays OFF until removed."
+            echo "Remove with: idle-hold off    (or set a timed hold: idle-hold 3h)"
+        fi
+    fi
+    if [[ -f "$COUNTDOWN_FILE" ]]; then
+        local at
+        at=$(tr -d '[:space:]' < "$COUNTDOWN_FILE" 2>/dev/null || true)
+        [[ "$at" =~ ^[0-9]+$ ]] && at=$(date -d "@$(( 10#$at ))" '+%H:%M:%S %Z') || at="soon"
+        echo "NOTE: shutdown countdown IN PROGRESS (stop at ${at}) -- 'idle-hold 30m' cancels it."
+    fi
+}
+
+usage() {
+    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+case "${1:-}" in
+    "")
+        show_status
+        ;;
+    off)
+        if [[ ! -f "$HOLD_FILE" ]]; then
+            echo "No hold was set -- auto-off already armed."
+        else
+            remove_hold
+            echo "Hold removed -- auto-off re-armed (${BOX} ${IDLE_DESC})."
+            note_in_log "hold removed by $(whoami)"
+        fi
+        ;;
+    -h|--help|help)
+        usage
+        ;;
+    *)
+        if secs=$(parse_duration_secs "$1"); then
+            expiry=$(( $(date +%s) + secs ))
+            write_hold "$expiry"
+            echo "Hold set: ${BOX} auto-off paused until $(date -d "@${expiry}" '+%H:%M %Z') -- $(fmt_span "$secs") from now."
+            echo "The hold self-clears after that. 'idle-hold off' re-arms sooner; 'idle-hold' shows status."
+            note_in_log "timed hold set by $(whoami) until $(date -d "@${expiry}" '+%Y-%m-%d %H:%M:%S') (arg: $1)"
+        else
+            echo "ERROR: can't parse duration '$1'." >&2
+            echo >&2
+            usage >&2
+            exit 1
+        fi
+        ;;
+esac

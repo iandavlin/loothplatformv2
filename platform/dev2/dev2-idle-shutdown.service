@@ -1,0 +1,25 @@
+[Unit]
+Description=dev2 idle auto-off (45m idle, 5m countdown) -- dev2 ONLY
+Documentation=file:///home/ubuntu/loothplatformv2-clean/platform/dev2/README.md
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/dev2-idle-shutdown.sh
+Restart=on-failure
+RestartSec=60
+
+# The box has no IAM instance profile; the stop call borrows the devgbox-cli
+# key. If a profile is ever attached, drop these three and the SDK will pick
+# up IMDS credentials on its own.
+Environment=AWS_SHARED_CREDENTIALS_FILE=/home/looth-dev/.aws/credentials
+Environment=AWS_CONFIG_FILE=/home/looth-dev/.aws/config
+Environment=AWS_DEFAULT_REGION=us-east-1
+EnvironmentFile=-/etc/default/dev2-idle-shutdown
+
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
