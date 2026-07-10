@@ -457,6 +457,10 @@ body.lg-sm-open { overflow: hidden; }
 }
 .lg-social-modal__close:hover,
 .lg-social-modal__back-btn:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-ink, #323532); }
+/* display:inline-flex above beats the UA [hidden] rule, so the JS that sets
+   backBtn.hidden = true on the thread LIST left a dead chevron pointing at
+   nothing (HK-074). Same trap as .lg-msg-detail / .lg-social-pane. */
+.lg-social-modal__back-btn[hidden] { display: none; }
 /* Head text action (e.g. "Mark all read") */
 .lg-social-modal__action {
   appearance: none; background: transparent; border: 0; cursor: pointer;
