@@ -825,8 +825,10 @@ function lg_shared_render_site_header(array $ctx): void
                 <path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/>
               </svg>
             </button>
+            <!-- Same noun as the mobile sheet ("Message…"); the keyboard hint is kept
+                 because only this surface has a hardware keyboard (HK-086). -->
             <textarea id="lg-msg-reply-input" class="lg-msg__reply-input"
-                      placeholder="Reply... (Enter to send, Shift+Enter for newline)"
+                      placeholder="Message… (Enter to send, Shift+Enter for newline)"
                       rows="2"></textarea>
             <button class="lg-msg__send-btn" data-lg-send-reply aria-label="Send">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
