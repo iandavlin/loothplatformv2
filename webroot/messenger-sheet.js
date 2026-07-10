@@ -33,6 +33,13 @@
   var ATTACH_MAX = 5 * 1024 * 1024;
   var ATTACH_TYPES = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1 };
 
+  // The 8s poll re-renders the whole thread. It used to re-scroll to the bottom every
+  // time, so scrolling up to read history got you yanked back down within 8s. The render
+  // now follows the reader: pinned to the newest message, or parked in the history.
+  var BOTTOM_EPS = 40;                          // px of slack that still counts as "at the bottom"
+  var stickBottom = true;                       // is the reader pinned to the newest message?
+  var lastMsgHtml = '';                         // last markup written into #mg-msgs
+
   function esc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
@@ -47,6 +54,9 @@
       if (s < 604800) return Math.floor(s / 86400) + 'd';
       return Math.floor(s / 604800) + 'w';
     } catch (e) { return ''; }
+  }
+  function atBottom(box) {
+    return (box.scrollHeight - box.scrollTop - box.clientHeight) <= BOTTOM_EPS;
   }
 
   function ensureCss() {
@@ -200,6 +210,9 @@
         if (dy > 110) closeMessenger();
       });
     })();
+    // follow the reader: any scroll (theirs or ours) re-decides whether we are pinned
+    var msgBox = sheet.querySelector('#mg-msgs');
+    msgBox.addEventListener('scroll', function () { stickBottom = atBottom(msgBox); }, { passive: true });
     // search filters the loaded threads
     sheet.querySelector('.mg-search input').addEventListener('input', function () { renderThreads(this.value); });
     // composer: grow + send
@@ -326,16 +339,19 @@
   function showHome() {
     if (pollT) { clearInterval(pollT); pollT = null; }
     curThread = null; curPeer = null;
+    lastMsgHtml = ''; stickBottom = true;
     sheet.querySelector('#mg-chat').classList.remove('is-on');
     loadThreads();
   }
 
-  function renderMessages(msgs, peers) {
+  /* force = this render was asked for by the user (first open, or their own send), so it
+     always lands at the newest message. Otherwise the 8s poll must not move them. */
+  function renderMessages(msgs, peers, force) {
     var box = sheet.querySelector('#mg-msgs');
     var peerSet = {};
     (peers || []).forEach(function (p) { peerSet[p.uuid] = 1; });
     var lastDay = '';
-    box.innerHTML = (msgs || []).map(function (m) {
+    var html = (msgs || []).map(function (m) {
       var mine = !peerSet[m.sender_uuid];                     // mine = sender not among peers
       var day = String(m.created_at || '').slice(0, 10);
       var h = '';
@@ -350,7 +366,26 @@
       if (m.body) h += '<div class="mg-b ' + (mine ? 'mg-b--me' : 'mg-b--them') + '">' + esc(m.body) + '</div>';
       return h;
     }).join('');
-    box.scrollTop = box.scrollHeight;
+
+    // Nothing changed since the last render (the common case for a poll): leave the DOM
+    // alone entirely. No reflow, no lost text selection, no scroll jump.
+    if (!force && html === lastMsgHtml) return;
+
+    var stick = force || stickBottom;
+    var prevTop = box.scrollTop;
+    lastMsgHtml = html;
+    box.innerHTML = html;
+    if (stick) { box.scrollTop = box.scrollHeight; stickBottom = true; }
+    else       { box.scrollTop = prevTop; }      // messages only append, so prevTop holds the view
+
+    // Images decode after innerHTML lands and grow the box under us. Hold the pin if we
+    // had it; never take it back from a reader who has scrolled away.
+    [].forEach.call(box.querySelectorAll('img'), function (im) {
+      if (im.complete) return;
+      im.addEventListener('load', function () {
+        if (stickBottom) box.scrollTop = box.scrollHeight;
+      }, { once: true });
+    });
   }
 
   function loadThread(uuid, quiet) {
@@ -358,7 +393,7 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (!d || curThread !== uuid) return;
-        renderMessages(d.messages || [], d.peers || []);
+        renderMessages(d.messages || [], d.peers || [], !quiet);
         if (!quiet && d.peers && d.peers[0]) {
           sheet.querySelector('#mg-chname').textContent = d.peers[0].name || 'Member';
           sheet.querySelector('#mg-chavi').innerHTML = avi(d.peers[0]);
@@ -373,6 +408,7 @@
     sheet.querySelector('#mg-chname').textContent = (peer && peer.name) || '…';
     sheet.querySelector('#mg-chavi').innerHTML = avi(peer);
     sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Loading…</div>';
+    lastMsgHtml = ''; stickBottom = true;        // a freshly opened thread starts at the newest message
     sheet.querySelector('#mg-chat').classList.add('is-on');
     var ta = sheet.querySelector('#mg-in'); ta.value = ''; ta.style.height = 'auto';
     clearFile();
@@ -400,6 +436,7 @@
         sheet.querySelector('#mg-chname').textContent = curPeer.name;
         sheet.querySelector('#mg-chavi').innerHTML = avi(curPeer);
         sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Say hi — this starts your chat.</div>';
+        lastMsgHtml = ''; stickBottom = true;
         sheet.querySelector('#mg-chat').classList.add('is-on');
         try { sheet.querySelector('#mg-in').focus({ preventScroll: true }); } catch (e) {}
       })
@@ -423,7 +460,7 @@
     var box = sheet.querySelector('#mg-msgs');
     if (box.querySelector('.mg-empty')) box.innerHTML = '';
     var b = document.createElement('div'); b.className = 'mg-b mg-b--me'; b.textContent = text;
-    box.appendChild(b); box.scrollTop = box.scrollHeight;
+    box.appendChild(b); box.scrollTop = box.scrollHeight; stickBottom = true;   // your own send always follows you down
     ta.value = ''; ta.style.height = 'auto';
     fetch(url, {
       method: 'POST', credentials: 'include',
@@ -463,7 +500,7 @@
     box.appendChild(a);
     var tb = null;
     if (text) { tb = document.createElement('div'); tb.className = 'mg-b mg-b--me'; tb.textContent = text; box.appendChild(tb); }
-    box.scrollTop = box.scrollHeight;
+    box.scrollTop = box.scrollHeight; stickBottom = true;
     var savedText = text;
     ta.value = ''; ta.style.height = 'auto';
     setSendError(null);
