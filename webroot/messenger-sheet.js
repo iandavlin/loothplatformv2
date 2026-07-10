@@ -76,6 +76,23 @@
     return (box.scrollHeight - box.scrollTop - box.clientHeight) <= BOTTOM_EPS;
   }
 
+  /* Day dividers. The old code sliced the raw UTC stamp, so it both LOOKED like a
+     database row ("2026-07-08") and bucketed by UTC rather than by the reader's day —
+     a message sent at 8pm in New York landed under tomorrow's heading. */
+  function dayKey(ms) {
+    var d = new Date(ms);
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+  function dayLabel(ms) {
+    var d = new Date(ms), today = new Date();
+    var yest = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    if (dayKey(ms) === dayKey(today)) return 'Today';
+    if (dayKey(ms) === dayKey(yest))  return 'Yesterday';
+    var opts = { month: 'long', day: 'numeric' };
+    if (d.getFullYear() !== today.getFullYear()) opts.year = 'numeric';
+    try { return d.toLocaleDateString(undefined, opts); } catch (e) { return dayKey(ms); }
+  }
+
   function ensureCss() {
     if (document.getElementById('lg-msgr-css')) return;
     var D = 'html[data-lguser-theme="dark"]';
@@ -384,9 +401,14 @@
     var lastDay = '';
     var html = (msgs || []).map(function (m) {
       var mine = !peerSet[m.sender_uuid];                     // mine = sender not among peers
-      var day = String(m.created_at || '').slice(0, 10);
+      var ms = parseTs(m.created_at);
+      var unparseable = isNaN(ms);
+      var day = unparseable ? String(m.created_at || '').slice(0, 10) : dayKey(ms);
       var h = '';
-      if (day && day !== lastDay) { lastDay = day; h += '<div class="mg-day">' + esc(day) + '</div>'; }
+      if (day && day !== lastDay) {
+        lastDay = day;
+        h += '<div class="mg-day">' + esc(unparseable ? day : dayLabel(ms)) + '</div>';
+      }
       // image attachment (access-controlled URL) — tap to open full size
       if (m.media_url) {
         h += '<a class="mg-img" style="align-self:' + (mine ? 'flex-end' : 'flex-start') + '" href="' +
