@@ -431,6 +431,22 @@
     pollT = setInterval(function () { if (curThread === uuid) loadThread(uuid, true); }, 8000);
   }
 
+  /* Name the recipient of a not-yet-existing chat. GET /users?uuids= is the only
+     place a lone uuid resolves to an identity; guarded on curPeer so a slow reply
+     never relabels a thread the user has since navigated away from. */
+  function fillPeerFromApi(userUuid) {
+    fetch(API + '/users?uuids=' + encodeURIComponent(userUuid), { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        var u = d && d.items && d.items[0];
+        if (!u || !curPeer || curPeer.uuid !== userUuid || curThread) return;
+        curPeer = { uuid: u.uuid, name: u.display_name || 'Member', avatar_url: u.avatar_url || '' };
+        sheet.querySelector('#mg-chname').textContent = curPeer.name;
+        sheet.querySelector('#mg-chavi').innerHTML = avi(curPeer);
+      })
+      .catch(function () {});
+  }
+
   // chat with a USER (member card "Message") — resolve their uuid to a thread,
   // or open a fresh chat whose first send creates the thread.
   function openChatWith(userUuid, name, avatarUrl) {
@@ -448,6 +464,10 @@
         clearFile();
         sheet.querySelector('#mg-chname').textContent = curPeer.name;
         sheet.querySelector('#mg-chavi').innerHTML = avi(curPeer);
+        // lg:open-dm carries only a uuid, so a chat opened from a profile named the
+        // recipient "Member" with a "?" avatar. No thread exists yet to carry peers[] —
+        // resolve them, so you can see who you are about to message (HK-019, mobile half).
+        if (!name || !avatarUrl) fillPeerFromApi(userUuid);
         sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Say hi — this starts your chat.</div>';
         lastMsgHtml = ''; stickBottom = true;
         sheet.querySelector('#mg-chat').classList.add('is-on');

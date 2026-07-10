@@ -800,6 +800,12 @@ function lg_shared_render_site_header(array $ctx): void
            the pane never hid again after opening a thread (Buck 6/11; the
            css keeps a defensive [hidden] counter-rule either way). -->
       <div id="lg-msg-detail" class="lg-msg-detail" hidden>
+        <!-- Who you are talking to. The thread LIST is the only other place the
+             counterpart is named, and it is display:none the moment a thread
+             opens — so without this an open conversation carried no identity at
+             all, and you could not confirm the recipient before sending
+             (HK-019). Filled by social-modals.js renderPeerHeader(). -->
+        <div class="lg-msg__peer" id="lg-msg-peer" hidden></div>
         <div class="lg-msg__messages" id="lg-msg-messages"></div>
         <div class="lg-msg__compose" id="lg-msg-compose">
           <!-- staged image preview (above the input); shown only when a photo is picked -->
