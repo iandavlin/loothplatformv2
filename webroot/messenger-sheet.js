@@ -13,7 +13,8 @@
  *
  * API (canonical profile-app, contract from social-modals.js header):
  *   GET  /profile-api/v0/me/messages/          → {threads:[{id,uuid,unread_count,
- *          last_snippet,last_sender,peers:[{uuid,name,slug,avatar_url}]}]}
+ *          last_message_at,last_snippet,last_sender,peers:[{uuid,name,slug,avatar_url}]}]}
+ *          (timestamps are Postgres "YYYY-MM-DD HH:MM:SS.ffffff+00" — see parseTs)
  *   GET  /profile-api/v0/me/messages/<uuid>    → {thread,peers,messages:[{id,
  *          sender_uuid,body,created_at}]}  (marks read; mine = sender not in peers)
  *   POST /profile-api/v0/me/messages/<uuid>    {body}            (reply)
@@ -43,17 +44,29 @@
   function esc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+  /* Postgres hands us "2026-07-09 00:18:07.410418+00". That bare two-digit "+00" offset
+     is not ISO-8601 — Date.parse only tolerates it while the date and time are still
+     SPACE-separated, so replacing the space with "T" (as rel() used to) turned a
+     parseable stamp into NaN. Normalise the offset instead of relying on the quirk. */
+  function parseTs(ts) {
+    var s = String(ts == null ? '' : ts).trim();
+    if (!s) return NaN;
+    s = s.replace(' ', 'T');
+    if (s.indexOf('T') > 0) {
+      if (/[+-]\d{2}$/.test(s)) s += ':00';                     // "+00" → "+00:00"
+      else if (!/(Z|[+-]\d{2}:?\d{2})$/.test(s)) s += 'Z';      // offset-less: server time is UTC
+    }
+    return Date.parse(s);
+  }
   function rel(ts) {
-    try {
-      var d = Date.parse(String(ts || '').replace(' ', 'T'));
-      if (!d) return '';
-      var s = (Date.now() - d) / 1000;
-      if (s < 60) return 'now';
-      if (s < 3600) return Math.floor(s / 60) + 'm';
-      if (s < 86400) return Math.floor(s / 3600) + 'h';
-      if (s < 604800) return Math.floor(s / 86400) + 'd';
-      return Math.floor(s / 604800) + 'w';
-    } catch (e) { return ''; }
+    var d = parseTs(ts);
+    if (isNaN(d)) return '';
+    var s = (Date.now() - d) / 1000;
+    if (s < 60) return 'now';
+    if (s < 3600) return Math.floor(s / 60) + 'm';
+    if (s < 86400) return Math.floor(s / 3600) + 'h';
+    if (s < 604800) return Math.floor(s / 86400) + 'd';
+    return Math.floor(s / 604800) + 'w';
   }
   function atBottom(box) {
     return (box.scrollHeight - box.scrollTop - box.clientHeight) <= BOTTOM_EPS;
@@ -312,7 +325,7 @@
         '<span class="mg-avi">' + avi(p) + '</span>' +
         '<span class="mg-col"><span class="mg-name">' + esc(p.name || 'Member') + '</span>' +
         '<span class="mg-snip">' + esc(t.last_snippet || '') + '</span></span>' +
-        '<span class="mg-meta"><span class="mg-time">' + rel(t.last_at || t.updated_at || '') + '</span>' +
+        '<span class="mg-meta"><span class="mg-time">' + rel(t.last_message_at) + '</span>' +
         (unread ? '<span class="mg-dot"></span>' : '') + '</span></button>';
     }).join('');
     [].forEach.call(list.querySelectorAll('[data-mg-thread]'), function (b) {
