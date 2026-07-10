@@ -800,6 +800,12 @@ function lg_shared_render_site_header(array $ctx): void
            the pane never hid again after opening a thread (Buck 6/11; the
            css keeps a defensive [hidden] counter-rule either way). -->
       <div id="lg-msg-detail" class="lg-msg-detail" hidden>
+        <!-- Who you are talking to. The thread LIST is the only other place the
+             counterpart is named, and it is display:none the moment a thread
+             opens — so without this an open conversation carried no identity at
+             all, and you could not confirm the recipient before sending
+             (HK-019). Filled by social-modals.js renderPeerHeader(). -->
+        <div class="lg-msg__peer" id="lg-msg-peer" hidden></div>
         <div class="lg-msg__messages" id="lg-msg-messages"></div>
         <div class="lg-msg__compose" id="lg-msg-compose">
           <!-- staged image preview (above the input); shown only when a photo is picked -->
@@ -819,8 +825,10 @@ function lg_shared_render_site_header(array $ctx): void
                 <path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/>
               </svg>
             </button>
+            <!-- Same noun as the mobile sheet ("Message…"); the keyboard hint is kept
+                 because only this surface has a hardware keyboard (HK-086). -->
             <textarea id="lg-msg-reply-input" class="lg-msg__reply-input"
-                      placeholder="Reply... (Enter to send, Shift+Enter for newline)"
+                      placeholder="Message… (Enter to send, Shift+Enter for newline)"
                       rows="2"></textarea>
             <button class="lg-msg__send-btn" data-lg-send-reply aria-label="Send">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"

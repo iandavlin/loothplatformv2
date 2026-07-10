@@ -14,8 +14,10 @@
  *                                  actor{uuid,name,slug,avatar_url}}], unread:int}
  *                                 (type ∈ message|connection_request|connection_accept; NO text field — build it)
  * POST  /me/notifications/        body:{action:'read_all'} | {action:'read', id:int}
- * GET   /me/messages/             {threads:[{id,uuid,unread_count,last_snippet,last_sender,
- *                                  peers:[{uuid,name,slug,avatar_url}]}]}      (key by thread uuid)
+ * GET   /me/messages/             {threads:[{id,uuid,unread_count,last_message_at,last_snippet,
+ *                                  last_sender,peers:[{uuid,name,slug,avatar_url}]}]}  (key by thread uuid)
+ * GET   /users?uuids=<uuid>       {items:[{uuid,slug,display_name,avatar_url,…}]}  (members only;
+ *                                  names the recipient of a DM that has no thread yet)
  * GET   /me/messages/<thread-uuid> {ok,thread,peers:[{uuid,name,…}],messages:[{id,sender_uuid,body,created_at}]}
  *                                 (marks read; "mine" = sender_uuid NOT among peers)
  * POST  /me/messages/<thread-uuid> reply        body:{body:string}
@@ -244,6 +246,7 @@ function loadThreadList() {
   currentThreadUuid = null;
   pendingPeerUuid   = null;
   clearAttach();
+  clearPeerHeader();
   list.hidden = false;
   if (detail) detail.hidden = true;
   /* show back button only when in detail */
@@ -272,16 +275,47 @@ function loadThreadList() {
           + (unread ? '<span class="lg-sm__badge">' + capCount(unread) + '</span>' : '')
           + '</div>';
       }).join('');
+      var peerByThread = {};
+      threads.forEach(function (t) { peerByThread[t.uuid] = (t.peers && t.peers[0]) || null; });
       list.querySelectorAll('[data-thread-uuid]').forEach(function (el) {
-        el.addEventListener('click', function () { openThread(el.dataset.threadUuid); });
+        var open = function () { openThread(el.dataset.threadUuid, peerByThread[el.dataset.threadUuid]); };
+        el.addEventListener('click', open);
         el.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openThread(el.dataset.threadUuid); }
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
         });
       });
     })
     .catch(function () {
       list.innerHTML = '<p class="lg-sm__error">Could not load messages.</p>';
     });
+}
+
+/* ── messages: who you are talking to ──
+   The thread list names the counterpart, and it is display:none the moment a thread
+   opens, so the open conversation showed no name, no avatar, nothing (HK-019). */
+function renderPeerHeader(peers) {
+  var el = document.getElementById('lg-msg-peer');
+  if (!el) return;
+  var p = (peers && peers[0]) || null;
+  if (!p) { clearPeerHeader(); return; }
+  var name = p.name || p.display_name || 'Member';
+  el.innerHTML = avatarEl(p, 36) + (p.slug
+    ? '<a class="lg-msg__peer-name" href="/u/' + esc(p.slug) + '">' + esc(name) + '</a>'
+    : '<span class="lg-msg__peer-name">' + esc(name) + '</span>');
+  el.hidden = false;
+}
+function clearPeerHeader() {
+  var el = document.getElementById('lg-msg-peer');
+  if (el) { el.innerHTML = ''; el.hidden = true; }
+}
+/* A brand-new DM has no thread yet, so nothing carries peers[] — resolve the single
+   uuid we were handed. Without this, "Message" from a profile opens a conversation
+   with an unnamed stranger, which is the exact case HK-019 calls out. */
+function fetchPeer(uuid) {
+  return fetch(API + '/users?uuids=' + encodeURIComponent(uuid), { credentials: 'include' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { return (d && d.items && d.items[0]) || null; })
+    .catch(function () { return null; });
 }
 
 /* ── messages: thread detail (keyed by opaque thread uuid) ── */
@@ -293,7 +327,9 @@ function showDetailPane() {
   if (detail)  detail.hidden  = false;
   if (backBtn) backBtn.hidden = false;
 }
-function openThread(threadUuid) {
+/* peerHint = the peer we already hold from the thread row, so the header paints with
+   the messages rather than a beat later, once the thread fetch resolves. */
+function openThread(threadUuid, peerHint) {
   var detail  = document.getElementById('lg-msg-detail');
   var msgs    = document.getElementById('lg-msg-messages');
   var compose = document.getElementById('lg-msg-compose');
@@ -302,6 +338,7 @@ function openThread(threadUuid) {
   pendingPeerUuid   = null;
   clearAttach();
   showDetailPane();
+  if (peerHint) renderPeerHeader([peerHint]);
   msgs.innerHTML = '<p class="lg-sm__status">Loading...</p>';
 
   fetch(API + '/me/messages/' + encodeURIComponent(threadUuid), { credentials: 'include' })
@@ -311,6 +348,7 @@ function openThread(threadUuid) {
       var peerSet  = {};
       ((d && d.peers) || []).forEach(function (p) { peerSet[p.uuid] = true; });
       var messages = (d && d.messages) || [];
+      renderPeerHeader((d && d.peers) || []);   /* authoritative identity for this thread */
 
       if (!messages.length) {
         msgs.innerHTML = '<p class="lg-sm__empty">No messages yet. Send the first one!</p>';
@@ -346,6 +384,7 @@ function openDmWithUser(peerUuid) {
   var compose = document.getElementById('lg-msg-compose');
   if (!msgs) return;
   clearAttach();
+  clearPeerHeader();
   showDetailPane();
   msgs.innerHTML = '<p class="lg-sm__status">Loading...</p>';
   fetch(API + '/me/messages/', { credentials: 'include' })
@@ -356,12 +395,18 @@ function openDmWithUser(peerUuid) {
       threads.forEach(function (t) {
         if ((t.peers || []).some(function (p) { return p.uuid === peerUuid; })) match = t;
       });
-      if (match) { openThread(match.uuid); return; }
+      if (match) {
+        openThread(match.uuid, (match.peers || []).filter(function (p) { return p.uuid === peerUuid; })[0]);
+        return;
+      }
       /* no thread yet — first message creates it via POST /me/messages/ {to_uuid} */
       currentThreadUuid = null;
       pendingPeerUuid   = peerUuid;
       msgs.innerHTML = '<p class="lg-sm__empty">No messages yet. Send the first one!</p>';
       if (compose) compose.hidden = false;
+      /* no thread means no peers[] on the wire — resolve the recipient so they are
+         named before the first message is sent, not after */
+      fetchPeer(peerUuid).then(function (u) { if (u && pendingPeerUuid === peerUuid) renderPeerHeader([u]); });
       var input = document.getElementById('lg-msg-reply-input');
       if (input) input.focus();
     })

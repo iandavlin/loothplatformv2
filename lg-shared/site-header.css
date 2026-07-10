@@ -457,6 +457,10 @@ body.lg-sm-open { overflow: hidden; }
 }
 .lg-social-modal__close:hover,
 .lg-social-modal__back-btn:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-ink, #323532); }
+/* display:inline-flex above beats the UA [hidden] rule, so the JS that sets
+   backBtn.hidden = true on the thread LIST left a dead chevron pointing at
+   nothing (HK-074). Same trap as .lg-msg-detail / .lg-social-pane. */
+.lg-social-modal__back-btn[hidden] { display: none; }
 /* Head text action (e.g. "Mark all read") */
 .lg-social-modal__action {
   appearance: none; background: transparent; border: 0; cursor: pointer;
@@ -732,3 +736,21 @@ body.lg-sm-open { overflow: hidden; }
    same pattern as .lg-social-pane[hidden]. */
 .lg-msg-detail{display:flex;flex-direction:column;flex:1;min-height:0}
 #lg-msg-detail[hidden]{display:none!important}
+
+/* Open-conversation peer header (HK-019). Same [hidden] counter-rule trap as
+   .lg-msg-detail above: display:flex would otherwise beat the UA [hidden] rule
+   and leave an empty strip above the bubbles before a thread is opened. */
+.lg-msg__peer {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--lg-line, #e3ddd0);
+  flex: 0 0 auto;
+}
+.lg-msg__peer[hidden] { display: none; }
+.lg-msg__peer-name {
+  font: 600 15px/1.2 var(--lg-font-sans, system-ui);
+  color: var(--lg-ink, #323532);
+  text-decoration: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+a.lg-msg__peer-name:hover { text-decoration: underline; }
