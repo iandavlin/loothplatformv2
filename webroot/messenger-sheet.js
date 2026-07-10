@@ -41,6 +41,10 @@
   var stickBottom = true;                       // is the reader pinned to the newest message?
   var lastMsgHtml = '';                         // last markup written into #mg-msgs
 
+  // true when the conversation is the ROOT view of this messenger session — i.e. it was
+  // opened straight from a profile / member card and no Chats list was ever shown.
+  var chatIsRoot = false;
+
   function esc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
@@ -122,6 +126,7 @@
       '#looth-msgr .mg-chd{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:14px 12px 10px;border-bottom:1px solid var(--lg-line,#e3ddd0)}',
       '#looth-msgr .mg-backbtn{flex:0 0 auto;width:34px;height:34px;border:0;border-radius:50%;background:none;color:var(--lg-sage-d,#6b7c52);' +
         'font-size:21px;line-height:34px;text-align:center;cursor:pointer}',
+      '#looth-msgr .mg-backbtn[hidden]{display:none}',   // defensive, per the .mg-attach-prev trap above
       '#looth-msgr .mg-chd .mg-avi{width:36px;height:36px;font-size:14px}',
       '#looth-msgr .mg-chname{flex:1 1 auto;min-width:0;font:700 15.5px/1.2 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-charcoal,#1a1d1a);' +
         'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
@@ -186,8 +191,9 @@
           '<input type="search" placeholder="Search chats" autocomplete="off" aria-label="Search chats"></label>' +
         '<div class="mg-list" id="mg-list"><div class="mg-empty">Loading…</div></div>' +
         '<div class="mg-chat" id="mg-chat">' +
-          '<div class="mg-chd"><button class="mg-backbtn" type="button" data-mg-home aria-label="Back">‹</button>' +
-            '<span class="mg-avi" id="mg-chavi"></span><span class="mg-chname" id="mg-chname"></span></div>' +
+          '<div class="mg-chd"><button class="mg-backbtn" type="button" data-mg-home aria-label="Back to chats">‹</button>' +
+            '<span class="mg-avi" id="mg-chavi"></span><span class="mg-chname" id="mg-chname"></span>' +
+            '<button class="mg-x" type="button" data-mg-close aria-label="Close messages">✕</button></div>' +
           '<div class="mg-msgs" id="mg-msgs"></div>' +
           '<div class="mg-comp">' +
             '<div class="mg-attach-prev" id="mg-attach-prev" hidden><div class="mg-attach-thumb">' +
@@ -206,8 +212,11 @@
       '</div>';
     (document.body || document.documentElement).appendChild(sheet);
     sheet.addEventListener('click', function (e) {
-      if (e.target.closest('[data-mg-close]')) closeMessenger();
-      if (e.target.closest('[data-mg-home]')) showHome();
+      if (e.target.closest('[data-mg-close]')) { closeMessenger(); return; }
+      // Back to a list you never saw is disorienting. When the conversation IS the
+      // root view (opened from a profile), dismiss the sheet and land back on the
+      // page underneath instead (HK-018).
+      if (e.target.closest('[data-mg-home]')) { chatIsRoot ? closeMessenger() : showHome(); }
     });
     // drag the grab down to dismiss (design-system gesture)
     (function () {
@@ -331,6 +340,7 @@
     [].forEach.call(list.querySelectorAll('[data-mg-thread]'), function (b) {
       b.addEventListener('click', function () {
         var t = threadsCache.filter(function (x) { return x.uuid === b.getAttribute('data-mg-thread'); })[0];
+        chatIsRoot = false;                       // reached from the list — "back" returns to it
         openThread(b.getAttribute('data-mg-thread'), (t && t.peers && t.peers[0]) || null);
       });
     });
@@ -353,8 +363,16 @@
     if (pollT) { clearInterval(pollT); pollT = null; }
     curThread = null; curPeer = null;
     lastMsgHtml = ''; stickBottom = true;
+    chatIsRoot = false;
     sheet.querySelector('#mg-chat').classList.remove('is-on');
     loadThreads();
+  }
+
+  /* A chevron pointing at a list you never opened is a dead control (and the same
+     defect as the desktop thread-list back arrow). Show it only when it goes somewhere. */
+  function syncChatChrome() {
+    var back = sheet.querySelector('.mg-backbtn');
+    if (back) back.hidden = chatIsRoot;
   }
 
   /* force = this render was asked for by the user (first open, or their own send), so it
@@ -423,6 +441,7 @@
     sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Loading…</div>';
     lastMsgHtml = ''; stickBottom = true;        // a freshly opened thread starts at the newest message
     sheet.querySelector('#mg-chat').classList.add('is-on');
+    syncChatChrome();
     var ta = sheet.querySelector('#mg-in'); ta.value = ''; ta.style.height = 'auto';
     clearFile();
     sheet.querySelector('#mg-send').disabled = true;
@@ -452,6 +471,7 @@
   function openChatWith(userUuid, name, avatarUrl) {
     ensureSheet();
     openMessenger();
+    chatIsRoot = true;                            // set AFTER openMessenger() → showHome() clears it
     fetch(API + '/me/messages/', { credentials: 'include' })
       .then(function (r) { return r.ok ? r.json() : { threads: [] }; })
       .then(function (d) {
@@ -471,6 +491,7 @@
         sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Say hi — this starts your chat.</div>';
         lastMsgHtml = ''; stickBottom = true;
         sheet.querySelector('#mg-chat').classList.add('is-on');
+    syncChatChrome();
         try { sheet.querySelector('#mg-in').focus({ preventScroll: true }); } catch (e) {}
       })
       .catch(function () {});
@@ -590,7 +611,8 @@
   window.addEventListener('popstate', function () {
     if (!sheet || !sheet.classList.contains('is-open')) return;
     var chat = sheet.querySelector('#mg-chat');
-    if (chat && chat.classList.contains('is-on')) {           // back from a chat → home
+    // a chat opened straight from a profile has no list behind it — dismiss, don't invent one
+    if (chat && chat.classList.contains('is-on') && !chatIsRoot) {   // back from a chat → home
       showHome();
       try { history.pushState({ lgMg: 1 }, ''); } catch (e) {}
       return;
