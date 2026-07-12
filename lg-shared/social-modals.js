@@ -34,6 +34,13 @@ var API = '/profile-api/v0';
 var currentThreadUuid = null;  // opaque thread uuid → replies POST /me/messages/<uuid>
 var pendingPeerUuid   = null;  // target USER uuid for a not-yet-existing thread (new DM)
 var pendingAttachFile = null;  // staged image File for the next send (image attachment)
+var currentPeers      = [];    // EVERY peer of the open thread (see renderPeerHeader)
+/* Bumped by every navigation. A thread/list response that resolves after you have
+   navigated elsewhere belongs to a screen that no longer exists and must not write:
+   a 6s-delayed response for thread A was proven to repaint thread B's header AND its
+   messages (2026-07-10). Guards live on .then AND .catch — an error from the old
+   screen would otherwise paint "Could not load thread" over the new one. */
+var navSeq            = 0;
 
 /* image attachment limits — mirror the upload endpoint (jpeg/png/webp ≤5MB) */
 var ATTACH_MAX   = 5 * 1024 * 1024;
@@ -283,11 +290,42 @@ function markAllNotifsRead() {
     .catch(function () {});
 }
 
+/* ── messages: peer identity ──
+   A thread has ANY number of peers — 0 (a thread whose counterpart recipient row is
+   missing: 38 of them on dev2), 1 (a normal DM), or many (group threads). Every
+   surface used to render peers[0] as "the" recipient, which presented a group thread
+   as a private 1:1: you could reply into what read as a private chat with Doug and
+   Sharon + John also received it. peersByThread() now returns a deterministic order,
+   so the helpers below name the SAME people in the list and in the open header — but
+   the fix is that they name ALL of them. Nothing here may ever fall back to peers[0]. */
+
+/* "Doug Proper" · "Doug Proper, John Lehmann" · "Doug Proper, John Lehmann +2" */
+function peerLabel(peers, max) {
+  var ps = peers || [];
+  if (!ps.length) return 'Unknown member';   /* never inherit the previous thread's name */
+  var names = ps.map(function (p) { return p.name || p.display_name || 'Member'; });
+  max = max || 2;
+  if (names.length <= max) return names.join(', ');
+  return names.slice(0, max).join(', ') + ' +' + (names.length - max);
+}
+/* Overlapping faces, so a group is legible as a group before you read a word. */
+function avatarStack(peers, sz) {
+  var ps = (peers || []).slice(0, 3);
+  if (!ps.length) return '<span class="lg-sm__avatar lg-sm__avatar--initial">?</span>';
+  if (ps.length === 1) return avatarEl(ps[0], sz);
+  return '<span class="lg-msg__avstack">' + ps.map(function (p) {
+    return avatarEl(p, sz);
+  }).join('') + '</span>';
+}
+/* Total humans in the thread, counting the viewer — how a person counts a group chat. */
+function peerTotal(peers) { return ((peers || []).length) + 1; }
+
 /* ── messages: thread list ── */
 function loadThreadList() {
   var list   = document.getElementById('lg-msg-list');
   var detail = document.getElementById('lg-msg-detail');
   if (!list) return;
+  var seq = ++navSeq;                 /* going back to the list is a navigation too */
   currentThreadUuid = null;
   pendingPeerUuid   = null;
   clearAttach();
@@ -301,29 +339,35 @@ function loadThreadList() {
   fetch(API + '/me/messages/', { credentials: 'include' })
     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function (d) {
+      if (seq !== navSeq) return;     /* a thread is open now — do not paint the list over it */
       var threads = (d && d.threads) || [];
       if (!threads.length) {
         list.innerHTML = '<p class="lg-sm__empty">No messages yet.</p>';
         return;
       }
       list.innerHTML = threads.map(function (t) {
-        var p      = (t.peers && t.peers[0]) || {};   /* peersByThread → {uuid,name,slug,avatar_url} */
+        var ps     = (t.peers) || [];   /* peersByThread → [{uuid,name,slug,avatar_url}, …] */
         var unread = t.unread_count || 0;
         var prev   = t.last_snippet || '';
+        var group  = ps.length > 1;
         return '<div class="lg-msg__thread' + (unread ? ' lg-msg__thread--unread' : '') +
           '" data-thread-uuid="' + esc(t.uuid) + '" tabindex="0" role="button">'
-          + '<div class="lg-msg__av">' + avatarEl(p, 36) + '</div>'
+          + '<div class="lg-msg__av">' + avatarStack(ps, 36) + '</div>'
           + '<div class="lg-msg__meta">'
-            + '<div class="lg-msg__name">' + esc(p.name || p.display_name || 'Unknown') + '</div>'
+            + '<div class="lg-msg__nameline">'
+              + '<span class="lg-msg__name">' + esc(peerLabel(ps, 2)) + '</span>'
+              + (group ? '<span class="lg-msg__group-tag">Group · ' + peerTotal(ps) + '</span>' : '')
+            + '</div>'
             + '<div class="lg-msg__preview">' + esc(prev) + '</div>'
           + '</div>'
           + (unread ? '<span class="lg-sm__badge">' + capCount(unread) + '</span>' : '')
           + '</div>';
       }).join('');
-      var peerByThread = {};
-      threads.forEach(function (t) { peerByThread[t.uuid] = (t.peers && t.peers[0]) || null; });
+      /* carry the WHOLE peers array into the thread, not one member of it */
+      var peersByThread = {};
+      threads.forEach(function (t) { peersByThread[t.uuid] = t.peers || []; });
       list.querySelectorAll('[data-thread-uuid]').forEach(function (el) {
-        var open = function () { openThread(el.dataset.threadUuid, peerByThread[el.dataset.threadUuid]); };
+        var open = function () { openThread(el.dataset.threadUuid, peersByThread[el.dataset.threadUuid]); };
         el.addEventListener('click', open);
         el.addEventListener('keydown', function (e) {
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
@@ -331,27 +375,62 @@ function loadThreadList() {
       });
     })
     .catch(function () {
+      if (seq !== navSeq) return;
       list.innerHTML = '<p class="lg-sm__error">Could not load messages.</p>';
     });
 }
 
 /* ── messages: who you are talking to ──
    The thread list names the counterpart, and it is display:none the moment a thread
-   opens, so the open conversation showed no name, no avatar, nothing (HK-019). */
+   opens, so the open conversation showed no name, no avatar, nothing (HK-019).
+   EVERY peer is named here — a reply goes to the whole thread, so the header has to
+   say who the whole thread is. */
+var REPLY_PLACEHOLDER = 'Message… (Enter to send, Shift+Enter for newline)';
 function renderPeerHeader(peers) {
   var el = document.getElementById('lg-msg-peer');
   if (!el) return;
-  var p = (peers && peers[0]) || null;
-  if (!p) { clearPeerHeader(); return; }
-  var name = p.name || p.display_name || 'Member';
-  el.innerHTML = avatarEl(p, 36) + (p.slug
-    ? '<a class="lg-msg__peer-name" href="/u/' + esc(p.slug) + '">' + esc(name) + '</a>'
-    : '<span class="lg-msg__peer-name">' + esc(name) + '</span>');
+  var ps = peers || [];
+  currentPeers = ps;             /* so a send can re-open without re-deriving them */
+  if (!ps.length) {
+    /* Zero-peer thread. Honest copy and NO /u/ link — there is nobody to link to, and
+       the old code fell through to peers[0] of whatever was rendered last. */
+    el.innerHTML = '<span class="lg-sm__avatar lg-sm__avatar--initial">?</span>'
+      + '<span class="lg-msg__peer-names"><span class="lg-msg__peer-name">Unknown member</span>'
+      + '<span class="lg-msg__peer-note">This conversation has no other members.</span></span>';
+    el.hidden = false;
+    setReplyPlaceholder(ps);
+    return;
+  }
+  var names = ps.map(function (p) {
+    var name = p.name || p.display_name || 'Member';
+    return p.slug
+      ? '<a class="lg-msg__peer-name" href="/u/' + esc(p.slug) + '">' + esc(name) + '</a>'
+      : '<span class="lg-msg__peer-name">' + esc(name) + '</span>';
+  }).join('<span class="lg-msg__peer-sep">, </span>');
+  el.innerHTML = avatarStack(ps, 36)
+    + '<span class="lg-msg__peer-names">' + names
+    + (ps.length > 1
+        ? '<span class="lg-msg__peer-note">Group · ' + peerTotal(ps) +
+          ' people · everyone here sees your reply</span>'
+        : '')
+    + '</span>';
   el.hidden = false;
+  setReplyPlaceholder(ps);
+}
+/* The last place a reply can be misread as private is the box you type into, so the
+   composer says where it is going. */
+function setReplyPlaceholder(peers) {
+  var input = document.getElementById('lg-msg-reply-input');
+  if (!input) return;
+  input.placeholder = (peers || []).length > 1
+    ? 'Message all ' + peerTotal(peers) + ' people…'
+    : REPLY_PLACEHOLDER;
 }
 function clearPeerHeader() {
   var el = document.getElementById('lg-msg-peer');
+  currentPeers = [];
   if (el) { el.innerHTML = ''; el.hidden = true; }
+  setReplyPlaceholder([]);
 }
 /* A brand-new DM has no thread yet, so nothing carries peers[] — resolve the single
    uuid we were handed. Without this, "Message" from a profile opens a conversation
@@ -372,23 +451,35 @@ function showDetailPane() {
   if (detail)  detail.hidden  = false;
   if (backBtn) backBtn.hidden = false;
 }
-/* peerHint = the peer we already hold from the thread row, so the header paints with
-   the messages rather than a beat later, once the thread fetch resolves. */
-function openThread(threadUuid, peerHint) {
+/* peersHint = the peers[] we already hold from the thread row, so the header paints
+   with the messages rather than a beat later, once the thread fetch resolves. It is
+   the WHOLE array — handing openThread a single peer is what let a group thread open
+   under one person's name. */
+function openThread(threadUuid, peersHint) {
   var detail  = document.getElementById('lg-msg-detail');
   var msgs    = document.getElementById('lg-msg-messages');
   var compose = document.getElementById('lg-msg-compose');
   if (!detail || !msgs) return;
+  var seq = ++navSeq;
   currentThreadUuid = threadUuid;
   pendingPeerUuid   = null;
   clearAttach();
   showDetailPane();
-  if (peerHint) renderPeerHeader([peerHint]);
+  /* Clear on ENTRY. Every caller happens to clear today, so the previous thread's
+     header is not actually reachable on main — but openThread being correct only
+     because all four of its callers remembered is a trap, and the next caller that
+     forgets ships "you are chatting with <the last person you looked at>". */
+  clearPeerHeader();
+  if (peersHint && peersHint.length) renderPeerHeader(peersHint);
   msgs.innerHTML = '<p class="lg-sm__status">Loading...</p>';
 
   fetch(API + '/me/messages/' + encodeURIComponent(threadUuid), { credentials: 'include' })
     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function (d) {
+      /* This response is for a screen the user has left (they went back, or opened
+         another thread). Writing now would repaint their CURRENT thread with THIS
+         thread's header and messages. */
+      if (seq !== navSeq || currentThreadUuid !== threadUuid) return;
       /* "mine" = sender is NOT one of the peers (peers = everyone but the viewer) */
       var peerSet  = {};
       ((d && d.peers) || []).forEach(function (p) { peerSet[p.uuid] = true; });
@@ -418,6 +509,9 @@ function openThread(threadUuid, peerHint) {
       setTimeout(refreshCounts, 400);  /* GET thread marks read server-side */
     })
     .catch(function () {
+      /* Same guard: a failure belonging to the thread you already left must not put
+         an error over the thread you are reading now. */
+      if (seq !== navSeq || currentThreadUuid !== threadUuid) return;
       msgs.innerHTML = '<p class="lg-sm__error">Could not load thread.</p>';
     });
 }
@@ -428,6 +522,7 @@ function openDmWithUser(peerUuid) {
   var msgs    = document.getElementById('lg-msg-messages');
   var compose = document.getElementById('lg-msg-compose');
   if (!msgs) return;
+  var seq = ++navSeq;
   clearAttach();
   clearPeerHeader();
   showDetailPane();
@@ -435,13 +530,19 @@ function openDmWithUser(peerUuid) {
   fetch(API + '/me/messages/', { credentials: 'include' })
     .then(function (r) { return r.ok ? r.json() : { threads: [] }; })
     .then(function (d) {
+      if (seq !== navSeq) return;
       var threads = (d && d.threads) || [];
       var match = null;
       threads.forEach(function (t) {
-        if ((t.peers || []).some(function (p) { return p.uuid === peerUuid; })) match = t;
+        /* ONLY a true 1:1 thread. A GROUP thread that happens to contain this person is
+           not "your conversation with them" — opening it would aim a private-intent DM
+           at everyone in the group. The server's findPairThread() enforces the same rule
+           on the send path, so the two cannot diverge. */
+        var ps = t.peers || [];
+        if (ps.length === 1 && ps[0].uuid === peerUuid) match = t;
       });
       if (match) {
-        openThread(match.uuid, (match.peers || []).filter(function (p) { return p.uuid === peerUuid; })[0]);
+        openThread(match.uuid, match.peers || []);
         return;
       }
       /* no thread yet — first message creates it via POST /me/messages/ {to_uuid} */
@@ -451,11 +552,16 @@ function openDmWithUser(peerUuid) {
       if (compose) compose.hidden = false;
       /* no thread means no peers[] on the wire — resolve the recipient so they are
          named before the first message is sent, not after */
-      fetchPeer(peerUuid).then(function (u) { if (u && pendingPeerUuid === peerUuid) renderPeerHeader([u]); });
+      fetchPeer(peerUuid).then(function (u) {
+        /* …and only if we are still on THAT new-DM screen: no thread has since been
+           opened, and no later navigation has happened. */
+        if (u && seq === navSeq && !currentThreadUuid && pendingPeerUuid === peerUuid) renderPeerHeader([u]);
+      });
       var input = document.getElementById('lg-msg-reply-input');
       if (input) input.focus();
     })
     .catch(function () {
+      if (seq !== navSeq) return;
       msgs.innerHTML = '<p class="lg-sm__error">Could not open conversation.</p>';
     });
 }
@@ -536,7 +642,10 @@ function sendReply() {
   })
     .then(function (r) {
       if (!r.ok) throw new Error(r.status);
-      if (currentThreadUuid) return openThread(currentThreadUuid);
+      /* carry the peers forward: openThread() now clears the header on entry, and
+         sendReply re-opens the SAME thread — without the hint the header would blink
+         empty on every single send. */
+      if (currentThreadUuid) return openThread(currentThreadUuid, currentPeers);
       pendingPeerUuid = null;                     /* thread now exists — re-resolve + open it */
       return openDmWithUser(newDmPeer);
     })
@@ -585,7 +694,7 @@ function sendWithAttachment(text) {
     .then(function () {
       if (input) input.value = '';
       clearAttach();
-      if (currentThreadUuid) return openThread(currentThreadUuid);
+      if (currentThreadUuid) return openThread(currentThreadUuid, currentPeers);   /* peers forward — no header blink */
       pendingPeerUuid = null;
       return openDmWithUser(newDmPeer);
     })
