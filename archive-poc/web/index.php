@@ -774,7 +774,7 @@ foreach ($main_rows as $row):
         <script defer src="/archive-poc/fp-map.js?v=<?= @filemtime(__DIR__ . '/fp-map.js') ?>"></script>
         <div class="lg-bento__events">
           <?php if ($is_member): ?>
-          <a class="lg-loothalong<?= $happening_now ? ' is-live' : '' ?>" href="/loothalong.php">
+          <a class="lg-loothalong<?= $happening_now ? ' is-live' : '' ?>" href="/loothalong.php" target="_blank" rel="noopener">
             <span class="lg-loothalong__glow"></span>
             <span class="lg-loothalong__live"><span class="lg-loothalong__dot"></span><?= $happening_now ? 'Live now' : 'Open 24/7' ?></span>
             <span class="lg-loothalong__txt">Loothalong<small>A 24-hour workbench full of friends.</small></span>
