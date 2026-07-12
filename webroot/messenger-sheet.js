@@ -30,6 +30,9 @@
   var API = '/profile-api/v0';
   var sheet = null, curThread = null, curPeer = null, pollT = null, listPollT = null;
   var curPeers = [];                            // EVERY peer of the open thread (never peers[0])
+  var curMeta = null;                           // {is_group,can_manage,created_by,members,meUuid} of the open thread
+  var pendingGroup = null;                      // selected uuids for a not-yet-created group (first send → to_uuids[])
+  var lpAt = 0;                                 // timestamp of the last long-press (suppresses the trailing tap)
   var threadsCache = [];
   var pendingFile = null;                       // staged image attachment for the next send
   var ATTACH_MAX = 5 * 1024 * 1024;
@@ -214,7 +217,85 @@
       D + ' #looth-msgr .mg-b--them{background:#262b30;color:#e5e7e1}',
       D + ' #looth-msgr .mg-b--me{background:var(--lg-sage-d,#6b7c52)}',
       D + ' #looth-msgr .mg-compwrap{background:#262b30}',
-      D + ' #looth-msgr .mg-in{color:#e5e7e1}'
+      D + ' #looth-msgr .mg-in{color:#e5e7e1}',
+
+      // ── group management (lane: messages-manage) ──
+      // compose button (Chats home) + members button (chat header)
+      '#looth-msgr .mg-newbtn,#looth-msgr .mg-chmenu{flex:0 0 auto;width:34px;height:34px;border:0;border-radius:50%;' +
+        'background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);font-size:19px;line-height:34px;text-align:center;cursor:pointer;padding:0}',
+      // system (membership) line — centered pill, never a bubble
+      '#looth-msgr .mg-sys{align-self:center;text-align:center;max-width:86%;font:600 11.5px/1.35 var(--lg-font-sans,system-ui);' +
+        'color:var(--lg-mute,#6b6f6b);background:var(--lg-paper,#f3f1ea);border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;padding:4px 12px;margin:3px 0}',
+      // who-said-it label above a peer run in a group
+      '#looth-msgr .mg-author{align-self:flex-start;font:600 11px/1 var(--lg-font-sans,system-ui);color:var(--lg-sage-d,#6b7c52);margin:4px 0 -1px 3px}',
+      '#looth-msgr .mg-edited{font-size:10.5px;opacity:.72;margin-left:6px}',
+      '#looth-msgr .mg-b--tomb{background:transparent;border:1px dashed var(--lg-line2,#d8d2c4);color:var(--lg-mute,#6b6f6b);font-style:italic}',
+      // secondary panel (picker + member manager) slides over the chat/home
+      '#looth-msgr .mg-p2{position:absolute;inset:0;z-index:2;display:none;flex-direction:column;background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0}',
+      '#looth-msgr .mg-p2.is-on{display:flex}',
+      '#looth-msgr .mg-p2hd{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:14px 12px 10px;border-bottom:1px solid var(--lg-line,#e3ddd0)}',
+      '#looth-msgr .mg-p2t{flex:1;font:700 17px/1.2 var(--lg-font-serif,Georgia,serif);color:var(--lg-charcoal,#1a1d1a)}',
+      '#looth-msgr .mg-p2body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px}',
+      '#looth-msgr .mg-p2hint{font:13px/1.4 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b);margin:0 0 12px}',
+      // pick field: chips + search
+      '#looth-msgr .mg-pkfield{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--lg-line,#e3ddd0);border-radius:12px;padding:8px 10px;background:#fff;min-height:46px}',
+      '#looth-msgr .mg-chip{display:inline-flex;align-items:center;gap:6px;background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);border-radius:999px;padding:3px 6px 3px 3px;font:600 12.5px/1 var(--lg-font-sans,system-ui)}',
+      '#looth-msgr .mg-chip-av{width:22px;height:22px;border-radius:50%;object-fit:cover;flex:0 0 22px;display:inline-flex;align-items:center;justify-content:center;background:var(--lg-sage,#87986a);color:#fff;font:700 10px/1 var(--lg-font-sans,system-ui);overflow:hidden}',
+      '#looth-msgr .mg-chip-av img{width:100%;height:100%;object-fit:cover}',
+      '#looth-msgr .mg-chip-x{border:0;background:rgba(107,124,82,.24);color:var(--lg-sage-d,#6b7c52);width:16px;height:16px;border-radius:50%;font:700 10px/1 system-ui;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center}',
+      '#looth-msgr .mg-pksearch{flex:1;min-width:90px;border:0;outline:0;background:none;font:14px/1.3 var(--lg-font-sans,system-ui);color:var(--lg-ink,#323532)}',
+      '#looth-msgr .mg-pklist{margin-top:10px;border:1px solid var(--lg-line,#e3ddd0);border-radius:12px;overflow:hidden}',
+      '#looth-msgr .mg-pi{display:flex;align-items:center;gap:11px;padding:10px 12px;cursor:pointer;background:none;border:0;width:100%;text-align:left}',
+      '#looth-msgr .mg-pi + .mg-pi{border-top:1px solid var(--lg-line,#e3ddd0)}',
+      '#looth-msgr .mg-pi:active{background:var(--lg-sage-tint,#eef2e3)}',
+      '#looth-msgr .mg-pi .mg-avi{width:38px;height:38px;font-size:14px}',
+      '#looth-msgr .mg-pi-col{flex:1;min-width:0}',
+      '#looth-msgr .mg-pi-nm{font:600 14.5px/1.2 var(--lg-font-sans,system-ui);color:var(--lg-charcoal,#1a1d1a)}',
+      '#looth-msgr .mg-pi-sub{font:12px/1.2 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b)}',
+      '#looth-msgr .mg-pi-add{flex:0 0 auto;font:600 12.5px/1 var(--lg-font-sans,system-ui);color:var(--lg-sage-d,#6b7c52);border:1px solid var(--lg-sage-3,#d4e0b8);border-radius:999px;padding:6px 12px}',
+      '#looth-msgr .mg-p2foot{flex:0 0 auto;display:flex;gap:10px;padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--lg-line,#e3ddd0)}',
+      // display:flex above beats the UA [hidden] rule (the trap this file documents) — counter it
+      '#looth-msgr .mg-p2foot[hidden]{display:none}',
+      '#looth-msgr .mg-gobtn{flex:1;border:0;border-radius:12px;background:var(--lg-sage,#87986a);color:#fff;font:600 15px/1 var(--lg-font-sans,system-ui);padding:13px;cursor:pointer}',
+      '#looth-msgr .mg-gobtn:disabled{background:var(--lg-line,#e3ddd0);color:var(--lg-mute,#6b6f6b)}',
+      // member manager list
+      '#looth-msgr .mg-mmi{display:flex;align-items:center;gap:11px;padding:11px 4px;border-bottom:1px solid var(--lg-line,#e3ddd0)}',
+      '#looth-msgr .mg-mmi .mg-avi{width:40px;height:40px;font-size:15px}',
+      '#looth-msgr .mg-mmi-col{flex:1;min-width:0}',
+      '#looth-msgr .mg-mmi-nm{font:600 14.5px/1.2 var(--lg-font-sans,system-ui);color:var(--lg-charcoal,#1a1d1a)}',
+      '#looth-msgr .mg-mmi-sub{font:12px/1.2 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b)}',
+      '#looth-msgr .mg-you{flex:0 0 auto;font:600 11px/1 var(--lg-font-sans,system-ui);color:var(--lg-sage-d,#6b7c52);background:var(--lg-sage-tint,#eef2e3);border-radius:999px;padding:4px 9px}',
+      '#looth-msgr .mg-rm{flex:0 0 auto;border:1px solid #e7c4c0;background:none;color:var(--lg-error,#b3261e);border-radius:999px;font:600 12px/1 var(--lg-font-sans,system-ui);padding:6px 11px;cursor:pointer}',
+      '#looth-msgr .mg-addrow{width:100%;margin-top:14px;border:1px dashed var(--lg-sage-3,#d4e0b8);background:none;color:var(--lg-sage-d,#6b7c52);border-radius:12px;font:600 14px/1 var(--lg-font-sans,system-ui);padding:12px;cursor:pointer}',
+      '#looth-msgr .mg-leavebtn{width:100%;margin-top:10px;border:1px solid #e7c4c0;background:none;color:var(--lg-error,#b3261e);border-radius:12px;font:600 14px/1 var(--lg-font-sans,system-ui);padding:12px;cursor:pointer}',
+      // long-press action sheet (edit/delete/copy)
+      '#looth-msgr .mg-acts{position:absolute;inset:0;z-index:5;display:none;align-items:flex-end;background:rgba(15,16,12,.42)}',
+      '#looth-msgr .mg-acts.is-on{display:flex}',
+      '#looth-msgr .mg-acts-in{width:100%;background:var(--lg-cream,#fbfbf8);border-radius:16px 16px 0 0;padding:8px 10px calc(10px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 26px rgba(0,0,0,.22)}',
+      '#looth-msgr .mg-actbtn{width:100%;border:0;background:none;text-align:center;font:600 16px/1 var(--lg-font-sans,system-ui);color:var(--lg-ink,#323532);padding:15px;cursor:pointer;border-radius:12px}',
+      '#looth-msgr .mg-actbtn:active{background:var(--lg-sage-tint,#eef2e3)}',
+      '#looth-msgr .mg-actbtn--del{color:var(--lg-error,#b3261e)}',
+      '#looth-msgr .mg-actbtn--cancel{color:var(--lg-mute,#6b6f6b);margin-top:4px;border-top:1px solid var(--lg-line,#e3ddd0);border-radius:0}',
+      // dark overrides
+      D + ' #looth-msgr .mg-p2,' + D + ' #looth-msgr .mg-acts-in{background:#1b1e21}',
+      D + ' #looth-msgr .mg-p2hd,' + D + ' #looth-msgr .mg-mmi{border-color:#2c312d}',
+      D + ' #looth-msgr .mg-p2t,' + D + ' #looth-msgr .mg-pi-nm,' + D + ' #looth-msgr .mg-mmi-nm,' + D + ' #looth-msgr .mg-actbtn{color:#f2f4ee}',
+      D + ' #looth-msgr .mg-p2hint,' + D + ' #looth-msgr .mg-pi-sub,' + D + ' #looth-msgr .mg-mmi-sub{color:#9aa097}',
+      D + ' #looth-msgr .mg-newbtn,' + D + ' #looth-msgr .mg-chmenu,' + D + ' #looth-msgr .mg-you{background:#262b30;color:#9cb37d}',
+      D + ' #looth-msgr .mg-pkfield{background:#262b30;border-color:#2c312d}',
+      D + ' #looth-msgr .mg-pi:active,' + D + ' #looth-msgr .mg-actbtn:active{background:#262b30}',
+
+      // ── image lightbox (P4.5 — Ian scope-add 7/12). SAME /message-media/ URL, no new
+      // exposure. Appended to <body> (outside #looth-msgr), so these rules are unscoped. ──
+      '#looth-msgr .mg-img{position:relative;border:0;padding:0;background:none;cursor:zoom-in}',
+      '#looth-msgr .mg-zoomdot{position:absolute;right:7px;bottom:7px;width:24px;height:24px;border-radius:50%;' +
+        'background:rgba(0,0,0,.5);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;pointer-events:none}',
+      '.mg-lb{position:fixed;inset:0;z-index:2147483600;background:rgba(13,14,11,.95);display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none}',
+      '.mg-lb-img{max-width:100vw;max-height:100vh;display:block;user-select:none;-webkit-user-select:none;will-change:transform;touch-action:none;transition:transform .05s linear}',
+      '.mg-lb-x{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:14px;width:40px;height:40px;border-radius:50%;border:0;' +
+        'background:rgba(255,255,255,.16);color:#fff;font:400 19px/1 system-ui;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1}',
+      '.mg-lb-hint{position:absolute;bottom:calc(16px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;' +
+        'color:rgba(255,255,255,.7);font:600 11px/1.3 var(--lg-font-sans,system-ui);letter-spacing:.03em;padding:0 20px}'
     ].join('\n');
     (document.head || document.documentElement).appendChild(st);
   }
@@ -229,13 +310,16 @@
       '<div class="mg-back" data-mg-close></div>' +
       '<div class="mg-panel">' +
         '<div class="mg-grab" aria-hidden="true"></div>' +
-        '<div class="mg-hd"><span class="mg-t">Chats</span><button class="mg-x" type="button" data-mg-close aria-label="Close">✕</button></div>' +
+        '<div class="mg-hd"><span class="mg-t">Chats</span>' +
+          '<button class="mg-newbtn" type="button" data-mg-new aria-label="New message" title="New message">＋</button>' +
+          '<button class="mg-x" type="button" data-mg-close aria-label="Close">✕</button></div>' +
         '<label class="mg-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>' +
           '<input type="search" placeholder="Search chats" autocomplete="off" aria-label="Search chats"></label>' +
         '<div class="mg-list" id="mg-list"><div class="mg-empty">Loading…</div></div>' +
         '<div class="mg-chat" id="mg-chat">' +
           '<div class="mg-chd"><button class="mg-backbtn" type="button" data-mg-home aria-label="Back to chats">‹</button>' +
             '<span class="mg-avi" id="mg-chavi"></span><span class="mg-chname" id="mg-chname"></span>' +
+            '<button class="mg-chmenu" type="button" data-mg-members aria-label="Members" title="Members">⋯</button>' +
             '<button class="mg-x" type="button" data-mg-close aria-label="Close messages">✕</button></div>' +
           '<div class="mg-msgs" id="mg-msgs"></div>' +
           '<div class="mg-comp">' +
@@ -252,14 +336,39 @@
             '</div>' +
           '</div>' +
         '</div>' +
+        // secondary panel: compose picker + member manager (slides over home/chat)
+        '<div class="mg-p2" id="mg-p2">' +
+          '<div class="mg-p2hd"><button class="mg-backbtn" type="button" data-mg-p2back aria-label="Back">‹</button>' +
+            '<span class="mg-p2t" id="mg-p2t">Members</span>' +
+            '<button class="mg-x" type="button" data-mg-close aria-label="Close">✕</button></div>' +
+          '<div class="mg-p2body" id="mg-p2body"></div>' +
+          '<div class="mg-p2foot" id="mg-p2foot" hidden></div>' +
+        '</div>' +
+        // long-press action sheet (edit / delete / copy)
+        '<div class="mg-acts" id="mg-acts"><div class="mg-acts-in" id="mg-acts-in"></div></div>' +
       '</div>';
     (document.body || document.documentElement).appendChild(sheet);
     sheet.addEventListener('click', function (e) {
-      if (e.target.closest('[data-mg-close]')) { closeMessenger(); return; }
+      var C = function (sel) { return e.target.closest && e.target.closest(sel); };
+      if (C('[data-mg-close]')) { closeMessenger(); return; }
       // Back to a list you never saw is disorienting. When the conversation IS the
       // root view (opened from a profile), dismiss the sheet and land back on the
       // page underneath instead (HK-018).
-      if (e.target.closest('[data-mg-home]')) { chatIsRoot ? closeMessenger() : showHome(); }
+      if (C('[data-mg-home]'))   { chatIsRoot ? closeMessenger() : showHome(); return; }
+      // ── group management ──
+      if (e.target.id === 'mg-acts') { closeActs(); return; }
+      // a long-press just fired the action sheet on this same image → swallow the tap
+      if (lpAt && Date.now() - lpAt < 600) { lpAt = 0; return; }
+      var lbx = C('[data-mg-lightbox]'); if (lbx) { openLightboxMobile(lbx.getAttribute('data-mg-lightbox')); return; }
+      if (C('[data-mg-new]'))     { openPickerMobile('new'); return; }
+      if (C('[data-mg-members]')) { openMemberManagerMobile(); return; }
+      if (C('[data-mg-p2back]'))  { closeP2(); return; }
+      var pa = C('[data-mg-pick-add]');    if (pa) { mpickAdd(pa.getAttribute('data-mg-pick-add')); return; }
+      var px = C('[data-mg-pick-remove]'); if (px) { mpickRemove(px.getAttribute('data-mg-pick-remove')); return; }
+      if (C('[data-mg-pick-go]'))  { mpickGo(); return; }
+      var mr = C('[data-mg-mm-remove]');   if (mr) { mmRemoveMobile(mr.getAttribute('data-mg-mm-remove')); return; }
+      if (C('[data-mg-mm-add]'))   { openPickerMobile('add'); return; }
+      if (C('[data-mg-mm-leave]')) { mmLeaveMobile(); return; }
     });
     // drag the grab down to dismiss (design-system gesture)
     (function () {
@@ -310,6 +419,33 @@
     }
     ta.addEventListener('focus', function () { setTimeout(kb, 120); setTimeout(kb, 330); });
     ta.addEventListener('blur', function () { setTimeout(kb, 80); });
+
+    // picker search (delegated — the input is re-rendered inside #mg-p2body)
+    sheet.addEventListener('input', function (e) {
+      if (e.target && e.target.id === 'mg-pksearch') mrenderPickList(e.target.value);
+    });
+    // long-press an own message bubble → the edit/delete/copy action sheet
+    (function () {
+      var box = sheet.querySelector('#mg-msgs');
+      var t = null, target = null, sx = 0, sy = 0;
+      var clear = function () { if (t) { clearTimeout(t); t = null; } };
+      box.addEventListener('touchstart', function (e) {
+        var b = e.target.closest && e.target.closest('[data-mg-msg-id]');
+        if (!b) return;
+        target = b; sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+        clear(); t = setTimeout(function () { t = null; lpAt = Date.now(); openActs(target); }, 480);
+      }, { passive: true });
+      box.addEventListener('touchmove', function (e) {
+        if (t && (Math.abs(e.touches[0].clientX - sx) > 10 || Math.abs(e.touches[0].clientY - sy) > 10)) clear();
+      }, { passive: true });
+      box.addEventListener('touchend', clear);
+      box.addEventListener('touchcancel', clear);
+      // right-click / trackpad long-press fallback (also lets CDP verify without touch)
+      box.addEventListener('contextmenu', function (e) {
+        var b = e.target.closest && e.target.closest('[data-mg-msg-id]');
+        if (b) { e.preventDefault(); openActs(b); }
+      });
+    })();
     return sheet;
   }
 
@@ -460,8 +596,10 @@
   function showHome() {
     if (pollT) { clearInterval(pollT); pollT = null; }
     curThread = null; curPeer = null; curPeers = [];
+    curMeta = null; pendingGroup = null;
     lastMsgHtml = ''; stickBottom = true;
     chatIsRoot = false;
+    closeP2(); closeActs();
     sheet.querySelector('#mg-chat').classList.remove('is-on');
     loadThreads();
   }
@@ -475,13 +613,15 @@
 
   /* force = this render was asked for by the user (first open, or their own send), so it
      always lands at the newest message. Otherwise the 8s poll must not move them. */
-  function renderMessages(msgs, peers, force) {
+  function renderMessages(msgs, peers, force, members) {
     var box = sheet.querySelector('#mg-msgs');
     var peerSet = {};
     (peers || []).forEach(function (p) { peerSet[p.uuid] = 1; });
-    var lastDay = '';
+    var group = (peers || []).length > 1;
+    var nameBy = {};
+    (members || []).forEach(function (m) { nameBy[m.uuid] = m.name || m.display_name || 'Member'; });
+    var lastDay = '', lastSender = null;
     var html = (msgs || []).map(function (m) {
-      var mine = !peerSet[m.sender_uuid];                     // mine = sender not among peers
       var ms = parseTs(m.created_at);
       var unparseable = isNaN(ms);
       var day = unparseable ? String(m.created_at || '').slice(0, 10) : dayKey(ms);
@@ -490,14 +630,34 @@
         lastDay = day;
         h += '<div class="mg-day">' + esc(unparseable ? day : dayLabel(ms)) + '</div>';
       }
-      // image attachment (access-controlled URL) — tap to open full size
-      if (m.media_url) {
-        h += '<a class="mg-img" style="align-self:' + (mine ? 'flex-end' : 'flex-start') + '" href="' +
-             esc(m.media_url) + '" target="_blank" rel="noopener noreferrer"><img src="' +
-             esc(m.media_url) + '" alt="Photo" loading="lazy"></a>';
+      // membership / transparency line — centered pill, never a bubble, never owned
+      if (m.kind === 'system') { lastSender = null; return h + '<div class="mg-sys">' + esc(m.body) + '</div>'; }
+      var mine = !peerSet[m.sender_uuid];                     // mine = sender not among peers
+      // who-said-it label above a peer's run of messages in a GROUP (never for you)
+      if (group && !mine && m.sender_uuid !== lastSender) {
+        h += '<span class="mg-author">' + esc(nameBy[m.sender_uuid] || 'Member') + '</span>';
       }
-      // body optional when an image is present (image-only message)
-      if (m.body) h += '<div class="mg-b ' + (mine ? 'mg-b--me' : 'mg-b--them') + '">' + esc(m.body) + '</div>';
+      lastSender = m.sender_uuid;
+      // soft-deleted → tombstone (body + media already withheld server-side)
+      if (m.deleted) {
+        return h + '<div class="mg-b mg-b--tomb ' + (mine ? 'mg-b--me' : 'mg-b--them') + '">Message deleted</div>';
+      }
+      // image attachment (access-controlled URL) → in-app lightbox with pinch-zoom.
+      // An OWN caption-less image also carries the msg id so long-press can delete it
+      // (a captioned image is deleted via its caption bubble instead).
+      if (m.media_url) {
+        h += '<button type="button" class="mg-img" style="align-self:' + (mine ? 'flex-end' : 'flex-start') +
+             '" data-mg-lightbox="' + esc(m.media_url) + '"' +
+             (mine && !m.body ? ' data-mg-msg-id="' + esc(m.id) + '"' : '') + '><img src="' + esc(m.media_url) +
+             '" alt="Photo" loading="lazy"><span class="mg-zoomdot" aria-hidden="true">⤢</span></button>';
+      }
+      // body optional when an image is present (image-only message).
+      // own text bubble carries id + raw body for the long-press edit/delete sheet.
+      if (m.body) {
+        h += '<div class="mg-b ' + (mine ? 'mg-b--me' : 'mg-b--them') + '"' +
+             (mine ? ' data-mg-msg-id="' + esc(m.id) + '" data-mg-body="' + esc(m.body) + '"' : '') + '>' +
+             esc(m.body) + (m.edited ? '<span class="mg-edited">(edited)</span>' : '') + '</div>';
+      }
       return h;
     }).join('');
 
@@ -530,12 +690,13 @@
            back, or opened another). Writing now would paint THIS thread's messages and
            header over the one they are actually reading. */
         if (!d || curThread !== uuid) return;
-        renderMessages(d.messages || [], d.peers || [], !quiet);
         if (!quiet) {
-          /* authoritative identity for this thread — every peer, including none */
+          /* authoritative identity + management context for this thread */
           curPeers = d.peers || [];
+          curMeta  = metaFrom(d);
           setChatHeader(curPeers);
         }
+        renderMessages(d.messages || [], d.peers || [], !quiet, d.members || []);
       })
       .catch(function () {});
   }
@@ -546,6 +707,8 @@
   function openThread(uuid, peers) {
     ensureSheet();
     curThread = uuid; curPeer = null; curPeers = peers || [];
+    curMeta = null; pendingGroup = null;
+    closeP2(); closeActs();
     setChatHeader(curPeers);
     sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Loading…</div>';
     lastMsgHtml = ''; stickBottom = true;        // a freshly opened thread starts at the newest message
@@ -615,13 +778,20 @@
     var ta = sheet.querySelector('#mg-in'), send = sheet.querySelector('#mg-send');
     var text = (ta.value || '').trim();
     if (!text && !pendingFile) return;                         // need text OR an image
-    if (!curThread && !(curPeer && curPeer.uuid)) return;
+    if (!curThread && !(curPeer && curPeer.uuid) && !pendingGroup) return;
     send.disabled = true;
 
+    // A group is created by its FIRST message (POST to_uuids), which has no image variant —
+    // so the first line of a new group must be text. Photos work once the group exists.
+    if (pendingGroup && pendingFile) {
+      setSendError('Send a message to start the group first — you can add photos once it exists.');
+      send.disabled = false; return;
+    }
     if (pendingFile) { sendWithFile(text, ta, send); return; }
 
     var url, body;
     if (curThread) { url = API + '/me/messages/' + encodeURIComponent(curThread); body = { body: text }; }
+    else if (pendingGroup) { url = API + '/me/messages/'; body = { to_uuids: pendingGroup, body: text }; }
     else if (curPeer && curPeer.uuid) { url = API + '/me/messages/'; body = { to_uuid: curPeer.uuid, body: text }; }
     else { return; }
     // optimistic bubble
@@ -637,10 +807,10 @@
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
       .then(function (res) {
         if (!res.ok) { b.style.opacity = '.4'; b.textContent += ' (failed — tap Send to retry)'; ta.value = text; send.disabled = false; return; }
-        // first message created the thread → adopt its uuid and start polling
+        // first message created the thread (DM or group) → adopt its uuid and start polling
         var newUuid = res.j && (res.j.thread_uuid || (res.j.thread && res.j.thread.uuid) || res.j.uuid);
         if (!curThread && newUuid) {
-          curThread = newUuid;
+          curThread = newUuid; pendingGroup = null;
           if (pollT) clearInterval(pollT);
           pollT = setInterval(function () { if (curThread === newUuid) loadThread(newUuid, true); }, 8000);
         }
@@ -701,6 +871,308 @@
       .catch(failed);
   }
 
+  /* ══ group management (lane: messages-manage) — parity with desktop social-modals.js ══
+     Every rule is ALSO enforced server-side; nothing here is the only guard. */
+
+  // viewer = the member NOT among the peers (peers is everyone but you)
+  function metaFrom(d) {
+    var peers = (d && d.peers) || [], members = (d && d.members) || [];
+    var pset = {}; peers.forEach(function (p) { pset[p.uuid] = 1; });
+    var me = members.filter(function (m) { return !pset[m.uuid]; })[0];
+    return {
+      is_group: !!(d && d.is_group), can_manage: !!(d && d.can_manage),
+      created_by: d && d.created_by, members: members, meUuid: me ? me.uuid : null,
+    };
+  }
+
+  // ── secondary panel (compose picker + member manager) ──
+  function openP2()  { if (sheet) sheet.querySelector('#mg-p2').classList.add('is-on'); }
+  function closeP2() {
+    if (!sheet) return;
+    var p2 = sheet.querySelector('#mg-p2'); if (p2) p2.classList.remove('is-on');
+    var foot = sheet.querySelector('#mg-p2foot'); if (foot) { foot.hidden = true; foot.innerHTML = ''; }
+  }
+  function closeActs() { if (sheet) { var a = sheet.querySelector('#mg-acts'); if (a) a.classList.remove('is-on'); } }
+
+  // ── long-press action sheet: edit / delete / copy ──
+  function openActs(bubble) {
+    var id  = bubble.getAttribute('data-mg-msg-id');
+    var raw = bubble.getAttribute('data-mg-body') || '';
+    var acts = sheet.querySelector('#mg-acts'), inn = sheet.querySelector('#mg-acts-in');
+    var html = '';
+    if (raw) html += '<button class="mg-actbtn" type="button" data-act="edit">Edit message</button>';
+    html += '<button class="mg-actbtn mg-actbtn--del" type="button" data-act="delete">Delete message</button>';
+    if (raw) html += '<button class="mg-actbtn" type="button" data-act="copy">Copy text</button>';
+    html += '<button class="mg-actbtn mg-actbtn--cancel" type="button" data-act="cancel">Cancel</button>';
+    inn.innerHTML = html;
+    var ed = inn.querySelector('[data-act="edit"]');
+    if (ed) ed.addEventListener('click', function () { closeActs(); editMobile(id, raw); });
+    inn.querySelector('[data-act="delete"]').addEventListener('click', function () { closeActs(); deleteMobile(id); });
+    var cp = inn.querySelector('[data-act="copy"]');
+    if (cp) cp.addEventListener('click', function () { closeActs(); try { navigator.clipboard.writeText(raw); } catch (e) {} });
+    inn.querySelector('[data-act="cancel"]').addEventListener('click', closeActs);
+    acts.classList.add('is-on');
+  }
+  // edit uses the action-sheet container as an overlay editor → the 8s poll re-rendering
+  // the messages underneath can't clobber an in-progress edit.
+  function editMobile(id, raw) {
+    var acts = sheet.querySelector('#mg-acts'), inn = sheet.querySelector('#mg-acts-in');
+    inn.innerHTML = '<div style="padding:10px 10px 4px">'
+      + '<textarea id="mg-editta" rows="3" style="width:100%;box-sizing:border-box;border:1px solid var(--lg-sage,#87986a);'
+      + 'border-radius:12px;padding:10px;font:15px/1.4 var(--lg-font-sans,system-ui);max-height:170px;background:#fff;color:var(--lg-ink,#1a1d1a)"></textarea>'
+      + '<div style="display:flex;gap:10px;margin-top:10px">'
+      + '<button class="mg-leavebtn" type="button" id="mg-editcancel" style="margin-top:0;border-color:var(--lg-line,#e3ddd0);color:var(--lg-mute,#6b6f6b)">Cancel</button>'
+      + '<button class="mg-gobtn" type="button" id="mg-editsave">Save</button></div></div>';
+    var t2 = inn.querySelector('#mg-editta'); t2.value = raw;
+    acts.classList.add('is-on');
+    setTimeout(function () { try { t2.focus(); } catch (e) {} }, 60);
+    inn.querySelector('#mg-editcancel').addEventListener('click', closeActs);
+    inn.querySelector('#mg-editsave').addEventListener('click', function () {
+      var v = (t2.value || '').trim(); if (!v || !curThread) return;
+      fetch(API + '/me/messages/' + encodeURIComponent(curThread) + '/entries/' + encodeURIComponent(id), {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: v }),
+      }).then(function (r) { closeActs(); if (r.ok) loadThread(curThread, true); else alert('Could not edit the message.'); })
+        .catch(function () { closeActs(); });
+    });
+  }
+  function deleteMobile(id) {
+    if (!curThread || !confirm('Delete this message? This can’t be undone.')) return;
+    fetch(API + '/me/messages/' + encodeURIComponent(curThread) + '/entries/' + encodeURIComponent(id), {
+      method: 'DELETE', credentials: 'include',
+    }).then(function (r) { if (r.ok) loadThread(curThread, true); else alert('Could not delete the message.'); })
+      .catch(function () {});
+  }
+
+  // ── compose / add picker ──
+  var mpickMode = 'new', mpickSel = [], mpickConns = [], mmMembersM = [];
+  function mchipAv(u) {
+    if (u.avatar_url) return '<span class="mg-chip-av"><img src="' + esc(u.avatar_url) + '" alt=""></span>';
+    var n = (u.display_name || u.name || '?');
+    return '<span class="mg-chip-av">' + esc(n.charAt(0).toUpperCase()) + '</span>';
+  }
+  function msearchVal() { var s = sheet.querySelector('#mg-pksearch'); return s ? s.value : ''; }
+  function mrenderChips() {
+    var box = sheet.querySelector('#mg-pkchips'); if (!box) return;
+    box.innerHTML = mpickSel.map(function (u) {
+      return '<span class="mg-chip">' + mchipAv(u) + esc(u.display_name || u.name || 'Member')
+        + '<button type="button" class="mg-chip-x" data-mg-pick-remove="' + esc(u.uuid) + '" aria-label="Remove">✕</button></span>';
+    }).join('');
+  }
+  function mrenderPickList(filter) {
+    var list = sheet.querySelector('#mg-pklist'); if (!list) return;
+    var f = (filter || '').trim().toLowerCase();
+    var chosen = {}; mpickSel.forEach(function (u) { chosen[u.uuid] = 1; });
+    var excl = {}; if (mpickMode === 'add') mmMembersM.forEach(function (uu) { excl[uu] = 1; });
+    var rows = mpickConns.filter(function (u) {
+      if (chosen[u.uuid] || excl[u.uuid]) return false;
+      if (!f) return true;
+      return String(u.display_name || '').toLowerCase().indexOf(f) > -1
+          || String(u.slug || '').toLowerCase().indexOf(f) > -1;
+    });
+    if (!rows.length) {
+      list.innerHTML = '<div class="mg-empty">' + (mpickConns.length ? 'No connections match.' : 'No connections yet.') + '</div>';
+      return;
+    }
+    list.innerHTML = rows.map(function (u) {
+      return '<button type="button" class="mg-pi" data-mg-pick-add="' + esc(u.uuid) + '">'
+        + '<span class="mg-avi">' + avi({ avatar_url: u.avatar_url, name: u.display_name || u.name }) + '</span>'
+        + '<span class="mg-pi-col"><span class="mg-pi-nm">' + esc(u.display_name || 'Member') + '</span>'
+        + (u.slug ? '<span class="mg-pi-sub">@' + esc(u.slug) + '</span>' : '') + '</span>'
+        + '<span class="mg-pi-add">Add</span></button>';
+    }).join('');
+  }
+  function mupdateGo() {
+    var go = sheet.querySelector('#mg-pickgo'); if (!go) return;
+    var n = mpickSel.length; go.disabled = n < 1;
+    go.textContent = mpickMode === 'add' ? 'Add' : (n >= 2 ? 'Start group' : 'Message');
+  }
+  function mloadConns() {
+    fetch(API + '/me/connections/', { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { mpickConns = (d && d.accepted) || []; mrenderPickList(msearchVal()); })
+      .catch(function () { var l = sheet.querySelector('#mg-pklist'); if (l) l.innerHTML = '<div class="mg-empty">Couldn’t load connections.</div>'; });
+  }
+  function openPickerMobile(mode) {
+    if (mode === 'add' && !curThread) return;
+    ensureSheet();
+    mpickMode = mode; mpickSel = [];
+    sheet.querySelector('#mg-p2t').textContent = mode === 'add' ? 'Add people' : 'New message';
+    sheet.querySelector('#mg-p2body').innerHTML =
+      '<p class="mg-p2hint">' + (mode === 'add' ? 'You can only add people you’re connected to.' : 'Add two or more people to start a group.') + '</p>'
+      + '<div class="mg-pkfield"><span id="mg-pkchips"></span>'
+      + '<input id="mg-pksearch" class="mg-pksearch" placeholder="Search connections…" autocomplete="off"></div>'
+      + '<div class="mg-pklist" id="mg-pklist"><div class="mg-empty">Loading…</div></div>';
+    var foot = sheet.querySelector('#mg-p2foot');
+    foot.hidden = false;
+    foot.innerHTML = '<button class="mg-gobtn" type="button" id="mg-pickgo" data-mg-pick-go disabled>' + (mode === 'add' ? 'Add' : 'Start group') + '</button>';
+    openP2(); mrenderChips(); mupdateGo(); mloadConns();
+    var s = sheet.querySelector('#mg-pksearch'); if (s) setTimeout(function () { try { s.focus(); } catch (e) {} }, 80);
+  }
+  function mpickAdd(uuid) {
+    var u = mpickConns.filter(function (c) { return c.uuid === uuid; })[0]; if (!u) return;
+    mpickSel.push(u); mrenderChips(); mrenderPickList(msearchVal()); mupdateGo();
+  }
+  function mpickRemove(uuid) {
+    mpickSel = mpickSel.filter(function (u) { return u.uuid !== uuid; });
+    mrenderChips(); mrenderPickList(msearchVal()); mupdateGo();
+  }
+  function mpickGo() {
+    if (!mpickSel.length) return;
+    var uuids = mpickSel.map(function (u) { return u.uuid; });
+    if (mpickMode === 'add') { mmAddConfirmMobile(uuids); return; }
+    if (uuids.length === 1) {
+      var u = mpickSel[0]; closeP2();
+      openChatWith(u.uuid, u.display_name, u.avatar_url); chatIsRoot = false;   // came from the list
+      return;
+    }
+    enterGroupComposeMobile(mpickSel.slice());
+  }
+  // ≥2 selected → a not-yet-created group. Hold the uuids; the first text message
+  // POSTs {to_uuids} and creates the thread (see doSend). Mirrors the new-DM compose.
+  function enterGroupComposeMobile(sel) {
+    closeP2();
+    curThread = null; curPeer = null; curMeta = null;
+    pendingGroup = sel.map(function (u) { return u.uuid; });
+    curPeers = sel.map(function (u) { return { uuid: u.uuid, name: u.display_name || u.name, slug: u.slug, avatar_url: u.avatar_url }; });
+    chatIsRoot = false;
+    clearFile();
+    setChatHeader(curPeers);
+    sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Say hi — this starts your group.</div>';
+    lastMsgHtml = ''; stickBottom = true;
+    sheet.querySelector('#mg-chat').classList.add('is-on');
+    syncChatChrome();
+    var ta = sheet.querySelector('#mg-in'); ta.value = ''; ta.style.height = 'auto';
+    sheet.querySelector('#mg-send').disabled = true;
+    try { ta.focus({ preventScroll: true }); } catch (e) {}
+  }
+
+  // ── member manager ──
+  function openMemberManagerMobile() {
+    if (!curThread) return;
+    ensureSheet();
+    sheet.querySelector('#mg-p2t').textContent = 'Members';
+    sheet.querySelector('#mg-p2body').innerHTML = '<div class="mg-empty">Loading…</div>';
+    sheet.querySelector('#mg-p2foot').hidden = true;
+    openP2();
+    var tu = curThread;
+    fetch(API + '/me/messages/' + encodeURIComponent(tu), { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && curThread === tu) renderMemberManagerMobile(d); })
+      .catch(function () { var b = sheet.querySelector('#mg-p2body'); if (b) b.innerHTML = '<div class="mg-empty">Couldn’t load members.</div>'; });
+  }
+  function renderMemberManagerMobile(d) {
+    var peers = (d && d.peers) || [], members = (d && d.members) || [];
+    var canManage = !!(d && d.can_manage), isGroup = !!(d && d.is_group), createdBy = d && d.created_by;
+    var pset = {}; peers.forEach(function (p) { pset[p.uuid] = 1; });
+    var me = members.filter(function (m) { return !pset[m.uuid]; })[0];
+    var meUuid = me ? me.uuid : null;
+    mmMembersM = members.map(function (m) { return m.uuid; });
+    var hint = canManage
+      ? 'You can remove anyone in this ' + (isGroup ? 'group' : 'conversation') + '.'
+      : (isGroup ? 'Only the group’s creator or a site admin can remove others. You can always leave.'
+                 : 'Add people to start a group — this private chat stays as it is.');
+    var rows = members.map(function (m) {
+      var isMe = m.uuid === meUuid, isCreator = createdBy && m.uuid === createdBy;
+      var sub = isMe ? ('You' + (isCreator ? ' · started the group' : ''))
+                     : (isCreator ? 'Started the group' : (m.slug ? '@' + m.slug : ''));
+      var right = isMe ? '<span class="mg-you">You</span>'
+        : (canManage ? '<button type="button" class="mg-rm" data-mg-mm-remove="' + esc(m.uuid) + '">Remove</button>' : '');
+      return '<div class="mg-mmi"><span class="mg-avi">' + avi({ avatar_url: m.avatar_url, name: m.name || m.display_name }) + '</span>'
+        + '<span class="mg-mmi-col"><span class="mg-mmi-nm">' + esc(m.name || m.display_name || 'Member') + '</span>'
+        + '<span class="mg-mmi-sub">' + esc(sub) + '</span></span>' + right + '</div>';
+    }).join('');
+    sheet.querySelector('#mg-p2t').textContent = 'Members · ' + members.length;
+    sheet.querySelector('#mg-p2body').innerHTML = '<p class="mg-p2hint">' + esc(hint) + '</p>' + rows
+      + '<button type="button" class="mg-addrow" data-mg-mm-add>＋ Add people</button>'
+      + '<button type="button" class="mg-leavebtn" data-mg-mm-leave>' + (isGroup ? 'Leave group' : 'Leave') + '</button>';
+    sheet.querySelector('#mg-p2foot').hidden = true;
+  }
+  function mpostMembers(body) {
+    if (!curThread) return Promise.resolve(null);
+    return fetch(API + '/me/messages/' + encodeURIComponent(curThread) + '/members', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }).then(function (r) {
+      return r.json().then(
+        function (j) { j = j || {}; j._status = r.status; j._ok = r.ok && j.ok !== false; return j; },
+        function ()  { return { _status: r.status, _ok: r.ok }; }
+      );
+    }).catch(function () { return null; });
+  }
+  function mmRemoveMobile(uuid) {
+    if (!confirm('Remove this person from the group?')) return;
+    mpostMembers({ remove: uuid }).then(function (res) {
+      if (res && res._ok) openMemberManagerMobile();
+      else if (res && res._status === 403) alert('Only the group’s creator or a site admin can remove members.');
+      else alert('Could not remove that member.');
+    });
+  }
+  function mmLeaveMobile() {
+    if (!confirm('Leave this conversation? You’ll lose access to it.')) return;
+    mpostMembers({ leave: true }).then(function (res) {
+      if (res && res._ok) { closeP2(); showHome(); }
+      else alert('Could not leave the conversation.');
+    });
+  }
+  function mmAddConfirmMobile(uuids) {
+    mpostMembers({ add: uuids }).then(function (res) {
+      if (res && res._ok) {
+        /* adding to a 1:1 forks a NEW group (the DM is never converted) → open the new one */
+        if (res.forked && res.thread_uuid) { closeP2(); chatIsRoot = false; openThread(res.thread_uuid, null); }
+        else openMemberManagerMobile();
+      } else if (res && res._status === 403) { alert('You can only add people you’re connected to.'); }
+      else alert('Could not add those people.');
+    });
+  }
+
+  // ── image lightbox (pinch-zoom on touch; double-tap / ✕ / backdrop; Esc closes) ──
+  var mgLightbox = null;
+  function closeLightboxMobile() {
+    if (mgLightbox) { mgLightbox.remove(); mgLightbox = null; }
+  }
+  function openLightboxMobile(url) {
+    closeLightboxMobile();
+    var lb = document.createElement('div');
+    lb.className = 'mg-lb';
+    lb.setAttribute('role', 'dialog'); lb.setAttribute('aria-label', 'Photo');
+    lb.innerHTML = '<button type="button" class="mg-lb-x" aria-label="Close">✕</button>'
+      + '<img class="mg-lb-img" src="' + esc(url) + '" alt="Photo" draggable="false">'
+      + '<div class="mg-lb-hint">Pinch to zoom · double-tap to reset · tap outside to close</div>';
+    (document.body || document.documentElement).appendChild(lb);
+    mgLightbox = lb;
+    var img = lb.querySelector('.mg-lb-img');
+    var scale = 1, tx = 0, ty = 0, startDist = 0, startScale = 1, psx = 0, psy = 0, mode = '', lastTap = 0;
+    function apply() { img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; }
+    function dist(t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); }
+    function reset() { scale = 1; tx = 0; ty = 0; apply(); }
+    img.addEventListener('touchstart', function (e) {
+      if (e.touches.length === 2) { mode = 'pinch'; startDist = dist(e.touches); startScale = scale; }
+      else if (e.touches.length === 1 && scale > 1) { mode = 'pan'; psx = e.touches[0].clientX - tx; psy = e.touches[0].clientY - ty; }
+      else { mode = ''; }
+    }, { passive: true });
+    img.addEventListener('touchmove', function (e) {
+      if (mode === 'pinch' && e.touches.length === 2) {
+        if (e.cancelable) e.preventDefault();
+        scale = Math.min(5, Math.max(1, startScale * dist(e.touches) / (startDist || 1)));
+        if (scale === 1) { tx = 0; ty = 0; } apply();
+      } else if (mode === 'pan' && e.touches.length === 1) {
+        if (e.cancelable) e.preventDefault();
+        tx = e.touches[0].clientX - psx; ty = e.touches[0].clientY - psy; apply();
+      }
+    }, { passive: false });
+    img.addEventListener('touchend', function () {
+      var now = Date.now();
+      if (now - lastTap < 300) { scale > 1 ? reset() : (scale = 2.5, apply()); lastTap = 0; }
+      else lastTap = now;
+    });
+    // non-touch (CDP / trackpad) affordances: double-click toggles, wheel zooms
+    img.addEventListener('dblclick', function (e) { e.preventDefault(); scale > 1 ? reset() : (scale = 2.5, apply()); });
+    lb.addEventListener('wheel', function (e) { e.preventDefault(); scale = Math.min(5, Math.max(1, scale + (e.deltaY < 0 ? 0.25 : -0.25))); if (scale === 1) { tx = 0; ty = 0; } apply(); }, { passive: false });
+    lb.querySelector('.mg-lb-x').addEventListener('click', function (e) { e.stopPropagation(); closeLightboxMobile(); });
+    lb.addEventListener('click', function (e) { if (e.target === lb) closeLightboxMobile(); });
+  }
+
   var msgrHist = false;
   function openMessenger() {
     ensureSheet();
@@ -724,6 +1196,10 @@
   }
   window.addEventListener('popstate', function () {
     if (!sheet || !sheet.classList.contains('is-open')) return;
+    // an action sheet or the compose/member panel is a sub-screen — back dismisses it first
+    var acts = sheet.querySelector('#mg-acts'), p2 = sheet.querySelector('#mg-p2');
+    if (acts && acts.classList.contains('is-on')) { closeActs(); try { history.pushState({ lgMg: 1 }, ''); } catch (e) {} return; }
+    if (p2 && p2.classList.contains('is-on'))     { closeP2();   try { history.pushState({ lgMg: 1 }, ''); } catch (e) {} return; }
     var chat = sheet.querySelector('#mg-chat');
     // a chat opened straight from a profile has no list behind it — dismiss, don't invent one
     if (chat && chat.classList.contains('is-on') && !chatIsRoot) {   // back from a chat → home
@@ -734,7 +1210,13 @@
     closeMessenger(true);
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && sheet && sheet.classList.contains('is-open')) closeMessenger();
+    if (e.key !== 'Escape') return;
+    if (mgLightbox) { e.stopImmediatePropagation(); closeLightboxMobile(); return; }
+    if (!sheet || !sheet.classList.contains('is-open')) return;
+    var acts = sheet.querySelector('#mg-acts'), p2 = sheet.querySelector('#mg-p2');
+    if (acts && acts.classList.contains('is-on')) { closeActs(); return; }
+    if (p2 && p2.classList.contains('is-on'))     { closeP2(); return; }
+    closeMessenger();
   });
 
   window.openMessenger = openMessenger;

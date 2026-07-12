@@ -37,7 +37,8 @@ $threadId = (int)$threadId;
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'GET') {
-    $res = Messaging::thread($uuid, $threadId);
+    // Auth::isAdmin() feeds can_manage (a site admin may remove any member, per Ian 7/12).
+    $res = Messaging::thread($uuid, $threadId, Auth::isAdmin());
     profile_app_json($res['ok'] ? 200 : 403, $res);
 }
 
