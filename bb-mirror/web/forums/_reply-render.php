@@ -138,7 +138,11 @@ if (!function_exists('bb_mirror__mention_identities')) {
         $needUuid = array_values(array_diff(array_unique(array_map('strtolower', $uuids)), array_keys($memoUuid)));
 
         $fetch = function (string $qs): array {
-            if (PHP_SAPI === 'cli') return [];
+            // NB: no CLI short-circuit. Unlike hub_resolve_profiles() (which forwards the
+            // viewer's browser cookie and is meaningless without one), this resolver reads
+            // the PUBLIC identity over the loopback endpoint, which is internal-exempt
+            // (users.php: REMOTE_ADDR 127.0.0.1/::1 → no auth). So it works — and is
+            // unit-testable — from CLI and any cron/CLI render path, cookie or not.
             $hdrs = ['Host: ' . (defined('LG_BB_MIRROR_HOST') ? LG_BB_MIRROR_HOST : 'localhost')];
             if (!empty($_SERVER['HTTP_COOKIE'])) $hdrs[] = 'Cookie: ' . $_SERVER['HTTP_COOKIE'];
             $ch = curl_init();
