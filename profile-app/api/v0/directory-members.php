@@ -167,6 +167,21 @@ if ($creds) {
                          WHERE pc.owner_type='profile' AND pc.owner_id = u.id AND cc.slug IN (" . implode(',', $ph) . "))";
 }
 
+// NAME SEARCH (Ian 2026-07-12: "search user name on DT and mobile"). Substring-anywhere
+// ILIKE on display_name — NOT prefix — because business names live in display_name and
+// must be findable by any word in the tail ([[display_name business tail]]). Rides the
+// SHARED $wheres (above $listWheres), so it constrains BOTH the paginated stack and the
+// map-pin feed, and sits on TOP of the visibility stack already in $wheres: a
+// directory-hidden member (private master switch; anon non-opt-in via $listWheres) can
+// never be surfaced by name. Escape LIKE metacharacters so a literal % / _ / \ typed in
+// the box matches literally instead of acting as a wildcard.
+$q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+if ($q !== '') {
+    $qEsc = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
+    $wheres[]    = "u.display_name ILIKE :q ESCAPE '\\'";
+    $params[':q'] = '%' . $qEsc . '%';
+}
+
 $selectDistance = '';
 // Base ordering from the sort whitelist. 'distance_asc' is resolved inside the
 // location block below (it needs the computed distance column); online_* fall
