@@ -39,6 +39,7 @@ PAGES = {
     "weekly":  ("/weekly/",            ["anon"]),
     "events":  ("/events/",            ["anon"]),
     "profile": ("/u/iandavlin",        ["member"]),
+    "chapter": ("/g/dmv-looths",       ["anon", "member"]),   # dmv-native: covered post-cutover
 }
 
 OVERSIZE_RATIO   = 1.7        # natural px vs rendered px * dpr

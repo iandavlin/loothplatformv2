@@ -130,7 +130,8 @@ lg_shared_render_site_header([
       data-slug="<?= looth_h($ch['slug']) ?>"
       data-member="<?= $isMember ? '1' : '0' ?>"
       data-authed="<?= $authed ? '1' : '0' ?>"
-      data-canpost="<?= $canPost ? '1' : '0' ?>">
+      data-canpost="<?= $canPost ? '1' : '0' ?>"
+      data-src-base="/profile-api/v0">
 
   <header class="ch-hero">
     <div class="ch-hero__in">
@@ -187,6 +188,26 @@ lg_shared_render_site_header([
         <?php endforeach; ?>
       </ul>
 
+      <?php
+      /* Modal data island: the full body + author for each rendered discussion, so opening a
+       * thread needs ONE fetch (the replies) instead of two. JSON_HEX_TAG closes the </script>
+       * breakout; every value re-enters the DOM through the modal's JS escaper. */
+      $island = [];
+      foreach ($posts as $p) {
+          $island[(string)(int)$p['id']] = [
+              'title'  => trim((string)($p['title'] ?? '')),
+              'body'   => (string)($p['body'] ?? ''),
+              'author' => (string)($p['author_name'] ?? 'Member'),
+              'slug'   => $p['author_slug'] ?? null,
+              'avatar' => $p['author_avatar'] ?? null,
+              'when'   => $when($p['created_at'] ?? null),
+          ];
+      }
+      ?>
+      <script type="application/json" id="ch-posts-data"><?=
+          json_encode($island, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}'
+      ?></script>
+
       <div class="ch-empty" id="ch-empty"<?= $posts ? ' hidden' : '' ?>>
         <p class="ch-empty__h">No discussions yet.</p>
         <p class="ch-empty__s"><?= $canPost
@@ -201,9 +222,9 @@ lg_shared_render_site_header([
 
 <script>
 /* Chapter page client — inline so it ships with the PHP (no separate webroot copy step).
- * Three jobs: (1) draw the map, (2) one-tap join/leave, (3) open a discussion in the modal.
- * The modal seam (data-src-base + native fragment endpoints) is wired in a follow-up; the
- * click handler is stubbed to a graceful fallback until then. */
+ * Three jobs: (1) draw the map, (2) one-tap join/leave, (3) open a discussion in the modal
+ * (read the thread, and — for members — reply or start a new discussion). Every modal
+ * endpoint derives from data-src-base, so the network layer is one swappable seam. */
 (function () {
   'use strict';
   var root = document.getElementById('ch');
@@ -212,10 +233,12 @@ lg_shared_render_site_header([
 
   // ── MAP ─────────────────────────────────────────────────────────────────────
   var mapEl = document.getElementById('ch-map');
-  if (mapEl && window.L) {
-    var lat = parseFloat(mapEl.getAttribute('data-lat'));
-    var lng = parseFloat(mapEl.getAttribute('data-lng'));
-    var radiusMi = parseFloat(mapEl.getAttribute('data-radius-mi'));
+  var lat = mapEl ? parseFloat(mapEl.getAttribute('data-lat')) : NaN;
+  var lng = mapEl ? parseFloat(mapEl.getAttribute('data-lng')) : NaN;
+  var radiusMi = mapEl ? parseFloat(mapEl.getAttribute('data-radius-mi')) : NaN;
+  // NaN guard: a chapter row with a null/garbage center or radius must not throw and take
+  // the whole page's JS down with it. If the geo is unusable we simply skip the map.
+  if (mapEl && window.L && isFinite(lat) && isFinite(lng) && isFinite(radiusMi) && radiusMi > 0) {
     var radiusM = radiusMi * 1609.344;
     var map = L.map(mapEl, { scrollWheelZoom: false });
     // OSM tiles — the house source (webroot/practice-sheet.js, profile-sheet.js).
@@ -245,6 +268,10 @@ lg_shared_render_site_header([
         });
       })
       .catch(function () {});
+  } else if (mapEl) {
+    // Unusable geo (or no Leaflet): drop the whole map panel rather than leave a dead box.
+    var wrap = mapEl.closest('.ch-mapwrap');
+    if (wrap) wrap.hidden = true;
   }
 
   // ── JOIN / LEAVE (one tap) ──────────────────────────────────────────────────
@@ -293,25 +320,215 @@ lg_shared_render_site_header([
     });
   }
 
-  // ── OPEN A DISCUSSION (modal seam wired in the follow-up step) ──────────────
+  // ── DISCUSSION MODAL ────────────────────────────────────────────────────────
+  // Every endpoint derives from data-src-base — THE SEAM. In production it is
+  // "/profile-api/v0"; a harness can repoint it at a fixtures dir and the whole modal
+  // is exercised with zero network. The overlay is built once, lazily, on first open.
+  var base = (root.getAttribute('data-src-base') || '/profile-api/v0').replace(/\/+$/, '');
+  var postsById = {};
+  try {
+    var island = document.getElementById('ch-posts-data');
+    if (island) postsById = JSON.parse(island.textContent || '{}') || {};
+  } catch (e) { postsById = {}; }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  // Body text: escape first, THEN turn newlines into breaks. Plain text — no markdown.
+  function bodyHtml(s) { return esc(s).replace(/\n/g, '<br>'); }
+
+  // Avatar through the resizer (CLAUDE.md: never a raw upload).
+  function avatarHtml(url, name) {
+    name = (name && name.trim()) || 'Member';
+    if (!url) return '<span class="ch-av ch-av--none" aria-hidden="true">' +
+      esc(name.charAt(0).toUpperCase()) + '</span>';
+    var rz = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'w=';
+    return '<img class="ch-av" src="' + esc(rz + '80') + '" srcset="' +
+      esc(rz + '40') + ' 40w, ' + esc(rz + '80') + ' 80w, ' + esc(rz + '120') + ' 120w" ' +
+      'sizes="40px" width="40" height="40" alt="" decoding="async">';
+  }
+
+  function canPost()  { return root.getAttribute('data-canpost') === '1'; }
+  function isAuthed() { return root.getAttribute('data-authed') === '1'; }
+
+  var modal, modalBody, lastFocus;
+  function ensureModal() {
+    if (modal) return;
+    modal = document.createElement('div');
+    modal.className = 'ch-modal';
+    modal.hidden = true;
+    modal.innerHTML =
+      '<div class="ch-modal__scrim" data-close></div>' +
+      '<div class="ch-modal__panel" role="dialog" aria-modal="true" aria-label="Discussion">' +
+        '<button type="button" class="ch-modal__x" data-close aria-label="Close">✕</button>' +
+        '<div class="ch-modal__body"></div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modalBody = modal.querySelector('.ch-modal__body');
+    modal.addEventListener('click', function (e) {
+      if (e.target.hasAttribute('data-close')) closeModal();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal && !modal.hidden) closeModal();
+    });
+  }
+  function openModal() {
+    ensureModal();
+    lastFocus = document.activeElement;
+    modal.hidden = false;
+    document.body.classList.add('ch-modal-open');
+    var x = modal.querySelector('.ch-modal__x');
+    if (x) x.focus();
+  }
+  function closeModal() {
+    if (!modal || modal.hidden) return;
+    modal.hidden = true;
+    document.body.classList.remove('ch-modal-open');
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  // Keep a list row's reply count honest after replies change (set to the true thread size).
+  function setReplyCount(pid, n) {
+    var badge = document.querySelector('.ch-post[data-post-id="' + pid + '"] .ch-post__replies');
+    if (!badge) return;
+    badge.setAttribute('data-count', String(n));
+    badge.textContent = n + ' ' + (n === 1 ? 'reply' : 'replies');
+  }
+
+  // ---- Open a discussion: header from the island, replies over the wire --------
+  function threadEl()      { return modalBody.querySelector('.ch-thread'); }
+  function setThread(html) { var t = threadEl(); if (t) { t.innerHTML = html; t.removeAttribute('aria-busy'); } }
+
+  function commentHtml(c) {
+    var a = c.author || {};
+    return '<li class="ch-reply" data-comment-id="' + (c.id | 0) + '">' +
+      avatarHtml(a.avatar_url, a.name) +
+      '<div class="ch-reply__in"><span class="ch-reply__by">' +
+        (a.slug ? '<a href="/u/' + encodeURIComponent(a.slug) + '">' + esc(a.name || 'Someone') + '</a>'
+                : esc(a.name || 'Someone')) +
+      '</span><div class="ch-reply__text">' + bodyHtml(c.body) + '</div></div></li>';
+  }
+  function renderThread(comments) {
+    if (!comments.length) { setThread('<p class="ch-thread__note">No replies yet.</p>'); return; }
+    setThread('<ul class="ch-replies">' + comments.map(commentHtml).join('') + '</ul>');
+  }
+  function fetchThread(pid) {
+    return fetch(base + '/chapter-posts/' + encodeURIComponent(pid) + '/comments', { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+      .then(function (d) {
+        var cs = d && d.comments ? d.comments : [];
+        renderThread(cs);
+        setReplyCount(pid, cs.length);
+        return cs;
+      });
+  }
+
+  function replyBoxHtml() {
+    if (canPost()) {
+      return '<form class="ch-reply-form" id="ch-reply-form">' +
+        '<textarea class="ch-reply-form__body" name="body" rows="2" placeholder="Write a reply…" required></textarea>' +
+        '<button type="submit" class="ch-reply-form__send">Reply</button>' +
+      '</form>';
+    }
+    if (isAuthed()) return '<p class="ch-reply-hint">Join the chapter to reply.</p>';
+    return '<p class="ch-reply-hint"><a href="/wp-login.php?redirect_to=' +
+      encodeURIComponent(location.pathname) + '">Sign in</a> to reply.</p>';
+  }
+  function wireReply(pid) {
+    var form = modalBody.querySelector('#ch-reply-form');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var ta = form.querySelector('[name=body]');
+      var body = (ta.value || '').trim();
+      if (!body) return;
+      var send = form.querySelector('.ch-reply-form__send');
+      send.disabled = true;
+      fetch(base + '/chapter-posts/' + encodeURIComponent(pid) + '/comments', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: body })
+      })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+        // Re-fetch so the new reply renders with the server's stitched identity, not a guess.
+        .then(function () { ta.value = ''; return fetchThread(pid); })
+        .catch(function () {})
+        .then(function () { send.disabled = false; });
+    });
+  }
+
+  function openPost(pid) {
+    var post = postsById[pid] || {};
+    openModal();
+    var head =
+      '<div class="ch-modal__post">' +
+        (post.title ? '<h3 class="ch-modal__title">' + esc(post.title) + '</h3>' : '') +
+        '<div class="ch-modal__meta">' +
+          avatarHtml(post.avatar, post.author) +
+          '<span class="ch-modal__by">' +
+            (post.slug ? '<a href="/u/' + encodeURIComponent(post.slug) + '">' + esc(post.author || 'Member') + '</a>'
+                       : esc(post.author || 'Member')) +
+          '</span><span class="ch-post__dot">·</span>' +
+          '<span class="ch-modal__when">' + esc(post.when || '') + '</span>' +
+        '</div>' +
+        (post.body ? '<div class="ch-modal__text">' + bodyHtml(post.body) + '</div>' : '') +
+      '</div>';
+    modalBody.innerHTML = head +
+      '<div class="ch-thread" aria-busy="true"><p class="ch-thread__note">Loading replies…</p></div>' +
+      replyBoxHtml();
+    wireReply(pid);
+    fetchThread(pid).catch(function () {
+      setThread('<p class="ch-thread__note ch-thread__note--err">Couldn’t load replies.</p>');
+    });
+  }
+
+  // ---- Start a discussion ------------------------------------------------------
+  function openCompose() {
+    if (!canPost()) return;
+    openModal();
+    modalBody.innerHTML =
+      '<h3 class="ch-modal__title">Start a discussion</h3>' +
+      '<form class="ch-form" id="ch-compose-form">' +
+        '<input class="ch-form__title" name="title" maxlength="140" placeholder="Title (optional)">' +
+        '<textarea class="ch-form__body" name="body" rows="6" placeholder="What’s happening in the chapter?" required></textarea>' +
+        '<div class="ch-form__foot"><button type="submit" class="ch-form__submit">Post discussion</button></div>' +
+      '</form>';
+    var form = modalBody.querySelector('#ch-compose-form');
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var body = form.querySelector('[name=body]').value.trim();
+      if (!body) return;
+      var title = form.querySelector('[name=title]').value.trim();
+      var submit = form.querySelector('.ch-form__submit');
+      submit.disabled = true;
+      fetch(base + '/chapters/' + encodeURIComponent(slug) + '/posts', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title || null, body: body })
+      })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+        .then(function (d) {
+          if (!d || !d.ok) throw d;
+          // The new discussion is SERVER-rendered on reload — the same render that painted
+          // the rest of the list, so there is no client/server drift. The list is short.
+          location.reload();
+        })
+        .catch(function () { submit.disabled = false; });
+    });
+  }
+
+  // ---- Wire the affordances ----------------------------------------------------
   var list = document.getElementById('ch-list');
   if (list) {
     list.addEventListener('click', function (e) {
       var btn = e.target.closest('.ch-post__open');
-      if (!btn) return;
-      var pid = btn.getAttribute('data-post-id');
-      // Placeholder until the modal seam lands: deep-link that the modal will intercept.
-      window.dispatchEvent(new CustomEvent('lg:open-chapter-post', { detail: { postId: pid, slug: slug } }));
+      if (btn) openPost(btn.getAttribute('data-post-id'));
     });
   }
-
-  // Compose affordance — the composer branch is wired with the modal seam.
   var compose = document.getElementById('ch-compose');
-  if (compose) {
-    compose.addEventListener('click', function () {
-      window.dispatchEvent(new CustomEvent('lg:compose-chapter-post', { detail: { slug: slug } }));
-    });
-  }
+  if (compose) compose.addEventListener('click', openCompose);
 })();
 </script>
 </body>

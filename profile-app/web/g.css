@@ -132,4 +132,87 @@
 .ch-empty__h { margin: 0 0 4px; font-weight: 600; font-size: 1.05rem; }
 .ch-empty__s { margin: 0; color: var(--lg-ink-soft, #77827b); }
 
+/* ── DISCUSSION MODAL ──────────────────────────────────────────────────────
+ * Built client-side (webroot/g.php) on first open. Read the post + its replies;
+ * members get a reply box and a compose form. Endpoints derive from data-src-base. */
+.ch-modal {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 6vh 16px 16px;
+}
+.ch-modal__scrim {
+  position: absolute; inset: 0;
+  background: rgba(26, 29, 26, 0.44);
+}
+.ch-modal__panel {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 40rem;
+  max-height: 88vh; overflow-y: auto;
+  background: var(--lg-cream, #fbfbf8);
+  border: 1px solid var(--lg-line, #eee8db);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(26, 29, 26, 0.24);
+  padding: 26px 26px 22px;
+}
+.ch-modal__x {
+  position: absolute; top: 12px; right: 12px;
+  width: 32px; height: 32px; border: 0; border-radius: 50%;
+  background: transparent; color: var(--lg-ink-soft, #77827b);
+  font-size: 1.05rem; line-height: 1; cursor: pointer;
+}
+.ch-modal__x:hover { background: var(--lg-sage-tint, #f5f8ef); color: var(--lg-ink, #1a1d1a); }
+.ch-modal-open { overflow: hidden; }
+
+.ch-modal__title { margin: 0 34px 12px 0; font-size: 1.28rem; font-weight: 700; line-height: 1.25; }
+.ch-modal__meta {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.9rem; color: var(--lg-ink-soft, #6b756e); margin-bottom: 14px;
+}
+.ch-modal__by { font-weight: 500; color: var(--lg-ink, #3a423c); }
+.ch-modal__by a { color: inherit; text-decoration: none; }
+.ch-modal__by a:hover { text-decoration: underline; }
+.ch-modal__when { color: var(--lg-ink-soft, #77827b); }
+.ch-modal__text {
+  font-size: 1rem; line-height: 1.6; color: var(--lg-ink, #2b322c);
+  white-space: normal; word-break: break-word;
+}
+
+/* Replies thread */
+.ch-thread { margin: 20px 0 6px; padding-top: 16px; border-top: 1px solid var(--lg-line, #eee8db); }
+.ch-thread__note { margin: 4px 0; color: var(--lg-ink-soft, #77827b); font-size: 0.92rem; }
+.ch-thread__note--err { color: #a3432f; }
+.ch-replies { list-style: none; margin: 0; padding: 0; }
+.ch-reply { display: flex; gap: 10px; padding: 12px 0; }
+.ch-reply + .ch-reply { border-top: 1px solid var(--lg-line, #f0ece1); }
+.ch-reply__in { min-width: 0; }
+.ch-reply__by { font-weight: 600; font-size: 0.9rem; color: var(--lg-ink, #3a423c); }
+.ch-reply__by a { color: inherit; text-decoration: none; }
+.ch-reply__by a:hover { text-decoration: underline; }
+.ch-reply__text { font-size: 0.96rem; line-height: 1.5; word-break: break-word; }
+
+/* Reply box + compose form */
+.ch-reply-form { display: flex; gap: 8px; align-items: flex-end; margin-top: 14px; }
+.ch-reply-form__body { flex: 1 1 auto; }
+.ch-reply-hint { margin: 14px 0 2px; color: var(--lg-ink-soft, #77827b); font-size: 0.92rem; }
+.ch-reply-hint a { color: var(--lg-sage, #3a6b3a); }
+.ch-form { display: flex; flex-direction: column; gap: 12px; }
+.ch-form__foot { display: flex; justify-content: flex-end; }
+.ch-form__title, .ch-form__body,
+.ch-reply-form__body {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid var(--lg-line, #ded9cc); border-radius: 10px;
+  padding: 10px 12px; font: inherit; color: var(--lg-ink, #1a1d1a);
+  background: #fff; resize: vertical;
+}
+.ch-form__title:focus, .ch-form__body:focus, .ch-reply-form__body:focus {
+  outline: none; border-color: var(--lg-sage, #6f9e57);
+}
+.ch-form__submit, .ch-reply-form__send {
+  border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--lg-sage, #2f5a2f); color: #fff; font-weight: 600;
+  padding: 10px 20px; white-space: nowrap;
+}
+.ch-form__submit:hover, .ch-reply-form__send:hover { background: #315a31; }
+.ch-form__submit:disabled, .ch-reply-form__send:disabled { opacity: .55; cursor: default; }
+
 [hidden] { display: none !important; }
