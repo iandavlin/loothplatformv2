@@ -147,7 +147,12 @@
     var a = document.createElement('a');
     a.id = EL_ID;
     a.href = LOOTHALONG_HREF;
-    a.setAttribute('aria-label', 'Loothalong — the always-on 24/7 luthier hangout room. Drop in any time.');
+    // Open the gated join route in a NEW tab so the visitor's current
+    // loothgroup.com tab is never navigated away to Zoom (Ian 2026-07-12).
+    // rel=noopener so the opened tab can't reach back via window.opener.
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.setAttribute('aria-label', 'Loothalong — the always-on 24/7 luthier hangout room. Drop in any time. Opens in a new tab.');
     a.innerHTML =
       '<span class="ll-glow"></span>' +
       '<span class="ll-top">' +
