@@ -163,6 +163,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Profile.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Practice.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/GeoIP.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Cache.php';
+require_once LG_PROFILE_APP_APP_ROOT . '/src/Slug.php';   // @username ownership + mention resolution (needs Db)
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Whoami.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/R2.php';      // R2 (S3) client for profile media originals
 require_once LG_PROFILE_APP_APP_ROOT . '/src/MessageR2.php'; // R2 (S3) client for DM image attachments (SEPARATE bucket)
