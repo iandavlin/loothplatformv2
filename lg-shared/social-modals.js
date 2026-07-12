@@ -309,7 +309,8 @@ function loadThreadList() {
           '" data-thread-uuid="' + esc(t.uuid) + '" tabindex="0" role="button">'
           + '<div class="lg-msg__av">' + avatarStack(ps, 36) + '</div>'
           + '<div class="lg-msg__meta">'
-            + '<div class="lg-msg__name">' + esc(peerLabel(ps, 2))
+            + '<div class="lg-msg__nameline">'
+              + '<span class="lg-msg__name">' + esc(peerLabel(ps, 2)) + '</span>'
               + (group ? '<span class="lg-msg__group-tag">Group · ' + peerTotal(ps) + '</span>' : '')
             + '</div>'
             + '<div class="lg-msg__preview">' + esc(prev) + '</div>'

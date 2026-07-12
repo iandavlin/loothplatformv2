@@ -139,7 +139,7 @@
       '#looth-msgr .mg-dot{width:10px;height:10px;border-radius:50%;background:var(--lg-sage,#87986a)}',
       '#looth-msgr .mg-empty{padding:40px 18px;text-align:center;color:var(--lg-mute,#6b6f6b);font:14px/1.5 var(--lg-font-sans,system-ui,sans-serif)}',
       // chat view (slides over the home)
-      '#looth-msgr .mg-chat{position:absolute;inset:0;display:none;flex-direction:column;background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0}',
+      '#looth-msgr .mg-chat{position:absolute;inset:0;z-index:1;display:none;flex-direction:column;background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0}',
       '#looth-msgr .mg-chat.is-on{display:flex}',
       '#looth-msgr .mg-chd{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:14px 12px 10px;border-bottom:1px solid var(--lg-line,#e3ddd0)}',
       '#looth-msgr .mg-backbtn{flex:0 0 auto;width:34px;height:34px;border:0;border-radius:50%;background:none;color:var(--lg-sage-d,#6b7c52);' +
@@ -149,13 +149,16 @@
       // The chat header is now a two-line block: WHO (every peer) + the group note.
       '#looth-msgr .mg-chname{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1px}',
       '#looth-msgr .mg-chnames{font:700 15.5px/1.25 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-charcoal,#1a1d1a);' +
-        'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-      // "everyone here sees your reply" — a group must never read as a private chat
-      '#looth-msgr .mg-chsub{font:11.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b);' +
-        'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+        'display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}',
+      // "everyone here sees your reply" — a group must never read as a private chat, so this
+      // line WRAPS rather than ellipsizing. A truncated privacy notice is not a privacy notice.
+      '#looth-msgr .mg-chsub{font:11.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b)}',
       // group avatar STACK — overlapping faces, never one arbitrary member's photo
       '#looth-msgr .mg-avi--stack{background:none}',
-      '#looth-msgr .mg-stack{position:relative;width:100%;height:100%;display:block}',
+      // z-index:0 = own stacking context. Without it the .mg-stack-i children (z-index 1-3)
+      // join the ANCESTOR context and the thread-list row's avatars paint straight THROUGH
+      // the open chat panel, over the message bubbles.
+      '#looth-msgr .mg-stack{position:relative;z-index:0;width:100%;height:100%;display:block}',
       '#looth-msgr .mg-stack-i{position:absolute;border-radius:50%;overflow:hidden;background:var(--lg-sage-3,#d4e0b8);' +
         'display:flex;align-items:center;justify-content:center;border:2px solid var(--lg-cream,#fbfbf8);' +
         'font:700 12px/1 var(--lg-font-serif,Georgia,serif);color:#fff}',
@@ -163,7 +166,9 @@
       '#looth-msgr .mg-stack-i:nth-child(1){width:66%;height:66%;top:0;left:0;z-index:3}',
       '#looth-msgr .mg-stack-i:nth-child(2){width:66%;height:66%;bottom:0;right:0;z-index:2}',
       '#looth-msgr .mg-stack-i:nth-child(3){width:54%;height:54%;top:0;right:0;z-index:1;font-size:9px}',
-      '#looth-msgr .mg-grouptag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;' +
+      '#looth-msgr .mg-nameline{display:flex;align-items:center;gap:6px;min-width:0}',
+      '#looth-msgr .mg-nameline .mg-name{flex:1 1 auto;min-width:0}',
+      '#looth-msgr .mg-grouptag{flex:0 0 auto;display:inline-block;padding:1px 6px;border-radius:999px;' +
         'background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);' +
         'font:600 10.5px/1.5 var(--lg-font-sans,system-ui,sans-serif);vertical-align:middle}',
       '#looth-msgr .mg-msgs{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 12px;display:flex;flex-direction:column;gap:3px}',
@@ -355,7 +360,10 @@
       av.innerHTML = aviStack(ps);
     }
     if (nm) {
-      nm.innerHTML = '<span class="mg-chnames">' + esc(peerLabel(ps, 3)) + '</span>' +
+      /* <=3 peers: every name, wrapped over up to 3 lines. More than that and the
+         header would swallow the screen, so the label says "A, B +N" — still true,
+         never a silent clip that hides a participant. */
+      nm.innerHTML = '<span class="mg-chnames">' + esc(peerLabel(ps, ps.length <= 3 ? ps.length : 2)) + '</span>' +
         (group ? '<span class="mg-chsub">Group · ' + peerTotal(ps) + ' people · everyone here sees your reply</span>'
                : (!ps.length ? '<span class="mg-chsub">This chat has no other members.</span>' : ''));
     }
@@ -420,8 +428,9 @@
       var group = ps.length > 1;
       return '<button type="button" class="mg-row' + (unread ? ' is-unread' : '') + '" data-mg-thread="' + esc(t.uuid) + '">' +
         '<span class="mg-avi' + (group ? ' mg-avi--stack' : '') + '">' + aviStack(ps) + '</span>' +
-        '<span class="mg-col"><span class="mg-name">' + esc(peerLabel(ps, 2)) +
-        (group ? '<span class="mg-grouptag">Group · ' + peerTotal(ps) + '</span>' : '') + '</span>' +
+        '<span class="mg-col">' +
+          '<span class="mg-nameline"><span class="mg-name">' + esc(peerLabel(ps, 2)) + '</span>' +
+          (group ? '<span class="mg-grouptag">Group · ' + peerTotal(ps) + '</span>' : '') + '</span>' +
         '<span class="mg-snip">' + esc(t.last_snippet || '') + '</span></span>' +
         '<span class="mg-meta"><span class="mg-time">' + rel(t.last_message_at) + '</span>' +
         (unread ? '<span class="mg-dot"></span>' : '') + '</span></button>';
