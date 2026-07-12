@@ -879,8 +879,22 @@ function lg_shared_render_site_header(array $ctx): void
 
     <!-- Messages pane -->
     <div class="lg-social-pane" data-lg-pane="messages" role="tabpanel">
+      <!-- Start a new message / group. Shown only in the thread-list view; JS hides it
+           the moment a thread, the compose picker, or the member manager opens. -->
+      <div class="lg-msg__newbar" id="lg-msg-newbar">
+        <button type="button" class="lg-msg__newbtn" data-lg-new-msg>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+               stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          New message
+        </button>
+      </div>
       <!-- Thread list view -->
       <div class="lg-social-modal__body" id="lg-msg-list"></div>
+      <!-- Compose picker + member manager share this panel; filled by social-modals.js.
+           [hidden] counter-rule in the css (same trap as .lg-msg-detail). -->
+      <div class="lg-msg__panel" id="lg-msg-panel" hidden></div>
       <!-- Thread detail view. Layout via the .lg-msg-detail class, NOT an
            inline style — inline display:flex beat the UA [hidden] rule, so
            the pane never hid again after opening a thread (Buck 6/11; the
