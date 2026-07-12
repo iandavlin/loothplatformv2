@@ -116,6 +116,13 @@ const CONFIG = {
     FEATURED_IMAGE:   21,
     OTHER_ATTENDEES:  22,
     ZOOM_URL:         23, // ← virtual-attend link → WP `zoom_url` (the one gated field)
+    // ── SOCIAL POSTER (Meta FB/IG) — additive columns, filled by the social pipeline ──
+    SOCIAL_APPROVED:  24, // checkbox — the HARD gate. Blank/FALSE never auto-posts (mail-lock equivalent)
+    FB_CAPTION:       25, // editable draft, authored ~5-7 days out, human-tweakable before approval
+    IG_CAPTION:       26, // editable draft (hashtag-forward)
+    SOCIAL_POSTED:    27, // timestamp — dupe guard (like LAST_REMINDER); once set, row never re-posts
+    FB_POST_URL:      28, // written back after a live post
+    IG_POST_URL:      29, // written back after a live post
   },
 
   // Standing Looth Group virtual room. New events default to this (editable per row);
@@ -128,6 +135,30 @@ const CONFIG = {
   // Falls back to these defaults if Script Properties not set.
   WP_DEFAULT_BASE_URL: 'https://dev.loothgroup.com',
   WP_TIER_OPTIONS: ['Public', 'Looth Lite', 'Looth Pro'],
+
+  // ── SOCIAL POSTER (Meta FB/IG) ──────────────────────────────
+  // Architecture B (keeper-approved 2026-07-12): Apps Script SCHEDULES + drafts;
+  // the WP bridge holds the Meta tokens, does the Graph calls, hosts the public
+  // JPEG, and holds the Anthropic key. Secrets live server-side on LIVE — NEVER
+  // in Script Properties, NEVER in sheet cells, NEVER in the repo.
+  SOCIAL: {
+    // Caption model — a config value so Ian can flip haiku→opus after seeing drafts (keeper ack d).
+    CAPTION_MODEL: 'claude-haiku-4-5',
+    // Fire the trigger inside the 11:00–12:00 ET window (keeper ack e). Exact minute not guaranteed.
+    POST_HOUR: 11,
+    // Post this many days before air date. `<=` (not `==`) so a missed run still catches up.
+    DAYS_OUT: 3,
+    // Draft captions this many days out (into editable cells, ahead of the approval gate).
+    DRAFT_DAYS_OUT: 6,
+    // WHICH EVENTS POST — pending Ian's ruling (b): all published events vs Public-tier-only.
+    // null = ALL published tiers (the plan's proposal). To make it Public-only, set ['Public'].
+    // This is the ONE line to flip when (b) lands — no other code changes.
+    TIERS: null,
+    // Bridge endpoints (built AFTER (b) lands — do not exist yet; dry-run does not call them).
+    POST_PATH:    '/wp-json/loothdev/v1/social-post',
+    CAPTION_PATH: '/wp-json/loothdev/v1/social-caption',
+    TOKEN_PATH:   '/wp-json/loothdev/v1/social-token-status',
+  },
 };
 
 // Asset status values
@@ -163,6 +194,12 @@ const HEADERS = [
   'Featured Image',     // ← NEW (inline thumbnail preview)
   'Other Attendees',    // ← NEW (comma-separated guest emails for Calendar)
   'Zoom Link',          // ← NEW (WP) — zoom_url_for_looth_group_virtual_event (gated Join CTA)
+  'Social Approved',    // ← NEW (Meta) — HARD gate checkbox; nothing posts unless TRUE
+  'FB Caption',         // ← NEW (Meta) — editable draft for the Facebook Page post
+  'IG Caption',         // ← NEW (Meta) — editable draft for the Instagram post
+  'Social Posted',      // ← NEW (Meta) — dupe-guard timestamp (set on first successful post)
+  'FB Post URL',        // ← NEW (Meta) — filled after live FB post
+  'IG Post URL',        // ← NEW (Meta) — filled after live IG post
 ];
 
 // ── HELPERS ───────────────────────────────────────────────────
@@ -204,6 +241,14 @@ function onOpen() {
     // ── REMINDERS ──
     .addItem('Send Reminders Now (dry run — logs only)', 'sendRemindersDryRun')
     .addItem('Send Reminders Now (live)', 'sendRemindersLive')
+    .addSeparator()
+    // ── SOCIAL (Meta FB/IG) ──
+    .addItem('Draft Social Captions for Selected Row', 'draftSocialCaptionsForSelectedRow')
+    .addItem('Post to Social Now (dry run — logs Graph calls)', 'socialPostDryRun')
+    .addItem('Post to Social Now (LIVE) ⚠', 'socialPostLive')
+    .addItem('Test Meta Connection', 'testMetaConnection')
+    .addItem('Install Social Post Trigger (11am ET)', 'installSocialPostTrigger')
+    .addItem('Remove Social Post Trigger', 'removeSocialPostTrigger')
     .addSeparator()
     .addItem('Sort Episodes by Air Date', 'sortEpisodesByAirDate')
     .addItem('Flush Form Responses', 'flushFormResponses')
@@ -348,6 +393,21 @@ function setupSheet() {
 
   // ── Zoom Link column (WP gated Join CTA) ──
   sheet.setColumnWidth(CONFIG.COL.ZOOM_URL, 260);
+
+  // ── Social Poster columns (Meta FB/IG) ──
+  // Social Approved is the HARD gate — a real checkbox so it's unambiguous TRUE/FALSE.
+  // Validation only (no pre-fill) — same 500-row-corrupts-getLastRow rule as the status cols.
+  sheet.getRange(2, CONFIG.COL.SOCIAL_APPROVED, 500, 1)
+    .setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
+  sheet.setColumnWidth(CONFIG.COL.SOCIAL_APPROVED, 110);
+  sheet.setColumnWidth(CONFIG.COL.FB_CAPTION,      280);
+  sheet.getRange(2, CONFIG.COL.FB_CAPTION, 500, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+  sheet.setColumnWidth(CONFIG.COL.IG_CAPTION,      280);
+  sheet.getRange(2, CONFIG.COL.IG_CAPTION, 500, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+  sheet.setColumnWidth(CONFIG.COL.SOCIAL_POSTED,   150);
+  sheet.getRange(2, CONFIG.COL.SOCIAL_POSTED, 500, 1).setNumberFormat('dd MMM yyyy  HH:mm');
+  sheet.setColumnWidth(CONFIG.COL.FB_POST_URL,     220);
+  sheet.setColumnWidth(CONFIG.COL.IG_POST_URL,     220);
 
   // ── Conditional formatting: highlight Episode Title green when WP Post URL is filled ──
   const rules = sheet.getConditionalFormatRules();
@@ -1053,6 +1113,10 @@ function protectAdminColumns_(sheet) {
     CONFIG.COL.REMINDER_COUNT,
     CONFIG.COL.WP_POST_URL,
     CONFIG.COL.FEATURED_IMAGE,
+    // Social back-written columns — pipeline writes these; humans edit captions/approval, not these.
+    CONFIG.COL.SOCIAL_POSTED,
+    CONFIG.COL.FB_POST_URL,
+    CONFIG.COL.IG_POST_URL,
   ];
   adminCols.forEach(col => {
     const protection = sheet.getRange(2, col, 500, 1).protect();
@@ -2311,6 +2375,350 @@ function publishRowToWp_(rowIndex, allowDraftOverride) {
     'Edit: ' + (result.edit_url || '(n/a)') + '\n\n' +
     'Post ID: ' + result.wp_post_id
   );
+}
+
+// ============================================================
+// ── SOCIAL POSTER (Meta FB/IG) ──────────────────────────────
+// Architecture B (keeper-approved 2026-07-12): this Apps Script SCHEDULES and
+// DRAFTS. The WP bridge (on LIVE) holds the Meta Page/IG tokens, does the Graph
+// calls, hosts the public JPEG, and holds the Anthropic key. This file never
+// sees a secret — no token, no API key, ever, in Script Properties or cells.
+//
+// LIVE posting is TRIPLE-GATED:
+//   1) per-row: the Social Approved checkbox must be TRUE (the mail-lock equivalent),
+//   2) global: the SOCIAL_LIVE_ENABLED script property must be 'true'
+//      (defaults off → the scheduled trigger runs DRY-RUN and only logs),
+//   3) reality: the bridge social-post endpoint does not exist yet — it is built
+//      only after Ian rules which tiers post (decision (b)). Until all three are
+//      satisfied, nothing can reach Meta.
+//
+// Dry-run logs the EXACT bridge request and the modeled Graph calls the bridge
+// will make. It sends nothing and touches no external service.
+// ============================================================
+
+const SOCIAL_GRAPH_VERSION = 'v21.0'; // Graph API version the bridge will target
+
+// Parse a WP post ID out of a WP Post URL cell (?p=NNN, wp_post_id=NNN, or /NNN/).
+function parseWpPostId_(url) {
+  const s = String(url || '');
+  let m = s.match(/[?&]p=(\d+)/);            if (m) return parseInt(m[1]);
+  m = s.match(/wp_post_id=(\d+)/);           if (m) return parseInt(m[1]);
+  m = s.match(/\/(\d+)\/?(?:[?#]|$)/);       if (m) return parseInt(m[1]);
+  return 0;
+}
+
+// Find the VERTICAL promo image (featured_V.* / featured-v.*) in a row's Drive folder.
+// The horizontal picker uses /^featured\b/ which does NOT match "featured_V"
+// (d→_ is not a word boundary), so the two are cleanly separable.
+function pickVerticalImageFromFolder_(folder) {
+  const imageMimes = ['image/jpeg', 'image/webp', 'image/png'];
+  const it = folder.getFiles();
+  while (it.hasNext()) {
+    const f = it.next();
+    if (imageMimes.indexOf(f.getMimeType()) === -1) continue;
+    if (/^featured[_-]v\b/i.test(f.getName())) return f;
+  }
+  return null;
+}
+
+// Emit a block of log lines: always to the execution Logger; also to a UI alert
+// IF a UI is available (menu context). In a time-trigger context getUi() throws —
+// we swallow that so the scheduled dry-run can log without a UI.
+function socialLog_(title, lines) {
+  const body = lines.length ? lines.join('\n') : '(nothing)';
+  Logger.log(title + '\n' + body);
+  try {
+    SpreadsheetApp.getUi().alert(title + '\n\n' + body);
+  } catch (e) { /* no UI (trigger context) — Logger already has it */ }
+}
+
+// Build the eligibility verdict for one Episodes row for the social pipeline.
+// Returns { ok, reason, ctx } where ctx carries everything the post/draft steps need.
+function socialRowVerdict_(sheet, rowIndex, today) {
+  const row = sheet.getRange(rowIndex, 1, 1, HEADERS.length).getValues()[0];
+  const title      = String(row[CONFIG.COL.EPISODE_TITLE - 1] || '').trim();
+  const airDateRaw = row[CONFIG.COL.AIR_DATE - 1];
+  const wpPostUrl  = String(row[CONFIG.COL.WP_POST_URL - 1] || '').trim();
+  const tier       = String(row[CONFIG.COL.EVENT_TIER - 1] || '').trim();
+  const approved   = row[CONFIG.COL.SOCIAL_APPROVED - 1] === true;
+  const fbCaption  = String(row[CONFIG.COL.FB_CAPTION - 1] || '').trim();
+  const igCaption  = String(row[CONFIG.COL.IG_CAPTION - 1] || '').trim();
+  const posted     = row[CONFIG.COL.SOCIAL_POSTED - 1];
+  const driveUrl   = String(row[CONFIG.COL.DRIVE_FOLDER_URL - 1] || '').trim();
+
+  if (!title || !airDateRaw) return { ok: false, reason: 'no title/air date' };
+
+  const airDate = airDateRaw instanceof Date ? airDateRaw : new Date(airDateRaw);
+  airDate.setHours(0, 0, 0, 0);
+  const daysOut = Math.round((airDate - today) / (1000 * 60 * 60 * 24));
+
+  // Dupe guard — once posted, never again.
+  if (posted) return { ok: false, reason: 'already posted ' + posted };
+  // Window: due within DAYS_OUT and not past air (<= not ==, so a missed run catches up).
+  if (daysOut < 0)                 return { ok: false, reason: 'air date passed (' + daysOut + 'd)' };
+  if (daysOut > CONFIG.SOCIAL.DAYS_OUT) return { ok: false, reason: daysOut + 'd out (posts at <=' + CONFIG.SOCIAL.DAYS_OUT + 'd)' };
+  // Must be a published event.
+  if (!wpPostUrl)                  return { ok: false, reason: 'not published to WP (no WP Post URL)' };
+  // Tier gate — pending Ian (b). null = all tiers.
+  if (CONFIG.SOCIAL.TIERS && CONFIG.SOCIAL.TIERS.indexOf(tier) === -1) {
+    return { ok: false, reason: 'tier "' + tier + '" not in ' + JSON.stringify(CONFIG.SOCIAL.TIERS) };
+  }
+  // THE HARD GATE.
+  if (!approved)                   return { ok: false, reason: 'Social Approved not checked' };
+  // Both captions authored.
+  if (!fbCaption || !igCaption)    return { ok: false, reason: 'missing ' + (!fbCaption ? 'FB' : 'IG') + ' caption' };
+
+  // Resolve the vertical image (bridge needs it to build the IG public JPEG).
+  let vertical = null;
+  if (driveUrl) {
+    const m = driveUrl.match(/[-\w]{25,}/);
+    if (m) {
+      try { vertical = pickVerticalImageFromFolder_(DriveApp.getFolderById(m[0])); } catch (e) {}
+    }
+  }
+  if (!vertical) return { ok: false, reason: 'no featured_V.* (vertical) image in Drive folder' };
+
+  const wpPostId = parseWpPostId_(wpPostUrl);
+  if (!wpPostId) return { ok: false, reason: 'could not parse WP post ID from URL' };
+
+  return {
+    ok: true,
+    ctx: { title, tier, daysOut, wpPostId, fbCaption, igCaption, vertical },
+  };
+}
+
+// Build the bridge request payload for a row (b64 of the vertical is included for
+// the real call; the dry-run report shows filename/mime/size instead of the blob).
+function buildSocialBridgeRequest_(ctx, dryRun) {
+  const blob = ctx.vertical.getBlob();
+  return {
+    wp_post_id: ctx.wpPostId,
+    fb_caption: ctx.fbCaption,
+    ig_caption: ctx.igCaption,
+    image_vertical: {
+      filename: ctx.vertical.getName(),
+      mime: blob.getContentType(),
+      data_b64: Utilities.base64Encode(blob.getBytes()),
+    },
+    dry_run: !!dryRun,
+  };
+}
+
+// Model the Graph calls the bridge will make — for dry-run EVIDENCE only.
+// The bridge is authoritative; public image URLs are minted server-side, shown
+// here as <bridge-resolved …> placeholders.
+function modelGraphCalls_(ctx) {
+  const V = SOCIAL_GRAPH_VERSION;
+  const vname = ctx.vertical.getName();
+  return [
+    '  FB — Page photo (horizontal featured.*):',
+    '    POST https://graph.facebook.com/' + V + '/{PAGE_ID}/photos',
+    '      url          = <bridge-resolved: event featured image, WP uploads JPEG, from wp_post_id ' + ctx.wpPostId + '>',
+    '      caption      = ' + JSON.stringify(ctx.fbCaption),
+    '      access_token = <Page token, held by bridge>',
+    '',
+    '  IG — two-step publish (vertical ' + vname + ', PNG→JPEG server-side):',
+    '    1) POST https://graph.facebook.com/' + V + '/{IG_USER_ID}/media',
+    '         image_url    = <bridge-resolved: vertical JPEG public WP uploads URL>',
+    '         caption      = ' + JSON.stringify(ctx.igCaption),
+    '         access_token = <Page token>   → returns creation_id',
+    '    2) POST https://graph.facebook.com/' + V + '/{IG_USER_ID}/media_publish',
+    '         creation_id  = <from step 1>',
+    '         access_token = <Page token>',
+  ];
+}
+
+// The scheduler entry point. dryRun=true logs everything and sends nothing.
+function socialPostRun_(dryRun) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_NAME);
+  if (!sheet) return;
+  const lastRow = sheet.getLastRow();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const eligible = [];
+  const skipped = [];
+  for (let i = 2; i <= lastRow; i++) {
+    const v = socialRowVerdict_(sheet, i, today);
+    if (v.ok) eligible.push({ row: i, ctx: v.ctx });
+    else if (v.reason && v.reason !== 'no title/air date') skipped.push('Row ' + i + ': ' + v.reason);
+  }
+
+  const out = [];
+  out.push('MODE: ' + (dryRun ? 'DRY RUN (nothing sent)' : 'LIVE'));
+  out.push('Tier filter: ' + (CONFIG.SOCIAL.TIERS ? JSON.stringify(CONFIG.SOCIAL.TIERS) : 'ALL published tiers (pending Ian decision b)'));
+  out.push('');
+
+  if (!eligible.length) {
+    out.push('No rows eligible to post today.');
+    if (skipped.length) out.push('', 'Nearby rows skipped:', ...skipped.slice(0, 12));
+    socialLog_('Social Post — ' + (dryRun ? 'DRY RUN' : 'LIVE'), out);
+    return;
+  }
+
+  eligible.forEach(e => {
+    const ctx = e.ctx;
+    out.push('── Row ' + e.row + ': "' + ctx.title + '" (' + ctx.tier + ', ' + ctx.daysOut + 'd out) ──');
+    const req = buildSocialBridgeRequest_(ctx, dryRun);
+    const reqForLog = Object.assign({}, req, {
+      image_vertical: {
+        filename: req.image_vertical.filename,
+        mime: req.image_vertical.mime,
+        bytes: ctx.vertical.getBlob().getBytes().length,
+        data_b64: '<' + req.image_vertical.data_b64.length + ' b64 chars omitted>',
+      },
+    });
+    out.push('Bridge request → POST {WP_BASE}' + CONFIG.SOCIAL.POST_PATH);
+    out.push(JSON.stringify(reqForLog, null, 2));
+    out.push('');
+    out.push('Graph calls the bridge will make:');
+    out.push(...modelGraphCalls_(ctx));
+    out.push('');
+
+    if (!dryRun) {
+      // LIVE path — reaches Meta via the bridge. Guarded by the Social Approved
+      // gate (already checked) + the bridge's own dry_run flag = false.
+      const result = wpRequest_(CONFIG.SOCIAL.POST_PATH, 'post', req);
+      if (result && result.ok) {
+        if (result.fb_url) sheet.getRange(e.row, CONFIG.COL.FB_POST_URL).setValue(result.fb_url);
+        if (result.ig_url) sheet.getRange(e.row, CONFIG.COL.IG_POST_URL).setValue(result.ig_url);
+        sheet.getRange(e.row, CONFIG.COL.SOCIAL_POSTED).setValue(new Date());
+        out.push('POSTED ✓  FB: ' + (result.fb_url || 'n/a') + '   IG: ' + (result.ig_url || 'n/a'));
+      } else {
+        out.push('POST FAILED — ' + JSON.stringify(result));
+      }
+      out.push('');
+    }
+  });
+
+  if (skipped.length) out.push('Rows skipped: ' + skipped.length + ' (see execution log)');
+  socialLog_('Social Post — ' + (dryRun ? 'DRY RUN' : 'LIVE'), out);
+}
+
+function socialPostDryRun() { socialPostRun_(true); }
+
+function socialPostLive() {
+  if (!confirmDestructive_(
+      'Post to Social — LIVE',
+      'This will attempt to post APPROVED rows to the real Facebook Page + Instagram.\n' +
+      'Only rows with Social Approved = TRUE and no prior Social Posted timestamp are affected.\n' +
+      'Requires Ian\'s written go and the bridge endpoint to be live.')) {
+    return;
+  }
+  socialPostRun_(false);
+}
+
+// Time-trigger handler. Runs DRY-RUN (logs only) unless the SOCIAL_LIVE_ENABLED
+// script property is explicitly 'true' — the global kill-switch above the per-row gate.
+function socialPostTriggerHandler() {
+  const live = PropertiesService.getScriptProperties().getProperty('SOCIAL_LIVE_ENABLED') === 'true';
+  socialPostRun_(!live);
+}
+
+function installSocialPostTrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'socialPostTriggerHandler')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('socialPostTriggerHandler')
+    .timeBased()
+    .atHour(CONFIG.SOCIAL.POST_HOUR)
+    .everyDays(1)
+    .create();
+  const live = PropertiesService.getScriptProperties().getProperty('SOCIAL_LIVE_ENABLED') === 'true';
+  SpreadsheetApp.getUi().alert(
+    'Social post trigger installed — fires daily in the ' + CONFIG.SOCIAL.POST_HOUR + ':00–' +
+    (CONFIG.SOCIAL.POST_HOUR + 1) + ':00 ET window.\n\n' +
+    'Global mode: ' + (live ? 'LIVE (SOCIAL_LIVE_ENABLED=true)' : 'DRY RUN (logs only — flip SOCIAL_LIVE_ENABLED to go live)') + '.');
+}
+
+function removeSocialPostTrigger() {
+  const removed = ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'socialPostTriggerHandler');
+  removed.forEach(t => ScriptApp.deleteTrigger(t));
+  SpreadsheetApp.getUi().alert('Removed ' + removed.length + ' social post trigger(s).');
+}
+
+// ── CAPTION DRAFTING ─────────────────────────────────────────
+// Builds the prompt (pure AS-side, reviewable now) and hands off to the bridge's
+// caption endpoint (which holds the Anthropic key). The endpoint is built after
+// (b) lands; until then this logs the exact request it will send.
+function buildCaptionPrompt_(ctx) {
+  const parts = [
+    'You are the social media voice of Looth Group, writing promo copy for an upcoming live event.',
+    'Write TWO captions for the same event:',
+    '  • "fb": Facebook Page post — 2–4 sentences, warm and informative, one clear call to attend. No hashtag spam.',
+    '  • "ig": Instagram post — punchy, hashtag-forward (5–10 relevant hashtags at the end).',
+    'Return STRICT JSON: {"fb": "...", "ig": "..."} and nothing else.',
+    '',
+    'EVENT DETAILS:',
+    '  Title: ' + ctx.title,
+    '  Show: ' + (ctx.showName || '(n/a)'),
+    '  Topic: ' + (ctx.topic || '(n/a)'),
+    '  Blurb: ' + (ctx.blurb || '(n/a)'),
+    '  Air date: ' + ctx.airDateStr,
+    '  Tier: ' + (ctx.tier || 'Public'),
+  ];
+  if (ctx.zoom) parts.push('  Virtual attendance is available (do not paste the raw link; say "join virtually").');
+  return parts.join('\n');
+}
+
+function draftSocialCaptionsForSelectedRow() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_NAME);
+  if (!sheet) { ui.alert('Episodes sheet not found.'); return; }
+  const rowIndex = sheet.getActiveCell().getRow();
+  if (rowIndex < 2) { ui.alert('Select a data row (not the header).'); return; }
+
+  const row = sheet.getRange(rowIndex, 1, 1, HEADERS.length).getValues()[0];
+  const airDateRaw = row[CONFIG.COL.AIR_DATE - 1];
+  const airDate = airDateRaw instanceof Date ? airDateRaw : new Date(airDateRaw);
+  const ctx = {
+    title:      String(row[CONFIG.COL.EPISODE_TITLE - 1] || '').trim(),
+    showName:   String(row[CONFIG.COL.SHOW_NAME - 1] || '').trim(),
+    topic:      String(row[CONFIG.COL.TOPIC - 1] || '').trim(),
+    blurb:      String(row[CONFIG.COL.BLURB - 1] || '').trim(),
+    tier:       String(row[CONFIG.COL.EVENT_TIER - 1] || '').trim(),
+    zoom:       String(row[CONFIG.COL.ZOOM_URL - 1] || '').trim(),
+    airDateStr: airDateRaw ? Utilities.formatDate(airDate, TIMEZONE, 'EEEE, MMMM d, yyyy  h:mm a z') : '(no date)',
+  };
+  if (!ctx.title) { ui.alert('Row has no Episode Title.'); return; }
+
+  const req = {
+    model: CONFIG.SOCIAL.CAPTION_MODEL,   // config value — Ian flips haiku→opus here (ack d)
+    prompt: buildCaptionPrompt_(ctx),
+  };
+  socialLog_('Draft Social Captions — request (bridge endpoint pending decision b)', [
+    'Would POST {WP_BASE}' + CONFIG.SOCIAL.CAPTION_PATH,
+    'The bridge calls Claude (' + req.model + ') server-side with its own Anthropic key,',
+    'returns {fb, ig}, and this menu writes them into the FB Caption / IG Caption cells',
+    'for you to edit, then check Social Approved.',
+    '',
+    'model  = ' + req.model,
+    'prompt =',
+    req.prompt,
+  ]);
+}
+
+// Test the Meta token/scopes via the bridge (debug_token). Endpoint built post-(b);
+// until then this documents exactly what it will check.
+function testMetaConnection() {
+  try {
+    const res = wpRequest_(CONFIG.SOCIAL.TOKEN_PATH, 'get', null);
+    socialLog_('Meta Connection', [
+      'Page: ' + (res.page_name || '?') + ' (' + (res.page_id || '?') + ')',
+      'IG business acct: ' + (res.ig_user_id || '?'),
+      'Token expires: ' + (res.expires || 'never (long-lived Page token)'),
+      'Scopes: ' + ((res.scopes || []).join(', ') || '?'),
+    ]);
+  } catch (err) {
+    socialLog_('Meta Connection — not available yet', [
+      'The bridge token-status endpoint (' + CONFIG.SOCIAL.TOKEN_PATH + ') is not built yet',
+      '(pending decision b). Once live it returns Page name/ID, IG business acct ID,',
+      'token expiry, and granted scopes via Graph debug_token.',
+      '',
+      'Error: ' + err.message,
+    ]);
+  }
 }
 
 // ============================================================
