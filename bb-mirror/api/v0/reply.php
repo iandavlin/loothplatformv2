@@ -29,6 +29,9 @@ require LG_BB_MIRROR_WP_LOAD;
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
+// @mention ingest — mints the stable data-lg-uuid storage form on every write path below.
+require_once __DIR__ . '/_mention-ingest.php';
+
 function reply_out(int $code, array $body): void {
     http_response_code($code);
     echo json_encode($body);
@@ -159,6 +162,7 @@ if ($method === 'PUT' || $method === 'DELETE') {
         if ($new_body === '') {
             reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Post can't be empty."]);
         }
+        $new_body = lg_bb_mirror_mint_mentions($new_body);   // @handles → stable storage form
         // wp_update_post kses-filters post_content (and sanitizes post_title) for
         // users without unfiltered_html. Title is optional — keep the stored one
         // when the client omits it (body-only edits).
@@ -230,6 +234,7 @@ if ($method === 'PUT' || $method === 'DELETE') {
     if ($new === '' && !$add_atts && !$keep_ids) {
         reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Reply can't be empty."]);
     }
+    $new = lg_bb_mirror_mint_mentions($new);   // @handles → stable storage form
     $upd = wp_update_post(['ID' => $reply_id, 'post_content' => $new], true);
     if (is_wp_error($upd)) {
         reply_out(500, ['ok' => false, 'error' => 'server', 'message' => (string) $upd->get_error_message()]);
@@ -321,6 +326,7 @@ if ($throttle > 0 && !$bypass) {
 
 // ── Insert via BuddyBoss REST in-process. Reuses media + counts + notifications
 //    + the bb→pg sync hooks; permission_callback re-checks the viewer server-side.
+$content = lg_bb_mirror_mint_mentions($content);   // @handles → stable storage form
 $req = new WP_REST_Request('POST', '/buddyboss/v1/reply');
 $req->set_param('topic_id', $topic_id);
 $req->set_param('forum_id', $forum_id);
