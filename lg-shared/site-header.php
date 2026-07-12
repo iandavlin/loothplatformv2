@@ -247,7 +247,17 @@ function lg_shared_render_site_header(array $ctx): void
    authed because the Hub is public. Items mirror $hub_types (→ HUB_TYPE_LABELS). ---- */
 .lg-hubmenu { position: fixed; inset: 0; z-index: 300; display: flex; align-items: flex-end; justify-content: center; }
 .lg-hubmenu[hidden] { display: none; }
-.lg-hubmenu__backdrop { position: absolute; inset: 0; background: rgba(26,29,26,0.45); backdrop-filter: blur(3px); }
+/* Motion = the house .lt-sheet tray idiom (Ian 7/08: "slide away like the
+   other trays"): backdrop fades (.22s ease), sheet slides from/to the bottom
+   edge (.26s cubic-bezier(.32,.72,0,1)) — the SAME numbers as bottom-nav's
+   trays, one idiom everywhere. .is-open drives both; [hidden] is only the
+   resting state, applied by JS after the slide-out ends. The sliding sheet
+   also absorbs a grab-tap's synthesized click exactly like the other trays. */
+.lg-hubmenu__backdrop {
+  position: absolute; inset: 0; background: rgba(26,29,26,0.45); backdrop-filter: blur(3px);
+  opacity: 0; transition: opacity .22s ease;
+}
+.lg-hubmenu.is-open .lg-hubmenu__backdrop { opacity: 1; }
 .lg-hubmenu__sheet {
   position: relative; z-index: 1;
   width: 100%; max-width: 560px; max-height: 72vh;
@@ -255,9 +265,10 @@ function lg_shared_render_site_header(array $ctx): void
   background: #fff; border-radius: 16px 16px 0 0;
   box-shadow: 0 -6px 28px rgba(0,0,0,0.18);
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  animation: lg-hubmenu-rise .18s ease;
+  transform: translateY(100%);
+  transition: transform .26s cubic-bezier(.32,.72,0,1);
 }
-@keyframes lg-hubmenu-rise { from { transform: translateY(14px); opacity: .5; } to { transform: none; opacity: 1; } }
+.lg-hubmenu.is-open .lg-hubmenu__sheet { transform: translateY(0); }
 .lg-hubmenu__head {
   display: flex; align-items: center; gap: 8px;
   padding: 14px 18px; border-bottom: 1px solid var(--lg-line, #e3ddd0); flex: 0 0 auto;
@@ -279,6 +290,27 @@ function lg_shared_render_site_header(array $ctx): void
 }
 .lg-hubmenu__item:hover, .lg-hubmenu__item:focus { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #6b7c52); outline: none; }
 .lg-hubmenu__item--all { font-weight: 800; }
+/* Grab bar: house sheet idiom (visible 40x5 bar; content-box padding = a big
+   forgiving tap/drag target). Carries .lt-sheet__grab too so bottom-nav.js's
+   claim-model drag (enableSheetDrag) treats it as the handle — tap closes,
+   downward drag dismisses. This body-level rule wins the duplicate-property
+   cascade against bottom-nav's injected head styles. */
+.lg-hubmenu__grab {
+  width: 40px; height: 5px; border-radius: 999px; background: var(--lg-line, #e3ddd0);
+  margin: 0 auto -8px; padding: 13px 30px; box-sizing: content-box; background-clip: content-box;
+  cursor: pointer; touch-action: none; flex: 0 0 auto;
+}
+/* Tray mode — open({tray:true}), Ian's pick 7/08 (sibling-sheet): flush
+   bottom at the Nav tray's own level, replacing the tray like a sub-sheet —
+   the bar dims under the backdrop exactly as it does under the tray it just
+   swapped in for (.lt-sheet z 2147481400). Drawer mode (≤820 header door)
+   keeps the base 300 (header lifts itself to 360 above it). */
+.lg-hubmenu--tray { z-index: 2147481400; }
+/* The content type you are ALREADY viewing (marked on open from location). */
+.lg-hubmenu__item.is-current {
+  background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #6b7c52);
+  box-shadow: inset 3px 0 0 var(--lg-sage-d, #6b7c52);
+}
 /* Hard guard: the picker never appears on desktop (desktop uses the dropdown). */
 @media (min-width: 821px) { .lg-hubmenu { display: none !important; } }
 </style>
@@ -555,6 +587,9 @@ function lg_shared_render_site_header(array $ctx): void
      role="dialog" aria-modal="true" aria-label="Browse the Hub by content type">
   <div class="lg-hubmenu__backdrop" data-lg-hubmenu-close></div>
   <div class="lg-hubmenu__sheet" role="document">
+    <?php /* .lt-sheet__grab alias = bottom-nav.js enableSheetDrag's handle +
+             tap-to-close selector; styled by .lg-hubmenu__grab above. */ ?>
+    <div class="lg-hubmenu__grab lt-sheet__grab" aria-hidden="true"></div>
     <div class="lg-hubmenu__head">
       <h2 class="lg-hubmenu__title">Browse the Hub</h2>
       <button class="lg-hubmenu__close" type="button" aria-label="Close" data-lg-hubmenu-close>
@@ -691,33 +726,76 @@ function lg_shared_render_site_header(array $ctx): void
      link opens a content-type MODAL instead of navigating; a SECOND tap on the
      (now lifted) Hub link — without choosing a type — falls through to /hub/.
      Desktop keeps the dropdown, so this is gated off entirely ≥821. Null-safe.
-     hdr / btn are the header + hamburger declared at the top of this IIFE. */
+     hdr / btn are the header + hamburger declared at the top of this IIFE.
+     The picker is ALSO summoned by the Nav tray's Hub tile (bottom-nav.js)
+     through window.lgHubMenu — open({tray:true}) = sibling-sheet flush-bottom
+     at tray level (.lg-hubmenu--tray, Ian's mock-gate pick 7/08). ONE modal,
+     ONE $hub_types list, two doors (parity gate: never a second menu). */
   var hubMq    = window.matchMedia('(max-width: 820px)');
   var hubLi    = document.querySelector('[data-lg-hassub]');
   var hubLink  = hubLi ? hubLi.querySelector('[data-lg-hub-link]') : null;
   var hubModal = document.getElementById('lg-hubmenu');
   if (hdr && hubLi && hubLink && hubModal) {
-    var hubMenuOpen = function () { return !hubModal.hidden; };
+    // "Open" = the .is-open class, NOT [hidden]: during the ~300ms slide-out
+    // the element is still un-hidden but already closing — a tap then should
+    // re-OPEN (first-tap branch), never fall through to navigation.
+    var hubMenuOpen = function () { return hubModal.classList.contains('is-open'); };
+    var hubCloseTimer = null;
 
-    var openHubMenu = function () {
+    // Mark the item matching the CURRENT view (/hub/?type=<key>; bare /hub/ =
+    // "Everything") so the menu shows where you already are. Re-checked on
+    // every open — cheap, and stays right if history state ever changes.
+    var markHubCurrent = function () {
+      var type = null;
+      try { type = new URLSearchParams(location.search).get('type'); } catch (err) {}
+      var onHub = /^\/hub\/?$/.test(location.pathname);
+      var items = hubModal.querySelectorAll('.lg-hubmenu__item');
+      for (var i = 0; i < items.length; i++) {
+        var m = (items[i].getAttribute('href') || '').match(/[?&]type=([^&]+)/);
+        var cur = onHub && (m ? (type === decodeURIComponent(m[1]))
+                              : !type);          // typeless item = "Everything"
+        items[i].classList.toggle('is-current', cur);
+        if (cur) items[i].setAttribute('aria-current', 'true');
+        else items[i].removeAttribute('aria-current');
+      }
+    };
+
+    var openHubMenu = function (opts) {
+      if (hubCloseTimer) { clearTimeout(hubCloseTimer); hubCloseTimer = null; }
+      hubModal.classList.toggle('lg-hubmenu--tray', !!(opts && opts.tray));
+      markHubCurrent();
       hubModal.hidden = false;
       hubModal.setAttribute('aria-hidden', 'false');
+      void hubModal.offsetHeight;                  // reflow so the slide-in runs (house idiom)
+      hubModal.classList.add('is-open');
       hdr.classList.add('lg-chrome--hubmenu-open');
       hubLi.classList.add('is-armed');
       hubLink.setAttribute('aria-expanded', 'true');
       document.body.classList.add('lg-sm-open');   // reuse the social-modal scroll lock
-      var first = hubModal.querySelector('.lg-hubmenu__item');
+      var first = hubModal.querySelector('.lg-hubmenu__item.is-current') ||
+                  hubModal.querySelector('.lg-hubmenu__item');
       if (first) first.focus();
+      try { document.dispatchEvent(new CustomEvent('lg:hubmenu-open', { detail: opts || {} })); } catch (err) {}
     };
 
     var closeHubMenu = function () {
-      hubModal.hidden = true;
+      hubModal.classList.remove('is-open');        // slide-out starts (sheet + backdrop transition)
       hubModal.setAttribute('aria-hidden', 'true');
       hdr.classList.remove('lg-chrome--hubmenu-open');
       hubLi.classList.remove('is-armed');
       hubLink.setAttribute('aria-expanded', 'false');
       document.body.classList.remove('lg-sm-open');
+      if (hubCloseTimer) clearTimeout(hubCloseTimer);
+      hubCloseTimer = setTimeout(function () {     // rest ([hidden]) once the .26s slide ends
+        hubModal.hidden = true;
+        hubModal.classList.remove('lg-hubmenu--tray');
+        hubCloseTimer = null;
+      }, 300);
+      try { document.dispatchEvent(new CustomEvent('lg:hubmenu-close')); } catch (err) {}
     };
+
+    // Public door (bottom-nav.js Nav-tray Hub tile, or any future summoner).
+    window.lgHubMenu = { open: openHubMenu, close: closeHubMenu, isOpen: hubMenuOpen };
 
     hubLink.addEventListener('click', function (e) {
       if (!hubMq.matches) return;                    // desktop: normal link + caret dropdown
@@ -725,6 +803,14 @@ function lg_shared_render_site_header(array $ctx): void
       e.preventDefault();                            // 1st tap → reveal the picker
       openHubMenu();
     });
+
+    // Grab-bar taps: the tap/drag semantics live in bottom-nav.js's
+    // enableSheetDrag (tap on the grab closes, drag dismisses/snaps back).
+    // This sheet hides INSTANTLY on close (no slide-out covering the finger
+    // like the .lt-sheet trays), so the tap's synthesized click would fall
+    // through onto whatever the page shows underneath — swallow it here.
+    var hubGrab = hubModal.querySelector('.lg-hubmenu__grab');
+    if (hubGrab) hubGrab.addEventListener('touchend', function (e) { if (e.cancelable) e.preventDefault(); });
 
     // Dismiss WITHOUT navigating: backdrop, close button, Escape.
     var hubClosers = hubModal.querySelectorAll('[data-lg-hubmenu-close]');
@@ -793,8 +879,22 @@ function lg_shared_render_site_header(array $ctx): void
 
     <!-- Messages pane -->
     <div class="lg-social-pane" data-lg-pane="messages" role="tabpanel">
+      <!-- Start a new message / group. Shown only in the thread-list view; JS hides it
+           the moment a thread, the compose picker, or the member manager opens. -->
+      <div class="lg-msg__newbar" id="lg-msg-newbar">
+        <button type="button" class="lg-msg__newbtn" data-lg-new-msg>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+               stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          New message
+        </button>
+      </div>
       <!-- Thread list view -->
       <div class="lg-social-modal__body" id="lg-msg-list"></div>
+      <!-- Compose picker + member manager share this panel; filled by social-modals.js.
+           [hidden] counter-rule in the css (same trap as .lg-msg-detail). -->
+      <div class="lg-msg__panel" id="lg-msg-panel" hidden></div>
       <!-- Thread detail view. Layout via the .lg-msg-detail class, NOT an
            inline style — inline display:flex beat the UA [hidden] rule, so
            the pane never hid again after opening a thread (Buck 6/11; the

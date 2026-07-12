@@ -19,6 +19,27 @@
 $html  = is_string($args['html']  ?? null) ? $args['html'] : '';
 $style = is_string($args['style'] ?? null) ? strtolower((string) $args['style']) : 'plain';
 if (!in_array($style, ['plain', 'panel'], true)) $style = 'plain';
+
+// Loothalong links carried inside body content (e.g. Sheet-bridge event copy)
+// must open in a NEW tab so the reader's current loothgroup.com tab is never
+// navigated away to the Zoom gate (Ian 2026-07-12). We rewrite at RENDER time so
+// existing rows are covered without an import pass, and only touch anchors that
+// don't already declare their own target. The stripos guard makes this a no-op
+// for the overwhelming majority of content (the block otherwise renders as-is).
+if ($html !== '' && stripos($html, 'loothalong.php') !== false) {
+    $html = preg_replace_callback('#<a\b([^>]*)>#i', static function (array $m): string {
+        $attrs = $m[1];
+        // Only loothalong.php anchors, and only when no target is set already.
+        if (!preg_match('#href\s*=\s*("[^"]*loothalong\.php[^"]*"|\'[^\']*loothalong\.php[^\']*\'|[^\s"\'>]*loothalong\.php[^\s>]*)#i', $attrs)) {
+            return $m[0];
+        }
+        if (preg_match('#\btarget\s*=#i', $attrs)) {
+            return $m[0];
+        }
+        $rel = preg_match('#\brel\s*=#i', $attrs) ? '' : ' rel="noopener"';
+        return '<a' . $attrs . ' target="_blank"' . $rel . '>';
+    }, $html) ?? $html;
+}
 ?>
 <?php $editProp = !empty($ctx['editor_mode']) ? ' data-lg-edit-prop="html"' : ''; ?>
 <div class="lg-wysiwyg lg-wysiwyg--<?= $style ?>"<?= $editProp ?>><?php echo $html; ?></div>
