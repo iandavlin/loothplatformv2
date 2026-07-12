@@ -32,6 +32,7 @@
   var curPeers = [];                            // EVERY peer of the open thread (never peers[0])
   var curMeta = null;                           // {is_group,can_manage,created_by,members,meUuid} of the open thread
   var pendingGroup = null;                      // selected uuids for a not-yet-created group (first send → to_uuids[])
+  var lpAt = 0;                                 // timestamp of the last long-press (suppresses the trailing tap)
   var threadsCache = [];
   var pendingFile = null;                       // staged image attachment for the next send
   var ATTACH_MAX = 5 * 1024 * 1024;
@@ -356,6 +357,8 @@
       if (C('[data-mg-home]'))   { chatIsRoot ? closeMessenger() : showHome(); return; }
       // ── group management ──
       if (e.target.id === 'mg-acts') { closeActs(); return; }
+      // a long-press just fired the action sheet on this same image → swallow the tap
+      if (lpAt && Date.now() - lpAt < 600) { lpAt = 0; return; }
       var lbx = C('[data-mg-lightbox]'); if (lbx) { openLightboxMobile(lbx.getAttribute('data-mg-lightbox')); return; }
       if (C('[data-mg-new]'))     { openPickerMobile('new'); return; }
       if (C('[data-mg-members]')) { openMemberManagerMobile(); return; }
@@ -430,7 +433,7 @@
         var b = e.target.closest && e.target.closest('[data-mg-msg-id]');
         if (!b) return;
         target = b; sx = e.touches[0].clientX; sy = e.touches[0].clientY;
-        clear(); t = setTimeout(function () { t = null; openActs(target); }, 480);
+        clear(); t = setTimeout(function () { t = null; lpAt = Date.now(); openActs(target); }, 480);
       }, { passive: true });
       box.addEventListener('touchmove', function (e) {
         if (t && (Math.abs(e.touches[0].clientX - sx) > 10 || Math.abs(e.touches[0].clientY - sy) > 10)) clear();
@@ -639,10 +642,13 @@
       if (m.deleted) {
         return h + '<div class="mg-b mg-b--tomb ' + (mine ? 'mg-b--me' : 'mg-b--them') + '">Message deleted</div>';
       }
-      // image attachment (access-controlled URL) → in-app lightbox with pinch-zoom
+      // image attachment (access-controlled URL) → in-app lightbox with pinch-zoom.
+      // An OWN caption-less image also carries the msg id so long-press can delete it
+      // (a captioned image is deleted via its caption bubble instead).
       if (m.media_url) {
         h += '<button type="button" class="mg-img" style="align-self:' + (mine ? 'flex-end' : 'flex-start') +
-             '" data-mg-lightbox="' + esc(m.media_url) + '"><img src="' + esc(m.media_url) +
+             '" data-mg-lightbox="' + esc(m.media_url) + '"' +
+             (mine && !m.body ? ' data-mg-msg-id="' + esc(m.id) + '"' : '') + '><img src="' + esc(m.media_url) +
              '" alt="Photo" loading="lazy"><span class="mg-zoomdot" aria-hidden="true">⤢</span></button>';
       }
       // body optional when an image is present (image-only message).
