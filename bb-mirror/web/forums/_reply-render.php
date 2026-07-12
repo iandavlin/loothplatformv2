@@ -114,39 +114,160 @@ if (!function_exists('bb_mirror__safe_href')) {
     }
 }
 
+if (!function_exists('bb_mirror__mention_identities')) {
+    /**
+     * Batch-resolve mentioned members to their CURRENT identity.
+     *
+     * Source of truth is profile_app (users.slug), read over the same loopback endpoint
+     * hub_resolve_profiles() already uses. Deliberately NOT forums.person: that table
+     * caches the WP user_nicename, which is NOT the handle a member controls. Reading it
+     * is precisely what makes a mention render a name its owner no longer uses.
+     *
+     * Memoised (incl. negative results) for the request: a feed page with the same member
+     * mentioned on ten cards resolves them once, not ten times.
+     *
+     * @param int[]    $wpIds legacy BuddyBoss placeholders
+     * @param string[] $uuids mentions minted by us
+     * @return array{wp:array<int,?array>, uuid:array<string,?array>}
+     */
+    function bb_mirror__mention_identities(array $wpIds, array $uuids): array
+    {
+        static $memoWp = [], $memoUuid = [];
+
+        $needWp   = array_values(array_diff(array_unique(array_map('intval', $wpIds)), array_keys($memoWp)));
+        $needUuid = array_values(array_diff(array_unique(array_map('strtolower', $uuids)), array_keys($memoUuid)));
+
+        $fetch = function (string $qs): array {
+            if (PHP_SAPI === 'cli') return [];
+            $hdrs = ['Host: ' . (defined('LG_BB_MIRROR_HOST') ? LG_BB_MIRROR_HOST : 'localhost')];
+            if (!empty($_SERVER['HTTP_COOKIE'])) $hdrs[] = 'Cookie: ' . $_SERVER['HTTP_COOKIE'];
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL            => 'https://127.0.0.1/profile-api/v0/users?' . $qs,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
+                CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+                CURLOPT_TIMEOUT        => 4,
+                CURLOPT_HTTPHEADER     => $hdrs,
+            ]);
+            $body = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+            if ($code !== 200 || !$body) return [];
+            $data = json_decode((string)$body, true);
+            return (array)($data['items'] ?? []);
+        };
+
+        $shape = function (array $it): array {
+            return [
+                'uuid'    => strtolower((string)($it['uuid'] ?? '')),
+                'slug'    => $it['slug'] ?? null,
+                'private' => (($it['profile_visibility'] ?? 'public') === 'private'),
+            ];
+        };
+
+        foreach (array_chunk($needWp, 100) as $chunk) {
+            foreach ($fetch('wp_ids=' . rawurlencode(implode(',', $chunk))) as $it) {
+                $id = $shape($it);
+                if (!empty($it['wp_user_id'])) $memoWp[(int)$it['wp_user_id']] = $id;
+                if ($id['uuid'] !== '')        $memoUuid[$id['uuid']] = $id;
+            }
+        }
+        foreach (array_chunk($needUuid, 100) as $chunk) {
+            foreach ($fetch('uuids=' . rawurlencode(implode(',', $chunk))) as $it) {
+                $id = $shape($it);
+                if ($id['uuid'] !== '') $memoUuid[$id['uuid']] = $id;
+            }
+        }
+        // Negative-cache the misses (deleted member, dead uuid) so we don't re-ask per card.
+        foreach ($needWp as $i)   if (!array_key_exists($i, $memoWp))   $memoWp[$i]   = null;
+        foreach ($needUuid as $u) if (!array_key_exists($u, $memoUuid)) $memoUuid[$u] = null;
+
+        return ['wp' => $memoWp, 'uuid' => $memoUuid];
+    }
+}
+
 if (!function_exists('bb_mirror_resolve_mentions')) {
     /**
-     * Make BuddyBoss-sourced content_html actually clickable:
-     *   1. Resolve the unresolved `{{mention_user_id_N}}` placeholder hrefs that
-     *      BuddyBoss leaves in stored content → /members/<slug>/ (looked up from
-     *      forums.person; falls back to '#' if the user is gone).
-     *   2. Auto-link bare URLs that were typed as plain text (BuddyBoss does not
-     *      store them as anchors).
-     * Returns full HTML — structure preserved. Used for the expanded topic body.
+     * Make stored content_html clickable:
+     *   1. Resolve @mentions to the mentioned member's CURRENT handle → /u/<slug>.
+     *   2. Auto-link bare URLs that were typed as plain text.
+     * Returns full HTML — structure preserved. Used for the expanded topic body, and by
+     * bb_mirror_format_snippet() for every teaser/stub, so it is the ONE place mentions
+     * are resolved on every surface.
+     *
+     * TWO STORED SHAPES, ONE MEANING — "this anchor refers to a member":
+     *   OURS   <a … data-lg-uuid="<uuid>" …>@whatever</a>            (uuid = native, immutable)
+     *   LEGACY <a … href="{{mention_user_id_<wpid>}}" …>@whatever</a> (BuddyBoss; wpid → uuid
+     *          via the profile bridge — all 65 members ever mentioned bridge cleanly)
+     *
+     * Both carry a STABLE reference to a person. Neither one's TEXT is trustworthy: it is
+     * the handle FROZEN at the moment the post was written. So we rebuild the whole anchor
+     * — href AND visible text — from the member's CURRENT slug. That is the entire point:
+     * a member renames, and every mention of them ever posted follows, with nothing in the
+     * stored content rewritten.
+     *
+     * This is not theoretical. In live data a reply renders "@ianhatesguitars" linking to WP
+     * user 1 (Ian, whose handle is now `iandavlin`) — while a DIFFERENT member holds the slug
+     * `ianhatesguitars` today. Reader sees one person's handle, click lands on another.
+     *
+     * $db is retained for signature compatibility with the callers; mentions no longer read
+     * forums.person (see bb_mirror__mention_identities for why).
      */
     function bb_mirror_resolve_mentions(string $html, PDO $db): string
     {
         if (trim($html) === '') return $html;
 
-        // 1. Resolve {{mention_user_id_N}} → /members/<slug>/
-        if (preg_match_all('/\{\{mention_user_id_(\d+)\}\}/', $html, $m)) {
-            $ids = array_values(array_unique(array_map('intval', $m[1])));
-            $in  = implode(',', array_fill(0, count($ids), '?'));
-            $st  = $db->prepare("SELECT id, slug FROM forums.person WHERE id IN ($in)");
-            $st->execute($ids);
-            $slug = [];
-            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                $slug[(int)$row['id']] = (string)$row['slug'];
+        // 1. @mentions → the member's current handle.
+        $anchorRe = '~<a\b([^>]*)>(.*?)</a>~is';
+        $uuidRe   = '~data-lg-uuid=([\'"])([0-9a-fA-F-]{36})\1~';
+        $wpRe     = '~\{\{mention_user_id_(\d+)\}\}~';
+
+        if (preg_match_all($anchorRe, $html, $ms, PREG_SET_ORDER)) {
+            $wpIds = [];
+            $uuids = [];
+            foreach ($ms as $m) {
+                if (preg_match($uuidRe, $m[1], $u))       $uuids[] = strtolower($u[2]);
+                elseif (preg_match($wpRe, $m[1], $w))     $wpIds[] = (int)$w[1];
             }
-            foreach ($ids as $id) {
-                // Escape the slug into the href: user_nicename is WP-constrained
-                // to [a-z0-9._-] today, but don't trust that for an attribute we
-                // emit raw in the full-body path.
-                $url = isset($slug[$id])
-                    ? htmlspecialchars('/members/' . $slug[$id] . '/', ENT_QUOTES)
-                    : '#';
-                $html = str_replace('{{mention_user_id_' . $id . '}}', $url, $html);
+
+            if ($wpIds || $uuids) {
+                $ident = bb_mirror__mention_identities($wpIds, $uuids);
+
+                $html = preg_replace_callback($anchorRe, function ($m) use ($ident, $uuidRe, $wpRe) {
+                    if (preg_match($uuidRe, $m[1], $u)) {
+                        $who = $ident['uuid'][strtolower($u[2])] ?? null;
+                    } elseif (preg_match($wpRe, $m[1], $w)) {
+                        $who = $ident['wp'][(int)$w[1]] ?? null;
+                    } else {
+                        return $m[0];   // an ordinary link — not ours, leave it exactly as-is
+                    }
+
+                    // Member gone, or a private profile whose /u/ page 404s for everyone else:
+                    // render the handle as plain text. A mention must never become a dead link.
+                    if (!$who || empty($who['slug']) || !empty($who['private'])) {
+                        $txt = trim(html_entity_decode(strip_tags($m[2]), ENT_QUOTES, 'UTF-8'));
+                        $txt = '@' . ltrim($txt, '@');
+                        return htmlspecialchars($txt === '@' ? '@member' : $txt, ENT_QUOTES, 'UTF-8');
+                    }
+
+                    // Keep class="bp-suggestions-mention": bb_mirror_format_snippet() keys its
+                    // mention detection on it (→ class="bb-mention"), which the anon leak-scrub
+                    // then keys on in turn. Dropping it would silently un-gate handles to anon.
+                    $slug = (string)$who['slug'];
+                    return '<a class="bp-suggestions-mention" href="'
+                         . htmlspecialchars('/u/' . rawurlencode($slug), ENT_QUOTES)
+                         . '" rel="nofollow">@'
+                         . htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') . '</a>';
+                }, $html) ?? $html;
             }
+        }
+
+        // A placeholder loose in the text (not inside an anchor) would leak raw braces onto
+        // the page. Nothing should emit one; neutralise rather than render '{{…}}'.
+        if (str_contains($html, '{{mention_user_id_')) {
+            $html = preg_replace($wpRe, '', $html) ?? $html;
         }
 
         // 2. Auto-link bare URLs — but ONLY in the segments OUTSIDE existing

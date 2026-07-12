@@ -22,19 +22,59 @@ use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Social;
 use Looth\ProfileApp\Block;   // composable-layout caddy (availableBlocks + LAYOUT_BLOCKS)
 use Looth\ProfileApp\Visibility;
+use Looth\ProfileApp\Slug;
 
 $slug = $_GET['slug'] ?? '';
 if (!is_string($slug) || $slug === '') { http_response_code(404); echo 'not found'; exit; }
 
+/**
+ * Send the visitor to the canonical URL for this profile, keeping any query string
+ * (?view=me, ?admin_edit=1 …). 301, because these are permanent moves: a member's old
+ * handle belongs to them forever and is never re-issued to anyone else.
+ */
+$lg_slug_redirect = function (string $to) use ($slug): void {
+    $qs = $_GET;
+    unset($qs['slug']);                     // nginx injects this from the path, not the URL
+    $url = '/u/' . rawurlencode($to) . ($qs ? '?' . http_build_query($qs) : '');
+    header('Location: ' . $url, true, 301);
+    exit;
+};
+
 $pg = Db::pg();
-$q = $pg->prepare('SELECT id, uuid, display_name, slug, profile_visibility, avatar_url, at_a_glance, business_name FROM users WHERE slug = :s');
+$SEL = 'SELECT id, uuid, display_name, slug, profile_visibility, avatar_url, at_a_glance, business_name FROM users ';
+
+// 1. Exact match — the hot path, unchanged.
+$q = $pg->prepare($SEL . 'WHERE slug = :s');
 $q->execute([':s' => $slug]);
 $row = $q->fetch();
+
+// 2. Same handle, different case (/u/KevinSmith → /u/kevinsmith). Handles are unique
+//    case-insensitively, so this can match at most one member. Redirect to the canonical
+//    casing rather than serving the profile at two URLs.
+if (!$row) {
+    $q = $pg->prepare($SEL . 'WHERE lower(slug) = lower(:s)');
+    $q->execute([':s' => $slug]);
+    $row = $q->fetch();
+    if ($row && (string)$row['slug'] !== $slug) $lg_slug_redirect((string)$row['slug']);
+}
+
+// 3. Numeric fallback — /u/<id>. Pre-existing behaviour, kept. (It is also exactly why
+//    Slug::checkShape() forbids an all-numeric handle: one would shadow this route and
+//    hide another member's profile.)
 if (!$row && ctype_digit($slug)) {
-    $q = $pg->prepare('SELECT id, uuid, display_name, slug, profile_visibility, avatar_url, at_a_glance, business_name FROM users WHERE id = :i');
+    $q = $pg->prepare($SEL . 'WHERE id = :i');
     $q->execute([':i' => (int)$slug]);
     $row = $q->fetch();
 }
+
+// 4. A handle its owner has since changed. Old links — bookmarks, shared URLs, and the
+//    legacy /members/<nicename>/ redirect that lands here — must reach the member, not a
+//    404. slug_history keeps every handle they have ever held, and no one else can take it.
+if (!$row) {
+    $current = Slug::currentSlugForRetired($slug);
+    if ($current !== null && strcasecmp($current, $slug) !== 0) $lg_slug_redirect($current);
+}
+
 if (!$row) { http_response_code(404); echo 'not found'; exit; }
 
 $subjectId = (int)$row['id'];
@@ -503,6 +543,44 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-edit.editing{background:var(--lg-card-bg,#fff);box-shadow:0 0 0 2px var(--lg-sage);font-style:normal;color:var(--lg-ink)}
 .lg-edit.editing::after{content:none}
 .lg-edit.saved{box-shadow:0 0 0 2px var(--lg-sage-3)}
+/* the @username (username-mentions lane) — public handle; owner gets the editor panel */
+.lg-uname{margin-top:6px}
+.lg-uname__handle{font:600 calc(13.5px*var(--lg-read-scale,1))/1.4 var(--lg-font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);color:var(--lg-mute);letter-spacing:.01em}
+.lg-uname__btn{display:inline-flex;align-items:center;gap:5px;background:none;border:0;padding:2px 5px;margin:0 -5px;cursor:pointer;border-radius:6px;transition:background .12s,box-shadow .12s}
+.lg-uname__btn:hover,.lg-uname__btn:focus-visible{background:var(--lg-sage-tint);box-shadow:0 0 0 3px var(--lg-sage-tint);outline:none}
+.lg-uname__btn:hover .lg-uname__handle,.lg-uname__btn:focus-visible .lg-uname__handle{color:var(--lg-sage-d)}
+.lg-uname__btn::after{content:"✎";font-size:.72em;color:var(--lg-sage-d);opacity:0;transition:opacity .12s}
+.lg-uname__btn:hover::after,.lg-uname__btn:focus-visible::after{opacity:.75}
+/* editor panel — same shape as .lg-locedit (inline panel + aria-live status line) */
+.lg-slugedit{margin-top:10px;padding:13px;border:1px solid var(--lg-line);border-radius:12px;background:var(--lg-cream);max-width:460px}
+.lg-slugedit__help{margin:0 0 10px;font:400 calc(12.5px*var(--lg-read-scale,1))/1.45 var(--lg-font-sans);color:var(--lg-mute)}
+.lg-slugedit__row{display:flex;align-items:stretch;gap:6px}
+.lg-slugedit__wrap{flex:1;display:flex;align-items:center;min-width:0;border:2px solid var(--lg-line);border-radius:8px;background:var(--lg-card-bg,#fff);transition:border-color .13s,box-shadow .13s}
+.lg-slugedit__wrap:focus-within{border-color:var(--lg-sage);box-shadow:0 0 0 3px var(--lg-sage-tint)}
+.lg-slugedit--ok   .lg-slugedit__wrap{border-color:var(--lg-sage)}
+.lg-slugedit--err  .lg-slugedit__wrap{border-color:var(--lg-rust)}
+.lg-slugedit--warn .lg-slugedit__wrap{border-color:var(--lg-amber)}
+.lg-slugedit__at{padding:0 1px 0 10px;color:var(--lg-mute);font:600 calc(14px*var(--lg-read-scale,1))/1 var(--lg-font-mono,ui-monospace,monospace);user-select:none}
+.lg-slugedit__in{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--lg-ink);font:500 calc(14px*var(--lg-read-scale,1))/1 var(--lg-font-mono,ui-monospace,monospace);padding:10px 10px 10px 2px}
+.lg-slugedit__save{border:0;border-radius:8px;background:var(--lg-sage);color:#fff;font:600 calc(13px*var(--lg-read-scale,1))/1 var(--lg-font-sans);padding:0 15px;cursor:pointer;transition:background .13s}
+.lg-slugedit__save:hover:not(:disabled){background:var(--lg-sage-d)}
+.lg-slugedit__save:disabled{background:var(--lg-line);color:var(--lg-mute);cursor:not-allowed}
+.lg-slugedit__cancel{border:0;background:none;color:var(--lg-mute);font:500 calc(12.5px*var(--lg-read-scale,1))/1 var(--lg-font-sans);padding:0 6px;cursor:pointer;border-radius:6px}
+.lg-slugedit__cancel:hover{color:var(--lg-ink)}
+.lg-slugedit__status{display:flex;align-items:flex-start;gap:6px;margin-top:9px;min-height:18px;font:400 calc(12.5px*var(--lg-read-scale,1))/1.45 var(--lg-font-sans);color:var(--lg-mute)}
+.lg-slugedit__status::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;margin-top:5px;background:var(--lg-line)}
+.lg-slugedit--ok   .lg-slugedit__status{color:var(--lg-sage-d)}
+.lg-slugedit--ok   .lg-slugedit__status::before{background:var(--lg-sage)}
+.lg-slugedit--err  .lg-slugedit__status{color:var(--lg-rust)}
+.lg-slugedit--err  .lg-slugedit__status::before{background:var(--lg-rust)}
+.lg-slugedit--warn .lg-slugedit__status::before{background:var(--lg-amber)}
+/* the mobile edit sheet iframes this page at <=640px — the panel must not overflow its card */
+@media (max-width:640px){
+  .lg-slugedit{max-width:100%;padding:11px}
+  .lg-slugedit__row{flex-wrap:wrap}
+  .lg-slugedit__wrap{flex:1 1 100%}
+  .lg-slugedit__save{flex:1;padding:10px 15px}
+}
 .lg-about{font-size:calc(14.5px*var(--lg-read-scale,1));line-height:1.6;color:var(--lg-ink);white-space:pre-wrap;max-width:640px}
 .lg-about.lg-edit{min-height:1.5em;display:block;padding:6px 8px;margin:0 -8px}
 /* resume block — single PDF, download button + owner replace/remove */
@@ -1643,6 +1721,129 @@ window.lgSortable = function (container, opts) {
       el.textContent = el.dataset.orig || ''; finish(el); restorePlaceholder(el);
     }
   }
+
+  /* ── @username editor (username-mentions lane) ───────────────────────────────
+     Deliberately NOT the .lg-edit contentEditable driver below: that one commits on
+     blur and alert()s on failure. A username has to answer "is it free?" BEFORE you
+     commit — taken / reserved / another member's name / not-for-another-24-days — so
+     this is the .lg-locedit panel idiom: inline panel, debounced probe, aria-live status.
+     Runs inside the mobile edit sheet too (that sheet iframes this page). */
+  (function wireUsername() {
+    var host = document.querySelector('.lg-uname--own');
+    if (!host) return;
+    var btn = host.querySelector('.lg-uname__btn');
+    var panel = null, timer = null, lastQ = null, seq = 0, busy = false;
+
+    function close() {
+      if (panel) { panel.remove(); panel = null; }
+      btn.setAttribute('aria-expanded', 'false');
+      btn.hidden = false;
+    }
+
+    function open() {
+      if (panel) return;
+      btn.setAttribute('aria-expanded', 'true');
+      var cur = host.getAttribute('data-slug') || '';
+      panel = document.createElement('div');
+      panel.className = 'lg-slugedit';
+      panel.innerHTML =
+        '<p class="lg-slugedit__help">This is your profile link and the name people type to @mention you.</p>' +
+        '<div class="lg-slugedit__row">' +
+          '<span class="lg-slugedit__wrap">' +
+            '<span class="lg-slugedit__at">@</span>' +
+            '<input type="text" class="lg-slugedit__in" spellcheck="false" autocomplete="off" ' +
+                   'autocapitalize="none" maxlength="30" aria-label="Username">' +
+          '</span>' +
+          '<button type="button" class="lg-slugedit__save" disabled>Save</button>' +
+          '<button type="button" class="lg-slugedit__cancel">Cancel</button>' +
+        '</div>' +
+        '<div class="lg-slugedit__status" aria-live="polite"></div>';
+      host.appendChild(panel);
+      btn.hidden = true;
+
+      var input  = panel.querySelector('.lg-slugedit__in');
+      var save   = panel.querySelector('.lg-slugedit__save');
+      var cancel = panel.querySelector('.lg-slugedit__cancel');
+      var status = panel.querySelector('.lg-slugedit__status');
+      input.value = cur;
+      input.focus();
+      input.select();
+
+      function setState(kind, msg, canSave) {
+        panel.classList.remove('lg-slugedit--ok', 'lg-slugedit--err', 'lg-slugedit--warn');
+        if (kind) panel.classList.add('lg-slugedit--' + kind);
+        status.textContent = msg || '';
+        save.disabled = !canSave || busy;
+      }
+
+      /* 250ms debounce + a sequence guard: a slow answer for "mar" must not overwrite
+         the answer for "markus". Same shape as the location typeahead. */
+      function probe() {
+        var v = input.value.trim();
+        if (v === '')        { setState('', 'Pick a username.', false); return; }
+        if (v === cur)       { setState('', 'That’s your username already.', false); return; }
+        var mine = ++seq;
+        fetch('/profile-api/v0/me/slug?q=' + encodeURIComponent(v), { credentials: 'include' })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (mine !== seq) return;                       // a newer keystroke won
+            if (j && j.available) {
+              if (j.cooldown_days_left > 0) {
+                setState('warn', 'Free — but you changed your username recently. You can change it again in '
+                         + j.cooldown_days_left + ' day' + (j.cooldown_days_left === 1 ? '' : 's') + '.', false);
+              } else {
+                setState('ok', j.message || 'Available.', true);
+              }
+            } else {
+              setState('err', (j && j.message) || 'That username isn’t available.', false);
+            }
+          })
+          .catch(function () { if (mine === seq) setState('', 'Could not check that right now.', false); });
+      }
+
+      input.addEventListener('input', function () {
+        var v = input.value.trim();
+        if (v === lastQ) return;
+        lastQ = v;
+        setState('', 'Checking…', false);
+        clearTimeout(timer);
+        timer = setTimeout(probe, 250);
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter')  { e.preventDefault(); if (!save.disabled) save.click(); }
+        if (e.key === 'Escape') { e.preventDefault(); close(); }
+      });
+      cancel.addEventListener('click', close);
+
+      save.addEventListener('click', function () {
+        if (busy || save.disabled) return;
+        var v = input.value.trim();
+        busy = true; save.disabled = true; input.disabled = true;
+        setState('', 'Saving…', false);
+        fetch('/profile-api/v0/me/slug', {
+          method: 'PATCH', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: v })
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            busy = false; input.disabled = false;
+            if (!res.ok) { setState('err', (res.j && res.j.message) || 'Could not save.', false); return; }
+            /* The handle IS the URL — land the member on their new profile so what they
+               see in the address bar matches what they just picked. The old URL 301s here. */
+            window.location.replace((res.j && res.j.url) || ('/u/' + encodeURIComponent(v)) + '?view=me');
+          })
+          .catch(function () {
+            busy = false; input.disabled = false;
+            setState('err', 'Network error — not saved.', false);
+          });
+      });
+
+      setState('', cur ? '' : 'Pick a username.', false);
+    }
+
+    btn.addEventListener('click', open);
+  })();
 
   document.querySelectorAll('.lg-edit[data-edit-field]').forEach(function (el) {
     el.setAttribute('title', 'Click to edit');

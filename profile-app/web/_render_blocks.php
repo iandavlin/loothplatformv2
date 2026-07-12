@@ -1031,6 +1031,41 @@ function looth_render_header_block(array $header, string $role, string $headerVi
     } elseif ($glance !== '') {
         echo '<p class="lg-idrow__glance">' . looth_h($glance) . '</p>';
     }
+
+    // ── The @username (username-mentions lane) ────────────────────────────────────
+    // Shown to EVERYONE, not just the owner: the handle is public by definition — it is
+    // the member's /u/ URL and the name others type to mention them. Seeing "@markus" on
+    // the profile is how a member learns what to type in a composer.
+    //
+    // The owner gets an editor. NOT the .lg-edit contentEditable idiom used above: that
+    // one alerts() on failure, and a username needs to answer taken / reserved / too-soon
+    // BEFORE you commit. This uses the .lg-locedit panel idiom (inline panel + aria-live
+    // status), wired in u.php. Deliberately not plumbed through Block::loadHeader — the
+    // handle is identity, not a profile field, and the fields contract stays untouched.
+    $slugNow = '';
+    if ($userId > 0) {
+        try {
+            $st = \Looth\ProfileApp\Db::pg()->prepare('SELECT slug FROM users WHERE id = :u');
+            $st->execute([':u' => $userId]);
+            $slugNow = (string)($st->fetchColumn() ?: '');
+        } catch (\Throwable $e) {
+            $slugNow = '';   // never let the handle row take the profile page down
+        }
+    }
+    if ($slugNow !== '' || $isOwner) {
+        echo '<div class="lg-uname' . ($isOwner ? ' lg-uname--own' : '') . '"'
+           . ' data-slug="' . looth_h($slugNow) . '">';
+        if ($isOwner) {
+            echo '<button type="button" class="lg-uname__btn" aria-expanded="false"'
+               . ' title="Change your username">'
+               . '<span class="lg-uname__handle">@' . looth_h($slugNow !== '' ? $slugNow : 'set-a-username')
+               . '</span></button>';
+        } else {
+            echo '<span class="lg-uname__handle">@' . looth_h($slugNow) . '</span>';
+        }
+        echo '</div>';
+    }
+
     echo '</div></div>';                                   // close __body + idrow
 
     // Header status lights (availability widgets). Owner can toggle/remove each + add more.
