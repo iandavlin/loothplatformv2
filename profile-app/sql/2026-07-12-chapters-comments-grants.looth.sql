@@ -1,0 +1,84 @@
+-- CHAPTERS — cross-DATABASE grants so profile-app can REUSE discovery.comments.
+--
+-- ⚠️⚠️ THIS ONE APPLIES TO THE `looth` DATABASE, NOT `profile_app`. That is why the filename ends
+--       .looth.sql. Applying it to profile_app will fail (no discovery schema) — which is the
+--       intended failure mode.
+--
+--   sudo -u postgres psql -d looth -v ON_ERROR_STOP=1 \
+--        -f profile-app/sql/2026-07-12-chapters-comments-grants.looth.sql
+--
+--   (as postgres, not archive-poc: GRANT CONNECT ON DATABASE is a database-level privilege that
+--    the schema owner cannot confer.)
+--
+-- IDEMPOTENT: GRANT is idempotent by definition; re-running is a no-op.
+-- REVERSIBLE: see the REVOKE block at the bottom (commented — it is the down-migration).
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+-- WHY THIS FILE EXISTS — the one seam in the whole native build.
+--
+-- The brief: "Comments on announcements: REUSE an existing store — discovery.comments is already
+-- owned by archive-poc. Do NOT create a second comments store. Verify and justify."
+--
+-- VERIFIED, and it holds — with one cost that has to be paid explicitly:
+--
+--   ✓ The SCHEMA is genuinely WordPress-free and polymorphic. Comments are addressed by
+--     (post_type text, item_id bigint) with NO foreign key to wp_posts, to content_item, or to
+--     anything else. It already carries a user_uuid column — the same shared identity key
+--     profile_app uses. Inserting ('chapter_post', <chapter_post.id>) is legal today.
+--     The WordPress assumption lives in archive-poc's WRITE ENDPOINT (comment-post.php boots WP
+--     and calls get_post($itemId), which would 400 `bad_target` for a native row) — NOT in the
+--     store. We therefore reuse the STORE and write our own native endpoint; archive-poc's PHP is
+--     untouched by this lane.
+--
+--   ✗ THE COST: discovery.comments is in the `looth` database. profile_app is a SEPARATE DATABASE
+--     in the same cluster. There is no postgres_fdw and no dblink installed (verified in both
+--     DBs), so a SQL JOIN between chapter_post and its comments is IMPOSSIBLE. profile-app must
+--     open a SECOND PDO connection to `looth`.
+--
+--     That is not a hack — it is the established pattern here. archive-poc already does exactly
+--     this in reverse (archive-poc/web/sitemap.php:91-94 opens a second PDO to profile_app,
+--     backed by the cross-DB grants in tools/cut/sitemap-grants.sql). This file is the mirror
+--     image of that precedent.
+--
+--     The alternative — a second comments table inside profile_app — was REJECTED: it would give
+--     the platform two comment stores, two reaction stores and two moderation surfaces forever,
+--     to save one connection. The brief is right.
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+
+-- 1. Reach the database at all. (profile-app currently has no CONNECT on looth — only looth_ro
+--    does.) Without this, PDO throws before it ever sees the table.
+GRANT CONNECT ON DATABASE looth TO "profile-app";
+
+-- 2. Reach the schema. (archive-poc/sql/comments.pg.sql already granted profile-app SELECT on the
+--    comments TABLE — "harmless if it never reads this table", it said — but USAGE on the schema
+--    was never granted, so that SELECT is currently unreachable. This completes it.)
+GRANT USAGE ON SCHEMA discovery TO "profile-app";
+
+-- 3. Write. SELECT is already held (comments.pg.sql:65). We add the write side so a chapter
+--    announcement's comments can be posted, edited and removed by the native endpoint.
+--    UPDATE covers edit (body/edited_at) and moderation (status). DELETE is for the author's own
+--    "delete my comment" — the existing archive-poc modal soft-deletes via status, and we match
+--    that, but the grant is here so we are not blocked from a hard delete during GDPR erase.
+GRANT INSERT, UPDATE, DELETE ON discovery.comments TO "profile-app";
+GRANT USAGE, SELECT ON SEQUENCE discovery.comments_id_seq TO "profile-app";
+
+-- Verify post-apply (as profile-app — this is the exact check that proves the reuse works):
+--   sudo -u profile-app psql -d looth -c \
+--     "SELECT has_table_privilege('profile-app','discovery.comments','INSERT') AS can_insert,
+--             has_table_privilege('profile-app','discovery.comments','SELECT') AS can_select;"
+--   expect: can_insert=t, can_select=t
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+-- DOWN (reverses this file — uncomment to run):
+--
+--   REVOKE INSERT, UPDATE, DELETE ON discovery.comments   FROM "profile-app";
+--   REVOKE USAGE, SELECT ON SEQUENCE discovery.comments_id_seq FROM "profile-app";
+--   REVOKE USAGE  ON SCHEMA discovery                     FROM "profile-app";
+--   REVOKE CONNECT ON DATABASE looth                      FROM "profile-app";
+--   -- Do NOT revoke the SELECT on discovery.comments granted by comments.pg.sql — that predates
+--   -- this lane and is not ours to take away.
+--
+-- Orphaned comment rows after a chapters rollback (the up-migration's down-script cannot reach
+-- this database, by design — see its header). Clean up deliberately, never automatically:
+--   DELETE FROM discovery.comments WHERE post_type = 'chapter_post';
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
