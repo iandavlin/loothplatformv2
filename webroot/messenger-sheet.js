@@ -266,6 +266,16 @@
       '#looth-msgr .mg-mmi-sub{font:12px/1.2 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b)}',
       '#looth-msgr .mg-you{flex:0 0 auto;font:600 11px/1 var(--lg-font-sans,system-ui);color:var(--lg-sage-d,#6b7c52);background:var(--lg-sage-tint,#eef2e3);border-radius:999px;padding:4px 9px}',
       '#looth-msgr .mg-rm{flex:0 0 auto;border:1px solid #e7c4c0;background:none;color:var(--lg-error,#b3261e);border-radius:999px;font:600 12px/1 var(--lg-font-sans,system-ui);padding:6px 11px;cursor:pointer}',
+      // custom group name + ownership (Ian 7/12 v1.1)
+      '#looth-msgr .mg-mmi-actions{flex:0 0 auto;display:flex;align-items:center;gap:7px}',
+      '#looth-msgr .mg-owner-chip{display:inline-block;margin-left:8px;vertical-align:1px;font:700 10px/1 var(--lg-font-sans,system-ui);letter-spacing:.04em;text-transform:uppercase;color:#8a6d1f;background:#f4ecd4;border-radius:999px;padding:3px 7px}',
+      '#looth-msgr .mg-mkowner{flex:0 0 auto;border:1px solid var(--lg-sage-3,#d4e0b8);background:none;color:var(--lg-sage-d,#6b7c52);border-radius:999px;font:600 12px/1 var(--lg-font-sans,system-ui);padding:6px 11px;cursor:pointer}',
+      '#looth-msgr .mg-mm-name{margin:0 0 14px}',
+      '#looth-msgr .mg-mm-name-lbl{display:block;font:600 12px/1 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b);margin-bottom:6px}',
+      '#looth-msgr .mg-mm-name-row{display:flex;gap:8px}',
+      '#looth-msgr .mg-mm-name-in{flex:1;min-width:0;font:400 15px/1.3 var(--lg-font-sans,system-ui);color:var(--lg-charcoal,#1a1d1a);border:1px solid var(--lg-line,#e3ddd0);border-radius:10px;padding:10px 12px;background:#fff}',
+      '#looth-msgr .mg-mm-name-save{flex:0 0 auto;border:0;background:var(--lg-sage-d,#6b7c52);color:#fff;border-radius:10px;font:600 14px/1 var(--lg-font-sans,system-ui);padding:0 16px;cursor:pointer}',
+      '#looth-msgr .mg-mm-name-hint{display:block;font:400 11.5px/1.35 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b);margin:7px 2px 0}',
       '#looth-msgr .mg-addrow{width:100%;margin-top:14px;border:1px dashed var(--lg-sage-3,#d4e0b8);background:none;color:var(--lg-sage-d,#6b7c52);border-radius:12px;font:600 14px/1 var(--lg-font-sans,system-ui);padding:12px;cursor:pointer}',
       '#looth-msgr .mg-leavebtn{width:100%;margin-top:10px;border:1px solid #e7c4c0;background:none;color:var(--lg-error,#b3261e);border-radius:12px;font:600 14px/1 var(--lg-font-sans,system-ui);padding:12px;cursor:pointer}',
       // long-press action sheet (edit/delete/copy)
@@ -283,6 +293,8 @@
       D + ' #looth-msgr .mg-p2hint,' + D + ' #looth-msgr .mg-pi-sub,' + D + ' #looth-msgr .mg-mmi-sub{color:#9aa097}',
       D + ' #looth-msgr .mg-newbtn,' + D + ' #looth-msgr .mg-chmenu,' + D + ' #looth-msgr .mg-you{background:#262b30;color:#9cb37d}',
       D + ' #looth-msgr .mg-pkfield{background:#262b30;border-color:#2c312d}',
+      D + ' #looth-msgr .mg-mm-name-in{background:#262b30;border-color:#2c312d;color:#f2f4ee}',
+      D + ' #looth-msgr .mg-mm-name-lbl,' + D + ' #looth-msgr .mg-mm-name-hint{color:#9aa097}',
       D + ' #looth-msgr .mg-pi:active,' + D + ' #looth-msgr .mg-actbtn:active{background:#262b30}',
 
       // ── image lightbox (P4.5 — Ian scope-add 7/12). SAME /message-media/ URL, no new
@@ -367,6 +379,8 @@
       var px = C('[data-mg-pick-remove]'); if (px) { mpickRemove(px.getAttribute('data-mg-pick-remove')); return; }
       if (C('[data-mg-pick-go]'))  { mpickGo(); return; }
       var mr = C('[data-mg-mm-remove]');   if (mr) { mmRemoveMobile(mr.getAttribute('data-mg-mm-remove')); return; }
+      var mo = C('[data-mg-mm-owner]');    if (mo) { mmMakeOwnerMobile(mo.getAttribute('data-mg-mm-owner')); return; }
+      if (C('[data-mg-mm-rename]')) { mmRenameMobile(); return; }
       if (C('[data-mg-mm-add]'))   { openPickerMobile('add'); return; }
       if (C('[data-mg-mm-leave]')) { mmLeaveMobile(); return; }
     });
@@ -499,9 +513,17 @@
       /* <=3 peers: every name, wrapped over up to 3 lines. More than that and the
          header would swallow the screen, so the label says "A, B +N" — still true,
          never a silent clip that hides a participant. */
-      nm.innerHTML = '<span class="mg-chnames">' + esc(peerLabel(ps, ps.length <= 3 ? ps.length : 2)) + '</span>' +
-        (group ? '<span class="mg-chsub">Group · ' + peerTotal(ps) + ' people · everyone here sees your reply</span>'
-               : (!ps.length ? '<span class="mg-chsub">This chat has no other members.</span>' : ''));
+      /* A custom group name (subject) wins as the header title; the member names then drop to
+         the subline (Ian 7/12). No subject → member names stay the title, as before. */
+      var subject = curMeta && curMeta.subject;
+      var namesLabel = esc(peerLabel(ps, ps.length <= 3 ? ps.length : 2));
+      var groupNote = group ? 'Group · ' + peerTotal(ps) + ' people · everyone here sees your reply' : '';
+      nm.innerHTML = subject
+        ? '<span class="mg-chnames">' + esc(subject) + '</span>'
+          + '<span class="mg-chsub">' + namesLabel + (groupNote ? ' · ' + groupNote : '') + '</span>'
+        : '<span class="mg-chnames">' + namesLabel + '</span>' +
+          (group ? '<span class="mg-chsub">' + groupNote + '</span>'
+                 : (!ps.length ? '<span class="mg-chsub">This chat has no other members.</span>' : ''));
     }
     if (ta) ta.placeholder = group ? 'Message all ' + peerTotal(ps) + ' people…' : 'Message…';
   }
@@ -562,10 +584,12 @@
       var ps = t.peers || [];
       var unread = (parseInt(t.unread_count, 10) || 0) > 0;
       var group = ps.length > 1;
+      /* A custom group name (subject) wins over the member-name label; empty/absent → label. */
+      var title = (t.subject && String(t.subject).length) ? String(t.subject) : peerLabel(ps, 2);
       return '<button type="button" class="mg-row' + (unread ? ' is-unread' : '') + '" data-mg-thread="' + esc(t.uuid) + '">' +
         '<span class="mg-avi' + (group ? ' mg-avi--stack' : '') + '">' + aviStack(ps) + '</span>' +
         '<span class="mg-col">' +
-          '<span class="mg-nameline"><span class="mg-name">' + esc(peerLabel(ps, 2)) + '</span>' +
+          '<span class="mg-nameline"><span class="mg-name">' + esc(title) + '</span>' +
           (group ? '<span class="mg-grouptag">Group · ' + peerTotal(ps) + '</span>' : '') + '</span>' +
         '<span class="mg-snip">' + esc(t.last_snippet || '') + '</span></span>' +
         '<span class="mg-meta"><span class="mg-time">' + rel(t.last_message_at) + '</span>' +
@@ -882,6 +906,7 @@
     return {
       is_group: !!(d && d.is_group), can_manage: !!(d && d.can_manage),
       created_by: d && d.created_by, members: members, meUuid: me ? me.uuid : null,
+      subject: (d && d.thread && d.thread.subject) || null,   // custom group name, or null
     };
   }
 
@@ -1070,20 +1095,41 @@
     mmMembersM = members.map(function (m) { return m.uuid; });
     var hint = canManage
       ? 'You can remove anyone in this ' + (isGroup ? 'group' : 'conversation') + '.'
-      : (isGroup ? 'Only the group’s creator or a site admin can remove others. You can always leave.'
+      : (isGroup ? 'Only the group’s owner or a site admin can remove others. You can always leave.'
                  : 'Add people to start a group — this private chat stays as it is.');
     var rows = members.map(function (m) {
-      var isMe = m.uuid === meUuid, isCreator = createdBy && m.uuid === createdBy;
-      var sub = isMe ? ('You' + (isCreator ? ' · started the group' : ''))
-                     : (isCreator ? 'Started the group' : (m.slug ? '@' + m.slug : ''));
-      var right = isMe ? '<span class="mg-you">You</span>'
-        : (canManage ? '<button type="button" class="mg-rm" data-mg-mm-remove="' + esc(m.uuid) + '">Remove</button>' : '');
+      var isMe = m.uuid === meUuid, isOwner = createdBy && m.uuid === createdBy;   // created_by = current owner (mutable)
+      var sub = isMe ? 'You' : (m.slug ? '@' + m.slug : '');
+      /* Owner chip on the owner's row — all members see it; only when an owner is recorded. */
+      var chip = isOwner ? '<span class="mg-owner-chip">Owner</span>' : '';
+      var right;
+      if (isMe) { right = '<span class="mg-you">You</span>'; }
+      else {
+        right = '';
+        /* Transfer: owner OR site admin (canManage) hands ownership to a NON-owner member. */
+        if (canManage && isGroup && !isOwner) right += '<button type="button" class="mg-mkowner" data-mg-mm-owner="' + esc(m.uuid) + '">Make owner</button>';
+        if (canManage) right += '<button type="button" class="mg-rm" data-mg-mm-remove="' + esc(m.uuid) + '">Remove</button>';
+      }
       return '<div class="mg-mmi"><span class="mg-avi">' + avi({ avatar_url: m.avatar_url, name: m.name || m.display_name }) + '</span>'
-        + '<span class="mg-mmi-col"><span class="mg-mmi-nm">' + esc(m.name || m.display_name || 'Member') + '</span>'
-        + '<span class="mg-mmi-sub">' + esc(sub) + '</span></span>' + right + '</div>';
+        + '<span class="mg-mmi-col"><span class="mg-mmi-nm">' + esc(m.name || m.display_name || 'Member') + chip + '</span>'
+        + '<span class="mg-mmi-sub">' + esc(sub) + '</span></span>'
+        + '<span class="mg-mmi-actions">' + right + '</span></div>';
     }).join('');
+    /* Group-name field — ANY member may set/clear it (groups only); esc() keeps the value inert. */
+    var subject = (d && d.thread && d.thread.subject) || '';
+    var nameField = isGroup
+      ? '<div class="mg-mm-name">'
+        + '<label class="mg-mm-name-lbl" for="mg-mm-name-in">Group name</label>'
+        + '<div class="mg-mm-name-row">'
+        + '<input type="text" id="mg-mm-name-in" class="mg-mm-name-in" maxlength="60" '
+        +   'placeholder="Add a name (optional)" value="' + esc(subject) + '">'
+        + '<button type="button" class="mg-mm-name-save" data-mg-mm-rename>Save</button>'
+        + '</div>'
+        + '<div class="mg-mm-name-hint">Anyone here can rename the group. Clear the box to remove the name.</div>'
+        + '</div>'
+      : '';
     sheet.querySelector('#mg-p2t').textContent = 'Members · ' + members.length;
-    sheet.querySelector('#mg-p2body').innerHTML = '<p class="mg-p2hint">' + esc(hint) + '</p>' + rows
+    sheet.querySelector('#mg-p2body').innerHTML = '<p class="mg-p2hint">' + esc(hint) + '</p>' + nameField + rows
       + '<button type="button" class="mg-addrow" data-mg-mm-add>＋ Add people</button>'
       + '<button type="button" class="mg-leavebtn" data-mg-mm-leave>' + (isGroup ? 'Leave group' : 'Leave') + '</button>';
     sheet.querySelector('#mg-p2foot').hidden = true;
@@ -1104,8 +1150,27 @@
     if (!confirm('Remove this person from the group?')) return;
     mpostMembers({ remove: uuid }).then(function (res) {
       if (res && res._ok) openMemberManagerMobile();
-      else if (res && res._status === 403) alert('Only the group’s creator or a site admin can remove members.');
+      else if (res && res._status === 403) alert('Only the group’s owner or a site admin can remove members.');
       else alert('Could not remove that member.');
+    });
+  }
+  /* Rename (any member): re-open the thread so the new title + the "named the group" system
+     line both land live; an empty box clears the name and reverts to the member-name label. */
+  function mmRenameMobile() {
+    var inp = sheet && sheet.querySelector('#mg-mm-name-in');
+    if (!inp) return;
+    mpostMembers({ rename: inp.value }).then(function (res) {
+      if (res && res._ok) { closeP2(); openThread(curThread, curPeers); }
+      else alert('Could not rename the group.');
+    });
+  }
+  /* Transfer ownership (owner or site admin): server 403s anyone else. */
+  function mmMakeOwnerMobile(uuid) {
+    if (!confirm('Make this person the group owner?')) return;
+    mpostMembers({ transfer: uuid }).then(function (res) {
+      if (res && res._ok) openMemberManagerMobile();
+      else if (res && res._status === 403) alert('Only the current owner or a site admin can pass ownership.');
+      else alert('Could not transfer ownership.');
     });
   }
   function mmLeaveMobile() {

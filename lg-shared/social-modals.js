@@ -358,12 +358,14 @@ function loadThreadList() {
         var unread = t.unread_count || 0;
         var prev   = t.last_snippet || '';
         var group  = ps.length > 1;
+        /* A custom group name (subject) wins over the member-name label; empty/absent → label. */
+        var title  = (t.subject && String(t.subject).length) ? String(t.subject) : peerLabel(ps, 2);
         return '<div class="lg-msg__thread' + (unread ? ' lg-msg__thread--unread' : '') +
           '" data-thread-uuid="' + esc(t.uuid) + '" tabindex="0" role="button">'
           + '<div class="lg-msg__av">' + avatarStack(ps, 36) + '</div>'
           + '<div class="lg-msg__meta">'
             + '<div class="lg-msg__nameline">'
-              + '<span class="lg-msg__name">' + esc(peerLabel(ps, 2)) + '</span>'
+              + '<span class="lg-msg__name">' + esc(title) + '</span>'
               + (group ? '<span class="lg-msg__group-tag">Group · ' + peerTotal(ps) + '</span>' : '')
             + '</div>'
             + '<div class="lg-msg__preview">' + esc(prev) + '</div>'
@@ -415,25 +417,33 @@ function renderPeerHeader(peers) {
       ? '<a class="lg-msg__peer-name" href="/u/' + esc(p.slug) + '">' + esc(name) + '</a>'
       : '<span class="lg-msg__peer-name">' + esc(name) + '</span>';
   }).join('<span class="lg-msg__peer-sep">, </span>');
+  /* A custom group name (subject) wins as the header title; the member names then drop to the
+     subline (Ian 7/12). No subject → the member names stay the title, as before. */
+  var subject  = currentThreadMeta && currentThreadMeta.subject;
+  var groupNote = ps.length > 1
+    ? 'Group · ' + peerTotal(ps) + ' people · everyone here sees your reply' : '';
+  /* Members / manage — only on a real (already-created) thread. A not-yet-created DM or new-
+     group compose has no thread to manage yet. Opens the member manager panel. */
+  var manageBtn = currentThreadUuid
+    ? '<button type="button" class="lg-msg__manage" data-lg-manage aria-label="' +
+      (ps.length > 1 ? 'Manage members' : 'Members and add people') + '" title="' +
+      (ps.length > 1 ? 'Manage members' : 'Add people') + '">'
+      + '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"'
+      + ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      + '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>'
+      + '<path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
+      + '</button>'
+    : '';
   el.innerHTML = avatarStack(ps, 36)
-    + '<span class="lg-msg__peer-names">' + names
-    + (ps.length > 1
-        ? '<span class="lg-msg__peer-note">Group · ' + peerTotal(ps) +
-          ' people · everyone here sees your reply</span>'
-        : '')
+    + '<span class="lg-msg__peer-names">'
+    + (subject
+        ? '<span class="lg-msg__peer-name lg-msg__peer-title">' + esc(subject) + '</span>'
+          + '<span class="lg-msg__peer-note">' + names
+            + (groupNote ? '<span class="lg-msg__peer-sep"> · </span>' + groupNote : '') + '</span>'
+        : names
+          + (groupNote ? '<span class="lg-msg__peer-note">' + groupNote + '</span>' : ''))
     + '</span>'
-    /* Members / manage — only on a real (already-created) thread. A not-yet-created DM
-       or new-group compose has no thread to manage yet. Opens the member manager panel. */
-    + (currentThreadUuid
-        ? '<button type="button" class="lg-msg__manage" data-lg-manage aria-label="' +
-          (ps.length > 1 ? 'Manage members' : 'Members and add people') + '" title="' +
-          (ps.length > 1 ? 'Manage members' : 'Add people') + '">'
-          + '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"'
-          + ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-          + '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>'
-          + '<path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
-          + '</button>'
-        : '');
+    + manageBtn;
   el.hidden = false;
   setReplyPlaceholder(ps);
 }
@@ -541,6 +551,7 @@ function openThread(threadUuid, peersHint) {
         can_manage: !!(d && d.can_manage),
         members:    members,
         meUuid:     meMember ? meMember.uuid : null,
+        subject:    (d && d.thread && d.thread.subject) || null,   /* custom group name, or null */
       };
       renderPeerHeader(peers);   /* authoritative identity for this thread */
       renderThreadMessages(msgs, (d && d.messages) || [], peers, members);
@@ -1178,28 +1189,56 @@ function renderMemberManager(d) {
 
   var hint = canManage
     ? 'You can remove anyone in this ' + (isGroup ? 'group' : 'conversation') + '.'
-    : (isGroup ? 'Only the group’s creator or a site admin can remove others. You can always leave.'
+    : (isGroup ? 'Only the group’s owner or a site admin can remove others. You can always leave.'
                : 'Add people to start a group — this private chat stays as it is.');
 
   var rows = members.map(function (m) {
-    var isMe      = m.uuid === meUuid;
-    var isCreator = createdBy && m.uuid === createdBy;
-    var sub = isMe
-      ? ('You' + (isCreator ? ' · started the group' : ''))
-      : (isCreator ? 'Started the group' : (m.slug ? '@' + m.slug : ''));
-    var right = isMe
-      ? '<span class="lg-msg__you">You</span>'
-      : (canManage ? '<button type="button" class="lg-msg__rm" data-lg-mm-remove="' + esc(m.uuid) + '">Remove</button>' : '');
+    var isMe    = m.uuid === meUuid;
+    var isOwner = createdBy && m.uuid === createdBy;   /* created_by = current owner (mutable) */
+    var sub = isMe ? 'You' : (m.slug ? '@' + m.slug : '');
+    /* Owner chip on the owner's row — visible to ALL members; only when an owner is recorded
+       (legacy NULL-owner threads show no badge, never a guess). */
+    var chip = isOwner ? '<span class="lg-msg__owner-chip">Owner</span>' : '';
+    var actions;
+    if (isMe) {
+      actions = '<span class="lg-msg__you">You</span>';
+    } else {
+      actions = '';
+      /* Transfer: the current owner OR a site admin (canManage) may hand ownership to any
+         NON-owner member. Server re-checks and 403s anyone else. */
+      if (canManage && isGroup && !isOwner) {
+        actions += '<button type="button" class="lg-msg__mkowner" data-lg-mm-owner="' + esc(m.uuid) + '">Make owner</button>';
+      }
+      if (canManage) {
+        actions += '<button type="button" class="lg-msg__rm" data-lg-mm-remove="' + esc(m.uuid) + '">Remove</button>';
+      }
+    }
     return '<div class="lg-msg__mmi">'
       + avatarEl(m, 36)
-      + '<div class="lg-msg__mmi-col"><div class="lg-msg__mmi-name">' + esc(m.name || m.display_name || 'Member') + '</div>'
+      + '<div class="lg-msg__mmi-col"><div class="lg-msg__mmi-name">' + esc(m.name || m.display_name || 'Member') + chip + '</div>'
       + '<div class="lg-msg__mmi-sub">' + esc(sub) + '</div></div>'
-      + right + '</div>';
+      + '<div class="lg-msg__mmi-actions">' + actions + '</div></div>';
   }).join('');
+
+  /* Group-name field — ANY member may set/clear it (Ian 7/12). Groups only; a 1:1 has no
+     custom title. Pre-filled with the current name; esc() makes the value attribute inert. */
+  var subject = (d && d.thread && d.thread.subject) || '';
+  var nameField = isGroup
+    ? '<div class="lg-msg__mm-name">'
+      + '<label class="lg-msg__mm-name-lbl" for="lg-mm-name">Group name</label>'
+      + '<div class="lg-msg__mm-name-row">'
+      + '<input type="text" id="lg-mm-name" class="lg-msg__mm-name-in" maxlength="60" '
+      +   'placeholder="Add a name (optional)" value="' + esc(subject) + '">'
+      + '<button type="button" class="lg-msg__mm-name-save" data-lg-mm-rename>Save</button>'
+      + '</div>'
+      + '<p class="lg-msg__mm-name-hint">Anyone here can rename the group. Clear the box to remove the name.</p>'
+      + '</div>'
+    : '';
 
   showMsgPanel('<div class="lg-msg__mm">'
     + '<h4 class="lg-msg__pk-title">Members · ' + members.length + '</h4>'
     + '<p class="lg-msg__pk-hint">' + esc(hint) + '</p>'
+    + nameField
     + '<div class="lg-msg__mm-list">' + rows + '</div>'
     + '<div class="lg-msg__mm-foot">'
       + '<button type="button" class="lg-msg__addrow" data-lg-mm-add>＋ Add people</button>'
@@ -1222,7 +1261,7 @@ function mmRemove(uuid) {
   if (!confirm('Remove this person from the group?')) return;
   postMembers({ remove: uuid }).then(function (res) {
     if (res && res._ok) { openMemberManager(); refreshCounts(); }
-    else if (res && res._status === 403) alert('Only the group’s creator or a site admin can remove members.');
+    else if (res && res._status === 403) alert('Only the group’s owner or a site admin can remove members.');
     else alert('Could not remove that member.');
   });
 }
@@ -1231,6 +1270,25 @@ function mmLeave() {
   postMembers({ leave: true }).then(function (res) {
     if (res && res._ok) { loadThreadList(); refreshCounts(); }
     else alert('Could not leave the conversation.');
+  });
+}
+/* Rename (any member): re-open the thread so the new title + the "named the group" system
+   line both land live; an empty box clears the name and reverts to the member-name label. */
+function mmRename() {
+  var inp = document.getElementById('lg-mm-name');
+  if (!inp) return;
+  postMembers({ rename: inp.value }).then(function (res) {
+    if (res && res._ok) { openThread(currentThreadUuid, currentPeers); refreshCounts(); }
+    else alert('Could not rename the group.');
+  });
+}
+/* Transfer ownership (owner or site admin): server 403s anyone else. */
+function mmMakeOwner(uuid) {
+  if (!confirm('Make this person the group owner?')) return;
+  postMembers({ transfer: uuid }).then(function (res) {
+    if (res && res._ok) { openMemberManager(); refreshCounts(); }
+    else if (res && res._status === 403) alert('Only the current owner or a site admin can pass ownership.');
+    else alert('Could not transfer ownership.');
   });
 }
 function mmAddConfirm(uuids) {
@@ -1354,6 +1412,8 @@ document.addEventListener('click', function (e) {
   if (hit('[data-lg-pick-go]'))     { pickerGo(); return; }
   if (hit('[data-lg-pick-cancel]')) { loadThreadList(); return; }
   var mr = hit('[data-lg-mm-remove]');   if (mr) { mmRemove(mr.getAttribute('data-lg-mm-remove')); return; }
+  var mo = hit('[data-lg-mm-owner]');    if (mo) { mmMakeOwner(mo.getAttribute('data-lg-mm-owner')); return; }
+  if (hit('[data-lg-mm-rename]'))   { mmRename(); return; }
   if (hit('[data-lg-mm-add]'))      { openAddPicker(); return; }
   if (hit('[data-lg-mm-leave]'))    { mmLeave(); return; }
   if (hit('[data-lg-edit]'))        { var be = hit('[data-lg-msg-id]'); if (be) beginEdit(be); return; }
