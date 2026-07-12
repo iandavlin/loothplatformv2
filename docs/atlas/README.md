@@ -7,6 +7,7 @@ the keeper.
 - **SYSTEM-MAP.md** — how the live system works, end to end (audited from dev2, the canonical
   box). The index of truth for "how it runs."
 - **GIT-PROTOCOL.md** — how we use git for this repo (branch-per-task + Ian approves merge).
+- **DISCUSSION-SURFACE-CANON.md** — the discussion MODAL (hub-polish.js §4e, desktop+mobile) is the canonical render+compose surface; legacy forum topic pages are not a feature target (Ian 2026-07-09).
 
 ## Canon authority (Ian 6/19)
 `docs/atlas/` is canonical and forward-looking. **All other docs are FROZEN — emergency
