@@ -274,6 +274,195 @@
     });
   })();
 
+  // ── @mention autocomplete (username-mentions lane) ──────────────────────────────
+  // Typing "@" in any discussion composer (Quill .ql-editor, or the plain-textarea
+  // fallback) suggests members by handle + name from the LIVE identity store
+  // (/profile-api/v0/mention-suggest — users.slug, never the forums.person nicename
+  // cache), and inserts "@<slug> " as PLAIN TEXT. The reply-write ingest
+  // (reply.php → lg_bb_mirror_mint_mentions) resolves that handle to the member's
+  // immutable uuid at save time, so the stored mention follows a later rename. No
+  // client-side uuid markup is needed — and none survives Quill reliably — so plain
+  // text is the robust contract, the same one the reply-to seeder already uses.
+  (function lgMentionAutocomplete() {
+    if (!window.fetch || !document.body) return;
+
+    var TOKEN = /(^|[\s (>\[])@([A-Za-z0-9._-]{0,60})$/;   // "@partial" at the caret
+    var panel = null, items = [], sel = -1, active = null, seq = 0, timer = null;
+
+    function ensurePanel() {
+      if (panel) return panel;
+      var css = '.lg-mnt{position:fixed;z-index:100000;min-width:200px;max-width:320px;'
+        + 'max-height:260px;overflow-y:auto;background:#fff;border:1px solid #d8d8d0;'
+        + 'border-radius:10px;box-shadow:0 8px 28px rgba(30,35,25,.18);padding:4px;'
+        + 'font:14px/1.3 system-ui,-apple-system,sans-serif;display:none}'
+        + '.lg-mnt__i{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer}'
+        + '.lg-mnt__i[aria-selected=true]{background:#eef1e7}'
+        + '.lg-mnt__av{width:26px;height:26px;border-radius:50%;flex:0 0 auto;object-fit:cover;'
+        + 'background:#c7cbb8;display:inline-block}'
+        + '.lg-mnt__tx{min-width:0}.lg-mnt__h{font-weight:600;color:#2e3a23}'
+        + '.lg-mnt__n{color:#6b7362;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+      var st = document.createElement('style'); st.id = 'lg-mnt-css'; st.textContent = css;
+      document.head.appendChild(st);
+      panel = document.createElement('div');
+      panel.className = 'lg-mnt';
+      panel.setAttribute('role', 'listbox');
+      document.body.appendChild(panel);
+      // Pointer pick (mousedown, not click — a click would blur the editor first).
+      panel.addEventListener('mousedown', function (e) {
+        var row = e.target.closest('.lg-mnt__i');
+        if (!row) return;
+        e.preventDefault();
+        pick(parseInt(row.dataset.i, 10));
+      });
+      return panel;
+    }
+
+    // Which composer, if any, is the event target.
+    function editorOf(el) {
+      if (!el || !el.tagName) return null;
+      if (el.classList && el.classList.contains('ql-editor')) return { el: el, kind: 'ce' };
+      if (el.tagName === 'TEXTAREA' &&
+          el.matches('textarea.rse-input, textarea.fic-input, #frm-content, #ntm-content'))
+        return { el: el, kind: 'ta' };
+      return null;
+    }
+
+    // The text immediately before the caret (for token detection), per editor kind.
+    function textBefore(info) {
+      if (info.kind === 'ta') return info.el.value.slice(0, info.el.selectionStart || 0);
+      var s = window.getSelection();
+      if (!s || !s.rangeCount) return null;
+      var r = s.getRangeAt(0);
+      if (!r.collapsed || r.startContainer.nodeType !== 3) return null;
+      if (!info.el.contains(r.startContainer)) return null;
+      return r.startContainer.nodeValue.slice(0, r.startOffset);
+    }
+
+    function caretRect(info) {
+      if (info.kind === 'ce') {
+        var s = window.getSelection();
+        if (s && s.rangeCount) {
+          var rc = s.getRangeAt(0).getBoundingClientRect();
+          if (rc && (rc.width || rc.height || rc.top)) return rc;
+        }
+      }
+      return info.el.getBoundingClientRect();
+    }
+
+    function close() {
+      if (panel) panel.style.display = 'none';
+      items = []; sel = -1; active = null; seq++;
+    }
+
+    function render() {
+      var p = ensurePanel();
+      if (!items.length) { p.style.display = 'none'; return; }
+      p.innerHTML = items.map(function (it, i) {
+        var av = it.avatar_url
+          ? '<img class="lg-mnt__av" src="' + esc(it.avatar_url) + '" alt="">'
+          : '<span class="lg-mnt__av"></span>';
+        var nm = it.display_name && it.display_name !== it.slug
+          ? '<span class="lg-mnt__n">' + esc(it.display_name) + '</span>' : '';
+        return '<div class="lg-mnt__i" role="option" data-i="' + i + '"'
+          + (i === sel ? ' aria-selected="true"' : '') + '>' + av
+          + '<span class="lg-mnt__tx"><span class="lg-mnt__h">@' + esc(it.slug) + '</span>' + nm + '</span></div>';
+      }).join('');
+      var rc = caretRect(active);
+      var top = rc.bottom + 4, left = rc.left;
+      p.style.display = 'block';
+      // Flip above the caret if it would overflow the viewport bottom.
+      var ph = p.offsetHeight || 260;
+      if (top + ph > window.innerHeight - 8) top = Math.max(8, rc.top - ph - 4);
+      left = Math.min(left, window.innerWidth - p.offsetWidth - 8);
+      p.style.top = top + 'px';
+      p.style.left = Math.max(8, left) + 'px';
+    }
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      });
+    }
+
+    function query(info, q) {
+      var my = ++seq;
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        fetch('/profile-api/v0/mention-suggest?q=' + encodeURIComponent(q),
+          { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+          .then(function (r) { return r.ok ? r.json() : { items: [] }; })
+          .then(function (j) {
+            if (my !== seq) return;            // out-of-order / superseded
+            items = (j && j.items) || [];
+            sel = items.length ? 0 : -1;
+            active = info;
+            render();
+          })
+          .catch(function () { if (my === seq) close(); });
+      }, 140);
+    }
+
+    function pick(i) {
+      if (i < 0 || i >= items.length || !active) return;
+      var slug = items[i].slug, info = active, ins = '@' + slug + ' ';
+      if (info.kind === 'ta') {
+        var el = info.el, v = el.value, c = el.selectionStart || 0;
+        var m = TOKEN.exec(v.slice(0, c)); if (!m) { close(); return; }
+        var tok = m[0].length - (m[1] ? m[1].length : 0);   // length of "@partial"
+        var start = c - tok;
+        el.value = v.slice(0, start) + ins + v.slice(c);
+        el.selectionStart = el.selectionEnd = start + ins.length;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.focus();
+      } else {
+        var s = window.getSelection();
+        if (!s || !s.rangeCount) { close(); return; }
+        var r = s.getRangeAt(0), node = r.startContainer;
+        if (node.nodeType !== 3) { close(); return; }
+        var before = node.nodeValue.slice(0, r.startOffset);
+        var mm = TOKEN.exec(before); if (!mm) { close(); return; }
+        var tlen = mm[0].length - (mm[1] ? mm[1].length : 0);
+        var startOff = r.startOffset - tlen;
+        node.nodeValue = node.nodeValue.slice(0, startOff) + ins + node.nodeValue.slice(r.startOffset);
+        var caret = startOff + ins.length;
+        var nr = document.createRange(); nr.setStart(node, Math.min(caret, node.nodeValue.length));
+        nr.collapse(true); s.removeAllRanges(); s.addRange(nr);
+        info.el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      close();
+    }
+
+    function onType(e) {
+      var info = editorOf(e.target);
+      if (!info) { if (active) close(); return; }
+      var tb = textBefore(info);
+      if (tb == null) { close(); return; }
+      var m = TOKEN.exec(tb);
+      if (!m) { close(); return; }
+      var q = m[2];
+      if (q.length < 1) { close(); return; }   // "@" alone: wait for a letter
+      query(info, q);
+    }
+
+    document.addEventListener('input', onType, true);
+    // Keyboard nav — capture phase, only when the panel is open, so Enter picks a
+    // suggestion instead of inserting a Quill newline / submitting the composer.
+    document.addEventListener('keydown', function (e) {
+      if (!panel || panel.style.display === 'none' || !items.length) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); sel = (sel + 1) % items.length; render(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); sel = (sel - 1 + items.length) % items.length; render(); }
+      else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); pick(sel); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+    }, true);
+    // Dismiss on blur / outside interaction / scroll.
+    document.addEventListener('focusout', function () { setTimeout(function () {
+      if (!panel) return;
+      var a = document.activeElement;
+      if (!a || !editorOf(a)) close();
+    }, 0); }, true);
+    document.addEventListener('scroll', function () { if (active) close(); }, true);
+  })();
+
   // Discussion (topic) cards do NOT click through to a topic page (Ian) — the card is
   // the unit. A click on the card (incl. its title) expands the body + thread IN PLACE
   // via the card's own affordances instead of navigating. Under ?proto=cards, §1b4's
