@@ -37,7 +37,7 @@ chats are on hold.
 | **Q1** | **Opting OUT of a subject — does it (a) hide that subject's posts from your MAIN Hub feed, or (b) only mute notifications?** *(still the crux, still unanswered)* | **(a) hide from the main Hub feed**, and mute notifications with it. Your ruling makes this cleaner, not harder: because everything stays public and browsable, hiding a subject from your feed costs a member *nothing* — the content is still one click away at `/g/<slug>`, still searchable, still linkable. The feed filter is now purely about **your firehose**, with no access consequences at all. See §2. |
 | **Q8** | **NEW, and it gates §B: for a SUBJECT, does the poster still pick a sub-forum?** Repair And Restoration has **9** of them (Acoustic Repair, Finish Repair, Neck Reset Database…). Composing "in the group" does not make that choice disappear — it only scopes it. | **Keep the sub-forum, scoped to the group** (a 2–9 item flat list, shown only when the group has more than one). Flattening 9 sub-forums into one Repair bucket is a real IA change that throws away a working taxonomy — and members already navigate by it. **Chapters skip this step entirely** (1 group = 1 forum), which is why your idea works perfectly there. See §B.2. |
 | **Q9** | **NEW: do you want ONE picker or TWO doors?** Is GROUP a second axis inside the parked content-type picker, or its own entry? | **Its own door, sibling to it.** A *type* (Videos) is a lens on the firehose; a *group* (SoCal Looths) is a **place** with members and a join button. One sheet containing both teaches members that SoCal Looths is a kind of content. See §A.3 — I mock the merged alternative too, in case you disagree. |
-| **Q10** | **NEW, and it is the one to answer even if you answer nothing else: "group" now means TWO things.** Group **messaging** shipped tonight — members can make "a group" with a name, an owner and a member list. This design calls chapters and subjects "groups" too. **Same word, two features, same month.** | **Rename ours, not theirs.** Messages keeps "group" (it shipped, it's the ordinary meaning). Ours get the names they already have: **Chapters** and **Subjects** — nav tray tile = "Chapters", You sheet = "My chapters & subjects". "Group" survives only as the internal schema word (`bp_group`), which no member ever sees. **This costs one string today and a rename across every surface + the URLs if we ship first and decide later.** See **§C.1**. |
+| ~~Q10~~ | ~~"group" now means two things — rename ours?~~ | ✅ **RULED (Ian, 2026-07-12): NO rename.** *"I think group chat and the groups that have names like local looths will be easy enough to tell apart."* **"Group" stays for both.** The community spaces are told apart by **their actual names and their context**, not by a category word. That is a ruling on the *label* — it leaves the *nav* work in place, and I've done it: **§C.1** is now how the two entries are made distinct **without** renaming either. |
 | **Q3** | Who may create a chapter? | **Staff only, for now.** A chapter is a real-world commitment (someone hosts the meetup). Members *request* one. Revisit past ~15 chapters. |
 | **Q4** | Can members create their own groups? | **No, not in v1.** You are about to archive three dead groups (§5). Member-created groups would manufacture more. Ship mini-hubs, see if anyone asks. |
 | **Q6** | Should non-discussion content (videos, articles, loothprints) belong to a group? | **Not in v1.** They genuinely have no group today — see §1.2. Discussions are group-aware for free; CPTs are not. This is also why the group chip lands on discussion cards only (§A.2). |
@@ -255,43 +255,49 @@ message threads with a **member-manager modal** (roster, add/remove, leave), **c
 an **owner badge** and **ownership transfer**. I did not know this when I wrote §A and §B. It changes
 three things, and **one of them is a decision Ian has to make before any of this ships.**
 
-### C.1 🔴 The word "group" now means two different things — and that is a real problem
+### C.1 ✅ RULED — "group" means both things, and the nav does the work instead
 
-As of tonight, a Looth member can create **"a group"** in Messages: it has **a name they chose**,
-**members**, **an owner**, and a **member-manager modal** where you add and remove people.
+As of tonight a member can make **"a group"** in Messages (a name they chose, members, an owner, a
+member-manager modal). This design calls chapters and subjects **"groups"** too. I raised that as a
+collision and recommended renaming ours to Chapters + Subjects.
 
-This design also calls its chapters and subjects **"groups"**: they have **a name**, **members**, an
-**organiser**, and (Phase 2) a **membership mirror**.
+> **Ian, 2026-07-12 — NO RENAME.** *"I think group chat and the groups that have names like local
+> looths will be easy enough to tell apart."* **"Group" stays for both.** The community spaces are told
+> apart by **their actual names and their context**, not by a category word.
 
-**Two things, same word, both shipping in the same month, and they are not the same thing:**
+**He's right, and the reason is worth stating, because it changes what the nav has to do.** Nobody
+navigates by the category noun. A member does not think *"open my groups"* — they think ***"open SoCal
+Looths"***, or ***"reply to the thread with Dave and Marta."*** The **name** is the identifier, and
+these names are not remotely alike. "Group" is just the shelf they sit on, and **a shelf label the
+member barely reads does not earn a rename across every surface plus the URLs.**
 
-| | a **Messages** group *(shipped tonight)* | a **Hub** group *(this design)* |
+So the ruling does not remove the design work — **it relocates it.** The two entries have to be
+tellable apart **at a glance, from their content**. That is a rendering job, not a vocabulary job:
+
+| | a **Messages** group | a **Hub** group *(this design)* |
 |---|---|---|
-| who makes it | **any member**, ad-hoc, in seconds | **staff** (Q3/Q4 — members can't) |
-| who's in it | **people you picked** | **anyone who taps Join** — up to **1,841** |
-| what it's for | a private conversation | a **public place** with a feed and a directory |
-| can you find it? | no — it's yours | **yes, that's the point** (`/g/<slug>`, the directory) |
+| **what the row is** | **the people in it** — stacked **round** member avatars | **the place itself** — one **rounded-square** group avatar |
+| **the subline** | the **last message** — *"Dave: anyone around Sat?"* | **members + where** — *"827 members · Southern California"* |
+| **the number** | an **unread badge** — something demanding an answer | a **member count** — something describing a place |
+| **what it is** | a **conversation you are inside** | a **destination you go to** |
+| **where it lives** | Messages | the Hub · the Nav tray · `/g/<slug>` |
 
-A member who reads *"Join SoCal Looths — 827 members"* three weeks after being taught that a "group"
-is the thing they made with four friends **has been taught the wrong thing by us.** And the collision
-is not cosmetic — it's in the nav: "My groups" in the You sheet (§A.4) would sit **directly next to
-Messages**, which now also contains things called groups.
+**Round vs. rounded-square is the load-bearing one, and it is already the platform's idiom** — people
+are circles everywhere on this site, and a place is not a person. A member scanning the You sheet sees
+**a row of faces above a row of places** and never has to parse the word above either one. **That is
+what "easy enough to tell apart" looks like once it's built.** It needs no new component and no rename:
+the group rows reuse the **member-manager idiom that shipped tonight** (§C.2) against a different data
+source.
 
-**→ Q10 (new, and it gates the nav copy — it is cheap now and expensive later).** My recommendation:
-**keep "group" for the Messages feature** (it's shipped, members already see it, and it's the ordinary
-meaning of the word) **and give this design's things their real names, which they already have:**
-**Chapters** (places) and **Subjects** (topics). They are **not** two flavours of one noun to a member
-— a member joins *a chapter* or follows *a subject*. So:
+**One residual, stated once and then dropped:** a member *could* name a group chat "SoCal Looths", and
+then only the surface and the avatar shape separate them. That is precisely the case Ian is calling
+fine, and I agree it doesn't earn a rename — **noted so nobody re-opens it later thinking we missed
+it.**
 
-- Nav tray tile → **"Chapters"** (a place — and it's the location-shaped thing anyway, §A.5)
-- You sheet → **"My chapters & subjects"**, *not* "My groups"
-- The directory → `/chapters/` and the subject list lives on the Hub as filters
-- **"Group" survives only as our internal schema word** (`bp_group`, `effective_group_id`) — where it
-  is already the BuddyBoss term and no member ever sees it.
-
-**The cost of deciding this now is zero — it's a string.** The cost of deciding it after the directory,
-the chip and the You-sheet entry ship is a rename across every surface plus the URLs. **This is the one
-thing in this round I'd ask Ian to answer even if he answers nothing else.**
+**What this changes in the mocks:** the Nav-tray tile stays **"Groups"** (N3a) and the You-sheet entry
+stays **"My groups"** (N4) — but N4 is re-shot so the group rows read as *places* (rounded-square
+avatar, member count, location) sitting directly above Messages' *people*. **The ruling is the design
+brief for that shot, not a reason to skip it.**
 
 ### C.2 The member-manager modal is the idiom I was about to reinvent — reuse it
 

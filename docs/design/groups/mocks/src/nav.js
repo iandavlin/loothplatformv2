@@ -397,9 +397,9 @@
       hub.parentNode.insertBefore(clone, hub.nextSibling);
       banner('<b>N3a — RECOMMENDED: Groups is its own door.</b> A tile in the Nav tray, '
         + 'sibling to the Hub (and to the content-type picker, which MERGED tonight). '
-        + '⚠️ The LABEL is Q10: "Groups" now collides with group messaging — my rec is '
-        + '<b>"Chapters"</b>. A <b>type</b> is a lens; '
-        + 'a <b>group</b> is a place with members and a Join button. Same sheet ≠ same kind of thing.');
+        + 'A <b>type</b> is a lens; a <b>group</b> is a place with members and a Join button. '
+        + 'Same sheet ≠ same kind of thing. <b>Label stays "Groups" per Ian\'s ruling</b> — the '
+        + 'community spaces are told apart by their NAMES, not by a category word.');
     },
 
     // ---- N3b: the ALTERNATIVE — one merged picker, two titled sections ----
@@ -470,7 +470,7 @@
         ${chaps.map((c) => `<div class="mk-pick__row">
           <div class="mk-pick__av" style="background:${avc(c.name)}">${ini(c.name)}</div>
           <div class="mk-pick__t"><div class="mk-pick__n">${c.name}</div>
-            <div class="mk-pick__s">${c.members} members · in your Hub feed</div></div>
+            <div class="mk-pick__s">${c.members} members · ${c.place}</div></div>
           <span class="mk-pick__go">${svg(ICO.chev, 16)}</span></div>`).join('')}
         <div class="mk-pick__sech">My subjects</div>
         ${subs.map((s, i) => `<div class="mk-pick__row">
@@ -484,8 +484,9 @@
       banner('<b>N4 — "My groups" lives in the You sheet, not the Nav tray.</b> Not my call: '
         + 'bottom-nav.js:50 (Ian/keeper 6/24) — the tray is PLACES ONLY, personal things live in You. '
         + 'A groups <b>directory</b> is a place; <b>my</b> groups is personal. '
-        + '⚠️ <b>Look at it sitting on top of Messages</b> — which now also holds things called '
-        + '"groups". That is Q10 (§C.1), and it is why I\'d call these <b>Chapters</b>.');
+        + '<b>Q10 RULED: no rename</b> — so the ROWS do the work. These read as <b>places</b> '
+        + '(square avatar · member count · location) sitting right above <b>Messages</b>, whose rows '
+        + 'are <b>people</b> (round avatars · last message · unread badge). Same word, unmistakable rows.');
     },
 
     // ---- N2: the Groups directory (the only page built from scratch) ----
