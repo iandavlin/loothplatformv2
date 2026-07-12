@@ -62,7 +62,19 @@ final class Messaging
         }, $rows);
     }
 
-    /** Other-party identities grouped by thread id (for the thread list / header). */
+    /**
+     * Other-party identities grouped by thread id (for the thread list / header).
+     *
+     * The ORDER BY is load-bearing, not cosmetic. Without it Postgres is free to return a
+     * thread's peers in any order, and it does: the thread LIST calls this with ~30 ids
+     * and the thread DETAIL with 1, which are different query plans and came back in
+     * different orders. Both surfaces then displayed peers[0] — so the SAME multi-peer
+     * thread was listed as "Doug" and opened as "John", on a cold load, with nothing
+     * stale and nothing racing (2026-07-10). display_name, then uuid as the tiebreak =
+     * one total order every caller sees. Callers must still render ALL peers, never
+     * peers[0]; deterministic order makes them AGREE, it does not make one peer "the"
+     * peer.
+     */
     private static function peersByThread(array $threadIds, string $selfUuid): array
     {
         if (!$threadIds) return [];
@@ -71,7 +83,8 @@ final class Messaging
             "SELECT mr.thread_id, u.uuid, u.display_name, u.slug, u.avatar_url
                FROM message_recipients mr
                JOIN users u ON u.uuid = mr.user_uuid
-              WHERE mr.thread_id IN ($place) AND mr.user_uuid <> ?"
+              WHERE mr.thread_id IN ($place) AND mr.user_uuid <> ?
+              ORDER BY mr.thread_id, u.display_name, u.uuid"
         );
         $st->execute([...array_map('intval', $threadIds), $selfUuid]);
         $out = [];
@@ -219,7 +232,17 @@ final class Messaging
         return array_map('strval', array_column($st->fetchAll(), 'user_uuid'));
     }
 
-    /** The existing 1:1 thread between two users (most recent), or null. */
+    /**
+     * The existing 1:1 thread between two users (most recent), or null.
+     *
+     * The recipient-count clause is a PRIVACY gate, not an optimisation. "Both A and B
+     * are recipients" also matches a GROUP thread that happens to contain them, so
+     * without it, pressing "Message" on Doug's profile and typing resolved to the
+     * 4-person BuddyBoss thread and delivered a private-looking DM to three other
+     * people. A pair thread is a thread with exactly TWO recipients; anything else is a
+     * group and must never be reached by a 1:1 send (2026-07-10). ensurePairThread()
+     * (image upload) shares this resolver, so both send paths are gated in one place.
+     */
     private static function findPairThread(string $a, string $b): ?int
     {
         $st = Db::pg()->prepare(
@@ -228,6 +251,8 @@ final class Messaging
                JOIN message_recipients mr2 ON mr2.thread_id = mr.thread_id
                JOIN message_threads t ON t.id = mr.thread_id
               WHERE mr.user_uuid = :a AND mr2.user_uuid = :b
+                AND (SELECT count(*) FROM message_recipients r
+                      WHERE r.thread_id = mr.thread_id) = 2
               ORDER BY t.last_message_at DESC LIMIT 1"
         );
         $st->execute([':a' => $a, ':b' => $b]);
