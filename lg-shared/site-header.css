@@ -747,10 +747,48 @@ body.lg-sm-open { overflow: hidden; }
   flex: 0 0 auto;
 }
 .lg-msg__peer[hidden] { display: none; }
+/* No nowrap/ellipsis: several names can share this line now, and a truncated
+   participant list is exactly the lie this header exists to stop telling. Long
+   names wrap instead of overflowing. */
 .lg-msg__peer-name {
-  font: 600 15px/1.2 var(--lg-font-sans, system-ui);
+  font: 600 15px/1.3 var(--lg-font-sans, system-ui);
   color: var(--lg-ink, #323532);
   text-decoration: none;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 a.lg-msg__peer-name:hover { text-decoration: underline; }
+
+/* ── Multi-peer (group) threads ──
+   A thread can have more than one peer (BuddyBoss-migrated group threads today,
+   group chats as a feature next). Rendering peers[0] as "the" recipient made a
+   group read as a private 1:1 — a reply reached people the header never named.
+   The header names EVERY peer and says so out loud; these styles carry it. */
+.lg-msg__peer-names {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 2px;
+  min-width: 0;   /* let the names ellipsize instead of shoving the avatar out */
+}
+.lg-msg__peer-sep { color: var(--lg-mute, #6b6f6b); }
+/* "everyone here sees your reply" — the whole point of the header, on its own line. */
+.lg-msg__peer-note {
+  flex: 1 0 100%;
+  font: 400 11.5px/1.35 var(--lg-font-sans, system-ui);
+  color: var(--lg-mute, #6b6f6b);
+}
+/* Overlapping faces: a group is legible as a group before you read a name. */
+.lg-msg__avstack {
+  position: relative; flex: 0 0 36px; width: 36px; height: 36px;
+}
+.lg-msg__avstack .lg-sm__avatar {
+  position: absolute; border: 2px solid var(--lg-cream, #fbfbf8);
+  width: 24px; height: 24px; flex: none; font-size: 10px;
+}
+.lg-msg__avstack .lg-sm__avatar:nth-child(1) { top: 0; left: 0; z-index: 3; }
+.lg-msg__avstack .lg-sm__avatar:nth-child(2) { bottom: 0; right: 0; z-index: 2; }
+.lg-msg__avstack .lg-sm__avatar:nth-child(3) { top: 0; right: 0; z-index: 1; width: 20px; height: 20px; }
+/* Thread-list row: the name line is one line, so the group fact rides as a chip. */
+.lg-msg__group-tag {
+  margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+  background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #6b7c52);
+  font: 600 10.5px/1.5 var(--lg-font-sans, system-ui);
+  vertical-align: middle;
+}
