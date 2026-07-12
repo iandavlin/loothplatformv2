@@ -167,6 +167,26 @@ if ($creds) {
                          WHERE pc.owner_type='profile' AND pc.owner_id = u.id AND cc.slug IN (" . implode(',', $ph) . "))";
 }
 
+// CHAPTER filter (dmv-native lane). Constrain the directory to ONE chapter's members, so the
+// chapter page's map can reuse this endpoint instead of growing a second geo query.
+//
+// Additive and NARROWING only: it joins the shared $wheres BEFORE the location/visibility
+// stack below, so every existing guard still applies and a chapter pin can never out-resolve
+// what the member already shows the directory. The clamp (Visibility::locationPrecision +
+// Block::locationDisplay, via dir_member_display) stays the last thing that touches a
+// coordinate — this clause only decides WHICH members are considered, never at what precision.
+//
+// A chapter member with no location, or with location hidden, simply drops out here and gets
+// no pin. They still count as a member: the count comes from chapter_member (Chapters::
+// memberCount), never from this query.
+$chapter = isset($_GET['chapter']) ? trim((string)$_GET['chapter']) : '';
+if ($chapter !== '') {
+    $wheres[] = "EXISTS (SELECT 1 FROM chapter_member cm
+                          JOIN chapter c ON c.id = cm.chapter_id
+                         WHERE cm.user_uuid = u.uuid AND c.slug = :chapter AND c.is_active = true)";
+    $params[':chapter'] = $chapter;
+}
+
 $selectDistance = '';
 // Base ordering from the sort whitelist. 'distance_asc' is resolved inside the
 // location block below (it needs the computed distance column); online_* fall
