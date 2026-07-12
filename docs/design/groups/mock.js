@@ -8,7 +8,7 @@
   const GROUPS = {
     socal: {
       name: 'SoCal Looths', slug: 'socal-looths', kind: 'chapter',
-      status: 'private', members: 827, cat: 'looths',
+      status: 'public', members: 827, cat: 'looths',
       desc: 'Southern California luthiers — meetups, shop tours, and the annual build-off. Come for the fret levelling, stay for the tacos.',
       place: 'Southern California, USA',
     },
@@ -218,6 +218,30 @@
   .note { background: #fff7e6; border: 1px solid #ecd9a8; border-radius: 10px; padding: 10px 13px;
       font-size: 12.5px; color: #6b5320; margin-bottom: 16px; }
   .note b { color: #4a3810; }
+
+  /* ---- mobile 390 ---- */
+  @media (max-width: 640px) {
+    .mk { padding: 14px 12px 72px; }
+    .gb__body { flex-direction: column; gap: 11px; padding: 14px 16px 16px; }
+    .gb__badge { width: 66px; height: 66px; margin-top: -46px; font-size: 24px; border-radius: 15px; }
+    .gb__ttl { font-size: 22px; }
+    .gb__desc { font-size: 14px; }
+    .gb__acts { flex-wrap: wrap; }
+    .gb__acts .btn { flex: 1 1 auto; justify-content: center; }
+    .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .tab { padding: 10px 12px; white-space: nowrap; }
+    .card { padding: 14px; }
+    .card__ft { flex-wrap: wrap; gap: 12px; }
+
+    /* the chat header must not push the room wider than the viewport */
+    .chat { height: 600px; }
+    .chat__hd { gap: 9px; padding: 10px 12px; }
+    .chat__hd .stack { display: none; }
+    .chat__ttl { font-size: 15px; }
+    .chat__hd .btn { padding: 8px 10px; font-size: 13px; }
+    .msg { max-width: 86%; }
+    .chat__ft { padding: 10px; gap: 7px; }
+  }
   `;
 
   const avatarStack = (names, more) => `
@@ -357,31 +381,38 @@
       </div>`;
   }
 
-  if (V === 'private') {
+  if (V === 'guest') {
     body = `
-      ${banner(reqBtn)}
+      ${banner(`${joinBtn}<button class="btn btn--chat">${I.chat} Group chat</button><button class="btn">Share</button>`)}
       ${tabs('Feed')}
       <div class="cols">
         <main>
-          <div class="teaser">
-            <div class="teaser__lock">${svg('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', {s: 38})}</div>
-            <h3 class="teaser__t">This chapter is private</h3>
-            <p class="teaser__b">You can see that <b>${G.name}</b> exists and who runs it — but its posts,
-              members and chat are visible to members only. Ask to join and an organiser will let you in.</p>
-            <button class="btn btn--pri">${I.lock} Request to join</button>
-          </div>
-          <div class="blur" style="margin-top:13px">${POSTS.map(postCard).join('')}</div>
+          <div class="note"><b>Not a member — and it doesn't matter.</b> Chapters are public and fully
+            browsable. Joining is one tap, no approval: it puts ${G.name} in your Hub feed and lets you
+            into the chat.</div>
+          ${POSTS.map(postCard).join('')}
         </main>
         <aside class="side">
           <div class="box">
+            <p class="box__t">Your participation</p>
+            <div class="sub">
+              <div class="sub__row">
+                <div><div class="sub__lbl">Not joined</div>
+                  <div class="sub__hint">You can read everything. Join to get ${G.name} in your Hub feed
+                    and to post &amp; chat.</div></div>
+              </div>
+              <div style="padding-top:8px">${joinBtn}</div>
+            </div>
+          </div>
+          <div class="box">
             <p class="box__t">About</p>
             <div class="krow"><span>Members</span><b>${G.members.toLocaleString()}</b></div>
-            <div class="krow"><span>Type</span><b>Private</b></div>
+            <div class="krow"><span>Type</span><b>Public</b></div>
             <div class="krow"><span>Organisers</span><b>2</b></div>
           </div>
           <div class="box">
-            <p class="box__t">Organisers</p>
-            ${avatarStack(['Dave Ramos', 'Rosa Lim'], 0).replace('+0 members', 'Contact to join')}
+            <p class="box__t">Members</p>
+            ${avatarStack(memberNames, G.members - memberNames.length)}
           </div>
         </aside>
       </div>`;
