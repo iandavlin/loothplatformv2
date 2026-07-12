@@ -958,7 +958,7 @@ function renderThreadMessages(msgs, messages, peers, members) {
        + '>';
     if (m.media_url) {
       /* image attachment → in-app lightbox (SAME access-controlled /message-media/ URL) */
-      h += '<button type="button" class="lg-msg__msg-media" data-lg-lightbox="' + esc(m.media_url) + '">'
+      h += '<button type="button" class="lg-msg__msg-media" data-lg-msg-lightbox="' + esc(m.media_url) + '">'
          + '<img src="' + esc(m.media_url) + '" alt="Photo" loading="lazy">'
          + '<span class="lg-msg__zoomdot" aria-hidden="true">⤢</span></button>';
     }
@@ -1260,19 +1260,19 @@ var lightboxEl = null;
 function openLightbox(url) {
   closeLightbox();
   var lb = document.createElement('div');
-  lb.className = 'lg-lightbox';
+  lb.className = 'lg-msg-lightbox';
   lb.setAttribute('role', 'dialog');
   lb.setAttribute('aria-label', 'Photo');
-  lb.innerHTML = '<div class="lg-lightbox__bar">'
-    + '<button type="button" class="lg-lightbox__btn" data-lb-out aria-label="Zoom out">－</button>'
-    + '<button type="button" class="lg-lightbox__btn" data-lb-in aria-label="Zoom in">＋</button>'
-    + '<button type="button" class="lg-lightbox__btn" data-lb-close aria-label="Close">✕</button></div>'
-    + '<img class="lg-lightbox__img" src="' + esc(url) + '" alt="Photo" draggable="false">'
-    + '<div class="lg-lightbox__hint">Scroll or ＋ / － to zoom · Esc to close</div>';
+  lb.innerHTML = '<div class="lg-msg-lightbox__bar">'
+    + '<button type="button" class="lg-msg-lightbox__btn" data-lb-out aria-label="Zoom out">－</button>'
+    + '<button type="button" class="lg-msg-lightbox__btn" data-lb-in aria-label="Zoom in">＋</button>'
+    + '<button type="button" class="lg-msg-lightbox__btn" data-lb-close aria-label="Close">✕</button></div>'
+    + '<img class="lg-msg-lightbox__img" src="' + esc(url) + '" alt="Photo" draggable="false">'
+    + '<div class="lg-msg-lightbox__hint">Scroll or ＋ / － to zoom · Esc to close</div>';
   document.body.appendChild(lb);
   lightboxEl = lb;
-  document.body.classList.add('lg-lightbox-open');
-  var img = lb.querySelector('.lg-lightbox__img');
+  document.body.classList.add('lg-msg-lightbox-open');
+  var img = lb.querySelector('.lg-msg-lightbox__img');
   var scale = 1, tx = 0, ty = 0;
   function apply() { img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; img.style.cursor = scale > 1 ? 'grab' : 'zoom-in'; }
   function zoom(d) { scale = Math.min(5, Math.max(1, scale + d)); if (scale === 1) { tx = 0; ty = 0; } apply(); }
@@ -1290,7 +1290,7 @@ function openLightbox(url) {
 function closeLightbox() {
   if (!lightboxEl) return;
   lightboxEl.remove(); lightboxEl = null;
-  document.body.classList.remove('lg-lightbox-open');
+  document.body.classList.remove('lg-msg-lightbox-open');
 }
 /* Esc closes the lightbox FIRST (capture) so it does not also close the whole modal. */
 document.addEventListener('keydown', function (e) {
@@ -1303,7 +1303,7 @@ document.addEventListener('click', function (e) {
   var hit = function (sel) { return t.closest && t.closest(sel); };
   if (hit('[data-lg-new-msg]'))     { openComposePicker(); return; }
   if (hit('[data-lg-manage]'))      { openMemberManager(); return; }
-  if (hit('[data-lg-lightbox]'))    { openLightbox(hit('[data-lg-lightbox]').getAttribute('data-lg-lightbox')); return; }
+  if (hit('[data-lg-msg-lightbox]'))    { openLightbox(hit('[data-lg-msg-lightbox]').getAttribute('data-lg-msg-lightbox')); return; }
   var pa = hit('[data-lg-pick-add]');    if (pa) { pickerAdd(pa.getAttribute('data-lg-pick-add')); return; }
   var px = hit('[data-lg-pick-remove]'); if (px) { pickerRemove(px.getAttribute('data-lg-pick-remove')); return; }
   if (hit('[data-lg-pick-go]'))     { pickerGo(); return; }
