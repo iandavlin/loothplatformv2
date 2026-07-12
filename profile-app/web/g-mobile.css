@@ -1,0 +1,29 @@
+/* g-mobile.css — CHAPTER PAGE, mobile overrides (<=640). Media-gated in <head> so it paints
+ * on first load without a JS flash. Mirrors the directory's mobile split. Never merge into g.css. */
+
+.ch { padding: 16px 14px 56px; }
+
+.ch-hero { margin: 4px 0 16px; }
+.ch-name { font-size: 1.55rem; }
+.ch-desc { font-size: 0.98rem; margin-bottom: 14px; }
+
+/* Count + Join sit on one line, Join pushed to the right edge for thumb reach. */
+.ch-meta { gap: 12px; }
+.ch-join { margin-left: auto; padding: 10px 22px; }
+
+/* Single column: map first (shorter), discussions below. */
+.ch-cols { grid-template-columns: 1fr; gap: 16px; }
+.ch-mapwrap { position: static; }
+#ch-map { height: 260px; }
+.ch-panel { border-radius: 14px; }
+
+.ch-discuss__head { padding: 12px 14px 8px; }
+.ch-discuss__head h2 { font-size: 1.08rem; }
+.ch-post__open { padding: 13px 14px; }
+.ch-post__title { font-size: 1rem; }
+.ch-post__foot { font-size: 0.82rem; gap: 6px; }
+
+/* On the narrowest screens the reply count can wrap under the byline rather than crush it. */
+@media (max-width: 380px) {
+  .ch-post__replies { margin-left: 0; flex-basis: 100%; margin-top: 3px; }
+}
