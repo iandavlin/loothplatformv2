@@ -22,6 +22,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/_render.php';                       // looth_h(), looth_issue_bounce_if_needed()
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Chapters.php';
+require_once LG_PROFILE_APP_APP_ROOT . '/src/DiscoveryComments.php';   // Chapters::posts() -> reply counts
 
 use Looth\ProfileApp\Chapters;
 use Looth\ProfileApp\Whoami;
@@ -222,7 +223,7 @@ lg_shared_render_site_header([
       maxZoom: 19, attribution: '© OpenStreetMap'
     }).addTo(map);
     var circle = L.circle([lat, lng], {
-      radius: radiusM, color: '#3a6b3a', weight: 1.5, fillColor: '#6f9e57', fillOpacity: 0.08
+      radius: radiusM, color: '#2f5a2f', weight: 2, fillColor: '#6f9e57', fillOpacity: 0.14
     }).addTo(map);
     map.fitBounds(circle.getBounds(), { padding: [24, 24] });
 
