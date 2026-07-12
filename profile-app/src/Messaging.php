@@ -550,11 +550,15 @@ final class Messaging
         $pg = Db::pg();
 
         if (!self::isGroupThread($threadId)) {
-            // 1:1 → fork a new group; the private DM is never mutated.
+            // 1:1 → fork a new group; the private DM is never mutated. Everyone but the
+            // starter is newly in this thread → they get an unread badge (Ian 7/12: the
+            // newly-added person is notified; the starter's own view stays read).
             $pg->beginTransaction();
             try {
                 $tid = self::createThread(array_merge($cur, $toAdd), $actorUuid);
                 self::insertSystemLine($tid, $actorUuid, self::displayName($actorUuid) . ' started the group');
+                $pg->prepare('UPDATE message_recipients SET unread_count = 1 WHERE thread_id = :t AND user_uuid <> :a')
+                   ->execute([':t' => $tid, ':a' => $actorUuid]);
                 $pg->commit();
             } catch (\Throwable $e) {
                 $pg->rollBack();
@@ -565,10 +569,13 @@ final class Messaging
             return ['ok' => true, 'forked' => true, 'thread_id' => $tid, 'thread_uuid' => (string)$uu->fetchColumn()];
         }
 
+        // Add in place. The NEWLY-added member's row starts unread (Ian 7/12: they get a
+        // badge so they notice the new thread); existing members get only the quiet bump
+        // insertSystemLine gives — the membership line never lights their message badge.
         $pg->beginTransaction();
         try {
             $ins = $pg->prepare(
-                'INSERT INTO message_recipients (thread_id, user_uuid) VALUES (:t, :u) ON CONFLICT DO NOTHING'
+                'INSERT INTO message_recipients (thread_id, user_uuid, unread_count) VALUES (:t, :u, 1) ON CONFLICT DO NOTHING'
             );
             foreach ($toAdd as $u) {
                 $ins->execute([':t' => $threadId, ':u' => $u]);
