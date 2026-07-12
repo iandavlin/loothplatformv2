@@ -136,24 +136,46 @@ function refreshCounts() {
 }
 
 /* ── notifications ── */
-/* No text field on the wire — compose the sentence from type + actor.name. */
+/* No text field on the wire — compose the sentence from type + actor.name.
+   Hub events (notifications lane) carry actor_count: the backend coalesces two
+   reactors on one card into ONE row, so the sentence has to say so. */
+function notifActors(n) {
+  var who   = esc((n.actor && n.actor.name) || 'Someone');
+  var extra = (n.actor_count || 1) - 1;
+  if (extra === 1) return who + ' and 1 other';
+  if (extra > 1)   return who + ' and ' + extra + ' others';
+  return who;
+}
 function notifText(n) {
   var who = (n.actor && n.actor.name) || 'Someone';
   switch (n.type) {
     case 'connection_accept':  return esc(who) + ' accepted your connection request';
     case 'connection_request': return esc(who) + ' sent you a connection request';
     case 'message':            return 'New message from ' + esc(who);
-    default:                   return esc(who);
+    /* Hub events — all deep-link into the §4e discussion modal on the exact item. */
+    case 'forum.reply_to_topic': return notifActors(n) + ' replied to your post';
+    case 'forum.reply_to_reply': return notifActors(n) + ' replied to your comment';
+    case 'forum.mention':        return notifActors(n) + ' mentioned you in a discussion';
+    case 'reaction.on_post':     return notifActors(n) + ' reacted to your post';
+    default:                     return esc(who);
   }
 }
 var CHECK_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"'
   + ' stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
   + '<polyline points="20 6 9 17 4 12"/></svg>';
 
+/* A row that HAS somewhere to land renders as a real <a> — the whole row is the
+   click target, middle-click/⌘-click open a tab, and the status bar shows where it
+   goes. Rows with no link (the legacy connection events) stay <div>s, so a row can
+   never navigate somewhere wrong. The ✓ button keeps its own stopPropagation. */
 function renderNotifItem(n) {
   var unread = !n.is_read;
-  return '<div class="lg-notif__item' + (unread ? ' lg-notif__item--unread' : '') +
-    '" data-notif-id="' + esc(n.id) + '">'
+  var link   = n.link || '';
+  var tag    = link ? 'a' : 'div';
+  var attrs  = 'class="lg-notif__item' + (unread ? ' lg-notif__item--unread' : '') +
+               (link ? ' lg-notif__item--link' : '') + '" data-notif-id="' + esc(n.id) + '"';
+  if (link) attrs += ' href="' + esc(link) + '" data-notif-link';
+  return '<' + tag + ' ' + attrs + '>'
     + '<div class="lg-notif__body">'
       + '<p class="lg-notif__text">' + notifText(n) + '</p>'
       + '<span class="lg-notif__time">' + relTime(n.created_at) + '</span>'
@@ -162,7 +184,21 @@ function renderNotifItem(n) {
         ? '<button class="lg-notif__clear" data-notif-clear="' + esc(n.id) +
           '" title="Mark as read" aria-label="Mark as read">' + CHECK_SVG + '</button>'
         : '')
-    + '</div>';
+    + '</' + tag + '>';
+}
+/* Read-on-clickthrough: opening the thing marks that ONE notification read.
+   keepalive lets the POST survive the navigation we are NOT preventing — the link
+   navigates natively (so modified clicks still work) while the mark-read flies. */
+function markNotifReadOnNav(id) {
+  try {
+    fetch(API + '/me/notifications/', {
+      method:      'POST',
+      credentials: 'include',
+      keepalive:   true,
+      headers:     { 'Content-Type': 'application/json' },
+      body:        JSON.stringify({ action: 'read', id: parseInt(id, 10) }),
+    });
+  } catch (e) {}
 }
 function updateReadAllBtn(show) {
   var b = document.querySelector('[data-lg-notif-readall]');
@@ -188,8 +224,17 @@ function loadNotifications() {
       updateReadAllBtn(items.some(function (n) { return !n.is_read; }));
       list.querySelectorAll('[data-notif-clear]').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
+          e.preventDefault();          /* the ✓ sits inside an <a> now — don't navigate */
           e.stopPropagation();
           markNotifRead(btn.getAttribute('data-notif-clear'));
+        });
+      });
+      /* Click-through: mark read, then let the browser follow the href into the
+         discussion modal (forums.js §4f routes ?topic=&reply= on both surfaces). */
+      list.querySelectorAll('[data-notif-link]').forEach(function (row) {
+        row.addEventListener('click', function (e) {
+          if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+          markNotifReadOnNav(row.getAttribute('data-notif-id'));
         });
       });
     })

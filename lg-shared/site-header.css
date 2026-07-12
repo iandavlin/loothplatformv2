@@ -528,6 +528,9 @@ body.lg-sm-open { overflow: hidden; }
   cursor: default;
 }
 .lg-notif__item--unread { background: var(--lg-sage-tint, #eef2e3); }
+/* Rows that deep-link into the thing they are about (hub events) render as <a>. */
+.lg-notif__item--link { cursor: pointer; text-decoration: none; color: inherit; }
+.lg-notif__item--link:hover { background: var(--lg-line, #e3ddd0); }
 .lg-notif__body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .lg-notif__clear {
   appearance: none; background: transparent; border: 0; cursor: pointer;

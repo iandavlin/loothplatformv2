@@ -66,19 +66,25 @@ function lg_notify_push(array $ev): void
         error_log('[lg-notify] no internal secret readable — notification dropped');
         return;
     }
+    // https://127.0.0.1 + Host header + no peer verify — the SAME loopback convention
+    // the whoami shim uses (profile-app/deploy/profile-whoami-shim.mu-plugin.php:42).
+    // Plain http:// gets a 301 to https from the vhost and the POST body is lost.
+    $host = defined('LG_BB_MIRROR_HOST') ? LG_BB_MIRROR_HOST
+          : (defined('LG_ARCHIVE_POC_HOST') ? LG_ARCHIVE_POC_HOST : 'localhost');
     $payload = wp_json_encode($ev);
-    $ch = curl_init('http://127.0.0.1/profile-api/v0/internal/notify');
+    $ch = curl_init('https://127.0.0.1/profile-api/v0/internal/notify');
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => $payload,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 2,          // the reply write must not hang on the bell
         CURLOPT_CONNECTTIMEOUT => 1,
+        CURLOPT_SSL_VERIFYPEER => false,      // loopback to ourselves; the cert is for the public host
+        CURLOPT_SSL_VERIFYHOST => 0,
         CURLOPT_HTTPHEADER     => [
             'Content-Type: application/json',
             'X-LG-Internal-Auth: ' . trim($secret),
-            'Host: ' . (defined('LG_BB_MIRROR_HOST') ? LG_BB_MIRROR_HOST
-                       : (defined('LG_ARCHIVE_POC_HOST') ? LG_ARCHIVE_POC_HOST : 'localhost')),
+            'Host: ' . $host,
         ],
     ]);
     $res  = curl_exec($ch);
