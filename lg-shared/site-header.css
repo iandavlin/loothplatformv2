@@ -922,6 +922,35 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
 }
 .lg-msg__leave:hover { background: #fbe6e4; }
 
+/* custom group name + ownership (Ian 7/12 v1.1) */
+.lg-msg__mmi-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; }
+.lg-msg__owner-chip {
+  display: inline-block; margin-left: 8px; vertical-align: 1px;
+  font: 700 10px/1 var(--lg-font-sans, system-ui); letter-spacing: .04em; text-transform: uppercase;
+  color: #8a6d1f; background: #f4ecd4; border-radius: 999px; padding: 3px 7px;
+}
+.lg-msg__mkowner {
+  flex: 0 0 auto; appearance: none; cursor: pointer; font: 600 12px/1 var(--lg-font-sans, system-ui);
+  color: var(--lg-sage-d, #6b7c52); background: none; border: 1px solid var(--lg-sage-3, #d4e0b8);
+  border-radius: 999px; padding: 5px 10px;
+}
+.lg-msg__mkowner:hover { background: var(--lg-sage-tint, #eef2e3); }
+.lg-msg__mm-name { margin-top: 13px; }
+.lg-msg__mm-name-lbl { display: block; font: 600 12px/1 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b); margin-bottom: 6px; }
+.lg-msg__mm-name-row { display: flex; gap: 8px; }
+.lg-msg__mm-name-in {
+  flex: 1; min-width: 0; font: 400 14px/1.3 var(--lg-font-sans, system-ui); color: var(--lg-charcoal, #1a1d1a);
+  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 10px; padding: 9px 11px; background: #fff;
+}
+.lg-msg__mm-name-in:focus { outline: none; border-color: var(--lg-sage-3, #d4e0b8); box-shadow: 0 0 0 3px var(--lg-sage-tint, #eef2e3); }
+.lg-msg__mm-name-save {
+  flex: 0 0 auto; appearance: none; cursor: pointer; font: 600 13px/1 var(--lg-font-sans, system-ui);
+  color: #fff; background: var(--lg-sage-d, #6b7c52); border: 0; border-radius: 10px; padding: 0 15px;
+}
+.lg-msg__mm-name-save:hover { background: #5a6a45; }
+.lg-msg__mm-name-hint { font: 400 11px/1.35 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b); margin: 7px 2px 0; }
+.lg-msg__peer-title { font-weight: 700; }
+
 /* system (membership) line — centered pill, never a bubble */
 .lg-msg__sys {
   align-self: center; text-align: center; max-width: 88%;
