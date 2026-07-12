@@ -334,6 +334,41 @@
     try { window.location.assign('/hub/?compose=1'); } catch (e) { window.location.href = '/hub/?compose=1'; }
   }
 
+  // ---- Hub picker via the Nav tray (hub-picker-in-tray lane) ----------------
+  // The shared header (site-header.php) renders ONE #lg-hubmenu content-type
+  // picker on every page and exposes window.lgHubMenu {open,close,isOpen}.
+  // The tray's Hub tile summons it (see buildNavTray): tray closes, picker
+  // opens; the picker's "Everything" row covers plain /hub/. There is NO bar
+  // button (Ian 7/08: bar stays Nav | + | You). Backdrop / X / Escape /
+  // grab-tap / swipe all close WITHOUT navigating (header + enableSheetDrag).
+  // Placement = tray-sibling per Ian's mock-gate pick 7/08: the picker replaces
+  // the tray flush-bottom at tray z ({tray:true} → .lg-hubmenu--tray), sliding
+  // in/out on the house .lt-sheet motion (the header owns those transitions).
+  // While open the backdrop covers the bar, so bar taps just close (backdrop).
+  function hubApi() { return window.lgHubMenu || null; }
+  function openHubPicker() {
+    var api = hubApi();
+    if (api) api.open({ tray: true });
+  }
+  function wireHubPicker() {
+    // Born swipe-closable: the picker's grab bar carries .lt-sheet__grab, so
+    // the house claim-model drag applies as-is; its LIST is the inner scroller.
+    var hubModal = document.getElementById('lg-hubmenu');
+    var hubSheet = hubModal ? hubModal.querySelector('.lg-hubmenu__sheet') : null;
+    if (hubSheet) {
+      enableSheetDrag(hubSheet, function () { var api = hubApi(); if (api) api.close(); },
+                      hubModal.querySelector('.lg-hubmenu__list'));
+      // Type-item taps are full-page navs — bridge them with the same skeleton
+      // every tray destination shows (bar viewports only; the ≤820 header
+      // drawer door has no bar and no skeleton).
+      hubModal.addEventListener('click', function (e) {
+        var a = e.target && e.target.closest ? e.target.closest('.lg-hubmenu__item') : null;
+        if (a && window.matchMedia(MOBILE_MQ).matches) showTabSkeleton();
+      });
+    }
+  }
+  // ---- end Hub picker via the Nav tray ----------------------------------------
+
   // 3-button bar: Nav (tray) · Post (modal) · You (profile sheet). Replaces the
   // old 5 destination tabs — destinations moved into the Nav tray so the bar can
   // give Post a big, always-visible center action and restore a Home door
@@ -380,6 +415,7 @@
 
     (document.body || document.documentElement).appendChild(nav);
     document.body.classList.add('has-looth-tabbar');
+    wireHubPicker();   // Hub picker swipe-close + skeleton (fenced above; tray tile summons)
 
     // Notification count badge on the You tab (Instagram-style).
     var youTab = nav.querySelector('a[href="/profile/edit"]');
@@ -432,7 +468,10 @@
   // inner scroll is at the very top (scrollTop<=0). An upward move, or a downward
   // move while scrolled, is released back to native scrolling. A plain tap is never
   // claimed, so the row/link/chip under it still fires; a tap on the grab closes.
-  function enableSheetDrag(sheet, closeFn) {
+  function enableSheetDrag(sheet, closeFn, scroller) {
+    // scroller: the inner scroll surface when it isn't the sheet itself (the
+    // Hub picker scrolls its LIST, not its sheet). Defaults to the sheet.
+    var sc = scroller || sheet;
     var SLOP = 6, THRESH = 48, FLICK = 0.35;
     var startY = 0, cur = 0, tracking = false, claimed = false, onGrab = false, fromHandle = false,
         startScroll = 0, lastY = 0, lastT = 0, vy = 0;
@@ -441,7 +480,7 @@
       var t = e.target;
       onGrab = !!(t.closest && t.closest('.lt-sheet__grab'));
       fromHandle = onGrab || !!(t.closest && t.closest('.lt-sheet__head, .lt-sheet__sech'));
-      startY = lastY = ptY(e); startScroll = sheet.scrollTop || 0; lastT = e.timeStamp || 0;
+      startY = lastY = ptY(e); startScroll = sc.scrollTop || 0; lastT = e.timeStamp || 0;
       cur = 0; vy = 0; tracking = true; claimed = false;
       // NB: don't kill the transition or transform yet — only once a drag is claimed,
       // so taps and inner scrolls are left completely untouched.
@@ -455,7 +494,7 @@
         if (Math.abs(dy) < SLOP) return;                          // not enough movement to decide
         // Claim a downward dismiss only when eligible; otherwise release to native
         // scroll (so the You sheet's content still scrolls normally).
-        var eligible = fromHandle || (sheet.scrollTop <= 0 && startScroll <= 0);
+        var eligible = fromHandle || (sc.scrollTop <= 0 && startScroll <= 0);
         if (dy > 0 && eligible) { claimed = true; sheet.style.transition = 'none'; }
         else { tracking = false; return; }
       }
@@ -756,7 +795,18 @@
       var here = navIsHere(d.key, path);
       if (here) a.classList.add('is-here');
       a.innerHTML = '<span class="lt-nico"><svg viewBox="0 0 24 24" aria-hidden="true">' + d.icon + '</svg></span><span>' + d.label + '</span>';
-      a.addEventListener('click', function () {
+      a.addEventListener('click', function (e) {
+        // Hub tile deploys the content-type picker instead of navigating
+        // (hub-picker-in-tray lane) — its "Everything" row covers plain /hub/,
+        // so no destination is lost. Header API absent → plain /hub/ nav.
+        // Tray slides out first, picker slides in on the house sheet→sheet
+        // beat (cf. the You sheet's Notifications row: close + 120ms).
+        if (d.key === 'hub' && hubApi()) {
+          e.preventDefault();
+          closeNav();
+          setTimeout(openHubPicker, 120);
+          return;
+        }
         closeNav();
         // Tray = destinations only; Messages/Alerts moved to the You sheet.
         if (!d.ext && !here) showTabSkeleton();   // perceived-speed bridge on real nav
