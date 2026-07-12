@@ -282,7 +282,19 @@
       D + ' #looth-msgr .mg-p2hint,' + D + ' #looth-msgr .mg-pi-sub,' + D + ' #looth-msgr .mg-mmi-sub{color:#9aa097}',
       D + ' #looth-msgr .mg-newbtn,' + D + ' #looth-msgr .mg-chmenu,' + D + ' #looth-msgr .mg-you{background:#262b30;color:#9cb37d}',
       D + ' #looth-msgr .mg-pkfield{background:#262b30;border-color:#2c312d}',
-      D + ' #looth-msgr .mg-pi:active,' + D + ' #looth-msgr .mg-actbtn:active{background:#262b30}'
+      D + ' #looth-msgr .mg-pi:active,' + D + ' #looth-msgr .mg-actbtn:active{background:#262b30}',
+
+      // ── image lightbox (P4.5 — Ian scope-add 7/12). SAME /message-media/ URL, no new
+      // exposure. Appended to <body> (outside #looth-msgr), so these rules are unscoped. ──
+      '#looth-msgr .mg-img{position:relative;border:0;padding:0;background:none;cursor:zoom-in}',
+      '#looth-msgr .mg-zoomdot{position:absolute;right:7px;bottom:7px;width:24px;height:24px;border-radius:50%;' +
+        'background:rgba(0,0,0,.5);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;pointer-events:none}',
+      '.mg-lb{position:fixed;inset:0;z-index:2147483600;background:rgba(13,14,11,.95);display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none}',
+      '.mg-lb-img{max-width:100vw;max-height:100vh;display:block;user-select:none;-webkit-user-select:none;will-change:transform;touch-action:none;transition:transform .05s linear}',
+      '.mg-lb-x{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:14px;width:40px;height:40px;border-radius:50%;border:0;' +
+        'background:rgba(255,255,255,.16);color:#fff;font:400 19px/1 system-ui;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1}',
+      '.mg-lb-hint{position:absolute;bottom:calc(16px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;' +
+        'color:rgba(255,255,255,.7);font:600 11px/1.3 var(--lg-font-sans,system-ui);letter-spacing:.03em;padding:0 20px}'
     ].join('\n');
     (document.head || document.documentElement).appendChild(st);
   }
@@ -344,6 +356,7 @@
       if (C('[data-mg-home]'))   { chatIsRoot ? closeMessenger() : showHome(); return; }
       // ── group management ──
       if (e.target.id === 'mg-acts') { closeActs(); return; }
+      var lbx = C('[data-mg-lightbox]'); if (lbx) { openLightboxMobile(lbx.getAttribute('data-mg-lightbox')); return; }
       if (C('[data-mg-new]'))     { openPickerMobile('new'); return; }
       if (C('[data-mg-members]')) { openMemberManagerMobile(); return; }
       if (C('[data-mg-p2back]'))  { closeP2(); return; }
@@ -626,11 +639,11 @@
       if (m.deleted) {
         return h + '<div class="mg-b mg-b--tomb ' + (mine ? 'mg-b--me' : 'mg-b--them') + '">Message deleted</div>';
       }
-      // image attachment (access-controlled URL) — tap to open full size
+      // image attachment (access-controlled URL) → in-app lightbox with pinch-zoom
       if (m.media_url) {
-        h += '<a class="mg-img" style="align-self:' + (mine ? 'flex-end' : 'flex-start') + '" href="' +
-             esc(m.media_url) + '" target="_blank" rel="noopener noreferrer"><img src="' +
-             esc(m.media_url) + '" alt="Photo" loading="lazy"></a>';
+        h += '<button type="button" class="mg-img" style="align-self:' + (mine ? 'flex-end' : 'flex-start') +
+             '" data-mg-lightbox="' + esc(m.media_url) + '"><img src="' + esc(m.media_url) +
+             '" alt="Photo" loading="lazy"><span class="mg-zoomdot" aria-hidden="true">⤢</span></button>';
       }
       // body optional when an image is present (image-only message).
       // own text bubble carries id + raw body for the long-press edit/delete sheet.
@@ -1107,6 +1120,53 @@
     });
   }
 
+  // ── image lightbox (pinch-zoom on touch; double-tap / ✕ / backdrop; Esc closes) ──
+  var mgLightbox = null;
+  function closeLightboxMobile() {
+    if (mgLightbox) { mgLightbox.remove(); mgLightbox = null; }
+  }
+  function openLightboxMobile(url) {
+    closeLightboxMobile();
+    var lb = document.createElement('div');
+    lb.className = 'mg-lb';
+    lb.setAttribute('role', 'dialog'); lb.setAttribute('aria-label', 'Photo');
+    lb.innerHTML = '<button type="button" class="mg-lb-x" aria-label="Close">✕</button>'
+      + '<img class="mg-lb-img" src="' + esc(url) + '" alt="Photo" draggable="false">'
+      + '<div class="mg-lb-hint">Pinch to zoom · double-tap to reset · tap outside to close</div>';
+    (document.body || document.documentElement).appendChild(lb);
+    mgLightbox = lb;
+    var img = lb.querySelector('.mg-lb-img');
+    var scale = 1, tx = 0, ty = 0, startDist = 0, startScale = 1, psx = 0, psy = 0, mode = '', lastTap = 0;
+    function apply() { img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; }
+    function dist(t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); }
+    function reset() { scale = 1; tx = 0; ty = 0; apply(); }
+    img.addEventListener('touchstart', function (e) {
+      if (e.touches.length === 2) { mode = 'pinch'; startDist = dist(e.touches); startScale = scale; }
+      else if (e.touches.length === 1 && scale > 1) { mode = 'pan'; psx = e.touches[0].clientX - tx; psy = e.touches[0].clientY - ty; }
+      else { mode = ''; }
+    }, { passive: true });
+    img.addEventListener('touchmove', function (e) {
+      if (mode === 'pinch' && e.touches.length === 2) {
+        if (e.cancelable) e.preventDefault();
+        scale = Math.min(5, Math.max(1, startScale * dist(e.touches) / (startDist || 1)));
+        if (scale === 1) { tx = 0; ty = 0; } apply();
+      } else if (mode === 'pan' && e.touches.length === 1) {
+        if (e.cancelable) e.preventDefault();
+        tx = e.touches[0].clientX - psx; ty = e.touches[0].clientY - psy; apply();
+      }
+    }, { passive: false });
+    img.addEventListener('touchend', function () {
+      var now = Date.now();
+      if (now - lastTap < 300) { scale > 1 ? reset() : (scale = 2.5, apply()); lastTap = 0; }
+      else lastTap = now;
+    });
+    // non-touch (CDP / trackpad) affordances: double-click toggles, wheel zooms
+    img.addEventListener('dblclick', function (e) { e.preventDefault(); scale > 1 ? reset() : (scale = 2.5, apply()); });
+    lb.addEventListener('wheel', function (e) { e.preventDefault(); scale = Math.min(5, Math.max(1, scale + (e.deltaY < 0 ? 0.25 : -0.25))); if (scale === 1) { tx = 0; ty = 0; } apply(); }, { passive: false });
+    lb.querySelector('.mg-lb-x').addEventListener('click', function (e) { e.stopPropagation(); closeLightboxMobile(); });
+    lb.addEventListener('click', function (e) { if (e.target === lb) closeLightboxMobile(); });
+  }
+
   var msgrHist = false;
   function openMessenger() {
     ensureSheet();
@@ -1144,7 +1204,9 @@
     closeMessenger(true);
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key !== 'Escape' || !sheet || !sheet.classList.contains('is-open')) return;
+    if (e.key !== 'Escape') return;
+    if (mgLightbox) { e.stopImmediatePropagation(); closeLightboxMobile(); return; }
+    if (!sheet || !sheet.classList.contains('is-open')) return;
     var acts = sheet.querySelector('#mg-acts'), p2 = sheet.querySelector('#mg-p2');
     if (acts && acts.classList.contains('is-on')) { closeActs(); return; }
     if (p2 && p2.classList.contains('is-on'))     { closeP2(); return; }

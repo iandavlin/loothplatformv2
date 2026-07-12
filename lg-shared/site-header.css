@@ -973,3 +973,29 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
 .lg-msg__edit-cancel { background: var(--lg-line, #e3ddd0); color: var(--lg-ink, #323532); }
 .lg-msg__edit-save   { background: var(--lg-sage, #87986a); color: #fff; }
 
+
+/* ══ Image lightbox (lane: messages-manage, P4.5 — Ian scope-add 7/12) ═══════════
+   Replaces the target=_blank message-image links. Loads the SAME access-controlled
+   /message-media/ URL — no new exposure path. Desktop: scroll / ＋ − zoom, drag pan. */
+.lg-msg__msg-media { position: relative; appearance: none; border: 0; padding: 0; background: none; cursor: zoom-in; display: block; }
+.lg-msg__zoomdot {
+  position: absolute; right: 7px; bottom: 7px; width: 24px; height: 24px; border-radius: 50%;
+  background: rgba(0,0,0,.5); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px;
+}
+.lg-lightbox {
+  position: fixed; inset: 0; z-index: 2147483600;
+  background: rgba(13,14,11,.94); display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+body.lg-lightbox-open { overflow: hidden; }
+.lg-lightbox__img { max-width: 94vw; max-height: 90vh; display: block; transition: transform .12s ease; cursor: zoom-in; user-select: none; }
+.lg-lightbox__bar { position: absolute; top: 14px; right: 14px; display: flex; gap: 8px; }
+.lg-lightbox__btn {
+  appearance: none; cursor: pointer; width: 38px; height: 38px; border-radius: 50%; border: 0;
+  background: rgba(255,255,255,.16); color: #fff; font: 400 18px/1 system-ui;
+  display: inline-flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);
+}
+.lg-lightbox__btn:hover { background: rgba(255,255,255,.28); }
+.lg-lightbox__hint {
+  position: absolute; bottom: 16px; left: 0; right: 0; text-align: center;
+  color: rgba(255,255,255,.7); font: 600 11.5px/1 var(--lg-font-sans, system-ui); letter-spacing: .04em;
+}

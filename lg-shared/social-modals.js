@@ -957,9 +957,10 @@ function renderThreadMessages(msgs, messages, peers, members) {
        + (mine ? ' data-lg-msg-id="' + esc(m.id) + '"' + (m.body ? ' data-lg-body="' + esc(m.body) + '"' : '') : '')
        + '>';
     if (m.media_url) {
-      /* image attachment (access-controlled URL): tap to open full size */
-      h += '<a class="lg-msg__msg-media" href="' + esc(m.media_url) + '" target="_blank" rel="noopener noreferrer">'
-         + '<img src="' + esc(m.media_url) + '" alt="Photo" loading="lazy"></a>';
+      /* image attachment → in-app lightbox (SAME access-controlled /message-media/ URL) */
+      h += '<button type="button" class="lg-msg__msg-media" data-lg-lightbox="' + esc(m.media_url) + '">'
+         + '<img src="' + esc(m.media_url) + '" alt="Photo" loading="lazy">'
+         + '<span class="lg-msg__zoomdot" aria-hidden="true">⤢</span></button>';
     }
     if (m.body) {
       h += '<p class="lg-msg__msg-text">' + linkifyText(m.body)
@@ -1254,12 +1255,55 @@ function deleteMsg(id) {
   }).catch(function () {});
 }
 
+/* ── image lightbox (scroll / ＋ − to zoom, drag to pan; Esc closes) ── */
+var lightboxEl = null;
+function openLightbox(url) {
+  closeLightbox();
+  var lb = document.createElement('div');
+  lb.className = 'lg-lightbox';
+  lb.setAttribute('role', 'dialog');
+  lb.setAttribute('aria-label', 'Photo');
+  lb.innerHTML = '<div class="lg-lightbox__bar">'
+    + '<button type="button" class="lg-lightbox__btn" data-lb-out aria-label="Zoom out">－</button>'
+    + '<button type="button" class="lg-lightbox__btn" data-lb-in aria-label="Zoom in">＋</button>'
+    + '<button type="button" class="lg-lightbox__btn" data-lb-close aria-label="Close">✕</button></div>'
+    + '<img class="lg-lightbox__img" src="' + esc(url) + '" alt="Photo" draggable="false">'
+    + '<div class="lg-lightbox__hint">Scroll or ＋ / － to zoom · Esc to close</div>';
+  document.body.appendChild(lb);
+  lightboxEl = lb;
+  document.body.classList.add('lg-lightbox-open');
+  var img = lb.querySelector('.lg-lightbox__img');
+  var scale = 1, tx = 0, ty = 0;
+  function apply() { img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; img.style.cursor = scale > 1 ? 'grab' : 'zoom-in'; }
+  function zoom(d) { scale = Math.min(5, Math.max(1, scale + d)); if (scale === 1) { tx = 0; ty = 0; } apply(); }
+  lb.querySelector('[data-lb-in]').addEventListener('click',  function (e) { e.stopPropagation(); zoom(0.4); });
+  lb.querySelector('[data-lb-out]').addEventListener('click', function (e) { e.stopPropagation(); zoom(-0.4); });
+  lb.querySelector('[data-lb-close]').addEventListener('click', function (e) { e.stopPropagation(); closeLightbox(); });
+  lb.addEventListener('click', function (e) { if (e.target === lb) closeLightbox(); });
+  img.addEventListener('click', function (e) { e.stopPropagation(); if (scale === 1) zoom(0.9); });
+  lb.addEventListener('wheel', function (e) { e.preventDefault(); zoom(e.deltaY < 0 ? 0.25 : -0.25); }, { passive: false });
+  var drag = false, sx = 0, sy = 0;
+  img.addEventListener('pointerdown', function (e) { if (scale <= 1) return; drag = true; sx = e.clientX - tx; sy = e.clientY - ty; try { img.setPointerCapture(e.pointerId); } catch (x) {} });
+  img.addEventListener('pointermove', function (e) { if (!drag) return; tx = e.clientX - sx; ty = e.clientY - sy; apply(); });
+  img.addEventListener('pointerup',   function () { drag = false; });
+}
+function closeLightbox() {
+  if (!lightboxEl) return;
+  lightboxEl.remove(); lightboxEl = null;
+  document.body.classList.remove('lg-lightbox-open');
+}
+/* Esc closes the lightbox FIRST (capture) so it does not also close the whole modal. */
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && lightboxEl) { e.stopImmediatePropagation(); closeLightbox(); }
+}, true);
+
 /* ── delegated wiring for all of the above ── */
 document.addEventListener('click', function (e) {
   var t = e.target;
   var hit = function (sel) { return t.closest && t.closest(sel); };
   if (hit('[data-lg-new-msg]'))     { openComposePicker(); return; }
   if (hit('[data-lg-manage]'))      { openMemberManager(); return; }
+  if (hit('[data-lg-lightbox]'))    { openLightbox(hit('[data-lg-lightbox]').getAttribute('data-lg-lightbox')); return; }
   var pa = hit('[data-lg-pick-add]');    if (pa) { pickerAdd(pa.getAttribute('data-lg-pick-add')); return; }
   var px = hit('[data-lg-pick-remove]'); if (px) { pickerRemove(px.getAttribute('data-lg-pick-remove')); return; }
   if (hit('[data-lg-pick-go]'))     { pickerGo(); return; }
