@@ -15,6 +15,7 @@ require_once __DIR__ . '/Notifications.php';
 final class Messaging
 {
     private const SNIPPET = 140;
+    private const NAME_MAX = 60;   // custom group-name cap (chars, post-trim)
 
     /** Thread list for the messages modal: peers, last snippet, unread, last_message_at. */
     public static function threadsFor(string $uuid, int $limit = 30, int $offset = 0): array
@@ -614,6 +615,10 @@ final class Messaging
         try {
             $pg->prepare('DELETE FROM message_recipients WHERE thread_id = :t AND user_uuid = :u')
                ->execute([':t' => $threadId, ':u' => $targetUuid]);
+            // Removing the OWNER makes the thread ownerless too (symmetric with leave): NULL
+            // created_by so the badge never points at a non-member; rights fall to admin+self.
+            $pg->prepare('UPDATE message_threads SET created_by = NULL WHERE id = :t AND created_by = :u')
+               ->execute([':t' => $threadId, ':u' => $targetUuid]);
             self::insertSystemLine($threadId, $actorUuid, self::displayName($actorUuid) . ' removed ' . self::displayName($targetUuid));
             $pg->commit();
         } catch (\Throwable $e) {
@@ -634,6 +639,11 @@ final class Messaging
         try {
             // Line first (so the leaver still resolves as a member for its text), then delete.
             self::insertSystemLine($threadId, $actorUuid, self::displayName($actorUuid) . ' left');
+            // An OWNER who leaves makes the thread OWNERLESS (Ian 7/12): created_by -> NULL, so the
+            // Owner badge disappears and rights fall back to admin+self (an admin may re-appoint).
+            // Never blocks the leave. No-op for non-owners (the AND created_by = :u guard).
+            $pg->prepare('UPDATE message_threads SET created_by = NULL WHERE id = :t AND created_by = :u')
+               ->execute([':t' => $threadId, ':u' => $actorUuid]);
             $pg->prepare('DELETE FROM message_recipients WHERE thread_id = :t AND user_uuid = :u')
                ->execute([':t' => $threadId, ':u' => $actorUuid]);
             $pg->commit();
@@ -642,6 +652,77 @@ final class Messaging
             return ['ok' => false, 'error' => 'leave_failed'];
         }
         return ['ok' => true, 'left' => true];
+    }
+
+    /**
+     * Rename a GROUP (custom title, Ian 7/12 v1.1). ANY participant may rename — Ian's default.
+     * The name lives in the EXISTING message_threads.subject (no schema); it is stored as PLAIN
+     * TEXT and esc()'d at every render sink (angle brackets stay inert). Trimmed, whitespace
+     * collapsed, capped at NAME_MAX. An empty name CLEARS it (subject -> NULL) and the thread
+     * falls back to the member-name label. A 1:1 has no custom title — reject. Writes a system
+     * line; the name is captured in that line at write time (history, like every membership line).
+     */
+    public static function renameThread(string $actorUuid, int $threadId, string $rawName): array
+    {
+        if (!self::isRecipient($actorUuid, $threadId)) return ['ok' => false, 'error' => 'not_a_recipient'];
+        if (!self::isGroupThread($threadId))          return ['ok' => false, 'error' => 'not_a_group'];
+
+        // Collapse all whitespace (incl. newlines/tabs) to single spaces, trim, cap length.
+        // Non-unicode \s avoids the /u-on-invalid-UTF-8 null-return trap.
+        $name = trim((string)preg_replace('/\s+/', ' ', $rawName));
+        $name = function_exists('mb_substr') ? mb_substr($name, 0, self::NAME_MAX) : substr($name, 0, self::NAME_MAX);
+        $cleared = ($name === '');
+
+        $pg = Db::pg();
+        $pg->prepare('UPDATE message_threads SET subject = :s WHERE id = :t')
+           ->execute([':s' => $cleared ? null : $name, ':t' => $threadId]);
+        self::insertSystemLine(
+            $threadId,
+            $actorUuid,
+            $cleared
+                ? self::displayName($actorUuid) . ' cleared the group name'
+                : self::displayName($actorUuid) . ' named the group ' . $name
+        );
+        return ['ok' => true, 'subject' => $cleared ? null : $name, 'cleared' => $cleared];
+    }
+
+    /**
+     * Transfer ownership (Ian 7/12 v1.1). created_by IS the owner (mutable) — the immutable
+     * "who created it" fact stays recorded in the "started the group" system line, so no second
+     * column is needed. The current OWNER may hand off to any current member; a site ADMIN may
+     * also transfer OR set an owner (which quietly fixes legacy NULL-owner threads over time).
+     * Anyone else -> forbidden (403). Target must be a current member. Groups only. Server-
+     * enforced exactly like remove. Writes "X made Y the owner".
+     */
+    public static function transferOwnership(string $actorUuid, int $threadId, string $targetUuid, bool $actorIsAdmin): array
+    {
+        if (!self::isRecipient($actorUuid, $threadId)) return ['ok' => false, 'error' => 'not_a_recipient'];
+        if (!self::isGroupThread($threadId))          return ['ok' => false, 'error' => 'not_a_group'];
+
+        $pg = Db::pg();
+        $st = $pg->prepare('SELECT created_by FROM message_threads WHERE id = :t');
+        $st->execute([':t' => $threadId]);
+        $owner = $st->fetchColumn();
+        $owner = ($owner === false || $owner === null) ? null : (string)$owner;
+
+        // Only the current owner or a site admin may (re)assign. Legacy NULL-owner threads have
+        // no owner to authorise, so ONLY an admin can appoint one.
+        if (!($actorIsAdmin || ($owner !== null && $owner === $actorUuid))) {
+            return ['ok' => false, 'error' => 'forbidden'];
+        }
+        $targetUuid = strtolower(trim($targetUuid));
+        if ($targetUuid === '')                            return ['ok' => false, 'error' => 'target_required'];
+        if (!self::isRecipient($targetUuid, $threadId))    return ['ok' => false, 'error' => 'not_a_member'];
+        if ($targetUuid === $owner)                        return ['ok' => true, 'created_by' => $owner]; // already owner, no-op
+
+        $pg->prepare('UPDATE message_threads SET created_by = :o WHERE id = :t')
+           ->execute([':o' => $targetUuid, ':t' => $threadId]);
+        self::insertSystemLine(
+            $threadId,
+            $actorUuid,
+            self::displayName($actorUuid) . ' made ' . self::displayName($targetUuid) . ' the owner'
+        );
+        return ['ok' => true, 'created_by' => $targetUuid];
     }
 
     // ── edit / delete own message (Ian 2026-07-12) ──────────────────────────────────
