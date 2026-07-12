@@ -5,7 +5,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Chapters.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/DiscoveryComments.php';
 
 /**
- * Comments on a chapter ANNOUNCEMENT — stored in the platform's ONE comments store
+ * REPLIES to a chapter DISCUSSION — stored in the platform's ONE comments store
  * (discovery.comments), NOT in a second one. Backend: src/DiscoveryComments.php, which
  * explains the cross-database seam in full.
  *

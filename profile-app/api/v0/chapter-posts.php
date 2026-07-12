@@ -5,20 +5,21 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Chapters.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/DiscoveryComments.php';
 
 /**
- * ANNOUNCEMENTS — the durable, findable half of a chapter.
- * "DMV meetup Saturday the 14th, here's the address."  Backend: src/Chapters.php.
+ * DISCUSSIONS — the single chapter content surface (Ian 2026-07-12: "everything can be done
+ * from discussions"). One row = one discussion topic; it carries both the durable announcement
+ * and the throwaway chatter.  Backend: src/Chapters.php.
  *
  *   GET    /profile-api/v0/chapters/<slug>/posts        -> { posts: [...] }   (public)
  *   POST   /profile-api/v0/chapters/<slug>/posts        -> { ok, id }          (members only)
  *          body { title?, body }
  *   DELETE /profile-api/v0/chapters/<slug>/posts?id=N   -> { ok }              (author or admin)
  *
- * Read is PUBLIC (chapters are public + browsable). Posting requires membership — and
- * joining is one tap. See ChapterChat::canPost() for the reasoning; same rule, one surface.
+ * Read is PUBLIC (chapters are public + browsable). Starting a discussion requires membership,
+ * and joining is one tap — read = anyone, post = members (recommended rule, pending Ian).
  *
- * comment_count on each post comes from discovery.comments in the OTHER database, batched
- * into ONE query by DiscoveryComments::countsFor(). Never N+1, never a cross-DB JOIN (there
- * is no fdw/dblink on this cluster — a JOIN is not merely slow, it is impossible).
+ * comment_count on each discussion is its REPLY count, from discovery.comments in the OTHER
+ * database, batched into ONE query by DiscoveryComments::countsFor(). Never N+1, never a
+ * cross-DB JOIN (there is no fdw/dblink on this cluster — a JOIN is not slow, it is impossible).
  *
  * NOTE TO COORDINATOR — nginx:
  *   rewrite "^/profile-api/v0/chapters/([\w\-]+)/posts/?$" /profile-api/v0/chapter-posts.php?slug=$1&$args last;
@@ -48,7 +49,7 @@ if ($method === 'POST') {
         // Not a 403-with-a-shrug: the client turns this into the one-tap Join prompt.
         profile_app_json(403, ['error' => 'not_a_member', 'join_required' => true]);
     }
-    profile_app_rate_gate('chapter-post:' . $uuid, 10, 3600);   // 10 announcements/hour/member
+    profile_app_rate_gate('chapter-post:' . $uuid, 10, 3600);   // 10 discussions/hour/member
 
     $in    = json_decode(file_get_contents('php://input') ?: '', true);
     $in    = is_array($in) ? $in : [];

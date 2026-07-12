@@ -9,7 +9,7 @@ use PDO;
  * CHAPTERS — the native chapter model (the strangler test).
  *
  * A chapter depends on NO BuddyBoss and NO WordPress. Identity, membership,
- * announcements, the map and the chat room are all native Postgres in profile_app.
+ * discussions and the map are all native Postgres in profile_app.
  * The only thing it cannot shed is AUTH: members still sign in via the WP cookie,
  * which mints the looth_id JWT that Auth reads. That is out of scope; we ride it.
  *
@@ -18,8 +18,10 @@ use PDO;
  *     There is deliberately no visibility column, no role column, no approval state.
  *   * Join is ONE TAP, self-serve, no approval. Chapters are opt-IN and start EMPTY.
  *   * Legacy BuddyBoss membership is NOT imported (it is junk).
- *   * Two surfaces, two jobs: ANNOUNCEMENTS (durable, findable — chapter_post) and
- *     CHAT (throwaway — ChapterChat). There is NO third activity feed.
+ *   * DISCUSSIONS are the single chapter content surface (chapter_post) — they carry both
+ *     durable announcements and throwaway chatter ("everything can be done from discussions").
+ *     The chat ROOM is DEFERRED, not cancelled; nothing room-shaped is built here. There is
+ *     NO separate activity feed.
  *   * A chapter is a DATA ROW, not code. Adding "Austin Looths" is an INSERT.
  *     See docs/atlas/CHAPTERS-RUNBOOK.md.
  *
@@ -91,87 +93,38 @@ final class Chapters
         return (bool) $st->fetchColumn();
     }
 
-    /** The chapter's chat room thread id (rooms are message_threads with a non-null chapter_id). */
-    public static function roomThreadId(int $chapterId): ?int
-    {
-        $st = Db::pg()->prepare('SELECT id FROM message_threads WHERE chapter_id = :c');
-        $st->execute([':c' => $chapterId]);
-        $id = $st->fetchColumn();
-        return $id === false ? null : (int) $id;
-    }
-
     /**
-     * JOIN — one tap, idempotent, no approval.
-     *
-     * Also seeds the room's read-watermark at the CURRENT head, so a member who joins a
-     * chapter with 4,000 old chat messages does not open it to "4,000 unread". This is
-     * the one place besides markRead() that writes chapter_room_read, and it writes ONE
-     * row per member — never one per message.
+     * JOIN — one tap, idempotent, no approval. A single INSERT; there is no room to seed
+     * (chat is deferred), so no watermark write and no transaction is needed.
      */
     public static function join(int $chapterId, string $userUuid): void
     {
-        $pg = Db::pg();
-        $pg->beginTransaction();
-        try {
-            $st = $pg->prepare(
-                'INSERT INTO chapter_member (chapter_id, user_uuid) VALUES (:c, :u)
-                 ON CONFLICT (chapter_id, user_uuid) DO NOTHING'
-            );
-            $st->execute([':c' => $chapterId, ':u' => $userUuid]);
-
-            $tid = self::roomThreadId($chapterId);
-            if ($tid !== null) {
-                // Distinct placeholders: PDO with EMULATE_PREPARES=false cannot reuse a
-                // named parameter within one statement.
-                $w = $pg->prepare(
-                    'INSERT INTO chapter_room_read (thread_id, user_uuid, last_read_message_id)
-                     SELECT :t1, :u, COALESCE(max(id), 0) FROM messages WHERE thread_id = :t2
-                     ON CONFLICT (thread_id, user_uuid) DO NOTHING'
-                );
-                $w->execute([':t1' => $tid, ':t2' => $tid, ':u' => $userUuid]);
-            }
-            $pg->commit();
-        } catch (\Throwable $e) {
-            $pg->rollBack();
-            throw $e;
-        }
+        $st = Db::pg()->prepare(
+            'INSERT INTO chapter_member (chapter_id, user_uuid) VALUES (:c, :u)
+             ON CONFLICT (chapter_id, user_uuid) DO NOTHING'
+        );
+        $st->execute([':c' => $chapterId, ':u' => $userUuid]);
     }
 
     /**
-     * LEAVE — one tap. Drops the read-watermark too, so a re-join re-seeds at the head
-     * rather than resurrecting a stale one (which would show a phantom unread backlog).
-     * Announcements and chat messages the member wrote STAY: leaving a chapter is not
-     * retracting what you said in it.
+     * LEAVE — one tap. Discussions and replies the member wrote STAY: leaving a chapter is
+     * not retracting what you said in it.
      */
     public static function leave(int $chapterId, string $userUuid): void
     {
-        $pg = Db::pg();
-        $pg->beginTransaction();
-        try {
-            $st = $pg->prepare('DELETE FROM chapter_member WHERE chapter_id = :c AND user_uuid = :u');
-            $st->execute([':c' => $chapterId, ':u' => $userUuid]);
-
-            $tid = self::roomThreadId($chapterId);
-            if ($tid !== null) {
-                $w = $pg->prepare('DELETE FROM chapter_room_read WHERE thread_id = :t AND user_uuid = :u');
-                $w->execute([':t' => $tid, ':u' => $userUuid]);
-            }
-            $pg->commit();
-        } catch (\Throwable $e) {
-            $pg->rollBack();
-            throw $e;
-        }
+        $st = Db::pg()->prepare('DELETE FROM chapter_member WHERE chapter_id = :c AND user_uuid = :u');
+        $st->execute([':c' => $chapterId, ':u' => $userUuid]);
     }
 
-    // ── ANNOUNCEMENTS ────────────────────────────────────────────────────────────────
-    // Durable, findable. "DMV meetup Saturday the 14th, here's the address."
-    // The member-facing litmus test is: "will I want to FIND this again?" -> announcement.
-    // Otherwise -> chat.
+    // ── DISCUSSIONS ──────────────────────────────────────────────────────────────────
+    // The single chapter content surface (chapter_post). One row = one discussion topic; it
+    // carries the durable announcement ("DMV meetup Saturday, here's the address") AND the
+    // throwaway chatter ("anyone actually coming?"). Its replies are discovery.comments rows.
 
     /**
-     * The announcement list, with author identity and comment counts.
+     * The discussion list, with author identity and reply counts.
      *
-     * Comment counts come from discovery.comments in the OTHER database, so they are
+     * Reply counts come from discovery.comments in the OTHER database, so they are
      * fetched in ONE batched query by DiscoveryComments::countsFor() and stitched in
      * here — never N+1, and never a (impossible) cross-DB JOIN.
      */
@@ -217,7 +170,7 @@ final class Chapters
         return $st->fetch() ?: null;
     }
 
-    /** Post an announcement. Caller MUST have already checked membership. */
+    /** Start a discussion. Caller MUST have already checked membership. */
     public static function createPost(int $chapterId, string $authorUuid, ?string $title, string $body): array
     {
         $title = $title !== null ? trim($title) : null;
@@ -236,7 +189,7 @@ final class Chapters
     }
 
     /**
-     * Soft-delete an announcement. SOFT because the comments live in another database
+     * Soft-delete a discussion. SOFT because the replies live in another database
      * and a hard delete would orphan them beyond this transaction's reach.
      * Author or admin only — that is OWNERSHIP, not a permission system.
      */
