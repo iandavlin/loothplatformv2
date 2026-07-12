@@ -113,7 +113,7 @@
   }
 
   if (onEvents) {
-    inject('looth-loothalong-js', '/loothalong.js?v=4');       // pinned Loothalong CTA
+    inject('looth-loothalong-js', '/loothalong.js?v=5');       // pinned Loothalong CTA (v5: opens in new tab)
     inject('looth-events-live-js', '/events-live.js?v=1');     // LIVE-NOW surfacing
     if (mobileish) inject('looth-events-mobile-js', '/events-mobile.js?v=7'); // event-details popup
   }
