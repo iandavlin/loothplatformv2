@@ -1221,9 +1221,17 @@ function mmRemove(uuid) {
   });
 }
 function mmLeave() {
+  /* The owner must hand off before leaving while others remain (Ian 7/12 23:2x) — steer them to
+     the transfer flow instead of a silent failure. Server re-enforces (400 transfer_required). */
+  var m = currentThreadMeta || {};
+  if (m.created_by && m.created_by === m.meUuid && (m.members || []).length > 1) {
+    alert('You’re the group owner. Make someone else the owner first (tap “Make owner”), then you can leave.');
+    return;
+  }
   if (!confirm('Leave this conversation? You’ll lose access to it.')) return;
   postMembers({ leave: true }).then(function (res) {
     if (res && res._ok) { loadThreadList(); refreshCounts(); }
+    else if (res && res._status === 400 && res.error === 'transfer_required') alert('Pass ownership to another member before you can leave.');
     else alert('Could not leave the conversation.');
   });
 }
