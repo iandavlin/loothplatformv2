@@ -29,6 +29,7 @@
 
   var API = '/profile-api/v0';
   var sheet = null, curThread = null, curPeer = null, pollT = null, listPollT = null;
+  var curPeers = [];                            // EVERY peer of the open thread (never peers[0])
   var threadsCache = [];
   var pendingFile = null;                       // staged image attachment for the next send
   var ATTACH_MAX = 5 * 1024 * 1024;
@@ -145,8 +146,26 @@
         'font-size:21px;line-height:34px;text-align:center;cursor:pointer}',
       '#looth-msgr .mg-backbtn[hidden]{display:none}',   // defensive, per the .mg-attach-prev trap above
       '#looth-msgr .mg-chd .mg-avi{width:36px;height:36px;font-size:14px}',
-      '#looth-msgr .mg-chname{flex:1 1 auto;min-width:0;font:700 15.5px/1.2 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-charcoal,#1a1d1a);' +
+      // The chat header is now a two-line block: WHO (every peer) + the group note.
+      '#looth-msgr .mg-chname{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1px}',
+      '#looth-msgr .mg-chnames{font:700 15.5px/1.25 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-charcoal,#1a1d1a);' +
         'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      // "everyone here sees your reply" — a group must never read as a private chat
+      '#looth-msgr .mg-chsub{font:11.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b);' +
+        'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      // group avatar STACK — overlapping faces, never one arbitrary member's photo
+      '#looth-msgr .mg-avi--stack{background:none}',
+      '#looth-msgr .mg-stack{position:relative;width:100%;height:100%;display:block}',
+      '#looth-msgr .mg-stack-i{position:absolute;border-radius:50%;overflow:hidden;background:var(--lg-sage-3,#d4e0b8);' +
+        'display:flex;align-items:center;justify-content:center;border:2px solid var(--lg-cream,#fbfbf8);' +
+        'font:700 12px/1 var(--lg-font-serif,Georgia,serif);color:#fff}',
+      '#looth-msgr .mg-stack-i img{width:100%;height:100%;object-fit:cover;display:block}',
+      '#looth-msgr .mg-stack-i:nth-child(1){width:66%;height:66%;top:0;left:0;z-index:3}',
+      '#looth-msgr .mg-stack-i:nth-child(2){width:66%;height:66%;bottom:0;right:0;z-index:2}',
+      '#looth-msgr .mg-stack-i:nth-child(3){width:54%;height:54%;top:0;right:0;z-index:1;font-size:9px}',
+      '#looth-msgr .mg-grouptag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;' +
+        'background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);' +
+        'font:600 10.5px/1.5 var(--lg-font-sans,system-ui,sans-serif);vertical-align:middle}',
       '#looth-msgr .mg-msgs{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 12px;display:flex;flex-direction:column;gap:3px}',
       '#looth-msgr .mg-b{max-width:78%;padding:9px 13px;border-radius:18px;font:15px/1.4 var(--lg-font-sans,system-ui,sans-serif);' +
         'overflow-wrap:break-word;white-space:pre-wrap}',
@@ -177,7 +196,9 @@
       // dark
       D + ' #looth-msgr .mg-panel,' + D + ' #looth-msgr .mg-chat,' + D + ' #looth-msgr .mg-comp{background:#1b1e21}',
       D + ' #looth-msgr .mg-grab::before{background:#3a403a}',
-      D + ' #looth-msgr .mg-t,' + D + ' #looth-msgr .mg-name,' + D + ' #looth-msgr .mg-chname{color:#f2f4ee}',
+      D + ' #looth-msgr .mg-t,' + D + ' #looth-msgr .mg-name,' + D + ' #looth-msgr .mg-chnames{color:#f2f4ee}',
+      D + ' #looth-msgr .mg-chsub{color:#9aa097}',
+      D + ' #looth-msgr .mg-stack-i{border-color:#1b1e21}',
       D + ' #looth-msgr .mg-x{background:#262b30;color:#9cb37d}',
       D + ' #looth-msgr .mg-search{background:#262b30}',
       D + ' #looth-msgr .mg-search input{color:#e5e7e1}',
@@ -293,6 +314,54 @@
     return esc(n.split(/\s+/).map(function (w) { return w[0] || ''; }).join('').slice(0, 2).toUpperCase());
   }
 
+  /* ── peers: 0, 1, or MANY ──
+     A thread can have any number of peers — 0 (a thread whose counterpart recipient
+     row is missing), 1 (a normal DM), or many (group threads: BuddyBoss-migrated ones
+     exist today, group chats are the product direction). Both surfaces used to render
+     peers[0] as "the" recipient, so a GROUP thread read as a private 1:1 and a reply
+     reached people the header never named. peersByThread() now returns a deterministic
+     order (server), and nothing below may fall back to peers[0]: the row and the chat
+     header name EVERY peer, and say a reply goes to all of them. Desktop parity:
+     lg-shared/social-modals.js peerLabel()/avatarStack(). */
+  function peerLabel(peers, max) {
+    var ps = peers || [];
+    if (!ps.length) return 'Unknown member';    /* never inherit the last thread's name */
+    var names = ps.map(function (p) { return p.name || 'Member'; });
+    max = max || 2;
+    if (names.length <= max) return names.join(', ');
+    return names.slice(0, max).join(', ') + ' +' + (names.length - max);
+  }
+  function peerTotal(peers) { return ((peers || []).length) + 1; }   /* + you */
+  /* inner HTML for a .mg-avi span; overlapping faces when it is a group */
+  function aviStack(peers) {
+    var ps = (peers || []).slice(0, 3);
+    if (!ps.length) return '?';
+    if (ps.length === 1) return avi(ps[0]);
+    return '<span class="mg-stack">' + ps.map(function (p) {
+      return '<span class="mg-stack-i">' + avi(p) + '</span>';
+    }).join('') + '</span>';
+  }
+  /* The chat header + the composer placeholder are the two places a group can still be
+     mistaken for a private chat, so both of them say it. */
+  function setChatHeader(peers) {
+    if (!sheet) return;
+    var ps    = peers || [];
+    var group = ps.length > 1;
+    var av    = sheet.querySelector('#mg-chavi');
+    var nm    = sheet.querySelector('#mg-chname');
+    var ta    = sheet.querySelector('#mg-in');
+    if (av) {
+      av.className = 'mg-avi' + (group ? ' mg-avi--stack' : '');
+      av.innerHTML = aviStack(ps);
+    }
+    if (nm) {
+      nm.innerHTML = '<span class="mg-chnames">' + esc(peerLabel(ps, 3)) + '</span>' +
+        (group ? '<span class="mg-chsub">Group · ' + peerTotal(ps) + ' people · everyone here sees your reply</span>'
+               : (!ps.length ? '<span class="mg-chsub">This chat has no other members.</span>' : ''));
+    }
+    if (ta) ta.placeholder = group ? 'Message all ' + peerTotal(ps) + ' people…' : 'Message…';
+  }
+
   /* visible failure state for the attach send — silent dimming alone left users
      blind to failures (parity with the desktop modal's .lg-msg__send-error) */
   function setSendError(msg) {
@@ -337,19 +406,22 @@
     var ql = (q || '').trim().toLowerCase();
     var items = threadsCache.filter(function (t) {
       if (!ql) return true;
-      var p = (t.peers && t.peers[0]) || {};
-      return ((p.name || '') + ' ' + (t.last_snippet || '')).toLowerCase().indexOf(ql) > -1;
+      /* search EVERY peer — in a group thread the person you remember may not be first */
+      var names = (t.peers || []).map(function (p) { return p.name || ''; }).join(' ');
+      return (names + ' ' + (t.last_snippet || '')).toLowerCase().indexOf(ql) > -1;
     });
     if (!items.length) {
       list.innerHTML = '<div class="mg-empty">' + (ql ? 'No chats match.' : 'No messages yet. Find a member and tap Message to start a chat.') + '</div>';
       return;
     }
     list.innerHTML = items.map(function (t) {
-      var p = (t.peers && t.peers[0]) || {};
+      var ps = t.peers || [];
       var unread = (parseInt(t.unread_count, 10) || 0) > 0;
+      var group = ps.length > 1;
       return '<button type="button" class="mg-row' + (unread ? ' is-unread' : '') + '" data-mg-thread="' + esc(t.uuid) + '">' +
-        '<span class="mg-avi">' + avi(p) + '</span>' +
-        '<span class="mg-col"><span class="mg-name">' + esc(p.name || 'Member') + '</span>' +
+        '<span class="mg-avi' + (group ? ' mg-avi--stack' : '') + '">' + aviStack(ps) + '</span>' +
+        '<span class="mg-col"><span class="mg-name">' + esc(peerLabel(ps, 2)) +
+        (group ? '<span class="mg-grouptag">Group · ' + peerTotal(ps) + '</span>' : '') + '</span>' +
         '<span class="mg-snip">' + esc(t.last_snippet || '') + '</span></span>' +
         '<span class="mg-meta"><span class="mg-time">' + rel(t.last_message_at) + '</span>' +
         (unread ? '<span class="mg-dot"></span>' : '') + '</span></button>';
@@ -358,7 +430,7 @@
       b.addEventListener('click', function () {
         var t = threadsCache.filter(function (x) { return x.uuid === b.getAttribute('data-mg-thread'); })[0];
         chatIsRoot = false;                       // reached from the list — "back" returns to it
-        openThread(b.getAttribute('data-mg-thread'), (t && t.peers && t.peers[0]) || null);
+        openThread(b.getAttribute('data-mg-thread'), (t && t.peers) || []);   // ALL peers, not peers[0]
       });
     });
   }
@@ -378,7 +450,7 @@
 
   function showHome() {
     if (pollT) { clearInterval(pollT); pollT = null; }
-    curThread = null; curPeer = null;
+    curThread = null; curPeer = null; curPeers = [];
     lastMsgHtml = ''; stickBottom = true;
     chatIsRoot = false;
     sheet.querySelector('#mg-chat').classList.remove('is-on');
@@ -445,21 +517,27 @@
     fetch(API + '/me/messages/' + encodeURIComponent(uuid), { credentials: 'include' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
+        /* stale-response guard: this thread is no longer the open one (the user went
+           back, or opened another). Writing now would paint THIS thread's messages and
+           header over the one they are actually reading. */
         if (!d || curThread !== uuid) return;
         renderMessages(d.messages || [], d.peers || [], !quiet);
-        if (!quiet && d.peers && d.peers[0]) {
-          sheet.querySelector('#mg-chname').textContent = d.peers[0].name || 'Member';
-          sheet.querySelector('#mg-chavi').innerHTML = avi(d.peers[0]);
+        if (!quiet) {
+          /* authoritative identity for this thread — every peer, including none */
+          curPeers = d.peers || [];
+          setChatHeader(curPeers);
         }
       })
       .catch(function () {});
   }
 
-  function openThread(uuid, peer) {
+  /* peers = the WHOLE peers[] carried from the row we came from (hint, so the header
+     paints immediately); loadThread() then re-affirms it from the server. Handing this
+     a single peer is what let a 4-person thread open under one person's name. */
+  function openThread(uuid, peers) {
     ensureSheet();
-    curThread = uuid; curPeer = peer || null;
-    sheet.querySelector('#mg-chname').textContent = (peer && peer.name) || '…';
-    sheet.querySelector('#mg-chavi').innerHTML = avi(peer);
+    curThread = uuid; curPeer = null; curPeers = peers || [];
+    setChatHeader(curPeers);
     sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Loading…</div>';
     lastMsgHtml = ''; stickBottom = true;        // a freshly opened thread starts at the newest message
     sheet.querySelector('#mg-chat').classList.add('is-on');
@@ -482,8 +560,8 @@
         var u = d && d.items && d.items[0];
         if (!u || !curPeer || curPeer.uuid !== userUuid || curThread) return;
         curPeer = { uuid: u.uuid, name: u.display_name || 'Member', avatar_url: u.avatar_url || '' };
-        sheet.querySelector('#mg-chname').textContent = curPeer.name;
-        sheet.querySelector('#mg-chavi').innerHTML = avi(curPeer);
+        curPeers = [curPeer];                      // a new DM is 1:1 by construction
+        setChatHeader(curPeers);
       })
       .catch(function () {});
   }
@@ -497,15 +575,20 @@
     fetch(API + '/me/messages/', { credentials: 'include' })
       .then(function (r) { return r.ok ? r.json() : { threads: [] }; })
       .then(function (d) {
+        // ONLY a true 1:1 thread with this person. A GROUP thread that happens to contain
+        // them is not "your chat with them" — reusing it would aim a private-intent DM at
+        // everyone in the group. Server-side findPairThread() enforces the same rule on
+        // the send path, so the UI and the delivery cannot diverge.
         var hit = ((d && d.threads) || []).filter(function (t) {
-          return (t.peers || []).some(function (p) { return p.uuid === userUuid; });
+          var ps = t.peers || [];
+          return ps.length === 1 && ps[0].uuid === userUuid;
         })[0];
-        if (hit) { openThread(hit.uuid, (hit.peers || [])[0]); return; }
+        if (hit) { openThread(hit.uuid, hit.peers || []); return; }
         // no thread yet — fresh chat, first send POSTs {to_uuid}
         curThread = null; curPeer = { uuid: userUuid, name: name || 'Member', avatar_url: avatarUrl || '' };
+        curPeers = [curPeer];
         clearFile();
-        sheet.querySelector('#mg-chname').textContent = curPeer.name;
-        sheet.querySelector('#mg-chavi').innerHTML = avi(curPeer);
+        setChatHeader(curPeers);
         // lg:open-dm carries only a uuid, so a chat opened from a profile named the
         // recipient "Member" with a "?" avatar. No thread exists yet to carry peers[] —
         // resolve them, so you can see who you are about to message (HK-019, mobile half).
