@@ -130,6 +130,19 @@ final class Social
 .lg-social-menu__item{display:block;width:100%;text-align:left;border:0;background:none;font:500 13px/1.3 var(--lg-font-sans,system-ui);color:var(--lg-ink,#323532);padding:9px 10px;border-radius:8px;cursor:pointer}
 .lg-social-menu__item:hover{background:var(--lg-sage-tint,#eef2e3)}
 .lg-social-menu__item--danger{color:var(--lg-rust,#c66845)}
+.lg-social-confirm{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px}
+.lg-social-confirm[hidden]{display:none}
+.lg-social-confirm__backdrop{position:absolute;inset:0;background:rgba(0,0,0,.4)}
+.lg-social-confirm__box{position:relative;max-width:360px;width:100%;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.28);padding:24px}
+.lg-social-confirm__title{font:700 17px/1.3 var(--lg-font-sans,system-ui);color:var(--lg-ink,#323532);margin:0 0 8px}
+.lg-social-confirm__body{font:400 14px/1.5 var(--lg-font-sans,system-ui);color:var(--lg-ink-2,#5b5f5a);margin:0 0 20px}
+.lg-social-confirm__actions{display:flex;justify-content:flex-end;gap:10px}
+.lg-social-confirm__btn{font:600 13px/1 var(--lg-font-sans,system-ui);padding:10px 16px;border-radius:999px;cursor:pointer;border:1px solid}
+.lg-social-confirm__btn--cancel{background:#fff;color:var(--lg-ink,#323532);border-color:var(--lg-line,#e3ddd0)}
+.lg-social-confirm__btn--cancel:hover{background:var(--lg-sage-tint,#eef2e3)}
+.lg-social-confirm__btn--danger{background:var(--lg-rust,#c66845);color:#fff;border-color:var(--lg-rust,#c66845)}
+.lg-social-confirm__btn--danger:hover{filter:brightness(.96)}
+.lg-social-confirm__btn[disabled]{opacity:.6;cursor:default}
 </style>
 CSS;
     }
@@ -158,6 +171,49 @@ CSS;
     Array.prototype.forEach.call(document.querySelectorAll('.lg-social-menu:not([hidden])'), function (m) { m.hidden = true; });
     Array.prototype.forEach.call(document.querySelectorAll('.lg-social-morebtn[aria-expanded="true"]'), function (b) { b.setAttribute('aria-expanded', 'false'); });
   }
+  // Remove connection DELETES the edge with no undo, so it must be confirmed.
+  // Cancel is the safe default: it is auto-focused, Esc and backdrop-click cancel,
+  // and Enter (on the focused Cancel) cancels — nothing removes without an explicit
+  // click on the danger button.
+  var confirmEl = null;
+  function hideConfirm() { if (confirmEl) confirmEl.hidden = true; }
+  function confirmDisconnect(cid) {
+    if (!confirmEl) {
+      confirmEl = document.createElement('div');
+      confirmEl.className = 'lg-social-confirm';
+      confirmEl.hidden = true;
+      confirmEl.setAttribute('role', 'dialog');
+      confirmEl.setAttribute('aria-modal', 'true');
+      confirmEl.setAttribute('aria-labelledby', 'lg-social-confirm-title');
+      confirmEl.innerHTML =
+        '<div class="lg-social-confirm__backdrop" data-confirm-cancel></div>' +
+        '<div class="lg-social-confirm__box">' +
+          '<h2 class="lg-social-confirm__title" id="lg-social-confirm-title">Remove connection?</h2>' +
+          '<p class="lg-social-confirm__body">This can\'t be undone. Reconnecting means sending a new request they\'ll have to accept again.</p>' +
+          '<div class="lg-social-confirm__actions">' +
+            '<button type="button" class="lg-social-confirm__btn lg-social-confirm__btn--cancel" data-confirm-cancel>Cancel</button>' +
+            '<button type="button" class="lg-social-confirm__btn lg-social-confirm__btn--danger" data-confirm-ok>Remove connection</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(confirmEl);
+      confirmEl.addEventListener('click', function (e) {
+        if (e.target.closest('[data-confirm-cancel]')) { hideConfirm(); return; }
+        var ok = e.target.closest('[data-confirm-ok]');
+        if (ok) {
+          ok.disabled = true;
+          post(API + '/connections/' + confirmEl.__cid, { action: 'disconnect' }, 'PATCH')
+            .then(function () { location.reload(); })
+            .catch(function () { ok.disabled = false; hideConfirm(); });
+        }
+      });
+    }
+    confirmEl.__cid = cid;
+    var ok = confirmEl.querySelector('[data-confirm-ok]');
+    if (ok) ok.disabled = false;
+    confirmEl.hidden = false;
+    var cancel = confirmEl.querySelector('.lg-social-confirm__btn--cancel');
+    if (cancel) cancel.focus();
+  }
   document.addEventListener('click', function (e) {
     // 3-dot toggle
     var more = e.target.closest('.lg-social-morebtn');
@@ -183,19 +239,21 @@ CSS;
       document.dispatchEvent(new CustomEvent('lg:require-auth', { detail: { reason: 'connect' } }));
       return;
     }
+    // Remove connection: confirm before deleting the edge (no undo). The actual
+    // disconnect fetch fires from the dialog's danger button, never from here.
+    if (act === 'disconnect') { closeMenus(); confirmDisconnect(cid); return; }
 
     var p;
     if (act === 'connect')          { b.disabled = true; p = post(API + '/connections', { addressee_uuid: to }); }
     else if (act === 'accept')      { b.disabled = true; p = post(API + '/connections/' + cid, { action: 'accept' }, 'PATCH'); }
     else if (act === 'decline')     { b.disabled = true; p = post(API + '/connections/' + cid, { action: 'decline' }, 'PATCH'); }
     else if (act === 'cancel')      { b.disabled = true; p = post(API + '/connections/' + cid, { action: 'cancel' }, 'PATCH'); }
-    else if (act === 'disconnect')  { p = post(API + '/connections/' + cid, { action: 'disconnect' }, 'PATCH'); }
     else if (act === 'mute')        { p = post(API + '/me/mutes', { uuid: to }); }
     else if (act === 'unmute')      { p = post(API + '/me/mutes/' + encodeURIComponent(to), null, 'DELETE'); }
     else { return; }
     p.then(function () { location.reload(); }).catch(function () { b.disabled = false; });
   });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenus(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeMenus(); hideConfirm(); } });
 })();
 </script>
 JS;
