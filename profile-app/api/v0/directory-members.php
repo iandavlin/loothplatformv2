@@ -118,6 +118,15 @@ $hasLastSeen = (bool)$pg->query(
 
 $wheres = [
     'u.archived_at IS NULL',
+    // GHOST CONTAINMENT (Ian 2026-07-13): an identity with NO wp_user_bridge row
+    // is NOT A MEMBER — it cannot log in, accept a connection, or read a DM (these
+    // are the ~90 orphan rows: e.g. a Patreon-only email that never became a WP
+    // account). It must not be reachable as a person. This lives in the SHARED
+    // $wheres so it constrains BOTH the paginated card stack AND the map-pin feed
+    // in one place and can never be forgotten on one path. Server-side, never a
+    // client filter. The rule is exactly "has a bridge row", nothing subtler — the
+    // 1,835 real members all have one and are unaffected.
+    "EXISTS (SELECT 1 FROM wp_user_bridge b WHERE b.user_id = u.id)",
     // MASTER SWITCH (Visibility model): a private profile is owner-only —
     // no card, no pin, no teaser dot, for members too; admins excepted.
     "(u.profile_visibility = 'public' OR u.id = :vuid OR :vadmin = 1)",

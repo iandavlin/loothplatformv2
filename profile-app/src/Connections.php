@@ -193,12 +193,23 @@ final class Connections
     {
         $pg = Db::pg();
 
+        // GHOST CONTAINMENT (Ian 2026-07-13): the OTHER party (u) must be a real
+        // member — a wp_user_bridge row. A ghost (unbridged identity) can never
+        // send or accept, so it only ever appears here as a member's dangling
+        // pending_OUT request (Ian's request to 9d5aa168 sits pending forever). The
+        // EXISTS drops that row from the render so no member sees a dead ghost name
+        // linking to a 404 profile. The connections ROW is NOT touched — data is a
+        // separate lane; this is a render-time filter only. No-op for accepted /
+        // pending_in (both parties there are already real members).
+        $bridged = 'AND EXISTS (SELECT 1 FROM wp_user_bridge b WHERE b.user_id = u.id)';
+
         $accepted = $pg->prepare(
             "SELECT c.id, c.created_at, u.uuid, u.display_name, u.slug, u.avatar_url
                FROM connections c
                JOIN users u ON u.uuid = CASE WHEN c.requester_uuid = :u
                                              THEN c.addressee_uuid ELSE c.requester_uuid END
               WHERE c.status = 'accepted' AND :u IN (c.requester_uuid, c.addressee_uuid)
+              $bridged
               ORDER BY u.display_name"
         );
         $accepted->execute([':u' => $uuid]);
@@ -207,6 +218,7 @@ final class Connections
             "SELECT c.id, c.created_at, u.uuid, u.display_name, u.slug, u.avatar_url
                FROM connections c JOIN users u ON u.uuid = c.requester_uuid
               WHERE c.status = 'pending' AND c.addressee_uuid = :u
+              $bridged
               ORDER BY c.created_at DESC"
         );
         $pendingIn->execute([':u' => $uuid]);
@@ -215,6 +227,7 @@ final class Connections
             "SELECT c.id, c.created_at, u.uuid, u.display_name, u.slug, u.avatar_url
                FROM connections c JOIN users u ON u.uuid = c.addressee_uuid
               WHERE c.status = 'pending' AND c.requester_uuid = :u
+              $bridged
               ORDER BY c.created_at DESC"
         );
         $pendingOut->execute([':u' => $uuid]);
