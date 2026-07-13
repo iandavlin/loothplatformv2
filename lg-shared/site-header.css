@@ -975,14 +975,17 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
   border: 1px dashed var(--lg-line2, #d8d2c4); font-style: italic;
 }
 
-/* own-message hover menu (Edit / Delete) */
+/* message hover menu (React / Edit / Delete). Reveals on ANY bubble now (React rides every
+   message, own or a peer's) — was mine-only when it carried Edit/Delete alone. */
 .lg-msg__msg { position: relative; }
 .lg-msg__acts {
   position: absolute; top: -12px; right: 4px; display: none; gap: 2px;
   background: #fff; border: 1px solid var(--lg-line, #e3ddd0); border-radius: 8px;
   box-shadow: 0 3px 10px rgba(0,0,0,.12); padding: 2px; z-index: 2;
 }
-.lg-msg__msg--mine:hover .lg-msg__acts, .lg-msg__acts:hover { display: inline-flex; }
+/* a peer's bubble is align-self:flex-start, so anchor its menu on the LEFT edge instead */
+.lg-msg__msg:not(.lg-msg__msg--mine) .lg-msg__acts { right: auto; left: 4px; }
+.lg-msg__msg:hover .lg-msg__acts, .lg-msg__acts:hover { display: inline-flex; }
 .lg-msg__act {
   appearance: none; border: 0; background: none; cursor: pointer;
   font: 600 11.5px/1 var(--lg-font-sans, system-ui); color: var(--lg-ink, #323532);
@@ -990,6 +993,41 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
 }
 .lg-msg__act:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #6b7c52); }
 .lg-msg__act--del:hover { background: #fbe6e4; color: var(--lg-error, #b3261e); }
+[data-lg-react] { font-size: 14px; line-height: 1; padding: 4px 7px; }
+
+/* six-emoji picker (revealed by React) — a small floating row above the bubble */
+.lg-msg__rx-pick {
+  position: absolute; top: -44px; right: 4px; z-index: 3;
+  display: inline-flex; gap: 1px;
+  background: #fff; border: 1px solid var(--lg-line, #e3ddd0); border-radius: 20px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.16); padding: 3px 5px;
+}
+.lg-msg__msg:not(.lg-msg__msg--mine) .lg-msg__rx-pick { right: auto; left: 4px; }
+/* flip below the bubble when there isn't room above (topmost message) — else the
+   scroller's overflow clips the popover behind the modal header, unclickable */
+.lg-msg__rx-pick--down { top: auto; bottom: -44px; }
+.lg-msg__rx-pick[hidden] { display: none; }
+.lg-msg__rx-opt {
+  appearance: none; border: 0; background: none; cursor: pointer;
+  font-size: 19px; line-height: 1; padding: 3px 4px; border-radius: 50%;
+  transition: transform .08s ease;
+}
+.lg-msg__rx-opt:hover { transform: scale(1.25); background: var(--lg-sage-tint, #eef2e3); }
+
+/* aggregated reaction strip under a bubble */
+.lg-msg__rx-strip { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 2px 0; }
+.lg-msg__msg--mine .lg-msg__rx-strip { justify-content: flex-end; }
+.lg-msg__rx-chip {
+  appearance: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 3px;
+  background: var(--lg-sage-tint, #eef2e3); border: 1px solid transparent;
+  border-radius: 11px; padding: 1px 7px 1px 5px;
+  font: 600 11px/1.6 var(--lg-font-sans, system-ui); color: var(--lg-ink, #323532);
+}
+.lg-msg__rx-chip.is-mine { border-color: var(--lg-sage, #87986a); background: #e2ecd2; }
+.lg-msg__rx-chip:hover { border-color: var(--lg-sage, #87986a); }
+.lg-msg__rx-e { font-size: 12px; }
+.lg-msg__rx-n { font-variant-numeric: tabular-nums; }
 
 /* inline edit field (replaces the bubble on Edit) */
 .lg-msg__edit { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
