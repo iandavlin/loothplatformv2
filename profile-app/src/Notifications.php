@@ -61,16 +61,30 @@ final class Notifications
                                actor_uuid = EXCLUDED.actor_uuid, read_at = NULL"
             );
         } else {
+            // Connection rows get a click-through to the actor's profile stamped here
+            // so a fresh row is never blank. listFor() ALSO resolves this at render from
+            // the live actor slug and that path is AUTHORITATIVE (it revives the rows
+            // that predate this column, and it stays correct if the actor later changes
+            // their slug) — this stamp just keeps the stored data honest. No slug
+            // (unclaimed actor) → NULL, rendered as plain text, never a dead /u/ link.
+            $targetUrl = null;
+            if ($actorUuid !== null) {
+                $slugSt = $pg->prepare('SELECT slug FROM users WHERE uuid = :a');
+                $slugSt->execute([':a' => $actorUuid]);
+                $slug = $slugSt->fetchColumn();
+                if (is_string($slug) && $slug !== '') $targetUrl = '/u/' . rawurlencode($slug);
+            }
             $st = $pg->prepare(
-                "INSERT INTO notifications (user_uuid, actor_uuid, type, connection_id)
-                 VALUES (:u, :actor, :type, :ref)
+                "INSERT INTO notifications (user_uuid, actor_uuid, type, connection_id, target_url)
+                 VALUES (:u, :actor, :type, :ref, :url)
                  ON CONFLICT (user_uuid, connection_id) WHERE connection_id IS NOT NULL
                  DO UPDATE SET is_read = false, created_at = now(),
-                               actor_uuid = EXCLUDED.actor_uuid, type = EXCLUDED.type, read_at = NULL"
+                               actor_uuid = EXCLUDED.actor_uuid, type = EXCLUDED.type,
+                               target_url = EXCLUDED.target_url, read_at = NULL"
             );
         }
         $params = [':u' => $userUuid, ':actor' => $actorUuid, ':ref' => $refId];
-        if ($type !== 'message') $params[':type'] = $type;
+        if ($type !== 'message') { $params[':type'] = $type; $params[':url'] = $targetUrl; }
         $st->execute($params);
     }
 
@@ -151,6 +165,23 @@ final class Notifications
 
         return array_map(static function (array $r): array {
             $isHub = $r['target_kind'] !== null;
+            // The click-through target. Hub rows carry a stamped target_url. Connection
+            // rows (accept/request) shipped with NONE — dead text — so resolve one at
+            // RENDER from the actor's profile slug: connection_accept → the member who
+            // accepted; connection_request → the requester's profile, which is exactly
+            // where you act on it (Social::renderProfileActions renders Accept/Decline
+            // for a pending_in edge). Resolving here revives every pre-existing
+            // connection row with no backfill/migration. An actor with no slug
+            // (missing / never-claimed user) gets NO /u/ link → the surfaces render the
+            // name as plain text, same rule as the DM all-peer header — never a dead
+            // /u/ link.
+            $link = null;
+            if ($isHub) {
+                $link = (string)$r['target_url'];
+            } elseif (($r['type'] === 'connection_accept' || $r['type'] === 'connection_request')
+                      && !empty($r['actor_slug'])) {
+                $link = '/u/' . rawurlencode((string)$r['actor_slug']);
+            }
             return [
                 'id'        => (int)$r['id'],
                 'type'      => $r['type'],
@@ -166,7 +197,7 @@ final class Notifications
                 // The click-through. Present ONLY on rows that have somewhere to land —
                 // the surfaces make a row clickable iff `link` is non-null, so a legacy
                 // row can never navigate to a wrong/legacy URL.
-                'link'        => $isHub ? (string)$r['target_url'] : null,
+                'link'        => $link,
                 'actor_count' => (int)$r['actor_count'],
                 'actor'     => $r['actor_uuid'] ? [
                     'uuid'       => $r['actor_uuid'],
