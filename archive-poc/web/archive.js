@@ -2031,42 +2031,20 @@ if (ssrPresent && !hasFilters) {
   });
 })();
 
-// ===== Chrome badge counts (messages + notifications) =================
-// archive-poc lives outside WP, but we share the loothgroup.com cookie scope,
-// so the BuddyBoss REST endpoints accept the visitor's WP session. Only fires
-// when the badged icons are present (logged-in members).
-(function chromeCounts() {
-  const msgEl   = document.querySelector('[data-lg-msg-count]');
-  const notifEl = document.querySelector('[data-lg-notif-count]');
-  if (!msgEl && !notifEl) return; // not logged in, nothing to update
-
-  function setBadge(el, n) {
-    if (!el) return;
-    if (n > 0) {
-      el.textContent = n > 99 ? '99+' : String(n);
-      el.removeAttribute('hidden');
-    } else {
-      el.setAttribute('hidden', '');
-    }
-  }
-
-  async function refresh() {
-    if (document.hidden) return;
-    try {
-      const r = await fetch('/wp-json/buddyboss/v1/messages?per_page=1&fields=ids', { credentials: 'include' });
-      const unread = parseInt(r.headers.get('X-BP-Unread-Count') || '0', 10);
-      if (!isNaN(unread)) setBadge(msgEl, unread);
-    } catch (_) { /* silent — badge stays at its last-known state */ }
-    try {
-      const r = await fetch('/wp-json/buddyboss/v1/notifications?per_page=1&is_new=1&fields=ids', { credentials: 'include' });
-      const total = parseInt(r.headers.get('X-WP-Total') || '0', 10);
-      if (!isNaN(total)) setBadge(notifEl, total);
-    } catch (_) {}
-  }
-
-  // Defer the first fetch to browser-idle — these are BuddyBoss WP calls (~1s+
-  // cold) and shouldn't compete with the initial render. Badges pop in shortly.
-  (window.requestIdleCallback || (f => setTimeout(f, 1500)))(refresh);
-  setInterval(refresh, 60000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
-})();
+// ===== Chrome badge counts — REMOVED (HK-003) ========================
+// A `chromeCounts` IIFE used to live here and poll BuddyBoss
+// (/wp-json/buddyboss/v1/{messages,notifications}) to fill [data-lg-msg-count] and
+// [data-lg-notif-count]. Those routes are DEAD — the forum is strangled to the Hub
+// and messaging moved to profile-app — so it read 0 and *hid the badges*.
+//
+// That made it the second writer of spans lg-shared/social-modals.js already owns,
+// and it landed LAST: refreshCounts() set the badge to "1" at ~2.1s, this poll then
+// re-hid it (idle + every 60s + on every visibilitychange). A member with a genuine
+// unread DM and unread notifications saw the badge blink on, then vanish — the
+// root cause of "badges never appear" (sweep HK-003).
+//
+// One store, one writer: /me/social-counts/ is the single source, social-modals.js
+// (loaded by site-header.php on every page that renders the header, including this
+// one) is the sole writer of all three badge spans. Do not add a second poller here
+// — if one is ever needed it must read /me/social-counts/ and MUST NOT write the
+// spans. Lane: notifications, 2026-07-12.
