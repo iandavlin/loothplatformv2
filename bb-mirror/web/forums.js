@@ -4367,6 +4367,49 @@
     var parts = v.split('/').filter(Boolean);
     return parts.length >= 2 ? { forum: parts[0], topic: parts[1] } : null;
   }
+
+  // ── &reply=<id> — the REPLY ANCHOR (notifications lane, 2026-07-12) ─────────
+  // An OPTIONAL companion to ?topic=. Notification click-throughs must land on the
+  // exact reply they are about ("someone mentions you in this discussion actually
+  // needs to go to that discussion" — Ian), so the bell links carry &reply=<id> and
+  // we scroll to + highlight that reply once the modal's replies have hydrated.
+  // Deliberately NOT part of shareUrl(): a shared link is about the topic, not about
+  // whichever reply happened to notify one person.
+  // Both surfaces render replies as .reply-stub[data-reply-id] (the §4e desktop
+  // modal and the ≤640 sheet pour the SAME server-rendered thread HTML), so one
+  // routine anchors both. Replies arrive async → poll briefly, then give up quietly.
+  function parseReplyParam() {
+    var m = /[?&]reply=(\d+)/.exec(location.search);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+  function anchorStyle() {
+    if (document.getElementById('lg-reply-anchor-css')) return;
+    var st = document.createElement('style');
+    st.id = 'lg-reply-anchor-css';
+    // Self-contained (not forums.css / mobile-hub.css): this is deep-link behavior
+    // that must look identical on BOTH sides of the 641px split.
+    st.textContent =
+      '.reply-stub.lg-reply-target{background:var(--lg-sage-tint,#eef2e3);' +
+      'border-radius:10px;box-shadow:0 0 0 2px var(--lg-sage-d,#6b7c52);' +
+      'transition:background .5s ease,box-shadow .5s ease}' +
+      '.reply-stub.lg-reply-target.lg-reply-fade{background:transparent;box-shadow:0 0 0 0 transparent}';
+    document.head.appendChild(st);
+  }
+  function anchorReply(rid, tries) {
+    if (!rid) return;
+    var open = dmodal() && !dmodal().hidden ? dmodal() : document.getElementById('looth-rep-sheet');
+    var stub = open && open.querySelector('.reply-stub[data-reply-id="' + rid + '"]');
+    if (!stub) {
+      if ((tries || 0) >= 40) return;              // ~5s of hydration, then let it be
+      setTimeout(function () { anchorReply(rid, (tries || 0) + 1); }, 125);
+      return;
+    }
+    anchorStyle();
+    try { stub.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { stub.scrollIntoView(); }
+    stub.classList.add('lg-reply-target');
+    setTimeout(function () { stub.classList.add('lg-reply-fade'); }, 2200);
+    setTimeout(function () { stub.classList.remove('lg-reply-target', 'lg-reply-fade'); }, 3000);
+  }
   // Canonical standalone permalink for a {forum, topic}.
   function permalink(ft) { return FORUM_BASE + '/' + ft.forum + '/' + ft.topic + '/'; }
   // The SHARE payload: the clean feed deep-link (no sort/q/… baggage), encoded
@@ -4378,11 +4421,13 @@
   function topicUrl(ft) {
     var qs = new URLSearchParams(location.search);
     qs.set('topic', ft.forum + '/' + ft.topic);
+    qs.delete('reply');            // a reply anchor belongs to the topic it arrived with
     return location.pathname + '?' + qs.toString();
   }
   function feedUrlNoTopic() {
     var qs = new URLSearchParams(location.search);
     qs.delete('topic');
+    qs.delete('reply');            // …and must not outlive the modal it scrolled
     var s = qs.toString();
     return location.pathname + (s ? '?' + s : '');
   }
@@ -4570,6 +4615,10 @@
   function routeFromUrl() {
     var ft = parseTopicParam();
     if (!ft) return;
+    // Capture the reply anchor BEFORE the history rewrite below strips it from the
+    // address bar (a notification link is ?topic=…&reply=<id>; the topic URL we seat
+    // in history is the clean, copyable one).
+    var rid = parseReplyParam();
     // Seat a feed entry beneath the topic state so Back returns to the feed (not
     // off-site), then layer the topic entry on top and open — the SAME two-entry
     // stack on both surfaces (the sheet sees ?topic already set and adopts the
@@ -4577,13 +4626,17 @@
     history.replaceState({}, '', feedUrlNoTopic());
     history.pushState({ lgTopic: ft.forum + '/' + ft.topic }, '', topicUrl(ft));
     if (deskt()) openTopic(ft); else openTopicMobile(ft);
+    if (rid) anchorReply(rid);
   }
 
   // ONE deep-link contract, exported — hub-polish.js's sheet stamps the same
-  // ?topic= URL/state with these instead of growing a second parser.
+  // ?topic= URL/state with these instead of growing a second parser. parseReply /
+  // anchorReply are the notification lane's addition: any surface that lands a user
+  // on a specific reply uses THESE, so the reply anchor also stays one system.
   window.lgTopicDeepLink = {
     parse: parseTopicParam, hasParam: hasTopicParam, ftFromHref: ftFromHref,
-    urlFor: topicUrl, shareUrl: shareUrl, feedUrl: feedUrlNoTopic, permalink: permalink
+    urlFor: topicUrl, shareUrl: shareUrl, feedUrl: feedUrlNoTopic, permalink: permalink,
+    parseReply: parseReplyParam, anchorReply: anchorReply
   };
 
   function boot() {
