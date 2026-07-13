@@ -118,6 +118,15 @@ $hasLastSeen = (bool)$pg->query(
 
 $wheres = [
     'u.archived_at IS NULL',
+    // GHOST CONTAINMENT (Ian 2026-07-13): an identity with NO wp_user_bridge row
+    // is NOT A MEMBER — it cannot log in, accept a connection, or read a DM (these
+    // are the ~90 orphan rows: e.g. a Patreon-only email that never became a WP
+    // account). It must not be reachable as a person. This lives in the SHARED
+    // $wheres so it constrains BOTH the paginated card stack AND the map-pin feed
+    // in one place and can never be forgotten on one path. Server-side, never a
+    // client filter. The rule is exactly "has a bridge row", nothing subtler — the
+    // 1,835 real members all have one and are unaffected.
+    "EXISTS (SELECT 1 FROM wp_user_bridge b WHERE b.user_id = u.id)",
     // MASTER SWITCH (Visibility model): a private profile is owner-only —
     // no card, no pin, no teaser dot, for members too; admins excepted.
     "(u.profile_visibility = 'public' OR u.id = :vuid OR :vadmin = 1)",
@@ -179,12 +188,32 @@ if ($creds) {
 // A chapter member with no location, or with location hidden, simply drops out here and gets
 // no pin. They still count as a member: the count comes from chapter_member (Chapters::
 // memberCount), never from this query.
+//
+// GHOST CONTAINMENT (main 2026-07-13): the chapter_member row is keyed by u.uuid, and the
+// directory's shared $wheres already excludes unbridged identities, so a ghost can never
+// appear as a chapter pin here even if it holds a chapter_member row. The membership count
+// (Chapters::memberCount) must apply the same wp_user_bridge gate itself — audited separately.
 $chapter = isset($_GET['chapter']) ? trim((string)$_GET['chapter']) : '';
 if ($chapter !== '') {
     $wheres[] = "EXISTS (SELECT 1 FROM chapter_member cm
                           JOIN chapter c ON c.id = cm.chapter_id
                          WHERE cm.user_uuid = u.uuid AND c.slug = :chapter AND c.is_active = true)";
     $params[':chapter'] = $chapter;
+}
+
+// NAME SEARCH (Ian 2026-07-12: "search user name on DT and mobile"). Substring-anywhere
+// ILIKE on display_name — NOT prefix — because business names live in display_name and
+// must be findable by any word in the tail ([[display_name business tail]]). Rides the
+// SHARED $wheres (above $listWheres), so it constrains BOTH the paginated stack and the
+// map-pin feed, and sits on TOP of the visibility stack already in $wheres: a
+// directory-hidden member (private master switch; anon non-opt-in via $listWheres) can
+// never be surfaced by name. Escape LIKE metacharacters so a literal % / _ / \ typed in
+// the box matches literally instead of acting as a wildcard.
+$q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+if ($q !== '') {
+    $qEsc = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
+    $wheres[]    = "u.display_name ILIKE :q ESCAPE '\\'";
+    $params[':q'] = '%' . $qEsc . '%';
 }
 
 $selectDistance = '';

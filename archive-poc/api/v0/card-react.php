@@ -150,6 +150,16 @@ try {
     lg_kr_json(['ok' => false, 'error' => 'server_error'], 500);
 }
 
+// ── Ring the bell (notifications lane, 2026-07-12) ──────────────────────────
+// Only when a reaction was ADDED — $res['mine'] is null when the user toggled their
+// own reaction OFF, and re-notifying on un-react would be nonsense. Switching slug
+// (love → fire) is still an add; the bell coalesces it into the existing unread row
+// rather than raising a second one. Fire-and-forget: never fail the reaction.
+if (!empty($res['mine']) && is_file('/srv/lg-shared/notify-bridge.php')) {
+    require_once '/srv/lg-shared/notify-bridge.php';
+    lg_notify_on_reaction($postType, $itemId, $uid);
+}
+
 lg_kr_json([
     'ok'        => true,
     'post_type' => $postType,

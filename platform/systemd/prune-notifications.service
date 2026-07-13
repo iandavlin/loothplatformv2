@@ -1,0 +1,16 @@
+[Unit]
+Description=Prune notifications bell rows older than 30 days (retention, 30-day ruling)
+# The bell's prune() exists in profile-app but nothing rotated it — rows
+# accumulated forever. This is the convergence job (notifications lane, Ian
+# 2026-07-13). Idempotent; DELETE-by-age only, never touches the underlying
+# DM/connection/hub thread. ~ms for a healthy table.
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+# Peer-auth as the profile-app PG role (same role the FPM pool uses) — the
+# script connects via the /var/run/postgresql unix socket, no password.
+User=profile-app
+ExecStart=/usr/bin/php /srv/profile-app/bin/prune-notifications.php
+StandardOutput=journal
+StandardError=journal

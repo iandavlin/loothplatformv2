@@ -15,6 +15,17 @@ require_once __DIR__ . '/Notifications.php';
 final class Messaging
 {
     private const SNIPPET = 140;
+    private const NAME_MAX = 60;   // custom group-name cap (chars, post-trim)
+
+    /**
+     * The FIXED reaction set (Ian 2026-07-13: no full picker, no keyboard — this is a
+     * phone-first surface). SERVER is the source of truth: every write is validated against
+     * this list (invalid → 400), so a client can never store an off-set glyph. Both surfaces
+     * hardcode the identical six. The hub's palette is not reused — it is a 7-item MIXED set
+     * (emoji + brand PNGs) bound to the MySQL BuddyBoss store; messages get their own
+     * text-emoji set (overlaps the hub on 👍 😂 😮 for familiarity).
+     */
+    public const REACTION_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
     /** Thread list for the messages modal: peers, last snippet, unread, last_message_at. */
     public static function threadsFor(string $uuid, int $limit = 30, int $offset = 0): array
@@ -140,6 +151,9 @@ final class Messaging
 
         self::markRead($viewerUuid, $threadId);
 
+        $rows      = $msgs->fetchAll();
+        $reactions = self::reactionsFor(array_column($rows, 'id'), $viewerUuid);
+
         $isGroup   = (bool)$thread['is_group'];
         $createdBy = $thread['created_by'];
         return [
@@ -151,7 +165,101 @@ final class Messaging
             'can_manage' => $viewerIsAdmin || ($createdBy !== null && $createdBy === $viewerUuid),
             'peers'      => self::peersByThread([$threadId], $viewerUuid)[$threadId] ?? [],
             'members'    => self::threadMembers($threadId),
-            'messages'   => array_map([self::class, 'shapeMessage'], $msgs->fetchAll()),
+            'messages'   => array_map(
+                static fn (array $m): array => self::shapeMessage($m, $reactions[(int)$m['id']] ?? []),
+                $rows
+            ),
+        ];
+    }
+
+    /**
+     * Aggregate reactions for a batch of message ids (ONE query for the whole thread — no
+     * per-message N+1). Returns [message_id => [ {emoji, count, mine, who:[names]}, … ]],
+     * emoji groups in first-reaction order, names oldest-first (the index orders by created_at).
+     * `mine` = the viewer holds this emoji on this message. Counts/who come only from this table.
+     */
+    private static function reactionsFor(array $messageIds, string $viewerUuid): array
+    {
+        $ids = array_values(array_filter(array_map('intval', $messageIds)));
+        if (!$ids) return [];
+        $place = implode(',', array_fill(0, count($ids), '?'));
+        $st = Db::pg()->prepare(
+            "SELECT r.message_id, r.emoji, r.user_uuid, u.display_name
+               FROM message_reactions r
+               JOIN users u ON u.uuid = r.user_uuid
+              WHERE r.message_id IN ($place)
+              ORDER BY r.message_id, r.created_at, r.id"
+        );
+        $st->execute($ids);
+
+        // Two-level accumulate: per message, per emoji (preserving first-seen emoji order).
+        $acc = [];   // [mid][emoji] => ['count'=>int,'mine'=>bool,'who'=>[names]]
+        foreach ($st->fetchAll() as $r) {
+            $mid   = (int)$r['message_id'];
+            $emoji = (string)$r['emoji'];
+            if (!isset($acc[$mid][$emoji])) $acc[$mid][$emoji] = ['count' => 0, 'mine' => false, 'who' => []];
+            $acc[$mid][$emoji]['count']++;
+            $acc[$mid][$emoji]['who'][] = (string)($r['display_name'] ?: 'Member');
+            if ((string)$r['user_uuid'] === $viewerUuid) $acc[$mid][$emoji]['mine'] = true;
+        }
+        $out = [];
+        foreach ($acc as $mid => $byEmoji) {
+            foreach ($byEmoji as $emoji => $a) {
+                $out[$mid][] = [
+                    'emoji' => $emoji,
+                    'count' => $a['count'],
+                    'mine'  => $a['mine'],
+                    'who'   => $a['who'],
+                ];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Toggle the viewer's reaction to one message. Fixed-set + participant + live-message
+     * enforced HERE (server is the only gate). Re-tapping the same emoji REMOVES it (idempotent
+     * unreact); a first tap adds it. A user may hold several DIFFERENT emoji on one message.
+     * Returns the freshly-aggregated reactions for that message so the client updates live.
+     */
+    public static function reactToMessage(string $actorUuid, int $threadId, int $messageId, string $emoji): array
+    {
+        if (!in_array($emoji, self::REACTION_EMOJI, true)) {
+            return ['ok' => false, 'error' => 'invalid_emoji'];
+        }
+        if (!self::isRecipient($actorUuid, $threadId)) {
+            return ['ok' => false, 'error' => 'not_a_recipient'];
+        }
+        $pg = Db::pg();
+        $st = $pg->prepare('SELECT kind, deleted_at FROM messages WHERE id = :m AND thread_id = :t');
+        $st->execute([':m' => $messageId, ':t' => $threadId]);
+        $row = $st->fetch();
+        if (!$row) return ['ok' => false, 'error' => 'not_found'];
+        // System lines and tombstones carry no reactions (Ian 2026-07-13, server-enforced).
+        if (($row['kind'] ?? 'message') !== 'message' || $row['deleted_at'] !== null) {
+            return ['ok' => false, 'error' => 'not_reactable'];
+        }
+
+        // Toggle: INSERT returns a row iff it was newly added; DO NOTHING (already present)
+        // means the viewer already holds this emoji → remove it. rowCount() on the INSERT is
+        // the discriminator (0 = conflict → the row existed → DELETE it).
+        $ins = $pg->prepare(
+            'INSERT INTO message_reactions (message_id, user_uuid, emoji) VALUES (:m, :u, :e)
+             ON CONFLICT (message_id, user_uuid, emoji) DO NOTHING'
+        );
+        $ins->execute([':m' => $messageId, ':u' => $actorUuid, ':e' => $emoji]);
+        $reacted = $ins->rowCount() > 0;
+        if (!$reacted) {
+            $pg->prepare('DELETE FROM message_reactions WHERE message_id = :m AND user_uuid = :u AND emoji = :e')
+               ->execute([':m' => $messageId, ':u' => $actorUuid, ':e' => $emoji]);
+        }
+
+        return [
+            'ok'         => true,
+            'message_id' => $messageId,
+            'emoji'      => $emoji,
+            'reacted'    => $reacted,
+            'reactions'  => self::reactionsFor([$messageId], $actorUuid)[$messageId] ?? [],
         ];
     }
 
@@ -160,9 +268,10 @@ final class Messaging
      * any media reference are withheld from the payload entirely (the bytes are already GC'd
      * server-side on delete), leaving only `deleted:true` so both surfaces render "Message
      * deleted" without ever exposing the old content. `edited:true` drives the "(edited)"
-     * marker; `kind` distinguishes a membership system line from a real message.
+     * marker; `kind` distinguishes a membership system line from a real message. `reactions`
+     * (batch-loaded by the caller) is the aggregated per-emoji strip; a tombstone carries none.
      */
-    private static function shapeMessage(array $m): array
+    private static function shapeMessage(array $m, array $reactions = []): array
     {
         $deleted = $m['deleted_at'] !== null;
         return [
@@ -177,6 +286,8 @@ final class Messaging
             'media_mime'  => $deleted ? null : $m['media_mime'],
             'media_w'     => $deleted ? null : $m['media_w'],
             'media_h'     => $deleted ? null : $m['media_h'],
+            // A tombstone renders no strip (its reactions, if any, are irrelevant + withheld).
+            'reactions'   => $deleted ? [] : $reactions,
         ];
     }
 
@@ -614,6 +725,10 @@ final class Messaging
         try {
             $pg->prepare('DELETE FROM message_recipients WHERE thread_id = :t AND user_uuid = :u')
                ->execute([':t' => $threadId, ':u' => $targetUuid]);
+            // Removing the OWNER makes the thread ownerless too (symmetric with leave): NULL
+            // created_by so the badge never points at a non-member; rights fall to admin+self.
+            $pg->prepare('UPDATE message_threads SET created_by = NULL WHERE id = :t AND created_by = :u')
+               ->execute([':t' => $threadId, ':u' => $targetUuid]);
             self::insertSystemLine($threadId, $actorUuid, self::displayName($actorUuid) . ' removed ' . self::displayName($targetUuid));
             $pg->commit();
         } catch (\Throwable $e) {
@@ -623,17 +738,36 @@ final class Messaging
         return ['ok' => true, 'thread_id' => $threadId];
     }
 
-    /** Remove YOURSELF from a thread. Always allowed for a participant. */
+    /**
+     * Remove YOURSELF from a thread. Allowed for any participant EXCEPT the current owner while
+     * other members remain: an owner must transfer first (Ian 7/12 23:2x — reverses the earlier
+     * ownerless-on-leave default for a VOLUNTARY leave) -> 'transfer_required'. Edges (ruled):
+     *   - owner is the SOLE remaining member -> allowed (nobody to transfer to; the thread empties)
+     *   - ownerless / legacy (created_by NULL) -> unaffected
+     *   - a non-owner -> always allowed
+     * (Admin REMOVAL of an owner is a different path — removeMember still -> ownerless.)
+     */
     public static function leave(string $actorUuid, int $threadId): array
     {
         if (!self::isRecipient($actorUuid, $threadId)) {
             return ['ok' => false, 'error' => 'not_a_recipient'];
+        }
+        $st = Db::pg()->prepare('SELECT created_by FROM message_threads WHERE id = :t');
+        $st->execute([':t' => $threadId]);
+        $owner   = $st->fetchColumn();
+        $isOwner = $owner !== false && $owner !== null && $owner === $actorUuid;
+        if ($isOwner && count(self::allRecipientUuids($threadId)) > 1) {
+            return ['ok' => false, 'error' => 'transfer_required'];
         }
         $pg = Db::pg();
         $pg->beginTransaction();
         try {
             // Line first (so the leaver still resolves as a member for its text), then delete.
             self::insertSystemLine($threadId, $actorUuid, self::displayName($actorUuid) . ' left');
+            // The only owner who reaches here is the SOLE member leaving — NULL created_by so no
+            // badge outlives them. No-op for non-owners (the AND created_by = :u guard).
+            $pg->prepare('UPDATE message_threads SET created_by = NULL WHERE id = :t AND created_by = :u')
+               ->execute([':t' => $threadId, ':u' => $actorUuid]);
             $pg->prepare('DELETE FROM message_recipients WHERE thread_id = :t AND user_uuid = :u')
                ->execute([':t' => $threadId, ':u' => $actorUuid]);
             $pg->commit();
@@ -642,6 +776,77 @@ final class Messaging
             return ['ok' => false, 'error' => 'leave_failed'];
         }
         return ['ok' => true, 'left' => true];
+    }
+
+    /**
+     * Rename a GROUP (custom title, Ian 7/12 v1.1). ANY participant may rename — Ian's default.
+     * The name lives in the EXISTING message_threads.subject (no schema); it is stored as PLAIN
+     * TEXT and esc()'d at every render sink (angle brackets stay inert). Trimmed, whitespace
+     * collapsed, capped at NAME_MAX. An empty name CLEARS it (subject -> NULL) and the thread
+     * falls back to the member-name label. A 1:1 has no custom title — reject. Writes a system
+     * line; the name is captured in that line at write time (history, like every membership line).
+     */
+    public static function renameThread(string $actorUuid, int $threadId, string $rawName): array
+    {
+        if (!self::isRecipient($actorUuid, $threadId)) return ['ok' => false, 'error' => 'not_a_recipient'];
+        if (!self::isGroupThread($threadId))          return ['ok' => false, 'error' => 'not_a_group'];
+
+        // Collapse all whitespace (incl. newlines/tabs) to single spaces, trim, cap length.
+        // Non-unicode \s avoids the /u-on-invalid-UTF-8 null-return trap.
+        $name = trim((string)preg_replace('/\s+/', ' ', $rawName));
+        $name = function_exists('mb_substr') ? mb_substr($name, 0, self::NAME_MAX) : substr($name, 0, self::NAME_MAX);
+        $cleared = ($name === '');
+
+        $pg = Db::pg();
+        $pg->prepare('UPDATE message_threads SET subject = :s WHERE id = :t')
+           ->execute([':s' => $cleared ? null : $name, ':t' => $threadId]);
+        self::insertSystemLine(
+            $threadId,
+            $actorUuid,
+            $cleared
+                ? self::displayName($actorUuid) . ' cleared the group name'
+                : self::displayName($actorUuid) . ' named the group ' . $name
+        );
+        return ['ok' => true, 'subject' => $cleared ? null : $name, 'cleared' => $cleared];
+    }
+
+    /**
+     * Transfer ownership (Ian 7/12 v1.1). created_by IS the owner (mutable) — the immutable
+     * "who created it" fact stays recorded in the "started the group" system line, so no second
+     * column is needed. The current OWNER may hand off to any current member; a site ADMIN may
+     * also transfer OR set an owner (which quietly fixes legacy NULL-owner threads over time).
+     * Anyone else -> forbidden (403). Target must be a current member. Groups only. Server-
+     * enforced exactly like remove. Writes "X made Y the owner".
+     */
+    public static function transferOwnership(string $actorUuid, int $threadId, string $targetUuid, bool $actorIsAdmin): array
+    {
+        if (!self::isRecipient($actorUuid, $threadId)) return ['ok' => false, 'error' => 'not_a_recipient'];
+        if (!self::isGroupThread($threadId))          return ['ok' => false, 'error' => 'not_a_group'];
+
+        $pg = Db::pg();
+        $st = $pg->prepare('SELECT created_by FROM message_threads WHERE id = :t');
+        $st->execute([':t' => $threadId]);
+        $owner = $st->fetchColumn();
+        $owner = ($owner === false || $owner === null) ? null : (string)$owner;
+
+        // Only the current owner or a site admin may (re)assign. Legacy NULL-owner threads have
+        // no owner to authorise, so ONLY an admin can appoint one.
+        if (!($actorIsAdmin || ($owner !== null && $owner === $actorUuid))) {
+            return ['ok' => false, 'error' => 'forbidden'];
+        }
+        $targetUuid = strtolower(trim($targetUuid));
+        if ($targetUuid === '')                            return ['ok' => false, 'error' => 'target_required'];
+        if (!self::isRecipient($targetUuid, $threadId))    return ['ok' => false, 'error' => 'not_a_member'];
+        if ($targetUuid === $owner)                        return ['ok' => true, 'created_by' => $owner]; // already owner, no-op
+
+        $pg->prepare('UPDATE message_threads SET created_by = :o WHERE id = :t')
+           ->execute([':o' => $targetUuid, ':t' => $threadId]);
+        self::insertSystemLine(
+            $threadId,
+            $actorUuid,
+            self::displayName($actorUuid) . ' made ' . self::displayName($targetUuid) . ' the owner'
+        );
+        return ['ok' => true, 'created_by' => $targetUuid];
     }
 
     // ── edit / delete own message (Ian 2026-07-12) ──────────────────────────────────
@@ -694,6 +899,10 @@ final class Messaging
                 SET deleted_at = now(), body = '', media_url = NULL, media_mime = NULL, media_w = NULL, media_h = NULL
               WHERE id = :m"
         )->execute([':m' => $messageId]);
+        // A soft tombstone keeps the messages row, so the FK ON DELETE CASCADE never fires —
+        // purge this message's reactions explicitly so "delete removes its reactions" holds
+        // literally (a real row delete still cascades; this covers the soft-delete path).
+        $pg->prepare('DELETE FROM message_reactions WHERE message_id = :m')->execute([':m' => $messageId]);
         return ['ok' => true, 'message_id' => $messageId, 'deleted' => true, 'media_url' => $old];
     }
 }

@@ -574,7 +574,7 @@ body { margin: 0; background: #f0eee8; color: #323532;
         'msg_unread'    => null,
         'notif_unread'  => null,
         'active_nav'    => '',
-        'logout_url'    => '/wp-login.php?action=logout',
+        'logout_url'    => '/logout',   // one-click endpoint, no WP interstitial (GH #55)
         'profile_url'   => !empty($who['slug'])
             ? '/u/' . rawurlencode((string) $who['slug'])
             : '/profile/edit',

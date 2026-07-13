@@ -528,6 +528,9 @@ body.lg-sm-open { overflow: hidden; }
   cursor: default;
 }
 .lg-notif__item--unread { background: var(--lg-sage-tint, #eef2e3); }
+/* Rows that deep-link into the thing they are about (hub events) render as <a>. */
+.lg-notif__item--link { cursor: pointer; text-decoration: none; color: inherit; }
+.lg-notif__item--link:hover { background: var(--lg-line, #e3ddd0); }
 .lg-notif__body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .lg-notif__clear {
   appearance: none; background: transparent; border: 0; cursor: pointer;
@@ -922,6 +925,35 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
 }
 .lg-msg__leave:hover { background: #fbe6e4; }
 
+/* custom group name + ownership (Ian 7/12 v1.1) */
+.lg-msg__mmi-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; }
+.lg-msg__owner-chip {
+  display: inline-block; margin-left: 8px; vertical-align: 1px;
+  font: 700 10px/1 var(--lg-font-sans, system-ui); letter-spacing: .04em; text-transform: uppercase;
+  color: #8a6d1f; background: #f4ecd4; border-radius: 999px; padding: 3px 7px;
+}
+.lg-msg__mkowner {
+  flex: 0 0 auto; appearance: none; cursor: pointer; font: 600 12px/1 var(--lg-font-sans, system-ui);
+  color: var(--lg-sage-d, #6b7c52); background: none; border: 1px solid var(--lg-sage-3, #d4e0b8);
+  border-radius: 999px; padding: 5px 10px;
+}
+.lg-msg__mkowner:hover { background: var(--lg-sage-tint, #eef2e3); }
+.lg-msg__mm-name { margin-top: 13px; }
+.lg-msg__mm-name-lbl { display: block; font: 600 12px/1 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b); margin-bottom: 6px; }
+.lg-msg__mm-name-row { display: flex; gap: 8px; }
+.lg-msg__mm-name-in {
+  flex: 1; min-width: 0; font: 400 14px/1.3 var(--lg-font-sans, system-ui); color: var(--lg-charcoal, #1a1d1a);
+  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 10px; padding: 9px 11px; background: #fff;
+}
+.lg-msg__mm-name-in:focus { outline: none; border-color: var(--lg-sage-3, #d4e0b8); box-shadow: 0 0 0 3px var(--lg-sage-tint, #eef2e3); }
+.lg-msg__mm-name-save {
+  flex: 0 0 auto; appearance: none; cursor: pointer; font: 600 13px/1 var(--lg-font-sans, system-ui);
+  color: #fff; background: var(--lg-sage-d, #6b7c52); border: 0; border-radius: 10px; padding: 0 15px;
+}
+.lg-msg__mm-name-save:hover { background: #5a6a45; }
+.lg-msg__mm-name-hint { font: 400 11px/1.35 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b); margin: 7px 2px 0; }
+.lg-msg__peer-title { font-weight: 700; }
+
 /* system (membership) line — centered pill, never a bubble */
 .lg-msg__sys {
   align-self: center; text-align: center; max-width: 88%;
@@ -943,14 +975,17 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
   border: 1px dashed var(--lg-line2, #d8d2c4); font-style: italic;
 }
 
-/* own-message hover menu (Edit / Delete) */
+/* message hover menu (React / Edit / Delete). Reveals on ANY bubble now (React rides every
+   message, own or a peer's) — was mine-only when it carried Edit/Delete alone. */
 .lg-msg__msg { position: relative; }
 .lg-msg__acts {
   position: absolute; top: -12px; right: 4px; display: none; gap: 2px;
   background: #fff; border: 1px solid var(--lg-line, #e3ddd0); border-radius: 8px;
   box-shadow: 0 3px 10px rgba(0,0,0,.12); padding: 2px; z-index: 2;
 }
-.lg-msg__msg--mine:hover .lg-msg__acts, .lg-msg__acts:hover { display: inline-flex; }
+/* a peer's bubble is align-self:flex-start, so anchor its menu on the LEFT edge instead */
+.lg-msg__msg:not(.lg-msg__msg--mine) .lg-msg__acts { right: auto; left: 4px; }
+.lg-msg__msg:hover .lg-msg__acts, .lg-msg__acts:hover { display: inline-flex; }
 .lg-msg__act {
   appearance: none; border: 0; background: none; cursor: pointer;
   font: 600 11.5px/1 var(--lg-font-sans, system-ui); color: var(--lg-ink, #323532);
@@ -958,6 +993,41 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
 }
 .lg-msg__act:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #6b7c52); }
 .lg-msg__act--del:hover { background: #fbe6e4; color: var(--lg-error, #b3261e); }
+[data-lg-react] { font-size: 14px; line-height: 1; padding: 4px 7px; }
+
+/* six-emoji picker (revealed by React) — a small floating row above the bubble */
+.lg-msg__rx-pick {
+  position: absolute; top: -44px; right: 4px; z-index: 3;
+  display: inline-flex; gap: 1px;
+  background: #fff; border: 1px solid var(--lg-line, #e3ddd0); border-radius: 20px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.16); padding: 3px 5px;
+}
+.lg-msg__msg:not(.lg-msg__msg--mine) .lg-msg__rx-pick { right: auto; left: 4px; }
+/* flip below the bubble when there isn't room above (topmost message) — else the
+   scroller's overflow clips the popover behind the modal header, unclickable */
+.lg-msg__rx-pick--down { top: auto; bottom: -44px; }
+.lg-msg__rx-pick[hidden] { display: none; }
+.lg-msg__rx-opt {
+  appearance: none; border: 0; background: none; cursor: pointer;
+  font-size: 19px; line-height: 1; padding: 3px 4px; border-radius: 50%;
+  transition: transform .08s ease;
+}
+.lg-msg__rx-opt:hover { transform: scale(1.25); background: var(--lg-sage-tint, #eef2e3); }
+
+/* aggregated reaction strip under a bubble */
+.lg-msg__rx-strip { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 2px 0; }
+.lg-msg__msg--mine .lg-msg__rx-strip { justify-content: flex-end; }
+.lg-msg__rx-chip {
+  appearance: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 3px;
+  background: var(--lg-sage-tint, #eef2e3); border: 1px solid transparent;
+  border-radius: 11px; padding: 1px 7px 1px 5px;
+  font: 600 11px/1.6 var(--lg-font-sans, system-ui); color: var(--lg-ink, #323532);
+}
+.lg-msg__rx-chip.is-mine { border-color: var(--lg-sage, #87986a); background: #e2ecd2; }
+.lg-msg__rx-chip:hover { border-color: var(--lg-sage, #87986a); }
+.lg-msg__rx-e { font-size: 12px; }
+.lg-msg__rx-n { font-variant-numeric: tabular-nums; }
 
 /* inline edit field (replaces the bubble on Edit) */
 .lg-msg__edit { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }

@@ -124,7 +124,7 @@
       '#looth-msgr .mg-search svg{width:16px;height:16px;color:var(--lg-mute,#6b6f6b);flex:0 0 auto}',
       '#looth-msgr .mg-search input{flex:1 1 auto;min-width:0;border:0;background:none;outline:none;' +
         'font:15px/1.2 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#323532)}',
-      '#looth-msgr .mg-list{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 8px calc(20px + env(safe-area-inset-bottom,0px))}',
+      '#looth-msgr .mg-list{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 8px calc(20px + env(safe-area-inset-bottom,0px))}',
       '#looth-msgr .mg-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;background:none;' +
         'padding:9px 10px;border-radius:14px;cursor:pointer}',
       '#looth-msgr .mg-row:active{background:var(--lg-sage-tint,#eef2e3)}',
@@ -174,7 +174,7 @@
       '#looth-msgr .mg-grouptag{flex:0 0 auto;display:inline-block;padding:1px 6px;border-radius:999px;' +
         'background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);' +
         'font:600 10.5px/1.5 var(--lg-font-sans,system-ui,sans-serif);vertical-align:middle}',
-      '#looth-msgr .mg-msgs{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 12px;display:flex;flex-direction:column;gap:3px}',
+      '#looth-msgr .mg-msgs{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:14px 12px;display:flex;flex-direction:column;gap:3px}',
       '#looth-msgr .mg-b{max-width:78%;padding:9px 13px;border-radius:18px;font:15px/1.4 var(--lg-font-sans,system-ui,sans-serif);' +
         'overflow-wrap:break-word;white-space:pre-wrap}',
       '#looth-msgr .mg-b--them{align-self:flex-start;background:var(--lguser-bubble,#eceff3);color:var(--lg-ink,#1a1d1a);border-bottom-left-radius:6px}',
@@ -230,12 +230,23 @@
       '#looth-msgr .mg-author{align-self:flex-start;font:600 11px/1 var(--lg-font-sans,system-ui);color:var(--lg-sage-d,#6b7c52);margin:4px 0 -1px 3px}',
       '#looth-msgr .mg-edited{font-size:10.5px;opacity:.72;margin-left:6px}',
       '#looth-msgr .mg-b--tomb{background:transparent;border:1px dashed var(--lg-line2,#d8d2c4);color:var(--lg-mute,#6b6f6b);font-style:italic}',
+      // reaction strip under a message + chips
+      '#looth-msgr .mg-rx{display:flex;flex-wrap:wrap;gap:5px;margin:2px 2px 0;max-width:80%}',
+      '#looth-msgr .mg-rx-chip{display:inline-flex;align-items:center;gap:3px;border:1px solid transparent;background:var(--lguser-bubble,#eceff3);' +
+        'border-radius:13px;padding:2px 9px 2px 7px;font:600 12px/1.5 var(--lg-font-sans,system-ui);color:var(--lg-ink,#1a1d1a);cursor:pointer}',
+      '#looth-msgr .mg-rx-chip.is-mine{border-color:var(--lg-sage,#87986a);background:#e2ecd2}',
+      '#looth-msgr .mg-rx-e{font-size:13px}',
+      '#looth-msgr .mg-rx-n{font-variant-numeric:tabular-nums}',
+      // React row at the top of the long-press action sheet (six big emoji)
+      '#looth-msgr .mg-rxrow{display:flex;justify-content:space-around;gap:4px;padding:6px 4px 10px;border-bottom:1px solid var(--lg-line,#e3ddd0);margin-bottom:4px}',
+      '#looth-msgr .mg-rxbtn{border:0;background:none;font-size:30px;line-height:1;padding:4px 6px;border-radius:50%;cursor:pointer}',
+      '#looth-msgr .mg-rxbtn:active{background:var(--lg-sage-tint,#eef2e3);transform:scale(1.15)}',
       // secondary panel (picker + member manager) slides over the chat/home
       '#looth-msgr .mg-p2{position:absolute;inset:0;z-index:2;display:none;flex-direction:column;background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0}',
       '#looth-msgr .mg-p2.is-on{display:flex}',
       '#looth-msgr .mg-p2hd{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:14px 12px 10px;border-bottom:1px solid var(--lg-line,#e3ddd0)}',
       '#looth-msgr .mg-p2t{flex:1;font:700 17px/1.2 var(--lg-font-serif,Georgia,serif);color:var(--lg-charcoal,#1a1d1a)}',
-      '#looth-msgr .mg-p2body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px}',
+      '#looth-msgr .mg-p2body{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:14px}',
       '#looth-msgr .mg-p2hint{font:13px/1.4 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b);margin:0 0 12px}',
       // pick field: chips + search
       '#looth-msgr .mg-pkfield{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--lg-line,#e3ddd0);border-radius:12px;padding:8px 10px;background:#fff;min-height:46px}',
@@ -266,6 +277,16 @@
       '#looth-msgr .mg-mmi-sub{font:12px/1.2 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b)}',
       '#looth-msgr .mg-you{flex:0 0 auto;font:600 11px/1 var(--lg-font-sans,system-ui);color:var(--lg-sage-d,#6b7c52);background:var(--lg-sage-tint,#eef2e3);border-radius:999px;padding:4px 9px}',
       '#looth-msgr .mg-rm{flex:0 0 auto;border:1px solid #e7c4c0;background:none;color:var(--lg-error,#b3261e);border-radius:999px;font:600 12px/1 var(--lg-font-sans,system-ui);padding:6px 11px;cursor:pointer}',
+      // custom group name + ownership (Ian 7/12 v1.1)
+      '#looth-msgr .mg-mmi-actions{flex:0 0 auto;display:flex;align-items:center;gap:7px}',
+      '#looth-msgr .mg-owner-chip{display:inline-block;margin-left:8px;vertical-align:1px;font:700 10px/1 var(--lg-font-sans,system-ui);letter-spacing:.04em;text-transform:uppercase;color:#8a6d1f;background:#f4ecd4;border-radius:999px;padding:3px 7px}',
+      '#looth-msgr .mg-mkowner{flex:0 0 auto;border:1px solid var(--lg-sage-3,#d4e0b8);background:none;color:var(--lg-sage-d,#6b7c52);border-radius:999px;font:600 12px/1 var(--lg-font-sans,system-ui);padding:6px 11px;cursor:pointer}',
+      '#looth-msgr .mg-mm-name{margin:0 0 14px}',
+      '#looth-msgr .mg-mm-name-lbl{display:block;font:600 12px/1 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b);margin-bottom:6px}',
+      '#looth-msgr .mg-mm-name-row{display:flex;gap:8px}',
+      '#looth-msgr .mg-mm-name-in{flex:1;min-width:0;font:400 15px/1.3 var(--lg-font-sans,system-ui);color:var(--lg-charcoal,#1a1d1a);border:1px solid var(--lg-line,#e3ddd0);border-radius:10px;padding:10px 12px;background:#fff}',
+      '#looth-msgr .mg-mm-name-save{flex:0 0 auto;border:0;background:var(--lg-sage-d,#6b7c52);color:#fff;border-radius:10px;font:600 14px/1 var(--lg-font-sans,system-ui);padding:0 16px;cursor:pointer}',
+      '#looth-msgr .mg-mm-name-hint{display:block;font:400 11.5px/1.35 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b);margin:7px 2px 0}',
       '#looth-msgr .mg-addrow{width:100%;margin-top:14px;border:1px dashed var(--lg-sage-3,#d4e0b8);background:none;color:var(--lg-sage-d,#6b7c52);border-radius:12px;font:600 14px/1 var(--lg-font-sans,system-ui);padding:12px;cursor:pointer}',
       '#looth-msgr .mg-leavebtn{width:100%;margin-top:10px;border:1px solid #e7c4c0;background:none;color:var(--lg-error,#b3261e);border-radius:12px;font:600 14px/1 var(--lg-font-sans,system-ui);padding:12px;cursor:pointer}',
       // long-press action sheet (edit/delete/copy)
@@ -283,7 +304,12 @@
       D + ' #looth-msgr .mg-p2hint,' + D + ' #looth-msgr .mg-pi-sub,' + D + ' #looth-msgr .mg-mmi-sub{color:#9aa097}',
       D + ' #looth-msgr .mg-newbtn,' + D + ' #looth-msgr .mg-chmenu,' + D + ' #looth-msgr .mg-you{background:#262b30;color:#9cb37d}',
       D + ' #looth-msgr .mg-pkfield{background:#262b30;border-color:#2c312d}',
+      D + ' #looth-msgr .mg-mm-name-in{background:#262b30;border-color:#2c312d;color:#f2f4ee}',
+      D + ' #looth-msgr .mg-mm-name-lbl,' + D + ' #looth-msgr .mg-mm-name-hint{color:#9aa097}',
       D + ' #looth-msgr .mg-pi:active,' + D + ' #looth-msgr .mg-actbtn:active{background:#262b30}',
+      D + ' #looth-msgr .mg-rx-chip{background:#262b30;color:#e5e7e1}',
+      D + ' #looth-msgr .mg-rx-chip.is-mine{border-color:var(--lg-sage,#87986a);background:#33412a}',
+      D + ' #looth-msgr .mg-rxrow{border-color:#2c312d}',
 
       // ── image lightbox (P4.5 — Ian scope-add 7/12). SAME /message-media/ URL, no new
       // exposure. Appended to <body> (outside #looth-msgr), so these rules are unscoped. ──
@@ -359,6 +385,8 @@
       if (e.target.id === 'mg-acts') { closeActs(); return; }
       // a long-press just fired the action sheet on this same image → swallow the tap
       if (lpAt && Date.now() - lpAt < 600) { lpAt = 0; return; }
+      // tap an existing reaction chip → toggle that emoji straight off
+      var rxc = C('[data-mg-rx]'); if (rxc) { toggleReactionMobile(rxc.getAttribute('data-mg-rxid'), rxc.getAttribute('data-mg-rx')); return; }
       var lbx = C('[data-mg-lightbox]'); if (lbx) { openLightboxMobile(lbx.getAttribute('data-mg-lightbox')); return; }
       if (C('[data-mg-new]'))     { openPickerMobile('new'); return; }
       if (C('[data-mg-members]')) { openMemberManagerMobile(); return; }
@@ -367,6 +395,8 @@
       var px = C('[data-mg-pick-remove]'); if (px) { mpickRemove(px.getAttribute('data-mg-pick-remove')); return; }
       if (C('[data-mg-pick-go]'))  { mpickGo(); return; }
       var mr = C('[data-mg-mm-remove]');   if (mr) { mmRemoveMobile(mr.getAttribute('data-mg-mm-remove')); return; }
+      var mo = C('[data-mg-mm-owner]');    if (mo) { mmMakeOwnerMobile(mo.getAttribute('data-mg-mm-owner')); return; }
+      if (C('[data-mg-mm-rename]')) { mmRenameMobile(); return; }
       if (C('[data-mg-mm-add]'))   { openPickerMobile('add'); return; }
       if (C('[data-mg-mm-leave]')) { mmLeaveMobile(); return; }
     });
@@ -499,9 +529,17 @@
       /* <=3 peers: every name, wrapped over up to 3 lines. More than that and the
          header would swallow the screen, so the label says "A, B +N" — still true,
          never a silent clip that hides a participant. */
-      nm.innerHTML = '<span class="mg-chnames">' + esc(peerLabel(ps, ps.length <= 3 ? ps.length : 2)) + '</span>' +
-        (group ? '<span class="mg-chsub">Group · ' + peerTotal(ps) + ' people · everyone here sees your reply</span>'
-               : (!ps.length ? '<span class="mg-chsub">This chat has no other members.</span>' : ''));
+      /* A custom group name (subject) wins as the header title; the member names then drop to
+         the subline (Ian 7/12). No subject → member names stay the title, as before. */
+      var subject = curMeta && curMeta.subject;
+      var namesLabel = esc(peerLabel(ps, ps.length <= 3 ? ps.length : 2));
+      var groupNote = group ? 'Group · ' + peerTotal(ps) + ' people · everyone here sees your reply' : '';
+      nm.innerHTML = subject
+        ? '<span class="mg-chnames">' + esc(subject) + '</span>'
+          + '<span class="mg-chsub">' + namesLabel + (groupNote ? ' · ' + groupNote : '') + '</span>'
+        : '<span class="mg-chnames">' + namesLabel + '</span>' +
+          (group ? '<span class="mg-chsub">' + groupNote + '</span>'
+                 : (!ps.length ? '<span class="mg-chsub">This chat has no other members.</span>' : ''));
     }
     if (ta) ta.placeholder = group ? 'Message all ' + peerTotal(ps) + ' people…' : 'Message…';
   }
@@ -562,10 +600,12 @@
       var ps = t.peers || [];
       var unread = (parseInt(t.unread_count, 10) || 0) > 0;
       var group = ps.length > 1;
+      /* A custom group name (subject) wins over the member-name label; empty/absent → label. */
+      var title = (t.subject && String(t.subject).length) ? String(t.subject) : peerLabel(ps, 2);
       return '<button type="button" class="mg-row' + (unread ? ' is-unread' : '') + '" data-mg-thread="' + esc(t.uuid) + '">' +
         '<span class="mg-avi' + (group ? ' mg-avi--stack' : '') + '">' + aviStack(ps) + '</span>' +
         '<span class="mg-col">' +
-          '<span class="mg-nameline"><span class="mg-name">' + esc(peerLabel(ps, 2)) + '</span>' +
+          '<span class="mg-nameline"><span class="mg-name">' + esc(title) + '</span>' +
           (group ? '<span class="mg-grouptag">Group · ' + peerTotal(ps) + '</span>' : '') + '</span>' +
         '<span class="mg-snip">' + esc(t.last_snippet || '') + '</span></span>' +
         '<span class="mg-meta"><span class="mg-time">' + rel(t.last_message_at) + '</span>' +
@@ -638,26 +678,31 @@
         h += '<span class="mg-author">' + esc(nameBy[m.sender_uuid] || 'Member') + '</span>';
       }
       lastSender = m.sender_uuid;
-      // soft-deleted → tombstone (body + media already withheld server-side)
+      // soft-deleted → tombstone (body + media already withheld server-side; no reactions)
       if (m.deleted) {
         return h + '<div class="mg-b mg-b--tomb ' + (mine ? 'mg-b--me' : 'mg-b--them') + '">Message deleted</div>';
       }
+      // The MESSAGE CARRIER is the text bubble when there's a caption, else the image itself:
+      // it holds data-mg-msg-id so long-press (edit/delete/React) + reactions target the message.
+      // data-mg-mine marks own messages (edit/delete gate); data-mg-body carries the raw text.
+      var carrierOnMedia = !!m.media_url && !m.body;
       // image attachment (access-controlled URL) → in-app lightbox with pinch-zoom.
-      // An OWN caption-less image also carries the msg id so long-press can delete it
-      // (a captioned image is deleted via its caption bubble instead).
       if (m.media_url) {
         h += '<button type="button" class="mg-img" style="align-self:' + (mine ? 'flex-end' : 'flex-start') +
              '" data-mg-lightbox="' + esc(m.media_url) + '"' +
-             (mine && !m.body ? ' data-mg-msg-id="' + esc(m.id) + '"' : '') + '><img src="' + esc(m.media_url) +
+             (carrierOnMedia ? ' data-mg-msg-id="' + esc(m.id) + '"' + (mine ? ' data-mg-mine="1"' : '') : '') +
+             '><img src="' + esc(m.media_url) +
              '" alt="Photo" loading="lazy"><span class="mg-zoomdot" aria-hidden="true">⤢</span></button>';
       }
       // body optional when an image is present (image-only message).
-      // own text bubble carries id + raw body for the long-press edit/delete sheet.
       if (m.body) {
         h += '<div class="mg-b ' + (mine ? 'mg-b--me' : 'mg-b--them') + '"' +
-             (mine ? ' data-mg-msg-id="' + esc(m.id) + '" data-mg-body="' + esc(m.body) + '"' : '') + '>' +
+             ' data-mg-msg-id="' + esc(m.id) + '"' +
+             (mine ? ' data-mg-mine="1" data-mg-body="' + esc(m.body) + '"' : '') + '>' +
              esc(m.body) + (m.edited ? '<span class="mg-edited">(edited)</span>' : '') + '</div>';
       }
+      // aggregated reaction strip under the message (own side / peer side)
+      h += reactionStripMobile(m, mine);
       return h;
     }).join('');
 
@@ -882,6 +927,7 @@
     return {
       is_group: !!(d && d.is_group), can_manage: !!(d && d.can_manage),
       created_by: d && d.created_by, members: members, meUuid: me ? me.uuid : null,
+      subject: (d && d.thread && d.thread.subject) || null,   // custom group name, or null
     };
   }
 
@@ -894,20 +940,51 @@
   }
   function closeActs() { if (sheet) { var a = sheet.querySelector('#mg-acts'); if (a) a.classList.remove('is-on'); } }
 
-  // ── long-press action sheet: edit / delete / copy ──
+  // ── reactions (fixed six-emoji set; MUST match Messaging::REACTION_EMOJI server-side) ──
+  var REACTION_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+  // Aggregated strip under a message: one chip per emoji anyone used, count + who (title).
+  // A chip the viewer is part of is highlighted; tapping any chip toggles that emoji.
+  function reactionStripMobile(m, mine) {
+    var rx = m.reactions || [];
+    if (!rx.length) return '';
+    return '<div class="mg-rx" style="align-self:' + (mine ? 'flex-end' : 'flex-start') + '">' + rx.map(function (r) {
+      var who = (r.who || []).join(', ');
+      return '<button type="button" class="mg-rx-chip' + (r.mine ? ' is-mine' : '') + '"' +
+        ' data-mg-rx="' + esc(r.emoji) + '" data-mg-rxid="' + esc(m.id) + '" title="' + esc(who) + '">' +
+        '<span class="mg-rx-e">' + r.emoji + '</span><span class="mg-rx-n">' + esc(r.count) + '</span></button>';
+    }).join('') + '</div>';
+  }
+  function toggleReactionMobile(id, emoji) {
+    if (!curThread || !id) return;
+    closeActs();
+    fetch(API + '/me/messages/' + encodeURIComponent(curThread) + '/entries/' + encodeURIComponent(id), {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emoji: emoji }),
+    }).then(function (r) { if (r.ok) loadThread(curThread, true); }).catch(function () {});
+  }
+
+  // ── long-press action sheet: React (any message) / edit / delete / copy (own text) ──
   function openActs(bubble) {
-    var id  = bubble.getAttribute('data-mg-msg-id');
-    var raw = bubble.getAttribute('data-mg-body') || '';
+    var id   = bubble.getAttribute('data-mg-msg-id');
+    var raw  = bubble.getAttribute('data-mg-body') || '';
+    var mine = bubble.getAttribute('data-mg-mine') === '1';
     var acts = sheet.querySelector('#mg-acts'), inn = sheet.querySelector('#mg-acts-in');
-    var html = '';
-    if (raw) html += '<button class="mg-actbtn" type="button" data-act="edit">Edit message</button>';
-    html += '<button class="mg-actbtn mg-actbtn--del" type="button" data-act="delete">Delete message</button>';
-    if (raw) html += '<button class="mg-actbtn" type="button" data-act="copy">Copy text</button>';
+    // React row (all messages) at the top — Messenger-style emoji strip.
+    var html = '<div class="mg-rxrow">' + REACTION_EMOJI.map(function (e) {
+      return '<button class="mg-rxbtn" type="button" data-rx="' + esc(e) + '">' + e + '</button>';
+    }).join('') + '</div>';
+    if (mine && raw) html += '<button class="mg-actbtn" type="button" data-act="edit">Edit message</button>';
+    if (mine)        html += '<button class="mg-actbtn mg-actbtn--del" type="button" data-act="delete">Delete message</button>';
+    if (raw)         html += '<button class="mg-actbtn" type="button" data-act="copy">Copy text</button>';
     html += '<button class="mg-actbtn mg-actbtn--cancel" type="button" data-act="cancel">Cancel</button>';
     inn.innerHTML = html;
+    Array.prototype.forEach.call(inn.querySelectorAll('[data-rx]'), function (b) {
+      b.addEventListener('click', function () { toggleReactionMobile(id, b.getAttribute('data-rx')); });
+    });
     var ed = inn.querySelector('[data-act="edit"]');
     if (ed) ed.addEventListener('click', function () { closeActs(); editMobile(id, raw); });
-    inn.querySelector('[data-act="delete"]').addEventListener('click', function () { closeActs(); deleteMobile(id); });
+    var del = inn.querySelector('[data-act="delete"]');
+    if (del) del.addEventListener('click', function () { closeActs(); deleteMobile(id); });
     var cp = inn.querySelector('[data-act="copy"]');
     if (cp) cp.addEventListener('click', function () { closeActs(); try { navigator.clipboard.writeText(raw); } catch (e) {} });
     inn.querySelector('[data-act="cancel"]').addEventListener('click', closeActs);
@@ -1070,20 +1147,41 @@
     mmMembersM = members.map(function (m) { return m.uuid; });
     var hint = canManage
       ? 'You can remove anyone in this ' + (isGroup ? 'group' : 'conversation') + '.'
-      : (isGroup ? 'Only the group’s creator or a site admin can remove others. You can always leave.'
+      : (isGroup ? 'Only the group’s owner or a site admin can remove others. You can always leave.'
                  : 'Add people to start a group — this private chat stays as it is.');
     var rows = members.map(function (m) {
-      var isMe = m.uuid === meUuid, isCreator = createdBy && m.uuid === createdBy;
-      var sub = isMe ? ('You' + (isCreator ? ' · started the group' : ''))
-                     : (isCreator ? 'Started the group' : (m.slug ? '@' + m.slug : ''));
-      var right = isMe ? '<span class="mg-you">You</span>'
-        : (canManage ? '<button type="button" class="mg-rm" data-mg-mm-remove="' + esc(m.uuid) + '">Remove</button>' : '');
+      var isMe = m.uuid === meUuid, isOwner = createdBy && m.uuid === createdBy;   // created_by = current owner (mutable)
+      var sub = isMe ? 'You' : (m.slug ? '@' + m.slug : '');
+      /* Owner chip on the owner's row — all members see it; only when an owner is recorded. */
+      var chip = isOwner ? '<span class="mg-owner-chip">Owner</span>' : '';
+      var right;
+      if (isMe) { right = '<span class="mg-you">You</span>'; }
+      else {
+        right = '';
+        /* Transfer: owner OR site admin (canManage) hands ownership to a NON-owner member. */
+        if (canManage && isGroup && !isOwner) right += '<button type="button" class="mg-mkowner" data-mg-mm-owner="' + esc(m.uuid) + '">Make owner</button>';
+        if (canManage) right += '<button type="button" class="mg-rm" data-mg-mm-remove="' + esc(m.uuid) + '">Remove</button>';
+      }
       return '<div class="mg-mmi"><span class="mg-avi">' + avi({ avatar_url: m.avatar_url, name: m.name || m.display_name }) + '</span>'
-        + '<span class="mg-mmi-col"><span class="mg-mmi-nm">' + esc(m.name || m.display_name || 'Member') + '</span>'
-        + '<span class="mg-mmi-sub">' + esc(sub) + '</span></span>' + right + '</div>';
+        + '<span class="mg-mmi-col"><span class="mg-mmi-nm">' + esc(m.name || m.display_name || 'Member') + chip + '</span>'
+        + '<span class="mg-mmi-sub">' + esc(sub) + '</span></span>'
+        + '<span class="mg-mmi-actions">' + right + '</span></div>';
     }).join('');
+    /* Group-name field — ANY member may set/clear it (groups only); esc() keeps the value inert. */
+    var subject = (d && d.thread && d.thread.subject) || '';
+    var nameField = isGroup
+      ? '<div class="mg-mm-name">'
+        + '<label class="mg-mm-name-lbl" for="mg-mm-name-in">Group name</label>'
+        + '<div class="mg-mm-name-row">'
+        + '<input type="text" id="mg-mm-name-in" class="mg-mm-name-in" maxlength="60" '
+        +   'placeholder="Add a name (optional)" value="' + esc(subject) + '">'
+        + '<button type="button" class="mg-mm-name-save" data-mg-mm-rename>Save</button>'
+        + '</div>'
+        + '<div class="mg-mm-name-hint">Anyone here can rename the group. Clear the box to remove the name.</div>'
+        + '</div>'
+      : '';
     sheet.querySelector('#mg-p2t').textContent = 'Members · ' + members.length;
-    sheet.querySelector('#mg-p2body').innerHTML = '<p class="mg-p2hint">' + esc(hint) + '</p>' + rows
+    sheet.querySelector('#mg-p2body').innerHTML = '<p class="mg-p2hint">' + esc(hint) + '</p>' + nameField + rows
       + '<button type="button" class="mg-addrow" data-mg-mm-add>＋ Add people</button>'
       + '<button type="button" class="mg-leavebtn" data-mg-mm-leave>' + (isGroup ? 'Leave group' : 'Leave') + '</button>';
     sheet.querySelector('#mg-p2foot').hidden = true;
@@ -1104,14 +1202,41 @@
     if (!confirm('Remove this person from the group?')) return;
     mpostMembers({ remove: uuid }).then(function (res) {
       if (res && res._ok) openMemberManagerMobile();
-      else if (res && res._status === 403) alert('Only the group’s creator or a site admin can remove members.');
+      else if (res && res._status === 403) alert('Only the group’s owner or a site admin can remove members.');
       else alert('Could not remove that member.');
     });
   }
+  /* Rename (any member): re-open the thread so the new title + the "named the group" system
+     line both land live; an empty box clears the name and reverts to the member-name label. */
+  function mmRenameMobile() {
+    var inp = sheet && sheet.querySelector('#mg-mm-name-in');
+    if (!inp) return;
+    mpostMembers({ rename: inp.value }).then(function (res) {
+      if (res && res._ok) { closeP2(); openThread(curThread, curPeers); }
+      else alert('Could not rename the group.');
+    });
+  }
+  /* Transfer ownership (owner or site admin): server 403s anyone else. */
+  function mmMakeOwnerMobile(uuid) {
+    if (!confirm('Make this person the group owner?')) return;
+    mpostMembers({ transfer: uuid }).then(function (res) {
+      if (res && res._ok) openMemberManagerMobile();
+      else if (res && res._status === 403) alert('Only the current owner or a site admin can pass ownership.');
+      else alert('Could not transfer ownership.');
+    });
+  }
   function mmLeaveMobile() {
+    /* Owner must transfer before leaving while others remain (Ian 7/12 23:2x) — steer to the
+       transfer flow, don't fail silently. Server re-enforces (400 transfer_required). */
+    var m = curMeta || {};
+    if (m.created_by && m.created_by === m.meUuid && (m.members || []).length > 1) {
+      alert('You’re the group owner. Make someone else the owner first (tap “Make owner”), then you can leave.');
+      return;
+    }
     if (!confirm('Leave this conversation? You’ll lose access to it.')) return;
     mpostMembers({ leave: true }).then(function (res) {
       if (res && res._ok) { closeP2(); showHome(); }
+      else if (res && res._status === 400 && res.error === 'transfer_required') alert('Pass ownership to another member before you can leave.');
       else alert('Could not leave the conversation.');
     });
   }
@@ -1173,12 +1298,47 @@
     lb.addEventListener('click', function (e) { if (e.target === lb) closeLightboxMobile(); });
   }
 
+  // ── background scroll-lock + pinch containment (#56) ──────────────────────────────
+  // The sheet is position:fixed over the page, but on iOS a touch that overscrolls an
+  // inner scroller (or lands on the sheet chrome) still scrolls the page BEHIND it, and a
+  // two-finger pinch triggers native VIEWPORT zoom (which leaves the fixed bottom-nav/trays
+  // visibly displaced after close). We pick the position:fixed body lock (version-independent
+  // — it does not rely on iOS honouring overflow:hidden or overscroll-behavior for the core
+  // lock) and restore the exact scroll offset on close (no jump-to-top). overscroll-behavior:
+  // contain on the scrollers stops rubber-band chaining; a capture-phase multi-touch guard
+  // blocks native pinch-zoom everywhere in the messenger while the lightbox's own JS still
+  // scales the image (preventDefault kills the native gesture, not our handler).
+  var bgLocked = false, lockedY = 0, pinchGuard = null;
+  function lockBg() {
+    if (bgLocked) return; bgLocked = true;
+    lockedY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    var b = document.body;
+    b.style.top = (-lockedY) + 'px';
+    b.style.position = 'fixed'; b.style.left = '0'; b.style.right = '0'; b.style.width = '100%';
+    b.style.overflow = 'hidden';
+    // Block native pinch-zoom (and any residual background pan) for touches inside the sheet
+    // or lightbox. Multi-touch → always preventDefault (no viewport zoom); the lightbox's own
+    // touchmove handler still runs and zooms the image. Single-touch is left to the scrollers
+    // (+ overscroll-behavior:contain) and the fixed body, so normal scrolling is untouched.
+    pinchGuard = function (e) {
+      if (e.touches && e.touches.length > 1 && e.cancelable) e.preventDefault();
+    };
+    document.addEventListener('touchmove', pinchGuard, { passive: false, capture: true });
+  }
+  function unlockBg() {
+    if (!bgLocked) return; bgLocked = false;
+    var b = document.body;
+    b.style.position = ''; b.style.top = ''; b.style.left = ''; b.style.right = ''; b.style.width = ''; b.style.overflow = '';
+    if (pinchGuard) { document.removeEventListener('touchmove', pinchGuard, { capture: true }); pinchGuard = null; }
+    window.scrollTo(0, lockedY);   // exact restore — no jump-to-top
+  }
+
   var msgrHist = false;
   function openMessenger() {
     ensureSheet();
     sheet.classList.add('is-open');
     requestAnimationFrame(function () { requestAnimationFrame(function () { sheet.classList.add('is-up'); }); });
-    document.body.style.overflow = 'hidden';
+    lockBg();
     if (!msgrHist) { try { history.pushState({ lgMg: 1 }, ''); msgrHist = true; } catch (e) {} }
     showHome();
     if (listPollT) clearInterval(listPollT);
@@ -1188,7 +1348,7 @@
     if (!sheet || !sheet.classList.contains('is-open')) return;
     sheet.classList.remove('is-up');
     setTimeout(function () { if (sheet && !sheet.classList.contains('is-up')) sheet.classList.remove('is-open'); }, 320);
-    document.body.style.overflow = '';
+    unlockBg();
     if (pollT) { clearInterval(pollT); pollT = null; }
     if (listPollT) { clearInterval(listPollT); listPollT = null; }
     if (msgrHist && !fromPop) { msgrHist = false; try { history.back(); } catch (e) {} }
