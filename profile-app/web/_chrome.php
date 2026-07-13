@@ -40,11 +40,11 @@ lg_shared_render_site_header([
         : '/profile/edit',
 ]);
 
-// social-modals.js (the DM modal + the notifications/connections panels) is ALREADY
-// loaded by /srv/lg-shared/site-header.php above, CACHE-BUSTED with ?v=filemtime.
-// This file used to print a SECOND, UN-VERSIONED tag here — and /lg-shared/*.js is served
-// `immutable, max-age=1yr`, so that bare URL handed the browser a YEAR-OLD copy which then
-// ran alongside (and clobbered) the fresh one. Profile pages were therefore running stale
-// panel code: notification rows rendered WITHOUT their links while every other surface had
-// them (Ian, 2026-07-13). One versioned load is the whole fix — never re-add a bare
-// <script> tag for a shared, immutably-cached asset.
+// /u/ uses this profile-app chrome, and the shared header does NOT emit the script tag
+// here — so this IS the only loader of social-modals.js on profile pages (the DM modal +
+// the notifications/connections panels). It MUST carry the ?v=filemtime cache-bust:
+// /lg-shared/*.js is served `immutable, max-age=1yr`, so a BARE url hands the browser a
+// year-old copy forever. That is exactly what happened — profile pages ran stale panel
+// code and notification rows rendered WITHOUT their links, while every other surface
+// (which loads it versioned via site-header.php) had them (Ian, 2026-07-13).
+echo '<script src="/lg-shared/social-modals.js?v=' . (@filemtime('/srv/lg-shared/social-modals.js') ?: '1') . '" defer></script>';
