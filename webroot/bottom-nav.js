@@ -221,7 +221,10 @@
       '.lt-notifs__clear{border:0;background:none;color:var(--lg-sage-d,#6b7c52);font:700 12px/1 var(--lg-font-sans,system-ui,sans-serif);' +
         'text-transform:none;letter-spacing:0;cursor:pointer;padding:4px 6px}' +
       '.lt-notifs{padding:2px 0 6px;display:flex;flex-direction:column}' +
+      // .lt-notif is a <button> for legacy rows and an <a> for deep-linked hub rows —
+      // the reset below has to neutralize BOTH (text-decoration/color for the anchor).
       '.lt-notif{display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:0;background:none;' +
+      'text-decoration:none;color:inherit;box-sizing:border-box;' +
         'cursor:pointer;padding:9px 6px;border-radius:10px}' +
       '.lt-notif:active{background:var(--lg-sage-tint,#eef2e3)}' +
       '.lt-notif.is-unread{background:var(--lg-sage-tint,#eef2e3)}' +
@@ -616,8 +619,14 @@
     // Log out lives in the header, far-right (Ian 2026-06-17) — opposite the avatar/
     // "View profile" so the two account actions are well separated (no misclick).
     // Starts on the plain action URL; upgraded below to a NONCED one-tap URL.
-    var soLink     = document.querySelector('.lg-chrome__account-menu-signout, .lg-chrome__menu a[href*="action=logout"]');
-    var logoutHref = (soLink && soLink.getAttribute('href')) || '/wp-login.php?action=logout';
+    // Mirror the shared header's sign-out href (it ships /logout — the one-click,
+    // nonce-free route from the lg-logout mu-plugin). NEVER fall back to
+    // wp-login.php?action=logout: on a WP-FREE page (the Hub, Events, the directory)
+    // that URL carries no nonce, so WP answers with its "Do you really want to log
+    // out?" interstitial — the exact bug #55 exists to kill. Ian hit it AGAIN on
+    // 2026-07-13 because THIS file, not the PHP header, draws the button he clicks.
+    var soLink     = document.querySelector('.lg-chrome__account-menu-signout');
+    var logoutHref = (soLink && soLink.getAttribute('href')) || '/logout';
     head.innerHTML =
       '<span class="lt-sheet__avi">' + (src ? '<img src="' + src + '" alt="">' : '') + '</span>' +
       '<span class="lt-sheet__id"><span class="lt-sheet__name"></span>' +
@@ -627,29 +636,9 @@
         '<span>Log out</span></a>';
     head.querySelector('.lt-sheet__name').textContent = name;
     sheet.appendChild(head);
-    // Logout MUST carry a fresh WP nonce, or WordPress serves its "Do you really
-    // want to log out?" confirm page and the session quietly survives — the mobile
-    // "logout doesn't take" bug (Ian/keeper 2026-06-24). The header ships the plain
-    // un-nonced URL, so we mint a nonced one-tap URL from auth.php (WP pool). We
-    // pre-fetch it, but a fast tap can beat that fetch — so the click is ALSO
-    // intercepted: if the href isn't nonced yet, fetch a fresh URL and only THEN
-    // navigate. Once the real logout lands, WP redirects to a fresh (network-first)
-    // page that renders the anon header, so the nav + You sheet rebuild as anon.
-    var loEl = head.querySelector('.lt-sheet__logout');
-    function freshLogoutUrl() {
-      return fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) { return (d && d.logout_url) || null; });
-    }
-    freshLogoutUrl().then(function (url) { if (url && loEl) loEl.href = url; }).catch(function () {});
-    loEl.addEventListener('click', function (e) {
-      var href = loEl.getAttribute('href') || '';
-      if (/[?&]_wpnonce=/.test(href)) return;   // already nonced → real one-tap logout, let it through
-      e.preventDefault();                        // not nonced yet — never hit the confirm page
-      freshLogoutUrl()
-        .then(function (url) { window.location.href = url || href; })
-        .catch(function () { window.location.href = href; });
-    });
+    // (The obsolete nonce-minting dance lived here. /logout needs NO nonce, so the
+    //  plain link IS the mechanism now. Its click interceptor was actively re-routing
+    //  the button back to wp-login.php — removed 2026-07-13, #55.)
 
     // Swipe / tap-the-grab to dismiss (shared model — see enableSheetDrag).
     enableSheetDrag(sheet, closeSheet);
@@ -1033,12 +1022,26 @@
       return Math.floor(s / 604800) + 'w';
     } catch (e) { return ''; }
   }
+  // Coalesced hub rows carry actor_count ("Alice and 1 other reacted") — the backend
+  // merges multiple actors on one target into ONE row. Mirrors social-modals.js's
+  // notifActors()/notifText() so both surfaces say the same sentence.
+  function ntActors(n) {
+    var who   = ntEsc((n.actor && n.actor.name) || 'Someone');
+    var extra = (n.actor_count || 1) - 1;
+    if (extra === 1) return who + ' and 1 other';
+    if (extra > 1)   return who + ' and ' + extra + ' others';
+    return who;
+  }
   function ntText(n) {
     var who = (n.actor && n.actor.name) || 'Someone';
     switch (n.type) {
       case 'connection_accept': return ntEsc(who) + ' accepted your connection request';
       case 'connection_request': return ntEsc(who) + ' sent you a connection request';
       case 'message': return 'New message from ' + ntEsc(who);
+      case 'forum.reply_to_topic': return ntActors(n) + ' replied to your post';
+      case 'forum.reply_to_reply': return ntActors(n) + ' replied to your comment';
+      case 'forum.mention':        return ntActors(n) + ' mentioned you in a discussion';
+      case 'reaction.on_post':     return ntActors(n) + ' reacted to your post';
       default: return ntEsc(who);
     }
   }
@@ -1053,13 +1056,35 @@
     var box = document.getElementById('lt-notifs');
     if (box) loadSheetNotifs(box, true);
   }
+  // A hub notification carries `link` — the deep link into the §4e discussion modal
+  // on the exact topic/reply (forums.js §4f routes ?topic=&reply= on this surface via
+  // lgOpenTopicMobile). Those rows are real <a>s that GO THERE. Rows with no link
+  // (legacy connection events) stay <button>s that open the list, as before — a row
+  // never navigates somewhere it wasn't about. (notifications lane, 2026-07-12)
   function notifRow(n) {
-    var avi = (n.actor && n.actor.avatar_url) || '';
-    return '<button type="button" class="lt-notif' + (n.is_read ? '' : ' is-unread') + '" data-notif>' +
+    var avi   = (n.actor && n.actor.avatar_url) || '';
+    var link  = n.link || '';
+    var inner =
       '<span class="lt-notif-avi">' + (avi ? '<img src="' + ntEsc(avi) + '" alt="">' : '') + '</span>' +
       '<span class="lt-notif-tx"><span class="lt-notif-t">' + ntText(n) + '</span>' +
       '<span class="lt-notif-time">' + ntRel(n.created_at) + '</span></span>' +
-      (n.is_read ? '' : '<span class="lt-notif-dot"></span>') + '</button>';
+      (n.is_read ? '' : '<span class="lt-notif-dot"></span>');
+    var cls = 'lt-notif' + (n.is_read ? '' : ' is-unread');
+    return link
+      ? '<a class="' + cls + '" href="' + ntEsc(link) + '" data-notif-link data-notif-id="' +
+        ntEsc(n.id) + '">' + inner + '</a>'
+      : '<button type="button" class="' + cls + '" data-notif>' + inner + '</button>';
+  }
+  // Read-on-clickthrough (mobile twin of social-modals.js). keepalive so the POST
+  // survives the navigation we deliberately do NOT prevent.
+  function markNotifReadOnNav(id) {
+    try {
+      fetch('/profile-api/v0/me/notifications/', {
+        method: 'POST', credentials: 'include', keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'read', id: parseInt(id, 10) })
+      });
+    } catch (e) {}
   }
   function loadSheetNotifs(box, showAll) {
     if (!box) return;
@@ -1091,6 +1116,14 @@
         var allBtn = box.querySelector('[data-notif-all]');
         if (allBtn) allBtn.addEventListener('click', function () { loadSheetNotifs(box, true); });
         [].forEach.call(box.querySelectorAll('[data-notif]'), function (el) { el.addEventListener('click', openNotifs); });
+        // Hub rows: mark read, close the sheet, and let the <a> navigate to the thing.
+        [].forEach.call(box.querySelectorAll('[data-notif-link]'), function (el) {
+          el.addEventListener('click', function (e) {
+            if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey) return;
+            markNotifReadOnNav(el.getAttribute('data-notif-id'));
+            closeNotifSheet();     // the sheet must not sit over the modal we're opening
+          });
+        });
         // Seeing them clears the indicator (Buck 2026-06-08): mark read + zero the
         // badge once the list is shown. Fire when the badge shows ANY unread
         // (social-counts), not just when one of the visible top-8 is unread —

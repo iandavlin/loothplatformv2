@@ -109,7 +109,7 @@ lg_shared_render_site_header([
         ? '/u/' . rawurlencode((string)$_whoami['slug'])
         : '/profile/edit',
     'active_nav'    => 'members',
-    'logout_url'    => ($_whoami['authenticated'] ?? false) ? '/wp-login.php?action=logout' : null,
+    'logout_url'    => ($_whoami['authenticated'] ?? false) ? '/logout' : null,   // one-click endpoint, no WP interstitial (GH #55)
 ]);
 ?>
 <div class="dir-header">Members <span class="dir-meta" id="dir-meta">loading…</span>

@@ -628,20 +628,34 @@ final class Messaging
         return ['ok' => true, 'thread_id' => $threadId];
     }
 
-    /** Remove YOURSELF from a thread. Always allowed for a participant. */
+    /**
+     * Remove YOURSELF from a thread. Allowed for any participant EXCEPT the current owner while
+     * other members remain: an owner must transfer first (Ian 7/12 23:2x — reverses the earlier
+     * ownerless-on-leave default for a VOLUNTARY leave) -> 'transfer_required'. Edges (ruled):
+     *   - owner is the SOLE remaining member -> allowed (nobody to transfer to; the thread empties)
+     *   - ownerless / legacy (created_by NULL) -> unaffected
+     *   - a non-owner -> always allowed
+     * (Admin REMOVAL of an owner is a different path — removeMember still -> ownerless.)
+     */
     public static function leave(string $actorUuid, int $threadId): array
     {
         if (!self::isRecipient($actorUuid, $threadId)) {
             return ['ok' => false, 'error' => 'not_a_recipient'];
+        }
+        $st = Db::pg()->prepare('SELECT created_by FROM message_threads WHERE id = :t');
+        $st->execute([':t' => $threadId]);
+        $owner   = $st->fetchColumn();
+        $isOwner = $owner !== false && $owner !== null && $owner === $actorUuid;
+        if ($isOwner && count(self::allRecipientUuids($threadId)) > 1) {
+            return ['ok' => false, 'error' => 'transfer_required'];
         }
         $pg = Db::pg();
         $pg->beginTransaction();
         try {
             // Line first (so the leaver still resolves as a member for its text), then delete.
             self::insertSystemLine($threadId, $actorUuid, self::displayName($actorUuid) . ' left');
-            // An OWNER who leaves makes the thread OWNERLESS (Ian 7/12): created_by -> NULL, so the
-            // Owner badge disappears and rights fall back to admin+self (an admin may re-appoint).
-            // Never blocks the leave. No-op for non-owners (the AND created_by = :u guard).
+            // The only owner who reaches here is the SOLE member leaving — NULL created_by so no
+            // badge outlives them. No-op for non-owners (the AND created_by = :u guard).
             $pg->prepare('UPDATE message_threads SET created_by = NULL WHERE id = :t AND created_by = :u')
                ->execute([':t' => $threadId, ':u' => $actorUuid]);
             $pg->prepare('DELETE FROM message_recipients WHERE thread_id = :t AND user_uuid = :u')
