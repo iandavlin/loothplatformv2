@@ -619,8 +619,14 @@
     // Log out lives in the header, far-right (Ian 2026-06-17) — opposite the avatar/
     // "View profile" so the two account actions are well separated (no misclick).
     // Starts on the plain action URL; upgraded below to a NONCED one-tap URL.
-    var soLink     = document.querySelector('.lg-chrome__account-menu-signout, .lg-chrome__menu a[href*="action=logout"]');
-    var logoutHref = (soLink && soLink.getAttribute('href')) || '/wp-login.php?action=logout';
+    // Mirror the shared header's sign-out href (it ships /logout — the one-click,
+    // nonce-free route from the lg-logout mu-plugin). NEVER fall back to
+    // wp-login.php?action=logout: on a WP-FREE page (the Hub, Events, the directory)
+    // that URL carries no nonce, so WP answers with its "Do you really want to log
+    // out?" interstitial — the exact bug #55 exists to kill. Ian hit it AGAIN on
+    // 2026-07-13 because THIS file, not the PHP header, draws the button he clicks.
+    var soLink     = document.querySelector('.lg-chrome__account-menu-signout');
+    var logoutHref = (soLink && soLink.getAttribute('href')) || '/logout';
     head.innerHTML =
       '<span class="lt-sheet__avi">' + (src ? '<img src="' + src + '" alt="">' : '') + '</span>' +
       '<span class="lt-sheet__id"><span class="lt-sheet__name"></span>' +
@@ -630,29 +636,9 @@
         '<span>Log out</span></a>';
     head.querySelector('.lt-sheet__name').textContent = name;
     sheet.appendChild(head);
-    // Logout MUST carry a fresh WP nonce, or WordPress serves its "Do you really
-    // want to log out?" confirm page and the session quietly survives — the mobile
-    // "logout doesn't take" bug (Ian/keeper 2026-06-24). The header ships the plain
-    // un-nonced URL, so we mint a nonced one-tap URL from auth.php (WP pool). We
-    // pre-fetch it, but a fast tap can beat that fetch — so the click is ALSO
-    // intercepted: if the href isn't nonced yet, fetch a fresh URL and only THEN
-    // navigate. Once the real logout lands, WP redirects to a fresh (network-first)
-    // page that renders the anon header, so the nav + You sheet rebuild as anon.
-    var loEl = head.querySelector('.lt-sheet__logout');
-    function freshLogoutUrl() {
-      return fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) { return (d && d.logout_url) || null; });
-    }
-    freshLogoutUrl().then(function (url) { if (url && loEl) loEl.href = url; }).catch(function () {});
-    loEl.addEventListener('click', function (e) {
-      var href = loEl.getAttribute('href') || '';
-      if (/[?&]_wpnonce=/.test(href)) return;   // already nonced → real one-tap logout, let it through
-      e.preventDefault();                        // not nonced yet — never hit the confirm page
-      freshLogoutUrl()
-        .then(function (url) { window.location.href = url || href; })
-        .catch(function () { window.location.href = href; });
-    });
+    // (The obsolete nonce-minting dance lived here. /logout needs NO nonce, so the
+    //  plain link IS the mechanism now. Its click interceptor was actively re-routing
+    //  the button back to wp-login.php — removed 2026-07-13, #55.)
 
     // Swipe / tap-the-grab to dismiss (shared model — see enableSheetDrag).
     enableSheetDrag(sheet, closeSheet);
