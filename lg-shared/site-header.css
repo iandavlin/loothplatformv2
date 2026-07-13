@@ -1003,6 +1003,9 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
   box-shadow: 0 4px 14px rgba(0,0,0,.16); padding: 3px 5px;
 }
 .lg-msg__msg:not(.lg-msg__msg--mine) .lg-msg__rx-pick { right: auto; left: 4px; }
+/* flip below the bubble when there isn't room above (topmost message) — else the
+   scroller's overflow clips the popover behind the modal header, unclickable */
+.lg-msg__rx-pick--down { top: auto; bottom: -44px; }
 .lg-msg__rx-pick[hidden] { display: none; }
 .lg-msg__rx-opt {
   appearance: none; border: 0; background: none; cursor: pointer;

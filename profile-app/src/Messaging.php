@@ -899,6 +899,10 @@ final class Messaging
                 SET deleted_at = now(), body = '', media_url = NULL, media_mime = NULL, media_w = NULL, media_h = NULL
               WHERE id = :m"
         )->execute([':m' => $messageId]);
+        // A soft tombstone keeps the messages row, so the FK ON DELETE CASCADE never fires —
+        // purge this message's reactions explicitly so "delete removes its reactions" holds
+        // literally (a real row delete still cascades; this covers the soft-delete path).
+        $pg->prepare('DELETE FROM message_reactions WHERE message_id = :m')->execute([':m' => $messageId]);
         return ['ok' => true, 'message_id' => $messageId, 'deleted' => true, 'media_url' => $old];
     }
 }

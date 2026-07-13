@@ -1466,13 +1466,25 @@ document.addEventListener('click', function (e) {
   if (hit('[data-lg-mm-leave]'))    { mmLeave(); return; }
   if (hit('[data-lg-edit]'))        { var be = hit('[data-lg-msg-id]'); if (be) beginEdit(be); return; }
   if (hit('[data-lg-del]'))         { var bd = hit('[data-lg-msg-id]'); if (bd) deleteMsg(bd.getAttribute('data-lg-msg-id')); return; }
-  /* React: reveal this bubble's six-emoji picker (only one open at a time). */
+  /* React: reveal this bubble's six-emoji picker (only one open at a time). It opens
+     UPWARD by default, but flips DOWNWARD when the bubble is near the scroller's top —
+     otherwise the popover is clipped by the messages list's overflow (the topmost message
+     would push it up behind the modal header, unclickable). */
   if (hit('[data-lg-react]')) {
     var rb = hit('[data-lg-msg-id]');
     var pick = rb && rb.querySelector('.lg-msg__rx-pick');
     var wasHidden = pick && pick.hasAttribute('hidden');
     closeReactionPickers();
-    if (pick && wasHidden) pick.removeAttribute('hidden');
+    if (pick && wasHidden) {
+      var scroller = rb.closest('.lg-msg__messages');
+      var down = false;
+      if (scroller) {
+        var br = rb.getBoundingClientRect(), sr = scroller.getBoundingClientRect();
+        down = (br.top - sr.top) < 56;   // too little room above → open below the bubble
+      }
+      pick.classList.toggle('lg-msg__rx-pick--down', down);
+      pick.removeAttribute('hidden');
+    }
     return;
   }
   /* An emoji (picker option OR an existing chip) → toggle it on this bubble. */
