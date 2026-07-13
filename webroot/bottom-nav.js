@@ -221,7 +221,10 @@
       '.lt-notifs__clear{border:0;background:none;color:var(--lg-sage-d,#6b7c52);font:700 12px/1 var(--lg-font-sans,system-ui,sans-serif);' +
         'text-transform:none;letter-spacing:0;cursor:pointer;padding:4px 6px}' +
       '.lt-notifs{padding:2px 0 6px;display:flex;flex-direction:column}' +
+      // .lt-notif is a <button> for legacy rows and an <a> for deep-linked hub rows —
+      // the reset below has to neutralize BOTH (text-decoration/color for the anchor).
       '.lt-notif{display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:0;background:none;' +
+      'text-decoration:none;color:inherit;box-sizing:border-box;' +
         'cursor:pointer;padding:9px 6px;border-radius:10px}' +
       '.lt-notif:active{background:var(--lg-sage-tint,#eef2e3)}' +
       '.lt-notif.is-unread{background:var(--lg-sage-tint,#eef2e3)}' +
@@ -1033,12 +1036,26 @@
       return Math.floor(s / 604800) + 'w';
     } catch (e) { return ''; }
   }
+  // Coalesced hub rows carry actor_count ("Alice and 1 other reacted") — the backend
+  // merges multiple actors on one target into ONE row. Mirrors social-modals.js's
+  // notifActors()/notifText() so both surfaces say the same sentence.
+  function ntActors(n) {
+    var who   = ntEsc((n.actor && n.actor.name) || 'Someone');
+    var extra = (n.actor_count || 1) - 1;
+    if (extra === 1) return who + ' and 1 other';
+    if (extra > 1)   return who + ' and ' + extra + ' others';
+    return who;
+  }
   function ntText(n) {
     var who = (n.actor && n.actor.name) || 'Someone';
     switch (n.type) {
       case 'connection_accept': return ntEsc(who) + ' accepted your connection request';
       case 'connection_request': return ntEsc(who) + ' sent you a connection request';
       case 'message': return 'New message from ' + ntEsc(who);
+      case 'forum.reply_to_topic': return ntActors(n) + ' replied to your post';
+      case 'forum.reply_to_reply': return ntActors(n) + ' replied to your comment';
+      case 'forum.mention':        return ntActors(n) + ' mentioned you in a discussion';
+      case 'reaction.on_post':     return ntActors(n) + ' reacted to your post';
       default: return ntEsc(who);
     }
   }
@@ -1053,13 +1070,35 @@
     var box = document.getElementById('lt-notifs');
     if (box) loadSheetNotifs(box, true);
   }
+  // A hub notification carries `link` — the deep link into the §4e discussion modal
+  // on the exact topic/reply (forums.js §4f routes ?topic=&reply= on this surface via
+  // lgOpenTopicMobile). Those rows are real <a>s that GO THERE. Rows with no link
+  // (legacy connection events) stay <button>s that open the list, as before — a row
+  // never navigates somewhere it wasn't about. (notifications lane, 2026-07-12)
   function notifRow(n) {
-    var avi = (n.actor && n.actor.avatar_url) || '';
-    return '<button type="button" class="lt-notif' + (n.is_read ? '' : ' is-unread') + '" data-notif>' +
+    var avi   = (n.actor && n.actor.avatar_url) || '';
+    var link  = n.link || '';
+    var inner =
       '<span class="lt-notif-avi">' + (avi ? '<img src="' + ntEsc(avi) + '" alt="">' : '') + '</span>' +
       '<span class="lt-notif-tx"><span class="lt-notif-t">' + ntText(n) + '</span>' +
       '<span class="lt-notif-time">' + ntRel(n.created_at) + '</span></span>' +
-      (n.is_read ? '' : '<span class="lt-notif-dot"></span>') + '</button>';
+      (n.is_read ? '' : '<span class="lt-notif-dot"></span>');
+    var cls = 'lt-notif' + (n.is_read ? '' : ' is-unread');
+    return link
+      ? '<a class="' + cls + '" href="' + ntEsc(link) + '" data-notif-link data-notif-id="' +
+        ntEsc(n.id) + '">' + inner + '</a>'
+      : '<button type="button" class="' + cls + '" data-notif>' + inner + '</button>';
+  }
+  // Read-on-clickthrough (mobile twin of social-modals.js). keepalive so the POST
+  // survives the navigation we deliberately do NOT prevent.
+  function markNotifReadOnNav(id) {
+    try {
+      fetch('/profile-api/v0/me/notifications/', {
+        method: 'POST', credentials: 'include', keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'read', id: parseInt(id, 10) })
+      });
+    } catch (e) {}
   }
   function loadSheetNotifs(box, showAll) {
     if (!box) return;
@@ -1091,6 +1130,14 @@
         var allBtn = box.querySelector('[data-notif-all]');
         if (allBtn) allBtn.addEventListener('click', function () { loadSheetNotifs(box, true); });
         [].forEach.call(box.querySelectorAll('[data-notif]'), function (el) { el.addEventListener('click', openNotifs); });
+        // Hub rows: mark read, close the sheet, and let the <a> navigate to the thing.
+        [].forEach.call(box.querySelectorAll('[data-notif-link]'), function (el) {
+          el.addEventListener('click', function (e) {
+            if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey) return;
+            markNotifReadOnNav(el.getAttribute('data-notif-id'));
+            closeNotifSheet();     // the sheet must not sit over the modal we're opening
+          });
+        });
         // Seeing them clears the indicator (Buck 2026-06-08): mark read + zero the
         // badge once the list is shown. Fire when the badge shows ANY unread
         // (social-counts), not just when one of the visible top-8 is unread —
