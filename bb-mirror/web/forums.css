@@ -1541,6 +1541,16 @@ body.fcr-anon .feed-page .fcr-chip { pointer-events: none; }
 .reply-stub--mine > .reply-stub__head .reply-stub__edit,
 .reply-stub--mine > .reply-stub__head .reply-stub__trash,
 .reply-stub--mine .reply-stub__edit, .reply-stub--mine .reply-stub__trash { display: inline-flex; }
+/* GH #57: on the modal surfaces the raw pencil/trash must NEVER show — the ⋯/Edit
+   menu (forums.js dmInjectReplyMenu / hub-polish lgFbToggleMenu) is the only
+   affordance there (Ian 6/25 parity ruling). But hub-polish wireModalModeration
+   adds .feed--can-moderate / per-stub reveal to #lg-dmodal and #looth-rep-sheet to
+   wire own/mod edit, which trips the reveal rules above and leaks the raw carriers
+   inline after the timestamp ("9m✎🗑"). Keep them in the DOM (data-reply-id/raw
+   feed the menu) but unconditionally hidden here. In-page feed is untouched — there
+   the raw pencil/trash IS the wired affordance. */
+#lg-dmodal .reply-stub__edit, #lg-dmodal .reply-stub__trash,
+#looth-rep-sheet .reply-stub__edit, #looth-rep-sheet .reply-stub__trash { display: none !important; }
 /* Inline reply editor */
 .reply-stub__editbox { margin: 6px 0 4px; width: 100%; flex: 1 1 100%; box-sizing: border-box; }
 .reply-stub__editbox .rse-input { width: 100%; box-sizing: border-box; resize: vertical; min-height: 60px;
