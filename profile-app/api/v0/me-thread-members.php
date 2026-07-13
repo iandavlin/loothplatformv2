@@ -12,6 +12,8 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Messaging.php';
  *                               1:1 FORKS a new group and returns {forked:true, thread_uuid})
  *     { remove: user-uuid }     remove another member (CREATOR or site admin only → 403 else)
  *     { leave: true }           remove yourself (always allowed for a participant)
+ *     { rename: "New name" }    set/clear the group's custom title (any participant; groups only)
+ *     { transfer: user-uuid }   hand ownership to a current member (OWNER or site admin only → 403)
  *
  * Every rule is enforced server-side (client gating is how the last privacy bug shipped).
  * Deny reads as 404 for a non-participant (existing model); a forbidden remove is 403.
@@ -67,6 +69,23 @@ if (isset($in['add'])) {
     $add = is_array($in['add']) ? $in['add'] : [$in['add']];
     $res  = Messaging::addMembers($uuid, $threadId, $add);
     $code = $res['ok'] ? 200 : ($res['error'] === 'not_connected' ? 403 : 400);
+    profile_app_json($code, $res);
+}
+
+// { rename: "New name" }  set the group's custom title (any participant; groups only).
+// An empty string CLEARS it (falls back to the member-name label) — array_key_exists so
+// the clear intent survives (isset would also pass "" but this reads the intent plainly).
+if (array_key_exists('rename', $in)) {
+    $res  = Messaging::renameThread($uuid, $threadId, (string)$in['rename']);
+    profile_app_json($res['ok'] ? 200 : 400, $res);
+}
+
+// { transfer: user-uuid }  hand ownership to a current member (OWNER or site admin only → 403).
+if (isset($in['transfer'])) {
+    $target = trim((string)$in['transfer']);
+    if ($target === '') profile_app_json(400, ['error' => 'target_required']);
+    $res  = Messaging::transferOwnership($uuid, $threadId, $target, Auth::isAdmin());
+    $code = $res['ok'] ? 200 : ($res['error'] === 'forbidden' ? 403 : 400);
     profile_app_json($code, $res);
 }
 
