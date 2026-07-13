@@ -77,10 +77,23 @@ final class Chapters
      * Member count. This is the ONE source of the number — it comes from chapter_member,
      * NEVER from the map. A member with no location, or with location hidden, has no pin
      * but still counts here. (Brief, §2: "simply has no pin (but still counts as a member)".)
+     *
+     * GHOST CONTAINMENT (main 2026-07-13): an unbridged identity (no wp_user_bridge row —
+     * cannot log in, accept, or read a DM) is NOT A MEMBER anywhere else, so it must not be
+     * counted here either. In practice a ghost can never join (join() needs an authed
+     * session, which needs a bridge) so this changes nothing today; it exists so that if
+     * identity-reconcile purges or unbridges an identity that somehow holds a chapter_member
+     * row, the count SELF-HEALS and never reports a population the directory/map can't show.
+     * Same rule as directory-members' shared $wheres: exactly "has a bridge row".
      */
     public static function memberCount(int $chapterId): int
     {
-        $st = Db::pg()->prepare('SELECT count(*) FROM chapter_member WHERE chapter_id = :c');
+        $st = Db::pg()->prepare(
+            'SELECT count(*) FROM chapter_member cm
+               JOIN users u ON u.uuid = cm.user_uuid
+              WHERE cm.chapter_id = :c
+                AND EXISTS (SELECT 1 FROM wp_user_bridge b WHERE b.user_id = u.id)'
+        );
         $st->execute([':c' => $chapterId]);
         return (int) $st->fetchColumn();
     }
