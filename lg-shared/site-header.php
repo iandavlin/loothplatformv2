@@ -844,7 +844,7 @@ function lg_shared_render_site_header(array $ctx): void
   <div class="lg-social-modal__panel">
     <div class="lg-social-modal__head">
       <h2 class="lg-social-modal__title">Notifications</h2>
-      <button class="lg-social-modal__action" data-lg-notif-readall hidden>Mark all read</button>
+      <button class="lg-social-modal__action" data-lg-notif-clearall hidden>Clear all</button>
       <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
              stroke-width="2.5" stroke-linecap="round" aria-hidden="true">

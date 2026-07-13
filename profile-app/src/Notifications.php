@@ -209,6 +209,37 @@ final class Notifications
     }
 
     /**
+     * Delete ONE notification (must belong to $viewerUuid). Owner-scoped by the
+     * same WHERE user_uuid clause markRead() uses — a row that isn't the viewer's
+     * matches nothing. Returns true iff a row was actually removed, so the endpoint
+     * can 404 a non-owner / already-gone id (same deny model as everywhere else:
+     * "not yours" and "doesn't exist" are indistinguishable to the caller).
+     */
+    public static function delete(string $viewerUuid, int $id): bool
+    {
+        $st = Db::pg()->prepare(
+            'DELETE FROM notifications WHERE id = :id AND user_uuid = :v'
+        );
+        $st->execute([':id' => $id, ':v' => $viewerUuid]);
+        return $st->rowCount() > 0;
+    }
+
+    /**
+     * Delete ALL of a user's notifications (the "Clear all" both surfaces now
+     * DELETE server-side instead of the retired client watermark). Scoped to the
+     * viewer; never touches the underlying DM/connection/hub thread. Returns rows
+     * removed (for a client toast / no-op detection).
+     */
+    public static function deleteAll(string $viewerUuid): int
+    {
+        $st = Db::pg()->prepare(
+            'DELETE FROM notifications WHERE user_uuid = :v'
+        );
+        $st->execute([':v' => $viewerUuid]);
+        return $st->rowCount();
+    }
+
+    /**
      * Retention prune (30-day ruling). Called by cron (bin/prune-notifications),
      * NOT on the request path. Deletes by age regardless of read state; the
      * underlying DM/connection is untouched. Returns rows deleted (for the cron log).

@@ -100,7 +100,7 @@
   // also owns the DESKTOP header settings gear (lg-set-gear -> LGSettings panel),
   // so it must load on ALL viewports; it self-gates internally (tab bar <=640,
   // gear >=641). Gating it mobile-only removed the desktop gear (Ian 6/11).
-  inject('looth-tabbar-js', '/bottom-nav.js?v=35');   // v34: hub-picker Nav tray (main) + notification rows deep-link (notifications lane)
+  inject('looth-tabbar-js', '/bottom-nav.js?v=36');   // v36: real notif DELETE — swipe-to-delete rows + Clear-all DELETEs server-side (watermark retired)
 
   if (mobileish) {
     inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=36');
