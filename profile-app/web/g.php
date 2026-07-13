@@ -248,7 +248,15 @@ lg_shared_render_site_header([
     var circle = L.circle([lat, lng], {
       radius: radiusM, color: '#2f5a2f', weight: 2, fillColor: '#6f9e57', fillOpacity: 0.14
     }).addTo(map);
-    map.fitBounds(circle.getBounds(), { padding: [24, 24] });
+    // Fit to the catchment. Derive the bounds from the centre + diameter via LatLng.toBounds
+    // — NOT circle.getBounds(): in the vendored Leaflet 1.9.4 (merge f7401fe dropped the CDN
+    // for the vendored build) L.Circle.getBounds() dereferences the map projection and throws
+    // "Cannot read properties of undefined (reading 'layerPointToLatLng')" when called before
+    // the map has an initial view — which is exactly our order, since we set the FIRST view
+    // from these very bounds. toBounds is pure geodesy on the centre, so it needs no view and
+    // yields the identical box (radiusM in each direction). Once fitBounds sets the view the
+    // circle projects and renders normally.
+    map.fitBounds(L.latLng(lat, lng).toBounds(radiusM * 2), { padding: [24, 24] });
 
     // Clamped pins — the endpoint decides precision; we just plot what it returns.
     fetch('/profile-api/v0/directory/members?pins=1&chapter=' + encodeURIComponent(slug),
