@@ -171,14 +171,16 @@ function notifText(n) {
     default:                     return esc(who);
   }
 }
-var CHECK_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"'
+var X_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"'
   + ' stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-  + '<polyline points="20 6 9 17 4 12"/></svg>';
+  + '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 
 /* A row that HAS somewhere to land renders as a real <a> — the whole row is the
    click target, middle-click/⌘-click open a tab, and the status bar shows where it
    goes. Rows with no link (the legacy connection events) stay <div>s, so a row can
-   never navigate somewhere wrong. The ✓ button keeps its own stopPropagation. */
+   never navigate somewhere wrong. The × (delete) button keeps its own
+   stopPropagation so removing a row never navigates it. The × is REAL delete now
+   (v2): every row carries one — read or unread — because you can delete either. */
 function renderNotifItem(n) {
   var unread = !n.is_read;
   var link   = n.link || '';
@@ -191,10 +193,8 @@ function renderNotifItem(n) {
       + '<p class="lg-notif__text">' + notifText(n) + '</p>'
       + '<span class="lg-notif__time">' + relTime(n.created_at) + '</span>'
     + '</div>'
-    + (unread
-        ? '<button class="lg-notif__clear" data-notif-clear="' + esc(n.id) +
-          '" title="Mark as read" aria-label="Mark as read">' + CHECK_SVG + '</button>'
-        : '')
+    + '<button class="lg-notif__clear" data-notif-del="' + esc(n.id) +
+      '" title="Delete" aria-label="Delete notification">' + X_SVG + '</button>'
     + '</' + tag + '>';
 }
 /* Read-on-clickthrough: opening the thing marks that ONE notification read.
@@ -211,8 +211,8 @@ function markNotifReadOnNav(id) {
     });
   } catch (e) {}
 }
-function updateReadAllBtn(show) {
-  var b = document.querySelector('[data-lg-notif-readall]');
+function updateClearAllBtn(show) {
+  var b = document.querySelector('[data-lg-notif-clearall]');
   if (b) b.hidden = !show;
 }
 function loadNotifications() {
@@ -227,17 +227,18 @@ function loadNotifications() {
       var items = ((d && d.items) || []).filter(function (n) { return n.type !== 'message'; });
       if (!items.length) {
         list.innerHTML = '<p class="lg-sm__empty">No notifications yet.</p>';
-        updateReadAllBtn(false);
+        updateClearAllBtn(false);
         return;
       }
       list.innerHTML = items.map(renderNotifItem).join('');
-      /* NO auto-mark-read — the user controls it (per-item ✓ or "Mark all read"). */
-      updateReadAllBtn(items.some(function (n) { return !n.is_read; }));
-      list.querySelectorAll('[data-notif-clear]').forEach(function (btn) {
+      /* NO auto-mark-read — the user controls it (per-item × delete, or click-through
+         marks the one read). Clear-all is offered whenever the list is non-empty. */
+      updateClearAllBtn(items.length > 0);
+      list.querySelectorAll('[data-notif-del]').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
-          e.preventDefault();          /* the ✓ sits inside an <a> now — don't navigate */
+          e.preventDefault();          /* the × sits inside an <a> — don't navigate */
           e.stopPropagation();
-          markNotifRead(btn.getAttribute('data-notif-clear'));
+          deleteNotif(btn.getAttribute('data-notif-del'));
         });
       });
       /* Click-through: mark read, then let the browser follow the href into the
@@ -253,42 +254,39 @@ function loadNotifications() {
       list.innerHTML = '<p class="lg-sm__error">Could not load notifications.</p>';
     });
 }
-/* Per-item clear = mark-read (v1): row de-emphasized in place, stays in the list. */
-function markNotifRead(id) {
-  fetch(API + '/me/notifications/', {
-    method:      'POST',
+/* Per-item × = REAL delete (v2): the row is removed here AND server-side via an
+   owner-scoped DELETE, so it's gone on every device. A 404 (someone else's id /
+   already gone) leaves the row untouched — never a silent success. Replaces the
+   v1 "mark-read in place" fudge; click-through still marks the one read. */
+function deleteNotif(id) {
+  fetch(API + '/me/notifications/?id=' + encodeURIComponent(id), {
+    method:      'DELETE',
     credentials: 'include',
-    headers:     { 'Content-Type': 'application/json' },
-    body:        JSON.stringify({ action: 'read', id: parseInt(id, 10) }),
   })
     .then(function (r) {
-      if (!r.ok) return;
+      if (!r.ok) return;                 /* 404 = not yours / gone → leave the row */
       var row = document.querySelector('.lg-notif__item[data-notif-id="' + id + '"]');
-      if (row) {
-        row.classList.remove('lg-notif__item--unread');
-        var btn = row.querySelector('.lg-notif__clear');
-        if (btn) btn.remove();
-      }
-      updateReadAllBtn(!!document.querySelector('.lg-notif__item--unread'));
+      if (row) row.remove();
+      var list = document.getElementById('lg-notif-list');
+      var any  = !!(list && list.querySelector('.lg-notif__item'));
+      if (list && !any) list.innerHTML = '<p class="lg-sm__empty">No notifications yet.</p>';
+      updateClearAllBtn(any);
       refreshCounts();
     })
     .catch(function () {});
 }
-function markAllNotifsRead() {
-  fetch(API + '/me/notifications/', {
-    method:      'POST',
+/* "Clear all" = DELETE every notification server-side (the mobile watermark's real
+   twin, now that clear actually deletes). Gone everywhere, every device. */
+function deleteAllNotifs() {
+  fetch(API + '/me/notifications/?all=1', {   /* query, not body — DELETE bodies get stripped by some proxies */
+    method:      'DELETE',
     credentials: 'include',
-    headers:     { 'Content-Type': 'application/json' },
-    body:        JSON.stringify({ action: 'read_all' }),
   })
     .then(function (r) {
       if (!r.ok) return;
-      document.querySelectorAll('.lg-notif__item--unread').forEach(function (row) {
-        row.classList.remove('lg-notif__item--unread');
-        var btn = row.querySelector('.lg-notif__clear');
-        if (btn) btn.remove();
-      });
-      updateReadAllBtn(false);
+      var list = document.getElementById('lg-notif-list');
+      if (list) list.innerHTML = '<p class="lg-sm__empty">No notifications yet.</p>';
+      updateClearAllBtn(false);
       refreshCounts();
     })
     .catch(function () {});
@@ -941,9 +939,9 @@ if (notifBtn) notifBtn.addEventListener('click', function (e) { e.preventDefault
 if (msgBtn)   msgBtn.addEventListener  ('click', function (e) { e.preventDefault(); openSocialModal('messages');    });
 if (connBtn)  connBtn.addEventListener ('click', function (e) { e.preventDefault(); openSocialModal('connections'); });
 
-/* "Mark all read" (notifications) */
-var notifReadAllBtn = document.querySelector('[data-lg-notif-readall]');
-if (notifReadAllBtn) notifReadAllBtn.addEventListener('click', markAllNotifsRead);
+/* "Clear all" (notifications) — DELETEs every row server-side */
+var notifClearAllBtn = document.querySelector('[data-lg-notif-clearall]');
+if (notifClearAllBtn) notifClearAllBtn.addEventListener('click', deleteAllNotifs);
 
 /* connections search — client-side filter of the loaded accepted[] */
 var connSearch = document.getElementById('lg-conn-search');
