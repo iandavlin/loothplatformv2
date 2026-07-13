@@ -80,10 +80,7 @@ function lg_shared_render_site_header(array $ctx): void
     $msg_unread    = $ctx['msg_unread']   ?? null;   // null = lazy-load
     $notif_unread  = $ctx['notif_unread'] ?? null;   // null = lazy-load
     $profile_url   = (string)($ctx['profile_url'] ?? '/profile/edit');  // viewer's public profile (/u/<slug>); /profile/edit is only the slug-less fallback
-    // Default to the one-click /logout endpoint (lg-logout mu-plugin, GH #55) so
-    // WP-free surfaces that can't mint a WP nonce still avoid the confirm
-    // interstitial. WP callers may still override with wp_logout_url() (nonce'd).
-    $logout_url    = (string)($ctx['logout_url']  ?? '/logout');
+    $logout_url    = (string)($ctx['logout_url']  ?? '/wp-login.php?action=logout');
     $search_id     = (string)($ctx['search_id'] ?? 'lg-chrome-q');
     $search_ph     = (string)($ctx['search_placeholder'] ?? 'Search…');
     $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'stream'|'hub'|'events'|'members'|'sponsors'

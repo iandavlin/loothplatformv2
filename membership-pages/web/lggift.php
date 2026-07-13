@@ -109,7 +109,7 @@ $wrongUserSignedIn = $isLoggedIn && $stapledEmail !== '' && strtolower($sessionE
 $treatAsLoggedIn   = $isLoggedIn && !$wrongUserSignedIn;
 if ($wrongUserSignedIn) { $nameValue = ''; }
 
-$logoutUrl = $ctx['logout_url'] ?? lg_ms_home('/logout');   // one-click endpoint (GH #55)
+$logoutUrl = $ctx['logout_url'] ?? lg_ms_home('/wp-login.php?action=logout');
 
 /* Wrong-user hard fail — render refusal in the shell + return early. */
 if ($wrongUserSignedIn) {

@@ -89,7 +89,7 @@ if ($email === '') {
 /* ?for= sanity check against the session. */
 $expectedEmail = isset($_GET['for']) ? trim((string) rawurldecode((string) $_GET['for'])) : '';
 if ($expectedEmail !== '' && strtolower($expectedEmail) !== strtolower($email)) {
-    $logoutUrl = $h($ctx['logout_url'] ?? lg_ms_home('/logout'));   // one-click endpoint (GH #55)
+    $logoutUrl = $h($ctx['logout_url'] ?? lg_ms_home('/wp-login.php?action=logout'));
     $pageWrap(
         '<div class="lg-mygifts lg-mygifts--oops" style="max-width:640px;margin:1em auto;padding:1.2em 1.4em;background:#fff3f0;border:1px solid #d97757;border-radius:8px;color:#1f1d1a;line-height:1.5;">'
         . '<p style="margin:0 0 .6em;font-size:1.05em;"><strong>Oops &mdash; you&rsquo;re signed in as the wrong account.</strong></p>'

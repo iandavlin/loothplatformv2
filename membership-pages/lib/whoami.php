@@ -131,7 +131,7 @@ function lg_membership_header_ctx(string $active_nav = ''): array {
         'logo_url'      => LG_MEMBERSHIP_LOGO,
         'profile_url'   => '/profile/edit',
         'active_nav'    => $active_nav,                                // coord §0a
-        'logout_url'    => $authed ? '/logout' : null,   // one-click endpoint, no WP interstitial (GH #55)
+        'logout_url'    => $authed ? '/wp-login.php?action=logout' : null,
     ];
 }
 }

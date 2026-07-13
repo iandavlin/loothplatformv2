@@ -42,7 +42,7 @@ $ctx    = [
     // Viewer's public profile (convergence doc); /profile/edit is only the slug-less fallback.
     'profile_url'   => !empty($who['slug']) ? '/u/' . rawurlencode((string)$who['slug']) : '/profile/edit',
     'active_nav'    => 'events',                                   // coord §0a
-    'logout_url'    => $authed ? '/logout' : null,   // one-click endpoint, no WP interstitial (GH #55)
+    'logout_url'    => $authed ? '/wp-login.php?action=logout' : null,
 ];
 
 // $regions/lg_events_regions() no longer queried — the chip row is gone

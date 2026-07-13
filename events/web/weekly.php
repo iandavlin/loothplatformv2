@@ -41,7 +41,7 @@ $ctx    = [
     // Viewer's public profile (convergence doc); $who['slug'] is the user's, NOT the digest $slug above.
     'profile_url'   => !empty($who['slug']) ? '/u/' . rawurlencode((string)$who['slug']) : '/profile/edit',
     'active_nav'    => 'hub',
-    'logout_url'    => $authed ? '/logout' : null,   // one-click endpoint, no WP interstitial (GH #55)
+    'logout_url'    => $authed ? '/wp-login.php?action=logout' : null,
 ];
 
 $db     = lg_events_db();
