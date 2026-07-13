@@ -36,6 +36,11 @@
 
 defined('ABSPATH') || exit;
 
+// Priority MUST be negative: /logout is an unrouted path, so WP treats it as a
+// 404, and lg-error-pages.php hooks template_redirect at priority 0 to readfile()
+// the branded 404 and exit(). It loads before this file (alphabetical mu-plugin
+// glob order), so at equal priority it would win and our handler would never run.
+// Running early (before any 404 interceptor) claims /logout first.
 add_action('template_redirect', function () {
     // Match /logout (with or without a trailing slash), query string ignored.
     $path = strtok((string)($_SERVER['REQUEST_URI'] ?? ''), '?');
@@ -72,4 +77,4 @@ add_action('template_redirect', function () {
     nocache_headers();
     wp_safe_redirect(home_url('/'), 302);
     exit;
-}, 0);
+}, -100);   // negative: run before lg-error-pages' priority-0 404 interceptor (see note above)
