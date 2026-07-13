@@ -74,6 +74,31 @@ it never touches files on disk or out-of-tree data stores. These are the misses.
       `/home/ubuntu/projects/bb-mirror` → `/srv/bb-mirror` (the projects path doesn't exist on dev2).
     DEFERRED: `thumbnails.service`/`-2` (node app `/home/ubuntu/thumbnail-gen-editor` not on dev2 —
     internal thumbnail-editor tool, not public), `lg-sudo-queue` (no `.service` even on dev1).
+11a. **`prune-notifications.timer` (daily) — TO INSTALL** (notifications lane, delete+rotation
+    2026-07-13). The bell's 30-day retention prune (`profile-app/bin/prune-notifications.php`
+    → `Notifications::prune(30)`) had NO cron — rows accumulated forever. Deploy:
+    ```
+    sudo cp platform/systemd/prune-notifications.service platform/systemd/prune-notifications.timer /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now prune-notifications.timer
+    systemctl list-timers prune-notifications.timer   # verify next-run
+    ```
+    Runs `Type=oneshot` as `User=profile-app` (peer-auth to the `profile_app` PG role via the
+    unix socket — same role the FPM pool uses; no gate token, no HTTP). ExecStart points at
+    `/srv/profile-app/bin/prune-notifications.php`, so the `/srv/profile-app` symlink must be in
+    place (it is, on the clean checkout). Idempotent; `Persistent=true` catches one missed run.
+    Verified by hand as `profile-app`: pruned aged rows, left <30-day rows intact.
+    Live-verified in the 2026-07-13 verify window: installed+enabled, ran once →
+    journal `deleted 1 notification(s) older than 30 day(s)` (seeded 40d row pruned,
+    5d row survived); `list-timers` armed for next-day 12:09 UTC.
+11b. **Overlay-window deploy gotcha (php-fpm opcache/realpath)** — when repointing a
+    `/srv/*` symlink (e.g. `/srv/lg-shared`) to a different checkout, you MUST
+    `sudo systemctl reload php8.3-fpm` afterward. PHP's opcache + realpath cache pin
+    the OLD symlink target, so `require '/srv/lg-shared/site-header.php'` keeps
+    rendering the pre-repoint file (in the verify window this served main's stale
+    "Mark all read" header instead of the branch's "Clear all" until reload).
+    Static assets served by nginx directly (e.g. `social-modals.js`) update
+    immediately — only PHP includes go stale. Reload again on restore.
 12. **archive-poc & events env-detection** — like profile-app, their CLI (no HTTP_HOST) resolves
     `live` on dev2 (no dev2 host match). LOWER severity: their DB DSN comes from the FPM pool's
     explicit `LG_*_DSN` env, so web is fine — only CLI/cron host-string fallbacks (link generation)

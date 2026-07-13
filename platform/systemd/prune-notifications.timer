@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily notifications retention prune (30-day)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1d
+AccuracySec=1h
+# Catch up one missed run if the box was down at the scheduled time — retention
+# must not silently stall for days.
+Persistent=true
+Unit=prune-notifications.service
+
+[Install]
+WantedBy=timers.target
