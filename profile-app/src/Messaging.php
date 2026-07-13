@@ -17,6 +17,16 @@ final class Messaging
     private const SNIPPET = 140;
     private const NAME_MAX = 60;   // custom group-name cap (chars, post-trim)
 
+    /**
+     * The FIXED reaction set (Ian 2026-07-13: no full picker, no keyboard — this is a
+     * phone-first surface). SERVER is the source of truth: every write is validated against
+     * this list (invalid → 400), so a client can never store an off-set glyph. Both surfaces
+     * hardcode the identical six. The hub's palette is not reused — it is a 7-item MIXED set
+     * (emoji + brand PNGs) bound to the MySQL BuddyBoss store; messages get their own
+     * text-emoji set (overlaps the hub on 👍 😂 😮 for familiarity).
+     */
+    public const REACTION_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
     /** Thread list for the messages modal: peers, last snippet, unread, last_message_at. */
     public static function threadsFor(string $uuid, int $limit = 30, int $offset = 0): array
     {
@@ -141,6 +151,9 @@ final class Messaging
 
         self::markRead($viewerUuid, $threadId);
 
+        $rows      = $msgs->fetchAll();
+        $reactions = self::reactionsFor(array_column($rows, 'id'), $viewerUuid);
+
         $isGroup   = (bool)$thread['is_group'];
         $createdBy = $thread['created_by'];
         return [
@@ -152,7 +165,101 @@ final class Messaging
             'can_manage' => $viewerIsAdmin || ($createdBy !== null && $createdBy === $viewerUuid),
             'peers'      => self::peersByThread([$threadId], $viewerUuid)[$threadId] ?? [],
             'members'    => self::threadMembers($threadId),
-            'messages'   => array_map([self::class, 'shapeMessage'], $msgs->fetchAll()),
+            'messages'   => array_map(
+                static fn (array $m): array => self::shapeMessage($m, $reactions[(int)$m['id']] ?? []),
+                $rows
+            ),
+        ];
+    }
+
+    /**
+     * Aggregate reactions for a batch of message ids (ONE query for the whole thread — no
+     * per-message N+1). Returns [message_id => [ {emoji, count, mine, who:[names]}, … ]],
+     * emoji groups in first-reaction order, names oldest-first (the index orders by created_at).
+     * `mine` = the viewer holds this emoji on this message. Counts/who come only from this table.
+     */
+    private static function reactionsFor(array $messageIds, string $viewerUuid): array
+    {
+        $ids = array_values(array_filter(array_map('intval', $messageIds)));
+        if (!$ids) return [];
+        $place = implode(',', array_fill(0, count($ids), '?'));
+        $st = Db::pg()->prepare(
+            "SELECT r.message_id, r.emoji, r.user_uuid, u.display_name
+               FROM message_reactions r
+               JOIN users u ON u.uuid = r.user_uuid
+              WHERE r.message_id IN ($place)
+              ORDER BY r.message_id, r.created_at, r.id"
+        );
+        $st->execute($ids);
+
+        // Two-level accumulate: per message, per emoji (preserving first-seen emoji order).
+        $acc = [];   // [mid][emoji] => ['count'=>int,'mine'=>bool,'who'=>[names]]
+        foreach ($st->fetchAll() as $r) {
+            $mid   = (int)$r['message_id'];
+            $emoji = (string)$r['emoji'];
+            if (!isset($acc[$mid][$emoji])) $acc[$mid][$emoji] = ['count' => 0, 'mine' => false, 'who' => []];
+            $acc[$mid][$emoji]['count']++;
+            $acc[$mid][$emoji]['who'][] = (string)($r['display_name'] ?: 'Member');
+            if ((string)$r['user_uuid'] === $viewerUuid) $acc[$mid][$emoji]['mine'] = true;
+        }
+        $out = [];
+        foreach ($acc as $mid => $byEmoji) {
+            foreach ($byEmoji as $emoji => $a) {
+                $out[$mid][] = [
+                    'emoji' => $emoji,
+                    'count' => $a['count'],
+                    'mine'  => $a['mine'],
+                    'who'   => $a['who'],
+                ];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Toggle the viewer's reaction to one message. Fixed-set + participant + live-message
+     * enforced HERE (server is the only gate). Re-tapping the same emoji REMOVES it (idempotent
+     * unreact); a first tap adds it. A user may hold several DIFFERENT emoji on one message.
+     * Returns the freshly-aggregated reactions for that message so the client updates live.
+     */
+    public static function reactToMessage(string $actorUuid, int $threadId, int $messageId, string $emoji): array
+    {
+        if (!in_array($emoji, self::REACTION_EMOJI, true)) {
+            return ['ok' => false, 'error' => 'invalid_emoji'];
+        }
+        if (!self::isRecipient($actorUuid, $threadId)) {
+            return ['ok' => false, 'error' => 'not_a_recipient'];
+        }
+        $pg = Db::pg();
+        $st = $pg->prepare('SELECT kind, deleted_at FROM messages WHERE id = :m AND thread_id = :t');
+        $st->execute([':m' => $messageId, ':t' => $threadId]);
+        $row = $st->fetch();
+        if (!$row) return ['ok' => false, 'error' => 'not_found'];
+        // System lines and tombstones carry no reactions (Ian 2026-07-13, server-enforced).
+        if (($row['kind'] ?? 'message') !== 'message' || $row['deleted_at'] !== null) {
+            return ['ok' => false, 'error' => 'not_reactable'];
+        }
+
+        // Toggle: INSERT returns a row iff it was newly added; DO NOTHING (already present)
+        // means the viewer already holds this emoji → remove it. rowCount() on the INSERT is
+        // the discriminator (0 = conflict → the row existed → DELETE it).
+        $ins = $pg->prepare(
+            'INSERT INTO message_reactions (message_id, user_uuid, emoji) VALUES (:m, :u, :e)
+             ON CONFLICT (message_id, user_uuid, emoji) DO NOTHING'
+        );
+        $ins->execute([':m' => $messageId, ':u' => $actorUuid, ':e' => $emoji]);
+        $reacted = $ins->rowCount() > 0;
+        if (!$reacted) {
+            $pg->prepare('DELETE FROM message_reactions WHERE message_id = :m AND user_uuid = :u AND emoji = :e')
+               ->execute([':m' => $messageId, ':u' => $actorUuid, ':e' => $emoji]);
+        }
+
+        return [
+            'ok'         => true,
+            'message_id' => $messageId,
+            'emoji'      => $emoji,
+            'reacted'    => $reacted,
+            'reactions'  => self::reactionsFor([$messageId], $actorUuid)[$messageId] ?? [],
         ];
     }
 
@@ -161,9 +268,10 @@ final class Messaging
      * any media reference are withheld from the payload entirely (the bytes are already GC'd
      * server-side on delete), leaving only `deleted:true` so both surfaces render "Message
      * deleted" without ever exposing the old content. `edited:true` drives the "(edited)"
-     * marker; `kind` distinguishes a membership system line from a real message.
+     * marker; `kind` distinguishes a membership system line from a real message. `reactions`
+     * (batch-loaded by the caller) is the aggregated per-emoji strip; a tombstone carries none.
      */
-    private static function shapeMessage(array $m): array
+    private static function shapeMessage(array $m, array $reactions = []): array
     {
         $deleted = $m['deleted_at'] !== null;
         return [
@@ -178,6 +286,8 @@ final class Messaging
             'media_mime'  => $deleted ? null : $m['media_mime'],
             'media_w'     => $deleted ? null : $m['media_w'],
             'media_h'     => $deleted ? null : $m['media_h'],
+            // A tombstone renders no strip (its reactions, if any, are irrelevant + withheld).
+            'reactions'   => $deleted ? [] : $reactions,
         ];
     }
 

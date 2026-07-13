@@ -5,15 +5,23 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Messaging.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/MessageR2.php';
 
 /**
- * Edit / delete an OWN message entry (group messaging, lane: messages-manage). Backend:
- * src/Messaging.php. Owner-only, enforced server-side (a hidden button is not a gate).
+ * Edit / delete / REACT to a message entry (group messaging + reactions). Backend:
+ * src/Messaging.php. Edit/delete are owner-only; react is any-participant. Every rule is
+ * enforced server-side (a hidden button is not a gate).
  *
- *   PATCH  /profile-api/v0/me/messages/<uuid>/entries/<id>  body { body }  → edit text ("(edited)")
- *   DELETE /profile-api/v0/me/messages/<uuid>/entries/<id>                 → soft tombstone + media GC
+ *   PATCH  /profile-api/v0/me/messages/<uuid>/entries/<id>  body { body }   → edit text ("(edited)")
+ *   DELETE /profile-api/v0/me/messages/<uuid>/entries/<id>                  → soft tombstone + media GC
+ *   POST   /profile-api/v0/me/messages/<uuid>/entries/<id>  body { emoji }  → TOGGLE the viewer's reaction
  *
- * Non-owner → 403. A delete blanks the body + strips the media reference in the DB and then
- * GCs the stored object through the SAME message store as the upload path (MessageR2, or the
- * local fallback while creds pend) — the bytes are gone, not merely hidden.
+ * The POST reaction rides this EXISTING route (no new nginx path-capture — Ian's default for
+ * notif-delete: the collection block already reaches PHP for every method). Reaction rules
+ * (server-enforced): participant-only (non-participant → 404, the existing deny model); emoji
+ * must be in the fixed set (400 otherwise); system lines + tombstones reject (400); re-sending
+ * the same emoji removes it (toggle). Response carries the freshly-aggregated `reactions[]`.
+ *
+ * Non-owner edit/delete → 403. A delete blanks the body + strips the media reference in the DB
+ * and then GCs the stored object through the SAME message store as the upload path (MessageR2,
+ * or the local fallback while creds pend) — the bytes are gone, not merely hidden.
  *
  * NOTE TO COORDINATOR — nginx route (place ABOVE the bare /me/messages/<uuid> rewrite):
  *   rewrite "^/profile-api/v0/me/messages/([0-9a-f-]{36})/entries/([0-9]+)/?$" /profile-api/v0/me-thread-entry.php?uuid=$1&mid=$2 last;
@@ -32,7 +40,7 @@ $user = Auth::requireUser();
 $uuid = strtolower((string)$user['uuid']);
 
 $method = $_SERVER['REQUEST_METHOD'];
-if ($method !== 'PATCH' && $method !== 'DELETE') profile_app_json(405, ['error' => 'method_not_allowed']);
+if ($method !== 'PATCH' && $method !== 'DELETE' && $method !== 'POST') profile_app_json(405, ['error' => 'method_not_allowed']);
 
 $threadUuid = (string)($_GET['uuid'] ?? '');
 $mid        = isset($_GET['mid']) ? (int)$_GET['mid'] : 0;
@@ -49,6 +57,17 @@ $threadId = $st->fetchColumn();
 if ($threadId === false) profile_app_json(404, ['error' => 'thread_not_found']);
 $threadId   = (int)$threadId;
 $threadUuid = strtolower($threadUuid);
+
+if ($method === 'POST') {
+    // Toggle a reaction. Any participant may react to any live message (own or a peer's).
+    // A non-participant reads as 404 (existing deny model); off-set emoji → 400.
+    $in    = json_decode(file_get_contents('php://input') ?: '', true);
+    $emoji = is_array($in) ? (string)($in['emoji'] ?? '') : '';
+    if ($emoji === '') profile_app_json(400, ['error' => 'emoji_required']);
+    $res  = Messaging::reactToMessage($uuid, $threadId, $mid, $emoji);
+    $code = $res['ok'] ? 200 : ($res['error'] === 'not_a_recipient' || $res['error'] === 'not_found' ? 404 : 400);
+    profile_app_json($code, $res);
+}
 
 if ($method === 'PATCH') {
     $in   = json_decode(file_get_contents('php://input') ?: '', true);

@@ -978,6 +978,41 @@ document.addEventListener('keydown', function (e) {
    Every rule is ALSO enforced server-side (src/Messaging.php + the two endpoints);
    nothing here is the only guard — a hidden button never gates access. */
 
+/* ── reactions (fixed six-emoji set; MUST match Messaging::REACTION_EMOJI server-side) ── */
+var REACTION_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+function reactionPickerHtml() {
+  return REACTION_EMOJI.map(function (e) {
+    return '<button type="button" class="lg-msg__rx-opt" data-lg-rx="' + esc(e) + '">' + e + '</button>';
+  }).join('');
+}
+/* The aggregated strip under a bubble: one chip per emoji anyone used, count + who (title).
+   A chip the viewer is part of is highlighted; clicking it toggles that emoji straight off. */
+function reactionStripHtml(reactions) {
+  if (!reactions || !reactions.length) return '';
+  return '<span class="lg-msg__rx-strip">' + reactions.map(function (r) {
+    var who = (r.who || []).join(', ');
+    return '<button type="button" class="lg-msg__rx-chip' + (r.mine ? ' is-mine' : '') + '"'
+      + ' data-lg-rx="' + esc(r.emoji) + '" title="' + esc(who) + '">'
+      + '<span class="lg-msg__rx-e">' + r.emoji + '</span>'
+      + '<span class="lg-msg__rx-n">' + esc(r.count) + '</span></button>';
+  }).join('') + '</span>';
+}
+/* Hide any open per-bubble emoji picker (one at a time). */
+function closeReactionPickers() {
+  var open = document.querySelectorAll('.lg-msg__rx-pick:not([hidden])');
+  for (var i = 0; i < open.length; i++) open[i].setAttribute('hidden', '');
+}
+function toggleReaction(id, emoji) {
+  if (!currentThreadUuid || !id) return;
+  closeReactionPickers();
+  fetch(API + '/me/messages/' + encodeURIComponent(currentThreadUuid) + '/entries/' + encodeURIComponent(id), {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emoji: emoji }),
+  }).then(function (r) {
+    if (r.ok) openThread(currentThreadUuid, currentPeers);   /* re-render strips live */
+  }).catch(function () {});
+}
+
 /* ── thread render: system lines · author lines · (edited) · tombstone · own-msg menu ── */
 function renderThreadMessages(msgs, messages, peers, members) {
   var peerSet = {};
@@ -1004,13 +1039,16 @@ function renderThreadMessages(msgs, messages, peers, members) {
       h += '<span class="lg-msg__author">' + esc(nameBy[m.sender_uuid] || 'Member') + '</span>';
     }
     lastSender = m.sender_uuid;
-    /* soft-deleted → tombstone; body + media were already withheld server-side */
+    /* soft-deleted → tombstone; body + media were already withheld server-side (no reactions) */
     if (m.deleted) {
       return h + '<div class="lg-msg__msg' + (mine ? ' lg-msg__msg--mine' : '') + '">'
         + '<p class="lg-msg__msg-text lg-msg__msg-text--tomb">Message deleted</p></div>';
     }
+    /* data-lg-msg-id rides EVERY live bubble now (peers' too) so React can target it; the raw
+       body + Edit/Delete stay mine-only. */
     h += '<div class="lg-msg__msg' + (mine ? ' lg-msg__msg--mine' : '') + '"'
-       + (mine ? ' data-lg-msg-id="' + esc(m.id) + '"' + (m.body ? ' data-lg-body="' + esc(m.body) + '"' : '') : '')
+       + ' data-lg-msg-id="' + esc(m.id) + '"'
+       + (mine && m.body ? ' data-lg-body="' + esc(m.body) + '"' : '')
        + '>';
     if (m.media_url) {
       /* image attachment → in-app lightbox (SAME access-controlled /message-media/ URL) */
@@ -1022,13 +1060,17 @@ function renderThreadMessages(msgs, messages, peers, members) {
       h += '<p class="lg-msg__msg-text">' + linkifyText(m.body)
          + (m.edited ? '<span class="lg-msg__edited">(edited)</span>' : '') + '</p>';
     }
-    /* own-message hover menu: Edit (text only) + Delete */
-    if (mine) {
-      h += '<span class="lg-msg__acts">'
-         + (m.body ? '<button type="button" class="lg-msg__act" data-lg-edit>Edit</button>' : '')
-         + '<button type="button" class="lg-msg__act lg-msg__act--del" data-lg-del>Delete</button></span>';
-    }
-    h += '<span class="lg-msg__msg-time">' + relTime(m.created_at) + '</span></div>';
+    /* hover menu: React (every message, own or a peer's) + Edit (own text) + Delete (own) */
+    h += '<span class="lg-msg__acts">'
+       + '<button type="button" class="lg-msg__act" data-lg-react aria-label="React" title="React">☺</button>'
+       + (mine && m.body ? '<button type="button" class="lg-msg__act" data-lg-edit>Edit</button>' : '')
+       + (mine ? '<button type="button" class="lg-msg__act lg-msg__act--del" data-lg-del>Delete</button>' : '')
+       + '</span>';
+    /* the six-emoji picker (hidden until React is clicked) */
+    h += '<span class="lg-msg__rx-pick" hidden>' + reactionPickerHtml() + '</span>';
+    h += '<span class="lg-msg__msg-time">' + relTime(m.created_at) + '</span>';
+    h += reactionStripHtml(m.reactions);
+    h += '</div>';
     return h;
   }).join('');
   msgs.scrollTop = msgs.scrollHeight;
@@ -1426,6 +1468,24 @@ document.addEventListener('click', function (e) {
   if (hit('[data-lg-mm-leave]'))    { mmLeave(); return; }
   if (hit('[data-lg-edit]'))        { var be = hit('[data-lg-msg-id]'); if (be) beginEdit(be); return; }
   if (hit('[data-lg-del]'))         { var bd = hit('[data-lg-msg-id]'); if (bd) deleteMsg(bd.getAttribute('data-lg-msg-id')); return; }
+  /* React: reveal this bubble's six-emoji picker (only one open at a time). */
+  if (hit('[data-lg-react]')) {
+    var rb = hit('[data-lg-msg-id]');
+    var pick = rb && rb.querySelector('.lg-msg__rx-pick');
+    var wasHidden = pick && pick.hasAttribute('hidden');
+    closeReactionPickers();
+    if (pick && wasHidden) pick.removeAttribute('hidden');
+    return;
+  }
+  /* An emoji (picker option OR an existing chip) → toggle it on this bubble. */
+  var rx = hit('[data-lg-rx]');
+  if (rx) {
+    var rmb = hit('[data-lg-msg-id]');
+    if (rmb) toggleReaction(rmb.getAttribute('data-lg-msg-id'), rx.getAttribute('data-lg-rx'));
+    return;
+  }
+  /* click anywhere else closes an open picker */
+  closeReactionPickers();
 });
 document.addEventListener('input', function (e) {
   if (e.target && e.target.id === 'lg-pick-search') renderPickList(e.target.value);

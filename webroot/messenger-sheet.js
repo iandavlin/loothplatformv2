@@ -230,6 +230,17 @@
       '#looth-msgr .mg-author{align-self:flex-start;font:600 11px/1 var(--lg-font-sans,system-ui);color:var(--lg-sage-d,#6b7c52);margin:4px 0 -1px 3px}',
       '#looth-msgr .mg-edited{font-size:10.5px;opacity:.72;margin-left:6px}',
       '#looth-msgr .mg-b--tomb{background:transparent;border:1px dashed var(--lg-line2,#d8d2c4);color:var(--lg-mute,#6b6f6b);font-style:italic}',
+      // reaction strip under a message + chips
+      '#looth-msgr .mg-rx{display:flex;flex-wrap:wrap;gap:5px;margin:2px 2px 0;max-width:80%}',
+      '#looth-msgr .mg-rx-chip{display:inline-flex;align-items:center;gap:3px;border:1px solid transparent;background:var(--lguser-bubble,#eceff3);' +
+        'border-radius:13px;padding:2px 9px 2px 7px;font:600 12px/1.5 var(--lg-font-sans,system-ui);color:var(--lg-ink,#1a1d1a);cursor:pointer}',
+      '#looth-msgr .mg-rx-chip.is-mine{border-color:var(--lg-sage,#87986a);background:#e2ecd2}',
+      '#looth-msgr .mg-rx-e{font-size:13px}',
+      '#looth-msgr .mg-rx-n{font-variant-numeric:tabular-nums}',
+      // React row at the top of the long-press action sheet (six big emoji)
+      '#looth-msgr .mg-rxrow{display:flex;justify-content:space-around;gap:4px;padding:6px 4px 10px;border-bottom:1px solid var(--lg-line,#e3ddd0);margin-bottom:4px}',
+      '#looth-msgr .mg-rxbtn{border:0;background:none;font-size:30px;line-height:1;padding:4px 6px;border-radius:50%;cursor:pointer}',
+      '#looth-msgr .mg-rxbtn:active{background:var(--lg-sage-tint,#eef2e3);transform:scale(1.15)}',
       // secondary panel (picker + member manager) slides over the chat/home
       '#looth-msgr .mg-p2{position:absolute;inset:0;z-index:2;display:none;flex-direction:column;background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0}',
       '#looth-msgr .mg-p2.is-on{display:flex}',
@@ -296,6 +307,9 @@
       D + ' #looth-msgr .mg-mm-name-in{background:#262b30;border-color:#2c312d;color:#f2f4ee}',
       D + ' #looth-msgr .mg-mm-name-lbl,' + D + ' #looth-msgr .mg-mm-name-hint{color:#9aa097}',
       D + ' #looth-msgr .mg-pi:active,' + D + ' #looth-msgr .mg-actbtn:active{background:#262b30}',
+      D + ' #looth-msgr .mg-rx-chip{background:#262b30;color:#e5e7e1}',
+      D + ' #looth-msgr .mg-rx-chip.is-mine{border-color:var(--lg-sage,#87986a);background:#33412a}',
+      D + ' #looth-msgr .mg-rxrow{border-color:#2c312d}',
 
       // ── image lightbox (P4.5 — Ian scope-add 7/12). SAME /message-media/ URL, no new
       // exposure. Appended to <body> (outside #looth-msgr), so these rules are unscoped. ──
@@ -371,6 +385,8 @@
       if (e.target.id === 'mg-acts') { closeActs(); return; }
       // a long-press just fired the action sheet on this same image → swallow the tap
       if (lpAt && Date.now() - lpAt < 600) { lpAt = 0; return; }
+      // tap an existing reaction chip → toggle that emoji straight off
+      var rxc = C('[data-mg-rx]'); if (rxc) { toggleReactionMobile(rxc.getAttribute('data-mg-rxid'), rxc.getAttribute('data-mg-rx')); return; }
       var lbx = C('[data-mg-lightbox]'); if (lbx) { openLightboxMobile(lbx.getAttribute('data-mg-lightbox')); return; }
       if (C('[data-mg-new]'))     { openPickerMobile('new'); return; }
       if (C('[data-mg-members]')) { openMemberManagerMobile(); return; }
@@ -662,26 +678,31 @@
         h += '<span class="mg-author">' + esc(nameBy[m.sender_uuid] || 'Member') + '</span>';
       }
       lastSender = m.sender_uuid;
-      // soft-deleted → tombstone (body + media already withheld server-side)
+      // soft-deleted → tombstone (body + media already withheld server-side; no reactions)
       if (m.deleted) {
         return h + '<div class="mg-b mg-b--tomb ' + (mine ? 'mg-b--me' : 'mg-b--them') + '">Message deleted</div>';
       }
+      // The MESSAGE CARRIER is the text bubble when there's a caption, else the image itself:
+      // it holds data-mg-msg-id so long-press (edit/delete/React) + reactions target the message.
+      // data-mg-mine marks own messages (edit/delete gate); data-mg-body carries the raw text.
+      var carrierOnMedia = !!m.media_url && !m.body;
       // image attachment (access-controlled URL) → in-app lightbox with pinch-zoom.
-      // An OWN caption-less image also carries the msg id so long-press can delete it
-      // (a captioned image is deleted via its caption bubble instead).
       if (m.media_url) {
         h += '<button type="button" class="mg-img" style="align-self:' + (mine ? 'flex-end' : 'flex-start') +
              '" data-mg-lightbox="' + esc(m.media_url) + '"' +
-             (mine && !m.body ? ' data-mg-msg-id="' + esc(m.id) + '"' : '') + '><img src="' + esc(m.media_url) +
+             (carrierOnMedia ? ' data-mg-msg-id="' + esc(m.id) + '"' + (mine ? ' data-mg-mine="1"' : '') : '') +
+             '><img src="' + esc(m.media_url) +
              '" alt="Photo" loading="lazy"><span class="mg-zoomdot" aria-hidden="true">⤢</span></button>';
       }
       // body optional when an image is present (image-only message).
-      // own text bubble carries id + raw body for the long-press edit/delete sheet.
       if (m.body) {
         h += '<div class="mg-b ' + (mine ? 'mg-b--me' : 'mg-b--them') + '"' +
-             (mine ? ' data-mg-msg-id="' + esc(m.id) + '" data-mg-body="' + esc(m.body) + '"' : '') + '>' +
+             ' data-mg-msg-id="' + esc(m.id) + '"' +
+             (mine ? ' data-mg-mine="1" data-mg-body="' + esc(m.body) + '"' : '') + '>' +
              esc(m.body) + (m.edited ? '<span class="mg-edited">(edited)</span>' : '') + '</div>';
       }
+      // aggregated reaction strip under the message (own side / peer side)
+      h += reactionStripMobile(m, mine);
       return h;
     }).join('');
 
@@ -919,20 +940,51 @@
   }
   function closeActs() { if (sheet) { var a = sheet.querySelector('#mg-acts'); if (a) a.classList.remove('is-on'); } }
 
-  // ── long-press action sheet: edit / delete / copy ──
+  // ── reactions (fixed six-emoji set; MUST match Messaging::REACTION_EMOJI server-side) ──
+  var REACTION_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+  // Aggregated strip under a message: one chip per emoji anyone used, count + who (title).
+  // A chip the viewer is part of is highlighted; tapping any chip toggles that emoji.
+  function reactionStripMobile(m, mine) {
+    var rx = m.reactions || [];
+    if (!rx.length) return '';
+    return '<div class="mg-rx" style="align-self:' + (mine ? 'flex-end' : 'flex-start') + '">' + rx.map(function (r) {
+      var who = (r.who || []).join(', ');
+      return '<button type="button" class="mg-rx-chip' + (r.mine ? ' is-mine' : '') + '"' +
+        ' data-mg-rx="' + esc(r.emoji) + '" data-mg-rxid="' + esc(m.id) + '" title="' + esc(who) + '">' +
+        '<span class="mg-rx-e">' + r.emoji + '</span><span class="mg-rx-n">' + esc(r.count) + '</span></button>';
+    }).join('') + '</div>';
+  }
+  function toggleReactionMobile(id, emoji) {
+    if (!curThread || !id) return;
+    closeActs();
+    fetch(API + '/me/messages/' + encodeURIComponent(curThread) + '/entries/' + encodeURIComponent(id), {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emoji: emoji }),
+    }).then(function (r) { if (r.ok) loadThread(curThread, true); }).catch(function () {});
+  }
+
+  // ── long-press action sheet: React (any message) / edit / delete / copy (own text) ──
   function openActs(bubble) {
-    var id  = bubble.getAttribute('data-mg-msg-id');
-    var raw = bubble.getAttribute('data-mg-body') || '';
+    var id   = bubble.getAttribute('data-mg-msg-id');
+    var raw  = bubble.getAttribute('data-mg-body') || '';
+    var mine = bubble.getAttribute('data-mg-mine') === '1';
     var acts = sheet.querySelector('#mg-acts'), inn = sheet.querySelector('#mg-acts-in');
-    var html = '';
-    if (raw) html += '<button class="mg-actbtn" type="button" data-act="edit">Edit message</button>';
-    html += '<button class="mg-actbtn mg-actbtn--del" type="button" data-act="delete">Delete message</button>';
-    if (raw) html += '<button class="mg-actbtn" type="button" data-act="copy">Copy text</button>';
+    // React row (all messages) at the top — Messenger-style emoji strip.
+    var html = '<div class="mg-rxrow">' + REACTION_EMOJI.map(function (e) {
+      return '<button class="mg-rxbtn" type="button" data-rx="' + esc(e) + '">' + e + '</button>';
+    }).join('') + '</div>';
+    if (mine && raw) html += '<button class="mg-actbtn" type="button" data-act="edit">Edit message</button>';
+    if (mine)        html += '<button class="mg-actbtn mg-actbtn--del" type="button" data-act="delete">Delete message</button>';
+    if (raw)         html += '<button class="mg-actbtn" type="button" data-act="copy">Copy text</button>';
     html += '<button class="mg-actbtn mg-actbtn--cancel" type="button" data-act="cancel">Cancel</button>';
     inn.innerHTML = html;
+    Array.prototype.forEach.call(inn.querySelectorAll('[data-rx]'), function (b) {
+      b.addEventListener('click', function () { toggleReactionMobile(id, b.getAttribute('data-rx')); });
+    });
     var ed = inn.querySelector('[data-act="edit"]');
     if (ed) ed.addEventListener('click', function () { closeActs(); editMobile(id, raw); });
-    inn.querySelector('[data-act="delete"]').addEventListener('click', function () { closeActs(); deleteMobile(id); });
+    var del = inn.querySelector('[data-act="delete"]');
+    if (del) del.addEventListener('click', function () { closeActs(); deleteMobile(id); });
     var cp = inn.querySelector('[data-act="copy"]');
     if (cp) cp.addEventListener('click', function () { closeActs(); try { navigator.clipboard.writeText(raw); } catch (e) {} });
     inn.querySelector('[data-act="cancel"]').addEventListener('click', closeActs);
