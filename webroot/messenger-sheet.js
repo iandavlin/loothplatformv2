@@ -124,7 +124,7 @@
       '#looth-msgr .mg-search svg{width:16px;height:16px;color:var(--lg-mute,#6b6f6b);flex:0 0 auto}',
       '#looth-msgr .mg-search input{flex:1 1 auto;min-width:0;border:0;background:none;outline:none;' +
         'font:15px/1.2 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#323532)}',
-      '#looth-msgr .mg-list{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 8px calc(20px + env(safe-area-inset-bottom,0px))}',
+      '#looth-msgr .mg-list{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 8px calc(20px + env(safe-area-inset-bottom,0px))}',
       '#looth-msgr .mg-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;background:none;' +
         'padding:9px 10px;border-radius:14px;cursor:pointer}',
       '#looth-msgr .mg-row:active{background:var(--lg-sage-tint,#eef2e3)}',
@@ -174,7 +174,7 @@
       '#looth-msgr .mg-grouptag{flex:0 0 auto;display:inline-block;padding:1px 6px;border-radius:999px;' +
         'background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);' +
         'font:600 10.5px/1.5 var(--lg-font-sans,system-ui,sans-serif);vertical-align:middle}',
-      '#looth-msgr .mg-msgs{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 12px;display:flex;flex-direction:column;gap:3px}',
+      '#looth-msgr .mg-msgs{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:14px 12px;display:flex;flex-direction:column;gap:3px}',
       '#looth-msgr .mg-b{max-width:78%;padding:9px 13px;border-radius:18px;font:15px/1.4 var(--lg-font-sans,system-ui,sans-serif);' +
         'overflow-wrap:break-word;white-space:pre-wrap}',
       '#looth-msgr .mg-b--them{align-self:flex-start;background:var(--lguser-bubble,#eceff3);color:var(--lg-ink,#1a1d1a);border-bottom-left-radius:6px}',
@@ -235,7 +235,7 @@
       '#looth-msgr .mg-p2.is-on{display:flex}',
       '#looth-msgr .mg-p2hd{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:14px 12px 10px;border-bottom:1px solid var(--lg-line,#e3ddd0)}',
       '#looth-msgr .mg-p2t{flex:1;font:700 17px/1.2 var(--lg-font-serif,Georgia,serif);color:var(--lg-charcoal,#1a1d1a)}',
-      '#looth-msgr .mg-p2body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px}',
+      '#looth-msgr .mg-p2body{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:14px}',
       '#looth-msgr .mg-p2hint{font:13px/1.4 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b);margin:0 0 12px}',
       // pick field: chips + search
       '#looth-msgr .mg-pkfield{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--lg-line,#e3ddd0);border-radius:12px;padding:8px 10px;background:#fff;min-height:46px}',
@@ -1174,9 +1174,17 @@
     });
   }
   function mmLeaveMobile() {
+    /* Owner must transfer before leaving while others remain (Ian 7/12 23:2x) — steer to the
+       transfer flow, don't fail silently. Server re-enforces (400 transfer_required). */
+    var m = curMeta || {};
+    if (m.created_by && m.created_by === m.meUuid && (m.members || []).length > 1) {
+      alert('You’re the group owner. Make someone else the owner first (tap “Make owner”), then you can leave.');
+      return;
+    }
     if (!confirm('Leave this conversation? You’ll lose access to it.')) return;
     mpostMembers({ leave: true }).then(function (res) {
       if (res && res._ok) { closeP2(); showHome(); }
+      else if (res && res._status === 400 && res.error === 'transfer_required') alert('Pass ownership to another member before you can leave.');
       else alert('Could not leave the conversation.');
     });
   }
@@ -1238,12 +1246,47 @@
     lb.addEventListener('click', function (e) { if (e.target === lb) closeLightboxMobile(); });
   }
 
+  // ── background scroll-lock + pinch containment (#56) ──────────────────────────────
+  // The sheet is position:fixed over the page, but on iOS a touch that overscrolls an
+  // inner scroller (or lands on the sheet chrome) still scrolls the page BEHIND it, and a
+  // two-finger pinch triggers native VIEWPORT zoom (which leaves the fixed bottom-nav/trays
+  // visibly displaced after close). We pick the position:fixed body lock (version-independent
+  // — it does not rely on iOS honouring overflow:hidden or overscroll-behavior for the core
+  // lock) and restore the exact scroll offset on close (no jump-to-top). overscroll-behavior:
+  // contain on the scrollers stops rubber-band chaining; a capture-phase multi-touch guard
+  // blocks native pinch-zoom everywhere in the messenger while the lightbox's own JS still
+  // scales the image (preventDefault kills the native gesture, not our handler).
+  var bgLocked = false, lockedY = 0, pinchGuard = null;
+  function lockBg() {
+    if (bgLocked) return; bgLocked = true;
+    lockedY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    var b = document.body;
+    b.style.top = (-lockedY) + 'px';
+    b.style.position = 'fixed'; b.style.left = '0'; b.style.right = '0'; b.style.width = '100%';
+    b.style.overflow = 'hidden';
+    // Block native pinch-zoom (and any residual background pan) for touches inside the sheet
+    // or lightbox. Multi-touch → always preventDefault (no viewport zoom); the lightbox's own
+    // touchmove handler still runs and zooms the image. Single-touch is left to the scrollers
+    // (+ overscroll-behavior:contain) and the fixed body, so normal scrolling is untouched.
+    pinchGuard = function (e) {
+      if (e.touches && e.touches.length > 1 && e.cancelable) e.preventDefault();
+    };
+    document.addEventListener('touchmove', pinchGuard, { passive: false, capture: true });
+  }
+  function unlockBg() {
+    if (!bgLocked) return; bgLocked = false;
+    var b = document.body;
+    b.style.position = ''; b.style.top = ''; b.style.left = ''; b.style.right = ''; b.style.width = ''; b.style.overflow = '';
+    if (pinchGuard) { document.removeEventListener('touchmove', pinchGuard, { capture: true }); pinchGuard = null; }
+    window.scrollTo(0, lockedY);   // exact restore — no jump-to-top
+  }
+
   var msgrHist = false;
   function openMessenger() {
     ensureSheet();
     sheet.classList.add('is-open');
     requestAnimationFrame(function () { requestAnimationFrame(function () { sheet.classList.add('is-up'); }); });
-    document.body.style.overflow = 'hidden';
+    lockBg();
     if (!msgrHist) { try { history.pushState({ lgMg: 1 }, ''); msgrHist = true; } catch (e) {} }
     showHome();
     if (listPollT) clearInterval(listPollT);
@@ -1253,7 +1296,7 @@
     if (!sheet || !sheet.classList.contains('is-open')) return;
     sheet.classList.remove('is-up');
     setTimeout(function () { if (sheet && !sheet.classList.contains('is-up')) sheet.classList.remove('is-open'); }, 320);
-    document.body.style.overflow = '';
+    unlockBg();
     if (pollT) { clearInterval(pollT); pollT = null; }
     if (listPollT) { clearInterval(listPollT); listPollT = null; }
     if (msgrHist && !fromPop) { msgrHist = false; try { history.back(); } catch (e) {} }
