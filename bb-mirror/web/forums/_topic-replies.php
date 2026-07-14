@@ -44,13 +44,21 @@ $rs = $db->prepare("
            LEFT(r.content_text, 200) AS excerpt,
            r.content_html,
            r.created_at,
-           reply_img.url AS reply_image_url
+           reply_img.urls AS reply_image_urls
       FROM forums.reply r
       LEFT JOIN forums.person p ON p.id = r.author_id
       LEFT JOIN LATERAL (
-        SELECT url FROM forums.attachment
-         WHERE parent_kind = 'reply' AND parent_id = r.id
-         ORDER BY id ASC LIMIT 1
+        -- ALL of a reply's images (up to 6 — Ian 2026-07-13), materialized order
+        -- (position, then id). json_agg preserves the ordered subquery's row order,
+        -- and decodes cleanly PHP-side (URLs may contain commas; a bare pg array
+        -- string would not round-trip). Was LIMIT 1 → a single reply_image_url,
+        -- which silently capped replies to one visible image.
+        SELECT json_agg(url) AS urls FROM (
+          SELECT url FROM forums.attachment
+           WHERE parent_kind = 'reply' AND parent_id = r.id
+           ORDER BY position ASC, id ASC
+           LIMIT 6
+        ) a6
       ) reply_img ON true
      WHERE r.topic_id = :tid AND r.status = 'publish'
      ORDER BY r.created_at ASC
@@ -73,6 +81,9 @@ foreach ($flat as $r) {
     // Member-only author mask, BEFORE the tree/flatten so the "↪ @parent" deep-reply
     // prefix (built from a parent's author_name) reads "Private member", not the real name.
     lg_bb_mirror_mask_visibility($r, $viewer_logged_in);
+    // json_agg → PHP array of image URLs (null when the reply has no media).
+    $r['reply_image_urls'] = !empty($r['reply_image_urls'])
+        ? (array) json_decode((string)$r['reply_image_urls'], true) : [];
     $by_id[(int)$r['reply_id']] = $r + ['_children' => []];
 }
 $top = [];

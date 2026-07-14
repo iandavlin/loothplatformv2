@@ -2036,6 +2036,29 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
   margin-top: 6px;
 }
 
+/* Multi-image reply gallery (up to 6 — Ian 2026-07-13). A reply with one image
+   keeps the bare <img> above; two or more render in this grid. Each cell is a
+   square thumbnail that keeps the .reply-stub__img class, so the existing
+   lightbox handler (forums.js) opens the full image on tap. 2/4 → 2 columns
+   (clean rows), 3/5/6 → 3 columns. */
+.reply-stub__gallery {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-top: 6px;
+  max-width: 420px;
+}
+.reply-stub__gallery[data-count="2"],
+.reply-stub__gallery[data-count="4"] { grid-template-columns: repeat(2, 1fr); }
+.reply-stub__gallery .reply-stub__img {
+  margin-top: 0;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
 /* Accordion expand button — pill style matching archive-poc */
 .feed-card__expand {
   color: var(--lg-sage-d);

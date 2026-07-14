@@ -159,13 +159,24 @@
       opts.statusEl.classList.remove('lg-msg-error');
       if (tray) { tray.innerHTML = ''; tray.hidden = true; tray.classList.remove('is-uploading'); }
     }
+    // Image cap (Ian 2026-07-13: up to 6 per reply). opts.max caps the RESULTING
+    // set — newly-added (mediaIds) plus any kept existing (getKeepCount, edit mode).
+    // The server hard-enforces too; this is the UI guard + a clear message.
+    function atMax() {
+      if (!opts.max) return false;
+      var keep = (typeof opts.getKeepCount === 'function') ? (opts.getKeepCount() || 0) : 0;
+      return (keep + opts.mediaIds.length) >= opts.max;
+    }
     function handler() {
+      if (atMax()) { fail('You can add up to ' + opts.max + ' images.'); return; }
       var input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
       input.onchange = function () {
         var file = input.files && input.files[0];
         if (!file) return;
+        // Re-check: the keep set can change while the picker is open (edit mode).
+        if (atMax()) { fail('You can add up to ' + opts.max + ' images.'); return; }
         // Pre-flight: reject formats BB will refuse (webp/heic/…) up front, so
         // the user gets a clear reason instead of a silent failed upload.
         if (LG_IMG_UNSUPPORTED.test(file.name || '')) {
@@ -2228,6 +2239,8 @@
       mediaIds: frmMediaIds,
       statusEl: frmStatus,
       restBase: frmRestBase,
+      max: 6,                                                // up to 6 images per reply (Ian 2026-07-13)
+      getKeepCount: function () { return frmKeepMedia.length; },  // edit mode: kept existing count toward the cap
       getNonce: function (cb) { cb(frmNonce); },
       insertInline: function (url) {
         var range = frmQuill.getSelection(true);

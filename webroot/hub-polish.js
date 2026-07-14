@@ -3557,6 +3557,8 @@
         fileIn.value = '';
         if (!file) return;
         var status = sh.querySelector('#lrs-comp-status');
+        // Image cap (Ian 2026-07-13: up to 6 per reply). Quick-comment is create-only.
+        if (lrsMediaIds.length >= 6) { status.textContent = 'You can add up to 6 images.'; return; }
         status.textContent = 'Uploading photo…';
         lrsGetAuth(function (a) {
           if (!a || !a.authenticated) { status.textContent = 'Sign in to add photos.'; return; }
@@ -3836,6 +3838,10 @@
       fileIn.value = '';
       if (!file) return;
       var status = sh.querySelector('#lcp-status');
+      // Image cap (Ian 2026-07-13: up to 6 per reply). Count new uploads plus any
+      // kept existing photos (edit mode). Server hard-enforces; this is the UI guard.
+      var keepN = ((sh.__lcpCtx && sh.__lcpCtx.keepMedia) || []).length;
+      if (keepN + lcpMediaIds.length >= 6) { status.textContent = 'You can add up to 6 images.'; return; }
       status.textContent = 'Uploading photo…';
       lrsGetAuth(function (a) {
         if (!a || !a.authenticated) { status.textContent = 'Sign in to add photos.'; return; }

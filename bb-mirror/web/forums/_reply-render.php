@@ -424,15 +424,38 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
             }
             echo '</span>';
         }
-        if (!empty($r['reply_image_url'])) {
-            $iu = htmlspecialchars(lg_cover_src((string)$r['reply_image_url']) ?? '');
+        // Up to 6 images per reply (Ian 2026-07-13). Prefer the multi-image array
+        // the thread query now supplies; fall back to the legacy single
+        // reply_image_url (optimistic stubs + any other caller still send one).
+        $img_urls = [];
+        if (!empty($r['reply_image_urls']) && is_array($r['reply_image_urls'])) {
+            $img_urls = $r['reply_image_urls'];
+        } elseif (!empty($r['reply_image_url'])) {
+            $img_urls = [$r['reply_image_url']];
+        }
+        $img_urls = array_slice(array_values(array_filter($img_urls)), 0, 6);
+        if ($img_urls) {
             if ($collapse_image) {
-                // Teaser context: keep the image hidden AND unloaded (data-src, no
-                // src) until the reader opens the reply — keeps the feed card compact.
+                // Teaser context (feed card): keep it compact — defer the FIRST image
+                // behind a "Show image" button exactly as before; the full set opens
+                // in the discussion modal.
+                $iu = htmlspecialchars(lg_cover_src((string)$img_urls[0]) ?? '');
                 echo '<button class="reply-stub__img-open" type="button">&#128247; Show image</button>'
                    . '<img class="reply-stub__img reply-stub__img--deferred" data-src="' . $iu . '" alt="" hidden>';
-            } else {
+            } elseif (count($img_urls) === 1) {
+                // Single image: byte-for-byte the legacy markup (no gallery wrapper) —
+                // keeps every existing single-image reply rendering unchanged.
+                $iu = htmlspecialchars(lg_cover_src((string)$img_urls[0]) ?? '');
                 echo '<img class="reply-stub__img" src="' . $iu . '" alt="" loading="lazy">';
+            } else {
+                // Multi-image: a responsive thumbnail grid; each img keeps the
+                // .reply-stub__img class so the existing lightbox handler still fires.
+                echo '<div class="reply-stub__gallery" data-count="' . count($img_urls) . '">';
+                foreach ($img_urls as $u) {
+                    $iu = htmlspecialchars(lg_cover_src((string)$u) ?? '');
+                    echo '<img class="reply-stub__img" src="' . $iu . '" alt="" loading="lazy">';
+                }
+                echo '</div>';
             }
         }
         echo '</div>'; // close .reply-stub__body

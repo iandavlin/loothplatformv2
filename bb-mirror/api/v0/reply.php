@@ -35,6 +35,13 @@ function reply_out(int $code, array $body): void {
     exit;
 }
 
+// Hard cap on images per reply (Ian 2026-07-13: "up to 6 images on a reply and a
+// reply-to-reply"). The client composers guard this too, but a client-only limit
+// is not a limit — the 7th must be rejected HERE (standing rule after the DM
+// privacy bug: every rule server-side). Enforced on both create (POST, total new
+// media) and edit (PUT, kept + newly-added).
+const LG_REPLY_MEDIA_MAX = 6;
+
 $method = $_SERVER['REQUEST_METHOD'] ?? '';
 
 // Resolve a forum post's photo set → [{media_id, url, thumb}] (shared by the GET
@@ -230,6 +237,14 @@ if ($method === 'PUT' || $method === 'DELETE') {
     if ($new === '' && !$add_atts && !$keep_ids) {
         reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Reply can't be empty."]);
     }
+    // Enforce the per-reply image cap on the RESULTING set (kept + newly added).
+    // An explicit keep set is authoritative; add-only (back-compat, no keep set)
+    // keeps everything already on the reply, so count the existing media then.
+    $keep_count = $has_keep ? count($keep_ids) : count(reply_media_list($reply_id));
+    if ($keep_count + count($add_atts) > LG_REPLY_MEDIA_MAX) {
+        reply_out(422, ['ok' => false, 'error' => 'too_many_media', 'max' => LG_REPLY_MEDIA_MAX,
+            'message' => 'A reply can have at most ' . LG_REPLY_MEDIA_MAX . ' images.']);
+    }
     $upd = wp_update_post(['ID' => $reply_id, 'post_content' => $new], true);
     if (is_wp_error($upd)) {
         reply_out(500, ['ok' => false, 'error' => 'server', 'message' => (string) $upd->get_error_message()]);
@@ -287,6 +302,10 @@ if ($topic_id <= 0) {
 }
 if ($content === '' && !$media) {
     reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Reply can't be empty."]);
+}
+if (count($media) > LG_REPLY_MEDIA_MAX) {
+    reply_out(422, ['ok' => false, 'error' => 'too_many_media', 'max' => LG_REPLY_MEDIA_MAX,
+        'message' => 'A reply can have at most ' . LG_REPLY_MEDIA_MAX . ' images.']);
 }
 if (!function_exists('bbp_get_topic_post_type')) {
     reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Forum engine unavailable.']);
@@ -366,17 +385,15 @@ if ($reply && in_array($reply->post_status, ['pending', 'spam'], true)) {
     ]);
 }
 
-// ── Ring the bell (notifications lane, 2026-07-12) ──────────────────────────
-// Reply-to-your-topic / reply-to-your-reply / @mention → profile-app's notification
-// store, each deep-linked into the §4e discussion modal on the exact reply. The
-// legacy BuddyBoss notification rows that rest_do_request() writes above go to a
-// table no UI reads (docs/atlas/NOTIFICATIONS-AUDIT.md §1) — THIS is the live path.
-// Fire-and-forget by contract: a published reply must never fail because the bell
-// is down, so the bridge swallows its own errors and we don't gate the response.
-if (is_file('/srv/lg-shared/notify-bridge.php')) {
-    require_once '/srv/lg-shared/notify-bridge.php';
-    lg_notify_on_reply($topic_id, $reply_id, (int) $uid, $reply_to, $content);
-}
+// ── Ring the bell — MOVED to the bbp_new_reply hook (2026-07-13, reply-images-6).
+// The bell now fires from platform/mu-plugins/lg-reply-notify.php, hooked on
+// bbp_new_reply, which runs on EVERY reply creation path — the hub modal (native
+// BuddyBoss /wp-json/buddyboss/v1/reply), this endpoint's in-process
+// rest_do_request(), and wp-admin alike. Members create replies via the native
+// route and NEVER reach this file on create, so calling lg_notify_on_reply here
+// notified nobody for the real path while double-notifying any path that did hit
+// reply.php (rest_do_request → bbp_new_reply → hook). The hook is the single
+// universal source now; this call is retired so there is exactly one ring.
 
 // Published — return everything a surface needs for an optimistic insert.
 $u          = wp_get_current_user();
