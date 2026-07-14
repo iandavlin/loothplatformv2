@@ -11,11 +11,15 @@
 .ch-meta { gap: 12px; }
 .ch-join { margin-left: auto; padding: 10px 22px; }
 
-/* Single column: map first (shorter), discussions below. */
+/* Single column: map first (shorter), then discussions (primary), then the roster. On desktop
+   the roster sits under the map in the left column; on mobile discussions come first. */
 .ch-cols { grid-template-columns: 1fr; gap: 16px; }
 .ch-mapwrap { position: static; }
+.ch-discuss { order: 2; }
+.ch-members { order: 3; }
 #ch-map { height: 260px; }
 .ch-panel { border-radius: 14px; }
+.ch-roster .ch-av { width: 36px; height: 36px; }
 
 .ch-discuss__head { padding: 12px 14px 8px; }
 .ch-discuss__head h2 { font-size: 1.08rem; }

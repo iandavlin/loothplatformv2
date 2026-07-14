@@ -215,4 +215,33 @@
 .ch-form__submit:hover, .ch-reply-form__send:hover { background: #315a31; }
 .ch-form__submit:disabled, .ch-reply-form__send:disabled { opacity: .55; cursor: default; }
 
+/* ── MEMBER ROSTER (CHAPTER-V2 ask 2) ─────────────────────────────────────── */
+.ch-members { padding: 10px 12px 12px; }
+.ch-members__head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; }
+.ch-members__head h2 { margin: 0; font-size: 1.15rem; font-weight: 700; }
+.ch-members__count {
+  font-size: .9rem; font-weight: 600; color: var(--lg-ink-soft, #55605a);
+  background: var(--lg-sage-tint, #eef2e3); border-radius: 999px; padding: 1px 9px;
+}
+.ch-roster { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ch-roster__link {
+  display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px;
+  text-decoration: none; color: var(--lg-ink, #1a1d1a);
+}
+a.ch-roster__link:hover { background: var(--lg-sage-tint, #eef2e3); }
+.ch-roster__link--nolink { cursor: default; }
+.ch-roster .ch-av { width: 40px; height: 40px; }
+.ch-roster .ch-av--none { font-size: 1rem; }
+.ch-roster__name {
+  font-weight: 500; font-size: .98rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ch-members__empty { margin: 4px 2px; color: var(--lg-ink-soft, #55605a); font-size: .95rem; }
+.ch-roster__more {
+  margin: 10px 0 0; width: 100%; padding: 8px;
+  border: 1px solid var(--lg-line, #e7e2d6); background: #fff; border-radius: 8px;
+  font: inherit; font-weight: 600; color: var(--lg-sage, #3a6b3a); cursor: pointer;
+}
+.ch-roster__more:hover { background: var(--lg-sage-tint, #eef2e3); }
+
 [hidden] { display: none !important; }

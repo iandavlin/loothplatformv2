@@ -107,6 +107,53 @@ final class Chapters
     }
 
     /**
+     * The member ROSTER — names + avatars for the chapter page (CHAPTER-V2 ask 2, Ian 2026-07-14).
+     * Identity only (uuid/name/slug/avatar); NO location and NO coordinate ever leaves here — the
+     * roster is "who is in this chapter", not the map (the map stays the clamped pins path).
+     *
+     * Two visibility gates, applied SERVER-SIDE in one query so pagination is exact and a hidden
+     * member can never leak onto a later page:
+     *   1. GHOST CONTAINMENT — a member with no wp_user_bridge row is not a person and never
+     *      appears (identical rule to directory-members' shared $wheres and to memberCount).
+     *   2. VISIBILITY — the master switch (profile_visibility private = owner/admin only) AND the
+     *      finer header ceiling (profile_sections key='header': public|members|private, default
+     *      'members'), resolved through the same audience×visibility truth table the directory
+     *      uses (Visibility::audienceCanSee): anon sees only 'public' headers, a signed-in member
+     *      also sees 'members', owner/admin see all.
+     * A member hidden by either gate drops out of the LIST but is STILL counted by memberCount —
+     * the same list-vs-count split we already ship for map pins.
+     */
+    public static function members(int $chapterId, int $viewerUserId, bool $isAdmin,
+                                   int $limit = 60, int $offset = 0): array
+    {
+        $st = Db::pg()->prepare(
+            "SELECT u.uuid, u.display_name, u.slug, u.avatar_url
+               FROM chapter_member cm
+               JOIN users u ON u.uuid = cm.user_uuid
+               LEFT JOIN profile_sections ps ON ps.user_id = u.id AND ps.key = 'header'
+              WHERE cm.chapter_id = :cid
+                AND u.archived_at IS NULL
+                AND EXISTS (SELECT 1 FROM wp_user_bridge b WHERE b.user_id = u.id)  -- ghost gate
+                AND (u.profile_visibility = 'public' OR u.id = :vuid OR :vadmin = 1) -- master switch
+                AND (                                                               -- header ceiling
+                     u.id = :vuid OR :vadmin = 1
+                     OR COALESCE(ps.visibility, 'members') = 'public'
+                     OR (:is_member = 1 AND COALESCE(ps.visibility, 'members') = 'members')
+                    )
+              ORDER BY cm.joined_at ASC, u.id ASC
+              LIMIT :lim OFFSET :off"
+        );
+        $st->bindValue(':cid', $chapterId, PDO::PARAM_INT);
+        $st->bindValue(':vuid', $viewerUserId, PDO::PARAM_INT);
+        $st->bindValue(':vadmin', $isAdmin ? 1 : 0, PDO::PARAM_INT);
+        $st->bindValue(':is_member', $viewerUserId !== 0 ? 1 : 0, PDO::PARAM_INT);
+        $st->bindValue(':lim', $limit, PDO::PARAM_INT);
+        $st->bindValue(':off', $offset, PDO::PARAM_INT);
+        $st->execute();
+        return $st->fetchAll();
+    }
+
+    /**
      * JOIN — one tap, idempotent, no approval. A single INSERT; there is no room to seed
      * (chat is deferred), so no watermark write and no transaction is needed.
      */

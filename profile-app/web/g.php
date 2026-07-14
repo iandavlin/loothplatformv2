@@ -26,6 +26,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/DiscoveryComments.php';   // Chapte
 
 use Looth\ProfileApp\Chapters;
 use Looth\ProfileApp\Whoami;
+use Looth\ProfileApp\Visibility;
 
 looth_issue_bounce_if_needed();   // mint looth_id for logged-in WP users who arrive without one
 
@@ -54,6 +55,18 @@ $isMember    = Chapters::isMember($cid, $uuid);
 $canPost     = $isMember;                          // read = anyone, post = members (recommended rule)
 $posts       = Chapters::posts($cid, 30, 0);       // discussions, newest first (with reply counts)
 $radiusMi    = Chapters::radiusMi($ch);
+
+// ROSTER (CHAPTER-V2 ask 2): the first page of members, visibility-gated SERVER-SIDE inside
+// Chapters::members() (ghost containment + master switch + header ceiling for THIS viewer). The
+// rest lazy-loads client-side via /chapters/<slug>/members. memberCount above is the full
+// population and can exceed what is listed (members-only/private-header members count but do not
+// show to this viewer) — the same list-vs-count split the map already uses for hidden pins.
+const CH_ROSTER_PAGE = 24;
+$vArr   = Visibility::viewer();
+// Fetch one extra to decide the "Show more" button without a second query, then trim to the page.
+$roster = Chapters::members($cid, (int)$vArr['id'], (bool)$vArr['admin'], CH_ROSTER_PAGE + 1, 0);
+$rosterHasMore = count($roster) > CH_ROSTER_PAGE;
+if ($rosterHasMore) array_pop($roster);
 
 // Small avatar through the serve resizer (CLAUDE.md: never a raw upload). Square 40px ladder.
 $avatar = static function (?string $url, string $name): string {
@@ -159,6 +172,37 @@ lg_shared_render_site_header([
            data-lng="<?= looth_h((string)$ch['center_lng']) ?>"
            data-radius-mi="<?= $radiusMi ?>"></div>
       <p class="ch-map-note">Approximate locations. Members who hide their location aren’t pinned.</p>
+    </section>
+
+    <!-- MEMBERS: the roster. Identity only (name+avatar->/u/); visibility is enforced SERVER-SIDE
+         in Chapters::members() (ghost containment + master switch + header ceiling for THIS viewer).
+         First page is server-rendered; the rest lazy-loads from /chapters/<slug>/members. -->
+    <section class="ch-panel ch-members" id="ch-members" aria-label="Members">
+      <div class="ch-members__head">
+        <h2>Members</h2>
+        <span class="ch-members__count" id="ch-members-count"><?= $memberCount ?></span>
+      </div>
+      <ul class="ch-roster" id="ch-roster"<?= $roster ? '' : ' hidden' ?>>
+        <?php foreach ($roster as $m):
+            $mslug = trim((string)($m['slug'] ?? ''));
+            $mname = (string)($m['display_name'] ?? 'Member');
+            $av    = $avatar($m['avatar_url'] ?? null, $mname); ?>
+        <li class="ch-roster__item">
+          <?php if ($mslug !== ''): ?>
+          <a class="ch-roster__link" href="/u/<?= looth_h(rawurlencode($mslug)) ?>" title="<?= looth_h($mname) ?>">
+            <?= $av ?><span class="ch-roster__name"><?= looth_h($mname) ?></span>
+          </a>
+          <?php else: /* no slug -> not linkable; show identity without a dead /u/ link */ ?>
+          <span class="ch-roster__link ch-roster__link--nolink">
+            <?= $av ?><span class="ch-roster__name"><?= looth_h($mname) ?></span>
+          </span>
+          <?php endif; ?>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+      <p class="ch-members__empty" id="ch-members-empty"<?= $roster ? ' hidden' : '' ?>>No members yet — be the first to join.</p>
+      <?php /* Full page returned => there may be more; the client pages the rest and hides on exhaustion. */ ?>
+      <button type="button" id="ch-roster-more" class="ch-roster__more"<?= $rosterHasMore ? '' : ' hidden' ?>>Show more members</button>
     </section>
 
     <!-- DISCUSSIONS: the single chapter content surface. -->
@@ -322,9 +366,89 @@ lg_shared_render_site_header([
           root.setAttribute('data-canpost', nowMember ? '1' : '0');
           var cmp = document.getElementById('ch-compose');
           if (cmp) cmp.hidden = !nowMember;
+          // Reflect the viewer's own join/leave in the roster immediately.
+          chRefreshRoster();
         })
         .catch(function () {})
         .then(function () { joinBtn.disabled = false; });
+    });
+  }
+
+  // ── MEMBER ROSTER (CHAPTER-V2 ask 2) ────────────────────────────────────────
+  // Page 1 is server-rendered (visibility already decided by Chapters::members); this only
+  // pages the rest and refreshes page 1 when the viewer joins/leaves. The client plots what
+  // the endpoint returns — it never decides who is visible.
+  var rosterEl    = document.getElementById('ch-roster');
+  var rosterMore  = document.getElementById('ch-roster-more');
+  var rosterEmpty = document.getElementById('ch-members-empty');
+  var rosterCount = document.getElementById('ch-members-count');
+  var rosterBase  = (root.getAttribute('data-src-base') || '/profile-api/v0').replace(/\/+$/, '');
+  var rosterPage  = 1;      // page 1 already in the DOM
+  var rosterBusy  = false;
+
+  function rosterAvatar(m, name) {
+    if (m.avatar_url) {
+      var img = document.createElement('img'), u = String(m.avatar_url),
+          sep = u.indexOf('?') >= 0 ? '&' : '?';
+      img.className = 'ch-av'; img.width = 40; img.height = 40; img.alt = '';
+      img.loading = 'lazy'; img.decoding = 'async';
+      img.src = u + sep + 'w=80';
+      img.srcset = u+sep+'w=40 40w, ' + u+sep+'w=80 80w, ' + u+sep+'w=120 120w';
+      img.sizes = '40px';
+      return img;
+    }
+    var s = document.createElement('span');
+    s.className = 'ch-av ch-av--none'; s.setAttribute('aria-hidden', 'true');
+    s.textContent = (String(name).charAt(0) || 'M').toUpperCase();
+    return s;
+  }
+
+  function rosterItem(m) {
+    var li = document.createElement('li'); li.className = 'ch-roster__item';
+    var slugv = (m.slug == null ? '' : String(m.slug)).trim();
+    var name  = m.display_name || 'Member';
+    var wrap  = document.createElement(slugv ? 'a' : 'span');
+    wrap.className = 'ch-roster__link' + (slugv ? '' : ' ch-roster__link--nolink');
+    if (slugv) { wrap.href = '/u/' + encodeURIComponent(slugv); wrap.title = name; }
+    var nm = document.createElement('span'); nm.className = 'ch-roster__name'; nm.textContent = name;
+    wrap.appendChild(rosterAvatar(m, name)); wrap.appendChild(nm);
+    li.appendChild(wrap);
+    return li;
+  }
+
+  function rosterFetch(page) {
+    return fetch(rosterBase + '/chapters/' + encodeURIComponent(slug) + '/members?page=' + page,
+                 { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : null; });
+  }
+
+  // Hoisted so the join/leave handler above can call it. Reloads page 1 from scratch.
+  function chRefreshRoster() {
+    if (!rosterEl) return;
+    rosterFetch(1).then(function (d) {
+      if (!d) return;
+      rosterEl.innerHTML = '';
+      (d.members || []).forEach(function (m) { rosterEl.appendChild(rosterItem(m)); });
+      var any = (d.members || []).length > 0;
+      rosterEl.hidden = !any;
+      if (rosterEmpty) rosterEmpty.hidden = any;
+      rosterPage = 1;
+      if (rosterMore) rosterMore.hidden = !d.has_more;
+      if (rosterCount && typeof d.member_count === 'number') rosterCount.textContent = d.member_count;
+    }).catch(function () {});
+  }
+
+  if (rosterMore) {
+    rosterMore.addEventListener('click', function () {
+      if (rosterBusy) return;
+      rosterBusy = true; rosterMore.disabled = true;
+      rosterFetch(rosterPage + 1).then(function (d) {
+        if (d) {
+          (d.members || []).forEach(function (m) { rosterEl.appendChild(rosterItem(m)); });
+          rosterPage += 1;
+          rosterMore.hidden = !d.has_more;
+        }
+      }).catch(function () {}).then(function () { rosterBusy = false; rosterMore.disabled = false; });
     });
   }
 
