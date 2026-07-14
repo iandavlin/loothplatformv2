@@ -20,6 +20,8 @@
 #ch-map { height: 260px; }
 .ch-panel { border-radius: 14px; }
 .ch-roster .ch-av { width: 36px; height: 36px; }
+.ch-chat__log { height: 300px; }
+.ch-chat__msg { max-width: 88%; }
 
 .ch-discuss__head { padding: 12px 14px 8px; }
 .ch-discuss__head h2 { font-size: 1.08rem; }

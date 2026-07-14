@@ -39,11 +39,11 @@ if ($threadUuid === '' && preg_match('~/messages/([0-9a-f-]{36})/members~', (str
 }
 if ($threadUuid === '') profile_app_json(400, ['error' => 'thread_uuid_required']);
 
-$st = Db::pg()->prepare('SELECT id FROM message_threads WHERE uuid = :u');
+$st = Db::pg()->prepare('SELECT id, chapter_id FROM message_threads WHERE uuid = :u');
 $st->execute([':u' => strtolower($threadUuid)]);
-$threadId = $st->fetchColumn();
-if ($threadId === false) profile_app_json(404, ['error' => 'thread_not_found']);
-$threadId = (int)$threadId;
+$trow = $st->fetch();
+if (!$trow) profile_app_json(404, ['error' => 'thread_not_found']);
+$threadId = (int)$trow['id'];
 
 $in = json_decode(file_get_contents('php://input') ?: '', true);
 $in = is_array($in) ? $in : [];
@@ -51,6 +51,15 @@ $in = is_array($in) ? $in : [];
 // deny for a non-participant reads as 404 (existing model): never confirm a thread's members
 // to an outsider. Messaging asserts the same, but gate the shape here before dispatch.
 if (!Messaging::isParticipant($uuid, $threadId)) profile_app_json(404, ['error' => 'thread_not_found']);
+
+// CHAPTER ROOM GUARD (dmv-native CHAPTER-V2 ask 3): a chapter-bound room is SYSTEM-owned and its
+// membership is DERIVED from chapter_member (synced in Chapters::join/leave). Person-management
+// here — add/remove/leave/rename/transfer — would desync it from the chapter, so refuse all of it.
+// You leave the room by leaving the chapter (/g/<slug>). Column added by 2026-07-14-chapter-room.sql.
+if (($trow['chapter_id'] ?? null) !== null) {
+    profile_app_json(403, ['error' => 'chapter_managed',
+        'message' => 'This is a chapter room — its members follow the chapter. Leave the chapter to leave the room.']);
+}
 
 if (!empty($in['leave'])) {
     $res = Messaging::leave($uuid, $threadId);

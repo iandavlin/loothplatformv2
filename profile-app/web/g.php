@@ -69,6 +69,13 @@ $roster = Chapters::members($cid, (int)$vArr['id'], (bool)$vArr['admin'], CH_ROS
 $rosterHasMore = count($roster) > CH_ROSTER_PAGE;
 if ($rosterHasMore) array_pop($roster);
 
+// CHAT ROOM (CHAPTER-V2 ask 3): a member gets the room's thread uuid so the embedded pane can
+// talk to the shipped /me/messages endpoints. ensureMemberRoom() is idempotent — it creates the
+// room on demand AND guarantees this member is a recipient (self-heals pre-feature members), so
+// the pane's /me/messages GET never 403s for a member. Non-members get null (the pane shows a
+// join prompt, never the thread).
+$roomUuid = ($isMember && $uuid) ? Chapters::ensureMemberRoom($cid, $uuid) : null;
+
 // Small avatar through the serve resizer (CLAUDE.md: never a raw upload). Square 40px ladder.
 $avatar = static function (?string $url, string $name): string {
     $name = trim($name) !== '' ? $name : 'Member';
@@ -145,6 +152,7 @@ lg_shared_render_site_header([
       data-member="<?= $isMember ? '1' : '0' ?>"
       data-authed="<?= $authed ? '1' : '0' ?>"
       data-canpost="<?= $canPost ? '1' : '0' ?>"
+      data-uuid="<?= looth_h((string)($uuid ?? '')) ?>"
       data-src-base="/profile-api/v0">
 
   <header class="ch-hero">
@@ -265,6 +273,31 @@ lg_shared_render_site_header([
       </div>
     </section>
   </div>
+
+  <!-- CHAT ROOM (CHAPTER-V2 ask 3): the chapter's live group room, embedded. Members only —
+       it reuses the shipped /me/messages endpoints (the room is a real group thread whose
+       membership mirrors chapter_member), so it also appears in the normal messenger. -->
+  <section class="ch-panel ch-chat" id="ch-chat" aria-label="Chapter chat"<?= $roomUuid ? ' data-room="' . looth_h($roomUuid) . '"' : '' ?>>
+    <div class="ch-chat__head">
+      <h2>Chapter chat</h2>
+      <span class="ch-chat__hint">Members only · live</span>
+    </div>
+    <?php if ($isMember && $roomUuid): ?>
+    <div class="ch-chat__log" id="ch-chat-log" aria-live="polite" aria-busy="true">
+      <p class="ch-chat__note">Loading chat…</p>
+    </div>
+    <form class="ch-chat__form" id="ch-chat-form">
+      <button type="button" class="ch-chat__attach" id="ch-chat-attach" title="Add an image" aria-label="Add an image">📷</button>
+      <input type="file" id="ch-chat-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+      <input class="ch-chat__input" id="ch-chat-input" name="body" placeholder="Message the chapter…" autocomplete="off" maxlength="4000">
+      <button type="submit" class="ch-chat__send">Send</button>
+    </form>
+    <?php else: ?>
+    <p class="ch-chat__gate"><?= $isMember
+        ? 'Chat is warming up — reload in a moment.'
+        : ($authed ? 'Join the chapter to see and post in the chat.' : 'Sign in and join the chapter to chat.') ?></p>
+    <?php endif; ?>
+  </section>
 </main>
 
 <?php lg_shared_render_site_footer(); ?>
@@ -727,6 +760,99 @@ lg_shared_render_site_header([
   }
   var compose = document.getElementById('ch-compose');
   if (compose) compose.addEventListener('click', openCompose);
+
+  // ── CHAT ROOM (CHAPTER-V2 ask 3) ────────────────────────────────────────────
+  // Embedded live room for members. Reuses the shipped /me/messages endpoints (GET marks read,
+  // POST sends, /<uuid>/image attaches); the room is a real group thread whose membership mirrors
+  // chapter_member, so it is a participant surface and the media proxy is gated by membership.
+  (function () {
+    var chat = document.getElementById('ch-chat');
+    var room = chat && chat.getAttribute('data-room');
+    if (!room) return;                              // non-member / no room -> gate is shown, no JS
+    var logEl  = document.getElementById('ch-chat-log');
+    var form   = document.getElementById('ch-chat-form');
+    var input  = document.getElementById('ch-chat-input');
+    var fileEl = document.getElementById('ch-chat-file');
+    var attach = document.getElementById('ch-chat-attach');
+    var meUuid = (root.getAttribute('data-uuid') || '').toLowerCase();
+    var msgApi = base + '/me/messages/' + encodeURIComponent(room);
+    var membersByUuid = {}, lastSig = '', busy = false, pollT = null;
+
+    function renderThread(d) {
+      membersByUuid = {};
+      (d.members || []).forEach(function (m) { membersByUuid[String(m.uuid).toLowerCase()] = m; });
+      var msgs = d.messages || [];
+      var sig = msgs.length + ':' + (msgs.length ? msgs[msgs.length - 1].id : 0);
+      if (sig === lastSig) return;                  // nothing new — don't thrash the DOM/scroll
+      lastSig = sig;
+      var atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 48;
+      logEl.innerHTML = '';
+      logEl.removeAttribute('aria-busy');
+      if (!msgs.length) { logEl.innerHTML = '<p class="ch-chat__note">No messages yet — say hello.</p>'; return; }
+      msgs.forEach(function (m) {
+        if (m.kind === 'system') {
+          var s = document.createElement('p'); s.className = 'ch-chat__sys';
+          s.textContent = m.body || ''; logEl.appendChild(s); return;
+        }
+        var mem = membersByUuid[String(m.sender_uuid).toLowerCase()] || {};
+        var mine = String(m.sender_uuid).toLowerCase() === meUuid;
+        var row = document.createElement('div');
+        row.className = 'ch-chat__msg' + (mine ? ' ch-chat__msg--me' : '');
+        var bub = '<div class="ch-chat__bub">';
+        if (!mine) bub += '<span class="ch-chat__who">' + esc(mem.display_name || 'Member') + '</span>';
+        if (m.deleted) bub += '<span class="ch-chat__del">message deleted</span>';
+        else {
+          if (m.media_url) bub += '<img class="ch-chat__img" src="' + esc(m.media_url) + '" alt="" loading="lazy">';
+          if (m.body) bub += '<span class="ch-chat__text">' + bodyHtml(m.body) + '</span>';
+        }
+        bub += '</div>';
+        row.innerHTML = (mine ? '' : avatarHtml(mem.avatar_url, mem.display_name || 'Member')) + bub;
+        logEl.appendChild(row);
+      });
+      if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function refresh() {
+      return fetch(msgApi, { credentials: 'include' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (d && d.ok !== false) renderThread(d); })
+        .catch(function () {});
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var body = input.value.trim();
+      if (!body || busy) return;
+      busy = true; input.disabled = true;
+      fetch(msgApi, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: body })
+      }).then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+        .then(function () { input.value = ''; lastSig = ''; return refresh(); })
+        .catch(function () {})
+        .then(function () { busy = false; input.disabled = false; input.focus(); });
+    });
+
+    if (attach && fileEl) {
+      attach.addEventListener('click', function () { if (!busy) fileEl.click(); });
+      fileEl.addEventListener('change', function () {
+        var f = fileEl.files && fileEl.files[0];
+        if (!f || busy) return;
+        busy = true; attach.disabled = true;
+        var fd = new FormData(); fd.append('image', f);
+        fetch(msgApi + '/image', { method: 'POST', credentials: 'include', body: fd })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+          .then(function () { lastSig = ''; return refresh(); })
+          .catch(function () {})
+          .then(function () { busy = false; attach.disabled = false; fileEl.value = ''; });
+      });
+    }
+
+    // Poll on the messenger cadence while the tab is visible; refresh immediately on re-focus.
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
+    refresh().then(function () { if (!pollT) pollT = setInterval(function () { if (!document.hidden) refresh(); }, 5000); });
+  })();
 })();
 </script>
 </body>

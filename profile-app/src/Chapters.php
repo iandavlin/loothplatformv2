@@ -154,8 +154,10 @@ final class Chapters
     }
 
     /**
-     * JOIN — one tap, idempotent, no approval. A single INSERT; there is no room to seed
-     * (chat is deferred), so no watermark write and no transaction is needed.
+     * JOIN — one tap, idempotent, no approval. A single INSERT, then a room-membership SYNC:
+     * the chat room (CHAPTER-V2 ask 3) reuses group messaging via ENUMERATE (Ian 2026-07-14),
+     * so a chapter member IS a message_recipients row in the room. ensureRoom() lazily creates
+     * the room on the first join and backfills existing members.
      */
     public static function join(int $chapterId, string $userUuid): void
     {
@@ -164,16 +166,116 @@ final class Chapters
              ON CONFLICT (chapter_id, user_uuid) DO NOTHING'
         );
         $st->execute([':c' => $chapterId, ':u' => $userUuid]);
+
+        $roomId = self::ensureRoom($chapterId);
+        Db::pg()->prepare(
+            'INSERT INTO message_recipients (thread_id, user_uuid) VALUES (:t, :u)
+             ON CONFLICT (thread_id, user_uuid) DO NOTHING'
+        )->execute([':t' => $roomId, ':u' => $userUuid]);
     }
 
     /**
-     * LEAVE — one tap. Discussions and replies the member wrote STAY: leaving a chapter is
-     * not retracting what you said in it.
+     * LEAVE — one tap. Discussions, replies AND chat messages the member wrote STAY (leaving a
+     * chapter is not retracting what you said). We only drop their room recipiency so the room
+     * stops appearing in their messenger and stops counting them.
      */
     public static function leave(int $chapterId, string $userUuid): void
     {
-        $st = Db::pg()->prepare('DELETE FROM chapter_member WHERE chapter_id = :c AND user_uuid = :u');
-        $st->execute([':c' => $chapterId, ':u' => $userUuid]);
+        Db::pg()->prepare('DELETE FROM chapter_member WHERE chapter_id = :c AND user_uuid = :u')
+            ->execute([':c' => $chapterId, ':u' => $userUuid]);
+
+        $roomId = self::roomId($chapterId);
+        if ($roomId !== null) {
+            Db::pg()->prepare('DELETE FROM message_recipients WHERE thread_id = :t AND user_uuid = :u')
+                ->execute([':t' => $roomId, ':u' => $userUuid]);
+        }
+    }
+
+    // ── CHAT ROOM (CHAPTER-V2 ask 3) ─────────────────────────────────────────────────
+    // ENUMERATE-v1 (Ian 2026-07-14): one group message_thread bound to the chapter via
+    // message_threads.chapter_id; membership mirrors chapter_member into message_recipients so
+    // the SHIPPED group messaging (thread view, send, poll, image attach) works unchanged. The
+    // room is SYSTEM-owned (created_by NULL, is_group=true) — it has no human owner, and it must
+    // NOT be person-managed (add/remove/leave via the member-manager) or it desyncs from
+    // chapter_member. That guard lives in the messaging management endpoints (see the board note).
+
+    /** The room's internal thread id, or null if no room exists yet. */
+    public static function roomId(int $chapterId): ?int
+    {
+        $st = Db::pg()->prepare('SELECT id FROM message_threads WHERE chapter_id = :c');
+        $st->execute([':c' => $chapterId]);
+        $id = $st->fetchColumn();
+        return $id === false ? null : (int) $id;
+    }
+
+    /** The room's public thread uuid (what the messenger/pane address it by), or null. */
+    public static function roomUuid(int $chapterId): ?string
+    {
+        $st = Db::pg()->prepare('SELECT uuid FROM message_threads WHERE chapter_id = :c');
+        $st->execute([':c' => $chapterId]);
+        $u = $st->fetchColumn();
+        return $u === false ? null : (string) $u;
+    }
+
+    /**
+     * For a MEMBER viewing the chapter: guarantee the room exists AND that this member is a
+     * recipient, then return the room uuid. Self-heals members who joined before the room feature
+     * (their old join() never synced) and anyone the creation-time backfill missed. Idempotent.
+     */
+    public static function ensureMemberRoom(int $chapterId, string $userUuid): string
+    {
+        $roomId = self::ensureRoom($chapterId);
+        Db::pg()->prepare(
+            'INSERT INTO message_recipients (thread_id, user_uuid) VALUES (:t, :u)
+             ON CONFLICT (thread_id, user_uuid) DO NOTHING'
+        )->execute([':t' => $roomId, ':u' => $userUuid]);
+        return (string) self::roomUuid($chapterId);
+    }
+
+    /**
+     * Ensure the chapter's room thread exists; return its id. Idempotent and race-safe via the
+     * unique partial index on message_threads(chapter_id). On first creation it backfills every
+     * current chapter member as a recipient (so an existing chapter's members all get the room).
+     */
+    public static function ensureRoom(int $chapterId): int
+    {
+        $existing = self::roomId($chapterId);
+        if ($existing !== null) return $existing;
+
+        $pg   = Db::pg();
+        $name = $pg->prepare('SELECT name FROM chapter WHERE id = :c');
+        $name->execute([':c' => $chapterId]);
+        $subject = (string) ($name->fetchColumn() ?: 'Chapter');
+
+        $pg->beginTransaction();
+        try {
+            $ins = $pg->prepare(
+                "INSERT INTO message_threads (is_group, created_by, subject, chapter_id)
+                 VALUES (true, NULL, :s, :c)
+                 ON CONFLICT (chapter_id) WHERE chapter_id IS NOT NULL DO NOTHING
+                 RETURNING id"
+            );
+            $ins->execute([':s' => $subject, ':c' => $chapterId]);
+            $id = $ins->fetchColumn();
+
+            if ($id === false) {
+                $pg->commit();                       // lost the create race — someone else has it
+                return (int) self::roomId($chapterId);
+            }
+            // Backfill current members as recipients.
+            $pg->prepare(
+                "INSERT INTO message_recipients (thread_id, user_uuid)
+                 SELECT :t, cm.user_uuid FROM chapter_member cm WHERE cm.chapter_id = :c
+                 ON CONFLICT (thread_id, user_uuid) DO NOTHING"
+            )->execute([':t' => (int) $id, ':c' => $chapterId]);
+            $pg->commit();
+            return (int) $id;
+        } catch (\Throwable $e) {
+            $pg->rollBack();
+            $again = self::roomId($chapterId);        // a concurrent txn may have created it
+            if ($again !== null) return $again;
+            throw $e;
+        }
     }
 
     // ── DISCUSSIONS ──────────────────────────────────────────────────────────────────
