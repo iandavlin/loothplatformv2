@@ -244,4 +244,24 @@ a.ch-roster__link:hover { background: var(--lg-sage-tint, #eef2e3); }
 }
 .ch-roster__more:hover { background: var(--lg-sage-tint, #eef2e3); }
 
+/* ── RICH TEXT: rendered discussion body + Quill composer (CHAPTER-V2 ask 1) ── */
+.ch-rich { line-height: 1.55; }
+.ch-rich h2 { font-size: 1.15rem; margin: .6em 0 .3em; }
+.ch-rich h3 { font-size: 1.03rem; margin: .6em 0 .3em; }
+.ch-rich p { margin: 0 0 .6em; }
+.ch-rich p:last-child { margin-bottom: 0; }
+.ch-rich ul, .ch-rich ol { margin: 0 0 .6em 1.4em; padding: 0; }
+.ch-rich blockquote {
+  margin: 0 0 .6em; padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--lg-line, #e7e2d6); color: var(--lg-ink-soft, #55605a);
+}
+.ch-rich a { color: var(--lg-sage, #3a6b3a); }
+.ch-form__editor { margin: 0 0 8px; }
+.ch-form__editor .ql-toolbar { border-radius: 8px 8px 0 0; border-color: var(--lg-line, #e7e2d6); }
+.ch-form__editor .ql-container {
+  border-radius: 0 0 8px 8px; border-color: var(--lg-line, #e7e2d6);
+  font: inherit; font-size: 1rem;
+}
+.ch-form__editor .ql-editor { min-height: 140px; }
+
 [hidden] { display: none !important; }

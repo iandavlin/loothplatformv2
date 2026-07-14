@@ -55,8 +55,11 @@ if ($method === 'POST') {
     $in    = is_array($in) ? $in : [];
     $title = isset($in['title']) ? (string)$in['title'] : null;
     $body  = (string)($in['body'] ?? '');
+    // Rich-text (CHAPTER-V2 ask 1): Quill HTML, sanitized SERVER-SIDE in Chapters::createPost.
+    // Plain-text clients that send only `body` keep working (body_html stays NULL).
+    $bodyHtml = isset($in['body_html']) ? (string)$in['body_html'] : null;
 
-    $res = Chapters::createPost($cid, $uuid, $title, $body);
+    $res = Chapters::createPost($cid, $uuid, $title, $body, $bodyHtml);
     profile_app_json($res['ok'] ? 200 : 400, $res);
 }
 

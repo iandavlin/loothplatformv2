@@ -191,7 +191,7 @@ final class Chapters
     public static function posts(int $chapterId, int $limit = 20, int $offset = 0): array
     {
         $st = Db::pg()->prepare(
-            "SELECT p.id, p.title, p.body, p.created_at, p.edited_at,
+            "SELECT p.id, p.title, p.body, p.body_html, p.created_at, p.edited_at,
                     p.author_uuid, u.display_name AS author_name, u.slug AS author_slug,
                     u.avatar_url AS author_avatar
                FROM chapter_post p
@@ -218,7 +218,7 @@ final class Chapters
     public static function post(int $postId): ?array
     {
         $st = Db::pg()->prepare(
-            "SELECT p.id, p.chapter_id, p.title, p.body, p.created_at, p.edited_at, p.author_uuid,
+            "SELECT p.id, p.chapter_id, p.title, p.body, p.body_html, p.created_at, p.edited_at, p.author_uuid,
                     u.display_name AS author_name, u.slug AS author_slug, u.avatar_url AS author_avatar,
                     c.slug AS chapter_slug
                FROM chapter_post p
@@ -230,19 +230,35 @@ final class Chapters
         return $st->fetch() ?: null;
     }
 
-    /** Start a discussion. Caller MUST have already checked membership. */
-    public static function createPost(int $chapterId, string $authorUuid, ?string $title, string $body): array
+    /**
+     * Start a discussion. Caller MUST have already checked membership.
+     *
+     * CHAPTER-V2 ask 1: if $bodyHtml (Quill output) is given it is run through the allowlist
+     * sanitizer and stored in body_html; the plain-text `body` is then DERIVED from that SAFE
+     * html (never trusted from the client) for the list preview/title/search. With no html the
+     * discussion is plain text exactly as before (body_html stays NULL).
+     */
+    public static function createPost(int $chapterId, string $authorUuid, ?string $title, string $body,
+                                      ?string $bodyHtml = null): array
     {
         $title = $title !== null ? trim($title) : null;
-        $body  = trim($body);
-        if ($body === '') return ['ok' => false, 'error' => 'empty_body'];
         if ($title === '') $title = null;
 
+        $html = null;
+        if ($bodyHtml !== null && trim($bodyHtml) !== '') {
+            $html = HtmlSanitize::chapterHtml($bodyHtml);
+            $body = HtmlSanitize::toPlainText($html);   // plaintext from the SANITIZED html, not the client
+        } else {
+            $body = trim($body);
+        }
+        if ($body === '') return ['ok' => false, 'error' => 'empty_body'];
+        if ($html === '') $html = null;                 // formatting-only input collapses to plain
+
         $st = Db::pg()->prepare(
-            'INSERT INTO chapter_post (chapter_id, author_uuid, title, body)
-             VALUES (:c, :a, :t, :b) RETURNING id, created_at'
+            'INSERT INTO chapter_post (chapter_id, author_uuid, title, body, body_html)
+             VALUES (:c, :a, :t, :b, :h) RETURNING id, created_at'
         );
-        $st->execute([':c' => $chapterId, ':a' => $authorUuid, ':t' => $title, ':b' => $body]);
+        $st->execute([':c' => $chapterId, ':a' => $authorUuid, ':t' => $title, ':b' => $body, ':h' => $html]);
         $row = $st->fetch();
 
         return ['ok' => true, 'id' => (int) $row['id'], 'created_at' => $row['created_at']];

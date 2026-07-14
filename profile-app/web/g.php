@@ -27,6 +27,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/DiscoveryComments.php';   // Chapte
 use Looth\ProfileApp\Chapters;
 use Looth\ProfileApp\Whoami;
 use Looth\ProfileApp\Visibility;
+use Looth\ProfileApp\HtmlSanitize;
 
 looth_issue_bounce_if_needed();   // mint looth_id for logged-in WP users who arrive without one
 
@@ -238,9 +239,13 @@ lg_shared_render_site_header([
        * breakout; every value re-enters the DOM through the modal's JS escaper. */
       $island = [];
       foreach ($posts as $p) {
+          $ph = trim((string)($p['body_html'] ?? ''));
           $island[(string)(int)$p['id']] = [
               'title'  => trim((string)($p['title'] ?? '')),
               'body'   => (string)($p['body'] ?? ''),
+              // body_html is SANITIZED on STORE; re-sanitize on RENDER too (idempotent) so the
+              // client only ever injects allowlisted HTML — belt and braces. null => plain text.
+              'body_html' => $ph !== '' ? HtmlSanitize::chapterHtml($ph) : null,
               'author' => (string)($p['author_name'] ?? 'Member'),
               'slug'   => $p['author_slug'] ?? null,
               'avatar' => $p['author_avatar'] ?? null,
@@ -605,7 +610,10 @@ lg_shared_render_site_header([
           '</span><span class="ch-post__dot">·</span>' +
           '<span class="ch-modal__when">' + esc(post.when || '') + '</span>' +
         '</div>' +
-        (post.body ? '<div class="ch-modal__text">' + bodyHtml(post.body) + '</div>' : '') +
+        // body_html is server-sanitized (store + render); safe to inject. Plain text falls back
+        // to the escaping renderer. Never inject post.body (plaintext) as HTML.
+        (post.body_html ? '<div class="ch-modal__text ch-rich">' + post.body_html + '</div>'
+          : (post.body ? '<div class="ch-modal__text">' + bodyHtml(post.body) + '</div>' : '')) +
       '</div>';
     modalBody.innerHTML = head +
       '<div class="ch-thread" aria-busy="true"><p class="ch-thread__note">Loading replies…</p></div>' +
@@ -616,6 +624,36 @@ lg_shared_render_site_header([
     });
   }
 
+  // ---- Quill (lazy, on compose intent only — never eager, never for anon) ------
+  // Vendored (webroot/lib/quill, no CDN). Loaded once on first compose; if it fails the
+  // composer degrades to the plain textarea (still fully functional, plain text).
+  var quillP = null;
+  function loadQuill() {
+    if (quillP) return quillP;
+    quillP = new Promise(function (resolve) {
+      if (window.Quill) { resolve(window.Quill); return; }
+      var css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = '/lib/quill/quill.snow.css';
+      document.head.appendChild(css);
+      var s = document.createElement('script');
+      s.src = '/lib/quill/quill.js';
+      s.onload  = function () { resolve(window.Quill || null); };
+      s.onerror = function () { resolve(null); };
+      document.head.appendChild(s);
+    });
+    return quillP;
+  }
+  // The chapter toolbar — deliberately matches the sanitizer allowlist (no image/code-block):
+  // headings, bold/italic/underline/strike, lists, blockquote, link, clear.
+  var CH_QUILL_TOOLBAR = [
+    [{ header: [2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    ['blockquote'],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    ['link'],
+    ['clean'],
+  ];
+
   // ---- Start a discussion ------------------------------------------------------
   function openCompose() {
     if (!canPost()) return;
@@ -624,27 +662,55 @@ lg_shared_render_site_header([
       '<h3 class="ch-modal__title">Start a discussion</h3>' +
       '<form class="ch-form" id="ch-compose-form">' +
         '<input class="ch-form__title" name="title" maxlength="140" placeholder="Title (optional)">' +
+        '<div class="ch-form__editor" id="ch-editor"></div>' +
         '<textarea class="ch-form__body" name="body" rows="6" placeholder="What’s happening in the chapter?" required></textarea>' +
-        '<div class="ch-form__foot"><button type="submit" class="ch-form__submit">Post discussion</button></div>' +
+        '<div class="ch-form__foot"><button type="submit" class="ch-form__submit" disabled>Post discussion</button></div>' +
       '</form>';
-    var form = modalBody.querySelector('#ch-compose-form');
+    var form   = modalBody.querySelector('#ch-compose-form');
+    var ta     = form.querySelector('[name=body]');
+    var submit = form.querySelector('.ch-form__submit');
+    var editor = form.querySelector('#ch-editor');
+    var quill  = null;
+
+    loadQuill().then(function (Q) {
+      if (Q && editor) {
+        ta.hidden = true; ta.removeAttribute('required');   // Quill takes over; textarea is the fallback
+        quill = new Q(editor, {
+          theme: 'snow',
+          placeholder: 'What’s happening in the chapter?',
+          bounds: editor,
+          modules: { toolbar: CH_QUILL_TOOLBAR },
+        });
+      } else if (editor) {
+        editor.parentNode.removeChild(editor);              // no Quill -> plain textarea stays
+      }
+      submit.disabled = false;
+    });
+
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      var body = form.querySelector('[name=body]').value.trim();
-      if (!body) return;
       var title = form.querySelector('[name=title]').value.trim();
-      var submit = form.querySelector('.ch-form__submit');
+      var payload;
+      if (quill) {
+        var text = quill.getText().trim();                  // Quill appends a trailing \n
+        if (!text) return;                                  // formatting-only / empty
+        payload = { title: title || null, body: text, body_html: quill.root.innerHTML };
+      } else {
+        var body = ta.value.trim();
+        if (!body) return;
+        payload = { title: title || null, body: body };
+      }
       submit.disabled = true;
       fetch(base + '/chapters/' + encodeURIComponent(slug) + '/posts', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title || null, body: body })
+        body: JSON.stringify(payload)
       })
         .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
         .then(function (d) {
           if (!d || !d.ok) throw d;
-          // The new discussion is SERVER-rendered on reload — the same render that painted
-          // the rest of the list, so there is no client/server drift. The list is short.
+          // The new discussion is SERVER-rendered on reload — the same render (and the same
+          // sanitizer) that painted the rest of the list, so there is no client/server drift.
           location.reload();
         })
         .catch(function () { submit.disabled = false; });

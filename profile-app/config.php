@@ -169,6 +169,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/MessageR2.php'; // R2 (S3) client f
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Media.php';   // confined GC of an owned media file + resizer cache twins
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';   // profile-2.0 spine (centralized per coordinator ask)
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Visibility.php'; // THE visibility decision point (Ian 6/12 refactor)
+require_once LG_PROFILE_APP_APP_ROOT . '/src/HtmlSanitize.php'; // chapter rich-text allowlist (no wp_kses here)
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Mint.php';    // looth_id signing (shim-replacement)
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Connections.php';   // social layer
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Messaging.php';     // social layer
