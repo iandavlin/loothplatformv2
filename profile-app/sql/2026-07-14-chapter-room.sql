@@ -13,6 +13,13 @@
 -- the SCALE path ("broadcast v2") for large chapters; git 2b3891d / 54b1828 hold its full sketch.
 -- So under v1 a chapter room DOES carry recipient rows — the §4 "zero recipient rows" property is
 -- intentionally not in force yet.
+--
+-- BROADCAST-V2 MEDIA-AUDIENCE NOTE (Ian 2026-07-14): image access in the room rides the existing
+-- message-media.php participant proxy, which authorises by message_recipients membership. That works
+-- ONLY because v1 ENUMERATES recipients. If broadcast-v2 stops enumerating (derives membership from
+-- chapter_member instead), the proxy will 403 every room image — so message-media.php MUST learn
+-- "chapter member of the room's chapter" as an authorised audience at that time, or images break at
+-- scale. Flagged here so the migration to derive can't silently regress room images.
 
 ALTER TABLE message_threads
     ADD COLUMN IF NOT EXISTS chapter_id bigint REFERENCES chapter(id) ON DELETE CASCADE;
