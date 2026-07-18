@@ -5,6 +5,7 @@ require_once __DIR__ . '/_bootstrap.php';
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Cache;
 use Looth\ProfileApp\Db;
+use Looth\ProfileApp\Provision;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'PATCH') profile_app_json(405, ['error' => 'method_not_allowed']);
 
@@ -32,6 +33,16 @@ if ($bizProvided) {
 }
 
 $pg = Db::pg();
+
+// Capture the name BEFORE the write so the slug auto-sync can tell whether the
+// current @handle was auto-derived from the old name (and should follow the
+// rename) or hand-picked by the member (and must be left alone).
+$oldName = (function () use ($pg, $user) {
+    $q = $pg->prepare('SELECT display_name FROM users WHERE id = :u');
+    $q->execute([':u' => (int)$user['id']]);
+    return (string) $q->fetchColumn();
+})();
+
 if ($bizProvided) {
     $pg->prepare('UPDATE users SET display_name = :n, business_name = :b WHERE id = :u')
        ->execute([':n' => $name, ':b' => $biz, ':u' => (int)$user['id']]);
@@ -39,6 +50,12 @@ if ($bizProvided) {
     $pg->prepare('UPDATE users SET display_name = :n WHERE id = :u')
        ->execute([':n' => $name, ':u' => (int)$user['id']]);
 }
+
+// Auto-sync the public @handle to follow the new name — but only while the slug
+// is still the system default (never a member's hand-picked handle). Guarded &
+// best-effort inside Provision; returns the new slug if it moved. See
+// Provision::maybeSyncSlugFromName for the ownership heuristic + lane note.
+$newSlug = Provision::maybeSyncSlugFromName((int)$user['id'], $oldName, $name);
 
 // Identity cleanup (slice 3): mirror display_name to wp_users so wp-admin
 // author bylines stay consistent with the profile-app source-of-truth.
@@ -66,4 +83,5 @@ if ($wpId > 0) Cache::purgeWhoami($wpId);
 
 $resp = ['ok' => true, 'display_name' => $name];
 if ($bizProvided) $resp['business_name'] = $biz;
+if ($newSlug !== null) $resp['slug'] = $newSlug;   // handle followed the rename
 profile_app_json(200, $resp);
