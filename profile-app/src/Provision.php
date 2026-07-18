@@ -170,6 +170,13 @@ final class Provision
 
             $base = '';
             foreach ([$nicename, $displayName, explode('@', $email)[0]] as $cand) {
+                // Forward-fix (2026-07): a Patreon-import nicename is a numeric
+                // placeholder ("patreon_100920474"), never a real handle. Skip it
+                // so a new Patreon connection derives its slug from the member's
+                // display_name instead of minting fresh junk. (The one-time
+                // profile_app backfill already renamed the 1,600+ legacy junk
+                // slugs; this stops the source from re-creating them.)
+                if (self::isPatreonJunk((string) $cand)) continue;
                 $base = self::slugify((string) $cand);
                 if ($base !== '') break;
             }
@@ -197,6 +204,96 @@ final class Provision
         $s = strtolower(trim($s));
         $s = preg_replace('/[^a-z0-9]+/', '-', $s) ?? '';
         return trim($s, '-');
+    }
+
+    /**
+     * True for a Patreon-import placeholder id — "patreon_100920474" (raw
+     * nicename) or its slugified form "patreon-100920474". These are numeric
+     * import artifacts, never a handle a member would choose, so both the
+     * forward-fix (ensureSlug) and the name-change auto-sync treat them as
+     * "no handle set" and derive a real one from the display_name.
+     */
+    private static function isPatreonJunk(string $s): bool
+    {
+        return (bool) preg_match('/^patreon[_-]?\d+$/i', trim($s));
+    }
+
+    /**
+     * Auto-move a member's public @handle (users.slug) to follow a display_name
+     * change — but ONLY while the slug is still the SYSTEM DEFAULT. A member who
+     * hand-picks a handle owns it and must never be clobbered by a later rename.
+     *
+     * "System default" = the current slug is empty, is Patreon-import junk, or
+     * still equals slugify($oldDisplayName) (i.e. it was auto-derived from the
+     * old name and never customized). Anything else is treated as member-owned
+     * and left untouched.
+     *
+     * The released slug is parked in slug_history so an old /u/<slug> link can
+     * 301-forward once the history-read lands. Deduped against live slugs with a
+     * numeric suffix, exactly like ensureSlug(). Best-effort + fully guarded: a
+     * slug is non-critical, so any failure only logs and the name change (which
+     * the caller already committed) still stands.
+     *
+     * COORDINATE (username-mentions lane): once an explicit slug_custom / locked
+     * flag exists, gate on THAT instead of this "still-matches-old-name"
+     * heuristic — the flag is authoritative about member ownership.
+     *
+     * Returns the new slug if it changed, else null.
+     */
+    public static function maybeSyncSlugFromName(int $userId, string $oldDisplayName, string $newDisplayName): ?string
+    {
+        try {
+            $newBase = self::slugify($newDisplayName);
+            if ($newBase === '') return null;   // new name has no slug-able chars; leave handle as-is
+
+            $pg  = Db::pg();
+            $cur = $pg->prepare('SELECT slug FROM users WHERE id = :i');
+            $cur->execute([':i' => $userId]);
+            $currentSlug = trim((string) $cur->fetchColumn());
+
+            // Only touch a slug that is still the system default — never a
+            // member's hand-picked handle.
+            $isDefault = $currentSlug === ''
+                || self::isPatreonJunk($currentSlug)
+                || $currentSlug === self::slugify($oldDisplayName);
+            if (!$isDefault) return null;
+
+            // Already matches the new name (case-insensitive) — nothing to do.
+            if ($currentSlug !== '' && strcasecmp($currentSlug, $newBase) === 0) return null;
+
+            // Dedup the desired handle against live slugs (case-insensitive),
+            // appending -2, -3 … on collision, mirroring ensureSlug().
+            $taken     = $pg->prepare('SELECT 1 FROM users WHERE lower(slug) = lower(:s) AND id <> :self');
+            $candidate = $newBase;
+            for ($i = 2; $i <= 999; $i++) {
+                $taken->execute([':s' => $candidate, ':self' => $userId]);
+                if (!$taken->fetchColumn()) break;
+                $candidate = $newBase . '-' . $i;
+            }
+            if ($i > 999) $candidate = $newBase . '-' . bin2hex(random_bytes(3));
+            if ($currentSlug !== '' && strcasecmp($currentSlug, $candidate) === 0) return null;
+
+            $pg->beginTransaction();
+            try {
+                // Park the released handle for a future history-301. Unique on
+                // lower(slug) across all history → ignore if already parked.
+                if ($currentSlug !== '') {
+                    $pg->prepare('INSERT INTO slug_history (user_id, slug) VALUES (:u, :s)
+                                  ON CONFLICT (lower(slug)) DO NOTHING')
+                       ->execute([':u' => $userId, ':s' => $currentSlug]);
+                }
+                $pg->prepare('UPDATE users SET slug = :s, slug_changed_at = now() WHERE id = :i')
+                   ->execute([':s' => $candidate, ':i' => $userId]);
+                $pg->commit();
+            } catch (Throwable $e) {
+                $pg->rollBack();
+                throw $e;
+            }
+            return $candidate;
+        } catch (\Throwable $e) {
+            error_log('[provision] slug auto-sync skipped for user_id=' . $userId . ': ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
