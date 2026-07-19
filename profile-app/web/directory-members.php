@@ -18,6 +18,7 @@ $lat    = isset($qs['lat']) ? (float)$qs['lat']    : null;
 $lng    = isset($qs['lng']) ? (float)$qs['lng']    : null;
 $radius = isset($qs['radius']) ? (int)$qs['radius'] : 50;
 $locTxt = (string)($qs['loc'] ?? '');
+$nameQ  = trim((string)($qs['q'] ?? ''));   // member name search — persisted in the URL for reload/share
 // Sort + view whitelists kept in lockstep with api/v0/directory-members.php.
 $sortOpts = ['joined_asc', 'joined_desc', 'name_asc', 'name_desc', 'distance_asc', 'online_desc', 'online_asc'];
 $sort   = in_array(($qs['sort'] ?? ''), $sortOpts, true) ? (string)$qs['sort'] : 'joined_asc';
@@ -108,7 +109,7 @@ lg_shared_render_site_header([
         ? '/u/' . rawurlencode((string)$_whoami['slug'])
         : '/profile/edit',
     'active_nav'    => 'members',
-    'logout_url'    => ($_whoami['authenticated'] ?? false) ? '/wp-login.php?action=logout' : null,
+    'logout_url'    => ($_whoami['authenticated'] ?? false) ? '/logout' : null,   // one-click endpoint, no WP interstitial (GH #55)
 ]);
 ?>
 <div class="dir-header">Members <span class="dir-meta" id="dir-meta">loading…</span>
@@ -155,6 +156,10 @@ if (isset($_SERVER['HTTP_CF_IPLATITUDE'], $_SERVER['HTTP_CF_IPLONGITUDE'])
 <?php endif; ?>
 
 <div class="dir-filterbar" id="dir-filterbar">
+  <div class="filt namebox">
+    <span class="flab">Name</span>
+    <input type="text" id="dir-name" placeholder="Search by name…" value="<?= htmlspecialchars($nameQ, ENT_QUOTES) ?>" autocomplete="off">
+  </div>
   <div class="filt loc">
     <span class="flab">Location</span>
     <input type="text" id="dir-loc" placeholder="Start typing a city…" value="<?= htmlspecialchars($locTxt, ENT_QUOTES) ?>">
@@ -237,6 +242,8 @@ function decodeEnt(s){ if(!s) return ''; const t=document.createElement('textare
 function filterQs() {
   const sp = new URLSearchParams();
   ['inst','skill','music','cred'].forEach(k => state[k].forEach(v => sp.append(k + '[]', v)));
+  const nm = document.getElementById('dir-name');
+  if (nm && nm.value.trim()) sp.set('q', nm.value.trim());
   const loc = document.getElementById('dir-loc').value.trim();
   const lat = document.getElementById('dir-lat').value;
   const lng = document.getElementById('dir-lng').value;
@@ -629,6 +636,15 @@ function setSortButtons(sort) {
 
 // Wire up controls.
 document.querySelectorAll('.ms').forEach(initMultiselect);
+// Member name search — debounced so each keystroke doesn't fire a query. filterQs()
+// already reads #dir-name, so this needs no state; the reset-to-page-1 + URL persist +
+// (map mode) pin refilter all ride the shared applyFilters().
+(function () {
+  const nm = document.getElementById('dir-name');
+  if (!nm) return;
+  let t = null;
+  nm.addEventListener('input', () => { clearTimeout(t); t = setTimeout(applyFilters, 300); });
+})();
 document.getElementById('dir-radius').addEventListener('change', applyFilters);
 document.getElementById('dir-more').addEventListener('click', () => loadPage(curPage + 1, true));
 const viewSel = document.getElementById('dir-view');

@@ -78,6 +78,15 @@ if (!$row) {
 if (!$row) { http_response_code(404); echo 'not found'; exit; }
 
 $subjectId = (int)$row['id'];
+
+// GHOST CONTAINMENT (Ian 2026-07-13): an unbridged identity (no wp_user_bridge
+// row) is NOT A MEMBER — it cannot log in. Its /u/<slug> must 404 exactly like a
+// non-existent slug, not render a ghost profile a member could try to connect to
+// or DM. Same answer as the master switch below (existence isn't probeable).
+$bq = $pg->prepare('SELECT 1 FROM wp_user_bridge WHERE user_id = :i LIMIT 1');
+$bq->execute([':i' => $subjectId]);
+if (!$bq->fetchColumn()) { http_response_code(404); echo 'not found'; exit; }
+
 looth_issue_bounce_if_needed();   // mint looth_id for logged-in WP users who land here without one
 $viewer    = Auth::currentUser();
 $isOwner   = $viewer && strtolower((string)$viewer['uuid']) === strtolower((string)$row['uuid']);

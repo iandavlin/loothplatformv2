@@ -25,7 +25,9 @@ $LOGO = LG_ARCHIVE_POC_LOGO_URL;
         <h3 class="lg-chrome-foot__h">Community</h3>
         <ul>
           <li><a href="/hub/">Forums</a></li>
-          <li><a href="/activity/">Activity</a></li>
+          <?php /* "Activity" removed (HK-012 / GH #44): /activity/ 301s straight
+                   back to home — the activity feed folded into the Hub, which is
+                   already linked above. A dead footer link reads as broken nav. */ ?>
           <li><a href="/members/">Members</a></li>
         </ul>
       </div>

@@ -35,6 +35,10 @@ var currentThreadUuid = null;  // opaque thread uuid → replies POST /me/messag
 var pendingPeerUuid   = null;  // target USER uuid for a not-yet-existing thread (new DM)
 var pendingAttachFile = null;  // staged image File for the next send (image attachment)
 var currentPeers      = [];    // EVERY peer of the open thread (see renderPeerHeader)
+/* Group-management state for the OPEN thread. Set from the thread() payload; drives the
+   member manager, author lines, and the own-message edit/delete affordance. */
+var currentThreadMeta = null;  // {is_group, created_by, can_manage, members:[…], meUuid}
+var pendingGroupUuids = null;  // selected uuids for a not-yet-created group (first send → to_uuids[])
 /* Bumped by every navigation. A thread/list response that resolves after you have
    navigated elsewhere belongs to a screen that no longer exists and must not write:
    a 6s-delayed response for thread A was proven to repaint thread B's header AND its
@@ -143,36 +147,72 @@ function refreshCounts() {
 }
 
 /* ── notifications ── */
-/* No text field on the wire — compose the sentence from type + actor.name. */
+/* No text field on the wire — compose the sentence from type + actor.name.
+   Hub events (notifications lane) carry actor_count: the backend coalesces two
+   reactors on one card into ONE row, so the sentence has to say so. */
+function notifActors(n) {
+  var who   = esc((n.actor && n.actor.name) || 'Someone');
+  var extra = (n.actor_count || 1) - 1;
+  if (extra === 1) return who + ' and 1 other';
+  if (extra > 1)   return who + ' and ' + extra + ' others';
+  return who;
+}
 function notifText(n) {
   var who = (n.actor && n.actor.name) || 'Someone';
   switch (n.type) {
     case 'connection_accept':  return esc(who) + ' accepted your connection request';
     case 'connection_request': return esc(who) + ' sent you a connection request';
     case 'message':            return 'New message from ' + esc(who);
-    default:                   return esc(who);
+    /* Hub events — all deep-link into the §4e discussion modal on the exact item. */
+    case 'forum.reply_to_topic': return notifActors(n) + ' replied to your post';
+    case 'forum.reply_to_reply': return notifActors(n) + ' replied to your comment';
+    case 'forum.mention':        return notifActors(n) + ' mentioned you in a discussion';
+    case 'reaction.on_post':     return notifActors(n) + ' reacted to your post';
+    default:                     return esc(who);
   }
 }
-var CHECK_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"'
+var X_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"'
   + ' stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-  + '<polyline points="20 6 9 17 4 12"/></svg>';
+  + '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 
+/* A row that HAS somewhere to land renders as a real <a> — the whole row is the
+   click target, middle-click/⌘-click open a tab, and the status bar shows where it
+   goes. Rows with no link (the legacy connection events) stay <div>s, so a row can
+   never navigate somewhere wrong. The × (delete) button keeps its own
+   stopPropagation so removing a row never navigates it. The × is REAL delete now
+   (v2): every row carries one — read or unread — because you can delete either. */
 function renderNotifItem(n) {
   var unread = !n.is_read;
-  return '<div class="lg-notif__item' + (unread ? ' lg-notif__item--unread' : '') +
-    '" data-notif-id="' + esc(n.id) + '">'
+  var link   = n.link || '';
+  var tag    = link ? 'a' : 'div';
+  var attrs  = 'class="lg-notif__item' + (unread ? ' lg-notif__item--unread' : '') +
+               (link ? ' lg-notif__item--link' : '') + '" data-notif-id="' + esc(n.id) + '"';
+  if (link) attrs += ' href="' + esc(link) + '" data-notif-link';
+  return '<' + tag + ' ' + attrs + '>'
     + '<div class="lg-notif__body">'
       + '<p class="lg-notif__text">' + notifText(n) + '</p>'
       + '<span class="lg-notif__time">' + relTime(n.created_at) + '</span>'
     + '</div>'
-    + (unread
-        ? '<button class="lg-notif__clear" data-notif-clear="' + esc(n.id) +
-          '" title="Mark as read" aria-label="Mark as read">' + CHECK_SVG + '</button>'
-        : '')
-    + '</div>';
+    + '<button class="lg-notif__clear" data-notif-del="' + esc(n.id) +
+      '" title="Delete" aria-label="Delete notification">' + X_SVG + '</button>'
+    + '</' + tag + '>';
 }
-function updateReadAllBtn(show) {
-  var b = document.querySelector('[data-lg-notif-readall]');
+/* Read-on-clickthrough: opening the thing marks that ONE notification read.
+   keepalive lets the POST survive the navigation we are NOT preventing — the link
+   navigates natively (so modified clicks still work) while the mark-read flies. */
+function markNotifReadOnNav(id) {
+  try {
+    fetch(API + '/me/notifications/', {
+      method:      'POST',
+      credentials: 'include',
+      keepalive:   true,
+      headers:     { 'Content-Type': 'application/json' },
+      body:        JSON.stringify({ action: 'read', id: parseInt(id, 10) }),
+    });
+  } catch (e) {}
+}
+function updateClearAllBtn(show) {
+  var b = document.querySelector('[data-lg-notif-clearall]');
   if (b) b.hidden = !show;
 }
 function loadNotifications() {
@@ -187,16 +227,26 @@ function loadNotifications() {
       var items = ((d && d.items) || []).filter(function (n) { return n.type !== 'message'; });
       if (!items.length) {
         list.innerHTML = '<p class="lg-sm__empty">No notifications yet.</p>';
-        updateReadAllBtn(false);
+        updateClearAllBtn(false);
         return;
       }
       list.innerHTML = items.map(renderNotifItem).join('');
-      /* NO auto-mark-read — the user controls it (per-item ✓ or "Mark all read"). */
-      updateReadAllBtn(items.some(function (n) { return !n.is_read; }));
-      list.querySelectorAll('[data-notif-clear]').forEach(function (btn) {
+      /* NO auto-mark-read — the user controls it (per-item × delete, or click-through
+         marks the one read). Clear-all is offered whenever the list is non-empty. */
+      updateClearAllBtn(items.length > 0);
+      list.querySelectorAll('[data-notif-del]').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
+          e.preventDefault();          /* the × sits inside an <a> — don't navigate */
           e.stopPropagation();
-          markNotifRead(btn.getAttribute('data-notif-clear'));
+          deleteNotif(btn.getAttribute('data-notif-del'));
+        });
+      });
+      /* Click-through: mark read, then let the browser follow the href into the
+         discussion modal (forums.js §4f routes ?topic=&reply= on both surfaces). */
+      list.querySelectorAll('[data-notif-link]').forEach(function (row) {
+        row.addEventListener('click', function (e) {
+          if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+          markNotifReadOnNav(row.getAttribute('data-notif-id'));
         });
       });
     })
@@ -204,42 +254,39 @@ function loadNotifications() {
       list.innerHTML = '<p class="lg-sm__error">Could not load notifications.</p>';
     });
 }
-/* Per-item clear = mark-read (v1): row de-emphasized in place, stays in the list. */
-function markNotifRead(id) {
-  fetch(API + '/me/notifications/', {
-    method:      'POST',
+/* Per-item × = REAL delete (v2): the row is removed here AND server-side via an
+   owner-scoped DELETE, so it's gone on every device. A 404 (someone else's id /
+   already gone) leaves the row untouched — never a silent success. Replaces the
+   v1 "mark-read in place" fudge; click-through still marks the one read. */
+function deleteNotif(id) {
+  fetch(API + '/me/notifications/?id=' + encodeURIComponent(id), {
+    method:      'DELETE',
     credentials: 'include',
-    headers:     { 'Content-Type': 'application/json' },
-    body:        JSON.stringify({ action: 'read', id: parseInt(id, 10) }),
   })
     .then(function (r) {
-      if (!r.ok) return;
+      if (!r.ok) return;                 /* 404 = not yours / gone → leave the row */
       var row = document.querySelector('.lg-notif__item[data-notif-id="' + id + '"]');
-      if (row) {
-        row.classList.remove('lg-notif__item--unread');
-        var btn = row.querySelector('.lg-notif__clear');
-        if (btn) btn.remove();
-      }
-      updateReadAllBtn(!!document.querySelector('.lg-notif__item--unread'));
+      if (row) row.remove();
+      var list = document.getElementById('lg-notif-list');
+      var any  = !!(list && list.querySelector('.lg-notif__item'));
+      if (list && !any) list.innerHTML = '<p class="lg-sm__empty">No notifications yet.</p>';
+      updateClearAllBtn(any);
       refreshCounts();
     })
     .catch(function () {});
 }
-function markAllNotifsRead() {
-  fetch(API + '/me/notifications/', {
-    method:      'POST',
+/* "Clear all" = DELETE every notification server-side (the mobile watermark's real
+   twin, now that clear actually deletes). Gone everywhere, every device. */
+function deleteAllNotifs() {
+  fetch(API + '/me/notifications/?all=1', {   /* query, not body — DELETE bodies get stripped by some proxies */
+    method:      'DELETE',
     credentials: 'include',
-    headers:     { 'Content-Type': 'application/json' },
-    body:        JSON.stringify({ action: 'read_all' }),
   })
     .then(function (r) {
       if (!r.ok) return;
-      document.querySelectorAll('.lg-notif__item--unread').forEach(function (row) {
-        row.classList.remove('lg-notif__item--unread');
-        var btn = row.querySelector('.lg-notif__clear');
-        if (btn) btn.remove();
-      });
-      updateReadAllBtn(false);
+      var list = document.getElementById('lg-notif-list');
+      if (list) list.innerHTML = '<p class="lg-sm__empty">No notifications yet.</p>';
+      updateClearAllBtn(false);
       refreshCounts();
     })
     .catch(function () {});
@@ -283,8 +330,12 @@ function loadThreadList() {
   var seq = ++navSeq;                 /* going back to the list is a navigation too */
   currentThreadUuid = null;
   pendingPeerUuid   = null;
+  pendingGroupUuids = null;
+  currentThreadMeta = null;
   clearAttach();
   clearPeerHeader();
+  hideMsgPanel();
+  showListChrome(true);
   list.hidden = false;
   if (detail) detail.hidden = true;
   /* show back button only when in detail */
@@ -305,12 +356,14 @@ function loadThreadList() {
         var unread = t.unread_count || 0;
         var prev   = t.last_snippet || '';
         var group  = ps.length > 1;
+        /* A custom group name (subject) wins over the member-name label; empty/absent → label. */
+        var title  = (t.subject && String(t.subject).length) ? String(t.subject) : peerLabel(ps, 2);
         return '<div class="lg-msg__thread' + (unread ? ' lg-msg__thread--unread' : '') +
           '" data-thread-uuid="' + esc(t.uuid) + '" tabindex="0" role="button">'
           + '<div class="lg-msg__av">' + avatarStack(ps, 36) + '</div>'
           + '<div class="lg-msg__meta">'
             + '<div class="lg-msg__nameline">'
-              + '<span class="lg-msg__name">' + esc(peerLabel(ps, 2)) + '</span>'
+              + '<span class="lg-msg__name">' + esc(title) + '</span>'
               + (group ? '<span class="lg-msg__group-tag">Group · ' + peerTotal(ps) + '</span>' : '')
             + '</div>'
             + '<div class="lg-msg__preview">' + esc(prev) + '</div>'
@@ -362,13 +415,33 @@ function renderPeerHeader(peers) {
       ? '<a class="lg-msg__peer-name" href="/u/' + esc(p.slug) + '">' + esc(name) + '</a>'
       : '<span class="lg-msg__peer-name">' + esc(name) + '</span>';
   }).join('<span class="lg-msg__peer-sep">, </span>');
+  /* A custom group name (subject) wins as the header title; the member names then drop to the
+     subline (Ian 7/12). No subject → the member names stay the title, as before. */
+  var subject  = currentThreadMeta && currentThreadMeta.subject;
+  var groupNote = ps.length > 1
+    ? 'Group · ' + peerTotal(ps) + ' people · everyone here sees your reply' : '';
+  /* Members / manage — only on a real (already-created) thread. A not-yet-created DM or new-
+     group compose has no thread to manage yet. Opens the member manager panel. */
+  var manageBtn = currentThreadUuid
+    ? '<button type="button" class="lg-msg__manage" data-lg-manage aria-label="' +
+      (ps.length > 1 ? 'Manage members' : 'Members and add people') + '" title="' +
+      (ps.length > 1 ? 'Manage members' : 'Add people') + '">'
+      + '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"'
+      + ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      + '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>'
+      + '<path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
+      + '</button>'
+    : '';
   el.innerHTML = avatarStack(ps, 36)
-    + '<span class="lg-msg__peer-names">' + names
-    + (ps.length > 1
-        ? '<span class="lg-msg__peer-note">Group · ' + peerTotal(ps) +
-          ' people · everyone here sees your reply</span>'
-        : '')
-    + '</span>';
+    + '<span class="lg-msg__peer-names">'
+    + (subject
+        ? '<span class="lg-msg__peer-name lg-msg__peer-title">' + esc(subject) + '</span>'
+          + '<span class="lg-msg__peer-note">' + names
+            + (groupNote ? '<span class="lg-msg__peer-sep"> · </span>' + groupNote : '') + '</span>'
+        : names
+          + (groupNote ? '<span class="lg-msg__peer-note">' + groupNote + '</span>' : ''))
+    + '</span>'
+    + manageBtn;
   el.hidden = false;
   setReplyPlaceholder(ps);
 }
@@ -405,6 +478,32 @@ function showDetailPane() {
   if (list)    list.hidden    = true;
   if (detail)  detail.hidden  = false;
   if (backBtn) backBtn.hidden = false;
+  hideMsgPanel();
+  showListChrome(false);
+}
+/* The "＋ New message" bar belongs to the thread-list view only — hidden whenever a
+   thread, the compose picker, or the member manager is showing. */
+function showListChrome(on) {
+  var bar = document.getElementById('lg-msg-newbar');
+  if (bar) bar.hidden = !on;
+}
+/* The shared panel hosts the compose picker AND the member manager. */
+function showMsgPanel(html) {
+  var list   = document.getElementById('lg-msg-list');
+  var detail = document.getElementById('lg-msg-detail');
+  var panel  = document.getElementById('lg-msg-panel');
+  var back   = document.querySelector('[data-lg-thread-back]');
+  if (!panel) return;
+  if (list)   list.hidden   = true;
+  if (detail) detail.hidden = true;
+  showListChrome(false);
+  panel.innerHTML = html;
+  panel.hidden = false;
+  if (back) back.hidden = false;   /* panel is a sub-screen — back returns to the list */
+}
+function hideMsgPanel() {
+  var panel = document.getElementById('lg-msg-panel');
+  if (panel) { panel.hidden = true; panel.innerHTML = ''; }
 }
 /* peersHint = the peers[] we already hold from the thread row, so the header paints
    with the messages rather than a beat later, once the thread fetch resolves. It is
@@ -418,6 +517,8 @@ function openThread(threadUuid, peersHint) {
   var seq = ++navSeq;
   currentThreadUuid = threadUuid;
   pendingPeerUuid   = null;
+  pendingGroupUuids = null;
+  currentThreadMeta = null;
   clearAttach();
   showDetailPane();
   /* Clear on ENTRY. Every caller happens to clear today, so the previous thread's
@@ -435,30 +536,23 @@ function openThread(threadUuid, peersHint) {
          another thread). Writing now would repaint their CURRENT thread with THIS
          thread's header and messages. */
       if (seq !== navSeq || currentThreadUuid !== threadUuid) return;
-      /* "mine" = sender is NOT one of the peers (peers = everyone but the viewer) */
-      var peerSet  = {};
-      ((d && d.peers) || []).forEach(function (p) { peerSet[p.uuid] = true; });
-      var messages = (d && d.messages) || [];
-      renderPeerHeader((d && d.peers) || []);   /* authoritative identity for this thread */
-
-      if (!messages.length) {
-        msgs.innerHTML = '<p class="lg-sm__empty">No messages yet. Send the first one!</p>';
-      } else {
-        msgs.innerHTML = messages.map(function (m) {
-          var mine = !peerSet[m.sender_uuid];
-          var h = '<div class="lg-msg__msg' + (mine ? ' lg-msg__msg--mine' : '') + '">';
-          /* image attachment (access-controlled URL): tap to open full size */
-          if (m.media_url) {
-            h += '<a class="lg-msg__msg-media" href="' + esc(m.media_url) + '" target="_blank" rel="noopener noreferrer">'
-               + '<img src="' + esc(m.media_url) + '" alt="Photo" loading="lazy"></a>';
-          }
-          /* body is optional when an image is present (image-only message) */
-          if (m.body) h += '<p class="lg-msg__msg-text">' + linkifyText(m.body) + '</p>';
-          h += '<span class="lg-msg__msg-time">' + relTime(m.created_at) + '</span></div>';
-          return h;
-        }).join('');
-        msgs.scrollTop = msgs.scrollHeight;
-      }
+      var peers = (d && d.peers) || [];
+      /* Capture group-management context for this thread: who can manage, the full member
+         list, and the viewer's own uuid (members MINUS peers — peers is everyone but you). */
+      var members = (d && d.members) || [];
+      var peerUuids = {};
+      peers.forEach(function (p) { peerUuids[p.uuid] = true; });
+      var meMember = members.filter(function (mm) { return !peerUuids[mm.uuid]; })[0];
+      currentThreadMeta = {
+        is_group:   !!(d && d.is_group),
+        created_by: d && d.created_by,
+        can_manage: !!(d && d.can_manage),
+        members:    members,
+        meUuid:     meMember ? meMember.uuid : null,
+        subject:    (d && d.thread && d.thread.subject) || null,   /* custom group name, or null */
+      };
+      renderPeerHeader(peers);   /* authoritative identity for this thread */
+      renderThreadMessages(msgs, (d && d.messages) || [], peers, members);
 
       if (compose) compose.hidden = false;
       setTimeout(refreshCounts, 400);  /* GET thread marks read server-side */
@@ -567,23 +661,32 @@ function stageAttach(file) {
 }
 
 function sendReply() {
-  if (!currentThreadUuid && !pendingPeerUuid) return;
+  if (!currentThreadUuid && !pendingPeerUuid && !pendingGroupUuids) return;
   var input = document.getElementById('lg-msg-reply-input');
   var text  = input ? input.value.trim() : '';
   /* require text OR an image (image-only messages are allowed) */
   if (!text && !pendingAttachFile) return;
 
+  /* A group is created by its FIRST message (POST to_uuids), and that path has no image
+     variant — so the first line of a new group must be text. Photos work once it exists. */
+  if (pendingGroupUuids && pendingAttachFile) {
+    setAttachError('Send a message to start the group first — you can add photos once it exists.');
+    return;
+  }
   if (pendingAttachFile) { sendWithAttachment(text); return; }
 
   var saved = text;
   input.value    = '';
   input.disabled = true;
 
-  var url, payload;
+  var url, payload, groupUuids = pendingGroupUuids, groupPeers = currentPeers;
   if (currentThreadUuid) {                       /* reply in existing thread */
     url     = API + '/me/messages/' + encodeURIComponent(currentThreadUuid);
     payload = { body: text };
-  } else {                                       /* first message → creates the thread */
+  } else if (pendingGroupUuids) {                /* first message → creates the GROUP thread */
+    url     = API + '/me/messages/';
+    payload = { to_uuids: pendingGroupUuids, body: text };
+  } else {                                       /* first message → creates the 1:1 thread */
     url     = API + '/me/messages/';
     payload = { to_uuid: pendingPeerUuid, body: text };
   }
@@ -601,6 +704,13 @@ function sendReply() {
          sendReply re-opens the SAME thread — without the hint the header would blink
          empty on every single send. */
       if (currentThreadUuid) return openThread(currentThreadUuid, currentPeers);
+      if (groupUuids) {                           /* group now exists — open it by its new uuid */
+        return r.json().then(function (j) {
+          pendingGroupUuids = null;
+          if (j && j.thread_uuid) openThread(j.thread_uuid, groupPeers);
+          else loadThreadList();
+        });
+      }
       pendingPeerUuid = null;                     /* thread now exists — re-resolve + open it */
       return openDmWithUser(newDmPeer);
     })
@@ -829,9 +939,9 @@ if (notifBtn) notifBtn.addEventListener('click', function (e) { e.preventDefault
 if (msgBtn)   msgBtn.addEventListener  ('click', function (e) { e.preventDefault(); openSocialModal('messages');    });
 if (connBtn)  connBtn.addEventListener ('click', function (e) { e.preventDefault(); openSocialModal('connections'); });
 
-/* "Mark all read" (notifications) */
-var notifReadAllBtn = document.querySelector('[data-lg-notif-readall]');
-if (notifReadAllBtn) notifReadAllBtn.addEventListener('click', markAllNotifsRead);
+/* "Clear all" (notifications) — DELETEs every row server-side */
+var notifClearAllBtn = document.querySelector('[data-lg-notif-clearall]');
+if (notifClearAllBtn) notifClearAllBtn.addEventListener('click', deleteAllNotifs);
 
 /* connections search — client-side filter of the loaded accepted[] */
 var connSearch = document.getElementById('lg-conn-search');
@@ -858,6 +968,542 @@ document.addEventListener('keydown', function (e) {
   if (e.key === 'Enter' && !e.shiftKey &&
       e.target && e.target.id === 'lg-msg-reply-input') {
     e.preventDefault(); sendReply();
+  }
+});
+
+/* ══ group messaging management (lane: messages-manage) ══════════════════════════
+   Compose a group, manage membership, edit/delete own messages, image lightbox.
+   Every rule is ALSO enforced server-side (src/Messaging.php + the two endpoints);
+   nothing here is the only guard — a hidden button never gates access. */
+
+/* ── reactions (fixed six-emoji set; MUST match Messaging::REACTION_EMOJI server-side) ── */
+var REACTION_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+function reactionPickerHtml() {
+  return REACTION_EMOJI.map(function (e) {
+    return '<button type="button" class="lg-msg__rx-opt" data-lg-rx="' + esc(e) + '">' + e + '</button>';
+  }).join('');
+}
+/* The aggregated strip under a bubble: one chip per emoji anyone used, count + who (title).
+   A chip the viewer is part of is highlighted; clicking it toggles that emoji straight off. */
+function reactionStripHtml(reactions) {
+  if (!reactions || !reactions.length) return '';
+  return '<span class="lg-msg__rx-strip">' + reactions.map(function (r) {
+    var who = (r.who || []).join(', ');
+    return '<button type="button" class="lg-msg__rx-chip' + (r.mine ? ' is-mine' : '') + '"'
+      + ' data-lg-rx="' + esc(r.emoji) + '" title="' + esc(who) + '">'
+      + '<span class="lg-msg__rx-e">' + r.emoji + '</span>'
+      + '<span class="lg-msg__rx-n">' + esc(r.count) + '</span></button>';
+  }).join('') + '</span>';
+}
+/* Hide any open per-bubble emoji picker (one at a time). */
+function closeReactionPickers() {
+  var open = document.querySelectorAll('.lg-msg__rx-pick:not([hidden])');
+  for (var i = 0; i < open.length; i++) open[i].setAttribute('hidden', '');
+}
+function toggleReaction(id, emoji) {
+  if (!currentThreadUuid || !id) return;
+  closeReactionPickers();
+  fetch(API + '/me/messages/' + encodeURIComponent(currentThreadUuid) + '/entries/' + encodeURIComponent(id), {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emoji: emoji }),
+  }).then(function (r) {
+    if (r.ok) openThread(currentThreadUuid, currentPeers);   /* re-render strips live */
+  }).catch(function () {});
+}
+
+/* ── thread render: system lines · author lines · (edited) · tombstone · own-msg menu ── */
+function renderThreadMessages(msgs, messages, peers, members) {
+  var peerSet = {};
+  (peers || []).forEach(function (p) { peerSet[p.uuid] = true; });
+  var group = (peers || []).length > 1;
+  var nameBy = {};
+  (members || []).forEach(function (m) { nameBy[m.uuid] = m.name || m.display_name || 'Member'; });
+
+  if (!messages.length) {
+    msgs.innerHTML = '<p class="lg-sm__empty">No messages yet. Send the first one!</p>';
+    return;
+  }
+  var lastSender = null;
+  msgs.innerHTML = messages.map(function (m) {
+    /* membership / transparency line — centered pill, never a bubble, never owned */
+    if (m.kind === 'system') {
+      lastSender = null;
+      return '<div class="lg-msg__sys">' + esc(m.body) + '</div>';
+    }
+    var mine = !peerSet[m.sender_uuid];   /* mine = sender is NOT among the peers */
+    var h = '';
+    /* who-said-it label above a run of a peer's messages in a GROUP (never for you) */
+    if (group && !mine && m.sender_uuid !== lastSender) {
+      h += '<span class="lg-msg__author">' + esc(nameBy[m.sender_uuid] || 'Member') + '</span>';
+    }
+    lastSender = m.sender_uuid;
+    /* soft-deleted → tombstone; body + media were already withheld server-side (no reactions) */
+    if (m.deleted) {
+      return h + '<div class="lg-msg__msg' + (mine ? ' lg-msg__msg--mine' : '') + '">'
+        + '<p class="lg-msg__msg-text lg-msg__msg-text--tomb">Message deleted</p></div>';
+    }
+    /* data-lg-msg-id rides EVERY live bubble now (peers' too) so React can target it; the raw
+       body + Edit/Delete stay mine-only. */
+    h += '<div class="lg-msg__msg' + (mine ? ' lg-msg__msg--mine' : '') + '"'
+       + ' data-lg-msg-id="' + esc(m.id) + '"'
+       + (mine && m.body ? ' data-lg-body="' + esc(m.body) + '"' : '')
+       + '>';
+    if (m.media_url) {
+      /* image attachment → in-app lightbox (SAME access-controlled /message-media/ URL) */
+      h += '<button type="button" class="lg-msg__msg-media" data-lg-msg-lightbox="' + esc(m.media_url) + '">'
+         + '<img src="' + esc(m.media_url) + '" alt="Photo" loading="lazy">'
+         + '<span class="lg-msg__zoomdot" aria-hidden="true">⤢</span></button>';
+    }
+    if (m.body) {
+      h += '<p class="lg-msg__msg-text">' + linkifyText(m.body)
+         + (m.edited ? '<span class="lg-msg__edited">(edited)</span>' : '') + '</p>';
+    }
+    /* hover menu: React (every message, own or a peer's) + Edit (own text) + Delete (own) */
+    h += '<span class="lg-msg__acts">'
+       + '<button type="button" class="lg-msg__act" data-lg-react aria-label="React" title="React">☺</button>'
+       + (mine && m.body ? '<button type="button" class="lg-msg__act" data-lg-edit>Edit</button>' : '')
+       + (mine ? '<button type="button" class="lg-msg__act lg-msg__act--del" data-lg-del>Delete</button>' : '')
+       + '</span>';
+    /* the six-emoji picker (hidden until React is clicked) */
+    h += '<span class="lg-msg__rx-pick" hidden>' + reactionPickerHtml() + '</span>';
+    h += '<span class="lg-msg__msg-time">' + relTime(m.created_at) + '</span>';
+    h += reactionStripHtml(m.reactions);
+    h += '</div>';
+    return h;
+  }).join('');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+/* ── compose / add picker (multi-select from accepted connections) ── */
+var pickerMode     = 'new';   /* 'new' = compose · 'add' = add to the open thread */
+var pickerSelected = [];      /* [{uuid, display_name, slug, avatar_url}, …] */
+var pickerConns    = [];      /* accepted connections for the search list */
+var mmMembers      = [];      /* member uuids of the thread the add-picker feeds (exclude them) */
+
+function chipAvatar(u) {
+  var name = u.display_name || u.name || '?';
+  var url  = u.avatar_url || '';
+  if (url) return '<img class="lg-msg__chip-av" src="' + esc(url) + '" alt="">';
+  return '<span class="lg-msg__chip-av lg-msg__chip-av--i">' + esc(name.charAt(0).toUpperCase()) + '</span>';
+}
+function pickerCurrentSearch() {
+  var s = document.getElementById('lg-pick-search');
+  return s ? s.value : '';
+}
+function renderPickChips() {
+  var box = document.getElementById('lg-pick-chips');
+  if (!box) return;
+  box.innerHTML = pickerSelected.map(function (u) {
+    return '<span class="lg-msg__chip">' + chipAvatar(u)
+      + esc(u.display_name || u.name || 'Member')
+      + '<button type="button" class="lg-msg__chip-x" data-lg-pick-remove="' + esc(u.uuid) + '" aria-label="Remove">✕</button></span>';
+  }).join('');
+}
+function renderPickList(filter) {
+  var list = document.getElementById('lg-pick-list');
+  if (!list) return;
+  var f = (filter || '').trim().toLowerCase();
+  var chosen = {}; pickerSelected.forEach(function (u) { chosen[u.uuid] = true; });
+  var excl   = {}; if (pickerMode === 'add') mmMembers.forEach(function (uu) { excl[uu] = true; });
+  var rows = pickerConns.filter(function (u) {
+    if (chosen[u.uuid] || excl[u.uuid]) return false;
+    if (!f) return true;
+    return String(u.display_name || '').toLowerCase().indexOf(f) > -1
+        || String(u.slug || '').toLowerCase().indexOf(f) > -1;
+  });
+  if (!rows.length) {
+    list.innerHTML = '<p class="lg-sm__empty">' +
+      (pickerConns.length ? 'No connections match.' : 'No connections yet.') + '</p>';
+    return;
+  }
+  list.innerHTML = rows.map(function (u) {
+    return '<div class="lg-msg__pi" data-lg-pick-add="' + esc(u.uuid) + '" role="button" tabindex="0">'
+      + avatarEl(u, 36)
+      + '<div class="lg-msg__pi-col"><div class="lg-msg__pi-name">' + esc(u.display_name || 'Member') + '</div>'
+      + (u.slug ? '<div class="lg-msg__pi-sub">@' + esc(u.slug) + '</div>' : '') + '</div>'
+      + '<span class="lg-msg__pi-add">Add</span></div>';
+  }).join('');
+}
+function updatePickGo() {
+  var go = document.getElementById('lg-pick-go');
+  if (!go) return;
+  var n = pickerSelected.length;
+  go.disabled = n < 1;
+  go.textContent = pickerMode === 'add' ? 'Add' : (n >= 2 ? 'Start group' : 'Message');
+}
+function pickerShellHtml(title, hint, ctaLabel) {
+  return '<div class="lg-msg__pk">'
+    + '<h4 class="lg-msg__pk-title">' + esc(title) + '</h4>'
+    + '<p class="lg-msg__pk-hint">' + esc(hint) + '</p>'
+    + '<div class="lg-msg__pk-field">'
+      + '<span id="lg-pick-chips"></span>'
+      + '<input id="lg-pick-search" class="lg-msg__pk-search" placeholder="Search connections…" autocomplete="off" aria-label="Search connections">'
+    + '</div>'
+    + '<div class="lg-msg__pk-list" id="lg-pick-list"><p class="lg-sm__status">Loading…</p></div>'
+    + '<div class="lg-msg__pk-cta">'
+      + '<button type="button" class="lg-msg__btn lg-msg__btn--ghost" data-lg-pick-cancel>Cancel</button>'
+      + '<button type="button" class="lg-msg__btn lg-msg__btn--primary" id="lg-pick-go" data-lg-pick-go disabled>' + esc(ctaLabel) + '</button>'
+    + '</div></div>';
+}
+function loadPickerConns() {
+  fetch(API + '/me/connections/', { credentials: 'include' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { pickerConns = (d && d.accepted) || []; renderPickList(pickerCurrentSearch()); })
+    .catch(function () {
+      var list = document.getElementById('lg-pick-list');
+      if (list) list.innerHTML = '<p class="lg-sm__error">Could not load connections.</p>';
+    });
+}
+function openComposePicker() {
+  pickerMode = 'new'; pickerSelected = [];
+  showMsgPanel(pickerShellHtml('New message', 'Add two or more people to start a group.', 'Start group'));
+  renderPickChips(); updatePickGo(); loadPickerConns();
+  var s = document.getElementById('lg-pick-search'); if (s) s.focus();
+}
+function openAddPicker() {
+  if (!currentThreadUuid) return;
+  pickerMode = 'add'; pickerSelected = [];
+  showMsgPanel(pickerShellHtml('Add people', 'You can only add people you’re connected to.', 'Add'));
+  renderPickChips(); updatePickGo(); loadPickerConns();
+  var s = document.getElementById('lg-pick-search'); if (s) s.focus();
+}
+function pickerAdd(uuid) {
+  var u = pickerConns.filter(function (c) { return c.uuid === uuid; })[0];
+  if (!u) return;
+  pickerSelected.push(u);
+  renderPickChips(); renderPickList(pickerCurrentSearch()); updatePickGo();
+}
+function pickerRemove(uuid) {
+  pickerSelected = pickerSelected.filter(function (u) { return u.uuid !== uuid; });
+  renderPickChips(); renderPickList(pickerCurrentSearch()); updatePickGo();
+}
+function pickerGo() {
+  if (!pickerSelected.length) return;
+  var uuids = pickerSelected.map(function (u) { return u.uuid; });
+  if (pickerMode === 'add') { mmAddConfirm(uuids); return; }
+  if (uuids.length === 1) { openDmWithUser(uuids[0]); return; }
+  enterGroupCompose(pickerSelected.slice());
+}
+/* ≥2 selected → a not-yet-created group. Mirror the new-DM compose: hold the uuids,
+   the first text message POSTs {to_uuids} and creates the thread (see sendReply). */
+function enterGroupCompose(sel) {
+  ++navSeq;
+  currentThreadUuid = null;
+  pendingPeerUuid   = null;
+  currentThreadMeta = null;
+  pendingGroupUuids = sel.map(function (u) { return u.uuid; });
+  clearAttach();
+  hideMsgPanel();
+  showDetailPane();
+  renderPeerHeader(sel.map(function (u) {
+    return { uuid: u.uuid, name: u.display_name || u.name, slug: u.slug, avatar_url: u.avatar_url };
+  }));
+  var msgs = document.getElementById('lg-msg-messages');
+  if (msgs) msgs.innerHTML = '<p class="lg-sm__empty">No messages yet. Send the first one to start the group.</p>';
+  var compose = document.getElementById('lg-msg-compose');
+  if (compose) compose.hidden = false;
+  var input = document.getElementById('lg-msg-reply-input');
+  if (input) input.focus();
+}
+
+/* ── member manager (opened from the thread header) ── */
+function openMemberManager() {
+  if (!currentThreadUuid) return;
+  var tu = currentThreadUuid;
+  showMsgPanel('<div class="lg-msg__mm"><p class="lg-sm__status">Loading…</p></div>');
+  fetch(API + '/me/messages/' + encodeURIComponent(tu), { credentials: 'include' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (d) { if (currentThreadUuid === tu) renderMemberManager(d); })
+    .catch(function () {
+      var p = document.getElementById('lg-msg-panel');
+      if (p) p.innerHTML = '<div class="lg-msg__mm"><p class="lg-sm__error">Could not load members.</p></div>';
+    });
+}
+function renderMemberManager(d) {
+  var peers = (d && d.peers) || [], members = (d && d.members) || [];
+  var canManage = !!(d && d.can_manage), isGroup = !!(d && d.is_group), createdBy = d && d.created_by;
+  var peerUuids = {}; peers.forEach(function (p) { peerUuids[p.uuid] = true; });
+  var me = members.filter(function (m) { return !peerUuids[m.uuid]; })[0];
+  var meUuid = me ? me.uuid : null;
+  mmMembers = members.map(function (m) { return m.uuid; });   /* add-picker excludes them */
+
+  var hint = canManage
+    ? 'You can remove anyone in this ' + (isGroup ? 'group' : 'conversation') + '.'
+    : (isGroup ? 'Only the group’s owner or a site admin can remove others. You can always leave.'
+               : 'Add people to start a group — this private chat stays as it is.');
+
+  var rows = members.map(function (m) {
+    var isMe    = m.uuid === meUuid;
+    var isOwner = createdBy && m.uuid === createdBy;   /* created_by = current owner (mutable) */
+    var sub = isMe ? 'You' : (m.slug ? '@' + m.slug : '');
+    /* Owner chip on the owner's row — visible to ALL members; only when an owner is recorded
+       (legacy NULL-owner threads show no badge, never a guess). */
+    var chip = isOwner ? '<span class="lg-msg__owner-chip">Owner</span>' : '';
+    var actions;
+    if (isMe) {
+      actions = '<span class="lg-msg__you">You</span>';
+    } else {
+      actions = '';
+      /* Transfer: the current owner OR a site admin (canManage) may hand ownership to any
+         NON-owner member. Server re-checks and 403s anyone else. */
+      if (canManage && isGroup && !isOwner) {
+        actions += '<button type="button" class="lg-msg__mkowner" data-lg-mm-owner="' + esc(m.uuid) + '">Make owner</button>';
+      }
+      if (canManage) {
+        actions += '<button type="button" class="lg-msg__rm" data-lg-mm-remove="' + esc(m.uuid) + '">Remove</button>';
+      }
+    }
+    return '<div class="lg-msg__mmi">'
+      + avatarEl(m, 36)
+      + '<div class="lg-msg__mmi-col"><div class="lg-msg__mmi-name">' + esc(m.name || m.display_name || 'Member') + chip + '</div>'
+      + '<div class="lg-msg__mmi-sub">' + esc(sub) + '</div></div>'
+      + '<div class="lg-msg__mmi-actions">' + actions + '</div></div>';
+  }).join('');
+
+  /* Group-name field — ANY member may set/clear it (Ian 7/12). Groups only; a 1:1 has no
+     custom title. Pre-filled with the current name; esc() makes the value attribute inert. */
+  var subject = (d && d.thread && d.thread.subject) || '';
+  var nameField = isGroup
+    ? '<div class="lg-msg__mm-name">'
+      + '<label class="lg-msg__mm-name-lbl" for="lg-mm-name">Group name</label>'
+      + '<div class="lg-msg__mm-name-row">'
+      + '<input type="text" id="lg-mm-name" class="lg-msg__mm-name-in" maxlength="60" '
+      +   'placeholder="Add a name (optional)" value="' + esc(subject) + '">'
+      + '<button type="button" class="lg-msg__mm-name-save" data-lg-mm-rename>Save</button>'
+      + '</div>'
+      + '<p class="lg-msg__mm-name-hint">Anyone here can rename the group. Clear the box to remove the name.</p>'
+      + '</div>'
+    : '';
+
+  showMsgPanel('<div class="lg-msg__mm">'
+    + '<h4 class="lg-msg__pk-title">Members · ' + members.length + '</h4>'
+    + '<p class="lg-msg__pk-hint">' + esc(hint) + '</p>'
+    + nameField
+    + '<div class="lg-msg__mm-list">' + rows + '</div>'
+    + '<div class="lg-msg__mm-foot">'
+      + '<button type="button" class="lg-msg__addrow" data-lg-mm-add>＋ Add people</button>'
+      + '<button type="button" class="lg-msg__leave" data-lg-mm-leave>' + (isGroup ? 'Leave group' : 'Leave') + '</button>'
+    + '</div></div>');
+}
+function postMembers(body) {
+  if (!currentThreadUuid) return Promise.resolve(null);
+  return fetch(API + '/me/messages/' + encodeURIComponent(currentThreadUuid) + '/members', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }).then(function (r) {
+    return r.json().then(
+      function (j) { j = j || {}; j._status = r.status; j._ok = r.ok && j.ok !== false; return j; },
+      function ()  { return { _status: r.status, _ok: r.ok }; }
+    );
+  }).catch(function () { return null; });
+}
+function mmRemove(uuid) {
+  if (!confirm('Remove this person from the group?')) return;
+  postMembers({ remove: uuid }).then(function (res) {
+    if (res && res._ok) { openMemberManager(); refreshCounts(); }
+    else if (res && res._status === 403) alert('Only the group’s owner or a site admin can remove members.');
+    else alert('Could not remove that member.');
+  });
+}
+function mmLeave() {
+  /* The owner must hand off before leaving while others remain (Ian 7/12 23:2x) — steer them to
+     the transfer flow instead of a silent failure. Server re-enforces (400 transfer_required). */
+  var m = currentThreadMeta || {};
+  if (m.created_by && m.created_by === m.meUuid && (m.members || []).length > 1) {
+    alert('You’re the group owner. Make someone else the owner first (tap “Make owner”), then you can leave.');
+    return;
+  }
+  if (!confirm('Leave this conversation? You’ll lose access to it.')) return;
+  postMembers({ leave: true }).then(function (res) {
+    if (res && res._ok) { loadThreadList(); refreshCounts(); }
+    else if (res && res._status === 400 && res.error === 'transfer_required') alert('Pass ownership to another member before you can leave.');
+    else alert('Could not leave the conversation.');
+  });
+}
+/* Rename (any member): re-open the thread so the new title + the "named the group" system
+   line both land live; an empty box clears the name and reverts to the member-name label. */
+function mmRename() {
+  var inp = document.getElementById('lg-mm-name');
+  if (!inp) return;
+  postMembers({ rename: inp.value }).then(function (res) {
+    if (res && res._ok) { openThread(currentThreadUuid, currentPeers); refreshCounts(); }
+    else alert('Could not rename the group.');
+  });
+}
+/* Transfer ownership (owner or site admin): server 403s anyone else. */
+function mmMakeOwner(uuid) {
+  if (!confirm('Make this person the group owner?')) return;
+  postMembers({ transfer: uuid }).then(function (res) {
+    if (res && res._ok) { openMemberManager(); refreshCounts(); }
+    else if (res && res._status === 403) alert('Only the current owner or a site admin can pass ownership.');
+    else alert('Could not transfer ownership.');
+  });
+}
+function mmAddConfirm(uuids) {
+  postMembers({ add: uuids }).then(function (res) {
+    if (res && res._ok) {
+      /* adding to a 1:1 forks a NEW group (the DM is never converted) → open the new one */
+      if (res.forked && res.thread_uuid) openThread(res.thread_uuid, null);
+      else openMemberManager();
+      refreshCounts();
+    } else if (res && res._status === 403) {
+      alert('You can only add people you’re connected to.');
+    } else {
+      alert('Could not add those people.');
+    }
+  });
+}
+
+/* ── edit / delete own message ── */
+function beginEdit(bubble) {
+  var id = bubble.getAttribute('data-lg-msg-id');
+  if (!id || bubble.querySelector('.lg-msg__edit')) return;
+  var raw    = bubble.getAttribute('data-lg-body') || '';
+  var textEl = bubble.querySelector('.lg-msg__msg-text');
+  var acts   = bubble.querySelector('.lg-msg__acts');
+  if (!textEl) return;
+  if (acts) acts.style.display = 'none';
+  textEl.style.display = 'none';
+  var ed = document.createElement('div');
+  ed.className = 'lg-msg__edit';
+  ed.innerHTML = '<textarea class="lg-msg__edit-input" rows="2"></textarea>'
+    + '<div class="lg-msg__edit-row">'
+      + '<button type="button" class="lg-msg__edit-cancel">Cancel</button>'
+      + '<button type="button" class="lg-msg__edit-save">Save</button></div>';
+  bubble.appendChild(ed);
+  var ta = ed.querySelector('textarea');
+  ta.value = raw; ta.focus(); ta.setSelectionRange(raw.length, raw.length);
+  ed.querySelector('.lg-msg__edit-cancel').addEventListener('click', function () { cancelEdit(bubble); });
+  ed.querySelector('.lg-msg__edit-save').addEventListener('click', function () { saveEdit(id, ta.value); });
+  ta.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(id, ta.value); }
+    else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(bubble); }
+  });
+}
+function cancelEdit(bubble) {
+  var ed = bubble.querySelector('.lg-msg__edit'); if (ed) ed.remove();
+  var textEl = bubble.querySelector('.lg-msg__msg-text'); if (textEl) textEl.style.display = '';
+  var acts = bubble.querySelector('.lg-msg__acts'); if (acts) acts.style.display = '';
+}
+function saveEdit(id, val) {
+  val = (val || '').trim();
+  if (!val || !currentThreadUuid) return;
+  fetch(API + '/me/messages/' + encodeURIComponent(currentThreadUuid) + '/entries/' + encodeURIComponent(id), {
+    method: 'PATCH', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: val }),
+  }).then(function (r) {
+    if (r.ok) openThread(currentThreadUuid, currentPeers);   /* re-render with "(edited)" */
+    else alert('Could not edit the message.');
+  }).catch(function () {});
+}
+function deleteMsg(id) {
+  if (!currentThreadUuid || !confirm('Delete this message? This can’t be undone.')) return;
+  fetch(API + '/me/messages/' + encodeURIComponent(currentThreadUuid) + '/entries/' + encodeURIComponent(id), {
+    method: 'DELETE', credentials: 'include',
+  }).then(function (r) {
+    if (r.ok) openThread(currentThreadUuid, currentPeers);   /* re-render with tombstone */
+    else alert('Could not delete the message.');
+  }).catch(function () {});
+}
+
+/* ── image lightbox (scroll / ＋ − to zoom, drag to pan; Esc closes) ── */
+var lightboxEl = null;
+function openLightbox(url) {
+  closeLightbox();
+  var lb = document.createElement('div');
+  lb.className = 'lg-msg-lightbox';
+  lb.setAttribute('role', 'dialog');
+  lb.setAttribute('aria-label', 'Photo');
+  lb.innerHTML = '<div class="lg-msg-lightbox__bar">'
+    + '<button type="button" class="lg-msg-lightbox__btn" data-lb-out aria-label="Zoom out">－</button>'
+    + '<button type="button" class="lg-msg-lightbox__btn" data-lb-in aria-label="Zoom in">＋</button>'
+    + '<button type="button" class="lg-msg-lightbox__btn" data-lb-close aria-label="Close">✕</button></div>'
+    + '<img class="lg-msg-lightbox__img" src="' + esc(url) + '" alt="Photo" draggable="false">'
+    + '<div class="lg-msg-lightbox__hint">Scroll or ＋ / － to zoom · Esc to close</div>';
+  document.body.appendChild(lb);
+  lightboxEl = lb;
+  document.body.classList.add('lg-msg-lightbox-open');
+  var img = lb.querySelector('.lg-msg-lightbox__img');
+  var scale = 1, tx = 0, ty = 0;
+  function apply() { img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; img.style.cursor = scale > 1 ? 'grab' : 'zoom-in'; }
+  function zoom(d) { scale = Math.min(5, Math.max(1, scale + d)); if (scale === 1) { tx = 0; ty = 0; } apply(); }
+  lb.querySelector('[data-lb-in]').addEventListener('click',  function (e) { e.stopPropagation(); zoom(0.4); });
+  lb.querySelector('[data-lb-out]').addEventListener('click', function (e) { e.stopPropagation(); zoom(-0.4); });
+  lb.querySelector('[data-lb-close]').addEventListener('click', function (e) { e.stopPropagation(); closeLightbox(); });
+  lb.addEventListener('click', function (e) { if (e.target === lb) closeLightbox(); });
+  img.addEventListener('click', function (e) { e.stopPropagation(); if (scale === 1) zoom(0.9); });
+  lb.addEventListener('wheel', function (e) { e.preventDefault(); zoom(e.deltaY < 0 ? 0.25 : -0.25); }, { passive: false });
+  var drag = false, sx = 0, sy = 0;
+  img.addEventListener('pointerdown', function (e) { if (scale <= 1) return; drag = true; sx = e.clientX - tx; sy = e.clientY - ty; try { img.setPointerCapture(e.pointerId); } catch (x) {} });
+  img.addEventListener('pointermove', function (e) { if (!drag) return; tx = e.clientX - sx; ty = e.clientY - sy; apply(); });
+  img.addEventListener('pointerup',   function () { drag = false; });
+}
+function closeLightbox() {
+  if (!lightboxEl) return;
+  lightboxEl.remove(); lightboxEl = null;
+  document.body.classList.remove('lg-msg-lightbox-open');
+}
+/* Esc closes the lightbox FIRST (capture) so it does not also close the whole modal. */
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && lightboxEl) { e.stopImmediatePropagation(); closeLightbox(); }
+}, true);
+
+/* ── delegated wiring for all of the above ── */
+document.addEventListener('click', function (e) {
+  var t = e.target;
+  var hit = function (sel) { return t.closest && t.closest(sel); };
+  if (hit('[data-lg-new-msg]'))     { openComposePicker(); return; }
+  if (hit('[data-lg-manage]'))      { openMemberManager(); return; }
+  if (hit('[data-lg-msg-lightbox]'))    { openLightbox(hit('[data-lg-msg-lightbox]').getAttribute('data-lg-msg-lightbox')); return; }
+  var pa = hit('[data-lg-pick-add]');    if (pa) { pickerAdd(pa.getAttribute('data-lg-pick-add')); return; }
+  var px = hit('[data-lg-pick-remove]'); if (px) { pickerRemove(px.getAttribute('data-lg-pick-remove')); return; }
+  if (hit('[data-lg-pick-go]'))     { pickerGo(); return; }
+  if (hit('[data-lg-pick-cancel]')) { loadThreadList(); return; }
+  var mr = hit('[data-lg-mm-remove]');   if (mr) { mmRemove(mr.getAttribute('data-lg-mm-remove')); return; }
+  var mo = hit('[data-lg-mm-owner]');    if (mo) { mmMakeOwner(mo.getAttribute('data-lg-mm-owner')); return; }
+  if (hit('[data-lg-mm-rename]'))   { mmRename(); return; }
+  if (hit('[data-lg-mm-add]'))      { openAddPicker(); return; }
+  if (hit('[data-lg-mm-leave]'))    { mmLeave(); return; }
+  if (hit('[data-lg-edit]'))        { var be = hit('[data-lg-msg-id]'); if (be) beginEdit(be); return; }
+  if (hit('[data-lg-del]'))         { var bd = hit('[data-lg-msg-id]'); if (bd) deleteMsg(bd.getAttribute('data-lg-msg-id')); return; }
+  /* React: reveal this bubble's six-emoji picker (only one open at a time). It opens
+     UPWARD by default, but flips DOWNWARD when the bubble is near the scroller's top —
+     otherwise the popover is clipped by the messages list's overflow (the topmost message
+     would push it up behind the modal header, unclickable). */
+  if (hit('[data-lg-react]')) {
+    var rb = hit('[data-lg-msg-id]');
+    var pick = rb && rb.querySelector('.lg-msg__rx-pick');
+    var wasHidden = pick && pick.hasAttribute('hidden');
+    closeReactionPickers();
+    if (pick && wasHidden) {
+      var scroller = rb.closest('.lg-msg__messages');
+      var down = false;
+      if (scroller) {
+        var br = rb.getBoundingClientRect(), sr = scroller.getBoundingClientRect();
+        down = (br.top - sr.top) < 56;   // too little room above → open below the bubble
+      }
+      pick.classList.toggle('lg-msg__rx-pick--down', down);
+      pick.removeAttribute('hidden');
+    }
+    return;
+  }
+  /* An emoji (picker option OR an existing chip) → toggle it on this bubble. */
+  var rx = hit('[data-lg-rx]');
+  if (rx) {
+    var rmb = hit('[data-lg-msg-id]');
+    if (rmb) toggleReaction(rmb.getAttribute('data-lg-msg-id'), rx.getAttribute('data-lg-rx'));
+    return;
+  }
+  /* click anywhere else closes an open picker */
+  closeReactionPickers();
+});
+document.addEventListener('input', function (e) {
+  if (e.target && e.target.id === 'lg-pick-search') renderPickList(e.target.value);
+});
+document.addEventListener('keydown', function (e) {
+  /* Enter on a highlighted picker row adds it */
+  if (e.key === 'Enter' && e.target && e.target.classList && e.target.classList.contains('lg-msg__pi')) {
+    e.preventDefault(); pickerAdd(e.target.getAttribute('data-lg-pick-add'));
   }
 });
 

@@ -100,14 +100,14 @@
   // also owns the DESKTOP header settings gear (lg-set-gear -> LGSettings panel),
   // so it must load on ALL viewports; it self-gates internally (tab bar <=640,
   // gear >=641). Gating it mobile-only removed the desktop gear (Ian 6/11).
-  inject('looth-tabbar-js', '/bottom-nav.js?v=33');
+  inject('looth-tabbar-js', '/bottom-nav.js?v=36');   // v36: real notif DELETE — swipe-to-delete rows + Clear-all DELETEs server-side (watermark retired)
 
   if (mobileish) {
     inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=36');
     // Tap-to-open sheets + push opt-in: needed soon, not needed for first paint.
     idle('looth-prac-sheet-js', '/practice-sheet.js?v=2');     // /p/<slug> business sheet
     idle('looth-prof-sheet-js', '/profile-sheet.js?v=8');      // /u/ profile sheet
-    idle('looth-msgr-js', '/messenger-sheet.js?v=3');          // DM pull-up
+    idle('looth-msgr-js', '/messenger-sheet.js?v=7');          // DM pull-up
     idle('looth-spon-sheet-js', '/sponsor-sheet.js?v=11');      // sponsors sheet
     idle('looth-push-js', '/push.js?v=2');                     // self-gates mobile-coarse
   }

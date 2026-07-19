@@ -372,6 +372,18 @@ if ($reply && in_array($reply->post_status, ['pending', 'spam'], true)) {
     ]);
 }
 
+// ── Ring the bell (notifications lane, 2026-07-12) ──────────────────────────
+// Reply-to-your-topic / reply-to-your-reply / @mention → profile-app's notification
+// store, each deep-linked into the §4e discussion modal on the exact reply. The
+// legacy BuddyBoss notification rows that rest_do_request() writes above go to a
+// table no UI reads (docs/atlas/NOTIFICATIONS-AUDIT.md §1) — THIS is the live path.
+// Fire-and-forget by contract: a published reply must never fail because the bell
+// is down, so the bridge swallows its own errors and we don't gate the response.
+if (is_file('/srv/lg-shared/notify-bridge.php')) {
+    require_once '/srv/lg-shared/notify-bridge.php';
+    lg_notify_on_reply($topic_id, $reply_id, (int) $uid, $reply_to, $content);
+}
+
 // Published — return everything a surface needs for an optimistic insert.
 $u          = wp_get_current_user();
 $forum_slug = get_post_field('post_name', $forum_id);

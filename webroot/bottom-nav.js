@@ -221,7 +221,10 @@
       '.lt-notifs__clear{border:0;background:none;color:var(--lg-sage-d,#6b7c52);font:700 12px/1 var(--lg-font-sans,system-ui,sans-serif);' +
         'text-transform:none;letter-spacing:0;cursor:pointer;padding:4px 6px}' +
       '.lt-notifs{padding:2px 0 6px;display:flex;flex-direction:column}' +
+      // .lt-notif is a <button> for legacy rows and an <a> for deep-linked hub rows —
+      // the reset below has to neutralize BOTH (text-decoration/color for the anchor).
       '.lt-notif{display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:0;background:none;' +
+      'text-decoration:none;color:inherit;box-sizing:border-box;' +
         'cursor:pointer;padding:9px 6px;border-radius:10px}' +
       '.lt-notif:active{background:var(--lg-sage-tint,#eef2e3)}' +
       '.lt-notif.is-unread{background:var(--lg-sage-tint,#eef2e3)}' +
@@ -616,8 +619,14 @@
     // Log out lives in the header, far-right (Ian 2026-06-17) — opposite the avatar/
     // "View profile" so the two account actions are well separated (no misclick).
     // Starts on the plain action URL; upgraded below to a NONCED one-tap URL.
-    var soLink     = document.querySelector('.lg-chrome__account-menu-signout, .lg-chrome__menu a[href*="action=logout"]');
-    var logoutHref = (soLink && soLink.getAttribute('href')) || '/wp-login.php?action=logout';
+    // Mirror the shared header's sign-out href (it ships /logout — the one-click,
+    // nonce-free route from the lg-logout mu-plugin). NEVER fall back to
+    // wp-login.php?action=logout: on a WP-FREE page (the Hub, Events, the directory)
+    // that URL carries no nonce, so WP answers with its "Do you really want to log
+    // out?" interstitial — the exact bug #55 exists to kill. Ian hit it AGAIN on
+    // 2026-07-13 because THIS file, not the PHP header, draws the button he clicks.
+    var soLink     = document.querySelector('.lg-chrome__account-menu-signout');
+    var logoutHref = (soLink && soLink.getAttribute('href')) || '/logout';
     head.innerHTML =
       '<span class="lt-sheet__avi">' + (src ? '<img src="' + src + '" alt="">' : '') + '</span>' +
       '<span class="lt-sheet__id"><span class="lt-sheet__name"></span>' +
@@ -627,29 +636,9 @@
         '<span>Log out</span></a>';
     head.querySelector('.lt-sheet__name').textContent = name;
     sheet.appendChild(head);
-    // Logout MUST carry a fresh WP nonce, or WordPress serves its "Do you really
-    // want to log out?" confirm page and the session quietly survives — the mobile
-    // "logout doesn't take" bug (Ian/keeper 2026-06-24). The header ships the plain
-    // un-nonced URL, so we mint a nonced one-tap URL from auth.php (WP pool). We
-    // pre-fetch it, but a fast tap can beat that fetch — so the click is ALSO
-    // intercepted: if the href isn't nonced yet, fetch a fresh URL and only THEN
-    // navigate. Once the real logout lands, WP redirects to a fresh (network-first)
-    // page that renders the anon header, so the nav + You sheet rebuild as anon.
-    var loEl = head.querySelector('.lt-sheet__logout');
-    function freshLogoutUrl() {
-      return fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) { return (d && d.logout_url) || null; });
-    }
-    freshLogoutUrl().then(function (url) { if (url && loEl) loEl.href = url; }).catch(function () {});
-    loEl.addEventListener('click', function (e) {
-      var href = loEl.getAttribute('href') || '';
-      if (/[?&]_wpnonce=/.test(href)) return;   // already nonced → real one-tap logout, let it through
-      e.preventDefault();                        // not nonced yet — never hit the confirm page
-      freshLogoutUrl()
-        .then(function (url) { window.location.href = url || href; })
-        .catch(function () { window.location.href = href; });
-    });
+    // (The obsolete nonce-minting dance lived here. /logout needs NO nonce, so the
+    //  plain link IS the mechanism now. Its click interceptor was actively re-routing
+    //  the button back to wp-login.php — removed 2026-07-13, #55.)
 
     // Swipe / tap-the-grab to dismiss (shared model — see enableSheetDrag).
     enableSheetDrag(sheet, closeSheet);
@@ -987,7 +976,7 @@
     var nH = document.createElement('div'); nH.className = 'lt-sheet__sech lt-notifs__h';
     nH.innerHTML = '<span>Notifications</span><button type="button" class="lt-notifs__clear" data-notif-clearall>Clear</button>';
     sheet.appendChild(nH);
-    nH.querySelector('[data-notif-clearall]').addEventListener('click', function () { markAllNotifsRead(true); });
+    nH.querySelector('[data-notif-clearall]').addEventListener('click', clearAllNotifs);
 
     var nBox = document.createElement('div'); nBox.className = 'lt-notifs'; nBox.id = 'lt-notifs';
     sheet.appendChild(nBox);
@@ -1033,12 +1022,26 @@
       return Math.floor(s / 604800) + 'w';
     } catch (e) { return ''; }
   }
+  // Coalesced hub rows carry actor_count ("Alice and 1 other reacted") — the backend
+  // merges multiple actors on one target into ONE row. Mirrors social-modals.js's
+  // notifActors()/notifText() so both surfaces say the same sentence.
+  function ntActors(n) {
+    var who   = ntEsc((n.actor && n.actor.name) || 'Someone');
+    var extra = (n.actor_count || 1) - 1;
+    if (extra === 1) return who + ' and 1 other';
+    if (extra > 1)   return who + ' and ' + extra + ' others';
+    return who;
+  }
   function ntText(n) {
     var who = (n.actor && n.actor.name) || 'Someone';
     switch (n.type) {
       case 'connection_accept': return ntEsc(who) + ' accepted your connection request';
       case 'connection_request': return ntEsc(who) + ' sent you a connection request';
       case 'message': return 'New message from ' + ntEsc(who);
+      case 'forum.reply_to_topic': return ntActors(n) + ' replied to your post';
+      case 'forum.reply_to_reply': return ntActors(n) + ' replied to your comment';
+      case 'forum.mention':        return ntActors(n) + ' mentioned you in a discussion';
+      case 'reaction.on_post':     return ntActors(n) + ' reacted to your post';
       default: return ntEsc(who);
     }
   }
@@ -1053,13 +1056,35 @@
     var box = document.getElementById('lt-notifs');
     if (box) loadSheetNotifs(box, true);
   }
+  // A hub notification carries `link` — the deep link into the §4e discussion modal
+  // on the exact topic/reply (forums.js §4f routes ?topic=&reply= on this surface via
+  // lgOpenTopicMobile). Those rows are real <a>s that GO THERE. Rows with no link
+  // (legacy connection events) stay <button>s that open the list, as before — a row
+  // never navigates somewhere it wasn't about. (notifications lane, 2026-07-12)
   function notifRow(n) {
-    var avi = (n.actor && n.actor.avatar_url) || '';
-    return '<button type="button" class="lt-notif' + (n.is_read ? '' : ' is-unread') + '" data-notif>' +
+    var avi   = (n.actor && n.actor.avatar_url) || '';
+    var link  = n.link || '';
+    var inner =
       '<span class="lt-notif-avi">' + (avi ? '<img src="' + ntEsc(avi) + '" alt="">' : '') + '</span>' +
       '<span class="lt-notif-tx"><span class="lt-notif-t">' + ntText(n) + '</span>' +
       '<span class="lt-notif-time">' + ntRel(n.created_at) + '</span></span>' +
-      (n.is_read ? '' : '<span class="lt-notif-dot"></span>') + '</button>';
+      (n.is_read ? '' : '<span class="lt-notif-dot"></span>');
+    var cls = 'lt-notif' + (n.is_read ? '' : ' is-unread');
+    return link
+      ? '<a class="' + cls + '" href="' + ntEsc(link) + '" data-notif-link data-notif-id="' +
+        ntEsc(n.id) + '">' + inner + '</a>'
+      : '<button type="button" class="' + cls + '" data-notif data-notif-id="' + ntEsc(n.id) + '">' + inner + '</button>';
+  }
+  // Read-on-clickthrough (mobile twin of social-modals.js). keepalive so the POST
+  // survives the navigation we deliberately do NOT prevent.
+  function markNotifReadOnNav(id) {
+    try {
+      fetch('/profile-api/v0/me/notifications/', {
+        method: 'POST', credentials: 'include', keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'read', id: parseInt(id, 10) })
+      });
+    } catch (e) {}
   }
   function loadSheetNotifs(box, showAll) {
     if (!box) return;
@@ -1067,21 +1092,12 @@
     fetch('/profile-api/v0/me/notifications/', { credentials: 'include' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
-        // Cleared = gone for good (Buck 2026-06-10; Vanessa 2026-06-11 re-report):
-        // unread-only AND nothing older than the last explicit Clear. The backend
-        // upsert REVIVES a repeat notification (is_read=false, created_at=now()),
-        // so is_read alone isn't enough — the Clear watermark keeps resurrected
-        // old rows out while genuinely new activity (fresh created_at) still shows.
-        var cw = 0;
-        try { cw = parseInt(localStorage.getItem('lg_notif_cleared_at'), 10) || 0; } catch (eW) {}
-        var all = ((d && d.items) || []).filter(function (n) {
-          if (n.is_read) return false;
-          if (cw) {
-            var ts = Date.parse(String(n.created_at || '').replace(' ', 'T'));
-            if (ts && ts <= cw) return false;
-          }
-          return true;
-        });
+        // Unread-only — the sheet shows what's new (auto-marked read on view below).
+        // The old `lg_notif_cleared_at` localStorage WATERMARK is RETIRED: "Clear"
+        // now DELETEs server-side (clearAllNotifs), so a cleared row no longer
+        // exists to be revived by the upsert, and genuinely new activity inserts a
+        // fresh row that shows normally. (notifications lane, delete+rotation 2026-07-13)
+        var all = ((d && d.items) || []).filter(function (n) { return !n.is_read; });
         var items = showAll ? all : all.slice(0, 8);
         if (!items.length) { box.innerHTML = '<div class="lt-notif-empty">No notifications yet.</div>'; return; }
         box.innerHTML = items.map(notifRow).join('') +
@@ -1091,6 +1107,17 @@
         var allBtn = box.querySelector('[data-notif-all]');
         if (allBtn) allBtn.addEventListener('click', function () { loadSheetNotifs(box, true); });
         [].forEach.call(box.querySelectorAll('[data-notif]'), function (el) { el.addEventListener('click', openNotifs); });
+        // Swipe-left a row to DELETE it (server-side + off the list). Parity with
+        // the desktop per-row ×; the tap/navigate behaviors above are preserved.
+        [].forEach.call(box.querySelectorAll('.lt-notif'), attachSwipeDelete);
+        // Hub rows: mark read, close the sheet, and let the <a> navigate to the thing.
+        [].forEach.call(box.querySelectorAll('[data-notif-link]'), function (el) {
+          el.addEventListener('click', function (e) {
+            if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey) return;
+            markNotifReadOnNav(el.getAttribute('data-notif-id'));
+            closeNotifSheet();     // the sheet must not sit over the modal we're opening
+          });
+        });
         // Seeing them clears the indicator (Buck 2026-06-08): mark read + zero the
         // badge once the list is shown. Fire when the badge shows ANY unread
         // (social-counts), not just when one of the visible top-8 is unread —
@@ -1098,26 +1125,84 @@
         // badge "comes back" after an app reset. markAllRead is idempotent.
         var lgBdg = document.querySelector('#' + BAR_ID + ' .lt-badge');
         if ((lgBdg && !lgBdg.hidden) || items.some(function (n) { return !n.is_read; }))
-          setTimeout(function () { markAllNotifsRead(false); }, 700);
+          setTimeout(function () { markAllNotifsRead(); }, 700);
       })
       .catch(function () { box.innerHTML = '<div class="lt-notif-empty">Couldn’t load notifications.</div>'; });
   }
-  // Mark all notifications read → clears the You-tab badge. clearList=true also
-  // empties the visible list (the "Clear" button); false just dims them (auto on view).
-  function markAllNotifsRead(clearList) {
+  // Mark all notifications read → drains the You-tab badge. This is the auto-on-view
+  // action (dims the rows, they stay); it is NOT delete. The "Clear" button DELETEs
+  // via clearAllNotifs(), and a per-row swipe DELETEs via deleteOneNotif().
+  function markAllNotifsRead() {
     var bdg = document.querySelector('#' + BAR_ID + ' .lt-badge'); if (bdg) bdg.hidden = true;   // optimistic
-    // explicit Clear sets the permanent watermark (see loadSheetNotifs filter)
-    if (clearList) { try { localStorage.setItem('lg_notif_cleared_at', String(Date.now())); } catch (eC) {} }
     var box = document.getElementById('lt-notifs');
-    if (box) {
-      if (clearList) box.innerHTML = '<div class="lt-notif-empty">No notifications yet.</div>';
-      else [].forEach.call(box.querySelectorAll('.lt-notif'), function (r) { r.classList.remove('is-unread'); var d = r.querySelector('.lt-notif-dot'); if (d) d.remove(); });
-    }
+    if (box) [].forEach.call(box.querySelectorAll('.lt-notif'), function (r) { r.classList.remove('is-unread'); var d = r.querySelector('.lt-notif-dot'); if (d) d.remove(); });
     fetch('/profile-api/v0/me/notifications/', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'read_all' })
     }).then(function () { refreshNotifBadge(); }).catch(function () {});
+  }
+  // "Clear" = DELETE every notification server-side (real, cross-device). The retired
+  // localStorage watermark only hid rows on THIS device; a real DELETE means cleared
+  // = gone everywhere, on every device.
+  function clearAllNotifs() {
+    var box = document.getElementById('lt-notifs');
+    if (box) box.innerHTML = '<div class="lt-notif-empty">No notifications yet.</div>';   // optimistic
+    var bdg = document.querySelector('#' + BAR_ID + ' .lt-badge'); if (bdg) bdg.hidden = true;
+    // query, not body — some proxies strip DELETE request bodies; ?all=1 always survives
+    fetch('/profile-api/v0/me/notifications/?all=1', {
+      method: 'DELETE', credentials: 'include'
+    }).then(function () { refreshNotifBadge(); }).catch(function () {});
+  }
+  // Delete ONE notification: ease the row out, drop it, and DELETE it server-side
+  // (owner-scoped; a 404 for a row that isn't ours just no-ops the network call).
+  function deleteOneNotif(id, rowEl) {
+    if (rowEl) {
+      rowEl.style.transition = 'transform .18s ease, opacity .18s ease';
+      rowEl.style.transform  = 'translateX(-110%)';
+      rowEl.style.opacity    = '0';
+      setTimeout(function () {
+        var box = rowEl.parentNode; if (!box) return;
+        box.removeChild(rowEl);
+        if (!box.querySelector('.lt-notif')) box.innerHTML = '<div class="lt-notif-empty">No notifications yet.</div>';
+        refreshNotifBadge();
+      }, 190);
+    }
+    if (!id) return;
+    fetch('/profile-api/v0/me/notifications/?id=' + encodeURIComponent(id), {
+      method: 'DELETE', credentials: 'include'
+    }).then(function () { refreshNotifBadge(); }).catch(function () {});
+  }
+  // Horizontal swipe-to-delete on one notif row. Distinguishes a LEFT swipe from a
+  // vertical scroll and from a tap, so the row's own tap/navigate still fires.
+  function attachSwipeDelete(row) {
+    var id = row.getAttribute('data-notif-id');
+    if (!id) return;                                  // unaddressable row → no swipe
+    var sx = 0, sy = 0, dx = 0, horizontal = false, active = false;
+    row.addEventListener('touchstart', function (e) {
+      var t = e.touches[0]; sx = t.clientX; sy = t.clientY; dx = 0; horizontal = false; active = true;
+      row.style.transition = 'none';
+    }, { passive: true });
+    row.addEventListener('touchmove', function (e) {
+      if (!active) return;
+      var t = e.touches[0]; dx = t.clientX - sx; var dy = t.clientY - sy;
+      if (!horizontal) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;                 // not a gesture yet
+        if (Math.abs(dy) >= Math.abs(dx)) { active = false; row.style.transition = ''; row.style.transform = ''; return; } // vertical → scroll
+        horizontal = true;
+      }
+      if (dx > 0) dx = 0;                             // only swipe LEFT
+      row.style.transform = 'translateX(' + dx + 'px)';
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+    function end() {
+      if (!active) return; active = false;
+      row.style.transition = 'transform .18s ease';
+      if (horizontal && dx < -(row.offsetWidth * 0.4)) deleteOneNotif(id, row);
+      else row.style.transform = 'translateX(0)';
+    }
+    row.addEventListener('touchend', end);
+    row.addEventListener('touchcancel', end);
   }
   function loadSavedPosts(box) {
     if (!box) return;

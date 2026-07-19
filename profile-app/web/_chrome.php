@@ -40,7 +40,11 @@ lg_shared_render_site_header([
         : '/profile/edit',
 ]);
 
-// /u/ uses this profile-app chrome (not the lg-shell header), so load the shared
-// member-to-member DM modal here — it listens for the lg:open-dm event the profile
-// Message button dispatches. Defer so it never blocks first paint.
-echo '<script src="/lg-shared/social-modals.js" defer></script>';
+// /u/ uses this profile-app chrome, and the shared header does NOT emit the script tag
+// here — so this IS the only loader of social-modals.js on profile pages (the DM modal +
+// the notifications/connections panels). It MUST carry the ?v=filemtime cache-bust:
+// /lg-shared/*.js is served `immutable, max-age=1yr`, so a BARE url hands the browser a
+// year-old copy forever. That is exactly what happened — profile pages ran stale panel
+// code and notification rows rendered WITHOUT their links, while every other surface
+// (which loads it versioned via site-header.php) had them (Ian, 2026-07-13).
+echo '<script src="/lg-shared/social-modals.js?v=' . (@filemtime('/srv/lg-shared/social-modals.js') ?: '1') . '" defer></script>';
