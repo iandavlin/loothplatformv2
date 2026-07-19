@@ -66,6 +66,14 @@ add_action('wp_ajax_lg_event_reminder_state', function () {
     catch (\Throwable $e) { wp_send_json(['ok' => false, 'error' => 'crm_error'], 500); }
 });
 
+// Anonymous visitors (GH #59): the front-page bento fires the state probe for
+// everyone, and admin-ajax answers an unregistered nopriv action with a bare
+// HTTP 400 ("0") — a console error on every logged-out front-page load. An
+// anonymous viewer's reminder state is simply "off"; answer cleanly instead.
+add_action('wp_ajax_nopriv_lg_event_reminder_state', function () {
+    wp_send_json(['ok' => true, 'on' => false, 'anon' => true]);
+});
+
 /** TOGGLE — on adds to the list, off detaches from it (Ian 6/12: both ways). */
 add_action('wp_ajax_lg_event_reminder_signup', function () {
     $u    = lg_evr_user();
