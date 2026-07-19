@@ -432,7 +432,7 @@ add_filter('login_message', function ($message) {
 	$message .= '
 		<div class="lg-login-announce" role="note" aria-label="Login announcement">
 			<div class="lg-login-announce__title">Log in with Email and Password</div>
-			<p class="lg-login-announce__body">New here or stuck? Pick the card that matches you below.</p>
+			<p class="lg-login-announce__body">New here or stuck? Scroll down &mdash; three cards under the login box explain every way in.</p>
 		</div>
 	';
 
