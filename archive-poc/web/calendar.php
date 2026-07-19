@@ -72,24 +72,33 @@ lg_page_open($is_member, 'Calendar', 'Upcoming and past events from The Looth Gr
   <p class="cal-empty">No events to show yet.</p>
 <?php else: ?>
   <div class="cal-list">
-    <?php foreach ($events as $e):
+    <?php
+    // Render event wall-clock in EASTERN, labeled "ET" (GH #43 / HK-011): the
+    // stored event_start_at is a correct instant (the indexer parses the WP meta
+    // with wp_timezone()), but bare date() here formatted it in the SERVER's
+    // default zone (UTC) with no label — so the calendar disagreed with the
+    // events listing (which says "· 3:00 PM ET"), and an evening event's date
+    // pill even landed on the WRONG DAY (7 PM ET = midnight UTC next day).
+    $lg_cal_tz = new DateTimeZone('America/New_York');
+    foreach ($events as $e):
         $start = (int) $e['event_start_at'];
         $url   = (string) ($e['url'] ?? '');
         $title = (string) ($e['title'] ?? 'Event');
         $join  = trim((string) ($e['event_join_url'] ?? ''));
         $past  = $start < $now;
+        $when  = (new DateTimeImmutable('@' . $start))->setTimezone($lg_cal_tz);
     ?>
     <div class="cal-row<?= $past ? ' cal-row--past' : '' ?>">
       <div class="cal-date">
-        <span class="cal-date__mon"><?= h(date('M', $start)) ?></span>
-        <span class="cal-date__day"><?= h(date('j', $start)) ?></span>
-        <span class="cal-date__yr"><?= h(date('Y', $start)) ?></span>
+        <span class="cal-date__mon"><?= h($when->format('M')) ?></span>
+        <span class="cal-date__day"><?= h($when->format('j')) ?></span>
+        <span class="cal-date__yr"><?= h($when->format('Y')) ?></span>
       </div>
       <div class="cal-body">
         <div class="cal-body__title">
           <?php if ($url !== ''): ?><a href="<?= h($url) ?>"><?= h($title) ?></a><?php else: ?><?= h($title) ?><?php endif; ?>
         </div>
-        <div class="cal-body__time"><?= h(date('l, M j, Y · g:i A', $start)) ?></div>
+        <div class="cal-body__time"><?= h($when->format('l, M j, Y · g:i A') . ' ET') ?></div>
         <?php if ($join !== ''): ?>
           <div class="cal-body__join"><a href="<?= h($join) ?>" target="_blank" rel="noopener">Join link →</a></div>
         <?php endif; ?>
