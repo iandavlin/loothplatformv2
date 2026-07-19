@@ -54,9 +54,42 @@ $topq->execute([':fs' => $forum_slug, ':ts' => $topic_slug]);
 $row = $topq->fetch();
 
 if (!$row) {
-    bb_mirror_chrome_header('Topic not found');
+    // ── Stale-deep-link rescue (HK-017 / GH #48) ─────────────────────────────
+    // A topic that was re-categorized (or a link minted with the wrong forum
+    // slug) used to dead-end here even though the topic still exists. Before
+    // 404ing, resolve by topic slug alone under the same visibility rules; on
+    // exactly ONE live match, 301 to its canonical forum path. Ambiguous slugs
+    // (same topic slug in several forums) stay a 404 — guessing would be worse.
+    $rescue = $db->prepare("
+        SELECT f.slug AS forum_slug
+          FROM forums.topic t
+          JOIN forums.forum f ON f.id = t.forum_id
+         WHERE t.slug = :ts
+           AND t.status IN ('publish', 'closed')
+           AND f.visibility = 'public'
+         LIMIT 2
+    ");
+    $rescue->execute([':ts' => $topic_slug]);
+    $homes = $rescue->fetchAll(PDO::FETCH_COLUMN);
+    if (count($homes) === 1 && $homes[0] !== $forum_slug) {
+        header('Location: ' . LG_BB_MIRROR_PUBLIC_PATH . '/' . rawurlencode($homes[0])
+             . '/' . rawurlencode($topic_slug) . '/', true, 301);
+        return;
+    }
+
+    // Genuinely gone: send the 404 BEFORE any output — chrome_header starts the
+    // body, and PHP can't change the status line after output, so the old
+    // order (header first, then http_response_code) silently shipped HTTP 200
+    // for a missing topic.
     http_response_code(404);
-    echo '<div class="page"><p class="bb-mirror__empty">Topic not found.</p></div>';
+    bb_mirror_chrome_header('Topic not found');
+    echo '<div class="page"><div class="bb-mirror__empty" style="text-align:center;padding:48px 20px">'
+       . '<p style="font-size:17px;margin:0 0 6px">Topic not found</p>'
+       . '<p style="margin:0 0 18px;color:var(--lg-mute,#6b6f6b)">It may have been removed, renamed, or the link is out of date.</p>'
+       . '<a href="' . htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH, ENT_QUOTES) . '/"'
+       . ' style="display:inline-block;background:var(--lg-sage,#87986a);color:#fff;border-radius:10px;'
+       . 'padding:10px 22px;font-weight:600;text-decoration:none">Browse the Hub</a>'
+       . '</div></div>';
     bb_mirror_chrome_footer();
     return;
 }
