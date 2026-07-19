@@ -966,5 +966,10 @@ function lg_shared_render_site_header(array $ctx): void
 <script src="/lg-shared/social-modals.js?v=<?= @filemtime(__DIR__ . '/social-modals.js') ?: '1' ?>" defer></script>
 <?php endif; ?>
 <?php
+// impact.com affiliate catcher — ONE shared tag definition (impact-tag.php).
+// Also emitted on wp_head by the lg-impact-tracking mu-plugin for WP-theme pages
+// that do not wear this chrome; window.__lgImpactTag dedupes pages that render both.
+require_once __DIR__ . '/impact-tag.php';
+lg_impact_tag_render();
 } // end function
 } // end if !function_exists
