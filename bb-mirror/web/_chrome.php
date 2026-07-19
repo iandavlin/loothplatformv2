@@ -258,8 +258,13 @@ function bb_mirror_new_topic_modal(): void
          WHERE f.visibility = 'public' AND f.status = 'open' AND f.forum_type = 'forum'
            AND f.id NOT IN (67251, 3876)
            AND f.id NOT IN (SELECT parent_forum_id FROM forum WHERE parent_forum_id IS NOT NULL)
-         ORDER BY COALESCE(f.parent_forum_id, f.id), f.menu_order ASC
+         ORDER BY (f.parent_forum_id IS NULL), COALESCE(f.parent_forum_id, f.id), f.menu_order ASC
     ")->fetchAll();
+    // ^ parentless leaves sort LAST as one contiguous block (GH #26): the old
+    //   COALESCE(pid, f.id) key scattered them between the parent groups, and the
+    //   render loop below prints a category header on every pid CHANGE — so each
+    //   scattered parentless forum minted its own "General" header ("GENERAL
+    //   listed twice" in the picker). Contiguous ⇒ exactly one General group.
 
     // Detect currently-scoped forum from URL (same logic as nav active highlight)
     $uri    = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
