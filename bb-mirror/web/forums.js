@@ -3269,7 +3269,13 @@
     var opt = e.target.closest('.fcr-opt');
     if (opt) { doReact(bar, opt.getAttribute('data-slug')); closePalettes(); return; }
     var chip = e.target.closest('.fcr-chip');
-    if (chip) { doReact(bar, chip.getAttribute('data-slug')); return; }
+    if (chip) {
+      // Chip click OPENS the who-reacted modal (LANE brief §2) — it no longer
+      // toggles. Toggle-off relocated to the palette: re-pick your active .fcr-opt
+      // (desktop opens it via .fcr-add; mobile via long-press) to remove it.
+      if (window.lgWhoReacted) window.lgWhoReacted(bar, chip.getAttribute('data-slug'));
+      return;
+    }
   });
   document.addEventListener('click', function (e) {
     if (!(e.target.closest && e.target.closest('.fcr'))) closePalettes();
@@ -3298,6 +3304,129 @@
     new MutationObserver(function () { clearTimeout(t); t = setTimeout(sync, 120); })
       .observe(feed, { childList: true, subtree: true });
   }
+})();
+
+/* ─── §4d′. Who-reacted modal (card + reply reactions, BOTH surfaces) ───────
+   Clicking a reaction summary chip (.fcr-chip) opens ONE modal listing every
+   reaction present + WHO reacted with it, read from the SAME discovery.card_reactions
+   store the counts come from (GET /archive-api/v0/card-reactors) — no second tally:
+   each group's reactor count equals the rendered chip count. ONE JS builds the modal
+   DOM; the CSS split styles it (forums.css centered dialog ≥ mobile-hub.css bottom
+   sheet ≤640). Reaction glyphs are pulled from the clicked bar's server-rendered
+   palette (never hard-coded), so custom-image reactions render identically here. */
+(function () {
+  var REACTORS = '/archive-api/v0/card-reactors';
+  var el = null, listEl = null, titleEl = null, lastFocus = null;
+
+  function esc(s) {
+    return (s + '').replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  // The clicked bar owns the authoritative glyph HTML per slug (server-rendered
+  // picker option) — reuse it so emoji AND custom-image reactions match the chips.
+  function glyphFor(bar, slug) {
+    var opt = bar && bar.querySelector('.fcr-palette .fcr-opt[data-slug="' + slug + '"]');
+    return opt ? opt.innerHTML : '';
+  }
+
+  function build() {
+    if (el) return;
+    el = document.createElement('div');
+    el.className = 'lg-wrx';
+    el.hidden = true;
+    el.innerHTML =
+      '<div class="lg-wrx__back" data-wrx-close></div>' +
+      '<div class="lg-wrx__panel" role="dialog" aria-modal="true" aria-label="Reactions">' +
+        '<div class="lg-wrx__head">' +
+          '<span class="lg-wrx__title" id="lg-wrx-title">Reactions</span>' +
+          '<button type="button" class="lg-wrx__x" data-wrx-close aria-label="Close">&times;</button>' +
+        '</div>' +
+        '<div class="lg-wrx__body"><div class="lg-wrx__list"></div></div>' +
+      '</div>';
+    document.body.appendChild(el);
+    listEl  = el.querySelector('.lg-wrx__list');
+    titleEl = el.querySelector('.lg-wrx__title');
+    el.querySelector('.lg-wrx__panel').setAttribute('aria-labelledby', 'lg-wrx-title');
+    el.addEventListener('click', function (e) {
+      if (e.target.closest('[data-wrx-close]')) close();
+    });
+  }
+
+  function close() {
+    if (!el || el.hidden) return;
+    el.hidden = true;
+    document.documentElement.classList.remove('lg-wrx-open');
+    if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (_) {} }
+    lastFocus = null;
+  }
+
+  // One reactor row. Unresolved reactors (name '') still render — the server lists
+  // them so the count can't diverge — as a neutral "Someone" with a blank avatar.
+  function rowHtml(u) {
+    var name = (u && u.name) || '';
+    var slug = (u && u.slug) || '';
+    var av   = (u && u.avatar_url) || '';
+    var avHtml = av
+      ? '<img class="lg-wrx__av" src="' + esc(av) + '" width="34" height="34" alt="" loading="lazy">'
+      : '<span class="lg-wrx__av lg-wrx__av--none" aria-hidden="true"></span>';
+    var label = name ? esc(name) : 'Someone';
+    var inner = avHtml + '<span class="lg-wrx__name">' + label + '</span>';
+    return (name && slug)
+      ? '<a class="lg-wrx__u" href="/u/' + esc(slug) + '">' + inner + '</a>'
+      : '<span class="lg-wrx__u">' + inner + '</span>';
+  }
+
+  function render(bar, data) {
+    var order  = (data && data.order) || [];
+    var groups = (data && data.groups) || {};
+    var total  = 0, html = '';
+    order.forEach(function (slug) {
+      var g = groups[slug]; if (!g) return;
+      total += g.count || 0;
+      var users = (g.users || []).map(rowHtml).join('');
+      html +=
+        '<section class="lg-wrx__grp">' +
+          '<div class="lg-wrx__grp-h">' +
+            '<span class="lg-wrx__grp-g">' + glyphFor(bar, slug) + '</span>' +
+            '<span class="lg-wrx__grp-lbl">' + esc(g.label || slug) + '</span>' +
+            '<span class="lg-wrx__grp-n">' + (g.count || 0) + '</span>' +
+          '</div>' +
+          '<div class="lg-wrx__grp-u">' + users + '</div>' +
+        '</section>';
+    });
+    listEl.innerHTML = html || '<div class="lg-wrx__empty">No reactions yet.</div>';
+    titleEl.textContent = total ? (total === 1 ? '1 reaction' : total + ' reactions') : 'Reactions';
+  }
+
+  function open(bar) {
+    if (!bar) return;
+    var pt = bar.getAttribute('data-post-type');
+    var id = bar.getAttribute('data-item-id');
+    if (!pt || !id) return;
+    build();
+    lastFocus = document.activeElement;
+    listEl.innerHTML = '<div class="lg-wrx__empty">Loading…</div>';
+    titleEl.textContent = 'Reactions';
+    el.hidden = false;
+    document.documentElement.classList.add('lg-wrx-open');
+    var x = el.querySelector('.lg-wrx__x'); if (x) x.focus();
+    fetch(REACTORS + '?post_type=' + encodeURIComponent(pt) + '&item_id=' + encodeURIComponent(id),
+          { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (d) { if (d && d.ok && !el.hidden) render(bar, d); })
+      .catch(function () {
+        if (!el.hidden) listEl.innerHTML = '<div class="lg-wrx__empty">Couldn’t load reactions.</div>';
+      });
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && el && !el.hidden) close();
+  });
+
+  // Exposed for the §4d chip-click delegate (same handler fires on desktop #lg-dmodal
+  // and the mobile #looth-rep-sheet — both carry forums.js — so one impl = both surfaces).
+  window.lgWhoReacted = function (bar /*, slug */) { open(bar); };
 })();
 
 /* ─── Save / bookmark toggle (fc-save) — binary per-card save → discovery.saved_posts

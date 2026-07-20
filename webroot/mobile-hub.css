@@ -133,6 +133,23 @@
     -webkit-touch-callout:none; -webkit-user-select:none; user-select:none;
   }
 
+  /* ───────────────────────────── Who-reacted modal → bottom SHEET ───────────────
+     Base/desktop is a centered dialog (forums.css .lg-wrx). On a phone re-chrome it
+     as a bottom sheet: pinned to the bottom edge, full width, rounded top. A top gap
+     (max-height < viewport) keeps the dimmed backdrop tappable-to-close; the ✕ in the
+     head closes too. Chip-click on the mobile #looth-rep-sheet opens the SAME modal
+     (forums.js §4d′), so this is pure chrome — no JS/store cross-wire. */
+  .lg-wrx__panel{
+    margin:auto 0 0; width:100%; max-width:none;
+    max-height:min(80vh, calc(100dvh - env(safe-area-inset-top,0px) - 40px));
+    border-left:0; border-right:0; border-bottom:0; border-radius:16px 16px 0 0;
+    box-shadow:0 -8px 30px rgba(20,30,15,.28);
+  }
+  .lg-wrx__head{ padding:14px 16px; }
+  .lg-wrx__grp-h{ padding-left:16px; padding-right:16px; }
+  .lg-wrx__u{ padding:10px 16px; }   /* thumb-friendly reactor rows */
+  .lg-wrx__body{ padding-bottom:calc(14px + env(safe-area-inset-bottom,0px)); }
+
   /* ───────────────────────────── Folded Hub band-aids (Hub-scoped only) ─────────
      Site-wide band-aids (footer overflow, directory map, off-canvas drawer, hamburger
      dupes, archive→hub redirect) stay in app-mobile-fixes.js / their canonical homes —
