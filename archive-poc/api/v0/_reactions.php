@@ -116,6 +116,86 @@ function lg_card_reactions_mine(PDO $pdo, array $items, ?int $wpId, ?string $uui
 }
 }
 
+if (!function_exists('lg_card_reactions_users')) {
+/**
+ * WHO-REACTED read for ONE card: the reactor list grouped by slug, with live
+ * profile identity resolved. Reads the SAME discovery.card_reactions store as the
+ * counts (lg_card_reactions_for_items) — NO second tally: each group's user-count
+ * equals that slug's rendered chip count. Newest reactor first within a group;
+ * groups ordered by descending count (so the modal reads most-reacted first).
+ *
+ * Identity resolution mirrors the comment lane: bridged rows carry user_uuid →
+ * resolved via lg_comments_author_cards(); unbridged rows carry only user_wp_id →
+ * resolved via the wp_ids profile lookup. A reactor whose card does not resolve
+ * (unbridged/no profile, or the dev cookie-gate on an anon read) is still LISTED
+ * with name '' so the list length never diverges from the count — the client
+ * renders a neutral placeholder for those.
+ *
+ * @return array{
+ *   order:  array<int,string>,                          // slugs present, count desc
+ *   groups: array<string, array{                        // slug =>
+ *     count: int,
+ *     users: array<int, array{name:string, slug:string, avatar_url:string}>
+ *   }>
+ * }
+ */
+function lg_card_reactions_users(PDO $pdo, string $postType, int $itemId): array {
+    $empty = ['order' => [], 'groups' => []];
+    if ($postType === '' || $itemId <= 0) return $empty;
+
+    $st = $pdo->prepare(
+        'SELECT slug, user_wp_id, user_uuid
+           FROM discovery.card_reactions
+          WHERE post_type = ? AND item_id = ?
+          ORDER BY created_at DESC');
+    $st->execute([$postType, $itemId]);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return $empty;
+
+    // Batch-resolve identity once: bridged rows by uuid, unbridged by wp id.
+    $uuids = []; $wpIds = [];
+    foreach ($rows as $r) {
+        $u = strtolower((string) ($r['user_uuid'] ?? ''));
+        if ($u !== '') { $uuids[$u] = true; }
+        else { $w = (int) ($r['user_wp_id'] ?? 0); if ($w > 0) $wpIds[$w] = true; }
+    }
+    $byUuid = $uuids ? lg_comments_author_cards(array_keys($uuids)) : [];
+    $byWp   = [];
+    if ($wpIds) {
+        foreach (lg_comments_profile_lookup('wp_ids', array_keys($wpIds)) as $it) {
+            $w = (int) ($it['wp_user_id'] ?? 0);
+            if ($w <= 0) continue;
+            $byWp[$w] = [
+                'display_name' => (string) ($it['display_name'] ?? ''),
+                'slug'         => (string) ($it['slug'] ?? ''),
+                'avatar_url'   => (string) ($it['avatar_url'] ?? ''),
+            ];
+        }
+    }
+
+    $groups = [];
+    foreach ($rows as $r) {
+        $slug = (string) $r['slug'];
+        $u    = strtolower((string) ($r['user_uuid'] ?? ''));
+        $w    = (int) ($r['user_wp_id'] ?? 0);
+        $card = ($u !== '' && isset($byUuid[$u])) ? $byUuid[$u]
+              : (($w > 0 && isset($byWp[$w])) ? $byWp[$w] : null);
+        if (!isset($groups[$slug])) $groups[$slug] = ['count' => 0, 'users' => []];
+        $groups[$slug]['count']++;
+        $groups[$slug]['users'][] = [
+            'name'       => (string) ($card['display_name'] ?? ''),
+            'slug'       => (string) ($card['slug'] ?? ''),
+            'avatar_url' => (string) ($card['avatar_url'] ?? ''),
+        ];
+    }
+    // Slug order = descending count (matches the chip row's most-reacted-first read).
+    // PHP 8 usort is stable, so equal-count groups keep their first-seen (newest) order.
+    $order = array_keys($groups);
+    usort($order, static fn($a, $b) => $groups[$b]['count'] <=> $groups[$a]['count']);
+    return ['order' => $order, 'groups' => $groups];
+}
+}
+
 if (!function_exists('lg_card_reactions_set')) {
 /**
  * Idempotent toggle/switch/off for one card, keyed on the normalized actor_key.
