@@ -103,7 +103,7 @@
   inject('looth-tabbar-js', '/bottom-nav.js?v=36');   // v36: real notif DELETE — swipe-to-delete rows + Clear-all DELETEs server-side (watermark retired)
 
   if (mobileish) {
-    inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=36');
+    inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=37');
     // Tap-to-open sheets + push opt-in: needed soon, not needed for first paint.
     idle('looth-prac-sheet-js', '/practice-sheet.js?v=2');     // /p/<slug> business sheet
     idle('looth-prof-sheet-js', '/profile-sheet.js?v=8');      // /u/ profile sheet
