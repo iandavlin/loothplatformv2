@@ -433,8 +433,12 @@ function looth_render_login_interstitial(string $back = '/profile/edit'): void {
 <link rel="stylesheet" href="/profile/edit/edit.css"></head>
 <body class="interstitial"><div class="interstitial-card">
   <h1>Sign in to edit your profile</h1>
-  <p>This page lives outside WordPress, so you'll bounce through the WP login and come right back.</p>
-  <p><a class="btn btn-pri" href="<?= looth_h($login) ?>">Sign in →</a></p>
+  <?php /* GH #51 / HK-025: the old copy leaked dev jargon ("lives outside
+     WordPress... bounce through the WP login") and the page offered no way
+     back out. Plain member language + an escape hatch. */ ?>
+  <p>Log in to your Looth Group account and you&rsquo;ll land right back here in the editor.</p>
+  <p><a class="btn btn-pri" href="<?= looth_h($login) ?>">Sign in &rarr;</a></p>
+  <p><a href="/" style="font-size:14px;color:inherit;opacity:.75">&larr; Back to Looth Group</a></p>
 </div></body></html>
 <?php
 }
