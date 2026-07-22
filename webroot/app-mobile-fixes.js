@@ -47,10 +47,20 @@
       '.lg-chrome-foot__cols{grid-template-columns:repeat(2,1fr);gap:18px 20px}' +
       '.lg-chrome-foot__legal{flex-direction:column;align-items:flex-start;gap:8px}' +
       '.lg-chrome-foot{margin-top:36px}' +
-      // Hide the redundant "add emoji" (☺+) button on mobile — press-and-hold the
-      // like opens the reaction picker instead (Buck 2026-06-08). Kept in the DOM
-      // (display:none) so mobile-hub's long-press openShared can still find it.
-      '.fcr-add{display:none!important}' +
+      // REVERSED (HK-013 / GH #45): .fcr-add used to be display:none on mobile —
+      // "press-and-hold the like opens the picker instead" (Buck 2026-06-08). But
+      // the sweep proved long-press never covered replies/OPs with zero reactions,
+      // leaving mobile members NO way to originate a reaction. Show it again as a
+      // clear "☺ React" pill (mirrors hub-polish's desktop treatment): hide the
+      // tiny "+" span, label via ::after, 32px tap height.
+      '.fcr-add{display:inline-flex!important;align-items:center!important;height:32px!important;' +
+        'min-width:0!important;width:auto!important;padding:0 12px!important;border-radius:999px!important;' +
+        'gap:5px!important;background:var(--lguser-pill,var(--lg-sage-tint,#eef2e3))!important;' +
+        'border:1px solid var(--lguser-line,#e3ddd0)!important;' +
+        'color:var(--lguser-accent-d,var(--lg-sage-d,#52613d))!important;' +
+        'font-size:16px!important;line-height:1!important}' +
+      '.fcr-add>span{display:none!important}' +
+      '.fcr-add::after{content:"React";font:700 12px/1 var(--lg-font-sans,system-ui,-apple-system,sans-serif);color:inherit}' +
     '}' +
     // Very small phones: a single link column reads better than cramped pairs.
     '@media (max-width:380px){' +
