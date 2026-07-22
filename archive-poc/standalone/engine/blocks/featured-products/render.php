@@ -35,6 +35,24 @@ $headingEdit = $editorMode ? ' data-lg-edit-prop="heading"' : '';
    resolver (e.g. the WP editor preview). */
 $author = (int) ($args['author'] ?? 0);
 if ($author <= 0 && is_array($ctx['sponsor'] ?? null)) $author = (int) ($ctx['sponsor']['wp_user_id'] ?? 0);
+
+/* Fallback: if sponsor_feed is unavailable or returned nothing, query WP directly
+   for sponsor-product posts and pull their ACF URLs. This keeps featured products
+   working even when discovery DB isn't set up. */
+if ((!isset($ctx['sponsor_feed']) || empty($items)) && $author > 0 && function_exists('get_posts')) {
+    try {
+        $posts = get_posts(['post_type' => 'sponsor-product', 'author' => $author, 'posts_per_page' => 12, 'orderby' => 'date', 'order' => 'DESC']);
+        if (!empty($posts)) {
+            $items = [];
+            foreach ($posts as $post) {
+                $acf_url = function_exists('get_field') ? get_field('sponsor_product_link_to_product_page', $post->ID) : '';
+                $items[] = ['title' => $post->post_title, 'url' => $acf_url ?: get_permalink($post->ID), 
+                           'image' => '', 'price' => '', 'badge' => ''];
+            }
+        }
+    } catch (Throwable $e) { /* silently fall back to baked items */ }
+}
+
 if ($author > 0 && isset($ctx['sponsor_feed']) && is_callable($ctx['sponsor_feed'])) {
     $live = ($ctx['sponsor_feed'])('sponsor-product', $author, 12);
     if (is_array($live)) $items = $live;   // authoritative live loop (empty = none → suppress)
