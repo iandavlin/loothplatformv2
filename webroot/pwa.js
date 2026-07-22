@@ -170,12 +170,35 @@
   // Bail entirely unless we're on mobile, not already installed, not dismissed.
   if (isStandalone || !isMobile || dismissed()) return;
 
+  // Engagement gate (HK-029 / GH #54): the banner used to appear on FIRST PAINT of
+  // every page and overlay whatever was at the bottom (front CTAs, hub action rows,
+  // even the directory Filters modal). Now it waits for real engagement: the 2nd
+  // page of the session, or the first meaningful scroll (>400px) — whichever comes
+  // first. Dismiss/install state still wins above.
+  var pv = 1;
+  try {
+    pv = (parseInt(sessionStorage.getItem('looth_pwa_pv') || '0', 10) || 0) + 1;
+    sessionStorage.setItem('looth_pwa_pv', String(pv));
+  } catch (e) {}
+  function whenEngaged(cb) {
+    if (pv >= 2) { cb(); return; }
+    var fired = false;
+    function go() {
+      if (fired) return;
+      fired = true;
+      window.removeEventListener('scroll', onScroll);
+      cb();
+    }
+    function onScroll() { if ((window.scrollY || 0) > 400) go(); }
+    window.addEventListener('scroll', onScroll, { passive: true });
+  }
+
   var deferredPrompt = null;
 
   function injectStyles() {
     if (document.getElementById('looth-pwa-style')) return;
     var css =
-      '#looth-pwa-banner{position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483000;' +
+      '#looth-pwa-banner{position:fixed;left:12px;right:12px;bottom:12px;z-index:3000;' +
       'background:var(--lg-cream,#fbfbf8);color:var(--lg-ink,#323532);border:1px solid var(--lg-line,#e3ddd0);' +
       'border-radius:16px;box-shadow:0 6px 24px rgba(26,29,26,.18);padding:14px 14px 14px 16px;' +
       'display:flex;align-items:center;gap:12px;' +
@@ -192,7 +215,7 @@
       '#looth-pwa-banner .lpw-install:active,#looth-pwa-banner .lpw-how:active{background:var(--lg-sage-d,#6b7c52)}' +
       '#looth-pwa-banner .lpw-x{background:transparent;color:var(--lg-mute,#6b6f6b);padding:8px 8px;font-size:20px;line-height:1}' +
       /* iOS step-by-step "Add to Home Screen" sheet (Buck 2026-06-08: make it super easy) */
-      '#looth-ios-sheet{position:fixed;inset:0;z-index:2147483600;display:none}' +
+      '#looth-ios-sheet{position:fixed;inset:0;z-index:3900;display:none}' +
       '#looth-ios-sheet.is-open{display:block}' +
       '#looth-ios-sheet .lis-back{position:absolute;inset:0;background:rgba(26,29,26,.55)}' +
       '#looth-ios-sheet .lis-card{position:absolute;left:10px;right:10px;bottom:10px;background:var(--lg-cream,#fbfbf8);' +
@@ -306,7 +329,7 @@
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
     deferredPrompt = e;
-    showBanner('install');
+    whenEngaged(function () { showBanner('install'); });
   });
 
   window.addEventListener('appinstalled', function () {
@@ -318,9 +341,9 @@
   // iOS Safari has no beforeinstallprompt — surface manual instructions.
   if (isiOSSafari) {
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function () { showBanner('ios'); });
+      document.addEventListener('DOMContentLoaded', function () { whenEngaged(function () { showBanner('ios'); }); });
     } else {
-      showBanner('ios');
+      whenEngaged(function () { showBanner('ios'); });
     }
   }
 })();
