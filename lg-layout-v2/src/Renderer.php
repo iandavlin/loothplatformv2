@@ -55,6 +55,40 @@ final class Renderer
         $sponsor = $ctx['sponsor'] ?? ($layout['sponsor'] ?? null);
         $ctx['sponsor'] = is_array($sponsor) ? $sponsor : null;
 
+        /* Sponsor feed resolver — for featured-products blocks to pull live
+           sponsor-product posts with their ACF URLs instead of baked
+           permalinks. Returns items array or null on error. */
+        $ctx['sponsor_feed'] = function(string $cpt, int $author_id, int $limit): ?array {
+            if ($cpt !== 'sponsor-product' || $author_id <= 0 || $limit <= 0) return null;
+            try {
+                $posts = get_posts(['post_type' => 'sponsor-product', 'author' => $author_id, 'posts_per_page' => $limit, 'orderby' => 'date', 'order' => 'DESC']);
+                if (empty($posts)) return null;
+                $items = [];
+                foreach ($posts as $post) {
+                    $acf_url = function_exists('get_field') ? get_field('sponsor_product_link_to_product_page', $post->ID) : '';
+                    $items[] = ['title' => $post->post_title, 'url' => $acf_url ?: get_permalink($post->ID), 'image' => '', 'price' => '', 'badge' => ''];
+                }
+                return $items ?: null;
+            } catch (Throwable $e) { return null; }
+        };
+
+        /* Sponsor feed resolver — for featured-products blocks to pull live
+           sponsor-product posts with their ACF URLs instead of baked
+           permalinks. Returns items array or null on error. */
+        \$ctx['sponsor_feed'] = function(string \$cpt, int \$author_id, int \$limit): ?array {
+            if (\$cpt !== 'sponsor-product' || \$author_id <= 0 || \$limit <= 0) return null;
+            try {
+                \$posts = get_posts(['post_type' => 'sponsor-product', 'author' => \$author_id, 'posts_per_page' => \$limit, 'orderby' => 'date', 'order' => 'DESC']);
+                if (empty(\$posts)) return null;
+                \$items = [];
+                foreach (\$posts as \$post) {
+                    \$acf_url = function_exists('get_field') ? get_field('sponsor_product_link_to_product_page', \$post->ID) : '';
+                    \$items[] = ['title' => \$post->post_title, 'url' => \$acf_url ?: get_permalink(\$post->ID), 'image' => '', 'price' => '', 'badge' => ''];
+                }
+                return \$items ?: null;
+            } catch (Throwable \$e) { return null; }
+        };
+
         /* data-lg-v2 marks the article as v2-rendered HTML — handy in browser
            devtools to tell v2 output apart from v1 / cached / theme-template
            output. data-lg-blocks + data-lg-schema give counts + manifest
