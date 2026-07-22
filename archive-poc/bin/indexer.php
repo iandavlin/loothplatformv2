@@ -414,7 +414,7 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
     $url   = get_permalink($post_id) ?: '';
     // For sponsor-product CPT, use the ACF 'url' field if available (external product link)
     if ($cpt === 'sponsor-product' && function_exists('get_field')) {
-        $acf_url = get_field('url', $post_id);
+        $acf_url = get_field('sponsor_product_link_to_product_page', $post_id);
         if (!empty($acf_url)) {
             $url = (string) $acf_url;
         }
