@@ -58,15 +58,15 @@ return [
     ],
 
     'local_looths' => [
-        ['name' => 'Tri State Looths (NYC)',  'url' => 'https://loothgroup.com/groups/tri-state-looths-nyc/',  'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/38/6703eb1642637-bpthumb.jpg'],
-        ['name' => 'SoCal Looths',            'url' => 'https://loothgroup.com/groups/socal-looths/',          'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/39/67059fc8c8f52-bpthumb.png'],
-        ['name' => 'SW Ontario Looths',       'url' => 'https://loothgroup.com/groups/sw-ontario-looths/',     'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/40/695029893f4d0-bpthumb.jpg'],
-        ['name' => 'DMV Looths',              'url' => 'https://loothgroup.com/groups/dmv-looths/',            'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/41/67bf465a9aa9b-bpthumb.png'],
-        ['name' => 'Looth Troop PNW',         'url' => 'https://loothgroup.com/groups/looth-troop-pnw/',       'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/42/67c3666232607-bpthumb.jpg'],
-        ['name' => 'Looths of Ireland',       'url' => 'https://loothgroup.com/groups/looths-of-ireland/',     'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/43/67c4978e6ed05-bpthumb.png'],
-        ['name' => 'Middle Tennessee Looths', 'url' => 'https://loothgroup.com/groups/middle-tennessee-looths/','avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/45/68b649a51295e-bpthumb.png'],
-        ['name' => 'Basque Country Looths',   'url' => 'https://loothgroup.com/groups/basque-country-looths/', 'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/46/68fb57ee07b48-bpthumb.png'],
-        ['name' => 'Ohio Local Looths',       'url' => 'https://loothgroup.com/groups/ohio-local-looths/',     'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/47/691e1eeae828a-bpthumb.png'],
+        ['name' => 'Tri State Looths (NYC)',  'url' => '/local/tri-state-looths-nyc/',  'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/38/6703eb1642637-bpthumb.jpg'],
+        ['name' => 'SoCal Looths',            'url' => '/local/socal-looths/',          'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/39/67059fc8c8f52-bpthumb.png'],
+        ['name' => 'SW Ontario Looths',       'url' => '/local/sw-ontario-looths/',     'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/40/695029893f4d0-bpthumb.jpg'],
+        ['name' => 'DMV Looths',              'url' => '/local/dmv-looths/',            'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/41/67bf465a9aa9b-bpthumb.png'],
+        ['name' => 'Looth Troop PNW',         'url' => '/local/looth-troop-pnw/',       'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/42/67c3666232607-bpthumb.jpg'],
+        ['name' => 'Looths of Ireland',       'url' => '/local/looths-of-ireland/',     'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/43/67c4978e6ed05-bpthumb.png'],
+        ['name' => 'Middle Tennessee Looths', 'url' => '/local/middle-tennessee-looths/','avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/45/68b649a51295e-bpthumb.png'],
+        ['name' => 'Basque Country Looths',   'url' => '/local/basque-country-looths/', 'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/46/68fb57ee07b48-bpthumb.png'],
+        ['name' => 'Ohio Local Looths',       'url' => '/local/ohio-local-looths/',     'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/47/691e1eeae828a-bpthumb.png'],
     ],
 
     'cta_member' => [
