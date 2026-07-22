@@ -120,7 +120,18 @@ function lg_local_events(int $limit = 3): array {
     }
 }
 
+/* Patreon-import placeholder handles ("patreon_70362340") still live in the
+ * forums mirror until the nicename backfill lands (username-mentions lane).
+ * Show an honest generic byline instead of the junk — real handles appear
+ * automatically once the mirror re-syncs. */
+function lg_local_is_junk_slug(string $s): bool {
+    return (bool) preg_match('/^patreon[_-]?\d+$/i', $s);
+}
+function lg_local_byline(string $slug): string {
+    return lg_local_is_junk_slug($slug) ? 'Looth member' : '@' . $slug;
+}
 function lg_local_initials(string $s): string {
+    if (lg_local_is_junk_slug($s)) return 'LG';
     $parts = preg_split('/[\s\-]+/', trim(str_replace('-', ' ', $s))) ?: [];
     $a = strtoupper(substr($parts[0] ?? 'L', 0, 1));
     $b = strtoupper(substr($parts[1] ?? ($parts[0] ?? 'L'), 0, 1));
@@ -309,7 +320,7 @@ lg_page_open($is_member, $chapter['name'] . ' — Local Looths', 'The ' . $chapt
     <a class="bn-topic" href="<?= h($hubUrl) ?>">
       <div class="bn-avi"><?= h(lg_local_initials((string)$t['author_slug'])) ?></div>
       <div class="bn-bub">
-        <div class="bn-who">@<?= h((string)$t['author_slug']) ?> · <?= h(lg_local_ago((string)$t['created_at'])) ?></div>
+        <div class="bn-who"><?= h(lg_local_byline((string)$t['author_slug'])) ?> · <?= h(lg_local_ago((string)$t['created_at'])) ?></div>
         <div class="bn-t"><?= h((string)$t['title']) ?></div>
       </div>
     </a>
