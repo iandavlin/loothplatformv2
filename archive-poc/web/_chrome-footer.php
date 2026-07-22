@@ -18,7 +18,7 @@ $LOGO = LG_ARCHIVE_POC_LOGO_URL;
           <li><a href="/">Home</a></li>
           <li><a href="/calendar/">Calendar</a></li>
           <li><a href="/sponsors/">Sponsors</a></li>
-          <li><a href="/shops/">Shops</a></li>
+          <li><a href="https://loothtool.com/">loothtool</a></li>
         </ul>
       </div>
       <div class="lg-chrome-foot__col">

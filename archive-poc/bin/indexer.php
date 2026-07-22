@@ -412,6 +412,13 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
     $thumb = archive_poc_resolve_thumb($post_id, $post->post_content);
     $tier  = archive_poc_resolve_tier($post_id, $kind);
     $url   = get_permalink($post_id) ?: '';
+    // For sponsor-product CPT, use the ACF 'url' field if available (external product link)
+    if ($cpt === 'sponsor-product' && function_exists('get_field')) {
+        $acf_url = get_field('url', $post_id);
+        if (!empty($acf_url)) {
+            $url = (string) $acf_url;
+        }
+    }
 
     // Video play-button facade: resolve a real YouTube id from the layout/meta/body
     // (videos only) so the column is the single source — readers prefer it over the

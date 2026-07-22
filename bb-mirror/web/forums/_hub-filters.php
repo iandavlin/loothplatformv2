@@ -628,6 +628,10 @@ function hub_filter_where(array $filters, array $forum_cat_map, array $content_c
             $ph = [];
             foreach ($kinds as $i => $k) { $ph[] = ":hk$i"; $binds[":hk$i"] = $k; }
             $content_conds[] = 'u.content_kind IN (' . implode(',', $ph) . ')';
+            // Ensure only member-benefit CPT posts are shown as Benefits
+            if (in_array('benefit', $kinds, true)) {
+                $content_conds[] = "u.content_cpt = 'member-benefit'";
+            }
         } else {
             $content_conds[] = 'FALSE'; // only Discussions chosen
         }
