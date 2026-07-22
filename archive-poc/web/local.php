@@ -274,7 +274,7 @@ if ($chapter === null) {
 
 /* ---------------- /local/<slug>/ — the Bento chapter page ---------------- */
 $members = lg_local_members($chapter);
-$topics  = lg_local_topics($slug);
+$topics  = $is_member ? lg_local_topics($slug) : [];   // topic titles are members-only
 $events  = lg_local_events();
 $deals   = LG_LOCAL_DEALS[$slug] ?? [];
 $hubUrl  = '/hub/?forum=' . rawurlencode($slug);
@@ -316,7 +316,13 @@ lg_page_open($is_member, $chapter['name'] . ' — Local Looths', 'The ' . $chapt
 
   <div class="bn bn--wide bn--chat4">
     <div class="bn-k"><?= $icons['chat'] ?>CHAPTER DISCUSSION</div>
-<?php if ($topics): foreach ($topics as $t): ?>
+<?php /* Members-only: this card reads forums.topic directly, which would bypass
+         the Hub's visibility enforcement — so the card itself gates on the
+         viewer being signed in. Anonymous visitors get the pitch, not titles. */
+      if (!$is_member): ?>
+    <p class="bn-empty">Chapter members are planning meetups and trading local knowledge in
+      here. Sign in to join the conversation.</p>
+<?php elseif ($topics): foreach ($topics as $t): ?>
     <a class="bn-topic" href="<?= h($hubUrl) ?>">
       <div class="bn-avi"><?= h(lg_local_initials((string)$t['author_slug'])) ?></div>
       <div class="bn-bub">
