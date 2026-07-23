@@ -627,7 +627,17 @@ function hub_filter_where(array $filters, array $forum_cat_map, array $content_c
         if ($kinds) {
             $ph = [];
             foreach ($kinds as $i => $k) { $ph[] = ":hk$i"; $binds[":hk$i"] = $k; }
-            $content_conds[] = 'u.content_kind IN (' . implode(',', $ph) . ')';
+            $kind_cond = 'u.content_kind IN (' . implode(',', $ph) . ')';
+            // Benefits = the member-benefit CPT only. Legacy index rows map other
+            // CPTs onto the 'benefit' kind (the sponsor bleed), so pin the cpt on
+            // benefit rows — scoped so it never constrains the OTHER selected
+            // kinds (a plain ANDed cond hid every video/article whenever
+            // Benefits was part of a multi-select).
+            if (in_array('benefit', $kinds, true)) {
+                $kind_cond = '(' . $kind_cond
+                    . " AND (u.content_kind <> 'benefit' OR u.content_cpt = 'member-benefit'))";
+            }
+            $content_conds[] = $kind_cond;
         } else {
             $content_conds[] = 'FALSE'; // only Discussions chosen
         }
