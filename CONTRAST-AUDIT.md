@@ -1,8 +1,10 @@
 # Dark-mode contrast audit — chrome dropdowns + full WCAG sweep
 
 **Lane:** dark-mode · **Branch:** `dark-mode` (off `main`) · **Started:** 2026-07-23
-**Status:** _scaffold committed; data tables pending the baseline + after sweep runs
-(gated on a serve/RAM window — see "Run log")._
+**Status:** _COMPLETE — baseline + after runs captured. All 4 chrome-owned dark
+clusters FIXED (submenu/skip-link/account-menu/sort-pills), 0 regressions, light
+byte-identical. Chrome dark surfaces audit-clean. Residual FAILs are page-owned or
+Ian-judgment (§8). HOLDING for keeper + Ian review before merge._
 
 This document is the merge gate the keeper addendum requires: the branch does not
 merge until this audit is **clean** (no chrome-owned FAIL) and every remaining
@@ -184,12 +186,64 @@ components, worst-first (`report.py --run run-baseline`):
 
 ## 7. After audit — branch `dark-mode`
 
-_PENDING — captured in an announced short serve-flip window (detach to the branch
-sha + `systemctl reload php8.3-fpm`, capture, restore to main immediately).
-`report.py --before run-baseline --after run-2` renders the delta table here._
+Run `run-2` (branch serve — `/srv/lg-shared`→worktree + docroot `app-settings.js`
+swap, restored byte-identical after). 82 states.
 
-<!-- AFTER_TABLE -->
-<!-- DELTA_TABLE -->
+**Result: 234 → 146 total FAIL instances; 61 → 42 FAIL components; 19 resolved,
+0 regressions.** Every one of the 4 chrome-owned dark clusters is cleared:
+
+| cluster (dark) | before | after | fix |
+|----------------|-------:|------:|-----|
+| `ul.lg-chrome__submenu > li > a` — **the reported bug** | 1.25 | **PASS** | `2fb5346` |
+| `a.skip-link` (×13 body-class variants, 41 instances) | 1.25 | **PASS** | `67a6f25` |
+| `ul.lg-chrome__account-menu` Sign out / My Profile (dark) | 3.84 / 3.98 | **PASS** | `2fb5346` |
+| `feed-sort-bar--zones … a` Newest/Trending/Random/Saved (dark) | 1.41–1.56 | **PASS** | `8f76dd1` |
+
+Regression scan (components FAILing in after but not before): **none**. Light mode
+byte-identical confirmed empirically — every light-mode component keeps its exact
+baseline ratio (e.g. account-menu light Sign out 3.84 → 3.84, "+ New post" light
+3.12 → 3.12; these are bucket-B/C items for Ian, untouched by the dark-only fixes).
+
+The 42 residual FAIL components are entirely bucket B (chrome light/brand
+near-miss) + bucket C (page-owned) from §8 — no chrome-owned **dark** FAIL remains.
+**Merge gate: chrome dark surfaces are audit-clean.**
+
+Before/after per component (`report.py --before run-baseline --after run-2`),
+fixed clusters first:
+
+| component (sel) | theme | before | after | delta | status |
+|-----------------|:-----:|-------:|------:|------:|--------|
+| `html > body.view-discover.has-looth-tabbar > a.skip-link` | dark | 1.25 | gone | resolved | FIXED |
+| `html > body.view-discover.is-member.has-looth-tabbar > a.skip-link` | dark | 1.25 | gone | resolved | FIXED |
+| `html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link` | dark | 1.25 | gone | resolved | FIXED |
+| `ul.lg-chrome__submenu > li > a` | dark | 1.25 | gone | resolved | FIXED |
+| `html > body.mode-view.has-looth-tabbar > a.skip-link` | dark | 1.25 | gone | resolved | FIXED |
+| `html.lgdd > body.dir--map.has-looth-tabbar > a.skip-link` | dark | 1.25 | gone | resolved | FIXED |
+| `html.lgdm > body.dir--map.has-looth-tabbar > a.skip-link` | dark | 1.25 | gone | resolved | FIXED |
+| `html > body.lg-events-landing-page.has-looth-tabbar > a.skip-link` | dark | 1.25 | gone | resolved | FIXED |
+| `html.lgev > body.lg-events-landing-page.has-looth-tabbar > a.skip-link` | dark | 1.25 | gone | resolved | FIXED |
+| `html > body.view-content.arc-calendar-page.has-looth-tabbar > a.skip-link` | dark | 1.25 | gone | resolved | FIXED |
+| `html > body.view-content.arc-sponsors-page.has-looth-tabbar > a.skip-link` | dark | 1.25 | gone | resolved | FIXED |
+| `html > body.has-looth-tabbar > a.skip-link` | dark | 1.25 | gone | resolved | FIXED |
+| `html > body.lg-membership-page.lg-join.lg-join--start > a.skip-link` | dark | 1.25 | gone | resolved | FIXED |
+| `nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active` | dark | 1.41 | gone | resolved | FIXED |
+| `nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab` | dark | 1.56 | gone | resolved | FIXED |
+| `nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a` | dark | 1.56 | gone | resolved | FIXED |
+| `nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-saved-pill` | dark | 1.56 | gone | resolved | FIXED |
+| `ul.lg-chrome__account-menu > li > a.lg-chrome__account-menu-signout` | dark | 3.84 | gone | resolved | FIXED |
+| `ul.lg-chrome__account-menu > li > a` | dark | 3.98 | gone | resolved | FIXED |
+| `div.leaflet-bottom.leaflet-right > div.leaflet-control-attribution.leaflet-control > a` | light | 4.52 | 4.52 | 0.00 | FIXED |
+| `ul.lg-chrome__menu > li > a.is-active` | light | 4.53 | 4.53 | 0.00 | FIXED |
+| `div.dir-header > div.dir-viewtoggle > button.on` | light | 4.54 | 4.54 | 0.00 | FIXED |
+| … | | | | | |
+| `a.fc-cover.feed-card__cover.fc-cover--gated > span.fc-gate > span.fc-gate__lock` | light | 1.13 | 1.13 | 0.00 | still FAIL |
+| `a.fc-cover.feed-card__cover.fc-cover--gated > span.fc-gate > span.fc-gate__t` | light | 1.13 | 1.13 | 0.00 | still FAIL |
+| `a.sponsor-card > span.sponsor-card__body > span.sponsor-card__name` | light | 1.14 | 1.14 | 0.00 | still FAIL |
+| `main.lg-join__main > section.lg-join__card.lg-join__card--start > p.lg-join__lede` | dark | 1.25 | 1.25 | 0.00 | still FAIL |
+| `div.leaflet-marker-icon.marker-cluster.marker-cluster-medium > div > span` | dark | 1.29 | 1.29 | 0.00 | still FAIL |
+| `div.dir-header > div.dir-viewtoggle > button.on` | dark | 1.85 | 1.85 | 0.00 | still FAIL |
+| `div.dir-card__foot > div.dir-card__actions > button.dir-connect.dir-connect--none` | dark | 1.85 | 1.85 | 0.00 | still FAIL |
+| `div.lgdm-shd > div.lgdm-vt > button.on` | dark | 1.85 | 1.85 | 0.00 | still FAIL |
 
 ## 8. Findings classification (61 FAIL + 14 WATCH → three buckets)
 
@@ -243,6 +297,9 @@ would clear a whole cluster of C-bucket items at once.
 
 ## 9. Run log
 
+- `2026-07-23` — after run (82 states, branch serve window; /srv+docroot swap,
+  restored byte-identical, /hub 200 verified, chrome killed). 234→146 FAIL
+  instances, 19 components resolved, 0 regressions. Window OPEN 21:30 → CLOSED.
 - `2026-07-23` — baseline run (82 states, main). Confirmed the reported bug
   (submenu 1.25 dark) + caught the skip-link (1.25 dark) and Buck's under-scoped
   sort-pill combinator (already-served yet still 1.41–1.56 dark). Fixes committed
