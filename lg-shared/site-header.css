@@ -49,6 +49,12 @@
   z-index: 100; text-decoration: none;
 }
 .skip-link:focus { left: 0; }
+/* Dark mode flips --lg-ink near-white (#e5e7e1), so `background:var(--lg-ink)`
+   above turned this focus chip near-white behind its fixed white text — 1.25:1,
+   keyboard-focus-only but a real WCAG fail (dark-mode audit 2026-07-23, same
+   inverting-ink defect class as the chrome panels). Pin a dark chip in dark
+   mode; light is unchanged (there --lg-ink is already dark). */
+html[data-lguser-theme="dark"] .skip-link { background: #1b1e21; }
 
 /* Reserve the scrollbar gutter permanently — the scrollbar popping in after
    first paint narrowed the viewport ~15px and re-centered EVERY element: the
