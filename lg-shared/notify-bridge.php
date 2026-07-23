@@ -224,6 +224,38 @@ function lg_notify_on_reply(int $topic_id, int $reply_id, int $author_id, int $p
 }
 
 /**
+ * A NEW TOPIC (discussion) was published → ring everyone @mentioned in its body.
+ * Called by the bb-mirror-sync mu-plugin on bbp_new_topic — the native BuddyBoss
+ * create path, which (unlike replies) never goes through reply.php, so nothing else
+ * mints or rings for it (username-mentions lane, 2026-07-23).
+ *
+ * Only @mentions apply: a brand-new topic has no reply-to-topic / reply-to-reply
+ * relationship, and the deep link lands on the topic itself (no reply anchor).
+ * Mirrors the mention leg of lg_notify_on_reply exactly — same event type, same
+ * dedup shape (one forum.mention row per mentioning post) — so the bell UI, links
+ * and coalescing all keep working untouched.
+ */
+function lg_notify_on_topic(int $topic_id, int $author_id, string $content): void
+{
+    if ($topic_id < 1) return;
+
+    $url = lg_notify_topic_url($topic_id);
+    if ($url === '') return;                       // no resolvable deep link → don't raise a dead row
+
+    foreach (lg_notify_find_mentions($content, $author_id) as $mentioned_id) {
+        lg_notify_push([
+            'recipient_wp_id' => $mentioned_id,
+            'actor_wp_id'     => $author_id,
+            'type'            => 'forum.mention',
+            'target_kind'     => 'topic',          // the modal opens the topic itself
+            'target_id'       => $topic_id,
+            'anchor_id'       => 0,                 // no reply to scroll to on a fresh topic
+            'target_url'      => $url,
+        ]);
+    }
+}
+
+/**
  * Someone reacted to a card → ring its author. Called by archive-poc card-react.php
  * ONLY when a reaction was ADDED (toggling your own reaction off must not notify).
  *

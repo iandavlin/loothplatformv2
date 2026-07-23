@@ -132,6 +132,54 @@ add_action('bbp_new_reply', function ($reply_id) {
     if (bb_mirror_request_anon_flag()) update_post_meta((int)$reply_id, '_lg_anon', 1);
 }, 5, 1);
 
+// -- @mention mint + bell for NEW TOPICS (username-mentions lane, 2026-07-23) -----
+// New discussions POST to NATIVE BuddyBoss REST (/wp-json/buddyboss/v1/topics); they
+// never touch bb-mirror's reply.php, so — unlike replies — nothing mints their
+// @mentions into the stable storage anchor or rings the mentioned member's bell.
+// Do it here on the post-insert action, mirroring reply.php EXACTLY:
+//   1. Re-mint the SAVED post_content with kses OFF. BuddyBoss's insert sanitizes a
+//      pre-minted anchor away (proven in reply.php 2026-07-23), so a pre_content
+//      filter would be stripped; the canonical anchor is already escaped, so we write
+//      it back kses-off. wp_update_post re-fires the save hooks, so the bb->pg mirror
+//      carries the anchor too. Idempotent: no resolvable @token round-trips unchanged.
+//   2. Ring every @mentioned member via the shared notify-bridge (forum.mention).
+// Fire-and-forget: a published topic must never fail because minting or the bell is
+// down (both legs swallow their own errors).
+add_action('bbp_new_topic', function ($topic_id) {
+    static $inMint = false;
+    if ($inMint) return;                            // the wp_update_post below must not re-enter
+    $topic_id = (int) $topic_id;
+    if ($topic_id < 1) return;
+    if (!is_file('/srv/bb-mirror/api/v0/_mention-ingest.php')) return;
+
+    // The mint resolves @handles over a loopback to /profile-api. LG_BB_MIRROR_HOST is a
+    // bb-mirror API constant, undefined in this WP mu-plugin context — without it the
+    // resolve loopback Host defaults to 'localhost' and 404s. Seed it from the same
+    // per-box host the sync dispatcher already resolves.
+    if (!defined('LG_BB_MIRROR_HOST')) define('LG_BB_MIRROR_HOST', bb_mirror_sync_host());
+    require_once '/srv/bb-mirror/api/v0/_mention-ingest.php';
+    if (!function_exists('lg_bb_mirror_mint_mentions')) return;
+
+    $topic = get_post($topic_id);
+    if (!$topic) return;
+
+    $minted = lg_bb_mirror_mint_mentions((string) $topic->post_content);
+    if ($minted !== (string) $topic->post_content) {
+        $inMint = true;
+        kses_remove_filters();
+        wp_update_post(['ID' => $topic_id, 'post_content' => $minted]);
+        kses_init_filters();
+        $inMint = false;
+    }
+
+    if (is_file('/srv/lg-shared/notify-bridge.php')) {
+        require_once '/srv/lg-shared/notify-bridge.php';
+        if (function_exists('lg_notify_on_topic')) {
+            lg_notify_on_topic($topic_id, (int) $topic->post_author, $minted);
+        }
+    }
+}, 20, 1);   // prio 20: AFTER anon-meta (5), before the shutdown-deferred sync reads content
+
 // Deferred dispatch: fires on `shutdown` instead of immediately. Needed for
 // topic/reply CREATE + EDIT because BuddyBoss attaches forum media via an
 // `edit_post` priority-999 hook that runs AFTER bbp_new_topic/bbp_new_reply.
