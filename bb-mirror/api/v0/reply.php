@@ -285,7 +285,7 @@ if (!wp_verify_nonce((string) ($_SERVER['HTTP_X_WP_NONCE'] ?? ''), 'wp_rest')) {
 $topic_id = (int) ($body['topic_id'] ?? 0);
 $content  = trim((string) ($body['content'] ?? ''));
 $reply_to = (int) ($body['reply_to'] ?? 0);
-$media    = array_values(array_filter(array_map('intval', (array) ($body['media_ids'] ?? []))));
+$media    = array_values(array_filter(array_map('intval', (array) ($body['media_ids'] ?? $body['bbp_media'] ?? []))));
 
 if ($topic_id <= 0) {
     reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => 'topic_id is required.']);

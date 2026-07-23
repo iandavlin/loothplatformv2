@@ -3675,7 +3675,10 @@
       var payload = { topic_id: tid, content: text ? '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' : '' };
       if (fid) payload.forum_id = fid;
       if (lrsMediaIds.length) payload.bbp_media = lrsMediaIds.slice();
-      fetch(LRS_REPLY_BASE + '/reply', {
+      // bb-mirror reply API, NOT BB REST direct: the mirror path mints @mention
+      // anchors + rings the bell (mentions lane 2026-07-23); same nonce/cookies,
+      // response carries reply_id like BB's id.
+      fetch('/bb-mirror-api/v0/reply', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
         body: JSON.stringify(payload)
@@ -4069,7 +4072,10 @@
       if (ctx.replyTo) payload.reply_to = ctx.replyTo;   // nest under the comment being replied to
       if (lcpMediaIds.length) payload.bbp_media = lcpMediaIds.slice();
       var wasNested = !!ctx.replyTo;
-      fetch(LRS_REPLY_BASE + '/reply', {
+      // bb-mirror reply API, NOT BB REST direct: the mirror path mints @mention
+      // anchors + rings the bell (mentions lane 2026-07-23); same nonce/cookies,
+      // response carries reply_id like BB's id.
+      fetch('/bb-mirror-api/v0/reply', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
         body: JSON.stringify(payload)
