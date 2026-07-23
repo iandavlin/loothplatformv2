@@ -291,7 +291,11 @@
 
     function ensurePanel() {
       if (panel) return panel;
-      var css = '.lg-mnt{position:fixed;z-index:100000;min-width:200px;max-width:320px;'
+      // z-index MUST clear the mobile composer sheet (#looth-comp-sheet z 2147483560,
+      // hub-polish.js) — at the old 100000 the panel painted BEHIND the opaque
+      // composer card and the dropdown was invisible on phones (Ian 2026-07-23). On
+      // desktop the dmodal is only z 8800 so this sits above it there too.
+      var css = '.lg-mnt{position:fixed;z-index:2147483600;min-width:200px;max-width:320px;'
         + 'max-height:260px;overflow-y:auto;background:#fff;border:1px solid #d8d8d0;'
         + 'border-radius:10px;box-shadow:0 8px 28px rgba(30,35,25,.18);padding:4px;'
         + 'font:14px/1.3 system-ui,-apple-system,sans-serif;display:none}'

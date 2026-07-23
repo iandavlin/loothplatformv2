@@ -3170,7 +3170,9 @@
   function lrsClose(fromPop) {
     var sh = document.getElementById('looth-rep-sheet'); if (!sh) return;
     sh.classList.remove('is-open');
+    sh.inert = false; sh.removeAttribute('aria-hidden');   // clear any composer-set inert
     document.body.style.overflow = lrsScroll || '';
+    lgSyncSheetLock();
     var comp = sh.querySelector('.lrs-comp'); if (comp) comp.style.transform = '';   // reset keyboard lift
     var t = sh.querySelector('#lrs-thread'); if (t) t.innerHTML = '';
     var op = sh.querySelector('#lrs-op'); if (op) { op.innerHTML = ''; op.hidden = true; }
@@ -3628,6 +3630,7 @@
     var pv0 = sh.querySelector('#lrs-comp-previews'); if (pv0) pv0.innerHTML = '';
     lrsScroll = document.body.style.overflow; document.body.style.overflow = 'hidden';
     sh.classList.add('is-open');
+    lgSyncSheetLock();
     // URL parity with the desktop dmodal (§4f contract in forums.js): the sheet's
     // history entry carries /hub/?topic=<forum>/<topic> so the address bar is a
     // copyable deep link and Back restores the feed URL. Routed opens (?topic
@@ -3714,7 +3717,11 @@
         '#looth-comp-sheet.is-open{display:block}',
         // light scrim — the thread in the modal behind stays readable ABOVE the
         // composer card (Buck 2026-06-10: show the replies while writing)
-        '#looth-comp-sheet .lcp-back{position:absolute;inset:0;background:rgba(15,16,12,.18)}',
+        // Backdrop: bumped .18 -> .34 so the composer clearly OWNS the foreground and
+        // the (inert) lrs thread reads as a recessed backdrop, not a competing modal
+        // (Ian 2026-07-23 "modal behind the modal"). Still translucent so the replies
+        // stay faintly visible while writing (Buck 2026-06-10). Tunable by Ian.
+        '#looth-comp-sheet .lcp-back{position:absolute;inset:0;background:rgba(15,16,12,.34)}',
         '#looth-comp-sheet .lcp-card{position:absolute;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom,0px));' +
           'background:#fff;border-radius:22px;box-shadow:0 10px 44px rgba(0,0,0,.3);padding:2px 16px 14px;' +
           'animation:looth-pwa-up .26s ease;will-change:transform;font:15px/1.4 var(--lg-font-sans,system-ui,sans-serif)}',
@@ -3880,6 +3887,17 @@
     ta.addEventListener('blur', function () { setTimeout(lcpKb, 80); });
     return sh;
   }
+  // iOS-safe scroll lock for the reply stack. The lrs/lcp sheets historically set
+  // body{overflow:hidden}, which iOS WebKit IGNORES (the background hub scrolls
+  // behind the fixed sheet and the sheet itself drags off-screen — Ian's phone,
+  // 2026-07-23). Toggle a body lock-class that the position:fixed scroll-lock
+  // observer (bottom of file) watches, reusing the SAME proven mechanism the ntm
+  // composer uses. Presence-based ref-count: locked while EITHER sheet is open,
+  // released only once both are closed (so opening/closing lcp over lrs is stable).
+  function lgSyncSheetLock() {
+    var open = document.querySelector('#looth-rep-sheet.is-open, #looth-comp-sheet.is-open');
+    document.body.classList.toggle('lg-sheet-lock', !!open);
+  }
   function openComposerSheet(o) {
     o = o || {};
     var sh = ensureCompSheet();
@@ -3974,6 +3992,15 @@
       postBtn.textContent = 'Post';
     }
     sh.classList.add('is-open');
+    lgSyncSheetLock();
+    // Ghost-modal fix (Ian 2026-07-23: "a modal behind the modal I cannot access").
+    // The lrs thread stays OPEN behind the composer BY DESIGN (Buck: read the replies
+    // while writing), but as a live full-screen dialog it read as a second, inert-but-
+    // undismissable modal. Mark it inert + aria-hidden while the composer owns the
+    // foreground, so it is honestly a backdrop (no phantom taps, no focus/AT escape,
+    // no "second modal"); restored on composer close.
+    var rsGhost = document.getElementById('looth-rep-sheet');
+    if (rsGhost && rsGhost.classList.contains('is-open')) { rsGhost.inert = true; rsGhost.setAttribute('aria-hidden', 'true'); }
     // bring the latest replies into view in the modal behind, so the user reads
     // the conversation right above the composer while writing
     var rs = document.getElementById('looth-rep-sheet');
@@ -3986,9 +4013,13 @@
   function closeComposerSheet() {
     var sh = document.getElementById('looth-comp-sheet');
     if (sh) sh.classList.remove('is-open');
+    // release the lrs backdrop the composer inert-ed on open (ghost-modal fix)
+    var rsGhost = document.getElementById('looth-rep-sheet');
+    if (rsGhost) { rsGhost.inert = false; rsGhost.removeAttribute('aria-hidden'); }
     // belt-and-braces vs the per-open rebuild: a closed sheet can't hold a stale
     // comment target
     if (sh && sh.__lcpCtx) sh.__lcpCtx.replyTo = 0;
+    lgSyncSheetLock();
   }
   function lcpSubmit(sh) {
     var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post'), status = sh.querySelector('#lcp-status');
@@ -5056,7 +5087,7 @@
    Lock the body with position:fixed (preserving scroll position) whenever
    forums.js raises a modal lock-class. Mobile only; desktop keeps overflow:hidden. */
 (function () {
-  var LOCK_CLASSES = ['ntm-active', 'hub-fmodal-lock'];
+  var LOCK_CLASSES = ['ntm-active', 'hub-fmodal-lock', 'lg-sheet-lock'];
   var savedY = 0, locked = false;
   function wantLock() {
     if (!window.matchMedia('(max-width:640px)').matches) return false;
