@@ -957,6 +957,7 @@ final class Block
         $s = preg_replace('~<(p|li|ul|ol|h3|h4|blockquote)\b[^>]*>~i', "\n", (string)$s);
         $s = strip_tags((string)$s);
         $s = html_entity_decode($s, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $s = str_replace("\u{00A0}", ' ', $s);   // nbsp → space so the author-box projection is clean
         $s = preg_replace("~[ \t]+~", ' ', $s);
         $s = preg_replace("~ *\n *~", "\n", (string)$s);
         $s = preg_replace("~\n{3,}~", "\n\n", (string)$s);
