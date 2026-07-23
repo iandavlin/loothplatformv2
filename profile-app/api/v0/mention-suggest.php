@@ -43,21 +43,24 @@ $q = ltrim($q, '@');                       // the composer may send the '@' alon
 if (mb_strlen($q) < 2) profile_app_json(200, ['items' => [], 'q' => $q]);
 if (mb_strlen($q) > 40) $q = mb_substr($q, 0, 40);
 
-// Escape LIKE wildcards so a member typing "%" doesn't match everyone.
-$esc  = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], mb_strtolower($q));
+// Escape LIKE wildcards so a member typing "%" doesn't match everyone. The escape
+// char is '!' — NOT backslash: a '\' ESCAPE literal makes PDO's placeholder parser
+// read \' as an escaped quote, swallowing the next :placeholder into the "string"
+// (HY093 invalid parameter number at execute).
+$esc  = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($q));
 $pre  = $esc . '%';
 $mid  = '%' . $esc . '%';
 
 $st = Db::pg()->prepare("
     SELECT uuid, slug, display_name, avatar_url,
-           CASE WHEN lower(slug) LIKE :pre1 THEN 0
-                WHEN lower(display_name) LIKE :pre2 THEN 1
+           CASE WHEN lower(slug) LIKE :pre1 ESCAPE '!' THEN 0
+                WHEN lower(display_name) LIKE :pre2 ESCAPE '!' THEN 1
                 ELSE 2 END AS rank
     FROM users
     WHERE archived_at IS NULL
       AND slug IS NOT NULL
       AND profile_visibility <> 'private'
-      AND (lower(slug) LIKE :mid1 ESCAPE '\\' OR lower(display_name) LIKE :mid2 ESCAPE '\\')
+      AND (lower(slug) LIKE :mid1 ESCAPE '!' OR lower(display_name) LIKE :mid2 ESCAPE '!')
     ORDER BY rank, length(slug), lower(slug)
     LIMIT 8
 ");
