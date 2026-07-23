@@ -23,18 +23,18 @@ use Looth\ProfileApp\Slug;
  * re-issued (link-hijacking prevention) and why numeric handles are banned.
  */
 
-if ($_SERVER[‘REQUEST_METHOD’] !== ‘GET’) {
-    profile_app_json(405, [‘error’ => ‘method_not_allowed’]);
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    profile_app_json(405, ['error' => 'method_not_allowed']);
 }
 
 $user   = Auth::requireUser();
-$userId = (int) $user[‘id’];
+$userId = (int) $user['id'];
 
-// Return the member’s current handle.
-$st = Db::pg()->prepare(‘SELECT slug FROM users WHERE id = :u’);
-$st->execute([‘:u’ => $userId]);
+// Return the member's current handle.
+$st = Db::pg()->prepare('SELECT slug FROM users WHERE id = :u');
+$st->execute([':u' => $userId]);
 profile_app_json(200, [
-    ‘slug’ => $st->fetchColumn() ?: null,
-    ‘min’  => Slug::MIN_LEN,
-    ‘max’  => Slug::MAX_LEN,
+    'slug' => $st->fetchColumn() ?: null,
+    'min'  => Slug::MIN_LEN,
+    'max'  => Slug::MAX_LEN,
 ]);
