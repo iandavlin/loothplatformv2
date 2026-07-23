@@ -121,6 +121,30 @@ function lg_shared_render_site_header(array $ctx): void
 <style>
 /* Critical chrome overrides — inline so they beat any <head> stylesheet (BB theme,
    archive.css, etc.) that loads after site-header.css at equal or higher specificity. */
+
+/* Chrome PANEL tokens (dropdowns + the mobile Hub sheet). Light values live in
+   each rule's var() fallback, so light mode is byte-for-byte unchanged. Dark mode
+   re-points the tokens on the chrome/hubmenu roots and every panel follows.
+   THE SIGNAL: html[data-lguser-theme="dark"] — set on <html> by app-settings.js
+   apply() (localStorage 'lg-set-theme', and since Buck's #64, the OS default too).
+   It is NOT a prefers-color-scheme media query: dark mode here is a resolved app
+   theme, so keying off that attribute is the only correct trigger.
+   WHY this was needed: the account menu, the Hub "type" dropdown and the mobile
+   Hub picker were hardcoded `background:#fff`, while their ink rides var(--lg-ink)
+   — which the dark theme flips near-white → near-invisible pale text on a white
+   slab (Ian's screenshot). Tokens keep the defensive !important scoping intact.
+   (dark-mode lane 2026-07-23) */
+html[data-lguser-theme="dark"] .lg-chrome,
+html[data-lguser-theme="dark"] .lg-hubmenu {
+  --lg-panel-bg: #1b1e21;
+  --lg-panel-border: #2c312d;
+  --lg-panel-ink: #e5e7e1;
+  --lg-panel-hover-bg: #243024;
+  --lg-panel-hover-ink: #b0c693;
+  --lg-panel-divider: #2c312d;
+  --lg-panel-danger: #e08a63;
+  --lg-panel-danger-bg: #3a2320;
+}
 .lg-chrome ul.lg-chrome__menu,
 .lg-chrome ul.lg-chrome__account-menu,
 .lg-chrome ul.lg-chrome__account-menu li { list-style: none !important; }
@@ -131,8 +155,8 @@ function lg_shared_render_site_header(array $ctx): void
   top: calc(100% + 6px) !important;
   right: 0 !important;
   min-width: 210px !important;
-  background: #fff !important;
-  border: 1px solid #e3ddd0 !important;
+  background: var(--lg-panel-bg, #fff) !important;
+  border: 1px solid var(--lg-panel-border, #e3ddd0) !important;
   border-radius: 10px !important;
   box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06) !important;
   padding: 6px !important;
@@ -146,25 +170,25 @@ function lg_shared_render_site_header(array $ctx): void
   border-radius: 6px !important;
   text-decoration: none !important;
   font-size: 13px !important;
-  color: #323532 !important;
+  color: var(--lg-panel-ink, #323532) !important;
   white-space: nowrap !important;
   background: transparent !important;
 }
 .lg-chrome ul.lg-chrome__account-menu [role="menuitem"]:hover,
 .lg-chrome ul.lg-chrome__account-menu [role="menuitem"]:focus {
-  background: #eef2e3 !important;
-  color: #6b7c52 !important;
+  background: var(--lg-panel-hover-bg, #eef2e3) !important;
+  color: var(--lg-panel-hover-ink, #6b7c52) !important;
 }
 .lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-divider {
   height: 1px !important;
-  background: #e3ddd0 !important;
+  background: var(--lg-panel-divider, #e3ddd0) !important;
   margin: 4px 0 !important;
   padding: 0 !important;
 }
-.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout { color: #c66845 !important; }
+.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout { color: var(--lg-panel-danger, #c66845) !important; }
 .lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout:hover,
 .lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout:focus {
-  background: #fdf0ec !important; color: #c66845 !important;
+  background: var(--lg-panel-danger-bg, #fdf0ec) !important; color: var(--lg-panel-danger, #c66845) !important;
 }
 
 /* Hub content-type submenu — a desktop dropdown (hover / keyboard focus / click)
@@ -188,7 +212,7 @@ function lg_shared_render_site_header(array $ctx): void
   display: none;
   position: absolute; top: 100%; left: 0;
   min-width: 200px; margin: 0 !important; padding: 6px !important;
-  background: #fff !important; border: 1px solid var(--lg-line) !important;
+  background: var(--lg-panel-bg, #fff) !important; border: 1px solid var(--lg-panel-border, var(--lg-line)) !important;
   border-radius: 10px !important;
   box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06) !important;
   z-index: 200;
@@ -265,7 +289,7 @@ function lg_shared_render_site_header(array $ctx): void
   position: relative; z-index: 1;
   width: 100%; max-width: 560px; max-height: 72vh;
   display: flex; flex-direction: column;
-  background: #fff; border-radius: 16px 16px 0 0;
+  background: var(--lg-panel-bg, #fff); border-radius: 16px 16px 0 0;
   box-shadow: 0 -6px 28px rgba(0,0,0,0.18);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   transform: translateY(100%);
