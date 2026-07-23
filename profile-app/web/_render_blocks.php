@@ -139,33 +139,18 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
         Block::profileLayout($userId),
         static fn($k) => !isset($hiddenBlocks[$k]) && isset($renderers[$k])
     ));
-    // The "Add gallery (N of 3)" counter (Ian 2026-07-23) deploys the next gallery —
-    // it renders right after the LAST gallery in the layout, owner-only, and only
-    // while fewer than 3 exist (it disappears at 3).
-    $galleryKeys = array_values(array_filter($layout, static fn($k) => Block::isGalleryKey($k)));
-    $lastGallery = $galleryKeys ? end($galleryKeys) : null;
+    // The "Add gallery" control lives in the Sections caddy rail (u.php), NOT in the
+    // blocks flow (Ian 2026-07-23, rev 2) — see looth_gallery_count() for the countdown.
     foreach ($layout as $key) {
         ($renderers[$key])();
-        if ($role === 'me' && $key === $lastGallery && count($galleryKeys) < 3) {
-            looth_render_add_gallery_control(count($galleryKeys));
-        }
     }
     // (Freeform sections + the "+ New section" affordance removed 2026-06-11, Ian.)
 }
 
-/**
- * The "Add gallery (N of 3)" counter (owner-only). Deploys the next gallery block
- * via /me/layout (JS). $count = how many galleries the owner currently has (1 or 2).
- */
-function looth_render_add_gallery_control(int $count): void
+/** How many galleries the user currently has placed in their layout (0–3). */
+function looth_gallery_count(int $userId): int
 {
-    echo '<div class="lg-gadd-wrap" data-gallery-count="' . $count . '">';
-    echo '<button type="button" class="lg-gadd" id="lg-add-gallery">'
-       . '<span class="lg-gadd__plus" aria-hidden="true">＋</span>'
-       . '<span class="lg-gadd__lab">Add gallery</span>'
-       . '<span class="lg-gadd__count">' . $count . ' of 3</span>'
-       . '</button>';
-    echo '</div>';
+    return count(array_filter(Block::profileLayout($userId), static fn($k) => Block::isGalleryKey($k)));
 }
 
 /**

@@ -561,13 +561,16 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-gdel{border:0;background:none;cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;opacity:.55;border-radius:6px;color:var(--lg-mute)}
 .lg-gdel:hover{opacity:1;background:#fbeaea;color:#b3261e}
 .lg-gdel:disabled{opacity:.35;cursor:progress}
-/* gallery — owner: "Add gallery (N of 3)" counter */
-.lg-gadd-wrap{margin:2px 0 20px}
+/* gallery — owner: "Add gallery" countdown control (pinned in the Sections rail) */
+.lg-caddy__gadd{margin:0 0 14px}
 .lg-gadd{display:inline-flex;align-items:center;gap:9px;background:var(--lg-sage-tint,#eef1e8);border:1px dashed var(--lg-sage-3,#b7c6ab);color:var(--lg-ink);border-radius:999px;padding:9px 16px;min-height:40px;font:700 calc(12.5px*var(--lg-read-scale,1))/1 var(--lg-font-sans);cursor:pointer}
 .lg-gadd:hover{border-color:var(--lg-sage);background:#fff}
-.lg-gadd:disabled{opacity:.55;cursor:progress}
+.lg-gadd--rail{width:100%;justify-content:flex-start}
+.lg-gadd:disabled,.lg-gadd[disabled]{opacity:.5;cursor:not-allowed;border-style:solid}
+.lg-gadd:disabled:hover,.lg-gadd[disabled]:hover{background:var(--lg-sage-tint,#eef1e8);border-color:var(--lg-sage-3,#b7c6ab)}
 .lg-gadd__plus{font-size:17px;line-height:1;color:var(--lg-sage-d,#4f6a45)}
-.lg-gadd__count{font-weight:600;color:var(--lg-mute);font-size:calc(11px*var(--lg-read-scale,1))}
+.lg-gadd__count{margin-left:auto;font-weight:700;color:var(--lg-sage-d,#4f6a45);font-size:calc(11px*var(--lg-read-scale,1))}
+.lg-gadd:disabled .lg-gadd__count,.lg-gadd[disabled] .lg-gadd__count{color:var(--lg-mute)}
 /* gallery — carousel display mode */
 .lg-gallery--carousel{display:block}
 .lg-gallery--carousel.lg-gallery--edit{display:flex;flex-direction:column;gap:8px}
@@ -768,6 +771,18 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
         <button type="button" class="lg-caddy__close" id="lg-caddy-close" aria-label="Close">×</button>
       </div>
       <p class="lg-caddy__hint">Drag a section into your profile — or tap to add. Sections marked <b>Filterable</b> tag you with site taxonomy so members can find you in search.</p>
+      <?php
+        // Add-gallery control — pinned in the Sections rail (Ian 2026-07-23, rev 2), a
+        // COUNTDOWN of galleries you can still add (max 3), disabled at 0 left.
+        $lgGalLeft = max(0, 3 - looth_gallery_count($subjectId));
+      ?>
+      <div class="lg-caddy__gadd">
+        <button type="button" class="lg-gadd lg-gadd--rail" id="lg-add-gallery"<?= $lgGalLeft <= 0 ? ' disabled aria-disabled="true"' : '' ?>>
+          <span class="lg-gadd__plus" aria-hidden="true">＋</span>
+          <span class="lg-gadd__lab">Add gallery</span>
+          <span class="lg-gadd__count"><?= $lgGalLeft ?> left</span>
+        </button>
+      </div>
       <div class="lg-caddy__list" id="lg-caddy-list">
         <?php foreach ($paletteGroups as $grp => $keys):
               $keys = array_values(array_diff($keys, Block::launchHiddenBlocks()));
@@ -2145,13 +2160,15 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
   });
 })();
 
-/* "Add gallery (N of 3)" counter (owner) — deploy the next unused gallery block by
-   appending its key to the layout (/me/layout), then reload. */
+/* "Add gallery" countdown (owner, pinned in the Sections rail) — deploy the next
+   unused gallery block by appending its key to the layout (/me/layout), then reload.
+   Disabled (0 left) at 3 galleries. */
 (function () {
   var btn = document.getElementById('lg-add-gallery');
   if (!btn) return;
   var KEYS = ['gallery', 'gallery-2', 'gallery-3'];
   btn.addEventListener('click', function () {
+    if (btn.disabled) return;
     var profile = document.querySelector('.lg-profile');
     if (!profile) return;
     var present = Array.prototype.map.call(
