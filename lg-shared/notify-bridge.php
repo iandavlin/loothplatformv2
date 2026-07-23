@@ -115,25 +115,42 @@ function lg_notify_push(array $ev): void
  */
 function lg_notify_find_mentions(string $content, int $exclude_wp_id = 0): array
 {
-    $text = trim(wp_strip_all_tags($content));
-    if ($text === '' || strpos($text, '@') === false) return [];
-
-    if (!preg_match_all('/(?:^|[\s>(\[])@([A-Za-z0-9_.\-]{1,60})/u', $text, $m)) return [];
-
     $ids = [];
-    foreach (array_unique($m[1]) as $name) {
-        $name = rtrim($name, '.');                 // trailing sentence period
-        if ($name === '') continue;
-        $uid = 0;
-        if (function_exists('bp_core_get_userid_from_nicename')) {
-            $uid = (int) bp_core_get_userid_from_nicename($name);
+
+    // username-mentions lane (2026-07-23): the write side mints every resolved
+    // mention into the canonical anchor whose href carries the WP id directly —
+    // {{mention_user_id_N}}. Parse that FIRST, from the RAW content (the id lives
+    // in an attribute, so it must be read before tags are stripped). This is the
+    // authoritative identity — profile-app slugs never equal WP nicenames, which
+    // is why the nicename path below rang nobody for autocompleted mentions.
+    if (preg_match_all('/\{\{mention_user_id_(\d+)\}\}/', $content, $mm)) {
+        foreach ($mm[1] as $wid) {
+            $wid = (int) $wid;
+            if ($wid > 0 && $wid !== $exclude_wp_id) $ids[$wid] = true;
         }
-        if (!$uid) {
-            $u = get_user_by('slug', $name) ?: get_user_by('login', $name);
-            $uid = $u ? (int) $u->ID : 0;
-        }
-        if ($uid > 0 && $uid !== $exclude_wp_id) $ids[$uid] = true;
     }
+
+    // Fallback: hand-typed @name the minter could not resolve, and legacy content
+    // — the original nicename path. Minted anchors also hit this via their @slug
+    // text; that either resolves to the same id (deduped) or to nobody (skipped).
+    $text = trim(wp_strip_all_tags($content));
+    if ($text !== '' && strpos($text, '@') !== false
+        && preg_match_all('/(?:^|[\s>(\[])@([A-Za-z0-9_.\-]{1,60})/u', $text, $m)) {
+        foreach (array_unique($m[1]) as $name) {
+            $name = rtrim($name, '.');                 // trailing sentence period
+            if ($name === '') continue;
+            $uid = 0;
+            if (function_exists('bp_core_get_userid_from_nicename')) {
+                $uid = (int) bp_core_get_userid_from_nicename($name);
+            }
+            if (!$uid) {
+                $u = get_user_by('slug', $name) ?: get_user_by('login', $name);
+                $uid = $u ? (int) $u->ID : 0;
+            }
+            if ($uid > 0 && $uid !== $exclude_wp_id) $ids[$uid] = true;
+        }
+    }
+
     return array_keys($ids);
 }
 

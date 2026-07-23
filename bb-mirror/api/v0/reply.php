@@ -364,6 +364,21 @@ update_user_meta($uid, '_bbp_last_posted', time());
 
 $reply = get_post($reply_id);
 
+// Re-mint the SAVED content: the BB REST insert sanitizes the pre-minted mention
+// anchor away (strips the <a>, keeps its text — found 2026-07-23). Our anchor is
+// already the canonical escaped shape, so write it back with kses off;
+// wp_update_post re-fires the save hooks, so the bb→pg mirror carries the anchor
+// too. Idempotent: content with no resolvable @token round-trips unchanged.
+if ($reply) {
+    $lg_minted = lg_bb_mirror_mint_mentions((string) $reply->post_content);
+    if ($lg_minted !== (string) $reply->post_content) {
+        kses_remove_filters();
+        wp_update_post(['ID' => $reply_id, 'post_content' => $lg_minted]);
+        kses_init_filters();
+        $reply = get_post($reply_id);
+    }
+}
+
 // Moderation: held replies come back pending/spam.
 if ($reply && in_array($reply->post_status, ['pending', 'spam'], true)) {
     reply_out(202, [

@@ -322,7 +322,7 @@
       if (!el || !el.tagName) return null;
       if (el.classList && el.classList.contains('ql-editor')) return { el: el, kind: 'ce' };
       if (el.tagName === 'TEXTAREA' &&
-          el.matches('textarea.rse-input, textarea.fic-input, #frm-content, #ntm-content'))
+          el.matches('textarea.rse-input, textarea.fic-input, textarea.lg-fb-replyinput, #frm-content, #ntm-content'))
         return { el: el, kind: 'ta' };
       return null;
     }
