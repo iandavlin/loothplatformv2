@@ -951,6 +951,18 @@ window.lgSortable = function (container, opts) {
   if (!container) return;
   var DCLASS = 'lg-sort-dragging';
   var dragging = null;
+  // Data-loss guard (Ian 2026-07-23 audit): a drag reorders by insertBefore()-ing the
+  // dragged node repeatedly. If a child inline editor is still in its contentEditable
+  // "editing" state, that DOM move fires a blur while the node is momentarily detached,
+  // and the field's blur-handler reads innerText='' → saves an EMPTY value (the "About
+  // lost its data once" report; also gallery titles). Commit any active editor BEFORE
+  // the node ever moves — while it's still attached, so blur reads the correct value.
+  function commitActiveEdit() {
+    var a = document.activeElement;
+    if (a && a !== document.body && (a.isContentEditable || a.getAttribute('contenteditable') === 'true')) {
+      a.blur();
+    }
+  }
   function items() {
     return Array.prototype.slice.call(container.querySelectorAll(opts.itemSelector + ':not(.' + DCLASS + ')'));
   }
@@ -972,6 +984,7 @@ window.lgSortable = function (container, opts) {
     container.addEventListener('mousedown', function (e) {
       var h = e.target.closest(opts.handleSelector);
       if (!h || !container.contains(h)) return;
+      commitActiveEdit();   // settle any open inline editor before the drag arms
       var el = h.closest(opts.itemSelector);
       if (el) el.setAttribute('draggable', 'true');
     });
@@ -980,6 +993,7 @@ window.lgSortable = function (container, opts) {
   container.addEventListener('dragstart', function (e) {
     var el = e.target.closest(opts.itemSelector);
     if (!el || !container.contains(el)) return;
+    commitActiveEdit();   // belt+braces: dragstart fires before any insertBefore move
     dragging = el; el.classList.add(DCLASS);
     e.dataTransfer.effectAllowed = 'move';
     try { e.dataTransfer.setData('text/plain', ''); } catch (_) {}
