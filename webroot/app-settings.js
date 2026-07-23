@@ -184,8 +184,15 @@
       D + ' .lg-hub-search__item{border-color:#2c312d!important}',
       D + ' .lg-hub-search__t{color:#e5e7e1!important}',
       // sort pills: Newest/Trending + the toggle icon buttons render WHITE → dark
-      D + ' .feed-sort-bar > a,' + D + ' .feed-sort-bar button{background:#22262a!important;color:#d0d4cd!important;border:1px solid #333833!important;font-weight:600!important;transition:background .15s,color .15s!important}',
-      D + ' .feed-sort-bar > a.active,' + D + ' .feed-sort-bar .is-active{background:#9cb37d!important;color:#15171a!important;border-color:#9cb37d!important;font-weight:700!important;box-shadow:0 1px 6px rgba(156,179,125,.35)!important}',
+      // dark-mode lane 2026-07-23 (credit Buck #64): the bg/active rules used the
+      // DIRECT-CHILD combinator `.feed-sort-bar > a`, but the live `--zones` layout
+      // nests anchors one level down (`.feed-sort-bar--zones > div.zL > a`), so
+      // Buck's descendant COLOR rule (line ~155) lit the text #cdd0ca while these
+      // bg rules missed → light text on a still-WHITE pill (1.41–1.56:1, audit
+      // #19–22). Widen `> a` to descendant `a` (buttons on this line already are);
+      // the more-specific .lg-newpost/.lg-filters-chip rules below still win.
+      D + ' .feed-sort-bar a,' + D + ' .feed-sort-bar button{background:#22262a!important;color:#d0d4cd!important;border:1px solid #333833!important;font-weight:600!important;transition:background .15s,color .15s!important}',
+      D + ' .feed-sort-bar a.active,' + D + ' .feed-sort-bar .is-active{background:#9cb37d!important;color:#15171a!important;border-color:#9cb37d!important;font-weight:700!important;box-shadow:0 1px 6px rgba(156,179,125,.35)!important}',
       D + ' .feed-sort-bar .lg-filters-chip{background:#9cb37d!important;color:#15171a!important}',   // dark text on sage
       D + ' .feed-sort-bar .lg-newpost{background:#243024!important;color:#e5e7e1!important}',
       // card borders compute near-WHITE on edges → unify dark. The shorthand
