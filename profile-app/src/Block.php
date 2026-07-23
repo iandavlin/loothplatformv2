@@ -63,6 +63,11 @@ final class Block
         'instruments' => ['label' => 'Instruments', 'removable' => true],
         'music'       => ['label' => 'Music',       'removable' => true],
         'gallery'     => ['label' => 'Gallery',     'removable' => true],
+        // Independent extra galleries (Ian 2026-07-23). Valid layout keys so they
+        // reorder/persist like any block, but NOT in the caddy ('caddy' => false) —
+        // they deploy from the in-block "Add gallery (N of 3)" counter instead.
+        'gallery-2'   => ['label' => 'Gallery 2',   'removable' => true, 'caddy' => false],
+        'gallery-3'   => ['label' => 'Gallery 3',   'removable' => true, 'caddy' => false],
         'resume'      => ['label' => 'Resume',      'removable' => true],
         'connect'     => ['label' => 'Connections', 'removable' => true],
         'socials'     => ['label' => 'Links',       'removable' => true],
@@ -94,7 +99,9 @@ final class Block
             case 'services':
             case 'instruments':
             case 'music':    $b = self::loadCatalogBlock($userId, $key); return $b !== null && !empty($b['items']);
-            case 'gallery':  return !empty(self::loadGallery($userId)['images']);
+            case 'gallery':
+            case 'gallery-2':
+            case 'gallery-3': return !empty(self::loadGallery($userId, $key)['images']);
             case 'resume':   $r = self::loadResume($userId); return $r !== null && !empty($r['url']);
             case 'connect':  $c = self::loadConnect($userId, $userId); return $c !== null && (int)($c['fields']['count'] ?? 0) > 0;
             case 'socials':  $s = self::loadSocials($userId);  return $s !== null && !empty($s['fields']['ordered']);
@@ -138,6 +145,7 @@ final class Block
         $hidden  = array_flip(self::launchHiddenBlocks());
         $out = [];
         foreach (self::LAYOUT_BLOCKS as $k => $cfg) {
+            if (($cfg['caddy'] ?? true) === false) continue;   // counter-managed (extra galleries)
             if (!isset($present[$k]) && !isset($hidden[$k])) $out[$k] = (string)$cfg['label'];
         }
         return $out;
@@ -741,22 +749,161 @@ final class Block
 
     // ---------- block: about (free-text; shared, profile + practice) ----------
 
-    public const ABOUT_KEY = 'about';
+    public const ABOUT_KEY      = 'about';
+    public const ABOUT_TEXT_MAX = 8000;    // tag-stripped plain projection (also the legacy plain cap)
+    public const ABOUT_HTML_MAX = 16000;   // sanitized rich-text body
 
-    /** Assemble the about block — free text + block vis (profile_sections key='about'). */
+    /**
+     * The strict rich-text allowlist (Ian 2026-07-23). Inline emphasis + links +
+     * lists + a couple of headings. NO img/media/iframe/style/script, NO classes,
+     * NO id — enforced by sanitizeRichHtml() at BOTH save and render (belt+braces).
+     */
+    private const RICH_ALLOWED_TAGS = [
+        'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'a',
+        'ul', 'ol', 'li', 'blockquote', 'h3', 'h4',
+    ];
+
+    /** Assemble the about block — rich text (html) + tag-stripped projection (text) + block vis. */
     public static function loadAbout(int $userId, string $key = 'about'): array
     {
         $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k");
         $s->execute([':u' => $userId, ':k' => $key]);
         $r = $s->fetch();
         $text = '';
-        if ($r) { $d = json_decode((string)$r['data'], true) ?: []; $text = (string)($d['text'] ?? ''); }
+        $html = '';
+        if ($r) {
+            $d = json_decode((string)$r['data'], true) ?: [];
+            $text = (string)($d['text'] ?? '');
+            $html = (string)($d['html'] ?? '');
+        }
         return [
             'block'   => 'about',
             'subject' => 'person',
             'vis'     => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'members'),
             'text'    => $text,
+            'html'    => $html,
         ];
+    }
+
+    /**
+     * Sanitize an About rich-text body to the strict allowlist. DOMDocument-based
+     * (structural, not regex): disallowed tags are UNWRAPPED (their text is kept),
+     * every attribute is stripped except a validated href on <a> (http/https/mailto
+     * or site-relative only — never javascript:/data:), which also gets a forced
+     * rel. Comments/PIs removed. Enforced server-side at save AND re-run at render,
+     * so a stored value is trusted only after passing through here. Length-capped.
+     */
+    public static function sanitizeRichHtml(string $html): string
+    {
+        $html = trim($html);
+        if ($html === '') return '';
+        if (strlen($html) > self::ABOUT_HTML_MAX) $html = substr($html, 0, self::ABOUT_HTML_MAX);
+
+        $prev = libxml_use_internal_errors(true);
+        $doc  = new \DOMDocument('1.0', 'UTF-8');
+        // A charset meta forces UTF-8 parsing; wrap in a known <div> we serialize the
+        // children of (Quill's snow output emits no bare <div>, so the first <div> in
+        // document order is always our wrapper).
+        $ok = $doc->loadHTML(
+            '<meta http-equiv="Content-Type" content="text/html; charset=utf-8"><div>' . $html . '</div>',
+            LIBXML_NOERROR | LIBXML_NOWARNING
+        );
+        libxml_clear_errors();
+        libxml_use_internal_errors($prev);
+        if (!$ok) return '';
+
+        $root = null;
+        foreach ($doc->getElementsByTagName('div') as $d) { $root = $d; break; }
+        if ($root === null) return '';
+
+        self::sanitizeRichNode($root);
+
+        $out = '';
+        foreach (iterator_to_array($root->childNodes) as $child) {
+            $out .= $doc->saveHTML($child);
+        }
+        return trim($out);
+    }
+
+    /** Recursive allowlist pass for sanitizeRichHtml(). Mutates the tree in place. */
+    private static function sanitizeRichNode(\DOMNode $node): void
+    {
+        foreach (iterator_to_array($node->childNodes) as $child) {
+            if ($child instanceof \DOMElement) {
+                $tag = strtolower($child->tagName);
+                if (!in_array($tag, self::RICH_ALLOWED_TAGS, true)) {
+                    // Dangerous / raw-text containers: drop the WHOLE subtree so their
+                    // content never leaks as visible text (e.g. <script>alert(1)</script>).
+                    static $dropWhole = ['script','style','iframe','object','embed','noscript',
+                        'template','svg','math','form','textarea','title','head','link','meta'];
+                    if (in_array($tag, $dropWhole, true)) { $node->removeChild($child); continue; }
+                    // Everything else disallowed: UNWRAP — clean descendants, then splice
+                    // them in where this node was (keeps the readable text).
+                    self::sanitizeRichNode($child);
+                    while ($child->firstChild) { $node->insertBefore($child->firstChild, $child); }
+                    $node->removeChild($child);
+                    continue;
+                }
+                // Capture a would-be href before we strip every attribute.
+                $href = ($tag === 'a') ? trim((string)$child->getAttribute('href')) : '';
+                if ($child->hasAttributes()) {
+                    foreach (iterator_to_array($child->attributes) as $attr) {
+                        $child->removeAttributeNode($attr);
+                    }
+                }
+                if ($tag === 'a') {
+                    $safe = self::safeHref($href);
+                    if ($safe === null) {
+                        // Not a safe link — unwrap to keep the text, drop the anchor.
+                        self::sanitizeRichNode($child);
+                        while ($child->firstChild) { $node->insertBefore($child->firstChild, $child); }
+                        $node->removeChild($child);
+                        continue;
+                    }
+                    $child->setAttribute('href', $safe);
+                    $child->setAttribute('rel', 'nofollow ugc noopener');
+                    $child->setAttribute('target', '_blank');
+                }
+                self::sanitizeRichNode($child);
+            } elseif ($child instanceof \DOMComment || $child instanceof \DOMProcessingInstruction) {
+                $node->removeChild($child);
+            }
+            // DOMText nodes are kept verbatim (serialization re-escapes them).
+        }
+    }
+
+    /** Validate a link target: http/https/mailto or site-relative; null = reject. */
+    private static function safeHref(string $href): ?string
+    {
+        if ($href === '') return null;
+        // Site-relative (starts with a single slash, not "//" protocol-relative).
+        if ($href[0] === '/' && (strlen($href) === 1 || $href[1] !== '/')) return $href;
+        $scheme = strtolower((string)parse_url($href, PHP_URL_SCHEME));
+        if ($scheme === 'http' || $scheme === 'https' || $scheme === 'mailto') return $href;
+        // Scheme-less "example.com/..." → assume https (friendly, still safe).
+        if ($scheme === '' && preg_match('~^[\w.-]+\.[a-z]{2,}(?:[/?#].*)?$~i', $href)) return 'https://' . $href;
+        return null;
+    }
+
+    /**
+     * Tag-stripped plain projection of a rich-text body (feeds the WP author box +
+     * directory search fuel). Block boundaries become newlines; entities decoded;
+     * whitespace collapsed; capped at ABOUT_TEXT_MAX.
+     */
+    public static function htmlToPlainText(string $html): string
+    {
+        if (trim($html) === '') return '';
+        $s = preg_replace('~<br\s*/?>~i', "\n", $html);
+        $s = preg_replace('~</(p|li|h3|h4|blockquote)>~i', "\n", (string)$s);
+        $s = preg_replace('~<(p|li|ul|ol|h3|h4|blockquote)\b[^>]*>~i', "\n", (string)$s);
+        $s = strip_tags((string)$s);
+        $s = html_entity_decode($s, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $s = preg_replace("~[ \t]+~", ' ', $s);
+        $s = preg_replace("~ *\n *~", "\n", (string)$s);
+        $s = preg_replace("~\n{3,}~", "\n\n", (string)$s);
+        $s = trim((string)$s);
+        if (mb_strlen($s) > self::ABOUT_TEXT_MAX) $s = mb_substr($s, 0, self::ABOUT_TEXT_MAX);
+        return $s;
     }
 
     // ---------- block: drop-off locations (business drop-off points; structured list) ----------
@@ -1146,10 +1293,54 @@ Accept: application/json
     // ---------- block: gallery (image grid; shared, profile + practice) ----------
 
     public const GALLERY_KEY            = 'gallery';
+    // Up to 3 independent galleries (Ian 2026-07-23). Each is its own profile_sections
+    // row (own title/visibility/images) and its own layout block. All three store
+    // files in the SAME flat dir gallery/<uuid>/<rand> (unique filenames) so the
+    // existing Media::unlinkUrl GC — which only understands the flat path — keeps
+    // working unchanged; gallery membership is data-driven, not path-driven.
+    public const GALLERY_KEYS           = ['gallery', 'gallery-2', 'gallery-3'];
     public const GALLERY_URL_BASE       = '/profile-media/gallery';
-    public const GALLERY_MAX            = 10;
+    public const GALLERY_MAX            = 10;   // per gallery
     public const GALLERY_DISPLAY_MODES  = ['grid', 'carousel'];
     public const GALLERY_DISPLAY_DEFAULT = 'grid';
+
+    /** True for a valid gallery layout/section key. */
+    public static function isGalleryKey(string $key): bool
+    {
+        return in_array($key, self::GALLERY_KEYS, true);
+    }
+
+    /** 1|2|3 slot → section key ('gallery' | 'gallery-2' | 'gallery-3'); null if out of range. */
+    public static function galleryKeyForSlot(int $slot): ?string
+    {
+        return self::GALLERY_KEYS[$slot - 1] ?? null;
+    }
+
+    /** Section key → 1|2|3 slot (defaults to 1 for the legacy 'gallery'). */
+    public static function gallerySlot(string $key): int
+    {
+        $i = array_search($key, self::GALLERY_KEYS, true);
+        return $i === false ? 1 : $i + 1;
+    }
+
+    /**
+     * Every image URL currently referenced by the user's OTHER galleries (all
+     * GALLERY_KEYS except $exceptKey). GC consults this so deleting/dropping a photo
+     * from one gallery never unlinks a file another gallery still shows — the shared
+     * flat store makes this the safe delete rule.
+     */
+    private static function galleryUrlsInUse(int $userId, string $exceptKey): array
+    {
+        $used = [];
+        foreach (self::GALLERY_KEYS as $k) {
+            if ($k === $exceptKey) continue;
+            foreach (self::loadGallery($userId, $k)['images'] as $im) {
+                $u = (string)($im['url'] ?? '');
+                if ($u !== '') $used[$u] = true;
+            }
+        }
+        return $used;
+    }
 
     private static function userUuid(int $userId): ?string
     {
@@ -1159,11 +1350,12 @@ Accept: application/json
         return $u === false ? null : strtolower((string)$u);
     }
 
-    /** Assemble the gallery block — image list + block vis (profile_sections key='gallery'). */
-    public static function loadGallery(int $userId): array
+    /** Assemble a gallery block — image list + block vis (profile_sections key=$key). */
+    public static function loadGallery(int $userId, string $key = self::GALLERY_KEY): array
     {
-        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = 'gallery'");
-        $s->execute([':u' => $userId]);
+        if (!self::isGalleryKey($key)) $key = self::GALLERY_KEY;
+        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k");
+        $s->execute([':u' => $userId, ':k' => $key]);
         $r = $s->fetch();
         $images = [];
         $title  = '';
@@ -1180,7 +1372,7 @@ Accept: application/json
             }
         }
         return [
-            'block'        => 'gallery',
+            'block'        => $key,
             'subject'      => 'person',
             'vis'          => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'members'),
             'title'        => $title,
@@ -1190,25 +1382,30 @@ Accept: application/json
     }
 
     /**
-     * Persist the gallery image list (used for add/remove/reorder/caption). Sanitizes
-     * to URLs under THIS user's gallery dir (no foreign URLs). visInput optional.
+     * Persist a gallery's image list (used for add/remove/reorder/caption). Sanitizes
+     * to URLs under THIS user's gallery dir (no foreign URLs). visInput/title/mode
+     * optional (null keeps stored). $key selects which of the up-to-3 galleries.
      */
-    public static function saveGalleryImages(int $userId, array $images, ?string $visInput = null, ?string $title = null, ?string $displayMode = null): array
+    public static function saveGalleryImages(int $userId, array $images, ?string $visInput = null, ?string $title = null, ?string $displayMode = null, string $key = self::GALLERY_KEY): array
     {
+        if (!self::isGalleryKey($key)) $key = self::GALLERY_KEY;
         $uuid   = self::userUuid($userId);
         $prefix = self::GALLERY_URL_BASE . '/' . $uuid . '/';
         $clean  = [];
         foreach ($images as $im) {
             if (!is_array($im)) continue;
             $url = (string)($im['url'] ?? '');
-            if ($uuid === null || strpos($url, $prefix) !== 0) continue;     // only this user's images
+            // Only this user's images, AND a single path segment after the prefix
+            // (rejects any crafted sub-path). Flat store → one basename, no slashes.
+            if ($uuid === null || strpos($url, $prefix) !== 0) continue;
+            if (strpos(substr($url, strlen($prefix)), '/') !== false) continue;
             $clean[] = ['url' => $url, 'caption' => mb_substr((string)($im['caption'] ?? ''), 0, 200)];
             if (count($clean) >= self::GALLERY_MAX) break;
         }
         // Previous state — needed both for the keep-fallback on a partial PUT
         // (null params keep whatever's stored) AND to GC files dropped from the
         // gallery below (orphan cleanup).
-        $prev = self::loadGallery($userId);
+        $prev = self::loadGallery($userId, $key);
         $finalTitle = ($title === null)
             ? $prev['title']
             : mb_substr(trim($title), 0, 80);
@@ -1223,29 +1420,59 @@ Accept: application/json
         if ($visInput !== null && self::visFromInput($visInput) !== null) {
             Db::pg()->prepare("
                 INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
-                VALUES (:u, 'gallery', :v, :d::jsonb, 40)
+                VALUES (:u, :k, :v, :d::jsonb, 40)
                 ON CONFLICT (user_id, key) DO UPDATE SET visibility = EXCLUDED.visibility, data = EXCLUDED.data, updated_at = now()
-            ")->execute([':u' => $userId, ':v' => self::visFromInput($visInput), ':d' => $data]);
+            ")->execute([':u' => $userId, ':k' => $key, ':v' => self::visFromInput($visInput), ':d' => $data]);
         } else {
             Db::pg()->prepare("
                 INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
-                VALUES (:u, 'gallery', 'members', :d::jsonb, 40)
+                VALUES (:u, :k, 'members', :d::jsonb, 40)
                 ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
-            ")->execute([':u' => $userId, ':d' => $data]);
+            ")->execute([':u' => $userId, ':k' => $key, ':d' => $data]);
         }
 
-        // GC files dropped from the gallery: any previously-stored URL not in the
-        // new set is now orphaned on disk → unlink it + its resizer cache twins.
+        // GC files dropped from THIS gallery: any previously-stored URL not in the new
+        // set is now orphaned → unlink it + resizer cache twins — UNLESS another
+        // gallery still references it (shared flat store; never orphan a live file).
         // After the row is persisted, so a failed write never deletes live files.
         $newUrls = array_column($clean, 'url');
+        $inUse   = self::galleryUrlsInUse($userId, $key);
         foreach (($prev['images'] ?? []) as $pi) {
             $pu = (string)($pi['url'] ?? '');
-            if ($pu !== '' && !in_array($pu, $newUrls, true)) {
+            if ($pu !== '' && !in_array($pu, $newUrls, true) && !isset($inUse[$pu])) {
                 Media::unlinkUrl($pu);
             }
         }
 
-        return self::loadGallery($userId);
+        return self::loadGallery($userId, $key);
+    }
+
+    /**
+     * Delete a whole gallery: unlink its stored files (unless another gallery still
+     * references them), remove its profile_sections row, and drop its key from the
+     * owner's profile_layout so it stops rendering. Returns true if a row existed.
+     */
+    public static function deleteGallery(int $userId, string $key): bool
+    {
+        if (!self::isGalleryKey($key)) return false;
+        $prev  = self::loadGallery($userId, $key);
+        $inUse = self::galleryUrlsInUse($userId, $key);
+
+        $pg = Db::pg();
+        $del = $pg->prepare("DELETE FROM profile_sections WHERE user_id = :u AND key = :k");
+        $del->execute([':u' => $userId, ':k' => $key]);
+        $existed = $del->rowCount() > 0;
+
+        // Drop from the layout (idempotent — normalizeLayout de-dupes/validates).
+        $layout = array_values(array_filter(self::profileLayout($userId), static fn($k) => $k !== $key));
+        self::saveProfileLayout($userId, $layout);
+
+        // GC files last, so a mid-delete failure never strands a live row.
+        foreach (($prev['images'] ?? []) as $pi) {
+            $pu = (string)($pi['url'] ?? '');
+            if ($pu !== '' && !isset($inUse[$pu])) Media::unlinkUrl($pu);
+        }
+        return $existed;
     }
 
     // ---------- block: socials / links (website + platforms) ----------

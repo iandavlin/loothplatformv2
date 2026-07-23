@@ -47,10 +47,22 @@ $existing = $row->fetch();
 $data = $existing ? (json_decode($existing['data'], true) ?: []) : [];
 $vis  = $existing ? $existing['visibility'] : 'members';
 
-if (array_key_exists('text', $in)) {
+// Rich-text body (server-side sanitize; the editor is never trusted). data.text is
+// the tag-stripped projection, derived here. A practice isn't a WP author, so there
+// is no author_about mirror — this is the /p/ storefront About only.
+if (array_key_exists('html', $in)) {
+    if (!is_string($in['html'])) profile_app_json(400, ['error' => 'html_must_be_string']);
+    if (strlen($in['html']) > Block::ABOUT_HTML_MAX) profile_app_json(400, ['error' => 'html_too_long']);
+    $clean = Block::sanitizeRichHtml($in['html']);
+    $plain = Block::htmlToPlainText($clean);
+    if ($plain === '') $clean = '';   // whitespace-only body → truly empty (shows placeholder)
+    $data['html'] = $clean;
+    $data['text'] = $plain;
+} elseif (array_key_exists('text', $in)) {
     if (!is_string($in['text'])) profile_app_json(400, ['error' => 'text_must_be_string']);
-    if (strlen($in['text']) > 8000) profile_app_json(400, ['error' => 'text_too_long']);
+    if (strlen($in['text']) > Block::ABOUT_TEXT_MAX) profile_app_json(400, ['error' => 'text_too_long']);
     $data['text'] = $in['text'];
+    unset($data['html']);
 }
 if (array_key_exists('visibility', $in)) {
     if (!in_array($in['visibility'], Profile::VIS_VALUES, true)) {
