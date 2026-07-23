@@ -116,9 +116,11 @@ declare(strict_types=1);
     cancel.addEventListener('click', teardown);
 
     save.addEventListener('click', function () {
-      // Quill 2 renders bullet lists as <ol data-list="bullet">; getSemanticHTML()
-      // emits proper <ul>/<ol> (which our allowlist keeps). Fall back to raw innerHTML.
-      var html = (typeof q.getSemanticHTML === 'function') ? q.getSemanticHTML() : q.root.innerHTML;
+      // Serialize the LIVE editor DOM — NOT getSemanticHTML(), which nbsp-ifies every
+      // space and can double-escape entities each round-trip (Ian bug 2026-07-23). The
+      // server sanitizer normalizes Quill's <ol data-list="bullet"> lists to <ul>/<ol>,
+      // so root.innerHTML round-trips clean + idempotent.
+      var html = q.root.innerHTML;
       save.disabled = true; save.textContent = 'Saving…';
       fetch(url, {
         method: method, credentials: 'include',

@@ -759,7 +759,7 @@ final class Block
      * NO id — enforced by sanitizeRichHtml() at BOTH save and render (belt+braces).
      */
     private const RICH_ALLOWED_TAGS = [
-        'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'a',
+        'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'del', 'a',
         'ul', 'ol', 'li', 'blockquote', 'h3', 'h4',
     ];
 
@@ -816,6 +816,7 @@ final class Block
         foreach ($doc->getElementsByTagName('div') as $d) { $root = $d; break; }
         if ($root === null) return '';
 
+        self::normalizeQuillLists($root, $doc);   // <ol><li data-list="bullet"> → <ul>, before attrs are stripped
         self::sanitizeRichNode($root);
 
         $out = '';
@@ -823,6 +824,50 @@ final class Block
             $out .= $doc->saveHTML($child);
         }
         return trim($out);
+    }
+
+    /**
+     * Quill 2 renders BOTH list kinds as one <ol> container, tagging each item with
+     * data-list="bullet"|"ordered" (client sends quill.root.innerHTML — canonical spaces
+     * + single-level entities, unlike getSemanticHTML which nbsp-ifies + re-escapes). We
+     * must read that hint HERE, before sanitizeRichNode() strips the attribute: split each
+     * list into proper <ul>/<ol> runs so bullets don't render as numbers.
+     */
+    private static function normalizeQuillLists(\DOMElement $root, \DOMDocument $doc): void
+    {
+        $lists = [];
+        foreach ($root->getElementsByTagName('*') as $el) {
+            $t = strtolower($el->tagName);
+            if ($t === 'ol' || $t === 'ul') $lists[] = $el;
+        }
+        foreach ($lists as $list) {
+            $items = [];
+            foreach (iterator_to_array($list->childNodes) as $ch) {
+                if ($ch instanceof \DOMElement && strtolower($ch->tagName) === 'li') {
+                    $dl   = strtolower(trim((string)$ch->getAttribute('data-list')));
+                    $type = $dl === 'bullet' ? 'ul' : ($dl === 'ordered' ? 'ol' : null);
+                    $items[] = [$ch, $type];
+                }
+            }
+            // No per-item hint → nothing to reclassify; leave the list as authored.
+            $anyHint = false;
+            foreach ($items as $it) { if ($it[1] !== null) { $anyHint = true; break; } }
+            if (!$anyHint) continue;
+
+            $parent  = $list->parentNode;
+            $fallback = strtolower($list->tagName);
+            $curType = null; $curList = null;
+            foreach ($items as [$li, $type]) {
+                $t = $type ?? $fallback;
+                if ($t !== $curType) {
+                    $curList = $doc->createElement($t);
+                    $parent->insertBefore($curList, $list);
+                    $curType = $t;
+                }
+                $curList->appendChild($li);   // moves the <li> (and any nested list) into the run
+            }
+            $parent->removeChild($list);
+        }
     }
 
     /** Recursive allowlist pass for sanitizeRichHtml(). Mutates the tree in place. */
@@ -843,6 +888,14 @@ final class Block
                     while ($child->firstChild) { $node->insertBefore($child->firstChild, $child); }
                     $node->removeChild($child);
                     continue;
+                }
+                // Normalize strike synonyms to <s> so the round-trip is canonical
+                // (Quill/paste may emit <strike> or <del>; the render allowlist keys on <s>).
+                if ($tag === 'strike' || $tag === 'del') {
+                    $s = $child->ownerDocument->createElement('s');
+                    while ($child->firstChild) { $s->appendChild($child->firstChild); }
+                    $node->replaceChild($s, $child);
+                    $child = $s; $tag = 's';
                 }
                 // Capture a would-be href before we strip every attribute.
                 $href = ($tag === 'a') ? trim((string)$child->getAttribute('href')) : '';
@@ -867,8 +920,14 @@ final class Block
                 self::sanitizeRichNode($child);
             } elseif ($child instanceof \DOMComment || $child instanceof \DOMProcessingInstruction) {
                 $node->removeChild($child);
+            } elseif ($child instanceof \DOMText) {
+                // Heal the non-breaking spaces earlier getSemanticHTML() saves injected —
+                // U+00A0 → normal space. A bio never needs nbsp; this keeps the round-trip
+                // stable (space→space) and undoes prior nbsp corruption on the next pass.
+                if (strpos($child->nodeValue, "\u{00A0}") !== false) {
+                    $child->nodeValue = str_replace("\u{00A0}", ' ', $child->nodeValue);
+                }
             }
-            // DOMText nodes are kept verbatim (serialization re-escapes them).
         }
     }
 
