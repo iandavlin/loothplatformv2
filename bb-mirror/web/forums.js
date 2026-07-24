@@ -295,16 +295,38 @@
       // hub-polish.js) — at the old 100000 the panel painted BEHIND the opaque
       // composer card and the dropdown was invisible on phones (Ian 2026-07-23). On
       // desktop the dmodal is only z 8800 so this sits above it there too.
+      // Themed via the dark-mode chrome-panel tokens (site-header.php sets --lg-panel-*
+      // on html[data-lguser-theme=dark]; they cascade to this body-appended panel, so
+      // var(--token, <light literal>) = light identical / dark automatically). Ian
+      // 2026-07-24: the hardcoded #fff panel looked "really bad" floating in the dark
+      // sheet. Row is now @handle (strong) STACKED over display-name (secondary) with
+      // real spacing — no more "@mikeMike" mash. On MOBILE the panel is anchored inside
+      // the sheet under the input (JS sets left/top/width/max-height, class .lg-mnt--sheet
+      // gives roomier touch rows). Desktop keeps the compact floating popover.
       var css = '.lg-mnt{position:fixed;z-index:2147483600;min-width:200px;max-width:320px;'
-        + 'max-height:260px;overflow-y:auto;background:#fff;border:1px solid #d8d8d0;'
-        + 'border-radius:10px;box-shadow:0 8px 28px rgba(30,35,25,.18);padding:4px;'
+        + 'max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch;'
+        + 'background:var(--lg-panel-bg,#fff);border:1px solid var(--lg-panel-border,#d8d8d0);'
+        + 'border-radius:12px;box-shadow:0 10px 30px rgba(20,24,16,.30);padding:4px;'
         + 'font:14px/1.3 system-ui,-apple-system,sans-serif;display:none}'
-        + '.lg-mnt__i{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer}'
-        + '.lg-mnt__i[aria-selected=true]{background:#eef1e7}'
-        + '.lg-mnt__av{width:26px;height:26px;border-radius:50%;flex:0 0 auto;object-fit:cover;'
-        + 'background:#c7cbb8;display:inline-block}'
-        + '.lg-mnt__tx{min-width:0}.lg-mnt__h{font-weight:600;color:#2e3a23}'
-        + '.lg-mnt__n{color:#6b7362;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+        + '.lg-mnt--sheet{padding:6px;border-radius:14px;box-shadow:0 -2px 22px rgba(0,0,0,.30)}'
+        + '.lg-mnt__i{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;cursor:pointer}'
+        + '.lg-mnt--sheet .lg-mnt__i{padding:11px 12px;gap:12px}'
+        + '.lg-mnt__i[aria-selected=true]{background:var(--lg-panel-hover-bg,#eef1e7)}'
+        + '.lg-mnt__av{width:28px;height:28px;border-radius:50%;flex:0 0 auto;object-fit:cover;'
+        + 'background:var(--lg-panel-divider,#c7cbb8);display:inline-block}'
+        + '.lg-mnt--sheet .lg-mnt__av{width:36px;height:36px}'
+        + '.lg-mnt__tx{min-width:0;display:flex;flex-direction:column;justify-content:center;line-height:1.25}'
+        + '.lg-mnt__h{font-weight:700;color:var(--lg-panel-ink,#2e3a23);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+        + '.lg-mnt__n{color:#6b7362;font-size:12.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+        // Explicit dark overrides — the --lg-panel-* tokens are NOT loaded on /hub/ (only
+        // the site-header partial defines them), so the var() fallbacks above stay light
+        // there. These literals ARE the dark-mode chrome-panel values, so the mention
+        // panel matches dark chrome everywhere. (Ian 2026-07-24: white panel in dark sheet.)
+        + 'html[data-lguser-theme="dark"] .lg-mnt{background:#1b1e21;border-color:#2c312d;box-shadow:0 10px 30px rgba(0,0,0,.5)}'
+        + 'html[data-lguser-theme="dark"] .lg-mnt__h{color:#e5e7e1}'
+        + 'html[data-lguser-theme="dark"] .lg-mnt__n{color:#9aa79b}'
+        + 'html[data-lguser-theme="dark"] .lg-mnt__i[aria-selected=true]{background:#243024}'
+        + 'html[data-lguser-theme="dark"] .lg-mnt__av{background:#2c312d}';
       var st = document.createElement('style'); st.id = 'lg-mnt-css'; st.textContent = css;
       document.head.appendChild(st);
       panel = document.createElement('div');
@@ -378,9 +400,43 @@
           + (i === sel ? ' aria-selected="true"' : '') + '>' + av
           + '<span class="lg-mnt__tx"><span class="lg-mnt__h">@' + esc(it.slug) + '</span>' + nm + '</span></div>';
       }).join('');
+      p.style.display = 'block';
+      // MOBILE + the composer sheet: anchor the panel INSIDE the sheet, directly under
+      // the input, full sheet-width minus padding, capped + scrollable, never overlapping
+      // the Post button or hidden by the iOS keyboard (Ian 2026-07-24). The panel stays
+      // position:fixed on document.body (NOT a child of the transform-lifted card — that
+      // ancestor transform would trap/mis-stack it on iOS), so we compute coordinates
+      // from the live rects, which already reflect the keyboard lift.
+      var sheet = active.el.closest && active.el.closest('#looth-comp-sheet');
+      var isMobile = window.matchMedia && window.matchMedia('(max-width:640px)').matches;
+      if (isMobile && sheet) {
+        p.classList.add('lg-mnt--sheet');
+        var card = sheet.querySelector('.lcp-card') || sheet;
+        var cr = card.getBoundingClientRect();
+        var ir = (sheet.querySelector('#lcp-input') || active.el).getBoundingClientRect();
+        var pad = 12;
+        var mLeft = cr.left + pad;
+        var mWidth = Math.max(140, cr.width - pad * 2);
+        p.style.left = mLeft + 'px';
+        p.style.width = mWidth + 'px';
+        p.style.maxWidth = 'none';
+        // Anchor the list ABOVE the input, growing upward. The composer card stacks
+        // input → photo row → Post with almost no gap, so a panel BELOW the input would
+        // overlap the Post button; and the keyboard occupies everything below the input.
+        // Above the input is the only place it can be full-height without covering the
+        // action buttons or being hidden by the keyboard — the standard mobile mention
+        // UX (Slack/iMessage). Capped at 40vh, scrollable, never past the top of screen.
+        var mMaxH = Math.max(96, Math.min(window.innerHeight * 0.4, ir.top - 14));
+        p.style.maxHeight = mMaxH + 'px';
+        var hh = Math.min(p.offsetHeight || mMaxH, mMaxH);
+        p.style.top = Math.max(8, Math.round(ir.top) - 6 - hh) + 'px';
+        return;
+      }
+      // DESKTOP (and any non-sheet composer): compact floating popover at the caret.
+      p.classList.remove('lg-mnt--sheet');
+      p.style.width = ''; p.style.maxWidth = ''; p.style.maxHeight = '';
       var rc = caretRect(active);
       var top = rc.bottom + 4, left = rc.left;
-      p.style.display = 'block';
       // Flip above the caret if it would overflow the viewport bottom.
       var ph = p.offsetHeight || 260;
       if (top + ph > window.innerHeight - 8) top = Math.max(8, rc.top - ph - 4);
@@ -471,7 +527,20 @@
       var a = document.activeElement;
       if (!a || !editorOf(a)) close();
     }, 0); }, true);
-    document.addEventListener('scroll', function () { if (active) close(); }, true);
+    document.addEventListener('scroll', function (e) {
+      if (!active) return;
+      // Don't dismiss when the user is scrolling the dropdown's OWN list (the mobile
+      // in-sheet panel is tall + scrollable) — only when the page/composer behind moves.
+      if (panel && e.target && panel.contains && e.target.nodeType === 1 && panel.contains(e.target)) return;
+      close();
+    }, true);
+    // Mobile: re-anchor the in-sheet panel when the keyboard opens/closes or the visual
+    // viewport shifts, so it keeps tracking the input and never slides under the keyboard.
+    if (window.visualViewport) {
+      var lgVvRe = function () { if (active && items.length && panel && panel.style.display !== 'none') render(); };
+      window.visualViewport.addEventListener('resize', lgVvRe);
+      window.visualViewport.addEventListener('scroll', lgVvRe);
+    }
   })();
 
   // Discussion (topic) cards do NOT click through to a topic page (Ian) — the card is
