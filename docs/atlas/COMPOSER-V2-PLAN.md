@@ -52,10 +52,20 @@ Size estimate: ~250 lines + ~40/surface adapter. Net LOC negative by a wide marg
 
 A single component with modes `reply | topic | edit-reply | edit-topic` (and later
 `comment` for the archive comments system), replacing lcp, frm, ntm's write half,
-rse, post-edit, fic, and fb-inline. One implementation of: text input, title row
+rse, post-edit, fic, and fb-inline. One implementation of: rich-text editor, title row
 (topic modes), photo tray, mention autocomplete mount, submit/moderation states,
 draft preservation across accidental dismiss.
 
+- **Editor = RICH TEXT on BOTH surfaces (Ian ruling 2026-07-24, binding).** One
+  editor engine everywhere — the plain-textarea-mobile / Quill-desktop split does
+  not survive v2. Engine choice + toolbar set are phase-2 previs decisions (with a
+  Quill-compat assessment for the desktop migration); Ian approves them as pictures
+  like the rest of the design.
+- **Images NEVER inline inside the editor (same ruling).** The attachment strip/row
+  — mobile's photo-row model — is the ONLY image surface, every mode, both surfaces:
+  composing never embeds an image into the text body. Read path untouched (legacy
+  posts with inline images still render). Desktop losing inline insertion is
+  UX-visible → phase-3 Ian gate.
 - **One write path: the mirror API only.** `POST/PUT /bb-mirror-api/v0/reply` (+ a
   thin `POST /bb-mirror-api/v0/topic` create endpoint to be added, wrapping the same
   in-process `rest_do_request` + post-insert kses-off re-mint + notify pattern
@@ -76,7 +86,8 @@ draft preservation across accidental dismiss.
 
 The round-3 lesson (receipt R7): geometry is a product decision, previs it like the
 Local Looths mockups. Before any code: static HTML previs at true 390×844 (light+dark,
-keyboard-up and keyboard-down states, mention-list open/closed, photo-tray states),
+keyboard-up and keyboard-down states, mention-list open/closed, rich-text toolbar + attachment-strip states,
+photo-tray states),
 committed under `footer-mockups/composer-v2/` and screenshotted for a board post.
 **Ian approves pictures, then we build.** Design constraints already ruled: full
 height to the keyboard top (zero-gap dock, no autofill stage), header = identity left
@@ -90,7 +101,9 @@ we cannot remove).
 The mention pipeline (mint → uuid-anchored storage → current-slug render → bell) is
 proven and untouched. The lrs thread READ surface stays (it's a renderer, not a
 composer). Desktop layouts keep their current look; desktop adopts the same manager +
-composer with a modal skin. Handles remain read-only (Ian ruling 2026-07-19).
+composer with a modal skin — rich text stays, but image insertion moves from
+inline to the attachment strip (the composer ruling applies to desktop too).
+Handles remain read-only (Ian ruling 2026-07-19).
 
 ## 3. Migration order (strangler, one surface per window)
 
@@ -112,7 +125,7 @@ gate where UX-visible (phases 2–4).
 | Risk | Mitigation |
 |---|---|
 | The manager becomes a 9th lifecycle instead of THE lifecycle | Phase-1 exit = lrs+lcp fully adapted, their old lifecycle code DELETED same commit |
-| Quill/BB-media coupling in frm/ntm resists the unified composer | Composer keeps a per-mode "editor engine" seam (plain textarea on mobile, Quill on desktop) — already today's split |
+| Quill/BB-media coupling in frm/ntm resists the unified composer | Old mitigation (per-mode editor seam: textarea mobile / Quill desktop) SUPERSEDED by the 2026-07-24 ruling — ONE rich-text engine both surfaces, images strip-only. New mitigation: engine chosen at phase-2 previs with a Quill-compat assessment; inline-image embeds deleted at phase 3; legacy content keeps rendering |
 | History-owner refactor breaks deep links (`?topic=` contract with forums.js §4f) | The §4f contract is the spec; e2e test cold-load + forward-nav + back before/after |
 | Mirror topic-create endpoint drifts from BB behavior (anon flag, media, throttle) | Wrap `rest_do_request` in-process exactly like reply.php; reuse its patterns verbatim |
 | WebKit harness ≠ iOS still bites (R8) | Harness is the gate for regressions only; Ian's phone remains the product gate; GH-Actions macOS iOS-Simulator tier (below) when CI budget allows |
