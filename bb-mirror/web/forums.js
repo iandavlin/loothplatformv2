@@ -311,13 +311,20 @@
       panel.className = 'lg-mnt';
       panel.setAttribute('role', 'listbox');
       document.body.appendChild(panel);
-      // Pointer pick (mousedown, not click — a click would blur the editor first).
-      panel.addEventListener('mousedown', function (e) {
-        var row = e.target.closest('.lg-mnt__i');
+      // Pointer pick BEFORE focus moves — a click would blur the editor first, and
+      // on iOS Safari `blur` fires before the synthetic `mousedown`, so a mousedown-
+      // only handler races the focusout dismiss and the tap misses (WebKit event
+      // order: touchend → mousedown → blur → mouseup → click). touchstart fires
+      // first and preventDefault keeps the editor focused so the pick always lands.
+      // pick() clears items, so a duplicate mousedown after touchstart no-ops.
+      function panelPick(e) {
+        var row = e.target.closest && e.target.closest('.lg-mnt__i');
         if (!row) return;
         e.preventDefault();
         pick(parseInt(row.dataset.i, 10));
-      });
+      }
+      panel.addEventListener('touchstart', panelPick, { passive: false });   // iOS: before blur
+      panel.addEventListener('mousedown', panelPick);                        // desktop / fallback
       return panel;
     }
 
