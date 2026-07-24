@@ -679,6 +679,13 @@
       '.lgdm-vt{flex:0 0 auto;display:flex;border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;overflow:hidden;background:#fff}',
       '.lgdm-vt button{border:0;background:none;font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b);padding:0 16px;min-height:40px;cursor:pointer}',
       '.lgdm-vt button.on{background:var(--lg-sage-d,#6b7c52);color:#fff}',
+      /* DARK bucket-C (Ian 2026-07-24): control bg was hardcoded #fff → inactive
+         label 2.33:1, and .on used --lg-sage-d (→#b0c693 light in dark) + white
+         = 1.85:1. Theme the control dark + dark ink on the active sage (parity
+         with directory.css .dir-viewtoggle). 10.4:1 / 9.7:1. Light untouched. */
+      'html[data-lguser-theme="dark"] .lgdm-vt{background:#1e2124;border-color:#2c312d}',
+      'html[data-lguser-theme="dark"] .lgdm-vt button{color:#cdd0ca}',
+      'html[data-lguser-theme="dark"] .lgdm-vt button.on{background:#b0c693;color:#15171a}',
       '.lgdm-shd__ttl{font:700 17px/1.1 var(--lg-font-serif,Georgia,serif);color:var(--lg-charcoal,#1a1d1a)}',
       '.lgdm-shd__meta{font:13px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b);font-weight:400;margin-left:2px}',
       /* the relocated results app becomes the scroll area */
