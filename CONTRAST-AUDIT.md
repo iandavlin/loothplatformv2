@@ -256,19 +256,34 @@ fixed clusters first:
 | 4–16 | `a.skip-link` (focus chip) | dark | 1.25 | `67a6f25` dark chip |
 | 19–22 | `nav.feed-sort-bar--zones … a` (Newest/Trending/Random/Saved) | dark | 1.41–1.56 | `8f76dd1` `>`→descendant (credit Buck #64) |
 
-### B · Chrome-owned but LIGHT / brand near-misses — Ian's ruling (NOT auto-fixed; light must stay byte-identical)
+### B · Chrome-owned LIGHT / brand near-misses — **APPLIED** (Ian accepted all five, 2026-07-24)
 
-These are pre-existing in **light** mode (or both themes) and are brand-palette /
-deliberate-mute decisions, not dark regressions. A one-line fix is ready for each;
-none applied without a ruling.
+These were pre-existing in **light** mode (or both themes) — brand-palette / deliberate-mute
+decisions, not dark regressions. Ian **ACCEPTED ALL FIVE** recommendations; applied on
+branch `dark-brand-nudges` off `origin/main`. Each is a **light-only** change (the darkened
+color is either a plain literal in a light-only rule, or a `var()` fallback whose token is
+redefined in the dark block) — **dark mode is preserved byte-identical**: the three sage
+items carry a `html[data-lguser-theme="dark"] …` restore to the lighter dark token, and the
+two account inks live behind `--lg-panel-*` vars that the dark block already defines. Ratios
+verified mathematically (relative-luminance / alpha-blend); light header bg is
+`rgba(255,255,255,.96)` ≈ white, footer is charcoal `#1a1d1a` both themes.
 
-| # | component | theme | ratio | recommendation |
-|--:|-----------|:-----:|------:|----------------|
-| 33 | `.lg-chrome__wordmark` "Looth Group" (sage on white, every 1280 page) | light | 3.10 | brand sage `#87986a` fails 4.5 as text; darken wordmark to ~`#6f7c54` **or** accept as large-ish brand mark (18px 700 → 3:1 threshold, then it PASSES — likely acceptable) |
-| 42 / 47 | account-menu "Sign out" 3.84 / "My Profile" 3.98 (light) | light | 3.84–3.98 | danger `#c66845` / sage `#6b7c52` on white; nudge darker to clear 4.5 if desired |
-| 52 / 53 | `.lg-chrome-foot__legal` © (rgba …,0.55) | both | 4.14 / 4.27 | muted legal text; bump alpha `0.55`→`0.65` clears both — deliberate mute, Ian's call |
-| 58 | `.lg-chrome__connect` "Connect Patreon" | light | 4.46 | 0.04 under; darken sage one step |
-| 63 | `.lg-chrome__menu a.is-active` "The Map" | light | 4.53 (WATCH) | on the line; brand sage active state |
+| # | component | theme | before | applied color | after | status |
+|--:|-----------|:-----:|------:|---------------|------:|--------|
+| 33 | `.lg-chrome__wordmark` "Looth Group" | light | 3.10 | `#87986a`→`#6b7850` (deeper sage; `~#6f7c54` was 4.48, 0.02 short — went one step darker) | **4.74** white / 4.58 cream | ✅ APPLIED |
+| 42 | account-menu "Sign out" (danger) | light | 3.84 | fallback `#c66845`→`#ad5330` | **5.18** white / 4.65 pink-hover | ✅ APPLIED |
+| 47 | account-menu "My Profile" hover/focus ink | light | 3.98 | fallback `#6b7c52`→`#586b3f` | **5.14** on sage-tint | ✅ APPLIED |
+| 52 / 53 | `.lg-chrome-foot__legal` © | both | 4.14 / 4.27 | alpha `0.55`→`0.65` | **5.24** on charcoal | ✅ APPLIED |
+| 58 | `.lg-chrome__connect` "Connect Patreon" | light | 4.46 | `var(--lg-sage-d)`→`#586b3f` | **5.64** cream / 5.85 white | ✅ APPLIED |
+| 63 | `.lg-chrome__menu a.is-active` "The Map" | light | 4.53 (WATCH) | `var(--lg-sage-d)`→`#586b3f` | **5.64** cream / 5.85 white | ✅ APPLIED |
+
+**Dark restores** (`lg-shared/site-header.css`, grouped with the skip-link dark rule):
+`html[data-lguser-theme="dark"] .lg-chrome__wordmark { color: var(--lg-sage); }` (→ `#9cb37d`),
+`… .lg-chrome__connect { color: var(--lg-sage-d); }` and `… .lg-chrome__menu a.is-active { color: var(--lg-sage-d); }` (→ `#b0c693`).
+Account inks in `lg-shared/site-header.php` need no restore — dark defines `--lg-panel-danger`/`--lg-panel-hover-ink`.
+
+*Out of scope (not in Ian's five):* the mobile hub-picker `.lg-hubmenu__item` active/hover
+(`--lg-sage-d` on sage-tint, ~3.98 light) was never a bucket-B row — left untouched.
 
 ### C · Page-theme-owned — for Ian / the owning surface (chrome does not style these)
 

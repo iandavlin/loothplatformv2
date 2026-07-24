@@ -56,6 +56,14 @@
    mode; light is unchanged (there --lg-ink is already dark). */
 html[data-lguser-theme="dark"] .skip-link { background: #1b1e21; }
 
+/* Dark restores for the 2026-07-24 light-mode brand-nudges above. The base rules
+   were darkened for the near-white LIGHT header; in dark, app-settings.js
+   redefines --lg-sage/--lg-sage-d LIGHTER (for the dark bg), so re-point these to
+   the tokens to keep the dark rendering byte-identical to pre-nudge. */
+html[data-lguser-theme="dark"] .lg-chrome__wordmark { color: var(--lg-sage); }
+html[data-lguser-theme="dark"] .lg-chrome__connect { color: var(--lg-sage-d); }
+html[data-lguser-theme="dark"] .lg-chrome__menu a.is-active { color: var(--lg-sage-d); }
+
 /* Reserve the scrollbar gutter permanently — the scrollbar popping in after
    first paint narrowed the viewport ~15px and re-centered EVERY element: the
    site-wide "shift/flash" Ian chased on 2026-06-11 (events page CLS 0.116 -> 0
@@ -106,7 +114,11 @@ body { margin: 0; }
 .lg-chrome__logo img { width: 36px; height: 36px; border-radius: 6px; display: block; }
 .lg-chrome__wordmark {
   font: 800 17px/1 var(--lg-font-serif);
-  color: var(--lg-sage);
+  /* Brand-nudge (Ian 2026-07-24, dark-mode audit B-33): base --lg-sage (#87986a)
+     is 3.12:1 on the near-white header — fails 4.5 as 17px text. Darkened to a
+     deeper sage that clears 4.5 on both white and cream (4.74/4.58). Dark keeps
+     the lighter --lg-sage (#9cb37d) via the restore below. */
+  color: #6b7850;
   letter-spacing: -0.3px;
 }
 
@@ -130,7 +142,10 @@ body { margin: 0; }
    Subtle sage underline rather than a filled pill, so it stays calm across the
    full six-item nav. Underline is a pseudo-element so it never shifts layout. */
 .lg-chrome__menu a.is-active {
-  color: var(--lg-sage-d);
+  /* Brand-nudge (Ian 2026-07-24, audit B-63): base --lg-sage-d (#6b7c52) is
+     4.37:1 on the near-white header — under 4.5. Darkened one step (5.64 cream).
+     Dark restores the lighter --lg-sage-d (#b0c693) below. */
+  color: #586b3f;
   position: relative;
 }
 .lg-chrome__menu a.is-active::after {
@@ -207,7 +222,9 @@ body { margin: 0; }
    (stays visible ≤640, unlike Sign in: it's the only logged-out path there). */
 .lg-chrome__connect {
   font: 600 13px/1 var(--lg-font-sans);
-  color: var(--lg-sage-d); text-decoration: none;
+  /* Brand-nudge (Ian 2026-07-24, audit B-58): --lg-sage-d was 4.46:1 on the
+     header — 0.04 under. Darkened one step (5.64 cream); dark restores below. */
+  color: #586b3f; text-decoration: none;
   padding: 9px 13px; border-radius: 999px;
   box-shadow: 0 0 0 1px var(--lg-sage) inset;
   white-space: nowrap;
@@ -406,7 +423,9 @@ body { margin: 0; }
   padding: 18px 24px;
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
   font: 400 12px/1.4 var(--lg-font-sans);
-  color: rgba(212,204,184,0.55);
+  /* Brand-nudge (Ian 2026-07-24, audit B-52/53): legal © muted to 0.55 read
+     4.14:1 on the charcoal footer (both themes). Bumped to 0.65 → 5.24:1. */
+  color: rgba(212,204,184,0.65);
 }
 .lg-chrome-foot__legal nav { display: flex; gap: 18px; }
 .lg-chrome-foot__legal a { color: rgba(212,204,184,0.7); text-decoration: none; }
