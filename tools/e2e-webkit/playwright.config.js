@@ -13,6 +13,14 @@
 // Auth: cookies come from /tmp/mentions-verify/wp-cookies.env (dev-gate + WP admin),
 // the same env file the chrome-dev-login harness maintains. Traffic goes through the
 // REAL public URL (Cloudflare -> this box), the same path a phone takes.
+//
+// RAM PROTOCOL (keeper-watch incident 2026-07-24 ~04:58): a WebKit run spawns ~2x
+// WPEWebProcess (~660MB total) and took the 3.8GB box to 86MB avail with other lanes
+// resident. Before running: (1) board-flag that a heavy browser suite is starting,
+// (2) confirm NO other browser engine is up (pgrep -f 'chrome-linux64|WPEWebProcess|
+// headless_shell'), (3) keep workers:1 (below), (4) suite must be the ONLY engine on
+// the box until it exits. One engine at a time is box law, and Playwright engines
+// count — not just lg-chrome.
 const { defineConfig, devices } = require('@playwright/test');
 
 module.exports = defineConfig({
