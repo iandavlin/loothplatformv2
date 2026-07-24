@@ -308,16 +308,26 @@
         + 'background:var(--lg-panel-bg,#fff);border:1px solid var(--lg-panel-border,#d8d8d0);'
         + 'border-radius:12px;box-shadow:0 10px 30px rgba(20,24,16,.30);padding:4px;'
         + 'font:14px/1.3 system-ui,-apple-system,sans-serif;display:none}'
-        + '.lg-mnt--sheet{padding:6px;border-radius:14px;box-shadow:0 -2px 22px rgba(0,0,0,.30)}'
+        // MOBILE sheet = Facebook-tagging feel (Ian 2026-07-24 design target): 16px
+        // card radius, soft shadow, roomy 60px rows, 46px avatars, name-first text.
+        + '.lg-mnt--sheet{padding:6px;border-radius:16px;box-shadow:0 10px 34px rgba(0,0,0,.30)}'
         + '.lg-mnt__i{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;cursor:pointer}'
-        + '.lg-mnt--sheet .lg-mnt__i{padding:11px 12px;gap:12px}'
+        + '.lg-mnt--sheet .lg-mnt__i{min-height:60px;padding:8px 15px;gap:13px;border-radius:12px}'
         + '.lg-mnt__i[aria-selected=true]{background:var(--lg-panel-hover-bg,#eef1e7)}'
+        // helper caption pinned at the top of the sheet panel (sheet only)
+        + '.lg-mnt__cap{display:none}'
+        + '.lg-mnt--sheet .lg-mnt__cap{display:block;position:sticky;top:0;z-index:1;'
+        + 'background:var(--lg-panel-bg,#fff);color:#8a8f86;font-size:12px;line-height:1.3;'
+        + 'padding:9px 14px 8px;border-bottom:1px solid var(--lg-panel-divider,#ececec)}'
         + '.lg-mnt__av{width:28px;height:28px;border-radius:50%;flex:0 0 auto;object-fit:cover;'
         + 'background:var(--lg-panel-divider,#c7cbb8);display:inline-block}'
-        + '.lg-mnt--sheet .lg-mnt__av{width:36px;height:36px}'
+        + '.lg-mnt--sheet .lg-mnt__av{width:46px;height:46px}'
         + '.lg-mnt__tx{min-width:0;display:flex;flex-direction:column;justify-content:center;line-height:1.25}'
+        // name-first: bold display name (16px on mobile) over muted @handle (13px)
         + '.lg-mnt__h{font-weight:700;color:var(--lg-panel-ink,#2e3a23);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+        + '.lg-mnt--sheet .lg-mnt__h{font-size:16px}'
         + '.lg-mnt__n{color:#6b7362;font-size:12.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+        + '.lg-mnt--sheet .lg-mnt__n{font-size:13px;margin-top:2px}'
         // Explicit dark overrides — the --lg-panel-* tokens are NOT loaded on /hub/ (only
         // the site-header partial defines them), so the var() fallbacks above stay light
         // there. These literals ARE the dark-mode chrome-panel values, so the mention
@@ -326,7 +336,8 @@
         + 'html[data-lguser-theme="dark"] .lg-mnt__h{color:#e5e7e1}'
         + 'html[data-lguser-theme="dark"] .lg-mnt__n{color:#9aa79b}'
         + 'html[data-lguser-theme="dark"] .lg-mnt__i[aria-selected=true]{background:#243024}'
-        + 'html[data-lguser-theme="dark"] .lg-mnt__av{background:#2c312d}';
+        + 'html[data-lguser-theme="dark"] .lg-mnt__av{background:#2c312d}'
+        + 'html[data-lguser-theme="dark"] .lg-mnt__cap{background:#1b1e21;color:#9aa79b;border-bottom-color:#2c312d}';
       var st = document.createElement('style'); st.id = 'lg-mnt-css'; st.textContent = css;
       document.head.appendChild(st);
       panel = document.createElement('div');
@@ -390,16 +401,26 @@
     function render() {
       var p = ensurePanel();
       if (!items.length) { p.style.display = 'none'; return; }
-      p.innerHTML = items.map(function (it, i) {
+      var onSheet = !!(active && active.el && active.el.closest
+        && active.el.closest('#looth-comp-sheet')
+        && window.matchMedia && window.matchMedia('(max-width:640px)').matches);
+      var rows = items.map(function (it, i) {
         var av = it.avatar_url
           ? '<img class="lg-mnt__av" src="' + esc(it.avatar_url) + '" alt="">'
           : '<span class="lg-mnt__av"></span>';
-        var nm = it.display_name && it.display_name !== it.slug
-          ? '<span class="lg-mnt__n">' + esc(it.display_name) + '</span>' : '';
+        // NAME-FIRST (Ian's FB-tagging target): bold display name on top, muted @handle
+        // underneath. Fall back to @handle as the primary when there's no distinct name.
+        var hasName = it.display_name && it.display_name !== it.slug;
+        var primary = hasName ? esc(it.display_name) : '@' + esc(it.slug);
+        var secondary = hasName ? '<span class="lg-mnt__n">@' + esc(it.slug) + '</span>' : '';
         return '<div class="lg-mnt__i" role="option" data-i="' + i + '"'
           + (i === sel ? ' aria-selected="true"' : '') + '>' + av
-          + '<span class="lg-mnt__tx"><span class="lg-mnt__h">@' + esc(it.slug) + '</span>' + nm + '</span></div>';
+          + '<span class="lg-mnt__tx"><span class="lg-mnt__h">' + primary + '</span>' + secondary + '</span></div>';
       }).join('');
+      // Pinned helper caption (sheet only) — sets the same expectation FB's "Tagging
+      // friends will send them each a message" does; TRUE here (a mention rings their bell).
+      var cap = onSheet ? '<div class="lg-mnt__cap">Mentioning someone notifies them.</div>' : '';
+      p.innerHTML = cap + rows;
       p.style.display = 'block';
       // MOBILE + the composer sheet: anchor the panel INSIDE the sheet, directly under
       // the input, full sheet-width minus padding, capped + scrollable, never overlapping
