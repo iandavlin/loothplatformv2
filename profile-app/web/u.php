@@ -635,6 +635,20 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-gmode__btn{border:0;background:transparent;font:600 calc(12px*var(--lg-read-scale,1))/1 var(--lg-font-sans);color:var(--lg-mute);padding:6px 14px;border-radius:999px;cursor:pointer}
 .lg-gmode__btn:hover{color:var(--lg-ink)}
 .lg-gmode__btn[aria-pressed="true"]{background:var(--lg-sage-tint);color:var(--lg-ink)}
+/* gallery — owner: per-gallery delete (trash) in the heading */
+.lg-gdel{border:0;background:none;cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;opacity:.55;border-radius:6px;color:var(--lg-mute)}
+.lg-gdel:hover{opacity:1;background:#fbeaea;color:#b3261e}
+.lg-gdel:disabled{opacity:.35;cursor:progress}
+/* gallery — owner: "Add gallery" countdown control (pinned in the Sections rail) */
+.lg-caddy__gadd{margin:0 0 14px}
+.lg-gadd{display:inline-flex;align-items:center;gap:9px;background:var(--lg-sage-tint,#eef1e8);border:1px dashed var(--lg-sage-3,#b7c6ab);color:var(--lg-ink);border-radius:999px;padding:9px 16px;min-height:40px;font:700 calc(12.5px*var(--lg-read-scale,1))/1 var(--lg-font-sans);cursor:pointer}
+.lg-gadd:hover{border-color:var(--lg-sage);background:#fff}
+.lg-gadd--rail{width:100%;justify-content:flex-start}
+.lg-gadd:disabled,.lg-gadd[disabled]{opacity:.5;cursor:not-allowed;border-style:solid}
+.lg-gadd:disabled:hover,.lg-gadd[disabled]:hover{background:var(--lg-sage-tint,#eef1e8);border-color:var(--lg-sage-3,#b7c6ab)}
+.lg-gadd__plus{font-size:17px;line-height:1;color:var(--lg-sage-d,#4f6a45)}
+.lg-gadd__count{margin-left:auto;font-weight:700;color:var(--lg-sage-d,#4f6a45);font-size:calc(11px*var(--lg-read-scale,1))}
+.lg-gadd:disabled .lg-gadd__count,.lg-gadd[disabled] .lg-gadd__count{color:var(--lg-mute)}
 /* gallery — carousel display mode */
 .lg-gallery--carousel{display:block}
 .lg-gallery--carousel.lg-gallery--edit{display:flex;flex-direction:column;gap:8px}
@@ -835,6 +849,18 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
         <button type="button" class="lg-caddy__close" id="lg-caddy-close" aria-label="Close">×</button>
       </div>
       <p class="lg-caddy__hint">Drag a section into your profile — or tap to add. Sections marked <b>Filterable</b> tag you with site taxonomy so members can find you in search.</p>
+      <?php
+        // Add-gallery control — pinned in the Sections rail (Ian 2026-07-23, rev 2), a
+        // COUNTDOWN of galleries you can still add (max 3), disabled at 0 left.
+        $lgGalLeft = max(0, 3 - looth_gallery_count($subjectId));
+      ?>
+      <div class="lg-caddy__gadd">
+        <button type="button" class="lg-gadd lg-gadd--rail" id="lg-add-gallery"<?= $lgGalLeft <= 0 ? ' disabled aria-disabled="true"' : '' ?>>
+          <span class="lg-gadd__plus" aria-hidden="true">＋</span>
+          <span class="lg-gadd__lab">Add gallery</span>
+          <span class="lg-gadd__count"><?= $lgGalLeft ?> left</span>
+        </button>
+      </div>
       <div class="lg-caddy__list" id="lg-caddy-list">
         <?php foreach ($paletteGroups as $grp => $keys):
               $keys = array_values(array_diff($keys, Block::launchHiddenBlocks()));
@@ -1003,6 +1029,18 @@ window.lgSortable = function (container, opts) {
   if (!container) return;
   var DCLASS = 'lg-sort-dragging';
   var dragging = null;
+  // Data-loss guard (Ian 2026-07-23 audit): a drag reorders by insertBefore()-ing the
+  // dragged node repeatedly. If a child inline editor is still in its contentEditable
+  // "editing" state, that DOM move fires a blur while the node is momentarily detached,
+  // and the field's blur-handler reads innerText='' → saves an EMPTY value (the "About
+  // lost its data once" report; also gallery titles). Commit any active editor BEFORE
+  // the node ever moves — while it's still attached, so blur reads the correct value.
+  function commitActiveEdit() {
+    var a = document.activeElement;
+    if (a && a !== document.body && (a.isContentEditable || a.getAttribute('contenteditable') === 'true')) {
+      a.blur();
+    }
+  }
   function items() {
     return Array.prototype.slice.call(container.querySelectorAll(opts.itemSelector + ':not(.' + DCLASS + ')'));
   }
@@ -1024,6 +1062,7 @@ window.lgSortable = function (container, opts) {
     container.addEventListener('mousedown', function (e) {
       var h = e.target.closest(opts.handleSelector);
       if (!h || !container.contains(h)) return;
+      commitActiveEdit();   // settle any open inline editor before the drag arms
       var el = h.closest(opts.itemSelector);
       if (el) el.setAttribute('draggable', 'true');
     });
@@ -1032,6 +1071,7 @@ window.lgSortable = function (container, opts) {
   container.addEventListener('dragstart', function (e) {
     var el = e.target.closest(opts.itemSelector);
     if (!el || !container.contains(el)) return;
+    commitActiveEdit();   // belt+braces: dragstart fires before any insertBefore move
     dragging = el; el.classList.add(DCLASS);
     e.dataTransfer.effectAllowed = 'move';
     try { e.dataTransfer.setData('text/plain', ''); } catch (_) {}
@@ -1089,6 +1129,8 @@ window.lgSortable = function (container, opts) {
     music:       '<path d="M9 17V5l10-2v12"/><circle cx="6.5" cy="17" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/>',
     location:    '<path d="M12 21s7-5.8 7-11a7 7 0 1 0-14 0c0 5.2 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
     gallery:     '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.7"/><path d="M5 17l4.5-4.5 3 3L16 11l3 3.4"/>',
+    'gallery-2':  '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.7"/><path d="M5 17l4.5-4.5 3 3L16 11l3 3.4"/>',
+    'gallery-3':  '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.7"/><path d="M5 17l4.5-4.5 3 3L16 11l3 3.4"/>',
     connect:     '<circle cx="8.5" cy="9" r="2.8"/><circle cx="16" cy="9.5" r="2.3"/><path d="M3.5 19a5 5 0 0 1 10 0"/><path d="M14 19a4.3 4.3 0 0 1 6.5-3.7"/>',
     socials:     '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.6 2.4 2.6 14.6 0 17"/><path d="M12 3.5c-2.6 2.4-2.6 14.6 0 17"/>',
     resume:      '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13.2h6"/><path d="M10 16.6h6"/><path d="M10 9.8h2"/>'
@@ -1318,7 +1360,9 @@ window.lgSortable = function (container, opts) {
     'music':           { url: BASE + '/me/catalog/music',       m: 'PUT', k: 'visibility' },
     'connect':         { url: BASE + '/me/connect',  m: 'PATCH', k: 'visibility' },
     'about':           { url: BASE + '/me/about',    m: 'PATCH', k: 'visibility' },
-    'gallery':         { url: BASE + '/me/gallery',  m: 'PUT',   k: 'visibility' },
+    'gallery':         { url: BASE + '/me/gallery?g=1', m: 'PUT', k: 'visibility' },
+    'gallery-2':       { url: BASE + '/me/gallery?g=2', m: 'PUT', k: 'visibility' },
+    'gallery-3':       { url: BASE + '/me/gallery?g=3', m: 'PUT', k: 'visibility' },
     'socials':         { url: BASE + '/me/socials',  m: 'PUT',   k: 'visibility' },
     'location-approx': { url: BASE + '/me/location', m: 'PUT',   k: 'location_visibility' },
     'location-exact':  { url: BASE + '/me/location', m: 'PUT',   k: 'location_exact_visibility' }
@@ -1855,6 +1899,7 @@ window.lgSortable = function (container, opts) {
   })();
 
   document.querySelectorAll('.lg-edit[data-edit-field]').forEach(function (el) {
+    if (el.getAttribute('data-edit-type') === 'richtext') return;   // handled by the Quill editor (_richedit.php)
     el.setAttribute('title', 'Click to edit');
     el.addEventListener('click', function () {
       if (el.classList.contains('editing')) return;
@@ -2155,7 +2200,13 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
    data-url (capped at w=1600 via the media resizer), not the grid thumbnail. */
 (function () {
   var photos = [];
-  function collect() { photos = Array.prototype.slice.call(document.querySelectorAll('.lg-gphoto[data-url]')); }
+  // Scope the lightbox set to ONE gallery block (up to 3 per page) so prev/next stay
+  // within the gallery the photo was clicked in; falls back to page-wide.
+  var scopeEl = null;
+  function collect() {
+    var root = scopeEl || document;
+    photos = Array.prototype.slice.call(root.querySelectorAll('.lg-gphoto[data-url]'));
+  }
 
   function big(url) { return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'w=1600'; }
 
@@ -2225,6 +2276,7 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
     if (e.target.closest('.lg-gphoto__rm') || e.target.closest('.lg-gphoto__add')) return;
     var fig = e.target.closest('.lg-gphoto[data-url]');
     if (!fig) return;
+    scopeEl = fig.closest('.lg-block--gallery') || null;   // this gallery's photos only
     collect();
     var i = photos.indexOf(fig);
     if (i >= 0) { e.preventDefault(); open(i); }
@@ -2234,69 +2286,118 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
 <?php if ($isOwner): /* reopen owner-only region for the gallery editor below */ ?>
 
 <script>
-/* Gallery editor (owner/Me) — multi-upload (POST me-gallery) + remove (PUT list). */
+/* Gallery editor (owner/Me) — up to 3 independent galleries. Each .lg-block--gallery
+   carries data-g (1|2|3) → the ?g=N selector on /me/gallery. Per-gallery multi-upload
+   (POST) + remove (PUT list) + display-mode toggle. Scoped per block so photo ops
+   never leak across galleries. */
 (function () {
-  var wrap = document.getElementById('lg-gallery');
-  if (!wrap) return;
-  var addBtn = document.getElementById('lg-gallery-add');
+  var galleries = document.querySelectorAll('.lg-block--gallery');
+  if (!galleries.length) return;
+  var GBASE = '/profile-api/v0/me/gallery';
 
-  function currentImages() {
-    return Array.prototype.map.call(wrap.querySelectorAll('.lg-gphoto'), function (el) {
-      var cap = el.querySelector('figcaption');
-      return { url: el.getAttribute('data-url'), caption: cap ? cap.textContent : '' };
+  galleries.forEach(function (block) {
+    var wrap = block.querySelector('.lg-gallery');
+    if (!wrap) return;
+    var slot = block.getAttribute('data-g') || '1';
+    var ep   = GBASE + '?g=' + slot;
+    var addBtn = block.querySelector('.lg-gphoto__add');
+
+    function currentImages() {
+      return Array.prototype.map.call(wrap.querySelectorAll('.lg-gphoto'), function (el) {
+        var cap = el.querySelector('figcaption');
+        return { url: el.getAttribute('data-url'), caption: cap ? cap.textContent : '' };
+      });
+    }
+    function putList(images) {
+      return fetch(ep, { method: 'PUT', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ images: images }) })
+        .then(function (r) { return r.ok; });
+    }
+
+    // Remove a photo (this gallery only).
+    wrap.addEventListener('click', function (e) {
+      var rm = e.target.closest('.lg-gphoto__rm'); if (!rm) return;
+      rm.closest('.lg-gphoto').remove();
+      putList(currentImages()).then(function (ok) { if (!ok) { alert('Remove failed'); location.reload(); } });
     });
-  }
-  function putList(images) {
-    return fetch('/profile-api/v0/me/gallery', { method: 'PUT', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ images: images }) })
-      .then(function (r) { return r.ok; });
-  }
 
-  wrap.addEventListener('click', function (e) {
-    var rm = e.target.closest('.lg-gphoto__rm'); if (!rm) return;
-    rm.closest('.lg-gphoto').remove();
-    putList(currentImages()).then(function (ok) { if (!ok) { alert('Remove failed'); location.reload(); } });
-  });
+    // Multi-upload into this gallery.
+    if (addBtn) {
+      var input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp'; input.multiple = true;
+      input.style.display = 'none'; document.body.appendChild(input);
+      addBtn.addEventListener('click', function () { input.click(); });
+      input.addEventListener('change', function () {
+        var files = Array.prototype.slice.call(input.files || []); input.value = '';
+        if (!files.length) return;
+        addBtn.textContent = 'Uploading…';
+        var i = 0;
+        (function next() {
+          if (i >= files.length) { location.reload(); return; }
+          var f = files[i++];
+          if (f.size > 5 * 1024 * 1024) { alert(f.name + ' is over 5 MB — skipped'); next(); return; }
+          var fd = new FormData(); fd.append('image', f);
+          fetch(ep, { method: 'POST', credentials: 'include', body: fd })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (res) { if (!res.ok) alert('Upload failed (' + f.name + '): ' + (res.j && res.j.error || '?')); next(); })
+            .catch(function () { alert('Network error on ' + f.name); next(); });
+        })();
+      });
+    }
 
-  var input = document.createElement('input');
-  input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp'; input.multiple = true;
-  input.style.display = 'none'; document.body.appendChild(input);
-  addBtn && addBtn.addEventListener('click', function () { input.click(); });
-  input.addEventListener('change', function () {
-    var files = Array.prototype.slice.call(input.files || []); input.value = '';
-    if (!files.length) return;
-    addBtn.textContent = 'Uploading…';
-    var i = 0;
-    (function next() {
-      if (i >= files.length) { location.reload(); return; }
-      var f = files[i++];
-      if (f.size > 5 * 1024 * 1024) { alert(f.name + ' is over 5 MB — skipped'); next(); return; }
-      var fd = new FormData(); fd.append('image', f);
-      fetch('/profile-api/v0/me/gallery', { method: 'POST', credentials: 'include', body: fd })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-        .then(function (res) { if (!res.ok) alert('Upload failed (' + f.name + '): ' + (res.j && res.j.error || '?')); next(); })
-        .catch(function () { alert('Network error on ' + f.name); next(); });
-    })();
+    // Grid/carousel display-mode toggle (this gallery only).
+    var ctrl = block.querySelector('.lg-gmode');
+    if (ctrl) {
+      ctrl.addEventListener('click', function (e) {
+        var btn = e.target.closest('.lg-gmode__btn'); if (!btn) return;
+        if (btn.getAttribute('aria-pressed') === 'true') return;
+        var mode = btn.getAttribute('data-mode');
+        btn.disabled = true;
+        fetch(ep, { method: 'PUT', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ display_mode: mode }) })
+          .then(function (r) { if (r.ok) location.reload(); else { btn.disabled = false; alert('Could not change mode'); } })
+          .catch(function () { btn.disabled = false; alert('Network error'); });
+      });
+    }
+
+    // Delete this WHOLE gallery (confirm) → DELETE ?g=N (server GCs files + drops the
+    // layout key), then reload so the counter + remaining galleries re-render.
+    var del = block.querySelector('.lg-gdel');
+    if (del) {
+      del.addEventListener('click', function () {
+        if (!confirm('Delete this entire gallery? Its photos will be permanently removed.')) return;
+        del.disabled = true;
+        fetch(ep, { method: 'DELETE', credentials: 'include' })
+          .then(function (r) { if (r.ok) location.reload(); else { del.disabled = false; alert('Delete failed'); } })
+          .catch(function () { del.disabled = false; alert('Network error'); });
+      });
+    }
   });
 })();
 
-/* Gallery display-mode toggle (owner only) — PUT /me/gallery {display_mode}. */
+/* "Add gallery" countdown (owner, pinned in the Sections rail) — deploy the next
+   unused gallery block by appending its key to the layout (/me/layout), then reload.
+   Disabled (0 left) at 3 galleries. */
 (function () {
-  var ctrl = document.querySelector('.lg-block--gallery .lg-gmode');
-  if (!ctrl) return;
-  ctrl.addEventListener('click', function (e) {
-    var btn = e.target.closest('.lg-gmode__btn'); if (!btn) return;
-    if (btn.getAttribute('aria-pressed') === 'true') return;
-    var mode = btn.getAttribute('data-mode');
+  var btn = document.getElementById('lg-add-gallery');
+  if (!btn) return;
+  var KEYS = ['gallery', 'gallery-2', 'gallery-3'];
+  btn.addEventListener('click', function () {
+    if (btn.disabled) return;
+    var profile = document.querySelector('.lg-profile');
+    if (!profile) return;
+    var present = Array.prototype.map.call(
+      profile.querySelectorAll('.lg-block:not(.lg-block--header)'),
+      function (s) { return s.getAttribute('data-block'); }
+    ).filter(Boolean);
+    var next = KEYS.filter(function (k) { return present.indexOf(k) === -1; })[0];
+    if (!next) return;                     // already at 3
     btn.disabled = true;
-    fetch('/profile-api/v0/me/gallery', {
-      method: 'PUT', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ display_mode: mode })
-    }).then(function (r) {
-      if (r.ok) location.reload();
-      else { btn.disabled = false; alert('Could not change mode'); }
-    }).catch(function () { btn.disabled = false; alert('Network error'); });
+    var order = present.slice(); order.push(next);
+    fetch('/profile-api/v0/me/layout', { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: order }) })
+      .then(function (r) { if (r.ok) location.reload(); else { btn.disabled = false; alert('Could not add gallery'); } })
+      .catch(function () { btn.disabled = false; alert('Network error'); });
   });
 })();
 /* Business entry pill (owner) — create the member's LoothPro business page, then
@@ -2423,6 +2524,7 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
   });
 })();
 </script>
+<?php require __DIR__ . '/_richedit.php'; /* About rich-text editor (owner-only; lazy Quill) */ ?>
 <?php endif; ?>
 </body>
 </html>

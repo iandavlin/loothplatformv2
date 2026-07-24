@@ -616,6 +616,7 @@ window.lgSortable = function (container, opts) {
     }
   }
   document.querySelectorAll('.lg-edit[data-edit-field]').forEach(function (el) {
+    if (el.getAttribute('data-edit-type') === 'richtext') return;   // handled by the Quill editor (_richedit.php)
     el.setAttribute('title', 'Click to edit');
     el.addEventListener('click', function () {
       if (el.classList.contains('editing')) return;
@@ -778,6 +779,7 @@ window.lgSortable = function (container, opts) {
   });
 })();
 </script>
+<?php require __DIR__ . '/_richedit.php'; /* practice About rich-text editor (owner-only; lazy Quill) */ ?>
 <?php endif; ?>
 <script>
 /* Drop-off Locations map — Leaflet + OSM tiles. Reads pins from the

@@ -3,7 +3,10 @@
  * /forums-poc/ and /forums-poc/<slug>/ — activity feed (v2).
  *
  * Features:
- *  - Sort bar: new (default) / old / hot
+ *  - Sort bar:// Sort: new (default) | old | hot | random
+// Default = Newest everywhere (Ian ruling 2026-07-22, supersedes the Random
+// front-door default of 2026-06-07). An explicit pick still persists via the
+// lg_hub_sort cookie below, so members who chose Random keep Random.(default) / old / hot
  *  - Featured image thumbnail on cards (LATERAL join on attachment table)
  *  - Card redesign: OP excerpt + last 3 replies threaded beneath OP,
  *    with accordion toggle for > 3 replies.
@@ -167,12 +170,12 @@ if (preg_match('/[?&]fid=(\d+)/', $_SERVER['REQUEST_URI'] ?? '', $m)) {
     $fid = (int)$m[1];
 }
 
-// Sort: random (front-door default) | new | old | hot
-// The site-wide /hub/ front door defaults to "Random" — a popularity-weighted shuffle
-// that surfaces old/popular content (Ian/Buck 2026-06-07). A scoped single-forum view
-// keeps newest-first so a specific forum reads chronologically.
+// Sort: new (default) | old | hot | random
+// Default = Newest everywhere (Ian ruling 2026-07-22; supersedes the Random
+// front-door default of 2026-06-07). An explicit pick still persists via the
+// lg_hub_sort cookie below, so members who chose Random keep Random.
 $sort_param   = strtolower(trim((string)($_GET['sort'] ?? '')));
-$default_sort = ($forum_slug !== '' || $fid > 0) ? 'new' : 'random';
+$default_sort = 'new';
 // Persist the picked sort across visits (Ian 2026-06-10): an explicit ?sort=
 // writes a 1-year cookie; a bare /hub/ load reads it back, so Newest/Trending/
 // Random survives navigation and hard refresh. Random's SEED still re-rolls

@@ -1,0 +1,5104 @@
+[
+ {
+  "tag": "front__anon__light__1280w",
+  "surface": "front",
+  "url": "/front-page/",
+  "auth": "anon",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "section.row.row--featured-member > div.lg-fm > span.lg-fm__badge",
+    "sample": "Featured member",
+    "fg": "rgb(236, 179, 81)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.89,
+    "size": 10,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(138, 150, 112)",
+    "bg": "rgb(255,254,254)",
+    "ratio": 3.13,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "ol.gdle-side-board > li.gdle-side-row.gdle-side-row--open > span.gdle-side-row__pts",
+    "sample": "play to claim",
+    "fg": "rgb(120, 137, 91)",
+    "bg": "rgb(243,247,233)",
+    "ratio": 3.49,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "ol.gdle-side-board > li.gdle-side-row.gdle-side-row--open > span.gdle-side-row__pts",
+    "sample": "play to claim",
+    "fg": "rgb(120, 137, 91)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.8,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo > div.vpromo__video > p.vpromo__label",
+    "sample": "Featured video",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 3.9,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo > div.vpromo__copy > p.vp-eyebrow",
+    "sample": "Welcome",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 3.9,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo__copy > p > a.vp-cta.vp-cta--secondary",
+    "sample": "Weekly email",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 3.9,
+    "size": 16.32,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(255,254,254)",
+    "ratio": 4.46,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo__copy > p > a.vp-cta",
+    "sample": "Join Looth Group \u2192",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(111,124,84)",
+    "ratio": 4.48,
+    "size": 16.32,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-fm > div.lg-fm__body > div.lg-fm__role",
+    "sample": "Brooklyn Fretworks",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.48,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-fm > div.lg-fm__act > a.lg-fm__cta",
+    "sample": "Visit Chip's profile",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(111,124,84)",
+    "ratio": 4.48,
+    "size": 13,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": [
+   {
+    "sel": "div.signup-banner__inner > div > strong.signup-banner__title",
+    "sample": "Join the Looth community",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 1.15,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "div.signup-banner__inner > div > span.signup-banner__body",
+    "sample": "Sign up for full access to articles, vid",
+    "fg": "rgba(255, 255, 255, 0.85)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 1.12,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "front__anon__light__390w",
+  "surface": "front",
+  "url": "/front-page/",
+  "auth": "anon",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "ol.gdle-side-board > li.gdle-side-row.gdle-side-row--open > span.gdle-side-row__pts",
+    "sample": "play to claim",
+    "fg": "rgb(120, 137, 91)",
+    "bg": "rgb(243,247,233)",
+    "ratio": 3.49,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "ol.gdle-side-board > li.gdle-side-row.gdle-side-row--open > span.gdle-side-row__pts",
+    "sample": "play to claim",
+    "fg": "rgb(120, 137, 91)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.8,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo > div.vpromo__video > p.vpromo__label",
+    "sample": "Featured video",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 3.9,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo > div.vpromo__copy > p.vp-eyebrow",
+    "sample": "Welcome",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 3.9,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo__copy > p > a.vp-cta.vp-cta--secondary",
+    "sample": "Weekly email",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 3.9,
+    "size": 16.32,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(255,254,254)",
+    "ratio": 4.46,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo__copy > p > a.vp-cta",
+    "sample": "Join Looth Group \u2192",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(111,124,84)",
+    "ratio": 4.48,
+    "size": 16.32,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "nav > button > span.lt-lb",
+    "sample": "Nav",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.89,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > a > span.lt-lb",
+    "sample": "You",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.89,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": [
+   {
+    "sel": "div.signup-banner__inner > div > strong.signup-banner__title",
+    "sample": "Join the Looth community",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 1.15,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "div.signup-banner__inner > div > span.signup-banner__body",
+    "sample": "Sign up for full access to articles, vid",
+    "fg": "rgba(255, 255, 255, 0.85)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 1.12,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "front__anon__dark__1280w",
+  "surface": "front",
+  "url": "/front-page/",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.view-discover.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": [
+   {
+    "sel": "div.signup-banner__inner > div > strong.signup-banner__title",
+    "sample": "Join the Looth community",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 17.96,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "div.signup-banner__inner > div > span.signup-banner__body",
+    "sample": "Sign up for full access to articles, vid",
+    "fg": "rgba(255, 255, 255, 0.85)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 13.12,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "front__anon__dark__390w",
+  "surface": "front",
+  "url": "/front-page/",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.view-discover.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": [
+   {
+    "sel": "div.signup-banner__inner > div > strong.signup-banner__title",
+    "sample": "Join the Looth community",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 17.96,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "div.signup-banner__inner > div > span.signup-banner__body",
+    "sample": "Sign up for full access to articles, vid",
+    "fg": "rgba(255, 255, 255, 0.85)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 13.12,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "front__auth__light__1280w",
+  "surface": "front",
+  "url": "/front-page/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "section.row.row--featured-member > div.lg-fm > span.lg-fm__badge",
+    "sample": "Featured member",
+    "fg": "rgb(236, 179, 81)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.89,
+    "size": 10,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(138, 150, 112)",
+    "bg": "rgb(255,254,254)",
+    "ratio": 3.13,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "ol.gdle-side-board > li.gdle-side-row.gdle-side-row--open > span.gdle-side-row__pts",
+    "sample": "play to claim",
+    "fg": "rgb(120, 137, 91)",
+    "bg": "rgb(243,247,233)",
+    "ratio": 3.49,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "ol.gdle-side-board > li.gdle-side-row.gdle-side-row--open > span.gdle-side-row__pts",
+    "sample": "play to claim",
+    "fg": "rgb(120, 137, 91)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.8,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(255,254,254)",
+    "ratio": 4.46,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo > div.vpromo__video > p.vpromo__label",
+    "sample": "Featured video",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.48,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo > div.vpromo__copy > p.vp-eyebrow",
+    "sample": "What's new",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.48,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo__copy > p > a.vp-cta",
+    "sample": "Report a bug or suggestion \u2192",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(111,124,84)",
+    "ratio": 4.48,
+    "size": 15.68,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo__copy > p > a.vp-cta.vp-cta--secondary",
+    "sample": "Start a thread",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.48,
+    "size": 15.68,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-fm > div.lg-fm__body > div.lg-fm__role",
+    "sample": "Brooklyn Fretworks",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.48,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-fm > div.lg-fm__act > a.lg-fm__cta",
+    "sample": "Visit Chip's profile",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(111,124,84)",
+    "ratio": 4.48,
+    "size": 13,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": [
+   {
+    "sel": "div.signup-banner__inner > div > strong.signup-banner__title",
+    "sample": "Welcome back.",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 1.15,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "div.signup-banner__inner > div > span.signup-banner__body",
+    "sample": "Here\u2019s what\u2019s new in the Looth community",
+    "fg": "rgba(255, 255, 255, 0.85)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 1.12,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "front__auth__light__390w",
+  "surface": "front",
+  "url": "/front-page/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(255,254,254)",
+    "ratio": 4.46,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo > div.vpromo__video > p.vpromo__label",
+    "sample": "Featured video",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.48,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo > div.vpromo__copy > p.vp-eyebrow",
+    "sample": "What's new",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.48,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo__copy > p > a.vp-cta",
+    "sample": "Report a bug or suggestion \u2192",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(111,124,84)",
+    "ratio": 4.48,
+    "size": 15.68,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.vpromo__copy > p > a.vp-cta.vp-cta--secondary",
+    "sample": "Start a thread",
+    "fg": "rgb(111, 124, 84)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.48,
+    "size": 15.68,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "nav > button > span.lt-lb",
+    "sample": "Nav",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.89,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > a > span.lt-lb",
+    "sample": "You",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.89,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": [
+   {
+    "sel": "div.signup-banner__inner > div > strong.signup-banner__title",
+    "sample": "Welcome back.",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 1.15,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "div.signup-banner__inner > div > span.signup-banner__body",
+    "sample": "Here\u2019s what\u2019s new in the Looth community",
+    "fg": "rgba(255, 255, 255, 0.85)",
+    "bg": "rgb(243,239,230)",
+    "ratio": 1.12,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "front__auth__dark__1280w",
+  "surface": "front",
+  "url": "/front-page/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.view-discover.is-member.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": [
+   {
+    "sel": "div.signup-banner__inner > div > strong.signup-banner__title",
+    "sample": "Welcome back.",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 17.96,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "div.signup-banner__inner > div > span.signup-banner__body",
+    "sample": "Here\u2019s what\u2019s new in the Looth community",
+    "fg": "rgba(255, 255, 255, 0.85)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 13.12,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "front__auth__dark__390w",
+  "surface": "front",
+  "url": "/front-page/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.view-discover.is-member.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": [
+   {
+    "sel": "div.signup-banner__inner > div > strong.signup-banner__title",
+    "sample": "Welcome back.",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 17.96,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "div.signup-banner__inner > div > span.signup-banner__body",
+    "sample": "Here\u2019s what\u2019s new in the Looth community",
+    "fg": "rgba(255, 255, 255, 0.85)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 13.12,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "hub__anon__light__1280w",
+  "surface": "hub",
+  "url": "/hub/",
+  "auth": "anon",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "a.fc-cover.feed-card__cover.fc-cover--gated > span.fc-gate > span.fc-gate__lock",
+    "sample": "\ud83d\udd12",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(244,241,234)",
+    "ratio": 1.13,
+    "size": 26,
+    "bold": false,
+    "thr": 3
+   },
+   {
+    "sel": "a.fc-cover.feed-card__cover.fc-cover--gated > span.fc-gate > span.fc-gate__t",
+    "sample": "Lite members only",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(244,241,234)",
+    "ratio": 1.13,
+    "size": 13,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(255,254,254)",
+    "ratio": 3.11,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "a.fc-cover.feed-card__cover.fc-cover--gated > span.fc-gate > span.fc-gate__cta",
+    "sample": "Unlock",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(135,152,106)",
+    "ratio": 3.12,
+    "size": 12,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub__anon__light__390w",
+  "surface": "hub",
+  "url": "/hub/",
+  "auth": "anon",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub__anon__dark__1280w",
+  "surface": "hub",
+  "url": "/hub/",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "a.fc-cover.feed-card__cover.fc-cover--gated > span.fc-gate > span.fc-gate__cta",
+    "sample": "Unlock",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(156,179,125)",
+    "ratio": 2.29,
+    "size": 12,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub__anon__dark__390w",
+  "surface": "hub",
+  "url": "/hub/",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub__auth__light__1280w",
+  "surface": "hub",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(255,254,254)",
+    "ratio": 3.11,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zM > button.forum-header__new-post.lg-newpost",
+    "sample": "+ New post",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(135,152,106)",
+    "ratio": 3.12,
+    "size": 14.5,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub__auth__light__390w",
+  "surface": "hub",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub__auth__dark__1280w",
+  "surface": "hub",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-saved-pill",
+    "sample": "Saved",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub__auth__dark__390w",
+  "surface": "hub",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub-typemenu__auth__light__1280w",
+  "surface": "hub-typemenu",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": {
+   "clicked": "[aria-controls*='submenu']"
+  },
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(255,254,254)",
+    "ratio": 3.11,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zM > button.forum-header__new-post.lg-newpost",
+    "sample": "+ New post",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(135,152,106)",
+    "ratio": 3.12,
+    "size": 14.5,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub-typemenu__auth__light__390w",
+  "surface": "hub-typemenu",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": {
+   "clicked": null
+  },
+  "fails": [],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub-typemenu__auth__dark__1280w",
+  "surface": "hub-typemenu",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": {
+   "clicked": "[aria-controls*='submenu']"
+  },
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "ul.lg-chrome__submenu > li > a",
+    "sample": "Everything",
+    "fg": "rgb(229, 231, 225)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-saved-pill",
+    "sample": "Saved",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub-typemenu__auth__dark__390w",
+  "surface": "hub-typemenu",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": {
+   "clicked": null
+  },
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub-acctmenu__auth__light__1280w",
+  "surface": "hub-acctmenu",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": {
+   "clicked": ".lg-chrome__account"
+  },
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(255,254,254)",
+    "ratio": 3.11,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zM > button.forum-header__new-post.lg-newpost",
+    "sample": "+ New post",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(135,152,106)",
+    "ratio": 3.12,
+    "size": 14.5,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "ul.lg-chrome__account-menu > li > a.lg-chrome__account-menu-signout",
+    "sample": "Sign out",
+    "fg": "rgb(198, 104, 69)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.84,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "ul.lg-chrome__account-menu > li > a",
+    "sample": "My Profile",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(238,242,227)",
+    "ratio": 3.98,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub-acctmenu__auth__light__390w",
+  "surface": "hub-acctmenu",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": {
+   "clicked": ".lg-chrome__account"
+  },
+  "fails": [],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub-acctmenu__auth__dark__1280w",
+  "surface": "hub-acctmenu",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": {
+   "clicked": ".lg-chrome__account"
+  },
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-saved-pill",
+    "sample": "Saved",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "ul.lg-chrome__account-menu > li > a.lg-chrome__account-menu-signout",
+    "sample": "Sign out",
+    "fg": "rgb(198, 104, 69)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.84,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "ul.lg-chrome__account-menu > li > a",
+    "sample": "My Profile",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(238,242,227)",
+    "ratio": 3.98,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub-acctmenu__auth__dark__390w",
+  "surface": "hub-acctmenu",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": {
+   "clicked": ".lg-chrome__account"
+  },
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub-mobiledrawer__auth__light__390w",
+  "surface": "hub-mobiledrawer",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": {
+   "clicked": "[aria-label*='menu' i]"
+  },
+  "fails": [],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "hub-mobiledrawer__auth__dark__390w",
+  "surface": "hub-mobiledrawer",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": {
+   "clicked": "[aria-label*='menu' i]"
+  },
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "notifications__auth__light__1280w",
+  "surface": "notifications",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": {
+   "clicked": "[aria-label*='notification' i]"
+  },
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(255,254,254)",
+    "ratio": 3.11,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zM > button.forum-header__new-post.lg-newpost",
+    "sample": "+ New post",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(135,152,106)",
+    "ratio": 3.12,
+    "size": 14.5,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "notifications__auth__light__390w",
+  "surface": "notifications",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": {
+   "clicked": "[aria-label*='notification' i]"
+  },
+  "fails": [],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "notifications__auth__dark__1280w",
+  "surface": "notifications",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": {
+   "clicked": "[aria-label*='notification' i]"
+  },
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-saved-pill",
+    "sample": "Saved",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "notifications__auth__dark__390w",
+  "surface": "notifications",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": {
+   "clicked": "[aria-label*='notification' i]"
+  },
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "discussion__auth__light__1280w",
+  "surface": "discussion",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": {
+   "modal": false
+  },
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(255,254,254)",
+    "ratio": 3.11,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zM > button.forum-header__new-post.lg-newpost",
+    "sample": "+ New post",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(135,152,106)",
+    "ratio": 3.12,
+    "size": 14.5,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "discussion__auth__light__390w",
+  "surface": "discussion",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": {
+   "modal": false
+  },
+  "fails": [],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "discussion__auth__dark__1280w",
+  "surface": "discussion",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": {
+   "modal": false
+  },
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-saved-pill",
+    "sample": "Saved",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "discussion__auth__dark__390w",
+  "surface": "discussion",
+  "url": "/hub/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": {
+   "modal": false
+  },
+  "fails": [
+   {
+    "sel": "html > body.bb-mirror.hub-fmodal-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.active",
+    "sample": "Newest",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(242,244,238)",
+    "ratio": 1.41,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a.lg-random-tab",
+    "sample": "Random",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav.feed-sort-bar.feed-sort-bar--zones > div.zL > a",
+    "sample": "Trending",
+    "fg": "rgb(205, 208, 202)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.56,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "profile__anon__light__1280w",
+  "surface": "profile",
+  "url": "/u/iandavlin",
+  "auth": "anon",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.12,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.53,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.leaflet-bottom.leaflet-right > div.leaflet-control-attribution.leaflet-control > a",
+    "sample": "Leaflet",
+    "fg": "rgb(0, 120, 168)",
+    "bg": "rgb(252,252,249)",
+    "ratio": 4.81,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "profile__anon__light__390w",
+  "surface": "profile",
+  "url": "/u/iandavlin",
+  "auth": "anon",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > a.is-active > span.lt-lb",
+    "sample": "You",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.37,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.53,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.leaflet-bottom.leaflet-right > div.leaflet-control-attribution.leaflet-control > a",
+    "sample": "Leaflet",
+    "fg": "rgb(0, 120, 168)",
+    "bg": "rgb(252,252,249)",
+    "ratio": 4.81,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-shell > div.lg-profile > a.lg-report",
+    "sample": "Report this profile",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.93,
+    "size": 12.5,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > button > span.lt-lb",
+    "sample": "Nav",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.93,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "profile__anon__dark__1280w",
+  "surface": "profile",
+  "url": "/u/iandavlin",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.mode-view.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.leaflet-control-container > div.leaflet-bottom.leaflet-right > div.leaflet-control-attribution.leaflet-control",
+    "sample": "\u00a9 OpenStreetMap",
+    "fg": "rgb(128, 134, 125)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 4.81,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "profile__anon__dark__390w",
+  "surface": "profile",
+  "url": "/u/iandavlin",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.mode-view.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.leaflet-control-container > div.leaflet-bottom.leaflet-right > div.leaflet-control-attribution.leaflet-control",
+    "sample": "\u00a9 OpenStreetMap",
+    "fg": "rgb(128, 134, 125)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 4.81,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "profile__auth__light__1280w",
+  "surface": "profile",
+  "url": "/u/iandavlin",
+  "auth": "auth",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.12,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-viewas > div.lg-viewas__row > a.lg-vchip",
+    "sample": "Edit profile (admin)",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(135,152,106)",
+    "ratio": 3.12,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "section.block.lg-block.lg-block--header > div.lg-social-actions > button.lg-btn.lg-social-btn",
+    "sample": "Connect",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(135,152,106)",
+    "ratio": 3.12,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.leaflet-bottom.leaflet-right > div.leaflet-control-attribution.leaflet-control > a",
+    "sample": "Leaflet",
+    "fg": "rgb(0, 120, 168)",
+    "bg": "rgb(252,252,249)",
+    "ratio": 4.81,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "profile__auth__light__390w",
+  "surface": "profile",
+  "url": "/u/iandavlin",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-viewas > div.lg-viewas__row > a.lg-vchip",
+    "sample": "Edit profile (admin)",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(135,152,106)",
+    "ratio": 3.12,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "section.block.lg-block.lg-block--header > div.lg-social-actions > button.lg-btn.lg-social-btn",
+    "sample": "Connect",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(135,152,106)",
+    "ratio": 3.12,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > a.is-active > span.lt-lb",
+    "sample": "You",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.37,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.leaflet-bottom.leaflet-right > div.leaflet-control-attribution.leaflet-control > a",
+    "sample": "Leaflet",
+    "fg": "rgb(0, 120, 168)",
+    "bg": "rgb(252,252,249)",
+    "ratio": 4.81,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-shell > div.lg-profile > a.lg-report",
+    "sample": "Report this profile",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.93,
+    "size": 12.5,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > button > span.lt-lb",
+    "sample": "Nav",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.93,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "profile__auth__dark__1280w",
+  "surface": "profile",
+  "url": "/u/iandavlin",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.mode-view.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-viewas > div.lg-viewas__row > a.lg-vchip",
+    "sample": "Edit profile (admin)",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(156,179,125)",
+    "ratio": 2.29,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "section.block.lg-block.lg-block--header > div.lg-social-actions > button.lg-btn.lg-social-btn",
+    "sample": "Connect",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(156,179,125)",
+    "ratio": 2.29,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.leaflet-control-container > div.leaflet-bottom.leaflet-right > div.leaflet-control-attribution.leaflet-control",
+    "sample": "\u00a9 OpenStreetMap",
+    "fg": "rgb(128, 134, 125)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 4.81,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "profile__auth__dark__390w",
+  "surface": "profile",
+  "url": "/u/iandavlin",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.mode-view.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-viewas > div.lg-viewas__row > a.lg-vchip",
+    "sample": "Edit profile (admin)",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(156,179,125)",
+    "ratio": 2.29,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "section.block.lg-block.lg-block--header > div.lg-social-actions > button.lg-btn.lg-social-btn",
+    "sample": "Connect",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(156,179,125)",
+    "ratio": 2.29,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.leaflet-control-container > div.leaflet-bottom.leaflet-right > div.leaflet-control-attribution.leaflet-control",
+    "sample": "\u00a9 OpenStreetMap",
+    "fg": "rgb(128, 134, 125)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 4.81,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "directory__auth__light__1280w",
+  "surface": "directory",
+  "url": "/directory/members/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.12,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "a.dir-card__main > div.hl-chips > span.hl",
+    "sample": "Finish touch-up",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(238,242,227)",
+    "ratio": 3.98,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "ul.lg-chrome__menu > li > a.is-active",
+    "sample": "The Map",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.53,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.dir-header > div.dir-viewtoggle > button.on",
+    "sample": "Map",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(107,124,82)",
+    "ratio": 4.54,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.dir-card__foot > div.dir-card__actions > button.dir-connect.dir-connect--none",
+    "sample": "Connect",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(107,124,82)",
+    "ratio": 4.54,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.gmaps-search > button.gmaps-search__filt > span",
+    "sample": "Filters",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.54,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.leaflet-bottom.leaflet-right > div.leaflet-control-attribution.leaflet-control > a",
+    "sample": "Leaflet",
+    "fg": "rgb(0, 120, 168)",
+    "bg": "rgb(248,248,248)",
+    "ratio": 4.66,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.dir-pane-left > div.dir-header > span.dir-meta",
+    "sample": "133 members in view",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.93,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "directory__auth__light__390w",
+  "surface": "directory",
+  "url": "/directory/members/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.leaflet-bottom.leaflet-right > div.leaflet-control-attribution.leaflet-control > a",
+    "sample": "Leaflet",
+    "fg": "rgb(0, 120, 168)",
+    "bg": "rgb(238,246,249)",
+    "ratio": 4.52,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lgdm-shd > div.lgdm-vt > button.on",
+    "sample": "Map",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(107,124,82)",
+    "ratio": 4.54,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.dir-card__foot > div.dir-card__actions > button.dir-connect.dir-connect--none",
+    "sample": "Connect",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(107,124,82)",
+    "ratio": 4.54,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > button > span.lt-lb",
+    "sample": "Nav",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.93,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > a > span.lt-lb",
+    "sample": "You",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.93,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lgdm-shd > span.lgdm-shd__ttl > span.lgdm-shd__meta",
+    "sample": "6 members in view",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.93,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "directory__auth__dark__1280w",
+  "surface": "directory",
+  "url": "/directory/members/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html.lgdd > body.dir--map.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.leaflet-marker-icon.marker-cluster.marker-cluster-medium > div > span",
+    "sample": "13",
+    "fg": "rgb(229, 231, 225)",
+    "bg": "rgb(240,201,42)",
+    "ratio": 1.29,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.dir-header > div.dir-viewtoggle > button.on",
+    "sample": "Map",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(176,198,147)",
+    "ratio": 1.85,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.dir-card__foot > div.dir-card__actions > button.dir-connect.dir-connect--none",
+    "sample": "Connect",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(176,198,147)",
+    "ratio": 1.85,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.leaflet-marker-icon.marker-cluster.marker-cluster-large > div > span",
+    "sample": "128",
+    "fg": "rgb(229, 231, 225)",
+    "bg": "rgb(246,139,60)",
+    "ratio": 1.94,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.dir-viewtoggle > button > span.vt-dt",
+    "sample": "Cards",
+    "fg": "rgb(166, 172, 159)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 2.33,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.gmaps-search > button.gmaps-search__filt > span",
+    "sample": "Filters",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.54,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "directory__auth__dark__390w",
+  "surface": "directory",
+  "url": "/directory/members/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html.lgdm > body.dir--map.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lgdm-shd > div.lgdm-vt > button.on",
+    "sample": "Map",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(176,198,147)",
+    "ratio": 1.85,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.dir-card__foot > div.dir-card__actions > button.dir-connect.dir-connect--none",
+    "sample": "Connect",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(176,198,147)",
+    "ratio": 1.85,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lgdm-shd > div.lgdm-vt > button",
+    "sample": "List",
+    "fg": "rgb(166, 172, 159)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 2.33,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.leaflet-bottom.leaflet-right > div.leaflet-control-attribution.leaflet-control > a",
+    "sample": "Leaflet",
+    "fg": "rgb(156, 179, 125)",
+    "bg": "rgb(51,61,65)",
+    "ratio": 4.88,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "events__anon__light__1280w",
+  "surface": "events",
+  "url": "/events/",
+  "auth": "anon",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.12,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "main.lg-evland > section.lg-evland__section > h2.lg-evland__section-h",
+    "sample": "Upcoming",
+    "fg": "rgb(184, 132, 43)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.29,
+    "size": 13,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "a > span.ll-foot > span.ll-btn",
+    "sample": "Pull up a bench",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.37,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "ul.lg-chrome__menu > li > a.is-active",
+    "sample": "Events",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.54,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.54,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": [
+   {
+    "sel": "a > span.ll-top > span.ll-live",
+    "sample": "Live now",
+    "fg": "rgb(251, 251, 248)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.04,
+    "size": 10.5,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "a > span.ll-top > span.ll-open",
+    "sample": "Open 24/7",
+    "fg": "rgba(251, 251, 248, 0.85)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.03,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-title",
+    "sample": "Loothalong",
+    "fg": "rgb(251, 251, 248)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.04,
+    "size": 30,
+    "bold": true,
+    "thr": 3,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-tag",
+    "sample": "A 24-hour workbench full of friends.",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1,
+    "size": 14.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-sub",
+    "sample": "Drop in whenever \u2014 ask a question, show ",
+    "fg": "rgba(251, 251, 248, 0.92)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.03,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "span.ll-foot > span.ll-crew > span.ll-crewl",
+    "sample": "luthiers hang here",
+    "fg": "rgba(251, 251, 248, 0.9)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.03,
+    "size": 11.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "events__anon__light__390w",
+  "surface": "events",
+  "url": "/events/",
+  "auth": "anon",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "main.lg-evland > section.lg-evland__section > h2.lg-evland__section-h",
+    "sample": "Upcoming",
+    "fg": "rgb(184, 132, 43)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.29,
+    "size": 13,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "a > span.ll-foot > span.ll-btn",
+    "sample": "Pull up a bench",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.37,
+    "size": 13,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": [
+   {
+    "sel": "a > span.ll-top > span.ll-live",
+    "sample": "Live now",
+    "fg": "rgb(251, 251, 248)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.04,
+    "size": 10.5,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "a > span.ll-top > span.ll-open",
+    "sample": "Open 24/7",
+    "fg": "rgba(251, 251, 248, 0.85)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.03,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-title",
+    "sample": "Loothalong",
+    "fg": "rgb(251, 251, 248)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.04,
+    "size": 26,
+    "bold": true,
+    "thr": 3,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-tag",
+    "sample": "A 24-hour workbench full of friends.",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1,
+    "size": 14.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-sub",
+    "sample": "Drop in whenever \u2014 ask a question, show ",
+    "fg": "rgba(251, 251, 248, 0.92)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.03,
+    "size": 12.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "span.ll-foot > span.ll-crew > span.ll-crewl",
+    "sample": "luthiers hang here",
+    "fg": "rgba(251, 251, 248, 0.9)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.03,
+    "size": 11.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "events__anon__dark__1280w",
+  "surface": "events",
+  "url": "/events/",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.lg-events-landing-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "body.lg-events-landing-page.has-looth-tabbar > main.lg-evland > p.lg-evland__sub",
+    "sample": "Live builds, clinics, and community call",
+    "fg": "rgb(107, 111, 104)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 3.51,
+    "size": 16,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "main.lg-evland > section.lg-evland__section > p.lg-evland__empty",
+    "sample": "No upcoming events scheduled \u2014 check bac",
+    "fg": "rgb(107, 111, 104)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 3.51,
+    "size": 16,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": [
+   {
+    "sel": "a > span.ll-top > span.ll-live",
+    "sample": "Live now",
+    "fg": "rgb(21, 23, 26)",
+    "bg": "rgb(22,25,26)",
+    "ratio": 1.01,
+    "size": 10.5,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "a > span.ll-top > span.ll-open",
+    "sample": "Open 24/7",
+    "fg": "rgba(251, 251, 248, 0.85)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 12.67,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-title",
+    "sample": "Loothalong",
+    "fg": "rgb(21, 23, 26)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 1,
+    "size": 30,
+    "bold": true,
+    "thr": 3,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-tag",
+    "sample": "A 24-hour workbench full of friends.",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 17.96,
+    "size": 14.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-sub",
+    "sample": "Drop in whenever \u2014 ask a question, show ",
+    "fg": "rgba(251, 251, 248, 0.92)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 14.73,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "span.ll-foot > span.ll-crew > span.ll-crewl",
+    "sample": "luthiers hang here",
+    "fg": "rgba(251, 251, 248, 0.9)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 14.12,
+    "size": 11.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "events__anon__dark__390w",
+  "surface": "events",
+  "url": "/events/",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html.lgev > body.lg-events-landing-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "body.lg-events-landing-page.has-looth-tabbar > main.lg-evland > p.lg-evland__sub",
+    "sample": "Live builds, clinics, and community call",
+    "fg": "rgb(107, 111, 104)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 3.51,
+    "size": 16,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "main.lg-evland > section.lg-evland__section > p.lg-evland__empty",
+    "sample": "No upcoming events scheduled \u2014 check bac",
+    "fg": "rgb(107, 111, 104)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 3.51,
+    "size": 16,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": [
+   {
+    "sel": "a > span.ll-top > span.ll-live",
+    "sample": "Live now",
+    "fg": "rgb(21, 23, 26)",
+    "bg": "rgb(22,25,26)",
+    "ratio": 1.01,
+    "size": 10.5,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "a > span.ll-top > span.ll-open",
+    "sample": "Open 24/7",
+    "fg": "rgba(251, 251, 248, 0.85)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 12.67,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-title",
+    "sample": "Loothalong",
+    "fg": "rgb(21, 23, 26)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 1,
+    "size": 26,
+    "bold": true,
+    "thr": 3,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-tag",
+    "sample": "A 24-hour workbench full of friends.",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 17.96,
+    "size": 14.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-sub",
+    "sample": "Drop in whenever \u2014 ask a question, show ",
+    "fg": "rgba(251, 251, 248, 0.92)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 14.73,
+    "size": 12.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "span.ll-foot > span.ll-crew > span.ll-crewl",
+    "sample": "luthiers hang here",
+    "fg": "rgba(251, 251, 248, 0.9)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 14.12,
+    "size": 11.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "events__auth__light__1280w",
+  "surface": "events",
+  "url": "/events/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.12,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "main.lg-evland > section.lg-evland__section > h2.lg-evland__section-h",
+    "sample": "Upcoming",
+    "fg": "rgb(184, 132, 43)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.29,
+    "size": 13,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "a > span.ll-foot > span.ll-btn",
+    "sample": "Pull up a bench",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.37,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "ul.lg-chrome__menu > li > a.is-active",
+    "sample": "Events",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.54,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": [
+   {
+    "sel": "a > span.ll-top > span.ll-live",
+    "sample": "Live now",
+    "fg": "rgb(251, 251, 248)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.04,
+    "size": 10.5,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "a > span.ll-top > span.ll-open",
+    "sample": "Open 24/7",
+    "fg": "rgba(251, 251, 248, 0.85)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.03,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-title",
+    "sample": "Loothalong",
+    "fg": "rgb(251, 251, 248)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.04,
+    "size": 30,
+    "bold": true,
+    "thr": 3,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-tag",
+    "sample": "A 24-hour workbench full of friends.",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1,
+    "size": 14.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-sub",
+    "sample": "Drop in whenever \u2014 ask a question, show ",
+    "fg": "rgba(251, 251, 248, 0.92)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.03,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "span.ll-foot > span.ll-crew > span.ll-crewl",
+    "sample": "luthiers hang here",
+    "fg": "rgba(251, 251, 248, 0.9)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.03,
+    "size": 11.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "events__auth__light__390w",
+  "surface": "events",
+  "url": "/events/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "main.lg-evland > section.lg-evland__section > h2.lg-evland__section-h",
+    "sample": "Upcoming",
+    "fg": "rgb(184, 132, 43)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.29,
+    "size": 13,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "a > span.ll-foot > span.ll-btn",
+    "sample": "Pull up a bench",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(251,251,248)",
+    "ratio": 4.37,
+    "size": 13,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": [
+   {
+    "sel": "a > span.ll-top > span.ll-live",
+    "sample": "Live now",
+    "fg": "rgb(251, 251, 248)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.04,
+    "size": 10.5,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "a > span.ll-top > span.ll-open",
+    "sample": "Open 24/7",
+    "fg": "rgba(251, 251, 248, 0.85)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.03,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-title",
+    "sample": "Loothalong",
+    "fg": "rgb(251, 251, 248)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.04,
+    "size": 26,
+    "bold": true,
+    "thr": 3,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-tag",
+    "sample": "A 24-hour workbench full of friends.",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1,
+    "size": 14.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-sub",
+    "sample": "Drop in whenever \u2014 ask a question, show ",
+    "fg": "rgba(251, 251, 248, 0.92)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.03,
+    "size": 12.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "span.ll-foot > span.ll-crew > span.ll-crewl",
+    "sample": "luthiers hang here",
+    "fg": "rgba(251, 251, 248, 0.9)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.03,
+    "size": 11.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "events__auth__dark__1280w",
+  "surface": "events",
+  "url": "/events/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.lg-events-landing-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "body.lg-events-landing-page.has-looth-tabbar > main.lg-evland > p.lg-evland__sub",
+    "sample": "Live builds, clinics, and community call",
+    "fg": "rgb(107, 111, 104)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 3.51,
+    "size": 16,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "main.lg-evland > section.lg-evland__section > p.lg-evland__empty",
+    "sample": "No upcoming events scheduled \u2014 check bac",
+    "fg": "rgb(107, 111, 104)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 3.51,
+    "size": 16,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": [
+   {
+    "sel": "a > span.ll-top > span.ll-live",
+    "sample": "Live now",
+    "fg": "rgb(21, 23, 26)",
+    "bg": "rgb(22,25,26)",
+    "ratio": 1.01,
+    "size": 10.5,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "a > span.ll-top > span.ll-open",
+    "sample": "Open 24/7",
+    "fg": "rgba(251, 251, 248, 0.85)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 12.67,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-title",
+    "sample": "Loothalong",
+    "fg": "rgb(21, 23, 26)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 1,
+    "size": 30,
+    "bold": true,
+    "thr": 3,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-tag",
+    "sample": "A 24-hour workbench full of friends.",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 17.96,
+    "size": 14.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-sub",
+    "sample": "Drop in whenever \u2014 ask a question, show ",
+    "fg": "rgba(251, 251, 248, 0.92)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 14.73,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "span.ll-foot > span.ll-crew > span.ll-crewl",
+    "sample": "luthiers hang here",
+    "fg": "rgba(251, 251, 248, 0.9)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 14.12,
+    "size": 11.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "events__auth__dark__390w",
+  "surface": "events",
+  "url": "/events/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html.lgev > body.lg-events-landing-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "body.lg-events-landing-page.has-looth-tabbar > main.lg-evland > p.lg-evland__sub",
+    "sample": "Live builds, clinics, and community call",
+    "fg": "rgb(107, 111, 104)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 3.51,
+    "size": 16,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "main.lg-evland > section.lg-evland__section > p.lg-evland__empty",
+    "sample": "No upcoming events scheduled \u2014 check bac",
+    "fg": "rgb(107, 111, 104)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 3.51,
+    "size": 16,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": [
+   {
+    "sel": "a > span.ll-top > span.ll-live",
+    "sample": "Live now",
+    "fg": "rgb(21, 23, 26)",
+    "bg": "rgb(22,25,26)",
+    "ratio": 1.01,
+    "size": 10.5,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "a > span.ll-top > span.ll-open",
+    "sample": "Open 24/7",
+    "fg": "rgba(251, 251, 248, 0.85)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 12.67,
+    "size": 11,
+    "bold": true,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-title",
+    "sample": "Loothalong",
+    "fg": "rgb(21, 23, 26)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 1,
+    "size": 26,
+    "bold": true,
+    "thr": 3,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-tag",
+    "sample": "A 24-hour workbench full of friends.",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 17.96,
+    "size": 14.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "main.lg-evland > a > span.ll-sub",
+    "sample": "Drop in whenever \u2014 ask a question, show ",
+    "fg": "rgba(251, 251, 248, 0.92)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 14.73,
+    "size": 12.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   },
+   {
+    "sel": "span.ll-foot > span.ll-crew > span.ll-crewl",
+    "sample": "luthiers hang here",
+    "fg": "rgba(251, 251, 248, 0.9)",
+    "bg": "rgb(21,23,26)",
+    "ratio": 14.12,
+    "size": 11.5,
+    "bold": false,
+    "thr": 4.5,
+    "note": "over-image"
+   }
+  ]
+ },
+ {
+  "tag": "calendar__anon__light__1280w",
+  "surface": "calendar",
+  "url": "/calendar/",
+  "auth": "anon",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 3.1,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "body.view-content.arc-calendar-page.has-looth-tabbar > main.arc-page.lg-content-page > p.lg-page-sub",
+    "sample": "Upcoming and past Looth Group events.",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(239,236,230)",
+    "ratio": 4.33,
+    "size": 15,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 4.51,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "calendar__anon__light__390w",
+  "surface": "calendar",
+  "url": "/calendar/",
+  "auth": "anon",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "body.view-content.arc-calendar-page.has-looth-tabbar > main.arc-page.lg-content-page > p.lg-page-sub",
+    "sample": "Upcoming and past Looth Group events.",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(239,236,230)",
+    "ratio": 4.33,
+    "size": 15,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 4.51,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > button > span.lt-lb",
+    "sample": "Nav",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.88,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > a > span.lt-lb",
+    "sample": "You",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.88,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "calendar__anon__dark__1280w",
+  "surface": "calendar",
+  "url": "/calendar/",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.view-content.arc-calendar-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "calendar__anon__dark__390w",
+  "surface": "calendar",
+  "url": "/calendar/",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.view-content.arc-calendar-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "calendar__auth__light__1280w",
+  "surface": "calendar",
+  "url": "/calendar/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 3.1,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "body.view-content.arc-calendar-page.has-looth-tabbar > main.arc-page.lg-content-page > p.lg-page-sub",
+    "sample": "Upcoming and past Looth Group events.",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(239,236,230)",
+    "ratio": 4.33,
+    "size": 15,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 4.51,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "calendar__auth__light__390w",
+  "surface": "calendar",
+  "url": "/calendar/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "body.view-content.arc-calendar-page.has-looth-tabbar > main.arc-page.lg-content-page > p.lg-page-sub",
+    "sample": "Upcoming and past Looth Group events.",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(239,236,230)",
+    "ratio": 4.33,
+    "size": 15,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 4.51,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > button > span.lt-lb",
+    "sample": "Nav",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.88,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > a > span.lt-lb",
+    "sample": "You",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.88,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "calendar__auth__dark__1280w",
+  "surface": "calendar",
+  "url": "/calendar/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.view-content.arc-calendar-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "calendar__auth__dark__390w",
+  "surface": "calendar",
+  "url": "/calendar/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.view-content.arc-calendar-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "sponsors__anon__light__1280w",
+  "surface": "sponsors",
+  "url": "/sponsors/",
+  "auth": "anon",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "a.sponsor-card > span.sponsor-card__body > span.sponsor-card__name",
+    "sample": "Gluboost",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(238,242,227)",
+    "ratio": 1.14,
+    "size": 19,
+    "bold": true,
+    "thr": 3
+   },
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 3.1,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "body.view-content.arc-sponsors-page.has-looth-tabbar > main.arc-page.lg-content-page > p.lg-page-sub",
+    "sample": "The companies that support the Looth Gro",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(239,236,230)",
+    "ratio": 4.33,
+    "size": 15,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 4.51,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "sponsors__anon__light__390w",
+  "surface": "sponsors",
+  "url": "/sponsors/",
+  "auth": "anon",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "a.sponsor-card > span.sponsor-card__body > span.sponsor-card__name",
+    "sample": "Gluboost",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(238,242,227)",
+    "ratio": 1.14,
+    "size": 19,
+    "bold": true,
+    "thr": 3
+   },
+   {
+    "sel": "body.view-content.arc-sponsors-page.has-looth-tabbar > main.arc-page.lg-content-page > p.lg-page-sub",
+    "sample": "The companies that support the Looth Gro",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(239,236,230)",
+    "ratio": 4.33,
+    "size": 15,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 4.51,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > button > span.lt-lb",
+    "sample": "Nav",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.88,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > a > span.lt-lb",
+    "sample": "You",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.88,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "sponsors__anon__dark__1280w",
+  "surface": "sponsors",
+  "url": "/sponsors/",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.view-content.arc-sponsors-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "sponsors__anon__dark__390w",
+  "surface": "sponsors",
+  "url": "/sponsors/",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.view-content.arc-sponsors-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "sponsors__auth__light__1280w",
+  "surface": "sponsors",
+  "url": "/sponsors/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "a.sponsor-card > span.sponsor-card__body > span.sponsor-card__name",
+    "sample": "Gluboost",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(238,242,227)",
+    "ratio": 1.14,
+    "size": 19,
+    "bold": true,
+    "thr": 3
+   },
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 3.1,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "body.view-content.arc-sponsors-page.has-looth-tabbar > main.arc-page.lg-content-page > p.lg-page-sub",
+    "sample": "The companies that support the Looth Gro",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(239,236,230)",
+    "ratio": 4.33,
+    "size": 15,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 4.51,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "sponsors__auth__light__390w",
+  "surface": "sponsors",
+  "url": "/sponsors/",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "a.sponsor-card > span.sponsor-card__body > span.sponsor-card__name",
+    "sample": "Gluboost",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(238,242,227)",
+    "ratio": 1.14,
+    "size": 19,
+    "bold": true,
+    "thr": 3
+   },
+   {
+    "sel": "body.view-content.arc-sponsors-page.has-looth-tabbar > main.arc-page.lg-content-page > p.lg-page-sub",
+    "sample": "The companies that support the Looth Gro",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(239,236,230)",
+    "ratio": 4.33,
+    "size": 15,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 4.51,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > button > span.lt-lb",
+    "sample": "Nav",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.88,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > a > span.lt-lb",
+    "sample": "You",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.88,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "sponsors__auth__dark__1280w",
+  "surface": "sponsors",
+  "url": "/sponsors/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.view-content.arc-sponsors-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "sponsors__auth__dark__390w",
+  "surface": "sponsors",
+  "url": "/sponsors/",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.view-content.arc-sponsors-page.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "sponsor__anon__light__1280w",
+  "surface": "sponsor",
+  "url": "/sponsors/stewmac",
+  "auth": "anon",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 3.1,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-brand-hero__cta > a.lg-brand-hero__cta-btn > span",
+    "sample": "Visit Website",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(255,0,0)",
+    "ratio": 4,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 4.51,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "sponsor__anon__light__390w",
+  "surface": "sponsor",
+  "url": "/sponsors/stewmac",
+  "auth": "anon",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-brand-hero__cta > a.lg-brand-hero__cta-btn > span",
+    "sample": "Visit Website",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(255,0,0)",
+    "ratio": 4,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 4.51,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > button > span.lt-lb",
+    "sample": "Nav",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.88,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > a > span.lt-lb",
+    "sample": "You",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.88,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "sponsor__anon__dark__1280w",
+  "surface": "sponsor",
+  "url": "/sponsors/stewmac",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-brand-hero__cta > a.lg-brand-hero__cta-btn > span",
+    "sample": "Visit Website",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(255,0,0)",
+    "ratio": 4,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "sponsor__anon__dark__390w",
+  "surface": "sponsor",
+  "url": "/sponsors/stewmac",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-brand-hero__cta > a.lg-brand-hero__cta-btn > span",
+    "sample": "Visit Website",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(255,0,0)",
+    "ratio": 4,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "sponsor__auth__light__1280w",
+  "surface": "sponsor",
+  "url": "/sponsors/stewmac",
+  "auth": "auth",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(254,254,254)",
+    "ratio": 3.1,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-brand-hero__cta > a.lg-brand-hero__cta-btn > span",
+    "sample": "Visit Website",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(255,0,0)",
+    "ratio": 4,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "sponsor__auth__light__390w",
+  "surface": "sponsor",
+  "url": "/sponsors/stewmac",
+  "auth": "auth",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-brand-hero__cta > a.lg-brand-hero__cta-btn > span",
+    "sample": "Visit Website",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(255,0,0)",
+    "ratio": 4,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "nav > button > span.lt-lb",
+    "sample": "Nav",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.88,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "nav > a > span.lt-lb",
+    "sample": "You",
+    "fg": "rgb(107, 111, 107)",
+    "bg": "rgb(250,250,247)",
+    "ratio": 4.88,
+    "size": 11,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "sponsor__auth__dark__1280w",
+  "surface": "sponsor",
+  "url": "/sponsors/stewmac",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-brand-hero__cta > a.lg-brand-hero__cta-btn > span",
+    "sample": "Visit Website",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(255,0,0)",
+    "ratio": 4,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "sponsor__auth__dark__390w",
+  "surface": "sponsor",
+  "url": "/sponsors/stewmac",
+  "auth": "auth",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.has-looth-tabbar > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "div.lg-brand-hero__cta > a.lg-brand-hero__cta-btn > span",
+    "sample": "Visit Website",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(255,0,0)",
+    "ratio": 4,
+    "size": 14,
+    "bold": true,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "login__anon__light__1280w",
+  "surface": "login",
+  "url": "/join",
+  "auth": "anon",
+  "theme": "light",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "div.lg-chrome__inner > a.lg-chrome__logo > span.lg-chrome__wordmark",
+    "sample": "Looth Group",
+    "fg": "rgb(135, 152, 106)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 3.12,
+    "size": 17,
+    "bold": true,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.54,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "login__anon__light__390w",
+  "surface": "login",
+  "url": "/join",
+  "auth": "anon",
+  "theme": "light",
+  "width": 390,
+  "applied_theme": {
+   "theme": "default",
+   "dark": "0"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(26,29,26)",
+    "ratio": 4.14,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [
+   {
+    "sel": "div.lg-chrome__inner > div.lg-chrome__aside > a.lg-chrome__connect",
+    "sample": "Connect Patreon",
+    "fg": "rgb(107, 124, 82)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 4.54,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "manual": []
+ },
+ {
+  "tag": "login__anon__dark__1280w",
+  "surface": "login",
+  "url": "/join",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 1280,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.lg-membership-page.lg-join.lg-join--start > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "main.lg-join__main > section.lg-join__card.lg-join__card--start > p.lg-join__lede",
+    "sample": "The Looth Group is a member-supported co",
+    "fg": "rgb(229, 231, 225)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.25,
+    "size": 16.8,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ },
+ {
+  "tag": "login__anon__dark__390w",
+  "surface": "login",
+  "url": "/join",
+  "auth": "anon",
+  "theme": "dark",
+  "width": 390,
+  "applied_theme": {
+   "theme": "dark",
+   "dark": "1"
+  },
+  "opened": null,
+  "fails": [
+   {
+    "sel": "html > body.lg-membership-page.lg-join.lg-join--start > a.skip-link",
+    "sample": "Skip to content",
+    "fg": "rgb(255, 255, 255)",
+    "bg": "rgb(229,231,225)",
+    "ratio": 1.25,
+    "size": 13,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "main.lg-join__main > section.lg-join__card.lg-join__card--start > p.lg-join__lede",
+    "sample": "The Looth Group is a member-supported co",
+    "fg": "rgb(229, 231, 225)",
+    "bg": "rgb(255,255,255)",
+    "ratio": 1.25,
+    "size": 16.8,
+    "bold": false,
+    "thr": 4.5
+   },
+   {
+    "sel": "footer.lg-chrome-foot > div.lg-chrome-foot__legal > span",
+    "sample": "\u00a9 2026 The Looth Group. All rights reser",
+    "fg": "rgba(212, 204, 184, 0.55)",
+    "bg": "rgb(16,18,20)",
+    "ratio": 4.27,
+    "size": 12,
+    "bold": false,
+    "thr": 4.5
+   }
+  ],
+  "watch": [],
+  "manual": []
+ }
+]

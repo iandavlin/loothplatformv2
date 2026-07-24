@@ -5,10 +5,14 @@ require_once __DIR__ . '/../../src/ImageOptimize.php';
 
 /**
  * Gallery block — image grid in the app-owned media store. Owner-only writes.
- *   GET  → the assembled gallery block (Block::loadGallery).
- *   POST → multipart "image" (jpeg/png/webp ≤5MB): COMPRESS (cap 1600px, WebP
- *          q82, auto-oriented via ImageOptimize), store bytes, append to the list.
- *   PUT  → { images: [{url,caption}], visibility? } — replace the list (remove/reorder/caption/vis).
+ * Up to 3 independent galleries, selected by ?g=1|2|3 (default 1 = the legacy
+ * 'gallery' key, back-compat). Each is its own profile_sections row; all three
+ * store files in the same flat dir gallery/<uuid>/<rand> (unique names).
+ *   GET    → the assembled gallery block (Block::loadGallery).
+ *   POST   → multipart "image" (jpeg/png/webp ≤5MB): COMPRESS (cap 1600px, WebP
+ *            q82, auto-oriented via ImageOptimize), store bytes, append to the list.
+ *   PUT    → { images: [{url,caption}], visibility?, title?, display_mode? } — replace.
+ *   DELETE → remove the WHOLE gallery: GC its files, drop the row + its layout key.
  *
  * Store:  <LG_GALLERY_STORE>/<uuid>/<rand>.webp   served at /profile-media/gallery/<uuid>/<rand>.webp
  * (nginx serves /profile-media/ from /srv/profile-app-media/, cookie-gated.)
@@ -32,8 +36,17 @@ $uid    = (int) $user['id'];
 $uuid   = strtolower((string) $user['uuid']);
 $method = $_SERVER['REQUEST_METHOD'];
 
+// Which of the up-to-3 galleries. Default 1 = legacy 'gallery' key (back-compat).
+$g   = (isset($_GET['g']) && in_array((string)$_GET['g'], ['1', '2', '3'], true)) ? (int)$_GET['g'] : 1;
+$gkey = Block::galleryKeyForSlot($g) ?? Block::GALLERY_KEY;
+
 if ($method === 'GET') {
-    profile_app_json(200, Block::loadGallery($uid));
+    profile_app_json(200, Block::loadGallery($uid, $gkey));
+}
+
+if ($method === 'DELETE') {
+    Block::deleteGallery($uid, $gkey);
+    profile_app_json(200, ['ok' => true, 'deleted' => $gkey]);
 }
 
 if ($method === 'POST') {
@@ -50,7 +63,7 @@ if ($method === 'POST') {
     $ext = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'][$info['mime'] ?? ''] ?? null;
     if ($ext === null) profile_app_json(400, ['error' => 'unsupported_type', 'allowed' => ['jpeg', 'png', 'webp']]);
 
-    $current = Block::loadGallery($uid)['images'];
+    $current = Block::loadGallery($uid, $gkey)['images'];
     if (count($current) >= Block::GALLERY_MAX) profile_app_json(400, ['error' => 'gallery_full', 'max' => Block::GALLERY_MAX]);
 
     // Compress / cap / auto-orient at write time (cap 1600px, WebP q82). Fall back
@@ -84,7 +97,7 @@ if ($method === 'POST') {
 
     $url = Block::GALLERY_URL_BASE . '/' . $uuid . '/' . $fn;
     $current[] = ['url' => $url, 'caption' => ''];
-    $gallery = Block::saveGalleryImages($uid, $current);
+    $gallery = Block::saveGalleryImages($uid, $current, null, null, null, $gkey);
     profile_app_json(200, ['ok' => true, 'image' => ['url' => $url], 'gallery' => $gallery]);
 }
 
@@ -95,9 +108,9 @@ if (!is_array($in)) profile_app_json(400, ['error' => 'invalid_json']);
 // images only replaced when the key is present; a vis-only / title-only PUT keeps the photos.
 $images = array_key_exists('images', $in) && is_array($in['images'])
     ? $in['images']
-    : Block::loadGallery($uid)['images'];
+    : Block::loadGallery($uid, $gkey)['images'];
 $vis    = array_key_exists('visibility', $in) ? $in['visibility'] : null;
 $title  = array_key_exists('title', $in) ? (string) $in['title'] : null;  // null = keep existing
 $mode   = array_key_exists('display_mode', $in) ? (string) $in['display_mode'] : null;  // null = keep existing
-$gallery = Block::saveGalleryImages($uid, $images, $vis, $title, $mode);
+$gallery = Block::saveGalleryImages($uid, $images, $vis, $title, $mode, $gkey);
 profile_app_json(200, ['ok' => true, 'gallery' => $gallery]);
