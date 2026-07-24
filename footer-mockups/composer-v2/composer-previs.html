@@ -1,0 +1,175 @@
+<!doctype html>
+<!-- COMPOSER-V2 PREVIS — static pictures only, no runtime code ships from here.
+     One composer, two skins. Drive with URL params:
+       ?skin=mobile|desktop & state=base|kb|mentions|photos & theme=light|dark
+     Mobile shoots at 390x844, desktop at 1280x900 (see shoot.js).
+     Design tokens mirror the live codebase (sage #87986a, cream #fbfbf8, dark
+     panel #1b1e21/#2c312d/#e5e7e1); mention rows are the Ian-approved FB set
+     (name-first 16px, @handle 13px, 46px avatars, caption). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>composer-v2 previs</title>
+<style>
+  :root{
+    --sage:#87986a; --sage-d:#6b7c52; --sage-tint:#eef2e3;
+    --bg:#fbfbf8; --card:#ffffff; --ink:#1a1d1a; --mute:#6b7362; --line:#e3e0d8;
+    --cap:#8a8f86; --sel:#eef1e7; --scrim:rgba(15,16,12,.45);
+  }
+  html[data-lguser-theme="dark"]{
+    --bg:#141618; --card:#1b1e21; --ink:#e5e7e1; --mute:#9aa79b; --line:#2c312d;
+    --cap:#9aa79b; --sel:#243024; --sage-tint:#243024; --scrim:rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box;margin:0}
+  body{font:15px/1.4 -apple-system,system-ui,sans-serif;background:var(--bg);color:var(--ink);height:100vh;overflow:hidden}
+
+  /* ---------- shared composer pieces (ONE composer, two skins) ---------- */
+  .hd{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .hd .x{width:32px;height:32px;border-radius:50%;border:0;background:var(--sage-tint);color:var(--sage-d);font:600 16px/32px sans-serif;text-align:center}
+  .av{width:38px;height:38px;border-radius:50%;background:#c8567e;color:#fff;font:700 16px/38px sans-serif;text-align:center;flex:0 0 auto}
+  .id{min-width:0;flex:1 1 auto}
+  .nm{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ctx{display:inline-block;margin-top:3px;background:var(--sage-tint);color:var(--sage-d);font:600 11.5px/1 sans-serif;border-radius:999px;padding:5px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .post{border:0;border-radius:999px;background:var(--sage);color:#fff;font:700 14px/1 sans-serif;padding:10px 20px;flex:0 0 auto}
+  .body{flex:1 1 auto;min-height:0;overflow:auto;padding:10px 14px;display:flex;flex-direction:column}
+  .rte{font-size:17px;line-height:1.5;min-height:64px;flex:0 0 auto}
+  .rte .ph{color:#9aa097}
+  .rte b{font-weight:700} .rte s{opacity:.75}
+  .rte .mnt-chip{color:var(--sage-d);font-weight:700}
+  /* mention list (approved FB rows) */
+  .mnt{flex:1 1 auto;min-height:0;overflow:auto;margin-top:6px}
+  .mnt .cap{position:sticky;top:0;background:var(--card);color:var(--cap);font-size:12px;padding:9px 2px 8px;border-bottom:1px solid var(--line)}
+  .mi{display:flex;align-items:center;gap:13px;min-height:60px;padding:8px 6px;border-radius:12px}
+  .mi.sel{background:var(--sel)}
+  .mi .a{width:46px;height:46px;border-radius:50%;color:#fff;font:700 19px/46px sans-serif;text-align:center;flex:0 0 auto}
+  .mi .t{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+  .mi .n{font-weight:700;font-size:16px}
+  .mi .h{color:var(--mute);font-size:13px;margin-top:2px}
+  /* attachment strip (the ONLY image surface — Ian ruling 2026-07-24) */
+  .strip{display:flex;gap:8px;padding:8px 14px 0;flex:0 0 auto}
+  .strip .p{position:relative;width:64px;height:64px;border-radius:10px;border:1px solid var(--line);overflow:hidden}
+  .strip .p i{position:absolute;inset:0;display:block}
+  .strip .p .x{position:absolute;top:2px;right:2px;width:18px;height:18px;border:0;border-radius:50%;background:rgba(26,29,26,.75);color:#fff;font:700 11px/18px sans-serif;padding:0}
+  .strip .add{width:64px;height:64px;border-radius:10px;border:1.5px dashed var(--line);color:var(--mute);font:400 26px/60px sans-serif;text-align:center;background:none}
+  /* slim tool row above the keyboard: attach + rich-text toolbar (proposal: Quill 2, 6 buttons) */
+  .tools{display:flex;align-items:center;gap:4px;padding:8px 10px;border-top:1px solid var(--line);flex:0 0 auto}
+  .tb{width:38px;height:38px;border:0;border-radius:9px;background:none;color:var(--ink);font:600 15px/38px sans-serif;text-align:center}
+  .tb.on{background:var(--sel);color:var(--sage-d)}
+  .tb.pic{color:var(--sage-d);font-size:18px}
+  .tools .sp{flex:1 1 auto}
+  .tools .cnt{color:var(--cap);font-size:12px}
+
+  /* ---------- mobile skin: FB full-height sheet ---------- */
+  .m-stage{position:relative;height:100vh;background:#888}
+  .m-feed{position:absolute;inset:0;background:var(--bg);opacity:.9;padding:12px;filter:blur(0)}
+  .m-feed .fc{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;color:var(--mute);font-size:13px}
+  .m-scrim{position:absolute;inset:0;background:var(--scrim)}
+  .m-sheet{position:absolute;left:0;right:0;display:flex;flex-direction:column;background:var(--card);border-radius:18px 18px 0 0;box-shadow:0 -10px 44px rgba(0,0,0,.32)}
+  .m-grab{height:14px;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+  .m-grab::before{content:"";width:36px;height:4px;border-radius:3px;background:var(--line)}
+  .kb{position:absolute;left:0;right:0;bottom:0;background:#cfd3d9;border-top:1px solid #b7bcc4;display:flex;align-items:center;justify-content:center;text-align:center;padding:0 30px;color:#5b6270;font:600 13px/1.5 sans-serif;letter-spacing:.06em}
+  html[data-lguser-theme="dark"] .kb{background:#2a2d31;border-top-color:#3a3e44;color:#8a9097}
+
+  /* ---------- desktop skin: centered modal ---------- */
+  .d-stage{position:relative;height:100vh;background:var(--bg)}
+  .d-page{position:absolute;inset:0;padding:24px;color:var(--mute)}
+  .d-page .row{background:var(--card);border:1px solid var(--line);border-radius:12px;height:110px;margin-bottom:14px}
+  .d-scrim{position:absolute;inset:0;background:var(--scrim)}
+  .d-modal{position:absolute;left:50%;top:70px;transform:translateX(-50%);width:640px;max-height:76vh;display:flex;flex-direction:column;background:var(--card);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.35)}
+  .d-modal .mnt{position:absolute;left:330px;top:112px;width:320px;max-height:300px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(20,24,16,.3);padding:4px 8px;flex:none;overflow:auto}
+  .d-modal .mi{min-height:52px}
+  .d-modal .mi .a{width:36px;height:36px;font:700 15px/36px sans-serif}
+  .d-modal .mi .n{font-size:15px}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+/* previs state switcher — mock-only, never shipped */
+const q = new URLSearchParams(location.search);
+const skin = q.get('skin') || 'mobile';
+const state = q.get('state') || 'base';
+const theme = q.get('theme') || 'light';
+if (theme === 'dark') document.documentElement.setAttribute('data-lguser-theme', 'dark');
+
+const AV = (bg, ch) => `<span class="a" style="background:${bg}">${ch}</span>`;
+const MENTIONS = `
+  <div class="mnt"><div class="cap">Mentioning someone notifies them.</div>
+    <div class="mi sel">${AV('#b05fd0','M')}<span class="t"><span class="n">Mike</span><span class="h">@mike</span></span></div>
+    <div class="mi">${AV('#d05f6b','M')}<span class="t"><span class="n">Mike</span><span class="h">@mike-2</span></span></div>
+    <div class="mi">${AV('#8e5fd0','M')}<span class="t"><span class="n">Mike Hogan</span><span class="h">@mike-hogan</span></span></div>
+    <div class="mi">${AV('#4db06a','M')}<span class="t"><span class="n">mike nihen</span><span class="h">@mike-nihen</span></span></div>
+    <div class="mi">${AV('#b05fd0','M')}<span class="t"><span class="n">Mike Opitz</span><span class="h">@mike-opitz</span></span></div>
+    <div class="mi">${AV('#5f6bd0','M')}<span class="t"><span class="n">Mike Center</span><span class="h">@mike-center</span></span></div>
+  </div>`;
+const STRIP = `
+  <div class="strip">
+    <span class="p"><i style="background:linear-gradient(135deg,#b8905f,#7a5c38)"></i><button class="x">×</button></span>
+    <span class="p"><i style="background:linear-gradient(135deg,#5f8ab8,#38567a)"></i><button class="x">×</button></span>
+    <span class="p"><i style="background:linear-gradient(135deg,#6ab85f,#3f7a38)"></i><button class="x">×</button></span>
+    <button class="add">+</button>
+  </div>`;
+const TOOLS = (withCount) => `
+  <div class="tools">
+    <button class="tb pic" title="Add photo — the ONLY image surface"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>
+    <button class="tb${state==='kb'||state==='mentions'?' on':''}"><b>B</b></button>
+    <button class="tb"><i>I</i></button>
+    <button class="tb"><s>S</s></button>
+    <button class="tb"><span style="font-size:13px">link</span></button>
+    <button class="tb">≔</button>
+    <button class="tb">1.</button>
+    <span class="sp"></span>${withCount?'<span class="cnt">3 photos</span>':''}
+  </div>`;
+const HEADER = `
+  <div class="hd">
+    <button class="x">✕</button>
+    <span class="av">C</span>
+    <span class="id"><span class="nm">Claude Admin</span><br><span class="ctx">Replying to: Flying V Neck…</span></span>
+    <button class="post">Post</button>
+  </div>`;
+const RTE = {
+  base:     `<div class="rte"><span class="ph">Write a comment…</span></div>`,
+  kb:       `<div class="rte">The <b>neck joint</b> looks solid — <s>maybe</s> definitely worth saving. Steps I&rsquo;d take:</div>`,
+  mentions: `<div class="rte">Great point — asking @mik</div>`,
+  photos:   `<div class="rte">Here&rsquo;s the damage from three angles:</div>`,
+};
+
+if (skin === 'mobile') {
+  const KB_H = 290, kbUp = (state !== 'base');
+  const sheetTop = 0, sheetBottom = kbUp ? KB_H : 0;
+  document.getElementById('stage').innerHTML = `
+    <div class="m-stage">
+      <div class="m-feed">
+        <div class="fc">Flying V Neck/Body Separation — Ian Davlin · 3 replies</div>
+        <div class="fc">NOTIFLANE test topic — Buck Van Laarhoven</div>
+        <div class="fc">Fret level on a &rsquo;62 reissue — Mikelle</div>
+      </div>
+      <div class="m-scrim"></div>
+      <div class="m-sheet" style="top:${sheetTop}px;bottom:${sheetBottom}px;border-radius:0">
+        <div class="m-grab"></div>
+        ${HEADER}
+        <div class="body">${RTE[state]}${state==='mentions'?MENTIONS:''}</div>
+        ${state==='photos'?STRIP:''}
+        ${TOOLS(state==='photos')}
+      </div>
+      ${kbUp?`<div class="kb" style="height:${KB_H}px">iOS KEYBOARD (zero-gap dock — no autofill stage)</div>`:''}
+    </div>`;
+} else {
+  document.getElementById('stage').innerHTML = `
+    <div class="d-stage">
+      <div class="d-page"><div class="row"></div><div class="row"></div><div class="row"></div><div class="row"></div></div>
+      <div class="d-scrim"></div>
+      <div class="d-modal">
+        <div class="m-grab" style="height:10px"></div>
+        ${HEADER}
+        <div class="body" style="min-height:220px">${RTE[state==='base'?'base':state==='mentions'?'mentions':'photos']}</div>
+        ${state==='photos'?STRIP:''}
+        ${TOOLS(state==='photos')}
+        ${state==='mentions'?MENTIONS.replace('class="mnt"','class="mnt" style="position:absolute;left:330px;top:112px;width:320px;max-height:300px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(20,24,16,.3);padding:4px 8px;flex:none"'):''}
+      </div>
+    </div>`;
+}
+</script>
+</body>
+</html>
