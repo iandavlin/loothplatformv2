@@ -180,6 +180,57 @@ add_action('bbp_new_topic', function ($topic_id) {
     }
 }, 20, 1);   // prio 20: AFTER anon-meta (5), before the shutdown-deferred sync reads content
 
+// -- @mention mint + bell for NEW REPLIES on NATIVE write paths (G8, phase-0 stopgap;
+//    Ian ruling 2026-07-24, spec docs/atlas/COMPOSER-V2-PLAN.md §1.2) ---------------
+// The desktop frm modal (incl. every dmodal reply), the fic inline box and the
+// fb-inline thread box all POST replies to NATIVE BuddyBoss REST — they never touch
+// bb-mirror's reply.php, so their @mentions were never minted and they rang NO bells
+// at all (not even reply-to-topic; lg_notify_on_reply fires only from reply.php).
+// This hook gives EVERY reply write path — current and future — the same post-insert
+// mint + bell, exactly like the bbp_new_topic hook above.
+//
+// DOUBLE-FIRE GUARD: the mobile sheets post through reply.php, whose in-process
+// rest_do_request ALSO fires bbp_new_reply. reply.php owns that write end-to-end (its
+// own pre-mint + post-insert re-mint + bell) and marks the request with
+// $GLOBALS['lg_bb_mirror_reply_owned'] before dispatching — when that flag is up this
+// hook stands down entirely, so nothing mints twice and nobody's bell rings twice.
+//
+// bbPress action signature: do_action('bbp_new_reply', $reply_id, $topic_id,
+// $forum_id, $anonymous_data, $reply_author, $is_edit, $reply_to) — we take 7 args
+// for $reply_to so reply-to-reply bells target the right parent author.
+add_action('bbp_new_reply', function ($reply_id, $topic_id = 0, $forum_id = 0, $anon = false, $author_id = 0, $is_edit = false, $reply_to = 0) {
+    static $inMint = false;
+    if ($inMint) return;
+    if (!empty($GLOBALS['lg_bb_mirror_reply_owned'])) return;   // reply.php owns this write
+    $reply_id = (int) $reply_id;
+    if ($reply_id < 1 || $is_edit) return;
+    if (!is_file('/srv/bb-mirror/api/v0/_mention-ingest.php')) return;
+
+    if (!defined('LG_BB_MIRROR_HOST')) define('LG_BB_MIRROR_HOST', bb_mirror_sync_host());
+    require_once '/srv/bb-mirror/api/v0/_mention-ingest.php';
+    if (!function_exists('lg_bb_mirror_mint_mentions')) return;
+
+    $reply = get_post($reply_id);
+    if (!$reply) return;
+
+    $minted = lg_bb_mirror_mint_mentions((string) $reply->post_content);
+    if ($minted !== (string) $reply->post_content) {
+        $inMint = true;
+        kses_remove_filters();
+        wp_update_post(['ID' => $reply_id, 'post_content' => $minted]);
+        kses_init_filters();
+        $inMint = false;
+    }
+
+    if (is_file('/srv/lg-shared/notify-bridge.php')) {
+        require_once '/srv/lg-shared/notify-bridge.php';
+        if (function_exists('lg_notify_on_reply')) {
+            $author = (int) ($author_id ?: $reply->post_author);
+            lg_notify_on_reply((int) $topic_id, $reply_id, $author, (int) $reply_to, $minted);
+        }
+    }
+}, 20, 7);   // prio 20: after anon-meta (5); shutdown-deferred sync reads the minted content
+
 // Deferred dispatch: fires on `shutdown` instead of immediately. Needed for
 // topic/reply CREATE + EDIT because BuddyBoss attaches forum media via an
 // `edit_post` priority-999 hook that runs AFTER bbp_new_topic/bbp_new_reply.

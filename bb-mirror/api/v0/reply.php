@@ -326,6 +326,11 @@ if ($throttle > 0 && !$bypass) {
 
 // ── Insert via BuddyBoss REST in-process. Reuses media + counts + notifications
 //    + the bb→pg sync hooks; permission_callback re-checks the viewer server-side.
+// This endpoint OWNS the whole write (pre-mint below + post-insert re-mint + bell),
+// and the in-process rest_do_request fires bbp_new_reply — flag the request so the
+// mu-plugin's native-path mint+bell hook (bb-mirror-sync.php, G8 stopgap) stands
+// down and nothing mints or rings twice.
+$GLOBALS['lg_bb_mirror_reply_owned'] = true;
 $content = lg_bb_mirror_mint_mentions($content);   // @handles → stable storage form
 $req = new WP_REST_Request('POST', '/buddyboss/v1/reply');
 $req->set_param('topic_id', $topic_id);
