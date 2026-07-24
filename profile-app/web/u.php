@@ -743,7 +743,9 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
         // Builder palette: real layout blocks grouped like the approved mockup.
         $paletteGroups = [
           'Core'   => ['about', 'instruments', 'skills', 'services', 'music', 'location'],
-          'Extras' => ['gallery', 'connect', 'socials', 'resume'],
+          // 'gallery' left the palette 2026-07-24 (Ian): the pinned "Add gallery"
+          // countdown control in this rail supersedes it.
+          'Extras' => ['connect', 'socials', 'resume'],
         ];
         // Section icons — line SVGs (stroke=currentColor inherits the bubble/badge color).
         $iconPaths = [
