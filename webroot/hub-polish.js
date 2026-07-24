@@ -3906,8 +3906,17 @@
   // composer uses. Presence-based ref-count: locked while EITHER sheet is open,
   // released only once both are closed (so opening/closing lcp over lrs is stable).
   function lgSyncSheetLock() {
+    var lcpOpen = !!document.querySelector('#looth-comp-sheet.is-open');
     var open = document.querySelector('#looth-rep-sheet.is-open, #looth-comp-sheet.is-open');
     document.body.classList.toggle('lg-sheet-lock', !!open);
+    // ROOT INVARIANT (Ian 2026-07-24: reactions dead on mobile): the lrs
+    // "behind" state (pointer-events:none) exists ONLY while the composer is open.
+    // This function runs on EVERY sheet open/close, so enforcing the invariant here —
+    // rather than per dismiss path — guarantees NO close path (backdrop, swipe, post,
+    // back-gesture, or any future one) can leave the thread non-interactive and kill
+    // the React buttons. openComposerSheet sets behind AFTER its lgSyncSheetLock call,
+    // so the composer's own open is unaffected.
+    if (!lcpOpen) lgSetBehind(document.getElementById('looth-rep-sheet'), false);
   }
   // Make (or un-make) a sheet the non-interactive backdrop behind the composer.
   // We DELIBERATELY avoid the `inert` attribute: iOS Safari does not reliably clear
