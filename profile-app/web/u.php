@@ -774,23 +774,25 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
       </div>
       <p class="lg-caddy__hint">Drag a section into your profile — or tap to add. Sections marked <b>Filterable</b> tag you with site taxonomy so members can find you in search.</p>
       <?php
-        // Add-gallery control — pinned in the Sections rail (Ian 2026-07-23, rev 2), a
-        // COUNTDOWN of galleries you can still add (max 3), disabled at 0 left.
+        // Add-gallery COUNTDOWN (max 3, disabled at 0 left) — lives INSIDE the
+        // Extras group (Ian 2026-07-24; was pinned standalone above the rail).
         $lgGalLeft = max(0, 3 - looth_gallery_count($subjectId));
       ?>
-      <div class="lg-caddy__gadd">
-        <button type="button" class="lg-gadd lg-gadd--rail" id="lg-add-gallery"<?= $lgGalLeft <= 0 ? ' disabled aria-disabled="true"' : '' ?>>
-          <span class="lg-gadd__plus" aria-hidden="true">＋</span>
-          <span class="lg-gadd__lab">Add gallery</span>
-          <span class="lg-gadd__count"><?= $lgGalLeft ?> left</span>
-        </button>
-      </div>
       <div class="lg-caddy__list" id="lg-caddy-list">
         <?php foreach ($paletteGroups as $grp => $keys):
               $keys = array_values(array_diff($keys, Block::launchHiddenBlocks()));
               if (!$keys) continue;
         ?>
           <h3 class="lg-caddy__grp"><?= looth_h($grp) ?></h3>
+          <?php if ($grp === 'Extras'): ?>
+          <div class="lg-caddy__gadd">
+            <button type="button" class="lg-gadd lg-gadd--rail" id="lg-add-gallery"<?= $lgGalLeft <= 0 ? ' disabled aria-disabled="true"' : '' ?>>
+              <span class="lg-gadd__plus" aria-hidden="true">＋</span>
+              <span class="lg-gadd__lab">Add gallery</span>
+              <span class="lg-gadd__count"><?= $lgGalLeft ?> left</span>
+            </button>
+          </div>
+          <?php endif; ?>
           <div class="lg-bubbles">
             <?php foreach ($keys as $key):
               $b    = Block::LAYOUT_BLOCKS[$key];
