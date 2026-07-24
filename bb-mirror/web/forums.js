@@ -344,20 +344,38 @@
       panel.className = 'lg-mnt';
       panel.setAttribute('role', 'listbox');
       document.body.appendChild(panel);
-      // Pointer pick BEFORE focus moves — a click would blur the editor first, and
-      // on iOS Safari `blur` fires before the synthetic `mousedown`, so a mousedown-
-      // only handler races the focusout dismiss and the tap misses (WebKit event
-      // order: touchend → mousedown → blur → mouseup → click). touchstart fires
-      // first and preventDefault keeps the editor focused so the pick always lands.
-      // pick() clears items, so a duplicate mousedown after touchstart no-ops.
-      function panelPick(e) {
+      // TAP-vs-SCROLL pick (Ian RELOOK-3B receipt, folded back per keeper 2026-07-24):
+      // a touchSTART-pick made any scroll attempt inside the list insta-pick + close.
+      // Record the touchstart; treat it as a PICK only if touchend lands within 10px
+      // and under 700ms — a drag past 10px is a scroll and must scroll the list
+      // (passive touchstart/touchmove so native scrolling is never blocked). The
+      // touchend picks BEFORE iOS's synthetic mousedown→blur, so the focusout dismiss
+      // can't race it. Desktop keeps mousedown-pick (fires before click-blur). All
+      // list pointer events stopPropagation so a list touch never bubbles to any
+      // sheet dismiss handler.
+      var tStart = null;
+      panel.addEventListener('touchstart', function (e) {
+        var row = e.target.closest && e.target.closest('.lg-mnt__i');
+        tStart = row ? { row: row, x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
+      }, { passive: true });
+      panel.addEventListener('touchmove', function (e) {
+        if (!tStart) return;
+        var t = e.touches[0];
+        if (Math.abs(t.clientX - tStart.x) > 10 || Math.abs(t.clientY - tStart.y) > 10) tStart = null;   // became a scroll
+      }, { passive: true });
+      panel.addEventListener('touchend', function (e) {
+        if (!tStart) return;
+        var dt = Date.now() - tStart.t, row = tStart.row;
+        tStart = null;
+        if (dt < 700) { e.preventDefault(); e.stopPropagation(); pick(parseInt(row.dataset.i, 10)); }
+      }, { passive: false });
+      panel.addEventListener('click', function (e) { e.stopPropagation(); }, true);   // swallow synthetic click
+      panel.addEventListener('mousedown', function (e) {                              // desktop / fallback
         var row = e.target.closest && e.target.closest('.lg-mnt__i');
         if (!row) return;
-        e.preventDefault();
+        e.preventDefault(); e.stopPropagation();
         pick(parseInt(row.dataset.i, 10));
-      }
-      panel.addEventListener('touchstart', panelPick, { passive: false });   // iOS: before blur
-      panel.addEventListener('mousedown', panelPick);                        // desktop / fallback
+      });
       return panel;
     }
 
