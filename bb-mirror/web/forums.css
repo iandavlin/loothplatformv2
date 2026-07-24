@@ -4906,3 +4906,55 @@ html[data-lguser-theme="dark"] .lg-fb-menu__item:hover { background: rgba(255, 2
   }
   .feed-page .fc-replycount__ico { width: 15px; height: 15px; flex: 0 0 auto; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK-MODE BUCKET-C SWEEP — page-owned dark theming (Ian 2026-07-24)
+   ---------------------------------------------------------------------------
+   forums.css OWNS its dark theming here, keyed off the real dark signal
+   (html[data-lguser-theme="dark"]) — NOT reliant on app-settings.js injection,
+   whose deployed copy under-scoped these states. Everything below is inside the
+   dark selector, so LIGHT mode is byte-identical. Ratios verified (WCAG AA).
+
+   P1 — feed-sort ACTIVE pill (Ian: "Newest active = washed light-on-light").
+   The app-settings.js dark override targeted `.feed-sort-bar > a.active` with a
+   CHILD combinator; the hub front door renders pills nested one level down
+   (`.feed-sort-bar--zones > .zL > a.active` / `.hub-fmodal-page .feed-sort-bar
+   .zL a.active`), so the active rule MISSED while the descendant COLOR rule
+   still lit the text → light ink on the base white/charcoal pill. Re-own the
+   whole pill row with DESCENDANT selectors so flat + zones both theme. ────── */
+html[data-lguser-theme="dark"] .feed-sort-bar a,
+html[data-lguser-theme="dark"] .feed-sort-bar button {
+  background: #22262a !important;   /* dark pill  (10.1:1 vs #d0d4cd) */
+  color: #d0d4cd !important;
+  border: 1px solid #333833 !important;
+}
+html[data-lguser-theme="dark"] .feed-sort-bar a.active,
+html[data-lguser-theme="dark"] .feed-sort-bar a.is-active,
+html[data-lguser-theme="dark"] .feed-sort-bar .is-active {
+  background: #9cb37d !important;   /* sage slab, DARK ink (7.83:1) */
+  color: #15171a !important;
+  border-color: #9cb37d !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 6px rgba(156,179,125,.35) !important;
+}
+
+/* P2 — Advanced Search modal / rail TYPE count-chips (Ian: "white pills w/ pale
+   ink in dark, never themed"). `.hub-rail__secbody .hub-rail__row` hardcodes
+   `background:#fff` and `.hub-rail__nm` uses `var(--lg-ink)` (→ near-white in
+   dark) → light-on-white. hub-rail was NEVER dark-themed (0 rules anywhere).
+   Theme the secbody rows (Type grid + category chips) + count badges. ─────── */
+html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__secbody .hub-rail__row {
+  background: #1e2124 !important;   /* dark chip (12.98:1 vs #e5e7e1) */
+  border-color: #2c312d !important;
+}
+html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__secbody .hub-rail__row.is-on {
+  background: rgba(156,179,125,.14) !important;   /* faint sage over dark */
+  border-color: #9cb37d !important;
+}
+html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__secbody .hub-rail__nm {
+  color: #e5e7e1 !important;
+}
+html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__secbody .hub-rail__ct {
+  background: rgba(156,179,125,.16) !important;   /* 6.46:1 vs #b0c693 */
+  color: #b0c693 !important;
+}
