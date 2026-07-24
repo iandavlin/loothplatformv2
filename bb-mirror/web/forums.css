@@ -4958,3 +4958,19 @@ html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__secbody .hub-rail__ct {
   background: rgba(156,179,125,.16) !important;   /* 6.46:1 vs #b0c693 */
   color: #b0c693 !important;
 }
+
+/* P3 — fc-gate CTA over a gated cover (Ian ranked-C #1). The "unlock" button is
+   `background:var(--lguser-accent)` + white text; in dark the sage lightens to
+   ~#9cb37d so white ink drops to 2.29:1. Hover ALSO darkens the bg via
+   --lguser-accent-d, so dark-ink-only would break on hover — pin dark ink on
+   sage for both states and let hover BRIGHTEN the sage (matches the active-pill
+   treatment above). base 7.83:1, hover 9.59:1. Gate title/lock stay white over
+   the brightness(.48) cover image (shadowed, not flagged). ────────────────── */
+html[data-lguser-theme="dark"] .feed-page .fc-gate__cta {
+  background: #9cb37d !important;
+  color: #15171a !important;
+}
+html[data-lguser-theme="dark"] .feed-page .fc-cover--gated:hover .fc-gate__cta {
+  background: #b0c693 !important;
+  color: #15171a !important;
+}
