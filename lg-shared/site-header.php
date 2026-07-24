@@ -177,7 +177,10 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
 .lg-chrome ul.lg-chrome__account-menu [role="menuitem"]:hover,
 .lg-chrome ul.lg-chrome__account-menu [role="menuitem"]:focus {
   background: var(--lg-panel-hover-bg, #eef2e3) !important;
-  color: var(--lg-panel-hover-ink, #6b7c52) !important;
+  /* Brand-nudge (Ian 2026-07-24, audit B-42/47): LIGHT hover/focus ink was
+     #6b7c52 = 3.98:1 on the sage-tint hover bg. Darkened light fallback to
+     #586b3f (5.14:1). Dark uses --lg-panel-hover-ink (#b0c693), untouched. */
+  color: var(--lg-panel-hover-ink, #586b3f) !important;
 }
 .lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-divider {
   height: 1px !important;
@@ -185,10 +188,14 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
   margin: 4px 0 !important;
   padding: 0 !important;
 }
-.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout { color: var(--lg-panel-danger, #c66845) !important; }
+/* Brand-nudge (Ian 2026-07-24, audit B-42): LIGHT "Sign out" danger ink was
+   #c66845 = 3.84:1 on the white panel. Darkened light fallback to #ad5330
+   (5.18:1 white / 4.65:1 on the pink hover bg). Dark uses --lg-panel-danger
+   (#e08a63), untouched. */
+.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout { color: var(--lg-panel-danger, #ad5330) !important; }
 .lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout:hover,
 .lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout:focus {
-  background: var(--lg-panel-danger-bg, #fdf0ec) !important; color: var(--lg-panel-danger, #c66845) !important;
+  background: var(--lg-panel-danger-bg, #fdf0ec) !important; color: var(--lg-panel-danger, #ad5330) !important;
 }
 
 /* Hub content-type submenu — a desktop dropdown (hover / keyboard focus / click)
