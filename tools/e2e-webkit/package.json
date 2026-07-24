@@ -1,0 +1,12 @@
+{
+  "name": "lg-e2e-webkit",
+  "private": true,
+  "description": "Real-WebKit (Playwright) regression harness for the mobile reply/composer stack — closes the headless-Chromium-vs-iOS-Safari gap that let three phone-only bugs ship (2026-07-24).",
+  "scripts": {
+    "test": "playwright test",
+    "test:mobile": "playwright test --project=iphone-webkit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
