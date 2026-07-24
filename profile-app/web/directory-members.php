@@ -16,6 +16,7 @@ $music  = (array)($qs['music'] ?? []);
 $creds  = (array)($qs['cred']  ?? []);
 $lat    = isset($qs['lat']) ? (float)$qs['lat']    : null;
 $lng    = isset($qs['lng']) ? (float)$qs['lng']    : null;
+$radiusAll = isset($qs['radius']) && $qs['radius'] === 'all';   // "Everywhere" — server skips the distance clause
 $radius = isset($qs['radius']) ? (int)$qs['radius'] : 50;
 $locTxt = (string)($qs['loc'] ?? '');
 $nameQ  = trim((string)($qs['q'] ?? ''));   // member name search — persisted in the URL for reload/share
@@ -170,8 +171,9 @@ if (isset($_SERVER['HTTP_CF_IPLATITUDE'], $_SERVER['HTTP_CF_IPLONGITUDE'])
     <span class="flab">Radius</span>
     <select id="dir-radius">
       <?php foreach ([10,25,50,100,250] as $r): ?>
-      <option value="<?= $r ?>" <?= $radius===$r?'selected':'' ?>>within <?= $r ?> mi</option>
+      <option value="<?= $r ?>" <?= (!$radiusAll && $radius===$r)?'selected':'' ?>>within <?= $r ?> mi</option>
       <?php endforeach; ?>
+      <option value="all" <?= $radiusAll?'selected':'' ?>>Everywhere</option>
     </select>
   </div>
   <?php if (!($_whoami['authenticated'] ?? false)): ?>
@@ -248,7 +250,12 @@ function filterQs() {
   const lat = document.getElementById('dir-lat').value;
   const lng = document.getElementById('dir-lng').value;
   if (loc) sp.set('loc', loc);
-  if (lat && lng) { sp.set('lat', lat); sp.set('lng', lng); sp.set('radius', document.getElementById('dir-radius').value); }
+  const rad = document.getElementById('dir-radius').value;
+  if (lat && lng) { sp.set('lat', lat); sp.set('lng', lng); sp.set('radius', rad); }
+  // "Everywhere" carries its explicit token even without a location, so the
+  // all-members intent persists in the URL (shareable/reloadable); the server
+  // skips the distance clause regardless of lat/lng.
+  else if (rad === 'all') { sp.set('radius', 'all'); }
   sp.set('sort', curSort);
   return sp;
 }
