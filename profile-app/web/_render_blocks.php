@@ -127,36 +127,53 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
         'services'    => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'services'),
         'instruments' => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'instruments'),
         'music'       => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'music'),
-        'gallery'     => static fn() => looth_render_gallery_block($userId, $role, $headerVis),
+        'gallery'     => static fn() => looth_render_gallery_block($userId, $role, $headerVis, 'gallery'),
+        'gallery-2'   => static fn() => looth_render_gallery_block($userId, $role, $headerVis, 'gallery-2'),
+        'gallery-3'   => static fn() => looth_render_gallery_block($userId, $role, $headerVis, 'gallery-3'),
         'resume'      => static fn() => looth_render_resume_block($userId, $role, $headerVis),
         'connect'     => static fn() => looth_render_connect_block($userId, $role, $headerVis, $viewerUserId),
         'socials'     => static fn() => looth_render_socials_block($userId, $role, $headerVis),
     ];
     $hiddenBlocks = array_flip(Block::launchHiddenBlocks());
-    foreach (Block::profileLayout($userId) as $key) {
-        if (isset($hiddenBlocks[$key])) continue;                 // launch-deferred block
-        if (isset($renderers[$key])) ($renderers[$key])();
+    $layout = array_values(array_filter(
+        Block::profileLayout($userId),
+        static fn($k) => !isset($hiddenBlocks[$k]) && isset($renderers[$k])
+    ));
+    // The "Add gallery" control lives in the Sections caddy rail (u.php), NOT in the
+    // blocks flow (Ian 2026-07-23, rev 2) — see looth_gallery_count() for the countdown.
+    foreach ($layout as $key) {
+        ($renderers[$key])();
     }
     // (Freeform sections + the "+ New section" affordance removed 2026-06-11, Ian.)
 }
 
-/**
- * The gallery block — image grid in the app-owned media store. Shared (profile +
- * practice). Owner uploads/removes; block-level pmp on profile_sections key='gallery'.
- */
-function looth_render_gallery_block(int $userId, string $role, string $headerVis): void
+/** How many galleries the user currently has placed in their layout (0–3). */
+function looth_gallery_count(int $userId): int
 {
-    $g       = Block::loadGallery($userId);
+    return count(array_filter(Block::profileLayout($userId), static fn($k) => Block::isGalleryKey($k)));
+}
+
+/**
+ * The gallery block — image grid in the app-owned media store. Up to 3 independent
+ * galleries per profile (keys gallery, gallery-2, gallery-3 — $key selects which),
+ * each with its own title, visibility, and images. Owner uploads/removes/deletes.
+ */
+function looth_render_gallery_block(int $userId, string $role, string $headerVis, string $key = 'gallery'): void
+{
+    if (!Block::isGalleryKey($key)) $key = 'gallery';
+    $slot    = Block::gallerySlot($key);                 // 1|2|3 → ?g=N
+    $g       = Block::loadGallery($userId, $key);
     $images  = $g['images'];
     $isOwner = ($role === 'me');
     if (!$images && !$isOwner) return;
     if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$g['vis'])) && !$isOwner) return;
 
-    $title  = trim((string)($g['title'] ?? ''));
-    $mode   = (string)($g['display_mode'] ?? Block::GALLERY_DISPLAY_DEFAULT);
-    $isCar  = ($mode === 'carousel') && count($images) > 0;
+    $title   = trim((string)($g['title'] ?? ''));
+    $mode    = (string)($g['display_mode'] ?? Block::GALLERY_DISPLAY_DEFAULT);
+    $isCar   = ($mode === 'carousel') && count($images) > 0;
+    $editUrl = '/profile-api/v0/me/gallery?g=' . $slot;   // per-gallery endpoint
 
-    echo '<section class="block lg-block lg-block--gallery" data-block="gallery">';
+    echo '<section class="block lg-block lg-block--gallery" data-block="' . looth_h($key) . '" data-g="' . $slot . '">';
     echo '<h3 class="lg-bh">';
     if ($isOwner) {
         // Editable block title — reuses the generic lg-edit inline editor (PUT me-gallery {title}).
@@ -164,10 +181,12 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
         // is a zero-width click target the owner can't see, let alone click.
         $hasT = $title !== '';
         echo '<span class="lg-edit lg-btitle' . ($hasT ? '' : ' lg-edit--empty') . '"'
-           . ' data-edit-field="title" data-edit-url="/profile-api/v0/me/gallery" data-edit-method="PUT"'
+           . ' data-edit-field="title" data-edit-url="' . looth_h($editUrl) . '" data-edit-method="PUT"'
            . ' data-edit-type="text" data-edit-placeholder="Name this gallery…">'
            . ($hasT ? looth_h($title) : 'Name this gallery…') . '</span>';
-        echo ' ' . looth_pmp_control('gallery', (string)$g['vis'], $headerVis);
+        echo ' ' . looth_pmp_control($key, (string)$g['vis'], $headerVis);
+        // Hard-delete this whole gallery (confirm + GC in JS via DELETE ?g=N).
+        echo ' <button type="button" class="lg-gdel" data-g="' . $slot . '" title="Delete this gallery" aria-label="Delete this gallery">🗑</button>';
     } else {
         echo looth_h($title !== '' ? $title : 'Gallery');
     }
@@ -186,7 +205,8 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
     $wrapClass = 'lg-gallery'
         . ($isOwner ? ' lg-gallery--edit' : '')
         . ($isCar ? ' lg-gallery--carousel' : ' lg-gallery--grid');
-    echo '<div class="' . $wrapClass . '" id="lg-gallery">';
+    // No id — up to 3 galleries render on one page; the editor JS scopes per-block.
+    echo '<div class="' . $wrapClass . '">';
 
     // Owner gets an "add" tile as the last slide, so the carousel stays navigable
     // even with a single real photo (1 photo + add tile = 2 navigable slots).
@@ -232,7 +252,7 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
     // Add-photos control: an empty "+" tile at the END of the photo run — the last
     // grid cell in grid mode, the last slide inside the carousel track in carousel
     // mode (it sits before the track close below).
-    if ($isOwner) echo '<button type="button" class="lg-gphoto__add" id="lg-gallery-add" aria-label="Add photos">＋</button>';
+    if ($isOwner) echo '<button type="button" class="lg-gphoto__add" aria-label="Add photos">＋</button>';
 
     if ($isCar) {
         echo '</div></div>'; // track + viewport
@@ -258,23 +278,30 @@ function looth_render_about_block(int $userId, string $role, string $headerVis, 
 {
     $ab      = Block::loadAbout($userId, $loadKey);
     $text    = (string)$ab['text'];
+    $html    = (string)$ab['html'];
     $isOwner = ($role === 'me');
     $canEdit = $isOwner && $editable;
-    if ($text === '' && !$isOwner) return;
+    $hasContent = ($html !== '' || $text !== '');
+    if (!$hasContent && !$isOwner) return;
     if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$ab['vis'])) && !$isOwner) return;
+
+    // Rendered body: sanitized rich html (re-sanitized here too — belt + braces),
+    // or nl2br(escaped) for a legacy plain-text About (plain text is valid rich text).
+    $rendered = $html !== '' ? Block::sanitizeRichHtml($html) : nl2br(looth_h($text));
 
     echo '<section class="block lg-block lg-block--about" data-block="about">';
     echo '<h3 class="lg-bh">About';
     if ($canEdit) echo ' ' . looth_pmp_control($pmpBlock, (string)$ab['vis'], $headerVis);
     echo '</h3>';
     if ($canEdit) {
-        $has = $text !== '';
-        echo '<div class="lg-about lg-edit' . ($has ? '' : ' lg-edit--empty') . '"'
-           . ' data-edit-field="text" data-edit-url="' . looth_h($editUrl) . '" data-edit-method="PATCH"'
-           . ' data-edit-type="textarea" data-edit-multiline="1" data-edit-placeholder="Write a bit about your work…">'
-           . ($has ? looth_h($text) : 'Write a bit about your work…') . '</div>';
+        // Rich-text edit: the editor lazy-mounts Quill on click (owner intent only —
+        // never loaded for visitors). data-edit-field='html' → PATCH {html}.
+        echo '<div class="lg-about lg-edit lg-richedit' . ($hasContent ? '' : ' lg-edit--empty') . '"'
+           . ' data-edit-field="html" data-edit-url="' . looth_h($editUrl) . '" data-edit-method="PATCH"'
+           . ' data-edit-type="richtext" data-edit-placeholder="Write a bit about your work…">'
+           . ($hasContent ? $rendered : 'Write a bit about your work…') . '</div>';
     } else {
-        echo '<div class="lg-about">' . nl2br(looth_h($text)) . '</div>';
+        echo '<div class="lg-about">' . $rendered . '</div>';
     }
     echo '</section>';
 }
