@@ -4285,6 +4285,7 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   #lg-dmodal .lg-dmodal__back { position: absolute; inset: 0; background: rgba(10, 12, 10, .58); }
   #lg-dmodal .lg-dmodal__panel.lg-dmodal--s { width: min(620px, calc(100vw - 48px)); }
   #lg-dmodal .lg-dmodal__panel.lg-dmodal--l { width: min(1040px, calc(100vw - 64px)); }
+  #lg-dmodal .lg-dmodal__panel.lg-dmodal--xl { width: min(1320px, calc(100vw - 64px)); }
   #lg-dmodal .lg-dmodal__panel {
     position: relative; width: min(760px, calc(100vw - 48px)); max-height: 86vh;
     margin: 7vh auto 0; display: flex; flex-direction: column; overflow: hidden;
