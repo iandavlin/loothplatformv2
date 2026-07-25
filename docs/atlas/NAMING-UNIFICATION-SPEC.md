@@ -1,5 +1,12 @@
 # NAMING-UNIFICATION-SPEC — one name, one handle, one URL
 
+> **SUPERSEDED 2026-07-25 (Ian final):** auto-derive-from-name, fwd-mint-on-rename and
+> unique-display-names are ALL OFF — @handle stays a separate member-owned control
+> (me-slug editor + slug_history as shipped). STILL LIVE from this doc: §2 Patreon
+> human-handle minting (built 7/25: vanity in the OAuth fetch + username chain,
+> +tag-stripped email fallback, nicename threaded to provision) and §3's COUNTS,
+> which gate the patreon_* re-mint backfill (Ian approves before any apply).
+
 *mentions/naming lane, 2026-07-25. Ian ruling 7/25 (supersedes the 7/25-morning
 reversal and amends 7/19): @handle + /u/ URL auto-derive from the CLEANED profile
 name, always; display names become UNIQUE platform-wide (numeric suffixes at

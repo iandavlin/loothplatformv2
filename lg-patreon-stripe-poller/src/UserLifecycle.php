@@ -309,7 +309,7 @@ final class UserLifecycle
     {
         $base = sanitize_user( strtolower( str_replace( ' ', '.', trim( $seed ) ) ), true );
         if ( strpos( $base, '@' ) !== false ) {
-            $base = sanitize_user( strtolower( strstr( $base, '@', true ) ), true );
+            $base = sanitize_user( strtolower( preg_replace( '/\+.*$/', '', strstr( $base, '@', true ) ) ), true );
         }
         if ( $base === '' ) {
             $base = 'looth-member';

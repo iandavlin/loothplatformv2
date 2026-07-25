@@ -1105,7 +1105,7 @@ function lgpo_handle_callback() {
     // fail the whole identity fetch → ?onboarded=fail.
     $identity_url = 'https://www.patreon.com/api/oauth2/v2/identity'
         . '?include=memberships,memberships.currently_entitled_tiers,memberships.campaign'
-        . '&fields%5Buser%5D=email,full_name,image_url'
+        . '&fields%5Buser%5D=email,full_name,vanity,image_url'
         . '&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents,pledge_cadence,email,full_name'
         . '&fields%5Btier%5D=title';
 
@@ -1134,6 +1134,7 @@ function lgpo_handle_callback() {
     $patreon_user_id = $identity_body['data']['id'];
     $patreon_email   = $identity_body['data']['attributes']['email'] ?? '';
     $patreon_name    = $identity_body['data']['attributes']['full_name'] ?? '';
+    $patreon_vanity  = $identity_body['data']['attributes']['vanity'] ?? '';
 
     $campaign_id = get_option( 'lgpo_campaign_id' );
     $membership  = null;
@@ -1362,7 +1363,7 @@ function lgpo_handle_callback() {
     }
 
     // No existing account by Patreon id, email, or skeleton username — create one.
-    $username = lgpo_generate_username( $patreon_name, $patreon_email );
+    $username = lgpo_generate_username( $patreon_name, $patreon_vanity, $patreon_email );
     $password = wp_generate_password( 24, true, true );
 
     $user_id = wp_insert_user( array(
@@ -1387,6 +1388,7 @@ function lgpo_handle_callback() {
 
     update_user_meta( $user_id, 'lgpo_patreon_user_id', $patreon_user_id );
     update_user_meta( $user_id, 'lgpo_patreon_email', $patreon_email );
+    if ( $patreon_vanity !== '' ) update_user_meta( $user_id, 'lgpo_patreon_vanity', $patreon_vanity );
     update_user_meta( $user_id, 'lgpo_patreon_tier_id', $tier_id );
     update_user_meta( $user_id, 'lgpo_onboarded_at', current_time( 'mysql' ) );
     update_user_meta( $user_id, 'payment_source', 'patreon' );
@@ -1465,10 +1467,16 @@ function lgpo_adopt_existing_user( $user, $patreon_user_id, $patreon_email, $tie
     lgpo_login_user( $user );
 }
 
-function lgpo_generate_username( $name, $email ) {
+function lgpo_generate_username( $name, $vanity, $email ) {
+    // Human-handle chain (Ian 2026-07-25): Patreon full name -> Patreon vanity ->
+    // email local-part (+tag stripped) -> looth-member. Cleaned + numeric-suffixed.
     $base = sanitize_user( strtolower( str_replace( ' ', '.', trim( $name ) ) ), true );
     if ( empty( $base ) ) {
-        $base = sanitize_user( strtolower( explode( '@', $email )[0] ), true );
+        $base = sanitize_user( strtolower( trim( (string) $vanity ) ), true );
+    }
+    if ( empty( $base ) ) {
+        $local = preg_replace( '/\+.*$/', '', explode( '@', $email )[0] );
+        $base  = sanitize_user( strtolower( $local ), true );
     }
     if ( empty( $base ) ) {
         $base = 'looth-member';
