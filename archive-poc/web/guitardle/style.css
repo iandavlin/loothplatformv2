@@ -1259,3 +1259,10 @@ a.board-name:hover { text-decoration: underline; }
 /* (.gdle-eb in-modal board removed — Ian 6/12) */
 
 /* (840px side-by-side embed grid removed with the in-modal board — Ian 6/12) */
+
+/* Leaderboard overlay: wider than the default 340px panel so member names
+   render in full instead of ellipsizing (Ian 2026-07-25). Board only — the
+   stats/rules overlays keep the narrow card. */
+#overlay-board .overlay-panel {
+    max-width: 30rem;
+}
