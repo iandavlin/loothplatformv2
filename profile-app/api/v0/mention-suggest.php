@@ -65,22 +65,42 @@ foreach ($tokens as $i => $tok) {
     $params[":mid{$i}s"] = $params[":mid{$i}n"] = '%' . $like($tok) . '%';
 }
 
+// SCRUNCHED match (Ian 2026-07-25, caught live: q=dougproper returned 0): normalize
+// BOTH sides to bare [a-z0-9] so a glued query matches across spaces/hyphens in the
+// name AND the slug ("dougproper" ~ "Doug Proper - …"; "theguitarspec" ~
+// "the-guitar-specialist"). OR-branch beside the token match; scrunch-only hits rank
+// BELOW the prefix/substring tiers (rank tier added below). The scrunched value is
+// alnum-only, so no LIKE wildcards can survive in it.
+$scr = preg_replace('/[^a-z0-9]/', '', mb_strtolower($q)) ?? '';
+$scrunchExpr = "regexp_replace(lower(coalesce(display_name,'')), '[^a-z0-9]', '', 'g')";
+$scrunchSlug = "regexp_replace(lower(slug), '[^a-z0-9]', '', 'g')";
+$hasScr = mb_strlen($scr) >= 3;
+if ($hasScr) {
+    $params[':scrn'] = $params[':scrs'] = '%' . $scr . '%';
+}
+
 if (count($tokens) === 1) {
     // single word: slug-prefix > name-prefix > substring (unchanged behavior)
     $rank = "CASE WHEN lower(slug) LIKE :pre1 ESCAPE '!' THEN 0
                   WHEN lower(display_name) LIKE :pre2 ESCAPE '!' THEN 1
-                  ELSE 2 END";
+                  WHEN lower(slug) LIKE :mid0s2 ESCAPE '!' OR lower(display_name) LIKE :mid0n2 ESCAPE '!' THEN 2
+                  ELSE 3 END";   // 3 = scrunch-only hit, below every plain tier
     $params[':pre1'] = $params[':pre2'] = $like($tokens[0]) . '%';
+    $params[':mid0s2'] = $params[':mid0n2'] = '%' . $like($tokens[0]) . '%';
 } else {
     // multi word: best rank when EVERY token prefixes a word of the display name
     // ("doug spec" → "Doug … Specialist"); space-boundary approximation is fine here.
     $conds = [];
+    $plain = [];
     foreach ($tokens as $i => $tok) {
         $conds[] = "(lower(display_name) LIKE :wp{$i}a ESCAPE '!' OR lower(display_name) LIKE :wp{$i}b ESCAPE '!')";
         $params[":wp{$i}a"] = $like($tok) . '%';
         $params[":wp{$i}b"] = '% ' . $like($tok) . '%';
+        $plain[] = "(lower(slug) LIKE :pm{$i}s ESCAPE '!' OR lower(display_name) LIKE :pm{$i}n ESCAPE '!')";
+        $params[":pm{$i}s"] = $params[":pm{$i}n"] = '%' . $like($tok) . '%';
     }
-    $rank = 'CASE WHEN ' . implode(' AND ', $conds) . ' THEN 0 ELSE 1 END';
+    $rank = 'CASE WHEN ' . implode(' AND ', $conds) . ' THEN 0 '
+          . 'WHEN ' . implode(' AND ', $plain) . ' THEN 1 ELSE 2 END';   // 2 = scrunch-only
 }
 
 // Ranking fix (Ian 2026-07-25, live evidence: q=doug returned 8/8 patreon_* rows and
@@ -100,7 +120,8 @@ $st = Db::pg()->prepare("
     WHERE archived_at IS NULL
       AND slug IS NOT NULL
       AND profile_visibility <> 'private'
-      AND " . implode("\n      AND ", $where) . "
+      AND ((" . implode("\n      AND ", $where) . ")" . ($hasScr ? "
+           OR ({$scrunchExpr} LIKE :scrn ESCAPE '!' OR {$scrunchSlug} LIKE :scrs ESCAPE '!')" : '') . ")
     ORDER BY rank, machine, mpos, lower(display_name), lower(slug)
     LIMIT 10
 ");

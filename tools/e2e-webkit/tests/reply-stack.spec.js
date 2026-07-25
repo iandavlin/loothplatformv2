@@ -150,3 +150,22 @@ test2.describe('mention multi-word @390 (WebKit)', () => {
     expect2(open).toBe(false);             // prose after the failed @ is NOT captured
   });
 });
+
+// Scrunched match (Ian 2026-07-25 mid-look): a glued query must match across
+// spaces/hyphens on both name and slug — q=dougproper -> "Doug Proper - …".
+const { test: test3, expect: expect3 } = require('@playwright/test');
+test3.describe('mention scrunched match @390 (WebKit)', () => {
+  test3.skip(({ isMobile }) => !isMobile, 'mobile-profile only');
+  const H = require('./_helpers');
+  test3.beforeEach(async ({ context }) => { await H.addAuthCookies(context); });
+
+  test3('"@dougproper" finds Doug Proper (separator-stripped match)', async ({ page }) => {
+    await H.openTopicComposer(page);
+    const input = page.locator('#lcp-input');
+    await input.tap();
+    await input.pressSequentially('@dougproper', { delay: 80 });
+    await page.waitForSelector('.lg-mnt .lg-mnt__i', { timeout: 8000 });
+    const label = await page.locator('.lg-mnt .lg-mnt__h').first().textContent();
+    expect3(label).toContain('Doug Proper');
+  });
+});
