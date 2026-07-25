@@ -169,7 +169,7 @@ final class Provision
             if (trim((string) $cur->fetchColumn()) !== '') return;   // already slugged
 
             $base = '';
-            foreach ([$nicename, $displayName, explode('@', $email)[0]] as $cand) {
+            foreach ([$nicename, $displayName, preg_replace('/\+.*$/', '', explode('@', $email)[0])] as $cand) {
                 // Forward-fix (2026-07): a Patreon-import nicename is a numeric
                 // placeholder ("patreon_100920474"), never a real handle. Skip it
                 // so a new Patreon connection derives its slug from the member's

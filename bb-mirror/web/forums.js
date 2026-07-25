@@ -286,7 +286,14 @@
   (function lgMentionAutocomplete() {
     if (!window.fetch || !document.body) return;
 
-    var TOKEN = /(^|[\s (>\[])@([A-Za-z0-9._-]{0,60})$/;   // "@partial" at the caret
+    // "@partial" at the caret. MULTI-WORD (Ian 2026-07-25, FB-style): the token may
+    // span spaces — up to 3 words — so "@doug proper" narrows instead of dying at
+    // the space. Capture continues only while the dropdown has hits: a space typed
+    // after a ZERO-hit query ends the token (lastZero below), so prose after a
+    // failed @ never stays captured. lastPicked stops the trailing space of a just-
+    // inserted pick from instantly reopening the panel.
+    var TOKEN = /(^|[\s (>\[])@([A-Za-z0-9._-][A-Za-z0-9._-]*(?: +[A-Za-z0-9._-]*){0,2})$/;
+    var lastZero = null, lastPicked = null;
     var panel = null, items = [], sel = -1, active = null, seq = 0, timer = null;
 
     function ensurePanel() {
@@ -500,6 +507,7 @@
           .then(function (j) {
             if (my !== seq) return;            // out-of-order / superseded
             items = (j && j.items) || [];
+            lastZero = items.length ? null : q;   // zero-hit query: a following space ends the token
             sel = items.length ? 0 : -1;
             active = info;
             render();
@@ -511,6 +519,7 @@
     function pick(i) {
       if (i < 0 || i >= items.length || !active) return;
       var slug = items[i].slug, info = active, ins = '@' + slug + ' ';
+      lastPicked = slug; lastZero = null;
       if (info.kind === 'ta') {
         var el = info.el, v = el.value, c = el.selectionStart || 0;
         var m = TOKEN.exec(v.slice(0, c)); if (!m) { close(); return; }
@@ -544,9 +553,17 @@
       var tb = textBefore(info);
       if (tb == null) { close(); return; }
       var m = TOKEN.exec(tb);
-      if (!m) { close(); return; }
-      var q = m[2];
+      if (!m) { lastZero = lastPicked = null; close(); return; }
+      var tok = m[2];
+      var q = tok.replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
       if (q.length < 1) { close(); return; }   // "@" alone: wait for a letter
+      // just-picked slug + trailing space: don't reopen on our own insertion
+      if (lastPicked && q === lastPicked) { close(); return; }
+      if (lastPicked && q !== lastPicked) lastPicked = null;
+      // a space after a ZERO-hit query ends the token — prose stops being captured
+      if (lastZero && tok.length > lastZero.length && tok.indexOf(lastZero) === 0 && /\s/.test(tok.charAt(lastZero.length))) { close(); return; }
+      if (lastZero && q.indexOf(lastZero) !== 0) lastZero = null;   // user backspaced/edited — re-arm
+      if (tok.length > 40) { close(); return; }
       query(info, q);
     }
 

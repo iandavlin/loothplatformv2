@@ -25,7 +25,11 @@ async function addAuthCookies(context) {
 // Tap the Reply action on the first topic card -> opens the lrs thread sheet with
 // the lcp composer sheet auto-opened on top (the current Reply-intent flow).
 async function openTopicComposer(page) {
-  await page.goto('/hub/', { waitUntil: 'domcontentloaded' });
+  // First nav MUST be the looth_id bounce: /looth-auth/issue reads the WP cookie,
+  // Set-Cookies the RS256 looth_id JWT and 302s to return= — without it every
+  // /profile-api call (mention-suggest included) is 401 through the real edge.
+  // (Loopback curls are exempt via the internal-IP check; the browser is not.)
+  await page.goto('/looth-auth/issue?return=/hub/', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.feed-card[data-topic-id] .lg-act-replies', { timeout: 20_000 });
   const reply = page.locator('.feed-card[data-topic-id] .lg-act-replies').first();
   await reply.scrollIntoViewIfNeeded();

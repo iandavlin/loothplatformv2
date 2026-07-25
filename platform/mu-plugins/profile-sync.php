@@ -46,6 +46,7 @@ function profile_sync_dispatch_user_created(int $user_id): void {
         'wp_user_id'   => $user_id,
         'email'        => $u->user_email,
         'display_name' => $u->display_name,
+        'nicename'     => $u->user_nicename,   // human chain (name->vanity->email) minted at WP create; preferred slug source
     ]);
 
     wp_remote_post('https://127.0.0.1/profile-api/v0/hooks/user-created', [

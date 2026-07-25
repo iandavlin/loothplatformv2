@@ -107,3 +107,65 @@ test.describe('mobile reply stack @390 (WebKit)', () => {
     await expect(panel).toBeHidden();
   });
 });
+
+// Suggest-robustness (Ian 2026-07-25): multi-word @-queries — the token spans
+// spaces while the dropdown has hits; a space after a zero-hit word ends capture.
+// Server side is CLI-proven; this exercises the client tokenizer end-to-end @390.
+const { test: test2, expect: expect2 } = require('@playwright/test');
+test2.describe('mention multi-word @390 (WebKit)', () => {
+  test2.skip(({ isMobile }) => !isMobile, 'mobile-profile only');
+  const { addAuthCookies, openTopicComposer } = require('./_helpers');
+  test2.beforeEach(async ({ context }) => { await addAuthCookies(context); });
+
+  test2('"@doug proper" narrows across the space instead of dying', async ({ page }) => {
+    await openTopicComposer(page);
+    const input = page.locator('#lcp-input');
+    await input.tap();
+    await input.pressSequentially('@doug', { delay: 90 });
+    await page.waitForSelector('.lg-mnt .lg-mnt__i', { timeout: 8000 });
+    const before = await page.locator('.lg-mnt .lg-mnt__i').count();
+    await input.pressSequentially(' proper', { delay: 90 });
+    await page.waitForFunction(() => {
+      const p = document.querySelector('.lg-mnt');
+      return p && getComputedStyle(p).display !== 'none' &&
+             p.querySelectorAll('.lg-mnt__i').length === 1;
+    }, { timeout: 8000 });
+    expect2(before).toBeGreaterThan(1);   // narrowed from many to exactly Doug Proper
+    const label = await page.locator('.lg-mnt .lg-mnt__h').first().textContent();
+    expect2(label).toContain('Doug Proper');
+  });
+
+  test2('a space after a zero-hit word ends the token (prose not captured)', async ({ page }) => {
+    await openTopicComposer(page);
+    const input = page.locator('#lcp-input');
+    await input.tap();
+    await input.pressSequentially('@doug xyz', { delay: 90 });
+    await page.waitForTimeout(900);        // zero-hit query lands, panel hides
+    await input.pressSequentially(' hello world', { delay: 60 });
+    await page.waitForTimeout(900);
+    const open = await page.evaluate(() => {
+      const p = document.querySelector('.lg-mnt');
+      return !!(p && getComputedStyle(p).display !== 'none');
+    });
+    expect2(open).toBe(false);             // prose after the failed @ is NOT captured
+  });
+});
+
+// Scrunched match (Ian 2026-07-25 mid-look): a glued query must match across
+// spaces/hyphens on both name and slug — q=dougproper -> "Doug Proper - …".
+const { test: test3, expect: expect3 } = require('@playwright/test');
+test3.describe('mention scrunched match @390 (WebKit)', () => {
+  test3.skip(({ isMobile }) => !isMobile, 'mobile-profile only');
+  const H = require('./_helpers');
+  test3.beforeEach(async ({ context }) => { await H.addAuthCookies(context); });
+
+  test3('"@dougproper" finds Doug Proper (separator-stripped match)', async ({ page }) => {
+    await H.openTopicComposer(page);
+    const input = page.locator('#lcp-input');
+    await input.tap();
+    await input.pressSequentially('@dougproper', { delay: 80 });
+    await page.waitForSelector('.lg-mnt .lg-mnt__i', { timeout: 8000 });
+    const label = await page.locator('.lg-mnt .lg-mnt__h').first().textContent();
+    expect3(label).toContain('Doug Proper');
+  });
+});
