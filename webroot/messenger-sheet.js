@@ -32,7 +32,14 @@
   var curPeers = [];                            // EVERY peer of the open thread (never peers[0])
   var curMeta = null;                           // {is_group,can_manage,created_by,members,meUuid} of the open thread
   var pendingGroup = null;                      // selected uuids for a not-yet-created group (first send → to_uuids[])
-  var dmReturn = null;                           // {uuid,peers,wasRoot} of the GROUP a 1:1 was opened FROM — one-hop "back to group"
+  /* Side conversation LAYER (#mg-chat2) — the mobile analogue of the desktop split.
+     It slides OVER the group INSIDE the already-open sheet; the group's #mg-chat DOM
+     is never torn down or re-scrolled, so its scroll position and composer draft are
+     preserved BY CONSTRUCTION. One body lock (the sheet's) — the layer adds none.
+     LG-SHEET SEAM: this layer deliberately has NO lifecycle of its own beyond
+     open/close/isOpen on this one object — when lg-sheet.js (composer-v2 phase 1)
+     lands its ONE sheet manager, these three hooks are what registers with it. */
+  var side2 = { uuid: null, pendingPeer: null, seq: 0, pollT: null, lastHtml: '', stick: true };
   var curMembersById = {};                       // {uuid:{name,slug,avatar_url,can_message}} of the open thread — powers BOTH message-card doors
   var lpAt = 0;                                 // timestamp of the last long-press (suppresses the trailing tap)
   var threadsCache = [];
@@ -146,6 +153,11 @@
       // chat view (slides over the home)
       '#looth-msgr .mg-chat{position:absolute;inset:0;z-index:1;display:none;flex-direction:column;background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0}',
       '#looth-msgr .mg-chat.is-on{display:flex}',
+      // side conversation layer — SLIDES over the group (z 3: above chat/p2, under acts/card).
+      // visibility (not display) so the slide can animate; the group DOM underneath is untouched.
+      '#looth-msgr .mg-chat2{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;background:var(--lg-cream,#fbfbf8);' +
+        'border-radius:18px 18px 0 0;transform:translateX(102%);transition:transform .22s ease,visibility .22s;visibility:hidden}',
+      '#looth-msgr .mg-chat2.is-on{transform:none;visibility:visible}',
       '#looth-msgr .mg-chd{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:14px 12px 10px;border-bottom:1px solid var(--lg-line,#e3ddd0)}',
       '#looth-msgr .mg-backbtn{flex:0 0 auto;width:34px;height:34px;border:0;border-radius:50%;background:none;color:var(--lg-sage-d,#6b7c52);' +
         'font-size:21px;line-height:34px;text-align:center;cursor:pointer}',
@@ -204,7 +216,7 @@
         'font:700 14px/1 var(--lg-font-sans,system-ui,sans-serif);padding:8px 9px}',
       '#looth-msgr .mg-send:disabled{color:#b0b3b8}',
       // dark
-      D + ' #looth-msgr .mg-panel,' + D + ' #looth-msgr .mg-chat,' + D + ' #looth-msgr .mg-comp{background:#1b1e21}',
+      D + ' #looth-msgr .mg-panel,' + D + ' #looth-msgr .mg-chat,' + D + ' #looth-msgr .mg-chat2,' + D + ' #looth-msgr .mg-comp{background:#1b1e21}',
       D + ' #looth-msgr .mg-grab::before{background:#3a403a}',
       D + ' #looth-msgr .mg-t,' + D + ' #looth-msgr .mg-name,' + D + ' #looth-msgr .mg-chnames{color:#f2f4ee}',
       D + ' #looth-msgr .mg-chsub{color:#9aa097}',
@@ -383,6 +395,19 @@
             '</div>' +
           '</div>' +
         '</div>' +
+        // side conversation layer: a 1:1 OVER the group; the group DOM stays put underneath
+        '<div class="mg-chat2" id="mg-chat2">' +
+          '<div class="mg-chd"><button class="mg-backbtn" type="button" data-mg2-back aria-label="Back to group">‹</button>' +
+            '<span class="mg-avi" id="mg2-avi"></span><span class="mg-chname"><span class="mg-chnames" id="mg2-name"></span>' +
+            '<span class="mg-chsub">Side conversation — just the two of you</span></span>' +
+            '<button class="mg-x" type="button" data-mg-close aria-label="Close messages">✕</button></div>' +
+          '<div class="mg-msgs" id="mg2-msgs"></div>' +
+          '<div class="mg-comp"><div class="mg-comprow">' +
+            '<div class="mg-compwrap">' +
+              '<textarea class="mg-in" id="mg2-in" rows="1" placeholder="Message…"></textarea>' +
+              '<button class="mg-send" id="mg2-send" type="button" disabled>Send</button></div>' +
+          '</div></div>' +
+        '</div>' +
         // secondary panel: compose picker + member manager (slides over home/chat)
         '<div class="mg-p2" id="mg-p2">' +
           '<div class="mg-p2hd"><button class="mg-backbtn" type="button" data-mg-p2back aria-label="Back">‹</button>' +
@@ -403,12 +428,9 @@
       // Back to a list you never saw is disorienting. When the conversation IS the
       // root view (opened from a profile), dismiss the sheet and land back on the
       // page underneath instead (HK-018).
-      // One-hop "back to group": a 1:1 opened FROM a group returns to that group thread,
-      // restoring the group's own root-ness so ITS back still behaves (keeper 7/13 nav call).
-      if (C('[data-mg-home]'))   {
-        if (dmReturn) { var g = dmReturn; dmReturn = null; chatIsRoot = !!g.wasRoot; openThread(g.uuid, g.peers); return; }
-        chatIsRoot ? closeMessenger() : showHome(); return;
-      }
+      if (C('[data-mg-home]'))   { chatIsRoot ? closeMessenger() : showHome(); return; }
+      // side conversation layer: back slides it away — the group underneath was never touched
+      if (C('[data-mg2-back]'))  { closeSideChatMobile(); return; }
       // ── group management ──
       if (e.target.id === 'mg-acts') { closeActs(); return; }
       if (e.target.id === 'mg-card') { closeMemberCardMobile(); return; }   // tap the dim backdrop → dismiss
@@ -460,6 +482,27 @@
     });
     ta.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } });
     send.addEventListener('click', doSend);
+    // side conversation layer: its own composer + reader-following scroll + swipe-right close
+    var ta2 = sheet.querySelector('#mg2-in'), send2 = sheet.querySelector('#mg2-send');
+    ta2.addEventListener('input', function () {
+      send2.disabled = !ta2.value.trim();
+      ta2.style.height = 'auto'; ta2.style.height = Math.min(ta2.scrollHeight, 110) + 'px';
+    });
+    ta2.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); side2Send(); } });
+    send2.addEventListener('click', side2Send);
+    var msgBox2 = sheet.querySelector('#mg2-msgs');
+    msgBox2.addEventListener('scroll', function () { side2.stick = atBottom(msgBox2); }, { passive: true });
+    (function () {   // swipe right anywhere on the layer → back to the group (same hop as the chevron)
+      var layer = sheet.querySelector('#mg-chat2'), sx = 0, sy = 0, on = false;
+      layer.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; on = true; }, { passive: true });
+      layer.addEventListener('touchend', function (e) {
+        if (!on || !e.changedTouches[0]) { on = false; return; }
+        on = false;
+        var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+        // decisive horizontal-right swipe only — never steals a scroll or a tap
+        if (dx > 80 && Math.abs(dy) < 40 && dx > 2 * Math.abs(dy)) closeSideChatMobile();
+      }, { passive: true });
+    })();
     // image attachment: paperclip opens picker, change stages a preview, ✕ clears
     var attBtn = sheet.querySelector('#mg-attach-btn'), attIn = sheet.querySelector('#mg-attach-in'), attX = sheet.querySelector('#mg-attach-x');
     if (attBtn && attIn) {
@@ -469,12 +512,19 @@
     if (attX) attX.addEventListener('click', clearFile);
     // keyboard-aware composer lift
     function kb() {
-      var comp = sheet.querySelector('.mg-comp');
-      if (!sheet.classList.contains('is-open') || !window.visualViewport) { comp.style.transform = ''; return; }
+      var comps = sheet.querySelectorAll('.mg-comp');
+      if (!sheet.classList.contains('is-open') || !window.visualViewport) {
+        [].forEach.call(comps, function (c) { c.style.transform = ''; }); return;
+      }
       var vv = window.visualViewport;
       var k = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-      comp.style.transform = k > 1 ? ('translateY(-' + k + 'px)') : '';
-      if (k > 1) { var m = sheet.querySelector('#mg-msgs'); if (m) m.scrollTop = m.scrollHeight; }
+      [].forEach.call(comps, function (c) { c.style.transform = k > 1 ? ('translateY(-' + k + 'px)') : ''; });
+      if (k > 1) {
+        // follow the keyboard in whichever chat is on top
+        var onSide = sheet.querySelector('#mg-chat2').classList.contains('is-on');
+        var m = sheet.querySelector(onSide ? '#mg2-msgs' : '#mg-msgs');
+        if (m) m.scrollTop = m.scrollHeight;
+      }
     }
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', kb);
@@ -482,6 +532,8 @@
     }
     ta.addEventListener('focus', function () { setTimeout(kb, 120); setTimeout(kb, 330); });
     ta.addEventListener('blur', function () { setTimeout(kb, 80); });
+    ta2.addEventListener('focus', function () { setTimeout(kb, 120); setTimeout(kb, 330); });
+    ta2.addEventListener('blur', function () { setTimeout(kb, 80); });
 
     // picker search (delegated — the input is re-rendered inside #mg-p2body)
     sheet.addEventListener('input', function (e) {
@@ -648,7 +700,6 @@
       b.addEventListener('click', function () {
         var t = threadsCache.filter(function (x) { return x.uuid === b.getAttribute('data-mg-thread'); })[0];
         chatIsRoot = false;                       // reached from the list — "back" returns to it
-        dmReturn = null;                          // a fresh list pick is not a from-group DM
         openThread(b.getAttribute('data-mg-thread'), (t && t.peers) || []);   // ALL peers, not peers[0]
       });
     });
@@ -670,10 +721,10 @@
   function showHome() {
     if (pollT) { clearInterval(pollT); pollT = null; }
     curThread = null; curPeer = null; curPeers = [];
-    curMeta = null; pendingGroup = null; dmReturn = null;
+    curMeta = null; pendingGroup = null;
     lastMsgHtml = ''; stickBottom = true;
     chatIsRoot = false;
-    closeP2(); closeActs(); closeMemberCardMobile();
+    closeP2(); closeActs(); closeMemberCardMobile(); closeSideChatMobile();
     sheet.querySelector('#mg-chat').classList.remove('is-on');
     loadThreads();
   }
@@ -791,7 +842,7 @@
     ensureSheet();
     curThread = uuid; curPeer = null; curPeers = peers || [];
     curMeta = null; pendingGroup = null;
-    closeP2(); closeActs(); closeMemberCardMobile();
+    closeP2(); closeActs(); closeMemberCardMobile(); closeSideChatMobile();
     setChatHeader(curPeers);
     sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Loading…</div>';
     lastMsgHtml = ''; stickBottom = true;        // a freshly opened thread starts at the newest message
@@ -857,24 +908,151 @@
       .catch(function () {});
   }
 
-  /* "Message" a member from inside the group's member manager. Opens a TRUE 1:1 IN PLACE
-     (no stacked sheet over the locked body — that is the #56 trap) via openChatWith, whose
-     resolver ONLY reuses a real pair thread (peers.length===1) and otherwise starts a fresh
-     1:1; findPairThread/is_group=false on the server guarantees a private-intent DM can never
-     land on the group. dmReturn remembers the group so the chat header's back is a one-hop
-     "back to group", restoring the group's own root-ness so ITS back still behaves. */
+  /* "Message" a member from inside a group (member-manager row or member card): the side
+     conversation LAYER. The 1:1 slides OVER the group inside the already-open sheet — the
+     group's #mg-chat DOM is never torn down or re-scrolled, so returning restores it EXACTLY
+     (scroll + draft) by construction (Ian 7/13: a sidebar ALONGSIDE the room, not navigation).
+     Text + live poll; the heavier per-message actions (attach/edit/delete/react-toggle) stay
+     in the full thread view, so no affordance in the layer can ever target the wrong thread.
+     Resolves a TRUE pair thread (peers.length===1) or arms a first-send create —
+     findPairThread/is_group=false on the server guarantees it never lands on the group. */
+  function side2RxStrip(m, mine) {
+    var rx = m.reactions || [];
+    if (!rx.length) return '';
+    // display-only chips: NO data-mg-rx — the tap handler toggles against curThread (the
+    // GROUP), so a live chip here would react to the wrong thread.
+    return '<div class="mg-rx" style="align-self:' + (mine ? 'flex-end' : 'flex-start') + '">' + rx.map(function (r) {
+      return '<span class="mg-rx-chip' + (r.mine ? ' is-mine' : '') + '" title="' + esc((r.who || []).join(', ')) + '">' +
+        '<span class="mg-rx-e">' + r.emoji + '</span><span class="mg-rx-n">' + esc(r.count) + '</span></span>';
+    }).join('') + '</div>';
+  }
+  function side2Html(msgs, peers) {
+    var peerSet = {};
+    (peers || []).forEach(function (p) { peerSet[p.uuid] = 1; });
+    if (!msgs || !msgs.length) return '<div class="mg-empty">Say hi — this starts your chat.</div>';
+    var lastDay = '';
+    return msgs.map(function (m) {
+      var ms = parseTs(m.created_at), unparseable = isNaN(ms);
+      var day = unparseable ? String(m.created_at || '').slice(0, 10) : dayKey(ms);
+      var h = '';
+      if (day && day !== lastDay) { lastDay = day; h += '<div class="mg-day">' + esc(unparseable ? day : dayLabel(ms)) + '</div>'; }
+      if (m.kind === 'system') return h + '<div class="mg-sys">' + esc(m.body) + '</div>';
+      var mine = !peerSet[m.sender_uuid];
+      if (m.deleted) return h + '<div class="mg-b mg-b--tomb ' + (mine ? 'mg-b--me' : 'mg-b--them') + '">Message deleted</div>';
+      if (m.media_url) {
+        h += '<button type="button" class="mg-img" style="align-self:' + (mine ? 'flex-end' : 'flex-start') +
+             '" data-mg-lightbox="' + esc(m.media_url) + '"><img src="' + esc(m.media_url) +
+             '" alt="Photo" loading="lazy"><span class="mg-zoomdot" aria-hidden="true">⤢</span></button>';
+      }
+      if (m.body) {
+        h += '<div class="mg-b ' + (mine ? 'mg-b--me' : 'mg-b--them') + '">' +
+             esc(m.body) + (m.edited ? '<span class="mg-edited">(edited)</span>' : '') + '</div>';
+      }
+      return h + side2RxStrip(m, mine);
+    }).join('');
+  }
+  function side2Header(m) {
+    if (!m) return;
+    sheet.querySelector('#mg2-avi').innerHTML = avi({ avatar_url: m.avatar_url, name: m.name || m.display_name });
+    sheet.querySelector('#mg2-name').textContent = m.name || m.display_name || 'Member';
+  }
+  function side2Load(uuid, quiet) {
+    var seq = side2.seq;
+    fetch(API + '/me/messages/' + encodeURIComponent(uuid), { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || seq !== side2.seq || side2.uuid !== uuid) return;   // the layer moved on
+        var box = sheet.querySelector('#mg2-msgs');
+        if (d.peers && d.peers[0]) side2Header(d.peers[0]);
+        var html = side2Html(d.messages || [], d.peers || []);
+        if (quiet && html === side2.lastHtml) return;                 // poll: no change → no reflow
+        var stick = !quiet || side2.stick;
+        var prevTop = box.scrollTop;
+        side2.lastHtml = html;
+        box.innerHTML = html;
+        if (stick) { box.scrollTop = box.scrollHeight; side2.stick = true; }
+        else       { box.scrollTop = prevTop; }
+      })
+      .catch(function () {});
+  }
   function openDmFromGroupMobile(uuid) {
     if (!uuid || !curThread) return;
-    var m = curMembersById[uuid] || {};
-    // Capture the group BEFORE openChatWith resets curThread/curPeers.
-    var group = { uuid: curThread, peers: (curPeers || []).slice(), wasRoot: chatIsRoot };
-    closeP2();
-    openChatWith(uuid, m.name || m.display_name, m.avatar_url);
-    // openChatWith runs openMessenger()→showHome() SYNCHRONOUSLY, which clears dmReturn — so
-    // set the back-link AFTER it returns; the async thread fetch never touches dmReturn.
-    dmReturn = group;
-    chatIsRoot = false;                          // back is "to group", not "close messenger"
-    syncChatChrome();                            // reveal the back chevron immediately
+    closeP2(); closeMemberCardMobile();
+    var seq = ++side2.seq;
+    side2.uuid = null; side2.pendingPeer = null; side2.lastHtml = ''; side2.stick = true;
+    if (side2.pollT) { clearInterval(side2.pollT); side2.pollT = null; }
+    side2Header(curMembersById[uuid] || null);   // instant from group meta; the fetch refines it
+    var box = sheet.querySelector('#mg2-msgs');
+    box.innerHTML = '<div class="mg-empty">Loading…</div>';
+    var ta = sheet.querySelector('#mg2-in'); ta.value = ''; ta.style.height = 'auto';
+    sheet.querySelector('#mg2-send').disabled = true;
+    sheet.querySelector('#mg-chat2').classList.add('is-on');
+    fetch(API + '/me/messages/', { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : { threads: [] }; })
+      .then(function (d) {
+        if (seq !== side2.seq) return;
+        var match = null;
+        ((d && d.threads) || []).forEach(function (t) {
+          var ps = t.peers || [];
+          if (ps.length === 1 && ps[0].uuid === uuid) match = t;      // TRUE pair thread only
+        });
+        if (match) {
+          side2.uuid = match.uuid;
+          side2Load(match.uuid);
+          side2.pollT = setInterval(function () { if (side2.uuid === match.uuid) side2Load(match.uuid, true); }, 8000);
+        } else {
+          side2.pendingPeer = uuid;                                   // first send creates the 1:1
+          box.innerHTML = '<div class="mg-empty">Say hi — this starts your chat.</div>';
+        }
+      })
+      .catch(function () {
+        if (seq !== side2.seq) return;
+        box.innerHTML = '<div class="mg-empty">Couldn’t open this conversation right now.</div>';
+      });
+  }
+  function side2Send() {
+    var ta = sheet.querySelector('#mg2-in'), send = sheet.querySelector('#mg2-send');
+    var text = (ta.value || '').trim();
+    if (!text) return;
+    if (!side2.uuid && !side2.pendingPeer) return;
+    send.disabled = true;
+    var url, body;
+    if (side2.uuid) { url = API + '/me/messages/' + encodeURIComponent(side2.uuid); body = { body: text }; }
+    else            { url = API + '/me/messages/'; body = { to_uuid: side2.pendingPeer, body: text }; }
+    var box = sheet.querySelector('#mg2-msgs');
+    if (box.querySelector('.mg-empty')) box.innerHTML = '';
+    var b = document.createElement('div'); b.className = 'mg-b mg-b--me'; b.textContent = text;
+    box.appendChild(b); box.scrollTop = box.scrollHeight; side2.stick = true;
+    ta.value = ''; ta.style.height = 'auto';
+    var seq = side2.seq;
+    fetch(url, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+      .then(function (res) {
+        if (seq !== side2.seq) return;
+        if (!res.ok) throw new Error('send');
+        if (!side2.uuid && res.j && res.j.thread_uuid) {              // the 1:1 now exists — adopt + poll
+          side2.uuid = res.j.thread_uuid; side2.pendingPeer = null;
+          if (side2.pollT) clearInterval(side2.pollT);
+          side2.pollT = setInterval(function () { if (side2.uuid === res.j.thread_uuid) side2Load(res.j.thread_uuid, true); }, 8000);
+        }
+        if (side2.uuid) side2Load(side2.uuid);
+      })
+      .catch(function () {
+        if (seq !== side2.seq) return;
+        b.remove();                                                    // take back the optimistic bubble
+        ta.value = text;                                               // restore the draft on failure
+        send.disabled = false;
+      });
+  }
+  function closeSideChatMobile() {
+    side2.seq++;
+    if (side2.pollT) { clearInterval(side2.pollT); side2.pollT = null; }
+    side2.uuid = null; side2.pendingPeer = null; side2.lastHtml = '';
+    var l = sheet && sheet.querySelector('#mg-chat2');
+    if (l) l.classList.remove('is-on');
   }
 
   /* Member card — the intuitive door (bubble avatar/name tap). A LIGHT popover INSIDE the
@@ -1438,7 +1616,7 @@
   }
   function closeMessenger(fromPop) {
     if (!sheet || !sheet.classList.contains('is-open')) return;
-    dmReturn = null;
+    closeSideChatMobile();
     sheet.classList.remove('is-up');
     setTimeout(function () { if (sheet && !sheet.classList.contains('is-up')) sheet.classList.remove('is-open'); }, 320);
     unlockBg();
@@ -1455,13 +1633,14 @@
     if (p2 && p2.classList.contains('is-on'))     { closeP2();   try { history.pushState({ lgMg: 1 }, ''); } catch (e) {} return; }
     var card = sheet.querySelector('#mg-card');
     if (card && card.classList.contains('is-on')) { closeMemberCardMobile(); try { history.pushState({ lgMg: 1 }, ''); } catch (e) {} return; }
-    var chat = sheet.querySelector('#mg-chat');
-    // a 1:1 opened FROM a group → physical back returns to the group, same one hop as the chevron
-    if (chat && chat.classList.contains('is-on') && dmReturn) {
-      var g = dmReturn; dmReturn = null; chatIsRoot = !!g.wasRoot; openThread(g.uuid, g.peers);
+    // the side conversation layer → physical back slides it away, group restored untouched
+    var l2 = sheet.querySelector('#mg-chat2');
+    if (l2 && l2.classList.contains('is-on')) {
+      closeSideChatMobile();
       try { history.pushState({ lgMg: 1 }, ''); } catch (e) {}
       return;
     }
+    var chat = sheet.querySelector('#mg-chat');
     // a chat opened straight from a profile has no list behind it — dismiss, don't invent one
     if (chat && chat.classList.contains('is-on') && !chatIsRoot) {   // back from a chat → home
       showHome();
@@ -1478,6 +1657,8 @@
     if (card && card.classList.contains('is-on')) { closeMemberCardMobile(); return; }
     if (acts && acts.classList.contains('is-on')) { closeActs(); return; }
     if (p2 && p2.classList.contains('is-on'))     { closeP2(); return; }
+    var l2 = sheet.querySelector('#mg-chat2');
+    if (l2 && l2.classList.contains('is-on'))     { closeSideChatMobile(); return; }
     closeMessenger();
   });
 
