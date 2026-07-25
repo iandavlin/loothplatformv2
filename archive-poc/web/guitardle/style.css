@@ -1266,3 +1266,13 @@ a.board-name:hover { text-decoration: underline; }
 #overlay-board .overlay-panel {
     max-width: 30rem;
 }
+
+/* Overlay ink pinned (Ian 2026-07-25 #2): the game is light-only by design, but
+   when the surrounding site chrome is in dark mode its text color cascades in and
+   bleaches the leaderboard names on the white panel. Pin the panel ink + name color
+   so the light card stays readable inside a dark page — composer light-card pattern. */
+.overlay-panel,
+.overlay-panel .board-name,
+.overlay-panel a.board-name {
+    color: var(--text-dark);
+}
