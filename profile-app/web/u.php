@@ -1726,7 +1726,21 @@ window.lgSortable = function (container, opts) {
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         finish(el);
-        if (res.ok) { el.classList.add('saved'); setTimeout(function () { el.classList.remove('saved'); }, 900); }
+        if (res.ok) {
+          el.classList.add('saved'); setTimeout(function () { el.classList.remove('saved'); }, 900);
+          /* Rename re-derives the handle server-side (numbered ruling 2026-07-25) — the
+             page must FOLLOW (Ian 7/25): the /u/ URL in the bar is the OLD slug the
+             moment the save lands. me-name returns the post-derive slug; when it
+             differs from the path, replace() to the new URL (back-button skips the
+             dead one) carrying the query string so owner edit context is preserved. */
+          if (field === 'display_name' && res.j && res.j.slug) {
+            var cur = decodeURIComponent((location.pathname.match(/^\/u\/([^\/]+)/) || [])[1] || '');
+            if (cur && cur.toLowerCase() !== String(res.j.slug).toLowerCase()) {
+              location.replace('/u/' + encodeURIComponent(res.j.slug) + location.search);
+              return;
+            }
+          }
+        }
         else { el.textContent = orig; alert('Save failed: ' + (res.j && res.j.error || '?')); }
         restorePlaceholder(el);
       })
