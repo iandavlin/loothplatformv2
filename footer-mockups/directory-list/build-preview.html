@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>Directory List — BUILD preview (real CSS)</title>
+<!-- Real stylesheets from the worktree so the actual cascade (incl. the new
+     desktop list @media block) applies to real .dir-card DOM. -->
+<link rel="stylesheet" href="../../profile-app/web/edit.css">
+<link rel="stylesheet" href="../../profile-app/web/directory.css">
+<style>
+  /* Site design tokens (normally injected by the chrome + app-settings.js). */
+  :root{
+    --bg:#fbfbf8; --bg-card:#fff; --lg-card-bg:#fff; --lg-cream:#fbfbf8;
+    --lg-ink:#323532; --lg-mute:#6b6f6b; --lg-line:#e3ddd0;
+    --lg-sage:#87986a; --lg-sage-d:#6b7c52; --lg-sage-tint:#eef2e3; --lg-sage-3:#2f3d2c;
+    --lg-charcoal:#1a1d1a; --lg-amber:#ecb351;
+    --lg-font-serif:Georgia,"Times New Roman",serif;
+    --lg-font-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --panel:#fffdf9; --line:#e6e0d4; --ink:#1f1d1a; --ink-mute:#8a8478;
+    --accent:#6b7c52; --accent-soft:#eef2e3; --shadow:0 8px 24px -16px rgba(0,0,0,.18);
+  }
+  html[data-lguser-theme="dark"]{
+    --lg-cream:#15171a; --lg-card-bg:#1e2124; --lg-ink:#e5e7e1; --lg-mute:#a6ac9f;
+    --lg-line:#2c312d; --lg-sage:#9cb37d; --lg-sage-d:#b0c693; --lg-sage-tint:#243024;
+    --lg-charcoal:#f2f4ee; --panel:#1e2124; --line:#2c312d; --ink:#e5e7e1;
+  }
+  body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--lg-font-sans)}
+  .dir-app{max-width:1180px;margin:0 auto;padding:22px 32px 40px}
+  .hd{display:flex;align-items:center;gap:14px;margin:0 0 16px;font:700 26px/1.1 var(--lg-font-serif);color:var(--lg-charcoal)}
+  .hd .meta{font:400 14px/1 var(--lg-font-sans);color:var(--lg-mute)}
+  .stamp{position:fixed;top:8px;right:10px;font:700 11px/1 var(--lg-font-sans);color:var(--lg-mute);
+         background:var(--lg-card-bg);border:1px solid var(--lg-line);border-radius:7px;padding:6px 9px}
+  /* runtime-injected connect CSS (mirrors directory-members.php #dir-connect-css) */
+  .dir-card__foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 10px;padding:0 12px 12px}
+  .dir-card__foot .dir-links{flex:1 1 auto;min-width:0;margin-left:0}
+  .dir-card__actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+  .dir-connect,.dir-msg{border:1px solid var(--lg-sage-d,#6b7c52);background:var(--lg-sage-d,#6b7c52);color:#fff;
+    font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);border-radius:999px;padding:8px 15px;cursor:pointer;flex:0 0 auto}
+  .dir-connect--pending_out,.dir-connect--accepted{background:#fff;color:var(--lg-sage-d,#6b7c52)}
+  html[data-lguser-theme="dark"] .dir-connect,html[data-lguser-theme="dark"] .dir-msg{color:#15171a}
+  html[data-lguser-theme="dark"] .dir-connect--pending_out,html[data-lguser-theme="dark"] .dir-connect--accepted{background:#1e2124;color:#b0c693}
+</style>
+</head>
+<body class="dir--cards">
+  <div class="stamp" id="stamp">BUILD · light</div>
+  <div class="dir-app">
+    <div class="hd">Members <span class="meta">1,820 members matching</span></div>
+    <div id="dir-results"></div>
+  </div>
+  <script>
+    // Real renderResults() output shape (from directory-members.php).
+    const M = [
+      {ini:"DP", nm:"Doug Proper — Guitar Specialist, Inc.", loc:"Bedford Hills, NY · 40 mi",
+       chips:["Fret work","Setups & repair","Refinishing"], lights:[["go","Accepting new work"],["go","Open to collaborations"]], act:'<button class="dir-msg">Message</button>'},
+      {ini:"DE", nm:"Dan Erlewine", loc:"Athens, OH · 420 mi",
+       chips:["Setups","Fret leveling","Finish touch-up"], lights:[["go","Accepting new work"]], act:'<button class="dir-msg">Message</button>'},
+      {ini:"GH", nm:"Gerry Hayes — Haze Guitars", loc:"Lucan, Ireland · 3,190 mi",
+       chips:["Repairs","Setups"], lights:[["go","Accepting new work"]], act:'<button class="dir-connect dir-connect--none">Connect</button>'},
+      {ini:"BH", nm:"Beau Hannam Guitars", loc:"Grand Junction, CO · 1,760 mi",
+       chips:["Flat-top build","Neck build / refinish","Finish touch-up"], lights:[["go","Accepting new work"],["go","Open to collaborations"]], act:'<button class="dir-connect dir-connect--none">Connect</button>'},
+      {ini:"EA", nm:"Ed Auletta — TruTone Guitar Repair", loc:"Passaic, NJ · 13 mi",
+       chips:["Electronics","Setups"], lights:[], act:'<button class="dir-connect dir-connect--none">Connect</button>'},
+      {ini:"BV", nm:"Buck Van Laarhoven — VL Guitar Repair", loc:"San Diego, CA · 2,430 mi",
+       chips:["Fretwork","Restoration"], lights:[["go","Open to collaborations"]], act:'<button class="dir-connect dir-connect--pending_out" disabled>Requested</button>'},
+      {ini:"ID", nm:"Ian Davlin", loc:"Ridgefield Park, NJ · 10 mi",
+       chips:["Finish touch-up","3D modeling (CAD)","3dp"], lights:[["stop","Not accepting work"],["go","Open to collaborations"]], act:''},
+    ];
+    const lightHtml = l => `<span class="dir-light dir-light--${l[0]}"><span class="dir-light__dot"></span>${l[1]}</span>`;
+    document.getElementById('dir-results').innerHTML = M.map(m=>`
+      <div class="dir-card">
+        <a class="dir-card__main" href="#" data-slug="x">
+          <div class="row1"><div class="avi-sm">${m.ini}</div>
+            <div><div class="name">${m.nm}</div><div class="loc-row">${m.loc}</div></div>
+          </div>
+          ${m.chips.length?`<div class="hl-chips">${m.chips.map(c=>`<span class="hl">${c}</span>`).join('')}</div>`:''}
+          ${m.lights.length?`<div class="dir-lights">${m.lights.map(lightHtml).join('')}</div>`:''}
+        </a>
+        <div class="dir-card__foot">
+          <span class="dir-foot-sp"></span>
+          ${m.act?`<div class="dir-card__actions">${m.act}</div>`:''}
+        </div>
+      </div>`).join('');
+    function apply(){const d=location.hash.includes('dark');document.documentElement.setAttribute('data-lguser-theme',d?'dark':'light');document.getElementById('stamp').textContent='BUILD · '+(d?'dark':'light');}
+    addEventListener('hashchange',apply);apply();
+  </script>
+</body>
+</html>

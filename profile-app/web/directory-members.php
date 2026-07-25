@@ -116,10 +116,11 @@ lg_shared_render_site_header([
 <div class="dir-header">Members <span class="dir-meta" id="dir-meta">loading…</span>
   <div class="dir-viewtoggle" id="dir-viewtoggle" role="group" aria-label="Map or card view">
     <button type="button" data-view="map"   class="<?= $view==='map'?'on':'' ?>" aria-pressed="<?= $view==='map'?'true':'false' ?>">Map</button>
-    <?php /* One mode, two labels: desktop says "Cards", ≤640 says "List" (mobile
-             idiom — same view=cards, same localStorage.dirView contract). Span
-             pair swapped by directory.css / mobile-directory.css. */ ?>
-    <button type="button" data-view="cards" class="<?= $view==='cards'?'on':'' ?>" aria-pressed="<?= $view==='cards'?'true':'false' ?>"><span class="vt-dt">Cards</span><span class="vt-mb">List</span></button>
+    <?php /* One mode, one label now: "List" on both desktop and ≤640 (Ian
+             2026-07-25 — desktop 'Cards' grid became the list-row view, so it
+             reads "List" like mobile). Same view=cards param + localStorage.dirView
+             contract; the vt-dt/vt-mb span pair is kept for the CSS swap hook. */ ?>
+    <button type="button" data-view="cards" class="<?= $view==='cards'?'on':'' ?>" aria-pressed="<?= $view==='cards'?'true':'false' ?>"><span class="vt-dt">List</span><span class="vt-mb">List</span></button>
   </div>
 </div>
 <?php
