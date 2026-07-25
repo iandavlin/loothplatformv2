@@ -217,3 +217,36 @@ body.dir--cards #dir-results {
   font: 700 12px/1 var(--lg-font-sans, system-ui, sans-serif);
   padding: 7px 12px; border-radius: 999px; }
 .dir-card__joincta:hover { background: #f2c476; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK-MODE BUCKET-C SWEEP — directory owns its dark states (Ian 2026-07-24)
+   ---------------------------------------------------------------------------
+   app-settings.js dark-themes .dir-card but NOT the view-toggle, the Connect
+   button, or the marker clusters. All rules below are inside the dark signal
+   (html[data-lguser-theme="dark"]) → LIGHT byte-identical. Ratios WCAG-verified.
+
+   view-toggle: `.dir-viewtoggle button` hardcodes background:#fff (stays white
+   in dark → the inactive "Map/Cards" label read 2.33:1) and `button.on` uses
+   --lg-sage-d (→ light #b0c693 in dark) + white ink = 1.85:1. Theme the control
+   dark and put dark ink on the active sage. ──────────────────────────────── */
+html[data-lguser-theme="dark"] .dir-viewtoggle { border-color: #2c312d; }
+html[data-lguser-theme="dark"] .dir-viewtoggle button { background: #1e2124; color: #cdd0ca; }   /* 10.4:1 */
+html[data-lguser-theme="dark"] .dir-viewtoggle button + button { border-left-color: #2c312d; }
+html[data-lguser-theme="dark"] .dir-viewtoggle button.on { background: #b0c693; color: #15171a; } /* 9.7:1 */
+
+/* Connect button (.dir-connect / .dir-msg, injected in directory-members.php):
+   sage bg + white ink → 1.85:1 in dark. Dark ink on the sage; the "outline"
+   pending/accepted states hardcode background:#fff (invisible sage text in dark)
+   → give them a dark chip bg with sage ink. */
+html[data-lguser-theme="dark"] .dir-connect,
+html[data-lguser-theme="dark"] .dir-msg { color: #15171a !important; }   /* 9.7:1 on #b0c693 */
+html[data-lguser-theme="dark"] .dir-connect--pending_out,
+html[data-lguser-theme="dark"] .dir-connect--accepted {
+  background: #1e2124 !important; color: #b0c693 !important;   /* 8.7:1 */
+}
+
+/* Marker clusters keep their real bubble colors (green/yellow/orange by count);
+   a broad dark rule lightened the count text to #e5e7e1 → light-on-yellow
+   1.29:1. Force dark ink back on the light bubbles (7.4–11.2:1). */
+html[data-lguser-theme="dark"] .marker-cluster span,
+html[data-lguser-theme="dark"] .marker-cluster div { color: #15171a; }
