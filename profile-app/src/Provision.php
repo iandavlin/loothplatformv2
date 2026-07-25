@@ -219,24 +219,25 @@ final class Provision
     }
 
     /**
-     * Auto-move a member's public @handle (users.slug) to follow a display_name
-     * change — but ONLY while the slug is still the SYSTEM DEFAULT. A member who
-     * hand-picks a handle owns it and must never be clobbered by a later rename.
+     * Move a member's public @handle (users.slug) to follow a display_name change.
      *
-     * "System default" = the current slug is empty, is Patreon-import junk, or
-     * still equals slugify($oldDisplayName) (i.e. it was auto-derived from the
-     * old name and never customized). Anything else is treated as member-owned
-     * and left untouched.
+     * PRODUCT RULING (Ian, 2026-07-19, binding): the profile URL ALWAYS follows the
+     * profile name — there are NO member-editable handles. So this sync is
+     * UNCONDITIONAL: every rename re-derives the slug (IG-style). The earlier
+     * "only while still the system default" heuristic guarded a hand-picked-handle
+     * feature that will not exist; it is removed, and the coordinated slug_custom /
+     * locked flag is resolved to "there is no such flag". Mentions stay uuid-anchored
+     * (bb-mirror data-lg-uuid) so an unconditional rename never breaks a past mention.
      *
-     * The released slug is parked in slug_history so an old /u/<slug> link can
-     * 301-forward once the history-read lands. Deduped against live slugs with a
-     * numeric suffix, exactly like ensureSlug(). Best-effort + fully guarded: a
-     * slug is non-critical, so any failure only logs and the name change (which
-     * the caller already committed) still stands.
+     * The one thing this never does is clobber ANOTHER member: the desired slug is
+     * deduped against live slugs with a -2/-3 suffix, exactly like ensureSlug(). The
+     * released handle is parked in slug_history so /u/<old-slug> 301-forwards
+     * (u.php step 4 → Slug::currentSlugForRetired). Best-effort + fully guarded: a
+     * slug is non-critical, so any failure only logs and the name change (which the
+     * caller already committed) still stands.
      *
-     * COORDINATE (username-mentions lane): once an explicit slug_custom / locked
-     * flag exists, gate on THAT instead of this "still-matches-old-name"
-     * heuristic — the flag is authoritative about member ownership.
+     * $oldDisplayName is retained for the caller's signature + logging; the
+     * unconditional rule no longer branches on it.
      *
      * Returns the new slug if it changed, else null.
      */
@@ -250,13 +251,6 @@ final class Provision
             $cur = $pg->prepare('SELECT slug FROM users WHERE id = :i');
             $cur->execute([':i' => $userId]);
             $currentSlug = trim((string) $cur->fetchColumn());
-
-            // Only touch a slug that is still the system default — never a
-            // member's hand-picked handle.
-            $isDefault = $currentSlug === ''
-                || self::isPatreonJunk($currentSlug)
-                || $currentSlug === self::slugify($oldDisplayName);
-            if (!$isDefault) return null;
 
             // Already matches the new name (case-insensitive) — nothing to do.
             if ($currentSlug !== '' && strcasecmp($currentSlug, $newBase) === 0) return null;
@@ -275,7 +269,13 @@ final class Provision
 
             $pg->beginTransaction();
             try {
-                // Park the released handle for a future history-301. Unique on
+                // Reclaiming a handle this member previously held (rename A→B→A):
+                // drop it from history so it is never simultaneously "live" and
+                // "retired". Mirrors Slug::change(). Own-history only — another
+                // member's parked handle was already excluded by the dedup above.
+                $pg->prepare('DELETE FROM slug_history WHERE user_id = :u AND lower(slug) = lower(:s)')
+                   ->execute([':u' => $userId, ':s' => $candidate]);
+                // Park the released handle for the history-301. Unique on
                 // lower(slug) across all history → ignore if already parked.
                 if ($currentSlug !== '') {
                     $pg->prepare('INSERT INTO slug_history (user_id, slug) VALUES (:u, :s)

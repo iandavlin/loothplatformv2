@@ -115,25 +115,42 @@ function lg_notify_push(array $ev): void
  */
 function lg_notify_find_mentions(string $content, int $exclude_wp_id = 0): array
 {
-    $text = trim(wp_strip_all_tags($content));
-    if ($text === '' || strpos($text, '@') === false) return [];
-
-    if (!preg_match_all('/(?:^|[\s>(\[])@([A-Za-z0-9_.\-]{1,60})/u', $text, $m)) return [];
-
     $ids = [];
-    foreach (array_unique($m[1]) as $name) {
-        $name = rtrim($name, '.');                 // trailing sentence period
-        if ($name === '') continue;
-        $uid = 0;
-        if (function_exists('bp_core_get_userid_from_nicename')) {
-            $uid = (int) bp_core_get_userid_from_nicename($name);
+
+    // username-mentions lane (2026-07-23): the write side mints every resolved
+    // mention into the canonical anchor whose href carries the WP id directly —
+    // {{mention_user_id_N}}. Parse that FIRST, from the RAW content (the id lives
+    // in an attribute, so it must be read before tags are stripped). This is the
+    // authoritative identity — profile-app slugs never equal WP nicenames, which
+    // is why the nicename path below rang nobody for autocompleted mentions.
+    if (preg_match_all('/\{\{mention_user_id_(\d+)\}\}/', $content, $mm)) {
+        foreach ($mm[1] as $wid) {
+            $wid = (int) $wid;
+            if ($wid > 0 && $wid !== $exclude_wp_id) $ids[$wid] = true;
         }
-        if (!$uid) {
-            $u = get_user_by('slug', $name) ?: get_user_by('login', $name);
-            $uid = $u ? (int) $u->ID : 0;
-        }
-        if ($uid > 0 && $uid !== $exclude_wp_id) $ids[$uid] = true;
     }
+
+    // Fallback: hand-typed @name the minter could not resolve, and legacy content
+    // — the original nicename path. Minted anchors also hit this via their @slug
+    // text; that either resolves to the same id (deduped) or to nobody (skipped).
+    $text = trim(wp_strip_all_tags($content));
+    if ($text !== '' && strpos($text, '@') !== false
+        && preg_match_all('/(?:^|[\s>(\[])@([A-Za-z0-9_.\-]{1,60})/u', $text, $m)) {
+        foreach (array_unique($m[1]) as $name) {
+            $name = rtrim($name, '.');                 // trailing sentence period
+            if ($name === '') continue;
+            $uid = 0;
+            if (function_exists('bp_core_get_userid_from_nicename')) {
+                $uid = (int) bp_core_get_userid_from_nicename($name);
+            }
+            if (!$uid) {
+                $u = get_user_by('slug', $name) ?: get_user_by('login', $name);
+                $uid = $u ? (int) $u->ID : 0;
+            }
+            if ($uid > 0 && $uid !== $exclude_wp_id) $ids[$uid] = true;
+        }
+    }
+
     return array_keys($ids);
 }
 
@@ -202,6 +219,38 @@ function lg_notify_on_reply(int $topic_id, int $reply_id, int $author_id, int $p
             'target_id'       => $topic_id,
             'anchor_id'       => 0,                // NULL in the dedup key → ONE row per topic…
             'target_url'      => $url,             // …whose link re-points at the newest reply on coalesce
+        ]);
+    }
+}
+
+/**
+ * A NEW TOPIC (discussion) was published → ring everyone @mentioned in its body.
+ * Called by the bb-mirror-sync mu-plugin on bbp_new_topic — the native BuddyBoss
+ * create path, which (unlike replies) never goes through reply.php, so nothing else
+ * mints or rings for it (username-mentions lane, 2026-07-23).
+ *
+ * Only @mentions apply: a brand-new topic has no reply-to-topic / reply-to-reply
+ * relationship, and the deep link lands on the topic itself (no reply anchor).
+ * Mirrors the mention leg of lg_notify_on_reply exactly — same event type, same
+ * dedup shape (one forum.mention row per mentioning post) — so the bell UI, links
+ * and coalescing all keep working untouched.
+ */
+function lg_notify_on_topic(int $topic_id, int $author_id, string $content): void
+{
+    if ($topic_id < 1) return;
+
+    $url = lg_notify_topic_url($topic_id);
+    if ($url === '') return;                       // no resolvable deep link → don't raise a dead row
+
+    foreach (lg_notify_find_mentions($content, $author_id) as $mentioned_id) {
+        lg_notify_push([
+            'recipient_wp_id' => $mentioned_id,
+            'actor_wp_id'     => $author_id,
+            'type'            => 'forum.mention',
+            'target_kind'     => 'topic',          // the modal opens the topic itself
+            'target_id'       => $topic_id,
+            'anchor_id'       => 0,                 // no reply to scroll to on a fresh topic
+            'target_url'      => $url,
         ]);
     }
 }

@@ -274,6 +274,314 @@
     });
   })();
 
+  // ── @mention autocomplete (username-mentions lane) ──────────────────────────────
+  // Typing "@" in any discussion composer (Quill .ql-editor, or the plain-textarea
+  // fallback) suggests members by handle + name from the LIVE identity store
+  // (/profile-api/v0/mention-suggest — users.slug, never the forums.person nicename
+  // cache), and inserts "@<slug> " as PLAIN TEXT. The reply-write ingest
+  // (reply.php → lg_bb_mirror_mint_mentions) resolves that handle to the member's
+  // immutable uuid at save time, so the stored mention follows a later rename. No
+  // client-side uuid markup is needed — and none survives Quill reliably — so plain
+  // text is the robust contract, the same one the reply-to seeder already uses.
+  (function lgMentionAutocomplete() {
+    if (!window.fetch || !document.body) return;
+
+    var TOKEN = /(^|[\s (>\[])@([A-Za-z0-9._-]{0,60})$/;   // "@partial" at the caret
+    var panel = null, items = [], sel = -1, active = null, seq = 0, timer = null;
+
+    function ensurePanel() {
+      if (panel) return panel;
+      // z-index MUST clear the mobile composer sheet (#looth-comp-sheet z 2147483560,
+      // hub-polish.js) — at the old 100000 the panel painted BEHIND the opaque
+      // composer card and the dropdown was invisible on phones (Ian 2026-07-23). On
+      // desktop the dmodal is only z 8800 so this sits above it there too.
+      // Themed via the dark-mode chrome-panel tokens (site-header.php sets --lg-panel-*
+      // on html[data-lguser-theme=dark]; they cascade to this body-appended panel, so
+      // var(--token, <light literal>) = light identical / dark automatically). Ian
+      // 2026-07-24: the hardcoded #fff panel looked "really bad" floating in the dark
+      // sheet. Row is now @handle (strong) STACKED over display-name (secondary) with
+      // real spacing — no more "@mikeMike" mash. On MOBILE the panel is anchored inside
+      // the sheet under the input (JS sets left/top/width/max-height, class .lg-mnt--sheet
+      // gives roomier touch rows). Desktop keeps the compact floating popover.
+      var css = '.lg-mnt{position:fixed;z-index:2147483600;min-width:200px;max-width:320px;'
+        + 'max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch;'
+        + 'background:var(--lg-panel-bg,#fff);border:1px solid var(--lg-panel-border,#d8d8d0);'
+        + 'border-radius:12px;box-shadow:0 10px 30px rgba(20,24,16,.30);padding:4px;'
+        + 'font:14px/1.3 system-ui,-apple-system,sans-serif;display:none}'
+        // MOBILE sheet = Facebook-tagging feel (Ian 2026-07-24 design target): 16px
+        // card radius, soft shadow, roomy 60px rows, 46px avatars, name-first text.
+        + '.lg-mnt--sheet{padding:6px;border-radius:16px;box-shadow:0 10px 34px rgba(0,0,0,.30)}'
+        + '.lg-mnt__i{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;cursor:pointer}'
+        + '.lg-mnt--sheet .lg-mnt__i{min-height:60px;padding:8px 15px;gap:13px;border-radius:12px}'
+        + '.lg-mnt__i[aria-selected=true]{background:var(--lg-panel-hover-bg,#eef1e7)}'
+        // helper caption pinned at the top of the sheet panel (sheet only)
+        + '.lg-mnt__cap{display:none}'
+        + '.lg-mnt--sheet .lg-mnt__cap{display:block;position:sticky;top:0;z-index:1;'
+        + 'background:var(--lg-panel-bg,#fff);color:#8a8f86;font-size:12px;line-height:1.3;'
+        + 'padding:9px 14px 8px;border-bottom:1px solid var(--lg-panel-divider,#ececec)}'
+        + '.lg-mnt__av{width:28px;height:28px;border-radius:50%;flex:0 0 auto;object-fit:cover;'
+        + 'background:var(--lg-panel-divider,#c7cbb8);display:inline-block}'
+        + '.lg-mnt--sheet .lg-mnt__av{width:46px;height:46px}'
+        + '.lg-mnt__tx{min-width:0;display:flex;flex-direction:column;justify-content:center;line-height:1.25}'
+        // name-first: bold display name (16px on mobile) over muted @handle (13px)
+        + '.lg-mnt__h{font-weight:700;color:var(--lg-panel-ink,#2e3a23);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+        + '.lg-mnt--sheet .lg-mnt__h{font-size:16px}'
+        + '.lg-mnt__n{color:#6b7362;font-size:12.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+        + '.lg-mnt--sheet .lg-mnt__n{font-size:13px;margin-top:2px}'
+        // Explicit dark overrides — the --lg-panel-* tokens are NOT loaded on /hub/ (only
+        // the site-header partial defines them), so the var() fallbacks above stay light
+        // there. These literals ARE the dark-mode chrome-panel values, so the mention
+        // panel matches dark chrome everywhere. (Ian 2026-07-24: white panel in dark sheet.)
+        + 'html[data-lguser-theme="dark"] .lg-mnt{background:#1b1e21;border-color:#2c312d;box-shadow:0 10px 30px rgba(0,0,0,.5)}'
+        + 'html[data-lguser-theme="dark"] .lg-mnt__h{color:#e5e7e1}'
+        + 'html[data-lguser-theme="dark"] .lg-mnt__n{color:#9aa79b}'
+        + 'html[data-lguser-theme="dark"] .lg-mnt__i[aria-selected=true]{background:#243024}'
+        + 'html[data-lguser-theme="dark"] .lg-mnt__av{background:#2c312d}'
+        + 'html[data-lguser-theme="dark"] .lg-mnt__cap{background:#1b1e21;color:#9aa79b;border-bottom-color:#2c312d}';
+      var st = document.createElement('style'); st.id = 'lg-mnt-css'; st.textContent = css;
+      document.head.appendChild(st);
+      panel = document.createElement('div');
+      panel.className = 'lg-mnt';
+      panel.setAttribute('role', 'listbox');
+      document.body.appendChild(panel);
+      // TAP-vs-SCROLL pick (Ian RELOOK-3B receipt, folded back per keeper 2026-07-24):
+      // a touchSTART-pick made any scroll attempt inside the list insta-pick + close.
+      // Record the touchstart; treat it as a PICK only if touchend lands within 10px
+      // and under 700ms — a drag past 10px is a scroll and must scroll the list
+      // (passive touchstart/touchmove so native scrolling is never blocked). The
+      // touchend picks BEFORE iOS's synthetic mousedown→blur, so the focusout dismiss
+      // can't race it. Desktop keeps mousedown-pick (fires before click-blur). All
+      // list pointer events stopPropagation so a list touch never bubbles to any
+      // sheet dismiss handler.
+      var tStart = null;
+      panel.addEventListener('touchstart', function (e) {
+        var row = e.target.closest && e.target.closest('.lg-mnt__i');
+        tStart = row ? { row: row, x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
+      }, { passive: true });
+      panel.addEventListener('touchmove', function (e) {
+        if (!tStart) return;
+        var t = e.touches[0];
+        if (Math.abs(t.clientX - tStart.x) > 10 || Math.abs(t.clientY - tStart.y) > 10) tStart = null;   // became a scroll
+      }, { passive: true });
+      panel.addEventListener('touchend', function (e) {
+        if (!tStart) return;
+        var dt = Date.now() - tStart.t, row = tStart.row;
+        tStart = null;
+        if (dt < 700) { e.preventDefault(); e.stopPropagation(); pick(parseInt(row.dataset.i, 10)); }
+      }, { passive: false });
+      panel.addEventListener('click', function (e) { e.stopPropagation(); }, true);   // swallow synthetic click
+      panel.addEventListener('mousedown', function (e) {                              // desktop / fallback
+        var row = e.target.closest && e.target.closest('.lg-mnt__i');
+        if (!row) return;
+        e.preventDefault(); e.stopPropagation();
+        pick(parseInt(row.dataset.i, 10));
+      });
+      return panel;
+    }
+
+    // Which composer, if any, is the event target.
+    function editorOf(el) {
+      if (!el || !el.tagName) return null;
+      if (el.classList && el.classList.contains('ql-editor')) return { el: el, kind: 'ce' };
+      if (el.tagName === 'TEXTAREA' &&
+          el.matches('textarea.rse-input, textarea.fic-input, textarea.lg-fb-replyinput, textarea.lcp-input, #lrs-comp-input, #frm-content, #ntm-content'))
+        return { el: el, kind: 'ta' };
+      return null;
+    }
+
+    // The text immediately before the caret (for token detection), per editor kind.
+    function textBefore(info) {
+      if (info.kind === 'ta') return info.el.value.slice(0, info.el.selectionStart || 0);
+      var s = window.getSelection();
+      if (!s || !s.rangeCount) return null;
+      var r = s.getRangeAt(0);
+      if (!r.collapsed || r.startContainer.nodeType !== 3) return null;
+      if (!info.el.contains(r.startContainer)) return null;
+      return r.startContainer.nodeValue.slice(0, r.startOffset);
+    }
+
+    function caretRect(info) {
+      if (info.kind === 'ce') {
+        var s = window.getSelection();
+        if (s && s.rangeCount) {
+          var rc = s.getRangeAt(0).getBoundingClientRect();
+          if (rc && (rc.width || rc.height || rc.top)) return rc;
+        }
+      }
+      return info.el.getBoundingClientRect();
+    }
+
+    function close() {
+      if (panel) panel.style.display = 'none';
+      items = []; sel = -1; active = null; seq++;
+    }
+
+    function render() {
+      var p = ensurePanel();
+      if (!items.length) { p.style.display = 'none'; return; }
+      var onSheet = !!(active && active.el && active.el.closest
+        && active.el.closest('#looth-comp-sheet')
+        && window.matchMedia && window.matchMedia('(max-width:640px)').matches);
+      var rows = items.map(function (it, i) {
+        var av = it.avatar_url
+          ? '<img class="lg-mnt__av" src="' + esc(it.avatar_url) + '" alt="">'
+          : '<span class="lg-mnt__av"></span>';
+        // NAME-FIRST (Ian's FB-tagging target): bold display name on top, muted @handle
+        // underneath. Fall back to @handle as the primary when there's no distinct name.
+        var hasName = it.display_name && it.display_name !== it.slug;
+        var primary = hasName ? esc(it.display_name) : '@' + esc(it.slug);
+        var secondary = hasName ? '<span class="lg-mnt__n">@' + esc(it.slug) + '</span>' : '';
+        return '<div class="lg-mnt__i" role="option" data-i="' + i + '"'
+          + (i === sel ? ' aria-selected="true"' : '') + '>' + av
+          + '<span class="lg-mnt__tx"><span class="lg-mnt__h">' + primary + '</span>' + secondary + '</span></div>';
+      }).join('');
+      // Pinned helper caption (sheet only) — sets the same expectation FB's "Tagging
+      // friends will send them each a message" does; TRUE here (a mention rings their bell).
+      var cap = onSheet ? '<div class="lg-mnt__cap">Mentioning someone notifies them.</div>' : '';
+      p.innerHTML = cap + rows;
+      p.style.display = 'block';
+      // MOBILE + the composer sheet: anchor the panel INSIDE the sheet, directly under
+      // the input, full sheet-width minus padding, capped + scrollable, never overlapping
+      // the Post button or hidden by the iOS keyboard (Ian 2026-07-24). The panel stays
+      // position:fixed on document.body (NOT a child of the transform-lifted card — that
+      // ancestor transform would trap/mis-stack it on iOS), so we compute coordinates
+      // from the live rects, which already reflect the keyboard lift.
+      var sheet = active.el.closest && active.el.closest('#looth-comp-sheet');
+      var isMobile = window.matchMedia && window.matchMedia('(max-width:640px)').matches;
+      if (isMobile && sheet) {
+        p.classList.add('lg-mnt--sheet');
+        var card = sheet.querySelector('.lcp-card') || sheet;
+        var cr = card.getBoundingClientRect();
+        var ir = (sheet.querySelector('#lcp-input') || active.el).getBoundingClientRect();
+        var pad = 12;
+        var mLeft = cr.left + pad;
+        var mWidth = Math.max(140, cr.width - pad * 2);
+        p.style.left = mLeft + 'px';
+        p.style.width = mWidth + 'px';
+        p.style.maxWidth = 'none';
+        // Anchor the list ABOVE the input, growing upward. The composer card stacks
+        // input → photo row → Post with almost no gap, so a panel BELOW the input would
+        // overlap the Post button; and the keyboard occupies everything below the input.
+        // Above the input is the only place it can be full-height without covering the
+        // action buttons or being hidden by the keyboard — the standard mobile mention
+        // UX (Slack/iMessage). Capped at 40vh, scrollable, never past the top of screen.
+        var mMaxH = Math.max(96, Math.min(window.innerHeight * 0.4, ir.top - 14));
+        p.style.maxHeight = mMaxH + 'px';
+        var hh = Math.min(p.offsetHeight || mMaxH, mMaxH);
+        p.style.top = Math.max(8, Math.round(ir.top) - 6 - hh) + 'px';
+        return;
+      }
+      // DESKTOP (and any non-sheet composer): compact floating popover at the caret.
+      p.classList.remove('lg-mnt--sheet');
+      p.style.width = ''; p.style.maxWidth = ''; p.style.maxHeight = '';
+      var rc = caretRect(active);
+      var top = rc.bottom + 4, left = rc.left;
+      // Flip above the caret if it would overflow the viewport bottom.
+      var ph = p.offsetHeight || 260;
+      if (top + ph > window.innerHeight - 8) top = Math.max(8, rc.top - ph - 4);
+      left = Math.min(left, window.innerWidth - p.offsetWidth - 8);
+      p.style.top = top + 'px';
+      p.style.left = Math.max(8, left) + 'px';
+    }
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      });
+    }
+
+    function query(info, q) {
+      var my = ++seq;
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        fetch('/profile-api/v0/mention-suggest?q=' + encodeURIComponent(q),
+          { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+          .then(function (r) { return r.ok ? r.json() : { items: [] }; })
+          .then(function (j) {
+            if (my !== seq) return;            // out-of-order / superseded
+            items = (j && j.items) || [];
+            sel = items.length ? 0 : -1;
+            active = info;
+            render();
+          })
+          .catch(function () { if (my === seq) close(); });
+      }, 140);
+    }
+
+    function pick(i) {
+      if (i < 0 || i >= items.length || !active) return;
+      var slug = items[i].slug, info = active, ins = '@' + slug + ' ';
+      if (info.kind === 'ta') {
+        var el = info.el, v = el.value, c = el.selectionStart || 0;
+        var m = TOKEN.exec(v.slice(0, c)); if (!m) { close(); return; }
+        var tok = m[0].length - (m[1] ? m[1].length : 0);   // length of "@partial"
+        var start = c - tok;
+        el.value = v.slice(0, start) + ins + v.slice(c);
+        el.selectionStart = el.selectionEnd = start + ins.length;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.focus();
+      } else {
+        var s = window.getSelection();
+        if (!s || !s.rangeCount) { close(); return; }
+        var r = s.getRangeAt(0), node = r.startContainer;
+        if (node.nodeType !== 3) { close(); return; }
+        var before = node.nodeValue.slice(0, r.startOffset);
+        var mm = TOKEN.exec(before); if (!mm) { close(); return; }
+        var tlen = mm[0].length - (mm[1] ? mm[1].length : 0);
+        var startOff = r.startOffset - tlen;
+        node.nodeValue = node.nodeValue.slice(0, startOff) + ins + node.nodeValue.slice(r.startOffset);
+        var caret = startOff + ins.length;
+        var nr = document.createRange(); nr.setStart(node, Math.min(caret, node.nodeValue.length));
+        nr.collapse(true); s.removeAllRanges(); s.addRange(nr);
+        info.el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      close();
+    }
+
+    function onType(e) {
+      var info = editorOf(e.target);
+      if (!info) { if (active) close(); return; }
+      var tb = textBefore(info);
+      if (tb == null) { close(); return; }
+      var m = TOKEN.exec(tb);
+      if (!m) { close(); return; }
+      var q = m[2];
+      if (q.length < 1) { close(); return; }   // "@" alone: wait for a letter
+      query(info, q);
+    }
+
+    document.addEventListener('input', onType, true);
+    // Keyboard nav — capture phase, only when the panel is open, so Enter picks a
+    // suggestion instead of inserting a Quill newline / submitting the composer.
+    document.addEventListener('keydown', function (e) {
+      if (!panel || panel.style.display === 'none' || !items.length) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); sel = (sel + 1) % items.length; render(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); sel = (sel - 1 + items.length) % items.length; render(); }
+      else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); pick(sel); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+    }, true);
+    // Dismiss on blur / outside interaction / scroll.
+    document.addEventListener('focusout', function () { setTimeout(function () {
+      if (!panel) return;
+      var a = document.activeElement;
+      if (!a || !editorOf(a)) close();
+    }, 0); }, true);
+    document.addEventListener('scroll', function (e) {
+      if (!active) return;
+      // Don't dismiss when the user is scrolling the dropdown's OWN list (the mobile
+      // in-sheet panel is tall + scrollable) — only when the page/composer behind moves.
+      if (panel && e.target && panel.contains && e.target.nodeType === 1 && panel.contains(e.target)) return;
+      close();
+    }, true);
+    // Mobile: re-anchor the in-sheet panel when the keyboard opens/closes or the visual
+    // viewport shifts, so it keeps tracking the input and never slides under the keyboard.
+    if (window.visualViewport) {
+      var lgVvRe = function () { if (active && items.length && panel && panel.style.display !== 'none') render(); };
+      window.visualViewport.addEventListener('resize', lgVvRe);
+      window.visualViewport.addEventListener('scroll', lgVvRe);
+    }
+  })();
+
   // Discussion (topic) cards do NOT click through to a topic page (Ian) — the card is
   // the unit. A click on the card (incl. its title) expands the body + thread IN PLACE
   // via the card's own affordances instead of navigating. Under ?proto=cards, §1b4's

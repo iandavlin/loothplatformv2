@@ -29,6 +29,9 @@ require LG_BB_MIRROR_WP_LOAD;
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
+// @mention ingest — mints the stable data-lg-uuid storage form on every write path below.
+require_once __DIR__ . '/_mention-ingest.php';
+
 function reply_out(int $code, array $body): void {
     http_response_code($code);
     echo json_encode($body);
@@ -159,6 +162,7 @@ if ($method === 'PUT' || $method === 'DELETE') {
         if ($new_body === '') {
             reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Post can't be empty."]);
         }
+        $new_body = lg_bb_mirror_mint_mentions($new_body);   // @handles → stable storage form
         // wp_update_post kses-filters post_content (and sanitizes post_title) for
         // users without unfiltered_html. Title is optional — keep the stored one
         // when the client omits it (body-only edits).
@@ -230,6 +234,7 @@ if ($method === 'PUT' || $method === 'DELETE') {
     if ($new === '' && !$add_atts && !$keep_ids) {
         reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Reply can't be empty."]);
     }
+    $new = lg_bb_mirror_mint_mentions($new);   // @handles → stable storage form
     $upd = wp_update_post(['ID' => $reply_id, 'post_content' => $new], true);
     if (is_wp_error($upd)) {
         reply_out(500, ['ok' => false, 'error' => 'server', 'message' => (string) $upd->get_error_message()]);
@@ -280,7 +285,7 @@ if (!wp_verify_nonce((string) ($_SERVER['HTTP_X_WP_NONCE'] ?? ''), 'wp_rest')) {
 $topic_id = (int) ($body['topic_id'] ?? 0);
 $content  = trim((string) ($body['content'] ?? ''));
 $reply_to = (int) ($body['reply_to'] ?? 0);
-$media    = array_values(array_filter(array_map('intval', (array) ($body['media_ids'] ?? []))));
+$media    = array_values(array_filter(array_map('intval', (array) ($body['media_ids'] ?? $body['bbp_media'] ?? []))));
 
 if ($topic_id <= 0) {
     reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => 'topic_id is required.']);
@@ -321,6 +326,12 @@ if ($throttle > 0 && !$bypass) {
 
 // ── Insert via BuddyBoss REST in-process. Reuses media + counts + notifications
 //    + the bb→pg sync hooks; permission_callback re-checks the viewer server-side.
+// This endpoint OWNS the whole write (pre-mint below + post-insert re-mint + bell),
+// and the in-process rest_do_request fires bbp_new_reply — flag the request so the
+// mu-plugin's native-path mint+bell hook (bb-mirror-sync.php, G8 stopgap) stands
+// down and nothing mints or rings twice.
+$GLOBALS['lg_bb_mirror_reply_owned'] = true;
+$content = lg_bb_mirror_mint_mentions($content);   // @handles → stable storage form
 $req = new WP_REST_Request('POST', '/buddyboss/v1/reply');
 $req->set_param('topic_id', $topic_id);
 $req->set_param('forum_id', $forum_id);
@@ -357,6 +368,21 @@ update_user_meta($uid, '_bbp_last_posted', time());
 // new-TOPIC feature only. (Existing anon replies keep their stored meta.)
 
 $reply = get_post($reply_id);
+
+// Re-mint the SAVED content: the BB REST insert sanitizes the pre-minted mention
+// anchor away (strips the <a>, keeps its text — found 2026-07-23). Our anchor is
+// already the canonical escaped shape, so write it back with kses off;
+// wp_update_post re-fires the save hooks, so the bb→pg mirror carries the anchor
+// too. Idempotent: content with no resolvable @token round-trips unchanged.
+if ($reply) {
+    $lg_minted = lg_bb_mirror_mint_mentions((string) $reply->post_content);
+    if ($lg_minted !== (string) $reply->post_content) {
+        kses_remove_filters();
+        wp_update_post(['ID' => $reply_id, 'post_content' => $lg_minted]);
+        kses_init_filters();
+        $reply = get_post($reply_id);
+    }
+}
 
 // Moderation: held replies come back pending/spam.
 if ($reply && in_array($reply->post_status, ['pending', 'spam'], true)) {

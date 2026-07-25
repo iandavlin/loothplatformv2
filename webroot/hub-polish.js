@@ -3170,7 +3170,9 @@
   function lrsClose(fromPop) {
     var sh = document.getElementById('looth-rep-sheet'); if (!sh) return;
     sh.classList.remove('is-open');
+    lgSetBehind(sh, false);   // clear composer-set backdrop state (class + aria + any legacy inert)
     document.body.style.overflow = lrsScroll || '';
+    lgSyncSheetLock();
     var comp = sh.querySelector('.lrs-comp'); if (comp) comp.style.transform = '';   // reset keyboard lift
     var t = sh.querySelector('#lrs-thread'); if (t) t.innerHTML = '';
     var op = sh.querySelector('#lrs-op'); if (op) { op.innerHTML = ''; op.hidden = true; }
@@ -3627,7 +3629,9 @@
     lrsMediaIds.length = 0;
     var pv0 = sh.querySelector('#lrs-comp-previews'); if (pv0) pv0.innerHTML = '';
     lrsScroll = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    lgScrubSheetState();   // idempotent open: a reopened thread never inherits a stuck backdrop/inert
     sh.classList.add('is-open');
+    lgSyncSheetLock();
     // URL parity with the desktop dmodal (§4f contract in forums.js): the sheet's
     // history entry carries /hub/?topic=<forum>/<topic> so the address bar is a
     // copyable deep link and Back restores the feed URL. Routed opens (?topic
@@ -3675,7 +3679,10 @@
       var payload = { topic_id: tid, content: text ? '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' : '' };
       if (fid) payload.forum_id = fid;
       if (lrsMediaIds.length) payload.bbp_media = lrsMediaIds.slice();
-      fetch(LRS_REPLY_BASE + '/reply', {
+      // bb-mirror reply API, NOT BB REST direct: the mirror path mints @mention
+      // anchors + rings the bell (mentions lane 2026-07-23); same nonce/cookies,
+      // response carries reply_id like BB's id.
+      fetch('/bb-mirror-api/v0/reply', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
         body: JSON.stringify(payload)
@@ -3711,7 +3718,21 @@
         '#looth-comp-sheet.is-open{display:block}',
         // light scrim — the thread in the modal behind stays readable ABOVE the
         // composer card (Buck 2026-06-10: show the replies while writing)
-        '#looth-comp-sheet .lcp-back{position:absolute;inset:0;background:rgba(15,16,12,.18)}',
+        // Backdrop: bumped .18 -> .34 so the composer clearly OWNS the foreground and
+        // the (inert) lrs thread reads as a recessed backdrop, not a competing modal
+        // (Ian 2026-07-23 "modal behind the modal"). Still translucent so the replies
+        // stay faintly visible while writing (Buck 2026-06-10). Tunable by Ian.
+        // cursor:pointer is REQUIRED for iOS Safari to deliver a tap to a plain
+        // <div> overlay — without it the backdrop tap-to-close silently no-ops on
+        // iPhone, leaving the translucent composer sheet is-open = an invisible
+        // full-screen layer that intercepts everything ("hidden modal", Ian
+        // 2026-07-24). (WebKit: non-interactive divs don't reliably receive taps.)
+        '#looth-comp-sheet .lcp-back{position:absolute;inset:0;background:rgba(15,16,12,.34);cursor:pointer}',
+        // The thread sheet, while it sits BEHIND the open composer, is a
+        // non-interactive backdrop via this class (NOT the inert attribute, which
+        // iOS clears unreliably) — reliably reversible on close so the reopened
+        // thread + its "Write a comment" pill are fully tappable again.
+        '#looth-rep-sheet.lg-sheet-behind{pointer-events:none}',
         '#looth-comp-sheet .lcp-card{position:absolute;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom,0px));' +
           'background:#fff;border-radius:22px;box-shadow:0 10px 44px rgba(0,0,0,.3);padding:2px 16px 14px;' +
           'animation:looth-pwa-up .26s ease;will-change:transform;font:15px/1.4 var(--lg-font-sans,system-ui,sans-serif)}',
@@ -3877,9 +3898,65 @@
     ta.addEventListener('blur', function () { setTimeout(lcpKb, 80); });
     return sh;
   }
+  // iOS-safe scroll lock for the reply stack. The lrs/lcp sheets historically set
+  // body{overflow:hidden}, which iOS WebKit IGNORES (the background hub scrolls
+  // behind the fixed sheet and the sheet itself drags off-screen — Ian's phone,
+  // 2026-07-23). Toggle a body lock-class that the position:fixed scroll-lock
+  // observer (bottom of file) watches, reusing the SAME proven mechanism the ntm
+  // composer uses. Presence-based ref-count: locked while EITHER sheet is open,
+  // released only once both are closed (so opening/closing lcp over lrs is stable).
+  function lgSyncSheetLock() {
+    var lcpOpen = !!document.querySelector('#looth-comp-sheet.is-open');
+    var open = document.querySelector('#looth-rep-sheet.is-open, #looth-comp-sheet.is-open');
+    document.body.classList.toggle('lg-sheet-lock', !!open);
+    // ROOT INVARIANT (Ian 2026-07-24: reactions dead on mobile): the lrs
+    // "behind" state (pointer-events:none) exists ONLY while the composer is open.
+    // This function runs on EVERY sheet open/close, so enforcing the invariant here —
+    // rather than per dismiss path — guarantees NO close path (backdrop, swipe, post,
+    // back-gesture, or any future one) can leave the thread non-interactive and kill
+    // the React buttons. openComposerSheet sets behind AFTER its lgSyncSheetLock call,
+    // so the composer's own open is unaffected.
+    if (!lcpOpen) lgSetBehind(document.getElementById('looth-rep-sheet'), false);
+  }
+  // Make (or un-make) a sheet the non-interactive backdrop behind the composer.
+  // We DELIBERATELY avoid the `inert` attribute: iOS Safari does not reliably clear
+  // it via the IDL setter (`el.inert = false` can leave a stuck, tap-intercepting
+  // layer — the "reopen kills the dropdown / hidden modal" bug Ian hit on his iPhone
+  // 2026-07-24). A toggled class (pointer-events:none) + aria-hidden is reliably
+  // reversible on iOS. We ALSO scrub any legacy `inert` so an older cached build's
+  // stuck attribute heals on the next open.
+  function lgSetBehind(el, on) {
+    if (!el) return;
+    if (on) {
+      el.classList.add('lg-sheet-behind');
+      el.setAttribute('aria-hidden', 'true');
+    } else {
+      el.classList.remove('lg-sheet-behind');
+      el.removeAttribute('aria-hidden');
+      if (el.inert) { try { el.inert = false; } catch (e) {} }
+      el.removeAttribute('inert');
+    }
+  }
+  // Defensive idempotent-open: force BOTH sheets back to a clean, fully-interactive
+  // baseline before we apply fresh state, so a sheet reopened after ANY close path
+  // (backdrop tap, swipe, post, back-gesture, esc) never inherits a stale backdrop /
+  // aria-hidden / inert / lifted-card transform from the previous cycle.
+  function lgScrubSheetState() {
+    ['looth-rep-sheet', 'looth-comp-sheet'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('lg-sheet-behind');
+      el.removeAttribute('aria-hidden');
+      if (el.inert) { try { el.inert = false; } catch (e) {} }
+      el.removeAttribute('inert');
+    });
+    var card = document.querySelector('#looth-comp-sheet .lcp-card');
+    if (card) { card.style.transform = ''; card.style.transition = ''; }
+  }
   function openComposerSheet(o) {
     o = o || {};
     var sh = ensureCompSheet();
+    lgScrubSheetState();   // idempotent open: never inherit a stale backdrop/inert/transform
     // Rebuilt fresh on EVERY open — replyTo from a comment-reply open can never
     // leak into a later OP-reply open (and vice versa).
     sh.__lcpCtx = {
@@ -3971,6 +4048,15 @@
       postBtn.textContent = 'Post';
     }
     sh.classList.add('is-open');
+    lgSyncSheetLock();
+    // Ghost-modal fix (Ian 2026-07-23: "a modal behind the modal I cannot access").
+    // The lrs thread stays OPEN behind the composer BY DESIGN (Buck: read the replies
+    // while writing), but as a live full-screen dialog it read as a second, inert-but-
+    // undismissable modal. Mark it inert + aria-hidden while the composer owns the
+    // foreground, so it is honestly a backdrop (no phantom taps, no focus/AT escape,
+    // no "second modal"); restored on composer close.
+    var rsGhost = document.getElementById('looth-rep-sheet');
+    if (rsGhost && rsGhost.classList.contains('is-open')) lgSetBehind(rsGhost, true);
     // bring the latest replies into view in the modal behind, so the user reads
     // the conversation right above the composer while writing
     var rs = document.getElementById('looth-rep-sheet');
@@ -3983,9 +4069,19 @@
   function closeComposerSheet() {
     var sh = document.getElementById('looth-comp-sheet');
     if (sh) sh.classList.remove('is-open');
+    // reset the keyboard-lift transform: a stale translateY on the card is an
+    // ancestor transform that traps/mis-stacks position:fixed children on iOS
+    // (WebKit: a transformed ancestor becomes the containing block for fixed
+    // descendants) — leave it and the reopened dropdown/backdrop can mis-render.
+    if (sh) { var c = sh.querySelector('.lcp-card'); if (c) { c.style.transform = ''; c.style.transition = ''; } }
+    // release the lrs backdrop the composer put behind on open (ghost-modal fix),
+    // reliably (class + aria + any legacy inert) so the thread + its "Write a
+    // comment" pill are fully interactive again for the NEXT open.
+    lgSetBehind(document.getElementById('looth-rep-sheet'), false);
     // belt-and-braces vs the per-open rebuild: a closed sheet can't hold a stale
     // comment target
     if (sh && sh.__lcpCtx) sh.__lcpCtx.replyTo = 0;
+    lgSyncSheetLock();
   }
   function lcpSubmit(sh) {
     var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post'), status = sh.querySelector('#lcp-status');
@@ -4069,7 +4165,10 @@
       if (ctx.replyTo) payload.reply_to = ctx.replyTo;   // nest under the comment being replied to
       if (lcpMediaIds.length) payload.bbp_media = lcpMediaIds.slice();
       var wasNested = !!ctx.replyTo;
-      fetch(LRS_REPLY_BASE + '/reply', {
+      // bb-mirror reply API, NOT BB REST direct: the mirror path mints @mention
+      // anchors + rings the bell (mentions lane 2026-07-23); same nonce/cookies,
+      // response carries reply_id like BB's id.
+      fetch('/bb-mirror-api/v0/reply', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
         body: JSON.stringify(payload)
@@ -5050,7 +5149,7 @@
    Lock the body with position:fixed (preserving scroll position) whenever
    forums.js raises a modal lock-class. Mobile only; desktop keeps overflow:hidden. */
 (function () {
-  var LOCK_CLASSES = ['ntm-active', 'hub-fmodal-lock'];
+  var LOCK_CLASSES = ['ntm-active', 'hub-fmodal-lock', 'lg-sheet-lock'];
   var savedY = 0, locked = false;
   function wantLock() {
     if (!window.matchMedia('(max-width:640px)').matches) return false;
@@ -5077,5 +5176,63 @@
   try {
     var mo = new MutationObserver(apply);
     mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  } catch (e) {}
+})();
+
+
+/* ---- lg-mentions-debug (2026-07-24, Ian iPhone diagnostic) ----
+   ?lgdebug=1 renders a tiny always-on-top overlay that reports DOM TRUTH live, so a
+   real phone can show what's stuck when the mobile reply stack misbehaves: which
+   sheets are open + their display/pointer-events/inert, elements marked behind/inert,
+   the body scroll-lock state, the mention dropdown, and what element is actually being
+   hit at the screen centre (the "hidden modal" suspect). The overlay is pointer-events:
+   none so it can NEVER itself intercept a tap or skew elementFromPoint. Opt-in only. */
+(function () {
+  try {
+    if (!/[?&]lgdebug=1\b/.test(location.search)) return;
+    var box = document.createElement('div');
+    box.id = 'lg-mnt-debug';
+    box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;pointer-events:none;'
+      + 'background:rgba(10,12,8,.88);color:#c8f7a0;font:10px/1.35 ui-monospace,Menlo,monospace;'
+      + 'padding:5px 7px;white-space:pre-wrap;word-break:break-word;max-height:42vh;overflow:hidden';
+    function info(id) {
+      var e = document.getElementById(id);
+      if (!e) return id + ':absent';
+      var cs = getComputedStyle(e);
+      return id.replace('looth-', '') + ':' + (e.classList.contains('is-open') ? 'OPEN' : 'closed')
+        + ' disp=' + cs.display + ' pe=' + cs.pointerEvents
+        + (e.inert ? ' INERT' : '') + (e.classList.contains('lg-sheet-behind') ? ' BEHIND' : '');
+    }
+    function path(el) {
+      var o = [];
+      while (el && o.length < 5) {
+        o.push((el.id ? '#' + el.id : el.tagName ? el.tagName.toLowerCase() : '?')
+          + (el.className && el.className.split ? '.' + el.className.split(' ')[0] : ''));
+        el = el.parentElement;
+      }
+      return o.join('>');
+    }
+    function tick() {
+      var b = document.body.style;
+      var mnt = document.querySelector('.lg-mnt');
+      var cx = Math.round(window.innerWidth / 2), cy = Math.round(window.innerHeight / 2);
+      var hit = document.elementFromPoint(cx, cy);
+      var lines = [
+        'LGDEBUG ' + window.innerWidth + 'x' + window.innerHeight + ' sy=' + Math.round(window.scrollY),
+        info('looth-rep-sheet'),
+        info('looth-comp-sheet'),
+        'body pos=' + (b.position || '-') + ' lock=' + (document.body.classList.contains('lg-sheet-lock') ? 'Y' : 'n')
+          + ' inert#=' + document.querySelectorAll('[inert]').length + ' behind#=' + document.querySelectorAll('.lg-sheet-behind').length,
+        'dropdown=' + (mnt ? (getComputedStyle(mnt).display + ' z=' + getComputedStyle(mnt).zIndex + ' items=' + mnt.querySelectorAll('.lg-mnt__i').length) : 'absent'),
+        'hit@center=' + (hit ? path(hit) : 'null')
+      ];
+      box.textContent = lines.join('\n');
+    }
+    function start() {
+      if (!document.body) return setTimeout(start, 200);
+      document.body.appendChild(box);
+      tick(); setInterval(tick, 500);
+    }
+    start();
   } catch (e) {}
 })();
