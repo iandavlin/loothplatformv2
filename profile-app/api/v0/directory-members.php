@@ -84,7 +84,11 @@ $audience     = $viewerUserId !== 0 ? 'members' : 'public';
 
 $lat    = isset($_GET['lat']) ? (float)$_GET['lat'] : null;
 $lng    = isset($_GET['lng']) ? (float)$_GET['lng'] : null;
-$radius = isset($_GET['radius']) ? max(1, min(500, (int)$_GET['radius'])) : 50;
+// "Everywhere" (radius=all) is an EXPLICIT token, never a magic huge number: it
+// makes the server SKIP the distance WHERE clause entirely (below) so a location
+// search returns ALL visible members / ALL pins, not a 99999-mile emulation.
+$radiusAll = isset($_GET['radius']) && $_GET['radius'] === 'all';
+$radius    = $radiusAll ? null : (isset($_GET['radius']) ? max(1, min(500, (int)$_GET['radius'])) : 50);
 $insts  = isset($_GET['inst'])  ? (array)$_GET['inst']  : [];
 $skills = isset($_GET['skill']) ? (array)$_GET['skill'] : [];
 $music  = isset($_GET['music']) ? (array)$_GET['music'] : [];
@@ -203,7 +207,14 @@ switch ($sort) {
     case 'online_asc':  $orderBy = $hasLastSeen ? 'u.last_seen_at ASC  NULLS LAST, u.id ASC'  : 'u.created_at ASC,  u.id ASC';  break;
     default:            $orderBy = 'u.created_at ASC, u.id ASC';   // joined_asc + distance_asc (pre-location)
 }
-if ($lat !== null && $lng !== null) {
+// EVERYWHERE ($radiusAll): skip this whole distance block — no radius cap, no
+// distance column, no :lat/:lng/:radius binds — so a location search collapses
+// to the SAME set as no location at all: ALL visible members / ALL pins. The
+// base + list visibility gates in $wheres/$listWheres still stand (ghost
+// containment + master switch untouched); we never emulate "everywhere" with a
+// huge radius. (Binding :lat/:lng here while the COUNT/PINS queries don't use
+// them would also throw under non-emulated PDO.)
+if ($lat !== null && $lng !== null && !$radiusAll) {
     // earthdistance: point(lng, lat) <@> point(lng, lat) returns miles.
     //
     // TRILATERATION GUARD (Ian 6/12 "as secure as possible"): the radius test
