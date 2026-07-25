@@ -110,6 +110,7 @@ const q = new URLSearchParams(location.search);
 const skin = q.get('skin') || 'mobile';
 const state = q.get('state') || 'base';
 const theme = q.get('theme') || 'light';
+const iconVariant = q.get('icon') || 'person';
 if (theme === 'dark') document.documentElement.setAttribute('data-lguser-theme', 'dark');
 
 const AV = (bg, ch) => `<span class="a" style="background:${bg}">${ch}</span>`;
@@ -138,7 +139,9 @@ const TOOLS = (withCount) => `
     <button class="tb"><span style="font-size:13px">link</span></button>
     <button class="tb">≔</button>
     <button class="tb">1.</button>
-    <button class="tb pic" title="Tag people — opens the picker"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5"/><path d="M17 8.5v5M14.5 11h5"/></svg></button>
+    ${iconVariant==='at'
+      ? `<button class="tb pic" title="Tag people (@+ variant)" style="font:700 17px/38px sans-serif">@+</button>`
+      : `<button class="tb pic" title="Tag people — opens the picker"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5"/><path d="M17 8.5v5M14.5 11h5"/></svg></button>`}
     <span class="sp"></span>${withCount?'<span class="cnt">3 photos</span>':''}
   </div>`;
 const HEADER = `
@@ -151,7 +154,7 @@ const HEADER = `
 const PKROW=(bg,ch,n,h,on)=>`<div class="pk-row${on?' on':''}"><span class="pk-cb"></span>${AV(bg,ch)}<span class="t" style="display:flex;flex-direction:column;line-height:1.25"><span class="n" style="font-weight:700;font-size:16px">${n}</span><span class="h" style="color:var(--mute);font-size:13px">@${h}</span></span></div>`;
 const PICKER=(mob)=>`
   <div class="pk-scrim"></div>
-  <div class="pk" style="${mob?'left:0;right:0;bottom:0;top:18%;border-radius:18px 18px 0 0':'left:50%;top:110px;transform:translateX(-50%);width:520px;max-height:64vh;border-radius:16px'}">
+  <div class="pk" style="${mob?'left:0;right:0;bottom:290px;top:44px;border-radius:18px':'left:50%;top:110px;transform:translateX(-50%);width:520px;max-height:64vh;border-radius:16px'}">
     <div class="pk-hd"><span class="t">Tag people</span><button class="pk-done">Done</button></div>
     <div class="pk-search">🔍 <span class="q">mi</span><span class="caret"></span><span style="flex:1"></span></div>
     <div class="pk-list">
