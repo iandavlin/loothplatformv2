@@ -51,10 +51,11 @@ if ($bizProvided) {
        ->execute([':n' => $name, ':u' => (int)$user['id']]);
 }
 
-// Auto-sync the public @handle to follow the new name — but only while the slug
-// is still the system default (never a member's hand-picked handle). Guarded &
-// best-effort inside Provision; returns the new slug if it moved. See
-// Provision::maybeSyncSlugFromName for the ownership heuristic + lane note.
+// Auto-sync the public @handle + /u/ URL to follow the new name — UNCONDITIONAL
+// (Ian numbered ruling 2026-07-25: the name DRIVES the handle; it is display-only,
+// never member-edited). Old handle parks in slug_history so old links 301; collision
+// dedupe = @steve2 scheme; another member's live OR retired handle is never taken.
+// Guarded & best-effort inside Provision; returns the new slug if it moved.
 $newSlug = Provision::maybeSyncSlugFromName((int)$user['id'], $oldName, $name);
 
 // Identity cleanup (slice 3): mirror display_name to wp_users so wp-admin

@@ -182,14 +182,21 @@ final class Provision
             }
             if ($base === '') $base = 'member';
 
-            $taken     = $pg->prepare('SELECT 1 FROM users WHERE slug = :s AND id <> :self');
+            // Collision suffix: @steve, @steve2, @steve3 (Ian numbered ruling 7/25,
+            // dash dropped — scheme pending his final confirm). A candidate is taken
+            // if LIVE on another member OR parked in ANOTHER member's slug_history —
+            // retired handles are never re-issued (link-hijack prevention; the old
+            // users-only check left that hole open).
+            $taken = $pg->prepare('SELECT 1 FROM users WHERE lower(slug) = lower(:s) AND id <> :self
+                                   UNION ALL
+                                   SELECT 1 FROM slug_history WHERE lower(slug) = lower(:s2) AND user_id <> :self2');
             $candidate = $base;
             for ($i = 2; $i <= 999; $i++) {
-                $taken->execute([':s' => $candidate, ':self' => $userId]);
+                $taken->execute([':s' => $candidate, ':self' => $userId, ':s2' => $candidate, ':self2' => $userId]);
                 if (!$taken->fetchColumn()) break;
-                $candidate = $base . '-' . $i;
+                $candidate = $base . $i;
             }
-            if ($i > 999) $candidate = $base . '-' . bin2hex(random_bytes(3));
+            if ($i > 999) $candidate = $base . bin2hex(random_bytes(3));
 
             $pg->prepare("UPDATE users SET slug = :s WHERE id = :i AND (slug IS NULL OR slug = '')")
                ->execute([':s' => $candidate, ':i' => $userId]);
@@ -255,16 +262,21 @@ final class Provision
             // Already matches the new name (case-insensitive) — nothing to do.
             if ($currentSlug !== '' && strcasecmp($currentSlug, $newBase) === 0) return null;
 
-            // Dedup the desired handle against live slugs (case-insensitive),
-            // appending -2, -3 … on collision, mirroring ensureSlug().
-            $taken     = $pg->prepare('SELECT 1 FROM users WHERE lower(slug) = lower(:s) AND id <> :self');
+            // Dedup against live slugs AND every other member's slug_history —
+            // a retired handle is never re-issued (the prior users-only check let an
+            // auto-rename inherit another member's old links; found + closed 7/25).
+            // Suffix scheme: @steve, @steve2, @steve3 (Ian numbered ruling 7/25,
+            // pending final confirm), mirroring ensureSlug().
+            $taken = $pg->prepare('SELECT 1 FROM users WHERE lower(slug) = lower(:s) AND id <> :self
+                                   UNION ALL
+                                   SELECT 1 FROM slug_history WHERE lower(slug) = lower(:s2) AND user_id <> :self2');
             $candidate = $newBase;
             for ($i = 2; $i <= 999; $i++) {
-                $taken->execute([':s' => $candidate, ':self' => $userId]);
+                $taken->execute([':s' => $candidate, ':self' => $userId, ':s2' => $candidate, ':self2' => $userId]);
                 if (!$taken->fetchColumn()) break;
-                $candidate = $newBase . '-' . $i;
+                $candidate = $newBase . $i;
             }
-            if ($i > 999) $candidate = $newBase . '-' . bin2hex(random_bytes(3));
+            if ($i > 999) $candidate = $newBase . bin2hex(random_bytes(3));
             if ($currentSlug !== '' && strcasecmp($currentSlug, $candidate) === 0) return null;
 
             $pg->beginTransaction();

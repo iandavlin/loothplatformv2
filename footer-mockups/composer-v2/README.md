@@ -56,3 +56,13 @@ sanitized HTML; composer-v2 reads/writes the same shape. Existing posts with inl
 `<img>` keep rendering (read path untouched); on EDIT of a legacy inline-image post,
 images lift out of the body into the attachment strip (same behavior the mobile
 editor has today via keep_media).
+
+## Revision 2 (Ian notes, 7/25 21:12)
+- Mobile picker RAISED: 44px top inset, search at top, list fills the middle, sheet
+  bottom lands exactly on the keyboard top (was cramped at 18%-top over the keyboard).
+- `m-icon-at-light.png`: the ONE @+ icon-variant decision frame (composer tool row with
+  an @+ button in place of the person icon). Person icon is the keeper-recommended
+  default and appears in every other frame.
+- Search behavior note (no change, confirming): the picker's search IS mention-suggest —
+  rank fix (machine slugs demoted), multi-word AND, scrunched matching and LIMIT 10 are
+  all inherited for free, both skins.

@@ -60,6 +60,25 @@
   .tools .sp{flex:1 1 auto}
   .tools .cnt{color:var(--cap);font-size:12px}
 
+  /* tag-people PICKER (Ian 7/25: selections drop INLINE at the caret; chip-row dead).
+     Second layer of the sheet stack — exactly the modal-over-modal case lg-sheet.js owns. */
+  .pk-scrim{position:absolute;inset:0;background:rgba(10,12,8,.5)}
+  .pk{position:absolute;display:flex;flex-direction:column;background:var(--card);box-shadow:0 -10px 44px rgba(0,0,0,.4)}
+  .pk-hd{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .pk-hd .t{font-weight:700;flex:1}
+  .pk-done{border:0;border-radius:999px;background:var(--sage);color:#fff;font:700 14px/1 sans-serif;padding:10px 20px}
+  .pk-search{display:flex;align-items:center;gap:8px;margin:10px 14px;padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;color:var(--mute);flex:0 0 auto}
+  .pk-search .q{color:var(--ink);font-weight:600}
+  .pk-search .caret{display:inline-block;width:1.5px;height:16px;background:var(--sage-d);vertical-align:-3px}
+  .pk-list{flex:1 1 auto;min-height:0;overflow:auto;padding:0 8px}
+  .pk-row{display:flex;align-items:center;gap:13px;min-height:60px;padding:8px 7px;border-radius:12px}
+  .pk-row.on{background:var(--sel)}
+  .pk-cb{width:22px;height:22px;border:2px solid var(--line);border-radius:6px;flex:0 0 auto}
+  .pk-row.on .pk-cb{background:var(--sage);border-color:var(--sage);position:relative}
+  .pk-row.on .pk-cb::after{content:"✓";position:absolute;inset:0;color:#fff;font:700 15px/22px sans-serif;text-align:center}
+  .pk-row .a{width:44px;height:44px;border-radius:50%;color:#fff;font:700 18px/44px sans-serif;text-align:center;flex:0 0 auto}
+  .rte .imnt{color:var(--sage-d);font-weight:700}
+
   /* ---------- mobile skin: FB full-height sheet ---------- */
   .m-stage{position:relative;height:100vh;background:#888}
   .m-feed{position:absolute;inset:0;background:var(--bg);opacity:.9;padding:12px;filter:blur(0)}
@@ -91,6 +110,7 @@ const q = new URLSearchParams(location.search);
 const skin = q.get('skin') || 'mobile';
 const state = q.get('state') || 'base';
 const theme = q.get('theme') || 'light';
+const iconVariant = q.get('icon') || 'person';
 if (theme === 'dark') document.documentElement.setAttribute('data-lguser-theme', 'dark');
 
 const AV = (bg, ch) => `<span class="a" style="background:${bg}">${ch}</span>`;
@@ -119,6 +139,9 @@ const TOOLS = (withCount) => `
     <button class="tb"><span style="font-size:13px">link</span></button>
     <button class="tb">≔</button>
     <button class="tb">1.</button>
+    ${iconVariant==='at'
+      ? `<button class="tb pic" title="Tag people (@+ variant)" style="font:700 17px/38px sans-serif">@+</button>`
+      : `<button class="tb pic" title="Tag people — opens the picker"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5"/><path d="M17 8.5v5M14.5 11h5"/></svg></button>`}
     <span class="sp"></span>${withCount?'<span class="cnt">3 photos</span>':''}
   </div>`;
 const HEADER = `
@@ -128,11 +151,28 @@ const HEADER = `
     <span class="id"><span class="nm">Claude Admin</span><br><span class="ctx">Replying to: Flying V Neck…</span></span>
     <button class="post">Post</button>
   </div>`;
+const PKROW=(bg,ch,n,h,on)=>`<div class="pk-row${on?' on':''}"><span class="pk-cb"></span>${AV(bg,ch)}<span class="t" style="display:flex;flex-direction:column;line-height:1.25"><span class="n" style="font-weight:700;font-size:16px">${n}</span><span class="h" style="color:var(--mute);font-size:13px">@${h}</span></span></div>`;
+const PICKER=(mob)=>`
+  <div class="pk-scrim"></div>
+  <div class="pk" style="${mob?'left:0;right:0;bottom:290px;top:44px;border-radius:18px':'left:50%;top:110px;transform:translateX(-50%);width:520px;max-height:64vh;border-radius:16px'}">
+    <div class="pk-hd"><span class="t">Tag people</span><button class="pk-done">Done</button></div>
+    <div class="pk-search">🔍 <span class="q">mi</span><span class="caret"></span><span style="flex:1"></span></div>
+    <div class="pk-list">
+      ${PKROW('#b05fd0','M','Mikelle Davlin','mikelle-davlin2',true)}
+      ${PKROW('#8e5fd0','M','Mike Hogan','mike-hogan',true)}
+      ${PKROW('#d05f6b','M','Mike','mike-2',false)}
+      ${PKROW('#4db06a','M','mike nihen','mike-nihen',false)}
+      ${PKROW('#5f6bd0','M','Mike Center','mike-center',false)}
+      ${PKROW('#b0805f','M','Mike Doolin','mike-doolin',false)}
+    </div>
+  </div>`;
 const RTE = {
   base:     `<div class="rte"><span class="ph">Write a comment…</span></div>`,
   kb:       `<div class="rte">The <b>neck joint</b> looks solid — <s>maybe</s> definitely worth saving. Steps I&rsquo;d take:</div>`,
   mentions: `<div class="rte">Great point — asking @mik</div>`,
   photos:   `<div class="rte">Here&rsquo;s the damage from three angles:</div>`,
+  picker:   `<div class="rte">Great point &mdash; asking </div>`,
+  picked:   `<div class="rte">Great point &mdash; asking <span class="imnt">@mikelle-davlin2</span> <span class="imnt">@mike-hogan</span>&nbsp;<span class="caret" style="display:inline-block;width:1.5px;height:17px;background:var(--sage-d);vertical-align:-3px"></span></div>`,
 };
 
 if (skin === 'mobile') {
@@ -153,6 +193,7 @@ if (skin === 'mobile') {
         ${state==='photos'?STRIP:''}
         ${TOOLS(state==='photos')}
       </div>
+      ${state==='picker'?PICKER(true):''}
       ${kbUp?`<div class="kb" style="height:${KB_H}px">iOS KEYBOARD (zero-gap dock — no autofill stage)</div>`:''}
     </div>`;
 } else {
@@ -166,6 +207,7 @@ if (skin === 'mobile') {
         <div class="body" style="min-height:220px">${RTE[state==='base'?'base':state==='mentions'?'mentions':'photos']}</div>
         ${state==='photos'?STRIP:''}
         ${TOOLS(state==='photos')}
+        ${state==='picker'?PICKER(false):''}
         ${state==='mentions'?MENTIONS.replace('class="mnt"','class="mnt" style="position:absolute;left:330px;top:112px;width:320px;max-height:300px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(20,24,16,.3);padding:4px 8px;flex:none"'):''}
       </div>
     </div>`;
