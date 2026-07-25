@@ -91,9 +91,40 @@ across page CTAs (fc-gate, dir-connect, profile chips) — each cleared here by 
 A palette-level ruling (dark-ink-on-sage, or a darker sage-for-white-text) would prevent
 the next one.
 
-## After-shots (deferred)
-When the seat frees: baseline needs no flip (live already reproduces); after-shots
-repoint `/srv/lg-bb-mirror` → this worktree (forums.css static, no fpm reload) and
-serve profile-app/webroot for directory.css + directory-mobile.js, re-run the sweep
-dark states (hub 1280 + 390 with sort active + adv-search modal open; directory 1280 +
-390 list/map + toggles; hub gated cover), attach before/after PNGs + delta table here.
+## After-shots — DONE (2026-07-25, seat window)
+
+Real-browser CDP before/after (headless Chrome 150, port 9223, one engine, killed
+between phases). Serve method: **file-overlay** of the 3 changed static assets onto
+the live serve source (forums.css + directory.css onto the main clone via /srv;
+directory-mobile.js onto the `/var/www/dev` docroot copy) — keeps the PHP at the live
+`208f825` for BOTH phases so before/after differ ONLY by my CSS/JS. Static only → no
+fpm reload. Serve **restored byte-identical** after (md5s match prestate:
+forums.css `1845244c`, directory.css `88cfcc65`, directory-mobile.js `24089c69`;
+main-clone git clean). Sweep added an `advsearch` state that clicks `.lg-filters-chip`
+to open `#hub-fmodal`.
+
+**Result — dark states across hub + advsearch modal + directory (1280 & 390):**
+
+| dark state | FAILs before → after |
+|-----------|:--------------------:|
+| hub (anon/auth) 1280 | 4 → **0** |
+| hub 390 | 3 → **0** |
+| **advsearch modal 1280** | **12 → 0*** |
+| advsearch modal 390 | 3 → **0** |
+| directory 1280 (toggle/connect/map) | 5 → **0** |
+| directory 390 (mobile toggle) | 3 → **0** |
+| **DARK TOTAL** | **34 → 0*** |
+
+*After-shot flagged one residual — the **Shows** section count pill (`--sec` rust
+→#d57a55 + white = 3.11:1); fixed in the same commit as the after-shots (dark ink →
+5.63:1, matching the Type pill). Everything else went to 0 on the shot itself.
+
+**Light mode: byte-identical** — the 6 remaining LIGHT fails are unchanged before→after
+(identical ratios) and out of the dark-sweep scope: fc-gate lock/title/CTA
+(over-image false-positives, white text on the darkened gated cover + text-shadow),
+the sage `+ New post` button (3.12, B-bucket), the light Shows pill (3.84, existing
+design), dir-card highlight chips (3.98). None touched by dark-signal-scoped rules.
+
+Evidence PNGs (before/after) in `evidence-c/`: advsearch modal 1280, hub 1280,
+directory 1280, directory 390. Full delta table: `evidence-c/delta-c.md`.
+Raw runs: `/tmp/dark-mode/cbefore` · `/tmp/dark-mode/cafter`.

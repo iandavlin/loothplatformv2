@@ -5019,3 +5019,6 @@ html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--type  { --secdk: #
 html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--cat   { --secdk: #e6c27a; }
 html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--shows { --secdk: #e59b78; }
 html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--type .hub-rail__secn { color: #15171a; }
+/* Shows count pill: --sec rust (→#d57a55 in dark) + white ink = 3.11:1 (after-shot
+   residual). Dark ink → 5.63:1 (Cat pill already uses a dark --secink). */
+html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--shows .hub-rail__secn { color: #15171a; }
