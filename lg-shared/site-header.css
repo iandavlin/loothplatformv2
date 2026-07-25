@@ -963,6 +963,14 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
   border-radius: 999px; padding: 5px 10px;
 }
 .lg-msg__mkowner:hover { background: var(--lg-sage-tint, #eef2e3); }
+/* Message action (member-manager row) + honest not-connected note */
+.lg-msg__dm {
+  flex: 0 0 auto; appearance: none; cursor: pointer; font: 600 12px/1 var(--lg-font-sans, system-ui);
+  color: var(--lg-sage-d, #6b7c52); background: var(--lg-sage-tint, #eef2e3);
+  border: 1px solid var(--lg-sage-3, #d4e0b8); border-radius: 999px; padding: 5px 10px;
+}
+.lg-msg__dm:hover { background: #e2ecd2; }
+.lg-msg__mm-noconn { flex: 0 0 auto; font: 400 11.5px/1.25 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b); }
 .lg-msg__mm-name { margin-top: 13px; }
 .lg-msg__mm-name-lbl { display: block; font: 600 12px/1 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b); margin-bottom: 6px; }
 .lg-msg__mm-name-row { display: flex; gap: 8px; }
@@ -986,10 +994,38 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
   background: var(--lg-paper, #f3f1ea); border: 1px solid var(--lg-line, #e3ddd0);
   border-radius: 999px; padding: 4px 12px; margin: 3px 0;
 }
-/* who-said-it label above a peer's run of messages in a group */
+/* who-said-it label above a peer's run of messages in a group — ALSO the member-card door */
 .lg-msg__author {
   align-self: flex-start; font: 600 11px/1 var(--lg-font-sans, system-ui);
   color: var(--lg-sage-d, #6b7c52); margin: 4px 0 -2px 3px;
+  appearance: none; background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+}
+.lg-msg__author:hover { text-decoration: underline; }
+
+/* member card popover (bubble avatar/name tap) — light centered layer over the modal */
+.lg-msg-card {
+  position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center;
+  background: rgba(15,16,12,.42); padding: 24px;
+}
+.lg-msg-card__in {
+  width: 100%; max-width: 300px; background: var(--lg-cream, #fbfbf8); border-radius: 16px;
+  padding: 22px 18px; box-shadow: 0 14px 40px rgba(0,0,0,.3); text-align: center;
+}
+.lg-msg-card__av { display: flex; justify-content: center; }
+.lg-msg-card__av .lg-sm__avatar { width: 60px; height: 60px; border-radius: 50%; }
+.lg-msg-card__nm { font: 700 16px/1.25 var(--lg-font-sans, system-ui); color: var(--lg-ink, #1a1d1a); margin: 12px 0 2px; }
+.lg-msg-card__sub { font: 400 12.5px/1.3 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b); margin-bottom: 14px; }
+.lg-msg-card__act {
+  display: block; width: 100%; box-sizing: border-box; appearance: none; cursor: pointer; text-decoration: none;
+  border: 0; border-radius: 10px; font: 600 14px/1 var(--lg-font-sans, system-ui); padding: 12px; margin-top: 8px;
+}
+.lg-msg-card__msg { background: var(--lg-sage-d, #6b7c52); color: #fff; }
+.lg-msg-card__msg:hover { background: #5a6a45; }
+.lg-msg-card__prof { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #6b7c52); }
+.lg-msg-card__prof:hover { background: #e2ecd2; }
+.lg-msg-card__noconn {
+  font: 400 12.5px/1.4 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b);
+  background: var(--lg-paper, #f3f1ea); border-radius: 10px; padding: 11px; margin-top: 8px;
 }
 /* "(edited)" marker */
 .lg-msg__edited { font-size: 11px; opacity: .7; margin-left: 6px; }

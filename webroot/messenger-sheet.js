@@ -32,6 +32,8 @@
   var curPeers = [];                            // EVERY peer of the open thread (never peers[0])
   var curMeta = null;                           // {is_group,can_manage,created_by,members,meUuid} of the open thread
   var pendingGroup = null;                      // selected uuids for a not-yet-created group (first send → to_uuids[])
+  var dmReturn = null;                           // {uuid,peers,wasRoot} of the GROUP a 1:1 was opened FROM — one-hop "back to group"
+  var curMembersById = {};                       // {uuid:{name,slug,avatar_url,can_message}} of the open thread — powers BOTH message-card doors
   var lpAt = 0;                                 // timestamp of the last long-press (suppresses the trailing tap)
   var threadsCache = [];
   var pendingFile = null;                       // staged image attachment for the next send
@@ -227,7 +229,8 @@
       '#looth-msgr .mg-sys{align-self:center;text-align:center;max-width:86%;font:600 11.5px/1.35 var(--lg-font-sans,system-ui);' +
         'color:var(--lg-mute,#6b6f6b);background:var(--lg-paper,#f3f1ea);border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;padding:4px 12px;margin:3px 0}',
       // who-said-it label above a peer run in a group
-      '#looth-msgr .mg-author{align-self:flex-start;font:600 11px/1 var(--lg-font-sans,system-ui);color:var(--lg-sage-d,#6b7c52);margin:4px 0 -1px 3px}',
+      '#looth-msgr .mg-author{align-self:flex-start;font:600 11px/1 var(--lg-font-sans,system-ui);color:var(--lg-sage-d,#6b7c52);margin:4px 0 -1px 3px;border:0;background:none;padding:0;cursor:pointer;text-align:left}',
+      '#looth-msgr .mg-author:active{text-decoration:underline}',
       '#looth-msgr .mg-edited{font-size:10.5px;opacity:.72;margin-left:6px}',
       '#looth-msgr .mg-b--tomb{background:transparent;border:1px dashed var(--lg-line2,#d8d2c4);color:var(--lg-mute,#6b6f6b);font-style:italic}',
       // reaction strip under a message + chips
@@ -281,6 +284,20 @@
       '#looth-msgr .mg-mmi-actions{flex:0 0 auto;display:flex;align-items:center;gap:7px}',
       '#looth-msgr .mg-owner-chip{display:inline-block;margin-left:8px;vertical-align:1px;font:700 10px/1 var(--lg-font-sans,system-ui);letter-spacing:.04em;text-transform:uppercase;color:#8a6d1f;background:#f4ecd4;border-radius:999px;padding:3px 7px}',
       '#looth-msgr .mg-mkowner{flex:0 0 auto;border:1px solid var(--lg-sage-3,#d4e0b8);background:none;color:var(--lg-sage-d,#6b7c52);border-radius:999px;font:600 12px/1 var(--lg-font-sans,system-ui);padding:6px 11px;cursor:pointer}',
+      // Message action (member-manager row) + honest not-connected note
+      '#looth-msgr .mg-msgbtn{flex:0 0 auto;border:1px solid var(--lg-sage-3,#d4e0b8);background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);border-radius:999px;font:600 12px/1 var(--lg-font-sans,system-ui);padding:6px 11px;cursor:pointer}',
+      '#looth-msgr .mg-mm-noconn{flex:0 0 auto;font:400 11.5px/1.3 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b)}',
+      // member card popover (bubble avatar/name tap) — light layer, dismiss on backdrop
+      '#looth-msgr .mg-card{position:absolute;inset:0;z-index:6;display:none;align-items:center;justify-content:center;background:rgba(15,16,12,.42);padding:24px}',
+      '#looth-msgr .mg-card.is-on{display:flex}',
+      '#looth-msgr .mg-card-in{width:100%;max-width:290px;background:var(--lg-cream,#fbfbf8);border-radius:16px;padding:20px 16px;box-shadow:0 12px 34px rgba(0,0,0,.28);text-align:center}',
+      '#looth-msgr .mg-card-avi{width:60px;height:60px;border-radius:50%;margin:0 auto;overflow:hidden}',
+      '#looth-msgr .mg-card-nm{font:700 16px/1.25 var(--lg-font-sans,system-ui);color:var(--lg-ink,#1a1d1a);margin:12px 0 2px}',
+      '#looth-msgr .mg-card-sub{font:400 12.5px/1.3 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b);margin-bottom:14px}',
+      '#looth-msgr .mg-card-act{display:block;width:100%;box-sizing:border-box;border:0;border-radius:10px;font:600 14px/1 var(--lg-font-sans,system-ui);padding:12px;margin-top:8px;cursor:pointer;text-decoration:none}',
+      '#looth-msgr .mg-card-msg{background:var(--lg-sage-d,#6b7c52);color:#fff}',
+      '#looth-msgr .mg-card-prof{background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52)}',
+      '#looth-msgr .mg-card-noconn{font:400 12.5px/1.4 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b);background:var(--lg-paper,#f3f1ea);border-radius:10px;padding:11px;margin-top:8px}',
       '#looth-msgr .mg-mm-name{margin:0 0 14px}',
       '#looth-msgr .mg-mm-name-lbl{display:block;font:600 12px/1 var(--lg-font-sans,system-ui);color:var(--lg-mute,#6b6f6b);margin-bottom:6px}',
       '#looth-msgr .mg-mm-name-row{display:flex;gap:8px}',
@@ -298,7 +315,11 @@
       '#looth-msgr .mg-actbtn--del{color:var(--lg-error,#b3261e)}',
       '#looth-msgr .mg-actbtn--cancel{color:var(--lg-mute,#6b6f6b);margin-top:4px;border-top:1px solid var(--lg-line,#e3ddd0);border-radius:0}',
       // dark overrides
-      D + ' #looth-msgr .mg-p2,' + D + ' #looth-msgr .mg-acts-in{background:#1b1e21}',
+      D + ' #looth-msgr .mg-p2,' + D + ' #looth-msgr .mg-acts-in,' + D + ' #looth-msgr .mg-card-in{background:#1b1e21}',
+      D + ' #looth-msgr .mg-card-nm{color:#f2f4ee}',
+      D + ' #looth-msgr .mg-card-sub,' + D + ' #looth-msgr .mg-card-noconn{color:#9aa097}',
+      D + ' #looth-msgr .mg-card-noconn{background:#262b30}',
+      D + ' #looth-msgr .mg-msgbtn,' + D + ' #looth-msgr .mg-card-prof{background:#262b30;color:#9cb37d;border-color:#2c312d}',
       D + ' #looth-msgr .mg-p2hd,' + D + ' #looth-msgr .mg-mmi{border-color:#2c312d}',
       D + ' #looth-msgr .mg-p2t,' + D + ' #looth-msgr .mg-pi-nm,' + D + ' #looth-msgr .mg-mmi-nm,' + D + ' #looth-msgr .mg-actbtn{color:#f2f4ee}',
       D + ' #looth-msgr .mg-p2hint,' + D + ' #looth-msgr .mg-pi-sub,' + D + ' #looth-msgr .mg-mmi-sub{color:#9aa097}',
@@ -372,6 +393,8 @@
         '</div>' +
         // long-press action sheet (edit / delete / copy)
         '<div class="mg-acts" id="mg-acts"><div class="mg-acts-in" id="mg-acts-in"></div></div>' +
+        // member card (bubble avatar/name tap in a group) — light popover, no scroll-lock
+        '<div class="mg-card" id="mg-card"><div class="mg-card-in" id="mg-card-in"></div></div>' +
       '</div>';
     (document.body || document.documentElement).appendChild(sheet);
     sheet.addEventListener('click', function (e) {
@@ -380,11 +403,20 @@
       // Back to a list you never saw is disorienting. When the conversation IS the
       // root view (opened from a profile), dismiss the sheet and land back on the
       // page underneath instead (HK-018).
-      if (C('[data-mg-home]'))   { chatIsRoot ? closeMessenger() : showHome(); return; }
+      // One-hop "back to group": a 1:1 opened FROM a group returns to that group thread,
+      // restoring the group's own root-ness so ITS back still behaves (keeper 7/13 nav call).
+      if (C('[data-mg-home]'))   {
+        if (dmReturn) { var g = dmReturn; dmReturn = null; chatIsRoot = !!g.wasRoot; openThread(g.uuid, g.peers); return; }
+        chatIsRoot ? closeMessenger() : showHome(); return;
+      }
       // ── group management ──
       if (e.target.id === 'mg-acts') { closeActs(); return; }
+      if (e.target.id === 'mg-card') { closeMemberCardMobile(); return; }   // tap the dim backdrop → dismiss
       // a long-press just fired the action sheet on this same image → swallow the tap
       if (lpAt && Date.now() - lpAt < 600) { lpAt = 0; return; }
+      // member card: bubble avatar/name tap opens it; Message inside routes the shared 1:1 path
+      var mcd = C('[data-mg-membercard]'); if (mcd) { openMemberCardMobile(mcd.getAttribute('data-mg-membercard')); return; }
+      var cms = C('[data-mg-card-msg]');   if (cms) { var cu = cms.getAttribute('data-mg-card-msg'); closeMemberCardMobile(); openDmFromGroupMobile(cu); return; }
       // tap an existing reaction chip → toggle that emoji straight off
       var rxc = C('[data-mg-rx]'); if (rxc) { toggleReactionMobile(rxc.getAttribute('data-mg-rxid'), rxc.getAttribute('data-mg-rx')); return; }
       var lbx = C('[data-mg-lightbox]'); if (lbx) { openLightboxMobile(lbx.getAttribute('data-mg-lightbox')); return; }
@@ -394,6 +426,7 @@
       var pa = C('[data-mg-pick-add]');    if (pa) { mpickAdd(pa.getAttribute('data-mg-pick-add')); return; }
       var px = C('[data-mg-pick-remove]'); if (px) { mpickRemove(px.getAttribute('data-mg-pick-remove')); return; }
       if (C('[data-mg-pick-go]'))  { mpickGo(); return; }
+      var md = C('[data-mg-mm-dm]');       if (md) { openDmFromGroupMobile(md.getAttribute('data-mg-mm-dm')); return; }
       var mr = C('[data-mg-mm-remove]');   if (mr) { mmRemoveMobile(mr.getAttribute('data-mg-mm-remove')); return; }
       var mo = C('[data-mg-mm-owner]');    if (mo) { mmMakeOwnerMobile(mo.getAttribute('data-mg-mm-owner')); return; }
       if (C('[data-mg-mm-rename]')) { mmRenameMobile(); return; }
@@ -615,6 +648,7 @@
       b.addEventListener('click', function () {
         var t = threadsCache.filter(function (x) { return x.uuid === b.getAttribute('data-mg-thread'); })[0];
         chatIsRoot = false;                       // reached from the list — "back" returns to it
+        dmReturn = null;                          // a fresh list pick is not a from-group DM
         openThread(b.getAttribute('data-mg-thread'), (t && t.peers) || []);   // ALL peers, not peers[0]
       });
     });
@@ -636,10 +670,10 @@
   function showHome() {
     if (pollT) { clearInterval(pollT); pollT = null; }
     curThread = null; curPeer = null; curPeers = [];
-    curMeta = null; pendingGroup = null;
+    curMeta = null; pendingGroup = null; dmReturn = null;
     lastMsgHtml = ''; stickBottom = true;
     chatIsRoot = false;
-    closeP2(); closeActs();
+    closeP2(); closeActs(); closeMemberCardMobile();
     sheet.querySelector('#mg-chat').classList.remove('is-on');
     loadThreads();
   }
@@ -659,7 +693,7 @@
     (peers || []).forEach(function (p) { peerSet[p.uuid] = 1; });
     var group = (peers || []).length > 1;
     var nameBy = {};
-    (members || []).forEach(function (m) { nameBy[m.uuid] = m.name || m.display_name || 'Member'; });
+    (members || []).forEach(function (m) { nameBy[m.uuid] = m.name || m.display_name || 'Member'; curMembersById[m.uuid] = m; });
     var lastDay = '', lastSender = null;
     var html = (msgs || []).map(function (m) {
       var ms = parseTs(m.created_at);
@@ -673,9 +707,13 @@
       // membership / transparency line — centered pill, never a bubble, never owned
       if (m.kind === 'system') { lastSender = null; return h + '<div class="mg-sys">' + esc(m.body) + '</div>'; }
       var mine = !peerSet[m.sender_uuid];                     // mine = sender not among peers
-      // who-said-it label above a peer's run of messages in a GROUP (never for you)
+      // who-said-it label above a peer's run of messages in a GROUP (never for you).
+      // In a group it is ALSO the intuitive door (Slack/WhatsApp idiom): tapping it opens a
+      // light member card with Message + View profile. 1:1 threads have no group author line,
+      // so no dead card is ever offered (keeper 7/13 d). It stays a name→ affordance, not a
+      // hijack of name→profile — the card offers both.
       if (group && !mine && m.sender_uuid !== lastSender) {
-        h += '<span class="mg-author">' + esc(nameBy[m.sender_uuid] || 'Member') + '</span>';
+        h += '<button type="button" class="mg-author" data-mg-membercard="' + esc(m.sender_uuid) + '">' + esc(nameBy[m.sender_uuid] || 'Member') + '</button>';
       }
       lastSender = m.sender_uuid;
       // soft-deleted → tombstone (body + media already withheld server-side; no reactions)
@@ -753,7 +791,7 @@
     ensureSheet();
     curThread = uuid; curPeer = null; curPeers = peers || [];
     curMeta = null; pendingGroup = null;
-    closeP2(); closeActs();
+    closeP2(); closeActs(); closeMemberCardMobile();
     setChatHeader(curPeers);
     sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Loading…</div>';
     lastMsgHtml = ''; stickBottom = true;        // a freshly opened thread starts at the newest message
@@ -817,6 +855,54 @@
         try { sheet.querySelector('#mg-in').focus({ preventScroll: true }); } catch (e) {}
       })
       .catch(function () {});
+  }
+
+  /* "Message" a member from inside the group's member manager. Opens a TRUE 1:1 IN PLACE
+     (no stacked sheet over the locked body — that is the #56 trap) via openChatWith, whose
+     resolver ONLY reuses a real pair thread (peers.length===1) and otherwise starts a fresh
+     1:1; findPairThread/is_group=false on the server guarantees a private-intent DM can never
+     land on the group. dmReturn remembers the group so the chat header's back is a one-hop
+     "back to group", restoring the group's own root-ness so ITS back still behaves. */
+  function openDmFromGroupMobile(uuid) {
+    if (!uuid || !curThread) return;
+    var m = curMembersById[uuid] || {};
+    // Capture the group BEFORE openChatWith resets curThread/curPeers.
+    var group = { uuid: curThread, peers: (curPeers || []).slice(), wasRoot: chatIsRoot };
+    closeP2();
+    openChatWith(uuid, m.name || m.display_name, m.avatar_url);
+    // openChatWith runs openMessenger()→showHome() SYNCHRONOUSLY, which clears dmReturn — so
+    // set the back-link AFTER it returns; the async thread fetch never touches dmReturn.
+    dmReturn = group;
+    chatIsRoot = false;                          // back is "to group", not "close messenger"
+    syncChatChrome();                            // reveal the back chevron immediately
+  }
+
+  /* Member card — the intuitive door (bubble avatar/name tap). A LIGHT popover INSIDE the
+     already-open messenger (never a second off-canvas layer over the locked body — that is the
+     #56 trap): it adds no scroll-lock of its own, so it cannot leak one. Offers Message (same
+     code path as the manager row → openDmFromGroupMobile) and View profile, so the name still
+     reaches the profile it always did. Only shown for OTHER members of a GROUP. */
+  function openMemberCardMobile(uuid) {
+    if (!uuid || !sheet) return;
+    var m = curMembersById[uuid];
+    if (!m) return;
+    var card = sheet.querySelector('#mg-card-in');
+    var nm = esc(m.name || m.display_name || 'Member');
+    var actMsg = m.can_message
+      ? '<button type="button" class="mg-card-act mg-card-msg" data-mg-card-msg="' + esc(uuid) + '">Message</button>'
+      : '<div class="mg-card-noconn">Connect with ' + nm + ' to message them.</div>';
+    var actProf = m.slug
+      ? '<a class="mg-card-act mg-card-prof" href="/u/' + esc(m.slug) + '">View profile</a>'
+      : '';
+    card.innerHTML = '<span class="mg-avi mg-card-avi">' + avi({ avatar_url: m.avatar_url, name: m.name || m.display_name }) + '</span>'
+      + '<div class="mg-card-nm">' + nm + '</div>'
+      + (m.slug ? '<div class="mg-card-sub">@' + esc(m.slug) + '</div>' : '')
+      + actMsg + actProf;
+    sheet.querySelector('#mg-card').classList.add('is-on');
+  }
+  function closeMemberCardMobile() {
+    var c = sheet && sheet.querySelector('#mg-card');
+    if (c) c.classList.remove('is-on');
   }
 
   function doSend() {
@@ -1145,6 +1231,7 @@
     var me = members.filter(function (m) { return !pset[m.uuid]; })[0];
     var meUuid = me ? me.uuid : null;
     mmMembersM = members.map(function (m) { return m.uuid; });
+    members.forEach(function (m) { curMembersById[m.uuid] = m; });   // keep the card/DM lookup fresh from the manager payload too
     var hint = canManage
       ? 'You can remove anyone in this ' + (isGroup ? 'group' : 'conversation') + '.'
       : (isGroup ? 'Only the group’s owner or a site admin can remove others. You can always leave.'
@@ -1158,6 +1245,11 @@
       if (isMe) { right = '<span class="mg-you">You</span>'; }
       else {
         right = '';
+        /* Message: open a TRUE 1:1 with this member, in place, with a back to the group.
+           Gated on can_message (accepted connection) — the same rule the send path enforces,
+           so a non-connection is told to connect instead of hitting a silent send-time 403. */
+        if (m.can_message) right += '<button type="button" class="mg-msgbtn" data-mg-mm-dm="' + esc(m.uuid) + '">Message</button>';
+        else right += '<span class="mg-mm-noconn" title="Connect first to message">Connect to message</span>';
         /* Transfer: owner OR site admin (canManage) hands ownership to a NON-owner member. */
         if (canManage && isGroup && !isOwner) right += '<button type="button" class="mg-mkowner" data-mg-mm-owner="' + esc(m.uuid) + '">Make owner</button>';
         if (canManage) right += '<button type="button" class="mg-rm" data-mg-mm-remove="' + esc(m.uuid) + '">Remove</button>';
@@ -1346,6 +1438,7 @@
   }
   function closeMessenger(fromPop) {
     if (!sheet || !sheet.classList.contains('is-open')) return;
+    dmReturn = null;
     sheet.classList.remove('is-up');
     setTimeout(function () { if (sheet && !sheet.classList.contains('is-up')) sheet.classList.remove('is-open'); }, 320);
     unlockBg();
@@ -1360,7 +1453,15 @@
     var acts = sheet.querySelector('#mg-acts'), p2 = sheet.querySelector('#mg-p2');
     if (acts && acts.classList.contains('is-on')) { closeActs(); try { history.pushState({ lgMg: 1 }, ''); } catch (e) {} return; }
     if (p2 && p2.classList.contains('is-on'))     { closeP2();   try { history.pushState({ lgMg: 1 }, ''); } catch (e) {} return; }
+    var card = sheet.querySelector('#mg-card');
+    if (card && card.classList.contains('is-on')) { closeMemberCardMobile(); try { history.pushState({ lgMg: 1 }, ''); } catch (e) {} return; }
     var chat = sheet.querySelector('#mg-chat');
+    // a 1:1 opened FROM a group → physical back returns to the group, same one hop as the chevron
+    if (chat && chat.classList.contains('is-on') && dmReturn) {
+      var g = dmReturn; dmReturn = null; chatIsRoot = !!g.wasRoot; openThread(g.uuid, g.peers);
+      try { history.pushState({ lgMg: 1 }, ''); } catch (e) {}
+      return;
+    }
     // a chat opened straight from a profile has no list behind it — dismiss, don't invent one
     if (chat && chat.classList.contains('is-on') && !chatIsRoot) {   // back from a chat → home
       showHome();
@@ -1373,7 +1474,8 @@
     if (e.key !== 'Escape') return;
     if (mgLightbox) { e.stopImmediatePropagation(); closeLightboxMobile(); return; }
     if (!sheet || !sheet.classList.contains('is-open')) return;
-    var acts = sheet.querySelector('#mg-acts'), p2 = sheet.querySelector('#mg-p2');
+    var acts = sheet.querySelector('#mg-acts'), p2 = sheet.querySelector('#mg-p2'), card = sheet.querySelector('#mg-card');
+    if (card && card.classList.contains('is-on')) { closeMemberCardMobile(); return; }
     if (acts && acts.classList.contains('is-on')) { closeActs(); return; }
     if (p2 && p2.classList.contains('is-on'))     { closeP2(); return; }
     closeMessenger();

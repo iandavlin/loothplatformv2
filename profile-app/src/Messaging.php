@@ -164,7 +164,7 @@ final class Messaging
             // Creator or site admin may remove others; everyone may always leave.
             'can_manage' => $viewerIsAdmin || ($createdBy !== null && $createdBy === $viewerUuid),
             'peers'      => self::peersByThread([$threadId], $viewerUuid)[$threadId] ?? [],
-            'members'    => self::threadMembers($threadId),
+            'members'    => self::threadMembers($threadId, $viewerUuid),
             'messages'   => array_map(
                 static fn (array $m): array => self::shapeMessage($m, $reactions[(int)$m['id']] ?? []),
                 $rows
@@ -291,18 +291,34 @@ final class Messaging
         ];
     }
 
-    /** Every recipient identity of a thread (INCLUDING the viewer) — for the member manager. */
-    private static function threadMembers(int $threadId): array
+    /**
+     * Every recipient identity of a thread (INCLUDING the viewer) — for the member manager.
+     * can_message = viewer may open a 1:1 with this member (accepted connection, symmetric).
+     * It is the SAME rule the send path enforces (Connections::canMessage), computed set-based
+     * here so the member manager can offer "Message" honestly — connected rows get the action,
+     * non-connected rows are told to connect instead of hitting a silent send-time 403. The
+     * viewer's own row is never a connection to itself, so it is naturally can_message=false.
+     */
+    private static function threadMembers(int $threadId, string $viewerUuid): array
     {
         $st = Db::pg()->prepare(
-            "SELECT u.uuid, u.display_name AS name, u.slug, u.avatar_url
+            "SELECT u.uuid, u.display_name AS name, u.slug, u.avatar_url,
+                    EXISTS (
+                      SELECT 1 FROM connections c
+                       WHERE c.status = 'accepted'
+                         AND ((c.requester_uuid = :v AND c.addressee_uuid = u.uuid)
+                           OR (c.addressee_uuid = :v AND c.requester_uuid = u.uuid))
+                    ) AS can_message
                FROM message_recipients mr
                JOIN users u ON u.uuid = mr.user_uuid
               WHERE mr.thread_id = :t
               ORDER BY u.display_name, u.uuid"
         );
-        $st->execute([':t' => $threadId]);
-        return $st->fetchAll();
+        $st->execute([':t' => $threadId, ':v' => $viewerUuid]);
+        return array_map(static function (array $r): array {
+            $r['can_message'] = (bool)$r['can_message'];   // PDO pgsql returns 't'/'f' — cast to a real JSON bool
+            return $r;
+        }, $st->fetchAll());
     }
 
     /** The once-a-group flag (NOT the live recipient count — a shrunk group stays a group). */
