@@ -4974,3 +4974,48 @@ html[data-lguser-theme="dark"] .feed-page .fc-cover--gated:hover .fc-gate__cta {
   background: #b0c693 !important;
   color: #15171a !important;
 }
+
+/* P2b — FULL Advanced Search modal dark theming (Ian screenshot 2026-07-24:
+   "white input fields + rings, washed chip labels, section bars"). ROOT CAUSE:
+   .hub-fmodal__panel reads `var(--bg-card, #fbfaf6)` but the dark var set only
+   defines `--lg-card-bg` (a variable-NAME mismatch) → the whole modal stayed a
+   near-white sheet in dark; inputs/chips also hardcode #fff. The panel
+   border/ink/head-border already resolve dark via --lg-line/--lg-ink, so only
+   the bg + the hardcoded-light inner surfaces need theming (rail rows: P2 above).
+   All under the dark signal → light byte-identical. Ratios WCAG-verified. ──── */
+html[data-lguser-theme="dark"] .hub-fmodal { --bg-card: #1e2124; }
+html[data-lguser-theme="dark"] .hub-fmodal__panel { background: #1e2124; }   /* 12.98:1 vs #e5e7e1 ink */
+
+/* search inputs + focus rings (the .hub-tsearch pill bg was hardcoded #fff; the
+   quick-search bubble on the bar too). Dark pill, brighter sage focus ring; the
+   input ink/placeholder/icon already resolve via --lg-ink/--lg-mute. 11.4:1. */
+html[data-lguser-theme="dark"] .hub-fmodal__search .hub-tsearch,
+html[data-lguser-theme="dark"] .hub-fmodal-page .feed-sort-bar .lg-quickq {
+  background: #262b30 !important; border-color: #2c312d !important;
+}
+html[data-lguser-theme="dark"] .hub-fmodal__search .hub-tsearch:focus-within,
+html[data-lguser-theme="dark"] .hub-fmodal-page .feed-sort-bar .lg-quickq:focus-within {
+  border-color: #9cb37d !important; box-shadow: 0 0 0 2px rgba(156,179,125,.22) !important;
+}
+html[data-lguser-theme="dark"] .hub-suggest { background: #1e2124; border-color: #2c312d; }
+
+/* active-filter chip labels: plain .hub-chip already themes (sage-tint→#243024 +
+   light ink); the hardcoded light-peach `--muted` and the color-mix-over-#fff
+   category chips stay pale in dark → dark chip base + light category-tint ink. */
+html[data-lguser-theme="dark"] .hub-chip--muted {
+  background: #2a2622 !important; border-color: #3a332b !important; color: #e0a97b !important;  /* 7.3:1 */
+}
+html[data-lguser-theme="dark"] .hub-chip[data-cat] {
+  background: color-mix(in srgb, var(--nc) 22%, #1e2124) !important;
+  border-color: color-mix(in srgb, var(--nc) 45%, #2c312d) !important;
+  color: color-mix(in srgb, var(--nc) 45%, #ffffff) !important;   /* light tint of the category hue */
+}
+
+/* section bars (Type/Categories/Shows): --secdk is a DARK accent (icon + chevron)
+   meant for LIGHT tint bars → washed on the dark-composited tint. Lighten the
+   accent per section; and the Type count pill is white on the lightened sage
+   (--sec→#b0c693) → dark ink. Section tint bg + ink already resolve dark. */
+html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--type  { --secdk: #b0c693; }
+html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--cat   { --secdk: #e6c27a; }
+html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--shows { --secdk: #e59b78; }
+html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--type .hub-rail__secn { color: #15171a; }

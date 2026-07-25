@@ -23,6 +23,10 @@ is *why* sage-bg + white-ink chrome flips to ~1.8:1 in dark.
 | P1 | `.feed-sort-bar .zL a.active` (hub sort ACTIVE pill) | hub (zones) | dark | **1.41** | 7.83 | `forums.css` · d478e37 |
 | P1 | `.feed-sort-bar .zL a` (base sort pills) | hub (zones) | dark | 1.56 | 10.1 | `forums.css` · d478e37 |
 | P2 | `.hub-rail__secbody .hub-rail__row` Type count-chips | adv-search modal / rail | dark | white-on-white | 12.98 | `forums.css` · d478e37 |
+| P2b | `.hub-fmodal__panel` (whole modal was a white sheet) | adv-search modal | dark | white sheet | 12.98 | `forums.css` · _(this batch)_ |
+| P2b | `.hub-tsearch` / `.lg-quickq` input fields + focus rings | adv-search modal | dark | white-on-white | 11.46 | `forums.css` · _(this batch)_ |
+| P2b | `.hub-chip[data-cat]` / `--muted` filter chip labels | adv-search modal | dark | pale/washed | 7.2+ | `forums.css` · _(this batch)_ |
+| P2b | section bars `--secdk` icon/chev + Type count pill | adv-search modal | dark | washed | 8.7 / 9.7 | `forums.css` · _(this batch)_ |
 | C1 | `.fc-gate__cta` unlock CTA | hub feed (gated cover) | dark | 2.29 | 7.83 / 9.59 hover | `forums.css` · 6feceff |
 | C3 | `.dir-viewtoggle button` inactive label | directory | dark | 2.33 | 10.4 | `directory.css` · b249e8f |
 | C3 | `.dir-viewtoggle button.on` active | directory | dark | 1.85 | 9.7 | `directory.css` · b249e8f |
@@ -43,6 +47,15 @@ regardless of what app-settings.js version is deployed.
 rail rows were **never** dark-themed. `.hub-rail__secbody .hub-rail__row` hardcodes
 `background:#fff`; `.hub-rail__nm` uses `var(--lg-ink)` (→ near-white in dark).
 
+**Root cause of P2b** (full modal, Ian 7/24 screenshot): `.hub-fmodal__panel` reads
+`background: var(--bg-card, #fbfaf6)`, but the dark theme's var set only defines
+`--lg-card-bg` — a **variable-NAME mismatch** (`--bg-card` ≠ `--lg-card-bg`) — so the
+panel fell back to the near-white literal and the **entire modal rendered as a white
+sheet** in dark. The `.hub-tsearch`/`.lg-quickq` inputs and `.hub-chip` category/muted
+labels additionally hardcode `#fff` / `color-mix(…, #fff)`. Panel border/ink/head-border
+already resolve dark via `--lg-line`/`--lg-ink`, so the fix is the bg + the
+hardcoded-light inner surfaces + the section-bar `--secdk` accents.
+
 ## Not fixed — evidence-based rulings
 
 ### Sponsors card name (keeper C #2, "1.14") — **FALSE POSITIVE**, no fix
@@ -55,11 +68,11 @@ contrast is white-on-dark-veil ≈ **10:1** (verified). The `--plain` variant (n
 already switches the name to `var(--lg-ink)`. **Recommend: mark resolved / harden the
 audit's over-overlay detection.** No code change (a "fix" would break the design).
 
-### Sponsor hero "Visit Website" CTA — content-owned, for Ian
+### Sponsor hero "Visit Website" CTA — **RESOLVED** (Ian ruling 2026-07-25)
 `.lg-brand-hero__cta-btn` = `#fff` on `#f00` (**4.00**, 0.5 under). The red is the
 *sponsor's own brand accent* (per-sponsor, theme-independent, layout-v2 brand-hero
-block). Not a chrome/dark bug. **Ruling for Ian:** enforce a min-contrast on sponsor
-accent CTAs (auto-darken or switch ink) vs. accept as the sponsor's brand.
+block). **Ian RULED: sponsor Visit-Website CTAs stay as-is — brand red accepted.**
+No change; closed.
 
 ## Backlog — other-surface dark-C failures (ratio'd, for keeper to assign)
 Genuine dark failures **outside** the four named C surfaces; each owned by a different
