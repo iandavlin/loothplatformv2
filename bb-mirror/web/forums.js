@@ -4090,7 +4090,7 @@
       if (!e.target.closest('.post__menu-wrap--rs')) dmCloseMenus();   // dismiss any open reply ⋯ menu
     });
     // 3 panel sizes (Ian): S / M / L, cycled from the head, persisted per device.
-    var SIZES = ['s', 'm', 'l'];
+    var SIZES = ['s', 'm', 'l', 'xl'];
     function getSize() { try { var v = localStorage.getItem('lg-dmodal-size'); return SIZES.indexOf(v) > -1 ? v : 'm'; } catch (e) { return 'm'; } }
     function applySize(sz) {
       var p = modal.querySelector('.lg-dmodal__panel');
