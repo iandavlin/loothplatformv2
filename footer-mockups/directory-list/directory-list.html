@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>Directory — Desktop List view (previs)</title>
+<style>
+  :root{
+    --lg-cream:#fbfbf8; --lg-card-bg:#fff; --lg-ink:#323532; --lg-mute:#6b6f6b;
+    --lg-line:#e3ddd0; --lg-sage:#87986a; --lg-sage-d:#6b7c52; --lg-sage-tint:#eef2e3;
+    --lg-charcoal:#1a1d1a; --lg-amber:#ecb351;
+    --go:#3fa34d; --stop:#c0492f;
+    --serif:"Georgia","Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  html[data-lguser-theme="dark"]{
+    --lg-cream:#15171a; --lg-card-bg:#1e2124; --lg-ink:#e5e7e1; --lg-mute:#a6ac9f;
+    --lg-line:#2c312d; --lg-sage:#9cb37d; --lg-sage-d:#b0c693; --lg-sage-tint:#243024;
+    --lg-charcoal:#f2f4ee;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+
+  /* site header strip (context) */
+  .site-hd{height:58px;border-bottom:1px solid var(--lg-line);display:flex;align-items:center;gap:26px;padding:0 32px;background:var(--lg-cream)}
+  .brand{display:flex;align-items:center;gap:9px;font:700 18px/1 var(--serif);color:var(--lg-charcoal)}
+  .brand .mk{width:26px;height:26px;border-radius:50%;background:var(--lg-sage);display:inline-block}
+  .nav{display:flex;gap:20px;font:600 13.5px/1 var(--sans);color:var(--lg-mute)}
+  .nav .on{color:var(--lg-charcoal)}
+  .hd-sp{flex:1}
+  .hd-pill{width:30px;height:30px;border-radius:50%;background:var(--lg-sage-tint)}
+
+  .dir-app{max-width:1180px;margin:0 auto;padding:22px 32px 40px}
+
+  .dir-header{display:flex;align-items:center;gap:14px;margin:2px 0 16px;font:700 26px/1.1 var(--serif);color:var(--lg-charcoal)}
+  .dir-meta{font:400 14px/1 var(--sans);color:var(--lg-mute)}
+  .dir-viewtoggle{margin-left:auto;display:flex;border:1px solid var(--lg-line);border-radius:9px;overflow:hidden}
+  .dir-viewtoggle button{appearance:none;border:0;background:var(--lg-card-bg);color:var(--lg-mute);font:600 13px/1 var(--sans);padding:9px 18px;cursor:pointer}
+  .dir-viewtoggle button+button{border-left:1px solid var(--lg-line)}
+  .dir-viewtoggle button.on{background:var(--lg-sage-d);color:#fff}
+  html[data-lguser-theme="dark"] .dir-viewtoggle button.on{color:#15171a}
+
+  /* filter bar (kept — Everywhere lives here) */
+  .filt{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 14px;border:1px solid var(--lg-line);
+        border-radius:14px;background:var(--lg-card-bg);margin-bottom:18px}
+  .filt .f{display:flex;flex-direction:column;gap:5px}
+  .filt .flab{font:600 10.5px/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;color:var(--lg-mute)}
+  .filt .ctrl{min-width:150px;height:36px;border:1px solid var(--lg-line);border-radius:9px;background:var(--lg-cream);
+        color:var(--lg-ink);font:500 13.5px/34px var(--sans);padding:0 12px;display:flex;align-items:center;gap:8px}
+  .filt .ctrl.sel::after{content:"▾";margin-left:auto;color:var(--lg-mute)}
+  .filt .ctrl .ph{color:var(--lg-mute)}
+  .badge-ev{color:var(--lg-sage-d);font-weight:700}
+
+  /* ── THE LIST ── */
+  .dlist{border:1px solid var(--lg-line);border-radius:16px;overflow:hidden;background:var(--lg-card-bg)}
+  .drow{display:grid;grid-template-columns:auto minmax(240px,1.25fr) minmax(0,1fr) auto auto;align-items:center;
+        gap:22px;padding:16px 22px;border-top:1px solid var(--lg-line);text-decoration:none;color:inherit}
+  .drow:first-child{border-top:0}
+  .drow:hover{background:var(--lg-sage-tint)}
+  .avi{width:52px;height:52px;border-radius:50%;flex:0 0 auto;background:var(--lg-sage-tint);color:var(--lg-sage-d);
+       display:flex;align-items:center;justify-content:center;font:700 18px/1 var(--serif);overflow:hidden}
+  .avi img{width:100%;height:100%;object-fit:cover}
+  .idc{min-width:0}
+  .idc .nm{display:block;font:700 16.5px/1.25 var(--serif);color:var(--lg-charcoal);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .idc .lc{display:block;margin-top:4px;font:400 13px/1.3 var(--sans);color:var(--lg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .idc .lc .dist{color:var(--lg-sage-d);font-weight:600}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+  .chip{background:var(--lg-sage-tint);color:var(--lg-sage-d);border-radius:999px;padding:5px 11px;font:600 12px/1 var(--sans);white-space:nowrap}
+  .lights{display:flex;flex-direction:column;gap:5px;justify-self:start}
+  .light{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--lg-line);border-radius:999px;
+         padding:4px 11px;font:600 11.5px/1 var(--sans);color:var(--lg-ink);background:var(--lg-cream);white-space:nowrap}
+  .dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:var(--lg-mute)}
+  .dot.go{background:var(--go);box-shadow:0 0 0 3px rgba(63,163,77,.18)}
+  .dot.stop{background:var(--stop);box-shadow:0 0 0 3px rgba(192,73,47,.16)}
+  .acts{display:flex;align-items:center;gap:8px;justify-self:end}
+  .btn{border:1px solid var(--lg-sage-d);border-radius:999px;padding:9px 17px;font:600 13px/1 var(--sans);cursor:pointer;white-space:nowrap}
+  .btn.primary{background:var(--lg-sage-d);color:#fff}
+  .btn.ghost{background:var(--lg-card-bg);color:var(--lg-sage-d)}
+  html[data-lguser-theme="dark"] .btn.primary{color:#15171a}
+  html[data-lguser-theme="dark"] .btn.ghost{background:#1e2124}
+  .self-tag{font:600 12px/1 var(--sans);color:var(--lg-mute);padding:9px 4px}
+
+  /* compact density */
+  body.compact .drow{padding:10px 20px;gap:14px}
+  body.compact .avi{width:38px;height:38px;font-size:14px}
+  body.compact .idc .nm{font-size:15px}
+  body.compact .idc .lc{font-size:12px}
+  body.compact .lights{flex-direction:row;gap:6px}
+  body.compact .light{border:0;background:transparent;padding:2px 0}
+  body.compact .light .lbl{display:none}
+  body.compact .chip{padding:4px 9px;font-size:11.5px}
+  body.compact .btn{padding:7px 13px;font-size:12.5px}
+
+  .note{max-width:1180px;margin:14px auto 0;padding:0 32px;font:500 12.5px/1.5 var(--sans);color:var(--lg-mute)}
+  .stamp{position:fixed;top:8px;right:10px;font:700 11px/1 var(--sans);letter-spacing:.03em;color:var(--lg-mute);
+         background:var(--lg-card-bg);border:1px solid var(--lg-line);border-radius:7px;padding:6px 9px}
+</style>
+</head>
+<body>
+  <div class="stamp" id="stamp">PREVIS · comfortable · light</div>
+
+  <div class="site-hd">
+    <span class="brand"><span class="mk"></span>Looth Group</span>
+    <nav class="nav"><span>The Hub</span><span>Events</span><span class="on">The Map</span><span>Sponsors</span><span>Loothtool</span></nav>
+    <span class="hd-sp"></span><span class="hd-pill"></span>
+  </div>
+
+  <div class="dir-app">
+    <div class="dir-header">Members <span class="dir-meta">1,820 members matching</span>
+      <div class="dir-viewtoggle"><button>Map</button><button class="on">List</button></div>
+    </div>
+
+    <div class="filt">
+      <div class="f"><span class="flab">Location</span><span class="ctrl"><span class="ph">Start typing a city…</span></span></div>
+      <div class="f"><span class="flab">Radius</span><span class="ctrl sel"><span class="badge-ev">Everywhere</span></span></div>
+      <div class="f"><span class="flab">Instruments</span><span class="ctrl sel"><span class="ph">Any instrument…</span></span></div>
+      <div class="f"><span class="flab">Skills</span><span class="ctrl sel"><span class="ph">Any skill…</span></span></div>
+      <div class="f"><span class="flab">Sort</span><span class="ctrl sel">Nearest</span></div>
+    </div>
+
+    <div class="dlist" id="dlist"></div>
+  </div>
+
+  <script>
+    // Real directory data (from the live dev2 set) so Ian judges real content shapes.
+    const ROWS = [
+      {ini:"DP", nm:"Doug Proper — Guitar Specialist, Inc.", lc:"Bedford Hills, NY", dist:"40 mi",
+       chips:["Fret work","Setups & repair","Refinishing"], lights:[["go","Accepting new work"],["go","Open to collaborations"]], act:"msg"},
+      {ini:"DE", nm:"Dan Erlewine", lc:"Athens, OH", dist:"420 mi",
+       chips:["Setups","Fret leveling","Finish touch-up"], lights:[["go","Accepting new work"]], act:"msg"},
+      {ini:"GH", nm:"Gerry Hayes — Haze Guitars", lc:"Lucan, Ireland", dist:"3,190 mi",
+       chips:["Repairs","Setups"], lights:[["go","Accepting new work"]], act:"connect"},
+      {ini:"BH", nm:"Beau Hannam Guitars", lc:"Grand Junction, CO", dist:"1,760 mi",
+       chips:["Flat-top build","Neck build / refinish","Finish touch-up"], lights:[["go","Accepting new work"],["go","Open to collaborations"]], act:"connect"},
+      {ini:"EA", nm:"Ed Auletta — TruTone Guitar Repair", lc:"Passaic, NJ", dist:"13 mi",
+       chips:["Electronics","Setups"], lights:[], act:"connect"},
+      {ini:"BV", nm:"Buck Van Laarhoven — VL Guitar Repair", lc:"San Diego, CA", dist:"2,430 mi",
+       chips:["Fretwork","Restoration"], lights:[["go","Open to collaborations"]], act:"pending"},
+      {ini:"ID", nm:"Ian Davlin", lc:"Ridgefield Park, NJ", dist:"10 mi",
+       chips:["Finish touch-up","3D modeling (CAD)","3dp"], lights:[["stop","Not accepting work"],["go","Open to collaborations"]], act:"self"},
+    ];
+    function actHtml(a){
+      if(a==="msg") return '<button class="btn ghost">Message</button>';
+      if(a==="connect") return '<button class="btn primary">Connect</button>';
+      if(a==="pending") return '<button class="btn ghost">Requested</button>';
+      if(a==="self") return '<span class="self-tag">You</span>';
+      return '';
+    }
+    document.getElementById('dlist').innerHTML = ROWS.map(r=>`
+      <a class="drow" href="#">
+        <span class="avi">${r.ini}</span>
+        <span class="idc"><span class="nm">${r.nm}</span><span class="lc">${r.lc}${r.dist?` · <span class="dist">${r.dist}</span>`:''}</span></span>
+        <span class="chips">${r.chips.map(c=>`<span class="chip">${c}</span>`).join('')}</span>
+        <span class="lights">${r.lights.map(l=>`<span class="light"><span class="dot ${l[0]}"></span><span class="lbl">${l[1]}</span></span>`).join('')}</span>
+        <span class="acts">${actHtml(r.act)}</span>
+      </a>`).join('');
+
+    // Theme + density driven by URL hash: #dark, #compact (Playwright sets these).
+    function apply(){
+      const h=location.hash;
+      const dark=h.includes('dark'), compact=h.includes('compact');
+      document.documentElement.setAttribute('data-lguser-theme', dark?'dark':'light');
+      document.body.classList.toggle('compact', compact);
+      document.getElementById('stamp').textContent='PREVIS · '+(compact?'compact':'comfortable')+' · '+(dark?'dark':'light');
+    }
+    addEventListener('hashchange',apply); apply();
+  </script>
+</body>
+</html>

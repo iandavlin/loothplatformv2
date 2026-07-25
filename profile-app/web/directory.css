@@ -123,6 +123,73 @@ body.dir--cards #dir-results {
   align-items: start;
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+   DESKTOP LIST VIEW (Ian 2026-07-25): the desktop "Cards" mode renders as a
+   single-column LIST of horizontal rows — the mobile-list idiom given the
+   desktop room mobile lacks. Ian's picks from the previs: COMFORTABLE density,
+   status as DOTS (not labeled pills), distance only when a location is set
+   (already the data contract — distance_mi is server-computed only with a geo
+   anchor). Scoped to ≥641 so the ≤640 mobile List view (mobile-directory.css)
+   keeps its stacked cards; this reflows the EXISTING .dir-card DOM with no
+   markup change, so the map-mode side list and pin popups are untouched. */
+@media (min-width: 641px) {
+  body.dir--cards #dir-results {
+    display: block;
+    border: 1px solid var(--lg-line);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--lg-card-bg, #fff);
+  }
+  body.dir--cards #dir-results .dir-card {
+    flex-direction: row;
+    align-items: center;
+    gap: 22px;
+    min-height: 76px;
+    padding: 14px 22px;
+    border: 0;
+    border-top: 1px solid var(--lg-line);
+    border-radius: 0;
+    background: transparent;
+  }
+  body.dir--cards #dir-results .dir-card:first-child { border-top: 0; }
+  body.dir--cards #dir-results .dir-card:hover {
+    transform: none; box-shadow: none; background: var(--lg-sage-tint);
+  }
+  /* .dir-card__main is the profile link: identity + chips + status dots, in a row. */
+  body.dir--cards #dir-results .dir-card__main {
+    flex-direction: row;
+    align-items: center;
+    gap: 22px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  body.dir--cards #dir-results .dir-card__banner { display: none; }   /* avatar carries identity in a row */
+  body.dir--cards #dir-results .avi-sm { width: 48px; height: 48px; flex: 0 0 48px; font-size: 17px; }
+  body.dir--cards #dir-results .row1 { flex: 0 0 320px; width: 320px; min-width: 0; }
+  body.dir--cards #dir-results .row1 > div { min-width: 0; }
+  body.dir--cards #dir-results .row1 .name,
+  body.dir--cards #dir-results .row1 .loc-row {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  body.dir--cards #dir-results .hl-chips { flex: 1 1 auto; margin-top: 0; }
+  /* Status as DOTS: collapse each pill to just its colored dot. The label text
+     node stays in the DOM (font-size:0 keeps it for screen readers). */
+  body.dir--cards #dir-results .dir-lights {
+    flex: 0 0 auto; margin-top: 0; gap: 9px; align-items: center;
+  }
+  body.dir--cards #dir-results .dir-light {
+    border: 0; background: transparent; padding: 0; gap: 0; font-size: 0;
+  }
+  /* .dir-card__foot is the action cluster, pinned to the right of the row. The
+     social-link icons are dropped here to match the approved row (they live on
+     the profile); the primary Connect/Message action stays. */
+  body.dir--cards #dir-results .dir-card__foot {
+    flex: 0 0 auto; width: auto; padding: 0; justify-content: flex-end; gap: 8px;
+  }
+  body.dir--cards #dir-results .dir-links,
+  body.dir--cards #dir-results .dir-foot-sp { display: none; }
+}
+
 /* Disabled sort (e.g. "Near me" with no location set). */
 .dir-sort button:disabled { opacity: .45; cursor: not-allowed; }
 
