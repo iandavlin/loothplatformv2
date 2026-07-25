@@ -7,9 +7,9 @@ const { webkit } = require(path.join(__dirname, '../../tools/e2e-webkit/node_mod
 const FILE = 'file://' + path.join(__dirname, 'composer-previs.html');
 const SHOTS = [];
 for (const theme of ['light', 'dark']) {
-  for (const state of ['base', 'kb', 'mentions', 'photos'])
+  for (const state of ['base', 'kb', 'mentions', 'photos', 'picker', 'picked'])
     SHOTS.push({ skin: 'mobile', state, theme, vp: { width: 390, height: 844 } });
-  for (const state of ['base', 'mentions', 'photos'])
+  for (const state of ['base', 'mentions', 'photos', 'picker', 'picked'])
     SHOTS.push({ skin: 'desktop', state, theme, vp: { width: 1280, height: 900 } });
 }
 
