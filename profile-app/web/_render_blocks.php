@@ -1079,18 +1079,11 @@ function looth_render_header_block(array $header, string $role, string $headerVi
             $slugNow = '';   // never let the handle row take the profile page down
         }
     }
-    if ($slugNow !== '' || $isOwner) {
-        echo '<div class="lg-uname' . ($isOwner ? ' lg-uname--own' : '') . '"'
-           . ' data-slug="' . looth_h($slugNow) . '">';
-        if ($isOwner) {
-            echo '<button type="button" class="lg-uname__btn" aria-expanded="false"'
-               . ' title="Change your username">'
-               . '<span class="lg-uname__handle">@' . looth_h($slugNow !== '' ? $slugNow : 'set-a-username')
-               . '</span></button>';
-        } else {
-            echo '<span class="lg-uname__handle">@' . looth_h($slugNow) . '</span>';
-        }
-        echo '</div>';
+    // DISPLAY-ONLY handle chip (Ian numbered ruling 2026-07-25: the handle follows
+    // the profile name — rename re-derives it via Provision::maybeSyncSlugFromName;
+    // it is not independently editable, so owners see the same chip everyone does).
+    if ($slugNow !== '') {
+        echo '<div class="lg-uname"><span class="lg-uname__handle">@' . looth_h($slugNow) . '</span></div>';
     }
 
     echo '</div></div>';                                   // close __body + idrow

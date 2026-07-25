@@ -12,8 +12,9 @@ use Looth\ProfileApp\Slug;
  *   GET   /profile-api/v0/me/slug   → display the member's current handle
  *         200 {slug, min, max}
  *
- * PRODUCT RULING (Ian, 2026-07-19): Handles are read-only and derived from the profile
- * name (IG-style). Members no longer edit their handles. The @handle displays on the
+ * PRODUCT RULING (Ian, 2026-07-25, numbered — reaffirms 7/19 after the 7/25-morning
+ * member-owned interlude): handles are display-only and derived from the profile
+ * name. Members do not edit them; renames re-derive handle + URL. The @handle displays on the
  * profile; mention resolution uses the current handle for the mentioned user. See
  * Provision::maybeSyncSlugFromName in profile-app/src/Provision.php for the
  * name-change sync behavior. Mentions stay uuid-anchored so rename never breaks
