@@ -568,6 +568,114 @@ final class Messaging
         return (int)$st->fetchColumn();
     }
 
+    /**
+     * Search MESSAGE BODIES across every thread the viewer participates in (Ian 2026-07-13:
+     * find a message, not just a chat — the thread-list name filter is NOT this feature).
+     *
+     * Privacy is STRUCTURAL, not client-gated: the query starts FROM message_recipients on
+     * the viewer's uuid, so a row in a thread the viewer is not in can never join into the
+     * result set — there is no post-filter to forget. mr.is_deleted = false keeps threads
+     * the viewer cleared out of their list (same rule threadsFor applies). Tombstones
+     * (deleted_at IS NOT NULL) are excluded — the body is already blanked on delete, but the
+     * predicate makes non-resurrection a query invariant, not a data accident. System lines
+     * (kind <> 'message') are membership noise, not conversation — excluded.
+     *
+     * LIKE metacharacters are escaped exactly like directory-members.php name search, so a
+     * literal % or _ typed in the box matches literally instead of acting as a wildcard.
+     *
+     * COST (stated, not hidden): ILIKE '%…%' cannot use a btree — this is a seq scan over
+     * the viewer-joined messages. At dev2's ~2.2k message rows that is well under a
+     * millisecond and fine for v1. Switch-over plan at ~25k rows: GIN index on
+     * to_tsvector('english', body) + websearch_to_tsquery ranking (or pg_trgm gin_trgm_ops
+     * if substring-anywhere semantics must survive verbatim).
+     *
+     * Returns newest-first hits, limit+offset paginated, `more` flags a further page.
+     * Per hit: message id, thread id/uuid, thread label (subject, else peer names), group
+     * flag, sender uuid/name, created_at, and a context SNIPPET with the match visible.
+     */
+    public static function searchFor(string $viewerUuid, string $q, int $limit = 20, int $offset = 0): array
+    {
+        $q     = trim($q);
+        $limit = max(1, min(50, $limit));
+        $offset = max(0, $offset);
+        // Sub-2-char terms match half the corpus and the clients never send them (they fall
+        // back to the local thread-name filter) — answer empty instead of scanning.
+        if (mb_strlen($q) < 2) {
+            return ['ok' => true, 'q' => $q, 'hits' => [], 'limit' => $limit, 'offset' => $offset, 'more' => false];
+        }
+        $qEsc = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
+
+        $st = Db::pg()->prepare(
+            "SELECT m.id, m.thread_id, m.sender_uuid, m.body, m.created_at,
+                    t.uuid AS thread_uuid, t.subject, t.is_group,
+                    u.display_name AS sender_name
+               FROM message_recipients mr
+               JOIN message_threads t ON t.id = mr.thread_id
+               JOIN messages m ON m.thread_id = mr.thread_id
+               LEFT JOIN users u ON u.uuid = m.sender_uuid
+              WHERE mr.user_uuid = :viewer AND mr.is_deleted = false
+                AND m.deleted_at IS NULL
+                AND m.kind = 'message'
+                AND m.body ILIKE :q ESCAPE '\\'
+              ORDER BY m.created_at DESC, m.id DESC
+              LIMIT :lim OFFSET :off"
+        );
+        $st->bindValue(':viewer', $viewerUuid);
+        $st->bindValue(':q', '%' . $qEsc . '%');
+        // limit+1 answers "is there another page" without a count(*) over the same scan.
+        $st->bindValue(':lim', $limit + 1, \PDO::PARAM_INT);
+        $st->bindValue(':off', $offset, \PDO::PARAM_INT);
+        $st->execute();
+        $rows = $st->fetchAll();
+
+        $more = count($rows) > $limit;
+        if ($more) array_pop($rows);
+
+        $peers = $rows ? self::peersByThread(array_unique(array_column($rows, 'thread_id')), $viewerUuid) : [];
+
+        $hits = array_map(static function (array $r) use ($peers, $q): array {
+            $tid   = (int)$r['thread_id'];
+            $label = (string)($r['subject'] ?? '');
+            if ($label === '') {
+                $names = array_column($peers[$tid] ?? [], 'name');
+                $label = $names ? implode(', ', $names) : 'Conversation';
+            }
+            return [
+                'message_id'  => (int)$r['id'],
+                'thread_id'   => $tid,
+                'thread_uuid' => $r['thread_uuid'],
+                'label'       => $label,
+                'is_group'    => (bool)$r['is_group'],
+                'sender_uuid' => $r['sender_uuid'],
+                'sender_name' => (string)($r['sender_name'] ?: 'Member'),
+                'snippet'     => self::matchSnippet((string)$r['body'], $q),
+                'created_at'  => $r['created_at'],
+            ];
+        }, $rows);
+
+        return ['ok' => true, 'q' => $q, 'hits' => $hits, 'limit' => $limit, 'offset' => $offset, 'more' => $more];
+    }
+
+    /**
+     * A snippet WITH THE MATCH IN IT — not the head of the body (SNIPPET-truncating from the
+     * front would routinely cut the matched words out of a long message, defeating the whole
+     * "see why this hit" point). Window opens ~a third before the match so leading context
+     * survives; ellipses mark trims. mb_stripos approximates ILIKE's case fold — on the rare
+     * unicode edge where they disagree, fall back to the head (the hit itself stays correct).
+     */
+    private static function matchSnippet(string $body, string $q, int $window = 140): string
+    {
+        $body = trim((string)preg_replace('/\s+/', ' ', $body));
+        if (mb_strlen($body) <= $window) return $body;
+        $pos   = mb_stripos($body, $q);
+        $start = $pos === false ? 0 : max(0, $pos - intdiv($window, 3));
+        // Pull the window back so it never overhangs the end (a match near the tail would
+        // otherwise yield a short, mostly-empty snippet).
+        $start = min($start, mb_strlen($body) - $window);
+        $out   = mb_substr($body, $start, $window);
+        return ($start > 0 ? '…' : '') . $out . ($start + $window < mb_strlen($body) ? '…' : '');
+    }
+
     // ── group management (Ian 2026-07-12: start / add / remove / leave) ──────────────
     //
     // Membership is the PRESENCE of a message_recipients row. Remove/leave DELETE the row,
