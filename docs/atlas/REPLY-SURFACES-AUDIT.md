@@ -296,3 +296,26 @@ real device without devtools.
 *Verification appendix: `tools/e2e-webkit/` — Playwright WebKit harness (iPhone-13
 profile, touch, real public URL) wiring this audit's receipts into executable
 contracts; see COMPOSER-V2-PLAN §5 for the verification ladder.*
+
+---
+
+## Addendum (2026-07-26): the invisible-door composition bug — a G7 specimen in the wild
+
+Ian: "cannot react to replies." Diagnosis: TWO individually-approved designs composed
+into an invisible door. (1) app-mobile-fixes.js:53 hides `.fcr-add` on all mobile
+(Buck 2026-06-08 — press-and-hold the LIKE opens the picker; the add-button is
+redundant *wherever a Like exists*). (2) fbStyleReply (hub-polish.js, Ian 2026-06-25)
+replaces the fake Like with the real `.fcr` bar inside the lrs sheet. Composition: in
+the sheet there is no Like, and on a ZERO-reaction reply the real bar's only child is
+the hidden add-button → the bar computes 0×0 — nothing visible, tappable, or
+long-pressable. Desktop unaffected (verified working end-to-end). Fix: sheet-scoped
+`display:inline-flex!important` on `#looth-rep-sheet .fcr-add` — the add-button IS the
+affordance where the Like doesn't exist; Buck's hide stands everywhere else; the
+own-reply inline-important hide survives by cascade.
+
+LESSON (the audit's thesis, again, empirically): neither change was wrong; the SURFACE
+COMPOSITION was unowned. Each design assumed a context invariant ("a Like exists" /
+"the bar is visible") that the other silently broke. Until composer-v2 gives these
+surfaces one owner, every cross-surface style/behavior change needs a "who assumes
+this element exists/shows?" sweep — grep the OTHER surface files for the class you
+are hiding or replacing.
