@@ -110,11 +110,18 @@ declare -A MU_MAP=(
     [lg-dev-mail-containment.php]="$REPO/platform/mu-plugins/lg-dev-mail-containment.php"
     [lg-patreon-stripe-poller.php]="$REPO/lg-patreon-stripe-poller.php"
 )
-for n in "${!MU_MAP[@]}"; do
-    # only convert files the box actually has (e.g. live has no dev-mail-containment)
-    [ -e "$MU/$n" ] || [ -L "$MU/$n" ] || continue
-    link_one "mu-plugins/$n" "$MU/$n" "${MU_MAP[$n]}"
-done
+if [ "$BOX" = "live" ]; then
+    # Keeper ruling 2026-07-26: live's real-file mu-plugins are REPORT-ONLY this
+    # pass (tracking the two that are ours is queued, not cutover-window work).
+    echo "REPORT    live mu-plugins left untouched by ruling; real files present:"
+    find "$MU" -maxdepth 1 -type f -name "*.php" 2>/dev/null | sed 's/^/            /' || true
+else
+    for n in "${!MU_MAP[@]}"; do
+        # only convert files the box actually has (e.g. live has no dev-mail-containment)
+        [ -e "$MU/$n" ] || [ -L "$MU/$n" ] || continue
+        link_one "mu-plugins/$n" "$MU/$n" "${MU_MAP[$n]}"
+    done
+fi
 
 echo "----"
 echo "converted=$converted repaired=$repaired skipped=$skipped"

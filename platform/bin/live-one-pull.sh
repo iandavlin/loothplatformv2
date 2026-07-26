@@ -82,7 +82,7 @@ if [ "$MODE" = "audit" ]; then
         t="$LG_WP_PATH/$n"
         if [ -L "$t" ]; then note "  SYMLINK $n -> $(readlink "$t")";
         elif [ -f "$t" ]; then
-            if cmp -s "$t" "$f"; then same=$((same+1)); else diffn=$((diffn+1)); note "  DIFF    $n (box $(md5sum "$t" | cut -c1-8) vs repo $(md5sum "$f" | cut -c1-8)) — REVERSE DRIFT? capture before apply"; fi
+            if cmp -s "$t" "$f"; then same=$((same+1)); else diffn=$((diffn+1)); note "  DIFF    $n (box $(md5sum "$t" | cut -c1-8) vs repo $(md5sum "$f" | cut -c1-8)) — an older COMMITTED version = PENDING DEPLOY (apply's historic gate verifies); unknown bytes = drift"; fi
         else missing=$((missing+1)); note "  ABSENT  $n"; fi
     done
     note "  summary: same=$same diff=$diffn absent=$missing (apply converts only 'same')"
@@ -145,26 +145,45 @@ bash "$REPO/webroot/install-symlinks.sh" "$LG_WP_PATH" | tee -a "$OUT/REPORT.txt
 note "== B2. config layer (vhost if identical, FPM live posture, mu-plugin strays)"
 bash "$REPO/platform/bin/install-config-symlinks.sh" live | tee -a "$OUT/REPORT.txt" || note "  (config installer exited $? — skips reported above)"
 
-note "== B3. /srv/lg-shared -> whole-dir symlink (the site-header.php copy dies here)"
+note "== B3. /srv/lg-shared -> PER-FILE symlinks (the site-header.php copy dies here)"
+# Deliberately NOT a whole-dir swap on live (unlike dev2): keeper ruling 2026-07-26 —
+# Ian's *.bak-20260726b deploy backups live in this dir, must be KEPT IN PLACE, and
+# are not repo files. The dir stays real; each repo-managed file gets its own link
+# (css+js already are per-file links on live), excluded names are never touched.
 if [ -L /srv/lg-shared ]; then
-    note "  already a symlink: $(readlink /srv/lg-shared)"
+    note "  /srv/lg-shared is a whole-dir symlink: $(readlink /srv/lg-shared) — nothing to do"
 else
-    ok=1
     for f in /srv/lg-shared/*; do
         n="$(basename "$f")"
-        if [ -L "$f" ]; then [ "$(readlink -f "$f")" = "$(readlink -f "$REPO/lg-shared/$n")" ] || { ok=0; note "  BLOCK: $n symlinks elsewhere"; }
-        elif [ -f "$f" ]; then cmp -s "$f" "$REPO/lg-shared/$n" || { ok=0; note "  BLOCK: $n differs from repo — capture first"; }
-        elif [ -d "$f" ]; then diff -rq "$f" "$REPO/lg-shared/$n" >/dev/null 2>&1 || { ok=0; note "  BLOCK: dir $n differs"; }
+        case "$n" in
+            *.bak-20260726b) note "  PRESERVED $n (Ian's deploy backup — keeper-mandated exclusion, untouched)"; continue ;;
+        esac
+        if [ ! -e "$REPO/lg-shared/$n" ] && [ ! -L "$f" ]; then
+            note "  LEFT      $n (no repo counterpart — box-local, report to keeper)"; continue
+        fi
+        if [ -L "$f" ]; then
+            [ "$(readlink -f "$f")" = "$(readlink -f "$REPO/lg-shared/$n")" ] && continue
+            echo "$f was -> $(readlink "$f")" >> "$OUT/RELINKED.txt"
+            ln -sfn "$REPO/lg-shared/$n" "$f"
+            note "  REPAIRED  $n (old target in RELINKED.txt)"
+        elif [ -f "$f" ]; then
+            if cmp -s "$f" "$REPO/lg-shared/$n"; then
+                mv "$f" "$OUT/lg-shared_$n"; ln -s "$REPO/lg-shared/$n" "$f"
+                echo "rm $f && mv $OUT/lg-shared_$n $f" >> "$RB"
+                note "  CONVERTED $n (per-file; rollback in ROLLBACK.sh)"
+            else
+                note "  SKIPPED   $n — differs from repo (never clobber; capture or deploy first)"
+            fi
+        elif [ -d "$f" ]; then
+            if diff -rq "$f" "$REPO/lg-shared/$n" >/dev/null 2>&1; then
+                mv "$f" "$OUT/lg-shared_$n.dir"; ln -s "$REPO/lg-shared/$n" "$f"
+                echo "rm $f && mv $OUT/lg-shared_$n.dir $f" >> "$RB"
+                note "  CONVERTED $n/ (dir; rollback in ROLLBACK.sh)"
+            else
+                note "  SKIPPED   $n/ — dir differs from repo"
+            fi
         fi
     done
-    if [ "$ok" = 1 ]; then
-        mv /srv/lg-shared "$OUT/lg-shared.predir"
-        ln -s "$REPO/lg-shared" /srv/lg-shared
-        echo "rm /srv/lg-shared && mv $OUT/lg-shared.predir /srv/lg-shared" >> "$RB"
-        note "  CONVERTED /srv/lg-shared (rollback in ROLLBACK.sh)"
-    else
-        note "  SKIPPED /srv/lg-shared — blocks above must clear first"
-    fi
 fi
 
 note "== B4. lg-snippets -> whole-dir symlink (the 86.php copy dies here)"

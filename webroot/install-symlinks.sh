@@ -59,13 +59,19 @@ link_one() {
     elif [ -e "$t" ]; then
         [ "$NEW_ONLY" = 1 ] && return 0
         if [ -d "$t" ]; then
-            if diff -rq "$t" "$target" >/dev/null 2>&1; then
+            dd="$(diff -rq "$t" "$target" 2>&1 || true)"
+            if [ -z "$dd" ]; then
                 bk; mv "$t" "$BACKUP/$name"; ln -s "$target" "$t"; converted=$((converted+1))
                 echo "CONVERTED $name/ (dir, contents identical; original in $BACKUP)"
+            elif ! printf '%s\n' "$dd" | grep -vq "^Only in $target"; then
+                # box dir is a strict SUBSET of the repo dir (every delta is a file
+                # only the repo has) — converting only ADDS files, so it is safe
+                bk; mv "$t" "$BACKUP/$name"; ln -s "$target" "$t"; converted=$((converted+1))
+                echo "CONVERTED $name/ (dir, box was a subset — repo adds: $(printf '%s\n' "$dd" | wc -l) file(s); original in $BACKUP)"
             else
                 skipped=$((skipped+1))
-                echo "SKIPPED   $name/ — dir differs from repo (extra/changed files):"
-                { diff -rq "$t" "$target" 2>&1 || true; } | sed 's/^/            /' | head -10
+                echo "SKIPPED   $name/ — dir has box-side changes vs repo:"
+                printf '%s\n' "$dd" | sed 's/^/            /' | head -10
             fi
         else
             local a b
