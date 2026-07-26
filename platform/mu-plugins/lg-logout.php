@@ -78,3 +78,5 @@ add_action('template_redirect', function () {
     wp_safe_redirect(home_url('/'), 302);
     exit;
 }, -100);   // negative: run before lg-error-pages' priority-0 404 interceptor (see note above)
+
+// deploy-one-pull acceptance probe 2026-07-26T21:22Z — comment only
