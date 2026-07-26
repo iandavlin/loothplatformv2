@@ -169,3 +169,35 @@ test3.describe('mention scrunched match @390 (WebKit)', () => {
     expect3(label).toContain('Doug Proper');
   });
 });
+
+// Dark-mode merge gate (Ian standing rule 7/26): every changed surface must verify
+// in dark. The reply stack's dark contract: composer card + mention panel render the
+// dark tokens (not light leaks), and the shared manager backdrop is present.
+const { test: test4, expect: expect4 } = require('@playwright/test');
+test4.describe('reply stack dark render @390 (WebKit)', () => {
+  test4.skip(({ isMobile }) => !isMobile, 'mobile-profile only');
+  const H4 = require('./_helpers');
+  test4.beforeEach(async ({ context }) => { await H4.addAuthCookies(context); });
+
+  test4('dark theme: composer card + mention panel use dark surfaces; backdrop present', async ({ page }) => {
+    await page.addInitScript(() => document.documentElement.setAttribute('data-lguser-theme', 'dark'));
+    await H4.openTopicComposer(page);
+    const input = page.locator('#lcp-input');
+    await input.tap();
+    await input.pressSequentially('@mik', { delay: 90 });
+    await page.waitForSelector('.lg-mnt .lg-mnt__i', { timeout: 8000 });
+    const s = await page.evaluate(() => {
+      const card = document.querySelector('.lcp-card');
+      const panel = document.querySelector('.lg-mnt');
+      const back = document.getElementById('lg-sheet-backdrop');
+      return {
+        cardBg: getComputedStyle(card).backgroundColor,
+        panelBg: getComputedStyle(panel).backgroundColor,
+        backdropShown: !!(back && getComputedStyle(back).display !== 'none'),
+      };
+    });
+    expect4(s.cardBg).toBe('rgb(27, 30, 33)');    // dark card, not light leak
+    expect4(s.panelBg).toBe('rgb(27, 30, 33)');   // dark panel (explicit override)
+    expect4(s.backdropShown).toBe(true);          // ONE shared backdrop under top sheet
+  });
+});
