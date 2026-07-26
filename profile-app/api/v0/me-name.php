@@ -16,7 +16,9 @@ if (!is_array($in)) profile_app_json(400, ['error' => 'bad_json']);
 $name = $in['display_name'] ?? null;
 if (!is_string($name)) profile_app_json(400, ['error' => 'display_name_required']);
 $name = trim($name);
-if ($name === '' || mb_strlen($name) > 120) profile_app_json(400, ['error' => 'invalid_length']);
+// 40-char cap (identity pass, keeper 02:25 spec 2026-07-26 — was 120, the padding
+// enabler). business_name below deliberately keeps 120.
+if ($name === '' || mb_strlen($name) > 40) profile_app_json(400, ['error' => 'invalid_length']);
 
 $biz = array_key_exists('business_name', $in) ? $in['business_name'] : null;
 $bizProvided = array_key_exists('business_name', $in);
