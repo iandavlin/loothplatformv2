@@ -17,12 +17,15 @@ declare(strict_types=1);
  * slugs ∪ slug_history ∪ handles already proposed in this batch (batch-internal
  * collisions matter when re-minting hundreds on live).
  *
- * Derivation preference (per ruling):
- *   1. API full_name        (fresh)
- *   2. API vanity           (fresh — NOT in the poller's sweep fields; requested here)
- *   3. API email local-part (+tag stripped)
- *   4. profile_app primary_email local-part (OFFLINE fallback, e.g. member left Patreon)
- *   5. 'member'
+ * Derivation preference (Ian 7/25 23:45 revision — profile-name PRIMARY):
+ *   1. EXISTING profile display_name, when REAL (not patreon_* junk, not empty/numeric
+ *      after clean) — identical to the live rename rule, business tails included
+ *      (consistency with forward behavior beats brevity).
+ *   2. API full_name        (fresh — fallback for junk/empty names only)
+ *   3. API vanity           (fresh — NOT in the poller's sweep fields; requested here)
+ *   4. API email local-part (+tag stripped)
+ *   5. profile_app primary_email local-part (OFFLINE fallback, e.g. member left Patreon)
+ *   6. 'member'
  */
 
 require dirname(__DIR__) . '/config.php';
@@ -142,7 +145,14 @@ foreach ($cand as $c) {
     $pid  = $m[1] ?? '';
     $id   = $api[$pid] ?? null;
 
+    // profile-name PRIMARY (Ian 7/25 23:45): a real display name wins outright —
+    // same derivation the live rename rule applies, business tails and all.
+    $dn        = (string) $c['display_name'];
+    $dnIsJunk  = (bool) preg_match('/^patreon[_-]?\d+$/i', trim($dn));
+    $dnClean   = $dnIsJunk ? '' : $clean($dn);
+    if (preg_match('/^\d+$/', $dnClean)) $dnClean = '';   // numeric-only never a handle
     $chain = [
+        'profile-name'  => $dnClean,
         'api-full-name' => $id ? $clean($id['full_name']) : '',
         'api-vanity'    => $id ? $clean($id['vanity']) : '',
         'api-email'     => $id ? $clean($emailLocal($id['email'])) : '',
