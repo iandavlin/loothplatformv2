@@ -437,12 +437,19 @@ if (!function_exists('bb_mirror_format_snippet')) {
                         }
                     } else {
                         $is_block = in_array($tag, ['p', 'br', 'li', 'blockquote', 'div'], true);
+                        // Safe INLINE formatting passes through (composer-v2: rich text is
+                        // now THE mobile input — a bolded reply must render bold in its
+                        // stub). Fixed wrapper set = the composer/sanitizer allowlist;
+                        // emitted around the recursion so truncation stays balanced.
+                        $inline = in_array($tag, ['b', 'strong', 'i', 'em', 's', 'del'], true);
                         // Break ENTERING a block (so "text<div>more</div>" → "text<br>more",
                         // not "textmore"). Only when content already precedes it.
                         if ($preserve_breaks && $is_block && $out !== '') {
                             $out .= '<br>';
                         }
+                        if ($inline) $out .= '<' . $tag . '>';
                         $walk($c);
+                        if ($inline) $out .= '</' . $tag . '>';
                         // ...and leaving it. Old callers just get a space (no structure).
                         if ($budget > 0 && $is_block) {
                             $out .= $preserve_breaks ? '<br>' : ' ';
