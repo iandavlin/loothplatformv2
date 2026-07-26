@@ -15,6 +15,9 @@ CANCEL_FILE="${IDLE_CANCEL_FILE:-/tmp/idle-shutdown-cancel}"
 STOP_CMD="${IDLE_STOP_CMD:-/snap/bin/aws ec2 stop-instances --instance-ids i-01e54ed6c9a4ba91e}"
 ACTIVITY_FILE="${IDLE_ACTIVITY_FILE:-/tmp/last-ccdev-activity}"
 HOME_DIR="${IDLE_HOME_DIR:-/home/ubuntu}"
+# Every team home's Claude conversation dir, and the browser heartbeat log.
+CLAUDE_HOME_GLOB="${IDLE_CLAUDE_HOME_GLOB:-/home/*/.claude/projects/}"
+HEARTBEAT_LOG="${IDLE_HEARTBEAT_LOG:-/var/log/nginx/heartbeat.log}"
 COUNTDOWN_SECS="${IDLE_COUNTDOWN_SECS:-300}"
 EMAIL_TO="${IDLE_EMAIL_TO:-ian.davlin@gmail.com}"
 MAIL_CMD="${IDLE_MAIL_CMD:-msmtp}"
@@ -27,8 +30,11 @@ EMAIL_IDLE_THRESHOLD="${IDLE_EMAIL_THRESHOLD:-60}"  # minutes before sending idl
 WORKER_STATE_DIR="${IDLE_WORKER_STATE_DIR:-/run/idle-shutdown}"
 WORKER_CPU_STATE="${WORKER_STATE_DIR}/worker-cpu"
 WORKER_STAMP="${WORKER_STATE_DIR}/last-worker-activity"
+WORKER_PASS_STAMP="${WORKER_STATE_DIR}/last-pass"
 # CPU jiffies per 60s that count as real work -- see check_worker_activity().
-WORK_JIFFIES="${IDLE_WORK_JIFFIES:-100}"
+# 150 sits between what was measured on this box: parked claude 12-84 j/min,
+# working claude 348-1296 j/min, leaked chrome a flat 0.
+WORK_JIFFIES="${IDLE_WORK_JIFFIES:-150}"
 # Process comms that ARE the work (exact comm, verified through /proc/pid/exe).
 WORKER_COMMS="${IDLE_WORKER_COMMS:-claude}"
 # Engines: only ever counted alongside a live worker (they leak at 0% CPU).
@@ -101,7 +107,7 @@ check_tty_idle() {
 
 check_browser_heartbeat() {
     # Dedicated heartbeat endpoint (legacy)
-    local hb_log="/var/log/nginx/heartbeat.log"
+    local hb_log="$HEARTBEAT_LOG"
     if [[ -f "$hb_log" ]]; then
         local recent
         recent=$(find "$hb_log" -mmin -"${IDLE_THRESHOLD}" 2>/dev/null)
@@ -132,7 +138,7 @@ check_file_activity() {
 
     # Check Claude conversation files (.jsonl) across ALL team home dirs
     local conv_found
-    conv_found=$(find /home/*/.claude/projects/ -maxdepth 3 -name "*.jsonl" -mmin -"${IDLE_THRESHOLD}" 2>/dev/null | head -1)
+    conv_found=$(find $CLAUDE_HOME_GLOB -maxdepth 3 -name "*.jsonl" -mmin -"${IDLE_THRESHOLD}" 2>/dev/null | head -1)
     if [[ -n "$conv_found" ]]; then
         local who
         who=$(echo "$conv_found" | sed 's|/home/\([^/]*\)/.*|\1|')
@@ -227,7 +233,12 @@ scan_proc() {
 # still running. A build that exits between passes moves from the third term to
 # the second, so the total never goes backwards.
 tree_jiffies() {
-    local root=$1 total=$(( PROC_JIFF[$root] + PROC_CJIFF[$root] ))
+    # NOTE: these MUST be separate statements. Bash expands every word of a
+    # `local a=$1 b=$((...$a...))` command BEFORE performing any of its
+    # assignments, so the arithmetic would read $root while it is still unset
+    # -- which under `set -u` aborts the function and silently returns nothing.
+    local root=$1
+    local total=$(( PROC_JIFF[$root] + PROC_CJIFF[$root] ))
     local -a queue=( ${PROC_KIDS[$root]:-} )
     local cur
     while (( ${#queue[@]} )); do
@@ -315,8 +326,31 @@ check_worker_activity() {
     ROOTS=(); WORKER_ROOTS=0
     collect_roots
 
-    # Threshold is per 60s; scale it to whatever interval we actually ran at.
-    local need=$(( WORK_JIFFIES * INTERVAL / 60 ))
+    # If the state dir is unusable we cannot measure a delta at all. Fall back
+    # to presence alone and say so: an unwritable /run is an anomaly, and
+    # keeping the box up wrongly costs money, while shutting it down wrongly
+    # costs someone's work.
+    if [[ ! -d "$WORKER_STATE_DIR" || ! -w "$WORKER_STATE_DIR" ]]; then
+        if (( WORKER_ROOTS > 0 )); then
+            log "  WORKER: ${WORKER_STATE_DIR} unwritable -- DEGRADED, holding on presence of ${WORKER_ROOTS} worker(s)"
+            return 1
+        fi
+        log "  WORKER: ${WORKER_STATE_DIR} unwritable -- DEGRADED, but no workers present -- idle"
+        return 0
+    fi
+
+    # Scale the threshold to the window we actually measured, not to INTERVAL:
+    # the countdown loop re-checks every 10s, and billing a 60s threshold to a
+    # 10s sample would make those re-checks six times harder to trip.
+    local elapsed=$INTERVAL lastpass
+    if [[ -f "$WORKER_PASS_STAMP" ]]; then
+        lastpass=$(< "$WORKER_PASS_STAMP")
+        if [[ "$lastpass" =~ ^[0-9]+$ ]] && (( now > lastpass )); then
+            elapsed=$(( now - lastpass ))
+        fi
+    fi
+    echo "$now" > "$WORKER_PASS_STAMP"
+    local need=$(( WORK_JIFFIES * elapsed / 60 ))
     if (( need < 1 )); then need=1; fi
 
     local -A prev=()
@@ -331,6 +365,11 @@ check_worker_activity() {
         st=${PROC_START[$pid]:-}
         [[ -n "$st" ]] || continue
         j=$(tree_jiffies "$pid")
+        # is_idle() calls this function on the left of &&, which suppresses
+        # `set -e` for everything inside it -- a failure here would be silent.
+        # Refuse to record a measurement we do not trust; the pid then reads as
+        # "new" next pass, which errs toward keeping the box up.
+        if [[ ! "$j" =~ ^[0-9]+$ ]]; then continue; fi
         echo "$pid $st $j" >> "${WORKER_CPU_STATE}.new"
         key="${pid}:${st}"
         if [[ -z "${prev[$key]+set}" ]]; then
