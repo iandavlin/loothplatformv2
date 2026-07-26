@@ -2994,14 +2994,156 @@
   // inline. We drive the canonical loader to fill .feed-card__replies-full, then
   // RELOCATE that element into the sheet (keeps reactions/reply-boxes wired); on
   // close we move it back and collapse the card. ──────────────────────────────
-  var lrsScroll = '';
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     lg-sheet.js (embedded module) — THE sheet-lifecycle manager. Composer-v2
+     phase 1 (docs/atlas/COMPOSER-V2-PLAN.md §1.1): the invariants that were
+     convention across 8 hand-rolled lifecycles become CODE here. Phase 1
+     converts lrs + lcp; other surfaces migrate in later phases. Embedded in
+     hub-polish.js because pwa.js's loader is a hardcoded ordered inject list —
+     extraction to its own file rides the loader work.
+
+     The manager owns: the STACK (top sheet interactive; every sheet below gets
+     .lg-sheet-behind = pointer-events:none + aria-hidden — same class the specs
+     assert), ONE shared backdrop (cursor:pointer — iOS drops taps on plain divs,
+     receipt R1) positioned just under the top sheet, the body lg-sheet-lock
+     class (the proven position:fixed observer at the bottom of this file keeps
+     watching it, untouched — ntm/frm still ride the same observer), transform
+     clearing on close (a stale translateY traps position:fixed descendants on
+     iOS, receipt R3), Esc-close, and ONE popstate arbitration for its stack
+     (lightbox-aware, replacing the hand-rolled three-way dance).
+
+     Surfaces own: their DOM/content, submit logic, keyboard lift, swipe
+     gestures (which call close). Close reasons: backdrop|esc|swipe|post|
+     programmatic|popstate.
+     ═══════════════════════════════════════════════════════════════════════ */
+  window.LgSheets = (function () {
+    var defs = {};          // id -> {ensure, onClose, escClose, backdrop, historyEntry}
+    var stack = [];         // bottom → top ids
+    var backdropEl = null;
+    var histDepth = 0;      // how many stack entries pushed a history entry
+
+    function ensureBackdrop() {
+      if (backdropEl) return backdropEl;
+      backdropEl = document.createElement('div');
+      backdropEl.id = 'lg-sheet-backdrop';
+      // cursor:pointer REQUIRED for iOS to deliver the tap (receipt R1)
+      backdropEl.style.cssText = 'position:fixed;inset:0;background:rgba(15,16,12,.42);' +
+        'cursor:pointer;display:none;z-index:2147483510';
+      backdropEl.addEventListener('click', function () { closeTop('backdrop'); });
+      (document.body || document.documentElement).appendChild(backdropEl);
+      return backdropEl;
+    }
+
+    /* Re-assert every invariant from current stack state. Idempotent by design —
+       call it after ANY mutation and the world is correct (no per-path teardown). */
+    function sync() {
+      var top = stack.length ? stack[stack.length - 1] : null;
+      Object.keys(defs).forEach(function (id) {
+        var el = defs[id].el;
+        if (!el) return;
+        var inStack = stack.indexOf(id) !== -1;
+        var isTop = id === top;
+        el.classList.toggle('lg-sheet-behind', inStack && !isTop);
+        if (inStack && !isTop) el.setAttribute('aria-hidden', 'true');
+        else el.removeAttribute('aria-hidden');
+        if (el.inert) { try { el.inert = false; } catch (e) {} }   // legacy heal
+        el.removeAttribute('inert');
+        // The TOP sheet's full-screen container is click-transparent so off-card
+        // taps reach the shared backdrop beneath (which closes top) — the old
+        // per-surface .lcp-back/.lrs-back behavior, now structural. The card
+        // ([data-lg-sheet-card]) stays interactive.
+        var sheetCard = el.querySelector('[data-lg-sheet-card]');
+        if (isTop) {
+          el.style.pointerEvents = 'none';
+          if (sheetCard) sheetCard.style.pointerEvents = 'auto';
+        } else {
+          el.style.pointerEvents = '';
+          if (sheetCard) sheetCard.style.pointerEvents = '';
+        }
+      });
+      // the ONE backdrop sits just under the top sheet
+      if (top && defs[top].backdrop !== false) {
+        var b = ensureBackdrop();
+        var z = parseInt(getComputedStyle(defs[top].el).zIndex, 10) || 2147483520;
+        b.style.zIndex = String(z - 1);
+        b.style.display = 'block';
+      } else if (backdropEl) backdropEl.style.display = 'none';
+      // body lock by stack depth — the position:fixed observer watches this class
+      document.body.classList.toggle('lg-sheet-lock', stack.length > 0);
+    }
+
+    function open(id, ctx) {
+      var d = defs[id];
+      if (!d) return;
+      if (!d.el) d.el = d.ensure();
+      if (stack.indexOf(id) === -1) stack.push(id);
+      // idempotent-open scrub: no stale transform on this sheet or its card
+      d.el.style.transform = '';
+      var card = d.el.querySelector('[data-lg-sheet-card]');
+      if (card) { card.style.transform = ''; card.style.transition = ''; }
+      d.el.classList.add('is-open');
+      if (d.historyEntry) {
+        var h = d.historyEntry(ctx);
+        if (h) { try { history.pushState(h.state || { lgSheet: id }, '', h.url); histDepth++; d._pushed = true; } catch (e) {} }
+      }
+      sync();
+    }
+
+    function close(id, reason) {
+      var d = defs[id];
+      if (!d || stack.indexOf(id) === -1) return;
+      stack.splice(stack.indexOf(id), 1);
+      d.el.classList.remove('is-open');
+      d.el.style.transform = '';
+      var card = d.el.querySelector('[data-lg-sheet-card]');
+      if (card) { card.style.transform = ''; card.style.transition = ''; }
+      sync();
+      if (d.onClose) { try { d.onClose(reason || 'programmatic'); } catch (e) {} }
+      // consume this sheet's history entry unless the pop itself closed us
+      if (d._pushed && reason !== 'popstate') {
+        d._pushed = false;
+        if (histDepth > 0) { histDepth--; try { history.back(); } catch (e) {} }
+      } else if (reason === 'popstate') { d._pushed = false; if (histDepth > 0) histDepth--; }
+    }
+
+    function closeTop(reason) { if (stack.length) close(stack[stack.length - 1], reason); }
+
+    // Esc closes the top sheet (G12 — free for every registered surface)
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || !stack.length) return;
+      var top = defs[stack[stack.length - 1]];
+      if (top && top.escClose !== false) { e.preventDefault(); closeTop('esc'); }
+    });
+
+    // ONE popstate arbitration for the stack. The image lightbox stacks above
+    // the sheets — while it is up, the pop belongs to IT (same guard the old
+    // hand-rolled handler used).
+    window.addEventListener('popstate', function () {
+      if (!stack.length) return;
+      var lb = document.getElementById('lg-lb');
+      if (lb && lb.classList.contains('is-on')) return;
+      if (window.__lgLbPop && Date.now() - window.__lgLbPop < 600) return;
+      var topDef = defs[stack[stack.length - 1]];
+      // surface veto (lrs: a pop INTO ?topic= is forward-nav re-opening the sheet)
+      if (topDef && topDef.popGuard && topDef.popGuard()) return;
+      closeTop('popstate');
+    });
+
+    return {
+      register: function (d) { defs[d.id] = d; },
+      open: open, close: close, closeTop: closeTop,
+      isOpen: function (id) { return stack.indexOf(id) !== -1; },
+      stack: function () { return stack.slice(); }
+    };
+  })();
+
   function ensureRepStyles() {
     if (document.getElementById('lg-rep-css')) return;
     var s = document.createElement('style'); s.id = 'lg-rep-css';
     s.textContent = [
       '#looth-rep-sheet{position:fixed;inset:0;z-index:2147483520;display:none}',
       '#looth-rep-sheet.is-open{display:block}',
-      '#looth-rep-sheet .lrs-back{position:absolute;inset:0;background:rgba(26,29,26,.55)}',
       '#looth-rep-sheet .lrs-card{position:absolute;left:0;right:0;bottom:0;top:max(6vh,env(safe-area-inset-top,0px));display:flex;flex-direction:column;' +
         'background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(26,29,26,.32);animation:looth-pwa-up .26s ease;will-change:transform}',
       // Design-system grab handle (same as the content sheet) — drag down to dismiss.
@@ -3166,56 +3308,45 @@
     for (var i = 0; i < sels.length; i++) { var el = document.querySelector(sels[i]); if (el && el.src && !/logo/i.test(el.src)) return el.src; }
     return null;
   }
-  var lrsHist = false;
+  /* lrs lifecycle is MANAGER-OWNED (phase 1). This wrapper keeps the many call
+     sites; content/URL cleanup lives in the registered onClose. */
   function lrsClose(fromPop) {
-    var sh = document.getElementById('looth-rep-sheet'); if (!sh) return;
-    sh.classList.remove('is-open');
-    lgSetBehind(sh, false);   // clear composer-set backdrop state (class + aria + any legacy inert)
-    document.body.style.overflow = lrsScroll || '';
-    lgSyncSheetLock();
-    var comp = sh.querySelector('.lrs-comp'); if (comp) comp.style.transform = '';   // reset keyboard lift
-    var t = sh.querySelector('#lrs-thread'); if (t) t.innerHTML = '';
-    var op = sh.querySelector('#lrs-op'); if (op) { op.innerHTML = ''; op.hidden = true; }
-    // Phone back-gesture support (same pattern as the content sheet's lgCsHist).
-    if (lrsHist && !fromPop) { lrsHist = false; try { history.back(); } catch (e) {} }
-    else {
-      lrsHist = false;
-      // Defensive twin of the dmodal's onClosed: UI close with no entry to pop but
-      // a ?topic= URL still up → scrub the param so the address bar is the feed again.
-      if (!fromPop) {
+    window.LgSheets.close('lrs', fromPop ? 'popstate' : 'programmatic');
+  }
+  window.LgSheets.register({
+    id: 'lrs',
+    ensure: function () { return document.getElementById('looth-rep-sheet'); },
+    escClose: true,
+    // forward-nav veto: a pop INTO ?topic= just (re)opened the sheet via forums.js
+    // §4f — don't close it (the old hand-rolled guard, now declarative).
+    popGuard: function () {
+      var dl = window.lgTopicDeepLink;
+      return !!(dl && dl.hasParam());
+    },
+    historyEntry: function (ctx) {
+      // deep-link already in the URL (cold load / forward-nav): the entry exists —
+      // no push; the onClose scrub keeps the address bar honest on UI-close.
+      var dl = window.lgTopicDeepLink;
+      if (dl && dl.hasParam()) return null;
+      return { state: { lgRs: 1 }, url: (ctx && ctx.url) || undefined };
+    },
+    onClose: function (reason) {
+      var sh = document.getElementById('looth-rep-sheet'); if (!sh) return;
+      var comp = sh.querySelector('.lrs-comp'); if (comp) comp.style.transform = '';   // keyboard lift
+      var t = sh.querySelector('#lrs-thread'); if (t) t.innerHTML = '';
+      var op = sh.querySelector('#lrs-op'); if (op) { op.innerHTML = ''; op.hidden = true; }
+      // UI close with no entry to pop but a ?topic= URL still up → scrub to the feed.
+      if (reason !== 'popstate') {
         try {
-          var clDl = window.lgTopicDeepLink;
-          if (clDl && clDl.hasParam()) history.replaceState({}, '', clDl.feedUrl());
+          var dl = window.lgTopicDeepLink;
+          if (dl && dl.hasParam()) history.replaceState({}, '', dl.feedUrl());
         } catch (e) {}
       }
     }
-  }
-  window.addEventListener('popstate', function () {
-    // The image lightbox stacks ABOVE the sheets and pushes its OWN history
-    // entry — while it's up (back gesture) or just closed (tap-close pops its
-    // entry via history.back), this pop belongs to IT: don't also close a sheet.
-    var lb0 = document.getElementById('lg-lb');
-    if (lb0 && lb0.classList.contains('is-on')) return;
-    if (window.__lgLbPop && Date.now() - window.__lgLbPop < 600) return;
-    // Composer sheet stacks on top of the modal — phone back closes IT first and
-    // re-pushes the modal's history entry so a second back closes the modal.
-    var cs = document.getElementById('looth-comp-sheet');
-    if (cs && cs.classList.contains('is-open')) {
-      closeComposerSheet();
-      var sh0 = document.getElementById('looth-rep-sheet');
-      if (sh0 && sh0.classList.contains('is-open') && lrsHist) { try { history.pushState({ lgRs: 1 }, '', sh0.__lgTopicUrl || undefined); } catch (e) {} }   // keep the ?topic= URL on the re-pushed entry
-      return;
-    }
-    var sh = document.getElementById('looth-rep-sheet');
-    if (sh && sh.classList.contains('is-open')) {
-      // Flag-free per the §4f doctrine: only close when the live URL left the
-      // topic state. A pop INTO ?topic= (forward-nav) may have just (re)opened
-      // the sheet via forums.js's own popstate handler — leave it alone.
-      var popDl = window.lgTopicDeepLink;
-      if (popDl && popDl.hasParam()) return;
-      lrsClose(true);
-    }
   });
+  /* popstate arbitration for lrs/lcp is MANAGER-OWNED (phase 1): back closes the
+     top sheet (composer first, thread second — each holds its own entry), with the
+     lightbox guard and the lrs forward-nav veto inside the manager. */
   function lrsEnhance(full) { try { revealReplyImages(full); enhanceReplyReactions(full); } catch (e) {} }
   // The sheet shows the WHOLE drained thread — that rendered count is the truth
   // the user can see. Push it back onto the card's reply-count displays (same
@@ -3465,7 +3596,7 @@
     var sh = document.getElementById('looth-rep-sheet');
     if (!sh) {
       sh = document.createElement('div'); sh.id = 'looth-rep-sheet';
-      sh.innerHTML = '<div class="lrs-back" data-lrs-close></div><div class="lrs-card">' +
+      sh.innerHTML = '<div class="lrs-card" data-lg-sheet-card>' +
         '<div class="lrs-grab" aria-hidden="true"></div>' +
         '<div class="lrs-hd"><span class="lrs-t"></span><button class="lrs-x" type="button" data-lrs-close aria-label="Close">&times;</button></div>' +
         '<div class="lrs-body" id="lrs-body"><div class="lrs-op" id="lrs-op" hidden></div><div id="lrs-thread"></div></div>' +
@@ -3628,28 +3759,18 @@
     sh.querySelector('#lrs-comp-status').textContent = '';
     lrsMediaIds.length = 0;
     var pv0 = sh.querySelector('#lrs-comp-previews'); if (pv0) pv0.innerHTML = '';
-    lrsScroll = document.body.style.overflow; document.body.style.overflow = 'hidden';
-    lgScrubSheetState();   // idempotent open: a reopened thread never inherits a stuck backdrop/inert
-    sh.classList.add('is-open');
-    lgSyncSheetLock();
+    // lifecycle is MANAGER-OWNED: lock/backdrop/behind/history via LgSheets.
     // URL parity with the desktop dmodal (§4f contract in forums.js): the sheet's
     // history entry carries /hub/?topic=<forum>/<topic> so the address bar is a
     // copyable deep link and Back restores the feed URL. Routed opens (?topic
     // already in the URL — cold deep-link / forward-nav, seated by §4f's
     // routeFromUrl) ADOPT the existing entry instead of double-pushing. Cards
     // with no parseable permalink (legacy/dynamic) keep the old bare entry.
-    if (!lrsHist) {
-      var lrsDl = window.lgTopicDeepLink;
-      var lrsFt = (lrsDl && card && card.getAttribute) ? lrsDl.ftFromHref(card.getAttribute('data-href')) : null;
-      try {
-        if (lrsDl && lrsDl.hasParam()) { sh.__lgTopicUrl = location.pathname + location.search; lrsHist = true; }
-        else if (lrsFt) {
-          sh.__lgTopicUrl = lrsDl.urlFor(lrsFt);
-          history.pushState({ lgRs: 1, lgTopic: lrsFt.forum + '/' + lrsFt.topic }, '', sh.__lgTopicUrl);
-          lrsHist = true;
-        } else { sh.__lgTopicUrl = ''; history.pushState({ lgRs: 1 }, ''); lrsHist = true; }
-      } catch (e) {}
-    }
+    var lrsDl = window.lgTopicDeepLink;
+    var lrsFt = (lrsDl && card && card.getAttribute) ? lrsDl.ftFromHref(card.getAttribute('data-href')) : null;
+    sh.__lgTopicUrl = (lrsDl && lrsDl.hasParam()) ? (location.pathname + location.search)
+                    : (lrsFt ? lrsDl.urlFor(lrsFt) : '');
+    window.LgSheets.open('lrs', { url: sh.__lgTopicUrl || undefined });
     // Reply intent → open the FB-style composer sheet on top (focus is synchronous
     // within the originating tap so iOS honors the keyboard).
     if (opts && opts.focus) openComposerSheet({ tid: tid, fid: fid, title: ttl, focus: true });
@@ -3718,16 +3839,6 @@
         '#looth-comp-sheet.is-open{display:block}',
         // light scrim — the thread in the modal behind stays readable ABOVE the
         // composer card (Buck 2026-06-10: show the replies while writing)
-        // Backdrop: bumped .18 -> .34 so the composer clearly OWNS the foreground and
-        // the (inert) lrs thread reads as a recessed backdrop, not a competing modal
-        // (Ian 2026-07-23 "modal behind the modal"). Still translucent so the replies
-        // stay faintly visible while writing (Buck 2026-06-10). Tunable by Ian.
-        // cursor:pointer is REQUIRED for iOS Safari to deliver a tap to a plain
-        // <div> overlay — without it the backdrop tap-to-close silently no-ops on
-        // iPhone, leaving the translucent composer sheet is-open = an invisible
-        // full-screen layer that intercepts everything ("hidden modal", Ian
-        // 2026-07-24). (WebKit: non-interactive divs don't reliably receive taps.)
-        '#looth-comp-sheet .lcp-back{position:absolute;inset:0;background:rgba(15,16,12,.34);cursor:pointer}',
         // The thread sheet, while it sits BEHIND the open composer, is a
         // non-interactive backdrop via this class (NOT the inert attribute, which
         // iOS clears unreliably) — reliably reversible on close so the reopened
@@ -3784,8 +3895,7 @@
     sh = document.createElement('div'); sh.id = 'looth-comp-sheet';
     sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-modal', 'true'); sh.setAttribute('aria-label', 'Write a reply');
     sh.innerHTML =
-      '<div class="lcp-back" data-lcp-close></div>' +
-      '<div class="lcp-card">' +
+      '<div class="lcp-card" data-lg-sheet-card>' +
         '<div class="lcp-grab" aria-hidden="true"></div>' +
         '<div class="lcp-head"><span class="lcp-av" id="lcp-av"></span>' +
           '<div class="lcp-id"><div class="lcp-name" id="lcp-name">You</div><span class="lcp-ctx" id="lcp-ctx" hidden></span></div></div>' +
@@ -3808,13 +3918,11 @@
         '<button class="lcp-post" id="lcp-post" type="button" disabled>Post</button>' +
       '</div>';
     (document.body || document.documentElement).appendChild(sh);
-    sh.addEventListener('click', function (e) { if (e.target.closest('[data-lcp-close]')) closeComposerSheet(); });
     var card = sh.querySelector('.lcp-card');
     // Tap-off keyboard dismiss (Ian 2026-06-25, iPhone): tapping the sheet's
     // NON-input chrome (header, grab handle, empty panel) blurs the input so iOS
     // closes the keyboard WITHOUT closing the composer. Controls keep their focus/
-    // behavior; the backdrop ([data-lcp-close]) still closes the whole sheet
-    // (consistent with the tray).
+    // behavior; the shared manager backdrop closes the whole sheet.
     card.addEventListener('click', function (e) {
       if (e.target.closest('input, textarea, button, label, .lcp-previews')) return;
       var inp = sh.querySelector('#lcp-input'); if (inp) inp.blur();
@@ -3830,7 +3938,7 @@
       }, { passive: false });
       grab.addEventListener('touchend', function () {
         if (!on) return; on = false; card.style.transition = ''; card.style.transform = '';
-        if (dy > 90) closeComposerSheet();
+        if (dy > 90) closeComposerSheet('swipe');
       });
     })();
     var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post');
@@ -3905,58 +4013,11 @@
   // observer (bottom of file) watches, reusing the SAME proven mechanism the ntm
   // composer uses. Presence-based ref-count: locked while EITHER sheet is open,
   // released only once both are closed (so opening/closing lcp over lrs is stable).
-  function lgSyncSheetLock() {
-    var lcpOpen = !!document.querySelector('#looth-comp-sheet.is-open');
-    var open = document.querySelector('#looth-rep-sheet.is-open, #looth-comp-sheet.is-open');
-    document.body.classList.toggle('lg-sheet-lock', !!open);
-    // ROOT INVARIANT (Ian 2026-07-24: reactions dead on mobile): the lrs
-    // "behind" state (pointer-events:none) exists ONLY while the composer is open.
-    // This function runs on EVERY sheet open/close, so enforcing the invariant here —
-    // rather than per dismiss path — guarantees NO close path (backdrop, swipe, post,
-    // back-gesture, or any future one) can leave the thread non-interactive and kill
-    // the React buttons. openComposerSheet sets behind AFTER its lgSyncSheetLock call,
-    // so the composer's own open is unaffected.
-    if (!lcpOpen) lgSetBehind(document.getElementById('looth-rep-sheet'), false);
-  }
-  // Make (or un-make) a sheet the non-interactive backdrop behind the composer.
-  // We DELIBERATELY avoid the `inert` attribute: iOS Safari does not reliably clear
-  // it via the IDL setter (`el.inert = false` can leave a stuck, tap-intercepting
-  // layer — the "reopen kills the dropdown / hidden modal" bug Ian hit on his iPhone
-  // 2026-07-24). A toggled class (pointer-events:none) + aria-hidden is reliably
-  // reversible on iOS. We ALSO scrub any legacy `inert` so an older cached build's
-  // stuck attribute heals on the next open.
-  function lgSetBehind(el, on) {
-    if (!el) return;
-    if (on) {
-      el.classList.add('lg-sheet-behind');
-      el.setAttribute('aria-hidden', 'true');
-    } else {
-      el.classList.remove('lg-sheet-behind');
-      el.removeAttribute('aria-hidden');
-      if (el.inert) { try { el.inert = false; } catch (e) {} }
-      el.removeAttribute('inert');
-    }
-  }
-  // Defensive idempotent-open: force BOTH sheets back to a clean, fully-interactive
-  // baseline before we apply fresh state, so a sheet reopened after ANY close path
-  // (backdrop tap, swipe, post, back-gesture, esc) never inherits a stale backdrop /
-  // aria-hidden / inert / lifted-card transform from the previous cycle.
-  function lgScrubSheetState() {
-    ['looth-rep-sheet', 'looth-comp-sheet'].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.classList.remove('lg-sheet-behind');
-      el.removeAttribute('aria-hidden');
-      if (el.inert) { try { el.inert = false; } catch (e) {} }
-      el.removeAttribute('inert');
-    });
-    var card = document.querySelector('#looth-comp-sheet .lcp-card');
-    if (card) { card.style.transform = ''; card.style.transition = ''; }
-  }
+  /* lgSyncSheetLock / lgSetBehind / lgScrubSheetState DELETED — every invariant
+     they enforced by convention is structural in LgSheets (phase 1). */
   function openComposerSheet(o) {
     o = o || {};
-    var sh = ensureCompSheet();
-    lgScrubSheetState();   // idempotent open: never inherit a stale backdrop/inert/transform
+    var sh = ensureCompSheet();   // idempotent-open scrub is MANAGER-OWNED (LgSheets.open)
     // Rebuilt fresh on EVERY open — replyTo from a comment-reply open can never
     // leak into a later OP-reply open (and vice versa).
     sh.__lcpCtx = {
@@ -4047,16 +4108,9 @@
     } else {
       postBtn.textContent = 'Post';
     }
-    sh.classList.add('is-open');
-    lgSyncSheetLock();
-    // Ghost-modal fix (Ian 2026-07-23: "a modal behind the modal I cannot access").
-    // The lrs thread stays OPEN behind the composer BY DESIGN (Buck: read the replies
-    // while writing), but as a live full-screen dialog it read as a second, inert-but-
-    // undismissable modal. Mark it inert + aria-hidden while the composer owns the
-    // foreground, so it is honestly a backdrop (no phantom taps, no focus/AT escape,
-    // no "second modal"); restored on composer close.
-    var rsGhost = document.getElementById('looth-rep-sheet');
-    if (rsGhost && rsGhost.classList.contains('is-open')) lgSetBehind(rsGhost, true);
+    window.LgSheets.open('lcp');
+    // Ghost-modal invariant (Ian 2026-07-23) is MANAGER-OWNED: the stack marks the
+    // lrs .lg-sheet-behind automatically while the composer is on top.
     // bring the latest replies into view in the modal behind, so the user reads
     // the conversation right above the composer while writing
     var rs = document.getElementById('looth-rep-sheet');
@@ -4066,23 +4120,24 @@
     }
     if (o.focus !== false) { try { ta.focus({ preventScroll: true }); } catch (e) { try { ta.focus(); } catch (e2) {} } }
   }
-  function closeComposerSheet() {
-    var sh = document.getElementById('looth-comp-sheet');
-    if (sh) sh.classList.remove('is-open');
-    // reset the keyboard-lift transform: a stale translateY on the card is an
-    // ancestor transform that traps/mis-stacks position:fixed children on iOS
-    // (WebKit: a transformed ancestor becomes the containing block for fixed
-    // descendants) — leave it and the reopened dropdown/backdrop can mis-render.
-    if (sh) { var c = sh.querySelector('.lcp-card'); if (c) { c.style.transform = ''; c.style.transition = ''; } }
-    // release the lrs backdrop the composer put behind on open (ghost-modal fix),
-    // reliably (class + aria + any legacy inert) so the thread + its "Write a
-    // comment" pill are fully interactive again for the NEXT open.
-    lgSetBehind(document.getElementById('looth-rep-sheet'), false);
-    // belt-and-braces vs the per-open rebuild: a closed sheet can't hold a stale
-    // comment target
-    if (sh && sh.__lcpCtx) sh.__lcpCtx.replyTo = 0;
-    lgSyncSheetLock();
+  function closeComposerSheet(reason) {
+    // MANAGER-OWNED: behind-release, transform clear (card carries
+    // data-lg-sheet-card), lock sync and the history entry all happen in LgSheets.
+    window.LgSheets.close('lcp', reason || 'programmatic');
   }
+  window.LgSheets.register({
+    id: 'lcp',
+    ensure: function () { return ensureCompSheet(); },
+    escClose: true,
+    // the composer holds its OWN history entry (same URL) so phone-back closes it
+    // first and a second back closes the thread beneath — the old re-push dance,
+    // now structural.
+    historyEntry: function () { return { state: { lgLcp: 1 }, url: undefined }; },
+    onClose: function () {
+      var sh = document.getElementById('looth-comp-sheet');
+      if (sh && sh.__lcpCtx) sh.__lcpCtx.replyTo = 0;   // stale-target belt-and-braces
+    }
+  });
   function lcpSubmit(sh) {
     var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post'), status = sh.querySelector('#lcp-status');
     var ctx = sh.__lcpCtx || {};
@@ -4177,7 +4232,7 @@
         .then(function (res) {
           if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not post.'; post.disabled = false; return; }
           var newId = (res.j && (res.j.reply_id || res.j.id)) || 0;
-          closeComposerSheet();
+          closeComposerSheet('post');
           // live-refresh the discussion modal if it's open on this topic
           var rs = document.getElementById('looth-rep-sheet');
           if (rs && rs.classList.contains('is-open') && parseInt(rs.getAttribute('data-tid'), 10) === tid) {

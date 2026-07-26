@@ -31,12 +31,16 @@ test.describe('mobile reply stack @390 (WebKit)', () => {
     await expect(page.locator('#looth-comp-sheet.is-open')).toHaveCount(0);
     const clean = await page.evaluate(() => {
       const lrs = document.getElementById('looth-rep-sheet');
+      // LgSheets makes the TOP container click-transparent (off-card taps reach the
+      // shared backdrop) — interactivity lives on the CARD. The contract: not
+      // behind, not inert, and the card is interactive.
+      const card = lrs.querySelector('[data-lg-sheet-card]') || lrs;
       return { behind: lrs.classList.contains('lg-sheet-behind'), inert: !!lrs.inert,
-               pe: getComputedStyle(lrs).pointerEvents };
+               cardPe: getComputedStyle(card).pointerEvents };
     });
     expect(clean.behind).toBe(false);
     expect(clean.inert).toBe(false);
-    expect(clean.pe).not.toBe('none');
+    expect(clean.cardPe).not.toBe('none');
     await page.locator('#looth-rep-sheet .lrs-comp').tap();
     await page.waitForSelector('#looth-comp-sheet.is-open');
     await typeMention(page);
@@ -167,5 +171,40 @@ test3.describe('mention scrunched match @390 (WebKit)', () => {
     await page.waitForSelector('.lg-mnt .lg-mnt__i', { timeout: 8000 });
     const label = await page.locator('.lg-mnt .lg-mnt__h').first().textContent();
     expect3(label).toContain('Doug Proper');
+  });
+});
+
+// Dark-mode merge gate (Ian standing rule 7/26): every changed surface must verify
+// in dark. The reply stack's dark contract: composer card + mention panel render the
+// dark tokens (not light leaks), and the shared manager backdrop is present.
+const { test: test4, expect: expect4 } = require('@playwright/test');
+test4.describe('reply stack dark render @390 (WebKit)', () => {
+  test4.skip(({ isMobile }) => !isMobile, 'mobile-profile only');
+  const H4 = require('./_helpers');
+  test4.beforeEach(async ({ context }) => { await H4.addAuthCookies(context); });
+
+  test4('dark theme: composer card + mention panel use dark surfaces; backdrop present', async ({ page }) => {
+    await H4.openTopicComposer(page);
+    // set dark AFTER load — app-settings.js applies the member's stored theme at
+    // boot and would stomp an init-script attribute; post-load flips are live CSS.
+    await page.evaluate(() => document.documentElement.setAttribute('data-lguser-theme', 'dark'));
+    await page.waitForTimeout(300);
+    const input = page.locator('#lcp-input');
+    await input.tap();
+    await input.pressSequentially('@mik', { delay: 90 });
+    await page.waitForSelector('.lg-mnt .lg-mnt__i', { timeout: 8000 });
+    const s = await page.evaluate(() => {
+      const card = document.querySelector('.lcp-card');
+      const panel = document.querySelector('.lg-mnt');
+      const back = document.getElementById('lg-sheet-backdrop');
+      return {
+        cardBg: getComputedStyle(card).backgroundColor,
+        panelBg: getComputedStyle(panel).backgroundColor,
+        backdropShown: !!(back && getComputedStyle(back).display !== 'none'),
+      };
+    });
+    expect4(s.cardBg).toBe('rgb(27, 30, 33)');    // dark card, not light leak
+    expect4(s.panelBg).toBe('rgb(27, 30, 33)');   // dark panel (explicit override)
+    expect4(s.backdropShown).toBe(true);          // ONE shared backdrop under top sheet
   });
 });
