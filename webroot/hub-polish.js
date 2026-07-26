@@ -3049,6 +3049,18 @@
         else el.removeAttribute('aria-hidden');
         if (el.inert) { try { el.inert = false; } catch (e) {} }   // legacy heal
         el.removeAttribute('inert');
+        // The TOP sheet's full-screen container is click-transparent so off-card
+        // taps reach the shared backdrop beneath (which closes top) — the old
+        // per-surface .lcp-back/.lrs-back behavior, now structural. The card
+        // ([data-lg-sheet-card]) stays interactive.
+        var sheetCard = el.querySelector('[data-lg-sheet-card]');
+        if (isTop) {
+          el.style.pointerEvents = 'none';
+          if (sheetCard) sheetCard.style.pointerEvents = 'auto';
+        } else {
+          el.style.pointerEvents = '';
+          if (sheetCard) sheetCard.style.pointerEvents = '';
+        }
       });
       // the ONE backdrop sits just under the top sheet
       if (top && defs[top].backdrop !== false) {
@@ -3584,7 +3596,7 @@
     var sh = document.getElementById('looth-rep-sheet');
     if (!sh) {
       sh = document.createElement('div'); sh.id = 'looth-rep-sheet';
-      sh.innerHTML = '<div class="lrs-card">' +
+      sh.innerHTML = '<div class="lrs-card" data-lg-sheet-card>' +
         '<div class="lrs-grab" aria-hidden="true"></div>' +
         '<div class="lrs-hd"><span class="lrs-t"></span><button class="lrs-x" type="button" data-lrs-close aria-label="Close">&times;</button></div>' +
         '<div class="lrs-body" id="lrs-body"><div class="lrs-op" id="lrs-op" hidden></div><div id="lrs-thread"></div></div>' +
