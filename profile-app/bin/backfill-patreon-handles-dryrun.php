@@ -26,8 +26,14 @@ declare(strict_types=1);
  *                suffix scheme against live slugs ∪ slug_history ∪ this batch.
  *
  * Rows where the split could not be anchored (no API identity, heuristic separator
- * split, anchor mismatch, business_name already occupied) are flagged LOW-CONFIDENCE
- * for Ian's eyes. Members with nothing to change and nothing to flag are omitted.
+ * split, anchor mismatch, single-word anchor, business_name already occupied) are
+ * flagged LOW-CONFIDENCE for Ian's eyes. Members with nothing to change and nothing
+ * to flag are omitted. A single-word API anchor never drives a split (keeper ruling
+ * 7/26: it would relocate the surname into business, inverting the Cody rule) —
+ * those rows emit no name/biz proposal and are flagged 'anchor-too-sparse'.
+ * display_name / business_name / API identity fields are html_entity_decoded at
+ * read time (same treatment as indexer.php) so proposals and derived handles never
+ * carry raw entities.
  *
  *   sudo -u profile-app php backfill-patreon-handles-dryrun.php [--db-only] [--tsv=/path]
  *
@@ -56,6 +62,7 @@ $clean = function (string $s): string {
 $emailLocal = fn(string $e): string => preg_replace('/\+.*$/', '', explode('@', $e)[0] ?? '');
 $isJunk     = fn(string $s): bool => (bool) preg_match('/^patreon[_-]?\d+$/i', trim($s));
 $squash     = fn(string $s): string => preg_replace('/\s+/u', ' ', trim(mb_strtolower($s))) ?? '';
+$deent      = fn(string $s): string => html_entity_decode($s, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
 /** Word-boundary trim of a display NAME to the cap (cut at the last space inside it,
     unless the cap already lands at a word end). */
@@ -67,7 +74,7 @@ $nameFit = function (string $s, int $max = NAME_MAX): string {
         $sp = mb_strrpos($cut, ' ');
         if ($sp !== false && $sp >= 2) $cut = mb_substr($cut, 0, $sp);
     }
-    return rtrim($cut, " \t|,/·:;–—-");
+    return rtrim($cut, " \t|,/·:;–—-&");   // & joins the set: decoded '&' can now dangle at a cap cut
 };
 
 /** Word-boundary trim of a HANDLE to the cap (cut at the last dash inside it).
@@ -138,8 +145,8 @@ if (!$DB_ONLY) {
             foreach (($j['included'] ?? []) as $inc) {
                 if (($inc['type'] ?? '') !== 'user') continue;
                 $api[(string) $inc['id']] = [
-                    'full_name' => (string) ($inc['attributes']['full_name'] ?? ''),
-                    'vanity'    => (string) ($inc['attributes']['vanity'] ?? ''),
+                    'full_name' => $deent((string) ($inc['attributes']['full_name'] ?? '')),
+                    'vanity'    => $deent((string) ($inc['attributes']['vanity'] ?? '')),
                     'email'     => (string) ($inc['attributes']['email'] ?? ''),
                 ];
             }
@@ -148,7 +155,7 @@ if (!$DB_ONLY) {
                 $uid = (string) ($m['relationships']['user']['data']['id'] ?? '');
                 if ($uid === '') continue;
                 $api[$uid]['full_name'] = $api[$uid]['full_name'] ?? '';
-                if ($api[$uid]['full_name'] === '') $api[$uid]['full_name'] = (string) ($m['attributes']['full_name'] ?? '');
+                if ($api[$uid]['full_name'] === '') $api[$uid]['full_name'] = $deent((string) ($m['attributes']['full_name'] ?? ''));
                 if (($api[$uid]['email'] ?? '') === '') $api[$uid]['email'] = (string) ($m['attributes']['email'] ?? '');
             }
             $cursor = $j['meta']['pagination']['cursors']['next'] ?? null;
@@ -203,6 +210,10 @@ $split = function (string $name, string $anchor) use ($squash): ?array {
         $pat = '/^\s*' . implode('\s+', array_map(fn($w) => preg_quote($w, '/'), $words))
              . '[\s\-–—|,\/:·]+(\S.*)$/iu';
         if (preg_match($pat, $n, $m)) {
+            // single-word anchor may NOT drive a split (keeper ruling 7/26): the
+            // "tail" would be the surname relocated into business, inverting the
+            // Cody rule. No proposal; flag for Ian's eyes.
+            if (count($words) < 2) return [$n, '', 'anchor-too-sparse'];
             $tail   = trim($m[1]);
             $person = trim(mb_substr($n, 0, mb_strlen($n) - mb_strlen($m[1])), " \t|,/·:;–—-");
             if ($tail !== '') return [$person, $tail, 'anchored'];
@@ -220,9 +231,9 @@ $split = function (string $name, string $anchor) use ($squash): ?array {
 $rows = []; $byNameSource = []; $byHandleSource = []; $flagCount = [];
 foreach ($cand as $c) {
     $uid      = (int) $c['id'];
-    $nameNow  = trim((string) $c['display_name']);
+    $nameNow  = trim($deent((string) $c['display_name']));
     $slugNow  = (string) $c['slug'];
-    $bizNow   = trim((string) ($c['business_name'] ?? ''));
+    $bizNow   = trim($deent((string) ($c['business_name'] ?? '')));
     $slugJunk = $isJunk($slugNow);
     $nameJunk = $nameNow === '' || $isJunk($nameNow) || preg_match('/^\d+$/', $nameNow);
 
@@ -234,6 +245,7 @@ foreach ($cand as $c) {
     $anchor = trim((string) ($ident['full_name'] ?? ''));
 
     $flags = [];
+    $capExempt = false;   // anchor-too-sparse rows emit NO name proposal at all
 
     // ── NAME: junk fix, business prune, 40-cap ──────────────────────────────
     $nameSource = 'unchanged';
@@ -251,6 +263,9 @@ foreach ($cand as $c) {
             } elseif ($mode === 'separator') {
                 $person = $p; $biz = $t; $nameSource = 'business-prune';
                 $flags[] = 'split-heuristic';                          // no anchor backing it
+            } elseif ($mode === 'anchor-too-sparse') {
+                $flags[] = 'anchor-too-sparse';                        // single-word anchor; no split (name stays)
+                $capExempt = true;                                     // not even the 40-cap: Ian rules these by hand
             } elseif ($mode === 'anchor-mismatch') {
                 $flags[] = 'anchor-mismatch';                          // API name ≠ profile name; no split
             }
@@ -258,7 +273,7 @@ foreach ($cand as $c) {
             $flags[] = 'no-api';                                       // long name, nothing to anchor a split on
         }
     }
-    $nameProposed = $nameFit($person);
+    $nameProposed = $capExempt ? $person : $nameFit($person);
     if ($nameProposed !== $person) { $flags[] = 'name-capped'; if ($nameSource === 'unchanged') $nameSource = 'cap-40'; }
     if ($nameProposed === '') { $nameProposed = $nameNow; $nameSource = 'unchanged'; }   // never propose an empty name
 
@@ -300,7 +315,7 @@ foreach ($cand as $c) {
     // ── row inclusion: something changes, or something needs Ian's eyes ─────
     $changed = $nameProposed !== $nameNow || $bizCaptured !== '' || $slugProposed !== $slugNow;
     $lowConf = (bool) array_intersect($flags,
-        ['split-heuristic', 'anchor-mismatch', 'biz-col-occupied', 'junk-name-unresolvable', 'no-api']);
+        ['split-heuristic', 'anchor-mismatch', 'anchor-too-sparse', 'biz-col-occupied', 'junk-name-unresolvable', 'no-api']);
     if (!$changed && !$lowConf) continue;
 
     $byNameSource[$nameSource]     = ($byNameSource[$nameSource] ?? 0) + 1;
