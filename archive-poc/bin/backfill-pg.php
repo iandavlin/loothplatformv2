@@ -105,10 +105,10 @@ function extract_v2_text($blocks): string {
         if ($type === 'callout' && isset($node['body']))         $out[] = clean_text($node['body']);
         if ($type === 'transcript' && isset($node['text']))      $out[] = clean_text($node['text']);
         if ($type === 'post-header') {
-            if (!empty($node['title']))   $out[] = $node['title'];
-            if (!empty($node['tagline'])) $out[] = $node['tagline'];
+            if (!empty($node['title']))   $out[] = clean_text($node['title']);
+            if (!empty($node['tagline'])) $out[] = clean_text($node['tagline']);
         }
-        if ($type === 'section-heading' && isset($node['text'])) $out[] = $node['text'];
+        if ($type === 'section-heading' && isset($node['text'])) $out[] = clean_text($node['text']);
         if ($type === 'image' && !empty($node['caption']))       $out[] = clean_text($node['caption']);
         if ($type === 'gallery' && !empty($node['image_text']))  $out[] = clean_text($node['image_text']);
         if ($type === 'columns' && !empty($node['columns'])) {
@@ -401,7 +401,8 @@ while (true) {
             $body_text = clean_text($p['post_content'] . ' ' . $extra);
         }
 
-        $excerpt = trim((string)$p['post_excerpt']);
+        // Entity-decode like the title (GH #41); fallback body_text is already decoded.
+        $excerpt = trim(html_entity_decode((string)$p['post_excerpt'], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
         if ($excerpt === '') {
             $excerpt = mb_substr($body_text, 0, 220);
             if (mb_strlen($body_text) > 220) $excerpt .= '…';

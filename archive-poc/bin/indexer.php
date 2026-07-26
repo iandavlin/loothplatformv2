@@ -75,10 +75,10 @@ function archive_poc_extract_v2_text($blocks): string {
         if ($type === 'callout' && isset($node['body']))         $out[] = archive_poc_clean_text($node['body']);
         if ($type === 'transcript' && isset($node['text']))      $out[] = archive_poc_clean_text($node['text']);
         if ($type === 'post-header') {
-            if (!empty($node['title']))   $out[] = $node['title'];
-            if (!empty($node['tagline'])) $out[] = $node['tagline'];
+            if (!empty($node['title']))   $out[] = archive_poc_clean_text($node['title']);
+            if (!empty($node['tagline'])) $out[] = archive_poc_clean_text($node['tagline']);
         }
-        if ($type === 'section-heading' && isset($node['text'])) $out[] = $node['text'];
+        if ($type === 'section-heading' && isset($node['text'])) $out[] = archive_poc_clean_text($node['text']);
         if ($type === 'image' && !empty($node['caption']))       $out[] = archive_poc_clean_text($node['caption']);
         if ($type === 'gallery' && !empty($node['image_text']))  $out[] = archive_poc_clean_text($node['image_text']);
         if ($type === 'columns' && !empty($node['columns'])) {
@@ -402,8 +402,9 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
         $body_text = archive_poc_clean_text($post->post_content . ' ' . $extra);
     }
 
-    // Excerpt
-    $excerpt = trim((string) $post->post_excerpt);
+    // Excerpt — entity-decode like the title (GH #41): store text, escape at render.
+    // Fallback below comes from $body_text, which archive_poc_clean_text already decoded.
+    $excerpt = trim(html_entity_decode((string) $post->post_excerpt, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
     if ($excerpt === '') {
         $excerpt = mb_substr($body_text, 0, 220);
         if (mb_strlen($body_text) > 220) $excerpt .= '…';
