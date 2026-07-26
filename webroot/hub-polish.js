@@ -3876,6 +3876,15 @@
   // half-name. Serialized by getSemanticHTML() exactly as the server mint expects
   // (reply.php re-canonicalizes data-lg-uuid anchors idempotently).
   function lgcRegisterMentionBlot() {
+    try {
+      lgcRegisterMentionBlotInner();
+    } catch (e) {
+      // surfaced, never swallowed: a silent miss here means mentions degrade to
+      // plain text at pick time (caught live in the phase-2 verify window)
+      try { console.error('lgmention blot registration failed:', e); } catch (e2) {}
+    }
+  }
+  function lgcRegisterMentionBlotInner() {
     if (!window.Quill || window.Quill.imports['formats/lgmention']) return;
     var Embed = window.Quill.import('blots/embed');
     class LgMention extends Embed {
@@ -4341,6 +4350,10 @@
     if (lgcQuill) { if (cb) cb(); return; }
     lgQuillReady(function () {
       if (lgcQuill) { if (cb) cb(); return; }
+      // belt-and-braces: registration is idempotent and MUST precede construction
+      // (the formats whitelist resolves blots at construct time; a prefetch-path
+      // ordering miss here cost the first verify run its mention inserts)
+      lgcRegisterMentionBlot();
       var ed = sh.querySelector('#lgc-editor');
       lgcQuill = new window.Quill(ed, {
         placeholder: 'Write a comment…',

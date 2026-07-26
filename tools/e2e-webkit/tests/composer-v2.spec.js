@@ -15,6 +15,12 @@ test.describe('composer-v2 @390 (WebKit)', () => {
   test('full-height sheet: header X/identity/Post, editor mounts, no peek', async ({ page }) => {
     await openTopicComposer(page);
     await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15_000 });
+    // the card slides in (looth-pwa-up, .26s) — wait for settled geometry, don't
+    // read a mid-animation rect (first-run flake)
+    await page.waitForFunction(() => {
+      const c = document.querySelector('#looth-comp-sheet [data-lg-sheet-card]');
+      return c && c.getBoundingClientRect().top === 0;
+    }, null, { timeout: 3_000 });
     const geo = await page.evaluate(() => {
       const card = document.querySelector('#looth-comp-sheet [data-lg-sheet-card]');
       const r = card.getBoundingClientRect();
