@@ -4081,7 +4081,44 @@
         D + ' #looth-tag-sheet .lgt-c,' + D + ' #looth-tag-sheet .lgt-note{color:#9aa79b}',
         D + ' #looth-tag-sheet .lgt-row.on{background:#243024}',
         D + ' #looth-tag-sheet .lgt-cb{border-color:#3a403a}',
-        D + ' #looth-tag-sheet .lgt-av{background:#262b30}'
+        D + ' #looth-tag-sheet .lgt-av{background:#262b30}',
+        // ── link panel (Ian design call 2026-07-26: link is a two-part INSERT —
+        //    URL then optional text — not a decoration applied to a selection).
+        //    Third sheet layer, same LgSheets machinery as the tag picker; unlike
+        //    the picker it is COMPACT and bottom-docked, because two fields do not
+        //    warrant covering the reply you are writing.
+        '#looth-link-sheet{position:fixed;inset:0;z-index:2147483580;display:none}',
+        '#looth-link-sheet.is-open{display:block}',
+        '#looth-link-sheet .lgl-card{position:absolute;left:0;right:0;bottom:0;' +
+          'background:var(--lg-card-bg,#fff);border-radius:18px 18px 0 0;box-shadow:0 -10px 44px rgba(0,0,0,.4);' +
+          'padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px));' +
+          'font:.9375rem/1.4 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a)}',
+        '#looth-link-sheet .lgl-t{font-weight:700;margin:0 0 10px}',
+        '#looth-link-sheet .lgl-f{display:block;margin:0 0 10px}',
+        '#looth-link-sheet .lgl-lb{display:block;font-size:.75rem;font-weight:600;color:var(--lg-mute,#6b7362);margin:0 0 4px}',
+        '#looth-link-sheet .lgl-in{width:100%;box-sizing:border-box;border:1.5px solid var(--lg-line,#e3e0d8);border-radius:10px;' +
+          'padding:11px 12px;background:none;font:600 1rem/1.3 var(--lg-font-sans,sans-serif);color:var(--lg-ink,#1a1d1a);outline:0}',
+        '#looth-link-sheet .lgl-in:focus{border-color:var(--lg-sage,#87986a)}',
+        // the rejection line, same contract as the composer's upload alert: its own
+        // element, role=alert, a full row of its own so it can never ellipse away
+        '#looth-link-sheet .lgl-err{color:var(--lg-error,#b3261e);font:600 .75rem/1.4 var(--lg-font-sans,sans-serif);margin:-4px 0 8px}',
+        '#looth-link-sheet .lgl-err:empty{display:none}',
+        '#looth-link-sheet .lgl-btns{display:flex;align-items:center;gap:8px;margin-top:4px}',
+        '#looth-link-sheet .lgl-b{flex:0 0 auto;border:0;border-radius:999px;font:700 .875rem/1 var(--lg-font-sans,sans-serif);padding:12px 20px;cursor:pointer}',
+        '#looth-link-sheet .lgl-b--go{background:var(--lguser-accent,var(--lg-sage,#87986a));color:#fff}',
+        '#looth-link-sheet .lgl-b--go:disabled{background:#c9cfc0;cursor:default}',
+        '#looth-link-sheet .lgl-b--x{background:none;color:var(--lg-mute,#6b7362)}',
+        '#looth-link-sheet .lgl-b--rm{background:none;color:var(--lg-error,#b3261e);margin-left:auto}',
+        '#looth-link-sheet .lgl-b--rm[hidden]{display:none}',
+        D + ' #looth-link-sheet .lgl-card{background:#1b1e21;color:#e5e7e1}',
+        D + ' #looth-link-sheet .lgl-in{border-color:#2c312d;color:#e5e7e1}',
+        D + ' #looth-link-sheet .lgl-in:focus{border-color:#9cb37d}',
+        D + ' #looth-link-sheet .lgl-lb{color:#9aa79b}',
+        D + ' #looth-link-sheet .lgl-b--go{background:var(--lg-sage-d,#6b7c52)}',
+        D + ' #looth-link-sheet .lgl-b--go:disabled{background:#2c312d;color:#7e857c}',
+        D + ' #looth-link-sheet .lgl-b--x{color:#9aa79b}',
+        // #b3261e is 3.0:1 on #1b1e21 — under AA, same lift as the composer alert
+        D + ' #looth-link-sheet .lgl-err,' + D + ' #looth-link-sheet .lgl-b--rm{color:#f2b8b5}'
       ].join('\n');
       (document.head || document.documentElement).appendChild(st);
     }
@@ -4493,6 +4530,205 @@
       try { lgcQuill.focus(); } catch (e) {}
     }
   });
+  /* ── link panel: URL first, then OPTIONAL link text ─────────────────────────
+     Ian design call 2026-07-26. Before this, the toolbar ran Quill's default
+     handler — window.prompt('Link URL') applied to the CURRENT SELECTION — so
+     with nothing selected a member got a system dialog over a full-height sheet
+     and then nothing visible happened. Link is an INSERT, not a decoration.
+
+     Three entry states, all reachable from the same button:
+       nothing selected      -> insert a new link at the cursor; display text is
+                                the text field, falling back to the URL itself
+       text selected         -> pre-fill the text field with it and link it
+                                (today's behaviour, so no habit is lost)
+       cursor inside a link  -> pre-fill both fields and offer Remove
+     Mounted through LgSheets so the stack, scroll-lock, backdrop, z-order and
+     history entry are inherited — phone-back closes THIS panel only, which is
+     the wound fbf6b57 closed and which this layer must not re-open. */
+  var LGL_OK = /^(https?:|mailto:|tel:)/i;
+  // Normalise before we ever hand a string to Quill. Returns '' for anything we
+  // will not create — the editor must not be able to mint a javascript: link even
+  // though wp_kses_post also scrubs on render. Two defences, because the one that
+  // runs at insert is the one that keeps the draft, the preview and the paste
+  // buffer clean too.
+  function lglNormalizeUrl(raw) {
+    // strip control chars/whitespace FIRST: "java\tscript:x" is a scheme in
+    // disguise once the parser is done with it
+    var u = String(raw == null ? '' : raw)
+      .replace(/[\u0000-\u0020\u007f\u00a0\u1680\u2000-\u200f\u2028\u2029\u202f\u205f\u3000\ufeff]/g, '');
+    if (!u) return '';
+    if (/^\/\//.test(u)) u = 'https:' + u;                    // protocol-relative
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) {
+      // no scheme at all: a bare domain or domain/path becomes https://
+      if (!/^[^\s/?#]+\.[^\s/?#]+/.test(u)) return '';        // not plausibly a host
+      u = 'https://' + u;
+    }
+    if (!LGL_OK.test(u)) return '';                           // javascript:, data:, file: …
+    if (/^https?:/i.test(u) && !/^https?:\/\/[^\s/?#]+/i.test(u)) return '';   // http:// with no host
+    if (/^mailto:/i.test(u) && !/^mailto:[^\s@]+@[^\s@]+/i.test(u)) return '';
+    if (/^tel:/i.test(u) && !/^tel:[+0-9()\s.-]{3,}$/i.test(u)) return '';
+    return u;
+  }
+  var lglCtx = null;          // {mode, index, length, url} captured at open
+  function ensureLinkSheet() {
+    var l = document.getElementById('looth-link-sheet');
+    if (l) return l;
+    ensureCompSheet();        // styles live in the composer's block
+    l = document.createElement('div'); l.id = 'looth-link-sheet';
+    l.setAttribute('role', 'dialog'); l.setAttribute('aria-modal', 'true'); l.setAttribute('aria-label', 'Add link');
+    l.innerHTML =
+      '<div class="lgl-card" data-lg-sheet-card>' +
+        '<p class="lgl-t" id="lgl-t">Add link</p>' +
+        '<label class="lgl-f"><span class="lgl-lb">Link to</span>' +
+          '<input class="lgl-in" id="lgl-url" type="url" inputmode="url" placeholder="example.com" ' +
+            'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></label>' +
+        '<div class="lgl-err" id="lgl-err" role="alert"></div>' +
+        '<label class="lgl-f"><span class="lgl-lb">Link text (optional)</span>' +
+          '<input class="lgl-in" id="lgl-text" type="text" placeholder="Leave empty to show the address" ' +
+            'autocomplete="off" autocapitalize="sentences"></label>' +
+        '<div class="lgl-btns">' +
+          '<button class="lgl-b lgl-b--go" id="lgl-go" type="button" disabled>Insert</button>' +
+          '<button class="lgl-b lgl-b--x" id="lgl-x" type="button">Cancel</button>' +
+          '<button class="lgl-b lgl-b--rm" id="lgl-rm" type="button" hidden>Remove link</button>' +
+        '</div>' +
+      '</div>';
+    (document.body || document.documentElement).appendChild(l);
+    var urlEl = l.querySelector('#lgl-url'), errEl = l.querySelector('#lgl-err'), goEl = l.querySelector('#lgl-go');
+    function recalc() {
+      var raw = urlEl.value.trim();
+      var ok = !!lglNormalizeUrl(raw);
+      goEl.disabled = !ok;
+      // say WHY only once they have typed something that cannot work — an error
+      // shouting at an empty field is noise, silence on a rejected one is worse
+      errEl.textContent = (!raw || ok) ? ''
+        : /^[a-z][a-z0-9+.-]*:/i.test(raw)
+          ? 'Only web, email and phone links can be added.'
+          : "That doesn't look like a web address.";
+    }
+    urlEl.addEventListener('input', recalc);
+    l.__lglRecalc = recalc;
+    urlEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); if (!goEl.disabled) lglApply(); } });
+    l.querySelector('#lgl-text').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); if (!goEl.disabled) lglApply(); }
+    });
+    goEl.addEventListener('click', lglApply);
+    l.querySelector('#lgl-x').addEventListener('click', function () { window.LgSheets.close('lglink', 'programmatic'); });
+    l.querySelector('#lgl-rm').addEventListener('click', function () {
+      var c = lglCtx;
+      if (c && c.length && lgcQuill) lgcQuill.formatText(c.index, c.length, 'link', false, 'user');
+      lglCtx = null;                       // consumed — onClose must not re-apply
+      window.LgSheets.close('lglink', 'programmatic');
+    });
+    // same zero-gap keyboard dock as the composer and the picker — a bottom-docked
+    // card that ignored visualViewport would sit UNDER the keyboard on iOS
+    function lglDock() {
+      var card = l.querySelector('.lgl-card');
+      if (!l.classList.contains('is-open') || !window.visualViewport) { card.style.bottom = ''; return; }
+      var vv = window.visualViewport;
+      var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      card.style.bottom = kb > 1 ? kb + 'px' : '';
+    }
+    l.__lglDock = lglDock;
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', lglDock);
+      window.visualViewport.addEventListener('scroll', lglDock);
+    }
+    return l;
+  }
+  // The whole run of one link around an index — Quill gives us the format at a
+  // point, not the extent of it, and Remove/edit both need the extent.
+  function lglLinkRangeAt(idx) {
+    var q = lgcQuill; if (!q) return null;
+    var here = (q.getFormat(idx, 0) || {}).link;
+    if (!here) return null;
+    var len = q.getLength(), s = idx, e = idx;
+    while (s > 0 && (q.getFormat(s - 1, 1) || {}).link === here) s--;
+    while (e < len - 1 && (q.getFormat(e, 1) || {}).link === here) e++;
+    return { index: s, length: e - s, url: here };
+  }
+  function lglApply() {
+    var l = document.getElementById('looth-link-sheet');
+    var q = lgcQuill, c = lglCtx;
+    if (!l || !q || !c) return;
+    var url = lglNormalizeUrl(l.querySelector('#lgl-url').value);
+    if (!url) return;                      // Insert is disabled in this state anyway
+    var text = l.querySelector('#lgl-text').value.trim();
+    if (c.length) {
+      // replacing an existing run (selection or an edited link): only touch the
+      // text when they actually changed it, so a pure URL edit preserves any
+      // formatting inside the run
+      var cur = q.getText(c.index, c.length);
+      if (text && text !== cur) {
+        q.deleteText(c.index, c.length, 'user');
+        q.insertText(c.index, text, { link: url }, 'user');
+        c.length = text.length;
+      } else {
+        q.formatText(c.index, c.length, 'link', url, 'user');
+      }
+      q.setSelection(c.index + c.length, 0, 'silent');
+    } else {
+      // THE NEW CASE: nothing selected. Empty text field shows the address itself
+      // — that is what makes the text field optional rather than required.
+      var body = text || url;
+      q.insertText(c.index, body, { link: url }, 'user');
+      // an unformatted space after, so the next thing typed is NOT inside the
+      // link (same trailing-space idiom the mention insert uses)
+      q.insertText(c.index + body.length, ' ', { link: false }, 'user');
+      q.setSelection(c.index + body.length + 1, 0, 'silent');
+    }
+    lglCtx = null;
+    var sh = document.getElementById('looth-comp-sheet');
+    if (sh) lgcRecalcPost(sh);
+    window.LgSheets.close('lglink', 'programmatic');
+  }
+  window.LgSheets.register({
+    id: 'lglink',
+    ensure: function () { return ensureLinkSheet(); },
+    escClose: true,
+    // its own history entry: phone-back closes the panel ONLY, composer intact
+    historyEntry: function () { return { state: { lgLink: 1 }, url: undefined }; },
+    // NOTHING is applied on close. Unlike the tag picker — where a dropped
+    // selection loses deliberate work — a half-typed URL is not an intention, and
+    // silently linking on a stray backdrop tap is how you get javascript-shaped
+    // accidents. Insert and Remove are the only two things that change the body.
+    onClose: function () {
+      lglCtx = null;
+      var l = document.getElementById('looth-link-sheet');
+      if (l) l.querySelector('.lgl-card').style.bottom = '';
+      try { if (lgcQuill) lgcQuill.focus(); } catch (e) {}
+    }
+  });
+  function openLinkPanel() {
+    if (!lgcQuill) return;
+    var q = lgcQuill;
+    var sel = q.getSelection(true) || { index: Math.max(0, q.getLength() - 1), length: 0 };
+    var l = ensureLinkSheet();
+    var urlEl = l.querySelector('#lgl-url'), txEl = l.querySelector('#lgl-text');
+    var rmEl = l.querySelector('#lgl-rm'), tEl = l.querySelector('#lgl-t');
+    var run = sel.length ? null : lglLinkRangeAt(sel.index);
+    if (run) {                             // cursor inside an existing link
+      lglCtx = { index: run.index, length: run.length };
+      urlEl.value = run.url || '';
+      txEl.value = q.getText(run.index, run.length);
+      tEl.textContent = 'Edit link';
+      rmEl.hidden = false;
+    } else if (sel.length) {               // text selected — today's behaviour, kept
+      lglCtx = { index: sel.index, length: sel.length };
+      urlEl.value = ((q.getFormat(sel) || {}).link) || '';
+      txEl.value = q.getText(sel.index, sel.length);
+      tEl.textContent = 'Add link';
+      rmEl.hidden = !((q.getFormat(sel) || {}).link);
+    } else {                               // nothing selected — the new insert case
+      lglCtx = { index: sel.index, length: 0 };
+      urlEl.value = ''; txEl.value = '';
+      tEl.textContent = 'Add link';
+      rmEl.hidden = true;
+    }
+    l.__lglRecalc();
+    window.LgSheets.open('lglink');
+    if (l.__lglDock) l.__lglDock();
+    try { urlEl.focus({ preventScroll: true }); } catch (e) { urlEl.focus(); }
+  }
   var lgtReturnAt = 0;
   function openTagPicker() {
     if (!lgcQuill) return;
@@ -4524,12 +4760,14 @@
           toolbar: {
             container: sh.querySelector('#lgc-tools'),
             handlers: {
-              // no theme tooltip mounted — a plain prompt is the whole link UI
-              link: function (value) {
-                if (!value) { this.quill.format('link', false, 'user'); return; }
-                var url = window.prompt('Link URL');
-                if (url) this.quill.format('link', url, 'user');
-              }
+              // Quill's default handler is window.prompt applied to the current
+              // selection. Both halves were wrong for a phone: a system dialog
+              // over a full-height sheet mid-typing, and nothing at all to see
+              // when nothing was selected. The panel handles all three states
+              // (insert / apply-to-selection / edit-existing), so the toolbar
+              // button always opens it — including when Quill reports the button
+              // as active (cursor inside a link), where Remove is what is wanted.
+              link: function () { openLinkPanel(); }
             }
           }
         }
@@ -4542,6 +4780,19 @@
           slug: decodeURIComponent((node.getAttribute('href') || '').replace(/^\/u\//, '')),
           name: (node.textContent || '').replace(/\uFEFF/g, '')
         } });
+      });
+      // …and run every OTHER incoming anchor through the same normaliser the link
+      // panel uses. Insert is not the only door into the body: a paste, or a draft
+      // restored through dangerouslyPasteHTML, arrives as HTML with whatever href
+      // it likes. Registered AFTER the mention matcher so mention embeds (which
+      // carry no link attribute) pass through untouched.
+      lgcQuill.clipboard.addMatcher('a', function (node, delta) {
+        if (node.classList && node.classList.contains('bp-suggestions-mention')) return delta;
+        var ok = lglNormalizeUrl(node.getAttribute('href') || '');
+        (delta.ops || []).forEach(function (op) {
+          if (op.attributes && op.attributes.link) op.attributes.link = ok || false;
+        });
+        return delta;
       });
       var root = lgcQuill.root;
       root.setAttribute('autocorrect', 'off');
