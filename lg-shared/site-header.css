@@ -888,6 +888,12 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
   100%    { box-shadow: 0 0 0 3px transparent; }
 }
 .lg-msg__msg--hl { animation: lg-msg-hl-pulse 2.2s ease-out 1; border-radius: 8px; }
+/* dark: the sage TINTS are not re-pointed by the theme (only ink/line/mute/cream are) —
+   the search pill + mark held their light hex in dark (caught by the verify window's
+   dark leg, 7/26 gate). Pin them explicitly, mirroring the mobile sheet's dark rules. */
+html[data-lguser-theme="dark"] .lg-msg__search { background: #262b30; }
+html[data-lguser-theme="dark"] .lg-msg__search input { color: #e5e7e1; }
+html[data-lguser-theme="dark"] .lg-msg__mark { background: var(--lg-sage-d, #6b7c52); color: #f2f4ee; }
 .lg-msg__newbtn {
   appearance: none; cursor: pointer; width: 100%;
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
