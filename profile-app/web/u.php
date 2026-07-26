@@ -1775,7 +1775,8 @@ window.lgSortable = function (container, opts) {
       if (wasEmpty) { el.textContent = ''; el.classList.remove('lg-edit--empty'); }
       el.classList.add('editing'); el.contentEditable = 'true'; el.focus(); caretEnd(el);
       /* data-edit-max: contentEditable has no maxlength — truncate as typed/pasted
-         (display_name capped at 40, identity pass; server rejects over-cap anyway). */
+         (display_name capped at 71 per the Ian ruling 2026-07-26; server rejects
+         over-cap anyway). The cap is per-element, so this stays field-agnostic. */
       var max = parseInt(el.getAttribute('data-edit-max') || '0', 10);
       function onInput() {
         if (max > 0 && el.textContent.length > max) { el.textContent = el.textContent.slice(0, max); caretEnd(el); }
