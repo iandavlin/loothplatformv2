@@ -555,6 +555,15 @@ body { margin: 0; background: #f0eee8; color: #323532;
 .lg-pf-react__opt img { width: 24px; height: 24px; display: block; }
 .lg-pf-react__opt.is-on { background: #fdf6e9; }
 @media (max-width: 640px) { .lg-dock__back span { display: none; } .lg-pf-react__lbl { display: none; } }
+/* GH #53 / HK-027: at 641-1500px the horizontal dock (~310px) overlapped the
+   centered article column (content left ~x178 at 1280 -> ~150px of body text
+   covered). Collapse to a compact VERTICAL stack in the left gutter: word
+   labels hidden (counts stay), so the dock's widest button fits inside the
+   column margin instead of under the text. */
+@media (min-width: 641px) and (max-width: 1500px) {
+  .lg-standalone-dock { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .lg-dock__back span, .lg-pf-react__lbl, .lg-dock__word { display: none; }
+}
 </style>
 </head>
 <body<?= $embed ? ' class="lg-embed"' : '' ?>>
@@ -602,7 +611,7 @@ body { margin: 0; background: #f0eee8; color: #323532;
 <?php endif; ?>
 <?php if ($commentsUrl !== ''): ?>
   <button type="button" class="lg-dock__btn lg-standalone-comments" id="lg-comments-btn" aria-haspopup="dialog" aria-controls="lg-cmodal">
-    &#128172; <span><?= $commentsCount > 0 ? number_format($commentsCount) . ' comment' . ($commentsCount === 1 ? '' : 's') : 'Comments' ?></span>
+    &#128172; <?php if ($commentsCount > 0): ?><span><?= number_format($commentsCount) ?></span><span class="lg-dock__word">&nbsp;comment<?= $commentsCount === 1 ? '' : 's' ?></span><?php else: ?><span class="lg-dock__word">Comments</span><?php endif; ?>
   </button>
 <?php endif; ?>
 </div>
