@@ -27,7 +27,9 @@ test.describe('mobile reply stack @390 (WebKit)', () => {
   test('reopen cycle: dismiss composer, reopen, dropdown works again (iPhone 2026-07-24 receipt)', async ({ page }) => {
     await openTopicComposer(page);
     await typeMention(page);
-    await page.touchscreen.tap(195, 60);   // backdrop off-tap
+    // COMPOSER-V2: the full-height card has no off-card backdrop region (df97f87 —
+    // the "double modal" peek is cut); the explicit ✕ is the dismissal affordance.
+    await page.locator('#lgc-x').tap();
     await expect(page.locator('#looth-comp-sheet.is-open')).toHaveCount(0);
     const clean = await page.evaluate(() => {
       const lrs = document.getElementById('looth-rep-sheet');
@@ -54,7 +56,7 @@ test.describe('mobile reply stack @390 (WebKit)', () => {
     }));
     expect(locked.pos).toBe('fixed');
     expect(locked.lock).toBe(true);
-    await page.touchscreen.tap(195, 60);                       // composer backdrop
+    await page.locator('#lgc-x').tap();                        // composer ✕ (full-height card — no backdrop region)
     await page.locator('#looth-rep-sheet .lrs-x').tap();       // thread X
     await expect(page.locator('#looth-rep-sheet.is-open')).toHaveCount(0);
     const after = await page.evaluate(() => ({
@@ -66,7 +68,7 @@ test.describe('mobile reply stack @390 (WebKit)', () => {
 
   test('reactions reachable after composer dismiss (behind-state root invariant)', async ({ page }) => {
     await openTopicComposer(page);
-    await page.touchscreen.tap(195, 60);   // dismiss composer, thread stays
+    await page.locator('#lgc-x').tap();    // dismiss composer via ✕, thread stays
     const state = await page.evaluate(() => {
       const lrs = document.getElementById('looth-rep-sheet');
       const chip = [...lrs.querySelectorAll('.fcr-chip, .fcr-add')]
