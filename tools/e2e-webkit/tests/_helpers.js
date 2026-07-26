@@ -37,12 +37,23 @@ async function openTopicComposer(page) {
   await page.waitForSelector('#looth-comp-sheet.is-open', { timeout: 10_000 });
 }
 
-// Type @mik into the composer input with real key events and wait for the panel.
+// Type @mik into the composer editor with real key events and wait for the panel.
+// COMPOSER-V2: the editor is the Quill contenteditable (.ql-editor), lazy-mounted
+// after the sheet opens — wait for it before typing.
 async function typeMention(page, q = '@mik') {
-  const input = page.locator('#lcp-input');
+  await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15_000 });
+  const input = page.locator('#looth-comp-sheet .ql-editor');
   await input.tap();
   await input.pressSequentially(q, { delay: 90 });
   await page.waitForSelector('.lg-mnt .lg-mnt__i', { timeout: 8_000 });
 }
 
-module.exports = { addAuthCookies, openTopicComposer, typeMention };
+// Editor text content (the composer is contenteditable now — no inputValue).
+async function editorText(page) {
+  return page.evaluate(() => {
+    const e = document.querySelector('#looth-comp-sheet .ql-editor');
+    return e ? e.textContent : '';
+  });
+}
+
+module.exports = { addAuthCookies, openTopicComposer, typeMention, editorText };
