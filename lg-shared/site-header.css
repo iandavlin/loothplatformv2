@@ -1050,11 +1050,18 @@ html[data-lguser-theme="dark"] .lg-msg__mark { background: var(--lg-sage-d, #6b7
 }
 /* who-said-it label above a peer's run of messages in a group — ALSO the member-card door */
 .lg-msg__author {
-  align-self: flex-start; font: 600 11px/1 var(--lg-font-sans, system-ui);
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+  font: 600 11px/1 var(--lg-font-sans, system-ui);
   color: var(--lg-sage-d, #6b7c52); margin: 4px 0 -2px 3px;
   appearance: none; background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
 }
-.lg-msg__author:hover { text-decoration: underline; }
+.lg-msg__author .lg-sm__avatar {
+  width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex: 0 0 auto;
+  font-size: 10px; display: inline-flex; align-items: center; justify-content: center;
+}
+/* discoverability (Ian 7/26): the face is the door — make hover SAY so */
+.lg-msg__author:hover .lg-sm__avatar { box-shadow: 0 0 0 2px var(--lg-sage, #87986a); }
+.lg-msg__author:hover .lg-msg__author-nm { text-decoration: underline; }
 
 /* member card popover (bubble avatar/name tap) — light centered layer over the modal */
 .lg-msg-card {
@@ -1124,28 +1131,10 @@ html[data-lguser-theme="dark"] .lg-msg__mark { background: var(--lg-sage-d, #6b7
   padding: 14px 14px;
   display: flex; flex-direction: column; gap: 10px;
 }
-.lg-msg-side__compose {
-  flex: 0 0 auto; display: flex; align-items: flex-end; gap: 8px;
-  padding: 12px 14px;
-  border-top: 1px solid var(--lg-line, #e3ddd0);
-}
-.lg-msg-side__input {
-  flex: 1; resize: none; min-width: 0;
-  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 8px;
-  padding: 8px 12px;
-  font: 400 13px/1.4 var(--lg-font-sans, system-ui);
-  color: var(--lg-ink, #323532);
-  background: #fff; outline: none;
-}
-.lg-msg-side__input:focus { border-color: var(--lg-sage, #87986a); }
-.lg-msg-side__send {
-  appearance: none; background: var(--lg-sage, #87986a); border: 0;
-  width: 34px; height: 34px; border-radius: 50%;
-  cursor: pointer; padding: 0; flex: 0 0 34px;
-  display: inline-flex; align-items: center; justify-content: center;
-  color: #fff;
-}
-.lg-msg-side__send:hover { background: var(--lg-sage-d, #6b7c52); }
+/* the pane's composer is the REAL .lg-msg__compose component (attach parity, Ian
+   7/26) — it brings its own border/padding/input/send styling; only the narrower
+   column needs a nudge */
+.lg-msg-side .lg-msg__compose { padding: 12px 14px; }
 /* Narrow desktop (<900px): a true split cannot fit. The side chat covers the
    group pane INSIDE the normal-width panel instead — the group DOM stays
    intact underneath, so dismissing it is still an exact restore. */

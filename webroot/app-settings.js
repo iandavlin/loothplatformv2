@@ -271,11 +271,10 @@
       // --lg-cream/#fff slabs in site-header.css — same white-slab defect class
       // as the panel above, darkened here so they never ship light-on-light.
       D + ' .lg-msg-side{background:#1a1d20!important;border-left-color:#2c312d!important}',
-      D + ' .lg-msg-side__head,' + D + ' .lg-msg-side__compose{border-color:#2c312d!important}',
+      D + ' .lg-msg-side__head,' + D + ' .lg-msg-side .lg-msg__compose{border-color:#2c312d!important}',
       D + ' .lg-msg-side__peer-nm{color:#e5e7e1!important}',
       D + ' .lg-msg-side__close{color:#9aa097!important}',
       D + ' .lg-msg-side__close:hover{background:#243024!important;color:#e5e7e1!important}',
-      D + ' .lg-msg-side__input{background:#22262a!important;border-color:#333833!important;color:#e7ebe1!important}',
       D + ' .lg-msg-card__in{background:#1a1d20!important}',
       D + ' .lg-msg-card__nm{color:#e5e7e1!important}',
       D + ' .lg-msg-card__noconn{background:#22262a!important;color:#9aa097!important}',

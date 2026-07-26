@@ -36,10 +36,15 @@
      It slides OVER the group INSIDE the already-open sheet; the group's #mg-chat DOM
      is never torn down or re-scrolled, so its scroll position and composer draft are
      preserved BY CONSTRUCTION. One body lock (the sheet's) — the layer adds none.
-     LG-SHEET SEAM: this layer deliberately has NO lifecycle of its own beyond
-     open/close/isOpen on this one object — when lg-sheet.js (composer-v2 phase 1)
-     lands its ONE sheet manager, these three hooks are what registers with it. */
-  var side2 = { uuid: null, pendingPeer: null, seq: 0, pollT: null, lastHtml: '', stick: true };
+     LGSHEETS SEAM (aligned to mentions' phase-1 API, board 7/26 00:33): the whole
+     lifecycle is openDmFromGroupMobile / closeSideChatMobile(reason) with their
+     close-reason vocabulary (esc|swipe|programmatic|popstate — no backdrop/post
+     here). A phase-2 conversion maps onto LgSheets.register({id:'mg-chat2',
+     ensure, onClose:closeSideChatMobile, escClose:true, backdrop:false,
+     historyEntry:null}) — the layer stays lock-free (the sheet owns the lock), so
+     it must register as a non-locking stacked layer or stay internal; seam
+     question board-posted to mentions. */
+  var side2 = { uuid: null, pendingPeer: null, seq: 0, pollT: null, lastHtml: '', stick: true, pendingFile: null };
   var curMembersById = {};                       // {uuid:{name,slug,avatar_url,can_message}} of the open thread — powers BOTH message-card doors
   var lpAt = 0;                                 // timestamp of the last long-press (suppresses the trailing tap)
   var threadsCache = [];
@@ -254,6 +259,7 @@
       D + ' #looth-msgr .mg-b--me{background:var(--lg-sage-d,#6b7c52)}',
       D + ' #looth-msgr .mg-compwrap{background:#262b30}',
       D + ' #looth-msgr .mg-in{color:#e5e7e1}',
+      D + ' #looth-msgr .mg-hint{background:#243024;color:#b0c693}',
 
       // ── group management (lane: messages-manage) ──
       // compose button (Chats home) + members button (chat header)
@@ -262,9 +268,16 @@
       // system (membership) line — centered pill, never a bubble
       '#looth-msgr .mg-sys{align-self:center;text-align:center;max-width:86%;font:600 11.5px/1.35 var(--lg-font-sans,system-ui);' +
         'color:var(--lg-mute,#6b6f6b);background:var(--lg-paper,#f3f1ea);border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;padding:4px 12px;margin:3px 0}',
-      // who-said-it label above a peer run in a group
-      '#looth-msgr .mg-author{align-self:flex-start;font:600 11px/1 var(--lg-font-sans,system-ui);color:var(--lg-sage-d,#6b7c52);margin:4px 0 -1px 3px;border:0;background:none;padding:0;cursor:pointer;text-align:left}',
+      // who-said-it label above a peer run in a group — the FACE is the door (Ian 7/26)
+      '#looth-msgr .mg-author{align-self:flex-start;display:inline-flex;align-items:center;gap:5px;font:600 11px/1 var(--lg-font-sans,system-ui);color:var(--lg-sage-d,#6b7c52);margin:4px 0 -1px 3px;border:0;background:none;padding:0;cursor:pointer;text-align:left}',
       '#looth-msgr .mg-author:active{text-decoration:underline}',
+      '#looth-msgr .mg-author-avi{width:22px;height:22px;font-size:9px;flex:0 0 auto}',
+      // one-time side-chat hint bar (groups only; ✕ persists the dismissal)
+      '#looth-msgr .mg-hint{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:7px 12px;' +
+        'background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#52613d);font:600 12px/1.3 var(--lg-font-sans,system-ui)}',
+      '#looth-msgr .mg-hint[hidden]{display:none}',   // display:flex beats the UA [hidden] rule (house trap)
+      '#looth-msgr .mg-hint span{flex:1 1 auto}',
+      '#looth-msgr .mg-hint-x{flex:0 0 auto;border:0;background:none;color:inherit;font:700 13px/1 system-ui;padding:2px 4px;cursor:pointer}',
       '#looth-msgr .mg-edited{font-size:10.5px;opacity:.72;margin-left:6px}',
       '#looth-msgr .mg-b--tomb{background:transparent;border:1px dashed var(--lg-line2,#d8d2c4);color:var(--lg-mute,#6b6f6b);font-style:italic}',
       // reaction strip under a message + chips
@@ -402,6 +415,9 @@
             '<span class="mg-avi" id="mg-chavi"></span><span class="mg-chname" id="mg-chname"></span>' +
             '<button class="mg-chmenu" type="button" data-mg-members aria-label="Members" title="Members">⋯</button>' +
             '<button class="mg-x" type="button" data-mg-close aria-label="Close messages">✕</button></div>' +
+          // one-time discoverability hint (groups only; no hover on a phone, so SAY it once)
+          '<div class="mg-hint" id="mg-hint" hidden><span>Tap a photo to start a side chat</span>' +
+            '<button type="button" class="mg-hint-x" data-mg-hint-x aria-label="Dismiss hint">✕</button></div>' +
           '<div class="mg-msgs" id="mg-msgs"></div>' +
           '<div class="mg-comp">' +
             '<div class="mg-attach-prev" id="mg-attach-prev" hidden><div class="mg-attach-thumb">' +
@@ -424,11 +440,21 @@
             '<span class="mg-chsub">Side conversation — just the two of you</span></span>' +
             '<button class="mg-x" type="button" data-mg-close aria-label="Close messages">✕</button></div>' +
           '<div class="mg-msgs" id="mg2-msgs"></div>' +
-          '<div class="mg-comp"><div class="mg-comprow">' +
-            '<div class="mg-compwrap">' +
-              '<textarea class="mg-in" id="mg2-in" rows="1" placeholder="Message…"></textarea>' +
-              '<button class="mg-send" id="mg2-send" type="button" disabled>Send</button></div>' +
-          '</div></div>' +
+          // the REAL composer shape (attach parity, Ian 7/26): same classes, same
+          // paperclip/preview affordance, same pipeline as the main sheet composer
+          '<div class="mg-comp">' +
+            '<div class="mg-attach-prev" id="mg2-attach-prev" hidden><div class="mg-attach-thumb">' +
+              '<img id="mg2-attach-img" alt=""><button type="button" class="mg-attach-x" id="mg2-attach-x" aria-label="Remove photo">✕</button></div></div>' +
+            '<div class="mg-comprow">' +
+              '<input type="file" id="mg2-attach-in" accept="image/jpeg,image/png,image/webp" hidden>' +
+              '<button class="mg-attach-btn" id="mg2-attach-btn" type="button" aria-label="Attach photo">' +
+                '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg></button>' +
+              '<div class="mg-compwrap">' +
+                '<textarea class="mg-in" id="mg2-in" rows="1" placeholder="Message…"></textarea>' +
+                '<button class="mg-send" id="mg2-send" type="button" disabled>Send</button></div>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
         // secondary panel: compose picker + member manager (slides over home/chat)
         '<div class="mg-p2" id="mg-p2">' +
@@ -452,7 +478,13 @@
       // page underneath instead (HK-018).
       if (C('[data-mg-home]'))   { chatIsRoot ? closeMessenger() : showHome(); return; }
       // side conversation layer: back slides it away — the group underneath was never touched
-      if (C('[data-mg2-back]'))  { closeSideChatMobile(); return; }
+      if (C('[data-mg2-back]'))  { closeSideChatMobile('programmatic'); return; }
+      // one-time hint: dismissing persists — it never comes back on this device
+      if (C('[data-mg-hint-x]')) {
+        sheet.querySelector('#mg-hint').hidden = true;
+        try { localStorage.setItem('lg-sidechat-hint-dismissed', '1'); } catch (err) {}
+        return;
+      }
       // ── group management ──
       if (e.target.id === 'mg-acts') { closeActs(); return; }
       if (e.target.id === 'mg-card') { closeMemberCardMobile(); return; }   // tap the dim backdrop → dismiss
@@ -510,9 +542,16 @@
     // side conversation layer: its own composer + reader-following scroll + swipe-right close
     var ta2 = sheet.querySelector('#mg2-in'), send2 = sheet.querySelector('#mg2-send');
     ta2.addEventListener('input', function () {
-      send2.disabled = !ta2.value.trim();
+      send2.disabled = !ta2.value.trim() && !side2.pendingFile;   // text OR a staged image
       ta2.style.height = 'auto'; ta2.style.height = Math.min(ta2.scrollHeight, 110) + 'px';
     });
+    // layer attach: paperclip opens picker, change stages a preview, ✕ clears
+    var att2Btn = sheet.querySelector('#mg2-attach-btn'), att2In = sheet.querySelector('#mg2-attach-in'), att2X = sheet.querySelector('#mg2-attach-x');
+    if (att2Btn && att2In) {
+      att2Btn.addEventListener('click', function () { att2In.click(); });
+      att2In.addEventListener('change', function () { side2StageFile(att2In.files && att2In.files[0]); });
+    }
+    if (att2X) att2X.addEventListener('click', side2ClearFile);
     ta2.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); side2Send(); } });
     send2.addEventListener('click', side2Send);
     var msgBox2 = sheet.querySelector('#mg2-msgs');
@@ -525,7 +564,7 @@
         on = false;
         var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
         // decisive horizontal-right swipe only — never steals a scroll or a tap
-        if (dx > 80 && Math.abs(dy) < 40 && dx > 2 * Math.abs(dy)) closeSideChatMobile();
+        if (dx > 80 && Math.abs(dy) < 40 && dx > 2 * Math.abs(dy)) closeSideChatMobile('swipe');
       }, { passive: true });
     })();
     // image attachment: paperclip opens picker, change stages a preview, ✕ clears
@@ -831,7 +870,7 @@
     lastMsgHtml = ''; stickBottom = true;
     chatIsRoot = false;
     pendingAnchor = null;
-    closeP2(); closeActs(); closeMemberCardMobile(); closeSideChatMobile();
+    closeP2(); closeActs(); closeMemberCardMobile(); closeSideChatMobile('programmatic');
     sheet.querySelector('#mg-chat').classList.remove('is-on');
     loadThreads();
   }
@@ -871,7 +910,11 @@
       // so no dead card is ever offered (keeper 7/13 d). It stays a name→ affordance, not a
       // hijack of name→profile — the card offers both.
       if (group && !mine && m.sender_uuid !== lastSender) {
-        h += '<button type="button" class="mg-author" data-mg-membercard="' + esc(m.sender_uuid) + '">' + esc(nameBy[m.sender_uuid] || 'Member') + '</button>';
+        // the FACE is the door (Ian 7/26 discoverability): avatar + name, one tap target
+        var am = curMembersById[m.sender_uuid] || { name: nameBy[m.sender_uuid] };
+        h += '<button type="button" class="mg-author" data-mg-membercard="' + esc(m.sender_uuid) + '">'
+           + '<span class="mg-avi mg-author-avi">' + avi({ avatar_url: am.avatar_url, name: am.name || am.display_name }) + '</span>'
+           + '<span>' + esc(nameBy[m.sender_uuid] || 'Member') + '</span></button>';
       }
       lastSender = m.sender_uuid;
       // soft-deleted → tombstone (body + media already withheld server-side; no reactions)
@@ -965,7 +1008,14 @@
     ensureSheet();
     curThread = uuid; curPeer = null; curPeers = peers || [];
     curMeta = null; pendingGroup = null;
-    closeP2(); closeActs(); closeMemberCardMobile(); closeSideChatMobile();
+    closeP2(); closeActs(); closeMemberCardMobile(); closeSideChatMobile('programmatic');
+    // one-time side-chat hint: groups only, until dismissed once
+    var hint = sheet.querySelector('#mg-hint');
+    if (hint) {
+      var dismissed = false;
+      try { dismissed = localStorage.getItem('lg-sidechat-hint-dismissed') === '1'; } catch (err) {}
+      hint.hidden = dismissed || (curPeers.length < 2);
+    }
     setChatHeader(curPeers);
     sheet.querySelector('#mg-msgs').innerHTML = '<div class="mg-empty">Loading…</div>';
     lastMsgHtml = ''; stickBottom = true;        // a freshly opened thread starts at the newest message
@@ -1103,6 +1153,7 @@
     closeP2(); closeMemberCardMobile();
     var seq = ++side2.seq;
     side2.uuid = null; side2.pendingPeer = null; side2.lastHtml = ''; side2.stick = true;
+    side2ClearFile();                              // a fresh side chat never inherits a staged photo
     if (side2.pollT) { clearInterval(side2.pollT); side2.pollT = null; }
     side2Header(curMembersById[uuid] || null);   // instant from group meta; the fetch refines it
     var box = sheet.querySelector('#mg2-msgs');
@@ -1133,11 +1184,96 @@
         box.innerHTML = '<div class="mg-empty">Couldn’t open this conversation right now.</div>';
       });
   }
+  /* ── side layer attach — SAME affordance + pipeline as the sheet composer ── */
+  function side2SetError(msg) {
+    var comp = sheet && sheet.querySelector('#mg-chat2 .mg-comp');
+    if (!comp) return;
+    var el = comp.querySelector('.mg-send-error');
+    if (!msg) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'mg-send-error';
+      el.setAttribute('role', 'alert');
+      comp.insertBefore(el, comp.firstChild);
+    }
+    el.textContent = msg;
+  }
+  function side2ClearFile() {
+    side2.pendingFile = null;
+    side2SetError(null);
+    if (!sheet) return;
+    var inp = sheet.querySelector('#mg2-attach-in'); if (inp) inp.value = '';
+    var img = sheet.querySelector('#mg2-attach-img');
+    if (img) { if (img.src && img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src); img.removeAttribute('src'); }
+    var prev = sheet.querySelector('#mg2-attach-prev'); if (prev) prev.hidden = true;
+    var ta = sheet.querySelector('#mg2-in'), send = sheet.querySelector('#mg2-send');
+    if (send) send.disabled = !(ta && ta.value.trim());
+  }
+  function side2StageFile(file) {
+    if (!file) return;
+    if (!ATTACH_TYPES[file.type]) { alert('Please choose a JPEG, PNG, or WebP image.'); return; }
+    if (file.size > ATTACH_MAX)   { alert('That image is larger than 5 MB — please choose a smaller one.'); return; }
+    side2SetError(null);
+    side2.pendingFile = file;
+    var img = sheet.querySelector('#mg2-attach-img');
+    if (img) { if (img.src && img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src); img.src = URL.createObjectURL(file); }
+    var prev = sheet.querySelector('#mg2-attach-prev'); if (prev) prev.hidden = false;
+    var send = sheet.querySelector('#mg2-send'); if (send) send.disabled = false;
+  }
+  /* Image send from the layer — same multipart target as sendWithFile (thread /image,
+     or first-send create via /me/messages/image + to_uuid), same Sending…/retry idiom. */
+  function side2SendWithFile(text, ta, send) {
+    var file = side2.pendingFile;
+    var fd = new FormData();
+    fd.append('image', file);
+    if (text) fd.append('body', text);
+    var url;
+    if (side2.uuid) { url = API + '/me/messages/' + encodeURIComponent(side2.uuid) + '/image'; }
+    else { url = API + '/me/messages/image'; fd.append('to_uuid', side2.pendingPeer); }
+    var box = sheet.querySelector('#mg2-msgs');
+    if (box.querySelector('.mg-empty')) box.innerHTML = '';
+    var a = document.createElement('a'); a.className = 'mg-img'; a.style.alignSelf = 'flex-end';
+    var im = document.createElement('img'); im.src = URL.createObjectURL(file); a.appendChild(im);
+    box.appendChild(a);
+    var tb = null;
+    if (text) { tb = document.createElement('div'); tb.className = 'mg-b mg-b--me'; tb.textContent = text; box.appendChild(tb); }
+    box.scrollTop = box.scrollHeight; side2.stick = true;
+    var savedText = text;
+    ta.value = ''; ta.style.height = 'auto';
+    side2SetError(null);
+    var prev = sheet.querySelector('#mg2-attach-prev'); if (prev) prev.hidden = true;
+    send.textContent = 'Sending…'; send.setAttribute('aria-busy', 'true');
+    var settle = function () { send.textContent = 'Send'; send.removeAttribute('aria-busy'); };
+    var failed = function () {
+      settle();
+      a.style.opacity = '.4'; if (tb) tb.style.opacity = '.4';
+      ta.value = savedText; if (prev) prev.hidden = false; send.disabled = false;
+      side2SetError("Couldn't send your photo — nothing was posted. Tap Send to retry.");
+    };
+    var seq = side2.seq;
+    fetch(url, { method: 'POST', credentials: 'include', body: fd })   // no Content-Type → browser sets boundary
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+      .then(function (res) {
+        if (seq !== side2.seq) return;
+        if (!res.ok) { failed(); return; }
+        settle();
+        side2ClearFile();
+        var newUuid = res.j && res.j.thread_uuid;
+        if (!side2.uuid && newUuid) {                    // the 1:1 now exists — adopt + poll
+          side2.uuid = newUuid; side2.pendingPeer = null;
+          if (side2.pollT) clearInterval(side2.pollT);
+          side2.pollT = setInterval(function () { if (side2.uuid === newUuid) side2Load(newUuid, true); }, 8000);
+        }
+        if (side2.uuid) side2Load(side2.uuid);
+      })
+      .catch(function () { if (seq === side2.seq) failed(); });
+  }
   function side2Send() {
     var ta = sheet.querySelector('#mg2-in'), send = sheet.querySelector('#mg2-send');
     var text = (ta.value || '').trim();
-    if (!text) return;
+    if (!text && !side2.pendingFile) return;             // text OR an image
     if (!side2.uuid && !side2.pendingPeer) return;
+    if (side2.pendingFile) { side2SendWithFile(text, ta, send); return; }
     send.disabled = true;
     var url, body;
     if (side2.uuid) { url = API + '/me/messages/' + encodeURIComponent(side2.uuid); body = { body: text }; }
@@ -1170,9 +1306,12 @@
         send.disabled = false;
       });
   }
-  function closeSideChatMobile() {
+  /* reason rides the LgSheets vocabulary (esc|swipe|programmatic|popstate) so the
+     phase-2 conversion to LgSheets.register({onClose}) is a rename, not a rewrite. */
+  function closeSideChatMobile(reason) {
     side2.seq++;
     if (side2.pollT) { clearInterval(side2.pollT); side2.pollT = null; }
+    side2ClearFile();                              // a dismissed layer never keeps a staged photo
     side2.uuid = null; side2.pendingPeer = null; side2.lastHtml = '';
     var l = sheet && sheet.querySelector('#mg-chat2');
     if (l) l.classList.remove('is-on');
@@ -1739,7 +1878,7 @@
   }
   function closeMessenger(fromPop) {
     if (!sheet || !sheet.classList.contains('is-open')) return;
-    closeSideChatMobile();
+    closeSideChatMobile('programmatic');
     sheet.classList.remove('is-up');
     setTimeout(function () { if (sheet && !sheet.classList.contains('is-up')) sheet.classList.remove('is-open'); }, 320);
     unlockBg();
@@ -1759,7 +1898,7 @@
     // the side conversation layer → physical back slides it away, group restored untouched
     var l2 = sheet.querySelector('#mg-chat2');
     if (l2 && l2.classList.contains('is-on')) {
-      closeSideChatMobile();
+      closeSideChatMobile('popstate');
       try { history.pushState({ lgMg: 1 }, ''); } catch (e) {}
       return;
     }
@@ -1781,7 +1920,7 @@
     if (acts && acts.classList.contains('is-on')) { closeActs(); return; }
     if (p2 && p2.classList.contains('is-on'))     { closeP2(); return; }
     var l2 = sheet.querySelector('#mg-chat2');
-    if (l2 && l2.classList.contains('is-on'))     { closeSideChatMobile(); return; }
+    if (l2 && l2.classList.contains('is-on'))     { closeSideChatMobile('esc'); return; }
     closeMessenger();
   });
 

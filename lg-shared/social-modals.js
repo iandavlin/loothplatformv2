@@ -768,7 +768,7 @@ function threadMemberById(uuid) {
    one click away, so the sidebar never renders an affordance that would target the wrong
    thread. The 1:1 is resolved to a TRUE pair thread (peers.length===1) or created fresh —
    findPairThread/is_group=false on the server guarantees it never lands on the group. */
-var sideChat = { uuid: null, peers: [], pendingPeer: null, seq: 0, pollT: null, lastHtml: '' };
+var sideChat = { uuid: null, peers: [], pendingPeer: null, seq: 0, pollT: null, lastHtml: '', pendingFile: null, sending: false };
 
 function ensureSideChatDom() {
   var existing = document.getElementById('lg-msg-side');
@@ -787,14 +787,78 @@ function ensureSideChatDom() {
       + '</button>'
     + '</div>'
     + '<div class="lg-msg-side__messages" id="lg-msg-side-messages"></div>'
-    + '<div class="lg-msg-side__compose">'
-      + '<textarea id="lg-msg-side-input" class="lg-msg-side__input" placeholder="Message… (Enter to send)" rows="2"></textarea>'
-      + '<button type="button" class="lg-msg-side__send" data-lg-side-send aria-label="Send">'
-      + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>'
-      + '</button>'
+    /* the REAL DM composer, mounted in pane context (Ian 7/26 attach parity: same
+       component classes, same attach affordance, same pipeline — never a stripped fork) */
+    + '<div class="lg-msg__compose" id="lg-msg-side-compose">'
+      + '<div class="lg-msg__attach-preview" id="lg-msg-side-attach-preview" hidden>'
+        + '<div class="lg-msg__attach-thumb">'
+          + '<img id="lg-msg-side-attach-img" alt="Attachment preview">'
+          + '<button type="button" class="lg-msg__attach-remove" data-lg-side-attach-remove aria-label="Remove photo">&times;</button>'
+        + '</div>'
+      + '</div>'
+      + '<div class="lg-msg__compose-row">'
+        + '<input type="file" id="lg-msg-side-attach-input" class="lg-msg__attach-input" accept="image/jpeg,image/png,image/webp" hidden>'
+        + '<button type="button" class="lg-msg__attach-btn" data-lg-side-attach aria-label="Attach photo" title="Attach photo">'
+          + '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+          + '<path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg>'
+        + '</button>'
+        + '<textarea id="lg-msg-side-input" class="lg-msg__reply-input" placeholder="Message… (Enter to send)" rows="2"></textarea>'
+        + '<button type="button" class="lg-msg__send-btn" data-lg-side-send aria-label="Send">'
+          + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>'
+        + '</button>'
+      + '</div>'
     + '</div>';
   pane.appendChild(el);
+  /* attach wiring (side ids; the shared document delegates cover send/remove) */
+  var sAttBtn = el.querySelector('[data-lg-side-attach]');
+  var sAttIn  = document.getElementById('lg-msg-side-attach-input');
+  if (sAttBtn && sAttIn) {
+    sAttBtn.addEventListener('click', function () { sAttIn.click(); });
+    sAttIn.addEventListener('change', function () { stageSideAttach(sAttIn.files && sAttIn.files[0]); });
+  }
   return el;
+}
+
+/* ── side pane attach (SAME pipeline as the main composer, side-mounted) ── */
+function setSideAttachError(msg) {
+  var compose = document.getElementById('lg-msg-side-compose');
+  if (!compose) return;
+  var el = compose.querySelector('.lg-msg__send-error');
+  if (!msg) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('p');
+    el.className = 'lg-msg__send-error';
+    el.setAttribute('role', 'alert');
+    compose.insertBefore(el, compose.firstChild);
+  }
+  el.textContent = msg;
+}
+function clearSideAttach() {
+  sideChat.pendingFile = null;
+  setSideAttachError(null);
+  var inp = document.getElementById('lg-msg-side-attach-input');
+  if (inp) inp.value = '';
+  var img = document.getElementById('lg-msg-side-attach-img');
+  if (img) {
+    if (img.src && img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src);
+    img.removeAttribute('src');
+  }
+  var prev = document.getElementById('lg-msg-side-attach-preview');
+  if (prev) prev.hidden = true;
+}
+function stageSideAttach(file) {
+  if (!file) return;
+  if (!ATTACH_TYPES[file.type]) { alert('Please choose a JPEG, PNG, or WebP image.'); return; }
+  if (file.size > ATTACH_MAX)   { alert('That image is larger than 5 MB — please choose a smaller one.'); return; }
+  setSideAttachError(null);
+  sideChat.pendingFile = file;
+  var img = document.getElementById('lg-msg-side-attach-img');
+  if (img) {
+    if (img.src && img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src);
+    img.src = URL.createObjectURL(file);
+  }
+  var prev = document.getElementById('lg-msg-side-attach-preview');
+  if (prev) prev.hidden = false;
 }
 
 /* Read-only render for the side pane. A 1:1 has no author labels and no member card; the
@@ -864,6 +928,7 @@ function openSideChat(peerUuid) {
   if (!el) return;
   var seq = ++sideChat.seq;
   sideChat.uuid = null; sideChat.peers = []; sideChat.pendingPeer = null; sideChat.lastHtml = '';
+  clearSideAttach();                                    /* a fresh side chat never inherits a staged photo */
   if (sideChat.pollT) { clearInterval(sideChat.pollT); sideChat.pollT = null; }
   var pane = document.querySelector('[data-lg-pane="messages"]');
   /* the pane's OWN panel — a bare .lg-social-modal__panel query returns the NOTIF
@@ -910,8 +975,9 @@ function openSideChat(peerUuid) {
 function sideSend() {
   var input = document.getElementById('lg-msg-side-input');
   var text  = input ? input.value.trim() : '';
-  if (!text) return;
+  if (!text && !sideChat.pendingFile) return;             /* text OR an image */
   if (!sideChat.uuid && !sideChat.pendingPeer) return;
+  if (sideChat.pendingFile) { sideSendWithAttachment(text); return; }
   input.value = ''; input.disabled = true;
   var url, payload;
   if (sideChat.uuid) { url = API + '/me/messages/' + encodeURIComponent(sideChat.uuid); payload = { body: text }; }
@@ -939,9 +1005,56 @@ function sideSend() {
     });
 }
 
+/* Image branch of the side composer — SAME pipeline (postDmImage), same in-flight
+   spinner, same keep-for-retry failure contract as the main mount. A first-send
+   image is allowed: /me/messages/image with to_uuid creates the pair thread. */
+function sideSendWithAttachment(text) {
+  if (sideChat.sending) return;
+  var input   = document.getElementById('lg-msg-side-input');
+  var sendBtn = document.querySelector('[data-lg-side-send]');
+  var file    = sideChat.pendingFile;
+  if (!file) return;
+  var seq = sideChat.seq;
+  sideChat.sending = true;
+  setSideAttachError(null);
+  if (input) input.disabled = true;
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.classList.add('lg-msg__send-btn--sending');
+    sendBtn.setAttribute('aria-busy', 'true');
+  }
+  postDmImage({ threadUuid: sideChat.uuid, toUuid: sideChat.pendingPeer, file: file, text: text })
+    .then(function (j) {
+      if (seq !== sideChat.seq) return;
+      if (input) input.value = '';
+      clearSideAttach();
+      if (!sideChat.uuid && j && j.thread_uuid) {         /* the 1:1 now exists — adopt + poll */
+        sideChat.uuid = j.thread_uuid; sideChat.pendingPeer = null;
+        if (sideChat.pollT) clearInterval(sideChat.pollT);
+        sideChat.pollT = setInterval(function () { if (sideChat.uuid === j.thread_uuid) sideLoad(j.thread_uuid, true); }, 8000);
+      }
+      if (sideChat.uuid) sideLoad(sideChat.uuid);
+      setTimeout(refreshCounts, 400);
+    })
+    .catch(function () {
+      if (seq !== sideChat.seq) return;
+      setSideAttachError("Couldn't send your photo — nothing was posted. Tap Send to retry.");
+    })
+    .then(function () {
+      sideChat.sending = false;
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.classList.remove('lg-msg__send-btn--sending');
+        sendBtn.removeAttribute('aria-busy');
+      }
+      if (input) { input.disabled = false; input.focus(); }
+    });
+}
+
 function closeSideChat() {
   sideChat.seq++;
   if (sideChat.pollT) { clearInterval(sideChat.pollT); sideChat.pollT = null; }
+  clearSideAttach();                                      /* drop any staged photo with the pane */
   sideChat.uuid = null; sideChat.peers = []; sideChat.pendingPeer = null; sideChat.lastHtml = '';
   var el = document.getElementById('lg-msg-side');
   if (el) el.hidden = true;
@@ -1090,11 +1203,30 @@ function sendReply() {
     .then(function () { if (input) { input.disabled = false; input.focus(); } });
 }
 
-/* Multipart send when a photo is staged. Reply → /me/messages/<uuid>/image;
-   first message → /me/messages/image with to_uuid (creates the thread). Body is
-   the optional caption. On failure, the staged file + text are kept for retry.
-   In-flight lockout: without it every extra Send click fired ANOTHER POST of the
-   same staged file (5 clicks = 5 uploads — Ian's repeated-404 storm on 7/06). */
+/* THE image-send pipeline — one function, every mount (main composer + side pane;
+   Ian 7/26 one-composer rule). Reply → /me/messages/<uuid>/image; first message →
+   /me/messages/image with to_uuid (creates the thread). Returns the fetch promise;
+   caller owns its own UI state. NB: no Content-Type header — the browser sets the
+   multipart boundary. */
+function postDmImage(opts) {
+  var fd = new FormData();
+  fd.append('image', opts.file);
+  if (opts.text) fd.append('body', opts.text);
+  var url;
+  if (opts.threadUuid) {
+    url = API + '/me/messages/' + encodeURIComponent(opts.threadUuid) + '/image';
+  } else {
+    url = API + '/me/messages/image';
+    fd.append('to_uuid', opts.toUuid);
+  }
+  return fetch(url, { method: 'POST', credentials: 'include', body: fd })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json().catch(function () { return {}; }); });
+}
+
+/* Multipart send when a photo is staged (main composer mount). Body is the optional
+   caption. On failure, the staged file + text are kept for retry. In-flight lockout:
+   without it every extra Send click fired ANOTHER POST of the same staged file
+   (5 clicks = 5 uploads — Ian's repeated-404 storm on 7/06). */
 var attachSending = false;
 function sendWithAttachment(text) {
   if (attachSending) return;
@@ -1103,18 +1235,7 @@ function sendWithAttachment(text) {
   var file    = pendingAttachFile;
   if (!file) return;
 
-  var fd = new FormData();
-  fd.append('image', file);
-  if (text) fd.append('body', text);
-
-  var url, newDmPeer = pendingPeerUuid;
-  if (currentThreadUuid) {
-    url = API + '/me/messages/' + encodeURIComponent(currentThreadUuid) + '/image';
-  } else {
-    url = API + '/me/messages/image';
-    fd.append('to_uuid', pendingPeerUuid);
-  }
-
+  var newDmPeer = pendingPeerUuid;
   attachSending = true;
   setAttachError(null);
   if (input)   input.disabled   = true;
@@ -1125,9 +1246,7 @@ function sendWithAttachment(text) {
     sendBtn.classList.add('lg-msg__send-btn--sending');
     sendBtn.setAttribute('aria-busy', 'true');
   }
-  /* NB: no Content-Type header — the browser sets the multipart boundary. */
-  fetch(url, { method: 'POST', credentials: 'include', body: fd })
-    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json().catch(function () { return {}; }); })
+  postDmImage({ threadUuid: currentThreadUuid, toUuid: pendingPeerUuid, file: file, text: text })
     .then(function () {
       if (input) input.value = '';
       clearAttach();
@@ -1388,8 +1507,8 @@ function renderThreadMessages(msgs, messages, peers, members) {
   var peerSet = {};
   (peers || []).forEach(function (p) { peerSet[p.uuid] = true; });
   var group = (peers || []).length > 1;
-  var nameBy = {};
-  (members || []).forEach(function (m) { nameBy[m.uuid] = m.name || m.display_name || 'Member'; });
+  var memberBy = {};
+  (members || []).forEach(function (m) { memberBy[m.uuid] = m; });
 
   if (!messages.length) {
     msgs.innerHTML = '<p class="lg-sm__empty">No messages yet. Send the first one!</p>';
@@ -1404,11 +1523,16 @@ function renderThreadMessages(msgs, messages, peers, members) {
     }
     var mine = !peerSet[m.sender_uuid];   /* mine = sender is NOT among the peers */
     var h = '';
-    /* who-said-it label above a run of a peer's messages in a GROUP (never for you). In a
-       group it is ALSO the intuitive door: tapping it opens a light member card with Message
-       + View profile. 1:1 threads have no author line, so no dead card is ever offered. */
+    /* who-said-it AVATAR + name above a run of a peer's messages in a GROUP (never for you).
+       In a group it is ALSO the intuitive door: tapping it opens a light member card with
+       Message + View profile. The face makes the door OBVIOUS (Ian 7/26 discoverability):
+       cursor + hover ring + native tooltip say it goes somewhere. 1:1 threads have no author
+       line, so no dead card is ever offered. */
     if (group && !mine && m.sender_uuid !== lastSender) {
-      h += '<button type="button" class="lg-msg__author" data-lg-membercard="' + esc(m.sender_uuid) + '">' + esc(nameBy[m.sender_uuid] || 'Member') + '</button>';
+      var mb = memberBy[m.sender_uuid] || {};
+      h += '<button type="button" class="lg-msg__author" data-lg-membercard="' + esc(m.sender_uuid) + '" title="View &amp; message">'
+         + avatarEl(mb, 22)
+         + '<span class="lg-msg__author-nm">' + esc(mb.name || mb.display_name || 'Member') + '</span></button>';
     }
     lastSender = m.sender_uuid;
     /* soft-deleted → tombstone; body + media were already withheld server-side (no reactions) */
@@ -1846,6 +1970,7 @@ document.addEventListener('click', function (e) {
   var cms = hit('[data-lg-card-msg]');   if (cms) { var cu = cms.getAttribute('data-lg-card-msg'); closeMemberCard(); openDmFromGroupDesktop(cu); return; }
   if (hit('[data-lg-side-close]'))       { closeSideChat(); return; }
   if (hit('[data-lg-side-send]'))        { sideSend(); return; }
+  if (hit('[data-lg-side-attach-remove]')) { clearSideAttach(); return; }
   var mr = hit('[data-lg-mm-remove]');   if (mr) { mmRemove(mr.getAttribute('data-lg-mm-remove')); return; }
   var mo = hit('[data-lg-mm-owner]');    if (mo) { mmMakeOwner(mo.getAttribute('data-lg-mm-owner')); return; }
   if (hit('[data-lg-mm-rename]'))   { mmRename(); return; }
