@@ -121,15 +121,22 @@ final class Social
 .lg-social-btn{font:600 13px/1 var(--lg-font-sans,system-ui);padding:9px 16px;border-radius:999px;border:1px solid var(--lg-sage-d,#6b7c52);background:var(--lg-sage,#87986a);color:#fff;cursor:pointer}
 .lg-social-btn:hover{filter:brightness(.96)}
 .lg-social-btn[disabled]{background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);border-color:var(--lg-sage-3,#d4e0b8);cursor:default}
-.lg-social-btn[data-lg-social="message"],.lg-social-btn[data-lg-social="decline"],.lg-social-btn[data-lg-social="cancel"]{background:#fff;color:var(--lg-ink,#323532);border-color:var(--lg-line,#e3ddd0)}
+/* Secondary buttons + the ⋯ pill + the menu ride the CARD token, not #fff —
+   hardcoded white rendered these LIGHT in dark mode (Ian screenshot 7/26; the
+   Message rule also wins over [disabled], so a disabled Message went white with
+   near-white ink). Token-only per the dark gate; light is byte-identical. */
+.lg-social-btn[data-lg-social="message"],.lg-social-btn[data-lg-social="decline"],.lg-social-btn[data-lg-social="cancel"]{background:var(--lg-card-bg,#fff);color:var(--lg-ink,#323532);border-color:var(--lg-line,#e3ddd0)}
 .lg-social-more{position:relative;display:inline-flex}
-.lg-social-morebtn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:999px;border:1px solid var(--lg-line,#e3ddd0);background:#fff;color:var(--lg-ink,#323532);font-size:18px;line-height:1;cursor:pointer}
+.lg-social-morebtn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:999px;border:1px solid var(--lg-line,#e3ddd0);background:var(--lg-card-bg,#fff);color:var(--lg-ink,#323532);font-size:18px;line-height:1;cursor:pointer}
 .lg-social-morebtn:hover{background:var(--lg-sage-tint,#eef2e3)}
-.lg-social-menu{position:absolute;top:42px;right:0;min-width:184px;background:#fff;border:1px solid var(--lg-line,#e3ddd0);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:6px;z-index:1000}
+.lg-social-menu{position:absolute;top:42px;right:0;min-width:184px;background:var(--lg-card-bg,#fff);border:1px solid var(--lg-line,#e3ddd0);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:6px;z-index:1000}
 .lg-social-menu[hidden]{display:none}
 .lg-social-menu__item{display:block;width:100%;text-align:left;border:0;background:none;font:500 13px/1.3 var(--lg-font-sans,system-ui);color:var(--lg-ink,#323532);padding:9px 10px;border-radius:8px;cursor:pointer}
 .lg-social-menu__item:hover{background:var(--lg-sage-tint,#eef2e3)}
 .lg-social-menu__item--danger{color:var(--lg-rust,#c66845)}
+/* Dark: sage lightens to #9cb37d where fixed white text lands 2.29:1 (C-sweep
+   backlog). Dark ink on the lightened sage, the hub active-pill treatment. */
+html[data-lguser-theme="dark"] .lg-social-btn[data-lg-social="connect"],html[data-lguser-theme="dark"] .lg-social-btn[data-lg-social="accept"]{color:#15171a}
 </style>
 CSS;
     }
