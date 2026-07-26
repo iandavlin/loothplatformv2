@@ -1,20 +1,40 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LOGFILE="/var/log/idle-shutdown.log"
-INTERVAL=60
-IDLE_THRESHOLD=10
-OVERRIDE_FILE="/tmp/no-idle-shutdown"
-DRYRUN_FILE="/tmp/idle-shutdown-dryrun"
-COUNTDOWN_FILE="/tmp/idle-shutdown-countdown"
-CANCEL_FILE="/tmp/idle-shutdown-cancel"
-STOP_CMD="/snap/bin/aws ec2 stop-instances --instance-ids i-01e54ed6c9a4ba91e"
-ACTIVITY_FILE="/tmp/last-ccdev-activity"
-HOME_DIR="/home/ubuntu"
-COUNTDOWN_SECS=300
+# Every setting below may be overridden from the environment. systemd starts
+# this unit with a clean env, so in production the defaults always win; the
+# overrides exist so tools/dev1-idle/selftest.sh can run the REAL script in a
+# sandbox (own log, own state, mocked STOP_CMD) instead of a forked copy.
+LOGFILE="${IDLE_LOGFILE:-/var/log/idle-shutdown.log}"
+INTERVAL="${IDLE_INTERVAL:-60}"
+IDLE_THRESHOLD="${IDLE_THRESHOLD:-10}"
+OVERRIDE_FILE="${IDLE_OVERRIDE_FILE:-/tmp/no-idle-shutdown}"
+DRYRUN_FILE="${IDLE_DRYRUN_FILE:-/tmp/idle-shutdown-dryrun}"
+COUNTDOWN_FILE="${IDLE_COUNTDOWN_FILE:-/tmp/idle-shutdown-countdown}"
+CANCEL_FILE="${IDLE_CANCEL_FILE:-/tmp/idle-shutdown-cancel}"
+STOP_CMD="${IDLE_STOP_CMD:-/snap/bin/aws ec2 stop-instances --instance-ids i-01e54ed6c9a4ba91e}"
+ACTIVITY_FILE="${IDLE_ACTIVITY_FILE:-/tmp/last-ccdev-activity}"
+HOME_DIR="${IDLE_HOME_DIR:-/home/ubuntu}"
+COUNTDOWN_SECS="${IDLE_COUNTDOWN_SECS:-300}"
 EMAIL_TO="ian.davlin@gmail.com"
-EMAIL_SENT_FILE="/tmp/idle-shutdown-email-sent"
-EMAIL_IDLE_THRESHOLD=60  # minutes before sending idle email
+EMAIL_SENT_FILE="${IDLE_EMAIL_SENT_FILE:-/tmp/idle-shutdown-email-sent}"
+EMAIL_IDLE_THRESHOLD="${IDLE_EMAIL_THRESHOLD:-60}"  # minutes before sending idle email
+
+# --- worker activity (tmux panes / claude / headless engines) --------------
+# State lives under /run: it is wiped on boot, which is what we want since it
+# holds pids. Both files are recreated on the first pass after a (re)start.
+WORKER_STATE_DIR="${IDLE_WORKER_STATE_DIR:-/run/idle-shutdown}"
+WORKER_CPU_STATE="${WORKER_STATE_DIR}/worker-cpu"
+WORKER_STAMP="${WORKER_STATE_DIR}/last-worker-activity"
+# CPU jiffies per 60s that count as real work -- see check_worker_activity().
+WORK_JIFFIES="${IDLE_WORK_JIFFIES:-100}"
+# Process comms that ARE the work (exact comm, verified through /proc/pid/exe).
+WORKER_COMMS="${IDLE_WORKER_COMMS:-claude}"
+# Engines: only ever counted alongside a live worker (they leak at 0% CPU).
+ENGINE_COMMS="${IDLE_ENGINE_COMMS:-chrome}"
+TMUX_SOCKET_GLOB="${IDLE_TMUX_SOCKET_GLOB:-/tmp/tmux-*/*}"
+# A pane sitting at one of these is a prompt, not work.
+SHELL_CMDS="${IDLE_SHELL_CMDS:-bash sh zsh dash fish tmux}"
 
 WATCH_DIRS=(
     "${HOME_DIR}/.claude"
