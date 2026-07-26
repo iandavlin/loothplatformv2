@@ -26,11 +26,26 @@ REPO="/home/ubuntu/loothplatformv2-clean"
 # WP path comes from the established per-env file
 LG_WP_PATH="$(sed -n 's/^LG_WP_PATH=//p' /etc/looth/env 2>/dev/null | tr -d '"')"
 LG_WP_PATH="${LG_WP_PATH:-/var/www/dev}"
-case "$BOX" in
-    dev2) VHOST="dev2.loothgroup.com.conf" ;;
-    live) VHOST="loothgroup.com.conf" ;;
-    *) echo "unknown box '$BOX'" >&2; exit 1 ;;
-esac
+case "$BOX" in dev2|live) : ;; *) echo "unknown box '$BOX'" >&2; exit 1 ;; esac
+
+# Resolve the enabled vhost by what actually serves LG_PUBLIC_HOST — filenames lie
+# (live's serving vhost is still NAMED dev2.loothgroup.com.conf, promotion leftover).
+PUB="$(sed -n 's/^LG_PUBLIC_HOST=//p' /etc/looth/env 2>/dev/null | tr -d '"')"
+[ -n "$PUB" ] || { echo "FATAL: LG_PUBLIC_HOST missing from /etc/looth/env" >&2; exit 1; }
+# exact server_name TOKEN equality (regex boundaries false-matched buck-dev2 vs dev2)
+vh_serves() { awk -v H="$1" '/^[[:space:]]*server_name[[:space:]]/ { for(i=2;i<=NF;i++){ n=$i; sub(/;$/,"",n); if(n==H){ found=1 } } } END{ exit !found }' "$2" 2>/dev/null; }
+VH_EN=""
+for f in /etc/nginx/sites-enabled/*; do
+    [ -e "$f" ] || continue
+    vh_serves "$PUB" "$f" && VH_EN="$VH_EN $f"
+done
+# shellcheck disable=SC2086
+set -- $VH_EN
+[ "$#" -eq 1 ] || { echo "FATAL: expected exactly ONE enabled vhost serving $PUB, found $#:$VH_EN" >&2; exit 1; }
+VH_EN="$1"
+# the box-level vhost file is one link-hop from sites-enabled (or the file itself)
+if [ -L "$VH_EN" ]; then VH_SA="$(readlink "$VH_EN")"; case "$VH_SA" in /*) : ;; *) VH_SA="/etc/nginx/sites-enabled/$VH_SA" ;; esac; else VH_SA="$VH_EN"; fi
+VHOST="$(basename "$VH_SA")"
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="/home/ubuntu/deploy-backups/config-symlinks-$STAMP"
@@ -60,8 +75,19 @@ link_one() {  # name, live path, repo target — same-content-or-skip conversion
     fi
 }
 
-echo "== nginx main vhost ($VHOST)"
-link_one "sites-available/$VHOST" "/etc/nginx/sites-available/$VHOST" "$REPO/platform/nginx/$VHOST"
+echo "== nginx main vhost ($VHOST, serving $PUB)"
+VH_FINAL="$(readlink -f "$VH_EN")"
+case "$VH_FINAL" in
+    "$REPO"/platform/nginx/*)
+        echo "OK        vhost already serves tracked $(basename "$VH_FINAL") from the checkout — pull deploys it" ;;
+    *)
+        if [ -e "$REPO/platform/nginx/$VHOST" ]; then
+            link_one "sites-available/$VHOST" "$VH_SA" "$REPO/platform/nginx/$VHOST"
+        else
+            skipped=$((skipped+1))
+            echo "SKIPPED   vhost — no tracked platform/nginx/$VHOST to link against (capture + commit it first)"
+        fi ;;
+esac
 
 echo "== FPM posture (platform/fpm/$BOX)"
 if [ -d "$REPO/platform/fpm/$BOX" ]; then

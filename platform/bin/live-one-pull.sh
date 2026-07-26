@@ -46,11 +46,29 @@ note "checkout: $BR @ $HEADC dirty='$DIRTY'"
 [ "$BR" = "main" ] || { note "FATAL: serving checkout not on main — stop, tell keeper"; exit 1; }
 [ -z "$DIRTY" ] || { note "FATAL: serving checkout dirty — stop, tell keeper"; exit 1; }
 
-# vhost: where does nginx actually serve loothgroup.com from?
-VH_EN="/etc/nginx/sites-enabled/loothgroup.com.conf"
-VH_REAL="$(readlink -f "$VH_EN" 2>/dev/null || true)"
-note "vhost: sites-enabled -> ${VH_REAL:-MISSING}"
-TRACKED_VH="$REPO/platform/nginx/loothgroup.com.conf"
+# vhost: resolve which enabled file ACTUALLY serves LG_PUBLIC_HOST — never assume a
+# filename (keeper's live audit 2026-07-26: live still serves a vhost NAMED
+# dev2.loothgroup.com.conf, a promotion leftover; a hardcoded loothgroup.com.conf
+# path would have missed it mid-cutover).
+PUB="$(sed -n 's/^LG_PUBLIC_HOST=//p' /etc/looth/env 2>/dev/null | tr -d '"')"
+[ -n "$PUB" ] || { note "FATAL: LG_PUBLIC_HOST missing from /etc/looth/env — cannot identify the serving vhost"; exit 1; }
+# exact server_name TOKEN equality (regex boundaries false-matched buck-dev2 vs dev2)
+vh_serves() { awk -v H="$1" '/^[[:space:]]*server_name[[:space:]]/ { for(i=2;i<=NF;i++){ n=$i; sub(/;$/,"",n); if(n==H){ found=1 } } } END{ exit !found }' "$2" 2>/dev/null; }
+VH_EN=""
+for f in /etc/nginx/sites-enabled/*; do
+    [ -e "$f" ] || continue
+    vh_serves "$PUB" "$f" && VH_EN="$VH_EN $f"
+done
+# shellcheck disable=SC2086
+set -- $VH_EN
+if [ "$#" -ne 1 ]; then
+    note "FATAL: expected exactly ONE enabled vhost with server_name $PUB, found $#:$VH_EN"
+    note "       identify it by hand and fix sites-enabled before rerunning."
+    exit 1
+fi
+VH_EN="$1"
+VH_REAL="$(readlink -f "$VH_EN")"
+note "vhost serving $PUB: $VH_EN -> $VH_REAL"
 
 # opcache posture decides whether live deploys ever need an fpm reload
 note "opcache: $(php-fpm8.3 -i 2>/dev/null | grep -E '^opcache\.(validate_timestamps|revalidate_freq)' | tr '\n' ' ' || echo 'UNREADABLE')"
@@ -86,15 +104,22 @@ if [ "$MODE" = "audit" ]; then
         done
     fi
 
-    note "== A4. vhost capture (L-1: it was never tracked)"
+    note "== A4. vhost tracking state (L-1 check)"
     if [ -n "$VH_REAL" ] && [ -f "$VH_REAL" ]; then
-        cp -a "$VH_REAL" "$OUT/loothgroup.com.conf.captured"
-        if git -C "$REPO" ls-files --error-unmatch "platform/nginx/loothgroup.com.conf" >/dev/null 2>&1; then
-            cmp -s "$VH_REAL" "$TRACKED_VH" && note "  vhost already tracked AND identical" || note "  vhost tracked but DIFFERS from serving copy — diff for keeper in $OUT"
-        else
-            note "  CAPTURED to $OUT/loothgroup.com.conf.captured — keeper: commit as platform/nginx/loothgroup.com.conf WITH the dev2-style pwa edits (bare /pwa.js sub_filter + pwa-loader.php location), then run apply"
-        fi
-        grep -n "pwa.js?v=" "$VH_REAL" | tee -a "$OUT/REPORT.txt" || note "  (no hand-carried pwa ?v= found in vhost)"
+        case "$VH_REAL" in
+            "$REPO"/*)
+                REL="${VH_REAL#"$REPO"/}"
+                if git -C "$REPO" ls-files --error-unmatch "$REL" >/dev/null 2>&1; then
+                    note "  vhost serves TRACKED $REL straight from the checkout — a pull deploys it; L-1 does NOT apply on this box. No capture needed."
+                else
+                    cp -a "$VH_REAL" "$OUT/vhost.captured"
+                    note "  vhost symlinks into the checkout but $REL is UNTRACKED (L-1 confirmed) — CAPTURED to $OUT/vhost.captured; keeper commits it, then rerun."
+                fi ;;
+            *)
+                cp -a "$VH_REAL" "$OUT/vhost.captured"
+                note "  vhost is a box file OUTSIDE the checkout — CAPTURED to $OUT/vhost.captured for keeper to commit; then apply converts it (byte-identical gate)." ;;
+        esac
+        grep -n "pwa.js?v=" "$VH_REAL" | tee -a "$OUT/REPORT.txt" || note "  (no hand-carried pwa ?v= in vhost — good)"
     else
         note "  WARN: could not resolve the serving vhost file"
     fi
@@ -173,3 +198,6 @@ for p in / /hub/ /pwa.js ; do
     note "  smoke $code $p"
 done
 note "== APPLY DONE. Report + rollback: $OUT (send REPORT.txt to keeper)"
+note "   Routine deploys from here: lg-deploy (= git pull). Keeper-confirmed 2026-07-26:"
+note "   live opcache validate_timestamps=On/2s — PHP self-refreshes, NO fpm reload in a"
+note "   routine deploy. nginx/fpm reloads happen only when platform confs change."

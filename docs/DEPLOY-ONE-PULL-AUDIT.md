@@ -261,3 +261,25 @@ Standing rule (CLAUDE.md quality gates): every loader carries `?v=filemtime`. Re
   throughout.
 - **Open items**: rung 2 soak overnight (box left quiet); hub-polish.js conversion after
   Ian's test resolves; lib/ after the quill call; rungs 4–5 are live and keeper/Ian-run.
+
+### Live audit results (keeper-run read-only pass, 2026-07-26 ~22:20)
+
+- **Live's serving vhost is NAMED dev2.loothgroup.com.conf** (dev2→live promotion
+  leftover), already symlinked sites-enabled → sites-available → the checkout — i.e.
+  live serves the TRACKED dev2 vhost file, so §8's L-1 reads differently: the vhost
+  IS tracked and pull-deployable; the risk was the FILENAME assumption in tooling +
+  the fact that vhost content changes ride into live on its next pull. Both fixed:
+  (1) live-one-pull.sh + install-config-symlinks.sh now resolve the serving vhost by
+  server_name match on LG_PUBLIC_HOST and FATAL when not exactly one; (2) the
+  /pwa.js location in the shared tracked vhost is now SELF-FALLBACK (try_files →
+  @pwa_static) so a live pull BEFORE install-symlinks.sh links pwa-loader.php serves
+  static pwa.js on v() fallbacks instead of 404ing the bootstrap site-wide.
+- **Live opcache: validate_timestamps=On, revalidate_freq=2** (keeper-confirmed) →
+  a routine live deploy is LITERALLY the pull; no fpm reload. Baked into
+  live-one-pull.sh apply output; lg-deploy was already conditional.
+- **Zero drift on live**: all 24 webroot copies + /srv/lg-shared/site-header.php +
+  lg-snippets/86.php are byte-identical to their commits; 3 files change content at
+  cutover, the rest are pure conversions. Ian has taken a machine snapshot of live
+  (the level-below-ROLLBACK.sh revert).
+- dev2: hub-polish.js converted after the composer merge (repo==docroot f3c8a43b);
+  docroot top level now has ZERO real js/css files; lib/ still pending the quill call.
