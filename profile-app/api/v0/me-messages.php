@@ -8,6 +8,11 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Messaging.php';
  * Backend: src/Messaging.php (Connections-only gate on new DMs).
  *
  *   GET  /profile-api/v0/me/messages        → [ { id, uuid, peers[], last_snippet, unread_count, last_message_at } ]
+ *   GET  /profile-api/v0/me/messages?q=…    → message-content SEARCH across the viewer's threads
+ *                                              (&limit≤50 &offset — { hits[], more }; participant-scoped,
+ *                                               tombstones + system lines excluded — src/Messaging::searchFor).
+ *                                              Rides this route as a query-param branch (the notif-delete
+ *                                              pattern): nginx matches only the path, so NO new rewrite.
  *   POST /profile-api/v0/me/messages        → send  body { to_uuid?, to_uuids?[], thread_id?, body }
  *                                              (to_uuid starts/finds the 1:1 thread; thread_id replies;
  *                                               to_uuids[] with ≥2 members starts a GROUP thread)
@@ -25,6 +30,12 @@ $uuid   = $user['uuid'];
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'GET') {
+    $q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+    if ($q !== '') {
+        $limit  = isset($_GET['limit'])  ? (int)$_GET['limit']  : 20;
+        $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
+        profile_app_json(200, Messaging::searchFor($uuid, $q, $limit, $offset));
+    }
     profile_app_json(200, ['threads' => Messaging::threadsFor($uuid)]);
 }
 

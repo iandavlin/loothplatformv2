@@ -840,6 +840,60 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
 /* "＋ New message" bar above the thread list (list view only; JS toggles [hidden]) */
 .lg-msg__newbar { padding: 10px 16px 4px; }
 .lg-msg__newbar[hidden] { display: none; }
+
+/* ── message search (list-view chrome, like the newbar) ──
+   Tokens only — the theme system re-points --lg-* in dark, so no dark block needed. */
+.lg-msg__searchbar { padding: 6px 16px 8px; }
+.lg-msg__searchbar[hidden] { display: none; }
+.lg-msg__search {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; border-radius: 999px;
+  background: var(--lg-sage-tint, #eef2e3);
+  color: var(--lg-mute, #6b6f6b);
+}
+.lg-msg__search input {
+  flex: 1; min-width: 0; border: 0; background: none; outline: none;
+  font: 400 13px/1.2 var(--lg-font-sans, system-ui);
+  color: var(--lg-ink, #323532);
+}
+.lg-msg__sechead {
+  padding: 10px 20px 4px;
+  font: 700 10.5px/1 var(--lg-font-sans, system-ui);
+  letter-spacing: .06em; text-transform: uppercase;
+  color: var(--lg-mute, #6b6f6b);
+}
+/* hit rows ride .lg-msg__thread; the snippet must WRAP so the matched words stay visible
+   (the thread rows' nowrap ellipsis would routinely cut them off) */
+.lg-msg__thread--hit .lg-msg__preview {
+  white-space: normal;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.lg-msg__hitwhere {
+  font: 400 11.5px/1.3 var(--lg-font-sans, system-ui);
+  color: var(--lg-mute, #6b6f6b);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lg-msg__mark {
+  background: var(--lg-sage-3, #d4e0b8); color: inherit;
+  border-radius: 3px; padding: 0 1px;
+}
+.lg-msg__hittime {
+  font: 400 11px/1 var(--lg-font-sans, system-ui);
+  color: var(--lg-mute, #6b6f6b); flex: 0 0 auto; align-self: flex-start; margin-top: 2px;
+}
+/* jump-to-message flash — same show-me-the-anchor treatment as the forums reply deep-link */
+@keyframes lg-msg-hl-pulse {
+  0%, 55% { box-shadow: 0 0 0 3px var(--lg-sage, #87986a); }
+  100%    { box-shadow: 0 0 0 3px transparent; }
+}
+.lg-msg__msg--hl { animation: lg-msg-hl-pulse 2.2s ease-out 1; border-radius: 8px; }
+/* dark: the sage TINTS are not re-pointed by the theme (only ink/line/mute/cream are) —
+   the search pill + mark held their light hex in dark (caught by the verify window's
+   dark leg, 7/26 gate). Pin them explicitly, mirroring the mobile sheet's dark rules. */
+html[data-lguser-theme="dark"] .lg-msg__search { background: #262b30; }
+html[data-lguser-theme="dark"] .lg-msg__search input { color: #e5e7e1; }
+html[data-lguser-theme="dark"] .lg-msg__mark { background: var(--lg-sage-d, #6b7c52); color: #f2f4ee; }
 .lg-msg__newbtn {
   appearance: none; cursor: pointer; width: 100%;
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
