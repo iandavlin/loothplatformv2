@@ -58,6 +58,7 @@ cleanup() {
     pkill -x lg-fakeengine 2>/dev/null
     # ONLY the private selftest server. Never the default socket.
     tmux -L "$SOCKET" kill-server 2>/dev/null
+    rm -f "/tmp/tmux-$(id -u)/$SOCKET"   # kill-server leaves the socket file behind
     if (( KEEP )); then echo "sandbox kept: $SB"; else rm -rf "$SB"; fi
 }
 trap cleanup EXIT INT TERM
@@ -183,8 +184,14 @@ say "CASE 4  same engine ALONGSIDE a live worker -> counted, box stays up"
 fixture "$SB/bin/lg-fakeengine" 300; eng=$FIX_PID
 fixture "$SB/bin/lg-fakeworker" -c 'while :; do :; done'; spin=$FIX_PID
 log=$(run_daemon engine-plus-worker 22)
+# The verdict line alone cannot show this: with a worker burning CPU the
+# daemon is active every pass, so the idle summary never prints. Look at the
+# tracked-pid state instead -- the engine's pid is in it only if the engine was
+# collected as a root, which only happens alongside a live worker.
+if grep -q "^${eng} " "$(dirname "$log")/run/worker-cpu" 2>/dev/null
+then ok "engine tracked as a root because a worker is alive (pid $eng)"
+else bad "engine was not collected even though a worker was alive"; fi
 unfixture $spin $eng
-expect "$log" "candidate" "candidates include the engine"
 expect "$log" "server active" "reported active"
 
 say "CASE 5  PARKED worker (present, 0% CPU) -> idle once the grace expires"
@@ -224,6 +231,9 @@ refute "$log" "ALL IDLE" "no countdown while held"
 # Read-only: no fixtures, no load. Shows where the REAL processes on this box
 # fall relative to the threshold, which is the number that actually matters.
 say "CALIBRATION (read-only, live processes -- no load manufactured)"
+# Read the shipped default out of the daemon itself so this cannot drift from it.
+DEF_JIFF=$(sed -n 's/^WORK_JIFFIES="${IDLE_WORK_JIFFIES:-\([0-9]*\)}".*/\1/p' "$DAEMON")
+DEF_JIFF=${DEF_JIFF:-150}
 snap() { local p=$1; [[ -r /proc/$p/stat ]] || return 0; local l; l=$(< /proc/$p/stat)
          local r=${l##*) }; local -a f; read -r -a f <<< "$r"; echo $(( f[11]+f[12] )); }
 declare -A t0
@@ -234,7 +244,7 @@ for p in "${!t0[@]}"; do
     now=$(snap "$p"); [[ -n "$now" ]] || continue
     per_min=$(( (now - t0[$p]) * 6 ))
     comm=$(cat "/proc/$p/comm" 2>/dev/null || echo "?")
-    if (( per_min >= 100 )); then v="WORKING (>= 100 default threshold)"; else v="parked/leaked (< 100)"; fi
+    if (( per_min >= DEF_JIFF )); then v="WORKING (>= ${DEF_JIFF} shipped threshold)"; else v="parked/leaked (< ${DEF_JIFF})"; fi
     printf '  %-8s %-10s %s  [%s]\n' "$p" "$per_min" "$v" "$comm"
 done
 
