@@ -152,7 +152,7 @@ else
         echo "rm $SNIP && mv $OUT/lg-snippets.predir $SNIP" >> "$RB"
         note "  CONVERTED lg-snippets (rollback in ROLLBACK.sh)"
     else
-        note "  SKIPPED lg-snippets — differs from repo:"; diff -rq "$SNIP" "$REPO/lg-snippets" 2>&1 | head -8 | tee -a "$OUT/REPORT.txt"
+        note "  SKIPPED lg-snippets — differs from repo:"; { diff -rq "$SNIP" "$REPO/lg-snippets" 2>&1 || true; } | head -8 | tee -a "$OUT/REPORT.txt"
     fi
 fi
 

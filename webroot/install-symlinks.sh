@@ -33,6 +33,20 @@ skipped=0 converted=0 linked=0 repaired=0
 
 bk() { mkdir -p "$BACKUP"; }
 
+# Does the docroot file's md5 match ANY committed version of the repo target (last
+# 50 revisions of main)? Distinguishes "box is merely BEHIND the repo" (converting
+# = deploying current main, which is the point) from TRUE reverse drift / a lane
+# overlay (bytes main never had → skip). Without this, every file changed since
+# the box's last copy-deploy would false-skip — on live, that is all of them.
+historic_match() {
+    local rel="${1#"$REPO"/}" dm="$2" r h
+    while read -r r; do
+        h="$(git -C "$REPO" cat-file blob "$r:$rel" 2>/dev/null | md5sum | cut -d' ' -f1)" || continue
+        [ "$h" = "$dm" ] && return 0
+    done < <(git -C "$REPO" rev-list -n 50 HEAD -- "$rel" 2>/dev/null)
+    return 1
+}
+
 # link TARGET as WEBROOT/NAME with the full safety model
 link_one() {
     local name="$1" target="$2" t
@@ -51,7 +65,7 @@ link_one() {
             else
                 skipped=$((skipped+1))
                 echo "SKIPPED   $name/ — dir differs from repo (extra/changed files):"
-                diff -rq "$t" "$target" 2>&1 | sed 's/^/            /' | head -10
+                { diff -rq "$t" "$target" 2>&1 || true; } | sed 's/^/            /' | head -10
             fi
         else
             local a b
@@ -59,9 +73,12 @@ link_one() {
             if [ "$a" = "$b" ]; then
                 bk; mv "$t" "$BACKUP/$name"; ln -s "$target" "$t"; converted=$((converted+1))
                 echo "CONVERTED $name (original in $BACKUP)"
+            elif historic_match "$target" "$a"; then
+                bk; mv "$t" "$BACKUP/$name"; ln -s "$target" "$t"; converted=$((converted+1))
+                echo "CONVERTED $name (docroot held an OLDER committed version $a — link deploys current main; original in $BACKUP)"
             else
                 skipped=$((skipped+1))
-                echo "SKIPPED   $name — docroot=$a repo=$b (box differs from repo; capture or overlay in progress?)"
+                echo "SKIPPED   $name — docroot=$a repo=$b and $a matches NO committed version (reverse drift or lane overlay)"
             fi
         fi
     else

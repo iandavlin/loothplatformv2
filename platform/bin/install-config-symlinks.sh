@@ -52,7 +52,7 @@ link_one() {  # name, live path, repo target — same-content-or-skip conversion
         else
             skipped=$((skipped+1))
             echo "SKIPPED   $name — box file differs from repo copy:"
-            diff -u "$target" "$t" 2>&1 | head -15 | sed 's/^/            /'
+            { diff -u "$target" "$t" 2>&1 || true; } | head -15 | sed 's/^/            /'
         fi
     else
         ln -s "$target" "$t"; converted=$((converted+1))
