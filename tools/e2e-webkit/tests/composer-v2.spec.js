@@ -245,16 +245,18 @@ test.describe('composer-v2 @390 (WebKit)', () => {
     ]);
     await chooser.setFiles(files);
   }
+  // Hold every /media/upload open so the in-flight window is observable at all
+  // (against dev2 over loopback an upload lands almost instantly). Resolvers queue,
+  // so a retry — which is a SECOND request from the same tile — gets its own slot:
+  // __release(status, body, i), i defaulting to the first.
   const stallUpload = (page) => page.evaluate(() => {
     const orig = window.fetch;
-    window.__release = null;
+    window.__pending = [];
+    window.__release = (status, body, i) => window.__pending[i || 0](
+      new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }));
     window.fetch = function (url) {
       if (String(url).indexOf('/media/upload') > -1) {
-        return new Promise((res) => {
-          window.__release = (status, body) => res(new Response(JSON.stringify(body), {
-            status, headers: { 'Content-Type': 'application/json' },
-          }));
-        });
+        return new Promise((res) => { window.__pending.push(res); });
       }
       return orig.apply(this, arguments);
     };
@@ -331,12 +333,20 @@ test.describe('composer-v2 @390 (WebKit)', () => {
         wants: err.scrollWidth,
         ink: getComputedStyle(err).color,
         postBusy: document.querySelector('#lgc-post').getAttribute('aria-busy'),
+        retryTag: (document.querySelector('#looth-comp-sheet .lgc-pv-r') || {}).tagName,
+        retryLabel: (document.querySelector('#looth-comp-sheet .lgc-pv-r') || document.createElement('i'))
+          .getAttribute('aria-label'),
       };
     });
     expect(failed.stripChildren).toBe(1);               // the photo did NOT vanish
     expect(failed.errTile).toBe(true);
     expect(failed.busyTile).toBe(false);                // spinner stopped
     expect(failed.text).toMatch(/try again/i);          // plain language + a way forward
+    // the way forward is a REAL control, not prose: a <button>, so the tap lands on
+    // iOS and the label is announced (a bare span needs cursor:pointer to register
+    // at all there — the trap this codebase has already paid for twice)
+    expect(failed.retryTag).toBe('BUTTON');
+    expect(failed.retryLabel).toMatch(/retry/i);
     expect(failed.role).toBe('alert');
     expect(failed.h).toBeGreaterThan(0);
     expect(failed.w).toBeGreaterThanOrEqual(failed.wants);   // legible, not ellipsed
@@ -363,5 +373,84 @@ test.describe('composer-v2 @390 (WebKit)', () => {
     expect(cleared.err).toBe(false);
     expect(cleared.status).toBe('');
     expect(cleared.comp).toBe(true);
+  });
+
+  test('a failed photo retries IN PLACE — same tile goes busy again and lands (DM composer parity)', async ({ page }) => {
+    await openTopicComposer(page);
+    await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15_000 });
+    await stallUpload(page);
+    await attach(page);
+    await page.waitForSelector('#looth-comp-sheet .lgc-pv', { timeout: 8_000 });
+    await page.evaluate(() => window.__release(500, { message: 'boom' }));
+    await page.waitForSelector('#looth-comp-sheet .lgc-pv-r', { timeout: 8_000 });
+
+    await page.locator('#looth-comp-sheet .lgc-pv-r').tap();
+    await page.waitForTimeout(300);
+    const again = await page.evaluate(() => ({
+      strip: document.querySelector('#lgc-strip').children.length,   // same tile, not a second one
+      busy: !!document.querySelector('#looth-comp-sheet .lgc-pv--up'),
+      err: !!document.querySelector('#looth-comp-sheet .lgc-err'),   // alert withdrawn while retrying
+      errTile: !!document.querySelector('#looth-comp-sheet .lgc-pv--err'),
+      status: document.querySelector('#lgc-status').textContent,
+      postDisabled: document.querySelector('#lgc-post').disabled,
+      requests: window.__pending.length,                             // a SECOND upload really went out
+    }));
+    expect(again.strip).toBe(1);
+    expect(again.busy).toBe(true);
+    expect(again.errTile).toBe(false);
+    expect(again.err).toBe(false);
+    expect(again.status).toContain('Uploading');
+    expect(again.postDisabled).toBe(true);
+    expect(again.requests).toBe(2);
+
+    await page.evaluate(() => window.__release(200, { upload_id: 999002, upload: '/u2.png', upload_thumb: '/t2.png' }, 1));
+    await page.waitForTimeout(500);
+    const landed = await page.evaluate(() => ({
+      strip: document.querySelector('#lgc-strip').children.length,
+      busy: !!document.querySelector('#looth-comp-sheet .lgc-pv--up'),
+      retry: !!document.querySelector('#looth-comp-sheet .lgc-pv-r'),  // affordance withdrawn
+      src: document.querySelector('#looth-comp-sheet .lgc-pv img').getAttribute('src'),
+      status: document.querySelector('#lgc-status').textContent,
+      postDisabled: document.querySelector('#lgc-post').disabled,
+    }));
+    expect(landed.strip).toBe(1);
+    expect(landed.busy).toBe(false);
+    expect(landed.retry).toBe(false);
+    expect(landed.src).toBe('/t2.png');
+    expect(landed.status).toBe('');
+    expect(landed.postDisabled).toBe(false);   // the retry armed Post — the photo counts
+  });
+
+  // Two channels that each write their own strings drift apart; this is the case
+  // that caught it — clearing the alert on removal cleared it for the OTHER failed
+  // tile too, leaving a red-badged photo with nothing saying why. The fix is that
+  // both lines are RECOMPUTED from the strip, never written per-upload.
+  test('two failed photos: removing one leaves the other still explained', async ({ page }) => {
+    await openTopicComposer(page);
+    await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15_000 });
+    await stallUpload(page);
+    await attach(page);
+    await attach(page, { name: 'probe2.png', mimeType: 'image/png', buffer: PNG });
+    await page.waitForFunction(() => document.querySelectorAll('#lgc-strip .lgc-pv').length === 2, null, { timeout: 8_000 });
+    await page.evaluate(() => { window.__release(500, { message: 'a' }, 0); window.__release(500, { message: 'b' }, 1); });
+    await page.waitForFunction(() => document.querySelectorAll('#lgc-strip .lgc-pv--err').length === 2, null, { timeout: 8_000 });
+
+    const both = await page.evaluate(() => ({
+      text: document.querySelector('#looth-comp-sheet .lgc-err').textContent,
+      status: document.querySelector('#lgc-status').textContent,   // nothing is in flight now
+    }));
+    expect(both.text).toMatch(/2 photos/);
+    expect(both.status).toBe('');
+
+    await page.locator('#looth-comp-sheet .lgc-pv-x').first().tap();
+    await page.waitForTimeout(300);
+    const one = await page.evaluate(() => ({
+      tiles: document.querySelectorAll('#lgc-strip .lgc-pv').length,
+      errTiles: document.querySelectorAll('#lgc-strip .lgc-pv--err').length,
+      err: (document.querySelector('#looth-comp-sheet .lgc-err') || {}).textContent,
+    }));
+    expect(one.tiles).toBe(1);
+    expect(one.errTiles).toBe(1);
+    expect(one.err).toMatch(/try again/i);     // the survivor is STILL explained
   });
 });

@@ -3992,8 +3992,13 @@
         '@keyframes lgc-spin{to{transform:rotate(360deg)}}',
         '@media (prefers-reduced-motion:reduce){#looth-comp-sheet .lgc-pv--up::after{animation:none}}',
         '#looth-comp-sheet .lgc-pv--err{border-color:var(--lg-error,#b3261e)}',
-        '#looth-comp-sheet .lgc-pv--err::after{content:"!";position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;' +
-          'border-radius:50%;background:var(--lg-error,#b3261e);color:#fff;font:700 13px/20px var(--lg-font-sans,sans-serif);text-align:center}',
+        // the failed tile's badge is a REAL <button>, not a ::after glyph: the DM
+        // composer lets you retry in place (its Send stays armed), so this one must
+        // too, and a decorative "!" would only tell you the bad news. A sibling
+        // button rather than making the 64px tile itself role=button — that would
+        // nest the remove ✕ inside another control.
+        '#looth-comp-sheet .lgc-pv-r{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border:0;' +
+          'border-radius:50%;background:var(--lg-error,#b3261e);color:#fff;font:700 15px/26px var(--lg-font-sans,sans-serif);cursor:pointer;padding:0}',
         // slim tool row above the keyboard: photo · B I S link UL OL · tag-people · status
         // wrap: the status/alert lines take a FULL row of their own beneath the
         // buttons. Inline they were flex:0 1 auto next to 8 buttons — measured 30px
@@ -4040,7 +4045,7 @@
         D + ' #looth-comp-sheet .lgc-err{color:#f2b8b5}',
         D + ' #looth-comp-sheet .lgc-pv--up::after{border-color:rgba(242,244,238,.25);border-top-color:#9cb37d}',
         D + ' #looth-comp-sheet .lgc-pv--err{border-color:#f2b8b5}',
-        D + ' #looth-comp-sheet .lgc-pv--err::after{background:#f2b8b5;color:#1b1e21}',
+        D + ' #looth-comp-sheet .lgc-pv-r{background:#f2b8b5;color:#1b1e21}',
         D + ' #looth-comp-sheet .lgc-status{color:#9aa097}',
         D + ' #looth-comp-sheet .lgc-av{background:#262b30}',
         // ── tag-people picker (second sheet layer — the modal-over-modal stack
@@ -4203,66 +4208,99 @@
     }
     el.textContent = msg;
   }
-  function lgcUploadPhoto(sh, file) {
+  // ONE place decides what the two channels say, so they can never contradict each
+  // other: the status line counts what is actually in flight, the alert line exists
+  // exactly while a tile is actually in a failed state. Recomputing from the DOM
+  // (rather than each upload writing its own strings) is what makes removing one of
+  // two failed tiles leave the OTHER one's alert standing instead of clearing it.
+  function lgcSyncUploadUi(sh) {
     var status = sh.querySelector('#lgc-status');
+    if (status) {
+      status.textContent = !lcpUploading ? ''
+        : lcpUploading > 1 ? 'Uploading ' + lcpUploading + ' photos…' : 'Uploading photo…';
+    }
+    var bad = sh.querySelectorAll('#lgc-strip .lgc-pv--err');
+    if (!bad.length) { lgcSetErr(sh, null); return; }
+    lgcSetErr(sh, bad.length > 1
+      ? bad.length + " photos didn't upload — tap a ↻ to try again."
+      : (bad[0].__lgcErrMsg || "Couldn't add your photo — tap ↻ to try again."));
+  }
+  function lgcUploadPhoto(sh, file) {
     var local = null;
     try { local = URL.createObjectURL(file); } catch (e) {}
-    var settled = false;                   // upload no longer occupies a Post-blocking slot
+    var inFlight = false;                  // this tile is holding a Post-blocking slot
+    var dead = false;                      // tile removed — no attempt may resurrect it
+    var attempt = 0;                       // retries supersede: only the newest may land
     var gen = lgcOpenGen;
     var stale = function () { return gen !== lgcOpenGen; };   // composer re-opened under us
     var revoke = function () { if (local) { try { URL.revokeObjectURL(local); } catch (e) {} local = null; } };
+    var release = function () { if (inFlight) { inFlight = false; lcpUploading--; } };
     // the tile exists BEFORE the first byte leaves — that is the whole point
     var chip = lgcStripChip(sh, local || '', function () {
+      dead = true; attempt++;              // invalidate whatever is in the air
       if (stale()) { revoke(); return; }
-      if (!settled) { settled = true; lcpUploading--; }   // cancelled mid-flight
+      release();                           // cancelled mid-flight
       var id = chip.__lgcMediaId;
       if (id) { var ix = lcpMediaIds.indexOf(id); if (ix > -1) lcpMediaIds.splice(ix, 1); }
-      if (chip.classList.contains('lgc-pv--err')) lgcSetErr(sh, null);
-      if (!lcpUploading) status.textContent = '';
       revoke();
+      lgcSyncUploadUi(sh);                 // the chip is already out of the DOM
       lgcRecalcPost(sh);
     });
-    chip.classList.add('lgc-pv--up');
-    chip.setAttribute('aria-busy', 'true');
-    lcpUploading++;
-    lgcSetErr(sh, null);
-    status.textContent = lcpUploading > 1 ? 'Uploading ' + lcpUploading + ' photos…' : 'Uploading photo…';
-    lgcRecalcPost(sh);
 
-    var fail = function (msg) {
-      if (settled || stale()) return;
-      settled = true; lcpUploading--;
+    function fail(msg) {
+      release();
       chip.classList.remove('lgc-pv--up'); chip.classList.add('lgc-pv--err');
       chip.removeAttribute('aria-busy');
-      if (!lcpUploading) status.textContent = '';
-      lgcSetErr(sh, msg);                  // the strip is NEVER silently empty
+      chip.__lgcErrMsg = msg;
+      if (!chip.querySelector('.lgc-pv-r')) {
+        var r = document.createElement('button');
+        r.type = 'button'; r.className = 'lgc-pv-r';
+        r.setAttribute('aria-label', 'Retry photo upload');
+        r.textContent = '↻';
+        r.addEventListener('click', send);
+        chip.appendChild(r);
+      }
+      lgcSyncUploadUi(sh);                 // the strip is NEVER silently empty
       lgcRecalcPost(sh);
-    };
-    lrsGetAuth(function (a) {
-      if (settled || stale()) return;      // removed while auth was in flight
-      if (!a || !a.authenticated) { fail('Sign in to add photos.'); return; }
-      var fd = new FormData(); fd.append('file', file);
-      fetch(LRS_REPLY_BASE + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': a.nonce }, body: fd })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: false, j: {} }; }); })
-        .then(function (res) {
-          if (settled || stale()) { revoke(); return; }   // removed / re-opened — drop the result
-          if (!res.ok || !res.j.upload_id) {
-            fail("Couldn't add your photo — remove it and try again."
-              + ((res.j && res.j.message) ? ' (' + res.j.message + ')' : ''));
-            return;
-          }
-          settled = true; lcpUploading--;
-          lcpMediaIds.push(res.j.upload_id);
-          chip.__lgcMediaId = res.j.upload_id;
-          chip.classList.remove('lgc-pv--up'); chip.removeAttribute('aria-busy');
-          var im = chip.querySelector('img');
-          if (im) im.src = String(res.j.upload_thumb || res.j.upload);
-          revoke();
-          if (!lcpUploading) status.textContent = '';
-          lgcRecalcPost(sh);
-        })
-        .catch(function () { fail("Couldn't add your photo — check your connection and try again."); });
-    });
+    }
+    function send() {
+      if (dead || stale() || inFlight) return;
+      var my = ++attempt;
+      var live = function () { return my === attempt && !dead && !stale(); };
+      inFlight = true; lcpUploading++;
+      chip.__lgcErrMsg = '';
+      var old = chip.querySelector('.lgc-pv-r'); if (old) old.remove();
+      chip.classList.remove('lgc-pv--err'); chip.classList.add('lgc-pv--up');
+      chip.setAttribute('aria-busy', 'true');
+      lgcSyncUploadUi(sh);
+      lgcRecalcPost(sh);
+      lrsGetAuth(function (a) {
+        if (!live()) return;               // removed / retried / re-opened under us
+        if (!a || !a.authenticated) { fail('Sign in to add photos.'); return; }
+        var fd = new FormData(); fd.append('file', file);
+        fetch(LRS_REPLY_BASE + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': a.nonce }, body: fd })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: false, j: {} }; }); })
+          .then(function (res) {
+            if (!live()) { revoke(); return; }
+            if (!res.ok || !res.j.upload_id) {
+              fail("Couldn't add your photo — tap ↻ to try again."
+                + ((res.j && res.j.message) ? ' (' + res.j.message + ')' : ''));
+              return;
+            }
+            release();
+            lcpMediaIds.push(res.j.upload_id);
+            chip.__lgcMediaId = res.j.upload_id;
+            chip.classList.remove('lgc-pv--up'); chip.removeAttribute('aria-busy');
+            var im = chip.querySelector('img');
+            if (im) im.src = String(res.j.upload_thumb || res.j.upload);
+            revoke();
+            lgcSyncUploadUi(sh);
+            lgcRecalcPost(sh);
+          })
+          .catch(function () { if (live()) fail("Couldn't add your photo — check your connection, then tap ↻."); });
+      });
+    }
+    send();
   }
   // Quill body → submit HTML. Empty document serializes as '<p><br></p>' — that is ''.
   function lgcHtml() {

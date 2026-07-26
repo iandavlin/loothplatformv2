@@ -22,9 +22,24 @@ async function addAuthCookies(context) {
   ]);
 }
 
+// PROVE-IT-GOES-RED harness (keeper 2026-07-26: "the honest bar is a spec that
+// FAILS against the current code"). Point LGC_JS_OVERRIDE at any hub-polish.js —
+// e.g. `git show 66da45f:webroot/hub-polish.js > /tmp/pre.js` — and every spec in
+// the run executes against THOSE bytes instead of the served ones. A regression
+// spec can then be shown red on the pre-fix build and green on the fix WITHOUT
+// touching the docroot, which matters when the serve is an open Ian window.
+async function installJsOverride(page) {
+  const path = process.env.LGC_JS_OVERRIDE;
+  if (!path) return;
+  const body = fs.readFileSync(path, 'utf8');
+  await page.route('**/hub-polish.js*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body }));
+}
+
 // Tap the Reply action on the first topic card -> opens the lrs thread sheet with
 // the lcp composer sheet auto-opened on top (the current Reply-intent flow).
 async function openTopicComposer(page) {
+  await installJsOverride(page);
   // First nav MUST be the looth_id bounce: /looth-auth/issue reads the WP cookie,
   // Set-Cookies the RS256 looth_id JWT and 302s to return= — without it every
   // /profile-api call (mention-suggest included) is 401 through the real edge.
@@ -56,4 +71,4 @@ async function editorText(page) {
   });
 }
 
-module.exports = { addAuthCookies, openTopicComposer, typeMention, editorText };
+module.exports = { addAuthCookies, openTopicComposer, typeMention, editorText, installJsOverride };
