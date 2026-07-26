@@ -4781,6 +4781,19 @@
           name: (node.textContent || '').replace(/\uFEFF/g, '')
         } });
       });
+      // …and run every OTHER incoming anchor through the same normaliser the link
+      // panel uses. Insert is not the only door into the body: a paste, or a draft
+      // restored through dangerouslyPasteHTML, arrives as HTML with whatever href
+      // it likes. Registered AFTER the mention matcher so mention embeds (which
+      // carry no link attribute) pass through untouched.
+      lgcQuill.clipboard.addMatcher('a', function (node, delta) {
+        if (node.classList && node.classList.contains('bp-suggestions-mention')) return delta;
+        var ok = lglNormalizeUrl(node.getAttribute('href') || '');
+        (delta.ops || []).forEach(function (op) {
+          if (op.attributes && op.attributes.link) op.attributes.link = ok || false;
+        });
+        return delta;
+      });
       var root = lgcQuill.root;
       root.setAttribute('autocorrect', 'off');
       root.setAttribute('autocapitalize', 'sentences');
