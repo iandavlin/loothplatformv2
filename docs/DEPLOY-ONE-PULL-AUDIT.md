@@ -206,3 +206,30 @@ Standing rule (CLAUDE.md quality gates): every loader carries `?v=filemtime`. Re
 5. **Live vhost never tracked** (L-1, §8).
 6. **One serve symlink into a lane worktree** (strangler-profile-app.conf, §4) — standing-rule
    violation, unrelated to deploy steps but a serve-integrity landmine this lane must clear.
+
+---
+
+## 10. Phase 3 log (as it happens)
+
+- **Mutation 1 DONE 20:52** — strangler-profile-app.conf snippet repointed dmv-native
+  worktree → serve checkout (bytes identical c6088138 both sides, recorded in
+  ~/deploy-backups/deploy-one-pull-20260726/PRESTATE.txt). Proof: nginx -t OK, **full
+  nginx restart**, smokes 200 (/, /hub/, /directory/members/, /u/mike,
+  /profile-api/v0/whoami; /members/x 301 as designed; /billing/ 403 = Slim app's own
+  token auth, pre-existing). Rollback stays: `sudo ln -sfn
+  /home/ubuntu/worktrees/dmv-native/platform/nginx/strangler-profile-app.conf
+  /etc/nginx/snippets/strangler-profile-app.conf && sudo systemctl restart nginx`.
+- **Lane commits b1d7f84 (5)** pushed, validated pre-merge: new vhosts pass sandboxed
+  `nginx -t` (only the pre-existing duplicate-MIME warn); pwa.js passes `node --check`;
+  pwa-loader.php `php -l` + CLI smoke emits the LG_V map; installer dry-run against a
+  fake webroot exercised all five cases (new-link / correct-link no-op / wrong-target
+  repair / drift skip+exit 2 / identical convert+backup) correctly.
+- **Gates**: `tools/gates/run-all.sh` RED for the pre-existing box-wide reason (gates
+  2/3/5 hardcode the retired dev.loothgroup.com vhost path for token reads — broken
+  since 6/30, tracked by the gate-env lane @e4f3e07 unmerged). Gate 4, the only live
+  signal, is GREEN. Nothing in this lane touches what 2/3/5 would measure until the
+  merge deploys it; re-run owed post-deploy regardless of their env failure.
+- **Coordination**: hub-polish.js docroot currently carries the composer-link-insert
+  overlay (f3c8a43b) for Ian's phone test — the installer will SKIP it by md5-gate;
+  its conversion happens after that test resolves (or after the branch merges, when
+  repo bytes == overlay bytes).
