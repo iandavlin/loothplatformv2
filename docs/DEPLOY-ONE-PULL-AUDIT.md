@@ -283,3 +283,8 @@ Standing rule (CLAUDE.md quality gates): every loader carries `?v=filemtime`. Re
   (the level-below-ROLLBACK.sh revert).
 - dev2: hub-polish.js converted after the composer merge (repo==docroot f3c8a43b);
   docroot top level now has ZERO real js/css files; lib/ still pending the quill call.
+- **Self-fallback verified on the wire** (post-merge @512220c, full nginx restart):
+  loader present → LG_V map; pwa-loader.php temporarily unlinked → 200 static pwa.js
+  no-cache (the live pre-installer scenario — no 404); relinked → LG_V back. Vhost
+  discovery token-matching tested against all three hosts on this box (buck-dev2
+  false-match eliminated).
