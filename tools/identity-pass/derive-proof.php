@@ -27,7 +27,7 @@ $nameFit = function (string $s, int $max = NAME_MAX): string {
         $sp = mb_strrpos($cut, ' ');
         if ($sp !== false && $sp >= 2) $cut = mb_substr($cut, 0, $sp);
     }
-    return rtrim($cut, " \t|,/·:;–—-");
+    return rtrim($cut, " \t|,/·:;–—-&");   // & joins the set (generator sync, 3a80cfb)
 };
 
 $slugFit = function (string $s, int $max = SLUG_MAX): string {
