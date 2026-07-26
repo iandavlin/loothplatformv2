@@ -33,7 +33,12 @@ declare(strict_types=1);
  * those rows emit no name/biz proposal and are flagged 'anchor-too-sparse'.
  * display_name / business_name / API identity fields are html_entity_decoded at
  * read time (same treatment as indexer.php) so proposals and derived handles never
- * carry raw entities.
+ * carry raw entities. Members whose STORED value carries an entity but who
+ * otherwise need no change get a decode-only proposal (keeper ruling 17:52 —
+ * mechanical and safe, NOT low-confidence; the handle stays untouched, with a
+ * 'decode-slug-drift' note when the decode changes the derived slug). The
+ * name_now / biz_existing report columns show the RAW stored values: a report
+ * that decodes on read cannot be audited against the store.
  *
  *   sudo -u profile-app php backfill-patreon-handles-dryrun.php [--db-only] [--tsv=/path]
  *
@@ -231,9 +236,11 @@ $split = function (string $name, string $anchor) use ($squash): ?array {
 $rows = []; $byNameSource = []; $byHandleSource = []; $flagCount = [];
 foreach ($cand as $c) {
     $uid      = (int) $c['id'];
-    $nameNow  = trim($deent((string) $c['display_name']));
+    $nameRaw  = trim((string) $c['display_name']);
+    $bizRaw   = trim((string) ($c['business_name'] ?? ''));
+    $nameNow  = trim($deent($nameRaw));
     $slugNow  = (string) $c['slug'];
-    $bizNow   = trim($deent((string) ($c['business_name'] ?? '')));
+    $bizNow   = trim($deent($bizRaw));
     $slugJunk = $isJunk($slugNow);
     $nameJunk = $nameNow === '' || $isJunk($nameNow) || preg_match('/^\d+$/', $nameNow);
 
@@ -283,6 +290,20 @@ foreach ($cand as $c) {
         $flags[] = 'biz-col-occupied';                                 // existing value differs — Ian decides
     }
 
+    // decode-only cure (keeper ruling 17:52): the STORED value carries entities but
+    // nothing else changes — propose the pure decode. Mechanical, NOT low-confidence.
+    // No re-structuring, no split, no cap; the handle stays untouched.
+    $decodeOnlyName = $nameProposed === $nameNow && $nameNow !== $nameRaw;
+    $decodeOnlyBiz  = $bizCaptured === '' && $bizNow !== '' && $bizNow !== $bizRaw;
+    if ($decodeOnlyName || $decodeOnlyBiz) {
+        $flags[] = 'decode-only';
+        if ($decodeOnlyName && $nameSource === 'unchanged') $nameSource = 'decode-only';
+        if ($decodeOnlyBiz) $bizCaptured = mb_substr($bizNow, 0, BIZ_MAX);
+        if ($decodeOnlyName && $clean($nameNow) !== $clean($nameRaw)) {
+            $flags[] = 'decode-slug-drift';                            // derived slug would differ; handle untouched
+        }
+    }
+
     // ── HANDLE: from the PRUNED name (the live rename rule), else 7/25 chain ─
     $dnClean = $isJunk($nameProposed) || preg_match('/^\d+$/', $clean($nameProposed)) ? '' : $clean($nameProposed);
     $chain = [
@@ -313,7 +334,8 @@ foreach ($cand as $c) {
     if (strcasecmp($slugProposed, $slugNow) === 0) $slugProposed = $slugNow;   // case-stable no-op
 
     // ── row inclusion: something changes, or something needs Ian's eyes ─────
-    $changed = $nameProposed !== $nameNow || $bizCaptured !== '' || $slugProposed !== $slugNow;
+    // (proposal vs the RAW stored value: a decode-only cure IS a change)
+    $changed = $nameProposed !== $nameRaw || $bizCaptured !== '' || $slugProposed !== $slugNow;
     $lowConf = (bool) array_intersect($flags,
         ['split-heuristic', 'anchor-mismatch', 'anchor-too-sparse', 'biz-col-occupied', 'junk-name-unresolvable', 'no-api']);
     if (!$changed && !$lowConf) continue;
@@ -326,10 +348,10 @@ foreach ($cand as $c) {
         'user_id'        => $uid,
         'wp_id'          => $c['wp_user_id'] ?? '',
         'in_api'         => $inApi,
-        'name_now'       => $nameNow,
-        'name_proposed'  => $nameProposed === $nameNow ? '' : $nameProposed,
+        'name_now'       => $nameRaw,
+        'name_proposed'  => $nameProposed === $nameRaw ? '' : $nameProposed,
         'biz_captured'   => $bizCaptured,
-        'biz_existing'   => $bizNow,
+        'biz_existing'   => $bizRaw,
         'slug_now'       => $slugNow,
         'slug_proposed'  => strcasecmp($slugProposed, $slugNow) === 0 ? '' : $slugProposed,
         'name_source'    => $nameSource,
