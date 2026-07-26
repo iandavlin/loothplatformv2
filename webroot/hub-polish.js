@@ -3981,16 +3981,39 @@
         '#looth-comp-sheet .lgc-pv{position:relative;flex:0 0 auto;width:64px;height:64px;border-radius:10px;border:1px solid var(--lg-line,#e3ddd0);overflow:hidden}',
         '#looth-comp-sheet .lgc-pv img{width:100%;height:100%;object-fit:cover;display:block}',
         '#looth-comp-sheet .lgc-pv-x{position:absolute;top:2px;right:2px;width:18px;height:18px;border:0;border-radius:50%;background:rgba(26,29,26,.75);color:#fff;font:700 11px/18px sans-serif;cursor:pointer;padding:0}',
+        // Upload IN-FLIGHT / FAILED on the tile itself (Ian, real iPhone 2026-07-26:
+        // "no indication that the image is uploading"). Same idiom the DM composer
+        // shipped at Ian 7/06 (msgimg-sending-state): the picked image appears at
+        // once, wears its busy state, and a failure is dimmed + badged rather than
+        // vanishing into an empty strip.
+        '#looth-comp-sheet .lgc-pv--up img,#looth-comp-sheet .lgc-pv--err img{opacity:.4}',
+        '#looth-comp-sheet .lgc-pv--up::after{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;' +
+          'border-radius:50%;border:2px solid rgba(26,29,26,.25);border-top-color:var(--lg-sage-d,#52613d);animation:lgc-spin .8s linear infinite}',
+        '@keyframes lgc-spin{to{transform:rotate(360deg)}}',
+        '@media (prefers-reduced-motion:reduce){#looth-comp-sheet .lgc-pv--up::after{animation:none}}',
+        '#looth-comp-sheet .lgc-pv--err{border-color:var(--lg-error,#b3261e)}',
+        '#looth-comp-sheet .lgc-pv--err::after{content:"!";position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;' +
+          'border-radius:50%;background:var(--lg-error,#b3261e);color:#fff;font:700 13px/20px var(--lg-font-sans,sans-serif);text-align:center}',
         // slim tool row above the keyboard: photo · B I S link UL OL · tag-people · status
-        '#looth-comp-sheet .lgc-tools{flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--lg-line,#e3e0d8)}',
+        // wrap: the status/alert lines take a FULL row of their own beneath the
+        // buttons. Inline they were flex:0 1 auto next to 8 buttons — measured 30px
+        // of room for 111px of "Uploading photo…", i.e. ellipsed into nothing on a
+        // 390px phone. A message nobody can read is the same as no message.
+        '#looth-comp-sheet .lgc-tools{flex:0 0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--lg-line,#e3e0d8)}',
         '#looth-comp-sheet .lgc-tb{flex:0 0 auto;width:2.375rem;height:2.375rem;border:0;border-radius:9px;background:none;color:var(--lg-ink,#1a1d1a);' +
           'font:600 .9375rem/2.375rem var(--lg-font-sans,sans-serif);text-align:center;cursor:pointer;padding:0}',
         '#looth-comp-sheet .lgc-tb svg{vertical-align:middle}',
         '#looth-comp-sheet .lgc-tb.ql-active{background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#52613d)}',
         '#looth-comp-sheet .lgc-tb--pic,#looth-comp-sheet .lgc-tb--tag{color:var(--lg-sage-d,#6b7c52)}',
         '#looth-comp-sheet .lgc-sp{flex:1 1 auto}',
-        '#looth-comp-sheet .lgc-status{flex:0 1 auto;font:.75rem/1.3 var(--lg-font-sans,sans-serif);color:#8a8d91;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+        '#looth-comp-sheet .lgc-status{flex:1 0 100%;order:9;font:.75rem/1.35 var(--lg-font-sans,sans-serif);color:#8a8d91;padding:3px 2px 0}',
         '#looth-comp-sheet .lgc-status:empty{display:none}',
+        // failure line — the DM composer's .mg-send-error, same token, same plain
+        // language + retry instruction, same role=alert. Its own element (not a
+        // modifier on .lgc-status) exactly as over there, so the two channels can
+        // never desync: one says what is happening, one says what went wrong.
+        '#looth-comp-sheet .lgc-err{flex:1 0 100%;order:-1;color:var(--lg-error,#b3261e);' +
+          'font:600 .75rem/1.4 var(--lg-font-sans,sans-serif);padding:0 2px 6px}',
         // dark pass — tokens where they exist on /hub/, explicit pins where they
         // don't (the messages-search dark-gate lesson: sage tints never re-point)
         D + ' #looth-comp-sheet .lgc-card{background:#1b1e21;color:#e5e7e1}',
@@ -4011,6 +4034,14 @@
         D + ' #looth-comp-sheet .lgc-tb.ql-active{background:#243024;color:#9cb37d}',
         D + ' #looth-comp-sheet .lgc-tb--pic,' + D + ' #looth-comp-sheet .lgc-tb--tag{color:#9cb37d}',
         D + ' #looth-comp-sheet .lgc-pv{border-color:#2c312d}',
+        // #b3261e on #1b1e21 is 3.0:1 — under AA for text. Lighten the error ink for
+        // dark exactly as the bucket-C sweep did, and keep the tile's spinner ring
+        // legible against the dark card.
+        D + ' #looth-comp-sheet .lgc-err{color:#f2b8b5}',
+        D + ' #looth-comp-sheet .lgc-pv--up::after{border-color:rgba(242,244,238,.25);border-top-color:#9cb37d}',
+        D + ' #looth-comp-sheet .lgc-pv--err{border-color:#f2b8b5}',
+        D + ' #looth-comp-sheet .lgc-pv--err::after{background:#f2b8b5;color:#1b1e21}',
+        D + ' #looth-comp-sheet .lgc-status{color:#9aa097}',
         D + ' #looth-comp-sheet .lgc-av{background:#262b30}',
         // ── tag-people picker (second sheet layer — the modal-over-modal stack
         //    LgSheets was built for; df97f87 raised-sheet geometry) ──
@@ -4114,27 +4145,7 @@
     fileIn.addEventListener('change', function () {
       var file = fileIn.files && fileIn.files[0];
       fileIn.value = '';
-      if (!file) return;
-      var status = sh.querySelector('#lgc-status');
-      status.textContent = 'Uploading photo…';
-      lrsGetAuth(function (a) {
-        if (!a || !a.authenticated) { status.textContent = 'Sign in to add photos.'; return; }
-        var fd = new FormData(); fd.append('file', file);
-        fetch(LRS_REPLY_BASE + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': a.nonce }, body: fd })
-          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-          .then(function (res) {
-            if (!res.ok || !res.j.upload_id) { status.textContent = 'Photo upload failed: ' + ((res.j && res.j.message) || 'error'); return; }
-            lcpMediaIds.push(res.j.upload_id);
-            status.textContent = '';
-            lgcStripChip(sh, String(res.j.upload_thumb || res.j.upload), function () {
-              var ix = lcpMediaIds.indexOf(res.j.upload_id);
-              if (ix > -1) lcpMediaIds.splice(ix, 1);
-              lgcRecalcPost(sh);
-            });
-            lgcRecalcPost(sh);
-          })
-          .catch(function (err) { status.textContent = 'Upload error: ' + err.message; });
-      });
+      if (file) lgcUploadPhoto(sh, file);
     });
     // ZERO-GAP KEYBOARD DOCK (df97f87): the card's bottom edge lands exactly on the
     // keyboard top. Sized via bottom-offset, NOT translateY — a leftover transform
@@ -4164,6 +4175,95 @@
     strip.appendChild(chip);
     return chip;
   }
+  // ── photo attach with a VISIBLE in-flight state ──────────────────────────────
+  // Ian, real iPhone 2026-07-26: "there is no indication that the image is
+  // uploading". The old path DID write 'Uploading photo…' — into #lgc-status,
+  // which sat inline beside 8 toolbar buttons and measured 30px wide for 111px of
+  // text at 390px. Ellipsed to nothing: a message nobody can read is no message.
+  //
+  // The cure is the DM composer's shipped idiom (msgimg-sending-state, Ian 7/06),
+  // reused rather than re-invented: the picked image goes on the strip AT ONCE
+  // wearing a busy state, the action stays clearly not-ready while bytes are in
+  // flight, and a failure says so in plain language with a way forward instead of
+  // leaving an empty strip. Here the tile carries the state, #lgc-status carries
+  // the progress words and .lgc-err (= .mg-send-error) carries the failure.
+  var lcpUploading = 0;                    // uploads in flight — Post is not ready until 0
+  var lgcOpenGen = 0;                      // bumped per composer open; an upload that
+                                           // outlives its open must not touch the next
+                                           // one's media ids or its in-flight count
+  function lgcSetErr(sh, msg) {
+    var tools = sh.querySelector('#lgc-tools'); if (!tools) return;
+    var el = tools.querySelector('.lgc-err');
+    if (!msg) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'lgc-err';
+      el.setAttribute('role', 'alert');
+      tools.insertBefore(el, tools.firstChild);
+    }
+    el.textContent = msg;
+  }
+  function lgcUploadPhoto(sh, file) {
+    var status = sh.querySelector('#lgc-status');
+    var local = null;
+    try { local = URL.createObjectURL(file); } catch (e) {}
+    var settled = false;                   // upload no longer occupies a Post-blocking slot
+    var gen = lgcOpenGen;
+    var stale = function () { return gen !== lgcOpenGen; };   // composer re-opened under us
+    var revoke = function () { if (local) { try { URL.revokeObjectURL(local); } catch (e) {} local = null; } };
+    // the tile exists BEFORE the first byte leaves — that is the whole point
+    var chip = lgcStripChip(sh, local || '', function () {
+      if (stale()) { revoke(); return; }
+      if (!settled) { settled = true; lcpUploading--; }   // cancelled mid-flight
+      var id = chip.__lgcMediaId;
+      if (id) { var ix = lcpMediaIds.indexOf(id); if (ix > -1) lcpMediaIds.splice(ix, 1); }
+      if (chip.classList.contains('lgc-pv--err')) lgcSetErr(sh, null);
+      if (!lcpUploading) status.textContent = '';
+      revoke();
+      lgcRecalcPost(sh);
+    });
+    chip.classList.add('lgc-pv--up');
+    chip.setAttribute('aria-busy', 'true');
+    lcpUploading++;
+    lgcSetErr(sh, null);
+    status.textContent = lcpUploading > 1 ? 'Uploading ' + lcpUploading + ' photos…' : 'Uploading photo…';
+    lgcRecalcPost(sh);
+
+    var fail = function (msg) {
+      if (settled || stale()) return;
+      settled = true; lcpUploading--;
+      chip.classList.remove('lgc-pv--up'); chip.classList.add('lgc-pv--err');
+      chip.removeAttribute('aria-busy');
+      if (!lcpUploading) status.textContent = '';
+      lgcSetErr(sh, msg);                  // the strip is NEVER silently empty
+      lgcRecalcPost(sh);
+    };
+    lrsGetAuth(function (a) {
+      if (settled || stale()) return;      // removed while auth was in flight
+      if (!a || !a.authenticated) { fail('Sign in to add photos.'); return; }
+      var fd = new FormData(); fd.append('file', file);
+      fetch(LRS_REPLY_BASE + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': a.nonce }, body: fd })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: false, j: {} }; }); })
+        .then(function (res) {
+          if (settled || stale()) { revoke(); return; }   // removed / re-opened — drop the result
+          if (!res.ok || !res.j.upload_id) {
+            fail("Couldn't add your photo — remove it and try again."
+              + ((res.j && res.j.message) ? ' (' + res.j.message + ')' : ''));
+            return;
+          }
+          settled = true; lcpUploading--;
+          lcpMediaIds.push(res.j.upload_id);
+          chip.__lgcMediaId = res.j.upload_id;
+          chip.classList.remove('lgc-pv--up'); chip.removeAttribute('aria-busy');
+          var im = chip.querySelector('img');
+          if (im) im.src = String(res.j.upload_thumb || res.j.upload);
+          revoke();
+          if (!lcpUploading) status.textContent = '';
+          lgcRecalcPost(sh);
+        })
+        .catch(function () { fail("Couldn't add your photo — check your connection and try again."); });
+    });
+  }
   // Quill body → submit HTML. Empty document serializes as '<p><br></p>' — that is ''.
   function lgcHtml() {
     if (!lgcQuill) return '';
@@ -4185,10 +4285,15 @@
   function lgcRecalcPost(sh) {
     var post = sh.querySelector('#lgc-post'); if (!post) return;
     var c = sh.__lcpCtx || {};
+    // A photo still uploading means the post is NOT ready — posting now would ship
+    // a reply without the picture the member just attached. aria-busy alongside the
+    // disable so "not ready" is announced, not just greyed (Ian 7/26).
+    var busy = lcpUploading > 0;
+    if (busy) post.setAttribute('aria-busy', 'true'); else post.removeAttribute('aria-busy');
     var titleEl = sh.querySelector('#lgc-title');
-    if (c.editTopicId) { post.disabled = !(lgcHasContent() && titleEl && titleEl.value.trim()); return; }
+    if (c.editTopicId) { post.disabled = busy || !(lgcHasContent() && titleEl && titleEl.value.trim()); return; }
     var keepN = (c.keepMedia && c.keepMedia.length) || 0;
-    post.disabled = !lgcHasContent() && !lcpMediaIds.length && !keepN;
+    post.disabled = busy || (!lgcHasContent() && !lcpMediaIds.length && !keepN);
   }
   // Mention insertion hook for the shared .lg-mnt engine (forums.js): replace the
   // typed "@partial" token with an atomic name-displaying mention embed.
@@ -4432,6 +4537,11 @@
     sh.querySelector('#lgc-status').textContent = '';
     sh.querySelector('#lgc-strip').innerHTML = '';
     lcpMediaIds.length = 0;
+    // a fresh open owns a fresh strip: any upload from the LAST open is orphaned
+    // here, so its Post-blocking slot must go with it or Post never arms again
+    lgcOpenGen++;
+    lcpUploading = 0;
+    lgcSetErr(sh, null);
     var titleEl = sh.querySelector('#lgc-title');
     if (titleEl) { titleEl.value = ''; titleEl.hidden = true; }
     sh.__lcpCtx.editReplyId = parseInt(o.editReplyId, 10) || 0;

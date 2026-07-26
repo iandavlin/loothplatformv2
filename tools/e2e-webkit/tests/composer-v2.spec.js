@@ -8,6 +8,12 @@
 const { test, expect } = require('@playwright/test');
 const { addAuthCookies, openTopicComposer, typeMention, editorText } = require('./_helpers');
 
+// 1x1 transparent PNG — the attachment specs only need a real image the file
+// chooser will accept; the upload itself is stalled in-page.
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64');
+
 test.describe('composer-v2 @390 (WebKit)', () => {
   test.skip(({ isMobile }) => !isMobile, 'mobile-profile only');
   test.beforeEach(async ({ context }) => { await addAuthCookies(context); });
@@ -220,5 +226,142 @@ test.describe('composer-v2 @390 (WebKit)', () => {
     expect(s.card).toBe('rgb(27, 30, 33)');      // dark card, no light leak
     expect(s.picker).toBe('rgb(27, 30, 33)');    // picker follows (dark merge gate)
     expect(s.editorInk).toBe('rgb(229, 231, 225)');
+  });
+
+  // ── REGRESSION: a photo upload must be VISIBLY in progress ───────────────────
+  // Ian, real iPhone, 2026-07-26: "no indication that the image is uploading."
+  // The old code did set 'Uploading photo…' — into a span sharing a 390px flex row
+  // with 8 toolbar buttons, measured at 30px of room for 111px of text. So the
+  // first assertion here is LEGIBILITY, not presence: a status the member cannot
+  // read is the bug, and only a width check catches it. Then the tile state, the
+  // not-ready Post, and a failure that says so instead of emptying the strip.
+  // The gesture is the real one end to end — tap the photo button, answer the
+  // file chooser it opens; the network is stalled in-page so the in-flight window
+  // is observable at all (upload against dev2 loopback resolves near-instantly).
+  async function attach(page, files = { name: 'probe.png', mimeType: 'image/png', buffer: PNG }) {
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      page.locator('#lgc-photo').tap(),      // real tap opens the real chooser
+    ]);
+    await chooser.setFiles(files);
+  }
+  const stallUpload = (page) => page.evaluate(() => {
+    const orig = window.fetch;
+    window.__release = null;
+    window.fetch = function (url) {
+      if (String(url).indexOf('/media/upload') > -1) {
+        return new Promise((res) => {
+          window.__release = (status, body) => res(new Response(JSON.stringify(body), {
+            status, headers: { 'Content-Type': 'application/json' },
+          }));
+        });
+      }
+      return orig.apply(this, arguments);
+    };
+  });
+
+  test('photo upload is VISIBLY in flight: busy tile, legible status, Post not ready (Ian real-iPhone FAIL 2026-07-26)', async ({ page }) => {
+    await openTopicComposer(page);
+    await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15_000 });
+    await stallUpload(page);
+    await attach(page);
+    await page.waitForSelector('#looth-comp-sheet .lgc-pv', { timeout: 8_000 });
+
+    const flight = await page.evaluate(() => {
+      const st = document.querySelector('#lgc-status');
+      const chip = document.querySelector('#looth-comp-sheet .lgc-pv');
+      const post = document.querySelector('#lgc-post');
+      const r = st.getBoundingClientRect();
+      return {
+        busyTile: chip.classList.contains('lgc-pv--up'),
+        tileBusyAttr: chip.getAttribute('aria-busy'),
+        tileShowsPickedImage: /^blob:/.test(chip.querySelector('img').src),
+        statusText: st.textContent,
+        statusW: Math.round(r.width),
+        statusWants: st.scrollWidth,
+        postDisabled: post.disabled,
+        postBusy: post.getAttribute('aria-busy'),
+      };
+    });
+    expect(flight.busyTile).toBe(true);                 // the tile wears the spinner
+    expect(flight.tileBusyAttr).toBe('true');
+    expect(flight.tileShowsPickedImage).toBe(true);     // their photo, before it lands
+    expect(flight.statusText).toContain('Uploading');
+    // THE MEASUREMENT THAT WOULD HAVE CAUGHT THIS: room for every pixel of the text
+    expect(flight.statusW).toBeGreaterThanOrEqual(flight.statusWants);
+    expect(flight.statusW).toBeGreaterThan(100);
+    expect(flight.postDisabled).toBe(true);             // not ready while bytes fly
+    expect(flight.postBusy).toBe('true');
+
+    await page.evaluate(() => window.__release(200, { upload_id: 999001, upload: '/u.png', upload_thumb: '/t.png' }));
+    await page.waitForTimeout(500);
+    const landed = await page.evaluate(() => ({
+      busyTile: !!document.querySelector('#looth-comp-sheet .lgc-pv--up'),
+      tileSrc: document.querySelector('#looth-comp-sheet .lgc-pv img').getAttribute('src'),
+      statusText: document.querySelector('#lgc-status').textContent,
+      postDisabled: document.querySelector('#lgc-post').disabled,
+      postBusy: document.querySelector('#lgc-post').getAttribute('aria-busy'),
+    }));
+    expect(landed.busyTile).toBe(false);                // busy state clears on landing
+    expect(landed.tileSrc).toBe('/t.png');              // swapped to the server thumb
+    expect(landed.statusText).toBe('');
+    expect(landed.postDisabled).toBe(false);            // Post arms
+    expect(landed.postBusy).toBeNull();
+  });
+
+  test('photo upload FAILURE says so — errored tile + legible alert, never a silently empty strip', async ({ page }) => {
+    await openTopicComposer(page);
+    await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15_000 });
+    await stallUpload(page);
+    await attach(page);
+    await page.waitForSelector('#looth-comp-sheet .lgc-pv', { timeout: 8_000 });
+    await page.evaluate(() => window.__release(500, { message: 'boom' }));
+    await page.waitForSelector('#looth-comp-sheet .lgc-err', { timeout: 8_000 });
+
+    const failed = await page.evaluate(() => {
+      const err = document.querySelector('#looth-comp-sheet .lgc-err');
+      const r = err.getBoundingClientRect();
+      return {
+        stripChildren: document.querySelector('#lgc-strip').children.length,
+        errTile: !!document.querySelector('#looth-comp-sheet .lgc-pv--err'),
+        busyTile: !!document.querySelector('#looth-comp-sheet .lgc-pv--up'),
+        text: err.textContent,
+        role: err.getAttribute('role'),
+        w: Math.round(r.width), h: Math.round(r.height),
+        wants: err.scrollWidth,
+        ink: getComputedStyle(err).color,
+        postBusy: document.querySelector('#lgc-post').getAttribute('aria-busy'),
+      };
+    });
+    expect(failed.stripChildren).toBe(1);               // the photo did NOT vanish
+    expect(failed.errTile).toBe(true);
+    expect(failed.busyTile).toBe(false);                // spinner stopped
+    expect(failed.text).toMatch(/try again/i);          // plain language + a way forward
+    expect(failed.role).toBe('alert');
+    expect(failed.h).toBeGreaterThan(0);
+    expect(failed.w).toBeGreaterThanOrEqual(failed.wants);   // legible, not ellipsed
+    expect(failed.ink).toBe('rgb(179, 38, 30)');        // --lg-error
+    expect(failed.postBusy).toBeNull();                 // no longer in flight
+
+    // dark merge gate: #b3261e on the dark card is 3.0:1 — the ink must lighten
+    const darkInk = await page.evaluate(() => {
+      document.documentElement.setAttribute('data-lguser-theme', 'dark');
+      return getComputedStyle(document.querySelector('#looth-comp-sheet .lgc-err')).color;
+    });
+    expect(darkInk).toBe('rgb(242, 184, 181)');
+
+    // removing the failed tile clears the alert and leaves the composer usable
+    await page.locator('#looth-comp-sheet .lgc-pv-x').first().tap();
+    await page.waitForTimeout(300);
+    const cleared = await page.evaluate(() => ({
+      strip: document.querySelector('#lgc-strip').children.length,
+      err: !!document.querySelector('#looth-comp-sheet .lgc-err'),
+      status: document.querySelector('#lgc-status').textContent,
+      comp: document.querySelector('#looth-comp-sheet').classList.contains('is-open'),
+    }));
+    expect(cleared.strip).toBe(0);
+    expect(cleared.err).toBe(false);
+    expect(cleared.status).toBe('');
+    expect(cleared.comp).toBe(true);
   });
 });
