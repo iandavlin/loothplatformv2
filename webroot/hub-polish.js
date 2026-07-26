@@ -3273,7 +3273,15 @@
       '#looth-rep-sheet .fcr-chip.is-mine{background:var(--lg-sage-tint,#eef2e3);border-color:var(--lg-sage,#87986a);color:var(--lg-sage-d,#52613d)}',
       '#looth-rep-sheet .fcr-chip .fcr-img{width:17px;height:17px}',
       '#looth-rep-sheet .fcr-n{font-weight:600;font-variant-numeric:tabular-nums}',
-      '#looth-rep-sheet .fcr-add{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;' +
+      // display gets !important: app-mobile-fixes.js:53 kills .fcr-add on ALL mobile
+      // (Buck 2026-06-08: long-press-the-Like opens the picker) — but fbStyleReply
+      // replaced the Like with THIS real bar inside the sheet (Ian 2026-06-25), so a
+      // zero-reaction reply rendered a 0x0 bar with no visible/pressable affordance
+      // at all ("cannot react to replies", diagnosed 2026-07-26). Inside the sheet
+      // the add-button IS the affordance; everywhere a Like exists, Buck's hide
+      // stands. The own-reply inline-important hide (forums.js dmInjectReplyMenu)
+      // still wins over this by cascade — preserved.
+      '#looth-rep-sheet .fcr-add{display:inline-flex!important;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;' +
         'width:34px;height:30px;border:1px solid var(--lg-line,#cdd6ba);border-radius:999px;background:var(--lg-card-bg,#fff);color:var(--lg-sage-d,#52613d);padding:0}',
       '#looth-rep-sheet .fcr-add>span{font-size:12px;font-weight:700;margin-left:-1px}',
       '#looth-rep-sheet .fcr-palette{position:absolute;left:0;bottom:calc(100% + 4px);z-index:20;display:flex;gap:2px;padding:6px;background:#fff;' +
