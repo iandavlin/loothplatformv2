@@ -495,7 +495,52 @@ function lgpo_handle_resolve() {
  * ============================================================
  */
 
+/**
+ * Reduce a caller-supplied post-OAuth destination to a path we're willing to
+ * bind, or '' when there is nothing trustworthy to bind.
+ *
+ * Same posture as the login_redirect exception (platform/mu-plugins/lg-login-redirect-honor.php,
+ * 9ab8fcd): the value is NEVER trusted — wp_validate_redirect with an EMPTY
+ * fallback means anything off-host (https://evil.example, scheme-relative
+ * //evil.example, data:, garbage) comes back '' and the caller keeps its own
+ * default. Absolute same-host URLs are reduced to path+query because
+ * /patreon-connect only accepts path-only return targets.
+ */
+function lgpo_sanitize_return_path( $raw ): string {
+    if ( ! is_string( $raw ) || $raw === '' ) {
+        return '';
+    }
+
+    $validated = wp_validate_redirect( wp_sanitize_redirect( $raw ), '' );
+    if ( $validated === '' ) {
+        return '';
+    }
+
+    $parts = wp_parse_url( $validated );
+    if ( ! is_array( $parts ) ) {
+        return '';
+    }
+
+    $path = (string) ( $parts['path'] ?? '' );
+    if ( ! empty( $parts['query'] ) ) {
+        $path .= '?' . $parts['query'];
+    }
+
+    // Mirror lgpo_handle_connect()'s own guard (leading /, not //) so a value
+    // that entry would clamp to its default never gets bound here either.
+    return preg_match( '#^/[^/]#', $path ) ? $path : '';
+}
+
 add_shortcode( 'lg_patreon_onboard', 'lgpo_shortcode' );
+/**
+ * @param array|string $atts  Optional `return` = same-host post-OAuth destination.
+ *                            With a valid one the button routes through
+ *                            /patreon-connect?return=<path>, whose state carries
+ *                            return_target so the callback lands the member back
+ *                            where they started. Without one (every legacy caller)
+ *                            this mints the bare state exactly as before and the
+ *                            callback keeps its lgpo_confirm_page terminal.
+ */
 function lgpo_shortcode( $atts ) {
     if ( is_user_logged_in() ) {
         $patreon_id = get_user_meta( get_current_user_id(), 'lgpo_patreon_user_id', true );
@@ -511,16 +556,29 @@ function lgpo_shortcode( $atts ) {
         return '<div class="lgpo-notice lgpo-error">Patreon onboarding is not configured yet. Please check back soon.</div>';
     }
 
-    $state = wp_generate_password( 32, false );
-    set_transient( 'lgpo_state_' . $state, '1', 600 );
+    $atts   = shortcode_atts( array( 'return' => '' ), (array) $atts, 'lg_patreon_onboard' );
+    $return = lgpo_sanitize_return_path( (string) $atts['return'] );
 
-    $auth_url = add_query_arg( array(
-        'response_type' => 'code',
-        'client_id'     => $client_id,
-        'redirect_uri'  => $redirect_uri,
-        'scope'         => 'identity identity[email] identity.memberships',
-        'state'         => $state,
-    ), 'https://www.patreon.com/oauth2/authorize' );
+    if ( $return !== '' ) {
+        // Destination binding only — the state (and with it every mint /
+        // provision decision) is minted by lgpo_handle_connect exactly as it is
+        // for /join/, which re-validates this path a second time.
+        // rawurlencode, not add_query_arg: add_query_arg does NOT encode values,
+        // so a destination carrying its own query (/hub/?topic=x&y=2) would be
+        // split into sibling params and arrive truncated.
+        $auth_url = home_url( '/patreon-connect/' ) . '?return=' . rawurlencode( $return );
+    } else {
+        $state = wp_generate_password( 32, false );
+        set_transient( 'lgpo_state_' . $state, '1', 600 );
+
+        $auth_url = add_query_arg( array(
+            'response_type' => 'code',
+            'client_id'     => $client_id,
+            'redirect_uri'  => $redirect_uri,
+            'scope'         => 'identity identity[email] identity.memberships',
+            'state'         => $state,
+        ), 'https://www.patreon.com/oauth2/authorize' );
+    }
 
     ob_start();
     ?>

@@ -32,6 +32,25 @@ function lg_login_get_patreon_connect_shortcode() {
 	return '[lg_patreon_onboard]';
 }
 
+/**
+ * The destination this login request asked for, reduced to a path we can bind
+ * to the Patreon OAuth state — or '' when nothing was requested / the value
+ * isn't same-host.
+ *
+ * wp-login offers two doors and both must keep the promise the sign-in
+ * interstitial makes ("you'll land right back here"). The password form is
+ * handled by lg-login-redirect-honor.php; this is Card 2's Patreon door, which
+ * is our own lgpo OAuth. Validation is lgpo's (wp_validate_redirect with an
+ * empty fallback — off-host values bind nothing and the flow keeps its own
+ * default terminal), so both doors reject a hostile redirect_to identically.
+ */
+function lg_login_patreon_return_path() {
+	if ( ! isset( $_REQUEST['redirect_to'] ) || ! function_exists( 'lgpo_sanitize_return_path' ) ) {
+		return '';
+	}
+	return lgpo_sanitize_return_path( (string) wp_unslash( $_REQUEST['redirect_to'] ) );
+}
+
 function lg_login_get_patreon_join_url() {
 	return 'https://www.patreon.com/cw/theloothgroup/membership';
 }
@@ -449,6 +468,7 @@ add_action('login_footer', function () {
 	$support_email       = lg_login_get_support_email();
 	$patreon_join_url    = lg_login_get_patreon_join_url();
 	$patreon_shortcode   = lg_login_get_patreon_connect_shortcode();
+	$patreon_return      = lg_login_patreon_return_path();
 
 	$action     = isset($_REQUEST['action']) ? sanitize_key((string) $_REQUEST['action']) : '';
 	$checkemail = isset($_REQUEST['checkemail']) ? sanitize_key((string) $_REQUEST['checkemail']) : '';
@@ -550,7 +570,19 @@ add_action('login_footer', function () {
 				</details>
 
 				<div class="lg-btn-wrap">
-					<?php echo do_shortcode($patreon_shortcode); ?>
+					<?php
+					// With a validated destination we hand it to the shortcode
+					// directly (not through shortcode text — a path carries
+					// query separators and brackets the parser would mangle) so
+					// the button routes via /patreon-connect?return=<path> and
+					// the OAuth state carries the return target. A bare login
+					// renders byte-identical to before.
+					if ($patreon_return !== '' && function_exists('lgpo_shortcode')) {
+						echo lgpo_shortcode(array('return' => $patreon_return));
+					} else {
+						echo do_shortcode($patreon_shortcode);
+					}
+					?>
 				</div>
 			</div>
 
