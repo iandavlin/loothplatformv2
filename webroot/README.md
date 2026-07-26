@@ -30,12 +30,16 @@ old `live-webroot-capture/2026-06-06/` snapshot was ~thousands of lines stale).
 - **Generated/regenerable** — `shop-feed.json`, `shop-vendors.json`, `*.bak`, logs (see `.gitignore`).
 - **Cruft** — `catapult-*`, `cdp-launcher`, WP core/content.
 
-## Deploy
+## Deploy (deploy-one-pull 2026-07-26: DEPLOY = GIT PULL)
+The docroot holds **symlinks** into this directory, installed once per box by
 ```bash
-sudo ./deploy.sh [WEBROOT] [OWNER]      # defaults: /var/www/dev  looth-dev
+sudo ./install-symlinks.sh [WEBROOT]    # default: /var/www/dev; md5-gated, idempotent
 ```
-Copies everything except the repo meta files into the webroot and sets ownership. Cache-busting
-is via `?v=N` query strings inside `pwa.js` (filenames don't change) — bump those when a file changes.
+so a `git pull` in the serving checkout IS the deploy — no copy step exists anymore
+(the old rsync `deploy.sh` is retired). Cache-busting is automatic: `pwa-loader.php`
+serves `/pwa.js` with a `window.LG_V` filemtime map and pwa.js builds every layer URL
+as `?v=<filemtime>` — never hand-bump a version again. New files: commit here, run
+`install-symlinks.sh --new-only` (lg-deploy does it for you).
 
 ## Lane note
 This was **buck's** lane (he authored these files, edited live). As of 2026-06-14 the webroot lane

@@ -59,34 +59,43 @@
   var idleQ = [];
   function idle(id, src) { idleQ.push([id, src]); }
 
+  // ?v= derives from window.LG_V — the filemtime map pwa-loader.php prepends when it
+  // serves this file — so a `git pull` in the checkout busts the 1y-immutable asset
+  // cache by itself. The literal number in each call is the FALLBACK (kept roughly
+  // current at edit time) so any surface that serves pwa.js statically — buck's
+  // preview slot, a loader outage — degrades to the old hand-bumped behavior, never
+  // to a forever-stale ?v.
+  var LGV = window.LG_V || {};
+  function v(src, fb) { return src + '?v=' + (LGV[src.replace(/^\//, '')] || fb); }
+
   // The user settings engine FIRST (color theme / webfont / text size from
   // localStorage, applied site-wide). Earliest so a picked theme paints with
   // minimal flash; defaults apply no override, so most users see no change.
-  inject('looth-app-settings-js', '/app-settings.js?v=32', true);
+  inject('looth-app-settings-js', v('/app-settings.js', 32), true);
 
   if (onHub) {
     // Hub feed visual polish (app-card feed, desktop mosaic, action row …).
-    inject('looth-hub-polish-js', '/hub-polish.js?v=227', true);
+    inject('looth-hub-polish-js', v('/hub-polish.js', 227), true);
     // Hub infinite scroll (auto-append older feed items at the bottom).
-    inject('looth-hub-infinite-js', '/hub-infinite.js?v=4');
+    inject('looth-hub-infinite-js', v('/hub-infinite.js', 4));
     // Spotlight sponsor cards in the feed (Ian+Buck greenlight 2026-06-11).
-    inject('looth-sponsor-cards-js', '/sponsor-cards.js?v=5');
+    inject('looth-sponsor-cards-js', v('/sponsor-cards.js', 5));
     // Cover-image placeholder heights (scroll-jump mitigation, Buck 6/11).
-    inject('looth-hub-nojump-js', '/hub-nojump.js?v=2', true);
+    inject('looth-hub-nojump-js', v('/hub-nojump.js', 2), true);
     // Mobile Hub behaviors (≤640): killCompactOnMobile + long-press reactions.
-    if (mobileish) inject('looth-mobile-hub-js', '/mobile-hub.js?v=3');
+    if (mobileish) inject('looth-mobile-hub-js', v('/mobile-hub.js', 3));
     // "Play today's Guitardle" strip under the sort bar; opens the game in a
     // pull-up sheet (mobile) / centered modal (desktop). Buck 6/12.
     // DECOMMISSIONED for launch (Ian 6/12) — Guitardle is a fast-follow;
     // re-enable this line to bring the Hub teaser back.
-    // idle('looth-gdle-teaser-js', '/guitardle-teaser.js?v=6');
+    // idle('looth-gdle-teaser-js', v('/guitardle-teaser.js', 6));
   }
 
   // Guitardle app-icon side art on the archive front page (stopgap until
   // canonical buck/guitardle-polish 903addb merges; layer bails if merged).
   // DECOMMISSIONED for launch (Ian 6/12) — fast-follow with the game block.
   // if (PATH.indexOf('/archive-poc') === 0 || PATH.indexOf('/front-page') === 0) {
-  //   idle('looth-gdle-art-js', '/gdle-side-art.js?v=1');
+  //   idle('looth-gdle-art-js', v('/gdle-side-art.js', 1));
   // }
 
   // Marketplace shop bubble REMOVED (Ian 2026-06-14): loothtool runs on its own
@@ -100,29 +109,29 @@
   // also owns the DESKTOP header settings gear (lg-set-gear -> LGSettings panel),
   // so it must load on ALL viewports; it self-gates internally (tab bar <=640,
   // gear >=641). Gating it mobile-only removed the desktop gear (Ian 6/11).
-  inject('looth-tabbar-js', '/bottom-nav.js?v=36');   // v36: real notif DELETE — swipe-to-delete rows + Clear-all DELETEs server-side (watermark retired)
+  inject('looth-tabbar-js', v('/bottom-nav.js', 36));   // v36: real notif DELETE — swipe-to-delete rows + Clear-all DELETEs server-side (watermark retired)
 
   if (mobileish) {
-    inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=36');
+    inject('looth-mobile-fixes-js', v('/app-mobile-fixes.js', 36));
     // Tap-to-open sheets + push opt-in: needed soon, not needed for first paint.
-    idle('looth-prac-sheet-js', '/practice-sheet.js?v=2');     // /p/<slug> business sheet
-    idle('looth-prof-sheet-js', '/profile-sheet.js?v=8');      // /u/ profile sheet
-    idle('looth-msgr-js', '/messenger-sheet.js?v=8');          // DM pull-up (v8: message search)
-    idle('looth-spon-sheet-js', '/sponsor-sheet.js?v=11');      // sponsors sheet
-    idle('looth-push-js', '/push.js?v=2');                     // self-gates mobile-coarse
+    idle('looth-prac-sheet-js', v('/practice-sheet.js', 2));     // /p/<slug> business sheet
+    idle('looth-prof-sheet-js', v('/profile-sheet.js', 8));      // /u/ profile sheet
+    idle('looth-msgr-js', v('/messenger-sheet.js', 8));          // DM pull-up (v8: message search)
+    idle('looth-spon-sheet-js', v('/sponsor-sheet.js', 11));      // sponsors sheet
+    idle('looth-push-js', v('/push.js', 2));                     // self-gates mobile-coarse
   }
 
   if (onEvents) {
-    inject('looth-loothalong-js', '/loothalong.js?v=5');       // pinned Loothalong CTA (v5: opens in new tab)
-    inject('looth-events-live-js', '/events-live.js?v=1');     // LIVE-NOW surfacing
-    if (mobileish) inject('looth-events-mobile-js', '/events-mobile.js?v=7'); // event-details popup
+    inject('looth-loothalong-js', v('/loothalong.js', 5));       // pinned Loothalong CTA (v5: opens in new tab)
+    inject('looth-events-live-js', v('/events-live.js', 1));     // LIVE-NOW surfacing
+    if (mobileish) inject('looth-events-mobile-js', v('/events-mobile.js', 7)); // event-details popup
   }
 
   if (onDir) {
     // Coarse pointers can rotate across the 640 split — give them both layers
     // (each self-gates at init); fine pointers load only the matching one.
-    if (coarse || mqPhone) inject('looth-dir-mobile-js', '/directory-mobile.js?v=12');
-    if (coarse || !mqPhone) inject('looth-dir-desktop-js', '/directory-desktop.js?v=13');
+    if (coarse || mqPhone) inject('looth-dir-mobile-js', v('/directory-mobile.js', 12));
+    if (coarse || !mqPhone) inject('looth-dir-desktop-js', v('/directory-desktop.js', 13));
   }
 
   (function () {

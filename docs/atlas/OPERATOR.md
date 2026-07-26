@@ -40,8 +40,15 @@ tokens, `r2-uploads-dev.service`, thumbnails services. Full list: `~/BOX-LOCAL-d
 
 ## 3. Deploy & git discipline
 
-- **Deploy = `git pull` in the checkout + `systemctl reload php8.3-fpm`** (+ `nginx -t && reload` if
-  confs changed). Same on live, but Ian runs it.
+- **Deploy = `lg-deploy`** (= `git pull --ff-only` in the checkout, guarded on clean main).
+  The routine case does NOTHING else: statics serve through symlinks, PHP revalidates by
+  mtime in ≤2s, asset `?v=` is filemtime read at request time (pwa-loader.php / LG_V) — no
+  fpm reload, no cp, no conf edit. lg-deploy auto-runs `nginx -t && reload` / fpm reload
+  ONLY when the pull changed `platform/nginx/` / `platform/fpm/`. Same on live, Ian runs it.
+  (deploy-one-pull 2026-07-26; audit + design in docs/DEPLOY-ONE-PULL-*.md. New webroot
+  file = commit it; new served path = add its symlink via webroot/install-symlinks.sh or
+  platform/bin/install-config-symlinks.sh — NEVER a copy: a copy is the six-step drift
+  coming back.)
 - Lanes: worktree off main (`git -C ~/loothplatformv2-clean worktree add ~/worktrees/<lane> -b <lane> main`),
   **push the branch to origin** after first commit (backup — branch-push ≠ merge), report to keeper.
   Merge to main ONLY after dev2-tested + Ian-approved; present commits+diffstat before every push to main.

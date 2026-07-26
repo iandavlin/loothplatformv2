@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# lg-deploy — THE deploy (deploy-one-pull 2026-07-26, OPERATOR.md §3 mandate:
+# a deploy is a single push and a single pull).
+#
+# Routine case: this does NOTHING but `git pull --ff-only` in the serving checkout.
+# Symlinks make everything propagate from that alone: nginx-served statics update
+# on the next request, PHP within opcache's 2s mtime revalidation, asset ?v=
+# versions are filemtimes read at request time. The extra steps below fire ONLY
+# when the pull actually changed serving *config*:
+#   platform/nginx/ changed -> nginx -t + reload
+#   platform/fpm/ changed   -> php8.3-fpm reload
+#   platform/systemd/ drift -> warning (units are deliberate copies; see audit)
+#   new webroot files       -> linked (install-symlinks.sh --new-only; no-op otherwise)
+#
+# Guards: refuses to run if the serving checkout is off main or dirty — the
+# checkout NEVER leaves main (standing rule from the 2026-07-26 outage).
+set -euo pipefail
+
+CO="/home/ubuntu/loothplatformv2-clean"
+cd "$CO"
+
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+[ "$BRANCH" = "main" ] || { echo "FATAL: serving checkout is on '$BRANCH', not main — fix that first (never deploy a detached/lane serve)"; exit 1; }
+DIRTY="$(git status --porcelain)"
+[ -z "$DIRTY" ] || { echo "FATAL: serving checkout is dirty — an overlay window is open or something hand-edited the tree:"; echo "$DIRTY"; exit 1; }
+
+OLD="$(git rev-parse HEAD)"
+git pull --ff-only
+NEW="$(git rev-parse HEAD)"
+if [ "$OLD" = "$NEW" ]; then echo "Already up to date ($NEW)"; exit 0; fi
+
+echo "== deployed $(git rev-list --count "$OLD".."$NEW") commit(s): $OLD -> $NEW"
+CHANGED="$(git diff --name-only "$OLD" "$NEW")"
+echo "$CHANGED" | sed 's/^/   /'
+
+# Link brand-new webroot assets (safe fast path; no-op when nothing is new)
+sudo "$CO/webroot/install-symlinks.sh" --new-only || true
+
+if echo "$CHANGED" | grep -q '^platform/nginx/'; then
+    echo "== nginx confs changed -> test + reload"
+    sudo nginx -t && sudo systemctl reload nginx && echo "   nginx reloaded"
+fi
+if echo "$CHANGED" | grep -q '^platform/fpm/'; then
+    echo "== FPM posture changed -> reload"
+    sudo systemctl reload php8.3-fpm && echo "   php8.3-fpm reloaded"
+fi
+for u in "$CO"/platform/systemd/*; do
+    b="$(basename "$u")"
+    if [ -e "/etc/systemd/system/$b" ] && ! cmp -s "$u" "/etc/systemd/system/$b"; then
+        echo "WARN: systemd unit drift: $b (repo != installed; cp + daemon-reload when intended)"
+    fi
+done
+echo "== done"
