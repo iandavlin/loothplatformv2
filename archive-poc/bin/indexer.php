@@ -501,6 +501,12 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
     ", array_merge([$post_id], $taxonomies)), ARRAY_A) ?: [];
     $tag_labels = array_values(array_filter(array_map(fn($r) => $r['name'], $terms_rows)));
 
+    // Title as PLAIN TEXT (GH #41 / HK-008): some imported posts carry HTML-entity
+    // titles ("Tools &amp; Jigs") from the old stack's editors. Every renderer
+    // escapes once at output, so an entity stored here ships as a visible "&amp;".
+    // Decode at index time — store text, escape at render.
+    $title_plain = html_entity_decode((string) $post->post_title, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
     $db->beginTransaction();
 
     if (lg_archive_poc_is_pg($db)) {
@@ -518,7 +524,7 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
             VALUES (?, 'wp', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'false', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ")->execute([
             $post_id, $kind, null, $cpt,
-            $post->post_title ?: '(untitled)',
+            $title_plain ?: '(untitled)',
             $post->post_name ?: ('p-' . $post_id),
             $url, $excerpt, $body_text,
             $thumb, $author_id ?: null, $author_name,
@@ -557,7 +563,7 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
             VALUES (?, 'wp', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ")->execute([
             $post_id, $kind, null, $cpt,
-            $post->post_title ?: '(untitled)',
+            $title_plain ?: '(untitled)',
             $post->post_name ?: ('p-' . $post_id),
             $url, $excerpt, $body_text,
             $thumb, $author_id ?: null, $author_name,
@@ -579,7 +585,7 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
         }
         $db->prepare("INSERT INTO content_fts(rowid, title, body_text, author_name, tag_text)
                       VALUES (?, ?, ?, ?, ?)")
-            ->execute([$post_id, $post->post_title, $body_text, $author_name ?: '', implode(' ', $tag_labels)]);
+            ->execute([$post_id, $title_plain, $body_text, $author_name ?: '', implode(' ', $tag_labels)]);
     }
 
     $db->commit();
