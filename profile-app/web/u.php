@@ -552,9 +552,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-edit.editing{background:var(--lg-card-bg,#fff);box-shadow:0 0 0 2px var(--lg-sage);font-style:normal;color:var(--lg-ink)}
 .lg-edit.editing::after{content:none}
 .lg-edit.saved{box-shadow:0 0 0 2px var(--lg-sage-3)}
-/* the @username (username-mentions lane) — public handle; owner gets the editor panel */
-.lg-uname{margin-top:6px}
-.lg-uname__handle{font:600 calc(13.5px*var(--lg-read-scale,1))/1.4 var(--lg-font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);color:var(--lg-mute);letter-spacing:.01em}
+/* @username chip REMOVED (Ian FINAL 2026-07-26 handles-invisible ruling) */
 .lg-about{font-size:calc(14.5px*var(--lg-read-scale,1));line-height:1.6;color:var(--lg-ink);white-space:pre-wrap;max-width:640px}
 .lg-about.lg-edit{min-height:1.5em;display:block;padding:6px 8px;margin:0 -8px}
 /* resume block — single PDF, download button + owner replace/remove */
