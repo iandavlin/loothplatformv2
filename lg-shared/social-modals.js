@@ -738,7 +738,10 @@ function openSideChat(peerUuid) {
   sideChat.uuid = null; sideChat.peers = []; sideChat.pendingPeer = null; sideChat.lastHtml = '';
   if (sideChat.pollT) { clearInterval(sideChat.pollT); sideChat.pollT = null; }
   var pane = document.querySelector('[data-lg-pane="messages"]');
-  var panel = document.querySelector('.lg-social-modal__panel');
+  /* the pane's OWN panel — a bare .lg-social-modal__panel query returns the NOTIF
+     modal's panel (first in DOM) and the split class lands on a hidden element:
+     the drawer never widens and the 344px dock crushes the group column. */
+  var panel = pane && pane.closest('.lg-social-modal__panel');
   if (pane) pane.classList.add('lg-social-pane--split');
   if (panel) panel.classList.add('lg-social-modal__panel--split');
   el.hidden = false;
@@ -815,7 +818,7 @@ function closeSideChat() {
   var el = document.getElementById('lg-msg-side');
   if (el) el.hidden = true;
   var pane = document.querySelector('[data-lg-pane="messages"]');
-  var panel = document.querySelector('.lg-social-modal__panel');
+  var panel = pane && pane.closest('.lg-social-modal__panel');   /* same wrong-panel trap as open */
   if (pane) pane.classList.remove('lg-social-pane--split');
   if (panel) panel.classList.remove('lg-social-modal__panel--split');
 }
