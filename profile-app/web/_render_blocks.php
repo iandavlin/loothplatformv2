@@ -1060,32 +1060,10 @@ function looth_render_header_block(array $header, string $role, string $headerVi
         echo '<p class="lg-idrow__glance">' . looth_h($glance) . '</p>';
     }
 
-    // ── The @username (username-mentions lane) ────────────────────────────────────
-    // Shown to EVERYONE, not just the owner: the handle is public by definition — it is
-    // the member's /u/ URL and the name others type to mention them. Seeing "@markus" on
-    // the profile is how a member learns what to type in a composer.
-    //
-    // The owner gets an editor. NOT the .lg-edit contentEditable idiom used above: that
-    // one alerts() on failure, and a username needs to answer taken / reserved / too-soon
-    // BEFORE you commit. This uses the .lg-locedit panel idiom (inline panel + aria-live
-    // status), wired in u.php. Deliberately not plumbed through Block::loadHeader — the
-    // handle is identity, not a profile field, and the fields contract stays untouched.
-    $slugNow = '';
-    if ($userId > 0) {
-        try {
-            $st = \Looth\ProfileApp\Db::pg()->prepare('SELECT slug FROM users WHERE id = :u');
-            $st->execute([':u' => $userId]);
-            $slugNow = (string)($st->fetchColumn() ?: '');
-        } catch (\Throwable $e) {
-            $slugNow = '';   // never let the handle row take the profile page down
-        }
-    }
-    // DISPLAY-ONLY handle chip (Ian numbered ruling 2026-07-25: the handle follows
-    // the profile name — rename re-derives it via Provision::maybeSyncSlugFromName;
-    // it is not independently editable, so owners see the same chip everyone does).
-    if ($slugNow !== '') {
-        echo '<div class="lg-uname"><span class="lg-uname__handle">@' . looth_h($slugNow) . '</span></div>';
-    }
+    // @username chip REMOVED (Ian FINAL 2026-07-26, handles-invisible ruling: nuke
+    // visible handles everywhere — slugs live on invisibly as URL keys only; auto-
+    // derive, history redirects and the backfill all stand. One identity concept:
+    // the name).
 
     echo '</div></div>';                                   // close __body + idrow
 
