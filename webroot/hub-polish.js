@@ -3022,6 +3022,11 @@
     var stack = [];         // bottom → top ids
     var backdropEl = null;
     var histDepth = 0;      // how many stack entries pushed a history entry
+    // Pops WE caused. close() consumes its own history entry with history.back(),
+    // which lands in the popstate listener ONE TASK LATER — indistinguishable there
+    // from a real phone-back unless we mark it. Counter + staleness window so a
+    // history.back() that somehow never pops can't leave a swallow armed forever.
+    var selfPop = 0, selfPopAt = 0;
 
     function ensureBackdrop() {
       if (backdropEl) return backdropEl;
@@ -3103,7 +3108,11 @@
       // consume this sheet's history entry unless the pop itself closed us
       if (d._pushed && reason !== 'popstate') {
         d._pushed = false;
-        if (histDepth > 0) { histDepth--; try { history.back(); } catch (e) {} }
+        if (histDepth > 0) {
+          histDepth--;
+          selfPop++; selfPopAt = Date.now();
+          try { history.back(); } catch (e) { selfPop--; }
+        }
       } else if (reason === 'popstate') { d._pushed = false; if (histDepth > 0) histDepth--; }
     }
 
@@ -3120,6 +3129,16 @@
     // the sheets — while it is up, the pop belongs to IT (same guard the old
     // hand-rolled handler used).
     window.addEventListener('popstate', function () {
+      // OUR OWN pop, from close() consuming its history entry — swallow it. This
+      // MUST come before the empty-stack bail, or a close that empties the stack
+      // leaves the swallow armed and eats the member's NEXT real back press.
+      // (Ian, real iPhone 2026-07-26: picking a person in the tag picker tore the
+      // composer down with it. close('lgtag') -> history.back() -> this listener
+      // saw a non-empty stack ['lrs','lcp'] and closeTop'd the COMPOSER. Invisible
+      // for a lone sheet — the bail below covered it — and only reachable once
+      // sheets stack, which phase 2's picker is the first surface to do.)
+      if (selfPop > 0 && Date.now() - selfPopAt < 2000) { selfPop--; return; }
+      selfPop = 0;
       if (!stack.length) return;
       var lb = document.getElementById('lg-lb');
       if (lb && lb.classList.contains('is-on')) return;

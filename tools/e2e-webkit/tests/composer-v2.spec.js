@@ -130,6 +130,80 @@ test.describe('composer-v2 @390 (WebKit)', () => {
         .map((a) => a.textContent.replace(/﻿/g, '').trim()));
     expect(mentions).toContain(firstName);
     for (const m of mentions) expect(m.startsWith('@')).toBe(false);
+    // ...and the COMPOSER IS STILL THERE. This assertion is why the spec below
+    // exists; without it this test passed green while the composer was gone.
+    await page.waitForTimeout(600);
+    expect(await page.evaluate(() => document.querySelector('#looth-comp-sheet').classList.contains('is-open'))).toBe(true);
+  });
+
+  // ── REGRESSION: dismissing a sheet must never take the sheet BENEATH with it ──
+  // Ian, real iPhone, 2026-07-26: "when a user is selected it closes the composer."
+  // close() consumes its own history entry with history.back(); that pop arrives
+  // ONE TASK LATER and the manager's popstate listener read it as a phone-back and
+  // closeTop'd the next sheet down. Two reasons the phase-2 suite missed it:
+  //   (1) the picker test above asserted the PICKER closed + the mention landed and
+  //       never asserted the composer was still open;
+  //   (2) every assertion ran synchronously after the click — BEFORE the pop landed.
+  // So both halves are mandatory here: settle the event loop, then assert the layer
+  // beneath SURVIVED. Real taps throughout (locator.tap = touchstart/touchend), and
+  // the last test proves the self-pop swallow still lets REAL backs through.
+  const SETTLE = 600;   // the defect is async — asserting sooner cannot see it
+
+  test('picker Done dismisses ONLY the picker — the composer survives (Ian real-iPhone FAIL 2026-07-26)', async ({ page }) => {
+    await openTopicComposer(page);
+    await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15_000 });
+    await page.locator('#lgc-tag').tap();
+    await page.waitForSelector('#looth-tag-sheet.is-open', { timeout: 8_000 });
+    await page.locator('#lgt-q').fill('mik');
+    await page.waitForSelector('#looth-tag-sheet .lgt-row', { timeout: 8_000 });
+    await page.locator('#looth-tag-sheet .lgt-row').first().tap();
+    await page.locator('#lgt-done').tap();
+    await page.waitForTimeout(SETTLE);
+    const s = await page.evaluate(() => ({
+      stack: window.LgSheets.stack(),
+      tag: document.querySelector('#looth-tag-sheet').classList.contains('is-open'),
+      comp: document.querySelector('#looth-comp-sheet').classList.contains('is-open'),
+      lrs: document.querySelector('#looth-rep-sheet').classList.contains('is-open'),
+      mentions: document.querySelectorAll('#looth-comp-sheet .ql-editor a.bp-suggestions-mention').length,
+    }));
+    expect(s.tag).toBe(false);                          // the picker layer went away
+    expect(s.comp).toBe(true);                          // the composer DID NOT
+    expect(s.lrs).toBe(true);                           // nor the thread under it
+    expect(s.stack[s.stack.length - 1]).toBe('lcp');    // composer is top again
+    expect(s.mentions).toBeGreaterThan(0);              // and it kept the mention
+  });
+
+  test('composer ✕ dismisses ONLY the composer — the thread sheet survives', async ({ page }) => {
+    await openTopicComposer(page);
+    await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15_000 });
+    await page.locator('#lgc-x').tap();
+    await page.waitForTimeout(SETTLE);
+    const s = await page.evaluate(() => ({
+      stack: window.LgSheets.stack(),
+      comp: document.querySelector('#looth-comp-sheet').classList.contains('is-open'),
+      lrs: document.querySelector('#looth-rep-sheet').classList.contains('is-open'),
+    }));
+    expect(s.comp).toBe(false);
+    expect(s.lrs).toBe(true);
+    expect(s.stack).toEqual(['lrs']);
+  });
+
+  test('phone-back still walks the stack ONE layer per press (the self-pop swallow eats only OUR pops)', async ({ page }) => {
+    await openTopicComposer(page);
+    await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15_000 });
+    await page.locator('#lgc-tag').tap();
+    await page.waitForSelector('#looth-tag-sheet.is-open', { timeout: 8_000 });
+    const stackNow = () => page.evaluate(() => window.LgSheets.stack());
+    expect(await stackNow()).toEqual(['lrs', 'lcp', 'lgtag']);
+    await page.goBack();                    // real back #1 → picker only
+    await page.waitForTimeout(SETTLE);
+    expect(await stackNow()).toEqual(['lrs', 'lcp']);
+    await page.goBack();                    // real back #2 → composer only
+    await page.waitForTimeout(SETTLE);
+    expect(await stackNow()).toEqual(['lrs']);
+    await page.goBack();                    // real back #3 → thread
+    await page.waitForTimeout(SETTLE);
+    expect(await stackNow()).toEqual([]);
   });
 
   test('dark render: composer card, tool row and picker use dark surfaces', async ({ page }) => {
