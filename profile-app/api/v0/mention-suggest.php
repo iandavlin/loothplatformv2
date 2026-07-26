@@ -9,7 +9,9 @@ use Looth\ProfileApp\Visibility;
  * @mention autocomplete.
  *
  *   GET /profile-api/v0/mention-suggest?q=<text>
- *       200 { items: [ {uuid, slug, display_name, avatar_url}, … ] }   (max 10)
+ *       200 { items: [ {uuid, slug, display_name, avatar_url, context}, … ] }   (max 10)
+ *       context = business name, else location at members precision (row second line;
+ *       handles-invisible ruling 2026-07-26 — rows never show a handle)
  *       q may span spaces ("doug spec") — tokens AND across slug/display_name.
  *
  * WHY THIS LIVES HERE and not in bb-mirror's existing /hub/?suggest=author:
@@ -112,6 +114,8 @@ if (count($tokens) === 1) {
 $params[':pos1'] = $params[':pos2'] = $tokens[0];
 $st = Db::pg()->prepare("
     SELECT uuid, slug, display_name, avatar_url,
+           business_name, location_city, location_region, location_country,
+           location_visibility, location_members_precision,
            {$rank} AS rank,
            (slug ~* '^patreon[_-]?[0-9]+\$')::int AS machine,
            LEAST(coalesce(nullif(position(:pos1 in lower(display_name)), 0), 999),
@@ -127,6 +131,8 @@ $st = Db::pg()->prepare("
 ");
 $st->execute($params);
 
+require_once __DIR__ . '/_mention-context.php';   // row second line (see helper docblock)
+
 $items = [];
 while ($r = $st->fetch()) {
     $items[] = [
@@ -134,6 +140,7 @@ while ($r = $st->fetch()) {
         'slug'         => (string) $r['slug'],
         'display_name' => $r['display_name'] !== null ? (string) $r['display_name'] : null,
         'avatar_url'   => $r['avatar_url']   !== null ? (string) $r['avatar_url']   : null,
+        'context'      => lg_profile_mention_context($r),
     ];
 }
 

@@ -19,6 +19,9 @@ declare(strict_types=1);
 // Logged-out contact scrub (Ian 2026-06-10) — see _anon-scrub.php. Included
 // by index.php (config already loaded).
 require_once __DIR__ . '/../_anon-scrub.php';
+// unconditional (the later require sits behind the reactions require in a try{}):
+// post bodies resolve mentions now — text = member's CURRENT NAME (2026-07-26 swap)
+require_once __DIR__ . '/_reply-render.php';
 $lg_anon_view = function_exists('lg_bb_mirror_can_post') ? !lg_bb_mirror_can_post() : true;
 require __DIR__ . '/../_chrome.php';
 
@@ -345,7 +348,11 @@ function render_reply(
               'forum_id' => (int)($GLOBALS['forum']['id'] ?? 0),
           ]); ?>
         </div>
-        <div class="post__body"><?= ($GLOBALS['lg_anon_view'] ?? true) ? lg_scrub_anon_contacts((string)$r['content_html']) : $r['content_html'] /* sanitized at sync write */ ?></div>
+        <?php // resolve mentions (uuid/legacy anchor → CURRENT NAME text, /u/<slug> href —
+              // this page previously echoed frozen @slug text); then the anon scrub, whose
+              // mention-anchor rule neutralizes the name for logged-out eyes.
+              $lg_body = bb_mirror_resolve_mentions((string)$r['content_html'], bb_mirror_db()); ?>
+        <div class="post__body"><?= ($GLOBALS['lg_anon_view'] ?? true) ? lg_scrub_anon_contacts($lg_body) : $lg_body /* sanitized at sync write */ ?></div>
         <?php render_attachments($GLOBALS['att_map']['reply'][(int)$r['id']] ?? []); ?>
         <div class="post__actions">
           <button type="button" class="post__reply-btn" data-reply-to="<?= (int)$r['id'] ?>"
@@ -499,7 +506,8 @@ $fh_image      = $forum['header_image_url'] ?: null;
               'title'    => (string)$topic['title'],
           ]); ?>
         </div>
-        <div class="post__body"><?= $lg_anon_view ? lg_scrub_anon_contacts((string)$topic['content_html']) : $topic['content_html'] /* sanitized at sync write */ ?></div>
+        <?php $lg_op_body = bb_mirror_resolve_mentions((string)$topic['content_html'], $db); /* mention text = CURRENT NAME (2026-07-26 swap) */ ?>
+        <div class="post__body"><?= $lg_anon_view ? lg_scrub_anon_contacts($lg_op_body) : $lg_op_body /* sanitized at sync write */ ?></div>
         <?php render_attachments($att_map['topic'][$topic_id] ?? []); ?>
         <?php /* Engagement bar — same .fc-actions .fcr surface the feed card emits
                  (_feed.php), so the §4e modal cold-fetch can clone it for full OP

@@ -164,9 +164,11 @@ if (!function_exists('bb_mirror__mention_identities')) {
         };
 
         $shape = function (array $it): array {
+            $name = trim((string)($it['display_name'] ?? ''));
             return [
                 'uuid'    => strtolower((string)($it['uuid'] ?? '')),
                 'slug'    => $it['slug'] ?? null,
+                'name'    => $name !== '' ? $name : null,
                 'private' => (($it['profile_visibility'] ?? 'public') === 'private'),
             ];
         };
@@ -195,7 +197,7 @@ if (!function_exists('bb_mirror__mention_identities')) {
 if (!function_exists('bb_mirror_resolve_mentions')) {
     /**
      * Make stored content_html clickable:
-     *   1. Resolve @mentions to the mentioned member's CURRENT handle → /u/<slug>.
+     *   1. Resolve @mentions to the mentioned member's CURRENT NAME, linked → /u/<slug>.
      *   2. Auto-link bare URLs that were typed as plain text.
      * Returns full HTML — structure preserved. Used for the expanded topic body, and by
      * bb_mirror_format_snippet() for every teaser/stub, so it is the ONE place mentions
@@ -207,8 +209,10 @@ if (!function_exists('bb_mirror_resolve_mentions')) {
      *          via the profile bridge — all 65 members ever mentioned bridge cleanly)
      *
      * Both carry a STABLE reference to a person. Neither one's TEXT is trustworthy: it is
-     * the handle FROZEN at the moment the post was written. So we rebuild the whole anchor
-     * — href AND visible text — from the member's CURRENT slug. That is the entire point:
+     * the handle FROZEN at the moment the post was written. So we rebuild the whole anchor:
+     * visible text from the member's CURRENT NAME (handles-invisible, Ian final 2026-07-26
+     * — members never see a handle; "one identity concept: the name"), href from their
+     * CURRENT slug (slugs live on invisibly as URL keys). That is the entire point:
      * a member renames, and every mention of them ever posted follows, with nothing in the
      * stored content rewritten.
      *
@@ -249,21 +253,34 @@ if (!function_exists('bb_mirror_resolve_mentions')) {
                     }
 
                     // Member gone, or a private profile whose /u/ page 404s for everyone else:
-                    // render the handle as plain text. A mention must never become a dead link.
+                    // render plain text — a mention must never become a dead link. Text is the
+                    // member's current NAME when we still know it (private profile), else the
+                    // frozen anchor text humanized OUT of handle shape (handles-invisible,
+                    // Ian final 2026-07-26: no @handle text anywhere).
                     if (!$who || empty($who['slug']) || !empty($who['private'])) {
-                        $txt = trim(html_entity_decode(strip_tags($m[2]), ENT_QUOTES, 'UTF-8'));
-                        $txt = '@' . ltrim($txt, '@');
-                        return htmlspecialchars($txt === '@' ? '@member' : $txt, ENT_QUOTES, 'UTF-8');
+                        $txt = $who['name'] ?? null;
+                        if ($txt === null || $txt === '') {
+                            $frozen = trim(html_entity_decode(strip_tags($m[2]), ENT_QUOTES, 'UTF-8'));
+                            $frozen = ltrim($frozen, '@');
+                            // "doug-lawrence" → "Doug Lawrence"; a frozen slug must not
+                            // resurface as a visible handle
+                            $txt = $frozen !== '' ? mb_convert_case(strtr($frozen, '-_.', '   '), MB_CASE_TITLE, 'UTF-8') : 'a member';
+                        }
+                        return htmlspecialchars($txt, ENT_QUOTES, 'UTF-8');
                     }
 
                     // Keep class="bp-suggestions-mention": bb_mirror_format_snippet() keys its
                     // mention detection on it (→ class="bb-mention"), which the anon leak-scrub
-                    // then keys on in turn. Dropping it would silently un-gate handles to anon.
+                    // then keys on in turn. Dropping it would silently un-gate mentions to anon.
+                    // TEXT = the member's CURRENT NAME (handles-invisible, Ian final 2026-07-26 —
+                    // render source swapped from slug); the slug lives on invisibly as the URL key.
                     $slug = (string)$who['slug'];
+                    $text = ($who['name'] !== null && $who['name'] !== '') ? $who['name']
+                          : mb_convert_case(strtr($slug, '-_.', '   '), MB_CASE_TITLE, 'UTF-8');
                     return '<a class="bp-suggestions-mention" href="'
                          . htmlspecialchars('/u/' . rawurlencode($slug), ENT_QUOTES)
-                         . '" rel="nofollow">@'
-                         . htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') . '</a>';
+                         . '" rel="nofollow">'
+                         . htmlspecialchars($text, ENT_QUOTES, 'UTF-8') . '</a>';
                 }, $html) ?? $html;
             }
         }
@@ -467,13 +484,16 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         }
         $ra          = htmlspecialchars($r['author_name'] ?: 'Anonymous');
         $rslug       = $r['author_slug'] ?? null;
-        $raw_text    = trim(strip_tags($r['excerpt'] ?? ''));
-        // Logged-out contact scrub (Ian 2026-06-10): emails + @handles never
-        // reach anonymous eyes. See _anon-scrub.php.
+        // Logged-out contact scrub (Ian 2026-06-10): emails + @handles + mentioned-member
+        // names never reach anonymous eyes. Scrub BEFORE strip_tags: the mention scrub
+        // keys on the anchor's class, and mention text is a NAME now (render-source swap
+        // 2026-07-26) — once the tags are stripped it is indistinguishable from prose.
+        $raw_excerpt = (string) ($r['excerpt'] ?? '');
         if (function_exists('lg_bb_mirror_can_post') && !lg_bb_mirror_can_post()) {
             require_once __DIR__ . '/../_anon-scrub.php';
-            $raw_text = lg_scrub_anon_contacts($raw_text);
+            $raw_excerpt = lg_scrub_anon_contacts($raw_excerpt);
         }
+        $raw_text = trim(strip_tags($raw_excerpt));
         $reply_short = mb_substr($raw_text, 0, 160);
         $reply_rest  = mb_strlen($raw_text) > 160 ? mb_substr($raw_text, 160) : '';
         $rtime_r     = $r['created_at'] ? feed_rel_time((string)$r['created_at']) : '—';
@@ -528,7 +548,9 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         echo '</div>';
         echo '<div class="reply-stub__body">';
         if ($reply_to_author !== null && $reply_to_author !== '') {
-            echo '<span class="reply-stub__reply-to">&#8618; @' . htmlspecialchars($reply_to_author) . '</span> ';
+            // bare name, no @ glyph (handles-invisible 2026-07-26; Q1 default — one
+            // glyph to restore if Ian rules @-prefixed)
+            echo '<span class="reply-stub__reply-to">&#8618; ' . htmlspecialchars($reply_to_author) . '</span> ';
         }
         if (!empty($r['excerpt_html'])) {
             // Pre-formatted by the caller (bb_mirror_format_snippet): resolved
