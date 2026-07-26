@@ -114,6 +114,7 @@ function openModal(id) {
   if (cb) cb.focus();
 }
 function closeAllModals() {
+  if (typeof closeSideChat === 'function') closeSideChat();   /* stop its poll, drop the split */
   document.querySelectorAll('.lg-social-modal').forEach(function (m) {
     m.hidden = true;
     m.setAttribute('aria-hidden', 'true');
@@ -121,7 +122,13 @@ function closeAllModals() {
   document.body.classList.remove('lg-sm-open');
 }
 document.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape') closeAllModals();
+  if (e.key !== 'Escape') return;
+  /* Esc closes the side conversation first (it is a sub-layer of the open modal), only
+     dropping the whole modal once there is no side-chat left to peel back. */
+  if (sideChat && sideChat.uuid !== undefined && document.getElementById('lg-msg-side') && !document.getElementById('lg-msg-side').hidden) {
+    closeSideChat(); return;
+  }
+  closeAllModals();
 });
 document.addEventListener('click', function (e) {
   var t = e.target;
@@ -332,6 +339,7 @@ function loadThreadList() {
   pendingPeerUuid   = null;
   pendingGroupUuids = null;
   currentThreadMeta = null;
+  closeSideChat();            /* the side conversation belongs to a group thread, not the list */
   clearAttach();
   clearPeerHeader();
   hideMsgPanel();
@@ -614,6 +622,242 @@ function openDmWithUser(peerUuid) {
       msgs.innerHTML = '<p class="lg-sm__error">Could not open conversation.</p>';
     });
 }
+
+/* Member lookup for the message card (bubble tap) — from the meta captured on thread load. */
+function threadMemberById(uuid) {
+  var ms = (currentThreadMeta && currentThreadMeta.members) || [];
+  for (var i = 0; i < ms.length; i++) if (ms[i].uuid === uuid) return ms[i];
+  return null;
+}
+
+/* ══ side conversation (keeper 7/13: "easy side bars without page reloads") ═══════════
+   A TRUE side-by-side 1:1 docked to the RIGHT of the group, both live and pollable at
+   once — no navigation, no page reload. Self-contained: its own DOM, navSeq, poll, and
+   send path, so it can never cross-write the group pane (the left thread keeps its own
+   currentThreadUuid/poll untouched). ONE side-chat at a time — opening a second replaces
+   it (keeper's lean). Read + send-text + live poll + image lightbox view; the heavier
+   per-message actions (edit/delete/react/attach) stay in the full thread view, which is
+   one click away, so the sidebar never renders an affordance that would target the wrong
+   thread. The 1:1 is resolved to a TRUE pair thread (peers.length===1) or created fresh —
+   findPairThread/is_group=false on the server guarantees it never lands on the group. */
+var sideChat = { uuid: null, peers: [], pendingPeer: null, seq: 0, pollT: null, lastHtml: '' };
+
+function ensureSideChatDom() {
+  var existing = document.getElementById('lg-msg-side');
+  if (existing) return existing;
+  var pane = document.querySelector('[data-lg-pane="messages"]');
+  if (!pane) return null;
+  var el = document.createElement('div');
+  el.className = 'lg-msg-side';
+  el.id = 'lg-msg-side';
+  el.hidden = true;
+  el.innerHTML =
+    '<div class="lg-msg-side__head">'
+      + '<span class="lg-msg-side__peer" id="lg-msg-side-peer"></span>'
+      + '<button type="button" class="lg-msg-side__close" data-lg-side-close aria-label="Close side conversation">'
+      + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+      + '</button>'
+    + '</div>'
+    + '<div class="lg-msg-side__messages" id="lg-msg-side-messages"></div>'
+    + '<div class="lg-msg-side__compose">'
+      + '<textarea id="lg-msg-side-input" class="lg-msg-side__input" placeholder="Message… (Enter to send)" rows="2"></textarea>'
+      + '<button type="button" class="lg-msg-side__send" data-lg-side-send aria-label="Send">'
+      + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>'
+      + '</button>'
+    + '</div>';
+  pane.appendChild(el);
+  return el;
+}
+
+/* Read-only render for the side pane. A 1:1 has no author labels and no member card; the
+   per-message hover menu is deliberately omitted so the shared document click handlers
+   (which act on currentThreadUuid = the GROUP) can never fire against the side thread. */
+function sideMessagesHtml(messages, peers) {
+  var peerSet = {};
+  (peers || []).forEach(function (p) { peerSet[p.uuid] = true; });
+  if (!messages || !messages.length) {
+    return '<p class="lg-sm__empty">No messages yet. Send the first one!</p>';
+  }
+  return messages.map(function (m) {
+    if (m.kind === 'system') return '<div class="lg-msg__sys">' + esc(m.body) + '</div>';
+    var mine = !peerSet[m.sender_uuid];
+    if (m.deleted) {
+      return '<div class="lg-msg__msg' + (mine ? ' lg-msg__msg--mine' : '') + '">'
+        + '<p class="lg-msg__msg-text lg-msg__msg-text--tomb">Message deleted</p></div>';
+    }
+    var h = '<div class="lg-msg__msg' + (mine ? ' lg-msg__msg--mine' : '') + '">';
+    if (m.media_url) {
+      h += '<button type="button" class="lg-msg__msg-media" data-lg-msg-lightbox="' + esc(m.media_url) + '">'
+        + '<img src="' + esc(m.media_url) + '" alt="Photo" loading="lazy">'
+        + '<span class="lg-msg__zoomdot" aria-hidden="true">⤢</span></button>';
+    }
+    if (m.body) {
+      h += '<p class="lg-msg__msg-text">' + linkifyText(m.body)
+        + (m.edited ? '<span class="lg-msg__edited">(edited)</span>' : '') + '</p>';
+    }
+    h += '<span class="lg-msg__msg-time">' + relTime(m.created_at) + '</span>';
+    h += reactionStripHtml(m.reactions);   /* display only — no toggle in the sidebar */
+    h += '</div>';
+    return h;
+  }).join('');
+}
+
+function sideRenderHeader(u) {
+  var el = document.getElementById('lg-msg-side-peer');
+  if (!el) return;
+  el.innerHTML = avatarEl(u, 28)
+    + '<span class="lg-msg-side__peer-nm">' + esc(u.display_name || u.name || 'Member') + '</span>';
+}
+
+function sideLoad(uuid, quiet) {
+  var seq = sideChat.seq;
+  fetch(API + '/me/messages/' + encodeURIComponent(uuid), { credentials: 'include' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (d) {
+      if (seq !== sideChat.seq || sideChat.uuid !== uuid) return;   /* the side pane moved on */
+      var msgs = document.getElementById('lg-msg-side-messages');
+      if (!msgs) return;
+      if (d && d.peers) { sideChat.peers = d.peers; if (d.peers[0]) sideRenderHeader(d.peers[0]); }
+      var html = sideMessagesHtml((d && d.messages) || [], (d && d.peers) || []);
+      if (quiet && html === sideChat.lastHtml) return;   /* poll: nothing changed → no reflow */
+      var stick = !quiet || (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 40);
+      sideChat.lastHtml = html;
+      msgs.innerHTML = html;
+      if (stick) msgs.scrollTop = msgs.scrollHeight;
+    })
+    .catch(function () {});
+}
+
+/* Open (or start) a 1:1 with peerUuid in the side pane. Resolve to a TRUE pair thread; if
+   none exists, arm a fresh compose whose first send creates it. */
+function openSideChat(peerUuid) {
+  if (!peerUuid || !currentThreadUuid) return;
+  var el = ensureSideChatDom();
+  if (!el) return;
+  var seq = ++sideChat.seq;
+  sideChat.uuid = null; sideChat.peers = []; sideChat.pendingPeer = null; sideChat.lastHtml = '';
+  if (sideChat.pollT) { clearInterval(sideChat.pollT); sideChat.pollT = null; }
+  var pane = document.querySelector('[data-lg-pane="messages"]');
+  /* the pane's OWN panel — a bare .lg-social-modal__panel query returns the NOTIF
+     modal's panel (first in DOM) and the split class lands on a hidden element:
+     the drawer never widens and the 344px dock crushes the group column. */
+  var panel = pane && pane.closest('.lg-social-modal__panel');
+  if (pane) pane.classList.add('lg-social-pane--split');
+  if (panel) panel.classList.add('lg-social-modal__panel--split');
+  el.hidden = false;
+  var msgs = document.getElementById('lg-msg-side-messages');
+  if (msgs) msgs.innerHTML = '<p class="lg-sm__status">Loading…</p>';
+  /* header from the group's member meta (instant), refined by the thread fetch */
+  var m = threadMemberById(peerUuid);
+  if (m) sideRenderHeader(m);
+  fetch(API + '/me/messages/', { credentials: 'include' })
+    .then(function (r) { return r.ok ? r.json() : { threads: [] }; })
+    .then(function (d) {
+      if (seq !== sideChat.seq) return;
+      var match = null;
+      ((d && d.threads) || []).forEach(function (t) {
+        var ps = t.peers || [];
+        if (ps.length === 1 && ps[0].uuid === peerUuid) match = t;   /* TRUE pair thread only */
+      });
+      if (match) {
+        sideChat.uuid = match.uuid; sideChat.peers = match.peers || [];
+        sideLoad(match.uuid);
+        sideChat.pollT = setInterval(function () { if (sideChat.uuid === match.uuid) sideLoad(match.uuid, true); }, 8000);
+      } else {
+        sideChat.pendingPeer = peerUuid;                             /* first send creates the 1:1 */
+        var mm = document.getElementById('lg-msg-side-messages');
+        if (mm) mm.innerHTML = '<p class="lg-sm__empty">No messages yet. Send the first one!</p>';
+        fetchPeer(peerUuid).then(function (u) { if (u && seq === sideChat.seq) sideRenderHeader(u); });
+      }
+      var input = document.getElementById('lg-msg-side-input');
+      if (input) input.focus();
+    })
+    .catch(function () {
+      if (seq !== sideChat.seq) return;
+      var mm = document.getElementById('lg-msg-side-messages');
+      if (mm) mm.innerHTML = '<p class="lg-sm__error">Could not open conversation.</p>';
+    });
+}
+
+function sideSend() {
+  var input = document.getElementById('lg-msg-side-input');
+  var text  = input ? input.value.trim() : '';
+  if (!text) return;
+  if (!sideChat.uuid && !sideChat.pendingPeer) return;
+  input.value = ''; input.disabled = true;
+  var url, payload;
+  if (sideChat.uuid) { url = API + '/me/messages/' + encodeURIComponent(sideChat.uuid); payload = { body: text }; }
+  else               { url = API + '/me/messages/'; payload = { to_uuid: sideChat.pendingPeer, body: text }; }
+  var seq = sideChat.seq;
+  fetch(url, {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json().catch(function () { return {}; }); })
+    .then(function (j) {
+      if (seq !== sideChat.seq) return;
+      if (input) input.disabled = false;
+      if (!sideChat.uuid && j && j.thread_uuid) {   /* the 1:1 now exists — adopt it + start polling */
+        sideChat.uuid = j.thread_uuid; sideChat.pendingPeer = null;
+        if (sideChat.pollT) clearInterval(sideChat.pollT);
+        sideChat.pollT = setInterval(function () { if (sideChat.uuid === j.thread_uuid) sideLoad(j.thread_uuid, true); }, 8000);
+      }
+      if (sideChat.uuid) sideLoad(sideChat.uuid);
+      if (input) input.focus();
+      setTimeout(refreshCounts, 400);
+    })
+    .catch(function () {
+      if (input) { input.disabled = false; input.value = text; }   /* restore the draft on failure */
+    });
+}
+
+function closeSideChat() {
+  sideChat.seq++;
+  if (sideChat.pollT) { clearInterval(sideChat.pollT); sideChat.pollT = null; }
+  sideChat.uuid = null; sideChat.peers = []; sideChat.pendingPeer = null; sideChat.lastHtml = '';
+  var el = document.getElementById('lg-msg-side');
+  if (el) el.hidden = true;
+  var pane = document.querySelector('[data-lg-pane="messages"]');
+  var panel = pane && pane.closest('.lg-social-modal__panel');   /* same wrong-panel trap as open */
+  if (pane) pane.classList.remove('lg-social-pane--split');
+  if (panel) panel.classList.remove('lg-social-modal__panel--split');
+}
+
+/* Entry points (member-manager row + bubble member card) open the side conversation. */
+function openDmFromGroupDesktop(uuid) { openSideChat(uuid); }
+
+/* Member card — the intuitive door (bubble avatar/name tap in a group). A light centered
+   popover (Slack/WhatsApp idiom) offering Message + View profile, so the name still reaches
+   the profile it always did. Only offered for OTHER members of a GROUP; a 1:1 renders no
+   author line, so no dead card is ever shown (keeper 7/13 d). */
+var msgCardEl = null;
+function openMemberCard(uuid) {
+  closeMemberCard();
+  var m = threadMemberById(uuid);
+  if (!m) return;
+  var nm = esc(m.name || m.display_name || 'Member');
+  var msgAct = m.can_message
+    ? '<button type="button" class="lg-msg-card__act lg-msg-card__msg" data-lg-card-msg="' + esc(uuid) + '">Message</button>'
+    : '<div class="lg-msg-card__noconn">Connect with ' + nm + ' to message them.</div>';
+  var profAct = m.slug ? '<a class="lg-msg-card__act lg-msg-card__prof" href="/u/' + esc(m.slug) + '">View profile</a>' : '';
+  var el = document.createElement('div');
+  el.className = 'lg-msg-card';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', 'Member');
+  el.innerHTML = '<div class="lg-msg-card__in">'
+    + '<div class="lg-msg-card__av">' + avatarEl(m, 60) + '</div>'
+    + '<div class="lg-msg-card__nm">' + nm + '</div>'
+    + (m.slug ? '<div class="lg-msg-card__sub">@' + esc(m.slug) + '</div>' : '')
+    + msgAct + profAct + '</div>';
+  document.body.appendChild(el);
+  msgCardEl = el;
+  el.addEventListener('click', function (e) { if (e.target === el) closeMemberCard(); });
+}
+function closeMemberCard() { if (msgCardEl) { msgCardEl.remove(); msgCardEl = null; } }
+/* Esc closes the card FIRST (capture) so it does not also close the whole modal. */
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && msgCardEl) { e.stopImmediatePropagation(); closeMemberCard(); }
+}, true);
 
 /* ── image attachment (compose) ── */
 /* Visible failure state for the attach send — created on demand, cleared on any
@@ -965,9 +1209,9 @@ document.addEventListener('click', function (e) {
       (t.closest && t.closest('[data-lg-attach-remove]'))) { clearAttach(); }
 });
 document.addEventListener('keydown', function (e) {
-  if (e.key === 'Enter' && !e.shiftKey &&
-      e.target && e.target.id === 'lg-msg-reply-input') {
-    e.preventDefault(); sendReply();
+  if (e.key === 'Enter' && !e.shiftKey && e.target) {
+    if (e.target.id === 'lg-msg-reply-input') { e.preventDefault(); sendReply(); }
+    else if (e.target.id === 'lg-msg-side-input') { e.preventDefault(); sideSend(); }
   }
 });
 
@@ -1032,9 +1276,11 @@ function renderThreadMessages(msgs, messages, peers, members) {
     }
     var mine = !peerSet[m.sender_uuid];   /* mine = sender is NOT among the peers */
     var h = '';
-    /* who-said-it label above a run of a peer's messages in a GROUP (never for you) */
+    /* who-said-it label above a run of a peer's messages in a GROUP (never for you). In a
+       group it is ALSO the intuitive door: tapping it opens a light member card with Message
+       + View profile. 1:1 threads have no author line, so no dead card is ever offered. */
     if (group && !mine && m.sender_uuid !== lastSender) {
-      h += '<span class="lg-msg__author">' + esc(nameBy[m.sender_uuid] || 'Member') + '</span>';
+      h += '<button type="button" class="lg-msg__author" data-lg-membercard="' + esc(m.sender_uuid) + '">' + esc(nameBy[m.sender_uuid] || 'Member') + '</button>';
     }
     lastSender = m.sender_uuid;
     /* soft-deleted → tombstone; body + media were already withheld server-side (no reactions) */
@@ -1244,6 +1490,14 @@ function renderMemberManager(d) {
       actions = '<span class="lg-msg__you">You</span>';
     } else {
       actions = '';
+      /* Message: open a TRUE 1:1 with this member, in place, with a back to the group.
+         Gated on can_message (accepted connection) — same rule the send path enforces, so
+         a non-connection is told to connect instead of hitting a silent send-time 403. */
+      if (m.can_message) {
+        actions += '<button type="button" class="lg-msg__dm" data-lg-mm-dm="' + esc(m.uuid) + '">Message</button>';
+      } else {
+        actions += '<span class="lg-msg__mm-noconn">Connect to message</span>';
+      }
       /* Transfer: the current owner OR a site admin (canManage) may hand ownership to any
          NON-owner member. Server re-checks and 403s anyone else. */
       if (canManage && isGroup && !isOwner) {
@@ -1459,6 +1713,11 @@ document.addEventListener('click', function (e) {
   var px = hit('[data-lg-pick-remove]'); if (px) { pickerRemove(px.getAttribute('data-lg-pick-remove')); return; }
   if (hit('[data-lg-pick-go]'))     { pickerGo(); return; }
   if (hit('[data-lg-pick-cancel]')) { loadThreadList(); return; }
+  var mdm = hit('[data-lg-mm-dm]');      if (mdm) { openDmFromGroupDesktop(mdm.getAttribute('data-lg-mm-dm')); return; }
+  var mca = hit('[data-lg-membercard]'); if (mca) { openMemberCard(mca.getAttribute('data-lg-membercard')); return; }
+  var cms = hit('[data-lg-card-msg]');   if (cms) { var cu = cms.getAttribute('data-lg-card-msg'); closeMemberCard(); openDmFromGroupDesktop(cu); return; }
+  if (hit('[data-lg-side-close]'))       { closeSideChat(); return; }
+  if (hit('[data-lg-side-send]'))        { sideSend(); return; }
   var mr = hit('[data-lg-mm-remove]');   if (mr) { mmRemove(mr.getAttribute('data-lg-mm-remove')); return; }
   var mo = hit('[data-lg-mm-owner]');    if (mo) { mmMakeOwner(mo.getAttribute('data-lg-mm-owner')); return; }
   if (hit('[data-lg-mm-rename]'))   { mmRename(); return; }

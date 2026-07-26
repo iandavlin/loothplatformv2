@@ -963,6 +963,14 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
   border-radius: 999px; padding: 5px 10px;
 }
 .lg-msg__mkowner:hover { background: var(--lg-sage-tint, #eef2e3); }
+/* Message action (member-manager row) + honest not-connected note */
+.lg-msg__dm {
+  flex: 0 0 auto; appearance: none; cursor: pointer; font: 600 12px/1 var(--lg-font-sans, system-ui);
+  color: var(--lg-sage-d, #6b7c52); background: var(--lg-sage-tint, #eef2e3);
+  border: 1px solid var(--lg-sage-3, #d4e0b8); border-radius: 999px; padding: 5px 10px;
+}
+.lg-msg__dm:hover { background: #e2ecd2; }
+.lg-msg__mm-noconn { flex: 0 0 auto; font: 400 11.5px/1.25 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b); }
 .lg-msg__mm-name { margin-top: 13px; }
 .lg-msg__mm-name-lbl { display: block; font: 600 12px/1 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b); margin-bottom: 6px; }
 .lg-msg__mm-name-row { display: flex; gap: 8px; }
@@ -986,10 +994,111 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
   background: var(--lg-paper, #f3f1ea); border: 1px solid var(--lg-line, #e3ddd0);
   border-radius: 999px; padding: 4px 12px; margin: 3px 0;
 }
-/* who-said-it label above a peer's run of messages in a group */
+/* who-said-it label above a peer's run of messages in a group — ALSO the member-card door */
 .lg-msg__author {
   align-self: flex-start; font: 600 11px/1 var(--lg-font-sans, system-ui);
   color: var(--lg-sage-d, #6b7c52); margin: 4px 0 -2px 3px;
+  appearance: none; background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+}
+.lg-msg__author:hover { text-decoration: underline; }
+
+/* member card popover (bubble avatar/name tap) — light centered layer over the modal */
+.lg-msg-card {
+  position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center;
+  background: rgba(15,16,12,.42); padding: 24px;
+}
+.lg-msg-card__in {
+  width: 100%; max-width: 300px; background: var(--lg-cream, #fbfbf8); border-radius: 16px;
+  padding: 22px 18px; box-shadow: 0 14px 40px rgba(0,0,0,.3); text-align: center;
+}
+.lg-msg-card__av { display: flex; justify-content: center; }
+.lg-msg-card__av .lg-sm__avatar { width: 60px; height: 60px; border-radius: 50%; }
+.lg-msg-card__nm { font: 700 16px/1.25 var(--lg-font-sans, system-ui); color: var(--lg-ink, #1a1d1a); margin: 12px 0 2px; }
+.lg-msg-card__sub { font: 400 12.5px/1.3 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b); margin-bottom: 14px; }
+.lg-msg-card__act {
+  display: block; width: 100%; box-sizing: border-box; appearance: none; cursor: pointer; text-decoration: none;
+  border: 0; border-radius: 10px; font: 600 14px/1 var(--lg-font-sans, system-ui); padding: 12px; margin-top: 8px;
+}
+.lg-msg-card__msg { background: var(--lg-sage-d, #6b7c52); color: #fff; }
+.lg-msg-card__msg:hover { background: #5a6a45; }
+.lg-msg-card__prof { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #6b7c52); }
+.lg-msg-card__prof:hover { background: #e2ecd2; }
+.lg-msg-card__noconn {
+  font: 400 12.5px/1.4 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b);
+  background: var(--lg-paper, #f3f1ea); border-radius: 10px; padding: 11px; margin-top: 8px;
+}
+
+/* ── Side conversation (desktop): group left, 1:1 docked right, BOTH live ─────
+   The split only widens the panel and carves a dock with padding — the group
+   pane's own column, scroll and composer are never touched, so closing the
+   side chat returns the group to full width with scroll + draft intact by
+   construction. */
+.lg-social-modal__panel--split { width: min(744px, 100vw); }
+.lg-social-pane--split { position: relative; padding-right: 344px; }
+.lg-msg-side {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 344px;
+  box-sizing: border-box; display: flex; flex-direction: column; min-height: 0;
+  border-left: 1px solid var(--lg-line, #e3ddd0);
+  background: var(--lg-cream, #fbfbf8);
+}
+/* display:flex above would beat the UA [hidden] rule — same trap as
+   .lg-msg-detail / .lg-social-pane (HK-074 family). */
+.lg-msg-side[hidden] { display: none; }
+.lg-msg-side__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px; flex: 0 0 auto;
+  border-bottom: 1px solid var(--lg-line, #e3ddd0);
+}
+.lg-msg-side__peer { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.lg-msg-side__peer .lg-sm__avatar { width: 28px; height: 28px; border-radius: 50%; flex: 0 0 auto; }
+.lg-msg-side__peer-nm {
+  font: 700 14px/1.2 var(--lg-font-sans, system-ui); color: var(--lg-ink, #323532);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lg-msg-side__close {
+  appearance: none; background: transparent; border: 0;
+  width: 30px; height: 30px; border-radius: 50%;
+  cursor: pointer; padding: 0; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--lg-mute, #6b6f6b);
+}
+.lg-msg-side__close:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-ink, #323532); }
+/* Bubbles reuse .lg-msg__msg, so the container mirrors .lg-msg__messages
+   (tighter padding — it is a narrower column). */
+.lg-msg-side__messages {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 14px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.lg-msg-side__compose {
+  flex: 0 0 auto; display: flex; align-items: flex-end; gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--lg-line, #e3ddd0);
+}
+.lg-msg-side__input {
+  flex: 1; resize: none; min-width: 0;
+  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 8px;
+  padding: 8px 12px;
+  font: 400 13px/1.4 var(--lg-font-sans, system-ui);
+  color: var(--lg-ink, #323532);
+  background: #fff; outline: none;
+}
+.lg-msg-side__input:focus { border-color: var(--lg-sage, #87986a); }
+.lg-msg-side__send {
+  appearance: none; background: var(--lg-sage, #87986a); border: 0;
+  width: 34px; height: 34px; border-radius: 50%;
+  cursor: pointer; padding: 0; flex: 0 0 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff;
+}
+.lg-msg-side__send:hover { background: var(--lg-sage-d, #6b7c52); }
+/* Narrow desktop (<900px): a true split cannot fit. The side chat covers the
+   group pane INSIDE the normal-width panel instead — the group DOM stays
+   intact underneath, so dismissing it is still an exact restore. */
+@media (max-width: 899px) {
+  .lg-social-modal__panel--split { width: min(400px, 100vw); }
+  .lg-social-pane--split { padding-right: 0; }
+  .lg-msg-side { left: 0; width: auto; border-left: 0; }
 }
 /* "(edited)" marker */
 .lg-msg__edited { font-size: 11px; opacity: .7; margin-left: 6px; }

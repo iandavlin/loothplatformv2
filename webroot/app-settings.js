@@ -267,6 +267,18 @@
       D + ' .lg-conn__search,' + D + ' .lg-msg__reply-input{background:#22262a!important;border-color:#333833!important;color:#e7ebe1!important}',
       D + ' .lg-msg__thread--unread,' + D + ' .lg-msg__msg,' + D + ' .lg-notif__item--unread{background:#22262a!important}',
       D + ' .lg-msg__msg--mine{background:#2a341f!important}',
+      // Side conversation dock + member card (dm-from-group): both ride
+      // --lg-cream/#fff slabs in site-header.css — same white-slab defect class
+      // as the panel above, darkened here so they never ship light-on-light.
+      D + ' .lg-msg-side{background:#1a1d20!important;border-left-color:#2c312d!important}',
+      D + ' .lg-msg-side__head,' + D + ' .lg-msg-side__compose{border-color:#2c312d!important}',
+      D + ' .lg-msg-side__peer-nm{color:#e5e7e1!important}',
+      D + ' .lg-msg-side__close{color:#9aa097!important}',
+      D + ' .lg-msg-side__close:hover{background:#243024!important;color:#e5e7e1!important}',
+      D + ' .lg-msg-side__input{background:#22262a!important;border-color:#333833!important;color:#e7ebe1!important}',
+      D + ' .lg-msg-card__in{background:#1a1d20!important}',
+      D + ' .lg-msg-card__nm{color:#e5e7e1!important}',
+      D + ' .lg-msg-card__noconn{background:#22262a!important;color:#9aa097!important}',
       // (OS-dark default-theme header block REMOVED 2026-06-10 pare-back: it
       // blackened ONLY the header when OS was dark with no picked theme — the
       // page stayed light = the "some headers and not others" mismatch. Two
