@@ -29,8 +29,38 @@ declare(strict_types=1);
 
 if (PHP_SAPI !== 'cli') { fwrite(STDERR, "CLI only\n"); exit(2); }
 
+/**
+ * Host / token come from the ONE resolver (tools/gates/gate-env.sh) so this gate
+ * cannot drift out of the box again — a hardcoded dev.loothgroup.com pair here
+ * is what made gate 1/5 die on "cannot read dev gate token" once the box became
+ * dev2 and the tokens moved into a box-local nginx include.
+ * LG_MATRIX_HOST still overrides for the LIVE acceptance run.
+ */
+function lg_gate_env(): array {
+    static $env = null;
+    if ($env !== null) return $env;
+    $script = realpath(__DIR__ . '/../../tools/gates/gate-env.sh');
+    if ($script === false) {
+        fwrite(STDERR, "cannot find tools/gates/gate-env.sh (looked beside " . __DIR__ . "/../../)\n");
+        exit(2);
+    }
+    $out = []; $rc = 0;
+    exec('bash ' . escapeshellarg($script) . ' 2>&1', $out, $rc);
+    if ($rc !== 0) { fwrite(STDERR, implode("\n", $out) . "\n"); exit(2); }
+    $env = [];
+    foreach ($out as $line) {
+        if (strpos($line, '=') !== false) { [$k, $v] = explode('=', $line, 2); $env[$k] = $v; }
+    }
+    return $env;
+}
+
+$LG_ENV = lg_gate_env();
 // Override for the LIVE acceptance run: LG_MATRIX_HOST=https://loothgroup.com
-define('HOST', getenv('LG_MATRIX_HOST') ?: 'https://dev.loothgroup.com');
+define('HOST', getenv('LG_MATRIX_HOST') ?: $LG_ENV['LG_GATE_HOST']);
+// Pin to the local origin exactly as the shell gates do — the public edge is
+// behind Cloudflare, which challenges non-browser clients (403). Skipped when
+// the host was overridden (a LIVE run must reach the real edge).
+define('RESOLVE', getenv('LG_MATRIX_HOST') ? '' : ($LG_ENV['LG_GATE_DOMAIN'] . ':443:127.0.0.1'));
 const SUBJ_ID  = 1849;            // profile-app user id   ('qa')
 const SUBJ_WP  = 1910;            // bridged wp user id
 const MEMBER_WP = 7;              // genuine non-admin member (read-only viewer)
@@ -47,12 +77,7 @@ function sh(string $cmd): string { return trim((string)shell_exec($cmd . ' 2>/de
 function pgq(string $sql): string { return sh('sudo -u profile-app psql profile_app -tAc ' . escapeshellarg($sql)); }
 function lgq(string $sql): string { return sh('sudo -u postgres psql looth -tAc ' . escapeshellarg($sql)); }
 
-function gate_token(): string {
-    foreach (file('/etc/nginx/sites-available/dev.loothgroup.com.conf') as $l) {
-        if (preg_match('/set \$loothdev_token "([^"]+)"/', $l, $m)) return $m[1];
-    }
-    fwrite(STDERR, "cannot read dev gate token\n"); exit(2);
-}
+function gate_token(): string { return lg_gate_env()['LG_GATE_TOKEN']; }
 function mint(int $wpId): string {
     $t = sh('sudo -u profile-app php /srv/profile-app/bin/mint-dev-token.php ' . $wpId . ' | tail -1');
     if ($t === '') { fwrite(STDERR, "mint failed for wp $wpId\n"); exit(2); }
@@ -78,6 +103,7 @@ function req(string $viewer, string $path, string $method = 'GET', ?array $json 
         CURLOPT_TIMEOUT        => 20,
         CURLOPT_CUSTOMREQUEST  => $method,
     ];
+    if (RESOLVE !== '') $opts[CURLOPT_RESOLVE] = [RESOLVE];
     if ($json !== null) {
         $opts[CURLOPT_POSTFIELDS] = json_encode($json);
         $opts[CURLOPT_HTTPHEADER] = ['Content-Type: application/json'];
@@ -244,13 +270,21 @@ check('S1 me/location anon 401',  req('anon',  '/profile-api/v0/me/location')[0]
 
 // Stale-token self-heal (Danny West bug, 6/12): WP session + INVALID looth_id
 // must bounce to re-mint, not render the member as a stranger forever.
-$wpck = trim((string)shell_exec('sudo -u www-data wp --path=/var/www/dev eval ' . escapeshellarg(
-    '$e=time()+600; echo LOGGED_IN_COOKIE."=".urlencode(wp_generate_auth_cookie(' . SUBJ_WP . ',$e,"logged_in"));')));
+// wp-cli as looth-dev, NOT www-data: /etc/looth/live-wp-keys.php is
+// root:looth-dev 0640, so www-data cannot bootstrap WP and this came back empty
+// — which SILENTLY skipped the whole self-heal check below (a skipped assertion
+// reads as green), so the skip is announced now.
+$wpck = trim((string)shell_exec('sudo -u looth-dev wp --path=/var/www/dev eval ' . escapeshellarg(
+    '$e=time()+600; echo LOGGED_IN_COOKIE."=".urlencode(wp_generate_auth_cookie(' . SUBJ_WP . ',$e,"logged_in"));') . ' 2>/dev/null'));
+if ($wpck === '' || strpos($wpck, '=') === false) {
+    echo "  SKIP  S2 stale-token self-heal — could not mint a WP session cookie (harness fault, NOT a pass)\n";
+}
 if ($wpck !== '' && strpos($wpck, '=') !== false) {
     [$wn, $wv] = explode('=', $wpck, 2);
     $ch = curl_init(HOST . '/u/' . SLUG);
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20,
-        CURLOPT_COOKIE => 'loothdev_auth=' . $GATE . '; ' . $wn . '=' . rawurldecode($wv) . '; looth_id=STALE.GARBAGE.TOKEN']);
+        CURLOPT_COOKIE => 'loothdev_auth=' . $GATE . '; ' . $wn . '=' . rawurldecode($wv) . '; looth_id=STALE.GARBAGE.TOKEN']
+        + (RESOLVE !== '' ? [CURLOPT_RESOLVE => [RESOLVE]] : []));
     curl_exec($ch);
     $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     $loc  = (string)curl_getinfo($ch, CURLINFO_REDIRECT_URL);
