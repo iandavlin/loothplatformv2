@@ -269,10 +269,21 @@ test.describe('composer link panel @390 (WebKit)', () => {
     expect(await page.evaluate(() =>
       document.querySelector('#looth-comp-sheet').classList.contains('is-open'))).toBe(false);
 
+    // NOTE, and it is the whole reason this leg is shaped like this: drafts live in
+    // an in-memory map, so the round-trip must NOT navigate — a reload would wipe
+    // them and the test would prove nothing. And the thread sheet is still up over
+    // the feed after the composer closes, so its images intercept a tap aimed at
+    // the card beneath; walk the stack all the way out first, exactly as a member
+    // would, then come back to the same topic.
+    await page.goBack();                       // close the thread sheet too
+    await page.waitForTimeout(SETTLE);
+    expect(await page.evaluate(() => window.LgSheets.stack())).toEqual([]);
+
     const reply = page.locator('.feed-card[data-topic-id] .lg-act-replies').first();
     await reply.scrollIntoViewIfNeeded();
     await reply.tap();
     await page.waitForSelector('#looth-comp-sheet.is-open', { timeout: 10_000 });
+    await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15_000 });
     await page.waitForTimeout(SETTLE);
     const back = await page.evaluate(() => ({
       html: document.querySelector('#looth-comp-sheet .ql-editor').innerHTML,
