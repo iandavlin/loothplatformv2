@@ -31,12 +31,16 @@ test.describe('mobile reply stack @390 (WebKit)', () => {
     await expect(page.locator('#looth-comp-sheet.is-open')).toHaveCount(0);
     const clean = await page.evaluate(() => {
       const lrs = document.getElementById('looth-rep-sheet');
+      // LgSheets makes the TOP container click-transparent (off-card taps reach the
+      // shared backdrop) — interactivity lives on the CARD. The contract: not
+      // behind, not inert, and the card is interactive.
+      const card = lrs.querySelector('[data-lg-sheet-card]') || lrs;
       return { behind: lrs.classList.contains('lg-sheet-behind'), inert: !!lrs.inert,
-               pe: getComputedStyle(lrs).pointerEvents };
+               cardPe: getComputedStyle(card).pointerEvents };
     });
     expect(clean.behind).toBe(false);
     expect(clean.inert).toBe(false);
-    expect(clean.pe).not.toBe('none');
+    expect(clean.cardPe).not.toBe('none');
     await page.locator('#looth-rep-sheet .lrs-comp').tap();
     await page.waitForSelector('#looth-comp-sheet.is-open');
     await typeMention(page);
@@ -180,8 +184,11 @@ test4.describe('reply stack dark render @390 (WebKit)', () => {
   test4.beforeEach(async ({ context }) => { await H4.addAuthCookies(context); });
 
   test4('dark theme: composer card + mention panel use dark surfaces; backdrop present', async ({ page }) => {
-    await page.addInitScript(() => document.documentElement.setAttribute('data-lguser-theme', 'dark'));
     await H4.openTopicComposer(page);
+    // set dark AFTER load — app-settings.js applies the member's stored theme at
+    // boot and would stomp an init-script attribute; post-load flips are live CSS.
+    await page.evaluate(() => document.documentElement.setAttribute('data-lguser-theme', 'dark'));
+    await page.waitForTimeout(300);
     const input = page.locator('#lcp-input');
     await input.tap();
     await input.pressSequentially('@mik', { delay: 90 });
