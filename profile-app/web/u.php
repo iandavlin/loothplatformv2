@@ -1771,9 +1771,17 @@ window.lgSortable = function (container, opts) {
       el.dataset.orig = wasEmpty ? '' : valOf(el);
       if (wasEmpty) { el.textContent = ''; el.classList.remove('lg-edit--empty'); }
       el.classList.add('editing'); el.contentEditable = 'true'; el.focus(); caretEnd(el);
+      /* data-edit-max: contentEditable has no maxlength — truncate as typed/pasted
+         (display_name capped at 40, identity pass; server rejects over-cap anyway). */
+      var max = parseInt(el.getAttribute('data-edit-max') || '0', 10);
+      function onInput() {
+        if (max > 0 && el.textContent.length > max) { el.textContent = el.textContent.slice(0, max); caretEnd(el); }
+      }
+      if (max > 0) el.addEventListener('input', onInput);
       el.addEventListener('keydown', onKey);
       el.addEventListener('blur', function onBlur(e) {
         el.removeEventListener('keydown', onKey); el.removeEventListener('blur', onBlur);
+        el.removeEventListener('input', onInput);
         var val = valOf(el), orig = el.dataset.orig || '';
         if (val === orig) { finish(el); restorePlaceholder(el); } else { save(el, val, orig); }
       });

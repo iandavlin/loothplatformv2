@@ -1040,9 +1040,10 @@ function looth_render_header_block(array $header, string $role, string $headerVi
     echo '<div class="lg-idrow__body">';
     echo '<h1 class="lg-idrow__name">';
     if ($isOwner) {
-        // click-to-edit → PATCH /me/name {display_name}
+        // click-to-edit → PATCH /me/name {display_name}. 40-char cap (identity pass,
+        // keeper 02:25 spec 2026-07-26) — enforced here at input AND server-side.
         echo '<span class="lg-edit" data-edit-field="display_name" data-edit-url="/profile-api/v0/me/name"'
-           . ' data-edit-method="PATCH" data-edit-type="text">' . looth_h($name) . '</span>';
+           . ' data-edit-method="PATCH" data-edit-type="text" data-edit-max="40">' . looth_h($name) . '</span>';
     } else {
         echo looth_h($name);
     }
