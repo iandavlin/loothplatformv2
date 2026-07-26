@@ -22,9 +22,24 @@ async function addAuthCookies(context) {
   ]);
 }
 
+// PROVE-IT-GOES-RED harness (keeper 2026-07-26: "the honest bar is a spec that
+// FAILS against the current code"). Point LGC_JS_OVERRIDE at any hub-polish.js —
+// e.g. `git show 66da45f:webroot/hub-polish.js > /tmp/pre.js` — and every spec in
+// the run executes against THOSE bytes instead of the served ones. A regression
+// spec can then be shown red on the pre-fix build and green on the fix WITHOUT
+// touching the docroot, which matters when the serve is an open Ian window.
+async function installJsOverride(page) {
+  const path = process.env.LGC_JS_OVERRIDE;
+  if (!path) return;
+  const body = fs.readFileSync(path, 'utf8');
+  await page.route('**/hub-polish.js*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body }));
+}
+
 // Tap the Reply action on the first topic card -> opens the lrs thread sheet with
 // the lcp composer sheet auto-opened on top (the current Reply-intent flow).
 async function openTopicComposer(page) {
+  await installJsOverride(page);
   // First nav MUST be the looth_id bounce: /looth-auth/issue reads the WP cookie,
   // Set-Cookies the RS256 looth_id JWT and 302s to return= — without it every
   // /profile-api call (mention-suggest included) is 401 through the real edge.
@@ -37,12 +52,23 @@ async function openTopicComposer(page) {
   await page.waitForSelector('#looth-comp-sheet.is-open', { timeout: 10_000 });
 }
 
-// Type @mik into the composer input with real key events and wait for the panel.
+// Type @mik into the composer editor with real key events and wait for the panel.
+// COMPOSER-V2: the editor is the Quill contenteditable (.ql-editor), lazy-mounted
+// after the sheet opens — wait for it before typing.
 async function typeMention(page, q = '@mik') {
-  const input = page.locator('#lcp-input');
+  await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15_000 });
+  const input = page.locator('#looth-comp-sheet .ql-editor');
   await input.tap();
   await input.pressSequentially(q, { delay: 90 });
   await page.waitForSelector('.lg-mnt .lg-mnt__i', { timeout: 8_000 });
 }
 
-module.exports = { addAuthCookies, openTopicComposer, typeMention };
+// Editor text content (the composer is contenteditable now — no inputValue).
+async function editorText(page) {
+  return page.evaluate(() => {
+    const e = document.querySelector('#looth-comp-sheet .ql-editor');
+    return e ? e.textContent : '';
+  });
+}
+
+module.exports = { addAuthCookies, openTopicComposer, typeMention, editorText, installJsOverride };

@@ -433,11 +433,11 @@
         var av = it.avatar_url
           ? '<img class="lg-mnt__av" src="' + esc(it.avatar_url) + '" alt="">'
           : '<span class="lg-mnt__av"></span>';
-        // NAME-FIRST (Ian's FB-tagging target): bold display name on top, muted @handle
-        // underneath. Fall back to @handle as the primary when there's no distinct name.
-        var hasName = it.display_name && it.display_name !== it.slug;
-        var primary = hasName ? esc(it.display_name) : '@' + esc(it.slug);
-        var secondary = hasName ? '<span class="lg-mnt__n">@' + esc(it.slug) + '</span>' : '';
+        // HANDLES ARE INVISIBLE (Ian final 2026-07-26): bold display name on top,
+        // location/business context underneath — NO @handle line anywhere. The
+        // context is computed server-side (mention-suggest) at members precision.
+        var primary = esc((it.display_name && it.display_name.trim()) || it.slug);
+        var secondary = it.context ? '<span class="lg-mnt__n">' + esc(it.context) + '</span>' : '';
         return '<div class="lg-mnt__i" role="option" data-i="' + i + '"'
           + (i === sel ? ' aria-selected="true"' : '') + '>' + av
           + '<span class="lg-mnt__tx"><span class="lg-mnt__h">' + primary + '</span>' + secondary + '</span></div>';
@@ -457,25 +457,26 @@
       var isMobile = window.matchMedia && window.matchMedia('(max-width:640px)').matches;
       if (isMobile && sheet) {
         p.classList.add('lg-mnt--sheet');
-        var card = sheet.querySelector('.lcp-card') || sheet;
+        var card = sheet.querySelector('[data-lg-sheet-card]') || sheet;
         var cr = card.getBoundingClientRect();
-        var ir = (sheet.querySelector('#lcp-input') || active.el).getBoundingClientRect();
+        var ir = (sheet.querySelector('.ql-editor') || active.el).getBoundingClientRect();
         var pad = 12;
         var mLeft = cr.left + pad;
         var mWidth = Math.max(140, cr.width - pad * 2);
         p.style.left = mLeft + 'px';
         p.style.width = mWidth + 'px';
         p.style.maxWidth = 'none';
-        // Anchor the list ABOVE the input, growing upward. The composer card stacks
-        // input → photo row → Post with almost no gap, so a panel BELOW the input would
-        // overlap the Post button; and the keyboard occupies everything below the input.
-        // Above the input is the only place it can be full-height without covering the
-        // action buttons or being hidden by the keyboard — the standard mobile mention
-        // UX (Slack/iMessage). Capped at 40vh, scrollable, never past the top of screen.
-        var mMaxH = Math.max(96, Math.min(window.innerHeight * 0.4, ir.top - 14));
+        // COMPOSER-V2 (df97f87 frames): the full-height composer puts the list BELOW
+        // the text, filling the midsection down to the tool row. All LIVE rects
+        // (receipt R5 — never viewport arithmetic): the card's bottom edge is docked
+        // to the keyboard top, so the tool row's rect already reflects the keyboard
+        // and the list can never slide under it.
+        var toolsEl = sheet.querySelector('.lgc-tools');
+        var floorY = toolsEl ? toolsEl.getBoundingClientRect().top : cr.bottom;
+        var mTop = Math.min(Math.round(ir.bottom) + 6, floorY - 96);
+        var mMaxH = Math.max(96, floorY - mTop - 8);
+        p.style.top = Math.max(cr.top + 8, mTop) + 'px';
         p.style.maxHeight = mMaxH + 'px';
-        var hh = Math.min(p.offsetHeight || mMaxH, mMaxH);
-        p.style.top = Math.max(8, Math.round(ir.top) - 6 - hh) + 'px';
         return;
       }
       // DESKTOP (and any non-sheet composer): compact floating popover at the caret.
@@ -537,6 +538,15 @@
         var before = node.nodeValue.slice(0, r.startOffset);
         var mm = TOKEN.exec(before); if (!mm) { close(); return; }
         var tlen = mm[0].length - (mm[1] ? mm[1].length : 0);
+        // COMPOSER-V2 (phase 2): inside the one composer the pick is an atomic
+        // NAME-displaying mention embed (handles-invisible) — delegate to the
+        // composer's Quill hook instead of splicing "@slug " into the text node.
+        // tlen = "@partial" length including the '@'.
+        if (window.lgComposerMention && window.lgComposerMention.owns(info.el)) {
+          window.lgComposerMention.pick(items[i], tlen);
+          close();
+          return;
+        }
         var startOff = r.startOffset - tlen;
         node.nodeValue = node.nodeValue.slice(0, startOff) + ins + node.nodeValue.slice(r.startOffset);
         var caret = startOff + ins.length;

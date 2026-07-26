@@ -27,7 +27,9 @@ test.describe('mobile reply stack @390 (WebKit)', () => {
   test('reopen cycle: dismiss composer, reopen, dropdown works again (iPhone 2026-07-24 receipt)', async ({ page }) => {
     await openTopicComposer(page);
     await typeMention(page);
-    await page.touchscreen.tap(195, 60);   // backdrop off-tap
+    // COMPOSER-V2: the full-height card has no off-card backdrop region (df97f87 —
+    // the "double modal" peek is cut); the explicit ✕ is the dismissal affordance.
+    await page.locator('#lgc-x').tap();
     await expect(page.locator('#looth-comp-sheet.is-open')).toHaveCount(0);
     const clean = await page.evaluate(() => {
       const lrs = document.getElementById('looth-rep-sheet');
@@ -54,7 +56,7 @@ test.describe('mobile reply stack @390 (WebKit)', () => {
     }));
     expect(locked.pos).toBe('fixed');
     expect(locked.lock).toBe(true);
-    await page.touchscreen.tap(195, 60);                       // composer backdrop
+    await page.locator('#lgc-x').tap();                        // composer ✕ (full-height card — no backdrop region)
     await page.locator('#looth-rep-sheet .lrs-x').tap();       // thread X
     await expect(page.locator('#looth-rep-sheet.is-open')).toHaveCount(0);
     const after = await page.evaluate(() => ({
@@ -66,7 +68,7 @@ test.describe('mobile reply stack @390 (WebKit)', () => {
 
   test('reactions reachable after composer dismiss (behind-state root invariant)', async ({ page }) => {
     await openTopicComposer(page);
-    await page.touchscreen.tap(195, 60);   // dismiss composer, thread stays
+    await page.locator('#lgc-x').tap();    // dismiss composer via ✕, thread stays
     const state = await page.evaluate(() => {
       const lrs = document.getElementById('looth-rep-sheet');
       const chip = [...lrs.querySelectorAll('.fcr-chip, .fcr-add')]
@@ -104,9 +106,10 @@ test.describe('mobile reply stack @390 (WebKit)', () => {
     await fireSeq([['touchstart', 0, false], ['touchmove', -40, false], ['touchend', -40, true]]);
     await expect(panel).toBeVisible();
     // quick tap (no movement): must PICK into the input and close the list
-    const before = await page.locator('#lcp-input').inputValue();
+    const { editorText } = require('./_helpers');
+    const before = await editorText(page);
     await fireSeq([['touchstart', 0, false], ['touchend', 0, true]]);
-    const after = await page.locator('#lcp-input').inputValue();
+    const after = await editorText(page);
     expect(after).not.toBe(before);
     await expect(panel).toBeHidden();
   });
@@ -123,7 +126,8 @@ test2.describe('mention multi-word @390 (WebKit)', () => {
 
   test2('"@doug proper" narrows across the space instead of dying', async ({ page }) => {
     await openTopicComposer(page);
-    const input = page.locator('#lcp-input');
+    await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15000 });
+    const input = page.locator('#looth-comp-sheet .ql-editor');
     await input.tap();
     await input.pressSequentially('@doug', { delay: 90 });
     await page.waitForSelector('.lg-mnt .lg-mnt__i', { timeout: 8000 });
@@ -141,7 +145,8 @@ test2.describe('mention multi-word @390 (WebKit)', () => {
 
   test2('a space after a zero-hit word ends the token (prose not captured)', async ({ page }) => {
     await openTopicComposer(page);
-    const input = page.locator('#lcp-input');
+    await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15000 });
+    const input = page.locator('#looth-comp-sheet .ql-editor');
     await input.tap();
     await input.pressSequentially('@doug xyz', { delay: 90 });
     await page.waitForTimeout(900);        // zero-hit query lands, panel hides
@@ -165,7 +170,8 @@ test3.describe('mention scrunched match @390 (WebKit)', () => {
 
   test3('"@dougproper" finds Doug Proper (separator-stripped match)', async ({ page }) => {
     await H.openTopicComposer(page);
-    const input = page.locator('#lcp-input');
+    await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15000 });
+    const input = page.locator('#looth-comp-sheet .ql-editor');
     await input.tap();
     await input.pressSequentially('@dougproper', { delay: 80 });
     await page.waitForSelector('.lg-mnt .lg-mnt__i', { timeout: 8000 });
@@ -189,12 +195,13 @@ test4.describe('reply stack dark render @390 (WebKit)', () => {
     // boot and would stomp an init-script attribute; post-load flips are live CSS.
     await page.evaluate(() => document.documentElement.setAttribute('data-lguser-theme', 'dark'));
     await page.waitForTimeout(300);
-    const input = page.locator('#lcp-input');
+    await page.waitForSelector('#looth-comp-sheet .ql-editor', { timeout: 15000 });
+    const input = page.locator('#looth-comp-sheet .ql-editor');
     await input.tap();
     await input.pressSequentially('@mik', { delay: 90 });
     await page.waitForSelector('.lg-mnt .lg-mnt__i', { timeout: 8000 });
     const s = await page.evaluate(() => {
-      const card = document.querySelector('.lcp-card');
+      const card = document.querySelector('#looth-comp-sheet [data-lg-sheet-card]');
       const panel = document.querySelector('.lg-mnt');
       const back = document.getElementById('lg-sheet-backdrop');
       return {

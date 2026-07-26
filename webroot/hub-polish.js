@@ -3022,6 +3022,11 @@
     var stack = [];         // bottom → top ids
     var backdropEl = null;
     var histDepth = 0;      // how many stack entries pushed a history entry
+    // Pops WE caused. close() consumes its own history entry with history.back(),
+    // which lands in the popstate listener ONE TASK LATER — indistinguishable there
+    // from a real phone-back unless we mark it. Counter + staleness window so a
+    // history.back() that somehow never pops can't leave a swallow armed forever.
+    var selfPop = 0, selfPopAt = 0;
 
     function ensureBackdrop() {
       if (backdropEl) return backdropEl;
@@ -3103,7 +3108,11 @@
       // consume this sheet's history entry unless the pop itself closed us
       if (d._pushed && reason !== 'popstate') {
         d._pushed = false;
-        if (histDepth > 0) { histDepth--; try { history.back(); } catch (e) {} }
+        if (histDepth > 0) {
+          histDepth--;
+          selfPop++; selfPopAt = Date.now();
+          try { history.back(); } catch (e) { selfPop--; }
+        }
       } else if (reason === 'popstate') { d._pushed = false; if (histDepth > 0) histDepth--; }
     }
 
@@ -3120,6 +3129,16 @@
     // the sheets — while it is up, the pop belongs to IT (same guard the old
     // hand-rolled handler used).
     window.addEventListener('popstate', function () {
+      // OUR OWN pop, from close() consuming its history entry — swallow it. This
+      // MUST come before the empty-stack bail, or a close that empties the stack
+      // leaves the swallow armed and eats the member's NEXT real back press.
+      // (Ian, real iPhone 2026-07-26: picking a person in the tag picker tore the
+      // composer down with it. close('lgtag') -> history.back() -> this listener
+      // saw a non-empty stack ['lrs','lcp'] and closeTop'd the COMPOSER. Invisible
+      // for a lone sheet — the bail below covered it — and only reachable once
+      // sheets stack, which phase 2's picker is the first surface to do.)
+      if (selfPop > 0 && Date.now() - selfPopAt < 2000) { selfPop--; return; }
+      selfPop = 0;
       if (!stack.length) return;
       var lb = document.getElementById('lg-lb');
       if (lb && lb.classList.contains('is-on')) return;
@@ -3751,6 +3770,11 @@
     }
     // per-open setup
     sh.setAttribute('data-tid', tid || ''); sh.setAttribute('data-fid', fid);
+    // COMPOSER-V2: prefetch Quill the moment an authed member opens a discussion
+    // (on-intent per the craft law — anon never loads it) so the composer's first
+    // open finds the editor warm and focus stays synchronous inside the tap
+    // (async-load focus would miss the iOS keyboard gesture window).
+    lrsGetAuth(function (a) { if (a && a.authenticated) lgQuillReady(); });
     // Title = the post's title (this is the discussion modal now, not just a reply list).
     var ttlEl = card.querySelector('.fc-title, .feed-card__title');
     var ttl = ttlEl ? (ttlEl.textContent || '').trim() : '';
@@ -3829,116 +3853,283 @@
     });
   }
 
-  // ── FB-style reply composer sheet (Ian via Buck 2026-06-10: replies should
-  // compose like Facebook's share sheet) — a compact floating card over the
-  // content: grab pill, your avatar + name, a context pill naming the post, a
-  // big open input, photo attach, and ONE big Post button. Opens from the card's
-  // Reply action and from the modal's pinned "Write a comment…" bar (now a
-  // trigger). Posting reuses the same canonical REST flow as lrsSubmit.
+  // ── COMPOSER V2 — the ONE composer (phase 2, replacing lcp; plan §1.2, approved
+  // df97f87 frames): FB full-height sheet docked zero-gap to the keyboard top,
+  // Quill 2 rich text (B/I/S/link/UL/OL — the approved 6-button toolbar), images
+  // via the ATTACHMENT STRIP ONLY (never inline — Ian ruling 2026-07-24), mention
+  // dropdown + tag-people picker with NO visible handles (Ian final 2026-07-26:
+  // rows are name + avatar + location/business; inserted mentions display the
+  // member's CURRENT NAME over a data-lg-uuid anchor — the server re-canonicalizes
+  // at write and the render side resolves uuid → current name forever after).
+  // Modes: reply create (tid/fid/replyTo) + edit-reply + edit-topic (same duties
+  // lcp carried). Lifecycle rides LgSheets (id 'lcp' kept — stack semantics,
+  // history entry and specs are unchanged by the reskin).
   var lcpMediaIds = [];
+  var lgcQuill = null;          // the one Quill instance (mobile skin mounts it)
+  var lgcDrafts = {};           // tid -> Delta-HTML preserved across accidental dismiss
+  var lgcSubmitting = false;
+
+  // Quill 2.0.3 ON-INTENT loader (craft law: editors never load eagerly — anon
+  // never fetches this; we prefetch when an authed member opens a discussion, so
+  // by composer-open Quill is warm and focus stays synchronous in the tap).
+  var lgcQuillCbs = null;
+  function lgQuillReady(cb) {
+    if (window.Quill) { if (cb) cb(); return; }
+    if (lgcQuillCbs) { if (cb) lgcQuillCbs.push(cb); return; }
+    lgcQuillCbs = cb ? [cb] : [];
+    var l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = 'https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.core.css';
+    document.head.appendChild(l);
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js';
+    s.onload = function () {
+      lgcRegisterMentionBlot();
+      var q = lgcQuillCbs; lgcQuillCbs = null;
+      (q || []).forEach(function (f) { try { f(); } catch (e) {} });
+    };
+    document.head.appendChild(s);
+  }
+  // Atomic mention embed: <a class="bp-suggestions-mention" data-lg-uuid> whose
+  // visible text is the member's NAME (handles-invisible). Embed (not Inline) so
+  // backspace deletes the whole mention and typing can't mutate its text into a
+  // half-name. Serialized by getSemanticHTML() exactly as the server mint expects
+  // (reply.php re-canonicalizes data-lg-uuid anchors idempotently).
+  function lgcRegisterMentionBlot() {
+    try {
+      lgcRegisterMentionBlotInner();
+    } catch (e) {
+      // surfaced, never swallowed: a silent miss here means mentions degrade to
+      // plain text at pick time (caught live in the phase-2 verify window)
+      try { console.error('lgmention blot registration failed:', e); } catch (e2) {}
+    }
+  }
+  function lgcRegisterMentionBlotInner() {
+    if (!window.Quill || window.Quill.imports['formats/lgmention']) return;
+    var Embed = window.Quill.import('blots/embed');
+    class LgMention extends Embed {
+      static create(v) {
+        var node = super.create(v);
+        node.setAttribute('data-lg-uuid', v.uuid || '');
+        node.setAttribute('href', '/u/' + encodeURIComponent(v.slug || ''));
+        node.setAttribute('rel', 'nofollow');
+        node.setAttribute('contenteditable', 'false');
+        node.textContent = v.name || v.slug || 'member';
+        return node;
+      }
+      static value(node) {
+        return {
+          uuid: node.getAttribute('data-lg-uuid') || '',
+          slug: decodeURIComponent((node.getAttribute('href') || '').replace(/^\/u\//, '')),
+          name: (node.textContent || '').replace(/\uFEFF/g, '')
+        };
+      }
+    }
+    LgMention.blotName = 'lgmention';
+    LgMention.tagName = 'A';
+    LgMention.className = 'bp-suggestions-mention';
+    window.Quill.register(LgMention);
+  }
   function ensureCompSheet() {
     var sh = document.getElementById('looth-comp-sheet');
     if (sh) return sh;
-    if (!document.getElementById('lg-lcp-css')) {
-      var st = document.createElement('style'); st.id = 'lg-lcp-css';
+    if (!document.getElementById('lg-lgc-css')) {
+      var st = document.createElement('style'); st.id = 'lg-lgc-css';
       var D = 'html[data-lguser-theme="dark"]';
+      // rem-based type throughout (text-scale gate): the composer tracks the
+      // member's root font-size; layout paddings stay px where scale-neutral.
       st.textContent = [
         '#looth-comp-sheet{position:fixed;inset:0;z-index:2147483560;display:none}',
         '#looth-comp-sheet.is-open{display:block}',
-        // light scrim — the thread in the modal behind stays readable ABOVE the
-        // composer card (Buck 2026-06-10: show the replies while writing)
-        // The thread sheet, while it sits BEHIND the open composer, is a
-        // non-interactive backdrop via this class (NOT the inert attribute, which
-        // iOS clears unreliably) — reliably reversible on close so the reopened
-        // thread + its "Write a comment" pill are fully tappable again.
         '#looth-rep-sheet.lg-sheet-behind{pointer-events:none}',
-        '#looth-comp-sheet .lcp-card{position:absolute;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom,0px));' +
-          'background:#fff;border-radius:22px;box-shadow:0 10px 44px rgba(0,0,0,.3);padding:2px 16px 14px;' +
-          'animation:looth-pwa-up .26s ease;will-change:transform;font:15px/1.4 var(--lg-font-sans,system-ui,sans-serif)}',
-        '#looth-comp-sheet .lcp-grab{height:18px;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab}',
-        '#looth-comp-sheet .lcp-grab::before{content:"";width:36px;height:4px;border-radius:3px;background:#d8d2c4}',
-        '#looth-comp-sheet .lcp-head{display:flex;align-items:center;gap:10px;margin:4px 0 2px}',
-        '#looth-comp-sheet .lcp-av{width:38px;height:38px;border-radius:50%;overflow:hidden;flex:0 0 auto;background:var(--lg-sage-tint,#eef2e3)}',
-        '#looth-comp-sheet .lcp-av img{width:100%;height:100%;object-fit:cover;display:block}',
-        '#looth-comp-sheet .lcp-id{min-width:0;flex:1 1 auto}',
-        '#looth-comp-sheet .lcp-name{font:700 15px/1.2 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-charcoal,#1a1d1a)}',
-        '#looth-comp-sheet .lcp-ctx{display:inline-block;margin-top:4px;background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);' +
-          'font:600 11.5px/1 var(--lg-font-sans,system-ui,sans-serif);border-radius:999px;padding:5px 10px;max-width:240px;' +
+        // FULL-HEIGHT card (df97f87: no peek — the "double modal" cut). bottom is
+        // set dynamically to the keyboard height (zero-gap dock, no autofill stage).
+        '#looth-comp-sheet .lgc-card{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;flex-direction:column;' +
+          'background:var(--lg-card-bg,#fff);animation:looth-pwa-up .26s ease;will-change:transform;' +
+          'font:.9375rem/1.4 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a)}',
+        '#looth-comp-sheet .lgc-grab{flex:0 0 auto;height:14px;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab}',
+        '#looth-comp-sheet .lgc-grab::before{content:"";width:36px;height:4px;border-radius:3px;background:var(--lg-line,#d8d2c4)}',
+        // header: ✕ left · identity + context pill · Post right (FB Done-style)
+        '#looth-comp-sheet .lgc-hd{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:2px 14px 10px;border-bottom:1px solid var(--lg-line,#e3e0d8)}',
+        '#looth-comp-sheet .lgc-x{flex:0 0 auto;width:32px;height:32px;border:0;border-radius:50%;background:var(--lg-sage-tint,#eef2e3);' +
+          'color:var(--lg-sage-d,#6b7c52);font:600 1rem/32px var(--lg-font-sans,sans-serif);text-align:center;cursor:pointer;padding:0}',
+        '#looth-comp-sheet .lgc-av{width:38px;height:38px;border-radius:50%;overflow:hidden;flex:0 0 auto;background:var(--lg-sage-tint,#eef2e3)}',
+        '#looth-comp-sheet .lgc-av img{width:100%;height:100%;object-fit:cover;display:block}',
+        '#looth-comp-sheet .lgc-id{min-width:0;flex:1 1 auto}',
+        '#looth-comp-sheet .lgc-name{font:700 .9375rem/1.2 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-charcoal,#1a1d1a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+        '#looth-comp-sheet .lgc-ctx{display:inline-block;margin-top:3px;background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);' +
+          'font:600 .72rem/1 var(--lg-font-sans,sans-serif);border-radius:999px;padding:5px 10px;max-width:200px;' +
           'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:top}',
-        '#looth-comp-sheet .lcp-input{width:100%;box-sizing:border-box;border:0;outline:0;background:none;resize:none;' +
-          'font:17px/1.45 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);min-height:84px;max-height:200px;padding:10px 2px 6px}',
-        '#looth-comp-sheet .lcp-input::placeholder{color:#9aa097}',
-        '#looth-comp-sheet .lcp-title{width:100%;box-sizing:border-box;margin:2px 0 6px;border:0;border-bottom:1px solid var(--lg-line,#e3e0d8);outline:0;background:none;' +
-          'font:700 17px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);padding:6px 2px}',
-        '#looth-comp-sheet .lcp-title::placeholder{color:#9aa097;font-weight:600}',
-        '#looth-comp-sheet .lcp-row{display:flex;align-items:center;gap:10px;margin:0 0 10px;flex-wrap:wrap}',
-        '#looth-comp-sheet .lcp-photo{flex:0 0 auto;border:0;background:none;cursor:pointer;color:var(--lg-sage-d,#6b7c52);padding:4px 2px;line-height:0}',
-        '#looth-comp-sheet .lcp-photo svg{width:22px;height:22px}',
-        '#looth-comp-sheet .lcp-previews{display:flex;gap:8px;flex-wrap:wrap}',
-        '#looth-comp-sheet .lcp-previews:empty{display:none}',
-        '#looth-comp-sheet .lcp-pv{position:relative;display:inline-block}',
-        '#looth-comp-sheet .lcp-pv img{width:52px;height:52px;object-fit:cover;border-radius:10px;display:block;border:1px solid var(--lg-line,#e3ddd0)}',
-        '#looth-comp-sheet .lcp-pv-x{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border:0;border-radius:50%;background:rgba(26,29,26,.75);color:#fff;font:700 13px/20px sans-serif;cursor:pointer;padding:0}',
-        '#looth-comp-sheet .lcp-status{flex-basis:100%;font:12px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:#8a8d91}',
-        '#looth-comp-sheet .lcp-status:empty{display:none}',
-        '#looth-comp-sheet .lcp-post{display:block;width:100%;box-sizing:border-box;border:0;border-radius:12px;cursor:pointer;' +
-          'background:var(--lg-sage,#87986a);color:#fff;font:700 15px/1 var(--lg-font-sans,system-ui,sans-serif);padding:14px}',
-        '#looth-comp-sheet .lcp-post:disabled{background:#c9cfc0;cursor:default}',
-        // dark pass
-        D + ' #looth-comp-sheet .lcp-card{background:#1b1e21;color:#e5e7e1}',
-        D + ' #looth-comp-sheet .lcp-grab::before{background:#3a403a}',
-        D + ' #looth-comp-sheet .lcp-name{color:#f2f4ee}',
-        D + ' #looth-comp-sheet .lcp-ctx{background:#243024;color:#b6c79a}',
-        D + ' #looth-comp-sheet .lcp-input{color:#e5e7e1;background:none!important;border:0!important}',
-        D + ' #looth-comp-sheet .lcp-input::placeholder{color:#7e857c}',
-        D + ' #looth-comp-sheet .lcp-title{color:#f2f4ee;border-bottom-color:#343a33}',
-        D + ' #looth-comp-sheet .lcp-title::placeholder{color:#7e857c}',
-        D + ' #looth-comp-sheet .lcp-av{background:#262b30}',
-        D + ' #looth-comp-sheet .lcp-pv img{border-color:#2c312d}',
-        D + ' #looth-comp-sheet .lcp-post{background:var(--lg-sage-d,#6b7c52)}',
-        D + ' #looth-comp-sheet .lcp-post:disabled{background:#2c312d;color:#7e857c}'
+        '#looth-comp-sheet .lgc-post{flex:0 0 auto;border:0;border-radius:999px;background:var(--lguser-accent,var(--lg-sage,#87986a));color:#fff;' +
+          'font:700 .875rem/1 var(--lg-font-sans,sans-serif);padding:10px 20px;cursor:pointer}',
+        '#looth-comp-sheet .lgc-post:disabled{background:#c9cfc0;cursor:default}',
+        '#looth-comp-sheet .lgc-title{flex:0 0 auto;box-sizing:border-box;margin:8px 14px 0;border:0;border-bottom:1px solid var(--lg-line,#e3e0d8);outline:0;background:none;' +
+          'font:700 1.0625rem/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);padding:6px 2px}',
+        '#looth-comp-sheet .lgc-title::placeholder{color:#9aa097;font-weight:600}',
+        // body: the editor scrolls; the mention dropdown floats over it (forums.js)
+        '#looth-comp-sheet .lgc-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 14px}',
+        '#looth-comp-sheet .lgc-editor{min-height:64px}',
+        // Quill chrome-free: no border, our font, real placeholder color
+        '#looth-comp-sheet .ql-container{border:0;font:inherit}',
+        '#looth-comp-sheet .ql-editor{padding:10px 0 6px;font:1.0625rem/1.5 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);min-height:64px;caret-color:var(--lg-sage-d,#6b7c52)}',
+        '#looth-comp-sheet .ql-editor.ql-blank::before{color:#9aa097;font-style:normal;left:0;right:0}',
+        '#looth-comp-sheet .ql-editor a{color:var(--lg-sage-d,#6b7c52)}',
+        '#looth-comp-sheet .ql-editor .bp-suggestions-mention{color:var(--lg-sage-d,#6b7c52);font-weight:700;text-decoration:none}',
+        '#looth-comp-sheet .ql-editor s{opacity:.75}',
+        // attachment strip — the ONLY image surface (64px tiles + dashed add)
+        '#looth-comp-sheet .lgc-strip{flex:0 0 auto;display:flex;gap:8px;padding:8px 14px 0;overflow-x:auto}',
+        '#looth-comp-sheet .lgc-strip:empty{display:none}',
+        '#looth-comp-sheet .lgc-pv{position:relative;flex:0 0 auto;width:64px;height:64px;border-radius:10px;border:1px solid var(--lg-line,#e3ddd0);overflow:hidden}',
+        '#looth-comp-sheet .lgc-pv img{width:100%;height:100%;object-fit:cover;display:block}',
+        '#looth-comp-sheet .lgc-pv-x{position:absolute;top:2px;right:2px;width:18px;height:18px;border:0;border-radius:50%;background:rgba(26,29,26,.75);color:#fff;font:700 11px/18px sans-serif;cursor:pointer;padding:0}',
+        // Upload IN-FLIGHT / FAILED on the tile itself (Ian, real iPhone 2026-07-26:
+        // "no indication that the image is uploading"). Same idiom the DM composer
+        // shipped at Ian 7/06 (msgimg-sending-state): the picked image appears at
+        // once, wears its busy state, and a failure is dimmed + badged rather than
+        // vanishing into an empty strip.
+        '#looth-comp-sheet .lgc-pv--up img,#looth-comp-sheet .lgc-pv--err img{opacity:.4}',
+        '#looth-comp-sheet .lgc-pv--up::after{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;' +
+          'border-radius:50%;border:2px solid rgba(26,29,26,.25);border-top-color:var(--lg-sage-d,#52613d);animation:lgc-spin .8s linear infinite}',
+        '@keyframes lgc-spin{to{transform:rotate(360deg)}}',
+        '@media (prefers-reduced-motion:reduce){#looth-comp-sheet .lgc-pv--up::after{animation:none}}',
+        '#looth-comp-sheet .lgc-pv--err{border-color:var(--lg-error,#b3261e)}',
+        // the failed tile's badge is a REAL <button>, not a ::after glyph: the DM
+        // composer lets you retry in place (its Send stays armed), so this one must
+        // too, and a decorative "!" would only tell you the bad news. A sibling
+        // button rather than making the 64px tile itself role=button — that would
+        // nest the remove ✕ inside another control.
+        '#looth-comp-sheet .lgc-pv-r{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border:0;' +
+          'border-radius:50%;background:var(--lg-error,#b3261e);color:#fff;font:700 15px/26px var(--lg-font-sans,sans-serif);cursor:pointer;padding:0}',
+        // slim tool row above the keyboard: photo · B I S link UL OL · tag-people · status
+        // wrap: the status/alert lines take a FULL row of their own beneath the
+        // buttons. Inline they were flex:0 1 auto next to 8 buttons — measured 30px
+        // of room for 111px of "Uploading photo…", i.e. ellipsed into nothing on a
+        // 390px phone. A message nobody can read is the same as no message.
+        '#looth-comp-sheet .lgc-tools{flex:0 0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--lg-line,#e3e0d8)}',
+        '#looth-comp-sheet .lgc-tb{flex:0 0 auto;width:2.375rem;height:2.375rem;border:0;border-radius:9px;background:none;color:var(--lg-ink,#1a1d1a);' +
+          'font:600 .9375rem/2.375rem var(--lg-font-sans,sans-serif);text-align:center;cursor:pointer;padding:0}',
+        '#looth-comp-sheet .lgc-tb svg{vertical-align:middle}',
+        '#looth-comp-sheet .lgc-tb.ql-active{background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#52613d)}',
+        '#looth-comp-sheet .lgc-tb--pic,#looth-comp-sheet .lgc-tb--tag{color:var(--lg-sage-d,#6b7c52)}',
+        '#looth-comp-sheet .lgc-sp{flex:1 1 auto}',
+        '#looth-comp-sheet .lgc-status{flex:1 0 100%;order:9;font:.75rem/1.35 var(--lg-font-sans,sans-serif);color:#8a8d91;padding:3px 2px 0}',
+        '#looth-comp-sheet .lgc-status:empty{display:none}',
+        // failure line — the DM composer's .mg-send-error, same token, same plain
+        // language + retry instruction, same role=alert. Its own element (not a
+        // modifier on .lgc-status) exactly as over there, so the two channels can
+        // never desync: one says what is happening, one says what went wrong.
+        '#looth-comp-sheet .lgc-err{flex:1 0 100%;order:-1;color:var(--lg-error,#b3261e);' +
+          'font:600 .75rem/1.4 var(--lg-font-sans,sans-serif);padding:0 2px 6px}',
+        // dark pass — tokens where they exist on /hub/, explicit pins where they
+        // don't (the messages-search dark-gate lesson: sage tints never re-point)
+        D + ' #looth-comp-sheet .lgc-card{background:#1b1e21;color:#e5e7e1}',
+        D + ' #looth-comp-sheet .lgc-grab::before{background:#3a403a}',
+        D + ' #looth-comp-sheet .lgc-hd{border-bottom-color:#2c312d}',
+        D + ' #looth-comp-sheet .lgc-x{background:#262b30;color:#9cb37d}',
+        D + ' #looth-comp-sheet .lgc-name{color:#f2f4ee}',
+        D + ' #looth-comp-sheet .lgc-ctx{background:#243024;color:#b6c79a}',
+        D + ' #looth-comp-sheet .lgc-post{background:var(--lg-sage-d,#6b7c52)}',
+        D + ' #looth-comp-sheet .lgc-post:disabled{background:#2c312d;color:#7e857c}',
+        D + ' #looth-comp-sheet .lgc-title{color:#f2f4ee;border-bottom-color:#343a33}',
+        D + ' #looth-comp-sheet .lgc-title::placeholder{color:#7e857c}',
+        D + ' #looth-comp-sheet .ql-editor{color:#e5e7e1}',
+        D + ' #looth-comp-sheet .ql-editor.ql-blank::before{color:#7e857c}',
+        D + ' #looth-comp-sheet .ql-editor a,' + D + ' #looth-comp-sheet .ql-editor .bp-suggestions-mention{color:#9cb37d}',
+        D + ' #looth-comp-sheet .lgc-tools{border-top-color:#2c312d}',
+        D + ' #looth-comp-sheet .lgc-tb{color:#e5e7e1}',
+        D + ' #looth-comp-sheet .lgc-tb.ql-active{background:#243024;color:#9cb37d}',
+        D + ' #looth-comp-sheet .lgc-tb--pic,' + D + ' #looth-comp-sheet .lgc-tb--tag{color:#9cb37d}',
+        D + ' #looth-comp-sheet .lgc-pv{border-color:#2c312d}',
+        // #b3261e on #1b1e21 is 3.0:1 — under AA for text. Lighten the error ink for
+        // dark exactly as the bucket-C sweep did, and keep the tile's spinner ring
+        // legible against the dark card.
+        D + ' #looth-comp-sheet .lgc-err{color:#f2b8b5}',
+        D + ' #looth-comp-sheet .lgc-pv--up::after{border-color:rgba(242,244,238,.25);border-top-color:#9cb37d}',
+        D + ' #looth-comp-sheet .lgc-pv--err{border-color:#f2b8b5}',
+        D + ' #looth-comp-sheet .lgc-pv-r{background:#f2b8b5;color:#1b1e21}',
+        D + ' #looth-comp-sheet .lgc-status{color:#9aa097}',
+        D + ' #looth-comp-sheet .lgc-av{background:#262b30}',
+        // ── tag-people picker (second sheet layer — the modal-over-modal stack
+        //    LgSheets was built for; df97f87 raised-sheet geometry) ──
+        '#looth-tag-sheet{position:fixed;inset:0;z-index:2147483570;display:none}',
+        '#looth-tag-sheet.is-open{display:block}',
+        '#looth-tag-sheet .lgt-card{position:absolute;left:0;right:0;top:44px;bottom:0;display:flex;flex-direction:column;' +
+          'background:var(--lg-card-bg,#fff);border-radius:18px 18px 0 0;box-shadow:0 -10px 44px rgba(0,0,0,.4);' +
+          'font:.9375rem/1.4 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a)}',
+        '#looth-tag-sheet .lgt-hd{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--lg-line,#e3e0d8)}',
+        '#looth-tag-sheet .lgt-t{font-weight:700;flex:1}',
+        '#looth-tag-sheet .lgt-done{border:0;border-radius:999px;background:var(--lguser-accent,var(--lg-sage,#87986a));color:#fff;font:700 .875rem/1 var(--lg-font-sans,sans-serif);padding:10px 20px;cursor:pointer}',
+        '#looth-tag-sheet .lgt-search{flex:0 0 auto;display:flex;align-items:center;gap:8px;margin:10px 14px;padding:9px 12px;border:1.5px solid var(--lg-line,#e3e0d8);border-radius:10px}',
+        '#looth-tag-sheet .lgt-q{flex:1 1 auto;border:0;outline:0;background:none;font:600 .9375rem/1.3 var(--lg-font-sans,sans-serif);color:var(--lg-ink,#1a1d1a)}',
+        '#looth-tag-sheet .lgt-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 8px 10px}',
+        '#looth-tag-sheet .lgt-row{display:flex;align-items:center;gap:13px;min-height:60px;padding:8px 7px;border-radius:12px;cursor:pointer}',
+        '#looth-tag-sheet .lgt-row.on{background:var(--lg-sage-tint,#eef2e3)}',
+        '#looth-tag-sheet .lgt-cb{width:22px;height:22px;border:2px solid var(--lg-line,#d8d2c4);border-radius:6px;flex:0 0 auto;position:relative}',
+        '#looth-tag-sheet .lgt-row.on .lgt-cb{background:var(--lg-sage,#87986a);border-color:var(--lg-sage,#87986a)}',
+        '#looth-tag-sheet .lgt-row.on .lgt-cb::after{content:"✓";position:absolute;inset:0;color:#fff;font:700 15px/22px sans-serif;text-align:center}',
+        '#looth-tag-sheet .lgt-av{width:44px;height:44px;border-radius:50%;flex:0 0 auto;object-fit:cover;background:var(--lg-sage-tint,#e8e5da);overflow:hidden}',
+        '#looth-tag-sheet .lgt-av img{width:100%;height:100%;object-fit:cover;display:block}',
+        '#looth-tag-sheet .lgt-tx{min-width:0;display:flex;flex-direction:column;line-height:1.25}',
+        '#looth-tag-sheet .lgt-n{font-weight:700;font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+        '#looth-tag-sheet .lgt-c{color:var(--lg-mute,#6b7362);font-size:.8125rem;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+        '#looth-tag-sheet .lgt-note{padding:14px;color:var(--lg-mute,#6b7362);font-size:.8125rem}',
+        D + ' #looth-tag-sheet .lgt-card{background:#1b1e21;color:#e5e7e1}',
+        D + ' #looth-tag-sheet .lgt-hd{border-bottom-color:#2c312d}',
+        D + ' #looth-tag-sheet .lgt-done{background:var(--lg-sage-d,#6b7c52)}',
+        D + ' #looth-tag-sheet .lgt-search{border-color:#2c312d}',
+        D + ' #looth-tag-sheet .lgt-q{color:#e5e7e1}',
+        D + ' #looth-tag-sheet .lgt-n{color:#f2f4ee}',
+        D + ' #looth-tag-sheet .lgt-c,' + D + ' #looth-tag-sheet .lgt-note{color:#9aa79b}',
+        D + ' #looth-tag-sheet .lgt-row.on{background:#243024}',
+        D + ' #looth-tag-sheet .lgt-cb{border-color:#3a403a}',
+        D + ' #looth-tag-sheet .lgt-av{background:#262b30}'
       ].join('\n');
       (document.head || document.documentElement).appendChild(st);
     }
     sh = document.createElement('div'); sh.id = 'looth-comp-sheet';
     sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-modal', 'true'); sh.setAttribute('aria-label', 'Write a reply');
     sh.innerHTML =
-      '<div class="lcp-card" data-lg-sheet-card>' +
-        '<div class="lcp-grab" aria-hidden="true"></div>' +
-        '<div class="lcp-head"><span class="lcp-av" id="lcp-av"></span>' +
-          '<div class="lcp-id"><div class="lcp-name" id="lcp-name">You</div><span class="lcp-ctx" id="lcp-ctx" hidden></span></div></div>' +
-        // Title row — shown ONLY when editing a TOPIC/OP (editTopicId), so this same
-        // composer doubles as the OP editor on mobile (parity with desktop). Hidden
-        // for replies. (Ian 2026-06-25, "new edit".)
-        // autocomplete/autocorrect/autocapitalize/spellcheck off the strong iOS
-        // autofill accessory (🔑/💳/📍): this is a free-text comment/title, not a
-        // credential/contact field. The composer is a <div> (NOT a <form>), so iOS
-        // has no login/payment form to associate either. (Ian 2026-06-25, iPhone.)
-        '<input class="lcp-title" id="lcp-title" type="text" placeholder="Post title" maxlength="200" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true" hidden>' +
-        '<textarea class="lcp-input" id="lcp-input" rows="3" placeholder="Write a comment…" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true"></textarea>' +
-        '<div class="lcp-row">' +
-          '<button class="lcp-photo" id="lcp-photo" type="button" aria-label="Add photo" title="Add photo">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
-          '<input type="file" id="lcp-file" accept="image/*" style="display:none">' +
-          '<span class="lcp-previews" id="lcp-previews"></span>' +
-          '<span class="lcp-status" id="lcp-status"></span>' +
+      '<div class="lgc-card" data-lg-sheet-card>' +
+        '<div class="lgc-grab" aria-hidden="true"></div>' +
+        '<div class="lgc-hd">' +
+          '<button class="lgc-x" id="lgc-x" type="button" aria-label="Close">✕</button>' +
+          '<span class="lgc-av" id="lgc-av"></span>' +
+          '<div class="lgc-id"><div class="lgc-name" id="lgc-name">You</div><span class="lgc-ctx" id="lgc-ctx" hidden></span></div>' +
+          '<button class="lgc-post" id="lgc-post" type="button" disabled>Post</button>' +
         '</div>' +
-        '<button class="lcp-post" id="lcp-post" type="button" disabled>Post</button>' +
+        // title row — TOPIC/OP edit only (same double duty lcp carried).
+        // autocomplete/correct off: free text, not a credential field (iOS accessory).
+        '<input class="lgc-title" id="lgc-title" type="text" placeholder="Post title" maxlength="200" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true" hidden>' +
+        '<div class="lgc-body" id="lgc-body"><div class="lgc-editor" id="lgc-editor"></div></div>' +
+        '<div class="lgc-strip" id="lgc-strip"></div>' +
+        '<div class="lgc-tools" id="lgc-tools">' +
+          '<button class="lgc-tb lgc-tb--pic" id="lgc-photo" type="button" aria-label="Add photo" title="Add photo">' +
+            '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
+          '<input type="file" id="lgc-file" accept="image/*" style="display:none">' +
+          '<button class="lgc-tb ql-bold" type="button" aria-label="Bold"><b>B</b></button>' +
+          '<button class="lgc-tb ql-italic" type="button" aria-label="Italic"><i>I</i></button>' +
+          '<button class="lgc-tb ql-strike" type="button" aria-label="Strikethrough"><s>S</s></button>' +
+          '<button class="lgc-tb ql-link" type="button" aria-label="Link" style="font-size:.8125rem">link</button>' +
+          '<button class="lgc-tb ql-list" value="bullet" type="button" aria-label="Bulleted list">≔</button>' +
+          '<button class="lgc-tb ql-list" value="ordered" type="button" aria-label="Numbered list">1.</button>' +
+          '<button class="lgc-tb lgc-tb--tag" id="lgc-tag" type="button" aria-label="Tag people" title="Tag people">' +
+            '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5"/><path d="M17 8.5v5M14.5 11h5"/></svg></button>' +
+          '<span class="lgc-sp"></span>' +
+          '<span class="lgc-status" id="lgc-status" role="status"></span>' +
+        '</div>' +
       '</div>';
     (document.body || document.documentElement).appendChild(sh);
-    var card = sh.querySelector('.lcp-card');
-    // Tap-off keyboard dismiss (Ian 2026-06-25, iPhone): tapping the sheet's
-    // NON-input chrome (header, grab handle, empty panel) blurs the input so iOS
-    // closes the keyboard WITHOUT closing the composer. Controls keep their focus/
-    // behavior; the shared manager backdrop closes the whole sheet.
+    var card = sh.querySelector('.lgc-card');
+    sh.querySelector('#lgc-x').addEventListener('click', function () { closeComposerSheet('programmatic'); });
+    // Tap-off keyboard dismiss (Ian 2026-06-25, iPhone): tapping non-input chrome
+    // blurs the editor so iOS closes the keyboard WITHOUT closing the composer.
     card.addEventListener('click', function (e) {
-      if (e.target.closest('input, textarea, button, label, .lcp-previews')) return;
-      var inp = sh.querySelector('#lcp-input'); if (inp) inp.blur();
-      var ttl = sh.querySelector('#lcp-title'); if (ttl) ttl.blur();
+      if (e.target.closest('input, textarea, button, label, .ql-editor, .lgc-strip, .lg-mnt')) return;
+      var qe = sh.querySelector('.ql-editor'); if (qe) qe.blur();
+      var ttl = sh.querySelector('#lgc-title'); if (ttl) ttl.blur();
     });
-    // drag the grab pill down to dismiss
+    // drag the grab pill down to dismiss (manager clears the transform on close)
     (function () {
-      var grab = sh.querySelector('.lcp-grab'), sy = 0, dy = 0, on = false;
+      var grab = sh.querySelector('.lgc-grab'), sy = 0, dy = 0, on = false;
       grab.addEventListener('touchstart', function (e) { sy = e.touches[0].clientY; dy = 0; on = true; card.style.transition = 'none'; }, { passive: true });
       grab.addEventListener('touchmove', function (e) {
         if (!on) return; dy = Math.max(0, e.touches[0].clientY - sy);
@@ -3949,80 +4140,418 @@
         if (dy > 90) closeComposerSheet('swipe');
       });
     })();
-    var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post');
-    var titleElW = sh.querySelector('#lcp-title');
-    // Enable Post/Save: topic edit needs BOTH a title and a body; everything else
-    // (reply create/edit) allows photo-only.
-    function lcpRecalcPost() {
-      var c = sh.__lcpCtx || {};
-      if (c.editTopicId) { post.disabled = !(ta.value.trim() && titleElW && titleElW.value.trim()); return; }
-      var keepN = (c.keepMedia && c.keepMedia.length) || 0;
-      post.disabled = !ta.value.trim() && !lcpMediaIds.length && !keepN;
-    }
-    ta.addEventListener('input', function () {
-      lcpRecalcPost();
-      ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
-    });
-    if (titleElW) titleElW.addEventListener('input', lcpRecalcPost);
+    var post = sh.querySelector('#lgc-post');
+    var titleElW = sh.querySelector('#lgc-title');
     post.addEventListener('click', function () { lcpSubmit(sh); });
-    // photo attach — same canonical contract as the modal composer (media/upload → bbp_media)
-    var photoBtn = sh.querySelector('#lcp-photo'), fileIn = sh.querySelector('#lcp-file');
+    if (titleElW) titleElW.addEventListener('input', function () { lgcRecalcPost(sh); });
+    // photo attach — same canonical contract as before (media/upload → bbp_media)
+    var photoBtn = sh.querySelector('#lgc-photo'), fileIn = sh.querySelector('#lgc-file');
     photoBtn.addEventListener('click', function () { fileIn.click(); });
     fileIn.addEventListener('change', function () {
       var file = fileIn.files && fileIn.files[0];
       fileIn.value = '';
-      if (!file) return;
-      var status = sh.querySelector('#lcp-status');
-      status.textContent = 'Uploading photo…';
-      lrsGetAuth(function (a) {
-        if (!a || !a.authenticated) { status.textContent = 'Sign in to add photos.'; return; }
-        var fd = new FormData(); fd.append('file', file);
-        fetch(LRS_REPLY_BASE + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': a.nonce }, body: fd })
-          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-          .then(function (res) {
-            if (!res.ok || !res.j.upload_id) { status.textContent = 'Photo upload failed: ' + ((res.j && res.j.message) || 'error'); return; }
-            lcpMediaIds.push(res.j.upload_id);
-            status.textContent = '';
-            var pv = sh.querySelector('#lcp-previews');
-            var chip = document.createElement('span'); chip.className = 'lcp-pv';
-            chip.innerHTML = '<img src="' + String(res.j.upload_thumb || res.j.upload).replace(/"/g, '&quot;') + '" alt="">' +
-              '<button type="button" class="lcp-pv-x" aria-label="Remove photo">&times;</button>';
-            chip.querySelector('.lcp-pv-x').addEventListener('click', function () {
-              var ix = lcpMediaIds.indexOf(res.j.upload_id);
-              if (ix > -1) lcpMediaIds.splice(ix, 1);
-              chip.remove();
-              post.disabled = !ta.value.trim() && !lcpMediaIds.length;
-            });
-            pv.appendChild(chip);
-            post.disabled = false;
-          })
-          .catch(function (err) { status.textContent = 'Upload error: ' + err.message; });
-      });
+      if (file) lgcUploadPhoto(sh, file);
     });
-    // keyboard-aware: lift the floating card above the on-screen keyboard
-    function lcpKb() {
-      if (!sh.classList.contains('is-open') || !window.visualViewport) { card.style.transform = ''; return; }
+    // ZERO-GAP KEYBOARD DOCK (df97f87): the card's bottom edge lands exactly on the
+    // keyboard top. Sized via bottom-offset, NOT translateY — a leftover transform
+    // on a fixed-position ancestor is receipt R3's trap.
+    function lgcDock() {
+      if (!sh.classList.contains('is-open') || !window.visualViewport) { card.style.bottom = ''; return; }
       var vv = window.visualViewport;
       var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-      card.style.transform = kb > 1 ? ('translateY(-' + kb + 'px)') : '';
+      card.style.bottom = kb > 1 ? kb + 'px' : '';
     }
+    sh.__lgcDock = lgcDock;
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', lcpKb);
-      window.visualViewport.addEventListener('scroll', lcpKb);
+      window.visualViewport.addEventListener('resize', lgcDock);
+      window.visualViewport.addEventListener('scroll', lgcDock);
     }
-    ta.addEventListener('focus', function () { setTimeout(lcpKb, 120); setTimeout(lcpKb, 330); });
-    ta.addEventListener('blur', function () { setTimeout(lcpKb, 80); });
     return sh;
   }
-  // iOS-safe scroll lock for the reply stack. The lrs/lcp sheets historically set
-  // body{overflow:hidden}, which iOS WebKit IGNORES (the background hub scrolls
-  // behind the fixed sheet and the sheet itself drags off-screen — Ian's phone,
-  // 2026-07-23). Toggle a body lock-class that the position:fixed scroll-lock
-  // observer (bottom of file) watches, reusing the SAME proven mechanism the ntm
-  // composer uses. Presence-based ref-count: locked while EITHER sheet is open,
-  // released only once both are closed (so opening/closing lcp over lrs is stable).
+  function lgcStripChip(sh, src, onRemove) {
+    var strip = sh.querySelector('#lgc-strip');
+    var chip = document.createElement('span'); chip.className = 'lgc-pv';
+    chip.innerHTML = '<img src="' + src.replace(/"/g, '&quot;') + '" alt="">' +
+      '<button type="button" class="lgc-pv-x" aria-label="Remove photo">&times;</button>';
+    chip.querySelector('.lgc-pv-x').addEventListener('click', function () {
+      chip.remove();
+      onRemove();
+    });
+    strip.appendChild(chip);
+    return chip;
+  }
+  // ── photo attach with a VISIBLE in-flight state ──────────────────────────────
+  // Ian, real iPhone 2026-07-26: "there is no indication that the image is
+  // uploading". The old path DID write 'Uploading photo…' — into #lgc-status,
+  // which sat inline beside 8 toolbar buttons and measured 30px wide for 111px of
+  // text at 390px. Ellipsed to nothing: a message nobody can read is no message.
+  //
+  // The cure is the DM composer's shipped idiom (msgimg-sending-state, Ian 7/06),
+  // reused rather than re-invented: the picked image goes on the strip AT ONCE
+  // wearing a busy state, the action stays clearly not-ready while bytes are in
+  // flight, and a failure says so in plain language with a way forward instead of
+  // leaving an empty strip. Here the tile carries the state, #lgc-status carries
+  // the progress words and .lgc-err (= .mg-send-error) carries the failure.
+  var lcpUploading = 0;                    // uploads in flight — Post is not ready until 0
+  var lgcOpenGen = 0;                      // bumped per composer open; an upload that
+                                           // outlives its open must not touch the next
+                                           // one's media ids or its in-flight count
+  function lgcSetErr(sh, msg) {
+    var tools = sh.querySelector('#lgc-tools'); if (!tools) return;
+    var el = tools.querySelector('.lgc-err');
+    if (!msg) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'lgc-err';
+      el.setAttribute('role', 'alert');
+      tools.insertBefore(el, tools.firstChild);
+    }
+    el.textContent = msg;
+  }
+  // ONE place decides what the two channels say, so they can never contradict each
+  // other: the status line counts what is actually in flight, the alert line exists
+  // exactly while a tile is actually in a failed state. Recomputing from the DOM
+  // (rather than each upload writing its own strings) is what makes removing one of
+  // two failed tiles leave the OTHER one's alert standing instead of clearing it.
+  function lgcSyncUploadUi(sh) {
+    var status = sh.querySelector('#lgc-status');
+    if (status) {
+      status.textContent = !lcpUploading ? ''
+        : lcpUploading > 1 ? 'Uploading ' + lcpUploading + ' photos…' : 'Uploading photo…';
+    }
+    var bad = sh.querySelectorAll('#lgc-strip .lgc-pv--err');
+    if (!bad.length) { lgcSetErr(sh, null); return; }
+    lgcSetErr(sh, bad.length > 1
+      ? bad.length + " photos didn't upload — tap a ↻ to try again."
+      : (bad[0].__lgcErrMsg || "Couldn't add your photo — tap ↻ to try again."));
+  }
+  function lgcUploadPhoto(sh, file) {
+    var local = null;
+    try { local = URL.createObjectURL(file); } catch (e) {}
+    var inFlight = false;                  // this tile is holding a Post-blocking slot
+    var dead = false;                      // tile removed — no attempt may resurrect it
+    var attempt = 0;                       // retries supersede: only the newest may land
+    var gen = lgcOpenGen;
+    var stale = function () { return gen !== lgcOpenGen; };   // composer re-opened under us
+    var revoke = function () { if (local) { try { URL.revokeObjectURL(local); } catch (e) {} local = null; } };
+    var release = function () { if (inFlight) { inFlight = false; lcpUploading--; } };
+    // the tile exists BEFORE the first byte leaves — that is the whole point
+    var chip = lgcStripChip(sh, local || '', function () {
+      dead = true; attempt++;              // invalidate whatever is in the air
+      if (stale()) { revoke(); return; }
+      release();                           // cancelled mid-flight
+      var id = chip.__lgcMediaId;
+      if (id) { var ix = lcpMediaIds.indexOf(id); if (ix > -1) lcpMediaIds.splice(ix, 1); }
+      revoke();
+      lgcSyncUploadUi(sh);                 // the chip is already out of the DOM
+      lgcRecalcPost(sh);
+    });
+
+    function fail(msg) {
+      release();
+      chip.classList.remove('lgc-pv--up'); chip.classList.add('lgc-pv--err');
+      chip.removeAttribute('aria-busy');
+      chip.__lgcErrMsg = msg;
+      if (!chip.querySelector('.lgc-pv-r')) {
+        var r = document.createElement('button');
+        r.type = 'button'; r.className = 'lgc-pv-r';
+        r.setAttribute('aria-label', 'Retry photo upload');
+        r.textContent = '↻';
+        r.addEventListener('click', send);
+        chip.appendChild(r);
+      }
+      lgcSyncUploadUi(sh);                 // the strip is NEVER silently empty
+      lgcRecalcPost(sh);
+    }
+    function send() {
+      if (dead || stale() || inFlight) return;
+      var my = ++attempt;
+      var live = function () { return my === attempt && !dead && !stale(); };
+      inFlight = true; lcpUploading++;
+      chip.__lgcErrMsg = '';
+      var old = chip.querySelector('.lgc-pv-r'); if (old) old.remove();
+      chip.classList.remove('lgc-pv--err'); chip.classList.add('lgc-pv--up');
+      chip.setAttribute('aria-busy', 'true');
+      lgcSyncUploadUi(sh);
+      lgcRecalcPost(sh);
+      lrsGetAuth(function (a) {
+        if (!live()) return;               // removed / retried / re-opened under us
+        if (!a || !a.authenticated) { fail('Sign in to add photos.'); return; }
+        var fd = new FormData(); fd.append('file', file);
+        fetch(LRS_REPLY_BASE + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': a.nonce }, body: fd })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: false, j: {} }; }); })
+          .then(function (res) {
+            if (!live()) { revoke(); return; }
+            if (!res.ok || !res.j.upload_id) {
+              fail("Couldn't add your photo — tap ↻ to try again."
+                + ((res.j && res.j.message) ? ' (' + res.j.message + ')' : ''));
+              return;
+            }
+            release();
+            lcpMediaIds.push(res.j.upload_id);
+            chip.__lgcMediaId = res.j.upload_id;
+            chip.classList.remove('lgc-pv--up'); chip.removeAttribute('aria-busy');
+            var im = chip.querySelector('img');
+            if (im) im.src = String(res.j.upload_thumb || res.j.upload);
+            revoke();
+            lgcSyncUploadUi(sh);
+            lgcRecalcPost(sh);
+          })
+          .catch(function () { if (live()) fail("Couldn't add your photo — check your connection, then tap ↻."); });
+      });
+    }
+    send();
+  }
+  // Quill body → submit HTML. Empty document serializes as '<p><br></p>' — that is ''.
+  function lgcHtml() {
+    if (!lgcQuill) return '';
+    var html = lgcQuill.getSemanticHTML().replace(/\uFEFF/g, '');
+    if (!lgcText() && html.indexOf('<img') === -1 && html.indexOf('bp-suggestions-mention') === -1) return '';
+    return html;
+  }
+  function lgcText() {
+    if (!lgcQuill) return '';
+    // embeds don't count into getText(); check them separately where it matters
+    return lgcQuill.getText().replace(/\n/g, ' ').trim();
+  }
+  function lgcHasContent() {
+    if (!lgcQuill) return false;
+    if (lgcText()) return true;
+    // a lone mention is content
+    return lgcQuill.getContents().ops.some(function (op) { return op.insert && op.insert.lgmention; });
+  }
+  function lgcRecalcPost(sh) {
+    var post = sh.querySelector('#lgc-post'); if (!post) return;
+    var c = sh.__lcpCtx || {};
+    // A photo still uploading means the post is NOT ready — posting now would ship
+    // a reply without the picture the member just attached. aria-busy alongside the
+    // disable so "not ready" is announced, not just greyed (Ian 7/26).
+    var busy = lcpUploading > 0;
+    if (busy) post.setAttribute('aria-busy', 'true'); else post.removeAttribute('aria-busy');
+    var titleEl = sh.querySelector('#lgc-title');
+    if (c.editTopicId) { post.disabled = busy || !(lgcHasContent() && titleEl && titleEl.value.trim()); return; }
+    var keepN = (c.keepMedia && c.keepMedia.length) || 0;
+    post.disabled = busy || (!lgcHasContent() && !lcpMediaIds.length && !keepN);
+  }
+  // Mention insertion hook for the shared .lg-mnt engine (forums.js): replace the
+  // typed "@partial" token with an atomic name-displaying mention embed.
+  window.lgComposerMention = {
+    owns: function (el) { return !!(el && el.closest && el.closest('#looth-comp-sheet')); },
+    pick: function (item, tokenLen) {
+      // tokenLen = length of the typed "@partial" INCLUDING the '@'
+      if (!lgcQuill) return;
+      var sel = lgcQuill.getSelection() || lgcQuill.getSelection(true);
+      if (!sel) return;
+      var at = Math.max(0, sel.index - tokenLen);
+      lgcQuill.deleteText(at, tokenLen, 'user');
+      lgcInsertMention(item, at);
+    }
+  };
+  function lgcInsertMention(item, at) {
+    lgcQuill.insertEmbed(at, 'lgmention', {
+      uuid: item.uuid, slug: item.slug,
+      name: (item.display_name && item.display_name.trim()) || item.slug
+    }, 'user');
+    lgcQuill.insertText(at + 1, ' ', 'user');
+    lgcQuill.setSelection(at + 2, 0, 'user');
+  }
+  // ── tag-people picker: second LgSheets layer over the composer (df97f87 raised
+  //    sheet: 44px top inset, search on top, list fills, bottom on the keyboard).
+  //    Search IS mention-suggest; checkbox rows persist selection across queries
+  //    (roster pinned first); Done drops the mentions INLINE at the caret (Ian
+  //    7/25 ruling — the chip-row landing is dead).
+  var lgtRoster = null, lgtSeq = 0;
+  function ensureTagSheet() {
+    var t = document.getElementById('looth-tag-sheet');
+    if (t) return t;
+    ensureCompSheet();   // styles live in the composer's block
+    t = document.createElement('div'); t.id = 'looth-tag-sheet';
+    t.setAttribute('role', 'dialog'); t.setAttribute('aria-modal', 'true'); t.setAttribute('aria-label', 'Tag people');
+    t.innerHTML =
+      '<div class="lgt-card" data-lg-sheet-card>' +
+        '<div class="lgt-hd"><span class="lgt-t">Tag people</span><button class="lgt-done" id="lgt-done" type="button">Done</button></div>' +
+        '<div class="lgt-search">' +
+          '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>' +
+          '<input class="lgt-q" id="lgt-q" type="search" placeholder="Search members" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">' +
+        '</div>' +
+        '<div class="lgt-list" id="lgt-list" role="listbox" aria-multiselectable="true"></div>' +
+      '</div>';
+    (document.body || document.documentElement).appendChild(t);
+    t.querySelector('#lgt-done').addEventListener('click', function () {
+      window.LgSheets.close('lgtag', 'programmatic');
+    });
+    var qEl = t.querySelector('#lgt-q');
+    qEl.addEventListener('input', function () { lgtQuery(qEl.value); });
+    // row toggle: tap-vs-scroll (receipt R4 — touchend <10px/<700ms; a drag scrolls)
+    var list = t.querySelector('#lgt-list'), tS = null;
+    list.addEventListener('touchstart', function (e) {
+      var row = e.target.closest && e.target.closest('.lgt-row');
+      tS = row ? { row: row, x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
+    }, { passive: true });
+    list.addEventListener('touchmove', function (e) {
+      if (!tS) return;
+      var to = e.touches[0];
+      if (Math.abs(to.clientX - tS.x) > 10 || Math.abs(to.clientY - tS.y) > 10) tS = null;
+    }, { passive: true });
+    list.addEventListener('touchend', function (e) {
+      if (!tS) return;
+      var dt = Date.now() - tS.t, row = tS.row; tS = null;
+      if (dt < 700) { e.preventDefault(); row.__lgtT = Date.now(); lgtToggle(row); }
+    }, { passive: false });
+    list.addEventListener('click', function (e) {   // desktop / synthetic fallback
+      var row = e.target.closest && e.target.closest('.lgt-row');
+      if (row && !(row.__lgtT && Date.now() - row.__lgtT < 500)) lgtToggle(row);
+    });
+    // zero-gap dock for the picker too — its bottom edge rides the keyboard top
+    function lgtDock() {
+      var cardT = t.querySelector('.lgt-card');
+      if (!t.classList.contains('is-open') || !window.visualViewport) { cardT.style.bottom = ''; return; }
+      var vv = window.visualViewport;
+      var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      cardT.style.bottom = kb > 1 ? kb + 'px' : '';
+    }
+    t.__lgtDock = lgtDock;
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', lgtDock);
+      window.visualViewport.addEventListener('scroll', lgtDock);
+    }
+    return t;
+  }
+  function lgtToggle(row) {
+    var uuid = row.getAttribute('data-uuid');
+    if (!uuid || !lgtRoster) return;
+    if (lgtRoster.has(uuid)) { lgtRoster.delete(uuid); row.classList.remove('on'); }
+    else {
+      lgtRoster.set(uuid, {
+        uuid: uuid,
+        slug: row.getAttribute('data-slug') || '',
+        display_name: row.getAttribute('data-name') || '',
+        avatar_url: row.getAttribute('data-av') || null,
+        context: row.getAttribute('data-ctx') || null
+      });
+      row.classList.add('on');
+    }
+  }
+  function lgtRow(it, on) {
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+    var name = (it.display_name && it.display_name.trim()) || it.slug;
+    var av = it.avatar_url ? '<span class="lgt-av"><img src="' + esc(it.avatar_url) + '" alt=""></span>' : '<span class="lgt-av"></span>';
+    // second line: location/business context — NEVER a handle (Ian final 2026-07-26)
+    var ctx = it.context ? '<span class="lgt-c">' + esc(it.context) + '</span>' : '';
+    return '<div class="lgt-row' + (on ? ' on' : '') + '" role="option" aria-selected="' + (on ? 'true' : 'false') + '"' +
+      ' data-uuid="' + esc(it.uuid) + '" data-slug="' + esc(it.slug) + '" data-name="' + esc(name) + '"' +
+      ' data-av="' + esc(it.avatar_url || '') + '" data-ctx="' + esc(it.context || '') + '">' +
+      '<span class="lgt-cb"></span>' + av +
+      '<span class="lgt-tx"><span class="lgt-n">' + esc(name) + '</span>' + ctx + '</span></div>';
+  }
+  function lgtRender(results) {
+    var t = document.getElementById('looth-tag-sheet'); if (!t || !lgtRoster) return;
+    var list = t.querySelector('#lgt-list');
+    var seen = {};
+    var html = '';
+    // selection persistence: the roster renders FIRST, always, checked — a new
+    // query can never silently drop someone already picked
+    lgtRoster.forEach(function (it) { seen[it.uuid] = 1; html += lgtRow(it, true); });
+    (results || []).forEach(function (it) {
+      if (seen[it.uuid]) return;
+      html += lgtRow(it, false);
+    });
+    if (!html) html = '<div class="lgt-note">Type a name to find members.</div>';
+    list.innerHTML = html;
+  }
+  function lgtQuery(q) {
+    q = (q || '').trim();
+    var my = ++lgtSeq;
+    if (q.length < 2) { lgtRender([]); return; }
+    fetch('/profile-api/v0/mention-suggest?q=' + encodeURIComponent(q), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : { items: [] }; })
+      .then(function (j) { if (my === lgtSeq) lgtRender((j && j.items) || []); })
+      .catch(function () {});
+  }
+  window.LgSheets.register({
+    id: 'lgtag',
+    ensure: function () { return ensureTagSheet(); },
+    escClose: true,
+    // own history entry: phone-back closes the picker, composer stays
+    historyEntry: function () { return { state: { lgTag: 1 }, url: undefined }; },
+    onClose: function () {
+      // ANY close path commits the roster (Done, Esc, back, backdrop): losing a
+      // deliberate selection to a stray dismiss is worse than an extra mention —
+      // and the mentions are plainly visible + deletable in the editor.
+      var roster = lgtRoster; lgtRoster = null;
+      if (!roster || !roster.size || !lgcQuill) return;
+      // drop INLINE at the caret position the picker was opened from (Ian 7/25)
+      var at = Math.min(lgtReturnAt, Math.max(0, lgcQuill.getLength() - 1));
+      roster.forEach(function (it) {
+        lgcInsertMention(it, at);
+        at += 2;   // embed + trailing space
+      });
+      var sh2 = document.getElementById('looth-comp-sheet');
+      if (sh2) lgcRecalcPost(sh2);
+      var t2 = document.getElementById('looth-tag-sheet');
+      if (t2) t2.querySelector('.lgt-card').style.bottom = '';
+      try { lgcQuill.focus(); } catch (e) {}
+    }
+  });
+  var lgtReturnAt = 0;
+  function openTagPicker() {
+    if (!lgcQuill) return;
+    var s = lgcQuill.getSelection();
+    lgtReturnAt = s ? s.index : Math.max(0, lgcQuill.getLength() - 1);
+    lgtRoster = new Map();
+    var t = ensureTagSheet();
+    t.querySelector('#lgt-q').value = '';
+    lgtRender([]);
+    window.LgSheets.open('lgtag');
+    if (t.__lgtDock) t.__lgtDock();
+    try { t.querySelector('#lgt-q').focus({ preventScroll: true }); } catch (e) { t.querySelector('#lgt-q').focus(); }
+  }
   /* lgSyncSheetLock / lgSetBehind / lgScrubSheetState DELETED — every invariant
      they enforced by convention is structural in LgSheets (phase 1). */
+  function lgcInitQuill(sh, cb) {
+    if (lgcQuill) { if (cb) cb(); return; }
+    lgQuillReady(function () {
+      if (lgcQuill) { if (cb) cb(); return; }
+      // belt-and-braces: registration is idempotent and MUST precede construction
+      // (the formats whitelist resolves blots at construct time; a prefetch-path
+      // ordering miss here cost the first verify run its mention inserts)
+      lgcRegisterMentionBlot();
+      var ed = sh.querySelector('#lgc-editor');
+      lgcQuill = new window.Quill(ed, {
+        placeholder: 'Write a comment…',
+        formats: ['bold', 'italic', 'strike', 'link', 'list', 'lgmention'],
+        modules: {
+          toolbar: {
+            container: sh.querySelector('#lgc-tools'),
+            handlers: {
+              // no theme tooltip mounted — a plain prompt is the whole link UI
+              link: function (value) {
+                if (!value) { this.quill.format('link', false, 'user'); return; }
+                var url = window.prompt('Link URL');
+                if (url) this.quill.format('link', url, 'user');
+              }
+            }
+          }
+        }
+      });
+      // paste/draft-restore: revive stored mention anchors as atomic embeds
+      var Delta = window.Quill.import('delta');
+      lgcQuill.clipboard.addMatcher('a.bp-suggestions-mention', function (node) {
+        return new Delta().insert({ lgmention: {
+          uuid: node.getAttribute('data-lg-uuid') || '',
+          slug: decodeURIComponent((node.getAttribute('href') || '').replace(/^\/u\//, '')),
+          name: (node.textContent || '').replace(/\uFEFF/g, '')
+        } });
+      });
+      var root = lgcQuill.root;
+      root.setAttribute('autocorrect', 'off');
+      root.setAttribute('autocapitalize', 'sentences');
+      root.setAttribute('spellcheck', 'true');
+      lgcQuill.on('text-change', function () { lgcRecalcPost(sh); });
+      sh.querySelector('#lgc-tag').addEventListener('click', function () { openTagPicker(); });
+      if (cb) cb();
+    });
+  }
   function openComposerSheet(o) {
     o = o || {};
     var sh = ensureCompSheet();   // idempotent-open scrub is MANAGER-OWNED (LgSheets.open)
@@ -4032,101 +4561,84 @@
       tid: parseInt(o.tid, 10) || 0, fid: parseInt(o.fid, 10) || 0,
       replyTo: parseInt(o.replyTo, 10) || 0, replyToName: (o.replyToName || '').trim()
     };
-    var av = sh.querySelector('#lcp-av'); var avs = lrsViewerAvatar();
+    var av = sh.querySelector('#lgc-av'); var avs = lrsViewerAvatar();
     av.innerHTML = avs ? '<img src="' + avs.replace(/"/g, '&quot;') + '" alt="">' : '';
-    var nameEl = sh.querySelector('#lcp-name');
+    var nameEl = sh.querySelector('#lgc-name');
     nameEl.textContent = 'You';
     lrsGetAuth(function (a) { if (a && a.display_name) nameEl.textContent = a.display_name; });
-    var ctx = sh.querySelector('#lcp-ctx');
-    // Replying to a comment → name the comment's author; otherwise the topic title.
+    var ctx = sh.querySelector('#lgc-ctx');
     var who = sh.__lcpCtx.replyTo ? (sh.__lcpCtx.replyToName || 'a comment') : (o.title || '').trim();
     if (who) { ctx.hidden = false; ctx.textContent = 'Replying to: ' + (who.length > 34 ? who.slice(0, 33) + '…' : who); }
     else { ctx.hidden = true; }
-    var ta = sh.querySelector('#lcp-input');
-    ta.value = ''; ta.style.height = 'auto';
-    var postBtn = sh.querySelector('#lcp-post');
+    var postBtn = sh.querySelector('#lgc-post');
     postBtn.disabled = true;
-    sh.querySelector('#lcp-status').textContent = '';
-    sh.querySelector('#lcp-previews').innerHTML = '';
+    sh.querySelector('#lgc-status').textContent = '';
+    sh.querySelector('#lgc-strip').innerHTML = '';
     lcpMediaIds.length = 0;
-    var titleEl = sh.querySelector('#lcp-title');
+    // a fresh open owns a fresh strip: any upload from the LAST open is orphaned
+    // here, so its Post-blocking slot must go with it or Post never arms again
+    lgcOpenGen++;
+    lcpUploading = 0;
+    lgcSetErr(sh, null);
+    var titleEl = sh.querySelector('#lgc-title');
     if (titleEl) { titleEl.value = ''; titleEl.hidden = true; }
-    // ── EDIT MODE — reuse this composer to EDIT a reply (Ian 2026-06-25): pre-fill
-    //    the text, label the button "Save", and load existing photos as removable
-    //    thumbs below the input (✕ drops the id from keepMedia → removed on save). ──
     sh.__lcpCtx.editReplyId = parseInt(o.editReplyId, 10) || 0;
     sh.__lcpCtx.editTopicId = parseInt(o.editTopicId, 10) || 0;
     sh.__lcpCtx.keepMedia   = [];
-    if (sh.__lcpCtx.editTopicId) {
-      // ── TOPIC/OP edit — the SAME composer doubles as the OP editor (unified
-      //    "new edit", parity with desktop): show the title field, pre-fill
-      //    title + body, load existing photos as removable thumbs. Save → owned
-      //    reply.php topic PUT (+ topic-media.php for photos). ──
-      var teid = sh.__lcpCtx.editTopicId, pvElT = sh.querySelector('#lcp-previews');
-      ctx.hidden = false; ctx.textContent = '✎ Editing your post';
-      if (titleEl) { titleEl.hidden = false; titleEl.value = o.title || ''; }
-      ta.value = o.bodyText || '';
-      postBtn.textContent = 'Save';
-      postBtn.disabled = !(ta.value.trim() && titleEl && titleEl.value.trim());
-      fetch('/bb-mirror-api/v0/topic-media?topic_id=' + teid, { credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) {
-          if (!d || !d.ok || !d.media || sh.__lcpCtx.editTopicId !== teid) return;
-          if (d.media.length) sh.__lcpCtx.topicHadMedia = true;   // so removals get synced on save
-          d.media.forEach(function (m) {
-            sh.__lcpCtx.keepMedia.push(m.media_id);
-            var chip = document.createElement('span'); chip.className = 'lcp-pv';
-            chip.innerHTML = '<img src="' + String(m.thumb || m.url).replace(/"/g, '&quot;') + '" alt="">' +
-              '<button type="button" class="lcp-pv-x" aria-label="Remove photo">&times;</button>';
-            chip.querySelector('.lcp-pv-x').addEventListener('click', function () {
-              var ix = sh.__lcpCtx.keepMedia.indexOf(m.media_id);
-              if (ix > -1) sh.__lcpCtx.keepMedia.splice(ix, 1);
-              chip.remove();
-            });
-            pvElT.appendChild(chip);
-          });
-        })
-        .catch(function () {});
-    } else if (sh.__lcpCtx.editReplyId) {
-      ctx.hidden = false; ctx.textContent = '✎ Editing your reply';
-      ta.value = o.bodyText || '';
-      postBtn.textContent = 'Save';
-      postBtn.disabled = !ta.value.trim();
-      var eid = sh.__lcpCtx.editReplyId, pvEl = sh.querySelector('#lcp-previews');
-      fetch('/bb-mirror-api/v0/reply?reply_id=' + eid, { credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) {
-          if (!d || !d.ok || !d.media || sh.__lcpCtx.editReplyId !== eid) return;
-          d.media.forEach(function (m) {
-            sh.__lcpCtx.keepMedia.push(m.media_id);
-            var chip = document.createElement('span'); chip.className = 'lcp-pv';
-            chip.innerHTML = '<img src="' + String(m.thumb || m.url).replace(/"/g, '&quot;') + '" alt="">' +
-              '<button type="button" class="lcp-pv-x" aria-label="Remove photo">&times;</button>';
-            chip.querySelector('.lcp-pv-x').addEventListener('click', function () {
-              var ix = sh.__lcpCtx.keepMedia.indexOf(m.media_id);
-              if (ix > -1) sh.__lcpCtx.keepMedia.splice(ix, 1);
-              chip.remove();
-              postBtn.disabled = !ta.value.trim() && !lcpMediaIds.length && !sh.__lcpCtx.keepMedia.length;
-            });
-            pvEl.appendChild(chip);
-          });
-          postBtn.disabled = !ta.value.trim() && !lcpMediaIds.length && !sh.__lcpCtx.keepMedia.length;
-        })
-        .catch(function () {});
-    } else {
-      postBtn.textContent = 'Post';
-    }
+    // ── mode setup (content fills once Quill is ready — warm after the lrs
+    //    prefetch, so this is synchronous in practice) ──
+    var mode = function () {
+      if (!lgcQuill) return;
+      lgcQuill.setContents([], 'silent');
+      if (sh.__lcpCtx.editTopicId) {
+        ctx.hidden = false; ctx.textContent = '✎ Editing your post';
+        if (titleEl) { titleEl.hidden = false; titleEl.value = o.title || ''; }
+        if (o.bodyText) lgcQuill.setText(o.bodyText + '\n', 'silent');
+        postBtn.textContent = 'Save';
+        lgcLoadEditMedia(sh, '/bb-mirror-api/v0/topic-media?topic_id=' + sh.__lcpCtx.editTopicId, 'editTopicId');
+      } else if (sh.__lcpCtx.editReplyId) {
+        ctx.hidden = false; ctx.textContent = '✎ Editing your reply';
+        if (o.bodyText) lgcQuill.setText(o.bodyText + '\n', 'silent');
+        postBtn.textContent = 'Save';
+        lgcLoadEditMedia(sh, '/bb-mirror-api/v0/reply?reply_id=' + sh.__lcpCtx.editReplyId, 'editReplyId');
+      } else {
+        postBtn.textContent = 'Post';
+        // draft preservation across accidental dismiss (plan §1.2): restore this
+        // topic's unposted draft; posts + explicit ✕ clear it (onClose below)
+        var d = sh.__lcpCtx.tid && lgcDrafts[sh.__lcpCtx.tid];
+        if (d) { try { lgcQuill.clipboard.dangerouslyPasteHTML(d, 'silent'); } catch (e) {} }
+      }
+      lgcRecalcPost(sh);
+      if (o.focus !== false) { try { lgcQuill.focus(); } catch (e) {} }
+    };
     window.LgSheets.open('lcp');
-    // Ghost-modal invariant (Ian 2026-07-23) is MANAGER-OWNED: the stack marks the
-    // lrs .lg-sheet-behind automatically while the composer is on top.
-    // bring the latest replies into view in the modal behind, so the user reads
-    // the conversation right above the composer while writing
+    if (sh.__lgcDock) sh.__lgcDock();
+    // bring the latest replies into view in the thread behind
     var rs = document.getElementById('looth-rep-sheet');
     if (rs && rs.classList.contains('is-open')) {
       var bd = rs.querySelector('#lrs-body');
       if (bd) { try { bd.scrollTo({ top: bd.scrollHeight, behavior: 'smooth' }); } catch (e) { bd.scrollTop = bd.scrollHeight; } }
     }
-    if (o.focus !== false) { try { ta.focus({ preventScroll: true }); } catch (e) { try { ta.focus(); } catch (e2) {} } }
+    lgcInitQuill(sh, mode);
+  }
+  function lgcLoadEditMedia(sh, url, ctxKey) {
+    var id = sh.__lcpCtx[ctxKey];
+    fetch(url, { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.ok || !d.media || sh.__lcpCtx[ctxKey] !== id) return;
+        if (ctxKey === 'editTopicId' && d.media.length) sh.__lcpCtx.topicHadMedia = true;
+        d.media.forEach(function (m) {
+          sh.__lcpCtx.keepMedia.push(m.media_id);
+          lgcStripChip(sh, String(m.thumb || m.url), function () {
+            var ix = sh.__lcpCtx.keepMedia.indexOf(m.media_id);
+            if (ix > -1) sh.__lcpCtx.keepMedia.splice(ix, 1);
+            lgcRecalcPost(sh);
+          });
+        });
+        lgcRecalcPost(sh);
+      })
+      .catch(function () {});
   }
   function closeComposerSheet(reason) {
     // MANAGER-OWNED: behind-release, transform clear (card carries
@@ -4141,26 +4653,35 @@
     // first and a second back closes the thread beneath — the old re-push dance,
     // now structural.
     historyEntry: function () { return { state: { lgLcp: 1 }, url: undefined }; },
-    onClose: function () {
+    onClose: function (reason) {
       var sh = document.getElementById('looth-comp-sheet');
-      if (sh && sh.__lcpCtx) sh.__lcpCtx.replyTo = 0;   // stale-target belt-and-braces
+      if (sh && sh.__lcpCtx) {
+        var c = sh.__lcpCtx;
+        // draft preservation: an ACCIDENTAL dismiss (backdrop/swipe/back/Esc) keeps
+        // the unposted text for this topic; a post or the explicit ✕ clears it.
+        if (!c.editReplyId && !c.editTopicId && c.tid && lgcQuill) {
+          if (reason === 'post' || reason === 'programmatic') delete lgcDrafts[c.tid];
+          else if (lgcHasContent()) lgcDrafts[c.tid] = lgcQuill.getSemanticHTML();
+        }
+        c.replyTo = 0;   // stale-target belt-and-braces
+      }
+      if (sh) sh.querySelector('.lgc-card').style.bottom = '';
     }
   });
   function lcpSubmit(sh) {
-    var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post'), status = sh.querySelector('#lcp-status');
+    if (lgcSubmitting) return;
+    var post = sh.querySelector('#lgc-post'), status = sh.querySelector('#lgc-status');
     var ctx = sh.__lcpCtx || {};
-    var text = (ta.value || '').trim();
+    var html = lgcHtml();
     // TOPIC/OP edit → owned reply.php topic PUT (title+body), then topic-media.php
-    // for photo keep/add/remove (the SAME endpoints the wizard used). Reload after,
-    // since OP photos can't be patched in place on the mobile sheet.
     if (ctx.editTopicId) {
-      var titleElS = sh.querySelector('#lcp-title');
+      var titleElS = sh.querySelector('#lgc-title');
       var tTitle = (titleElS && titleElS.value.trim()) || '';
-      if (!text)   { status.textContent = "Post can't be empty."; return; }
+      if (!html)   { status.textContent = "Post can't be empty."; return; }
       if (!tTitle) { status.textContent = 'Title is required.'; if (titleElS) titleElS.focus(); return; }
-      post.disabled = true; status.textContent = 'Saving…';
+      lgcSubmitting = true; post.disabled = true; status.textContent = 'Saving…';
       lrsGetAuth(function (a) {
-        if (!a || !a.authenticated) { status.textContent = 'Sign in to edit.'; post.disabled = false; return; }
+        if (!a || !a.authenticated) { status.textContent = 'Sign in to edit.'; post.disabled = false; lgcSubmitting = false; return; }
         var teid  = ctx.editTopicId;
         var added = lcpMediaIds.slice();
         var keep  = (ctx.keepMedia || []).slice();
@@ -4168,10 +4689,11 @@
         fetch('/bb-mirror-api/v0/reply', {
           method: 'PUT', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
-          body: JSON.stringify({ topic_id: teid, title: tTitle, content: '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' })
+          body: JSON.stringify({ topic_id: teid, title: tTitle, content: html })
         })
           .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
           .then(function (res) {
+            lgcSubmitting = false;
             if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.error)) || 'Could not save.'; post.disabled = false; return; }
             var finish = function () { try { location.reload(); } catch (e) { closeComposerSheet(); } };
             if (syncPhotos) {
@@ -4183,21 +4705,20 @@
               }).then(finish, finish);
             } else { finish(); }
           })
-          .catch(function () { status.textContent = 'Network error.'; post.disabled = false; });
+          .catch(function () { status.textContent = 'Network error.'; post.disabled = false; lgcSubmitting = false; });
       });
       return;
     }
-    // EDIT mode → PUT the owned endpoint (author-or-mod): content + new photos
-    // (media_ids) + kept photos (keep_media_ids; removes the rest, no orphans).
+    // reply EDIT → PUT the owned endpoint: content + new photos + kept photos
     if (ctx.editReplyId) {
       var keepN = (ctx.keepMedia && ctx.keepMedia.length) || 0;
-      if (!text && !lcpMediaIds.length && !keepN) { status.textContent = "Reply can't be empty."; return; }
-      post.disabled = true; status.textContent = 'Saving…';
+      if (!html && !lcpMediaIds.length && !keepN) { status.textContent = "Reply can't be empty."; return; }
+      lgcSubmitting = true; post.disabled = true; status.textContent = 'Saving…';
       lrsGetAuth(function (a) {
-        if (!a || !a.authenticated) { status.textContent = 'Sign in to edit.'; post.disabled = false; return; }
+        if (!a || !a.authenticated) { status.textContent = 'Sign in to edit.'; post.disabled = false; lgcSubmitting = false; return; }
         var payload = {
           reply_id: ctx.editReplyId,
-          content: text ? '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' : '',
+          content: html,
           keep_media_ids: (ctx.keepMedia || []).slice()
         };
         if (lcpMediaIds.length) payload.media_ids = lcpMediaIds.slice();
@@ -4208,29 +4729,30 @@
         })
           .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
           .then(function (res) {
+            lgcSubmitting = false;
             if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.error)) || 'Could not save.'; post.disabled = false; return; }
             closeComposerSheet();
             var rs = document.getElementById('looth-rep-sheet');
             var rtid = rs && parseInt(rs.getAttribute('data-tid'), 10);
             if (rs && rs.classList.contains('is-open') && rtid) lrsLoadThread(rtid);
           })
-          .catch(function () { status.textContent = 'Network error.'; post.disabled = false; });
+          .catch(function () { status.textContent = 'Network error.'; post.disabled = false; lgcSubmitting = false; });
       });
       return;
     }
-    if (!text && !lcpMediaIds.length) return;
+    // CREATE reply
+    if (!html && !lcpMediaIds.length) return;
     var tid = ctx.tid; if (!tid) { status.textContent = 'Couldn’t find the post.'; return; }
-    post.disabled = true; status.textContent = 'Posting…';
+    lgcSubmitting = true; post.disabled = true; status.textContent = 'Posting…';
     lrsGetAuth(function (a) {
-      if (!a || !a.authenticated) { status.textContent = 'Sign in to reply.'; post.disabled = false; return; }
-      var payload = { topic_id: tid, content: text ? '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' : '' };
+      if (!a || !a.authenticated) { status.textContent = 'Sign in to reply.'; post.disabled = false; lgcSubmitting = false; return; }
+      var payload = { topic_id: tid, content: html };
       if (ctx.fid) payload.forum_id = ctx.fid;
       if (ctx.replyTo) payload.reply_to = ctx.replyTo;   // nest under the comment being replied to
       if (lcpMediaIds.length) payload.bbp_media = lcpMediaIds.slice();
       var wasNested = !!ctx.replyTo;
       // bb-mirror reply API, NOT BB REST direct: the mirror path mints @mention
-      // anchors + rings the bell (mentions lane 2026-07-23); same nonce/cookies,
-      // response carries reply_id like BB's id.
+      // anchors + rings the bell; same nonce/cookies, response carries reply_id.
       fetch('/bb-mirror-api/v0/reply', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
@@ -4238,6 +4760,7 @@
       })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
+          lgcSubmitting = false;
           if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not post.'; post.disabled = false; return; }
           var newId = (res.j && (res.j.reply_id || res.j.id)) || 0;
           closeComposerSheet('post');
@@ -4247,10 +4770,6 @@
             lrsLoadThread(tid);
             var b = rs.querySelector('#lrs-body');
             if (b && wasNested && newId) {
-              // The thread sorts newest TOP-LEVEL first, so a nested reply can land
-              // anywhere — poll for its stub (batches stream in via lrsLoadAll) and
-              // center it; fall back to the bottom if it never shows (e.g. held
-              // for moderation).
               var tries = 0;
               (function find() {
                 var el = rs.querySelector('#lrs-thread .reply-stub[data-reply-id="' + newId + '"]');
@@ -4263,7 +4782,7 @@
             }
           }
         })
-        .catch(function () { status.textContent = 'Network error.'; post.disabled = false; });
+        .catch(function () { status.textContent = 'Network error.'; post.disabled = false; lgcSubmitting = false; });
     });
   }
 
