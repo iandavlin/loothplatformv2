@@ -1509,6 +1509,51 @@ body.nav-open .nav-overlay { display: block; }
 body.fcr-anon .feed-page .fcr-add { display: none; }
 body.fcr-anon .feed-page .fcr-chip { pointer-events: none; }
 
+/* ── Who-reacted modal (reaction chip → who reacted, BOTH surfaces) ─────────
+   Base + desktop: a centered dialog. Mobile-hub.css re-chromes it as a bottom
+   sheet ≤640. z-index sits above #lg-dmodal (8800) AND the mobile #looth-rep-sheet
+   (2147483520) so it layers over whichever discussion surface launched it. Reaction
+   glyphs are cloned from the launching bar's palette, so .fcr-img/.fcr-emoji styles
+   already apply inside a group header. */
+.lg-wrx { position: fixed; inset: 0; z-index: 2147483600; display: flex; }
+.lg-wrx[hidden] { display: none; }
+.lg-wrx__back { position: absolute; inset: 0; background: rgba(10, 12, 10, .58); }
+.lg-wrx__panel {
+  position: relative; margin: auto; width: min(440px, calc(100vw - 40px));
+  max-height: min(78vh, 640px); display: flex; flex-direction: column; overflow: hidden;
+  background: var(--bg-card); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 24px 64px -16px rgba(0, 0, 0, .45);
+}
+.lg-wrx__head {
+  flex: none; display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+}
+.lg-wrx__title { flex: 1; min-width: 0; margin: 0; font: 700 17px/1.3 var(--font-head); color: var(--fg); }
+.lg-wrx__x {
+  flex: none; width: 34px; height: 34px; border: 0; border-radius: 50%; cursor: pointer;
+  background: var(--lg-sage-tint); color: var(--fg-muted); font: 400 20px/1 var(--font-body);
+}
+.lg-wrx__x:hover { background: var(--lg-sage); color: #fff; }
+.lg-wrx__body { overflow-y: auto; padding: 4px 0 10px; }
+.lg-wrx__grp { padding: 4px 0; }
+.lg-wrx__grp + .lg-wrx__grp { border-top: 1px solid var(--lg-line); }
+.lg-wrx__grp-h {
+  display: flex; align-items: center; gap: 8px; padding: 9px 18px 5px;
+  position: sticky; top: 0; background: var(--bg-card);
+}
+.lg-wrx__grp-g { display: inline-flex; align-items: center; }
+.lg-wrx__grp-g .fcr-img { width: 20px; height: 20px; }
+.lg-wrx__grp-g .fcr-emoji { font-size: 18px; }
+.lg-wrx__grp-lbl { font: 600 13px/1 var(--font-body); color: var(--fg-muted); }
+.lg-wrx__grp-n { margin-left: auto; font: 600 13px/1 var(--font-body); color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.lg-wrx__u { display: flex; align-items: center; gap: 10px; padding: 7px 18px; text-decoration: none; color: var(--fg); }
+a.lg-wrx__u:hover { background: var(--lg-sage-tint); }
+.lg-wrx__av { flex: none; width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--lg-sage-tint); }
+.lg-wrx__av--none { display: inline-block; }
+.lg-wrx__name { font: 600 14px/1.2 var(--font-body); }
+.lg-wrx__empty { padding: 22px 18px; text-align: center; color: var(--fg-muted); font: 400 14px/1.4 var(--font-body); }
+
 /* Max tier: lift the title + show the breadcrumb path prominently */
 .feed--proto .feed-card--max .feed-card__title { font-size: 22px; }
 /* Inline reply composer (shown only when a discussion is expanded) */
