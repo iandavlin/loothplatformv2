@@ -924,6 +924,20 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
           New message
         </button>
       </div>
+      <!-- Search chats AND message content (mobile-sheet parity). Short queries filter
+           the loaded thread list client-side; ≥2 chars also server-search message
+           bodies (GET /me/messages?q=) into a "Messages" section. List-view chrome:
+           hidden with the newbar whenever a thread / picker / manager is showing. -->
+      <div class="lg-msg__searchbar" id="lg-msg-searchbar">
+        <label class="lg-msg__search">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/>
+          </svg>
+          <input type="search" id="lg-msg-search-in" placeholder="Search chats &amp; messages"
+                 autocomplete="off" aria-label="Search chats and messages">
+        </label>
+      </div>
       <!-- Thread list view -->
       <div class="lg-social-modal__body" id="lg-msg-list"></div>
       <!-- Compose picker + member manager share this panel; filled by social-modals.js.

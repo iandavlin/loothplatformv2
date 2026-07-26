@@ -46,6 +46,12 @@ var pendingGroupUuids = null;  // selected uuids for a not-yet-created group (fi
    screen would otherwise paint "Could not load thread" over the new one. */
 var navSeq            = 0;
 
+/* message-content search state (mobile-sheet parity; same guards) */
+var dtThreads    = [];    // last-loaded thread list, so the filter re-renders without a refetch
+var dtSearchHits = null;  // {q, hits:[…], more} | 'pending' | null — null under 2 chars
+var dtSearchT    = null;  // debounce timer for the ?q= fetch
+var dtAnchor     = null;  // {uuid, msgId} — a tapped hit's landing target, consumed once
+
 /* image attachment limits — mirror the upload endpoint (jpeg/png/webp ≤5MB) */
 var ATTACH_MAX   = 5 * 1024 * 1024;
 var ATTACH_TYPES = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1 };
@@ -354,12 +360,43 @@ function loadThreadList() {
     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function (d) {
       if (seq !== navSeq) return;     /* a thread is open now — do not paint the list over it */
-      var threads = (d && d.threads) || [];
-      if (!threads.length) {
-        list.innerHTML = '<p class="lg-sm__empty">No messages yet.</p>';
-        return;
-      }
-      list.innerHTML = threads.map(function (t) {
+      dtThreads = (d && d.threads) || [];
+      var input = document.getElementById('lg-msg-search-in');
+      renderThreadRows(input ? input.value : '');
+    })
+    .catch(function () {
+      if (seq !== navSeq) return;
+      list.innerHTML = '<p class="lg-sm__error">Could not load messages.</p>';
+    });
+}
+
+/* First occurrence of q in the snippet gets a <mark>. Escape AROUND the split, never
+   after it — marking the escaped string would let a q of "&" land inside an entity. */
+function markSnippet(snippet, q) {
+  var s = String(snippet || '');
+  var i = s.toLowerCase().indexOf(String(q || '').toLowerCase());
+  if (i < 0 || !q) return esc(s);
+  return esc(s.slice(0, i)) + '<mark class="lg-msg__mark">' + esc(s.slice(i, i + q.length)) + '</mark>' + esc(s.slice(i + q.length));
+}
+
+/* Paint the thread-list body from dtThreads + dtSearchHits: the filtered chats (the
+   original behaviour, kept), then — for a ≥2-char query — a "Messages" section of
+   CONTENT hits: who said it, in which chat, when, matched words visible. */
+function renderThreadRows(q) {
+  var list = document.getElementById('lg-msg-list');
+  if (!list) return;
+  var ql = (q || '').trim().toLowerCase();
+  var secActive = ql.length >= 2 && dtSearchHits !== null;
+  var threads = dtThreads.filter(function (t) {
+    if (!ql) return true;
+    /* filter on EVERY peer — in a group the person you remember may not be first */
+    var names = (t.peers || []).map(function (p) { return p.name || ''; }).join(' ');
+    return (names + ' ' + (t.last_snippet || '') + ' ' + (t.subject || '')).toLowerCase().indexOf(ql) > -1;
+  });
+  var html = '';
+  if (threads.length) {
+    html += (secActive ? '<div class="lg-msg__sechead">Chats</div>' : '') +
+      threads.map(function (t) {
         var ps     = (t.peers) || [];   /* peersByThread → [{uuid,name,slug,avatar_url}, …] */
         var unread = t.unread_count || 0;
         var prev   = t.last_snippet || '';
@@ -379,21 +416,94 @@ function loadThreadList() {
           + (unread ? '<span class="lg-sm__badge">' + capCount(unread) + '</span>' : '')
           + '</div>';
       }).join('');
-      /* carry the WHOLE peers array into the thread, not one member of it */
-      var peersByThread = {};
-      threads.forEach(function (t) { peersByThread[t.uuid] = t.peers || []; });
-      list.querySelectorAll('[data-thread-uuid]').forEach(function (el) {
-        var open = function () { openThread(el.dataset.threadUuid, peersByThread[el.dataset.threadUuid]); };
-        el.addEventListener('click', open);
-        el.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
-        });
-      });
-    })
-    .catch(function () {
-      if (seq !== navSeq) return;
-      list.innerHTML = '<p class="lg-sm__error">Could not load messages.</p>';
+  } else if (!secActive) {
+    html = '<p class="lg-sm__empty">' + (ql ? 'No chats match.' : 'No messages yet.') + '</p>';
+  }
+  if (secActive) {
+    html += '<div class="lg-msg__sechead">Messages</div>';
+    if (dtSearchHits === 'pending') {
+      html += '<p class="lg-sm__status">Searching…</p>';
+    } else if (dtSearchHits.error) {
+      html += '<p class="lg-sm__error">Search isn’t available right now.</p>';
+    } else if (!dtSearchHits.hits.length) {
+      html += '<p class="lg-sm__empty">No messages match.</p>';
+    } else {
+      html += dtSearchHits.hits.map(function (h) {
+        return '<div class="lg-msg__thread lg-msg__thread--hit" data-hit-thread="' + esc(h.thread_uuid) + '"'
+          + ' data-hit-msg="' + esc(h.message_id) + '" tabindex="0" role="button">'
+          + '<div class="lg-msg__av">' + avatarStack([{ name: h.sender_name }], 36) + '</div>'
+          + '<div class="lg-msg__meta">'
+            + '<div class="lg-msg__nameline">'
+              + '<span class="lg-msg__name">' + esc(h.sender_name) + '</span>'
+              + (h.is_group ? '<span class="lg-msg__group-tag">Group</span>' : '')
+            + '</div>'
+            + '<div class="lg-msg__hitwhere">in ' + esc(h.label) + '</div>'
+            + '<div class="lg-msg__preview">' + markSnippet(h.snippet, dtSearchHits.q) + '</div>'
+          + '</div>'
+          + '<span class="lg-msg__hittime">' + relTime(h.created_at) + '</span>'
+          + '</div>';
+      }).join('');
+      if (dtSearchHits.more) {
+        html += '<p class="lg-sm__empty">Showing the newest ' + dtSearchHits.hits.length + ' matches — keep typing to narrow.</p>';
+      }
+    }
+  }
+  list.innerHTML = html;
+  /* carry the WHOLE peers array into the thread, not one member of it */
+  var peersByThread = {};
+  dtThreads.forEach(function (t) { peersByThread[t.uuid] = t.peers || []; });
+  list.querySelectorAll('[data-thread-uuid]').forEach(function (el) {
+    var open = function () {
+      dtAnchor = null;              /* a plain open never inherits an abandoned hit's anchor */
+      openThread(el.dataset.threadUuid, peersByThread[el.dataset.threadUuid]);
+    };
+    el.addEventListener('click', open);
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
     });
+  });
+  /* a hit opens ITS thread scrolled to THAT message (dtAnchor), highlighted */
+  list.querySelectorAll('[data-hit-thread]').forEach(function (el) {
+    var open = function () {
+      var uuid = el.getAttribute('data-hit-thread');
+      dtAnchor = { uuid: uuid, msgId: el.getAttribute('data-hit-msg') };
+      /* peers may be absent when the hit's thread sits beyond the list page —
+         openThread paints the header from the server fetch either way */
+      openThread(uuid, peersByThread[uuid] || []);
+    };
+    el.addEventListener('click', open);
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+  });
+}
+
+/* Short q = the client-side chat filter alone, no server call. ≥2 chars = the filter
+   PLUS a debounced server search of message CONTENT (GET /me/messages?q=). A response
+   paints only if the box still holds the query it answered (mobile-sheet parity). */
+function onMsgSearchInput(v) {
+  var q = (v || '').trim();
+  if (dtSearchT) { clearTimeout(dtSearchT); dtSearchT = null; }
+  if (q.length < 2) { dtSearchHits = null; renderThreadRows(v); return; }
+  if (!(dtSearchHits && dtSearchHits !== 'pending' && dtSearchHits.q === q)) dtSearchHits = 'pending';
+  renderThreadRows(v);
+  dtSearchT = setTimeout(function () {
+    dtSearchT = null;
+    fetch(API + '/me/messages/?q=' + encodeURIComponent(q) + '&limit=20', { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        var input = document.getElementById('lg-msg-search-in');
+        if (!input || input.value.trim() !== q) return;   /* stale — a newer query owns the box */
+        dtSearchHits = d ? { q: q, hits: d.hits || [], more: !!d.more } : { q: q, hits: [], more: false, error: true };
+        renderThreadRows(q);
+      })
+      .catch(function () {
+        var input = document.getElementById('lg-msg-search-in');
+        if (!input || input.value.trim() !== q) return;
+        dtSearchHits = { q: q, hits: [], more: false, error: true };
+        renderThreadRows(q);
+      });
+  }, 300);
 }
 
 /* ── messages: who you are talking to ──
@@ -494,6 +604,8 @@ function showDetailPane() {
 function showListChrome(on) {
   var bar = document.getElementById('lg-msg-newbar');
   if (bar) bar.hidden = !on;
+  var search = document.getElementById('lg-msg-searchbar');
+  if (search) search.hidden = !on;
 }
 /* The shared panel hosts the compose picker AND the member manager. */
 function showMsgPanel(html) {
@@ -561,6 +673,7 @@ function openThread(threadUuid, peersHint) {
       };
       renderPeerHeader(peers);   /* authoritative identity for this thread */
       renderThreadMessages(msgs, (d && d.messages) || [], peers, members);
+      applyDtAnchor(msgs, threadUuid);
 
       if (compose) compose.hidden = false;
       setTimeout(refreshCounts, 400);  /* GET thread marks read server-side */
@@ -571,6 +684,21 @@ function openThread(threadUuid, peersHint) {
       if (seq !== navSeq || currentThreadUuid !== threadUuid) return;
       msgs.innerHTML = '<p class="lg-sm__error">Could not load thread.</p>';
     });
+}
+
+/* Land a search hit: scroll its bubble to center + flash — the forums ?reply= anchor
+   treatment, aimed at data-lg-msg-id instead. Consumed once; a hit older than the
+   render window falls back to the normal newest-message open. */
+function applyDtAnchor(msgs, threadUuid) {
+  if (!dtAnchor || dtAnchor.uuid !== threadUuid) return;
+  var id = dtAnchor.msgId;
+  dtAnchor = null;
+  var el = msgs.querySelector('[data-lg-msg-id="' + id + '"]');
+  if (!el) return;
+  /* renderThreadMessages just pinned scrollTop to the bottom — repoint it at the hit */
+  el.scrollIntoView({ block: 'center' });
+  el.classList.add('lg-msg__msg--hl');
+  setTimeout(function () { el.classList.remove('lg-msg__msg--hl'); }, 2400);
 }
 
 /* Open (or start) a DM with a specific USER uuid — used by the lg:open-dm event.
@@ -1758,6 +1886,7 @@ document.addEventListener('click', function (e) {
 });
 document.addEventListener('input', function (e) {
   if (e.target && e.target.id === 'lg-pick-search') renderPickList(e.target.value);
+  if (e.target && e.target.id === 'lg-msg-search-in') onMsgSearchInput(e.target.value);
 });
 document.addEventListener('keydown', function (e) {
   /* Enter on a highlighted picker row adds it */

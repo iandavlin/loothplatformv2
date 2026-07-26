@@ -43,6 +43,14 @@
   var curMembersById = {};                       // {uuid:{name,slug,avatar_url,can_message}} of the open thread — powers BOTH message-card doors
   var lpAt = 0;                                 // timestamp of the last long-press (suppresses the trailing tap)
   var threadsCache = [];
+  // message-content search (server-side, ≥2 chars): the last result set + the debounce
+  // timer. searchHits.q is compared to the live input before painting, so a slow response
+  // can never draw stale hits over a newer query.
+  var searchHits = null;                        // {q, hits:[…], more} | 'pending' | null
+  var searchT = null;                           // debounce timer for the ?q= fetch
+  // jump-to-message: set when a search hit is tapped; consumed by loadThread's first
+  // render — scroll to that bubble + flash, instead of the bottom-pin a fresh open gets.
+  var pendingAnchor = null;                     // {uuid: thread uuid, msgId} | null
   var pendingFile = null;                       // staged image attachment for the next send
   var ATTACH_MAX = 5 * 1024 * 1024;
   var ATTACH_TYPES = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1 };
@@ -150,6 +158,18 @@
       '#looth-msgr .mg-time{font:12px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b)}',
       '#looth-msgr .mg-dot{width:10px;height:10px;border-radius:50%;background:var(--lg-sage,#87986a)}',
       '#looth-msgr .mg-empty{padding:40px 18px;text-align:center;color:var(--lg-mute,#6b6f6b);font:14px/1.5 var(--lg-font-sans,system-ui,sans-serif)}',
+      // message-content search: section labels, hit rows (snippet wraps to show the matched
+      // words — a nowrap ellipsis routinely cut them off), match highlight, "in {chat}" tag
+      '#looth-msgr .mg-sechead{padding:12px 12px 4px;font:700 11px/1 var(--lg-font-sans,system-ui,sans-serif);letter-spacing:.06em;' +
+        'text-transform:uppercase;color:var(--lg-mute,#6b6f6b)}',
+      '#looth-msgr .mg-row--hit .mg-snip{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}',
+      '#looth-msgr .mg-hitwhere{font:400 12.5px/1.25 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b);' +
+        'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      '#looth-msgr .mg-mark{background:var(--lg-sage-3,#d4e0b8);color:inherit;border-radius:3px;padding:0 1px}',
+      // jump-to-message flash — the same show-me-the-anchor treatment the forums reply
+      // deep-link uses: a brief background pulse on the landed bubble, then normal.
+      '@keyframes mg-hl-pulse{0%,55%{box-shadow:0 0 0 3px var(--lg-sage,#87986a)}100%{box-shadow:0 0 0 3px transparent}}',
+      '#looth-msgr .mg-hl{animation:mg-hl-pulse 2.2s ease-out 1}',
       // chat view (slides over the home)
       '#looth-msgr .mg-chat{position:absolute;inset:0;z-index:1;display:none;flex-direction:column;background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0}',
       '#looth-msgr .mg-chat.is-on{display:flex}',
@@ -225,6 +245,8 @@
       D + ' #looth-msgr .mg-search{background:#262b30}',
       D + ' #looth-msgr .mg-search input{color:#e5e7e1}',
       D + ' #looth-msgr .mg-snip,' + D + ' #looth-msgr .mg-time,' + D + ' #looth-msgr .mg-empty,' + D + ' #looth-msgr .mg-day{color:#9aa097}',
+      D + ' #looth-msgr .mg-sechead,' + D + ' #looth-msgr .mg-hitwhere{color:#9aa097}',
+      D + ' #looth-msgr .mg-mark{background:var(--lg-sage-d,#6b7c52);color:#f2f4ee}',
       D + ' #looth-msgr .mg-row.is-unread .mg-name,' + D + ' #looth-msgr .mg-row.is-unread .mg-snip{color:#f2f4ee}',
       D + ' #looth-msgr .mg-row:active{background:#262b30}',
       D + ' #looth-msgr .mg-chd,' + D + ' #looth-msgr .mg-comp{border-color:#2c312d}',
@@ -373,7 +395,7 @@
           '<button class="mg-newbtn" type="button" data-mg-new aria-label="New message" title="New message">＋</button>' +
           '<button class="mg-x" type="button" data-mg-close aria-label="Close">✕</button></div>' +
         '<label class="mg-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>' +
-          '<input type="search" placeholder="Search chats" autocomplete="off" aria-label="Search chats"></label>' +
+          '<input type="search" placeholder="Search chats &amp; messages" autocomplete="off" aria-label="Search chats and messages"></label>' +
         '<div class="mg-list" id="mg-list"><div class="mg-empty">Loading…</div></div>' +
         '<div class="mg-chat" id="mg-chat">' +
           '<div class="mg-chd"><button class="mg-backbtn" type="button" data-mg-home aria-label="Back to chats">‹</button>' +
@@ -472,8 +494,11 @@
     // follow the reader: any scroll (theirs or ours) re-decides whether we are pinned
     var msgBox = sheet.querySelector('#mg-msgs');
     msgBox.addEventListener('scroll', function () { stickBottom = atBottom(msgBox); }, { passive: true });
-    // search filters the loaded threads
-    sheet.querySelector('.mg-search input').addEventListener('input', function () { renderThreads(this.value); });
+    // search: short q filters the loaded threads (the original behaviour, kept — people
+    // use it); ≥2 chars ALSO fires a debounced server search of message content, rendered
+    // as a second "Messages" section under the filtered chats (the feature grew, nothing
+    // was replaced).
+    sheet.querySelector('.mg-search input').addEventListener('input', function () { onSearchInput(this.value); });
     // composer: grow + send
     var ta = sheet.querySelector('#mg-in'), send = sheet.querySelector('#mg-send');
     ta.addEventListener('input', function () {
@@ -668,41 +693,122 @@
     var send = sheet.querySelector('#mg-send'); if (send) send.disabled = false;
   }
 
+  /* First occurrence of q in the snippet gets a <mark>. Escape AROUND the split, never
+     after it — marking the escaped string would let a q of "&" land inside an entity. */
+  function markSnippet(snippet, q) {
+    var s = String(snippet || '');
+    var i = s.toLowerCase().indexOf(String(q || '').toLowerCase());
+    if (i < 0 || !q) return esc(s);
+    return esc(s.slice(0, i)) + '<mark class="mg-mark">' + esc(s.slice(i, i + q.length)) + '</mark>' + esc(s.slice(i + q.length));
+  }
+
   function renderThreads(q) {
     var list = sheet.querySelector('#mg-list');
     var ql = (q || '').trim().toLowerCase();
+    /* the Messages section shows whenever a server search is in flight or landed for
+       THIS query — searchHits is nulled the moment the box drops under 2 chars */
+    var secActive = ql.length >= 2 && searchHits !== null;
     var items = threadsCache.filter(function (t) {
       if (!ql) return true;
       /* search EVERY peer — in a group thread the person you remember may not be first */
       var names = (t.peers || []).map(function (p) { return p.name || ''; }).join(' ');
       return (names + ' ' + (t.last_snippet || '')).toLowerCase().indexOf(ql) > -1;
     });
-    if (!items.length) {
-      list.innerHTML = '<div class="mg-empty">' + (ql ? 'No chats match.' : 'No messages yet. Find a member and tap Message to start a chat.') + '</div>';
-      return;
+    var html = '';
+    if (items.length) {
+      html += (secActive ? '<div class="mg-sechead">Chats</div>' : '') +
+        items.map(function (t) {
+          var ps = t.peers || [];
+          var unread = (parseInt(t.unread_count, 10) || 0) > 0;
+          var group = ps.length > 1;
+          /* A custom group name (subject) wins over the member-name label; empty/absent → label. */
+          var title = (t.subject && String(t.subject).length) ? String(t.subject) : peerLabel(ps, 2);
+          return '<button type="button" class="mg-row' + (unread ? ' is-unread' : '') + '" data-mg-thread="' + esc(t.uuid) + '">' +
+            '<span class="mg-avi' + (group ? ' mg-avi--stack' : '') + '">' + aviStack(ps) + '</span>' +
+            '<span class="mg-col">' +
+              '<span class="mg-nameline"><span class="mg-name">' + esc(title) + '</span>' +
+              (group ? '<span class="mg-grouptag">Group · ' + peerTotal(ps) + '</span>' : '') + '</span>' +
+            '<span class="mg-snip">' + esc(t.last_snippet || '') + '</span></span>' +
+            '<span class="mg-meta"><span class="mg-time">' + rel(t.last_message_at) + '</span>' +
+            (unread ? '<span class="mg-dot"></span>' : '') + '</span></button>';
+        }).join('');
+    } else if (!secActive) {
+      html = '<div class="mg-empty">' + (ql ? 'No chats match.' : 'No messages yet. Find a member and tap Message to start a chat.') + '</div>';
     }
-    list.innerHTML = items.map(function (t) {
-      var ps = t.peers || [];
-      var unread = (parseInt(t.unread_count, 10) || 0) > 0;
-      var group = ps.length > 1;
-      /* A custom group name (subject) wins over the member-name label; empty/absent → label. */
-      var title = (t.subject && String(t.subject).length) ? String(t.subject) : peerLabel(ps, 2);
-      return '<button type="button" class="mg-row' + (unread ? ' is-unread' : '') + '" data-mg-thread="' + esc(t.uuid) + '">' +
-        '<span class="mg-avi' + (group ? ' mg-avi--stack' : '') + '">' + aviStack(ps) + '</span>' +
-        '<span class="mg-col">' +
-          '<span class="mg-nameline"><span class="mg-name">' + esc(title) + '</span>' +
-          (group ? '<span class="mg-grouptag">Group · ' + peerTotal(ps) + '</span>' : '') + '</span>' +
-        '<span class="mg-snip">' + esc(t.last_snippet || '') + '</span></span>' +
-        '<span class="mg-meta"><span class="mg-time">' + rel(t.last_message_at) + '</span>' +
-        (unread ? '<span class="mg-dot"></span>' : '') + '</span></button>';
-    }).join('');
+    if (secActive) {
+      /* results are a LIST OF MESSAGES — who said it, in which chat, when, with the
+         matched words visible. That is the difference from the chat filter above. */
+      html += '<div class="mg-sechead">Messages</div>';
+      if (searchHits === 'pending') {
+        html += '<div class="mg-empty">Searching…</div>';
+      } else if (searchHits.error) {
+        html += '<div class="mg-empty">Search isn’t available right now.</div>';
+      } else if (!searchHits.hits.length) {
+        html += '<div class="mg-empty">No messages match.</div>';
+      } else {
+        html += searchHits.hits.map(function (h) {
+          return '<button type="button" class="mg-row mg-row--hit" data-mg-hit="' + esc(h.thread_uuid) + '"' +
+            ' data-mg-hitmsg="' + esc(h.message_id) + '">' +
+            '<span class="mg-avi">' + avi({ name: h.sender_name }) + '</span>' +
+            '<span class="mg-col">' +
+              '<span class="mg-nameline"><span class="mg-name">' + esc(h.sender_name) + '</span>' +
+              (h.is_group ? '<span class="mg-grouptag">Group</span>' : '') + '</span>' +
+              '<span class="mg-hitwhere">in ' + esc(h.label) + '</span>' +
+              '<span class="mg-snip">' + markSnippet(h.snippet, searchHits.q) + '</span></span>' +
+            '<span class="mg-meta"><span class="mg-time">' + rel(h.created_at) + '</span></span></button>';
+        }).join('');
+        if (searchHits.more) {
+          html += '<div class="mg-empty">Showing the newest ' + searchHits.hits.length + ' matches — keep typing to narrow.</div>';
+        }
+      }
+    }
+    list.innerHTML = html;
     [].forEach.call(list.querySelectorAll('[data-mg-thread]'), function (b) {
       b.addEventListener('click', function () {
         var t = threadsCache.filter(function (x) { return x.uuid === b.getAttribute('data-mg-thread'); })[0];
         chatIsRoot = false;                       // reached from the list — "back" returns to it
+        pendingAnchor = null;                     // a plain open never inherits an abandoned hit's anchor
         openThread(b.getAttribute('data-mg-thread'), (t && t.peers) || []);   // ALL peers, not peers[0]
       });
     });
+    /* a hit opens ITS thread scrolled to THAT message (pendingAnchor), highlighted */
+    [].forEach.call(list.querySelectorAll('[data-mg-hit]'), function (b) {
+      b.addEventListener('click', function () {
+        var uuid = b.getAttribute('data-mg-hit');
+        var t = threadsCache.filter(function (x) { return x.uuid === uuid; })[0];
+        pendingAnchor = { uuid: uuid, msgId: b.getAttribute('data-mg-hitmsg') };
+        chatIsRoot = false;
+        /* peers may be absent when the hit's thread sits beyond the list page —
+           openThread paints the header from the server fetch either way */
+        openThread(uuid, (t && t.peers) || []);
+      });
+    });
+  }
+
+  /* Short q = exactly the old client-side filter, no server call. ≥2 chars = the filter
+     PLUS a debounced server search of message CONTENT (GET /me/messages?q=). A response
+     is painted only if the box still holds the query it answered. */
+  function onSearchInput(v) {
+    var q = (v || '').trim();
+    if (searchT) { clearTimeout(searchT); searchT = null; }
+    if (q.length < 2) { searchHits = null; renderThreads(v); return; }
+    if (!(searchHits && searchHits !== 'pending' && searchHits.q === q)) searchHits = 'pending';
+    renderThreads(v);
+    searchT = setTimeout(function () {
+      searchT = null;
+      fetch(API + '/me/messages/?q=' + encodeURIComponent(q) + '&limit=20', { credentials: 'include' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (sheet.querySelector('.mg-search input').value.trim() !== q) return;   // stale — a newer query owns the box
+          searchHits = d ? { q: q, hits: d.hits || [], more: !!d.more } : { q: q, hits: [], more: false, error: true };
+          renderThreads(q);
+        })
+        .catch(function () {
+          if (sheet.querySelector('.mg-search input').value.trim() !== q) return;
+          searchHits = { q: q, hits: [], more: false, error: true };
+          renderThreads(q);
+        });
+    }, 300);
   }
 
   function loadThreads() {
@@ -724,6 +830,7 @@
     curMeta = null; pendingGroup = null;
     lastMsgHtml = ''; stickBottom = true;
     chatIsRoot = false;
+    pendingAnchor = null;
     closeP2(); closeActs(); closeMemberCardMobile(); closeSideChatMobile();
     sheet.querySelector('#mg-chat').classList.remove('is-on');
     loadThreads();
@@ -831,8 +938,24 @@
           setChatHeader(curPeers);
         }
         renderMessages(d.messages || [], d.peers || [], !quiet, d.members || []);
+        if (!quiet) applyPendingAnchor(uuid);
       })
       .catch(function () {});
+  }
+
+  /* Land a search hit: scroll its bubble to center + flash — the forums ?reply= anchor
+     treatment, aimed at data-mg-msg-id instead. Consumed once; a hit older than the
+     render window falls back to the normal newest-message open. */
+  function applyPendingAnchor(uuid) {
+    if (!pendingAnchor || pendingAnchor.uuid !== uuid) return;
+    var id = pendingAnchor.msgId;
+    pendingAnchor = null;
+    var el = sheet.querySelector('#mg-msgs [data-mg-msg-id="' + id + '"]');
+    if (!el) return;
+    stickBottom = false;              // parked in history — the 8s poll must not yank to the bottom
+    el.scrollIntoView({ block: 'center' });
+    el.classList.add('mg-hl');
+    setTimeout(function () { el.classList.remove('mg-hl'); }, 2400);
   }
 
   /* peers = the WHOLE peers[] carried from the row we came from (hint, so the header
