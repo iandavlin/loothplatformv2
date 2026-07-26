@@ -196,12 +196,19 @@
 <script>
   // Frame control: ?theme=dark → dark; ≤480px viewport → mention (two-item) menu open,
   // wider → followed-topic (one-item) menu open. Deterministic for the shot harness.
+  // Re-applied on resize: headless chrome clamps windows to 500px min then relayouts,
+  // so a load-time-only check picks the desktop menu on the 390px mobile frames.
   (function () {
     if (/[?&]theme=dark/.test(location.search)) {
       document.documentElement.setAttribute('data-lguser-theme', 'dark');
     }
-    var mobile = window.matchMedia('(max-width: 480px)').matches;
-    document.getElementById(mobile ? 'menu-mention' : 'menu-followed').hidden = false;
+    function apply() {
+      var mobile = window.matchMedia('(max-width: 480px)').matches;
+      document.getElementById('menu-mention').hidden = !mobile;
+      document.getElementById('menu-followed').hidden = mobile;
+    }
+    apply();
+    window.addEventListener('resize', apply);
   })();
 </script>
 </body>
