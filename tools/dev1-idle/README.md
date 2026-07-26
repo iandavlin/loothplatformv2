@@ -3,12 +3,44 @@
 `platform/dev1/idle-shutdown-daemon.sh` decides whether dev1 may power itself
 off. Until 2026-07-26 it decided that from **side effects only** — TTY idle
 time, file mtimes, a browser heartbeat. A lane grinding through one long tool
-call produces none of those, so "busy" and "idle" were indistinguishable. At
-02:59 that morning the box powered off mid-work and took every lane with it;
-the only thing that had been keeping it up was someone remembering to run
-`idle-hold`.
+call produces none of those, so "busy" and "idle" were indistinguishable and
+the box survived only when someone remembered to run `idle-hold`.
 
 The daemon now also asks the process table directly (`check_worker_activity`).
+
+## What this did NOT fix
+
+This work was commissioned on the belief that the daemon powered the box off
+mid-work at 02:59 on 2026-07-26. **The logs do not support that**, and the
+record should say so:
+
+- At 02:44 through 02:50:13 the daemon logged `FILES: recent Claude
+  conversation activity (ubuntu)` → `RESULT: server active`. It was seeing the
+  workers correctly.
+- There is no `ALL IDLE`, no countdown and no `stop-instances` anywhere near
+  that time, and a stop is impossible without a logged 5-minute countdown first.
+- That boot's last journal line is 02:51:01, mid-sentence, with no shutdown
+  sequence — an abrupt death, not a graceful stop.
+- Seconds earlier, mariadb logged an InnoDB *memory pressure* event, while
+  `thumbnails.service` was in a permanent crash-restart loop (missing
+  `WorkingDirectory`, ~11 restarts/min, forever). Same signature as the tmux
+  server death at 18:05.
+
+The daemon's only genuine stop that day was 01:27:48, after a full countdown
+during which every pass read `FILES: no recent activity`.
+
+The gap this closes is still real — at 01:27 the daemon stopped the box on
+signals that cannot see a working `claude`, so a lane mid-long-tool-call would
+have been killed and the log would look identical. But if the box dies again
+with the daemon logging `server active`, **look at memory, not here**.
+
+## Residual gap
+
+A lane that waits *quietly* — polling an external job with `sleep`, burning no
+CPU and writing no `.jsonl` — still reads idle once the grace window expires.
+Nothing in the process table distinguishes it from an abandoned session.
+`idle-hold` remains the right tool for a long unattended wait, and remains
+unchanged.
 
 ## What counts as activity
 
@@ -28,15 +60,19 @@ genuinely stops, the stamp goes stale and the box is free to shut down.
 Measured on dev1 while writing this:
 
 ```
-parked claude      54 jiffies/min      <- doing nothing, still not free
-working claude    348 jiffies/min
-working claude   1160 jiffies/min
-leaked chrome       0 jiffies/min      <- alive 17 min, zero CPU, forever
+parked claude    12-84 jiffies/min      <- doing nothing, still not free
+working claude 348-1296 jiffies/min
+leaked chrome        0 jiffies/min      <- alive 17 min, zero CPU, forever
 ```
 
-`WORK_JIFFIES` defaults to 100/min, between parked and working. It is compared
-**per process tree, never summed**, because five parked lanes at 54 each would
-otherwise add up to "busy" permanently and the box would never shut down.
+`WORK_JIFFIES` defaults to **150**/min, roughly centred between the two
+populations. It is compared **per process tree, never summed**, because five
+parked lanes at ~54 each would otherwise add up to "busy" permanently and the
+box would never shut down.
+
+The boundary is empirical, not sharp: a lane doing light background work can
+land above 150 and read as working. That error keeps the box **up**, which is
+the cheap direction — the expensive mistake is shutting down on someone.
 
 ## Traps (each is a bug that was live at some point)
 
