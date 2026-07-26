@@ -233,3 +233,31 @@ Standing rule (CLAUDE.md quality gates): every loader carries `?v=filemtime`. Re
   overlay (f3c8a43b) for Ian's phone test — the installer will SKIP it by md5-gate;
   its conversion happens after that test resolves (or after the branch merges, when
   repo bytes == overlay bytes).
+
+### Phase 3 completion (merge night, 21:09–21:30)
+
+- Keeper merged @1144d81 (dev2 only; live gated behind the 5-rung ladder in keeper's
+  21:09 post). Conversions executed: 32 webroot links + icons/push/sponsors-deck dirs +
+  img.php; 7 FPM pools + 99-lg-tuning.ini; 5 mu-plugins; vhost flipped to tracked file.
+  hub-polish.js SKIPPED (Ian's composer overlay f3c8a43b — protected by the gate as
+  designed); lib/ held pending the quill-cruft decision.
+- **Real-run installer finds, fixed @d83fac0**: (1) pipefail killed the dir-skip report
+  pipeline mid-run; (2) the md5 gate needed the historic-match extension — "box is
+  BEHIND repo" (safe: converting deploys main; on live that is EVERY file) vs "bytes
+  main never had" (overlay/reverse-drift: skip). Re-verified on the rig: behind-repo
+  converts, never-committed skips, dir-skip no longer aborts.
+- **Restart proof**: full nginx AND php8.3-fpm restarts survived; smokes green; gate
+  still armed; img.php resizes (200 webp; the 302 scare was a wrong test param — it is
+  `?s=`, not `?src=`).
+- **RUNG 1 — ACCEPTANCE PASSED**: probe commit → main (cc06477) → `git pull --ff-only`
+  in the serve checkout was the ONLY command. mobile-hub.css wire == repo == HEAD
+  (9523064f ×3, probe visible in served bytes); LG_V bumped 1785025695→1785100816 by
+  itself; lg-logout.php through symlink == HEAD blob. No cp, no conf edit, no reload.
+- **RUNG 3 — ROLLBACK REHEARSED FOR REAL**: banked vhost rollback executed (hand file
+  restored, full restart) → old posture proven serving (static pwa.js?v=5 inject,
+  overlay-nocache back, site 200s — and the v() fallback design carried the NEW pwa.js
+  safely under the OLD vhost, proving the degradation path); re-flip + full restart →
+  new posture re-proven (LG_V, bare inject, immutable). Overlay f3c8a43b intact
+  throughout.
+- **Open items**: rung 2 soak overnight (box left quiet); hub-polish.js conversion after
+  Ian's test resolves; lib/ after the quill call; rungs 4–5 are live and keeper/Ian-run.
