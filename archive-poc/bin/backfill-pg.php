@@ -467,7 +467,8 @@ while (true) {
             $kind,
             null,                                 // subkind
             $cpt,
-            $p['post_title'] ?: '(untitled)',
+            // Entity-decode to match indexer.php (GH #41): store text, escape at render.
+            html_entity_decode((string) $p['post_title'], ENT_QUOTES | ENT_HTML5, 'UTF-8') ?: '(untitled)',
             $p['post_name'] ?: ('p-' . $pid),
             $url,
             $excerpt,
