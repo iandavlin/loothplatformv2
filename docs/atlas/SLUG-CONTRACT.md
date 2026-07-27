@@ -202,6 +202,51 @@ the evidence: because the canonical form of some names is already held, it propo
 clean unique handle can only be made worse. **Only defective slugs are candidates** —
 "my derivation disagrees with the stored slug" is not a defect.
 
+### The first real LIVE measurement — 2026-07-27
+
+Until now every number in this contract came from dev2, which **cannot** rehearse this lane
+(a cleanup already ran there 2026-07-17, so its patreon population is ~5-11 against live's
+~1,634). `ssh live-ro` reached production for the first time on 2026-07-27 — it ProxyJumps
+through dev1, so **dev1 must be powered on** (`dev1-power on`) or the export just times out.
+
+Identity proved before trusting a single row: `looth_import` `siteurl` = `https://loothgroup.com`,
+while the `looth_dev` decoy on the same box answers `https://dev.loothgroup.com`.
+
+| | live (measured) | dev2 live-shape rehearsal |
+|---|---|---|
+| members considered | 1,836 | 1,836 |
+| would change (`2-PATREON-JUNK`) | **1,526** | 1,518 |
+| need a ruling | **107** | 109 |
+| collisions needing a ruling | 99 | 101 |
+| no honest slug (would need latinizing) | 8 | 8 |
+| bare first name (fragile) | 136 | 134 |
+| numeric suffixes still needed (target 0) | **12** | 10 |
+
+The rehearsal was accurate to within ~0.5% on every axis, which retrospectively validates
+the replay-through-`slug_history` trick — but the live numbers above are the ones to act on.
+Live PG holds 1,876 users / 1,634 patreon slugs / 1,873 held handles (3 rows carry no slug).
+
+**The export is incomplete, and the gap is named in the filename.** `looth_ro` on live holds
+per-table SELECT grants that predate `slug_history` (added 2026-07-12), so the owners half of
+the export **could not include retired handles** — it is `users` only. The table exists on
+live (owner `profile-app`); this is a missing grant, not a missing table. Consequence: the
+collision check cannot see a handle that was previously retired, so a proposal *could* collide
+with one. Live has almost certainly never run a cleanup — it still holds all 1,634 patreon
+slugs — so the retired set is probably empty, but **that is unproven and must not be assumed
+before `--apply`.** One SELECT-only grant closes it (Ian runs it; all live writes are his):
+
+```sql
+-- on LIVE, as a superuser: lets the read-only export see retired handles
+GRANT SELECT ON TABLE public.slug_history TO looth_ro;
+```
+
+Re-run the export after that grant and the owners file loses its `NO-slug_history` suffix.
+
+**Reports carry PII.** The live HTML/TSV embed member email addresses (they surface in the
+"could be /u/<x> (from account email)" rulings). They are kept at `~/lane-reports/slug-backfill/`
+mode 0600 — deliberately **not** in the repo and **not** in the dev docroot, where the dev gate
+is a shared credential rather than per-person auth.
+
 ---
 
 ## 8. Deliberately out of scope

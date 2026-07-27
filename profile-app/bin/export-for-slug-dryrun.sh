@@ -47,14 +47,39 @@ fi
 # Ownership: EVERY held handle, live or retired, including archived and unbridged rows.
 # A ghost that cannot log in still squats on its handle; leaving it out would mint
 # duplicates. slug_history is included because a retired handle is never re-issued.
+#
+# But the reader role may not be able to SELECT it. On LIVE 2026-07-27, `looth_ro`
+# held per-table grants made BEFORE slug_history existed (added 2026-07-12), so this
+# COPY died with "permission denied for table slug_history" — and under `set -e` that
+# aborted the run after members.tsv was already written, leaving a 0-byte owners file
+# that looks like "no handles are held". A half-written export that reads as complete
+# is worse than one that stops, so probe first and degrade OUT LOUD: the gap goes in
+# the FILENAME, so it travels with the artifact into whatever report is built from it.
+if "${PSQL[@]}" -c "SELECT 1 FROM slug_history LIMIT 1" >/dev/null 2>&1; then
+  HIST_SQL="UNION ALL SELECT user_id::text, lower(slug) FROM slug_history"
+  OWNERS_OUT="${OUT}-owners.tsv"
+else
+  HIST_SQL=""
+  OWNERS_OUT="${OUT}-owners-NO-slug_history.tsv"
+  cat >&2 <<'WARN'
+
+  !! slug_history is NOT READABLE by this role — RETIRED handles are MISSING from the
+     owners export. The collision check downstream cannot see a handle that was already
+     retired, so it may propose one. Do NOT --apply from a report built on this file
+     until the gap is closed or proven empty. One SELECT-only grant fixes it:
+
+         GRANT SELECT ON TABLE public.slug_history TO looth_ro;   -- run on LIVE
+
+WARN
+fi
 "${PSQL[@]}" -c "COPY (
   SELECT 'owner_id','slug'
   UNION ALL
   SELECT id::text, lower(slug) FROM users WHERE slug IS NOT NULL AND slug <> ''
-  UNION ALL
-  SELECT user_id::text, lower(slug) FROM slug_history
-) TO STDOUT WITH (FORMAT csv, DELIMITER E'\t')" > "${OUT}-owners.tsv"
+  $HIST_SQL
+) TO STDOUT WITH (FORMAT csv, DELIMITER E'\t')" > "$OWNERS_OUT"
 
 echo "wrote ${OUT}-members.tsv ($(($(wc -l < "${OUT}-members.tsv")-1)) members)" >&2
-echo "wrote ${OUT}-owners.tsv  ($(($(wc -l < "${OUT}-owners.tsv")-1)) held handles)" >&2
+echo "wrote $OWNERS_OUT  ($(($(wc -l < "$OWNERS_OUT")-1)) held handles)" >&2
+[ -n "$HIST_SQL" ] || echo "  ^ RETIRED handles are NOT in that file — see the warning above." >&2
 echo "NO WRITES PERFORMED." >&2
