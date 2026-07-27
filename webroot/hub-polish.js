@@ -872,6 +872,10 @@
   // Inline reply box (Facebook-style) under a comment, @mentioning its author.
   // Submit posts via submitReply(). Idempotent per column.
   function openReplyBox(col, author, stub) {
+    // Same gate as openComposerSheet, at this composer's own door. fb-inline is a
+    // SECOND write-capable composer (its own textarea + submit), so gating only the
+    // sheet would leave the desktop in-thread box wide open to anon.
+    if (!lgCanPost()) { openSignInModal(); return; }
     var existing = col.querySelector('.lg-fb-replybox');
     if (existing) { var t0 = existing.querySelector('textarea'); if (t0) t0.focus(); return; }
     var box = document.createElement('div'); box.className = 'lg-fb-replybox';
@@ -4803,8 +4807,117 @@
       if (cb) cb();
     });
   }
+  /* ── ANON POSTING GATE (Ian + keeper 2026-07-27) ──────────────────────────────
+     Every composer on this page is built CLIENT-SIDE, and this file is served
+     byte-identically to anon and members alike. The only thing that ever gated
+     posting was the server refusing to render composer MARKUP — which cannot cover
+     a composer the client constructs from nothing. Meanwhile the reply affordances
+     ARE served to anon (feed_action_bar() emits .lg-act-replies with no can-post
+     gate), so a logged-out tap reached a real composer shell.
+
+     Not a phase-2 regression: hub-polish.js has never carried a can-post flag in its
+     tracked history, and the pre-phase-2 openComposerSheet had no gate either.
+
+     Ian's call: do NOT hide the affordance. A hidden button teaches a curious reader
+     nothing; a modal that says "sign in to reply" and offers the door CONVERTS them.
+
+     THIS IS A UX LAYER ON TOP OF A GATE, NEVER A REPLACEMENT FOR ONE. Untouched:
+     the server still renders no composer markup to anon, BuddyBoss REST still 401s
+     anonymous writes, reply.php still re-checks caps, and the anon contact/mention
+     scrub stands. A forged data-lg-can-post at most opens a composer that fails on
+     submit — exactly what it does today. */
+  function lgCanPost() {
+    var b = document.body, v = b && b.getAttribute('data-lg-can-post');
+    // ABSENT is deliberately permissive: the attribute ships with _chrome.php, so
+    // absence means stale cached HTML (or a surface that predates the flag). Failing
+    // CLOSED there would silently block real members mid-session on a cached page,
+    // which is a worse bug than the one we're closing — and the submit-time auth
+    // check + REST 401 still catch anon on those pages. Present is authoritative.
+    return v === null || v === '1';
+  }
+  // Absolute URL to return to after sign-in. Prefer the open thread's deep link
+  // (?topic=…) so a reader who taps Reply inside a thread lands back IN that thread,
+  // not on the bare feed. Falls back to wherever they are.
+  function lgSignInReturnUrl() {
+    var rs = document.getElementById('looth-rep-sheet');
+    if (rs && rs.classList.contains('is-open') && rs.__lgTopicUrl) {
+      try { return new URL(rs.__lgTopicUrl, location.origin).href; } catch (e) {}
+    }
+    return location.href;
+  }
+  var lgSignInSheet = null;
+  function ensureSignInSheet() {
+    if (lgSignInSheet) return lgSignInSheet;
+    var D = 'html[data-lguser-theme="dark"]';
+    var st = document.createElement('style');
+    st.textContent = [
+      // Sits ABOVE lrs (…520) and the composer family (…560/570/580) because it can
+      // be raised from inside any of them; stays BELOW .lg-mnt (…600) so it never
+      // fights the mention panel's layer. Centered card, not a bottom sheet: this is
+      // an interruption to answer, not a tray to work in.
+      '#looth-signin-sheet{position:fixed;inset:0;z-index:2147483590;display:none}',
+      '#looth-signin-sheet.is-open{display:block}',
+      '#looth-signin-sheet .lgsi-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);' +
+        'width:min(21rem,calc(100vw - 2.5rem));box-sizing:border-box;background:var(--lg-card-bg,#fff);' +
+        'border-radius:18px;box-shadow:0 12px 48px rgba(0,0,0,.34);padding:1.375rem 1.25rem 1.25rem;' +
+        'font:.9375rem/1.5 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);text-align:center}',
+      '#looth-signin-sheet .lgsi-t{font:700 1.125rem/1.3 var(--lg-font-sans,system-ui,sans-serif);margin:0 0 .5rem}',
+      '#looth-signin-sheet .lgsi-p{margin:0 0 1.125rem;color:var(--lg-mute,#6b7362)}',
+      '#looth-signin-sheet .lgsi-b{display:block;width:100%;box-sizing:border-box;border:0;border-radius:999px;' +
+        'font:700 .9375rem/1 var(--lg-font-sans,sans-serif);padding:.875rem 1.25rem;cursor:pointer;text-decoration:none}',
+      '#looth-signin-sheet .lgsi-b--go{background:var(--lguser-accent,var(--lg-sage,#87986a));color:#fff}',
+      '#looth-signin-sheet .lgsi-b--x{background:none;color:var(--lg-mute,#6b7362);margin-top:.25rem}',
+      D + ' #looth-signin-sheet .lgsi-card{background:#1b1e21;color:#e5e7e1}',
+      D + ' #looth-signin-sheet .lgsi-p{color:#9aa79b}',
+      D + ' #looth-signin-sheet .lgsi-b--go{background:var(--lg-sage-d,#6b7c52)}',
+      D + ' #looth-signin-sheet .lgsi-b--x{color:#9aa79b}'
+    ].join('\n');
+    (document.head || document.documentElement).appendChild(st);
+
+    var s = document.createElement('div');
+    s.id = 'looth-signin-sheet';
+    s.setAttribute('role', 'dialog'); s.setAttribute('aria-modal', 'true');
+    s.setAttribute('aria-label', 'Sign in to reply');
+    s.innerHTML =
+      '<div class="lgsi-card" data-lg-sheet-card>' +
+        '<p class="lgsi-t">Sign in to reply</p>' +
+        '<p class="lgsi-p">Join the conversation — you&rsquo;ll come straight back to this discussion.</p>' +
+        '<a class="lgsi-b lgsi-b--go" id="lgsi-go" href="/wp-login.php">Sign in</a>' +
+        '<button type="button" class="lgsi-b lgsi-b--x" id="lgsi-x">Not now</button>' +
+      '</div>';
+    document.body.appendChild(s);
+    s.querySelector('#lgsi-x').addEventListener('click', function () {
+      window.LgSheets.close('lgsignin', 'programmatic');
+    });
+    lgSignInSheet = s;
+    return s;
+  }
+  window.LgSheets.register({
+    id: 'lgsignin',
+    ensure: function () { return ensureSignInSheet(); },
+    escClose: true,
+    // its own history entry, same contract as the tag picker and link panel:
+    // phone-BACK closes ONLY this modal and leaves the thread beneath standing.
+    historyEntry: function () { return { state: { lgSignIn: 1 }, url: undefined }; }
+  });
+  function openSignInModal() {
+    var s = ensureSignInSheet();
+    // Bind the return URL at OPEN time, not build time — the reader may have moved
+    // between threads since the modal was first constructed. The F1 login-redirect
+    // fix (9ab8fcd) is what makes this land on the topic instead of /activity/.
+    s.querySelector('#lgsi-go').setAttribute(
+      'href', '/wp-login.php?redirect_to=' + encodeURIComponent(lgSignInReturnUrl())
+    );
+    window.LgSheets.open('lgsignin');
+  }
+
   function openComposerSheet(o) {
     o = o || {};
+    // THE GATE, at the composer's own door rather than at its callers. There are 6
+    // call sites today and phase 3 adds more; gating each one is precisely the
+    // "invariant by convention" that G7 says always loses a surface eventually.
+    // One door, one check — and anon never gets the composer DOM built at all.
+    if (!lgCanPost()) { openSignInModal(); return; }
     var sh = ensureCompSheet();   // idempotent-open scrub is MANAGER-OWNED (LgSheets.open)
     // Rebuilt fresh on EVERY open — replyTo from a comment-reply open can never
     // leak into a later OP-reply open (and vice versa).

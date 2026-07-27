@@ -294,7 +294,20 @@ function bb_mirror_new_topic_modal(): void
     // the loopback/server side self-resolves too; relative stays as the cleanest
     // browser-side form. Was a band-aid for the dev2 cross-origin upload CORS block.
     $rest_base = '/wp-json/buddyboss/v1';
-    $login_url = '/wp-login.php';
+    // Sign-in link for the ntm/frm ANON panels carries the reader back to the page
+    // they tried to post from (anon-gate lane 2026-07-27). Before this it was a bare
+    // /wp-login.php, so a logged-out desktop reader who clicked Reply, signed in, and
+    // landed on /activity/ had to find the discussion again by hand. The F1 fix
+    // (lg-login-redirect-honor, 9ab8fcd) is what makes redirect_to actually survive
+    // BuddyBoss's forced-login destination stomp, so this now lands.
+    //
+    // Only a same-host ABSOLUTE PATH is ever emitted: must start with a single '/'
+    // (a leading '//' is protocol-relative = off-host), else fall back to bare login.
+    // The server-side validator re-checks same-host regardless; this is belt and braces.
+    $lg_return = (string) ($_SERVER['REQUEST_URI'] ?? '');
+    $login_url = (isset($lg_return[0]) && $lg_return[0] === '/' && strncmp($lg_return, '//', 2) !== 0)
+        ? '/wp-login.php?redirect_to=' . rawurlencode($lg_return)
+        : '/wp-login.php';
     ?>
 <div class="ntm-overlay" id="ntm-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="ntm-heading">
   <div class="ntm-backdrop" id="ntm-backdrop"></div>
@@ -544,7 +557,32 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
          pwa.js re-introduces the flash). Behaviors-only mobile-hub.js may defer. */ ?>
 <link rel="stylesheet" href="/mobile-hub.css?v=<?= @filemtime('/var/www/dev/mobile-hub.css') ?: '1' ?>" media="(max-width:640px)">
 </head>
-<body class="bb-mirror<?= !empty($GLOBALS['__bb_hub_rail']) ? ' hub-fmodal-page' : '' ?>">
+<?php
+/* data-lg-can-post — the EXPLICIT server can-post signal for client-built composers.
+ *
+ * WHY THIS EXISTS (anon-gate lane 2026-07-27): every composer on the Hub is built
+ * CLIENT-SIDE by hub-polish.js, which is served identically to everyone. The only
+ * thing that ever gated posting was the server refusing to render composer markup
+ * (lg_bb_mirror_can_post below) — a gate that cannot cover a composer the client
+ * constructs from scratch. Anon viewers still receive the reply AFFORDANCES
+ * (feed_action_bar() in _feed.php emits .lg-act-replies unconditionally), so a
+ * logged-out tap reached a real composer shell. This attribute is the one thing the
+ * client can synchronously read to know the answer.
+ *
+ * ONE SOURCE OF TRUTH: lg_bb_mirror_can_post() (_reply-render.php) — the SAME
+ * predicate that decides whether reply markup is rendered at all. Deliberately NOT
+ * /whoami: that would hide the post UI from logged-in members whose profile isn't
+ * bridged yet (whoami→anon despite a valid WP session). See the note on the function.
+ *
+ * THIS IS A UX LAYER, NOT THE LOCK. The server still renders no composer markup to
+ * anon, BuddyBoss REST still 401s anonymous writes, and the anon contact/mention
+ * scrub is untouched. A forged attribute at most opens a composer that fails on submit.
+ */
+$lg_can_post = function_exists('lg_bb_mirror_can_post')
+    ? lg_bb_mirror_can_post()
+    : lg_bb_mirror_wp_logged_in();   // same cookie rule; _reply-render.php not loaded on every page
+?>
+<body class="bb-mirror<?= !empty($GLOBALS['__bb_hub_rail']) ? ' hub-fmodal-page' : '' ?>" data-lg-can-post="<?= $lg_can_post ? '1' : '0' ?>">
 <?php /* Hub feed: filters live in a CENTERED MODAL (Ian 2026-06-11), not the
          side rail — so the hub emits no nav aside, no hamburger, no drawer
          backdrop, and needs no pre-paint nav-closed state. Forum subpages
