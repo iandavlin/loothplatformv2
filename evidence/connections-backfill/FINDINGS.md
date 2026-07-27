@@ -64,6 +64,24 @@ member may open the site tomorrow to find requests they have never seen. **That 
 decision and Ian should make it deliberately.** If unwanted, restore the 355 accepted rows now
 and hold the 391 pending — accepted rows carry no call to action.
 
+**Which side the pending lands on — measured, and it is not symmetric.** All **52** of Ian's
+pending rows have Ian as the **requester**; he has **0** inbound. So restoring Ian's set does
+**not** put 52 new requests in front of Ian. It puts **one new incoming request in front of each
+of 52 other members**, attributed to Ian, dated 2023-06-21 → 2026-04-18. Ian sees them only in
+his *outgoing / awaiting* list.
+
+The badge those 52 see is real but silent: `Connections::pendingCount()`
+(`profile-app/src/Connections.php`) counts straight off `connections` where
+`addressee_uuid = me AND status = 'pending'`, and feeds `requests_pending` in
+`api/v0/me-social-counts.php`. So the header friends badge increments with **no notification row
+and no email behind it** (see below). Across the full 746 the same effect reaches **142 distinct
+members**.
+
+**One coupling to respect:** `profile-app/bin/migrate-social-from-bb.php` → `seedNotifications()`
+seeds one `connection_request` bell for *every* pending row it finds. It is a one-shot migration
+script, not a cron, so it will not fire on its own — but re-running it after this restore would
+convert these silent badges into real bells. Do not re-run it.
+
 **No notification or email will be sent.** Verified on live: `public.connections` has exactly one
 trigger, `connections_touch`, which is `BEFORE UPDATE` only. No INSERT trigger, no rules.
 Notifications are written by the application layer. A direct SQL insert mints nothing.
