@@ -30,24 +30,51 @@ BuddyBoss, PHP, nginx — will happily accept and store any number.
 **This is a live defect, not just a missing feature.** Measured on **LIVE**
 (`looth_import`, loothgroup.com, read-only via live-ro, 2026-07-27):
 
-| | LIVE | dev2 mirror |
-|---|---|---|
-| published replies | 5,195 | 5,118 |
-| replies carrying ≥1 photo | 518 | 504 |
-| replies carrying **>1** photo — showing only the first | **236** | 229 |
-| images stored but never rendered | **380** | 367 |
-| replies that a cap of 6 would truncate | **0** | 0 |
-| most photos on one published reply | **5** | 5 |
+| | LIVE (WP, uploaded) | LIVE (mirror, rendered) | dev2 mirror |
+|---|---|---|---|
+| published replies | 5,195 | — | 5,118 |
+| replies carrying ≥1 photo | 518 | 513 | 505 |
+| replies carrying **>1** photo — showing only the first | **236** | **233** | 230 |
+| images stored but never rendered | **380** | **374** | 368 |
+| replies that a cap of 6 would truncate | **0** | **0** | 0 |
+| most photos on one published reply | **5** | **5** | 5 |
 
 **236 replies on live** are silently hiding images their authors successfully
 uploaded, with no "+N more" and no indication anything is missing. **380 images**
 become visible the moment the render cap lifts.
 
-Quote the LIVE column. Earlier revisions of this doc quoted dev2 and called it
-"a faithful copy of live" — that was an assumption, never verified, and it was
-wrong by 7 replies / 13 images. dev2 also takes writes from test lanes, so its
-number moves during a session (it read 229 at 16:20 and 230 at 21:30 the same
-day, the difference being one reply Ian posted while testing).
+**Two live columns, and the difference is real** (measured 2026-07-27, both
+re-run from scratch). WP `bp_media_ids` is what members *uploaded*; the Postgres
+mirror's `forums.attachment` is what the renderer actually *reads*. The mirror is
+short by exactly four replies:
+
+| reply | WP | mirror | |
+|---|---|---|---|
+| 58201 | 3 | absent from the multi set | |
+| 58209 | 2 | absent from the multi set | |
+| 58294 | 3 | absent from the multi set | |
+| 58462 | 3 | **2** | one image not mirrored |
+
+That reconciles to the digit: 236 − 3 = **233**, and (3−1)+(2−1)+(3−1) + 1 =
+**6** = 380 − 374. So the honest sentence is **"236 replies are hiding 380
+images; 233 of them light up the moment this ships, and 4 replies need a mirror
+re-sync to finish the job."** Quote 236/380 as the size of the defect and 233/374
+as what the deploy fixes on day one — do not quote one as the other. Whether
+those four are a materializer gap or intentionally skipped rows is **not proven**
+(live-ro dropped mid-probe; dev1 auto-stops). Not this lane's bug either way: the
+same rows are invisible today.
+
+Quote LIVE, never dev2. Earlier revisions of this doc quoted dev2 and called it
+"a faithful copy of live" — that was an assumption, never verified. dev2 also
+takes writes from test lanes, so its number moves during a session (its joined
+count read 229, then 230, then 368 hidden images across one day).
+
+> **The 233 coincidence — do not be caught by it.** dev2's *attachment-only*
+> count (orphans included) is also 233, and live's *joined* count is 233. They
+> are different shapes on different boxes and it is pure coincidence. dev2 joined
+> = 230, dev2 attachment-only = 233 (the 3 orphans 72083/72084/72225); live
+> joined = 233, live orphan parents = 1. Two people have already been misled by
+> an attachment-only count on this exact question.
 
 Live query (bbPress replies carry their photo set as a comma-separated
 `bp_media_ids` post meta, which is also what the mirror materializes from):
@@ -247,11 +274,13 @@ Measured against published replies at build time:
 |---|---|
 | replies carrying images | **518** |
 | unchanged (single image) | **282** |
-| **replies that stop hiding images** | **236** |
-| **images that become visible for the first time** | **380** |
+| **replies that stop hiding images** | **236** (233 on day one) |
+| **images that become visible for the first time** | **380** (374 on day one) |
 | replies truncated by the cap | **0** |
 
-(LIVE, 2026-07-27. §1 has the dev2 column and why it differs.)
+(LIVE WP, 2026-07-27, re-measured from scratch. The "day one" figure is LIVE's
+Postgres mirror — what the renderer actually reads. §1 has both columns, the
+four-reply reconciliation between them, and the dev2 column.)
 
 ---
 

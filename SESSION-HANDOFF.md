@@ -38,12 +38,20 @@ owed. This handoff is only "what to do next".
 
 ## 2. THE NUMBERS — quote LIVE, never dev2
 
-| | LIVE | dev2 |
-|---|---|---|
-| replies that stop hiding images | **236** | 229 → 230 (moves!) |
-| images that become visible | **380** | 367 |
-| replies truncated by a cap of 6 | **0** | 0 |
-| most photos on any published reply | **5** | 5 |
+| | LIVE (uploaded) | LIVE (renders day one) | dev2 |
+|---|---|---|---|
+| replies that stop hiding images | **236** | **233** | 230 (moves!) |
+| images that become visible | **380** | **374** | 368 |
+| replies truncated by a cap of 6 | **0** | **0** | 0 |
+| most photos on any published reply | **5** | **5** | 5 |
+
+All re-measured from scratch on 2026-07-27 via live-ro; the WP column reproduced
+the original figures exactly. **The two live columns are both true and mean
+different things** — WP `bp_media_ids` is what members uploaded, the Postgres
+mirror is what the renderer reads, and the mirror is short by four replies
+(58201, 58209, 58294 absent; 58462 has 2 of 3). Reconciles to the digit.
+Say: *"236 replies are hiding 380 images; 233 light up on deploy, 4 need a mirror
+re-sync."* Never quote one column as the other. Atlas §1 has the full table.
 
 Three traps in that one table, all of which have already caught someone:
 
@@ -230,6 +238,14 @@ Files this lane overlays (8, all tracked):
   and returns true. Never trust a `true` return as proof mail was sent.
 - **`dev.loothgroup.com` is DEAD.** Anything naming it is broken by definition,
   not merely misaddressed. Do not preserve it as a fallback.
+- **`live-ro` proxies through dev1, and dev1 AUTO-STOPS.** It read `stopped`, then
+  `dev1-power on` said "already running", then it stopped again mid-probe and
+  every retry died at `Connection timed out during banner exchange`. Budget for a
+  short window: script the whole live query set into ONE file, pipe it over a
+  single ssh on stdin (`ssh live-ro 'mysql … looth_import' < q.sql`), and get it
+  all in one round trip. Do not plan an interactive back-and-forth with live.
+  Both live stores are readable: MySQL `looth_import` (WP) and Postgres
+  `psql -h 127.0.0.1 -U looth_ro -d looth` (the `forums.*` mirror).
 
 ---
 
@@ -237,8 +253,23 @@ Files this lane overlays (8, all tracked):
 
 ```sh
 cd footer-mockups/reply-images
-sudo -u postgres bash verify.sh        # 36 assertions, ~20s, no window needed
+sudo -u postgres bash verify.sh        # 38 assertions, ~20s, no window needed
 ```
+
+**It was 31/36 when this handoff first said "36 assertions" — a false RED.**
+Section 4 hardcoded the `sizes` strings from before `e183136` corrected them
+(360px/240px → 228px/151px), so it failed against *correct* code. Fixed in
+`886966c`: section 4 now parses `max-width`, columns, gap and the grid spans out
+of `forums.css` and computes the expected tile widths, so it tracks the source of
+truth instead of a snapshot. Proven both directions — reintroduce the e183136
+defect → 5 FAILs; change the CSS max-width to 500px → re-derives 248/164 and
+fails on the renderer's drift; restored → 38/38.
+
+**Lesson worth carrying:** a verifier that hardcodes the output of the code it
+verifies rots the moment that code is fixed, and it rots *silently* into a RED
+that reads as a regression. Derive from the source of truth or expect to be lied
+to. Run it before you quote it — this handoff pointed the next run at a check it
+had never re-run after the last commit.
 
 `render-harness.php` `require`s the shipping `_reply-render.php` and runs the
 shipping `_topic-replies.php` query against the live mirror, so reply markup can
