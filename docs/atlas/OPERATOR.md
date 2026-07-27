@@ -1,7 +1,16 @@
 # OPERATOR.md — read this FIRST, every session (5 minutes that prevent wrong assumptions)
 
-**Status: authoritative, 2026-07-04.** If this disagrees with an older doc, THIS wins. If the box
-disagrees with this file, verify on the box, then update this file in the same task (keeper rule).
+**Status: authoritative, updated 2026-07-27 (keeper moved to dev2).** If this disagrees with an
+older doc, THIS wins. If the box disagrees with this file, verify on the box, then update this
+file in the same task (keeper rule).
+
+> **CHANGED 2026-07-27 — the keeper now runs ON dev2.** Ian's editor, the `msg` board, the keeper
+> memory and the tooling all live on dev2; dev1 is an archive box you wake to fetch something
+> (`dev1-power status|on|off|ssh`). Anything below or elsewhere that says "you usually run on dev1"
+> or tells you to ssh across to dev2 is describing the old shape. The consequence that bites:
+> **on dev2, `~/loothplatformv2-clean` is the SERVING checkout — it only ever pulls.** Keeper
+> merges in `~/keeper-repo`; lanes work in `~/worktrees/*`. Merging in the serving tree detaches
+> the files nginx and the mu-plugins are symlinked to.
 Written so any operator (human or model) can run the site without deep-diving or guessing.
 
 ## 1. The boxes — identify by NAME/ROLE, never by IP alone
@@ -9,8 +18,8 @@ Written so any operator (human or model) can run the site without deep-diving or
 | role | instance | IP | access |
 |---|---|---|---|
 | **LIVE** (loothgroup.com) | `loothgroup2-4` / i-0b938c07575254cab | 54.146.118.131 (EIP) | READ: `ssh live-ro` (SELECT-only mysql via its ~/.my.cnf). WRITES: hand Ian a bash — never write to live yourself. |
-| **dev2** (the dev env, dev2.loothgroup.com) | Name tag `dev2*` — **instance id CHANGES per rebuild, find by tag** | 34.193.244.53 (EIP) | `ssh -i ~/projects/lg-stripe-billing/claude-keypair.pem ubuntu@34.193.244.53`, passwordless `sudo -n`. Power on/off from dev1: `aws ec2 start-instances/stop-instances` (devgbox-cli IAM allows dev1 + `dev2*` tags ONLY). |
-| **dev1** (orchestration/keeper) | "Claude Code" / i-01e54ed6c9a4ba91e | 50.19.198.38 | You usually RUN here. Chat transcripts + `msg` board live here. NOT a platform box. |
+| **dev2** (the dev env, dev2.loothgroup.com) | Name tag `dev2*` — **instance id CHANGES per rebuild, find by tag** | 34.193.244.53 (EIP) | **YOU RUN HERE as of 2026-07-27** — keeper, Ian's editor (`/vscode/`), the `msg` board and the lane fleet. Passwordless `sudo -n`. From elsewhere: `ssh -i ~/projects/lg-stripe-billing/claude-keypair.pem ubuntu@34.193.244.53`. The devgbox-cli IAM key can start/stop dev1 and `dev2*` tags and **cannot** open security groups or resize instances (measured 7/27) — those are console-only. |
+| **dev1** (ARCHIVE, retired as keeper 2026-07-27) | "Claude Code" / i-01e54ed6c9a4ba91e | 50.19.198.38 | Wake it only to fetch something: `dev1-power status\|on\|off\|ssh` from dev2. Still holds ~545MB of old session transcripts and a `~/projects` with historical handoffs/audits. NOT a platform box, and no longer where you run. |
 
 ⚠️ **EIPs get recycled across rebuilds** (54.146.118.131 was OLD-live before it was new-live;
 34.193.244.53 has fronted three different dev2 instances). Confirm identity with `hostname` /
