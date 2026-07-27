@@ -142,4 +142,25 @@ test.describe('phase 3 exit — desktop reply mint + bell', () => {
  * the write and raises lg_bb_mirror_reply_owned, so the hook stands down. If the
  * hook is what minted, the reply still looks right and the architecture is still
  * broken, which is exactly the distinction phase 3 exists to make.
+ *
+ * ── RESULT, keeper window 2026-07-27 20:33–20:36 UTC, serve carrying the
+ *    _mention-ingest.php guard fix. Topic 72212. ──────────────────────────────
+ *
+ *   DESKTOP (this spec, real modal CTA -> composer v2 -> real mouse mention pick):
+ *     reply 72215 stored:
+ *       <p>p3exit-203347 hello
+ *          <a class="bp-suggestions-mention" href="{{mention_user_id_8}}">@dan-erlewine</a></p>
+ *     bell: forum.mention | reply | target 72212 | anchor 72215 | actor_count 1
+ *
+ *   MOBILE (same component, lrs pill -> composer, real TOUCH pick):
+ *     reply 72216 stored: …href="{{mention_user_id_8}}">@dan-erlewine</a>
+ *     bell: forum.mention | reply | target 72212 | anchor 72216 | actor_count 1
+ *
+ *   dan-erlewine notifications 2 -> 4; mention-type rows 0 -> 2. wp_user_id 8 is
+ *   dan-erlewine, so both resolved the right identity.
+ *
+ *   BACKSTOP STOOD DOWN: exactly ONE bell per reply (actor_count 1, two rows for
+ *   two replies). Had the bbp_new_reply hook also minted/rung, the double-fire
+ *   would show here. Combined with the deletion gate — zero native reply-creates
+ *   in the served JS — reply.php owned both writes.
  */
