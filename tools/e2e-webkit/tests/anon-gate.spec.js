@@ -38,15 +38,22 @@ async function anonContext(context) {
 
 // Land on the hub as anon and wait for a reply affordance to exist.
 // NOTE: no /looth-auth/issue bounce — that is the authed path.
-async function anonHub(page, context, { canPost = null, dark = false } = {}) {
+async function anonHub(page, context, { canPost = null, dark = false, stripFlag = false } = {}) {
   await anonContext(context);
   await installJsOverride(page);
-  if (canPost !== null) {
-    await page.addInitScript((cp) => {
-      const apply = () => { if (document.body) document.body.setAttribute('data-lg-can-post', cp); };
+  if (canPost !== null || stripFlag) {
+    await page.addInitScript(([cp, strip]) => {
+      // stripFlag simulates HTML older than the attribute — i.e. a deploy that
+      // shipped hub-polish.js without _chrome.php. dev2 now serves the flag, so
+      // without this the "absent" branch is untestable there.
+      const apply = () => {
+        if (!document.body) return;
+        if (strip) document.body.removeAttribute('data-lg-can-post');
+        else document.body.setAttribute('data-lg-can-post', cp);
+      };
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply, { once: true });
       else apply();
-    }, canPost);
+    }, [canPost, stripFlag]);
   }
   await page.goto('/hub/', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.feed-card[data-topic-id] .lg-act-replies', { timeout: 20_000 });
@@ -78,16 +85,97 @@ test.describe('anon posting gate', () => {
     expect(await page.locator('#lgc-editor').count()).toBe(0);
   });
 
-  test('RED BASELINE: with the flag ABSENT the composer still opens for anon', async ({ page, context }) => {
-    // Reproduces today's served behaviour — the bug Ian hit on live.
-    await anonHub(page, context, { canPost: null });
+  // THE SPEC THAT SHOULD HAVE EXISTED FIRST. Its previous version asserted the
+  // OPPOSITE — that with the flag absent the composer opens, "permissive by design".
+  // That encoded the hole as correct behaviour, which is exactly why the suite was
+  // green while a partial deploy (this file without _chrome.php — live's state on
+  // 2026-07-27) served every anon a live composer. Absent must FAIL CLOSED.
+  test('flag ABSENT still gates anon (partial-deploy / stale-cache safety)', async ({ page, context }) => {
+    await anonHub(page, context, { canPost: null, stripFlag: true });
+    expect(await page.evaluate(() => document.body.getAttribute('data-lg-can-post'))).toBeNull();
+    const r = replyAction(page);
+    await r.scrollIntoViewIfNeeded();
+    await r.tap();
+    await page.waitForSelector('#looth-signin-sheet.is-open', { timeout: 10_000 });
+    expect(await page.locator('#looth-comp-sheet').count()).toBe(0);
+  });
+
+  test('flag ABSENT does NOT gate a member (the fallback reads real affordances)', async ({ page, context }) => {
+    // The reason the old default was permissive: never block a real member on stale
+    // html. The derived fallback keeps that promise without the hole — a page that
+    // carries server-rendered post affordances means the viewer can post.
+    await anonHub(page, context, { canPost: null, stripFlag: true });
+    await page.evaluate(() => {
+      const d = document.createElement('div');
+      d.className = 'fc-composer';        // the marker _feed.php emits only when $can_post
+      document.body.appendChild(d);
+    });
     const r = replyAction(page);
     await r.scrollIntoViewIfNeeded();
     await r.tap();
     await page.waitForSelector('#looth-comp-sheet.is-open', { timeout: 10_000 });
-    expect(await page.locator('#looth-comp-sheet.is-open').count()).toBe(1);
-    // Absent is permissive BY DESIGN (stale-cache grace) — the submit-time auth
-    // check and the REST 401 are what still stop the write on that path.
+    expect(await page.locator('#looth-signin-sheet.is-open').count()).toBe(0);
+  });
+
+  // IAN'S EXACT SYMPTOM, as an assertion: "the cursor just moves down the composer".
+  // The old suite asserted the composer SHEET was absent but never that nothing was
+  // FOCUSED — a caret in the sheet's own composer bar would have passed it.
+  test("anon card tap leaves NOTHING focused — no caret anywhere (Ian's live symptom)", async ({ page, context }) => {
+    await anonHub(page, context, { canPost: '0' });
+    const r = replyAction(page);
+    await r.scrollIntoViewIfNeeded();
+    await r.tap();
+    await page.waitForSelector('#looth-signin-sheet.is-open', { timeout: 10_000 });
+    const state = await page.evaluate(() => {
+      const ae = document.activeElement;
+      return {
+        editableFocused: ae ? (ae.isContentEditable || /^(INPUT|TEXTAREA)$/.test(ae.tagName)) : false,
+        qlEditors: document.querySelectorAll('.ql-editor').length,
+        sheetInput: document.querySelectorAll('#lrs-comp-input').length,
+        sheetSend: document.querySelectorAll('#lrs-comp-send').length,
+        sheetPhoto: document.querySelectorAll('#lrs-comp-photo').length,
+        sheetFile: document.querySelectorAll('#lrs-comp-file').length,
+      };
+    });
+    expect(state.editableFocused).toBe(false);   // no caret — Ian's symptom
+    expect(state.qlEditors).toBe(0);
+    // and the sheet's own composer was never MOUNTED, not merely hidden
+    expect(state.sheetInput).toBe(0);
+    expect(state.sheetSend).toBe(0);
+    expect(state.sheetPhoto).toBe(0);
+    expect(state.sheetFile).toBe(0);
+  });
+
+  // THE OTHER HALF: gating the composer must not gate READING. Anon opening the
+  // sheet and reading the thread is the public teaser; losing it would be a
+  // regression in the opposite direction.
+  test('anon can still OPEN the sheet and READ the replies', async ({ page, context }) => {
+    await anonHub(page, context, { canPost: '0' });
+    const r = replyAction(page);
+    await r.scrollIntoViewIfNeeded();
+    await r.tap();
+    await page.waitForSelector('#looth-rep-sheet.is-open', { timeout: 10_000 });
+    // the thread actually rendered content, not an empty/blocked shell
+    await page.waitForFunction(() => {
+      const t = document.querySelector('#looth-rep-sheet #lrs-thread, #looth-rep-sheet #lrs-body');
+      return t && t.textContent.trim().length > 20;
+    }, null, { timeout: 15_000 });
+    // and the write surface is a sign-in affordance, not a composer
+    expect(await page.locator('#looth-rep-sheet #lrs-signin').count()).toBe(1);
+    expect(await page.locator('#looth-rep-sheet #lrs-comp-input').count()).toBe(0);
+  });
+
+  test('the sheet sign-in bar opens the modal when tapped', async ({ page, context }) => {
+    await anonHub(page, context, { canPost: '0' });
+    const r = replyAction(page);
+    await r.scrollIntoViewIfNeeded();
+    await r.tap();
+    await page.waitForSelector('#looth-rep-sheet.is-open', { timeout: 10_000 });
+    // dismiss the auto-raised modal from the reply INTENT, then tap the bar itself
+    await page.goBack();
+    await page.waitForTimeout(400);
+    await page.locator('#looth-rep-sheet #lrs-signin').tap();
+    await page.waitForSelector('#looth-signin-sheet.is-open', { timeout: 8_000 });
   });
 
   test('GATED: data-lg-can-post=0 shows the sign-in modal and NO composer', async ({ page, context }) => {

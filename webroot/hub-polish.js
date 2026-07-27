@@ -3283,6 +3283,16 @@
         'color:#fff;font:700 15px/1 var(--lg-font-sans,system-ui,sans-serif)}',
       '#looth-rep-sheet .lrs-replybtn:active{background:var(--lguser-accent-d,var(--lg-sage-d,#586b3f))}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-replybtn{background:var(--lg-sage-d,#6b7c52);color:#f2f4ee}',
+      // ── Anon sign-in bar: what a logged-out reader gets where the composer would
+      //    be. Same footprint and weight as .lrs-replybtn so the sheet doesn't jump
+      //    between viewers, but it is an <button> with no input anywhere near it.
+      //    cursor:pointer is REQUIRED for iOS to deliver the tap (receipt R1).
+      '#looth-rep-sheet .lrs-signin{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:8px;' +
+        'border:0;border-radius:999px;cursor:pointer;padding:11px 16px;background:var(--lguser-accent,var(--lg-sage,#87986a));' +
+        'color:#fff;font:700 15px/1 var(--lg-font-sans,system-ui,sans-serif)}',
+      '#looth-rep-sheet .lrs-signin:active{background:var(--lguser-accent-d,var(--lg-sage-d,#586b3f))}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-signin,' +
+        'html[data-lguser-dark="1"] #looth-rep-sheet .lrs-signin{background:var(--lg-sage-d,#6b7c52);color:#f2f4ee}',
       // ── React controls in the sheet (Ian 2026-06-25) — the .fcr reaction bar is
       //    only styled under .feed-page; the sheet sits OUTSIDE it, so the cloned OP
       //    bar + each reply's bar rendered unstyled/invisible. Mirror the essential
@@ -3636,16 +3646,24 @@
         // .lrs-comp click handler below), same one-tap behavior as the feed. The
         // legacy pill/photo/send elements stay in the DOM (hidden via CSS) so the
         // existing composer wiring below keeps its element refs.
-        '<div class="lrs-comp"><button class="lrs-replybtn" id="lrs-replybtn" type="button">' +
-            '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17l-5-5 5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v1"/></svg><span>Reply</span></button>' +
-          '<span class="lrs-comp__av" id="lrs-comp-av"></span>' +
-          '<div class="lrs-comp__wrap"><textarea class="lrs-comp__input" id="lrs-comp-input" rows="1" autocomplete="off" placeholder="Write a comment…"></textarea>' +
-          '<button class="lrs-comp__photo" id="lrs-comp-photo" type="button" aria-label="Add photo" title="Add photo">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
-          '<button class="lrs-comp__send" id="lrs-comp-send" type="button" disabled>Post</button></div>' +
-          '<input type="file" id="lrs-comp-file" accept="image/*" style="display:none">' +
-          '<div class="lrs-comp__previews" id="lrs-comp-previews"></div>' +
-          '<span class="lrs-comp__status" id="lrs-comp-status"></span></div>';
+        // ANON gets a DIFFERENT bar. Not the composer with a guard on it — no
+        // textarea, no photo button, no send, no file input, nothing focusable that
+        // could take a caret. Reading the thread stays fully open (that is the public
+        // teaser and gating the SHEET would be a regression); only the write surface
+        // is withheld, and tapping where it would be converts instead of no-oping.
+        (lgCanPost()
+          ? '<div class="lrs-comp"><button class="lrs-replybtn" id="lrs-replybtn" type="button">' +
+              '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17l-5-5 5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v1"/></svg><span>Reply</span></button>' +
+            '<span class="lrs-comp__av" id="lrs-comp-av"></span>' +
+            '<div class="lrs-comp__wrap"><textarea class="lrs-comp__input" id="lrs-comp-input" rows="1" autocomplete="off" placeholder="Write a comment…"></textarea>' +
+            '<button class="lrs-comp__photo" id="lrs-comp-photo" type="button" aria-label="Add photo" title="Add photo">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
+            '<button class="lrs-comp__send" id="lrs-comp-send" type="button" disabled>Post</button></div>' +
+            '<input type="file" id="lrs-comp-file" accept="image/*" style="display:none">' +
+            '<div class="lrs-comp__previews" id="lrs-comp-previews"></div>' +
+            '<span class="lrs-comp__status" id="lrs-comp-status"></span></div>'
+          : '<div class="lrs-comp lrs-comp--signin"><button class="lrs-signin" id="lrs-signin" type="button">' +
+              'Sign in to reply</button></div>');
       document.body.appendChild(sh);
       sh.addEventListener('click', function (e) { if (e.target.closest('[data-lrs-close]')) lrsClose(); });
       // Drag-to-dismiss (design-system gesture, same as the content sheet): drag the
@@ -3703,6 +3721,14 @@
         bodyEl.addEventListener('wheel', function () { sh.__lgToReplies = 0; }, { passive: true });
       })();
       // composer wiring (once): enable Post on input; auto-grow; submit
+      // Skipped entirely for anon — those elements were never built, so this block
+      // has nothing to wire and every querySelector below would be null.
+      if (!lgCanPost()) {
+        sh.querySelector('#lrs-signin').addEventListener('click', function (ev) {
+          ev.preventDefault(); ev.stopPropagation();
+          openSignInModal();
+        });
+      } else {
       var inp = sh.querySelector('#lrs-comp-input'), send = sh.querySelector('#lrs-comp-send');
       inp.addEventListener('input', function () {
         send.disabled = !inp.value.trim() && !lrsMediaIds.length;
@@ -3771,6 +3797,7 @@
           title: (sh.querySelector('.lrs-t') || {}).textContent, focus: true
         });
       }, true);
+      }   // end can-post composer wiring
     }
     // per-open setup
     sh.setAttribute('data-tid', tid || ''); sh.setAttribute('data-fid', fid);
@@ -3788,13 +3815,17 @@
     // thread, not the OP. Timestamped so late async loads (OP body) can re-anchor
     // for a few seconds without hijacking the sheet later (e.g. post-reply reloads).
     sh.__lgToReplies = (opts && opts.toReplies) ? Date.now() : 0;
+    // Per-open composer reset — anon has no composer elements to reset (the sheet
+    // built a sign-in bar instead), so the whole block is can-post only.
     var av = sh.querySelector('#lrs-comp-av'); var avs = lrsViewerAvatar();
-    av.innerHTML = avs ? '<img src="' + avs.replace(/"/g, '&quot;') + '" alt="">' : '';
-    var inp2 = sh.querySelector('#lrs-comp-input'); inp2.value = ''; inp2.style.height = 'auto';
-    sh.querySelector('#lrs-comp-send').disabled = true;
-    sh.querySelector('#lrs-comp-status').textContent = '';
-    lrsMediaIds.length = 0;
-    var pv0 = sh.querySelector('#lrs-comp-previews'); if (pv0) pv0.innerHTML = '';
+    if (av) {
+      av.innerHTML = avs ? '<img src="' + avs.replace(/"/g, '&quot;') + '" alt="">' : '';
+      var inp2 = sh.querySelector('#lrs-comp-input'); inp2.value = ''; inp2.style.height = 'auto';
+      sh.querySelector('#lrs-comp-send').disabled = true;
+      sh.querySelector('#lrs-comp-status').textContent = '';
+      lrsMediaIds.length = 0;
+      var pv0 = sh.querySelector('#lrs-comp-previews'); if (pv0) pv0.innerHTML = '';
+    }
     // lifecycle is MANAGER-OWNED: lock/backdrop/behind/history via LgSheets.
     // URL parity with the desktop dmodal (§4f contract in forums.js): the sheet's
     // history entry carries /hub/?topic=<forum>/<topic> so the address bar is a
@@ -4826,14 +4857,27 @@
      anonymous writes, reply.php still re-checks caps, and the anon contact/mention
      scrub stands. A forged data-lg-can-post at most opens a composer that fails on
      submit — exactly what it does today. */
+  // Server-rendered post affordances. EVERY one of these is emitted only when
+  // lg_bb_mirror_can_post() is true (_feed.php:1300/:1341/:1555/:1645), and — this is
+  // the point — they predate the data-lg-can-post attribute, so they are present in
+  // OLD html too. Measured on dev2: anon 0/0/0/0/0, member 7/7/2/1/2.
+  var LG_CANPOST_MARKERS = '.fc-composer,[data-frm-open],[data-ntm-open],.lg-newpost,.forum-header__new-post';
   function lgCanPost() {
     var b = document.body, v = b && b.getAttribute('data-lg-can-post');
-    // ABSENT is deliberately permissive: the attribute ships with _chrome.php, so
-    // absence means stale cached HTML (or a surface that predates the flag). Failing
-    // CLOSED there would silently block real members mid-session on a cached page,
-    // which is a worse bug than the one we're closing — and the submit-time auth
-    // check + REST 401 still catch anon on those pages. Present is authoritative.
-    return v === null || v === '1';
+    if (v === '1') return true;
+    if (v === '0') return false;
+    // ATTRIBUTE ABSENT — html older than the flag, or a cached page. This used to
+    // return TRUE ("permissive, the submit check still catches it"), and that was
+    // wrong: it makes a PARTIAL DEPLOY silently reopen the hole. Ship this file
+    // without _chrome.php — exactly live's state on 2026-07-27 — and every anon gets
+    // a live composer again while the suite stays green, because the suite asserted
+    // the permissive branch was correct.
+    //
+    // Fail closed instead, but derive it rather than guessing: if the server rendered
+    // ANY post affordance into this page, the viewer can post. No affordance at all
+    // means the server already decided they cannot. Members keep working on stale
+    // html (they have the markers); anon does not (they never do).
+    return !!(document.querySelector(LG_CANPOST_MARKERS));
   }
   // Absolute URL to return to after sign-in. Prefer the open thread's deep link
   // (?topic=…) so a reader who taps Reply inside a thread lands back IN that thread,
