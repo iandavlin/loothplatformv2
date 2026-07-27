@@ -2081,6 +2081,59 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
   margin-top: 6px;
 }
 
+/* ── Multi-image reply gallery (up to LG_REPLY_IMG_MAX = 6; Ian 2026-07-27) ──
+   A reply with ONE image keeps the bare .reply-stub__img above, unchanged — 275
+   existing replies render byte-identically. Two or more get this grid.
+
+   Six columns with span rules rather than a per-count column count, so no layout
+   leaves an orphan gap: 2 and 4 are half-width (2-up rows), 3 and 6 are thirds,
+   and 5 is three thirds then two halves. Previs'd and signed off at
+   /mockups/reply-images/ before this shipped.
+
+   Tiles keep the .reply-stub__img class so the existing lightbox handler
+   (forums.js) and the `cursor: zoom-in` rule apply with no JS change. */
+.reply-stub__gallery {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  margin-top: 6px;
+  max-width: 460px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.reply-stub__gcell {
+  display: block; position: relative; margin: 0; line-height: 0;
+  grid-column: span 2;                 /* thirds by default — also covers 6 */
+}
+.reply-stub__gallery[data-count="2"] .reply-stub__gcell,
+.reply-stub__gallery[data-count="4"] .reply-stub__gcell { grid-column: span 3; }
+.reply-stub__gallery[data-count="5"] .reply-stub__gcell:nth-child(4),
+.reply-stub__gallery[data-count="5"] .reply-stub__gcell:nth-child(5) { grid-column: span 3; }
+/* Square thirds, 4:3 halves — the wider tiles earn a wider crop. */
+.reply-stub__gallery .reply-stub__img {
+  margin-top: 0;
+  width: 100%; height: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: none;
+  border-radius: 0;
+  cursor: zoom-in;
+}
+.reply-stub__gallery[data-count="2"] .reply-stub__img,
+.reply-stub__gallery[data-count="4"] .reply-stub__img,
+.reply-stub__gallery[data-count="5"] .reply-stub__gcell:nth-child(4) .reply-stub__img,
+.reply-stub__gallery[data-count="5"] .reply-stub__gcell:nth-child(5) .reply-stub__img {
+  aspect-ratio: 4 / 3;
+}
+/* "+N" — only reachable for a legacy reply holding more than the cap. Shows the
+   overflow rather than dropping it silently the way LIMIT 1 used to. */
+.reply-stub__gmore {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(12, 14, 12, .62);
+  color: #fff; font: 700 20px/1 var(--font-head, sans-serif); letter-spacing: .5px;
+  pointer-events: none;
+}
+
 /* Accordion expand button — pill style matching archive-poc */
 .feed-card__expand {
   color: var(--lg-sage-d);

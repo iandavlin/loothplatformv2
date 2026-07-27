@@ -385,3 +385,15 @@ function lg_bb_mirror_safe_avatar(?string $url): ?string {
          . ($p['path'] ?? '') . '?' . http_build_query($q);
 }
 }
+
+// ---------- reply media cap ----------
+// Max images on a single reply (Ian 2026-07-27, keeper-relayed: "MAX 6 IMAGES
+// PER REPLY"). ONE constant so the renderer and the write endpoint cannot drift:
+// `web/forums/_topic-replies.php` slices the gallery to it, and `api/v0/reply.php`
+// rejects past it on both create and edit. A client-only cap is not a cap.
+//
+// History worth keeping: before this, nothing capped reply images ANYWHERE on the
+// way in — the effective limit was a `LIMIT 1` in the render, so 229 replies had
+// been quietly holding 2-6 images that nobody had ever seen. See
+// docs/atlas/REPLY-IMAGE-COUNT-CEILING.md.
+if (!defined('LG_REPLY_IMG_MAX')) define('LG_REPLY_IMG_MAX', 6);

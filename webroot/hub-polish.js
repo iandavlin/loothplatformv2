@@ -3293,7 +3293,16 @@
     if (lrsAuth) { cb(lrsAuth); return; }
     fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { lrsAuth = d || { authenticated: false }; cb(lrsAuth); })
+      .then(function (d) {
+        lrsAuth = d || { authenticated: false };
+        // Per-reply image cap, server-sourced (auth.php ships LG_REPLY_IMG_MAX) so
+        // the composer guard and reply.php's 422 cannot drift apart. Absent field
+        // (stale cached JS, anon payload) keeps the conservative default — an
+        // absent signal must land ON the cap, never on "no cap".
+        var m = d && parseInt(d.reply_image_max, 10);
+        if (m > 0) lgcImgMax = m;
+        cb(lrsAuth);
+      })
       .catch(function () { cb({ authenticated: false }); });
   }
   function lrsEsc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
@@ -3998,6 +4007,15 @@
         '#looth-comp-sheet .lgc-tb svg{vertical-align:middle}',
         '#looth-comp-sheet .lgc-tb.ql-active{background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#52613d)}',
         '#looth-comp-sheet .lgc-tb--pic,#looth-comp-sheet .lgc-tb--tag{color:var(--lg-sage-d,#6b7c52)}',
+        // Photo count read-out ("3 of 6"). Sits with the photo button it describes,
+        // so the cap is visible BEFORE it is hit rather than as a rejection at the
+        // 7th tap. Goes amber at the cap. Never truncates — the whole reason this
+        // exists is to be read (cf. the status line that ellipsed to nothing).
+        '#looth-comp-sheet .lgc-pcount{flex:0 0 auto;white-space:nowrap;font:600 .6875rem/1 var(--lg-font-sans,sans-serif);' +
+          'color:#8a8d91;padding:0 2px 0 1px}',
+        '#looth-comp-sheet .lgc-pcount[data-full="1"]{color:var(--lg-rust,#c66845)}',
+        'html[data-lguser-dark="1"] #looth-comp-sheet .lgc-pcount{color:#9aa097}',
+        '#looth-comp-sheet .lgc-tb--pic[disabled]{opacity:.4;cursor:not-allowed}',
         '#looth-comp-sheet .lgc-sp{flex:1 1 auto}',
         '#looth-comp-sheet .lgc-status{flex:1 0 100%;order:9;font:.75rem/1.35 var(--lg-font-sans,sans-serif);color:#8a8d91;padding:3px 2px 0}',
         '#looth-comp-sheet .lgc-status:empty{display:none}',
@@ -4178,6 +4196,7 @@
           '<button class="lgc-tb lgc-tb--pic" id="lgc-photo" type="button" aria-label="Add photo" title="Add photo">' +
             '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
           '<input type="file" id="lgc-file" accept="image/*" style="display:none">' +
+          '<span class="lgc-pcount" id="lgc-pcount" hidden></span>' +
           '<button class="lgc-tb ql-bold" type="button" aria-label="Bold"><b>B</b></button>' +
           '<button class="lgc-tb ql-italic" type="button" aria-label="Italic"><i>I</i></button>' +
           '<button class="lgc-tb ql-strike" type="button" aria-label="Strikethrough"><s>S</s></button>' +
@@ -4223,7 +4242,15 @@
     fileIn.addEventListener('change', function () {
       var file = fileIn.files && fileIn.files[0];
       fileIn.value = '';
-      if (file) lgcUploadPhoto(sh, file);
+      if (!file) return;
+      // Re-check at drop time, not only when the picker opened: on an edit the
+      // kept-photo set can load (or a retry can land) while the picker is up.
+      if (lgcCapped(sh) && lgcPhotoN(sh) >= lgcImgMax) {
+        lgcSetErr(sh, 'A reply can have at most ' + lgcImgMax + ' photos — remove one to add another.');
+        lgcSyncPhotoCount(sh);
+        return;
+      }
+      lgcUploadPhoto(sh, file);
     });
     // ZERO-GAP KEYBOARD DOCK (df97f87): the card's bottom edge lands exactly on the
     // keyboard top. Sized via bottom-offset, NOT translateY — a leftover transform
@@ -4280,6 +4307,29 @@
       tools.insertBefore(el, tools.firstChild);
     }
     el.textContent = msg;
+  }
+  // ── Per-reply image cap (Ian 2026-07-27: max 6) ──────────────────────────
+  // Server-sourced via auth.php; this is the conservative default until the first
+  // auth call lands, and the fallback if the field is missing.
+  var lgcImgMax = 6;
+  // The strip is the single honest count: every image the member can see occupies
+  // one chip, whether it is uploaded, still uploading, failed-and-retryable, or
+  // an existing photo kept on an edit. Removing a chip frees the slot. Counting
+  // lcpMediaIds instead would miss in-flight and kept-on-edit photos and let the
+  // member queue past the cap.
+  function lgcPhotoN(sh) { return sh.querySelectorAll('#lgc-strip .lgc-pv').length; }
+  // The cap is a REPLY cap. Topic edit shares this composer and is NOT capped —
+  // an OP gallery is a different thing and Ian did not rule on it.
+  function lgcCapped(sh) { return !(sh.__lcpCtx && sh.__lcpCtx.editTopicId); }
+  function lgcSyncPhotoCount(sh) {
+    var el = sh.querySelector('#lgc-pcount'), btn = sh.querySelector('#lgc-photo');
+    if (!el) return;
+    var n = lgcPhotoN(sh), cap = lgcCapped(sh);
+    if (!cap || !n) { el.hidden = true; el.removeAttribute('data-full'); if (btn) btn.disabled = false; return; }
+    el.hidden = false;
+    el.textContent = n + ' of ' + lgcImgMax;
+    if (n >= lgcImgMax) el.setAttribute('data-full', '1'); else el.removeAttribute('data-full');
+    if (btn) btn.disabled = n >= lgcImgMax;
   }
   // ONE place decides what the two channels say, so they can never contradict each
   // other: the status line counts what is actually in flight, the alert line exists
@@ -4394,6 +4444,11 @@
     return lgcQuill.getContents().ops.some(function (op) { return op.insert && op.insert.lgmention; });
   }
   function lgcRecalcPost(sh) {
+    // Single owner for the photo-count read-out: every path that adds, removes,
+    // fails or restores a chip already funnels through here (upload start/ok/fail,
+    // chip ✕, and lgcLoadEditMedia's kept photos — which lgcSyncUploadUi does NOT
+    // see). Must run before the topic-edit early return below.
+    lgcSyncPhotoCount(sh);
     var post = sh.querySelector('#lgc-post'); if (!post) return;
     var c = sh.__lcpCtx || {};
     // A photo still uploading means the post is NOT ready — posting now would ship
