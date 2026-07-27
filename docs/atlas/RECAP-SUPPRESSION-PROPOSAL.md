@@ -229,15 +229,22 @@ self-corrects if a week is skipped, because the window simply grows to cover the
 
 **This is a call-site change, not a schema change.** The lookback is already a parameter threaded end
 to end: `Recap_Source::fetch( array $wp_user_ids, int $days = 7 )`
-(`class-lg-wd-recap-source.php:173`) → `internal-recap.php:65` → `Recap::forWpIds($ids, $days)`,
-clamped 1..90 at the endpoint. Today `payload_for()` at line 159 calls `fetch([$id])` and takes the
-default. The change is to pass a computed value there.
+(`class-lg-wd-recap-source.php:173`) → `internal-recap.php:65` → `Recap::forWpIds($ids, $days)`.
+Today `payload_for()` at line 159 calls `fetch([$id])` and takes the default. The change is to pass
+a computed value there.
 
-**It must ship with the floor**, or the first run under the new rule reaches back to whenever the
-previous campaign was and exposes §1.3(c)'s backlog. The floor: the window never starts earlier than
-the day this ships, and it is additionally clamped by the endpoint's existing 1..90 guard. Members
-begin clean; the 349-item historical backlog is never mailed. Given that backlog is 343 of 349 stale
-connection rows from June and early July, not mailing it is also the right product answer.
+**The 1..90 clamp is already enforced at the source** — `Recap.php:98`, `max(1, min(90, $days))`,
+inside `forWpIds()` rather than at the endpoint, on the same principle as the `is_read` filter: every
+caller gets the same answer and no call site can widen the window by accident. Rule 3a therefore
+cannot produce an unbounded lookback even if the computed value is wrong. (I checked
+`internal-recap.php` first, saw it clamp only the value it *echoes* in the response, and thought the
+query ran unclamped. It does not — the guard is one layer down, deliberately.)
+
+**It must still ship with an explicit floor**, because the 90-day clamp is far wider than the
+backlog: a first run reaching back to the previous campaign under the new rule would expose
+§1.3(c)'s 349 items. The floor: the window never starts earlier than the day this ships. Members
+begin clean; the historical backlog is never mailed. Given it is 343 of 349 stale connection rows
+from June and early July, not mailing it is also the right product answer.
 
 **Rule 3b (do not build yet): the per-member watermark.**
 
