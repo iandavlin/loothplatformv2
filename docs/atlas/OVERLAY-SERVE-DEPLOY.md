@@ -93,10 +93,70 @@ without touching the serve clone. (DELIVERY-ARCH-PROPOSAL step (a), realized as 
 slot-a's tree; `LG_BB_MIRROR_APP_ROOT=/srv/bb-mirror` is only the schema-file path, not request
 rendering. Add slot-B (`preview-b.dev2`, own pool) the same way when a third parallel preview is needed.
 
+## Temporarily serving YOUR build to verify it (the window case)
+
+This is the case the doc above does **not** cover, and the one that bites: not deploying,
+just "serve my bytes for ten minutes so I can test them".
+
+**The trap (measured by keeper 2026-07-27).** All 24 top-level `.js`/`.css` in
+`/var/www/dev` are symlinks into the serving checkout. So:
+
+```sh
+cp mybuild.js /var/www/dev/hub-polish.js     # ← FOLLOWS THE LINK
+```
+
+overwrites `~/loothplatformv2-clean/webroot/hub-polish.js` and **leaves the symlink
+intact**. The docroot path looks right, `md5sum /var/www/dev/hub-polish.js` passes, the
+served bytes are right — and `main` is silently dirty. The old lane recipe ("cp over the
+docroot, keep the prestate md5, flip it back") was written when those were real files and
+is now actively wrong: the md5 you would check is the very thing the trap defeats.
+
+**Preferred: don't touch the docroot at all.** `tools/e2e-webkit` routes bytes in-browser:
+
+```sh
+LGC_JS_OVERRIDE=<worktree>/webroot/hub-polish.js \
+LGC_FORUMS_OVERRIDE=<worktree>/bb-mirror/web/forums.js \
+  npx playwright test …
+```
+
+`installJsOverride()` (`tests/_helpers.js`) fulfils `**/hub-polish.js*` and
+`**/forums.js*` per page, so a whole verify run needs **zero serve writes**. Composer-v2
+phase 3 verified its entire desktop surface this way.
+
+**If you genuinely must place a file:**
+- A *tracked* file inside a symlinked directory (e.g. `bb-mirror/api/v0/_mention-ingest.php`
+  under `/srv/bb-mirror`) is a real file — write it, then restore with
+  `git checkout -- <path>`. Exact by construction.
+- A *symlinked* target — `rm` the link, place a real file, restore with `rm` + recreate the
+  link pointing back at the repo path.
+- **Never** `git checkout` / branch-switch / detach the serving tree. Only `git checkout -- <path>`.
+
+**Proof of restore is the whole-tree hash, not an md5:**
+
+```sh
+cd ~/loothplatformv2-clean && git rev-parse HEAD && git rev-parse HEAD: && git status --porcelain
+```
+
+`git rev-parse HEAD:` is the tree object — byte-for-byte over everything. `--porcelain` must
+be empty, **untracked `??` lines included**.
+
+**No FPM reload for an in-place PHP edit:** `99-lg-tuning.ini` (itself symlinked into the
+checkout) sets `validate_timestamps=1, revalidate_freq=2`, so mtime revalidation picks it up
+in ~2s. The reload requirement applies to **repointing a `/srv` symlink**, where realpath
+cache pins the old target — a different operation.
+
+**Server-side verification without a browser:** the CF edge 403s public `curl`, but loopback
+bypasses it —
+`curl -sk -H "Host: dev2.loothgroup.com" -H "Cookie: <gate + wp>" https://127.0.0.1/bb-mirror-api/v0/auth.php`
+returns a real nonce. Endpoint behaviour can then be exercised and asserted against the store
+with no engine resident, which matters when RAM allows only one.
+
 ## Footguns
 - `deploy.sh --apply` syncs **all** app subtrees + the full webroot — always backup + dry-run/diff
   on live first.
 - Verify at the **origin** (`--resolve … :127.0.0.1` on-box, or the origin IP), never the CF edge.
 - dev2 = pull-only; the guard protects it, but don't fight it — `git pull`, don't rsync.
+- Count browser engines with `pgrep -x <name>`. `pgrep -f` matches its own command line and
+  reads as a false positive — a trap this box has already paid for.
 
 See SYSTEM-MAP §13 (serve-from-repo) and §14 (deploy model).
