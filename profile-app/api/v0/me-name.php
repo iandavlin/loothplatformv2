@@ -16,7 +16,11 @@ if (!is_array($in)) profile_app_json(400, ['error' => 'bad_json']);
 $name = $in['display_name'] ?? null;
 if (!is_string($name)) profile_app_json(400, ['error' => 'display_name_required']);
 $name = trim($name);
-if ($name === '' || mb_strlen($name) > 120) profile_app_json(400, ['error' => 'invalid_length']);
+// 71-char cap (Ian ruling 2026-07-26, supersedes the 02:25 spec's 40). 71 is EXACTLY
+// today's longest display_name on the box, so the cap freezes the worst case without
+// making anybody retroactively invalid — 40 would have truncated 60 live members.
+// business_name below deliberately keeps 120; the handle/slug cap stays 30.
+if ($name === '' || mb_strlen($name) > 71) profile_app_json(400, ['error' => 'invalid_length']);
 
 $biz = array_key_exists('business_name', $in) ? $in['business_name'] : null;
 $bizProvided = array_key_exists('business_name', $in);

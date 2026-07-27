@@ -286,6 +286,10 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-vchip--public{background:var(--lg-sage-tint);color:var(--lg-sage-d)}
 .lg-vchip--member{background:#fdf0d8;color:#8a6326}
 .lg-vchip--private{background:#f0e6e2;color:var(--lg-rust)}
+/* sage CTA chip (admin "Edit profile") — was an inline style, which the dark
+   bridge could not override: white on dark-lightened sage sat at 2.29:1
+   (C-sweep backlog). Class + dark ink pin below, hub active-pill treatment. */
+.lg-vchip--cta{background:var(--lg-sage);color:#fff;text-decoration:none}
 
 /* header / identity card */
 .lg-idrow{display:flex;gap:20px;align-items:center}
@@ -552,9 +556,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-edit.editing{background:var(--lg-card-bg,#fff);box-shadow:0 0 0 2px var(--lg-sage);font-style:normal;color:var(--lg-ink)}
 .lg-edit.editing::after{content:none}
 .lg-edit.saved{box-shadow:0 0 0 2px var(--lg-sage-3)}
-/* the @username (username-mentions lane) — public handle; owner gets the editor panel */
-.lg-uname{margin-top:6px}
-.lg-uname__handle{font:600 calc(13.5px*var(--lg-read-scale,1))/1.4 var(--lg-font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);color:var(--lg-mute);letter-spacing:.01em}
+/* @username chip REMOVED (Ian FINAL 2026-07-26 handles-invisible ruling) */
 .lg-about{font-size:calc(14.5px*var(--lg-read-scale,1));line-height:1.6;color:var(--lg-ink);white-space:pre-wrap;max-width:640px}
 .lg-about.lg-edit{min-height:1.5em;display:block;padding:6px 8px;margin:0 -8px}
 /* resume block — single PDF, download button + owner replace/remove */
@@ -698,6 +700,7 @@ html[data-lguser-theme="dark"] .lg-disc-seg button[aria-checked="true"],
 html[data-lguser-theme="dark"] .lg-idrow__pic,
 html[data-lguser-theme="dark"] .lg-bubble__ic,
 html[data-lguser-theme="dark"] .lg-connect__av,
+html[data-lguser-theme="dark"] .lg-vchip--cta,
 html[data-lguser-theme="dark"] .lg-link-form .ok{color:#15171a}
 html[data-lguser-theme="dark"] .lg-vchip--member{background:#3a3220;color:#ecb351}
 html[data-lguser-theme="dark"] .lg-vchip--private{background:#3a2a24;color:#d57a55}
@@ -716,7 +719,7 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
         <div class="lg-viewas__row">
           <span class="lg-viewas__lbl" style="color:#f0c987">Admin</span>
           <span class="lg-viewas__note">Viewing as administrator.</span>
-          <a class="lg-vchip" style="background:var(--lg-sage);color:#fff;text-decoration:none"
+          <a class="lg-vchip lg-vchip--cta"
              href="/u/<?= rawurlencode($slugSafe) ?>?admin_edit=1">Edit profile (admin)</a>
         </div>
       </div>
@@ -1771,9 +1774,18 @@ window.lgSortable = function (container, opts) {
       el.dataset.orig = wasEmpty ? '' : valOf(el);
       if (wasEmpty) { el.textContent = ''; el.classList.remove('lg-edit--empty'); }
       el.classList.add('editing'); el.contentEditable = 'true'; el.focus(); caretEnd(el);
+      /* data-edit-max: contentEditable has no maxlength — truncate as typed/pasted
+         (display_name capped at 71 per the Ian ruling 2026-07-26; server rejects
+         over-cap anyway). The cap is per-element, so this stays field-agnostic. */
+      var max = parseInt(el.getAttribute('data-edit-max') || '0', 10);
+      function onInput() {
+        if (max > 0 && el.textContent.length > max) { el.textContent = el.textContent.slice(0, max); caretEnd(el); }
+      }
+      if (max > 0) el.addEventListener('input', onInput);
       el.addEventListener('keydown', onKey);
       el.addEventListener('blur', function onBlur(e) {
         el.removeEventListener('keydown', onKey); el.removeEventListener('blur', onBlur);
+        el.removeEventListener('input', onInput);
         var val = valOf(el), orig = el.dataset.orig || '';
         if (val === orig) { finish(el); restorePlaceholder(el); } else { save(el, val, orig); }
       });
