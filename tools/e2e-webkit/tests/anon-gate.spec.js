@@ -16,7 +16,7 @@
 // reproduces the real bug before the flag is shown to close it.
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
-const { installJsOverride } = require('./_helpers');
+const { installJsOverride, addAuthCookies } = require('./_helpers');
 
 const ENV_PATH = process.env.WP_COOKIES_ENV || '/tmp/mentions-verify/wp-cookies.env';
 
@@ -250,5 +250,130 @@ test.describe('anon posting gate', () => {
     await r.tap();
     await page.waitForSelector('#looth-comp-sheet.is-open', { timeout: 10_000 });
     expect(await page.locator('#looth-signin-sheet.is-open').count()).toBe(0);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE CHROME DOORS (login-destination lane, 2026-07-27)
+   ══════════════════════════════════════════════════════════════════════════
+
+   The sign-in SHEET above already keeps the promise it makes out loud. The
+   chrome "Sign in" — the most-used door on the site, present on every page —
+   carried nothing, so signing in from anywhere landed everyone on BuddyBoss's
+   /activity/ default. Two doors: the desktop button (>640) and the phone
+   drawer item (<=640, where the button is display:none).
+
+   RED BASELINE: these fail against dev2's current serve (main, a2ec633), where
+   both hrefs are a bare /wp-login.php. That is the honest bar — the specs
+   reproduce the real defect before the fix is served. The server half is PHP in
+   the shared header, so unlike the sheet it cannot be proven through
+   LGC_JS_OVERRIDE; it needs the branch actually served.
+
+   The paired server-side proof that runs with no browser and no serve window is
+   tools/gates/login-doors-gate.php, which renders the SERVING partial directly.
+*/
+
+// A real thread page — the destination a reader actually wants to come back to.
+async function anonThread(page, context) {
+  await anonContext(context);
+  await page.goto('/hub/', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.feed-card[data-topic-id]', { timeout: 20_000 });
+  const href = await page.locator('.feed-card[data-topic-id] a[href*="/hub/"]').first().getAttribute('href');
+  const topicPath = new URL(href, 'https://dev2.loothgroup.com').pathname;
+  await page.goto(topicPath, { waitUntil: 'domcontentloaded' });
+  return topicPath;
+}
+
+// Pull the destination out of a sign-in href, or null when it carries none.
+function boundDest(href) {
+  if (!href) return null;
+  const i = href.indexOf('redirect_to=');
+  return i === -1 ? null : decodeURIComponent(href.slice(i + 'redirect_to='.length));
+}
+
+test.describe('chrome sign-in carries the destination', () => {
+  test('desktop: the header button returns the reader to THIS thread', async ({ page, context, isMobile }) => {
+    test.skip(isMobile, 'the header button is display:none <=640; the drawer leg covers phones');
+    const topicPath = await anonThread(page, context);
+    const btn = page.locator('.lg-chrome__signin');
+    await expect(btn).toBeVisible();
+    const href = await btn.getAttribute('href');
+    // The defect this lane fixes is EXACTLY this being null.
+    expect(boundDest(href)).toBe(topicPath);
+    expect(href).not.toMatch(/wp-login\.php$/);
+  });
+
+  test('mobile: the drawer "Sign in" returns the reader to THIS thread', async ({ page, context, isMobile }) => {
+    test.skip(!isMobile, 'the drawer item is the phone-only door');
+    const topicPath = await anonThread(page, context);
+    // NOT via the hamburger: bottom-nav.js hides it outright on phones
+    // ('.lg-chrome__hamburger{display:none !important}'), so the drawer item is
+    // in the DOM but has no opener of its own down here. It is still the SOURCE
+    // OF TRUTH — bottom-nav's account tray copies this href (see the next spec)
+    // — so the href is what we assert, not its visibility.
+    const item = page.locator('.lg-chrome__menu-signin a');
+    await expect(item).toHaveCount(1);
+    expect(boundDest(await item.getAttribute('href'))).toBe(topicPath);
+    // Sanity that we're testing the phone door: the desktop button is gone here.
+    await expect(page.locator('.lg-chrome__signin')).toBeHidden();
+  });
+
+  test('mobile: the bottom-nav account tray inherits the same destination', async ({ page, context, isMobile }) => {
+    test.skip(!isMobile, 'the tray is the phone-only surface');
+    // The tray builds its Sign in from hdrHref('.lg-chrome__signin, .lg-chrome__menu-signin a')
+    // (bottom-nav.js), so it rides the header fix with no change of its own —
+    // and this is the door a phone reader actually taps.
+    const topicPath = await anonThread(page, context);
+    await page.locator('[aria-label="You"]').tap();
+    const login = page.locator('#looth-sheet .lt-sheet__login');
+    await expect(login).toBeVisible();
+    expect(boundDest(await login.getAttribute('href'))).toBe(topicPath);
+  });
+
+  test('the door survives the round trip: following it lands on the thread', async ({ page, context, isMobile }) => {
+    // Read the href as a genuinely anonymous session, then follow it WITH WP
+    // cookies. wp-login.php honours redirect_to for an already-authenticated
+    // visitor, so this proves the destination survives the login endpoint —
+    // the half a static href assertion cannot show.
+    const topicPath = await anonThread(page, context);
+    // Attribute read only — the phone drawer item has no opener (see above).
+    const sel = isMobile ? '.lg-chrome__menu-signin a' : '.lg-chrome__signin';
+    const href = await page.locator(sel).getAttribute('href');
+    expect(boundDest(href)).toBe(topicPath);
+
+    await addAuthCookies(context);
+    await page.goto(href, { waitUntil: 'domcontentloaded' });
+    // Landed on the thread, NOT on /activity/ and NOT back on wp-login.
+    expect(new URL(page.url()).pathname).toBe(topicPath);
+    expect(page.url()).not.toMatch(/\/activity\//);
+    expect(page.url()).not.toMatch(/wp-login/);
+  });
+
+  test('a query on the destination survives whole', async ({ page, context, isMobile }) => {
+    // /hub/?type=<x> is a real filtered view; before this lane a reader signing
+    // in from one came back to an unfiltered page (when they came back at all).
+    await anonContext(context);
+    await page.goto('/hub/?type=discussions', { waitUntil: 'domcontentloaded' });
+    // Attribute read only — the phone drawer item has no opener (see above).
+    const sel = isMobile ? '.lg-chrome__menu-signin a' : '.lg-chrome__signin';
+    // The query must arrive as ONE value, not split into sibling params —
+    // which is what add_query_arg would have done (it does not encode values).
+    expect(boundDest(await page.locator(sel).getAttribute('href'))).toBe('/hub/?type=discussions');
+  });
+
+  test('on wp-login itself the door binds nothing (no sign-in loop)', async ({ page, context, isMobile }) => {
+    // Ruling 3: landing on an auth URL is the infinite loop. wp-login.php does
+    // not render the shared chrome, so the surface under test is any page whose
+    // own URL is unbindable; /wp-login.php is the canonical one. The header is
+    // asserted directly by tools/gates/login-doors-gate.php; here we assert the
+    // door never offers itself as a destination anywhere it IS rendered.
+    await anonContext(context);
+    await page.goto('/hub/', { waitUntil: 'domcontentloaded' });
+    // Attribute read only — the phone drawer item has no opener (see above).
+    const sel = isMobile ? '.lg-chrome__menu-signin a' : '.lg-chrome__signin';
+    const dest = boundDest(await page.locator(sel).getAttribute('href'));
+    // Bound (the lane's whole point) AND never an auth path (ruling 3).
+    expect(dest).toBe('/hub/');
+    expect(dest).not.toMatch(/wp-login|patreon-connect|patreon-password/);
   });
 });
