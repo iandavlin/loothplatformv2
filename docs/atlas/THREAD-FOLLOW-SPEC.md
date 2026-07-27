@@ -4,9 +4,14 @@
 > Lane: threadfollow-spec (dev1, docs+mock only). Branch `threadfollow-spec`.
 > **REVISED 2026-07-27 (v2) — Ian: TWO independent toggles per discussion, NOTIFICATIONS and
 > EMAILS, both default OFF, both unsettable from three places including the email itself.**
-> **IAN GATED THE CARD 2026-07-27: two icons, not a single expanding control.** He reviewed the
-> previs and chose the two-icon design; the single-control fallback is dead and has been removed
-> from this document rather than kept as an alternative.
+> **IAN GATED, 2026-07-27 — three closures, all recorded here so none is re-litigated:**
+> **(1) the CARD carries two icons**, not a single expanding control; **(2) MOBILE CARD** — the two
+> icons go at the right end of the `.lg-card-actions` bar; **(3) MOBILE SHEET HEADER** — circular
+> peers between the title and the ×. Each rejected alternative has been **deleted** from this
+> document rather than archived.
+> *(Closures 2 and 3 were keeper-relayed through the operator on 2026-07-27 and were not posted to
+> the devmsg board as of id 1378; closure 1 is board post id 1377. Noted so the provenance of each
+> is on the record.)*
 > This supersedes v1's single follow toggle, which itself reversed the original auto-subscribe
 > design. See §0.0 for the trail and §9 for what is still Ian's to decide.
 > Mock frames: `footer-mockups/threadfollow-notif-panel/` — published for gating at
@@ -48,6 +53,8 @@ replies to their own topic without toggling anything.
    control cluster (§2). Ian: the affordance must be **visible, not buried**.
    **The card carries the bell and the envelope as two separate visible icons — Ian-confirmed
    2026-07-27 from the previs.** Eight controls in that action row is the shape he approved.
+   **Mobile placements are Ian-confirmed the same day**: right end of the mobile card bar (§2.2b)
+   and circular peers of the × in the sheet header (§2.4).
    **Explicitly NOT in the post ⋯ menu** — verified wrong surface twice over (§2.3).
 3. **UNSET them from three places, all reaching the same store:**
    (1) the thread itself, same controls; (2) the notifications panel per-row ⋯ (§3.5);
@@ -194,21 +201,20 @@ server-rendered inert and batch-hydrated with the viewer's real state.
   settled — do not re-open it.
 - **MOBILE cards are a different bar and still need Ian's word — §2.2b, proposal below.**
 
-### 2.2b Mobile card placement — PROPOSAL (frame 2)
+### 2.2b Mobile card placement — IAN-CONFIRMED 2026-07-27 (frame 2)
 
 Mobile cards do **not** use `.fc-actions`. They use `.lg-card-actions`/`.lg-act` (forums.css @≤640,
 `gap:18px; padding:8px 13px 12px`), and `.fc-share`/`.fc-save` are desktop-only (:600).
 
-**Recommended — the same two icons at the right end of the mobile bar, icon-only, `margin-left:auto`,
-≥44px touch targets.** The mobile bar carries only three items (Like / N replies / Share) against
-390px, so unlike desktop there is room; measured in frame 2 with space to spare. This keeps the
-ordering identical to desktop (state controls right, before nothing) and keeps the card's whole
-purpose intact: opting in **without** having to open the thread.
+**The two icons sit at the right end of that bar** — icon-only, `margin-left:auto`, ≥44px touch
+targets. The bar carries only three items (Like / N replies / Share) against 390px, so unlike
+desktop there is room, with space to spare in frame 2. Ordering matches desktop (state controls
+right).
 
-**Alternative — leave mobile cards alone; the sheet header (§2.4) carries both, one tap away.**
-Cleaner card. The cost is real: a member scrolling the feed cannot opt in to anything without
-opening every thread first, which is most of the value of a card control on the surface where
-people actually browse.
+Ian's reason for choosing it, worth keeping because it generalises: **a card control whose whole
+point is opting in without opening the thread is worthless if it only exists inside the thread.**
+
+*The rejected alternative — omit from mobile cards, sheet header only — is deleted, not archived.*
 
 ### 2.3 The DISCUSSION MODAL header — and why NOT the ⋯ menu
 
@@ -253,21 +259,20 @@ the cards, falling back to a single-topic read when deep-linked in cold.
 > physical placement is the same either way, so nothing in the design changes — but a build lane
 > aiming at :219-228 would be editing dead code.
 
-### 2.4 The MOBILE SHEET header — PROPOSAL (frame 5)
+### 2.4 The MOBILE SHEET header — IAN-CONFIRMED 2026-07-27 (frame 5)
 
 ≤640 the router opens `#looth-rep-sheet`, whose header is
 `<div class="lrs-hd"><span class="lrs-t"></span><button class="lrs-x">×</button></div>`
 (hub-polish.js:3628, styles :3171) — title + close, and **no size control at all**, so the desktop
 instruction ("beside S/M/L/XL") has no literal target here.
 
-**Recommended — `.lrs-notify` + `.lrs-email` as circular 34px buttons between `.lrs-t` and
-`.lrs-x`.** Same state, same handler, ≥44px effective touch targets. The order then reads
-*title → state controls → dismiss*, identical to the desktop cluster, so the two surfaces stay
-learnable as one thing.
+**`.lrs-notify` + `.lrs-email` as circular 34px buttons between `.lrs-t` and `.lrs-x`.** Same state,
+same handler, ≥44px effective touch targets. The order reads *title → state → dismiss*, identical to
+the desktop cluster, so the two surfaces stay learnable as one thing.
 
-The only other placement considered was a control row **beneath** the header. Rejected: it adds
-permanent vertical chrome to the smallest screen, on a sheet that is already competing with the
-composer and the keyboard.
+*The rejected placement — a control row beneath the header — is deleted, not archived. It added
+permanent vertical chrome to the smallest screen, on a sheet already competing with the composer and
+the keyboard.*
 
 ---
 
@@ -518,6 +523,43 @@ unbounded: someone following thirty threads gets a thirty-row settings page, and
 to open that page. **Not recommended**; drawn in frame 6 beside the recommendation so the difference
 is visible rather than argued.
 
+### 6b ⚠️ CROSS-LANE COLLISION — this section and the weekly-recap lane are designing one page
+
+**Two lanes are editing `#lg-email-prefs` (membership-pages/web/manage-subscription.php:167-214)
+from opposite ends.** This spec proposes a third **Discussion emails** master row (§6); the
+weekly-recap lane on dev2 is building a per-user digest section governed by the **same Weekly
+Digest toggle** shipped at bf9e3a1. Neither lane can land cleanly without the other knowing.
+
+**What this lane needs from the weekly-recap lane — two things:**
+
+1. **The recap must NOT mint its own account-level toggle.** Under §6's rule the account page holds
+   one master *per class of email*. The weekly digest is a class; **the recap is content inside that
+   class**, not a new class. If the recap ships its own switch (e.g. "My discussions recap"), then
+   discussion content is governed by two account controls plus the per-thread bits, and §6's
+   guarantee — *the page can never say off while mail still arrives* — is dead. Keep the recap
+   governed by the existing `lg-pref-weekly` toggle and nothing else.
+2. **Say whether `#lg-email-prefs` stops being append-only markup.** Today it is sibling
+   `.lg-pref-row` divs, each wired by `wire(id, stateAction, toggleAction)` (:202-214); §6's row is
+   a fourth sibling plus one `wire()` call. If that lane converts the block to a generated list
+   (config array, REST-driven render), that is **better** for this spec — but §6's delta then
+   becomes a config entry rather than markup, and it must be re-spec'd before build. Either shape
+   works. Silence is the problem.
+
+**What it must not touch:**
+
+- **The semantics of `lg_weekly_member_state` / `lg_weekly_member_toggle`.** §3.7 rides that toggle;
+  splitting, inverting or making it tri-state breaks both §3.7 and §6's precedence rule.
+- **Weekly Digest's independence from discussion email.** A member who turns **Discussion emails**
+  off must still receive the weekly recap — that is the entire point of having a recap, and it is
+  what makes §9.1's options A and C survivable at all.
+
+**Mechanical:** both lanes edit the same file, so a merge conflict is certain rather than likely —
+whoever lands second rebases, and neither hand-edits live (REPO-MANDATE).
+
+**Offered as the shared contract:** *account = one master per email class; per-thread = membership
+of that class; a recap is content inside a class, never a class of its own.* If both lanes adopt
+that, the page composes with no further coordination.
+
 ### 3.7 Weekly digest recap (unchanged from v1, independent of §9.1)
 
 - One section in the existing weekly digest (lg-weekly-digest, FluentCRM campaign to list 3 —
@@ -541,16 +583,17 @@ Published for gating (cookie-gated dev2):
 | # | Frame | Shows | Status |
 |---|---|---|---|
 | 1 | `card-d-{light,dark}` 1280 | **Feed card** — bell + envelope beside Save, on/off states | **IAN GATED 2026-07-27** |
-| 2 | `card-m-{light,dark}` 390 | **Mobile card** — recommendation (icons at the right end of the mobile bar) vs the alternative (not on mobile cards) | **PROPOSAL — §2.2b** |
+| 2 | `card-m-{light,dark}` 390 | **Mobile card** — the two icons at the right end of the mobile bar | **IAN GATED 2026-07-27** |
 | 3 | `modal-d-{light,dark}` 1280 | **Modal header** *[title] [bell] [mail] [M] [×]*, both states | previs'd |
 | 4 | `unsub-d-{light,dark,done}` 1280 + `unsub-m-light` 390 | **Email unsubscribe page** — ask state, done state with Undo (§4.3) | previs'd |
-| 5 | (in `modal-d-*`) | **Mobile sheet header** — the ≤640 placement, which has no size control to sit beside | **PROPOSAL — §2.4** |
+| 5 | (in `modal-d-*`) | **Mobile sheet header** — circular peers between the title and the × | **IAN GATED 2026-07-27** |
 | 6 | `account-d-{light,dark}` 1280, `account-m-light` 390 | **Account email prefs** — the third "Discussion emails" master row vs the per-thread-list alternative | **PROPOSAL — §6** |
 | 7 | `legacy-d-{light,dark}` 1280 | **The 1,519 existing subscriptions** — the recommendation shown as a member experiences it | **PROPOSAL — §9.2** |
 | 8 | `notif-d-{light,dark}` 1280, `notif-m-{light,dark}` 390 | Notifications panel: coalesced row + ⋯ menu carrying both bits | previs'd |
 
-Frames 2, 5, 6 and 7 are the ones carrying an open decision; each shows a recommendation and at
-most one alternative, side by side, so the choice can be made by looking rather than by reading.
+Frames 6 and 7 are the only ones still carrying an open decision; each shows a recommendation and
+at most one alternative, side by side, so the choice can be made by looking rather than by reading.
+Frames 1, 2 and 5 are gated — their rejected alternatives are gone from the mocks as well as the doc.
 
 ---
 
@@ -666,11 +709,11 @@ while it sits untouched.
 
 ### 9.3 Smaller open questions
 
-1. ~~Two icons vs one expanding control~~ — **CLOSED, Ian gated two icons 2026-07-27** (§2.1). The
-   fallback has been deleted from this document, not archived.
-2. **Card control on mobile** (§2.2b) — **proposal + one alternative, frame 2.** Recommended: the
-   same two icons at the right end of the mobile bar.
-3. **Mobile sheet header** (§2.4) — **proposal, frame 5.** Recommended: circular peers of the ×.
+1. ~~Two icons vs one expanding control~~ — **CLOSED, Ian 2026-07-27** (§2.1). Fallback deleted, not archived.
+2. ~~Card control on mobile~~ — **CLOSED, Ian 2026-07-27** (§2.2b): right end of the mobile bar.
+   Rejected alternative deleted, not archived.
+3. ~~Mobile sheet header~~ — **CLOSED, Ian 2026-07-27** (§2.4): circular peers of the ×.
+   Rejected placement deleted, not archived.
 4. **Digest recap** (§3.7) — may public-forum topic TITLES appear, or names + counts only? *(No
    frame; low stakes, and it does not block anything.)*
 5. **Content cards** (§2.2) — v1 is discussion cards only. Should articles/videos get "email me

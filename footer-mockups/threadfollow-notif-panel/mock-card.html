@@ -16,9 +16,12 @@
   (_feed.php:1617-1626) carries six controls; with the two toggles it carries eight,
   which is the shape Ian approved on sight.
 
-  MOBILE is the open one (spec §9.3 q1): mobile cards do NOT use .fc-actions — they use
-  the .lg-card-actions/.lg-act bar (forums.css @<=640, gap 18px), and .fc-share/.fc-save
-  are desktop-only. Both the recommendation and the one alternative are drawn below.
+  MOBILE ALSO GATED 2026-07-27: the two icons go at the RIGHT END of the .lg-card-actions bar
+  (forums.css @<=640, gap 18px), icon-only, margin-left:auto, 44px touch targets. Mobile cards do
+  NOT use .fc-actions and .fc-share/.fc-save are desktop-only, so this is its own placement.
+  The rejected alternative (omit from mobile cards, sheet header only) has been DELETED, not
+  archived — Ian's reason: a card control whose point is opting in without opening the thread is
+  worthless if it only exists inside the thread.
   Open with ?theme=dark for the dark frames.
 -->
 <link rel="stylesheet" href="_tokens.css">
@@ -123,8 +126,8 @@
     </div>
   </article>
 
-  <p class="capt" style="margin-top:30px">Frame 2 — mobile card · spec §9.3 q1 · <b>PROPOSAL</b></p>
-  <p class="legend"><b>Recommended</b> — same two icons, right end of the mobile action bar, icon-only.
+  <p class="capt" style="margin-top:30px">Frame 2 — mobile card · spec §2.2b · <b>IAN GATED 2026-07-27 — this is the design</b></p>
+  <p class="legend">Same two icons, right end of the mobile action bar, icon-only, 44px touch targets.
     The mobile bar carries only three items (Like / replies / Share) with 18px gaps, so unlike desktop there is room.</p>
 
   <article class="feed-card" style="max-width:360px">
@@ -143,25 +146,6 @@
       <span class="spacer"></span>
       <button class="fc-notify" aria-pressed="true" aria-label="Notifications on"><span class="gly"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span></button>
       <button class="fc-email" aria-pressed="false" aria-label="Emails off"><span class="gly"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span></button>
-    </div>
-  </article>
-
-  <p class="legend"><b>Alternative</b> — leave mobile cards alone; the sheet header carries both (one tap away).
-    Cleaner card, but a member browsing the feed cannot opt in without opening every thread first.</p>
-
-  <article class="feed-card" style="max-width:360px">
-    <div class="feed-card__meta-top">
-      <span class="lg-card-avatar">SF</span>
-      <span class="lg-card-id"><a class="lg-card-author" href="#">Sharon Fisher</a><span class="lg-card-time">1d ago</span></span>
-    </div>
-    <div class="feed-card__header-body">
-      <h3 class="fc-title" style="font-size:19px">Bookmatched claro walnut top</h3>
-      <p class="fc-excerpt" style="font-size:14.5px">Third attempt. Cauls are flat, I’m at 90 psi…</p>
-    </div>
-    <div class="m-bar">
-      <button class="lg-act"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg> Like</button>
-      <button class="lg-act"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg> 4</button>
-      <button class="lg-act"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
     </div>
   </article>
 

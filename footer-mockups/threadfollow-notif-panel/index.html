@@ -77,20 +77,22 @@
     · cites <code>main@c10df43</code> · <b>spec + mock only, nothing built</b></p>
 
   <div class="gated">
-    <h2>✓ Gated 27 July — the card carries two icons</h2>
-    <p>You chose the two-icon design over the single expanding control. That is now the spec, and the
-      rejected design has been <b>deleted</b> from the doc rather than kept as an alternative.
-      <b>Frame 1 below is settled</b> — everything else on this page is waiting on you.</p>
+    <h2>✓ Gated 27 July — all three placements are settled</h2>
+    <p><b>Desktop card:</b> two icons, not one expanding control. <b>Mobile card:</b> the same two
+      icons at the right end of the mobile action bar. <b>Mobile sheet:</b> round buttons between the
+      title and the ×. Every rejected alternative has been <b>deleted</b> from the mocks and the doc
+      rather than kept around. <b>Frames 1, 2, 3 and 5 are done</b> — two decisions left below.</p>
   </div>
 
   <div class="rules">
-    <h2>Four things to decide — each has a recommendation</h2>
+    <h2>Two things to decide — each has a recommendation</h2>
     <ol>
-      <li><b>Mobile card</b> — mobile uses a different action bar. <i>Recommended: same two icons, right end of it.</i> → frame 2</li>
-      <li><b>Mobile sheet header</b> — it has no S/M/L/XL to sit beside. <i>Recommended: circular peers of the ×.</i> → frame 5</li>
-      <li><b>Account page</b> — how per-thread email fits the Weekly/Event switches. <i>Recommended: one new master row.</i> → frame 6</li>
+      <li><b>Account page</b> — how per-thread email fits the Weekly/Event switches you already ship. <i>Recommended: one new master row.</i> → frame 6</li>
       <li><b>The 1,519 subscriptions already emailing members</b> — <i>Recommended: change no data, make them visible and one tap from off.</i> → frame 7</li>
     </ol>
+    <p style="font:400 13px/1.6 var(--lg-font-sans);color:var(--lg-mute);margin:12px 0 0">
+      Plus one with no frame: whether an explicit email toggle should send email as it happens, or
+      only feed the weekly recap — at the bottom of this page.</p>
   </div>
 
   <h2 class="sec">Frame 1 — the feed card <span class="ok">gated</span></h2>
@@ -103,28 +105,26 @@
     <figure><img src="shots/card-d-dark.png" alt="Desktop feed card, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
   </div>
 
-  <h2 class="sec">Frame 2 — the mobile card <span class="ask">needs you</span></h2>
-  <h3 class="fr">Recommended: the same two icons, right end of the mobile bar</h3>
+  <h2 class="sec">Frame 2 — the mobile card <span class="ok">gated</span></h2>
+  <h3 class="fr">The same two icons, right end of the mobile bar</h3>
   <p class="fr-note">Mobile cards use a different, sparser action bar — only Like, replies and Share,
-    with wide gaps — so unlike desktop there is room, with space to spare.
-    <b>The alternative</b> is to leave mobile cards alone and let the sheet header carry both. Cleaner
-    card, but then someone scrolling the feed can't opt in to anything without opening every thread
-    first, which is most of what a card control is for. Both are drawn.</p>
+    with wide gaps — so unlike desktop there is room, with space to spare. Icon-only, 44px touch
+    targets. Your reason for choosing it is worth keeping: a card control whose whole point is opting
+    in without opening the thread is worthless if it only exists inside the thread.</p>
   <div class="grid">
     <figure><img src="shots/card-m-light.png" alt="Mobile card, light"><figcaption>Mobile 390 · light — recommended above, alternative below</figcaption></figure>
     <figure><img src="shots/card-m-dark.png" alt="Mobile card, dark"><figcaption>Mobile 390 · dark</figcaption></figure>
   </div>
   <p class="live">Live: <a href="mock-card.html">mock-card.html</a> · <a href="mock-card.html?theme=dark">dark</a></p>
 
-  <h2 class="sec">Frames 3 + 5 — the discussion modal <span class="ask">sheet needs you</span></h2>
+  <h2 class="sec">Frames 3 + 5 — the discussion modal <span class="ok">gated</span></h2>
   <h3 class="fr">Beside the size control</h3>
   <p class="fr-note">The cluster reads <b>[title] [bell] [mail] [M] [×]</b> — the two state controls
     grouped together, close rightmost. Second block shows both OFF, which is what every discussion
     looks like until someone clicks.<br><br>
-    <b>Frame 5, third block — the mobile sheet header needs your word.</b> It has no S/M/L/XL control
-    to sit beside. <b>Recommended:</b> the same two icons as round buttons between the title and the
-    ×, so the order still reads title → switches → close, exactly like desktop. The only other option
-    was a row underneath the header; rejected, it eats vertical space on the smallest screen.</p>
+    <b>Frame 5, third block — the mobile sheet header.</b> It has no S/M/L/XL control to sit beside,
+    so the two icons are round buttons between the title and the ×, keeping the order
+    title → switches → close, exactly like desktop.</p>
   <div class="grid">
     <figure><img src="shots/modal-d-light.png" alt="Modal header, light"><figcaption>Desktop 1280 · light</figcaption></figure>
     <figure><img src="shots/modal-d-dark.png" alt="Modal header, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
@@ -211,6 +211,19 @@
     <p>With opt-in now the rule, the natural answer is that <b>an explicit envelope toggle is what
       earns you the email</b> — a per-discussion email switch that never sends email would be a
       contradiction. But that is your call, not ours, so nothing has been decided.</p>
+  </div>
+
+  <div class="open" style="border-color:var(--lg-sage);background:var(--lg-sage-tint)">
+    <h2 style="color:var(--lg-sage-d)">Heads-up — two lanes are designing your account page</h2>
+    <p>Frame 6 adds a <b>Discussion emails</b> row to the email preferences card. The weekly-recap
+      lane on dev2 is building its per-user digest section into that <b>same card</b>, governed by
+      the Weekly Digest switch you already ship. Nobody has done anything wrong — the two just
+      arrived from opposite ends.</p>
+    <p>The rule we are proposing keeps them from fighting: <b>the account page holds one switch per
+      kind of email; the per-discussion switches decide which discussions are in that kind; and a
+      recap is content inside a kind, never a new kind of its own.</b> If the recap stays under the
+      Weekly Digest switch rather than growing its own, both land cleanly and you keep one coherent
+      page instead of two half-designs.</p>
   </div>
 
   <p class="foot">Mock tooling, never shipped. Frames shot serially with headless Chrome on dev1;
