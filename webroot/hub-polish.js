@@ -4848,7 +4848,14 @@
   var lgSignInSheet = null;
   function ensureSignInSheet() {
     if (lgSignInSheet) return lgSignInSheet;
-    var D = 'html[data-lguser-theme="dark"]';
+    // BOTH dark signals. The pre-paint boot script stamps data-lguser-theme AND
+    // data-lguser-dark on <html>, and this file already keys off both in places
+    // (the lrs composer bar). Matching only one is how a panel renders white on a
+    // dark page — cheap to cover, and dark is known-fragile here (G4: the
+    // --lg-panel-* tokens are not loaded on /hub at all).
+    var dk = function (sel) {
+      return 'html[data-lguser-theme="dark"] ' + sel + ',html[data-lguser-dark="1"] ' + sel;
+    };
     var st = document.createElement('style');
     st.textContent = [
       // Sits ABOVE lrs (…520) and the composer family (…560/570/580) because it can
@@ -4867,10 +4874,10 @@
         'font:700 .9375rem/1 var(--lg-font-sans,sans-serif);padding:.875rem 1.25rem;cursor:pointer;text-decoration:none}',
       '#looth-signin-sheet .lgsi-b--go{background:var(--lguser-accent,var(--lg-sage,#87986a));color:#fff}',
       '#looth-signin-sheet .lgsi-b--x{background:none;color:var(--lg-mute,#6b7362);margin-top:.25rem}',
-      D + ' #looth-signin-sheet .lgsi-card{background:#1b1e21;color:#e5e7e1}',
-      D + ' #looth-signin-sheet .lgsi-p{color:#9aa79b}',
-      D + ' #looth-signin-sheet .lgsi-b--go{background:var(--lg-sage-d,#6b7c52)}',
-      D + ' #looth-signin-sheet .lgsi-b--x{color:#9aa79b}'
+      dk('#looth-signin-sheet .lgsi-card') + '{background:#1b1e21;color:#e5e7e1}',
+      dk('#looth-signin-sheet .lgsi-p') + '{color:#9aa79b}',
+      dk('#looth-signin-sheet .lgsi-b--go') + '{background:var(--lg-sage-d,#6b7c52)}',
+      dk('#looth-signin-sheet .lgsi-b--x') + '{color:#9aa79b}'
     ].join('\n');
     (document.head || document.documentElement).appendChild(st);
 
