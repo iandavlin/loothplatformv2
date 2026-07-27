@@ -116,16 +116,9 @@ class LG_WD_Recap_Source {
 			return '';
 		}
 
-		return LG_WD_Recap::render( $payload, self::render_opts() );
+		return LG_WD_Recap::render( $payload );
 	}
 
-	/**
-	 * Layout knobs, filterable so the answers to the three open design questions
-	 * (WEEKLY-DIGEST-RECAP.md §4) become a one-line change rather than a rewrite.
-	 */
-	public static function render_opts(): array {
-		return apply_filters( 'lg_wd_recap_opts', LG_WD_Recap::defaults() );
-	}
 
 	/**
 	 * A FluentCRM subscriber's WP user id.

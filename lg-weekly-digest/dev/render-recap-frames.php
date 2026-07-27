@@ -103,6 +103,11 @@ $frames = [
 		'note'  => 'Real: Jim Hensley (wp 1891) — a single pending connection request from Doug Proper. The thinnest section that is still worth sending.',
 		'data'  => $fixtures['one_connection'],
 	],
+	'long-name' => [
+		'title' => 'The longest real name on the platform (71 characters)',
+		'note'  => 'Real: Dave Staudte (wp 32) — "Dave Staudte (rhymms with &ldquo;Howdy&rdquo;) NB Guitar Repair (New Braunfels, TX)", the longest display_name in the store at 71 chars. The greeting says "Dave": the platform greets on the FIRST TOKEN only, because the legacy name system backfilled business names into display_name. The ROWS carry the long ones — including "Dan Wolf &amp; Steve Baker…", which is stored HTML-entity-damaged and must render with a real ampersand.',
+		'data'  => $fixtures['long_name'],
+	],
 	'empty' => [
 		'title' => 'A member with nothing this week',
 		'note'  => 'EMPTY MEANS ABSENT. No heading, no panel, no "you have 0 notifications". The digest is byte-identical to what it is today — scroll: the intro rule runs straight into the first curated section.',
@@ -110,19 +115,19 @@ $frames = [
 	],
 ];
 
-// Layout variants: A is the recommendation, B the single alternative per question.
+// ONE layout. Ian picked the recommended design from the frames on 2026-07-27 and
+// asked for the alternatives to be dropped rather than left as options, so the
+// renderer no longer has knobs and neither does this deck. The rejected shapes
+// survive as history in docs/atlas/WEEKLY-DIGEST-RECAP.md §4.
 $variants = [
-	'a-recommended'   => [ 'opts' => [],                        'where' => 'top',    'title' => 'A — RECOMMENDED: titles, per-row deep links, at the top' ],
-	'b-no-titles'     => [ 'opts' => [ 'titles' => false ],     'where' => 'top',    'title' => 'B — alternative: counts + senders only, no discussion titles' ],
-	'c-one-hub-link'  => [ 'opts' => [ 'deep_links' => false ], 'where' => 'top',    'title' => 'C — alternative: no per-row links, one "Open the Hub" button' ],
-	'd-bottom'        => [ 'opts' => [],                        'where' => 'bottom', 'title' => 'D — alternative: same section, placed below the curated content' ],
+	'a-recommended' => [ 'where' => 'top', 'title' => 'The shipping design' ],
 ];
 
 $written = [];
 foreach ( $frames as $fkey => $frame ) {
 	$data = hydrate_titles( $frame['data'] );
 	foreach ( $variants as $vkey => $variant ) {
-		$section = LG_WD_Recap::render( $data, $variant['opts'] );
+		$section = LG_WD_Recap::render( $data );
 		$html    = frame_inject( $base_html, $section, $variant['where'] );
 		$file    = "$OUT/$fkey--$vkey.html";
 		file_put_contents( $file, $html );

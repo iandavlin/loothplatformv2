@@ -41,44 +41,35 @@ class LG_WD_Recap {
 	/** Most rows we will draw before rolling the tail into one "N more" line. */
 	const MAX_ROWS = 8;
 
-	/**
-	 * Layout knobs. Defaults are the SHIPPING recommendation; the alternates exist
-	 * so the design frames can render the same real data both ways for a decision
-	 * (docs/atlas/WEEKLY-DIGEST-RECAP.md §4).
-	 *
-	 *  titles      true  → name the discussion ("on 'Suggest an alternative…'")
-	 *                      false → counts + senders only, no title
-	 *  deep_links  true  → every row links to its own target (bridge's target_url)
-	 *                      false → no per-row links, one "Open the Hub" button
-	 *  reactions   true  → include reaction rows (batched, one row per target)
-	 */
-	public static function defaults(): array {
-		return [ 'titles' => true, 'deep_links' => true, 'reactions' => true ];
-	}
-
 	// ── Public API ────────────────────────────────────────────────────────────
 
 	/**
 	 * Render the section, or '' when the member has nothing this week.
 	 *
-	 * @param array $payload  Normalised recap payload — see LG_WD_Recap_Source.
-	 * @param array $opts     Layout knobs, see defaults().
+	 * THE SHAPE IS SETTLED (Ian, 2026-07-27, from the frames): discussion titles are
+	 * named, every row carries its own deep link, reactions are included batched,
+	 * and the section sits at the top of the digest. The layout knobs the frames
+	 * used to draw the alternatives are GONE ON PURPOSE — Ian asked for the chosen
+	 * design to be built and the alternative dropped rather than left as an option,
+	 * so nobody re-litigates it from a config flag. The alternatives survive only as
+	 * history in docs/atlas/WEEKLY-DIGEST-RECAP.md §4.
+	 *
+	 * @param array $payload Normalised recap payload — see LG_WD_Recap_Source.
 	 */
-	public static function render( array $payload, array $opts = [] ): string {
-		$opts = array_merge( self::defaults(), $opts );
-		$rows = self::build_rows( $payload, $opts );
+	public static function render( array $payload ): string {
+		$rows = self::build_rows( $payload );
 
-		// EMPTY MEANS ABSENT. No heading, no panel, no zero-state.
+		// EMPTY MEANS ABSENT. No heading, no panel, no zero-state, no greeting.
 		if ( ! $rows ) {
 			return '';
 		}
 
 		$body = '';
 		foreach ( $rows as $i => $row ) {
-			$body .= self::render_row( $row, $opts, $i === 0 );
+			$body .= self::render_row( $row, $i === 0 );
 		}
 
-		$html = self::render_heading();
+		$html = self::render_heading() . self::render_greeting( $payload );
 
 		$html .= '<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"'
 			. ' style="background-color:#FFFDF7;border:1px solid #E6DFCE;border-radius:6px;margin-bottom:10px;">'
@@ -87,12 +78,6 @@ class LG_WD_Recap {
 			. $body
 			. '</table>'
 			. '</td></tr></table>';
-
-		// When per-row deep links are OFF the rows are inert, so the section needs
-		// exactly one way back into the product or it is a dead end.
-		if ( empty( $opts['deep_links'] ) ) {
-			$html .= self::render_hub_button();
-		}
 
 		return '<div style="margin-bottom:28px;">' . $html . '</div>';
 	}
@@ -107,8 +92,7 @@ class LG_WD_Recap {
 	 * requests sit last because they are an action you take at your leisure. A
 	 * strict recency sort buries a mention under three reactions.
 	 */
-	public static function build_rows( array $payload, array $opts ): array {
-		$opts  = array_merge( self::defaults(), $opts );
+	public static function build_rows( array $payload ): array {
 		$notes = $payload['notifications'] ?? [];
 		$dms   = $payload['dms'] ?? [];
 
@@ -119,7 +103,7 @@ class LG_WD_Recap {
 
 		foreach ( $notes as $n ) {
 			$type = (string) ( $n['type'] ?? '' );
-			$row  = self::row_from_notification( $n, $opts );
+			$row  = self::row_from_notification( $n );
 			if ( ! $row ) {
 				continue;
 			}
@@ -128,9 +112,7 @@ class LG_WD_Recap {
 			} elseif ( $type === 'forum.reply_to_topic' || $type === 'forum.reply_to_reply' ) {
 				$replies[] = $row;
 			} elseif ( $type === 'reaction.on_post' ) {
-				if ( ! empty( $opts['reactions'] ) ) {
-					$reacts[] = $row;
-				}
+				$reacts[] = $row;
 			} elseif ( $type === 'connection_request' || $type === 'connection_accept' ) {
 				$conns[] = $row;
 			}
@@ -166,7 +148,7 @@ class LG_WD_Recap {
 	 * do not actually know where the thing lives. Same rule the bell itself uses —
 	 * never a dead link, and here, never a row that names something unreachable.
 	 */
-	private static function row_from_notification( array $n, array $opts ): ?array {
+	private static function row_from_notification( array $n ): ?array {
 		$type    = (string) ( $n['type'] ?? '' );
 		$actor   = self::clean_name( (string) ( $n['actor_name'] ?? '' ) );
 		$count   = max( 1, (int) ( $n['actor_count'] ?? 1 ) );
@@ -182,7 +164,7 @@ class LG_WD_Recap {
 			return null;
 		}
 
-		$where = ( ! empty( $opts['titles'] ) && $title !== '' ) ? $title : '';
+		$where = $title;   // titles are named — Ian's call, no longer optional
 
 		switch ( $type ) {
 			case 'forum.mention':
@@ -320,7 +302,56 @@ class LG_WD_Recap {
 			. '</tr></table></div>';
 	}
 
-	private static function render_row( array $row, array $opts, bool $first ): string {
+	/**
+	 * "Here's your week, Dave." — or, with no name to use, "Here's your week."
+	 *
+	 * MATCHES THE EXISTING CONVENTION, does not invent a second one. The platform
+	 * already greets members on the front feed (archive-poc/web/index.php:504-518,
+	 * "Welcome back, <first>."), and that code carries a rationale this section must
+	 * inherit rather than re-decide:
+	 *
+	 *   FIRST WHITESPACE TOKEN ONLY. The legacy name-field system backfilled BUSINESS
+	 *   names into profile display_name for many members — "Buck Van Laarhoven VL
+	 *   Guitar Repair", "Dave Staudte (rhymms with "Howdy") NB Guitar Repair (New
+	 *   Braunfels, TX)" — so the first word is the only token reliably the PERSON and
+	 *   not the business. Greeting someone with 71 characters of shop name is exactly
+	 *   what that convention exists to prevent, which is also why the long-name frame
+	 *   in the deck shows a short greeting above a long row.
+	 *
+	 *   NO NAME → NO NAME. The front feed drops to a name-less greeting rather than
+	 *   substituting anything; so does this. Never user_login, never user_nicename,
+	 *   never a Patreon handle — a member who set their own name must see that name,
+	 *   and a member who set none must not be shown a machine one. (For the record:
+	 *   zero of the 1,851 live profiles have an empty display_name and zero have a
+	 *   bare patreon handle in it, so this is a guard, not a common path.)
+	 *
+	 * The name is decoded before use — 20 live display_names carry HTML entity damage
+	 * ("Georgios Gerogiannis Rupicapra, Wood &amp; Voltage"), and greeting someone
+	 * "Wood &amp; Voltage" would be worse than not greeting them. clean_name() does
+	 * the decode; esc_html() at the end re-encodes correctly for the email.
+	 */
+	private static function render_greeting( array $payload ): string {
+		$name = self::clean_name( (string) ( $payload['display_name'] ?? '' ) );
+
+		$first = '';
+		if ( $name !== '' ) {
+			$parts = preg_split( '~\s+~', $name );
+			$first = is_array( $parts ) ? trim( (string) $parts[0] ) : '';
+		}
+
+		$line = $first !== ''
+			? 'Here&rsquo;s your week, ' . esc_html( $first ) . '.'
+			: 'Here&rsquo;s your week.';
+
+		// A <div>, not a <p>, on purpose: the section's invariant is that it contains
+		// NO prose markup at all (<p>, <br>, <blockquote>, <img>), which is what
+		// pasted content would drag in, and the verify asserts exactly that with no
+		// carve-outs. A carve-out for "our own paragraph" is where a future leak
+		// would hide. Renders identically in every email client.
+		return '<div style="font-size:15px;color:#5C4E3A;line-height:1.5;margin:0 0 12px;">' . $line . '</div>';
+	}
+
+	private static function render_row( array $row, bool $first ): string {
 		$border = $first ? '' : 'border-top:1px solid #EFE9DA;';
 		$lead   = esc_html( $row['lead'] );
 		$sub    = $row['sub'] !== '' ? esc_html( $row['sub'] ) : '';
@@ -332,7 +363,7 @@ class LG_WD_Recap {
 
 		$leadHtml = '<span style="font-size:16px;font-weight:700;color:#2B2318;line-height:1.45;">' . $lead . '</span>';
 
-		if ( ! empty( $opts['deep_links'] ) && $url !== '' ) {
+		if ( $url !== '' ) {
 			$href     = esc_url( self::absolute( $url ) );
 			$leadHtml = '<a href="' . $href . '" style="font-size:16px;font-weight:700;color:#2B2318;'
 				. 'line-height:1.45;text-decoration:none;border-bottom:1px solid #ECB351;">' . $lead . '</a>';
@@ -346,15 +377,6 @@ class LG_WD_Recap {
 			. '<td valign="top" style="' . $border . 'padding:12px 0 12px 10px;">'
 			. $leadHtml . $subHtml
 			. '</td></tr>';
-	}
-
-	private static function render_hub_button(): string {
-		$href = esc_url( self::absolute( '/hub/' ) );
-		return '<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:2px 0 0;"><tr>'
-			. '<td style="background-color:#ECB351;border-radius:4px;padding:10px 20px;">'
-			. '<a href="' . $href . '" style="font-size:14px;font-weight:700;color:#2B2318;'
-			. 'text-decoration:none;letter-spacing:.5px;">Open the Hub &rarr;</a>'
-			. '</td></tr></table>';
 	}
 
 	/** A quiet per-kind accent so the eye can sort the list without extra words. */

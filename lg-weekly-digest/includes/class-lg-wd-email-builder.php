@@ -59,7 +59,7 @@ class LG_WD_Email_Builder {
             if ( $uid > 0 ) {
                 $payload = LG_WD_Recap_Source::payload_for( $uid );
                 if ( $payload ) {
-                    $replacement = LG_WD_Recap::render( $payload, LG_WD_Recap_Source::render_opts() );
+                    $replacement = LG_WD_Recap::render( $payload );
                 }
             }
         }

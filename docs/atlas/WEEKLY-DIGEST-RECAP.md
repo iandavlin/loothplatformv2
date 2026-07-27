@@ -1,7 +1,8 @@
 # WEEKLY-DIGEST-RECAP
 
-> **Status:** BUILT, verified on dev2, **awaiting Ian's answers to §4** and a keeper window for
-> the one unexercised leg (§7). Nothing is deployed; no campaign left draft; nothing was sent.
+> **Status:** BUILT and verified on dev2. **Design DECIDED by Ian 2026-07-27 (§4) — closed, not
+> an open question.** Still needs a keeper window for the one unexercised leg (§7). Nothing is
+> deployed; no campaign left draft; nothing was sent.
 > **Lane:** weekly-digest-recap (branch `weekly-digest-recap`). **Box:** dev2. **Date:** 2026-07-27.
 > Cross-refs: NOTIFICATIONS-AUDIT.md (**stale in one important way — see §2**),
 > THREAD-FOLLOW-SPEC.md §2.6b (**overlaps this lane — see §6**), OPERATOR.md, SYSTEM-MAP.md.
@@ -98,7 +99,9 @@ Three properties of those rows are what made this lane cheap:
   split, not a gap to be closed by this lane.
 - **Anything before 2026-07-12.** The bridge does not backfill. The first digests will be thinner
   than steady state, and on dev2 specifically there is barely any material at all (§5).
-- **Whether a thread is public.** Rows carry no visibility flag; see §4 Q1.
+- **Whether a thread is public.** Rows carry no visibility flag. Ian ruled that titles are named
+  (§4), which is safe for public forums; if a private or tier-gated forum ever needs excluding,
+  the gate is `forums.forum.visibility` and it is a small addition to `Recap.php`, not a redesign.
 
 **What WordPress cannot do:** read any of it. The WP pool runs as `looth-dev`, which holds **zero**
 grants on the `profile_app` database (`select count(*) from information_schema.role_table_grants
@@ -148,41 +151,62 @@ recipient's if that address is a member; the wp_mail fallback resolves for its s
 
 ---
 
-## 4. Open questions for Ian — drawn, not argued
+## 4. The design — DECIDED, closed
 
-All three are rendered against the same real data at
-`https://dev2.loothgroup.com/mockups/wd-recap/` (frames A–D). Recommendation first, one
-alternative each.
+Ian saw the frames and picked the recommended design on **2026-07-27**. He asked for the
+alternatives to be **dropped rather than left as options**, so they are gone from the renderer:
+there is no layout flag, no filter, and nothing to flip. They are recorded here only so nobody
+proposes them again as if they were new.
 
-**Q1. May discussion titles appear?**
-**A (recommended)** — name the discussion: *2 new replies on your discussion — "Suggest an
-alternative to concave fret file" — Doug Proper and 1 other.*
-**B** — counts and senders only, no title.
-*Why A:* the title is what makes the row worth the tap, and a public forum title is already
-public — it is on the Hub, in search, and in the digest's own "From the Forum" section. It is not
-message content, which is what the ruling forbids. **The catch:** a private-forum or tier-gated
-title is *not* public and the recap has no idea which is which (§2). If A, titles get gated on
-`forums.forum.visibility = 'public'` and fall back to B's wording otherwise — a small addition to
-`Recap.php`, not a redesign. **This is the same question THREAD-FOLLOW-SPEC.md §6 Q3 asks; one
-answer settles both lanes.**
+**What ships:**
 
-**Q2. Per-row deep links, or one "Open the Hub" button?**
-**A (recommended)** — every row links to its own target.
-**C** — rows inert, one gold "Open the Hub →" button.
-*Why A:* the brief asked for deep links and the links already exist (§2). **Conflict to be aware
-of:** THREAD-FOLLOW-SPEC.md §2.6b proposes the opposite — one Hub link, "keeps the email inert."
-Two lanes are pointed in different directions; A follows the brief given to this one.
+| | Decision |
+|---|---|
+| Discussion titles | **Named.** "2 new replies on your discussion — *"Suggest an alternative to concave fret file"* — Doug Proper and 1 other." A public forum title is already public — it is on the Hub, in search, and in the digest's own "From the Forum" section. It is not message content, which is what the ruling forbids. |
+| Links | **Per row.** Each row links to its own target, taken from the bridge's stamped `target_url`. |
+| Placement | **Top**, directly under the intro rule, above the curated content. |
+| Greeting | **The member's profile name, first token only** — see §4.1. |
+| Reactions | **In**, batched: one row per thing reacted to. |
+| Length | **Caps at 8 rows**, tail rolled into "N more updates waiting for you" — never truncated silently. |
 
-**Q3. Top or bottom?**
-**A (recommended)** — directly under the intro rule, above the curated content.
-**D** — below the curated content, above the sign-off.
-*Why A:* it is the only part of the email about *them*, and it is three or four lines.
+**Rejected, do not re-propose:** counts-and-senders without titles; inert rows behind a single
+"Open the Hub" button (this was THREAD-FOLLOW-SPEC.md §2.6b's proposal — see §6); the section
+placed below the curated content.
 
-**Decided without asking** (say if either is wrong): reactions are **in**, one row per thing
-reacted to; and the section **caps at 8 rows** with a "N more updates waiting for you" tail
-rather than running long or truncating silently.
+### 4.1 The greeting
 
----
+"Here's your week, Dave." — and with no name on file, "Here's your week."
+
+**This is not a new convention.** The platform already greets members on the front feed
+(`archive-poc/web/index.php:504-518`, "Welcome back, <first>."), and that code carries a rationale
+this section inherits rather than re-decides:
+
+- **First whitespace token only.** The legacy name-field system backfilled BUSINESS names into
+  profile `display_name` for many members — "Buck Van Laarhoven VL Guitar Repair", or the longest
+  in the store at 71 characters, `Dave Staudte (rhymms with "Howdy") NB Guitar Repair (New
+  Braunfels, TX)`. The first word is the only token reliably the *person* and not the business.
+  Greeting someone with 71 characters of shop name is exactly what the convention prevents. Long
+  names still appear in the ROWS, where they are actor names and unavoidable; the deck's
+  long-name frame is the one to check for wrapping.
+- **No name -> no name.** The front feed drops to a name-less greeting rather than substituting
+  anything, and so does this. **Never `user_login`, never `user_nicename`, never a Patreon
+  handle:** a member who set their own name must see that name, and a member who set none must not
+  be shown a machine one. (Guard, not a common path — of 1,851 live profiles, 0 have an empty
+  `display_name` and 0 have a bare Patreon handle in it.)
+
+**Source:** `profile_app.users.display_name`, carried on the recap payload by `Recap::forWpIds()`.
+That is the same row `/u/` renders — the profile's own name, not WP's copy of it.
+
+**Entity damage is decoded before render.** 20 live `display_name`s carry HTML entities from the
+legacy import — "Georgios Gerogiannis Rupicapra, Wood &amp; Voltage", "Dan Wolf &amp; Steve Baker
+Chicago Fret Works Guitar &amp; Amp Repair". `clean_name()` decodes once (the store is
+singly-encoded — checked: 0 rows double-encoded) and `esc_html()` re-encodes correctly for the
+email. Greeting someone "Wood &amp; Voltage" would be worse than not greeting them.
+
+**Markup note:** the greeting is a `<div>`, not a `<p>`, on purpose. The section's invariant is
+that it contains NO prose markup at all (`<p>`, `<br>`, `<blockquote>`, `<img>`) — that is what
+pasted content would drag in — and the verify asserts exactly that with no carve-outs. A carve-out
+for "our own paragraph" is where a future leak would hide.
 
 ## 5. Deep links, and the one that does not exist
 
@@ -216,8 +240,8 @@ must not ship two of them. How they line up:
 |---|---|---|
 | Scope | replies in threads you **follow** | **everything unread**: replies, mentions, reactions, DMs, connections |
 | Source | `forums.forum_subscription` ⋈ replies, via a new `bb-mirror-api/v0/follow-recap` | `profile_app.notifications` + `message_recipients`, via `internal-recap` |
-| Links | one "Open the Hub" | per-row deep links (§4 Q2) |
-| Titles | open question (§6 Q3) | same open question (§4 Q1) |
+| Links | one "Open the Hub" | **DECIDED: per-row deep links** (§4) |
+| Titles | open question (§6 Q3) | **DECIDED: named** (§4) — the same question, now answered |
 | Per-user mechanism | "**Feasibility = dev2 verify**" | **answered: it works** (§3) |
 
 **The unifying fact:** thread-follow's proposed `forum.followed_topic` is just another
@@ -253,6 +277,9 @@ Run on dev2, read-only, nothing sent, no campaign created.
 | **Empty means absent** | wp:1170 (nothing this window) | no section; body **byte-identical** to the no-recap body |
 | Never content | rendered sections vs. the verbatim stored text of the replies members were notified about | no stored text, no prose markup, in any section |
 | The artifact, looked at | real email HTML rendered in headless Chrome at 390 / 720 | correct at both widths |
+| Greeting uses the profile name | 5 real members rendered from one campaign | "Markus", "Doug", "Tony", "Jim", and "Dave" from a 71-char display_name |
+| Longest real name (71 ch) | `Dave Staudte (rhymms with "Howdy") NB Guitar Repair (New Braunfels, TX)`, wp:32, at 390px | greeting reads "Dave"; long ACTOR names wrap across lines, no overflow, no truncation |
+| Entity damage decodes | stored `Dan Wolf &amp; Steve Baker … Guitar &amp; Amp Repair` rendered in the long-name frame | real ampersands on screen |
 
 **NOT verified — the one leg:** `curl → nginx → FPM` for `/profile-api/v0/internal/recap`. The
 location block is written in `platform/nginx/strangler-profile-app.conf` but is **not live on

@@ -40,7 +40,7 @@ final class Recap
      * posture internal-notify.php takes, expressed as absence rather than an error.
      *
      * @param int[] $wpUserIds
-     * @return array<int, array{notifications: list<array>, dms: list<array>}>
+     * @return array<int, array{display_name: string, notifications: list<array>, dms: list<array>}>
      */
     public static function forWpIds(array $wpUserIds, int $days = 7): array
     {
@@ -54,9 +54,14 @@ final class Recap
         $pg   = Db::pg();
 
         // wp id ↔ uuid, both directions — the caller speaks wp ids, the store uuids.
+        //
+        // display_name comes back with them because the digest greets the member by
+        // the name their PROFILE shows. It has to be THIS column: not WP's
+        // user_login, not a Patreon handle, not user_nicename. A member who set
+        // their own name must be greeted by it, and this row is what /u/ renders.
         $ph   = implode(',', array_fill(0, count($wpUserIds), '?'));
         $st   = $pg->prepare(
-            "SELECT b.wp_user_id, u.uuid FROM users u
+            "SELECT b.wp_user_id, u.uuid, u.display_name FROM users u
                JOIN wp_user_bridge b ON b.user_id = u.id
               WHERE b.wp_user_id IN ($ph)"
         );
@@ -64,16 +69,18 @@ final class Recap
 
         $uuidByWp = [];
         $wpByUuid = [];
+        $out      = [];
         foreach ($st->fetchAll() as $r) {
-            $uuidByWp[(int)$r['wp_user_id']] = (string)$r['uuid'];
-            $wpByUuid[(string)$r['uuid']]    = (int)$r['wp_user_id'];
+            $wp = (int)$r['wp_user_id'];
+            $uuidByWp[$wp]                = (string)$r['uuid'];
+            $wpByUuid[(string)$r['uuid']] = $wp;
+            $out[$wp] = [
+                'display_name'  => (string)($r['display_name'] ?? ''),
+                'notifications' => [],
+                'dms'           => [],
+            ];
         }
         if (!$uuidByWp) return [];
-
-        $out = [];
-        foreach ($uuidByWp as $wp => $_uuid) {
-            $out[$wp] = ['notifications' => [], 'dms' => []];
-        }
 
         $uuids = array_values($uuidByWp);
         $uph   = implode(',', array_fill(0, count($uuids), '?'));
