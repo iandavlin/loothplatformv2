@@ -2,74 +2,82 @@
 declare(strict_types=1);
 
 /**
- * backfill-slugs.php — re-derive member profile URLs from the profile NAME.
+ * backfill-slugs.php — give members a profile URL made of their NAME.
  *
- * WHAT THIS IS FOR
- * ----------------
- * `/u/<slug>` resolves from ONE store: profile_app (Postgres) `users.slug`. This script
- * is the only supported way to bulk-change that column. It never touches WordPress.
+ * `/u/<slug>` resolves from ONE store: profile-app Postgres `users.slug`. This script is
+ * the only supported way to bulk-change that column. It never writes WordPress.
  *
- * THE THREE RULINGS IT IMPLEMENTS (Ian)
- *   1. The URL follows the profile NAME. Members do not pick a handle. (2026-07-19)
- *   2. KEEP THE BUSINESS NAME — derive from display_name AS IT STANDS, no tail pruning.
- *      "Franklin Linker Linker Guitars LLC" -> `franklin-linker-linker-guitars`
- *      (the LLC falls off the 30-char cap, NOT off a prune rule). (2026-07-27)
- *   3. Every existing URL keeps working. Each change parks the OLD slug in
- *      `slug_history`, which u.php step 4 turns into a 301. Nothing ever 404s
- *      because of this script.
+ * THE RULINGS IT IMPLEMENTS (Ian)
+ * -------------------------------
+ *  R1  The slug is THE PROFILE DISPLAY NAME, CLEANED (2026-07-27, supersedes the 7/25
+ *      chain in docs/atlas/PATREON-HANDLE-BACKFILL-DRYRUN.md). Not Patreon full_name,
+ *      not vanity, not the email local-part. "Cleaned" = decode entities, strip
+ *      punctuation, collapse whitespace, lowercase, dash-join, 30-char cap trimmed at a
+ *      word boundary. It does NOT mean pruning the business tail.
  *
- * IDEMPOTENCY / RESUME
- *   A row is only written when the proposed slug DIFFERS from the current one, and the
- *   collision domain excludes the member's own slug and own history. So running this
- *   twice is a no-op and can never double-suffix (`steve2` -> `steve22`). There is no
- *   separate resume file: if it dies halfway, re-run it — the rows already applied fall
- *   out of the candidate set on their own.
+ *  R2  KEEP THE BUSINESS NAME. "Doug Lawrence Doug Lawrence Guitars" derives from that
+ *      whole string. The business prune is a separate, PARKED thing.
+ *
+ *  R3  NO NUMERIC SUFFIXES AS THE ANSWER TO A COLLISION (2026-07-27). Two Daves do not
+ *      become dave2/dave3. A contested handle is EXPANDED from a fuller identity
+ *      (Patreon full_name -> vanity -> email local-part) into `dave-thurston`. A numeric
+ *      suffix is a LAST RESORT that must be reported by name, and the target is zero.
+ *
+ *  R4  NEVER OVERWRITE A NAME THE MEMBER SUBMITTED (2026-07-27, HARD, outranks R3 where
+ *      they conflict). API expansion is only licensed where we are inventing an identity
+ *      for someone who never supplied one. It is NOT licence to "improve" a chosen name.
+ *      See PROVENANCE below — this is the load-bearing safety property.
+ *
+ *  R5  Every existing URL keeps working. Each change parks the outgoing handle in
+ *      `slug_history`, which u.php turns into a 301. Nothing 404s because of this script.
+ *
+ * PROVENANCE — how we decide a name is the member's own
+ * -----------------------------------------------------
+ * There is NO stored provenance. Measured, not assumed:
+ *   - `users` has no source/origin/provenance column, and there is no audit table.
+ *   - `updated_at` IS maintained by a `users_touch` trigger, but it is USELESS as an
+ *     intent signal: 1,920 of 1,925 dev2 rows differ from `created_at`, because avatar,
+ *     location and geocode backfills touched nearly every row.
+ *   - `profiles.claimed_via` is 96% polluted the same way — 659 of 684 dev2 rows are
+ *     `backfill_location`. Only `onboard|direct|menu` (24 rows) reflect a real person.
+ *   - Name SHAPE cannot discriminate: zero members have a `patreon_*` or empty
+ *     display_name. Everybody already looks like a human.
+ *
+ * So the only decisive test is comparing the stored display_name against what Patreon
+ * holds: names were seeded FROM the Patreon import, so a name that DIFFERS from Patreon's
+ * full_name was edited by the member and is theirs. That needs the creator token.
+ *
+ * Everything else is treated as USER-SUBMITTED — the conservative default — which means
+ * it is derived from, never expanded from. Unknown provenance never licenses a rewrite.
  *
  * USAGE
- *   sudo -u profile-app php backfill-slugs.php                        # dry run, scope=junk
- *   sudo -u profile-app php backfill-slugs.php --scope=repair
- *   sudo -u profile-app php backfill-slugs.php --scope=repair --apply
- *   ... [--limit=N] [--tsv=/path/out.tsv] [--html=/path/out.html]
+ *   sudo -u profile-app php backfill-slugs.php --html=/path/report.html   # dry run
+ *   sudo -u profile-app php backfill-slugs.php --apply
+ *   [--scope=junk|repair] [--limit=N] [--tsv=] [--db-only] [--applied-since=MIN]
  *
- * SCOPES — smallest blast radius first. Dry-run always reports BOTH tiers regardless,
- * so one report shows what each scope would do.
- *   junk    (default) members whose slug is a patreon_* placeholder or missing entirely.
- *   repair  junk + members whose current slug MISSPELLS their name (non-ASCII stripped
- *           rather than transliterated: `Åke Nathorst` -> `ke-nathorst`) or was derived
- *           from entity-damaged text (`&amp;` -> "amp").
- *
- * There is deliberately NO "re-derive everyone" scope. It was built, run, and rejected
- * on the evidence: because the canonical form of some names is already held by another
- * member, a blanket re-derivation proposed moving `iandavlin` -> `ian-davlin5` and
- * `charlesfox` -> `charles-fox2`. A member who already owns a clean unique handle can
- * only be made worse by re-deriving it. Healthy slugs are never candidates.
- *
- * WHAT IT DELIBERATELY DOES NOT DO
- *   - Does not write WordPress. `user_nicename` stays patreon_* on purpose: legacy
- *     `/members/<nicename>/` already 301s to `/u/<nicename>`, which slug_history then
- *     301s to the current slug. Those links work; rewriting nicename would risk WP
- *     author archives and BuddyBoss URLs for no gain.
- *   - Does not repair `display_name`. Entities are decoded for DERIVATION only. Fixing
- *     the stored name is the parked name-cleanup lane.
- *   - Does not touch unbridged identities (no wp_user_bridge = not a member; their /u/
- *     404s by ghost containment) or archived rows.
+ * --db-only skips the Patreon sweep (no creator token on this box): collisions then
+ * cannot be expanded and are reported as needing a ruling rather than silently suffixed.
  */
 
 require dirname(__DIR__) . '/config.php';
+require_once __DIR__ . '/lib/patreon-identity.php';
 
 use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Slug;
 
-$APPLY = in_array('--apply', $argv, true);
-$SCOPE = 'junk';
-$LIMIT = 0;
-$TSV   = null;
-$HTML  = null;
+$APPLY   = in_array('--apply', $argv, true);
+$DB_ONLY = in_array('--db-only', $argv, true);
+$SCOPE   = 'junk';
+$LIMIT   = 0;
+$SINCE   = 0;
+$TSV     = null;
+$HTML    = null;
 foreach ($argv as $a) {
-    if (str_starts_with($a, '--scope=')) $SCOPE = substr($a, 8);
-    if (str_starts_with($a, '--limit=')) $LIMIT = (int) substr($a, 8);
-    if (str_starts_with($a, '--tsv='))   $TSV   = substr($a, 6);
-    if (str_starts_with($a, '--html='))  $HTML  = substr($a, 7);
+    if (str_starts_with($a, '--scope='))         $SCOPE = substr($a, 8);
+    if (str_starts_with($a, '--limit='))         $LIMIT = (int) substr($a, 8);
+    if (str_starts_with($a, '--tsv='))           $TSV   = substr($a, 6);
+    if (str_starts_with($a, '--html='))          $HTML  = substr($a, 7);
+    if (str_starts_with($a, '--applied-since=')) $SINCE = (int) substr($a, 16);
 }
 if (!in_array($SCOPE, ['junk', 'repair'], true)) {
     fwrite(STDERR, "unknown --scope=$SCOPE (want junk|repair)\n");
@@ -77,142 +85,258 @@ if (!in_array($SCOPE, ['junk', 'repair'], true)) {
 }
 
 $pg = Db::pg();
-
-/** A patreon_* import placeholder — the thing this lane exists to remove. */
-$isJunk = fn(string $s): bool => (bool) preg_match('/^patreon[_-]?\d+$/i', trim($s));
+$isJunk     = fn(string $s): bool => (bool) preg_match('/^patreon[_-]?\d+$/i', trim($s));
 $emailLocal = fn(string $e): string => (string) preg_replace('/\+.*$/', '', explode('@', $e)[0] ?? '');
 
 // ── candidates ───────────────────────────────────────────────────────────────
-// Members only: bridged (can actually log in) and not archived. An unbridged row is
-// not a member — its /u/ 404s by ghost containment, so giving it a pretty slug would
-// just be a prettier 404.
+// Bridged (can actually log in) and not archived. An unbridged identity is not a member
+// — its /u/ 404s by ghost containment, so a prettier slug would just be a prettier 404.
 $cand = $pg->query("
-    SELECT u.id, u.display_name, u.slug, u.primary_email, b.wp_user_id
+    SELECT u.id, u.display_name, u.slug, u.primary_email, u.slug_changed_at,
+           b.wp_user_id, p.claimed_via
     FROM users u
     JOIN wp_user_bridge b ON b.user_id = u.id
+    LEFT JOIN profiles p  ON p.user_id = u.id
     WHERE u.archived_at IS NULL
     ORDER BY u.id
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-// ── collision domain ─────────────────────────────────────────────────────────
-// A candidate handle is taken if it is LIVE on another member, parked in another
-// member's slug_history (retired handles are NEVER re-issued — that is link-hijack
-// prevention, see Slug class docblock), or already claimed earlier in THIS batch.
-$live = $pg->query('SELECT id, lower(slug) s FROM users WHERE slug IS NOT NULL')->fetchAll(PDO::FETCH_ASSOC);
-$hist = $pg->query('SELECT user_id, lower(slug) s FROM slug_history')->fetchAll(PDO::FETCH_ASSOC);
-$ownerOf = [];                                   // lower(slug) => owning user_id
-foreach ($live as $r) $ownerOf[$r['s']][] = (int) $r['id'];
-foreach ($hist as $r) $ownerOf[$r['s']][] = (int) $r['user_id'];
-
-$claim = function (string $base, int $selfId) use (&$ownerOf): array {
-    $c = $base;
-    for ($i = 2; $i <= 999; $i++) {
-        $owners = $ownerOf[strtolower($c)] ?? [];
-        // free, or already ours (own live slug / own retired handle — reclaimable)
-        if (!$owners || !array_diff($owners, [$selfId])) break;
-        $c = Slug::fit($base, Slug::MAX_LEN - strlen((string) $i)) . $i;
-    }
-    $ownerOf[strtolower($c)][] = $selfId;        // claim for batch-internal uniqueness
-    return [$c, $c !== $base];
+// ── ownership map (for collision detection) ──────────────────────────────────
+// A handle is taken if it is live on another member OR parked in another member's
+// slug_history — retired handles are never re-issued, or whoever took your old handle
+// inherits every link that ever pointed at you.
+$ownerOf = [];
+foreach ($pg->query('SELECT id, lower(slug) s FROM users WHERE slug IS NOT NULL')->fetchAll(PDO::FETCH_ASSOC) as $r) {
+    $ownerOf[$r['s']][] = (int) $r['id'];
+}
+foreach ($pg->query('SELECT user_id, lower(slug) s FROM slug_history')->fetchAll(PDO::FETCH_ASSOC) as $r) {
+    $ownerOf[$r['s']][] = (int) $r['user_id'];
+}
+$freeFor = function (string $slug, int $selfId) use (&$ownerOf): bool {
+    $o = $ownerOf[strtolower($slug)] ?? [];
+    return !$o || !array_diff($o, [$selfId]);
 };
 
-// ── derive ───────────────────────────────────────────────────────────────────
-// A member is a candidate ONLY if their CURRENT slug is defective. This is the single
-// most important rule in the script, and it was learned the hard way: an earlier
-// version re-derived every member from their name, which proposed moving `iandavlin`
-// -> `ian-davlin5` and `charlesfox` -> `charles-fox2`, because the canonical
-// derivation of those names was already held by someone else. Re-deriving a member who
-// already owns a clean, unique handle cannot improve their URL — it can only add a
-// numeric suffix and burn a redirect. So "my derivation disagrees with the stored slug"
-// is NOT a defect; only these four things are.
+// ── is this slug defective? ──────────────────────────────────────────────────
+// A member is a candidate ONLY if their CURRENT slug is defective. Learned the hard way:
+// an earlier version re-derived everyone and proposed `iandavlin` -> `ian-davlin5` and
+// `charlesfox` -> `charles-fox2`, because the canonical form of those names was already
+// held by someone else. A member who already owns a clean unique handle can only be made
+// WORSE by re-deriving it. "My derivation disagrees with the stored slug" is not a defect.
 $defectOf = function (string $current, string $name) use ($isJunk): ?string {
-    if ($current === '')       return '1-NO-SLUG';
-    if ($isJunk($current))     return '2-PATREON-JUNK';
+    if ($current === '')   return '1-NO-SLUG';
+    if ($isJunk($current)) return '2-PATREON-JUNK';
 
     $decoded = html_entity_decode($name, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $good    = Slug::fit(Slug::derive($name));
-
-    // The test is deliberately "is the member WEARING the broken derivation", not
-    // "does my derivation disagree with their slug". The looser test also fires on
-    // members whose only difference is that their slug predates the 30-char cap
-    // (`shawn-reams-north-jersey-guitar`, 31 chars) — re-deriving those just shortens
-    // a perfectly good URL and spends a redirect to do it.
     $naiveOf = fn(string $t): string => Slug::fit(
         trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower($t)), '-')
     );
 
-    // Non-ASCII letters DELETED instead of transliterated, and the member is still
-    // wearing that result — their own name is misspelled in their own URL
-    // (`Åke Nathorst` -> `ke-nathorst`, `Peter Ellström` -> `peter-ellstr-m`).
+    // Latin letters DELETED instead of folded, and the member is still wearing the
+    // result — their own name misspelled in their own URL (`Åke` -> `ke-nathorst`).
     if (preg_match('/[^\x20-\x7E]/', $decoded)
-        && $naiveOf($decoded) !== $good
+        && $naiveOf($decoded) !== $good && $good !== ''
         && strcasecmp($current, $naiveOf($decoded)) === 0) {
-        return '4-MANGLED-NON-ASCII';
+        return '4-MANGLED-NAME';
     }
-
-    // Slug derived from entity-damaged text, so it carries "amp" (from `&amp;`) where
-    // the real name has "&". Only fires when the stored slug IS that polluted form.
-    if ($name !== $decoded
-        && $naiveOf($name) !== $good
+    // Slug derived from entity-damaged text, so it carries "amp" where the name has "&".
+    if ($name !== $decoded && $naiveOf($name) !== $good && $good !== ''
         && strcasecmp($current, $naiveOf($name)) === 0) {
         return '5-ENTITY-DAMAGE';
     }
-
-    return null;   // healthy — leave this member's URL alone
+    return null;
 };
 
-$rows = []; $healthy = 0;
+// ── PASS 1: derive, and record why each member is in or out ──────────────────
+$plan = [];      // rows we intend to change
+$skips = [];     // reason => count, so the report can explain every member left alone
+$wanted = [];    // base => [row indexes] — contention detection
 foreach ($cand as $c) {
     $id      = (int) $c['id'];
     $current = trim((string) $c['slug']);
     $name    = (string) $c['display_name'];
 
-    $cat = $defectOf($current, $name);
-    if ($cat === null) { $healthy++; continue; }
+    $defect = $defectOf($current, $name);
+    if ($defect === null) { $skips['healthy — slug already reads as their name'] = ($skips['healthy — slug already reads as their name'] ?? 0) + 1; continue; }
 
-    // Derivation chain. display_name is PRIMARY (Ian 7/25 23:45) — the same rule the
-    // live rename applies, business tails and all. Email local-part only rescues a
-    // member whose name yields nothing a URL can carry.
-    $source = 'display-name';
-    $base   = $isJunk($name) ? '' : Slug::deriveUsable($name);
+    // R1: the slug IS the display name, cleaned. Nothing else is consulted here.
+    $base = Slug::deriveUsable($name);
+
     if ($base === '') {
-        $base   = Slug::deriveUsable($emailLocal((string) $c['primary_email']));
-        $source = 'email-local';
+        // Non-Latin script, punctuation-only, or emoji. We NEVER latinize a member's
+        // name (PATREON-HANDLE-BACKFILL-DRYRUN.md 7/25), so there is no honest
+        // derivation. Surfaced for a human decision — never guessed at.
+        $plan[] = [
+            'cat' => '0-NO-HONEST-SLUG', 'user_id' => $id, 'wp_id' => (string) $c['wp_user_id'],
+            'name' => $name, 'current' => $current !== '' ? $current : '(none — 404s today)',
+            'proposed' => '', 'why' => 'display name has no Latin characters to derive from',
+            'action' => 'NEEDS RULING — cannot derive without latinizing the name',
+            'defect' => $defect, 'row' => $c,
+        ];
+        continue;
     }
-    if ($base === '') {
-        $base   = 'member';
-        $source = 'fallback';
-    }
-    if ($source !== 'display-name') $cat = '3-UNSLUGIFIABLE';
 
-    [$proposed, $suffixed] = $claim($base, $id);
-    if (strcasecmp($current, $proposed) === 0) { $healthy++; continue; }
-
-    $decoded = html_entity_decode($name, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-    $inJunk  = in_array($cat, ['1-NO-SLUG', '2-PATREON-JUNK', '3-UNSLUGIFIABLE'], true);
-
-    $rows[] = [
-        'cat'       => $cat,
-        'scope'     => $inJunk ? 'junk' : 'repair',
-        'user_id'   => $id,
-        'wp_id'     => (string) ($c['wp_user_id'] ?? ''),
-        'name'      => $name,
-        'current'   => $current !== '' ? $current : '(none — 404s today)',
-        'proposed'  => $proposed,
-        'source'    => $source,
-        'suffixed'  => $suffixed ? 'yes' : '',
-        'truncated' => strlen(Slug::derive($decoded)) > Slug::MAX_LEN ? 'yes' : '',
-        'changes'   => true,
+    $i = count($plan);
+    $plan[] = [
+        'cat' => $defect, 'user_id' => $id, 'wp_id' => (string) $c['wp_user_id'],
+        'name' => $name, 'current' => $current !== '' ? $current : '(none — 404s today)',
+        'proposed' => $base, 'base' => $base,
+        'why' => $defect === '2-PATREON-JUNK' ? 'URL is a Patreon id, not a name'
+               : ($defect === '1-NO-SLUG' ? 'no URL at all — /u/ 404s today'
+               : ($defect === '4-MANGLED-NAME' ? 'name is misspelled in the current URL'
+               : 'slug derived from entity-damaged text')),
+        'action' => 'derive from display name', 'defect' => $defect, 'row' => $c,
     ];
+    $wanted[strtolower($base)][] = $i;
 }
 
-// ── --applied-since=<minutes> ────────────────────────────────────────────────
-// After an --apply run the candidate set is empty by design, so a dry-run report can no
-// longer show what happened. This rebuilds the same report from what was actually
-// written: slug_history holds the outgoing handle, users.slug the incoming one. It is
-// the record of a real run — on the box it ran on.
-$SINCE = 0;
-foreach ($argv as $a) if (str_starts_with($a, '--applied-since=')) $SINCE = (int) substr($a, 16);
+// ── PASS 2: who is contested? ────────────────────────────────────────────────
+// Contested = more than one member cleans to the same handle, OR the handle already
+// belongs to somebody else (live or retired).
+$contested = [];
+foreach ($plan as $i => $p) {
+    if (($p['proposed'] ?? '') === '') continue;
+    $group = $wanted[strtolower($p['proposed'])] ?? [];
+    if (count($group) > 1 || !$freeFor($p['proposed'], $p['user_id'])) $contested[$i] = true;
+}
+
+// A bare first name that does NOT currently collide is one signup away from the same
+// problem. Ian wants the COUNT, and to decide himself — never expanded silently.
+$fragile = [];
+foreach ($plan as $i => $p) {
+    if (isset($contested[$i]) || ($p['proposed'] ?? '') === '') continue;
+    if (!str_contains($p['proposed'], '-')) $fragile[] = $p;
+}
+
+// ── PASS 3: provenance, then expand ONLY where we are inventing an identity ──
+$api = [];
+$apiStatus = 'skipped (--db-only)';
+// --api-fixture=<json> substitutes a recorded identity map for the live sweep. The
+// creator token only exists on LIVE, so without this the collision resolver cannot be
+// rehearsed anywhere else — and dev2's population cannot exercise it either. Same shape
+// the sweep returns: { "<patreon_user_id>": {full_name, vanity, email}, ... }
+foreach ($argv as $a) {
+    if (!str_starts_with($a, '--api-fixture=')) continue;
+    $j = json_decode((string) @file_get_contents(substr($a, 14)), true);
+    if (is_array($j)) { $api = $j; $apiStatus = 'FIXTURE — ' . count($j) . ' identities (not live data)'; }
+    else fwrite(STDERR, "api-fixture unreadable — ignoring\n");
+}
+if (!$api && !$DB_ONLY && $contested) {
+    try {
+        $my = new PDO('mysql:unix_socket=/var/run/mysqld/mysqld.sock;dbname=' . LG_PROFILE_APP_MYSQL_DB,
+            posix_getpwuid(posix_geteuid())['name'] ?? 'profile-app', '',
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        $api = looth_patreon_identity_sweep($my, $apiStatus);
+    } catch (Throwable $e) {
+        $apiStatus = 'UNAVAILABLE (' . $e->getMessage() . ')';
+    }
+} elseif (!$contested) {
+    $apiStatus = 'not needed — no collisions';
+}
+
+/**
+ * R4. Returns [verdict, evidence]. Conservative by construction: anything we cannot
+ * positively identify as machine-seeded is treated as the member's own.
+ */
+$provenance = function (array $row, ?array $ident) use ($isJunk): array {
+    $name = (string) $row['display_name'];
+
+    // Strongest positive signal for MACHINE: the stored name is still, character for
+    // character, what Patreon holds. Nobody has touched it.
+    if ($ident !== null && trim((string) $ident['full_name']) !== ''
+        && strcasecmp(Slug::derive($name), Slug::derive((string) $ident['full_name'])) === 0) {
+        return ['machine-seeded', 'display name is still exactly the Patreon import value'];
+    }
+    if ($isJunk($name)) {
+        return ['machine-seeded', 'display name is itself a patreon_* placeholder'];
+    }
+    // Strongest positive signal for USER: they came through onboarding or the menu.
+    // (claimed_via is 96% `backfill_location` on dev2, which proves nothing — only
+    // these three values reflect a real person.)
+    if (in_array((string) $row['claimed_via'], ['onboard', 'direct', 'menu'], true)) {
+        return ['user-submitted', 'member claimed their profile via ' . $row['claimed_via']];
+    }
+    // The tempting-but-WRONG inference lives here. "Dave" differing from Patreon's
+    // "Dave Thurston" is NOT proof the member shortened it — the import may simply have
+    // taken a first name. Claiming otherwise would block the exact case Ian wants
+    // expanded. We do not know, and say so.
+    if ($ident !== null && trim((string) $ident['full_name']) !== '') {
+        return ['indeterminate', 'stored name is shorter than / differs from Patreon\'s "'
+            . trim((string) $ident['full_name']) . '" — cannot tell who wrote it'];
+    }
+    return ['indeterminate', 'no signal either way — no provenance is recorded anywhere'];
+};
+
+$suffixLastResort = 0;
+foreach ($plan as $i => &$p) {
+    if (!isset($contested[$i])) continue;
+
+    preg_match('/(\d+)/', (string) ($p['row']['slug'] ?? ''), $m);
+    $ident = $api[$m[1] ?? ''] ?? null;
+    [$verdict, $evidence] = $provenance($p['row'], $ident);
+    $p['provenance'] = $verdict;
+
+    // Work out the expansion for EVERY contested row, whoever wrote the name. Ian asked
+    // to see exactly who is affected; "needs a ruling" with no proposal attached is not
+    // something anyone can approve. Whether we may ACT on it is the separate question
+    // below. Fuller identity first, email local-part last.
+    $found = '';
+    $src   = '';
+    foreach ([
+        'patreon full name' => (string) ($ident['full_name'] ?? ''),
+        'patreon vanity'    => (string) ($ident['vanity'] ?? ''),
+        'patreon email'     => $ident ? (string) ($ident['email'] ?? '') : '',
+        'account email'     => (string) $p['row']['primary_email'],
+    ] as $label => $raw) {
+        if ($raw === '') continue;
+        $try = Slug::deriveUsable(str_contains($raw, '@') ? (string) preg_replace('/\+.*$/', '', explode('@', $raw)[0]) : $raw);
+        if ($try === '' || strcasecmp($try, (string) $p['base']) === 0) continue;
+        if (!$freeFor($try, $p['user_id'])) continue;
+        $found = $try; $src = $label; break;
+    }
+    $p['suggested'] = $found;
+    $p['why'] = 'clashes on "' . $p['base'] . '" — already held; ' . $evidence;
+
+    if ($verdict === 'machine-seeded' && $found !== '') {
+        // Nobody supplied this name, so we are inventing an identity rather than
+        // rewriting a chosen one. Expansion is licensed (R3).
+        $p['cat']      = '6-COLLISION-EXPANDED';
+        $p['proposed'] = $found;
+        $p['action']   = 'expanded from ' . $src . ' (no numeric suffix)';
+        $ownerOf[strtolower($found)][] = $p['user_id'];
+        continue;
+    }
+
+    // Everything else stops here. R4 outranks R3: we may not reach for Patreon to
+    // "improve" a name that might be the member's own, and R3 forbids inventing dave2.
+    // The suggestion is shown so Ian can approve it in one look — it is not applied.
+    $p['cat']      = '3-COLLISION-NEEDS-RULING';
+    $p['proposed'] = '';
+    if ($found !== '') {
+        $p['action'] = $verdict === 'user-submitted'
+            ? 'NEEDS RULING — could be /u/' . $found . ' (from ' . $src . '), but this name looks like the member\'s own'
+            : 'NEEDS RULING — could be /u/' . $found . ' (from ' . $src . '); nobody knows who wrote the current name';
+    } else {
+        $suffixLastResort++;
+        $p['action'] = 'NEEDS RULING — nothing available to expand from; only a numeric suffix would work';
+    }
+}
+unset($p);
+
+// Uncontested rows keep their derived base; record provenance for the report.
+foreach ($plan as $i => &$p) {
+    if (isset($p['provenance'])) continue;
+    preg_match('/(\d+)/', (string) ($p['row']['slug'] ?? ''), $m);
+    [$v, ] = $provenance($p['row'], $api[$m[1] ?? ''] ?? null);
+    $p['provenance'] = $v;
+}
+unset($p);
+
+// Interesting cases FIRST — the rows needing a human decision must not be on page 40.
+usort($plan, fn($a, $b) => [$a['cat'], $a['user_id']] <=> [$b['cat'], $b['user_id']]);
+
+// ── --applied-since: rebuild the report from what a real run actually wrote ──
 if ($SINCE > 0) {
     $st = $pg->prepare("
         SELECT h.slug AS was, u.slug AS now, u.display_name, u.id, b.wp_user_id
@@ -223,77 +347,60 @@ if ($SINCE > 0) {
         ORDER BY h.slug
     ");
     $st->execute([':m' => $SINCE]);
-    $rows = [];
+    $plan = [];
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $isJ = $isJunk((string) $r['was']);
-        $rows[] = [
-            'cat'       => $isJ ? '2-PATREON-JUNK' : '4-MANGLED-NON-ASCII',
-            'scope'     => $isJ ? 'junk' : 'repair',
-            'user_id'   => (int) $r['id'],
-            'wp_id'     => (string) $r['wp_user_id'],
-            'name'      => (string) $r['display_name'],
-            'current'   => (string) $r['was'],
-            'proposed'  => (string) $r['now'],
-            'source'    => 'display-name',
-            'suffixed'  => '',
-            'truncated' => '',
-            'changes'   => true,
+        $plan[] = [
+            'cat' => $isJunk((string) $r['was']) ? '2-PATREON-JUNK' : '4-MANGLED-NAME',
+            'user_id' => (int) $r['id'], 'wp_id' => (string) $r['wp_user_id'],
+            'name' => (string) $r['display_name'], 'current' => (string) $r['was'],
+            'proposed' => (string) $r['now'], 'why' => 'applied on this box',
+            'action' => 'applied', 'provenance' => '', 'defect' => '',
         ];
     }
-    $healthy = count($cand) - count($rows);
 }
 
-// Interesting cases FIRST — a 1,600-row report is useless if the 9 rows that need a
-// human decision are on page 40. Sort by category, then by whether it changes.
-usort($rows, fn($a, $b) => [$a['cat'], -$a['changes'], $a['user_id']]
-                       <=> [$b['cat'], -$b['changes'], $b['user_id']]);
+$actionable = array_values(array_filter($plan, fn($p) => $p['proposed'] !== ''));
+$needRuling = array_values(array_filter($plan, fn($p) => $p['proposed'] === ''));
 
-$act = array_values(array_filter($rows, fn($r) =>
-    $SCOPE === 'repair' ? true : $r['scope'] === 'junk'));
+$act = array_values(array_filter($actionable, fn($p) =>
+    $SCOPE === 'repair' ? true : in_array($p['cat'], ['1-NO-SLUG', '2-PATREON-JUNK', '6-COLLISION-EXPANDED'], true)));
 if ($LIMIT > 0) $act = array_slice($act, 0, $LIMIT);
 
 // ── summary ──────────────────────────────────────────────────────────────────
 $byCat = [];
-foreach ($rows as $r) $byCat[$r['cat']] = ($byCat[$r['cat']] ?? 0) + 1;
+foreach ($plan as $p) $byCat[$p['cat']] = ($byCat[$p['cat']] ?? 0) + 1;
 ksort($byCat);
-
-fwrite(STDERR, sprintf("members=%d  healthy-left-alone=%d  defective=%d  scope=%s  acting-on=%d  mode=%s\n",
-    count($cand), $healthy, count($rows), $SCOPE, count($act),
+fwrite(STDERR, sprintf("members=%d  changing=%d  NEED-RULING=%d  scope=%s  acting-on=%d  mode=%s\n",
+    count($cand), count($actionable), count($needRuling), $SCOPE, count($act),
     $APPLY ? 'APPLY (WRITES)' : 'DRY RUN (no writes)'));
-foreach ($byCat as $k => $v) fwrite(STDERR, sprintf("  %-22s %d\n", $k, $v));
+fwrite(STDERR, "patreon api: $apiStatus\n");
+foreach ($byCat as $k => $v) fwrite(STDERR, sprintf("  %-28s %d\n", $k, $v));
+fwrite(STDERR, sprintf("  %-28s %d\n", 'bare-first-name (fragile)', count($fragile)));
+if ($suffixLastResort) fwrite(STDERR, "  numeric-suffix-would-be-needed  $suffixLastResort  (target is ZERO)\n");
 
 // ── apply ────────────────────────────────────────────────────────────────────
-// One transaction PER MEMBER, not one for the batch: a failure on row 900 must not
-// roll back the 899 good ones (that is what makes re-running the resume path).
-$applied = 0; $failed = 0;
+// One transaction PER MEMBER: a failure at row 900 must not roll back the 899 good ones.
+// That is also the resume path — re-running drops applied rows from the candidate set.
 if ($APPLY) {
+    $applied = 0; $failed = 0;
     foreach ($act as $r) {
         try {
             $pg->beginTransaction();
-
-            // Re-read under lock: another process may have changed this slug since we
-            // built the plan. If it no longer matches what we planned from, skip.
             $st = $pg->prepare('SELECT slug FROM users WHERE id = :i FOR UPDATE');
             $st->execute([':i' => $r['user_id']]);
             $old = trim((string) ($st->fetchColumn() ?: ''));
             if (strcasecmp($old, $r['proposed']) === 0) { $pg->rollBack(); continue; }
 
-            // Reclaiming a handle this member previously held: drop it from history so
-            // it is never simultaneously live AND retired.
             $pg->prepare('DELETE FROM slug_history WHERE user_id = :u AND lower(slug) = lower(:s)')
                ->execute([':u' => $r['user_id'], ':s' => $r['proposed']]);
-
-            // Park the outgoing handle — THIS is what keeps every shared/indexed link
-            // alive as a 301 (Ruling 3).
             if ($old !== '') {
+                // R5: this is what keeps every shared and indexed link alive as a 301.
                 $pg->prepare('INSERT INTO slug_history (user_id, slug) VALUES (:u, :s)
                               ON CONFLICT (lower(slug)) DO NOTHING')
                    ->execute([':u' => $r['user_id'], ':s' => $old]);
             }
-
             $pg->prepare('UPDATE users SET slug = :s, slug_changed_at = now() WHERE id = :i')
                ->execute([':s' => $r['proposed'], ':i' => $r['user_id']]);
-
             $pg->commit();
             $applied++;
         } catch (Throwable $e) {
@@ -303,119 +410,88 @@ if ($APPLY) {
         }
     }
     fwrite(STDERR, "applied=$applied failed=$failed\n");
-    fwrite(STDERR, "NOTE: WP `_looth_slug` usermeta is a CACHE of this column and is now stale\n"
-                 . "      for every member changed. Run bin/purge-stale-looth-slug-mirror.php next.\n");
+    fwrite(STDERR, "NEXT: WP `_looth_slug` is a CACHE of this column and is now stale for\n"
+                 . "      everyone changed — run bin/purge-stale-looth-slug-mirror.php.\n");
 }
 
 // ── report ───────────────────────────────────────────────────────────────────
-$cols = ['cat', 'scope', 'user_id', 'wp_id', 'name', 'current', 'proposed', 'source', 'suffixed', 'truncated'];
-$out  = $rows;
-
+$cols = ['cat', 'user_id', 'wp_id', 'name', 'current', 'proposed', 'provenance', 'why', 'action'];
 if ($TSV) {
     $fh = fopen($TSV, 'w');
     fputcsv($fh, $cols, "\t", '"', '\\');
-    foreach ($out as $r) fputcsv($fh, array_map(fn($c) => (string) $r[$c], $cols), "\t", '"', '\\');
+    foreach ($plan as $p) fputcsv($fh, array_map(fn($c) => (string) ($p[$c] ?? ''), $cols), "\t", '"', '\\');
     fclose($fh);
     fwrite(STDERR, "tsv: $TSV\n");
 }
 
 if ($HTML) {
-    $LABEL = [
-        '1-NO-SLUG'           => ['No slug at all — /u/ 404s today', 'These members have no profile URL. Nothing to redirect FROM, so there is no link risk in giving them one.'],
-        '2-PATREON-JUNK'      => ['Patreon placeholder URL', 'The point of the lane: a numeric import id standing in for a name. Old URL 301s forever.'],
-        '3-UNSLUGIFIABLE'     => ['Name yields no URL — fell back', 'display_name has nothing a URL can carry even after transliteration, so the email local-part was used. Ruling 1 cannot be honoured for these; review each one.'],
-        '4-MANGLED-NON-ASCII' => ['Name is MISSPELLED in the current URL', 'The old deriver deleted non-ASCII letters instead of transliterating them, so these members\' URLs spell their names wrong. Transliteration fixes them.'],
-        '5-ENTITY-DAMAGE'     => ['Stored name carries HTML entities', 'Raw rows contain literal &amp;. Decoded for derivation only — display_name is NOT rewritten (that is the parked name-cleanup lane).'],
-    ];
     $h = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    $LABEL = [
+        '0-NO-HONEST-SLUG'          => ['Name has no Latin characters — needs your ruling', 'Non-Latin script, punctuation or emoji. We never latinize a member\'s name, so there is no honest derivation. Options: leave the Patreon URL, let the member choose, or rule that these may be romanized.'],
+        '3-COLLISION-NEEDS-RULING'  => ['Collision we may NOT resolve on our own', 'Two members clean to the same handle. A numeric suffix is ruled out, and where the name is the member\'s own we may not reach for Patreon to "expand" it either. These need your call.'],
+        '1-NO-SLUG'                 => ['No URL at all — /u/ 404s today', 'Nothing to redirect FROM, so there is no link risk in giving them one.'],
+        '2-PATREON-JUNK'            => ['Patreon id instead of a name', 'The point of the lane. The old URL 301s forever.'],
+        '6-COLLISION-EXPANDED'      => ['Collision resolved by EXPANDING the name', 'Clashed, and the stored name was still the raw Patreon import (nobody supplied it), so a fuller identity was used — dave-thurston, never dave2.'],
+        '4-MANGLED-NAME'            => ['Name is misspelled in the current URL', 'The old deriver deleted accented letters instead of folding them, so these URLs spell members\' names wrong.'],
+        '5-ENTITY-DAMAGE'           => ['Slug built from entity-damaged text', 'Raw rows carry literal &amp;. Decoded for derivation only — display_name is never rewritten.'],
+    ];
     $f = fopen($HTML, 'w');
-    fwrite($f, '<!doctype html><meta charset="utf-8"><title>Slug backfill — dry run</title>'
+    fwrite($f, '<!doctype html><meta charset="utf-8"><title>Profile URL backfill</title>'
         . '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        . '<style>body{font:15px/1.55 system-ui,sans-serif;margin:0;padding:28px 20px 60px;max-width:1180px;margin:0 auto;color:#1f2320;background:#fbfaf7}'
-        . 'h1{font-size:26px;margin:0 0 6px}h2{font-size:18px;margin:34px 0 4px}'
-        . '.sub{color:#666;margin:0 0 22px}.why{color:#555;margin:0 0 12px;max-width:80ch}'
-        . 'table{border-collapse:collapse;width:100%;font-size:13.5px;margin-top:8px}'
-        . 'th,td{border:1px solid #e2e0d9;padding:6px 9px;text-align:left;vertical-align:top}'
-        . 'th{background:#f2f0ea;font-weight:700}td.old{color:#a33;font-family:ui-monospace,monospace}'
-        . 'td.new{color:#186a3b;font-family:ui-monospace,monospace;font-weight:600}'
-        . 'tr:nth-child(even) td{background:#fff}.tot{font-weight:700}'
-        . '.k{display:inline-block;background:#eef2ec;border:1px solid #d5ddd2;border-radius:5px;padding:1px 7px;font-size:12px;margin-right:6px}'
+        . '<style>body{font:15px/1.55 system-ui,sans-serif;max-width:1200px;margin:0 auto;padding:28px 20px 60px;color:#1f2320;background:#fbfaf7}'
+        . 'h1{font-size:26px;margin:0 0 6px}h2{font-size:18px;margin:34px 0 4px}.sub{color:#666;margin:0 0 20px}'
+        . '.why{color:#555;margin:0 0 12px;max-width:82ch}table{border-collapse:collapse;width:100%;font-size:13.5px;margin-top:8px}'
+        . 'th,td{border:1px solid #e2e0d9;padding:6px 9px;text-align:left;vertical-align:top}th{background:#f2f0ea}'
+        . 'td.old{color:#a33;font-family:ui-monospace,monospace}td.new{color:#186a3b;font-family:ui-monospace,monospace;font-weight:600}'
+        . 'tr:nth-child(even) td{background:#fff}.k{display:inline-block;background:#eef2ec;border:1px solid #d5ddd2;border-radius:5px;padding:1px 7px;font-size:12px;margin:0 6px 6px 0}'
+        . '.warn{background:#fff6e5;border:1px solid #e8d5a8;border-radius:8px;padding:12px 14px;margin:16px 0}'
         . '@media(max-width:700px){table{font-size:12px}th,td{padding:4px 6px}}</style>');
-    $isRecord = $SINCE > 0;
-    fwrite($f, '<h1>Profile URL backfill — ' . ($isRecord ? 'record of an applied run' : 'dry run') . '</h1>'
-        . '<p class="sub">Generated ' . $h(date('Y-m-d H:i T')) . ' &middot; ' . count($cand)
-        . ' active bridged members &middot; <b>' . count($out) . '</b> '
-        . ($isRecord
-            ? 'URLs were CHANGED on this box. Old addresses 301 to the new ones.'
-            : 'would change &middot; nothing has been written.')
-        . '</p>');
-    fwrite($f, '<p class="why"><b>How to read this.</b> Every change parks the old URL in <code>slug_history</code>, '
-        . 'so the old address 301-redirects to the new one permanently — no link, bookmark or search result breaks. '
-        . 'Sections are ordered most-interesting first. The <span class="k">scope</span> column says which run tier '
-        . 'acts on that row: <code>--scope=junk</code> (safest) or <code>--scope=repair</code>.</p>'
-        . '<p class="why"><b>Members with a healthy URL are not touched at all.</b> ' . (int) $healthy . ' of the '
-        . count($cand) . ' active members already have a clean, unique handle and are absent from this report. '
-        . 'A full re-derivation was tried and rejected: because the canonical form of some names is already taken, '
-        . 'it proposed moving <code>iandavlin</code> to <code>ian-davlin5</code> and <code>charlesfox</code> to '
-        . '<code>charles-fox2</code> — a worse URL and a wasted redirect. Only defective slugs are candidates.</p>');
+    fwrite($f, '<h1>Profile URL backfill</h1><p class="sub">' . $h(date('Y-m-d H:i T')) . ' &middot; '
+        . count($cand) . ' active members &middot; <b>' . count($actionable) . '</b> would change &middot; <b>'
+        . count($needRuling) . '</b> need your ruling &middot; nothing has been written.</p>');
+    fwrite($f, '<div class="warn"><b>How collisions are handled.</b> No member is ever given a numeric suffix. '
+        . 'Where two members clean to the same handle, the name is expanded from a fuller identity '
+        . '(<code>dave-thurston</code>, not <code>dave2</code>) — but only when the stored name was still the raw '
+        . 'Patreon import. <b>A name the member typed is theirs</b>, and is never expanded or overwritten; those '
+        . 'collisions are listed for you instead. Numeric suffixes still needed: <b>' . (int) $suffixLastResort
+        . '</b> (target zero).</div>');
     fwrite($f, '<p>');
     foreach ($byCat as $k => $v) fwrite($f, '<span class="k">' . $h($k) . ' &middot; ' . $v . '</span>');
-    fwrite($f, '</p>');
+    fwrite($f, '<span class="k">patreon api &middot; ' . $h($apiStatus) . '</span></p>');
 
     foreach ($LABEL as $catKey => $meta) {
-        $sub = array_values(array_filter($out, fn($r) => $r['cat'] === $catKey));
+        $sub = array_values(array_filter($plan, fn($p) => $p['cat'] === $catKey));
         if (!$sub) continue;
         fwrite($f, '<h2>' . $h($meta[0]) . ' <span class="k">' . count($sub) . '</span></h2>');
         fwrite($f, '<p class="why">' . $h($meta[1]) . '</p>');
-        fwrite($f, '<table><tr><th>scope</th><th>member</th><th>current URL</th><th>proposed URL</th><th>from</th><th>notes</th></tr>');
-        foreach ($sub as $r) {
-            $notes = trim(($r['suffixed'] ? 'collision-suffixed ' : '') . ($r['truncated'] ? 'truncated at 30' : ''));
-            fwrite($f, '<tr><td>' . $h($r['scope']) . '</td><td>' . $h($r['name'])
-                . '</td><td class="old">/u/' . $h($r['current']) . '</td><td class="new">/u/' . $h($r['proposed'])
-                . '</td><td>' . $h($r['source']) . '</td><td>' . $h($notes) . '</td></tr>');
+        fwrite($f, '<table><tr><th>member</th><th>current URL</th><th>proposed URL</th><th>name is</th><th>why</th></tr>');
+        foreach ($sub as $p) {
+            fwrite($f, '<tr><td>' . $h($p['name']) . '</td><td class="old">/u/' . $h($p['current']) . '</td>'
+                . '<td class="new">' . ($p['proposed'] !== '' ? '/u/' . $h($p['proposed']) : '<i>' . $h($p['action']) . '</i>')
+                . '</td><td>' . $h($p['provenance'] ?? '') . '</td><td>' . $h($p['why']) . '</td></tr>');
         }
         fwrite($f, '</table>');
     }
 
-    // ── considered and NOT proposed ──────────────────────────────────────────
-    // Ruling 1 says the URL follows the NAME, and these members are wearing an
-    // email-derived handle instead. They are still NOT proposed, because deriving
-    // from the name makes several of them worse, not better. That is a judgement
-    // call about real members' URLs, so it goes in front of Ian rather than into
-    // an --apply run.
-    $notProposed = [];
-    foreach ($cand as $c) {
-        $cur = strtolower(trim((string) $c['slug']));
-        if ($cur === '') continue;
-        $local     = $emailLocal((string) $c['primary_email']);
-        $emailSlug = Slug::fit(Slug::derive((string) $c['primary_email']));
-        $localSlug = Slug::fit(Slug::derive($local));
-        $nameSlug  = Slug::fit(Slug::derive((string) $c['display_name']));
-        if ($nameSlug !== '' && strcasecmp($cur, $nameSlug) !== 0
-            && (strcasecmp($cur, $emailSlug) === 0 || strcasecmp($cur, $localSlug) === 0)) {
-            $notProposed[] = ['name' => (string) $c['display_name'], 'cur' => $cur, 'would' => $nameSlug];
-        }
-    }
-    if ($notProposed) {
-        fwrite($f, '<h2>Considered and NOT proposed — needs your ruling <span class="k">' . count($notProposed) . '</span></h2>');
-        fwrite($f, '<p class="why">These members\' URLs come from their email address, not their name, so Ruling 1 '
-            . 'arguably applies. They are excluded because name-derivation makes several of them <b>worse</b> '
-            . '(<code>ianhatesguitars</code> would become <code>hates</code>; <code>stuguitarsetups</code> would become '
-            . '<code>stu-guitar</code>). Say the word and they can be folded in — as a group or one at a time.</p>');
-        fwrite($f, '<table><tr><th>member</th><th>current URL</th><th>would become</th></tr>');
-        foreach ($notProposed as $r) {
-            fwrite($f, '<tr><td>' . $h($r['name']) . '</td><td class="old">/u/' . $h($r['cur'])
-                . '</td><td>/u/' . $h($r['would']) . '</td></tr>');
-        }
+    if ($fragile) {
+        fwrite($f, '<h2>Bare first names that do NOT collide yet <span class="k">' . count($fragile) . '</span></h2>');
+        fwrite($f, '<p class="why">These resolve cleanly today, but each is one new signup away from the same '
+            . 'collision. They are <b>not</b> being expanded — that would mean rewriting a name nobody asked us to '
+            . 'touch. Flagged so you can decide whether to expand them now or leave them.</p>');
+        fwrite($f, '<table><tr><th>member</th><th>would become</th></tr>');
+        foreach ($fragile as $p) fwrite($f, '<tr><td>' . $h($p['name']) . '</td><td class="new">/u/' . $h($p['proposed']) . '</td></tr>');
         fwrite($f, '</table>');
     }
 
-    fwrite($f, '<h2>Also deliberately left alone</h2><p class="why">'
-        . '<b>Slugs longer than the 30-char cap</b> (e.g. <code>shawn-reams-north-jersey-guitar</code>, 31 chars) '
-        . 'predate the cap being enforced at mint. They resolve fine; re-deriving them only shortens a working URL. '
-        . '<b>WordPress <code>user_nicename</code></b> stays <code>patreon_*</code> for ~1,634 accounts on purpose — '
-        . '<code>/members/&lt;nicename&gt;/</code> already 301s to <code>/u/&lt;nicename&gt;</code>, which slug history '
-        . '301s again to the current URL, so those links work untouched.</p>');
+    fwrite($f, '<h2>Members left alone, and why</h2><p class="why">A migration that cannot explain its own skips '
+        . 'is one nobody can approve. Every active member not listed above falls into one of these:</p><table>'
+        . '<tr><th>reason</th><th>members</th></tr>');
+    foreach ($skips as $why => $n) fwrite($f, '<tr><td>' . $h($why) . '</td><td>' . $n . '</td></tr>');
+    fwrite($f, '<tr><td>WordPress <code>user_nicename</code> left as <code>patreon_*</code> — '
+        . '<code>/members/&lt;nicename&gt;/</code> already 301s to <code>/u/</code>, which slug history 301s again, '
+        . 'so those links work untouched</td><td>all</td></tr>');
+    fwrite($f, '<tr><td>unbridged identities (cannot log in — <code>/u/</code> 404s by ghost containment) '
+        . 'and archived rows</td><td>excluded</td></tr></table>');
     fclose($f);
     fwrite(STDERR, "html: $HTML\n");
 }

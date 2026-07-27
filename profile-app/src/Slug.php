@@ -98,14 +98,19 @@ final class Slug
      *      display_name back — repairing the stored name is the parked name-cleanup
      *      lane, deliberately not this one.
      *
-     *   2. TRANSLITERATE, don't strip. `preg_replace('/[^a-z0-9]+/')` deletes every
-     *      non-ASCII letter, which does not fail loudly — it silently MISSPELLS the
-     *      member's own name in their URL: `Åke Nathorst` became `ke-nathorst`,
-     *      `Peter Ellström` became `peter-ellstr-m`, `João` became `jo-o`. Any-Latin
-     *      then Latin-ASCII gives `ake-nathorst`, `peter-ellstrom`, `joao` — and gives
-     *      CJK names a real handle (`祁磊` → `qi-lei`) instead of an empty string that
-     *      falls through to a patreon_* id. Ruling 1 says the URL follows the NAME;
-     *      a mangled name is not the name.
+     *   2. FOLD LATIN DIACRITICS, don't delete them. `preg_replace('/[^a-z0-9]+/')`
+     *      deletes every non-ASCII byte, which does not fail loudly — it silently
+     *      MISSPELLS the member's own name in their URL: `Åke Nathorst` became
+     *      `ke-nathorst`, `Peter Ellström` became `peter-ellstr-m`, `João` became
+     *      `jo-o`. `Latin-ASCII` folds those to `ake-nathorst`, `peter-ellstrom`,
+     *      `joao`. That is slug hygiene on a name that is ALREADY Latin script.
+     *
+     *      It is deliberately `Latin-ASCII` and NOT `Any-Latin`. `Any-Latin` would
+     *      romanize other scripts entirely — `祁磊` → `qi-lei` — and the standing rule
+     *      is that we NEVER latinize a member's name (PATREON-HANDLE-BACKFILL-DRYRUN.md,
+     *      2026-07-25). Romanizing is a different act from folding an accent, and it is
+     *      not ours to do silently. A non-Latin name therefore derives to '' here and
+     *      is surfaced for a human decision rather than being guessed at.
      *
      *   3. APOSTROPHES VANISH rather than split. `Nikki’s Guitar Shop` → `nikkis-…`,
      *      not `nikki-s-…`. (Runs AFTER transliteration, which folds the curly ’ to '.)
@@ -117,7 +122,9 @@ final class Slug
         $s = html_entity_decode(trim($raw), ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
         if (class_exists('\Transliterator')) {
-            $tr = \Transliterator::create('Any-Latin; Latin-ASCII; Lower()');
+            // Latin-ASCII ONLY — see the docblock. Adding Any-Latin here would start
+            // silently romanizing CJK/Cyrillic/Arabic names.
+            $tr = \Transliterator::create('Latin-ASCII; Lower()');
             if ($tr !== null) {
                 $t = $tr->transliterate($s);
                 if (is_string($t)) $s = $t;
