@@ -2,8 +2,30 @@
 
 *mentions lane, 2026-07-24. Written after the mobile-mentions campaign (branch
 `username-mentions-finish`) surfaced three iPhone-only failures that a green
-headless-Chromium harness never saw. Citations are `file:line` at branch tip 334ffa4
+headless-Chromium harness never saw. Citations were `file:line` at branch tip 334ffa4
 (= a30ebfd ship candidate + origin/main). Companion: COMPOSER-V2-PLAN.md.*
+
+> **RE-VERIFIED 2026-07-26 at main 432f80b (composer-v2 phase 3 lane).** Every §1/§2
+> citation was re-checked against the tree; phases 0–2 moved most of them. All line
+> numbers below are now 432f80b. Four substantive corrections, not just drift:
+>
+> 1. **Two native-create surfaces were MISSING from the inventory and the §2 matrix** —
+>    `fc-composer` (§1.12) and the single-topic page reply form (§1.13). Both POST
+>    native BB REST. G8's blast radius was **five** create surfaces, not three.
+> 2. **`fic` and `rse` are dev-only** — both live inside the `?proto=cards` /
+>    `localStorage.lg_card_proto` block (forums.js:950–1240, gate at :956). §1.6/§1.7
+>    read as live surfaces; they are not reachable by a normal user.
+> 3. **G8 is currently closed BY STOPGAP** — the phase-0 `bbp_new_reply` mint+bell hook
+>    shipped (platform/mu-plugins/bb-mirror-sync.php:203–230) with the
+>    `$GLOBALS['lg_bb_mirror_reply_owned']` double-fire guard set at reply.php:333.
+>    Native creates mint and ring today. Phase 3's job is to make that hook *unnecessary*.
+> 4. **G1 is FIXED** — the mention panel now records touchstart and picks on touchend
+>    (<10px/<700ms) at forums.js:364/373. §1.3's "KNOWN DEFECT" no longer holds.
+>
+> Also stale and corrected in place: §6's three convention helpers are DELETED (phase 1
+> made them structural in `LgSheets`, hub-polish.js:3020); the lrs/lcp history dance of
+> §1.1/§1.2 is now manager-owned. Still true as written: G9, G10, G11 (`__lgLbPop` is
+> read at hub-polish.js:3145 and :5652 and set nowhere), G12.
 
 **The one-sentence diagnosis:** we have ~8 independent composer/sheet implementations,
 each with its own backdrop, its own open/close code, its own scroll-lock idea and its
@@ -15,93 +37,156 @@ last week is a pairwise interaction between two of them.
 ## 1. Surface inventory
 
 ### 1.1 lrs — mobile replies/discussion sheet (`#looth-rep-sheet`)
-- **Where**: `webroot/hub-polish.js` — build+open `openRepliesSheet()` :3457, close
-  `lrsClose()` :3170, submit `lrsSubmit()` :3671.
-- **Entry**: mobile (≤640px) Reply action `.lg-act-replies` (:430–458 routes every
-  reply-ish tap here), "View N replies" expanders (:4176ff), `?topic=` deep links via
-  `window.lgOpenTopicMobile` (:3667), read-more intents.
-- **Write path**: `lrsSubmit()` POSTs **`/bb-mirror-api/v0/reply`** (:3685) — the owned
+- **Where**: `webroot/hub-polish.js` — build+open `openRepliesSheet()` :3615, close
+  `lrsClose()` :3340, submit `lrsSubmit()` :3824.
+- **Entry**: mobile (≤640px) Reply action `.lg-act-replies` (built :394, wired :419,
+  routed :430ff), "View N replies" expanders (:5041ff), `?topic=` deep links via
+  `window.lgOpenTopicMobile` (:3822), read-more intents.
+- **Write path**: `lrsSubmit()` POSTs **`/bb-mirror-api/v0/reply`** (:3838) — the owned
   mirror endpoint (mints mentions + rings bells, §3).
-- **Lifecycle**: full-viewport `position:fixed` at **z 2147483520** (:3004); open sets
-  `body.style.overflow='hidden'` **and** the `lg-sheet-lock` class (:3631–3633 →
-  observer §4); close is symmetric (:3170–3176) and clears any composer-set
-  behind-state via `lgSetBehind(sh,false)` (:3173).
-- **History entanglement**: pushes its own `?topic=` history entry (:3641–3649); the
-  popstate handler (:3195–3220) must arbitrate between the lightbox, the composer
-  sheet, and itself. This dance is fragile by construction — three parties guess at
-  who owns the current history entry.
+- **Lifecycle**: full-viewport `position:fixed` at **z 2147483520** (:3164). **Phase-1
+  correction:** open/close no longer set locks or behind-state themselves — `lrsClose()`
+  delegates to `window.LgSheets.close('lrs', …)` (:3341) and open to
+  `LgSheets.open('lrs', {url})` (:3805). Lock, shared backdrop (:3037, z derived :3073),
+  behind-state and teardown are all manager-owned.
+- **History**: no longer a three-way dance — `LgSheets` is the single history owner and
+  the only popstate listener; lrs declares its deep-link URL (`sh.__lgTopicUrl`, :3803)
+  and the manager maps stack ↔ history with a self-pop guard (:3025–3029). The §4f
+  `?topic=` contract is unchanged. *(G6 closed for lrs/lcp; `__lgLbPop` — G11 — is still
+  read at :3145/:5652 and set nowhere.)*
 
-### 1.2 lcp — mobile composer sheet (`#looth-comp-sheet`)
-- **Where**: `webroot/hub-polish.js` — build `ensureCompSheet()` :3710, open
-  `openComposerSheet()` :3956, close `closeComposerSheet()` :4069, submit
-  `lcpSubmit()` :4086, keyboard lift `lcpKb()` :3887.
-- **Entry**: auto-opened ON TOP of lrs by a Reply-intent tap (:436
-  `openRepliesSheet(card,{toReplies:true,focus:true})` → :3654 `openComposerSheet`),
-  the lrs "Write a comment…" pill, per-reply Reply links, and EDIT reuse: the same
-  sheet doubles as reply-editor and topic/OP-editor (`editReplyId`/`editTopicId`,
-  :3987–4046).
-- **Write path**: create → **`/bb-mirror-api/v0/reply`** POST (:4151); reply edit →
-  same endpoint PUT (:4121); topic edit → same endpoint PUT w/ `topic_id` (:4085).
-- **Lifecycle**: z **2147483560** (:3720); floating card over a full-screen
-  `.lcp-back` scrim; on open: `lgScrubSheetState()` idempotent reset (:3959) then
-  marks lrs as backdrop `lgSetBehind(lrs,true)` (:4003); on close: symmetric clear.
-- **Dismiss paths** (all verified to tear down symmetrically, §5): backdrop tap
-  (`[data-lcp-close]` :3811 — needs `cursor:pointer`, receipt R1), grab-pill swipe
-  (:3820–3831), post-success, phone back-gesture (:3204–3208).
+### 1.2 lcp — THE composer (`#looth-comp-sheet`) — **now composer v2** (phase 2)
+- **Phase-2 correction:** this is no longer "the mobile composer sheet". Phase 2
+  (cea6ab3) replaced lcp's internals with composer v2 — Quill 2, full-height FB sheet,
+  attachment strip, tag picker, link panel. The sheet **id `lcp` was kept** for stack
+  semantics only (:3865). The `lgc*` family IS the shared composer component; it is what
+  phase 3 gives a desktop modal skin.
+- **Where**: `webroot/hub-polish.js` — build `ensureCompSheet()` :3932, open
+  `openComposerSheet()` :4806, close `closeComposerSheet()` :4894, submit
+  `lcpSubmit()` :4922, Quill init `lgcInitQuill()` :4747, mention insert
+  `lgcInsertMention()` :4387, attachment strip :4208/:4253/:4265, edit-media load
+  `lgcLoadEditMedia()` :4875, dock `lgcDock()` :4195.
+- **Open API (the phase-3 seam)** — `openComposerSheet({tid, fid, replyTo, replyToName,
+  title, editReplyId, editTopicId, bodyText, focus})` (:4806–4870). Modes resolve at
+  :4841ff: topic-edit → reply-edit → create(+draft restore). **This already covers every
+  mode frm implements**, which is why phase 3 is skin + delete rather than new build.
+- **Entry**: Reply-intent tap (:430ff → `openRepliesSheet(card,{toReplies:true,
+  focus:true})` → :3805ff), the lrs "Write a comment…" pill, per-reply Reply links, and
+  EDIT reuse (same sheet is reply-editor and topic/OP-editor).
+- **Write path**: create → **`/bb-mirror-api/v0/reply`** POST (:5007); reply edit → same
+  endpoint PUT (:4976); topic edit → same endpoint PUT w/ `topic_id` (:4940).
+- **Lifecycle**: z **2147483560** (:3941). **Manager-owned** — registered at :4899 with
+  `escClose:true` (G12 closed for lcp), its own history entry `{lgLcp:1}` (:4906) so
+  phone-back closes composer-then-thread, and an `onClose` (:4907) that owns *only*
+  content concerns: draft preservation on accidental dismiss vs. clear on `post`/explicit
+  ✕. No lock, backdrop or behind-state code remains in the surface.
+- **Sibling sheets on the same manager** (built phase 2, absent from the original audit):
+  tag picker `#looth-tag-sheet` z 2147483570 (:4053, registered :4508) and link panel
+  `#looth-link-sheet` z 2147483580 (:4090, registered :4684). Both are composer-owned
+  second/third stack layers and are **shared components phase 3 must not fork**.
+
+### 1.2a Deleted by phase 1 — `lgSyncSheetLock` / `lgSetBehind` / `lgScrubSheetState`
+The three convention helpers this audit's §6 enumerated are **gone** (tombstone comment
+at hub-polish.js:4745). Their invariants are structural in `LgSheets` (:3020). §6 is
+retained below as history; read it as "what phase 1 replaced", not as current state.
 
 ### 1.3 The mention autocomplete panel (`.lg-mnt`)
-- **Where**: `bb-mirror/web/forums.js` — IIFE `lgMentionAutocomplete()` :286, panel
-  build :292–363, editor matcher `editorOf()` :365 (covers `.ql-editor`,
+- **Where**: `bb-mirror/web/forums.js` — IIFE `lgMentionAutocomplete()` :286, panel CSS
+  :313ff, panel node :351, editor matcher `editorOf()` :390 (covers `.ql-editor`,
   `textarea.rse-input/.fic-input/.lg-fb-replyinput/.lcp-input`, `#lrs-comp-input`,
-  `#frm-content`, `#ntm-content`), suggest fetch :479 → `/profile-api/v0/mention-suggest`,
-  insert `pick()` :493, render+position :401.
+  `#frm-content`, `#ntm-content`), suggest fetch :505 → `/profile-api/v0/mention-suggest`,
+  insert `pick()` :520.
 - **One panel, every composer**: a single body-appended `position:fixed` node at
-  **z 2147483600** serves all surfaces; mobile gets the FB-style `.lg-mnt--sheet`
+  **z 2147483600** (:313) serves all surfaces; mobile gets the FB-style `.lg-mnt--sheet`
   styling (name-first rows, 46px avatars, helper caption).
-- **KNOWN DEFECT carried in the ship candidate**: pick fires on `touchstart`
-  (:359), so a scroll attempt inside the list insta-picks. The 3B tap-vs-scroll
-  handler (pick on touchend <10px/<700ms) exists in branch history (`bd02b56`,
-  reverted with round 3) and is encoded as a KNOWN-FAIL test in
-  `tools/e2e-webkit/tests/reply-stack.spec.js`.
+- ~~**KNOWN DEFECT**: pick fires on `touchstart`~~ — **G1 FIXED (re-verified 2026-07-26).**
+  The panel now records touchstart (:364, passive) and picks on **touchend** only when
+  the gesture stayed <10px / <700ms (:373) — receipt R4's correct shape. A scroll attempt
+  inside the list no longer insta-picks. The KNOWN-FAIL test in
+  `tools/e2e-webkit/tests/reply-stack.spec.js` should now be a PASS test.
+- **Phase-3 note**: `editorOf()` is the shared engine's surface whitelist. Every selector
+  phase 3 deletes (`.fic-input`, `.lg-fb-replyinput`) must come out of this list in the
+  same commit, or the mention engine keeps advertising editors that no longer exist.
 
 ### 1.4 ntm — new-topic modal (`#ntm-overlay`)
-- **Where**: `bb-mirror/web/forums.js` :1652–2024; open `ntmShowOverlay()` :1770, close
-  `ntmHideOverlay()` :1831; desktop ≥641px reshapes into a 4-step wizard (:1899–1950).
-- **Write**: create POSTs **native BB REST** `/wp-json/buddyboss/v1/topics` (:1677
-  `restBase` default, :2359 fetch). Edit routes to the mirror (reply.php topic PUT).
-- **Lifecycle**: `ntm-active` body class (:1772/:1833) → the position:fixed lock
+- **Where**: `bb-mirror/web/forums.js` — form :1702, open `ntmShowOverlay()` :1815, close
+  `ntmHideOverlay()` :1876; desktop ≥641px reshapes into a step wizard (`ntmWiz` :1724).
+- **Write**: create POSTs **native BB REST** `/wp-json/buddyboss/v1/topics` (:1722
+  `ntmRestBase` default, :2404 fetch). Edit routes to the mirror (reply.php topic PUT).
+  Anon: `_lg_anon` still rides topic create (:2401) — **topics keep anon; replies do not.**
+- **Lifecycle**: `ntm-active` body class (:1817/:1878) → the position:fixed lock
   observer (§4) — the ONE surface family that was iOS-correct from the start.
-- **State machine**: `ntmAuthState` idle|loading|anon|authed (:1839); Quill lazy-init.
+- **State machine**: `ntmAuthState` idle|loading|anon|authed (:1716); Quill lazy-init.
+- **Scope**: phase **4**, not phase 3.
 
 ### 1.5 frm — desktop reply/edit modal (`#frm-overlay`)
-- **Where**: `bb-mirror/web/forums.js` :2428–2914; open `frmOpen()` :2567, close :2603.
-- **Entry**: `.feed-card__reply-cta[data-frm-open]` delegate (:2747) — including the
-  reply CTA the desktop dmodal injects (forums.js:4203).
-- **Write**: **create POSTs native BB REST** `/reply` (:2442 default, :2860 fetch) —
-  see G8. Reply-edit PUT `/bb-mirror-api/v0/reply` (:2619); topic-edit PUT (:2672).
-- **Lifecycle**: reuses the `ntm-active` body class (:2599) → iOS-correct lock.
+- **Where**: `bb-mirror/web/forums.js` — form :2487, open `frmOpen()` :2612, close
+  `frmClose()` :2648, submit handler :2803.
+- **Entry**: delegate at :2792 on `.feed-card__reply-cta[data-frm-open]`,
+  `.reply-stub__reply`, **and `.fc-composer__rich`** (the pencil in §1.12's composer) —
+  including the reply CTA the desktop dmodal injects (:4377).
+- **Write**: **create POSTs native BB REST** `/reply` (:2487 `frmRestBase` default, :2905
+  fetch) — see G8. Reply-edit PUT `/bb-mirror-api/v0/reply` (:2867); topic-edit PUT
+  (:2825) + `topic-media` sync (:2841).
+- **Dead code found 2026-07-26**: :2902–2904 still builds `_lg_anon` from
+  `#frm-anon-check`, an element that **no longer exists** — the reply anon toggle was
+  removed 2026-06-10 (`_chrome.php`:415–419) and reply.php refuses it server-side
+  (:367). Retargeting frm to the mirror therefore loses **no** anon behaviour.
+- **Lifecycle**: reuses the `ntm-active` body class (:2644/:2650) → iOS-correct lock.
 
-### 1.6 rse — inline reply edit (`.rse-*`)
-- **Where**: forums.js :959–1096; entry `.reply-stub__edit` delegate; PUT
-  `/bb-mirror-api/v0/reply` (:1082). Inline (no modal/lock). Preserves inline `<img>`
-  on edit (:1064–1066) unlike create composers.
+### 1.6 rse — inline reply edit (`.rse-*`) — **DEV-ONLY**
+- **Where**: forums.js — editor scaffold :1099, PUT `/bb-mirror-api/v0/reply` :1127.
+  Inline (no modal/lock). Preserves inline `<img>` on edit unlike create composers.
+- **Correction (2026-07-26)**: this sits **inside the `?proto=cards` block**
+  (forums.js:950, gate `if (!protoOn || !feed) return;` :956, block ends :1240). It is
+  reachable only with `localStorage.lg_card_proto === '1'`. The original audit presented
+  it as a live surface; it is not.
 
-### 1.7 fic — inline card quick-reply (`.fic-*`)
-- **Where**: forums.js :1122–1160; mounted by `protoMountComposer()` on card expand.
-- **Write**: **POSTs native BB REST** `/reply` (:925 base, :1145 fetch) — see G8.
+### 1.7 fic — inline card quick-reply (`.fic-*`) — **DEV-ONLY**
+- **Where**: forums.js — `protoMountComposer()` :1167, mounted on card expand :1237.
+- **Write**: **POSTs native BB REST** `/reply` (:970 `protoReplyBase` default, :1190
+  fetch) — see G8.
+- **Correction (2026-07-26)**: same `?proto=cards` gate as §1.6. Not user-reachable.
 
 ### 1.8 lg-dmodal — desktop discussion modal (`#lg-dmodal`)
-- **Where**: forums.js :3995–4405; `window.lgDmodalOpen` :4385; close :4077.
+- **Where**: forums.js IIFE :4015–4560; `window.lgDmodalOpen` :4559; close :4251.
 - **Composition**: does NOT own a composer — injects a `data-frm-open` reply CTA
-  (:4203) that delegates to frm (§1.5), so its write path is frm's.
-- **Lifecycle**: z **8800** (forums.css:4283); own history entry `{lgDm:1}`
-  (:4801, popstate :4813–4829); scroll restore :4080.
+  (:4377) that delegates to frm (§1.5), so its write path is frm's. **This is the
+  desktop-skin seam for phase 3: repoint that one CTA and every dmodal reply moves.**
+- **Lifecycle**: z **8800** (forums.css); own history entry `{lgDm:1}` (§4f block
+  :4816–5113); reply edit/delete via the owned endpoint (:4162/:4187).
 
 ### 1.9 fb-inline — in-thread quick reply (`.lg-fb-replyinput`)
-- **Where**: `webroot/hub-polish.js` :759–930; `openReplyBox()` :874, submit :896–930.
-- **Where it lives**: inside the lrs thread's FB-styled reply columns (≥641px path;
-  mobile per-comment Reply taps route to lcp instead, :850).
-- **Write**: **POSTs native BB REST** `/wp-json/buddyboss/v1/reply` (:915ff) — see G8.
+- **Where**: `webroot/hub-polish.js` — `openReplyBox()` :874, submit ~:908–930.
+- **Where it lives**: inside the lrs thread's FB-styled reply columns. Routing at :847 —
+  **≤640px goes to lcp/composer v2; >640px falls to `openReplyBox`** (and :863 is the
+  no-sheet/no-card last resort). So this is the *desktop* in-thread reply box.
+- **Write**: **POSTs native BB REST** `/wp-json/buddyboss/v1/reply` (:925) — see G8.
+
+### 1.12 fc-composer — persistent card reply composer — **MISSING FROM THE ORIGINAL AUDIT**
+- **Where**: forums.js IIFE :3912–4003; `REPLY_BASE` :3914; markup server-rendered in
+  `bb-mirror/web/forums/_feed.php`:1643–1659.
+- **What it is**: the always-on single-line "Add a reply…" input under every feed card
+  (the "reply is lost" fix). **Authed only, NOT proto-gated**, desktop-only by CSS
+  (`display:none` ≤640) — i.e. a fully live desktop create surface.
+- **Write**: **POSTs native BB REST** `/reply` (:3986) — **G8, unlisted until now.**
+- **Two doors**: the plain input posts native directly; the `.fc-composer__rich` pencil
+  (`_feed.php`:1653) delegates to **frm** via the :2792 delegate. Phase 3 must claim
+  BOTH or the fast path keeps bypassing the composer.
+
+### 1.13 Single-topic page reply form (`.reply-form-wrap`) — **MISSING FROM THE ORIGINAL AUDIT**
+- **Where**: forums.js §3b :3021–3377 (inside the file's top-level IIFE); markup
+  `bb-mirror/web/forums/_single-topic.php`:543.
+- **What it is**: the server-rendered reply form on the canonical topic page — its own
+  Quill instance (:3056), its own `lgComposerTray` photo tray (:3044), reply-to threading
+  (`parent_reply_id` :3033).
+- **Write**: **POSTs native BB REST** `/reply` (:3027 `restBase` from
+  `wrap.dataset.bbRestBase`, :3354 fetch) — **G8, unlisted until now.**
+- **STRUCTURAL CONSTRAINT for phase 3**: composer v2 lives in `hub-polish.js`, which is
+  **path-gated to `/hub`** (:46 `onHubPath()`, injected site-wide via `/pwa.js`). This
+  page is not under `/hub`, so composer v2 is **not loadable here** without relocating
+  the module out of hub-polish.js. Retargeting its fetch to the mirror API closes G8 on
+  this surface without the skin; full v2 conversion is a larger, separable job.
 
 ### 1.10 Content-comment composers (articles/videos)
 - **Where**: `#looth-content-sheet` (hub-polish.js :1970–2200, z 2147483550) wraps a
@@ -118,16 +203,33 @@ last week is a pairwise interaction between two of them.
 
 ## 2. Write-path matrix
 
-| Surface | Create | Edit | Mint? | Bell? |
-|---|---|---|---|---|
-| lrs sheet reply | MIRROR POST (hub-polish.js:3685) | — | YES (reply.php:329 pre + :373 post-insert kses-off re-mint) | YES (reply.php:399 → `lg_notify_on_reply`) |
-| lcp sheet reply/edit | MIRROR POST (:4171) | MIRROR PUT (:4105/:4141) | YES / YES (edit re-mints, reply.php:165,:237) | YES |
-| New topic (ntm) | **NATIVE** `/wp-json/buddyboss/v1/topics` (forums.js:2359) | MIRROR PUT topic branch | YES via `bbp_new_topic` mu-plugin hook (bb-mirror-sync.php:148, post-insert kses-off) | YES (`lg_notify_on_topic`, notify-bridge.php:238) |
-| **frm desktop reply** | **NATIVE** `/reply` (forums.js:2442,:2860) | MIRROR PUT (:2619/:2672) | **NO on create** | **NO on create** |
-| **fic inline comment** | **NATIVE** `/reply` (forums.js:925,:1145) | — | **NO** | **NO** |
-| **fb-inline thread reply** | **NATIVE** `/reply` (hub-polish.js:896–930) | — | **NO** | **NO** |
-| rse / post-edit | — | MIRROR PUT (:1082/:3215) | YES | (edit does not re-notify — correct) |
-| Content comments | archive comments DB (iframe) | — | n/a (separate system) | n/a |
+**Re-derived 2026-07-26 at 432f80b.** Mint/bell columns now reflect the shipped phase-0
+stopgap: the `bbp_new_reply` hook (platform/mu-plugins/bb-mirror-sync.php:203) gives
+*every* reply create path mint + bell, and stands down when reply.php owns the write
+(`$GLOBALS['lg_bb_mirror_reply_owned']`, reply.php:333).
+
+| Surface | Live? | Create | Edit | Mint? | Bell? |
+|---|---|---|---|---|---|
+| lrs sheet reply | mobile | MIRROR POST (hub-polish.js:3838) | — | YES (reply.php:334 pre + :374 post-insert kses-off re-mint) | YES (reply.php:404 → `lg_notify_on_reply`) |
+| lcp / composer v2 | mobile | MIRROR POST (:5007) | MIRROR PUT (:4940/:4976) | YES / YES (edit re-mints) | YES |
+| New topic (ntm) | both | **NATIVE** `/topics` (forums.js:2404) | MIRROR PUT topic branch | YES via `bbp_new_topic` hook (bb-mirror-sync.php:128) | YES (`lg_notify_on_topic`) |
+| **frm desktop reply** | desktop | **NATIVE** `/reply` (forums.js:2487,:2905) | MIRROR PUT (:2867/:2825) | via STOPGAP hook | via STOPGAP hook |
+| **fc-composer** *(new)* | desktop | **NATIVE** `/reply` (forums.js:3914,:3986) | — | via STOPGAP hook | via STOPGAP hook |
+| **fb-inline thread reply** | desktop | **NATIVE** `/reply` (hub-polish.js:925) | — | via STOPGAP hook | via STOPGAP hook |
+| **single-topic form** *(new)* | topic page | **NATIVE** `/reply` (forums.js:3027,:3354) | — | via STOPGAP hook | via STOPGAP hook |
+| **fic inline comment** | **dev-only** (`?proto=cards`) | **NATIVE** `/reply` (forums.js:970,:1190) | — | via STOPGAP hook | via STOPGAP hook |
+| rse | **dev-only** (`?proto=cards`) | — | MIRROR PUT (:1127) | YES | (edit does not re-notify — correct) |
+| post-edit | topic page | — | MIRROR PUT (:3260) | YES | (edit does not re-notify — correct) |
+| Content comments | both | archive comments DB (iframe) | — | n/a (separate system) | n/a |
+
+> **G8 STATUS 2026-07-26 — closed by stopgap, not by architecture.** The paragraph below
+> describes the hole as it stood on 2026-07-24. Since then the phase-0 `bbp_new_reply`
+> mu-plugin hook shipped, so desktop replies **do** mint and **do** ring today. What
+> remains open is the *architecture*: five surfaces still POST native BB REST, so the
+> correctness of every desktop reply depends on a mu-plugin hook rather than on there
+> being one write path. Phase 3 retires the dependency. Note also that the blast radius
+> was **understated** — §1.12 `fc-composer` and §1.13 the single-topic form were never
+> inventoried, and both post native.
 
 **G8 — THE TOP FINDING. The native-create hole is still open on desktop/inline paths.**
 Any surface that posts CREATE to native BB REST bypasses reply.php entirely: no mention
@@ -163,6 +265,22 @@ picks (b) as the end state (§ plan), with (a) as the interim stopgap.
 ---
 
 ## 4. Cross-cutting mechanics (z-ladder, scroll-locks, focus)
+
+> **Re-verified 2026-07-26 — partially superseded by phase 1.** Corrections:
+> **§4.1** add `#looth-tag-sheet` z 2,147,483,570 (hub-polish.js:4053) and
+> `#looth-link-sheet` z 2,147,483,580 (:4090), both phase-2 composer layers; the lrs/lcp
+> ladder is now mediated by the manager's shared backdrop, which derives its z from the
+> top sheet (:3073) instead of a hand-picked number. The `.lg-mnt` == `#lg-lb` collision
+> (G10) still stands at :313 / :5356.
+> **§4.2** mechanism 1 (position:fixed observer) now covers lrs/lcp/tag/link via
+> `LgSheets`; the lrs belt-and-braces `overflow:hidden` duplicate is **gone**. Mechanism
+> 2 survives **only** on the content sheet (:2186/:2196) and mobile lightbox
+> (:5377/:5386) — G9 unchanged, still iOS-broken on those two.
+> **§4.3** Esc is now free for every registered sheet (`escClose`, :3125) — **G12 closed
+> for lrs/lcp/tag/link**, still open on any surface not yet on the manager.
+> **§4.4** lrs/lcp no longer arbitrate: `LgSheets` is the sole popstate owner. `__lgLbPop`
+> (G11) remains read at :3145/:5652 and set nowhere.
+
 
 ### 4.1 The z-index ladder (measured)
 | Layer | z | Cite |
@@ -261,7 +379,14 @@ real device without devtools.
 
 ---
 
-## 6. Teardown invariants as they exist today (candidate 334ffa4)
+## 6. Teardown invariants — HISTORICAL (candidate 334ffa4; superseded by phase 1)
+
+> **All three helpers below were DELETED by phase 1** (tombstone: hub-polish.js:4745).
+> `LgSheets` (hub-polish.js:3020) now owns the stack, the single shared backdrop
+> (:3037), the scroll-lock, behind-state, focus restore, Esc (`escClose`) and history
+> (single popstate owner + self-pop guard :3025). Item 4's prediction came true — read
+> this section as the "before" picture.
+
 1. **Lock**: `lg-sheet-lock` ⇔ (lrs open ∨ lcp open) — `lgSyncSheetLock()` :3908,
    called from every open/close.
 2. **Behind**: lrs is `lg-sheet-behind` ONLY while lcp is open — enforced at the ROOT
@@ -278,8 +403,8 @@ real device without devtools.
 
 | # | Gap | Evidence | Severity |
 |---|---|---|---|
-| **G8** | **Desktop/inline reply CREATE bypasses mint + bell entirely** (frm, fic, fb-inline post native BB REST; `lg_notify_on_reply` fires only from reply.php) — desktop replies mint nothing and ring nobody | §2 matrix; forums.js:2860,:1145; hub-polish.js:896–930 | **CRITICAL (functional)** |
-| G1 | Dropdown list-scroll insta-picks (touchstart-pick) | forums.js:359; KNOWN-FAIL test in e2e-webkit | HIGH (mobile UX) |
+| **G8** | ~~Desktop/inline reply CREATE bypasses mint + bell entirely~~ → **DOWNGRADED 2026-07-26**: functionally closed by the phase-0 `bbp_new_reply` stopgap hook (bb-mirror-sync.php:203, guard reply.php:333). **Architecturally open**: FIVE surfaces still POST native — frm (forums.js:2905), fc-composer (:3986), single-topic form (:3354), fb-inline (hub-polish.js:925), fic (:1190, dev-only). Correctness rides a hook, not a single write path | §2 matrix | **HIGH (architectural)** — was CRITICAL/functional |
+| G1 | ~~Dropdown list-scroll insta-picks (touchstart-pick)~~ — **FIXED**: touchstart recorded (forums.js:364), pick on touchend <10px/<700ms (:373) | re-verified 2026-07-26 | CLOSED |
 | G2 | Reply-intent auto-opens composer OVER thread → first reaction tap dismisses composer instead ("two-tap" feel; suspected source of Ian's "reactions dead") | hub-polish.js:436→:3655 | MED (needs Ian ruling: keep auto-open?) |
 | G9 | Content sheet + mobile lightbox still use iOS-broken `overflow:hidden`-only locks — they scroll-bleed on iPhone today (same class as R6) | hub-polish.js:2186,:4544 | MED |
 | G10 | z-index collision: `.lg-mnt` == `#lg-lb` at 2147483600; no z registry | forums.js:306; hub-polish.js:4523 | LOW (latent) |
