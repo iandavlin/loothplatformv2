@@ -248,11 +248,26 @@ class LG_WD_Sender {
             return [ 'success' => false, 'message' => 'No content in issue.', 'campaign_id' => null ];
         }
 
-        // Render HTML
-        $html    = LG_WD_Email_Builder::build( $payload );
         $subject = LG_WD_Email_Builder::build_subject( $payload );
 
+        /**
+         * How the per-member "Your week" token is resolved differs per path, and
+         * getting it wrong is user-visible, so it is decided explicitly here rather
+         * than defaulted anywhere downstream:
+         *
+         *  - PREVIEW  → render the previewing admin's own recap, so the compose
+         *               page shows a real section instead of a placeholder.
+         *  - TEST     → render the test recipient's recap if that address belongs
+         *               to a member; otherwise strip (no literal token in a test).
+         *  - CAMPAIGN → keep the token. This is the ONLY path where FluentCRM gets
+         *               to substitute per recipient.
+         *  - wp_mail fallback → one body, one recipient: render for that member.
+         */
         if ( $dry_run ) {
+            $html = LG_WD_Email_Builder::build( $payload, [
+                'mode'       => 'render',
+                'wp_user_id' => get_current_user_id(),
+            ] );
             return [ 'success' => true, 'message' => 'Preview ready.', 'html' => $html, 'subject' => $subject, 'campaign_id' => null ];
         }
 
@@ -260,11 +275,31 @@ class LG_WD_Sender {
 
         // Test send
         if ( $test_email ) {
+            $tester = get_user_by( 'email', $test_email );
+            $html   = LG_WD_Email_Builder::build( $payload, [
+                'mode'       => $tester ? 'render' : 'strip',
+                'wp_user_id' => $tester ? (int) $tester->ID : 0,
+            ] );
             return $sender->send_test( $test_email, $subject, $html );
         }
 
         // Full send
         $issue_title = get_the_title( $issue_id );
+
+        if ( $sender instanceof LG_WD_Sender_FluentCRM ) {
+            $html = LG_WD_Email_Builder::build( $payload, [ 'mode' => 'token' ] );
+        } else {
+            // wp_mail fallback: a single body to a single address, so the token has
+            // to be resolved here — nothing downstream will do it. LG_WD_Sender_WPMail
+            // takes its recipient from the same setting.
+            $to     = (string) LG_WD_Settings::get( 'review_notify_email', '' );
+            $member = $to ? get_user_by( 'email', $to ) : null;
+            $html   = LG_WD_Email_Builder::build( $payload, [
+                'mode'       => $member ? 'render' : 'strip',
+                'wp_user_id' => $member ? (int) $member->ID : 0,
+            ] );
+        }
+
         $result = $sender->send( $subject, $html, [ 'campaign_title' => $issue_title ] );
 
         if ( $result['success'] ) {

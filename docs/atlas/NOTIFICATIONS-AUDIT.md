@@ -6,6 +6,24 @@
 > **Lane:** notifications-audit (branch `notif-audit`). **Box audited:** dev2 (`34.193.244.53`),
 > WP `/var/www/dev`, repo `~/loothplatformv2` @ `7f4ccf2`. **Date:** 2026-06-27.
 > Cross-refs: SYSTEM-MAP.md, HUB-RENDER-ARCHITECTURE-AUDIT.md, REPO-MANDATE.md.
+>
+> ### ⚠️ SUPERSEDED IN ONE IMPORTANT WAY — read this before trusting §0–§3
+>
+> This audit describes `profile_app.notifications` as knowing about **connection request/accept
+> only**, with Hub replies/mentions/reactions notifying nobody (§0 item 1, table rows 6–7, §3.2).
+> **That stopped being true on 2026-07-12**, when the notifications lane shipped
+> `lg-shared/notify-bridge.php` + `Notifications::pushHubEvent()`. The store now also carries
+> `forum.reply_to_topic`, `forum.reply_to_reply`, `forum.mention` and `reaction.on_post` — each
+> with an actor, a coalesced `actor_count`, and **a stamped canonical `/hub/?topic=…&reply=…`
+> deep link**. Phase 1 of §4.4 is substantially done for forum events.
+>
+> Still accurate: DMs deliberately do not ring the bell, the `message` type is still dead code,
+> there are still no user-facing notification preferences, there is still no prune, and the
+> legacy BuddyBoss path is still an orphaned live landmine.
+>
+> See **WEEKLY-DIGEST-RECAP.md §2** for what the store does and does not know as of 2026-07-27,
+> and for the fact that WordPress holds zero grants on the `profile_app` database (which is why
+> both the write and the read paths are loopback endpoints).
 
 ---
 

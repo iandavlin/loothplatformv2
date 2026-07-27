@@ -65,6 +65,7 @@
   <a href="#only-dms">Only DMs</a>
   <a href="#one-connection">One connection request</a>
   <a href="#empty">Empty</a>
+  <a href="#recipients">Five real members</a>
   <a href="#notes">What the store knows</a>
 </nav>
 
@@ -195,6 +196,51 @@
     <div class="pair">
       <div class="col phone"><h3>Phone · 390px</h3><iframe sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" src="empty--a-recommended.html" title="empty, phone"></iframe></div>
       <div class="col desk"><h3>Desktop · 720px</h3><iframe sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" src="empty--a-recommended.html" title="empty, desktop"></iframe></div>
+    </div>
+  </div>
+</section>
+
+
+<section id="recipients">
+  <div class="sec-head">
+    <h2>Proof: five real members, one campaign <span class="tag rec">no composites</span></h2>
+    <p>Everything above shows the design. This shows the <b>mechanism</b>. One campaign body containing one
+       <code>##lg_recap.section##</code> token, pushed through the same <code>Parser::parse()</code> that FluentCRM
+       applies to every recipient at send — and it comes out <b>five different emails</b>. The recap material is the
+       verbatim response of the new <code>/profile-api/v0/internal/recap</code> endpoint, driven against the real
+       profile-app FPM pool. Window: 90 days (widened from the shipping 7 so these members have anything
+       at all to show — dev2 gets a trickle of traffic).</p>
+  </div>
+  <div class="sec-body">
+    <h3 style="margin:28px 0 10px;font:700 15px/1.3 system-ui">Markus Heidarsson Heidarsson Guitars <span class="tag alt">wp:690 · subscriber 636</span></h3>
+    <p class="frame-w" style="margin:0 0 10px">Two forum rows — replies on his discussion, and a reaction. Section rendered: <b>yes</b>, 2 row(s).</p>
+    <div class="pair">
+      <div class="col phone"><h3>Phone · 390px</h3><iframe sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" src="recipient-690.html" title="Markus Heidarsson Heidarsson Guitars phone"></iframe></div>
+      <div class="col desk"><h3>Desktop · 720px</h3><iframe sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" src="recipient-690.html" title="Markus Heidarsson Heidarsson Guitars desktop"></iframe></div>
+    </div>
+    <h3 style="margin:28px 0 10px;font:700 15px/1.3 system-ui">Doug Proper Guitar Specialist <span class="tag alt">wp:197 · subscriber 398</span></h3>
+    <p class="frame-w" style="margin:0 0 10px">Three rows — two reactions and a connection that was accepted. Section rendered: <b>yes</b>, 3 row(s).</p>
+    <div class="pair">
+      <div class="col phone"><h3>Phone · 390px</h3><iframe sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" src="recipient-197.html" title="Doug Proper Guitar Specialist phone"></iframe></div>
+      <div class="col desk"><h3>Desktop · 720px</h3><iframe sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" src="recipient-197.html" title="Doug Proper Guitar Specialist desktop"></iframe></div>
+    </div>
+    <h3 style="margin:28px 0 10px;font:700 15px/1.3 system-ui">Tony Lewis Skypilot Guitar Repair <span class="tag alt">wp:1138 · subscriber 983</span></h3>
+    <p class="frame-w" style="margin:0 0 10px">Only DMs. Six unread from one sender, coalesced into one row. Section rendered: <b>yes</b>, 1 row(s).</p>
+    <div class="pair">
+      <div class="col phone"><h3>Phone · 390px</h3><iframe sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" src="recipient-1138.html" title="Tony Lewis Skypilot Guitar Repair phone"></iframe></div>
+      <div class="col desk"><h3>Desktop · 720px</h3><iframe sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" src="recipient-1138.html" title="Tony Lewis Skypilot Guitar Repair desktop"></iframe></div>
+    </div>
+    <h3 style="margin:28px 0 10px;font:700 15px/1.3 system-ui">Jim Hensley <span class="tag alt">wp:1891 · subscriber 2022</span></h3>
+    <p class="frame-w" style="margin:0 0 10px">One lonely connection request and nothing else. Section rendered: <b>yes</b>, 1 row(s).</p>
+    <div class="pair">
+      <div class="col phone"><h3>Phone · 390px</h3><iframe sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" src="recipient-1891.html" title="Jim Hensley phone"></iframe></div>
+      <div class="col desk"><h3>Desktop · 720px</h3><iframe sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" src="recipient-1891.html" title="Jim Hensley desktop"></iframe></div>
+    </div>
+    <h3 style="margin:28px 0 10px;font:700 15px/1.3 system-ui">Jerry <span class="tag alt">wp:1170 · subscriber 773</span></h3>
+    <p class="frame-w" style="margin:0 0 10px">Nothing this window — the section is absent, body identical to today’s digest. Section rendered: <b>NO — absent</b>.</p>
+    <div class="pair">
+      <div class="col phone"><h3>Phone · 390px</h3><iframe sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" src="recipient-1170.html" title="Jerry phone"></iframe></div>
+      <div class="col desk"><h3>Desktop · 720px</h3><iframe sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" src="recipient-1170.html" title="Jerry desktop"></iframe></div>
     </div>
   </div>
 </section>
