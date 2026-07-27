@@ -24,6 +24,11 @@ use Looth\ProfileApp\Block;
 // Block isn't in config.php's require list yet (config.php is shared w/
 // shim-replacement — coordinator should add it there for consistency).
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';
+// The shared post-auth destination helper (WP-free, same as this surface).
+// Required directly rather than relying on the chrome having been rendered
+// first — the gate interstitials below are reachable from render paths that
+// don't include /srv/lg-shared/site-header.php.
+require_once '/srv/lg-shared/lg-destination.php';
 
 if (!function_exists('looth_h')) {
     function looth_h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
@@ -1158,7 +1163,10 @@ function looth_render_members_gate(int $userId): void
        . '<h2>This profile is members-only</h2>'
        . '<p>Profiles on Looth are a members community by default. Sign in to see more — or join to get your own.</p>'
        . '<div class="lg-gate__cta"><a class="lg-gate__join" href="/lgjoin/">Join Looth</a>'
-       . '<a class="lg-gate__signin" href="/wp-login.php">Sign in</a></div>'
+       // Sign in, then land back on THIS profile — not /activity/. The gate
+       // itself keeps showing its teaser to anyone who arrives without the
+       // membership (ruling 3): this only changes where the door goes.
+       . '<a class="lg-gate__signin" href="' . looth_h(lg_dest_login_url(lg_dest_here())) . '">Sign in</a></div>'
        . '</div>';
 }
 
@@ -1279,6 +1287,7 @@ function looth_render_practice_gate(): void
        . '<h2>This practice is members-only</h2>'
        . '<p>Sign in to see this practice — or join Looth to list your own.</p>'
        . '<div class="lg-gate__cta"><a class="lg-gate__join" href="/lgjoin/">Join Looth</a>'
-       . '<a class="lg-gate__signin" href="/wp-login.php">Sign in</a></div>'
+       // Same as the profile gate: sign in, come back to THIS practice.
+       . '<a class="lg-gate__signin" href="' . looth_h(lg_dest_login_url(lg_dest_here())) . '">Sign in</a></div>'
        . '</div>';
 }

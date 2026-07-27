@@ -31,6 +31,7 @@ declare(strict_types=1);
 require __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../web/forums/_reply-render.php'; // lg_bb_mirror_can_post, bb_mirror_avatar, feed_rel_time
 require_once __DIR__ . '/../../web/_anon-scrub.php';          // lg_scrub_anon_contacts (used by _topic-body)
+require_once '/srv/lg-shared/lg-destination.php';             // lg_dest_login_url (no chrome on this endpoint)
 
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -99,7 +100,11 @@ ob_start();
 require __DIR__ . '/../../web/forums/_topic-body.php';
 $body_html = ob_get_clean();
 
-$login_url = '/wp-login.php?redirect_to=' . rawurlencode('/hub/' . $topic['forum_slug'] . '/' . $topic['slug'] . '/');
+// Destination is the thread's canonical /hub/ path — this fragment is loaded
+// into a modal on some OTHER page, so lg_dest_here() would capture the API path.
+// Built by the shared helper (lg-shared/lg-destination.php) so it validates the
+// same as every other door.
+$login_url = lg_dest_login_url('/hub/' . $topic['forum_slug'] . '/' . $topic['slug'] . '/');
 ?>
 <div class="lg-fpd-op" data-topic-id="<?= $tid ?>" data-forum-id="<?= $fid ?>"
      data-title="<?= htmlspecialchars($title, ENT_QUOTES) ?>"

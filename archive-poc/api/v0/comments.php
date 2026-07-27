@@ -19,6 +19,7 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/_comments.php';
+require_once '/srv/lg-shared/lg-destination.php';
 
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store');
@@ -30,6 +31,32 @@ $postType = isset($_GET['post_type']) ? trim((string) $_GET['post_type']) : '';
 $itemId   = isset($_GET['item_id']) ? (int) $_GET['item_id'] : 0;
 
 $valid = in_array($postType, LG_COMMENTS_TYPES, true) && $itemId > 0;
+
+/**
+ * Post-auth destination for the "Log in" link.
+ *
+ * This document is an IFRAME, so lg_dest_here() would capture the API path —
+ * signing in would land the reader on a bare comments fragment. What they
+ * actually want is the ARTICLE they were reading, i.e. the parent document.
+ *
+ * Preferred: the parent hands it over as ?from= (both openers do — forums.js's
+ * lgc-modal and the standalone renderer). Fallback: the Referer, which for a
+ * same-origin iframe carries the parent's full URL under this site's
+ * strict-origin-when-cross-origin policy — that covers any opener still
+ * running cached JS from before this lane. Both go through lg_dest_capture,
+ * so a hostile or absent value yields '' and the link stays a bare login.
+ *
+ * A referer of exactly '/' is discarded: that is the signature of an
+ * origin-only referrer policy, not a reader who was on the front page.
+ */
+$loginDest = lg_dest_capture((string) ($_GET['from'] ?? ''));
+if ($loginDest === '') {
+    $ref = lg_dest_capture((string) ($_SERVER['HTTP_REFERER'] ?? ''));
+    if ($ref !== '/') {
+        $loginDest = $ref;
+    }
+}
+$loginUrl = lg_dest_login_url($loginDest);
 
 $rows  = [];
 $cards = [];
@@ -261,7 +288,7 @@ $count = count($rows);
       <button type="button" class="lgc-submit" id="lgc-submit">Post comment</button>
     </div>
   </div>
-  <p class="lgc-login" id="lgc-login" hidden><a href="/wp-login.php" target="_top">Log in</a> to join the conversation.</p>
+  <p class="lgc-login" id="lgc-login" hidden><a href="<?= lg_c_h($loginUrl) ?>" target="_top">Log in</a> to join the conversation.</p>
 
   <ul class="lgc-list" id="lgc-list"><?= $threadHtml ?></ul>
   <?php if ($count === 0): ?><p class="lgc-empty" id="lgc-empty">No comments yet. Be the first.</p><?php endif; ?>

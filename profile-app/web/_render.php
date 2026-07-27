@@ -4,6 +4,11 @@ declare(strict_types=1);
 use Looth\ProfileApp\Practice;
 use Looth\ProfileApp\Profile;
 
+// Shared post-auth destination helper (WP-free — profile-app runs with no
+// WordPress loaded). The login interstitial below is reachable without the
+// shared chrome, so require it here rather than relying on site-header.php.
+require_once '/srv/lg-shared/lg-destination.php';
+
 function looth_h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
 function looth_initials(string $name): string {
@@ -426,8 +431,13 @@ document.getElementById('claim-btn').addEventListener('click', async () => {
 function looth_render_login_interstitial(string $back = '/profile/edit'): void {
     // Host from config (env-branched) — a hardcoded dev URL here would bounce
     // LIVE users to the dev box at cutover (found in the 6/12 deploy audit).
-    $login = 'https://' . LG_PROFILE_APP_HOST . '/wp-login.php?redirect_to='
-           . urlencode('https://' . LG_PROFILE_APP_HOST . $back);
+    //
+    // Routed through the shared helper so $back is validated (its old form was
+    // urlencode'd straight in, unchecked) — a hostile caller now gets a bare
+    // login on the right host instead of a bound destination. redirect_to is
+    // emitted PATH-ONLY: it resolves against the login host it sits on, which is
+    // the same host, and a path is what every other door here binds.
+    $login = lg_dest_login_url($back, 'https://' . LG_PROFILE_APP_HOST . '/wp-login.php');
 ?>
 <!doctype html><html><head><meta charset="utf-8"><title>Sign in to edit · Looth</title>
 <link rel="stylesheet" href="/profile/edit/edit.css"></head>

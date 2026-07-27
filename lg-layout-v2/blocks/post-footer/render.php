@@ -348,7 +348,12 @@ if ($can_edit && $author_id) {
       setTimeout(function(){ document.addEventListener('click', function h(ev){ if(!box.contains(ev.target)){ pop.remove(); document.removeEventListener('click',h); } }); }, 0);
     }
     function pick(slug){
-      if (!st.authed){ location.href = '/wp-login.php?redirect_to='+encodeURIComponent(location.href); return; }
+      // One posture for every door: window.lgDest (lg-shared/lg-destination.js,
+      // shipped by the shared chrome for anon) validates and drops the fragment
+      // the server never sees. The inline fallback keeps an anon reader able to
+      // sign in even if that asset ever fails to load.
+      if (!st.authed){ location.href = (window.lgDest ? window.lgDest.loginUrl(window.lgDest.here())
+                                                      : '/wp-login.php?redirect_to='+encodeURIComponent(location.pathname+location.search)); return; }
       fetch(EP, { method:'POST', credentials:'same-origin',
         headers:{ 'Content-Type':'application/json', 'X-WP-Nonce': st.nonce },
         body: JSON.stringify({ post_type: pt, item_id: id, slug: slug, _wpnonce: st.nonce }) })

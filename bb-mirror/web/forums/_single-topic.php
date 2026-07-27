@@ -550,8 +550,12 @@ $fh_image      = $forum['header_image_url'] ?: null;
 
     <div class="reply-form reply-form--anon" data-state="anon" hidden>
       <p class="reply-form__cta">
+        <?php /* Destination stays the topic's CANONICAL path (deliberate — not
+                 lg_dest_here(); a reader deep in ?replies= paging still wants the
+                 thread itself), but it is now built by the shared helper so this
+                 door validates identically to every other. */ ?>
         <a class="reply-form__signin"
-           href="/wp-login.php?redirect_to=<?= rawurlencode(LG_BB_MIRROR_PUBLIC_PATH . '/' . $forum['slug'] . '/' . $topic['slug'] . '/') ?>">
+           href="<?= htmlspecialchars(lg_dest_login_url(LG_BB_MIRROR_PUBLIC_PATH . '/' . $forum['slug'] . '/' . $topic['slug'] . '/'), ENT_QUOTES) ?>">
           Sign in to post a reply
         </a>
       </p>

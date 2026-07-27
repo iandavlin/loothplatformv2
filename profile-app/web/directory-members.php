@@ -152,7 +152,11 @@ if (isset($_SERVER['HTTP_CF_IPLATITUDE'], $_SERVER['HTTP_CF_IPLONGITUDE'])
   <p class="dir-join-card__s"><span id="dir-join-count">Hundreds of</span> luthiers worldwide. Join to see who&rsquo;s near you.</p>
   <div class="dir-join-card__row">
     <a class="dir-join-card__join" href="https://www.patreon.com/c/theloothgroup/membership" target="_blank" rel="noopener">Join on Patreon &rarr;</a>
-    <a class="dir-join-card__signin" href="/wp-login.php?redirect_to=%2Fdirectory%2Fmembers%2F">Sign in</a>
+    <?php /* Was a hardcoded %2Fdirectory%2Fmembers%2F, which threw away whatever
+             filters the reader had applied. lg_dest_here() carries the CURRENT
+             request, query and all, so /directory/members/?craft=archtop comes
+             back as itself. */ ?>
+    <a class="dir-join-card__signin" href="<?= lg_shared_h(lg_dest_login_url(lg_dest_here())) ?>">Sign in</a>
   </div>
 </div>
 <?php endif; ?>
@@ -227,6 +231,9 @@ let dirView = <?= json_encode($view) ?>;            // 'map' | 'cards' (mapless)
 let curTotal = 0, curPageSize = 20, curHasMore = false;
 const DIR_HAS_ONLINE = <?= json_encode($hasOnline) ?>;
 const DIR_ME_SLUG = <?= json_encode($_whoami['slug'] ?? null, JSON_UNESCAPED_SLASHES) ?>;
+// Sign-in href for the gated map pins, resolved server-side through the shared
+// destination helper so this door has the same posture as the chrome's.
+const DIR_SIGNIN_HREF = <?= json_encode(lg_dest_login_url(lg_dest_here()), JSON_UNESCAPED_SLASHES) ?>;
 
 // Canonical URL for a given page, carrying the active view so a reload/share
 // reopens in the same mode. Shared by applyFilters + the pager.
@@ -799,7 +806,7 @@ function plotPins(pins) {
     if (p.gated) {
       m = L.marker([p.lat, p.lng], {icon: pinIconGated});
       popupHtml = `<div style="font-size:13px;color:#6b665e;max-width:190px">${escH(p.message)}</div>`
-        + `<a href="/wp-login.php" style="font-size:12px;font-weight:600;color:var(--lg-rust);text-decoration:none">Sign in to view</a>`;
+        + `<a href="${escH(DIR_SIGNIN_HREF)}" style="font-size:12px;font-weight:600;color:var(--lg-rust);text-decoration:none">Sign in to view</a>`;
     } else {
       navigates = !hasKids && !isMe;   // drop-off pins keep click-to-expand (their popup says so)
       m = L.marker([p.lat, p.lng], {icon: hasKids ? pinIconWithCount(p.dropoffs.length) : pinIcon, title: p.display_name});

@@ -4889,6 +4889,17 @@
     }
     return location.href;
   }
+  // ONE expression for this door's href, used at build time AND rebound at open
+  // time (the reader may have moved between threads since the sheet was built).
+  // window.lgDest is the shared validator (lg-shared/lg-destination.js, shipped
+  // by the chrome for anon); the inline form is the fallback that keeps the
+  // sheet's promise if that asset ever fails to load.
+  function lgSignInHref() {
+    var back = lgSignInReturnUrl();
+    return window.lgDest
+      ? window.lgDest.loginUrl(back)
+      : '/wp-login.php?redirect_to=' + encodeURIComponent(back);
+  }
   var lgSignInSheet = null;
   function ensureSignInSheet() {
     if (lgSignInSheet) return lgSignInSheet;
@@ -4933,7 +4944,7 @@
       '<div class="lgsi-card" data-lg-sheet-card>' +
         '<p class="lgsi-t">Sign in to reply</p>' +
         '<p class="lgsi-p">Join the conversation — you&rsquo;ll come straight back to this discussion.</p>' +
-        '<a class="lgsi-b lgsi-b--go" id="lgsi-go" href="/wp-login.php">Sign in</a>' +
+        '<a class="lgsi-b lgsi-b--go" id="lgsi-go" href="' + lgSignInHref() + '">Sign in</a>' +
         '<button type="button" class="lgsi-b lgsi-b--x" id="lgsi-x">Not now</button>' +
       '</div>';
     document.body.appendChild(s);
@@ -4956,9 +4967,9 @@
     // Bind the return URL at OPEN time, not build time — the reader may have moved
     // between threads since the modal was first constructed. The F1 login-redirect
     // fix (9ab8fcd) is what makes this land on the topic instead of /activity/.
-    s.querySelector('#lgsi-go').setAttribute(
-      'href', '/wp-login.php?redirect_to=' + encodeURIComponent(lgSignInReturnUrl())
-    );
+    // Rebound at OPEN time, not left at its build-time value — same posture as
+    // before this lane, now going through the shared validator (see lgSignInHref).
+    s.querySelector('#lgsi-go').setAttribute('href', lgSignInHref());
     window.LgSheets.open('lgsignin');
   }
 

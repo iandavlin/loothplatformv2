@@ -35,6 +35,9 @@ if (!getenv('LG_ARCHIVE_POC_DSN')) {
     putenv('LG_ARCHIVE_POC_DSN=pgsql:host=/var/run/postgresql;dbname=looth');
 }
 require_once dirname($DIR) . '/config.php';
+// The shared post-auth destination helper. Required here (not left to the chrome
+// further down) because $commentsUrl is built well before site-header.php loads.
+require_once '/srv/lg-shared/lg-destination.php';
 // LG_COMMENTS_TYPES — which content types the postgres comment store covers, so
 // the modal can point at the WP-free read endpoint for those (and fall back to WP
 // for the rest). Definitions only; no side effects.
@@ -181,7 +184,10 @@ if ($commentsCovered && !$IS_CLI) {
 }
 $commentsUrl   = (!$IS_CLI && ($commentsCount > 0 || $commentsOpen))
     ? ($commentsCovered
+        // &from= — see comments.php: the iframe's anon "Log in" link needs the
+        // ARTICLE's path, not the API path it is itself loaded from.
         ? '/archive-api/v0/comments?post_type=' . rawurlencode($postType) . '&item_id=' . $commentsItemId
+            . (lg_dest_here() !== '' ? '&from=' . rawurlencode(lg_dest_here()) : '')
         : rtrim((string) ($postContext['permalink'] ?? ''), '/') . '/?lg_comments=1')
     : '';
 
@@ -699,7 +705,12 @@ body { margin: 0; background: #f0eee8; color: #323532;
       setTimeout(function(){ document.addEventListener('click', function h(ev){ if(!box.contains(ev.target)){ pop.remove(); document.removeEventListener('click',h); } }); }, 0);
     }
     function pick(slug){
-      if (!st.authed){ location.href = '/wp-login.php?redirect_to='+encodeURIComponent(location.href); return; }
+      // One posture for every door: window.lgDest (lg-shared/lg-destination.js,
+      // shipped by the shared chrome for anon) validates and drops the fragment
+      // the server never sees. The inline fallback keeps an anon reader able to
+      // sign in even if that asset ever fails to load.
+      if (!st.authed){ location.href = (window.lgDest ? window.lgDest.loginUrl(window.lgDest.here())
+                                                      : '/wp-login.php?redirect_to='+encodeURIComponent(location.pathname+location.search)); return; }
       fetch(EP, { method:'POST', credentials:'same-origin',
         headers:{ 'Content-Type':'application/json', 'X-WP-Nonce': st.nonce },
         body: JSON.stringify({ post_type: pt, item_id: id, slug: slug, _wpnonce: st.nonce }) })

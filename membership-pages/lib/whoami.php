@@ -18,6 +18,11 @@
 
 declare(strict_types=1);
 
+// Shared post-auth destination helper (WP-free — membership-pages render with
+// no WordPress loaded). Required here so the session-expired card below can
+// build its sign-in link whether or not the chrome has been pulled in yet.
+require_once '/srv/lg-shared/lg-destination.php';
+
 if (!function_exists('lg_membership_whoami')) {
 function lg_membership_whoami(): ?array {
     static $fetched = false, $result = null;
@@ -155,8 +160,10 @@ function lg_membership_header_ctx(string $active_nav = ''): array {
 if (!function_exists('lg_membership_session_expired_html')) {
 function lg_membership_session_expired_html(): string {
     $h        = 'lg_membership_h';
-    $here     = 'https://' . LG_MEMBERSHIP_HOST . (string)($_SERVER['REQUEST_URI'] ?? '/');
-    $loginUrl = 'https://' . LG_MEMBERSHIP_HOST . '/wp-login.php?redirect_to=' . rawurlencode($here);
+    // Routed through the shared helper: REQUEST_URI is request-controlled and was
+    // being rawurlencode'd in unchecked. redirect_to is emitted PATH-ONLY now — it
+    // resolves against the login host it sits on, which is this same host.
+    $loginUrl = lg_dest_login_url(lg_dest_here(), 'https://' . LG_MEMBERSHIP_HOST . '/wp-login.php');
     return
         '<div class="lg-session-expired" style="max-width:560px;margin:2.5em auto;padding:1.4em 1.6em;background:#fff8f0;border:1px solid #ECB351;border-radius:10px;color:#1f1d1a;line-height:1.55;text-align:center;">'
       . '<p style="margin:0 0 .5em;font-size:1.1em;font-weight:700;">Your session has expired</p>'

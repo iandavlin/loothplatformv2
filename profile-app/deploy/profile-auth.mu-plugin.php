@@ -168,9 +168,15 @@ add_action('rest_api_init', function () {
         'methods'  => 'GET',
         'permission_callback' => '__return_true',
         'callback' => function (WP_REST_Request $req) {
-            $return = $req->get_param('return') ?: '/profile/edit';
             // Only allow same-origin returns — never bounce to off-host URLs.
-            if (!is_string($return) || $return === '' || $return[0] !== '/') {
+            // The hand-rolled leading-'/' check this replaced let through
+            // control characters, /\ backslash forms and /wp-login.php itself
+            // (a sign-in loop). lg_dest_capture_wp is the one validator every
+            // door on the site now shares; '' means "nothing bindable", and the
+            // /profile/edit default stands.
+            $raw    = $req->get_param('return');
+            $return = function_exists('lg_dest_capture_wp') ? lg_dest_capture_wp($raw) : '';
+            if ($return === '') {
                 $return = '/profile/edit';
             }
             $back = 'https://' . ($_SERVER['HTTP_HOST'] ?? $GLOBALS['lg_host'] ?? 'dev.loothgroup.com') . $return;

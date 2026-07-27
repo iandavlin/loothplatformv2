@@ -3426,8 +3426,14 @@
   var openerBtn = null;   // the card's comment button that opened the modal
 
   function openModal(pt, id) {
+    // ?from= hands the iframe the page the reader is actually on, so its anon
+    // "Log in" link brings them back HERE and not to a bare comments fragment
+    // (the iframe's own URL is the API path). Server re-validates it; a missing
+    // or hostile value just yields the bare login it emitted before.
+    var from = (window.lgDest && window.lgDest.here()) || (location.pathname + location.search);
     frame.src = '/archive-api/v0/comments?post_type=' +
-      encodeURIComponent(pt) + '&item_id=' + encodeURIComponent(id);
+      encodeURIComponent(pt) + '&item_id=' + encodeURIComponent(id) +
+      (from ? '&from=' + encodeURIComponent(from) : '');
     modal.hidden = false;
     document.body.style.overflow = 'hidden';
   }

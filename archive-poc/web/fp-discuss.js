@@ -53,7 +53,14 @@
   function injectFrmMarkup() {
     if (document.getElementById('frm-overlay')) return;
     var restBase = location.origin + '/wp-json/buddyboss/v1';
-    var login = '/wp-login.php?redirect_to=' + encodeURIComponent(location.pathname);
+    // Was location.pathname — which silently DROPPED the query, so a reader who
+    // signed in from a filtered front page came back to an unfiltered one.
+    // window.lgDest (lg-shared/lg-destination.js, shipped by the shared chrome
+    // for anon) keeps the query whole and validates the value; the inline form
+    // is the fallback if that asset ever fails to load.
+    var login = window.lgDest
+      ? window.lgDest.loginUrl(window.lgDest.here())
+      : '/wp-login.php?redirect_to=' + encodeURIComponent(location.pathname + location.search);
     var wrap = document.createElement('div');
     wrap.innerHTML =
       '<div class="ntm-overlay" id="frm-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="frm-heading">' +

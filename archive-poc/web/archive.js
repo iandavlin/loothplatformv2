@@ -1612,8 +1612,11 @@ if (ssrPresent && !hasFilters) {
     // profile-app returns `authenticated`; tolerate the legacy `logged_in`.
     if (!who || !(who.authenticated || who.logged_in)) {
       // Drop visitor on the login page; ?redirect_to brings them back here.
-      const back = encodeURIComponent(location.pathname + location.search);
-      location.href = '/wp-login.php?redirect_to=' + back;
+      // One posture for every door — window.lgDest is the shared validator
+      // (lg-shared/lg-destination.js); the inline form is the fallback.
+      location.href = window.lgDest
+        ? window.lgDest.loginUrl(window.lgDest.here())
+        : '/wp-login.php?redirect_to=' + encodeURIComponent(location.pathname + location.search);
       return;
     }
     if (btn.disabled) return;
@@ -1730,7 +1733,11 @@ if (ssrPresent && !hasFilters) {
     setStatus('', false);
     if (countEl) countEl.textContent = '';
     if (modal.querySelector('.member-map__teaser')) return; // already rendered
-    const back = encodeURIComponent(location.pathname + location.search);
+    // Shared validator when present (lg-shared/lg-destination.js), inline
+    // fallback otherwise — same posture as every other door.
+    const loginHref = window.lgDest
+      ? window.lgDest.loginUrl(window.lgDest.here())
+      : '/wp-login.php?redirect_to=' + encodeURIComponent(location.pathname + location.search);
     const teaser = document.createElement('div');
     teaser.className = 'member-map__teaser';
     teaser.innerHTML =
@@ -1738,7 +1745,7 @@ if (ssrPresent && !hasFilters) {
       'alt="Looth members across the globe" width="1140" height="748">' +
       '<div class="member-map__teaser-cta">' +
       '<p>Looth members across the globe — log in to explore.</p>' +
-      '<a class="cta-btn cta-btn--primary" href="/wp-login.php?redirect_to=' + back + '">Log in to see the map</a>' +
+      '<a class="cta-btn cta-btn--primary" href="' + loginHref + '">Log in to see the map</a>' +
       '</div>';
     const anchor = mapEl ? mapEl.nextSibling : null;
     (mapEl && mapEl.parentNode ? mapEl.parentNode : modal).insertBefore(teaser, anchor);

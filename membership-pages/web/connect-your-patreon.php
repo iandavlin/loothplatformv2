@@ -37,7 +37,7 @@ try {
     if ($opt !== '') $contact_email = $opt;
 } catch (Throwable $e) {}
 $manage_url      = '/manage-subscription/';
-$signin_url      = '/wp-login.php?redirect_to=' . rawurlencode($manage_url);
+$signin_url      = lg_dest_login_url($manage_url);   // shared validator — one posture for every door
 
 $valid     = ['success', 'already_onboarded', 'not_a_patron', 'email_collision', 'fail'];
 $onboarded = (string) ($_GET['onboarded'] ?? '');

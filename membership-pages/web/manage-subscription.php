@@ -92,7 +92,7 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
 
         <section class="lg-manage-sub__card lg-manage-sub__card--anon">
             <p>Sign in to see your membership details.</p>
-            <p><a class="lg-manage-sub__cta" href="/wp-login.php?redirect_to=<?= rawurlencode('/manage-subscription/') ?>">Sign in</a></p>
+            <p><a class="lg-manage-sub__cta" href="<?= lg_membership_h(lg_dest_login_url('/manage-subscription/')) ?>">Sign in</a></p>
             <p class="lg-manage-sub__hint"><small>Not linked yet? <a href="/join/">Join with Patreon &rarr;</a></small></p>
         </section>
 

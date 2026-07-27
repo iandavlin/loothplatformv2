@@ -44,7 +44,7 @@ try {
     if ($opt !== '') $become_patron = $opt;
 } catch (Throwable $e) {}
 $manage_url      = '/manage-subscription/';
-$signin_url      = '/wp-login.php?redirect_to=' . rawurlencode($manage_url);
+$signin_url      = lg_dest_login_url($manage_url);   // shared validator — one posture for every door
 
 // Onboarding result from the poller callback. Unknown/missing → the connect CTA.
 $valid     = ['success', 'already_onboarded', 'not_a_patron', 'email_collision', 'fail'];

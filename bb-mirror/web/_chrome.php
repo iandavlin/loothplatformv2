@@ -18,6 +18,11 @@
 
 declare(strict_types=1);
 
+// Shared post-auth destination helper (WP-free). Required at file scope rather
+// than relying on site-header.php further down, because the anon panels' login
+// URL is built before the chrome function that pulls the header in.
+require_once '/srv/lg-shared/lg-destination.php';
+
 /**
  * Cache-buster for static assets: filemtime so edits invalidate the browser
  * cache automatically. Falls back to a constant if the file can't be stat'd.
@@ -297,17 +302,16 @@ function bb_mirror_new_topic_modal(): void
     // Sign-in link for the ntm/frm ANON panels carries the reader back to the page
     // they tried to post from (anon-gate lane 2026-07-27). Before this it was a bare
     // /wp-login.php, so a logged-out desktop reader who clicked Reply, signed in, and
-    // landed on /activity/ had to find the discussion again by hand. The F1 fix
-    // (lg-login-redirect-honor, 9ab8fcd) is what makes redirect_to actually survive
-    // BuddyBoss's forced-login destination stomp, so this now lands.
+    // landed on /activity/ had to find the discussion again by hand. The
+    // login_redirect exception (now platform/mu-plugins/lg-login-destination.php,
+    // originally 9ab8fcd) is what makes redirect_to actually survive BuddyBoss's
+    // forced-login destination stomp, so this lands.
     //
-    // Only a same-host ABSOLUTE PATH is ever emitted: must start with a single '/'
-    // (a leading '//' is protocol-relative = off-host), else fall back to bare login.
-    // The server-side validator re-checks same-host regardless; this is belt and braces.
-    $lg_return = (string) ($_SERVER['REQUEST_URI'] ?? '');
-    $login_url = (isset($lg_return[0]) && $lg_return[0] === '/' && strncmp($lg_return, '//', 2) !== 0)
-        ? '/wp-login.php?redirect_to=' . rawurlencode($lg_return)
-        : '/wp-login.php';
+    // The hand-rolled leading-'/' guard this replaced was RIGHT about the shape but
+    // missed /\evil.example (browsers fold '\' to '/', making it protocol-relative),
+    // control characters, and the /wp-login.php self-loop. One helper, one posture:
+    // lg-shared/lg-destination.php, gated by tools/gates/dest-capture-gate.php.
+    $login_url = lg_dest_login_url(lg_dest_here());
     ?>
 <div class="ntm-overlay" id="ntm-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="ntm-heading">
   <div class="ntm-backdrop" id="ntm-backdrop"></div>

@@ -43,6 +43,13 @@
 
 declare(strict_types=1);
 
+/**
+ * The shared destination helper — ONE answer to "where should this door send
+ * them after they sign in?" for every surface that renders this chrome.
+ * Plain PHP, WP-free, same as this partial. See lg-shared/lg-destination.php.
+ */
+require_once __DIR__ . '/lg-destination.php';
+
 if (!function_exists('lg_shared_h')) {
     function lg_shared_h(string $s): string {
         return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
@@ -116,6 +123,19 @@ function lg_shared_render_site_header(array $ctx): void
     $notif_count  = (int)($notif_unread ?? 0);
 
     $h = 'lg_shared_h';
+
+    // THE most-used door on the site. Both chrome "Sign in" links (the desktop
+    // button and the phone drawer item) carry the reader back to the page they
+    // were on. Before this lane they were bare /wp-login.php, so signing in from
+    // anywhere landed everyone on BuddyBoss's /activity/ default — the promise
+    // the sign-in sheet makes out loud ("you'll come straight back to this
+    // discussion") was kept by exactly one door and broken by this one.
+    //
+    // lg_dest_here() returns '' when the current URL isn't bindable (we're
+    // already on an auth page, or REQUEST_URI is hostile), and lg_dest_login_url
+    // then hands back a BARE /wp-login.php — byte-identical to before. No
+    // destination requested, no behaviour change (ruling 5).
+    $lg_signin_href = lg_dest_login_url(lg_dest_here());
 
     ?>
 <style>
@@ -451,7 +471,7 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
               Sign-in button, which left anon phones with NO sign-in path —
               the drawer carries it there. CSS keeps this hidden >640 where
               the real button exists. */ ?>
-        <li class="lg-chrome__menu-signin"><a href="/wp-login.php">Sign in</a></li>
+        <li class="lg-chrome__menu-signin"><a href="<?= $h($lg_signin_href) ?>">Sign in</a></li>
         <?php endif; ?>
       </ul>
     </nav>
@@ -597,7 +617,7 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
 
       <?php else: ?>
 
-        <a class="lg-chrome__signin" href="/wp-login.php">Sign in</a>
+        <a class="lg-chrome__signin" href="<?= $h($lg_signin_href) ?>">Sign in</a>
         <?php /* Join goes STRAIGHT to Patreon (Ian 2026-06-12) — joining and
                  connecting are two different things; /connect-your-patreon/ is
                  the on-site instruction page for patrons linking an account
@@ -641,6 +661,16 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
     </ul>
   </div>
 </div>
+
+<?php if (!$authenticated): ?>
+<?php /* The JS twin of lg-destination.php (window.lgDest), for the doors that
+         are built client-side — the hub sign-in sheet, the front-page
+         discussion modal, the archive map teaser. Anon only: a signed-in member
+         has no sign-in door to build, so this is zero added bytes on the
+         traffic that matters. defer + filemtime bust + the 1y-immutable
+         Cache-Control on /lg-shared/ (same contract as site-header.css). */ ?>
+<script defer src="/lg-shared/lg-destination.js?v=<?= (int) (@filemtime(__DIR__ . '/lg-destination.js') ?: 1) ?>"></script>
+<?php endif; ?>
 
 <script>
 (function () {
