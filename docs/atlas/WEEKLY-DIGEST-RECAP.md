@@ -25,8 +25,11 @@ Ian's ruling (2026-07-25), which is as much about what we do NOT send:
   not the reply text. This is a privacy ruling, not a style one.
 - BuddyBoss subscription emails stay permanently off. Nothing here is fed from them.
 
-And (2026-07-27): **"your week" = UNREAD, last 7 days.** Not a replay of what they already read
-in the bell or cleared off the DM badge, and never resurfacing old news.
+And (2026-07-27, refined): **the section is WHAT YOU MISSED, not "your week."** Anything already
+cleared must not appear — a notification looked at, a connection made or actioned, a message read,
+or an item already clicked through from a previous digest. Only fresh, still-outstanding things go
+out. Three of those four are enforced today from columns that already exist (§9.1). **The fourth
+is not built and is waiting on an Ian ruling (§9.2).**
 
 ---
 
@@ -356,6 +359,111 @@ it). Signing with the raw option value fails `SignatureDoesNotMatch`.
 empty, all matching the sealed baseline; `nginx -t` green **after** the restore, then a full
 `systemctl restart nginx` plus a smoke of `/`, `/hub/`, `/u/<slug>` (200) and `/internal/recap`
 (404 — correctly gone again).
+
+## 9. "What you missed" — the exclusion rules
+
+### 9.1 The three that are free (BUILT)
+
+All enforced in `Recap::forWpIds()`, at the source, per recipient — so the smart code naturally
+emits nothing for a member who is up to date, and no renderer can widen the rule by accident.
+
+| Cleared by | Signal | Status |
+|---|---|---|
+| Looking at it in the bell | `notifications.is_read` / `read_at`, maintained by `Notifications::markRead()` | enforced |
+| Reading the message | `message_recipients.unread_count`, senders scoped by `last_read_at` | enforced |
+| Making or actioning the connection | `connections.status`, read **live** | enforced (new) |
+
+The connection one is the one that was actually missing, and it needed more than `is_read`: **a
+connection row stays unread in the bell even after the member has gone to the profile and accepted
+it.** Measured on this box — **3 unread `connection_request` rows whose edge is already
+`accepted`** (Bryan Parris wp:18, Brent Gable wp:120, John Catches wp:1884). Each would have told a
+member "X wants to connect" about someone they are already connected to. So the edge's live status
+is the authority, not the bell row:
+
+- `connection_request` → listed only while the edge is still `pending` (still theirs to action)
+- `connection_accept` → listed only while the edge is still `accepted` (still true)
+
+Verified: all 3 stale rows now excluded; a control member with a genuinely pending request still
+sees it.
+
+### 9.1a The empty section is now the COMMON case
+
+Measured across the real weekly list (1,626 subscribers with a WP account):
+
+| Window | Get a section | Get **nothing** |
+|---|---|---|
+| **7 days (shipping)** | 3 (0.2%) | **1,623 (99.8%)** |
+| 30 days | 111 (6.8%) | 1,515 (93.2%) |
+| 365 days | 116 (7.1%) | 1,510 (92.9%) |
+
+*(dev2 numbers — a trickle of traffic and a notification bridge only two weeks old, so live ratios
+will differ. 30d and 365d barely differ for exactly that reason: there is only ~2 weeks of bridged
+data in total.)*
+
+This is not an edge case to tolerate; **it is the default path.** It renders clean: the renderer
+returns `''`, the smart code emits nothing, and the recipient's body is byte-identical to the
+no-recap body — asserted per-member in `dev/verify-per-recipient.php`, not assumed.
+
+### 9.2 The one that is NOT free — click-through from a previous digest (**NOT BUILT, needs Ian**)
+
+**The problem is real and verified.** Nothing marks a notification read when a member clicks a link
+in the *email*. Recap links go straight to `/hub/?topic=…`, and `Notifications::markRead()` is
+called from exactly one place — `/profile-api/v0/me-notifications`, the bell modal. So a member who
+reads only by email never clears anything and sees the same items re-listed every week: precisely
+the nag this section exists to kill.
+
+The obvious fix is a per-item signed seen-then-redirect endpoint. **It must not be built on the
+obvious design, and here is the evidence — from this platform's own data, not general principle.**
+
+**Mail scanners already click every link we send.** FluentCRM's click tracking is itself a GET that
+mutates state (`RedirectionHandler::redirect` → `trackUrlClick` → 307), with **no bot, user-agent
+or prefetch guard of any kind** — `grep HTTP_USER_AGENT` across `fluent-crm/app` returns nothing.
+So the historical click table is a natural experiment in exactly this hazard. Campaign 266 (Weekly
+Digest, 25 May, 97 apparent clickers):
+
+| Distinct URLs hit by one subscriber | Subscribers |
+|---|---|
+| 1–3 (plausible humans) | 85 |
+| 4–5 | 2 |
+| **10** | **8** |
+| **12 and 20** | **2** |
+
+The eleven at the top are machines, and the timing proves it: **10, 12 and 20 distinct links hit in
+0–4 seconds**, all inside a three-minute band right after the send, from datacenter IP ranges with
+no reverse DNS (`135.232.20.x`, `74.179.70.x`, `48.209.223.38`, `68.218.165.88`, `72.153.231.x` —
+behaviour consistent with enterprise mail-security link detonation; I could not attribute a vendor,
+so I am not claiming one). No human clicks twenty links in two seconds. Campaign 265 shows the same
+at 6.6%. Campaigns showing 0% are the ones with few tracked links — the signature cannot express
+itself where there is nothing to follow (campaign 283 had 18 URLs and a per-subscriber max of 3).
+
+**So: where our email carried many links, 7–10% of apparent "clickers" were machines following
+every single one.** A recap carries up to 8 links. For those members a naive click-clear would wipe
+the entire section within seconds of delivery, before they ever opened the mail — **and their next
+digest would be empty, which looks exactly like "they are up to date."** The failure is silent, and
+it is biased toward members whose employer runs mail security: the professional end of this guild.
+
+**Options, and what the evidence supports:**
+
+| # | Design | Holds up? |
+|---|---|---|
+| A | Plain signed GET clears the item | **No.** This is the measured failure above. |
+| B | GET renders a tiny interstitial; a **POST** / `fetch` from it clears | Scanners run no JS and submit no forms. Costs one visible hop. |
+| C | Land on the Hub as today; clear only if the **member's own session** is present | No new hop; scanners carry no session cookie. Fails for logged-out readers — exactly the email-only members this is for. |
+| D | Clear on **arrival in-app**: mark read when the deep-linked topic actually opens in the Hub modal | No email-side mutation at all. The signal is "they arrived", observed where a session exists. |
+| E | Do nothing; accept re-listing until read in-app | Zero risk, keeps the nag. |
+
+**Recommendation: D, with C as the cheap fallback.** What we actually want to know is *did the
+member arrive at the thing* — and that is observable **in the app**, where a session exists and no
+scanner reaches, rather than inferred from an email hop a scanner forges indistinguishably. It
+needs no new endpoint, no signed token and no interstitial: the deep link already lands on
+`/hub/?topic=…&reply=…`, and the modal open is the natural place to mark the matching notification
+read. B is the right answer *if* Ian wants the clear to happen even when the member never reaches
+the app — and it must then be POST-on-landing, never a bare GET.
+
+**A must not ship in any form.** Signing the URL does not help: a signed URL sitting in an inbox is
+precisely what the scanner fetches.
+
+---
 
 ## 8. Deploy notes
 

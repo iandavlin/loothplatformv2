@@ -12,10 +12,33 @@ namespace Looth\ProfileApp;
  * the WP pool runs as `looth-dev`, which holds zero grants on `profile_app`. Same
  * constraint, same shape, opposite direction.
  *
- * WHAT COUNTS AS "YOUR WEEK" (Ian, 2026-07-27): UNREAD, and inside the window.
- * Not a replay of what the member already read in the bell or already cleared off
- * the DM badge, and never resurfacing old news. Both filters are applied HERE so
- * every caller gets the same answer and no renderer can widen them by accident.
+ * THE SECTION IS "WHAT YOU MISSED", NOT "YOUR WEEK" (Ian, refined 2026-07-27).
+ * Anything already dealt with must not appear — a notification looked at, a
+ * connection made or actioned, a message read. Only fresh, still-outstanding items
+ * go out. Three of those are free from columns that already exist, and all three
+ * are enforced HERE, at the source, so every caller gets the same answer and no
+ * renderer can widen them by accident:
+ *
+ *   looked at       -> notifications.is_read (the bell's own markRead maintains it)
+ *   message read    -> message_recipients.unread_count + last_read_at
+ *   connection made -> connections.status, read LIVE rather than trusted from the
+ *                      bell row (see the notification query below)
+ *
+ * A FOURTH IS NOT FREE AND IS DELIBERATELY NOT BUILT: an item the member already
+ * clicked through FROM a previous digest. Nothing marks a notification read when
+ * someone clicks a link in the EMAIL — recap links go straight to /hub/?topic= and
+ * never touch is_read (verified: markRead is called ONLY from /me-notifications,
+ * the bell modal). So an email-only reader keeps seeing the same items, which is
+ * the nag this section exists to kill. The obvious fix is a click-clear redirect,
+ * and it is NOT here on purpose: mail-security scanners follow every link with no
+ * human involved, and on this platform's OWN click data 7-10% of apparent clickers
+ * are machines hitting 10-20 links inside four seconds. A GET that cleared items
+ * would wipe their whole recap before they opened it, and the failure would look
+ * exactly like the feature working. Awaiting Ian's ruling — WEEKLY-DIGEST-RECAP.md §9.
+ *
+ * CONSEQUENCE WORTH STATING: the EMPTY section is now the COMMON case for anyone
+ * who keeps up, not an edge case. It must render clean — and it does: the renderer
+ * returns '' and the smart code emits nothing at all.
  *
  * WHAT THIS DELIBERATELY DOES NOT RETURN: message bodies, reply text, or any other
  * content. Counts, actors and links only (the privacy ruling). The SELECT lists
@@ -90,14 +113,34 @@ final class Recap
         // leak even by accident; actor identity is hydrated the same way the bell's
         // own listFor() does it, from the LIVE users row rather than a stored copy,
         // so a member who renamed themselves reads correctly in the email.
+        // "WHAT YOU MISSED", not "your week" (Ian, 2026-07-27). Anything the member
+        // has already dealt with must not appear, and `is_read` alone does not carry
+        // that: a connection row stays unread in the bell even after the member has
+        // gone to the profile and accepted. Measured on this box — 3 unread
+        // `connection_request` rows whose connection is already `accepted`. Those
+        // would have told a member "X wants to connect" about someone they are
+        // ALREADY connected to, which is precisely the nag this section exists to
+        // kill. So the edge's own live status is the authority, not the bell row:
+        //
+        //   connection_request  -> only while the edge is still `pending` (still yours to action)
+        //   connection_accept   -> only while the edge is still `accepted` (still true)
+        //
+        // Hub rows have no connection_id and are unaffected; their "already dealt
+        // with" signal is `is_read`, which the bell maintains.
         $sql = "SELECT n.user_uuid, n.type, n.target_kind, n.target_id, n.anchor_id,
                        n.target_url, n.actor_count, n.created_at,
                        a.display_name AS actor_name, a.slug AS actor_slug
                   FROM notifications n
                   LEFT JOIN users a ON a.uuid = n.actor_uuid
+                  LEFT JOIN connections c ON c.id = n.connection_id
                  WHERE n.user_uuid IN ($uph)
                    AND n.is_read = false
                    AND n.created_at >= now() - make_interval(days => ?)
+                   AND (
+                         n.connection_id IS NULL
+                         OR (n.type = 'connection_request' AND c.status = 'pending')
+                         OR (n.type = 'connection_accept'  AND c.status = 'accepted')
+                       )
                  ORDER BY n.user_uuid, n.created_at DESC";
         $st = $pg->prepare($sql);
         $st->execute(array_merge($uuids, [$days]));
