@@ -1,0 +1,5 @@
+legacy_friend_id	wp_initiator	initiator_name	wp_friend	friend_name	status	date_created	why_excluded
+10398	1	Ian Davlin	1535	Unknown Member	pending	2025-09-13 16:06:23	suspended account (hide_sitewide=1)
+10425	197	Doug Proper - Guitar Specialist, Inc.	1535	Unknown Member	pending	2025-09-22 15:05:54	suspended account (hide_sitewide=1)
+11305	1605	John Husted -	408	Magnús Gunnar	pending	2026-03-13 16:56:47	unexplained by cohort; may be a member decline (decline hard-DELETEs)
+11474	690	Markus Heidarsson	408	Magnús Gunnar	pending	2026-04-25 19:27:03	unexplained by cohort; may be a member decline (decline hard-DELETEs)

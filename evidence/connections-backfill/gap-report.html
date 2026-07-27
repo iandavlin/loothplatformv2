@@ -47,7 +47,7 @@ b.hl{color:var(--amb)}
 </style></head><body>
 
 <div class="banner">
-<b>DRY RUN — NOTHING HAS BEEN WRITTEN.</b>
+<b>DRY RUN — NOTHING HAS BEEN WRITTEN TO LIVE.</b>
 Generated <code>2026-07-27</code> by the <code>connections-backfill</code> lane on <b>dev2</b>, from a
 <b>READ-ONLY</b> snapshot of <b>LIVE</b>.
 Sources: <code>looth_import.wp_bp_friends</code> (11,363 rows) &middot;
@@ -69,21 +69,21 @@ rolled back against a <b>local throwaway replica</b> on dev2, never against live
 
 <h2>Ian's own account (WP user 1, resolved through the bridge — not by display name)</h2>
 <div class="grid">
-<div class="kpi red"><div class="v">136</div><div class="l">connections missing</div></div>
+<div class="kpi red"><div class="v">135</div><div class="l">connections restored to Ian</div></div>
 <div class="kpi amb"><div class="v">83</div><div class="l">accepted, gone</div></div>
-<div class="kpi amb"><div class="v">53</div><div class="l">pending, gone</div></div>
+<div class="kpi amb"><div class="v">52</div><div class="l">pending, gone</div></div>
 <div class="kpi grn"><div class="v">100%</div><div class="l">explained by late-added members</div></div>
 </div>
-<p class="note">Every single one of Ian's 136 missing connections is with someone in the late-added cohort. He did not lose a random slice — he lost precisely the people the backfill could not yet see.</p>
+<p class="note">Every single one of Ian's 135 missing connections is with someone in the late-added cohort. He did not lose a random slice — he lost precisely the people the backfill could not yet see.</p>
 
 <h2>The whole membership</h2>
 <div class="grid">
-<div class="kpi red"><div class="v">750</div><div class="l">friendships to restore</div></div>
+<div class="kpi red"><div class="v">746</div><div class="l">friendships restored</div></div>
 <div class="kpi"><div class="v">355</div><div class="l">accepted</div></div>
-<div class="kpi"><div class="v">395</div><div class="l">pending</div></div>
-<div class="kpi amb"><div class="v">306</div><div class="l">members affected</div></div>
+<div class="kpi"><div class="v">391</div><div class="l">pending</div></div>
+<div class="kpi amb"><div class="v">302</div><div class="l">members affected</div></div>
 <div class="kpi red"><div class="v">70</div><div class="l">members who lost &gt;80% of theirs</div></div>
-<div class="kpi blu"><div class="v">4</div><div class="l">rows genuinely unmappable</div></div>
+<div class="kpi blu"><div class="v">4</div><div class="l">deliberately excluded</div></div>
 </div>
 
 <p>There are <b>two different kinds of victim</b>, and they need telling apart:</p>
@@ -136,16 +136,43 @@ rolled back against a <b>local throwaway replica</b> on dev2, never against live
 </tbody></table></div>
 <p class="note">The amber <b>2026-06-11</b> badge is the tell: those members were provisioned after the backfill had already run.</p>
 
+
+<h2>What members will actually see</h2>
+<div class="verdict">
+<p><b class="hl">391 of the 746 rows are pending requests</b> — for Ian, 52 of his 135. Restoring them makes
+old, unanswered connection requests appear in members' pending UI, dated back to when they were originally sent.
+A member who opens the site tomorrow may find requests waiting that they have never seen before. That is a real
+product decision, not a technical detail, and it should be made deliberately.</p>
+<p><b>No notifications and no email will be sent.</b> Verified on live: <code>public.connections</code> carries exactly one
+trigger, <code>connections_touch</code>, which is <code>BEFORE UPDATE</code> only. There is no INSERT trigger and no rule,
+and notifications are written by the application layer, not the database. A direct SQL insert mints nothing.
+The rows simply appear in the UI.</p>
+<p>If that is not wanted, the clean split is to restore the 355 accepted rows now and hold the 391 pending ones —
+the accepted rows are the ones members lost and would expect back, and they carry no call to action.</p>
+</div>
+
+<h2>What is deliberately excluded</h2>
+<p>The full gap is 750 rows. 746 are restored; <b>4 are held back on purpose</b>, all of them pending requests:</p>
+<ul>
+<li><b>2 involve a suspended account</b> (WP 1535, <code>patreon_186249137</code>, <code>hide_sitewide=1</code>) — one of them Ian's own.
+Restoring a pending request to a sitewide-hidden account has no upside.</li>
+<li><b>2 are not explained by the cohort</b> (both to Magn&uacute;s Gunnar, WP 408). Both endpoints were bridged at cutover, so the
+backfill should have imported them. The most likely explanation is that it <i>did</i>, and the member later declined
+them &mdash; <code>Connections::decline()</code> performs a hard <code>DELETE</code> rather than setting a declined status, so a
+declined request and a never-imported one are indistinguishable in the data. Restoring them could resurrect something
+a member deliberately dismissed.</li>
+</ul>
+<p class="note">Both sets are enumerated in <code>excluded-4-rows.tsv</code>. Adding them back is a one-line change if Ian disagrees.</p>
+
 <h2>What the fix does</h2>
-<p>Inserts the 750 missing rows using exactly the original migration's conventions — <code>is_confirmed=1&rarr;accepted</code>, initiator becomes requester, and the original <code>date_created</code> is preserved as both <code>created_at</code> and <code>updated_at</code>, so restored connections keep their true age.</p>
+<p>Inserts the 746 rows using exactly the original migration's conventions — <code>is_confirmed=1&rarr;accepted</code>, initiator becomes requester, and the original <code>date_created</code> is preserved as both <code>created_at</code> and <code>updated_at</code>, so restored connections keep their true age.</p>
 <p>It differs from the original script in one deliberate way. The original relied only on <code>ON CONFLICT (requester_uuid, addressee_uuid)</code>, which is <b>directional</b> and cannot see an existing reverse row — which is why live already carries <b>10 duplicated bidirectional rows</b>. A naive re-run would have added <b>11 more</b>. The delivered script adds a reverse-existence guard, so it adds none.</p>
-<p class="note">Verified against a local replica loaded from this same live snapshot: the insert adds exactly 750 rows, a second run adds 0, and the rollback restores the table to a state that is <b>byte-identical</b> (matching MD5) to the live snapshot it started from.</p>
+<p class="note">Verified against a local replica loaded from this same live snapshot: the insert adds exactly the expected rows, a second run adds 0, and the rollback restores the table to a state that is <b>byte-identical</b> (matching MD5) to the live snapshot it started from.</p>
 
 <h2>Full row-level dry run</h2>
-<p>Every one of the 750 proposed rows, with both member names, both UUIDs, the status, the original date and the attributed cause:</p>
-<code class="blk">evidence/connections-backfill/dry-run-750-rows.tsv</code>
+<p>Every one of the 746 proposed rows, with both member names, both UUIDs, the status, the original date and the attributed cause:</p>
+<code class="blk">evidence/connections-backfill/restore-746-rows.tsv</code>
 <p class="note">Branch <code>connections-backfill</code>. The executable pair is
-<code>profile-app/sql/2026-07-27-connections-backfill-gap.sql</code> and its
-<code>&hellip;-ROLLBACK.sql</code>. Both are Ian's to run on live; this lane never wrote to it.</p>
+the three <code>profile-app/sql/2026-07-27-connections-restore-*.sql</code> files (DRYRUN / APPLY / ROLLBACK). Both are Ian's to run on live; this lane never wrote to it.</p>
 
 </div></body></html>
