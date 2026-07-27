@@ -620,7 +620,12 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
                 // stop. Half-width layouts declare ~47vw, thirds ~30vw.
                 $n     = count($imgs);
                 $half  = ($n === 2 || $n === 4);
-                $sizes = $half ? '(max-width:640px) 47vw, 360px' : '(max-width:640px) 30vw, 240px';
+                // Desktop widths are bounded by .reply-stub__gallery's max-width:460px,
+                // NOT by the modal's 724px content column. Measured on the serve: a
+                // half-width tile renders 229px, so declaring 360px made the browser
+                // pick the 800w candidate for it — the same over-fetch this gallery
+                // exists to end, reintroduced one layer up. 460/2 and 460/3, less gaps.
+                $sizes = $half ? '(max-width:640px) 47vw, 228px' : '(max-width:640px) 30vw, 151px';
                 echo '<div class="reply-stub__gallery" data-count="' . $n . '"'
                    . ($more ? ' data-more="' . $more . '"' : '') . '>';
                 foreach ($imgs as $i => $im) {
