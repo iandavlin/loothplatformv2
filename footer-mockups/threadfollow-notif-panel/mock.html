@@ -3,15 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mock — notifications panel with ⋯ mute (THREAD-FOLLOW-SPEC §4)</title>
+<title>Mock — notifications panel with the ⋯ follow control (THREAD-FOLLOW-SPEC §5)</title>
 <!--
-  MOCK ONLY — not served anywhere. Renders the notif panel per THREAD-FOLLOW-SPEC.md §4.
+  MOCK ONLY — not served anywhere. Renders the notif panel per THREAD-FOLLOW-SPEC.md §5.
+  REVISED 2026-07-27 for Ian's opt-in reversal: "Mute" is gone; every row carries the same
+  Follow/Unfollow state as the card and the modal (spec §2.4). NOTE this mock covers ONLY the
+  notifications panel — the card and modal-header controls Ian named have no frames yet (§5).
   Markup mirrors lg-shared/site-header.php:872-888 + social-modals.js renderNotifItem();
   styles are copied values from lg-shared/site-header.css:440-574 (light), the
   ⋯ popover follows the account-menu panel idiom (site-header.php:152-199), and dark
   mode replicates webroot/app-settings.js:255-268 under html[data-lguser-theme="dark"].
   Open with ?theme=dark for the dark frames. Viewport ≤480 shows the MENTION row's
-  two-item menu (mobile frames); wider shows the followed-topic MUTE menu (desktop).
+  two-item menu (mobile frames); wider shows the followed-topic UNFOLLOW menu (desktop).
 -->
 <style>
   :root {
@@ -57,7 +60,7 @@
     justify-content: center; color: var(--lg-sage-d); }
   .lg-notif__clear:hover, .lg-notif__more:hover { background: var(--lg-line); }
   @media (max-width: 480px) {
-    /* ≥44px effective touch targets (spec §2.3) via padding, visual size unchanged */
+    /* ≥44px effective touch targets (spec §2.4) via padding, visual size unchanged */
     .lg-notif__more, .lg-notif__clear { width: 34px; height: 34px; }
   }
   .lg-notif__muted-note { font: 600 11px/1 var(--lg-font-sans); color: var(--lg-sage-d); flex: 0 0 auto; padding: 4px 2px; }
@@ -113,8 +116,8 @@
     </div>
     <div class="lg-social-modal__body">
 
-      <!-- 1 · forum.followed_topic — the coalesced counting row (spec §2.2), unread.
-           Desktop frames: its ⋯ menu is OPEN (one-item variant). -->
+      <!-- 1 · forum.followed_topic — the coalesced counting row (spec §2.3), unread.
+           Desktop frames: its ⋯ menu is OPEN (one-item Unfollow variant). -->
       <a class="lg-notif__item lg-notif__item--unread lg-notif__item--link" href="#" id="row-followed">
         <div class="lg-notif__body">
           <p class="lg-notif__text">Sharon Fisher and 3 others replied in a discussion you follow</p>
@@ -126,12 +129,12 @@
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
         <div class="lg-notif__menu" id="menu-followed" role="menu" hidden>
-          <button class="lg-notif__menu-item" role="menuitem">Mute this thread</button>
-          <p class="lg-notif__menu-note">Stops follow-ups for this discussion. You’ll still be notified when someone mentions you.</p>
+          <button class="lg-notif__menu-item" role="menuitem">Unfollow this discussion</button>
+          <p class="lg-notif__menu-note">Stops follow-ups for this discussion. You’ll still be notified when someone replies to you or mentions you.</p>
         </div>
       </a>
 
-      <!-- 2 · forum.mention — unread. Mobile frames: its two-item menu is OPEN (spec §2.3/§2.5). -->
+      <!-- 2 · forum.mention — unread. Mobile frames: its two-item menu is OPEN (spec §2.4/§2.6). -->
       <a class="lg-notif__item lg-notif__item--unread lg-notif__item--link" href="#" id="row-mention">
         <div class="lg-notif__body">
           <p class="lg-notif__text">Doug Proper mentioned you in a discussion</p>
@@ -143,11 +146,14 @@
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
         <div class="lg-notif__menu" id="menu-mention" role="menu" hidden>
-          <button class="lg-notif__menu-item" role="menuitem">Mute this thread</button>
-          <p class="lg-notif__menu-note">Stops follow-ups for this discussion. You’ll still be notified when someone mentions you.</p>
+          <!-- Opt-in reversal (2026-07-27): a mention no longer subscribes you, so this row's
+               follow item OFFERS the follow rather than removing one — the bell is now an
+               opt-IN surface too (spec §2.4). -->
+          <button class="lg-notif__menu-item" role="menuitem">Follow this discussion</button>
+          <p class="lg-notif__menu-note">Get one grouped notification when new replies land here.</p>
           <div class="lg-notif__menu-divider"></div>
           <button class="lg-notif__menu-item lg-notif__menu-item--danger" role="menuitem">Remove my mention</button>
-          <p class="lg-notif__menu-note">Unlinks your name in that post and stops following this discussion.</p>
+          <p class="lg-notif__menu-note">Unlinks your name in that post. Nothing else changes.</p>
         </div>
       </a>
 
@@ -164,20 +170,21 @@
         </button>
       </a>
 
-      <!-- 4 · reaction.on_post — read, just MUTED (the post-action state, spec §2.3) -->
+      <!-- 4 · reaction.on_post — read, just UNFOLLOWED (the post-action state, spec §2.4).
+           Was "Muted ✓" pre-reversal; there is no mute concept now, only the follow state. -->
       <a class="lg-notif__item lg-notif__item--link" href="#">
         <div class="lg-notif__body">
           <p class="lg-notif__text">Buck Owens and 2 others reacted to your post</p>
           <span class="lg-notif__time">5h ago</span>
         </div>
-        <span class="lg-notif__muted-note">Muted ✓</span>
+        <span class="lg-notif__muted-note">Unfollowed ✓</span>
         <button class="lg-notif__clear" title="Delete" aria-label="Delete notification">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </a>
 
-      <!-- 5 · connection_accept — read; NO ⋯ (connection rows have nothing to mute, spec §2.3) -->
+      <!-- 5 · connection_accept — read; NO ⋯ (connection rows have nothing to follow, spec §2.4) -->
       <a class="lg-notif__item lg-notif__item--link" href="#">
         <div class="lg-notif__body">
           <p class="lg-notif__text">Gerry Marsden accepted your connection request</p>

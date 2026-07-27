@@ -3,7 +3,8 @@
 # Mock tooling only — never shipped. Run from this dir: ./shoot.sh
 # dev1 google-chrome, STRICTLY SERIAL — each shot is one headless chrome that exits
 # before the next launches (one-chrome-at-a-time RAM courtesy; flag the board first).
-# 4 frames: desktop 1280 = followed-topic one-item Mute menu open;
+# 4 frames: desktop 1280 = followed-topic one-item Unfollow menu open (was "Mute" before
+#           Ian's 2026-07-27 opt-in reversal — there is no mute concept now);
 #           mobile 390  = mention row two-item menu open (mock JS is resize-robust
 #           against the headless 500px-clamp-then-relayout).
 set -euo pipefail
