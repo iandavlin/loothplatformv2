@@ -3,18 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mock — notifications panel with the ⋯ follow control (THREAD-FOLLOW-SPEC §5)</title>
+<title>Mock — notifications panel, ⋯ row menu carrying both bits (THREAD-FOLLOW-SPEC §7)</title>
 <!--
-  MOCK ONLY — not served anywhere. Renders the notif panel per THREAD-FOLLOW-SPEC.md §5.
-  REVISED 2026-07-27 for Ian's opt-in reversal: "Mute" is gone; every row carries the same
-  Follow/Unfollow state as the card and the modal (spec §2.4). NOTE this mock covers ONLY the
-  notifications panel — the card and modal-header controls Ian named have no frames yet (§5).
+  MOCK ONLY — not served anywhere. Renders the notif panel per THREAD-FOLLOW-SPEC.md §7.
+  v2 2026-07-27 (Ian): TWO independent per-discussion opt-ins, NOTIFICATIONS and EMAILS, both
+  default OFF. "Mute" is gone. The row â¯ menu is UNSET SURFACE #2 and carries BOTH bits
+  (spec Â§3.5); the card + modal controls are mock-card.html / mock-modal.html, and the
+  email unsubscribe page (unset surface #3) is mock-unsub.html.
   Markup mirrors lg-shared/site-header.php:872-888 + social-modals.js renderNotifItem();
   styles are copied values from lg-shared/site-header.css:440-574 (light), the
   ⋯ popover follows the account-menu panel idiom (site-header.php:152-199), and dark
   mode replicates webroot/app-settings.js:255-268 under html[data-lguser-theme="dark"].
   Open with ?theme=dark for the dark frames. Viewport ≤480 shows the MENTION row's
-  two-item menu (mobile frames); wider shows the followed-topic UNFOLLOW menu (desktop).
+  opt-IN menu (mobile frames); wider shows the followed-topic two-bit menu (desktop).
 -->
 <style>
   :root {
@@ -95,6 +96,11 @@
     --lg-panel-danger: #e08a63; --lg-panel-danger-bg: #3a2320;
   }
   html[data-lguser-theme="dark"] .lg-notif__menu-note { color: #9aa097; }
+
+  /* Inline SVG glyphs for the two channels — dev1's headless chrome has no colour-emoji
+     font (🔔 shot as tofu), and the real UI uses SVG icons anyway. */
+  .lg-notif__menu-item { display: flex; align-items: center; }
+  .lg-notif__menu-item .gi { width: 14px; height: 14px; flex: 0 0 auto; }
 </style>
 </head>
 <body>
@@ -128,9 +134,12 @@
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
+        <!-- v2 (Ian 7/27): the row menu carries BOTH bits, each reflecting live state,
+             so whichever channel is ringing can be stopped from here (spec §3.5). -->
         <div class="lg-notif__menu" id="menu-followed" role="menu" hidden>
-          <button class="lg-notif__menu-item" role="menuitem">Unfollow this discussion</button>
-          <p class="lg-notif__menu-note">Stops follow-ups for this discussion. You’ll still be notified when someone replies to you or mentions you.</p>
+          <button class="lg-notif__menu-item" role="menuitem"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>&nbsp; Stop notifications</button>
+          <button class="lg-notif__menu-item" role="menuitem"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>&nbsp; Stop emails</button>
+          <p class="lg-notif__menu-note">You’ll still be notified when someone replies to you or mentions you.</p>
         </div>
       </a>
 
@@ -146,11 +155,12 @@
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
         <div class="lg-notif__menu" id="menu-mention" role="menu" hidden>
-          <!-- Opt-in reversal (2026-07-27): a mention no longer subscribes you, so this row's
-               follow item OFFERS the follow rather than removing one — the bell is now an
-               opt-IN surface too (spec §2.4). -->
-          <button class="lg-notif__menu-item" role="menuitem">Follow this discussion</button>
-          <p class="lg-notif__menu-note">Get one grouped notification when new replies land here.</p>
+          <!-- Opt-in model (2026-07-27): a mention subscribes you to NOTHING, so on a mention
+               row both bits are OFF and the menu OFFERS them — the bell is an opt-IN surface
+               too. Remove-my-mention touches neither (spec §3.5/§3.6). -->
+          <button class="lg-notif__menu-item" role="menuitem"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>&nbsp; Notify me about new replies</button>
+          <button class="lg-notif__menu-item" role="menuitem"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>&nbsp; Email me about new replies</button>
+          <p class="lg-notif__menu-note">Both are off unless you turn them on.</p>
           <div class="lg-notif__menu-divider"></div>
           <button class="lg-notif__menu-item lg-notif__menu-item--danger" role="menuitem">Remove my mention</button>
           <p class="lg-notif__menu-note">Unlinks your name in that post. Nothing else changes.</p>
@@ -170,14 +180,14 @@
         </button>
       </a>
 
-      <!-- 4 · reaction.on_post — read, just UNFOLLOWED (the post-action state, spec §2.4).
-           Was "Muted ✓" pre-reversal; there is no mute concept now, only the follow state. -->
+      <!-- 4 · reaction.on_post — read, one channel just switched off (post-action state, spec §3.5).
+           Was "Muted ✓" pre-reversal; the state now names the CHANNEL that was switched off. -->
       <a class="lg-notif__item lg-notif__item--link" href="#">
         <div class="lg-notif__body">
           <p class="lg-notif__text">Buck Owens and 2 others reacted to your post</p>
           <span class="lg-notif__time">5h ago</span>
         </div>
-        <span class="lg-notif__muted-note">Unfollowed ✓</span>
+        <span class="lg-notif__muted-note">Emails off ✓</span>
         <button class="lg-notif__clear" title="Delete" aria-label="Delete notification">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

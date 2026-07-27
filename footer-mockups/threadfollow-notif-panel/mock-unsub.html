@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — email unsubscribe confirmation page (THREAD-FOLLOW-SPEC §4.3)</title>
+<!--
+  MOCK ONLY — not served anywhere. THREAD-FOLLOW-SPEC.md §4, frame 4.
+  UNSET SURFACE #3: the link inside the email, for a LOGGED-OUT reader.
+
+  Why a confirmation page rather than acting on the link:
+  BuddyBoss's own unsubscribe handler mutates on a bare GET
+  (bp_update_user_meta(...), bp-core-functions.php:4106). Mail scanners and link
+  prefetchers (SafeLinks, proxying gateways) follow links in email, which against a
+  GET-mutating endpoint silently unsubscribes people who never clicked. So: GET renders
+  THIS page, the mutation happens on POST from it. Correctness, not politeness.
+
+  Token: hash_hmac('sha1', "lgdisc:{topic}:{user}", bp_email_get_salt()) — BuddyBoss's
+  own persistent salt (bp-core-functions.php:4183-4185), verified present on live, with
+  the TOPIC ID inside the signed payload. That is the whole difference between "this
+  discussion" and BB's own link, which signs "{email_type}:{user_id}" and can therefore
+  only kill an entire email type (bp-core-functions.php:4158). Spec §4.1-4.2.
+
+  ?state=done shows the post-action confirmation with Undo. ?theme=dark for dark frames.
+-->
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { background: var(--lg-cream); display: flex; align-items: flex-start; justify-content: center; }
+  .page { width: 100%; max-width: 560px; padding: 46px 20px 60px; }
+  @media (max-width: 640px) { .page { padding: 26px 14px 40px; } }
+
+  .brand { display: flex; align-items: center; gap: 9px; margin: 0 0 26px; }
+  .brand__mark { width: 30px; height: 30px; border-radius: 8px; background: var(--lg-sage);
+    color: #fff; display: inline-flex; align-items: center; justify-content: center;
+    font: 800 14px/1 var(--lg-font-sans); }
+  .brand__t { font: 700 14px/1 var(--lg-font-sans); color: var(--lg-ink); letter-spacing: .01em; }
+
+  .card { background: var(--bg-card); border: 1px solid var(--lg-line); border-radius: 16px;
+    padding: 26px 26px 22px; box-shadow: 0 1px 2px rgba(26,29,26,.04), 0 14px 34px -20px rgba(26,29,26,.34); }
+  @media (max-width: 640px) { .card { padding: 20px 17px 18px; } }
+
+  h1 { font: 700 21px/1.3 var(--lg-font-hub); color: var(--lg-ink); margin: 0 0 6px; }
+  h1 .thread { color: var(--lg-sage-d); }
+  .sub { font: 400 14px/1.55 var(--lg-font-sans); color: var(--lg-mute); margin: 0 0 20px; }
+
+  .btn { -webkit-appearance: none; appearance: none; display: block; width: 100%;
+    border-radius: 999px; cursor: pointer; text-align: center; text-decoration: none;
+    font: 700 14.5px/1 var(--lg-font-sans); padding: 14px 18px; border: 1px solid transparent; }
+  .btn--primary { background: var(--lg-sage); color: #fff; }
+  .btn--primary:hover { background: var(--lg-sage-d); }
+  .btn--ghost { background: transparent; color: var(--lg-ink); border-color: var(--lg-line);
+    margin-top: 10px; font-weight: 600; }
+  .btn--ghost:hover { border-color: var(--lg-sage); color: var(--lg-sage-d); }
+
+  .keep { display: flex; gap: 10px; align-items: flex-start; margin: 18px 0 0;
+    padding: 12px 14px; border-radius: 12px; background: var(--lg-sage-tint); }
+  .keep__ico { flex: 0 0 auto; font-size: 15px; line-height: 1.35; }
+  .keep__t { font: 400 12.5px/1.5 var(--lg-font-sans); color: var(--lg-ink); }
+  .keep__t b { font-weight: 700; }
+
+  .foot { margin: 20px 0 0; padding-top: 15px; border-top: 1px solid var(--lg-line);
+    font: 400 12px/1.6 var(--lg-font-sans); color: var(--lg-mute); }
+  .foot a { color: var(--lg-sage-d); }
+
+  /* post-action state */
+  .done__ico { width: 44px; height: 44px; border-radius: 50%; background: var(--lg-sage-tint);
+    color: var(--lg-sage-d); display: inline-flex; align-items: center; justify-content: center;
+    font-size: 21px; margin: 0 0 14px; }
+  .undo { background: none; border: 0; color: var(--lg-sage-d); cursor: pointer; padding: 0;
+    font: 700 13.5px/1 var(--lg-font-sans); text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="brand"><span class="brand__mark">L</span><span class="brand__t">The Looth Group</span></div>
+
+  <!-- ── STATE 1: the confirmation (what the GET renders) ── -->
+  <div class="card" id="ask">
+    <h1>Stop emails about <span class="thread">“Truss rod won’t budge on a ’74 Jazz”</span>?</h1>
+    <p class="sub">You’re getting these because you turned on email for this one discussion.
+      This won’t change anything else.</p>
+
+    <!-- POST, not a link: the mutation never rides the GET (see head comment) -->
+    <form method="post" action="#"><button class="btn btn--primary" type="submit">Stop emails from this discussion</button></form>
+
+    <div class="keep">
+      <span class="keep__ico"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+      <span class="keep__t"><b>You’ll still see new replies in your notifications.</b>
+        The bell and email are separate switches — this page only turns off email, and only for this discussion.</span>
+    </div>
+
+    <form method="post" action="#"><button class="btn btn--ghost" type="submit">Stop <b>all</b> discussion emails</button></form>
+
+    <p class="foot">
+      Signed link — no login needed, and it only ever turns things off.<br>
+      <a href="#">Open the discussion</a> &nbsp;·&nbsp; <a href="#">All email preferences</a>
+    </p>
+  </div>
+
+  <!-- ── STATE 2: after the POST (?state=done) ── -->
+  <div class="card" id="done" hidden>
+    <div class="done__ico"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></div>
+    <h1>Done — no more emails from that discussion.</h1>
+    <p class="sub">You won’t get email about <b>“Truss rod won’t budge on a ’74 Jazz”</b> again
+      unless you turn it back on.</p>
+
+    <div class="keep">
+      <span class="keep__ico"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+      <span class="keep__t"><b>Your notifications for it are untouched</b> — new replies will still
+        appear in your bell on the site.</span>
+    </div>
+
+    <p class="foot">
+      Didn’t mean to? <button class="undo" type="button">Undo</button><br>
+      <a href="#">Open the discussion</a> &nbsp;·&nbsp; <a href="#">All email preferences</a>
+    </p>
+  </div>
+
+  <p class="note" style="text-align:center">Spec §4 — one click, no login, specific to this discussion,
+    with the blanket option present but secondary.</p>
+</div>
+
+<script>
+  (function () {
+    function apply() {
+      var q = location.search;
+      document.documentElement.setAttribute('data-lguser-theme', /(?:\?|&)theme=dark\b/.test(q) ? 'dark' : 'light');
+      var done = /(?:\?|&)state=done\b/.test(q);
+      document.getElementById('ask').hidden = done;
+      document.getElementById('done').hidden = !done;
+    }
+    apply();
+    window.addEventListener('resize', apply);   // headless clamps to 500px then relayouts
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+/* Shared token + control block for the threadfollow v2 mocks.
+   MOCK TOOLING ONLY — never shipped. Values copied from bb-mirror/web/forums.css
+   (@main c10df43): .fc-actions :4113, .fc-save :4116-4123, card @<=640 .lg-card-actions
+   / .lg-act, and the dark-theme tokens webroot/app-settings.js:255-268 uses.
+   The 🔔/✉ toggles are NEW (spec §2.1) and reuse .fc-save's exact idiom:
+   inert + muted at rest, sage + aria-pressed=true when on. */
+
+:root {
+  --lg-cream: #fbfbf8; --lg-sage: #87986a; --lg-sage-d: #6b7c52;
+  --lg-sage-tint: #eef2e3; --lg-amber: #ecb351; --lg-rust: #c66845;
+  --lg-charcoal: #1a1d1a; --lg-ink: #323532; --lg-mute: #6b6f6b; --lg-line: #e3ddd0;
+  --lguser-bg: #e9eedd; --lguser-line: #cdd6ba; --lguser-pill: #dde6c7;
+  --lguser-accent: #6b7c52; --lguser-accent-d: #52613d; --lguser-bubble: #eceff3;
+  --bg-card: #fff;
+  --lg-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --lg-font-hub: "Trebuchet MS", "Cabin", "Segoe UI", sans-serif;
+}
+html[data-lguser-theme="dark"] {
+  --lg-cream: #101214; --lg-ink: #e5e7e1; --lg-mute: #9aa097; --lg-line: #2c312d;
+  --lguser-bg: #101214; --lguser-line: #2c312d; --lguser-pill: #243024;
+  --lguser-accent: #87986a; --lguser-accent-d: #b0c693; --lguser-bubble: #22262a;
+  --bg-card: #1a1d20; --lg-sage-tint: #243024; --lg-sage-d: #b0c693;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--lguser-bg); font-family: var(--lg-font-sans); }
+
+/* ── the two NEW toggles — .fc-save idiom (forums.css:4116-4123) ── */
+.fc-notify, .fc-email {
+  -webkit-appearance: none; appearance: none;
+  display: inline-flex; align-items: center; gap: 5px;
+  background: none; border: 0; padding: 3px 5px; border-radius: 8px;
+  font: 600 12px/1 var(--lg-font-sans); color: var(--lg-mute);
+  cursor: pointer; transition: color .12s, background .12s;
+}
+.fc-notify .gly, .fc-email .gly { font-size: 15px; line-height: 1; }
+.fc-notify:hover, .fc-email:hover { color: var(--lg-sage-d); background: var(--lg-sage-tint); }
+.fc-notify[aria-pressed="true"], .fc-email[aria-pressed="true"] {
+  color: var(--lg-sage-d); background: var(--lg-sage-tint);
+}
+/* State legend chips used in the mock captions only */
+.legend { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  font: 600 11px/1.3 var(--lg-font-sans); color: var(--lg-mute); margin: 0 0 8px; }
+.legend b { color: var(--lg-ink); }
+.capt { font: 600 11px/1.4 var(--lg-font-sans); color: var(--lg-mute);
+  letter-spacing: .06em; text-transform: uppercase; margin: 0 0 9px; }
+.note { font: 400 12px/1.5 var(--lg-font-sans); color: var(--lg-mute); margin: 10px 0 0; }
+.wrap { padding: 26px 30px 34px; max-width: 1180px; }
+@media (max-width: 640px) { .wrap { padding: 16px 12px 24px; } }
+
+/* Inline glyph icons. dev1's headless chrome has NO colour-emoji font, so 🔔/👍/💬
+   shot as tofu boxes in the first pass — every glyph in these mocks is SVG, which is
+   what the real card/actions row uses anyway (forums.css .ico, _feed.php:1181-1183). */
+.gi { width: 15px; height: 15px; flex: 0 0 auto; display: block; }
+.gly { display: inline-flex; align-items: center; }
+.fcr .gi { width: 13px; height: 13px; }
+.keep__ico .gi { width: 16px; height: 16px; margin-top: 1px; }
+.done__ico .gi { width: 22px; height: 22px; }
+.fc-followbtn .gi { width: 14px; height: 14px; }
+.lg-notif__menu-item { display: flex !important; align-items: center; }
+.lg-notif__menu-item .gi { width: 14px; height: 14px; margin-right: 2px; }

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thread-follow v2 — previs for Ian</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { background: var(--lg-cream); color: var(--lg-ink); }
+  .page { max-width: 1080px; margin: 0 auto; padding: 40px 22px 70px; }
+  @media (max-width: 640px) { .page { padding: 24px 14px 50px; } }
+  h1 { font: 700 27px/1.22 var(--lg-font-hub); margin: 0 0 8px; }
+  .lede { font: 400 15px/1.6 var(--lg-font-sans); color: var(--lg-mute); margin: 0 0 6px; max-width: 74ch; }
+  .lede b { color: var(--lg-ink); }
+  .meta { font: 500 12px/1.6 var(--lg-font-sans); color: var(--lg-mute); margin: 14px 0 0; }
+  .meta code { background: var(--lg-sage-tint); border-radius: 5px; padding: 2px 6px; color: var(--lg-sage-d); }
+
+  .rules { margin: 26px 0 0; padding: 18px 20px; border: 1px solid var(--lg-line);
+    border-radius: 14px; background: #fff; }
+  html[data-lguser-theme="dark"] .rules { background: var(--bg-card); }
+  .rules h2 { font: 700 13px/1 var(--lg-font-sans); letter-spacing: .07em; text-transform: uppercase;
+    color: var(--lg-sage-d); margin: 0 0 12px; }
+  .rules ol { margin: 0; padding-left: 20px; }
+  .rules li { font: 400 14px/1.62 var(--lg-font-sans); margin: 0 0 7px; }
+  .rules li b { font-weight: 700; }
+
+  h2.sec { font: 700 12px/1 var(--lg-font-sans); letter-spacing: .08em; text-transform: uppercase;
+    color: var(--lg-mute); margin: 40px 0 4px; }
+  h3.fr { font: 700 18px/1.3 var(--lg-font-hub); margin: 12px 0 4px; }
+  .fr-note { font: 400 13.5px/1.6 var(--lg-font-sans); color: var(--lg-mute); margin: 0 0 14px; max-width: 78ch; }
+  .fr-note b { color: var(--lg-ink); }
+  .decide { display: inline-block; font: 700 10.5px/1 var(--lg-font-sans); letter-spacing: .07em;
+    text-transform: uppercase; color: #fff; background: var(--lg-rust); border-radius: 999px;
+    padding: 5px 9px; margin-left: 8px; vertical-align: 3px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin: 0 0 8px; }
+  figure { margin: 0; border: 1px solid var(--lg-line); border-radius: 14px; overflow: hidden;
+    background: #fff; box-shadow: 0 1px 2px rgba(26,29,26,.04), 0 12px 26px -18px rgba(26,29,26,.3); }
+  html[data-lguser-theme="dark"] figure { background: var(--bg-card); }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { font: 600 11.5px/1.4 var(--lg-font-sans); color: var(--lg-mute);
+    padding: 9px 12px; border-top: 1px solid var(--lg-line); }
+  .live { font: 500 12.5px/1.6 var(--lg-font-sans); color: var(--lg-mute); margin: 8px 0 0; }
+  .live a { color: var(--lg-sage-d); font-weight: 700; }
+
+  .open { margin: 44px 0 0; padding: 20px 22px; border: 1px solid var(--lg-rust);
+    border-radius: 14px; background: #fdf3ef; }
+  html[data-lguser-theme="dark"] .open { background: #2a1d19; }
+  .open h2 { font: 700 13px/1 var(--lg-font-sans); letter-spacing: .07em; text-transform: uppercase;
+    color: var(--lg-rust); margin: 0 0 12px; }
+  .open p { font: 400 14px/1.62 var(--lg-font-sans); margin: 0 0 12px; }
+  .open p:last-child { margin-bottom: 0; }
+  .open b { font-weight: 700; }
+  .foot { margin: 40px 0 0; padding-top: 16px; border-top: 1px solid var(--lg-line);
+    font: 400 12px/1.7 var(--lg-font-sans); color: var(--lg-mute); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Thread-follow — previs v2</h1>
+  <p class="lede">Per discussion, <b>two independent opt-ins: notifications and emails</b>. Both default
+    <b>OFF</b> for everyone, always. Nothing subscribes you — not creating a topic, not replying, not
+    being @mentioned. You can hold either, both, or neither.</p>
+  <p class="meta">Spec: <code>docs/atlas/THREAD-FOLLOW-SPEC.md</code> · branch <code>threadfollow-spec</code>
+    · cites <code>main@c10df43</code> · <b>spec + mock only, nothing built</b></p>
+
+  <div class="rules">
+    <h2>What you're gating</h2>
+    <ol>
+      <li><b>Set them</b> on the feed card and in the open discussion modal, in the header cluster
+        beside the S/M/L/XL size control.</li>
+      <li><b>Unset them from three places</b>, all reaching the same store — the thread itself, the
+        notifications-panel row ⋯ menu, and <b>an unsubscribe link in the email</b>.</li>
+      <li>The email link works <b>logged out</b>, is <b>specific to that discussion</b>, and lands on a
+        confirmation page that also offers "stop all discussion emails" for someone who is really done.</li>
+    </ol>
+  </div>
+
+  <h2 class="sec">Frame 1 + 2 — the feed card</h2>
+  <h3 class="fr">Two toggles on the card<span class="decide">decide this one</span></h3>
+  <p class="fr-note">The card's action row already carries <b>six</b> controls; two more makes eight.
+    Cards A and B show the two-icon proposal (on/off states); the third card shows the fallback —
+    <b>one labelled control that expands two switches</b>. Both are visible affordances, neither is
+    buried in the ⋯ menu. <b>If the two-icon row reads as cluttered to you, we take the fallback.</b></p>
+  <div class="grid">
+    <figure><img src="shots/card-d-light.png" alt="Desktop feed card, light"><figcaption>Desktop 1280 · light</figcaption></figure>
+    <figure><img src="shots/card-d-dark.png" alt="Desktop feed card, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
+    <figure><img src="shots/card-m-light.png" alt="Mobile feed card, light"><figcaption>Mobile 390 · light — mobile cards use a different bar (open question)</figcaption></figure>
+    <figure><img src="shots/card-m-dark.png" alt="Mobile feed card, dark"><figcaption>Mobile 390 · dark</figcaption></figure>
+  </div>
+  <p class="live">Live: <a href="mock-card.html">mock-card.html</a> · <a href="mock-card.html?theme=dark">dark</a></p>
+
+  <h2 class="sec">Frame 3 — the discussion modal</h2>
+  <h3 class="fr">Beside the size control</h3>
+  <p class="fr-note">The cluster reads <b>[title] [bell] [mail] [M] [×]</b> — the two state controls
+    grouped together, close rightmost. Second block shows both OFF, which is what every discussion
+    looks like until someone clicks. Third block is the mobile sheet header, which has no S/M/L/XL
+    control at all — so its placement is a question for you.</p>
+  <div class="grid">
+    <figure><img src="shots/modal-d-light.png" alt="Modal header, light"><figcaption>Desktop 1280 · light</figcaption></figure>
+    <figure><img src="shots/modal-d-dark.png" alt="Modal header, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
+  </div>
+  <p class="live">Live: <a href="mock-modal.html">mock-modal.html</a> · <a href="mock-modal.html?theme=dark">dark</a></p>
+
+  <h2 class="sec">Frame 4 — the email unsubscribe page</h2>
+  <h3 class="fr">One click, no login, this discussion only</h3>
+  <p class="fr-note">Reached from a signed link in the email, so it works for someone logged out in
+    their inbox. Stopping email for one discussion <b>does not</b> touch its notifications — the page
+    says so. "Stop all discussion emails" is present but secondary. The link shows this page rather
+    than acting immediately, because mail scanners follow links and would otherwise unsubscribe people
+    who never clicked.</p>
+  <div class="grid">
+    <figure><img src="shots/unsub-d-light.png" alt="Unsubscribe page, light"><figcaption>Desktop 1280 · light</figcaption></figure>
+    <figure><img src="shots/unsub-d-dark.png" alt="Unsubscribe page, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
+    <figure><img src="shots/unsub-d-done.png" alt="Unsubscribe confirmed"><figcaption>After the click — with Undo</figcaption></figure>
+    <figure><img src="shots/unsub-m-light.png" alt="Unsubscribe page, mobile"><figcaption>Mobile 390 · light</figcaption></figure>
+  </div>
+  <p class="live">Live: <a href="mock-unsub.html">mock-unsub.html</a> ·
+    <a href="mock-unsub.html?theme=dark">dark</a> · <a href="mock-unsub.html?state=done">after the click</a></p>
+
+  <h2 class="sec">Frame 5 — the notifications panel</h2>
+  <h3 class="fr">The row ⋯ menu carries both switches</h3>
+  <p class="fr-note">New replies in a discussion you follow arrive as <b>one row that counts up</b>,
+    never one row per reply. The ⋯ on the row can switch either channel off — or on, since rows also
+    reach people following nothing. Mention rows offer both plus "Remove my mention", which now
+    unlinks your name and <b>changes nothing else</b>.</p>
+  <div class="grid">
+    <figure><img src="shots/notif-d-light.png" alt="Notifications panel, light"><figcaption>Desktop 1280 · light</figcaption></figure>
+    <figure><img src="shots/notif-d-dark.png" alt="Notifications panel, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
+    <figure><img src="shots/notif-m-light.png" alt="Notifications sheet, light"><figcaption>Mobile 390 · light — mention row menu</figcaption></figure>
+    <figure><img src="shots/notif-m-dark.png" alt="Notifications sheet, dark"><figcaption>Mobile 390 · dark</figcaption></figure>
+  </div>
+  <p class="live">Live: <a href="mock.html">mock.html</a> · <a href="mock.html?theme=dark">dark</a></p>
+
+  <div class="open">
+    <h2>Two things we need from you — we have deliberately not decided these</h2>
+    <p><b>1 · The 1,519 subscriptions that already exist.</b> Live currently has 1,519 topic and 46
+      forum subscriptions, and they are emailing real members today — 31 discussion emails in the last
+      fortnight. Opt-in-only is a rule for <b>new</b> follows; it says nothing about those.
+      Measured: <b>72%</b> of them were created by exactly the auto-subscribe you just banned
+      (the subscriber authored or replied in that thread), but <b>93% sit on threads nobody has
+      replied to in 90 days</b> — so the people actually affected today are <b>49 members across 112
+      subscriptions</b>. Five options are laid out in the spec (§9.2), from "leave them and just make
+      them visible and one click from off" to "retire the dormant tail". We are not proposing to mass-
+      unsubscribe anyone.</p>
+    <p><b>2 · Per-event email vs the weekly digest.</b> An earlier ruling turned all per-event
+      discussion email permanently off. The email you got on 7/26 and called wanted was a
+      <b>"new discussion"</b> email from a <b>forum</b> subscription (46 of those) — a different thing
+      from the <b>"new reply"</b> emails from <b>topic</b> subscriptions (1,519 of those) that fire on
+      every reply. One switch was covering two different things. Options in the spec (§9.1); the
+      two-toggle design leans toward "an explicit email toggle is what earns you the email," but that
+      is your call.</p>
+  </div>
+
+  <p class="foot">Mock tooling, never shipped. Frames shot serially with headless Chrome on dev1;
+    markup and tokens copied from the real hub surfaces so the previs matches what would actually
+    render. Nothing in this design has been built.</p>
+</div>
+
+<script>
+  // Follow the viewer's OS theme so the page itself reads correctly in both;
+  // re-applied on resize for the same headless-clamp reason the mocks handle.
+  (function () {
+    function apply() {
+      var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (/(?:\?|&)theme=dark\b/.test(location.search)) dark = true;
+      document.documentElement.setAttribute('data-lguser-theme', dark ? 'dark' : 'light');
+    }
+    apply();
+    window.addEventListener('resize', apply);
+  })();
+</script>
+</body>
+</html>

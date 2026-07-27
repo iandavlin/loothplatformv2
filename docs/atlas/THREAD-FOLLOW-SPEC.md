@@ -1,82 +1,68 @@
-# THREAD-FOLLOW-SPEC — opt-in following, coalesced follow-ups, one follow state everywhere
+# THREAD-FOLLOW-SPEC — two opt-in toggles per discussion, both default OFF
 
 > **Status: SPEC + MOCK, Ian-gated — no build until Ian approves both.**
 > Lane: threadfollow-spec (dev1, docs+mock only). Branch `threadfollow-spec`.
-> **REVISED 2026-07-27 — Ian reversed Ruling 1: following is OPT-IN ONLY.** See §0.0 for what
-> changed and §8 for the two decisions still sitting with Ian.
-> Mock frames: `footer-mockups/threadfollow-notif-panel/` (see §5 — the existing 4 frames now
-> under-represent the design).
-> Cross-refs: NOTIFICATIONS-AUDIT.md, DISCUSSION-SURFACE-CANON.md, OPERATOR.md §4–5,
-> REPO-MANDATE.md.
-> **Everything below cites current `main` (@c10df43).** The prior revision cited @aad6e3f; main
-> has moved and several line numbers with it — re-derived throughout.
+> **REVISED 2026-07-27 (v2) — Ian: TWO independent toggles per discussion, NOTIFICATIONS and
+> EMAILS, both default OFF, both unsettable from three places including the email itself.**
+> This supersedes v1's single follow toggle, which itself reversed the original auto-subscribe
+> design. See §0.0 for the trail and §9 for what is still Ian's to decide.
+> Mock frames: `footer-mockups/threadfollow-notif-panel/` — published for gating at
+> **https://dev2.loothgroup.com/v2/tests/output/threadfollow/index.html** (cookie-gated).
+> Cross-refs: NOTIFICATIONS-AUDIT.md, DISCUSSION-SURFACE-CANON.md, OPERATOR.md §4–5, REPO-MANDATE.md.
+> **Everything below cites current `main` (@c10df43)**, plus read-only measurement of LIVE
+> (§8) and of the deployed BuddyBoss source (§4.1).
 
 ---
 
-## 0.0 What the reversal changed (read this first if you read the old version)
+## 0.0 The ruling trail (three positions, this is the third)
 
-Ian, 2026-07-27: *"I dont want any auto subscribes. Has to be opt in for everything. I think a
-button on the card and in the controls inside the open modal. Maybe up by s m l xl or something."*
+| | Position | Status |
+|---|---|---|
+| **original** | Involvement auto-subscribes — authoring, replying or being @mentioned makes you follow | **DEAD** (Ian, 7/27) |
+| **v1** | ONE opt-in follow toggle; a separate global email preference | **SUPERSEDED** (keeper's suggestion, not Ian's) |
+| **v2 — THIS** | **TWO independent opt-ins per discussion: NOTIFICATIONS (bell) and EMAILS. Both default OFF for everyone, always.** A member can hold either, both, or neither. | **CURRENT** |
 
-| Old ruling | Now |
-|---|---|
-| 1. Involvement auto-subscribes (author / reply / mention) | **DEAD.** Nothing subscribes you without a deliberate click. |
-| 2. One coalesced counting row per thread | unchanged |
-| 3. Opt-out = per-row "Mute" in the notifications panel | **rewritten** — mute-as-a-concept is gone; the row carries the same *Unfollow* state as everywhere else (§2.4) |
-| 4. Remove-my-mention = unlink **+ unfollow** | **rewritten to unlink-only** (§2.6) |
-| 5. Store = BB/bbPress native subscriptions | unchanged (but written only on an explicit click) |
-| 6. Per-event BB email permanently OFF, digest is the only email | **CONTRADICTED by Ian's own 7/26 mail — §8.1, his call, not decided here** |
-| 7. Deep links per the notify-bridge contract | unchanged |
-| 8. One panel implementation, desktop + mobile | unchanged, and now extends to three surfaces (§2.2) |
-| — | **NEW §8.2: the 1,519 subscriptions live already has.** Opt-in is a rule for NEW follows; it says nothing about existing ones. Options + consequences for Ian. |
+Nothing auto-subscribes, to either toggle. Creating a topic, replying in it, and being @mentioned
+in it subscribe you to **nothing**.
 
-**The reversal is cheap, and here is why** (the single most important consequence, easy to miss):
-removing auto-subscribe does **not** make anyone go dark. Three of the bell's four notification
-rungs are authorship/mention-based and have nothing to do with subscriptions —
-`forum.reply_to_topic` (someone replied to *your* topic), `forum.reply_to_reply` (…to *your*
-reply), `forum.mention` (someone named you). Those fire today, unchanged, for people who hold
-zero subscriptions (notify-bridge.php:170-236). **Following only ever adds the fourth, least
-specific rung: "a thread I chose to watch but am not otherwise part of."** So a topic author still
-hears about replies to their topic without following it; the opt-in toggle is for bystanders who
-want to watch. That is the whole scope of what Ruling 1's reversal touches.
+**Why the reversal stays cheap** (carried from v1, still the most important consequence): killing
+auto-subscribe makes nobody go dark. Three of the bell's four rungs are authorship/mention-based
+and independent of any subscription — `forum.reply_to_topic` (someone replied to *your* topic),
+`forum.reply_to_reply`, `forum.mention` all fire today for people holding zero subscriptions
+(notify-bridge.php:170-236). **The NOTIFICATIONS toggle only ever adds the fourth, least-specific
+rung**: "a thread I chose to watch but am not otherwise part of." A topic author still hears about
+replies to their own topic without toggling anything.
 
 ---
 
-## 0. The Ian-CONFIRMED lifecycle (the rulings, one screen)
+## 0. The rulings
 
-1. **Following is an EXPLICIT TOGGLE — opt-in only, never implicit.** Creating a topic, replying
-   in it, and being @mentioned in it all subscribe you to **nothing**. The toggle lives in two
-   places Ian named plus one parity surface, all driving one state (§2.2):
-   **(a)** the feed **CARD**, as a peer of the Save star;
-   **(b)** the open **DISCUSSION MODAL**, in the header control cluster beside the S/M/L/XL size
-   button; **(c)** the mobile discussion **SHEET** header — the ≤640 equivalent of (b), because
-   the S/M/L/XL cluster is desktop-only (§2.2c).
-2. **Follow-ups are ONE coalesced counting row per thread** in the bell — never one row per
-   reply. "Alice and 3 others replied in a discussion you follow", count climbing, link always
-   pointing at the newest reply.
-3. **The notifications row carries the SAME follow state**, expressed as **Unfollow**, in a
-   per-row ⋯ control. It is a convenience and an escape hatch, not the primary control, and it is
-   **not a separate "mute" concept** — one state, four places to change it (§2.4).
-4. **Remove-my-mention = unlink ONLY.** The stored mention anchor becomes plain text. It does
-   **not** unfollow, because a mention never subscribed you and a deliberate follow is not the
-   system's to cancel (§2.6).
-5. **Store = BB/bbPress NATIVE topic subscriptions.** Follow writes the native subscription,
-   unfollow writes the native unsubscribe. No new subscription store — the existing BB registry
-   + its already-built PG mirror are the truth.
-6. **Email posture: OPEN — see §8.1.** The old ruling ("all per-event BB email permanently off,
-   weekly digest only") is contradicted by the per-event email Ian received and wanted on 7/26.
-   §8.1 shows why the two positions are *narrower* than they look and lays out the resolutions.
-   **Not decided here.**
-7. **Deep links per the existing notify-bridge contract** — `/hub/?topic=<forum>/<topic>[&reply=<id>]`,
-   nothing new.
-8. **Parity:** one implementation per surface, CSS-responsive, both themes, both widths.
-9. **Existing subscriptions: OPEN — see §8.2.** Live holds 1,519 active topic + 46 forum
-   (+ 12,948 group) subscriptions today. Opt-in governs new follows; what happens to those is
-   Ian's call, with options and member-visible consequences laid out.
+1. **TWO independent per-discussion opt-ins, both default OFF:**
+   - 🔔 **Notifications** — bell rows in the panel for new replies (§3.3).
+   - ✉ **Emails** — email for new replies (§3.4).
+   Independent: either, both, or neither. Nothing writes either bit without a deliberate click.
+2. **SET them in two places** — the feed **CARD** and the open **DISCUSSION MODAL**, in the header
+   control cluster (§2). Ian: the affordance must be **visible, not buried**.
+   **Explicitly NOT in the post ⋯ menu** — verified wrong surface twice over (§2.3).
+3. **UNSET them from three places, all reaching the same store:**
+   (1) the thread itself, same controls; (2) the notifications panel per-row ⋯ (§3.5);
+   (3) **an unsubscribe link in the email itself** (§4) — logged-out, signed, and **specific to
+   that discussion**, never a blanket kill.
+4. **Follow-ups are ONE coalesced counting row per thread** in the bell — never one row per reply.
+5. **Remove-my-mention = unlink ONLY** (§3.6). It touches neither toggle.
+6. **Store mapping (amends the old "no new store" ruling — see §5):** the **native BB subscription
+   is the EMAIL bit**; the **notifications bit is a new store we own**. This is the mapping that
+   costs least, and it makes the legacy-subscription question (§9.2) land on exactly one toggle.
+7. **Deep links per the existing notify-bridge contract** — unchanged.
+8. **Parity** — every surface works desktop and mobile, both themes, one implementation.
+9. **Account-level email prefs coexist by a strict master/member rule** (§6) — no state where the
+   account page says off and mail still arrives.
+10. **OPEN, Ian's call, not decided here:** the **1,519 existing topic + 46 forum subscriptions**
+    already emailing real members (§9.2), and the per-event vs digest email posture (§9.1).
 
 ---
 
-## 1. Current machinery (what already exists — read before touching anything)
+## 1. Current machinery (read before touching anything)
 
 ### 1.1 The bell pipeline (live, one writer, one store)
 
@@ -85,507 +71,452 @@ WRITE PATHS                          BRIDGE                    STORE            
 reply.php:402-405 ─────────┐
 (mobile-sheet replies)     │   lg-shared/notify-bridge.php    profile-app               site-header.php:872-888
 bb-mirror-sync.php:225-231 ├─▶ lg_notify_on_reply():170  ──▶  internal-notify.php  ──▶  (#lg-notif-modal)
-(native REST replies; G8)  │   lg_notify_on_topic():238      :97 pushHubEvent           social-modals.js:231
+(native REST replies)      │   lg_notify_on_topic():238      :97 pushHubEvent           social-modals.js:231
 bb-mirror-sync.php:175-180 │   lg_notify_on_reaction():266   Notifications.php:105      (loadNotifications)
 (new topics)               │   (dedup: mention > reply_to_   (ON CONFLICT coalesce
-card-react.php ────────────┘    reply > reply_to_topic,       :122-133, actor_count,
-                                one row per person/event)     unread-scoped)
+card-react.php ────────────┘    reply > reply_to_topic)       :122-133, actor_count)
 ```
 
-- **Dedup rule** (notify-bridge.php:161-182): exactly ONE notification per person per event; the
-  most specific type wins (mention → reply_to_reply → reply_to_topic); never your own action.
-  The `$notified` set (notify-bridge.php:177) is the mechanism — §2.3 extends it with a fourth,
-  least-specific rung.
+- **Dedup** (notify-bridge.php:161-182): one notification per person per event, most specific type
+  wins, never your own action. The `$notified` set (:177) is the mechanism — §3.3 adds a fourth rung.
 - **Coalescing** (Notifications.php:94-133): unique index on
   `(user_uuid, type, target_kind, target_id, COALESCE(anchor_id,0))` scoped `WHERE is_read=false`
-  (sql/2026-07-12-notifications-hub-events.sql:64-74). A second actor merges → `actor_count+1`,
-  latest actor wins, `target_url` re-pointed. Once READ, the next event rings a FRESH row
-  (Notifications.php:99-101). **`forum.reply_to_topic` with `anchor_id=0` already demonstrates
-  the exact one-row-per-topic counting shape** (notify-bridge.php:213-223) — the follow-up row is
-  the same shape with a different recipient set.
-- **Type vocabulary**: PHP allowlist `Notifications::HUB_TYPES` (Notifications.php:38-43) + DB
-  CHECK `notifications_type_check` (sql/2026-07-12-notifications-hub-events.sql:49-53). Both must
-  widen for a new type — a 2-line delta, designed for this.
-- **Ingest door**: internal-notify.php — loopback + shared secret (:47-49), wp_id→uuid bridge
-  (:78-87), unbridged recipients skipped silently (:91-94), site-relative `target_url` enforced.
-- **Read/delete contract** (me-notifications.php:10-15): GET list, POST `read`/`read_all`,
-  DELETE `?id=` / `?all=1`. Click-through marks the ONE row read; per-row × is a real
-  server-side delete (social-modals.js:250-254).
-- **Panel render**: `notifText()` social-modals.js:173-186 (the copy switch),
-  `renderNotifItem()` :197-212, `.lg-notif__clear` × button :209 styled at
-  site-header.css:560-566, panel markup site-header.php:872-888.
-- **Retention**: 30-day prune by age regardless of read state (Notifications.php:273-287).
+  (sql/2026-07-12-notifications-hub-events.sql:64-74). Second actor merges → `actor_count+1`,
+  `target_url` re-pointed. Once READ, the next event rings a fresh row (Notifications.php:99-101).
+  `forum.reply_to_topic` with `anchor_id=0` already demonstrates the one-row-per-topic shape.
+- **Type vocabulary**: `Notifications::HUB_TYPES` (Notifications.php:38-43) + DB CHECK
+  (sql/…:49-53). Both widen by one value for a new type.
+- **Panel render**: `notifText()` social-modals.js:173-186, `renderNotifItem()` :197-212,
+  `.lg-notif__clear` :209 styled site-header.css:560-566, markup site-header.php:872-888.
+- **Retention**: 30-day prune regardless of read state (Notifications.php:273-287).
 
-### 1.2 The subscription machinery (exists, INERT for the Hub — but NOT inert for email)
+### 1.2 The subscription store (exists; inert for the Hub, NOT inert for email)
 
-- **Native store**: BuddyBoss Platform 2.20 forum subscriptions — MySQL
-  `wp_bb_notifications_subscriptions` (columns verified on live 2026-07-27:
+- **Native**: `wp_bb_notifications_subscriptions` — columns verified on live 2026-07-27:
   `id, blog_id, user_id, type, item_id, secondary_item_id, status, date_recorded`;
-  `type ∈ {forum, topic, group}`, `status=1` = active). The bbPress-compat write API
-  (`bbp_add_user_subscription` / `bbp_remove_user_subscription` / `bbp_get_topic_subscribers`)
-  fronts it. ⚠️ exact function/action names on the deployed BB build remain a **build-time dev2
-  verify** (§7).
-- **Site settings** (live `wp_options`, verified 2026-07-27): `_bbp_enable_subscriptions = 1`,
-  `bb_enable_group_subscriptions = 1`. Subscriptions are switched ON at the platform level today.
-- **Mirror**: BB's subscribe/unsubscribe UI handler action is already synced —
-  bb-mirror-sync.php:324-329 (`bbp_subscriptions_handler`) → _sync.php:103-125 → PG
+  `type ∈ {forum, topic, group}`, `status=1` = active. Fronted by the bbPress-compat API
+  (`bbp_add_user_subscription` / `bbp_remove_user_subscription` / `bbp_get_topic_subscribers`).
+  ⚠️ exact function names on the deployed build = build-time dev2 verify (§7).
+- **Site settings** (live `wp_options`, verified): `_bbp_enable_subscriptions = 1`,
+  `bb_enable_group_subscriptions = 1`. Switched on at platform level today.
+- **Mirror**: `bbp_subscriptions_handler` (bb-mirror-sync.php:324-329) → _sync.php:103-125 → PG
   `forums.forum_subscription` (schema.pg.sql:209-217, PK `(user_id, target_kind, target_id)`).
-- **Nothing in the Hub reads any of it** — but the legacy BB email path does, every day (§1.3).
-  "Inert" was the previous revision's word and it was wrong about email.
+- **One bit per (user, topic).** The table has room for exactly one subscription state per pair —
+  which is why two independent toggles need a second home. §5.
 
-### 1.3 The email path — CORRECTED (the previous revision got the trigger wrong)
+### 1.3 The email path (synchronous, and it has never stopped)
 
-The prior revision blamed `lg-wp-cron.timer` for arming a dormant landmine. That is right for the
-**digest** and **wrong for the per-event mail**, which is synchronous and has never stopped.
 Verified end-to-end on live by the forum-email-audit lane (2026-07-26, read-only):
 
 ```
-Hub composer → POST /wp-json/buddyboss/v1/topics  (rest_base set in bb-mirror/web/_chrome.php)
-  → a REAL post_type=topic row → bbp_new_topic
+Hub composer → POST /wp-json/buddyboss/v1/topics  → real post_type=topic → bbp_new_topic
   → bbp_notify_forum_subscribers            (bp-forums/core/actions.php:221, priority 9999)
   → bb_send_notifications_to_subscribers()  (bp-forums/common/functions.php:1434)
-  → BP_Forums_Notification::bb_send_forums_subscribed_discussion()   (…:862)
+  → BP_Forums_Notification::bb_send_forums_subscribed_discussion()  (…:862)
        author excluded; per-user `bb_is_notification_enabled` gate
-  → bp_send_email('bbp-new-forum-topic') :957 → bp-email post ID 64928
-       "[{{{site.name}}}] New discussion: {{discussion.title}}"
-  → wp_mail → FluentSMTP → Amazon SES us-east-1        ← SYNCHRONOUS with the POST (~1s)
+  → bp_send_email('bbp-new-forum-topic') :957 → bp-email post 64928
+  → wp_mail → FluentSMTP → Amazon SES us-east-1     ← SYNCHRONOUS with the POST (~1s)
 ```
 
-Two distinct event classes ride two distinct subscription types — **this distinction is the whole
-of §8.1 and it was collapsed in the previous revision**:
+**Two event classes on two subscription types — the distinction that drives §9.1:**
 
-| Class | Subscription type | Trigger | Frequency shape |
+| Class | Type | Trigger | Shape |
 |---|---|---|---|
-| **"New discussion"** — a topic was started in a forum you follow | `type='forum'` (46 rows, 38 users) | `bbp_new_topic`, synchronous | rare — bounded by how often anyone starts a thread |
-| **"New reply"** — a reply landed in a topic you follow | `type='topic'` (1,519 rows, 383 users) | `bbp_new_reply` | the high-frequency one — this is what Ruling 6 was written to stop |
+| **"New discussion"** — a topic started in a forum you follow | `forum` (46 rows / 38 users) | `bbp_new_topic`, sync | rare |
+| **"New reply"** — a reply in a topic you follow | `topic` (1,519 rows / 383 users) | `bbp_new_reply` | every reply — the high-frequency one |
 
-If the forum **is** group-linked the code takes the GROUP-subscriber branch instead (template
-64927) — `bbp_get_forum_group_ids` decides, and the group population is 12,948 rows / 1,853 users.
-Check it before predicting blast radius for anything.
+Group-linked forums take the GROUP branch instead (template 64927); that population is 12,948 rows
+/ 1,853 users. Check `bbp_get_forum_group_ids` before predicting blast radius for anything.
 
-**Measured live volume** (`wp_fsmpt_email_logs`, 14-day window ending 2026-07-27): 31 discussion/
-reply emails total across 7 days, alongside ~1,795-recipient weekly digests. The two "New
-discussion:" sends in the window went to 5 recipients each. Per-event discussion mail today is
-**small**, not a flood — the flood risk was always in *auto-subscribing everyone*, which Ruling 1's
-reversal now prevents at the source. Retention note: FluentSMTP `log_saved_interval_days=14`, so an
-empty older window means retention, not silence; for older history use `wp_bp_notifications` where
-`component_action='bb_forums_subscribed_discussion'`.
+**Measured volume** (`wp_fsmpt_email_logs`, 14 days to 2026-07-27): 31 discussion/reply emails
+across 7 days; the two "New discussion:" sends went to 5 recipients each. FluentSMTP retention is
+`log_saved_interval_days=14`, so an empty older window means retention, not silence.
 
-### 1.4 The deep-link + surface contract (unchanged, cited for completeness)
+**Correction carried from v1:** this mail is *synchronous with the post*, not cron-driven. An
+earlier revision blamed `lg-wp-cron.timer`; that timer drives the digest only.
 
-- URL shape: `/hub/?topic=<forum-slug>/<topic-slug>[&reply=<id>]` — built by
-  notify-bridge.php:45-56, encoded like forums.js `shareUrl()`.
-- Router: forums.js §4f — desktop ≥641 opens the §4e dmodal, ≤640 the `#looth-rep-sheet` via
-  `lgOpenTopicMobile`; `&reply=` anchors + highlights the exact reply.
-- Panel: ONE `lg-social-modal` drawer for both surfaces — right-side 400px on desktop
-  (site-header.css:452-460), full-width ≤480 (:743-745). Dark theming injected by
-  webroot/app-settings.js:255-268 under `html[data-lguser-theme="dark"]`.
+### 1.4 Deep links + surfaces (unchanged)
 
-### 1.5 The control cluster Ian pointed at — CORRECTED
-
-The reversal brief cited forums.js:218-244 (the `--lg-read-scale` text-size pill, a 3-state
-Normal/Large/Larger cycle) as the control to sit beside. **That is the wrong control**, on two
-counts, and the build lane must not aim at it:
-
-1. **It is not in the modal.** It was a sort-bar pill, and it was **RETIRED 2026-06-10**
-   (bespoke-cutover; Ian: "the header GEAR is the only page-state control zone") —
-   `hub_render_view_toggles()` is now an empty function (_filter-rail.php:103-114) and
-   hub-polish.js additionally CSS-hides `.feed-text-toggle` at :4387. The forums.js handler is
-   null-guarded dead code driving a button nothing emits. Reading size now lives in the
-   settings-gear LGSettings panel (webroot/app-settings.js).
-2. **The real "s m l xl" is the MODAL SIZE control**, and it renders those exact four letters —
-   `.lg-dmodal__size` in the modal header (forums.js:4216-4218 markup;
-   `SIZES = ['s','m','l','xl']` :4232; `textContent = sz.toUpperCase()` :4238; cycle handler
-   :4241). Ian's "up by s m l xl" is a literal description of what he is looking at. **It is
-   already 4-state** — the brief's "if it should become 4 states that is a separate question" is
-   moot; only the stale code comment at :4231 ("3 panel sizes (Ian): S / M / L") is out of date,
-   which is worth a one-line fix but is not this lane's business.
-
-So the modal-side follow control is a **peer of `.lg-dmodal__size` in `.lg-dmodal__head`** — §2.2b.
+- URL: `/hub/?topic=<forum-slug>/<topic-slug>[&reply=<id>]` (notify-bridge.php:45-56).
+- Router: forums.js §4f — ≥641 the dmodal, ≤640 `#looth-rep-sheet` via `lgOpenTopicMobile`.
+- Panel: one `lg-social-modal` drawer — 400px right on desktop (site-header.css:452-460),
+  full-width ≤480 (:743-745); dark injected by app-settings.js:255-268.
 
 ---
 
-## 2. The spec
+## 2. Where the toggles are SET
 
-### 2.1 One follow state, one verb, one store
+### 2.1 Two controls, or one control revealing two?
 
-```php
-lg_follow_set(int $user_id, int $topic_id, bool $following): void   // lg-shared, rides notify-bridge.php
+Ian asked for two toggles, visible, not buried. Spec'd as **two peer icon toggles** with
+`aria-pressed`, so both states are readable at a glance without a click:
+
+```
+🔔  Notifications for this discussion     ✉  Emails for this discussion
 ```
 
-- Writes the **native** subscription (bbp-compat add/remove → `wp_bb_notifications_subscriptions`)
-  AND dispatches the mirror explicitly:
-  `bb_mirror_sync_dispatch('subscription', $topic_id, $following ? 'subscribe' : 'unsubscribe', ['user_id' => $user_id])`.
-  Explicit dispatch is required — `bbp_subscriptions_handler` (bb-mirror-sync.php:324) is the
-  **UI form-handler** action and does NOT fire on programmatic writes.
-- **Idempotent** and **fire-and-forget** — same contract as the bell (notify-bridge.php:25-27).
-- **Called from exactly one place: the §2.5 endpoint, on an authenticated user's own click.**
-  There are no other call sites. That is the enforcement of Ruling 1 — not a policy note, a
-  structural fact: no code path from `bbp_new_topic`, `bbp_new_reply`, reply.php, or the mention
-  legs reaches this helper. **A build lane adding one is a spec violation.**
+- Icon-only on the card (space, §2.2), icon + short label in the modal and sheet headers.
+- `aria-pressed` + a filled/sage state, matching `.fc-save`'s `.is-saved` idiom exactly.
+- Copy on hover/aria: "Notify me about new replies" / "Email me about new replies", flipping to
+  "Stop notifications" / "Stop emails" when on.
 
-The verb is **Follow / Following**, everywhere, in copy and in code. "Mute", "Subscribe", and
-"Watch" do not appear in the UI — a single vocabulary is what makes one state legible across four
-surfaces.
+⚠️ **Fallback if the card row cannot carry two more controls** (§2.2): ONE labelled **Follow**
+control that expands two inline switches. That is still not "buried in ⋯" — it is a labelled,
+visible control of its own — but it costs a click and hides state. **Frame 1 (§7) is the test.**
+Recommendation: try two icons first; fall back only if the row visibly breaks.
 
-### 2.2 Where the toggle lives
+### 2.2 The feed CARD
 
-#### (a) The feed CARD — peer of the Save star
+The precedent to copy rather than reinvent is `.fc-save` — the per-topic, per-user star that is
+server-rendered inert and batch-hydrated with the viewer's real state.
 
-Ian: *"a button on the card."* The exact precedent already exists and should be copied rather
-than reinvented: `.fc-save`, the per-topic per-user star, is server-rendered inert then
-batch-hydrated from the viewer's real state.
+- **Markup**: `feed_follow_btns(int $topicId)` beside `feed_save_btn()` in the topic card's
+  `.fc-actions` (_feed.php:1617-1621), defined in _reply-render.php next to `feed_save_btn()`
+  (:666) so every card-rendering partial can emit it. Shape mirrors the star:
+  `<button class="fc-notify" data-follow="notify" data-topic-id="N" aria-pressed="false">` and
+  `<button class="fc-email" data-follow="email" data-topic-id="N" aria-pressed="false">`.
+- **Hydration**: the fc-save module (forums.js:3767-3841) is the structural template — server
+  renders inert, ONE batch GET resolves auth + nonce + both bits for every card on screen,
+  `MutationObserver` re-syncs on filter swap and infinite-scroll appends, click is optimistic with
+  revert-on-failure, `stopPropagation` so it never opens the thread. **The batch read is why §3.2's
+  GET takes a topic LIST.**
+- **Anon**: no nonce → inert and CSS-hidden, as `body.fc-save-anon .fc-save{display:none}`
+  (forums.css:585, :4123).
+- **Topic cards only in v1.** Content cards (managed CPTs, _feed.php:1482) have comments, not topic
+  subscriptions — §9.3 q4.
+- ⚠️ **The crowding risk, stated plainly.** `.fc-actions` already carries reactions + Like/replies/
+  Share + Save + Share + expand (_feed.php:1617-1626). Two more makes **eight**. Desktop styling is
+  `display:flex; gap:8px` with `.fc-save{margin-left:auto}` (forums.css:4113-4123); mobile cards use
+  a different bar entirely (`.lg-card-actions`/`.lg-act`, gap 18px, forums.css @≤640) and
+  `.fc-share` is already desktop-only (:600). **Whether both icons fit, and what mobile cards get,
+  is a real design question — §9.3 q1**, and frame 1 exists to answer it.
 
-- **Markup**: a new `feed_follow_btn(int $topicId)` beside `feed_save_btn()` in the topic card's
-  `.fc-actions` row (_feed.php:1617-1621), living in _reply-render.php next to `feed_save_btn()`
-  (:666) so every card-rendering partial can emit it. Shape mirrors the star exactly:
-  `<button class="fc-follow" data-follow data-topic-id="N" aria-pressed="false" …>` + icon +
-  `<span class="fc-follow__lbl">Follow</span>`.
-- **Hydration**: the fc-save module (forums.js:3767-3841) is the template, verbatim in structure —
-  server renders inert, one **batch** GET resolves auth + nonce + the viewer's following-set for
-  every card on screen, `MutationObserver` re-syncs on filter swap and infinite-scroll appends,
-  click is optimistic with revert-on-failure, `stopPropagation` so it never opens the thread.
-  **The batch read is why §2.5's GET takes a topic LIST, not one id** — a per-card single-id GET
-  would be one request per card.
-- **Anon**: no nonce → button stays inert and is CSS-hidden, exactly as
-  `body.fc-save-anon .fc-save { display:none }` (forums.css:585, :4123).
-- **Topic cards only in v1.** Content cards (managed CPTs — the `.fc-actions` block at
-  _feed.php:1482) have comments, not topic subscriptions. "Follow this article's comments" is a
-  coherent extension and explicitly **out of scope** here (§8.3 q4).
-- ⚠️ **Design risk, flagged not hidden**: `.fc-actions` already carries reactions + Like/replies/
-  Share + Save + Share + expand. This is a 6th control in a tight row, and `.fc-share` is
-  desktop-only by CSS (forums.css:600 base-hidden, shown ≥641) while mobile cards use
-  hub-polish.js's own `.lg-act-*` bar. **Whether the card control renders on mobile cards, and if
-  so in which bar, is a real design question for Ian** — §8.3 q1. It does not block the desktop
-  card or either modal surface.
+### 2.3 The DISCUSSION MODAL header — and why NOT the ⋯ menu
 
-#### (b) The DISCUSSION MODAL header — peer of S/M/L/XL
+**⋯ is the wrong surface twice over — verified, and worth recording so nobody proposes it again:**
+`forums.js:3122` — *"FB-style '⋯' post menu (own posts; admins/mods on all)"* — the trigger is
+revealed only for the post's **author or a moderator**, and the menu's contents are **Edit /
+Delete** against the owned `/bb-mirror-api/v0/reply` PUT/DELETE endpoints. Same again for modal
+replies at `forums.js:4019-4024`. So it is (a) *scoped to people who own the post*, which is
+precisely **not** the audience for a follow control, and (b) *semantically a destructive
+content-management menu*. Ian's instruction and the code agree.
 
-Ian: *"in the controls inside the open modal. Maybe up by s m l xl."* Literal:
+The right home is the modal header cluster (forums.js:4215-4220):
 
 ```js
-// forums.js ensure(), currently :4215-4220
 '<header class="lg-dmodal__head">' +
   '<h2 class="lg-dmodal__title"></h2>' +
-  '<button type="button" class="lg-dmodal__follow" aria-pressed="false" ' +
-          'aria-label="Follow this discussion" title="Follow this discussion"></button>' +   // NEW
+  '<button type="button" class="lg-dmodal__notify" aria-pressed="false" ' +
+          'aria-label="Notify me about new replies">🔔</button>' +          // NEW
+  '<button type="button" class="lg-dmodal__email"  aria-pressed="false" ' +
+          'aria-label="Email me about new replies">✉</button>' +           // NEW
   '<button type="button" class="lg-dmodal__size" aria-label="Modal size" title="Modal size"></button>' +
   '<button type="button" class="lg-dmodal__x" data-dm-close aria-label="Close">&times;</button>' +
 '</header>'
 ```
 
-- Follow sits **before** size, so the cluster reads *[title] … [Follow] [M] [×]* — the destructive/
-  dismissive control stays rightmost, and the two state controls group together.
-- State is set when the modal is populated (the same place the title is set, forums.js:4354) from
-  the batch already fetched for the cards, falling back to a single-topic read if the modal was
-  deep-linked into cold (`/hub/?topic=…` with no feed behind it).
-- Same optimistic-toggle handler as the card — one delegated listener matching
-  `.fc-follow, .lg-dmodal__follow, .lrs-follow`, one `setState()`.
+Both toggles sit **before** the size control, so the cluster reads
+*[title] … [🔔] [✉] [S|M|L|XL] [×]* — state controls grouped, dismissal rightmost. State is set when
+the modal is populated (where the title is set, forums.js:4354) from the batch already fetched for
+the cards, falling back to a single-topic read when deep-linked in cold.
 
-#### (c) The MOBILE SHEET header — the ≤640 parity surface (NOT optional)
+> **⚠️ Citation correction — second time this has come through, so it is recorded here permanently.**
+> The brief points at `bb-mirror/web/forums.js:219-228` as "the reading-size control" to sit beside.
+> **That control does not exist on the page and never lived in the modal.** It is `.feed-text-toggle`,
+> the 3-state `--lg-read-scale` sort-bar pill, and it was **RETIRED 2026-06-10** (bespoke-cutover;
+> Ian: "the header GEAR is the only page-state control zone"): `hub_render_view_toggles()` is now an
+> empty function that emits nothing (_filter-rail.php:103-114), and hub-polish.js additionally
+> CSS-hides it (:4387). The forums.js block at :218-244 is null-guarded dead code. Reading size lives
+> in the settings-gear LGSettings panel (webroot/app-settings.js).
+> **The only size control in the modal header is `.lg-dmodal__size`** — `SIZES=['s','m','l','xl']`
+> (forums.js:4232), rendered as those literal letters (:4238), cycled at :4241. That is what Ian
+> described as "s m l xl" in the previous ruling, and it is the cluster this spec targets. The
+> physical placement is the same either way, so nothing in the design changes — but a build lane
+> aiming at :219-228 would be editing dead code.
 
-The S/M/L/XL cluster **is desktop-only**: ≤640 the router opens `#looth-rep-sheet`, whose header is
-`<div class="lrs-hd"><span class="lrs-t"></span><button class="lrs-x" …>×</button></div>`
-(hub-polish.js:3628) — title + close, no size control. Ian's instruction has no literal target on
-mobile, so it needs a decision rather than a guess, and Ruling 8 (parity) forbids shipping the
-control desktop-only. **Spec'd: a `.lrs-follow` button between `.lrs-t` and `.lrs-x`**, same state,
-same handler, ≥44px touch target. Flagged for Ian in §8.3 q2 since he only named two surfaces.
+### 2.4 The MOBILE SHEET header (parity, not optional)
 
-### 2.3 Follow-up fan-out: `forum.followed_topic`, ONE counting row per thread
+≤640 the router opens `#looth-rep-sheet`, whose header is
+`<div class="lrs-hd"><span class="lrs-t"></span><button class="lrs-x">×</button></div>`
+(hub-polish.js:3628) — title + close, no size cluster. Ian named two surfaces and neither exists on
+mobile in that form, so: **`.lrs-notify` + `.lrs-email` between `.lrs-t` and `.lrs-x`**, same state,
+same handler, ≥44px touch targets. Flagged in §9.3 q2.
 
-New event type `forum.followed_topic` — added to `Notifications::HUB_TYPES`
-(Notifications.php:38-43) and the DB CHECK (migration widens
-sql/2026-07-12-notifications-hub-events.sql:49-53 by one value; the coalescing unique index
+---
+
+## 3. Behaviour
+
+### 3.1 The two bits
+
+| Toggle | Default | Effect when ON | Store |
+|---|---|---|---|
+| 🔔 Notifications | **OFF** | new replies produce ONE coalesced `forum.followed_topic` bell row (§3.3) | **new store we own** (§5) |
+| ✉ Emails | **OFF** | new replies produce email via the existing BB sender (§1.3) | **native `wp_bb_notifications_subscriptions`** (§5) |
+
+Independent in both directions. Turning one on never turns the other on.
+
+### 3.2 The endpoint: `bb-mirror-api/v0/follow.php`
+
+The bell store and the BB subscription both need a WP-pool writer (MySQL/WP), exactly where
+reply.php lives. The caller mutates only their OWN state (`$uid` from the session, **never** the body).
+
+```
+GET  /bb-mirror-api/v0/follow?topics=12,44,91
+       → {authenticated:bool, nonce:string,
+          state:{"12":{notify:true,email:false}, "91":{notify:false,email:true}}}
+
+POST /bb-mirror-api/v0/follow            cookie-authed + X-WP-Nonce, self-scoped
+  {topic_id:int, channel:'notify'|'email', on:bool}
+  {topic_id:int, action:'remove_mention', reply_id?:int}     → §3.6
+```
+
+- **The batch GET is load-bearing** — a feed page renders many cards and each needs both bits. It
+  mirrors `/archive-api/v0/save-post?items=` (forums.js:3809-3813), same auth+nonce+state envelope,
+  so the client module is a near-copy.
+- `channel:'email'` writes the native subscription **and** dispatches the mirror explicitly:
+  `bb_mirror_sync_dispatch('subscription', $topic_id, $on?'subscribe':'unsubscribe', ['user_id'=>$uid])`.
+  Explicit dispatch is required — `bbp_subscriptions_handler` (bb-mirror-sync.php:324) is the **UI
+  form-handler** action and does not fire on programmatic writes.
+- Auth posture as reply.php:5, :81-84 (`get_current_user_id()` or 401). One nginx rewrite line in
+  strangler-bb-mirror.conf beside `reply`. The write-freeze map (lg-write-freeze-map.conf:7-10)
+  already catches all bb-mirror-api writes by prefix — correctly frozen during a freeze. No change.
+- **This endpoint is the ONLY caller of the subscription writers.** No path from `bbp_new_topic`,
+  `bbp_new_reply`, reply.php, or the mention legs reaches them. That is the structural enforcement
+  of "no auto-subscribes" — **a build lane adding one is a spec violation.**
+
+### 3.3 Notifications ON → `forum.followed_topic`, one counting row per thread
+
+New type `forum.followed_topic` in `Notifications::HUB_TYPES` (Notifications.php:38-43) and the DB
+CHECK (sql/2026-07-12-notifications-hub-events.sql:49-53 widens by one value; the coalescing index
 :64-74 needs **no change**).
 
 New leg **4** in `lg_notify_on_reply` (after :213-223), reusing the `$notified` dedup set:
 
 ```
-4. Everyone SUBSCRIBED to the topic, minus everyone already rung (mention,
-   parent-reply author, topic author) and the replier:
-     type        = forum.followed_topic
-     target_kind = 'topic', target_id = topic_id
-     anchor_id   = 0            ← NULL in the dedup key → ONE row per topic per user
-     target_url  = lg_notify_topic_url(topic_id, reply_id)   ← newest reply, re-pointed on coalesce
+4. Everyone with the NOTIFY bit on this topic, minus everyone already rung
+   (mention, parent-reply author, topic author) and the replier:
+     type = forum.followed_topic, target_kind='topic', target_id=topic_id
+     anchor_id = 0        ← NULL in the dedup key → ONE row per topic per user
+     target_url = lg_notify_topic_url(topic_id, reply_id)   ← newest reply, re-pointed on coalesce
 ```
 
-- Coalescing, counting, read-resets-the-row, prune — **all inherited unchanged** from the existing
-  `pushHubEvent` machinery (§1.1). This is deliberately the `reply_to_topic` shape fanned to
-  followers instead of the author.
-- Subscriber read: `bbp_get_topic_subscribers($topic_id)` on the WP pool. NOT the PG mirror — the
-  native store is the truth (Ruling 5); the mirror serves PG-side reads like the digest recap.
-- **Fan-out is now bounded by opt-in.** Under the old auto-subscribe rule every participant became
-  a recipient and the subscriber list grew with the thread; under opt-in it grows only when
-  someone chooses. The batch-POST contingency stays in §7 but is now unlikely to be needed.
-- Bell copy (social-modals.js `notifText`, :173-186, new case): `forum.followed_topic` →
-  `notifActors(n) + ' replied in a discussion you follow'`, via the existing actor_count sentence
-  builder (:166-172).
+Coalescing, counting, read-resets-the-row and prune are all **inherited unchanged**. Bell copy
+(social-modals.js `notifText` :173-186, new case): `notifActors(n) + ' replied in a discussion you follow'`.
 
-**Recipient-set invariant (unchanged):** one person, one row per event — a following topic author
-still gets `reply_to_topic`; a following mentioned member still gets `mention`. The
-most-specific-wins ladder just grows a fourth, least-specific rung.
+**Recipient-set invariant:** one person, one row per event — a following topic author still gets
+`reply_to_topic`; a following mentioned member still gets `mention`. The ladder grows a fourth,
+least-specific rung.
 
-### 2.4 The ⋯ row control — Unfollow, not Mute
+### 3.4 Emails ON → the existing BB sender, unchanged
 
-Ruling 3 survives, **demoted and re-verbed**. Three reasons it is worth keeping rather than
-dropping now that the card and modal carry the primary control:
+Because the email bit **is** the native subscription (§5), the send path needs no new machinery:
+`bb_send_notifications_to_subscribers` already reads that table. The work is confined to (a) the
+toggle writing it, (b) the unsubscribe link in the message (§4), and (c) whatever §9.1 decides
+about the posture.
 
-1. **The bell row is often the only place the user meets the thread.** Making them open the
-   discussion to stop hearing about it is a worse exit than the one that put them there.
-2. **It is the only exit that reaches the legacy 1,519** (§8.2). Those members never clicked a
-   Follow button, so no card affordance in their history explains why they are getting rows.
-   Whatever Ian decides in §8.2, an in-row exit is what makes grandfathering humane rather than
-   trapping.
-3. **A thread can become unreachable** — filtered out of the rail, scrolled past, in a forum the
-   viewer no longer browses. The row outlives the card.
+### 3.5 The notifications-panel row ⋯ (unset surface #2)
 
-**What changes from the old ruling:** "Mute this thread" is gone as a distinct concept. Under
-auto-subscribe, *mute* was the right word — it suppressed something you never asked for. Under
-opt-in there is nothing to mute; there is a follow you turned on, and the honest control is
-**Unfollow**, showing the *same state* as the card and modal. One state, one verb, four places.
-This deletes a mute-vs-unfollow vocabulary split that would have confused both users and code.
+Every hub-event row whose `ref.kind` is `topic`|`reply` gets a ⋯ between the body and the existing
+× — `[text/time] [⋯] [×]`, same 26px round hover-target as `.lg-notif__clear`
+(site-header.css:560-566). Connection rows get none.
 
-**Placement.** Every hub-event row whose `ref.kind` is `topic`|`reply` gets a ⋯ (overflow) button
-between the body and the existing × — `[text/time] [⋯] [×]`. Same 26px round hover-target styling
-as `.lg-notif__clear` (site-header.css:560-566). Connection rows get no ⋯.
-
-**Menu**, a small anchored popover (not a new modal layer):
+The menu carries **both** bits, so the row can unset whichever is ringing — and, because rows now
+arrive for people who follow nothing, it can also **opt in**:
 
 | Row type | Items |
 |---|---|
-| `forum.followed_topic` | **Unfollow this discussion** |
-| `forum.reply_to_topic`, `forum.reply_to_reply`, `reaction.on_post` (kind topic/reply) | **Follow this discussion** / **Unfollow this discussion** — reflects live state; these rows fire from authorship, so the viewer may not be following |
-| `forum.mention` | **Remove my mention** + **Follow / Unfollow this discussion** |
+| `forum.followed_topic` | **Stop notifications** · **Stop emails** (each shown per live state) |
+| `forum.reply_to_topic`, `forum.reply_to_reply`, `reaction.on_post` | **Notify me / Stop notifications** · **Email me / Stop emails** |
+| `forum.mention` | the two above + **Remove my mention** (§3.6) |
 
-- Quiet copy under the title: *"Unfollowing stops follow-ups for this discussion. You'll still be
-  notified when someone replies to you or mentions you."* — accurate under opt-in, and it names
-  the three rungs following does not control (§0.0).
-- **The menu is also an opt-IN surface.** Because rows now arrive for people who follow nothing,
-  the ⋯ can *start* a follow — a genuinely useful affordance the auto-subscribe design had no room
-  for.
-- Toggle → `POST /bb-mirror-api/v0/follow {topic_id, action:'follow'|'unfollow'}` (§2.5). The row
-  stays put either way (it is still a truthful record and its deep link still works); the client
-  updates the menu item and shows a one-shot confirmation. No future follow-up refires after
-  unfollow: the next reply simply finds them absent from the subscriber set.
-- The client already knows `topic_id`: `ref.id` IS the topic id for every `forum.*` type
-  (Notifications.php:190-196).
-- **A11y/parity**: `aria-haspopup="menu"`, Esc closes, click-outside closes, ⋯ has
-  `stopPropagation` like the × so opening the menu never navigates the row; ≥44px effective touch
-  target ≤480. One implementation, both widths, both themes.
+- Quiet copy: *"You'll still be notified when someone replies to you or mentions you."* — accurate,
+  and it names the three rungs neither toggle controls.
+- Writes the same §3.2 endpoint. The row stays put (still a truthful record, deep link still works).
+- `ref.id` IS the topic id for every `forum.*` type (Notifications.php:190-196).
+- **A11y**: `aria-haspopup="menu"`, Esc closes, click-outside closes, `stopPropagation` like the ×
+  so opening never navigates; ≥44px effective target ≤480. Both widths, both themes.
 
-### 2.5 The WP-side endpoint: `bb-mirror-api/v0/follow.php`
+### 3.6 Remove-my-mention = unlink ONLY
 
-The bell store (profile-app/PG) cannot write BB subscriptions (MySQL/WP) — follow must land on the
-WP pool, exactly where reply.php lives. The caller mutates only their OWN subscription (`$uid` from
-the session, **never** from the body).
+It touches **neither** toggle. A mention never subscribed you; and where you *did* deliberately
+toggle something on, cancelling it via an unrelated act would be a silent, non-consensual state
+change — the same class the opt-in rule outlaws, just the other sign. They are independent
+concerns: removing your name from someone's post is **attribution**; the toggles are **volume**.
+Nothing is lost by separating them — both toggles sit in the same ⋯ menu, one click away.
 
-```
-GET  /bb-mirror-api/v0/follow?topics=12,44,91      → {authenticated:bool, nonce:string,
-                                                      following:{"12":true,"91":true}}
-POST /bb-mirror-api/v0/follow                       cookie-authed + X-WP-Nonce, self-scoped
-  {topic_id:int, action:'follow'}                      → native subscribe   + mirror dispatch
-  {topic_id:int, action:'unfollow'}                    → native unsubscribe + mirror dispatch
-  {topic_id:int, action:'remove_mention', reply_id?:int} → §2.6 (unlink only)
-```
+Server side (`action:'remove_mention'`), acting user = the MENTIONED member:
 
-- **The batch GET is load-bearing**, not a convenience: a feed page renders many cards and each
-  needs the viewer's state. This mirrors `/archive-api/v0/save-post?items=` (forums.js:3809-3813)
-  — same auth+nonce+my-state envelope, so the client module is a near-copy.
-- Auth posture: `get_current_user_id()` or 401, as reply.php:5, :81-84.
-- Plumbing: one nginx rewrite line in strangler-bb-mirror.conf alongside `reply`. The write-freeze
-  map (lg-write-freeze-map.conf:7-10) already catches ALL bb-mirror-api writes by prefix — follow
-  is correctly frozen during a freeze, like replies. **No change.**
-
-### 2.6 Remove-my-mention = unlink ONLY (Ruling 4, rewritten)
-
-The old ruling bundled unfollow into it. Under opt-in that half is not merely meaningless — **it
-would be actively wrong**, and the argument is worth stating because it is the same principle that
-drove the reversal:
-
-- A mention never subscribed you, so in the common case there is nothing to unfollow.
-- In the case where there *is* — you deliberately followed the thread **and** were mentioned in it
-  — unfollowing would **silently cancel a choice the member made**, triggered by an unrelated act.
-  That is a non-consensual state change in the opposite direction, and Ruling 1 outlaws the class,
-  not just the sign.
-- They are independent concerns: removing your name from someone else's post is about **identity
-  and attribution**; unfollowing is about **notification volume**. Bundling them means a member who
-  wants their name off a post must accept losing a thread they chose to watch.
-- Nothing is lost by separating them: the Unfollow item sits directly beneath Remove-my-mention in
-  the very same ⋯ menu (§2.4). One extra click, fully in the member's control.
-
-**So: unlink only.** Server side (`action:'remove_mention'`), acting user = the MENTIONED member:
-
-1. Resolve the caller's mention identity: the stored anchor is
+1. Resolve identity from the stored anchor
    `<a class="bp-suggestions-mention" data-lg-uuid="<uuid>" href="{{mention_user_id_N}}">@<slug></a>`
-   (_mention-ingest.php:15-27) — match on `{{mention_user_id_<their-wp-id>}}` and/or their uuid,
+   (_mention-ingest.php:15-27) — match on `{{mention_user_id_<their-wp-id>}}` and/or uuid,
    **never on the @slug text** (slugs change; ids don't).
-2. Rewrite the stored `post_content` of the mentioning post(s) in the topic (or just `reply_id` if
-   given): replace each matching anchor with **the display name, without the `@` sigil**. kses-off
-   `wp_update_post`, exactly the re-mint precedent (reply.php:377-385, bb-mirror-sync.php:166-173)
-   — the save hooks re-fire so the PG mirror carries the unlinked content automatically.
-   Idempotent: no matching anchor → no-op success.
-   *Why no `@`:* a bare `@slug` is a **resolvable token** (_mention-ingest.php:28-30), so leaving
-   it would re-link on the next content re-mint. Dropping the sigil makes the removal stick and
-   the sentence still reads.
+2. Rewrite the mentioning post's stored `post_content`: replace each matching anchor with **the
+   display name, without the `@` sigil**. kses-off `wp_update_post`, the re-mint precedent
+   (reply.php:377-385, bb-mirror-sync.php:166-173) — save hooks re-fire so the PG mirror follows.
+   Idempotent. *Why no `@`:* a bare `@slug` is a resolvable token (_mention-ingest.php:28-30) and
+   would re-link on the next re-mint.
 3. **No subscription write of any kind.**
-4. The client then deletes the mention row via the EXISTING
-   `DELETE /profile-api/v0/me/notifications/?id=` (me-notifications.php:61-79) — no new bell API.
+4. Client deletes the row via the existing `DELETE /profile-api/v0/me/notifications/?id=`
+   (me-notifications.php:61-79).
 
-### 2.7 Email — deferred to §8.1
+---
 
-The previous revision's §2.6 ("new mu-plugin `lg-bb-subscription-email-off.php`, kill all per-event
-BB mail, ship it in the same change as auto-subscribe, kill first") was written as a **hard
-precondition of auto-subscribe** — because auto-subscribing every involved member would have
-multiplied a live email fan-out (old §1.3). **Ruling 1's reversal removes that precondition
-entirely**: opt-in cannot multiply fan-out, because nothing is written without a click.
+## 4. The email unsubscribe link (unset surface #3) — the one with real constraints
 
-That is the whole reason the email question is now *open* rather than settled: the kill-switch was
-load-bearing for a design that no longer exists, and Ian's 7/26 mail says the blanket kill is not
-what he wants. **§8.1 lays out the resolutions; nothing here presumes one.** The weekly-digest
-recap (§2.8) is written to be correct under any of them.
+**Requirement:** works for a **logged-out** reader clicking from their inbox; **specific** to that
+discussion, never a blanket kill; lands on a **small confirmation page** that also offers "stop all
+discussion emails" for someone who is really done; one click, no login, no accidental total-unsub.
 
-### 2.8 Weekly digest recap — counts + senders, never content
+### 4.1 What already exists — reuse analysis (all verified, not assumed)
 
-Independent of §8.1: a recap section is wanted whether or not per-event mail survives.
+| Candidate | What it actually is | Verdict |
+|---|---|---|
+| **BuddyBoss `bp-emails-unsubscribe-salt`** — `bp_email_get_salt()` (bp-core-functions.php:4183-4185), option seeded at install as base64 of `wp_generate_password(64)` (bp-core-update.php:841); present on live | A persistent HMAC salt + a working logged-out verify path | ✅ **the right base — take the salt and the pattern** |
+| `bp_email_get_unsubscribe_link()` (bp-core-functions.php:4142-4172) | Signs **`"{$email_type}:{$user_id}"`** → scoped to a notification **TYPE**, not an item. One click kills that whole email type via `bp_update_user_meta($uid,$meta_key,'no')` (:4106) | ❌ **wrong granularity** — it can only produce the blanket kill Ian ruled out. Reuse the salt, **not** this function |
+| FluentCRM `##crm.unsubscribe_url##` (lg-weekly-digest/templates/email.php:11, :181) | List/global unsubscribe smartcode | ❌ wrong granularity **and** wrong blast radius — would also kill the weekly digest |
+| `platform/mu-plugins/lg-event-reminders.php` | FluentCRM **list membership** management; defers to FluentCRM's GLOBAL unsubscribe as master off (:35-39, :177-198) | ❌ **emits no unsubscribe link and mints no token** — correction to the brief |
+| `platform/mu-plugins/bb-mirror-sync.php` | Its "unsubscribe" is the **mirror dispatch action name** (:323-326) | ❌ **not an unsub link at all** — correction to the brief |
+| `platform/mu-plugins/looth-vendor/firebase/php-jwt` | Full JWT, used by the identity minter | ➖ works, but oversized for a one-purpose link and drags in identity semantics |
 
-- **Surface**: one section in the existing weekly digest (lg-weekly-digest, FluentCRM campaign to
-  list 3 — class-lg-wd-sender.php:29-52; live cadence Mon 09:00, OPERATOR.md §5).
-- **Copy shape** — recap, not alert, zero content:
+**So there is exactly one real signed-token unsubscribe mechanism on the box (BuddyBoss's) and one
+real unsub link in the repo (the digest's FluentCRM smartcode).** Recommendation: **base it on
+BuddyBoss's salt + HMAC pattern**, extended with the topic id.
+
+### 4.2 The link
+
+```php
+$nh  = hash_hmac('sha1', "lgdisc:{$topic_id}:{$user_id}", bp_email_get_salt());
+$url = home_url("/discussions/unsubscribe/?uid={$user_id}&tid={$topic_id}&nh={$nh}");
+```
+
+- Same primitive, same salt, same `hash_equals()` verification posture as BB
+  (bp-core-functions.php:4089) — but the **topic id is inside the signed payload**, which is the
+  entire difference between "this discussion" and "all mail of this type."
+- Carries BB's own safety rule forward: a **logged-in** user may not act on a different `uid`
+  (bp-core-functions.php:4076-4085).
+- **No expiry**, deliberately, matching BB: the token only ever *removes* a subscription, and an
+  expiry would silently break the link in older emails. Stated so it is a choice, not an oversight.
+- Salt rotation invalidates every outstanding link — worth a note in the mu-plugin header.
+
+### 4.3 GET shows a confirmation page; POST performs the change
+
+**This is a correctness requirement, not politeness.** BuddyBoss's own handler mutates on a bare
+GET (`bp_update_user_meta(...)`, bp-core-functions.php:4106). Corporate mail scanners and link
+prefetchers (Outlook SafeLinks, proxying gateways) follow links in email — against a GET-mutating
+endpoint, that silently unsubscribes people who never clicked. The confirmation step removes the
+hazard and is also what Ian asked for.
+
+**The page** (small, standalone, no login, works in any theme):
+
+- Names the discussion: *"Stop emails about **'Truss rod won't budge'**?"*
+- **Primary action — "Stop emails from this discussion"** (POST). Affects the ✉ bit for that topic
+  only. **The 🔔 notifications bit is untouched** and the page says so: *"You'll still see new
+  replies in your notifications."*
+- **Secondary — "Stop ALL discussion emails"** (POST). Sets the account-level master (§6), which is
+  the same store the account page writes. For the person who is really done.
+- Third, quiet: a link back to the discussion, and (if logged in) to the account email preferences.
+- After acting: a confirmation state with an **Undo**, since a mis-click is otherwise unrecoverable
+  without finding the thread again.
+
+### 4.4 Where it renders
+
+The link belongs in the reply-notification email body. Which template that is depends on §9.1: if
+BB's own sender stays (posture A/B), the link is filtered into the bp-email template; if per-event
+mail is replaced, it rides whatever replaces it. **Spec'd as a filter on the outgoing message so it
+is independent of that decision.**
+
+---
+
+## 5. The store mapping (this ruling amends "no new subscription store")
+
+Two independent bits per (user, topic); the native table holds **one** (§1.2). So one bit needs a
+new home. **Which bit goes where is the load-bearing choice, and the mapping is not symmetric:**
+
+**✉ Emails → the NATIVE BB subscription.**
+1. BB's mailer already reads exactly that table (`bb_get_subscription_users`), so the email path
+   needs no recipient-filter hack — the hard part comes free.
+2. BB's own unsubscribe machinery already writes that world, so §4 stays close to its base.
+3. The PG mirror (`forums.forum_subscription`) already syncs it.
+4. **The 1,519 legacy rows ARE today's email population.** Mapping them onto the email toggle is
+   simply true, and it collapses §9.2 into a question about **one** toggle instead of two.
+
+**🔔 Notifications → a new store we own.** The bell is entirely ours (notify-bridge + profile-app
+PG); it needs no BB interop, so a new store costs nothing there.
+
+- **Recommended placement**: PG, owned by profile-app — `forums.topic_follow (user_uuid, topic_id,
+  created_at)`, PK `(user_uuid, topic_id)`. Leg 4 (§3.3) then becomes **ONE** loopback post
+  (`fanout:'followers'`) that profile-app expands against its own table — which also retires the
+  old "one loopback POST per recipient" cost. **This is the one genuinely new mechanism in the
+  spec**: internal-notify gains a fan-out form.
+- **Simpler fallback** if the build lane wants minimal change: a MySQL table on the WP pool read
+  directly by notify-bridge, keeping today's per-recipient posts. Cheaper to build, worse at scale.
+- Either way it is a **new store**, and the original "no new subscription store" ruling is
+  superseded by the two-toggle model — not quietly, here in writing.
+
+---
+
+## 6. How per-thread email coexists with the account-level toggles
+
+**What already ships** (bf9e3a1, membership-pages/web/manage-subscription.php:167-176): a
+`#lg-email-prefs` card with two switches — **Weekly Digest** and **Event Reminders** — wired at
+:202-214 to admin-ajax `lg_weekly_member_state`/`lg_weekly_member_toggle` and
+`lg_event_reminder_state`/`lg_event_reminder_signup`, both FluentCRM-list backed.
+
+**The rule that prevents two contradictory settings:**
+
+> **Account level = a master switch per email CLASS. Per-thread = which threads are in that class.**
+
+- Add a **third** account row: **Discussion emails** — the master for all per-thread discussion mail.
+- **Strict precedence: master OFF ⇒ never send, whatever the per-thread bits say. Master ON ⇒ the
+  per-thread bit decides.** There is no state where the account page says off and mail still
+  arrives — that is the whole point of the rule.
+- The account page does **not** list individual threads (there could be hundreds). It shows the
+  master plus a count — *"You get emails from 3 discussions"* — linking into the Hub.
+- **§4.3's "stop all discussion emails" writes this same master.** Three surfaces, one store —
+  the same discipline the toggles themselves follow.
+- **Weekly Digest stays independent.** The digest recap (§3.7 below) rides the Weekly Digest
+  switch, not the discussion one, so a member can have discussion emails off and still get the
+  weekly recap. That is exactly the point of having a recap.
+- ⚠️ Store asymmetry to settle at build time: Weekly/Event are FluentCRM-list backed; Discussion
+  emails is naturally usermeta (BB's own per-type meta key is literally what its unsubscribe
+  writes). Not a contradiction, but the account UI will be writing two different stores behind one
+  card — noted so it is designed, not discovered.
+
+### 3.7 Weekly digest recap (unchanged from v1, independent of §9.1)
+
+- One section in the existing weekly digest (lg-weekly-digest, FluentCRM campaign to list 3 —
+  class-lg-wd-sender.php:29-52; live cadence Mon 09:00).
+- Counts + sender display names ONLY, never content:
   > **Your discussions** — 12 new replies this week across 3 discussions you follow, from
   > Doug Proper, Sharon Fisher and 4 others. *[Open the Hub →]*
-  - Counts + sender display names ONLY. Never reply text; never topic titles of private-forum
-    threads (public-thread titles MAY be listed — Ian call, §8.3 q3).
-  - One "Open the Hub" link (`/hub/`), not per-thread deep links, keeps the email inert.
-- **Data**: entirely from the PG mirror, no WP round-trips: `forums.forum_subscription`
-  (schema.pg.sql:209) ⋈ replies-in-window ⋈ `person` (names). Exposed as an internal loopback
-  endpoint `bb-mirror-api/v0/follow-recap?wp_user_id=N` (loopback+deny-all like _sync).
-- **Per-recipient rendering** inside a FluentCRM broadcast is the one genuinely new mechanism (the
-  digest today is one body for all). Candidate: a FluentCRM custom smartcode rendered per
-  subscriber at send. **Feasibility = dev2 verify (§7).** If unsupported, the section ships generic
-  ("Discussions you follow had new activity this week") in v1 and per-user counts become a
-  follow-up — the bell experience does not depend on it.
-
-### 2.9 What deliberately does NOT change
-
-- Deep-link contract, reply anchor, read-on-clickthrough, per-row ×, Clear all, badge counts,
-  30-day prune, unbridged-recipient skip, "never notify yourself", mention > reply dedup ladder.
-- The legacy BB notification rows keep being written by the in-process REST replay (audit Phase 3
-  retires them; out of scope).
-- No notification-preferences UI. The follow toggle is the only control this ships (audit §4.2's
-  prefs matrix remains future work and stays compatible — follow is just the native subscription
-  bit). Note BuddyBoss already has its own per-user `bb_is_notification_enabled` gate in the mail
-  path (§1.3) — a second, overlapping preference surface is a reason to keep this spec's control
-  count at exactly one.
+- Data entirely from the PG mirror: `forums.forum_subscription` ⋈ replies-in-window ⋈ `person`,
+  via a loopback `bb-mirror-api/v0/follow-recap?wp_user_id=N`.
+- Per-recipient rendering inside a FluentCRM broadcast is new (the digest today is one body for
+  all). Candidate: a custom smartcode rendered per subscriber. **Feasibility = dev2 verify (§8);**
+  fallback is a generic section in v1.
 
 ---
 
-## 3. Delta summary (what a build lane actually touches)
+## 7. Mock frames
 
-| # | File | Change |
-|---|---|---|
-| 1 | `profile-app/sql/` new migration | widen `notifications_type_check` with `forum.followed_topic` |
-| 2 | `profile-app/src/Notifications.php:38-43` | add `forum.followed_topic` to `HUB_TYPES` |
-| 3 | `lg-shared/notify-bridge.php` | `lg_follow_set()` helper; new leg 4 fan-out in `lg_notify_on_reply` (:170). **No subscribe calls in the topic/reply/mention legs — that is the reversal.** |
-| 4 | `bb-mirror/api/v0/follow.php` **new** | batch GET + follow/unfollow/remove_mention (§2.5-2.6) |
-| 5 | `bb-mirror/api/v0/follow-recap.php` **new** | loopback recap counts (§2.8) |
-| 6 | `platform/nginx/strangler-bb-mirror.conf` | 2 rewrite lines + loopback block for follow-recap |
-| 7 | `bb-mirror/web/forums/_reply-render.php:666` | `feed_follow_btn()` beside `feed_save_btn()` |
-| 8 | `bb-mirror/web/forums/_feed.php:1617-1621` | emit it in the topic card's `.fc-actions` |
-| 9 | `bb-mirror/web/forums.js:4215-4220` | `.lg-dmodal__follow` in the modal head; set state where the title is set (:4354) |
-| 10 | `bb-mirror/web/forums.js` (new module, template = fc-save :3767-3841) | batch hydrate + delegated optimistic toggle for `.fc-follow, .lg-dmodal__follow, .lrs-follow` |
-| 11 | `webroot/hub-polish.js:3628` | `.lrs-follow` in the mobile sheet head (§2.2c) |
-| 12 | `bb-mirror/web/forums.css` | `.fc-follow` + `.lg-dmodal__follow` styles incl. `body.fc-save-anon`-style anon hide |
-| 13 | `lg-shared/social-modals.js:173-186, :197-212` | `notifText` case; ⋯ button + popover in `renderNotifItem`; follow/unfollow/remove handlers |
-| 14 | `lg-shared/site-header.css:560+` | ⋯ + popover styles (light), ~30 lines |
-| 15 | `webroot/app-settings.js:255-268` | dark rules for the popover, ~4 lines |
-| 16 | `lg-weekly-digest` | recap section hook (§2.8, mechanism pending verify) |
-| 17 | — | **§8.1's outcome may add or remove an email mu-plugin. Not spec'd until Ian rules.** |
+Published for gating (cookie-gated dev2):
+**https://dev2.loothgroup.com/v2/tests/output/threadfollow/index.html**
 
-No new stores. One new event type. Two new WP-pool endpoints. Zero automatic subscription writes.
+| # | Frame | Shows | Status |
+|---|---|---|---|
+| 1 | `card-d-{light,dark}` 1280 | **Feed card** `.fc-actions` with 🔔 + ✉ beside Save, both states — *the crowding test (§2.2)* | **NEW** |
+| 2 | `card-m-{light,dark}` 390 | Mobile card bar with the two toggles | **NEW** |
+| 3 | `modal-d-{light,dark}` 1280 | **Modal header** *[title] [🔔] [✉] [M] [×]*, on and off | **NEW** |
+| 4 | `unsub-d-{light,dark}` 1280 + `unsub-m-light` 390 | **Email unsubscribe confirmation page** (§4.3) | **NEW** |
+| 5 | `notif-d-{light,dark}` 1280, `notif-m-{light,dark}` 390 | Notifications panel: coalesced row + the ⋯ menu carrying both bits | **re-shot** |
+
+Frames 1 and 3 are the decisive ones — they test whether two visible toggles survive contact with
+rows that already carry six controls. If frame 1 reads as cluttered, §2.1's one-control fallback is
+the answer and only the card changes.
 
 ---
 
-## 4. Deleted from the previous revision (so nobody rebuilds it)
-
-- `lg_follow_on_involve()` and its three call-site table rows (topic author / replier / mentioned).
-- The "re-involvement re-subscribes" rule and the sticky-mute tombstone question it raised — both
-  are moot: nothing subscribes on involvement, so nothing re-subscribes, and an unfollow is simply
-  the absence of a row until the member clicks again. **This also removes a whole open question
-  from Ian's list.**
-- "Mute" as a concept and as UI copy (§2.4).
-- The unfollow half of remove-my-mention (§2.6).
-- `lg-bb-subscription-email-off.php` as a *hard precondition* — see §2.7 and §8.1.
-
----
-
-## 5. Mock frames — what survives, what Ian still needs to gate
-
-Existing: `footer-mockups/threadfollow-notif-panel/mock.html` + 4 frames shot @8da56d3
-(`notif-d-{light,dark}` 1280, `notif-m-{light,dark}` 390).
-
-**They were drawn around auto-subscribe + per-row mute, and they under-represent the design now.**
-Plainly:
-
-| Frame element | Verdict |
-|---|---|
-| Panel chrome, tokens, dark/light, desktop-drawer vs mobile-sheet geometry | **SURVIVES** — untouched by the reversal, still the right previs for the panel |
-| The coalesced `forum.followed_topic` counting row ("…and 3 others replied in a discussion you follow") | **SURVIVES** — Ruling 2 unchanged |
-| The ⋯ affordance + popover geometry, and "no ⋯ on connection rows" | **SURVIVES** — placement and mechanics unchanged (§2.4) |
-| Menu copy **"Mute this thread"** | **WRONG** — now "Unfollow this discussion" (§2.4) |
-| The **"Muted ✓"** post-action state | **WRONG** — the row shows a follow state, not a mute state |
-| The mention row's two-item menu **Mute + Remove my mention** | **WRONG PAIRING** — now Remove my mention + Follow/Unfollow, and the unlink no longer implies unfollow (§2.6) |
-| **The feed-card follow control** | **ABSENT** — the surface Ian named first does not appear in any frame |
-| **The modal header cluster (Follow beside S/M/L/XL)** | **ABSENT** — the surface Ian described most specifically does not appear in any frame |
-| **The mobile sheet header control** | **ABSENT** — and it is the one surface Ian has not seen a proposal for at all (§2.2c) |
-
-**New frames Ian needs to gate** (none exist yet):
-
-1. **Card, desktop 1280** — `.fc-actions` with Follow beside Save, in both states (Follow /
-   Following), light + dark. *This is the crowded-row risk in §2.2a made visible — it is the frame
-   most likely to change the design.*
-2. **Card, mobile 390** — whichever bar Ian picks in §8.3 q1, or a frame showing the control
-   absent on mobile cards if he prefers modal-only there.
-3. **Modal header, desktop 1280** — *[title] [Follow] [M] [×]* and *[title] [Following] [M] [×]*,
-   light + dark.
-4. **Mobile sheet header, 390** — `.lrs-hd` with the control between title and ×, both states.
-5. **Notif panel, re-shot** — the 4 existing frames with corrected verbs and the corrected mention
-   menu (cheap: same harness, `shoot.sh` is already strictly-serial and the resize trap is already
-   encoded in the mock JS).
-
-Frames 1 and 3 are the ones that decide whether Ian's instruction survives contact with the actual
-control rows; recommend shooting those first and gating the rest on his reaction.
-
----
-
-## 6. Verify plan for the build lane (dev2, at build time — NOT verified by this lane)
-
-1. BB 2.20 subscription internals: exact write/read function names
-   (`bbp_add_user_subscription` / `bb_create_subscription` / `bbp_get_topic_subscribers`), and
-   which low-level action (if any) fires on programmatic writes → decides §2.1's dispatch shape.
-   (Table + columns + `type` vocabulary already verified on live 2026-07-27, §1.2.)
-2. Whichever email posture §8.1 lands on: prove it on dev2 via mailpit — a follower receives
-   exactly the intended mail (or none) on a reply, and a non-follower receives nothing.
-3. FluentCRM per-subscriber dynamic content (smartcode/callback) → §2.8 mechanism or fallback.
-4. Batch-GET shape at feed scale: one `?topics=` request per feed page, correct after filter swap
-   and infinite-scroll appends (the fc-save MutationObserver path, forums.js:3836-3841).
-5. E2E per DISCUSSION-SURFACE-CANON, **starting from zero subscriptions**:
-   - post a topic as A → **A follows nothing**; B replies → A still gets `reply_to_topic` (the
-     authorship rung, §0.0), and **no** `followed_topic` row exists for anyone;
-   - A clicks Follow on the card → state persists across reload, and shows Following in the modal
-     header and the mobile sheet (one state, three surfaces);
-   - C replies → A gets ONE `followed_topic` row; D replies → same row, "and 1 other", link at D's
-     reply; A reads → next reply = fresh row;
-   - A unfollows from the ⋯ row → no new rows; A is still rung when @mentioned;
-   - remove-my-mention → anchor unlinked in stored + mirrored content, **A's follow untouched**,
-     no re-mint on the next edit pass.
-   - Both widths, both themes, through the real serve.
-
----
-
-## 7. Live subscription reality (measured 2026-07-27, read-only via `live-ro`, DB `looth_import`)
-
-Everything in §8.2 rests on these numbers, so they are stated with their queries' shape rather
-than asserted.
+## 8. Live measurements (read-only via `live-ro`, DB `looth_import`, 2026-07-27)
 
 ```
 type × status=1        rows      distinct users
@@ -594,7 +525,7 @@ type × status=1        rows      distinct users
   group              12,948        1,853
 ```
 
-**Topic subscriptions, by how they most likely came to exist:**
+**Topic subscriptions by likely origin:**
 
 | | rows | share |
 |---|---|---|
@@ -602,117 +533,121 @@ type × status=1        rows      distinct users
 | subscriber **replied** in that topic | 355 | 23% |
 | subscriber **never posted** in that topic | 428 | 28% |
 
-**1,091 of 1,519 (72%) correlate exactly with involvement — authored or replied.** That is the
-fingerprint of legacy auto-subscribe-on-involvement: precisely the mechanism Ian just outlawed. The
-428 never-posted rows are the population most likely to represent a deliberate "subscribe to this
-thread" click.
+**1,091 of 1,519 (72%) correlate exactly with involvement** — the fingerprint of legacy
+auto-subscribe-on-involvement, the mechanism now outlawed. The 428 never-posted rows are the
+population most likely to be deliberate clicks.
 
-**How much of it is actually live:**
+**How much is actually live:**
 
-| | rows | distinct users |
+| | rows | users |
 |---|---|---|
-| on a topic with **any reply in the last 90 days** | **112** | **49** |
-| on a topic dormant 90+ days | 1,407 | — |
+| topic has **any reply in the last 90 days** | **112** | **49** |
+| dormant 90+ days | 1,407 | — |
 
-**93% of the legacy subscriptions are dormant.** The real, present-day email/bell exposure is
-**49 people across 112 subscriptions**, not 383 across 1,519.
-
-**Age:** 321 rows from 2026, 583 from 2025, 448 from 2024, 167 from 2023 — roughly three-quarters
-predate this year.
-**Concentration:** one user (wp id 779) holds 335 topic subscriptions — 22% of the entire table.
-Any per-user framing of "the average member" is distorted by this account; check it before
-generalising.
-**Measured mail:** 31 discussion/reply emails in the trailing 14 days (§1.3).
+**93% dormant.** Present-day exposure is **49 people / 112 subscriptions**, not 383 / 1,519.
+**Age:** 321 rows from 2026, 583 from 2025, 448 from 2024, 167 from 2023.
+**Concentration:** one account (wp id 779) holds 335 topic subs — 22% of the table; it distorts any
+"average member" framing.
+**Mail:** 31 discussion/reply sends in the trailing 14 days.
 
 ---
 
-## 8. OPEN FOR IAN — two decisions this lane must not make, plus small ones
+## 9. OPEN FOR IAN
 
-### 8.1 The email contradiction (Ruling 6 vs. the mail you got on 7/26)
+### 9.1 Per-event email vs digest-only
 
-**The conflict.** Spec Ruling 6 turned per-event BuddyBoss discussion email permanently OFF and
-made the weekly digest the only email surface. On 2026-07-26 you received a per-event discussion
-email and called it legitimate and wanted. Both cannot stand.
+The original ruling turned all per-event BuddyBoss discussion email permanently off with the weekly
+digest as the only surface. On 2026-07-26 Ian received a per-event discussion email and called it
+legitimate and wanted.
 
-**The two positions are narrower than they look** — this is the finding that may dissolve most of
-the conflict, and it comes from the forum-email-audit lane's end-to-end trace (§1.3):
-
-- The mail you received was a **"New discussion:"** email — the **forum**-subscription path
-  (`bbp_notify_forum_subscribers` → `bb_send_forums_subscribed_discussion` → template 64928),
-  fired because you hold a **forum** subscription. That population is **46 subscriptions / 38
-  users**, and the event is rare: it fires only when someone *starts a thread* in a forum you
-  follow.
-- What Ruling 6 was written to stop is the **other** path: **"New reply"** mail from **topic**
-  subscriptions — **1,519 subscriptions / 383 users** — which fires on *every reply*. That is the
-  high-frequency surface, and it is the one this spec's follow feature feeds.
-
-They are different subscription types, different triggers, and different frequency shapes. Ruling 6
-collapsed them into one switch; the evidence says they deserve two.
-
-**Resolutions, for your call:**
+**The positions are narrower than they look.** The mail he received was a **"New discussion"** email
+— the **forum**-subscription path (46 subs / 38 users), which fires only when someone *starts* a
+thread. The blanket-off ruling was written against the **"New reply"** path — **topic**
+subscriptions (1,519 / 383), firing on *every reply*. Different types, triggers, frequency shapes;
+one switch was covering two things.
 
 | | Posture | Consequence |
 |---|---|---|
-| **A** | **Split the switch** (recommended by the evidence, not decided here): keep per-event **"new discussion in a forum you follow"** mail — the one you liked — and route per-reply follow-up mail to the weekly digest only. | You keep exactly the email you called wanted. The high-frequency surface never turns on. Two clearly different things stop sharing one switch. |
-| **B** | **An explicit follow earns the email.** Since following is now a deliberate click, per-event mail for followed threads is consented-to by definition; send it, and let the toggle be the unsubscribe. | Most generous reading of opt-in. But a member who follows an active thread can receive many emails a day, and the only volume control is unfollowing entirely — no "in-app only" middle setting exists in this spec (§2.9). |
-| **C** | **Original Ruling 6** — all per-event off, digest only. | Simplest and quietest. But it kills the 7/26 email you said you wanted, and the measured volume (31 sends / 14 days) suggests the problem it was solving is not currently large. |
+| **A** | **Split the switch** — keep per-event "new discussion in a forum you follow"; route per-reply follow-ups to the weekly digest | Keeps exactly the email Ian called wanted; the high-frequency surface never turns on |
+| **B** | **An explicit ✉ toggle earns the email** — with opt-in now the rule, per-event mail for a thread you deliberately ticked is consented-to by definition | Most consistent with the two-toggle model. But an active thread can mean many emails a day, and the only volume control is switching ✉ off |
+| **C** | **Original ruling** — all per-event off, digest only | Simplest and quietest; kills the 7/26 email, and 31 sends/14 days suggests the problem it solved is not currently large |
 
-Note that under **any** option the reversal has already removed the original danger: the old §1.3
-worry was auto-subscribing every involved member and multiplying a live fan-out. Opt-in makes that
-impossible. **The email decision is now about what members want, not about containing a blast
-radius** — which is why it is yours and not the spec's.
+**The two-toggle ruling leans toward B** — a per-discussion ✉ toggle that never sends email is a
+contradiction — but that is an inference from Ian's design, not his decision, so it stays here.
+Note the original danger is already gone either way: the blanket-off was a precondition of
+*auto-subscribe multiplying fan-out*, which opt-in makes impossible.
 
-*(One correction worth carrying into the decision: the per-event mail is **synchronous with the
-post**, not cron-driven. The previous revision blamed `lg-wp-cron.timer`; that timer drives the
-digest, not this. Turning off cron would not have stopped these emails.)*
+### 9.2 The 1,519 existing subscriptions
 
-### 8.2 The 1,519 subscriptions live already has
-
-Opt-in-only is a rule for **new** follows. It does not say what happens to subscriptions that
-already exist and are emailing people today. **No option below is recommended as "obviously
-right"; the trade is real.** Numbers and their derivation are in §7. Mass-unsubscribing real
-members is explicitly off the table.
+Opt-in governs **new** follows and says nothing about subscriptions that already exist and are
+emailing people today. Under §5's mapping these are all **✉ email** subscriptions — one toggle, not
+two, which simplifies every option below. Mass-unsubscribing real members is off the table.
 
 | | Option | Member-visible consequence |
 |---|---|---|
-| **A** | **Grandfather everything, change nothing.** All 1,519 stay; they simply become "follows" in the new vocabulary. | Nobody loses anything and nobody is surprised. But ~1,091 subscriptions that were created by the auto-subscribe you just banned keep running — the rule applies going forward only, and the back catalogue quietly contradicts it. |
-| **B** | **Grandfather, but surface and make exitable** *(the smallest honest option)*: change no data; the card, modal, sheet, and ⋯ row all show **Following** on those threads, so every legacy subscription becomes visible and one click from off. | Nobody loses anything, and for the first time members can *see* what they are subscribed to and leave. Converts hidden state into visible state — which is arguably what "opt-in" is really asking for. Cost: the 1,091 non-consensual subscriptions persist until each member acts. |
-| **C** | **B + retire the dormant tail**: unsubscribe the **1,407** rows on threads with no reply in 90 days; keep the **112** live ones. | Clears 93% of the legacy state while touching nobody who is currently receiving anything — dormant threads are, by definition, sending no mail today. Risk: if a dormant thread revives, a member who genuinely subscribed loses a notification they wanted and will never know why. |
-| **D** | **B + retire the involvement-created ones**: drop the **1,091** authored-or-replied rows, keep the **428** never-posted ones. | Philosophically the closest match to the ruling — it removes exactly what the banned mechanism created. But it unsubscribes **topic authors from their own threads** (736 rows), which most members would experience as a regression, and "authored or replied" is a correlation, not proof of how the row was made. |
-| **E** | **Mass unsubscribe all.** | Off the table per the lane brief, listed for completeness: 383 members silently stop hearing about threads some of them deliberately chose, with no way to recover the list once deleted. |
+| **A** | **Grandfather, change nothing** — all 1,519 become ✉-on | Nobody loses anything, nobody is surprised. But ~1,091 subscriptions created by the banned mechanism keep running; the rule applies forward only |
+| **B** | **Grandfather but SURFACE and make exitable** — no data change; card, modal, sheet, ⋯ row and every email footer show ✉ on and are one click from off | Nobody loses anything, and for the first time members can *see* what they're subscribed to and leave. Turns hidden state into visible state — arguably what opt-in is really asking for. Cost: the 1,091 persist until each member acts |
+| **C** | **B + retire the dormant tail** — unsubscribe the 1,407 on threads with no reply in 90 days, keep the 112 live | Clears 93% while touching nobody currently receiving anything. Risk: if a dormant thread revives, a genuine subscriber loses mail they wanted and never knows why |
+| **D** | **B + retire the involvement-created** — drop the 1,091 authored-or-replied, keep the 428 never-posted | Closest match to the ruling's spirit. But it unsubscribes **736 topic authors from their own threads**, which most members would read as a regression, and the heuristic is correlation, not proof |
+| **E** | **Mass unsubscribe all** | Off the table; listed for completeness — 383 members silently lose threads some chose, unrecoverable once deleted |
 
-**Two things to weigh alongside:** (1) the practical exposure is **49 people / 112 subscriptions**,
-so the difference between A/B and C is much smaller in lived experience than the raw 1,519
-suggests; (2) whatever you choose interacts with §8.1 — if per-reply email stays off (8.1 A or C),
-the legacy topic subscriptions are a *bell-volume* question, not an *inbox* question, and the case
-for touching them at all weakens considerably.
+**Weigh alongside:** practical exposure is 49 people / 112 subscriptions, so A/B vs C differ far
+less in lived experience than 1,519 suggests; and this interacts with §9.1 — if per-reply email
+ends up off, the legacy rows are a *bell-volume* question, not an *inbox* one, and the case for
+touching them weakens.
 
-**Also flagged, not folded in:** the **12,948 group subscriptions / 1,853 users** are a third
-population this spec has never addressed. Group-linked forums route discussion mail through the
-GROUP-subscriber branch (template 64927) rather than the forum one, so they are a live email path
-with 36× the reach of the forum subscriptions. **Out of scope here and deliberately not proposed
-against** — but no decision in §8.1 or §8.2 should be described as "covering the subscriptions"
-while this sits untouched.
+**Flagged, not folded in:** the **12,948 group subscriptions / 1,853 users** are a third population
+this spec has never addressed. Group-linked forums route discussion mail through the GROUP branch
+(template 64927) — a live email path with 36× the forum reach. Out of scope and deliberately not
+proposed against, but no §9.1/§9.2 decision should be described as "covering the subscriptions"
+while it sits untouched.
 
-### 8.3 Smaller open questions (none block the mock)
+### 9.3 Smaller open questions
 
-1. **Card control on mobile** (§2.2a): mobile cards use hub-polish's `.lg-act-*` bar, not
-   `.fc-actions`; `.fc-share` is already desktop-only. Does Follow appear on mobile cards, and in
-   which bar — or is the mobile sheet header (§2.2c) enough there?
-2. **Mobile sheet header** (§2.2c): you named the card and the modal; the ≤640 sheet has no
-   S/M/L/XL cluster to sit beside. Spec'd as a peer of the × in `.lrs-hd`. Confirm or redirect.
-3. **Digest recap** (§2.8): may public-forum topic TITLES appear, or names + counts only?
-4. **Content cards** (§2.2a): v1 puts Follow on discussion cards only. Should articles/videos get
-   "follow the comments" later, or never?
-5. **Stale code comment** at forums.js:4231 says "3 panel sizes (Ian): S / M / L" while `SIZES` has
-   four. Cosmetic, adjacent to our change, not fixed by this lane — worth a one-liner from whoever
-   touches that block next.
+1. **Card control on mobile** (§2.2) — mobile cards use `.lg-act-*`, not `.fc-actions`; `.fc-share`
+   is already desktop-only. Do both toggles appear on mobile cards, in which bar, or is the sheet
+   header enough? **Frame 2 exists to answer this.**
+2. **Mobile sheet header** (§2.4) — Ian named the card and the modal; ≤640 has no size cluster.
+   Spec'd as peers of the ×. Confirm or redirect.
+3. **Digest recap** (§3.7) — may public-forum topic TITLES appear, or names + counts only?
+4. **Content cards** (§2.2) — v1 is discussion cards only. Should articles/videos get "email me
+   about new comments" later, or never?
+5. **Two icons vs one expanding control** (§2.1) — decided by frame 1.
+6. Stale comment at forums.js:4231 says "3 panel sizes (Ian): S / M / L" while `SIZES` has four.
+   Cosmetic, adjacent, not fixed by this lane.
 
 ---
 
-*Written from static study of `main@c10df43` on dev1, plus read-only measurement of LIVE via
-`live-ro` on 2026-07-27 (§7) — the subscription and email-volume numbers are measured, not
-asserted. Claims about BB internals are cited to NOTIFICATIONS-AUDIT.md and the forum-email-audit
-lane's live trace; everything tagged "verify" in §6 must be proven on dev2 before the build lane
-asserts it. No build has started and none may start until Ian approves §0's rulings and answers
-§8.1 and §8.2.*
+## 10. Delta summary (what a build lane touches)
+
+| # | File | Change |
+|---|---|---|
+| 1 | `profile-app/sql/` new migration | widen `notifications_type_check`; **new `forums.topic_follow` table** (§5) |
+| 2 | `profile-app/src/Notifications.php:38-43` | add `forum.followed_topic` to `HUB_TYPES` |
+| 3 | `profile-app/` internal-notify | **fan-out form** — expand one event to followers (§5) |
+| 4 | `lg-shared/notify-bridge.php` | leg 4 in `lg_notify_on_reply` (:170). **No subscribe calls anywhere else — that is the ruling** |
+| 5 | `bb-mirror/api/v0/follow.php` **new** | batch GET + per-channel POST + remove_mention (§3.2, §3.6) |
+| 6 | `bb-mirror/api/v0/follow-recap.php` **new** | loopback recap counts (§3.7) |
+| 7 | `platform/mu-plugins/lg-discussion-unsub.php` **new** | signed link builder + `/discussions/unsubscribe/` confirm page (§4) |
+| 8 | `platform/nginx/strangler-bb-mirror.conf` | rewrites for follow + follow-recap; route for the unsub page |
+| 9 | `bb-mirror/web/forums/_reply-render.php:666` | `feed_follow_btns()` beside `feed_save_btn()` |
+| 10 | `bb-mirror/web/forums/_feed.php:1617-1621` | emit them in the topic card `.fc-actions` |
+| 11 | `bb-mirror/web/forums.js:4215-4220` | `.lg-dmodal__notify` + `.lg-dmodal__email`; state where the title is set (:4354) |
+| 12 | `bb-mirror/web/forums.js` new module (template = fc-save :3767-3841) | batch hydrate + delegated optimistic toggles across all three surfaces |
+| 13 | `webroot/hub-polish.js:3628` | `.lrs-notify` + `.lrs-email` in `.lrs-hd` |
+| 14 | `bb-mirror/web/forums.css` | toggle styles + anon hide |
+| 15 | `lg-shared/social-modals.js:173-186, :197-212` | `notifText` case; ⋯ button + two-bit popover; handlers |
+| 16 | `lg-shared/site-header.css:560+` / `webroot/app-settings.js:255-268` | popover light + dark |
+| 17 | `membership-pages/web/manage-subscription.php:167-176` | third pref row: **Discussion emails** master (§6) |
+| 18 | `lg-weekly-digest` | recap section (§3.7) |
+
+One new event type. One new small table. Two new WP-pool endpoints. One unsub mu-plugin.
+**Zero automatic subscription writes.**
+
+---
+
+*Written from static study of `main@c10df43` on dev1, read-only measurement of LIVE via `live-ro`
+(§8), and read-only inspection of the deployed BuddyBoss source for the unsubscribe machinery
+(§4.1). Numbers are measured, not asserted. Items tagged "verify" must be proven on dev2 before a
+build lane asserts them. No build has started and none may start until Ian approves §0 and answers
+§9.1 and §9.2.*
