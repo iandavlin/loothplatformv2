@@ -36,6 +36,28 @@ namespace Looth\ProfileApp;
  * would wipe their whole recap before they opened it, and the failure would look
  * exactly like the feature working. Awaiting Ian's ruling — WEEKLY-DIGEST-RECAP.md §9.
  *
+ * A FIFTH WAS MEASURED, COSTED AND DECLINED: an item already sent in a PER-EVENT
+ * email. Read state cannot catch it — an item can be unread in the bell and still
+ * have been emailed — so it is a genuinely separate axis, and the correct instrument
+ * would be a `notifications.emailed_at` stamp (NOT a scrape of wp_fsmpt_email_logs,
+ * which retains 14 days, matches on subject string, and records a recipient address
+ * rather than which item the mail was about). It is not built because the surface
+ * does not exist yet. Measured on LIVE 2026-07-27:
+ *
+ *   - connections, DMs and reactions have NO per-event email sender AT ALL — they
+ *     are our features in this database, and nothing emails about them. That is 87%
+ *     of listable recap items with a structurally impossible overlap.
+ *   - forums are the only surface BuddyBoss owns, and exactly THREE `forum.*` bell
+ *     rows have ever existed on live (ids 789, 790, 825).
+ *   - overlappable outbound mail: 5 sends in 14 days, list size 1,858.
+ *
+ * The overlap rate itself is UNTESTED, not measured-as-zero: the last overlappable
+ * email (07-24 22:39) predates the first bell row of a type that could overlap it
+ * (07-25 02:39) by four hours, so the comparable window contains zero events. The
+ * upper bound holds; the rate is unknown. Do not restate this as "no overlap".
+ * Triggers to revisit, and the script that evaluates them, are in
+ * docs/atlas/RECAP-SUPPRESSION-PROPOSAL.md §2 / dev/measure-suppression-axes.sh.
+ *
  * CONSEQUENCE WORTH STATING: the EMPTY section is now the COMMON case for anyone
  * who keeps up, not an edge case. It must render clean — and it does: the renderer
  * returns '' and the smart code emits nothing at all.
