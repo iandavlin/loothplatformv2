@@ -886,80 +886,16 @@
     // breaks that assumption shows up here instead of silently posting nowhere.
   }
 
-  // Inline reply box (Facebook-style) under a comment, @mentioning its author.
-  // Submit posts via submitReply(). Idempotent per column.
-  function openReplyBox(col, author, stub) {
-    // Same gate as openComposerSheet, at this composer's own door. fb-inline is a
-    // SECOND write-capable composer (its own textarea + submit), so gating only the
-    // sheet would leave the desktop in-thread box wide open to anon.
-    if (!lgCanPost()) { openSignInModal(); return; }
-    var existing = col.querySelector('.lg-fb-replybox');
-    if (existing) { var t0 = existing.querySelector('textarea'); if (t0) t0.focus(); return; }
-    var box = document.createElement('div'); box.className = 'lg-fb-replybox';
-    var avi = myAvatarSrc();
-    var aviEl = document.createElement('span'); aviEl.className = 'lg-fb-myavi';
-    if (avi) aviEl.innerHTML = '<img src="' + avi + '" alt="">';
-    var wrap = document.createElement('div'); wrap.className = 'lg-fb-replywrap';
-    var ta = document.createElement('textarea'); ta.className = 'lg-fb-replyinput'; ta.rows = 1; ta.placeholder = 'Write a reply…'; ta.setAttribute('autocomplete', 'off');
-    var name = author ? (author.textContent || '').trim().split(/[\s,]/)[0] : '';
-    if (name) ta.value = '@' + name + ' ';
-    var send = document.createElement('button'); send.type = 'button'; send.className = 'lg-fb-send'; send.textContent = 'Post';
-    send.disabled = false;
-    wrap.appendChild(ta); wrap.appendChild(send);
-    box.appendChild(aviEl); box.appendChild(wrap);
-    col.appendChild(box);
-    ta.focus();
-    try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {}
-    ta.addEventListener('input', function () { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; });
-    send.addEventListener('click', function () { submitReply(ta.value, box, send, stub); });
-  }
-
-  // Post the reply via the canonical BuddyBoss flow: lazily fetch the auth nonce
-  // from /bb-mirror-api/v0/auth.php, then POST to /wp-json/buddyboss/v1/reply
-  // with topic/forum (from the card's reply CTA) and reply_to (this reply's id,
-  // for nesting). On success, optimistically show the new comment.
-  function submitReply(text, box, send, stub) {
-    text = (text || '').trim();
-    if (!text) return;
-    send.disabled = true;
-    var note = box.querySelector('.lg-fb-note') || document.createElement('div');
-    note.className = 'lg-fb-note'; note.textContent = 'Posting…';
-    if (!note.parentNode) box.appendChild(note);
-
-    var card = stub.closest('.feed-card');
-    var cta = card && card.querySelector('.feed-card__reply-cta[data-frm-open]');
-    // Inside #looth-rep-sheet (the mobile discussion modal) the thread is fetched
-    // fresh — no .feed-card ancestor — so source the ids off the sheet itself.
-    var sheet = !card && stub.closest('#looth-rep-sheet');
-    var topicId = parseInt((cta && cta.dataset.topicId) || (card && card.dataset.topicId) || (sheet && sheet.getAttribute('data-tid')) || '', 10);
-    var forumId = parseInt((cta && cta.dataset.forumId) || (sheet && sheet.getAttribute('data-fid')) || '', 10);
-    var replyTo = parseInt(stub.getAttribute('data-lg-replyto') || '0', 10);
-    var myName = 'You';
-
-    fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d || !d.authenticated) throw new Error('Sign in to reply.');
-        myName = d.display_name || 'You';
-        var payload = { topic_id: topicId, forum_id: forumId, content: text };
-        if (replyTo) payload.reply_to = replyTo;
-        return fetch('/wp-json/buddyboss/v1/reply', {
-          method: 'POST', credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': d.nonce },
-          body: JSON.stringify(payload)
-        });
-      })
-      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-      .then(function (res) {
-        if (!res.ok) throw new Error((res.j && (res.j.message || res.j.code)) || 'Could not post.');
-        appendOptimisticReply(stub, myName, text);
-        box.parentNode && box.remove();
-      })
-      .catch(function (e) {
-        note.textContent = (e && e.message) || 'Could not post.';
-        send.disabled = false;
-      });
-  }
+  /* fb-inline (openReplyBox + its submit) DELETED — phase 3, 2026-07-27.
+     A SECOND write-capable composer: own textarea, own submit, own NATIVE
+     /wp-json/buddyboss/v1/reply create (W3) — one of the five paths that made G8
+     depend on a mu-plugin hook instead of on there being one write path. Every
+     caller now routes openReplyComposer -> the ONE composer (E4/E5/E6), which on
+     desktop wears the modal skin, so nothing lost an affordance.
+     Its .lg-fb-replybox / .lg-fb-replyinput styles go with it (D3), and
+     textarea.lg-fb-replyinput comes out of the mention engine's editor whitelist
+     (forums.js editorOf, D2) — an editor that no longer exists must not stay
+     advertised there. */
 
   // Show the just-posted reply immediately (the real one nests on next load).
   function appendOptimisticReply(stub, name, text) {
@@ -3260,10 +3196,6 @@
       '#looth-rep-sheet .lg-fb-reply::before,#looth-rep-sheet .lg-fb-time::before{content:"·";margin:0 6px;color:#8a8d91;font-weight:400}',
       '#looth-rep-sheet .lg-fb-time{font-weight:400;color:#8a8d91}',
       '#looth-rep-sheet .lg-fb-like.is-on{color:#1877f2}',
-      '#looth-rep-sheet .lg-fb-replybox{display:flex;gap:8px;align-items:flex-start;margin:8px 0 2px;width:100%}',
-      '#looth-rep-sheet .lg-fb-replywrap{display:flex;align-items:flex-end;gap:6px;flex:1 1 auto;background:var(--lguser-bubble,#eceff3);border-radius:18px;padding:4px 6px 4px 12px}',
-      '#looth-rep-sheet .lg-fb-replyinput{flex:1 1 auto;border:0;background:none;resize:none;outline:none;font:14px/1.4 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);max-height:120px;padding:4px 0}',
-      '#looth-rep-sheet .lg-fb-send{border:0;background:none;cursor:pointer;color:var(--lg-sage-d,#52613d);font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);padding:6px 8px}',
       // also apply the FB "·"-separated action format to the INLINE feed comments
       '.feed-page .lg-fb-actions{gap:0!important}',
       '.feed-page .lg-fb-act{font-weight:700!important}',
@@ -4930,7 +4862,14 @@
   // lg_bb_mirror_can_post() is true (_feed.php:1300/:1341/:1555/:1645), and — this is
   // the point — they predate the data-lg-can-post attribute, so they are present in
   // OLD html too. Measured on dev2: anon 0/0/0/0/0, member 7/7/2/1/2.
-  var LG_CANPOST_MARKERS = '.fc-composer,[data-frm-open],[data-ntm-open],.lg-newpost,.forum-header__new-post';
+  // PHASE 3: .fc-composer REMOVED from this list — the element no longer exists, and
+  // a marker that can never match is a marker that silently weakens the fallback.
+  // The remaining four still separate member from anon on OLD cached html (measured
+  // on dev2 — anon 0/0/0/0, member 7/2/1/2), which is the property that matters:
+  // this is the branch that decides can-post when data-lg-can-post is absent, i.e.
+  // exactly the partial-deploy case that would otherwise hand every logged-out
+  // reader a live composer.
+  var LG_CANPOST_MARKERS = '[data-frm-open],[data-ntm-open],.lg-newpost,.forum-header__new-post';
   function lgCanPost() {
     var b = document.body, v = b && b.getAttribute('data-lg-can-post');
     if (v === '1') return true;
@@ -5452,17 +5391,11 @@
       // .fc-actions row (reactions left, comment + ☆ save right) is THE row;
       // forums.css owns its desktop layout. Mobile action row untouched.)
 
-      // ── Reply composer. The DESKTOP card composer is .fc-composer > .fc-composer__wrap
-      // (the input "bubble") > input.fc-composer__input. The wrap hardcodes a dark
-      // var(--bg-card) bubble + the input text is dark → invisible on a light theme.
-      // Theme the bubble to the comment-bubble/pill surface and bind the input text
-      // to --lguser-ink (default/dark fall back to --bg-card + --fg, staying legible).
-      P + ' .fc-composer__wrap{background:var(--lguser-bubble,var(--lguser-pill,var(--bg-card,#eceff3)))!important;color:var(--lguser-mute,var(--fg-muted,#6b6f6b))!important}',
-      P + ' .fc-composer__input{color:var(--lguser-ink,var(--fg,#1a1d1a))!important;background:transparent!important}',
-      P + ' .fc-composer__input::placeholder{color:var(--lguser-mute,var(--fg-muted,#6b6f6b))!important}',
-      // also cover the native reply-form textarea + the inline fb-composer input
-      // (same dark-on-light defect via forums.css hardcoded white bg + color:var(--fg)).
-      P + ' .reply-form,' + P + ' .reply-form textarea,' + P + ' .feed-card__inline-compose .fic-input{' +
+      // The single-topic page's reply form: forums.css hardcodes a white bg +
+      // color:var(--fg), which is dark-on-light-theme invisible. Bind it to the user
+      // tokens instead. (The .fc-composer__wrap/__input and .fic-input rules that
+      // used to ride along here went with those composers in phase 3.)
+      P + ' .reply-form,' + P + ' .reply-form textarea{' +
         'background:var(--lguser-card,var(--bg-card,#fff))!important;color:var(--lguser-ink,var(--fg,#1a1d1a))!important;' +
         'border-color:var(--lguser-line,#e3ddd0)!important}',
 

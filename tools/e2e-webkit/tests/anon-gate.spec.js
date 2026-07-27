@@ -106,8 +106,11 @@ test.describe('anon posting gate', () => {
     // carries server-rendered post affordances means the viewer can post.
     await anonHub(page, context, { canPost: null, stripFlag: true });
     await page.evaluate(() => {
-      const d = document.createElement('div');
-      d.className = 'fc-composer';        // the marker _feed.php emits only when $can_post
+      // A marker _feed.php emits ONLY when $can_post. (Was .fc-composer until phase 3
+      // deleted that element — a marker that can never match would have made this
+      // test pass for the wrong reason, i.e. by no longer testing anything.)
+      const d = document.createElement('button');
+      d.setAttribute('data-frm-open', '');
       document.body.appendChild(d);
     });
     const r = replyAction(page);
@@ -149,6 +152,24 @@ test.describe('anon posting gate', () => {
   // THE OTHER HALF: gating the composer must not gate READING. Anon opening the
   // sheet and reading the thread is the public teaser; losing it would be a
   // regression in the opposite direction.
+  // PHASE 3 GUARD: .fc-composer was one of the five can-post markers and is now
+  // deleted. This pins the property that actually matters — the four survivors must
+  // still separate member from anon — on OLD html as well as new, since the absent
+  // branch exists precisely for pages served before the flag shipped.
+  test('the can-post markers still separate anon from member without .fc-composer', async ({ page, context }) => {
+    const M = '[data-frm-open],[data-ntm-open],.lg-newpost,.forum-header__new-post';
+    await anonHub(page, context, { canPost: null, stripFlag: true });
+    expect(await page.evaluate((m) => !!document.querySelector(m), M)).toBe(false);
+    expect(await page.evaluate((m) => m.split(',')
+      .every((s) => document.querySelectorAll(s).length === 0), M)).toBe(true);
+    // The gate must hold on this page: no marker, no flag => sign-in modal, no composer.
+    const r = replyAction(page);
+    await r.scrollIntoViewIfNeeded();
+    await r.tap();
+    await page.waitForSelector('#looth-signin-sheet.is-open', { timeout: 10_000 });
+    expect(await page.locator('#looth-comp-sheet').count()).toBe(0);
+  });
+
   test('anon can still OPEN the sheet and READ the replies', async ({ page, context }) => {
     await anonHub(page, context, { canPost: '0' });
     const r = replyAction(page);
