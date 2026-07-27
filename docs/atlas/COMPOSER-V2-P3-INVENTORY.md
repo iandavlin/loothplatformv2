@@ -161,6 +161,21 @@ alone, because composer v2 is path-gated to `/hub` and that page is not. Gate mu
 "stopgap" to "backstop": it stops being load-bearing (which is what "the stopgap stops
 being needed" asked for) while still covering any future native path for free.
 
+> **CORRECTION 2026-07-27 — the W5 ruling rested on a wrong fact of mine.** I told
+> keeper composer v2 was **not loadable** on the single-topic page, because
+> `hub-polish.js` is "path-gated to `/hub`" and that page isn't. It **is**:
+> `LG_BB_MIRROR_PUBLIC_PATH` is `/hub`, so the page is `/hub/<forum>/<topic>/`, which
+> matches `pwa.js:44`'s `onHub` test. Measured on live — hub-polish.js present,
+> `window.lgOpenTopicMobile` defined, `.reply-form-wrap` on the same page. I had
+> confused hub-polish's internal `onHubPath()` (which gates only two late features)
+> with the pwa.js injection gate that decides whether the file loads at all.
+>
+> **What this changes:** retarget-only for W5 is now a *scope* choice, not a capability
+> limit — full v2 conversion is available if keeper wants it. **Lane recommendation is
+> unchanged** (retarget-only this phase: the form has working Quill + photo tray +
+> `parent_reply_id` threading, and converting it is UX-visible and deserves its own Ian
+> gate). Flagged so the ruling can be re-made on correct facts. W1–W4 are unaffected.
+
 *Original question retained below for the record.*
 
 ## 5a. The question as posed (superseded by the ruling above)
