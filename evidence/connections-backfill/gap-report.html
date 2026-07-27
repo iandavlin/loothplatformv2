@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Connections backfill gap — live audit 2026-07-27</title>
+<style>
+:root{--bg:#0f1115;--card:#171a21;--line:#262b36;--tx:#e6e9ef;--dim:#98a1b3;--red:#ff6b6b;--amb:#ffb454;--grn:#4ec9a0;--blu:#6ea8fe}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:1000px;margin:0 auto;padding:0 20px 64px}
+.banner{background:#3a1d1d;border-bottom:3px solid var(--red);padding:14px 20px;font-size:13px;line-height:1.5}
+.banner b{color:var(--red);letter-spacing:.04em}
+.banner code{background:#00000055;padding:1px 5px;border-radius:3px;font-size:12px}
+h1{font-size:26px;margin:34px 0 6px;letter-spacing:-.02em}
+.sub{color:var(--dim);margin:0 0 30px;font-size:14px}
+h2{font-size:17px;margin:38px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.verdict{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--amb);border-radius:8px;padding:20px 22px;margin:24px 0}
+.verdict p{margin:0 0 10px}.verdict p:last-child{margin:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:20px 0}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+.kpi .v{font-size:30px;font-weight:650;letter-spacing:-.02em;line-height:1.1}
+.kpi .l{color:var(--dim);font-size:12px;margin-top:6px;text-transform:uppercase;letter-spacing:.06em}
+.kpi.red .v{color:var(--red)}.kpi.amb .v{color:var(--amb)}.kpi.grn .v{color:var(--grn)}.kpi.blu .v{color:var(--blu)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;position:sticky;top:0;background:var(--bg)}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:hover{background:#ffffff08}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11.5px;font-weight:600}
+.pill.late{background:#4a2318;color:var(--amb)}
+.pill.ok{background:#1b3a2e;color:var(--grn)}
+.bar{display:flex;align-items:center;gap:12px;margin:7px 0}
+.yl{width:44px;color:var(--dim);font-size:13px;font-variant-numeric:tabular-nums}
+.track{flex:1;background:#00000044;border-radius:4px;height:20px;overflow:hidden}
+.track i{display:block;height:100%;background:linear-gradient(90deg,#8a5a2b,var(--amb));border-radius:4px}
+.bv{width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:13px}
+code.blk{display:block;white-space:pre;overflow-x:auto;background:#0a0c10;border:1px solid var(--line);border-radius:8px;padding:14px 16px;font-size:12.5px;line-height:1.5;color:#cfd6e4;margin:10px 0}
+.note{color:var(--dim);font-size:13px}
+b.hl{color:var(--amb)}
+@media(prefers-color-scheme:light){
+ :root{--bg:#fbfcfd;--card:#fff;--line:#e2e6ec;--tx:#151922;--dim:#5d6577}
+ .banner{background:#fdecec}
+ .track{background:#eceff4}
+ code.blk{background:#f5f7fa;color:#1d222c}
+ .pill.late{background:#fdf0e2;color:#9a5a12}.pill.ok{background:#e5f6ef;color:#1a7d5c}
+}
+</style></head><body>
+
+<div class="banner">
+<b>DRY RUN — NOTHING HAS BEEN WRITTEN.</b>
+Generated <code>2026-07-27</code> by the <code>connections-backfill</code> lane on <b>dev2</b>, from a
+<b>READ-ONLY</b> snapshot of <b>LIVE</b>.
+Sources: <code>looth_import.wp_bp_friends</code> (11,363 rows) &middot;
+<code>profile_app.public.connections</code> (10,862 rows) &middot;
+<code>profile_app.public.wp_user_bridge</code>.
+No row on live was created, altered or deleted to produce this page. The proposed insert was executed and
+rolled back against a <b>local throwaway replica</b> on dev2, never against live.
+</div>
+
+<div class="wrap">
+<h1>The connections gap</h1>
+<p class="sub">Were the BuddyBoss friendships backfilled into the new app at the June cutover? Mostly yes — but a specific group was left behind.</p>
+
+<div class="verdict">
+<p><b class="hl">Yes, the backfill ran, and it mostly worked</b> — 10,609 of the 11,363 legacy friendships are present in the new app, carrying their original dates all the way back to June 2023. Ian's hypothesis that nothing came across is <b>not</b> what happened.</p>
+<p>But <b class="hl">750 friendships were dropped</b> and never re-imported. The cause is not random: the backfill only imported friendships between people who already had a row in <code>wp_user_bridge</code> when it ran. <b>241 members were added to that bridge after the backfill</b> — most of them on 2026-06-11, nine days later — and <b>748 of the 750 missing friendships involve one of those late-added members</b>. Only 2 rows are unexplained by that single cause.</p>
+<p>The script that did the import, <code>tools/backfill-bb-connections.sh</code>, <b>predicted this in its own header</b>: <i>"RE-RUN AT CUTOVER … rows skipped today are users not yet in wp_user_bridge (unprovisioned) … the ON CONFLICT guard makes re-runs safe."</i> That re-run never happened.</p>
+</div>
+
+<h2>Ian's own account (WP user 1, resolved through the bridge — not by display name)</h2>
+<div class="grid">
+<div class="kpi red"><div class="v">136</div><div class="l">connections missing</div></div>
+<div class="kpi amb"><div class="v">83</div><div class="l">accepted, gone</div></div>
+<div class="kpi amb"><div class="v">53</div><div class="l">pending, gone</div></div>
+<div class="kpi grn"><div class="v">100%</div><div class="l">explained by late-added members</div></div>
+</div>
+<p class="note">Every single one of Ian's 136 missing connections is with someone in the late-added cohort. He did not lose a random slice — he lost precisely the people the backfill could not yet see.</p>
+
+<h2>The whole membership</h2>
+<div class="grid">
+<div class="kpi red"><div class="v">750</div><div class="l">friendships to restore</div></div>
+<div class="kpi"><div class="v">355</div><div class="l">accepted</div></div>
+<div class="kpi"><div class="v">395</div><div class="l">pending</div></div>
+<div class="kpi amb"><div class="v">306</div><div class="l">members affected</div></div>
+<div class="kpi red"><div class="v">70</div><div class="l">members who lost &gt;80% of theirs</div></div>
+<div class="kpi blu"><div class="v">4</div><div class="l">rows genuinely unmappable</div></div>
+</div>
+
+<p>There are <b>two different kinds of victim</b>, and they need telling apart:</p>
+<ul>
+<li><b>The late-added members (70 of them lost more than 80%).</b> These people log in and the platform looks empty — they see almost none of the connections they built up over three years. This is the severe class.</li>
+<li><b>The long-established, heavily-connected members</b> — Ian, and others like him — lost 5&ndash;12%: every one of their friends who happens to be in the late-added group. Less visible, but it is why Ian noticed.</li>
+</ul>
+
+<h2>When the missing friendships were originally made</h2>
+<div class=bar><span class=yl>2023</span><div class=track><i style='width:25.0%'></i></div><span class=bv>100</span></div>
+<div class=bar><span class=yl>2024</span><div class=track><i style='width:100.0%'></i></div><span class=bv>400</span></div>
+<div class=bar><span class=yl>2025</span><div class=track><i style='width:34.2%'></i></div><span class=bv>137</span></div>
+<div class=bar><span class=yl>2026</span><div class=track><i style='width:28.2%'></i></div><span class=bv>113</span></div>
+<p class="note">The loss spans the entire history, not one window — further evidence this is a <i>who</i> problem (which members were bridged), not a <i>when</i> problem.</p>
+
+<h2>Most affected members (top 30 of 306)</h2>
+<div class="scroll"><table>
+<thead><tr><th>WP&nbsp;ID</th><th>Member</th><th>Missing</th><th>Legacy total</th><th>Lost</th><th>Bridged on</th></tr></thead>
+<tbody>
+<tr><td class=n>1</td><td>Ian Davlin</td><td class=n><b>136</b></td><td class=n>1762</td><td class=n>8%</td><td class=n><span class='pill ok'>2026-06-02</span></td></tr>
+<tr><td class=n>9</td><td>Grace Da Maren Guelph Guitar Repair</td><td class=n><b>101</b></td><td class=n>1323</td><td class=n>8%</td><td class=n><span class='pill ok'>2026-06-02</span></td></tr>
+<tr><td class=n>135</td><td>Michael Bashkin Bashkin Guitars</td><td class=n><b>86</b></td><td class=n>996</td><td class=n>9%</td><td class=n><span class='pill ok'>2026-06-02</span></td></tr>
+<tr><td class=n>16</td><td>Thom Abell String Theory Guitar Repair</td><td class=n><b>59</b></td><td class=n>674</td><td class=n>9%</td><td class=n><span class='pill ok'>2026-06-02</span></td></tr>
+<tr><td class=n>1605</td><td>John Husted -</td><td class=n><b>42</b></td><td class=n>345</td><td class=n>12%</td><td class=n><span class='pill ok'>2026-06-02</span></td></tr>
+<tr><td class=n>195</td><td>David Trustman</td><td class=n><b>41</b></td><td class=n>42</td><td class=n>98%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>1119</td><td>Paul McGill McGill guitars</td><td class=n><b>41</b></td><td class=n>813</td><td class=n>5%</td><td class=n><span class='pill ok'>2026-06-02</span></td></tr>
+<tr><td class=n>735</td><td>Troy Giesbrecht Teran Guitars</td><td class=n><b>35</b></td><td class=n>36</td><td class=n>97%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>1830</td><td>Daniel Twentey 20Fold Designs</td><td class=n><b>30</b></td><td class=n>31</td><td class=n>97%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>8</td><td>Dan Erlewine</td><td class=n><b>29</b></td><td class=n>516</td><td class=n>6%</td><td class=n><span class='pill ok'>2026-06-02</span></td></tr>
+<tr><td class=n>4</td><td>Gerry Hayes Haze Guitars</td><td class=n><b>26</b></td><td class=n>483</td><td class=n>5%</td><td class=n><span class='pill ok'>2026-06-02</span></td></tr>
+<tr><td class=n>84</td><td>Iñaki Font Guitar Tech Caracas</td><td class=n><b>22</b></td><td class=n>23</td><td class=n>96%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>321</td><td>Zach Lefebvre TreeHouse Guitars</td><td class=n><b>21</b></td><td class=n>336</td><td class=n>6%</td><td class=n><span class='pill ok'>2026-06-02</span></td></tr>
+<tr><td class=n>596</td><td>James Roadman - Roadman Guitars</td><td class=n><b>19</b></td><td class=n>394</td><td class=n>5%</td><td class=n><span class='pill ok'>2026-06-02</span></td></tr>
+<tr><td class=n>287</td><td>Cannon</td><td class=n><b>14</b></td><td class=n>15</td><td class=n>93%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>532</td><td>Jeramy Dilley</td><td class=n><b>14</b></td><td class=n>15</td><td class=n>93%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>1035</td><td>Culann Tierney Lutherie</td><td class=n><b>13</b></td><td class=n>14</td><td class=n>93%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>775</td><td>Alex Williams A.K. Acoustics</td><td class=n><b>11</b></td><td class=n>12</td><td class=n>92%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>216</td><td>Jeff Caines</td><td class=n><b>9</b></td><td class=n>10</td><td class=n>90%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>325</td><td>David Aldrich DEA Electric Guitar Repair</td><td class=n><b>9</b></td><td class=n>10</td><td class=n>90%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>848</td><td>Pierre Barrellon</td><td class=n><b>9</b></td><td class=n>10</td><td class=n>90%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>303</td><td>Jim Glinsky Glinsky Customs</td><td class=n><b>8</b></td><td class=n>10</td><td class=n>80%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>374</td><td>David Foster Fostino Guitars &amp; Ukuleles</td><td class=n><b>8</b></td><td class=n>9</td><td class=n>89%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>436</td><td>Tim Frick</td><td class=n><b>8</b></td><td class=n>9</td><td class=n>89%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>819</td><td>Eric Frank Pena Slugger Musical Instruments / EFP Design Co.</td><td class=n><b>8</b></td><td class=n>9</td><td class=n>89%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>855</td><td>Juan Carlos JCA</td><td class=n><b>8</b></td><td class=n>9</td><td class=n>89%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>954</td><td>Chris Cherryholmes Shorty&#x27;s Guitar Shop</td><td class=n><b>8</b></td><td class=n>9</td><td class=n>89%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>1861</td><td>Aron Bach | Guitar Maker</td><td class=n><b>8</b></td><td class=n>10</td><td class=n>80%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>218</td><td>Evan Bloom Big Elm Guitar Works</td><td class=n><b>7</b></td><td class=n>8</td><td class=n>88%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+<tr><td class=n>242</td><td>Andre D&#x27;Amours</td><td class=n><b>7</b></td><td class=n>8</td><td class=n>88%</td><td class=n><span class='pill late'>2026-06-11</span></td></tr>
+</tbody></table></div>
+<p class="note">The amber <b>2026-06-11</b> badge is the tell: those members were provisioned after the backfill had already run.</p>
+
+<h2>What the fix does</h2>
+<p>Inserts the 750 missing rows using exactly the original migration's conventions — <code>is_confirmed=1&rarr;accepted</code>, initiator becomes requester, and the original <code>date_created</code> is preserved as both <code>created_at</code> and <code>updated_at</code>, so restored connections keep their true age.</p>
+<p>It differs from the original script in one deliberate way. The original relied only on <code>ON CONFLICT (requester_uuid, addressee_uuid)</code>, which is <b>directional</b> and cannot see an existing reverse row — which is why live already carries <b>10 duplicated bidirectional rows</b>. A naive re-run would have added <b>11 more</b>. The delivered script adds a reverse-existence guard, so it adds none.</p>
+<p class="note">Verified against a local replica loaded from this same live snapshot: the insert adds exactly 750 rows, a second run adds 0, and the rollback restores the table to a state that is <b>byte-identical</b> (matching MD5) to the live snapshot it started from.</p>
+
+<h2>Full row-level dry run</h2>
+<p>Every one of the 750 proposed rows, with both member names, both UUIDs, the status, the original date and the attributed cause:</p>
+<code class="blk">evidence/connections-backfill/dry-run-750-rows.tsv</code>
+<p class="note">Branch <code>connections-backfill</code>. The executable pair is
+<code>profile-app/sql/2026-07-27-connections-backfill-gap.sql</code> and its
+<code>&hellip;-ROLLBACK.sql</code>. Both are Ian's to run on live; this lane never wrote to it.</p>
+
+</div></body></html>
