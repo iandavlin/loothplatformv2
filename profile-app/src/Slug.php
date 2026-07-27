@@ -84,6 +84,88 @@ final class Slug
     }
 
     /**
+     * THE canonical name → slug derivation. Every mint site goes through this:
+     * Provision::ensureSlug (new member), Provision::maybeSyncSlugFromName (rename),
+     * and bin/backfill-slugs.php (the one-time repair). One implementation, because a
+     * backfill that derives differently from the forward path is a split-brain that
+     * re-appears the moment a member renames.
+     *
+     * Three things happen here that a naive preg_replace does NOT do:
+     *
+     *   1. ENTITY DECODE. Raw display_name rows carry storage damage — literal
+     *      `Wood &amp; Voltage`. Undecoded, `&amp;` slugifies to the word "amp"
+     *      ("wood-amp-voltage"). We decode for DERIVATION only and never write
+     *      display_name back — repairing the stored name is the parked name-cleanup
+     *      lane, deliberately not this one.
+     *
+     *   2. TRANSLITERATE, don't strip. `preg_replace('/[^a-z0-9]+/')` deletes every
+     *      non-ASCII letter, which does not fail loudly — it silently MISSPELLS the
+     *      member's own name in their URL: `Åke Nathorst` became `ke-nathorst`,
+     *      `Peter Ellström` became `peter-ellstr-m`, `João` became `jo-o`. Any-Latin
+     *      then Latin-ASCII gives `ake-nathorst`, `peter-ellstrom`, `joao` — and gives
+     *      CJK names a real handle (`祁磊` → `qi-lei`) instead of an empty string that
+     *      falls through to a patreon_* id. Ruling 1 says the URL follows the NAME;
+     *      a mangled name is not the name.
+     *
+     *   3. APOSTROPHES VANISH rather than split. `Nikki’s Guitar Shop` → `nikkis-…`,
+     *      not `nikki-s-…`. (Runs AFTER transliteration, which folds the curly ’ to '.)
+     *
+     * Returns '' when the input has nothing slug-able — callers decide the fallback.
+     */
+    public static function derive(string $raw): string
+    {
+        $s = html_entity_decode(trim($raw), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        if (class_exists('\Transliterator')) {
+            $tr = \Transliterator::create('Any-Latin; Latin-ASCII; Lower()');
+            if ($tr !== null) {
+                $t = $tr->transliterate($s);
+                if (is_string($t)) $s = $t;
+            }
+        }
+
+        $s = strtolower($s);
+        $s = preg_replace('/[\x{0027}\x{2018}\x{2019}\x{02BC}]/u', '', $s) ?? $s;
+        $s = preg_replace('/[^a-z0-9]+/', '-', $s) ?? '';
+
+        return trim($s, '-');
+    }
+
+    /**
+     * Word-boundary trim to MAX_LEN. Cut at the last dash inside the cap unless the cap
+     * already lands on a word end; hard-cut a single long word. Shared with the mint
+     * sites so a 30-char cap is enforced in exactly one place.
+     *
+     * This is where Ruling 2 (KEEP THE BUSINESS NAME) meets reality: business tails are
+     * derived in full, then truncated at a word boundary — so
+     * "Franklin Linker Linker Guitars LLC" lands as `franklin-linker-linker-guitars`
+     * (the LLC falls off the 30-char cap, not off a prune rule).
+     */
+    public static function fit(string $s, int $max = self::MAX_LEN): string
+    {
+        if (strlen($s) <= $max) return $s;
+        $cut = substr($s, 0, $max);
+        if (($s[$max] ?? '') !== '-') {
+            $dash = strrpos($cut, '-');
+            if ($dash !== false && $dash >= self::MIN_LEN) $cut = substr($cut, 0, $dash);
+        }
+        return rtrim($cut, '-');
+    }
+
+    /**
+     * derive() + fit(), then reject anything checkShape() would refuse as a handle
+     * (too short, all-digits, reserved). Returns '' so the caller falls to the next
+     * candidate in its chain rather than minting a slug the router or the
+     * impersonation rules would reject.
+     */
+    public static function deriveUsable(string $raw): string
+    {
+        $s = self::fit(self::derive($raw));
+        if ($s === '') return '';
+        return self::checkShape($s) === null ? $s : '';
+    }
+
+    /**
      * Shape rules only — no DB. Returns null if OK, else a machine error code.
      *
      * Charset is deliberately a SUBSET of the nginx route charset (`^/u/([\w\-]+)/?$`):
