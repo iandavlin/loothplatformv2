@@ -8,6 +8,7 @@ the keeper.
   box). The index of truth for "how it runs."
 - **GIT-PROTOCOL.md** — how we use git for this repo (branch-per-task + Ian approves merge).
 - **DISCUSSION-SURFACE-CANON.md** — the discussion MODAL (hub-polish.js §4e, desktop+mobile) is the canonical render+compose surface; legacy forum topic pages are not a feature target (Ian 2026-07-09).
+- **RECAP-SUPPRESSION-PROPOSAL.md** — measured (on LIVE) proposal for not re-listing things the member has already seen: read-on-site (shipped, 21.8%), already-per-event-emailed (stamp it, do not scrape the mail log; contingent on THREAD-FOLLOW §9.1), previous-digest watermark (needs a floor — 347 aged-out items would land on 271 members). **Amends THREAD-FOLLOW-SPEC §3.7 — see its §4.**
 - **WEEKLY-DIGEST-RECAP.md** — the per-member "Your week" section of the weekly digest: counts + senders + deep links, never content; unread, last 7 days; empty means absent. **§2 is the current truth about what the notification store knows — NOTIFICATIONS-AUDIT.md is stale on that point.**
 
 ## Canon authority (Ian 6/19)

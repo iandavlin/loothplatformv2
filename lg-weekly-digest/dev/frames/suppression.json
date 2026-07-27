@@ -1,0 +1,20 @@
+[
+    {
+        "wp": 197,
+        "label": "Doug Proper \u2014 14 items, 6 already read",
+        "items": 14,
+        "kept": 8,
+        "before_rows": 9,
+        "after_rows": 8,
+        "after_absent": false
+    },
+    {
+        "wp": 1,
+        "label": "Ian Davlin \u2014 5 items, every one already read",
+        "items": 5,
+        "kept": 0,
+        "before_rows": 5,
+        "after_rows": 0,
+        "after_absent": true
+    }
+]
