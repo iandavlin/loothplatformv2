@@ -51,6 +51,17 @@
   .open p { font: 400 14px/1.62 var(--lg-font-sans); margin: 0 0 12px; }
   .open p:last-child { margin-bottom: 0; }
   .open b { font-weight: 700; }
+  .gated { margin: 26px 0 0; padding: 16px 20px; border: 1px solid var(--lg-sage);
+    border-radius: 14px; background: var(--lg-sage-tint); }
+  .gated h2 { font: 700 13px/1 var(--lg-font-sans); letter-spacing: .06em; text-transform: uppercase;
+    color: var(--lg-sage-d); margin: 0 0 9px; }
+  .gated p { font: 400 14px/1.62 var(--lg-font-sans); color: var(--lg-ink); margin: 0; }
+  .ok, .ask { display: inline-block; font: 700 10px/1 var(--lg-font-sans); letter-spacing: .07em;
+    text-transform: uppercase; color: #fff; border-radius: 999px; padding: 5px 8px;
+    margin-left: 8px; vertical-align: 1px; }
+  .ok { background: var(--lg-sage); }
+  .ask { background: var(--lg-rust); }
+  .rules li i { font-style: normal; color: var(--lg-sage-d); font-weight: 700; }
   .foot { margin: 40px 0 0; padding-top: 16px; border-top: 1px solid var(--lg-line);
     font: 400 12px/1.7 var(--lg-font-sans); color: var(--lg-mute); }
 </style>
@@ -65,38 +76,55 @@
   <p class="meta">Spec: <code>docs/atlas/THREAD-FOLLOW-SPEC.md</code> · branch <code>threadfollow-spec</code>
     · cites <code>main@c10df43</code> · <b>spec + mock only, nothing built</b></p>
 
+  <div class="gated">
+    <h2>✓ Gated 27 July — the card carries two icons</h2>
+    <p>You chose the two-icon design over the single expanding control. That is now the spec, and the
+      rejected design has been <b>deleted</b> from the doc rather than kept as an alternative.
+      <b>Frame 1 below is settled</b> — everything else on this page is waiting on you.</p>
+  </div>
+
   <div class="rules">
-    <h2>What you're gating</h2>
+    <h2>Four things to decide — each has a recommendation</h2>
     <ol>
-      <li><b>Set them</b> on the feed card and in the open discussion modal, in the header cluster
-        beside the S/M/L/XL size control.</li>
-      <li><b>Unset them from three places</b>, all reaching the same store — the thread itself, the
-        notifications-panel row ⋯ menu, and <b>an unsubscribe link in the email</b>.</li>
-      <li>The email link works <b>logged out</b>, is <b>specific to that discussion</b>, and lands on a
-        confirmation page that also offers "stop all discussion emails" for someone who is really done.</li>
+      <li><b>Mobile card</b> — mobile uses a different action bar. <i>Recommended: same two icons, right end of it.</i> → frame 2</li>
+      <li><b>Mobile sheet header</b> — it has no S/M/L/XL to sit beside. <i>Recommended: circular peers of the ×.</i> → frame 5</li>
+      <li><b>Account page</b> — how per-thread email fits the Weekly/Event switches. <i>Recommended: one new master row.</i> → frame 6</li>
+      <li><b>The 1,519 subscriptions already emailing members</b> — <i>Recommended: change no data, make them visible and one tap from off.</i> → frame 7</li>
     </ol>
   </div>
 
-  <h2 class="sec">Frame 1 + 2 — the feed card</h2>
-  <h3 class="fr">Two toggles on the card<span class="decide">decide this one</span></h3>
-  <p class="fr-note">The card's action row already carries <b>six</b> controls; two more makes eight.
-    Cards A and B show the two-icon proposal (on/off states); the third card shows the fallback —
-    <b>one labelled control that expands two switches</b>. Both are visible affordances, neither is
-    buried in the ⋯ menu. <b>If the two-icon row reads as cluttered to you, we take the fallback.</b></p>
+  <h2 class="sec">Frame 1 — the feed card <span class="ok">gated</span></h2>
+  <h3 class="fr">Two icons, as you chose</h3>
+  <p class="fr-note">Bell and envelope as separate visible controls, beside Save. Card A is one on,
+    one off; card B is the default state every discussion starts in and stays in until someone clicks.
+    Eight controls in that row is the shape you approved.</p>
   <div class="grid">
-    <figure><img src="shots/card-d-light.png" alt="Desktop feed card, light"><figcaption>Desktop 1280 · light</figcaption></figure>
+    <figure><img src="shots/card-d-light.png" alt="Desktop feed card, light"><figcaption>Desktop 1280 · light — frames 1 and 2 on one page</figcaption></figure>
     <figure><img src="shots/card-d-dark.png" alt="Desktop feed card, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
-    <figure><img src="shots/card-m-light.png" alt="Mobile feed card, light"><figcaption>Mobile 390 · light — mobile cards use a different bar (open question)</figcaption></figure>
-    <figure><img src="shots/card-m-dark.png" alt="Mobile feed card, dark"><figcaption>Mobile 390 · dark</figcaption></figure>
+  </div>
+
+  <h2 class="sec">Frame 2 — the mobile card <span class="ask">needs you</span></h2>
+  <h3 class="fr">Recommended: the same two icons, right end of the mobile bar</h3>
+  <p class="fr-note">Mobile cards use a different, sparser action bar — only Like, replies and Share,
+    with wide gaps — so unlike desktop there is room, with space to spare.
+    <b>The alternative</b> is to leave mobile cards alone and let the sheet header carry both. Cleaner
+    card, but then someone scrolling the feed can't opt in to anything without opening every thread
+    first, which is most of what a card control is for. Both are drawn.</p>
+  <div class="grid">
+    <figure><img src="shots/card-m-light.png" alt="Mobile card, light"><figcaption>Mobile 390 · light — recommended above, alternative below</figcaption></figure>
+    <figure><img src="shots/card-m-dark.png" alt="Mobile card, dark"><figcaption>Mobile 390 · dark</figcaption></figure>
   </div>
   <p class="live">Live: <a href="mock-card.html">mock-card.html</a> · <a href="mock-card.html?theme=dark">dark</a></p>
 
-  <h2 class="sec">Frame 3 — the discussion modal</h2>
+  <h2 class="sec">Frames 3 + 5 — the discussion modal <span class="ask">sheet needs you</span></h2>
   <h3 class="fr">Beside the size control</h3>
   <p class="fr-note">The cluster reads <b>[title] [bell] [mail] [M] [×]</b> — the two state controls
     grouped together, close rightmost. Second block shows both OFF, which is what every discussion
-    looks like until someone clicks. Third block is the mobile sheet header, which has no S/M/L/XL
-    control at all — so its placement is a question for you.</p>
+    looks like until someone clicks.<br><br>
+    <b>Frame 5, third block — the mobile sheet header needs your word.</b> It has no S/M/L/XL control
+    to sit beside. <b>Recommended:</b> the same two icons as round buttons between the title and the
+    ×, so the order still reads title → switches → close, exactly like desktop. The only other option
+    was a row underneath the header; rejected, it eats vertical space on the smallest screen.</p>
   <div class="grid">
     <figure><img src="shots/modal-d-light.png" alt="Modal header, light"><figcaption>Desktop 1280 · light</figcaption></figure>
     <figure><img src="shots/modal-d-dark.png" alt="Modal header, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
@@ -133,24 +161,56 @@
   </div>
   <p class="live">Live: <a href="mock.html">mock.html</a> · <a href="mock.html?theme=dark">dark</a></p>
 
+  <h2 class="sec">Frame 6 — the account page <span class="ask">needs you</span></h2>
+  <h3 class="fr">Recommended: one new "Discussion emails" row</h3>
+  <p class="fr-note">You already ship Weekly Digest and Event Reminders there. The rule that keeps
+    them from contradicting each other: <b>the account page is a master switch per kind of email;
+    the per-discussion switches decide which discussions are in that kind.</b> Master off means
+    nothing is sent, whatever the individual discussions say — so the page can never claim "off"
+    while mail is still arriving. It also shows a count, so a member can see how many discussions
+    are emailing them.<br><br>
+    <b>The alternative</b> — no master, and the account page lists every discussion instead — is
+    drawn underneath. Honest, but someone following thirty threads gets a thirty-row settings page
+    and no single "make it stop" button, which is the one thing people want when they open that page
+    annoyed.</p>
+  <div class="grid">
+    <figure><img src="shots/account-d-light.png" alt="Account email prefs, light"><figcaption>Desktop 1280 · light — recommended above, alternative below</figcaption></figure>
+    <figure><img src="shots/account-d-dark.png" alt="Account email prefs, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
+    <figure><img src="shots/account-m-light.png" alt="Account email prefs, mobile"><figcaption>Mobile 390 · light</figcaption></figure>
+  </div>
+  <p class="live">Live: <a href="mock-account.html">mock-account.html</a> · <a href="mock-account.html?theme=dark">dark</a></p>
+
+  <h2 class="sec">Frame 7 — the 1,519 already emailing members <span class="ask">needs you</span></h2>
+  <h3 class="fr">Recommended: change no data — make them visible and one tap from off</h3>
+  <p class="fr-note">Live has 1,519 topic and 46 forum subscriptions sending real email today —
+    31 discussion emails in the last fortnight. <b>72% of them were created by exactly the
+    auto-subscribe you banned</b> (the person authored or replied in that thread). But <b>93% sit on
+    threads nobody has replied to in 90 days</b>, so the people actually affected today are
+    <b>49 members across 112 subscriptions</b>.<br><br>
+    The frame shows the recommendation as a member would experience it rather than as a table: the
+    email they already get grows a discussion-specific unsubscribe link, the card and thread finally
+    <i>show</i> them they're subscribed, and the account page names the count with one switch that
+    stops all of it. <b>Deleting the 1,091 unasked-for ones is not recommended</b> — that would be a
+    second change made on their behalf, in the other direction, and it would take 428 apparently
+    deliberate subscribes with it. <b>The one alternative</b> — also retire the 1,407 dormant ones —
+    is drawn at the bottom with its cost.</p>
+  <div class="grid">
+    <figure><img src="shots/legacy-d-light.png" alt="Existing subscriptions proposal, light"><figcaption>Desktop 1280 · light</figcaption></figure>
+    <figure><img src="shots/legacy-d-dark.png" alt="Existing subscriptions proposal, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
+  </div>
+  <p class="live">Live: <a href="mock-legacy.html">mock-legacy.html</a> · <a href="mock-legacy.html?theme=dark">dark</a></p>
+
   <div class="open">
-    <h2>Two things we need from you — we have deliberately not decided these</h2>
-    <p><b>1 · The 1,519 subscriptions that already exist.</b> Live currently has 1,519 topic and 46
-      forum subscriptions, and they are emailing real members today — 31 discussion emails in the last
-      fortnight. Opt-in-only is a rule for <b>new</b> follows; it says nothing about those.
-      Measured: <b>72%</b> of them were created by exactly the auto-subscribe you just banned
-      (the subscriber authored or replied in that thread), but <b>93% sit on threads nobody has
-      replied to in 90 days</b> — so the people actually affected today are <b>49 members across 112
-      subscriptions</b>. Five options are laid out in the spec (§9.2), from "leave them and just make
-      them visible and one click from off" to "retire the dormant tail". We are not proposing to mass-
-      unsubscribe anyone.</p>
-    <p><b>2 · Per-event email vs the weekly digest.</b> An earlier ruling turned all per-event
-      discussion email permanently off. The email you got on 7/26 and called wanted was a
-      <b>"new discussion"</b> email from a <b>forum</b> subscription (46 of those) — a different thing
-      from the <b>"new reply"</b> emails from <b>topic</b> subscriptions (1,519 of those) that fire on
-      every reply. One switch was covering two different things. Options in the spec (§9.1); the
-      two-toggle design leans toward "an explicit email toggle is what earns you the email," but that
-      is your call.</p>
+    <h2>One thing left that has no frame — the email posture</h2>
+    <p>An earlier ruling turned all per-event discussion email permanently off, with the weekly digest
+      as the only email surface. The email you got on 26 July and called wanted was a
+      <b>"new discussion"</b> email from a <b>forum</b> subscription — 46 of those exist, and they
+      fire only when someone <i>starts</i> a thread. That is a different thing from the
+      <b>"new reply"</b> emails from <b>topic</b> subscriptions — 1,519 of those, firing on every
+      reply. One switch was covering two very different things.</p>
+    <p>With opt-in now the rule, the natural answer is that <b>an explicit envelope toggle is what
+      earns you the email</b> — a per-discussion email switch that never sends email would be a
+      contradiction. But that is your call, not ours, so nothing has been decided.</p>
   </div>
 
   <p class="foot">Mock tooling, never shipped. Frames shot serially with headless Chrome on dev1;

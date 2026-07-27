@@ -6,14 +6,19 @@
 <title>Mock — feed card with the two opt-in toggles (THREAD-FOLLOW-SPEC §2.2)</title>
 <!--
   MOCK ONLY — not served anywhere. THREAD-FOLLOW-SPEC.md §2.2, frames 1 + 2.
-  THIS IS THE CROWDING TEST. The real .fc-actions row (bb-mirror/web/forums/_feed.php:1617-1626)
-  already carries SIX controls: reactions bar, Like/replies/Share action bar, Save, Share,
-  the (CSS-hidden) reply CTA and the compact-expand chevron. The two new toggles make EIGHT.
-  Card A shows the spec'd two-icon proposal; Card B shows the §2.1 fallback (one labelled
-  control that expands two switches) so Ian can compare them side by side.
-  Desktop styling copied from forums.css:4113-4123 (@>=641); the 390 frames use the mobile
-  .lg-card-actions bar (forums.css @<=640) since .fc-share/.fc-save are desktop-only there —
-  that is open question §9.3 q1, and it is drawn, not assumed.
+
+  IAN GATED THIS 2026-07-27: TWO ICONS on the card (bell + envelope as separate
+  visible controls), NOT the single expanding "Following" control. The fallback
+  design is DEAD and has been deleted from this mock and from the spec — it is not
+  kept as an alternative, so nobody re-litigates it in three weeks.
+
+  Desktop styling copied from forums.css:4113-4123 (@>=641). The real .fc-actions row
+  (_feed.php:1617-1626) carries six controls; with the two toggles it carries eight,
+  which is the shape Ian approved on sight.
+
+  MOBILE is the open one (spec §9.3 q1): mobile cards do NOT use .fc-actions — they use
+  the .lg-card-actions/.lg-act bar (forums.css @<=640, gap 18px), and .fc-share/.fc-save
+  are desktop-only. Both the recommendation and the one alternative are drawn below.
   Open with ?theme=dark for the dark frames.
 -->
 <link rel="stylesheet" href="_tokens.css">
@@ -56,23 +61,6 @@
   /* the two new ones push to the right end, next to Save (spec §2.2) */
   .fc-follow-pair { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
 
-  /* ── §2.1 FALLBACK: one labelled control that expands two switches ── */
-  .fc-followbtn { -webkit-appearance: none; appearance: none; margin-left: auto;
-    display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--lguser-line);
-    background: var(--bg-card); border-radius: 999px; padding: 5px 12px;
-    font: 700 12px/1 var(--lg-font-sans); color: var(--lg-sage-d); cursor: pointer; }
-  .fc-followpanel { margin: 9px 13px 0 0; border: 1px solid var(--lguser-line); border-radius: 12px;
-    background: var(--bg-card); padding: 4px; width: 100%; max-width: 288px; margin-left: auto; }
-  .fc-followrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; }
-  .fc-followrow__t { flex: 1 1 auto; font: 600 12.5px/1.3 var(--lg-font-sans); color: var(--lg-ink); }
-  .fc-followrow__t small { display: block; font-weight: 400; color: var(--lg-mute); font-size: 11px; margin-top: 2px; }
-  .sw { flex: 0 0 auto; width: 38px; height: 22px; border-radius: 999px; background: var(--lg-line);
-    position: relative; transition: background .14s; }
-  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
-    border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .14s; }
-  .sw.on { background: var(--lg-sage); }
-  .sw.on::after { transform: translateX(16px); }
-
   /* mobile card bar (forums.css @<=640: .lg-card-actions gap 18px) */
   .m-bar { display: flex; align-items: center; gap: 18px; padding: 8px 13px 12px;
     color: var(--lg-mute); font: 600 12.5px/1 var(--lg-font-sans); }
@@ -83,7 +71,7 @@
 <body>
 <div class="wrap">
 
-  <p class="capt">Frame 1 — desktop feed card · spec §2.2 · the two-icon proposal</p>
+  <p class="capt">Frame 1 — desktop feed card · spec §2.2 · <b>IAN GATED 2026-07-27 — this is the design</b></p>
   <p class="legend"><b>Card A</b> · notifications ON, emails OFF — the common shape: watch the thread, don't get mail.</p>
 
   <article class="feed-card">
@@ -135,32 +123,10 @@
     </div>
   </article>
 
-  <p class="capt" style="margin-top:26px">The §2.1 fallback, for comparison — ONE labelled control, two switches inside</p>
-  <p class="legend">Still not "buried in ⋯": it is its own visible, labelled control. Costs a click and hides state.</p>
+  <p class="capt" style="margin-top:30px">Frame 2 — mobile card · spec §9.3 q1 · <b>PROPOSAL</b></p>
+  <p class="legend"><b>Recommended</b> — same two icons, right end of the mobile action bar, icon-only.
+    The mobile bar carries only three items (Like / replies / Share) with 18px gaps, so unlike desktop there is room.</p>
 
-  <article class="feed-card">
-    <div class="feed-card__meta-top">
-      <span class="lg-card-avatar">JL</span>
-      <span class="lg-card-id"><a class="lg-card-author" href="#">John Lehmann</a><span class="lg-card-time">5h ago</span></span>
-      <span class="lg-card-cat">Setup</span>
-    </div>
-    <div class="feed-card__header-body">
-      <h3 class="fc-title">Nut slot depth: what are you actually measuring to?</h3>
-      <p class="fc-excerpt">Feeler under the string at the first fret, capo at three — but everyone quotes a different number…</p>
-    </div>
-    <div class="fc-actions">
-      <span class="fcr"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg> 11</span>
-      <button class="lg-act"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg>21 replies</button>
-      <button class="fc-save" title="Save"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.6l2.95 5.98 6.6.96-4.77 4.65 1.13 6.57L12 17.66 6.09 20.76l1.13-6.57L2.45 9.54l6.6-.96z"/></svg></button>
-      <button class="fc-followbtn" aria-expanded="true"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg> Following ▾</button>
-      <div class="fc-followpanel">
-        <div class="fc-followrow"><span class="fc-followrow__t">Notifications<small>New replies show in your bell</small></span><span class="sw on"></span></div>
-        <div class="fc-followrow"><span class="fc-followrow__t">Emails<small>New replies come to your inbox</small></span><span class="sw"></span></div>
-      </div>
-    </div>
-  </article>
-
-  <p class="capt" style="margin-top:26px">Frame 2 — mobile card bar (§9.3 q1: which bar, or none)</p>
   <article class="feed-card" style="max-width:360px">
     <div class="feed-card__meta-top">
       <span class="lg-card-avatar">DP</span>
@@ -173,9 +139,29 @@
     <div class="m-bar">
       <button class="lg-act"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg> Like</button>
       <button class="lg-act"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg> 12</button>
+      <button class="lg-act"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
       <span class="spacer"></span>
       <button class="fc-notify" aria-pressed="true" aria-label="Notifications on"><span class="gly"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span></button>
       <button class="fc-email" aria-pressed="false" aria-label="Emails off"><span class="gly"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span></button>
+    </div>
+  </article>
+
+  <p class="legend"><b>Alternative</b> — leave mobile cards alone; the sheet header carries both (one tap away).
+    Cleaner card, but a member browsing the feed cannot opt in without opening every thread first.</p>
+
+  <article class="feed-card" style="max-width:360px">
+    <div class="feed-card__meta-top">
+      <span class="lg-card-avatar">SF</span>
+      <span class="lg-card-id"><a class="lg-card-author" href="#">Sharon Fisher</a><span class="lg-card-time">1d ago</span></span>
+    </div>
+    <div class="feed-card__header-body">
+      <h3 class="fc-title" style="font-size:19px">Bookmatched claro walnut top</h3>
+      <p class="fc-excerpt" style="font-size:14.5px">Third attempt. Cauls are flat, I’m at 90 psi…</p>
+    </div>
+    <div class="m-bar">
+      <button class="lg-act"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg> Like</button>
+      <button class="lg-act"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg> 4</button>
+      <button class="lg-act"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
     </div>
   </article>
 

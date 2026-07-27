@@ -4,6 +4,9 @@
 > Lane: threadfollow-spec (dev1, docs+mock only). Branch `threadfollow-spec`.
 > **REVISED 2026-07-27 (v2) — Ian: TWO independent toggles per discussion, NOTIFICATIONS and
 > EMAILS, both default OFF, both unsettable from three places including the email itself.**
+> **IAN GATED THE CARD 2026-07-27: two icons, not a single expanding control.** He reviewed the
+> previs and chose the two-icon design; the single-control fallback is dead and has been removed
+> from this document rather than kept as an alternative.
 > This supersedes v1's single follow toggle, which itself reversed the original auto-subscribe
 > design. See §0.0 for the trail and §9 for what is still Ian's to decide.
 > Mock frames: `footer-mockups/threadfollow-notif-panel/` — published for gating at
@@ -43,6 +46,8 @@ replies to their own topic without toggling anything.
    Independent: either, both, or neither. Nothing writes either bit without a deliberate click.
 2. **SET them in two places** — the feed **CARD** and the open **DISCUSSION MODAL**, in the header
    control cluster (§2). Ian: the affordance must be **visible, not buried**.
+   **The card carries the bell and the envelope as two separate visible icons — Ian-confirmed
+   2026-07-27 from the previs.** Eight controls in that action row is the shape he approved.
    **Explicitly NOT in the post ⋯ menu** — verified wrong surface twice over (§2.3).
 3. **UNSET them from three places, all reaching the same store:**
    (1) the thread itself, same controls; (2) the notifications panel per-row ⋯ (§3.5);
@@ -57,8 +62,10 @@ replies to their own topic without toggling anything.
 8. **Parity** — every surface works desktop and mobile, both themes, one implementation.
 9. **Account-level email prefs coexist by a strict master/member rule** (§6) — no state where the
    account page says off and mail still arrives.
-10. **OPEN, Ian's call, not decided here:** the **1,519 existing topic + 46 forum subscriptions**
-    already emailing real members (§9.2), and the per-event vs digest email posture (§9.1).
+10. **OPEN, Ian's call:** the **1,519 existing topic + 46 forum subscriptions** already emailing
+    real members (§9.2) and the per-event vs digest email posture (§9.1). Both now carry a
+    **recommendation with the member-visible consequence spelled out**, and §9.2 has a frame — but
+    neither is decided here.
 
 ---
 
@@ -146,10 +153,11 @@ earlier revision blamed `lg-wp-cron.timer`; that timer drives the digest only.
 
 ## 2. Where the toggles are SET
 
-### 2.1 Two controls, or one control revealing two?
+### 2.1 Two peer icon toggles — Ian-confirmed 2026-07-27
 
-Ian asked for two toggles, visible, not buried. Spec'd as **two peer icon toggles** with
-`aria-pressed`, so both states are readable at a glance without a click:
+Ian asked for two toggles, visible, not buried, and on reviewing the previs chose exactly that over
+a single control that expands to reveal them. **Two peer icon toggles** with `aria-pressed`, so both
+states are readable at a glance without a click:
 
 ```
 🔔  Notifications for this discussion     ✉  Emails for this discussion
@@ -159,11 +167,6 @@ Ian asked for two toggles, visible, not buried. Spec'd as **two peer icon toggle
 - `aria-pressed` + a filled/sage state, matching `.fc-save`'s `.is-saved` idiom exactly.
 - Copy on hover/aria: "Notify me about new replies" / "Email me about new replies", flipping to
   "Stop notifications" / "Stop emails" when on.
-
-⚠️ **Fallback if the card row cannot carry two more controls** (§2.2): ONE labelled **Follow**
-control that expands two inline switches. That is still not "buried in ⋯" — it is a labelled,
-visible control of its own — but it costs a click and hides state. **Frame 1 (§7) is the test.**
-Recommendation: try two icons first; fall back only if the row visibly breaks.
 
 ### 2.2 The feed CARD
 
@@ -184,12 +187,28 @@ server-rendered inert and batch-hydrated with the viewer's real state.
   (forums.css:585, :4123).
 - **Topic cards only in v1.** Content cards (managed CPTs, _feed.php:1482) have comments, not topic
   subscriptions — §9.3 q4.
-- ⚠️ **The crowding risk, stated plainly.** `.fc-actions` already carries reactions + Like/replies/
-  Share + Save + Share + expand (_feed.php:1617-1626). Two more makes **eight**. Desktop styling is
-  `display:flex; gap:8px` with `.fc-save{margin-left:auto}` (forums.css:4113-4123); mobile cards use
-  a different bar entirely (`.lg-card-actions`/`.lg-act`, gap 18px, forums.css @≤640) and
-  `.fc-share` is already desktop-only (:600). **Whether both icons fit, and what mobile cards get,
-  is a real design question — §9.3 q1**, and frame 1 exists to answer it.
+- **Eight controls in the row — approved on sight.** `.fc-actions` already carries reactions +
+  Like/replies/Share + Save + Share + expand (_feed.php:1617-1626); the two toggles make eight.
+  Desktop styling is `display:flex; gap:8px` with `.fc-save{margin-left:auto}`
+  (forums.css:4113-4123). Ian reviewed this exact row in the previs and gated it, so the row is
+  settled — do not re-open it.
+- **MOBILE cards are a different bar and still need Ian's word — §2.2b, proposal below.**
+
+### 2.2b Mobile card placement — PROPOSAL (frame 2)
+
+Mobile cards do **not** use `.fc-actions`. They use `.lg-card-actions`/`.lg-act` (forums.css @≤640,
+`gap:18px; padding:8px 13px 12px`), and `.fc-share`/`.fc-save` are desktop-only (:600).
+
+**Recommended — the same two icons at the right end of the mobile bar, icon-only, `margin-left:auto`,
+≥44px touch targets.** The mobile bar carries only three items (Like / N replies / Share) against
+390px, so unlike desktop there is room; measured in frame 2 with space to spare. This keeps the
+ordering identical to desktop (state controls right, before nothing) and keeps the card's whole
+purpose intact: opting in **without** having to open the thread.
+
+**Alternative — leave mobile cards alone; the sheet header (§2.4) carries both, one tap away.**
+Cleaner card. The cost is real: a member scrolling the feed cannot opt in to anything without
+opening every thread first, which is most of the value of a card control on the surface where
+people actually browse.
 
 ### 2.3 The DISCUSSION MODAL header — and why NOT the ⋯ menu
 
@@ -234,13 +253,21 @@ the cards, falling back to a single-topic read when deep-linked in cold.
 > physical placement is the same either way, so nothing in the design changes — but a build lane
 > aiming at :219-228 would be editing dead code.
 
-### 2.4 The MOBILE SHEET header (parity, not optional)
+### 2.4 The MOBILE SHEET header — PROPOSAL (frame 5)
 
 ≤640 the router opens `#looth-rep-sheet`, whose header is
 `<div class="lrs-hd"><span class="lrs-t"></span><button class="lrs-x">×</button></div>`
-(hub-polish.js:3628) — title + close, no size cluster. Ian named two surfaces and neither exists on
-mobile in that form, so: **`.lrs-notify` + `.lrs-email` between `.lrs-t` and `.lrs-x`**, same state,
-same handler, ≥44px touch targets. Flagged in §9.3 q2.
+(hub-polish.js:3628, styles :3171) — title + close, and **no size control at all**, so the desktop
+instruction ("beside S/M/L/XL") has no literal target here.
+
+**Recommended — `.lrs-notify` + `.lrs-email` as circular 34px buttons between `.lrs-t` and
+`.lrs-x`.** Same state, same handler, ≥44px effective touch targets. The order then reads
+*title → state controls → dismiss*, identical to the desktop cluster, so the two surfaces stay
+learnable as one thing.
+
+The only other placement considered was a control row **beneath** the header. Rejected: it adds
+permanent vertical chrome to the smallest screen, on a sheet that is already competing with the
+composer and the keyboard.
 
 ---
 
@@ -462,7 +489,7 @@ PG); it needs no BB interop, so a new store costs nothing there.
 :202-214 to admin-ajax `lg_weekly_member_state`/`lg_weekly_member_toggle` and
 `lg_event_reminder_state`/`lg_event_reminder_signup`, both FluentCRM-list backed.
 
-**The rule that prevents two contradictory settings:**
+**PROPOSAL (frame 6) — recommended, with the one alternative below.**
 
 > **Account level = a master switch per email CLASS. Per-thread = which threads are in that class.**
 
@@ -481,6 +508,15 @@ PG); it needs no BB interop, so a new store costs nothing there.
   emails is naturally usermeta (BB's own per-type meta key is literally what its unsubscribe
   writes). Not a contradiction, but the account UI will be writing two different stores behind one
   card — noted so it is designed, not discovered.
+
+**What this does to a real member:** one obvious place to make all of it stop, while the per-thread
+switches stay where the threads are. The page can never say "off" while mail still arrives.
+
+**The alternative — no master; list every emailed thread on the account page.** Honest, but
+unbounded: someone following thirty threads gets a thirty-row settings page, and there is no single
+"make it stop" control — which is the exact thing people go looking for when they are annoyed enough
+to open that page. **Not recommended**; drawn in frame 6 beside the recommendation so the difference
+is visible rather than argued.
 
 ### 3.7 Weekly digest recap (unchanged from v1, independent of §9.1)
 
@@ -504,15 +540,17 @@ Published for gating (cookie-gated dev2):
 
 | # | Frame | Shows | Status |
 |---|---|---|---|
-| 1 | `card-d-{light,dark}` 1280 | **Feed card** `.fc-actions` with 🔔 + ✉ beside Save, both states — *the crowding test (§2.2)* | **NEW** |
-| 2 | `card-m-{light,dark}` 390 | Mobile card bar with the two toggles | **NEW** |
-| 3 | `modal-d-{light,dark}` 1280 | **Modal header** *[title] [🔔] [✉] [M] [×]*, on and off | **NEW** |
-| 4 | `unsub-d-{light,dark}` 1280 + `unsub-m-light` 390 | **Email unsubscribe confirmation page** (§4.3) | **NEW** |
-| 5 | `notif-d-{light,dark}` 1280, `notif-m-{light,dark}` 390 | Notifications panel: coalesced row + the ⋯ menu carrying both bits | **re-shot** |
+| 1 | `card-d-{light,dark}` 1280 | **Feed card** — bell + envelope beside Save, on/off states | **IAN GATED 2026-07-27** |
+| 2 | `card-m-{light,dark}` 390 | **Mobile card** — recommendation (icons at the right end of the mobile bar) vs the alternative (not on mobile cards) | **PROPOSAL — §2.2b** |
+| 3 | `modal-d-{light,dark}` 1280 | **Modal header** *[title] [bell] [mail] [M] [×]*, both states | previs'd |
+| 4 | `unsub-d-{light,dark,done}` 1280 + `unsub-m-light` 390 | **Email unsubscribe page** — ask state, done state with Undo (§4.3) | previs'd |
+| 5 | (in `modal-d-*`) | **Mobile sheet header** — the ≤640 placement, which has no size control to sit beside | **PROPOSAL — §2.4** |
+| 6 | `account-d-{light,dark}` 1280, `account-m-light` 390 | **Account email prefs** — the third "Discussion emails" master row vs the per-thread-list alternative | **PROPOSAL — §6** |
+| 7 | `legacy-d-{light,dark}` 1280 | **The 1,519 existing subscriptions** — the recommendation shown as a member experiences it | **PROPOSAL — §9.2** |
+| 8 | `notif-d-{light,dark}` 1280, `notif-m-{light,dark}` 390 | Notifications panel: coalesced row + ⋯ menu carrying both bits | previs'd |
 
-Frames 1 and 3 are the decisive ones — they test whether two visible toggles survive contact with
-rows that already carry six controls. If frame 1 reads as cluttered, §2.1's one-control fallback is
-the answer and only the card changes.
+Frames 2, 5, 6 and 7 are the ones carrying an open decision; each shows a recommendation and at
+most one alternative, side by side, so the choice can be made by looking rather than by reading.
 
 ---
 
@@ -583,6 +621,30 @@ Opt-in governs **new** follows and says nothing about subscriptions that already
 emailing people today. Under §5's mapping these are all **✉ email** subscriptions — one toggle, not
 two, which simplifies every option below. Mass-unsubscribing real members is off the table.
 
+> ### RECOMMENDED: option B — grandfather, but surface and make exitable. Frame 7 shows it.
+>
+> **Change no data. Make every one of those subscriptions visible and one click from off**, in the
+> three places a member will actually be when it annoys them: the email itself now carries a
+> discussion-specific unsubscribe link (§4); the card and thread now *show* the ✉ bit as on, which
+> nothing on the site does today; and the account page names the count with one switch that stops
+> all of it (§6).
+>
+> **Why not just delete the 1,091 that were created without consent?** Because removing them
+> unasked is a second change made on the member's behalf, in the other direction — the same class of
+> act the opt-in rule exists to stop — and the "created by involvement" signal is a correlation, not
+> proof, so 428 apparently-deliberate subscribes would go with them. Making the state visible and
+> one tap from off is the honest remedy: people who never wanted it can leave from inside the very
+> email that annoyed them, people who did want it keep it, and the population clears itself over
+> time without us guessing on anyone's behalf.
+>
+> **The one alternative worth considering: B + C** — additionally retire the 1,407 dormant
+> subscriptions (no reply in 90 days), keeping the 112 live ones. Nobody currently receiving email
+> is affected. The cost: if a dormant thread wakes up years later, a member who genuinely subscribed
+> stops hearing about it and will never know why.
+>
+> **Not recommended: D or E.** D unsubscribes 736 topic authors from their own threads, which reads
+> as a regression to the person it happens to. E is off the table per the lane brief.
+
 | | Option | Member-visible consequence |
 |---|---|---|
 | **A** | **Grandfather, change nothing** — all 1,519 become ✉-on | Nobody loses anything, nobody is surprised. But ~1,091 subscriptions created by the banned mechanism keep running; the rule applies forward only |
@@ -604,15 +666,15 @@ while it sits untouched.
 
 ### 9.3 Smaller open questions
 
-1. **Card control on mobile** (§2.2) — mobile cards use `.lg-act-*`, not `.fc-actions`; `.fc-share`
-   is already desktop-only. Do both toggles appear on mobile cards, in which bar, or is the sheet
-   header enough? **Frame 2 exists to answer this.**
-2. **Mobile sheet header** (§2.4) — Ian named the card and the modal; ≤640 has no size cluster.
-   Spec'd as peers of the ×. Confirm or redirect.
-3. **Digest recap** (§3.7) — may public-forum topic TITLES appear, or names + counts only?
-4. **Content cards** (§2.2) — v1 is discussion cards only. Should articles/videos get "email me
+1. ~~Two icons vs one expanding control~~ — **CLOSED, Ian gated two icons 2026-07-27** (§2.1). The
+   fallback has been deleted from this document, not archived.
+2. **Card control on mobile** (§2.2b) — **proposal + one alternative, frame 2.** Recommended: the
+   same two icons at the right end of the mobile bar.
+3. **Mobile sheet header** (§2.4) — **proposal, frame 5.** Recommended: circular peers of the ×.
+4. **Digest recap** (§3.7) — may public-forum topic TITLES appear, or names + counts only? *(No
+   frame; low stakes, and it does not block anything.)*
+5. **Content cards** (§2.2) — v1 is discussion cards only. Should articles/videos get "email me
    about new comments" later, or never?
-5. **Two icons vs one expanding control** (§2.1) — decided by frame 1.
 6. Stale comment at forums.js:4231 says "3 panel sizes (Ian): S / M / L" while `SIZES` has four.
    Cosmetic, adjacent, not fixed by this lane.
 
