@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>More images on a discussion reply — where the limit is, and what it costs</title>
+<style>
+  :root{--gold:#ECB351;--dark:#2B2318;--mid:#5C4E3A;--light:#FAF6EE;--mint:#87986A;--mintl:#D4E0B8;--coral:#FE6A4F;--line:#E6DFCE}
+  *{box-sizing:border-box}
+  body{margin:0;background:#e8e2d8;color:var(--dark);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+  header{background:var(--dark);color:var(--light);padding:28px 24px}
+  header h1{font:700 24px/1.25 Georgia,"Times New Roman",serif;letter-spacing:1px;text-transform:uppercase;color:var(--gold);margin:0 0 6px}
+  header p{margin:0 0 8px;max-width:74ch;color:#cfc6b4;font-size:15px}
+  nav{background:var(--dark);padding:0 24px 22px}
+  nav a{color:var(--gold);font-size:14px;margin-right:18px;text-decoration:none;border-bottom:1px solid transparent}
+  nav a:hover{border-bottom-color:var(--gold)}
+  main{max-width:1240px;margin:0 auto;padding:24px 20px 64px}
+  section{background:var(--light);border:1px solid var(--line);border-radius:8px;margin:0 0 28px;overflow:hidden}
+  .sec-head{padding:18px 22px;border-bottom:1px solid var(--line)}
+  .sec-head h2{margin:0 0 4px;font:700 19px/1.3 Georgia,"Times New Roman",serif;text-transform:uppercase;letter-spacing:1.5px}
+  .sec-head p{margin:0;font-size:14px;color:var(--mid);max-width:84ch}
+  .sec-body{padding:18px 22px}
+  .pair{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;margin:0 0 26px}
+  .col h3{margin:0 0 8px;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mint);font-weight:700}
+  iframe{width:100%;border:1px solid var(--line);border-radius:6px;background:#f7f4ec;display:block}
+  .phone{flex:0 0 410px;max-width:100%}
+  .phone iframe{height:760px}
+  .desk{flex:1 1 560px;min-width:320px}
+  .desk iframe{height:760px}
+  .tall .phone iframe,.tall .desk iframe{height:1000px}
+  .frame-w{font-size:12px;color:var(--mid);margin:6px 0 0}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 9px;border-radius:99px;vertical-align:2px;margin-left:8px}
+  .rec{background:var(--gold);color:var(--dark)}
+  .alt{background:#e6e0d2;color:var(--mid)}
+  .warn{background:var(--coral);color:#fff}
+  .ok{background:var(--mintl);color:#3f4a2c}
+  table{border-collapse:collapse;width:100%;font-size:14px;margin:0 0 8px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#efe9da;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--mid)}
+  td.bind{background:#fdecd0}
+  code{background:#efe9da;padding:1px 5px;border-radius:3px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace}
+  ul,ol{max-width:88ch}
+  li{margin:0 0 6px}
+  .q{border-left:4px solid var(--gold);padding:2px 0 2px 16px;margin:0 0 22px}
+  .q h3{margin:0 0 4px;font-size:17px;color:var(--dark)}
+  .num{font:700 15px/1 Georgia,serif;color:var(--dark)}
+  .big{font:700 34px/1 Georgia,serif;color:var(--dark);display:block;margin:0 0 2px}
+  .stat{display:flex;gap:26px;flex-wrap:wrap;margin:0 0 18px}
+  .stat div{flex:0 0 auto}
+  .stat span{font-size:13px;color:var(--mid)}
+  /* .stat span (0,1,1) outranks .big (0,1,0) — re-declare at matching weight */
+  .stat span.big{font:700 34px/1 Georgia,serif;color:var(--dark)}
+  @media (prefers-color-scheme: dark){
+    body{background:#15171a;color:#e5e7e1}
+    section{background:#1d2024;border-color:#2f3339}
+    .sec-head{border-color:#2f3339}
+    .sec-head p,.q .why,.frame-w,.stat span{color:#a8ada3}
+    .q h3,.big,.num,.stat span.big{color:#e5e7e1}
+    code{background:#2a2e33;color:#e5e7e1}
+    th{background:#24282d;color:#a8ada3;border-color:#2f3339}
+    td{border-color:#2f3339}
+    td.bind{background:#3a2f1c}
+    iframe{border-color:#2f3339;background:#15171a}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>More images on a discussion reply</h1>
+  <p>Where the limit actually lives, what it costs to raise it, and a number to pick.
+     Every frame below is the <b>real</b> <code>/forums.css</code> with the <b>real</b>
+     <code>.reply-stub</code> markup and <b>real</b> photos already in the forum, pulled through
+     the <b>real</b> <code>/img.php</code> resizer at the widths a tile would ask for.
+     The only invented CSS is <code>.reply-stub__gallery</code> — that is the thing being decided.</p>
+  <p style="font-size:13px;color:#a99a80">Left column is the phone (390px replies sheet), right is
+     the desktop discussion modal (760px panel). Frames are plain pages on this box, so nginx injects
+     the site's PWA bottom-nav into them if you open one directly — ignore it, it is not part of the design.</p>
+</header>
+<nav>
+  <a href="#headline">The headline</a>
+  <a href="#ceiling">Ceiling table</a>
+  <a href="#today">Today</a>
+  <a href="#a">Option A</a>
+  <a href="#b">Option B</a>
+  <a href="#ugly">Ugly cases</a>
+  <a href="#page">A whole page</a>
+  <a href="#pick">The number</a>
+</nav>
+
+<main>
+
+<section id="headline">
+  <div class="sec-head"><h2>The headline <span class="tag warn">live defect</span></h2>
+    <p>This is not only a feature request. Images that members already uploaded are already
+       being hidden from them.</p></div>
+  <div class="sec-body">
+    <div class="stat">
+      <div><span class="big">5,118</span><span>published replies</span></div>
+      <div><span class="big">506</span><span>carry at least one photo</span></div>
+      <div><span class="big">231</span><span>carry <b>more than one</b> — and show only the first</span></div>
+      <div><span class="big">11</span><span>most photos on a single reply</span></div>
+    </div>
+    <p>The upload path has never had a cap. Members have been attaching 2, 3, 4, 5 photos to replies
+       for years and the forum has been storing every one of them. The hub replies list then renders
+       <b>exactly one</b> and drops the rest on the floor, with no “+3 more”, no indication anything
+       is missing. 231 replies are in that state right now.</p>
+    <p>So “allow more images on a reply” is mostly a <b>render</b> change, not an upload change.</p>
+  </div>
+</section>
+
+<section id="ceiling">
+  <div class="sec-head"><h2>Where the limit really lives</h2>
+    <p>Seven layers can cap this. Six of them do not. The highlighted row is the one that binds.</p></div>
+  <div class="sec-body">
+    <table>
+      <tr><th>Layer</th><th>Where</th><th>Current value</th><th>Binds?</th></tr>
+      <tr class="bindrow"><td colspan="4" style="padding:0;border:0"></td></tr>
+      <tr><td><b>Composer — file input</b></td><td><code>hub-polish.js:3662</code>, <code>:4179</code>; <code>forums.js:160</code></td><td>no <code>multiple</code>, one file per pick, no count check anywhere</td><td>No — but 1 tap per photo</td></tr>
+      <tr><td><b>Composer — pending array</b></td><td><code>lrsMediaIds</code>, <code>lcpMediaIds</code>, <code>frmTray</code></td><td><b>uncapped</b></td><td>No</td></tr>
+      <tr><td><b>Write endpoint</b></td><td><code>bb-mirror/api/v0/reply.php</code></td><td><code>media_ids[]</code> / <code>keep_media_ids[]</code> — <b>no count check</b></td><td>No</td></tr>
+      <tr><td><b>BuddyBoss</b></td><td><code>bp_media_allowed_per_batch</code></td><td><b>3</b> — but only reaches Dropzone's <code>maxFiles</code> in the <i>native</i> theme (<code>bp-nouveau/…/media/functions.php:141</code>) and a REST settings read-out. <b>Nothing enforces it server-side.</b></td><td>No — advisory</td></tr>
+      <tr><td>BuddyBoss per-file size</td><td><code>bp_media_allowed_size</code></td><td>5 MB per file</td><td>No (per file)</td></tr>
+      <tr><td>PHP</td><td>pool <code>looth-dev</code></td><td><code>upload_max_filesize</code> 64M, <code>post_max_size</code> 64M, <code>max_file_uploads</code> 20</td><td>No — <b>uploads are one file per request</b>, so the 20 never applies</td></tr>
+      <tr><td>nginx</td><td><code>dev2…conf:41</code></td><td><code>client_max_body_size 8000M</code></td><td>No</td></tr>
+      <tr><td class="bind"><b>RENDER — the hub replies list</b></td><td class="bind"><code>bb-mirror/web/forums/_topic-replies.php:53</code></td><td class="bind"><code>ORDER BY id ASC <b>LIMIT 1</b></code> in a LATERAL join → a single <code>reply_image_url</code> → one <code>&lt;img&gt;</code> in <code>_reply-render.php:589</code></td><td class="bind"><b>YES — this is the whole limit</b></td></tr>
+    </table>
+    <p style="margin-top:14px"><b>The single-topic page already renders all N.</b>
+       <code>_single-topic.php:256</code> <code>render_attachments()</code> loops every attachment with
+       <code>srcset</code>, <code>sizes</code>, <code>width</code>/<code>height</code>, <code>loading=lazy</code>,
+       a lightbox link, a wrap-grid on desktop and a <b>swipe carousel on mobile</b> (<code>forums.css:3537</code>).
+       Reply 58510's four photos render there today. The good pattern is already written, 200 lines from the
+       code that caps at one.</p>
+    <p><b>The one number the hub gets wrong.</b> The capped image is fetched at
+       <code>w=800</code> (<code>lg_cover_src()</code> default) into a box that CSS limits to
+       <code>max-height:240px</code>, with no <code>srcset</code> and no <code>width</code>/<code>height</code>.
+       Measured on real photos: <span class="num">79 KB</span> at w=800 vs <span class="num">11.6 KB</span>
+       at w=240. The hub is over-fetching about 7&times; per reply image and taking a layout shift for it.</p>
+  </div>
+</section>
+
+<section id="today">
+  <div class="sec-head"><h2>Today <span class="tag warn">what it looks like now</span></h2>
+    <p>Reply 58510 — a real Martin repair, four photos stored since September 2025. This is what a member
+       who posted four photos actually sees.</p></div>
+  <div class="sec-body"><div class="pair">
+    <div class="col phone"><h3>Phone — replies sheet</h3><iframe src="today--phone.html" sandbox></iframe><p class="frame-w">390px · 1 of 4 photos shown</p></div>
+    <div class="col desk"><h3>Desktop — discussion modal</h3><iframe src="today--desk.html" sandbox></iframe><p class="frame-w">760px · 1 of 4 photos shown</p></div>
+  </div></div>
+</section>
+
+<section id="a">
+  <div class="sec-head"><h2>Option A — grid, six tiles, “+N” for the rest <span class="tag rec">recommended</span></h2>
+    <p>A 6-column grid with span rules, so no count leaves an orphan gap. <b>Display</b> is capped at six
+       tiles no matter how many are attached; the sixth wears a <code>+N</code> and opens the rest.
+       One image is not a gallery — it keeps today's bare <code>&lt;img&gt;</code> exactly, so the 275
+       one-photo replies are untouched.</p></div>
+  <div class="sec-body">
+    <div class="pair"><div class="col phone"><h3>2 images</h3><iframe src="a02--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>2 images — desktop</h3><iframe src="a02--desk.html" sandbox></iframe></div></div>
+    <div class="pair"><div class="col phone"><h3>3 images</h3><iframe src="a03--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>3 images — desktop</h3><iframe src="a03--desk.html" sandbox></iframe></div></div>
+    <div class="pair"><div class="col phone"><h3>5 images</h3><iframe src="a05--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>5 images — desktop</h3><iframe src="a05--desk.html" sandbox></iframe></div></div>
+    <div class="pair"><div class="col phone"><h3>9 images → 6 + “+3”</h3><iframe src="a09--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>9 images — desktop</h3><iframe src="a09--desk.html" sandbox></iframe></div></div>
+    <div class="pair"><div class="col phone"><h3>20 images → 6 + “+14”</h3><iframe src="a20--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>20 images — desktop</h3><iframe src="a20--desk.html" sandbox></iframe></div></div>
+    <p><b>Why the display cap matters more than the upload cap:</b> with it, a reply stub is never taller
+       than two grid rows and a page of replies never fetches more than six tiles per reply — whatever
+       number you allow people to attach. It decouples “how many may I post” from “what does it cost to scroll”.</p>
+    <p>Measured in a real browser at 390&times;844, DPR&nbsp;2 — the height of the whole reply stub,
+       text and reaction bar included:</p>
+    <table>
+      <tr><th>Reply</th><th>Stub height, phone</th><th>Stub height, desktop</th></tr>
+      <tr><td>Today — 1 image</td><td><b>354 px</b></td><td>—</td></tr>
+      <tr><td>A — 2 images</td><td>261 px</td><td>—</td></tr>
+      <tr><td>A — 3 images</td><td>247 px</td><td>—</td></tr>
+      <tr><td>A — 5 images</td><td>369 px</td><td>—</td></tr>
+      <tr><td>A — 9 images (6 + “+3”)</td><td class="bind"><b>355 px</b></td><td>578 px</td></tr>
+      <tr><td>A — 20 images (6 + “+14”)</td><td class="bind"><b>355 px</b></td><td>578 px</td></tr>
+    </table>
+    <p><b>That is the whole argument in one row.</b> A reply carrying twenty photos is
+       <b>355 px</b> tall — one pixel more than the single-image reply the hub renders today.
+       Above six, the count stops affecting the layout entirely, so picking the upload number
+       becomes a policy question rather than a design one.</p>
+  </div>
+</section>
+
+<section id="b">
+  <div class="sec-head"><h2>Option B — swipe carousel on phone, full grid on desktop <span class="tag alt">alternative</span></h2>
+    <p>Show every image, no truncation. On the phone it becomes a horizontal scroll-snap strip —
+       which is <b>already shipped behaviour</b> for topic attachments on the single-topic page, so it is
+       consistent rather than new. Cost: a reply can now be arbitrarily wide-scrolling, and the payload
+       grows linearly with the cap.</p></div>
+  <div class="sec-body">
+    <div class="pair"><div class="col phone"><h3>5 images — carousel</h3><iframe src="b05--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>5 images — desktop grid</h3><iframe src="b05--desk.html" sandbox></iframe></div></div>
+    <div class="pair tall"><div class="col phone"><h3>9 images — carousel</h3><iframe src="b09--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>9 images — desktop grid, all shown</h3><iframe src="b09--desk.html" sandbox></iframe></div></div>
+    <div class="pair tall"><div class="col phone"><h3>20 images — carousel</h3><iframe src="b20--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>20 images — desktop grid, all shown <span class="tag warn">this is the problem</span></h3><iframe src="b20--desk.html" sandbox></iframe></div></div>
+    <p><b>The 20-image desktop frame is the argument against B</b>, and it is worse than it looks in a
+       thumbnail. Measured: that single reply stub is <b>1,729 px</b> tall — seven grid rows. Nine images
+       is already 808 px. One reply out of the five on the page pushes every other voice off the screen,
+       and the “Load 5 more” button ends up two full screens below the fold.</p>
+    <table>
+      <tr><th>Reply</th><th>Stub height, desktop</th><th>vs. Option A</th></tr>
+      <tr><td>B — 9 images, all shown</td><td>808 px</td><td>A: 578 px</td></tr>
+      <tr><td>B — 20 images, all shown</td><td class="bind"><b>1,729 px</b></td><td>A: 578 px</td></tr>
+    </table>
+    <p>B is still worth a look if you want no truncation at all — but then the upload cap has to do
+       all the work, because nothing downstream is holding the page together.</p>
+  </div>
+</section>
+
+<section id="ugly">
+  <div class="sec-head"><h2>The ugly cases</h2>
+    <p>The ones that decide whether a grid is honest.</p></div>
+  <div class="sec-body">
+    <div class="pair"><div class="col phone"><h3>Single image — must not change</h3><iframe src="ugly-single--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>Single image — desktop</h3><iframe src="ugly-single--desk.html" sandbox></iframe></div></div>
+    <div class="pair"><div class="col phone"><h3>Real reply 58510 — 3 landscape + 1 portrait</h3><iframe src="ugly-real4--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>Same, desktop</h3><iframe src="ugly-real4--desk.html" sandbox></iframe></div></div>
+    <div class="pair"><div class="col phone"><h3>All portrait — 5 phone shots <span class="tag warn">crop</span></h3><iframe src="ugly-portrait--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>Same, desktop</h3><iframe src="ugly-portrait--desk.html" sandbox></iframe></div></div>
+    <div class="pair"><div class="col phone"><h3>One portrait among landscapes — 9</h3><iframe src="ugly-mixed9--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>Same, desktop</h3><iframe src="ugly-mixed9--desk.html" sandbox></iframe></div></div>
+    <p><b>The honest cost of a square grid:</b> tiles are <code>object-fit:cover</code>, so a portrait photo
+       loses its top and bottom in the thumbnail. Tapping opens the whole image. The alternative —
+       letting tiles keep their natural aspect — gives ragged rows, which is worse in a list of five
+       replies. Worth a look at the all-portrait frame before signing off; that is where it bites.</p>
+  </div>
+</section>
+
+<section id="page">
+  <div class="sec-head"><h2>A whole page of replies — the real payload unit</h2>
+    <p>The replies fragment serves <b>five stubs per fetch</b> (<code>_topic-replies.php:110</code>,
+       <code>$PER = 5</code>, then “Load 5 more”). So the number that matters is not one reply — it is
+       five replies all carrying photos. Here every one of the five does: 6, 3, 20, 2, 5.</p></div>
+  <div class="sec-body">
+    <div class="pair tall"><div class="col phone"><h3>Phone — one “Load more” of five</h3><iframe src="page5--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>Desktop — same five</h3><iframe src="page5--desk.html" sandbox></iframe></div></div>
+    <p>Measured page height with all five replies carrying photos: <b>1,522 px</b> on the phone,
+       <b>2,455 px</b> on desktop — about 1.8 and 2.7 screens. Twenty-two tiles in total, none broken.</p>
+    <table>
+      <tr><th>Scenario</th><th>Tiles per page of 5</th><th>Bytes if all decode</th></tr>
+      <tr><td>Today — 1 per reply at <code>w=800</code></td><td>5</td><td><b>395 KB</b></td></tr>
+      <tr><td>Option A — 6 tiles at <code>w=240</code> (DPR 1)</td><td>30</td><td><b>348 KB</b> — <i>less than today</i></td></tr>
+      <tr><td>Option A — 6 tiles at <code>w=480</code> (DPR 2–3)</td><td>30</td><td><b>1.07 MB</b></td></tr>
+      <tr><td>Option B — 20 uncapped, DPR 2–3</td><td>100</td><td><b>3.6 MB</b></td></tr>
+    </table>
+    <p style="font-size:14px;color:var(--mid)">Bytes measured through the real <code>/img.php</code> on
+       four real attachments (WebP out): 11.6 KB avg at w=240, 35.8 KB at w=480, 79.0 KB at w=800,
+       against ~187 KB for the raw JPEG original. Every tile is <code>loading="lazy"</code> and carries
+       <code>width</code>/<code>height</code>, so rows below the fold cost nothing until they are
+       scrolled to — the “all decode” column is the worst case, not the typical one. On a 844 px phone
+       screen roughly the first two replies are in view, so the real first-paint cost of option A is
+       nearer <b>430 KB</b>.</p>
+    <p style="font-size:14px;color:var(--mid)"><b>One thing this deck caught by measuring rather than
+       reasoning:</b> the first cut declared a flat <code>sizes="33vw"</code> for every layout. The
+       browser probe showed the 2-up and 4-up tiles — which are half-width, not thirds — pulling the
+       <code>w=800</code> candidate: a 79 KB fetch for a 160 px tile, the exact defect this deck accuses
+       today's code of. <code>sizes</code> now tracks the span rules. Worth remembering when this gets
+       built: the attribute is not decorative.</p>
+  </div>
+</section>
+
+<section id="pick">
+  <div class="sec-head"><h2>The number</h2><p>One recommendation, one alternative.</p></div>
+  <div class="sec-body">
+    <div class="q">
+      <h3>Recommended: <b>10 attached, 6 displayed, “+N” for the rest</b> <span class="tag rec">A</span></h3>
+      <p><b>Why 10.</b> The most photos anyone has ever put on a real reply is 5 — twice over covers
+         every reply in the forum's history with room to spare. It is a comment, not an album: the topic
+         itself is where a big gallery belongs. And 10 is the largest number that still survives the
+         upload flow as it exists — photos go up <b>one tap at a time</b> (no <code>multiple</code> on any
+         file input), so 20 means twenty separate picks.</p>
+      <p><b>Why not higher.</b> Nothing in the render breaks above 10 once display is capped at six —
+         the reasons are upstream: per-file limit is 5 MB, so 20 photos is up to 100 MB uploaded from a
+         phone on cellular for one comment, and the moderation surface grows with no ceiling.</p>
+      <p><b>Why not lower.</b> 6 would also be defensible and is <i>cheaper</i> — see below.</p>
+    </div>
+    <div class="q">
+      <h3>Alternative: <b>6 attached, all 6 displayed, no “+N” at all</b> <span class="tag alt">B</span></h3>
+      <p>Simpler: no truncation affordance to design, no “+N” tap target, every attached photo visible.
+         6 still covers <b>100%</b> of replies ever posted (max is 5). And it is close to free —
+         a previous lane already built and verified this exact cap: render-to-6, the server edit cap,
+         and the client guard are sitting on branch <code>reply-images-6</code>, unmerged.
+         Choosing 6 is mostly a merge; choosing 10 adds the “+N” overflow tile on top of it.</p>
+    </div>
+    <p><b>Either way, three things should ship regardless of the number:</b></p>
+    <ol>
+      <li>Reply images move onto the same <code>srcset</code> / <code>sizes</code> /
+          <code>width</code>&amp;<code>height</code> contract the single-topic page already uses.
+          Today's single image over-fetches ~7&times; and shifts layout — that is a standing craft-gate
+          violation, independent of counts.</li>
+      <li>A cap that is enforced <b>server-side on create</b>, not only in the composer. There is no
+          server count check anywhere today, which is exactly why 10- and 11-image replies exist.</li>
+      <li><code>multiple</code> on the file input. Without it the cap is theatre: no file input in any
+          composer has it, so “ten photos” means ten separate trips through the picker. It is a
+          one-attribute change and it is the difference between the number being usable and being a
+          number.</li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>Coordination — what this needs from <code>composer-p3</code></h2>
+    <p>The composer is being rewritten right now. Nothing here should be built against the code that
+       exists today.</p></div>
+  <div class="sec-body">
+    <p>Per <code>docs/atlas/COMPOSER-V2-P3-INVENTORY.md</code>, phase 3 repoints entry points E1–E6 at
+       <code>openComposerSheet()</code> and deletes the five native create paths (W1–W5). That is good
+       news for this lane, because the count work lands almost entirely on the <b>render</b> side, and
+       what little lands on the composer lands on <b>one</b> composer instead of three.</p>
+    <p>Three asks, all small, and none of them a fork:</p>
+    <ol>
+      <li><b>A cap constant on the seam.</b> <code>openComposerSheet()</code> should accept — or expose —
+          a max-attachment number, and <code>lgcUploadPhoto()</code> should refuse past it with the same
+          error affordance it already uses for a failed upload. Today there is no count check anywhere
+          in that function.</li>
+      <li><b>A count read-out.</b> The strip needs “6 of 10” so the cap is visible before it is hit,
+          rather than a rejection at the eleventh tap.</li>
+      <li><b>The <code>multiple</code> attribute on <code>#lgc-file</code></b>, with
+          <code>lgcUploadPhoto()</code> called per file. The per-file machinery to support this is
+          <i>already there</i> — progress, retry, removal, supersede guard, optimistic tile — it is
+          only ever handed <code>files[0]</code>.</li>
+    </ol>
+    <p><b>What this lane does not need from p3:</b> nothing on the render path, nothing on the edit path
+       (edits already PUT the owned mirror endpoint), and no new upload endpoint. If p3 lands its seam
+       as inventoried, the composer half of this is three small changes inside one function.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>What does <i>not</i> break</h2><p>Checked rather than assumed.</p></div>
+  <div class="sec-body">
+    <ul>
+      <li><b>Weekly digest / email.</b> <span class="tag ok">safe</span> The forum section renders at most
+          <b>one</b> 240px thumbnail per item, sourced from the featured image or the first
+          <code>&lt;img&gt;</code> in <code>post_content</code>
+          (<code>templates/sections/forum.php:16-21</code>). Reply photos are <code>bp_media</code>
+          attachments and are not in <code>post_content</code>, so they never reach the email at all.
+          Structurally immune to the count.</li>
+      <li><b>Single-topic page.</b> <span class="tag ok">safe</span> Already uncapped and already correct —
+          it is the reference implementation, not a risk.</li>
+      <li><b>Feed card teaser.</b> <span class="tag ok">safe</span> Deliberately takes one image
+          (<code>_feed.php:896</code>) and defers it behind “Show image”. Should stay at one — the card
+          is a teaser.</li>
+      <li><b>Upload UX at higher counts.</b> <span class="tag ok">already built</span> Composer v2's
+          <code>lgcUploadPhoto()</code> already does per-file progress, per-file failure with a
+          <code>↻</code> retry, per-file removal, an optimistic tile before the first byte leaves, and a
+          supersede guard for re-tries. The thing that would have needed building for 20 photos exists.
+          The legacy <code>lrs</code> composer does <b>not</b> have it — which is the coordination note below.</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+</body>
+</html>
