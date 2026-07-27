@@ -173,6 +173,29 @@ recorded identity map so the collision resolver can be rehearsed off-live.
 
 Idempotent: re-running is a no-op and cannot double-suffix — which is also the resume path.
 
+### Reporting on a box you cannot run code on
+
+The box that must be reported on (LIVE) and the box that can run the deriver are often not
+the same box. Do **not** reimplement the cleaning rules in SQL to run over there — that is
+the split-brain this contract exists to prevent. Export and run the one deriver:
+
+```bash
+# on LIVE, as looth-ro — SELECTs only, cannot write
+bash profile-app/bin/export-for-slug-dryrun.sh /tmp/live
+# copy the two TSVs to the box with the code, then
+sudo -u profile-app php profile-app/bin/backfill-slugs.php --scope=repair \
+     --from-tsv=/tmp/live-members.tsv --owners-tsv=/tmp/live-owners.tsv \
+     --html=/tmp/live-dryrun.html
+```
+
+Offline mode is verified byte-identical to a direct connection on the same data, forces
+dry-run (there is no connection to write through), and stamps the report with the export
+it came from — a report that cannot say where its rows came from will be mistaken for
+production by whoever opens it next.
+
+The export script prints `siteurl` first, because on the live box **`looth_dev` is a
+decoy** — it is dev.loothgroup.com's own frozen database. The live WP DB is `looth_import`.
+
 **There is deliberately no "re-derive everyone" scope.** It was built, run and rejected on
 the evidence: because the canonical form of some names is already held, it proposed
 `iandavlin` → `ian-davlin5` and `charlesfox` → `charles-fox2`. A member who already owns a

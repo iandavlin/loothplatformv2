@@ -84,14 +84,42 @@ if (!in_array($SCOPE, ['junk', 'repair'], true)) {
     exit(2);
 }
 
-$pg = Db::pg();
+// ── OFFLINE MODE ─────────────────────────────────────────────────────────────
+// --from-tsv/--owners-tsv run the derivation against a read-only EXPORT instead of a
+// live connection. This exists because the box that must be reported on (live) and the
+// box that can run this code are not always the same box, and the alternative —
+// reimplementing the derivation in SQL to run over there — is precisely the split-brain
+// this lane keeps closing. Same code, exported data, and it CANNOT write: offline mode
+// forces dry-run because there is no connection to write through.
+$FROM = null; $OWNERS = null;
+foreach ($argv as $a) {
+    if (str_starts_with($a, '--from-tsv='))   $FROM   = substr($a, 11);
+    if (str_starts_with($a, '--owners-tsv=')) $OWNERS = substr($a, 13);
+}
+$OFFLINE = $FROM !== null;
+if ($OFFLINE) { $APPLY = false; $SINCE = 0; }
+
+$readTsv = function (string $path): array {
+    $rows = [];
+    $fh = fopen($path, 'r');
+    if ($fh === false) { fwrite(STDERR, "cannot read $path\n"); exit(2); }
+    $head = fgetcsv($fh, 0, "\t", '"', '\\');
+    while (($r = fgetcsv($fh, 0, "\t", '"', '\\')) !== false) {
+        if ($r === [null] || $r === false) continue;
+        $rows[] = array_combine($head, array_pad(array_slice($r, 0, count($head)), count($head), ''));
+    }
+    fclose($fh);
+    return $rows;
+};
+
+$pg = $OFFLINE ? null : Db::pg();
 $isJunk     = fn(string $s): bool => (bool) preg_match('/^patreon[_-]?\d+$/i', trim($s));
 $emailLocal = fn(string $e): string => (string) preg_replace('/\+.*$/', '', explode('@', $e)[0] ?? '');
 
 // ── candidates ───────────────────────────────────────────────────────────────
 // Bridged (can actually log in) and not archived. An unbridged identity is not a member
 // — its /u/ 404s by ghost containment, so a prettier slug would just be a prettier 404.
-$cand = $pg->query("
+$cand = $OFFLINE ? $readTsv($FROM) : $pg->query("
     SELECT u.id, u.display_name, u.slug, u.primary_email, u.slug_changed_at,
            b.wp_user_id, p.claimed_via
     FROM users u
@@ -104,13 +132,21 @@ $cand = $pg->query("
 // ── ownership map (for collision detection) ──────────────────────────────────
 // A handle is taken if it is live on another member OR parked in another member's
 // slug_history — retired handles are never re-issued, or whoever took your old handle
-// inherits every link that ever pointed at you.
+// inherits every link that ever pointed at you. Archived and unbridged rows are INCLUDED
+// here even though they are not candidates: a ghost that cannot log in still squats on
+// the handle, and pretending otherwise would mint a duplicate.
 $ownerOf = [];
-foreach ($pg->query('SELECT id, lower(slug) s FROM users WHERE slug IS NOT NULL')->fetchAll(PDO::FETCH_ASSOC) as $r) {
-    $ownerOf[$r['s']][] = (int) $r['id'];
-}
-foreach ($pg->query('SELECT user_id, lower(slug) s FROM slug_history')->fetchAll(PDO::FETCH_ASSOC) as $r) {
-    $ownerOf[$r['s']][] = (int) $r['user_id'];
+if ($OFFLINE) {
+    foreach ($OWNERS !== null ? $readTsv($OWNERS) : [] as $r) {
+        $ownerOf[strtolower((string) $r['slug'])][] = (int) $r['owner_id'];
+    }
+} else {
+    foreach ($pg->query('SELECT id, lower(slug) s FROM users WHERE slug IS NOT NULL')->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $ownerOf[$r['s']][] = (int) $r['id'];
+    }
+    foreach ($pg->query('SELECT user_id, lower(slug) s FROM slug_history')->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $ownerOf[$r['s']][] = (int) $r['user_id'];
+    }
 }
 $freeFor = function (string $slug, int $selfId) use (&$ownerOf): bool {
     $o = $ownerOf[strtolower($slug)] ?? [];
@@ -449,6 +485,16 @@ if ($HTML) {
     fwrite($f, '<h1>Profile URL backfill</h1><p class="sub">' . $h(date('Y-m-d H:i T')) . ' &middot; '
         . count($cand) . ' active members &middot; <b>' . count($actionable) . '</b> would change &middot; <b>'
         . count($needRuling) . '</b> need your ruling &middot; nothing has been written.</p>');
+    // Provenance banner. An offline run is only as live as the export it was fed, and a
+    // report that does not say where its rows came from is one that WILL be mistaken for
+    // live data by whoever opens it next.
+    if ($OFFLINE) {
+        fwrite($f, '<div class="warn" style="background:#fdecea;border-color:#e8b4ae"><b>Read this first — where these rows came from.</b> '
+            . 'Generated OFFLINE from the export <code>' . $h(basename((string) $FROM)) . '</code>'
+            . ($OWNERS ? ' (+ <code>' . $h(basename((string) $OWNERS)) . '</code>)' : '')
+            . '. It is exactly as live as that file and no more. If that export did not come from the '
+            . 'production database, <b>these are not production numbers.</b></div>');
+    }
     fwrite($f, '<div class="warn"><b>How collisions are handled.</b> No member is ever given a numeric suffix. '
         . 'Where two members clean to the same handle, the name is expanded from a fuller identity '
         . '(<code>dave-thurston</code>, not <code>dave2</code>) — but only when the stored name was still the raw '
