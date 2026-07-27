@@ -149,7 +149,21 @@ Stated so the diff can be read against it:
 
 ---
 
-## 5. OPEN — scope question for keeper (blocking the deletion commit)
+## 5. RESOLVED — keeper's ruling 2026-07-26
+
+**Scope: ALL FIVE.** W1 frm, W2 fc-composer, W3 fb-inline get the full composer-v2 claim
++ native create deleted; W4 fic deleted (dev-only); **W5 single-topic form is
+retarget-only** — its fetch moves to `/bb-mirror-api/v0/reply`, its own Quill UI is left
+alone, because composer v2 is path-gated to `/hub` and that page is not. Gate must read
+**zero** native `'/reply'` creates.
+
+**Stopgap: KEEP as backstop.** The `bbp_new_reply` hook stays, re-commented from
+"stopgap" to "backstop": it stops being load-bearing (which is what "the stopgap stops
+being needed" asked for) while still covering any future native path for free.
+
+*Original question retained below for the record.*
+
+## 5a. The question as posed (superseded by the ruling above)
 
 The plan names three surfaces. Re-verification found five. The two extras are not
 optional extras — they decide whether phase 3 meets its stated purpose.
