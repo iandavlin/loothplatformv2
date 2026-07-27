@@ -96,7 +96,10 @@ link_one() {
 # Top-level repo-managed files (everything here except repo meta files)
 for f in "$SRC"/*; do
     name="$(basename "$f")"
-    case "$name" in README.md|install-symlinks.sh|.gitignore) continue ;; esac
+    # lg-wp-load.php is a LIBRARY, not an endpoint — its consumers require it by
+    # __DIR__ inside the repo, so linking it would only publish a URL that returns
+    # an empty 200. Repo meta files are skipped for the same reason: not surfaces.
+    case "$name" in README.md|install-symlinks.sh|.gitignore|lg-wp-load.php) continue ;; esac
     [ -f "$f" ] || continue
     link_one "$name" "$f"
 done
