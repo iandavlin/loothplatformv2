@@ -5,8 +5,8 @@ Written so the next person does not re-derive this. Three lanes have now gone
 looking for this limit (`reply-images` @`26be43a`, `reply-images-6` @`af8eb89`,
 this one); all three found the same thing in a different order.*
 
-Previs deck (frames + measurements, behind the dev gate):
-**https://dev2.loothgroup.com/mockups/reply-images/index.html**
+Previs (behind the dev gate) — §9 is what shipped after Ian ruled max 6:
+**https://dev2.loothgroup.com/mockups/reply-images/**
 
 ---
 
@@ -33,12 +33,20 @@ mirror (which is a faithful copy of live):
 | | |
 |---|---|
 | published replies | 5,118 |
-| replies carrying ≥1 photo | 506 |
-| replies carrying **>1** photo — showing only the first | **231** |
-| most photos on one reply | 11 (`reply_id` 72084) |
+| replies carrying ≥1 photo | 504 |
+| replies carrying **>1** photo — showing only the first | **229** |
+| images stored but never rendered | **367** |
+| most photos on one published reply | **5** |
 
-231 replies are silently hiding images their authors successfully uploaded, with
+229 replies are silently hiding images their authors successfully uploaded, with
 no "+N more" and no indication anything is missing.
+
+> Counting note: `forums.attachment` alone reports 506 parents and a maximum of
+> 11, which is what a first pass finds. Two of those parents are **orphans** —
+> their `forums.reply` rows no longer exist (synthetic leftovers from the
+> `reply-images-6` lane). Join to `forums.reply … status='publish'` and the real
+> figures are the ones above. It matters: the orphans are the only thing that
+> ever made the cap look like it would truncate live content.
 
 ---
 
@@ -90,6 +98,11 @@ Any build here should lift `render_attachments()`'s contract rather than invent 
 Measured in a real browser at 390×844 DPR 2 (phone) and 820px (desktop), against
 the real `/hub/forums.css` and real photos through the real `/img.php`.
 Harness: `footer-mockups/reply-images/{gen.py,shoot.py}`.
+
+> These are the **exploration** numbers, taken against hand-written previs markup
+> before the ruling, and they include counts (9, 20) that are now out of scope.
+> They are kept because they are what the decision was made from. For what the
+> shipped code actually measures, see §9.
 
 ### Height — this is the whole design question
 
@@ -189,18 +202,27 @@ Nothing is needed from p3 on the render path or the edit path.
 
 ---
 
-## 7. Recommendation put to Ian (2026-07-27) — **awaiting his pick**
+## 7. THE RULING — **max 6** (Ian, keeper-relayed, 2026-07-27)
 
-- **Recommended: 10 attached, 6 displayed, "+N" for the rest.** The most photos on
-  any real reply is 5, so 10 is 2× every reply in the forum's history; above 6 the
-  display cap makes count layout-neutral, so the number is policy not design; and
-  10 is about the most the one-tap-per-photo upload flow survives.
-- **Alternative: 6 attached, all 6 shown, no "+N".** Still covers 100% of replies
-  ever posted, no truncation affordance to design — and it is nearly free, because
-  `reply-images-6` already built and verified exactly this.
-- **Ship regardless of the number:** the `srcset`/`sizes`/`width`&`height` contract
-  on reply images; a cap enforced **server-side on create**; and `multiple` on the
-  file input.
+Recommendation accepted at the alternative: **6 attached, all 6 shown.** Built in
+this lane; §9 is what shipped.
+
+**Nothing existing is truncated by 6.** The most photos on any published reply is
+**five**. The two rows in `forums.attachment` holding 10 and 11 are *orphans* —
+their `forums.reply` rows no longer exist (leftovers from `reply-images-6`'s
+synthetic tests). So the cap costs zero live content, and the `+N` affordance
+exists only so that an over-cap reply is shown as truncated rather than dropped
+silently the way `LIMIT 1` did.
+
+Measured against published replies at build time:
+
+| | |
+|---|---|
+| replies carrying images | 504 |
+| unchanged (single image) | 275 |
+| **replies that stop hiding images** | **229** |
+| **images that become visible for the first time** | **367** |
+| replies truncated by the cap | **0** |
 
 ---
 
@@ -225,3 +247,82 @@ Nothing is needed from p3 on the render path or the edit path.
   127.0.0.1"` puts the browser on loopback, which the dev gate authorizes via
   `geo $loothdev_src_local` — no cookie needed, no trip through the CF edge.
   Launch + drive + kill in ONE bash call; the box is 3.8 GB at a 4-lane cap.
+
+---
+
+## 9. What shipped (lane `reply-images-count`, 2026-07-27)
+
+Two pieces, as ruled: render what members already posted, and make 6 real.
+
+### The single constant
+
+`bb-mirror/config.php` → `LG_REPLY_IMG_MAX = 6`. Both the renderer and the write
+endpoint `require` that file, so the number cannot drift between what is stored
+and what is shown. `auth.php` ships it to the browser as `reply_image_max` so the
+composer's guard is the same 6 the server enforces — with the conservative value
+as the fallback when the field is absent (stale cached JS must land **on** the
+cap, never on "no cap").
+
+### Piece 1 — render (the live defect)
+
+| File | Change |
+|---|---|
+| `web/forums/_topic-replies.php` | the `LIMIT 1` LATERAL becomes a `json_agg` of `{url,w,h}` ordered by `position, id` and sliced to the constant, plus an **uncapped** `total` so an over-cap reply can show `+N`. Ordering verified identical to the old `id ASC` across all 506 rows, so the first image — and the feed teaser that reuses it — is unchanged. |
+| `web/forums/_reply-render.php` | accepts either the rich `reply_images` list or the legacy single `reply_image_url` (the feed teaser still sends one). 1 image → **byte-identical legacy markup**; 2-6 → `.reply-stub__gallery`; over-cap → 6 tiles + `+N`. Every tile carries `srcset` (240/480/800), `sizes`, intrinsic `width`/`height`, `loading=lazy`. |
+| `web/forums.css` | `.reply-stub__gallery` — 6-column grid with span rules (2/4 half-width, 3/6 thirds, 5 = three thirds then two halves), so no count leaves an orphan gap. Tiles keep `.reply-stub__img`, so the existing lightbox handler needs no JS change. |
+
+**`sizes` must track the span rule, not the count.** A flat `33vw` makes the
+half-width 2-up and 4-up tiles pull the `w=800` candidate — 79 KB for a 160 px
+tile, the exact over-fetch the gallery exists to end. `verify.sh` asserts both
+directions (each layout declares its own rule and never the other one).
+
+### Piece 2 — the cap at the door
+
+| Where | Enforcement | Bites today? |
+|---|---|---|
+| `api/v0/reply.php` POST | 422 `too_many_media` **before** `rest_do_request` | **Yes** — composer v2 posts creates here |
+| `api/v0/reply.php` PUT | 422 on the **resulting** set (kept + added) before `wp_update_post`, so an edit cannot walk a reply past the cap one photo at a time | **Yes** — all edits go here |
+| composer v2 `lgcUploadPhoto` | refuses past the cap, disables the photo button, live "3 of 6" read-out | **Yes** |
+| `lgComposerTray({max:6})` | same guard for the legacy desktop trays (frm reply modal, single-topic reply form) | Yes — **interim**, see below |
+
+The composer counts **chips in the strip**, not `lcpMediaIds`: an upload in
+flight, a failed-and-retryable one, and a photo kept on an edit each occupy a
+slot exactly as the member sees them. Counting the ids array would miss all
+three and let someone queue past the cap. Topic composing shares this composer
+and is deliberately **not** capped — this is a reply cap.
+
+**The one honest gap.** The legacy desktop reply composers still POST BuddyBoss
+REST direct on create (inventory W1/W5), so `reply.php`'s 422 never sees them and
+their client guard is all that holds the cap on that surface.
+**`composer-p3` deletes exactly those paths** — once it lands, the server is the
+backstop everywhere and `lgComposerTray`'s `max` is belt-and-braces. It was added
+rather than deferred because without it the cap is cosmetic on desktop today.
+
+### Verification
+
+`footer-mockups/reply-images/verify.sh` — **36 assertions, green**, run through
+the real renderer against the live mirror with no serve window
+(`sudo -u postgres bash verify.sh`). It proves the single-image case is
+**byte-identical** by rendering the same reply through the pre-change renderer
+pulled straight out of git and diffing, checks cell counts and the full image
+contract for 2-6, checks `sizes` both ways, checks the `+N`, and checks that both
+server caps sit *before* the writes they guard.
+
+`render-harness.php` is the reusable piece: it requires the shipping renderer and
+runs the shipping query, so reply markup can be verified — and previewed — without
+deploying anything.
+
+**Not proven, and it needs a serve window plus a real device:** the 422 exercised
+by an actual over-cap request, the composer guard and read-out driven by a real
+finger, and the gallery on Ian's phone.
+
+### Previs
+
+https://dev2.loothgroup.com/mockups/reply-images/ — 1 through 6, the over-limit
+case, real reply 58510, and a page of five, phone and desktop. Frames are the
+**actual shipped output**: markup from `render-harness.php`, stylesheet is this
+branch's `forums.css` copied whole.
+
+Measured stub heights, 390 px phone at DPR 2: 1 image **332 px**, 2 **237**,
+3 **223**, 4 **360**, 5 **345**, **6 → 331 px** — a six-photo reply is a pixel
+shorter than the single-image reply the hub renders today.

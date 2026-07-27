@@ -44,13 +44,37 @@ $rs = $db->prepare("
            LEFT(r.content_text, 200) AS excerpt,
            r.content_html,
            r.created_at,
-           reply_img.url AS reply_image_url
+           reply_img.imgs  AS reply_images,
+           reply_img.total AS reply_image_total
       FROM forums.reply r
       LEFT JOIN forums.person p ON p.id = r.author_id
       LEFT JOIN LATERAL (
-        SELECT url FROM forums.attachment
-         WHERE parent_kind = 'reply' AND parent_id = r.id
-         ORDER BY id ASC LIMIT 1
+        -- Up to LG_REPLY_IMG_MAX images per reply (Ian 2026-07-27). This was
+        -- `SELECT url … ORDER BY id ASC LIMIT 1` — a single reply_image_url, and
+        -- the ONLY thing capping reply images anywhere in the stack. Upload,
+        -- endpoint and storage always accepted any number, so 229 replies were
+        -- holding 2-6 images of which only the first was ever rendered.
+        --
+        -- json_agg over an ordered subquery preserves that order and round-trips
+        -- through PHP cleanly (URLs contain commas; a bare pg array string would
+        -- not). width/height come along so the <img> can carry intrinsic
+        -- dimensions — without them a 6-tile grid is 6 layout shifts.
+        --
+        -- `total` is the UNCAPPED count, so a legacy reply holding more than the
+        -- cap can render a +N affordance instead of silently dropping them
+        -- again. ORDER BY position matches _single-topic.php's render_attachments()
+        -- (verified: position order == id order for all 506 existing rows, so the
+        -- first image — and therefore the feed teaser — is unchanged).
+        SELECT json_agg(json_build_object('url', a.url, 'w', a.width, 'h', a.height)) AS imgs,
+               (SELECT count(*) FROM forums.attachment ax
+                 WHERE ax.parent_kind = 'reply' AND ax.parent_id = r.id) AS total
+          FROM (
+            SELECT url, width, height
+              FROM forums.attachment
+             WHERE parent_kind = 'reply' AND parent_id = r.id
+             ORDER BY position ASC, id ASC
+             LIMIT " . LG_REPLY_IMG_MAX . "
+          ) a
       ) reply_img ON true
      WHERE r.topic_id = :tid AND r.status = 'publish'
      ORDER BY r.created_at ASC
@@ -73,6 +97,11 @@ foreach ($flat as $r) {
     // Member-only author mask, BEFORE the tree/flatten so the "↪ @parent" deep-reply
     // prefix (built from a parent's author_name) reads "Private member", not the real name.
     lg_bb_mirror_mask_visibility($r, $viewer_logged_in);
+    // json_agg → PHP list of ['url'=>…, 'w'=>…, 'h'=>…], already ordered and
+    // already sliced to the cap by the query. Null when the reply has no media.
+    $r['reply_images']      = !empty($r['reply_images'])
+        ? (array) json_decode((string)$r['reply_images'], true) : [];
+    $r['reply_image_total'] = (int)($r['reply_image_total'] ?? 0);
     $by_id[(int)$r['reply_id']] = $r + ['_children' => []];
 }
 $top = [];

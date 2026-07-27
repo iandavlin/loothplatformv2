@@ -159,13 +159,32 @@
       opts.statusEl.classList.remove('lg-msg-error');
       if (tray) { tray.innerHTML = ''; tray.hidden = true; tray.classList.remove('is-uploading'); }
     }
+    // Per-reply image cap (Ian 2026-07-27: max 6). opts.max caps the RESULTING
+    // set — new uploads (mediaIds) plus any existing kept on an edit
+    // (opts.getKeepCount). Omit opts.max and the tray is uncapped, which is how
+    // the new-topic composer stays uncapped.
+    //
+    // INTERIM, and deliberately so: these desktop composers still POST BuddyBoss
+    // REST direct on create, so reply.php's 422 never sees them and this guard is
+    // the only thing holding the cap there. composer-p3 deletes those create
+    // paths (W1/W5); once it lands the server is the backstop and this is belt
+    // and braces. Until then, removing it makes the cap cosmetic on desktop.
+    function atMax() {
+      if (!opts.max) return false;
+      var keep = (typeof opts.getKeepCount === 'function') ? (opts.getKeepCount() || 0) : 0;
+      return (keep + opts.mediaIds.length) >= opts.max;
+    }
+    function capMsg() { return 'A reply can have at most ' + opts.max + ' photos — remove one to add another.'; }
     function handler() {
+      if (atMax()) { fail(capMsg()); return; }
       var input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
       input.onchange = function () {
         var file = input.files && input.files[0];
         if (!file) return;
+        // Re-check at drop time: the keep set can change while the picker is open.
+        if (atMax()) { fail(capMsg()); return; }
         // Pre-flight: reject formats BB will refuse (webp/heic/…) up front, so
         // the user gets a clear reason instead of a silent failed upload.
         if (LG_IMG_UNSUPPORTED.test(file.name || '')) {
@@ -2563,6 +2582,8 @@
       mediaIds: frmMediaIds,
       statusEl: frmStatus,
       restBase: frmRestBase,
+      max: 6,                                                    // per-reply image cap (Ian 2026-07-27)
+      getKeepCount: function () { return frmKeepMedia.length; },  // edit mode: kept photos count toward it
       getNonce: function (cb) { cb(frmNonce); },
       insertInline: function (url) {
         var range = frmQuill.getSelection(true);
@@ -3046,6 +3067,7 @@
     mediaIds: replyMediaIds,
     statusEl: status,
     restBase: restBase,
+    max: 6,                       // per-reply image cap (Ian 2026-07-27); create-only form, no keep set
     getNonce: function (cb) { cb(nonce); },
     insertInline: function (url) {
       var range = replyQuill.getSelection(true);

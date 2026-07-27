@@ -234,6 +234,15 @@ if ($method === 'PUT' || $method === 'DELETE') {
     if ($new === '' && !$add_atts && !$keep_ids) {
         reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Reply can't be empty."]);
     }
+    // Cap the RESULTING set (kept + newly added), not just the additions — else an
+    // edit could walk a reply past the cap one photo at a time. An explicit keep
+    // set is authoritative; add-only (back-compat, no keep set) keeps everything
+    // already on the reply, so count what is there now.
+    $keep_count = $has_keep ? count($keep_ids) : count(reply_media_list($reply_id));
+    if ($keep_count + count($add_atts) > LG_REPLY_IMG_MAX) {
+        reply_out(422, ['ok' => false, 'error' => 'too_many_media', 'max' => LG_REPLY_IMG_MAX,
+            'message' => 'A reply can have at most ' . LG_REPLY_IMG_MAX . ' images.']);
+    }
     $new = lg_bb_mirror_mint_mentions($new);   // @handles → stable storage form
     $upd = wp_update_post(['ID' => $reply_id, 'post_content' => $new], true);
     if (is_wp_error($upd)) {
@@ -292,6 +301,15 @@ if ($topic_id <= 0) {
 }
 if ($content === '' && !$media) {
     reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Reply can't be empty."]);
+}
+// The cap, at the door. Composer v2 posts creates here (it sends bbp_media, read
+// above), so this bites today for every reply the hub's live composer makes. The
+// legacy desktop create paths still POST BuddyBoss REST direct and bypass this —
+// composer-p3 deletes them (W1-W5); until it lands their guard is client-side
+// only. Tracked in docs/atlas/REPLY-IMAGE-COUNT-CEILING.md.
+if (count($media) > LG_REPLY_IMG_MAX) {
+    reply_out(422, ['ok' => false, 'error' => 'too_many_media', 'max' => LG_REPLY_IMG_MAX,
+        'message' => 'A reply can have at most ' . LG_REPLY_IMG_MAX . ' images.']);
 }
 if (!function_exists('bbp_get_topic_post_type')) {
     reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Forum engine unavailable.']);
