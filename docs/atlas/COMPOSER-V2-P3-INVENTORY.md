@@ -41,7 +41,7 @@ These stay as user-visible affordances; only their handler changes to composer v
 |---|---|---|---|---|
 | E1 | `.feed-card__reply-cta[data-frm-open]`, `.reply-stub__reply`, `.fc-composer__rich` — one delegate | `forums.js:2792` | `frmOpen(trigger)` | `openComposerSheet({…})` |
 | E2 | dmodal-injected reply CTA | `forums.js:4377` | rides E1 → frm | rides E1 → composer v2 |
-| E3 | fc-composer plain input + `.fc-composer__send` | `forums.js:3912–4003` | posts native inline | opens composer v2 |
+| E3 | fc-composer plain input + `.fc-composer__send` | `forums.js:3912–4003` | posts native inline | **NOT A DOOR — see the correction below** |
 | E4 | fb-inline desktop route | `hub-polish.js:847` | `openReplyBox()` @ >640px | `openComposerSheet()` |
 | E5 | fb-inline last resort (no sheet/card ctx) | `hub-polish.js:869` | `openReplyBox()` | `openComposerSheet()` |
 | E6 | optimistic-stub "Reply" wiring | `hub-polish.js:963` | `openReplyBox()` | `openComposerSheet()` |
@@ -49,6 +49,40 @@ These stay as user-visible affordances; only their handler changes to composer v
 **E1 is the load-bearing one**: because the dmodal composes by *injecting* a
 `data-frm-open` CTA rather than owning a composer (audit §1.8), repointing that single
 delegate moves every desktop dmodal reply at once.
+
+> ### CORRECTION 2026-07-27 — measured on dev2 at 1280px, member session
+>
+> I described `fc-composer` as an "always-on **live** desktop create surface" and E3 as
+> a door needing a repoint. **It is not a door. Nothing on the desktop hub feed is.**
+> Counted in the browser (DOM total / actually visible):
+>
+> | selector | in DOM | visible |
+> |---|---|---|
+> | `.fc-composer` | 7 | **0** |
+> | `.fc-composer__rich` / `__input` / `__send` | 7 each | **0** |
+> | `.feed-card__reply-cta[data-frm-open]` | 7 | **0** |
+> | `.reply-stub__reply` | 3 | **0** |
+>
+> Cause: **`forums.css:4417–4424`** hides `.fc-composer`, both reply CTAs and the
+> inline replies on `.feed-card--topic` at `min-width:641px` — its own comment says
+> *"the reply CTA lives in the §4e modal"* — and **`forums.css:4047`** hides
+> `.fc-composer` outright below that breakpoint. So it is invisible on mobile AND on
+> desktop topic cards.
+>
+> **What I got wrong and why:** I inferred "live" from `_feed.php:1645` rendering it
+> under `$can_post` plus the comment "desktop-only ≤640", and never checked whether a
+> later rule un-rendered it. Server-side reachability is not user reachability.
+>
+> **Consequences:**
+> - **The only desktop reply door on the hub is inside the §4e discussion modal**, and
+>   it is repointed (verified: a real click on the modal's visible CTA opens composer
+>   v2 and leaves `#frm-overlay` hidden).
+> - **E3 needs no repoint** — there is no visible input to repoint. The keeper question
+>   I was about to raise about fc-composer's "fast path vs the pencil" is moot.
+> - **W2 stays in the deletion set** but is reclassified from "live desktop" to
+>   **unreachable on the hub feed**. Deleting it is therefore lower-risk than the
+>   inventory implied, not higher.
+> - The §2 "Live?" column is corrected accordingly.
 
 ---
 
@@ -60,7 +94,7 @@ touched (all edits already PUT the owned mirror endpoint and stay exactly as the
 | # | Write path | File:line | Surface | Live? |
 |---|---|---|---|---|
 | W1 | `fetch(frmRestBase + '/reply')` | `forums.js:2905` | frm desktop reply modal | **live desktop** |
-| W2 | `fetch(REPLY_BASE + '/reply')` | `forums.js:3986` | fc-composer | **live desktop** |
+| W2 | `fetch(REPLY_BASE + '/reply')` | `forums.js:3986` | fc-composer | ~~live desktop~~ **UNREACHABLE** (forums.css:4047 + :4417) |
 | W3 | `fetch('/wp-json/buddyboss/v1/reply')` | `hub-polish.js:925` | fb-inline | **live desktop** |
 | W4 | `fetch(protoReplyBase + '/reply')` | `forums.js:1190` | fic | dev-only (`?proto=cards`) |
 | W5 | `fetch(restBase + '/reply')` | `forums.js:3354` | single-topic page form | **live** — *see §5* |
@@ -160,6 +194,21 @@ alone, because composer v2 is path-gated to `/hub` and that page is not. Gate mu
 **Stopgap: KEEP as backstop.** The `bbp_new_reply` hook stays, re-commented from
 "stopgap" to "backstop": it stops being load-bearing (which is what "the stopgap stops
 being needed" asked for) while still covering any future native path for free.
+
+> **CORRECTION 2026-07-27 — the W5 ruling rested on a wrong fact of mine.** I told
+> keeper composer v2 was **not loadable** on the single-topic page, because
+> `hub-polish.js` is "path-gated to `/hub`" and that page isn't. It **is**:
+> `LG_BB_MIRROR_PUBLIC_PATH` is `/hub`, so the page is `/hub/<forum>/<topic>/`, which
+> matches `pwa.js:44`'s `onHub` test. Measured on live — hub-polish.js present,
+> `window.lgOpenTopicMobile` defined, `.reply-form-wrap` on the same page. I had
+> confused hub-polish's internal `onHubPath()` (which gates only two late features)
+> with the pwa.js injection gate that decides whether the file loads at all.
+>
+> **What this changes:** retarget-only for W5 is now a *scope* choice, not a capability
+> limit — full v2 conversion is available if keeper wants it. **Lane recommendation is
+> unchanged** (retarget-only this phase: the form has working Quill + photo tray +
+> `parent_reply_id` threading, and converting it is UX-visible and deserves its own Ian
+> gate). Flagged so the ruling can be re-made on correct facts. W1–W4 are unaffected.
 
 *Original question retained below for the record.*
 

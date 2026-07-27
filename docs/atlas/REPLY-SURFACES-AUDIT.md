@@ -182,11 +182,20 @@ retained below as history; read it as "what phase 1 replaced", not as current st
   (`parent_reply_id` :3033).
 - **Write**: **POSTs native BB REST** `/reply` (:3027 `restBase` from
   `wrap.dataset.bbRestBase`, :3354 fetch) — **G8, unlisted until now.**
-- **STRUCTURAL CONSTRAINT for phase 3**: composer v2 lives in `hub-polish.js`, which is
-  **path-gated to `/hub`** (:46 `onHubPath()`, injected site-wide via `/pwa.js`). This
-  page is not under `/hub`, so composer v2 is **not loadable here** without relocating
-  the module out of hub-polish.js. Retargeting its fetch to the mirror API closes G8 on
-  this surface without the skin; full v2 conversion is a larger, separable job.
+- ~~**STRUCTURAL CONSTRAINT**: composer v2 is not loadable here.~~ **WRONG — corrected
+  2026-07-27, measured on live.** `LG_BB_MIRROR_PUBLIC_PATH` is `/hub` (config.php:57),
+  so this page is at `/hub/<forum>/<topic>/`, which **matches** `pwa.js`'s
+  `onHub = /^\/hub(\/|$)/` (pwa.js:44) and therefore **does** load hub-polish.js.
+  Verified on `https://loothgroup.com/hub/suggestion-box-bug-reporting/recorded-zoom-programs/`:
+  `hubPolishPresent: true`, `window.lgOpenTopicMobile: "function"`, `.reply-form-wrap`
+  present on the same page. (The earlier claim confused hub-polish's own internal
+  `onHubPath()` — which gates only two late features, :5992/:6061 — with the pwa.js
+  injection gate that actually decides whether the file loads.)
+- **Consequence for phase 3**: composer v2 **is** available on this surface, so the W5
+  ruling is a cost/scope choice, not a capability limit. Retarget-only remains the lane
+  recommendation — this form has a working Quill + photo tray + `parent_reply_id`
+  threading, and converting it is a UX-visible change deserving its own Ian gate — but
+  full conversion is now on the table if keeper wants it.
 
 ### 1.10 Content-comment composers (articles/videos)
 - **Where**: `#looth-content-sheet` (hub-polish.js :1970–2200, z 2147483550) wraps a

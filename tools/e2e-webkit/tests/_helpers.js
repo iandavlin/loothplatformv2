@@ -30,10 +30,22 @@ async function addAuthCookies(context) {
 // touching the docroot, which matters when the serve is an open Ian window.
 async function installJsOverride(page) {
   const path = process.env.LGC_JS_OVERRIDE;
-  if (!path) return;
-  const body = fs.readFileSync(path, 'utf8');
-  await page.route('**/hub-polish.js*', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body }));
+  if (path) {
+    const body = fs.readFileSync(path, 'utf8');
+    await page.route('**/hub-polish.js*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body }));
+  }
+  // PHASE 3: the composer's desktop doors (frm delegate, fc-composer) live in
+  // bb-mirror/web/forums.js, NOT hub-polish.js — so the single-file override above
+  // could not reach them. Without this, verifying a forums.js change would mean
+  // asking for a serve window on a box that is at its lane cap. Same contract:
+  // point LGC_FORUMS_OVERRIDE at any forums.js and the run executes THOSE bytes.
+  const fpath = process.env.LGC_FORUMS_OVERRIDE;
+  if (fpath) {
+    const fbody = fs.readFileSync(fpath, 'utf8');
+    await page.route('**/forums.js*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body: fbody }));
+  }
 }
 
 // Tap the Reply action on the first topic card -> opens the lrs thread sheet with
