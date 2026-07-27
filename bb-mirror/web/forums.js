@@ -2787,12 +2787,50 @@
       });
     }
 
+    /* PHASE 3 (E1/E2) — this delegate is the desktop reply door, and it now opens
+       THE composer (hub-polish.js) instead of frm.
+
+       Why this one delegate matters more than the others: the desktop discussion
+       modal does not own a composer, it INJECTS a [data-frm-open] CTA (§4e, :4377)
+       and lets this handler serve it. So repointing here moves every dmodal reply,
+       every card reply CTA, every per-reply Reply link and the fc-composer pencil
+       in a single edit — one door, four surfaces.
+
+       frmOpen stays as the FALLBACK, and it is a real one, not a formality:
+       pwa.js injects hub-polish.js only when onHub matches (pwa.js:44), so any
+       surface outside /hub reaches this handler with no composer loaded. false
+       means "not available here", never "failed". */
+    function frmComposerOpts(trigger) {
+      // Mirrors frmOpen's own id-sourcing exactly (see :2612ff) so the two doors
+      // can never disagree about which topic a click meant.
+      var card = trigger.closest('.feed-card');
+      var replyTo = parseInt(trigger.dataset.replyTo, 10) || 0;
+      // A per-reply Reply button carries only reply-to/-author; topic + forum live
+      // on the card's top-level CTA. The dmodal's injected CTA carries them itself
+      // and has no .feed-card ancestor, so `src = trigger` is the right default.
+      var src = trigger;
+      if (replyTo && card) {
+        var cta = card.querySelector('.feed-card__reply-cta[data-frm-open]');
+        if (cta) src = cta;
+      }
+      return {
+        tid: src.dataset.topicId || (card && card.dataset.topicId) || '',
+        fid: src.dataset.forumId || (card && card.dataset.forumId) || '',
+        replyTo: replyTo,
+        replyToName: (trigger.dataset.replyToAuthor || '').trim(),
+        title: src.dataset.topicTitle || '',
+        focus: true,
+      };
+    }
     // Delegated so it also works on lazily-loaded / optimistically-added cards.
     document.addEventListener('click', function (e) {
       var t = e.target.closest('.feed-card__reply-cta[data-frm-open], .reply-stub__reply, .fc-composer__rich');
       if (!t) return;
       e.stopPropagation();
-      frmOpen(t);
+      var opts = frmComposerOpts(t);
+      if (opts.tid && typeof window.lgOpenComposer === 'function'
+          && window.lgOpenComposer(opts)) return;
+      frmOpen(t);   // composer not loaded on this surface — keep the old door
     });
     frmCancel.addEventListener('click', frmClose);
     frmBackdrop.addEventListener('click', frmClose);

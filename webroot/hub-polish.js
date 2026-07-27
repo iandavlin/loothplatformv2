@@ -832,19 +832,20 @@
     return img && (img.currentSrc || img.getAttribute('src')) || '';
   }
 
-  // Reply to a COMMENT (Buck 2026-06-12): open the same pull-up composer sheet
-  // used for OP replies, with the context pill naming the comment's author, and
-  // post with reply_to so the reply nests under its parent. The old inline
-  // @-box (openReplyBox) stays as the fallback for stubs without a reply id
-  // (e.g. optimistic inserts) and any non-mobile edge.
+  // Reply to a COMMENT (Buck 2026-06-12): open the same composer used for OP
+  // replies, with the context pill naming the comment's author, and post with
+  // reply_to so the reply nests under its parent.
+  // PHASE 3: this is now the SINGLE route for every reply-to-a-comment affordance on
+  // both viewports. The old inline @-box (openReplyBox) is no longer referenced from
+  // anywhere — it and its native create (W3) are deleted in the write-path commit.
   function openReplyComposer(stub, author, col) {
     var rid = parseInt(stub.getAttribute('data-lg-replyto') || '0', 10);
     var aname = (stub.getAttribute('data-lg-replyto-author') || (author && author.textContent) || '').trim();
-    // Desktop keeps the inline @-box; MOBILE always opens the composer sheet — one
-    // tap, no intermediate inline "Write a reply…" bubble (Ian 2026-06-25). replyTo
-    // nests under the comment when known, else it posts as a top-level reply to the
-    // topic. (Was: no-rid fell back to the inline box on mobile too.)
-    if (!window.matchMedia('(max-width:640px)').matches) { openReplyBox(col, author, stub); return; }
+    // PHASE 3 (E4): the desktop branch is GONE. It used to hand desktop to the
+    // fb-inline @-box (openReplyBox) — a second write-capable composer with its own
+    // textarea, its own submit and its own NATIVE create (the G8 hole, W3). Both
+    // viewports now open THE composer; desktop just wears the modal skin. replyTo
+    // nests under the comment when known, else it posts top-level to the topic.
     var sheet = stub.closest('#looth-rep-sheet');
     if (sheet) {
       openComposerSheet({
@@ -853,20 +854,36 @@
       });
       return;
     }
-    // Feed-card teaser reply: open the discussion sheet behind the composer (both
-    // synchronously within the tap so iOS shows the keyboard) — the post-success
-    // thread reload then shows the new reply nested in place.
+    // Feed-card teaser reply.
     var card = stub.closest('.feed-card');
     if (card) {
-      openRepliesSheet(card, { toReplies: true });
-      var sh = document.getElementById('looth-rep-sheet');
-      openComposerSheet({
-        tid: sh && sh.getAttribute('data-tid'), fid: sh && sh.getAttribute('data-fid'),
-        replyTo: rid || 0, replyToName: rid ? aname : '', focus: true
-      });
+      if (window.matchMedia('(max-width:640px)').matches) {
+        // MOBILE: open the discussion sheet behind the composer (both synchronously
+        // within the tap so iOS shows the keyboard) — the post-success thread reload
+        // then shows the new reply nested in place.
+        openRepliesSheet(card, { toReplies: true });
+        var sh = document.getElementById('looth-rep-sheet');
+        openComposerSheet({
+          tid: sh && sh.getAttribute('data-tid'), fid: sh && sh.getAttribute('data-fid'),
+          replyTo: rid || 0, replyToName: rid ? aname : '', focus: true
+        });
+      } else {
+        // DESKTOP: the lrs thread sheet is a phone surface — desktop reads threads in
+        // the dmodal or in-card. Open the composer straight off the card's own ids so
+        // the modal doesn't drag a mobile sheet onto a 1280px page behind it.
+        openComposerSheet({
+          tid: card.getAttribute('data-topic-id'), fid: card.getAttribute('data-forum-id'),
+          replyTo: rid || 0, replyToName: rid ? aname : '', focus: true
+        });
+      }
       return;
     }
-    openReplyBox(col, author, stub);   // last resort: no sheet/card context
+    // No sheet AND no card — there is no topic id to post to, so opening a composer
+    // would only produce an editor that fails on submit. The old fb-inline fallback
+    // (openReplyBox, deleted with W3) had the same hole and hid it behind a textarea.
+    // Unreachable in practice: every reply stub lives inside the lrs sheet or a
+    // .feed-card. Left as an explicit, commented no-op so a future surface that
+    // breaks that assumption shows up here instead of silently posting nowhere.
   }
 
   // Inline reply box (Facebook-style) under a comment, @mentioning its author.
@@ -964,7 +981,11 @@
     var like = el.querySelector('.lg-fb-like');
     like.addEventListener('click', function () { like.classList.toggle('is-on'); });
     var rep = el.querySelector('.lg-fb-reply');
-    rep.addEventListener('click', function () { openReplyBox(el.querySelector('.lg-fb-col'), el.querySelector('.lg-fb-name'), el); });
+    // PHASE 3 (E6): route through openReplyComposer like every other reply affordance
+    // instead of straight into the deleted fb-inline box. The optimistic stub has no
+    // data-lg-replyto yet (the real id arrives on the next thread load), so this
+    // opens a top-level reply to the topic — same as before, minus the second composer.
+    rep.addEventListener('click', function () { openReplyComposer(el, el.querySelector('.lg-fb-name'), el.querySelector('.lg-fb-col')); });
   }
 
   // Mobile only: watch the feed subtree for replies loading in (native expand,
@@ -4153,7 +4174,55 @@
         D + ' #looth-link-sheet .lgl-b--go:disabled{background:#2c312d;color:#7e857c}',
         D + ' #looth-link-sheet .lgl-b--x{color:#9aa79b}',
         // #b3261e is 3.0:1 on #1b1e21 — under AA, same lift as the composer alert
-        D + ' #looth-link-sheet .lgl-err,' + D + ' #looth-link-sheet .lgl-b--rm{color:#f2b8b5}'
+        D + ' #looth-link-sheet .lgl-err,' + D + ' #looth-link-sheet .lgl-b--rm{color:#f2b8b5}',
+
+        /* ── PHASE 3: the DESKTOP MODAL SKIN ────────────────────────────────────
+           A SKIN, nothing else. Same #looth-comp-sheet, same lgc* component, same
+           Quill instance, same mention pipeline, same attachment strip, same link
+           panel and tag picker, same write path. Only the geometry changes: the
+           full-height phone sheet becomes a centered card, because a full-height
+           dock over a 1280px viewport reads as a broken page rather than a modal.
+
+           Everything here is inside one @media (min-width:641px) — the mobile
+           surface is byte-for-byte untouched, which is what makes it a skin. If
+           anything below ever needs a behaviour branch instead of a geometry one,
+           that is the signal to stop and re-read the one-composer thesis.
+
+           641px matches the boundary the rest of the Hub already uses (forums.css
+           mobile pass, .lg-card-actions, fc-composer's desktop-only display). */
+        '@media (min-width:641px){',
+        // centered card, not a dock. max-height keeps a long draft scrollable
+        // inside the composer instead of growing past the viewport.
+        '  #looth-comp-sheet .lgc-card{left:50%;right:auto;top:50%;bottom:auto;' +
+          'transform:translate(-50%,-50%);width:min(40rem,calc(100vw - 4rem));height:auto;' +
+          'max-height:min(44rem,calc(100vh - 4rem));border-radius:16px;overflow:hidden;' +
+          'box-shadow:0 18px 60px rgba(0,0,0,.34);animation:none}',
+        // the grab pill is a TOUCH affordance — swipe-to-dismiss has no desktop
+        // meaning, and leaving it draws a handle nothing can grab.
+        '  #looth-comp-sheet .lgc-grab{display:none}',
+        '  #looth-comp-sheet .lgc-hd{padding-top:14px}',
+        // the editor is the flexible middle; the tool row + strip stay pinned.
+        '  #looth-comp-sheet .lgc-body{min-height:12rem}',
+        // Esc is already free from LgSheets (escClose), and the shared backdrop is
+        // manager-owned — the skin adds no dismissal path of its own.
+        '}',
+
+        /* The keyboard dock is a phone concept. lgcDock() writes .lgc-card.bottom
+           from the visual viewport; on desktop that would fight the centering
+           transform, so neutralise it here rather than branching lgcDock(). */
+        '@media (min-width:641px){#looth-comp-sheet .lgc-card{bottom:auto!important}}',
+
+        /* Sign-in modal + link panel keep their own geometry on desktop; the tag
+           picker is the one composer layer that is full-height on phones, so give
+           it the same centered treatment or it covers a 1280px page edge to edge. */
+        '@media (min-width:641px){',
+        '  #looth-tag-sheet .lgt-card{left:50%;right:auto;top:50%;bottom:auto;' +
+          'transform:translate(-50%,-50%);width:min(34rem,calc(100vw - 4rem));height:auto;' +
+          'max-height:min(40rem,calc(100vh - 4rem));border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.34)}',
+        '  #looth-link-sheet .lgl-card{left:50%;right:auto;top:50%;bottom:auto;' +
+          'transform:translate(-50%,-50%);width:min(28rem,calc(100vw - 4rem));' +
+          'border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.34)}',
+        '}'
       ].join('\n');
       (document.head || document.documentElement).appendChild(st);
     }
@@ -5060,6 +5129,37 @@
     // data-lg-sheet-card), lock sync and the history entry all happen in LgSheets.
     window.LgSheets.close('lcp', reason || 'programmatic');
   }
+
+  /* ── PHASE 3 SEAM: the one door forums.js drives ──────────────────────────────
+     The composer lives here; frm/fic/fb-inline/fc-composer live in forums.js. This
+     export is the whole cross-file contract — deliberately ONE function taking the
+     same opts openComposerSheet already accepts, so there is no second API to keep
+     in sync and no place for a per-surface behaviour fork to hide.
+
+     Returns true when THIS composer handled the intent — including the anon case,
+     where the correct handling is the sign-in modal rather than an editor. Returns
+     false only when the composer genuinely is not available, which is a real state:
+     pwa.js injects hub-polish.js only when onHub matches (pwa.js:44), so any surface
+     outside /hub gets false and keeps its own path. Callers MUST treat false as
+     "fall back", never as "failed".
+
+     Modes are the ones the component already implements — reply create, reply edit,
+     topic/OP edit — so desktop gains nothing bespoke:
+       lgOpenComposer({tid, fid})                          -> reply to the topic
+       lgOpenComposer({tid, fid, replyTo, replyToName})    -> reply to a reply
+       lgOpenComposer({tid, fid, editReplyId, bodyText})   -> edit a reply
+       lgOpenComposer({tid, fid, editTopicId, title, bodyText}) -> edit the OP  */
+  window.lgOpenComposer = function (o) {
+    try {
+      openComposerSheet(o || {});
+      return true;
+    } catch (e) {
+      // Never let a composer failure swallow the user's intent silently — the
+      // caller can still fall back to its own surface.
+      try { console && console.warn && console.warn('lgOpenComposer failed', e); } catch (e2) {}
+      return false;
+    }
+  };
   window.LgSheets.register({
     id: 'lcp',
     ensure: function () { return ensureCompSheet(); },
@@ -5179,6 +5279,14 @@
           if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not post.'; post.disabled = false; return; }
           var newId = (res.j && (res.j.reply_id || res.j.id)) || 0;
           closeComposerSheet('post');
+          // PHASE 3: announce the post so surfaces with no .feed-card ancestor can
+          // refresh — the desktop discussion modal listens for exactly this
+          // (forums.js:4524) and frm used to be the only thing that emitted it
+          // (:2888/:2923). Repointing the desktop doors at THIS composer without
+          // also emitting here would post the reply and leave the dmodal stale.
+          try {
+            document.dispatchEvent(new CustomEvent('lg:reply-posted', { detail: { topicId: tid } }));
+          } catch (e) {}
           // live-refresh the discussion modal if it's open on this topic
           var rs = document.getElementById('looth-rep-sheet');
           if (rs && rs.classList.contains('is-open') && parseInt(rs.getAttribute('data-tid'), 10) === tid) {
