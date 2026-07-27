@@ -1,8 +1,9 @@
 # WEEKLY-DIGEST-RECAP
 
-> **Status:** BUILT and verified on dev2. **Design DECIDED by Ian 2026-07-27 (§4) — closed, not
-> an open question.** Still needs a keeper window for the one unexercised leg (§7). Nothing is
-> deployed; no campaign left draft; nothing was sent.
+> **Status:** BUILT and FULLY VERIFIED on dev2, including the nginx leg and one real inbox test,
+> both done inside a keeper-granted serve window on 2026-07-27 (§7.1) and the serve restored
+> byte-for-byte afterwards. **Design DECIDED by Ian 2026-07-27 (§4) — closed, not an open
+> question.** Nothing is deployed; the digest remains double-off and campaigns stay draft.
 > **Lane:** weekly-digest-recap (branch `weekly-digest-recap`). **Box:** dev2. **Date:** 2026-07-27.
 > Cross-refs: NOTIFICATIONS-AUDIT.md (**stale in one important way — see §2**),
 > THREAD-FOLLOW-SPEC.md §2.6b (**overlaps this lane — see §6**), OPERATOR.md, SYSTEM-MAP.md.
@@ -281,20 +282,40 @@ Run on dev2, read-only, nothing sent, no campaign created.
 | Longest real name (71 ch) | `Dave Staudte (rhymms with "Howdy") NB Guitar Repair (New Braunfels, TX)`, wp:32, at 390px | greeting reads "Dave"; long ACTOR names wrap across lines, no overflow, no truncation |
 | Entity damage decodes | stored `Dan Wolf &amp; Steve Baker … Guitar &amp; Amp Repair` rendered in the long-name frame | real ampersands on screen |
 
-**NOT verified — the one leg:** `curl → nginx → FPM` for `/profile-api/v0/internal/recap`. The
-location block is written in `platform/nginx/strangler-profile-app.conf` but is **not live on
-dev2**: that file is symlinked from the serving checkout, so activating it touches the shared
-serve and needs a keeper window. The endpoint PHP itself was exercised through the real pool via
-`cgi-fcgi` (auth, validation, query, JSON all real); only nginx's routing of the path is
-unexercised, and that block is a copy of the `/notify` block already in production use.
+### 7.1 The serve window (2026-07-27) — both owed legs closed
 
-**Also not done, deliberately:** no test email was sent. Sending on dev2 means defeating three
-locks, the third of which (`FLUENTMAIL_SIMULATE_EMAILS`) produces a convincing false positive —
-`wp_mail` returns true and the log says `status=sent` while nothing leaves the box. The
-substitution proof above does not need mail: it exercises the same `Parser::parse()` the mailer
-calls. A real inbox test should happen in the same window as the nginx leg, to Ian's address only.
+Keeper granted an exclusive window. On this box **the serve IS the repo**: `/srv/profile-app` and
+`/etc/nginx/snippets/strangler-profile-app.conf` are symlinks into `~/loothplatformv2-clean`, so
+the change landed as two new untracked files plus two dirtied tracked files inside the serving
+checkout — bounded, and restored after.
 
----
+| Check | Result |
+|---|---|
+| `curl → nginx → FPM`, loopback + correct secret | **HTTP 200**, correct JSON — the leg cgi-fcgi could not reach |
+| Wrong secret, loopback | 403 `forbidden` |
+| Correct secret, **non**-loopback (LAN IP) | 403 — nginx `allow 127.0.0.1; deny all` working as designed |
+| `GET` instead of `POST` | 405 `method_not_allowed` |
+| Sibling `/internal/notify` after the change | still 400 on a bad body — the nested regex location did not shadow it |
+| **One real email to Ian** | SES returned a **MessageId**; **mailpit shows 0 hits** for the subject, so it left the box |
+| Greeting in that email | **"Here's your week, Ian."** — name fetched live from the endpoint for wp:1 |
+
+**Why the test email is labelled.** Ian's own bell is 100% read (0 unread notifications, 0 unread
+DMs), so his *truthful* recap is the EMPTY case — no section, which demonstrates nothing about the
+greeting. Marking his real rows unread to manufacture a demo would have been a write to the live
+store outside the window's authorised paths, and a lie about his account. So the **greeting is
+real** (live endpoint, real `display_name`) and the **rows are real stored activity borrowed from
+other members**, with a banner in the email saying so.
+
+**The send bypasses `wp_mail` on purpose.** dev2's containment mu-plugin swallows `wp_mail` into
+mailpit and returns `true` — a convincing false positive. `build-inbox-test.php` only *builds*;
+the send is a direct SES call. **Trap for next time:** FluentSMTP stores the SES secret
+**encrypted** (208 chars raw in `fluentmail-settings`, 40 after `fluentMailGetSettings()` decrypts
+it). Signing with the raw option value fails `SignatureDoesNotMatch`.
+
+**Restore proof** — `HEAD fa67f026…`, `tree 74b39757…`, branch `main`, `git status --porcelain`
+empty, all matching the sealed baseline; `nginx -t` green **after** the restore, then a full
+`systemctl restart nginx` plus a smoke of `/`, `/hub/`, `/u/<slug>` (200) and `/internal/recap`
+(404 — correctly gone again).
 
 ## 8. Deploy notes
 
