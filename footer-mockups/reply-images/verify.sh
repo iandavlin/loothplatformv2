@@ -88,19 +88,60 @@ chk "3 candidates each" "$(grep -o '240w' <<<"$html" | wc -l)" "6"
 echo "4. sizes tracks the span rule, not the count"
 # grep -c counts LINES and the renderer emits one line — grep -o | wc -l or this
 # whole section silently reports 1 and passes nothing.
+#
+# The DESKTOP px in `sizes` is DERIVED from forums.css here, never hardcoded.
+# Hardcoding is what rotted this section once already: e183136 corrected the px
+# from 360/240 to 228/151 (the tiles are bounded by .reply-stub__gallery's own
+# max-width, not the modal's 724px column) and left these assertions asserting
+# the pre-fix strings — 5 false REDs on correct code. This over-fetch class has
+# now been found twice (flat 33vw in previs, then 360px on the serve), so per
+# docs/CRAFT-STANDARD.md it gets a gate that tracks the CSS instead of a literal.
+CSS=../../bb-mirror/web/forums.css
+gblock=$(awk '/^\.reply-stub__gallery \{/{f=1} f{print} f&&/\}/{exit}' "$CSS")
+COLS=$(grep -o 'repeat([0-9]*' <<<"$gblock" | tr -d 'repeat(')
+GAP=$(grep -o 'gap: *[0-9]*px' <<<"$gblock" | grep -o '[0-9]*')
+MAXW=$(grep -o 'max-width: *[0-9]*px' <<<"$gblock" | grep -o '[0-9]*')
+SPAN_THIRD=$(grep -A3 '^\.reply-stub__gcell {' "$CSS" | grep -o 'span [0-9]*' | grep -o '[0-9]*')
+SPAN_HALF=$(grep -oE 'data-count="4"\] \.reply-stub__gcell \{ grid-column: span [0-9]+' "$CSS" \
+            | grep -oE 'span [0-9]+' | grep -oE '[0-9]+')
+# a silently-empty parse computes a nonsense width and fails every check below
+# with a shell syntax error instead of a readable RED — catch it here
+for v in COLS GAP MAXW SPAN_HALF SPAN_THIRD; do
+  [ -n "${!v}" ] || { no "could not parse $v out of forums.css"; }
+done
+# rendered tile width = its share of the track, plus the gaps it spans across
+tilepx(){ echo $(( (MAXW - (COLS-1)*GAP) * $1 / COLS + ($1-1)*GAP )); }
+HALFPX=$(tilepx "$SPAN_HALF"); THIRDPX=$(tilepx "$SPAN_THIRD")
+echo "  (from CSS: ${MAXW}px / ${COLS} cols / ${GAP}px gap -> half=${HALFPX}px third=${THIRDPX}px)"
 for n in 2 4; do
   chk "count=$n declares half-width" \
-    "$($H synth $n | grep -o 'sizes="(max-width:640px) 47vw, 360px"' | wc -l)" "$n"
+    "$($H synth $n | grep -o "sizes=\"(max-width:640px) 47vw, ${HALFPX}px\"" | wc -l)" "$n"
 done
 for n in 3 5 6; do
   chk "count=$n declares thirds" \
-    "$($H synth $n | grep -o 'sizes="(max-width:640px) 30vw, 240px"' | wc -l)" "$n"
+    "$($H synth $n | grep -o "sizes=\"(max-width:640px) 30vw, ${THIRDPX}px\"" | wc -l)" "$n"
 done
 # and the inverse: no layout may declare the OTHER rule
 chk "count=3 never declares half-width" \
   "$($H synth 3 | grep -o '47vw' | wc -l)" "0"
 chk "count=4 never declares thirds" \
   "$($H synth 4 | grep -o '30vw' | wc -l)" "0"
+# (The two `declares` checks above ARE the over-fetch gate: they compare what the
+# renderer emits against what the CSS renders, so a tile that declares more width
+# than it can occupy — the 800w-for-a-160px-tile defect — fails them outright.)
+#
+# KNOWN, DELIBERATE IMPRECISION — count=5 is the one mixed-span layout: cells 1-3
+# are thirds and cells 4-5 are halves (forums.css), but the renderer emits ONE
+# `sizes` per gallery, so cells 4-5 declare ${THIRDPX}px while rendering
+# ${HALFPX}px. That under-declares, which cannot over-fetch. It is still adequate
+# at both densities because the next candidate up covers it: DPR1 needs
+# ${HALFPX}px and gets 240w; DPR2 needs $((HALFPX*2))px and gets 480w. Asserted so
+# that if the candidate ladder or the max-width changes, this stops being true
+# loudly instead of silently shipping a blurry tile.
+c5_dpr1=$(( THIRDPX <= 240 && HALFPX <= 240 ? 1 : 0 ))
+c5_dpr2=$(( THIRDPX*2 <= 480 && HALFPX*2 <= 480 ? 1 : 0 ))
+chk "count=5 mixed span still covered at DPR1" "$c5_dpr1" "1"
+chk "count=5 mixed span still covered at DPR2" "$c5_dpr2" "1"
 
 echo "5. a legacy over-cap reply shows the cap and a +N"
 over=$($H over 6 11)
