@@ -3,27 +3,28 @@
 # token" (docs/CRAFT-STANDARD.md).
 #
 # WHY THIS FILE EXISTS. Five gate entry points each hardcoded the same two facts
-# — `https://dev.loothgroup.com` and
-# `/etc/nginx/sites-available/dev.loothgroup.com.conf` — so when this box became
-# dev2 and the tokens moved into a box-local include, EVERY gate that reads a
-# token died on `cannot read dev gate token` and the CLAUDE.md gate law went
-# unrunnable for every lane. A harness that dies on its own environment drift is
-# itself a defect class; the cure is one resolver with fallbacks, not five
-# copies of a path.
+# — a hostname and an nginx conf path — so when the platform moved to dev2 and
+# the tokens moved into a box-local include, EVERY gate that reads a token died
+# on `cannot read dev gate token` and the CLAUDE.md gate law went unrunnable for
+# every lane. A harness that dies on its own environment drift is itself a defect
+# class; the cure is one resolver, not five copies of a path.
 #
-# RESOLUTION, in order, each step falling back rather than replacing:
-#   vhost   LG_GATE_VHOST, else the first CANDIDATE_VHOSTS that exists.
-#           This is the conf a gate greps for perimeter assertions (e.g.
-#           infra-sec's CDP-IN-PROD check) — it is NOT necessarily where the
-#           token lives, and the two must not be conflated: pointing a conf
-#           grep at the token snippet would make that assertion vacuously
-#           green, i.e. blind.
-#   host    LG_GATE_HOST, else derived from the vhost FILENAME (dev2.loothgroup
-#           .com.conf -> https://dev2.loothgroup.com). Not from `server_name`:
-#           this box's dev2 vhost lists `loothgroup.com` first, which is LIVE.
-#   token   LG_GATE_TOKEN, else the first of CANDIDATE_TOKEN_SRCS that actually
-#           yields a `set $loothdev_token "…";` line. The box-local snippet is
-#           preferred; the legacy vhost still works on a box that has it.
+# NO HOSTNAME IS WRITTEN IN THIS FILE. The old `dev.loothgroup.com` pair is
+# RETIRED (Ian, 2026-07-27) and is deliberately not kept as a fallback — a gate
+# that can silently resolve to a dead host is worse than one that fails loudly.
+# The box states its own identity instead, so the harness follows whatever box it
+# is on without another edit the next time the platform moves.
+#
+# RESOLUTION, in order:
+#   host    LG_GATE_HOST, else LG_PUBLIC_HOST from /etc/looth/env (the same file
+#           lg-env.php / profile-auth.php read). NOT from `server_name`: this
+#           box's vhost lists `loothgroup.com` first, which is LIVE.
+#   vhost   LG_GATE_VHOST, else <sites-available>/<host>.conf. This is the conf a
+#           gate greps for perimeter assertions (infra-sec's CDP-IN-PROD) — it is
+#           NOT where the token lives, and conflating them would make that
+#           assertion vacuously green.
+#   token   LG_GATE_TOKEN, else the box-local snippet, else the resolved vhost
+#           (only to tolerate a box predating the secret split).
 #   fail    loudly, naming every path tried — never silently tokenless.
 #
 # EDGE-BYPASS PIN. The public edge is behind Cloudflare, which challenges
@@ -43,45 +44,48 @@
 #   source "$(dirname "$0")/gate-env.sh"   # exports LG_GATE_* into a shell gate
 #   bash gate-env.sh                       # prints KEY=VALUE for python/php gates
 
-CANDIDATE_VHOSTS=(
-    /etc/nginx/sites-available/dev2.loothgroup.com.conf
-    /etc/nginx/sites-available/dev.loothgroup.com.conf
-)
-CANDIDATE_TOKEN_SRCS=(
-    /etc/nginx/snippets/loothdev-tokens.conf
-    /etc/nginx/sites-available/dev2.loothgroup.com.conf
-    /etc/nginx/sites-available/dev.loothgroup.com.conf
-)
+LG_ENV_FILE="${LG_ENV_FILE:-/etc/looth/env}"
+NGINX_AVAILABLE="${NGINX_AVAILABLE:-/etc/nginx/sites-available}"
+CANDIDATE_TOKEN_SRCS=( /etc/nginx/snippets/loothdev-tokens.conf )
 
 lg_gate_die() { echo "GATE-ENV-ERROR  $1" >&2; return 1; }
 
 lg_gate_resolve_env() {
-    local tried v src tok
+    local tried src tok
 
-    # ---- vhost ----
-    LG_GATE_VHOST="${LG_GATE_VHOST:-}"
-    if [ -z "$LG_GATE_VHOST" ]; then
-        for v in "${CANDIDATE_VHOSTS[@]}"; do
-            [ -r "$v" ] && { LG_GATE_VHOST="$v"; break; }
-        done
-    fi
-    if [ -z "$LG_GATE_VHOST" ]; then
-        tried=$(printf '%s, ' "${CANDIDATE_VHOSTS[@]}"); tried=${tried%, }
-        lg_gate_die "no nginx vhost conf found. Tried: $tried. Set LG_GATE_VHOST to this box's conf." || return 1
-    fi
-
-    # ---- host (env override disables the loopback pin: a LIVE run must reach the edge) ----
+    # ---- host (explicit override disables the pin: a LIVE run must reach the edge) ----
     local host_from_env=0
     if [ -n "${LG_GATE_HOST:-}" ]; then
         host_from_env=1
     else
-        LG_GATE_HOST="https://$(basename "$LG_GATE_VHOST" .conf)"
+        local pub=""
+        [ -r "$LG_ENV_FILE" ] && pub=$(sed -n 's/^LG_PUBLIC_HOST=//p' "$LG_ENV_FILE" | head -1 | tr -d '"'"'"' \r')
+        if [ -z "$pub" ]; then
+            lg_gate_die "no LG_PUBLIC_HOST in $LG_ENV_FILE. Set LG_GATE_HOST, or fix the box env." || return 1
+        fi
+        LG_GATE_HOST="https://$pub"
     fi
     LG_GATE_DOMAIN="${LG_GATE_HOST#*://}"; LG_GATE_DOMAIN="${LG_GATE_DOMAIN%%/*}"
 
+    # ---- vhost (named FOR the resolved host, not guessed from a list) ----
+    # Kept DISTINCT from the token source: infra-sec greps this conf for perimeter
+    # assertions (CDP-IN-PROD), and pointing that grep at the token snippet would
+    # make the assertion vacuously green, i.e. blind.
+    if [ -z "${LG_GATE_VHOST:-}" ]; then
+        LG_GATE_VHOST="$NGINX_AVAILABLE/${LG_GATE_DOMAIN}.conf"
+    fi
+    if [ ! -r "$LG_GATE_VHOST" ]; then
+        lg_gate_die "vhost conf not readable: $LG_GATE_VHOST (derived from host $LG_GATE_DOMAIN). Set LG_GATE_VHOST." || return 1
+    fi
+
     # ---- token ----
+    # deploy-one-pull deliberately moved the secret OUT of the tracked vhost into a
+    # box-local snippet (the repo carries only loothdev-tokens.conf.example), so the
+    # snippet is the source of record. The resolved vhost is tried second only to
+    # tolerate a box that predates that split — never put the secret back in the
+    # tracked conf to make this pass.
     if [ -z "${LG_GATE_TOKEN:-}" ]; then
-        for src in "${CANDIDATE_TOKEN_SRCS[@]}"; do
+        for src in "${CANDIDATE_TOKEN_SRCS[@]}" "$LG_GATE_VHOST"; do
             [ -r "$src" ] || continue
             tok=$(grep -oP '(?<=set \$loothdev_token ")[^"]+' "$src" | head -1)
             [ -n "$tok" ] && { LG_GATE_TOKEN="$tok"; LG_GATE_TOKEN_SRC="$src"; break; }
@@ -90,7 +94,7 @@ lg_gate_resolve_env() {
         LG_GATE_TOKEN_SRC="LG_GATE_TOKEN env"
     fi
     if [ -z "${LG_GATE_TOKEN:-}" ]; then
-        tried=$(printf '%s, ' "${CANDIDATE_TOKEN_SRCS[@]}"); tried=${tried%, }
+        tried=$(printf '%s, ' "${CANDIDATE_TOKEN_SRCS[@]}" "$LG_GATE_VHOST"); tried=${tried%, }
         lg_gate_die "cannot read dev gate token (a 'set \$loothdev_token \"…\";' line). Tried: $tried. Set LG_GATE_TOKEN to override." || return 1
     fi
 
