@@ -69,6 +69,34 @@ Reach live from the keeper box: `ssh live` (→ `54.157.13.77`).
 
 ## Preview slots (parallel preview surfaces)
 
+> ### ⚠️ GONE AS OF 2026-07-27 — slot-A NO LONGER EXISTS. Everything below is history.
+>
+> Measured by composer-v2-p3 while hunting for a way to verify a server-side PHP change
+> **without** asking for a serve window. There is no such route anymore:
+>
+> | Piece | State |
+> |---|---|
+> | `~/preview-slots/slot-a` | **absent** — the whole `~/preview-slots` tree is gone |
+> | vhost | **absent** from `sites-enabled` **and** `sites-available` |
+> | `snippets/strangler-bb-mirror-preview-a.conf` | **absent** |
+> | FPM pool `bb-preview-a` | **absent** from `pool.d` |
+> | any `preview-a` string under `/etc/nginx` | **zero hits** |
+> | DNS `preview-a.dev2.loothgroup.com` | **still resolves to 34.193.244.53** |
+>
+> **The DNS record is dangling** — it still points at the box, so the hostname now falls
+> through to nginx's `default` server rather than 404ing at the edge. Worth cleaning up in
+> Cloudflare, and worth knowing before anyone reads a response from that host as meaningful.
+>
+> **Consequence for lanes:** a change to a `/srv/*` app (bb-mirror, profile-app) can only be
+> exercised on the real serve, so it needs a **serve window** — ask keeper. The zero-mutation
+> escapes that DO still work are the in-browser JS overrides (`LGC_JS_OVERRIDE` /
+> `LGC_FORUMS_OVERRIDE`, next section) and `cgi-fcgi` straight into the real FPM pool; neither
+> reaches a PHP file that the request path includes.
+>
+> The equivalent live pattern today is the **`buck-dev2`** surface (`sites-available/
+> buck-dev2.loothgroup.com.conf` + the `*-buck.conf` strangler snippets), which is a different
+> thing with a different owner — do not assume it is a drop-in preview slot.
+
 The ONE pristine serve clone doubles as the preview surface (flip a branch onto it to look at WIP),
 which serializes previews to one-at-a-time. **Preview slots** break that: a dedicated surface = its
 own clone + FPM pool + nginx vhost, reusing the shared dev2 backend, so a second branch previews
