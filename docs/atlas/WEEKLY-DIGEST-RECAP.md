@@ -246,10 +246,50 @@ must not ship two of them. How they line up:
 | Per-user mechanism | "**Feasibility = dev2 verify**" | **answered: it works** (§3) |
 
 **The unifying fact:** thread-follow's proposed `forum.followed_topic` is just another
-`Notifications::pushHubEvent()` type. The moment it is written, **this recap picks it up for free**
-— no second query, no second endpoint, no second section. The recommendation is that thread-follow
-drops its own `follow-recap` endpoint and lets the bell be the one spine, which is also what
-NOTIFICATIONS-AUDIT.md §4.3 argues for.
+`Notifications::pushHubEvent()` type, landing in the same table this recap already reads. So the
+recommendation stands: thread-follow should drop its own `follow-recap` endpoint and let the bell
+be the one spine, which is what NOTIFICATIONS-AUDIT.md §4.3 argues for too.
+
+> **CORRECTION (2026-07-27).** An earlier revision of this section said the recap would pick a new
+> type up "for free". **That was wrong, and the opposite is true** — verified in the code, not
+> assumed. `LG_WD_Recap::INCLUDED_TYPES` is an ALLOW-LIST (§6.1): a type absent from it renders
+> nothing, enforced in `build_rows()` and again in `row_from_notification()`. Adding
+> `forum.followed_topic` to the digest is a deliberate one-line edit, never automatic. That is the
+> safer property and it is why the SS9.1 double-send cannot happen by accident.
+
+### 6.1 The source boundary — exactly what this recap covers
+
+Stated explicitly so that when SS9.1 (per-event email vs digest for discussion activity) is ruled
+on, the change is a scope edit and not a re-architecture. **No de-duplication has been built,
+deliberately — there is no rule yet to de-duplicate against.**
+
+| Included | From | Meaning |
+|---|---|---|
+| `forum.mention` | bell | someone @mentioned **you** |
+| `forum.reply_to_topic` | bell | someone replied on a discussion **you authored** |
+| `forum.reply_to_reply` | bell | someone replied to **your** reply |
+| `reaction.on_post` | bell | someone reacted to **your** topic / reply / card |
+| `connection_request`, `connection_accept` | bell | social edges involving **you** |
+| unread DMs | `message_recipients` | messages waiting for **you**, coalesced per sender |
+
+**Excluded — everything else, by default.** In particular:
+
+- **`forum.followed_topic` is NOT included.** This is the SS9.1 overlap: if a member has per-thread
+  email on *and* the digest also covered followed-thread activity, the same reply would reach them
+  twice. It cannot happen today, because the type is absent from the allow-list and provably
+  renders nothing (regression-tested).
+- **Activity in threads you merely follow, or any subscription-derived feed.** The recap has no
+  subscription source at all — it never queries `forums.forum_subscription`. Every row it draws is
+  one where the member is the *addressee* of a bell row.
+- Any future notification type, until someone adds it on purpose.
+
+**The one-line shape of each possible ruling:**
+
+| If Ian rules… | The change here |
+|---|---|
+| digest owns discussion activity | add `'forum.followed_topic' => 'replies'` to `INCLUDED_TYPES` |
+| per-event owns it | **nothing** — already excluded |
+| digest owns it, per-event goes quiet for followed threads | the same one line here; the per-event side turns itself off |
 
 **Preferences.** This section is part of the weekly digest, so the **digest toggle governs it** and
 this lane invents nothing. The account page's Weekly Digest switch (bf9e3a1) is FluentCRM **list

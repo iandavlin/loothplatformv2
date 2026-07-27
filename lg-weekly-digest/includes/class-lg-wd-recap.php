@@ -41,6 +41,55 @@ class LG_WD_Recap {
 	/** Most rows we will draw before rolling the tail into one "N more" line. */
 	const MAX_ROWS = 8;
 
+	/**
+	 * ── THE SOURCE BOUNDARY ──────────────────────────────────────────────────
+	 *
+	 * The complete, explicit list of what this recap reports on. Nothing else in
+	 * the bell reaches the digest: a notification type absent from this map is
+	 * dropped, silently and by default. **New types do NOT flow in automatically.**
+	 *
+	 * That property is deliberate and it matters beyond tidiness. The open SS9.1
+	 * question — per-event email vs digest for discussion activity — is not ruled
+	 * on. If thread-follow ships `forum.followed_topic` while per-thread email is
+	 * also on, the same reply could reach a member twice: once per event, once
+	 * here. Because this map is an ALLOW-LIST rather than a deny-list, that cannot
+	 * happen by accident — the digest stays silent about any type nobody has added
+	 * on purpose.
+	 *
+	 * So when Ian rules, the change is one line in this map:
+	 *   - "digest owns discussion activity"  → add 'forum.followed_topic' => 'replies'
+	 *   - "per-event owns it"                → change nothing; we already exclude it
+	 *   - "digest owns it, per-event is off for followed threads" → still one line
+	 *     here, plus the per-event side turning itself off. No re-architecture.
+	 *
+	 * DO NOT build de-duplication against a rule that does not exist yet.
+	 *
+	 * Value = the display bucket, which also fixes ordering (see build_rows): things
+	 * said TO you outrank things done to your posts.
+	 */
+	const INCLUDED_TYPES = [
+		'forum.mention'        => 'mentions',     // someone @mentioned you
+		'forum.reply_to_topic' => 'replies',      // someone replied on a discussion YOU authored
+		'forum.reply_to_reply' => 'replies',      // someone replied to YOUR reply
+		'reaction.on_post'     => 'reactions',    // someone reacted to your topic / reply / card
+		'connection_request'   => 'connections',
+		'connection_accept'    => 'connections',
+	];
+
+	/**
+	 * Buckets in render order. Unread DMs are spliced in after `replies` — they are
+	 * not a notification type at all (profile-app deliberately does not ring the bell
+	 * for a new message), so they are read from message_recipients instead.
+	 */
+	const BUCKET_ORDER = [ 'mentions', 'replies', '__dms__', 'reactions', 'connections' ];
+
+	/**
+	 * Types whose row is a link into the Hub and is therefore worthless without a
+	 * resolved `target_url`. Connection rows are not: they name a person, and the
+	 * profile link is resolved separately.
+	 */
+	const REQUIRES_TARGET_URL = [ 'forum.mention', 'forum.reply_to_topic', 'forum.reply_to_reply', 'reaction.on_post' ];
+
 	// ── Public API ────────────────────────────────────────────────────────────
 
 	/**
@@ -96,31 +145,27 @@ class LG_WD_Recap {
 		$notes = $payload['notifications'] ?? [];
 		$dms   = $payload['dms'] ?? [];
 
-		$mentions = [];
-		$replies  = [];
-		$reacts   = [];
-		$conns    = [];
+		$buckets = array_fill_keys( self::BUCKET_ORDER, [] );
 
 		foreach ( $notes as $n ) {
 			$type = (string) ( $n['type'] ?? '' );
-			$row  = self::row_from_notification( $n );
-			if ( ! $row ) {
+
+			// THE SOURCE BOUNDARY, enforced in one place. A type nobody put in the
+			// map is not ours to report on, and is dropped here.
+			$bucket = self::INCLUDED_TYPES[ $type ] ?? null;
+			if ( $bucket === null ) {
 				continue;
 			}
-			if ( $type === 'forum.mention' ) {
-				$mentions[] = $row;
-			} elseif ( $type === 'forum.reply_to_topic' || $type === 'forum.reply_to_reply' ) {
-				$replies[] = $row;
-			} elseif ( $type === 'reaction.on_post' ) {
-				$reacts[] = $row;
-			} elseif ( $type === 'connection_request' || $type === 'connection_accept' ) {
-				$conns[] = $row;
+
+			$row = self::row_from_notification( $n );
+			if ( $row ) {
+				$buckets[ $bucket ][] = $row;
 			}
 		}
 
-		$msgs = self::rows_from_dms( $dms );
+		$buckets['__dms__'] = self::rows_from_dms( $dms );
 
-		$rows = array_merge( $mentions, $replies, $msgs, $reacts, $conns );
+		$rows = array_merge( ...array_values( $buckets ) );
 
 		// A busy week must not turn the digest into a wall. Keep the highest-value
 		// rows (the order above already ranks them) and roll the tail into one line
@@ -155,9 +200,7 @@ class LG_WD_Recap {
 		$url     = (string) ( $n['target_url'] ?? '' );
 		$title   = self::clean_name( (string) ( $n['title'] ?? '' ) );
 		$actors  = self::actor_phrase( $actor, $count );
-		$isHub   = in_array( $type, [ 'forum.reply_to_topic', 'forum.reply_to_reply', 'forum.mention', 'reaction.on_post' ], true );
-
-		if ( $isHub && $url === '' ) {
+		if ( in_array( $type, self::REQUIRES_TARGET_URL, true ) && $url === '' ) {
 			return null;
 		}
 		if ( $actor === '' ) {
@@ -215,6 +258,9 @@ class LG_WD_Recap {
 				break;
 
 			default:
+				// Unreachable: build_rows already dropped anything outside
+				// INCLUDED_TYPES. Kept as the second half of the belt-and-braces —
+				// the boundary should hold even if this method is called directly.
 				return null;
 		}
 
