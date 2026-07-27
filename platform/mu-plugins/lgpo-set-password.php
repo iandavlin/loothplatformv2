@@ -19,6 +19,24 @@ add_action('init', function () {
     $slug = (string) get_user_meta($uid, '_looth_slug', true);
     $cont = $slug !== '' ? '/u/' . rawurlencode($slug) : '/profile/edit';
 
+    // A brand-new Patreon member is sent here overriding whatever destination
+    // they asked for (ruling 2) — but lg-patreon-onboard.php stashed it on the
+    // way in, and BOTH exits from this page hand it back: set a password, or
+    // skip. With nothing stashed this is all inert and today's behaviour stands
+    // (set → '/', skip → their profile).
+    $has_dest = defined('LG_DEST_STASH_KEY')
+        && (string) get_user_meta($uid, LG_DEST_STASH_KEY, true) !== '';
+
+    // Skip routes through ?skip=1 rather than linking straight at the stashed
+    // path, because the stash is ONE-SHOT: following the link has to be what
+    // consumes it. Otherwise an abandoned page leaves a destination armed to
+    // fire in some later session.
+    if (isset($_GET['skip'])) {
+        $dest = function_exists('lg_dest_take') ? lg_dest_take($uid) : '';
+        wp_safe_redirect($dest !== '' ? $dest : $cont);
+        exit;
+    }
+
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $nonce_ok = (bool) wp_verify_nonce($_POST['_lgpo_pw'] ?? '', 'lgpo_set_password');
         $pw  = (string) ($_POST['lgpo_password'] ?? '');
@@ -33,7 +51,10 @@ add_action('init', function () {
             wp_set_auth_cookie($uid, true);
             if ($u) do_action('wp_login', $u->user_login, $u);
             error_log('[lgpo-pw] set OK uid=' . $uid);
-            wp_safe_redirect(home_url('/')); exit;   // successful set/change → front page (Ian 6/16)
+            // Destination they originally asked for, if one was carried through
+            // the Patreon detour; otherwise the front page (Ian 6/16).
+            $dest = function_exists('lg_dest_take') ? lg_dest_take($uid) : '';
+            wp_safe_redirect($dest !== '' ? $dest : home_url('/')); exit;
         }
         $kp = isset($_GET['change']) ? ['pwerr' => $err, 'change' => 1] : ['pwerr' => $err];
         wp_safe_redirect(add_query_arg($kp, home_url('/patreon-password/'))); exit;
@@ -127,7 +148,9 @@ add_action('init', function () {
       <button type="submit" class="go" id="go" disabled>Set password</button>
     </form>
   </div>
-  <a class="skip" href="<?php echo esc_url($cont); ?>">Skip &mdash; continue to my profile &rarr;</a>
+  <a class="skip" href="/patreon-password/?skip=1"><?php echo $has_dest
+      ? 'Skip &mdash; continue where I left off &rarr;'
+      : 'Skip &mdash; continue to my profile &rarr;'; ?></a>
 </div>
 <?php if (function_exists('lg_shared_render_site_footer')) lg_shared_render_site_footer(); ?>
 <script>

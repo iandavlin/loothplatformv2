@@ -495,7 +495,34 @@ function lgpo_handle_resolve() {
  * ============================================================
  */
 
+/**
+ * Reduce a caller-supplied post-OAuth destination to a path we're willing to
+ * bind, or '' when there is nothing trustworthy to bind.
+ *
+ * Thin wrapper over the ONE shared validator every door on the site uses
+ * (lg_dest_capture_wp, platform/mu-plugins/lg-login-destination.php, itself
+ * wrapping the WP-free core at lg-shared/lg-destination.php). Kept as a named
+ * function because three call sites in this file want it and because the name
+ * says what it is at the point of use. mu-plugins load before regular plugins,
+ * so the wrapped function is always there; the guard only covers a broken
+ * deploy, and it fails CLOSED (no destination bound, flow keeps its default).
+ *
+ * @param mixed $raw
+ */
+function lgpo_sanitize_return_path( $raw ): string {
+    return function_exists( 'lg_dest_capture_wp' ) ? lg_dest_capture_wp( $raw ) : '';
+}
+
 add_shortcode( 'lg_patreon_onboard', 'lgpo_shortcode' );
+/**
+ * @param array|string $atts  Optional `return` = same-host post-OAuth destination.
+ *                            With a valid one the button routes through
+ *                            /patreon-connect?return=<path>, whose state carries
+ *                            return_target so the callback lands the member back
+ *                            where they started. Without one (every legacy caller)
+ *                            this mints the bare state exactly as before and the
+ *                            callback keeps its lgpo_confirm_page terminal.
+ */
 function lgpo_shortcode( $atts ) {
     if ( is_user_logged_in() ) {
         $patreon_id = get_user_meta( get_current_user_id(), 'lgpo_patreon_user_id', true );
@@ -511,16 +538,29 @@ function lgpo_shortcode( $atts ) {
         return '<div class="lgpo-notice lgpo-error">Patreon onboarding is not configured yet. Please check back soon.</div>';
     }
 
-    $state = wp_generate_password( 32, false );
-    set_transient( 'lgpo_state_' . $state, '1', 600 );
+    $atts   = shortcode_atts( array( 'return' => '' ), (array) $atts, 'lg_patreon_onboard' );
+    $return = lgpo_sanitize_return_path( (string) $atts['return'] );
 
-    $auth_url = add_query_arg( array(
-        'response_type' => 'code',
-        'client_id'     => $client_id,
-        'redirect_uri'  => $redirect_uri,
-        'scope'         => 'identity identity[email] identity.memberships',
-        'state'         => $state,
-    ), 'https://www.patreon.com/oauth2/authorize' );
+    if ( $return !== '' ) {
+        // Destination binding only — the state (and with it every mint /
+        // provision decision) is minted by lgpo_handle_connect exactly as it is
+        // for /join/, which re-validates this path a second time.
+        // rawurlencode, not add_query_arg: add_query_arg does NOT encode values,
+        // so a destination carrying its own query (/hub/?topic=x&y=2) would be
+        // split into sibling params and arrive truncated.
+        $auth_url = home_url( '/patreon-connect/' ) . '?return=' . rawurlencode( $return );
+    } else {
+        $state = wp_generate_password( 32, false );
+        set_transient( 'lgpo_state_' . $state, '1', 600 );
+
+        $auth_url = add_query_arg( array(
+            'response_type' => 'code',
+            'client_id'     => $client_id,
+            'redirect_uri'  => $redirect_uri,
+            'scope'         => 'identity identity[email] identity.memberships',
+            'state'         => $state,
+        ), 'https://www.patreon.com/oauth2/authorize' );
+    }
 
     ob_start();
     ?>
@@ -611,12 +651,15 @@ function lgpo_handle_connect() {
         wp_die( 'Creator-mode OAuth requires admin access.', 'Forbidden', array( 'response' => 403 ) );
     }
 
-    // Validate the optional return target — path only, no scheme/host, no
-    // protocol-relative URLs (//evil.com). Not used in creator mode.
+    // Validate the optional return target. The inline guard this replaced
+    // (^/[^/] plus a newline check) was right about the shape but let through
+    // /\evil.example, every control char but \n, and /wp-login.php itself — see
+    // the RED baseline in tools/gates/dest-capture-gate.php. One validator now,
+    // shared with every other door. Not used in creator mode.
     $return_target = '/manage-subscription/'; // default per §3n
     if ( isset( $_GET['return'] ) ) {
-        $candidate = (string) wp_unslash( $_GET['return'] );
-        if ( preg_match( '#^/[^/]#', $candidate ) && strpos( $candidate, "\n" ) === false ) {
+        $candidate = lgpo_sanitize_return_path( wp_unslash( $_GET['return'] ) );
+        if ( $candidate !== '' ) {
             $return_target = $candidate;
         }
     }
@@ -1409,6 +1452,18 @@ function lgpo_handle_callback() {
     // Log them straight in (lifecycle G1) — they connected via Patreon, so land
     // them authenticated instead of bouncing to a password screen.
     lgpo_login_user( (int) $user_id );
+
+    // A brand-new member goes to the password page, overriding any carried
+    // destination — they weren't anywhere yet and they need a password more
+    // (Ian ruling 2). But the destination is NOT discarded: stash it first, and
+    // lgpo-set-password.php hands it back after they set OR skip. One-shot, so
+    // an abandoned destination can never fire in some later session.
+    //
+    // With nothing carried the stash is empty and today's behaviour stands:
+    // set → '/', skip → their profile.
+    if ( function_exists( 'lg_dest_stash' ) ) {
+        lg_dest_stash( (int) $user_id, (string) ( $state_payload['return_target'] ?? '' ) );
+    }
 
     // New account: no emailed reset link. They're already logged in (above) —
     // send them to the inline set-password welcome page (lgpo-set-password.php).
