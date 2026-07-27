@@ -341,9 +341,39 @@ server caps sit *before* the writes they guard.
 runs the shipping query, so reply markup can be verified — and previewed — without
 deploying anything.
 
-**Not proven, and it needs a serve window plus a real device:** the 422 exercised
-by an actual over-cap request, the composer guard and read-out driven by a real
-finger, and the gallery on Ian's phone.
+### Serve-window verification, 2026-07-27 (third window) — **all three closed**
+
+Receipts, drivers and screenshots:
+`footer-mockups/reply-images/serve-window-20260727/`.
+
+- **The 422 under a real over-cap request — CLOSED.** Six real HTTP calls to the
+  real endpoint on the serve. 7 via `media_ids` → 422; 7 via `bbp_media` (the
+  shape composer v2 actually sends) → 422; 6 → 200. Edit: keep 4 + add 3 → 422;
+  **add-only on reply 58510, which has 4 real stored images** → 422 with
+  `post_modified` still `2025-09-02`, proving the cap counts existing media and
+  fires before the write; keep 3 + add 3 → 200. **Negative control:** after the
+  files were restored the identical over-cap POST returned 200 — which is what
+  rules out the 422 coming from anything but this lane.
+- **The composer guard under a real finger — CLOSED, one caveat.** 390×844 DPR 2
+  with touch emulation; composer opened by a real trusted touch on
+  `.lg-fb-reply`; six real photos uploaded through the real input to the real BB
+  media endpoint. Counter ran `1 of 6` → `6 of 6`, went amber and disabled the
+  photo button at 6, and refused the 7th with the chip count **held at 6**.
+  Counter width 38px == scrollWidth 38px (readable, not ellipsed). Posted, then
+  asserted on the **store**: 6 rows in `forums.attachment` and
+  `bp_media_ids 3401..3406`. *Caveat:* file selection used CDP
+  `DOM.setFileInputFiles` — the OS picker is not drivable by anything. Every step
+  downstream of it is the genuine path.
+- **The gallery on a real device — path proven by this lane, phone closed by
+  Ian.** Existing member reply 58510 on mobile logged-in, desktop logged-in and
+  mobile **logged-out**: 4 cells, 0 broken, intrinsic dimensions, lazy, anon
+  correctly scrubbed. Ian closed the actual phone leg himself, looking at reply
+  71991 rendering 5 of 5 previously-unseen images.
+
+**Still not proven:** the legacy desktop tray guard (`lgComposerTray({max:6})`)
+has never been driven by a finger — only composer v2's mobile path has; and
+removing a chip to free a slot was never exercised (filling to 6 and being
+refused at 7 was).
 
 ### Previs
 
