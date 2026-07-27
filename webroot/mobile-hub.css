@@ -51,9 +51,19 @@
   .feed-page .feed-card--content{ border-left:1px solid var(--lg-line,#e3ddd0); }
 
   .feed-page .fc-avatar{ grid-column:1; grid-row:1 / span 2; align-self:start; width:40px; height:40px; margin:0; }
-  .feed-page .fc-avatar img,
-  .feed-page .fc-avatar .avatar-init{
+  .feed-page .fc-avatar img{
     width:40px; height:40px; border-radius:50%; object-fit:cover; display:block;
+  }
+  /* The initials fallback is a <span> that centres its letter with flexbox, so
+     it must NOT take the <img> treatment above: display:block dropped the letter
+     into the top-left corner of the circle, and object-fit means nothing on a
+     span. Phone-only bug — desktop keeps the base inline-flex rule and was
+     always fine. Measured on /hub/ at 390px: dx -13.77 dy -11.5 -> 0,0.
+     Most visible on "Private member", whose avatar is ALWAYS initials because
+     masking strips the real avatar_url (bb-mirror/config.php). */
+  .feed-page .fc-avatar span.avatar-init{
+    width:40px; height:40px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
   }
 
   .feed-page .fc-author{
