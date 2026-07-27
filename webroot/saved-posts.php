@@ -38,8 +38,10 @@ function sp_out(int $code, array $body): void {
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 // --- Bootstrap WP for $wpdb + the logged-in user ----------------------------
-$wp_load = __DIR__ . '/wp-load.php';
-if (!is_readable($wp_load)) {
+// Not __DIR__ — this file is symlinked into the docroot and __DIR__ resolves to
+// the repo, where wp-load.php isn't. See webroot/lg-wp-load.php.
+$wp_load = require __DIR__ . '/lg-wp-load.php';
+if ($wp_load === '') {
     sp_out(500, ['ok' => false, 'error' => 'wp_unavailable']);
 }
 require $wp_load;

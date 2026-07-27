@@ -81,8 +81,10 @@ $endpoint_hash = hash('sha256', $endpoint); // 64-char hex = the dedup key
 // Full bootstrap (no SHORTINIT) so the pluggable auth API is available and
 // wp_get_current_user() resolves the same-origin login cookie. A subscribe call
 // fires at most once per device, so the heavier load is fine here.
-$wp_load = __DIR__ . '/wp-load.php';
-if (!is_readable($wp_load)) {
+// Not __DIR__ — this file is symlinked into the docroot and __DIR__ resolves to
+// the repo, where wp-load.php isn't. See webroot/lg-wp-load.php.
+$wp_load = require __DIR__ . '/lg-wp-load.php';
+if ($wp_load === '') {
     out(500, ['ok' => false, 'error' => 'wp_unavailable']);
 }
 require $wp_load;

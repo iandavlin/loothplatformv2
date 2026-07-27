@@ -17,7 +17,14 @@
  */
 declare(strict_types=1);
 
-require __DIR__ . '/wp-load.php';
+// Not __DIR__ — this file is symlinked into the docroot and __DIR__ resolves to
+// the repo, where wp-load.php isn't. See webroot/lg-wp-load.php.
+$wp_load = require __DIR__ . '/lg-wp-load.php';
+if ($wp_load === '') {
+    http_response_code(500);
+    exit('Loothalong is temporarily unavailable.');
+}
+require $wp_load;
 
 // Real room link — kept server-side only (PHP executes, so this is never
 // emitted to an unauthorized browser).
