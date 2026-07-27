@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# dev1-power — turn the keeper box on or off from dev2.
+#
+# The point of this: dev1 is the orchestration/keeper box, and once the keeper
+# role moves onto dev2 there is no reason to pay for dev1 to sit idle. But we
+# still want to be able to wake it and go and get something — the message board,
+# old session transcripts, the team packs, anything not yet migrated.
+#
+#   dev1-power status | on | off | ssh
+#
+# Credentials are the devgbox-cli IAM user, which is deliberately scoped to power
+# only: it CAN start/stop, and it CANNOT open security groups or resize instances
+# (measured 2026-07-27). Those stay console-only, which is the right blast radius
+# for a key sitting on a web-facing box.
+set -uo pipefail
+
+DEV1_ID="i-01e54ed6c9a4ba91e"
+DEV1_IP="50.19.198.38"
+
+state() {
+    aws ec2 describe-instances --instance-ids "$DEV1_ID" \
+        --query 'Reservations[].Instances[].State.Name' --output text 2>/dev/null
+}
+
+case "${1:-status}" in
+    status)
+        s="$(state)"
+        echo "dev1 ($DEV1_ID): ${s:-unknown}"
+        [ "$s" = "running" ] && ssh -o ConnectTimeout=8 -o BatchMode=yes dev1 'uptime' 2>/dev/null
+        ;;
+    on|start)
+        s="$(state)"
+        if [ "$s" = "running" ]; then echo "dev1 is already running"; exit 0; fi
+        aws ec2 start-instances --instance-ids "$DEV1_ID" --output text >/dev/null || exit 1
+        echo -n "starting dev1"
+        for _ in $(seq 1 40); do
+            sleep 5; echo -n "."
+            if ssh -o ConnectTimeout=5 -o BatchMode=yes dev1 true 2>/dev/null; then
+                echo " up — ssh dev1"; exit 0
+            fi
+        done
+        # An EIP means the address is stable, so a failure here is the box, not DNS.
+        echo " started but not answering ssh yet (ip $DEV1_IP) — give it a moment"
+        ;;
+    off|stop)
+        # Refuse to pull the floor out from under running work. A lane loses its
+        # context when the box stops, and that context is usually worth more than
+        # the hour of instance time being saved.
+        busy="$(ssh -o ConnectTimeout=8 -o BatchMode=yes dev1 'tmux ls 2>/dev/null | wc -l' 2>/dev/null || echo 0)"
+        if [ "${busy:-0}" -gt 0 ] && [ "${2:-}" != "--force" ]; then
+            echo "REFUSING: dev1 still has $busy tmux session(s) — check them first, or pass --force"
+            ssh -o ConnectTimeout=8 -o BatchMode=yes dev1 'tmux ls' 2>/dev/null
+            exit 1
+        fi
+        aws ec2 stop-instances --instance-ids "$DEV1_ID" --output text >/dev/null || exit 1
+        echo "dev1 stopping (EBS is still billed; compute is not)"
+        ;;
+    ssh)
+        shift
+        exec ssh dev1 "$@"
+        ;;
+    *)
+        echo "usage: dev1-power [status|on|off [--force]|ssh [cmd]]" >&2; exit 2 ;;
+esac
