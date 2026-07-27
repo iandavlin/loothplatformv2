@@ -60,7 +60,15 @@ define('HOST', getenv('LG_MATRIX_HOST') ?: $LG_ENV['LG_GATE_HOST']);
 // Pin to the local origin exactly as the shell gates do — the public edge is
 // behind Cloudflare, which challenges non-browser clients (403). Skipped when
 // the host was overridden (a LIVE run must reach the real edge).
-define('RESOLVE', getenv('LG_MATRIX_HOST') ? '' : ($LG_ENV['LG_GATE_DOMAIN'] . ':443:127.0.0.1'));
+// Address comes from the resolver, NOT a second hardcoded 127.0.0.1 here — that
+// is the same duplicated-fact defect gate-env.sh exists to kill, and it bites
+// harder than a stale hostname: loopback makes every request INTERNAL
+// (api/v0/users.php trusts REMOTE_ADDR 127.0.0.1/::1), which switches off the
+// anon 401 and the private-slug stripping that S3 below asserts. Pinned to
+// loopback this gate reported those two as product failures when the product was
+// correct — and would equally have reported green if it had regressed.
+define('RESOLVE', getenv('LG_MATRIX_HOST') ? ''
+    : ($LG_ENV['LG_GATE_DOMAIN'] . ':443:' . ($LG_ENV['LG_GATE_ADDR'] ?: '127.0.0.1')));
 const SUBJ_ID  = 1849;            // profile-app user id   ('qa')
 const SUBJ_WP  = 1910;            // bridged wp user id
 const MEMBER_WP = 7;              // genuine non-admin member (read-only viewer)
@@ -171,7 +179,15 @@ echo "== setup fixture (user " . SUBJ_ID . " -> '" . NAME . "' @ " . LAT . "," .
 $UUID = pgq("SELECT uuid FROM users WHERE id = " . SUBJ_ID);
 if ($UUID === '') { fwrite(STDERR, "fixture user missing\n"); exit(2); }
 
-pgq("UPDATE users SET slug = '" . SLUG . "', display_name = '" . NAME . "',
+// archived_at = NULL is load-bearing, not tidiness. An archived identity is
+// filtered out of the directory, the map pins, search-suggest and the users API
+// — but its /u/ page still renders. So when this fixture was archived on
+// 2026-06-30, every page assertion kept passing while every containment-filtered
+// surface failed, and re-running could never clear it because setup did not own
+// this column. The gate was asserting that an ARCHIVED member appears in the
+// directory: a demand the product is right to refuse. A fixture that does not
+// fully specify its own state is not a fixture.
+pgq("UPDATE users SET archived_at = NULL, slug = '" . SLUG . "', display_name = '" . NAME . "',
      location_text = 'Matrix Reef', location_city = 'Matrix Reef', location_region = 'Atlantic',
      location_country = 'XX', lat = " . LAT . ", lng = " . LNG . ",
      location_members_precision = 'city', location_public_precision = 'city',
