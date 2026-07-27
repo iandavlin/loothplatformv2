@@ -14,6 +14,26 @@
 #
 # Run:  bash lg-weekly-digest/dev/measure-suppression-axes.sh
 #
+# ── VERIFICATION STATUS, STATED HONESTLY (2026-07-27) ────────────────────────
+# This script has NOT been run end to end. dev1 — the jump host `live-ro` proxies
+# through — was stopped mid-run, and I could not restart the run.
+#
+#   PROVEN: every query in the AXIS 1 block, the AXIS 2 email-classification and
+#   forum-bell-rows blocks, and AXIS 3 blocks (b) and (c). Each was executed
+#   directly against live and its output is what the proposal's numbers ARE.
+#
+#   UNVERIFIED: the campaign-title query in AXIS 3(a). My first attempt matched
+#   '%Week of%' and returned EMPTY — the live titles are 'Weekly Digest — July 27,
+#   2026'. The '%Weekly Digest%' form below is the corrected pattern, and I derived
+#   the drift table from a direct query that DID return those five campaigns, but
+#   this exact statement has not itself been run.
+#
+#   Also unverified: that the shell quoting survives nine sequential ssh hops in
+#   one process. Individual invocations of the same shape worked.
+#
+# If a block returns empty, suspect the pattern before you conclude the answer is
+# zero — that mistake is already in this file's history.
+#
 # NOTE on the email log: FluentSMTP retains 14 days. Any question needing a longer view
 # cannot be answered from it at all — that is one of the three reasons the proposal
 # rejects log-scraping as the instrument for axis 2.
