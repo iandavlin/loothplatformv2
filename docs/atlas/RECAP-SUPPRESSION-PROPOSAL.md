@@ -1,8 +1,10 @@
 # RECAP-SUPPRESSION-PROPOSAL
 
-> **Status: FINISHED PROPOSAL, measured on LIVE, awaiting Ian.** Axis 1 is shipped; axes 2 and 3
-> are designed and costed here, and **the measurements argue against building most of it.**
-> **Lane:** weekly-digest-recap. **Date:** 2026-07-27 (re-measured 23:30 UTC after respin).
+> **Status: FINISHED PROPOSAL, measured on LIVE, awaiting Ian.** Axis 1 is shipped. **Axis 2:
+> do not build** (measured — the surface does not exist). **Axis 3: build Rule 3b** (the trigger I
+> set for it turned out to have already fired in June, and the design needs no new schema).
+> **Lane:** weekly-digest-recap. **Date:** 2026-07-27, **revised 2026-07-28** after running the
+> repro script end to end, which caught a material error in §1.3(b) — see the correction there.
 > **All numbers are from LIVE**, read-only via `live-ro` (PG `profile_app` as `looth_ro`,
 > MySQL `looth_import`) — not dev2, which holds different data.
 > Cross-refs: THREAD-FOLLOW-SPEC.md @2cb9e3f (§1.3, §3.7, §6b, §8, §9.1, §9.2),
@@ -128,17 +130,37 @@ certain and permanent; the damage at current volume (0.71 notifications/hour pla
 approximately one item per month. I am reporting both halves because quoting only the first would
 justify machinery the second does not.
 
-**(b) A per-recipient send can fail — and does on this platform.** `wp_fc_campaign_emails` carries a
-status per recipient: **32,983 sent, 1,122 scheduled, 65 failed** all-time. The failures are real
-infrastructure, not test noise:
+**(b) A per-recipient send can fail — and it has already happened to a weekly digest.**
 
-- campaign **283: 6 recipients**, `SimpleEmailService::sendRawEmail(): Sender - SignatureDoesNotMatch`
-- campaign **38: 59 recipients**, `Message body empty`
+> **CORRECTION — I got this wrong in the previous revision and the error was material.** I wrote
+> "no weekly digest has ever had a failed recipient", and named campaign 283 as a non-digest. **283
+> is `Weekly Digest — June 1, 2026`.** I had matched campaign titles on `LIKE '%Week of%'`, got an
+> empty result, and read that empty result as a real zero. The live titles read `Weekly Digest —
+> June 1, 2026`. That is precisely the trap I had written into
+> `dev/measure-suppression-axes.sh` as a warning to others — an empty result from a wrong pattern is
+> indistinguishable from a genuine zero — and I fell into it in the same document. It was caught by
+> running that script end to end, which is the entire reason it exists.
 
-**No weekly digest has ever had a failed recipient** — campaign 379 (Weekly Digest, July 27) is
-1,858 sent, 1,858 recipients. So the failure mode is *proven possible on this exact table and this
-exact sender*, and *never yet observed on this campaign type*. Under a pure date window a member
-whose send failed loses those items permanently and silently.
+`wp_fc_campaign_emails` carries a status per recipient: **32,983 sent, 1,122 scheduled, 65 failed**
+all-time. Across the **19 weekly digest campaigns** on record (2026-03-16 → 2026-07-27):
+
+| | |
+|---|---|
+| Digests with every recipient sent | **18** |
+| Digests with failed recipients | **1** — `Weekly Digest — June 1, 2026` |
+| Recipients lost on that send | **6 of 1,739 (0.34%)** |
+| Cause | `SimpleEmailService::sendRawEmail(): Sender - SignatureDoesNotMatch` |
+| Ever successfully re-sent | **No** — all six still read `failed`, eight weeks later |
+
+The six are real named members (`johnthebaker18@`, `ian@evansguitarlab`, `lpdude45@`, `ljinlay2@`,
+`lfrobisonjr@`, `t.l.wolf@`).
+
+**The magnitude that matters is not 0.34%.** All six failed inside one second with an identical
+cause. This is a **correlated** failure — one bad sender signature — not a per-recipient random
+one. It took out six because six were unlucky in the batch, but nothing about a signature error
+bounds it at six; the same fault could take the whole list. **A date window converts any such event
+into permanent, silent loss for everyone it touches**, and there is no signal afterwards that it
+happened.
 
 **(c) The cost of a watermark with no floor.** If the window were replaced by "everything still
 outstanding since your last successful digest" with no starting floor, the first send would carry
@@ -215,17 +237,21 @@ would itself be the moment to revisit this.
 recording that axis 2 was measured, costed and declined, with the trigger to revisit, is worth more
 than a column nobody stamps.
 
-### Rule 3 — previous digest: **fix the window, not the architecture. Floor it.**
+### Rule 3 — previous digest: **replace the constant window with the member's own last send. Floor it.**
 
-The previous revision proposed a per-member watermark. The measurements in §1.3 say the drift costs
-about one item a month and digest sends have never failed, so I am proposing the cheap correct fix
-and keeping the expensive one on the shelf with a named trigger.
+> **This section was rewritten after the correction in §1.3(b).** The previous revision recommended
+> a global window (3a) and shelved the per-member one (3b) on the grounds that digest sends had never
+> failed. **They have.** With that corrected, and with 3b turning out to need no new schema at all,
+> the two collapse into a single recommendation: **build 3b.** 3a is retained below only because it
+> is the fallback if Ian wants the smaller change, and because its call-site analysis is what 3b uses
+> too.
 
-**Rule 3a (recommended, build this): derive the window from the last successful digest send.**
+**Rule 3a (fallback, global): derive the window from the last digest send.**
 
 Instead of a constant 7 days, the window is `[time of the previous digest campaign's send, now]`.
 This eliminates the drift bands in §1.3(a) entirely — no gap, no overlap, by construction — and it
-self-corrects if a week is skipped, because the window simply grows to cover the gap.
+self-corrects if a week is skipped, because the window simply grows to cover the gap. **It does not
+help the six members in §1.3(b)**, because a global window cannot know that one member's send failed.
 
 **This is a call-site change, not a schema change.** The lookback is already a parameter threaded end
 to end: `Recap_Source::fetch( array $wp_user_ids, int $days = 7 )`
@@ -246,28 +272,62 @@ backlog: a first run reaching back to the previous campaign under the new rule w
 begin clean; the historical backlog is never mailed. Given it is 343 of 349 stale connection rows
 from June and early July, not mailing it is also the right product answer.
 
-**Rule 3b (do not build yet): the per-member watermark.**
+**Rule 3b (BUILD IT — the trigger has already fired, and it is far cheaper than I first costed).**
 
-The exact form, so it is on record and costed:
+The previous revision shelved this behind a trigger: *"the first weekly-digest campaign that records
+a `failed` row."* §1.3(b) shows that trigger was **already met on 2026-06-01**, and I only missed it
+because of a bad `LIKE` pattern. So the trigger is not a future condition — it is history.
 
-- A table `digest_renders(user_uuid, campaign_id, max_notification_id, rendered_at, confirmed_at)`.
-- At render time, record the highest `notifications.id` put into that member's email.
-  `notifications.id` is a `bigint` sequence (max 888, 604 rows) — a monotonic key is the right
-  watermark, not a timestamp, because it is immune to clock and timezone drift.
-- After the send, a reconciler sets `confirmed_at` from
-  `wp_fc_campaign_emails.status = 'sent'` for that `(campaign_id, subscriber_id)`. **That column is
-  the only honest "this member's send succeeded" signal that exists** — §1.3(b) is the proof it
-  distinguishes real outcomes.
-- The member's watermark is `max(max_notification_id)` over **confirmed** rows only.
+**And the design I proposed for it was more machinery than the job needs.** I specified a new table
+`digest_renders(...)`, a post-send reconciler, and a two-phase render/confirm coupling. **None of
+that is necessary**, because FluentCRM *already* stores per-recipient send status, and the recap
+*already* renders per recipient. The window start can simply be read:
 
-**Its failure mode is the safe one:** an unconfirmed render does not advance the watermark, so the
-member sees the item again next week. Re-showing is recoverable; silent loss is not.
+> **A member's window starts at the send time of the most recent weekly digest that member actually
+> received.**
 
-**Why it waits:** it buys exactness over Rule 3a only when a *digest* send fails per-recipient, which
-has never happened in 32,983 sends of this campaign type. Storage would be ~97k rows a year, which is
-nothing; the cost is the reconciler and the two-phase render/confirm coupling. **Trigger to build it:
-the first weekly-digest campaign that records a `failed` row in `wp_fc_campaign_emails`.** That is a
-one-line check anyone can run.
+One batched query against tables that already exist — no new schema, no reconciler, no two-phase
+commit:
+
+```sql
+SELECT e.subscriber_id, s.user_id AS wp_id, MAX(c.created_at) AS window_start
+  FROM wp_fc_campaigns c
+  JOIN wp_fc_campaign_emails e ON e.campaign_id = c.id
+  JOIN wp_fc_subscribers    s ON s.id = e.subscriber_id
+ WHERE c.title LIKE 'Weekly Digest%' AND e.status = 'sent'
+   AND e.subscriber_id IN (…this send's recipients…)
+ GROUP BY 1, 2;
+```
+
+**Demonstrated on live against the six real casualties.** Asked "what window would these members get
+at the next digest (June 22)?":
+
+| Member | Window start | |
+|---|---|---|
+| subscriber 964 | **2026-05-25** | reaches back past their failed June 1 send |
+| subscriber 1884 | **2026-05-25** | reaches back past their failed June 1 send |
+| subscriber 1000 (healthy control) | 2026-06-01 | correctly starts at the send they received |
+| subscriber 1001 (healthy control) | 2026-06-01 | correctly starts at the send they received |
+
+**It self-heals per member, with no state of our own to keep correct.** A member whose send failed
+automatically gets a window covering what they missed; a member whose send succeeded does not repeat.
+This subsumes Rule 3a — the drift bands in §1.3(a) also disappear, because the window start is a real
+send time rather than a constant offset.
+
+**Two honest caveats:**
+
+1. **It matches campaigns by title string** (`LIKE 'Weekly Digest%'`), and I objected to string
+   matching in Rule 2. The objection is not symmetric and I want to be explicit about why: there,
+   the string had to identify **which item a mail was about**, which a subject line fundamentally
+   cannot do. Here it identifies **which campaign is the digest** — admin-controlled, stable across
+   19 campaigns, and verifiable at a glance. If Ian prefers it exact, the digest can tag its own
+   campaigns and the `LIKE` becomes an id lookup; that is a small change, not a redesign.
+2. **`wp_fc_subscribers.user_id` is NULL for some contacts** — 2 of the 6 casualties, in fact. That
+   gap is already solved: `Recap_Source::wp_user_id_for()`
+   (`class-lg-wd-recap-source.php:130`) falls back to matching on email, which is how the weekly
+   list was built in the first place. Reuse it; do not re-derive it.
+
+**The floor still applies**, unchanged and for the same reason — see Rule 3a.
 
 ### 2.1 What this does not cover — the fourth axis, still open
 
@@ -342,6 +402,12 @@ that class; a recap is content inside a class, never a class of its own.*
 - **Group subscriptions (12,948 rows / 1,853 users)** are untouched here, as in the spec. If group
   discussion mail ever overlaps the recap, this proposal does not cover it.
 - **Nothing here is built.** Rule 1 was already shipped; Rules 2 and 3 are written, costed and
-  unwritten in code. Rule 3a is the only one I am asking to build.
+  unwritten in code. **Rule 3b is the one I am asking to build.**
+- **Rule 3b's window query is demonstrated, not deployed.** I ran it against live and it returns the
+  correct reach-back for the six real casualties and the correct no-reach-back for healthy controls
+  (§ Rule 3b). That proves the *data supports it*. It has not been wired into
+  `Recap_Source::payload_for()`, and no send has been rendered through it.
+- **I do not know whether the June 1 failure recurs on any schedule.** One event in 19 digests is not
+  a rate. The argument for 3b rests on the failure being *correlated and silent*, not on frequency.
 - **No serve window was held for this work** — it is measurement and design only. The live reads were
-  all through `live-ro`, read-only.
+  all through `live-ro`, read-only, on the LIVE box (not dev2; the two hold different data).
