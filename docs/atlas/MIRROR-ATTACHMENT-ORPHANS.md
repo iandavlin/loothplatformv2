@@ -94,10 +94,33 @@ Measured twice on 2026-07-28, hours apart, and **it moved between the two**:
 | live topic attachments | 1,017 | 1,017 | |
 | live reply attachments | 893 | 895 | |
 
-**The leak is accruing on live now, not historically.** A reply lost its images
-into the mirror during a single working morning. Orphans carry a `sync_at`, and
-the spread confirms it is ongoing rather than a one-off: 2 rows from 2026-05,
-14 from 2026-06, 8 from 2026-07.
+**The leak is accruing on live now, not historically.** Orphans carry a
+`sync_at`, and the spread confirms it is ongoing rather than a one-off: 2 rows
+from 2026-05, 14 from 2026-06, 8 from 2026-07.
+
+The two orphaned **reply** parents on live are worth naming, because between
+them they are the whole argument:
+
+| live reply | leaked rows | rows synced at | |
+|---|---|---|---|
+| **72256** | **6** | 2026-07-17 19:22 UTC | **a six-image reply, deleted — every row still there** |
+| 72389 | 2 | 2026-07-28 03:30 UTC | posted this morning, deleted this morning |
+
+`72256` is the **largest reply-image group on the whole live mirror**, and its
+reply no longer exists. That is the six-wide case this was predicted to cause,
+already having happened, ten days before anyone looked. It is also why live's
+user-visible `max_on_one_reply` reads 5 while a raw `GROUP BY parent_id` reads
+6 — the 6 belongs to a reply nobody can see.
+
+`72389` explains the +2 between the two measurements: its rows were written at
+03:30 UTC with a living parent (so they were *not* orphans when the 03:31
+census ran), and the reply was deleted later that morning. A member deleted a
+two-image post and the mirror kept the images.
+
+> **Beware the ID collision.** dev2 and live have independent ID sequences that
+> overlap. `bin/test-attachment-purge.php` happened to be assigned reply 72256
+> on **dev2** during this work; live's 72256 is an unrelated post on a different
+> box and a different database. Always say which box a number came from.
 
 Note **12 of the 14 lost parents are topics**, which is the path nobody was
 looking at. Live already carries a 6-image reply, so the new shape is live data,
@@ -300,7 +323,57 @@ Verified on dev2 2026-07-27 that a materializer re-sync does **not** clear
 orphans: `bb-mirror-reconcile.service` was run deliberately and the census was
 byte-identical afterwards. The triggers are the only thing that fixes this.
 
-## 6. Still open
+## 6. The live run — Ian's, and the rollback comes first
+
+**Rollback, stated before anything is applied.** Three statements, no data
+dependency, safe to run at any time:
+
+```sql
+DROP TRIGGER IF EXISTS topic_attachment_purge ON forums.topic;
+DROP TRIGGER IF EXISTS reply_attachment_purge ON forums.reply;
+DROP FUNCTION IF EXISTS forums.attachment_purge_for_parent();
+```
+
+or `bb-mirror/bin/fix-attachment-orphans.sh rollback`. This has been exercised,
+not just written down: after running it, the next delete leaks again. It restores
+the *old leaky behaviour* — it does not resurrect swept rows, and does not need
+to, because those rows point at parents that no longer exist.
+
+**Live dry run, run read-only through `ssh live-ro` on 2026-07-28:**
+
+| | |
+|---|---|
+| orphan rows to sweep | **24** (16 topic / 12 parents, 8 reply / 2 parents) |
+| rows that must survive | **1,888** |
+| replies with images / multi-image / extra images / max | **513 / 233 / 374 / 5** |
+| purge triggers currently on live | **0** — not installed |
+
+The third row is the assertion. `apply` re-measures it afterwards and **fails
+loudly if any of those four numbers move.** They must not: the sweep only removes
+rows whose parent is already gone, and no such row can appear in that query,
+which starts `FROM forums.reply`.
+
+**The command:**
+
+```bash
+cd /srv/bb-mirror
+./bin/fix-attachment-orphans.sh dry-run     # read-only; prints the exact SQL
+./bin/fix-attachment-orphans.sh apply
+```
+
+`apply` backs the exact rows up to `/tmp/<tag>.orphan-rows.tsv` first, installs
+the two triggers **before** sweeping so nothing leaks mid-run, aborts if it does
+not end up with exactly 2 triggers, then sweeps and re-asserts the counts above.
+
+> **NOBODY IS NOTIFIED AND NO USER-VISIBLE NUMBER MOVES.** Stated here so it does
+> not have to be asked. Every read path starts `FROM forums.reply` /
+> `forums.topic` and joins outward, so a row whose parent is gone cannot render,
+> cannot be linked, and is in nobody's feed, digest or email. Nothing about this
+> is member-facing: it is invisible rows being removed from a table. **No image
+> files are touched** — `attachment` stores URLs, not blobs, and the files live
+> in R2 under `wp-content/uploads`.
+
+## 7. Still open
 
 The **WP side** has the same shape and is out of this lane's scope: deleting a
 reply in WP removes its `bp_media` rows, but nothing reconciles a `bp_media_ids`
