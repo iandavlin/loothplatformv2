@@ -45,6 +45,29 @@ Move finished items to DONE with the date. If an item is blocked, say *on what* 
    cause of the long-standing "www-data wp-cli fatal", and it blocks lanes from
    minting WP cookies without root. Decide the correct group posture.
 
+7. **Events leave the events page too soon** — Ian, 2026-07-28. Events are
+   disappearing from `/events/` earlier than they should. Not yet diagnosed:
+   could be the query window, a timezone/UTC boundary, or an end-date vs
+   start-date comparison. Reproduce against LIVE data (dev2 and live hold
+   different events) before theorising.
+8. **Everything belongs in the monorepo** — Ian, 2026-07-28: "everything should
+   be in mono repo, that's why all the symlink". Standing principle, not a task:
+   if a served file is not in the repo and traceable to a commit, it does not
+   exist. Audit for anything still living outside it. Known offenders: the two
+   slug report HTMLs written straight into `/var/www/dev`, and the keeper badge
+   page under `~/projects/footer-mockups/`.
+
+## PROCESS NOTES
+
+- **Push with `git push origin main:main`, never `HEAD:main`.** On 2026-07-27
+  keeper was still on a temporary integration branch when it pushed a docs
+  commit with `HEAD:main`, which silently merged two feature branches into main
+  hours before Ian approved them. Nothing reached the serve or live, but the
+  explicit refspec would have failed loudly instead of quietly succeeding.
+- **Restore with `git checkout HEAD -- <path>`, never the bare form.** The bare
+  form restores from the INDEX; on a shared clone it installs another process's
+  staged work and exits 0. Measured 2026-07-27.
+
 ## BLOCKED — named blocker
 
 - **slug-backfill live dry-run** — blocked on the two live TSV exports. *May now
