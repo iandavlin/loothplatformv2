@@ -4375,6 +4375,27 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
     cursor: pointer; background: none; color: var(--fg-muted); font: 700 12px/1 var(--font-body);
   }
   #lg-dmodal .lg-dmodal__size:hover { border-color: var(--lg-sage, #87986a); color: var(--fg); }
+  /* The two per-discussion opt-ins in the head (thread-follow §2.3). Circular peers
+     of the size control so the cluster reads [title] … [🔔] [✉] [S|M|L|XL] [×] —
+     state controls grouped, dismissal rightmost. Theme-driven via var(--fg*), so
+     dark mode needs no separate rule. */
+  #lg-dmodal .lg-dmodal__notify,
+  #lg-dmodal .lg-dmodal__email {
+    flex: none; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 50%;
+    cursor: pointer; background: none; color: var(--fg-muted);
+    display: inline-flex; align-items: center; justify-content: center; transition: color .12s, border-color .12s;
+  }
+  #lg-dmodal .lg-dmodal__notify .ico,
+  #lg-dmodal .lg-dmodal__email .ico { width: 17px; height: 17px; }
+  #lg-dmodal .lg-dmodal__notify:hover,
+  #lg-dmodal .lg-dmodal__email:hover { border-color: var(--lg-sage, #87986a); color: var(--fg); }
+  #lg-dmodal .lg-dmodal__notify.is-on,
+  #lg-dmodal .lg-dmodal__email.is-on {
+    color: var(--lg-sage-d, #586b3f); border-color: var(--lg-sage, #87986a);
+    background: var(--lg-sage-tint);
+  }
+  #lg-dmodal .lg-dmodal__notify.is-on .ico,
+  #lg-dmodal .lg-dmodal__email.is-on .ico { fill: currentColor; }
   /* Social-style action rows — one place, under the content (Ian) */
   #lg-dmodal .lg-dmodal__opacts {
     display: flex; align-items: center; gap: 16px;

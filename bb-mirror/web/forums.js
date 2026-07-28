@@ -4201,6 +4201,21 @@
       '<div class="lg-dmodal__panel" role="dialog" aria-modal="true" aria-label="Discussion">' +
         '<header class="lg-dmodal__head">' +
           '<h2 class="lg-dmodal__title"></h2>' +
+          /* The two per-discussion opt-ins (thread-follow §2.3). They sit BEFORE the
+             size control, so the cluster reads [title] … [🔔] [✉] [S|M|L|XL] [×] —
+             state controls grouped, dismissal rightmost. data-topic-id is stamped
+             when the modal is populated (see lgFollowSync call at populate time).
+             Explicitly NOT in the post ⋯ menu: that trigger is revealed only to a
+             post's AUTHOR or a moderator and its contents are Edit/Delete, so it is
+             both the wrong audience and the wrong semantics for a follow control. */
+          '<button type="button" class="lg-dmodal__notify" data-follow="notify" data-topic-id="0" ' +
+                  'aria-pressed="false" aria-label="Notify me about new replies" title="Notify me about new replies">' +
+            '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>' +
+          '</button>' +
+          '<button type="button" class="lg-dmodal__email" data-follow="email" data-topic-id="0" ' +
+                  'aria-pressed="false" aria-label="Email me about new replies" title="Email me about new replies">' +
+            '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>' +
+          '</button>' +
           '<button type="button" class="lg-dmodal__size" aria-label="Modal size" title="Modal size"></button>' +
           '<button type="button" class="lg-dmodal__x" data-dm-close aria-label="Close">&times;</button>' +
         '</header>' +
@@ -4338,6 +4353,18 @@
     var m = ensure();
     var titleEl = card.querySelector('.fc-title, .feed-card__title');
     m.querySelector('.lg-dmodal__title').textContent = titleEl ? titleEl.textContent.trim() : 'Discussion';
+    // Point the two follow toggles at THIS topic and re-hydrate them (thread-follow
+    // §2.3). Clearing data-follow-synced is what makes the shared module treat them
+    // as fresh — the header markup persists across opens, so without this they would
+    // keep the previous topic's state. Deep-linked cold opens work too: the module's
+    // batch GET simply resolves one topic instead of a screenful.
+    [].slice.call(m.querySelectorAll('[data-follow]')).forEach(function (b) {
+      b.setAttribute('data-topic-id', tid);
+      b.removeAttribute('data-follow-synced');
+      b.setAttribute('aria-pressed', 'false');       // never show the last topic's state while loading
+      b.classList.remove('is-on');
+    });
+    if (window.lgFollowSync) window.lgFollowSync();
     // forum_id is stamped on the card's reply CTA / composer, not the card itself.
     var fidEl = card.querySelector('[data-forum-id]');
     var fid = card.getAttribute('data-forum-id') || (fidEl && fidEl.getAttribute('data-forum-id')) || '';
