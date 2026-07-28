@@ -145,8 +145,16 @@ ls -l /srv/profile-app/bin/backfill-slugs.php /srv/profile-app/bin/purge-stale-l
 ```bash
 sudo -u profile-app psql -d profile_app -c \
   "CREATE TABLE slug_rollback_20260728 AS SELECT id, slug, slug_changed_at FROM users;"
-sudo -u profile-app psql -d profile_app -c "SELECT count(*) FROM slug_rollback_20260728;"   # expect 1876
+sudo -u profile-app psql -d profile_app -c "SELECT count(*) FROM slug_rollback_20260728;"
 ```
+
+**Must print 1876. If it errors or prints anything else, STOP — do not run step 3.** Without
+this table the rollback above has nothing to restore from, and the apply is irreversible.
+
+(`sudo -u profile-app psql -d profile_app` is this repo's established idiom for reaching that
+database, but I could not read live's `pg_hba.conf` as the read-only role, so I have not proven
+that exact invocation authenticates *on live*. That is precisely why this step is gated on a
+number rather than assumed to have worked.)
 
 ## 2. Pre-flight — re-derive from live truth and confirm it still matches this report
 
