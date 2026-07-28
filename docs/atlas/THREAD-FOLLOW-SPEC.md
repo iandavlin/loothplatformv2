@@ -80,11 +80,19 @@ replies to their own topic without toggling anything.
     Explicitly rejected: **wiping** them (silently unsubscribes people who may want them) and
     **hiding** them (the toggle would read off while mail keeps arriving). This closes §9.2 as
     **option B**.
-11. **STILL OPEN, and deliberately NOT covered by ruling 10:** the **12,948 GROUP subscriptions**
-    (§8.2) — a third population neither keeper nor Ian knew existed when ruling 10 was made. They are
-    **auto-created from group membership, not chosen**, and carry a **1,830-recipient** blast radius.
-    A ruling made about 1,519 rows must not silently become a ruling about 14,000. Separate question,
-    separate numbers, §8.2.
+11. **RULED, Ian 2026-07-28 (second ruling) — "GROUP" IS TWO DIFFERENT THINGS (§8.2.4):**
+    **TYPE 1 LAYOUT GROUPS** are plumbing — a group created only to force a layout so a forum gets
+    its own activity feed. They **produce no notifications and no emails, and never appear in the
+    toggle UI**. **TYPE 2 LOCAL LOOTHS** are real geographic communities that *will* need both —
+    **but the feature is not built yet, so design the seam and build nothing.**
+    **The split is a real field**, not a heuristic: `bp_group_type` — **`loothing` = Type 1
+    (5 groups, 9,262 subs, 71.5%)**, **`34507` = Type 2 (9 groups, 3,480 subs)**; one type per group,
+    zero ambiguity, totals reconcile to 12,948 exactly (§8.2.5).
+    ⚠️ **The term names invert the meaning** — the plumbing is called `loothing`, the real communities
+    are called `34507` — so the build keys on the **slug** and implements an **allow-list that fails
+    closed** (§8.2.6). Local Looths is unbuilt ⇒ **the allow-list ships EMPTY** ⇒ no group
+    subscription produces anything. That is the whole seam.
+    This ruling also **disarms §8.2.2's 1,830-recipient hazard**, since that path is Type 1.
 12. **STILL OPEN:** the per-event vs digest email posture (§9.1), which carries a recommendation but
     is not decided here.
 
@@ -804,23 +812,80 @@ group-linked forum.
 mechanism is armed, the audience is 1,830, and the trigger is *one member starting a discussion in
 an ordinary-looking forum*. It is dormant by accident, not by design.
 
-### 8.2.4 The question for Ian — deliberately NOT answered here
+### 8.2.4 ✅ RULED, Ian 2026-07-28 (second ruling): "GROUP" IS TWO DIFFERENT THINGS
 
-**Q: Ruling 10 says honour existing subscriptions and show them as ON. Does that extend to the
-12,948 group subscriptions nobody chose?**
+> **TYPE 1 — LAYOUT GROUPS.** Created purely as a BuddyBoss mechanism: a group exists to force a
+> particular layout so a forum gets its own activity feed. **Plumbing, not communities.** Nobody
+> joined them to receive anything. They **must NOT produce notifications or emails, and must not
+> appear in the toggle UI at all.**
+>
+> **TYPE 2 — LOCAL LOOTHS.** The geographic-community initiative. These **are** real communities and
+> **will** need notifications and email prompts — **but the feature is not built out or functioning
+> yet.** So: **design for it, do not build it.** Leave a clean seam; invent no behaviour for a
+> feature that does not exist.
+>
+> This **supersedes nothing else**. Ruling 10 still governs the 1,519 topic + 46 forum subscriptions.
 
-Three positions, with the member-visible consequence:
+**This ruling resolves §8.2.2's landmine.** The 1,830-recipient blast radius belongs to **New Builds
+(group 32)**, which is **Type 1**. Under this ruling that path must not email anyone, so the hazard is
+disarmed by the ruling itself — the answer to the old G3 was effectively *yes*.
 
-| | Position | Consequence |
-|---|---|---|
-| **G1** | **Out of scope — leave untouched, surface nothing.** This spec governs per-*discussion* toggles; a group subscription is a different object. | Least work, status quo preserved. But the armed 1,830-recipient path stays armed and unnamed, and no member can see or leave it. |
-| **G2** | **Extend ruling 10 — show group-derived state as ON somewhere and make it exitable.** | Consistent with "the UI must tell the truth". Needs a surface this spec does not have — the state is per-*group*, and no per-topic control can represent it. Real design work. |
-| **G3** | **Treat the group path as a defect and disarm it** — e.g. gate the group branch so topic creation in a group-linked forum does not mail every member. | Removes a 1,830-recipient hazard nobody opted into. But it is a behaviour change to a shipped BuddyBoss path, and it is genuinely outside this lane's remit. |
+### 8.2.5 THE DISCRIMINATOR — there IS a field, and it splits cleanly
 
-**This lane's read, offered as input and not as a decision:** the honest ruling-10-consistent answer
-is **G2**, but the *urgent* one is **G3**, and they are independent — G3 is a safety question about a
-dormant mechanism, G2 is a truthfulness question about visible state. They should be answered
-separately rather than bundled. **Nothing is being built against any of them until Ian rules.**
+**Yes, the two types can be told apart in the data.** BuddyBoss's group-type taxonomy
+`bp_group_type` (`wp_term_relationships` → `wp_term_taxonomy` → `wp_terms`, `object_id` = group id):
+
+| `bp_group_type` | groups | **group subs** | share | What it is |
+|---|---|---|---|---|
+| **`loothing`** | 5 | **9,262** | **71.5%** | **TYPE 1 — LAYOUT / PLUMBING.** Repair And Restoration (31), New Builds (32), Tools/Spaces/Robots/Widgets (33), Business (34), Market Place (35). All created 2024-01-24, all `public`, ~1,851–1,854 subs each ≈ the whole membership |
+| **`34507`** | 9 | **3,480** | 26.9% | **TYPE 2 — LOCAL LOOTHS.** Tri State NYC (38), SoCal (39), SW Ontario (40), DMV (41), Looth Troop PNW (42), Ireland (43), Middle Tennessee (45), Basque Country (46), Ohio (47) |
+| `chat` | 4 | 199 | 1.5% | Neither — 2023 legacy social groups (General Chat, Music, Charla General, Dank Memes); `enable_forum=0` |
+| `leadership` | 1 | 5 | — | Neither — Looth Group Partners (44) |
+| *(no type)* | 1 | 2 | — | Neither — The Jannies (36), `hidden` |
+
+**9,262 + 3,480 + 199 + 5 + 2 = 12,948 ✓** — reconciles exactly. **Zero groups carry more than one
+type**, so the split is unambiguous: one group, one type, no overlap.
+
+**Keeper's guess was right:** the overwhelming majority — **71.5%** — is Type 1 plumbing, which is
+precisely why 12,948 looks absurd next to 1,519 topic subscriptions. It is not 12,948 people choosing
+things; it is ~1,853 members × 5 layout groups they were enrolled in automatically.
+
+### 8.2.6 ⚠️ THE FIELD IS SOUND BUT THE TERM NAMES ARE ACTIVELY MISLEADING
+
+**A rule that cannot be applied is not a rule — so this must be said plainly.** The field works, but
+its labels invert the meaning:
+
+- **The plumbing is called `loothing`** — which reads like the core community activity, i.e. the
+  semantic *opposite* of "inert layout scaffolding".
+- **The real communities are called `34507`** — term id 1450, whose `name` **and** `slug` are both the
+  literal string `34507`, with an **empty description**. It is an opaque numeric token that carries no
+  meaning to anyone reading it.
+
+**Consequences the build must respect:**
+
+1. **Key on the term `slug`, never on the group name, and never on a human reading the label.** A
+   maintainer tidying "34507" into "Local Looths" in wp-admin would silently change the slug and
+   break the rule with no error.
+2. **Implement as an ALLOW-LIST, not a deny-list.** Denying `loothing` fails *open*: any new or
+   renamed type would start emailing people. Allowing only known-Type-2 slugs fails *closed* —
+   unknown type ⇒ silent. Given Ian's rule is "layout groups must produce nothing", failing closed is
+   the only safe direction.
+3. **Which makes the seam trivially clean today:** Local Looths is not built, so **the allow-list
+   ships EMPTY** and no group subscription produces any notification or email. That is exactly
+   "design for it, do not build it" — the seam is one config entry, added the day Local Looths is
+   real, and nothing has to be invented now.
+4. **Recommend, not decided:** re-slug `34507` to something meaningful before Local Looths ships, so
+   the allow-list entry is legible. That is a live data write and therefore **Ian's**, not this lane's.
+
+### 8.2.7 Type 2 sizing, for whoever builds Local Looths later
+
+Largest Type 2 audiences: Tri State NYC **846**, SoCal **845**, Looth Troop PNW **359**, DMV **358**,
+SW Ontario **356**, Middle Tennessee **353**, Basque **342**; Ireland **10**, Ohio **11**.
+
+**Worth flagging for that future lane:** the *only* group-linked-forum topic created in the last 90
+days (2026-05-18) was in **DMV Looths (41)** — a **Type 2** group with 358 subscribers. So the sole
+piece of live group-forum activity on the platform is in exactly the population that will one day be
+wired up. It is dormant now, but it is not hypothetical.
 
 ---
 
