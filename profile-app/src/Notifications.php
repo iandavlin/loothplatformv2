@@ -40,6 +40,16 @@ final class Notifications
         'forum.reply_to_reply',
         'forum.mention',
         'reaction.on_post',
+        // thread-follow lane (2026-07-28), SPEC §3.3. The FOURTH and LEAST-SPECIFIC
+        // rung of the reply ladder: "a thread I chose to watch but am not otherwise
+        // part of". The three above are authorship/mention-based and fire for people
+        // holding zero subscriptions; this one requires a deliberate opt-in and is
+        // claimed LAST, after mention > reply_to_reply > reply_to_topic have taken
+        // their recipients (notify-bridge.php, the $notified set).
+        // Carries anchor_id = NULL → COALESCE(...,0) → ONE coalesced row per topic.
+        // Must stay in lockstep with notifications_type_check
+        // (sql/2026-07-28-followed-topic.sql).
+        'forum.followed_topic',
     ];
 
     /**
