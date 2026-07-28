@@ -401,7 +401,88 @@ not end up with exactly 2 triggers, then sweeps and re-asserts the counts above.
 > files are touched** — `attachment` stores URLs, not blobs, and the files live
 > in R2 under `wp-content/uploads`.
 
-## 7. Still open
+## 7. Does the trigger fix EVERY delete path? No. Here is the matrix.
+
+Keeper asked the right question: *a path that deletes a parent without touching
+the mirror is not fixed by a constraint.* Answered with evidence, 2026-07-28.
+
+| # | delete path | reaches the mirror? | trigger fixes it? |
+|---|---|---|---|
+| 1 | bbPress delete (UI / moderation) → `bbp_deleted_topic\|reply` → endpoint | yes | **yes** |
+| 2 | reconcile's upsert-delete, WP post gone or retyped (`materializers.php:348/418`) | yes | **yes** |
+| 3 | Postgres FK cascade (topic→replies, forum→topics→replies) | yes, internally | **yes** |
+| 4 | hand-run SQL against the mirror | yes | **yes** |
+| 5 | **wp-admin bulk delete, `wp_delete_post()`, WP-CLI, direct SQL** | **NO — no hook exists** | **no** |
+| 6 | **dispatch lost in flight** (fire-and-forget) | **NO** | **no** |
+| 7 | `TRUNCATE` on the mirror tables | n/a | no (nothing truncates them) |
+
+**1–4 are closed by this change. 5 and 6 are a different defect**, and they do not
+produce orphans at all — they produce **ghosts**.
+
+### Why 5 exists: the mu-plugin only hooks bbPress, not WordPress
+
+`platform/mu-plugins/bb-mirror-sync.php` registers `bbp_deleted_topic` and
+`bbp_deleted_reply` and no WP-native delete hook — there is no `deleted_post`,
+`before_delete_post` or `wp_trash_post` anywhere in it. Those `bbp_*` actions fire
+only from bbPress's own deletion flow. **Anything that deletes the post another
+way removes it from WordPress while the mirror hears nothing.**
+
+### Why 6 exists: every dispatch is fire-and-forget
+
+```php
+wp_remote_post(BB_MIRROR_SYNC_URL, [
+    'timeout'   => 1,
+    'blocking'  => false,   // <-- never waits, never checks, never retries
+```
+
+No response is read, no failure is logged, nothing is retried. If the endpoint is
+down or takes longer than a second, WordPress never finds out.
+
+### A ghost is worse than an orphan, and the orphan census cannot see it
+
+| | orphan | **ghost** |
+|---|---|---|
+| what remains | attachment row, parent gone | **whole reply/topic row, WP post gone** |
+| member-visible? | **no** — nothing can render it | **YES — it still renders in the thread** |
+| found by the orphan census? | yes | **no. It reads 0.** |
+| self-heals? | n/a | **no. Permanent.** |
+
+**Measured on LIVE, 2026-07-28: 13 ghost replies and 2 ghost topics, every one
+`status='publish'` with its parent topic still present — so all 15 are rendering
+to members right now.** They were deleted in WordPress and the forum still shows
+them. They carry 3 attachment rows between them, and the orphan census returns
+**0** for all of it (confirmed by direct query).
+
+All 15 share one `sync_at` — 2026-06-13 16:43 — so they are a single cohort last
+touched by one batch run and deleted afterwards, not a steady drip. Whether that
+was a bulk delete via path 5 or a lost dispatch via path 6 cannot be determined
+from the data that survives; both are open.
+
+### Correction: reconcile does NOT catch these
+
+An earlier note in this lane said ghosts were what `bb-mirror-reconcile.timer`
+exists to catch. **That is wrong, and it matters, because it made the gap sound
+already-covered.** `bin/reconcile.php:70` walks:
+
+```php
+SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_modified_gmt >= %s
+```
+
+It is driven entirely from the WordPress side. **A ghost has no WordPress row, so
+it can never appear in that query.** Nothing in the system will ever remove these
+15 rows. Reconcile repairs drift in rows that still exist in WP; it is structurally
+incapable of noticing rows that only exist in the mirror.
+
+### The shape of the fix (not built, not applied)
+
+Reconcile needs a **reverse pass**: walk the mirror's own ids and drop any whose WP
+post is gone. It belongs in the existing reconcile job rather than a new script —
+the same reason this leak got a trigger and not a sweeper. Note the two changes
+compose: with the purge triggers installed, deleting a ghost row also removes its
+attachment rows, so ghost repair is complete rather than trading a ghost for an
+orphan.
+
+## 8. Still open
 
 The **WP side** has the same shape and is out of this lane's scope: deleting a
 reply in WP removes its `bp_media` rows, but nothing reconciles a `bp_media_ids`
