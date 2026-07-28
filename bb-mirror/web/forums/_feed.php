@@ -1640,25 +1640,14 @@ $header_cat = $scoped_forum
           <button class="feed-card__expand" type="button" data-topic-id="<?= $topic_id ?>">View <?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?> &#9660;</button>
         </div>
       <?php endif; ?>
-      <?php /* fc-composer — PERSISTENT reply (the "reply is lost" fix). Authed only;
-               posts via the existing /reply path (forums.js). NEW; desktop-only ≤640. */ ?>
-      <?php if ($can_post): ?>
-        <div class="fc-composer" data-topic-id="<?= $topic_id ?>" data-forum-id="<?= (int)$topic['forum_id'] ?>">
-          <span class="fc-composer__av"><?= bb_mirror_avatar('You', 'you', 30, null) ?></span>
-          <span class="fc-composer__wrap">
-            <input class="fc-composer__input" type="text" autocomplete="off" placeholder="Add a reply&hellip; &#9998; for formatting &amp; photos" aria-label="Add a reply">
-            <?php /* Expand into the full rich (Quill) reply editor — reuses the feed-reply
-                     modal (image upload + formatting + nested-reply path). Carries topic/
-                     forum so frmOpen() targets this thread. */ ?>
-            <button type="button" class="fc-composer__rich" data-topic-id="<?= $topic_id ?>"
-                    data-forum-id="<?= (int)$topic['forum_id'] ?>"
-                    data-topic-title="<?= htmlspecialchars((string)$topic['topic_title'], ENT_QUOTES) ?>"
-                    title="Rich editor (formatting + images)" aria-label="Open the rich reply editor">&#9998;</button>
-            <button type="button" class="fc-composer__send" disabled>Reply</button>
-          </span>
-          <span class="fc-composer__status" role="status"></span>
-        </div>
-      <?php endif; ?>
+      <?php /* fc-composer (the persistent "Add a reply…" bar) REMOVED — phase 3,
+               2026-07-27. It rendered but was never visible: forums.css hid it
+               below 641 and again at >=641 on topic cards once desktop moved the
+               thread into the §4e modal, and content cards never emitted one.
+               Measured on dev2 at 1280px: 7 in the DOM, 0 visible. Deleted with
+               its native /reply create (W2) and its JS in forums.js rather than
+               left as dead markup wired to a live write path. Desktop replies go
+               through the modal's CTA -> composer v2. */ ?>
     </article>
     <?php endforeach; ?>
 

@@ -66,6 +66,12 @@ echo json_encode([
     // attributes, but this is consumed as a JS href string — keep it raw so the
     // _wpnonce param isn't mangled into amp;_wpnonce (one-tap stays one-tap).
     'logout_url'      => html_entity_decode(wp_logout_url(), ENT_QUOTES),
+    // Per-reply image cap, so the composer's guard and reply.php's 422 come from
+    // ONE number instead of a hardcoded copy that can drift from the server.
+    // The composer already calls this before every upload, so it costs nothing.
+    // Clients fall back to the same value when the field is absent (stale cached
+    // JS): an absent signal must land on the cap, never on "no cap".
+    'reply_image_max' => LG_REPLY_IMG_MAX,
     // groups: TBD — wires in when profile-app exposes user_group memberships.
     // Until then the form lets authenticated viewers post anywhere; BB REST
     // enforces group-membership server-side as a backstop.

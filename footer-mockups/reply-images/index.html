@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Up to 6 images on a reply — built</title>
+<style>
+  :root{--gold:#ECB351;--dark:#2B2318;--mid:#5C4E3A;--light:#FAF6EE;--mint:#87986A;--mintl:#D4E0B8;--coral:#FE6A4F;--line:#E6DFCE}
+  *{box-sizing:border-box}
+  body{margin:0;background:#e8e2d8;color:var(--dark);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+  header{background:var(--dark);color:var(--light);padding:28px 24px}
+  header h1{font:700 24px/1.25 Georgia,"Times New Roman",serif;letter-spacing:1px;text-transform:uppercase;color:var(--gold);margin:0 0 6px}
+  header p{margin:0 0 8px;max-width:78ch;color:#cfc6b4;font-size:15px}
+  nav{background:var(--dark);padding:0 24px 22px}
+  nav a{color:var(--gold);font-size:14px;margin-right:18px;text-decoration:none;border-bottom:1px solid transparent}
+  nav a:hover{border-bottom-color:var(--gold)}
+  main{max-width:1240px;margin:0 auto;padding:24px 20px 64px}
+  section{background:var(--light);border:1px solid var(--line);border-radius:8px;margin:0 0 28px;overflow:hidden}
+  .sec-head{padding:18px 22px;border-bottom:1px solid var(--line)}
+  .sec-head h2{margin:0 0 4px;font:700 19px/1.3 Georgia,"Times New Roman",serif;text-transform:uppercase;letter-spacing:1.5px}
+  .sec-head p{margin:0;font-size:14px;color:var(--mid);max-width:86ch}
+  .sec-body{padding:18px 22px}
+  .pair{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;margin:0 0 26px}
+  .col h3{margin:0 0 8px;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mint);font-weight:700}
+  iframe{width:100%;border:1px solid var(--line);border-radius:6px;background:#f7f4ec;display:block}
+  .phone{flex:0 0 410px;max-width:100%}
+  .phone iframe{height:620px}
+  .desk{flex:1 1 560px;min-width:320px}
+  .desk iframe{height:620px}
+  .tall .phone iframe,.tall .desk iframe{height:1080px}
+  .frame-w{font-size:12px;color:var(--mid);margin:6px 0 0}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 9px;border-radius:99px;vertical-align:2px;margin-left:8px}
+  .rec{background:var(--gold);color:var(--dark)}
+  .ok{background:var(--mintl);color:#3f4a2c}
+  .warn{background:var(--coral);color:#fff}
+  .alt{background:#e6e0d2;color:var(--mid)}
+  table{border-collapse:collapse;width:100%;font-size:14px;margin:0 0 8px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#efe9da;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--mid)}
+  td.hi{background:#fdecd0}
+  code{background:#efe9da;padding:1px 5px;border-radius:3px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace}
+  ul,ol{max-width:88ch} li{margin:0 0 6px}
+  .stat{display:flex;gap:26px;flex-wrap:wrap;margin:0 0 18px}
+  .stat div{flex:0 0 auto}
+  .stat span{font-size:13px;color:var(--mid)}
+  .stat span.big{font:700 34px/1 Georgia,serif;color:var(--dark);display:block;margin:0 0 2px}
+  @media (prefers-color-scheme: dark){
+    body{background:#15171a;color:#e5e7e1}
+    section{background:#1d2024;border-color:#2f3339}
+    .sec-head{border-color:#2f3339}
+    .sec-head p,.frame-w,.stat span{color:#a8ada3}
+    .stat span.big{color:#e5e7e1}
+    code{background:#2a2e33;color:#e5e7e1}
+    th{background:#24282d;color:#a8ada3;border-color:#2f3339}
+    td{border-color:#2f3339} td.hi{background:#3a2f1c}
+    iframe{border-color:#2f3339;background:#15171a}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Up to 6 images on a reply — built</h1>
+  <p><b>Ian ruled: max 6.</b> This is what it looks like, and what it un-hides.
+     Every frame below is the <b>actual shipped output</b> — the stub markup comes out of
+     the real <code>_reply-render.php</code> running the real <code>_topic-replies.php</code>
+     query against the live forum, and the stylesheet is this branch's
+     <code>forums.css</code> copied whole. Nothing on this page is a drawing.</p>
+  <p style="font-size:13px;color:#a99a80">Left column is the phone (390px replies sheet),
+     right is the desktop discussion modal (760px). Frames are plain pages on this box, so
+     nginx injects the site's PWA bottom-nav into them if you open one directly — ignore it.</p>
+</header>
+<nav>
+  <a href="#unhide">What this un-hides</a>
+  <a href="#counts">1 to 6</a>
+  <a href="#over">Over the limit</a>
+  <a href="#real">A real reply</a>
+  <a href="#page">One fetch</a>
+  <a href="#door">The cap at the door</a>
+  <a href="#state">Status</a>
+</nav>
+
+<main>
+
+<section id="unhide">
+  <div class="sec-head"><h2>What ships the moment this lands <span class="tag warn">live defect fixed</span></h2>
+    <p>Piece one of the two was never a feature — it was a defect. Measured against published
+       replies on the live mirror, just now.</p></div>
+  <div class="sec-body">
+    <div class="stat">
+      <div><span class="big">229</span><span>replies stop hiding images</span></div>
+      <div><span class="big">367</span><span>images nobody has ever seen become visible</span></div>
+      <div><span class="big">275</span><span>single-image replies render <b>byte-identically</b></span></div>
+      <div><span class="big">0</span><span>replies truncated by a cap of 6</span></div>
+    </div>
+    <p><b>Nothing real is lost at 6.</b> The most photos on any published reply in the forum's
+       history is <b>five</b>. The two rows in the store that hold 10 and 11 are orphaned
+       attachments from a previous lane's test — they have no reply attached to them any more.
+       So the cap costs zero existing content, and the <code>+N</code> affordance below exists
+       purely so that if one ever does turn up it is shown rather than silently dropped, the
+       way <code>LIMIT 1</code> has been dropping them.</p>
+  </div>
+</section>
+
+<section id="counts">
+  <div class="sec-head"><h2>1 through 6</h2>
+    <p>Six-column grid with span rules, so no count leaves an orphan gap: 2 and 4 are
+       half-width, 3 and 6 are thirds, 5 is three thirds then two halves.
+       <b>One image is not a gallery</b> — it keeps the exact markup it has today.</p></div>
+  <div class="sec-body">
+    <div class="pair"><div class="col phone"><h3>1 image <span class="tag ok">unchanged</span></h3><iframe src="n1--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>1 image — desktop</h3><iframe src="n1--desk.html" sandbox></iframe></div></div>
+    <div class="pair"><div class="col phone"><h3>2 images</h3><iframe src="n2--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>2 images — desktop</h3><iframe src="n2--desk.html" sandbox></iframe></div></div>
+    <div class="pair"><div class="col phone"><h3>3 images</h3><iframe src="n3--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>3 images — desktop</h3><iframe src="n3--desk.html" sandbox></iframe></div></div>
+    <div class="pair"><div class="col phone"><h3>4 images</h3><iframe src="n4--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>4 images — desktop</h3><iframe src="n4--desk.html" sandbox></iframe></div></div>
+    <div class="pair"><div class="col phone"><h3>5 images</h3><iframe src="n5--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>5 images — desktop</h3><iframe src="n5--desk.html" sandbox></iframe></div></div>
+    <div class="pair"><div class="col phone"><h3>6 images <span class="tag rec">the cap</span></h3><iframe src="n6--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>6 images — desktop</h3><iframe src="n6--desk.html" sandbox></iframe></div></div>
+  </div>
+</section>
+
+<section id="over">
+  <div class="sec-head"><h2>Over the limit</h2>
+    <p>A reply that somehow holds more than six — a legacy row, or a create path that got
+       past the guard. It shows the first six and says so, rather than dropping the rest
+       without a word.</p></div>
+  <div class="sec-body">
+    <div class="pair"><div class="col phone"><h3>Holds 11 → shows 6 + “+5”</h3><iframe src="over--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>Same, desktop</h3><iframe src="over--desk.html" sandbox></iframe></div></div>
+    <p>The overlay is <code>aria-hidden</code> and <code>pointer-events:none</code> — the tile
+       underneath is still the normal tap target and still opens the full image.</p>
+  </div>
+</section>
+
+<section id="real">
+  <div class="sec-head"><h2>A real reply, before and after</h2>
+    <p>Reply 58510 — a Martin side repair posted in September 2025 with four photos. Three
+       of them have never been visible to anyone. This frame is that exact row, rendered
+       through the new code.</p></div>
+  <div class="sec-body">
+    <div class="pair"><div class="col phone"><h3>Reply 58510 — all 4, one portrait among landscapes</h3><iframe src="real58510--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>Same, desktop</h3><iframe src="real58510--desk.html" sandbox></iframe></div></div>
+  </div>
+</section>
+
+<section id="page">
+  <div class="sec-head"><h2>One fetch</h2>
+    <p>The replies fragment serves <b>five stubs at a time</b> (<code>$PER = 5</code>, then
+       “Load 5 more”), so five image-carrying replies is the real payload unit — not one.
+       Here they carry 6, 3, 2, 5 and 4.</p></div>
+  <div class="sec-body">
+    <div class="pair tall"><div class="col phone"><h3>Phone</h3><iframe src="page5--phone.html" sandbox></iframe></div>
+      <div class="col desk"><h3>Desktop</h3><iframe src="page5--desk.html" sandbox></iframe></div></div>
+    <p>Every tile is <code>loading="lazy"</code> with intrinsic <code>width</code>/<code>height</code>,
+       and asks the resizer for a tile-sized image instead of the <code>w=800</code> the old
+       single image always pulled. Measured on real photos: <b>11.6 KB</b> at w=240 and
+       <b>35.8 KB</b> at w=480, against <b>79 KB</b> for the w=800 the hub used to fetch for
+       a thumbnail. Six tiles now can cost less than one image did.</p>
+  </div>
+</section>
+
+<section id="door">
+  <div class="sec-head"><h2>The cap at the door <span class="tag rec">piece two</span></h2>
+    <p>Six is enforced, not decorated. One constant, four places that honour it.</p></div>
+  <div class="sec-body">
+    <table>
+      <tr><th>Where</th><th>What it does</th><th>Bites today?</th></tr>
+      <tr><td><code>bb-mirror/config.php</code></td><td><code>LG_REPLY_IMG_MAX = 6</code> — the single source; renderer and endpoint both read it, so they cannot drift</td><td>—</td></tr>
+      <tr><td><code>reply.php</code> POST</td><td>422 <code>too_many_media</code> before the insert</td><td class="hi"><b>Yes</b> — composer v2 posts creates here</td></tr>
+      <tr><td><code>reply.php</code> PUT</td><td>422 on the <b>resulting</b> set (kept + newly added), so an edit can't walk a reply past the cap one photo at a time</td><td class="hi"><b>Yes</b> — all edits go here</td></tr>
+      <tr><td>Composer v2 (<code>lgcUploadPhoto</code>)</td><td>refuses past 6, disables the photo button, and shows a live “<b>3 of 6</b>” count so the cap is visible before it is hit</td><td class="hi"><b>Yes</b></td></tr>
+      <tr><td>Legacy desktop trays</td><td>same guard via <code>lgComposerTray({max:6})</code></td><td>Yes — interim, see below</td></tr>
+      <tr><td><code>auth.php</code></td><td>ships the number to the client, so the composer's guard and the server's 422 are the same 6</td><td>—</td></tr>
+    </table>
+    <p><b>The one honest gap.</b> The legacy desktop reply composers still POST BuddyBoss REST
+       direct on create, so <code>reply.php</code>'s 422 never sees them and their client guard
+       is all that holds the cap there. <code>composer-p3</code> deletes exactly those paths
+       (W1/W5); once it lands the server is the backstop everywhere. Until then the guard is
+       real but client-side on that one surface — which is why it was added rather than left
+       to p3.</p>
+    <p>The count is taken from the chips in the strip, not from the uploaded-ids array —
+       so a photo that is still uploading, one that failed and is waiting on a <code>↻</code>,
+       and an existing photo kept on an edit each occupy a slot, exactly as they appear to
+       the member. Topic composing is <b>not</b> capped; this is a reply cap.</p>
+  </div>
+</section>
+
+<section id="state">
+  <div class="sec-head"><h2>Status</h2><p>What is proven and what is not.</p></div>
+  <div class="sec-body">
+    <p><b>Verified — 36 assertions green</b> (<code>footer-mockups/reply-images/verify.sh</code>),
+       run against the live mirror through the real renderer:</p>
+    <ul>
+      <li>a single-image reply renders <b>byte-identically</b> to the pre-change code — diffed
+          against the renderer pulled out of git, not eyeballed</li>
+      <li>2–6 produce the right cell count; 1 produces no gallery at all</li>
+      <li>every tile carries <code>srcset</code> (3 candidates), <code>sizes</code>,
+          intrinsic <code>width</code>/<code>height</code> and <code>loading=lazy</code></li>
+      <li><code>sizes</code> tracks the span rule — half-width layouts declare half-width,
+          and no layout declares the other one</li>
+      <li>an over-cap reply shows six tiles and a <code>+5</code></li>
+      <li>both server caps sit <b>before</b> the writes they guard, and the PUT cap counts the
+          resulting set</li>
+    </ul>
+    <p><b>Not yet proven — needs a serve window and a real device:</b> the 422 exercised by an
+       actual over-cap request, the composer guard and “3 of 6” read-out driven by a real
+       finger, and the gallery on Ian's phone. A green harness has lost to that phone three
+       times this week; this deck is not a substitute for it.</p>
+  </div>
+</section>
+
+</main>
+</body>
+</html>

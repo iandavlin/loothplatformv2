@@ -94,12 +94,40 @@ if (!function_exists('lg_bb_mirror_mint_mentions')) {
 
     /**
      * Rewrite @mentions in a submitted reply/topic body into the stable storage shape.
-     * No-op when the body carries no '@'. Idempotent: an already-minted anchor re-resolves
-     * to the same (current) identity; plain @text inside an existing anchor is left alone.
+     * No-op when the body carries neither a '@' token nor a data-lg-uuid anchor.
+     * Idempotent: an already-minted anchor re-resolves to the same (current) identity;
+     * plain @text inside an existing anchor is left alone.
      */
     function lg_bb_mirror_mint_mentions(string $content): string
     {
-        if ($content === '' || strpos($content, '@') === false) return $content;
+        /* The '@' half of this guard is original. The data-lg-uuid half was added
+           2026-07-27 (composer-v2 phase-3 exit test) because the '@' test alone had
+           become WRONG and was silently killing every composer-v2 mention.
+
+           Composer v2 (phase 2, cea6ab3) swapped the mention render source from the
+           @slug to the member's DISPLAY NAME — lgcInsertMention inserts an `lgmention`
+           blot that renders:
+
+             <a class="bp-suggestions-mention" data-lg-uuid="<uuid>" href="/u/<slug>">
+               <span>Dan Erlewine</span></a>
+
+           There is no '@' anywhere in that, so this function early-returned and Pass 2's
+           uuid branch below — the branch that exists precisely to canonicalise our own
+           autocomplete anchor — was never reached. Result: the anchor stored raw, BB
+           REST's kses stripped data-lg-uuid on the way in, the post-insert re-mint
+           no-op'd for the same reason, notify-bridge found no {{mention_user_id_N}}
+           token, and NO BELL RANG. Same failure shape as G8, different cause.
+
+           Both surfaces were affected — lgcInsertMention is the shared composer insert,
+           so mobile mentions have been silently unminted since phase 2 merged, not just
+           the desktop ones phase 3 added.
+
+           Keep BOTH conditions: legacy/typed '@slug' text still mints via Pass 2's
+           token branch, and hand-typed mentions remain supported. */
+        if ($content === ''
+            || (strpos($content, '@') === false && strpos($content, 'data-lg-uuid') === false)) {
+            return $content;
+        }
 
         // A single @token capture: preceded by start/space/'>'/'('/'[' (so an email's
         // local@domain never matches — the '@' there follows a word char). The slug

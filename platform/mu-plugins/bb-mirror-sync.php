@@ -180,14 +180,27 @@ add_action('bbp_new_topic', function ($topic_id) {
     }
 }, 20, 1);   // prio 20: AFTER anon-meta (5), before the shutdown-deferred sync reads content
 
-// -- @mention mint + bell for NEW REPLIES on NATIVE write paths (G8, phase-0 stopgap;
-//    Ian ruling 2026-07-24, spec docs/atlas/COMPOSER-V2-PLAN.md §1.2) ---------------
-// The desktop frm modal (incl. every dmodal reply), the fic inline box and the
-// fb-inline thread box all POST replies to NATIVE BuddyBoss REST — they never touch
-// bb-mirror's reply.php, so their @mentions were never minted and they rang NO bells
-// at all (not even reply-to-topic; lg_notify_on_reply fires only from reply.php).
-// This hook gives EVERY reply write path — current and future — the same post-insert
-// mint + bell, exactly like the bbp_new_topic hook above.
+// -- @mention mint + bell for NEW REPLIES on NATIVE write paths (G8 BACKSTOP) -------
+//    Ian ruling 2026-07-24; spec docs/atlas/COMPOSER-V2-PLAN.md §1.2.
+//
+// WAS the phase-0 STOPGAP. As of phase 3 (2026-07-27) it is a BACKSTOP: no surface
+// posts a reply to native BuddyBoss REST any more. All five native create paths are
+// gone — frm and the single-topic form retargeted to reply.php, fc-composer and
+// fb-inline and fic deleted outright — so every reply now goes through reply.php,
+// which owns its own pre-mint, post-insert kses-off re-mint and bell, and raises
+// $GLOBALS['lg_bb_mirror_reply_owned'] so this hook stands down. G8 is closed
+// STRUCTURALLY: correctness rides one write path, not this hook.
+//
+// KEPT DELIBERATELY (keeper ruling): it is idempotent, guarded, and costs nothing
+// while it never fires. It is the only thing that would cover a future native path
+// added by mistake — the exact regression G8 was. Removing it would buy nothing and
+// take away the net. If you are reading this because a reply DID mint from here,
+// something re-introduced a native create; find it rather than celebrating the catch.
+//
+// Original conditions, for the record: the desktop frm modal (incl. every dmodal
+// reply), the fic inline box and the fb-inline thread box all POSTed to native BB
+// REST, so their @mentions were never minted and they rang NO bells at all — not
+// even reply-to-topic, since lg_notify_on_reply fires only from reply.php.
 //
 // DOUBLE-FIRE GUARD: the mobile sheets post through reply.php, whose in-process
 // rest_do_request ALSO fires bbp_new_reply. reply.php owns that write end-to-end (its

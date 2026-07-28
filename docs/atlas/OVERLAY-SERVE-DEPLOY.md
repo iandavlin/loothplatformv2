@@ -69,6 +69,34 @@ Reach live from the keeper box: `ssh live` (→ `54.157.13.77`).
 
 ## Preview slots (parallel preview surfaces)
 
+> ### ⚠️ GONE AS OF 2026-07-27 — slot-A NO LONGER EXISTS. Everything below is history.
+>
+> Measured by composer-v2-p3 while hunting for a way to verify a server-side PHP change
+> **without** asking for a serve window. There is no such route anymore:
+>
+> | Piece | State |
+> |---|---|
+> | `~/preview-slots/slot-a` | **absent** — the whole `~/preview-slots` tree is gone |
+> | vhost | **absent** from `sites-enabled` **and** `sites-available` |
+> | `snippets/strangler-bb-mirror-preview-a.conf` | **absent** |
+> | FPM pool `bb-preview-a` | **absent** from `pool.d` |
+> | any `preview-a` string under `/etc/nginx` | **zero hits** |
+> | DNS `preview-a.dev2.loothgroup.com` | **still resolves to 34.193.244.53** |
+>
+> **The DNS record is dangling** — it still points at the box, so the hostname now falls
+> through to nginx's `default` server rather than 404ing at the edge. Worth cleaning up in
+> Cloudflare, and worth knowing before anyone reads a response from that host as meaningful.
+>
+> **Consequence for lanes:** a change to a `/srv/*` app (bb-mirror, profile-app) can only be
+> exercised on the real serve, so it needs a **serve window** — ask keeper. The zero-mutation
+> escapes that DO still work are the in-browser JS overrides (`LGC_JS_OVERRIDE` /
+> `LGC_FORUMS_OVERRIDE`, next section) and `cgi-fcgi` straight into the real FPM pool; neither
+> reaches a PHP file that the request path includes.
+>
+> The equivalent live pattern today is the **`buck-dev2`** surface (`sites-available/
+> buck-dev2.loothgroup.com.conf` + the `*-buck.conf` strangler snippets), which is a different
+> thing with a different owner — do not assume it is a drop-in preview slot.
+
 The ONE pristine serve clone doubles as the preview surface (flip a branch onto it to look at WIP),
 which serializes previews to one-at-a-time. **Preview slots** break that: a dedicated surface = its
 own clone + FPM pool + nginx vhost, reusing the shared dev2 backend, so a second branch previews
@@ -93,10 +121,103 @@ without touching the serve clone. (DELIVERY-ARCH-PROPOSAL step (a), realized as 
 slot-a's tree; `LG_BB_MIRROR_APP_ROOT=/srv/bb-mirror` is only the schema-file path, not request
 rendering. Add slot-B (`preview-b.dev2`, own pool) the same way when a third parallel preview is needed.
 
+## Temporarily serving YOUR build to verify it (the window case)
+
+This is the case the doc above does **not** cover, and the one that bites: not deploying,
+just "serve my bytes for ten minutes so I can test them".
+
+**The trap (measured by keeper 2026-07-27).** All 24 top-level `.js`/`.css` in
+`/var/www/dev` are symlinks into the serving checkout. So:
+
+```sh
+cp mybuild.js /var/www/dev/hub-polish.js     # ← FOLLOWS THE LINK
+```
+
+overwrites `~/loothplatformv2-clean/webroot/hub-polish.js` and **leaves the symlink
+intact**. The docroot path looks right, `md5sum /var/www/dev/hub-polish.js` passes, the
+served bytes are right — and `main` is silently dirty. The old lane recipe ("cp over the
+docroot, keep the prestate md5, flip it back") was written when those were real files and
+is now actively wrong: the md5 you would check is the very thing the trap defeats.
+
+**Preferred: don't touch the docroot at all.** `tools/e2e-webkit` routes bytes in-browser:
+
+```sh
+LGC_JS_OVERRIDE=<worktree>/webroot/hub-polish.js \
+LGC_FORUMS_OVERRIDE=<worktree>/bb-mirror/web/forums.js \
+  npx playwright test …
+```
+
+`installJsOverride()` (`tests/_helpers.js`) fulfils `**/hub-polish.js*` and
+`**/forums.js*` per page, so a whole verify run needs **zero serve writes**. Composer-v2
+phase 3 verified its entire desktop surface this way.
+
+**If you genuinely must place a file:**
+- A *tracked* file inside a symlinked directory (e.g. `bb-mirror/api/v0/_mention-ingest.php`
+  under `/srv/bb-mirror`) is a real file — write it, then restore with
+  `git checkout HEAD -- <path>`. Exact by construction.
+- A *symlinked* target — `rm` the link, place a real file, restore with `rm` + recreate the
+  link pointing back at the repo path.
+- **Never** `git checkout` / branch-switch / detach the serving tree. Only the single-path form.
+
+> ### THE ONLY ALLOWED RESTORE — keeper ruling, 2026-07-28
+>
+> ```sh
+> git checkout HEAD -- <path>     # then: git reset -q   (if you staged anything)
+> ```
+>
+> **Never the bare `git checkout -- <path>`.** It restores from the **INDEX**, not HEAD. The
+> serving checkout is a *shared* clone — five lanes and a keeper touch it — so if any process
+> has staged that path, the bare form installs **their staged bytes** into the serve and exits
+> 0. A restore that reports success while leaving foreign code serving.
+>
+> Keeper proved it in a scratch repo rather than reasoning about it:
+>
+> ```
+> committed "COMMITTED"; another process stages "STAGED-BY-ANOTHER-PROCESS"; window edits "MY-OVERLAY"
+>   git checkout -- f.txt        ->  STAGED-BY-ANOTHER-PROCESS   (wrong, silent, exit 0)
+>   git checkout HEAD -- f.txt   ->  COMMITTED                   (correct)
+> ```
+>
+> Every window grant issued on 2026-07-27 named the wrong form. Nothing broke **only** because
+> every restore was verified against the whole-tree hash rather than spot-check md5s of the
+> files we remembered touching — which is exactly the failure that backstop exists to catch.
+>
+> Note the two proofs are not interchangeable: the whole-tree hash **cannot see a staged
+> overlay**, and `--porcelain` can. Check both, always.
+
+**Proof of restore is the whole-tree hash, not an md5:**
+
+```sh
+cd ~/loothplatformv2-clean && git rev-parse HEAD && git rev-parse HEAD: && git status --porcelain
+```
+
+`git rev-parse HEAD:` is the tree object — byte-for-byte over everything. `--porcelain` must
+be empty, **untracked `??` lines included**.
+
+**No FPM reload for an in-place PHP edit:** `99-lg-tuning.ini` (itself symlinked into the
+checkout) sets `validate_timestamps=1, revalidate_freq=2`, so mtime revalidation picks it up
+in ~2s. The reload requirement applies to **repointing a `/srv` symlink**, where realpath
+cache pins the old target — a different operation.
+
+**Server-side verification without a browser:** the CF edge 403s public `curl`, but loopback
+bypasses it —
+`curl -sk -H "Host: dev2.loothgroup.com" -H "Cookie: <gate + wp>" https://127.0.0.1/bb-mirror-api/v0/auth.php`
+returns a real nonce. Endpoint behaviour can then be exercised and asserted against the store
+with no engine resident, which matters when RAM allows only one.
+
 ## Footguns
 - `deploy.sh --apply` syncs **all** app subtrees + the full webroot — always backup + dry-run/diff
   on live first.
 - Verify at the **origin** (`--resolve … :127.0.0.1` on-box, or the origin IP), never the CF edge.
 - dev2 = pull-only; the guard protects it, but don't fight it — `git pull`, don't rsync.
+- Count browser engines with `pgrep -x <name>`. `pgrep -f` matches its own command line and
+  reads as a false positive — a trap this box has already paid for.
+- **A verification `grep` that matches nothing does not error — it prints nothing and exits 1,
+  and blank reads as a pass.** A BRE pattern containing an unescaped `$` (e.g. grepping PHP for
+  `strpos($content, '@')`) silently matches zero lines. Use **`grep -F`** for any literal code
+  fragment, and prefer `grep -c` with an explicit expected count over eyeballing output. Same
+  family as the `grep -c` counts-LINES-not-occurrences trap: **the failure mode of a bad grep is
+  silence, and silence looks like success.** Caught while staging the 2026-07-28 window — the
+  restore script's "guard is back to pre-fix form" proof line would have printed blank.
 
 See SYSTEM-MAP §13 (serve-from-repo) and §14 (deploy model).

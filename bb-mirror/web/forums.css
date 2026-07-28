@@ -2081,6 +2081,59 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
   margin-top: 6px;
 }
 
+/* ── Multi-image reply gallery (up to LG_REPLY_IMG_MAX = 6; Ian 2026-07-27) ──
+   A reply with ONE image keeps the bare .reply-stub__img above, unchanged — 275
+   existing replies render byte-identically. Two or more get this grid.
+
+   Six columns with span rules rather than a per-count column count, so no layout
+   leaves an orphan gap: 2 and 4 are half-width (2-up rows), 3 and 6 are thirds,
+   and 5 is three thirds then two halves. Previs'd and signed off at
+   /mockups/reply-images/ before this shipped.
+
+   Tiles keep the .reply-stub__img class so the existing lightbox handler
+   (forums.js) and the `cursor: zoom-in` rule apply with no JS change. */
+.reply-stub__gallery {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  margin-top: 6px;
+  max-width: 460px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.reply-stub__gcell {
+  display: block; position: relative; margin: 0; line-height: 0;
+  grid-column: span 2;                 /* thirds by default — also covers 6 */
+}
+.reply-stub__gallery[data-count="2"] .reply-stub__gcell,
+.reply-stub__gallery[data-count="4"] .reply-stub__gcell { grid-column: span 3; }
+.reply-stub__gallery[data-count="5"] .reply-stub__gcell:nth-child(4),
+.reply-stub__gallery[data-count="5"] .reply-stub__gcell:nth-child(5) { grid-column: span 3; }
+/* Square thirds, 4:3 halves — the wider tiles earn a wider crop. */
+.reply-stub__gallery .reply-stub__img {
+  margin-top: 0;
+  width: 100%; height: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: none;
+  border-radius: 0;
+  cursor: zoom-in;
+}
+.reply-stub__gallery[data-count="2"] .reply-stub__img,
+.reply-stub__gallery[data-count="4"] .reply-stub__img,
+.reply-stub__gallery[data-count="5"] .reply-stub__gcell:nth-child(4) .reply-stub__img,
+.reply-stub__gallery[data-count="5"] .reply-stub__gcell:nth-child(5) .reply-stub__img {
+  aspect-ratio: 4 / 3;
+}
+/* "+N" — only reachable for a legacy reply holding more than the cap. Shows the
+   overflow rather than dropping it silently the way LIMIT 1 used to. */
+.reply-stub__gmore {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(12, 14, 12, .62);
+  color: #fff; font: 700 20px/1 var(--font-head, sans-serif); letter-spacing: .5px;
+  pointer-events: none;
+}
+
 /* Accordion expand button — pill style matching archive-poc */
 .feed-card__expand {
   color: var(--lg-sage-d);
@@ -4044,7 +4097,7 @@ body:has(.feed-page) #bb-ham{display:none}
    add NOTHING to the mobile card (Buck's mobile-hub.css un-hides + arranges them
    when his layer's ready). The desktop block below shows them ≥641. fc-tags is an
    existing visible region (relocated), so it is NOT hidden. */
-.fc-activity, .fc-facepile, .fc-composer{ display:none; }
+.fc-activity, .fc-facepile{ display:none; }   /* .fc-composer removed — phase 3 */
 .fc-pulse{ width:8px; height:8px; border-radius:50%; background:#54c06a; position:relative; flex:none; }
 .fc-pulse::after{ content:""; position:absolute; inset:0; border-radius:50%; background:#54c06a; animation:fc-pulse 1.9s ease-out infinite; }
 @keyframes fc-pulse{ 0%{transform:scale(1);opacity:.6} 100%{transform:scale(3.2);opacity:0} }
@@ -4129,21 +4182,9 @@ body:has(.feed-page) #bb-ham{display:none}
   .feed-page .fc-share .ico { width:16px; height:16px; flex:0 0 auto; }
   .feed-page .fc-share:hover { color:var(--lg-sage-d,#586b3f); }
   .feed-page .fc-replies { grid-area:replies; min-width:0; margin-top:6px; }
-  /* fc-composer — persistent, pinned to the card bottom (full-bleed) */
-  .feed-page .fc-composer{ display:flex; grid-area:composer; align-items:center; gap:9px;
-    margin:12px -16px 0; padding:11px 16px; border-top:1px solid var(--lg-line);
-    background:color-mix(in srgb, var(--lg-sage) 5%, var(--bg-card)); border-radius:0 0 7px 7px; }
-  .feed-page .fc-composer__av .avatar-init,
-  .feed-page .fc-composer__av img{ width:30px; height:30px; border-radius:50%; }
-  .feed-page .fc-composer__wrap{ flex:1; display:flex; align-items:center; gap:8px; background:var(--bg-card);
-    border:1px solid var(--lg-line); border-radius:999px; padding:5px 6px 5px 14px; transition:.15s; }
-  .feed-page .fc-composer__wrap:focus-within{ border-color:var(--lg-sage); box-shadow:0 0 0 3px color-mix(in srgb, var(--lg-sage) 18%, transparent); }
-  .feed-page .fc-composer__input{ flex:1; border:0; outline:0; background:none; font:14px/1.3 var(--lg-font-sans); color:var(--lg-ink); }
-  .feed-page .fc-composer__send{ border:0; background:var(--lg-sage-d,#586b3f); color:#fff; border-radius:999px;
-    padding:7px 15px; font:700 13px/1 var(--lg-font-sans); cursor:pointer; transition:.12s; }
-  .feed-page .fc-composer__send:disabled{ opacity:.45; cursor:default; }
-  .feed-page .fc-composer__status{ font:12px/1 var(--lg-font-sans); color:var(--lg-mute); }
-  .feed-page .fc-composer__status:empty{ display:none; }
+  /* fc-composer REMOVED (phase 3, 2026-07-27) — the bar never rendered:
+     hidden below 641 by the default rule and again at >=641 on topic cards, and
+     content cards never emitted one. Deleted with its markup + JS + native create. */
 }
 
 /* ── Themed affordances (Ian) — subtle, present at REST (before hover) with a
@@ -4240,18 +4281,7 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   }
 }
 
-/* Composer → rich (Quill) expand affordance (Ian 6/7). Sits in the composer wrap
-   between the quick input and Reply; opens the full feed-reply Quill modal. Reads
-   as a defined button AT REST (resting tint + ring) so the formatting/image escape
-   hatch isn't lost next to Reply — bumps on hover. */
-.feed-page .fc-composer__rich { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; cursor: pointer; color: var(--lg-sage-d, #586b3f);
-  background: var(--lg-sage-tint, #eef2e3); border: 1px solid color-mix(in srgb, var(--lg-sage, #87986a) 35%, transparent);
-  font-size: 17px; line-height: 1; padding: 0; border-radius: 999px;
-  transition: background .12s, color .12s, border-color .12s, transform .12s; }
-.feed-page .fc-composer__rich:hover { background: var(--lg-sage, #87986a); color: #fff;
-  border-color: var(--lg-sage, #87986a); transform: translateY(-1px); }
-.feed-page .fc-composer__rich:active { transform: translateY(0); }
+/* fc-composer__rich (the pencil) REMOVED with the composer bar — phase 3. */
 
 /* ── Unified in-place expand (Ian 6/7): ONE chevron replaces Read-more + View-replies.
    The originals stay in the DOM (the orchestration handler + the composer's post-reload
@@ -4419,7 +4449,6 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   .feed-page .feed-card--topic .feed-card__replies,
   .feed-page .feed-card--topic .feed-card__replies-full,
   .feed-page .feed-card--topic .feed-card__read-more,
-  .feed-page .feed-card--topic .fc-composer,
   .feed-page .feed-card--topic .feed-card__reply-cta,
   .feed-page .feed-card--topic .feed-card__reply-cta--inline { display: none; }
 }

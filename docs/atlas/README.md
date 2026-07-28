@@ -8,6 +8,7 @@ the keeper.
   box). The index of truth for "how it runs."
 - **GIT-PROTOCOL.md** — how we use git for this repo (branch-per-task + Ian approves merge).
 - **DISCUSSION-SURFACE-CANON.md** — the discussion MODAL (hub-polish.js §4e, desktop+mobile) is the canonical render+compose surface; legacy forum topic pages are not a feature target (Ian 2026-07-09).
+- **REPLY-IMAGE-COUNT-CEILING.md** — how many images a reply may carry, and where that is actually enforced. Short answer: nowhere on the way in; `_topic-replies.php:53` `LIMIT 1` on the way out. Includes the per-layer ceiling table, every surface that renders a reply, and measured height/weight at 2–20 images.
 
 ## Canon authority (Ian 6/19)
 `docs/atlas/` is canonical and forward-looking. **All other docs are FROZEN — emergency

@@ -1,0 +1,138 @@
+{
+ "loggedIn": true,
+ "targetTopic": "72212",
+ "opened_by": "real touch on .lg-fb-reply (mobile reply CTA)",
+ "steps": [
+  {
+   "n": 1,
+   "chipsBefore": 0,
+   "after": {
+    "open": true,
+    "chips": 1,
+    "uploading": 0,
+    "counter": "1 of 6",
+    "counterFull": null,
+    "counterW": 38,
+    "counterScrollW": 38,
+    "photoDisabled": false,
+    "err": null
+   }
+  },
+  {
+   "n": 2,
+   "chipsBefore": 1,
+   "after": {
+    "open": true,
+    "chips": 2,
+    "uploading": 0,
+    "counter": "2 of 6",
+    "counterFull": null,
+    "counterW": 38,
+    "counterScrollW": 38,
+    "photoDisabled": false,
+    "err": null
+   }
+  },
+  {
+   "n": 3,
+   "chipsBefore": 2,
+   "after": {
+    "open": true,
+    "chips": 3,
+    "uploading": 0,
+    "counter": "3 of 6",
+    "counterFull": null,
+    "counterW": 38,
+    "counterScrollW": 38,
+    "photoDisabled": false,
+    "err": null
+   }
+  },
+  {
+   "n": 4,
+   "chipsBefore": 3,
+   "after": {
+    "open": true,
+    "chips": 4,
+    "uploading": 0,
+    "counter": "4 of 6",
+    "counterFull": null,
+    "counterW": 38,
+    "counterScrollW": 38,
+    "photoDisabled": false,
+    "err": null
+   }
+  },
+  {
+   "n": 5,
+   "chipsBefore": 4,
+   "after": {
+    "open": true,
+    "chips": 5,
+    "uploading": 0,
+    "counter": "5 of 6",
+    "counterFull": null,
+    "counterW": 38,
+    "counterScrollW": 38,
+    "photoDisabled": false,
+    "err": null
+   }
+  },
+  {
+   "n": 6,
+   "chipsBefore": 5,
+   "after": {
+    "open": true,
+    "chips": 6,
+    "uploading": 0,
+    "counter": "6 of 6",
+    "counterFull": "1",
+    "counterW": 38,
+    "counterScrollW": 38,
+    "photoDisabled": true,
+    "err": null
+   }
+  },
+  {
+   "n": 7,
+   "chipsBefore": 6,
+   "after": {
+    "open": true,
+    "chips": 6,
+    "uploading": 0,
+    "counter": "6 of 6",
+    "counterFull": "1",
+    "counterW": 38,
+    "counterScrollW": 38,
+    "photoDisabled": true,
+    "err": "A reply can have at most 6 photos \u2014 remove one to add another."
+   }
+  }
+ ],
+ "final": {
+  "open": true,
+  "chips": 6,
+  "uploading": 0,
+  "counter": "6 of 6",
+  "counterFull": "1",
+  "counterW": 38,
+  "counterScrollW": 38,
+  "photoDisabled": true,
+  "err": "A reply can have at most 6 photos \u2014 remove one to add another."
+ },
+ "posted": "{\"ok\":true,\"status\":\"published\",\"reply_id\":72225,\"topic_id\":72212,\"parent_reply_id\":72216,\"author\":{\"wp_user_id\":1912,\"display_name\":\"Claude Admin\",\"slug\":\"claude_admin\",\"avatar_url\":\"https://dev2.loothgroup.com/wp-content/uploads/avatars/0/674d94a777132-bpthumb.jpg\"},\"content_html\":\"<p>six photo cap proof</p>\",\"created_at\":\"2026-07-27T21:04:02-04:00\",\"permalink\":\"/hub/strings-micro-factory/zz-test-composer-v2-p3-exit-180635-ignore/#reply-72225\"}",
+ "galleryInSheet": {
+  "galleries": 1,
+  "lastCount": "6",
+  "lastCells": 6,
+  "lastPicked": [
+   "w=240",
+   "w=240",
+   "w=240",
+   "w=240",
+   "w=240",
+   "w=240"
+  ],
+  "broken": 0
+ }
+}

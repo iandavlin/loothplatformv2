@@ -578,15 +578,74 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
             }
             echo '</span>';
         }
-        if (!empty($r['reply_image_url'])) {
-            $iu = htmlspecialchars(lg_cover_src((string)$r['reply_image_url']) ?? '');
+        // ── Reply images ────────────────────────────────────────────────────
+        // Up to LG_REPLY_IMG_MAX (Ian 2026-07-27). Callers may pass EITHER the
+        // rich `reply_images` list ([{url,w,h}] — _topic-replies.php) or the
+        // legacy single `reply_image_url` string (_feed.php's teaser query and
+        // any other caller). Normalise to one shape so both keep working.
+        $imgs = [];
+        if (!empty($r['reply_images']) && is_array($r['reply_images'])) {
+            foreach ($r['reply_images'] as $im) {
+                if (!empty($im['url'])) $imgs[] = $im;
+            }
+        } elseif (!empty($r['reply_image_url'])) {
+            $imgs[] = ['url' => (string)$r['reply_image_url'], 'w' => null, 'h' => null];
+        }
+        $imgs  = array_slice($imgs, 0, LG_REPLY_IMG_MAX);
+        // Anything beyond the cap on a legacy reply gets a "+N" rather than being
+        // dropped silently a second time.
+        $more  = max(0, (int)($r['reply_image_total'] ?? count($imgs)) - count($imgs));
+        if ($imgs) {
             if ($collapse_image) {
-                // Teaser context: keep the image hidden AND unloaded (data-src, no
-                // src) until the reader opens the reply — keeps the feed card compact.
+                // Teaser context (feed card): keep it compact — defer the FIRST
+                // image behind "Show image", hidden AND unloaded (data-src, no
+                // src). The whole set opens in the discussion modal.
+                $iu = htmlspecialchars(lg_cover_src((string)$imgs[0]['url']) ?? '');
                 echo '<button class="reply-stub__img-open" type="button">&#128247; Show image</button>'
                    . '<img class="reply-stub__img reply-stub__img--deferred" data-src="' . $iu . '" alt="" hidden>';
-            } else {
+            } elseif (count($imgs) === 1 && !$more) {
+                // Single image: byte-for-byte the legacy markup, so the 275
+                // one-image replies render exactly as they do today.
+                $iu = htmlspecialchars(lg_cover_src((string)$imgs[0]['url']) ?? '');
                 echo '<img class="reply-stub__img" src="' . $iu . '" alt="" loading="lazy">';
+            } else {
+                // Gallery. Each tile keeps the .reply-stub__img class so the
+                // existing lightbox handler and the zoom-in cursor rule still
+                // apply with no JS change.
+                //
+                // `sizes` MUST track the span rules, not the count: the 2-up and
+                // 4-up layouts are HALF-width tiles, and declaring a flat 33vw for
+                // them makes the browser pick the 800w candidate — 79KB for a
+                // 160px tile, which is the exact over-fetch this gallery exists to
+                // stop. Half-width layouts declare ~47vw, thirds ~30vw.
+                $n     = count($imgs);
+                $half  = ($n === 2 || $n === 4);
+                // Desktop widths are bounded by .reply-stub__gallery's max-width:460px,
+                // NOT by the modal's 724px content column. Measured on the serve: a
+                // half-width tile renders 229px, so declaring 360px made the browser
+                // pick the 800w candidate for it — the same over-fetch this gallery
+                // exists to end, reintroduced one layer up. 460/2 and 460/3, less gaps.
+                $sizes = $half ? '(max-width:640px) 47vw, 228px' : '(max-width:640px) 30vw, 151px';
+                echo '<div class="reply-stub__gallery" data-count="' . $n . '"'
+                   . ($more ? ' data-more="' . $more . '"' : '') . '>';
+                foreach ($imgs as $i => $im) {
+                    $u   = (string)$im['url'];
+                    $s   = static fn(int $w): string => htmlspecialchars(lg_cover_src($u, $w) ?? '');
+                    $dim = '';
+                    if (!empty($im['w']) && !empty($im['h'])) {
+                        $dim = ' width="' . (int)$im['w'] . '" height="' . (int)$im['h'] . '"';
+                    }
+                    echo '<span class="reply-stub__gcell">'
+                       . '<img class="reply-stub__img" src="' . $s(480) . '"'
+                       . ' srcset="' . $s(240) . ' 240w, ' . $s(480) . ' 480w, ' . $s(800) . ' 800w"'
+                       . ' sizes="' . $sizes . '"'
+                       . ' alt="" loading="lazy" decoding="async"' . $dim . '>';
+                    if ($more && $i === $n - 1) {
+                        echo '<span class="reply-stub__gmore" aria-hidden="true">+' . $more . '</span>';
+                    }
+                    echo '</span>';
+                }
+                echo '</div>';
             }
         }
         echo '</div>'; // close .reply-stub__body
