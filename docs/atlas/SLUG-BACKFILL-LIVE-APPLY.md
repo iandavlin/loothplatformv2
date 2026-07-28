@@ -163,11 +163,18 @@ from the database at the moment it runs. If members joined or renamed in between
 moves. This step is how you find that out before writing, not after:
 
 ```bash
-sudo -u profile-app php /srv/profile-app/bin/backfill-slugs.php --scope=repair --db-only
+sudo -u profile-app php /srv/profile-app/bin/backfill-slugs.php \
+     --scope=repair --db-only --tsv=/tmp/preflight.tsv
+sudo -u profile-app php /srv/profile-app/bin/verify-slug-plan.php --plan=/tmp/preflight.tsv
 ```
 
-Expect: `members=1836  changing=1526  NEED-RULING=107  mode=DRY RUN (no writes)`.
-**If `changing` has moved much, stop and re-run the dry-run report before applying.**
+Expect `members=1836  changing=1526  NEED-RULING=107  mode=DRY RUN (no writes)`, then
+`VERDICT: no member-harming conflict found` (exit 0). **If the verifier exits 1, stop.**
+
+Matching counts are NOT sufficient on their own — the totals can stay identical while the
+individual rows move underneath them, which is why the second command re-checks the actual
+proposals against live ownership rather than comparing summary numbers. Run against the live
+database it also covers the retired-handle case (C) that an offline export cannot test.
 
 ## 3. Apply
 
