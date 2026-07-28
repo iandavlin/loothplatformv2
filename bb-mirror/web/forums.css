@@ -584,6 +584,46 @@ img { max-width: 100%; display: block; }
 .thread__util .fc-save.is-saved .ico { fill: currentColor; }
 body.fc-save-anon .thread__util .fc-save { display: none; }  /* logged-out → no save affordance */
 
+/* ── Thread-follow: cross-surface rules for the two opt-in toggles ──────────────
+   thread-follow lane 2026-07-28, SPEC §2. These apply on EVERY surface (feed card,
+   standalone thread row, desktop modal header, mobile sheet header) so the three
+   placements stay one implementation — §0 ruling 8, parity.
+
+   ANON: no write door, so no affordance at all. Same posture as fc-save above; the
+   batch GET sets body.lg-follow-anon when it resolves an unauthenticated viewer. */
+body.lg-follow-anon [data-follow] { display: none !important; }
+
+/* THE TRUTHFULNESS MARKER (Ian 2026-07-28: "the UI must tell the truth about what
+   is actually going to happen to that member").
+
+   A subscription row is NOT sufficient for email to arrive — BuddyBoss gates every
+   send on a per-member preference, and on LIVE 40 rows across 7 members would show
+   a lit envelope while nothing is ever sent. When the account-level gate is off,
+   `.is-muted` strikes the envelope so it reads as suppressed rather than implying
+   delivery. Deliberately NOT `disabled`: the member must still be able to turn the
+   bit off, which is the whole point of surfacing it. The title/aria text (set in
+   forums.js) says so in words for anyone not seeing the strike. */
+[data-follow="email"].is-muted { opacity: .55; }
+[data-follow="email"].is-muted .ico { stroke-dasharray: 3 2; }
+
+/* The standalone single-topic page carries the same two controls in .thread__util. */
+.thread__util .fc-notify,
+.thread__util .fc-email {
+  -webkit-appearance: none; appearance: none;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 0; padding: 2px 4px; box-shadow: none;
+  font: 600 12px/1 var(--lg-font-sans, var(--font-body)); color: var(--lg-mute, var(--fg-muted));
+  cursor: pointer; transition: color .12s;
+}
+.thread__util .fc-notify .ico,
+.thread__util .fc-email .ico { width: 16px; height: 16px; flex: 0 0 auto; }
+.thread__util .fc-notify:hover,
+.thread__util .fc-email:hover { color: var(--lg-sage-d, #586b3f); }
+.thread__util .fc-notify.is-on,
+.thread__util .fc-email.is-on { color: var(--lg-sage-d, #586b3f); }
+.thread__util .fc-notify.is-on .ico,
+.thread__util .fc-email.is-on .ico { fill: currentColor; }
+
 /* Share confirmation toast (desktop SHARE module, forums.js) — shown on copy-link
    fallback when the Web Share sheet is unavailable. Global (overlay), forums.css. */
 .lg-share-toast {
@@ -4083,6 +4123,18 @@ body:has(.feed-page) #bb-ham{display:none}
     font:600 12px/1 var(--lg-font-sans); color:var(--lg-mute); cursor:pointer; transition:color .12s; }
   .feed-page .fc-share .ico { width:16px; height:16px; flex:0 0 auto; }
   .feed-page .fc-share:hover { color:var(--lg-sage-d,#586b3f); }
+  /* fc-notify / fc-email — the TWO per-discussion opt-ins (thread-follow §2.2,
+     Ian-gated 2026-07-27: two separate visible icons, not one expanding control).
+     Icon-only on the card (space); they inherit fc-save's margin-left:auto push, so
+     the row reads [reactions … replies] … [☆ 🔔 ✉ share]: state controls grouped right.
+     .is-on = the bit is ON, filled sage, exactly .fc-save's .is-saved idiom. */
+  .feed-page .fc-notify, .feed-page .fc-email { -webkit-appearance:none; appearance:none;
+    display:inline-flex; align-items:center; background:none; border:0; padding:2px 3px;
+    font:600 12px/1 var(--lg-font-sans); color:var(--lg-mute); cursor:pointer; transition:color .12s; }
+  .feed-page .fc-notify .ico, .feed-page .fc-email .ico { width:16px; height:16px; flex:0 0 auto; }
+  .feed-page .fc-notify:hover, .feed-page .fc-email:hover { color:var(--lg-sage-d,#586b3f); }
+  .feed-page .fc-notify.is-on, .feed-page .fc-email.is-on { color:var(--lg-sage-d,#586b3f); }
+  .feed-page .fc-notify.is-on .ico, .feed-page .fc-email.is-on .ico { fill:currentColor; }
   .feed-page .fc-replies { grid-area:replies; min-width:0; margin-top:6px; }
   /* fc-composer — persistent, pinned to the card bottom (full-bleed) */
   .feed-page .fc-composer{ display:flex; grid-area:composer; align-items:center; gap:9px;
@@ -5023,3 +5075,38 @@ html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--type .hub-rail__se
 /* Shows count pill: --sec rust (→#d57a55 in dark) + white ink = 3.11:1 (after-shot
    residual). Dark ink → 5.63:1 (Cat pill already uses a dark --secink). */
 html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--shows .hub-rail__secn { color: #15171a; }
+
+/* ═══ Thread-follow: MOBILE card placement (≤640) ═══════════════════════════════
+   thread-follow lane 2026-07-28. SPEC §2.2b — IAN-CONFIRMED 2026-07-27 (frame 2).
+
+   Mobile cards do NOT use .fc-actions (that row is desktop-only), so the desktop
+   feed_follow_btns() placement never reaches them. They use .lg-card-actions/.lg-act,
+   which carries only three items (Like / N replies / Share) against 390px — so unlike
+   desktop there is room, with space to spare.
+
+   The two icons sit at the RIGHT END of that bar: margin-left:auto on the wrapper,
+   icon-only, ordering matching desktop (state controls right). Appended here as a
+   readable block rather than edited into the minified @≤640 section above. */
+@media (max-width: 640px) {
+  .feed-page .lg-card-actions .lg-act-follow {
+    display: inline-flex; align-items: center; gap: 2px;
+    margin-left: auto;                 /* → right end of the bar */
+    flex: 0 0 auto;
+  }
+  /* ≥44px effective touch targets (§2.2b) without inflating the 12px bar: the icon
+     stays 18px and the padding does the work. */
+  .feed-page .lg-card-actions .fc-notify,
+  .feed-page .lg-card-actions .fc-email {
+    -webkit-appearance: none; appearance: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 44px; min-height: 44px; margin: -13px 0;   /* negative margin keeps the bar height */
+    padding: 0; background: none; border: 0;
+    color: inherit; cursor: pointer; transition: color .12s;
+  }
+  .feed-page .lg-card-actions .fc-notify .ico,
+  .feed-page .lg-card-actions .fc-email .ico { width: 18px; height: 18px; flex: 0 0 auto; }
+  .feed-page .lg-card-actions .fc-notify.is-on,
+  .feed-page .lg-card-actions .fc-email.is-on { color: var(--lguser-accent-d, #52613d); }
+  .feed-page .lg-card-actions .fc-notify.is-on .ico,
+  .feed-page .lg-card-actions .fc-email.is-on .ico { fill: currentColor; }
+}

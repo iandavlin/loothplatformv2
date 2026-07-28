@@ -1174,7 +1174,17 @@ function feed_render_tags(array $tags): void
 // it (mobile-only via .lg-card-actions CSS; display:none at desktop). Content cards
 // pass $zero_label='Comment' (Buck 6/11 audit H4: they read identically to a 0-reply
 // discussion as "Reply", but their tap opens the comments surface, not a composer).
-function feed_action_bar(int $reply_count, string $zero_label = 'Reply'): void
+// $topicId (thread-follow, 2026-07-28): when > 0 the bar also carries the TWO
+// per-discussion opt-in toggles at its RIGHT END — Ian-confirmed 2026-07-27 from
+// previs frame 2 (SPEC §2.2b). Mobile cards do NOT use .fc-actions, so the desktop
+// feed_follow_btns() placement never reaches them; this is their only surface.
+// Defaults to 0 so CONTENT cards (which pass $zero_label='Comment') stay untouched —
+// they have comments, not topic subscriptions. v1 is discussion cards only (§9.3 q5).
+//
+// Ian's reason for choosing this placement, kept because it generalises: a card
+// control whose whole point is opting in WITHOUT opening the thread is worthless if
+// it only exists inside the thread.
+function feed_action_bar(int $reply_count, string $zero_label = 'Reply', int $topicId = 0): void
 {
     // Thumbs-up, not a heart: the Like applies a 👍 reaction so the icon matches
     // (Buck 2026-06-11 — was swapped client-side; canonical now, his replace no-ops).
@@ -1185,8 +1195,16 @@ function feed_action_bar(int $reply_count, string $zero_label = 'Reply'): void
     echo '<div class="feed-card__actions lg-card-actions">'
        . '<span class="lg-act lg-act-like" role="button" tabindex="0">' . $ICO_LIKE . 'Like</span>'
        . '<span class="lg-act lg-act-replies" role="button" tabindex="0">' . $ICO_REPLIES . htmlspecialchars($label) . '</span>'
-       . '<span class="lg-act lg-act-share" role="button" tabindex="0">' . $ICO_SHARE . 'Share</span>'
-       . '</div>';
+       . '<span class="lg-act lg-act-share" role="button" tabindex="0">' . $ICO_SHARE . 'Share</span>';
+    if ($topicId > 0 && function_exists('feed_follow_btns')) {
+        // .lg-act-follow carries margin-left:auto, so the two icons sit at the right
+        // end of a bar that otherwise holds only Like / N replies / Share. Frame 2
+        // showed room to spare at 390px.
+        echo '<span class="lg-act-follow">';
+        feed_follow_btns($topicId);
+        echo '</span>';
+    }
+    echo '</div>';
 }
 
 // feed_save_btn() now lives in _reply-render.php (the shared partial, required at
@@ -1616,8 +1634,13 @@ $header_cat = $scoped_forum
       <?php /* fc-actions = the reactions-comments SURFACE lane's engagement-bar slot. */ ?>
       <div class="fc-actions">
         <?php feed_reactions_bar('topic', $topic_id, $card_reaction_counts['topic:' . $topic_id] ?? []); ?>
-        <?php feed_action_bar($reply_count); ?>
+        <?php feed_action_bar($reply_count, 'Reply', $topic_id); ?>
         <?php feed_save_btn('topic', $topic_id); ?>
+        <?php /* The two per-discussion opt-ins (thread-follow §2.2). Ian reviewed and
+                 gated THIS row in the previs — eight controls is the shape he approved,
+                 so the count is settled; do not re-open it. Topic cards only in v1:
+                 content cards have comments, not topic subscriptions (§9.3 q5). */ ?>
+        <?php feed_follow_btns($topic_id); ?>
         <?php feed_share_btn(); ?>
         <?= $reply_cta /* card-level CTA: now hidden by CSS (composer is the reply entry, Ian) but KEPT as the topic/forum data-source that nested reply buttons read via frmOpen() */ ?>
         <?php /* expand-all RETIRED (Ian): SPLIT into "Read more" (full post BODY only,
