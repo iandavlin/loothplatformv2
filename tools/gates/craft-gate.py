@@ -28,8 +28,30 @@ try:
 except ImportError:
     sys.exit("python3-websockets required (it's installed system-wide on dev)")
 
-HOST = "https://dev.loothgroup.com"
+import os
+
+
+def gate_env():
+    """Host / domain / token from the ONE resolver (tools/gates/gate-env.sh).
+
+    Never hardcode them here again: this module's `dev.loothgroup.com` pair is
+    what took gates 1/2/3/5 down box-wide when the box became dev2 and the
+    tokens moved into a box-local nginx include.
+    """
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gate-env.sh")
+    p = subprocess.run(["bash", script], capture_output=True, text=True)
+    if p.returncode != 0:
+        sys.exit(p.stderr.strip() or f"gate-env.sh failed ({script})")
+    return dict(l.split("=", 1) for l in p.stdout.splitlines() if "=" in l)
+
+
+ENV  = gate_env()
+HOST = ENV["LG_GATE_HOST"]
+DOMAIN = ENV["LG_GATE_DOMAIN"]
 CDP  = "http://127.0.0.1:9222"
+# Chrome resolves its own navigations: the browser on :9222 must have been
+# launched with ENV["LG_GATE_CHROME_RESOLVER"] or every page below lands on the
+# Cloudflare challenge instead of our origin.
 
 # page → (path, [viewers]) ; add new user-facing surfaces HERE when built.
 PAGES = {
@@ -54,14 +76,13 @@ def sh(cmd):
 
 
 def gate_token():
-    for line in open("/etc/nginx/sites-available/dev.loothgroup.com.conf"):
-        if "$loothdev_token" in line and '"' in line:
-            return line.split('"')[1]
-    sys.exit("cannot read dev gate token")
+    return ENV["LG_GATE_TOKEN"]
 
 
 def member_cookies():
-    wpc = sh("sudo -u www-data wp --path=/var/www/dev eval "
+    # wp-cli as looth-dev, NOT www-data: /etc/looth/live-wp-keys.php is
+    # root:looth-dev 0640, so www-data cannot bootstrap WP and this returned ''.
+    wpc = sh("sudo -u looth-dev wp --path=/var/www/dev eval "
              "'$e=time()+3600; echo LOGGED_IN_COOKIE.\"=\".urlencode(wp_generate_auth_cookie(1912,$e,\"logged_in\"));'")
     jwt = sh("sudo -u profile-app php /srv/profile-app/bin/mint-dev-token.php 1 | tail -1")
     n, v = wpc.split("=", 1)
@@ -115,7 +136,7 @@ async def audit(path, viewer, gate, member):
         await t.send("Network.clearBrowserCookies")
         cookies = [("loothdev_auth", gate)] + (member if viewer == "member" else [])
         for n, v in cookies:
-            await t.send("Network.setCookie", {"domain": "dev.loothgroup.com", "name": n,
+            await t.send("Network.setCookie", {"domain": DOMAIN, "name": n,
                                                "value": v, "path": "/", "secure": True, "httpOnly": True})
         await t.send("Page.navigate", {"url": HOST + path + ("?craftgate=1" if "?" not in path else "&craftgate=1")})
         r = await t.send("Runtime.evaluate", {"expression": COLLECT_JS,

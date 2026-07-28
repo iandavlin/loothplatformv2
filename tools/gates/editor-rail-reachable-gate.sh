@@ -17,24 +17,30 @@
 # run standalone, and re-run once before believing a RED. Exit 0 = GREEN.
 set -uo pipefail
 
-WP="/var/www/dev"; CONF="/etc/nginx/sites-available/dev.loothgroup.com.conf"
+# Host / domain / token from the shared resolver (tools/gates/gate-env.sh).
+# NOTE for the operator: Chrome resolves its own navigations, so the browser this
+# gate drives must be launched with $LG_GATE_CHROME_RESOLVER — without it every
+# navigation lands on the Cloudflare challenge instead of our origin.
+. "$(dirname "$0")/gate-env.sh" || exit 1
+WP="/var/www/dev"
 APP="/srv/profile-app"; SUBJ=7      # a claimed member (owns a /profile/edit editor)
+GATE="$LG_GATE_TOKEN"
 
-GATE=$(grep -oP '(?<=set \$loothdev_token ")[^"]+' "$CONF" | head -1)
-[ -n "${GATE:-}" ] || { echo "GATE-ERROR  cannot read dev gate token"; exit 1; }
-
-read LIN LIV SN SV < <(sudo -u www-data wp --path="$WP" eval '
+# wp-cli as looth-dev, NOT www-data: /etc/looth/live-wp-keys.php is
+# root:looth-dev 0640, so www-data cannot bootstrap WP and this mint came back empty.
+read LIN LIV SN SV < <(sudo -u looth-dev wp --path="$WP" eval '
   $uid='"$SUBJ"'; $exp=time()+1800; $t=WP_Session_Tokens::get_instance($uid)->create($exp);
-  echo LOGGED_IN_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"logged_in",$t)." ".SECURE_AUTH_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"secure_auth",$t);' 2>/dev/null)
+  echo LOGGED_IN_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"logged_in",$t)." ".SECURE_AUTH_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"secure_auth",$t);' 2>/dev/null | tail -1)
 LOOTH=$(sudo -u profile-app php "$APP/bin/mint-dev-token.php" "$SUBJ" 2>/dev/null | tail -1)
 [ -n "${LIV:-}" ] && [ -n "${LOOTH:-}" ] || { echo "GATE-ERROR  could not mint owner session"; exit 1; }
 
-GATE="$GATE" LIN="$LIN" LIV="$LIV" SN="$SN" SV="$SV" LOOTH="$LOOTH" python3 - <<'PYEOF'
+GATE="$GATE" LIN="$LIN" LIV="$LIV" SN="$SN" SV="$SV" LOOTH="$LOOTH" \
+LG_GATE_DOMAIN="$LG_GATE_DOMAIN" LG_GATE_HOST="$LG_GATE_HOST" python3 - <<'PYEOF'
 import asyncio, json, os, urllib.request, websockets, sys
 C=[(os.environ['LIN'],os.environ['LIV']),(os.environ['SN'],os.environ['SV']),
    ('loothdev_auth',os.environ['GATE']),('looth_id',os.environ['LOOTH'])]
-cookies=[{'domain':'dev.loothgroup.com','name':n,'value':v,'path':'/','secure':True,'httpOnly':True} for n,v in C]
-URL='https://dev.loothgroup.com/profile/edit'
+cookies=[{'domain':os.environ['LG_GATE_DOMAIN'],'name':n,'value':v,'path':'/','secure':True,'httpOnly':True} for n,v in C]
+URL=os.environ['LG_GATE_HOST']+'/profile/edit'
 async def main():
   pages=json.load(urllib.request.urlopen('http://127.0.0.1:9222/json'))
   page=[p for p in pages if p['type']=='page'][0]

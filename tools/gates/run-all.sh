@@ -5,7 +5,13 @@
 set -uo pipefail
 red=0
 echo "=== GATE 1/6: visibility matrix (the privacy model) ==="
-php /srv/profile-app/bin/visibility-matrix.php || red=1
+# Prefer the copy that ships in THIS tree over the absolute serve path, so the
+# runner exercises the gates it was checked out with (and a lane can prove a
+# harness repair without a serve flip). Falls back to /srv for an installed
+# runner whose tree layout differs.
+VM="$(dirname "$0")/../../profile-app/bin/visibility-matrix.php"
+[ -r "$VM" ] || VM=/srv/profile-app/bin/visibility-matrix.php
+php "$VM" || red=1
 echo
 echo "=== GATE 2/6: web-craft gate (images / weight / eager scripts) ==="
 python3 "$(dirname "$0")/craft-gate.py" || red=1
