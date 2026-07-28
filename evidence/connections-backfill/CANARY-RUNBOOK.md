@@ -7,13 +7,20 @@ and each has its **own tag table** so rolling one back cannot disturb another.
 
 | Set | Files | Scope | Who gets notified | Tag table |
 | --- | --- | --- | --- | --- |
-| **START HERE — accepted only** | `7-DRYRUN` / `8-APPLY` / `9-ROLLBACK` | **83** accepted rows touching Ian | **nobody** | `…_ian_acc` |
-| Ian only, incl. pending | `4-DRYRUN` / `5-APPLY` / `6-ROLLBACK` | **135** rows touching Ian | 52 members get a badge | `…_ian` |
-| Full — everyone | `1-DRYRUN` / `2-APPLY` / `3-ROLLBACK` | **746** rows, 302 members | 142 members get a badge | `connections_restore_20260727` |
+| ✅ **APPLIED** — accepted only, Ian | `7` / `8` / `9` | **83** accepted rows touching Ian | **nobody** | `…_ian_acc` |
+| ▶ **RUN NEXT** — accepted only, everyone | `13` / `14` / `15` | **271** accepted rows, **164** members | **nobody** | `…_20260728_all_acc` |
+| ▶ **RUN NEXT** — the wrong-status fix | `10` / `11` / `12` | **81** rows corrected in place | **nobody** (71 badges *clear*) | `connections_restatus_20260728` |
+| ❌ **SUPERSEDED** — Ian only, incl. pending | `4` / `5` / `6` | 135 rows | 52 members get a badge | `…_ian` |
+| ❌ **SUPERSEDED** — full, incl. pending | `1` / `2` / `3` | 746 rows | 142 members get a badge | `connections_restore_20260727` |
 
-All live in `profile-app/sql/2026-07-27-connections-*.sql`. **Ian's ruling 2026-07-28: run 7/8/9
-first and judge the result before deciding anything that touches other people.** Files 1/2/3 and
-4/5/6 stay parked until then.
+**Ian's ruling 2026-07-28, after judging his own 83 on live: restore the confirmed friendships
+for everyone, and do NOT restore the unanswered requests.** That retires files 1/2/3 and 4/5/6 —
+they carry 391 pending rows between them, which is exactly what he decided against. **Files 13/14/15
+are the population equivalent of 7/8/9 and are what he runs now.** The superseded files are kept
+only so the numbers in this document stay checkable; do not run them.
+
+`13`/`14`/`15` are `profile-app/sql/2026-07-28-connections-restore-all-*.sql`, `10`/`11`/`12` are
+`…-connections-restatus-*.sql`, the rest are `…2026-07-27-connections-*.sql`.
 
 ## Getting the files onto live — never check out the branch
 
@@ -67,6 +74,114 @@ Ian is on **1334 accepted** (1251 + 83, exactly as the dry run predicted) and **
 unchanged at 427**. Nobody was notified. File 9 remains the rollback if he wants it undone.
 
 Only that one tag table exists on live — 1/2/3 and 4/5/6 are confirmed **not** applied.
+
+# The population restore (13/14/15) — accepted only, everyone
+
+**This is Ian's ruling made runnable: the rest of the membership gets their confirmed friendships
+back, silently, and no unanswered request is recreated.**
+
+| | |
+| --- | --- |
+| rows | **271** — every one `accepted` |
+| members | **164** |
+| touching Ian | **0** — his 83 were file 8; this is the remainder of the population |
+| notifies | **nobody.** 0 badges, 0 bells, 0 emails |
+| dates restored | 2023-06-20 → 2026-06-02, original `created_at` preserved |
+| tag table | `connections_restore_20260728_all_acc` |
+
+```bash
+git show origin/connections-backfill:profile-app/sql/2026-07-28-connections-restore-all-13-DRYRUN.sql   > /tmp/13-dryrun.sql
+git show origin/connections-backfill:profile-app/sql/2026-07-28-connections-restore-all-14-APPLY.sql    > /tmp/14-apply.sql
+git show origin/connections-backfill:profile-app/sql/2026-07-28-connections-restore-all-15-ROLLBACK.sql > /tmp/15-rollback.sql
+```
+
+```
+0.  psql -f /tmp/15-rollback.sql   # the escape hatch — know it before you start
+1.  psql -f /tmp/13-dryrun.sql     # read-only, writes nothing
+2.  psql -f /tmp/14-apply.sql      # inserts 271
+3.  psql -f /tmp/13-dryrun.sql     # verify: WILL INSERT = 0, already present = 271
+```
+
+**Measured against live 2026-07-28.** Stop if `UUID MATCH` is not `true` or if `payload uuids NOT
+found in users` is not `0`.
+
+```
+rows in this restore                        271
+every row is accepted                      true
+members affected                            164
+UUID MATCH                                 true
+payload uuids NOT found in users              0
+WILL INSERT (after guards)                  271
+already present, same direction               0
+already present, OPPOSITE direction           0
+members who get an incoming-request badge      0
+members who get a bell notification            0
+members who get an email                       0
+rows touching Ian                              0
+```
+
+## The collision check — re-run 2026-07-28, and the answer is better than expected
+
+The worry was that across a whole population, re-requests would collide with the restore: a
+same-direction one silently skipped, an opposite-direction one creating a **duplicate row for one
+relationship** because `UNIQUE (requester_uuid, addressee_uuid)` is directional.
+
+**That collision has already happened, it is already measured, and it is already excluded.** It is
+the 81 wrong-status rows — 74 same-direction, 7 opposite. Those pairs *have* a row, so they can
+never be in this payload, whose predicate is "no row in either direction". The full split of all
+7,609 legacy confirmed friendships:
+
+```
+already have a row, same direction   7321   (7247 correct + 74 wrong-status)
+already have a row, OPPOSITE dir       11   (   4 correct +  7 wrong-status)
+rows in BOTH directions                 5   shape (c), flagged, untouched
+unmappable (no bridge row)              1
+NO ROW AT ALL                         271   <- THIS PAYLOAD
+                              TOTAL  7609
+```
+
+**Collisions inside the 271 payload: zero, in both directions**, confirmed by the live dry run.
+The residual risk is only drift between now and the apply — someone re-requesting in the window —
+and that is what the two guards are for. Both were exercised, not argued: planting a reverse
+pending row for a payload pair made the apply insert **270**, skip that pair, and create **no**
+reciprocal duplicate.
+
+**The 271 and the 81 are provably disjoint** — intersection **0**, union 352. A pair with no row
+cannot also be a pair with a pending row. That is why they are separate file sets with separate tag
+tables, and why running one does not constrain the other. Ian can run them in either order or
+together; each rolls back on its own.
+
+*One pre-existing thing this does not touch:* live already carries **5 bidirectional pairs** (10
+rows) from before any of this work — the shape-(c) set. The restore adds none and removes none.
+Deleting live rows is a separate risk conversation.
+
+## Rehearsal — 2026-07-28, throwaway replica loaded with LIVE's own rows, dropped after
+
+`evidence/connections-backfill/rehearse-13-14-15.sh`, re-runnable, **34/34 PASS**. The replica is
+built from extracts of live's `connections` / `users` / `wp_user_bridge` with the real DDL —
+unique constraint, both check constraints, FKs and the `connections_touch` trigger — because
+rehearsing against dev2's own data would be the weaker test.
+
+| Step | Result |
+| --- | --- |
+| 13-DRYRUN | 271 will insert, 0 present either direction, 0 touching Ian; hash **unchanged** |
+| 14-APPLY | inserted + tagged **271**; all accepted; original `created_at` kept; **no new** reciprocal duplicates |
+| 14-APPLY again | **0** more |
+| 13-DRYRUN as verify | `WILL INSERT` **0**, `already present` **271** |
+| Opposite-direction test | reverse row planted → inserted **270**, pair skipped, **0** new duplicates |
+| 15-ROLLBACK | deleted exactly 271; hash **byte-identical** to baseline; tag table dropped |
+| Guard: truncated payload | aborts, table unchanged, no tag table |
+| Guard: a non-accepted row | aborts, table unchanged |
+| Guard: wrong database | aborts, table unchanged |
+| Guard: unknown uuid | aborts, table unchanged, no tag table |
+
+**Rollback is byte-identical here**, unlike 10/11/12 — this set only INSERTs, so deleting the
+tagged ids restores the table exactly. The `connections_touch` caveat does not apply.
+
+*Harness trap, recorded because it cost a run:* the script executes as `postgres`, so its data
+must be world-readable. A 0700 scratch dir makes `\copy` fail silently and the replica loads
+**empty** — at which point the dry run cheerfully reports "271 will insert" and most assertions
+pass for entirely the wrong reason. The harness now refuses to run below 10,000 rows.
 
 # The re-request fix (10/11/12) — a DIFFERENT defect
 
@@ -141,10 +256,17 @@ profile-app-native member (Patreon-provisioned, no `wp_users` row). That read Ia
 missing as 272. Map through uuids and compare pairs by uuid — then the classification sums to
 7609 exactly. A total that does not sum to the population is the tell.
 
-# PARKED — do not run until Ian has judged the 83
+# SUPERSEDED — do not run 1/2/3 or 4/5/6
 
 Everything below concerns the **135-row (4/5/6)** and **746-row (1/2/3)** sets. Both put an
-incoming request in front of other members. Ian's 2026-07-28 ruling parks them.
+incoming request in front of other members, and **Ian ruled against exactly that on 2026-07-28**
+after judging his own 83. Files 13/14/15 replace them with the accepted-only equivalent.
+
+Kept for one reason: the numbers below are the working that files 13/14/15 were derived from, and
+retiring a document silently is how a superseded file gets run by mistake. **The accepted content
+of the 746 is fully covered — 354 accepted rows = Ian's 83 (applied) + these 271.** What is
+deliberately *not* covered is the 391 pending rows; those are the unanswered requests Ian decided
+to leave alone.
 
 ## The 135-row set (4/5/6)
 
