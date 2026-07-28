@@ -200,14 +200,35 @@ foreach ($cand as $c) {
     $base = Slug::deriveUsable($name);
 
     if ($base === '') {
-        // Non-Latin script, punctuation-only, or emoji. We NEVER latinize a member's
-        // name (PATREON-HANDLE-BACKFILL-DRYRUN.md 7/25), so there is no honest
-        // derivation. Surfaced for a human decision — never guessed at.
+        // deriveUsable() returns '' for TWO unrelated reasons, and they need OPPOSITE
+        // rulings. Collapsing them mislabels one of the groups: on live 2026-07-28, 4 of
+        // these 8 were plain Latin initials ("BB", "G", "KJ", "Bo") filed under "name has
+        // no Latin characters", which invites a ruling about romanization that would do
+        // nothing for them. Ask each group its own question.
+        $rawDerived = Slug::fit(Slug::derive($name));
+        $shape      = $rawDerived === '' ? null : Slug::checkShape($rawDerived);
+
+        if ($rawDerived === '') {
+            // Non-Latin script, punctuation-only, or emoji. We NEVER latinize a member's
+            // name (PATREON-HANDLE-BACKFILL-DRYRUN.md 7/25), so there is no honest
+            // derivation. Surfaced for a human decision — never guessed at.
+            $cat    = '0-NO-HONEST-SLUG';
+            $why    = 'display name has no Latin characters to derive from';
+            $action = 'NEEDS RULING — cannot derive without latinizing the name';
+        } elseif ($shape === 'too_short') {
+            $cat    = '0b-NAME-TOO-SHORT';
+            $why    = sprintf('derives to "%s" — under the %d-character minimum', $rawDerived, Slug::MIN_LEN);
+            $action = 'NEEDS RULING — allow a short handle, or leave the Patreon URL';
+        } else {
+            $cat    = '0c-SHAPE-REJECTED';
+            $why    = sprintf('derives to "%s" — rejected by shape rule: %s', $rawDerived, (string) $shape);
+            $action = 'NEEDS RULING — the derived handle is not a legal slug';
+        }
+
         $plan[] = [
-            'cat' => '0-NO-HONEST-SLUG', 'user_id' => $id, 'wp_id' => (string) $c['wp_user_id'],
+            'cat' => $cat, 'user_id' => $id, 'wp_id' => (string) $c['wp_user_id'],
             'name' => $name, 'current' => $current !== '' ? $current : '(none — 404s today)',
-            'proposed' => '', 'why' => 'display name has no Latin characters to derive from',
-            'action' => 'NEEDS RULING — cannot derive without latinizing the name',
+            'proposed' => '', 'why' => $why, 'action' => $action,
             'defect' => $defect, 'row' => $c,
         ];
         continue;
@@ -464,6 +485,8 @@ if ($HTML) {
     $h = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     $LABEL = [
         '0-NO-HONEST-SLUG'          => ['Name has no Latin characters — needs your ruling', 'Non-Latin script, punctuation or emoji. We never latinize a member\'s name, so there is no honest derivation. Options: leave the Patreon URL, let the member choose, or rule that these may be romanized.'],
+        '0b-NAME-TOO-SHORT'         => ['Name is shorter than the minimum handle', 'These derive to perfectly good Latin — they are just under the ' . Slug::MIN_LEN . '-character floor. A DIFFERENT question from the non-Latin group above: nothing needs romanizing, you only need to say whether a 2-letter handle is allowed. Options: lower the floor, pad from a fuller identity, or leave the Patreon URL.'],
+        '0c-SHAPE-REJECTED'         => ['Derived handle is not a legal slug', 'The name derives to Latin, but the result breaks a shape rule (digits only would shadow /u/<member-id>, or the charset the nginx route can match).'],
         '3-COLLISION-NEEDS-RULING'  => ['Collision we may NOT resolve on our own', 'Two members clean to the same handle. A numeric suffix is ruled out, and where the name is the member\'s own we may not reach for Patreon to "expand" it either. These need your call.'],
         '1-NO-SLUG'                 => ['No URL at all — /u/ 404s today', 'Nothing to redirect FROM, so there is no link risk in giving them one.'],
         '2-PATREON-JUNK'            => ['Patreon id instead of a name', 'The point of the lane. The old URL 301s forever.'],
