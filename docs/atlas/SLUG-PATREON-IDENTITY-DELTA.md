@@ -26,6 +26,9 @@ accepts, so no second deriver exists to disagree with the first.
 The premise was that the derivation only saw "Matt" and could not see a surname. **For this
 group, Patreon does not have the surname either.**
 
+(Denominators are members with a `patreon_latest_patron_info` row: 129 of the 136 bare names,
+1,360 of the 1,390 hyphenated. The 1,585 rows do not cover every member.)
+
 | population | Patreon `last_name` present |
 |---|---|
 | members whose slug is a **bare first name** | **14 / 129 — 10%** |
@@ -129,8 +132,6 @@ R4 stands: we do not overwrite a name a member may have chosen. Note the distinc
 member 1550 the slug `/u/jeff-ferk` does **not** rewrite their display_name, and their current
 URL is `patreon_<id>`, so no existing handle is taken away from them either. Choosing between
 `/u/jeff` and `/u/jeff-ferk` is choosing what to give someone, not what to take.
-
----
 
 ---
 
