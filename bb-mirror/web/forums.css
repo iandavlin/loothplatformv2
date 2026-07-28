@@ -1974,7 +1974,10 @@ a.feed-card__reply-author:hover { text-decoration: underline; }
   -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
 }
 .lgc-modal__panel {
-  position: relative; width: min(640px,96vw); max-height: min(86vh,920px);
+  /* 860 = Ian's pick, 2026-07-28, from three drawn options. Not to be "improved":
+     past ~900px the prose line runs long enough to hurt readability; 860 puts a
+     line at ~95 characters, the top of the comfortable range. He passed on 1040. */
+  position: relative; width: min(860px,96vw); max-height: min(86vh,920px);
   background: #fff; border-radius: 16px; overflow: hidden;
   box-shadow: 0 16px 48px rgba(0,0,0,.28), 0 4px 12px rgba(0,0,0,.12);
   display: flex; flex-direction: column;
@@ -1992,7 +1995,15 @@ a.feed-card__reply-author:hover { text-decoration: underline; }
 }
 .lgc-modal__close:hover { background: #ece7db; color: #1a1d1a; }
 .lgc-modal__frame {
-  width: 100%; border: 0; height: 320px; background: #fff; transition: height .2s ease;
+  /* ⚠️ THIS HEIGHT IS THE PRE-HANDSHAKE HEIGHT ONLY — it is NOT what the modal
+     settles at. forums.js §4c replaces it the moment the iframe posts
+     lgCommentsHeight: frame.style.height = clamp(220, contentHeight, 82vh).
+     So raising 320 -> 480 makes the modal open taller and then, for any thread
+     shorter than 480px, SHRINK back to its content height. If the goal is a
+     genuinely taller modal, the floor in forums.js:3543 (currently 220) is the
+     value that governs it, not this one. Raised per Ian's pick; see the note on
+     __panel above. */
+  width: 100%; border: 0; height: 480px; background: #fff; transition: height .2s ease;
 }
 
 /* Reply list beneath OP */
