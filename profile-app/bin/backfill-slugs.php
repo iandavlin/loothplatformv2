@@ -355,6 +355,23 @@ foreach ($plan as $i => &$p) {
     $p['suggested'] = $found;
     $p['why'] = 'clashes on "' . $p['base'] . '" — already held; ' . $evidence;
 
+    // An EMAIL local-part is not a name, and publishing it is not a naming decision —
+    // it puts part of a member's private email address in a public URL forever.
+    // Measured on live once identity data existed: 40 members would have been given one,
+    // including /u/hxn7djggwx (Katie Mccartney) and /u/jf13fox (Jim Fenton). Nobody asked
+    // for that; it was simply the last link in the chain, and it had never been reachable
+    // before because provenance cannot return machine-seeded without an identity map.
+    // Supplying that map switches it on for the first time — so it is opt-in, and until
+    // someone opts in these stay a SUGGESTION for a human, exactly as they were.
+    $fromEmail = str_contains($src, 'email');
+    if ($fromEmail && !in_array('--allow-email-derived-slugs', $argv, true)) {
+        $p['cat']      = '3-COLLISION-NEEDS-RULING';
+        $p['proposed'] = '';
+        $p['action']   = 'NEEDS RULING — only an email-derived handle is available (/u/' . $found
+                       . '), which would publish part of their email address';
+        continue;
+    }
+
     if ($verdict === 'machine-seeded' && $found !== '') {
         // Nobody supplied this name, so we are inventing an identity rather than
         // rewriting a chosen one. Expansion is licensed (R3).
@@ -389,6 +406,57 @@ foreach ($plan as $i => &$p) {
     $p['provenance'] = $v;
 }
 unset($p);
+
+// --expand-bare-names: give a BARE FIRST NAME its surname where we have one.
+//
+// The expansion above only ever fires for rows already in a collision, so a member whose
+// name cleans to "jeff" sails through uncontested and takes /u/jeff — while 15 other Jeffs
+// get jeff-<surname>. Nothing was wrong with the code; it had no identity data to work with
+// until patreon_latest_patron_info turned out to be sitting in wp_usermeta all along.
+//
+// Measured on live 2026-07-28 (docs/atlas/SLUG-PATREON-IDENTITY-DELTA.md): this moves 6 of
+// the 46 contested bare names onto a free surname handle and creates ZERO new collisions.
+// It cannot do more — for 122 of the 136, PATREON HAS NO SURNAME EITHER (bare-name members
+// carry a last_name 10% of the time against 91% for everyone else), so "Matt" is not a
+// truncation we can undo. It is the only name that exists for them.
+//
+// This is not an R4 violation: display_name is never rewritten, and the member's current URL
+// is a patreon_<id>, so nothing they hold is taken away. It chooses what to GIVE them.
+if (in_array('--expand-bare-names', $argv, true)) {
+    $expanded = 0;
+    foreach ($plan as $i => &$p) {
+        if (($p['proposed'] ?? '') === '' || str_contains($p['proposed'], '-')) continue;
+        // Only touch handles that came from the DISPLAY NAME. A row PASS 3 already
+        // expanded was resolved from a stronger signal and must not be second-guessed:
+        // member 732 chose the Patreon vanity "meeloo", PASS 3 correctly gave them
+        // /u/meeloo, and an earlier version of this loop then overwrote it with the
+        // generic /u/seb — downgrading a self-chosen handle to a first name, which is
+        // precisely backwards.
+        if (($p['cat'] ?? '') === '6-COLLISION-EXPANDED') continue;
+        preg_match('/(\d+)/', (string) ($p['row']['slug'] ?? ''), $m);
+        $ident = $api[$m[1] ?? ''] ?? null;
+        if ($ident === null) continue;
+        foreach ([
+            'patreon full name' => (string) ($ident['full_name'] ?? ''),
+            'patreon vanity'    => (string) ($ident['vanity'] ?? ''),
+        ] as $label => $raw) {
+            if (trim($raw) === '') continue;
+            $try = Slug::deriveUsable($raw);
+            // Must be a genuine improvement AND free. Same handle back means Patreon holds
+            // only a first name too, which is the common case — leave it alone.
+            if ($try === '' || strcasecmp($try, (string) $p['proposed']) === 0) continue;
+            if (!$freeFor($try, $p['user_id'])) continue;
+            $ownerOf[strtolower($try)][] = $p['user_id'];
+            $p['proposed'] = $try;
+            $p['action']   = 'bare first name expanded from ' . $label;
+            $p['why']     .= '; expanded so the bare handle is not taken on an import accident';
+            $expanded++;
+            break;
+        }
+    }
+    unset($p);
+    fwrite(STDERR, "--expand-bare-names: expanded $expanded bare first name(s) from stored identity\n");
+}
 
 // Interesting cases FIRST — the rows needing a human decision must not be on page 40.
 usort($plan, fn($a, $b) => [$a['cat'], $a['user_id']] <=> [$b['cat'], $b['user_id']]);
