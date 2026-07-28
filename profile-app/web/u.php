@@ -397,16 +397,31 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 /* drop indicator while dragging a caddy block onto the profile */
 .lg-block--drop-before{box-shadow:0 -3px 0 0 var(--lg-sage)}
 .lg-block--drop-after{box-shadow:0 3px 0 0 var(--lg-sage)}
-/* Sections toggle in the View-as bar — a hamburger at the break (Ian 6/15):
-   below 1380px the caddy is an off-canvas drawer, so this reads as a menu
-   button; at >=1380 it's display:none (the caddy is the permanent column). */
-.lg-viewas__caddy{margin-left:auto;display:inline-flex;align-items:center;gap:9px;background:var(--lg-amber);color:#4a3c10;border:0;border-radius:999px;padding:8px 15px;min-height:40px;font:800 calc(12px*var(--lg-read-scale,1))/1 var(--lg-font-sans);cursor:pointer}
-.lg-viewas__caddy:hover{filter:brightness(1.06)}
-/* three-bar hamburger glyph (currentColor inherits the button ink) */
-.lg-burger-ic{display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px;position:relative;flex:0 0 16px}
-.lg-burger-ic::before,.lg-burger-ic::after{content:"";position:absolute;left:0;width:16px;height:2px;background:currentColor;border-radius:2px}
-.lg-burger-ic::before{top:-5px}
-.lg-burger-ic::after{top:5px}
+/* SECTIONS PICKER OPENERS (Ian 2026-07-28, option A) — replaced the amber pill that
+   used to sit in the View-as/privacy bar. Two in-flow affordances, both <1380px only:
+   the "Your layout" row under the identity card, and the dashed add card at the end of
+   the block list. At >=1380 the caddy is a permanent column and both are display:none
+   (see the @media block below). Neither element carries .lg-block/data-block, so the
+   DOM-order-driven layout save is untouched. */
+.lg-layoutrow{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:10px 14px;
+  background:var(--lg-sage-tint);border:1px solid var(--lg-sage-3);border-radius:14px}
+.lg-layoutrow__txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.lg-layoutrow__lbl{font:800 calc(12.5px*var(--lg-read-scale,1))/1.2 var(--lg-font-sans);color:var(--lg-charcoal)}
+.lg-layoutrow__n{font:500 calc(11px*var(--lg-read-scale,1))/1.2 var(--lg-font-sans);color:var(--lg-mute)}
+.lg-secopen{margin-left:auto;display:inline-flex;align-items:center;gap:7px;background:var(--lg-sage);
+  color:#fff;border:0;border-radius:999px;padding:9px 16px;min-height:40px;cursor:pointer;
+  font:800 calc(12px*var(--lg-read-scale,1))/1 var(--lg-font-sans)}
+.lg-secopen:hover{filter:brightness(1.06)}
+.lg-secopen:active{transform:scale(.98)}
+.lg-secopen__plus{font-size:14px;line-height:1}
+/* dashed end-of-list add card — this IS the drop target, drawn */
+.lg-addsec{display:flex;flex-direction:column;align-items:center;gap:3px;width:100%;
+  margin:4px 0 0;padding:18px 14px;cursor:pointer;text-align:center;
+  background:var(--lg-card-bg,#fff);border:1.5px dashed var(--lg-sage-3);border-radius:16px}
+.lg-addsec:hover{border-color:var(--lg-sage);background:var(--lg-sage-tint)}
+.lg-addsec:active{transform:scale(.995)}
+.lg-addsec__big{font:800 calc(13px*var(--lg-read-scale,1))/1.2 var(--lg-font-sans);color:var(--lg-charcoal)}
+.lg-addsec__sm{font:500 calc(11px*var(--lg-read-scale,1))/1.35 var(--lg-font-sans);color:var(--lg-mute)}
 /* caddy panel — slide-in from the right on desktop; off-canvas drawer on mobile */
 .lg-caddy{position:fixed;top:0;right:0;height:100vh;width:300px;max-width:86vw;background:var(--lg-card-bg,#fff);border-left:1px solid var(--lg-line);
   box-shadow:-12px 0 36px rgba(0,0,0,.14);transform:translateX(102%);transition:transform .22s ease;z-index:1200;display:flex;flex-direction:column;padding:18px}
@@ -497,7 +512,8 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
     width:auto;height:auto;max-height:calc(100vh - 109px);overflow-y:auto;transform:none;z-index:30;
     border:1px solid var(--lg-line);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
   .lg-shell--owner .lg-caddy__close{display:none}      /* permanent — no close button */
-  .lg-viewas__caddy{display:none}                       /* permanent — no toggle */
+  /* the sub-1380 openers are redundant here: the caddy IS the column (Ian 2026-07-28) */
+  .lg-layoutrow, .lg-addsec{display:none}
   .lg-caddy__backdrop{display:none}
 }
 .lg-link__grip{color:var(--lg-mute);font-size:13px;line-height:1;letter-spacing:-2px;cursor:grab;user-select:none}
@@ -732,9 +748,9 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
           <span class="lg-viewas__lbl" style="color:#f0c987">Admin edit</span>
           <span class="lg-viewas__note">You are editing <b><?= looth_h($displayName) ?></b>'s profile as an administrator. Every save is logged.</span>
           <a class="lg-vchip" style="background:rgba(255,255,255,.12);color:#fff;text-decoration:none" href="/u/<?= rawurlencode($slugSafe) ?>">Exit admin edit</a>
-          <?php if ($editing): ?>
-          <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy" aria-label="Open sections menu"><span class="lg-burger-ic" aria-hidden="true"></span><span class="lg-viewas__caddy-lbl">Sections</span></button>
-          <?php endif; ?>
+          <?php /* Sections opener moved OUT of this privacy panel — Ian 2026-07-28,
+                   option A. It now lives in the "Your layout" row under the identity
+                   card + the add card at the end of the blocks (_render_blocks.php). */ ?>
         </div>
         <?php else: ?>
         <div class="lg-viewas__row">
@@ -744,9 +760,9 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
             <a href="<?= looth_h($viewLink('member')) ?>" <?= $role==='member'?'aria-current="true"':'' ?>>Member</a>
             <a href="<?= looth_h($viewLink('me')) ?>"     <?= $role==='me'?'aria-current="true"':'' ?>>Me</a>
           </span>
-          <?php if ($editing): ?>
-          <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy" aria-label="Open sections menu"><span class="lg-burger-ic" aria-hidden="true"></span><span class="lg-viewas__caddy-lbl">Sections</span></button>
-          <?php endif; ?>
+          <?php /* Sections opener moved OUT of this privacy panel — Ian 2026-07-28,
+                   option A. This panel is privacy ONLY now: View-as, Profile
+                   visibility, Discussion posts. See _render_blocks.php. */ ?>
         </div>
         <?php endif; /* /adminEditing banner vs View-as */ ?>
         <?php
@@ -1213,18 +1229,25 @@ window.lgSortable = function (container, opts) {
 
   /* ---- caddy: open / close ---- */
   var caddy    = document.getElementById('lg-caddy');
-  var toggle   = document.getElementById('lg-caddy-toggle');
+  // Openers (Ian 2026-07-28, option A): was ONE #lg-caddy-toggle in the privacy bar;
+  // now any [data-caddy-open] — the "Your layout" row and the end-of-list add card,
+  // both emitted by _render_blocks.php. Kept as a live list so aria-expanded stays in
+  // sync on every opener, not just the one that was clicked.
+  var openers  = Array.prototype.slice.call(document.querySelectorAll('[data-caddy-open]'));
   var backdrop = document.getElementById('lg-caddy-backdrop');
+  function setOpenersExpanded(v) {
+    openers.forEach(function (b) { b.setAttribute('aria-expanded', v ? 'true' : 'false'); });
+  }
   function openCaddy() {
     if (!caddy) return;
     caddy.classList.add('is-open'); caddy.setAttribute('aria-hidden', 'false');
-    if (toggle) toggle.setAttribute('aria-expanded', 'true');
+    setOpenersExpanded(true);
     if (backdrop) { backdrop.hidden = false; requestAnimationFrame(function () { backdrop.classList.add('is-open'); }); }
   }
   function closeCaddy() {
     if (!caddy) return;
     caddy.classList.remove('is-open'); caddy.setAttribute('aria-hidden', 'true');
-    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    setOpenersExpanded(false);
     if (backdrop) { backdrop.classList.remove('is-open'); setTimeout(function () { backdrop.hidden = true; }, 220); }
   }
   // ≥1380px the caddy is a permanent floating sidebar (CSS); below, it's an off-canvas drawer.
@@ -1238,8 +1261,13 @@ window.lgSortable = function (container, opts) {
       caddy.setAttribute('aria-hidden', 'true');
     }
   }
-  if (toggle && caddy) {
-    toggle.addEventListener('click', function () { caddy.classList.contains('is-open') ? closeCaddy() : openCaddy(); });
+  // Gate on `caddy` ALONE. This used to be `if (toggle && caddy)`, which was safe only
+  // while a toggle always existed — with the privacy-bar pill gone that would have
+  // silently killed close, Escape, the backdrop AND the #caddy re-open below.
+  if (caddy) {
+    openers.forEach(function (b) {
+      b.addEventListener('click', function () { caddy.classList.contains('is-open') ? closeCaddy() : openCaddy(); });
+    });
     var closeBtn = document.getElementById('lg-caddy-close');
     if (closeBtn) closeBtn.addEventListener('click', closeCaddy);
     if (backdrop) backdrop.addEventListener('click', closeCaddy);
