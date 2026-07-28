@@ -93,6 +93,27 @@ class LG_WD_Recap_Source {
 	/** Per-request memo: wp_user_id → payload. */
 	private static $cache = [];
 
+	/**
+	 * Did the recap source actually ANSWER the last fetch?
+	 *
+	 * post() used to throw this away: every failure path — no secret, curl error,
+	 * non-200, unparseable body — returned `['recaps' => []]`, which is byte-for-byte
+	 * what a healthy source returns when nobody has anything. That was harmless while
+	 * an empty payload only cost a section.
+	 *
+	 * Under "empty means send nothing" (Ian, 2026-07-28) it stops being harmless: the
+	 * two cases now mean "mail nobody" and "mail nobody", and one of them is an
+	 * outage. Without this flag the recipient filter cannot tell a quiet week from a
+	 * dead endpoint, and the failure is invisible — no bounce, no error, the digest
+	 * just stops. So the transport outcome is recorded rather than discarded.
+	 */
+	private static $source_answered = true;
+
+	/** True if the last fetch reached a healthy source. See $source_answered. */
+	public static function source_answered(): bool {
+		return self::$source_answered;
+	}
+
 	// ── Boot ──────────────────────────────────────────────────────────────────
 
 	public static function init(): void {
@@ -158,6 +179,91 @@ class LG_WD_Recap_Source {
 	 * not, fall back to matching on email, which is how the weekly list was built
 	 * in the first place.
 	 */
+	/**
+	 * ── EMPTY MEANS SEND NOTHING (Ian, 2026-07-28) ────────────────────────────
+	 *
+	 * Of a resolved recipient list, the subset that actually has something waiting
+	 * on them. A member with nothing gets NO EMAIL — not the digest minus the
+	 * section. His rationale, worth keeping because it is the whole design: an email
+	 * from us should mean something genuinely wants them. That protects the signal.
+	 *
+	 * THIS SUPERSEDES the earlier empty-case behaviour (an empty recap rendering a
+	 * body byte-identical to the no-recap digest). That proof still holds and its
+	 * test is kept, repointed — see dev/verify-empty-means-no-send.php.
+	 *
+	 * ONE ROUND TRIP PER CHUNK, not one per member: fetch() has been public and
+	 * batch-shaped since it was written, for exactly this. At list-3 size that is
+	 * ~1,700 members in chunks rather than ~1,700 loopback calls.
+	 *
+	 * FAIL-OPEN, DELIBERATELY, AND THIS IS THE IMPORTANT LINE. If the recap source
+	 * cannot be reached, every member comes back as "has something" and the send
+	 * goes out whole. The alternative fails CLOSED — one unreachable endpoint and
+	 * the entire week's digest silently mails nobody, which looks exactly like a
+	 * quiet week. A gate whose absent-signal branch is restrictive turns an outage
+	 * into a total send failure with no error anywhere.
+	 *
+	 * @param int[] $subscriber_ids FluentCRM subscriber ids
+	 * @return int[] the subset to actually mail, order preserved
+	 */
+	public static function recipients_with_something_waiting( array $subscriber_ids ): array {
+		$subscriber_ids = array_values( array_unique( array_filter(
+			array_map( 'intval', $subscriber_ids ), fn( $i ) => $i > 0 ) ) );
+		if ( ! $subscriber_ids ) {
+			return [];
+		}
+		if ( ! class_exists( '\FluentCrm\App\Models\Subscriber' ) ) {
+			self::log_skip( 'FluentCRM Subscriber model missing — sending to everyone' );
+			return $subscriber_ids;
+		}
+
+		$keep = [];
+		foreach ( array_chunk( $subscriber_ids, 200 ) as $chunk ) {
+			$subs   = \FluentCrm\App\Models\Subscriber::whereIn( 'id', $chunk )->get();
+			$wp_by_sub = [];
+			foreach ( $subs as $sub ) {
+				$wp = self::wp_user_id_for( $sub );
+				if ( $wp > 0 ) {
+					$wp_by_sub[ (int) $sub->id ] = $wp;
+				}
+				// A subscriber with no WP account has no bell rows and no DMs by
+				// definition. Nothing can be waiting on them, so they are dropped
+				// rather than fail-opened — that is a real answer, not a missing one.
+			}
+			if ( ! $wp_by_sub ) {
+				continue;
+			}
+
+			$payloads = self::fetch( array_values( $wp_by_sub ) );
+
+			// FAIL OPEN on an outage — and ask the transport, not the shape of the
+			// result. `$payloads === []` was the first version of this check and it
+			// is WRONG: fetch() normalises every requested id to [], so a dead
+			// endpoint and a genuinely quiet week produce identical arrays and the
+			// check never fires. It failed CLOSED, silently, which is the exact
+			// failure this branch exists to prevent. Caught by
+			// dev/verify-empty-means-no-send.php case 5.
+			if ( ! self::source_answered() ) {
+				self::log_skip( 'recap source did not answer for a chunk of '
+					. count( $wp_by_sub ) . ' — keeping them all rather than mailing nobody' );
+				$keep = array_merge( $keep, array_keys( $wp_by_sub ) );
+				continue;
+			}
+			foreach ( $wp_by_sub as $sub_id => $wp ) {
+				if ( ! empty( $payloads[ $wp ] ) ) {
+					$keep[] = $sub_id;
+				}
+			}
+		}
+
+		// Preserve the caller's order; $keep is built per chunk.
+		$set = array_flip( $keep );
+		return array_values( array_filter( $subscriber_ids, fn( $id ) => isset( $set[ $id ] ) ) );
+	}
+
+	private static function log_skip( string $msg ): void {
+		error_log( '[LG Weekly Digest] recipient filter: ' . $msg );
+	}
+
 	private static function wp_user_id_for( $subscriber ): int {
 		if ( ! $subscriber ) {
 			return 0;
@@ -225,12 +331,26 @@ class LG_WD_Recap_Source {
 		 * Exists so a send can prime a whole chunk from one place, and so the
 		 * substitution path can be exercised without standing up the HTTP route.
 		 *
-		 * @param array|null $recaps
-		 * @param int[]      $want
-		 * @param int        $days
+		 * Return FALSE to say "the source is unavailable" — distinct from an array
+		 * of nothing, which says "the source answered and these members have
+		 * nothing". Those two were indistinguishable until 2026-07-28 and the
+		 * difference now decides whether a member is mailed at all.
+		 *
+		 * @param array|null|false $recaps
+		 * @param int[]            $want
+		 * @param int              $days
 		 */
 		$pre = apply_filters( 'lg_wd_recap_fetch', null, $want, $days );
-		$res = is_array( $pre ) ? [ 'recaps' => $pre ] : self::post( [ 'wp_user_ids' => $want, 'days' => $days ] );
+
+		if ( $pre === false ) {
+			self::$source_answered = false;
+			$res = [ 'recaps' => [] ];
+		} elseif ( is_array( $pre ) ) {
+			self::$source_answered = true;      // a filter supplying data IS an answer
+			$res = [ 'recaps' => $pre ];
+		} else {
+			$res = self::post( [ 'wp_user_ids' => $want, 'days' => $days ] );
+		}
 		$out = [];
 
 		foreach ( $want as $id ) {
@@ -288,6 +408,7 @@ class LG_WD_Recap_Source {
 		$secret = @file_get_contents( self::SECRET_FILE );
 		if ( ! is_string( $secret ) || trim( $secret ) === '' ) {
 			error_log( '[LG Weekly Digest] recap: no internal secret readable — section skipped' );
+			self::$source_answered = false;
 			return [ 'recaps' => [] ];
 		}
 
@@ -314,15 +435,18 @@ class LG_WD_Recap_Source {
 
 		if ( $raw === false || $code !== 200 ) {
 			error_log( '[LG Weekly Digest] recap fetch failed: HTTP ' . $code . ' ' . $err );
+			self::$source_answered = false;
 			return [ 'recaps' => [] ];
 		}
 
 		$json = json_decode( (string) $raw, true );
 		if ( ! is_array( $json ) || empty( $json['ok'] ) ) {
 			error_log( '[LG Weekly Digest] recap fetch returned a bad body' );
+			self::$source_answered = false;
 			return [ 'recaps' => [] ];
 		}
 
+		self::$source_answered = true;
 		return [ 'recaps' => $json['recaps'] ?? [] ];
 	}
 }

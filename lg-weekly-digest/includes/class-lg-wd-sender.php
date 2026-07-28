@@ -118,6 +118,41 @@ class LG_WD_Sender_FluentCRM implements LG_WD_Sender_Interface {
 
         self::log( 'INFO: Resolved ' . count( $subscriber_ids ) . ' subscribers.' );
 
+        // ── EMPTY MEANS SEND NOTHING (Ian, 2026-07-28) ────────────────────────
+        //
+        // Drop recipients with nothing waiting on them BEFORE the CampaignEmail rows
+        // exist, so they are never mailed rather than mailed-and-empty. This is the
+        // one place the recipient set is decided.
+        //
+        // SCOPE WORTH SEEING, because it is larger than the recap: this suppresses
+        // the WHOLE email, including the curated sections (Upcoming Events, new
+        // videos, loothprint) that have nothing to do with the member's to-do list.
+        // Measured on live 2026-07-28: 96 of 1,663 subscribed list-3 members have an
+        // actionable item this week, so ~94% of the list would receive no digest at
+        // all. That is what the ruling says; it is flagged to keeper with the numbers
+        // because it changes what the weekly digest IS, not just who it greets.
+        if ( class_exists( 'LG_WD_Recap_Source' ) ) {
+            $before         = count( $subscriber_ids );
+            $subscriber_ids = LG_WD_Recap_Source::recipients_with_something_waiting( $subscriber_ids );
+            self::log( sprintf(
+                'INFO: to-do filter kept %d of %d subscribers (%d had nothing waiting).',
+                count( $subscriber_ids ), $before, $before - count( $subscriber_ids )
+            ) );
+
+            if ( empty( $subscriber_ids ) ) {
+                // Nobody on the whole list has anything waiting. Send no campaign at
+                // all rather than one with zero recipients — an empty campaign row is
+                // a confusing artifact in Send History and in FluentCRM.
+                self::log( 'INFO: nobody has anything waiting — no digest sent this week.' );
+                return [
+                    'success'     => true,
+                    'message'     => 'No digest sent: no member had an item needing attention.',
+                    'campaign_id' => $campaign->id,
+                    'sent'        => 0,
+                ];
+            }
+        }
+
         // Create CampaignEmail rows
         try {
             $campaign->subscribe( $subscriber_ids );

@@ -83,6 +83,20 @@ foreach ( $cases as $wp_id => $label ) {
 
 	if ( $has_token ) { echo "   FAIL: the smart code did not substitute\n"; $fail++; }
 	if ( $wp_id === 1170 ) {
+		// ── REPOINTED 2026-07-28, NOT DELETED ────────────────────────────────
+		// This used to assert the SHIPPING empty case: a member with nothing gets
+		// the digest minus the section, byte-identical to a no-recap body. Ian then
+		// ruled that such a member gets NO EMAIL AT ALL, so that is no longer what
+		// happens in production — the recipient filter drops them before a
+		// CampaignEmail row exists (dev/verify-empty-means-no-send.php asserts
+		// THAT, and it is now the test of record for the ruling).
+		//
+		// The assertion stays because the property still has a job: it is the
+		// belt-and-braces behind the filter. If a member ever reaches the render
+		// with an empty payload — a filter bug, a fail-open on an unreachable
+		// source, a manual resend — the renderer must still emit nothing rather
+		// than an empty heading. What changed is what this proves, not whether it
+		// is true.
 		if ( $has_section ) { echo "   FAIL: empty member got a section\n"; $fail++; }
 		if ( $out !== '<p>INTRO</p><p>CURATED CONTENT</p>' ) {
 			echo "   FAIL: empty member's body is not byte-identical to the no-recap body\n"; $fail++;
