@@ -130,7 +130,7 @@ lg_gate_resolve_env() {
            LG_GATE_TOKEN_SRC LG_GATE_RESOLVE LG_GATE_CHROME_RESOLVER
 }
 
-lg_gate_resolve_env || { [ "${BASH_SOURCE[0]}" = "$0" ] && exit 1; return 1; }
+lg_gate_resolve_env || { [ "${BASH_SOURCE[0]}" = "$0" ] && exit 2; return 1; }
 
 # Executed (not sourced) → emit KEY=VALUE for the python / php gates to parse.
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

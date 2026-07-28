@@ -24,7 +24,7 @@ set -uo pipefail
 # again (see tools/gates/gate-env.sh for why). $CONF stays the VHOST, because
 # the CDP-IN-PROD assertion below greps the perimeter conf itself: pointing it
 # at the token snippet would make that check vacuously green.
-. "$(dirname "$0")/gate-env.sh" || exit 1
+. "$(dirname "$0")/gate-env.sh" || exit 2   # 2 = CANNOT RUN (no host/token), not RED
 HOST="$LG_GATE_HOST"
 CONF="$LG_GATE_VHOST"
 GATE="$LG_GATE_TOKEN"

@@ -23,7 +23,7 @@ set -uo pipefail
 
 # Host / token from the shared resolver — never hardcode them here again
 # (see tools/gates/gate-env.sh).
-. "$(dirname "$0")/gate-env.sh" || exit 1
+. "$(dirname "$0")/gate-env.sh" || exit 2   # 2 = CANNOT RUN (no host/token), not RED
 HOST="$LG_GATE_HOST"
 GATE="$LG_GATE_TOKEN"
 WP="/var/www/dev"
@@ -54,7 +54,7 @@ fi
 if [ -z "$RET_SLUG" ]; then
   echo "GATE-ERROR  no live slug for control wp_user_id=$CTRL_WP_UID (bridged, unarchived)."
   echo "            Set LG_GATE_RET_SLUG=<slug>, or LG_GATE_CTRL_UID=<wp uid>."
-  exit 1
+  exit 2
 fi
 RET="/u/$RET_SLUG"
 ISSUE="$HOST/looth-auth/issue?return=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$RET")"
@@ -80,7 +80,7 @@ read MLIN MLIV < <(sudo -u looth-dev wp --path="$WP" eval '
   $t=WP_Session_Tokens::get_instance($uid)->create($exp);
   echo LOGGED_IN_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"logged_in",$t);
 ' 2>/dev/null | tail -1)
-[ -n "${MLIV:-}" ] || { echo "GATE-ERROR  could not mint control member cookie"; exit 1; }
+[ -n "${MLIV:-}" ] || { echo "GATE-ERROR  could not mint control member cookie"; exit 2; }
 
 hdrs() { curl -s $LG_GATE_RESOLVE -D - -o /dev/null --max-redirs 0 -b "$1" "$ISSUE"; }
 

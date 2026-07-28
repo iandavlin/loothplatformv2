@@ -26,7 +26,8 @@ import asyncio, json, subprocess, sys, urllib.request, urllib.parse
 try:
     import websockets
 except ImportError:
-    sys.exit("python3-websockets required (it's installed system-wide on dev)")
+    print("GATE-ERROR  python3-websockets required (it's installed system-wide on dev)", file=sys.stderr)
+    sys.exit(2)   # 2 = CANNOT RUN, not RED
 
 import os
 
@@ -41,7 +42,8 @@ def gate_env():
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gate-env.sh")
     p = subprocess.run(["bash", script], capture_output=True, text=True)
     if p.returncode != 0:
-        sys.exit(p.stderr.strip() or f"gate-env.sh failed ({script})")
+        print("GATE-ERROR  " + (p.stderr.strip() or f"gate-env.sh failed ({script})"), file=sys.stderr)
+        sys.exit(2)   # 2 = CANNOT RUN, not RED
     return dict(l.split("=", 1) for l in p.stdout.splitlines() if "=" in l)
 
 
@@ -187,7 +189,7 @@ def main():
     flt = sys.argv[sys.argv.index("--page") + 1] if "--page" in sys.argv else ""
     gate = gate_token()
     member = member_cookies()
-    fails, ok = [], 0
+    fails, errors, ok = [], [], 0
     for name, (path, viewers) in PAGES.items():
         if flt and flt not in name:
             continue
@@ -196,7 +198,11 @@ def main():
             try:
                 data = asyncio.run(audit(path, viewer, gate, member))
             except Exception as e:
-                fails.append(f"GATE-ERROR     {label}  {e}")
+                # Could not AUDIT this page (no browser on :9222, nav timeout, dead
+                # fixture). That is not a craft defect — it is the gate failing to
+                # look. Kept apart from `fails` so a blind gate cannot masquerade as
+                # a gate that ran and found problems.
+                errors.append(f"GATE-ERROR     {label}  {e}")
                 continue
             v, img_kb, total_kb = check(label, data)
             if v:
@@ -206,11 +212,23 @@ def main():
                 ok += 1
                 print(f"  PASS  {label}  (imgs {img_kb}KB, total {total_kb}KB)")
     print()
+    if errors:
+        print(f"!!!!!!!!!!!!!!!!!!!! COULD NOT AUDIT {len(errors)} SURFACE(S) !!!!!!!!!!!!!!!!!!!!")
+        for e in errors:
+            print("  " + e)
+        print("  These surfaces were NOT checked. Usually no Chrome on :9222 (this gate")
+        print("  connects to an existing browser, it never launches one) or a dead fixture.")
+        print()
     if fails:
         print(f"==================== CRAFT GATE RED ({len(fails)}) ====================")
         for f in fails:
             print("  " + f)
         sys.exit(1)
+    if errors:
+        # No violations found — but only because nothing could be looked at. Exiting 0
+        # here is precisely how this gate sat dead for weeks while reading as green.
+        print(f"========= CRAFT GATE CANNOT RUN — {ok} surface(s) audited, {len(errors)} blind =========")
+        sys.exit(2)
     print(f"==================== CRAFT GATE GREEN (pages={ok}) ====================")
 
 

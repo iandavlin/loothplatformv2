@@ -21,7 +21,7 @@ set -uo pipefail
 # NOTE for the operator: Chrome resolves its own navigations, so the browser this
 # gate drives must be launched with $LG_GATE_CHROME_RESOLVER — without it every
 # navigation lands on the Cloudflare challenge instead of our origin.
-. "$(dirname "$0")/gate-env.sh" || exit 1
+. "$(dirname "$0")/gate-env.sh" || exit 2   # 2 = CANNOT RUN (no host/token), not RED
 WP="/var/www/dev"
 APP="/srv/profile-app"; SUBJ=7      # a claimed member (owns a /profile/edit editor)
 GATE="$LG_GATE_TOKEN"
@@ -32,7 +32,7 @@ read LIN LIV SN SV < <(sudo -u looth-dev wp --path="$WP" eval '
   $uid='"$SUBJ"'; $exp=time()+1800; $t=WP_Session_Tokens::get_instance($uid)->create($exp);
   echo LOGGED_IN_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"logged_in",$t)." ".SECURE_AUTH_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"secure_auth",$t);' 2>/dev/null | tail -1)
 LOOTH=$(sudo -u profile-app php "$APP/bin/mint-dev-token.php" "$SUBJ" 2>/dev/null | tail -1)
-[ -n "${LIV:-}" ] && [ -n "${LOOTH:-}" ] || { echo "GATE-ERROR  could not mint owner session"; exit 1; }
+[ -n "${LIV:-}" ] && [ -n "${LOOTH:-}" ] || { echo "GATE-ERROR  could not mint owner session"; exit 2; }
 
 GATE="$GATE" LIN="$LIN" LIV="$LIV" SN="$SN" SV="$SV" LOOTH="$LOOTH" \
 LG_GATE_DOMAIN="$LG_GATE_DOMAIN" LG_GATE_HOST="$LG_GATE_HOST" python3 - <<'PYEOF'
