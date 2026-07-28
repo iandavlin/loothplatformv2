@@ -204,6 +204,40 @@ Source: `Visibility::audienceCanSee()` (`Visibility.php:93`).
 With the master switch on **Private**, every row below admin becomes ❌ regardless of
 section chips — the profile does not exist for them.
 
+### 3.6b PROVEN — the whole model, green against the running system
+
+**`bin/visibility-matrix.php`: pass=67 fail=0, exit 0. Run on dev2, 2026-07-28,
+authorised by keeper.** Everything in §3 above is now verified end to end against the
+running site, not merely read from source. The gate drives **real HTTP** as
+anon / member / owner / admin across three subject states — S1 public-finder opt-in,
+S2 members-only default, S3 master-switch private — over `/u/` SSR, the user/users
+APIs, directory list + map pins, pins-public, `me/location`, the `/profile-media` file
+store (avatar, gallery, resume) and the hub search mask.
+
+**The gate had rotted and could not run at all.** It died before its first check. Three
+independent environment drifts, all repaired in this lane (§8a):
+
+1. **Gate token moved.** It read `set $loothdev_token` from
+   `sites-available/dev.loothgroup.com.conf`; that file is gone and the value is now a
+   cookie map in box-local `conf.d/loothdev-auth.conf`. Exit 2, zero checks run.
+2. **Host unreachable.** `dev.loothgroup.com` resolves to 50.19.198.38, which this box
+   cannot reach (curl exit 28). Every check returned `code=0` — **a wall of FAILs that
+   looked exactly like a catastrophic privacy regression and was pure connectivity.**
+3. **wp-cli ran as the wrong user.** As `www-data` it cannot read
+   `/etc/looth/live-wp-keys.php`; needs root + `--allow-root`.
+
+**The trap worth remembering** (it nearly became a false report from this lane): pinning
+requests to `127.0.0.1` to reach the box makes `api/v0/users.php:18` treat the caller as
+an **internal service** — which skips the anon 401 (`:19`) and skips slug-stripping on a
+private profile (`:44`). Two checks then fail in a way that reads precisely like *"a
+private member's slug and display name leak to other members."* **It is not a leak.** It
+is the test's own `(external)` path being short-circuited by the pin. Pinning to the
+box's internal IP (172.31.78.94) instead exercises the real external path — and both
+checks pass. Measured both ways.
+
+So: **no privacy defect was found.** The one thing that looked like one was an artifact
+of the instrumentation, and I proved that before reporting it.
+
 ### 3.7 What the STORE actually says — measured, not inferred
 
 Queried directly against Postgres `profile_app` on **dev2**, 2026-07-28. (dev2 and
@@ -521,6 +555,30 @@ guide") needs a hook. This is it.
 
 ---
 
+## 8a. The privacy regression gate — repaired, and how to run it
+
+`profile-app/bin/visibility-matrix.php` is the enforcement arm of the standing rule:
+if the guide's privacy section and the code ever disagree, **this is the thing that
+says who is wrong.** It was unrunnable; it now runs green.
+
+```bash
+php /home/ubuntu/worktrees/<lane>/profile-app/bin/visibility-matrix.php
+# expect: ==== MATRIX GREEN ====  pass=67 fail=0   (exit 0)
+```
+
+- **dev2 ONLY.** It mutates fixture user 1849. **Never on live.**
+- Needs passwordless sudo (token minting, fixture SQL, wp-cli as root).
+- Override the gate cookie if the conf moves again: `LG_DEV_GATE_TOKEN=<value>`.
+- Override the target: `LG_MATRIX_HOST=https://…`.
+
+**Read failures carefully before believing them.** This gate has now produced two
+distinct false catastrophes — an all-`code=0` sweep that was connectivity, and a
+private-profile "slug leak" that was a loopback pin defeating the endpoint's own
+external path. **Confirm `curl_pin()` is sane before reading any FAIL as a privacy
+verdict.**
+
+---
+
 ## 9. Outstanding — what is NOT yet proven
 
 **Proven so far:** the privacy model and defaults (§3, verified in the store, which
@@ -538,11 +596,12 @@ running page), the section catalog (§4), and the archived guide's contents (§7
 2. **Full phone-width visual inventory** (§5) — blocked on 1.
 3. **Which implementation actually serves `/membership-guide/` on dev2** (§7) — two
    exist; I have not traced the nginx route.
-4. **`bin/visibility-matrix.php`** — the real regression gate (drives HTTP as
-   anon/member/owner/admin across three subject states, `S1` opt-in / `S2` members-only
-   / `S3` master-private). It is the best possible proof of §3 and it exercises exactly
-   the surfaces the guide will describe. **I did not run it**: it mutates fixture user
-   1849 and needs sudo. Ask keeper before running.
+4. ~~`bin/visibility-matrix.php` not run.~~ **DONE — GREEN, 67/67** (§3.6b). Keeper
+   authorised it for dev2 on 2026-07-28. Three environment drifts repaired to make it
+   runnable again; fixes committed (§8a). Fixture user **1849** (`visibility-matrix-qa`,
+   bridged wp 1910) is the gate's own permanent fixture, not litter — the script parks
+   it members-only and its four restore checks passed. **Left in place deliberately:
+   deleting it would break the gate.**
 5. **The 96.5%-never-arranged figure is dev2 only** (§6). Re-run on live before
    treating it as decisive.
 6. Practice profiles (`web/p.php`, 814 ln) — a second entity with its own header,

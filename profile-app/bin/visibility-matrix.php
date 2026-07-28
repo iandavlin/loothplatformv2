@@ -47,11 +47,37 @@ function sh(string $cmd): string { return trim((string)shell_exec($cmd . ' 2>/de
 function pgq(string $sql): string { return sh('sudo -u profile-app psql profile_app -tAc ' . escapeshellarg($sql)); }
 function lgq(string $sql): string { return sh('sudo -u postgres psql looth -tAc ' . escapeshellarg($sql)); }
 
+/**
+ * The dev-gate cookie value.
+ *
+ * The gate MOVED (profile-audit, 2026-07-28): it used to be a
+ * `set $loothdev_token "..."` line in sites-available/dev.loothgroup.com.conf;
+ * it is now a cookie map in the BOX-LOCAL conf.d/loothdev-auth.conf
+ *   map $cookie_loothdev_auth $loothdev_dev_ok { default 0; "<token>" 1; }
+ * The old path no longer exists, so this gate had become unrunnable — it died at
+ * "cannot read dev gate token" before a single check ran. Read the new location
+ * first, keep the old one as a fallback, and allow an explicit override.
+ *
+ * NOTE the repo copy of platform/nginx/loothdev-auth.conf is the GATE-FREE live
+ * posture and carries no token — the armed values are box-local only. Never look
+ * for the token in the repo.
+ */
 function gate_token(): string {
-    foreach (file('/etc/nginx/sites-available/dev.loothgroup.com.conf') as $l) {
-        if (preg_match('/set \$loothdev_token "([^"]+)"/', $l, $m)) return $m[1];
+    if (($env = (string)getenv('LG_DEV_GATE_TOKEN')) !== '') return $env;
+
+    $sources = [
+        ['/etc/nginx/conf.d/loothdev-auth.conf', '/map\s+\$cookie_loothdev_auth.*?"([^"]+)"\s+1;/'],
+        ['/etc/nginx/sites-available/dev.loothgroup.com.conf', '/set \$loothdev_token "([^"]+)"/'],
+    ];
+    foreach ($sources as [$path, $re]) {
+        if (!is_readable($path)) continue;
+        // whole-file match: the conf.d map is one line but do not depend on that
+        if (preg_match($re, (string)file_get_contents($path), $m)) return $m[1];
     }
-    fwrite(STDERR, "cannot read dev gate token\n"); exit(2);
+    fwrite(STDERR,
+        "cannot read dev gate token — looked in conf.d/loothdev-auth.conf then\n" .
+        "sites-available/dev.loothgroup.com.conf. Override with LG_DEV_GATE_TOKEN=<value>.\n");
+    exit(2);
 }
 function mint(int $wpId): string {
     $t = sh('sudo -u profile-app php /srv/profile-app/bin/mint-dev-token.php ' . $wpId . ' | tail -1');
@@ -67,12 +93,57 @@ $TOK    = [
     'admin'  => mint(ADMIN_WP),
 ];
 
+/**
+ * Loopback pinning (profile-audit, 2026-07-28) — WITHOUT THIS EVERY CHECK RETURNS
+ * code=0 AND THE WHOLE MATRIX READS AS A TOTAL FAILURE.
+ *
+ * Two separate environment facts, both measured on dev2:
+ *  1. dev.loothgroup.com resolves to 50.19.198.38, which this box CANNOT reach —
+ *     a plain curl times out (curl exit 28). Same family as the standing rule
+ *     "never smoke live with a plain public curl".
+ *  2. Pinned to 127.0.0.1 the request works, but the cert offered on loopback is
+ *     CN=buck-dev2.loothgroup.com, so subjectAltName does not match and peer
+ *     verification fails. Hence verification off — LOOPBACK ONLY.
+ *
+ * PIN TO THE BOX'S INTERNAL IP, **NOT** 127.0.0.1 — this matters and it is subtle.
+ * api/v0/users.php:18 sets
+ *     $lgUsersInternal = REMOTE_ADDR in ['127.0.0.1','::1']
+ * and that flag SKIPS the anon 401 (:19) and SKIPS slug-stripping on a private
+ * profile (:44). So a loopback pin silently turns every request into a trusted
+ * internal caller and makes the two "(external)" /users checks fail — which reads
+ * exactly like a privacy leak on a private profile and is not one. Measured both
+ * ways on 2026-07-28: loopback -> those 2 fail; internal IP -> they pass.
+ *
+ * The internal IP is NOT covered by the gate's `geo $loothdev_src_local` rule, so
+ * the run is authorized by the gate COOKIE instead — which is why gate_token()
+ * above is load-bearing rather than vestigial.
+ *
+ * A code=0 here is a CONNECTIVITY failure, never a privacy verdict. Do not read a
+ * wall of FAILs as "the model broke" until this function is known good.
+ */
+function curl_pin(): array {
+    static $ip = null;
+    if ($ip === null) {
+        // primary non-loopback IPv4; loopback only as a last resort (see caveat above)
+        $ip = trim((string)shell_exec(
+            "ip -4 addr show scope global 2>/dev/null | grep -oP 'inet \\K[0-9.]+' | head -1"
+        )) ?: '127.0.0.1';
+    }
+    $host = parse_url(HOST, PHP_URL_HOST) ?: 'dev.loothgroup.com';
+    $port = (string)(parse_url(HOST, PHP_URL_PORT) ?: 443);
+    return [
+        CURLOPT_RESOLVE        => ["$host:$port:$ip"],
+        CURLOPT_SSL_VERIFYPEER => false,   // loopback/internal cert is CN=buck-dev2
+        CURLOPT_SSL_VERIFYHOST => 0,
+    ];
+}
+
 /** [status, body] for $viewer hitting $path (method GET unless overridden). */
 function req(string $viewer, string $path, string $method = 'GET', ?array $json = null): array {
     global $GATE, $TOK;
     $ch = curl_init(HOST . $path);
     $cookie = 'loothdev_auth=' . $GATE . ($TOK[$viewer] !== '' ? '; looth_id=' . $TOK[$viewer] : '');
-    $opts = [
+    $opts = curl_pin() + [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_COOKIE         => $cookie,
         CURLOPT_TIMEOUT        => 20,
@@ -244,12 +315,17 @@ check('S1 me/location anon 401',  req('anon',  '/profile-api/v0/me/location')[0]
 
 // Stale-token self-heal (Danny West bug, 6/12): WP session + INVALID looth_id
 // must bounce to re-mint, not render the member as a stranger forever.
-$wpck = trim((string)shell_exec('sudo -u www-data wp --path=/var/www/dev eval ' . escapeshellarg(
-    '$e=time()+600; echo LOGGED_IN_COOKIE."=".urlencode(wp_generate_auth_cookie(' . SUBJ_WP . ',$e,"logged_in"));')));
+// wp-cli must run as ROOT here (profile-audit 2026-07-28): as www-data it dies
+// reading /etc/looth/live-wp-keys.php (permission denied), so this check reported
+// "could not mint wp cookie" — a TOOLING failure that read as a privacy FAIL.
+// 2>/dev/null: wp emits a harmless "DISABLE_WP_CRON already defined" warning on
+// stdout in CLI, which would otherwise be captured as part of the cookie value.
+$wpck = trim((string)shell_exec('sudo -n wp --path=/var/www/dev --allow-root eval ' . escapeshellarg(
+    '$e=time()+600; echo LOGGED_IN_COOKIE."=".urlencode(wp_generate_auth_cookie(' . SUBJ_WP . ',$e,"logged_in"));') . ' 2>/dev/null'));
 if ($wpck !== '' && strpos($wpck, '=') !== false) {
     [$wn, $wv] = explode('=', $wpck, 2);
     $ch = curl_init(HOST . '/u/' . SLUG);
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20,
+    curl_setopt_array($ch, curl_pin() + [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20,
         CURLOPT_COOKIE => 'loothdev_auth=' . $GATE . '; ' . $wn . '=' . rawurldecode($wv) . '; looth_id=STALE.GARBAGE.TOKEN']);
     curl_exec($ch);
     $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
