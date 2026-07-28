@@ -19,8 +19,20 @@
 # This script only touches Postgres, but the check is printed so the operator can confirm
 # they are on the box they think they are on before trusting anything downstream.
 
+# --only=members|owners streams that ONE table to stdout and writes nothing to disk, so the
+# export can be run over ssh from the box that holds the code:
+#
+#   ssh live-ro 'bash -s -- --only=members' < export-for-slug-dryrun.sh > live-members.tsv
+#
+# WHY it exists: these rows carry member email addresses. Landing them in the LIVE box's
+# /tmp at default perms — on a box this role is only supposed to READ — creates a PII
+# artifact nobody owns and nobody cleans up. Streaming keeps the live footprint at zero.
 set -euo pipefail
-OUT="${1:-/tmp/live}"
+ONLY=""
+for a in "$@"; do case "$a" in --only=*) ONLY="${a#--only=}" ;; esac; done
+case "$ONLY" in ''|members|owners) ;; *) echo "unknown --only=$ONLY (want members|owners)" >&2; exit 2 ;; esac
+OUT="/tmp/live"
+for a in "$@"; do case "$a" in --*) ;; *) OUT="$a" ;; esac; done
 PSQL=(psql -h 127.0.0.1 -U looth_ro -d profile_app -At -F$'\t')
 
 echo "== identity check ==" >&2
@@ -33,6 +45,7 @@ if command -v mysql >/dev/null && [ -r /home/looth-ro/.my.cnf ]; then
 fi
 
 # Candidates: real members only — bridged (can log in) and not archived.
+if [ "$ONLY" != owners ]; then
 "${PSQL[@]}" -c "COPY (
   SELECT 'id','display_name','slug','primary_email','slug_changed_at','wp_user_id','claimed_via'
   UNION ALL
@@ -42,7 +55,10 @@ fi
   JOIN wp_user_bridge b ON b.user_id = u.id
   LEFT JOIN profiles p  ON p.user_id = u.id
   WHERE u.archived_at IS NULL
-) TO STDOUT WITH (FORMAT csv, DELIMITER E'\t')" > "${OUT}-members.tsv"
+) TO STDOUT WITH (FORMAT csv, DELIMITER E'\t')" \
+  > "$( [ "$ONLY" = members ] && echo /dev/stdout || echo "${OUT}-members.tsv" )"
+fi
+[ "$ONLY" = members ] && { echo "streamed members to stdout — NO WRITES PERFORMED." >&2; exit 0; }
 
 # Ownership: EVERY held handle, live or retired, including archived and unbridged rows.
 # A ghost that cannot log in still squats on its handle; leaving it out would mint
@@ -58,9 +74,19 @@ fi
 if "${PSQL[@]}" -c "SELECT 1 FROM slug_history LIMIT 1" >/dev/null 2>&1; then
   HIST_SQL="UNION ALL SELECT user_id::text, lower(slug) FROM slug_history"
   OWNERS_OUT="${OUT}-owners.tsv"
+  # State the retired count POSITIVELY. "the grant landed" and "the retired set is empty"
+  # produce an identical-looking owners file; only this number tells them apart.
+  echo "slug_history readable — RETIRED handles included: $("${PSQL[@]}" -c 'SELECT count(*) FROM slug_history')" >&2
 else
   HIST_SQL=""
   OWNERS_OUT="${OUT}-owners-NO-slug_history.tsv"
+  # In stream mode the gap cannot ride in the filename, so refuse to emit at all: a
+  # truncated owners file on stdout would read downstream as "no handles are held".
+  if [ "$ONLY" = owners ]; then
+    echo "REFUSING to stream owners: slug_history unreadable, retired handles would be missing." >&2
+    echo "    GRANT SELECT ON TABLE public.slug_history TO looth_ro;   -- run on LIVE" >&2
+    exit 3
+  fi
   cat >&2 <<'WARN'
 
   !! slug_history is NOT READABLE by this role — RETIRED handles are MISSING from the
@@ -77,9 +103,14 @@ fi
   UNION ALL
   SELECT id::text, lower(slug) FROM users WHERE slug IS NOT NULL AND slug <> ''
   $HIST_SQL
-) TO STDOUT WITH (FORMAT csv, DELIMITER E'\t')" > "$OWNERS_OUT"
+) TO STDOUT WITH (FORMAT csv, DELIMITER E'\t')" \
+  > "$( [ "$ONLY" = owners ] && echo /dev/stdout || echo "$OWNERS_OUT" )"
 
-echo "wrote ${OUT}-members.tsv ($(($(wc -l < "${OUT}-members.tsv")-1)) members)" >&2
-echo "wrote $OWNERS_OUT  ($(($(wc -l < "$OWNERS_OUT")-1)) held handles)" >&2
-[ -n "$HIST_SQL" ] || echo "  ^ RETIRED handles are NOT in that file — see the warning above." >&2
+if [ "$ONLY" = owners ]; then
+  echo "streamed owners to stdout — NO WRITES PERFORMED." >&2
+else
+  echo "wrote ${OUT}-members.tsv ($(($(wc -l < "${OUT}-members.tsv")-1)) members)" >&2
+  echo "wrote $OWNERS_OUT  ($(($(wc -l < "$OWNERS_OUT")-1)) held handles)" >&2
+  [ -n "$HIST_SQL" ] || echo "  ^ RETIRED handles are NOT in that file — see the warning above." >&2
+fi
 echo "NO WRITES PERFORMED." >&2
