@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Profile — where should the Sections picker live? (mobile)</title>
+<style>
+  :root{
+    --ink:#1f2420; --mute:#6d746b; --line:#e3e5df; --bg:#f4f4f0; --card:#fff;
+    --panel:#1e211f; --amber:#e9b949; --sage:#7f9b6a; --sage-tint:#eef2e6;
+    --sage-3:#c3d1b4; --bad:#c0563a; --good:#3f7d4e;
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--font);padding:26px 18px 60px}
+  h1{font-size:23px;margin:0 0 6px;letter-spacing:-.01em}
+  .sub{color:var(--mute);font-size:14px;margin:0 0 4px;max-width:70ch}
+  .meta{color:var(--mute);font-size:12.5px;margin:14px 0 26px}
+  .meta code{background:#e9eae4;padding:1px 5px;border-radius:4px;font-size:12px}
+
+  .row{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+  .col{flex:0 0 auto;width:330px;max-width:100%}
+  .col h2{font-size:15px;margin:0 0 3px;display:flex;align-items:center;gap:8px}
+  .tag{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+       padding:3px 8px;border-radius:999px}
+  .tag--now{background:#f3ded7;color:#8f3f24}
+  .tag--rec{background:#dcecdf;color:#2e6b3c}
+  .tag--alt{background:#e6e8e2;color:#5b6157}
+  .col .note{font-size:12.8px;color:var(--mute);margin:0 0 12px;min-height:56px}
+
+  /* ---- phone frame ---- */
+  .phone{background:#fff;border:9px solid #2a2d29;border-radius:30px;overflow:hidden;
+         box-shadow:0 10px 30px rgba(0,0,0,.16);position:relative}
+  .scr{height:576px;overflow:hidden;position:relative;background:var(--bg);display:flex;flex-direction:column}
+  .scroll{flex:1;overflow:hidden;padding:9px}
+
+  /* site chrome */
+  .chrome{background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;
+          gap:9px;padding:8px 11px;flex:0 0 auto}
+  .logo{width:21px;height:21px;border-radius:50%;background:var(--sage)}
+  .chrome b{font-size:12.5px;color:var(--sage)}
+  .chrome .sp{margin-left:auto;display:flex;gap:8px;opacity:.4;font-size:12px}
+
+  /* dark privacy panel */
+  .panel{background:var(--panel);border-radius:12px;padding:10px;color:#fff}
+  .prow{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+  .prow:last-child{margin-bottom:0}
+  .plbl{font-size:10.5px;font-weight:700;color:#cfd4cc;flex:0 0 74px}
+  .seg{display:inline-flex;background:#33383300;border:1px solid #454a45;border-radius:999px;overflow:hidden}
+  .seg span{font-size:10px;padding:3.5px 8px;color:#cfd4cc}
+  .seg span.on{background:var(--sage);color:#fff;font-weight:700}
+  .chip{font-size:9.5px;font-weight:800;padding:3.5px 9px;border-radius:999px;
+        background:#f5e3b8;color:#5b4715;letter-spacing:.04em}
+  .phint{font-size:9px;color:#9aa197;line-height:1.4;margin-top:7px;border-top:1px solid #333833;padding-top:6px}
+
+  /* the offending button */
+  .secbtn{margin-left:auto;background:var(--amber);color:#4a3c10;border-radius:999px;
+          padding:5px 11px;font-size:10.5px;font-weight:800;display:inline-flex;align-items:center;gap:5px;
+          white-space:nowrap}
+  .secbtn .bg{display:inline-block;width:9px;height:7px;border-top:2px solid #4a3c10;
+              border-bottom:2px solid #4a3c10;position:relative}
+  .secbtn .bg:after{content:"";position:absolute;left:0;top:2.5px;width:9px;border-top:2px solid #4a3c10}
+
+  /* profile cards */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:9px}
+  .idrow{display:flex;gap:9px;align-items:center}
+  .avi{width:38px;height:38px;border-radius:8px;background:#cfd6c6;flex:0 0 auto}
+  .nm{font:700 13px/1.25 Georgia,serif}
+  .bio{font-size:10.5px;color:var(--mute);font-style:italic}
+  .banner{height:30px;border-radius:8px;background:repeating-linear-gradient(45deg,#eef2e6 0,#eef2e6 7px,#e6ebdd 7px,#e6ebdd 14px);
+          display:flex;align-items:center;justify-content:center;font-size:9.5px;color:#8a907f}
+  .blk{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700}
+  .grip{color:#b9bfb2;font-size:12px;letter-spacing:-1px}
+  .blkbody{font-size:10px;color:var(--mute);margin-top:5px}
+  .map{height:44px;border-radius:7px;background:linear-gradient(160deg,#dfe7d6,#cdd8c6);margin-top:6px;
+       display:flex;align-items:center;justify-content:center;font-size:9px;color:#7e8a76}
+  .dials{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+  .dial{font-size:9px;background:#f2f4ee;border:1px solid var(--line);border-radius:999px;padding:2.5px 7px;color:#4e544b}
+
+  /* proposal A: layout row + end-of-list add card */
+  .layoutrow{background:var(--sage-tint);border:1px solid var(--sage-3);border-radius:12px;
+             padding:8px 10px;margin-top:9px;display:flex;align-items:center;gap:8px}
+  .layoutrow .lr-l{font-size:10.5px;font-weight:800;color:#3f5133}
+  .layoutrow .lr-n{font-size:9.5px;color:#6c7a61}
+  .pill{margin-left:auto;background:var(--sage);color:#fff;border-radius:999px;padding:5px 11px;
+        font-size:10.5px;font-weight:800;white-space:nowrap}
+  .addcard{margin-top:9px;border:1.5px dashed var(--sage-3);background:#fbfcf9;border-radius:12px;
+           padding:13px 10px;text-align:center}
+  .addcard .big{font-size:11.5px;font-weight:800;color:#41563a}
+  .addcard .sm{font-size:9.5px;color:var(--mute);margin-top:2px}
+
+  /* alt B: docked bar */
+  .dock{position:absolute;left:0;right:0;bottom:38px;background:#fff;border-top:1px solid var(--line);
+        box-shadow:0 -3px 12px rgba(0,0,0,.08);padding:7px 10px;display:flex;align-items:center;gap:8px}
+  .dock .d-l{font-size:10.5px;font-weight:800;color:#3f5133}
+
+  /* mobile tab bar (real, already on /u/) */
+  .tabbar{position:absolute;left:0;right:0;bottom:0;height:38px;background:#fff;border-top:1px solid var(--line);
+          display:flex;align-items:center;justify-content:space-around;padding:0 6px}
+  .tab{width:17px;height:17px;border-radius:4px;background:#d6dad2}
+  .tab.post{width:27px;height:27px;border-radius:50%;background:var(--sage);margin-top:-13px}
+  .tab.you{border-radius:50%;background:#b9c3ae}
+
+  /* annotation */
+  .ann{position:absolute;border:2px solid var(--bad);border-radius:10px;pointer-events:none}
+  .anlab{position:absolute;background:var(--bad);color:#fff;font-size:9px;font-weight:800;
+         padding:2px 6px;border-radius:5px;white-space:nowrap;z-index:5}
+  .ann--ok{border-color:var(--good)}
+  .anlab--ok{background:var(--good)}
+
+  .why{max-width:1080px;margin:34px auto 0;background:#fff;border:1px solid var(--line);
+       border-radius:12px;padding:18px 20px}
+  .why h3{margin:0 0 9px;font-size:15px}
+  .why ul{margin:0 0 14px;padding-left:19px}
+  .why li{margin:5px 0;font-size:13.6px}
+  .why p{font-size:13.6px}
+  .why .k{font-weight:700}
+  .caveat{background:#fdf6e6;border:1px solid #e8d9ae;border-radius:9px;padding:11px 13px;
+          font-size:13px;margin-top:14px}
+  @media (max-width:760px){ .col{width:100%;max-width:360px} body{padding:18px 12px 44px} }
+</style>
+</head>
+<body>
+
+<h1>Profile — where should the Sections picker live?</h1>
+<p class="sub">Ian: <em>“I don’t currently like the way the section picker is deployed on mobile. It’s a weird button in the privacy controls.”</em> Confirmed. Here is what it is today, a recommendation, and one alternative. <b>Nothing has been changed.</b></p>
+<p class="meta">Drawn from the running system on <b>dev2</b> at repo <code>6ef25e3</code>. Frames are illustrative, not pixel-exact. The picker is a drawer on <b>every width below 1380px</b> — phones, tablets <em>and</em> most laptops. At ≥1380px it is a permanent sidebar and the button is <code>display:none</code>; <b>both proposals leave that desktop behaviour untouched.</b></p>
+
+<div class="row">
+
+  <!-- ============ TODAY ============ -->
+  <div class="col">
+    <h2>Today <span class="tag tag--now">as built</span></h2>
+    <p class="note">The only way to open the picker is an amber pill in the top-right of the dark <b>Profile&nbsp;controls</b> panel — the panel that otherwise holds only privacy settings.</p>
+    <div class="phone"><div class="scr">
+      <div class="chrome"><div class="logo"></div><b>Looth Group</b><span class="sp">✉ ⚑ ⚙</span></div>
+      <div class="scroll" style="position:relative">
+        <div class="panel">
+          <div class="prow">
+            <span class="plbl">View as</span>
+            <span class="seg"><span>Public</span><span>Member</span><span class="on">Me</span></span>
+            <span class="secbtn" id="t-btn"><span class="bg"></span>Sections</span>
+          </div>
+          <div class="prow"><span class="plbl">Profile visibility</span><span class="chip">MEMBER ▾</span></div>
+          <div class="prow"><span class="plbl">Discussion posts</span>
+            <span class="seg"><span>Public</span><span class="on">Member-only</span></span></div>
+          <div class="phint">This IS your editor — click any field to edit in place.</div>
+        </div>
+        <div class="card"><div class="banner">+ Add banner</div>
+          <div class="idrow" style="margin-top:8px"><div class="avi"></div>
+            <div><div class="nm">Dale Hyldelund</div><div class="bio">Add a one-line bio…</div></div></div>
+        </div>
+        <div class="card">
+          <div class="blk"><span class="grip">⣿</span> ⌃ ⌄ ✕ &nbsp;📍 Location</div>
+          <div class="blkbody">1740 Broadway St, Charlottesville, VA</div>
+          <div class="map">map</div>
+          <div class="dials"><span class="dial">Members see: City ▾</span><span class="dial">Public sees: Private ▾</span></div>
+        </div>
+        <div class="anlab" style="top:6px;right:8px">✕ wrong group</div>
+        <div class="ann" style="top:20px;right:6px;width:82px;height:24px"></div>
+      </div>
+      <div class="tabbar"><div class="tab"></div><div class="tab"></div><div class="tab post"></div><div class="tab"></div><div class="tab you"></div></div>
+    </div></div>
+  </div>
+
+  <!-- ============ PROPOSAL A ============ -->
+  <div class="col">
+    <h2>Proposal A <span class="tag tag--rec">recommended</span></h2>
+    <p class="note">Sections leaves the privacy panel entirely. It gets its own <b>Your layout</b> row under the identity card, <b>plus</b> a dashed “Add a section” card at the end of the blocks — where the eye already is after scrolling.</p>
+    <div class="phone"><div class="scr">
+      <div class="chrome"><div class="logo"></div><b>Looth Group</b><span class="sp">✉ ⚑ ⚙</span></div>
+      <div class="scroll" style="position:relative">
+        <div class="panel">
+          <div class="prow">
+            <span class="plbl">View as</span>
+            <span class="seg"><span>Public</span><span>Member</span><span class="on">Me</span></span>
+          </div>
+          <div class="prow"><span class="plbl">Profile visibility</span><span class="chip">MEMBER ▾</span></div>
+          <div class="prow"><span class="plbl">Discussion posts</span>
+            <span class="seg"><span>Public</span><span class="on">Member-only</span></span></div>
+          <div class="phint">Privacy only — nothing else lives here now.</div>
+        </div>
+        <div class="card"><div class="banner">+ Add banner</div>
+          <div class="idrow" style="margin-top:8px"><div class="avi"></div>
+            <div><div class="nm">Dale Hyldelund</div><div class="bio">Add a one-line bio…</div></div></div>
+        </div>
+        <div class="layoutrow">
+          <div><div class="lr-l">Your layout</div><div class="lr-n">3 sections shown</div></div>
+          <span class="pill">＋ Sections</span>
+        </div>
+        <div class="card">
+          <div class="blk"><span class="grip">⣿</span> ⌃ ⌄ ✕ &nbsp;📍 Location</div>
+          <div class="blkbody">1740 Broadway St, Charlottesville, VA</div>
+          <div class="dials"><span class="dial">Members see: City ▾</span><span class="dial">Public sees: Private ▾</span></div>
+        </div>
+        <div class="addcard"><div class="big">＋ Add a section</div>
+          <div class="sm">About · Skills · Gallery · Links…</div></div>
+        <div class="anlab anlab--ok" style="top:150px;right:8px">✓ own row</div>
+        <div class="ann ann--ok" style="top:166px;left:6px;right:6px;height:34px"></div>
+      </div>
+      <div class="tabbar"><div class="tab"></div><div class="tab"></div><div class="tab post"></div><div class="tab"></div><div class="tab you"></div></div>
+    </div></div>
+  </div>
+
+  <!-- ============ ALT B ============ -->
+  <div class="col">
+    <h2>Alternative B <span class="tag tag--alt">also drawn</span></h2>
+    <p class="note">A sticky bar docked directly above the mobile tab bar, visible the whole time you are editing. Most reachable by thumb — but it stacks a second bar over the existing one and permanently eats screen height.</p>
+    <div class="phone"><div class="scr">
+      <div class="chrome"><div class="logo"></div><b>Looth Group</b><span class="sp">✉ ⚑ ⚙</span></div>
+      <div class="scroll" style="position:relative">
+        <div class="panel">
+          <div class="prow">
+            <span class="plbl">View as</span>
+            <span class="seg"><span>Public</span><span>Member</span><span class="on">Me</span></span>
+          </div>
+          <div class="prow"><span class="plbl">Profile visibility</span><span class="chip">MEMBER ▾</span></div>
+          <div class="prow"><span class="plbl">Discussion posts</span>
+            <span class="seg"><span>Public</span><span class="on">Member-only</span></span></div>
+          <div class="phint">Privacy only — nothing else lives here now.</div>
+        </div>
+        <div class="card"><div class="banner">+ Add banner</div>
+          <div class="idrow" style="margin-top:8px"><div class="avi"></div>
+            <div><div class="nm">Dale Hyldelund</div><div class="bio">Add a one-line bio…</div></div></div>
+        </div>
+        <div class="card">
+          <div class="blk"><span class="grip">⣿</span> ⌃ ⌄ ✕ &nbsp;📍 Location</div>
+          <div class="blkbody">1740 Broadway St, Charlottesville, VA</div>
+          <div class="map">map</div>
+          <div class="dials"><span class="dial">Members see: City ▾</span><span class="dial">Public sees: Private ▾</span></div>
+        </div>
+      </div>
+      <div class="dock"><span class="d-l">Your layout · 3 shown</span><span class="pill">＋ Sections</span></div>
+      <div class="tabbar"><div class="tab"></div><div class="tab"></div><div class="tab post"></div><div class="tab"></div><div class="tab you"></div></div>
+      <div class="anlab" style="bottom:44px;left:8px">two stacked bars</div>
+    </div></div>
+  </div>
+
+</div>
+
+<div class="why">
+  <h3>Why A is the recommendation</h3>
+  <ul>
+    <li><span class="k">It fixes the actual complaint.</span> “Sections” stops being a member of the privacy group. The dark panel goes back to meaning one thing: <em>who can see what</em>.</li>
+    <li><span class="k">It is reachable after scrolling.</span> Today the only opener is pinned to the top of the page; once a member scrolls down to their blocks, adding a section means scrolling all the way back up. The end-of-list card puts the control where the task ends.</li>
+    <li><span class="k">It matches the mental model already in the drawer.</span> The picker’s own hint says “drag a section into your profile — or tap to add”. A dashed slot at the end of the list <em>is</em> the drop target, drawn.</li>
+    <li><span class="k">It adds no new floating layer.</span> Both new affordances sit in normal document flow.</li>
+    <li><span class="k">Desktop is untouched.</span> At ≥1380px the permanent sidebar still wins; the new row and card are the &lt;1380px story only.</li>
+  </ul>
+  <h3>Why not B</h3>
+  <ul>
+    <li>The bottom of a mobile screen is <span class="k">already taken</span> — <code>bottom-nav.js</code> puts a fixed 54px tab bar (plus safe-area) on <code>/u/</code>, with a raised centre Post button. A second docked bar stacks on it and competes with that button.</li>
+    <li>It costs vertical height on every screen, permanently, for a control most members use rarely — a member sets their layout up once and then mostly edits content.</li>
+    <li>It is still a floating bar rather than something anchored to the thing it affects.</li>
+  </ul>
+  <div class="caveat">
+    <b>One thing to decide either way.</b> The Sections button today disappears whenever you switch <b>View as</b> to Public or Member — the whole editor is not rendered in preview mode (<code>u.php:127</code>). So the entry point is not just oddly placed, it is <em>intermittent</em>. Worth confirming that is intended before either proposal is built.
+  </div>
+</div>
+
+</body>
+</html>

@@ -219,8 +219,40 @@ Other profile breakpoints found so far: `560px` (identity row stacks, banner asp
 ratio changes, lightbox nav shrinks — `u.php:673,684,599`) and, in the separate
 `edit.css` surface, `780px` / `560px`.
 
-**NOT PROVEN:** the full list of what visually differs at phone width. That needs the
-browser engine at two viewports. Marked as the outstanding work in §9.
+### The mobile surface carries a fixed tab bar that desktop does not
+
+`webroot/bottom-nav.js` injects a **fixed bottom tab bar** — 54px plus
+`env(safe-area-inset-bottom)`, `z-index 2147481200`, 5 tabs with a raised centre Post
+button — and sets `body.has-looth-tabbar{padding-bottom:…}`. On `/u/` and `/profile/`
+the **"You" tab renders active** (`bottom-nav.js:412`). It also *hides* the shared
+header's account bubble and the hamburger on mobile (`:123-132`, Ian 2026-06-24).
+
+Consequences the guide must respect:
+- **Mobile screenshots will always contain the tab bar; desktop ones never will.** Two
+  genuinely different frames, not one with a note.
+- The **bottom of the mobile screen is spoken for.** Any future profile affordance
+  docked to the bottom collides with it (this constrains the §6 proposal).
+- The **route into the profile differs by surface**: desktop uses the header account
+  menu → "My Profile"; mobile uses the bottom "You" tab.
+
+### Visual evidence already on the box (partially stale — read the caveat)
+
+`/var/www/dev/mockups/` holds owner-view captures from **2026-06-15**:
+`u-owner-768.png`, `u-owner-1024.png`, `u-burger-768-closed.png`,
+`u-burger-768-open.png`. I have read them. They **confirm the shape** of everything in
+§3 and §6 — the dark Profile-controls panel with the amber Sections pill top-right, the
+"Members see / Public sees" dial pair under the map, the right-sliding drawer with
+CORE / EXTRAS groups and FILTERABLE badges.
+
+**They are stale in detail and must NOT be used as guide screenshots.** The June
+drawer shows `Gallery` as a palette bubble and has no `Services`; today's code has
+`Services` in Core and moved Gallery behind an "Add gallery (N left)" counter
+(`u.php:792-794`, Ian 2026-07-24). Anything shot before that date shows a picker that
+no longer exists.
+
+**NOT PROVEN:** the full list of what visually differs at phone width (these captures
+are 768px and 1024px — neither is a phone). That needs the browser engine at two
+viewports. Outstanding work, §9.
 
 ---
 
@@ -253,10 +285,18 @@ So: **the only control that adds content to your profile is parked in the corner
 privacy panel**, wearing a different colour from its neighbours, next to two controls
 that do something completely unrelated. Ian's read is correct.
 
+**Confirmed visually**, not just in source: `u-owner-768.png` (2026-06-15) shows the
+amber pill sitting in the top-right of the dark panel, the only warm-coloured control
+in a black box of privacy settings. That capture is stale in its drawer contents
+(§5) but the placement it shows is still what the code emits today.
+
 ### Why it ended up there
 
-Reconstructed from the code and its comments — **NOT PROVEN** as intent, no commit
-archaeology done yet:
+**Commit archaeology yields nothing.** `git log -S` for `lg-viewas__caddy`, `lg-caddy`
+and the `1380` breakpoint all bottom out at `e5d466d` — the "fresh seed from dev2
+reality" mega-commit that seeded this repo. The picker arrived whole, with no
+incremental history recording a decision. So the following is **reconstruction from
+the code and its own comments, and is NOT PROVEN as intent**:
 
 1. The caddy was designed **desktop-first as a permanent left column** (`u.php:483-501`
    describes the ≥1380px 3-column grid as the intended form).
@@ -277,8 +317,29 @@ Because `$editing` goes false in View-as mode (§2), the Sections button vanishe
 previewing — so the one entry point to the picker is not merely oddly placed, it is
 also **intermittent**.
 
-### Proposal
-See `PROFILE-SECTION-PICKER-PROPOSAL.md` (mockup, dev-gated URL). **Not changing it.**
+### Proposal — drawn, published, not built
+
+**URL for Ian (dev-gated, loopback-or-cookie):**
+`https://dev.loothgroup.com/footer-mockups/profile-sections/`
+
+Source of truth in-repo: `footer-mockups/profile-sections/index.html` (published copy
+lives at `~/projects/footer-mockups/profile-sections/`, the same convention the keeper
+dashboard used on 2026-07-27). Three phone frames side by side — **Today**,
+**Proposal A (recommended)**, **Alternative B** — reflowing to stacked on a phone,
+because Ian reads these on his.
+
+- **A (recommended):** Sections leaves the privacy panel and gets its own "Your layout"
+  row under the identity card, **plus** a dashed "＋ Add a section" card at the end of
+  the block list. Fixes the grouping error, is reachable *after* scrolling (today's
+  opener is pinned to the top — a member at the bottom of their profile must scroll all
+  the way back up), matches the drawer's own "drag a section into your profile" model,
+  and adds no floating layer.
+- **B (alternative):** a sticky bar docked above the mobile tab bar. Best thumb reach,
+  but it stacks a second bar on the existing 54px tab bar and competes with its raised
+  Post button, and costs vertical height permanently for a control used rarely.
+- **Desktop is untouched by either.** At ≥1380px the permanent sidebar still wins.
+
+**Not changing it.** Ian decides.
 
 ---
 
@@ -287,12 +348,54 @@ See `PROFILE-SECTION-PICKER-PROPOSAL.md` (mockup, dev-gated URL). **Not changing
 Ian's ruling: *"archive it for future additions, it's moot for profile."* Not built on,
 not deleted. Recorded here so a future entry can pick it up.
 
-**NOT YET SURVEYED** — pending. Files:
-- `lg-patreon-stripe-poller/src/Wp/MembershipGuide.php` (1794 ln)
-- `lg-patreon-stripe-poller/templates/page/membership-guide.php` (707 ln)
-- `docs/membership-guide-build-notes.md` (230 ln)
+### What it covers — and the key fact
 
-Verified already: it is **not** linked from the header user menu.
+```php
+MembershipGuide.php:93
+private const SECTION_SLUGS = [ 'events', 'archive', 'feed', 'forums', 'looths', 'loothalong' ];
+```
+
+**PROFILE IS NOT ONE OF ITS SECTIONS.** The archived guide covers six surfaces — events,
+archive, feed, forums, looths, loothalong — and has never had a profile entry. This
+independently corroborates Ian's "it's moot for profile": there is nothing to reuse
+because nothing was ever written. The PROFILE entry is genuinely net-new.
+
+Its other machinery, worth knowing before a future entry picks it up: an admin screen
+(`renderAdmin`, `:669`) editing wp_options-backed **preview cards, starter cards,
+elders (with BuddyPress-backed bios/avatars/links), screenshots, recurring shows**, and
+demo-video URLs; plus per-elder page syncing (`syncElderPages`, `:1085`). It is a
+**CMS-driven** guide, not a hand-written one. A profile entry built the same way would
+mean an admin editing screenshots in wp-admin — worth an explicit decision, because
+the standing rule ("change the profile → change the guide") is easier to enforce
+against files in git than against rows in `wp_options`.
+
+### There are TWO implementations, not one
+
+The brief cited ~2,700 lines in the plugin. There is also a **standalone front
+controller** — a verbatim port with no WP boot:
+- `membership-pages/web/membership-guide.php` (139 ln) + `membership-guide.css` (125)
+- `membership-pages/lib/guide-data.php` (111) — reads the same `wp_options` by direct PDO
+
+Its route is gated in `membership-pages/web/router.php:61`:
+`'membership-guide' => ['membership-guide.php', 'admin', 'public']` — i.e. **admin-only
+today, flipping to public at live launch.** A future guide entry needs to know which of
+the two implementations it is extending. **NOT PROVEN:** which one actually serves
+`/membership-guide/` on dev2 right now — I have not traced the nginx route.
+
+### Header user menu — verified, with a trap
+
+The brief's claim holds. The **live** header
+(`lg-shared/site-header.php:557-592`) menu is: My Profile → `/u/<slug>`, Manage Account,
+Join, Gift Memberships, Redeem a Gift, My Gifts, Earnings, Request a Refund, Test
+Checklist, Sign out. **No Membership Guide link.**
+
+**The trap:** `lg-shell/lg-shared/site-header.php:325` *does* carry
+`<a role="menuitem" href="/membership-guide/">Membership Guide</a>`. That file is the
+**dead twin tree** flagged in `MOBILE-DESKTOP-SPLIT.md` §4 (`#twin-cleanup`). A grep for
+"membership-guide" hits it first and reads as "already linked". It is not. **Whoever
+adds the guide link must edit `lg-shared/site-header.php`, not the twin** — and note
+the mobile surface hides that account bubble entirely (§5), so mobile needs its own
+entry point in the bottom-nav tray.
 
 ---
 
