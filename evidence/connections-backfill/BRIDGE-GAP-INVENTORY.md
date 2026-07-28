@@ -115,10 +115,37 @@ missing.** A visibly wrong artifact rather than an absence.
 Controls: zero `is_deleted` messages, so nothing was legitimately skipped. Unfixed, and a fix
 would need an Ian ruling — 2 members would get an unread badge unless it is applied silently.
 
-## C. REAL — location: 11 members
+## C. REAL — location: 11 members, and it is a CLOSED set
 
-**Live: 58 of the 241 have a BuddyBoss location pin (xprofile field 96); 11 of those have no
-location in the app.** Exact match to the original figure. Unfixed.
+**Live: 58 of the 241 have a BuddyBoss location string (xprofile field 96); 47 have it in the app
+and 11 do not.** Scoped in full 2026-07-28.
+
+**Root cause, precisely.** `bin/backfill.php` is the one-shot that reads field 96; the runtime
+path that provisioned the late cohort, `src/Provision.php`, inserts `users` with **no
+`location_text` at all** (its INSERT is uuid / emails / display_name / avatar_url). Anyone
+provisioned after the one-shot therefore starts with no location, and only a later run of
+`bin/snapshot-location-from-bb.php` can give them one.
+
+**It is not ongoing — this is the part that matters.** All 11 were bridged on **2026-06-11 (10)
+and 2026-06-13 (1)**. Members bridged from 2026-06-13 through 2026-07-14 all have their location.
+So whatever backfilled the others ran after that batch and has covered everyone since; **nothing
+bridged after 2026-06-13 is affected.** A closed historical set, not a leak — the same
+cleanup-versus-live-bug distinction that mattered for the connections re-request defect.
+
+*Not established:* why coverage on 2026-06-11 is partial (some of that day's members have a
+location, these 10 do not). The idempotent skip in `snapshot-location-from-bb.php` is the obvious
+suspect but it was not proven, and it does not change the conclusion.
+
+**Cosmetic by comparison with messages.** The source string still exists in BuddyBoss, so nothing
+is *lost* — it is unpropagated. All 47 who have it are geocoded, so a fix would also want the
+geocoder pass. Unfixed; no Ian ruling needed for a decision this small, but it is not mine to run
+on live either.
+
+**Related, and useful to the slug-backfill lane:** `Provision.php` leaves `slug` NULL for the same
+structural reason (its own comment says only the one-time xprofile backfill seeded slugs). On live
+today, however, **zero users in either cohort have a NULL slug** — so that particular consequence
+has already been resolved by something, and it is one more reason the dev2-era slug findings in
+section A should not be used to size work.
 
 ## D. LATENT — `email_aliases` is 100% at cutover and 19.5% late, and nothing reads it
 
