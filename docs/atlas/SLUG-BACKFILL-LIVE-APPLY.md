@@ -127,6 +127,29 @@ existing history entry — so the rollback has nothing to restore there.
 
 Then re-issue the mirror purge from step 5 to flush the reverted handles back out of WP.
 
+## 0a. Two members' profile links are broken on live RIGHT NOW — this is independent
+
+Found while exercising the purge against live's real mirror data. Two members' WP `_looth_slug`
+cache holds the handle of their **archived ghost duplicate**, and that handle 404s. The "My
+Profile" link in the site header sends them to a dead page today:
+
+| WP user | cached handle | that URL | their real URL |
+|---|---|---|---|
+| 1431 (member 1265, Bryan Hutchinson) | `patreon_178784349-1431` | **404** | `/u/patreon_178784349` → 200 |
+| 1768 (member 1585, Tom McDonough) | `tmcdonough8-1768` | **404** | `/u/tmcdonough8` → 200 |
+
+Measured against live's origin (`--resolve` to the LAN IP). **This needs no backfill, no deploy
+and no ruling** — it is two stale cache rows. The mirror self-heals from Postgres once the stale
+value is gone:
+
+```sql
+DELETE FROM wp_usermeta WHERE meta_key = '_looth_slug' AND user_id IN (1431, 1768);
+```
+
+Run against `looth_import` on live. Safe to do before or after everything below; doing it now
+fixes two members immediately. (A third row, wp#1, caches Ian's retired `iandavlin` — that one
+301s correctly, so it is cosmetic and the full purge in step 5 covers it.)
+
 ## 0. Prerequisite — the script is NOT on live yet
 
 `/srv/profile-app/bin/` has no `backfill-slugs.php`. Live is `main @6ef25e3`; this work is on
@@ -200,10 +223,11 @@ sudo -u profile-app psql -d profile_app -c "SELECT count(*) FROM slug_history;" 
 that reads as an outage. Pin to the origin, on the box:
 
 ```bash
-curl -sI --resolve loothgroup.com:443:127.0.0.1 \
-     https://loothgroup.com/u/franklin-linker-linker-guitars | head -1   # 404 -> 200
-curl -sI --resolve loothgroup.com:443:127.0.0.1 \
-     https://loothgroup.com/u/patreon_19682448 | head -1                 # 200 -> 301
+# on live. Pin to the LAN IP, NOT 127.0.0.1 — the loopback pin returns 000 (measured).
+curl -sk -o /dev/null -w '%{http_code}\n' --resolve loothgroup.com:443:172.31.67.175 \
+     https://loothgroup.com/u/franklin-linker-linker-guitars    # 404 -> 200
+curl -sk -o /dev/null -w '%{http_code}\n' --resolve loothgroup.com:443:172.31.67.175 \
+     https://loothgroup.com/u/patreon_19682448                  # 200 -> 301
 ```
 
 That proves the **origin**; it deliberately bypasses the edge, so it is not a cache check.
@@ -248,12 +272,18 @@ stores and writes neither. Deleting rather than rewriting is deliberate: a missi
 re-resolved and re-stamped on the member's next pageview, so it self-heals with no second source
 of truth.
 
-**What I did and did not exercise:** I ran this script on dev2 — it works and exits 0, but dev2
-currently has 0 stale mirrors, so only the clean path ran. The `--sql` emission has **not** been
-exercised against a non-empty stale set. Reading it, the risk is low (it interpolates `(int)`
-WordPress user ids and nothing else, so there is no injection surface), but the honest statement
-is that the SQL-generating branch is unproven by execution. That is why the step above prints the
-report first and gates on 332.
+**The `--sql` branch is now exercised.** dev2 has 0 stale mirrors, so a run there proves only the
+clean path — a SQL generator whose output nobody has ever seen is how a bad `DELETE` reaches
+production. It now takes `--truth-tsv=` / `--mirror-tsv=` (same idea as `backfill-slugs.php
+--from-tsv`), so live's real mirror can be replayed offline against no database at all:
+
+```bash
+php purge-stale-looth-slug-mirror.php --truth-tsv=<members.tsv> --mirror-tsv=<mirror.tsv> [--sql]
+```
+
+Replaying live's 426 mirror rows gives `STALE=3` against today's slugs and `STALE=332` against
+post-apply slugs — matching an independent calculation exactly, so two implementations agree on
+the 332 above. The emitted SQL is one `DELETE` with 332 ids, all integers, no other tokens.
 
 ## What this does NOT do
 

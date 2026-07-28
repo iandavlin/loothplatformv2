@@ -32,34 +32,86 @@ declare(strict_types=1);
  * member's next pageview, with no second source of truth to keep in step.
  *
  *   sudo -u profile-app php purge-stale-looth-slug-mirror.php [--sql]
+ *
+ * OFFLINE MODE — how the stale path gets exercised at all
+ * -------------------------------------------------------
+ * The dangerous branch here is the one that WRITES SQL for a human to run, and on a
+ * healthy box it never executes: dev2 has zero stale mirrors, so a run there proves
+ * only that the clean path works. Shipping a SQL generator whose output nobody has
+ * ever seen is how a bad DELETE reaches production.
+ *
+ *   --truth-tsv=<members.tsv>   substitutes Postgres (needs wp_user_id + slug columns)
+ *   --mirror-tsv=<mirror.tsv>   substitutes WordPress (user_id \t meta_value, no header)
+ *
+ * Same shape as backfill-slugs.php's --from-tsv, and for the same reason: run the ONE
+ * implementation against exported rows rather than writing a second one to test with.
+ * Offline touches no database, so it can be pointed at a copy of live's data safely.
  */
 
-require dirname(__DIR__) . '/config.php';
+$AS_SQL = in_array('--sql', $argv, true);
+$TRUTH = null; $MIRROR = null;
+foreach ($argv as $a) {
+    if (str_starts_with($a, '--truth-tsv='))  $TRUTH  = substr($a, 12);
+    if (str_starts_with($a, '--mirror-tsv=')) $MIRROR = substr($a, 13);
+}
+$OFFLINE = $TRUTH !== null && $MIRROR !== null;
+if (($TRUTH === null) !== ($MIRROR === null)) {
+    fwrite(STDERR, "--truth-tsv and --mirror-tsv must be given together\n");
+    exit(2);
+}
+if (!$OFFLINE) require dirname(__DIR__) . '/config.php';
 
 use Looth\ProfileApp\Db;
 
-$AS_SQL = in_array('--sql', $argv, true);
-
 // current truth
 $cur = [];
-foreach (Db::pg()->query('
-    SELECT b.wp_user_id, u.slug
-    FROM users u JOIN wp_user_bridge b ON b.user_id = u.id
-    WHERE u.slug IS NOT NULL AND u.slug <> \'\'
-')->fetchAll(PDO::FETCH_ASSOC) as $r) {
-    $cur[(int) $r['wp_user_id']] = (string) $r['slug'];
+if ($OFFLINE) {
+    $fh = fopen($TRUTH, 'r');
+    if ($fh === false) { fwrite(STDERR, "cannot read $TRUTH\n"); exit(2); }
+    $head = fgetcsv($fh, 0, "\t", '"', '\\');
+    $iWp  = array_search('wp_user_id', $head, true);
+    $iSl  = array_search('slug', $head, true);
+    if ($iWp === false || $iSl === false) {
+        fwrite(STDERR, "--truth-tsv needs wp_user_id and slug columns\n"); exit(2);
+    }
+    while (($r = fgetcsv($fh, 0, "\t", '"', '\\')) !== false) {
+        if ($r === [null] || $r === false) continue;
+        $slug = trim((string) ($r[$iSl] ?? ''));
+        if ($slug !== '') $cur[(int) $r[$iWp]] = $slug;
+    }
+    fclose($fh);
+} else {
+    foreach (Db::pg()->query('
+        SELECT b.wp_user_id, u.slug
+        FROM users u JOIN wp_user_bridge b ON b.user_id = u.id
+        WHERE u.slug IS NOT NULL AND u.slug <> \'\'
+    ')->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $cur[(int) $r['wp_user_id']] = (string) $r['slug'];
+    }
 }
 
 // the cache
-$my = new PDO(
-    'mysql:unix_socket=/var/run/mysqld/mysqld.sock;dbname=' . LG_PROFILE_APP_MYSQL_DB,
-    posix_getpwuid(posix_geteuid())['name'] ?? 'profile-app', '',
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-);
-$mirrors = $my->query('
-    SELECT user_id, meta_value FROM wp_usermeta
-    WHERE meta_key = "_looth_slug" AND meta_value <> ""
-')->fetchAll(PDO::FETCH_ASSOC);
+$mirrors = [];
+if ($OFFLINE) {
+    $fh = fopen($MIRROR, 'r');
+    if ($fh === false) { fwrite(STDERR, "cannot read $MIRROR\n"); exit(2); }
+    while (($line = fgets($fh)) !== false) {
+        $p = explode("\t", rtrim($line, "\r\n"));
+        if (count($p) < 2 || trim($p[1]) === '') continue;
+        $mirrors[] = ['user_id' => trim($p[0]), 'meta_value' => trim($p[1])];
+    }
+    fclose($fh);
+} else {
+    $my = new PDO(
+        'mysql:unix_socket=/var/run/mysqld/mysqld.sock;dbname=' . LG_PROFILE_APP_MYSQL_DB,
+        posix_getpwuid(posix_geteuid())['name'] ?? 'profile-app', '',
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    );
+    $mirrors = $my->query('
+        SELECT user_id, meta_value FROM wp_usermeta
+        WHERE meta_key = "_looth_slug" AND meta_value <> ""
+    ')->fetchAll(PDO::FETCH_ASSOC);
+}
 
 $stale = [];
 $inSync = 0;
