@@ -48,31 +48,96 @@ never runs at digest time. It is not a partial answer to axis 2; it is a differe
 
 ---
 
-## 1. What the stores actually say (LIVE, 2026-07-27 23:30 UTC)
+## 1. What the stores actually say (LIVE, re-measured 2026-07-28 against the RULED design)
+
+> **EVERY FIGURE IN THIS SECTION WAS RECOMPUTED after the 07-28 rulings.** The earlier numbers were
+> measured against the unfiltered set — every bell type, `is_read` as the only outstanding-test — and
+> that set no longer exists. Where a number moved I say so and why, rather than overwriting it
+> quietly; the ratios in particular move a lot, because the two largest excluded types were also the
+> two most likely to be already-read.
 
 ### 1.1 The recap's real composition
 
-Exact recap-shaped query (7-day window, `is_read = false`, plus the live `connections.status` test):
+**As ruled** — 7-day window, to-do types only, outstanding = edge `pending` for connection requests
+and `is_read = false` for forum types:
 
-| Type | Listable | Suppressed by `is_read` | Total in window |
+| Type | Named this week | Stale, still unresolved | Ruled |
 |---|---|---|---|
-| `connection_request` | 92 | 0 | 92 |
-| `connection_accept` | 19 | 5 | 24 |
-| `reaction.on_post` | 16 | 13 | 29 |
-| `forum.reply_to_topic` | 1 | 1 | 2 |
-| `forum.mention` | 0 | 1 | 1 |
-| **Total** | **128** | **20** | **148** |
+| `connection_request` | 96 | **257** | IN — they must accept or decline |
+| `forum.mention` | 4 | **0** | IN — addressed directly |
+| `forum.reply_to_reply` | 4 | **0** | IN |
+| `forum.reply_to_topic` | 2 | **0** | IN |
+| **Total admitted** | **106** | **257** | |
+| `connection_accept` | — | — | **OUT** — nothing is owed |
+| `reaction.on_post` | — | — | **OUT** — nothing is owed |
 
-Raw rows in the window are 152; the `connections.status` test drops 4 more before `is_read` is even
-consulted. **Axis 1 removes 24 of 152 items — 15.8%.**
+Counted against bridged members only, which is what the digest can actually mail.
 
-The composition is the headline for everything below: **111 of 128 listable items (87%) are
-connection notifications.** One is a forum item.
+> *I got this table wrong first time and it is worth saying how.* I published a per-type stale
+> breakdown of 253/3/1/2 that I had **inferred from the total rather than measured** — the total was
+> real, the split was not. Measured, **every single stale item is a connection request**. The reason
+> is structural and I should have seen it: `forum.*` notifications only began writing on 2026-07-25,
+> so no forum item is old enough to have gone stale yet. A breakdown that "looks about right" is
+> exactly the kind of number that survives into a decision.
 
-> *Correcting my own earlier figure:* the previous revision of this doc reported 101 items / 21.8%
-> read-suppressed. That was a true reading of an earlier 7-day window; the window has since slid over
-> a burst of 92 connection requests, which dilutes the percentage. The absolute read-suppression
-> count is stable (22 then, 20 now). The rate is not a constant and should not be quoted as one.
+**THE COUNTED REGISTER IS CURRENTLY 100% CONNECTION REQUESTS.** That will change as forum items age
+past a window for the first time, and it is worth watching: the copy "You have 2 replies to your
+comments waiting" has never once been rendered against real data.
+
+**What the to-do test removed, measured:** of 135 items listable under the old rules this week,
+**35 were `connection_accept` (20) or `reaction.on_post` (15)** — 26% of the section, gone because
+nothing waits on the member. All-time the two are 147 and 53 rows.
+
+**The composition headline survives and is stronger: 96 of 106 named items (91%) are connection
+requests.** Ten are forum items. Any argument here leaning on "the recap is mostly connection
+traffic" still holds.
+
+> *Numbers that moved, named explicitly.* The previous revision reported **128 listable / 15.8%
+> read-suppressed** against the unfiltered set. Neither figure survives, and not because the store
+> changed:
+> - **128 → 106 named.** The to-do filter removed 35 items, and the resolved-test admitted several
+>   `connection_request` rows that `is_read` had been hiding (91 under the old test, 96 under the new
+>   one — a member who glanced at the bell had not thereby answered anybody).
+> - **"Axis 1 removes 15.8%" is no longer a meaningful statistic** and should not be quoted. For
+>   connection requests `is_read` is not the suppressor any more — the edge status is — so the
+>   read-suppression rate now describes only the ten forum items, which is far too small a base to
+>   express as a percentage.
+> - **An earlier board post of mine said 96 members would be mailed on named items alone.** That was
+>   measured with the old `is_read` test and a separately-computed DM leg. Recomputed consistently
+>   under the resolved-test it is **99**. The conclusion it supported — that the counted register
+>   roughly triples the recipient list — is unchanged and if anything understated.
+> - **The stale register did not exist when that revision was written.** 257 items that the old
+>   design simply discarded are now counted rather than dropped.
+
+### 1.1b Who actually receives a digest
+
+The rulings interact here, and the interaction is the whole answer — measured on live, list 3,
+**1,663 subscribed**:
+
+| | Members mailed |
+|---|---|
+| Named items only — if the counted register did not exist | **99** |
+| **As built, with the counted register** | **280** |
+| — named only | 43 |
+| — **counted only** | **181** |
+| — both registers | 56 |
+
+(43 + 181 + 56 = 280; 43 + 56 = the 99 who have anything named.)
+
+**181 of 280 recipients get only a counted line.** The counted register is not a refinement on the
+design; it is the majority of the recipient list. Without it, "empty means send nothing" would have
+silenced every one of those members while the renderer was perfectly able to draw their row.
+
+**Stale volume is small and the singular is the common case:** 257 rows across 237 members —
+**224 have exactly one, 6 have two, 7 have three, and nobody has more.** Ian's example copy ("You
+have 6 connection requests") is above today's ceiling; the line most members will actually read is
+"You have 1 connection request waiting".
+
+> *One earlier figure retired for a different reason.* A previous revision reported a backlog of
+> "349 items older than the window, worst member 19". That used `is_read` as the outstanding-test and
+> included accepts and reactions. Under the resolved-test the same question answers **257 items,
+> worst member 3** — most of those old requests had in fact been accepted, which `is_read` could not
+> see. The 19 was never wrong for the question it answered; it is the wrong question now.
 
 ### 1.2 Axis 2 — already sent in a per-event email
 
@@ -200,9 +265,9 @@ entirely stale social requests from June and early July.
 
 ---
 
-## 2. The proposal
+## 2. The rules, as ruled and built
 
-### Rule 1 — read on the website: **SHIPPED, keep, no change requested**
+### Rule 1 — read on the website: **SHIPPED, and NARROWED by the to-do ruling**
 
 Exclude `is_read` at the source, in `Recap::forWpIds()`. Alongside it, and already shipped in the
 same WHERE clause: a connection notification is suppressed once the **edge itself** is no longer
@@ -251,97 +316,132 @@ would itself be the moment to revisit this.
 recording that axis 2 was measured, costed and declined, with the trigger to revisit, is worth more
 than a column nobody stamps.
 
-### Rule 3 — previous digest: **replace the constant window with the member's own last send. Floor it.**
+### Rule 3 — previous digest: **IAN RULED THE FIXED 7-DAY WINDOW, 2026-07-28**
 
-> **This section was rewritten after the correction in §1.3(b).** The previous revision recommended
-> a global window (3a) and shelved the per-member one (3b) on the grounds that digest sends had never
-> failed. **They have.** With that corrected, and with 3b turning out to need no new schema at all,
-> the two collapse into a single recommendation: **build 3b.** 3a is retained below only because it
-> is the fallback if Ian wants the smaller change, and because its call-site analysis is what 3b uses
-> too.
+**This section is a record, not a proposal.** Two alternatives were built up and measured; Ian
+declined both, having looked at the comparison frames. The measurements are kept because they are
+the reason the question was asked and because §1.3's defect analysis is still true — the window
+*does* drift, and a failed send *is* silent. He weighed that against predictability and chose
+predictability. **Do not reopen it.**
 
-**Rule 3a (fallback, global): derive the window from the last digest send.**
-
-Instead of a constant 7 days, the window is `[time of the previous digest campaign's send, now]`.
-This eliminates the drift bands in §1.3(a) entirely — no gap, no overlap, by construction — and it
-self-corrects if a week is skipped, because the window simply grows to cover the gap. **It does not
-help the six members in §1.3(b)**, because a global window cannot know that one member's send failed.
-
-**This is a call-site change, not a schema change.** The lookback is already a parameter threaded end
-to end: `Recap_Source::fetch( array $wp_user_ids, int $days = 7 )`
-(`class-lg-wd-recap-source.php:173`) → `internal-recap.php:65` → `Recap::forWpIds($ids, $days)`.
-Today `payload_for()` at line 159 calls `fetch([$id])` and takes the default. The change is to pass
-a computed value there.
-
-**The 1..90 clamp is already enforced at the source** — `Recap.php:98`, `max(1, min(90, $days))`,
-inside `forWpIds()` rather than at the endpoint, on the same principle as the `is_read` filter: every
-caller gets the same answer and no call site can widen the window by accident. Rule 3a therefore
-cannot produce an unbounded lookback even if the computed value is wrong. (I checked
-`internal-recap.php` first, saw it clamp only the value it *echoes* in the response, and thought the
-query ran unclamped. It does not — the guard is one layer down, deliberately.)
-
-**It must still ship with an explicit floor**, because the 90-day clamp is far wider than the
-backlog: a first run reaching back to the previous campaign under the new rule would expose
-§1.3(c)'s 349 items. The floor: the window never starts earlier than the day this ships. Members
-begin clean; the historical backlog is never mailed. Given it is 343 of 349 stale connection rows
-from June and early July, not mailing it is also the right product answer.
-
-**Rule 3b (BUILD IT — the trigger has already fired, and it is far cheaper than I first costed).**
-
-The previous revision shelved this behind a trigger: *"the first weekly-digest campaign that records
-a `failed` row."* §1.3(b) shows that trigger was **already met on 2026-06-01**, and I only missed it
-because of a bad `LIKE` pattern. So the trigger is not a future condition — it is history.
-
-**And the design I proposed for it was more machinery than the job needs.** I specified a new table
-`digest_renders(...)`, a post-send reconciler, and a two-phase render/confirm coupling. **None of
-that is necessary**, because FluentCRM *already* stores per-recipient send status, and the recap
-*already* renders per recipient. The window start can simply be read:
-
-> **A member's window starts at the send time of the most recent weekly digest that member actually
-> received.**
-
-One batched query against tables that already exist — no new schema, no reconciler, no two-phase
-commit:
-
-```sql
-SELECT e.subscriber_id, s.user_id AS wp_id, MAX(c.created_at) AS window_start
-  FROM wp_fc_campaigns c
-  JOIN wp_fc_campaign_emails e ON e.campaign_id = c.id
-  JOIN wp_fc_subscribers    s ON s.id = e.subscriber_id
- WHERE c.title LIKE 'Weekly Digest%' AND e.status = 'sent'
-   AND e.subscriber_id IN (…this send's recipients…)
- GROUP BY 1, 2;
-```
-
-**Demonstrated on live against the six real casualties.** Asked "what window would these members get
-at the next digest (June 22)?":
-
-| Member | Window start | |
+| | Was proposed | Outcome |
 |---|---|---|
-| subscriber 964 | **2026-05-25** | reaches back past their failed June 1 send |
-| subscriber 1884 | **2026-05-25** | reaches back past their failed June 1 send |
-| subscriber 1000 (healthy control) | 2026-06-01 | correctly starts at the send they received |
-| subscriber 1001 (healthy control) | 2026-06-01 | correctly starts at the send they received |
+| **3a** | window starts at the previous campaign's send time (global) | **Declined** |
+| **3b** | window starts at the last digest THAT MEMBER RECEIVED | **Declined** — this lane's recommendation, and keeper's |
+| **Ruled** | **a constant 7 days, for everyone, every send** | **Built** — `LG_WD_Recap_Source::WINDOW_DAYS` |
 
-**It self-heals per member, with no state of our own to keep correct.** A member whose send failed
-automatically gets a window covering what they missed; a member whose send succeeded does not repeat.
-This subsumes Rule 3a — the drift bands in §1.3(a) also disappear, because the window start is a real
-send time rather than a constant offset.
+**What was built to make it a decision rather than a default.** The window had been a default
+argument (`fetch( $ids, $days = 7 )`) threaded through three layers, because 3a and 3b both wanted a
+value computed per send. Both declined, that parameter became flexibility nobody uses — and the kind
+that quietly becomes a second window. It is gone; `fetch()` takes ids only. The endpoint keeps its
+`days` parameter, because `/internal/recap` is a general read API and dev verification legitimately
+drives it at other widths. **The digest's window has exactly one writer.**
+Guarded by `dev/verify-window-fixed.php`.
 
-**Two honest caveats:**
+**THE CONSEQUENCE HE ACCEPTED, recorded so it is designed around rather than rediscovered as a bug:
+a member who misses one digest never hears about that week.** Items older than seven days never
+return to the email. **Do not widen the window to compensate.**
 
-1. **It matches campaigns by title string** (`LIKE 'Weekly Digest%'`), and I objected to string
-   matching in Rule 2. The objection is not symmetric and I want to be explicit about why: there,
-   the string had to identify **which item a mail was about**, which a subject line fundamentally
-   cannot do. Here it identifies **which campaign is the digest** — admin-controlled, stable across
-   19 campaigns, and verifiable at a glance. If Ian prefers it exact, the digest can tag its own
-   campaigns and the `LIKE` becomes an id lookup; that is a small change, not a redesign.
-2. **`wp_fc_subscribers.user_id` is NULL for some contacts** — 2 of the 6 casualties, in fact. That
-   gap is already solved: `Recap_Source::wp_user_id_for()`
-   (`class-lg-wd-recap-source.php:130`) falls back to matching on email, which is how the weekly
-   list was built in the first place. Reuse it; do not re-derive it.
+> **What softened this, and it was not a compromise on the window.** Ruling D — fresh items NAMED,
+> stale items COUNTED — means an unresolved item older than the window is no longer *lost*, it is
+> *counted*. The named row is gone forever, exactly as ruled; the obligation is not. That is why the
+> §1.3(b) casualties matter less than they did when this section recommended 3b, and it is a better
+> outcome than 3b would have produced: 3b would have re-named old items, which is the nagging the
+> section exists to prevent.
 
-**The floor still applies**, unchanged and for the same reason — see Rule 3a.
+### Rule 4 — the digest is a TO-DO LIST (Ian, 2026-07-28)
+
+**One question decides admission: does this WAIT ON THE MEMBER?** In: `connection_request`,
+`forum.mention`, `forum.reply_to_topic`, `forum.reply_to_reply`, unread DMs. Out: `connection_accept`
+and `reaction.on_post` — nothing is owed on either. Removed the arms, the dot colours, the
+`reaction_what()` helper and the `reactions` bucket rather than leaving them unreachable behind the
+allow-list. Guarded by `dev/verify-source-boundary.php`, which now asserts both removed types stay
+out — they shipped until 07-28 and are the regression most likely to walk back in.
+
+### Rule 5 — empty means send NO EMAIL AT ALL (Ian, 2026-07-28)
+
+Not the digest minus the section. `recipients_with_something_waiting()` runs before
+`$campaign->subscribe()`, so a member with nothing never gets a `CampaignEmail` row.
+
+**It fails OPEN, and that is load-bearing.** `post()` returned `['recaps' => []]` on every failure
+path — no secret, curl error, non-200, bad body — which is byte-for-byte what a healthy source
+returns when nobody has anything. Harmless while an empty payload only cost a section; under this
+ruling both mean "mail nobody" and one of them is an outage. The transport outcome is now recorded
+(`source_answered()`) and the filter asks the transport rather than inferring from the shape of the
+result. **A first version of that check tested `$payloads === []`, which can never fire** — `fetch()`
+normalises every requested id to `[]` — so it failed CLOSED, silently. One unreachable endpoint
+would have mailed nobody and looked exactly like a quiet week.
+
+**Still flagged, not re-argued:** this suppresses the *whole* email, so **1,383 of 1,663 subscribed
+members receive nothing**, including Upcoming Events, the videos and loothprint, and the
+`sponsor-post` surface the plugin supports. It changes what the weekly digest *is*, not just who it
+greets. Built as ruled; keeper has the numbers.
+
+### Rule 6 — fresh items NAMED, stale items COUNTED (Ian, 2026-07-28)
+
+> "The fresh ones have a name and the stale ones have a collective number like *You have 6 connection
+> requests*."
+
+**It needs no new state, which is what makes it cheap — and it is why it could be built at all after
+3b was declined.** The fixed window IS the fresh/stale line: inside it, new this week, name it;
+outside it, it was in a previous email, count it. No per-item stamp and no per-member send record —
+the send record *was* 3b.
+
+**Resolved-state still decides when to STOP counting**, and that is the part to defend. `is_read`
+cannot end a count: a member who looked at a connection request and did not answer it still owes an
+answer. For `connection_request` the edge's own status is the authority. Forum types have no cheap
+resolution signal — they live in another database — so `is_read` remains their only stop condition.
+**That asymmetry is deliberate.**
+
+**Why the edge-status stop condition is not optional:** `bottom-nav.js:1128` auto-fires
+`markAllNotifsRead()` 700ms after the mobile notification sheet renders. Glancing at your
+notifications on a phone marks every one of them read whether you acted or not. Desktop has no
+equivalent (checked all 24 docroot `.js`). If `connection_request` were ever "simplified" back onto
+`is_read`, a glance would silence a member's whole digest.
+
+Guarded by `dev/verify-two-registers.php`, which also asserts an excluded type cannot enter through
+the counted register.
+
+### Rule 7 — verbosity guardrail: **ALREADY BUILT, TWICE. Build no third.**
+
+Ian ruled `forum.reply_to_reply` IN "but we need to have some verbosity guardrails built in".
+Measured before building, and the measurement says the constraint is already satisfied.
+
+**My first measurement was the wrong unit and I nearly reported it.** I counted raw reply EVENTS from
+the mirror over two years: 17.5% of member-weeks over 3, worst week 20. But the bell coalesces before
+the digest ever sees it — `notify-bridge.php` sets the dedup key deliberately:
+
+| type | `anchor_id` | effect |
+|---|---|---|
+| `reply_to_topic` | `0` | **one row per topic**, `actor_count` climbs |
+| `reply_to_reply` | parent reply id | **one row per comment of yours** that got replies |
+| `forum.mention` | the reply | one row each |
+
+Ten replies on your discussion are already one bell row, not ten. Re-measured in **bell rows**, the
+unit the digest actually renders:
+
+| | raw events (wrong unit) | **bell rows** |
+|---|---|---|
+| avg per member-week | 2.3 | **1.53** |
+| weeks over 3 rows | 274 (17.5%) | **80 (5.1%)** |
+| weeks over the existing 8-row cap | — | **6 in two years (0.4%)** |
+| worst week ever | 20 | **12** |
+
+The second guardrail is `LG_WD_Recap::MAX_ROWS = 8` with an "N more waiting" overflow, so the worst
+week in two years renders as 8 named rows plus one line.
+
+**Collapse-by-thread was proposed and is rejected on the measurement.** On raw events it looked
+decisive (busy weeks: 6.0 events across 1.7 topics). On bell rows it is weak — busy weeks are
+**5.3 rows across 3.0 topics**, and after collapsing **27 of the 80 still exceed 3 rows** — because
+the bridge already collapsed the within-thread case and what remains is genuinely cross-thread. It
+would also merge "replied to your discussion" with "replied to your comment" into one vaguer line.
+Information lost, ~2 rows saved, in 5% of member-weeks.
+
+**The one component I could not measure, said plainly:** mentions. Each is its own bell row and
+counting historical mentions needs content parsing for `@slug`. It is also the component most likely
+to grow, because the autocomplete minter only shipped 2026-07-23. **If a wall ever appears, mentions
+are where it comes from, not replies.**
+
 
 ### 2.1 What this does not cover — the fourth axis, still open
 
