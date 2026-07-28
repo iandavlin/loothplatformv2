@@ -95,14 +95,25 @@ duplicate-identity rows accumulate there and nowhere else. A defect that appears
 should be treated as suspect before it is promoted. A caveat in the provenance section does not
 cancel a headline.
 
-## B. REAL — messages: 16 members lost their history
+## B. REAL — messages: bigger and a different shape than this section first said
 
-**Live: 17 of the 241 late members have BuddyBoss message history; 16 of those 17 have none in
-the app.** Exact match to the original dev2-era figure.
+**Scoped in full on 2026-07-28: see `MESSAGES-GAP-INVENTORY.md`.** Two corrections to what this
+section used to claim.
 
-Same root cause and same shape as connections — `migrate-social-from-bb.php` seeds connections
-and messaging in one pass, keyed on the bridge. Small in absolute terms, but a **total loss** of
-message history for those 16 people. Unfixed.
+**It is 17, not 16.** All 17 late members with BuddyBoss message history have **none** of it in
+the app. The "1" that looked intact was a member who has used the app *since* cutover — their rows
+carry `bp_message_id IS NULL`, so it is post-cutover activity, not surviving history. Migrated
+messages for late members: **0**.
+
+**And it is not only their loss.** Unlike connections, this defect leaked outside the cohort. The
+migration inserts `message_threads` with **no uuid lookup**, but `messages` and
+`message_recipients` both resolve through the bridge — so the thread shell landed for everyone
+while its contents did not. **24 threads are affected, 9 render completely empty and 11 partial,
+and 13 members who were never in the late cohort can open them and see 73% of the conversation
+missing.** A visibly wrong artifact rather than an absence.
+
+Controls: zero `is_deleted` messages, so nothing was legitimately skipped. Unfixed, and a fix
+would need an Ian ruling — 2 members would get an unread badge unless it is applied silently.
 
 ## C. REAL — location: 11 members
 
