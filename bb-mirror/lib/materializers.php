@@ -345,6 +345,12 @@ function bb_mirror_sync_attachments(int $parent_id, string $kind, PDO $db, strin
 function bb_mirror_upsert_topic(int $id, PDO $db): void {
     $p = get_post($id);
     if (!$p || $p->post_type !== 'topic') {
+        // A SECOND delete path, and not the endpoint's: this is how reconcile
+        // (bin/reconcile.php) drops a topic whose WP post vanished or was
+        // retyped. Its `attachment` rows — and those of every reply cascaded
+        // away underneath it — are removed by the AFTER DELETE triggers in
+        // schema.pg.sql. Do not add cleanup here; see the note in
+        // api/v0/_sync.php for why a PHP-side purge cannot work.
         $db->prepare("DELETE FROM topic WHERE id = ?")->execute([$id]);
         return;
     }
@@ -415,6 +421,8 @@ function bb_mirror_upsert_topic(int $id, PDO $db): void {
 function bb_mirror_upsert_reply(int $id, PDO $db): void {
     $p = get_post($id);
     if (!$p || $p->post_type !== 'reply') {
+        // Reconcile's reply-delete path (see bb_mirror_upsert_topic above).
+        // The reply's `attachment` rows go by AFTER DELETE trigger.
         $db->prepare("DELETE FROM reply WHERE id = ?")->execute([$id]);
         return;
     }

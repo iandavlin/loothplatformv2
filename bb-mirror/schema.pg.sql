@@ -340,6 +340,13 @@ CREATE TRIGGER reply_search_doc_trigger
 -- Deliberately NOT a sweeper job: a cleanup script is a second thing to remember
 -- to run, a correct delete path is not.
 --
+-- KNOWN LIMIT, stated rather than discovered later: a FOR EACH ROW trigger does
+-- not fire on TRUNCATE, so `TRUNCATE topic` / `TRUNCATE reply` would still strand
+-- attachment rows. Nothing in the repo truncates either table (checked
+-- 2026-07-28), and bin/init-db.php uses DROP SCHEMA CASCADE, which takes
+-- `attachment` with it. If a TRUNCATE path is ever added, add `attachment` to the
+-- same statement — TRUNCATE accepts a table list.
+--
 -- EVERY NAME IN THE BODY IS SCHEMA-QUALIFIED, and that is load-bearing. plpgsql
 -- resolves unqualified names when the function RUNS, against the CALLER's
 -- search_path — not against the search_path in force here at CREATE time. The
