@@ -28,20 +28,20 @@ RET="/u/patreon_84629041"          # any existing same-origin path; we assert it
 ISSUE="$HOST/looth-auth/issue?return=$(python3 -c 'import urllib.parse;print(urllib.parse.quote("/u/patreon_84629041"))')"
 fails=()
 
-GATE=$(grep -oP '(?<=set \$loothdev_token ")[^"]+' "$CONF" | head -1)
-[ -n "${GATE:-}" ] || { echo "GATE-ERROR  cannot read dev gate token from $CONF"; exit 1; }
+. "$(dirname "$0")/lib/gate-token.sh"
+GATE=$(gate_token) || { echo "GATE-ERROR  $GATE_TOKEN_ERR"; exit 1; }
 
 # A logged-in member, bound to a REAL session token (an unregistered token does
 # not validate, so is_user_logged_in() would be false — the control must be a
 # true session). User 7 = a bridged member with a _looth_uuid mirror.
-read MLIN MLIV < <(sudo -u www-data wp --path="$WP" eval '
+read MLIN MLIV < <(sudo -n wp --path="$WP" --allow-root eval '
   $uid=7; $exp=time()+3600;
   $t=WP_Session_Tokens::get_instance($uid)->create($exp);
   echo LOGGED_IN_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"logged_in",$t);
 ' 2>/dev/null)
 [ -n "${MLIV:-}" ] || { echo "GATE-ERROR  could not mint control member cookie"; exit 1; }
 
-hdrs() { curl -s -D - -o /dev/null --max-redirs 0 -b "$1" "$ISSUE"; }
+hdrs() { gate_curl -s -D - -o /dev/null --max-redirs 0 -b "$1" "$ISSUE"; }
 
 # ---- 1. logged-in member, NO nonce → 302 back to ?return, with a looth_id ----
 H=$(hdrs "loothdev_auth=$GATE; $MLIN=$MLIV")
@@ -68,7 +68,7 @@ if [ "$code2" != "302" ] || ! printf '%s' "$loc2" | grep -q 'wp-login.php'; then
 fi
 
 # ---- 3. off-host ?return must NOT be honored (open-redirect guard) ----
-loc3=$(curl -s -D - -o /dev/null --max-redirs 0 -b "loothdev_auth=$GATE; $MLIN=$MLIV" \
+loc3=$(gate_curl -s -D - -o /dev/null --max-redirs 0 -b "loothdev_auth=$GATE; $MLIN=$MLIV" \
         "$HOST/looth-auth/issue?return=https://evil.example/x" | grep -i '^location:' | tr -d '\r' | awk '{print $2}')
 if printf '%s' "$loc3" | grep -qi 'evil.example'; then
   fails+=("ISSUE-OPENREDIR  off-host return honored ('$loc3') — must fall back to a same-origin path")

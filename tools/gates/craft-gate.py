@@ -21,7 +21,7 @@ in docs/CRAFT-STANDARD.md before pushing. Run via tools/gates/run-all.sh.
 Run as ubuntu on dev (mints viewer cookies via sudo, drives chrome-dev:9222).
 """
 
-import asyncio, json, subprocess, sys, urllib.request, urllib.parse
+import asyncio, json, os, re, subprocess, sys, urllib.request, urllib.parse
 
 try:
     import websockets
@@ -54,16 +54,69 @@ def sh(cmd):
 
 
 def gate_token():
-    for line in open("/etc/nginx/sites-available/dev.loothgroup.com.conf"):
-        if "$loothdev_token" in line and '"' in line:
-            return line.split('"')[1]
-    sys.exit("cannot read dev gate token")
+    """Dev-gate cookie value.
+
+    The gate MOVED (profile-audit 2026-07-28): it was `set $loothdev_token` in
+    sites-available/dev.loothgroup.com.conf, a file that no longer exists. It is
+    now a cookie map in the BOX-LOCAL conf.d/loothdev-auth.conf. This function
+    used to raise FileNotFoundError, which took this gate — and three others —
+    down without anyone noticing, because a gate that CANNOT RUN and a gate that
+    FAILS both just read as "red". Mirrors tools/gates/lib/gate-token.sh.
+
+    The REPO copy of platform/nginx/loothdev-auth.conf is the gate-free LIVE
+    posture and never holds a token; only the box-local file is armed.
+    """
+    env = os.environ.get("LG_DEV_GATE_TOKEN", "")
+    if env:
+        return env
+
+    # current: cookie map in box-local conf.d
+    m = re.search(
+        r'map\s+\$cookie_loothdev_auth.*?"([^"]+)"',
+        _read_if("/etc/nginx/conf.d/loothdev-auth.conf"),
+        re.S,
+    )
+    if m:
+        return m.group(1)
+
+    # legacy: set $loothdev_token in the vhost
+    m = re.search(
+        r'set \$loothdev_token "([^"]+)"',
+        _read_if("/etc/nginx/sites-available/dev.loothgroup.com.conf"),
+    )
+    if m:
+        return m.group(1)
+
+    sys.exit(
+        "cannot read dev gate token — tried conf.d/loothdev-auth.conf then "
+        "sites-available/dev.loothgroup.com.conf; override with LG_DEV_GATE_TOKEN"
+    )
+
+
+def _read_if(path):
+    try:
+        with open(path) as fh:
+            return fh.read()
+    except OSError:
+        return ""
 
 
 def member_cookies():
-    wpc = sh("sudo -u www-data wp --path=/var/www/dev eval "
-             "'$e=time()+3600; echo LOGGED_IN_COOKIE.\"=\".urlencode(wp_generate_auth_cookie(1912,$e,\"logged_in\"));'")
-    jwt = sh("sudo -u profile-app php /srv/profile-app/bin/mint-dev-token.php 1 | tail -1")
+    # wp-cli must run as ROOT (profile-audit 2026-07-28): as www-data it dies
+    # reading /etc/looth/live-wp-keys.php (permission denied) and returned an
+    # empty string, so the split below raised
+    #   ValueError: not enough values to unpack (expected 2, got 1)
+    # — an unhandled traceback that read as "the craft gate is red" rather than
+    # "the craft gate cannot run". 2>/dev/null drops wp's harmless
+    # "DISABLE_WP_CRON already defined" warning, which CLI prints on stdout and
+    # would otherwise be captured as part of the cookie value.
+    wpc = sh("sudo -n wp --path=/var/www/dev --allow-root eval "
+             "'$e=time()+3600; echo LOGGED_IN_COOKIE.\"=\".urlencode(wp_generate_auth_cookie(1912,$e,\"logged_in\"));'"
+             " 2>/dev/null")
+    jwt = sh("sudo -n -u profile-app php /srv/profile-app/bin/mint-dev-token.php 1 2>/dev/null | tail -1")
+    if "=" not in wpc or not jwt:
+        sys.exit("GATE-ERROR  could not mint member cookies (wp-cli as root? mint-dev-token?) — "
+                 "gate CANNOT RUN; this is not a craft failure")
     n, v = wpc.split("=", 1)
     return [(n, urllib.parse.unquote(v)), ("looth_id", jwt)]
 
