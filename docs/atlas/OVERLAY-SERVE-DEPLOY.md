@@ -154,10 +154,17 @@ phase 3 verified its entire desktop surface this way.
 **If you genuinely must place a file:**
 - A *tracked* file inside a symlinked directory (e.g. `bb-mirror/api/v0/_mention-ingest.php`
   under `/srv/bb-mirror`) is a real file — write it, then restore with
-  `git checkout -- <path>`. Exact by construction.
+  `git checkout HEAD -- <path>`. Exact by construction.
 - A *symlinked* target — `rm` the link, place a real file, restore with `rm` + recreate the
   link pointing back at the repo path.
-- **Never** `git checkout` / branch-switch / detach the serving tree. Only `git checkout -- <path>`.
+- **Never** `git checkout` / branch-switch / detach the serving tree. Only the single-path form.
+
+> **Use `git checkout HEAD -- <path>`, NOT the bare `git checkout -- <path>`.** The bare form
+> restores from the **INDEX**, not from HEAD. The serve clone is *shared*, so if any other
+> process has staged something for that path, the bare form silently installs **that** instead
+> of the committed bytes — a restore that reports success while leaving foreign code serving.
+> The `HEAD` form is unambiguous. Note also that the whole-tree hash **cannot see a staged
+> overlay**; only `git status --porcelain` can, which is why the proof below needs both.
 
 **Proof of restore is the whole-tree hash, not an md5:**
 
