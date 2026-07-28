@@ -95,6 +95,24 @@ will show it; the profile honours `html[data-lguser-theme="dark"]`.
 > and Gallery behind the counter. If your capture still looks like June, something is
 > wrong with your session, not with this list.
 
+> ### ⚠️ SEQUENCING — READ BEFORE SHOOTING ANY OWNER-VIEW FRAME
+>
+> **Option A landed on branch `profile-audit` (`04113b2`) but is NOT on the serve.**
+> It moves the Sections opener out of the privacy panel into a **"Your layout" row
+> under the identity card** plus a **dashed "＋ Add a section" card at the end of the
+> block list**.
+>
+> Both new affordances sit on the owner's `/u/<slug>` page, so **every owner-view
+> frame changes**: A1, A2, A3, A5, A6 and B1–B5. Shooting them against the current
+> serve produces images that are wrong the moment A merges.
+>
+> - **A-invariant, safe to shoot NOW:** B6, B7 (View-as — editor not emitted), B8
+>   (anon gate), C1, C2, C3 (other people's views + directory), D1, D2 (entry points).
+> - **Wait for A on the serve:** A1, A2, A3, A4, A5, A6, B1, B2, B3, B4, B5.
+>
+> A4 (the ≥1380 permanent sidebar) is *visually* unchanged by A, but shoot it in the
+> same pass as the rest of the A-set so the whole owner set is one consistent build.
+
 ### B. Privacy — the section Ian named explicitly
 
 | # | Frame | URL | Role | Viewports | Must show (§3) |

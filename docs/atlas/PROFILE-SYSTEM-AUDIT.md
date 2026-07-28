@@ -461,6 +461,17 @@ viewports. Outstanding work, §9.
 
 ## 6. IAN'S COMPLAINT — the section picker on mobile
 
+> **STATUS 2026-07-28: RULED AND BUILT.** Ian chose option A; it is implemented in
+> `04113b2` (branch only — **not merged, not on the serve**). Everything in this
+> section describes the state that was audited and is retained as the record of *why*
+> it changed. See `PROFILE-SECTION-PICKER-PROPOSAL.md` for what shipped.
+>
+> **What the guide must describe once this merges:** the picker opens from a
+> **"Your layout" row under the identity card** and from a **dashed "＋ Add a section"
+> card at the end of the block list** — *not* from the privacy panel. Every mobile and
+> desktop-narrow screenshot of the owner view changes. **Do not shoot the picker
+> frames until this is on the serve** (`PROFILE-GUIDE-SHOTLIST.md` §3A).
+
 > "I don't currently like the way the section picker is deployed on mobile.
 > It's a weird button in the privacy controls."
 
@@ -641,7 +652,8 @@ guide") needs a hook. This is it.
 | `profile-app/src/Block.php` §`HEADER_LIGHTS` | Status lights |
 | `profile-app/src/Block.php` §`LOCATION_PRECISION`, `precisionFromInput` | Location precision dials |
 | `profile-app/web/u.php` §`.lg-viewas` rows (`:729-784`) | Privacy controls walkthrough + View-as |
-| `profile-app/web/u.php` §`.lg-caddy` (`:816+`) & `:487` media query | Adding a section — **desktop AND mobile screenshots** |
+| `profile-app/web/u.php` §`.lg-caddy` (`:816+`) & the 1380px media query | Adding a section — **desktop AND mobile screenshots** |
+| `profile-app/web/_render_blocks.php` §`.lg-layoutrow` / `.lg-addsec` (the option-A openers) | **How you open the picker** — the "Your layout" row + end-of-list add card. Changing either changes the guide's core "add a section" walkthrough on both surfaces. |
 | `profile-app/web/_render_blocks.php` `looth_pmp_control`/`looth_prec_control` | the privacy-chip and precision-picker captions |
 | `profile-app/web/edit.php` | entry points / claim + login interstitials |
 | `profile-app/web/media.php`, `Visibility::fileVisible` | what's visible in galleries/resumes |

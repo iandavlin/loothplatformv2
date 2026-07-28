@@ -1,6 +1,42 @@
 # Proposal — move the profile Sections picker out of the privacy controls
 
-**For Ian's decision. Nothing has been changed.**
+## ✅ RULED AND BUILT — Ian chose **option A**, 2026-07-28
+
+Built in `04113b2` on branch `profile-audit`. **Not yet merged to main, so not yet on
+the serve.** This document is kept as the record of what was decided and why.
+
+What shipped, exactly as specified in §4A below:
+- The Sections opener is **gone from the `.lg-viewas` privacy panel** (both emit
+  sites). That panel is now privacy only: View-as, Profile visibility, Discussion
+  posts.
+- **"Your layout" row** under the identity card, with a live section count and a
+  `＋ Sections` button.
+- **Dashed "＋ Add a section" card** at the end of the block list, rendered only when
+  something is actually addable.
+- **Desktop ≥1380 untouched** — the permanent sidebar still wins; both new affordances
+  are `display:none` there.
+
+Two things §5's must-not-break list actually caught during the build:
+1. **The drawer would have become impossible to close.** The close button, backdrop,
+   Escape handler and the `#caddy` re-open-after-mobile-add were all nested inside
+   `if (toggle && caddy)`. Removing the toggle would have silently disabled every one
+   of them. Now gated on `caddy` alone, with a `[data-caddy-open]` opener list.
+2. **Layout-order safety.** `order()` reads the section order straight off the DOM via
+   `.lg-block:not(.lg-block--header)` → `data-block`. Neither new element carries
+   either attribute, so the saved order cannot be corrupted. Verified: 0 matches.
+
+**Still open — the §7 ruling has NOT been given** (see below): should the openers
+disappear in View-as preview? They currently inherit the old behaviour, because both
+are gated on `$role === 'me'`, which is the same condition as `$editing`.
+
+The gate that guards this change (`tools/gates/editor-rail-reachable-gate.sh`) was
+rewritten in `deeefef` — it had rotted against a surface that moved. It asserts the
+*property* (a visible opener exists below 1380) rather than a specific button id, and
+**has not been run yet**: it is CDP-based and the box has no engine headroom.
+
+---
+
+**Original proposal, as put to Ian, preserved below.**
 Mockup (dev-gated): `https://dev.loothgroup.com/footer-mockups/profile-sections/`
 Evidence: `PROFILE-SYSTEM-AUDIT.md` §6. Lane: profile-audit, 2026-07-28, dev2.
 
