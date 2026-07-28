@@ -223,17 +223,37 @@ WordPress caches the slug in `_looth_slug` usermeta. Nothing invalidates it, and
 "My Profile" link in the shared header — so after the apply, members click through to their own
 retired URL. It still resolves (the 301 covers it), which is exactly why this went unnoticed.
 
-Measured on live today: **426 mirror rows; 329 of them would go stale the moment step 3 lands**
-(only 1 is stale right now). 340 of the 426 already hand out a `patreon_` URL.
+Measured on live today: **426 mirror rows, 3 stale now, 332 stale the moment step 3 lands.**
+340 of the 426 currently hand out a `patreon_` URL.
 
 ```bash
-sudo -u profile-app php /srv/profile-app/bin/purge-stale-looth-slug-mirror.php --sql
+sudo -u profile-app php /srv/profile-app/bin/purge-stale-looth-slug-mirror.php        # report
+sudo -u profile-app php /srv/profile-app/bin/purge-stale-looth-slug-mirror.php --sql \
+     > /tmp/slug-mirror.sql
+sudo wp --allow-root --path=/var/www/dev db query < /tmp/slug-mirror.sql
 ```
 
+**Expect `mirrors=426  in-sync=94  STALE=332  no-pg-row=0`**, and a single `DELETE … user_id IN
+(…)` listing exactly 332 ids. If STALE is wildly off that number, stop — the apply and the purge
+disagree about what changed.
+
+`--path=/var/www/dev` looks wrong on a production box and is **correct**: live's vhost is
+`server_name loothgroup.com www.loothgroup.com; root /var/www/dev;`. The path name is inherited
+from the shared image. Do not "fix" it to `/var/www/html` — that is the stock nginx placeholder.
+Live's `LG_MYSQL_DB` is `looth_import`, so the script reads the right database and not the
+`looth_dev` decoy; both were checked on the box.
+
 It only *emits* SQL — profile-app has SELECT-only on the WP MySQL database, so it reads both
-stores and writes neither. Run the emitted `DELETE` against `looth_import` yourself. Deleting
-rather than rewriting is deliberate: a missing mirror is re-resolved and re-stamped on the
-member's next pageview, so it self-heals with no second source of truth.
+stores and writes neither. Deleting rather than rewriting is deliberate: a missing mirror is
+re-resolved and re-stamped on the member's next pageview, so it self-heals with no second source
+of truth.
+
+**What I did and did not exercise:** I ran this script on dev2 — it works and exits 0, but dev2
+currently has 0 stale mirrors, so only the clean path ran. The `--sql` emission has **not** been
+exercised against a non-empty stale set. Reading it, the risk is low (it interpolates `(int)`
+WordPress user ids and nothing else, so there is no injection surface), but the honest statement
+is that the SQL-generating branch is unproven by execution. That is why the step above prints the
+report first and gates on 332.
 
 ## What this does NOT do
 
