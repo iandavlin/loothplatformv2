@@ -59,20 +59,61 @@ old_html="$OUT/old-$stamp.html"; new_html="$OUT/new-$stamp.html"
 curl -s --max-time 30 "http://127.0.0.1:$OLD_PORT/" > "$old_html"
 curl -s --max-time 30 "http://127.0.0.1:$NEW_PORT/" > "$new_html"
 
+# --- ALSO read the REAL /events/ route, which is the strongest evidence available ---
+# dev2's serve is running main, which still has the pre-fix gmdate('Ymd'). So the actual
+# public route — through nginx, on the events php-fpm pool, unmodified — reproduces Ian's
+# bug tonight all by itself. Reading it mutates nothing: no serve window, no checkout, no
+# reload. Verified equivalent to the :8812 instance outside the window (both rendered 2
+# cards, same slugs, same moment), so this is a cross-check on the harness as well.
+# Degrades to UNAVAILABLE rather than failing the run if the gate env or the route is down.
+serve_html="$OUT/serve-$stamp.html"; serve_state=UNAVAILABLE
+GATE_ENV="$(dirname "$0")/../gates/gate-env.sh"
+if [ -r "$GATE_ENV" ] && eval "$(bash "$GATE_ENV" 2>/dev/null | grep -E '^LG_GATE_(TOKEN|ADDR|DOMAIN)=')" 2>/dev/null \
+   && [ -n "${LG_GATE_TOKEN:-}" ] && [ -n "${LG_GATE_ADDR:-}" ]; then
+  if curl -s --max-time 30 --resolve "${LG_GATE_DOMAIN}:443:${LG_GATE_ADDR}" \
+          -H "Cookie: loothdev_auth=${LG_GATE_TOKEN}" \
+          "https://${LG_GATE_DOMAIN}/events/" > "$serve_html" && [ -s "$serve_html" ]; then
+    serve_state=OK
+  fi
+fi
+
 # grep -c counts LINES, not occurrences — count hits with -o|wc -l throughout.
 has() { [ "$(grep -o "$2" "$1" | wc -l)" -gt 0 ] && echo PRESENT || echo ABSENT; }
 cards() { grep -o 'lg-evland__card' "$1" | wc -l; }
 
 o_today=$(has "$old_html" "$SLUG_TODAY");    o_tom=$(has "$old_html" "$SLUG_TOMORROW")
 n_today=$(has "$new_html" "$SLUG_TODAY");    n_tom=$(has "$new_html" "$SLUG_TOMORROW")
+if [ "$serve_state" = OK ]; then
+  s_today=$(has "$serve_html" "$SLUG_TODAY"); s_tom=$(has "$serve_html" "$SLUG_TOMORROW")
+  s_cards=$(cards "$serve_html")
+else
+  s_today=n/a; s_tom=n/a; s_cards=n/a
+fi
 
-printf '\n  %-22s %-9s cards=%s  today=%-7s tomorrow=%s\n' \
+printf '\n  %-24s %-11s cards=%-4s today=%-8s tomorrow=%s\n' \
+  "SERVE /events/" "(real route)" "$s_cards" "$s_today" "$s_tom"
+printf '  %-24s %-11s cards=%-4s today=%-8s tomorrow=%s\n' \
   "OLD $(git -C "$OLD_TREE" rev-parse --short HEAD)" "(pre-fix)" "$(cards "$old_html")" "$o_today" "$o_tom"
-printf '  %-22s %-9s cards=%s  today=%-7s tomorrow=%s\n\n' \
+printf '  %-24s %-11s cards=%-4s today=%-8s tomorrow=%s\n\n' \
   "NEW $(git -C "$NEW_TREE" rev-parse --short HEAD)" "(fixed)" "$(cards "$new_html")" "$n_today" "$n_tom"
 echo "  renders: $old_html"
 echo "           $new_html"
+[ "$serve_state" = OK ] && echo "           $serve_html  <- the REAL dev2 /events/, unmodified"
 echo
+
+# The SERVE corroborates but must NOT gate the verdict. It renders whatever is on main,
+# and main can change under this script at any moment — keeper merging the fix and pulling
+# is a NORMAL event, not a failure, and it would flip the serve from reproducing the bug to
+# not reproducing it. Gating on it would turn "the fix shipped" into a red run.
+serve_note() {
+  case "$serve_state:$1" in
+    OK:ABSENT)  echo "  SERVE: the REAL /events/ route drops today's event RIGHT NOW — Ian's bug,"
+                echo "         on the actual public surface, running main's pre-fix bytes." ;;
+    OK:PRESENT) echo "  SERVE: the real route KEEPS today's event, so main is no longer pre-fix —"
+                echo "         the fix has most likely been merged and pulled. Not a failure." ;;
+    *)          echo "  SERVE: not reachable this attempt; verdict rests on the two instances." ;;
+  esac
+}
 
 if [ "$in_window" -eq 0 ]; then
   if [ "$o_today" = PRESENT ] && [ "$n_today" = PRESENT ] \
@@ -96,6 +137,7 @@ if [ "$o_today" = ABSENT ] && [ "$o_tom" = PRESENT ] \
   echo "  pre-fix : tomorrow's event still renders, so the page and DB are demonstrably"
   echo "            alive — the missing card is the bug, not a broken harness"
   echo "  fixed   : BOTH events render; today's event survives its own evening"
+  serve_note "$s_today"
   exit 0
 fi
 echo "NOT PROVEN — in the window but the renders do not match the expected split."
