@@ -207,6 +207,14 @@ class LG_WD_Recap {
 
 		$rows = array_merge( ...array_values( $buckets ) );
 
+		// ── THE COUNTED REGISTER (Ian, 2026-07-28) ───────────────────────────
+		// Fresh items are NAMED above. Anything still unresolved from before the
+		// window is COLLAPSED into one line per type, appended after the named rows
+		// — "the fresh ones have a name and the stale ones have a collective
+		// number". It sits last on purpose: a count is a reminder, not news, and it
+		// must never push a named item off the end.
+		$rows = array_merge( $rows, self::rows_from_stale( $payload['stale'] ?? [] ) );
+
 		// A busy week must not turn the digest into a wall. Keep the highest-value
 		// rows (the order above already ranks them) and roll the tail into one line
 		// rather than truncating silently — a recap that quietly drops six things is
@@ -506,6 +514,57 @@ class LG_WD_Recap {
 			return $names[0] . ' and ' . $names[1];
 		}
 		return $names[0] . ', ' . $names[1] . ' and ' . self::n( $n - 2 ) . ' others';
+	}
+
+	/**
+	 * The counted register: one row per type for items already named in an earlier
+	 * email and still not dealt with.
+	 *
+	 * COPY IS IAN'S AND IS DELIBERATELY NOT INFLATED — "You have 6 connection
+	 * requests waiting". One short line, no explanation, no apology for mentioning
+	 * it again. The whole value of a count is that it costs the reader nothing.
+	 *
+	 * THE SINGULAR IS THE COMMON CASE, not the edge: measured on live 2026-07-28,
+	 * 224 of 237 members with anything stale have exactly ONE item, and the largest
+	 * anyone has is three. So "You have 1 connection request waiting" is the line
+	 * most people will actually read, and it has to be grammatical rather than an
+	 * afterthought. Ian's example of 6 is above today's ceiling.
+	 *
+	 * These rows carry no url. A count is not a thing you can click — deep-linking
+	 * "6 connection requests" to any one of them would be a lie about which. The
+	 * section's own heading already links to the Hub.
+	 */
+	private static function rows_from_stale( array $stale ): array {
+		$labels = [
+			'connection_request'   => [ 'connection request',  'connection requests'  ],
+			'forum.mention'        => [ 'mention',             'mentions'             ],
+			'forum.reply_to_topic' => [ 'reply to a discussion of yours',
+			                            'replies to your discussions' ],
+			'forum.reply_to_reply' => [ 'reply to a comment of yours',
+			                            'replies to your comments' ],
+		];
+
+		$rows = [];
+		// Same order as the named rows, so the eye reads one list, not two.
+		foreach ( self::BUCKET_ORDER as $bucket ) {
+			foreach ( self::INCLUDED_TYPES as $type => $b ) {
+				if ( $b !== $bucket || ! isset( $labels[ $type ] ) ) {
+					continue;
+				}
+				$n = (int) ( $stale[ $type ] ?? 0 );
+				if ( $n < 1 ) {
+					continue;
+				}
+				$rows[] = [
+					'lead' => 'You have ' . self::n( $n ) . ' '
+						. ( $n === 1 ? $labels[ $type ][0] : $labels[ $type ][1] ) . ' waiting',
+					'sub'  => '',
+					'url'  => '',
+					'kind' => 'stale',
+				];
+			}
+		}
+		return $rows;
 	}
 
 	/** Curly quotes around a discussion title — the digest sets Georgia elsewhere and

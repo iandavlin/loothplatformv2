@@ -358,8 +358,18 @@ class LG_WD_Recap_Source {
 			$payload = is_array( $raw ) ? self::hydrate_titles( $raw ) : [];
 
 			// An all-empty payload is normalised to [] so callers have one test for
-			// "nothing this week" instead of two.
-			if ( empty( $payload['notifications'] ) && empty( $payload['dms'] ) ) {
+			// "nothing this week" instead of three.
+			//
+			// `stale` MUST be part of that test (added 2026-07-28 with the counted
+			// register). A member with no fresh items but an unanswered connection
+			// request from a fortnight ago does have something waiting on them — they
+			// get "You have 1 connection request waiting" and therefore an email.
+			// Measured on live: 181 of the 280 members who now receive a digest are
+			// in exactly that position. Leaving `stale` out of this test would have
+			// silenced every one of them while the renderer was perfectly capable of
+			// drawing their row.
+			if ( empty( $payload['notifications'] ) && empty( $payload['dms'] )
+				&& empty( array_filter( (array) ( $payload['stale'] ?? [] ) ) ) ) {
 				$payload = [];
 			}
 

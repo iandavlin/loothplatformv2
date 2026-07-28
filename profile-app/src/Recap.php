@@ -123,6 +123,7 @@ final class Recap
                 'display_name'  => (string)($r['display_name'] ?? ''),
                 'notifications' => [],
                 'dms'           => [],
+                'stale'         => [],   // type => count, older than the window, still unresolved
             ];
         }
         if (!$uuidByWp) return [];
@@ -227,6 +228,46 @@ final class Recap
                 'sender_slugs'    => $slugs,
                 'last_message_at' => $r['last_message_at'],
             ];
+        }
+
+        // ── THE SECOND REGISTER: STALE, STILL UNRESOLVED (Ian, 2026-07-28) ────
+        //
+        // "Fresh ones have a name and the stale ones have a collective number like
+        // You have 6 connection requests." Two registers, and it dissolves a problem
+        // rather than trading one failure for the other: naming the same item every
+        // week is nagging, dropping it loses the one thing that actually needs the
+        // member. A count nags nobody and loses nothing.
+        //
+        // WHAT MAKES AN ITEM "ALREADY NAMED" NEEDS NO NEW STATE, and that is the
+        // reason this is cheap. The fixed 7-day window IS the line: an item inside it
+        // is new this week and gets named; an item outside it was in a previous
+        // email, so it gets counted. No per-item stamp, no per-member send record —
+        // the send record was Rule 3b, which Ian declined.
+        //
+        // RESOLVED, NOT MERELY SEEN, decides when to STOP counting. That is the whole
+        // reason the counted register can exist: `is_read` cannot end the count,
+        // because a member who looked at a connection request and did not answer it
+        // still owes an answer. For connection_request the edge's own status is the
+        // authority (the same live test the fresh query uses). For forum types there
+        // is no cheap resolution signal — they live in another database — so
+        // `is_read` remains the only stop condition available and is used as such.
+        // That asymmetry is deliberate and is the honest limit of this design.
+        $sql = "SELECT n.user_uuid, n.type, count(*) AS n
+                  FROM notifications n
+                  LEFT JOIN connections c ON c.id = n.connection_id
+                 WHERE n.user_uuid IN ($uph)
+                   AND n.created_at < now() - make_interval(days => ?)
+                   AND (CASE WHEN n.type = 'connection_request'
+                             THEN c.status = 'pending'
+                             ELSE n.is_read = false END)
+                 GROUP BY n.user_uuid, n.type";
+        $st = $pg->prepare($sql);
+        $st->execute(array_merge($uuids, [$days]));
+
+        foreach ($st->fetchAll() as $r) {
+            $wp = $wpByUuid[(string)$r['user_uuid']] ?? null;
+            if ($wp === null) continue;
+            $out[$wp]['stale'][(string)$r['type']] = (int)$r['n'];
         }
 
         return $out;
