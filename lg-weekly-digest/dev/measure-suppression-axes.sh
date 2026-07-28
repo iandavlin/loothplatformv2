@@ -1,154 +1,206 @@
 #!/usr/bin/env bash
-# measure-suppression-axes.sh — re-run every measurement behind RECAP-SUPPRESSION-PROPOSAL.md.
+# measure-suppression-axes.sh — re-measure the digest AS RULED, on LIVE.
 #
-# READ-ONLY. Every statement here is a SELECT against LIVE via `live-ro`, which is a
-# read-only account by construction (PG `looth_ro`, MySQL `/home/looth-ro/.my.cnf`).
-# It writes nothing anywhere and needs no serve window.
+# READ-ONLY. Every statement is a SELECT against LIVE via `live-ro`, a read-only
+# account by construction (PG `looth_ro`, MySQL `/home/looth-ro/.my.cnf`). Writes
+# nothing anywhere, needs no serve window, filters in SQL rather than in the shell.
 #
-# WHY THIS EXISTS: the proposal declines to build two of the three axes, and both
-# declines carry a named trigger to revisit. A trigger nobody can cheaply evaluate is
-# not a trigger. Run this; the answers are the triggers.
+#   bash lg-weekly-digest/dev/measure-suppression-axes.sh
 #
-#   Rule 2 reopens if  forum types exceed ~10% of listable items (see §1.1 / §1.2)
-#   Rule 3b was gated on a Weekly Digest campaign recording a `failed` recipient.
-#                      THAT TRIGGER IS ALREADY MET — campaign 283, 2026-06-01, six
-#                      members. The proposal now recommends BUILDING 3b. Block (b)
-#                      below stays because it is how you check whether it has
-#                      happened AGAIN, and how you size it if it does.
+# ── REWRITTEN 2026-07-28. IT WAS ASKING QUESTIONS THE RULINGS HAVE ANSWERED. ──
 #
-# Run:  bash lg-weekly-digest/dev/measure-suppression-axes.sh
+# The previous version evaluated triggers for two builds that Ian then declined and
+# one rule he replaced. Kept as history in git; not kept here, because a monitoring
+# script that reports on a design nobody is building is worse than no script — it
+# invites someone to act on it.
 #
-# ── VERIFICATION STATUS (2026-07-28) ─────────────────────────────────────────
-# RUN END TO END, clean, against LIVE. Every block below produced output.
+#   RETIRED  Rule 3a/3b triggers (failed digest recipients, the watermark window,
+#            the floorless-backlog cost). Ian ruled the FIXED 7-DAY WINDOW.
+#   RETIRED  the Rule 2 trigger (forum types exceeding ~10% of listable items).
+#            Rule 2 is retired PERMANENTLY, not deferred: the digest cannot carry
+#            followed-thread activity under ANY §9.1 outcome, because the to-do test
+#            excludes it on its merits. There is no configuration in which the same
+#            reply reaches a member twice through this digest, so there is nothing to
+#            de-duplicate against and no volume at which that changes.
+#            See RECAP-SUPPRESSION-PROPOSAL.md §4.1.
 #
-# WHAT THE FIRST FULL RUN CAUGHT — the reason this file exists:
-# The proposal claimed "no weekly digest has ever had a failed recipient." FALSE.
-# I had matched campaign titles on LIKE '%Week of%', got an empty result, and read
-# that empty result as a real zero. The live titles are 'Weekly Digest — June 1,
-# 2026'. Campaign 283 IS a digest, and it lost 6 real members to an SES signature
-# error. That single wrong character-string inverted a build/don't-build call.
+# WHAT IS WORTH WATCHING NOW is what the rulings made load-bearing: who gets mail at
+# all, whether the counted register's copy still matches reality, and whether the
+# verbosity guardrails still bound the worst week.
 #
-# SO: IF A BLOCK BELOW RETURNS EMPTY, SUSPECT THE PATTERN BEFORE YOU CONCLUDE THE
-# ANSWER IS ZERO. An empty result from a wrong LIKE is indistinguishable from a
-# genuine zero, and this file's own history is the cautionary case.
+# ── TRAPS THIS FILE HAS ALREADY FALLEN INTO. Read before trusting an empty result. ──
 #
-# The sibling trap, in the opposite direction: a naive REGEXP 'group' returns 5,689
-# hits, every one of them the words "The Looth Group" in the site name. Neither a
-# zero nor a big number means anything until you have checked the pattern.
-#
-# NOTE on the email log: FluentSMTP retains 14 days. Any question needing a longer view
-# cannot be answered from it at all — that is one of the three reasons the proposal
-# rejects log-scraping as the instrument for axis 2.
+# 1. AN EMPTY RESULT FROM A WRONG PATTERN IS INDISTINGUISHABLE FROM A REAL ZERO.
+#    A `LIKE '%Week of%'` returned empty; the live titles read `Weekly Digest — June
+#    1, 2026`. That single wrong string inverted a build decision. Suspect the
+#    pattern before you conclude the answer is zero.
+# 2. THE SIBLING, IN THE OTHER DIRECTION: a naive REGEXP 'group' returns thousands of
+#    hits, every one the words "The Looth Group" in the site name.
+# 3. DO NOT SPLIT A MEASURED TOTAL INTO PLAUSIBLE PARTS. I published a per-type stale
+#    breakdown inferred from a real total; measured, every stale item was one type.
+#    If a breakdown is not in the output below, it was not measured.
+# 4. COUNT IN THE UNIT THAT SHIPS. A verbosity measurement in raw reply EVENTS said
+#    17.5% of member-weeks were over 3 rows. In BELL ROWS — what the digest renders,
+#    after notify-bridge coalesces — it is 5.1%. Same data, different question.
 
 set -uo pipefail
 
 PG="psql -h 127.0.0.1 -U looth_ro -d profile_app -A -F'|'"
+PGL="psql -h 127.0.0.1 -U looth_ro -d looth -A -F'|'"
 MY="mysql --defaults-file=/home/looth-ro/.my.cnf -N -B looth_import -e"
 
+# The admission rule, in SQL, exactly as LG_WD_Recap::INCLUDED_TYPES declares it.
+TODO="'connection_request','forum.mention','forum.reply_to_topic','forum.reply_to_reply'"
+# Outstanding = the edge still waits on them, or the bell row is unread. NOT is_read
+# for connection_request — a member who glanced at a request has not answered it, and
+# the mobile sheet auto-marks everything read 700ms after it opens.
+OUTSTANDING="(CASE WHEN n.type='connection_request' THEN c.status='pending' ELSE n.is_read=false END)"
+
 echo "=============================================================="
-echo " AXIS 1 — read on the website (SHIPPED). Recap-shaped, 7d."
+echo " 1. COMPOSITION AS RULED — named (fresh) vs counted (stale)"
 echo "=============================================================="
-ssh live-ro "$PG -c \"
+echo "-- bridged members only: an unbridged row can never be mailed"
+ssh -o BatchMode=yes live-ro "$PG -c \"
 SELECT n.type,
-       count(*) FILTER (WHERE n.is_read = false) AS listable,
-       count(*) FILTER (WHERE n.is_read)         AS suppressed_by_read,
-       count(*)                                  AS total
+       count(*) FILTER (WHERE n.created_at >= now() - interval '7 days') AS named_fresh,
+       count(*) FILTER (WHERE n.created_at <  now() - interval '7 days') AS counted_stale
   FROM notifications n
+  JOIN users u ON u.uuid = n.user_uuid
+  JOIN wp_user_bridge b ON b.user_id = u.id
   LEFT JOIN connections c ON c.id = n.connection_id
- WHERE n.created_at >= now() - interval '7 days'
-   AND (n.connection_id IS NULL
-        OR (n.type = 'connection_request' AND c.status = 'pending')
-        OR (n.type = 'connection_accept'  AND c.status = 'accepted'))
- GROUP BY 1 ORDER BY 1;
-\" -c \"
--- raw minus the above total = rows the connections.status test drops on its own
-SELECT count(*) AS raw_rows_7d FROM notifications WHERE created_at >= now() - interval '7 days';
+ WHERE n.type IN ($TODO) AND $OUTSTANDING
+ GROUP BY 1 ORDER BY 3 DESC, 2 DESC;
+\""
+
+echo
+echo "-- what the TO-DO TEST excludes, so its cost stays visible rather than assumed"
+ssh -o BatchMode=yes live-ro "$PG -c \"
+SELECT n.type, count(*) AS rows_all_time,
+       count(*) FILTER (WHERE n.created_at >= now() - interval '7 days') AS in_window
+  FROM notifications n
+ WHERE n.type IN ('connection_accept','reaction.on_post')
+ GROUP BY 1 ORDER BY 2 DESC;
 \""
 
 echo
 echo "=============================================================="
-echo " AXIS 2 — already per-event emailed. RULE 2 TRIGGER."
+echo " 2. WHO GETS AN EMAIL AT ALL  (empty means send nothing)"
 echo "=============================================================="
-echo "-- email log coverage (retention is 14d; a longer view is impossible here)"
-ssh live-ro "$MY \"SELECT MIN(created_at) AS oldest, MAX(created_at) AS newest, COUNT(*) AS rows_logged FROM wp_fsmpt_email_logs;\""
-
-echo
-echo "-- outbound classified against the bell's types."
-echo "-- CAUTION: do NOT match on 'group' — 'The Looth Group' is in every subject and"
-echo "--          returns thousands of false positives."
-ssh live-ro "$MY \"
-SELECT 'OVERLAPPABLE mentioned'   k, COUNT(*) c, COUNT(DISTINCT \\\`to\\\`) r FROM wp_fsmpt_email_logs WHERE subject LIKE '%mentioned you%'
-UNION ALL SELECT 'OVERLAPPABLE replied',  COUNT(*), COUNT(DISTINCT \\\`to\\\`) FROM wp_fsmpt_email_logs WHERE subject LIKE '%replied%'
-UNION ALL SELECT 'no bell type: new-disc', COUNT(*), COUNT(DISTINCT \\\`to\\\`) FROM wp_fsmpt_email_logs WHERE subject LIKE '%New discussion:%'
-UNION ALL SELECT 'no sender: connection',  COUNT(*), COUNT(DISTINCT \\\`to\\\`) FROM wp_fsmpt_email_logs WHERE subject REGEXP 'connect|friend|wants to'
-UNION ALL SELECT 'no sender: dm',          COUNT(*), COUNT(DISTINCT \\\`to\\\`) FROM wp_fsmpt_email_logs WHERE subject REGEXP 'message|sent you'
-UNION ALL SELECT 'no sender: reaction',    COUNT(*), COUNT(DISTINCT \\\`to\\\`) FROM wp_fsmpt_email_logs WHERE subject REGEXP 'react|liked';
+echo "-- THE number to watch. If 'total_mailed' collapses, the digest has gone quiet"
+echo "-- for a reason nobody will otherwise notice — there is no bounce and no error."
+ssh -o BatchMode=yes live-ro "$PG -c \"
+WITH item AS (
+  SELECT b.wp_user_id, (n.created_at >= now() - interval '7 days') AS fresh
+    FROM notifications n
+    JOIN users u ON u.uuid=n.user_uuid
+    JOIN wp_user_bridge b ON b.user_id=u.id
+    LEFT JOIN connections c ON c.id=n.connection_id
+   WHERE n.type IN ($TODO) AND $OUTSTANDING
+), per AS (
+  SELECT wp_user_id, count(*) FILTER (WHERE fresh) f, count(*) FILTER (WHERE NOT fresh) s
+    FROM item GROUP BY 1
+)
+SELECT count(*) FILTER (WHERE f>0 AND s=0) AS named_only,
+       count(*) FILTER (WHERE f=0 AND s>0) AS counted_only,
+       count(*) FILTER (WHERE f>0 AND s>0) AS both,
+       count(*)                            AS total_mailed,
+       count(*) FILTER (WHERE f>0)         AS would_be_mailed_without_counted_register
+  FROM per;
 \""
 
 echo
-echo "-- every forum bell row that has ever existed, with the last overlappable email."
-echo "-- If the newest email PREDATES the oldest bell row, the comparable window is"
-echo "-- empty and the overlap rate is UNTESTED, not zero-confirmed."
-ssh live-ro "$PG -c \"
-SELECT id, type, created_at, is_read FROM notifications
- WHERE type LIKE 'forum.%' ORDER BY created_at;
-\""
-ssh live-ro "$MY \"SELECT MAX(created_at) AS newest_overlappable_email FROM wp_fsmpt_email_logs WHERE subject LIKE '%mentioned you%' OR subject LIKE '%replied%';\""
+echo "-- denominator: how many are on the list at all (MySQL, list 3)"
+ssh -o BatchMode=yes live-ro "$MY \"
+SELECT 'list3_rows' k, COUNT(*) v FROM wp_fc_subscriber_pivot p
+  WHERE p.object_id=3 AND p.object_type LIKE '%Lists%'
+UNION ALL SELECT 'subscribed', COUNT(*) FROM wp_fc_subscriber_pivot p
+  JOIN wp_fc_subscribers s ON s.id=p.subscriber_id
+ WHERE p.object_id=3 AND p.object_type LIKE '%Lists%' AND s.status='subscribed';\""
 
 echo
 echo "=============================================================="
-echo " AXIS 3 — already digested."
+echo " 3. DOES THE COUNTED REGISTER'S COPY STILL MATCH REALITY?"
 echo "=============================================================="
-echo "-- (a) cadence drift: a constant 7d window cannot meet a drifting send time."
-ssh live-ro "$MY \"SELECT id, LEFT(title,40) title, created_at FROM wp_fc_campaigns WHERE title LIKE '%Weekly Digest%' ORDER BY id DESC LIMIT 8;\""
-echo "   Compare consecutive gaps to 7d00h00m: gap > 7d loses a band, gap < 7d duplicates one."
-
-echo
-echo "-- (b) RULE 3b: 'failed' recipients on a Weekly Digest campaign."
-echo "--     NOT empty as of 2026-07-28: campaign 283 (June 1) lost 6 members to an"
-echo "--     SES SignatureDoesNotMatch, never re-sent. Match on 'Weekly Digest', NOT"
-echo "--     'Week of' — the wrong pattern here is what produced the false all-clear."
-ssh live-ro "$MY \"
-SELECT c.id, LEFT(c.title,40) title, e.status, COUNT(*) n
-  FROM wp_fc_campaigns c JOIN wp_fc_campaign_emails e ON e.campaign_id = c.id
- WHERE c.title LIKE '%Weekly Digest%' AND e.status <> 'sent'
- GROUP BY 1,2,3 ORDER BY c.id DESC;
-\""
-echo "   (platform-wide failure history — NOTE 283 IS a digest; only 38 is not:)"
-ssh live-ro "$MY \"SELECT campaign_id, COUNT(*) fails, LEFT(MIN(note),60) cause FROM wp_fc_campaign_emails WHERE status='failed' GROUP BY 1 ORDER BY 1 DESC;\""
-
-echo
-echo "-- (c) the backlog a floorless watermark would expose on its first send."
-ssh live-ro "$PG -c \"
-WITH b AS (
-  SELECT n.user_uuid, count(*) c
-    FROM notifications n LEFT JOIN connections c2 ON c2.id = n.connection_id
-   WHERE n.created_at < now() - interval '7 days' AND n.is_read = false
-     AND (n.connection_id IS NULL
-          OR (n.type = 'connection_request' AND c2.status = 'pending')
-          OR (n.type = 'connection_accept'  AND c2.status = 'accepted'))
-   GROUP BY 1)
-SELECT count(*) members, sum(c) items, round(avg(c),2) avg, max(c) worst,
-       count(*) FILTER (WHERE c >= 5)  AS mem_5plus,
-       count(*) FILTER (WHERE c >= 10) AS mem_10plus
-  FROM b;
+echo "-- The line reads 'You have N <thing> waiting'. Two things can drift:"
+echo "--   the SINGULAR stops being the common case, or N grows past what reads well."
+ssh -o BatchMode=yes live-ro "$PG -c \"
+WITH stale AS (
+  SELECT b.wp_user_id, count(*) AS n
+    FROM notifications n
+    JOIN users u ON u.uuid=n.user_uuid
+    JOIN wp_user_bridge b ON b.user_id=u.id
+    LEFT JOIN connections c ON c.id=n.connection_id
+   WHERE n.created_at < now() - interval '7 days'
+     AND n.type IN ($TODO) AND $OUTSTANDING
+   GROUP BY 1
+)
+SELECT n AS stale_items_held, count(*) AS members FROM stale GROUP BY 1 ORDER BY 1;
 \""
 
 echo
-echo "-- (d) RULE 3b's PROPOSED WINDOW, demonstrated. No new schema: the window start"
-echo "--     is the send time of the most recent digest THAT MEMBER ACTUALLY RECEIVED."
-echo "--     Asked as of the June 22 digest, the two failed members below must reach"
-echo "--     BACK to 2026-05-25, and the healthy controls must stay at 2026-06-01."
-echo "--     964 + 1884 = real casualties of campaign 283. 1000 + 1001 = controls."
-ssh live-ro "$MY \"
-SELECT e.subscriber_id, MAX(c.created_at) AS window_start
-  FROM wp_fc_campaigns c
-  JOIN wp_fc_campaign_emails e ON e.campaign_id = c.id
- WHERE c.title LIKE 'Weekly Digest%' AND e.status = 'sent' AND c.id < 319
-   AND e.subscriber_id IN (964, 1884, 1000, 1001)
- GROUP BY 1 ORDER BY 1;
+echo "-- HAS A FORUM TYPE EVER GONE STALE? As of 2026-07-28 the counted register was"
+echo "-- 100% connection_request, so 'You have 2 replies to your comments waiting' had"
+echo "-- NEVER been rendered against real data. A non-zero here is the first time."
+ssh -o BatchMode=yes live-ro "$PG -c \"
+SELECT n.type, count(*) AS stale_now
+  FROM notifications n
+  JOIN users u ON u.uuid=n.user_uuid
+  JOIN wp_user_bridge b ON b.user_id=u.id
+ WHERE n.created_at < now() - interval '7 days'
+   AND n.type IN ('forum.mention','forum.reply_to_topic','forum.reply_to_reply')
+   AND n.is_read = false
+ GROUP BY 1;
 \""
-echo "   Expected: 964 -> 2026-05-25 | 1000 -> 2026-06-01 | 1001 -> 2026-06-01 | 1884 -> 2026-05-25"
+echo "   (no rows = still never happened; the copy for those types remains unexercised)"
 
 echo
-echo "Done. Nothing was written. See docs/atlas/RECAP-SUPPRESSION-PROPOSAL.md."
+echo "=============================================================="
+echo " 4. VERBOSITY — do the two existing guardrails still bound it?"
+echo "=============================================================="
+echo "-- Guardrail 1: notify-bridge COALESCES before the digest sees anything."
+echo "--   reply_to_topic anchor=0            -> one row per TOPIC"
+echo "--   reply_to_reply anchor=parent reply -> one row per COMMENT OF YOURS"
+echo "-- Guardrail 2: LG_WD_Recap::MAX_ROWS = 8, tail rolled into 'N more waiting'."
+echo "-- Measured in BELL ROWS from the mirror, which is the unit that renders."
+ssh -o BatchMode=yes live-ro "$PGL -c \"
+WITH rows_ AS (
+  SELECT t.author_id AS member, date_trunc('week', r.created_at) AS wk, 'rtt:'||t.id AS k
+    FROM forums.reply r JOIN forums.topic t ON t.id=r.topic_id
+   WHERE r.author_id IS DISTINCT FROM t.author_id AND t.author_id IS NOT NULL
+     AND r.status='publish' AND r.created_at >= now() - interval '2 years'
+  UNION ALL
+  SELECT p.author_id, date_trunc('week', r.created_at), 'rtr:'||p.id
+    FROM forums.reply r JOIN forums.reply p ON p.id=r.parent_reply_id
+   WHERE r.author_id IS DISTINCT FROM p.author_id AND p.author_id IS NOT NULL
+     AND r.status='publish' AND r.created_at >= now() - interval '2 years'
+), per AS (SELECT member, wk, count(DISTINCT k) AS bell_rows FROM rows_ GROUP BY 1,2)
+SELECT count(*) AS member_weeks, round(avg(bell_rows),2) AS avg_rows,
+       count(*) FILTER (WHERE bell_rows > 3) AS over_3,
+       count(*) FILTER (WHERE bell_rows > 8) AS over_the_8_row_cap,
+       max(bell_rows) AS worst_week
+  FROM per;
+\""
+echo "   Baseline 2026-07-28: 1564 member-weeks, avg 1.53, over_3 = 80 (5.1%),"
+echo "   over the cap = 6 in two years, worst 12 -> renders as 8 rows + '4 more'."
+echo "   A third guardrail was NOT built because these two already bound it."
+echo
+echo "-- NOT MEASURED ANYWHERE ABOVE, and said so rather than left implied: MENTIONS."
+echo "-- Each mention is its own bell row (anchor = the reply), and counting historical"
+echo "-- mentions needs content parsing for @slug. It is also the component most likely"
+echo "-- to grow — the autocomplete minter only shipped 2026-07-23. If a wall ever"
+echo "-- appears in this section, mentions are where it comes from, not replies."
+
+echo
+echo "=============================================================="
+echo " 5. THE FOURTH AXIS — still open, still Ian's"
+echo "=============================================================="
+echo "Nothing marks a notification read when a member clicks a link in the EMAIL."
+echo "markRead is called ONLY from /me-notifications, the bell modal. So an"
+echo "email-only reader keeps seeing the same items — now as a COUNTED line rather"
+echo "than a repeated named row, which is softer but not a fix."
+echo "The obvious cure (a click-clear redirect) is deliberately NOT built: mail"
+echo "scanners follow every link with no human involved, and on this platform's own"
+echo "click data 7-10% of apparent clickers are machines hitting 10-20 links inside"
+echo "four seconds. A GET that cleared items would wipe a member's recap before they"
+echo "opened it, and the failure would look exactly like the feature working."
+echo "WEEKLY-DIGEST-RECAP.md §9.2."
