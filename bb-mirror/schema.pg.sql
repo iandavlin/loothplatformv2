@@ -339,26 +339,46 @@ CREATE TRIGGER reply_search_doc_trigger
 --
 -- Deliberately NOT a sweeper job: a cleanup script is a second thing to remember
 -- to run, a correct delete path is not.
-CREATE OR REPLACE FUNCTION attachment_purge_for_parent() RETURNS trigger AS $$
+--
+-- EVERY NAME IN THE BODY IS SCHEMA-QUALIFIED, and that is load-bearing. plpgsql
+-- resolves unqualified names when the function RUNS, against the CALLER's
+-- search_path — not against the search_path in force here at CREATE time. The
+-- app is fine either way (config.php sets `search_path = forums, public` on
+-- every connection), but `sudo -u postgres psql -d looth` runs with
+-- `"$user", public`. Measured on the real schema (2026-07-28), with the body
+-- unqualified:
+--     DELETE FROM forums.reply WHERE id = 100;
+--     ERROR:  relation "attachment" does not exist
+-- The trigger raised, so the DELETE aborted — turning a silent leak into a hard
+-- failure for exactly the hand-run cleanup this is supposed to cover. Qualified,
+-- the same statement succeeds from any search_path. The type cast needs it too:
+-- `attachment_parent_kind` is just as unqualified a name as the table.
+-- Everything between the BEGIN/END markers below is extracted verbatim by
+-- bin/fix-attachment-orphans.sh, so that applying this fix to LIVE runs these
+-- statements and nothing else — rather than replaying this whole file against a
+-- production database. Keep the block self-contained and fully schema-qualified.
+-- >>> BEGIN attachment-purge <<<
+CREATE OR REPLACE FUNCTION forums.attachment_purge_for_parent() RETURNS trigger AS $$
 BEGIN
   -- TG_ARGV[0] is the parent_kind this trigger is bound to. Matching on BOTH
   -- kind and id matters: topic 100 and reply 100 are different parents, and a
   -- kind-blind delete would take the wrong one's images.
-  DELETE FROM attachment
-   WHERE parent_kind = TG_ARGV[0]::attachment_parent_kind
+  DELETE FROM forums.attachment
+   WHERE parent_kind = TG_ARGV[0]::forums.attachment_parent_kind
      AND parent_id   = OLD.id;
   RETURN OLD;
 END $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS topic_attachment_purge ON topic;
+DROP TRIGGER IF EXISTS topic_attachment_purge ON forums.topic;
 CREATE TRIGGER topic_attachment_purge
-  AFTER DELETE ON topic
-  FOR EACH ROW EXECUTE FUNCTION attachment_purge_for_parent('topic');
+  AFTER DELETE ON forums.topic
+  FOR EACH ROW EXECUTE FUNCTION forums.attachment_purge_for_parent('topic');
 
-DROP TRIGGER IF EXISTS reply_attachment_purge ON reply;
+DROP TRIGGER IF EXISTS reply_attachment_purge ON forums.reply;
 CREATE TRIGGER reply_attachment_purge
-  AFTER DELETE ON reply
-  FOR EACH ROW EXECUTE FUNCTION attachment_purge_for_parent('reply');
+  AFTER DELETE ON forums.reply
+  FOR EACH ROW EXECUTE FUNCTION forums.attachment_purge_for_parent('reply');
+-- >>> END attachment-purge <<<
 
 -- ============================================================================
 -- Comments (visibility for cross-schema readers — profile-app has SELECT)

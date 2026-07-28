@@ -25,6 +25,22 @@ TAG="attachment-orphan-fix-$(date -u +%Y%m%dT%H%M%SZ)"
 
 say(){ printf '\n\033[1m%s\033[0m\n' "$1"; }
 
+# The forward migration is the marked block in schema.pg.sql — extracted, not
+# duplicated, so the file that builds a fresh database and the statements that
+# get applied to live can never drift apart. We deliberately do NOT pipe the
+# whole schema at a production database just to add two triggers.
+purge_ddl(){
+  awk '/^-- >>> BEGIN attachment-purge <<</{f=1;next} /^-- >>> END attachment-purge <<</{f=0} f' "$SCHEMA_SQL"
+}
+# Guard: a silent extraction failure would make `apply` sweep the existing
+# orphans while installing nothing to stop new ones — the worst outcome, because
+# it looks like it worked.
+DDL="$(purge_ddl)"
+case "$DDL" in
+  *attachment_purge_for_parent*reply_attachment_purge*) ;;
+  *) echo "FATAL: could not extract the attachment-purge block from $SCHEMA_SQL" >&2; exit 1;;
+esac
+
 census(){
   $PSQL -At -F'|' -c "
     SELECT COALESCE(k,'(none)'), COALESCE(rows::text,'0'), COALESCE(parents::text,'0') FROM (
@@ -58,8 +74,10 @@ say "3. Purge triggers currently installed (expect 2 once applied)"; triggers
 
 if [ "$MODE" = "dry-run" ]; then
   say "DRY RUN — nothing changed."
-  echo "  Would install: forums.attachment_purge_for_parent() + 2 AFTER DELETE triggers"
-  echo "  Would delete : the orphan rows counted above, and ONLY those."
+  say "  The EXACT SQL apply would run (and nothing else):"
+  printf '%s\n' "$DDL" | sed 's/^/    | /'
+  echo
+  echo "  Would then delete: the orphan rows counted above, and ONLY those."
   echo "  Rows that must survive (parent still exists):"
   $PSQL -At -c "SELECT COUNT(*) FROM forums.attachment a
      WHERE (a.parent_kind='reply' AND EXISTS (SELECT 1 FROM forums.reply r  WHERE r.id=a.parent_id))
@@ -94,9 +112,10 @@ $PSQL -At -F$'\t' -c "
 echo "  backed up $(wc -l < "$BK") orphan rows -> $BK"
 
 # Triggers first, so nothing new leaks while the sweep runs.
-say "  installing triggers from schema.pg.sql (idempotent, whole file)"
-$PSQL -q -f "$SCHEMA_SQL" >/dev/null || { echo "SCHEMA APPLY FAILED"; exit 1; }
+say "  installing the attachment-purge block from schema.pg.sql (idempotent)"
+printf '%s\n' "$DDL" | $PSQL -q -f - || { echo "TRIGGER INSTALL FAILED"; exit 1; }
 triggers | sed 's/^/  triggers installed: /'
+[ "$(triggers)" = "2" ] || { echo "ABORT: expected 2 triggers installed, got $(triggers) — NOT sweeping"; exit 1; }
 
 say "  sweeping stranded rows"
 $PSQL -c "DELETE FROM forums.attachment a
