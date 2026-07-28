@@ -86,6 +86,49 @@ alongside a general "claim your handle" flow.
 
 ---
 
+---
+
+## Question 4 — who gets `/u/matt`? (this one is decided BY APPLYING, so decide it first)
+
+Not in the 107. These 136 members are in the **apply** set, and the apply hands out the most
+contested handles on the site as a side effect.
+
+136 proposals are a single token — `matt`, `jeff`, `steve`, `tom`. **46 of them are also the
+first name of other members in the same run**, who get the hyphenated form:
+
+| handle | goes to | others in this run sharing that first name |
+|---|---|---|
+| `/u/matt` | member 1416, display_name `Matt` | 18 |
+| `/u/jeff` | member 1550, display_name `Jeff` | 15 |
+| `/u/steve` | member 1554, display_name `Steve` | 14 |
+| `/u/tom` | member 417, display_name `Tom` | 14 |
+| `/u/dan` | member 1480, display_name `Dan` | 12 |
+
+**Not one of those 46 has any record of choosing their display name.** All 136 are provenance
+`indeterminate`; of the 46 contested, 38 have no `claimed_via` at all and 8 have
+`backfill_location`, which is a location backfill and not a name claim. Zero claimed via
+`onboard`, `direct` or `menu`.
+
+So the winner of `/u/matt` is decided by which Patreon import happened to carry a first name
+only. **This is not proof those names are import artifacts** — R4 says we do not infer that, and
+refusing to infer it is exactly why the no-suffix rule exists. It is a reason for a person to
+decide before the handles are gone rather than after: once assigned and 301ing, taking one back
+costs a member their working URL.
+
+**Options:**
+
+| | |
+|---|---|
+| **A — apply the other 1,390 now, hold the 136 (recommended)** | `--apply --hold-bare-names`. The 1,390 unambiguous members get their names today; the contested namespace waits for a decision that is genuinely yours. Costs those 136 members nothing they are not already living with — they keep the Patreon URL they have had all along. |
+| B — apply all 1,526 as planned | Fastest, and defensible: R1 says the slug is the display name cleaned, and "Matt" *is* his name as stored. Accepts that the prime handles go by import accident. |
+| C — hold the 136 and expand them from Patreon identity later | Would yield `matt-brennan` rather than `matt`, and leave `/u/matt` for someone who asks. Needs the creator token, which is not on this box — so it is a second pass, not a variant of this one. |
+
+**Recommendation: A.** It is the only option that keeps every door open: nothing is spent, the
+1,390 clear cases land immediately, and C stays available. The flag is off by default and holds
+all 136 single-token handles (the conservative superset of the 46 genuinely contested).
+
+---
+
 ## What answering these is worth
 
 | | now | after Q1 | after all three |

@@ -211,6 +211,13 @@ resumes. Expect `applied=1526 failed=0`. Each member's old `patreon_<id>` URL is
 
 Want a smaller first bite? `--limit=25` applies the first 25 only; the same rollback covers it.
 
+**One decision is made BY running this, so make it deliberately:** the apply hands out 136
+single-token handles — `/u/matt`, `/u/jeff`, `/u/steve` — and 46 of those are also the first
+name of other members in this same run. None of the 46 recipients has any record of having
+chosen their display name. Adding `--hold-bare-names` applies 1,390 and holds all 136 for a
+ruling, keeping every option open at no cost to anyone. Full argument and alternatives:
+`docs/atlas/SLUG-RULING-QUEUE.md` Question 4.
+
 ## 4. Verify
 
 ```bash

@@ -53,7 +53,7 @@ declare(strict_types=1);
  * USAGE
  *   sudo -u profile-app php backfill-slugs.php --html=/path/report.html   # dry run
  *   sudo -u profile-app php backfill-slugs.php --apply
- *   [--scope=junk|repair] [--limit=N] [--tsv=] [--db-only] [--applied-since=MIN]
+ *   [--hold-bare-names] [--scope=junk|repair] [--limit=N] [--tsv=] [--db-only] [--applied-since=MIN]
  *
  * --db-only skips the Patreon sweep (no creator token on this box): collisions then
  * cannot be expanded and are reported as needing a ruling rather than silently suffixed.
@@ -421,6 +421,24 @@ $needRuling = array_values(array_filter($plan, fn($p) => $p['proposed'] === ''))
 
 $act = array_values(array_filter($actionable, fn($p) =>
     $SCOPE === 'repair' ? true : in_array($p['cat'], ['1-NO-SLUG', '2-PATREON-JUNK', '6-COLLISION-EXPANDED'], true)));
+
+// --hold-bare-names: apply everything EXCEPT the single-token handles.
+//
+// Handing out /u/matt is the one irreversible-feeling decision in this run. It is the most
+// contested handle on the site, it goes to whichever member's display_name happens to be
+// just "Matt", and on live 2026-07-28 not ONE of those winners has any record of having
+// typed their own name — all indeterminate, none claimed via onboard|direct|menu. So the
+// allocation is driven by which Patreon import carried a first name only.
+//
+// That is not proof the name is an import artifact (R4: we do not infer that, and refusing
+// to is why the no-suffix rule exists). It is a reason for a HUMAN to decide before the
+// handles are gone, rather than after. Off by default: this changes nothing unless asked for.
+if (in_array('--hold-bare-names', $argv, true)) {
+    $before = count($act);
+    $act = array_values(array_filter($act, fn($p) => str_contains($p['proposed'], '-')));
+    fwrite(STDERR, sprintf("--hold-bare-names: holding back %d single-token handle(s); acting on %d\n",
+        $before - count($act), count($act)));
+}
 if ($LIMIT > 0) $act = array_slice($act, 0, $LIMIT);
 
 // ── summary ──────────────────────────────────────────────────────────────────
