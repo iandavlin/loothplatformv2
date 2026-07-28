@@ -69,6 +69,36 @@ exactly the kind of thing an instruction set exists to pre-empt.
 The **View-as strip itself** stays visible in all three modes, because it is gated on
 `$isOwner || $adminEditing` (`u.php:728`), a weaker condition than `$editing`.
 
+### MEASURED against the served HTML (2026-07-28, no engine needed)
+
+Fetched as the real owner (minted session, gate cookie, pinned to the internal IP) and
+counted **elements, not CSS rules** — `lg-caddy` appears 55 vs 35 times between the two
+renders purely because the stylesheet stays, which would have been a misleading count:
+
+| probe | owner (`?view=me`) | owner `?view=member` | anon |
+|---|---|---|---|
+| `id="lg-caddy-toggle"` (the Sections button) | **1** | **0** | 0 |
+| `id="lg-caddy"` (the drawer itself) | **1** | **0** | 0 |
+| `data-pmp-block=` (privacy chips) | **4** | **1** | 0 |
+| `data-prec-aud=` (location dials) | **2** | **0** | 0 |
+| `class="lg-viewas"` (the panel) | 1 | **1** | 0 |
+
+`/profile/edit` → **302 → `https://dev.loothgroup.com/u/visibility-matrix-qa`**, measured.
+
+**Correction to an earlier draft of this section.** I had written that `$editing` gates
+"the per-section privacy chips" without qualification. The measurement says otherwise —
+one chip survives preview mode:
+
+- gone in preview: `about`, `gallery` (the **per-section** chips) and both location
+  precision dials.
+- **survives: the `header` chip** — the master *Profile visibility* control, because it
+  lives in the `.lg-viewas` panel under the weaker `$isOwner` condition (`u.php:762`),
+  not under `$editing`.
+
+So the accurate sentence for the guide is: **in View-as preview you can still change
+your whole-profile visibility, but not any individual section's.** That asymmetry is
+real, is not obvious, and is exactly the sort of thing a member would trip on.
+
 ---
 
 ## 2.5 Every control a member can reach
@@ -122,6 +152,19 @@ middle one is its own **screen**:
 The guide should show that gate screen, because it is **what a logged-out visitor sees
 of a default profile** — and the member themselves can only reach it via
 "View as → Public".
+
+**STILL NOT PROVEN — and I tried.** I fetched the fixture profile as a true anonymous
+viewer: it returned **200 with the full profile rendered** (display name present 9×, no
+`class="lg-gate"` element at all). That is *correct behaviour*, not a leak — the matrix
+parks fixture 1849 with `header=public`, so an anon visitor is entitled to see it. It
+simply means **this fixture cannot demonstrate the gate**. Proving the gate screen needs
+a subject whose header ceiling is `members`, which the matrix's S2 state does exercise
+but does not leave behind. Flagged in §9; do not screenshot the gate until it has
+actually been produced.
+
+*(Method note: my first count looked like the gate WAS present — `lg-gate` matched 7
+times. Those were all CSS rules. Counting `class="lg-gate` instead gave 0. Same family
+as the `grep -c` trap: match the element, not the word.)*
 
 ## 3. PRIVACY — the full model
 
@@ -646,6 +689,10 @@ running page), the section catalog (§4), and the archived guide's contents (§7
    that number. The June captures (§5) confirm placement but are stale on contents and
    are 768/1024px — neither is a phone.
 2. **Full phone-width visual inventory** (§5) — blocked on 1.
+2b. **The members GATE screen has never been produced** (§2.5). The matrix fixture is
+   parked `header=public`, so it renders to anon rather than gating. Needs a subject at
+   `header=members`. Until then the gate screen is described from source only — **do not
+   shoot it or caption it as fact.**
 3. ~~Which implementation serves `/membership-guide/`.~~ **RESOLVED** (§7):
    `membership-pages` owns the route and the `manage_options` gate; the plugin is the
    admin/CMS side. Measured on the running box.
