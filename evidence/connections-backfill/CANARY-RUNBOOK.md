@@ -60,6 +60,42 @@ is the point of the restore.
 
 ---
 
+## APPLIED — the 83 landed on live 2026-07-28
+
+Verified read-only on live: the tag table `connections_restore_20260727_ian_acc` is **present**,
+Ian is on **1334 accepted** (1251 + 83, exactly as the dry run predicted) and **pending is
+unchanged at 427**. Nobody was notified. File 9 remains the rollback if he wants it undone.
+
+Only that one tag table exists on live — 1/2/3 and 4/5/6 are confirmed **not** applied.
+
+# The re-request fix (10/11/12) — a DIFFERENT defect
+
+Ian found this from the UI: people he re-requested "stayed as requested". These pairs **already
+have a row**, with the wrong status, so no INSERT can fix them — they need an UPDATE. The restore
+sets are blind to them by construction (their predicate is "no row at all").
+
+| | |
+| --- | --- |
+| rows | **81** pending that should be accepted |
+| whose | 5 members re-requested by hand: wp 197 (53), Ian (23), wp 1431 (3), wp 303 (1), wp 244 (1) |
+| when | four batches in July — a cleanup, not an ongoing bug |
+| notifies | **nobody.** It removes 81 stale requests; **71 members' badges go DOWN** |
+| tag table | `connections_restatus_20260728`, records **prior_status** |
+
+```bash
+git show origin/connections-backfill:profile-app/sql/2026-07-28-connections-restatus-10-DRYRUN.sql   > /tmp/10-dryrun.sql
+git show origin/connections-backfill:profile-app/sql/2026-07-28-connections-restatus-11-APPLY.sql    > /tmp/11-apply.sql
+git show origin/connections-backfill:profile-app/sql/2026-07-28-connections-restatus-12-ROLLBACK.sql > /tmp/12-rollback.sql
+```
+
+Same order: know 12 first, then 10 (read-only), 11, then 10 again to verify. Live dry run says
+81 found / 81 will flip / 0 already accepted / 0 gone since measurement / 0 new badges / 71 cleared.
+
+**Rollback caveat, unique to this set:** file 12 restores **status** exactly, replaying the
+recorded `prior_status` rather than assuming it. It cannot restore `updated_at` — the
+`connections_touch` trigger stamps `now()` on every UPDATE. The restore sets rolled back
+byte-identically; an UPDATE-based fix cannot.
+
 # PARKED — do not run until Ian has judged the 83
 
 Everything below concerns the **135-row (4/5/6)** and **746-row (1/2/3)** sets. Both put an
