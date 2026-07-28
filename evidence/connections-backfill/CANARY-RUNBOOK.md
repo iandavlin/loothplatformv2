@@ -81,6 +81,36 @@ already present and are skipped by the guards).
    matching. `ON DELETE CASCADE` means a connection a member deletes afterwards drops its tag,
    so rollback stays correct.
 
+## Pre-flight — both dry runs executed against LIVE, 2026-07-28
+
+Both dry-run files are read-only and were run against live itself as `looth_ro`
+(`psql -h 127.0.0.1 -U looth_ro -d profile_app -f -`, SQL piped over stdin). They execute
+cleanly on the real box, so steps 1 and 4 below are proven, not just rehearsed.
+
+**Canary dry run on live** — `UUID MATCH` = **true**, so the wrong-box guard passes:
+
+```
+rows in this canary          135      already present (skipped)   0
+WILL INSERT                  135      Ian now: 1251 accepted
+  accepted                    83               0 pending IN
+  pending                     52             427 pending OUT
+    pending Ian SENT          52
+    pending Ian RECEIVED       0
+other members whose badge +1  52
+```
+
+After the canary Ian lands on **1334 accepted / 479 pending out**, and his incoming stays at
+**zero**. The direction finding is confirmed on live, not inferred from dev2.
+
+**Full dry run on live** — `746` payload, **`745` will insert**, 354 accepted / 391 pending,
+302 members. The 1 already-present row is the pair a member created organically at 22:31 on
+2026-07-27; the guards skip it correctly against real drift. It is not one of Ian's, so **after
+the canary the full apply inserts 610**.
+
+**The write path is still unproven and stays that way here.** `looth_ro` is read-only by design
+— a `CREATE TABLE` probe returns *permission denied for schema public*. The apply commands need
+a role that can write, and that is Ian's to run.
+
 ## Rehearsal — 2026-07-27, throwaway replica on dev2, dropped after
 
 Replica built from dev2's `profile_app` (`connections`, `users`, `wp_user_bridge`, plus the
