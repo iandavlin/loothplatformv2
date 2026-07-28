@@ -170,12 +170,51 @@ proposes them again as if they were new.
 | Links | **Per row.** Each row links to its own target, taken from the bridge's stamped `target_url`. |
 | Placement | **Top**, directly under the intro rule, above the curated content. |
 | Greeting | **The member's profile name, first token only** — see §4.1. |
-| Reactions | **In**, batched: one row per thing reacted to. |
+| Reactions | ~~**In**, batched~~ — **SUPERSEDED 2026-07-28.** Ian's to-do ruling removed reactions entirely: nothing is owed on a reaction. The 07-27 decision about SHAPE stands; its decision about this type's ADMISSION does not. |
 | Length | **Caps at 8 rows**, tail rolled into "N more updates waiting for you" — never truncated silently. |
 
 **Rejected, do not re-propose:** counts-and-senders without titles; inert rows behind a single
 "Open the Hub" button (this was THREAD-FOLLOW-SPEC.md §2.6b's proposal — see §6); the section
 placed below the curated content.
+
+### 4.2 TWO REGISTERS — fresh items NAMED, stale items COUNTED (Ian, 2026-07-28)
+
+> "If it's fired once and not been resolved, leave it out of the next email. Or perhaps we throw a
+> number at it like the fresh ones have a name and the stale ones have a collective number like
+> **You have 6 connection requests**."
+
+The section now has two voices, in this order:
+
+| Register | What it draws | Example |
+|---|---|---|
+| **Named** | everything new **this week** | *"Brian Carnett wants to connect"* |
+| **Counted** | everything still unresolved from **before** this week, one line per type | *"You have 3 connection requests waiting"* |
+
+**It solves both failure modes at once, which is why it beats either rule on its own.** Re-naming
+the same item every week is nagging; dropping it entirely loses the one thing that actually needs
+the member. A count nags nobody and loses nothing.
+
+**IT NEEDS NO NEW STATE — the fixed 7-day window IS the fresh/stale line.** Inside the window an item
+is new, so it gets named; outside it, it was in a previous email, so it gets counted. No per-item
+`named_at` stamp and no per-member send record. That last point matters: the send record *was*
+Rule 3b in RECAP-SUPPRESSION-PROPOSAL.md, and Ian declined it, so a design needing it would have been
+dead on arrival.
+
+**Resolved-state decides when to STOP counting**, and only that — see §9.1's boxed note for why
+`is_read` cannot do that job for a connection request, and why that is load-bearing rather than
+fastidious.
+
+**Copy is Ian's and is not inflated.** One short line, no explanation. Counted rows carry **no url**:
+a count is not a thing you can click, and deep-linking "3 connection requests" to any one of them
+would be a lie about which. Note the **singular is the common case** — measured on live, 224 of the
+237 members with anything stale have exactly one item, and nobody has more than three, so his example
+of 6 is above today's ceiling.
+
+**One open copy question, drawn rather than argued** (previs §2b): when both registers are present
+the counted line sits under a named row and its number does *not* include that row. Options are
+A (as built), B ("3 *more*"), or C — add "more" only when a named row of that type sits above it,
+which gives the 224 panel A and the 56 panel B for two lines of renderer. **A ships until Ian says
+otherwise.**
 
 ### 4.1 The greeting
 
@@ -266,33 +305,57 @@ Stated explicitly so that when SS9.1 (per-event email vs digest for discussion a
 on, the change is a scope edit and not a re-architecture. **No de-duplication has been built,
 deliberately — there is no rule yet to de-duplicate against.**
 
-| Included | From | Meaning |
+> **REWRITTEN 2026-07-28. The admission rule changed from a list to a TEST.** Ian ruled that the
+> digest is a **to-do list, not a news feed** — "just things that require attention from the user
+> like a connection request etc." So the question for any type, existing or new, is one question:
+>
+> ### **DOES THIS WAIT ON THE MEMBER?**
+>
+> If nothing is owed by them, it does not belong, however pleasant it is to hear.
+
+| Included | From | Why it passes the test |
 |---|---|---|
-| `forum.mention` | bell | someone @mentioned **you** |
-| `forum.reply_to_topic` | bell | someone replied on a discussion **you authored** |
-| `forum.reply_to_reply` | bell | someone replied to **your** reply |
-| `reaction.on_post` | bell | someone reacted to **your** topic / reply / card |
-| `connection_request`, `connection_accept` | bell | social edges involving **you** |
-| unread DMs | `message_recipients` | messages waiting for **you**, coalesced per sender |
+| `connection_request` | bell | **they must accept or decline** — the archetype |
+| `forum.mention` | bell | someone addressed **you** directly and may be waiting |
+| `forum.reply_to_topic` | bell | a reply on a discussion **you authored** |
+| `forum.reply_to_reply` | bell | a reply to **your** reply |
+| unread DMs | `message_recipients` | the most literally-waiting-on-you thing the platform has |
+
+| **Removed 2026-07-28** | Why it fails the test |
+|---|---|
+| `connection_accept` | they already have the connection. **Nothing is owed.** 147 rows all-time |
+| `reaction.on_post` | someone liked something. **Nothing is owed.** 53 rows all-time |
+
+Both were **deleted, not disabled** — render arms, `dot_color` arms, the `reaction_what()` helper
+and the `reactions` bucket all went with them. A render arm for a type the boundary refuses reads
+like a live feature.
 
 **Excluded — everything else, by default.** In particular:
 
-- **`forum.followed_topic` is NOT included.** This is the SS9.1 overlap: if a member has per-thread
-  email on *and* the digest also covered followed-thread activity, the same reply would reach them
-  twice. It cannot happen today, because the type is absent from the allow-list and provably
-  renders nothing (regression-tested).
+- **`forum.followed_topic` is STRUCTURALLY EXCLUDED — this is stronger than it used to be.** It was
+  previously "absent from the allow-list, one line away whenever wanted". Under the to-do test it
+  **fails on its merits**: a reply in a thread you merely *follow* does not wait on you — you are an
+  observer, not the addressee. It is excluded for the same reason `reaction.on_post` was removed.
+  Still regression-tested to render nothing.
 - **Activity in threads you merely follow, or any subscription-derived feed.** The recap has no
   subscription source at all — it never queries `forums.forum_subscription`. Every row it draws is
   one where the member is the *addressee* of a bell row.
 - Any future notification type, until someone adds it on purpose.
 
-**The one-line shape of each possible ruling:**
+**THE §9.1 QUESTION NO LONGER REACHES THIS DOCUMENT, and that is a real simplification.** The table
+that used to sit here gave "the one-line shape of each possible ruling". It is withdrawn: the digest
+**cannot carry followed-thread activity under any §9.1 outcome**, because the to-do test excludes it
+independently of how per-event email is configured.
 
 | If Ian rules… | The change here |
 |---|---|
-| digest owns discussion activity | add `'forum.followed_topic' => 'replies'` to `INCLUDED_TYPES` |
-| per-event owns it | **nothing** — already excluded |
-| digest owns it, per-event goes quiet for followed threads | the same one line here; the per-event side turns itself off |
+| digest owns discussion activity | **needs a separate ruling that a followed-thread reply waits on you** — his own test says it does not |
+| per-event owns it | **nothing** — excluded on the merits |
+| digest owns it, per-event goes quiet | same as the first row: not a scope edit any more |
+
+**Consequence for the double-send worry, which was the whole reason this section existed:** it
+cannot happen under any configuration, so no de-duplication is needed under any §9.1 outcome — not
+just under some of them. See RECAP-SUPPRESSION-PROPOSAL.md §4.1.
 
 **Preferences.** This section is part of the weekly digest, so the **digest toggle governs it** and
 this lane invents nothing. The account page's Weekly Digest switch (bf9e3a1) is FluentCRM **list
@@ -381,28 +444,50 @@ member "X wants to connect" about someone they are already connected to. So the 
 is the authority, not the bell row:
 
 - `connection_request` → listed only while the edge is still `pending` (still theirs to action)
-- `connection_accept` → listed only while the edge is still `accepted` (still true)
+- ~~`connection_accept` → listed only while the edge is still `accepted`~~ — **the type was removed
+  entirely on 2026-07-28**; nothing is owed once the connection exists.
+
+> **AND `is_read` NO LONGER SUPPRESSES A CONNECTION REQUEST AT ALL (2026-07-28).** The two-register
+> ruling needs a *resolved* signal, not a *seen* one, to know when to stop counting an item — a
+> member who looked at a request and did not answer it still owes an answer. So for
+> `connection_request` the edge status is now the **only** test; `is_read` is not consulted.
+>
+> **This is load-bearing, not tidying.** `bottom-nav.js:1128` auto-fires `markAllNotifsRead()` 700ms
+> after the mobile notification sheet renders — glancing at your notifications on a phone marks every
+> one of them read whether you acted or not. Desktop has no equivalent (checked all 24 docroot
+> `.js`). If this were ever "simplified" back onto `is_read`, a glance would silence a member's whole
+> digest, because empty now means no email at all. The row above is kept because it is still true for
+> the forum types, which have no cheap resolution signal.
 
 Verified: all 3 stale rows now excluded; a control member with a genuinely pending request still
 sees it.
 
-### 9.1a The empty section is now the COMMON case
+### 9.1a The empty case — **SUPERSEDED: empty now means NO EMAIL AT ALL**
 
-Measured across the real weekly list (1,626 subscribers with a WP account):
+> **Ian ruled 2026-07-28: a member with nothing waiting on them gets no email whatsoever, not the
+> digest minus the section.** "An email from us should mean something genuinely wants them." What
+> this section used to say — that the empty section is the common case and must render clean — is
+> still TRUE at the renderer, but it is no longer what a member experiences, because they are
+> dropped before a `CampaignEmail` row exists.
 
-| Window | Get a section | Get **nothing** |
-|---|---|---|
-| **7 days (shipping)** | 3 (0.2%) | **1,623 (99.8%)** |
-| 30 days | 111 (6.8%) | 1,515 (93.2%) |
-| 365 days | 116 (7.1%) | 1,510 (92.9%) |
+**Where it is enforced:** `LG_WD_Recap_Source::recipients_with_something_waiting()`, called from the
+sender before `$campaign->subscribe()`. The renderer's empty-string behaviour is retained as the
+belt-and-braces behind it (a member reaching the render with an empty payload must still emit
+nothing) and its byte-identical proof is repointed, not deleted — see
+`dev/verify-per-recipient.php` and `dev/verify-empty-means-no-send.php`.
 
-*(dev2 numbers — a trickle of traffic and a notification bridge only two weeks old, so live ratios
-will differ. 30d and 365d barely differ for exactly that reason: there is only ~2 weeks of bridged
-data in total.)*
+**It fails OPEN on purpose.** If the recap source cannot be reached, everyone is kept and the send
+goes out whole. Failing closed would mean one unreachable endpoint silently mails nobody — and that
+failure is indistinguishable from a quiet week, with no bounce and no error.
 
-This is not an edge case to tolerate; **it is the default path.** It renders clean: the renderer
-returns `''`, the smart code emits nothing, and the recipient's body is byte-identical to the
-no-recap body — asserted per-member in `dev/verify-per-recipient.php`, not assumed.
+**Measured on live 2026-07-28 (list 3, 1,663 subscribed):** **280 members would be mailed** — 43 on
+named items only, **181 on a counted line only**, 56 on both. The counted register is the majority
+of the recipient list, so `stale` had to join the "is this payload empty" test or 181 members would
+have been silenced while the renderer could perfectly well draw their row.
+
+**Flagged, not re-argued:** this suppresses the *whole* email, so 1,383 of 1,663 members receive
+nothing — including Upcoming Events, the videos and loothprint, which have nothing to do with
+anyone's to-do list.
 
 ### 9.2 The one that is NOT free — click-through from a previous digest (**NOT BUILT, needs Ian**)
 
