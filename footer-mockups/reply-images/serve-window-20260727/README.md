@@ -5,8 +5,21 @@ in a report is worth less than a re-runnable artifact.
 
 Serve baseline before and after: HEAD `fa67f02`, tree
 `74b397571af8ec01388c16b6f2657013e9a13d55`, branch `main`, porcelain empty.
-Eight tracked files overlaid in `~/loothplatformv2-clean`, restored with
-`git checkout --`.
+Eight tracked files overlaid in `~/loothplatformv2-clean`.
+
+> **RESTORE COMMAND — this window used the WRONG ONE. Do not copy it.**
+> It restored with the bare `git checkout -- <path>`, which was the form keeper
+> was issuing in window grants that night. On 2026-07-28 keeper ruled it wrong
+> and proved why: the bare form restores from the **INDEX**, so on a shared clone
+> where another process has staged work it silently installs *that* content into
+> the serve and exits 0. **The only allowed restore is
+> `git checkout HEAD -- <path>`**, plus `git reset -q` if you staged anything.
+>
+> This window got away with it: the restore was verified against the **whole-tree
+> hash** (`git rev-parse HEAD:` = `74b39757…`), not a spot-check of remembered
+> files, and it matched exactly. That backstop is the only reason the wrong
+> command did not ship someone else's edit — which is precisely the argument for
+> never accepting an md5 of the files you *think* you touched.
 
 ---
 

@@ -190,15 +190,28 @@ pull-only, so a deploy is one `git pull`. Ian corrected keeper on this.
   `filemtime`, so a changed file self-busts.
 - **Overlay by editing tracked files in `~/loothplatformv2-clean`**, then restore
   with a path-restore. That is the pattern keeper wants from every lane.
-- **Restore with `git checkout HEAD -- <path>`, not `git checkout -- <path>`.**
-  The bare form restores from the **INDEX**. Lanes overlap on the serve clone —
-  during this lane's window composer-p3 had six files staged there, three of
-  which overlapped this lane's set. Had their staging landed first, the bare form
-  would have silently written *their* staged content into the worktree.
+- **THE ONLY ALLOWED RESTORE IS `git checkout HEAD -- <path>`**, followed by
+  `git reset -q` if you staged anything. **Never the bare `git checkout -- <path>`
+  — keeper ruled this on 2026-07-28 after issuing the wrong form in every window
+  grant that night.** The bare form restores from the **INDEX**: on a shared clone
+  with five lanes and a keeper touching it, if any process has staged work it
+  **installs that staged work into the serve and exits 0** — success reported,
+  someone else's edit serving. keeper proved it in a scratch repo rather than
+  reasoning about it (committed `COMMITTED`, another process stages
+  `STAGED-BY-ANOTHER-PROCESS`; bare form yields the staged text, `HEAD --` yields
+  the committed text). This is not hypothetical here: during this lane's window
+  composer-p3 had six files staged in the serve clone, **three overlapping this
+  lane's set**. Had their staging landed first, the bare form would have written
+  their content into the serve under my name.
 - **The tree hash cannot detect a staged overlay.** `git rev-parse HEAD:` is the
   *committed* tree and matches regardless of index state. Only
   `git status --porcelain` catches it. Prove a restore with **all three**: HEAD,
   tree, porcelain.
+- **Verify the restore against the WHOLE-TREE HASH, never an md5 of the files you
+  remember touching.** This is exactly the failure that backstop exists for: all
+  three windows on 7/27 were restored with the *wrong* command and came back
+  matching `74b39757…` anyway, which is the only reason nothing shipped wrong. A
+  spot-check of remembered files cannot catch a file you did not remember.
 - Reload `php8.3-fpm` after PHP changes; `nginx -t` before any reload and again
   after the restore; a full `systemctl restart nginx` at the end is the bar.
 - **Ask keeper for the window. Never assume one.**
@@ -244,14 +257,24 @@ Files this lane overlays (8, all tracked):
   and returns true. Never trust a `true` return as proof mail was sent.
 - **`dev.loothgroup.com` is DEAD.** Anything naming it is broken by definition,
   not merely misaddressed. Do not preserve it as a fallback.
-- **`live-ro` proxies through dev1, and dev1 AUTO-STOPS.** It read `stopped`, then
-  `dev1-power on` said "already running", then it stopped again mid-probe and
-  every retry died at `Connection timed out during banner exchange`. Budget for a
-  short window: script the whole live query set into ONE file, pipe it over a
-  single ssh on stdin (`ssh live-ro 'mysql … looth_import' < q.sql`), and get it
-  all in one round trip. Do not plan an interactive back-and-forth with live.
-  Both live stores are readable: MySQL `looth_import` (WP) and Postgres
-  `psql -h 127.0.0.1 -U looth_ro -d looth` (the `forums.*` mirror).
+- **`live-ro` is DIRECT now — it no longer touches dev1.** Ian added dev2's IP to
+  live's security group and the `ProxyJump` is stripped from `~/.ssh/config`.
+  **dev1 is off and staying off.** Re-proven here on 2026-07-28 with dev1
+  confirmed `stopped`: `ssh live-ro` connects and queries fine. An earlier
+  revision of this file said live-ro proxies through dev1 and warned about dev1
+  auto-stopping mid-query — **that was true for about a day and is now wrong;
+  ignore it.** Both live stores are readable: MySQL `looth_import` (WP) and
+  Postgres `psql -h 127.0.0.1 -U looth_ro -d looth` (the `forums.*` mirror).
+  **Live is READ-ONLY and stays that way** — the account is `looth-ro`, a test
+  `CREATE TABLE` was refused, and every live write is Ian's.
+  Still worth doing anyway: **script a whole query set into ONE file and pipe it
+  over a single ssh on stdin** (`ssh live-ro 'mysql … looth_import' < q.sql`).
+  Not because the link is fragile now, but because it makes the measurement
+  re-runnable and quotable instead of a pile of ad-hoc shell.
+- **Do not carry another lane's figures — including keeper's — without checking.**
+  `free -m` and `swapon --show` take one second. Measured here 2026-07-28: swap
+  is **2GB total, not 4GB**, and it is **not** "essentially untouched" (984MB in
+  use, ~211MB free RAM, ~793MB available). Check before starting anything.
 
 ---
 
