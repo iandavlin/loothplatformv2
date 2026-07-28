@@ -10,11 +10,8 @@ environment drifts that had left that gate unable to run at all.
 
 > Read this before writing a word of the guide. Every claim is either sourced to a
 > file:line, measured against the store, or proven by the matrix — and where I have
-> only read the code and not the screen, it says **NOT PROVEN**.
-
-> Read this before writing a word of the guide. Every claim below is either sourced to
-> a file:line or explicitly marked **NOT PROVEN**. Where I have only read the code and
-> not the screen, it says so — a reading of the code is not a reading of the screen.
+> only read the code and not the screen, it says **NOT PROVEN**. A reading of the code
+> is not a reading of the screen.
 
 ---
 
@@ -56,9 +53,10 @@ least the claim interstitial. **NOT PROVEN:** I have not yet rendered them.
 u.php:127   $editing = ($isOwner && $role === 'me') || $adminEditing;
 ```
 
-`$editing` controls whether the **entire editing apparatus** renders: the Sections
-picker button (`u.php:748`), the caddy panel itself (`u.php:786`), the in-place field
-affordances, and the per-section privacy chips.
+`$editing` controls whether the **editing apparatus** renders: the Sections picker
+button (`u.php:748`), the caddy panel itself (`u.php:786`), the in-place field
+affordances, the location precision dials, and the **per-section** privacy chips. It
+does *not* gate the master Profile-visibility chip — see the measurement below.
 
 **Consequence the guide MUST state:** when an owner uses "View as → Public" or
 "View as → Member", the editor *disappears*. Not greys out — is not emitted. To get
