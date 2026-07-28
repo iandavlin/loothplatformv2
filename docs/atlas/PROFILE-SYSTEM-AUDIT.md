@@ -1,8 +1,16 @@
 # Profile system — audit of what it ACTUALLY does today
 
-**Status:** IN PROGRESS (source pass complete; running-system verification pending a
-browser engine from keeper). **Written for:** the Membership Guide's PROFILE entry.
-**Box:** dev2. **Audited at:** repo HEAD `6ef25e3`, branch `profile-audit`.
+**Status:** **COMPLETE except current phone-width screenshots** (the only item needing a
+browser engine, queued with keeper). The privacy model is **PROVEN GREEN** against the
+running system — `visibility-matrix.php` 67/67 (§3.6b), after repairing three
+environment drifts that had left that gate unable to run at all.
+**Written for:** the Membership Guide's PROFILE entry.
+**Box:** dev2 (dev2 and live hold different data — every number here is dev2).
+**Audited at:** branch `profile-audit`, off repo `6ef25e3`.
+
+> Read this before writing a word of the guide. Every claim is either sourced to a
+> file:line, measured against the store, or proven by the matrix — and where I have
+> only read the code and not the screen, it says **NOT PROVEN**.
 
 > Read this before writing a word of the guide. Every claim below is either sourced to
 > a file:line or explicitly marked **NOT PROVEN**. Where I have only read the code and
@@ -321,6 +329,35 @@ on tour / not available). Added via a "+ Status" picker.
 
 ---
 
+## 4b. Where a member's privacy choices become VISIBLE — directory + map
+
+The profile page is where a member *sets* privacy; the directory and map are where they
+*see it take effect*. The guide's privacy section should end here, because "did it
+work?" is answered on this surface, not on the profile.
+
+**Mind the two files with the same name** — I initially read the wrong one and found no
+visibility enforcement at all:
+
+| file | role |
+|---|---|
+| `profile-app/web/directory-members.php` (930 ln) | the **HTML shell** — filters, layout. **No `Visibility::` calls, correctly.** |
+| `profile-app/api/v0/directory-members.php` | the **FEED** — this is where enforcement lives |
+| `profile-app/api/v0/directory-pins-public.php` | the public (anon) map pin aggregate |
+| `webroot/directory-desktop.js` (815 ln) | desktop behaviour |
+| `webroot/directory-mobile.js` (773 ln) | mobile behaviour — **a genuine split**, per `MOBILE-DESKTOP-SPLIT.md` |
+
+Enforcement in the feed, all through the one decision point:
+- `Visibility::profileVisible()` drops the row entirely (`:55`) — master switch.
+- `Visibility::audienceCanSee()` gates the row and each pin (`:57`, `:433`).
+- `Visibility::locationPrecision()` decides pin resolution (`:32`); only the
+  coarsening math stays local, so **a pin can never out-resolve a card**.
+- The SQL carries the master switch too (`:136`,
+  `pins-public.php:39` — `u.profile_visibility = 'public'`), so a private profile is
+  excluded in the query, not just the render.
+
+**Both desktop and mobile directory JS exist as separate files**, so the guide needs two
+screenshot sets here as well as on the profile.
+
 ## 5. DESKTOP vs MOBILE — two surfaces
 
 Per `docs/atlas/MOBILE-DESKTOP-SPLIT.md`, mobile and desktop are deliberately separate
@@ -625,9 +662,9 @@ running page), the section catalog (§4), and the archived guide's contents (§7
    **Deliberately not audited: I judged it out of scope** for an entry Ian described as
    "PROFILE". If practices belong in the guide, that is a second audit of comparable
    size. **Flagged for Ian's call.**
-7. The directory / map surfaces (`web/directory-members.php`, 930 ln) — privacy-
-   adjacent, since that is where visibility choices become visible to the member.
-   Not audited.
+7. ~~Directory / map surfaces unaudited.~~ **DONE** (§4b) — enforcement traced to the
+   FEED api/v0/directory-members.php + pins-public, all via the one decision point.
+   Desktop and mobile directory JS are separate files; both need screenshots.
 8. Commit archaeology on the picker placement is a **dead end, not pending** — it
    arrived whole in seed commit `e5d466d` (§6).
 
