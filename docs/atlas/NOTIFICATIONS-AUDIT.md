@@ -360,6 +360,32 @@ Pass 2's uuid branch, on BOTH surfaces (`lgcInsertMention` is the shared insert)
 widening that guard to admit `data-lg-uuid` content as well — **not** by touching kses, which
 would be a security surface for exactly this element.
 
+### How much has this actually cost live members? Measured 2026-07-28 — and it corrects me.
+
+In `5abadd0` I wrote that this defect "is costing live users their mentions and bells **today**."
+That was an inference from the code path, not a measurement. With `live-ro` restored (dev2 now
+reaches live directly; the dev1 jump is gone) the real numbers are:
+
+| live `wp_posts`, published topic+reply | count |
+|---|---|
+| carrying `bp-suggestions-mention`, all time | 153 |
+| …last 90 days | 19 |
+| …last 30 days | 10 (≈ **one mention every 3 days**) |
+| …**since phase 2 shipped to live** (2026-07-26 19:01 site time) | **0** |
+| newest mention post of any kind | **2026-07-24 22:39:55** — two days *before* phase 2 landed |
+
+**So no live member has lost a mention to this yet.** The zero is robust: counting from
+`2026-07-25 00:00` (earlier than any plausible cutover, so the exact time and the
+America/New_York ↔ UTC conversion cannot matter) still gives 0.
+
+**But the zero is not reassurance, it is just arithmetic.** At ~0.33 mentions/day you would
+*expect* ~0.35 in the ~25 hours since phase 2 landed, so observing 0 is unremarkable and says
+nothing about whether the bug is real — the red→green store proof says that. The honest
+statement is: **this has cost nothing so far, and will silently cost roughly one dropped mention
+and one un-rung bell every three days until the fix ships.** Silently is the operative word —
+the render path resolves the token back to a slug, so neither the author nor the mentioned member
+sees anything wrong; the mention simply never arrives.
+
 **Where the fix has to live:** the PRE-insert mint (`reply.php:334`) is the only point that
 still sees `data-lg-uuid`. By the post-insert re-mint (`:378`) kses has already stripped it and
 the `@slug` text sits *inside* the anchor, where the token pass does not scan — so the
