@@ -54,7 +54,8 @@ u.php:127   $editing = ($isOwner && $role === 'me') || $adminEditing;
 ```
 
 `$editing` controls whether the **editing apparatus** renders: the Sections picker
-button (`u.php:748`), the caddy panel itself (`u.php:786`), the in-place field
+button (pre-A `u.php:748`; post-A the `[data-caddy-open]` openers), the caddy panel
+ itself, the in-place field
 affordances, the location precision dials, and the **per-section** privacy chips. It
 does *not* gate the master Profile-visibility chip — see the measurement below.
 
@@ -68,6 +69,12 @@ The **View-as strip itself** stays visible in all three modes, because it is gat
 `$isOwner || $adminEditing` (`u.php:728`), a weaker condition than `$editing`.
 
 ### MEASURED against the served HTML (2026-07-28, no engine needed)
+
+> **These numbers are PRE-option-A** — measured against the serve before `04113b2`.
+> The `#lg-caddy-toggle` row below no longer exists in the branch: that button was
+> removed and replaced by `[data-caddy-open]` openers (§6). **Re-measure after A
+> merges.** Everything else in the table — the caddy, the chips, the dials, the panel
+> — is unaffected by A and still holds.
 
 Fetched as the real owner (minted session, gate cookie, pinned to the internal IP) and
 counted **elements, not CSS rules** — `lg-caddy` appears 55 vs 35 times between the two
