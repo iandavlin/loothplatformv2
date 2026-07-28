@@ -89,12 +89,15 @@ Quote LIVE, never dev2. Earlier revisions of this doc quoted dev2 and called it
 takes writes from test lanes, so its number moves during a session (its joined
 count read 229, then 230, then 368 hidden images across one day).
 
-> **The 233 coincidence — do not be caught by it.** dev2's *attachment-only*
-> count (orphans included) is also 233, and live's *joined* count is 233. They
-> are different shapes on different boxes and it is pure coincidence. dev2 joined
-> = 230, dev2 attachment-only = 233 (the 3 orphans 72083/72084/72225); live
-> joined = 233, live orphan parents = 1. Two people have already been misled by
-> an attachment-only count on this exact question.
+> **The 233 coincidence — historical, but learn from it.** Until 2026-07-28,
+> dev2's *attachment-only* count (orphans included) was **also 233** while its
+> *joined* count was 230, and live's *joined* count is 233. Two different shapes
+> on two different boxes landing on the same number is pure coincidence, and it
+> cost real time. **The orphans have since been cleared (§10), so dev2's two
+> shapes now agree at 230** and this particular trap can no longer spring on this
+> box. The habit still stands everywhere else: *join to `forums.reply`, or say
+> which shape and which box you counted.* Three people were misled by an
+> attachment-only count on this exact question — I was the third.
 
 Live query (bbPress replies carry their photo set as a comma-separated
 `bp_media_ids` post meta, which is also what the mirror materializes from):
@@ -114,9 +117,11 @@ SELECT COUNT(*), SUM(n=1), SUM(n BETWEEN 2 AND 6), SUM(n>6),
 > reports more parents than there are replies, and a maximum of 11, which is what
 > a first pass finds. Those extra parents are **orphans**: the reply row is gone
 > but its attachment rows remain, because **deleting a reply does not clean its
-> mirror attachment rows**. Confirmed three times — 72083/72084 (reply-images-6
-> test replies deleted 2026-07-09) and 72225 (this lane's own serve-window test
-> reply, deleted 2026-07-27). No surface can render them, since every read starts
+> mirror attachment rows**. Confirmed four times — 72083/72084 (reply-images-6
+> test replies deleted 2026-07-09), 72225 and 72240 (this lane's own serve-window
+> test replies, 7/27 and 7/28). **All four were cleared on 2026-07-28 (§10)**, but
+> the delete-path defect that creates them is UNFIXED, so new ones accrue the
+> moment anyone tests. No surface can render them, since every read starts
 > `FROM forums.reply`, so they are metric pollution rather than a user-visible
 > bug — but they are the *only* thing that ever made a cap of 6 look like it
 > would truncate real content. Two different people have now been misled by that
