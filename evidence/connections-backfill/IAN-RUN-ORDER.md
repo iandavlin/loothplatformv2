@@ -138,6 +138,22 @@ Ian pending OUT now                          427
 
 ---
 
+## Step 4 — optional, one command that checks both sets at once
+
+Not required — each set's own step 3 already proves it landed. This adds the things a dry run
+cannot see: that no reciprocal duplicate was created, that the original `created_at` survived, and
+that the two tag tables do not overlap (which is what keeps the two rollbacks independent).
+
+```bash
+git show $B:evidence/connections-backfill/POST-APPLY-CHECK.sql > /tmp/check.sql
+chmod 644 /tmp/check.sql
+psql -f /tmp/check.sql          # read-only; safe before, between or after
+```
+
+Expect `rows tagged 271` / `rows tagged 81` / `tag-table OVERLAP 0` / `reciprocal duplicate rows
+10` (that 10 is **pre-existing** — 5 bidirectional pairs that predate all of this work; more than
+10 would mean something created one) and `Ian accepted 1357 / pending OUT 404`.
+
 ## If anything looks wrong
 
 - **`UUID MATCH` not `true`, or `payload uuids NOT found in users` not `0`** — wrong database.
