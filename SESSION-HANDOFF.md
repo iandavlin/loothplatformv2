@@ -5,11 +5,17 @@ with zero context — this is your charter.**
 
 | | |
 |---|---|
-| Branch | `reply-images-count`, pushed, tip **`1d743c9`** |
-| Base | main `8bef903` (serve was at `fa67f02`; no drift on any file this lane touches) |
-| State | **merge-ready.** Nothing uncommitted, nothing session-only. |
-| Ship position | directly behind `composer-v2-p3` in Ian's sequence. keeper merges both together (verified clean, zero conflicts). **DO NOT MERGE ANYTHING YOURSELF.** |
-| Ian | has seen it and asked for it by name; passed it on dev2 on real member content |
+| Branch | `reply-images-count`, pushed |
+| State | **MERGED AND SERVING ON DEV2** (2026-07-28, Ian approved). Not merge-ready — *shipped*. |
+| Serve baseline | HEAD **`645b4cff935b`**, tree **`e42d6a639820`**, branch `main`, porcelain empty. **Re-read it from `~/keeper-baseline/`, never from this file** — it moves. |
+| Shipped alongside | composer v2 phase 3, in the same pull |
+| LIVE | **NOT touched.** Live deploy is Ian's. |
+| Ian | asked for it by name, and passed it on dev2 on real member content |
+
+> ⚠️ **THE OLD BASELINE `fa67f02` / tree `74b3975` IS DEAD.** Restoring anything to
+> it now would be a **regression, not a restore** — it predates this lane's own
+> merge. Older sections of this file and the 7/27 receipt still name it; there it
+> is correct *as history*. It is never a restore target again.
 
 ---
 
@@ -123,6 +129,40 @@ Summary of what those receipts show:
   scrubbed. Ian closed the real phone leg himself on reply **71991** rendering
   5 of 5 previously-unseen images.
 
+### What the two owed proofs need NOW that the code is merged
+
+This changed with the 2026-07-28 deploy and it makes the ask **cheaper**, not
+dearer. **Neither proof needs a file overlay any more.** The code under test IS
+the serve — verified by diffing all eight files against the serving checkout:
+five byte-identical, and the three that differ (`forums.css`, `forums.js`,
+`hub-polish.js`) differ only because composer-p3 shipped in the same pull, with
+every one of this lane's markers intact (gallery block 12 hits, `max: 6` at two
+tray sites, `reply_image_max`/`lgcPhotoN` counts matching exactly, both server
+422 sites present at `reply.php:242` and `:310`).
+
+So there is nothing to overlay, nothing to `git checkout HEAD --` afterwards, and
+no fpm reload. What is actually needed:
+
+| Proof | Needs | Does NOT need |
+|---|---|---|
+| 422 under a real over-cap request | permission to create + delete test data on dev2 | overlay, engine, fpm reload, restore |
+| composer guard under a real finger | the **browser engine slot** + test data | overlay, fpm reload, restore |
+
+**The negative control has to change, and it gets stronger.** Last time the
+control was "restore the files, re-POST 7, get 200" — that proved the 422 was
+this lane's code. That control is now impossible without un-shipping, and
+un-shipping is a serve mutation nobody should want. The replacement is a
+**boundary differential on the shipped endpoint**: same session, same thread,
+same payload shape — **6 → 200, 7 → 422**. One image apart. That isolates the cap
+better than the restore control did, because it holds everything else constant
+instead of changing the whole tree.
+
+**Cleanup is the real obligation now.** Every test reply and every uploaded media
+row must come out, and — per this lane's own orphan finding — deleting a reply
+does **not** remove its `forums.attachment` rows. Check the mirror explicitly,
+not just WP; §4c and atlas §10 have it. Test data on a serving box is the thing
+that outlives the window.
+
 ---
 
 ## 4. WHAT IS GENUINELY STILL UNPROVEN
@@ -145,7 +185,13 @@ spending anything here.**
 *How to prove it if you do:* desktop viewport ≥ 641px, log in, open a feed card's
 reply modal (`[data-frm-open]` — visible on desktop, **0×0 on mobile**, see the
 trap in §6), attach 6 photos via the tray's own file input, confirm the 7th is
-refused with `You can add up to 6 images.` and that `frmMediaIds.length` stays 6.
+refused with the real message — `A reply can have at most 6 photos — remove one to
+add another.` (client, `hub-polish.js`) — and that `frmMediaIds.length` stays 6.
+**Earlier revisions of this file quoted `You can add up to 6 images.`; no such
+string exists in the code.** I wrote it from memory of the design rather than
+from the source, and a run that greps for it would find nothing and read that as
+a failure. The server's 422 body is a *different* string again: `A reply can have
+at most 6 images.` with `error: too_many_media`.
 Adapt `drive-composer-guard.py`; it already does the hard parts.
 
 ### 4b. Removing a chip to free a slot was never exercised

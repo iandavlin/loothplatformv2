@@ -7,6 +7,17 @@ Serve baseline before and after: HEAD `fa67f02`, tree
 `74b397571af8ec01388c16b6f2657013e9a13d55`, branch `main`, porcelain empty.
 Eight tracked files overlaid in `~/loothplatformv2-clean`.
 
+> **HISTORICAL BASELINE — correct for this window, NOT a restore target today.**
+> This lane merged on 2026-07-28 and the serve moved to HEAD `645b4cff935b` /
+> tree `e42d6a639820`. Restoring anything to `fa67f02` now would roll back this
+> lane's own shipped code. Always re-read the current baseline from
+> `~/keeper-baseline/`.
+>
+> These receipts also predate the merge, so they were taken against an *overlay*
+> of the branch. The same code is now the serve itself, which means a re-run
+> needs no overlay at all — see the handoff's "what the two owed proofs need
+> NOW".
+
 > **RESTORE COMMAND — this window used the WRONG ONE. Do not copy it.**
 > It restored with the bare `git checkout -- <path>`, which was the form keeper
 > was issuing in window grants that night. On 2026-07-28 keeper ruled it wrong
