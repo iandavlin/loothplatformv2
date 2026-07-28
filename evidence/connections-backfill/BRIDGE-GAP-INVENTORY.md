@@ -1,169 +1,202 @@
 # What else the cutover skipped — inventory of the late-bridged cohort
 
-**Lane:** connections-backfill · **Date:** 2026-07-27 · **INVENTORY ONLY — nothing here is fixed.**
+**Lane:** connections-backfill · **First written 2026-07-27 (dev2) · Re-measured against LIVE 2026-07-28**
+**INVENTORY ONLY — nothing here is fixed. Every measurement is a read.**
 
-Ian approved this after the connections restore: the members who were bridged *after* the
-cutover backfill ran were invisible to **anything** keyed on `wp_user_bridge`. Connections is
-just the table he happened to notice. This enumerates the rest.
+Ian approved this after the connections restore: members bridged *after* the cutover backfill
+ran were invisible to **anything** keyed on `wp_user_bridge`. Connections is just the table he
+happened to notice. This enumerates the rest.
 
-## Measurement caveat — read this before quoting a number
+## Provenance — which box each number came from
 
-**Everything below was measured on dev2's `profile_app`, not on live.** `ssh live-ro` jumps
-through dev1, and dev1 stopped answering partway through this work. dev2 is a close proxy but
-not identical: it splits **1610 at-cutover / 225 late**, where live splits **1606 / 241**.
+**Every figure in sections A–F is from LIVE** (`ssh live-ro`, `psql -h 127.0.0.1 -U looth_ro -d
+profile_app`, plus live MySQL `looth_import` for the BuddyBoss controls). Live read-only was
+re-proved on 2026-07-28: `CREATE TABLE` as `looth_ro` returns *permission denied for schema
+public*.
 
-- **Structural findings transfer** — which table, which script, which code path. Those are facts
-  about the repo.
-- **Counts do not.** Every number here needs re-measuring on live before anyone acts on it.
+The first version of this document was measured on **dev2** because dev1 was down. **One
+headline finding did not survive contact with live and has been retracted — see section A.**
+Where dev2 and live disagree, both numbers are shown, because the disagreement is the lesson.
 
-Cohort boundary used throughout: `wp_user_bridge.synced_at < 2026-06-03` = "at cutover".
-The late cohort is dominated by a single spike — **191 of 225 bridged on 2026-06-11**.
+Cohort boundary: `wp_user_bridge.synced_at < 2026-06-03` = "at cutover".
+
+| | live | dev2 |
+| --- | --- | --- |
+| at cutover | **1606** | 1610 |
+| late | **241** | 225 |
+| bridged on the 2026-06-11 spike | **181** | 191 |
+| `profile_app` tables | **33** | 36 (`chapter`, `chapter_member`, `chapter_post` are dev2-only) |
 
 ## The one-line answer
 
-Three domains were already known (connections, messages, location). This pass adds **one new
-real defect** — 8 members carrying a mangled profile handle — plus **one latent trap** and
-**one thing that cannot be measured at all**. The rest of the profile surface is clean, and
-two scary-looking numbers are proven false alarms.
+On live, the cutover left **three real gaps** — connections (already fixed and awaiting Ian),
+messages (16 members), location (11 members) — plus **one latent trap** (`email_aliases`). Three
+things that looked like gaps are **not**. One claimed defect was a **dev2 artifact and is
+retracted**. One item is **unmeasurable**, one is **ungranted**, and one is **still uncontrolled**.
 
 ---
 
-## A. NEW — 8 members have the wrong profile handle, and a ghost holds the right one
+## A. RETRACTED — "8 members have the wrong profile handle"
 
-**This is the finding worth acting on.** All 8 are in the late cohort. **All 8 bridged on
-2026-06-11** — the spike day. Zero in the cutover cohort.
+**This finding was wrong. On live the count is ZERO.** It was measured on dev2 and is a dev2-only
+artifact. It should not have been promoted to a headline, and it was briefly circulated to the
+slug-backfill lane as a real population before this correction.
 
-| WP | Handle they have | Handle they should have | Display name |
+**What dev2 showed.** Each of 8 members had *two* `profile_app` rows — an unbridged "ghost"
+holding the human-readable handle, and a bridged duplicate carrying a `-<wp_user_id>` suffix.
+With `web/u.php` ghost containment 404ing the unbridged holder, that read as: the good handle
+404s while the member is served from a mangled one.
+
+**What live shows.** One row per member, bridged, handle clean:
+
+| WP | profile_app id | live slug | bridged |
 | --- | --- | --- | --- |
-| 224 | `patreon_19682448-224` | `franklin-linker-linker-guitars` | Franklin Linker, Linker Guitars LLC |
-| 295 | `patreon_55486970-295` | `dave-thurston` | Dave Thurston |
-| 560 | `patreon_104272702-560` | `larry-jones` | Larry Jones |
-| 688 | `patreon_113262305-688` | `georgios-gerogiannis-rupicapra` | Georgios Gerogiannis, Wood & Voltage |
-| 894 | `ianloothgroup-com-894` | `ianloothgroup-com` | Ian Davlin |
-| 1198 | `patreon_156820476-1198` | `russell-olmsted-north-coast` | Russell Olmsted, North Coast Guitar Co. |
-| 1431 | `patreon_178784349-1431` | `bryan-hutchinson-hobbiest` | Bryan Hutchinson, Hobbiest guitar tech |
-| 1768 | `tmcdonough8-1768` | `tmcdonough8` | Tom McDonough |
+| 224 | 201 | `patreon_19682448` | 2026-07-14 |
+| 295 | 1724 | `patreon_55486970` | 2026-07-14 |
+| 560 | 491 | `patreon_104272702` | 2026-07-14 |
+| 688 | 1763 | `patreon_113262305` | 2026-07-14 |
+| 1198 | 1798 | `patreon_156820476` | 2026-07-14 |
+| 1431 | 1265 | `patreon_178784349` | 2026-07-14 |
+| 1768 | 1585 | `tmcdonough8` | 2026-07-14 |
 
-**What happened.** Each of these members already had a profile row in `profile_app` before they
-were bridged. When the real, bridgeable identity was provisioned on 2026-06-11 it collided with
-that pre-existing row on the handle, and the provisioner disambiguated by appending the member's
-own WP id. The pre-existing row was **never bridged**.
+In every case the `profile_app` id that was the *ghost* on dev2 is the *real bridged member* on
+live. WP 894 (`ianloothgroup-com`) does not exist on live at all — that was Ian's dev account,
+dev2 noise that reached a live-sounding claim.
 
-**Why that is user-visible, not cosmetic.** `web/u.php` ghost containment (Ian, 2026-07-13): an
-unbridged identity is not a member, so its `/u/<slug>` **404s**. So the good handle 404s while
-the real member is served from the ugly one:
+The detector returns zero rows on live:
 
-- `/u/franklin-linker-linker-guitars` → **404** (held by unbridged row, profile_app user 201)
-- `/u/patreon_19682448-224` → renders Franklin's real profile
+```sql
+SELECT b.wp_user_id, u.slug FROM users u
+JOIN wp_user_bridge b ON b.user_id = u.id
+WHERE u.slug ~ ('-' || b.wp_user_id || '$');
+```
 
-**Three of the eight are provable duplicates of the very member they block** — the unbridged row
-carries a placeholder email `looth-<wp_id>@invalid` naming a WP id that is bridged to a
-*different* profile row: pa 1724 → wp 295 (Dave Thurston), pa 1763 → wp 688 (Georgios
-Gerogiannis), pa 1798 → wp 1198 (Russell Olmsted). The other five match on human identity rather
-than on a placeholder — e.g. profile_app 201 `linkerguitars@gmail.com` vs WP 224
-`franklin.linker@gmail.com` — which is strong but is inference, not proof.
+*Practical note:* pipe SQL to `psql -f -` over ssh via **stdin**. Passing it with `-c` lets ssh's
+own quoting eat the regex `$`, which produced a false empty result before it was checked properly.
 
-There is a **fourth** placeholder-email ghost, pa 1820 `ian-davlin_2` → wp 1886 (bridged to pa
-1937). It is the same duplicate-row defect but it is not blocking a suffixed handle, so it is not
-in the table above.
+**Ghosts are real on live but smaller, and block nobody:**
 
-**Ghost population overall:** 90 of 1925 `profile_app` rows are unbridged. 87 of the 90 hold a
-handle (live slug or parked in `slug_history`). Only these 8 provably block a real member today,
-but every one of the 87 is a handle no member can ever claim — `uq_slug_history_lower` makes the
-reservation permanent and database-enforced.
-
-**Not fixed, deliberately.** Reassigning a handle means writing to `users.slug` and
-`slug_history` on live, and `slug_history` is explicitly designed so a retired handle is *never*
-re-issued. Unpicking that safely is its own job with its own rollback, and two of the eight are
-test/dev accounts (`ianloothgroup-com` is Ian's dev account, not a member). Ian's call.
-
-## B. LATENT — `email_aliases` is 100% at cutover and 11% late, but nothing reads it
-
-The single largest ratio in the whole sweep: **1610/1610 cutover vs 25/225 late.** Written by
-`bin/backfill.php` (one-shot, keyed on the bridge) and by `src/Provision.php` at runtime. Same
-bug shape as connections, and a clean total signal.
-
-**It has no functional consequence today.** I grepped the entire repo for `email_aliases` across
-`.php`, `.sql` and `.sh`: every hit is a **write** (`Provision.php` ×2, `bin/backfill.php`) or a
-delete (`EraseUser.php`'s teardown list) or the `CREATE TABLE`. **Nothing SELECTs from it.** It
-is a write-only identity table.
-
-So: do not rush it, but do not forget it. The day anything starts resolving a member by email —
-an account-merge, an email-change flow, a support lookup — the late cohort is invisible to it,
-and the failure will look like "this member does not exist."
-
-## C. CANNOT BE MEASURED — notifications
-
-`migrate-social-from-bb.php` → `seedNotifications()` seeds one bell per unread DM thread and one
-per pending connection. It reads `connections` and `message_recipients`, so it necessarily
-skipped the late cohort at cutover, exactly like everything else.
-
-**But there is nothing left to see, and nothing to restore.** `Notifications::prune()` enforces
-30-day retention; the oldest surviving row on dev2 is **2026-06-27**, six weeks after cutover.
-Every seeded bell — for both cohorts — has long since aged out. The cohort split visible today
-(cutover 2.4% vs late 90.7%) is **live dev activity, not migration residue**, and reading it as a
-gap would be exactly the "verify the thing, not the thing next to it" trap.
-
-**Conclusion: real at the time, moot now.** No action, and no restore is possible or wanted.
-
-## D. FALSE ALARMS — two numbers that look bad and are not
-
-**`slug_history`: headline 94.2% vs 49.8%, real gap 9 members.** The raw rate is cohort
-character. `slug_history` only holds a handle a member has *released*, so it can only have a row
-if the member's legacy WP nicename **differs** from their current slug. Controlling for that:
-
-| Cohort | Have a differing legacy nicename | Of those, parked in `slug_history` |
+| | live | dev2 |
 | --- | --- | --- |
-| cutover | 1517 | **1516 (99.9%)** |
-| late | 120 | **111 (92.5%)** |
+| unbridged ghost rows | **29** | 90 |
+| ghosts holding a slug | **26** | 87 |
+| `looth-<n>@invalid` placeholder ghosts | **1** | 4 |
+| duplicate `wp_user_id` in bridge | **0** | — |
 
-93 of the 225 late members have a nicename identical to their slug — nothing to park, so their
-absence is correct, not a miss. And the seeding ran **2026-07-17**, weeks after the last late
-bridge (2026-06-29), so bridge timing did not exclude anyone. The 9 residual misses are the
-handle collisions in section A, not a backfill gap. Different bug, already counted.
+Those 26 handles are permanently unclaimable (`uq_slug_history_lower` makes it a database
+invariant), so they remain a legitimate design input for the slug-backfill lane. But **no live
+member is currently sitting on a mangled URL**, and this is a stranded-handle design question,
+not a member-facing defect.
 
-**`profile_socials`: still no gap.** Re-confirmed the earlier control. The rate looks ~4.7×
-worse (8.5% vs 1.8%), but **91% of the cutover cohort also has zero socials** despite all of them
-having BuddyBoss xprofile data. Socials come from a narrow subset of fields; the crude metric
-proves nothing in either direction.
+**Why it was wrong, recorded so it is not repeated:** dev2 is the box that gets reprovisioned, so
+duplicate-identity rows accumulate there and nowhere else. A defect that appears *only* on dev2
+should be treated as suspect before it is promoted. A caveat in the provenance section does not
+cancel a headline.
 
-## E. CLEAN — measured, no cohort gap
+## B. REAL — messages: 16 members lost their history
 
-Coverage of the late cohort is at or above the cutover cohort in every one of these:
+**Live: 17 of the 241 late members have BuddyBoss message history; 16 of those 17 have none in
+the app.** Exact match to the original dev2-era figure.
+
+Same root cause and same shape as connections — `migrate-social-from-bb.php` seeds connections
+and messaging in one pass, keyed on the bridge. Small in absolute terms, but a **total loss** of
+message history for those 16 people. Unfixed.
+
+## C. REAL — location: 11 members
+
+**Live: 58 of the 241 have a BuddyBoss location pin (xprofile field 96); 11 of those have no
+location in the app.** Exact match to the original figure. Unfixed.
+
+## D. LATENT — `email_aliases` is 100% at cutover and 19.5% late, and nothing reads it
+
+**Live: 1606/1606 cutover vs 47/241 late.** The largest ratio in the sweep. (dev2 read 11%, so
+live is *less* severe.) Written by `bin/backfill.php` (one-shot, bridge-keyed) and by
+`src/Provision.php` at runtime — same bug shape as connections.
+
+**No functional consequence today.** Every reference across the repo in `.php`, `.sql` and `.sh`
+is a write (`Provision.php` ×2, `bin/backfill.php`), a delete (`EraseUser.php`'s teardown list),
+or the `CREATE TABLE`. **Nothing SELECTs from it.**
+
+Do not rush it; do not forget it. The day anything resolves a member by email — account merge,
+email change, support lookup — the late cohort is invisible and it will present as "this member
+does not exist."
+
+## E. NOT GAPS — measured on live, with controls
+
+**`profile_socials` — false alarm, control re-confirmed on live.** The late cohort's 97.5%
+zero-socials rate looks damning until you check the other cohort: **1463 of 1606 cutover members
+(91.1%) also have zero socials**, despite all of them having BuddyBoss xprofile data. Socials
+come from a narrow subset of fields; the crude rate proves nothing either way.
+
+**`notifications` — real at the time, moot now, unmeasurable in principle.**
+`seedNotifications()` reads `connections` and `message_recipients`, so it necessarily skipped the
+cohort at cutover. But `Notifications::prune()` enforces 30-day retention and **live's oldest
+surviving row is 2026-06-27** (604 rows total) — six weeks after cutover. Every seeded bell, for
+*both* cohorts, has aged out. The split visible today (cutover 7.9% vs late 92.5%, inverted) is
+current activity, not migration residue. Nothing to restore.
+
+**`profile_genres` — dev2 was wrong, live is clean.** dev2 flagged it (5/1610 vs 0/225); on live
+the late cohort is **higher** (1.2% vs 0.4%).
+
+**Clean on live — late cohort equal or higher:**
 
 | Surface | cutover | late |
 | --- | --- | --- |
 | `users.avatar_url` | 100.0% | **100.0%** |
-| `users.at_a_glance` | 1.9% | **2.2%** |
-| `profile_skills` | 0.6% | **0.9%** |
-| `profile_sections` | 1.0% | **3.1%** |
-| `users.profile_layout` | 3.3% | **6.2%** |
+| `users.profile_layout` | 5.0% | **10.0%** |
+| `profile_sections` | 1.8% | **3.7%** |
+| `profile_skills` | 0.9% | **2.5%** |
+| `profile_instruments` | 0.9% | **2.5%** |
+| `users.at_a_glance` | 2.4% | **2.9%** |
 | `users.resume_url` | 0.1% | **0.4%** |
-| `profile_instruments` | 0.6% | 0.4% |
-| `users.banner_url` | 0.7% | 0.4% |
+| `connections` | 99.4% | 95.9% |
 
-The tables that are near-empty for everyone — `profile_genres`, `profile_scenes`,
-`profile_highlights`, `practice_members`, `message_reactions`, `user_mutes`, `chapter_member`,
-`chapter_post` — carry 0–5 rows per cohort. **No signal either way**; too sparse to conclude
-anything, and no BuddyBoss source exists for most of them.
+Tables near-empty for everyone — `profile_highlights`, `profile_scenes`, `practice_members`,
+`message_reactions`, `user_mutes` — carry 0–3 rows per cohort. **No signal**, not a pass.
+`users.banner_url` (16 vs 1) is too small to read either way.
 
-## F. Already known, restated for completeness
+## F. OPEN ITEMS — do not let these be quoted as settled
 
-| Domain | Gap | Status |
-| --- | --- | --- |
-| **connections** | 746 rows / 302 members | Restore written, rehearsed, Ian's to run. See `CANARY-RUNBOOK.md`. |
-| **messages** | 16 members | 17 of the late cohort have BuddyBoss message history; 16 have none in the app. Total loss for those 16. Unfixed. |
-| **location** | 11 members | 58 have a BuddyBoss pin (xprofile field 96); 11 have no location in the app. Unfixed. |
-| **11 members not in `wp_users` at all** | — | profile-app-native (Patreon-provisioned). Nothing to migrate; cannot be audited against BuddyBoss either. |
+**1. `profiles` is uncontrolled.** Live reads **41.0% cutover vs 17.0% late** and stays under
+half. Nobody has established whether BuddyBoss source data exists for those members, which is
+exactly the control that killed the socials scare. **Not claimed as a gap.** This is the one
+substantive thing still open.
 
-## G. Recommended order, if Ian wants any of it
+**2. `slug_history` cannot be read on live.** `looth_ro` has SELECT on 32 of live's 33
+`profile_app` tables; `slug_history` is the exception — it was created 2026-07-12, after the RO
+grants were set. So the dev2-era analysis of it (headline 94.2% vs 49.8%, real gap 9, cause =
+handle collision not backfill) is **unverified on live** and, given section A, should be assumed
+dev2-specific until re-measured. If it matters, the ask for Ian is one read grant:
+
+```sql
+GRANT SELECT ON public.slug_history TO looth_ro;
+```
+
+## G. Already fixed / in flight
+
+| Domain | Status |
+| --- | --- |
+| **connections** — 746 rows / 302 members | Restore written, rehearsed, Ian's to run. `CANARY-RUNBOOK.md`. |
+| **11 members not in `wp_users` at all** | profile-app-native (Patreon-provisioned). Nothing to migrate; cannot be audited against BuddyBoss either. |
+
+## H. Recommended order, if Ian wants any of it
 
 1. **connections** — written and rehearsed, only needs running.
-2. **the 8 handles (section A)** — smallest, most visible, and the only one a member could
-   notice unaided. Needs its own design decision because `slug_history` is deliberately
-   write-once.
-3. **messages (16)** — a total loss of history for those members, but small.
-4. **location (11)** — cosmetic by comparison.
-5. **`email_aliases`** — no rush, but block any future email-resolution feature on it.
+2. **messages (16)** — a total loss of history for those members.
+3. **location (11)** — cosmetic by comparison.
+4. **`email_aliases`** — no rush, but gate any future email-resolution feature on it.
+5. **control `profiles`** before anyone treats section F.1 as real.
 
-Nothing in this document has been changed on live or on dev2. Every measurement was a read.
+The 26 stranded ghost handles belong to the **slug-backfill** lane as a design input, not to this
+one.
+
+## Re-running this sweep
+
+`cohort-coverage.sql` in this directory. Against live, drop the three dev2-only tables first:
+
+```bash
+grep -v "chapter_member\|chapter_post\|slug_history" cohort-coverage.sql \
+  | ssh live-ro "psql -h 127.0.0.1 -U looth_ro -d profile_app -f -"
+```
+
+Nothing in this document has been changed on live or on dev2.
