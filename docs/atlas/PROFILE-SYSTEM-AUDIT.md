@@ -63,6 +63,58 @@ The **View-as strip itself** stays visible in all three modes, because it is gat
 
 ---
 
+## 2.5 Every control a member can reach
+
+Authoritative index: the `me-*` endpoints (`profile-app/api/v0/`), cross-checked
+against what the renderer actually emits. Everything below is edited **in place on
+`/u/<slug>`** — there is no separate form.
+
+### Identity / chrome
+| Control | Endpoint | Notes |
+|---|---|---|
+| **Avatar** | `me-avatar.php` | click the photo; POST to upload, DELETE to remove (`u.php:1684,1699`) |
+| **Cover / banner** | `me-banner.php` | "+ Add banner" strip above the identity row (`u.php:2377,2397`) |
+| Display name | `me-name.php` | **renaming re-derives the @handle AND the profile URL** |
+| Tagline / bio | `me-header.php` | the "Add a one-line bio…" line |
+| Status lights | `me-lights.php` | "+ Status" picker; work / collab / tour (§4) |
+| @handle | `me-slug.php` | **READ-ONLY — not member-editable.** Ian 2026-07-25: handles are derived from the name. Renames re-derive; past mentions stay uuid-anchored so they never break. |
+
+### Layout
+| Control | Endpoint | Notes |
+|---|---|---|
+| Add / remove a section | `me-layout.php` | the caddy picker (§6) |
+| Reorder sections | `me-section-order.php` | drag the grip, or the ⌃ ⌄ buttons on each block |
+
+### Section content
+`me-about.php`, `me-gallery.php`, `me-resume.php`, `me-socials.php`,
+`me-connect.php`, `me-location.php` + `me-location-search.php`, and
+`me-catalog.php` / `me-skills.php` / `me-instruments.php` (the catalog-chip blocks).
+
+### Privacy
+`me-header.php` (master switch + ceiling), per-section chips, `me-location.php`
+(both precision dials), `me-discussion-visibility.php`. See §3.
+
+### Endpoints that are NOT member-reachable profile blocks
+`me-craft.php`, `me-credentials.php`, `me-scenes.php`, `me-highlights.php`,
+`me-dropoffs.php`, `me-freeform.php` — none of these keys appear in the render
+dispatch (`_render_blocks.php:124-135`, 12 keys only) or in `LAYOUT_BLOCKS`. They are
+retired or practice-only. **Do not document them as profile sections.**
+
+### The state a member never sees but must understand: the gate screen
+
+`Block::gateDecision()` (`Block.php:417`) returns one of three outcomes, and the
+middle one is its own **screen**:
+
+| decision | when | what renders |
+|---|---|---|
+| `private` | master switch private, viewer below admin | **nothing at all** |
+| `gate` | members-only, viewer is anonymous | `looth_render_members_gate()` — a join / sign-in screen |
+| `render` | otherwise | the profile, blocks then refining down per their own vis |
+
+The guide should show that gate screen, because it is **what a logged-out visitor sees
+of a default profile** — and the member themselves can only reach it via
+"View as → Public".
+
 ## 3. PRIVACY — the full model
 
 Privacy is **four independent controls**, not one. Members conflate them; the guide
@@ -471,17 +523,38 @@ guide") needs a hook. This is it.
 
 ## 9. Outstanding — what is NOT yet proven
 
-1. **Nothing here has been verified against the running screen.** Requested a browser
-   engine from keeper; events-fix has priority. Until then §5's mobile detail and every
-   screenshot-shaped claim is source-derived only.
-2. Full phone-width visual inventory (§5).
-3. Practice profiles (`web/p.php`, 814 ln) — a second entity with its own header,
-   hours, services, staff, dropoffs. **Not yet audited**; may or may not be in the
-   guide's scope. Flagged for Ian.
-4. The directory / map surfaces (`web/directory-members.php`, 930 ln) — privacy-
+**Proven so far:** the privacy model and defaults (§3, verified in the store, which
+corrected the code reading), the control inventory (§2.5, from the endpoint list +
+render dispatch), the picker's placement (§6, confirmed against a real capture of the
+running page), the section catalog (§4), and the archived guide's contents (§7).
+
+**Not proven — honestly outstanding:**
+
+1. **No current screenshot of the running system exists at phone width.** The engine
+   is queued with keeper behind events-fix; I flagged that the box measured **295MB
+   available** on 2026-07-28 and an engine is 500-660MB, so it should not be granted at
+   that number. The June captures (§5) confirm placement but are stale on contents and
+   are 768/1024px — neither is a phone.
+2. **Full phone-width visual inventory** (§5) — blocked on 1.
+3. **Which implementation actually serves `/membership-guide/` on dev2** (§7) — two
+   exist; I have not traced the nginx route.
+4. **`bin/visibility-matrix.php`** — the real regression gate (drives HTTP as
+   anon/member/owner/admin across three subject states, `S1` opt-in / `S2` members-only
+   / `S3` master-private). It is the best possible proof of §3 and it exercises exactly
+   the surfaces the guide will describe. **I did not run it**: it mutates fixture user
+   1849 and needs sudo. Ask keeper before running.
+5. **The 96.5%-never-arranged figure is dev2 only** (§6). Re-run on live before
+   treating it as decisive.
+6. Practice profiles (`web/p.php`, 814 ln) — a second entity with its own header,
+   hours, services, staff, dropoffs, and its own `me-practice-*` endpoints.
+   **Deliberately not audited: I judged it out of scope** for an entry Ian described as
+   "PROFILE". If practices belong in the guide, that is a second audit of comparable
+   size. **Flagged for Ian's call.**
+7. The directory / map surfaces (`web/directory-members.php`, 930 ln) — privacy-
    adjacent, since that is where visibility choices become visible to the member.
-5. Archived guide survey (§7).
-6. Commit archaeology on the picker placement (§6 "why").
+   Not audited.
+8. Commit archaeology on the picker placement is a **dead end, not pending** — it
+   arrived whole in seed commit `e5d466d` (§6).
 
 ---
 
