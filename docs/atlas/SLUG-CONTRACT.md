@@ -247,6 +247,48 @@ Re-run the export after that grant and the owners file loses its `NO-slug_histor
 mode 0600 — deliberately **not** in the repo and **not** in the dev docroot, where the dev gate
 is a shared credential rather than per-person auth.
 
+### What the ghosts actually hold — measured on LIVE 2026-07-28
+
+A cross-lane report described members stranded on `patreon_*` URLs because *an unbridged ghost
+holds their human-readable handle*. **On LIVE that is not the mechanism.** Measured, 6/6:
+
+> A ghost holds **`<the member's own slug>-<the member's wp_user_id>`** — not their name.
+
+| ghost | holds | is really | member slug | wp_id |
+|---|---|---|---|---|
+| 1854 | `patreon_19682448-224` | Franklin Linker Linker Guitars | `patreon_19682448` | 224 |
+| 1855 | `patreon_55486970-295` | Dave Thurston | `patreon_55486970` | 295 |
+| 1856 | `patreon_104272702-560` | Larry Jones | `patreon_104272702` | 560 |
+| 1857 | `patreon_113262305-688` | Georgios Gerogiannis | `patreon_113262305` | 688 |
+| 1859 | `patreon_156820476-1198` | Russell Olmsted | `patreon_156820476` | 1198 |
+| 1860 | `patreon_178784349-1431` | Bryan Hutchinson | `patreon_178784349` | 1431 |
+
+These are duplicate rows that hit the slug uniqueness constraint and got suffixed with the
+wp_user_id. `/u/franklin-linker-linker-guitars` really does 404 on live — but **because the
+backfill has never run there**, not because anything squats it. Nobody holds it. All six
+members are ordinary `2-PATREON-JUNK`: Franklin derives cleanly to
+`franklin-linker-linker-guitars`, no collision, no ruling. **The cure is this lane's backfill,
+and it does not depend on the parked ghost-cleanup work.**
+
+Live ghost population is also far smaller than dev2's: **29 unbridged rows, 26 holding a
+handle**, and 25 of those 26 are test/QA accounts (`qa_*`, `tst-staple-*`, `deltest_*`,
+`claude_admin`, `profileapp-test`). A dev2 ghost count does not transfer to live.
+
+### The real blocker is identity, not slugs
+
+**92 of the 99 live collisions are 41 pairs of members sharing an identical display name**
+(`Jake Tuel`, `steve chapman`, `Adam Pinner Arcus Custom Guitars` …), each with a *different*
+email — typically a personal address and a business one
+(`mcneillac@gmail.com` / `evokeguitarsdc@gmail.com`). Only **2** contested handles involve
+genuinely different names, and **7** are blocked by an existing holder.
+
+Whether a pair is one human with two accounts or two people who share a name **is not
+determinable from any data this lane holds** — which is exactly why they are rulings and not
+guesses (R4). But it reframes the question: it is a *merge* decision, not a slug decision. If
+those pairs are resolved upstream, the ruling queue collapses from **107 to roughly 15**.
+Pair list (carries emails, so 0600, outside the repo):
+`~/lane-reports/slug-backfill/GHOST-AND-DUPES-LIVE-2026-07-28.txt`.
+
 ---
 
 ## 8. Deliberately out of scope
