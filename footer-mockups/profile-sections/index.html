@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Profile — where should the Sections picker live? (mobile)</title>
+<title>Profile — where should the Sections picker live?</title>
 <style>
   :root{
     --ink:#1f2420; --mute:#6d746b; --line:#e3e5df; --bg:#f4f4f0; --card:#fff;
@@ -108,6 +108,21 @@
   .ann--ok{border-color:var(--good)}
   .anlab--ok{background:var(--good)}
 
+  /* ---- laptop frames (the "not just mobile" row) ---- */
+  .bigq{max-width:1080px;margin:44px auto 6px;font-size:19px;text-align:center;letter-spacing:-.01em}
+  .col--wide{width:500px}
+  .lap{background:#fff;border:8px solid #2a2d29;border-radius:12px;overflow:hidden;
+       box-shadow:0 10px 26px rgba(0,0,0,.15)}
+  .lapscr{height:310px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column}
+  .lapbody{flex:1;overflow:hidden;padding:10px;position:relative}
+  .colwrap{max-width:300px;margin:0 auto}
+  .grid3{display:grid;grid-template-columns:118px 1fr;gap:12px;align-items:start}
+  .railcol{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px}
+  .railhd{font:800 10.5px/1 Georgia,serif;margin-bottom:7px;color:var(--ink)}
+  .railbb{background:var(--sage-tint);border:1px solid var(--sage-3);border-radius:999px;
+          padding:4px 8px;font-size:9px;font-weight:700;color:#41563a;margin-bottom:5px}
+  .why code{background:#e9eae4;padding:1px 4px;border-radius:4px;font-size:12px}
+
   .why{max-width:1080px;margin:34px auto 0;background:#fff;border:1px solid var(--line);
        border-radius:12px;padding:18px 20px}
   .why h3{margin:0 0 9px;font-size:15px}
@@ -117,7 +132,7 @@
   .why .k{font-weight:700}
   .caveat{background:#fdf6e6;border:1px solid #e8d9ae;border-radius:9px;padding:11px 13px;
           font-size:13px;margin-top:14px}
-  @media (max-width:760px){ .col{width:100%;max-width:360px} body{padding:18px 12px 44px} }
+  @media (max-width:760px){ .col{width:100%;max-width:360px} .col--wide{width:100%;max-width:100%} .lapscr{height:270px} body{padding:18px 12px 44px} }
 </style>
 </head>
 <body>
@@ -236,6 +251,76 @@
     </div></div>
   </div>
 
+</div>
+
+<h2 class="bigq">This is not just a mobile problem — it is most laptops too</h2>
+<p class="sub" style="margin:0 auto 18px;text-align:center;max-width:76ch">The picker only becomes the permanent sidebar at <b>1380px and wider</b>. Below that it is the drawer, opened by that same button in the privacy panel. A 1280×800 laptop gets the mobile treatment.</p>
+
+<div class="row">
+  <div class="col col--wide">
+    <h2>Laptop, 1280px <span class="tag tag--now">still the drawer</span></h2>
+    <p class="note">Under the 1380px breakpoint. Single centred column, and the amber <b>Sections</b> pill is back in the top-right of the privacy panel — same problem as the phone.</p>
+    <div class="lap"><div class="lapscr">
+      <div class="chrome"><div class="logo"></div><b>Looth Group</b><span class="sp">✉ ⚑ ⚙</span></div>
+      <div class="lapbody">
+        <div class="colwrap">
+          <div class="panel">
+            <div class="prow">
+              <span class="plbl">View as</span>
+              <span class="seg"><span>Public</span><span>Member</span><span class="on">Me</span></span>
+              <span class="secbtn"><span class="bg"></span>Sections</span>
+            </div>
+            <div class="prow"><span class="plbl">Profile visibility</span><span class="chip">MEMBER ▾</span></div>
+            <div class="prow"><span class="plbl">Discussion posts</span>
+              <span class="seg"><span>Public</span><span class="on">Member-only</span></span></div>
+          </div>
+          <div class="card"><div class="banner">+ Add banner</div>
+            <div class="idrow" style="margin-top:8px"><div class="avi"></div>
+              <div><div class="nm">Dale Hyldelund</div><div class="bio">Add a one-line bio…</div></div></div>
+          </div>
+          <div class="card"><div class="blk"><span class="grip">⣿</span> ⌃ ⌄ ✕ &nbsp;📍 Location</div>
+            <div class="map">map</div></div>
+        </div>
+        <div class="anlab" style="top:8px;right:10px">✕ same button, same panel</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="col col--wide">
+    <h2>Desktop, ≥1380px <span class="tag tag--alt">the intended design</span></h2>
+    <p class="note">Here the caddy is a permanent left column and the toggle is <code>display:none</code>. This is the layout the picker was designed for — and the one most people never see.</p>
+    <div class="lap"><div class="lapscr">
+      <div class="chrome"><div class="logo"></div><b>Looth Group</b><span class="sp">✉ ⚑ ⚙</span></div>
+      <div class="lapbody">
+        <div class="grid3">
+          <aside class="railcol">
+            <div class="railhd">Sections</div>
+            <div class="railbb">About</div>
+            <div class="railbb">Instruments</div>
+            <div class="railbb">Skills</div>
+            <div class="railbb">Services</div>
+            <div class="railbb">Music</div>
+          </aside>
+          <div>
+            <div class="panel">
+              <div class="prow">
+                <span class="plbl">View as</span>
+                <span class="seg"><span>Public</span><span>Member</span><span class="on">Me</span></span>
+              </div>
+              <div class="prow"><span class="plbl">Profile visibility</span><span class="chip">MEMBER ▾</span></div>
+              <div class="prow"><span class="plbl">Discussion posts</span>
+                <span class="seg"><span>Public</span><span class="on">Member-only</span></span></div>
+            </div>
+            <div class="card"><div class="banner">+ Add banner</div>
+              <div class="idrow" style="margin-top:8px"><div class="avi"></div>
+                <div><div class="nm">Dale Hyldelund</div><div class="bio">Add a one-line bio…</div></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="anlab anlab--ok" style="top:8px;left:10px">✓ no button needed</div>
+      </div>
+    </div></div>
+  </div>
 </div>
 
 <div class="why">
