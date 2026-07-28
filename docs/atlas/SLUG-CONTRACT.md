@@ -206,8 +206,13 @@ clean unique handle can only be made worse. **Only defective slugs are candidate
 
 Until now every number in this contract came from dev2, which **cannot** rehearse this lane
 (a cleanup already ran there 2026-07-17, so its patreon population is ~5-11 against live's
-~1,634). `ssh live-ro` reached production for the first time on 2026-07-27 — it ProxyJumps
-through dev1, so **dev1 must be powered on** (`dev1-power on`) or the export just times out.
+~1,634). `ssh live-ro` reached production for the first time on 2026-07-27.
+
+**It connects DIRECTLY — do not wake dev1 for it (corrected 2026-07-28).** The original run
+went through a `ProxyJump dev1`, which meant dev1 had to be powered on and, because it
+auto-stops when idle, kept dying mid-query. Ian has since added dev2's IP to live's security
+group and the `ProxyJump` is gone from the stanza. Verified with **dev1 stopped**: `ssh
+live-ro` connects and answers. dev1 is off and staying off.
 
 Identity proved before trusting a single row: `looth_import` `siteurl` = `https://loothgroup.com`,
 while the `looth_dev` decoy on the same box answers `https://dev.loothgroup.com`.
