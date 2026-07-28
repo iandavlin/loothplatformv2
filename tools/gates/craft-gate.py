@@ -41,7 +41,10 @@ def gate_env():
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gate-env.sh")
     p = subprocess.run(["bash", script], capture_output=True, text=True)
     if p.returncode != 0:
-        sys.exit(p.stderr.strip() or f"gate-env.sh failed ({script})")
+        # A missing/unreadable environment is a DEAD gate, not a failing one — exit 2.
+        print("==================== CRAFT GATE CANNOT RUN ====================")
+        print("  " + (p.stderr.strip() or f"gate-env.sh failed ({script})"))
+        sys.exit(2)
     return dict(l.split("=", 1) for l in p.stdout.splitlines() if "=" in l)
 
 
@@ -183,8 +186,30 @@ def check(label, data):
     return v, img_kb, total_kb
 
 
+def preflight():
+    """Prerequisites, checked BEFORE any page is audited. Exits 2, never 1.
+
+    This gate spent weeks looking RED when it was in fact DEAD — pointed at a
+    retired host with no browser to drive, reporting one GATE-ERROR per page and
+    exiting 1, which is indistinguishable from finding real violations. A missing
+    browser is not a craft defect; reporting it as one hides both the dead harness
+    and whatever the gate would have caught. See the three-state contract at the
+    top of run-all.sh: exit 2 means CANNOT RUN and is louder than RED.
+    """
+    try:
+        urllib.request.urlopen(CDP + "/json/version", timeout=5).read()
+    except Exception as e:
+        print("==================== CRAFT GATE CANNOT RUN ====================")
+        print(f"  no browser on {CDP} ({e})")
+        print("  This gate drives a real Chrome over CDP. Nothing was audited, so this")
+        print("  is NOT a pass and NOT a failure — there is no verdict at all.")
+        print("  Start an engine (ask keeper — one per box) and re-run.")
+        sys.exit(2)
+
+
 def main():
     flt = sys.argv[sys.argv.index("--page") + 1] if "--page" in sys.argv else ""
+    preflight()
     gate = gate_token()
     member = member_cookies()
     fails, ok = [], 0
