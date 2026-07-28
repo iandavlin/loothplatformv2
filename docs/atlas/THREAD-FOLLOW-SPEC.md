@@ -633,6 +633,106 @@ population most likely to be deliberate clicks.
 
 ---
 
+## 8.1 DAY-ONE TRUTH TABLE — what the 1,519 do the moment the toggles ship
+
+> **Measured 2026-07-28 on LIVE** (`live-ro`, DB `looth_import`) against the **deployed BuddyBoss
+> 2.20.0 source**, by the thread-follow build lane. This section is the precondition on writing any
+> code: *if the UI shows a bit, that bit must be true.* Where it is not true, it is named here.
+>
+> §8's figures reproduce (113/48 for the 90-day live set vs §8's 112/49 — one day's drift, not a
+> discrepancy). Every count below is LIVE, never dev2; the two boxes hold different data.
+
+### 8.1.1 The mechanism, verified from source rather than assumed
+
+| Path | Hook | Recipients resolved by | Inherits? |
+|---|---|---|---|
+| **New REPLY** email | `bbp_notify_topic_subscribers`, `bbp_new_reply` @9999 (bp-forums/core/actions.php:220) | `bb_get_subscription_users(type:'topic', item_id:<topic>)` | **NO — topic-scoped, full stop** |
+| **New DISCUSSION** email | `bbp_notify_forum_subscribers`, `bbp_new_topic` @9999 (…:221) | group subs if the forum is group-linked, **else** forum subs — an exclusive `if/else` (bp-forums/common/functions.php:1382-1416) | n/a — never reads topic subs |
+
+**This is the load-bearing finding.** Reply mail — the thing the ✉ toggle governs — has **no
+inheritance path**. Nothing in forum or group subscriptions can produce a reply email. So the ✉ bit
+read from `wp_bb_notifications_subscriptions` is a *complete* account of who gets reply mail.
+
+### 8.1.2 Where the UI would be TRUTHFUL
+
+- **All 1,519 rows render ✉ = ON.** No data changes; state that has been invisible since 2023
+  simply becomes visible for the first time. 383 members see at least one lit envelope.
+- **🔔 renders OFF for all of them**, truthful *by construction* — `forums.topic_follow` (§5) is a
+  new, empty table. Nobody is silently opted into the bell.
+- **✉ = OFF is truthful for replies.** Proven above, not inferred.
+- **0 orphans**: every one of the 1,519 points at an existing user AND a published topic. There is
+  no dead-row cleanup hiding in this work.
+
+### 8.1.3 Where the UI would LIE — both directions, named
+
+**(a) Says ON, sends nothing — 40 rows / 7 users.**
+BuddyBoss gates every send on `bb_is_notification_enabled($uid, 'bb_forums_subscribed_reply')`
+(class-bp-forums-notification.php:1055). Live runs **modern** preference mode
+(`bp_is_labs_notification_preferences_support_enabled` defaults 1; the `bb_enabled_notification`
+option is populated with 20 entries), so the key is `bb_forums_subscribed_reply` and the admin
+default is `main:yes, email:yes` — mail flows unless the member opted out. Site-wide,
+**13 users** hold `bb_forums_subscribed_reply='no'` and **2** hold the master `enable_notification='no'`.
+Intersected with the topic subscriptions: **40 rows across 7 users** whose card would read ✉ ON
+while no email will ever arrive. **Of the 113 currently-live rows, only 3** are in this state.
+
+**(b) Says OFF, mail arrives anyway — the inherited-state gap, and it is the *majority* of today's mail.**
+The "New discussion" email is driven by **forum (46) or group (12,948)** subscriptions and fires when
+a topic is *created*. A member holding one of those opens a brand-new discussion, sees ✉ **OFF**, and
+has already received an email about that very discussion. The per-topic toggle cannot see or set
+that state. The toggle's copy ("Email me about new **replies**") is narrowly accurate — but no member
+parses it that finely, and this is the first thing that will be found.
+
+Sizing it, trailing 14 days on live: **29 of 33** discussion emails were exactly this "New discussion"
+class; only **4** were the reply path. So the population the toggles do *not* govern is currently
+sending ~7× the mail of the population they do.
+
+**But the group tail is nearly inert, which shrinks the fix:** of **124** topics created in the last
+90 days only **1** was in a group-linked forum (16 such forums exist). The 12,948 group subscriptions
+are therefore doing almost nothing today; essentially all 29 sends came from the **46 forum
+subscriptions / 38 users**. A remedy aimed at 46 rows is a very different proposition from one aimed
+at 12,948.
+
+### 8.1.4 Consequence for §9.2 — the recommendation survives, with one addition
+
+Option **B** (grandfather, surface, make exitable) still holds: the ✉ bit is a *complete and honest*
+account of reply mail, so surfacing it tells the truth for 1,479 of 1,519 rows. **But B as written
+does not cover 8.1.3(b)**, and that is where most of the mail is. Two additions are needed before B
+can be described as "members can see and leave what they're subscribed to":
+
+1. **Reconcile the 40 lying rows.** Cheapest honest fix: the ✉ toggle reads the subscription row
+   **AND** the preference gate, showing OFF when the gate suppresses. Turning it ON then clears the
+   member's `bb_forums_subscribed_reply='no'` for that member — a deliberate click, which is exactly
+   what the opt-in rule wants. **7 members, 40 rows — small enough to get right rather than paper over.**
+2. **Give the 46 forum subscriptions a surface.** They are unreachable from any per-topic control by
+   construction. Either the unsubscribe link (§4) carries a forum-scoped variant when the mail came
+   from the forum path, or the account master (§6) names them. **Not yet spec'd; flagged, not folded.**
+
+### 8.1.5 Two corrections to this document, from the same source read
+
+- **§1.3's "SYNCHRONOUS with the POST" is only true for a single subscriber.**
+  `bb_send_notifications_to_subscribers` sets `$background_process = true` whenever
+  `$subscriptions['total'] > 1` and hands the send to `$bb_background_updater` in chunks of 20
+  (bb-core-subscriptions.php:1135-1163). This morning's 3-recipient reply send went through the
+  background updater. It matters because a write-freeze or a rollback window does **not** necessarily
+  catch mail already queued.
+- **§4 is not adding an unsubscribe link where none exists — it is *replacing* one.** The reply
+  sender already injects `bp_email_get_unsubscribe_link($uid, 'bbp-new-forum-reply')` into the
+  `unsubscribe` token (class-bp-forums-notification.php:1078-1080), **overwriting** the
+  `'unsubscribe' => $topic_url` that `bbp_notify_topic_subscribers` set at functions.php:1249. So
+  today's emails already carry a working unsubscribe — at exactly the blanket type-level granularity
+  §4.1 ruled out. §4's filter has a concrete, known target rather than an open one.
+
+### 8.1.6 Verified for build (clears §1.2's "⚠️ build-time verify")
+
+All present on the deployed **BuddyBoss 2.20.0** source: `bbp_add_user_subscription`
+(bp-forums/users/functions.php:605), `bbp_remove_user_subscription` (:739),
+`bbp_get_topic_subscribers` (:235), `bbp_is_user_subscribed` (:434), `bb_create_subscription`
+(bp-core/bb-core-subscriptions.php:624), `bb_delete_subscription` (:907).
+⚠️ Read from **live's** copy — dev2's plugin tree is mode `0770 looth-dev:loothdevs` and unreadable
+to `ubuntu`, so "same build on dev2" is **not proven** and must be confirmed before the build asserts it.
+
+---
+
 ## 9. OPEN FOR IAN
 
 ### 9.1 Per-event email vs digest-only
