@@ -25,18 +25,18 @@ CONF="/etc/nginx/sites-available/dev.loothgroup.com.conf"
 ACT="$HOST/wp-json/looth/v1/activity?limit=1"
 fails=()
 
-GATE=$(grep -oP '(?<=set \$loothdev_token ")[^"]+' "$CONF" | head -1)
-[ -n "${GATE:-}" ] || { echo "GATE-ERROR  cannot read dev gate token from $CONF"; exit 1; }
+. "$(dirname "$0")/lib/gate-token.sh"
+GATE=$(gate_token) || { echo "GATE-ERROR  $GATE_TOKEN_ERR"; exit 1; }
 
 audience() {  # $1 = extra cookie(s) appended to the gate cookie
-  curl -s -D - -o /dev/null -b "loothdev_auth=$GATE${1:+; $1}" "$ACT" \
+  gate_curl -s -D - -o /dev/null -b "loothdev_auth=$GATE${1:+; $1}" "$ACT" \
     | grep -i '^X-LG-Activity-Audience:' | tr -d '\r' | awk '{print tolower($2)}'
 }
 
 # ---- 1. junk logged-in cookie must resolve to the PUBLIC bucket ----
 a_junk=$(audience "wordpress_logged_in_x=junkjunkjunk")
 a_anon=$(audience "")
-WPC=$(sudo -u www-data wp --path=/var/www/dev eval \
+WPC=$(sudo -n wp --path=/var/www/dev --allow-root eval \
       '$e=time()+3600; echo LOGGED_IN_COOKIE."=".wp_generate_auth_cookie(1912,$e,"logged_in");' 2>/dev/null)
 a_valid=$(audience "$WPC")
 
@@ -49,13 +49,13 @@ fi
 
 # ---- 2. /v2/ no autoindex, no PHP source ----
 for d in "/v2/" "/v2/src/"; do
-  code=$(curl -s -o /tmp/.v2body -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST$d")
+  code=$(gate_curl -s -o /tmp/.v2body -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST$d")
   if [ "$code" = "200" ] && grep -qi "Index of" /tmp/.v2body; then
     fails+=("V2-AUTOINDEX      $d enumerates the source tree (autoindex must be off)")
   fi
 done
 rm -f /tmp/.v2body
-code_php=$(curl -s -o /dev/null -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST/v2/lg-layout-v2.php")
+code_php=$(gate_curl -s -o /dev/null -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST/v2/lg-layout-v2.php")
 if [ "$code_php" != "403" ]; then
   fails+=("V2-PHP-SOURCE     /v2/lg-layout-v2.php returned $code_php (must be 403 — never serve source)")
 fi

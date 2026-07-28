@@ -20,10 +20,10 @@ set -uo pipefail
 WP="/var/www/dev"; CONF="/etc/nginx/sites-available/dev.loothgroup.com.conf"
 APP="/srv/profile-app"; SUBJ=7      # a claimed member (owns a /profile/edit editor)
 
-GATE=$(grep -oP '(?<=set \$loothdev_token ")[^"]+' "$CONF" | head -1)
-[ -n "${GATE:-}" ] || { echo "GATE-ERROR  cannot read dev gate token"; exit 1; }
+. "$(dirname "$0")/lib/gate-token.sh"
+GATE=$(gate_token) || { echo "GATE-ERROR  $GATE_TOKEN_ERR"; exit 1; }
 
-read LIN LIV SN SV < <(sudo -u www-data wp --path="$WP" eval '
+read LIN LIV SN SV < <(sudo -n wp --path="$WP" --allow-root eval '
   $uid='"$SUBJ"'; $exp=time()+1800; $t=WP_Session_Tokens::get_instance($uid)->create($exp);
   echo LOGGED_IN_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"logged_in",$t)." ".SECURE_AUTH_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"secure_auth",$t);' 2>/dev/null)
 LOOTH=$(sudo -u profile-app php "$APP/bin/mint-dev-token.php" "$SUBJ" 2>/dev/null | tail -1)
