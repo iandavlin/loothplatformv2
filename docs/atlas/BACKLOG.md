@@ -20,7 +20,7 @@ Move finished items to DONE with the date. If an item is blocked, say *on what* 
 | connections-backfill | 748 missing live connections | producing Ian's canary command (his 136 first) |
 | reply-images | 6 images per reply | merge-ready; owes 422-under-real-request + composer-guard-under-real-finger |
 | slug-backfill | craft gate repoint + slug dry-run | gate work; slug run blocked on live TSVs |
-| weekly-recap | weekly digest recap + dedup | building suppression proposal |
+| weekly-recap | weekly digest recap + dedup | BUILT to Ian's four 07-28 rulings (fixed window, to-do list, empty=no email, two registers); suite 4/4; blocked only on a real send, which is Ian's |
 
 ## QUEUED — ready, no slot
 
