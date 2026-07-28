@@ -29,12 +29,33 @@ Cohort boundary: `wp_user_bridge.synced_at < 2026-06-03` = "at cutover".
 
 ## The one-line answer
 
-On live, the cutover left **three real gaps** — connections (already fixed and awaiting Ian),
-messages (16 members), location (11 members) — plus **one latent trap** (`email_aliases`). Three
-things that looked like gaps are **not**. One claimed defect was a **dev2 artifact and is
-retracted**. One item is **unmeasurable** and one is **ungranted**. The last uncontrolled item,
-`profiles`, was **controlled on 2026-07-28 and is not a gap** (F.1) — so every surface in this
-sweep now carries a verdict, and the only thing still owed is one read grant (F.2).
+**The sweep is complete as of 2026-07-28 — every surface carries a verdict.**
+
+On live the cutover left **three real gaps**, and they are of very different severity:
+
+| gap | scale | shape |
+| --- | --- | --- |
+| **connections** | 271 rows / 164 members, plus 81 wrong-status | fix written, rehearsed, Ian's to run |
+| **messages** | **17** members, **24 threads**, **13 other members affected** | **worst — a visibly wrong artifact, not an absence** |
+| **location** | 11 members | closed batch; nothing lost, only unpropagated |
+
+Plus **one latent trap** (`email_aliases`, 202 users) whose failure mode is proven benign.
+**Three things that looked like gaps are not** (`profile_socials`, `profile_genres`,
+`notifications`), and a fourth — `profiles` — was **controlled on 2026-07-28 and is not a gap**
+either. One claimed defect was a **dev2 artifact and is retracted**.
+
+**Two findings recur across the sweep and are worth carrying:**
+
+1. **Most of these are closed batches, not live bugs.** Location stops at 2026-06-13;
+   `email_aliases` is 181-of-194 from the single 2026-06-11 bulk run; the connections
+   wrong-status rows were five people re-requesting by hand. The runtime paths work. Only the
+   messages gap is unbounded in the sense that it keeps rendering wrong every time someone opens
+   one of those threads.
+2. **Raw cohort ratios lied twice.** `profile_socials` and `profiles` both looked damning until
+   controlled, and the messages figure of "16" was a member's *post-cutover* activity mistaken
+   for surviving history. Control for what the number means before promoting it.
+
+The only thing still owed to this document is one read grant (F.2).
 
 ---
 
@@ -147,19 +168,52 @@ today, however, **zero users in either cohort have a NULL slug** — so that par
 has already been resolved by something, and it is one more reason the dev2-era slug findings in
 section A should not be used to size work.
 
-## D. LATENT — `email_aliases` is 100% at cutover and 19.5% late, and nothing reads it
+## D. LATENT — `email_aliases`: ONE bulk run caused it, and the failure mode is benign
 
-**Live: 1606/1606 cutover vs 47/241 late.** The largest ratio in the sweep. (dev2 read 11%, so
-live is *less* severe.) Written by `bin/backfill.php` (one-shot, bridge-keyed) and by
-`src/Provision.php` at runtime — same bug shape as connections.
+**Live: 202 of 1876 users have no alias for their own primary email; 194 are late cohort, 0 are
+cutover.** Scoped in full 2026-07-28. Two findings change how this should be treated.
 
-**No functional consequence today.** Every reference across the repo in `.php`, `.sql` and `.sh`
-is a write (`Provision.php` ×2, `bin/backfill.php`), a delete (`EraseUser.php`'s teardown list),
-or the `CREATE TABLE`. **Nothing SELECTs from it.**
+**It is not a defect in the provisioning path — it is one batch.** `Provision.php` writes the
+alias in the *same transaction* as the `wp_user_bridge` upsert, so the runtime path cannot produce
+this. Coverage by bridge date proves it:
+
+| bridged | members | with alias |
+| --- | --- | --- |
+| **2026-06-11 (the bulk spike)** | **181** | **0 — 0.0%** |
+| 06-13 | 9 | 1 |
+| 07-14 | 7 | 4 |
+| every other date, 24 of them | 1 – 4 each | **100%** |
+
+**181 of the 194 come from the single bulk bridge run on 2026-06-11**, which wrote
+`wp_user_bridge` without going through `Provision.php`. Every date where members arrived by the
+normal path is 100%. Same conclusion as section C: a closed historical batch, not a leak.
+
+**The failure mode is "not found", never "wrong member found".** This was worth checking, because
+a mis-pointed alias would be far worse than a missing one — it would resolve a support lookup or
+an account merge to somebody else's account. Measured on live:
+
+```
+aliases whose email <> that user's primary_email            0
+users whose primary_email alias is owned by ANOTHER user     0
+```
+
+Both zero. So the latent risk is bounded at invisibility, and there is no silent
+mis-identification hiding in the table.
+
+**Still nothing reads it.** Re-verified repo-wide across *all* file types, not just `.php`/`.sql`/
+`.sh`: every code reference is a write (`Provision.php` ×2, `bin/backfill.php`), a delete
+(`EraseUser.php` teardown), or the `CREATE TABLE`. **No SELECT exists anywhere.** The remaining
+mentions are documentation.
 
 Do not rush it; do not forget it. The day anything resolves a member by email — account merge,
-email change, support lookup — the late cohort is invisible and it will present as "this member
-does not exist."
+email change, support lookup — those 202 are invisible and it presents as "this member does not
+exist."
+
+*If it is ever fixed:* the insert is trivial and idempotent against the unique key on
+`email_normalized`. The one thing to measure **at apply time rather than assume** is collisions —
+`ON CONFLICT (email_normalized) DO NOTHING` would silently leave a contested email pointing at the
+other user. That count is 0 today, which makes a fix safe today, and is exactly why it should be
+re-measured then rather than trusted from this document.
 
 ## E. NOT GAPS — measured on live, with controls
 
@@ -249,10 +303,18 @@ GRANT SELECT ON public.slug_history TO looth_ro;
 
 ## H. Recommended order, if Ian wants any of it
 
-1. **connections** — written and rehearsed, only needs running.
-2. **messages (16)** — a total loss of history for those members.
-3. **location (11)** — cosmetic by comparison.
-4. **`email_aliases`** — no rush, but gate any future email-resolution feature on it.
+1. **connections** — written, rehearsed, dry-run against live. Only needs running.
+   See `IAN-RUN-ORDER.md`.
+2. **messages** — **promoted above location deliberately.** It is the only gap that is still
+   actively visible to members who were never part of the late cohort: 13 of them can open one of
+   24 threads and find up to 100% of the conversation gone. Needs an Ian ruling first, not code —
+   restoring 18-month-old private conversations is a product and privacy decision, and the
+   unread-badge question needs his answer exactly as the pending-request one did.
+   See `MESSAGES-GAP-INVENTORY.md`.
+3. **location (11)** — cosmetic by comparison and a closed batch. Nothing is lost; the source
+   string still exists in BuddyBoss. A fix wants the geocoder pass too.
+4. **`email_aliases`** — no rush, failure mode proven benign, but gate any future
+   email-resolution feature on it and re-measure collisions at apply time.
 5. ~~control `profiles`~~ — **done 2026-07-28, not a gap.** Nothing to do.
 
 The 26 stranded ghost handles belong to the **slug-backfill** lane as a design input, not to this
