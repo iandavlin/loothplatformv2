@@ -467,6 +467,113 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
  * COUNT over the pg reply table) so orphaned pg reply rows — replies trashed in
  * WP whose delete never propagated — can't inflate the count.
  */
+// GHOST SWEEP — the reverse pass. Everything else in this file is driven from
+// wp_posts, so it can only repair rows that STILL EXIST in WordPress. A row that
+// exists ONLY in the mirror — its WP post deleted without the mirror hearing —
+// can never be reached that way, and nothing else looks for it. Those are
+// GHOSTS, and unlike an orphan a ghost is `status='publish'` under a living
+// topic, so IT STILL RENDERS: members see replies that were deleted. Measured on
+// live 2026-07-28: 13 ghost replies + 2 ghost topics. No existing check could see
+// them — the orphan census reads 0 for a ghost by definition, because its
+// attachment rows still have a parent row.
+//
+// Two paths produce them, neither fixable by a database constraint:
+//   * bb-mirror-sync.php hooks bbp_deleted_topic/reply and NO WP-native delete
+//     hook, so wp-admin bulk delete, wp_delete_post(), WP-CLI and direct SQL all
+//     remove the post silently.
+//   * the dispatch is wp_remote_post(..., 'blocking' => false, timeout 1) — fire
+//     and forget: no response read, no retry, no log.
+//
+// $wp_ids_for('topic'|'reply') must return ALL WordPress ids of that type.
+// Returns a per-kind report; caller decides how to print it.
+//
+// It is deliberately hard to make this delete a lot:
+//   - $apply defaults to false. Report first, sweep once the numbers are trusted.
+//   - an EMPTY WordPress id set aborts that kind. If wp_posts returns nothing
+//     while the mirror is full, that is a broken query, not an empty forum —
+//     deleting the mirror because a SELECT failed is the one catastrophic
+//     outcome available here.
+//   - a blast-radius cap: more than $cap_abs rows, or more than $cap_pct of the
+//     table, refuses and asks for a human.
+// With the attachment purge triggers installed (schema.pg.sql), deleting a ghost
+// row also removes its attachment rows, so the repair is complete rather than
+// trading a ghost for an orphan.
+function bb_mirror_sweep_ghosts(
+    PDO $db, callable $wp_ids_for, bool $apply = false,
+    int $cap_abs = 100, int $cap_pct = 5
+): array {
+    $report = [];
+    // REPLIES FIRST, THEN TOPICS. Deleting a topic row CASCADES to its replies
+    // (reply.topic_id is ON DELETE CASCADE), and a cascaded reply that still
+    // exists in WordPress would silently vanish from the forum — the delta walk
+    // would not bring it back, because it only looks at posts modified inside
+    // the bookmark window and these are old. Sweeping replies first means that
+    // by the time a ghost topic is considered, every reply still under it is one
+    // that EXISTS IN WORDPRESS, and the guard below can simply refuse.
+    // Caught by the test fixture for the retyped case, not by inspection.
+    foreach (['reply', 'topic'] as $kind) {
+        $wp_ids = $wp_ids_for($kind);
+        if (!$wp_ids) {
+            $report[$kind] = ['status' => 'abort_empty_wp', 'ghosts' => 0, 'total' => 0, 'ids' => [], 'held' => []];
+            continue;
+        }
+        $wp_have    = array_flip(array_map('intval', $wp_ids));
+        $mirror_ids = $db->query("SELECT id FROM $kind")->fetchAll(PDO::FETCH_COLUMN);
+        $total      = count($mirror_ids);
+
+        $ghosts = [];
+        foreach ($mirror_ids as $mid) {
+            $mid = (int)$mid;
+            // A RETYPED post is a ghost for this table and correct to remove:
+            // live 71433 is a topic in the mirror but a reply in WordPress, so
+            // the topic row must go and the reply upsert re-creates it properly.
+            if (!isset($wp_have[$mid])) $ghosts[] = $mid;
+        }
+        $n = count($ghosts);
+        if ($n === 0) {
+            $report[$kind] = ['status' => 'clean', 'ghosts' => 0, 'total' => $total, 'ids' => [], 'held' => []];
+            continue;
+        }
+
+        $allowed = max($cap_abs, (int)ceil($total * $cap_pct / 100));
+        if ($n > $allowed) {
+            $report[$kind] = ['status' => 'refused_cap', 'ghosts' => $n, 'total' => $total,
+                              'ids' => $ghosts, 'allowed' => $allowed, 'held' => []];
+            continue;
+        }
+        // A ghost TOPIC whose replies still exist in WordPress must not be
+        // touched: the FK cascade would take those live replies with it. Hold it
+        // for a human instead. (On live 2026-07-28 no ghost topic had any mirror
+        // replies, so this holds nothing today — it is here because this runs on
+        // a timer forever and the retyped case can produce exactly this shape.)
+        $held = [];
+        if ($kind === 'topic' && $ghosts) {
+            $wp_reply_ids  = array_flip(array_map('intval', $wp_ids_for('reply')));
+            $stmt = $db->prepare("SELECT id FROM reply WHERE topic_id = ?");
+            foreach ($ghosts as $i => $gid) {
+                $stmt->execute([$gid]);
+                foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $rid) {
+                    if (isset($wp_reply_ids[(int)$rid])) { $held[] = $gid; unset($ghosts[$i]); break; }
+                }
+            }
+            $ghosts = array_values($ghosts);
+            $n = count($ghosts);
+        }
+
+        if (!$apply) {
+            $report[$kind] = ['status' => 'report_only', 'ghosts' => $n, 'total' => $total,
+                              'ids' => $ghosts, 'held' => $held];
+            continue;
+        }
+
+        $del = $db->prepare("DELETE FROM $kind WHERE id = ?");
+        foreach ($ghosts as $gid) $del->execute([$gid]);
+        $report[$kind] = ['status' => 'swept', 'ghosts' => $n, 'total' => $total,
+                          'ids' => $ghosts, 'held' => $held];
+    }
+    return $report;
+}
+
 function bb_mirror_refresh_topic_reply_count(int $topic_id, PDO $db): void {
     if ($topic_id <= 0) return;
     $real = (int)$GLOBALS['wpdb']->get_var($GLOBALS['wpdb']->prepare(
