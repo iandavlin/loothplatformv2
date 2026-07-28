@@ -25,6 +25,38 @@ Two things §5's must-not-break list actually caught during the build:
    `.lg-block:not(.lg-block--header)` → `data-block`. Neither new element carries
    either attribute, so the saved order cannot be corrupted. Verified: 0 matches.
 
+### VERIFIED — rendered markup, all four audiences (no engine, no serve)
+
+`profile-app/bin/render-check.php` calls the renderer directly and inspects the HTML,
+so the branch could be verified without the browser engine (scarcest thing on the box)
+and without a serve window (not a lane's to take). Run per audience:
+
+```
+sudo -n -u profile-app php profile-app/bin/render-check.php 1849 <me|member|public|admin>
+```
+
+| audience | `lg-layoutrow` | `lg-addsec` | `data-caddy-open` | order u.php would read |
+|---|---|---|---|---|
+| **me** (owner) | 1 | 1 | **2** | `[about, location, gallery]` |
+| member | 0 | 0 | 0 | `[about, location, gallery]` |
+| public | 0 | 0 | 0 | `[about]` |
+| admin (viewing) | 0 | 0 | 0 | `[about, location, gallery]` |
+
+- **No leak.** The openers render for the owner only. Admin *viewing* correctly gets
+  none; admin *editing* does get them, because `u.php` maps `admin_edit` → `role='me'`.
+- **Order is intact and identical** across audiences (the `public` row is shorter
+  because that fixture's location and gallery are members-only — a privacy result, not
+  a layout one).
+- **`non-block elements inside order()`: 0** in every case. This is the check that
+  matters most and the one no screenshot would ever show: had either new element
+  picked up `.lg-block` or a `data-block` attribute, it would have silently rewritten
+  members' saved section order on their next save. A data defect, invisible to the eye.
+- Removed markers confirmed gone: `lg-caddy-toggle` 0, `lg-viewas__caddy` 0.
+
+**What this does NOT prove:** anything visual, anything about the 1380px breakpoint,
+and that clicking an opener actually opens the drawer — those are behaviour and layout,
+and they need the engine (`editor-rail-reachable-gate.sh`, rewritten in `deeefef`).
+
 **Still open — the §7 ruling has NOT been given** (see below): should the openers
 disappear in View-as preview? They currently inherit the old behaviour, because both
 are gated on `$role === 'me'`, which is the same condition as `$editing`.
