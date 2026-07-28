@@ -1,0 +1,232 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weekly digest — what gets left out of the email</title>
+<!--
+  SOURCE OF TRUTH: lg-weekly-digest/dev/previs/index.html in the monorepo, branch
+  weekly-digest-recap. Published to /srv/lg-layout-v2/tests/output/wd-recap/ by
+  dev/publish-previs.sh. That directory is gitignored (lg-layout-v2/.gitignore:5)
+  and served through the `location ^~ /v2/` alias behind the dev gate, so
+  publishing writes nothing into the serving checkout and needs no serve window.
+
+  Every email in the frames below is REAL rendered output from the shipping
+  renderer over REAL live rows. Nothing is a mockup.
+-->
+<style>
+  :root{
+    --gold:#ECB351; --dark:#2B2318; --mint:#87986A; --mint-l:#D4E0B8;
+    --light:#FAF6EE; --ink:#2B2318; --paper:#fff; --line:#e6ded0;
+    --dim:#6b6355; --bad:#b4472e;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--light:#17150f; --ink:#efe8db; --paper:#1f1c15; --line:#3b352a; --dim:#a49b89;}
+  }
+  :root[data-theme="dark"]{--light:#17150f; --ink:#efe8db; --paper:#1f1c15; --line:#3b352a; --dim:#a49b89;}
+  :root[data-theme="light"]{--light:#FAF6EE; --ink:#2B2318; --paper:#fff; --line:#e6ded0; --dim:#6b6355;}
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--light);color:var(--ink);
+       font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       -webkit-text-size-adjust:100%}
+  .wrap{max-width:1360px;margin:0 auto;padding:24px 16px 80px}
+  header{border-bottom:3px solid var(--gold);padding-bottom:14px;margin-bottom:8px}
+  h1{font:600 24px/1.25 Georgia,serif;margin:0 0 4px}
+  .sub{color:var(--dim);font-size:14px;margin:0}
+
+  .lede{background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--gold);
+        border-radius:8px;padding:14px 16px;margin:20px 0 28px}
+  .lede p{margin:0 0 10px} .lede p:last-child{margin:0}
+  .q{font:600 17px/1.4 Georgia,serif}
+
+  .rules{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin:0 0 34px}
+  .rule{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:13px 15px}
+  .rule h3{margin:0 0 6px;font-size:15px;font-weight:600}
+  .rule p{margin:0;font-size:13.5px;color:var(--dim)}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+       padding:2px 8px;border-radius:99px;margin-bottom:8px}
+  .t-ship{background:var(--mint-l);color:#33421f}
+  .t-no{background:#e9e4da;color:#5a5347}
+  .t-ask{background:var(--gold);color:#3a2c0f}
+
+  section.cmp{margin:0 0 46px}
+  .chead{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;
+         border-bottom:2px solid var(--line);padding-bottom:9px;margin-bottom:12px}
+  .chead h2{margin:0;font:600 19px/1.3 Georgia,serif}
+  .who{color:var(--dim);font-size:14px}
+  .delta{margin-left:auto;font-weight:700;font-size:15px;white-space:nowrap}
+  .delta .n{font-variant-numeric:tabular-nums}
+  .arrow{color:var(--dim);padding:0 6px}
+
+  .note{font-size:13.5px;color:var(--dim);margin:0 0 14px}
+  .note b{color:var(--ink)}
+  .prov{font-size:12px;color:var(--dim);margin:10px 0 0;font-style:italic}
+
+  .pair{display:grid;gap:18px;grid-template-columns:1fr 1fr}
+  .pane{min-width:0}
+  .plabel{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin:0 0 7px}
+  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+  .d-before{background:var(--bad)} .d-after{background:var(--mint)}
+  .plabel .cnt{margin-left:auto;font-weight:400;color:var(--dim);font-variant-numeric:tabular-nums}
+  .shot{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;
+        box-shadow:0 1px 3px rgba(0,0,0,.07)}
+  .shot iframe{display:block;width:100%;height:620px;border:0;background:#fff}
+
+  .swap{display:none}
+  .segbtns{display:inline-flex;border:1px solid var(--line);border-radius:99px;overflow:hidden;
+           background:var(--paper);margin:0 0 10px}
+  .segbtns button{appearance:none;border:0;background:transparent;color:var(--ink);
+                  font:600 13px/1 inherit;padding:9px 15px;cursor:pointer}
+  .segbtns button[aria-pressed="true"]{background:var(--dark);color:var(--gold)}
+
+  @media (max-width:860px){
+    .pair{display:none}
+    .swap{display:block}
+    .swap .shot iframe{height:560px}
+  }
+
+  footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;font-size:13px;color:var(--dim)}
+  footer code{font-size:12px;background:var(--paper);border:1px solid var(--line);padding:1px 5px;border-radius:4px}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>Weekly digest — what gets left out of the email</h1>
+  <p class="sub">Three suppression rules, each shown as the email it produces. Real renderer, real live rows.</p>
+</header>
+
+<div class="lede">
+  <p class="q">“Do not duplicate notifications in the email that have already been read — either read in one of those emails, or already read on the website.”</p>
+  <p>That is three different problems, not one. Two are solved; the third is the only thing here that needs a decision from you. Each rule below is shown as <b>the email without it</b> beside <b>the email with it</b>.</p>
+</div>
+
+<div class="rules">
+  <div class="rule">
+    <span class="tag t-ship">Rule 1 · shipped</span>
+    <h3>Already read on the website</h3>
+    <p>Anything the member already looked at in the bell — or already actioned, for a connection — never enters the email. Live: <b>24 of 152 items removed</b>.</p>
+  </div>
+  <div class="rule">
+    <span class="tag t-no">Rule 2 · do not build</span>
+    <h3>Already sent in a per-event email</h3>
+    <p>Connections, messages and reactions have <b>no email sender at all</b>, so 87% of the digest cannot overlap by construction. Forums can — and forum items are <b>1 of 128</b> this week.</p>
+  </div>
+  <div class="rule">
+    <span class="tag t-ask">Rule 3b · your call</span>
+    <h3>Already sent in a previous digest</h3>
+    <p>A fixed 7-day window assumes last week's email arrived. On 2026-06-01 it did not, for six real members — and what they missed was lost silently.</p>
+  </div>
+</div>
+
+<!-- ─────────────────────────── Rule 1, case A ─────────────────────────── -->
+<section class="cmp">
+  <div class="chead">
+    <h2>Rule 1 — the ordinary case</h2>
+    <span class="who">Doug Proper · 14 items that week, 6 already read on the site</span>
+    <span class="delta"><span class="n">9</span> rows <span class="arrow">→</span> <span class="n">8</span> rows</span>
+  </div>
+  <p class="note">Most weeks the rule trims. Doug read six things on the site; the email stops re-telling him about them, and the <b>“6 more waiting”</b> overflow line disappears with them because there is no longer an overflow.</p>
+
+  <div class="pair">
+    <div class="pane">
+      <p class="plabel"><span class="dot d-before"></span>Without the rule<span class="cnt">9 rows</span></p>
+      <div class="shot"><iframe src="suppress-197-before.html" title="Doug Proper, no read-suppression" loading="lazy"></iframe></div>
+    </div>
+    <div class="pane">
+      <p class="plabel"><span class="dot d-after"></span>With the rule — what ships<span class="cnt">8 rows</span></p>
+      <div class="shot"><iframe src="suppress-197-after.html" title="Doug Proper, read-suppression applied" loading="lazy"></iframe></div>
+    </div>
+  </div>
+
+  <div class="swap" data-swap>
+    <div class="segbtns">
+      <button type="button" data-src="suppress-197-before.html" aria-pressed="false">Without · 9 rows</button>
+      <button type="button" data-src="suppress-197-after.html" aria-pressed="true">With · 8 rows</button>
+    </div>
+    <div class="shot"><iframe title="Doug Proper" loading="lazy"></iframe></div>
+  </div>
+
+  <p class="prov">Rendered 2026-07-27 from a read-only extract of LIVE <code>profile_app</code> (not dev2 — the two hold different data). Discussion titles are blank in these frames only because live post ids do not resolve on dev2; in a real send they read as titles.</p>
+</section>
+
+<!-- ─────────────────────────── Rule 1, case B ─────────────────────────── -->
+<section class="cmp">
+  <div class="chead">
+    <h2>Rule 1 — the case that matters</h2>
+    <span class="who">Your own account · 5 items that week, every one already read</span>
+    <span class="delta"><span class="n">5</span> rows <span class="arrow">→</span> nothing at all</span>
+  </div>
+  <p class="note">Five things happened to you that week. You read all five on the site. <b>The correct email says nothing</b> — no section, no heading, not an empty box. This is now the <b>common</b> case for anyone who keeps up, so it had to render clean rather than merely render short.</p>
+
+  <div class="pair">
+    <div class="pane">
+      <p class="plabel"><span class="dot d-before"></span>Without the rule<span class="cnt">5 rows</span></p>
+      <div class="shot"><iframe src="suppress-1-before.html" title="Ian Davlin, no read-suppression" loading="lazy"></iframe></div>
+    </div>
+    <div class="pane">
+      <p class="plabel"><span class="dot d-after"></span>With the rule — what ships<span class="cnt">no section</span></p>
+      <div class="shot"><iframe src="suppress-1-after.html" title="Ian Davlin, read-suppression applied" loading="lazy"></iframe></div>
+    </div>
+  </div>
+
+  <div class="swap" data-swap>
+    <div class="segbtns">
+      <button type="button" data-src="suppress-1-before.html" aria-pressed="false">Without · 5 rows</button>
+      <button type="button" data-src="suppress-1-after.html" aria-pressed="true">With · none</button>
+    </div>
+    <div class="shot"><iframe title="Ian Davlin" loading="lazy"></iframe></div>
+  </div>
+
+  <p class="prov">The empty case is proven byte-identical to an email built with no recap at all — the renderer returns nothing and the smart code emits nothing, rather than leaving a stray heading behind.</p>
+</section>
+
+<!-- ─────────────────────────── Rule 3b ─────────────────────────── -->
+<section class="cmp">
+  <div class="chead">
+    <h2>Rule 3b — the one that needs your call</h2>
+    <span class="who">Grace Da Maren · 6 outstanding items, spread across two weeks</span>
+    <span class="delta"><span class="n">2</span> rows <span class="arrow">→</span> <span class="n">6</span> rows</span>
+  </div>
+  <p class="note">This one is the reverse of the others: rows <b>appear</b>. The email counts back a fixed 7 days, which quietly assumes last week's email arrived. <b>On 2026-06-01 it did not</b> — one bad sender signature, six real members, all six still marked failed eight weeks later and never re-sent. Their week fell outside the next window and was never mentioned again. The fix is to count back to <b>the last digest that member actually received</b>, so a failed send heals itself the following week.</p>
+
+  <div class="pair">
+    <div class="pane">
+      <p class="plabel"><span class="dot d-before"></span>Fixed 7 days — what ships today<span class="cnt">2 rows</span></p>
+      <div class="shot"><iframe src="watermark-9-fixed.html" title="Grace, fixed 7-day window" loading="lazy"></iframe></div>
+    </div>
+    <div class="pane">
+      <p class="plabel"><span class="dot d-after"></span>Back to her last delivered email<span class="cnt">6 rows</span></p>
+      <div class="shot"><iframe src="watermark-9-reachback.html" title="Grace, per-member window" loading="lazy"></iframe></div>
+    </div>
+  </div>
+
+  <div class="swap" data-swap>
+    <div class="segbtns">
+      <button type="button" data-src="watermark-9-fixed.html" aria-pressed="true">Fixed 7d · 2 rows</button>
+      <button type="button" data-src="watermark-9-reachback.html" aria-pressed="false">Rule 3b · 6 rows</button>
+    </div>
+    <div class="shot"><iframe title="Grace Da Maren" loading="lazy"></iframe></div>
+  </div>
+
+  <p class="prov">Grace and all six rows are real, extracted from LIVE 2026-07-28 13:25 UTC; both panels already have Rule 1 applied, so the <b>only</b> difference between them is the window. <b>The failed send is simulated</b> — Grace's sends did not fail, the other six members' did. The frame answers what it looks like the next time one does.</p>
+</section>
+
+<footer>
+  <p><b>Not shown, because it has no picture yet:</b> nothing marks a notification read when someone clicks a link in the <i>email</i> — only the bell does that. So an email-only reader keeps seeing the same items. The obvious fix, a link that clears on click, is deliberately not built: mail scanners follow every link with no human involved, and on this platform's own click data 7–10% of apparent clickers are machines hitting 10–20 links in four seconds. That would wipe a member's recap before they opened it, and it would look exactly like the feature working.</p>
+  <p>Full measurements, queries and the two triggers that would reopen Rule 2: <code>docs/atlas/RECAP-SUPPRESSION-PROPOSAL.md</code>. Re-run them any time with <code>lg-weekly-digest/dev/measure-suppression-axes.sh</code>.</p>
+</footer>
+</div>
+
+<script>
+// Mobile: swap the two emails in place. A shrunk side-by-side is unreadable at
+// 390px, and a change-in-place actually reads BETTER than two small panels.
+document.querySelectorAll('[data-swap]').forEach(function (box) {
+  var frame = box.querySelector('iframe');
+  var btns  = box.querySelectorAll('button');
+  function pick(btn) {
+    btns.forEach(function (b) { b.setAttribute('aria-pressed', String(b === btn)); });
+    if (frame.getAttribute('src') !== btn.dataset.src) frame.setAttribute('src', btn.dataset.src);
+  }
+  btns.forEach(function (b) { b.addEventListener('click', function () { pick(b); }); });
+  pick(box.querySelector('button[aria-pressed="true"]') || btns[0]);
+});
+</script>
