@@ -1,8 +1,9 @@
 # RECAP-SUPPRESSION-PROPOSAL
 
-> **Status: FINISHED PROPOSAL, measured on LIVE, awaiting Ian.** Axis 1 is shipped. **Axis 2:
-> do not build** (measured — the surface does not exist). **Axis 3: build Rule 3b** (the trigger I
-> set for it turned out to have already fired in June, and the design needs no new schema).
+> **Status: FINISHED PROPOSAL, measured on LIVE, previs'd, awaiting Ian.** Axis 1 is shipped.
+> **Axis 2: do not build** (measured — the surface does not exist). **Axis 3: build Rule 3b** (the
+> trigger I set for it turned out to have already fired in June, and the design needs no new schema).
+> **The pictures are up — §3:** https://dev2.loothgroup.com/v2/tests/output/wd-recap/index.html
 > **Lane:** weekly-digest-recap. **Date:** 2026-07-27, **revised 2026-07-28** after running the
 > repro script end to end, which caught a material error in §1.3(b) — see the correction there.
 > **All numbers are from LIVE**, read-only via `live-ro` (PG `profile_app` as `looth_ro`,
@@ -344,10 +345,15 @@ feature working. **Awaiting Ian's ruling.** Rules 1-3 do not resolve it and do n
 
 ---
 
-## 3. The visible consequence
+## 3. The visible consequence — **published, side by side**
 
-Rule 1 rendered against two real live members, before and after
-(`lg-weekly-digest/dev/frames/`, published when a serve window allows):
+> **https://dev2.loothgroup.com/v2/tests/output/wd-recap/index.html** (dev-gated)
+
+Every rule with a member-visible consequence is rendered as the email it produces, before beside
+after. Real renderer, real live rows, no mockups. Source in `lg-weekly-digest/dev/previs/`, frames in
+`dev/frames/`, published by `dev/publish-previs.sh`.
+
+**Rule 1 — what suppression removes:**
 
 | Member | Items in window | Without suppression | **With suppression** |
 |---|---|---|---|
@@ -357,6 +363,26 @@ Rule 1 rendered against two real live members, before and after
 Ian's own live account is the clean demonstration: five things happened to him that week, he read all
 five on the site, and the correct email says nothing. That empty case is proven byte-identical to a
 no-recap body.
+
+**Rule 3b — what a fixed window silently drops.** This one runs the other way, and it is the ask, so
+it needed a picture of its own rather than a paragraph:
+
+| Member | Listable in 14d | **Fixed 7-day window** (ships today) | **Per-member window** (Rule 3b) |
+|---|---|---|---|
+| Grace Da Maren (wp:9) | 6 | **2 rows** | **6 rows** |
+
+Both panels already have Rule 1 applied, so the **only** variable between them is the window. Grace
+and all six rows are real (LIVE extract 2026-07-28 13:25 UTC, `dev/extract-watermark-frames.sh`);
+**the failed send is simulated and the frame says so** — Grace's sends did not fail, the six members
+in §1.3(b) did. The frame answers what it looks like the next time one does, which is the decision
+actually in front of Ian. Four items is what would have gone unmentioned forever.
+
+**Publishing took no serve window and dirtied nothing.** `location ^~ /v2/` aliases to
+`/srv/lg-layout-v2/`, and `tests/output/` is gitignored there (`lg-layout-v2/.gitignore:5`), so the
+publish adds no line to the serving checkout's porcelain — `publish-previs.sh` asserts that and
+refuses to finish otherwise. **The gate was proven from the LAN IP, not loopback** (403 with no
+cookie, 200 with the dev cookie), because these frames carry real members' names and
+`geo $loothdev_src_local` authorizes `127.0.0.1` outright — a loopback 200 is the gate not running.
 
 ---
 
@@ -407,6 +433,10 @@ that class; a recap is content inside a class, never a class of its own.*
   correct reach-back for the six real casualties and the correct no-reach-back for healthy controls
   (§ Rule 3b). That proves the *data supports it*. It has not been wired into
   `Recap_Source::payload_for()`, and no send has been rendered through it.
+- **Rule 3b's frames render a simulated failure, not an observed one.** Grace's rows are real and her
+  two-week spread is real; her sends did not fail. The frames show the *shape* of the loss using a
+  member who has the right data, not a member it happened to. The six it did happen to are named in
+  §1.3(b) and their loss is eight weeks old, so there is nothing left to render for them.
 - **I do not know whether the June 1 failure recurs on any schedule.** One event in 19 digests is not
   a rate. The argument for 3b rests on the failure being *correlated and silent*, not on frequency.
 - **No serve window was held for this work** — it is measurement and design only. The live reads were
