@@ -473,6 +473,45 @@ it can never appear in that query.** Nothing in the system will ever remove thes
 15 rows. Reconcile repairs drift in rows that still exist in WP; it is structurally
 incapable of noticing rows that only exist in the mirror.
 
+### The same comparison, run the other way: replies that NEVER arrived
+
+The ghost check compares mirror→WordPress. Run WordPress→mirror and a second,
+member-facing defect falls out: **6 replies and 1 topic exist in WordPress but
+not in the mirror.** Because the mirror *is* the forum read path, those replies
+never rendered. Members wrote them and nobody saw them.
+
+They are not one thing, and the difference decides who can fix them:
+
+| WP id | author | parent topic | why it never arrived |
+|---|---|---|---|
+| **71678** | Karl Borum | 71649 — **present in mirror** | **genuine lost sync** |
+| **71723** | Robert Owens | 71484 — **present in mirror** | **genuine lost sync** |
+| 71720, 71722 | Roger Sadowsky, Michael Minton | `_bbp_topic_id` = **71685, which is an `attachment`** (an image, `archtop-invisible-repair-005`) | corrupt bbPress metadata — the reply is parented to a media item, so the mirror's FK can never accept it |
+| 71728 | Colin O'Brien | 71671 — **does not exist in WordPress at all** | parent topic deleted; nothing to hang it on |
+| 4298 | — | — | a 2023 **draft** — correctly not mirrored, not a defect |
+
+**The two genuine losses are visible on live right now**, because `reply_count` is
+recomputed from WordPress (authoritative) while the thread renders from the
+mirror. The count and the content disagree:
+
+| topic | advertises | actually renders |
+|---|---|---|
+| 71484 "Back Braces Shape" | **9 replies** | **8** |
+| 71649 "Nominal Normal Thickness…" | **4 replies** | **3** |
+
+A member counts the replies, gets one fewer than the header promises, and the
+missing one is a real answer somebody took the time to write. Both replies are
+`publish`, both parent topics are live and rendering, and both have been missing
+since mid-June.
+
+These two are trivially repairable — re-materializing ids 71678 and 71723 inserts
+them — but that is a **write to live, so it is Ian's**. The reconcile timer will
+never do it on its own: its delta walk only looks at posts modified since the
+bookmark, and these have not been touched since June.
+
+The other three are a WordPress-side data problem, not a mirror problem. The
+mirror is right to reject a reply whose parent is an image or does not exist.
+
 ### The shape of the fix (not built, not applied)
 
 Reconcile needs a **reverse pass**: walk the mirror's own ids and drop any whose WP
