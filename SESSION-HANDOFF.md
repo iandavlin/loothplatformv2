@@ -22,7 +22,7 @@ not in BuddyBoss (its `bp_media_allowed_per_batch=3` only ever reached a Dropzon
 the **render**: `ORDER BY id ASC LIMIT 1` in `_topic-replies.php`.
 
 So members had been attaching 2–5 photos for years and seeing only the first.
-**On LIVE: 236 replies were hiding images, 380 images had never been seen by
+**On LIVE: 233 replies were hiding images, 374 images had never been seen by
 anyone.** Ian independently hit this ("we can still only do one image per reply,
 can we fix that?") without knowing the diagnosis.
 
@@ -38,20 +38,26 @@ owed. This handoff is only "what to do next".
 
 ## 2. THE NUMBERS — quote LIVE, never dev2
 
-| | LIVE (uploaded) | LIVE (renders day one) | dev2 |
-|---|---|---|---|
-| replies that stop hiding images | **236** | **233** | 230 (moves!) |
-| images that become visible | **380** | **374** | 368 |
-| replies truncated by a cap of 6 | **0** | **0** | 0 |
-| most photos on any published reply | **5** | **5** | 5 |
+| | LIVE | dev2 |
+|---|---|---|
+| replies that stop hiding images | **233** | 230 (moves!) |
+| images that become visible | **374** | 368 |
+| replies truncated by a cap of 6 | **0** | 0 |
+| most photos on any published reply | **5** | 5 |
 
-All re-measured from scratch on 2026-07-27 via live-ro; the WP column reproduced
-the original figures exactly. **The two live columns are both true and mean
-different things** — WP `bp_media_ids` is what members uploaded, the Postgres
-mirror is what the renderer reads, and the mirror is short by four replies
-(58201, 58209, 58294 absent; 58462 has 2 of 3). Reconciles to the digit.
-Say: *"236 replies are hiding 380 images; 233 light up on deploy, 4 need a mirror
-re-sync."* Never quote one column as the other. Atlas §1 has the full table.
+**The number is 233 / 374. The 236 / 380 this file used to carry is WITHDRAWN.**
+It counted the commas in `wp_postmeta.bp_media_ids`, which is a stale list of
+ids — some point at `wp_bp_media` rows that were later deleted, and the comma
+method cannot tell a live reference from a dead one. Resolving every id against
+`wp_bp_media` on LIVE gives 233 / 374, and LIVE's Postgres mirror independently
+gives 233 / 374. Two stores, exact agreement; the mirror was right all along.
+
+The four replies that made up the difference: 58201 (lists 3, 0 alive), 58209
+(2, 0), 58294 (3, 0), 58462 (3, **2**). 236 − 3 = 233; 380 − 6 = 374.
+
+Say to Ian: *"233 replies are hiding 374 images."* Nothing about a re-sync — I
+briefly reported that and it was wrong; those images are **deleted**, not
+un-mirrored. Atlas §1 has the retraction in full.
 
 Three traps in that one table, all of which have already caught someone:
 

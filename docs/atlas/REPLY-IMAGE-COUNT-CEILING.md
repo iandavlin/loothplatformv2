@@ -30,39 +30,59 @@ BuddyBoss, PHP, nginx — will happily accept and store any number.
 **This is a live defect, not just a missing feature.** Measured on **LIVE**
 (`looth_import`, loothgroup.com, read-only via live-ro, 2026-07-27):
 
-| | LIVE (WP, uploaded) | LIVE (mirror, rendered) | dev2 mirror |
-|---|---|---|---|
-| published replies | 5,195 | — | 5,118 |
-| replies carrying ≥1 photo | 518 | 513 | 505 |
-| replies carrying **>1** photo — showing only the first | **236** | **233** | 230 |
-| images stored but never rendered | **380** | **374** | 368 |
-| replies that a cap of 6 would truncate | **0** | **0** | 0 |
-| most photos on one published reply | **5** | **5** | 5 |
+| | LIVE | dev2 mirror |
+|---|---|---|
+| published replies | 5,195 | 5,118 |
+| replies carrying ≥1 **real** photo | 511 | 505 |
+| replies carrying **>1** photo — showing only the first | **233** | 230 |
+| images stored but never rendered | **374** | 368 |
+| replies that a cap of 6 would truncate | **0** | 0 |
+| most photos on one published reply | **5** | 5 |
 
-**236 replies on live** are silently hiding images their authors successfully
-uploaded, with no "+N more" and no indication anything is missing. **380 images**
+**233 replies on live** are silently hiding images their authors successfully
+uploaded, with no "+N more" and no indication anything is missing. **374 images**
 become visible the moment the render cap lifts.
 
-**Two live columns, and the difference is real** (measured 2026-07-27, both
-re-run from scratch). WP `bp_media_ids` is what members *uploaded*; the Postgres
-mirror's `forums.attachment` is what the renderer actually *reads*. The mirror is
-short by exactly four replies:
+### The number is 233 / 374, NOT 236 / 380 — and here is the retraction
 
-| reply | WP | mirror | |
-|---|---|---|---|
-| 58201 | 3 | absent from the multi set | |
-| 58209 | 2 | absent from the multi set | |
-| 58294 | 3 | absent from the multi set | |
-| 58462 | 3 | **2** | one image not mirrored |
+Earlier revisions of this doc said 236 / 380. **That was an overcount and it is
+withdrawn.** It came from counting the commas in `wp_postmeta.bp_media_ids`,
+which is a *stale list of ids*, not a list of images. Some of those ids point at
+`wp_bp_media` rows that have since been deleted, and the comma method cannot
+tell a live reference from a dead one.
 
-That reconciles to the digit: 236 − 3 = **233**, and (3−1)+(2−1)+(3−1) + 1 =
-**6** = 380 − 374. So the honest sentence is **"236 replies are hiding 380
-images; 233 of them light up the moment this ships, and 4 replies need a mirror
-re-sync to finish the job."** Quote 236/380 as the size of the defect and 233/374
-as what the deploy fixes on day one — do not quote one as the other. Whether
-those four are a materializer gap or intentionally skipped rows is **not proven**
-(live-ro dropped mid-probe; dev1 auto-stops). Not this lane's bug either way: the
-same rows are invisible today.
+Measured on LIVE 2026-07-28, resolving every listed id against `wp_bp_media`:
+
+| | |
+|---|---|
+| published replies listing any media | 518 |
+| …listing **only dead** ids (carry zero real images) | **7** |
+| …with exactly 1 live image (unchanged by this work) | 278 |
+| …with **>1 live image — the defect** | **233** |
+| images that become visible | **374** |
+
+The four replies that made up the old gap: **58201** (lists 3, 0 alive),
+**58209** (2, 0 alive), **58294** (3, 0 alive), **58462** (3, **2** alive).
+236 − 3 = 233; 380 − (2+1+2) − 1 = 374. Reconciles to the digit.
+
+**Two independent stores now agree exactly.** LIVE WP counting only extant media
+says 233 / 374 / 0 truncated / max 5. LIVE's Postgres mirror joined to published
+replies says 233 / 374 / 0 truncated / max 5. That agreement is the reason to
+trust it — the mirror was *right all along*, and the WP-side comma count was the
+thing that was wrong.
+
+> **The lesson, and it is the house lesson in a new costume:** `bp_media_ids` is
+> a *tool's convenient read*, not the store. Counting its commas answers "how
+> many ids were recorded", not "how many images exist" — cf.
+> [[sanitize-on-read-audit-the-store]]. Resolve ids to rows, or count the store
+> that the renderer actually reads.
+
+Residual, immaterial: the mirror shows 280 single-image replies where the live WP
+alive-count shows 278. That is a 2-reply difference **entirely inside the single
+bucket**, which this change does not touch (a 1-image reply renders identically
+before and after). It is consistent with the mirror retaining an attachment row
+after its upstream `wp_bp_media` row was deleted — the same non-cleanup behaviour
+documented for reply deletion in §10. It does not move 233 or 374.
 
 Quote LIVE, never dev2. Earlier revisions of this doc quoted dev2 and called it
 "a faithful copy of live" — that was an assumption, never verified. dev2 also
@@ -272,15 +292,16 @@ Measured against published replies at build time:
 
 | | |
 |---|---|
-| replies carrying images | **518** |
-| unchanged (single image) | **282** |
-| **replies that stop hiding images** | **236** (233 on day one) |
-| **images that become visible for the first time** | **380** (374 on day one) |
+| replies carrying real images | **511** |
+| unchanged (single image) | **278** |
+| **replies that stop hiding images** | **233** |
+| **images that become visible for the first time** | **374** |
 | replies truncated by the cap | **0** |
 
-(LIVE WP, 2026-07-27, re-measured from scratch. The "day one" figure is LIVE's
-Postgres mirror — what the renderer actually reads. §1 has both columns, the
-four-reply reconciliation between them, and the dev2 column.)
+(LIVE, 2026-07-28. Confirmed twice over: WP resolving every `bp_media_ids` entry
+against `wp_bp_media`, and LIVE's Postgres mirror — what the renderer actually
+reads — agreeing exactly. §1 has the retraction of the earlier 236/380, which
+counted dead media references.)
 
 ---
 
