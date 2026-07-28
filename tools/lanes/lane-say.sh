@@ -13,6 +13,8 @@
 #   lane-say <session> -f <file>            message from a file (use this for charters)
 #   lane-say --box dev2 <session> ...       target a session on dev2 instead of here
 #   lane-say --quiet ...                    only speak on failure (for timers)
+#   NO_FOOTER=1 lane-say ...                suppress the anti-park footer (rare;
+#                                           only when continuing is WRONG, e.g. a stand-down)
 #
 # Exit 0 = verified delivered. Exit 1 = NOT delivered, and it says so loudly.
 # NEVER treat a non-zero exit as cosmetic: it means a lane did not hear you.
@@ -38,6 +40,32 @@ if [ -n "$MSGFILE" ]; then
     MSG="$(cat "$MSGFILE")"
 fi
 [ -n "$MSG" ] || { echo "lane-say: empty message" >&2; exit 2; }
+
+# ---- the anti-park footer -------------------------------------------------
+# WHY THIS IS APPENDED TO EVERY MESSAGE. On 2026-07-28 all seven lanes were
+# found parked with not one project finished. Each had done a chunk, reported
+# it, and stopped — waiting for an acknowledgement nobody had promised. Ian:
+# "if they are parked and not finished with a project, we've got an issue."
+# The fault was keeper's: instructions said what to do, never what to do AFTER.
+#
+# A one-off broadcast cannot fix this: a respun lane has no memory of it, and
+# the next charter may forget it. Putting it HERE means every instruction a lane
+# ever receives carries it — there is no path to a lane that skips this file.
+# Keep it SHORT; it rides on top of every message ever sent.
+#
+# NO_FOOTER=1 suppresses it, for the rare message where continuing is wrong
+# (e.g. telling a lane to stand down so its RAM can be reclaimed).
+if [ "${NO_FOOTER:-0}" != "1" ]; then
+    MSG="$MSG
+
+--- standing rule, appended to every keeper message ---
+DO NOT PARK ON THIS MESSAGE. Act on it, then CONTINUE with the next thing on
+your own plan. Reporting is not stopping — keeper reads the board and your pane
+on a timer, so you lose nothing by carrying on. Park ONLY when genuinely
+blocked, and then state in one line WHO blocks you and WHAT would unblock it.
+If you are blocked on Ian, keep working on anything that does not depend on his
+answer — there is almost always something."
+fi
 
 # tmux, here or over there. Everything below is written once and runs on both boxes.
 if [ "$BOX" = "dev2" ]; then
