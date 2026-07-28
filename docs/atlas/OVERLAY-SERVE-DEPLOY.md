@@ -12,13 +12,41 @@ the repo). As of **2026-06-25** the serve model is explicit and differs per box:
 
 | Box | Model | How `bottom-nav.js` etc. are served | Deploy |
 |-----|-------|-------------------------------------|--------|
-| **dev2** | **PULL / symlink** | `/var/www/dev/<f>` is a **symlink** → `~/loothplatformv2-serve/webroot/<f>` | `git pull` in the serve clone — **zero docroot edits** |
-| **live** | **PUSH / rsync** | real files in the live docroot (live has no serve clone for the docroot) | `deploy/deploy.sh` (webroot stanza, **guarded**) |
+| **dev2** | **PULL / symlink** | `/var/www/dev/<f>` is a **symlink** → `~/loothplatformv2-clean/webroot/<f>` | `git pull` in the serve clone — **zero docroot edits** |
+| **live** | **PULL / symlink** (since 2026-07-26) | `/var/www/dev/<f>` is a **symlink** → `~/loothplatformv2-clean/webroot/<f>` | `lg-deploy` / `git pull` in live's serve clone |
 
 - **dev2 is pull-only.** All 14 overlays symlink into the pristine serve clone, exactly like the
-  `/srv/*` apps (§13). A `git pull` in `~/loothplatformv2-serve` deploys any overlay change with
+  `/srv/*` apps (§13). A `git pull` in `~/loothplatformv2-clean` deploys any overlay change with
   **no docroot touch**. Proven 2026-06-25: a `?v=26→27` bump in `pwa.js` reached origin via the
   pull alone (commit `2e5abad`).
+
+> ### ⚠️ LIVE IS NO LONGER PUSH/RSYNC — corrected 2026-07-28
+>
+> This table said live used **PUSH / rsync with real files** and that *"live has no serve clone
+> for the docroot"*. **Both halves are now wrong**, and the wrong version is the kind that costs
+> somebody an hour at 2am, because it sends them looking for a deploy that does not happen.
+>
+> Measured on live, read-only, 2026-07-28:
+> ```
+> lrwxrwxrwx 1 root root 56 Jul 26 22:59 /var/www/dev/hub-polish.js
+>     -> /home/ubuntu/loothplatformv2-clean/webroot/hub-polish.js
+> ```
+> Same for `app-settings.js` and `mobile-hub.css`; live **does** have a serve clone, at the same
+> path as dev2's. Live was cut over on **2026-07-26** and is now pull-deployed exactly like dev2.
+>
+> **Consequence, and it reads like a failure when it is not:** `deploy/deploy.sh` refuses any
+> target whose overlays are symlinks. That guard now fires on **live too**, so a live run prints
+>
+> ```
+> SKIP webroot …
+> ```
+>
+> **That is CORRECT behaviour and means the deploy already happened via the pull.** Do not
+> "fix" it, do not pass `--force`, and do not fall back to `webroot/deploy.sh` — the standalone
+> pusher has no guard and would replace live's symlinks with file copies, silently reinstating
+> the drift trap this whole document exists to close.
+>
+> The old push/rsync runbook below is kept for history. **Do not run it against live.**
 - **Cache-bust** is the `?v=N` strings inside `pwa.js` (filenames never change). Bump on change.
 
 ## CSS overlays are in the same farm (don't let one drift out)
@@ -44,7 +72,19 @@ the symlinks with file copies and silently undo the rewire. So:
 no guard and *will* clobber the symlinks. Use `git pull` on dev2. The guard lives only in
 `deploy/deploy.sh`.
 
-## LIVE deploy runbook (human-run — live is Claude-free)
+## LIVE deploy runbook — HISTORICAL (push/rsync era, superseded 2026-07-26)
+
+> **Do not run this against live.** Live is pull-deployed now (see the correction above);
+> the deploy is `lg-deploy` / a `git pull` in live's serve clone, and `deploy/deploy.sh`
+> correctly SKIPs the webroot there. This section is kept only to explain boxes that still
+> hold real files, and to make the old steps recognisable if you meet them in an old runbook.
+>
+> Two stale facts inside it, unverified and left uncorrected because this lane could not
+> confirm the replacements read-only:
+> - the address below is `54.157.13.77`, but the `live-ro` stanza on dev2 resolves live to
+>   **54.146.118.131**. Confirm which is current before using either.
+> - `ssh live` is a **write-capable** alias that this lane does not hold; read-only access
+>   is `ssh live-ro`, and every live write is Ian's.
 
 Reach live from the keeper box: `ssh live` (→ `54.157.13.77`).
 
