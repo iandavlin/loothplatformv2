@@ -60,6 +60,13 @@ is the point of the restore.
 
 ---
 
+# PARKED — do not run until Ian has judged the 83
+
+Everything below concerns the **135-row (4/5/6)** and **746-row (1/2/3)** sets. Both put an
+incoming request in front of other members. Ian's 2026-07-28 ruling parks them.
+
+## The 135-row set (4/5/6)
+
 The canary's 135 rows are a **strict byte-identical subset** of the full 746 — proven by diffing
 the generated payload lines against `2-APPLY` (0 lines differ). The canary cannot insert anything
 the full set would not.
@@ -70,7 +77,7 @@ means running **file 6 and file 3**.
 
 ---
 
-## Run order
+### Run order for 4/5/6 (parked)
 
 ```
 1.  psql -f 2026-07-27-connections-canary-ian-4-DRYRUN.sql     # read-only, writes nothing
@@ -85,7 +92,7 @@ means running **file 6 and file 3**.
 
 Rollback at any point: file **6** undoes the canary, file **3** undoes the full set.
 
-## Expected numbers
+### Expected numbers for 4/5/6
 
 **Canary dry run** — `UUID MATCH` must say `true`; if it does not, stop, you are on the wrong box.
 
@@ -135,11 +142,12 @@ reverse guard added for exactly this case. Tested rather than argued: planting a
 row for one of the 83 made the apply insert **82**, skip that pair, and leave **0** reciprocal
 duplicates.
 
-## Safety properties (all four rehearsed, see below)
+## Safety properties (all rehearsed, see below)
 
 1. **Wrong-database abort** — apply resolves WP user 1 through `wp_user_bridge` and aborts unless
    it equals the uuid the payload was built for.
-2. **Truncated-paste abort** — aborts unless the payload is exactly 135 rows.
+2. **Truncated-paste abort** — aborts unless the payload is exactly the expected row
+   count for that set (83 for 7/8/9, 135 for 4/5/6, 746 for 1/2/3).
 3. **Idempotent** — the real `UNIQUE (requester_uuid, addressee_uuid)` plus a `NOT EXISTS`
    reverse guard, because that constraint is directional. Running twice inserts nothing.
 4. **Exact rollback** — deletes by primary key via the tag table. No date window, no pair
