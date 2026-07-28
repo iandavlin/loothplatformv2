@@ -96,6 +96,51 @@ recorded `prior_status` rather than assuming it. It cannot restore `updated_at` 
 `connections_touch` trigger stamps `now()` on every UPDATE. The restore sets rolled back
 byte-identically; an UPDATE-based fix cannot.
 
+## Re-verified against live 2026-07-28 13:30 UTC — NO DRIFT, payload still exact
+
+This defect is produced **by hand**, so the payload was re-checked ~10 hours after it was frozen
+rather than assumed. Two independent methods, both read-only:
+
+1. The shipping `10-DRYRUN` re-run against live: `UUID MATCH true`, **81 found / 81 will flip /
+   0 already accepted / 0 other status / 0 gone since measurement**, 71 badges clear, Ian 23.
+2. A full re-derivation from **both stores** (live MySQL `wp_bp_friends` + live Postgres
+   `connections`, joined off-box), which reproduces every number in the classification:
+
+```
+legacy confirmed friendships   7609
+  correctly accepted           7251
+  missing entirely              271     <- the restore's territory
+  WRONG STATUS (pending)         81     <- this fix
+  both directions (shape c)       5     (4 accepted/accepted, 1 accepted/pending)
+  unmappable (no bridge)          1
+                        TOTAL  7609     (sums exactly)
+shapes of the 81: same-direction 74, opposite 7
+```
+
+**0 new, 0 gone.** Nobody re-requested anything in the window, so the frozen 81 is still the
+whole defect. Re-run method 1 before applying if more than a day has passed — if `WILL FLIP` is
+below 81 someone resolved a pair by hand, and if a *new* wrong-status row appears it will **not**
+be in this payload (the payload is a fixed list; file 11's abort checks the payload's own row
+count, not live's, so a new defect row is silently left unfixed rather than causing a failure).
+
+**A pending row appears for 82 pairs, not 81 — that is correct.** The 82nd is the shape-(c) pair
+wp 1 ↔ wp 733: conn **13753** (`1→733`, pending, dated 2024-05-11) sits alongside conn **20594**
+(`733→1`, **accepted**, 2026-04-27). The relationship already reads as accepted, so it is
+excluded by design. Any recount that collapses pairs without checking for a second row will find
+82 and appear to contradict this file.
+
+## The 83 that were applied are all still there
+
+Checked on the same pass: of Ian's legacy-confirmed friendships, **zero** are missing a
+`connections` row. Before the restore 83 were missing; nobody has removed a restored connection.
+Ian reads **1334 accepted / 427 pending OUT / 0 pending IN** — unchanged from the apply.
+
+*Method trap, recorded because it cost a wrong number first:* resolving connections to WP ids by
+joining `wp_user_bridge` on **both** sides silently drops every row whose counterparty is a
+profile-app-native member (Patreon-provisioned, no `wp_users` row). That read Ian as 1333/426 and
+missing as 272. Map through uuids and compare pairs by uuid — then the classification sums to
+7609 exactly. A total that does not sum to the population is the tell.
+
 # PARKED — do not run until Ian has judged the 83
 
 Everything below concerns the **135-row (4/5/6)** and **746-row (1/2/3)** sets. Both put an

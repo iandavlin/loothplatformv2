@@ -32,7 +32,9 @@ Cohort boundary: `wp_user_bridge.synced_at < 2026-06-03` = "at cutover".
 On live, the cutover left **three real gaps** — connections (already fixed and awaiting Ian),
 messages (16 members), location (11 members) — plus **one latent trap** (`email_aliases`). Three
 things that looked like gaps are **not**. One claimed defect was a **dev2 artifact and is
-retracted**. One item is **unmeasurable**, one is **ungranted**, and one is **still uncontrolled**.
+retracted**. One item is **unmeasurable** and one is **ungranted**. The last uncontrolled item,
+`profiles`, was **controlled on 2026-07-28 and is not a gap** (F.1) — so every surface in this
+sweep now carries a verdict, and the only thing still owed is one read grant (F.2).
 
 ---
 
@@ -157,10 +159,38 @@ Tables near-empty for everyone — `profile_highlights`, `profile_scenes`, `prac
 
 ## F. OPEN ITEMS — do not let these be quoted as settled
 
-**1. `profiles` is uncontrolled.** Live reads **41.0% cutover vs 17.0% late** and stays under
-half. Nobody has established whether BuddyBoss source data exists for those members, which is
-exactly the control that killed the socials scare. **Not claimed as a gap.** This is the one
-substantive thing still open.
+**1. `profiles` — CONTROLLED 2026-07-28. NOT A GAP. Closed.**
+
+The control has now been run on live, and it kills this the same way it killed the socials scare.
+
+`profiles` is **not a bridge-keyed migration table at all** — it records a *profile claim*. Two
+things write it: the one-shot `sql/0004_active_semantics_and_backfill.sql`, whose predicate is
+`users.location_text <> ''` (**not** `wp_user_bridge`), and `Profile::claim()` at runtime. So the
+cohort split is not evidence of a skipped backfill; it is evidence of who got a free claim.
+
+Controlled for 0004's actual predicate:
+
+| cohort | has `location_text` | members | with `profiles` row | |
+| --- | --- | --- | --- | --- |
+| cutover | no | 927 | **0** | 0.0% |
+| cutover | yes | 679 | 659 | 97.1% |
+| late | no | 185 | 31 | 16.8% |
+| late | yes | 56 | 10 | 17.9% |
+
+**Cutover members without a location got 0.0%** — the backfill is the entire mechanism behind
+their headline number, and `claimed_via` proves it: cutover is **655 `backfill_location`** + 4
+real claims; late is **36 `onboard`** + 4 + 1 null. The late cohort's claims are overwhelmingly
+*genuine member actions*; the cutover cohort's are overwhelmingly synthetic. The 41% was never a
+health baseline — 58% of the cutover cohort has never claimed a profile either.
+
+**Nothing is recoverable because nothing is lost.** `profiles` carries no member content:
+`user_id`, `claimed_at`, `updated_at`, `section_order` (defaults `{}`), `claimed_via`. A missing
+row means "has not claimed yet", not "lost their profile".
+
+**The one real residue, and it is cosmetic:** 46 late members have a `location_text` but no claim,
+so they will see a first-visit interstitial that an identically-placed cutover member was spared
+by 0004. That is an inconsistency in a courtesy, not a defect — and arguably correct, since they
+are newer members who *should* onboard. **No action recommended.**
 
 **2. `slug_history` cannot be read on live.** `looth_ro` has SELECT on 32 of live's 33
 `profile_app` tables; `slug_history` is the exception — it was created 2026-07-12, after the RO
@@ -185,7 +215,7 @@ GRANT SELECT ON public.slug_history TO looth_ro;
 2. **messages (16)** — a total loss of history for those members.
 3. **location (11)** — cosmetic by comparison.
 4. **`email_aliases`** — no rush, but gate any future email-resolution feature on it.
-5. **control `profiles`** before anyone treats section F.1 as real.
+5. ~~control `profiles`~~ — **done 2026-07-28, not a gap.** Nothing to do.
 
 The 26 stranded ghost handles belong to the **slug-backfill** lane as a design input, not to this
 one.
