@@ -1,0 +1,6 @@
+# Generated frames + browser shots. The deck is served live at
+# /mockups/reply-images/ and both are one `python3 gen.py out` away; the
+# measurements that matter are committed as probe-measurements.json and
+# written up in docs/atlas/REPLY-IMAGE-COUNT-CEILING.md.
+out/
+shots/

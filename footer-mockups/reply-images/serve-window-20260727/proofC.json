@@ -1,0 +1,59 @@
+{
+ "mobile-390-loggedin": {
+  "galleries": 1,
+  "found": true,
+  "count": "4",
+  "cells": 4,
+  "picked": [
+   "w=480",
+   "w=480",
+   "w=480",
+   "w=480"
+  ],
+  "broken": 0,
+  "tileW": 165,
+  "hasDims": true,
+  "lazy": true,
+  "galleryH": 250,
+  "loggedIn": true,
+  "anonScrubbed": false
+ },
+ "desktop-1280-loggedin": {
+  "galleries": 1,
+  "found": true,
+  "count": "4",
+  "cells": 4,
+  "picked": [
+   "w=480",
+   "w=480",
+   "w=480",
+   "w=480"
+  ],
+  "broken": 0,
+  "tileW": 229,
+  "hasDims": true,
+  "lazy": true,
+  "galleryH": 346,
+  "loggedIn": true,
+  "anonScrubbed": false
+ },
+ "mobile-390-loggedOUT": {
+  "galleries": 1,
+  "found": true,
+  "count": "4",
+  "cells": 4,
+  "picked": [
+   "w=480",
+   "w=480",
+   "w=480",
+   "w=480"
+  ],
+  "broken": 0,
+  "tileW": 165,
+  "hasDims": true,
+  "lazy": true,
+  "galleryH": 250,
+  "loggedIn": false,
+  "anonScrubbed": true
+ }
+}

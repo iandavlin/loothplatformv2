@@ -100,3 +100,34 @@ has them). Those markers predate the attribute, so they work on old HTML.
 - **Every server defence stays**: no composer markup to anon, BuddyBoss REST 401s
   anonymous writes, `reply.php` re-checks caps, anon contact/mention scrub untouched.
   This is a UX layer on top of a gate, never a replacement for one.
+
+---
+
+## G. LIVE VERIFICATION 2026-07-27 (post-deploy, read-only)
+
+Live went `432f80b → 303b79a` (it had been ten commits behind, which is why the earlier
+measurement found neither half deployed). Re-ran the identical anon mobile probe against
+`loothgroup.com` — real touch tap, iPhone-13 profile, no writes.
+
+**Deploy state confirmed:** `<body data-lg-can-post="0">`; `hub-polish.js` (389,648 B)
+carries `lgCanPost`, the sign-in sheet, the `lrs-signin` bar and the marker fallback.
+
+**Half 1 — write is gated** (was: `composerOpen=true, activeEditable=true, qlEditors=1`):
+
+| check | before | after |
+|---|---|---|
+| sign-in modal shown | `false` | **`true`** |
+| composer shell in DOM | open | **`0`** |
+| anything focused (Ian's caret) | `true` | **`false`** |
+| `.ql-editor` count | `1` | **`0`** |
+| sheet `#lrs-comp-input` / `-send` / `-photo` / `-file` | present | **`0` / `0` / `0` / `0`** |
+| `#lrs-signin` bar | — | **`1`** |
+
+Login button carried `redirect_to=https://loothgroup.com/hub/?topic=3d-printing%2Fcool-organizer`
+— the deep link to the exact discussion, so sign-in returns the reader where they were.
+
+**Half 2 — read still works.** The first probe hit a zero-reply topic (`threadChars:38`,
+`replyStubs:0`), which proves nothing either way. Re-probed against a topic advertising
+**4 replies** (topic 72312): **4 reply stubs rendered, 1,140 chars of thread, OP body
+476 chars** — and on that same path `#lrs-comp-input` was still `0`, `#lrs-signin` `1`,
+nothing focused. Reading is fully intact; only the write surface is withheld.

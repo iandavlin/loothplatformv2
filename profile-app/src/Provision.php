@@ -190,13 +190,14 @@ final class Provision
             $taken = $pg->prepare('SELECT 1 FROM users WHERE lower(slug) = lower(:s) AND id <> :self
                                    UNION ALL
                                    SELECT 1 FROM slug_history WHERE lower(slug) = lower(:s2) AND user_id <> :self2');
-            $candidate = $base;
+            $candidate = self::slugFit($base);
             for ($i = 2; $i <= 999; $i++) {
                 $taken->execute([':s' => $candidate, ':self' => $userId, ':s2' => $candidate, ':self2' => $userId]);
                 if (!$taken->fetchColumn()) break;
-                $candidate = $base . $i;
+                // suffix rides INSIDE the 30-cap (slug-fit both halves together)
+                $candidate = self::slugFit($base, Slug::MAX_LEN - strlen((string) $i)) . $i;
             }
-            if ($i > 999) $candidate = $base . bin2hex(random_bytes(3));
+            if ($i > 999) $candidate = self::slugFit($base, Slug::MAX_LEN - 6) . bin2hex(random_bytes(3));
 
             $pg->prepare("UPDATE users SET slug = :s WHERE id = :i AND (slug IS NULL OR slug = '')")
                ->execute([':s' => $candidate, ':i' => $userId]);
@@ -211,6 +212,23 @@ final class Provision
         $s = strtolower(trim($s));
         $s = preg_replace('/[^a-z0-9]+/', '-', $s) ?? '';
         return trim($s, '-');
+    }
+
+    /**
+     * Word-boundary trim to the handle cap. Slug::MAX_LEN existed but neither
+     * mint site enforced it (identity pass, keeper 02:25 spec 2026-07-26 — the
+     * dev2 34-char strays). Cut at the last dash inside the cap unless the cap
+     * already lands at a word end; hard-cut a single long word.
+     */
+    private static function slugFit(string $s, int $max = Slug::MAX_LEN): string
+    {
+        if (strlen($s) <= $max) return $s;
+        $cut = substr($s, 0, $max);
+        if (($s[$max] ?? '') !== '-') {
+            $dash = strrpos($cut, '-');
+            if ($dash !== false && $dash >= Slug::MIN_LEN) $cut = substr($cut, 0, $dash);
+        }
+        return rtrim($cut, '-');
     }
 
     /**
@@ -251,7 +269,7 @@ final class Provision
     public static function maybeSyncSlugFromName(int $userId, string $oldDisplayName, string $newDisplayName): ?string
     {
         try {
-            $newBase = self::slugify($newDisplayName);
+            $newBase = self::slugFit(self::slugify($newDisplayName));
             if ($newBase === '') return null;   // new name has no slug-able chars; leave handle as-is
 
             $pg  = Db::pg();
@@ -274,9 +292,10 @@ final class Provision
             for ($i = 2; $i <= 999; $i++) {
                 $taken->execute([':s' => $candidate, ':self' => $userId, ':s2' => $candidate, ':self2' => $userId]);
                 if (!$taken->fetchColumn()) break;
-                $candidate = $newBase . $i;
+                // suffix rides INSIDE the 30-cap (newBase is already slug-fit)
+                $candidate = self::slugFit($newBase, Slug::MAX_LEN - strlen((string) $i)) . $i;
             }
-            if ($i > 999) $candidate = $newBase . bin2hex(random_bytes(3));
+            if ($i > 999) $candidate = self::slugFit($newBase, Slug::MAX_LEN - 6) . bin2hex(random_bytes(3));
             if ($currentSlug !== '' && strcasecmp($currentSlug, $candidate) === 0) return null;
 
             $pg->beginTransaction();

@@ -342,3 +342,45 @@ mu-plugin presence on live. *(No new features — just make sure nothing uninten
 - **Transactional senders:** `plugins/lg-patreon-stripe-poller` (WelcomeMailer, EventHandler, AdminAlerts,
   RestController, GiftMailer); `plugins/event-reminder-and-cleaner` (FluentCRM campaigns);
   `plugins/lg-weekly-digest` (`lg_wd_send_digest`, disabled).
+
+---
+
+## Addendum 2026-07-27 — why the mention bell looks dead, and the metric that misleads
+
+Keeper measured on LIVE: 153 published topic+reply posts contain `bp-suggestions-mention`,
+**0** contain `data-lg-uuid`, and `forum.mention` has fired **once** all time. Read together
+that looks like a dead notifier. Two of those three facts are expected; one is real.
+
+**`data-lg-uuid = 0` is NOT the defect — it is the designed steady state.** WP's kses
+allowlist has no `data-*` on `<a>`, so the attribute is stripped during the BuddyBoss REST
+insert and never reaches the store. The DURABLE anchor is the `href="{{mention_user_id_N}}"`
+placeholder, which is what `notify-bridge.php:126` parses to ring the bell and what
+`_reply-render.php:207-208` resolves to a current slug (it handles BOTH the uuid form and the
+wpid form, so rename-proofing survives without the attribute). Measured on dev2, which mirrors
+live's shape: **149 mention posts, 113 minted (`{{mention_user_id_}}`), 0 with `data-lg-uuid`
+— simultaneously.** Minting and the uuid attribute are independent; counting the attribute
+tells you nothing about whether mentions work.
+
+**The bell is not retroactive, and that explains the "1".** `notify-bridge` shipped
+2026-07-12. Splitting dev2's minted posts by that date: **112 written BEFORE it
+(2024-03-05 → 2026-06-30), 2 after.** Everything older minted correctly and simply predates
+the notifier. Organic mention traffic through `reply.php` since 7/12 is close to zero on dev2,
+and live's counts are consistent with the same. `forum.reply_to_topic = 2` all time has the
+same explanation and is the same family — plus **G8**: until the phase-0 `bbp_new_reply`
+stopgap, desktop replies POSTed native BB REST and never touched `reply.php`, so any desktop
+mention in that window minted nothing and rang nobody. Phase 3 closed that structurally.
+
+**The one genuinely broken thing** is composer-v2-specific and forward-looking: phase 2
+(cea6ab3) swapped the mention render source from `@slug` text to the member's DISPLAY NAME,
+so the submitted body contains **no `@` at all** — and `_mention-ingest.php`'s opening guard
+was `strpos($content,'@') === false → return`. Every composer-v2 mention early-returned before
+Pass 2's uuid branch, on BOTH surfaces (`lgcInsertMention` is the shared insert). Fixed by
+widening that guard to admit `data-lg-uuid` content as well — **not** by touching kses, which
+would be a security surface for exactly this element.
+
+**Where the fix has to live:** the PRE-insert mint (`reply.php:334`) is the only point that
+still sees `data-lg-uuid`. By the post-insert re-mint (`:378`) kses has already stripped it and
+the `@slug` text sits *inside* the anchor, where the token pass does not scan — so the
+post-insert re-mint is not a recovery path for this class. One guard fix in the shared function
+covers all six call sites (create, reply-edit, topic-edit, post-insert re-mint, and both
+mu-plugin hooks) rather than patching a door at a time.

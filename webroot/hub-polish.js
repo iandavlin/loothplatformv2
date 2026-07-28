@@ -832,19 +832,20 @@
     return img && (img.currentSrc || img.getAttribute('src')) || '';
   }
 
-  // Reply to a COMMENT (Buck 2026-06-12): open the same pull-up composer sheet
-  // used for OP replies, with the context pill naming the comment's author, and
-  // post with reply_to so the reply nests under its parent. The old inline
-  // @-box (openReplyBox) stays as the fallback for stubs without a reply id
-  // (e.g. optimistic inserts) and any non-mobile edge.
+  // Reply to a COMMENT (Buck 2026-06-12): open the same composer used for OP
+  // replies, with the context pill naming the comment's author, and post with
+  // reply_to so the reply nests under its parent.
+  // PHASE 3: this is now the SINGLE route for every reply-to-a-comment affordance on
+  // both viewports. The old inline @-box (openReplyBox) is no longer referenced from
+  // anywhere — it and its native create (W3) are deleted in the write-path commit.
   function openReplyComposer(stub, author, col) {
     var rid = parseInt(stub.getAttribute('data-lg-replyto') || '0', 10);
     var aname = (stub.getAttribute('data-lg-replyto-author') || (author && author.textContent) || '').trim();
-    // Desktop keeps the inline @-box; MOBILE always opens the composer sheet — one
-    // tap, no intermediate inline "Write a reply…" bubble (Ian 2026-06-25). replyTo
-    // nests under the comment when known, else it posts as a top-level reply to the
-    // topic. (Was: no-rid fell back to the inline box on mobile too.)
-    if (!window.matchMedia('(max-width:640px)').matches) { openReplyBox(col, author, stub); return; }
+    // PHASE 3 (E4): the desktop branch is GONE. It used to hand desktop to the
+    // fb-inline @-box (openReplyBox) — a second write-capable composer with its own
+    // textarea, its own submit and its own NATIVE create (the G8 hole, W3). Both
+    // viewports now open THE composer; desktop just wears the modal skin. replyTo
+    // nests under the comment when known, else it posts top-level to the topic.
     var sheet = stub.closest('#looth-rep-sheet');
     if (sheet) {
       openComposerSheet({
@@ -853,96 +854,48 @@
       });
       return;
     }
-    // Feed-card teaser reply: open the discussion sheet behind the composer (both
-    // synchronously within the tap so iOS shows the keyboard) — the post-success
-    // thread reload then shows the new reply nested in place.
+    // Feed-card teaser reply.
     var card = stub.closest('.feed-card');
     if (card) {
-      openRepliesSheet(card, { toReplies: true });
-      var sh = document.getElementById('looth-rep-sheet');
-      openComposerSheet({
-        tid: sh && sh.getAttribute('data-tid'), fid: sh && sh.getAttribute('data-fid'),
-        replyTo: rid || 0, replyToName: rid ? aname : '', focus: true
-      });
+      if (window.matchMedia('(max-width:640px)').matches) {
+        // MOBILE: open the discussion sheet behind the composer (both synchronously
+        // within the tap so iOS shows the keyboard) — the post-success thread reload
+        // then shows the new reply nested in place.
+        openRepliesSheet(card, { toReplies: true });
+        var sh = document.getElementById('looth-rep-sheet');
+        openComposerSheet({
+          tid: sh && sh.getAttribute('data-tid'), fid: sh && sh.getAttribute('data-fid'),
+          replyTo: rid || 0, replyToName: rid ? aname : '', focus: true
+        });
+      } else {
+        // DESKTOP: the lrs thread sheet is a phone surface — desktop reads threads in
+        // the dmodal or in-card. Open the composer straight off the card's own ids so
+        // the modal doesn't drag a mobile sheet onto a 1280px page behind it.
+        openComposerSheet({
+          tid: card.getAttribute('data-topic-id'), fid: card.getAttribute('data-forum-id'),
+          replyTo: rid || 0, replyToName: rid ? aname : '', focus: true
+        });
+      }
       return;
     }
-    openReplyBox(col, author, stub);   // last resort: no sheet/card context
+    // No sheet AND no card — there is no topic id to post to, so opening a composer
+    // would only produce an editor that fails on submit. The old fb-inline fallback
+    // (openReplyBox, deleted with W3) had the same hole and hid it behind a textarea.
+    // Unreachable in practice: every reply stub lives inside the lrs sheet or a
+    // .feed-card. Left as an explicit, commented no-op so a future surface that
+    // breaks that assumption shows up here instead of silently posting nowhere.
   }
 
-  // Inline reply box (Facebook-style) under a comment, @mentioning its author.
-  // Submit posts via submitReply(). Idempotent per column.
-  function openReplyBox(col, author, stub) {
-    // Same gate as openComposerSheet, at this composer's own door. fb-inline is a
-    // SECOND write-capable composer (its own textarea + submit), so gating only the
-    // sheet would leave the desktop in-thread box wide open to anon.
-    if (!lgCanPost()) { openSignInModal(); return; }
-    var existing = col.querySelector('.lg-fb-replybox');
-    if (existing) { var t0 = existing.querySelector('textarea'); if (t0) t0.focus(); return; }
-    var box = document.createElement('div'); box.className = 'lg-fb-replybox';
-    var avi = myAvatarSrc();
-    var aviEl = document.createElement('span'); aviEl.className = 'lg-fb-myavi';
-    if (avi) aviEl.innerHTML = '<img src="' + avi + '" alt="">';
-    var wrap = document.createElement('div'); wrap.className = 'lg-fb-replywrap';
-    var ta = document.createElement('textarea'); ta.className = 'lg-fb-replyinput'; ta.rows = 1; ta.placeholder = 'Write a reply…'; ta.setAttribute('autocomplete', 'off');
-    var name = author ? (author.textContent || '').trim().split(/[\s,]/)[0] : '';
-    if (name) ta.value = '@' + name + ' ';
-    var send = document.createElement('button'); send.type = 'button'; send.className = 'lg-fb-send'; send.textContent = 'Post';
-    send.disabled = false;
-    wrap.appendChild(ta); wrap.appendChild(send);
-    box.appendChild(aviEl); box.appendChild(wrap);
-    col.appendChild(box);
-    ta.focus();
-    try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {}
-    ta.addEventListener('input', function () { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; });
-    send.addEventListener('click', function () { submitReply(ta.value, box, send, stub); });
-  }
-
-  // Post the reply via the canonical BuddyBoss flow: lazily fetch the auth nonce
-  // from /bb-mirror-api/v0/auth.php, then POST to /wp-json/buddyboss/v1/reply
-  // with topic/forum (from the card's reply CTA) and reply_to (this reply's id,
-  // for nesting). On success, optimistically show the new comment.
-  function submitReply(text, box, send, stub) {
-    text = (text || '').trim();
-    if (!text) return;
-    send.disabled = true;
-    var note = box.querySelector('.lg-fb-note') || document.createElement('div');
-    note.className = 'lg-fb-note'; note.textContent = 'Posting…';
-    if (!note.parentNode) box.appendChild(note);
-
-    var card = stub.closest('.feed-card');
-    var cta = card && card.querySelector('.feed-card__reply-cta[data-frm-open]');
-    // Inside #looth-rep-sheet (the mobile discussion modal) the thread is fetched
-    // fresh — no .feed-card ancestor — so source the ids off the sheet itself.
-    var sheet = !card && stub.closest('#looth-rep-sheet');
-    var topicId = parseInt((cta && cta.dataset.topicId) || (card && card.dataset.topicId) || (sheet && sheet.getAttribute('data-tid')) || '', 10);
-    var forumId = parseInt((cta && cta.dataset.forumId) || (sheet && sheet.getAttribute('data-fid')) || '', 10);
-    var replyTo = parseInt(stub.getAttribute('data-lg-replyto') || '0', 10);
-    var myName = 'You';
-
-    fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d || !d.authenticated) throw new Error('Sign in to reply.');
-        myName = d.display_name || 'You';
-        var payload = { topic_id: topicId, forum_id: forumId, content: text };
-        if (replyTo) payload.reply_to = replyTo;
-        return fetch('/wp-json/buddyboss/v1/reply', {
-          method: 'POST', credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': d.nonce },
-          body: JSON.stringify(payload)
-        });
-      })
-      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-      .then(function (res) {
-        if (!res.ok) throw new Error((res.j && (res.j.message || res.j.code)) || 'Could not post.');
-        appendOptimisticReply(stub, myName, text);
-        box.parentNode && box.remove();
-      })
-      .catch(function (e) {
-        note.textContent = (e && e.message) || 'Could not post.';
-        send.disabled = false;
-      });
-  }
+  /* fb-inline (openReplyBox + its submit) DELETED — phase 3, 2026-07-27.
+     A SECOND write-capable composer: own textarea, own submit, own NATIVE
+     /wp-json/buddyboss/v1/reply create (W3) — one of the five paths that made G8
+     depend on a mu-plugin hook instead of on there being one write path. Every
+     caller now routes openReplyComposer -> the ONE composer (E4/E5/E6), which on
+     desktop wears the modal skin, so nothing lost an affordance.
+     Its .lg-fb-replybox / .lg-fb-replyinput styles go with it (D3), and
+     textarea.lg-fb-replyinput comes out of the mention engine's editor whitelist
+     (forums.js editorOf, D2) — an editor that no longer exists must not stay
+     advertised there. */
 
   // Show the just-posted reply immediately (the real one nests on next load).
   function appendOptimisticReply(stub, name, text) {
@@ -964,7 +917,11 @@
     var like = el.querySelector('.lg-fb-like');
     like.addEventListener('click', function () { like.classList.toggle('is-on'); });
     var rep = el.querySelector('.lg-fb-reply');
-    rep.addEventListener('click', function () { openReplyBox(el.querySelector('.lg-fb-col'), el.querySelector('.lg-fb-name'), el); });
+    // PHASE 3 (E6): route through openReplyComposer like every other reply affordance
+    // instead of straight into the deleted fb-inline box. The optimistic stub has no
+    // data-lg-replyto yet (the real id arrives on the next thread load), so this
+    // opens a top-level reply to the topic — same as before, minus the second composer.
+    rep.addEventListener('click', function () { openReplyComposer(el, el.querySelector('.lg-fb-name'), el.querySelector('.lg-fb-col')); });
   }
 
   // Mobile only: watch the feed subtree for replies loading in (native expand,
@@ -3239,10 +3196,6 @@
       '#looth-rep-sheet .lg-fb-reply::before,#looth-rep-sheet .lg-fb-time::before{content:"·";margin:0 6px;color:#8a8d91;font-weight:400}',
       '#looth-rep-sheet .lg-fb-time{font-weight:400;color:#8a8d91}',
       '#looth-rep-sheet .lg-fb-like.is-on{color:#1877f2}',
-      '#looth-rep-sheet .lg-fb-replybox{display:flex;gap:8px;align-items:flex-start;margin:8px 0 2px;width:100%}',
-      '#looth-rep-sheet .lg-fb-replywrap{display:flex;align-items:flex-end;gap:6px;flex:1 1 auto;background:var(--lguser-bubble,#eceff3);border-radius:18px;padding:4px 6px 4px 12px}',
-      '#looth-rep-sheet .lg-fb-replyinput{flex:1 1 auto;border:0;background:none;resize:none;outline:none;font:14px/1.4 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);max-height:120px;padding:4px 0}',
-      '#looth-rep-sheet .lg-fb-send{border:0;background:none;cursor:pointer;color:var(--lg-sage-d,#52613d);font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);padding:6px 8px}',
       // also apply the FB "·"-separated action format to the INLINE feed comments
       '.feed-page .lg-fb-actions{gap:0!important}',
       '.feed-page .lg-fb-act{font-weight:700!important}',
@@ -3340,7 +3293,16 @@
     if (lrsAuth) { cb(lrsAuth); return; }
     fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { lrsAuth = d || { authenticated: false }; cb(lrsAuth); })
+      .then(function (d) {
+        lrsAuth = d || { authenticated: false };
+        // Per-reply image cap, server-sourced (auth.php ships LG_REPLY_IMG_MAX) so
+        // the composer guard and reply.php's 422 cannot drift apart. Absent field
+        // (stale cached JS, anon payload) keeps the conservative default — an
+        // absent signal must land ON the cap, never on "no cap".
+        var m = d && parseInt(d.reply_image_max, 10);
+        if (m > 0) lgcImgMax = m;
+        cb(lrsAuth);
+      })
       .catch(function () { cb({ authenticated: false }); });
   }
   function lrsEsc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
@@ -4045,6 +4007,15 @@
         '#looth-comp-sheet .lgc-tb svg{vertical-align:middle}',
         '#looth-comp-sheet .lgc-tb.ql-active{background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#52613d)}',
         '#looth-comp-sheet .lgc-tb--pic,#looth-comp-sheet .lgc-tb--tag{color:var(--lg-sage-d,#6b7c52)}',
+        // Photo count read-out ("3 of 6"). Sits with the photo button it describes,
+        // so the cap is visible BEFORE it is hit rather than as a rejection at the
+        // 7th tap. Goes amber at the cap. Never truncates — the whole reason this
+        // exists is to be read (cf. the status line that ellipsed to nothing).
+        '#looth-comp-sheet .lgc-pcount{flex:0 0 auto;white-space:nowrap;font:600 .6875rem/1 var(--lg-font-sans,sans-serif);' +
+          'color:#8a8d91;padding:0 2px 0 1px}',
+        '#looth-comp-sheet .lgc-pcount[data-full="1"]{color:var(--lg-rust,#c66845)}',
+        'html[data-lguser-dark="1"] #looth-comp-sheet .lgc-pcount{color:#9aa097}',
+        '#looth-comp-sheet .lgc-tb--pic[disabled]{opacity:.4;cursor:not-allowed}',
         '#looth-comp-sheet .lgc-sp{flex:1 1 auto}',
         '#looth-comp-sheet .lgc-status{flex:1 0 100%;order:9;font:.75rem/1.35 var(--lg-font-sans,sans-serif);color:#8a8d91;padding:3px 2px 0}',
         '#looth-comp-sheet .lgc-status:empty{display:none}',
@@ -4153,7 +4124,55 @@
         D + ' #looth-link-sheet .lgl-b--go:disabled{background:#2c312d;color:#7e857c}',
         D + ' #looth-link-sheet .lgl-b--x{color:#9aa79b}',
         // #b3261e is 3.0:1 on #1b1e21 — under AA, same lift as the composer alert
-        D + ' #looth-link-sheet .lgl-err,' + D + ' #looth-link-sheet .lgl-b--rm{color:#f2b8b5}'
+        D + ' #looth-link-sheet .lgl-err,' + D + ' #looth-link-sheet .lgl-b--rm{color:#f2b8b5}',
+
+        /* ── PHASE 3: the DESKTOP MODAL SKIN ────────────────────────────────────
+           A SKIN, nothing else. Same #looth-comp-sheet, same lgc* component, same
+           Quill instance, same mention pipeline, same attachment strip, same link
+           panel and tag picker, same write path. Only the geometry changes: the
+           full-height phone sheet becomes a centered card, because a full-height
+           dock over a 1280px viewport reads as a broken page rather than a modal.
+
+           Everything here is inside one @media (min-width:641px) — the mobile
+           surface is byte-for-byte untouched, which is what makes it a skin. If
+           anything below ever needs a behaviour branch instead of a geometry one,
+           that is the signal to stop and re-read the one-composer thesis.
+
+           641px matches the boundary the rest of the Hub already uses (forums.css
+           mobile pass, .lg-card-actions, fc-composer's desktop-only display). */
+        '@media (min-width:641px){',
+        // centered card, not a dock. max-height keeps a long draft scrollable
+        // inside the composer instead of growing past the viewport.
+        '  #looth-comp-sheet .lgc-card{left:50%;right:auto;top:50%;bottom:auto;' +
+          'transform:translate(-50%,-50%);width:min(40rem,calc(100vw - 4rem));height:auto;' +
+          'max-height:min(44rem,calc(100vh - 4rem));border-radius:16px;overflow:hidden;' +
+          'box-shadow:0 18px 60px rgba(0,0,0,.34);animation:none}',
+        // the grab pill is a TOUCH affordance — swipe-to-dismiss has no desktop
+        // meaning, and leaving it draws a handle nothing can grab.
+        '  #looth-comp-sheet .lgc-grab{display:none}',
+        '  #looth-comp-sheet .lgc-hd{padding-top:14px}',
+        // the editor is the flexible middle; the tool row + strip stay pinned.
+        '  #looth-comp-sheet .lgc-body{min-height:12rem}',
+        // Esc is already free from LgSheets (escClose), and the shared backdrop is
+        // manager-owned — the skin adds no dismissal path of its own.
+        '}',
+
+        /* The keyboard dock is a phone concept. lgcDock() writes .lgc-card.bottom
+           from the visual viewport; on desktop that would fight the centering
+           transform, so neutralise it here rather than branching lgcDock(). */
+        '@media (min-width:641px){#looth-comp-sheet .lgc-card{bottom:auto!important}}',
+
+        /* Sign-in modal + link panel keep their own geometry on desktop; the tag
+           picker is the one composer layer that is full-height on phones, so give
+           it the same centered treatment or it covers a 1280px page edge to edge. */
+        '@media (min-width:641px){',
+        '  #looth-tag-sheet .lgt-card{left:50%;right:auto;top:50%;bottom:auto;' +
+          'transform:translate(-50%,-50%);width:min(34rem,calc(100vw - 4rem));height:auto;' +
+          'max-height:min(40rem,calc(100vh - 4rem));border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.34)}',
+        '  #looth-link-sheet .lgl-card{left:50%;right:auto;top:50%;bottom:auto;' +
+          'transform:translate(-50%,-50%);width:min(28rem,calc(100vw - 4rem));' +
+          'border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.34)}',
+        '}'
       ].join('\n');
       (document.head || document.documentElement).appendChild(st);
     }
@@ -4177,6 +4196,7 @@
           '<button class="lgc-tb lgc-tb--pic" id="lgc-photo" type="button" aria-label="Add photo" title="Add photo">' +
             '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
           '<input type="file" id="lgc-file" accept="image/*" style="display:none">' +
+          '<span class="lgc-pcount" id="lgc-pcount" hidden></span>' +
           '<button class="lgc-tb ql-bold" type="button" aria-label="Bold"><b>B</b></button>' +
           '<button class="lgc-tb ql-italic" type="button" aria-label="Italic"><i>I</i></button>' +
           '<button class="lgc-tb ql-strike" type="button" aria-label="Strikethrough"><s>S</s></button>' +
@@ -4222,7 +4242,15 @@
     fileIn.addEventListener('change', function () {
       var file = fileIn.files && fileIn.files[0];
       fileIn.value = '';
-      if (file) lgcUploadPhoto(sh, file);
+      if (!file) return;
+      // Re-check at drop time, not only when the picker opened: on an edit the
+      // kept-photo set can load (or a retry can land) while the picker is up.
+      if (lgcCapped(sh) && lgcPhotoN(sh) >= lgcImgMax) {
+        lgcSetErr(sh, 'A reply can have at most ' + lgcImgMax + ' photos — remove one to add another.');
+        lgcSyncPhotoCount(sh);
+        return;
+      }
+      lgcUploadPhoto(sh, file);
     });
     // ZERO-GAP KEYBOARD DOCK (df97f87): the card's bottom edge lands exactly on the
     // keyboard top. Sized via bottom-offset, NOT translateY — a leftover transform
@@ -4279,6 +4307,29 @@
       tools.insertBefore(el, tools.firstChild);
     }
     el.textContent = msg;
+  }
+  // ── Per-reply image cap (Ian 2026-07-27: max 6) ──────────────────────────
+  // Server-sourced via auth.php; this is the conservative default until the first
+  // auth call lands, and the fallback if the field is missing.
+  var lgcImgMax = 6;
+  // The strip is the single honest count: every image the member can see occupies
+  // one chip, whether it is uploaded, still uploading, failed-and-retryable, or
+  // an existing photo kept on an edit. Removing a chip frees the slot. Counting
+  // lcpMediaIds instead would miss in-flight and kept-on-edit photos and let the
+  // member queue past the cap.
+  function lgcPhotoN(sh) { return sh.querySelectorAll('#lgc-strip .lgc-pv').length; }
+  // The cap is a REPLY cap. Topic edit shares this composer and is NOT capped —
+  // an OP gallery is a different thing and Ian did not rule on it.
+  function lgcCapped(sh) { return !(sh.__lcpCtx && sh.__lcpCtx.editTopicId); }
+  function lgcSyncPhotoCount(sh) {
+    var el = sh.querySelector('#lgc-pcount'), btn = sh.querySelector('#lgc-photo');
+    if (!el) return;
+    var n = lgcPhotoN(sh), cap = lgcCapped(sh);
+    if (!cap || !n) { el.hidden = true; el.removeAttribute('data-full'); if (btn) btn.disabled = false; return; }
+    el.hidden = false;
+    el.textContent = n + ' of ' + lgcImgMax;
+    if (n >= lgcImgMax) el.setAttribute('data-full', '1'); else el.removeAttribute('data-full');
+    if (btn) btn.disabled = n >= lgcImgMax;
   }
   // ONE place decides what the two channels say, so they can never contradict each
   // other: the status line counts what is actually in flight, the alert line exists
@@ -4393,6 +4444,11 @@
     return lgcQuill.getContents().ops.some(function (op) { return op.insert && op.insert.lgmention; });
   }
   function lgcRecalcPost(sh) {
+    // Single owner for the photo-count read-out: every path that adds, removes,
+    // fails or restores a chip already funnels through here (upload start/ok/fail,
+    // chip ✕, and lgcLoadEditMedia's kept photos — which lgcSyncUploadUi does NOT
+    // see). Must run before the topic-edit early return below.
+    lgcSyncPhotoCount(sh);
     var post = sh.querySelector('#lgc-post'); if (!post) return;
     var c = sh.__lcpCtx || {};
     // A photo still uploading means the post is NOT ready — posting now would ship
@@ -4861,7 +4917,14 @@
   // lg_bb_mirror_can_post() is true (_feed.php:1300/:1341/:1555/:1645), and — this is
   // the point — they predate the data-lg-can-post attribute, so they are present in
   // OLD html too. Measured on dev2: anon 0/0/0/0/0, member 7/7/2/1/2.
-  var LG_CANPOST_MARKERS = '.fc-composer,[data-frm-open],[data-ntm-open],.lg-newpost,.forum-header__new-post';
+  // PHASE 3: .fc-composer REMOVED from this list — the element no longer exists, and
+  // a marker that can never match is a marker that silently weakens the fallback.
+  // The remaining four still separate member from anon on OLD cached html (measured
+  // on dev2 — anon 0/0/0/0, member 7/2/1/2), which is the property that matters:
+  // this is the branch that decides can-post when data-lg-can-post is absent, i.e.
+  // exactly the partial-deploy case that would otherwise hand every logged-out
+  // reader a live composer.
+  var LG_CANPOST_MARKERS = '[data-frm-open],[data-ntm-open],.lg-newpost,.forum-header__new-post';
   function lgCanPost() {
     var b = document.body, v = b && b.getAttribute('data-lg-can-post');
     if (v === '1') return true;
@@ -5060,6 +5123,37 @@
     // data-lg-sheet-card), lock sync and the history entry all happen in LgSheets.
     window.LgSheets.close('lcp', reason || 'programmatic');
   }
+
+  /* ── PHASE 3 SEAM: the one door forums.js drives ──────────────────────────────
+     The composer lives here; frm/fic/fb-inline/fc-composer live in forums.js. This
+     export is the whole cross-file contract — deliberately ONE function taking the
+     same opts openComposerSheet already accepts, so there is no second API to keep
+     in sync and no place for a per-surface behaviour fork to hide.
+
+     Returns true when THIS composer handled the intent — including the anon case,
+     where the correct handling is the sign-in modal rather than an editor. Returns
+     false only when the composer genuinely is not available, which is a real state:
+     pwa.js injects hub-polish.js only when onHub matches (pwa.js:44), so any surface
+     outside /hub gets false and keeps its own path. Callers MUST treat false as
+     "fall back", never as "failed".
+
+     Modes are the ones the component already implements — reply create, reply edit,
+     topic/OP edit — so desktop gains nothing bespoke:
+       lgOpenComposer({tid, fid})                          -> reply to the topic
+       lgOpenComposer({tid, fid, replyTo, replyToName})    -> reply to a reply
+       lgOpenComposer({tid, fid, editReplyId, bodyText})   -> edit a reply
+       lgOpenComposer({tid, fid, editTopicId, title, bodyText}) -> edit the OP  */
+  window.lgOpenComposer = function (o) {
+    try {
+      openComposerSheet(o || {});
+      return true;
+    } catch (e) {
+      // Never let a composer failure swallow the user's intent silently — the
+      // caller can still fall back to its own surface.
+      try { console && console.warn && console.warn('lgOpenComposer failed', e); } catch (e2) {}
+      return false;
+    }
+  };
   window.LgSheets.register({
     id: 'lcp',
     ensure: function () { return ensureCompSheet(); },
@@ -5179,6 +5273,14 @@
           if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not post.'; post.disabled = false; return; }
           var newId = (res.j && (res.j.reply_id || res.j.id)) || 0;
           closeComposerSheet('post');
+          // PHASE 3: announce the post so surfaces with no .feed-card ancestor can
+          // refresh — the desktop discussion modal listens for exactly this
+          // (forums.js:4524) and frm used to be the only thing that emitted it
+          // (:2888/:2923). Repointing the desktop doors at THIS composer without
+          // also emitting here would post the reply and leave the dmodal stale.
+          try {
+            document.dispatchEvent(new CustomEvent('lg:reply-posted', { detail: { topicId: tid } }));
+          } catch (e) {}
           // live-refresh the discussion modal if it's open on this topic
           var rs = document.getElementById('looth-rep-sheet');
           if (rs && rs.classList.contains('is-open') && parseInt(rs.getAttribute('data-tid'), 10) === tid) {
@@ -5344,17 +5446,11 @@
       // .fc-actions row (reactions left, comment + ☆ save right) is THE row;
       // forums.css owns its desktop layout. Mobile action row untouched.)
 
-      // ── Reply composer. The DESKTOP card composer is .fc-composer > .fc-composer__wrap
-      // (the input "bubble") > input.fc-composer__input. The wrap hardcodes a dark
-      // var(--bg-card) bubble + the input text is dark → invisible on a light theme.
-      // Theme the bubble to the comment-bubble/pill surface and bind the input text
-      // to --lguser-ink (default/dark fall back to --bg-card + --fg, staying legible).
-      P + ' .fc-composer__wrap{background:var(--lguser-bubble,var(--lguser-pill,var(--bg-card,#eceff3)))!important;color:var(--lguser-mute,var(--fg-muted,#6b6f6b))!important}',
-      P + ' .fc-composer__input{color:var(--lguser-ink,var(--fg,#1a1d1a))!important;background:transparent!important}',
-      P + ' .fc-composer__input::placeholder{color:var(--lguser-mute,var(--fg-muted,#6b6f6b))!important}',
-      // also cover the native reply-form textarea + the inline fb-composer input
-      // (same dark-on-light defect via forums.css hardcoded white bg + color:var(--fg)).
-      P + ' .reply-form,' + P + ' .reply-form textarea,' + P + ' .feed-card__inline-compose .fic-input{' +
+      // The single-topic page's reply form: forums.css hardcodes a white bg +
+      // color:var(--fg), which is dark-on-light-theme invisible. Bind it to the user
+      // tokens instead. (The .fc-composer__wrap/__input and .fic-input rules that
+      // used to ride along here went with those composers in phase 3.)
+      P + ' .reply-form,' + P + ' .reply-form textarea{' +
         'background:var(--lguser-card,var(--bg-card,#fff))!important;color:var(--lguser-ink,var(--fg,#1a1d1a))!important;' +
         'border-color:var(--lguser-line,#e3ddd0)!important}',
 

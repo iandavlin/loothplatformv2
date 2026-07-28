@@ -159,13 +159,32 @@
       opts.statusEl.classList.remove('lg-msg-error');
       if (tray) { tray.innerHTML = ''; tray.hidden = true; tray.classList.remove('is-uploading'); }
     }
+    // Per-reply image cap (Ian 2026-07-27: max 6). opts.max caps the RESULTING
+    // set — new uploads (mediaIds) plus any existing kept on an edit
+    // (opts.getKeepCount). Omit opts.max and the tray is uncapped, which is how
+    // the new-topic composer stays uncapped.
+    //
+    // INTERIM, and deliberately so: these desktop composers still POST BuddyBoss
+    // REST direct on create, so reply.php's 422 never sees them and this guard is
+    // the only thing holding the cap there. composer-p3 deletes those create
+    // paths (W1/W5); once it lands the server is the backstop and this is belt
+    // and braces. Until then, removing it makes the cap cosmetic on desktop.
+    function atMax() {
+      if (!opts.max) return false;
+      var keep = (typeof opts.getKeepCount === 'function') ? (opts.getKeepCount() || 0) : 0;
+      return (keep + opts.mediaIds.length) >= opts.max;
+    }
+    function capMsg() { return 'A reply can have at most ' + opts.max + ' photos — remove one to add another.'; }
     function handler() {
+      if (atMax()) { fail(capMsg()); return; }
       var input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
       input.onchange = function () {
         var file = input.files && input.files[0];
         if (!file) return;
+        // Re-check at drop time: the keep set can change while the picker is open.
+        if (atMax()) { fail(capMsg()); return; }
         // Pre-flight: reject formats BB will refuse (webp/heic/…) up front, so
         // the user gets a clear reason instead of a silent failed upload.
         if (LG_IMG_UNSUPPORTED.test(file.name || '')) {
@@ -390,8 +409,12 @@
     function editorOf(el) {
       if (!el || !el.tagName) return null;
       if (el.classList && el.classList.contains('ql-editor')) return { el: el, kind: 'ce' };
+      // PHASE 3 (D2): textarea.fic-input and textarea.lg-fb-replyinput removed —
+      // fic and fb-inline are deleted, and an editor that no longer exists must not
+      // stay advertised here or the shared mention engine keeps offering to mount
+      // into surfaces that were cut.
       if (el.tagName === 'TEXTAREA' &&
-          el.matches('textarea.rse-input, textarea.fic-input, textarea.lg-fb-replyinput, textarea.lcp-input, #lrs-comp-input, #frm-content, #ntm-content'))
+          el.matches('textarea.rse-input, textarea.lcp-input, #lrs-comp-input, #frm-content, #ntm-content'))
         return { el: el, kind: 'ta' };
       return null;
     }
@@ -623,7 +646,7 @@
     // bare card area are hijacked away from navigation.
     if (e.target.closest('button, input, textarea, select, label, [role="button"], img, ' +
           '.feed-card__read-more, .feed-card__expand, .feed-card__reply-cta, .reply-stub__reply, ' +
-          '.fc-facepile, .fc-composer, ' +   // reply-count opens replies; composer is its own control
+          '.fc-facepile, ' +                 // reply-count opens replies (.fc-composer removed, phase 3)
           '[data-comments], .fcr, .lg-card-actions')) return;
     var titleA = e.target.closest('.feed-card__title a');
     if (e.target.closest('a') && !titleA) return;                 // author / thread links navigate
@@ -1163,46 +1186,13 @@
       });
     });
 
-    // Inline reply composer in the expanded discussion card — post in-feed, no modal.
-    function protoMountComposer(card) {
-      if (card.querySelector('.feed-card__inline-compose')) return;
-      var cta = card.querySelector('.feed-card__reply-cta[data-frm-open]');
-      var topicId = card.getAttribute('data-topic-id') || (cta && cta.dataset.topicId) || '';
-      var forumId = (cta && cta.dataset.forumId) || '';
-      if (!topicId) return;
-      var box = document.createElement('div');
-      box.className = 'feed-card__inline-compose';
-      box.innerHTML =
-        '<textarea class="fic-input" rows="1" autocomplete="off" placeholder="Reply to this thread…"></textarea>' +
-        '<button type="button" class="fic-send" disabled>Reply</button>' +
-        '<div class="fic-status" role="status"></div>';
-      (card.querySelector('.feed-card__replies') || card).appendChild(box);
-      var ta = box.querySelector('.fic-input'), send = box.querySelector('.fic-send'), status = box.querySelector('.fic-status');
-      ta.addEventListener('input', function () { send.disabled = !ta.value.trim(); ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; });
-      send.addEventListener('click', function () {
-        var text = ta.value.trim(); if (!text) return;
-        send.disabled = true; status.textContent = 'Posting…';
-        protoGetAuth(function (auth) {
-          if (!auth || !auth.authenticated) { status.textContent = 'Sign in to reply.'; return; }
-          var html = '<p>' + text.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }).replace(/\n/g, '<br>') + '</p>';
-          var payload = { topic_id: parseInt(topicId, 10), content: html };
-          if (parseInt(forumId, 10)) payload.forum_id = parseInt(forumId, 10);
-          fetch(protoReplyBase + '/reply', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': auth.nonce },
-            body: JSON.stringify(payload),
-          })
-            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-            .then(function (res) {
-              if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not post.'; send.disabled = false; return; }
-              ta.value = ''; ta.style.height = 'auto'; status.textContent = 'Posted ✓ — refreshing thread…';
-              var ex = card.querySelector('.feed-card__expand');   // reload the thread to show the new reply
-              if (ex) { card.classList.remove('replies-expanded'); var full = card.querySelector('.feed-card__replies-full'); if (full) { full.dataset.loaded = ''; } ex.click(); }
-            })
-            .catch(function (err) { status.textContent = 'Network error: ' + err.message; send.disabled = false; });
-        });
-      });
-    }
+    /* fic (protoMountComposer + its NATIVE create, W4) DELETED — phase 3.
+       Dev-only: this whole block is behind ?proto=cards / localStorage
+       lg_card_proto (:956), so no member could reach it — the audit read it as a
+       live surface and it never was. It carried its own textarea, its own submit
+       and a native /reply create, which is the pattern phase 3 exists to end.
+       Its call site below is removed with it; textarea.fic-input comes out of the
+       mention engine's editor whitelist (editorOf, D2). */
 
     feed.addEventListener('click', function (ev) {
       var card = ev.target.closest('.feed-card');
@@ -1222,7 +1212,7 @@
       // author/profile links, thread links) keep working.
       if (ev.target.closest('button, input, textarea, label, select, .feed-card__compact-expand, ' +
             '.feed-card__read-more, .feed-card__expand, .feed-card__reply-cta, .reply-stub__reply, ' +
-            '.fc-facepile, .fc-composer')) return;
+            '.fc-facepile')) return;   // .fc-composer removed — phase 3
       // author + in-thread links still navigate; only the title link is hijacked to expand
       if (ev.target.closest('a') && !ev.target.closest('.feed-card__title a')) return;
       var titleA = ev.target.closest('.feed-card__title a');
@@ -1234,7 +1224,6 @@
       if (!willOpen) return;
       var rm = card.querySelector('.feed-card__read-more');          // body-only expand
       if (rm && rm.dataset.state !== 'expanded') rm.click();         // replies open via the reply-count control
-      protoMountComposer(card);                                       // inline reply box (no modal)
       card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
   })();
@@ -2563,6 +2552,8 @@
       mediaIds: frmMediaIds,
       statusEl: frmStatus,
       restBase: frmRestBase,
+      max: 6,                                                    // per-reply image cap (Ian 2026-07-27)
+      getKeepCount: function () { return frmKeepMedia.length; },  // edit mode: kept photos count toward it
       getNonce: function (cb) { cb(frmNonce); },
       insertInline: function (url) {
         var range = frmQuill.getSelection(true);
@@ -2787,12 +2778,50 @@
       });
     }
 
+    /* PHASE 3 (E1/E2) — this delegate is the desktop reply door, and it now opens
+       THE composer (hub-polish.js) instead of frm.
+
+       Why this one delegate matters more than the others: the desktop discussion
+       modal does not own a composer, it INJECTS a [data-frm-open] CTA (§4e, :4377)
+       and lets this handler serve it. So repointing here moves every dmodal reply,
+       every card reply CTA and every per-reply Reply link
+       in a single edit — one door, four surfaces.
+
+       frmOpen stays as the FALLBACK, and it is a real one, not a formality:
+       pwa.js injects hub-polish.js only when onHub matches (pwa.js:44), so any
+       surface outside /hub reaches this handler with no composer loaded. false
+       means "not available here", never "failed". */
+    function frmComposerOpts(trigger) {
+      // Mirrors frmOpen's own id-sourcing exactly (see :2612ff) so the two doors
+      // can never disagree about which topic a click meant.
+      var card = trigger.closest('.feed-card');
+      var replyTo = parseInt(trigger.dataset.replyTo, 10) || 0;
+      // A per-reply Reply button carries only reply-to/-author; topic + forum live
+      // on the card's top-level CTA. The dmodal's injected CTA carries them itself
+      // and has no .feed-card ancestor, so `src = trigger` is the right default.
+      var src = trigger;
+      if (replyTo && card) {
+        var cta = card.querySelector('.feed-card__reply-cta[data-frm-open]');
+        if (cta) src = cta;
+      }
+      return {
+        tid: src.dataset.topicId || (card && card.dataset.topicId) || '',
+        fid: src.dataset.forumId || (card && card.dataset.forumId) || '',
+        replyTo: replyTo,
+        replyToName: (trigger.dataset.replyToAuthor || '').trim(),
+        title: src.dataset.topicTitle || '',
+        focus: true,
+      };
+    }
     // Delegated so it also works on lazily-loaded / optimistically-added cards.
     document.addEventListener('click', function (e) {
-      var t = e.target.closest('.feed-card__reply-cta[data-frm-open], .reply-stub__reply, .fc-composer__rich');
+      var t = e.target.closest('.feed-card__reply-cta[data-frm-open], .reply-stub__reply');
       if (!t) return;
       e.stopPropagation();
-      frmOpen(t);
+      var opts = frmComposerOpts(t);
+      if (opts.tid && typeof window.lgOpenComposer === 'function'
+          && window.lgOpenComposer(opts)) return;
+      frmOpen(t);   // composer not loaded on this surface — keep the old door
     });
     frmCancel.addEventListener('click', frmClose);
     frmBackdrop.addEventListener('click', frmClose);
@@ -2897,12 +2926,28 @@
       frmSubmit.disabled = true; frmStatus.textContent = 'Posting…';
       var frmPayload = { topic_id: topicId, forum_id: forumId };
       if (content) frmPayload.content = content;
-      if (frmMediaIds.length) frmPayload.bbp_media = frmMediaIds;
+      if (frmMediaIds.length) frmPayload.media_ids = frmMediaIds;
       if (frmParentId) frmPayload.reply_to = frmParentId;   // nested reply
-      // Reply anonymously (anon-rebuild lane): server stamps _lg_anon on the reply.
-      var frmAnonChk = document.getElementById('frm-anon-check');
-      if (frmAnonChk && frmAnonChk.checked) frmPayload._lg_anon = 1;
-      fetch(frmRestBase + '/reply', {
+      /* PHASE 3 (W1) — RETARGETED, not deleted, and that is a deliberate deviation
+         from "delete the native create" worth reading.
+
+         frm is now the FALLBACK behind the composer seam (:2827): if hub-polish.js
+         isn't loaded, the delegate still opens this modal. Deleting its create would
+         have left that fallback opening a modal whose Post button does nothing — the
+         half-job in a new place. Retargeting satisfies the gate that actually
+         matters (ZERO native reply-creates, so G8 dies structurally and the
+         bbp_new_reply hook stops being load-bearing) while keeping the fallback real.
+
+         Same endpoint, same contract as every other composer: reply.php derives
+         forum_id itself (:308), accepts reply_to (:339) and takes media as
+         `media_ids` (:288 also tolerates the old `bbp_media` spelling — using the
+         canonical name here). It pre-mints mentions, re-mints post-insert with kses
+         off, and rings the bell — none of which the native path did.
+
+         D1: the _lg_anon branch is GONE. It read #frm-anon-check, an element removed
+         2026-06-10 when anon replies were retired (_chrome.php:415-419); reply.php
+         refuses the flag server-side anyway (:367). Dead on both ends. */
+      fetch('/bb-mirror-api/v0/reply', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },
         body: JSON.stringify(frmPayload),
@@ -3046,6 +3091,7 @@
     mediaIds: replyMediaIds,
     statusEl: status,
     restBase: restBase,
+    max: 6,                       // per-reply image cap (Ian 2026-07-27); create-only form, no keep set
     getNonce: function (cb) { cb(nonce); },
     insertInline: function (url) {
       var range = replyQuill.getSelection(true);
@@ -3347,11 +3393,23 @@
 
     var body = { topic_id: topicId, forum_id: forumId };
     if (content) body.content = content;
-    if (replyMediaIds.length) body.bbp_media = replyMediaIds;
+    if (replyMediaIds.length) body.media_ids = replyMediaIds;
     var parentId = parseInt(parentInput.value, 10);
     if (parentId > 0) body.reply_to = parentId;
 
-    fetch(restBase + '/reply', {
+    /* PHASE 3 (W5) — RETARGET ONLY, per keeper's ruling. This form keeps its own
+       Quill, its own photo tray and its own parent_reply_id threading; only the
+       endpoint moves, so the single-topic page stops being the last surface whose
+       replies mint and ring by virtue of a mu-plugin hook rather than by taking the
+       one write path.
+
+       (Correction on the record: I originally justified retarget-only by claiming
+       composer v2 could not load here. It can — LG_BB_MIRROR_PUBLIC_PATH is '/hub',
+       so this page matches pwa.js:44's onHub test and hub-polish.js IS present.
+       Retarget-only stands as a SCOPE choice: replacing a working composer on the
+       canonical topic page is UX-visible and deserves its own Ian gate, not a ride
+       on a deletion commit.) */
+    fetch('/bb-mirror-api/v0/reply', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
@@ -3905,61 +3963,19 @@
   });
 })();
 
-/* ─── Cooler card: persistent reply composer (fc-composer) + face-pile (fc-facepile)
-   Always-on (NOT proto-gated). Composer posts via the existing /reply path; the
-   face-pile opens the thread. Desktop-only by CSS (display:none ≤640) until Buck's
-   mobile-hub.css arranges them, so this never affects mobile. ───────────────── */
+/* ─── Cooler card: face-pile (fc-facepile) — opens the thread. ─────────────────
+   PHASE 3, 2026-07-27: the persistent reply composer (fc-composer) that used to
+   share this block is GONE — markup, CSS and JS. It was never reachable: measured
+   on dev2 at 1280px, 7 in the DOM and 0 visible, because forums.css:4047 hid it
+   below 641 and :4417 hid it again at ≥641 on .feed-card--topic once desktop moved
+   the thread into the §4e modal. Content cards never rendered one at all (11 on the
+   page, 0 containing an fc-composer — _feed.php emits it only inside the topic-card
+   block), so the unscoped un-hide at :4133 had nothing to act on. Deleted with its
+   native create (W2) rather than left as dead UI with a live write path.
+   Removed here: REPLY_BASE, getAuth, esc, viewerAvatar, hydrateComposerAvatars and
+   its MutationObserver, the input→enable-send handler, and the send submit. ─── */
 (function () {
   'use strict';
-  var REPLY_BASE = (document.getElementById('frm-form') || { dataset: {} }).dataset.restBase || '/wp-json/buddyboss/v1';
-  var auth = null, authPending = null;
-  function getAuth(cb) {
-    if (auth) { cb(auth); return; }
-    if (authPending) { authPending.push(cb); return; }
-    authPending = [cb];
-    fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { auth = d || { authenticated: false }; authPending.forEach(function (f) { f(auth); }); authPending = null; })
-      .catch(function () { auth = { authenticated: false }; authPending.forEach(function (f) { f(auth); }); authPending = null; });
-  }
-  function esc(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
-
-  // ── Composer avatar: the SSR placeholder ('You' initials) has no viewer context
-  // (bb-mirror FPM pool can't resolve the WP user). Clone the logged-in avatar that
-  // the shared site-header already painted — instant, no fetch, no flash. Falls back
-  // to the placeholder when no header avatar is present (anon / header absent). ──
-  function viewerAvatar() {
-    var sels = ['.lg-chrome__aside img[src*="/avatars/"]', '.lg-chrome__aside img[src*="/profile-media/"]',
-                '#site-header img[src*="/avatars/"]', 'header img[src*="/avatars/"]'];
-    for (var i = 0; i < sels.length; i++) {
-      var el = document.querySelector(sels[i]);
-      if (el && el.src && !/logo/i.test(el.src)) return el.src;
-    }
-    return null;
-  }
-  function hydrateComposerAvatars() {
-    var src = viewerAvatar(); if (!src) return;
-    var avs = document.querySelectorAll('.fc-composer__av:not([data-av-set])');
-    if (!avs.length) return;
-    var img = '<img class="avatar-init avatar-init--img" src="' + src.replace(/"/g, '&quot;') +
-              '" width="30" height="30" alt="" decoding="async">';
-    avs.forEach(function (av) { av.setAttribute('data-av-set', '1'); av.innerHTML = img; });
-  }
-  if (document.readyState !== 'loading') hydrateComposerAvatars();
-  else document.addEventListener('DOMContentLoaded', hydrateComposerAvatars);
-  var fcFeed = document.getElementById('hub-feed-results') || document.querySelector('.feed');
-  if (fcFeed && window.MutationObserver) {                 // filter swap + infinite-scroll appends
-    var fcT = null;
-    new MutationObserver(function () { clearTimeout(fcT); fcT = setTimeout(hydrateComposerAvatars, 120); })
-      .observe(fcFeed, { childList: true, subtree: true });
-  }
-
-  document.addEventListener('input', function (e) {
-    var inp = e.target.closest && e.target.closest('.fc-composer__input'); if (!inp) return;
-    var btn = inp.closest('.fc-composer').querySelector('.fc-composer__send');
-    if (btn) btn.disabled = !inp.value.trim();
-  });
-
   document.addEventListener('click', function (e) {
     var fp = e.target.closest && e.target.closest('.fc-facepile');
     if (fp) {                                            // face-pile → open the thread
@@ -3967,38 +3983,7 @@
       var fex = fcard && fcard.querySelector('.feed-card__expand');
       if (fex) fex.click();
       else if (fcard && fcard.getAttribute('data-href')) location.href = fcard.getAttribute('data-href');
-      return;
     }
-    var send = e.target.closest && e.target.closest('.fc-composer__send');
-    if (!send) return;
-    var box = send.closest('.fc-composer');
-    var inp = box.querySelector('.fc-composer__input');
-    var status = box.querySelector('.fc-composer__status');
-    var text = (inp.value || '').trim(); if (!text) return;
-    var topicId = parseInt(box.getAttribute('data-topic-id'), 10);
-    var forumId = parseInt(box.getAttribute('data-forum-id'), 10);
-    if (!topicId) return;
-    send.disabled = true; if (status) status.textContent = 'Posting…';
-    getAuth(function (a) {
-      if (!a || !a.authenticated) { if (status) status.textContent = 'Sign in to reply.'; send.disabled = false; return; }
-      var payload = { topic_id: topicId, content: '<p>' + esc(text).replace(/\n/g, '<br>') + '</p>' };
-      if (forumId) payload.forum_id = forumId;
-      fetch(REPLY_BASE + '/reply', {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
-        body: JSON.stringify(payload)
-      })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-        .then(function (res) {
-          if (!res.ok) { if (status) status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not post.'; send.disabled = false; return; }
-          inp.value = ''; if (status) status.textContent = 'Posted ✓';
-          var card = box.closest('.feed-card');
-          var ex = card && card.querySelector('.feed-card__expand');   // reload thread to show the new reply
-          if (ex) { card.classList.remove('replies-expanded'); var full = card.querySelector('.feed-card__replies-full'); if (full) full.dataset.loaded = ''; ex.click(); }
-          setTimeout(function () { if (status) status.textContent = ''; }, 2600);
-        })
-        .catch(function () { if (status) status.textContent = 'Network error.'; send.disabled = false; });
-    });
   });
 })();
 
@@ -4546,7 +4531,7 @@
       // expand (Ian 6/16 — no surprise card-grow). Genuine controls self-handle;
       // read-more + compact-caret + bare chrome now all route to the modal (they used
       // to fall through to the bubble-phase expanders at forums.js §224/§2b/§compact).
-      if (e.target.closest('input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, .fc-actions, [data-comments], .fc-composer, .reply-stub, .fc-cover--video, a[href*="/u/"]')) return;
+      if (e.target.closest('input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, .fc-actions, [data-comments], .reply-stub, .fc-cover--video, a[href*="/u/"]')) return;   // .fc-composer removed — phase 3
     }
     e.preventDefault();
     e.stopPropagation();   // beat the legacy inline-expand handlers

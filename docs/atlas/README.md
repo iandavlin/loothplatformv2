@@ -8,8 +8,9 @@ the keeper.
   box). The index of truth for "how it runs."
 - **GIT-PROTOCOL.md** — how we use git for this repo (branch-per-task + Ian approves merge).
 - **DISCUSSION-SURFACE-CANON.md** — the discussion MODAL (hub-polish.js §4e, desktop+mobile) is the canonical render+compose surface; legacy forum topic pages are not a feature target (Ian 2026-07-09).
-- **RECAP-SUPPRESSION-PROPOSAL.md** — measured (on LIVE) proposal for not re-listing things the member has already seen: read-on-site (shipped, 21.8%), already-per-event-emailed (stamp it, do not scrape the mail log; contingent on THREAD-FOLLOW §9.1), previous-digest watermark (needs a floor — 347 aged-out items would land on 271 members). **Amends THREAD-FOLLOW-SPEC §3.7 — see its §4.**
+- **RECAP-SUPPRESSION-PROPOSAL.md** — measured (on LIVE) proposal for not re-listing things the member has already seen. Three axes, and the measurements decide two of them: read-on-site (**shipped**, 15.8%); already-per-event-emailed (**do not build** — connections/DMs/reactions have no per-event email sender at all, and only 3 `forum.*` bell rows have ever existed on live; the overlap rate is *untested*, not zero); previous-digest (**build** — window start = the last digest that member actually *received*, one batched query over existing FluentCRM tables, no new schema; needs a floor or 348 aged-out items land on 272 members). **Amends THREAD-FOLLOW-SPEC §3.7 — see its §4.**
 - **WEEKLY-DIGEST-RECAP.md** — the per-member "Your week" section of the weekly digest: counts + senders + deep links, never content; unread, last 7 days; empty means absent. **§2 is the current truth about what the notification store knows — NOTIFICATIONS-AUDIT.md is stale on that point.**
+- **REPLY-IMAGE-COUNT-CEILING.md** — how many images a reply may carry, and where that is actually enforced. Short answer: nowhere on the way in; `_topic-replies.php:53` `LIMIT 1` on the way out. Includes the per-layer ceiling table, every surface that renders a reply, and measured height/weight at 2–20 images.
 
 ## Canon authority (Ian 6/19)
 `docs/atlas/` is canonical and forward-looking. **All other docs are FROZEN — emergency
