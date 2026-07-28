@@ -152,7 +152,46 @@ Source: `Visibility::audienceCanSee()` (`Visibility.php:93`).
 With the master switch on **Private**, every row below admin becomes ❌ regardless of
 section chips — the profile does not exist for them.
 
-### 3.7 File store
+### 3.7 What the STORE actually says — measured, not inferred
+
+Queried directly against Postgres `profile_app` on **dev2**, 2026-07-28. (dev2 and
+live hold different data — these are dev2 numbers.) **n = 1,925 users.**
+
+| measure | result |
+|---|---|
+| `users.profile_visibility` | **public 1,924 · private 1** |
+| `profile_sections` rows with `key='header'` | **16 total** (12 public, 4 members) |
+| `users.resume_visibility` | **members — all 1,925** |
+| `location_members_precision` | city 1,918 · street 7 |
+| `location_public_precision` | **private 1,903** · city 14 · state 2 · street 6 |
+| `profile_layout` | **never-arranged 1,858 · explicit 67** |
+
+**This corrects a reading of the code alone.** `users.profile_visibility` is *not* the
+tri-state the UI chip shows — the store proves it is effectively binary
+(`public`/`private`), and the tri-state ceiling lives on a **separate**
+`profile_sections` row with `key='header'`. The chip writes **both columns**
+(`Visibility.php:18-20`, "ONE DIAL"). Because only **16 users have a header row at
+all**, the other ~1,909 never touch that table and fall through to the code constant
+`HEADER_DEFAULT = 'members'` (`Block::headerCeiling`, `Block.php:400-407`).
+
+So the honest sentence for the guide is: **a member who has never touched anything is
+Members-only** — even though their `users.profile_visibility` literally reads
+`public`. Writing "your profile defaults to public" would be wrong; writing "the
+default is members-only" is right, but for a reason no single column shows.
+
+Two more facts worth the guide's attention:
+- **Only 22 of 1,925 members are on the public finder** at any precision. The
+  opt-in default (§3.4) is doing exactly what it was designed to do.
+- **Only 67 of 1,925 members have ever arranged their layout** — 96.5% have never
+  successfully used the section picker. See §6.
+
+`profile_sections` also still holds **retired keys** — `freeform:<id>` (2 rows) and
+`dropoffs` — removed by Ian on 2026-06-11. `Block::normalizeLayout` drops them on read
+(`Block.php:310`), so they are inert orphans, not live sections. Do not document them.
+(Aside, out of scope: `src/Auth.php:74` still lists a `me-freeform.php` endpoint for
+that retired block. Flagged, not chased.)
+
+### 3.8 File store
 
 `Visibility::fileVisible()` (`:167`): `avatars` + `banners` are **identity chrome and
 always servable** (they appear in forum bylines and messages). `gallery` follows the
@@ -310,6 +349,18 @@ the code and its own comments, and is NOT PROVEN as intent**:
 
 It is a **placement of convenience**, not a designed IA decision. Nothing about
 "Sections" belongs to "Profile controls" conceptually.
+
+### The number that backs Ian up
+
+**67 of 1,925 dev2 members have ever arranged their layout. 1,858 have not** (§3.7).
+96.5% of members have never successfully used the section picker.
+
+That is not proof of causation — imported members may simply not have engaged, and
+dev2 is not live. But it is the strongest available signal that the control is not
+being found, and it is consistent with everything above: the picker's only opener is
+top-of-page, in the wrong conceptual group, in the hardest thumb zone on a phone, and
+it vanishes in preview mode. **Worth re-running against live before treating it as
+decisive** — dev2 and live hold different data.
 
 ### Second-order problem worth flagging
 
