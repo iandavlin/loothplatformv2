@@ -32,7 +32,10 @@ Everything serves from **`/home/ubuntu/loothplatformv2-clean`** — a git checko
 ⚠️ **THE #1 TRAP: check for symlink-into-repo BEFORE writing any "deployed" path.**
 `readlink -f <path>` first. `tee`/`cp` through a symlinked conf writes INTO the git working tree —
 dirties the repo and can put secrets in `git status`. Box-local overrides = replace the symlink with
-a real file, then `git checkout --` the repo copy. (Bit us twice on 2026-07-04.)
+a real file, then `git checkout HEAD -- <path>` the repo copy. (Bit us twice on 2026-07-04.)
+**Never the bare `git checkout -- <path>`** — it restores from the INDEX, so on the shared serve
+clone it silently installs another process's staged work and exits 0 (keeper ruling + scratch-repo
+proof, 2026-07-28). Add `git reset -q` if you staged anything.
 
 Intentionally box-local (do NOT capture into git): `/etc/looth/*` (secrets/env), TLS certs, gate
 tokens, `r2-uploads-dev.service`, thumbnails services. Full list: `~/BOX-LOCAL-dev2-units.md` (dev2)

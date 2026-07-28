@@ -271,6 +271,16 @@ Files this lane overlays (8, all tracked):
   over a single ssh on stdin** (`ssh live-ro 'mysql … looth_import' < q.sql`).
   Not because the link is fragile now, but because it makes the measurement
   re-runnable and quotable instead of a pile of ad-hoc shell.
+- **A GREP THAT UNDER-MATCHES READS AS A PASS.** Sweeping this branch for the
+  banned bare restore form, I searched `"git checkout -- "` **with a trailing
+  space** and reported "nothing to fix". `docs/atlas/OPERATOR.md` writes it as
+  `` `git checkout --` `` — backtick, no space — so the pattern silently returned
+  fewer hits and the empty-ish result read as clean. Same family as `grep -c`
+  counting lines, and the same failure keeper flagged in composer-p3's guard grep
+  (an unescaped `$` in a BRE returns empty rather than erroring). **Use `grep -F`
+  for literal strings, never assume the whitespace around a quoted command, and
+  when a sweep returns "clean", confirm the pattern can match a known-present
+  instance before believing it.**
 - **Do not carry another lane's figures — including keeper's — without checking.**
   `free -m` and `swapon --show` take one second. Measured here 2026-07-28: swap
   is **2GB total, not 4GB**, and it is **not** "essentially untouched" (984MB in
