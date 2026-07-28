@@ -1,16 +1,20 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Weekly digest — what gets left out of the email</title>
+<title>Weekly digest — the to-do list, as ruled</title>
 <!--
-  SOURCE OF TRUTH: lg-weekly-digest/dev/previs/index.html in the monorepo, branch
-  weekly-digest-recap. Published to /srv/lg-layout-v2/tests/output/wd-recap/ by
-  dev/publish-previs.sh. That directory is gitignored (lg-layout-v2/.gitignore:5)
-  and served through the `location ^~ /v2/` alias behind the dev gate, so
+  SOURCE: lg-weekly-digest/dev/previs/index.html, branch weekly-digest-recap.
+  Published by dev/publish-previs.sh to /srv/lg-layout-v2/tests/output/wd-recap/,
+  which is gitignored and served through `location ^~ /v2/` behind the dev gate — so
   publishing writes nothing into the serving checkout and needs no serve window.
 
-  Every email in the frames below is REAL rendered output from the shipping
-  renderer over REAL live rows. Nothing is a mockup.
+  REPLACES the 07-27 previs entirely. That page showed reactions, connection
+  acceptances and a Rule 3b before/after — all three now decided the other way. It
+  was not merely stale, it argued for designs Ian has since declined.
+
+  Every email below is real rendered output over real live rows. The "before" side is
+  the renderer as it actually stood on 07-27, loaded from git history (f48561f) in its
+  own process — not a reconstruction.
 -->
 <style>
   :root{
@@ -34,19 +38,16 @@
   .sub{color:var(--dim);font-size:14px;margin:0}
 
   .lede{background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--gold);
-        border-radius:8px;padding:14px 16px;margin:20px 0 28px}
+        border-radius:8px;padding:14px 16px;margin:20px 0 26px}
   .lede p{margin:0 0 10px} .lede p:last-child{margin:0}
-  .q{font:600 17px/1.4 Georgia,serif}
+  .q{font:600 17px/1.45 Georgia,serif}
 
-  .rules{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin:0 0 34px}
+  .rules{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin:0 0 34px}
   .rule{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:13px 15px}
   .rule h3{margin:0 0 6px;font-size:15px;font-weight:600}
   .rule p{margin:0;font-size:13.5px;color:var(--dim)}
   .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
-       padding:2px 8px;border-radius:99px;margin-bottom:8px}
-  .t-ship{background:var(--mint-l);color:#33421f}
-  .t-no{background:#e9e4da;color:#5a5347}
-  .t-ask{background:var(--gold);color:#3a2c0f}
+       padding:2px 8px;border-radius:99px;margin-bottom:8px;background:var(--mint-l);color:#33421f}
 
   section.cmp{margin:0 0 46px}
   .chead{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;
@@ -54,12 +55,14 @@
   .chead h2{margin:0;font:600 19px/1.3 Georgia,serif}
   .who{color:var(--dim);font-size:14px}
   .delta{margin-left:auto;font-weight:700;font-size:15px;white-space:nowrap}
-  .delta .n{font-variant-numeric:tabular-nums}
   .arrow{color:var(--dim);padding:0 6px}
 
   .note{font-size:13.5px;color:var(--dim);margin:0 0 14px}
   .note b{color:var(--ink)}
   .prov{font-size:12px;color:var(--dim);margin:10px 0 0;font-style:italic}
+  .ask{background:var(--paper);border:1px solid var(--gold);border-radius:8px;
+       padding:12px 14px;margin:14px 0 0;font-size:13.5px}
+  .ask b{color:var(--ink)}
 
   .pair{display:grid;gap:18px;grid-template-columns:1fr 1fr}
   .pane{min-width:0}
@@ -67,11 +70,6 @@
   .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
   .d-before{background:var(--bad)} .d-after{background:var(--mint)}
   .plabel .cnt{margin-left:auto;font-weight:400;color:var(--dim);font-variant-numeric:tabular-nums}
-  /* Height is a FALLBACK only. The script below measures each email and sizes the
-     pair to whichever is taller, because the whole comparison fails if the sixth
-     row of a six-row email is below the fold. I could not take the browser engine
-     to eyeball it (another lane had it, and the box had 110MB free), so the page
-     measures itself rather than trusting a number I guessed. */
   .shot{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;
         box-shadow:0 1px 3px rgba(0,0,0,.07)}
   .shot iframe{display:block;width:100%;height:860px;border:0;background:#fff}
@@ -95,135 +93,134 @@
 
 <div class="wrap">
 <header>
-  <h1>Weekly digest — what gets left out of the email</h1>
-  <p class="sub">Three suppression rules, each shown as the email it produces. Real renderer, real live rows.</p>
+  <h1>Weekly digest — the to-do list, as ruled</h1>
+  <p class="sub">Built to your 28 July rulings. Real renderer, real live members, before beside after.</p>
 </header>
 
 <div class="lede">
-  <p class="q">“Do not duplicate notifications in the email that have already been read — either read in one of those emails, or already read on the website.”</p>
-  <p>That is three different problems, not one. Two are solved; the third is the only thing here that needs a decision from you. Each rule below is shown as <b>the email without it</b> beside <b>the email with it</b>.</p>
+  <p class="q">“We don't need connection acceptance. Just things that require attention from the user like a connection request etc.”</p>
+  <p class="q">“The fresh ones have a name and the stale ones have a collective number like <i>You have 6 connection requests</i>.”</p>
+  <p>Both are built. Every panel below is the same real member's email, before and after. <b>The “before” side is the actual renderer from 27 July, loaded from git history</b> — not a redrawing of it.</p>
 </div>
 
 <div class="rules">
   <div class="rule">
-    <span class="tag t-ship">Rule 1 · shipped</span>
-    <h3>Already read on the website</h3>
-    <p>Anything the member already looked at in the bell — or already actioned, for a connection — never enters the email. Live: <b>24 of 152 items removed</b>.</p>
+    <span class="tag">Built</span>
+    <h3>The to-do test</h3>
+    <p>One question decides admission: <b>does this wait on the member?</b> Connection acceptances and reactions are out — nothing is owed on either.</p>
   </div>
   <div class="rule">
-    <span class="tag t-no">Rule 2 · do not build</span>
-    <h3>Already sent in a per-event email</h3>
-    <p>Connections, messages and reactions have <b>no email sender at all</b>, so 87% of the digest cannot overlap by construction. Forums can — and forum items are <b>1 of 128</b> this week.</p>
+    <span class="tag">Built</span>
+    <h3>Two registers</h3>
+    <p>New this week gets <b>named</b>. Still-unresolved from before gets <b>counted</b>. It needs no new bookkeeping — the 7-day window already draws the line.</p>
   </div>
   <div class="rule">
-    <span class="tag t-ask">Rule 3b · your call</span>
-    <h3>Already sent in a previous digest</h3>
-    <p>A fixed 7-day window assumes last week's email arrived. On 2026-06-01 it did not, for six real members — and what they missed was lost silently.</p>
+    <span class="tag">Built</span>
+    <h3>Empty sends nothing</h3>
+    <p>Nothing waiting means no email at all. <b>280 of 1,663</b> members would be mailed this week — and 181 of those <i>only</i> because of the counted line.</p>
   </div>
 </div>
 
-<!-- ─────────────────────────── Rule 1, case A ─────────────────────────── -->
+<!-- ───────────────────────── 1. the to-do test ───────────────────────── -->
 <section class="cmp">
   <div class="chead">
-    <h2>Rule 1 — the ordinary case</h2>
-    <span class="who">Doug Proper · 14 items that week, 6 already read on the site</span>
-    <span class="delta"><span class="n">9</span> rows <span class="arrow">→</span> <span class="n">8</span> rows</span>
+    <h2>1. The to-do test</h2>
+    <span class="who">Doug Proper — a busy week, mostly things that need nothing from him</span>
+    <span class="delta">9 rows <span class="arrow">→</span> 2 rows</span>
   </div>
-  <p class="note">Most weeks the rule trims. Doug read six things on the site; the email stops re-telling him about them, and the <b>“6 more waiting”</b> overflow line disappears with them because there is no longer an overflow.</p>
+  <p class="note">Doug's old email was nine rows and had hit the overflow line. Seven of them were reactions and connection acceptances — pleasant, but nothing was owed on any of them. <b>What survives is the two things that actually want him</b>: a mention, and a reply to his comment.</p>
 
   <div class="pair">
     <div class="pane">
-      <p class="plabel"><span class="dot d-before"></span>Without the rule<span class="cnt">9 rows</span></p>
-      <div class="shot"><iframe src="suppress-197-before.html" title="Doug Proper, no read-suppression" loading="lazy"></iframe></div>
+      <p class="plabel"><span class="dot d-before"></span>27 July — everything<span class="cnt">9 rows</span></p>
+      <div class="shot"><iframe src="ruled-197-before.html" title="Doug Proper before" loading="lazy"></iframe></div>
     </div>
     <div class="pane">
-      <p class="plabel"><span class="dot d-after"></span>With the rule — what ships<span class="cnt">8 rows</span></p>
-      <div class="shot"><iframe src="suppress-197-after.html" title="Doug Proper, read-suppression applied" loading="lazy"></iframe></div>
+      <p class="plabel"><span class="dot d-after"></span>As ruled — only what waits on him<span class="cnt">2 rows</span></p>
+      <div class="shot"><iframe src="ruled-197-after.html" title="Doug Proper after" loading="lazy"></iframe></div>
     </div>
   </div>
-
   <div class="swap" data-swap>
     <div class="segbtns">
-      <button type="button" data-src="suppress-197-before.html" aria-pressed="false">Without · 9 rows</button>
-      <button type="button" data-src="suppress-197-after.html" aria-pressed="true">With · 8 rows</button>
+      <button type="button" data-src="ruled-197-before.html" aria-pressed="false">Before · 9</button>
+      <button type="button" data-src="ruled-197-after.html" aria-pressed="true">As ruled · 2</button>
     </div>
     <div class="shot"><iframe title="Doug Proper" loading="lazy"></iframe></div>
   </div>
-
-  <p class="prov">Rendered 2026-07-27 from a read-only extract of LIVE <code>profile_app</code> (not dev2 — the two hold different data). Discussion titles are blank in these frames only because live post ids do not resolve on dev2; in a real send they read as titles.</p>
 </section>
 
-<!-- ─────────────────────────── Rule 1, case B ─────────────────────────── -->
+<!-- ───────────────────────── 2. both registers ───────────────────────── -->
 <section class="cmp">
   <div class="chead">
-    <h2>Rule 1 — the case that matters</h2>
-    <span class="who">Your own account · 5 items that week, every one already read</span>
-    <span class="delta"><span class="n">5</span> rows <span class="arrow">→</span> nothing at all</span>
+    <h2>2. Both registers, in one email</h2>
+    <span class="who">Beau Hannam — one new request this week, three still unanswered from before</span>
+    <span class="delta">named <span class="arrow">+</span> counted</span>
   </div>
-  <p class="note">Five things happened to you that week. You read all five on the site. <b>The correct email says nothing</b> — no section, no heading, not an empty box. This is now the <b>common</b> case for anyone who keeps up, so it had to render clean rather than merely render short.</p>
+  <p class="note">This is the shape you described. The new one is <b>named</b> — “Brian Carnett wants to connect”. The three he has been sitting on are <b>one counted line</b>, not three more rows and not silence. Same row count as before, carrying more.</p>
 
   <div class="pair">
     <div class="pane">
-      <p class="plabel"><span class="dot d-before"></span>Without the rule<span class="cnt">5 rows</span></p>
-      <div class="shot"><iframe src="suppress-1-before.html" title="Ian Davlin, no read-suppression" loading="lazy"></iframe></div>
+      <p class="plabel"><span class="dot d-before"></span>27 July<span class="cnt">2 rows</span></p>
+      <div class="shot"><iframe src="ruled-94-before.html" title="Beau Hannam before" loading="lazy"></iframe></div>
     </div>
     <div class="pane">
-      <p class="plabel"><span class="dot d-after"></span>With the rule — what ships<span class="cnt">no section</span></p>
-      <div class="shot"><iframe src="suppress-1-after.html" title="Ian Davlin, read-suppression applied" loading="lazy"></iframe></div>
+      <p class="plabel"><span class="dot d-after"></span>As ruled — named, then counted<span class="cnt">2 rows</span></p>
+      <div class="shot"><iframe src="ruled-94-after.html" title="Beau Hannam after" loading="lazy"></iframe></div>
     </div>
   </div>
-
   <div class="swap" data-swap>
     <div class="segbtns">
-      <button type="button" data-src="suppress-1-before.html" aria-pressed="false">Without · 5 rows</button>
-      <button type="button" data-src="suppress-1-after.html" aria-pressed="true">With · none</button>
+      <button type="button" data-src="ruled-94-before.html" aria-pressed="false">Before</button>
+      <button type="button" data-src="ruled-94-after.html" aria-pressed="true">As ruled</button>
     </div>
-    <div class="shot"><iframe title="Ian Davlin" loading="lazy"></iframe></div>
+    <div class="shot"><iframe title="Beau Hannam" loading="lazy"></iframe></div>
   </div>
 
-  <p class="prov">The empty case is proven byte-identical to an email built with no recap at all — the renderer returns nothing and the smart code emits nothing, rather than leaving a stray heading behind.</p>
+  <div class="ask">
+    <b>One question, and it is one word.</b> Beau's two lines read “Brian Carnett wants to connect” then “You have 3 connection requests waiting”. The 3 does <b>not</b> include Brian — counted items are strictly older than this week — but read together it could look like it does. <b>“You have 3 <i>more</i> connection requests waiting”</b> removes the ambiguity without changing the shape. It only reads oddly when both registers are present, which is 56 of 280 members. Your copy is unchanged in the build; say the word either way.
+  </div>
 </section>
 
-<!-- ─────────────────────────── Rule 3b ─────────────────────────── -->
+<!-- ───────────────────────── 3. the counted register alone ───────────────────────── -->
 <section class="cmp">
   <div class="chead">
-    <h2>Rule 3b — the one that needs your call</h2>
-    <span class="who">Grace Da Maren · 6 outstanding items, spread across two weeks</span>
-    <span class="delta"><span class="n">2</span> rows <span class="arrow">→</span> <span class="n">6</span> rows</span>
+    <h2>3. The people the counted line rescues</h2>
+    <span class="who">Gerry Hayes — nothing new this week, three requests still unanswered</span>
+    <span class="delta">no email <span class="arrow">→</span> one line</span>
   </div>
-  <p class="note">This one is the reverse of the others: rows <b>appear</b>. The email counts back a fixed 7 days, which quietly assumes last week's email arrived. <b>On 2026-06-01 it did not</b> — one bad sender signature, six real members, all six still marked failed eight weeks later and never re-sent. Their week fell outside the next window and was never mentioned again. The fix is to count back to <b>the last digest that member actually received</b>, so a failed send heals itself the following week.</p>
+  <p class="note">Gerry had <b>no section at all</b> on 27 July — nothing happened to him this week, so there was nothing to say. But three people are still waiting on him to answer. Under “empty sends nothing” he would now get <b>no email whatsoever</b>, and the three would go unmentioned indefinitely.</p>
+  <p class="note">The counted register is the only reason he hears from us. <b>181 of the 280 members mailed this week are in exactly this position</b> — a counted line is their entire recap.</p>
 
   <div class="pair">
     <div class="pane">
-      <p class="plabel"><span class="dot d-before"></span>Fixed 7 days — what ships today<span class="cnt">2 rows</span></p>
-      <div class="shot"><iframe src="watermark-9-fixed.html" title="Grace, fixed 7-day window" loading="lazy"></iframe></div>
+      <p class="plabel"><span class="dot d-before"></span>27 July — nothing to say<span class="cnt">no section</span></p>
+      <div class="shot"><iframe src="ruled-4-before.html" title="Gerry Hayes before" loading="lazy"></iframe></div>
     </div>
     <div class="pane">
-      <p class="plabel"><span class="dot d-after"></span>Back to her last delivered email<span class="cnt">6 rows</span></p>
-      <div class="shot"><iframe src="watermark-9-reachback.html" title="Grace, per-member window" loading="lazy"></iframe></div>
+      <p class="plabel"><span class="dot d-after"></span>As ruled — one counted line<span class="cnt">1 row</span></p>
+      <div class="shot"><iframe src="ruled-4-after.html" title="Gerry Hayes after" loading="lazy"></iframe></div>
     </div>
   </div>
-
   <div class="swap" data-swap>
     <div class="segbtns">
-      <button type="button" data-src="watermark-9-fixed.html" aria-pressed="true">Fixed 7d · 2 rows</button>
-      <button type="button" data-src="watermark-9-reachback.html" aria-pressed="false">Rule 3b · 6 rows</button>
+      <button type="button" data-src="ruled-4-before.html" aria-pressed="false">Before · none</button>
+      <button type="button" data-src="ruled-4-after.html" aria-pressed="true">As ruled · 1</button>
     </div>
-    <div class="shot"><iframe title="Grace Da Maren" loading="lazy"></iframe></div>
+    <div class="shot"><iframe title="Gerry Hayes" loading="lazy"></iframe></div>
   </div>
 
-  <p class="prov">Grace and all six rows are real, extracted from LIVE 2026-07-28 13:25 UTC; both panels already have Rule 1 applied, so the <b>only</b> difference between them is the window. <b>The failed send is simulated</b> — Grace's sends did not fail, the other six members' did. The frame answers what it looks like the next time one does.</p>
+  <p class="prov">All three members and every row are real, from LIVE (not dev2 — they hold different data), 28 July. Discussion titles read blank in these frames only because live post ids do not resolve on the dev box; a real send names them.</p>
 </section>
 
 <footer>
-  <p><b>Not shown, because it has no picture yet:</b> nothing marks a notification read when someone clicks a link in the <i>email</i> — only the bell does that. So an email-only reader keeps seeing the same items. The obvious fix, a link that clears on click, is deliberately not built: mail scanners follow every link with no human involved, and on this platform's own click data 7–10% of apparent clickers are machines hitting 10–20 links in four seconds. That would wipe a member's recap before they opened it, and it would look exactly like the feature working.</p>
-  <p>Full measurements, queries and the two triggers that would reopen Rule 2: <code>docs/atlas/RECAP-SUPPRESSION-PROPOSAL.md</code>. Re-run them any time with <code>lg-weekly-digest/dev/measure-suppression-axes.sh</code>.</p>
+  <p><b>Worth knowing before this sends:</b> “empty sends nothing” suppresses the <i>whole</i> email, so <b>1,383 of 1,663</b> subscribed members receive nothing at all this week — including Upcoming Events, the new videos and loothprint, which have nothing to do with anyone's to-do list. That is what the ruling says and it is built that way; flagging it because it changes what the weekly digest is, not just who it greets.</p>
+  <p>The stale counts are small today: 237 members have anything outstanding, <b>224 of them have exactly one</b>, and the largest anyone holds is three — so “You have 1 connection request waiting” is the line most people will actually see. Nobody will see 6 this week.</p>
+  <p>Measurements and queries: <code>docs/atlas/RECAP-SUPPRESSION-PROPOSAL.md</code>. Tests: <code>verify-source-boundary</code>, <code>verify-window-fixed</code>, <code>verify-empty-means-no-send</code>, <code>verify-two-registers</code>.</p>
 </footer>
 </div>
 
 <script>
-// Mobile: swap the two emails in place. A shrunk side-by-side is unreadable at
-// 390px, and a change-in-place actually reads BETTER than two small panels.
+// Mobile: swap the two emails in place. A shrunk side-by-side is unreadable at 390px.
 document.querySelectorAll('[data-swap]').forEach(function (box) {
   var frame = box.querySelector('iframe');
   var btns  = box.querySelectorAll('button');
@@ -235,10 +232,8 @@ document.querySelectorAll('[data-swap]').forEach(function (box) {
   pick(box.querySelector('button[aria-pressed="true"]') || btns[0]);
 });
 
-// Size each PAIR to whichever email is taller. The comparison is "2 rows vs 6
-// rows" — if row six lands below the fold the picture argues the opposite of what
-// it means. Same-origin, so the measurement is exact rather than an estimate.
-// Capped so one long email cannot make the page unusable; scrolls inside if hit.
+// Size each pair to whichever email is taller — measured, not guessed. If a row
+// lands below the fold the picture argues the opposite of what it means.
 var CAP = 1400;
 function sizePair(pair) {
   var frames = [].slice.call(pair.querySelectorAll('iframe'));
@@ -247,14 +242,12 @@ function sizePair(pair) {
       var d = f.contentDocument;
       if (!d || !d.body) return 0;
       return Math.max(d.body.scrollHeight, d.documentElement.scrollHeight);
-    } catch (e) { return 0; }   // fall back to the CSS height
+    } catch (e) { return 0; }
   });
   var tall = Math.min(CAP, Math.max.apply(null, hs));
   if (tall > 0) frames.forEach(function (f) { f.style.height = tall + 'px'; });
 }
 function sizeAll() { document.querySelectorAll('.pair').forEach(sizePair); }
-// Frames are lazy — measure on each load, and once more after the logo image
-// settles, since an unloaded <img> reports a shorter body.
 document.querySelectorAll('.pair iframe').forEach(function (f) {
   f.addEventListener('load', function () {
     sizePair(f.closest('.pair'));

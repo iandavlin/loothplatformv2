@@ -1,11 +1,21 @@
 # RECAP-SUPPRESSION-PROPOSAL
 
-> **Status: RULED AND BUILT.** Axis 1 shipped. **Axis 2: do not build** (measured — the surface does
-> not exist). **Axis 3: Ian ruled the FIXED 7-DAY WINDOW on 2026-07-28**, over this lane's
-> recommendation of Rule 3b and over keeper's. He looked at the comparison frames, weighed the loss
-> against predictability, and chose predictability. **It is settled — this document records it and
-> does not re-argue it.** The window is now a declared constant,
-> `LG_WD_Recap_Source::WINDOW_DAYS`, guarded by `dev/verify-window-fixed.php`.
+> **Status: RULED AND BUILT — 2026-07-28. This document RECORDS the rulings; it does not re-argue
+> them.** Four came in one evening and together they changed what the digest *is*:
+>
+> | | Ruling | Built as |
+> |---|---|---|
+> | **A** | **Fixed 7-day window** — not per-member (Rule 3b declined) | `LG_WD_Recap_Source::WINDOW_DAYS`, a declared constant |
+> | **B** | **The digest is a TO-DO LIST, not a news feed** | `INCLUDED_TYPES`, one admission question |
+> | **C** | **Empty means send NO EMAIL AT ALL** | `recipients_with_something_waiting()`, before `subscribe()` |
+> | **D** | **Fresh items NAMED, stale-unresolved COUNTED** | `rows_from_stale()`, the second register |
+>
+> Axis 1 (read on the website) shipped earlier and survives, narrowed by B. **Axis 2 (already
+> per-event emailed): still do not build** — measured, the surface does not exist; the overlap rate
+> remains **untested, not zero**. Axis 3 is closed by ruling A.
+>
+> **Tests:** `verify-source-boundary`, `verify-window-fixed`, `verify-empty-means-no-send`,
+> `verify-two-registers` — 4/4.
 > **The pictures are up — §3:** https://dev2.loothgroup.com/v2/tests/output/wd-recap/index.html
 > **Lane:** weekly-digest-recap. **Date:** 2026-07-27, **revised 2026-07-28** after running the
 > repro script end to end, which caught a material error in §1.3(b) — see the correction there.
@@ -352,33 +362,33 @@ feature working. **Awaiting Ian's ruling.** Rules 1-3 do not resolve it and do n
 
 > **https://dev2.loothgroup.com/v2/tests/output/wd-recap/index.html** (dev-gated)
 
-Every rule with a member-visible consequence is rendered as the email it produces, before beside
-after. Real renderer, real live rows, no mockups. Source in `lg-weekly-digest/dev/previs/`, frames in
-`dev/frames/`, published by `dev/publish-previs.sh`.
+Three real live members, each panel the email the shipping renderer produces. The **"before" side is
+the renderer as it actually stood on 2026-07-27**, loaded from git history (`f48561f`) in its own
+process — not a redrawing of it, because both versions declare `LG_WD_Recap` and only one can exist
+per process. Source in `dev/previs/`, frames in `dev/frames/`, extract `dev/extract-ruled-frames.sh`,
+render `dev/render-ruled-frames.php`, published by `dev/publish-previs.sh`.
 
-**Rule 1 — what suppression removes:**
-
-| Member | Items in window | Without suppression | **With suppression** |
+| Member | 27 July | **As ruled** | What it shows |
 |---|---|---|---|
-| Doug Proper (wp:197) | 14 (6 read) | 9 rows (8 + "6 more waiting") | **8 rows** |
-| **Ian Davlin (wp:1)** | 5 (**all** read) | 5 rows | **NO SECTION AT ALL** |
+| Doug Proper (wp:197) | 9 rows (at the overflow) | **2 rows** | **Ruling B** — seven were reactions and acceptances; nothing was owed on any of them |
+| Beau Hannam (wp:94) | 2 rows | **1 named + 1 counted** | **Ruling D** — "Brian Carnett wants to connect", then "You have 3 connection requests waiting" |
+| Gerry Hayes (wp:4) | **no section at all** | **1 counted row** | **Rulings C+D** — nothing happened to him this week, but three people wait on him. Without the counted register he would now get *no email at all* |
 
-Ian's own live account is the clean demonstration: five things happened to him that week, he read all
-five on the site, and the correct email says nothing. That empty case is proven byte-identical to a
-no-recap body.
+Gerry is the case worth looking at twice: **181 of the 280 members mailed this week are in his
+position**, where a counted line is the entire recap. The counted register is not a footnote on the
+design, it is the majority of the recipient list.
 
-**Rule 3b — what a fixed window silently drops.** This one runs the other way, and it is the ask, so
-it needed a picture of its own rather than a paragraph:
+> **THE PREVIOUS VERSION OF THIS SECTION HAS BEEN REPLACED, NOT AMENDED.** It showed Rule 1
+> before/after and a Rule 3b comparison, all rendered with reactions and connection acceptances in
+> the email. Every one of those was decided the other way on 07-28. A previs that argues for a
+> declined design is worse than none, so the frames and their two render scripts were deleted rather
+> than left beside the new ones.
 
-| Member | Listable in 14d | **Fixed 7-day window** (ships today) | **Per-member window** (Rule 3b) |
-|---|---|---|---|
-| Grace Da Maren (wp:9) | 6 | **2 rows** | **6 rows** |
-
-Both panels already have Rule 1 applied, so the **only** variable between them is the window. Grace
-and all six rows are real (LIVE extract 2026-07-28 13:25 UTC, `dev/extract-watermark-frames.sh`);
-**the failed send is simulated and the frame says so** — Grace's sends did not fail, the six members
-in §1.3(b) did. The frame answers what it looks like the next time one does, which is the decision
-actually in front of Ian. Four items is what would have gone unmentioned forever.
+**One open copy question, shown on the page rather than argued here.** When both registers are
+present, "You have 3 connection requests waiting" sits directly under a named request, and the 3
+does *not* include the named one. `"3 more connection requests"` removes the ambiguity in one word.
+Ian's copy is unchanged in the build; the frame shows the real rendering so the call can be made by
+looking. It only reads oddly for the 56 of 280 members who have both registers.
 
 **Publishing took no serve window and dirtied nothing.** `location ^~ /v2/` aliases to
 `/srv/lg-layout-v2/`, and `tests/output/` is gitignored there (`lg-layout-v2/.gitignore:5`), so the

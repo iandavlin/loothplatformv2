@@ -1,0 +1,23 @@
+[
+    {
+        "wp": 4,
+        "name": "Gerry Hayes Haze Guitars",
+        "side": "before",
+        "rows": 0,
+        "empty": true
+    },
+    {
+        "wp": 94,
+        "name": "Beau Hannam - Beau Hannam Guitars",
+        "side": "before",
+        "rows": 2,
+        "empty": false
+    },
+    {
+        "wp": 197,
+        "name": "Doug Proper - Guitar Specialist, Inc.",
+        "side": "before",
+        "rows": 9,
+        "empty": false
+    }
+]
