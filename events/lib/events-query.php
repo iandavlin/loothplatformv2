@@ -30,6 +30,54 @@ function lg_events_regions(): array {
 }
 
 /**
+ * The site's OWN calendar day as Ymd — the only correct "today" for comparing
+ * against `events_start_date_and_time_`.
+ *
+ * This surface never boots WordPress, so `current_time('Ymd')` (the idiom used by
+ * the WP-booted consumers) is unavailable. The authority is the same one WP uses:
+ * `wp_options.timezone_string`, read from the DB this app is already connected to.
+ * Cached per request — a single indexed lookup on a unique key.
+ *
+ * Fallback order, each step strictly safer than defaulting to UTC:
+ *   1. `timezone_string`  ('America/New_York') — what WP itself honours
+ *   2. `gmt_offset`       (numeric hours, WP's legacy field) — converted to ±HH:MM
+ *   3. 'America/New_York' — the platform's actual locale; UTC would silently
+ *      reintroduce the exact bug this function exists to remove.
+ */
+function lg_events_today_ymd(): string {
+    static $ymd = null;
+    if ($ymd !== null) return $ymd;
+
+    $p  = LG_EVENTS_TABLE_PREFIX;
+    $tz = null;
+
+    try {
+        $st = lg_events_db()->prepare(
+            "SELECT option_name, option_value FROM {$p}options
+              WHERE option_name IN ('timezone_string','gmt_offset')");
+        $st->execute();
+        $opt = [];
+        foreach ($st as $r) $opt[(string)$r['option_name']] = trim((string)$r['option_value']);
+
+        if (($opt['timezone_string'] ?? '') !== '') {
+            $tz = @timezone_open($opt['timezone_string']) ?: null;
+        }
+        if ($tz === null && ($opt['gmt_offset'] ?? '') !== '' && is_numeric($opt['gmt_offset'])) {
+            $off  = (float)$opt['gmt_offset'];
+            $sign = $off < 0 ? '-' : '+';
+            $abs  = abs($off);
+            $tz   = @timezone_open(sprintf('%s%02d:%02d', $sign, (int)$abs, (int)round(($abs - (int)$abs) * 60))) ?: null;
+        }
+    } catch (Throwable $e) {
+        // Never let a timezone lookup take the listing down; fall through.
+        $tz = null;
+    }
+
+    $tz = $tz ?: new DateTimeZone('America/New_York');
+    return $ymd = (new DateTimeImmutable('now', $tz))->format('Ymd');
+}
+
+/**
  * One bucket of events (upcoming or past), optionally region-filtered.
  * Each row: id, title, url, ymd, hms, when{mon,day,line}, region, tier_label, thumb.
  *
@@ -37,7 +85,15 @@ function lg_events_regions(): array {
  */
 function lg_events_list(bool $past, string $region_slug): array {
     $p      = LG_EVENTS_TABLE_PREFIX;
-    $today  = gmdate('Ymd');
+    /* SITE-LOCAL today, never gmdate('Ymd'). `events_start_date_and_time_` holds a
+       bare calendar date an editor typed in SITE-LOCAL time, so "today" must be the
+       site's calendar day too. Comparing it against a UTC day made every event drop
+       off `upcoming` at 20:00 America/New_York (19:00 in winter) — hours before the
+       day it belongs to had ended. Measured on live 2026-07-28: event 72327,
+       "Frank Brothers process and shop tour", start 20260727 at 8:00 pm, was already
+       absent from /events/ at 22:14 local, having vanished at the exact minute it
+       began. See lg_events_today_ymd(). */
+    $today  = lg_events_today_ymd();
     $cmp    = $past ? '<' : '>=';
     $order  = $past ? 'DESC' : 'ASC';
     $params = [':today' => $today];
