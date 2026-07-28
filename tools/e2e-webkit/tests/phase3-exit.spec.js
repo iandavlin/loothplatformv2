@@ -163,4 +163,38 @@ test.describe('phase 3 exit — desktop reply mint + bell', () => {
  *   two replies). Had the bbp_new_reply hook also minted/rung, the double-fire
  *   would show here. Combined with the deletion gate — zero native reply-creates
  *   in the served JS — reply.php owned both writes.
+ *
+ * ── FRESH RED→GREEN, keeper window 2026-07-28 00:00–00:04 UTC (post-reboot bytes,
+ *    signed grant). Same topic, same spec, same composer, ONE variable: whether the
+ *    serve carried the _mention-ingest.php guard fix. ─────────────────────────────
+ *
+ *   Editor bytes were IDENTICAL on both runs (the pre-insert anchor still carries
+ *   data-lg-uuid=6b3cd71f-… in both), so the difference is the server, not the client:
+ *
+ *   RED   — serve at baseline, guard admits data-lg-uuid: NO
+ *     reply 72230 stored: …<a class="bp-suggestions-mention" href="/u/dan-erlewine"
+ *                            rel="nofollow"><span>Dan Erlewine</span></a>
+ *     MINTED=NO. kses stripped data-lg-uuid; no {{mention_user_id_N}} token.
+ *     BELL: NONE. dan-erlewine total 4 / mention 2 — UNCHANGED.
+ *
+ *   GREEN — serve carrying the fix, guard admits data-lg-uuid: YES
+ *     reply 72231 stored: …<a class="bp-suggestions-mention"
+ *                            href="{{mention_user_id_8}}">@dan-erlewine</a>
+ *     MINTED=YES.
+ *     BELL: notifications id 576 | forum.mention | reply | target 72212 |
+ *           anchor 72231 | actor_count 1 | 2026-07-28 00:02:48Z
+ *     dan-erlewine total 4→5, mention 2→3.
+ *
+ *   The e2e leg passed on BOTH runs and lg:reply-posted fired {topicId:72212} both
+ *   times — which is the point: a green spec proves the door, and ONLY the store
+ *   query separates a working mention from a silently dropped one.
+ *
+ *   Backstop stood down again: exactly one new row, actor_count 1. The RED run
+ *   raised NO notification at all (ids 573/574 predate it by ~3h and belong to
+ *   other users), so nothing fired twice and nothing fired spuriously.
+ *
+ *   Serve restored to the sealed baseline and proven: HEAD fa67f02 / tree
+ *   74b39757… / branch main / porcelain EMPTY / file md5 a53bada0… — all MATCH,
+ *   restored with `git checkout HEAD -- <path>` (see OVERLAY-SERVE-DEPLOY.md on why
+ *   the bare form is unsafe on a shared clone). Engines parked, pgrep -x = 0.
  */
