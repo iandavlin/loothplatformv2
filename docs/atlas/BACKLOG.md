@@ -68,6 +68,19 @@ Move finished items to DONE with the date. If an item is blocked, say *on what* 
   form restores from the INDEX; on a shared clone it installs another process's
   staged work and exits 0. Measured 2026-07-27.
 
+9. **Mobile needs the desktop search-select for forum posting** — Ian,
+   2026-07-28: "I would like to replicate the search select for forum posting
+   that is on dt on the mobile." The searchable forum/destination picker that
+   desktop shows when composing a forum post does not exist on mobile; mobile
+   gets a lesser control (confirm which — a plain select, or no chooser at all).
+   Bring the desktop one across.
+   *Recorded as Ian said it plus keeper's reading of it — CONFIRM the actual
+   desktop control and the actual mobile control before building. Composer v2
+   phase 3 unified the composer across surfaces, so this may now be a matter of
+   pointing mobile at the existing component rather than writing a second one.
+   Ask Ian for a screenshot if the surface is ambiguous — he decides from
+   pictures.*
+
 ## BLOCKED — named blocker
 
 - **slug-backfill live dry-run** — blocked on the two live TSV exports. *May now
