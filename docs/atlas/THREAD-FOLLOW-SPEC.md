@@ -69,10 +69,24 @@ replies to their own topic without toggling anything.
 8. **Parity** — every surface works desktop and mobile, both themes, one implementation.
 9. **Account-level email prefs coexist by a strict master/member rule** (§6) — no state where the
    account page says off and mail still arrives.
-10. **OPEN, Ian's call:** the **1,519 existing topic + 46 forum subscriptions** already emailing
-    real members (§9.2) and the per-event vs digest email posture (§9.1). Both now carry a
-    **recommendation with the member-visible consequence spelled out**, and §9.2 has a frame — but
-    neither is decided here.
+10. **RULED, Ian 2026-07-28 — HONOUR EXISTING SUBSCRIPTIONS, SHOW THEM AS ON.** The 1,519 topic +
+    46 forum subscriptions are **not wiped and not hidden**. Anyone already carrying one sees the
+    envelope **already lit** and can now turn it off. Nothing changes for them silently.
+    **Read the ruling precisely:** "both default OFF" (ruling 1) means off for anyone with **no
+    existing subscription**; it does **not** mean wiping people who already have one.
+    **The governing sentence, and it is a build requirement, not a sentiment:** *the UI must tell the
+    truth about what is actually going to happen to that member.* §8.1.3 names the two places where a
+    naive implementation would break it — both must be fixed, not documented.
+    Explicitly rejected: **wiping** them (silently unsubscribes people who may want them) and
+    **hiding** them (the toggle would read off while mail keeps arriving). This closes §9.2 as
+    **option B**.
+11. **STILL OPEN, and deliberately NOT covered by ruling 10:** the **12,948 GROUP subscriptions**
+    (§8.2) — a third population neither keeper nor Ian knew existed when ruling 10 was made. They are
+    **auto-created from group membership, not chosen**, and carry a **1,830-recipient** blast radius.
+    A ruling made about 1,519 rows must not silently become a ruling about 14,000. Separate question,
+    separate numbers, §8.2.
+12. **STILL OPEN:** the per-event vs digest email posture (§9.1), which carries a recommendation but
+    is not decided here.
 
 ---
 
@@ -733,6 +747,83 @@ to `ubuntu`, so "same build on dev2" is **not proven** and must be confirmed bef
 
 ---
 
+## 8.2 THE 12,948 GROUP SUBSCRIPTIONS — a separate question, NOT covered by the 2026-07-28 ruling
+
+> Measured on **LIVE** 2026-07-28. Ruling 10 was made about the 1,519 topic + 46 forum
+> subscriptions. This population was not known to keeper or Ian at the time. **It must not inherit
+> that ruling by analogy**, because on the two facts that mattered to the ruling it behaves in the
+> *opposite* way.
+
+### 8.2.1 They are NOT chosen — they are minted by group membership
+
+| | rows |
+|---|---|
+| group subscriptions (`status=1`) | **12,948** |
+| confirmed group memberships | 12,952 |
+| subscriptions matching a membership 1:1 | **12,944 (99.97%)** |
+| subscriptions with **no** membership | 7 |
+| memberships with **no** subscription | 10 |
+| subscription timestamped **within 5s of the join** | **12,917 (99.8%)** |
+
+Source confirms the correlation: `BP_Groups_Member::bb_create_group_subscription()`
+(bp-groups/classes/class-bp-groups-member.php:1574) — *"Create group subscription when member
+join/accept to the group"* — with a matching delete-on-leave immediately below. **Joining a group
+subscribes you; leaving unsubscribes you.** No member ever clicked anything.
+
+**This is the decisive asymmetry.** Ruling 10 honours the topic/forum subscriptions because a member
+plausibly *chose* them (§8's 428 never-posted rows are the deliberate ones). **Nobody chose these.**
+"Show them as ON so the UI tells the truth" and "these represent a member's intent" are different
+claims, and only the first one survives here.
+
+### 8.2.2 They CAN email, and the blast radius is the largest on the platform
+
+The group branch is live (`bb_enable_group_subscriptions=1`) and fires on **topic creation** in a
+group-linked forum (§8.1.1). Subscriptions are concentrated in five platform-wide groups:
+
+| group | subs | linked forum | topics in it, **ever** |
+|---|---|---|---|
+| New Builds (32) | 1,853 | 3839 | 2 |
+| Market Place (35) | 1,853 | 7547 | **0** |
+| Repair and Restoration (31) | 1,852 | 3818 | 3 |
+| Tools, Spaces, Robots and Widgets (33) | 1,852 | 3857 | **0** |
+| Business (34) | 1,851 | 3873 | **0** |
+
+**One new topic in the New Builds forum emails 1,830 people** — measured, net of the 22 users holding
+`bb_groups_subscribed_discussion='no'` and the 2 holding the master `enable_notification='no'`.
+For scale: the entire platform sent **33** discussion emails in the trailing 14 days. **A single post
+in a forum with two topics in its history is ~55× that, in one event.**
+
+### 8.2.3 Why it has not fired — dormancy, not safety
+
+Across all **16** group-linked forums there are **21 topics in the site's entire history**; **11 have
+zero**. The newest is **2026-05-18** (DMV Looths) — which is why nothing appears in the 14-day mail
+log and why §8's audit never saw it. Of 124 topics created in the last 90 days, **exactly 1** was in a
+group-linked forum.
+
+**So this is not a live problem — it is a dormant one.** Nothing is emailing anyone today. But the
+mechanism is armed, the audience is 1,830, and the trigger is *one member starting a discussion in
+an ordinary-looking forum*. It is dormant by accident, not by design.
+
+### 8.2.4 The question for Ian — deliberately NOT answered here
+
+**Q: Ruling 10 says honour existing subscriptions and show them as ON. Does that extend to the
+12,948 group subscriptions nobody chose?**
+
+Three positions, with the member-visible consequence:
+
+| | Position | Consequence |
+|---|---|---|
+| **G1** | **Out of scope — leave untouched, surface nothing.** This spec governs per-*discussion* toggles; a group subscription is a different object. | Least work, status quo preserved. But the armed 1,830-recipient path stays armed and unnamed, and no member can see or leave it. |
+| **G2** | **Extend ruling 10 — show group-derived state as ON somewhere and make it exitable.** | Consistent with "the UI must tell the truth". Needs a surface this spec does not have — the state is per-*group*, and no per-topic control can represent it. Real design work. |
+| **G3** | **Treat the group path as a defect and disarm it** — e.g. gate the group branch so topic creation in a group-linked forum does not mail every member. | Removes a 1,830-recipient hazard nobody opted into. But it is a behaviour change to a shipped BuddyBoss path, and it is genuinely outside this lane's remit. |
+
+**This lane's read, offered as input and not as a decision:** the honest ruling-10-consistent answer
+is **G2**, but the *urgent* one is **G3**, and they are independent — G3 is a safety question about a
+dormant mechanism, G2 is a truthfulness question about visible state. They should be answered
+separately rather than bundled. **Nothing is being built against any of them until Ian rules.**
+
+---
+
 ## 9. OPEN FOR IAN
 
 ### 9.1 Per-event email vs digest-only
@@ -758,13 +849,27 @@ contradiction — but that is an inference from Ian's design, not his decision, 
 Note the original danger is already gone either way: the blanket-off was a precondition of
 *auto-subscribe multiplying fan-out*, which opt-in makes impossible.
 
-### 9.2 The 1,519 existing subscriptions
+### 9.2 The 1,519 existing subscriptions — ✅ RULED 2026-07-28: OPTION B
+
+> **IAN RULED (keeper-relayed, 2026-07-28): HONOUR EXISTING SUBSCRIPTIONS — SHOW THEM AS ON.**
+> This is **option B** below, adopted as written. Anyone already carrying a topic/forum subscription
+> sees the envelope already lit and can turn it off. Nothing changes silently.
+> **"Default OFF" means off for anyone with no existing subscription** — it does not mean wiping
+> people who have one. Wiping (D/E) and hiding are both explicitly rejected.
+> **Binding build requirement from the ruling:** *the UI must tell the truth about what is actually
+> going to happen to that member.* That makes **§8.1.3 mandatory work, not commentary** — the 40
+> rows / 7 users that would read ON while sending nothing are a violation of this ruling, and so is
+> the forum-subscription gap that reads OFF while mail arrives.
+> **Scope of the ruling:** the 1,519 topic + 46 forum subscriptions **only**. It does **not** reach
+> the 12,948 group subscriptions — see **§8.2**, which is a separate open question.
+
+The options are retained below as the record of what was decided against.
 
 Opt-in governs **new** follows and says nothing about subscriptions that already exist and are
 emailing people today. Under §5's mapping these are all **✉ email** subscriptions — one toggle, not
 two, which simplifies every option below. Mass-unsubscribing real members is off the table.
 
-> ### RECOMMENDED: option B — grandfather, but surface and make exitable. Frame 7 shows it.
+> ### ✅ ADOPTED: option B — grandfather, but surface and make exitable. Frame 7 shows it.
 >
 > **Change no data. Make every one of those subscriptions visible and one click from off**, in the
 > three places a member will actually be when it annoys them: the email itself now carries a
