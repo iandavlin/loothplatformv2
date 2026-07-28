@@ -6,7 +6,7 @@ with zero context — this is your charter.**
 | | |
 |---|---|
 | Branch | `reply-images-count`, pushed |
-| State | **MERGED AND SERVING ON DEV2** (2026-07-28, Ian approved). Not merge-ready — *shipped*. |
+| State | **MERGED, SERVING, AND FULLY PROVEN** (2026-07-28). Both owed proofs closed against shipped code. Nothing outstanding. |
 | Serve baseline | HEAD **`645b4cff935b`**, tree **`e42d6a639820`**, branch `main`, porcelain empty. **Re-read it from `~/keeper-baseline/`, never from this file** — it moves. |
 | Shipped alongside | composer v2 phase 3, in the same pull |
 | LIVE | **NOT touched.** Live deploy is Ian's. |
@@ -129,7 +129,23 @@ Summary of what those receipts show:
   scrubbed. Ian closed the real phone leg himself on reply **71991** rendering
   5 of 5 previously-unseen images.
 
-### What the two owed proofs need NOW that the code is merged
+### BOTH PROOFS ARE NOW CLOSED — receipts in `serve-window-20260728/`
+
+Closed 2026-07-28 against the **shipped** build, not a branch: the 422 went
+**6/6** (including the add-only branch refusing before the write, asserted on
+58510's store), and the composer guard refused the 7th with the chip count held
+at 6, store-asserted at 6 rows. The `e183136` srcset fix was re-verified in a
+real browser on the merged code (desktop declares 228px against a 229px tile,
+picks w240; before the fix it declared 360px and pulled w800). The orphan
+housekeeping in §4c/atlas §10 is **also done** — reconcile proven not to clear
+them, then 33 rows across 4 parents deleted with user-visible counts identical
+either side. dev2's attachment-only and joined counts now agree at 230.
+
+**Read `serve-window-20260728/README.md` before re-running any of it.** What
+follows is kept because it is still the correct reasoning about what a window
+costs.
+
+### What the two owed proofs needed once the code was merged
 
 This changed with the 2026-07-28 deploy and it makes the ask **cheaper**, not
 dearer. **Neither proof needs a file overlay any more.** The code under test IS
