@@ -513,11 +513,26 @@ controller** — a verbatim port with no WP boot:
 - `membership-pages/web/membership-guide.php` (139 ln) + `membership-guide.css` (125)
 - `membership-pages/lib/guide-data.php` (111) — reads the same `wp_options` by direct PDO
 
-Its route is gated in `membership-pages/web/router.php:61`:
-`'membership-guide' => ['membership-guide.php', 'admin', 'public']` — i.e. **admin-only
-today, flipping to public at live launch.** A future guide entry needs to know which of
-the two implementations it is extending. **NOT PROVEN:** which one actually serves
-`/membership-guide/` on dev2 right now — I have not traced the nginx route.
+### Which one actually serves — RESOLVED, measured on the running box
+
+**`membership-pages` owns the route. The plugin does not.** Verified by fetching
+`/membership-guide/` on dev2 (gate cookie, pinned to the internal IP):
+
+- 200, and the body is `membership-pages/web/_admin-gate.php` — its `<title>` is
+  literally `Not available — The Looth Group`.
+- Route registry: `membership-pages/web/router.php:61`
+  `'membership-guide' => ['membership-guide.php', 'admin', 'public']`.
+- The gate is **`manage_options`-only** and is described in the router as *"the
+  AUTHORITATIVE gate"* (`router.php:13-16, 44`). A profile-app `looth_id` token does
+  **not** satisfy it — I minted an admin one and still got the Not-available page,
+  because the gate wants a real WP admin capability, not a profile-app session.
+- Prelaunch `admin` → live `public`, flipped by **a flag in the poller's WP-admin
+  settings with no code edit** (`router.php:38-39`).
+
+So the division of labour is: **the plugin is the CMS + admin editor** (writes
+`wp_options`), and **membership-pages is the front end** (reads those options by direct
+PDO, no WP boot). A PROFILE entry extends `membership-pages/web/membership-guide.php`
+for rendering, and the plugin's admin screen only if it needs new editable fields.
 
 ### Header user menu — verified, with a trap
 
@@ -594,8 +609,9 @@ running page), the section catalog (§4), and the archived guide's contents (§7
    that number. The June captures (§5) confirm placement but are stale on contents and
    are 768/1024px — neither is a phone.
 2. **Full phone-width visual inventory** (§5) — blocked on 1.
-3. **Which implementation actually serves `/membership-guide/` on dev2** (§7) — two
-   exist; I have not traced the nginx route.
+3. ~~Which implementation serves `/membership-guide/`.~~ **RESOLVED** (§7):
+   `membership-pages` owns the route and the `manage_options` gate; the plugin is the
+   admin/CMS side. Measured on the running box.
 4. ~~`bin/visibility-matrix.php` not run.~~ **DONE — GREEN, 67/67** (§3.6b). Keeper
    authorised it for dev2 on 2026-07-28. Three environment drifts repaired to make it
    runnable again; fixes committed (§8a). Fixture user **1849** (`visibility-matrix-qa`,
