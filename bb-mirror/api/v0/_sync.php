@@ -84,6 +84,17 @@ try {
         case ['forum', 'delete']:
         case ['topic', 'delete']:
         case ['reply', 'delete']:
+            // Deletes only this row. Children go by FK ON DELETE CASCADE
+            // (reply.topic_id, reply.forum_id, topic.forum_id), and the
+            // `attachment` rows for every removed topic/reply go by the
+            // AFTER DELETE triggers in schema.pg.sql.
+            //
+            // DO NOT "fix" orphaned attachments by adding a DELETE here — it
+            // cannot work. On a topic or forum delete Postgres cascades to the
+            // reply rows internally; this code sees one id and never learns
+            // which replies died, so a PHP-side cleanup silently misses the
+            // whole subtree. That is exactly the leak this replaced. The
+            // row-level trigger fires for cascaded rows too.
             $db->prepare("DELETE FROM $kind WHERE id = ?")->execute([$id]);
             break;
 

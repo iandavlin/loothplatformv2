@@ -316,6 +316,51 @@ CREATE TRIGGER reply_search_doc_trigger
   FOR EACH ROW EXECUTE FUNCTION reply_search_doc_update();
 
 -- ============================================================================
+-- attachment cleanup — the referential integrity a polymorphic column can't have
+-- ============================================================================
+-- `attachment` is polymorphic (parent_kind + parent_id), so it CANNOT carry a
+-- foreign key, so it gets no ON DELETE CASCADE. Every other child of topic/forum
+-- does: reply.topic_id, reply.forum_id and topic.forum_id are all CASCADE. The
+-- result was a silent leak — deleting a reply left its image rows behind, and
+-- deleting a topic or forum cascaded away whole subtrees of replies whose
+-- attachment rows nothing ever removed.
+--
+-- These triggers are that missing CASCADE, expressed the only way a polymorphic
+-- key allows.
+--
+-- WHY THIS LIVES IN THE DATABASE AND NOT IN api/v0/_sync.php: on a topic or
+-- forum delete, Postgres cascades to the reply rows internally. The application
+-- issues one `DELETE FROM topic WHERE id = ?` and never learns which replies
+-- died, so it cannot clean up after them. An AFTER DELETE row trigger fires for
+-- every cascaded row, including ones no code path can name — and it also covers
+-- wp-admin, bulk deletes, reconcile, and manual SQL for free. Measured in a
+-- scratch DB (2026-07-28): deleting one forum orphaned 12 of 12 attachment rows
+-- before this, and 0 after.
+--
+-- Deliberately NOT a sweeper job: a cleanup script is a second thing to remember
+-- to run, a correct delete path is not.
+CREATE OR REPLACE FUNCTION attachment_purge_for_parent() RETURNS trigger AS $$
+BEGIN
+  -- TG_ARGV[0] is the parent_kind this trigger is bound to. Matching on BOTH
+  -- kind and id matters: topic 100 and reply 100 are different parents, and a
+  -- kind-blind delete would take the wrong one's images.
+  DELETE FROM attachment
+   WHERE parent_kind = TG_ARGV[0]::attachment_parent_kind
+     AND parent_id   = OLD.id;
+  RETURN OLD;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS topic_attachment_purge ON topic;
+CREATE TRIGGER topic_attachment_purge
+  AFTER DELETE ON topic
+  FOR EACH ROW EXECUTE FUNCTION attachment_purge_for_parent('topic');
+
+DROP TRIGGER IF EXISTS reply_attachment_purge ON reply;
+CREATE TRIGGER reply_attachment_purge
+  AFTER DELETE ON reply
+  FOR EACH ROW EXECUTE FUNCTION attachment_purge_for_parent('reply');
+
+-- ============================================================================
 -- Comments (visibility for cross-schema readers — profile-app has SELECT)
 -- ============================================================================
 COMMENT ON TABLE forum            IS 'bbPress forum container; mirrored from wp_posts post_type=forum';
