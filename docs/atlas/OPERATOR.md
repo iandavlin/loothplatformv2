@@ -11,6 +11,16 @@ file in the same task (keeper rule).
 > **on dev2, `~/loothplatformv2-clean` is the SERVING checkout — it only ever pulls.** Keeper
 > merges in `~/keeper-repo`; lanes work in `~/worktrees/*`. Merging in the serving tree detaches
 > the files nginx and the mu-plugins are symlinked to.
+
+> **PROVING THE SERVE IS CLEAN — use `git status --porcelain`, and do not lean on
+> `git rev-parse HEAD:`.** Measured 2026-07-28: `git rev-parse HEAD:` is a pure function of the
+> HEAD *commit* — it is the commit's tree object and it never looks at the working tree. In a
+> scratch repo it returned the identical hash with `TOTAL-GARBAGE-NOT-EVEN-CLOSE` sitting in the
+> file on disk. It is a useful identity check (it catches a branch switch or a detach) but it is
+> **not** a byte-for-byte proof that the served files match the commit, and it will not catch a
+> bad restore. The complete proof is **`git status --porcelain` empty**, which is exactly the
+> property wanted: working tree == index == HEAD. Pair it with `git rev-parse HEAD` (which commit)
+> and `git rev-parse --abbrev-ref HEAD` (which branch).
 Written so any operator (human or model) can run the site without deep-diving or guessing.
 
 ## 1. The boxes — identify by NAME/ROLE, never by IP alone
@@ -41,7 +51,15 @@ Everything serves from **`/home/ubuntu/loothplatformv2-clean`** — a git checko
 ⚠️ **THE #1 TRAP: check for symlink-into-repo BEFORE writing any "deployed" path.**
 `readlink -f <path>` first. `tee`/`cp` through a symlinked conf writes INTO the git working tree —
 dirties the repo and can put secrets in `git status`. Box-local overrides = replace the symlink with
-a real file, then `git checkout --` the repo copy. (Bit us twice on 2026-07-04.)
+a real file, then `git checkout HEAD -- ` the repo copy. (Bit us twice on 2026-07-04.)
+
+⚠️ **RESTORE IS `git checkout HEAD -- <path>`, NEVER the bare `git checkout -- <path>`**
+(keeper ruling 2026-07-28, found by composer-p3). The bare form restores from the **index**, not
+from HEAD. The serving checkout is shared — five lanes and a keeper — so if *any* process has
+staged work, the bare form **installs that staged work into the serve and exits 0**, reporting
+success while someone else's edit is being served. Follow with `git reset -q` if you staged
+anything. Reproduced in a scratch repo: with `STAGED-BY-ANOTHER-PROCESS` in the index,
+`git checkout -- f` yields exactly that, while `git checkout HEAD -- f` yields the committed content.
 
 Intentionally box-local (do NOT capture into git): `/etc/looth/*` (secrets/env), TLS certs, gate
 tokens, `r2-uploads-dev.service`, thumbnails services. Full list: `~/BOX-LOCAL-dev2-units.md` (dev2)
