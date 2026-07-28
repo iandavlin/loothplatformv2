@@ -388,6 +388,51 @@ CREATE TRIGGER reply_attachment_purge
 -- >>> END attachment-purge <<<
 
 -- ============================================================================
+-- forum_subscription cleanup — the SAME polymorphic hole, closed before it opens
+-- ============================================================================
+-- `forum_subscription` is keyed (user_id, target_kind, target_id) with target_kind
+-- an ENUM over 'forum'|'topic'. Polymorphic, therefore no foreign key, therefore
+-- no ON DELETE CASCADE — byte for byte the shape that leaked `attachment` rows for
+-- months. Deleting a topic would strand every subscription to it.
+--
+-- IT HAS NOT LEAKED YET, and the reason is worth writing down: on live 2026-07-28
+-- the table is EMPTY. WordPress holds 1,563 real forum/topic subscriptions in
+-- wp_bb_notifications_subscriptions (1,517 topic + 46 forum, ~400 members), but
+-- nothing has ever backfilled them and `forum_subscription` is referenced ONLY by
+-- the write path in api/v0/_sync.php — no read path, no subscribe UI on the mirror
+-- surface. It is a dormant table, not a broken feature.
+--
+-- Which is exactly why the trigger goes in NOW: on an empty table it is free and
+-- unobservable, and it means whoever eventually backfills those 1,563 rows and
+-- builds the UI inherits a delete path that already cleans up after itself,
+-- instead of rediscovering this leak the expensive way a second time.
+--
+-- Targets are 'forum' and 'topic' only — never 'reply'. A forum delete cascades to
+-- its topics, and row triggers fire for cascaded rows, so the topic trigger also
+-- clears subscriptions to every topic under a deleted forum.
+CREATE OR REPLACE FUNCTION forums.subscription_purge_for_target() RETURNS trigger AS $$
+BEGIN
+  -- Schema-qualified for the same measured reason as attachment_purge_for_parent:
+  -- plpgsql resolves unqualified names against the CALLER's search_path at RUN
+  -- time, so an unqualified body raises "relation does not exist" — and ABORTS the
+  -- delete — for any caller without `forums` on its path.
+  DELETE FROM forums.forum_subscription
+   WHERE target_kind = TG_ARGV[0]::forums.subscription_target_kind
+     AND target_id   = OLD.id;
+  RETURN OLD;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS forum_subscription_purge ON forums.forum;
+CREATE TRIGGER forum_subscription_purge
+  AFTER DELETE ON forums.forum
+  FOR EACH ROW EXECUTE FUNCTION forums.subscription_purge_for_target('forum');
+
+DROP TRIGGER IF EXISTS topic_subscription_purge ON forums.topic;
+CREATE TRIGGER topic_subscription_purge
+  AFTER DELETE ON forums.topic
+  FOR EACH ROW EXECUTE FUNCTION forums.subscription_purge_for_target('topic');
+
+-- ============================================================================
 -- Comments (visibility for cross-schema readers — profile-app has SELECT)
 -- ============================================================================
 COMMENT ON TABLE forum            IS 'bbPress forum container; mirrored from wp_posts post_type=forum';

@@ -521,7 +521,58 @@ compose: with the purge triggers installed, deleting a ghost row also removes it
 attachment rows, so ghost repair is complete rather than trading a ghost for an
 orphan.
 
-## 8. Still open
+## 8. The rest of the mirror, checked the same way
+
+The arithmetic-closed comparison (mirror ids vs WordPress ids, both directions,
+totals reconciling) found three defect classes in `reply`/`topic`. Applied to the
+remaining tables, 2026-07-28:
+
+| table | result |
+|---|---|
+| `forum` | **clean.** 55 mirrored, 59 in WP; the 4 unmirrored are **all `draft`** — correctly excluded |
+| `person` | **clean.** 5 rows whose WP user is gone, **all our own dead test accounts** (`qa-disposable`, `visibility-matrix-qa`, `claude_admin`, `deltest_admin`, one hex fixture) |
+| `bp_group` | **clean.** 20 in the mirror, 20 in WP, **id sets identical** |
+| `forum_subscription` | **empty — and that is the finding.** See below |
+
+In each case the count alone would have read as a defect. `forum`'s 4 are drafts.
+`person`'s 5 are our own fixtures — though one of them, `qa-disposable`, is
+attached to real live content, which is how §7's author misattribution surfaced.
+
+### `forum_subscription` is empty, and it is dormant rather than broken
+
+Live holds **zero** rows. WordPress holds **1,563** real forum/topic subscriptions
+in `wp_bb_notifications_subscriptions` (1,517 topic + 46 forum, ~400 members),
+none of them mirrored.
+
+That reads like a 1,563-row outage and is not one. `forum_subscription` is
+referenced **only by the write path** in `api/v0/_sync.php` — grep finds no read
+path, and there is no subscribe control on the mirror's forum surface. Nothing has
+ever backfilled the existing subscriptions and nothing consumes them. It is a
+table that was built ahead of its feature.
+
+**What it is instead is a loaded gun.** It is keyed `(user_id, target_kind,
+target_id)` with `target_kind` an ENUM — polymorphic, no foreign key, no
+`ON DELETE CASCADE`. Byte for byte the shape that leaked `attachment` rows for
+months. The moment somebody backfills those 1,563 rows, every topic delete starts
+stranding subscriptions.
+
+So the same triggers went in now, while the table is empty and the change is free
+and unobservable (§4's function, `subscription_purge_for_target`, on `forum` and
+`topic`). Proven in the live-shaped rehearsal DB: deleting a topic cleared its 7
+subscriptions with siblings untouched; deleting the forum cascaded and cleared the
+rest; with the triggers dropped the same delete stranded all 7.
+
+**This is deliberately NOT in the migration Ian was handed.** That block is
+unchanged and still extracts byte-identically — moving the goalposts under a
+command someone is about to paste is its own kind of defect. The subscription
+triggers ship in `schema.pg.sql` for fresh databases and can go to live in a later
+window, because on an empty unread table there is nothing to race.
+
+> **Cross-lane note:** the same WordPress table holds **12,948 `group`
+> subscriptions** — the number the thread-follow lane's ruling turns on. Different
+> `type`, same store.
+
+## 9. Still open
 
 The **WP side** has the same shape and is out of this lane's scope: deleting a
 reply in WP removes its `bp_media` rows, but nothing reconciles a `bp_media_ids`
