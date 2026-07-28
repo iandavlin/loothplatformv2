@@ -509,14 +509,57 @@ rendering listed as an open feasibility question.
 | §3.7 (v1) | Built |
 |---|---|
 | Source: `forums.forum_subscription` ⋈ replies, via a new `bb-mirror-api/v0/follow-recap` | Source: the **bell** (`profile_app.notifications`) + unread DMs, via `internal-recap` |
-| Scope: threads you follow | Scope: things addressed to **you** — allow-list; **`forum.followed_topic` deliberately excluded** |
+| Scope: threads you follow | Scope: things that **wait on you** — `forum.followed_topic` **structurally excluded**, see §4.1 |
 | One "Open the Hub" link | **Per-row deep links** (Ian's call from the frames) |
 | Generic counts, no titles | **Discussion titles named** (Ian's call) |
 | Per-recipient rendering: open question | **Proven** — one campaign, five real subscribers, five distinct emails |
 
-**Nothing in §3.7's intent is lost** — a member who follows a thread still gets a weekly summary the
-moment `forum.followed_topic` joins the allow-list, which is one line. The difference is the spine:
-the bell, not a second subscription query.
+### 4.1 **A claim I made here is now FALSE, and the thread-follow lane is building on it**
+
+The previous revision of this section said:
+
+> *"Nothing in §3.7's intent is lost — a member who follows a thread still gets a weekly summary the
+> moment `forum.followed_topic` joins the allow-list, which is one line."*
+
+**That was true when I wrote it and the to-do ruling of 2026-07-28 makes it false.** The allow-list
+is no longer a list of types we have got round to adding; it is the answer to a question:
+
+> **Does this WAIT ON THE MEMBER?**
+
+**A reply in a thread you merely follow does not wait on you.** You are an observer, not the
+addressee — nothing is owed, and nobody is blocked on your response. On Ian's own test
+`forum.followed_topic` is not "not yet admitted", it is **structurally excluded**, in the same way
+and for the same reason as `reaction.on_post`. Adding it would contradict the ruling, not extend it.
+
+**So the "one line" is no longer available**, and I am flagging it loudly rather than letting that
+lane discover it at merge:
+
+| | Before 07-28 | **After the to-do ruling** |
+|---|---|---|
+| `forum.followed_topic` in the digest | one line away, whenever wanted | **needs Ian to rule that a followed-thread reply waits on you** — which his own test says it does not |
+| §3.7's weekly follow summary | deferred | **has no home in this digest as ruled** |
+
+That does not kill §3.7's intent, but it moves where it can live. A followed-thread summary is
+*news*, and Ian has just ruled this email is not a news feed. It needs either its own vehicle or an
+explicit ruling that carves out an exception. **That is a thread-follow decision to take to Ian, not
+a weekly-recap one** — I am only saying that the door I previously said was open is shut.
+
+**One genuine simplification falls out of it, in their favour.** §9.1's option B — an explicit ✉
+toggle earning per-event mail while the digest also covers the same events — **can no longer produce
+a double-send through this digest**, because the digest cannot carry followed-thread activity at all.
+Rule 2 (suppress-what-was-already-emailed) is therefore **retired permanently, under every §9.1
+outcome**, not just under A and C. The seam I posted to them on 07-28 is now simpler than I
+described it: they do not need to tell me which way §9.1 goes.
+
+### 4.2 Two more rulings that reach into their spec
+
+- **Empty means send NO EMAIL AT ALL.** A member whose only digest content would have been a
+  followed-thread summary does not get a quieter email; they get none. Any §3.7 design that assumes
+  "the digest goes out weekly and we add a section to it" no longer holds — **the digest now goes to
+  280 of 1,663 members**, and only to those with something owed.
+- **`forum.reply_to_topic` and `forum.reply_to_reply` ARE admitted**, so a member still hears weekly
+  about replies **to their own** topics and comments. The line between that and §3.7 is exactly the
+  to-do test: replies *to you* wait on you; replies *near you* do not.
 
 **§6b's two asks of this lane, answered:**
 
