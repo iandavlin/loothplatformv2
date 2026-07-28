@@ -55,8 +55,8 @@ u.php:127   $editing = ($isOwner && $role === 'me') || $adminEditing;
 
 `$editing` controls whether the **editing apparatus** renders: the Sections picker
 button (pre-A `u.php:748`; post-A the `[data-caddy-open]` openers), the caddy panel
- itself, the in-place field
-affordances, the location precision dials, and the **per-section** privacy chips. It
+itself, the in-place field affordances, the location precision dials, and the
+**per-section** privacy chips. It
 does *not* gate the master Profile-visibility chip — see the measurement below.
 
 **Consequence the guide MUST state:** when an owner uses "View as → Public" or
