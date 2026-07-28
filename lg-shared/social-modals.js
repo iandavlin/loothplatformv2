@@ -168,6 +168,13 @@ function notifText(n) {
     case 'forum.reply_to_reply': return notifActors(n) + ' replied to your comment';
     case 'forum.mention':        return notifActors(n) + ' mentioned you in a discussion';
     case 'reaction.on_post':     return notifActors(n) + ' reacted to your post';
+    /* thread-follow §3.3 — the FOURTH and least-specific rung. Deliberately worded
+       "a discussion you follow" rather than "your post": this row only ever reaches
+       someone who OPTED IN, and it is claimed last, after mention > reply_to_reply >
+       reply_to_topic have taken their recipients. So if you see this row, you are
+       neither the author nor mentioned — you chose to watch it. The copy has to say
+       that, or the row reads as a bug to the person who never posted in the thread. */
+    case 'forum.followed_topic': return notifActors(n) + ' replied in a discussion you follow';
     default:                     return esc(who);
   }
 }

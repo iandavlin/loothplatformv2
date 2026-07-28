@@ -258,6 +258,11 @@ CREATE TABLE IF NOT EXISTS topic_follow (
   PRIMARY KEY (user_id, topic_id)
 );
 CREATE INDEX IF NOT EXISTS idx_topic_follow_topic ON topic_follow (topic_id);
+-- looth-dev (the WP FPM pool that runs follow.php) and profile-app arrive via this
+-- schema's DEFAULT PRIVILEGES; looth_ro does NOT — it is granted per-table, as on
+-- forum_subscription. Without it the read-only audit role cannot see this table,
+-- and "a tool that sanitises on read cannot audit the store" cuts both ways.
+GRANT SELECT ON topic_follow TO looth_ro;
 
 -- ============================================================================
 -- person (denormalized author cache; NOT identity authority)
