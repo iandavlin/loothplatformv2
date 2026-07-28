@@ -325,8 +325,36 @@ byte-identical afterwards. The triggers are the only thing that fixes this.
 
 ## 6. The live run — Ian's, and the rollback comes first
 
-**Rollback, stated before anything is applied.** Three statements, no data
-dependency, safe to run at any time:
+### Run it as `bb-mirror`. Not `postgres`, not `ubuntu`.
+
+Checked read-only on live 2026-07-28: role **`bb-mirror`** owns the `forums`
+schema, all three tables (`topic`, `reply`, `attachment`), the
+`attachment_parent_kind` enum, **and both existing trigger functions**. The system
+user exists (uid 993), so `sudo -u bb-mirror psql -d looth` peer-auths.
+
+| role | verdict |
+|---|---|
+| `ubuntu` | **not a Postgres role at all** — this is the "role ubuntu does not exist" error |
+| `profile-app` | does not own these tables |
+| `postgres` | superuser, so it *works* — and plants a landmine, see below |
+| **`bb-mirror`** | **correct: matches every existing object's owner** |
+
+The `postgres` trap is worth spelling out because it fails much later and looks
+unrelated. If `postgres` creates the function, the function is *owned by*
+`postgres` — and a subsequent re-apply of `schema.pg.sql` as `bb-mirror` (which is
+how `bin/init-db.php` and any normal schema refresh run) then dies:
+
+```
+ERROR:  must be owner of function attachment_purge_for_parent
+```
+
+Reproduced deliberately rather than assumed. Using `bb-mirror` keeps ownership
+uniform and `schema.pg.sql` re-appliable.
+
+### Rollback, stated before anything is applied
+
+Three statements, no data dependency, safe to run at any time and safe to run
+twice (a second run only prints `skipping`):
 
 ```sql
 DROP TRIGGER IF EXISTS topic_attachment_purge ON forums.topic;
