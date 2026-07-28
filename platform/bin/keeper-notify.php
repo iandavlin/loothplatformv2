@@ -57,6 +57,30 @@ function fail(int $code, string $msg): never
     exit($code);
 }
 
+/**
+ * Flatten whatever the SES client hands back into one readable line.
+ *
+ * The shape varies by failure LAYER, which is exactly the distinction an
+ * operator needs at 2am: a curl/transport failure (bad region -> DNS) arrives as
+ * ['curl' => …, 'message' => …], while an API refusal (unverified sender, bad
+ * signature) arrives as parsed XML under Error->Code / Error->Message.
+ */
+function sesErrorText(mixed $err): string
+{
+    if ($err === null || $err === false) return 'no detail supplied';
+    if (is_string($err))                 return $err;
+
+    $a = json_decode(json_encode($err), true);
+    if (!is_array($a)) return trim((string) json_encode($err));
+
+    $code = $a['Error']['Code']    ?? $a['code']  ?? $a['curl'] ?? null;
+    $msg  = $a['Error']['Message'] ?? $a['message'] ?? null;
+    if ($code !== null || $msg !== null) {
+        return trim(($code !== null ? "[{$code}] " : '') . (string) $msg);
+    }
+    return trim((string) json_encode($a));
+}
+
 // ── Make "loud" survive the WordPress bootstrap ──────────────────────────────
 // Measured, not assumed: bootstrapping WP repoints error_log to
 // /var/www/dev/wp-content/debug.log. So after that point an uncaught fatal or
@@ -160,6 +184,42 @@ $sender = (string) ($ses['sender_email'] ?? '');
 $access = (string) ($ses['access_key'] ?? '');
 $secret = (string) ($ses['secret_key'] ?? '');
 
+// ── Fault injection, for proving the SES-refusal branch ──────────────────────
+// keeper-notify is load-bearing: platform/bin/keeper-shutdown-check ABORTS the
+// poweroff when this returns non-zero, because a silent mail failure followed by
+// a shutdown leaves Ian with no notice AND an unreachable box (only the AWS
+// console can start this machine). So "does it really exit non-zero when SES
+// refuses" is the single most important assertion in the tool, and it must be
+// exercisable on the REAL tool rather than on a lookalike harness — a harness
+// would only prove the harness.
+//
+// SAFETY PROPERTY, which is why a test hook in a load-bearing tool is acceptable
+// here: every fault below can only ever make SES REFUSE. None can cause a
+// successful send, and none can redirect a message to a different recipient. The
+// blast radius of this variable being set by accident is that keeper-notify
+// fails loudly and the shutdown ABORTS — the safe direction.
+$fault = getenv('KEEPER_NOTIFY_FAULT') ?: '';
+if ($fault !== '') {
+    fwrite(STDERR, "keeper-notify: *** FAULT INJECTION ACTIVE ({$fault}) — this run is a TEST and MUST fail ***\n");
+    switch ($fault) {
+        case 'region':
+            // Signature scope and endpoint host both go wrong.
+            $region = 'us-nowhere-9';
+            break;
+        case 'sender':
+            // A From address SES holds no verified identity for.
+            $sender = 'definitely-not-verified@example.invalid';
+            break;
+        case 'secret':
+            // Still 40 chars, so it passes our own length guard on purpose and
+            // fails at SES instead — that is the branch under test.
+            $secret = str_repeat('A', 40);
+            break;
+        default:
+            fail(EXIT_USAGE, "unknown KEEPER_NOTIFY_FAULT '{$fault}' (expected: region | sender | secret)");
+    }
+}
+
 if ($region === '' || $sender === '' || $access === '') {
     fail(EXIT_BAD_CREDS, "SES connection {$sesId} is incomplete (region/sender/access_key).");
 }
@@ -206,7 +266,14 @@ $m->addTo($to);
 $m->setSubject($subject);
 $m->setMessageFromString($body);
 
-$res = $driver->sendEmail($m, false, true);
+// Third arg is $trigger_error, and passing FALSE is deliberate. With true, the
+// client funnels the real SES error into its own error handler and returns a
+// bare `false` — which is why the first cut of this tool reported "SES client
+// returned false" identically for a bad region, an unverified sender and a bad
+// signature. Three different faults, one useless message, in the tool that
+// aborts a shutdown. With false it returns the response object and we can print
+// what SES actually said.
+$res = $driver->sendEmail($m, false, false);
 
 // ── Verify. Success is a MessageId, nothing else. ────────────────────────────
 // sendEmail() returns ['MessageId'=>…,'RequestId'=>…] on success; false on a
@@ -216,11 +283,12 @@ $res = $driver->sendEmail($m, false, true);
 if (!is_array($res) || empty($res['MessageId'])) {
     $detail = 'no MessageId returned';
     if (is_array($res) && isset($res['error'])) {
-        $detail = 'SES error: ' . json_encode($res['error']);
+        $detail = 'SES refused (HTTP ' . ($res['code'] ?? '?') . '): ' . sesErrorText($res['error']);
     } elseif ($res === false) {
-        $detail = 'SES client returned false (message failed validation, or a transport/API error was triggered)';
+        $detail = 'the SES client rejected the message before sending it (failed its own validate()) '
+                . 'or an error handler swallowed the cause';
     } elseif (is_object($res)) {
-        $detail = 'SES returned a raw response object: ' . json_encode(['code' => $res->code ?? null, 'error' => $res->error ?? null]);
+        $detail = 'SES refused (HTTP ' . ($res->code ?? '?') . '): ' . sesErrorText($res->error ?? null);
     }
     fail(EXIT_SEND_FAILED, "send NOT accepted — {$detail}");
 }
