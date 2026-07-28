@@ -27,26 +27,100 @@ One `reply_image_url` column → one `<img class="reply-stub__img">` in
 `_reply-render.php:589`. Everything upstream of that — composer, endpoint,
 BuddyBoss, PHP, nginx — will happily accept and store any number.
 
-**This is a live defect, not just a missing feature.** Measured on the dev2
-mirror (which is a faithful copy of live):
+**This is a live defect, not just a missing feature.** Measured on **LIVE**
+(`looth_import`, loothgroup.com, read-only via live-ro, 2026-07-27):
+
+| | LIVE | dev2 mirror |
+|---|---|---|
+| published replies | 5,195 | 5,118 |
+| replies carrying ≥1 **real** photo | 511 | 505 |
+| replies carrying **>1** photo — showing only the first | **233** | 230 |
+| images stored but never rendered | **374** | 368 |
+| replies that a cap of 6 would truncate | **0** | 0 |
+| most photos on one published reply | **5** | 5 |
+
+**233 replies on live** are silently hiding images their authors successfully
+uploaded, with no "+N more" and no indication anything is missing. **374 images**
+become visible the moment the render cap lifts.
+
+### The number is 233 / 374, NOT 236 / 380 — and here is the retraction
+
+Earlier revisions of this doc said 236 / 380. **That was an overcount and it is
+withdrawn.** It came from counting the commas in `wp_postmeta.bp_media_ids`,
+which is a *stale list of ids*, not a list of images. Some of those ids point at
+`wp_bp_media` rows that have since been deleted, and the comma method cannot
+tell a live reference from a dead one.
+
+Measured on LIVE 2026-07-28, resolving every listed id against `wp_bp_media`:
 
 | | |
 |---|---|
-| published replies | 5,118 |
-| replies carrying ≥1 photo | 504 |
-| replies carrying **>1** photo — showing only the first | **229** |
-| images stored but never rendered | **367** |
-| most photos on one published reply | **5** |
+| published replies listing any media | 518 |
+| …listing **only dead** ids (carry zero real images) | **7** |
+| …with exactly 1 live image (unchanged by this work) | 278 |
+| …with **>1 live image — the defect** | **233** |
+| images that become visible | **374** |
 
-229 replies are silently hiding images their authors successfully uploaded, with
-no "+N more" and no indication anything is missing.
+The four replies that made up the old gap: **58201** (lists 3, 0 alive),
+**58209** (2, 0 alive), **58294** (3, 0 alive), **58462** (3, **2** alive).
+236 − 3 = 233; 380 − (2+1+2) − 1 = 374. Reconciles to the digit.
 
-> Counting note: `forums.attachment` alone reports 506 parents and a maximum of
-> 11, which is what a first pass finds. Two of those parents are **orphans** —
-> their `forums.reply` rows no longer exist (synthetic leftovers from the
-> `reply-images-6` lane). Join to `forums.reply … status='publish'` and the real
-> figures are the ones above. It matters: the orphans are the only thing that
-> ever made the cap look like it would truncate live content.
+**Two independent stores now agree exactly.** LIVE WP counting only extant media
+says 233 / 374 / 0 truncated / max 5. LIVE's Postgres mirror joined to published
+replies says 233 / 374 / 0 truncated / max 5. That agreement is the reason to
+trust it — the mirror was *right all along*, and the WP-side comma count was the
+thing that was wrong.
+
+> **The lesson, and it is the house lesson in a new costume:** `bp_media_ids` is
+> a *tool's convenient read*, not the store. Counting its commas answers "how
+> many ids were recorded", not "how many images exist" — cf.
+> [[sanitize-on-read-audit-the-store]]. Resolve ids to rows, or count the store
+> that the renderer actually reads.
+
+Residual, immaterial: the mirror shows 280 single-image replies where the live WP
+alive-count shows 278. That is a 2-reply difference **entirely inside the single
+bucket**, which this change does not touch (a 1-image reply renders identically
+before and after). It is consistent with the mirror retaining an attachment row
+after its upstream `wp_bp_media` row was deleted — the same non-cleanup behaviour
+documented for reply deletion in §10. It does not move 233 or 374.
+
+Quote LIVE, never dev2. Earlier revisions of this doc quoted dev2 and called it
+"a faithful copy of live" — that was an assumption, never verified. dev2 also
+takes writes from test lanes, so its number moves during a session (its joined
+count read 229, then 230, then 368 hidden images across one day).
+
+> **The 233 coincidence — do not be caught by it.** dev2's *attachment-only*
+> count (orphans included) is also 233, and live's *joined* count is 233. They
+> are different shapes on different boxes and it is pure coincidence. dev2 joined
+> = 230, dev2 attachment-only = 233 (the 3 orphans 72083/72084/72225); live
+> joined = 233, live orphan parents = 1. Two people have already been misled by
+> an attachment-only count on this exact question.
+
+Live query (bbPress replies carry their photo set as a comma-separated
+`bp_media_ids` post meta, which is also what the mirror materializes from):
+
+```sql
+SELECT COUNT(*), SUM(n=1), SUM(n BETWEEN 2 AND 6), SUM(n>6),
+       SUM(CASE WHEN n>1 THEN n-1 ELSE 0 END), MAX(n)
+  FROM (SELECT p.ID,
+               LENGTH(pm.meta_value)-LENGTH(REPLACE(pm.meta_value,',',''))+1 AS n
+          FROM wp_posts p
+          JOIN wp_postmeta pm ON pm.post_id=p.ID AND pm.meta_key='bp_media_ids'
+         WHERE p.post_type='reply' AND p.post_status='publish'
+           AND pm.meta_value IS NOT NULL AND pm.meta_value<>'') t;
+```
+
+> **Counting note — always join to `forums.reply`.** `forums.attachment` alone
+> reports more parents than there are replies, and a maximum of 11, which is what
+> a first pass finds. Those extra parents are **orphans**: the reply row is gone
+> but its attachment rows remain, because **deleting a reply does not clean its
+> mirror attachment rows**. Confirmed three times — 72083/72084 (reply-images-6
+> test replies deleted 2026-07-09) and 72225 (this lane's own serve-window test
+> reply, deleted 2026-07-27). No surface can render them, since every read starts
+> `FROM forums.reply`, so they are metric pollution rather than a user-visible
+> bug — but they are the *only* thing that ever made a cap of 6 look like it
+> would truncate real content. Two different people have now been misled by that
+> exact number. Join to `forums.reply … status='publish'`, or use live.
 
 ---
 
@@ -218,11 +292,16 @@ Measured against published replies at build time:
 
 | | |
 |---|---|
-| replies carrying images | 504 |
-| unchanged (single image) | 275 |
-| **replies that stop hiding images** | **229** |
-| **images that become visible for the first time** | **367** |
+| replies carrying real images | **511** |
+| unchanged (single image) | **278** |
+| **replies that stop hiding images** | **233** |
+| **images that become visible for the first time** | **374** |
 | replies truncated by the cap | **0** |
+
+(LIVE, 2026-07-28. Confirmed twice over: WP resolving every `bp_media_ids` entry
+against `wp_bp_media`, and LIVE's Postgres mirror — what the renderer actually
+reads — agreeing exactly. §1 has the retraction of the earlier 236/380, which
+counted dead media references.)
 
 ---
 
@@ -312,9 +391,39 @@ server caps sit *before* the writes they guard.
 runs the shipping query, so reply markup can be verified — and previewed — without
 deploying anything.
 
-**Not proven, and it needs a serve window plus a real device:** the 422 exercised
-by an actual over-cap request, the composer guard and read-out driven by a real
-finger, and the gallery on Ian's phone.
+### Serve-window verification, 2026-07-27 (third window) — **all three closed**
+
+Receipts, drivers and screenshots:
+`footer-mockups/reply-images/serve-window-20260727/`.
+
+- **The 422 under a real over-cap request — CLOSED.** Six real HTTP calls to the
+  real endpoint on the serve. 7 via `media_ids` → 422; 7 via `bbp_media` (the
+  shape composer v2 actually sends) → 422; 6 → 200. Edit: keep 4 + add 3 → 422;
+  **add-only on reply 58510, which has 4 real stored images** → 422 with
+  `post_modified` still `2025-09-02`, proving the cap counts existing media and
+  fires before the write; keep 3 + add 3 → 200. **Negative control:** after the
+  files were restored the identical over-cap POST returned 200 — which is what
+  rules out the 422 coming from anything but this lane.
+- **The composer guard under a real finger — CLOSED, one caveat.** 390×844 DPR 2
+  with touch emulation; composer opened by a real trusted touch on
+  `.lg-fb-reply`; six real photos uploaded through the real input to the real BB
+  media endpoint. Counter ran `1 of 6` → `6 of 6`, went amber and disabled the
+  photo button at 6, and refused the 7th with the chip count **held at 6**.
+  Counter width 38px == scrollWidth 38px (readable, not ellipsed). Posted, then
+  asserted on the **store**: 6 rows in `forums.attachment` and
+  `bp_media_ids 3401..3406`. *Caveat:* file selection used CDP
+  `DOM.setFileInputFiles` — the OS picker is not drivable by anything. Every step
+  downstream of it is the genuine path.
+- **The gallery on a real device — path proven by this lane, phone closed by
+  Ian.** Existing member reply 58510 on mobile logged-in, desktop logged-in and
+  mobile **logged-out**: 4 cells, 0 broken, intrinsic dimensions, lazy, anon
+  correctly scrubbed. Ian closed the actual phone leg himself, looking at reply
+  71991 rendering 5 of 5 previously-unseen images.
+
+**Still not proven:** the legacy desktop tray guard (`lgComposerTray({max:6})`)
+has never been driven by a finger — only composer v2's mobile path has; and
+removing a chip to free a slot was never exercised (filling to 6 and being
+refused at 7 was).
 
 ### Previs
 
@@ -326,3 +435,37 @@ branch's `forums.css` copied whole.
 Measured stub heights, 390 px phone at DPR 2: 1 image **332 px**, 2 **237**,
 3 **223**, 4 **360**, 5 **345**, **6 → 331 px** — a six-photo reply is a pixel
 shorter than the single-image reply the hub renders today.
+
+
+---
+
+## 10. Housekeeping owed (reply-images-count, 2026-07-27)
+
+**Orphan mirror attachment rows.** Deleting a reply removes the WP post, its WP
+attachments and the `forums.reply` row, but leaves its `forums.attachment` rows
+behind. Three parents are currently orphaned on dev2:
+
+| parent | rows | from |
+|---|---|---|
+| 72083 | 10 | reply-images-6 synthetic test, deleted 2026-07-09 |
+| 72084 | 11 | reply-images-6 synthetic test, deleted 2026-07-09 |
+| 72225 | 6 | **this lane's serve-window test reply**, deleted 2026-07-27 |
+
+Not user-visible — every read path starts `FROM forums.reply`, so nothing can
+render them. They only pollute counts taken off `forums.attachment` alone, which
+is precisely how the "max 11 images per reply" figure got into circulation and
+made a cap of 6 look lossy.
+
+Cleanup is one statement, and it is **dev2-only, needs a window, and must not run
+while anyone is testing**:
+
+```sql
+DELETE FROM forums.attachment a
+ WHERE a.parent_kind = 'reply'
+   AND NOT EXISTS (SELECT 1 FROM forums.reply r WHERE r.id = a.parent_id);
+```
+
+The underlying behaviour (delete-a-reply leaves attachment rows) is a separate,
+pre-existing defect in the mirror's delete path and is **not** fixed by this lane.
+Worth a lane of its own if orphans keep accruing; a materializer re-sync may also
+clear them, which is worth checking before writing a DELETE.
