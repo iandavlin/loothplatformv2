@@ -159,12 +159,31 @@ phase 3 verified its entire desktop surface this way.
   link pointing back at the repo path.
 - **Never** `git checkout` / branch-switch / detach the serving tree. Only the single-path form.
 
-> **Use `git checkout HEAD -- <path>`, NOT the bare `git checkout -- <path>`.** The bare form
-> restores from the **INDEX**, not from HEAD. The serve clone is *shared*, so if any other
-> process has staged something for that path, the bare form silently installs **that** instead
-> of the committed bytes — a restore that reports success while leaving foreign code serving.
-> The `HEAD` form is unambiguous. Note also that the whole-tree hash **cannot see a staged
-> overlay**; only `git status --porcelain` can, which is why the proof below needs both.
+> ### THE ONLY ALLOWED RESTORE — keeper ruling, 2026-07-28
+>
+> ```sh
+> git checkout HEAD -- <path>     # then: git reset -q   (if you staged anything)
+> ```
+>
+> **Never the bare `git checkout -- <path>`.** It restores from the **INDEX**, not HEAD. The
+> serving checkout is a *shared* clone — five lanes and a keeper touch it — so if any process
+> has staged that path, the bare form installs **their staged bytes** into the serve and exits
+> 0. A restore that reports success while leaving foreign code serving.
+>
+> Keeper proved it in a scratch repo rather than reasoning about it:
+>
+> ```
+> committed "COMMITTED"; another process stages "STAGED-BY-ANOTHER-PROCESS"; window edits "MY-OVERLAY"
+>   git checkout -- f.txt        ->  STAGED-BY-ANOTHER-PROCESS   (wrong, silent, exit 0)
+>   git checkout HEAD -- f.txt   ->  COMMITTED                   (correct)
+> ```
+>
+> Every window grant issued on 2026-07-27 named the wrong form. Nothing broke **only** because
+> every restore was verified against the whole-tree hash rather than spot-check md5s of the
+> files we remembered touching — which is exactly the failure that backstop exists to catch.
+>
+> Note the two proofs are not interchangeable: the whole-tree hash **cannot see a staged
+> overlay**, and `--porcelain` can. Check both, always.
 
 **Proof of restore is the whole-tree hash, not an md5:**
 
@@ -193,5 +212,12 @@ with no engine resident, which matters when RAM allows only one.
 - dev2 = pull-only; the guard protects it, but don't fight it — `git pull`, don't rsync.
 - Count browser engines with `pgrep -x <name>`. `pgrep -f` matches its own command line and
   reads as a false positive — a trap this box has already paid for.
+- **A verification `grep` that matches nothing does not error — it prints nothing and exits 1,
+  and blank reads as a pass.** A BRE pattern containing an unescaped `$` (e.g. grepping PHP for
+  `strpos($content, '@')`) silently matches zero lines. Use **`grep -F`** for any literal code
+  fragment, and prefer `grep -c` with an explicit expected count over eyeballing output. Same
+  family as the `grep -c` counts-LINES-not-occurrences trap: **the failure mode of a bad grep is
+  silence, and silence looks like success.** Caught while staging the 2026-07-28 window — the
+  restore script's "guard is back to pre-fix form" proof line would have printed blank.
 
 See SYSTEM-MAP §13 (serve-from-repo) and §14 (deploy model).
