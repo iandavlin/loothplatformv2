@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# keeper-notify — the one reliable way to reach Ian from dev2.
+#
+#   keeper-notify "<subject>" "<body>" [recipient]
+#   keeper-notify "<subject>" -            # body from stdin (use this for prose)
+#
+# Exits 0 ONLY when SES accepts the message and returns a MessageId. Every other
+# outcome — no WP, no SES connection, an encrypted secret, an API error, or a
+# hang — exits non-zero and prints why. See keeper-notify.php for the reasoning;
+# the short version is that dev2 has no working outbound mail path (no sendmail;
+# mailpit swallows wp_mail and returns true; the keeper IAM user has no SES
+# permissions), so this goes straight to SES with FluentSMTP's stored creds.
+#
+# WHY FAILING LOUDLY IS THE WHOLE POINT: this is the last thing that runs before
+# dev2 powers itself off, and nothing on our infrastructure can wake the box —
+# only the AWS console. A silent failure means Ian gets no notice AND the box is
+# dark.
+#
+# Needs root: the docroot is owned by looth-dev, so wp-load.php is unreadable as
+# ubuntu. Re-execs itself under sudo rather than making every caller remember.
+
+set -uo pipefail
+
+SEND_TIMEOUT="${KEEPER_NOTIFY_TIMEOUT:-60}"
+
+if [ $# -lt 2 ]; then
+    echo 'keeper-notify: FAILED — usage: keeper-notify "<subject>" "<body>" [recipient]' >&2
+    echo '                        (pass "-" as the body to read it from stdin)' >&2
+    exit 64
+fi
+
+# Resolve through the /usr/local/bin symlink to find the .php sibling in the
+# monorepo. `readlink -f` is correct here and is NOT the __DIR__ trap: that trap
+# is about a docroot script resolving into the repo and losing wp-load.php next
+# to it. Here the repo IS where we want to land, and wp-load is referenced by
+# absolute path inside the PHP.
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+IMPL="$(dirname "$SELF")/keeper-notify.php"
+
+if [ ! -r "$IMPL" ]; then
+    echo "keeper-notify: FAILED — implementation not found at $IMPL" >&2
+    exit 65
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+    if ! sudo -n true 2>/dev/null; then
+        echo 'keeper-notify: FAILED — needs root to read the docroot, and passwordless sudo is unavailable.' >&2
+        exit 77
+    fi
+    # Preserve stdin so the "-" body form still works after elevation.
+    exec sudo -n KEEPER_NOTIFY_TO="${KEEPER_NOTIFY_TO:-}" LG_WP_LOAD="${LG_WP_LOAD:-}" \
+        "$SELF" "$@"
+fi
+
+# A hung send is a real failure mode for a notifier that runs immediately before
+# the box shuts down, so bound it and treat the timeout as a loud failure.
+timeout "$SEND_TIMEOUT" php "$IMPL" "$@"
+rc=$?
+
+if [ "$rc" -eq 124 ]; then
+    echo "keeper-notify: FAILED — send timed out after ${SEND_TIMEOUT}s (no MessageId; assume NOT delivered)" >&2
+    exit 75
+fi
+
+exit "$rc"
