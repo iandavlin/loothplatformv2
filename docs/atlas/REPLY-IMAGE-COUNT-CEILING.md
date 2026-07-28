@@ -439,7 +439,7 @@ shorter than the single-image reply the hub renders today.
 
 ---
 
-## 10. Housekeeping owed (reply-images-count, 2026-07-27)
+## 10. Housekeeping — **DONE 2026-07-28** (was: owed)
 
 **Orphan mirror attachment rows.** Deleting a reply removes the WP post, its WP
 attachments and the `forums.reply` row, but leaves its `forums.attachment` rows
@@ -450,6 +450,19 @@ behind. Three parents are currently orphaned on dev2:
 | 72083 | 10 | reply-images-6 synthetic test, deleted 2026-07-09 |
 | 72084 | 11 | reply-images-6 synthetic test, deleted 2026-07-09 |
 | 72225 | 6 | **this lane's serve-window test reply**, deleted 2026-07-27 |
+
+> **CLEARED 2026-07-28** in the serve window, along with a fourth (72240, this
+> lane's proof-2 test reply, which orphaned 6 more rows on deletion — the same
+> defect, caught this time because the mirror was checked rather than assumed).
+> **33 rows across 4 parents deleted; 873 live rows survived; orphan census now
+> NONE.** Safety assertion either side: the joined counts were IDENTICAL
+> (505 / 230 / 368 / max 5), which is the point — clearing orphans must not move
+> a user-visible number.
+>
+> **Side effect worth having: dev2's attachment-only multi count is now 230, equal
+> to its joined count.** The two query shapes finally agree, so the phantom "max
+> 11 images per reply" cannot be reproduced on this box. Receipts:
+> `footer-mockups/reply-images/serve-window-20260728/README.md`.
 
 Not user-visible — every read path starts `FROM forums.reply`, so nothing can
 render them. They only pollute counts taken off `forums.attachment` alone, which
@@ -465,7 +478,14 @@ DELETE FROM forums.attachment a
    AND NOT EXISTS (SELECT 1 FROM forums.reply r WHERE r.id = a.parent_id);
 ```
 
+**The open question in this section is now ANSWERED: a materializer re-sync does
+NOT clear orphans.** `bb-mirror-reconcile.service` was run deliberately before
+writing the DELETE (`20 row(s) touched (forums=0, topics=0, replies=0,
+groups=20)`) and the orphan census was byte-identical afterwards. So the DELETE
+above is the only thing that clears them, and it was warranted.
+
 The underlying behaviour (delete-a-reply leaves attachment rows) is a separate,
 pre-existing defect in the mirror's delete path and is **not** fixed by this lane.
-Worth a lane of its own if orphans keep accruing; a materializer re-sync may also
-clear them, which is worth checking before writing a DELETE.
+**It is still unfixed and will keep producing orphans until someone owns it** —
+this lane alone created two (72225, 72240) simply by testing. Worth a lane of its
+own.
