@@ -1,8 +1,11 @@
 # RECAP-SUPPRESSION-PROPOSAL
 
-> **Status: FINISHED PROPOSAL, measured on LIVE, previs'd, awaiting Ian.** Axis 1 is shipped.
-> **Axis 2: do not build** (measured — the surface does not exist). **Axis 3: build Rule 3b** (the
-> trigger I set for it turned out to have already fired in June, and the design needs no new schema).
+> **Status: RULED AND BUILT.** Axis 1 shipped. **Axis 2: do not build** (measured — the surface does
+> not exist). **Axis 3: Ian ruled the FIXED 7-DAY WINDOW on 2026-07-28**, over this lane's
+> recommendation of Rule 3b and over keeper's. He looked at the comparison frames, weighed the loss
+> against predictability, and chose predictability. **It is settled — this document records it and
+> does not re-argue it.** The window is now a declared constant,
+> `LG_WD_Recap_Source::WINDOW_DAYS`, guarded by `dev/verify-window-fixed.php`.
 > **The pictures are up — §3:** https://dev2.loothgroup.com/v2/tests/output/wd-recap/index.html
 > **Lane:** weekly-digest-recap. **Date:** 2026-07-27, **revised 2026-07-28** after running the
 > repro script end to end, which caught a material error in §1.3(b) — see the correction there.

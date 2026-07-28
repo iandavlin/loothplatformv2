@@ -66,14 +66,44 @@ class LG_WD_Recap {
 	 *
 	 * Value = the display bucket, which also fixes ordering (see build_rows): things
 	 * said TO you outrank things done to your posts.
+	 *
+	 * ── THE TO-DO TEST (Ian, 2026-07-28). THIS IS NOW THE ADMISSION RULE. ────────
+	 *
+	 * **The digest is a to-do list, not a news feed.** His words: "we don't need
+	 * connection acceptance. Just things that require attention from the user like a
+	 * connection request etc."
+	 *
+	 * So the question for any type, existing or new, is one question:
+	 *
+	 *              DOES THIS WAIT ON THE MEMBER?
+	 *
+	 * If nothing is owed by them, it does not belong here — however pleasant it is
+	 * to hear. Two types were removed on that test 2026-07-28:
+	 *
+	 *   connection_accept   they already have the connection; nothing is owed. Telling
+	 *                       them a week later is noise. (147 rows all-time on live.)
+	 *   reaction.on_post    someone liked something. Nothing is owed. (53 all-time.)
+	 *
+	 * TWO ADMISSIONS I JUDGED RATHER THAN WAS TOLD, both flagged to keeper, both one
+	 * line to reverse if the call goes the other way:
+	 *
+	 *   forum.reply_to_reply  KEPT. Ian's list named reply_to_topic and mention; this
+	 *                         one appeared in neither the include nor the exclude
+	 *                         list, and it is already in. On the test it behaves
+	 *                         exactly like reply_to_topic — someone has said something
+	 *                         to you in a conversation you are in, and may be waiting
+	 *                         on an answer. Excluding it while including reply_to_topic
+	 *                         would be an odd asymmetry. (4 rows all-time.)
+	 *   unread DMs            KEPT, and they are not in this map at all — they come
+	 *                         from message_recipients (see rows_from_dms). An unread
+	 *                         message is the most literally-waiting-on-you thing the
+	 *                         platform has, so the test admits them easily.
 	 */
 	const INCLUDED_TYPES = [
-		'forum.mention'        => 'mentions',     // someone @mentioned you
-		'forum.reply_to_topic' => 'replies',      // someone replied on a discussion YOU authored
-		'forum.reply_to_reply' => 'replies',      // someone replied to YOUR reply
-		'reaction.on_post'     => 'reactions',    // someone reacted to your topic / reply / card
-		'connection_request'   => 'connections',
-		'connection_accept'    => 'connections',
+		'forum.mention'        => 'mentions',     // someone addressed you directly — Ian ruled IN
+		'forum.reply_to_topic' => 'replies',      // a reply on a discussion YOU authored — Ian ruled IN
+		'forum.reply_to_reply' => 'replies',      // a reply to YOUR reply — same test, see above
+		'connection_request'   => 'connections',  // they must accept or decline — the archetype
 	];
 
 	/**
@@ -81,14 +111,14 @@ class LG_WD_Recap {
 	 * not a notification type at all (profile-app deliberately does not ring the bell
 	 * for a new message), so they are read from message_recipients instead.
 	 */
-	const BUCKET_ORDER = [ 'mentions', 'replies', '__dms__', 'reactions', 'connections' ];
+	const BUCKET_ORDER = [ 'mentions', 'replies', '__dms__', 'connections' ];
 
 	/**
 	 * Types whose row is a link into the Hub and is therefore worthless without a
 	 * resolved `target_url`. Connection rows are not: they name a person, and the
 	 * profile link is resolved separately.
 	 */
-	const REQUIRES_TARGET_URL = [ 'forum.mention', 'forum.reply_to_topic', 'forum.reply_to_reply', 'reaction.on_post' ];
+	const REQUIRES_TARGET_URL = [ 'forum.mention', 'forum.reply_to_topic', 'forum.reply_to_reply' ];
 
 	// ── Public API ────────────────────────────────────────────────────────────
 
@@ -96,8 +126,16 @@ class LG_WD_Recap {
 	 * Render the section, or '' when the member has nothing this week.
 	 *
 	 * THE SHAPE IS SETTLED (Ian, 2026-07-27, from the frames): discussion titles are
-	 * named, every row carries its own deep link, reactions are included batched,
-	 * and the section sits at the top of the digest. The layout knobs the frames
+	 * named, every row carries its own deep link, and the section sits at the top of
+	 * the digest.
+	 *
+	 * ONE CLAUSE OF THAT RULING WAS SUPERSEDED THE NEXT DAY, and it is written out
+	 * rather than quietly dropped: 2026-07-27 also settled "reactions are included,
+	 * batched". Ian's to-do ruling of 2026-07-28 removed reactions entirely — nothing
+	 * is owed on a reaction. The 07-27 decision about SHAPE stands; its decision about
+	 * one type's ADMISSION does not. See INCLUDED_TYPES above.
+	 *
+	 * The layout knobs the frames
 	 * used to draw the alternatives are GONE ON PURPOSE — Ian asked for the chosen
 	 * design to be built and the alternative dropped rather than left as an option,
 	 * so nobody re-litigates it from a config flag. The alternatives survive only as
@@ -136,10 +174,12 @@ class LG_WD_Recap {
 	/**
 	 * Turn the payload into ordered display rows.
 	 *
-	 * Order is by importance-to-the-member, not by timestamp: someone talking TO
-	 * you (mention, reply, DM) outranks someone reacting to you, and connection
-	 * requests sit last because they are an action you take at your leisure. A
-	 * strict recency sort buries a mention under three reactions.
+	 * Order is by importance-to-the-member, not by timestamp: someone talking TO you
+	 * (mention, reply, DM) outranks a connection request, which sits last because it
+	 * is an action you take at your leisure. A strict recency sort would bury a
+	 * mention under three connection requests, and this week 91 of 97 admitted rows
+	 * platform-wide ARE connection requests — so the ordering is doing real work, not
+	 * decorating an even mix.
 	 */
 	public static function build_rows( array $payload ): array {
 		$notes = $payload['notifications'] ?? [];
@@ -234,28 +274,16 @@ class LG_WD_Recap {
 				$sub = ( $where !== '' ? 'in ' . self::quote( $where ) . ' — ' : '' ) . $actors;
 				break;
 
-			case 'reaction.on_post':
-				$what = self::reaction_what( (string) ( $n['target_kind'] ?? '' ) );
-				$lead = $count > 1
-					? self::n( $count ) . ' people reacted to ' . $what
-					: $actor . ' reacted to ' . $what;
-				$sub = $where !== '' ? self::quote( $where ) : '';
-				if ( $count > 1 && $sub !== '' ) {
-					$sub .= ' — ' . $actors;
-				} elseif ( $count > 1 ) {
-					$sub = $actors;
-				}
-				break;
-
 			case 'connection_request':
 				$lead = $actor . ' wants to connect';
 				$sub  = '';
 				break;
 
-			case 'connection_accept':
-				$lead = $actor . ' accepted your connection request';
-				$sub  = '';
-				break;
+			// `reaction.on_post` and `connection_accept` had arms here until
+			// 2026-07-28. They are gone rather than left unreachable behind the
+			// allow-list: Ian's to-do test excluded both, and a render arm for a type
+			// the boundary refuses is dead weight that reads like a live feature.
+			// Restoring either means restoring its INCLUDED_TYPES line too.
 
 			default:
 				// Unreachable: build_rows already dropped anything outside
@@ -430,9 +458,7 @@ class LG_WD_Recap {
 		switch ( $kind ) {
 			case 'forum.mention':       return '#FE6A4F';  // CORAL — someone addressed you by name
 			case 'message':             return '#ECB351';  // GOLD
-			case 'reaction.on_post':    return '#D4E0B8';  // MINT_LIGHT — the quietest signal
-			case 'connection_request':
-			case 'connection_accept':   return '#87986A';  // MINT_DARK
+			case 'connection_request':  return '#87986A';  // MINT_DARK
 			default:                    return '#87986A';
 		}
 	}
@@ -480,14 +506,6 @@ class LG_WD_Recap {
 			return $names[0] . ' and ' . $names[1];
 		}
 		return $names[0] . ', ' . $names[1] . ' and ' . self::n( $n - 2 ) . ' others';
-	}
-
-	private static function reaction_what( string $kind ): string {
-		switch ( $kind ) {
-			case 'reply': return 'your reply';
-			case 'card':  return 'your post';
-			default:      return 'your discussion';
-		}
 	}
 
 	/** Curly quotes around a discussion title — the digest sets Georgia elsewhere and

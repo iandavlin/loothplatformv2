@@ -36,7 +36,14 @@ foreach (array_keys(LG_WD_Recap::INCLUDED_TYPES) as $t) {
 
 echo "--- types OUTSIDE the boundary must produce ZERO rows ---\n";
 // forum.followed_topic is the one thread-follow proposes (SS9.1). It must not leak in.
-foreach (['forum.followed_topic','message','moderation.removed','event.reminder','','bogus.type'] as $t) {
+//
+// connection_accept and reaction.on_post are here because IAN REMOVED THEM on
+// 2026-07-28: the digest is a to-do list, and nothing is owed on either. They were
+// shipping types until that day, so they are the regression most likely to walk back
+// in — a well-meaning "the recap lost reactions" bug report is all it would take.
+// The test for any candidate is: DOES THIS WAIT ON THE MEMBER?
+foreach (['connection_accept','reaction.on_post',
+          'forum.followed_topic','message','moderation.removed','event.reminder','','bogus.type'] as $t) {
     $rows = LG_WD_Recap::build_rows(['display_name'=>'Test','notifications'=>[$hub($t)],'dms'=>[]]);
     $ok = count($rows) === 0;
     printf("  %-24s rows=%d  %s\n", $t===''?"(empty string)":$t, count($rows), $ok?'OK (excluded)':'FAIL — LEAKED IN');
@@ -44,8 +51,12 @@ foreach (['forum.followed_topic','message','moderation.removed','event.reminder'
 }
 
 echo "--- a mixed payload reports only the included half ---\n";
+// Was mention + reaction.on_post as the two INCLUDED types. Repointed 2026-07-28:
+// reaction.on_post is now excluded, so leaving it here would have made this
+// assertion fail for the right reason at the wrong line. connection_request is the
+// second included type now — and it is the archetype of the to-do test.
 $mixed = LG_WD_Recap::build_rows(['display_name'=>'Test','dms'=>[],'notifications'=>[
-  $hub('forum.mention'), $hub('forum.followed_topic'), $hub('reaction.on_post'), $hub('bogus.type')]]);
+  $hub('forum.mention'), $hub('forum.followed_topic'), $hub('connection_request'), $hub('reaction.on_post')]]);
 $ok = count($mixed) === 2;
 printf("  4 in (2 included, 2 not) -> rows=%d  %s\n", count($mixed), $ok?'OK':'FAIL');
 if(!$ok) $fail++;

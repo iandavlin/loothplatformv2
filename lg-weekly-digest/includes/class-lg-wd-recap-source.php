@@ -59,6 +59,37 @@ class LG_WD_Recap_Source {
 	/** Smart code group. `##lg_recap.section##` in templates/email.php. */
 	const SMARTCODE_KEY = 'lg_recap';
 
+	/**
+	 * ── THE WINDOW. FIXED AT SEVEN DAYS. IAN RULED IT 2026-07-28. ─────────────
+	 *
+	 * The digest looks back exactly this far, every send, for every member. It is a
+	 * declared constant rather than a default argument because it is a DECISION, and
+	 * a decision that lives in a default is one any future call site can overturn by
+	 * accident.
+	 *
+	 * TWO ALTERNATIVES WERE BUILT UP, MEASURED ON LIVE, AND DECLINED BY IAN — they
+	 * are recorded here so nobody re-derives them as though they were never asked:
+	 *
+	 *   3a  window starts at the previous digest's send time (global)
+	 *   3b  window starts at the last digest THIS MEMBER ACTUALLY RECEIVED
+	 *
+	 * 3b was this lane's recommendation and the case for it was real: on 2026-06-01
+	 * the campaign `Weekly Digest — June 1, 2026` lost six members to a single SES
+	 * `SignatureDoesNotMatch`, all six still marked `failed` eight weeks later and
+	 * never re-sent. Shown side by side (2 rows vs 6 for a real member), Ian weighed
+	 * that against predictability and chose predictability. His call, and it is
+	 * settled. See docs/atlas/RECAP-SUPPRESSION-PROPOSAL.md §2 Rule 3.
+	 *
+	 * THE CONSEQUENCE HE ACCEPTED, stated here so it is designed around honestly
+	 * rather than rediscovered as a bug: **a member who misses one digest never
+	 * hears about that week.** Items older than this window are gone from the email
+	 * permanently — they remain in the bell, but nothing will mail them again.
+	 *
+	 * DO NOT widen this to compensate, and do not make it conditional. If the fixed
+	 * window ever needs to move, it moves HERE, once, for everyone, deliberately.
+	 */
+	const WINDOW_DAYS = 7;
+
 	/** Per-request memo: wp_user_id → payload. */
 	private static $cache = [];
 
@@ -166,11 +197,21 @@ class LG_WD_Recap_Source {
 	 * Public so a send can prime a whole chunk in one round trip instead of paying
 	 * ~1,700 of them one at a time.
 	 *
+	 * THE WINDOW IS NOT A PARAMETER HERE, deliberately. It was one while Rules 3a
+	 * and 3b were live options — both wanted a value computed per send. Ian declined
+	 * both (2026-07-28) and fixed the window at self::WINDOW_DAYS, so a per-call
+	 * override is now flexibility nobody uses, and the kind that quietly becomes a
+	 * second window. The endpoint still takes `days` because /internal/recap is a
+	 * general read API that dev verification legitimately drives at other widths
+	 * (dev/verify-missed-exclusions.php opens it to 3650 to isolate a rule); the
+	 * DIGEST's window is this constant and has exactly one writer.
+	 *
 	 * @param int[] $wp_user_ids
 	 * @return array<int, array> keyed by wp user id; members with nothing are
 	 *                           memoised as [] so they are not re-fetched.
 	 */
-	public static function fetch( array $wp_user_ids, int $days = 7 ): array {
+	public static function fetch( array $wp_user_ids ): array {
+		$days = self::WINDOW_DAYS;
 		$want = array_values( array_filter( array_map( 'intval', $wp_user_ids ), fn( $i ) => $i > 0 ) );
 		if ( ! $want ) {
 			return [];
