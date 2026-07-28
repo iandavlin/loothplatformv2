@@ -199,6 +199,62 @@ dry-run changed nothing; `apply` swept 8 orphans with the user-visible counts
 identical before and after (`PASS 2|1|1|2`); `rollback` dropped the triggers and
 the next delete leaked 3 rows again.
 
+### Proven again through the real materializers — `bin/test-attachment-purge.php`
+
+The table above is a database-level proof. This is the code-level one, and it is
+checked in as a runnable test because the defect class has now been found twice
+(the `reply-images-count` lane first, then this lane) — which is the point at
+which `docs/CRAFT-STANDARD.md` says to encode it rather than fix it again.
+
+```
+sudo -u looth-dev php bb-mirror/bin/test-attachment-purge.php
+```
+
+It drives the **real** `lib/materializers.php` over **real** WordPress rows — a
+topic with a cover and a reply carrying **six** inline images — then issues the
+**verbatim** delete statement from `api/v0/_sync.php:98`, for both the direct
+reply delete and the topic-cascade case. 11 checks, all passing:
+
+```
+2. delete the reply — verbatim statement from api/v0/_sync.php
+  [PASS] all 6 reply images purged        got 0, want 0
+  [PASS] topic's own cover untouched      got 1, want 1
+3. delete the topic — the CASCADE case a PHP-side fix cannot reach
+  [PASS] cascaded reply images purged     got 0, want 0
+4. negative control — drop the triggers, the leak must return
+  [PASS] leak returns without triggers    got 6, want 6
+```
+
+**Step 4 is the one that matters most.** Without it the other ten assertions
+could all pass vacuously. With the triggers dropped, the same six-image reply
+delete strands all 6 rows — so the test can fail, and therefore its passing
+means something.
+
+Two things it deliberately does *not* do, both because they would write to the
+serving mirror: it targets a scratch database (`orphan_proof`) rather than
+`looth`, and it inserts its WP fixture with `$wpdb` directly rather than
+`wp_insert_post`, so the `bb-mirror-sync` mu-plugin hooks never fire. A dispatch
+would POST to the real endpoint and land rows in `looth`. Verified after every
+run: `looth` attachment rows unchanged at 1,859, and zero `ZZ TEST` rows left in
+WordPress.
+
+**What this does not cover, stated plainly:** the HTTP hop and the mu-plugin
+hook wiring. Proving those end-to-end means letting a real delete reach dev2's
+`looth`, which needs the triggers installed there first. The residual risk is
+small — `_sync.php`'s delete is `DELETE FROM $kind WHERE id = ?`, and the
+trigger has now been shown to fire on that statement issued from PDO, from
+`psql`, and by FK cascade — but it is not zero, and it is not proven.
+
+### dev2 is leaking too, on the same path
+
+Measured 2026-07-28: dev2's `looth` carries **16 orphan rows across 12 lost
+parents, every one of them under `topic`**, none under `reply`. A lane reported
+"forums.attachment orphans = 0" on dev2 earlier the same day; that was true of
+the reply orphans it had created and cleaned up, but not of the table. The topic
+path is the one nobody watches, on both boxes. dev2 and live show the same 16/12
+under topic, consistent with dev2's mirror having been built from the same
+source rather than having leaked independently.
+
 ## 5. Applying it — `bb-mirror/bin/fix-attachment-orphans.sh`
 
 ```
