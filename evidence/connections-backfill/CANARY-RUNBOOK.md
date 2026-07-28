@@ -30,7 +30,7 @@ means running **file 6 and file 3**.
 4.  psql -f 2026-07-27-connections-canary-ian-4-DRYRUN.sql     # verify: WILL INSERT = 0
     ... only then ...
 5.  psql -f 2026-07-27-connections-restore-1-DRYRUN.sql        # read-only
-6.  psql -f 2026-07-27-connections-restore-2-APPLY.sql         # inserts the remaining 611
+6.  psql -f 2026-07-27-connections-restore-2-APPLY.sql         # inserts the remaining 610
 7.  psql -f 2026-07-27-connections-restore-1-DRYRUN.sql        # verify: WILL INSERT = 0
 ```
 
@@ -53,8 +53,10 @@ other members whose badge +1  52
 **Canary apply** — `canary rows inserted and tagged (cumulative) = 135`, and Ian's totals move
 **+83 accepted / +52 pending**.
 
-**Full apply after the canary** — `rows inserted and tagged = 611` (746 − Ian's 135, which are
-already present and are skipped by the guards).
+**Full apply after the canary** — `rows inserted and tagged = 610`, measured against live on
+2026-07-28 (746 − Ian's 135, which are already present and are skipped by the guards, − 1 pair a
+member created organically on 2026-07-27). The dev2 rehearsal predicted 611 because it had no
+such drift; live is the number to expect.
 
 ## What Ian will actually see, and what 52 other people will see
 
