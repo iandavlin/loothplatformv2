@@ -242,6 +242,11 @@ if ($method === 'PUT' || $method === 'DELETE') {
             ])) {
                 // Container forums hold sub-forums; you post to the leaf.
                 $bad = 'Pick a sub-forum, not the group it contains.';
+            } elseif (in_array($cand, LG_BB_MIRROR_NONPOSTABLE_FORUM_IDS, true)) {
+                // The picker's explicit exclusions (config.php). These forums pass
+                // every generic rule, so without this a crafted request could move a
+                // post somewhere the composer will not even offer.
+                $bad = 'That forum does not take new posts.';
             } elseif (!current_user_can('publish_topics', $cand)) {
                 $bad = 'You cannot post in that forum.';
             }

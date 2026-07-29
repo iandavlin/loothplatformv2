@@ -77,6 +77,18 @@ define('LG_BB_MIRROR_HOST', $shared['host'] ?? ($bb_req_host !== '' ? $bb_req_ho
 define('LG_BB_MIRROR_SCHEMA_PG',  LG_BB_MIRROR_APP_ROOT . '/schema.pg.sql');
 define('LG_BB_MIRROR_WP_LOAD',    LG_BB_MIRROR_WP_PATH  . '/wp-load.php');
 
+// Forums a member may NOT start a topic in from a composer, beyond what the
+// generic rules (public + open + forum_type 'forum' + no sub-forums) already
+// exclude. Both of these look perfectly postable to those rules:
+//   3876  Quick Questions      — public, open, a leaf. Excluded by product decision.
+//   67251 Anonymous Questions  — has its own posting route.
+// Lives HERE because two different pools have to agree about it: the add-post
+// picker is rendered by web/_chrome.php on the bb-mirror pool (PG), and the topic
+// edit PUT enforces it in api/v0/reply.php on the WP pool. When only the picker
+// knew, the list was merely "not offered" — a hand-built request could still file
+// a post into one, and moving a post there was accepted by the edit endpoint.
+define('LG_BB_MIRROR_NONPOSTABLE_FORUM_IDS', [3876, 67251]);
+
 // Postgres (forums schema in shared looth DB)
 define('LG_BB_MIRROR_PG_DB',      $shared['pg_db'] ?? 'looth');
 define('LG_BB_MIRROR_PG_SCHEMA',  'forums');
