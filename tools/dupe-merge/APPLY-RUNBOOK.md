@@ -3,7 +3,7 @@
 For Ian, on live. Covers **only the 26 auto pairs**. The 12 holds are ruled on
 separately and every command here excludes them by construction.
 
-Branch `dupe-merge`, SHA `bb093fa` or later.
+Branch `dupe-merge`, SHA `3644369` or later.
 
 ---
 
@@ -59,7 +59,7 @@ Two more things to know before the first write:
 ```bash
 git -C <checkout> fetch origin
 git -C <checkout> checkout dupe-merge
-git -C <checkout> rev-parse --short HEAD      # expect bb093fa or later
+git -C <checkout> rev-parse --short HEAD      # expect 3644369 or later
 cd <checkout>
 ```
 
