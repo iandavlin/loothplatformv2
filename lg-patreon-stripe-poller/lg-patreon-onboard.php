@@ -820,6 +820,113 @@ function lgpo_alert_failure( string $context, string $detail ): void {
 }
 
 /**
+ * DUPLICATE-ACCOUNT ALARM — the second half of Ian's 2026-07-29 requirement:
+ * "an email for 2 things: a duplicate being created, or the patreon api
+ * rejecting my keys." Keys-rejection is already covered by lgpo_alert_failure()
+ * from the sweep's 401 / config paths and is deliberately untouched; this is the
+ * duplicate half, and it reuses that same function so it travels the identical
+ * X-LG-Poller-Intent bypass (the gate suppresses everything else poller-framed).
+ *
+ * Runs after each completed sweep. LIVE ONLY — dev2 mints and deletes test
+ * accounts constantly, so running it there would cry wolf and train the alarm to
+ * be ignored.
+ *
+ * TWO signatures, because either alone is blind to half the problem
+ * (audit §1.6 vs §8):
+ *   (a) the same lgpo_patreon_user_id on more than one WP user — a true split
+ *       identity. Zero on live today, so any hit is new and real.
+ *   (b) a `patreon_<id>` skeleton login whose embedded id is a DIFFERENT user's
+ *       lgpo_patreon_user_id — the historical email-keyed failure mode, which
+ *       (a) structurally cannot see: the known duplicate pairs contain ZERO
+ *       id-splits, so an (a)-only alarm would have caught none of them.
+ *
+ * Cost: two small indexed reads (~1.8k + ~1.6k rows on live) joined in PHP. The
+ * obvious single-query form joins on meta_value, which WP does not index, so it
+ * degrades to a ~2.7M-row nested loop every tick — hence the hash join here.
+ *
+ * (b)'s 11 known offenders as of 2026-07-29 ship as the default baseline so only
+ * NEW pairs alert; every alerted key is remembered so a persisting condition
+ * mails ONCE, not every tick; and a key that clears is forgotten, so a genuine
+ * recurrence alerts again.
+ */
+function lgpo_dupe_alarm_is_live(): bool {
+    $host = strtolower( (string) wp_parse_url( (string) get_option( 'siteurl', '' ), PHP_URL_HOST ) );
+    return $host === 'loothgroup.com' || $host === 'www.loothgroup.com';
+}
+
+function lgpo_dupe_alarm_baseline(): array {
+    // audit §8 — 'b:<skeleton wp id>:<partner wp id>', verified on live 2026-07-29.
+    return (array) get_option( 'lgpo_dupe_alarm_baseline', [
+        'b:84:1856', 'b:195:1758', 'b:399:1841', 'b:471:1786', 'b:505:1756', 'b:615:1798',
+        'b:676:1574', 'b:1154:1333', 'b:1407:1793', 'b:1516:1690', 'b:1520:1781',
+    ] );
+}
+
+function lgpo_check_duplicate_alarm(): void {
+    if ( ! lgpo_dupe_alarm_is_live() ) {
+        return;
+    }
+    global $wpdb;
+    $found = [];
+
+    $by_pid = [];
+    foreach ( (array) $wpdb->get_results(
+        "SELECT user_id, meta_value FROM {$wpdb->usermeta}
+          WHERE meta_key = 'lgpo_patreon_user_id' AND meta_value <> ''"
+    ) as $m ) {
+        $by_pid[ (string) $m->meta_value ][] = (int) $m->user_id;
+    }
+
+    // (a) one Patreon id, several WP users.
+    foreach ( $by_pid as $pid => $ids ) {
+        if ( count( $ids ) > 1 ) {
+            sort( $ids );
+            $found[ 'a:' . $pid ] = sprintf(
+                '(a) Patreon id %s is linked to WP users %s', $pid, implode( ', ', $ids )
+            );
+        }
+    }
+
+    // (b) skeleton username carrying an id that belongs to a different account.
+    foreach ( (array) $wpdb->get_results(
+        "SELECT ID, user_login FROM {$wpdb->users} WHERE user_login LIKE 'patreon\\_%'"
+    ) as $u ) {
+        $pid = substr( (string) $u->user_login, 8 );
+        if ( $pid === '' ) {
+            continue;
+        }
+        foreach ( $by_pid[ $pid ] ?? [] as $other ) {
+            if ( $other === (int) $u->ID ) {
+                continue;
+            }
+            $found[ sprintf( 'b:%d:%d', $u->ID, $other ) ] = sprintf(
+                '(b) skeleton WP #%d (%s) carries Patreon id %s, which is linked to WP #%d',
+                $u->ID, $u->user_login, $pid, $other
+            );
+        }
+    }
+
+    $keys = array_keys( $found );
+    // Drop cleared keys first, so a merged-then-recurring pair can alert again.
+    $seen = array_values( array_intersect( (array) get_option( 'lgpo_dupe_alarm_seen', [] ), $keys ) );
+    $new  = array_values( array_diff( $keys, lgpo_dupe_alarm_baseline(), $seen ) );
+
+    if ( $new ) {
+        lgpo_alert_failure(
+            'dupe.detected',
+            "A duplicate / split member account has appeared since the last sweep.\n\n"
+            . implode( "\n", array_map( static fn( $k ) => '  - ' . $found[ $k ], $new ) )
+            . "\n\n(a) = one Patreon id linked to two WP users."
+            . "\n(b) = a patreon_<id> skeleton whose id belongs to another account."
+            . "\n\nKnown pre-existing pairs are baselined and are NOT listed above."
+        );
+        $seen = array_values( array_unique( array_merge( $seen, $new ) ) );
+    }
+
+    update_option( 'lgpo_dupe_alarm_seen', $seen, false );
+}
+
+/**
  * Operator notification: a member completed onboarding. Emails Ian
  * (lgpo_contact_email, falling back to admin_email) — who, tier, source —
  * once per onboard. Fired from the three provisioning terminals:
@@ -932,6 +1039,53 @@ function lgpo_notify_failure( string $patron_email, string $patron_name, string 
         );
     } catch ( \Throwable $_ ) {
         // best-effort
+    }
+}
+
+/**
+ * Tell a member their SIGN-IN email changed — at BOTH the old and new address.
+ *
+ * The hourly sweep mirrors a patron's current Patreon email onto their WP
+ * account (LGPO_Sync_Engine::sync_wp_email), which silently rewrites their LOGIN
+ * identifier: email+password is a real login here (core registers
+ * wp_authenticate_email_password, and RestController::giftAuth checks passwords
+ * against an email lookup). WP core's own "Email Changed" notice cannot cover
+ * this — it mails only the OLD address, and being poller-framed it is suppressed
+ * by Plugin::gateOutboundMail while lgms_poller_mail_enabled is off. So this is a
+ * purpose-written notice carrying the agreed X-LG-Poller-Intent bypass marker,
+ * sent to BOTH addresses so the member learns the new one whichever they read.
+ * The gate itself is deliberately untouched.
+ *
+ * Hooked on profile_update because that is the single point EVERY wp_update_user
+ * email change passes through — the sweep's mirror, the skeleton-adopt mirror,
+ * and admin/profile edits alike. (On an admin-initiated edit WP core's notice
+ * still sends too, so the old address may get both; an extra security notice is
+ * the benign failure direction, and silencing core is not ours to decide here.)
+ * Best-effort, never throws — callers are mid-sweep.
+ */
+add_action( 'profile_update', 'lgpo_notify_email_change', 10, 2 );
+function lgpo_notify_email_change( $user_id, $old_user_data = null ): void {
+    $user = get_userdata( (int) $user_id );
+    if ( ! $user || ! $old_user_data instanceof WP_User ) return;
+    $old = strtolower( trim( (string) $old_user_data->user_email ) );
+    $new = strtolower( trim( (string) $user->user_email ) );
+    if ( $new === '' || $new === $old || ! is_email( $new ) ) return;
+
+    $site    = wp_specialchars_decode( (string) get_option( 'blogname' ), ENT_QUOTES );
+    $name    = trim( (string) $user->display_name );
+    $headers = [ 'Content-Type: text/plain; charset=UTF-8', 'X-LG-Poller-Intent: notify' ];
+    $body    = ( $name !== '' ? "Hi {$name}," : 'Hi,' ) . "\n\n"
+        . "Your sign-in email for {$site} is now {$new}.\n\n"
+        . "Use that address next time you sign in — your password has not changed. "
+        . "If you weren't expecting this, just reply and we'll sort it out.\n\n"
+        . "— The Looth Group team\n";
+
+    foreach ( array_unique( array_filter( [ $old, $new ], 'is_email' ) ) as $to ) {
+        try {
+            wp_mail( $to, "Your sign-in email for {$site} has changed", $body, $headers );
+        } catch ( \Throwable $_ ) {
+            // best-effort
+        }
     }
 }
 

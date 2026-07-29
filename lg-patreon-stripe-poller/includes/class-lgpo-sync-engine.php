@@ -244,6 +244,31 @@ class LGPO_Sync_Engine {
         ) );
 
         self::send_summary( $results, true, $changes['stats'] );
+
+        // Duplicate-account alarm (Ian 2026-07-29). Live-only, self-baselining,
+        // deduped — see lgpo_check_duplicate_alarm(). Runs only on a sweep that
+        // actually completed: an aborted sweep already alerts via the
+        // keys-rejection path, and re-alarming there would double the noise.
+        // Best-effort — a failing alarm must never break the sweep.
+        if ( function_exists( 'lgpo_check_duplicate_alarm' ) ) {
+            try {
+                lgpo_check_duplicate_alarm();
+            } catch ( \Throwable $e ) {
+                error_log( 'LGPO dupe-alarm failed: ' . $e->getMessage() );
+                // A dead alarm must never read as "all clear" — the doctrine the
+                // keeper-side tools/keeper/dupe-alarm.sh states explicitly. Deduped
+                // to one mail a day so a persistent fault cannot spam every sweep.
+                if ( function_exists( 'lgpo_alert_failure' ) && ! get_transient( 'lgpo_dupe_alarm_fault' ) ) {
+                    set_transient( 'lgpo_dupe_alarm_fault', 1, DAY_IN_SECONDS );
+                    lgpo_alert_failure(
+                        'dupe.alarm_failed',
+                        "The duplicate-account alarm threw and did NOT run this sweep, so a new"
+                        . " duplicate could go unreported until this is fixed.\n\n" . $e->getMessage()
+                    );
+                }
+            }
+        }
+
         delete_transient( self::LOCK_KEY );
     }
 

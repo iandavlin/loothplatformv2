@@ -169,6 +169,28 @@ guard, no different-patreon-id conflict routing. Obeying that docblock would
 route the Patreon onboard back into **precisely the email-keyed logic that minted
 the 29 duplicates**, discarding all three guards proven in §1.2.
 
+**Hardened against dynamic dispatch (2026-07-29).** "Zero callers" from a static
+grep can miss `call_user_func`, `$class::$method`, or a callback stored as a
+string, so each was searched: no dynamic dispatch, no bare `'provision'` string
+in any PHP file, nothing outside the repo under dev2's `wp-content` reaching it,
+and no runbook or script invoking it.
+
+**It has, however, *run*.** dev2's `lg-user-audit.log` records **6** executions of
+`LGMS\UserLifecycle::provision`, all on **2026-06-04**, and every one has
+`… < eval < Eval_Command->__invoke < WP_CLI\Runner->run_command` in its trigger
+chain — i.e. hand-run via `wp eval` on the day the lifecycle work was built. So
+the honest description is **written, hand-tested, never wired** — abandonment
+mid-implementation, not code whose callers were later removed.
+
+**One doc dependency to clear in the same commit.** `docs/atlas/NAMING-UNIFICATION-SPEC.md:48`
+still describes this mint as part of the live design ("§2 Patreon human-handle
+minting" is flagged STILL LIVE in that spec's header). It is only *descriptive* —
+§2 was actually built in `lgpo_generate_username()` (`lg-patreon-onboard.php:1470–1491`),
+whose name → vanity → +tag-stripped email → `looth-member` chain matches the spec
+exactly — so deleting `provision()` breaks nothing there. But that line should be
+corrected alongside the deletion, for the same reason the docblock is the real
+hazard: a stale pointer is what sends the next reader back to the wrong door.
+
 ### Recommendation: **delete lines 206–409.** Do not make it real.
 
 The docblock is more dangerous than the code, because it is an instruction. The
@@ -282,9 +304,19 @@ degrades **loudly**, which is correct.
 > revokes OAuth refresh tokens on a password change. That is Patreon-side
 > behaviour and I did not browse (and should not guess — guessing is the failure
 > this lane exists to correct). What *is* verified is our side: if the tokens are
-> revoked by anything, polling stops and Ian is emailed. **Operational note:**
-> `lgpo_creator_token_expires_at` on live = **2026-07-31 01:52 UTC** — about two
-> days out. Refresh-on-401 should rotate it; if it does not, polling stops.
+> revoked by anything, polling stops and Ian is emailed.
+
+**Operational note, re-checked 2026-07-29 03:33 UTC.** The creator token was
+obtained **2026-07-01 01:52** and expires **2026-07-31 01:52** — a 30-day life,
+never yet rotated. Polling is healthy right now (`lgpo_last_sync_time` =
+2026-07-29 02:38, under an hour old). The self-heal is real and reachable: on
+expiry the next sweep 401s, `fetch_all_members` calls
+`lgpo_refresh_creator_token()` once (`:306–337`), persists the new pair —
+correctly keeping the old refresh token if Patreon does not reissue one
+(`:957–959`) — and retries the same page. If the refresh also fails it emails
+`sync.refresh_failed`, which bypasses the mail gate. **So no action is needed;
+this degrades loudly rather than silently.** Worth watching on 7/31 only to
+confirm the rotation actually happened.
 
 ### 4.3 A member changes their EMAIL on Patreon — this is the real problem
 
@@ -300,15 +332,21 @@ The chain, each step read:
 4. `_looth_uuid` is **not** re-derived (`stamp_looth_uuid` returns early if set,
    `:784–787`). This is correct and important: the JWT `sub` stays stable, so the
    member is **not** logged out and their profile/identity survives.
+   **Measured on dev2, 2026-07-29** — across a real email change the uuid held at
+   `3dcadeb3-…` rather than becoming the new-email uuid `15b4e080-…`, and
+   re-running `stamp_looth_uuid()` was a no-op. So the member keeps their session
+   and profile; what they lose is only the ability to sign in with the address
+   they know. This is the one part of the mirror that is behaving correctly.
 5. profile-app is never told (§5) — it keeps the old address as `primary_email`.
 
-**Does the member get told? No — and the mechanism is exact.** WP core *does*
-send a `"[Site] Email Changed"` notice to the **old** address
-(`/var/www/dev/wp-includes/user.php:2818–2845`, `'headers' => ''`), and nothing
-in this repo filters `send_email_change_email`. But that `wp_mail()` is called
-from inside `wp_update_user()`, which is called from the poller. The plugin
-installs `pre_wp_mail` → `Plugin::gateOutboundMail` (`Plugin.php:135, 273`),
-which:
+**Does the member get told? No — and the mechanism is exact.** An email-change
+notice *is* generated, to the **old** address only. WP core ships one
+(`/var/www/dev/wp-includes/user.php:2818–2845`, `'headers' => ''`); on this
+install BuddyBoss supersedes it with its own *"Notice of Email Change"*
+(`buddyboss-platform/bp-core/bp-core-wp-emails.php`). Either way it carries **no**
+`X-LG-Poller-Intent` header, and it is emitted from inside `wp_update_user()` —
+i.e. from the poller's own call stack. The plugin installs `pre_wp_mail` →
+`Plugin::gateOutboundMail` (`Plugin.php:135, 273`), which:
 
 - passes anything carrying `X-LG-Poller-Intent` (`:278`) — core's notice has no
   headers;
@@ -322,6 +360,17 @@ which:
 
 **⇒ The member's login email is changed and WP's own notification of that change
 is swallowed by the poller's mail gate.**
+
+**Measured on dev2, 2026-07-29** (probe asserts on the gate's `pre_wp_mail`
+verdict, not on `wp_mail()` returning true — mailpit accepts everything, so a
+`true` return proves nothing). Driving an email change from a required file under
+`/lg-patreon-stripe-poller/` — the same frame shape `sync_wp_email()` has:
+
+```
+BEFORE  SUPPRESSED  tagged=no   "[The Looth Group] Notice of Email Change"  -> old address
+        (that was the ONLY notification — the member is told nothing)
+```
+Fixed in §7 item 1; the after-state is recorded there.
 
 **And Ian is not told either.** If the member later tries their old email,
 `lg-login-monitor` early-returns because the address no longer resolves to a user
@@ -500,15 +549,79 @@ Each of these is load-bearing and was verified against live data:
 
 | # | Change | Size | Risk | Why now |
 |---|---|---|---|---|
-| 1 | Un-suppress the email-change notice to the member (§4.3) | ~10 lines | low | Members are silently losing their login identifier today |
+| 1 | ~~Un-suppress the email-change notice to the member (§4.3)~~ **DONE** — `lgpo_notify_email_change()`, `lg-patreon-onboard.php` | +47 | low | Members were silently losing their login identifier |
 | 2 | `profile_update` hook **+ live nginx route** (§5) | ~25 lines + conf | low | Receiver already built and correct; 18 members drifted |
 | 3 | Delete `UserLifecycle.php:206–409` (§2) | −204 | none | Zero callers; its docblock is an active instruction to regress |
 | 4 | Fail-loud the `UserProvisioner` mint branch (§3) | −133/+5 | low | Runs every 5 min; only remaining hot email-keyed minter |
-| 5 | Backfill the 18 drifted profile-app emails | script | low | After #2 exists |
+| 5 | Backfill the 18 drifted profile-app emails — **dry run built**, `tools/backfill-profile-app-emails-dryrun.sh` | script | low | Ready; apply is Ian's |
 | 6 | Unify into `LgIdentity` (§6 phase 2) | −140 | medium | Only after 1–4, and only if Ian wants it |
 
 Items 1–4 are independent and can ship separately. Item 6 is optional — the code
 is correct as it stands; unification buys comprehensibility, not correctness.
+
+### Item 1 — shipped on this branch (Ian approved 2026-07-29). NOT deployed.
+
+`lgpo_notify_email_change()` in `lg-patreon-onboard.php`, hooked on
+`profile_update` — the single point every `wp_update_user` email change passes
+through (the sweep's mirror, the skeleton-adopt mirror, admin edits). Sends one
+short purpose-written notice — *"Your sign-in email for … is now X"* — to **both**
+the old and new address, tagged `X-LG-Poller-Intent: notify`. **The gate itself is
+untouched.**
+
+Proven on dev2 with the same frame shape `sync_wp_email()` has:
+
+```
+BEFORE  SUPPRESSED  tagged=no   "Notice of Email Change"                 -> old
+AFTER   PASSED      tagged=yes  "Your sign-in email for … has changed"   -> new
+        PASSED      tagged=yes  "Your sign-in email for … has changed"   -> old
+        SUPPRESSED  tagged=no   "Notice of Email Change"                 -> new
+```
+
+Controls confirm the gate still works as before: `lgpo_notify_admin()`
+(poller-framed, untagged) → SUPPRESSED; `lgpo_notify_failure()` (poller-framed,
+tagged) → PASSED. Assertions are on the gate's `pre_wp_mail` verdict, never on
+`wp_mail()`'s return value.
+
+**Known trade-off, flagged for Ian:** on an *admin-initiated* edit (no poller
+frame) BuddyBoss's notice is not suppressed, so the old address receives both it
+and this one. An extra security notice is the benign direction; silencing
+BuddyBoss/core is a separate decision and was not taken here.
+
+### Item 5 — dry run built (Ian approved 2026-07-29). NOTHING APPLIED.
+
+`tools/backfill-profile-app-emails-dryrun.sh` — five SELECTs and no other verb;
+it refuses to run unless `siteurl` is `https://loothgroup.com`, prints the
+per-member report (wp id, profile-app uuid, old and new `primary_email`), and
+emits the APPLY and ROLLBACK statements for Ian. It mirrors
+`Provision::applyEmailChange` exactly: `users.uuid` is never touched, the new
+address becomes an alias, and the old address stays an alias as history.
+
+**The 18 split 14 / 4, and the 4 would have broken a naive backfill.** For wp
+**#224, #560, #1431, #1768** the target address is already `primary_email` on a
+*different* profile-app row, and `primary_email` is UNIQUE NOT NULL — a
+straight `UPDATE` would abort the transaction. Each blocker turns out to be an
+**archived, unbridged orphan whose slug names the very same WP id**
+(`patreon_19682448-224`, `patreon_104272702-560`, `patreon_178784349-1431`,
+`tmcdonough8-1768`, all archived 2026-07-14) — i.e. a second identity minted for
+that member and later archived. The script therefore emits three blocks:
+
+- **A** — the 14 clean moves, plus a verify `SELECT` before `COMMIT`.
+- **B1** — the applyEmailChange-faithful handling of the 4: leave `primary_email`
+  alone, add the alias only. Safe, matches what the hook would have done.
+- **B2** — the fuller repair: park the archived orphan on a placeholder, then
+  move the address. Reversible, and it refuses any blocker that is not an
+  archived unbridged orphan.
+
+**One trap worth recording:** B2's placeholder is `looth-orphan-<pg id>@invalid`,
+*not* the legacy `looth-<id>@invalid`. The legacy placeholders are keyed by **WP**
+id and already run past `looth-1890@invalid`, which overlaps the pg-id range the
+orphans sit in — so the obvious name would have been a live collision risk. The
+script also checks the placeholder is unused before emitting the statement.
+
+**Cross-lane note:** wp **#1333** and **#1690** are also partner accounts in the
+§8 skeleton pairs. This backfill only touches profile-app and does not move any
+WP row, so it does not collide with `dupe-merge` — but that lane should know
+those two identities will have had their `primary_email` corrected.
 
 ---
 
