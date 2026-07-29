@@ -85,6 +85,51 @@ foreach (['forum', 'topic', 'reply'] as $kind) {
     echo "  {$counts[$kind]} {$kind}(s)\n";
 }
 
+// ---------- ghost sweep (the reverse pass) --------------------------------
+// The delta walk above is driven entirely from wp_posts, so it can only repair
+// rows that STILL EXIST in WordPress. Rows that exist only in the mirror —
+// GHOSTS — can never appear in that query, and they still render to members.
+// See bb_mirror_sweep_ghosts() in lib/materializers.php for the mechanism, the
+// two paths that produce them, and the safety rails.
+//
+// REPORT-ONLY BY DEFAULT: set BB_MIRROR_SWEEP_GHOSTS=1 to actually delete. The
+// timer starts reporting ghosts immediately at zero risk; the sweep gets turned
+// on once the numbers are trusted.
+$sweep_ghosts = getenv('BB_MIRROR_SWEEP_GHOSTS') === '1';
+echo "Ghost sweep — " . ($sweep_ghosts ? "ACTIVE" : "report-only (BB_MIRROR_SWEEP_GHOSTS=1 to delete)") . "\n";
+
+$ghost_report = bb_mirror_sweep_ghosts(
+    $db,
+    fn(string $kind) => $wpdb->get_col($wpdb->prepare(
+        "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s", $kind)),
+    $sweep_ghosts
+);
+foreach ($ghost_report as $kind => $r) {
+    $sample = implode(', ', array_slice($r['ids'], 0, 20)) . (count($r['ids']) > 20 ? ', …' : '');
+    switch ($r['status']) {
+        case 'clean':
+            echo "  {$kind}: none\n"; break;
+        case 'abort_empty_wp':
+            echo "  {$kind}: ABORT — wp_posts returned zero rows. Refusing to read that as "
+               . "'everything was deleted'.\n"; break;
+        case 'refused_cap':
+            echo "  {$kind}: {$r['ghosts']} ghost(s) of {$r['total']} EXCEEDS the cap "
+               . "({$r['allowed']}). Refusing to sweep — investigate. ids: {$sample}\n"; break;
+        case 'report_only':
+            echo "  {$kind}: {$r['ghosts']} ghost(s) of {$r['total']} — REPORT ONLY, nothing "
+               . "deleted. ids: {$sample}\n"; break;
+        case 'swept':
+            echo "  {$kind}: swept {$r['ghosts']} ghost(s) of {$r['total']}. ids: {$sample}\n"; break;
+    }
+    // A ghost topic whose replies still exist in WordPress is never swept: the FK
+    // cascade would take those live replies with it. Surfaced, not silently skipped.
+    if (!empty($r['held'])) {
+        echo "  {$kind}: HELD " . count($r['held']) . " ghost topic(s) that still have replies "
+           . "live in WordPress — sweeping them would cascade those replies away. "
+           . "ids: " . implode(', ', $r['held']) . "\n";
+    }
+}
+
 // ---------- reply_count rollup --------------------------------------------
 // bbPress doesn't bump a topic's post_modified_gmt when a reply is added or
 // removed, so the delta-walk above never re-materializes the parent topic and
