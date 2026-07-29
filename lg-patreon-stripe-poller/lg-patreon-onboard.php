@@ -1063,6 +1063,25 @@ function lgpo_notify_failure( string $patron_email, string $patron_name, string 
  * the benign failure direction, and silencing core is not ours to decide here.)
  * Best-effort, never throws — callers are mid-sweep.
  */
+/**
+ * Explicit source flag for the notice below. The sweep's email mirror sets this
+ * immediately around its wp_update_user so the copy can say the new address
+ * matches Patreon; every other writer (admin edit, profile edit) leaves it empty
+ * and gets the neutral wording. Deliberately an explicit hand-off rather than the
+ * hook sniffing a backtrace — the mail gate already taught us that inferring a
+ * caller from the stack is brittle, and a wrong guess here puts a false statement
+ * about the member's Patreon account into their inbox.
+ *
+ * Pass a string to set, null to read. Callers MUST clear it in a finally.
+ */
+function lgpo_email_change_source( ?string $set = null ): string {
+    static $source = '';
+    if ( $set !== null ) {
+        $source = $set;
+    }
+    return $source;
+}
+
 add_action( 'profile_update', 'lgpo_notify_email_change', 10, 2 );
 function lgpo_notify_email_change( $user_id, $old_user_data = null ): void {
     $user = get_userdata( (int) $user_id );
@@ -1074,8 +1093,12 @@ function lgpo_notify_email_change( $user_id, $old_user_data = null ): void {
     $site    = wp_specialchars_decode( (string) get_option( 'blogname' ), ENT_QUOTES );
     $name    = trim( (string) $user->display_name );
     $headers = [ 'Content-Type: text/plain; charset=UTF-8', 'X-LG-Poller-Intent: notify' ];
+    // Only the sweep's Patreon mirror may claim the address matches Patreon.
+    $lede    = lgpo_email_change_source() === 'patreon_sweep'
+        ? "Your sign-in email for {$site} is now {$new}, matching the email on your Patreon account."
+        : "Your sign-in email for {$site} is now {$new}.";
     $body    = ( $name !== '' ? "Hi {$name}," : 'Hi,' ) . "\n\n"
-        . "Your sign-in email for {$site} is now {$new}.\n\n"
+        . $lede . "\n\n"
         . "Use that address next time you sign in — your password has not changed. "
         . "If you weren't expecting this, just reply and we'll sort it out.\n\n"
         . "— The Looth Group team\n";
