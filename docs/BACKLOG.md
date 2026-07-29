@@ -3,6 +3,17 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-29 — Reacting on a shorty fails on LIVE (Ian, screenshot w/ console)
+
+On live, e.g. /shorty/dan-erlewine-stewmac-purfling-jig-mod/: tapping a
+reaction emoji fails — console shows POST /archive-api/v0/card-react returning
+**400**, twice, from inject_main.js. The react strip renders (lg-pf-react__opt
+buttons) but the endpoint rejects the payload. Suspects: archive-poc's
+card-react endpoint validating something live's page doesn't send (auth/token
+shape, card id format for shorties), or shorty cards minting ids the endpoint
+refuses. Verify on live read-only first; the fix likely lives in archive-poc
+(web or api/v0/card-react). Member-visible on live — high priority next seat.
+
 ## 2026-07-29 — Group chat header: verbose member list + cramped text (Ian, screenshot)
 
 Seen on Partners Chat (8 people): the panel header lists every member's full
