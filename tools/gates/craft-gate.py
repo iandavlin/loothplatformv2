@@ -87,10 +87,10 @@ def gate_token():
     if m:
         return m.group(1)
 
-    sys.exit(
-        "cannot read dev gate token — tried conf.d/loothdev-auth.conf then "
-        "sites-available/dev.loothgroup.com.conf; override with LG_DEV_GATE_TOKEN"
-    )
+    print("==================== CRAFT GATE CANNOT RUN ====================")
+    print("  cannot read dev gate token — tried conf.d/loothdev-auth.conf then")
+    print("  sites-available/dev.loothgroup.com.conf; override with LG_DEV_GATE_TOKEN")
+    sys.exit(2)   # missing prerequisite, NOT a craft violation
 
 
 def _read_if(path):
@@ -115,8 +115,9 @@ def member_cookies():
              " 2>/dev/null")
     jwt = sh("sudo -n -u profile-app php /srv/profile-app/bin/mint-dev-token.php 1 2>/dev/null | tail -1")
     if "=" not in wpc or not jwt:
-        sys.exit("GATE-ERROR  could not mint member cookies (wp-cli as root? mint-dev-token?) — "
-                 "gate CANNOT RUN; this is not a craft failure")
+        print("==================== CRAFT GATE CANNOT RUN ====================")
+        print("  could not mint member cookies (wp-cli as root? mint-dev-token?)")
+        sys.exit(2)   # this text already said CANNOT RUN while exiting 1 — that was the bug
     n, v = wpc.split("=", 1)
     return [(n, urllib.parse.unquote(v)), ("looth_id", jwt)]
 
@@ -215,8 +216,49 @@ def check(label, data):
     return v, img_kb, total_kb
 
 
+def preflight():
+    """Prerequisites, checked BEFORE any page is audited. Exits 2, never 1.
+
+    Two ways this gate dies without failing: no browser to drive, and a HOST that
+    no longer exists. Both used to surface as one GATE-ERROR line per page and an
+    exit 1 — indistinguishable from finding real violations, which is how this gate
+    sat dead for weeks while everyone read it as an ordinary red.
+    """
+    import socket
+    try:
+        urllib.request.urlopen(CDP + "/json/version", timeout=5).read()
+    except Exception as e:
+        print("==================== CRAFT GATE CANNOT RUN ====================")
+        print(f"  no browser on {CDP} ({e})")
+        print("  This gate drives a real Chrome over CDP. Nothing was audited, so this")
+        print("  is NOT a pass and NOT a failure — there is no verdict at all.")
+        print("  Start an engine (ask keeper — one per box) and re-run.")
+        sys.exit(2)
+    # DNS alone is NOT enough, and this is the case that actually bit us: the retired
+    # dev.loothgroup.com still resolves (to 50.19.198.38) but nothing answers on 443.
+    # A gate pointed at it produced one connection error per page and exited 1, which
+    # read as an ordinary RED for weeks. So probe the socket, not just the name.
+    host = urllib.parse.urlsplit(HOST).hostname or ""
+    try:
+        socket.getaddrinfo(host, 443)
+    except Exception as e:
+        print("==================== CRAFT GATE CANNOT RUN ====================")
+        print(f"  gate HOST does not resolve: {host} ({e})")
+        print("  Nothing was audited. This is a DEAD HARNESS, not a craft failure.")
+        sys.exit(2)
+    try:
+        socket.create_connection((host, 443), timeout=8).close()
+    except Exception as e:
+        print("==================== CRAFT GATE CANNOT RUN ====================")
+        print(f"  gate HOST resolves but does not answer on 443: {host} ({e})")
+        print("  Nothing was audited. The host this gate points at is DEAD — this is a")
+        print("  broken harness, NOT a craft failure. Fix HOST before trusting any run.")
+        sys.exit(2)
+
+
 def main():
     flt = sys.argv[sys.argv.index("--page") + 1] if "--page" in sys.argv else ""
+    preflight()
     gate = gate_token()
     member = member_cookies()
     fails, ok = [], 0
