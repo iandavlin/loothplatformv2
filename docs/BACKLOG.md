@@ -55,6 +55,11 @@ that store alongside members.
 
 ## 2026-07-29 — Events mobile: banner cut off + time listed twice (Ian, screenshot)
 
+RULING ADDED (Ian, later 7/29): on MOBILE, don't open the event modal/sheet at
+all — clicking an event goes straight through to the event's post page. The
+crop + duplicate-time fixes then apply to whatever surfaces still use the sheet
+(desktop).
+
 On the mobile event sheet (seen on "Looth Pro — Intermediate Inlay with CNC"):
 (1) the banner image is cut off — the AUG-2 date chip overlaps the artwork and
 the bottom of the banner crops the "August 2nd, 3PM" text baked into the image;
