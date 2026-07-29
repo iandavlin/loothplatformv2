@@ -543,7 +543,7 @@ Each of these is load-bearing and was verified against live data:
 | 2 | `profile_update` hook **+ live nginx route** (§5) | ~25 lines + conf | low | Receiver already built and correct; 18 members drifted |
 | 3 | Delete `UserLifecycle.php:206–409` (§2) | −204 | none | Zero callers; its docblock is an active instruction to regress |
 | 4 | Fail-loud the `UserProvisioner` mint branch (§3) | −133/+5 | low | Runs every 5 min; only remaining hot email-keyed minter |
-| 5 | Backfill the 18 drifted profile-app emails | script | low | After #2 exists |
+| 5 | Backfill the 18 drifted profile-app emails — **dry run built**, `tools/backfill-profile-app-emails-dryrun.sh` | script | low | Ready; apply is Ian's |
 | 6 | Unify into `LgIdentity` (§6 phase 2) | −140 | medium | Only after 1–4, and only if Ian wants it |
 
 Items 1–4 are independent and can ship separately. Item 6 is optional — the code
@@ -576,6 +576,42 @@ tagged) → PASSED. Assertions are on the gate's `pre_wp_mail` verdict, never on
 frame) BuddyBoss's notice is not suppressed, so the old address receives both it
 and this one. An extra security notice is the benign direction; silencing
 BuddyBoss/core is a separate decision and was not taken here.
+
+### Item 5 — dry run built (Ian approved 2026-07-29). NOTHING APPLIED.
+
+`tools/backfill-profile-app-emails-dryrun.sh` — five SELECTs and no other verb;
+it refuses to run unless `siteurl` is `https://loothgroup.com`, prints the
+per-member report (wp id, profile-app uuid, old and new `primary_email`), and
+emits the APPLY and ROLLBACK statements for Ian. It mirrors
+`Provision::applyEmailChange` exactly: `users.uuid` is never touched, the new
+address becomes an alias, and the old address stays an alias as history.
+
+**The 18 split 14 / 4, and the 4 would have broken a naive backfill.** For wp
+**#224, #560, #1431, #1768** the target address is already `primary_email` on a
+*different* profile-app row, and `primary_email` is UNIQUE NOT NULL — a
+straight `UPDATE` would abort the transaction. Each blocker turns out to be an
+**archived, unbridged orphan whose slug names the very same WP id**
+(`patreon_19682448-224`, `patreon_104272702-560`, `patreon_178784349-1431`,
+`tmcdonough8-1768`, all archived 2026-07-14) — i.e. a second identity minted for
+that member and later archived. The script therefore emits three blocks:
+
+- **A** — the 14 clean moves, plus a verify `SELECT` before `COMMIT`.
+- **B1** — the applyEmailChange-faithful handling of the 4: leave `primary_email`
+  alone, add the alias only. Safe, matches what the hook would have done.
+- **B2** — the fuller repair: park the archived orphan on a placeholder, then
+  move the address. Reversible, and it refuses any blocker that is not an
+  archived unbridged orphan.
+
+**One trap worth recording:** B2's placeholder is `looth-orphan-<pg id>@invalid`,
+*not* the legacy `looth-<id>@invalid`. The legacy placeholders are keyed by **WP**
+id and already run past `looth-1890@invalid`, which overlaps the pg-id range the
+orphans sit in — so the obvious name would have been a live collision risk. The
+script also checks the placeholder is unused before emitting the statement.
+
+**Cross-lane note:** wp **#1333** and **#1690** are also partner accounts in the
+§8 skeleton pairs. This backfill only touches profile-app and does not move any
+WP row, so it does not collide with `dupe-merge` — but that lane should know
+those two identities will have had their `primary_email` corrected.
 
 ---
 
