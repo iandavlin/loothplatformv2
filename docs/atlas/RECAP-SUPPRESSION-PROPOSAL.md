@@ -73,6 +73,15 @@ and `is_read = false` for forum types:
 
 Counted against bridged members only, which is what the digest can actually mail.
 
+> **These are a DATED SNAPSHOT, not constants — re-derive them, do not quote them.**
+> `dev/measure-suppression-axes.sh` prints all of it in one read-only run. Re-run
+> 2026-07-29, one day later, for comparison: connection_request 94 named / 259 stale,
+> forum items 3+2+1, **277 mailed (38 named-only, 181 counted-only, 58 both)**. The
+> 7-day window slides daily, so the named counts move; what has NOT moved is the shape
+> — **181 counted-only on both days, identical.** That is the load-bearing number,
+> because it is the population that receives an email *only* because the counted
+> register exists, and it is stable.
+
 > *I got this table wrong first time and it is worth saying how.* I published a per-type stale
 > breakdown of 253/3/1/2 that I had **inferred from the total rather than measured** — the total was
 > real, the split was not. Measured, **every single stale item is a connection request**. The reason

@@ -74,6 +74,36 @@ namespace Looth\ProfileApp;
  */
 final class Recap
 {
+    /**
+     * ── ONE DEFINITION OF "STILL OUTSTANDING", USED BY BOTH REGISTERS ─────────
+     *
+     * The named query and the counted query MUST agree on what is still owed, and on
+     * 2026-07-29 they did not: the counted side was updated to let the connection
+     * EDGE decide and the named side was left on a blanket `is_read = false`. A
+     * member who had merely *looked* at a request vanished from the named register
+     * while still appearing in the counted one, and — since empty now means no email
+     * — someone with exactly one unanswered request received nothing at all.
+     * Measured, not theorised: wp:1946 on this box.
+     *
+     * The two queries expressed the same rule in two different shapes, which is
+     * exactly how they drifted. So there is one shape now, in one place, and neither
+     * query owns it.
+     *
+     *   connection_request  the EDGE decides, and is_read is NOT consulted. Reading a
+     *                       request is not answering it, and bottom-nav.js:1128
+     *                       auto-marks every row read 700ms after the mobile
+     *                       notification sheet opens — so a glance would otherwise
+     *                       cost that member their whole digest.
+     *   connection_accept   excluded WP-side by INCLUDED_TYPES, but the store must not
+     *                       hand back a lie either way.
+     *   hub rows            no edge exists, so is_read is the only resolution signal
+     *                       they have. Documented as a limit, not a preference.
+     */
+    private const OUTSTANDING = "
+              (n.type = 'connection_request' AND c.status = 'pending')
+           OR (n.type = 'connection_accept'  AND c.status = 'accepted' AND n.is_read = false)
+           OR (n.connection_id IS NULL AND n.is_read = false)";
+
     /** Hard ceiling per member — a runaway week cannot make one recipient's payload huge. */
     private const MAX_ROWS = 50;
 
@@ -158,23 +188,7 @@ final class Recap
                   LEFT JOIN connections c ON c.id = n.connection_id
                  WHERE n.user_uuid IN ($uph)
                    AND n.created_at >= now() - make_interval(days => ?)
-                   AND (
-                         -- connection_request: THE EDGE DECIDES, NEVER is_read.
-                         -- Reading a request is not answering it, and the mobile
-                         -- notification sheet auto-marks every row read 700ms after
-                         -- it opens (bottom-nav.js:1128) — so suppressing on is_read
-                         -- silences a live to-do for anyone who glances at their
-                         -- phone. Since empty now means NO EMAIL, that costs them the
-                         -- whole digest, not one row. (Ian, 2026-07-28.)
-                         (n.type = 'connection_request' AND c.status = 'pending')
-                         -- connection_accept is excluded WP-side by INCLUDED_TYPES,
-                         -- but the store must not hand back a lie either way.
-                         OR (n.type = 'connection_accept' AND c.status = 'accepted'
-                             AND n.is_read = false)
-                         -- Hub rows (mentions, replies, reactions) have no edge, so
-                         -- is_read is the only resolution signal that exists for them.
-                         OR (n.connection_id IS NULL AND n.is_read = false)
-                       )
+                   AND (" . self::OUTSTANDING . ")
                  ORDER BY n.user_uuid, n.created_at DESC";
         $st = $pg->prepare($sql);
         $st->execute(array_merge($uuids, [$days]));
@@ -268,9 +282,7 @@ final class Recap
                   LEFT JOIN connections c ON c.id = n.connection_id
                  WHERE n.user_uuid IN ($uph)
                    AND n.created_at < now() - make_interval(days => ?)
-                   AND (CASE WHEN n.type = 'connection_request'
-                             THEN c.status = 'pending'
-                             ELSE n.is_read = false END)
+                   AND (" . self::OUTSTANDING . ")
                  GROUP BY n.user_uuid, n.type";
         $st = $pg->prepare($sql);
         $st->execute(array_merge($uuids, [$days]));
