@@ -717,13 +717,27 @@ if ($HTML) {
     $f = fopen($HTML, 'w');
     fwrite($f, '<!doctype html><meta charset="utf-8"><title>Profile URL backfill</title>'
         . '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        . '<style>body{font:15px/1.55 system-ui,sans-serif;max-width:1200px;margin:0 auto;padding:28px 20px 60px;color:#1f2320;background:#fbfaf7}'
-        . 'h1{font-size:26px;margin:0 0 6px}h2{font-size:18px;margin:34px 0 4px}.sub{color:#666;margin:0 0 20px}'
-        . '.why{color:#555;margin:0 0 12px;max-width:82ch}table{border-collapse:collapse;width:100%;font-size:13.5px;margin-top:8px}'
-        . 'th,td{border:1px solid #e2e0d9;padding:6px 9px;text-align:left;vertical-align:top}th{background:#f2f0ea}'
-        . 'td.old{color:#a33;font-family:ui-monospace,monospace}td.new{color:#186a3b;font-family:ui-monospace,monospace;font-weight:600}'
-        . 'tr:nth-child(even) td{background:#fff}.k{display:inline-block;background:#eef2ec;border:1px solid #d5ddd2;border-radius:5px;padding:1px 7px;font-size:12px;margin:0 6px 6px 0}'
-        . '.warn{background:#fff6e5;border:1px solid #e8d5a8;border-radius:8px;padding:12px 14px;margin:16px 0}'
+        // Every colour is a token with both themes defined — this page is read on a phone
+        // at night as often as at a desk, and a hardcoded white background is the standing
+        // dark-mode gate's single most common failure. prefers-color-scheme is the honest
+        // signal here: the page is standalone and carries none of the app chrome that would
+        // otherwise supply data-lguser-theme.
+        . '<style>:root{color-scheme:light dark;--bg:#fbfaf7;--ink:#1f2320;--ink2:#555;--ink3:#666;'
+        . '--line:#e2e0d9;--th:#f2f0ea;--zebra:#fff;--old:#a33;--new:#186a3b;'
+        . '--chip:#eef2ec;--chipline:#d5ddd2;--warn:#fff6e5;--warnline:#e8d5a8;--alert:#fdecea;--alertline:#e8b4ae}'
+        . '@media(prefers-color-scheme:dark){:root{--bg:#15171a;--ink:#e5e7e1;--ink2:#a8ada6;--ink3:#9aa09a;'
+        . '--line:#2f3438;--th:#1e2225;--zebra:#191c1f;--old:#e88b84;--new:#7fc99a;'
+        . '--chip:#1e2622;--chipline:#33403a;--warn:#2a2418;--warnline:#4a4025;--alert:#2c1c1b;--alertline:#5a3330}}'
+        . 'body{font:15px/1.55 system-ui,sans-serif;max-width:1200px;margin:0 auto;padding:28px 20px 60px;color:var(--ink);background:var(--bg)}'
+        . 'h1{font-size:26px;margin:0 0 6px}h2{font-size:18px;margin:34px 0 4px}.sub{color:var(--ink3);margin:0 0 20px}'
+        . '.why{color:var(--ink2);margin:0 0 12px;max-width:82ch}table{border-collapse:collapse;width:100%;font-size:13.5px;margin-top:8px}'
+        . 'th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}th{background:var(--th)}'
+        . 'td.old{color:var(--old);font-family:ui-monospace,monospace}td.new{color:var(--new);font-family:ui-monospace,monospace;font-weight:600}'
+        . 'tr:nth-child(even) td{background:var(--zebra)}.k{display:inline-block;background:var(--chip);border:1px solid var(--chipline);border-radius:5px;padding:1px 7px;font-size:12px;margin:0 6px 6px 0}'
+        . '.warn{background:var(--warn);border:1px solid var(--warnline);border-radius:8px;padding:12px 14px;margin:16px 0}'
+        . '.warn.alert{background:var(--alert);border-color:var(--alertline)}'
+        // Wide tables scroll inside their own box; the page body never scrolls sideways.
+        . '.scroll{overflow-x:auto}'
         . '@media(max-width:700px){table{font-size:12px}th,td{padding:4px 6px}}</style>');
     fwrite($f, '<h1>Profile URL backfill</h1><p class="sub">' . $h(date('Y-m-d H:i T')) . ' &middot; '
         . count($cand) . ' active members &middot; <b>' . count($actionable) . '</b> would change &middot; <b>'
@@ -732,7 +746,7 @@ if ($HTML) {
     // report that does not say where its rows came from is one that WILL be mistaken for
     // live data by whoever opens it next.
     if ($OFFLINE) {
-        fwrite($f, '<div class="warn" style="background:#fdecea;border-color:#e8b4ae"><b>Read this first — where these rows came from.</b> '
+        fwrite($f, '<div class="warn alert"><b>Read this first — where these rows came from.</b> '
             . 'Generated OFFLINE from the export <code>' . $h(basename((string) $FROM)) . '</code>'
             . ($OWNERS ? ' (+ <code>' . $h(basename((string) $OWNERS)) . '</code>)' : '')
             . '. It is exactly as live as that file and no more. If that export did not come from the '
@@ -753,13 +767,13 @@ if ($HTML) {
         if (!$sub) continue;
         fwrite($f, '<h2>' . $h($meta[0]) . ' <span class="k">' . count($sub) . '</span></h2>');
         fwrite($f, '<p class="why">' . $h($meta[1]) . '</p>');
-        fwrite($f, '<table><tr><th>member</th><th>current URL</th><th>proposed URL</th><th>name is</th><th>why</th></tr>');
+        fwrite($f, '<div class="scroll"><table><tr><th>member</th><th>current URL</th><th>proposed URL</th><th>name is</th><th>why</th></tr>');
         foreach ($sub as $p) {
             fwrite($f, '<tr><td>' . $h($p['name']) . '</td><td class="old">/u/' . $h($p['current']) . '</td>'
                 . '<td class="new">' . ($p['proposed'] !== '' ? '/u/' . $h($p['proposed']) : '<i>' . $h($p['action']) . '</i>')
                 . '</td><td>' . $h($p['provenance'] ?? '') . '</td><td>' . $h($p['why']) . '</td></tr>');
         }
-        fwrite($f, '</table>');
+        fwrite($f, '</table></div>');
     }
 
     if ($fragile) {
@@ -767,20 +781,20 @@ if ($HTML) {
         fwrite($f, '<p class="why">These resolve cleanly today, but each is one new signup away from the same '
             . 'collision. They are <b>not</b> being expanded — that would mean rewriting a name nobody asked us to '
             . 'touch. Flagged so you can decide whether to expand them now or leave them.</p>');
-        fwrite($f, '<table><tr><th>member</th><th>would become</th></tr>');
+        fwrite($f, '<div class="scroll"><table><tr><th>member</th><th>would become</th></tr>');
         foreach ($fragile as $p) fwrite($f, '<tr><td>' . $h($p['name']) . '</td><td class="new">/u/' . $h($p['proposed']) . '</td></tr>');
-        fwrite($f, '</table>');
+        fwrite($f, '</table></div>');
     }
 
     fwrite($f, '<h2>Members left alone, and why</h2><p class="why">A migration that cannot explain its own skips '
-        . 'is one nobody can approve. Every active member not listed above falls into one of these:</p><table>'
+        . 'is one nobody can approve. Every active member not listed above falls into one of these:</p><div class="scroll"><table>'
         . '<tr><th>reason</th><th>members</th></tr>');
     foreach ($skips as $why => $n) fwrite($f, '<tr><td>' . $h($why) . '</td><td>' . $n . '</td></tr>');
     fwrite($f, '<tr><td>WordPress <code>user_nicename</code> left as <code>patreon_*</code> — '
         . '<code>/members/&lt;nicename&gt;/</code> already 301s to <code>/u/</code>, which slug history 301s again, '
         . 'so those links work untouched</td><td>all</td></tr>');
     fwrite($f, '<tr><td>unbridged identities (cannot log in — <code>/u/</code> 404s by ghost containment) '
-        . 'and archived rows</td><td>excluded</td></tr></table>');
+        . 'and archived rows</td><td>excluded</td></tr></table></div>');
     fclose($f);
     fwrite(STDERR, "html: $HTML\n");
 }

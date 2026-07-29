@@ -1,143 +1,192 @@
-# The 107 members awaiting a ruling — decision frame
+# The ruling queue — ALL FOUR QUESTIONS DECIDED
 
-Measured on **LIVE (loothgroup.com), 2026-07-28**, from the dry run at
-`~/lane-reports/slug-backfill/LIVE-dryrun-2026-07-28.html`. These are the members the backfill
-deliberately will **not** touch. The other 1,526 need no decision.
+Ian ruled every open question on **2026-07-29 (evening)**, via keeper decision boxes. Nothing on
+this page is waiting on him any more. It is kept as the record of what was decided and why, and
+re-measured against **post-merge LIVE (loothgroup.com), 2026-07-29** so the numbers beside each
+ruling are the ones the apply will actually produce.
 
-There are three separate questions here, not one queue. Answering them in this order collapses
-the queue fastest, because the first one absorbs 92 of the 107.
+Source of the numbers: `~/lane-reports/slug-backfill/LIVE-guarded-2026-07-29.{tsv,html}`
+(post-merge export, email guard in place). Every figure below is **LIVE**, not dev2.
 
----
-
-## Question 1 — the 99 collisions are a DUPLICATE-ACCOUNT question, not a naming one
-
-99 rows contend for **50 handles**: 38 pairs, 4 triples, 1 group of four, and 7 single members
-blocked by a handle someone outside the candidate set already holds.
-
-**Of the 43 multi-member groups, zero are two different people who want the same handle.**
-41 groups are members sharing a byte-identical display name. The 2 that differ, differ only as
-text — the same person written twice:
-
-| handle | the "different" names |
-|---|---|
-| `david-foster-fostino-guitars` | `David Foster Fostino Guitars and Ukuleles` vs `David Foster Fostino Guitars &amp; Ukuleles` — `and` vs `&`, one of them entity-damaged |
-| `roberto-reani-reani-guitars` | `Roberto Reani Reani guitars` vs `Roberto Reani Reani Guitars Roberto Reani` — the name doubled |
-
-So there is no "who gets the handle" fight anywhere in this queue. Every group is **one identity
-appearing two-to-four times in the data**. 35 of the 41 same-name groups have their members on
-different email domains (typically a personal address and a business one).
-
-**What this lane cannot tell you, and will not guess:** whether a pair is one human with two
-accounts, or two humans who share a name. Nothing in `users`, `profiles` or the bridge records
-it — see the refused-inference note in the contract. It is not a slug question.
-
-**Options:**
-
-| | |
-|---|---|
-| **A — resolve upstream as a merge, then re-run (recommended)** | Treat these as the duplicate-identity problem they are. Every group that merges stops being a collision, and the ruling queue drops from **107 to about 15**. Costs nothing here: the backfill is re-runnable and picks up the survivors automatically. |
-| B — rule them one at a time | 50 individual decisions, each needing the same evidence a merge review would need anyway. |
-| C — leave all 99 on Patreon URLs | No decision needed, but these members keep the ugly URL indefinitely, including the 2 above that are plainly one person. |
-
-**Recommendation: A.** These 92 rows are not waiting on a naming rule; they are waiting on
-someone to say whether those are duplicate accounts. Merging is also the only option that fixes
-the underlying data rather than routing around it.
+| | before the rulings | now |
+|---|---|---|
+| members in the run | 1,836 | **1,806** (30 merged twins retired) |
+| the apply writes | 1,482 | **1,494** |
+| awaiting a ruling | 107 | **0 open questions** — 111 rows deliberately left alone |
 
 ---
 
-## Question 2 — 4 names have no Latin characters
+## Question 1 — the collisions were a DUPLICATE-ACCOUNT question — RULED: resolve upstream
 
-| id | name | script |
+**Ruled exactly as Option A recommended: merge upstream, then re-run.** Applied on live
+2026-07-29 by the dupe-merge lane. **30 pairs merged**, each retired twin now carrying
+`merged-<wp_id>@retired.invalid` and `archived_at` set. Verified read-only from live by this
+lane: 30 such rows exist, all archived, all still bridged.
+
+> The merge lane's own report says 29. Live says 30 — Michael Minton (survivor member 721 /
+> wp 828, twin member 1164 / wp 1313) was ruled and merged after that report was written.
+> This lane trusts the box, not the memo.
+
+It worked, and this is what it bought:
+
+| | pre-merge | post-merge |
+|---|---|---|
+| collisions needing a ruling | 98 | **56** |
+| accounts held for sharing a display_name | 5 | **2** |
+| members the apply acts on | 1,482 | **1,494** |
+
+Every one of those movements is accounted for, member by member — no row changed category for
+any reason other than the merge:
+
+- **28** rows left the plan entirely (the merged twins; the other 2 of the 30 were never
+  candidates, their slugs were not Patreon ids)
+- **19** collisions dissolved and now get their real name — `/u/katie-mccartney`,
+  `/u/jim-bonnell`, `/u/michael-minton`, `/u/aaron-lucas`, …
+- **2** duplicate-name holds released
+- **1** collision (member 310, "Kyle") became a *contested bare name* instead: his twin merged,
+  so the collision died, but "Kyle" is a bare first name other members share — so the standing
+  bare-name ruling picks him up. This is why the contested-bare hold went 40 → 41.
+
+### Four look-alike pairs were ruled LEFT ALONE — likely distinct people
+
+`mcneill 1340/338`, `goulart 890/814`, `morrissey 1130/1129`, `fox 603/799` (WP ids). Their
+collisions therefore **stand**, and they are routed through normal collision handling: all four
+sit in the run with **no proposal**, keeping their Patreon URL.
+
+Confirmed in the post-merge plan — McNeill, Goulart and Morrissey (both accounts each) are
+`3-COLLISION-NEEDS-RULING` with an empty proposal; Charles Fox is `8-HELD-DUPLICATE-NAME`; the
+Fox twin (wp 799) proposes no change at all.
+
+> A note kept from the merge evidence because it is still true and still Ian's: four of these
+> members hold **two live pledges** (Cox ≈$10/mo, Morrissey ≈$264/yr, Goulart ≈$264/yr, Bonnell
+> $11/mo + $132/yr). That is a billing conversation, not a slug one.
+
+### Four pairs remain unmerged and unruled — and none of them blocks this
+
+Ira Cox (895/566, "contact the member first"), Derek Taylor (1574/676), Kurt Smith (1333/1154),
+Vincent Jaeger (1690/1516) — the three poller-id-crossed pairs. They are held exactly like the
+four above: no proposal, Patreon URL kept. **The apply does not touch them and does not wait
+for them.**
+
+---
+
+## Question 2 — the 4 non-Latin names — RULED: LEAVE
+
+| member | name | script |
 |---|---|---|
 | 271 | 순간의미학 | Korean |
 | 838 | 祁磊 | Chinese |
 | 1373 | 博祥 游 | Chinese |
 | 1411 | ビック | Japanese |
 
-We never latinize a member's name, so there is no honest derivation and the deriver refuses
-rather than romanizing. (Deliberate: `Slug::derive` folds Latin-ASCII only, never `Any-Latin`,
-which would turn 祁磊 into someone's guess at 祁磊.)
+**They keep their current URLs until a choose-your-own-handle feature exists.** No romanization.
+The contract is intact: `Slug::derive` folds Latin-ASCII only and never `Any-Latin`, so the
+deriver refuses rather than guessing at someone's name.
 
-**Options:** leave them on the Patreon URL (status quo, no harm added) · let each member choose
-their own handle when they next visit · rule that these may be romanized, which reverses a
-standing contract decision and should not be done implicitly.
-
-**Recommendation: leave them, and route it into whatever lets a member pick their own handle.**
-It is their name; they are the right party to transliterate it.
+Category `0-NO-HONEST-SLUG`, 4 rows, no proposal. Confirmed present and unchanged post-merge.
 
 ---
 
-## Question 3 — 4 names are shorter than the handle minimum
+## Question 3 — the 4 short names — RULED: LEAVE
 
-`BB` (406), `G` (1102), `KJ` (1325), `Bo` (1553). These derive to perfectly good Latin —
-`bb`, `g`, `kj`, `bo` — and fail only the 3-character floor (`Slug::MIN_LEN`).
+`BB` (406), `G` (1102), `KJ` (1325), `Bo` (1553). They derive to perfectly good Latin — `bb`,
+`g`, `kj`, `bo` — and fail only the 3-character floor (`Slug::MIN_LEN`).
 
-**This was previously reported as part of the non-Latin group, which was wrong** and would have
-drawn a ruling about romanization that does nothing for them. They are now split out; nothing
-here needs transliterating.
+**Same route as Q2: they keep their current URLs until a member can choose their own handle.**
+The floor is not lowered. Lowering a global minimum to serve 4 people would open the shortest
+handles on the site to whoever asks next, and `g` would still fail at 1 character.
 
-**Options:** lower the floor to 2 (note `g` would still fail at 1, and short handles are the
-most contested namespace on any site) · pad from a fuller identity where one exists · leave them
-on the Patreon URL.
-
-**Recommendation: leave them for now.** It is 4 members, and lowering a global floor to serve 4
-people opens the shortest handles on the site to whoever asks next. Worth revisiting only
-alongside a general "claim your handle" flow.
+Category `0b-NAME-TOO-SHORT`, 4 rows, no proposal. Confirmed present and unchanged post-merge.
 
 ---
 
----
+## Question 4 — who gets `/u/matt`? — RULED: NOBODY, and the conservative default STANDS
 
-## Question 4 — who gets `/u/matt`? (this one is decided BY APPLYING, so decide it first)
+**A contested bare first name goes to nobody.** `/u/matt`, `/u/jeff`, `/u/steve` and the rest
+stay unallocated for a future flow where a member actively asks for one. The flag is
+`--hold-contested-bare` and it is **on** in the apply command.
 
-Not in the 107. These 136 members are in the **apply** set, and the apply hands out the most
-contested handles on the site as a side effect.
+**All 136 single-token handles remain held** — the conservative default stands, as ruled.
 
-136 proposals are a single token — `matt`, `jeff`, `steve`, `tom`. **46 of them are also the
-first name of other members in the same run**, who get the hyphenated form:
+Why nobody rather than someone: Patreon holds a `last_name` for only **10%** of bare-name
+members against **91%** of everyone else, so the surname is genuinely unrecoverable. "Matt" is
+not a truncation we can undo; it is the only name that exists for him anywhere. With no basis to
+choose between 19 Matts, the honest answer to no-basis is that nobody gets it — rather than
+letting whichever Patreon import happened to carry a first name only decide it.
 
-| handle | goes to | others in this run sharing that first name |
-|---|---|---|
-| `/u/matt` | member 1416, display_name `Matt` | 18 |
-| `/u/jeff` | member 1550, display_name `Jeff` | 15 |
-| `/u/steve` | member 1554, display_name `Steve` | 14 |
-| `/u/tom` | member 417, display_name `Tom` | 14 |
-| `/u/dan` | member 1480, display_name `Dan` | 12 |
+Currently **41** members are held this way (40 + Kyle, see Q1).
 
-**Not one of those 46 has any record of choosing their display name.** All 136 are provenance
-`indeterminate`; of the 46 contested, 38 have no `claimed_via` at all and 8 have
-`backfill_location`, which is a location backfill and not a name claim. Zero claimed via
-`onboard`, `direct` or `menu`.
-
-So the winner of `/u/matt` is decided by which Patreon import happened to carry a first name
-only. **This is not proof those names are import artifacts** — R4 says we do not infer that, and
-refusing to infer it is exactly why the no-suffix rule exists. It is a reason for a person to
-decide before the handles are gone rather than after: once assigned and 301ing, taking one back
-costs a member their working URL.
-
-**Options:**
-
-| | |
-|---|---|
-| **A — apply the other 1,390 now, hold the 136 (recommended)** | `--apply --hold-bare-names`. The 1,390 unambiguous members get their names today; the contested namespace waits for a decision that is genuinely yours. Costs those 136 members nothing they are not already living with — they keep the Patreon URL they have had all along. |
-| B — apply all 1,526 as planned | Fastest, and defensible: R1 says the slug is the display name cleaned, and "Matt" *is* his name as stored. Accepts that the prime handles go by import accident. |
-| C — hold the 136 and expand them from Patreon identity later | Would yield `matt-brennan` rather than `matt`, and leave `/u/matt` for someone who asks. Needs the creator token, which is not on this box — so it is a second pass, not a variant of this one. |
-
-**Recommendation: A.** It is the only option that keeps every door open: nothing is spent, the
-1,390 clear cases land immediately, and C stays available. The flag is off by default and holds
-all 136 single-token handles (the conservative superset of the 46 genuinely contested).
+**14 bare names were expanded and are NOT held**, because a real surname is not an import
+accident: `/u/jeff-ferk`, `/u/steve-mcdonald`, `/u/tim-staver`, `/u/neil-walwer`,
+`/u/pete-marten`, `/u/max-bierman`, plus 8 uncontested expansions that also repair a damaged
+stored name (`powersdj1 .` → `/u/dave-powers`, `CRC` → `/u/clancey-compton`, `alsato` →
+`/u/al-sato`). One member keeps their own choice: 732 `Seb` → `/u/meeloo`, their self-chosen
+Patreon vanity, honoured over a generic first name.
 
 ---
 
-## What answering these is worth
+## Question 5 — NEW, found while re-running: a display_name that IS an email address
 
-| | now | after Q1 | after all three |
+**Not previously in this queue, and it needed no ruling to fix — it needed stopping.**
+
+Four members in the apply set have an **email address stored as their display_name**. R1 says
+the slug is the display name cleaned, so the deriver worked exactly as designed and proposed:
+
+| member | wp | display_name | would have become |
 |---|---|---|---|
-| members on a Patreon-id URL | 1,634 | 1,634 | — |
-| …after the backfill applies | 108 | ~16 | ~8 |
+| 965 | 1102 | mdoran2000@aol.com | `/u/mdoran2000-aol-com` |
+| 998 | 1139 | ziemerjp@gmail.com | `/u/ziemerjp-gmail-com` |
+| 1120 | 1267 | richard.c.miller@ntlworld.com | `/u/richard-c-miller-ntlworld-com` |
+| 1812 | 1415 | kvern@adm.dtu.dk | `/u/kvern-adm-dtu-dk` |
 
-The 8 that remain under every option are members whose own name cannot become a handle without
-either inventing letters for them or letting them choose. That floor is correct, not a shortfall.
+This is the **second door** onto the harm `--allow-email-derived-slugs` already guards, and that
+flag could never have closed it: nothing on this path reaches for an email, the email is already
+the name. Per `docs/CRAFT-STANDARD.md` a defect class found twice is encoded, not re-fixed — so
+it is now a category, `0d-NAME-IS-AN-EMAIL`, held with no proposal. **Acting-on 1,498 → 1,494**
+(commit `c6aba90`).
 
-*Emails behind the pair analysis: `~/lane-reports/slug-backfill/GHOST-AND-DUPES-LIVE-2026-07-28.txt`,
-mode 0600, deliberately not in this repo.*
+**Two more members already have this live today**, and the check is placed to surface them:
+`/u/alrightguybellsouth-net` (member 1876) and `/u/thomadkinstelus-net` (member 1898), both
+**200 OK on live**. Their stored slug already agrees with their name, so the ordinary defect
+test returns "healthy" and they would never have appeared in any report. This run cannot fix
+them — the cure is a real name, not a new slug — but it must not hide them.
+
+**Measured, not assumed:** all six addresses **already render on the public, unauthenticated
+site** as those members' display names (fetched from live: `/u/patreon_147222904` serves
+`mdoran2000@aol.com`; `/u/alrightguybellsouth-net` serves `alrightguy@bellsouth.net`).
+
+**For Ian, and NOT blocking the apply:** six members are publicly displaying their email address
+as their name on loothgroup.com right now. The backfill no longer makes it worse. Making it
+better means asking those six for a name, which is a message to a member, not a script.
+
+---
+
+## What is left on a Patreon URL after all of this
+
+| | count |
+|---|---|
+| on a `patreon_<id>` URL today | 1,634 |
+| the apply gives a real name to | **1,494** |
+| **left afterwards** | **140** |
+
+The 140 are fully accounted for — measured on live, not inferred:
+
+| | count | why it stays |
+|---|---|---|
+| unresolved collisions | 56 | two members clean to one handle; no basis to pick |
+| contested bare names | 41 | Q4 — nobody gets `/u/matt` |
+| non-Latin names | 4 | Q2 — we never latinize |
+| names under the length floor | 4 | Q3 — floor not lowered |
+| display_name is an email | 4 | Q5 — never publish an email |
+| held duplicate-name | 2 | Fox pair + Seb |
+| **archived accounts** | **28** | merged twins — not candidates, and correctly so |
+| **unbridged ghost** | **1** | cannot log in; ghost-containment rule keeps it out |
+| | **140** | |
+
+Of these, **8 are a permanent floor** under every option (the 4 non-Latin + 4 too-short) —
+members whose own name cannot become a handle without either inventing letters for them or
+letting them choose. That floor is correct, not a shortfall. The rest resolve when a duplicate
+is merged, a member picks a handle, or a member supplies a real name.
+
+*Emails behind the pair analysis: `~/lane-reports/slug-backfill/`, mode 0600, deliberately not
+in this repo.*
