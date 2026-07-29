@@ -173,6 +173,20 @@ if ($preview_as === 'public') { $is_member = false; $viewer_tier = 'public'; $ed
 elseif ($preview_as === 'lite' && $edit_capable) { $is_member = true; $viewer_tier = 'lite'; }
 elseif ($preview_as === 'pro'  && $edit_capable) { $is_member = true; $viewer_tier = 'pro'; }
 
+// Front-page EDITOR gate. Deliberately manage_options, not edit_archive_poc:
+// this edits site-wide front-page config, not one post. The capability arrives
+// from /whoami, which sources WP-side caps from the poller's shared-secret
+// internal endpoint (user_can on the real WP user) — the same signal the
+// membership-pages router calls the authoritative gate. A profile-app session
+// alone never satisfies it.
+//
+// This gate only decides whether the LAUNCHER is emitted. The write authority is
+// api/v0/fp-save.php, which re-checks current_user_can('manage_options') inside
+// a booted WP plus a nonce, so a forged UI still cannot save.
+// ?as=public downgrade previews hide it too, so an admin can see the real page.
+$fp_editor_ok = ($whoami['capabilities']['manage_options'] ?? false) === true
+                && $preview_as !== 'public';
+
 // Expose to templates as globals the render closures can capture.
 $GLOBALS['LG_VIEWER_TIER']  = $viewer_tier;
 $GLOBALS['LG_EDIT_CAPABLE'] = $edit_capable;
@@ -970,6 +984,49 @@ window.__LG_VIEWER_TIER__ = <?= json_encode($viewer_tier) ?>;</script>
   forumsJs: <?= json_encode((string) @filemtime('/srv/bb-mirror/web/forums.js')) ?>
 };</script>
 <script defer src="/archive-poc/fp-discuss.js?v=<?= @filemtime(__DIR__.'/fp-discuss.js') ?>"></script>
+<?php if ($fp_editor_ok): /* ADMIN ONLY — see $fp_editor_ok above.
+
+       Everything the editor needs is behind this one conditional, so anon and
+       members ship ZERO extra bytes: no stylesheet link, no script tag, not even
+       the launcher markup. For an admin this is a button plus the few hundred
+       bytes below; fp-editor.css/.js (and Quill after that) are fetched only on
+       the first click. Editors load on intent — CRAFT-STANDARD. */ ?>
+<button type="button" class="fpe-launch" id="fpe-launch">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+  </svg>
+  <span>Edit page</span>
+</button>
+<style>/* launcher only — the rest arrives with fp-editor.css */
+.fpe-launch{position:fixed;right:1rem;bottom:1rem;z-index:9996;display:inline-flex;
+  align-items:center;gap:.4rem;padding:.55rem .9rem;border:0;border-radius:999px;
+  cursor:pointer;background:#2f7d55;color:#fff;font:600 .8rem/1 system-ui,-apple-system,sans-serif;
+  box-shadow:0 3px 12px rgba(0,0,0,.3)}
+.fpe-launch svg{width:13px;height:13px}
+html[data-lguser-theme="dark"] .fpe-launch{background:#4bbd82;color:#06120c}
+@media (max-width:640px){.fpe-launch{bottom:calc(4.2rem + env(safe-area-inset-bottom,0px))}}</style>
+<script>
+(function () {
+  var b = document.getElementById('fpe-launch');
+  b.addEventListener('click', function () {
+    if (window.lgFpEditor) { b.hidden = true; window.lgFpEditor.start(); return; }
+    b.disabled = true;
+    b.querySelector('span').textContent = 'Loading…';
+    var css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = '/archive-poc/fp-editor.css?v=<?= @filemtime(__DIR__ . '/fp-editor.css') ?>';
+    document.head.appendChild(css);
+    window.__lgFpAutostart = true;
+    var s = document.createElement('script');
+    s.src = '/archive-poc/fp-editor.js?v=<?= @filemtime(__DIR__ . '/fp-editor.js') ?>';
+    s.onload = function () { b.hidden = true; b.disabled = false; b.querySelector('span').textContent = 'Edit page'; };
+    s.onerror = function () { b.disabled = false; b.querySelector('span').textContent = 'Edit failed to load'; };
+    document.head.appendChild(s);
+  });
+})();
+</script>
+<?php endif; ?>
 </body>
 </html>
 <?php

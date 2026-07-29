@@ -1,0 +1,180 @@
+/**
+ * fp-editor.css — front-page editor chrome. ADMIN ONLY, LOADED ON INTENT.
+ *
+ * Never linked by the page. index.php emits a small launcher for admins only,
+ * and fp-editor.js injects this stylesheet the first time an admin actually
+ * asks to edit. Anon and members never request it (craft law: editors load on
+ * intent, never eagerly).
+ *
+ * Theme: the site stamps html[data-lguser-theme]. Both themes are styled via
+ * custom properties so the chrome tracks the page instead of fighting it.
+ */
+
+:root {
+  --fpe-accent: #2f7d55;
+  --fpe-on-accent: #fff;
+  --fpe-panel-bg: #fbfcfb;
+  --fpe-panel-ink: #1a201c;
+  --fpe-field-bg: #fff;
+  --fpe-hair: rgba(128, 140, 132, .32);
+  --fpe-bar-bg: #1d2b22;
+  --fpe-bar-ink: #e8f5ee;
+}
+html[data-lguser-theme="dark"] {
+  --fpe-accent: #4bbd82;
+  --fpe-on-accent: #06120c;
+  --fpe-panel-bg: #151d18;
+  --fpe-panel-ink: #e6eee9;
+  --fpe-field-bg: #0d1310;
+  --fpe-hair: rgba(140, 155, 146, .3);
+}
+
+/* ── region affordance ─────────────────────────────────────────────────── */
+/* Only present while the editor is active — .fpe-on is set on <html>. */
+.fpe-on [data-fpe] { position: relative; }
+.fpe-on [data-fpe]:hover,
+.fpe-on [data-fpe]:focus-within {
+  outline: 1.5px dashed color-mix(in srgb, var(--fpe-accent) 55%, transparent);
+  outline-offset: 5px;
+  border-radius: 3px;
+}
+.fpe-pencil {
+  position: absolute; top: -11px; right: -11px; z-index: 60;
+  display: none; align-items: center; gap: .32rem;
+  padding: .26rem .58rem; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--fpe-accent); color: var(--fpe-on-accent);
+  font: 600 .7rem/1 system-ui, -apple-system, sans-serif;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, .28);
+}
+.fpe-on [data-fpe]:hover > .fpe-pencil,
+.fpe-on [data-fpe] > .fpe-pencil:focus-visible { display: inline-flex; }
+.fpe-pencil svg { width: 11px; height: 11px; }
+
+/* ── in-place rich text ────────────────────────────────────────────────── */
+.fpe-live {
+  outline: 2px solid var(--fpe-accent) !important;
+  outline-offset: 5px; border-radius: 3px;
+  background: color-mix(in srgb, var(--fpe-accent) 5%, transparent);
+}
+/* Quill's own container styles are minimal (quill.core.css); keep authored
+   copy rendering in the page's real typography rather than Quill's. */
+.fpe-live.ql-container { font: inherit; }
+.fpe-live .ql-editor { padding: 0; line-height: inherit; }
+.fpe-live .ql-editor:focus { outline: none; }
+
+.fpe-tools {
+  position: sticky; top: .5rem; z-index: 70;
+  display: flex; gap: .2rem; width: max-content; margin: 0 0 .6rem;
+  padding: .3rem; border-radius: 7px;
+  background: var(--fpe-bar-bg); box-shadow: 0 3px 12px rgba(0, 0, 0, .3);
+}
+.fpe-tools button {
+  width: 29px; height: 27px; border: 0; border-radius: 4px; cursor: pointer;
+  background: transparent; color: var(--fpe-bar-ink);
+  font: 600 .82rem/1 Georgia, "Times New Roman", serif;
+}
+.fpe-tools button:hover { background: rgba(255, 255, 255, .14); }
+.fpe-tools button[aria-pressed="true"] { background: var(--fpe-accent); color: var(--fpe-on-accent); }
+.fpe-tools .fpe-i { font-style: italic; }
+.fpe-tools .fpe-s { text-decoration: line-through; }
+
+.fpe-act { display: flex; gap: .45rem; align-items: center; margin: .65rem 0 0; flex-wrap: wrap; }
+.fpe-act__note { font: 400 .74rem/1.4 system-ui, sans-serif; opacity: .68; }
+
+.fpe-btn {
+  font: 600 .78rem/1 system-ui, -apple-system, sans-serif;
+  padding: .42rem .8rem; border-radius: 6px; cursor: pointer; border: 0;
+}
+.fpe-btn--go { background: var(--fpe-accent); color: var(--fpe-on-accent); }
+.fpe-btn--off { background: transparent; color: inherit; border: 1px solid var(--fpe-hair); }
+.fpe-btn[disabled] { opacity: .5; cursor: default; }
+
+/* ── docked field panel ────────────────────────────────────────────────── */
+.fpe-panel {
+  position: fixed; inset: 0 0 0 auto; width: min(380px, 100%); z-index: 9998;
+  display: flex; flex-direction: column;
+  background: var(--fpe-panel-bg); color: var(--fpe-panel-ink);
+  box-shadow: -5px 0 26px rgba(0, 0, 0, .24);
+  transform: translateX(100%); transition: transform .17s ease;
+  font: 400 .84rem/1.45 system-ui, -apple-system, sans-serif;
+}
+.fpe-panel.is-open { transform: none; }
+.fpe-panel__hd {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .85rem 1rem; border-bottom: 1px solid var(--fpe-hair); font-weight: 700;
+}
+.fpe-panel__hd button {
+  margin-left: auto; border: 0; background: transparent; cursor: pointer;
+  font-size: 1.15rem; line-height: 1; color: inherit;
+}
+.fpe-panel__bd { flex: 1; overflow: auto; padding: 1rem; display: grid; gap: .85rem; align-content: start; }
+.fpe-panel__ft { padding: .8rem 1rem; border-top: 1px solid var(--fpe-hair); display: flex; gap: .5rem; justify-content: flex-end; }
+
+.fpe-f { display: grid; gap: .28rem; }
+.fpe-f > label { font-weight: 600; font-size: .76rem; }
+.fpe-f input[type="text"], .fpe-f input[type="url"], .fpe-f textarea, .fpe-f select {
+  font: inherit; width: 100%; box-sizing: border-box;
+  padding: .45rem .55rem; border-radius: 5px;
+  border: 1px solid var(--fpe-hair); background: var(--fpe-field-bg); color: inherit;
+}
+.fpe-f textarea { resize: vertical; min-height: 4.5em; }
+.fpe-f__hint { font-size: .72rem; opacity: .68; }
+.fpe-f--check { display: flex; align-items: center; gap: .45rem; }
+.fpe-f--check input { width: auto; }
+.fpe-f--check label { font-weight: 400; font-size: .8rem; }
+.fpe-thumb { width: 100%; border-radius: 6px; display: block; background: var(--fpe-hair); }
+
+/* list editor (rails) */
+.fpe-list { display: grid; gap: .4rem; }
+.fpe-item {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .5rem;
+  padding: .45rem .5rem; border-radius: 6px;
+  border: 1px solid var(--fpe-hair); background: color-mix(in srgb, var(--fpe-hair) 22%, transparent);
+}
+.fpe-item__img { width: 28px; height: 28px; object-fit: contain; border-radius: 3px; background: #fff; }
+.fpe-item__name { font-size: .79rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fpe-item__acts { display: flex; gap: .1rem; }
+.fpe-item__acts button {
+  width: 24px; height: 24px; border: 0; border-radius: 4px; cursor: pointer;
+  background: transparent; color: inherit; opacity: .62; font-size: .8rem; line-height: 1;
+}
+.fpe-item__acts button:hover { opacity: 1; background: var(--fpe-hair); }
+.fpe-item__acts button[disabled] { opacity: .2; cursor: default; }
+.fpe-item.is-open { grid-template-columns: 1fr; }
+.fpe-item__form { display: grid; gap: .5rem; padding: .3rem 0 .1rem; }
+
+/* ── status bar ────────────────────────────────────────────────────────── */
+.fpe-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 9997;
+  display: flex; align-items: center; gap: .7rem; padding: .6rem 1rem;
+  background: var(--fpe-bar-bg); color: var(--fpe-bar-ink);
+  font: 600 .79rem/1.3 system-ui, -apple-system, sans-serif;
+}
+.fpe-bar__sp { flex: 1; }
+.fpe-bar__msg--err { color: #ffb4a8; }
+.fpe-bar__msg--ok { color: #8fe0b4; }
+.fpe-bar .fpe-btn--off { border-color: rgba(232, 245, 238, .45); color: var(--fpe-bar-ink); }
+
+/* launcher (emitted inline by index.php; restyled once the editor loads) */
+.fpe-launch {
+  position: fixed; right: 1rem; bottom: 1rem; z-index: 9996;
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .55rem .9rem; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--fpe-accent); color: var(--fpe-on-accent);
+  font: 600 .8rem/1 system-ui, -apple-system, sans-serif;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .3);
+}
+.fpe-launch svg { width: 13px; height: 13px; }
+
+@media (max-width: 640px) {
+  .fpe-panel {
+    inset: auto 0 0 0; width: 100%; height: 78vh;
+    transform: translateY(100%); border-radius: 13px 13px 0 0;
+  }
+  .fpe-panel.is-open { transform: none; }
+  /* clear the status bar so the last field is never trapped under it */
+  .fpe-panel__ft { padding-bottom: calc(.8rem + env(safe-area-inset-bottom, 0px)); }
+  .fpe-launch { bottom: calc(4.2rem + env(safe-area-inset-bottom, 0px)); }
+  .fpe-bar { padding-bottom: calc(.6rem + env(safe-area-inset-bottom, 0px)); flex-wrap: wrap; }
+  .fpe-tools { top: .35rem; }
+}

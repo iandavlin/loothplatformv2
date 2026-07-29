@@ -45,7 +45,7 @@ OVERSIZE_RATIO   = 1.7        # natural px vs rendered px * dpr
 OVERSIZE_MIN_KB  = 40         # ignore tiny offenders
 IMG_BUDGET_KB    = 1500
 PAGE_BUDGET_KB   = 2500
-EDITOR_MARKERS   = ["quill"]  # script src substrings that are edit-intent only
+EDITOR_MARKERS   = ["quill", "fp-editor"]  # script src substrings that are edit-intent only
 DIMS_REQUIRED_RE = ["feed-card__cover", "dir-card", "lg-evland__thumb"]  # class hints
 
 

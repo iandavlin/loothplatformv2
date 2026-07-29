@@ -12,6 +12,10 @@
 #                     header actually discriminates — else the gate is blind).
 #   V2-AUTOINDEX      /v2/ must not enumerate the lg-layout-v2 source tree.
 #   V2-PHP-SOURCE     /v2/*.php must not be served as readable plaintext source.
+#   API-PHP-SOURCE    /archive-api/v0/*.php likewise (found 2026-07-29 leaking on
+#                     BOTH boxes — the V2 check was blind one directory over), with
+#                     API-REACHABLE as the positive control so a blanket deny that
+#                     breaks the API can't pass by 404-ing everything.
 #   CDP-IN-PROD       the Chrome remote-debug proxy route + debug port must be
 #                     absent from the prod-bound nginx conf (dev is promoted
 #                     in-place to live).
@@ -58,6 +62,29 @@ rm -f /tmp/.v2body
 code_php=$(gate_curl -s -o /dev/null -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST/v2/lg-layout-v2.php")
 if [ "$code_php" != "403" ]; then
   fails+=("V2-PHP-SOURCE     /v2/lg-layout-v2.php returned $code_php (must be 403 — never serve source)")
+fi
+
+# ---- 2b. /archive-api/v0/ must not serve PHP source either ----
+# Added 2026-07-29. The V2-PHP-SOURCE check above only ever looked at /v2/, so it
+# was blind to the same defect one directory over: `location ^~ /archive-api/v0/`
+# sets an `alias`, and any .php matching none of its nested endpoint locations fell
+# through to that alias and was served as a STATIC FILE. Measured HTTP 200 '<?php'
+# for _bootstrap, _rowlib, _saved, _likes, _comments, _reactions and _config — on
+# dev2 with NO gate cookie, and on live over loopback. Same defect class, second
+# occurrence, so per CRAFT-STANDARD it becomes a gate rather than just a fix.
+# The helpers are the probe set: they must never execute NOR reveal source.
+for f in _bootstrap _rowlib _saved _likes _comments _reactions _config; do
+  body=$(gate_curl -s -b "loothdev_auth=$GATE" "$HOST/archive-api/v0/$f.php" | head -c 200)
+  case "$body" in
+    *'<?php'*|*'<?='*)
+      fails+=("API-PHP-SOURCE    /archive-api/v0/$f.php served readable PHP source (must be 404/403 — never source)") ;;
+  esac
+done
+# Positive control: a real endpoint must still ANSWER, so a blanket deny that
+# breaks the API cannot pass this gate by making everything 404.
+code_api=$(gate_curl -s -o /dev/null -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST/archive-api/v0/search/?q=guitar")
+if [ "$code_api" != "200" ]; then
+  fails+=("API-REACHABLE     /archive-api/v0/search/ returned $code_api (expected 200 — clean-URL routing broken)")
 fi
 
 # ---- 3. Chrome remote-debug proxy must be gone from the prod conf ----
