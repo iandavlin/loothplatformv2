@@ -3,6 +3,21 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-29 — Stripe membership: back on the roadmap — AUDIT FIRST, then build (Ian)
+
+Ian: "It's time to start building that out. We probably need to audit the whole
+thing at this point." Audit scope before any build: the poller's Stripe half
+(Tick→Sync→UserProvisioner — POLLER-ONBOARDING-AUDIT §3: an email-keyed latent
+minter runs every 5 min for 3 live customers; if Stripe onboarding is coming it
+must route through shared Patreon-id-aware identity matching, never email-only),
+the lg-stripe-billing Slim companion app (cross-cutting handoff in
+docs/SESSION-HANDOFF.md), the lg_membership schema on live (customers 4,
+wp_user_bridge 3, entitlements 7, subscriptions 3; lg_role_sources 44 stripe
+rows), the origin/stripe-poller-audit branch (dev2 Stripe sandbox-safety doc,
+6/20), webhook + key state, and Patreon coexistence (the sweep's
+payment_source=stripe skip). Deliverable: atlas audit + a build plan Ian can
+rule on. CHARTER CANDIDATE: stripe-audit lane — next free seat.
+
 ## 2026-07-29 — Post header: title illegible over thumbnails that contain text (Ian, screenshot)
 
 On post/video pages, the hero overlays the post title on the thumbnail. When the
