@@ -63,6 +63,57 @@ function reply_media_list(int $post_id): array {
     return $out;
 }
 
+// GET ?topic_id= — the TOPIC EDIT PAYLOAD: everything the composer needs to open
+// pre-filled at full add-post parity (Ian 2026-07-29: "edit must equal add"). One
+// fetch seeds title, body, forum, tags and photos.
+//
+// This exists because the composer used to seed itself by SCRAPING THE RENDERED OP
+// out of the DOM and flattening it to plain text (hub-polish.js:3560 — strip <img>,
+// <br>→\n, then tags→''). That silently destroyed every link, bold, list and inline
+// image on save. The editable truth is `post_content`, and only the server has it.
+//
+// AUTH-GATED, unlike the reply-media GET below: post_content is the RAW stored body
+// (pre-kses, pre-render) and is_anon is a moderator-visible fact, so this returns the
+// same author-or-moderator gate the topic PUT enforces — never a public read.
+if ($method === 'GET' && (int) ($_GET['topic_id'] ?? 0) > 0) {
+    $topic_id_read = (int) $_GET['topic_id'];
+    $uid_read = get_current_user_id();
+    if (!$uid_read) {
+        reply_out(401, ['ok' => false, 'error' => 'auth', 'message' => 'Sign in to edit.']);
+    }
+    if (!function_exists('bbp_get_topic_post_type')) {
+        reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Forum engine unavailable.']);
+    }
+    $topic_read = get_post($topic_id_read);
+    if (!$topic_read || $topic_read->post_type !== bbp_get_topic_post_type()) {
+        reply_out(404, ['ok' => false, 'error' => 'not_found', 'message' => 'Post not found.']);
+    }
+    // Same gate as the PUT — author from the STORED post, never the client (IDOR).
+    $mod_read = current_user_can('moderate') || current_user_can('keep_gate') || current_user_can('manage_options');
+    if ((int) $topic_read->post_author !== (int) $uid_read && !$mod_read) {
+        reply_out(403, ['ok' => false, 'error' => 'forbidden', 'message' => 'You can only edit your own posts.']);
+    }
+    $tags_read = wp_get_object_terms($topic_id_read, 'topic-tag', ['fields' => 'names']);
+    if (is_wp_error($tags_read)) $tags_read = [];
+    $media_read = array_map(
+        static fn($m) => ['media_id' => (int) $m['media_id'], 'url' => $m['url'], 'thumb' => $m['thumb']],
+        reply_media_list($topic_id_read)
+    );
+    reply_out(200, [
+        'ok'       => true,
+        'topic_id' => $topic_id_read,
+        'title'    => (string) $topic_read->post_title,
+        // RAW stored body. Mention anchors ride along in their minted form; the
+        // composer revives them as embeds and lg_bb_mirror_mint_mentions is
+        // idempotent on the way back in (see the re-mint note further down).
+        'content'  => (string) $topic_read->post_content,
+        'forum_id' => (int) bbp_get_topic_forum_id($topic_id_read),
+        'tags'     => array_values(array_map('strval', (array) $tags_read)),
+        'is_anon'  => (bool) get_post_meta($topic_id_read, '_lg_anon', true),
+        'media'    => $media_read,
+    ]);
+}
+
 // GET — read a reply's photo set so the edit composer can show removable thumbs
 // (Ian 2026-06-25). Read-only; no auth needed (returns only public media URLs).
 if ($method === 'GET') {
@@ -163,25 +214,100 @@ if ($method === 'PUT' || $method === 'DELETE') {
             reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Post can't be empty."]);
         }
         $new_body = lg_bb_mirror_mint_mentions($new_body);   // @handles → stable storage form
+
+        // ── FORUM MOVE (Ian 2026-07-29: edit exposes the forum picker) ───────────
+        // ABSENT key = don't touch. Only a forum_id that is present AND different
+        // from the stored one is a move, so a body-only save can never relocate a
+        // post. The destination is validated against the SAME eligibility rule the
+        // add-post picker renders (_chrome.php:253 — public + open + forum_type
+        // 'forum' + no sub-forums), because a client can name any id it likes.
+        $old_forum_id = (int) bbp_get_topic_forum_id($topic_id_edit);
+        $new_forum_id = 0;
+        if (array_key_exists('forum_id', $body) && (int) $body['forum_id'] > 0
+            && (int) $body['forum_id'] !== $old_forum_id) {
+            $cand  = (int) $body['forum_id'];
+            $cpost = get_post($cand);
+            $bad   = null;
+            if (!$cpost || $cpost->post_type !== bbp_get_forum_post_type()) {
+                $bad = 'That forum does not exist.';
+            } elseif (function_exists('bbp_is_forum_category') && bbp_is_forum_category($cand)) {
+                $bad = 'That is a category, not a forum you can post in.';
+            } elseif (function_exists('bbp_is_forum_closed') && bbp_is_forum_closed($cand)) {
+                $bad = 'That forum is closed to new posts.';
+            } elseif (function_exists('bbp_is_forum_public') && !bbp_is_forum_public($cand)) {
+                $bad = 'That forum is not public.';
+            } elseif (get_posts([
+                'post_type' => bbp_get_forum_post_type(), 'post_parent' => $cand,
+                'posts_per_page' => 1, 'fields' => 'ids', 'post_status' => 'any',
+            ])) {
+                // Container forums hold sub-forums; you post to the leaf.
+                $bad = 'Pick a sub-forum, not the group it contains.';
+            } elseif (!current_user_can('publish_topics', $cand)) {
+                $bad = 'You cannot post in that forum.';
+            }
+            if ($bad !== null) {
+                reply_out(400, ['ok' => false, 'error' => 'forum', 'message' => $bad]);
+            }
+            $new_forum_id = $cand;
+        }
+
         // wp_update_post kses-filters post_content (and sanitizes post_title) for
         // users without unfiltered_html. Title is optional — keep the stored one
         // when the client omits it (body-only edits).
         $update = ['ID' => $topic_id_edit, 'post_content' => $new_body];
         if ($new_title !== '') $update['post_title'] = $new_title;
+        // A topic's forum IS its post_parent — same shape bbp_edit_topic_handler
+        // writes (bp-forums/topics/functions.php:786).
+        if ($new_forum_id) $update['post_parent'] = $new_forum_id;
         $upd = wp_update_post($update, true);
         if (is_wp_error($upd)) {
             reply_out(500, ['ok' => false, 'error' => 'server', 'message' => (string) $upd->get_error_message()]);
+        }
+
+        // ── TAGS ────────────────────────────────────────────────────────────────
+        // ABSENT key = don't touch (this is what keeps a body-only save from wiping
+        // the 327 dev2 topics that carry tags). PRESENT and empty = the member
+        // deliberately cleared them. bb_add_topic_tags is BuddyBoss's own
+        // add-and-remove-the-difference helper, given the existing set as its
+        // 4th arg — the exact call bbp_edit_topic_handler makes (functions.php:812).
+        if (array_key_exists('topic_tags', $body) && function_exists('bb_add_topic_tags')) {
+            $raw_tags = $body['topic_tags'];
+            if (!is_array($raw_tags)) $raw_tags = explode(',', (string) $raw_tags);
+            $tag_names = [];
+            foreach ($raw_tags as $t) {
+                $t = trim(wp_strip_all_tags((string) $t));
+                if ($t !== '' && !in_array($t, $tag_names, true)) $tag_names[] = $t;
+            }
+            $existing = wp_get_object_terms($topic_id_edit, 'topic-tag', ['fields' => 'names']);
+            if (is_wp_error($existing)) $existing = [];
+            bb_add_topic_tags($tag_names, $topic_id_edit, 'topic-tag', implode(',', $existing));
+        }
+
+        // The move runs AFTER the post is saved, exactly like the canonical handler
+        // (functions.php:845): it re-parents the topic's replies, fixes stickies and
+        // walks BOTH forums' ancestor count trees. Skipping it would leave the old
+        // forum claiming a topic it no longer holds.
+        if ($new_forum_id && function_exists('bbp_move_topic_handler')) {
+            bbp_move_topic_handler($topic_id_edit, $old_forum_id, $new_forum_id);
         }
         // wp_update_post doesn't fire bbp_edit_topic, so sync the PG mirror
         // explicitly ('upsert' is the same action the bbp_edit_topic hook maps to).
         if (function_exists('bb_mirror_sync_dispatch')) bb_mirror_sync_dispatch('topic', $topic_id_edit, 'upsert');
         $fresh = get_post($topic_id_edit);
+        $fresh_tags = wp_get_object_terms($topic_id_edit, 'topic-tag', ['fields' => 'names']);
+        if (is_wp_error($fresh_tags)) $fresh_tags = [];
         reply_out(200, [
             'ok'           => true,
             'status'       => 'edited',
             'topic_id'     => $topic_id_edit,
             'title'        => (string) $fresh->post_title,
             'content_html' => (string) apply_filters('bbp_get_topic_content', $fresh->post_content, $topic_id_edit),
+            // Echo the post-save truth so the client redirects to the right forum
+            // when a move happened, instead of assuming its request won.
+            'forum_id'     => (int) bbp_get_topic_forum_id($topic_id_edit),
+            'forum_slug'   => (string) get_post_field('post_name', (int) bbp_get_topic_forum_id($topic_id_edit)),
+            'moved'        => (bool) $new_forum_id,
+            'tags'         => array_values(array_map('strval', (array) $fresh_tags)),
         ]);
     }
 
