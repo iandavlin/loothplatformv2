@@ -47,16 +47,17 @@ const [OUT, BEFORE_JS, AFTER_JS, EVENTS_CSS, FRAGMENTS] = process.argv.slice(2);
 const ROOT = process.argv[8] || process.cwd();
 
 /* ---- Extract the injected CSS by running the real IIFE on a stub DOM. ---- */
-function extractCss(file) {
+function extractCss(file, listenerSink) {
   const src = fs.readFileSync(file, 'utf8');
   let captured = null;
   const styleEl = { id: '', textContent: '' };
+  const note = (target) => (type) => { if (listenerSink) listenerSink.push(target + ':' + type); };
   const doc = {
     getElementById: () => null,
     createElement: () => styleEl,
     querySelector: () => null,
     querySelectorAll: () => [],
-    addEventListener: () => {},
+    addEventListener: note('document'),
     readyState: 'complete',
     head: { appendChild: (n) => { captured = n.textContent; } },
     documentElement: { classList: { add: () => {} }, appendChild: (n) => { captured = n.textContent; } },
@@ -65,7 +66,7 @@ function extractCss(file) {
   const win = {
     __loothEventsMobile: false,
     matchMedia: () => ({ matches: true }),        // pretend a <=640 phone
-    addEventListener: () => {},
+    addEventListener: note('window'),
     location: { pathname: '/events/' },
   };
   const sandbox = {
@@ -158,8 +159,13 @@ function frameDoc(variant, theme, css, extraCss, bodyHtml) {
     '</head><body>' + bodyHtml + '</body></html>';
 }
 
-const cssBefore = extractCss(BEFORE_JS);
-const cssAfter = extractCss(AFTER_JS);
+/* Run each version on the stub and record every listener it registers. This is a
+   behavioural check, not a grep: the navigation invariant is that executing the
+   module installs no document/window click or popstate handler, so a tap on a
+   card reaches the anchor and the browser navigates. */
+const beforeListeners = [], afterListeners = [];
+const cssBefore = extractCss(BEFORE_JS, beforeListeners);
+const cssAfter = extractCss(AFTER_JS, afterListeners);
 const eventsCss = fs.readFileSync(EVENTS_CSS, 'utf8');
 const afterSrc = fs.readFileSync(AFTER_JS, 'utf8');
 
@@ -177,8 +183,13 @@ check('AFTER never calls preventDefault', !/preventDefault/.test(afterCode));
 /* Not "no click listener at all" — the search bar's clear button legitimately has
    one. The invariant is that nothing intercepts a tap on an event CARD: no
    document/capture-phase click handler, and no card selector in a handler. */
-check('AFTER installs no document-level click handler',
-  !/document\.addEventListener\(\s*['"]click['"]/.test(afterCode));
+/* Behavioural, from actually running the module (see beforeListeners/afterListeners). */
+check('BEFORE did install a document click handler (control)',
+  beforeListeners.includes('document:click'));
+check('AFTER installs no document/window click handler when RUN',
+  !afterListeners.some((l) => l.endsWith(':click')));
+check('AFTER installs no popstate handler when RUN',
+  !afterListeners.some((l) => l.endsWith(':popstate')));
 check('AFTER never matches a card for interception',
   !/closest\([^)]*lg-evland__card/.test(afterCode));
 check('AFTER keeps the landing search bar', /buildEventsSearch/.test(afterCode));
