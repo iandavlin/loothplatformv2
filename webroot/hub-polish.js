@@ -3022,7 +3022,22 @@
         'display:inline-flex;align-items:center;justify-content:center;padding:0}',
       '#looth-rep-sheet .lrs-notify .ico,#looth-rep-sheet .lrs-email .ico{width:17px;height:17px}',
       '#looth-rep-sheet .lrs-notify.is-on,#looth-rep-sheet .lrs-email.is-on{background:var(--lg-sage,#87986a);color:#fff}',
-      '#looth-rep-sheet .lrs-notify.is-on .ico,#looth-rep-sheet .lrs-email.is-on .ico{fill:currentColor}',
+      /* ON state. The bell is an OPEN path so flooding it reads as a filled bell.
+         The envelope is a <rect> — flooding that paints over the flap and produces a
+         solid block, the same defect the exercise pass caught in forums.css on
+         2026-07-29 (§12.1). This is the FIFTH site of that one rule; per
+         docs/CRAFT-STANDARD.md a class seen twice becomes a gate, so it is now one.
+         Envelope tints, flap stays legible. */
+      '#looth-rep-sheet .lrs-notify.is-on .ico{fill:currentColor}',
+      '#looth-rep-sheet .lrs-email.is-on .ico rect{fill:currentColor;fill-opacity:.3}',
+      /* ≥44px effective touch target (§2.4) without growing the 32px circle: the
+         visible button stays 32, an invisible ::after extends the hit area to 44.
+         Measured 32x32 flat in the exercise pass — under the 44 the card surface
+         already achieves (§2.2b), and this is the SMALLEST screen. */
+      '#looth-rep-sheet .lrs-notify,#looth-rep-sheet .lrs-email{position:relative}',
+      '#looth-rep-sheet .lrs-notify::after,#looth-rep-sheet .lrs-email::after{'
+        + 'content:"";position:absolute;top:50%;left:50%;width:44px;height:44px;'
+        + 'transform:translate(-50%,-50%)}',
       '#looth-rep-sheet .lrs-email.is-muted{opacity:.55}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-notify,html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-email{background:#262b30;color:#9cb37d}',
       '#looth-rep-sheet .lrs-body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px 24px}',

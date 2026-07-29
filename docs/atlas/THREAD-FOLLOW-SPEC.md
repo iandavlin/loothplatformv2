@@ -1312,3 +1312,121 @@ Whoever finishes these needs a profile-api-backed page, not merely another brows
 
 *§12 written from execution on dev2, 2026-07-29. 25 assertions green; the one defect
 found is fixed and re-proven.*
+
+---
+
+## 13. ALL FOUR SET-SURFACES + THE ⋯ MENU — EXERCISED. And a correction to §12.3.
+
+*2026-07-29, dev2, on keeper's shared `chrome-dev.service` (:9222) via CDP — our own
+target, created and closed, so no other lane's tab was touched. Totals for this leg:
+**14/14** the ⋯ menu, **9/9** dark + the muted note, **9/9** the mobile sheet.*
+
+### 13.1 ⚠️ CORRECTION TO §12.3 — I WAS WRONG, AND THE REASON IS WORTH MORE THAN THE CLAIM
+
+§12.3 said the ⋯ menu and the mobile sheet "are NOT on the Hub page at all", citing a
+`curl` of the real served Hub that contained no `hub-polish.js` and no
+`#looth-rep-sheet`. **The curl was accurate and the conclusion was wrong.**
+
+`dev2.loothgroup.com.conf:47` carries a **server-level `sub_filter '</head>' …`** that
+appends the theme-boot script and `<script src="/pwa.js" defer>`. `pwa.js` then injects
+**thirteen** root-level overlays at runtime — including `app-settings.js` (which holds
+§3.5's dark rules for the popover) and `hub-polish.js` (which owns §2.4's
+`#looth-rep-sheet`). **None of it appears in the app's HTML**, because nginx adds the
+loader and the loader adds the rest from JS.
+
+So: grepping served markup for an overlay filename will always find nothing, and
+"it isn't on this page" is the wrong inference. Both surfaces *are* on the Hub in
+production. The harness was the thing that lacked them.
+
+**Consequences, recorded because they generalise beyond this lane:**
+- Any loopback/`php -S` harness that bypasses nginx **silently loses the entire overlay
+  layer** — 13 JS files. The page renders and looks right, so nothing announces the loss.
+  `tools/exercise-harness/hub-router.php` now reproduces the injection.
+- A theme test that emulates `prefers-color-scheme` proves nothing here. This site's dark
+  signal is `html[data-lguser-theme="dark"]` (`site-header.php:128`), and the ⋯ popover's
+  dark rules ship inside `app-settings.js`. My first dark run "passed" **while rendering
+  light**, on a weak assertion. Assert the *painted colour*.
+
+### 13.2 §3.5 the ⋯ menu — 14/14
+
+Surface stood up: branch `profile-app` on its own pool user, `/profile-api/v0/*` proxied
+with nginx's own rewrite convention (`me/notifications/` → `me-notifications.php`), a real
+`looth_id` JWT minted via `profile-app/bin/mint-dev-token.php`, and two real notification
+rows raised through the branch's internal-notify.
+
+Both discussion rows carry the ⋯ (`ref.kind` topic/reply, per `notifCanFollow`). Menu is
+`role="menu"`, `aria-expanded` flips true and back, second ⋯ click closes it. **Ticks
+mirror the store at every step, asserted against the store either side of each click:**
+both off → 🔔 on (✉ untouched) → ✉ on → 🔔 off **with ✉ surviving**. Labels invert with
+state ("Notify me about new replies" ⇄ "Stop notifications"). The note "You'll still be
+notified when someone replies to you or mentions you" is present.
+
+**Dark verified on painted colour:** menu `#1c1f22`, text `#e5e7e1`, the ⋯ itself sage
+`#9cb37d` — and different from light (`#fbfbf8`).
+
+**§8.1.3(a) honesty holds visually:** with the account master off, the ✉ item is
+`is-muted` at 0.6 opacity and the menu *says* "Your account has discussion emails turned
+off." rather than implying delivery.
+
+### 13.3 §2.4 the mobile sheet — 9/9, plus two defects found
+
+Reachable once `pwa.js` was injected. Opened through `window.lgOpenTopicMobile`
+(`hub-polish.js:3714`) — the same entry point §2.4's router uses. Header order measured as
+**`lrs-t, lrs-notify, lrs-email, lrs-x`** — title → state → dismiss, exactly as specified.
+Tap wrote through to the store.
+
+**⚠️ DEFECT 1 — the envelope flood, FIFTH SITE.** `hub-polish.js:3025` had the same
+`.is-on .ico { fill: currentColor }` shared by both glyphs that §12.1 fixed in four places
+in `forums.css`. I fixed those four and **missed this one**, because it lives in a
+different file and is injected as a JS string. Fixed the same way: bell floods, envelope
+tints its rect. **This class has now been found twice in two files — per
+`docs/CRAFT-STANDARD.md` it must be a gate, and §13.4 states it.**
+
+**⚠️ DEFECT 2 — touch targets under the minimum on the smallest screen.** Built at a flat
+`32×32px` with no expanded hit area, while §2.4 itself asks for "≥44px effective" and the
+card surface already measures 44×44 (§12.2). Fixed by keeping the 32px circle visually and
+extending the hit area to 44×44 with an invisible `::after` — verified at `44px`.
+
+### 13.4 THE GATE THIS LANE OWES `craft-gate.py`
+
+> **A two-icon toggle pair must not share one `fill` rule when one glyph is an open path
+> and the other is a closed shape.** Flooding an open path (bell, star) reads as "filled";
+> flooding a closed outline (envelope `<rect>`) paints over its interior detail and renders
+> as a solid block. Found 2026-07-29 in `forums.css` (4 sites) and `hub-polish.js` (1 site).
+> Gate: for any `.is-on .ico{fill:currentColor}`, assert the icon's own `<rect>`/closed
+> outline is not flood-filled.
+
+Also worth a gate, cheaply: **effective touch target ≥44px** on any control inside
+`#looth-rep-sheet` / `.lg-card-actions`.
+
+### 13.5 ⚠️ THE EMAIL BIT HAS TWO BACKING STORES, AND THE READ PATH IS THE ONE §5 DOESN'T NAME
+
+Found while resetting test state, and it materially affects the §9.2 cutover.
+
+§5 says the ✉ bit lives in `wp_bb_notifications_subscriptions`. That is where it is
+**written**. But `bbp_is_user_subscribed()` — the function `follow.php`, the BB mailer and
+the ⋯ menu all read — resolves against the **legacy bbPress user-meta**
+`wp_usermeta.wp__bbp_subscriptions` (a comma-joined topic-id list).
+
+Measured on dev2, `bbp_add_user_subscription` / `bbp_remove_user_subscription` keep both in
+step **only while they agree**: with a table row present, remove clears both; **with the
+table row missing, remove is a no-op and the meta keeps the topic forever.** The UI then
+shows ✉ ON, and the member's OFF click returns HTTP 200 and changes nothing — precisely the
+"UI lies" class Ian ruled against in §8.1.3.
+
+Divergence already exists in production, small but real:
+
+| Box | users with `type='topic'` rows | users with `wp__bbp_subscriptions` meta |
+|---|---|---|
+| **live** | 381 | **384** |
+| dev2 | 384 | 386 |
+
+**So the obvious §9.2 lever is a trap.** Clearing `wp_bb_notifications_subscriptions` to
+make the 1,519 "vestigial" would leave every one of those members with a stale meta entry
+that still reads as subscribed and that the API can no longer clear. Any cutover must go
+through `bbp_remove_user_subscription` (or clear **both** stores), never raw SQL on the
+table — and the "1,519" figure should be re-derived with the meta cross-checked, since the
+two stores do not agree today.
+
+*§13 written from execution on dev2, 2026-07-29. Every colour, pixel size and row count
+above was measured in the browser or queried from the database named.*

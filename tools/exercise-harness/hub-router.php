@@ -46,6 +46,50 @@ if (str_starts_with($uri, '/bb-mirror-api/v0/follow')) {
     return true;
 }
 
+/* /profile-api/v0/* → the BRANCH profile-app on 8796 (its own pool user), so the
+   notifications panel that feeds the ⋯ menu is served by branch code against the real
+   profile_app database. nginx's rewrite convention here is regular —
+   `me/notifications/` → `me-notifications.php`, `me/social-counts/` →
+   `me-social-counts.php` — so we reproduce it rather than hardcode one route.
+   Cookies pass straight through: the panel authenticates on the looth_id JWT. */
+if (str_starts_with($uri, '/profile-api/v0/')) {
+    $rest = trim(substr($uri, strlen('/profile-api/v0/')), '/');
+    $file = $rest === '' ? 'me' : str_replace('/', '-', $rest);
+    $qs   = parse_url($_SERVER['REQUEST_URI'], PHP_URL_QUERY);
+    $ch   = curl_init('http://127.0.0.1:8796/' . $file . '.php' . ($qs ? '?' . $qs : ''));
+    $hdrs = ['Content-Type: ' . ($_SERVER['CONTENT_TYPE'] ?? 'application/json')];
+    if (!empty($_SERVER['HTTP_COOKIE'])) $hdrs[] = 'Cookie: ' . $_SERVER['HTTP_COOKIE'];
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST  => $_SERVER['REQUEST_METHOD'],
+        CURLOPT_POSTFIELDS     => file_get_contents('php://input'),
+        CURLOPT_HTTPHEADER     => $hdrs,
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $body = curl_exec($ch);
+    http_response_code((int) curl_getinfo($ch, CURLINFO_HTTP_CODE));
+    curl_close($ch);
+    header('Content-Type: application/json');
+    echo $body;
+    return true;
+}
+
+/* Root-level docroot OVERLAYS (/app-settings.js, /hub-polish.js, /bottom-nav.js …).
+   On dev2 these are symlinks in /var/www/dev pointing into the repo's webroot/. The
+   Hub's <head> loads /app-settings.js, and that file is where §3.5's DARK rules for
+   the ⋯ popover live — so without this route the popover renders cream-on-dark and a
+   naive theme test passes for the wrong reason. Serve them from the BRANCH webroot. */
+if (preg_match('#^/([A-Za-z0-9._-]+\.(?:js|css|json))$#', $uri, $mm)) {
+    $WR = '/home/ubuntu/worktrees/thread-follow/webroot';
+    $f  = realpath($WR . '/' . $mm[1]);
+    if ($f !== false && str_starts_with($f, $WR . DIRECTORY_SEPARATOR) && is_file($f)) {
+        $e = strtolower(pathinfo($f, PATHINFO_EXTENSION));
+        header('Content-Type: ' . ['js' => 'application/javascript', 'css' => 'text/css',
+                                   'json' => 'application/json'][$e]);
+        readfile($f);
+        return true;
+    }
+}
+
 /* nginx `location ^~ /lg-shared/ { alias /srv/lg-shared/; }` — but pointed at the
    BRANCH copy, so the shared header's JS/CSS under test are the branch's. Note the
    PHP partial itself is still required by _chrome.php via the absolute /srv path,
@@ -98,7 +142,28 @@ if ($candidate !== false
     return true;
 }
 
-// ...otherwise the front controller, exactly as try_files falls through.
+/* ⚠️ THE OVERLAY LAYER IS INJECTED BY NGINX, NOT BY THE APP — and a loopback harness
+   that bypasses nginx silently loses ALL of it.
+
+   dev2.loothgroup.com.conf:47 carries a server-level `sub_filter '</head>' …` that
+   appends the theme-boot script and `<script src="/pwa.js" defer>`. pwa.js then
+   injects THIRTEEN root overlays at runtime — including app-settings.js (which holds
+   §3.5's dark rules for the ⋯ popover) and hub-polish.js (which owns §2.4's
+   #looth-rep-sheet). None of that appears in the app's own HTML, so grepping the
+   served markup for "hub-polish" finds nothing and the wrong conclusion is very easy
+   to reach: I reached it myself once.
+
+   We reproduce the injection here so the harness renders the page the browser really
+   gets. Kept deliberately minimal — the pwa.js loader only. */
 $_SERVER['SCRIPT_FILENAME'] = $ROOT . '/index.php';
 $_SERVER['SCRIPT_NAME']     = '/hub/index.php';
+ob_start();
 require $ROOT . '/index.php';
+$html = ob_get_clean();
+$pos  = stripos($html, '</head>');
+if ($pos !== false) {
+    $html = substr($html, 0, $pos)
+          . '<script src="/pwa.js" defer></script>'
+          . substr($html, $pos);
+}
+echo $html;
