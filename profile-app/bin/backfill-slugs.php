@@ -547,6 +547,40 @@ if (in_array('--hold-bare-names', $argv, true)) {
 // claim, so it is still given out. Only the contested ones are withheld, and only after
 // expansion has had its chance — the 6 a real surname resolves are kept, because a name is
 // not an accident.
+// --hold-duplicate-names: don't hand a permanent URL to an account that may be about to
+// merge (Ian, 2026-07-29). A slug change also mints a slug_history row — a 301 for an
+// account that may not survive — and that is unpickable later for no gain now.
+//
+// Measured on live: of 110 accounts sharing a display_name with another member, 93 are
+// ALREADY held as collision rulings and 12 are not candidates. Only 5 reach the apply —
+// the first mover of a pair, who wins the handle uncontested precisely because their twin
+// is stuck in the ruling queue. So this flag costs 5 members a wait and decouples the whole
+// apply from the duplicate investigation.
+if (in_array('--hold-duplicate-names', $argv, true)) {
+    $nameCount = [];
+    foreach ($cand as $c) {
+        $n = mb_strtolower(trim((string) $c['display_name']));
+        if ($n !== '') $nameCount[$n] = ($nameCount[$n] ?? 0) + 1;
+    }
+    $dupHeld = [];
+    $act = array_values(array_filter($act, function ($p) use ($nameCount, &$dupHeld) {
+        $n = mb_strtolower(trim((string) ($p['row']['display_name'] ?? $p['name'])));
+        if (($nameCount[$n] ?? 0) > 1) { $dupHeld[] = $p['user_id']; return false; }
+        return true;
+    }));
+    $dupSet = array_flip($dupHeld);
+    foreach ($plan as &$p) {
+        if (!isset($dupSet[$p['user_id']]) || ($p['proposed'] ?? '') === '') continue;
+        $p['cat']      = '8-HELD-DUPLICATE-NAME';
+        $p['action']   = 'HELD — another live member has the same display_name; may be one human with two accounts';
+        $p['why']      = 'duplicate-account question is open (docs/atlas/SLUG-DUPLICATE-ACCOUNTS.md)';
+        $p['proposed'] = '';
+    }
+    unset($p);
+    fwrite(STDERR, sprintf("--hold-duplicate-names: withholding %d account(s) sharing a display_name; acting on %d\n",
+        count($dupHeld), count($act)));
+}
+
 if (in_array('--hold-contested-bare', $argv, true)) {
     $firstNameCount = [];
     foreach ($actionable as $p) {
@@ -643,6 +677,7 @@ if ($HTML) {
         '0-NO-HONEST-SLUG'          => ['Name has no Latin characters — needs your ruling', 'Non-Latin script, punctuation or emoji. We never latinize a member\'s name, so there is no honest derivation. Options: leave the Patreon URL, let the member choose, or rule that these may be romanized.'],
         '0b-NAME-TOO-SHORT'         => ['Name is shorter than the minimum handle', 'These derive to perfectly good Latin — they are just under the ' . Slug::MIN_LEN . '-character floor. A DIFFERENT question from the non-Latin group above: nothing needs romanizing, you only need to say whether a 2-letter handle is allowed. Options: lower the floor, pad from a fuller identity, or leave the Patreon URL.'],
         '0c-SHAPE-REJECTED'         => ['Derived handle is not a legal slug', 'The name derives to Latin, but the result breaks a shape rule (digits only would shadow /u/<member-id>, or the charset the nginx route can match).'],
+        '8-HELD-DUPLICATE-NAME'     => ['Held — another member has the same name', 'Ian, 2026-07-29. These share a display_name with another live member, and on live NOT ONE such pair shares a Patreon id — so each is two distinct Patreon accounts, which may be one human who signed up twice (Katie McCartney has a second account via Sign-in-with-Apple) or may be two people called Dave. Giving one a permanent URL now also mints a 301 for an account that may not survive a merge. Held until that is ruled on.'],
         '7-HELD-CONTESTED-BARE'     => ['Held by ruling — the bare handle goes to nobody', 'Ian, 2026-07-29. These members would have taken a bare first name that other members also carry. We proved the surname is not recoverable — Patreon holds one for only 10% of bare-name members against 91% of everyone else — so there is no basis to choose between them. The honest answer to no-basis is that nobody gets it, rather than letting the import accident decide. /u/matt and friends stay free for a future flow where a member actively asks. These keep their Patreon URL for now.'],
         '3-COLLISION-NEEDS-RULING'  => ['Collision we may NOT resolve on our own', 'Two members clean to the same handle. A numeric suffix is ruled out, and where the name is the member\'s own we may not reach for Patreon to "expand" it either. These need your call.'],
         '1-NO-SLUG'                 => ['No URL at all — /u/ 404s today', 'Nothing to redirect FROM, so there is no link risk in giving them one.'],

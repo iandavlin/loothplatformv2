@@ -1,6 +1,11 @@
 # Profile URL backfill — the apply, for Ian
 
-**1,487 members get a URL made of their name. 40 are deliberately left alone.**
+**1,482 members get a URL made of their name. 45 are deliberately left alone (40 contested bare
+names + 5 duplicated accounts).**
+
+> **HELD 2026-07-29 pending Ian's duplicate-account ruling** — see
+> `docs/atlas/SLUG-DUPLICATE-ACCOUNTS.md`. The coupling is only 5 rows, so this run is ready
+> the moment he says go.
 Live is `main @0995f2b`. Every command below runs on **live, from a webmin terminal, as
 `ubuntu`**; the role each one needs is stated on the line.
 
@@ -80,7 +85,7 @@ authenticates *on live*. That is why this step is gated on a number.)
 # as: profile-app
 sudo -u profile-app php /srv/profile-app/bin/backfill-slugs.php \
      --scope=repair --identity-from-wp --expand-bare-names --hold-contested-bare \
-     --tsv=/tmp/preflight.tsv --html=/tmp/preflight.html
+     --hold-duplicate-names --tsv=/tmp/preflight.tsv --html=/tmp/preflight.html
 sudo -u profile-app php /srv/profile-app/bin/verify-slug-plan.php --plan=/tmp/preflight.tsv
 ```
 
@@ -89,8 +94,9 @@ Expect:
 ```
 patreon api: wp_usermeta patreon_latest_patron_info — ~1585 identities (no API call)
 --expand-bare-names: expanded 14 bare first name(s) from stored identity
---hold-contested-bare: withholding 40 contested bare handle(s); acting on 1487
-members=1836  changing=1527  NEED-RULING=106  acting-on=1487  mode=DRY RUN (no writes)
+--hold-duplicate-names: withholding 5 account(s) sharing a display_name; acting on 1522
+--hold-contested-bare: withholding 40 contested bare handle(s); acting on 1482
+members=1836  changing=1527  NEED-RULING=106  acting-on=1482  mode=DRY RUN (no writes)
 VERDICT: no member-harming conflict found
 ```
 
@@ -105,10 +111,11 @@ it ran; dev2 has no collisions, so that path could not be exercised there.
 ```bash
 # as: profile-app
 sudo -u profile-app php /srv/profile-app/bin/backfill-slugs.php \
-     --scope=repair --identity-from-wp --expand-bare-names --hold-contested-bare --apply
+     --scope=repair --identity-from-wp --expand-bare-names --hold-contested-bare \
+     --hold-duplicate-names --apply
 ```
 
-Expect `applied=1487 failed=0`. One transaction per member, so a failure at row 900 keeps the
+Expect `applied=1482 failed=0`. One transaction per member, so a failure at row 900 keeps the
 899 before it and re-running resumes. Each old `patreon_<id>` URL is parked in `slug_history`,
 which is what keeps every shared and indexed link alive as a 301.
 
@@ -119,8 +126,8 @@ Smaller first bite: add `--limit=25`. The same rollback covers it.
 ```bash
 # as: profile-app
 sudo -u profile-app psql -d profile_app -c \
-  "SELECT count(*) FROM users WHERE slug ~* '^patreon[_-]?[0-9]+$';"   -- 1634 -> 147 exactly
-sudo -u profile-app psql -d profile_app -c "SELECT count(*) FROM slug_history;"  -- 2 -> 1489
+  "SELECT count(*) FROM users WHERE slug ~* '^patreon[_-]?[0-9]+$';"   -- 1634 -> 152 exactly
+sudo -u profile-app psql -d profile_app -c "SELECT count(*) FROM slug_history;"  -- 2 -> 1484
 ```
 
 ```bash
