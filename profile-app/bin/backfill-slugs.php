@@ -284,7 +284,30 @@ if (!$api && !$DB_ONLY && $contested) {
         $my = new PDO('mysql:unix_socket=/var/run/mysqld/mysqld.sock;dbname=' . LG_PROFILE_APP_MYSQL_DB,
             posix_getpwuid(posix_geteuid())['name'] ?? 'profile-app', '',
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-        $api = looth_patreon_identity_sweep($my, $apiStatus);
+        // --identity-from-wp: the sync ALREADY stored what the sweep goes to Patreon for.
+        // wp_usermeta.patreon_latest_patron_info holds id/first/last/full/vanity per member
+        // (1,585 rows on live, 2026-07-29), so the creator token is not needed and neither
+        // is a fixture FILE — which matters because that file is third-party PII sitting on
+        // disk waiting to be forgotten. Read in-process, used to derive, never written down.
+        if (in_array('--identity-from-wp', $argv, true)) {
+            $n = 0;
+            foreach ($my->query("SELECT user_id, meta_value FROM wp_usermeta
+                                 WHERE meta_key = 'patreon_latest_patron_info'") as $r) {
+                $d = @unserialize((string) $r['meta_value'], ['allowed_classes' => false]);
+                $attr = $d['data']['attributes'] ?? null;
+                $pid  = (string) ($d['data']['id'] ?? '');
+                if (!is_array($attr) || $pid === '') continue;
+                $api[$pid] = [
+                    'full_name' => (string) ($attr['full_name'] ?? ''),
+                    'vanity'    => (string) ($attr['vanity'] ?? ''),
+                    'email'     => (string) ($attr['email'] ?? ''),
+                ];
+                $n++;
+            }
+            $apiStatus = "wp_usermeta patreon_latest_patron_info — $n identities (no API call)";
+        } else {
+            $api = looth_patreon_identity_sweep($my, $apiStatus);
+        }
     } catch (Throwable $e) {
         $apiStatus = 'UNAVAILABLE (' . $e->getMessage() . ')';
     }
@@ -507,6 +530,53 @@ if (in_array('--hold-bare-names', $argv, true)) {
     fwrite(STDERR, sprintf("--hold-bare-names: holding back %d single-token handle(s); acting on %d\n",
         $before - count($act), count($act)));
 }
+
+// --hold-contested-bare: IAN'S RULING, 2026-07-29. A bare first name that other members
+// also carry goes to NOBODY. /u/matt, /u/jeff and the rest stay unallocated and free for a
+// future flow where a member actively asks for one.
+//
+// The reasoning, so it is not lost behind the outcome: we PROVED the surname is not
+// recoverable — Patreon holds a last_name for only 10% of bare-name members against 91% of
+// everyone else, so "Matt" is not a truncation we can undo, it is the only name that exists
+// for him anywhere. That moved the question from "who deserves it" to "there is no basis to
+// choose", and the honest answer to no-basis is that nobody gets it — not that the import
+// accident decides. A scarce public handle allocated by which Patreon record happened to
+// carry a first name only is exactly the thing to refuse to do.
+//
+// Narrower than --hold-bare-names on purpose: an UNcontested bare name is nobody else's
+// claim, so it is still given out. Only the contested ones are withheld, and only after
+// expansion has had its chance — the 6 a real surname resolves are kept, because a name is
+// not an accident.
+if (in_array('--hold-contested-bare', $argv, true)) {
+    $firstNameCount = [];
+    foreach ($actionable as $p) {
+        if ($p['proposed'] === '') continue;
+        $firstNameCount[explode('-', $p['proposed'])[0]] = ($firstNameCount[explode('-', $p['proposed'])[0]] ?? 0) + 1;
+    }
+    $held = [];
+    $act = array_values(array_filter($act, function ($p) use ($firstNameCount, &$held) {
+        $bare = !str_contains($p['proposed'], '-');
+        if ($bare && ($firstNameCount[$p['proposed']] ?? 0) > 1) { $held[] = $p['user_id']; return false; }
+        return true;
+    }));
+    // Mark them IN THE PLAN too, not just in the apply set. A withheld member who still
+    // appears in the report as "-> /u/matt" reads as though they are getting it; the whole
+    // point of the ruling is that nobody is, and Ian asked to see exactly who is being left
+    // alone and why. Runs before the summary, so the category counts pick it up.
+    $heldSet = array_flip($held);
+    foreach ($plan as &$p) {
+        if (!isset($heldSet[$p['user_id']]) || ($p['proposed'] ?? '') === '') continue;
+        $others = ($firstNameCount[$p['proposed']] ?? 1) - 1;
+        $p['cat']    = '7-HELD-CONTESTED-BARE';
+        $p['action'] = 'HELD BY RULING — /u/' . $p['proposed'] . ' goes to nobody ('
+                     . $others . ' other member' . ($others === 1 ? '' : 's') . ' share that first name)';
+        $p['why']    = 'no basis to choose: no surname in our store or Patreon\'s';
+        $p['proposed'] = '';
+    }
+    unset($p);
+    fwrite(STDERR, sprintf("--hold-contested-bare: withholding %d contested bare handle(s); acting on %d\n",
+        count($held), count($act)));
+}
 if ($LIMIT > 0) $act = array_slice($act, 0, $LIMIT);
 
 // ── summary ──────────────────────────────────────────────────────────────────
@@ -573,6 +643,7 @@ if ($HTML) {
         '0-NO-HONEST-SLUG'          => ['Name has no Latin characters — needs your ruling', 'Non-Latin script, punctuation or emoji. We never latinize a member\'s name, so there is no honest derivation. Options: leave the Patreon URL, let the member choose, or rule that these may be romanized.'],
         '0b-NAME-TOO-SHORT'         => ['Name is shorter than the minimum handle', 'These derive to perfectly good Latin — they are just under the ' . Slug::MIN_LEN . '-character floor. A DIFFERENT question from the non-Latin group above: nothing needs romanizing, you only need to say whether a 2-letter handle is allowed. Options: lower the floor, pad from a fuller identity, or leave the Patreon URL.'],
         '0c-SHAPE-REJECTED'         => ['Derived handle is not a legal slug', 'The name derives to Latin, but the result breaks a shape rule (digits only would shadow /u/<member-id>, or the charset the nginx route can match).'],
+        '7-HELD-CONTESTED-BARE'     => ['Held by ruling — the bare handle goes to nobody', 'Ian, 2026-07-29. These members would have taken a bare first name that other members also carry. We proved the surname is not recoverable — Patreon holds one for only 10% of bare-name members against 91% of everyone else — so there is no basis to choose between them. The honest answer to no-basis is that nobody gets it, rather than letting the import accident decide. /u/matt and friends stay free for a future flow where a member actively asks. These keep their Patreon URL for now.'],
         '3-COLLISION-NEEDS-RULING'  => ['Collision we may NOT resolve on our own', 'Two members clean to the same handle. A numeric suffix is ruled out, and where the name is the member\'s own we may not reach for Patreon to "expand" it either. These need your call.'],
         '1-NO-SLUG'                 => ['No URL at all — /u/ 404s today', 'Nothing to redirect FROM, so there is no link risk in giving them one.'],
         '2-PATREON-JUNK'            => ['Patreon id instead of a name', 'The point of the lane. The old URL 301s forever.'],
