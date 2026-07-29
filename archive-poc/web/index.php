@@ -289,6 +289,7 @@ define('LG_CTA_MEMBER',   is_array($_lg_overlay['cta_member']   ?? null) ? $_lg_
 define('LG_CTA_PUBLIC',   is_array($_lg_overlay['cta_public']   ?? null) ? $_lg_overlay['cta_public']   : $_lg_defaults['cta_public']);
 define('LG_FEATURED_MEMBER', is_array($_lg_overlay['featured_member'] ?? null) ? $_lg_overlay['featured_member'] : ($_lg_defaults['featured_member'] ?? []));
 define('LG_HUB_TEASER', is_array($_lg_overlay['hub_teaser'] ?? null) ? $_lg_overlay['hub_teaser'] : ($_lg_defaults['hub_teaser'] ?? []));
+define('LG_MEMBER_GREETING', is_array($_lg_overlay['member_greeting'] ?? null) ? $_lg_overlay['member_greeting'] : ($_lg_defaults['member_greeting'] ?? []));
 unset($_lg_defaults, $_lg_overlay, $_lg_raw, $_lg_parsed);
 
 function thumb_url(array $it): string {
@@ -516,7 +517,7 @@ require __DIR__ . '/_chrome.php'; ?>
   <div class="signup-banner__inner">
     <div>
       <strong class="signup-banner__title">Welcome back<?= $lg_greet !== '' ? ', ' . h($lg_greet) : '' ?>.</strong>
-      <span class="signup-banner__body">Here&rsquo;s what&rsquo;s new in the Looth community.</span>
+      <span class="signup-banner__body"><?= h((string) (LG_MEMBER_GREETING['body'] ?? '')) ?></span>
     </div>
   </div>
 </aside>

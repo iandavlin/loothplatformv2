@@ -258,3 +258,37 @@ Excluded — no action, ever:
 - **charles fox** (603 / 799) — twin carries doug@dougproper.com; not provably Charles.
 - **don goulart** (890 / 814) — Ian: "ignore."
 - **patrick morrissey** (1130 / 1129) — Ian chose leave-alone over the recommended merge.
+
+---
+
+## 11. After the apply — protect reversibility
+
+The merge is reversible **only while the journals survive**. They are the sole
+record of every prior value: post authors, emails, capabilities, connections
+created/deleted/upgraded, deleted notifications, mirror author fields, and each
+twin's archive state. Nothing else on the box can reconstruct them. Deleting
+them is the one action that makes the merge permanent.
+
+They are `postgres`-owned and mode `0750`, so a read-only account cannot see
+them — this check has to be run on the box, in the checkout the apply ran from:
+
+```bash
+cd <the checkout you applied from>
+sudo ls -1 tools/dupe-merge/journal/ | wc -l          # expect 30: 29 journals + 1 manifest
+sudo wc -l  tools/dupe-merge/journal/APPLIED-20260729-142122.tsv   # expect 29
+sudo sh -c 'for f in $(cut -f2 tools/dupe-merge/journal/APPLIED-20260729-142122.tsv); do
+              [ -r "$f" ] || echo "MISSING: $f"; done; echo "journal check done"'
+```
+
+Every journal named in the manifest must exist. If one is missing, that pair is
+no longer reversible and Ian should know before anything else is decided.
+
+**Retention:** keep them until the merge is accepted as permanent. They contain
+member email addresses and prior values, so they are git-ignored and should not
+be copied off the box. When the merge is confirmed good and reversibility is no
+longer wanted, delete the whole `journal/` directory in one go — that is the
+deliberate, explicit end of the rollback path.
+
+A worktree is not a safe home for them long-term: removing the worktree removes
+the journals with it. If the checkout is temporary, move `journal/` somewhere
+durable and root-owned first.
