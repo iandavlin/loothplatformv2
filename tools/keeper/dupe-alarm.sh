@@ -2,16 +2,28 @@
 # dupe-alarm — daily duplicate-Patreon-ID check against LIVE (read-only).
 # The poller bug's signature is one Patreon id attached to two WP accounts;
 # this is the definition-level test from docs/atlas/POLLER-ONBOARDING-AUDIT.md §1.6.
-# Mails Ian ONLY when it finds one, or when the check itself fails to run —
-# a dead alarm must never read as "all clear".
-# --selftest sends a test mail to prove the delivery path end to end.
+#
+# TRANSPORT: dev2 CANNOT SEND EMAIL (verified 2026-07-29: no sendmail/msmtp/mail
+# binary, no SMTP credential in lg-secrets-helper). Alerts go to the on-box msg
+# board + log + the Ian-action flag. An alarm that must reach Ian's INBOX belongs
+# inside the poller on live, which has a proven mail path (lgpo_alert_failure).
+# A dead alarm must never read as "all clear" — failures alert too.
+# --selftest proves the alert path end to end.
 set -uo pipefail
 
-TO="ian.davlin@gmail.com"
+MSG=/usr/local/bin/msg
+LOG=/home/ubuntu/.dupe-alarm.log
+FLAG=/tmp/claude-ian-action
+
+alert() {
+    echo "$(date -u '+%F %T') ALERT: $1" >> "$LOG"
+    "$MSG" send ubuntu "dupe-alarm: $1" || echo "$(date -u '+%F %T') ALERT DELIVERY FAILED (msg rc=$?)" >> "$LOG"
+    touch "$FLAG"
+}
 
 if [ "${1:-}" = "--selftest" ]; then
-    printf 'Subject: [dupe-alarm] test — delivery path works\n\nThis is the one-time self-test of the daily duplicate alarm on dev2.\nIf you are reading this, alarm mail reaches you. No duplicates were involved.\n' | sendmail "$TO"
-    echo "selftest mail handed to sendmail"
+    alert "SELFTEST — if keeper can read this on the board, the alarm path works. No duplicates involved."
+    echo "selftest sent to board + log + flag"
     exit 0
 fi
 
@@ -20,16 +32,14 @@ OUT=$(ssh -o BatchMode=yes -o ConnectTimeout=20 live-ro "mysql --defaults-file=/
 RC=$?
 
 if [ $RC -ne 0 ]; then
-    printf 'Subject: [dupe-alarm] CHECK FAILED to run\n\nThe daily duplicate check could not query live (exit %s):\n\n%s\n' "$RC" "$OUT" | sendmail "$TO"
-    echo "dupe-alarm: FAILED to query live (rc=$RC)" >&2
+    alert "CHECK FAILED to query live (rc=$RC): $OUT"
     exit 1
 fi
 
 if [ -n "$OUT" ]; then
-    printf 'Subject: [dupe-alarm] DUPLICATE Patreon id on live\n\nOne Patreon id is attached to more than one WP account (id<TAB>count):\n\n%s\n\nThis is the exact signature of the old poller duplicate bug. Tell keeper.\n' "$OUT" | sendmail "$TO"
-    echo "dupe-alarm: DUPLICATES FOUND"
+    alert "DUPLICATE Patreon id on live (id/count): $OUT — the old poller bug's exact signature. Investigate before merging anything."
     exit 2
 fi
 
-echo "dupe-alarm: clean"
+echo "$(date -u '+%F %T') clean" >> "$LOG"
 exit 0
