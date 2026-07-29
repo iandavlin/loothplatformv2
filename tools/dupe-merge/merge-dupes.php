@@ -29,7 +29,8 @@
  * its own transaction; if a later store fails, the journal still describes
  * everything already done and --rollback undoes it.
  *
- *   php merge-dupes.php --dry-run [--pair=NAME|--all]      writes nothing
+ *   php merge-dupes.php --dry-run [--pair=NAME|--auto]     writes nothing
+ *   php merge-dupes.php --dry-run --auto --list            names of the auto pairs
  *   php merge-dupes.php --apply --pair=NAME
  *   php merge-dupes.php --verify --pair=NAME
  *   php merge-dupes.php --rollback --journal=FILE
@@ -480,7 +481,9 @@ function count_plan(array $plan): array {
 
 function print_plan(array $plan, bool $verbose): void {
     $p = $plan['pair']; $c = count_plan($plan);
-    $hold = $p['hold'] ? ('  ** HOLD: ' . implode(',', $p['hold']) . ' **') : '';
+    $hold = ($p['action'] ?? '') === 'EXCLUDED'
+        ? '  ** EXCLUDED — no action **'
+        : ($p['hold'] ? ('  ** HOLD: ' . implode(',', $p['hold']) . ' **') : '');
     printf("\n=== %s%s\n", strtoupper($p['name']), $hold);
     printf("  survivor  wp=%-5d pg=%-5d %-34s  patron=%s\n", $p['survivor'], $p['survivor_pg'], $p['survivor_wp_email'], $p['survivor_patron_status'] ?: '-');
     printf("  retire    wp=%-5d pg=%-5d %-34s  patron=%s\n", $p['twin'], $p['twin_pg'], $p['twin_wp_email'] ?: '(none)', $p['twin_patron_status'] ?: '-');
@@ -501,6 +504,10 @@ function print_plan(array $plan, bool $verbose): void {
     if ($c['notif_cascade']) $conf[] = "{$c['notif_cascade']} notification(s) cascade-deleted with dropped connections (recorded)";
     printf("  conflicts %s\n", $conf ? implode('; ', $conf) : 'none');
     if ($p['notes']) printf("  notes     %s\n", implode(',', $p['notes']));
+    if (!empty($p['ruling'])) printf("  ruling    %s\n", $p['ruling']);
+    if (!empty($p['billing_warning'])) {
+        printf("  !! BILLING %s\n", wordwrap($p['billing_warning'], 88, "\n             "));
+    }
 
     if ($verbose) {
         foreach ($plan['my'] as $t)
@@ -879,7 +886,12 @@ if ($MODE === 'rollback') {
 
 $want = $OPT['pair'] ?? null;
 $sel  = array_values(array_filter($pairs, fn($p) => $want === null || stripos($p['name'], (string)$want) !== false));
-if (!$sel) { fwrite(STDERR, "no pair matches --pair=$want\n"); exit(2); }
+// --auto restricts to the pairs that carry no hold, so a batch can never reach
+// one Ian has not ruled on. --list prints the selection and exits, which is how
+// the runbook drives a loop without hardcoding 26 names.
+if (isset($OPT['auto'])) $sel = array_values(array_filter($sel, fn($p) => $p['action'] === 'AUTO'));
+if (!$sel) { fwrite(STDERR, "no pair matches" . ($want !== null ? " --pair=$want" : '') . (isset($OPT['auto']) ? ' --auto' : '') . "\n"); exit(2); }
+if (isset($OPT['list'])) { foreach ($sel as $p) echo $p['name'], "\n"; exit(0); }
 if ($MODE !== 'dry-run' && count($sel) > 1) { fwrite(STDERR, "--pair must select exactly one pair for $MODE (matched " . count($sel) . ")\n"); exit(2); }
 
 printf("env=%s  wp=%s  mysql=%s/%s  pg=%s/%s  mode=%s\n", $ENV, $WP_PATH, $MY_DB, $BILL_DB, $PG_PROF, $PG_MIRR, $MODE);
@@ -897,6 +909,15 @@ foreach ($sel as $p) {
     foreach ($tot as $k => $_) $tot[$k] += $c[$k] ?? 0;
 
     if ($MODE === 'apply') {
+        // EXCLUDED is Ian's "no action ever" — not provably the same member, or
+        // ruled off the list. There is deliberately no override: a pair reaches
+        // this state by a human decision, and only a human decision (editing
+        // pairs.json) takes it back out.
+        if (($p['action'] ?? '') === 'EXCLUDED') {
+            fwrite(STDERR, "\nREFUSING: {$p['name']} is EXCLUDED — " . ($p['ruling'] ?? 'ruled off the dupe list') . "\n");
+            fwrite(STDERR, "No flag overrides this. If the ruling changed, change pairs.json.\n");
+            exit(6);
+        }
         if ($p['hold'] && !isset($OPT['force-hold'])) {
             fwrite(STDERR, "\nREFUSING: {$p['name']} is HELD (" . implode(',', $p['hold']) . "). Decide it by hand, then re-run with --force-hold.\n");
             exit(3);
