@@ -124,7 +124,7 @@
   if (onEvents) {
     inject('looth-loothalong-js', v('/loothalong.js', 5));       // pinned Loothalong CTA (v5: opens in new tab)
     inject('looth-events-live-js', v('/events-live.js', 1));     // LIVE-NOW surfacing
-    if (mobileish) inject('looth-events-mobile-js', v('/events-mobile.js', 7)); // event-details popup
+    if (mobileish) inject('looth-events-mobile-js', v('/events-mobile.js', 8)); // v8: uncropped 16:9 banner + the when line renders once
   }
 
   if (onDir) {

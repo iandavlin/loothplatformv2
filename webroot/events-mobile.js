@@ -39,6 +39,13 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
   function txt(el) { return el ? (el.textContent || '').trim() : ''; }
+  // Whitespace- and case-insensitive line compare. Guards the fetched description
+  // against echoing a line the sheet already renders itself.
+  function sameLine(a, b) {
+    var n = function (s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase(); };
+    var x = n(a);
+    return x !== '' && x === n(b);
+  }
 
   // One close path (✕ / backdrop / drag / back-gesture) so history stays balanced.
   var levHist = false;
@@ -61,10 +68,18 @@
       // matches the content / replies / profile sheets so every pop-up reads as one app.
       '#looth-ev-sheet .lev-card{position:absolute;left:0;right:0;bottom:0;max-height:92vh;overflow:auto;-webkit-overflow-scrolling:touch;background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0;padding:0 0 16px;box-shadow:0 -8px 30px rgba(26,29,26,.32);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--lg-ink,#323532);animation:looth-pwa-up .26s ease;will-change:transform}',
       '#looth-ev-sheet .lev-grab{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:40px;height:5px;border-radius:3px;background:rgba(255,255,255,.85);box-shadow:0 1px 4px rgba(0,0,0,.25);z-index:2;pointer-events:none}',
-      '#looth-ev-sheet .lev-cover{position:relative;width:100%;height:170px;background:var(--lg-sage-tint,#eef2e3) center/cover no-repeat;border-radius:18px 18px 0 0}',
-      '#looth-ev-sheet .lev-pill{position:absolute;left:12px;bottom:12px;background:#fff;border-radius:12px;padding:6px 10px;text-align:center;box-shadow:0 2px 8px rgba(26,29,26,.25);line-height:1}',
-      '#looth-ev-sheet .lev-mon{display:block;font:700 10px/1 var(--lg-font-sans,system-ui);letter-spacing:.08em;color:var(--lg-rust,#c66845)}',
-      '#looth-ev-sheet .lev-day{display:block;font:700 18px/1.1 var(--lg-font-serif,Georgia,serif);color:var(--lg-charcoal,#1a1d1a)}',
+      // Event banners are 16:9 featured images with the title, host and date
+      // TYPESET INTO the artwork, so any crop eats real content. The fixed 170px
+      // box made `cover` scale a 390px-wide phone's banner to 219px and trim the
+      // difference off both edges — ~81px top and bottom in image pixels — which
+      // cut the baked-in "August 2nd, 3PM" clean off (Ian, phone, 2026-07-29).
+      // Use the landing card's own contract instead, so the sheet can never crop
+      // more than the card the reader just tapped.
+      '#looth-ev-sheet .lev-cover{position:relative;width:100%;aspect-ratio:16/9;background:var(--lg-sage-tint,#eef2e3) center/cover no-repeat;border-radius:18px 18px 0 0}',
+      // The AUG-2 date pill is deliberately absent from the sheet (same report):
+      // pinned bottom-left it landed square on the artwork's own date line, and
+      // it carried nothing — .lev-when spells the full date out one line below,
+      // and it renders in every case the pill would have (both need a valid ymd).
       '#looth-ev-sheet .lev-x{position:absolute;top:8px;right:10px;width:32px;height:32px;border:0;border-radius:50%;background:rgba(26,29,26,.5);color:#fff;font-size:20px;line-height:30px;cursor:pointer}',
       '#looth-ev-sheet .lev-body{padding:14px 16px 4px}',
       '#looth-ev-sheet .lev-kind{font:700 10px/1 var(--lg-font-sans,system-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--lg-sage-d,#6b7c52)}',
@@ -98,8 +113,6 @@
       /* DARK pass (2026-06-10 — this sheet had none; app-settings only darkens the
          card shell + title, the content stayed light-on-light). */
       'html[data-lguser-theme="dark"] #looth-ev-sheet .lev-card{background:#1b1e21;color:#e5e7e1}',
-      'html[data-lguser-theme="dark"] #looth-ev-sheet .lev-pill{background:#262b30;box-shadow:0 2px 8px rgba(0,0,0,.45)}',
-      'html[data-lguser-theme="dark"] #looth-ev-sheet .lev-day{color:#f2f4ee}',
       'html[data-lguser-theme="dark"] #looth-ev-sheet .lev-kind{color:#9cb37d}',
       'html[data-lguser-theme="dark"] #looth-ev-sheet .lev-t{color:#f2f4ee}',
       'html[data-lguser-theme="dark"] #looth-ev-sheet .lev-when{color:#e5e7e1}',
@@ -237,8 +250,6 @@
     var href = card.getAttribute('href') || '';
     var title = txt(card.querySelector('.lg-evland__title')) || 'Event';
     var when = txt(card.querySelector('.lg-evland__when'));
-    var mon = txt(card.querySelector('.lg-evland__mon'));
-    var day = txt(card.querySelector('.lg-evland__day'));
     var metaEl = card.querySelector('.lg-evland__meta');
     var metaHtml = '';
     if (metaEl) {
@@ -267,9 +278,7 @@
       '<div class="lev-back" data-lev-close></div>' +
       '<div class="lev-card">' +
         '<div class="lev-grab" aria-hidden="true"></div>' +
-        '<div class="lev-cover" style="' + (cover ? "background-image:url('" + esc(cover) + "')" : '') + '">' +
-          (mon || day ? '<span class="lev-pill"><span class="lev-mon">' + esc(mon) + '</span><span class="lev-day">' + esc(day) + '</span></span>' : '') +
-        '</div>' +
+        '<div class="lev-cover" style="' + (cover ? "background-image:url('" + esc(cover) + "')" : '') + '"></div>' +
         '<button class="lev-x" type="button" aria-label="Close" data-lev-close>&times;</button>' +
         '<div class="lev-body">' +
           '<div class="lev-kind">Event</div>' +
@@ -324,16 +333,26 @@
       .then(function (html) {
         var doc = new DOMParser().parseFromString(html, 'text/html');
         // Description: the event header blurb, else the post/body content.
-        var descEl = doc.querySelector('.lg-event-header__detail, .lg-event__description, .bb-card-content, .entry-content, .wp-block-post-content');
+        // The description is the post's PROSE — never the event header. The old
+        // first selector, `.lg-event-header__detail`, is the when/where strip: on
+        // a v2 event page its only <p> is `.lg-event-header__date`, holding the
+        // byte-identical string .lev-when already shows. It therefore won the
+        // selector race on every event and rendered the time line a SECOND time
+        // below the tier chip, while the real blurb never appeared at all (Ian,
+        // phone, 2026-07-29). `.lg-wysiwyg` is the v2 engine's prose container;
+        // the remaining selectors stay as fallbacks for non-v2 event pages.
+        var descEl = doc.querySelector('.lg-wysiwyg, .lg-event__description, .bb-card-content, .entry-content, .wp-block-post-content');
         var descBox = sheet.querySelector('#lev-desc');
         if (descBox && descEl) {
           var ps = descEl.querySelectorAll('p');
           if (ps.length) {
             var out = '';
-            for (var i = 0; i < ps.length && i < 6; i++) { var p = (ps[i].textContent || '').trim(); if (p) out += '<p>' + esc(p) + '</p>'; }
+            // Belt and braces: whatever the source, the when line renders once.
+            for (var i = 0; i < ps.length && i < 6; i++) { var p = (ps[i].textContent || '').trim(); if (p && !sameLine(p, when)) out += '<p>' + esc(p) + '</p>'; }
             descBox.innerHTML = out;
           } else {
-            descBox.textContent = (descEl.textContent || '').trim().slice(0, 600);
+            var body = (descEl.textContent || '').trim();
+            if (!sameLine(body, when)) descBox.textContent = body.slice(0, 600);
           }
         }
         // Gate note (Lite events show an upgrade message).
