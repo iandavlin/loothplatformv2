@@ -1126,3 +1126,121 @@ One new event type. One new small table. Two new WP-pool endpoints. One unsub mu
 (§4.1). Numbers are measured, not asserted. Items tagged "verify" must be proven on dev2 before a
 build lane asserts them. No build has started and none may start until Ian approves §0 and answers
 §9.1 and §9.2.*
+
+---
+
+## 11. THE EXERCISE PASS — what is now EXECUTED, and what is still only WRITTEN
+
+*thread-follow lane, 2026-07-29, on dev2. Everything below was run; nothing here is inferred from
+reading source. The honest headline: **the whole server half is exercised and green; every real
+CLICK is still unexercised** and is held behind keeper's memory gate, not behind any doubt about
+the code.*
+
+### 11.1 How branch code was run WITHOUT a serve window
+
+The serving checkout `~/loothplatformv2-clean` was never touched — still `main`, still clean, no
+symlink added, no nginx change, nothing written to `/var/www/dev`. The branch was run on **loopback
+`php -S`, one server per FPM pool, each as the SAME UNIX USER nginx would use**, so the permissions
+posture is identical to production rather than merely similar:
+
+| Port | Serves | Runs as | Why that user |
+|---|---|---|---|
+| 8791 | the Hub (`bb-mirror/web`, router emulating `alias` + `try_files`) | `bb-mirror` | the Hub pool — and it still cannot read `wp-load.php`, exactly as in prod |
+| 8792 | `follow.php` | `looth-dev` | the pool the endpoint is actually routed to (it needs WP) |
+| 8793/4 | the §4 unsub page | `looth-dev` | WP pool; 8794 loads the plugin as a REAL mu-plugin via `WPMU_PLUGIN_DIR` |
+| 8795 | the branch's `internal-notify.php` | `profile-app` | the bell receiver's own pool |
+
+Against the **real** dev2 MySQL (`looth_import`) and the **real** PG (`looth`, `profile_app`). No
+mocks, no stubs. Acting user throughout: `claude_admin` (1912) — deliberately not Ian's account.
+
+**This harness is reusable by any lane that needs to exercise unmerged code on dev2.** It is
+strictly safer than a serve window: it cannot detach the serving checkout, so it cannot delete the
+mu-plugin/webroot symlink set the running system depends on.
+
+### 11.2 EXERCISED — green
+
+1. **`feed_follow_btns()` renders.** 14 topic cards → 28 buttons, both bits, from the branch's own
+   PHP. Previously unexecuted markup.
+2. **Batch GET.** Anon → `{authenticated:false, nonce:"", state:{}}` — inert, never an error.
+   Authed → nonce + `email_master` + all 7 topics `{notify:false,email:false}`. **Default-OFF is now
+   a runtime fact, not a source claim.**
+3. **POST, both channels.** notify ON → ON again (idempotent, `ON CONFLICT` held) → email ON →
+   **notify OFF with email SURVIVING** → email OFF. The fourth step is the one that matters: the two
+   bits are provably independent in both directions.
+4. **Guards, all seven exact:** anon POST 401 · bad nonce 403 · dead topic 404 · bad channel 400 ·
+   missing `on` 400 · `remove_mention` declared 501 · PUT 405.
+5. **Stores audited DIRECTLY**, not through the endpoint's own read (a tool that sanitises on read
+   cannot audit the store): `forums.topic_follow` ← uid 1912 / topic 72039 (**first row ever**;
+   the table was empty), and `wp_bb_notifications_subscriptions` ← id 15831, `type=topic`,
+   `item_id=72039`. Two stores, one per bit, exactly as §5 rules.
+6. **§4 unsubscribe, END TO END.** Link minted by the plugin's own builder against the real
+   BuddyBoss salt → **GET renders the confirmation page and does NOT mutate** (verified by counting
+   rows either side — this is the anti-prefetch property, and it holds) → POST removes the
+   subscription → `undo=1` restores it → **three tamper cases all 403: bad signature, *different
+   topic with a valid signature*, and different user.** The middle one is the proof that the topic
+   id is genuinely inside the signed payload, which is the entire difference from BuddyBoss's
+   blanket link.
+7. **The token swap, in the real send path.** `bp_send_email('bbp-new-forum-reply', …)` produced a
+   delivered message (mailpit) whose **only** unsubscribe link is ours — BuddyBoss's blanket link is
+   gone. Replaced, not supplemented, as claimed.
+8. **§6 coherence, proven at runtime.** "Stop ALL discussion emails" writes the same store
+   `follow.php` reads for `email_master`; after the POST the endpoint returns `email_master:false`,
+   and after `undo` it returns `true` again. The account page can never say "off" while mail
+   arrives, and the UI can never render a lit envelope while nothing will send.
+9. **Leg 4 + coalescing.** A followed-topic event through the branch receiver produced **ONE** row;
+   a second event from a different actor coalesced into the same row with `actor_count=2` and the
+   `target_url` re-pointed at the newest reply. `anchor_id` NULL folds to 0 under the existing
+   index, so counting, read-reset and the 30-day prune are inherited with no new logic.
+
+### 11.3 ⚠️ FOUND AND FIXED — the logged-out unsubscribe was one hook-ordering accident from broken
+
+BuddyPress registers `bp_template_redirect` at priority **10** and, for a **logged-out** visitor,
+302s to `/wp-login.php?…&bp-auth=1&action=bpnoaccess`. Our page was also at the default 10, so the
+only thing keeping it alive was **registration order** — mu-plugins load before regular plugins, so
+ours happened to run first.
+
+That is luck, not design, and the audience it fails is exactly the one §4 exists for: someone
+logged out, clicking unsubscribe from their inbox. The symptom is a login wall, which reads as "your
+unsubscribe link is broken".
+
+**Reproduced** (plugin registered last → 302 to wp-login) and **fixed** by moving to **priority 5**,
+then **re-proven at 200 in BOTH orders**. Rationale is in the file header, not just here.
+
+### 11.4 ⚠️ DEPLOY COUPLING — leg 4 and profile-app MUST ship in the same window
+
+A third coupling for the list in `CLAUDE.md`, and the nastiest kind because it is **silent**.
+
+`lg_notify_push()` fires the bell over loopback to
+`/profile-api/v0/internal/notify`, and that receiver **validates the type against
+`Notifications::HUB_TYPES`**. Measured against the currently-deployed (main) receiver:
+
+```
+{"ok":false,"error":"bad_type","allowed":["forum.reply_to_topic","forum.reply_to_reply",
+                                          "forum.mention","reaction.on_post"]}   HTTP 400
+```
+
+`lg_notify_push()` **fails silent by design** ("a reply that posted must never fail because the bell
+was down"), so the 400 is swallowed and the follower simply never gets a bell. **No error surfaces
+to anyone.** Against the branch's receiver the identical payload returns `{"ok":true,"raised":true}`.
+
+**Consequence for the cutover:** `lg-shared/notify-bridge.php` (leg 4) and
+`profile-app/src/Notifications.php` (the widened `HUB_TYPES`) and the applied SQL `CHECK` are ONE
+atomic unit. Ship leg 4 first and every followed-topic notification is dropped without a trace;
+ship it in a window where profile-app's FPM pool has not reloaded, same result.
+
+### 11.5 STILL UNEXERCISED — no click has happened
+
+Named plainly rather than softened. **All of these are client-side JS and need a browser engine:**
+
+- both toggles clicked on the **desktop feed card** and the **mobile feed card**
+- the **discussion modal header** pair, and the **mobile sheet header** pair
+- the notifications-panel **⋯ menu** (§3.5) — both bits, both themes
+- the **chip-removal** path
+- optimistic-update revert-on-failure, `MutationObserver` re-sync on filter swap / infinite scroll,
+  and the `body.fc-save-anon` hide for anon
+
+Held at 2026-07-29 on keeper's memory gate: the browser leg requires `free -m` **available ≥ 800MB**
+and the box measured 737MB, then 546MB, at 4 working lanes. Not a code doubt — a seat.
+
+*§11 written from execution on dev2, 2026-07-29. Every number above was produced by running the
+thing, on the box named, as the user named.*

@@ -148,7 +148,26 @@ add_filter('bp_email_set_tokens', function ($tokens) {
        path has no extension.
    So SPEC §10 item 8's "route for the unsub page" is a no-op on this vhost. Recorded
    because the NEXT box may differ: if a vhost ever adds a /discussions prefix or a
-   broader regex, this page stops resolving with no other symptom. */
+   broader regex, this page stops resolving with no other symptom.
+
+   ── ⚠️ PRIORITY 5, AND WHY IT IS LOAD-BEARING (exercise pass, 2026-07-29) ─────
+   BuddyPress registers bp_template_redirect on this same hook at priority 10, and
+   for a LOGGED-OUT visitor it 302s to
+       /wp-login.php?…&bp-auth=1&action=bpnoaccess
+   Measured on dev2: with our callback also at 10, the ONLY thing that saved this
+   page was registration order — mu-plugins load before regular plugins, so ours
+   happened to run first and exit. That is luck, not design, and the audience it
+   would fail is precisely the one this feature exists for: a logged-out member
+   clicking unsubscribe from their inbox. The symptom would be a login wall, which
+   reads as "the unsubscribe link is broken" and would be reported as such.
+
+   Priority 5 makes it deterministic regardless of load order. It also puts us ahead
+   of bbp_template_redirect (8) and redirect_canonical (10); neither claims this
+   path, and running first is correct for a page that owns its URL outright.
+
+   PROVEN BOTH WAYS on dev2: at priority 10 with the plugin loaded LAST → 302 to
+   wp-login (the failure reproduced); at priority 5 → 200 and the confirmation page,
+   with the plugin loaded last. */
 add_action('template_redirect', function () {
     $path = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
     if (rtrim($path, '/') !== rtrim(LG_DISC_UNSUB_PATH, '/')) return;
@@ -216,7 +235,7 @@ add_action('template_redirect', function () {
         $body .= '<p class="lg-u-note">You&rsquo;ll still see new replies in your notifications.</p>';
     }
     lg_disc_unsub_render($done, $body, $tid, $uid, $nh, true);
-});
+}, 5);   // ⚠️ priority 5 — NOT default 10. See below; measured, not stylistic.
 
 function lg_disc_unsub_form(int $tid, int $uid, string $nh, string $scope, string $label, string $kind, bool $undo = false): string
 {
