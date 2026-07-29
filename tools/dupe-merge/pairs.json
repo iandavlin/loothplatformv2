@@ -181,49 +181,6 @@
   "action": "AUTO"
  },
  {
-  "name": "derek taylor",
-  "detected_by": "patreon-id",
-  "rule": "only-B-matches-patreon",
-  "survivor": 1574,
-  "twin": 676,
-  "survivor_pg": 1397,
-  "twin_pg": 1761,
-  "survivor_uuid": "df88b697-a765-5833-a6be-98c619bc3ac3",
-  "twin_uuid": "82dcb617-3891-50ef-ae09-226c95f5f3c4",
-  "survivor_slug": "patreon_166811191",
-  "twin_slug": "patreon_20763650",
-  "survivor_display": "Derek Taylor",
-  "twin_display": "Derek",
-  "win_email": "dtaylor9553@yahoo.com",
-  "survivor_wp_email": "dtaylor9553@yahoo.com",
-  "twin_wp_email": "",
-  "email_changes": false,
-  "survivor_patron_status": "active_patron",
-  "twin_patron_status": "",
-  "survivor_patreon_id": "20763650",
-  "twin_patreon_id": "20763650",
-  "survivor_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 2,
-   "threads": 0
-  },
-  "twin_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 2,
-   "threads": 0
-  },
-  "conn_move": 0,
-  "conn_drop_exact": 2,
-  "conn_drop_reversed": 0,
-  "hold": [],
-  "notes": [],
-  "action": "AUTO"
- },
- {
   "name": "eric petrus",
   "detected_by": "name",
   "rule": "both-match; active_patron wins",
@@ -580,51 +537,6 @@
   "hold": [],
   "notes": [
    "SURVIVOR-PRIVATERELAY"
-  ],
-  "action": "AUTO"
- },
- {
-  "name": "kurt smith",
-  "detected_by": "patreon-id",
-  "rule": "only-B-matches-patreon",
-  "survivor": 1333,
-  "twin": 1154,
-  "survivor_pg": 1180,
-  "twin_pg": 1797,
-  "survivor_uuid": "83444113-170c-53f8-abd3-3bc6a8fb0c92",
-  "twin_uuid": "6da7529e-a3e4-5e51-9af9-ad1bba72720b",
-  "survivor_slug": "patreon_169179770",
-  "twin_slug": "patreon_151895741",
-  "survivor_display": "Kurt Smith",
-  "twin_display": "Kurt Smith GuitarSmith",
-  "win_email": "kdsmith@srt.com",
-  "survivor_wp_email": "kdsmith@srt.com",
-  "twin_wp_email": "",
-  "email_changes": false,
-  "survivor_patron_status": "active_patron",
-  "twin_patron_status": "",
-  "survivor_patreon_id": "151895741",
-  "twin_patreon_id": "151895741",
-  "survivor_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 3,
-   "threads": 0
-  },
-  "twin_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 1,
-   "threads": 0
-  },
-  "conn_move": 0,
-  "conn_drop_exact": 1,
-  "conn_drop_reversed": 0,
-  "hold": [],
-  "notes": [
-   "TWIN-MORE-RECENT"
   ],
   "action": "AUTO"
  },
@@ -1245,49 +1157,6 @@
   "action": "AUTO"
  },
  {
-  "name": "vincent jaeger",
-  "detected_by": "patreon-id",
-  "rule": "only-B-matches-patreon",
-  "survivor": 1690,
-  "twin": 1516,
-  "survivor_pg": 1509,
-  "twin_pg": 1817,
-  "survivor_uuid": "4ac84a00-5579-56be-b800-e9b118b9352b",
-  "twin_uuid": "c87c94d3-aaad-54e2-8c8b-e6b8799a23c2",
-  "survivor_slug": "patreon_196135453",
-  "twin_slug": "patreon_185178224",
-  "survivor_display": "Vincent Jaeger",
-  "twin_display": "Vincent Jaeger Jaeger Guitar Repair",
-  "win_email": "vjaeger2011@my.fit.edu",
-  "survivor_wp_email": "vjaeger2011@my.fit.edu",
-  "twin_wp_email": "",
-  "email_changes": false,
-  "survivor_patron_status": "active_patron",
-  "twin_patron_status": "",
-  "survivor_patreon_id": "185178224",
-  "twin_patreon_id": "185178224",
-  "survivor_content": {
-   "forum_posts": 8,
-   "other_posts": 1,
-   "msgs": 0,
-   "connections": 2,
-   "threads": 0
-  },
-  "twin_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 2,
-   "threads": 0
-  },
-  "conn_move": 0,
-  "conn_drop_exact": 2,
-  "conn_drop_reversed": 0,
-  "hold": [],
-  "notes": [],
-  "action": "AUTO"
- },
- {
   "name": "andrew mcneill",
   "detected_by": "name",
   "rule": "both-match & BOTH ACTIVE -> provisional",
@@ -1423,6 +1292,51 @@
   "conn_drop_reversed": 0,
   "hold": [
    "TWO-WAY-CONTENT"
+  ],
+  "notes": [],
+  "action": "HOLD"
+ },
+ {
+  "name": "derek taylor",
+  "detected_by": "patreon-id",
+  "rule": "only-B-matches-patreon",
+  "survivor": 1574,
+  "twin": 676,
+  "survivor_pg": 1397,
+  "twin_pg": 1761,
+  "survivor_uuid": "df88b697-a765-5833-a6be-98c619bc3ac3",
+  "twin_uuid": "82dcb617-3891-50ef-ae09-226c95f5f3c4",
+  "survivor_slug": "patreon_166811191",
+  "twin_slug": "patreon_20763650",
+  "survivor_display": "Derek Taylor",
+  "twin_display": "Derek",
+  "win_email": "dtaylor9553@yahoo.com",
+  "survivor_wp_email": "dtaylor9553@yahoo.com",
+  "twin_wp_email": "",
+  "email_changes": false,
+  "survivor_patron_status": "active_patron",
+  "twin_patron_status": "",
+  "survivor_patreon_id": "20763650",
+  "twin_patreon_id": "20763650",
+  "survivor_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 2,
+   "threads": 0
+  },
+  "twin_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 2,
+   "threads": 0
+  },
+  "conn_move": 0,
+  "conn_drop_exact": 2,
+  "conn_drop_reversed": 0,
+  "hold": [
+   "POLLER-ID-CROSSED"
   ],
   "notes": [],
   "action": "HOLD"
@@ -1614,6 +1528,53 @@
   "action": "HOLD"
  },
  {
+  "name": "kurt smith",
+  "detected_by": "patreon-id",
+  "rule": "only-B-matches-patreon",
+  "survivor": 1333,
+  "twin": 1154,
+  "survivor_pg": 1180,
+  "twin_pg": 1797,
+  "survivor_uuid": "83444113-170c-53f8-abd3-3bc6a8fb0c92",
+  "twin_uuid": "6da7529e-a3e4-5e51-9af9-ad1bba72720b",
+  "survivor_slug": "patreon_169179770",
+  "twin_slug": "patreon_151895741",
+  "survivor_display": "Kurt Smith",
+  "twin_display": "Kurt Smith GuitarSmith",
+  "win_email": "kdsmith@srt.com",
+  "survivor_wp_email": "kdsmith@srt.com",
+  "twin_wp_email": "",
+  "email_changes": false,
+  "survivor_patron_status": "active_patron",
+  "twin_patron_status": "",
+  "survivor_patreon_id": "151895741",
+  "twin_patreon_id": "151895741",
+  "survivor_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 3,
+   "threads": 0
+  },
+  "twin_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 1,
+   "threads": 0
+  },
+  "conn_move": 0,
+  "conn_drop_exact": 1,
+  "conn_drop_reversed": 0,
+  "hold": [
+   "POLLER-ID-CROSSED"
+  ],
+  "notes": [
+   "TWIN-MORE-RECENT"
+  ],
+  "action": "HOLD"
+ },
+ {
   "name": "michael minton",
   "detected_by": "name",
   "rule": "both-match; active_patron wins",
@@ -1701,6 +1662,51 @@
   "conn_drop_reversed": 0,
   "hold": [
    "BOTH-ACTIVE-PATRON"
+  ],
+  "notes": [],
+  "action": "HOLD"
+ },
+ {
+  "name": "vincent jaeger",
+  "detected_by": "patreon-id",
+  "rule": "only-B-matches-patreon",
+  "survivor": 1690,
+  "twin": 1516,
+  "survivor_pg": 1509,
+  "twin_pg": 1817,
+  "survivor_uuid": "4ac84a00-5579-56be-b800-e9b118b9352b",
+  "twin_uuid": "c87c94d3-aaad-54e2-8c8b-e6b8799a23c2",
+  "survivor_slug": "patreon_196135453",
+  "twin_slug": "patreon_185178224",
+  "survivor_display": "Vincent Jaeger",
+  "twin_display": "Vincent Jaeger Jaeger Guitar Repair",
+  "win_email": "vjaeger2011@my.fit.edu",
+  "survivor_wp_email": "vjaeger2011@my.fit.edu",
+  "twin_wp_email": "",
+  "email_changes": false,
+  "survivor_patron_status": "active_patron",
+  "twin_patron_status": "",
+  "survivor_patreon_id": "185178224",
+  "twin_patreon_id": "185178224",
+  "survivor_content": {
+   "forum_posts": 8,
+   "other_posts": 1,
+   "msgs": 0,
+   "connections": 2,
+   "threads": 0
+  },
+  "twin_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 2,
+   "threads": 0
+  },
+  "conn_move": 0,
+  "conn_drop_exact": 2,
+  "conn_drop_reversed": 0,
+  "hold": [
+   "POLLER-ID-CROSSED"
   ],
   "notes": [],
   "action": "HOLD"

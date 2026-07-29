@@ -32,7 +32,30 @@ record), falling back to the `lgpo_patreon_email` meta and then to the
 email**, so no live email is rewritten — the rule picks the matching account by
 construction. The merge frees the twin's address rather than moving it.
 
+A fourth outcome comes from the poller audit: where the poller row for either
+account describes a **different Patreon identity** than the account itself
+claims, the email match proves only that the member controls the address — not
+that this account's own Patreon identity is current. Those are **held**, and
+the tool refuses them at apply time regardless of `--force-hold`.
+
 The decisions live in `pairs.json` as reviewable data, not in code.
+
+## Preflight
+
+`--apply` re-derives the survivor rule from the database immediately before
+writing, because `pairs.json` was computed earlier and can drift. Its three
+failures take three different overrides, so waiving one never silently waives
+another:
+
+| override | waives |
+|---|---|
+| `--force-hold` | the pair is flagged for a human; you are that human |
+| `--force-preflight` | a crossed Patreon linkage, or the survivor's email has drifted from the plan |
+| `--skip-poller-check` | `lg_membership` is unreachable (a box without the secret) |
+
+Credentials for `lg_membership` come from `/etc/lg-poller-db`, falling back to
+the `lgms_db_*` `wp_options` rows — the same order `membership-pages/config.php`
+uses.
 
 ## What a merge does
 
@@ -138,6 +161,26 @@ survivor holds both halves, rolls back, and re-fingerprints — failing unless t
 restore is byte-identical.
 
 **All 38 pairs pass on dev2.**
+
+Use the journal path the tool prints. Do not pick one with `ls | tail -1` — the
+journals are named per pair, so that selects alphabetically, not the most
+recent, and rolls back the wrong merge. That mistake cost a manual test run
+here and left a pair merged until it was repaired from live.
+
+## Cross-check against POLLER-ONBOARDING-AUDIT §8
+
+All 14 accounts the audit names are in this population. The 11 skeleton accounts
+carrying another account's Patreon id (#84, 195, 399, 471, 505, 615, 676, 1154,
+1407, 1516, 1520) are all on the **retired** side, so a crossed id never elects
+a survivor. The 3 partner accounts whose id meta disagrees with their own
+`patreon_<id>` username (#1574 derek taylor, #1333 kurt smith, #1690 vincent
+jaeger) are all **survivors**, and all three are now held.
+
+The sharpest of them is vincent jaeger: #1690 is `patreon_196135453` and its own
+patron blob gives `vjaeger@jaegerguitarrepair.com`, but its poller row describes
+patreon id `185178224` — the twin's — with `vjaeger2011@my.fit.edu`, which is
+what its WP email matches. Under a strict per-account reading its email does not
+match its own Patreon account at all.
 
 ## Known gap
 

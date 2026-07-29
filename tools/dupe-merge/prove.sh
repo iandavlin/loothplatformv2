@@ -113,7 +113,7 @@ BEFORE_TWIN_MIRROR=$(mir "SELECT COUNT(*) FROM forums.reply WHERE author_id=$TWI
 echo "    twin posts=$BEFORE_TWIN_POSTS  survivor posts=$BEFORE_SURV_POSTS  twin conns=$BEFORE_TWIN_CONN  twin mirror replies=$BEFORE_TWIN_MIRROR"
 
 echo "--- 3. APPLY"
-"$HERE/run-as-root.sh" --apply --pair="$PAIR" --force-hold | tee "$WORK/apply.log"
+"$HERE/run-as-root.sh" --apply --pair="$PAIR" --force-hold --skip-poller-check --force-preflight | tee "$WORK/apply.log"
 JOURNAL=$(grep -oE '/[^ ]*\.json' "$WORK/apply.log" | head -1)
 echo "    journal=$JOURNAL"
 

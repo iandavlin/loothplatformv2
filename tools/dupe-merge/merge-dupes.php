@@ -36,6 +36,13 @@
  *
  * --apply refuses a pair marked HOLD unless --force-hold is given, which is
  * there so Ian can merge one after deciding it by hand, not to batch them.
+ *
+ * Preflight re-derives the survivor rule from the database just before writing
+ * and refuses separately, because pairs.json can be stale. Its three failures
+ * take three different overrides, so waiving one never silently waives another:
+ *   --force-hold        the pair is flagged for a human; you are that human
+ *   --force-preflight   a crossed Patreon linkage or drifted email, decided
+ *   --skip-poller-check lg_membership is unreachable (a box without the secret)
  */
 
 declare(strict_types=1);
@@ -111,17 +118,30 @@ function pdo_pg(string $db): PDO {
  * only to copy the live patron record into the journal, so a box where the
  * secret is unreadable still merges — it just records less.
  */
-function poller_creds(): ?array {
+function poller_creds(?PDO $wp = null): ?array {
     $f = getenv('LG_POLLER_DB_FILE') ?: '/etc/lg-poller-db';
-    if (!is_readable($f)) return null;
-    $c = [];
-    foreach (file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-        $line = trim($line);
-        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
-        [$k, $v] = explode('=', $line, 2);
-        $c[trim($k)] = trim($v, " \t'\"");
+    if (is_readable($f)) {
+        $c = [];
+        foreach (file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+            $line = trim($line);
+            if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+            [$k, $v] = explode('=', $line, 2);
+            $c[trim($k)] = trim($v, " \t'\"");
+        }
+        if (isset($c['DB_USER'])) return $c + ['DB_HOST' => '127.0.0.1', 'DB_NAME' => 'lg_membership'];
     }
-    return isset($c['DB_USER']) ? $c + ['DB_HOST' => '127.0.0.1', 'DB_NAME' => 'lg_membership'] : null;
+    // Same fallback membership-pages/config.php uses when the secret file is
+    // absent: the credentials are also kept as wp_options.
+    if ($wp) {
+        $q = $wp->query("SELECT option_name, option_value FROM wp_options
+                          WHERE option_name IN ('lgms_db_user','lgms_db_pass','lgms_db_host','lgms_db_name')");
+        $o = [];
+        foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) $o[$r['option_name']] = $r['option_value'];
+        if (!empty($o['lgms_db_user'])) return [
+            'DB_USER' => $o['lgms_db_user'], 'DB_PASSWORD' => $o['lgms_db_pass'] ?? '',
+            'DB_HOST' => $o['lgms_db_host'] ?: '127.0.0.1', 'DB_NAME' => $o['lgms_db_name'] ?: 'lg_membership'];
+    }
+    return null;
 }
 
 $creds = wp_creds($WP_PATH);
@@ -131,11 +151,11 @@ $DB = [
     'pg'   => pdo_pg($PG_PROF),
     'mir'  => pdo_pg($PG_MIRR),
 ];
-if ($pc = poller_creds()) {
+if ($pc = poller_creds($DB['my'])) {
     try { $DB['bill'] = pdo_mysql($pc['DB_NAME'] ?: $BILL_DB, $pc); }
     catch (Throwable $e) { fwrite(STDERR, "note: lg_membership unreadable ({$e->getMessage()}); patron record omitted from journal\n"); }
 } else {
-    fwrite(STDERR, "note: no /etc/lg-poller-db; patron record omitted from journal\n");
+    fwrite(STDERR, "note: lg_membership credentials not found (no /etc/lg-poller-db, no lgms_db_* options); patron record omitted from journal\n");
 }
 
 // --------------------------------------------------------------- the surface
@@ -494,6 +514,45 @@ function print_plan(array $plan, bool $verbose): void {
 
 // ------------------------------------------------------------------- execute
 
+/**
+ * Re-derive the survivor rule against the database immediately before writing,
+ * instead of trusting pairs.json, which was computed earlier and can drift.
+ *
+ * Also refuses when the poller row for either account describes a DIFFERENT
+ * Patreon identity than the account itself claims — its username-embedded id,
+ * corroborated by its own patron_info blob. POLLER-ONBOARDING-AUDIT s8 found
+ * 11 skeleton accounts carrying another account's id, and where that crossing
+ * touches a survivor the email match proves only that the member controls the
+ * address, not that this account's own Patreon identity is current. Deciding
+ * who survives on a crossed link is how the wrong account gets retired.
+ */
+function preflight(array $DB, array $p): array {
+    $problems = ['crossed' => [], 'no_poller' => [], 'drift' => []];
+    $S = (int)$p['survivor'];
+
+    $q = $DB['my']->prepare("SELECT LOWER(TRIM(user_email)) FROM wp_users WHERE ID = ?");
+    $q->execute([$S]);
+    $live = (string)$q->fetchColumn();
+    if ($live !== strtolower($p['win_email']) && !$p['email_changes'])
+        $problems['drift'][] = sprintf("survivor %d email is now %s, plan expected %s", $S, $live ?: '(empty)', $p['win_email']);
+
+    foreach ([[$S, 'survivor'], [(int)$p['twin'], 'twin']] as [$uid, $role]) {
+        $q = $DB['my']->prepare("SELECT user_login FROM wp_users WHERE ID = ?");
+        $q->execute([$uid]);
+        $login = (string)$q->fetchColumn();
+        $ownPid = preg_match('/^patreon_(\d+)$/', $login, $m) ? $m[1] : '';
+        if ($ownPid === '') continue;
+        if (!$DB['bill']) { $problems['no_poller'][] = "cannot reach lg_membership to check the $role's Patreon linkage"; continue; }
+        $q = $DB['bill']->prepare("SELECT patreon_user_id FROM lg_patreon_members WHERE wp_user_id = ?");
+        $q->execute([$uid]);
+        $pollPid = (string)$q->fetchColumn();
+        if ($pollPid !== '' && $pollPid !== $ownPid)
+            $problems['crossed'][] = sprintf("%s %d is patreon_%s but its poller row says patreon id %s — crossed linkage (audit s8)",
+                $role, $uid, $ownPid, $pollPid);
+    }
+    return $problems;
+}
+
 function journal_write(string $dir, array $plan): string {
     if (!is_dir($dir)) mkdir($dir, 0750, true);
     $f = sprintf('%s/%s-%d-into-%d-%s.json', $dir,
@@ -842,6 +901,26 @@ foreach ($sel as $p) {
             fwrite(STDERR, "\nREFUSING: {$p['name']} is HELD (" . implode(',', $p['hold']) . "). Decide it by hand, then re-run with --force-hold.\n");
             exit(3);
         }
+        // Three different failures, three different answers. Drift and a crossed
+        // linkage are real findings and need a decision; an unreadable poller
+        // secret is an environment gap, waived on its own narrow flag rather
+        // than by --force-hold, which is for HELD pairs and would hide both.
+        $problems = preflight($DB, $p);
+        $hard = array_merge($problems['crossed'], $problems['drift']);
+        if ($hard && !isset($OPT['force-preflight'])) {
+            fwrite(STDERR, "\nREFUSING: {$p['name']} failed preflight against live data:\n");
+            foreach ($hard as $x) fwrite(STDERR, "  - $x\n");
+            fwrite(STDERR, "These are decisions, not defaults. Resolve them, then re-run with --force-preflight.\n");
+            exit(4);
+        }
+        foreach ($hard as $x) fwrite(STDERR, "  preflight OVERRIDDEN: $x\n");
+        if ($problems['no_poller'] && !isset($OPT['skip-poller-check'])) {
+            fwrite(STDERR, "\nREFUSING: {$p['name']} — the Patreon linkage could not be checked:\n");
+            foreach ($problems['no_poller'] as $x) fwrite(STDERR, "  - $x\n");
+            fwrite(STDERR, "On live this secret exists. Pass --skip-poller-check only on a box without it.\n");
+            exit(5);
+        }
+        foreach ($problems['no_poller'] as $x) fwrite(STDERR, "  preflight waived: $x\n");
         do_apply($DB, $plan, $JOURNAL_DIR);
     }
 }
