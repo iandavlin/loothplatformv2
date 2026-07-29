@@ -3,6 +3,12 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-29 — Mirror dispatch must be durable → CHARTERED: mirror-dispatch lane
+
+Ian approved 7/29 (spins after merger night). Charter: ~/lane-prompts/mirror-dispatch.md.
+Outbox queue + reconcile reverse pass + WP-native delete hook; proves §9's hop.
+Root cause: docs/atlas/MIRROR-ATTACHMENT-ORPHANS.md §10.
+
 ## 2026-07-29 — Mail containment must gate on host, not LG_ENV (keeper)
 
 `platform/mu-plugins/lg-dev-mail-containment.php` treats `LG_ENV=dev2` as proof
