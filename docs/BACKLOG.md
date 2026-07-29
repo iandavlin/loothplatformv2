@@ -3,6 +3,16 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-29 — Public weekly-email signup page (Ian)
+
+A page where someone WITHOUT a WP account signs up for the weekly email. No WP
+user may be required or created by signing up. Stack notes: the weekly digest and
+its recipient rules are the weekly-digest-recap lane's domain (fold this into its
+respawn charter — candidate owner); FluentCRM exists on the stack and live mail
+rides FluentSMTP→SES; public-facing page → craft gates apply. Needs: the page,
+a store for non-member subscribers, unsubscribe, and the digest sender reading
+that store alongside members.
+
 ## 2026-07-29 — Events mobile: banner cut off + time listed twice (Ian, screenshot)
 
 On the mobile event sheet (seen on "Looth Pro — Intermediate Inlay with CNC"):
