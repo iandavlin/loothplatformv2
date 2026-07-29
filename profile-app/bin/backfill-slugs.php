@@ -193,6 +193,33 @@ foreach ($cand as $c) {
     $current = trim((string) $c['slug']);
     $name    = (string) $c['display_name'];
 
+    // R1 says the slug IS the display name cleaned — which is a hole when the display name
+    // IS AN EMAIL ADDRESS. Then the deriver works perfectly and publishes the member's email
+    // as their public URL: `mdoran2000@aol.com` -> /u/mdoran2000-aol-com.
+    //
+    // This is the SECOND door onto the same harm. The first was the expansion chain
+    // (full_name -> vanity -> patreon email -> account email), disarmed behind
+    // --allow-email-derived-slugs. That flag does NOT guard this path and never could:
+    // nothing here reaches for an email, the email is already sitting in display_name.
+    // Per docs/CRAFT-STANDARD.md a defect class found twice is encoded, not re-fixed.
+    //
+    // Deliberately BEFORE the healthy-slug skip. For members already wearing an
+    // email-derived slug the derivation "agrees" with the stored one, so $defectOf returns
+    // null and they would never appear — the report would look clean while the exposure is
+    // live. On live 2026-07-29 that is exactly 2 members (/u/alrightguybellsouth-net and
+    // /u/thomadkinstelus-net, both 200 OK today). They are surfaced with NO proposal: this
+    // run cannot fix them (the cure is a new name, not a new slug) but it must not hide them.
+    if (preg_match('/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/', $name)) {
+        $plan[] = [
+            'cat' => '0d-NAME-IS-AN-EMAIL', 'user_id' => $id, 'wp_id' => (string) $c['wp_user_id'],
+            'name' => $name, 'current' => $current !== '' ? $current : '(none — 404s today)',
+            'proposed' => '', 'why' => 'display name is an email address — deriving would publish it',
+            'action' => 'NEEDS RULING — never publish an email as a URL; needs a real name first',
+            'defect' => $defectOf($current, $name) ?? '2-PATREON-JUNK', 'row' => $c,
+        ];
+        continue;
+    }
+
     $defect = $defectOf($current, $name);
     if ($defect === null) { $skips['healthy — slug already reads as their name'] = ($skips['healthy — slug already reads as their name'] ?? 0) + 1; continue; }
 
@@ -677,6 +704,7 @@ if ($HTML) {
         '0-NO-HONEST-SLUG'          => ['Name has no Latin characters — needs your ruling', 'Non-Latin script, punctuation or emoji. We never latinize a member\'s name, so there is no honest derivation. Options: leave the Patreon URL, let the member choose, or rule that these may be romanized.'],
         '0b-NAME-TOO-SHORT'         => ['Name is shorter than the minimum handle', 'These derive to perfectly good Latin — they are just under the ' . Slug::MIN_LEN . '-character floor. A DIFFERENT question from the non-Latin group above: nothing needs romanizing, you only need to say whether a 2-letter handle is allowed. Options: lower the floor, pad from a fuller identity, or leave the Patreon URL.'],
         '0c-SHAPE-REJECTED'         => ['Derived handle is not a legal slug', 'The name derives to Latin, but the result breaks a shape rule (digits only would shadow /u/<member-id>, or the charset the nginx route can match).'],
+        '0d-NAME-IS-AN-EMAIL'       => ['Their name IS an email address — never publish it', 'These members\' stored display_name is an email address, so the ordinary derivation would publish it as their public URL (mdoran2000@aol.com becomes /u/mdoran2000-aol-com). Nothing is proposed for them. This is a different door onto the harm --allow-email-derived-slugs already guards, and that flag cannot close it: nothing here reaches for an email, the email is already the name. Rows whose CURRENT url is not a Patreon id are ALREADY exposed on live today — this run cannot fix them, because the cure is a real name, not a new slug. The fix is to ask each member for their name.'],
         '8-HELD-DUPLICATE-NAME'     => ['Held — another member has the same name', 'Ian, 2026-07-29. These share a display_name with another live member, and on live NOT ONE such pair shares a Patreon id — so each is two distinct Patreon accounts, which may be one human who signed up twice (Katie McCartney has a second account via Sign-in-with-Apple) or may be two people called Dave. Giving one a permanent URL now also mints a 301 for an account that may not survive a merge. Held until that is ruled on.'],
         '7-HELD-CONTESTED-BARE'     => ['Held by ruling — the bare handle goes to nobody', 'Ian, 2026-07-29. These members would have taken a bare first name that other members also carry. We proved the surname is not recoverable — Patreon holds one for only 10% of bare-name members against 91% of everyone else — so there is no basis to choose between them. The honest answer to no-basis is that nobody gets it, rather than letting the import accident decide. /u/matt and friends stay free for a future flow where a member actively asks. These keep their Patreon URL for now.'],
         '3-COLLISION-NEEDS-RULING'  => ['Collision we may NOT resolve on our own', 'Two members clean to the same handle. A numeric suffix is ruled out, and where the name is the member\'s own we may not reach for Patreon to "expand" it either. These need your call.'],
