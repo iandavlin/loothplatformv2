@@ -3,6 +3,18 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-29 — Post header: title illegible over thumbnails that contain text (Ian, screenshot)
+
+On post/video pages, the hero overlays the post title on the thumbnail. When the
+thumbnail has its own baked-in text (e.g. AGBC video cards: "Offset soundhole,
+modern guitar design" behind the title "Acoustic Guitar Builders Club: Offset
+Soundhole…"), the two layers of text fight and the title goes hard to read.
+Ian wants the header text more legible in that case. Candidate treatments (lane
+decides, Ian picks from pictures): stronger scrim/gradient behind the title
+block, blur/darken the image region under the text, or a busy-image detection
+that switches to a solid band. Applies to the hub post hero; check video posts
+especially (thumbnails almost always carry text).
+
 ## 2026-07-29 — Public weekly-email signup page (Ian)
 
 A page where someone WITHOUT a WP account signs up for the weekly email. No WP
