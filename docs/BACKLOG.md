@@ -3,6 +3,17 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-29 — Events mobile: banner cut off + time listed twice (Ian, screenshot)
+
+On the mobile event sheet (seen on "Looth Pro — Intermediate Inlay with CNC"):
+(1) the banner image is cut off — the AUG-2 date chip overlaps the artwork and
+the bottom of the banner crops the "August 2nd, 3PM" text baked into the image;
+(2) the time line "Sunday, August 2, 2026 · 3:00 PM ET" renders TWICE — once
+under the title, again below the PRO tier chip. Exactly one should remain.
+Where: mobile event detail sheet/modal. Unowned — fold into the next events
+lane charter (events-fix died in the 7/29 reboot; its branches are still
+unmerged).
+
 ## 2026-07-29 — Mirror dispatch must be durable → CHARTERED: mirror-dispatch lane
 
 Ian approved 7/29 (spins after merger night). Charter: ~/lane-prompts/mirror-dispatch.md.
