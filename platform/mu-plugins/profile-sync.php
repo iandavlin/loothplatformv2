@@ -64,7 +64,74 @@ function profile_sync_dispatch_user_created(int $user_id): void {
 }
 }
 
+if (!function_exists('profile_sync_dispatch_email_changed')) {
+/**
+ * Forward a WP email change to profile-app (audit §5).
+ *
+ * profile-app's receiver (Provision::applyEmailChange) has existed and been
+ * correct for months, but nothing ever called it: this file hooked `user_register`
+ * only. Consequence measured on live 2026-07-29 — 18 members carried a stale
+ * `primary_email` because their address moved and profile-app was never told.
+ *
+ * Deliberately does NOT stamp `_looth_uuid`. The uuid is frozen at create and is
+ * what the looth_id JWT carries as `sub`; re-deriving it from the new email would
+ * mint a `sub` that no longer matches the stored users.uuid and log the member
+ * out as a stranger. Keeping identity stable across an email change is the whole
+ * point of the receiver — it re-points primary_email and records an alias while
+ * the uuid never moves.
+ *
+ * Blocking, unlike a fire-and-forget: an email change is rare (18 in the platform's
+ * history) so the cost is nil, and a silently dropped POST reproduces exactly the
+ * bug being fixed. Non-200s are logged loudly rather than swallowed.
+ */
+function profile_sync_dispatch_email_changed(int $user_id, string $email): void {
+    if ($user_id <= 0 || $email === '') return;
+    $secret = (string) get_option('profile_hook_secret', '');
+    if ($secret === '') return; // refuse to send without secret
+
+    $res = wp_remote_post('https://127.0.0.1/profile-api/v0/hooks/email-changed', [
+        'method'    => 'POST',
+        'timeout'   => 5,
+        'blocking'  => true,
+        'sslverify' => false,
+        'headers'   => [
+            'Host'          => $_SERVER['HTTP_HOST'] ?? 'dev.loothgroup.com',
+            'Content-Type'  => 'application/json',
+            'X-Hook-Secret' => $secret,
+        ],
+        'body' => wp_json_encode(['wp_user_id' => $user_id, 'email' => $email]),
+    ]);
+
+    if (is_wp_error($res)) {
+        error_log('profile-sync email-changed FAILED for #' . $user_id . ': ' . $res->get_error_message());
+        return;
+    }
+    $code = (int) wp_remote_retrieve_response_code($res);
+    if ($code !== 200) {
+        // 404 here means the nginx route is missing on this box — the receiver is
+        // unreachable and profile-app is still carrying the old address.
+        error_log('profile-sync email-changed HTTP ' . $code . ' for #' . $user_id
+            . ' -> ' . substr((string) wp_remote_retrieve_body($res), 0, 200));
+    }
+}
+}
+
 add_action('user_register', function ($user_id) {
     profile_sync_stamp_looth_uuid((int)$user_id);
     profile_sync_dispatch_user_created((int)$user_id);
 }, 99, 1);
+
+/**
+ * Every wp_update_user email change passes through `profile_update` — the hourly
+ * poller sweep's email mirror (LGPO_Sync_Engine::sync_wp_email), the onboard's
+ * skeleton-adopt mirror, and admin/profile edits alike. Hooking here rather than
+ * inside the poller is what makes the poller's own mirror writes covered too.
+ */
+add_action('profile_update', function ($user_id, $old_user_data = null) {
+    $user = get_userdata((int)$user_id);
+    if (!$user || !$old_user_data instanceof WP_User) return;
+    $old = strtolower(trim((string)$old_user_data->user_email));
+    $new = strtolower(trim((string)$user->user_email));
+    if ($new === '' || $new === $old) return;
+    profile_sync_dispatch_email_changed((int)$user_id, $new);
+}, 99, 2);

@@ -406,12 +406,22 @@ keeping the existing primary (`:372–384`). It is fronted by a real endpoint,
 *"Called by the Profile-app Sync mu-plugin on the WP `profile_update` hook"* — a
 documented contract with no caller.
 
-**New finding — the gap is two layers, not one.** The route is wired on dev2
-(`platform/nginx/strangler-profile-app*.conf`, 3 files, e.g.
-`strangler-profile-app.conf:183`) but **absent from the live snippet**:
-`profile-app/deploy/profile-app.nginx-snippet.live.conf` rewrites only
-`hooks/user-created` (`:15`), and `grep -r email-changed /etc/nginx/` on live
-returns nothing. **Adding the WP hook alone would 404 on live.**
+**CORRECTION (2026-07-29, while building item 2).** An earlier revision of this
+section claimed the gap was "two layers" — no sender *and* no live nginx route.
+**The route half was wrong.** `grep -r` does not follow symlinks during recursion,
+and `/etc/nginx/snippets/strangler-profile-app.conf` on live is a symlink to
+`~/loothplatformv2-clean/platform/nginx/strangler-profile-app.conf`. That file —
+included by live's server block at line 325 — carries both the rewrite (`:183`)
+and the loopback location (`:266`), and `/srv/profile-app/api/v0/internal-email-changed.php`
+is present in the served tree. **The route has been live all along; the gap is
+sender-only.** Same mistake had hidden it on dev2 too.
+
+`profile-app/deploy/profile-app.nginx-snippet.live.conf` is a **stale artifact**:
+it documents installation at `/etc/nginx/snippets/profile-app.conf`, which does
+not exist on live, and aliases `/srv/profile-app/` while the file live actually
+loads is the strangler conf. (`/etc/nginx/snippets/preview-buck-profile-app.conf`
+is likewise dead on live — included by nothing and pointing at
+`/home/buck/looth-platform/`, a directory that does not exist there.)
 
 **Measured blast radius.** Comparing all 1,836 WP users against profile-app's
 bridged `primary_email`:
@@ -443,8 +453,35 @@ Notes that matter:
 - It must **not** re-stamp `_looth_uuid` — immutability is what keeps the member
   logged in (`class-lgpo-sync-engine.php:784–787`).
 - It fires for the poller's mirror too, since that mirror is a `wp_update_user`.
-- **Ship the live nginx route in the same window as the hook**, or it 404s.
+- The live nginx route already exists (see the correction above) — no route work.
 - Backfill the 18 drifted rows once the channel is live.
+
+### Item 2 — shipped on this branch (Ian approved 2026-07-29). NOT deployed.
+
+`profile-sync.php` gains `profile_sync_dispatch_email_changed()` plus an
+`add_action('profile_update', …, 99, 2)` that fires only when the address actually
+changed. It deliberately does **not** touch `_looth_uuid`. It POSTs blocking with
+a 5s timeout and logs non-200s loudly — a silently dropped POST would reproduce
+the very bug being fixed, and an email change is rare enough (18 in the platform's
+history) that the cost is nil.
+
+Proven end to end on dev2, which has the same route and receiver as live — 7/7:
+
+```
+create wp#1985                    _looth_uuid d3d77b1e-…
+change 1  plain wp_update_user    HTTP 200  ok, email_changed, uuid d3d77b1e-…
+change 2  POLLER-FRAMED mirror    HTTP 200  ok, email_changed, uuid d3d77b1e-…
+_looth_uuid after both            d3d77b1e-…   (unchanged — never re-stamped)
+```
+
+Postgres afterwards: `primary_email` = the latest address, `uuid` unchanged, and
+**all three** addresses retained in `email_aliases` — the create address plus both
+changes, which is the history behaviour the receiver intends. Probe user deleted;
+dev2 left clean.
+
+The nginx edit in `profile-app/deploy/profile-app.nginx-snippet.live.conf` is kept
+for consistency and clearly marked stale, but it is **not** the file live loads and
+changes nothing on its own.
 
 ---
 
