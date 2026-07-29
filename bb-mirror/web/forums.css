@@ -621,8 +621,14 @@ body.lg-follow-anon [data-follow] { display: none !important; }
 .thread__util .fc-email:hover { color: var(--lg-sage-d, #586b3f); }
 .thread__util .fc-notify.is-on,
 .thread__util .fc-email.is-on { color: var(--lg-sage-d, #586b3f); }
-.thread__util .fc-notify.is-on .ico,
-.thread__util .fc-email.is-on .ico { fill: currentColor; }
+/* ON state. The bell is an OPEN path, so filling it reads as a filled bell — the
+   idiom Ian gated. The envelope is NOT: its outline is a <rect>, and filling that
+   paints a SOLID BLOCK over the flap, which reads as a broken icon rather than an
+   active one (caught in the exercise pass, 2026-07-29 — it was visibly a dark
+   rectangle in the feed). So the envelope tints instead of flooding, and its flap
+   stroke stays legible. Same treatment at all four sizes/surfaces below. */
+.thread__util .fc-notify.is-on .ico { fill: currentColor; }
+.thread__util .fc-email.is-on .ico rect { fill: currentColor; fill-opacity: .18; }
 
 /* Share confirmation toast (desktop SHARE module, forums.js) — shown on copy-link
    fallback when the Web Share sheet is unavailable. Global (overlay), forums.css. */
@@ -4134,7 +4140,8 @@ body:has(.feed-page) #bb-ham{display:none}
   .feed-page .fc-notify .ico, .feed-page .fc-email .ico { width:16px; height:16px; flex:0 0 auto; }
   .feed-page .fc-notify:hover, .feed-page .fc-email:hover { color:var(--lg-sage-d,#586b3f); }
   .feed-page .fc-notify.is-on, .feed-page .fc-email.is-on { color:var(--lg-sage-d,#586b3f); }
-  .feed-page .fc-notify.is-on .ico, .feed-page .fc-email.is-on .ico { fill:currentColor; }
+  .feed-page .fc-notify.is-on .ico { fill:currentColor; }
+  .feed-page .fc-email.is-on .ico rect { fill:currentColor; fill-opacity:.18; }   /* tint, never flood — see :624 */
   .feed-page .fc-replies { grid-area:replies; min-width:0; margin-top:6px; }
   /* fc-composer — persistent, pinned to the card bottom (full-bleed) */
   .feed-page .fc-composer{ display:flex; grid-area:composer; align-items:center; gap:9px;
@@ -4394,8 +4401,8 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
     color: var(--lg-sage-d, #586b3f); border-color: var(--lg-sage, #87986a);
     background: var(--lg-sage-tint);
   }
-  #lg-dmodal .lg-dmodal__notify.is-on .ico,
-  #lg-dmodal .lg-dmodal__email.is-on .ico { fill: currentColor; }
+  #lg-dmodal .lg-dmodal__notify.is-on .ico { fill: currentColor; }
+  #lg-dmodal .lg-dmodal__email.is-on .ico rect { fill: currentColor; fill-opacity: .18; }   /* see :624 */
   /* Social-style action rows — one place, under the content (Ian) */
   #lg-dmodal .lg-dmodal__opacts {
     display: flex; align-items: center; gap: 16px;
@@ -5128,6 +5135,6 @@ html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--shows .hub-rail__s
   .feed-page .lg-card-actions .fc-email .ico { width: 18px; height: 18px; flex: 0 0 auto; }
   .feed-page .lg-card-actions .fc-notify.is-on,
   .feed-page .lg-card-actions .fc-email.is-on { color: var(--lguser-accent-d, #52613d); }
-  .feed-page .lg-card-actions .fc-notify.is-on .ico,
-  .feed-page .lg-card-actions .fc-email.is-on .ico { fill: currentColor; }
+  .feed-page .lg-card-actions .fc-notify.is-on .ico { fill: currentColor; }
+  .feed-page .lg-card-actions .fc-email.is-on .ico rect { fill: currentColor; fill-opacity: .18; }   /* see :624 */
 }

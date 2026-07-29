@@ -46,6 +46,25 @@ if (str_starts_with($uri, '/bb-mirror-api/v0/follow')) {
     return true;
 }
 
+/* nginx `location ^~ /lg-shared/ { alias /srv/lg-shared/; }` — but pointed at the
+   BRANCH copy, so the shared header's JS/CSS under test are the branch's. Note the
+   PHP partial itself is still required by _chrome.php via the absolute /srv path,
+   i.e. main's; only these static assets are branch. Labelled, not glossed. */
+if (str_starts_with($uri, '/lg-shared/')) {
+    $SH = '/home/ubuntu/worktrees/thread-follow/lg-shared';
+    $f  = realpath($SH . substr($uri, strlen('/lg-shared')));
+    if ($f !== false && str_starts_with($f, $SH . DIRECTORY_SEPARATOR) && is_file($f)
+        && !str_ends_with(strtolower($f), '.php')) {
+        $e = strtolower(pathinfo($f, PATHINFO_EXTENSION));
+        header('Content-Type: ' . (['js' => 'application/javascript', 'css' => 'text/css',
+                                    'svg' => 'image/svg+xml'][$e] ?? 'application/octet-stream'));
+        readfile($f);
+        return true;
+    }
+    http_response_code(404);
+    return true;
+}
+
 // `alias` semantics: strip the /hub mount, resolve against the web dir.
 $rel = $uri;
 if ($rel === '/hub' || str_starts_with($rel, '/hub/')) {
@@ -61,7 +80,22 @@ if ($candidate !== false
     && str_starts_with($candidate, $ROOT . DIRECTORY_SEPARATOR)
     && is_file($candidate)
     && !str_ends_with(strtolower($candidate), '.php')) {
-    return false;   // let php -S serve it with its own mime handling
+    // Serve it OURSELVES. `return false` would hand php -S the ORIGINAL uri
+    // (/hub/forums.js) which does not exist under the docroot — the /hub prefix is
+    // an nginx `alias`, not a real directory. That 404s every asset while the HTML
+    // still renders, so the page looks fine and no JS runs.
+    static $types = [
+        'js' => 'application/javascript', 'css' => 'text/css', 'svg' => 'image/svg+xml',
+        'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
+        'gif' => 'image/gif', 'webp' => 'image/webp', 'avif' => 'image/avif',
+        'woff' => 'font/woff', 'woff2' => 'font/woff2', 'ico' => 'image/x-icon',
+        'json' => 'application/json', 'mp4' => 'video/mp4',
+    ];
+    $ext = strtolower(pathinfo($candidate, PATHINFO_EXTENSION));
+    header('Content-Type: ' . ($types[$ext] ?? 'application/octet-stream'));
+    header('Content-Length: ' . filesize($candidate));
+    readfile($candidate);
+    return true;
 }
 
 // ...otherwise the front controller, exactly as try_files falls through.

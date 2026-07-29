@@ -1244,3 +1244,71 @@ and the box measured 737MB, then 546MB, at 4 working lanes. Not a code doubt —
 
 *§11 written from execution on dev2, 2026-07-29. Every number above was produced by running the
 thing, on the box named, as the user named.*
+
+---
+
+## 12. THE BROWSER LEG — real clicks, and the defect only a picture caught
+
+*2026-07-29, dev2, engine granted by keeper. WebKit via playwright-core (no Chrome is
+installed on this box — `chrome-dev.service` no longer exists; the cached
+`~/.cache/ms-playwright/webkit-2311` plus the mentions lane's `playwright-core` is what
+is actually available, and WebKit is also the honest proxy for Ian's iPhone).*
+
+**25 assertions, 0 failures.** Harness committed: `tools/exercise-harness/browser-leg.js`.
+
+### 12.1 ⚠️ THE ENVELOPE'S "ON" STATE WAS A SOLID BLACK BLOCK
+
+The defect that justifies the whole leg. Every `aria-pressed` assertion was **passing**
+while the icon was visibly broken — it took a screenshot to see it.
+
+`forums.css` expressed the ON state as `fill: currentColor` on the icon, for **both**
+toggles, in **four** places (`:624`, `:4137`, `#lg-dmodal`, and the mobile
+`.lg-card-actions`). That is right for the bell — its outline is an **open path**, so
+filling it reads as a filled bell, exactly the idiom Ian gated. It is **wrong for the
+envelope**, whose outline is a `<rect>`: filling it floods the whole rectangle and
+paints over the flap, so "emails on" rendered as a **solid dark block** in the feed.
+On Ian's phone that is an instant reject, and it would have been read as a broken
+build rather than a CSS bug.
+
+**Fixed** at all four sites: the bell keeps `fill: currentColor`; the envelope tints
+its rect (`fill-opacity: .18`) so it reads as active while the flap stays legible.
+Before/after in `docs/atlas/thread-follow-shots/`.
+
+**The lesson, for the craft gate:** a two-icon toggle pair cannot share one fill rule
+when one glyph is an open path and the other is a closed shape. This is a defect class,
+not a one-off — per `docs/CRAFT-STANDARD.md` it becomes a gate the second time it is
+seen.
+
+### 12.2 What the browser exercised
+
+| Surface | Result |
+|---|---|
+| **Anon** | `body.lg-follow-anon` set, never marked authed, **no toggle visible** — inert, never an error |
+| **Desktop card** (1280×900, `.fc-actions`) | baseline OFF/OFF → 🔔 flips **optimistically**, survives the round trip, **server agrees**; ✉ independent; 🔔 back OFF **with ✉ surviving** |
+| **Modal header** (§2.3) | opens from the card title; cluster order measured as **title, 🔔, ✉, size, close**; toggles retargeted to the opened topic; ✉ **carries the state set on the card**; a click **writes through to the store** |
+| **Mobile card** (390×844, touch, iOS UA) | toggles in `.lg-act-follow` inside the mobile bar per §2.2b; **44×44px** touch targets; tap on each writes through |
+| **Toggle must not open the thread** | clicking a toggle leaves `#lg-dmodal` closed — `stopPropagation` holds |
+
+Every UI assertion is re-checked against the **server**, because an optimistic UI that
+flips and silently reverts would otherwise read as a pass. Zero JS errors throughout.
+
+### 12.3 STILL UNEXERCISED — and why, precisely
+
+Two of the four set-surfaces are **not on the Hub page at all**. Verified against the
+**real served dev2 Hub**, not just the harness: `curl` of `https://dev2.loothgroup.com/hub/`
+contains **no** `hub-polish.js`, **no** `social-modals.js`, and **no** `#looth-rep-sheet`.
+
+- **§2.4 the mobile sheet header** (`.lrs-notify`/`.lrs-email` in `#looth-rep-sheet`) —
+  lives in `webroot/hub-polish.js`, a docroot overlay that the Hub does not load.
+- **§3.5 the notifications-panel ⋯ menu** — `lg-shared/social-modals.js` **is** referenced
+  by the logged-in Hub page (via `_chrome.php:473`'s shared header) and the harness now
+  serves the branch copy, and the bell button renders. But the panel populates from
+  `/profile-api/v0/…`, which needs a profile-app JWT (`looth_id` cookie) **and** real
+  notification rows for the viewer. Reaching it means **building** that surface, not
+  testing it — so it is recorded UNEXERCISED rather than faked.
+- **§3.6 chip-removal** — endpoint still returns the declared 501; nothing to click.
+
+Whoever finishes these needs a profile-api-backed page, not merely another browser seat.
+
+*§12 written from execution on dev2, 2026-07-29. 25 assertions green; the one defect
+found is fixed and re-proven.*
