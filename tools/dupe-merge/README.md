@@ -78,15 +78,25 @@ as `merged-<id>@retired.invalid`, capabilities stripped, and `lg_merged_into` /
 
 ## Commands
 
+**To apply on live, follow `APPLY-RUNBOOK.md`** — it covers the 26 auto pairs
+end to end. These are the underlying commands.
+
 ```bash
 # read-only, writes nothing
 sudo tools/dupe-merge/run-as-root.sh --dry-run                      # all 38
+sudo tools/dupe-merge/run-as-root.sh --dry-run --auto               # the 26 only
+sudo tools/dupe-merge/run-as-root.sh --dry-run --auto --list        # their names
 sudo tools/dupe-merge/run-as-root.sh --dry-run --pair="jake tuel" --verbose
 
 # one pair at a time; refuses a HELD pair without --force-hold
 sudo tools/dupe-merge/run-as-root.sh --apply --pair="jake tuel"
 sudo tools/dupe-merge/run-as-root.sh --verify --pair="jake tuel"
 sudo tools/dupe-merge/run-as-root.sh --rollback --journal=<file>
+
+# the 26 auto pairs as one batch: apply + verify each, stop on first failure
+sudo tools/dupe-merge/apply-auto.sh --dry-run
+sudo tools/dupe-merge/apply-auto.sh
+sudo tools/dupe-merge/rollback-auto.sh tools/dupe-merge/journal/APPLIED-<stamp>.tsv
 
 # merge -> verify -> rollback -> byte-compare, on a copy
 sudo tools/dupe-merge/prove.sh "jake tuel"
@@ -160,7 +170,9 @@ Each one was found by measurement or caught by the dev2 proof.
 survivor holds both halves, rolls back, and re-fingerprints — failing unless the
 restore is byte-identical.
 
-**All 38 pairs pass on dev2.**
+**All 38 pairs pass on dev2.** The 26 auto pairs also pass as one batch through
+`apply-auto.sh` / `rollback-auto.sh`: applied and verified 26/26, rolled back
+26/26, box back to baseline with the dry-run totals reproduced identically.
 
 Use the journal path the tool prints. Do not pick one with `ls | tail -1` — the
 journals are named per pair, so that selects alphabetically, not the most

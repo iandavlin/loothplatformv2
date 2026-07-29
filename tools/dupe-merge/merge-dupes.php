@@ -29,7 +29,8 @@
  * its own transaction; if a later store fails, the journal still describes
  * everything already done and --rollback undoes it.
  *
- *   php merge-dupes.php --dry-run [--pair=NAME|--all]      writes nothing
+ *   php merge-dupes.php --dry-run [--pair=NAME|--auto]     writes nothing
+ *   php merge-dupes.php --dry-run --auto --list            names of the auto pairs
  *   php merge-dupes.php --apply --pair=NAME
  *   php merge-dupes.php --verify --pair=NAME
  *   php merge-dupes.php --rollback --journal=FILE
@@ -879,7 +880,12 @@ if ($MODE === 'rollback') {
 
 $want = $OPT['pair'] ?? null;
 $sel  = array_values(array_filter($pairs, fn($p) => $want === null || stripos($p['name'], (string)$want) !== false));
-if (!$sel) { fwrite(STDERR, "no pair matches --pair=$want\n"); exit(2); }
+// --auto restricts to the pairs that carry no hold, so a batch can never reach
+// one Ian has not ruled on. --list prints the selection and exits, which is how
+// the runbook drives a loop without hardcoding 26 names.
+if (isset($OPT['auto'])) $sel = array_values(array_filter($sel, fn($p) => $p['action'] === 'AUTO'));
+if (!$sel) { fwrite(STDERR, "no pair matches" . ($want !== null ? " --pair=$want" : '') . (isset($OPT['auto']) ? ' --auto' : '') . "\n"); exit(2); }
+if (isset($OPT['list'])) { foreach ($sel as $p) echo $p['name'], "\n"; exit(0); }
 if ($MODE !== 'dry-run' && count($sel) > 1) { fwrite(STDERR, "--pair must select exactly one pair for $MODE (matched " . count($sel) . ")\n"); exit(2); }
 
 printf("env=%s  wp=%s  mysql=%s/%s  pg=%s/%s  mode=%s\n", $ENV, $WP_PATH, $MY_DB, $BILL_DB, $PG_PROF, $PG_MIRR, $MODE);
