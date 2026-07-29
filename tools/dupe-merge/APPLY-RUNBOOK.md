@@ -66,6 +66,44 @@ Two more things to know before the first write:
 
 ---
 
+## 0b. One pair in the 29 needs a billing decision first — **jim bonnell**
+
+Investigating the roster (which Ian asked for) turned this up after the rulings
+were made, so it is new information on a pair already cleared to merge.
+
+**Both sides are a live active patron, on two different plans:**
+
+| | account | patreon id | pledge | next charge |
+|---|---|---|---|---|
+| survivor | 1467 `jimbonnell@gmail.com` | 31057830 | **$11.00/mo** Looth-Pro | 2026-08-02 |
+| retire | 1470 `jbonnell@tampabay.rr.com` | 260787 | **$132.00/yr** Ding King Plus | 2026-11-02 |
+
+**Merging does not cancel a pledge.** Retiring 1470 leaves that annual charge
+running against an account that no longer resolves — he keeps paying $132/yr for
+an entitlement that has nowhere to land. That is the same situation you ruled
+*contact-first* for ira cox; this one was labelled only `BOTH-ACTIVE-PATRON`
+without the payment detail behind it.
+
+**Recommendation: pull it from tonight and treat it like ira cox.** One edit:
+
+```bash
+python3 - <<'PY'
+import json; P='tools/dupe-merge/pairs.json'; ps=json.load(open(P))
+for p in ps:
+    if p['name']=='jim bonnell': p['action']='HOLD'; p['hold']=['CONTACT-MEMBER-FIRST-DOUBLE-PLEDGE']
+json.dump(ps,open(P,'w'),indent=1)
+PY
+sudo tools/dupe-merge/apply-auto.sh --dry-run    # now says 28 auto
+```
+
+If you would rather merge anyway, nothing is needed — it is already in the set,
+and the dry-run prints the warning against the pair so it cannot pass unseen.
+
+The other **28** pairs are clear: the retiring account has no live pledge in any
+of them. Verified against the roster, whose newest sync is hours old.
+
+---
+
 ## 1. Get the code
 
 ```bash

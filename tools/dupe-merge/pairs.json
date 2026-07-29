@@ -499,10 +499,12 @@
   "conn_drop_reversed": 0,
   "hold": [],
   "notes": [
+   "DOUBLE-LIVE-PLEDGE",
    "EMAIL-LOCALPART-DISJOINT"
   ],
   "action": "AUTO",
-  "ruling": "Ian 2026-07-29: MERGE \u2014 as planned"
+  "ruling": "Ian 2026-07-29: MERGE \u2014 as planned",
+  "billing_warning": "BOTH sides are a LIVE active patron. Survivor 1467 pays $11.00/mo Looth-Pro (next 2026-08-02). Twin 1470 pays $132.00/yr Ding King Plus (next 2026-11-02) on patreon 260787. MERGING DOES NOT CANCEL A PLEDGE: retiring 1470 leaves the annual charge running against an account that no longer resolves. Same situation Ian ruled contact-first for ira cox."
  },
  {
   "name": "jim fenton",

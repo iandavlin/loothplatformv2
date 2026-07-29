@@ -505,6 +505,9 @@ function print_plan(array $plan, bool $verbose): void {
     printf("  conflicts %s\n", $conf ? implode('; ', $conf) : 'none');
     if ($p['notes']) printf("  notes     %s\n", implode(',', $p['notes']));
     if (!empty($p['ruling'])) printf("  ruling    %s\n", $p['ruling']);
+    if (!empty($p['billing_warning'])) {
+        printf("  !! BILLING %s\n", wordwrap($p['billing_warning'], 88, "\n             "));
+    }
 
     if ($verbose) {
         foreach ($plan['my'] as $t)
