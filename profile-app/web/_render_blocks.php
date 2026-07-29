@@ -285,7 +285,16 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
            . '<img src="' . $rz($imgW) . '" srcset="' . $srcset . '" sizes="' . $sizes . '"'
            . ' width="' . $iw . '" height="' . $ih . '" alt="' . looth_h($cap) . '" loading="lazy" decoding="async">';
         if ($isOwner) echo '<button type="button" class="lg-gphoto__rm" aria-label="Remove">×</button>';
-        if ($cap !== '') echo '<figcaption>' . looth_h($cap) . '</figcaption>';
+        // Owner ALWAYS gets the caption strip (ghost placeholder when empty) — it IS
+        // the edit affordance (Ian previs-approved 7/26). Visitors only see real
+        // captions. Caption visibility inherits the gallery (7/25 ruling): the strip
+        // renders wherever the gallery renders, gated identically — no own control.
+        if ($isOwner) {
+            echo '<figcaption class="lg-gcap' . ($cap !== '' ? '' : ' lg-gcap--empty') . '" title="Click to edit caption">'
+               . ($cap !== '' ? looth_h($cap) : '＋ Add caption') . '</figcaption>';
+        } elseif ($cap !== '') {
+            echo '<figcaption>' . looth_h($cap) . '</figcaption>';
+        }
         echo '</figure>';
     }
 

@@ -1,0 +1,234 @@
+<!doctype html>
+<!-- PROFILE-POLISH PREVIS (A): GALLERY CAPTIONS — static pictures only, nothing ships from here.
+     Drive with URL params:
+       ?state=viewer|lightbox|owner|owner-edit|owner-lightbox & theme=light|dark
+     Desktop shoots at 1280, mobile at 390 (see shoot.sh — dev1 google-chrome, serial).
+     Markup + CSS mirror the REAL /u/ render (u.php .lg-gphoto/.lg-lightbox, _render_blocks.php):
+     grid figcaption overlay + lightbox cap ALREADY EXIST in the build — what this previs
+     sells is the OWNER EDIT AFFORDANCE (on-tile strip vs lightbox edit, Ian picks).
+     Caption visibility INHERITS the gallery visibility exactly (Ian ruling 2026-07-25 22:50):
+     no per-caption vis control appears anywhere in these frames, by design. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>profile previs — gallery captions</title>
+<style>
+  :root{
+    --lg-cream:#fbfbf8; --lg-card-bg:#fff; --lg-ink:#323532; --lg-mute:#6b6f6b;
+    --lg-line:#e3ddd0; --lg-sage:#87986a; --lg-sage-d:#6b7c52; --lg-sage-3:#d4e0b8;
+    --lg-sage-tint:#eef2e3; --lg-charcoal:#1a1d1a; --lg-amber:#ecb351; --lg-rust:#c66845;
+    --lg-font-serif:"Lora",Georgia,serif;
+    --lg-font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  html[data-lguser-theme="dark"]{
+    --lg-cream:#15171a; --lg-card-bg:#1e2124; --lg-ink:#e5e7e1; --lg-mute:#a6ac9f;
+    --lg-line:#2c312d; --lg-sage:#9cb37d; --lg-sage-d:#b0c693; --lg-sage-3:#4a5a40;
+    --lg-sage-tint:#243024; --lg-charcoal:#f2f4ee;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font:15px/1.6 var(--lg-font-sans);-webkit-font-smoothing:antialiased}
+
+  /* site header strip (context only) */
+  .site-hd{height:58px;border-bottom:1px solid var(--lg-line);display:flex;align-items:center;gap:26px;padding:0 32px;background:var(--lg-cream)}
+  .brand{display:flex;align-items:center;gap:9px;font:700 18px/1 var(--lg-font-serif);color:var(--lg-charcoal)}
+  .brand .mk{width:26px;height:26px;border-radius:50%;background:var(--lg-sage);display:inline-block}
+  .nav{display:flex;gap:20px;font:600 13.5px/1 var(--lg-font-sans);color:var(--lg-mute)}
+  .nav .on{color:var(--lg-charcoal)}
+  .hd-sp{flex:1}
+  .hd-pill{width:30px;height:30px;border-radius:50%;background:var(--lg-sage-tint)}
+  .hd-burger{display:none;font:400 22px/1 var(--lg-font-sans);color:var(--lg-ink)}
+  @media (max-width:560px){
+    .site-hd{padding:0 16px;gap:14px}
+    .nav{display:none}
+    .hd-burger{display:block}
+  }
+
+  /* /u/ shell */
+  .lg-shell{display:flex;flex-direction:column;gap:20px;max-width:760px;margin:0 auto;padding:24px 20px 48px}
+  .lg-block{position:relative;background:var(--lg-card-bg);border:1px solid var(--lg-line);border-radius:16px;padding:22px 24px;margin:0}
+  .lg-bh{margin:0 0 12px;font:800 16px/1 var(--lg-font-serif);color:var(--lg-charcoal)}
+  .lg-vchip{display:inline-block;vertical-align:middle;font:800 9px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;border-radius:5px;padding:4px 7px;margin-left:8px}
+  .lg-vchip--member{background:#fdf0d8;color:#8a6326}
+  html[data-lguser-theme="dark"] .lg-vchip--member{background:#3a3220;color:#ecb351}
+
+  /* identity row (grounding) */
+  .lg-idrow{display:flex;align-items:center;gap:16px}
+  .lg-idrow__pic{width:72px;height:72px;border-radius:16px;flex:none;background:var(--lg-sage);color:#fff;display:grid;place-items:center;font:700 26px/1 var(--lg-font-serif)}
+  html[data-lguser-theme="dark"] .lg-idrow__pic{color:#15171a}
+  .lg-idrow__name{margin:0;font:800 24px/1.1 var(--lg-font-serif);color:var(--lg-charcoal)}
+  .lg-idrow__tag{margin:5px 0 0;font:500 13.5px/1.4 var(--lg-font-sans);color:var(--lg-mute)}
+
+  /* ── gallery block (mirrors u.php) ── */
+  .lg-gmode{display:inline-flex;gap:0;margin:0 0 12px;border:1px solid var(--lg-line);border-radius:999px;padding:2px;background:var(--lg-card-bg)}
+  .lg-gmode__btn{border:0;background:transparent;font:600 12px/1 var(--lg-font-sans);color:var(--lg-mute);padding:6px 14px;border-radius:999px;cursor:pointer}
+  .lg-gmode__btn[aria-pressed="true"]{background:var(--lg-sage-tint);color:var(--lg-ink)}
+  .lg-gdel{border:0;background:none;cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;opacity:.55;color:var(--lg-mute)}
+
+  .lg-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+  .lg-gphoto{margin:0;position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--lg-sage-tint);cursor:zoom-in}
+  .lg-gphoto .ph{position:absolute;inset:0}
+  /* photo stand-ins: CSS only, no assets (mock rule) */
+  .ph--burst{background:radial-gradient(ellipse 90% 70% at 48% 42%,#e8a94f 0%,#b56b28 48%,#6e3a16 78%,#3a1f10 100%)}
+  .ph--rose{background:linear-gradient(160deg,#5a3624,#38221a 70%,#2a1812)}
+  .ph--rose::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(168deg,transparent 0 7px,rgba(0,0,0,.14) 7px 8px)}
+  .ph--fret{background:linear-gradient(135deg,#8b8f94,#5a5e63)}
+  .ph--fret::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(180deg,transparent 0 22px,rgba(240,242,244,.55) 22px 24px)}
+  .ph--polish{background:linear-gradient(140deg,#c98f3d 0%,#a06a28 55%,#7d5220 100%)}
+  .ph--polish::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 60% 40% at 62% 30%,rgba(255,244,214,.5),transparent 70%)}
+  .ph--bench{background:linear-gradient(150deg,#a08a6a,#6f5c42)}
+  .ph--bench::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 26px,rgba(58,44,28,.22) 26px 28px)}
+
+  /* caption display (viewer + owner) — the EXISTING figcaption overlay */
+  .lg-gphoto figcaption{position:absolute;bottom:0;left:0;right:0;font:600 11px/1.3 var(--lg-font-sans);color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.6));padding:16px 8px 6px;z-index:2}
+  .lg-gphoto__rm{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;font-size:15px;line-height:1;z-index:3;display:none}
+  .lg-gphoto__add{aspect-ratio:1;border:2px dashed var(--lg-sage-3);background:none;border-radius:10px;cursor:pointer;color:var(--lg-sage-3);font:300 34px/1 var(--lg-font-sans);display:none;align-items:center;justify-content:center}
+
+  /* ── NEW: owner caption edit affordance (the previs subject) ── */
+  /* captioned tile: pencil rides the caption overlay */
+  .lg-gphoto figcaption .lg-cap__pen{display:none;margin-left:6px;font-size:10px;opacity:.85;vertical-align:baseline}
+  /* captionless tile: ghost "add caption" strip */
+  .lg-cap__ghost{position:absolute;bottom:0;left:0;right:0;z-index:2;display:none;font:600 10.5px/1 var(--lg-font-sans);color:rgba(255,255,255,.92);background:linear-gradient(transparent,rgba(0,0,0,.55));padding:16px 8px 7px;cursor:text}
+  .lg-cap__ghost .plus{font-weight:400;margin-right:4px}
+  /* editing state: bottom strip becomes a live input */
+  .lg-cap__edit{position:absolute;bottom:0;left:0;right:0;z-index:4;display:none;flex-direction:column;gap:4px;background:rgba(10,12,8,.78);padding:7px 8px 6px;border-top:2px solid var(--lg-sage)}
+  .lg-cap__in{font:600 11px/1.35 var(--lg-font-sans);color:#fff;word-wrap:break-word}
+  .lg-cap__in .caret{display:inline-block;width:1.5px;height:12px;background:#d4e0b8;vertical-align:-2px}
+  .lg-cap__hint{font:500 9.5px/1 var(--lg-font-sans);color:rgba(255,255,255,.66);display:flex;gap:6px}
+  .lg-cap__hint .cnt{margin-left:auto}
+
+  /* owner-mode switches */
+  body.is-owner .lg-gphoto__rm{display:block}
+  body.is-owner .lg-gphoto__add{display:flex}
+  body.is-owner .lg-gphoto figcaption .lg-cap__pen{display:inline}
+  body.is-owner .lg-gphoto--nocap .lg-cap__ghost{display:block}
+  body.is-owner .lg-gphoto--editing .lg-cap__edit{display:flex}
+  body.is-owner .lg-gphoto--editing .lg-cap__ghost{display:none}
+  body.is-owner .lg-gphoto--editing figcaption{display:none}
+
+  /* ── lightbox (mirrors u.php; cap already real) ── */
+  .lg-lightbox{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:24px}
+  .lg-lightbox.is-open{display:flex}
+  .lg-lightbox__fig{margin:0;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;align-items:center;gap:10px}
+  .lg-lightbox__img{width:min(760px,86vw);aspect-ratio:4/3;border-radius:6px;box-shadow:0 8px 40px rgba(0,0,0,.5);position:relative;overflow:hidden}
+  .lg-lightbox__cap{font:500 13.5px/1.4 var(--lg-font-sans);color:#fff;text-align:center;max-width:80ch;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+  .lg-lightbox__close,.lg-lightbox__nav{position:absolute;border:0;background:rgba(0,0,0,.45);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:50%}
+  .lg-lightbox__close{top:18px;right:20px;width:42px;height:42px;font:300 26px/1 var(--lg-font-sans)}
+  .lg-lightbox__nav{top:50%;transform:translateY(-50%);width:48px;height:48px;font:300 34px/1 var(--lg-font-sans)}
+  .lg-lightbox__prev{left:18px}
+  .lg-lightbox__next{right:18px}
+  @media (max-width:560px){.lg-lightbox__nav{width:40px;height:40px;font-size:28px}.lg-lightbox__prev{left:6px}.lg-lightbox__next{right:6px}}
+
+  /* NEW: owner caption edit IN the lightbox (option B for the affordance) */
+  .lg-lightbox__capedit{display:none;flex-direction:column;gap:6px;width:min(560px,86vw)}
+  .lg-lightbox__capin{border:1.5px solid var(--lg-sage);border-radius:10px;background:rgba(255,255,255,.08);padding:9px 12px;font:500 13.5px/1.4 var(--lg-font-sans);color:#fff;text-align:left}
+  .lg-lightbox__capin .caret{display:inline-block;width:1.5px;height:15px;background:#d4e0b8;vertical-align:-3px}
+  .lg-lightbox__caphint{display:flex;font:500 11px/1 var(--lg-font-sans);color:rgba(255,255,255,.6)}
+  .lg-lightbox__caphint .cnt{margin-left:auto}
+  body.lb-capedit .lg-lightbox__cap{display:none}
+  body.lb-capedit .lg-lightbox__capedit{display:flex}
+
+  .note{max-width:760px;margin:0 auto;padding:0 20px 40px;font:500 12.5px/1.55 var(--lg-font-sans);color:var(--lg-mute)}
+  .note b{color:var(--lg-ink)}
+  .stamp{position:fixed;top:8px;right:10px;z-index:1200;font:700 11px/1 var(--lg-font-sans);letter-spacing:.03em;color:var(--lg-mute);background:var(--lg-card-bg);border:1px solid var(--lg-line);border-radius:7px;padding:6px 9px}
+  @media (max-width:560px){.stamp{top:auto;bottom:8px}}
+</style>
+</head>
+<body>
+  <div class="stamp" id="stamp">PREVIS</div>
+
+  <div class="site-hd">
+    <span class="brand"><span class="mk"></span>Looth Group</span>
+    <nav class="nav"><span class="on">The Hub</span><span>Events</span><span>The Map</span><span>Sponsors</span><span>Loothtool</span></nav>
+    <span class="hd-sp"></span><span class="hd-burger">≡</span><span class="hd-pill"></span>
+  </div>
+
+  <div class="lg-shell">
+    <section class="lg-block">
+      <div class="lg-idrow">
+        <span class="lg-idrow__pic">DP</span>
+        <div>
+          <h1 class="lg-idrow__name">Doug Proper</h1>
+          <p class="lg-idrow__tag">Archtop builder &amp; repair — Guitar Specialist, Inc. · Bedford Hills, NY</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="lg-block lg-block--gallery" data-g="1">
+      <h3 class="lg-bh"><span id="gtitle">On the bench</span><span class="lg-vchip lg-vchip--member owner-only" id="gvis" style="display:none">Members</span> <button type="button" class="lg-gdel owner-only" id="gdel" style="display:none" aria-label="Delete this gallery"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button></h3>
+      <div class="lg-gmode owner-only" id="gmode" style="display:none"><button class="lg-gmode__btn" aria-pressed="true">Grid</button><button class="lg-gmode__btn" aria-pressed="false">Carousel</button></div>
+
+      <div class="lg-gallery lg-gallery--grid" id="grid"></div>
+    </section>
+  </div>
+
+  <div class="lg-lightbox" id="lb">
+    <button type="button" class="lg-lightbox__close">×</button>
+    <button type="button" class="lg-lightbox__nav lg-lightbox__prev">‹</button>
+    <figure class="lg-lightbox__fig">
+      <span class="lg-lightbox__img"><span class="ph ph--burst" style="position:absolute;inset:0"></span></span>
+      <figcaption class="lg-lightbox__cap">Carved spruce top — ’38 L-5 copy, tap-tuned</figcaption>
+      <span class="lg-lightbox__capedit">
+        <span class="lg-lightbox__capin">Carved spruce top — ’38 L-5 copy, tap-tuned<span class="caret"></span></span>
+        <span class="lg-lightbox__caphint"><span>Enter saves · Esc cancels</span><span class="cnt">41/140</span></span>
+      </span>
+    </figure>
+    <button type="button" class="lg-lightbox__nav lg-lightbox__next">›</button>
+  </div>
+
+  <div class="note" id="note"></div>
+
+  <script>
+    // Photo set — captions are REAL content shapes (short + long) so Ian judges overflow.
+    const PHOTOS = [
+      {cls:'ph--burst',  cap:'Carved spruce top — ’38 L-5 copy, tap-tuned'},
+      {cls:'ph--rose',   cap:''},                                   // captionless → ghost affordance (owner)
+      {cls:'ph--fret',   cap:'Refret — ’62 Jazzmaster, 7.25″ radius kept'},
+      {cls:'ph--polish', cap:'French polish, day three'},
+      {cls:'ph--bench',  cap:''},
+    ];
+    const q = new URLSearchParams(location.search);
+    const state = q.get('state') || 'viewer';   // viewer|lightbox|owner|owner-edit|owner-lightbox
+    const theme = q.get('theme') || 'light';
+    document.documentElement.setAttribute('data-lguser-theme', theme);
+
+    const isOwner = state.indexOf('owner') === 0;
+    document.body.classList.toggle('is-owner', isOwner);
+    if (isOwner) {
+      document.querySelectorAll('.owner-only').forEach(el => el.style.display = '');
+      document.getElementById('gvis').style.display = 'inline-block';
+    }
+
+    // Owner-edit frame: tile 2 (rosewood, captionless) is mid-typing a NEW caption —
+    // shows the ghost→input transition; tile 1/3/4 keep pencil-on-caption (edit-existing).
+    const editingIdx = state === 'owner-edit' ? 1 : -1;
+    document.getElementById('grid').innerHTML = PHOTOS.map((p, i) => {
+      const editing = i === editingIdx;
+      const nocap = !p.cap;
+      return '<figure class="lg-gphoto' + (nocap ? ' lg-gphoto--nocap' : '') + (editing ? ' lg-gphoto--editing' : '') + '">' +
+        '<span class="ph ' + p.cls + '"></span>' +
+        '<button type="button" class="lg-gphoto__rm">×</button>' +
+        (p.cap ? '<figcaption>' + p.cap + '<span class="lg-cap__pen">✎</span></figcaption>' : '') +
+        (nocap ? '<span class="lg-cap__ghost"><span class="plus">＋</span>Add caption</span>' : '') +
+        (editing ? '<span class="lg-cap__edit"><span class="lg-cap__in">Brazilian rosewood back, bo<span class="caret"></span></span>' +
+                   '<span class="lg-cap__hint"><span>Enter saves · Esc cancels</span><span class="cnt">26/140</span></span></span>' : '') +
+        '</figure>';
+    }).join('') + '<button type="button" class="lg-gphoto__add">＋</button>';
+
+    if (state === 'lightbox' || state === 'owner-lightbox') {
+      document.getElementById('lb').classList.add('is-open');
+      if (state === 'owner-lightbox') document.body.classList.add('lb-capedit');
+    }
+
+    const NOTES = {
+      'viewer':        '<b>Caption display (visitor)</b> — the existing grid overlay: gradient scrim, 11px, photo stays the hero. Captionless photos show nothing. Caption visibility <b>inherits the gallery</b> (Ian ruling 7/25) — no per-caption setting exists anywhere.',
+      'lightbox':      '<b>Caption in the lightbox (visitor)</b> — existing surface: caption centered under the full-size photo; alt text = caption. Captionless photos show no cap line.',
+      'owner':         '<b>Owner grid — the NEW edit affordance</b>: captioned tiles get a ✎ on the overlay; captionless tiles get a ghost “＋ Add caption” strip. Click either → inline edit (next frame). Remove-× and ＋-add are the existing controls.',
+      'owner-edit':    '<b>Owner mid-edit (OPTION A: on-tile inline)</b> — the strip becomes a live input (sage focus bar, caret), Enter saves · Esc cancels, 140-char cap with counter. PUT already round-trips {url, caption} per image — UI-only build, no schema change.',
+      'owner-lightbox':'<b>Owner mid-edit (OPTION B: in the lightbox)</b> — click a photo, edit the caption full-width under the big image. Roomier than a 136px tile; one extra click vs Option A. Ian picks A, B, or both.'
+    };
+    document.getElementById('note').innerHTML = NOTES[state] || '';
+    document.getElementById('stamp').textContent = 'PREVIS · captions · ' + state + ' · ' + theme;
+  </script>
+</body>
+</html>
