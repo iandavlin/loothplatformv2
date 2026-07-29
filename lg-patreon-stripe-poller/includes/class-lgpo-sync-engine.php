@@ -754,8 +754,19 @@ class LGPO_Sync_Engine {
             return;
         }
 
-        // Safe to mirror.
-        $res = wp_update_user( [ 'ID' => $user->ID, 'user_email' => $patreon_email ] );
+        // Safe to mirror. Flag the source so lgpo_notify_email_change() can tell the
+        // member the new address matches their Patreon account — true ONLY here, so
+        // it is handed over explicitly and cleared in the finally, never inferred.
+        if ( function_exists( 'lgpo_email_change_source' ) ) {
+            lgpo_email_change_source( 'patreon_sweep' );
+        }
+        try {
+            $res = wp_update_user( [ 'ID' => $user->ID, 'user_email' => $patreon_email ] );
+        } finally {
+            if ( function_exists( 'lgpo_email_change_source' ) ) {
+                lgpo_email_change_source( '' );
+            }
+        }
         if ( is_wp_error( $res ) ) {
             error_log( 'LGPO Sync: email mirror failed for #' . $user->ID . ': ' . $res->get_error_message() );
             if ( function_exists( 'lgpo_notify_failure' ) ) {
