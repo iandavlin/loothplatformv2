@@ -11,6 +11,13 @@ explicitly with the evidence.
 three things the handoff recorded as "dead" are not dead, and the email mirror
 silently changes a member's login credential without telling them or Ian.**
 
+> **Every `file:line` below is against the audited baseline, `0995f2b`** — the
+> serve/main tree as it stood when this audit was written. Approved fixes have
+> since landed on this branch and moved later lines (`lg-patreon-onboard.php`
+> 1966 → 2143, `class-lgpo-sync-engine.php` 1316 → 1352), so read a reference
+> with `git show 0995f2b:<file>` rather than against branch HEAD. The findings
+> are unaffected; only the offsets moved.
+
 ---
 
 ## 0. Corrections to the handoff's premises
@@ -497,15 +504,15 @@ sync admin screen, and most of `UserLifecycle.php` is the live teardown. The
 | Block | file:line | Lines |
 |---|---|---|
 | onboard identity decision + mint | `lg-patreon-onboard.php:1221–1417` | 197 |
-| onboard identity helpers (`get_user_by_patreon_id`, `adopt`, `generate_username`) | `:1425–1491` | 65 |
+| onboard identity helpers (`get_user_by_patreon_id`, `adopt`, `generate_username`) | `:1425–1491` | 67 |
 | sweep match + id backfill | `class-lgpo-sync-engine.php:484–532` | 49 |
 | sweep email mirror | `:670–754` | 85 |
 | uuid freeze (+ v5 fallback) | `:756–824` | 69 |
 | **dead** `UserLifecycle::provision` block | `UserLifecycle.php:206–409` | **204** |
 | **latent** Stripe provisioner | `Wp/UserProvisioner.php` (whole) | **133** |
-| | **Total** | **802** |
+| | **Total** | **804** |
 
-So: **802 identity lines inside 4,239 lines of file.** The problem was never bulk
+So: **804 identity lines inside 4,239 lines of file.** The problem was never bulk
 — it is that a ~50-line decision is spread across four files with an 824-line
 file shadowing it and two email-keyed minters standing next to it.
 
@@ -535,8 +542,8 @@ render terminals); the sweep's 49+85 → ~20 (delegate).
 
 | | Before | After |
 |---|---|---|
-| Identity surface | **802** | **~325** |
-| Reduction | | **−477 (≈60%)** |
+| Identity surface | **804** | **~325** |
+| Reduction | | **−479 (≈60%)** |
 
 The duplication being removed is real and specific: the id→email lookup exists
 twice (`onboard:1222,1238` vs `sync:499–511`), and the email mirror with
