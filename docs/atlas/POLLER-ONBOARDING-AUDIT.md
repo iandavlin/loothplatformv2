@@ -304,9 +304,19 @@ degrades **loudly**, which is correct.
 > revokes OAuth refresh tokens on a password change. That is Patreon-side
 > behaviour and I did not browse (and should not guess — guessing is the failure
 > this lane exists to correct). What *is* verified is our side: if the tokens are
-> revoked by anything, polling stops and Ian is emailed. **Operational note:**
-> `lgpo_creator_token_expires_at` on live = **2026-07-31 01:52 UTC** — about two
-> days out. Refresh-on-401 should rotate it; if it does not, polling stops.
+> revoked by anything, polling stops and Ian is emailed.
+
+**Operational note, re-checked 2026-07-29 03:33 UTC.** The creator token was
+obtained **2026-07-01 01:52** and expires **2026-07-31 01:52** — a 30-day life,
+never yet rotated. Polling is healthy right now (`lgpo_last_sync_time` =
+2026-07-29 02:38, under an hour old). The self-heal is real and reachable: on
+expiry the next sweep 401s, `fetch_all_members` calls
+`lgpo_refresh_creator_token()` once (`:306–337`), persists the new pair —
+correctly keeping the old refresh token if Patreon does not reissue one
+(`:957–959`) — and retries the same page. If the refresh also fails it emails
+`sync.refresh_failed`, which bypasses the mail gate. **So no action is needed;
+this degrades loudly rather than silently.** Worth watching on 7/31 only to
+confirm the rotation actually happened.
 
 ### 4.3 A member changes their EMAIL on Patreon — this is the real problem
 
