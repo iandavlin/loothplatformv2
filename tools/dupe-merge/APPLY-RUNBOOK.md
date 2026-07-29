@@ -15,7 +15,7 @@ Ian ruled the 12 holds on 2026-07-29. That split them three ways:
 apply one; only editing `pairs.json` can, which takes a human decision. Each
 pair carries Ian's ruling as text and the dry-run prints it.
 
-Branch `dupe-merge`, SHA `HEADSHA` or later.
+Branch `dupe-merge`, SHA `4d00522` or later.
 
 ---
 
@@ -71,7 +71,7 @@ Two more things to know before the first write:
 ```bash
 git -C <checkout> fetch origin
 git -C <checkout> checkout dupe-merge
-git -C <checkout> rev-parse --short HEAD      # expect 3644369 or later
+git -C <checkout> rev-parse --short HEAD      # expect 4d00522 or later
 cd <checkout>
 ```
 
