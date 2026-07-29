@@ -1,0 +1,24 @@
+[Unit]
+Description=Headless Chrome with CDP on 127.0.0.1:9222 (craft gates + dev browser automation)
+After=network.target
+
+[Service]
+User=ubuntu
+ExecStart=/usr/bin/google-chrome-stable \
+  --headless=new \
+  --remote-debugging-port=9222 \
+  --remote-debugging-address=127.0.0.1 \
+  --user-data-dir=/var/lib/chrome-dev/profile \
+  --no-first-run \
+  --no-default-browser-check \
+  --disable-gpu \
+  --disable-dev-shm-usage \
+  --hide-scrollbars \
+  --mute-audio \
+  about:blank
+Restart=on-failure
+RestartSec=3
+MemoryMax=700M
+
+[Install]
+WantedBy=multi-user.target
