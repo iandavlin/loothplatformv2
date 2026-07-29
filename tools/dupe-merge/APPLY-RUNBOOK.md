@@ -20,6 +20,31 @@ twin is the account that member has been using, so this is not a corner case.
 It changes a login path, so it needs `tools/gates/run-all.sh` green and your
 approval first.
 
+It lives at `platform/mu-plugins/lg-merged-login-redirect.php`. **A pull alone
+will not activate it.** mu-plugins are symlinked into the webroot one file at a
+time, so the pull brings the file into the checkout and nothing loads it — the
+symlink has to be created in the same window:
+
+```bash
+ln -s /home/ubuntu/loothplatformv2-clean/platform/mu-plugins/lg-merged-login-redirect.php \
+      /var/www/dev/wp-content/mu-plugins/lg-merged-login-redirect.php
+ls -l /var/www/dev/wp-content/mu-plugins/ | wc -l     # expect one more than before
+```
+
+**Proved on dev2** against a real merged pair (steve chapman, 227 → 182), with
+the plugin loaded and a known password set on the survivor:
+
+| check | result |
+|---|---|
+| WP alone finds the parked old address | no — correctly absent |
+| old address + **survivor's** password | signs in as the survivor |
+| old address + wrong password | `lg_merged_account`, names the survivor masked (`s***********d@gmail.com`) |
+| parked `merged-<id>@retired.invalid` as a login | rejected — the retired account is never a login target |
+| an unrelated address | untouched by the filter |
+
+Afterwards the merge was rolled back, the survivor's password hash restored
+(verified byte-identical to live) and the symlink removed.
+
 Two more things to know before the first write:
 
 - **Do not use `~/loothplatformv2-clean`.** It only ever pulls, and this is a

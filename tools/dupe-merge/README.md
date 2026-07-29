@@ -124,10 +124,15 @@ continues, because it may be undoing a run that failed part-way.
 
 ## Login for the retired address
 
-`lg-merged-login-redirect.php` (an mu-plugin, **not yet deployed**) makes the old
-address sign the member into the survivor when they present the survivor's
-password, and otherwise names the address to use instead of failing blankly. It
-also points password resets at the survivor.
+`platform/mu-plugins/lg-merged-login-redirect.php` (**not yet deployed**) makes
+the old address sign the member into the survivor when they present the
+survivor's password, and otherwise names the address to use instead of failing
+blankly. It also points password resets at the survivor. The retired account is
+never itself a login target — only the survivor's password works.
+
+Proved on dev2 against a real merged pair; see `APPLY-RUNBOOK.md` §0 for the
+five checks and the exact symlink command, because a pull alone does not
+activate a new mu-plugin.
 
 It is a change to a login path: it needs `tools/gates/run-all.sh`, Ian's
 approval, and it must ship **in the same window as the merge** — until it is
