@@ -28,6 +28,27 @@ three separate people — was orphan pollution and nothing else.*
 > weeks (§7); and three live posts show the wrong author (§7). Four of those five
 > trace to one non-blocking HTTP call whose result nobody checks — see §10.
 
+> ## UPDATE 2026-07-29 — `mirror-dispatch` lane, @`aa4f403`
+>
+> The lane §10 called for was chartered by Ian and built. **Three claims in this
+> document are now wrong and are corrected in place below rather than deleted**,
+> because how they were wrong is the useful part.
+>
+> | was | now |
+> |---|---|
+> | §9 "the WP hook → HTTP → mirror hop is UNPROVEN" | **PROVEN**, both directions, against the DEPLOYED endpoint — §9 |
+> | §7 path 5 "wp-admin/WP-CLI delete: NO — no hook exists" | **wrong.** It does reach the mirror, by an accident of ordering in WP core — §7 |
+> | §7 "the shape of the fix (not built, not applied)" | **built and verified** against the real mirror — `1576134`, verified `a4a121e` |
+>
+> **Still true, and still unapplied:** every runbook in §5/§6 (the attachment
+> migration, the bookmark rewind, the ghost cleanup, re-materializing 71678 and
+> 71723). Those are Ian's. Nothing in this update touched live, and nothing in it
+> touched dev2's data — all four tests restore their baseline and assert it.
+>
+> **The new hole this lane found**: nothing is *running*. The outbox worker's
+> systemd timer is not installed on dev2, and `~/loothplatformv2-clean` does not
+> contain the reverse pass at all. Code merged is not code running — see §11.
+
 ---
 
 ## 1. The mechanism, in one line
@@ -435,14 +456,61 @@ the mirror is not fixed by a constraint.* Answered with evidence, 2026-07-28.
 | 2 | reconcile's upsert-delete, WP post gone or retyped (`materializers.php:348/418`) | yes | **yes** |
 | 3 | Postgres FK cascade (topic→replies, forum→topics→replies) | yes, internally | **yes** |
 | 4 | hand-run SQL against the mirror | yes | **yes** |
-| 5 | **wp-admin bulk delete, `wp_delete_post()`, WP-CLI, direct SQL** | **NO — no hook exists** | **no** |
-| 6 | **dispatch lost in flight** (fire-and-forget) | **NO** | **no** |
+| 5 | **wp-admin bulk delete, `wp_delete_post()`, WP-CLI** | ~~NO~~ → **yes, by accident** (2026-07-29) | **yes** |
+| 5b | direct SQL against `wp_posts` | **NO** — the only genuinely hookless path | no |
+| 6 | **dispatch lost in flight** (fire-and-forget) | **NO** → **closed by the outbox** (2026-07-29) | **yes** |
 | 7 | `TRUNCATE` on the mirror tables | n/a | no (nothing truncates them) |
 
 **1–4 are closed by this change. 5 and 6 are a different defect**, and they do not
 produce orphans at all — they produce **ghosts**.
 
-### Why 5 exists: the mu-plugin only hooks bbPress, not WordPress
+### Why 5 exists: ~~the mu-plugin only hooks bbPress, not WordPress~~
+
+> **CORRECTION, 2026-07-29 (`mirror-dispatch` lane). The claim below is wrong,
+> and it was wrong in the direction that matters: it says a path is broken when
+> it actually works.** It was made from code reading. §9 step 4 predicted that a
+> test there would FAIL and said "a pass would mean §7's matrix is wrong and
+> should be reopened." It passed. Reopened.
+>
+> Measured on dev2 with every outbound HTTP request intercepted and recorded:
+>
+> | path | dispatched? |
+> |---|---|
+> | reply `wp_delete_post($id, true)` | `{"kind":"reply","action":"delete"}` |
+> | reply `wp_trash_post()` | `{"kind":"reply","action":"trash"}` |
+> | topic `wp_delete_post($id, true)` | `{"kind":"topic","action":"delete"}` |
+> | **direct SQL `DELETE FROM wp_posts`** | **none** — the one real gap |
+>
+> **The bridge is BuddyBoss's, not ours.** `bp-forums/core/actions.php` registers
+> `add_action('deleted_post', 'bbp_deleted_reply')`, and on WP 6.9.5
+> `deleted_post` fires at `post.php:3936` — one line BEFORE `clean_post_cache()`
+> at `:3938`. So `bbp_deleted_reply()`'s `bbp_is_reply()` guard still finds a warm
+> post cache, passes, and re-emits the `bbp_*` action this file already hooks.
+>
+> **It is closed by an accident of ordering, which is why it still got a
+> backstop.** The chain rests on two lines of WP core staying in that order and on
+> the post cache being warm at that instant. Neither is a contract: reorder them
+> upstream, or run an external object cache that has already evicted the row, and
+> `bbp_is_reply()` returns false, the `bbp_*` action never fires, and every
+> WP-native delete goes silently missing again — exactly the failure that produced
+> live's 13 ghost replies and 2 ghost topics.
+>
+> So `platform/mu-plugins/bb-mirror-sync.php` now hooks the WP-native path
+> directly: capture the post type in `before_delete_post` (while `wp_posts` still
+> has the row and the answer is knowable from the database rather than a cache),
+> enqueue on `deleted_post`. Hooking `deleted_post` alone would not work — by then
+> the type is exactly what you cannot look up, which is the same cliff bbPress is
+> standing on. Proven by `bin/test-native-delete-hooks.php`, which **deletes
+> BuddyBoss's bridge** and asserts our backstop carries reply, topic and forum
+> regardless; 20 checks, negative control included.
+>
+> **A forum delete was never dispatched at all** — `api/v0/_sync.php` has handled
+> `['forum','delete']` since it was written and nothing in WordPress had ever sent
+> one, so a deleted forum stayed in the mirror forever, and so did every topic and
+> reply beneath it, because the Postgres cascade never got a DELETE to fire on.
+> `bbp_deleted_forum` is now hooked too.
+
+The original claim, for the record:
 
 `platform/mu-plugins/bb-mirror-sync.php` registers `bbp_deleted_topic` and
 `bbp_deleted_reply` and no WP-native delete hook — there is no `deleted_post`,
@@ -535,7 +603,7 @@ bookmark, and these have not been touched since June.
 The other three are a WordPress-side data problem, not a mirror problem. The
 mirror is right to reject a reply whose parent is an image or does not exist.
 
-### The shape of the fix (not built, not applied)
+### The shape of the fix ~~(not built, not applied)~~ — BUILT, and verified
 
 Reconcile needs a **reverse pass**: walk the mirror's own ids and drop any whose WP
 post is gone. It belongs in the existing reconcile job rather than a new script —
@@ -543,6 +611,32 @@ the same reason this leak got a trigger and not a sweeper. Note the two changes
 compose: with the purge triggers installed, deleting a ghost row also removes its
 attachment rows, so ghost repair is complete rather than trading a ghost for an
 orphan.
+
+> **STATUS 2026-07-29.** `bb_mirror_sweep_ghosts()` plus reconcile's call to it
+> landed in `1576134` on 2026-07-28 — the heading above was already stale when it
+> was written. The `mirror-dispatch` lane therefore **verified rather than
+> rebuilt** it, in two places:
+>
+> - `bin/test-ghost-sweep.php` — scratch DB, passes in full.
+> - `bin/test-ghost-sweep-live-shape.php` (`a4a121e`) — the same function against
+>   the **real** `forums` schema and real `looth` rows, because "works on a
+>   scratch DB" and "works on the serving mirror" are two different claims.
+>   14 checks. **The shield is the interesting part**: dev2 holds 15 real
+>   pre-existing ghosts, so the `wp_ids_for` callback returns real WP ids *plus*
+>   those 15, leaving exactly one ghost to sweep — the manufactured one. That the
+>   15 survive is itself the blast-radius assertion. Negative control:
+>   re-manufacture, run report-only, the ghost is still there; only `apply`
+>   removes it.
+>
+> **`bin/ghost-census.php`** (read-only) makes drift a one-command question in
+> both directions. On **dev2**, 2026-07-29:
+>
+> | | |
+> |---|---|
+> | ghosts (mirror → WP, still rendering) | 2 topics, 13 replies |
+> | never arrived (WP → mirror) | 2 genuine losses (71678, 71723), 4 WP-side corrupt, 1 correct draft |
+> | orphaned attachments | 16 rows / 12 lost topic parents |
+> | attachment-purge triggers | **0 of 2 — the leak is still open on dev2** |
 
 ## 8. The rest of the mirror, checked the same way
 
@@ -595,12 +689,50 @@ window, because on an empty unread table there is nothing to race.
 > subscriptions** — the number the thread-follow lane's ruling turns on. Different
 > `type`, same store.
 
-## 9. UNPROVEN: the WordPress hook → HTTP → mirror hop
+## 9. ~~UNPROVEN~~ **PROVEN**: the WordPress hook → HTTP → mirror hop
 
-**Lane closed 2026-07-29 with this segment unverified. No dev2 window was
-available, and it is recorded here rather than quietly dropped.**
+> **CLOSED 2026-07-29, `mirror-dispatch` lane — `bin/test-sync-hop-e2e.php`,
+> 21 checks, run twice on dev2.** §9 estimated ten minutes once a window existed;
+> that is about what it took. The section below is kept as written because the
+> reasoning that bounded the risk was correct, and because it is the record of
+> what was and was not known before the measurement.
+>
+> **Both directions, against the serving mirror:**
+>
+> | | | |
+> |---|---|---|
+> | create | WP topic → outbox → real HTTPS → `forums.topic` **exists** | 1313 → **1314** |
+> | delete | `wp_delete_post()` → hooks → outbox → HTTPS → row **gone** | 1314 → **1313** |
+>
+> Delivery is the worker's own path — blocking raw curl, `CURLOPT_RESOLVE`
+> pinning `dev2.loothgroup.com` to `127.0.0.1`, response read and parsed. Round
+> trips 0.31–0.54s warm.
+>
+> **The receiver is the DEPLOYED one, which is what makes this worth having.**
+> `/srv/bb-mirror/api/v0/_sync.php` contains the string `outbox` **zero** times —
+> it does not carry the dispatch branch. So the hop is proven against the endpoint
+> as it runs today, and the rows were acked by the **worker**, not the receiver.
+> The fast-path ack cannot work on dev2 until the branch is deployed; asserted,
+> not assumed.
+>
+> **The fast path was predicted to lose the race and it WON, both runs** — so that
+> result is printed and never asserted. `wp_remote_post(blocking=>false,
+> timeout 1)` against an endpoint measured at 7.3s cold / ~1.1s warm wins on an
+> idle box and loses on a cold or saturated one. A leg whose bias moves with load
+> is not a guarantee; the bulk delete firing N at once into `pm.max_children = 8`
+> is the case that made the ghosts. What is asserted is that **the outbox delivers
+> regardless**.
+>
+> **Negative control:** the same fixture with its WP row removed via `$wpdb`, so
+> no hook fires and nothing is enqueued — and the mirror row **survives**. A ghost,
+> manufactured the way live got its 15. Without it the other steps could be
+> passing because something else was tidying up.
+>
+> Containment: teardown runs in a `finally`, so a mid-run failure still cleans the
+> serving mirror; baselines re-asserted (1313 / 5126 / 1859, `wp_posts` back to
+> 20291, zero outbox residue). The 15 real dev2 ghosts were never touched.
 
-### Exactly what is unproven
+### Exactly what was unproven
 
 One segment of the delete path, end to end on a running system:
 
@@ -662,11 +794,97 @@ are gone. That is what made LIVE's reply image count read 236/380 when the truth
 was 233/374 — see `REPLY-IMAGE-COUNT-CEILING.md` §1. Different store, same class
 of defect: a delete that does not clean up after itself.
 
-Also unaddressed by design, from §7's matrix: **path 5** (no WP-native delete
-hook) and **path 6** (fire-and-forget dispatch). Neither is fixable with a
+~~Also unaddressed by design, from §7's matrix: **path 5** (no WP-native delete
+hook) and **path 6** (fire-and-forget dispatch).~~ Neither is fixable with a
 database constraint. Path 6 in particular is the root cause behind the ghosts, the
 two replies that never rendered, and the author drift — three of the four defect
 classes this lane found trace back to one non-blocking HTTP call that nobody ever
 checks the result of. **That is the next piece of work in this area**, and it is
 larger than a lane-closing note: it means giving the dispatch a durable queue or a
 verification pass, not a retry bolted onto `wp_remote_post`.
+
+> **Done, 2026-07-29 — that next piece of work is the `mirror-dispatch` lane.**
+> Path 6 is closed by the outbox (§11); path 5 turned out to be already closed by
+> accident and got a backstop anyway (§7). The paragraph above is left standing
+> because it is the charter that produced them.
+>
+> **What remains genuinely out of scope and still true** is the first paragraph of
+> this section: the WP side has the same shape. Deleting a reply in WP removes its
+> `bp_media` rows, but nothing reconciles a `bp_media_ids` meta listing ids whose
+> media rows are gone. Different store, same class of defect — a delete that does
+> not clean up after itself.
+
+## 11. The dispatch is durable now — and nothing is running it
+
+*Added by the `mirror-dispatch` lane, 2026-07-29.*
+
+### The outbox
+
+Every mirror-relevant event writes a row in `wp_bb_mirror_outbox` at the moment of
+the WP change; the existing non-blocking POST stays the **fast path** and carries
+its `outbox_id`; `api/v0/_sync.php` **acks the row through the database** once it
+has materialized the change — which is the trick that keeps the fast path
+non-blocking and still makes it verifiable; and `bin/outbox-worker.php` redelivers
+whatever nobody acked over a blocking raw curl whose response *is* read, then backs
+off and dead-letters. **A row still `pending` past its grace window IS the alarm.**
+
+Four decisions worth not re-litigating:
+
+- **The outbox lives in MySQL, not the mirror's Postgres.** The event is recorded
+  in the same database as the fact that generated it. Putting the durability
+  record in Postgres would put it in the exact failure domain it exists to survive.
+- **Ordering is load-bearing.** Events replay per object in enqueue order and a
+  group stops at its first failure. Replaying upsert→delete→upsert out of order is
+  a way to manufacture the very ghost this document is about.
+- **4xx dead-letters immediately**; only 408/429 and 5xx/curl failures get the
+  backoff ladder. Retrying a malformed payload twelve times just delays the human.
+- **Loading the lib is optional by design.** Absent `/srv/bb-mirror`, every
+  dispatch degrades to exactly its old behaviour. A broken outbox must never make
+  the site worse than no outbox.
+
+Alerting is the **systemd exit code**, not `wp_mail` — on dev2 `wp_mail` is a known
+false positive (mailpit swallows it).
+
+### A topic delete enqueues TWO rows, and always has
+
+Traced with an `all`-hook tracer, 2026-07-29: bbPress's own `bbp_delete_topic()`
+calls `bbp_unstick_topic()`, which fires the `bbp_unstick_topic` action — mapped to
+`upsert` in this mu-plugin since long before this lane. So every topic delete is
+**upsert-then-delete**. It converges rather than corrupts, for two independent
+reasons, both now asserted rather than assumed:
+
+- ordering is preserved, so `delete` is terminal; and
+- `bb_mirror_upsert_topic()` opens `if (!$p || $p->post_type !== 'topic')` →
+  `DELETE FROM topic` (`lib/materializers.php:346`), so with the WP post already
+  gone **the upsert deletes too**. Both rows drive the mirror to the same state.
+
+### THE FINDING THAT OUTRANKS THE CODE: none of this is running
+
+| | |
+|---|---|
+| `bb-mirror-outbox.timer` installed on dev2 | **no** — only `bb-mirror-reconcile.timer` is |
+| `~/loothplatformv2-clean` contains the reverse pass (`1576134`) | **no** — the serving checkout was 47 commits behind |
+| `/srv/bb-mirror/api/v0/_sync.php` contains the outbox ack | **no** — `outbox` appears 0 times |
+
+Which is why reconcile's journal shows no ghost lines every ten minutes, and why
+the end-to-end proof in §9 had to be acked by the worker rather than the receiver.
+**Code merged is not code running.** The deploy of this branch has two couplings a
+`git pull` does not handle: the systemd unit for the outbox timer must be installed
+and enabled, and the mu-plugin symlink set must be refreshed.
+
+### The tests, and what each one would catch
+
+| test | asserts | negative control |
+|---|---|---|
+| `bin/test-outbox.php` | 28 checks — enqueue, collapse, backoff, dead-letter, stats | a real connection failure, by pinning delivery at a dead port |
+| `bin/test-native-delete-hooks.php` | 20 checks — reply/topic/forum native delete recorded | **BuddyBoss's bridge deleted**, then ours too: the event vanishes |
+| `bin/test-sync-hop-e2e.php` | 21 checks — §9's hop, both directions, real HTTPS | a ghost manufactured with `$wpdb`, which survives |
+| `bin/test-ghost-sweep-live-shape.php` | 14 checks — the reverse pass on the real mirror | report-only leaves the ghost; only `apply` removes it |
+
+> **A trap that cost two red runs, recorded so it costs a third nobody.**
+> `wp eval-file` includes the file from inside a **method**, so everything at
+> "top level" is function-local. A helper doing `global $TABLE` imports an *unset*
+> global and interpolates the empty string into ``FROM `` ``. `$wpdb` answers that
+> with **0 rows instead of raising**, so the helper silently does nothing and every
+> downstream assertion fails while the code under test is perfectly fine. Ask
+> `bb_mirror_outbox_table()` for the name; never trust scope.
