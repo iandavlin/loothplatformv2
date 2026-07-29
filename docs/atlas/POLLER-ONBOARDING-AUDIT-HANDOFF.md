@@ -74,7 +74,17 @@ has been mis-described repeatedly.
    inert. A reachable-but-email-keyed minter is a latent duplicate source if
    Stripe is ever switched on.
 
-4. **The email-change gap (already found, verify and scope).** Live
+4. **Credential changes on the Patreon side (Ian asked this directly, 2026-07-29).**
+   What happens when a member changes their **password on Patreon**? Trace it:
+   does Patreon revoke OAuth tokens on password change, and if so, what breaks —
+   the poller's stored tokens, the member's next onboarding return, nothing?
+   State the answer with proof. Adjacent and sharper: when a member changes their
+   **email on Patreon**, the sync engine mirrors it onto the WP account — which
+   silently changes the member's LOGIN identifier while their WP password stays.
+   Does the member get told? Can they still log in with what they think their
+   email is? Trace both directions and write down the actual member experience.
+
+5. **The email-change gap on the WP side (already found, verify and scope).** Live
    `profile-sync.php` hooks `user_register` only, NOT `profile_update`. The
    profile-app receiver `applyEmailChange` (keeps uuid stable, adds new email as
    alias, moves primary_email) EXISTS and is CORRECT but is **never called** —
@@ -84,7 +94,7 @@ has been mis-described repeatedly.
    Patreon — a WP email change that diverges from Patreon may break login/verify
    on the next sync. Trace this fully and say what should fire on `profile_update`.
 
-5. **Can it be smaller?** Only after 1–4. The question is not "shrink for its own
+6. **Can it be smaller?** Only after 1–5. The question is not "shrink for its own
    sake" — it is: how much of the ~4,200 user-touching lines is dead
    (UserLifecycle 824), duplicated (onboard vs sync-engine both implement the
    match), or defensive scar tissue from past incidents (the mikelle.davlin
