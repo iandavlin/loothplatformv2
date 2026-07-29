@@ -180,11 +180,15 @@ final class UserLifecycle
      * code that should make a Looth user. Every creator (Patreon onboard,
      * gift-auth, Stripe, sweep-match, admin, affiliate, native) routes through
      * here so they stop each keeping a different subset of the create promises
-     * (USER-LIFECYCLE-AUDIT §2). Idempotent on email: an existing account is
-     * found + reconciled, never duplicated.
+     * (USER-LIFECYCLE-AUDIT §2). Idempotent on the PATREON USER ID first and email
+     * second: an existing account is found + reconciled, never duplicated.
      *
      * Promises kept, in order:
-     *   1. WP account (find by email, else create).
+     *   1. WP account — find by Patreon id, then by email, else create. On an id
+     *      match the incoming email is written ONTO that account (logged, previous
+     *      value kept in `lgpo_previous_user_email`). Refuses to adopt an admin, or
+     *      to move an email onto an account linked to a different Patreon id / owned
+     *      by someone else; those route to the pending human-review queue.
      *   2. user_meta from $opts['meta'] + display/first/last name.
      *   3. Tier role via the Arbiter source pipeline (never a raw set_role) —
      *      $opts['tier'] reported under $opts['source'] (default manual_admin).
@@ -196,10 +200,12 @@ final class UserLifecycle
      *
      * @param array{
      *   display_name?:string, first_name?:string, last_name?:string,
-     *   tier?:?string, source?:string, login?:bool, meta?:array<string,mixed>
+     *   patreon_user_id?:string, tier?:?string, source?:string, login?:bool,
+     *   meta?:array<string,mixed>
      * } $opts
      * @return array{
      *   ok:bool, wp_user_id:int, created:bool, email:string, role:?string,
+     *   matched_by?:string, email_changed_from?:string,
      *   profile_identity:array<string,mixed>, logged_in:bool, errors:array<int,string>
      * }
      */
@@ -223,8 +229,98 @@ final class UserLifecycle
 
         $displayName = isset( $opts['display_name'] ) ? (string) $opts['display_name'] : '';
 
-        // ---- 1. WP account (find by email, else create) --------------------
-        $user = get_user_by( 'email', $email );
+        // ---- 1. WP account: PATREON ID FIRST, then email, else create ------
+        //
+        // Email is NOT an identity. It is a mutable credential a member can change
+        // on Patreon at any time, and keying on it is what splits one human into two
+        // accounts: the patron comes back with a new address, no account matches, and
+        // a second one is minted. The Patreon user id is the stable key, so it is
+        // consulted FIRST and the incoming email is written ONTO the account it finds.
+        //
+        // Mirrors what class-lgpo-sync-engine.php already does on the roster path
+        // (a6af334) — same key, same fallback order, same refusals — so the two
+        // creators cannot drift into disagreeing about who a member is.
+        //
+        // Two things it will NOT do, both of which are real-world harm:
+        //   - adopt a privileged account (never hand an admin identity to a poller)
+        //   - move an email onto an account already linked to a DIFFERENT Patreon id,
+        //     or onto one whose address belongs to somebody else
+        // Those route to the same pending/human-review path onboard.php uses for the
+        // mikelle.davlin case, and the caller gets ok=false rather than a silent skip.
+        $patreonId = '';
+        if ( isset( $opts['patreon_user_id'] ) ) {
+            $patreonId = trim( (string) $opts['patreon_user_id'] );
+        } elseif ( isset( $opts['meta']['lgpo_patreon_user_id'] ) ) {
+            $patreonId = trim( (string) $opts['meta']['lgpo_patreon_user_id'] );
+        }
+
+        $user       = null;
+        $matchedBy  = '';
+        if ( $patreonId !== '' ) {
+            $user = self::userByPatreonId( $patreonId );
+            if ( $user ) { $matchedBy = 'patreon_id'; }
+        }
+
+        if ( $user && user_can( $user, 'manage_options' ) ) {
+            // Never adopt an admin over this path. Same refusal as onboard.php.
+            self::flagForReview( $patreonId, $email, (int) $user->ID, 'admin_collision' );
+            $result['ok']     = false;
+            $result['errors'][] = 'refused: Patreon id ' . $patreonId
+                . ' resolves to a privileged account (#' . (int) $user->ID . ') — routed to human review';
+            $result['wp_user_id'] = (int) $user->ID;
+            return $result;
+        }
+
+        if ( $user ) {
+            // THE STEP THAT WAS MISSING ENTIRELY: update the account's email to the
+            // incoming one. Changing an email is a real-world action — it moves where
+            // their mail goes and what they log in with — so it is logged, the previous
+            // value is recorded for reversal, and it is refused if anyone else holds it.
+            $current = strtolower( trim( (string) $user->user_email ) );
+            if ( $current !== strtolower( $email ) ) {
+                $owner = get_user_by( 'email', $email );
+                if ( $owner && (int) $owner->ID !== (int) $user->ID ) {
+                    self::flagForReview( $patreonId, $email, (int) $user->ID, 'email_owned_by_other' );
+                    $result['errors'][] = 'email ' . $email . ' already belongs to WP #'
+                        . (int) $owner->ID . ' — NOT changed, routed to human review';
+                } else {
+                    update_user_meta( $user->ID, 'lgpo_previous_user_email', $current );
+                    $upd = wp_update_user( [ 'ID' => $user->ID, 'user_email' => $email ] );
+                    if ( is_wp_error( $upd ) ) {
+                        $result['errors'][] = 'email update failed for #' . (int) $user->ID
+                            . ': ' . $upd->get_error_message();
+                    } else {
+                        error_log( sprintf(
+                            'LGMS UserLifecycle: patreon_id=%s matched WP #%d — email %s -> %s (previous recorded in lgpo_previous_user_email)',
+                            $patreonId, (int) $user->ID, $current !== '' ? $current : '(blank)', $email
+                        ) );
+                        $result['email_changed_from'] = $current;
+                        $user = get_user_by( 'id', (int) $user->ID );
+                    }
+                }
+            }
+        }
+
+        if ( ! $user ) {
+            $byEmail = get_user_by( 'email', $email );
+            if ( $byEmail ) {
+                $linked = (string) get_user_meta( $byEmail->ID, 'lgpo_patreon_user_id', true );
+                if ( $patreonId !== '' && $linked !== '' && $linked !== $patreonId ) {
+                    // Two Patreon accounts, one email — a genuine conflict, not a match.
+                    self::flagForReview( $patreonId, $email, (int) $byEmail->ID, 'different_patreon_id' );
+                    $result['ok'] = false;
+                    $result['errors'][] = 'refused: ' . $email . ' belongs to WP #' . (int) $byEmail->ID
+                        . ' which is linked to Patreon id ' . $linked . ' — routed to human review';
+                    $result['wp_user_id'] = (int) $byEmail->ID;
+                    return $result;
+                }
+                $user      = $byEmail;
+                $matchedBy = 'email';
+            }
+        }
+
+        $result['matched_by'] = $matchedBy;
+
         if ( ! $user ) {
             require_once ABSPATH . 'wp-admin/includes/user.php';
             $username = self::uniqueUsername( $displayName !== '' ? $displayName : $email );
@@ -244,6 +340,14 @@ final class UserLifecycle
         }
         $wpUserId = (int) $user->ID;
         $result['wp_user_id'] = $wpUserId;
+
+        // Backfill the stable key on an email match (or a fresh mint) so every later
+        // pass keys on the id and the email is free to drift — the same backfill the
+        // roster path does. Without it, an account matched once by email stays
+        // matchable only by email, which is the defect this whole block exists to end.
+        if ( $patreonId !== '' && (string) get_user_meta( $wpUserId, 'lgpo_patreon_user_id', true ) !== $patreonId ) {
+            update_user_meta( $wpUserId, 'lgpo_patreon_user_id', sanitize_text_field( $patreonId ) );
+        }
 
         // ---- 2. names ------------------------------------------------------
         $update = [ 'ID' => $wpUserId ];
@@ -305,6 +409,61 @@ final class UserLifecycle
     }
 
     /** Find-or-make a unique WP login from a name or email local-part. */
+    /**
+     * The account carrying this Patreon id, or null.
+     *
+     * Prefers onboard.php's helper so there is ONE definition of "who owns this
+     * Patreon id"; the inline query is the identical lookup for contexts where that
+     * plugin file is not loaded (cron, wp-cli). Also checks the LEGACY
+     * `patreon_user_id` meta, because accounts linked before the `lgpo_` prefix
+     * exist and are exactly the old records most likely to be duplicated.
+     */
+    private static function userByPatreonId( string $patreonId ): ?\WP_User
+    {
+        if ( $patreonId === '' ) { return null; }
+        if ( function_exists( 'lgpo_get_user_by_patreon_id' ) ) {
+            $u = \lgpo_get_user_by_patreon_id( $patreonId );
+            if ( $u instanceof \WP_User ) { return $u; }
+        }
+        foreach ( [ 'lgpo_patreon_user_id', 'patreon_user_id' ] as $key ) {
+            $users = get_users( [ 'meta_key' => $key, 'meta_value' => $patreonId, 'number' => 1 ] );
+            if ( ! empty( $users ) ) { return $users[0]; }
+        }
+        return null;
+    }
+
+    /**
+     * Route a conflict to the same human-review queue onboard.php uses, and emit the
+     * decoupled blocked signal lg-login-monitor listens for. Never throws: a failure
+     * to *report* a conflict must not also destroy the refusal that caused it.
+     */
+    private static function flagForReview( string $patreonId, string $email, int $wpUserId, string $reason ): void
+    {
+        try {
+            if ( function_exists( 'lgpo_add_pending' ) ) {
+                \lgpo_add_pending( [
+                    'patreon_user_id' => $patreonId,
+                    'patreon_email'   => $email,
+                    'patreon_name'    => '',
+                    'tier_id'         => '',
+                    'wp_user_id'      => $wpUserId,
+                    'reason'          => $reason,
+                ] );
+            }
+            do_action( 'lg_login_blocked', [
+                'surface'         => 'lifecycle_provision',
+                'reason'          => $reason,
+                'patreon_user_id' => $patreonId,
+                'patreon_email'   => $email,
+                'wp_user_id'      => $wpUserId,
+            ] );
+            error_log( sprintf(
+                'LGMS UserLifecycle: REFUSED provision (%s) patreon_id=%s email=%s wp=#%d — human review',
+                $reason, $patreonId, $email, $wpUserId
+            ) );
+        } catch ( Throwable $_ ) {}
+    }
+
     private static function uniqueUsername( string $seed ): string
     {
         $base = sanitize_user( strtolower( str_replace( ' ', '.', trim( $seed ) ) ), true );
