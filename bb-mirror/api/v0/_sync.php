@@ -45,10 +45,17 @@ $_SERVER['HTTP_HOST']   ??= LG_BB_MIRROR_HOST;
 $_SERVER['REQUEST_URI'] ??= '/';
 require LG_BB_MIRROR_WP_LOAD;
 require_once __DIR__ . '/../../lib/materializers.php';
+require_once __DIR__ . '/../../lib/outbox.php';
 
 $kind   = (string)$body['kind'];
 $id     = (int)$body['id'];
 $action = (string)($body['action'] ?? 'upsert');
+
+// The outbox row this request is delivering, if any. THE ACK TRAVELS THROUGH THE
+// DATABASE, NOT THE HTTP RESPONSE — which is what lets the caller stay
+// non-blocking and still end up with proof the work happened. We have WP loaded
+// here anyway, so $wpdb is already sitting right there. See lib/outbox.php.
+$outbox_id = (int)($body['outbox_id'] ?? 0);
 
 $db = bb_mirror_db(readonly: false);
 
@@ -145,8 +152,16 @@ try {
     if ($kind === 'reply' && $reply_topic_id > 0) {
         bb_mirror_refresh_topic_reply_count($reply_topic_id, $db);
     }
+
+    // Ack AFTER the work, never before. This records that the row was actually
+    // materialized — not merely that an HTTP request arrived — so a row left
+    // `pending` is unambiguous evidence the change never landed.
+    bb_mirror_outbox_ack($outbox_id, true, null, 'fastpath');
 } catch (Throwable $e) {
     error_log("[bb-mirror _sync] $kind#$id $action: " . $e->getMessage());
+    // Bank the reason and leave the row PENDING so bin/outbox-worker.php retries
+    // it. A 500 used to be the end of the story; now it is the start of one.
+    bb_mirror_outbox_ack($outbox_id, false, $e->getMessage());
     http_response_code(500); exit('sync error');
 }
 

@@ -72,10 +72,32 @@ function bb_mirror_sync_host(): string {
 }
 }
 
+// -- The outbox: durability for a dispatch nobody was checking ----------------
+// Loading this is OPTIONAL BY DESIGN. If /srv/bb-mirror is absent or the table
+// cannot be created, every dispatch below degrades to exactly the
+// fire-and-forget behaviour it had before — a broken outbox must never be able
+// to make the site worse than it was without one.
+if (!function_exists('bb_mirror_outbox_enqueue') && is_file('/srv/bb-mirror/lib/outbox.php')) {
+    require_once '/srv/bb-mirror/lib/outbox.php';
+}
+
 if (!function_exists('bb_mirror_sync_dispatch')) {
-function bb_mirror_sync_dispatch(string $kind, int $id, string $action = 'upsert', array $extra = []): void {
+/**
+ * Fire the fast path for an event that is ALREADY recorded in the outbox.
+ *
+ * Still non-blocking, still timeout 1, still nobody reads the response — and
+ * that is now fine, because the response is no longer the only evidence the
+ * event happened. $outbox_id rides along in the payload so api/v0/_sync.php can
+ * ack the row through the database once it has materialized the change.
+ *
+ * A dropped request now costs a retry instead of a permanent divergence. See
+ * bb-mirror/lib/outbox.php for the mechanism and the measurements.
+ */
+function bb_mirror_sync_dispatch(string $kind, int $id, string $action = 'upsert', array $extra = [], int $outbox_id = 0): void {
     if ($id <= 0) return;
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+
+    if ($outbox_id > 0) $extra['outbox_id'] = $outbox_id;
 
     $payload = wp_json_encode(array_merge([
         'kind'   => $kind,    // 'forum' | 'topic' | 'reply' | 'subscription'
@@ -95,6 +117,27 @@ function bb_mirror_sync_dispatch(string $kind, int $id, string $action = 'upsert
         ],
         'body' => $payload,
     ]);
+}
+}
+
+if (!function_exists('bb_mirror_sync_record_and_dispatch')) {
+/**
+ * THE ONLY WAY A MIRROR EVENT SHOULD LEAVE WORDPRESS.
+ *
+ * Record first, then fire. The record is the guarantee; the POST is the
+ * optimization. If the POST is dropped — pool saturated, endpoint restarting,
+ * nginx refusing — bin/outbox-worker.php redelivers it with a blocking request
+ * whose result IS read, and escalates if it stays broken.
+ */
+function bb_mirror_sync_record_and_dispatch(string $kind, int $id, string $action = 'upsert', array $extra = []): void {
+    if ($id <= 0) return;
+    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+
+    $outbox_id = function_exists('bb_mirror_outbox_enqueue')
+        ? bb_mirror_outbox_enqueue($kind, $id, $action, $extra)
+        : 0;
+
+    bb_mirror_sync_dispatch($kind, $id, $action, $extra, $outbox_id);
 }
 }
 
@@ -250,6 +293,13 @@ add_action('bbp_new_reply', function ($reply_id, $topic_id = 0, $forum_id = 0, $
 // Dispatching at prio 99 reads the post before `bp_media_ids` is committed, so
 // the mirror misses freshly-attached images. By shutdown the meta is written.
 // De-dupes per (kind,id,action) so multiple hooks in one request fire once.
+//
+// THE OUTBOX ROW IS WRITTEN NOW; ONLY THE POST IS DEFERRED. Deferral exists so
+// the mirror reads post meta that BuddyBoss has finished writing — it is not a
+// reason to delay the durable record. Recording at hook time means a fatal
+// between here and `shutdown` still leaves a row the worker will deliver, and
+// costs nothing in correctness: the payload carries no content, so the
+// materializer re-reads current WP state whenever it eventually runs.
 if (!function_exists('bb_mirror_sync_dispatch_deferred')) {
 function bb_mirror_sync_dispatch_deferred(string $kind, int $id, string $action = 'upsert', array $extra = []): void {
     if ($id <= 0) return;
@@ -258,8 +308,13 @@ function bb_mirror_sync_dispatch_deferred(string $kind, int $id, string $action 
     $key = $kind . ':' . $id . ':' . $action;
     if (isset($queued[$key])) return;
     $queued[$key] = true;
-    add_action('shutdown', function () use ($kind, $id, $action, $extra) {
-        bb_mirror_sync_dispatch($kind, $id, $action, $extra);
+
+    $outbox_id = function_exists('bb_mirror_outbox_enqueue')
+        ? bb_mirror_outbox_enqueue($kind, $id, $action, $extra)
+        : 0;
+
+    add_action('shutdown', function () use ($kind, $id, $action, $extra, $outbox_id) {
+        bb_mirror_sync_dispatch($kind, $id, $action, $extra, $outbox_id);
     }, 99);
 }
 }
@@ -267,12 +322,34 @@ function bb_mirror_sync_dispatch_deferred(string $kind, int $id, string $action 
 // -- Forums (rare events, but visibility changes matter) ---------------------
 add_action('bbp_new_forum',  function ($args) {
     $id = is_array($args) ? (int)($args['forum_id'] ?? 0) : (int)$args;
-    bb_mirror_sync_dispatch('forum', $id, 'upsert');
+    bb_mirror_sync_record_and_dispatch('forum', $id, 'upsert');
 }, 99, 1);
 add_action('bbp_edit_forum', function ($args) {
     $id = is_array($args) ? (int)($args['forum_id'] ?? 0) : (int)$args;
-    bb_mirror_sync_dispatch('forum', $id, 'upsert');
+    bb_mirror_sync_record_and_dispatch('forum', $id, 'upsert');
 }, 99, 1);
+
+// FORUM DELETE / TRASH — added 2026-07-29 (mirror-dispatch lane). These did not
+// exist, and their absence is a real hole rather than a tidy-up:
+// api/v0/_sync.php has handled `['forum','delete']` since it was written, but
+// NOTHING IN WORDPRESS HAS EVER SENT ONE. A deleted forum therefore stayed in
+// the mirror forever, and — because the mirror only ever hears about the forum
+// row itself — so did every topic and reply beneath it, since the Postgres
+// cascade that would have removed them never got a DELETE to fire on.
+// atlas §7's matrix records forum delete as "reaches the mirror? yes" on row 1;
+// that is wrong, and this is the line that makes it true.
+add_action('bbp_deleted_forum', function ($forum_id) {
+    bb_mirror_sync_record_and_dispatch('forum', (int)$forum_id, 'delete');
+}, 99, 1);
+//
+// DELIBERATELY NOT HOOKING bbp_trashed_forum / bbp_untrashed_forum. A separate,
+// PRE-EXISTING gap sits underneath forum trash and this lane is not the place to
+// close it: _bb_mirror_visibility() (lib/materializers.php) reads the forum's
+// _bbp_forum_visibility meta FIRST and only falls through to post_status, so a
+// trashed forum whose meta still says 'public' materializes as visibility
+// 'public' and keeps rendering. An upsert hook here would therefore look like it
+// handled trash while hiding nothing — a trap for the next reader. Recorded in
+// docs/atlas/MIRROR-ATTACHMENT-ORPHANS.md instead of half-closed here.
 
 // -- Topics ------------------------------------------------------------------
 // new/edit defer to shutdown (media may attach at edit_post prio 999); the rest
@@ -294,22 +371,22 @@ foreach ([
     $deferred = in_array($hook, $bb_mirror_topic_deferred, true);
     add_action($hook, function ($topic_id) use ($action, $deferred) {
         if ($deferred) bb_mirror_sync_dispatch_deferred('topic', (int)$topic_id, $action);
-        else           bb_mirror_sync_dispatch('topic', (int)$topic_id, $action);
+        else           bb_mirror_sync_record_and_dispatch('topic', (int)$topic_id, $action);
     }, 99, 1);
 }
 
 // Merge: destination_topic_id absorbs source. Both must reindex.
 add_action('bbp_merged_topic', function ($destination_topic_id, $source_topic_id, $source_topic_forum_id) {
-    bb_mirror_sync_dispatch('topic', (int)$destination_topic_id, 'upsert', ['merge_source' => (int)$source_topic_id]);
-    bb_mirror_sync_dispatch('topic', (int)$source_topic_id,      'delete');
+    bb_mirror_sync_record_and_dispatch('topic', (int)$destination_topic_id, 'upsert', ['merge_source' => (int)$source_topic_id]);
+    bb_mirror_sync_record_and_dispatch('topic', (int)$source_topic_id,      'delete');
 }, 99, 3);
 
 // Split: a reply (or replies) becomes a new topic. New topic_id will fire
 // bbp_new_topic separately; this hook flags the affected source topic for
 // reply-count refresh.
 add_action('bbp_post_split_topic', function ($from_reply_id, $source_topic_id, $destination_topic_id) {
-    bb_mirror_sync_dispatch('topic', (int)$source_topic_id,      'upsert', ['split_from_reply' => (int)$from_reply_id]);
-    bb_mirror_sync_dispatch('topic', (int)$destination_topic_id, 'upsert');
+    bb_mirror_sync_record_and_dispatch('topic', (int)$source_topic_id,      'upsert', ['split_from_reply' => (int)$from_reply_id]);
+    bb_mirror_sync_record_and_dispatch('topic', (int)$destination_topic_id, 'upsert');
 }, 99, 3);
 
 // -- Replies -----------------------------------------------------------------
@@ -326,7 +403,7 @@ foreach ([
     $deferred = in_array($hook, $bb_mirror_reply_deferred, true);
     add_action($hook, function ($reply_id) use ($action, $deferred) {
         if ($deferred) bb_mirror_sync_dispatch_deferred('reply', (int)$reply_id, $action);
-        else           bb_mirror_sync_dispatch('reply', (int)$reply_id, $action);
+        else           bb_mirror_sync_record_and_dispatch('reply', (int)$reply_id, $action);
     }, 99, 1);
 }
 
@@ -336,7 +413,7 @@ foreach ([
 // 'subscribe' or 'unsubscribe'.
 add_action('bbp_subscriptions_handler', function ($success, $user_id, $object_id, $action) {
     if (!$success) return;
-    bb_mirror_sync_dispatch('subscription', (int)$object_id, $action === 'bbp_subscribe' ? 'subscribe' : 'unsubscribe', [
+    bb_mirror_sync_record_and_dispatch('subscription', (int)$object_id, $action === 'bbp_subscribe' ? 'subscribe' : 'unsubscribe', [
         'user_id' => (int)$user_id,
     ]);
 }, 99, 4);
@@ -346,22 +423,83 @@ add_action('bbp_subscriptions_handler', function ($success, $user_id, $object_id
 // for the "Local: <group>" pill and (eventually) write-gating against
 // group membership. Hooks fire from BuddyBoss Platform's bp-groups component.
 add_action('groups_create_group', function ($group_id) {
-    bb_mirror_sync_dispatch('bp_group', (int)$group_id, 'upsert');
+    bb_mirror_sync_record_and_dispatch('bp_group', (int)$group_id, 'upsert');
 }, 99, 1);
 add_action('groups_update_group', function ($group_id) {
-    bb_mirror_sync_dispatch('bp_group', (int)$group_id, 'upsert');
+    bb_mirror_sync_record_and_dispatch('bp_group', (int)$group_id, 'upsert');
 }, 99, 1);
 add_action('groups_before_delete_group', function ($group_id) {
-    bb_mirror_sync_dispatch('bp_group', (int)$group_id, 'delete');
+    bb_mirror_sync_record_and_dispatch('bp_group', (int)$group_id, 'delete');
 }, 99, 1);
 // Group settings save (forum attachment, status changes etc.)
 add_action('groups_settings_updated', function ($group_id) {
-    bb_mirror_sync_dispatch('bp_group', (int)$group_id, 'upsert');
+    bb_mirror_sync_record_and_dispatch('bp_group', (int)$group_id, 'upsert');
 }, 99, 1);
 // Member join/leave shifts the group's total_member_count — refresh.
 add_action('groups_join_group', function ($group_id) {
-    bb_mirror_sync_dispatch('bp_group', (int)$group_id, 'upsert');
+    bb_mirror_sync_record_and_dispatch('bp_group', (int)$group_id, 'upsert');
 }, 99, 1);
 add_action('groups_leave_group', function ($group_id) {
-    bb_mirror_sync_dispatch('bp_group', (int)$group_id, 'upsert');
+    bb_mirror_sync_record_and_dispatch('bp_group', (int)$group_id, 'upsert');
 }, 99, 1);
+
+// -- WP-NATIVE DELETE BACKSTOP (mirror-dispatch lane, 2026-07-29) -------------
+//
+// MEASURE BEFORE YOU BUILD. atlas §7 path 5 says wp-admin bulk delete,
+// wp_delete_post() and WP-CLI are invisible to the mirror because "no WP-native
+// delete hook exists" in this file. That was read from code, and §9 step 4 said
+// a passing test there would mean the matrix is wrong. It is wrong. Measured on
+// dev2 2026-07-29 with every outbound HTTP request intercepted and recorded:
+//
+//   reply  wp_delete_post(force)  ->  {"kind":"reply","id":N,"action":"delete"}
+//   reply  wp_trash_post          ->  {"kind":"reply","id":N,"action":"trash"}
+//   topic  wp_delete_post(force)  ->  {"kind":"topic","id":N,"action":"delete"}
+//   topic  wp_trash_post          ->  {"kind":"topic","id":N,"action":"trash"}
+//   reply  DIRECT SQL delete      ->  (none — the only genuinely hookless path)
+//
+// The bridge is BuddyBoss's own, not ours: bp-forums/core/actions.php registers
+//   add_action('deleted_post', 'bbp_deleted_reply');   (and _topic, and _forum)
+// and on WP 6.9.5 `deleted_post` fires at post.php:3936, one line BEFORE
+// clean_post_cache() at :3938 — so bbp_deleted_reply()'s bbp_is_reply() guard
+// still finds a warm post cache, passes, and re-emits the bbp_* action this
+// file already hooks. So path 5 is closed today.
+//
+// IT IS CLOSED BY AN ACCIDENT OF ORDERING, WHICH IS WHY THIS BACKSTOP EXISTS.
+// The whole chain rests on two lines of WordPress core staying in that order and
+// on the post cache being warm at that instant. Neither is a contract: reorder
+// those two lines upstream, or run with an external object cache that has
+// already evicted the row, and bbp_is_reply() returns false, the bbp_* action
+// never fires, and every WP-native delete goes silently missing again — which is
+// EXACTLY the failure that produced 13 ghost replies and 2 ghost topics on live.
+//
+// So: capture the post type in before_delete_post, while the row still exists
+// and the answer is knowable from the database rather than from a cache; then
+// enqueue on deleted_post, once the delete has actually happened. Hooking
+// deleted_post alone would not work — by then the type is exactly the thing you
+// cannot look up, which is the same cliff bbPress is standing on.
+//
+// Double-firing with the bbp_* path is EXPECTED and harmless: the outbox
+// collapses a repeat of the newest pending action for the same object, and a
+// mirror delete is idempotent (DELETE ... WHERE id = ? matches nothing the
+// second time). Cheap insurance against a silent, permanent, member-visible
+// divergence.
+// Stash the type while wp_posts still has the row.
+add_action('before_delete_post', function ($post_id, $post = null) {
+    $post_id = (int) $post_id;
+    if ($post_id <= 0) return;
+    $type = $post instanceof WP_Post ? $post->post_type : get_post_type($post_id);
+    if (in_array($type, ['forum', 'topic', 'reply'], true)) {
+        $GLOBALS['bb_mirror_native_delete_types'][$post_id] = $type;
+    }
+}, 1, 2);
+
+// Enqueue once the row is genuinely gone.
+add_action('deleted_post', function ($post_id, $post = null) {
+    $post_id = (int) $post_id;
+    if ($post_id <= 0) return;
+    $type = $GLOBALS['bb_mirror_native_delete_types'][$post_id]
+        ?? ($post instanceof WP_Post ? $post->post_type : null);
+    unset($GLOBALS['bb_mirror_native_delete_types'][$post_id]);
+    if (!in_array($type, ['forum', 'topic', 'reply'], true)) return;
+    bb_mirror_sync_record_and_dispatch($type, $post_id, 'delete');
+}, 99, 2);

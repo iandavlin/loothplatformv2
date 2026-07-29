@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the BB-mirror outbox worker every minute
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=1min
+AccuracySec=10s
+Unit=bb-mirror-outbox.service
+
+[Install]
+WantedBy=timers.target
