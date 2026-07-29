@@ -3,6 +3,18 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-29 — Group chat header: verbose member list + cramped text (Ian, screenshot)
+
+Seen on Partners Chat (8 people): the panel header lists every member's full
+display name inline — half the panel is names before the first message. Two
+asks: (1) past a few participants, collapse the name roll to a count ("Group -
+8 people") plus the MANAGE-MEMBERS button as the way to see/edit who's in the
+chat — no verbose list; (2) the chat must respect the member's text size and
+scale its container accordingly — at larger text it's awfully cramped (fixed
+container + growing text). Candidate owner: next messages-surface lane (the
+side-chat popout Ian references in that thread is already shipped; this is the
+group-header + type-scale layer).
+
 ## 2026-07-29 — Profile social links go stale on posts/events (member report: Massimiliano Monterosso, 7/1 email)
 
 Member removed the Linktree link from his profile, but it still shows on the
