@@ -66,41 +66,28 @@ Two more things to know before the first write:
 
 ---
 
-## 0b. One pair in the 29 needs a billing decision first — **jim bonnell**
+## 0b. Known billing condition on **jim bonnell** — merging anyway, per ruling
 
-Investigating the roster (which Ian asked for) turned this up after the rulings
-were made, so it is new information on a pair already cleared to merge.
+Ian ruled MERGE on 2026-07-29 and **jim bonnell is in the apply set**. This is
+recorded here because the roster check turned up a fact worth knowing, not to
+reopen the ruling.
 
-**Both sides are a live active patron, on two different plans:**
+**Both sides carry a live pledge:**
 
 | | account | patreon id | pledge | next charge |
 |---|---|---|---|---|
 | survivor | 1467 `jimbonnell@gmail.com` | 31057830 | **$11.00/mo** Looth-Pro | 2026-08-02 |
 | retire | 1470 `jbonnell@tampabay.rr.com` | 260787 | **$132.00/yr** Ding King Plus | 2026-11-02 |
 
-**Merging does not cancel a pledge.** Retiring 1470 leaves that annual charge
-running against an account that no longer resolves — he keeps paying $132/yr for
-an entitlement that has nowhere to land. That is the same situation you ruled
-*contact-first* for ira cox; this one was labelled only `BOTH-ACTIVE-PATRON`
-without the payment detail behind it.
+Merging does not cancel a Patreon pledge. After the merge the `$132/yr` charge
+on patreon `260787` keeps running, with its WP account retired. That is a
+Patreon-side matter to settle with the member — it does not change the merge and
+does not block it.
 
-**Recommendation: pull it from tonight and treat it like ira cox.** One edit:
+The dry-run prints this against the pair so it stays visible on the night.
 
-```bash
-python3 - <<'PY'
-import json; P='tools/dupe-merge/pairs.json'; ps=json.load(open(P))
-for p in ps:
-    if p['name']=='jim bonnell': p['action']='HOLD'; p['hold']=['CONTACT-MEMBER-FIRST-DOUBLE-PLEDGE']
-json.dump(ps,open(P,'w'),indent=1)
-PY
-sudo tools/dupe-merge/apply-auto.sh --dry-run    # now says 28 auto
-```
-
-If you would rather merge anyway, nothing is needed — it is already in the set,
-and the dry-run prints the warning against the pair so it cannot pass unseen.
-
-The other **28** pairs are clear: the retiring account has no live pledge in any
-of them. Verified against the roster, whose newest sync is hours old.
+**The other 28 pairs retire an account with no live pledge at all** — verified
+against the roster, whose newest sync is hours old.
 
 ---
 

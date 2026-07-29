@@ -504,7 +504,7 @@
   ],
   "action": "AUTO",
   "ruling": "Ian 2026-07-29: MERGE \u2014 as planned",
-  "billing_warning": "BOTH sides are a LIVE active patron. Survivor 1467 pays $11.00/mo Looth-Pro (next 2026-08-02). Twin 1470 pays $132.00/yr Ding King Plus (next 2026-11-02) on patreon 260787. MERGING DOES NOT CANCEL A PLEDGE: retiring 1470 leaves the annual charge running against an account that no longer resolves. Same situation Ian ruled contact-first for ira cox."
+  "billing_warning": "Both sides carry a live pledge: survivor 1467 $11.00/mo Looth-Pro (next 2026-08-02); twin 1470 $132.00/yr Ding King Plus (next 2026-11-02, patreon 260787). Merging does not cancel a Patreon pledge, so the annual charge on 260787 continues after 1470 is retired. Ian ruled MERGE 2026-07-29 with this pair in the apply set; the pledge is a separate matter to settle in Patreon, not a reason to change the merge."
  },
  {
   "name": "jim fenton",
@@ -1362,7 +1362,8 @@
   ],
   "notes": [],
   "action": "HOLD",
-  "ruling": "Ian 2026-07-29: LANE INVESTIGATES \u2014 POLLER-ID-CROSSED: untangle which Patreon identity is the live pledge (roster + payment history), then recommend with proof."
+  "ruling": "Ian 2026-07-29: LANE INVESTIGATES \u2014 POLLER-ID-CROSSED: untangle which Patreon identity is the live pledge (roster + payment history), then recommend with proof.",
+  "investigation": "Untangle complete 2026-07-29. The live pledge sits on the patreon id embedded in the SKELETON's username; the survivor's own username id has no roster row at all. The survivor's WP email equals the paying identity's email and the skeleton has no email. RETURNED TO IAN WITH EVIDENCE \u2014 not merged, no action taken."
  },
  {
   "name": "ira cox",
@@ -1458,7 +1459,8 @@
    "TWIN-MORE-RECENT"
   ],
   "action": "HOLD",
-  "ruling": "Ian 2026-07-29: LANE INVESTIGATES \u2014 POLLER-ID-CROSSED: untangle which Patreon identity is the live pledge (roster + payment history), then recommend with proof."
+  "ruling": "Ian 2026-07-29: LANE INVESTIGATES \u2014 POLLER-ID-CROSSED: untangle which Patreon identity is the live pledge (roster + payment history), then recommend with proof.",
+  "investigation": "Untangle complete 2026-07-29. The live pledge sits on the patreon id embedded in the SKELETON's username; the survivor's own username id has no roster row at all. The survivor's WP email equals the paying identity's email and the skeleton has no email. RETURNED TO IAN WITH EVIDENCE \u2014 not merged, no action taken."
  },
  {
   "name": "michael minton",
@@ -1552,7 +1554,8 @@
   ],
   "notes": [],
   "action": "HOLD",
-  "ruling": "Ian 2026-07-29: LANE INVESTIGATES \u2014 POLLER-ID-CROSSED: untangle which Patreon identity is the live pledge (roster + payment history), then recommend with proof."
+  "ruling": "Ian 2026-07-29: LANE INVESTIGATES \u2014 POLLER-ID-CROSSED: untangle which Patreon identity is the live pledge (roster + payment history), then recommend with proof.",
+  "investigation": "Untangle complete 2026-07-29. The live pledge sits on the patreon id embedded in the SKELETON's username; the survivor's own username id has no roster row at all. The survivor's WP email equals the paying identity's email and the skeleton has no email. RETURNED TO IAN WITH EVIDENCE \u2014 not merged, no action taken."
  },
  {
   "name": "andrew mcneill",
