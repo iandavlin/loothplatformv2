@@ -4475,6 +4475,36 @@
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
   }
+  /* Did this composer actually OFFER the forum picker / the tags field?
+     These two predicates decide whether the save sends `forum_id` and `topic_tags`
+     at all, and the server reads an ABSENT key as "leave this alone". So they are
+     the client half of a destructive contract:
+       - claim tags were offered when they were not  -> sends topic_tags: []
+                                                     -> WIPES the post's tags
+         (327 of dev2's 1311 topics carry tags)
+       - claim the forum was offered when it was not -> sends a forum_id
+                                                     -> RELOCATES the post
+     Both failures are silent and look like a normal successful save, which is why
+     they are lifted out of lcpSubmit into named, tested functions rather than left
+     as inline booleans. Gate: tools/gates/composer-topic-meta-test.js. */
+  function lgcTopicForumOffered(sh) {
+    var el = sh.querySelector('#lgc-forum');
+    var row = el && el.parentNode;
+    return !!(el && row && !row.hidden && el.value);
+  }
+  function lgcTopicTagsOffered(sh) {
+    var meta = sh.querySelector('#lgc-meta');
+    return !!(meta && !meta.hidden);
+  }
+  // The exact body of the topic-edit PUT. Keys are OMITTED, never nulled.
+  function lgcTopicEditPayload(sh, topicId, title, html) {
+    var p = { topic_id: topicId, title: title, content: html };
+    if (lgcTopicForumOffered(sh)) {
+      p.forum_id = parseInt(sh.querySelector('#lgc-forum').value, 10);
+    }
+    if (lgcTopicTagsOffered(sh)) p.topic_tags = lgcTagList(sh);
+    return p;
+  }
   function lgcSetErr(sh, msg) {
     var tools = sh.querySelector('#lgc-tools'); if (!tools) return;
     var el = tools.querySelector('.lgc-err');
@@ -5476,20 +5506,12 @@
       if (ctx.editLoading) { status.textContent = 'Still loading this post…'; return; }
       if (!html)   { status.textContent = "Post can't be empty."; return; }
       if (!tTitle) { status.textContent = 'Title is required.'; if (titleElS) titleElS.focus(); return; }
-      // Forum + tags — the two controls edit gained on 2026-07-29. Both are sent
-      // ONLY when the composer actually offered them, because the server reads an
-      // absent key as "leave this alone": a save from a page with no picker must
-      // not relocate the post, and must not clear tags it never showed.
       var forumElS = sh.querySelector('#lgc-forum');
-      var forumRowS = forumElS && forumElS.parentNode;
-      var offeredForum = !!(forumElS && forumRowS && !forumRowS.hidden && forumElS.value);
-      if (offeredForum && !parseInt(forumElS.value, 10)) {
+      if (lgcTopicForumOffered(sh) && !parseInt(forumElS.value, 10)) {
         status.textContent = 'Please choose a forum.';
         forumElS.classList.add('lgc-forum--err'); forumElS.focus();
         return;
       }
-      var metaElS = sh.querySelector('#lgc-meta');
-      var offeredTags = !!(metaElS && !metaElS.hidden);
       lgcSubmitting = true; post.disabled = true; status.textContent = 'Saving…';
       lrsGetAuth(function (a) {
         if (!a || !a.authenticated) { status.textContent = 'Sign in to edit.'; post.disabled = false; lgcSubmitting = false; return; }
@@ -5497,9 +5519,7 @@
         var added = lcpMediaIds.slice();
         var keep  = (ctx.keepMedia || []).slice();
         var syncPhotos = ctx.topicHadMedia || added.length > 0;
-        var payloadT = { topic_id: teid, title: tTitle, content: html };
-        if (offeredForum) payloadT.forum_id = parseInt(forumElS.value, 10);
-        if (offeredTags)  payloadT.topic_tags = lgcTagList(sh);
+        var payloadT = lgcTopicEditPayload(sh, teid, tTitle, html);
         fetch('/bb-mirror-api/v0/reply', {
           method: 'PUT', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },

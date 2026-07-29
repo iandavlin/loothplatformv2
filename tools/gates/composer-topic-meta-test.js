@@ -54,6 +54,7 @@ class El {
   get className() { return [...this._classes].join(' '); }
   setAttribute(k, v) { this._attrs[k] = String(v); if (k === 'class') this.className = v; }
   getAttribute(k) { return k === 'class' ? this.className : (k in this._attrs ? this._attrs[k] : null); }
+  removeAttribute(k) { delete this._attrs[k]; }
   addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); }
   dispatch(type) { (this._listeners[type] || []).forEach((fn) => fn.call(this, { type })); }
   get firstChild() { return this.children[0] || null; }
@@ -176,6 +177,7 @@ function extract(src, names) {
 const NAMES = [
   'lgcForumOptionSource', 'lgcFillForumSelect', 'lgcBuildQuickTags',
   'lgcTagList', 'lgcSetTagList', 'lgcToggleTag', 'lgcSyncQuickTags',
+  'lgcTopicForumOffered', 'lgcTopicTagsOffered', 'lgcTopicEditPayload',
 ];
 
 function loadUnderTest(forumList, quicktagsEl) {
@@ -332,6 +334,108 @@ console.log(`composer-topic-meta-test — fixture: ${leaves.length} forums, ${ca
   ok(council.classList.contains('is-on'), 'pill matching is case-insensitive');
   F.lgcToggleTag(sh, 'councilyes');
   ok(JSON.stringify(F.lgcTagList(sh)) === '[]', 'toggling off removes a differently-cased tag');
+}
+
+/* 8. THE DESTRUCTIVE CONTRACT. The server reads an ABSENT key as "leave this
+      alone", so what the payload OMITS matters more than what it sets:
+        topic_tags: [] sent when tags were never shown -> wipes the post's tags
+        forum_id sent when no picker was shown         -> relocates the post
+      Both look like an ordinary successful save. These assert on key PRESENCE,
+      not just values, because `undefined` and "absent" are the same in JS but
+      very different once JSON.stringify drops the key. */
+{
+  // a composer that offered both controls
+  const sh = buildSheet();
+  F.lgcFillForumSelect(sh, 3823);
+  F.lgcSetTagList(sh, ['vintage', 'martin']);
+  ok(F.lgcTopicForumOffered(sh) === true, 'forum counts as offered when shown and set');
+  ok(F.lgcTopicTagsOffered(sh) === true, 'tags count as offered when the meta row is visible');
+  let p = F.lgcTopicEditPayload(sh, 72306, 'T', '<p>b</p>');
+  ok('forum_id' in p && p.forum_id === 3823, 'forum_id sent when offered');
+  ok('topic_tags' in p && JSON.stringify(p.topic_tags) === '["vintage","martin"]',
+     'topic_tags sent when offered');
+  ok(p.topic_id === 72306 && p.title === 'T' && p.content === '<p>b</p>', 'core fields intact');
+
+  // deliberately cleared tags — PRESENT and empty is a real instruction
+  F.lgcSetTagList(sh, []);
+  p = F.lgcTopicEditPayload(sh, 72306, 'T', '<p>b</p>');
+  ok('topic_tags' in p && p.topic_tags.length === 0,
+     'cleared tags send an EMPTY ARRAY, not an omitted key');
+
+  // the meta row hidden = this composer never showed tags (a reply-mode open, or a
+  // page with no picker). Sending topic_tags here would wipe them.
+  const hidden = buildSheet();
+  hidden.querySelector('#lgc-meta').hidden = true;
+  ok(F.lgcTopicTagsOffered(hidden) === false, 'hidden meta row = tags not offered');
+  p = F.lgcTopicEditPayload(hidden, 72306, 'T', '<p>b</p>');
+  ok(!('topic_tags' in p), 'topic_tags OMITTED when never offered — tags survive');
+  ok(!('forum_id' in p), 'forum_id OMITTED when never offered — post is not relocated');
+
+  // picker row hidden because the page carried no #ntm-forum to clone
+  const noPicker = buildSheet();
+  const G = loadUnderTest(null, null);
+  ok(G.lgcFillForumSelect(noPicker, 0) === false, 'no picker to clone');
+  noPicker.querySelector('#lgc-forum').parentNode.hidden = true;
+  ok(G.lgcTopicForumOffered(noPicker) === false, 'hidden forum row = not offered');
+  p = G.lgcTopicEditPayload(noPicker, 72306, 'T', '<p>b</p>');
+  ok(!('forum_id' in p), 'a page without the picker cannot relocate the post');
+  ok(JSON.parse(JSON.stringify(p)).forum_id === undefined,
+     'and the key really is gone after JSON round trip');
+}
+
+/* 9. SAVE-ARMING — the most destructive single line in the feature.
+      The composer opens EMPTY and fills in from a server fetch. If Save is armed
+      before the payload lands, one tap writes that emptiness over a real post. So
+      `editLoading` must dominate: no combination of other inputs may arm Save while
+      the stored body is still in flight.
+      lgcRecalcPost is extracted with its collaborators stubbed, so this tests the
+      REAL arming logic rather than a restatement of it. */
+{
+  const src = fs.readFileSync(SRC, 'utf8');
+  const body = extract(src, ['lgcRecalcPost']);
+  const mk = (opts) => {
+    const sh = buildSheet();
+    const post = new El('button'); post.setAttribute('id', 'lgc-post'); post.disabled = false;
+    const title = new El('input'); title.setAttribute('id', 'lgc-title');
+    title.value = opts.title === undefined ? 'A title' : opts.title;
+    sh.appendChild(post); sh.appendChild(title);
+    if (opts.forum !== undefined) {
+      F.lgcFillForumSelect(sh, opts.forum || 3823);
+      if (opts.forum === 0) sh.querySelector('#lgc-forum').value = '';
+    } else {
+      sh.querySelector('#lgc-forum').parentNode.hidden = true;
+    }
+    sh.__lcpCtx = { editTopicId: 72306, editLoading: !!opts.loading, keepMedia: [] };
+    // eslint-disable-next-line no-new-func
+    const fn = new Function('lgcSyncPhotoCount', 'lgcHasContent', 'lcpUploading', 'El',
+                            `${body}\n return lgcRecalcPost;`)(
+      () => {}, () => opts.content !== false, opts.uploading ? 1 : 0, El);
+    fn(sh);
+    return post.disabled;
+  };
+
+  ok(mk({ loading: false, content: true, forum: 3823 }) === false,
+     'Save ARMS once the payload landed and everything is filled');
+  ok(mk({ loading: true, content: true, forum: 3823 }) === true,
+     'Save is INERT while the stored body is still loading');
+  // NOT a domination test — with an empty body and title Save is inert anyway, so
+  // this would pass with the editLoading guard deleted. The domination case is the
+  // assertion above it (loading + everything else valid). Kept as a plain
+  // nothing-is-ready check, named for what it actually proves.
+  ok(mk({ loading: true, content: false, title: '', forum: 0 }) === true,
+     'nothing ready at all is inert');
+  ok(mk({ loading: false, content: false, forum: 3823 }) === true,
+     'Save is inert with an empty body');
+  ok(mk({ loading: false, content: true, title: '', forum: 3823 }) === true,
+     'Save is inert with an empty title (the server requires one)');
+  ok(mk({ loading: false, content: true, title: '   ', forum: 3823 }) === true,
+     'a whitespace-only title does not count');
+  ok(mk({ loading: false, content: true, forum: 0 }) === true,
+     'Save is inert when the picker is shown but nothing is chosen');
+  ok(mk({ loading: false, content: true }) === false,
+     'but a page with NO picker still lets the member edit their text');
+  ok(mk({ loading: false, content: true, forum: 3823, uploading: true }) === true,
+     'Save is inert while a photo is still uploading');
 }
 
 console.log(`\ncomposer-topic-meta-test: pass=${pass} fail=${fail}`);
