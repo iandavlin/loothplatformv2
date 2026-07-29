@@ -433,3 +433,83 @@ directions to reconstruct live's gap.
 
 Then `7-DRYRUN` was executed against **live** read-only: `UUID MATCH true`, `WILL INSERT 83`,
 `already present 0`, `0` badges / `0` bells / `0` emails.
+
+# The IAN-ONLY canary (16/17/18) — the 23, measured 2026-07-29
+
+Ian's ruling: fix his own stuck-as-requested rows first, look at his profile, then let the other
+58 across 75 members follow. His 23 are a **strict subset** of the 81 in files 10/11/12.
+
+| | |
+| --- | --- |
+| rows | **23**, all `pending`, all with **Ian as the requester** |
+| when created | **all 23 on 2026-07-27** — a single day |
+| notifies | **nobody.** 0 badges created; 23 stale requests removed |
+| Ian moves | 1334 → **1357** accepted, 427 → **404** pending OUT, pending IN stays **0** |
+| tag table | `connections_restatus_20260729_ian_only`, records `prior_status` |
+
+## The four questions, answered for THIS set
+
+**1. Directional shapes.** `UNIQUE (requester_uuid, addressee_uuid)` is directional, so the split
+matters:
+
+```
+(a) same direction as legacy, wrong status   22   clean single-row UPDATE
+(b) OPPOSITE direction to legacy              1   ALSO a clean single-row UPDATE - see below
+(c) both directions present                   5   EXCLUDED from this set entirely
+```
+
+**(b) needs no ruling, and here is why rather than just the claim.** That row is the *only* row
+for its pair — a pair with rows in both directions classifies as (c) and is excluded — so there is
+no duplicate to resolve and nothing to delete. Direction is also semantically irrelevant once a
+connection is accepted: `Connections.php:211` reads
+`status='accepted' AND :u IN (c.requester_uuid, c.addressee_uuid)`, which is direction-blind. So
+(b) collapses into the same trivial UPDATE as (a).
+
+**(c) is flagged for Ian, not resolved in SQL.** All 5 of his are already correct as relationships
+— 4 are accepted/accepted, 1 is accepted/pending — so none needs this fix. But two of them are
+**visible to him**, and he is about to inspect his own profile, so both are called out in
+`IAN-RUN-ORDER.md` before he judges the canary:
+
+- the accepted/pending pair (conn 13753 + conn 20594) will **still show as requested** afterwards;
+- the 4 accepted/accepted pairs render **twice** in his list, inflating his count by 4, because
+  the list query has no `DISTINCT`.
+
+Neither is caused or fixed by this work. Deleting a live duplicate row is a separate conversation.
+
+**2. Rollback restores the prior status.** File 18 replays the recorded `prior_status` rather than
+assuming `pending`, and only touches rows still sitting at `accepted`. **Stated before he runs:
+`updated_at` cannot be restored** — `connections_touch` stamps `now()` on every UPDATE. Status
+round-trips exactly; the rehearsal confirms the status hash returns to baseline.
+
+**3. Notification: zero, and it only removes.** No pending row is created, so no badge appears. The
+friends badge counts `status='pending'` only, so 23 inboxes go **down**. Bells are rows in
+`notifications` written solely by `Notifications::push()` in PHP — SQL mints none. No per-event
+email exists. Ian sent all 23 himself.
+
+**4. Is this still happening? No — one day, one person.** All 23 rows were created on
+**2026-07-27**, by Ian, in one sitting. Not spread over months, so nothing is producing them
+continuously and a data fix is the right answer. (Across the full 81 the same holds: four batches
+in July by five members.)
+
+## Rehearsal — `rehearse-16-17-18.sh`, 32/32 PASS
+
+Throwaway replica loaded with live's own rows, dropped after.
+
+| Step | Result |
+| --- | --- |
+| 16-DRYRUN | 23 will flip, 0 gone, every pair Ian's; table hash **unchanged** |
+| 17-APPLY | flipped + tagged **23**, all `prior_status='pending'`; Ian 1334→**1357**, 427→**404**, IN unchanged |
+| 17-APPLY again | **0** more |
+| 16-DRYRUN as verify | `WILL FLIP` **0**, `already accepted` **23** |
+| **11-APPLY after the canary** | flips **exactly 58 more**; tag tables **share 0 rows** |
+| 12-ROLLBACK | the 58 revert, **canary untouched at 23** |
+| 18-ROLLBACK | status back to `pending`; hash **byte-identical to baseline** |
+| Guards | truncated / non-Ian pair / wrong database all abort, table unchanged |
+
+**The fifth row is the one that matters for a canary**: running Ian's 23 first does not break the
+81-row set that follows it. Afterwards `10-DRYRUN` reads `81 pairs / 58 will flip / 23 already
+accepted` — 58 + 23 = 81. That is the guards working, not drift, and it is documented in the run
+order so it cannot read as a fault.
+
+**16-DRYRUN executed against LIVE 2026-07-29:** 23 found, 23 will flip, 0 already accepted, 0 gone
+since measurement, 0 badges / 0 bells / 0 emails, Ian 1334 → 1357 and 427 → 404.
