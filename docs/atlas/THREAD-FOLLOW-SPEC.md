@@ -69,7 +69,23 @@ replies to their own topic without toggling anything.
 8. **Parity** — every surface works desktop and mobile, both themes, one implementation.
 9. **Account-level email prefs coexist by a strict master/member rule** (§6) — no state where the
    account page says off and mail still arrives.
-10. **RULED, Ian 2026-07-28 — HONOUR EXISTING SUBSCRIPTIONS, SHOW THEM AS ON.** The 1,519 topic +
+10bis. **⚠️ SUPERSEDED — RULED AGAIN, Ian 2026-07-29 (via keeper). READ THIS BEFORE RULING 10.**
+    Three rulings, and the first REVERSES ruling 10 below:
+    1. **§9.2 IS DECIDED: DEFAULT-OFF APPLIES TO THE 1,519. NO GRANDFATHERING.** At cutover, legacy
+       discussion emailing **stops**, and members opt in fresh through the toggles. Option B
+       (grandfather + surface) is **dead**; ruling 10's "honour existing, show them as ON" no longer
+       governs the ✉ bit.
+    2. **THE ENVELOPE EMAILS SHIP THROUGH OUR OWN SEND MECHANISM.** At cutover we **replace** the
+       BuddyBoss/bbPress notify path — **not wrap it**.
+    3. Ian disputed the send figures; the delivery evidence is **§8.1.7**. Result: the mail is real
+       and he is himself a recipient, but the reply path is **6 sends / 6 people / 21 days**.
+    **What this changes in the build (§5b):** because our own sender reads **our own store**, the
+    native BB subscription stops being consulted the moment the BB path is replaced — so "no
+    grandfathering" is achieved **without deleting anyone's data**, which is the outcome Ian rejected
+    as "a second unasked change" when the question was framed the other way round. The 1,519 rows
+    simply become vestigial. **This is a proposal derived from rulings 1+2, not a fourth ruling.**
+10. **RULED, Ian 2026-07-28 — HONOUR EXISTING SUBSCRIPTIONS, SHOW THEM AS ON** *(⚠️ SUPERSEDED for the
+    ✉ bit by 10bis above; retained as the record of what was decided and why).* The 1,519 topic +
     46 forum subscriptions are **not wiped and not hidden**. Anyone already carrying one sees the
     envelope **already lit** and can now turn it off. Nothing changes for them silently.
     **Read the ruling precisely:** "both default OFF" (ruling 1) means off for anyone with **no
@@ -755,6 +771,56 @@ to `ubuntu`, so "same build on dev2" is **not proven** and must be confirmed bef
 
 ---
 
+## 8.1.7 DELIVERY PROOF — Ian disputed the send figures, so here is the evidence chain
+
+> **Ian, 2026-07-28 (via keeper): "I don't think anyone has been getting those emails, might be in a
+> buddyboss setting."** He was right to push: my earlier figure came from `wp_fsmpt_email_logs`, which
+> logs send **attempts**, and I had not checked the `status` column. On this box "wp_mail returned
+> true" is a known false positive, so the challenge was fair. Re-measured on LIVE 2026-07-29.
+
+**The finding: the emails are real, they left the box, and Ian is himself a recipient.** But his
+instinct about the *scale* was sound — the reply path is tiny.
+
+**The chain, each link measured rather than assumed:**
+
+| # | Link | Evidence |
+|---|---|---|
+| 1 | The path is **enabled** | `bb_is_enabled_subscription('topic')` → `bbp_is_subscriptions_active()` → option **`_bbp_enable_subscriptions = 1`**. *That is the BuddyBoss setting in question, and it is ON.* |
+| 2 | The sender **runs** | `bbp_notify_topic_subscribers` hooked to `bbp_new_reply` @9999 (bp-forums/core/actions.php:220) |
+| 3 | Recipients **hold subscriptions** | all 6 recipients hold live `type=topic` rows (11, 25, 335, 5, 8, 14) |
+| 4 | The per-user gate **allows** | 5 unset (default `yes`), 1 explicit `yes` |
+| 5 | FluentSMTP **accepted** | `status='sent'` for **45/45** discussion emails and 4,679/4,679 overall in 14 days |
+| 6 | **AWS SES accepted** | every row carries a real SES **`MessageId`** + **`RequestId`** (e.g. `0100019fa9201a22-e22625e2-…`). This is the link that answers the challenge: it is an AWS acknowledgement, not a `wp_mail` return value |
+
+**Reply-path emails, 21 days to 2026-07-29 — the complete list, not a sample:**
+
+| when (UTC) | recipient | subject |
+|---|---|---|
+| 2026-07-28 10:28 | **ian.davlin@gmail.com** | James Huntley replied to one of your forum discussions |
+| 2026-07-28 10:28 | flacrosse82@gmail.com | (same reply) |
+| 2026-07-28 08:49 | wgbluetone1@gmail.com | Rick Liftig … replied to one of your forum discussions |
+| 2026-07-28 08:49 | james.huntley27@gmail.com | (same reply) |
+| 2026-07-28 08:49 | michael@bashkinguitars.com | (same reply) |
+| 2026-07-21 07:44 | zwitchguitars@gmail.com | Anthony Kreher … replied to one of your forum discussions |
+
+**So: 6 sends / 6 people / 21 days on the reply path.** Both halves of Ian's position are addressed —
+*"nobody is getting them"* is not correct (he received one himself on 2026-07-28), but *"this is not
+a large problem"* is: six emails in three weeks.
+
+**⚠️ THE ONE BOUNDARY I CANNOT CROSS FROM THIS BOX, stated rather than glossed:** an SES `MessageId`
+proves AWS **accepted** the message for delivery. It does **not** prove inbox placement — a later
+bounce, or Gmail filing it under Promotions/Spam, is invisible here because the bounce/complaint
+feedback lives in AWS (SNS/CloudWatch), not on the box. **The decisive check is Ian's own inbox:**
+search for *"replied to one of your forum discussions"* — he has one dated **2026-07-28 10:28 UTC
+(03:28 PDT)** from James Huntley. If it is not there, the message was accepted by SES and dropped
+downstream, which is a different and more interesting finding.
+
+**Consequence for the cutover (§9.2): small either way.** Whether or not those six landed, the
+population that would notice a cutover is **6 people over 3 weeks**, not 383. The 29 "New discussion"
+emails in the same window are the **forum**-subscription path (§8.1.1), which is a separate switch.
+
+---
+
 ## 8.2 THE 12,948 GROUP SUBSCRIPTIONS — a separate question, NOT covered by the 2026-07-28 ruling
 
 > Measured on **LIVE** 2026-07-28. Ruling 10 was made about the 1,519 topic + 46 forum
@@ -914,7 +980,38 @@ contradiction — but that is an inference from Ian's design, not his decision, 
 Note the original danger is already gone either way: the blanket-off was a precondition of
 *auto-subscribe multiplying fan-out*, which opt-in makes impossible.
 
-### 9.2 The 1,519 existing subscriptions — ✅ RULED 2026-07-28: OPTION B
+### 9.2 The 1,519 existing subscriptions — ✅ RE-RULED 2026-07-29: **NO GRANDFATHERING, CUTOVER**
+
+> **THIS IS THE CURRENT RULING AND IT REVERSES THE ONE BELOW.** Ian, 2026-07-29 via keeper:
+> **default-OFF applies to the 1,519.** At cutover, legacy discussion emailing **stops**; members opt
+> in fresh through the toggles. And the envelope emails ship through **our own send mechanism** —
+> we **replace** the BuddyBoss/bbPress notify path, we do not wrap it.
+>
+> **Why this is now cheap, measured rather than argued (§8.1.7):** the reply path sent **6 emails to
+> 6 people in 21 days**. That is the entire population a cutover interrupts. Not 383, not 1,519.
+>
+> **The cutover, in the order it must happen:**
+> 1. **Ship our own sender** reading **our own store** (§5b) — nothing else changes yet.
+> 2. **Disable the BB reply path.** The clean switch is the one §8.1.7 identified as governing it:
+>    `_bbp_enable_subscriptions`. ⚠️ **But that option ALSO governs the 46 forum subscriptions**
+>    (`bb_is_enabled_subscription()` switches `'topic'` and `'forum'` through the *same*
+>    `bbp_is_subscriptions_active()` branch) — so flipping it kills the "New discussion" email too,
+>    which is **29 of the 33 sends** and the one Ian called *legitimate and wanted* on 7/26.
+>    **Therefore: do NOT flip the option.** Unhook the reply path specifically —
+>    `remove_action('bbp_new_reply','bbp_notify_topic_subscribers',9999)` — which is surgical,
+>    reversible, and leaves the forum path untouched. Recorded here because the obvious lever is
+>    the wrong one, and it would be found the hard way.
+> 3. **The 1,519 rows are then vestigial** — not deleted, just never read. No live data mutation, so
+>    nothing is destroyed and the decision stays reversible.
+>
+> **Still Ian's to confirm:** whether the ✉ bit's STORE moves to ours (§5b) or stays the native table
+> with our sender reading it. Only the first delivers "default OFF for everyone" without a live write.
+> **Neither is built yet.** §9.1 also collapses into this: our own sender means the per-event posture
+> is ours to choose, not BuddyBoss's.
+
+<details><summary>SUPERSEDED — the 2026-07-28 ruling (option B), kept as the record</summary>
+
+### 9.2-old The 1,519 existing subscriptions — RULED 2026-07-28: OPTION B *(superseded)*
 
 > **IAN RULED (keeper-relayed, 2026-07-28): HONOUR EXISTING SUBSCRIPTIONS — SHOW THEM AS ON.**
 > This is **option B** below, adopted as written. Anyone already carrying a topic/forum subscription
@@ -975,7 +1072,10 @@ touching them weakens.
 this spec has never addressed. Group-linked forums route discussion mail through the GROUP branch
 (template 64927) — a live email path with 36× the forum reach. Out of scope and deliberately not
 proposed against, but no §9.1/§9.2 decision should be described as "covering the subscriptions"
-while it sits untouched.
+while it sits untouched. *(Since resolved: Ian ruled on the group populations 2026-07-28 — §8.2.4 —
+and the path is now gated in code by `lg-discussion-group-gate.php`.)*
+
+</details>
 
 ### 9.3 Smaller open questions
 
