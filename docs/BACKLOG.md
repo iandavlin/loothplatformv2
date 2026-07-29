@@ -3,6 +3,19 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-29 — Profile social links go stale on posts/events (member report: Massimiliano Monterosso, 7/1 email)
+
+Member removed the Linktree link from his profile, but it still shows on the
+EVENTS he posted; and the FB link on his video POST differs from his current
+profile. Shape of the defect: post/event surfaces carry a SNAPSHOT of the
+author's social links taken at creation instead of reading current profile
+truth at render — same drift class the mirror work fixed elsewhere. Fix
+direction: bylines/social rows on posts + events render live from the profile
+store (or re-sync on profile change via the new profile_update pipeline).
+Audit which surfaces snapshot links (video posts, events, others?) and whether
+a backfill is needed for existing content. Member-visible, member-reported —
+prioritize into the next content-surface seat.
+
 ## 2026-07-29 — Stripe membership: back on the roadmap — AUDIT FIRST, then build (Ian)
 
 Ian: "It's time to start building that out. We probably need to audit the whole
