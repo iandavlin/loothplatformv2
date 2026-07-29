@@ -90,3 +90,30 @@ whether you are relying on luck.
   close to its limit with several lanes up.
 - Writes go to the **real** dev2 databases. Use `claude_admin` (1912), not a real member, and clean
   up anything synthetic.
+
+## ⚠️ TWO THINGS THAT WILL FOOL YOU (both cost this lane real time)
+
+**1. The overlay layer comes from nginx, not the app.** `dev2.loothgroup.com.conf:47` has a
+server-level `sub_filter '</head>' …` injecting the theme-boot script and
+`<script src="/pwa.js">`; `pwa.js` then injects **13** root overlays at runtime
+(`app-settings.js`, `hub-polish.js`, `bottom-nav.js`, …). A `php -S` harness bypasses nginx
+and therefore **loses all of it** — and the page still renders and looks correct, so nothing
+tells you. `hub-router.php` reproduces the injection; keep it that way.
+
+Corollary: **never conclude "overlay X isn't on this page" by grepping the served HTML.**
+The filename is never in the markup. Check at runtime in the browser instead.
+
+**2. Never clean subscription test data with raw SQL.** The ✉ bit has TWO backing stores —
+the `wp_bb_notifications_subscriptions` table (written) and the legacy user-meta
+`wp__bbp_subscriptions` (READ, by `bbp_is_user_subscribed()`). `bbp_remove_user_subscription`
+clears both **only while they agree**; with the table row already gone it is a no-op and the
+meta keeps the topic forever, so the account reads as subscribed and cannot be unsubscribed
+through the API. Always clean via:
+
+```bash
+sudo -u looth-dev php -r '$_SERVER["HTTP_HOST"]="dev2.loothgroup.com";
+  require "/var/www/dev/wp-load.php"; bbp_remove_user_subscription(<uid>,<topic>);'
+```
+
+If you have already desynced one, delete the meta key explicitly:
+`wp user meta delete <uid> wp__bbp_subscriptions`. See THREAD-FOLLOW-SPEC §13.5.
