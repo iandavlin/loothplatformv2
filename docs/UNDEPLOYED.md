@@ -6,8 +6,7 @@ whenever this file is non-empty — see it, clear it, feel good. Newest on top.
 
 ## Waiting on Ian's `lg-deploy` (one pull clears the section)
 
-- (section clear — Ian should run one `lg-deploy` to print state: it will either
-  say already-up-to-date or land safe doc/tooling riders.)
+- (section clear)
 
 ## Staged scripts awaiting Ian's hands (not pull-shaped)
 
@@ -25,6 +24,9 @@ whenever this file is non-empty — see it, clear it, feel good. Newest on top.
   the working lanes don't have in-flight verification against the serve.
 
 ## Cleared
+
+- 2026-07-29 late: **chip accordions + connection-remove confirm DEPLOYED to
+  live** — Ian ran the pull and verified both working. Live current with main.
 
 - 2026-07-29 22:33: **Minton merged + verified on live** — 30/30 ruled pairs now
   applied; twin drained, survivor holds both halves, duplicate signature 0.
