@@ -1,9 +1,21 @@
-# Apply runbook — the 26 auto-mergeable pairs
+# Apply runbook — the 29 pairs cleared to merge
 
-For Ian, on live. Covers **only the 26 auto pairs**. The 12 holds are ruled on
-separately and every command here excludes them by construction.
+For Ian, on live. Covers **only the 29 pairs cleared for merge**. The other 9
+are excluded by construction — no flag in this runbook can reach them.
 
-Branch `dupe-merge`, SHA `3644369` or later.
+Ian ruled the 12 holds on 2026-07-29. That split them three ways:
+
+| | | |
+|---|---|---|
+| **29 merge** | the original 26 auto + **jim bonnell**, **david trustman/donnercruz**, **john sarlo** | this runbook |
+| **5 hold** | ira cox (contact member first); michael minton, derek taylor, kurt smith, vincent jaeger (lane investigating) | not here |
+| **4 excluded** | andrew mcneill, don goulart, patrick morrissey, charles fox — *no action, ever* | refused outright |
+
+`EXCLUDED` has **no override**. `--force-hold` and `--force-preflight` will not
+apply one; only editing `pairs.json` can, which takes a human decision. Each
+pair carries Ian's ruling as text and the dry-run prints it.
+
+Branch `dupe-merge`, SHA `HEADSHA` or later.
 
 ---
 
@@ -14,7 +26,7 @@ Branch `dupe-merge`, SHA `3644369` or later.
 The merge parks the retired account's address as `merged-<id>@retired.invalid`
 so WP's unique-email index frees it. Until the redirect is deployed, a member
 who types their old address gets "unknown email" — which reads as *my account is
-gone*. Twelve of the 26 survivors are flagged `TWIN-MORE-RECENT`, meaning the
+gone*. Several of the 29 survivors are flagged `TWIN-MORE-RECENT`, meaning the
 twin is the account that member has been using, so this is not a corner case.
 
 It changes a login path, so it needs `tools/gates/run-all.sh` green and your
@@ -73,18 +85,17 @@ Expected shape (dev2 rehearsal figures; live will differ slightly because the
 snapshots differ, and that is fine):
 
 ```
-26 pair(s): 26 auto, 0 held
-would move: 14 forum/other posts, 760 other wp rows, 19 profile_app rows,
-            8 mirror rows, 40 connections
-would drop 89 duplicate connection(s). NOTHING WAS WRITTEN.
+29 pair(s): 29 auto, 0 held
+would move: 96 forum/other posts, 1069 other wp rows, 19 profile_app rows,
+            36 mirror rows, 40 connections
+would drop 92 duplicate connection(s). NOTHING WAS WRITTEN.
 ```
 
-**Sanity check before proceeding:** it must say `26 auto, 0 held`. If any number
-of held pairs appears, stop — the selection is wrong.
+**Sanity check before proceeding:** it must say `29 auto, 0 held`. If a held
+count appears, stop — the selection is wrong.
 
-Note the auto batch moves only **14 posts**. The content-heavy merges (David
-Trustman 81, Michael Minton 27) are all in the held set, which is why this batch
-is the low-risk half.
+The jump from 14 posts to 96 is David Trustman's 81-post reattach, which Ian
+cleared. Michael Minton's 27 are *not* in here — that pair is still held.
 
 To see the whole 38-pair picture instead: `sudo tools/dupe-merge/run-as-root.sh --dry-run`
 
@@ -94,7 +105,7 @@ To see the whole 38-pair picture instead: `sudo tools/dupe-merge/run-as-root.sh 
 sudo tools/dupe-merge/apply-auto.sh
 ```
 
-It walks the 26 pairs one at a time and for each one:
+It walks the 29 pairs one at a time and for each one:
 
 1. re-derives the survivor rule **from the live database** and refuses if it has
    drifted or if the Patreon linkage is crossed,
@@ -141,7 +152,7 @@ sudo tools/dupe-merge/run-as-root.sh --verify --pair="jake tuel"
 `VERIFY OK` means: the twin owns no rows in any remapped table, the survivor's
 email is the winning Patreon email, and the twin is archived in `profile_app`.
 
-Whole-batch state check — after applying all 26 you should see 26 everywhere:
+Whole-batch state check — after applying all 29 you should see 29 everywhere:
 
 ```bash
 mysql looth_import -e "SELECT COUNT(*) FROM wp_users WHERE user_email LIKE 'merged-%@retired.invalid';"
@@ -179,7 +190,8 @@ Afterwards all three counts in §5 should be back to `0`.
 
 | symptom | what it means | do this |
 |---|---|---|
-| `REFUSING … is HELD` | you named a held pair | leave it; holds are ruled separately |
+| `REFUSING … is EXCLUDED` | Ian ruled that pair off the list entirely | leave it; no flag overrides this |
+| `REFUSING … is HELD` | you named a held pair | leave it; those are still open |
 | `REFUSING … failed preflight` | the survivor's email drifted, or the Patreon linkage is crossed | **stop.** Re-run the dry-run; the plan no longer matches the database |
 | `REFUSING … Patreon linkage could not be checked` | `lg_membership` unreachable | do not waive on live — it is reachable there; investigate |
 | `expected to rewrite 1 row … matched none` | a row vanished since the plan was built | the batch already stopped; roll back and re-run the dry-run |
@@ -194,12 +206,30 @@ On dev2, against a copy of live:
 
 - all **38** pairs individually: merge → verify → rollback → **byte-identical**
   restore (fingerprint of every affected row, not row counts),
-- all **26** auto pairs as one batch through these exact scripts: applied,
-  verified 26/26, rolled back 26/26, box returned to baseline and the dry-run
-  totals reproduced identically.
+- the **29** cleared pairs as one batch through these exact scripts: applied and
+  verified 29/29, rolled back 29/29, box returned to baseline,
+- during that batch the four excluded twins (338, 799, 814, 1129) were confirmed
+  **untouched**.
 
 ## 9. After the merge lands
 
 The poller still holds `lg_patreon_members` rows for the retired twins. Until
 the `poller-patreon-id` lane ships, a later sync could act on a retired account.
 Each row is recorded in the journal; this tool does not modify it.
+
+## 10. The 9 pairs NOT in this batch
+
+Held — still open:
+
+- **derek taylor** (1574 / 676) — POLLER-ID-CROSSED: untangle which Patreon identity is the live pledge (roster + payment history), then recommend with proof.
+- **ira cox** (895 / 566) — double pledge + survivor is an Apple relay address; contact the member first. Verify the twin active_patron is current roster truth before telling him he pays twice.
+- **kurt smith** (1333 / 1154) — POLLER-ID-CROSSED: untangle which Patreon identity is the live pledge (roster + payment history), then recommend with proof.
+- **michael minton** (828 / 1313) — run the INTERACTION CHECK (connections / messages / cross-replies between 828 and 1313). Interaction -> two people, pair dies. Nothing -> back to Ian with evidence.
+- **vincent jaeger** (1690 / 1516) — POLLER-ID-CROSSED: untangle which Patreon identity is the live pledge (roster + payment history), then recommend with proof.
+
+Excluded — no action, ever:
+
+- **andrew mcneill** (1340 / 338) — name-only detection, zero shared connections, personal vs business email. Not proven same person.
+- **charles fox** (603 / 799) — twin carries doug@dougproper.com; not provably Charles.
+- **don goulart** (890 / 814) — Ian: "ignore."
+- **patrick morrissey** (1130 / 1129) — Ian chose leave-alone over the recommended merge.

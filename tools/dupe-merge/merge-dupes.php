@@ -481,7 +481,9 @@ function count_plan(array $plan): array {
 
 function print_plan(array $plan, bool $verbose): void {
     $p = $plan['pair']; $c = count_plan($plan);
-    $hold = $p['hold'] ? ('  ** HOLD: ' . implode(',', $p['hold']) . ' **') : '';
+    $hold = ($p['action'] ?? '') === 'EXCLUDED'
+        ? '  ** EXCLUDED — no action **'
+        : ($p['hold'] ? ('  ** HOLD: ' . implode(',', $p['hold']) . ' **') : '');
     printf("\n=== %s%s\n", strtoupper($p['name']), $hold);
     printf("  survivor  wp=%-5d pg=%-5d %-34s  patron=%s\n", $p['survivor'], $p['survivor_pg'], $p['survivor_wp_email'], $p['survivor_patron_status'] ?: '-');
     printf("  retire    wp=%-5d pg=%-5d %-34s  patron=%s\n", $p['twin'], $p['twin_pg'], $p['twin_wp_email'] ?: '(none)', $p['twin_patron_status'] ?: '-');
@@ -502,6 +504,7 @@ function print_plan(array $plan, bool $verbose): void {
     if ($c['notif_cascade']) $conf[] = "{$c['notif_cascade']} notification(s) cascade-deleted with dropped connections (recorded)";
     printf("  conflicts %s\n", $conf ? implode('; ', $conf) : 'none');
     if ($p['notes']) printf("  notes     %s\n", implode(',', $p['notes']));
+    if (!empty($p['ruling'])) printf("  ruling    %s\n", $p['ruling']);
 
     if ($verbose) {
         foreach ($plan['my'] as $t)
@@ -903,6 +906,15 @@ foreach ($sel as $p) {
     foreach ($tot as $k => $_) $tot[$k] += $c[$k] ?? 0;
 
     if ($MODE === 'apply') {
+        // EXCLUDED is Ian's "no action ever" — not provably the same member, or
+        // ruled off the list. There is deliberately no override: a pair reaches
+        // this state by a human decision, and only a human decision (editing
+        // pairs.json) takes it back out.
+        if (($p['action'] ?? '') === 'EXCLUDED') {
+            fwrite(STDERR, "\nREFUSING: {$p['name']} is EXCLUDED — " . ($p['ruling'] ?? 'ruled off the dupe list') . "\n");
+            fwrite(STDERR, "No flag overrides this. If the ruling changed, change pairs.json.\n");
+            exit(6);
+        }
         if ($p['hold'] && !isset($OPT['force-hold'])) {
             fwrite(STDERR, "\nREFUSING: {$p['name']} is HELD (" . implode(',', $p['hold']) . "). Decide it by hand, then re-run with --force-hold.\n");
             exit(3);

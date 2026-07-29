@@ -42,7 +42,8 @@
   "notes": [
    "EMAIL-LOCALPART-DISJOINT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "adam pinner arcus custom guitars",
@@ -87,7 +88,8 @@
   "notes": [
    "EMAIL-LOCALPART-DISJOINT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "alessio guarnieri",
@@ -132,7 +134,8 @@
   "notes": [
    "EMAIL-LOCALPART-DISJOINT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "brian kuchta",
@@ -178,7 +181,52 @@
    "EMAIL-LOCALPART-DISJOINT",
    "TWIN-MORE-RECENT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
+ },
+ {
+  "name": "david trustman/donnercruz",
+  "detected_by": "patreon-id",
+  "rule": "only-B-matches-patreon",
+  "survivor": 1758,
+  "twin": 195,
+  "survivor_pg": 1575,
+  "twin_pg": 1714,
+  "survivor_uuid": "deac7f97-7e4a-58e8-883c-122f97d5add0",
+  "twin_uuid": "bdf872ea-7e1e-5334-af7c-2ff76cdd8d46",
+  "survivor_slug": "donnercruz",
+  "twin_slug": "patreon_3979535",
+  "survivor_display": "donnercruz",
+  "twin_display": "David Trustman",
+  "win_email": "donnercruz@gmail.com",
+  "survivor_wp_email": "donnercruz@gmail.com",
+  "twin_wp_email": "",
+  "email_changes": false,
+  "survivor_patron_status": "active_patron",
+  "twin_patron_status": "",
+  "survivor_patreon_id": "3979535",
+  "twin_patreon_id": "3979535",
+  "survivor_content": {
+   "forum_posts": 1,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 3,
+   "threads": 0
+  },
+  "twin_content": {
+   "forum_posts": 6,
+   "other_posts": 75,
+   "msgs": 0,
+   "connections": 2,
+   "threads": 0
+  },
+  "conn_move": 0,
+  "conn_drop_exact": 2,
+  "conn_drop_reversed": 0,
+  "hold": [],
+  "notes": [],
+  "action": "AUTO",
+  "ruling": "Ian 2026-07-29: MERGE \u2014 as planned, the 81-post reattach"
  },
  {
   "name": "eric petrus",
@@ -223,7 +271,8 @@
   "notes": [
    "EMAIL-LOCALPART-DISJOINT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "ethan hughes",
@@ -268,7 +317,8 @@
   "notes": [
    "EMAIL-LOCALPART-DISJOINT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "eugene mcloughlin",
@@ -314,7 +364,8 @@
    "EMAIL-LOCALPART-DISJOINT",
    "TWIN-MORE-RECENT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "inaki font",
@@ -357,7 +408,8 @@
   "conn_drop_reversed": 1,
   "hold": [],
   "notes": [],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "jake tuel",
@@ -403,7 +455,54 @@
    "EMAIL-LOCALPART-DISJOINT",
    "TWIN-RICHER-GRAPH"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
+ },
+ {
+  "name": "jim bonnell",
+  "detected_by": "name",
+  "rule": "both-match & BOTH ACTIVE -> provisional",
+  "survivor": 1467,
+  "twin": 1470,
+  "survivor_pg": 1300,
+  "twin_pg": 1815,
+  "survivor_uuid": "da1b649c-de84-5a3b-9431-bc863ea4f669",
+  "twin_uuid": "30ff07ff-a67e-54a5-995d-ab87f163b563",
+  "survivor_slug": "patreon_31057830",
+  "twin_slug": "patreon_260787",
+  "survivor_display": "Jim Bonnell",
+  "twin_display": "Jim Bonnell",
+  "win_email": "jimbonnell@gmail.com",
+  "survivor_wp_email": "jimbonnell@gmail.com",
+  "twin_wp_email": "jbonnell@tampabay.rr.com",
+  "email_changes": false,
+  "survivor_patron_status": "active_patron",
+  "twin_patron_status": "active_patron",
+  "survivor_patreon_id": "31057830",
+  "twin_patreon_id": "260787",
+  "survivor_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 3,
+   "threads": 0
+  },
+  "twin_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 1,
+   "threads": 0
+  },
+  "conn_move": 0,
+  "conn_drop_exact": 1,
+  "conn_drop_reversed": 0,
+  "hold": [],
+  "notes": [
+   "EMAIL-LOCALPART-DISJOINT"
+  ],
+  "action": "AUTO",
+  "ruling": "Ian 2026-07-29: MERGE \u2014 as planned"
  },
  {
   "name": "jim fenton",
@@ -448,7 +547,8 @@
   "notes": [
    "EMAIL-LOCALPART-DISJOINT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "john burke mojo mobile guitar repair",
@@ -493,7 +593,52 @@
   "notes": [
    "EMAIL-LOCALPART-DISJOINT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
+ },
+ {
+  "name": "john sarlo",
+  "detected_by": "patreon-id",
+  "rule": "only-B-matches-patreon",
+  "survivor": 1756,
+  "twin": 505,
+  "survivor_pg": 1573,
+  "twin_pg": 1741,
+  "survivor_uuid": "a2b057d5-9540-55fb-a19a-729e2ed9e862",
+  "twin_uuid": "c53b758e-441f-5daa-906f-6d8d289c4c6b",
+  "survivor_slug": "john-sarlo",
+  "twin_slug": "patreon_102730908",
+  "survivor_display": "john-sarlo",
+  "twin_display": "John Sarlo",
+  "win_email": "johnthebaker18@gmail.com",
+  "survivor_wp_email": "johnthebaker18@gmail.com",
+  "twin_wp_email": "",
+  "email_changes": false,
+  "survivor_patron_status": "active_patron",
+  "twin_patron_status": "",
+  "survivor_patreon_id": "102730908",
+  "twin_patreon_id": "102730908",
+  "survivor_content": {
+   "forum_posts": 5,
+   "other_posts": 0,
+   "msgs": 3,
+   "connections": 4,
+   "threads": 2
+  },
+  "twin_content": {
+   "forum_posts": 1,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 2,
+   "threads": 0
+  },
+  "conn_move": 0,
+  "conn_drop_exact": 2,
+  "conn_drop_reversed": 0,
+  "hold": [],
+  "notes": [],
+  "action": "AUTO",
+  "ruling": "Ian 2026-07-29: MERGE \u2014 as planned"
  },
  {
   "name": "katie mccartney",
@@ -538,7 +683,8 @@
   "notes": [
    "SURVIVOR-PRIVATERELAY"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "kyle la",
@@ -581,7 +727,8 @@
   "conn_drop_reversed": 0,
   "hold": [],
   "notes": [],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "larry dent dent guitar care inc",
@@ -624,7 +771,8 @@
   "conn_drop_reversed": 0,
   "hold": [],
   "notes": [],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "mark adams",
@@ -670,7 +818,8 @@
    "EMAIL-LOCALPART-DISJOINT",
    "TWIN-MORE-RECENT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "matt rubendall",
@@ -715,7 +864,8 @@
   "notes": [
    "TWIN-MORE-RECENT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "matthew mcintosh",
@@ -758,7 +908,8 @@
   "conn_drop_reversed": 0,
   "hold": [],
   "notes": [],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "miguel mazariegos",
@@ -804,7 +955,8 @@
    "EMAIL-LOCALPART-DISJOINT",
    "TWIN-MORE-RECENT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "mike hoenerhoff elderly instruments",
@@ -847,7 +999,8 @@
   "conn_drop_reversed": 0,
   "hold": [],
   "notes": [],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "niall ward",
@@ -890,7 +1043,8 @@
   "conn_drop_reversed": 0,
   "hold": [],
   "notes": [],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "nick gagliardo",
@@ -933,7 +1087,8 @@
   "conn_drop_reversed": 0,
   "hold": [],
   "notes": [],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "peter morande",
@@ -978,7 +1133,8 @@
   "notes": [
    "TWIN-MORE-RECENT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "robert vogt",
@@ -1023,7 +1179,8 @@
   "notes": [
    "TWIN-MORE-RECENT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "steve chapman",
@@ -1068,7 +1225,8 @@
   "notes": [
    "EMAIL-LOCALPART-DISJOINT"
   ],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "steve rozitis r guitars",
@@ -1111,7 +1269,8 @@
   "conn_drop_reversed": 0,
   "hold": [],
   "notes": [],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
  },
  {
   "name": "tim frick",
@@ -1154,7 +1313,244 @@
   "conn_drop_reversed": 0,
   "hold": [],
   "notes": [],
-  "action": "AUTO"
+  "action": "AUTO",
+  "ruling": null
+ },
+ {
+  "name": "derek taylor",
+  "detected_by": "patreon-id",
+  "rule": "only-B-matches-patreon",
+  "survivor": 1574,
+  "twin": 676,
+  "survivor_pg": 1397,
+  "twin_pg": 1761,
+  "survivor_uuid": "df88b697-a765-5833-a6be-98c619bc3ac3",
+  "twin_uuid": "82dcb617-3891-50ef-ae09-226c95f5f3c4",
+  "survivor_slug": "patreon_166811191",
+  "twin_slug": "patreon_20763650",
+  "survivor_display": "Derek Taylor",
+  "twin_display": "Derek",
+  "win_email": "dtaylor9553@yahoo.com",
+  "survivor_wp_email": "dtaylor9553@yahoo.com",
+  "twin_wp_email": "",
+  "email_changes": false,
+  "survivor_patron_status": "active_patron",
+  "twin_patron_status": "",
+  "survivor_patreon_id": "20763650",
+  "twin_patreon_id": "20763650",
+  "survivor_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 2,
+   "threads": 0
+  },
+  "twin_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 2,
+   "threads": 0
+  },
+  "conn_move": 0,
+  "conn_drop_exact": 2,
+  "conn_drop_reversed": 0,
+  "hold": [
+   "POLLER-ID-CROSSED"
+  ],
+  "notes": [],
+  "action": "HOLD",
+  "ruling": "Ian 2026-07-29: LANE INVESTIGATES \u2014 POLLER-ID-CROSSED: untangle which Patreon identity is the live pledge (roster + payment history), then recommend with proof."
+ },
+ {
+  "name": "ira cox",
+  "detected_by": "name",
+  "rule": "both-match & BOTH ACTIVE -> provisional",
+  "survivor": 895,
+  "twin": 566,
+  "survivor_pg": 780,
+  "twin_pg": 496,
+  "survivor_uuid": "7bbf6657-20b3-5bae-9f2c-df248ab674f6",
+  "twin_uuid": "6c17d415-46f6-5beb-a7d0-b67a2cfbe519",
+  "survivor_slug": "patreon_119632061",
+  "twin_slug": "patreon_104636106",
+  "survivor_display": "ira Cox",
+  "twin_display": "Ira Cox",
+  "win_email": "vnrb8b4zcc@privaterelay.appleid.com",
+  "survivor_wp_email": "vnrb8b4zcc@privaterelay.appleid.com",
+  "twin_wp_email": "iracox3@gmail.com",
+  "email_changes": false,
+  "survivor_patron_status": "active_patron",
+  "twin_patron_status": "active_patron",
+  "survivor_patreon_id": "119632061",
+  "twin_patreon_id": "104636106",
+  "survivor_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 7,
+   "threads": 0
+  },
+  "twin_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 5,
+   "threads": 0
+  },
+  "conn_move": 2,
+  "conn_drop_exact": 3,
+  "conn_drop_reversed": 0,
+  "hold": [
+   "BOTH-ACTIVE-PATRON"
+  ],
+  "notes": [
+   "SURVIVOR-PRIVATERELAY"
+  ],
+  "action": "HOLD",
+  "ruling": "Ian 2026-07-29: CONTACT MEMBER FIRST \u2014 double pledge + survivor is an Apple relay address; contact the member first. Verify the twin active_patron is current roster truth before telling him he pays twice."
+ },
+ {
+  "name": "kurt smith",
+  "detected_by": "patreon-id",
+  "rule": "only-B-matches-patreon",
+  "survivor": 1333,
+  "twin": 1154,
+  "survivor_pg": 1180,
+  "twin_pg": 1797,
+  "survivor_uuid": "83444113-170c-53f8-abd3-3bc6a8fb0c92",
+  "twin_uuid": "6da7529e-a3e4-5e51-9af9-ad1bba72720b",
+  "survivor_slug": "patreon_169179770",
+  "twin_slug": "patreon_151895741",
+  "survivor_display": "Kurt Smith",
+  "twin_display": "Kurt Smith GuitarSmith",
+  "win_email": "kdsmith@srt.com",
+  "survivor_wp_email": "kdsmith@srt.com",
+  "twin_wp_email": "",
+  "email_changes": false,
+  "survivor_patron_status": "active_patron",
+  "twin_patron_status": "",
+  "survivor_patreon_id": "151895741",
+  "twin_patreon_id": "151895741",
+  "survivor_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 3,
+   "threads": 0
+  },
+  "twin_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 1,
+   "threads": 0
+  },
+  "conn_move": 0,
+  "conn_drop_exact": 1,
+  "conn_drop_reversed": 0,
+  "hold": [
+   "POLLER-ID-CROSSED"
+  ],
+  "notes": [
+   "TWIN-MORE-RECENT"
+  ],
+  "action": "HOLD",
+  "ruling": "Ian 2026-07-29: LANE INVESTIGATES \u2014 POLLER-ID-CROSSED: untangle which Patreon identity is the live pledge (roster + payment history), then recommend with proof."
+ },
+ {
+  "name": "michael minton",
+  "detected_by": "name",
+  "rule": "both-match; active_patron wins",
+  "survivor": 828,
+  "twin": 1313,
+  "survivor_pg": 721,
+  "twin_pg": 1164,
+  "survivor_uuid": "093eac46-7c0e-5434-a81f-837aec552811",
+  "twin_uuid": "69a93ff2-8a72-5728-8973-fabdd7011854",
+  "survivor_slug": "patreon_120178820",
+  "twin_slug": "patreon_120195814",
+  "survivor_display": "Michael Minton",
+  "twin_display": "Michael Minton",
+  "win_email": "mminton01@charter.net",
+  "survivor_wp_email": "mminton01@charter.net",
+  "twin_wp_email": "skywagon85k@gmail.com",
+  "email_changes": false,
+  "survivor_patron_status": "active_patron",
+  "twin_patron_status": "former_patron",
+  "survivor_patreon_id": "120178820",
+  "twin_patreon_id": "120195814",
+  "survivor_content": {
+   "forum_posts": 66,
+   "other_posts": 21,
+   "msgs": 13,
+   "connections": 17,
+   "threads": 6
+  },
+  "twin_content": {
+   "forum_posts": 23,
+   "other_posts": 4,
+   "msgs": 6,
+   "connections": 6,
+   "threads": 2
+  },
+  "conn_move": 1,
+  "conn_drop_exact": 5,
+  "conn_drop_reversed": 0,
+  "hold": [
+   "TWO-WAY-CONTENT"
+  ],
+  "notes": [
+   "EMAIL-LOCALPART-DISJOINT"
+  ],
+  "action": "HOLD",
+  "ruling": "Ian 2026-07-29: LANE INVESTIGATES \u2014 run the INTERACTION CHECK (connections / messages / cross-replies between 828 and 1313). Interaction -> two people, pair dies. Nothing -> back to Ian with evidence."
+ },
+ {
+  "name": "vincent jaeger",
+  "detected_by": "patreon-id",
+  "rule": "only-B-matches-patreon",
+  "survivor": 1690,
+  "twin": 1516,
+  "survivor_pg": 1509,
+  "twin_pg": 1817,
+  "survivor_uuid": "4ac84a00-5579-56be-b800-e9b118b9352b",
+  "twin_uuid": "c87c94d3-aaad-54e2-8c8b-e6b8799a23c2",
+  "survivor_slug": "patreon_196135453",
+  "twin_slug": "patreon_185178224",
+  "survivor_display": "Vincent Jaeger",
+  "twin_display": "Vincent Jaeger Jaeger Guitar Repair",
+  "win_email": "vjaeger2011@my.fit.edu",
+  "survivor_wp_email": "vjaeger2011@my.fit.edu",
+  "twin_wp_email": "",
+  "email_changes": false,
+  "survivor_patron_status": "active_patron",
+  "twin_patron_status": "",
+  "survivor_patreon_id": "185178224",
+  "twin_patreon_id": "185178224",
+  "survivor_content": {
+   "forum_posts": 8,
+   "other_posts": 1,
+   "msgs": 0,
+   "connections": 2,
+   "threads": 0
+  },
+  "twin_content": {
+   "forum_posts": 0,
+   "other_posts": 0,
+   "msgs": 0,
+   "connections": 2,
+   "threads": 0
+  },
+  "conn_move": 0,
+  "conn_drop_exact": 2,
+  "conn_drop_reversed": 0,
+  "hold": [
+   "POLLER-ID-CROSSED"
+  ],
+  "notes": [],
+  "action": "HOLD",
+  "ruling": "Ian 2026-07-29: LANE INVESTIGATES \u2014 POLLER-ID-CROSSED: untangle which Patreon identity is the live pledge (roster + payment history), then recommend with proof."
  },
  {
   "name": "andrew mcneill",
@@ -1202,7 +1598,8 @@
    "EMAIL-LOCALPART-DISJOINT",
    "TWIN-RICHER-GRAPH"
   ],
-  "action": "HOLD"
+  "action": "EXCLUDED",
+  "ruling": "Ian 2026-07-29: LEAVE ALONE \u2014 name-only detection, zero shared connections, personal vs business email. Not proven same person."
  },
  {
   "name": "charles fox",
@@ -1249,97 +1646,8 @@
   "notes": [
    "EMAIL-LOCALPART-DISJOINT"
   ],
-  "action": "HOLD"
- },
- {
-  "name": "david trustman/donnercruz",
-  "detected_by": "patreon-id",
-  "rule": "only-B-matches-patreon",
-  "survivor": 1758,
-  "twin": 195,
-  "survivor_pg": 1575,
-  "twin_pg": 1714,
-  "survivor_uuid": "deac7f97-7e4a-58e8-883c-122f97d5add0",
-  "twin_uuid": "bdf872ea-7e1e-5334-af7c-2ff76cdd8d46",
-  "survivor_slug": "donnercruz",
-  "twin_slug": "patreon_3979535",
-  "survivor_display": "donnercruz",
-  "twin_display": "David Trustman",
-  "win_email": "donnercruz@gmail.com",
-  "survivor_wp_email": "donnercruz@gmail.com",
-  "twin_wp_email": "",
-  "email_changes": false,
-  "survivor_patron_status": "active_patron",
-  "twin_patron_status": "",
-  "survivor_patreon_id": "3979535",
-  "twin_patreon_id": "3979535",
-  "survivor_content": {
-   "forum_posts": 1,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 3,
-   "threads": 0
-  },
-  "twin_content": {
-   "forum_posts": 6,
-   "other_posts": 75,
-   "msgs": 0,
-   "connections": 2,
-   "threads": 0
-  },
-  "conn_move": 0,
-  "conn_drop_exact": 2,
-  "conn_drop_reversed": 0,
-  "hold": [
-   "TWO-WAY-CONTENT"
-  ],
-  "notes": [],
-  "action": "HOLD"
- },
- {
-  "name": "derek taylor",
-  "detected_by": "patreon-id",
-  "rule": "only-B-matches-patreon",
-  "survivor": 1574,
-  "twin": 676,
-  "survivor_pg": 1397,
-  "twin_pg": 1761,
-  "survivor_uuid": "df88b697-a765-5833-a6be-98c619bc3ac3",
-  "twin_uuid": "82dcb617-3891-50ef-ae09-226c95f5f3c4",
-  "survivor_slug": "patreon_166811191",
-  "twin_slug": "patreon_20763650",
-  "survivor_display": "Derek Taylor",
-  "twin_display": "Derek",
-  "win_email": "dtaylor9553@yahoo.com",
-  "survivor_wp_email": "dtaylor9553@yahoo.com",
-  "twin_wp_email": "",
-  "email_changes": false,
-  "survivor_patron_status": "active_patron",
-  "twin_patron_status": "",
-  "survivor_patreon_id": "20763650",
-  "twin_patreon_id": "20763650",
-  "survivor_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 2,
-   "threads": 0
-  },
-  "twin_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 2,
-   "threads": 0
-  },
-  "conn_move": 0,
-  "conn_drop_exact": 2,
-  "conn_drop_reversed": 0,
-  "hold": [
-   "POLLER-ID-CROSSED"
-  ],
-  "notes": [],
-  "action": "HOLD"
+  "action": "EXCLUDED",
+  "ruling": "Ian 2026-07-29: LEAVE ALONE \u2014 twin carries doug@dougproper.com; not provably Charles."
  },
  {
   "name": "don goulart",
@@ -1386,240 +1694,8 @@
   "notes": [
    "EMAIL-LOCALPART-DISJOINT"
   ],
-  "action": "HOLD"
- },
- {
-  "name": "ira cox",
-  "detected_by": "name",
-  "rule": "both-match & BOTH ACTIVE -> provisional",
-  "survivor": 895,
-  "twin": 566,
-  "survivor_pg": 780,
-  "twin_pg": 496,
-  "survivor_uuid": "7bbf6657-20b3-5bae-9f2c-df248ab674f6",
-  "twin_uuid": "6c17d415-46f6-5beb-a7d0-b67a2cfbe519",
-  "survivor_slug": "patreon_119632061",
-  "twin_slug": "patreon_104636106",
-  "survivor_display": "ira Cox",
-  "twin_display": "Ira Cox",
-  "win_email": "vnrb8b4zcc@privaterelay.appleid.com",
-  "survivor_wp_email": "vnrb8b4zcc@privaterelay.appleid.com",
-  "twin_wp_email": "iracox3@gmail.com",
-  "email_changes": false,
-  "survivor_patron_status": "active_patron",
-  "twin_patron_status": "active_patron",
-  "survivor_patreon_id": "119632061",
-  "twin_patreon_id": "104636106",
-  "survivor_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 7,
-   "threads": 0
-  },
-  "twin_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 5,
-   "threads": 0
-  },
-  "conn_move": 2,
-  "conn_drop_exact": 3,
-  "conn_drop_reversed": 0,
-  "hold": [
-   "BOTH-ACTIVE-PATRON"
-  ],
-  "notes": [
-   "SURVIVOR-PRIVATERELAY"
-  ],
-  "action": "HOLD"
- },
- {
-  "name": "jim bonnell",
-  "detected_by": "name",
-  "rule": "both-match & BOTH ACTIVE -> provisional",
-  "survivor": 1467,
-  "twin": 1470,
-  "survivor_pg": 1300,
-  "twin_pg": 1815,
-  "survivor_uuid": "da1b649c-de84-5a3b-9431-bc863ea4f669",
-  "twin_uuid": "30ff07ff-a67e-54a5-995d-ab87f163b563",
-  "survivor_slug": "patreon_31057830",
-  "twin_slug": "patreon_260787",
-  "survivor_display": "Jim Bonnell",
-  "twin_display": "Jim Bonnell",
-  "win_email": "jimbonnell@gmail.com",
-  "survivor_wp_email": "jimbonnell@gmail.com",
-  "twin_wp_email": "jbonnell@tampabay.rr.com",
-  "email_changes": false,
-  "survivor_patron_status": "active_patron",
-  "twin_patron_status": "active_patron",
-  "survivor_patreon_id": "31057830",
-  "twin_patreon_id": "260787",
-  "survivor_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 3,
-   "threads": 0
-  },
-  "twin_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 1,
-   "threads": 0
-  },
-  "conn_move": 0,
-  "conn_drop_exact": 1,
-  "conn_drop_reversed": 0,
-  "hold": [
-   "BOTH-ACTIVE-PATRON"
-  ],
-  "notes": [
-   "EMAIL-LOCALPART-DISJOINT"
-  ],
-  "action": "HOLD"
- },
- {
-  "name": "john sarlo",
-  "detected_by": "patreon-id",
-  "rule": "only-B-matches-patreon",
-  "survivor": 1756,
-  "twin": 505,
-  "survivor_pg": 1573,
-  "twin_pg": 1741,
-  "survivor_uuid": "a2b057d5-9540-55fb-a19a-729e2ed9e862",
-  "twin_uuid": "c53b758e-441f-5daa-906f-6d8d289c4c6b",
-  "survivor_slug": "john-sarlo",
-  "twin_slug": "patreon_102730908",
-  "survivor_display": "john-sarlo",
-  "twin_display": "John Sarlo",
-  "win_email": "johnthebaker18@gmail.com",
-  "survivor_wp_email": "johnthebaker18@gmail.com",
-  "twin_wp_email": "",
-  "email_changes": false,
-  "survivor_patron_status": "active_patron",
-  "twin_patron_status": "",
-  "survivor_patreon_id": "102730908",
-  "twin_patreon_id": "102730908",
-  "survivor_content": {
-   "forum_posts": 5,
-   "other_posts": 0,
-   "msgs": 3,
-   "connections": 4,
-   "threads": 2
-  },
-  "twin_content": {
-   "forum_posts": 1,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 2,
-   "threads": 0
-  },
-  "conn_move": 0,
-  "conn_drop_exact": 2,
-  "conn_drop_reversed": 0,
-  "hold": [
-   "TWO-WAY-CONTENT"
-  ],
-  "notes": [],
-  "action": "HOLD"
- },
- {
-  "name": "kurt smith",
-  "detected_by": "patreon-id",
-  "rule": "only-B-matches-patreon",
-  "survivor": 1333,
-  "twin": 1154,
-  "survivor_pg": 1180,
-  "twin_pg": 1797,
-  "survivor_uuid": "83444113-170c-53f8-abd3-3bc6a8fb0c92",
-  "twin_uuid": "6da7529e-a3e4-5e51-9af9-ad1bba72720b",
-  "survivor_slug": "patreon_169179770",
-  "twin_slug": "patreon_151895741",
-  "survivor_display": "Kurt Smith",
-  "twin_display": "Kurt Smith GuitarSmith",
-  "win_email": "kdsmith@srt.com",
-  "survivor_wp_email": "kdsmith@srt.com",
-  "twin_wp_email": "",
-  "email_changes": false,
-  "survivor_patron_status": "active_patron",
-  "twin_patron_status": "",
-  "survivor_patreon_id": "151895741",
-  "twin_patreon_id": "151895741",
-  "survivor_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 3,
-   "threads": 0
-  },
-  "twin_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 1,
-   "threads": 0
-  },
-  "conn_move": 0,
-  "conn_drop_exact": 1,
-  "conn_drop_reversed": 0,
-  "hold": [
-   "POLLER-ID-CROSSED"
-  ],
-  "notes": [
-   "TWIN-MORE-RECENT"
-  ],
-  "action": "HOLD"
- },
- {
-  "name": "michael minton",
-  "detected_by": "name",
-  "rule": "both-match; active_patron wins",
-  "survivor": 828,
-  "twin": 1313,
-  "survivor_pg": 721,
-  "twin_pg": 1164,
-  "survivor_uuid": "093eac46-7c0e-5434-a81f-837aec552811",
-  "twin_uuid": "69a93ff2-8a72-5728-8973-fabdd7011854",
-  "survivor_slug": "patreon_120178820",
-  "twin_slug": "patreon_120195814",
-  "survivor_display": "Michael Minton",
-  "twin_display": "Michael Minton",
-  "win_email": "mminton01@charter.net",
-  "survivor_wp_email": "mminton01@charter.net",
-  "twin_wp_email": "skywagon85k@gmail.com",
-  "email_changes": false,
-  "survivor_patron_status": "active_patron",
-  "twin_patron_status": "former_patron",
-  "survivor_patreon_id": "120178820",
-  "twin_patreon_id": "120195814",
-  "survivor_content": {
-   "forum_posts": 66,
-   "other_posts": 21,
-   "msgs": 13,
-   "connections": 17,
-   "threads": 6
-  },
-  "twin_content": {
-   "forum_posts": 23,
-   "other_posts": 4,
-   "msgs": 6,
-   "connections": 6,
-   "threads": 2
-  },
-  "conn_move": 1,
-  "conn_drop_exact": 5,
-  "conn_drop_reversed": 0,
-  "hold": [
-   "TWO-WAY-CONTENT"
-  ],
-  "notes": [
-   "EMAIL-LOCALPART-DISJOINT"
-  ],
-  "action": "HOLD"
+  "action": "EXCLUDED",
+  "ruling": "Ian 2026-07-29: LEAVE ALONE \u2014 Ian: \"ignore.\""
  },
  {
   "name": "patrick morrissey",
@@ -1664,51 +1740,7 @@
    "BOTH-ACTIVE-PATRON"
   ],
   "notes": [],
-  "action": "HOLD"
- },
- {
-  "name": "vincent jaeger",
-  "detected_by": "patreon-id",
-  "rule": "only-B-matches-patreon",
-  "survivor": 1690,
-  "twin": 1516,
-  "survivor_pg": 1509,
-  "twin_pg": 1817,
-  "survivor_uuid": "4ac84a00-5579-56be-b800-e9b118b9352b",
-  "twin_uuid": "c87c94d3-aaad-54e2-8c8b-e6b8799a23c2",
-  "survivor_slug": "patreon_196135453",
-  "twin_slug": "patreon_185178224",
-  "survivor_display": "Vincent Jaeger",
-  "twin_display": "Vincent Jaeger Jaeger Guitar Repair",
-  "win_email": "vjaeger2011@my.fit.edu",
-  "survivor_wp_email": "vjaeger2011@my.fit.edu",
-  "twin_wp_email": "",
-  "email_changes": false,
-  "survivor_patron_status": "active_patron",
-  "twin_patron_status": "",
-  "survivor_patreon_id": "185178224",
-  "twin_patreon_id": "185178224",
-  "survivor_content": {
-   "forum_posts": 8,
-   "other_posts": 1,
-   "msgs": 0,
-   "connections": 2,
-   "threads": 0
-  },
-  "twin_content": {
-   "forum_posts": 0,
-   "other_posts": 0,
-   "msgs": 0,
-   "connections": 2,
-   "threads": 0
-  },
-  "conn_move": 0,
-  "conn_drop_exact": 2,
-  "conn_drop_reversed": 0,
-  "hold": [
-   "POLLER-ID-CROSSED"
-  ],
-  "notes": [],
-  "action": "HOLD"
+  "action": "EXCLUDED",
+  "ruling": "Ian 2026-07-29: LEAVE ALONE \u2014 Ian chose leave-alone over the recommended merge."
  }
 ]
