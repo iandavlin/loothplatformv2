@@ -1,0 +1,35 @@
+# Work finished, but not deployed
+
+Keeper maintains this at every merge. Rule (Ian 2026-07-29): he gets reminded
+whenever this file is non-empty — see it, clear it, feel good. Newest on top.
+"Deployed" means live is actually running it / the script actually ran.
+
+## Waiting on Ian's `lg-deploy` (one pull clears the section)
+
+- **Minton single-pair merge, ruled + rehearsed** (2026-07-29): Ian ruled MERGE;
+  ruling recorded in pairs.json; dev2 rehearsal selects exactly 1 pair
+  (27 posts, 9 profile rows, 27 mirror rows, email unchanged). After the pull:
+  `cd /home/ubuntu/loothplatformv2-clean && sudo tools/dupe-merge/run-as-root.sh --apply --pair="michael minton" && sudo tools/dupe-merge/run-as-root.sh --verify --pair="michael minton"`
+- **dupe-merge journal retention + post-apply reversibility check** (29036ab) —
+  tooling tail; rides the same pull, nothing to run.
+
+## Staged scripts awaiting Ian's hands (not pull-shaped)
+
+- **Mirror attachment purge** — `sudo -u bb-mirror psql -d looth -v ON_ERROR_STOP=1 -f bb-mirror/deploy/2026-07-28-attachment-purge-live.sql`
+  (24 orphan rows; rollback file beside it; already on live via this morning's pull).
+- **Reconcile bookmark rewind to 2026-06-01** — one statement, fixes 5 drifted
+  rows incl. the miscredited post; command in the mirror-orphans handoff.
+- **Re-materialize replies 71678 + 71723** — the two members' answers nobody
+  ever saw; `bb-mirror/bin/rematerialize.php` per its header.
+
+## dev2 serve (keeper's window, not Ian's)
+
+- dev2's serving checkout is at `0995f2b`; main is ~30 commits ahead (all of
+  today's merges). Keeper pulls in a coordinated serve window — parked until
+  the working lanes don't have in-flight verification against the serve.
+
+## Cleared
+
+- 2026-07-29 morning `lg-deploy` (57a9ee7): duplicate alarm, member email
+  notice, profile email-change hook + nginx reload, merger toolkit, orphan
+  delete-path fix. 2026-07-29 14:21: the 29-pair merge applied + verified.
