@@ -272,9 +272,13 @@ function bb_mirror_outbox_fail(array $row, int $http, string $error): string {
  *
  * @return array{ok:bool, http:int, error:string, seconds:float}
  */
-function bb_mirror_outbox_deliver(array $row, ?string $host = null, int $timeout = 30): array {
+// $port exists so bin/test-outbox.php can pin delivery at a port nothing is
+// listening on and produce a REAL connection failure — the same thing curl sees
+// when FPM has no child free and nginx cannot place the request. Production
+// callers never pass it.
+function bb_mirror_outbox_deliver(array $row, ?string $host = null, int $timeout = 30, int $port = 443): array {
     $host = $host ?: bb_mirror_outbox_host();
-    $url  = 'https://' . $host . '/bb-mirror-api/v0/_sync';
+    $url  = 'https://' . $host . ($port === 443 ? '' : ':' . $port) . '/bb-mirror-api/v0/_sync';
 
     // The payload the worker sends carries this row's id, exactly as the fast
     // path does, so the receiver's ack path is identical for both.
@@ -293,7 +297,7 @@ function bb_mirror_outbox_deliver(array $row, ?string $host = null, int $timeout
         CURLOPT_CONNECTTIMEOUT => 5,
         // The repo convention: pin the real hostname to loopback so Cloudflare
         // never sees this, and SNI + Host agree. wp_remote_post cannot do this.
-        CURLOPT_RESOLVE        => ["{$host}:443:127.0.0.1"],
+        CURLOPT_RESOLVE        => ["{$host}:{$port}:127.0.0.1"],
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => false,
         CURLOPT_HTTPHEADER     => [
