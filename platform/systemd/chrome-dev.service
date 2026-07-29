@@ -16,7 +16,7 @@ ExecStart=/usr/bin/google-chrome-stable \
   --hide-scrollbars \
   --mute-audio \
   about:blank
-Restart=on-failure
+Restart=always
 RestartSec=3
 MemoryMax=700M
 
