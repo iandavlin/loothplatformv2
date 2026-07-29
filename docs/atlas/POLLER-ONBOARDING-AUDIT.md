@@ -169,6 +169,28 @@ guard, no different-patreon-id conflict routing. Obeying that docblock would
 route the Patreon onboard back into **precisely the email-keyed logic that minted
 the 29 duplicates**, discarding all three guards proven in §1.2.
 
+**Hardened against dynamic dispatch (2026-07-29).** "Zero callers" from a static
+grep can miss `call_user_func`, `$class::$method`, or a callback stored as a
+string, so each was searched: no dynamic dispatch, no bare `'provision'` string
+in any PHP file, nothing outside the repo under dev2's `wp-content` reaching it,
+and no runbook or script invoking it.
+
+**It has, however, *run*.** dev2's `lg-user-audit.log` records **6** executions of
+`LGMS\UserLifecycle::provision`, all on **2026-06-04**, and every one has
+`… < eval < Eval_Command->__invoke < WP_CLI\Runner->run_command` in its trigger
+chain — i.e. hand-run via `wp eval` on the day the lifecycle work was built. So
+the honest description is **written, hand-tested, never wired** — abandonment
+mid-implementation, not code whose callers were later removed.
+
+**One doc dependency to clear in the same commit.** `docs/atlas/NAMING-UNIFICATION-SPEC.md:48`
+still describes this mint as part of the live design ("§2 Patreon human-handle
+minting" is flagged STILL LIVE in that spec's header). It is only *descriptive* —
+§2 was actually built in `lgpo_generate_username()` (`lg-patreon-onboard.php:1470–1491`),
+whose name → vanity → +tag-stripped email → `looth-member` chain matches the spec
+exactly — so deleting `provision()` breaks nothing there. But that line should be
+corrected alongside the deletion, for the same reason the docblock is the real
+hazard: a stale pointer is what sends the next reader back to the wrong door.
+
 ### Recommendation: **delete lines 206–409.** Do not make it real.
 
 The docblock is more dangerous than the code, because it is an instruction. The
@@ -300,6 +322,11 @@ The chain, each step read:
 4. `_looth_uuid` is **not** re-derived (`stamp_looth_uuid` returns early if set,
    `:784–787`). This is correct and important: the JWT `sub` stays stable, so the
    member is **not** logged out and their profile/identity survives.
+   **Measured on dev2, 2026-07-29** — across a real email change the uuid held at
+   `3dcadeb3-…` rather than becoming the new-email uuid `15b4e080-…`, and
+   re-running `stamp_looth_uuid()` was a no-op. So the member keeps their session
+   and profile; what they lose is only the ability to sign in with the address
+   they know. This is the one part of the mirror that is behaving correctly.
 5. profile-app is never told (§5) — it keeps the old address as `primary_email`.
 
 **Does the member get told? No — and the mechanism is exact.** An email-change
