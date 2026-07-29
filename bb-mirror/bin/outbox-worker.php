@@ -11,6 +11,9 @@
  * Usage:
  *   sudo -u looth-dev wp eval-file /srv/bb-mirror/bin/outbox-worker.php
  *   BB_MIRROR_OUTBOX_DRYRUN=1 ...     report what it WOULD deliver, send nothing
+ *   BB_MIRROR_OUTBOX_PORT=9    ...    REHEARSAL ONLY: deliver at a dead port to
+ *                                     rehearse the retry ladder and the alarm.
+ *                                     Prints a loud banner; never set in prod.
  *
  * Cron: systemd timer at /etc/systemd/system/bb-mirror-outbox.{service,timer},
  *       every minute. Source of truth: platform/systemd/.
@@ -37,6 +40,28 @@ if (!function_exists('get_post_meta')) {
 require_once __DIR__ . '/../lib/outbox.php';
 
 $dry = getenv('BB_MIRROR_OUTBOX_DRYRUN') === '1';
+
+// ---------- the outage-rehearsal knob ---------------------------------------
+// bb_mirror_outbox_deliver()'s $port parameter already exists so a test can pin
+// delivery at a port nothing is listening on and produce a REAL connection
+// failure — the same thing curl sees when FPM has no child free and nginx cannot
+// place the request. This exposes it to the worker, so the retry ladder and the
+// alarm can be rehearsed BY SYSTEMD, on the real unit, without stopping nginx or
+// php-fpm box-wide (dev2 is shared — that would be an outage for everyone).
+//
+// It is LOUD on purpose. A silent delivery-target override left set in
+// production would send every event into a hole while the outbox reported
+// healthy retries — the exact invisible-divergence failure this whole file
+// exists to end. If you see this banner on a real box, something is misconfigured.
+$port = 443;
+$port_env = getenv('BB_MIRROR_OUTBOX_PORT');
+if ($port_env !== false && $port_env !== '' && ctype_digit($port_env) && (int) $port_env !== 443) {
+    $port = (int) $port_env;
+    $banner = "[bb-mirror outbox] !!! DELIVERY PORT OVERRIDDEN TO $port — REHEARSAL MODE, NOT PRODUCTION !!!";
+    echo $banner . "\n";
+    fwrite(STDERR, $banner . "\n");
+    error_log($banner);
+}
 
 if (!bb_mirror_outbox_ensure()) {
     fwrite(STDERR, "outbox table missing and could not be created\n");
@@ -76,7 +101,7 @@ foreach ($groups as $key => $group) {
 
         if ($dry) { echo "  WOULD DELIVER $label\n"; continue; }
 
-        $res = bb_mirror_outbox_deliver($row);
+        $res = bb_mirror_outbox_deliver($row, null, 30, $port);
 
         if ($res['ok']) {
             bb_mirror_outbox_ack((int) $row['id'], true, null, 'worker');
