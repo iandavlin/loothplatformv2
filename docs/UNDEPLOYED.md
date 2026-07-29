@@ -6,12 +6,8 @@ whenever this file is non-empty — see it, clear it, feel good. Newest on top.
 
 ## Waiting on Ian's `lg-deploy` (one pull clears the section)
 
-- **Minton single-pair merge, ruled + rehearsed** (2026-07-29): Ian ruled MERGE;
-  ruling recorded in pairs.json; dev2 rehearsal selects exactly 1 pair
-  (27 posts, 9 profile rows, 27 mirror rows, email unchanged). After the pull:
-  `cd /home/ubuntu/loothplatformv2-clean && sudo tools/dupe-merge/run-as-root.sh --apply --pair="michael minton" && sudo tools/dupe-merge/run-as-root.sh --verify --pair="michael minton"`
-- **dupe-merge journal retention + post-apply reversibility check** (29036ab) —
-  tooling tail; rides the same pull, nothing to run.
+- (section clear — Ian should run one `lg-deploy` to print state: it will either
+  say already-up-to-date or land safe doc/tooling riders.)
 
 ## Staged scripts awaiting Ian's hands (not pull-shaped)
 
@@ -29,6 +25,9 @@ whenever this file is non-empty — see it, clear it, feel good. Newest on top.
   the working lanes don't have in-flight verification against the serve.
 
 ## Cleared
+
+- 2026-07-29 22:33: **Minton merged + verified on live** — 30/30 ruled pairs now
+  applied; twin drained, survivor holds both halves, duplicate signature 0.
 
 - 2026-07-29 morning `lg-deploy` (57a9ee7): duplicate alarm, member email
   notice, profile email-change hook + nginx reload, merger toolkit, orphan
