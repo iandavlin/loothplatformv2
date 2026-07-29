@@ -3,16 +3,36 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
-## 2026-07-29 — Events mobile: banner cut off + time listed twice (Ian, screenshot)
+## 2026-07-29 — ~~Events mobile: banner cut off + time listed twice~~ → CLOSED by the events-mobile lane
 
-On the mobile event sheet (seen on "Looth Pro — Intermediate Inlay with CNC"):
-(1) the banner image is cut off — the AUG-2 date chip overlaps the artwork and
-the bottom of the banner crops the "August 2nd, 3PM" text baked into the image;
-(2) the time line "Sunday, August 2, 2026 · 3:00 PM ET" renders TWICE — once
-under the title, again below the PRO tier chip. Exactly one should remain.
-Where: mobile event detail sheet/modal. Unowned — fold into the next events
-lane charter (events-fix died in the 7/29 reboot; its branches are still
-unmerged).
+Ian, screenshot, on the mobile event sheet ("Looth Pro — Intermediate Inlay with
+CNC", live 72363): (1) the banner was cut off — the AUG-2 chip sat on the artwork
+and the bottom crop ate the "August 2nd, 3PM" typeset into the image;
+(2) "Sunday, August 2, 2026 · 3:00 PM ET" rendered TWICE, under the title and
+again below the PRO chip.
+
+**Both diagnosed, then resolved by Ian's own follow-up ruling** (keeper-signed
+2026-07-29): *on mobile, stop opening the modal entirely — a tap goes straight to
+the event's post page.* Branch `events-mobile`. Retiring the sheet deletes the
+surface both defects lived on, and there was never a desktop sheet to keep them
+in — `webroot/events-mobile.js` always self-gated to `max-width:640px` and desktop
+has navigated to the post page since Buck built it. The destination has neither
+defect: under 768px `post-header/shell.css` runs the hero at
+`height:auto; object-fit:unset` (uncropped), and the event header states the date
+once. Causes, for the record: `.lev-cover` pinned `height:170px` around a 16:9
+poster (81 image px off top and bottom, 22.6% of the height), and the description
+selector led with `.lg-event-header__detail`, whose only `<p>` is the byte-identical
+date line — so it also meant the real blurb never rendered at all.
+
+**Two residuals this created, both needing an Ian call — genuinely unowned:**
+1. **"Add to calendar" is gone from the mobile events flow.** It lived only in the
+   sheet; the event post page has no calendar affordance. Natural homes: the event
+   post page, or the landing card.
+2. **`.lg-post-header__photo` is a raw one-size upload** — no `/img.php?w=`, no
+   `srcset`, no width/height, `loading="eager" fetchpriority="high"`. 263KB of
+   poster at full size on a phone, and the missing dimensions reflow the page on
+   load. Breaks the standing image rule in CLAUDE.md, and it is now on the mobile
+   critical path. `post-header` is used by EVERY post, so this wants its own lane.
 
 ## 2026-07-29 — Mirror dispatch must be durable → CHARTERED: mirror-dispatch lane
 
