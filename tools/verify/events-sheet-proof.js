@@ -335,6 +335,22 @@ const page = `<!doctype html>
        Group roundel are cut through at the bottom.</p>
   </div>
 
+  <h2 class="sec">Dark theme on the destination — a real gap, not a drawing error</h2>
+  <p class="note" style="margin-top:0">In the dark frame above, the title/byline block and the
+     date card stay cream and white while everything around them goes dark. <b>That is what the
+     real page does</b> — I checked before blaming my own harness. On live, the v2 stylesheet
+     <code>lg-v2-bundle.de6376ddb621d99c.css</code> contains <b>zero</b>
+     <code>html[data-lguser-theme="dark"]</code> rules; <code>site-header.css</code> has seven and
+     none touch these blocks; neither file defines <code>--lg-paper</code> or <code>--lg-ink</code>,
+     so <code>var(--lg-paper, #f4f1e8)</code> falls back to literal cream whatever the theme; and
+     <code>app-settings.js</code>'s dark pass does not name <code>.lg-post-header</code> or
+     <code>.lg-event-header</code>. The page does carry <code>data-lguser-theme="dark"</code> — there
+     is simply no CSS that answers it here.</p>
+  <p class="note">This is the same gap the events sheet had and had fixed on 2026-06-10, whose own
+     code comment reads: “this sheet had none; app-settings only darkens the card shell + title, the
+     content stayed light-on-light.” Worth knowing because your ruling has just made this page the
+     mobile event experience.</p>
+
   <h2 class="sec">Two things the ruling costs, for your call</h2>
   <div class="card" style="margin-top:0">
     <p class="flag" style="margin-top:0"><b>1. “Add to calendar” disappears from the mobile events
@@ -352,7 +368,15 @@ const page = `<!doctype html>
 
   <p class="foot">Rendered by your own browser at your own device width — each frame is a real
      390px viewport with its own theme, not a screenshot. Banner served from this page, copied
-     byte-for-byte from live.</p>
+     byte-for-byte from live. Each frame is also openable full-bleed on its own:
+     <a href="frame-light-before.html">light before</a> ·
+     <a href="frame-light-after.html">light after</a> ·
+     <a href="frame-dark-before.html">dark before</a> ·
+     <a href="frame-dark-after.html">dark after</a>.
+     Independently confirmed in a real headless Chrome at 390×780: the before cover measures
+     exactly 390×170 (the crop) with 2 date lines, the after hero measures 390×220 —
+     390 × 720/1279, natural 16:9, nothing cropped — with 1 date line, and no frame scrolls
+     sideways.</p>
 </div>
 </body>
 </html>
@@ -360,6 +384,12 @@ const page = `<!doctype html>
 
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 fs.writeFileSync(OUT, page);
+/* Also emit each frame standalone. Two reasons: a phone can open one full-bleed
+   at its true width instead of inside a 390px box, and a headless engine can
+   screenshot it at exactly 390x780 without reaching into an iframe. */
+for (const f of frames) {
+  fs.writeFileSync(path.join(path.dirname(OUT), `frame-${f.theme}-${f.variant}.html`), f.srcdoc);
+}
 console.log('wrote ' + OUT + ' (' + page.length + ' bytes)');
 console.log('assertions passed: ' + checks.length);
 checks.forEach((c) => console.log('  ok ' + c.name));
