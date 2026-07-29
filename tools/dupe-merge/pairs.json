@@ -1501,14 +1501,12 @@
   "conn_move": 1,
   "conn_drop_exact": 5,
   "conn_drop_reversed": 0,
-  "hold": [
-   "TWO-WAY-CONTENT"
-  ],
+  "hold": [],
   "notes": [
    "EMAIL-LOCALPART-DISJOINT"
   ],
-  "action": "HOLD",
-  "ruling": "Ian 2026-07-29: LANE INVESTIGATES \u2014 run the INTERACTION CHECK (connections / messages / cross-replies between 828 and 1313). Interaction -> two people, pair dies. Nothing -> back to Ian with evidence."
+  "action": "AUTO",
+  "ruling": "Ian 2026-07-29: MERGE \u2014 same person (interaction check: zero across ten channels; Patreon ids ~4h apart; self-thread continuation voice). Ruled via keeper decision box."
  },
  {
   "name": "vincent jaeger",
