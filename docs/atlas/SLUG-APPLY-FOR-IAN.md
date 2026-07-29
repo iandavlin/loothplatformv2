@@ -150,7 +150,7 @@ sudo -u profile-app php /srv/profile-app/bin/purge-stale-looth-slug-mirror.php -
 sudo wp --allow-root --path=/var/www/dev db query < /tmp/slug-mirror.sql
 ```
 
-Expect `STALE=332` (measured by replaying live's real mirror rows). `--path=/var/www/dev`
+Expect `mirrors=426  in-sync=98  STALE=328` (measured by replaying live's real mirror rows against this exact 1,487-member plan). `--path=/var/www/dev`
 **is correct on live** — the vhost really is `server_name loothgroup.com …; root /var/www/dev;`
 and `LG_MYSQL_DB=looth_import`. Do not "fix" it to `/var/www/html`, which is the stock nginx
 placeholder. Deleting rather than rewriting is deliberate: a missing mirror is re-resolved from
