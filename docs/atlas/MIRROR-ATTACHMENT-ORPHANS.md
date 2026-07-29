@@ -5,6 +5,29 @@ tripping over it: that lane created two orphans (72225, 72240) simply by testing
 and its "max 11 images per reply" phantom — which made a cap of 6 look lossy to
 three separate people — was orphan pollution and nothing else.*
 
+> ## LANE CLOSED 2026-07-29 — `mirror-delete-orphans` @`a3b0041`
+>
+> **Nothing here has been applied.** Live is untouched; dev2's `looth` is
+> untouched (5126 replies / 1313 topics / 1859 attachments, 0 purge triggers).
+> The code ships in `schema.pg.sql` for fresh databases.
+>
+> **Two items were handed to Ian, each rollback-first, neither run:**
+> 1. the attachment migration + rollback — `bb-mirror/deploy/2026-07-28-attachment-purge-live*.sql`, 24 orphan rows (§6)
+> 2. a one-statement reconcile-bookmark rewind fixing 5 drifted rows, including the live forum crediting one member's post to another (§7)
+>
+> **One thing is UNPROVEN and is written up rather than dropped: the WordPress
+> hook → HTTP → mirror hop (§9).** No dev2 window was available. §9 states
+> exactly what that does and does not leave uncertain, and how to close it in
+> about ten minutes.
+>
+> **The charter's bug turned out to be the smallest thing here.** The attachment
+> leak was real (24 live rows). Underneath it: the previously committed fix was
+> itself broken for hand-run SQL (§4); the mechanism was five delete paths, not
+> one (§7); ghosts are permanent, member-visible, and invisible to the orphan
+> census everyone was using (§7); two members' replies never rendered for six
+> weeks (§7); and three live posts show the wrong author (§7). Four of those five
+> trace to one non-blocking HTTP call whose result nobody checks — see §10.
+
 ---
 
 ## 1. The mechanism, in one line
@@ -572,11 +595,78 @@ window, because on an empty unread table there is nothing to race.
 > subscriptions** — the number the thread-follow lane's ruling turns on. Different
 > `type`, same store.
 
-## 9. Still open
+## 9. UNPROVEN: the WordPress hook → HTTP → mirror hop
 
-The **WP side** has the same shape and is out of this lane's scope: deleting a
-reply in WP removes its `bp_media` rows, but nothing reconciles a `bp_media_ids`
-meta that lists ids whose media rows are gone. That is what made LIVE's reply
-image count read 236/380 when the truth was 233/374 — see
-`REPLY-IMAGE-COUNT-CEILING.md` §1. Different store, same class of defect: a
-delete that does not clean up after itself.
+**Lane closed 2026-07-29 with this segment unverified. No dev2 window was
+available, and it is recorded here rather than quietly dropped.**
+
+### Exactly what is unproven
+
+One segment of the delete path, end to end on a running system:
+
+```
+bbPress delete → bbp_deleted_reply fires → bb_mirror_sync_dispatch()
+   → wp_remote_post (non-blocking, 1s) → nginx → api/v0/_sync.php
+   → DELETE FROM reply WHERE id = ?          ← everything from here is proven
+```
+
+Proving it means letting a real WordPress delete reach dev2's `looth`, which
+needs the purge triggers installed there first. That was requested at 13:30 on
+2026-07-28 and not granted.
+
+### Exactly what IS proven, so the gap is not overstated
+
+The trigger sits *downstream* of the unproven segment, and it has been fired from
+three independent issuers against the real schema:
+
+| issuer | proven by |
+|---|---|
+| PHP/PDO running the **verbatim** `DELETE FROM $kind WHERE id = ?` from `_sync.php:98` | `bin/test-attachment-purge.php`, through the real materializers, six-image reply |
+| `psql` with `forums` absent from `search_path` | §4, the case that used to raise and abort |
+| Postgres itself, via FK cascade | topic- and forum-delete cases, §4 |
+
+So the residual risk is **not** "the trigger might not fire on that statement".
+It is "the statement might never be issued" — which is **path 6 in §7, already
+documented as a known unfixed gap**: the dispatch is
+`wp_remote_post(..., 'blocking' => false, timeout 1)` with no response read, no
+retry and no log. The unproven hop and the known defect are the same stretch of
+wire. Verifying it would have *measured* that transport, not fixed it.
+
+### How to close it — about ten minutes, once a window exists
+
+1. Apply the triggers to dev2: `bb-mirror/bin/fix-attachment-orphans.sh apply`
+   (as `bb-mirror` — see §6 on the role).
+2. In the dev2 UI, post a reply with images to any topic, then delete it through
+   the normal bbPress control.
+3. `SELECT count(*) FROM forums.attachment WHERE parent_kind='reply' AND
+   parent_id=<id>;` → expect **0**, and the reply row gone.
+4. Repeat once with the reply deleted from **wp-admin's** post list rather than
+   the bbPress control. That is path 5, and it is expected to FAIL — the mirror
+   should keep both rows, because no WP-native delete hook exists. A pass there
+   would mean §7's matrix is wrong and should be reopened.
+
+Step 4 is the valuable one. Steps 1–3 confirm something already strongly
+evidenced; step 4 tests a claim made from code reading alone.
+
+### Everything else in this lane is proven or explicitly measured
+
+Nothing else is left dangling. The fix, the rollback, both live runbooks, the
+ghost sweep and its safety rails, and the whole-mirror comparison all have
+measurements behind them, including negative controls.
+
+## 10. Out of scope, and still true
+
+The **WP side** has the same shape: deleting a reply in WP removes its `bp_media`
+rows, but nothing reconciles a `bp_media_ids` meta that lists ids whose media rows
+are gone. That is what made LIVE's reply image count read 236/380 when the truth
+was 233/374 — see `REPLY-IMAGE-COUNT-CEILING.md` §1. Different store, same class
+of defect: a delete that does not clean up after itself.
+
+Also unaddressed by design, from §7's matrix: **path 5** (no WP-native delete
+hook) and **path 6** (fire-and-forget dispatch). Neither is fixable with a
+database constraint. Path 6 in particular is the root cause behind the ghosts, the
+two replies that never rendered, and the author drift — three of the four defect
+classes this lane found trace back to one non-blocking HTTP call that nobody ever
+checks the result of. **That is the next piece of work in this area**, and it is
+larger than a lane-closing note: it means giving the dispatch a durable queue or a
+verification pass, not a retry bolted onto `wp_remote_post`.
