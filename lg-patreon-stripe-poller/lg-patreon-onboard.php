@@ -820,6 +820,113 @@ function lgpo_alert_failure( string $context, string $detail ): void {
 }
 
 /**
+ * DUPLICATE-ACCOUNT ALARM — the second half of Ian's 2026-07-29 requirement:
+ * "an email for 2 things: a duplicate being created, or the patreon api
+ * rejecting my keys." Keys-rejection is already covered by lgpo_alert_failure()
+ * from the sweep's 401 / config paths and is deliberately untouched; this is the
+ * duplicate half, and it reuses that same function so it travels the identical
+ * X-LG-Poller-Intent bypass (the gate suppresses everything else poller-framed).
+ *
+ * Runs after each completed sweep. LIVE ONLY — dev2 mints and deletes test
+ * accounts constantly, so running it there would cry wolf and train the alarm to
+ * be ignored.
+ *
+ * TWO signatures, because either alone is blind to half the problem
+ * (audit §1.6 vs §8):
+ *   (a) the same lgpo_patreon_user_id on more than one WP user — a true split
+ *       identity. Zero on live today, so any hit is new and real.
+ *   (b) a `patreon_<id>` skeleton login whose embedded id is a DIFFERENT user's
+ *       lgpo_patreon_user_id — the historical email-keyed failure mode, which
+ *       (a) structurally cannot see: the known duplicate pairs contain ZERO
+ *       id-splits, so an (a)-only alarm would have caught none of them.
+ *
+ * Cost: two small indexed reads (~1.8k + ~1.6k rows on live) joined in PHP. The
+ * obvious single-query form joins on meta_value, which WP does not index, so it
+ * degrades to a ~2.7M-row nested loop every tick — hence the hash join here.
+ *
+ * (b)'s 11 known offenders as of 2026-07-29 ship as the default baseline so only
+ * NEW pairs alert; every alerted key is remembered so a persisting condition
+ * mails ONCE, not every tick; and a key that clears is forgotten, so a genuine
+ * recurrence alerts again.
+ */
+function lgpo_dupe_alarm_is_live(): bool {
+    $host = strtolower( (string) wp_parse_url( (string) get_option( 'siteurl', '' ), PHP_URL_HOST ) );
+    return $host === 'loothgroup.com' || $host === 'www.loothgroup.com';
+}
+
+function lgpo_dupe_alarm_baseline(): array {
+    // audit §8 — 'b:<skeleton wp id>:<partner wp id>', verified on live 2026-07-29.
+    return (array) get_option( 'lgpo_dupe_alarm_baseline', [
+        'b:84:1856', 'b:195:1758', 'b:399:1841', 'b:471:1786', 'b:505:1756', 'b:615:1798',
+        'b:676:1574', 'b:1154:1333', 'b:1407:1793', 'b:1516:1690', 'b:1520:1781',
+    ] );
+}
+
+function lgpo_check_duplicate_alarm(): void {
+    if ( ! lgpo_dupe_alarm_is_live() ) {
+        return;
+    }
+    global $wpdb;
+    $found = [];
+
+    $by_pid = [];
+    foreach ( (array) $wpdb->get_results(
+        "SELECT user_id, meta_value FROM {$wpdb->usermeta}
+          WHERE meta_key = 'lgpo_patreon_user_id' AND meta_value <> ''"
+    ) as $m ) {
+        $by_pid[ (string) $m->meta_value ][] = (int) $m->user_id;
+    }
+
+    // (a) one Patreon id, several WP users.
+    foreach ( $by_pid as $pid => $ids ) {
+        if ( count( $ids ) > 1 ) {
+            sort( $ids );
+            $found[ 'a:' . $pid ] = sprintf(
+                '(a) Patreon id %s is linked to WP users %s', $pid, implode( ', ', $ids )
+            );
+        }
+    }
+
+    // (b) skeleton username carrying an id that belongs to a different account.
+    foreach ( (array) $wpdb->get_results(
+        "SELECT ID, user_login FROM {$wpdb->users} WHERE user_login LIKE 'patreon\\_%'"
+    ) as $u ) {
+        $pid = substr( (string) $u->user_login, 8 );
+        if ( $pid === '' ) {
+            continue;
+        }
+        foreach ( $by_pid[ $pid ] ?? [] as $other ) {
+            if ( $other === (int) $u->ID ) {
+                continue;
+            }
+            $found[ sprintf( 'b:%d:%d', $u->ID, $other ) ] = sprintf(
+                '(b) skeleton WP #%d (%s) carries Patreon id %s, which is linked to WP #%d',
+                $u->ID, $u->user_login, $pid, $other
+            );
+        }
+    }
+
+    $keys = array_keys( $found );
+    // Drop cleared keys first, so a merged-then-recurring pair can alert again.
+    $seen = array_values( array_intersect( (array) get_option( 'lgpo_dupe_alarm_seen', [] ), $keys ) );
+    $new  = array_values( array_diff( $keys, lgpo_dupe_alarm_baseline(), $seen ) );
+
+    if ( $new ) {
+        lgpo_alert_failure(
+            'dupe.detected',
+            "A duplicate / split member account has appeared since the last sweep.\n\n"
+            . implode( "\n", array_map( static fn( $k ) => '  - ' . $found[ $k ], $new ) )
+            . "\n\n(a) = one Patreon id linked to two WP users."
+            . "\n(b) = a patreon_<id> skeleton whose id belongs to another account."
+            . "\n\nKnown pre-existing pairs are baselined and are NOT listed above."
+        );
+        $seen = array_values( array_unique( array_merge( $seen, $new ) ) );
+    }
+
+    update_option( 'lgpo_dupe_alarm_seen', $seen, false );
+}
+
+/**
  * Operator notification: a member completed onboarding. Emails Ian
  * (lgpo_contact_email, falling back to admin_email) — who, tier, source —
  * once per onboard. Fired from the three provisioning terminals:
