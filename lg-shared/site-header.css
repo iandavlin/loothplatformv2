@@ -564,6 +564,47 @@ body.lg-sm-open { overflow: hidden; }
   color: var(--lg-sage-d, #6b7c52);
 }
 .lg-notif__clear:hover { background: var(--lg-line, #e3ddd0); }
+/* ── thread-follow §3.5: the per-row ⋯ and its popover ────────────────────────
+   The ⋯ sits BETWEEN the body and the ×, so the row reads [text/time] [⋯] [×].
+   Same 26px round hover-target as .lg-notif__clear above, deliberately — they are
+   peers and should read as one control group. */
+.lg-notif__more {
+  appearance: none; background: transparent; border: 0; cursor: pointer;
+  width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--lg-sage-d, #6b7c52);
+}
+.lg-notif__more:hover,
+.lg-notif__more[aria-expanded="true"] { background: var(--lg-line, #e3ddd0); }
+/* ≥44px effective touch target on phones without changing the visual size (§3.5 a11y). */
+@media (max-width: 480px) {
+  .lg-notif__more, .lg-notif__clear { width: 44px; height: 44px; }
+}
+/* position:fixed so the panel's own overflow can never clip it; JS anchors it to
+   the button and flips it up when there is no room below. */
+.lg-notif-menu {
+  position: fixed; z-index: 2147483000; min-width: 232px; max-width: min(300px, calc(100vw - 16px));
+  background: var(--lg-cream, #fbfbf8); border: 1px solid var(--lg-line, #e3ddd0);
+  border-radius: 12px; box-shadow: 0 12px 32px rgba(26,29,26,.22);
+  padding: 6px; overflow: hidden;
+}
+.lg-notif-menu__item {
+  appearance: none; width: 100%; display: flex; align-items: center; gap: 8px;
+  background: none; border: 0; border-radius: 8px; cursor: pointer;
+  padding: 9px 10px; text-align: left;
+  font: 500 13px/1.35 var(--lg-font-sans, system-ui); color: var(--lg-ink, #323532);
+}
+.lg-notif-menu__item:hover { background: var(--lg-sage-tint, #eef2e3); }
+.lg-notif-menu__item.is-on { color: var(--lg-sage-d, #6b7c52); font-weight: 700; }
+/* The truthfulness marker again (Ian 2026-07-28) — an emails row that cannot
+   currently deliver must not read as if it will. NOT disabled: the member may still
+   turn the bit off, and the note below the list says why in words. */
+.lg-notif-menu__item.is-muted { opacity: .6; }
+.lg-notif-menu__tick { width: 13px; flex: 0 0 auto; color: var(--lg-sage-d, #6b7c52); }
+.lg-notif-menu__note, .lg-notif-menu__load {
+  margin: 4px 4px 2px; padding: 0 6px 4px;
+  font: 400 11.5px/1.4 var(--lg-font-sans, system-ui); color: var(--lg-mute, #6b6f6b);
+}
 .lg-notif__text {
   font: 400 13px/1.4 var(--lg-font-sans, system-ui);
   color: var(--lg-ink, #323532); margin: 0;

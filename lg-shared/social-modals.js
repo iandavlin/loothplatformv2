@@ -188,6 +188,24 @@ var X_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke=
    never navigate somewhere wrong. The × (delete) button keeps its own
    stopPropagation so removing a row never navigates it. The × is REAL delete now
    (v2): every row carries one — read or unread — because you can delete either. */
+var DOTS_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">'
+  + '<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
+
+/* thread-follow §3.5 — UNSET SURFACE #2.
+   A row can carry the ⋯ menu only if it points at a DISCUSSION, i.e. ref.kind is
+   'topic' or 'reply'. For every such row ref.id IS the topic id (notify-bridge
+   pushes target_id = topic_id even when target_kind is 'reply' — the anchor carries
+   the reply). Two kinds are correctly excluded by that single test:
+     - connection/message rows, whose ref.kind is 'connection'/'thread';
+     - reaction.on_post on a MANAGED CPT CARD, whose ref.kind is 'card' and whose
+       ref.id is the card id — there is no topic subscription to toggle, and
+       offering one would write a follow against a card id.
+   So the gate is the ref, never the type string. */
+function notifCanFollow(n) {
+  var k = n && n.ref && n.ref.kind;
+  return (k === 'topic' || k === 'reply') && !!(n.ref.id);
+}
+
 function renderNotifItem(n) {
   var unread = !n.is_read;
   var link   = n.link || '';
@@ -195,15 +213,131 @@ function renderNotifItem(n) {
   var attrs  = 'class="lg-notif__item' + (unread ? ' lg-notif__item--unread' : '') +
                (link ? ' lg-notif__item--link' : '') + '" data-notif-id="' + esc(n.id) + '"';
   if (link) attrs += ' href="' + esc(link) + '" data-notif-link';
+  var dots = notifCanFollow(n)
+    ? '<button class="lg-notif__more" data-notif-more="' + esc(n.ref.id) + '"'
+      + ' aria-haspopup="menu" aria-expanded="false"'
+      + ' title="Notification settings for this discussion"'
+      + ' aria-label="Notification settings for this discussion">' + DOTS_SVG + '</button>'
+    : '';
   return '<' + tag + ' ' + attrs + '>'
     + '<div class="lg-notif__body">'
       + '<p class="lg-notif__text">' + notifText(n) + '</p>'
       + '<span class="lg-notif__time">' + relTime(n.created_at) + '</span>'
     + '</div>'
+    + dots
     + '<button class="lg-notif__clear" data-notif-del="' + esc(n.id) +
       '" title="Delete" aria-label="Delete notification">' + X_SVG + '</button>'
     + '</' + tag + '>';
 }
+
+/* ── The ⋯ popover (§3.5) ───────────────────────────────────────────────────────
+   Carries BOTH bits, so the row can unset whichever is ringing — and, because rows
+   now arrive for people who follow nothing (reply_to_topic / mention fire without
+   any subscription), it can also OPT IN from here.
+
+   Writes the SAME endpoint as every other surface (§3.2), so there is one store and
+   one contract. The row itself STAYS PUT: it is still a truthful record of something
+   that happened, and its deep link still works. Only future volume changes. */
+var notifMenuEl = null, notifMenuBtn = null;
+
+function closeNotifMenu() {
+  if (notifMenuEl) { notifMenuEl.remove(); notifMenuEl = null; }
+  if (notifMenuBtn) { notifMenuBtn.setAttribute('aria-expanded', 'false'); notifMenuBtn = null; }
+}
+
+function notifMenuRow(ch, on, muted) {
+  var lbl;
+  if (ch === 'notify') lbl = on ? 'Stop notifications' : 'Notify me about new replies';
+  else lbl = on ? 'Stop emails' : 'Email me about new replies';
+  return '<button type="button" role="menuitem" class="lg-notif-menu__item'
+    + (on ? ' is-on' : '') + (muted ? ' is-muted' : '') + '" data-follow-menu="' + ch + '">'
+    + '<span class="lg-notif-menu__tick" aria-hidden="true">' + (on ? '&#10003;' : '') + '</span>'
+    + esc(lbl) + '</button>';
+}
+
+function openNotifMenu(btn, topicId) {
+  closeNotifMenu();
+  notifMenuBtn = btn;
+  btn.setAttribute('aria-expanded', 'true');
+  var m = document.createElement('div');
+  m.className = 'lg-notif-menu';
+  m.setAttribute('role', 'menu');
+  m.innerHTML = '<p class="lg-notif-menu__load">Loading…</p>';
+  document.body.appendChild(m);
+  notifMenuEl = m;
+
+  // Anchor to the button, flipped up when there is no room below. Fixed-position so
+  // it is never clipped by the panel's own overflow.
+  function place() {
+    var r = btn.getBoundingClientRect();
+    var h = m.offsetHeight || 120, w = m.offsetWidth || 232;
+    var top = (r.bottom + h + 8 > window.innerHeight) ? (r.top - h - 6) : (r.bottom + 6);
+    m.style.top  = Math.max(8, top) + 'px';
+    m.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px';
+  }
+  place();
+
+  fetch('/bb-mirror-api/v0/follow?topics=' + encodeURIComponent(topicId),
+        { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+    .then(function (d) {
+      if (m !== notifMenuEl) return;                       // superseded while in flight
+      if (!d || !d.authenticated) { m.innerHTML = '<p class="lg-notif-menu__load">Sign in to change this.</p>'; place(); return; }
+      var st = (d.state && d.state[topicId]) || { notify: false, email: false };
+      var muted = d.email_master === false;
+      m.dataset.nonce = d.nonce || '';
+      m.dataset.topicId = topicId;
+      m.innerHTML = notifMenuRow('notify', !!st.notify, false)
+        + notifMenuRow('email', !!st.email, muted)
+        + (muted
+            ? '<p class="lg-notif-menu__note">Your account has discussion emails turned off.</p>'
+            : '')
+        /* Names the three rungs NEITHER toggle controls, so turning things off never
+           reads as "I will now hear nothing". Accurate: reply_to_topic, reply_to_reply
+           and mention are authorship/mention-based and fire regardless of both bits. */
+        + '<p class="lg-notif-menu__note">You&rsquo;ll still be notified when someone replies to you or mentions you.</p>';
+      place();
+    })
+    .catch(function () {
+      if (m !== notifMenuEl) return;
+      m.innerHTML = '<p class="lg-notif-menu__load">Could not load that.</p>'; place();
+    });
+}
+
+document.addEventListener('click', function (e) {
+  var more = e.target.closest && e.target.closest('[data-notif-more]');
+  if (more) {
+    e.preventDefault(); e.stopPropagation();               // the ⋯ sits inside an <a>
+    var tid = parseInt(more.getAttribute('data-notif-more'), 10);
+    if (more === notifMenuBtn) { closeNotifMenu(); return; }   // second click closes
+    if (tid) openNotifMenu(more, tid);
+    return;
+  }
+  var item = e.target.closest && e.target.closest('[data-follow-menu]');
+  if (item) {
+    e.preventDefault(); e.stopPropagation();
+    var menu = notifMenuEl; if (!menu) return;
+    var ch = item.getAttribute('data-follow-menu');
+    var on = item.classList.contains('is-on');
+    fetch('/bb-mirror-api/v0/follow', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': menu.dataset.nonce || '' },
+      body: JSON.stringify({ topic_id: parseInt(menu.dataset.topicId, 10), channel: ch, on: !on })
+    })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (j) {
+        if (!j || !j.ok) return;
+        closeNotifMenu();
+        // Keep the card/modal toggles honest if the hub is behind the panel.
+        if (window.lgFollowSync) window.lgFollowSync();
+      })
+      .catch(function () { closeNotifMenu(); });
+    return;
+  }
+  if (notifMenuEl && !e.target.closest('.lg-notif-menu')) closeNotifMenu();   // click-outside
+}, true);
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeNotifMenu(); });
+window.addEventListener('resize', closeNotifMenu);
 /* Read-on-clickthrough: opening the thing marks that ONE notification read.
    keepalive lets the POST survive the navigation we are NOT preventing — the link
    navigates natively (so modified clicks still work) while the mark-read flies. */
