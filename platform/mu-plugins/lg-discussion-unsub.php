@@ -136,11 +136,19 @@ add_filter('bp_email_set_tokens', function ($tokens) {
 }, 20);
 
 /* ── The page ─────────────────────────────────────────────────────────────────
-   Small, standalone, no login, theme-independent. Rendered on template_redirect so
-   it needs no nginx change — provided /discussions/ reaches WordPress at all.
-   ⚠️ UNVERIFIED ON DEV2: the strangler nginx config owns several prefixes and this
-   lane has not had a serve window to confirm /discussions/ falls through to WP. If
-   it does not, one rewrite line is needed (SPEC §10 item 8). Flagged, not assumed. */
+   Small, standalone, no login, theme-independent. Rendered on template_redirect, so
+   it needs NO nginx change — VERIFIED on dev2 by reading the live config rather than
+   assuming (2026-07-29):
+     * nothing anywhere in /etc/nginx/ mentions "discussion", so no block claims it;
+     * the vhost's catch-all is `location / { try_files $uri $uri/ /index.php?$args; }`
+       — the WordPress fallback, which /discussions/unsubscribe/ reaches;
+     * and no REGEX location intercepts it first. That check matters specifically
+       because a regex location outranks a prefix one — but every regex block here is
+       extension-anchored (\.php$, the static-asset alternation, wp-config), and this
+       path has no extension.
+   So SPEC §10 item 8's "route for the unsub page" is a no-op on this vhost. Recorded
+   because the NEXT box may differ: if a vhost ever adds a /discussions prefix or a
+   broader regex, this page stops resolving with no other symptom. */
 add_action('template_redirect', function () {
     $path = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
     if (rtrim($path, '/') !== rtrim(LG_DISC_UNSUB_PATH, '/')) return;
