@@ -862,9 +862,43 @@ reasons, both now asserted rather than assumed:
 
 | | |
 |---|---|
-| `bb-mirror-outbox.timer` installed on dev2 | **no** — only `bb-mirror-reconcile.timer` is |
+| `bb-mirror-outbox.timer` installed on dev2 | **now installed** (2026-07-29), drift-free — but **left DISABLED**, see below |
 | `~/loothplatformv2-clean` contains the reverse pass (`1576134`) | **no** — the serving checkout was 47 commits behind |
 | `/srv/bb-mirror/api/v0/_sync.php` contains the outbox ack | **no** — `outbox` appears 0 times |
+| `/srv/bb-mirror/bin/outbox-worker.php` exists | **no** — which is why the timer is disabled |
+
+**The timer is installed and disabled on purpose.** Its `ExecStart` points at
+`/srv/bb-mirror/bin/outbox-worker.php`, which does not exist until this branch is
+merged and pulled. A timer armed ahead of its code fails every 60 seconds and
+leaves `systemctl --failed` permanently red — **which destroys the alert channel,
+because the worker signals divergence BY failing.** A unit that is always red
+tells nobody anything. Order: pull → confirm the file exists → install →
+drift-check → enable. Runbook: `bb-mirror/deploy/2026-07-29-outbox-timer.md`.
+
+**It was rehearsed before being stood down**, on the real unit, via a drop-in
+pointing `ExecStart` at the lane worktree (since removed):
+
+```
+16:07:16  Due this tick: 0      <- the 60s grace; the fast path gets first refusal
+16:08:18  retry #65 topic upsert (attempt 1)  curl: ... port 9: Couldn't connect
+16:09:18  ok    #65 topic upsert (attempt 2)  0.307s
+          ok    #66 topic delete (attempt 1)  0.295s   Delivered 2, dead 0
+```
+
+Seeded by `bin/rehearse-outbox.php`, which drives a real `wp_delete_post()` with
+the fast path blocked and so leaves a **real ghost** — WP row gone, mirror row
+still rendering. The queue healed it unattended in about two minutes.
+
+**The ordering guarantee held under a real outage**, which is the detail worth
+keeping: at 16:08:18 the tick was due *two* rows and attempted *one*. The delete
+was held back because the upsert ahead of it failed. Replaying a group past its
+first failure is how you manufacture the very ghost this document is about.
+
+**The alarm fired on all three surfaces and then cleared**: the journal (`DEAD
+#67 … http 400: unknown kind/action`), systemd (exit 1, listed in
+`systemctl --failed`), and `forums.sync_state.outbox_alert`. A 4xx dead-lettered
+on attempt 1 rather than after 12. Clearing the row and re-running cleared both
+the unit state and the `sync_state` key — so the key means "right now".
 
 Which is why reconcile's journal shows no ghost lines every ten minutes, and why
 the end-to-end proof in §9 had to be acked by the worker rather than the receiver.
