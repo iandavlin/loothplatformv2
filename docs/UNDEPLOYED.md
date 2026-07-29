@@ -10,10 +10,7 @@ whenever this file is non-empty — see it, clear it, feel good. Newest on top.
 
 ## Staged scripts awaiting Ian's hands (not pull-shaped)
 
-- **Mirror attachment purge** — `sudo -u bb-mirror psql -d looth -v ON_ERROR_STOP=1 -f bb-mirror/deploy/2026-07-28-attachment-purge-live.sql`
-  (24 orphan rows; rollback file beside it; already on live via this morning's pull).
-- **Reconcile bookmark rewind to 2026-06-01** — one statement, fixes 5 drifted
-  rows incl. the miscredited post; command in the mirror-orphans handoff.
+- **Re-materialize replies 71678 + 71723** — Ian mid-run (dry then apply).
 - **Re-materialize replies 71678 + 71723** — the two members' answers nobody
   ever saw; `bb-mirror/bin/rematerialize.php` per its header.
 
@@ -24,6 +21,10 @@ whenever this file is non-empty — see it, clear it, feel good. Newest on top.
   the working lanes don't have in-flight verification against the serve.
 
 ## Cleared
+
+- 2026-07-29 23:1x: **attachment purge RUN on live (DELETE 24, triggers
+  installed)** and **bookmark rewind RUN** (was 1785366600 → 1780272000; that
+  old value is the rollback number). Timer re-walk fixes the drift.
 
 - 2026-07-29 late: **chip accordions + connection-remove confirm DEPLOYED to
   live** — Ian ran the pull and verified both working. Live current with main.
