@@ -514,6 +514,7 @@
     // list behaviours
     var list = qs('[data-list]', body);
     if (list) {
+      renumber(list);   // set the end-stop arrows before the first interaction
       list.addEventListener('click', function (e) {
         var it = e.target.closest('.fpe-item'); if (!it) return;
         if (e.target.closest('[data-rm]')) { it.remove(); renumber(list); return; }
