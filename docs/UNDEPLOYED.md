@@ -10,7 +10,7 @@ whenever this file is non-empty — see it, clear it, feel good. Newest on top.
 
 ## Staged scripts awaiting Ian's hands (not pull-shaped)
 
-- **Re-materialize replies 71678 + 71723** — Ian mid-run (dry then apply).
+- (section clear — nothing staged)
 - **Re-materialize replies 71678 + 71723** — the two members' answers nobody
   ever saw; `bb-mirror/bin/rematerialize.php` per its header.
 
@@ -21,6 +21,10 @@ whenever this file is non-empty — see it, clear it, feel good. Newest on top.
   the working lanes don't have in-flight verification against the serve.
 
 ## Cleared
+
+- 2026-07-29 23:2x: **rematerialize RUN — Karl Borum's and Robert Owens' replies
+  restored**; keeper verified both stores agree (71484: 9/9, 71649: 4/4).
+  ALL mirror-orphans repairs now complete on live.
 
 - 2026-07-29 23:1x: **attachment purge RUN on live (DELETE 24, triggers
   installed)** and **bookmark rewind RUN** (was 1785366600 → 1780272000; that
