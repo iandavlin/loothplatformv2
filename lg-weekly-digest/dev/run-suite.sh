@@ -36,7 +36,20 @@ TESTS=(
   verify-two-registers              # fresh NAMED / stale COUNTED
   verify-empty-means-no-send        # the recipient filter's logic
   verify-recipient-filter-at-scale  # the same filter over the real subscriber set
+  verify-per-recipient              # the REAL smart-code callback, one body -> N emails
+  verify-missed-exclusions          # edge status, not is_read, decides (needs the PG role)
 )
+
+# RUNNER IS PER-TEST. verify-missed-exclusions talks to Postgres through profile-app's
+# own config, and the WP pool (looth-dev) holds ZERO grants on profile_app — run it
+# under wp-cli and it fatals on the first query. It went unnoticed precisely because
+# it was not in this list.
+runner_for() {
+  case "$1" in
+    verify-missed-exclusions) echo "sudo -u profile-app php" ;;
+    *)                        echo "sudo -u looth-dev wp --path=$WP_PATH eval-file" ;;
+  esac
+}
 
 # A test is GREEN only if it exits 0 AND prints its own success sentinel. Exit code
 # alone is not enough: wp-cli exits 0 in situations where the file never ran.
@@ -46,6 +59,8 @@ declare -A SENTINEL=(
   [verify-two-registers]='TWO REGISTERS OK'
   [verify-empty-means-no-send]='EMPTY MEANS NO SEND'
   [verify-recipient-filter-at-scale]='RECIPIENT FILTER HOLDS AT SCALE'
+  [verify-per-recipient]='PER-RECIPIENT SEAM HOLDS'
+  [verify-missed-exclusions]='EDGE STATUS IS THE AUTHORITY'
 )
 
 green=0; red=0; dead=0
@@ -62,7 +77,7 @@ for t in "${TESTS[@]}"; do
     dead=$((dead+1)); continue
   fi
 
-  out="$(sudo -u looth-dev wp --path="$WP_PATH" eval-file "$f" 2>&1)"
+  out="$( $(runner_for "$t") "$f" 2>&1 )"
   code=$?
   clean="$(printf '%s' "$out" | grep -v 'DISABLE_WP_CRON')"
 

@@ -157,12 +157,23 @@ final class Recap
                   LEFT JOIN users a ON a.uuid = n.actor_uuid
                   LEFT JOIN connections c ON c.id = n.connection_id
                  WHERE n.user_uuid IN ($uph)
-                   AND n.is_read = false
                    AND n.created_at >= now() - make_interval(days => ?)
                    AND (
-                         n.connection_id IS NULL
-                         OR (n.type = 'connection_request' AND c.status = 'pending')
-                         OR (n.type = 'connection_accept'  AND c.status = 'accepted')
+                         -- connection_request: THE EDGE DECIDES, NEVER is_read.
+                         -- Reading a request is not answering it, and the mobile
+                         -- notification sheet auto-marks every row read 700ms after
+                         -- it opens (bottom-nav.js:1128) — so suppressing on is_read
+                         -- silences a live to-do for anyone who glances at their
+                         -- phone. Since empty now means NO EMAIL, that costs them the
+                         -- whole digest, not one row. (Ian, 2026-07-28.)
+                         (n.type = 'connection_request' AND c.status = 'pending')
+                         -- connection_accept is excluded WP-side by INCLUDED_TYPES,
+                         -- but the store must not hand back a lie either way.
+                         OR (n.type = 'connection_accept' AND c.status = 'accepted'
+                             AND n.is_read = false)
+                         -- Hub rows (mentions, replies, reactions) have no edge, so
+                         -- is_read is the only resolution signal that exists for them.
+                         OR (n.connection_id IS NULL AND n.is_read = false)
                        )
                  ORDER BY n.user_uuid, n.created_at DESC";
         $st = $pg->prepare($sql);
