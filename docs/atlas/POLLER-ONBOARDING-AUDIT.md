@@ -302,13 +302,14 @@ The chain, each step read:
    member is **not** logged out and their profile/identity survives.
 5. profile-app is never told (§5) — it keeps the old address as `primary_email`.
 
-**Does the member get told? No — and the mechanism is exact.** WP core *does*
-send a `"[Site] Email Changed"` notice to the **old** address
-(`/var/www/dev/wp-includes/user.php:2818–2845`, `'headers' => ''`), and nothing
-in this repo filters `send_email_change_email`. But that `wp_mail()` is called
-from inside `wp_update_user()`, which is called from the poller. The plugin
-installs `pre_wp_mail` → `Plugin::gateOutboundMail` (`Plugin.php:135, 273`),
-which:
+**Does the member get told? No — and the mechanism is exact.** An email-change
+notice *is* generated, to the **old** address only. WP core ships one
+(`/var/www/dev/wp-includes/user.php:2818–2845`, `'headers' => ''`); on this
+install BuddyBoss supersedes it with its own *"Notice of Email Change"*
+(`buddyboss-platform/bp-core/bp-core-wp-emails.php`). Either way it carries **no**
+`X-LG-Poller-Intent` header, and it is emitted from inside `wp_update_user()` —
+i.e. from the poller's own call stack. The plugin installs `pre_wp_mail` →
+`Plugin::gateOutboundMail` (`Plugin.php:135, 273`), which:
 
 - passes anything carrying `X-LG-Poller-Intent` (`:278`) — core's notice has no
   headers;
@@ -322,6 +323,17 @@ which:
 
 **⇒ The member's login email is changed and WP's own notification of that change
 is swallowed by the poller's mail gate.**
+
+**Measured on dev2, 2026-07-29** (probe asserts on the gate's `pre_wp_mail`
+verdict, not on `wp_mail()` returning true — mailpit accepts everything, so a
+`true` return proves nothing). Driving an email change from a required file under
+`/lg-patreon-stripe-poller/` — the same frame shape `sync_wp_email()` has:
+
+```
+BEFORE  SUPPRESSED  tagged=no   "[The Looth Group] Notice of Email Change"  -> old address
+        (that was the ONLY notification — the member is told nothing)
+```
+Fixed in §7 item 1; the after-state is recorded there.
 
 **And Ian is not told either.** If the member later tries their old email,
 `lg-login-monitor` early-returns because the address no longer resolves to a user
@@ -500,7 +512,7 @@ Each of these is load-bearing and was verified against live data:
 
 | # | Change | Size | Risk | Why now |
 |---|---|---|---|---|
-| 1 | Un-suppress the email-change notice to the member (§4.3) | ~10 lines | low | Members are silently losing their login identifier today |
+| 1 | ~~Un-suppress the email-change notice to the member (§4.3)~~ **DONE** — `lgpo_notify_email_change()`, `lg-patreon-onboard.php` | +47 | low | Members were silently losing their login identifier |
 | 2 | `profile_update` hook **+ live nginx route** (§5) | ~25 lines + conf | low | Receiver already built and correct; 18 members drifted |
 | 3 | Delete `UserLifecycle.php:206–409` (§2) | −204 | none | Zero callers; its docblock is an active instruction to regress |
 | 4 | Fail-loud the `UserProvisioner` mint branch (§3) | −133/+5 | low | Runs every 5 min; only remaining hot email-keyed minter |
@@ -509,6 +521,34 @@ Each of these is load-bearing and was verified against live data:
 
 Items 1–4 are independent and can ship separately. Item 6 is optional — the code
 is correct as it stands; unification buys comprehensibility, not correctness.
+
+### Item 1 — shipped on this branch (Ian approved 2026-07-29). NOT deployed.
+
+`lgpo_notify_email_change()` in `lg-patreon-onboard.php`, hooked on
+`profile_update` — the single point every `wp_update_user` email change passes
+through (the sweep's mirror, the skeleton-adopt mirror, admin edits). Sends one
+short purpose-written notice — *"Your sign-in email for … is now X"* — to **both**
+the old and new address, tagged `X-LG-Poller-Intent: notify`. **The gate itself is
+untouched.**
+
+Proven on dev2 with the same frame shape `sync_wp_email()` has:
+
+```
+BEFORE  SUPPRESSED  tagged=no   "Notice of Email Change"                 -> old
+AFTER   PASSED      tagged=yes  "Your sign-in email for … has changed"   -> new
+        PASSED      tagged=yes  "Your sign-in email for … has changed"   -> old
+        SUPPRESSED  tagged=no   "Notice of Email Change"                 -> new
+```
+
+Controls confirm the gate still works as before: `lgpo_notify_admin()`
+(poller-framed, untagged) → SUPPRESSED; `lgpo_notify_failure()` (poller-framed,
+tagged) → PASSED. Assertions are on the gate's `pre_wp_mail` verdict, never on
+`wp_mail()`'s return value.
+
+**Known trade-off, flagged for Ian:** on an *admin-initiated* edit (no poller
+frame) BuddyBoss's notice is not suppressed, so the old address receives both it
+and this one. An extra security notice is the benign direction; silencing
+BuddyBoss/core is a separate decision and was not taken here.
 
 ---
 

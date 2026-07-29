@@ -936,6 +936,53 @@ function lgpo_notify_failure( string $patron_email, string $patron_name, string 
 }
 
 /**
+ * Tell a member their SIGN-IN email changed — at BOTH the old and new address.
+ *
+ * The hourly sweep mirrors a patron's current Patreon email onto their WP
+ * account (LGPO_Sync_Engine::sync_wp_email), which silently rewrites their LOGIN
+ * identifier: email+password is a real login here (core registers
+ * wp_authenticate_email_password, and RestController::giftAuth checks passwords
+ * against an email lookup). WP core's own "Email Changed" notice cannot cover
+ * this — it mails only the OLD address, and being poller-framed it is suppressed
+ * by Plugin::gateOutboundMail while lgms_poller_mail_enabled is off. So this is a
+ * purpose-written notice carrying the agreed X-LG-Poller-Intent bypass marker,
+ * sent to BOTH addresses so the member learns the new one whichever they read.
+ * The gate itself is deliberately untouched.
+ *
+ * Hooked on profile_update because that is the single point EVERY wp_update_user
+ * email change passes through — the sweep's mirror, the skeleton-adopt mirror,
+ * and admin/profile edits alike. (On an admin-initiated edit WP core's notice
+ * still sends too, so the old address may get both; an extra security notice is
+ * the benign failure direction, and silencing core is not ours to decide here.)
+ * Best-effort, never throws — callers are mid-sweep.
+ */
+add_action( 'profile_update', 'lgpo_notify_email_change', 10, 2 );
+function lgpo_notify_email_change( $user_id, $old_user_data = null ): void {
+    $user = get_userdata( (int) $user_id );
+    if ( ! $user || ! $old_user_data instanceof WP_User ) return;
+    $old = strtolower( trim( (string) $old_user_data->user_email ) );
+    $new = strtolower( trim( (string) $user->user_email ) );
+    if ( $new === '' || $new === $old || ! is_email( $new ) ) return;
+
+    $site    = wp_specialchars_decode( (string) get_option( 'blogname' ), ENT_QUOTES );
+    $name    = trim( (string) $user->display_name );
+    $headers = [ 'Content-Type: text/plain; charset=UTF-8', 'X-LG-Poller-Intent: notify' ];
+    $body    = ( $name !== '' ? "Hi {$name}," : 'Hi,' ) . "\n\n"
+        . "Your sign-in email for {$site} is now {$new}.\n\n"
+        . "Use that address next time you sign in — your password has not changed. "
+        . "If you weren't expecting this, just reply and we'll sort it out.\n\n"
+        . "— The Looth Group team\n";
+
+    foreach ( array_unique( array_filter( [ $old, $new ], 'is_email' ) ) as $to ) {
+        try {
+            wp_mail( $to, "Your sign-in email for {$site} has changed", $body, $headers );
+        } catch ( \Throwable $_ ) {
+            // best-effort
+        }
+    }
+}
+
+/**
  * Persist a Patreon OAuth-token response (creator scope) to the lgpo_creator_*
  * options. Takes the full body returned by Patreon's /api/oauth2/token
  * endpoint (auth_code or refresh_token grants) and stores:
