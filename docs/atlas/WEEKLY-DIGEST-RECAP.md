@@ -342,20 +342,34 @@ like a live feature.
   one where the member is the *addressee* of a bell row.
 - Any future notification type, until someone adds it on purpose.
 
-**THE §9.1 QUESTION NO LONGER REACHES THIS DOCUMENT, and that is a real simplification.** The table
-that used to sit here gave "the one-line shape of each possible ruling". It is withdrawn: the digest
-**cannot carry followed-thread activity under any §9.1 outcome**, because the to-do test excludes it
-independently of how per-event email is configured.
+**§9.1 DOES NOT CHANGE THIS DOCUMENT'S SCOPE**, which is a genuine simplification and is all that
+survives of the paragraph that stood here. The digest's admission rule is the to-do test, and that
+test answers `forum.followed_topic` independently of how per-event email is configured.
 
 | If Ian rules… | The change here |
 |---|---|
 | digest owns discussion activity | **needs a separate ruling that a followed-thread reply waits on you** — his own test says it does not |
-| per-event owns it | **nothing** — excluded on the merits |
+| per-event owns it | **nothing** — `forum.followed_topic` is excluded on the merits |
 | digest owns it, per-event goes quiet | same as the first row: not a scope edit any more |
 
-**Consequence for the double-send worry, which was the whole reason this section existed:** it
-cannot happen under any configuration, so no de-duplication is needed under any §9.1 outcome — not
-just under some of them. See RECAP-SUPPRESSION-PROPOSAL.md §4.1.
+> ### ⚠️ THE DOUBLE-SEND CONCLUSION THAT STOOD HERE IS WITHDRAWN (2026-07-30)
+>
+> It read: *"it cannot happen under any configuration, so no de-duplication is needed under any §9.1
+> outcome — not just under some of them."* **The first half of the reasoning is sound and the
+> conclusion does not follow from it.**
+>
+> True: a followed-thread reply cannot double-send, because `forum.followed_topic` is excluded.
+> **Also true, and omitted:** this digest **NAMES `forum.reply_to_topic`** — a reply on a discussion
+> *you authored* — and BB's reply mailer excludes only the **replier**, never the topic author (its
+> own comment says otherwise and is wrong: `class-bp-forums-notification.php:989`). A member with the
+> ✉ bit on their own topic therefore receives the same reply as **both** a per-event email and a
+> named row here.
+>
+> **De-duplication is deferred on volume, not unnecessary by construction** — and the trigger is the
+> ✉ toggle shipping on that row type, which THREAD-FOLLOW-SPEC §3.5 puts one click from these very
+> rows. See RECAP-SUPPRESSION-PROPOSAL.md **§4.1b/§4.1c**. The visible consequence is drawn as
+> previs section 4, because suppression here does not shorten an email — under "empty sends nothing"
+> it cancels it.
 
 **Preferences.** This section is part of the weekly digest, so the **digest toggle governs it** and
 this lane invents nothing. The account page's Weekly Digest switch (bf9e3a1) is FluentCRM **list

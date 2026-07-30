@@ -41,15 +41,33 @@ namespace Looth\ProfileApp;
  * have been emailed — so it is a genuinely separate axis, and the correct instrument
  * would be a `notifications.emailed_at` stamp (NOT a scrape of wp_fsmpt_email_logs,
  * which retains 14 days, matches on subject string, and records a recipient address
- * rather than which item the mail was about). It is not built because the surface
- * does not exist yet. Measured on LIVE 2026-07-27:
+ * rather than which item the mail was about). It is not built because the VOLUME does
+ * not justify it. Measured on LIVE 2026-07-27, re-measured 07-30:
  *
  *   - connections, DMs and reactions have NO per-event email sender AT ALL — they
- *     are our features in this database, and nothing emails about them. That is 87%
+ *     are our features in this database, and nothing emails about them. That is ~93%
  *     of listable recap items with a structurally impossible overlap.
- *   - forums are the only surface BuddyBoss owns, and exactly THREE `forum.*` bell
- *     rows have ever existed on live (ids 789, 790, 825).
- *   - overlappable outbound mail: 5 sends in 14 days, list size 1,858.
+ *   - forums are the only surface BuddyBoss owns; ELEVEN `forum.*` bell rows have
+ *     ever existed on live, and 7 are outstanding across 258 mailed members.
+ *   - overlappable outbound mail: 5 sends in 14 days, 1,663 subscribed.
+ *
+ * ── ⚠️ DO NOT READ THAT ~93% AS "THE OVERLAP CANNOT HAPPEN" (fixed 2026-07-30) ──
+ *
+ * This comment used to say the axis was unbuilt because "the surface does not exist
+ * yet". IT DOES EXIST, for the remaining ~7%. This class admits
+ * `forum.reply_to_topic` — a reply on a discussion the member AUTHORED — and BB's
+ * reply mailer removes only the REPLIER from its recipients, never the topic author.
+ * (`bb_send_forums_subscribed_reply`, class-bp-forums-notification.php:989; its own
+ * comment there claims it removes the topic author and the comment is wrong.) So one
+ * reply can reach one member as BOTH a per-event email and a named row from here.
+ *
+ * THE TRIGGER IS NOT A NUMBER IN THIS FILE. It is the thread-follow ✉ toggle
+ * shipping on that row type (THREAD-FOLLOW-SPEC §3.5's menu offers "Email me"
+ * directly on it) or our own sender landing (§9.2) — whichever first, and BEFORE it
+ * lands. And if it is ever built it needs a FLOOR: under Ian's "empty means send no
+ * email", suppressing a member's last row does not shorten their digest, it cancels
+ * it. Today every member this axis could touch holds ONLY forum rows, so it would
+ * silence all of them and shorten none.
  *
  * The overlap rate itself is UNTESTED, not measured-as-zero: the last overlappable
  * email (07-24 22:39) predates the first bell row of a type that could overlap it

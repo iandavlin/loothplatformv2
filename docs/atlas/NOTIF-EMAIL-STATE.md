@@ -77,22 +77,42 @@ useful. That gap is what thread-follow and the digest recap between them close.
 > **This section said "everything else is downstream of §9.1". That is no longer true,
 > and the correction makes §9.1 SMALLER, not more urgent.**
 >
-> The double-send it worried about **cannot happen under any §9.1 outcome.** Ian's
-> to-do ruling excludes `forum.followed_topic` from the digest *on its merits* — a
-> reply in a thread you merely follow does not wait on you; you are an observer, not
-> the addressee. So the digest cannot carry followed-thread activity at all, whatever
-> per-event email does. There is nothing to de-duplicate against and no volume at
-> which that changes. See RECAP-SUPPRESSION-PROPOSAL.md §4.1.
+> Ian's to-do ruling excludes `forum.followed_topic` from the digest *on its merits* —
+> a reply in a thread you merely follow does not wait on you; you are an observer, not
+> the addressee. **That much is true and still stands.** §9.1 is therefore not the
+> keystone it was called, and can be ruled on its own merits.
+
+> ### ⚠️ BUT THE STRONGER CLAIM THAT FOLLOWED IT IS WITHDRAWN (2026-07-30)
 >
-> **§9.1 can now be ruled on its own merits, with no weekly-digest consequence to
-> weigh.** It is still worth ruling — it decides what per-event email does — it is
-> simply no longer a precondition for anything in the digest.
+> This section went on to say the double-send **"cannot happen under any §9.1
+> outcome ... there is nothing to de-duplicate against and no volume at which that
+> changes."** **That is false, and this is the doc the next keeper reads first, so it
+> is corrected here rather than only at source.**
+>
+> The reasoning held for `forum.followed_topic` and was then stated for the whole
+> question. **The digest also NAMES `forum.reply_to_topic`** — a reply on a discussion
+> *you authored*, which does wait on you and is admitted deliberately. And BB's reply
+> mailer (`bb_send_forums_subscribed_reply`, `class-bp-forums-notification.php:989`)
+> removes only the **replier** from its recipient list — its own comment claims it
+> removes the topic author, and the comment is wrong. So a member holding the ✉ bit on
+> a topic they started gets the same reply **twice**: a per-event email and a named
+> digest row. THREAD-FOLLOW-SPEC §3.5's ⋯ menu offers *"Email me"* on exactly that row
+> type, so the affordance that creates it is being built now.
+>
+> **What this means for the next keeper:** de-duplication across channels is **not**
+> structurally unnecessary. It is **deferred on volume** — 5 overlappable sends in 14
+> days, and an overlap rate that is **untested, not zero** — with a live trigger that
+> is *another lane's ship date*, not a number. See RECAP-SUPPRESSION-PROPOSAL.md
+> **§4.1b and §4.1c**, and `dev/measure-suppression-axes.sh` §6.
 
-**§9.1 — per-event vs digest**, kept for the record of what it was *thought* to decide:
+**§9.1 — per-event vs digest**, and what it does and does not decide:
 
-- ~~If per-thread ✉ email is its own channel, a member with ✉ on a thread *and* a
-  weekly recap covering discussion activity receives the same reply twice.~~
-  **Cannot occur — the digest never covers followed-thread activity.**
+- A member with ✉ on a thread **they authored**, plus the weekly recap, **can receive
+  the same reply twice** — per-event email and a named `forum.reply_to_topic` row.
+  **This is live, not hypothetical**; it is small (7 forum items across 258 mailed
+  members on 2026-07-30) and it grows the moment the ✉ toggle ships.
+- A member with ✉ on a thread they merely **follow** cannot, because
+  `forum.followed_topic` is excluded on the to-do test. **That leg was right.**
 - If per-thread ✉ email *is* a digest subscription, there is one channel — but note
   the digest would still not carry it, so this shape needs a separate ruling that a
   followed-thread reply waits on the member.
