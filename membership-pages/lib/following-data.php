@@ -225,14 +225,19 @@ if (!function_exists('lg_following_list')) {
  * lie of exactly the kind this feature exists to stop. The caller renders a
  * plain sentence saying which half could not be read.
  *
- * `hydrated` is the sharper case, and it is LIVE'S STATE TODAY: forums.topic_follow
- * has not been migrated to live yet and the `membership` role does not exist there,
- * so Postgres answers nothing at all. Without this flag every ✉ row falls through
- * the not-in-the-mirror branch and renders "This discussion is no longer available"
- * — eleven perfectly live discussions declared dead. "The mirror says this topic is
- * gone" and "we could not reach the mirror" are different facts and the page must
- * not confuse them: on !hydrated the caller drops the list entirely, says so, and
- * still offers Stop all, which needs only the ids and stays useful.
+ * `hydrated` is the sharper case: the topic mirror itself was unreadable. This is
+ * ORDINARY ERROR HANDLING for an unreachable store — a Postgres restart, a
+ * saturated box, a revoked grant — and NOT a mode the feature is designed around.
+ * The section assumes forums.topic_follow exists and is readable; that is the
+ * contract, and thread-follow's migration makes it true on live in the same window
+ * as the deploy (docs/UNDEPLOYED.md).
+ *
+ * It earns its place because without it the failure is silent and confident: every
+ * ✉ row falls through the not-in-the-mirror branch and renders "This discussion is
+ * no longer available", so a member is told eleven live discussions are dead.
+ * "The mirror says this topic is gone" and "we could not reach the mirror" are
+ * different facts and the page must not collapse them. On !hydrated the caller
+ * drops the list, says so, and still offers Stop all — which needs only the ids.
  */
 function lg_following_list(int $uid): array {
     $empty = ['items' => [], 'total' => 0, 'notify_count' => 0, 'email_count' => 0,
