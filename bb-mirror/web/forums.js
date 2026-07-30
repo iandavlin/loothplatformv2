@@ -4169,9 +4169,23 @@
       .catch(function () { setState(btn, was); });        // revert on failure
   }
 
-  /** Batch viewer-state fetch for any toggles not yet synced. */
+  /** Batch viewer-state fetch for any toggles not yet synced.
+   *
+   * ⚠️ [data-follow-open] IS IN THIS SELECTOR AND MUST STAY. §15 variant A removed the
+   * inline 🔔/✉ pair from the feed card, so a hub full of discussion cards now has
+   * ZERO [data-follow] until a modal is opened. Keyed on [data-follow] alone this
+   * function returned at the `!btns.length` guard, never fetched, and therefore:
+   *   - body.lg-follow-authed was never set (every gate hung at hydration), and
+   *   - paint() never ran, so NO PILL EVER LIT — a member following six threads saw
+   *     "Follow" on all six.
+   * That is §15.2's whole justification for allowing consolidation ("a member reads a
+   * thread's state off the feed without opening anything") silently inverted, and it
+   * is the §8.1.3 lie: the control would have said Follow over a live subscription.
+   * Caught in a real engine 2026-07-30; SSR counts and lint were all green on it.
+   */
   function sync() {
-    var btns = [].slice.call(document.querySelectorAll('[data-follow]:not([data-follow-synced])'));
+    var btns = [].slice.call(document.querySelectorAll(
+      '[data-follow]:not([data-follow-synced]), [data-follow-open]:not([data-follow-synced])'));
     if (!btns.length) return;
     btns.forEach(function (b) { b.setAttribute('data-follow-synced', '1'); });
     var ids = {};

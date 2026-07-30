@@ -162,12 +162,39 @@ def close_page(tid):
     except Exception: pass
 
 
+def set_cookies(p, base):
+    """Carry the member's WP auth cookies into the page.
+
+    ⚠️ NOT OPTIONAL, and easy to omit because it is invisible on the other harness.
+    real-origin-proxy.py injects auth SERVER-SIDE, so a run against it authenticates
+    with no cookie work at all — and the same gate pointed at the loopback exercise
+    harness then resolves ANON, never gets body.lg-follow-authed, and dies at
+    hydration as CANNOT RUN. That is a no-verdict caused entirely by the gate, which
+    is worse than a red because it looks like the environment's fault.
+    """
+    host = base.split("//", 1)[-1].split("/")[0].split(":")[0]
+    try:
+        raw = open(COOKIES).read()
+    except Exception as e:
+        cannot_run(f"{COOKIES} missing — cannot authenticate as a member ({e})")
+    cks = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or "=" not in line: continue
+        k, v = line.split("=", 1)
+        cks.append({"name": k, "value": v, "domain": host, "path": "/"})
+    if not cks:
+        cannot_run(f"{COOKIES} held no name=value pairs")
+    p.send("Network.enable")
+    p.send("Network.setCookies", {"cookies": cks})
+
+
 def emulate(p, width, height, mobile):
     p.send("Emulation.setDeviceMetricsOverride",
            {"width": width, "height": height,
             "deviceScaleFactor": 3 if mobile else 1, "mobile": mobile})
     p.send("Emulation.setTouchEmulationEnabled",
-           {"enabled": mobile, "maxTouchPoints": 5 if mobile else 0})
+           {"enabled": mobile, "maxTouchPoints": 5 if mobile else 1})
     p.send("Emulation.setUserAgentOverride", {"userAgent":
         ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 "
          "(KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1") if mobile else
@@ -175,7 +202,7 @@ def emulate(p, width, height, mobile):
          "Chrome/151.0.0.0 Safari/537.36")})
 
 
-def goto(p, url, tries=2):
+def goto(p, url, tries=3):
     """Navigate and WAIT FOR REAL HYDRATION, not merely readyState.
 
     The toggles ship server-rendered but inert; their true state arrives via the
@@ -185,12 +212,12 @@ def goto(p, url, tries=2):
     """
     for attempt in range(tries):
         p.send("Page.navigate", {"url": url})
-        for _ in range(160):
+        for _ in range(240):
             time.sleep(0.25)
             try:
                 if p.ev("document.readyState") == "complete": break
             except Exception: pass
-        for _ in range(160):
+        for _ in range(240):
             try:
                 if p.ev("document.body.classList.contains('lg-follow-authed')"):
                     return True
@@ -282,6 +309,7 @@ def main():
     _open["tid"], _open["page"] = tid, p
     try:
         p.send("Page.enable"); p.send("Runtime.enable")
+        set_cookies(p, base)
 
         # ---- PHASE 1 — the CONSOLIDATED control on the topic card ----------
         # §15 variant A (Ian 2026-07-30): the card row is React/replies/Share/Follow,
@@ -375,8 +403,22 @@ def main():
             rows = probe(p, ".feed-card:not(:has([data-follow-open])) :is(.fc-save, .lg-act-save)")
             vis, hittable, clipped = summarise(rows, f"content-card SAVE {label}")
             check(f"content cards {label}: no Save clipped out of its card", len(clipped), 0)
-            check(f"content cards {label}: every content card's Save is VISIBLE",
-                  len(vis), n_content)
+            # ⚠️ COUNTED PER CARD, NOT PER NODE. A card can ship BOTH a .fc-save
+            # (desktop) and a .lg-act-save (mobile) and CSS shows one per width, so
+            # "visible nodes == cards" is simply false arithmetic — it failed 12 vs 13
+            # on the first run against a build where every card was in fact fine.
+            # What matters to a member is that each card has AT LEAST ONE reachable
+            # Save, which is what this asks.
+            n_with_visible = p.ev(
+                "[...document.querySelectorAll('.feed-card')]"
+                ".filter(c => !c.querySelector('[data-follow-open]'))"
+                ".filter(c => [...c.querySelectorAll('.fc-save, .lg-act-save')].some(b => {"
+                "  const cs = getComputedStyle(b), r = b.getBoundingClientRect();"
+                "  return cs.display !== 'none' && cs.visibility !== 'hidden' &&"
+                "         parseFloat(cs.opacity) > 0.01 && r.width > 0 && r.height > 0; }))"
+                ".length")
+            check(f"content cards {label}: every card that ships Save has a VISIBLE one",
+                  n_with_visible, n_content)
             check(f"content cards {label}: every visible Save is hittable",
                   len([r for r in vis if r["inView"]]) == len(hittable), True)
 
@@ -454,8 +496,17 @@ def main():
               p.ev("document.querySelector('[data-follow=notify]').getAttribute('aria-pressed')"), "false")
 
         p.ev("document.querySelector('[data-follow=notify]').click()")
-        time.sleep(1.5)
-        check("after click: a row exists in forums.topic_follow", db_notify(topic_id), True)
+        # ⚠️ POLL, DO NOT SLEEP. A fixed 1.5s wait reported "no row" against a build
+        # whose POST demonstrably returned 200 and DID write — the round-trip is just
+        # slower than that under harness load. A too-short sleep manufactures a
+        # finding, and an over-long one hides a real hang; polling does neither. The
+        # NEXT navigation would also cancel an in-flight fetch, so waiting for the
+        # store here is what stops the reload racing the write.
+        wrote = False
+        for _ in range(40):                      # up to 10s
+            if db_notify(topic_id): wrote = True; break
+            time.sleep(0.25)
+        check("after click: a row exists in forums.topic_follow", wrote, True)
 
         if not goto(p, base + TOPIC_PATH):
             cannot_run("hydration never completed for the reload check")
