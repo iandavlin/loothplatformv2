@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Card changes — follow to the corner, replies as a stat (Ian, 2026-07-30)</title>
+<style>
+:root{--ink:#1a1d1a;--mute:#6b6f6b;--line:#e3ddd0;--card:#fff;--bg:#f2efe6;--rust:#c66845;
+ --sage:#87986a;--tint:#eef2e3;--sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--serif:Georgia,serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans)}
+.wrap{max-width:1120px;margin:0 auto;padding:26px 18px 70px}
+h1{font:700 25px/1.2 var(--serif);margin:0 0 6px}
+.lede{color:var(--mute);max-width:74ch;margin:0 0 10px}
+.q{border-left:3px solid var(--rust);padding:8px 13px;background:#fff;border-radius:0 9px 9px 0;margin:12px 0 20px;max-width:74ch}
+.q b{color:var(--rust)}
+h2{font:700 13px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--mute);margin:32px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.pane{background:#e8e4d8;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.pane__h{padding:11px 14px;background:#fff;border-bottom:1px solid var(--line)}
+.tag{display:inline-block;font:700 10px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;background:#9a9384;color:#fff;padding:4px 8px;border-radius:999px}
+.tag--a{background:var(--sage)}
+.pane__h h3{margin:7px 0 0;font:700 15px/1.25 var(--serif)}
+.pane__b{padding:18px 14px;display:flex;justify-content:center}
+.hint{margin:0 14px 14px;font-size:13px;color:#4a4d4a;line-height:1.5}
+.hint b{color:var(--ink)}
+
+/* card */
+.c{width:100%;max-width:430px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;position:relative}
+.c--ph{max-width:330px}
+.c__m{display:flex;align-items:center;gap:8px;padding:11px 13px 0;font-size:11.5px;color:var(--mute)}
+.av{width:28px;height:28px;border-radius:50%;background:var(--sage);color:#fff;display:flex;align-items:center;justify-content:center;font:700 11px/1 var(--sans);flex:0 0 auto}
+.c__t{margin:8px 13px 4px;font:700 17px/1.25 var(--serif)}
+.c__x{margin:0 13px 10px;font-size:13.5px;color:#4a4d4a}
+.c__stat{margin:0 13px 8px;font-size:12px;color:var(--mute);font-weight:600}
+.c__row{display:flex;align-items:center;gap:16px;padding:9px 13px 12px;border-top:1px solid var(--line);font:600 12.5px/1 var(--sans);color:var(--mute)}
+.c__row .sp{margin-left:auto}
+.ico{width:15px;height:15px;vertical-align:-2px}
+.act{display:inline-flex;align-items:center;gap:5px}
+.foll{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 11px;font:600 12.5px/1 var(--sans);color:var(--mute)}
+.foll.on{color:var(--rust);border-color:var(--rust);background:#fdf1ec}
+.corner{position:absolute;top:10px;right:11px;z-index:2}
+.rx{display:inline-flex;align-items:center;gap:5px;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:3px 9px;font-size:12px;font-weight:600;color:#4a4d4a}
+.dot{color:#b9bcb4;margin:0 2px}
+.del{text-decoration:line-through;opacity:.45}
+.mark{background:#fdf1ec;outline:2px dashed var(--rust);outline-offset:2px;border-radius:6px}
+table{border-collapse:collapse;width:100%;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13.5px;margin-top:8px}
+th,td{padding:9px 11px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:#faf8f2;font-weight:700}
+tr:last-child td{border-bottom:0}
+.warn{background:#fdf6e9;border:1px solid #e8cfa8;border-radius:10px;padding:12px 14px;margin:14px 0;max-width:74ch;font-size:14px}
+</style></head><body><div class="wrap">
+
+<h1>Two card changes</h1>
+<p class="lede">Both are layout moves on the discussion card. Desktop and phone are different cards with different rules, so each is shown separately — before on the left, after on the right.</p>
+<div class="q"><b>&ldquo;Is it possible to move the follow button to the upper right hand corner of the card on DT?&rdquo;</b> &nbsp;and&nbsp; <b>&ldquo;remove the replies button from the bottom&hellip; remove the replies stat from the top&hellip; replies becomes a stat, not a link, inline with the reactions.&rdquo;</b></div>
+
+<h2>1 &middot; Desktop — follow moves to the top-right corner</h2>
+<div class="grid">
+  <div class="pane">
+    <div class="pane__h"><span class="tag">Now</span><h3>Follow sits at the end of the action row</h3></div>
+    <div class="pane__b"><div class="c">
+      <div class="c__m"><span class="av">DL</span><span>Doug Lawrence &middot; 2h</span></div>
+      <div class="c__t">Bridge saddle buzz on a &rsquo;68 Tele</div>
+      <div class="c__x">Swapped the saddles and it&rsquo;s still there on the B string&hellip;</div>
+      <div class="c__row">
+        <span class="act">&#128077; React</span><span class="act">&#128172; 8 replies</span><span class="act">&#8599; Share</span>
+        <span class="foll sp mark">&#128276; Follow</span>
+      </div>
+    </div></div>
+    <p class="hint">Four controls competing for one row. It is also the row that overflowed and dropped the toggles off the card earlier today.</p>
+  </div>
+  <div class="pane">
+    <div class="pane__h"><span class="tag tag--a">After</span><h3>Follow in the corner, three controls left</h3></div>
+    <div class="pane__b"><div class="c">
+      <span class="foll on corner mark">&#128276; Following</span>
+      <div class="c__m"><span class="av">DL</span><span>Doug Lawrence &middot; 2h</span></div>
+      <div class="c__t" style="margin-right:118px">Bridge saddle buzz on a &rsquo;68 Tele</div>
+      <div class="c__x">Swapped the saddles and it&rsquo;s still there on the B string&hellip;</div>
+      <div class="c__row"><span class="act">&#128077; React</span><span class="act">&#128172; 8 replies</span><span class="act">&#8599; Share</span></div>
+    </div></div>
+    <p class="hint"><b>Does the row still balance?</b> Yes, and better than before. React / replies / Share are all <em>doing</em> actions of the same weight; Follow was the odd one out — a state you set once, not an action you take. The three sit left-aligned at the same rhythm and the row no longer has a control pinned to the far right with a gap in the middle.</p>
+  </div>
+</div>
+<div class="warn"><b>One thing to look at:</b> the corner overlaps where a long title wraps. In the after-frame the title is held back from the corner so they can never collide. If you would rather the title keep the full width, the alternative is a corner that only appears on hover &mdash; but then the state stops being readable at a glance, which is the rule we set when we agreed the bell must carry its own state. I have kept it always-visible.</div>
+
+<h2>2 &middot; Phone — replies stops being a button and becomes a stat</h2>
+<div class="grid">
+  <div class="pane">
+    <div class="pane__h"><span class="tag">Now</span><h3>Replies appears TWICE</h3></div>
+    <div class="pane__b"><div class="c c--ph">
+      <div class="c__m"><span class="av">DL</span><span>Doug Lawrence &middot; 2h</span></div>
+      <div class="c__t">Bridge saddle buzz on a &rsquo;68 Tele</div>
+      <div class="c__stat mark">8 replies</div>
+      <div class="c__x">Swapped the saddles and it&rsquo;s still there&hellip;</div>
+      <div style="padding:0 13px 8px"><span class="rx">&#128077; 1</span></div>
+      <div class="c__row">
+        <span class="act">&#128077; Like</span><span class="act mark">&#128172; 8 replies</span><span class="act">&#8599; Share</span>
+        <span class="foll sp">&#128276;</span>
+      </div>
+    </div></div>
+    <p class="hint">A stat above the excerpt, and a tappable button below. The same number, twice, in two different roles.</p>
+  </div>
+  <div class="pane">
+    <div class="pane__h"><span class="tag tag--a">After</span><h3>Once, beside the reactions</h3></div>
+    <div class="pane__b"><div class="c c--ph">
+      <div class="c__m"><span class="av">DL</span><span>Doug Lawrence &middot; 2h</span></div>
+      <div class="c__t">Bridge saddle buzz on a &rsquo;68 Tele</div>
+      <div class="c__x">Swapped the saddles and it&rsquo;s still there&hellip;</div>
+      <div style="padding:0 13px 8px"><span class="rx mark">&#128077; 1 <span class="dot">&middot;</span> 8 replies</span></div>
+      <div class="c__row">
+        <span class="act">&#128077; Like</span><span class="act">&#8599; Share</span>
+        <span class="foll sp">&#128276;</span>
+      </div>
+    </div></div>
+    <p class="hint"><b>Replies now appears exactly once</b>, as a count sitting with the reaction counts. Not tappable, not at the top, not at the bottom. The bottom row drops to Like / Share / follow.</p>
+  </div>
+</div>
+
+<h2>Before you say yes — the one risk, and why it is safe</h2>
+<p class="lede">Removing the replies button takes away a way <em>into</em> the thread. I checked in a real browser before drawing this rather than assuming:</p>
+<table>
+<tr><th>Question</th><th>Answer</th></tr>
+<tr><td>Is the replies button the only way into a thread from a phone card?</td><td><b>No.</b> Tapping the card&rsquo;s title, excerpt or cover opens the thread sheet. Verified on the running site at 390px: tapped the title, the thread sheet opened.</td></tr>
+<tr><td>So does removing it strand anyone?</td><td><b>No.</b> The card body remains a visible, obvious way in &mdash; the same one most people already use.</td></tr>
+<tr><td>Does the count still tell you there is a conversation?</td><td>Yes &mdash; that is what moving it beside the reactions is for. It reads as &ldquo;this thread has activity&rdquo; rather than as a second button.</td></tr>
+</table>
+
+<h2>What this does not change</h2>
+<p class="lede">Desktop keeps its replies affordance exactly as it is &mdash; item 2 is phone-only. The follow control keeps carrying its own state (lit when following, with the envelope badge when emails are on), on both. And nothing here is switched on for members yet: it all sits behind the off-by-default flag until you say so.</p>
+</div></body></html>
