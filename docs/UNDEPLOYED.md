@@ -3,18 +3,17 @@
 Keeper maintains this at every merge. Rule (Ian 2026-07-29): he gets reminded
 whenever this file is non-empty. "Deployed" means live is actually running it.
 
-## Waiting on Ian's `lg-deploy` — ⚠ HOLD, do not pull yet
+## Waiting on Ian's `lg-deploy` — tonight's merges
 
-Main is ahead of live with tonight's merges: **events-mobile** (mobile tap
-navigates — Ian-verified on dev2), **thread-follow** (follow toggles,
-default-off), the gate harness generation, and the buck-conf disclosure fix.
+Main is ahead of live: events-mobile, thread-follow (mobile long-press fix +
+feed-card fixes), slug tooling, gate harness. Follow controls need a live DB
+migration IN THE SAME WINDOW as the pull:
+- **forums.topic_follow table** — staged by thread-follow at
+  ~/lane-outbox/thread-follow-LIVE-topic-follow-*.sql (forward + ROLLBACK).
+  Run as `sudo -u bb-mirror psql -d looth` on LIVE. Without it, follow toggles
+  render but can't persist (the exact dev2 symptom, now fixed on dev2 because
+  keeper is applying the table there).
 
-**HOLD because:** thread-follow has Ian-reported defects on the hub feed card
-(dead buttons, two glyphless squares, rough mobile layout) — member-visible if
-pulled now. The lane is fixing on its branch. When its fix merges and Ian
-re-passes dev2, ONE lg-deploy carries everything, plus:
-- thread-follow's DB migrations must run live-side in the same window (keeper
-  stages the exact commands here before the pull).
 
 ## Staged scripts awaiting Ian's hands
 
