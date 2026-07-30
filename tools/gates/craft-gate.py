@@ -21,14 +21,26 @@ in docs/CRAFT-STANDARD.md before pushing. Run via tools/gates/run-all.sh.
 Run as ubuntu on dev (mints viewer cookies via sudo, drives chrome-dev:9222).
 """
 
-import asyncio, json, subprocess, sys, urllib.request, urllib.parse
+import asyncio, json, os, subprocess, sys, urllib.request, urllib.parse
 
 try:
     import websockets
 except ImportError:
     sys.exit("python3-websockets required (it's installed system-wide on dev)")
 
-HOST = "https://dev.loothgroup.com"
+# Public host also differs per box — read the shared env rather than assume dev.*
+def _public_host():
+    try:
+        for line in open("/etc/looth/env"):
+            if line.startswith("LG_PUBLIC_HOST="):
+                return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return "dev.loothgroup.com"
+
+
+HOSTNAME = _public_host()
+HOST = "https://" + HOSTNAME
 CDP  = "http://127.0.0.1:9222"
 
 # page → (path, [viewers]) ; add new user-facing surfaces HERE when built.
@@ -53,15 +65,51 @@ def sh(cmd):
     return subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout.strip()
 
 
+# The dev vhost is NOT the same filename on every box: this one is dev2. Hardcoding
+# dev.loothgroup.com.conf made three of the five gates GATE-ERROR here, which reads as
+# "GATES RED — do not push" and blocks every lane for an environment reason rather than
+# a defect. Resolve instead of assuming (thread-follow, 2026-07-30).
+# The `set $loothdev_token "…"` lives in the SNIPPET; the vhost only *uses* the
+# variable, so parsing the vhost yields the Set-Cookie line, not the token.
+GATE_CONFS = [
+    "/etc/nginx/snippets/loothdev-tokens.conf",
+    "/etc/nginx/sites-available/dev2.loothgroup.com.conf",
+    "/etc/nginx/sites-available/dev.loothgroup.com.conf",
+]
+
+
+def _env(key, default):
+    try:
+        for line in open("/etc/looth/env"):
+            if line.startswith(key + "="):
+                return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return default
+
+
+# wp-cli must run as the WP pool user — www-data cannot read wp-config on dev2.
+WP_USER = _env("LG_WP_USER", "www-data")
+WP_PATH = _env("LG_WP_PATH", "/var/www/dev")
+
+
+def gate_conf():
+    for p in GATE_CONFS:
+        if os.path.exists(p):
+            return p
+    sys.exit("cannot find a dev vhost conf in: " + ", ".join(GATE_CONFS))
+
+
 def gate_token():
-    for line in open("/etc/nginx/sites-available/dev.loothgroup.com.conf"):
-        if "$loothdev_token" in line and '"' in line:
+    conf = gate_conf()
+    for line in open(conf):
+        if "set $loothdev_token" in line and '"' in line:
             return line.split('"')[1]
-    sys.exit("cannot read dev gate token")
+    sys.exit("cannot read dev gate token from " + conf)
 
 
 def member_cookies():
-    wpc = sh("sudo -u www-data wp --path=/var/www/dev eval "
+    wpc = sh(f"sudo -u {WP_USER} wp --path={WP_PATH} eval "
              "'$e=time()+3600; echo LOGGED_IN_COOKIE.\"=\".urlencode(wp_generate_auth_cookie(1912,$e,\"logged_in\"));'")
     jwt = sh("sudo -u profile-app php /srv/profile-app/bin/mint-dev-token.php 1 | tail -1")
     n, v = wpc.split("=", 1)
@@ -115,7 +163,7 @@ async def audit(path, viewer, gate, member):
         await t.send("Network.clearBrowserCookies")
         cookies = [("loothdev_auth", gate)] + (member if viewer == "member" else [])
         for n, v in cookies:
-            await t.send("Network.setCookie", {"domain": "dev.loothgroup.com", "name": n,
+            await t.send("Network.setCookie", {"domain": HOSTNAME, "name": n,
                                                "value": v, "path": "/", "secure": True, "httpOnly": True})
         await t.send("Page.navigate", {"url": HOST + path + ("?craftgate=1" if "?" not in path else "&craftgate=1")})
         r = await t.send("Runtime.evaluate", {"expression": COLLECT_JS,

@@ -4734,6 +4734,19 @@
       '.feed-page .lg-card-actions{padding-left:7px!important;padding-right:10px!important;gap:20px!important}',
       // Instagram save bookmark — pushed to the right of the action row; fills when saved
       '.feed-page .lg-card-actions .lg-act-save{margin-left:auto}',
+      /* ⚠️ THE ROW HAS TO FIT A PHONE — Ian, 2026-07-30 ("the card's mobile layout is
+         rough"). Measured on dev2 at 390px: content ran to 420px and the Save bookmark
+         ended 34px OFF-SCREEN. The row was designed for four items with `save` pushed
+         right by margin-left:auto; thread-follow added a fifth (the 🔔/✉ pair) without
+         a width budget, and 20px gaps × 4 made it worse.
+         Fix: when the pair is present, the STATE controls group right together —
+         [Like][N replies][Share] ……… [🔔][✉][🔖] — which is also what §2.2b asked for
+         ("ordering matches desktop, state controls right"), and the gap tightens to 10.
+         :has() scopes this to bars that actually carry the pair, so content cards are
+         untouched; browsers without :has() simply keep today's behaviour. */
+      '.feed-page .lg-card-actions:has(.lg-act-follow){gap:10px!important}',
+      '.feed-page .lg-card-actions .lg-act-follow{margin-left:auto}',
+      '.feed-page .lg-card-actions:has(.lg-act-follow) .lg-act-save{margin-left:0}',
       '.feed-page .lg-card-actions .lg-act-save .ico{fill:none;stroke:currentColor}',
       '.feed-page .lg-card-actions .lg-act-save.is-on{color:var(--lguser-ink,#1a1d1a)}',
       '.feed-page .lg-card-actions .lg-act-save.is-on .ico{fill:currentColor;stroke:currentColor}',

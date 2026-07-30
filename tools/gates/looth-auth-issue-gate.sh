@@ -21,8 +21,23 @@
 # Run as ubuntu on dev (mints a control session via sudo wp-cli). Exit 0 = GREEN.
 set -uo pipefail
 
-HOST="https://dev.loothgroup.com"
-CONF="/etc/nginx/sites-available/dev.loothgroup.com.conf"
+HOSTNAME="$(grep -h '^LG_PUBLIC_HOST=' /etc/looth/env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
+HOSTNAME="${HOSTNAME:-dev.loothgroup.com}"
+HOST="https://$(grep -h '^LG_PUBLIC_HOST=' /etc/looth/env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
+HOST="${HOST:-https://dev.loothgroup.com}"; [ "$HOST" = "https://" ] && HOST="https://dev.loothgroup.com"
+# Verify at the ORIGIN, never the CF edge — a plain public curl gets bot-challenged
+# into a 403 that reads as an outage (CLAUDE.md trap #2). This is exactly how this
+# gate went RED on dev2 with a perfectly healthy 302. (thread-follow 2026-07-30)
+RESOLVE=(--resolve "${HOSTNAME}:443:127.0.0.1" -k)
+
+# The dev vhost filename differs per box (this one is dev2) — resolve, do not assume.
+# Hardcoding it made this gate GATE-ERROR on dev2, which reads as RED and blocks the
+# push for an environment reason rather than a defect (thread-follow 2026-07-30).
+CONF=""; for c in /etc/nginx/snippets/loothdev-tokens.conf \
+                  /etc/nginx/sites-available/dev2.loothgroup.com.conf \
+                  /etc/nginx/sites-available/dev.loothgroup.com.conf; do
+  [ -f "$c" ] && { CONF="$c"; break; }
+done
 WP="/var/www/dev"
 RET="/u/patreon_84629041"          # any existing same-origin path; we assert it round-trips
 ISSUE="$HOST/looth-auth/issue?return=$(python3 -c 'import urllib.parse;print(urllib.parse.quote("/u/patreon_84629041"))')"
@@ -34,14 +49,14 @@ GATE=$(grep -oP '(?<=set \$loothdev_token ")[^"]+' "$CONF" | head -1)
 # A logged-in member, bound to a REAL session token (an unregistered token does
 # not validate, so is_user_logged_in() would be false — the control must be a
 # true session). User 7 = a bridged member with a _looth_uuid mirror.
-read MLIN MLIV < <(sudo -u www-data wp --path="$WP" eval '
+read MLIN MLIV < <(sudo -u "${LG_WP_USER:-looth-dev}" wp --path="$WP" eval '
   $uid=7; $exp=time()+3600;
   $t=WP_Session_Tokens::get_instance($uid)->create($exp);
   echo LOGGED_IN_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"logged_in",$t);
 ' 2>/dev/null)
 [ -n "${MLIV:-}" ] || { echo "GATE-ERROR  could not mint control member cookie"; exit 1; }
 
-hdrs() { curl -s -D - -o /dev/null --max-redirs 0 -b "$1" "$ISSUE"; }
+hdrs() { curl -s "${RESOLVE[@]}" -D - -o /dev/null --max-redirs 0 -b "$1" "$ISSUE"; }
 
 # ---- 1. logged-in member, NO nonce → 302 back to ?return, with a looth_id ----
 H=$(hdrs "loothdev_auth=$GATE; $MLIN=$MLIV")
@@ -68,7 +83,7 @@ if [ "$code2" != "302" ] || ! printf '%s' "$loc2" | grep -q 'wp-login.php'; then
 fi
 
 # ---- 3. off-host ?return must NOT be honored (open-redirect guard) ----
-loc3=$(curl -s -D - -o /dev/null --max-redirs 0 -b "loothdev_auth=$GATE; $MLIN=$MLIV" \
+loc3=$(curl -s "${RESOLVE[@]}" -D - -o /dev/null --max-redirs 0 -b "loothdev_auth=$GATE; $MLIN=$MLIV" \
         "$HOST/looth-auth/issue?return=https://evil.example/x" | grep -i '^location:' | tr -d '\r' | awk '{print $2}')
 if printf '%s' "$loc3" | grep -qi 'evil.example'; then
   fails+=("ISSUE-OPENREDIR  off-host return honored ('$loc3') — must fall back to a same-origin path")

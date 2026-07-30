@@ -17,24 +17,33 @@
 # run standalone, and re-run once before believing a RED. Exit 0 = GREEN.
 set -uo pipefail
 
-WP="/var/www/dev"; CONF="/etc/nginx/sites-available/dev.loothgroup.com.conf"
+WP="/var/www/dev"
+HOSTNAME="$(grep -h '^LG_PUBLIC_HOST=' /etc/looth/env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
+HOSTNAME="${HOSTNAME:-dev.loothgroup.com}"
+# dev vhost filename differs per box (dev2 here) — resolve, do not assume.
+CONF=""; for c in /etc/nginx/snippets/loothdev-tokens.conf \
+                  /etc/nginx/sites-available/dev2.loothgroup.com.conf \
+                  /etc/nginx/sites-available/dev.loothgroup.com.conf; do
+  [ -f "$c" ] && { CONF="$c"; break; }
+done
 APP="/srv/profile-app"; SUBJ=7      # a claimed member (owns a /profile/edit editor)
 
 GATE=$(grep -oP '(?<=set \$loothdev_token ")[^"]+' "$CONF" | head -1)
 [ -n "${GATE:-}" ] || { echo "GATE-ERROR  cannot read dev gate token"; exit 1; }
 
-read LIN LIV SN SV < <(sudo -u www-data wp --path="$WP" eval '
+read LIN LIV SN SV < <(sudo -u "${LG_WP_USER:-looth-dev}" wp --path="$WP" eval '
   $uid='"$SUBJ"'; $exp=time()+1800; $t=WP_Session_Tokens::get_instance($uid)->create($exp);
   echo LOGGED_IN_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"logged_in",$t)." ".SECURE_AUTH_COOKIE." ".wp_generate_auth_cookie($uid,$exp,"secure_auth",$t);' 2>/dev/null)
 LOOTH=$(sudo -u profile-app php "$APP/bin/mint-dev-token.php" "$SUBJ" 2>/dev/null | tail -1)
 [ -n "${LIV:-}" ] && [ -n "${LOOTH:-}" ] || { echo "GATE-ERROR  could not mint owner session"; exit 1; }
 
-GATE="$GATE" LIN="$LIN" LIV="$LIV" SN="$SN" SV="$SV" LOOTH="$LOOTH" python3 - <<'PYEOF'
+GATE="$GATE" LIN="$LIN" LIV="$LIV" SN="$SN" SV="$SV" LOOTH="$LOOTH" LGHOST="$HOSTNAME" python3 - <<'PYEOF'
 import asyncio, json, os, urllib.request, websockets, sys
+HOSTNAME=os.environ.get('LGHOST') or 'dev.loothgroup.com'
 C=[(os.environ['LIN'],os.environ['LIV']),(os.environ['SN'],os.environ['SV']),
    ('loothdev_auth',os.environ['GATE']),('looth_id',os.environ['LOOTH'])]
-cookies=[{'domain':'dev.loothgroup.com','name':n,'value':v,'path':'/','secure':True,'httpOnly':True} for n,v in C]
-URL='https://dev.loothgroup.com/profile/edit'
+cookies=[{'domain':HOSTNAME,'name':n,'value':v,'path':'/','secure':True,'httpOnly':True} for n,v in C]
+URL='https://'+HOSTNAME+'/profile/edit'
 async def main():
   pages=json.load(urllib.request.urlopen('http://127.0.0.1:9222/json'))
   page=[p for p in pages if p['type']=='page'][0]

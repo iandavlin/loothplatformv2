@@ -20,8 +20,23 @@
 # Invoked by tools/gates/run-all.sh. Exit 0 = GREEN, non-zero = RED.
 set -uo pipefail
 
-HOST="https://dev.loothgroup.com"
-CONF="/etc/nginx/sites-available/dev.loothgroup.com.conf"
+HOSTNAME="$(grep -h '^LG_PUBLIC_HOST=' /etc/looth/env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
+HOSTNAME="${HOSTNAME:-dev.loothgroup.com}"
+HOST="https://$(grep -h '^LG_PUBLIC_HOST=' /etc/looth/env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
+HOST="${HOST:-https://dev.loothgroup.com}"; [ "$HOST" = "https://" ] && HOST="https://dev.loothgroup.com"
+# Verify at the ORIGIN, never the CF edge — a plain public curl gets bot-challenged
+# into a 403 that reads as an outage (CLAUDE.md trap #2). This is exactly how this
+# gate went RED on dev2 with a perfectly healthy 302. (thread-follow 2026-07-30)
+RESOLVE=(--resolve "${HOSTNAME}:443:127.0.0.1" -k)
+
+# The dev vhost filename differs per box (this one is dev2) — resolve, do not assume.
+# Hardcoding it made this gate GATE-ERROR on dev2, which reads as RED and blocks the
+# push for an environment reason rather than a defect (thread-follow 2026-07-30).
+CONF=""; for c in /etc/nginx/snippets/loothdev-tokens.conf \
+                  /etc/nginx/sites-available/dev2.loothgroup.com.conf \
+                  /etc/nginx/sites-available/dev.loothgroup.com.conf; do
+  [ -f "$c" ] && { CONF="$c"; break; }
+done
 ACT="$HOST/wp-json/looth/v1/activity?limit=1"
 fails=()
 
@@ -29,14 +44,14 @@ GATE=$(grep -oP '(?<=set \$loothdev_token ")[^"]+' "$CONF" | head -1)
 [ -n "${GATE:-}" ] || { echo "GATE-ERROR  cannot read dev gate token from $CONF"; exit 1; }
 
 audience() {  # $1 = extra cookie(s) appended to the gate cookie
-  curl -s -D - -o /dev/null -b "loothdev_auth=$GATE${1:+; $1}" "$ACT" \
+  curl -s "${RESOLVE[@]}" -D - -o /dev/null -b "loothdev_auth=$GATE${1:+; $1}" "$ACT" \
     | grep -i '^X-LG-Activity-Audience:' | tr -d '\r' | awk '{print tolower($2)}'
 }
 
 # ---- 1. junk logged-in cookie must resolve to the PUBLIC bucket ----
 a_junk=$(audience "wordpress_logged_in_x=junkjunkjunk")
 a_anon=$(audience "")
-WPC=$(sudo -u www-data wp --path=/var/www/dev eval \
+WPC=$(sudo -u "${LG_WP_USER:-looth-dev}" wp --path=/var/www/dev eval \
       '$e=time()+3600; echo LOGGED_IN_COOKIE."=".wp_generate_auth_cookie(1912,$e,"logged_in");' 2>/dev/null)
 a_valid=$(audience "$WPC")
 
@@ -49,13 +64,13 @@ fi
 
 # ---- 2. /v2/ no autoindex, no PHP source ----
 for d in "/v2/" "/v2/src/"; do
-  code=$(curl -s -o /tmp/.v2body -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST$d")
+  code=$(curl -s "${RESOLVE[@]}" -o /tmp/.v2body -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST$d")
   if [ "$code" = "200" ] && grep -qi "Index of" /tmp/.v2body; then
     fails+=("V2-AUTOINDEX      $d enumerates the source tree (autoindex must be off)")
   fi
 done
 rm -f /tmp/.v2body
-code_php=$(curl -s -o /dev/null -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST/v2/lg-layout-v2.php")
+code_php=$(curl -s "${RESOLVE[@]}" -o /dev/null -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST/v2/lg-layout-v2.php")
 if [ "$code_php" != "403" ]; then
   fails+=("V2-PHP-SOURCE     /v2/lg-layout-v2.php returned $code_php (must be 403 — never serve source)")
 fi
