@@ -29,8 +29,46 @@ declare(strict_types=1);
 
 if (PHP_SAPI !== 'cli') { fwrite(STDERR, "CLI only\n"); exit(2); }
 
+/**
+ * Host / token come from the ONE resolver (tools/gates/gate-env.sh) so this gate
+ * cannot drift out of the box again — a hardcoded dev.loothgroup.com pair here
+ * is what made gate 1/5 die on "cannot read dev gate token" once the box became
+ * dev2 and the tokens moved into a box-local nginx include.
+ * LG_MATRIX_HOST still overrides for the LIVE acceptance run.
+ */
+function lg_gate_env(): array {
+    static $env = null;
+    if ($env !== null) return $env;
+    $script = realpath(__DIR__ . '/../../tools/gates/gate-env.sh');
+    if ($script === false) {
+        fwrite(STDERR, "cannot find tools/gates/gate-env.sh (looked beside " . __DIR__ . "/../../)\n");
+        exit(2);
+    }
+    $out = []; $rc = 0;
+    exec('bash ' . escapeshellarg($script) . ' 2>&1', $out, $rc);
+    if ($rc !== 0) { fwrite(STDERR, implode("\n", $out) . "\n"); exit(2); }
+    $env = [];
+    foreach ($out as $line) {
+        if (strpos($line, '=') !== false) { [$k, $v] = explode('=', $line, 2); $env[$k] = $v; }
+    }
+    return $env;
+}
+
+$LG_ENV = lg_gate_env();
 // Override for the LIVE acceptance run: LG_MATRIX_HOST=https://loothgroup.com
-define('HOST', getenv('LG_MATRIX_HOST') ?: 'https://dev.loothgroup.com');
+define('HOST', getenv('LG_MATRIX_HOST') ?: $LG_ENV['LG_GATE_HOST']);
+// Pin to the local origin exactly as the shell gates do — the public edge is
+// behind Cloudflare, which challenges non-browser clients (403). Skipped when
+// the host was overridden (a LIVE run must reach the real edge).
+// Address comes from the resolver, NOT a second hardcoded 127.0.0.1 here — that
+// is the same duplicated-fact defect gate-env.sh exists to kill, and it bites
+// harder than a stale hostname: loopback makes every request INTERNAL
+// (api/v0/users.php trusts REMOTE_ADDR 127.0.0.1/::1), which switches off the
+// anon 401 and the private-slug stripping that S3 below asserts. Pinned to
+// loopback this gate reported those two as product failures when the product was
+// correct — and would equally have reported green if it had regressed.
+define('RESOLVE', getenv('LG_MATRIX_HOST') ? ''
+    : ($LG_ENV['LG_GATE_DOMAIN'] . ':443:' . ($LG_ENV['LG_GATE_ADDR'] ?: '127.0.0.1')));
 const SUBJ_ID  = 1849;            // profile-app user id   ('qa')
 const SUBJ_WP  = 1910;            // bridged wp user id
 const MEMBER_WP = 7;              // genuine non-admin member (read-only viewer)
@@ -47,38 +85,7 @@ function sh(string $cmd): string { return trim((string)shell_exec($cmd . ' 2>/de
 function pgq(string $sql): string { return sh('sudo -u profile-app psql profile_app -tAc ' . escapeshellarg($sql)); }
 function lgq(string $sql): string { return sh('sudo -u postgres psql looth -tAc ' . escapeshellarg($sql)); }
 
-/**
- * The dev-gate cookie value.
- *
- * The gate MOVED (profile-audit, 2026-07-28): it used to be a
- * `set $loothdev_token "..."` line in sites-available/dev.loothgroup.com.conf;
- * it is now a cookie map in the BOX-LOCAL conf.d/loothdev-auth.conf
- *   map $cookie_loothdev_auth $loothdev_dev_ok { default 0; "<token>" 1; }
- * The old path no longer exists, so this gate had become unrunnable — it died at
- * "cannot read dev gate token" before a single check ran. Read the new location
- * first, keep the old one as a fallback, and allow an explicit override.
- *
- * NOTE the repo copy of platform/nginx/loothdev-auth.conf is the GATE-FREE live
- * posture and carries no token — the armed values are box-local only. Never look
- * for the token in the repo.
- */
-function gate_token(): string {
-    if (($env = (string)getenv('LG_DEV_GATE_TOKEN')) !== '') return $env;
-
-    $sources = [
-        ['/etc/nginx/conf.d/loothdev-auth.conf', '/map\s+\$cookie_loothdev_auth.*?"([^"]+)"\s+1;/'],
-        ['/etc/nginx/sites-available/dev.loothgroup.com.conf', '/set \$loothdev_token "([^"]+)"/'],
-    ];
-    foreach ($sources as [$path, $re]) {
-        if (!is_readable($path)) continue;
-        // whole-file match: the conf.d map is one line but do not depend on that
-        if (preg_match($re, (string)file_get_contents($path), $m)) return $m[1];
-    }
-    fwrite(STDERR,
-        "cannot read dev gate token — looked in conf.d/loothdev-auth.conf then\n" .
-        "sites-available/dev.loothgroup.com.conf. Override with LG_DEV_GATE_TOKEN=<value>.\n");
-    exit(2);
-}
+function gate_token(): string { return lg_gate_env()['LG_GATE_TOKEN']; }
 function mint(int $wpId): string {
     $t = sh('sudo -u profile-app php /srv/profile-app/bin/mint-dev-token.php ' . $wpId . ' | tail -1');
     if ($t === '') { fwrite(STDERR, "mint failed for wp $wpId\n"); exit(2); }
@@ -93,62 +100,18 @@ $TOK    = [
     'admin'  => mint(ADMIN_WP),
 ];
 
-/**
- * Loopback pinning (profile-audit, 2026-07-28) — WITHOUT THIS EVERY CHECK RETURNS
- * code=0 AND THE WHOLE MATRIX READS AS A TOTAL FAILURE.
- *
- * Two separate environment facts, both measured on dev2:
- *  1. dev.loothgroup.com resolves to 50.19.198.38, which this box CANNOT reach —
- *     a plain curl times out (curl exit 28). Same family as the standing rule
- *     "never smoke live with a plain public curl".
- *  2. Pinned to 127.0.0.1 the request works, but the cert offered on loopback is
- *     CN=buck-dev2.loothgroup.com, so subjectAltName does not match and peer
- *     verification fails. Hence verification off — LOOPBACK ONLY.
- *
- * PIN TO THE BOX'S INTERNAL IP, **NOT** 127.0.0.1 — this matters and it is subtle.
- * api/v0/users.php:18 sets
- *     $lgUsersInternal = REMOTE_ADDR in ['127.0.0.1','::1']
- * and that flag SKIPS the anon 401 (:19) and SKIPS slug-stripping on a private
- * profile (:44). So a loopback pin silently turns every request into a trusted
- * internal caller and makes the two "(external)" /users checks fail — which reads
- * exactly like a privacy leak on a private profile and is not one. Measured both
- * ways on 2026-07-28: loopback -> those 2 fail; internal IP -> they pass.
- *
- * The internal IP is NOT covered by the gate's `geo $loothdev_src_local` rule, so
- * the run is authorized by the gate COOKIE instead — which is why gate_token()
- * above is load-bearing rather than vestigial.
- *
- * A code=0 here is a CONNECTIVITY failure, never a privacy verdict. Do not read a
- * wall of FAILs as "the model broke" until this function is known good.
- */
-function curl_pin(): array {
-    static $ip = null;
-    if ($ip === null) {
-        // primary non-loopback IPv4; loopback only as a last resort (see caveat above)
-        $ip = trim((string)shell_exec(
-            "ip -4 addr show scope global 2>/dev/null | grep -oP 'inet \\K[0-9.]+' | head -1"
-        )) ?: '127.0.0.1';
-    }
-    $host = parse_url(HOST, PHP_URL_HOST) ?: 'dev.loothgroup.com';
-    $port = (string)(parse_url(HOST, PHP_URL_PORT) ?: 443);
-    return [
-        CURLOPT_RESOLVE        => ["$host:$port:$ip"],
-        CURLOPT_SSL_VERIFYPEER => false,   // loopback/internal cert is CN=buck-dev2
-        CURLOPT_SSL_VERIFYHOST => 0,
-    ];
-}
-
 /** [status, body] for $viewer hitting $path (method GET unless overridden). */
 function req(string $viewer, string $path, string $method = 'GET', ?array $json = null): array {
     global $GATE, $TOK;
     $ch = curl_init(HOST . $path);
     $cookie = 'loothdev_auth=' . $GATE . ($TOK[$viewer] !== '' ? '; looth_id=' . $TOK[$viewer] : '');
-    $opts = curl_pin() + [
+    $opts = [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_COOKIE         => $cookie,
         CURLOPT_TIMEOUT        => 20,
         CURLOPT_CUSTOMREQUEST  => $method,
     ];
+    if (RESOLVE !== '') $opts[CURLOPT_RESOLVE] = [RESOLVE];
     if ($json !== null) {
         $opts[CURLOPT_POSTFIELDS] = json_encode($json);
         $opts[CURLOPT_HTTPHEADER] = ['Content-Type: application/json'];
@@ -216,7 +179,15 @@ echo "== setup fixture (user " . SUBJ_ID . " -> '" . NAME . "' @ " . LAT . "," .
 $UUID = pgq("SELECT uuid FROM users WHERE id = " . SUBJ_ID);
 if ($UUID === '') { fwrite(STDERR, "fixture user missing\n"); exit(2); }
 
-pgq("UPDATE users SET slug = '" . SLUG . "', display_name = '" . NAME . "',
+// archived_at = NULL is load-bearing, not tidiness. An archived identity is
+// filtered out of the directory, the map pins, search-suggest and the users API
+// — but its /u/ page still renders. So when this fixture was archived on
+// 2026-06-30, every page assertion kept passing while every containment-filtered
+// surface failed, and re-running could never clear it because setup did not own
+// this column. The gate was asserting that an ARCHIVED member appears in the
+// directory: a demand the product is right to refuse. A fixture that does not
+// fully specify its own state is not a fixture.
+pgq("UPDATE users SET archived_at = NULL, slug = '" . SLUG . "', display_name = '" . NAME . "',
      location_text = 'Matrix Reef', location_city = 'Matrix Reef', location_region = 'Atlantic',
      location_country = 'XX', lat = " . LAT . ", lng = " . LNG . ",
      location_members_precision = 'city', location_public_precision = 'city',
@@ -315,18 +286,21 @@ check('S1 me/location anon 401',  req('anon',  '/profile-api/v0/me/location')[0]
 
 // Stale-token self-heal (Danny West bug, 6/12): WP session + INVALID looth_id
 // must bounce to re-mint, not render the member as a stranger forever.
-// wp-cli must run as ROOT here (profile-audit 2026-07-28): as www-data it dies
-// reading /etc/looth/live-wp-keys.php (permission denied), so this check reported
-// "could not mint wp cookie" — a TOOLING failure that read as a privacy FAIL.
-// 2>/dev/null: wp emits a harmless "DISABLE_WP_CRON already defined" warning on
-// stdout in CLI, which would otherwise be captured as part of the cookie value.
-$wpck = trim((string)shell_exec('sudo -n wp --path=/var/www/dev --allow-root eval ' . escapeshellarg(
+// wp-cli as looth-dev, NOT www-data: /etc/looth/live-wp-keys.php is
+// root:looth-dev 0640, so www-data cannot bootstrap WP and this came back empty
+// — which SILENTLY skipped the whole self-heal check below (a skipped assertion
+// reads as green), so the skip is announced now.
+$wpck = trim((string)shell_exec('sudo -u looth-dev wp --path=/var/www/dev eval ' . escapeshellarg(
     '$e=time()+600; echo LOGGED_IN_COOKIE."=".urlencode(wp_generate_auth_cookie(' . SUBJ_WP . ',$e,"logged_in"));') . ' 2>/dev/null'));
+if ($wpck === '' || strpos($wpck, '=') === false) {
+    echo "  SKIP  S2 stale-token self-heal — could not mint a WP session cookie (harness fault, NOT a pass)\n";
+}
 if ($wpck !== '' && strpos($wpck, '=') !== false) {
     [$wn, $wv] = explode('=', $wpck, 2);
     $ch = curl_init(HOST . '/u/' . SLUG);
-    curl_setopt_array($ch, curl_pin() + [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20,
-        CURLOPT_COOKIE => 'loothdev_auth=' . $GATE . '; ' . $wn . '=' . rawurldecode($wv) . '; looth_id=STALE.GARBAGE.TOKEN']);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20,
+        CURLOPT_COOKIE => 'loothdev_auth=' . $GATE . '; ' . $wn . '=' . rawurldecode($wv) . '; looth_id=STALE.GARBAGE.TOKEN']
+        + (RESOLVE !== '' ? [CURLOPT_RESOLVE => [RESOLVE]] : []));
     curl_exec($ch);
     $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     $loc  = (string)curl_getinfo($ch, CURLINFO_REDIRECT_URL);

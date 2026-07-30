@@ -21,15 +21,37 @@ in docs/CRAFT-STANDARD.md before pushing. Run via tools/gates/run-all.sh.
 Run as ubuntu on dev (mints viewer cookies via sudo, drives chrome-dev:9222).
 """
 
-import asyncio, json, os, re, subprocess, sys, urllib.request, urllib.parse
+import asyncio, json, subprocess, sys, urllib.request, urllib.parse
 
 try:
     import websockets
 except ImportError:
     sys.exit("python3-websockets required (it's installed system-wide on dev)")
 
-HOST = "https://dev.loothgroup.com"
+import os
+
+
+def gate_env():
+    """Host / domain / token from the ONE resolver (tools/gates/gate-env.sh).
+
+    Never hardcode them here again: this module's `dev.loothgroup.com` pair is
+    what took gates 1/2/3/5 down box-wide when the box became dev2 and the
+    tokens moved into a box-local nginx include.
+    """
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gate-env.sh")
+    p = subprocess.run(["bash", script], capture_output=True, text=True)
+    if p.returncode != 0:
+        sys.exit(p.stderr.strip() or f"gate-env.sh failed ({script})")
+    return dict(l.split("=", 1) for l in p.stdout.splitlines() if "=" in l)
+
+
+ENV  = gate_env()
+HOST = ENV["LG_GATE_HOST"]
+DOMAIN = ENV["LG_GATE_DOMAIN"]
 CDP  = "http://127.0.0.1:9222"
+# Chrome resolves its own navigations: the browser on :9222 must have been
+# launched with ENV["LG_GATE_CHROME_RESOLVER"] or every page below lands on the
+# Cloudflare challenge instead of our origin.
 
 # page → (path, [viewers]) ; add new user-facing surfaces HERE when built.
 PAGES = {
@@ -54,69 +76,15 @@ def sh(cmd):
 
 
 def gate_token():
-    """Dev-gate cookie value.
-
-    The gate MOVED (profile-audit 2026-07-28): it was `set $loothdev_token` in
-    sites-available/dev.loothgroup.com.conf, a file that no longer exists. It is
-    now a cookie map in the BOX-LOCAL conf.d/loothdev-auth.conf. This function
-    used to raise FileNotFoundError, which took this gate — and three others —
-    down without anyone noticing, because a gate that CANNOT RUN and a gate that
-    FAILS both just read as "red". Mirrors tools/gates/lib/gate-token.sh.
-
-    The REPO copy of platform/nginx/loothdev-auth.conf is the gate-free LIVE
-    posture and never holds a token; only the box-local file is armed.
-    """
-    env = os.environ.get("LG_DEV_GATE_TOKEN", "")
-    if env:
-        return env
-
-    # current: cookie map in box-local conf.d
-    m = re.search(
-        r'map\s+\$cookie_loothdev_auth.*?"([^"]+)"',
-        _read_if("/etc/nginx/conf.d/loothdev-auth.conf"),
-        re.S,
-    )
-    if m:
-        return m.group(1)
-
-    # legacy: set $loothdev_token in the vhost
-    m = re.search(
-        r'set \$loothdev_token "([^"]+)"',
-        _read_if("/etc/nginx/sites-available/dev.loothgroup.com.conf"),
-    )
-    if m:
-        return m.group(1)
-
-    sys.exit(
-        "cannot read dev gate token — tried conf.d/loothdev-auth.conf then "
-        "sites-available/dev.loothgroup.com.conf; override with LG_DEV_GATE_TOKEN"
-    )
-
-
-def _read_if(path):
-    try:
-        with open(path) as fh:
-            return fh.read()
-    except OSError:
-        return ""
+    return ENV["LG_GATE_TOKEN"]
 
 
 def member_cookies():
-    # wp-cli must run as ROOT (profile-audit 2026-07-28): as www-data it dies
-    # reading /etc/looth/live-wp-keys.php (permission denied) and returned an
-    # empty string, so the split below raised
-    #   ValueError: not enough values to unpack (expected 2, got 1)
-    # — an unhandled traceback that read as "the craft gate is red" rather than
-    # "the craft gate cannot run". 2>/dev/null drops wp's harmless
-    # "DISABLE_WP_CRON already defined" warning, which CLI prints on stdout and
-    # would otherwise be captured as part of the cookie value.
-    wpc = sh("sudo -n wp --path=/var/www/dev --allow-root eval "
-             "'$e=time()+3600; echo LOGGED_IN_COOKIE.\"=\".urlencode(wp_generate_auth_cookie(1912,$e,\"logged_in\"));'"
-             " 2>/dev/null")
-    jwt = sh("sudo -n -u profile-app php /srv/profile-app/bin/mint-dev-token.php 1 2>/dev/null | tail -1")
-    if "=" not in wpc or not jwt:
-        sys.exit("GATE-ERROR  could not mint member cookies (wp-cli as root? mint-dev-token?) — "
-                 "gate CANNOT RUN; this is not a craft failure")
+    # wp-cli as looth-dev, NOT www-data: /etc/looth/live-wp-keys.php is
+    # root:looth-dev 0640, so www-data cannot bootstrap WP and this returned ''.
+    wpc = sh("sudo -u looth-dev wp --path=/var/www/dev eval "
+             "'$e=time()+3600; echo LOGGED_IN_COOKIE.\"=\".urlencode(wp_generate_auth_cookie(1912,$e,\"logged_in\"));'")
+    jwt = sh("sudo -u profile-app php /srv/profile-app/bin/mint-dev-token.php 1 | tail -1")
     n, v = wpc.split("=", 1)
     return [(n, urllib.parse.unquote(v)), ("looth_id", jwt)]
 
@@ -168,7 +136,7 @@ async def audit(path, viewer, gate, member):
         await t.send("Network.clearBrowserCookies")
         cookies = [("loothdev_auth", gate)] + (member if viewer == "member" else [])
         for n, v in cookies:
-            await t.send("Network.setCookie", {"domain": "dev.loothgroup.com", "name": n,
+            await t.send("Network.setCookie", {"domain": DOMAIN, "name": n,
                                                "value": v, "path": "/", "secure": True, "httpOnly": True})
         await t.send("Page.navigate", {"url": HOST + path + ("?craftgate=1" if "?" not in path else "&craftgate=1")})
         r = await t.send("Runtime.evaluate", {"expression": COLLECT_JS,
