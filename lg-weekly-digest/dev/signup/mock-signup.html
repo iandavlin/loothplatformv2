@@ -1,0 +1,211 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Looth Group Weekly — sign up (MOCK)</title>
+<!--
+  mock-signup.html — DESIGN MOCK for the public weekly-email signup page.
+  NOT THE BUILD. No form posts anywhere; the button is inert by design.
+
+  WHAT IT REPLACES: WP page 68595 "Weekly Email Sign Up", whose entire content is
+  the string [fluentform id="5"] — an unstyled form on a bare page, with no
+  statement of what the email is, how often it comes, or what happens next.
+
+  CONSTRAINTS THIS MOCK RESPECTS, so the build is a port and not a redesign:
+    - Form 5's real field set is exactly TWO inputs: email + a GDPR consent
+      checkbox. Not a name, not a preference picker. Drawn as those two.
+    - Form 5 has double_opt_in:true, so a confirmation email is unavoidable and
+      the page must say so. Measured: 9 of 128 signups in the last 12 months are
+      still 'pending' (7%) — people who signed up and never confirmed.
+    - list_id 7 = "Non Member Weekly Email Subscriber". 188 of its 204 confirmed
+      subscribers have NO wp_users row, so this page's audience is NON-MEMBERS.
+    - Brand tokens are the email builder's own: gold #ECB351, dark #2B2318,
+      mint #87986A / #D4E0B8, paper #FAF6EE.
+    - Craft standard: no image is a raw upload. The one photographic slot uses
+      /img.php?w= with srcset and explicit width/height. Nothing loads eagerly
+      that an anonymous visitor does not need.
+-->
+<style>
+  :root{
+    --gold:#ECB351; --dark:#2B2318; --mint:#87986A; --mint-pale:#D4E0B8;
+    --paper:#FAF6EE; --ink:#2B2318; --dim:#6b6357; --line:#e3dbcd; --white:#fff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+       font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+
+  /* ── hero ─────────────────────────────────────────────────────────────── */
+  .hero{background:var(--dark);color:var(--paper);padding:54px 0 48px}
+  .hero .wrap{display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font:700 11.5px/1 inherit;
+           letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin:0 0 16px}
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--gold)}
+  h1{font-size:clamp(28px,4.2vw,42px);line-height:1.12;margin:0 0 14px;letter-spacing:-.02em}
+  .lede{font-size:17.5px;line-height:1.55;color:#e8e0d2;margin:0 0 22px;max-width:46ch}
+  .cadence{display:flex;flex-wrap:wrap;gap:8px;margin:0}
+  .chip{display:inline-flex;align-items:center;gap:7px;background:rgba(236,179,81,.13);
+        border:1px solid rgba(236,179,81,.4);color:var(--gold);border-radius:99px;
+        padding:6px 13px;font:600 12.5px/1 inherit}
+
+  /* ── the form card ────────────────────────────────────────────────────── */
+  .card{background:var(--white);border-radius:12px;padding:26px 24px 22px;
+        box-shadow:0 8px 28px rgba(0,0,0,.22);color:var(--ink)}
+  .card h2{font-size:19px;margin:0 0 6px}
+  .card .sub{font-size:13.5px;color:var(--dim);margin:0 0 18px}
+  label.fl{display:block;font:600 13px/1 inherit;margin:0 0 6px}
+  input[type=email]{width:100%;font:16px/1.4 inherit;padding:12px 13px;color:var(--ink);
+                    border:1.5px solid var(--line);border-radius:7px;background:var(--white)}
+  input[type=email]:focus{outline:0;border-color:var(--gold);box-shadow:0 0 0 3px rgba(236,179,81,.25)}
+  .consent{display:flex;gap:10px;align-items:flex-start;margin:15px 0 0;
+           font-size:12.5px;line-height:1.45;color:var(--dim)}
+  .consent input{margin:2px 0 0;flex:0 0 auto;width:16px;height:16px;accent-color:var(--mint)}
+  .btn{display:block;width:100%;margin:17px 0 0;font:700 16px/1 inherit;padding:14px;
+       color:var(--dark);background:var(--gold);border:0;border-radius:7px;cursor:pointer}
+  .btn:hover{background:#e0a53f}
+  /* The 7% who never confirm are the reason this line is IN the card and not in a
+     footnote — the confirmation step has to be an expectation, not a surprise. */
+  .next{display:flex;gap:9px;align-items:flex-start;margin:15px 0 0;padding:11px 12px;
+        background:var(--paper);border:1px solid var(--line);border-radius:7px;
+        font-size:12.5px;line-height:1.45;color:var(--dim)}
+  .next b{color:var(--ink)}
+  .next .ico{flex:0 0 auto;font-size:15px;line-height:1.2}
+
+  /* ── what's in it ─────────────────────────────────────────────────────── */
+  section{padding:52px 0}
+  .shead{text-align:center;max-width:56ch;margin:0 auto 34px}
+  .shead h2{font-size:clamp(22px,3vw,30px);margin:0 0 10px;letter-spacing:-.01em}
+  .shead p{font-size:15.5px;color:var(--dim);margin:0}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+  .tile{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:20px 18px}
+  .tile .ti{width:36px;height:36px;border-radius:8px;background:var(--mint-pale);
+            display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 0 12px}
+  .tile h3{font-size:15px;margin:0 0 6px}
+  .tile p{font-size:13.5px;color:var(--dim);margin:0;line-height:1.5}
+
+  /* ── the sample ───────────────────────────────────────────────────────── */
+  .sample{background:var(--dark);color:var(--paper)}
+  .sample .shead h2{color:var(--paper)} .sample .shead p{color:#cfc6b6}
+  .frame{max-width:640px;margin:0 auto;border-radius:10px;overflow:hidden;
+         box-shadow:0 12px 40px rgba(0,0,0,.3);background:var(--white)}
+  .frame iframe{display:block;width:100%;height:560px;border:0;background:#fff}
+  .fcap{max-width:640px;margin:12px auto 0;font-size:12.5px;color:#cfc6b6;text-align:center}
+
+  /* ── member nudge ─────────────────────────────────────────────────────── */
+  .nudge{max-width:760px;margin:0 auto;background:var(--white);border:1px solid var(--line);
+         border-left:4px solid var(--mint);border-radius:10px;padding:22px 24px}
+  .nudge h3{font-size:17px;margin:0 0 8px}
+  .nudge p{font-size:14.5px;color:var(--dim);margin:0 0 12px}
+  .nudge a{color:var(--dark);font-weight:700;text-decoration:underline;
+           text-decoration-color:var(--gold);text-decoration-thickness:2px;text-underline-offset:3px}
+
+  footer{background:var(--dark);color:#a99f8d;padding:28px 0;font-size:12.5px;text-align:center}
+
+  @media (max-width:880px){
+    .hero{padding:40px 0 36px}
+    .hero .wrap{grid-template-columns:1fr;gap:30px}
+    .grid{grid-template-columns:repeat(2,1fr)}
+    .frame iframe{height:460px}
+  }
+  @media (max-width:520px){ .grid{grid-template-columns:1fr} section{padding:38px 0} }
+</style>
+
+<div class="hero">
+  <div class="wrap">
+    <div>
+      <p class="eyebrow">The Looth Group Weekly</p>
+      <h1>Guitar repair worth reading about, once a week.</h1>
+      <p class="lede">Repair and restoration work from the bench, what's coming up, and what the
+        community is building — collected into one email every Monday morning.</p>
+      <p class="cadence">
+        <span class="chip">✉ Once a week, Mondays</span>
+        <span class="chip">◔ About a 4-minute read</span>
+        <span class="chip">↩ Unsubscribe in one click</span>
+      </p>
+    </div>
+
+    <form class="card" onsubmit="return false" aria-labelledby="su-h">
+      <h2 id="su-h">Get the weekly email</h2>
+      <p class="sub">Free. No account needed.</p>
+
+      <label class="fl" for="su-email">Your email address</label>
+      <input id="su-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+
+      <label class="consent">
+        <input type="checkbox" name="gdpr-agreement" required>
+        <span>I agree to receive the weekly email from The Looth Group and understand
+          I can unsubscribe at any time.</span>
+      </label>
+
+      <button class="btn" type="submit">Sign me up</button>
+
+      <p class="next">
+        <span class="ico" aria-hidden="true">→</span>
+        <span><b>One more step:</b> we'll email you a confirmation link. Click it and you're on
+          the list — if you don't, the emails never start.</span>
+      </p>
+    </form>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <div class="shead">
+      <h2>What's actually in it</h2>
+      <p>Every issue is put together by hand. These are the sections the email is built from.</p>
+    </div>
+    <div class="grid">
+      <div class="tile">
+        <div class="ti" aria-hidden="true">🔧</div>
+        <h3>From the workshop</h3>
+        <p>Repair and restoration writeups — what came in, what was wrong, and how it was fixed.</p>
+      </div>
+      <div class="tile">
+        <div class="ti" aria-hidden="true">📅</div>
+        <h3>Upcoming events</h3>
+        <p>Shows, meetups and workshops worth putting in the diary, with dates and places.</p>
+      </div>
+      <div class="tile">
+        <div class="ti" aria-hidden="true">💬</div>
+        <h3>From the forum</h3>
+        <p>The discussions people are actually having — problems solved, opinions traded.</p>
+      </div>
+      <div class="tile">
+        <div class="ti" aria-hidden="true">★</div>
+        <h3>Member highlight</h3>
+        <p>One builder or repairer, and the work they've been doing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sample">
+  <div class="wrap">
+    <div class="shead">
+      <h2>Here's a real one</h2>
+      <p>Not a mockup of an email — this is the actual issue that went out, rendered by the
+        same code that sends it.</p>
+    </div>
+    <div class="frame">
+      <iframe src="signup-sample-email.html" title="A real recent issue of the weekly email"
+              loading="lazy" scrolling="yes"></iframe>
+    </div>
+    <p class="fcap">Scroll inside the frame to read the whole issue.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="nudge">
+      <h3>Already a Looth Group member?</h3>
+      <p>You're on this list already — it comes with your membership, and it also tells you
+        about anything waiting for you on the site: connection requests, replies to your
+        discussions, and people who mentioned you.</p>
+      <p style="margin:0"><a href="#">Manage your email preferences →</a></p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">DESIGN MOCK — nothing on this page submits. The Looth Group.</div>
+</footer>
