@@ -3,11 +3,13 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
-## 2026-07-30 — Discussion hub cards: inline-embed pasted YT/IG/FB links (Ian)
+## 2026-07-30 — Discussion hub cards: PLAY a video inline like a video post (Ian) ★ wants this
 
-Ian wants a discussion whose body carries a YouTube/Instagram/Facebook link to
-show that media EMBEDDED on its hub card — the inline-play treatment video posts
-already get. Fine if the embed is driven by a link pasted in the discussion
+Ian restated 7/30: "I want to be able to play a video in a discussion in the hub
+card like a video post would have happen." A discussion whose body carries a
+YouTube/Instagram/Facebook link should show that media EMBEDDED and PLAYABLE on
+its hub card — the exact inline-play facade (thumb + play button → iframe on
+click) video posts already get. Fine if the embed is driven by a link pasted in the discussion
 posting modal (the composer already shows "paste a YouTube/Vimeo/Instagram link
 on its own line to embed it" — so IN-BODY embed on the post page likely already
 works; the gap is the HUB CARD).
