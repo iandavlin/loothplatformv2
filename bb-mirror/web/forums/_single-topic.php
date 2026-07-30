@@ -476,6 +476,20 @@ $fh_image      = $forum['header_image_url'] ?: null;
     <span><?= $reply_count ?> repl<?= $reply_count === 1 ? 'y' : 'ies' ?></span>
     <div class="thread__util-acts">
       <?php if (function_exists('feed_save_btn')) feed_save_btn('topic', (int)$topic['id']); ?>
+      <?php /* The two per-discussion opt-ins (thread-follow §2, §0 ruling 8: every
+               surface, one implementation). Ordered ☆ 🔔 ✉ … Share to match the feed
+               card's action row exactly, so the cluster is learnable as one thing.
+
+               THIS CALL WAS MISSING until 2026-07-30 and the page rendered NO
+               toggles at all — found by counting [data-follow] in the real DOM at
+               1280 and getting ZERO. It read as a styling bug and was not one:
+               forums.css:610-631 has carried .thread__util .fc-notify/.fc-email
+               rules the whole time, styling a placement nothing ever emitted.
+               _reply-render.php:662 even says feed_follow_btns() lives beside
+               feed_save_btn() precisely so this page — which loads _reply-render.php
+               and NOT _feed.php — can emit it. The helper was put within reach and
+               then never called. CSS existing is not evidence that markup does. */ ?>
+      <?php if (function_exists('feed_follow_btns')) feed_follow_btns((int)$topic['id']); ?>
       <button type="button" class="lg-share-btn" data-share-topic
               data-share-url="<?= htmlspecialchars($lg_topic_share_url, ENT_QUOTES) ?>"
               data-share-title="<?= htmlspecialchars((string)$topic['title'], ENT_QUOTES) ?>"
