@@ -3,7 +3,12 @@
 Keeper maintains this at every merge. Rule (Ian 2026-07-29): he gets reminded
 whenever this file is non-empty. "Deployed" means live is actually running it.
 
-## Waiting on Ian's `lg-deploy` — tonight's merges
+## Waiting on Ian's `lg-deploy` — ⚠ HELD by Ian for the consolidation modal
+
+Ian 7/30: "add that modal to follow notifs/email/save before we ship to live."
+So the whole follow/edit/signup deploy WAITS until thread-follow builds the
+consolidated action-row modal (notify+email+frequency+save behind one control).
+Mocks → Ian picks → build → then ONE deploy carries everything.
 
 Main is ahead of live: events-mobile, thread-follow (mobile long-press fix +
 feed-card fixes), slug tooling, gate harness. Follow controls need a live DB
