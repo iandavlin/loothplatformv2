@@ -1609,3 +1609,43 @@ receiving instant mail — or nothing at all — is worse than not offering the 
 the same class of lie §8.1.3(a)'s `email_master` bit exists to prevent.
 
 *§15 written 2026-07-30. Mocks published and Ian-gated; no code written against either variant.*
+
+### 15.5 THE SENDER DOES NOT EXIST, AND CADENCE IS PROBABLY THE WRONG SHAPE
+
+Two findings from reading the repo rather than waiting on the board, 2026-07-30.
+
+**(a) `lg-weekly-digest` cannot host this.** It is an **editorial broadcast**: one issue
+composed by hand, auto-populated from the last 7 days, sent through FluentCRM to List 3 /
+tag `all` on a `wp_schedule_single_event` weekly cron (America/New_York). **It resolves its
+audience by CRM tag and has no notion of who follows thread X.** Reusing it for per-thread
+reply batching would be the wrong mechanism, not a shortcut.
+
+So of the four cadences, **only Instant works today** (the existing per-reply email path).
+Hourly / Daily / Weekly each need a per-member queue plus a sweep to flush it — infrastructure
+that does not exist. The nearest existing idea is `notify-bridge`, which already coalesces to
+ONE bell row per topic (§0 ruling 4); a reply digest is that same idea one level up —
+coalesce *across* topics, per member, flush on a cadence.
+
+**(b) Per-discussion cadence defeats the feature it implements.** A digest exists to batch
+**across** threads. A cadence set per discussion means following six threads on Daily is six
+daily emails — precisely what the member was trying to escape — and a thread on Hourly can
+never share an email with a thread on Daily.
+
+> **Recommendation: cadence is ONE account-level preference** — "email me about discussions I
+> follow: Instant / Hourly / Daily / Weekly" — which the per-discussion modal **shows** rather
+> than owns (`Emails · on — Daily (change)`). The per-thread control stays a clean on/off,
+> which is what §0 ruling 1 already made it. One member, one digest, every followed thread in it.
+
+Consequences, all favourable: storage collapses from (member × thread) to one row per member;
+it sits with the account-level email prefs that already exist (§6 master/member); and the
+sender only ever asks *"who is due now"* instead of *"which of this member's 40 threads are due"*.
+
+**Therefore cadence does NOT belong on `forums.topic_follow`.** That table stays exactly what
+it is — the per-(member, topic) 🔔 bit. Cadence belongs with the account email prefs, unless
+weekly-recap would rather own the column so its sender reads one store. **Agree the home with
+the consuming lane; do not pick one unilaterally and hand them a migration.**
+
+**Open for Ian (on the mock page):** whether frequency lives in this modal (per-thread) or is
+shown here and set once in account settings (per-member). **This does not affect the A/B pick.**
+**Open for weekly-recap:** whether Hourly is worth offering at all — better Ian never sees it
+than picks it and has it withdrawn.
