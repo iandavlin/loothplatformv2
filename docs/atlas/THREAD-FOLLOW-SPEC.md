@@ -1542,3 +1542,643 @@ as long as a human takes.
 
 *§14 written from execution on dev2, 2026-07-30. Every figure above was measured in a real
 engine or queried from the database named. All 7 suite gates green; dev2 left clean.*
+
+---
+
+## 15. CONSOLIDATING THE ACTION ROW — two variants, Ian's pick PENDING
+
+**Ian, 2026-07-30 (via keeper), gated on the defect fixes in §14 which are now shipped:**
+put 🔔 notifications, ✉ emails, **email FREQUENCY** (Off/Instant/Hourly/Daily/Weekly) and
+**Save** behind ONE control that opens a small modal. Like / replies / Share stay inline.
+
+**Mocks (both interactive, not flat frames):**
+https://dev2.loothgroup.com/footer-mockups/threadfollow-consolidate/
+
+### 15.1 The two variants
+
+| | Row | Modal | Row controls |
+|---|---|---|---|
+| **A** | Like · replies · Share · **Follow** | Notifications, Emails, Frequency, **Save** | 4 |
+| **B** *(recommended)* | Like · replies · Share · **Save** · **Follow** | Notifications, Emails, Frequency | 5 |
+
+**The recommendation is B, and the reason generalises past this row:** the controls being
+merged are not the same *kind*. Save is a reflex hit while scrolling, many times a session;
+follow and email are a once-per-thread decision. Putting a frequent action behind a modal to
+keep company with two rare ones spends a tap every time to buy width once. B also degrades
+better — the bell is already icon-only, so if the row tightens again Save can shed its label
+without losing meaning. **A wins if the row is expected to keep growing**: it is the only
+version that reaches four controls, and it puts every state control in exactly one place.
+
+### 15.2 THE CONSOLIDATED CONTROL IS NOT A ⋯ MENU — this is a constraint, not a preference
+
+§2.3 ruled the ⋯ menu the wrong surface for follow, **twice**, and ruling 2 says the
+affordance must be **visible, not buried**. Consolidation puts pressure on exactly that
+ruling, so the mock pays it back explicitly: the control is a **labelled bell that carries its
+own state** — lit orange when following, with a small ✉ badge when emails are on. A member
+still reads a thread's state from the feed without opening anything. **Any future
+implementation that reduces this to a generic overflow menu re-breaks a ruling that has
+already been made twice.**
+
+### 15.3 "Off" in the frequency list is the Emails toggle wearing a second hat
+
+Off/Instant/Hourly/Daily/Weekly **plus** an Emails on/off toggle expresses one state twice: a
+member can set Emails ON and frequency Off and have no way to know which wins. The mock wires
+them as ONE state — choosing Off switches Emails off; switching Emails off snaps frequency to
+Off; the frequency row dims when Emails is off so it never reads as a live setting that isn't.
+
+**Open for Ian:** dropping "Off" from the list is the tighter design (the toggle owns on/off,
+the segmented control only ever picks a cadence). "Off" was kept because it was specified.
+
+### 15.4 ⚠️ FREQUENCY IS HALF A FEATURE — the sending side is NOT this lane's
+
+Storing a cadence does nothing on its own. Instant/Hourly/Daily/Weekly require something to
+**batch and send** the digest, which is **weekly-recap's**. Raised with them on the board
+2026-07-30; three questions must be answered before building past the mock:
+
+1. Is there an existing batching/digest scheduler to write this preference into, or is it
+   still to be built?
+2. **What granularity can actually be honoured** — is Hourly realistic, or should the control
+   offer Daily/Weekly only? *Better to drop it before Ian settles on the list than after.*
+3. **Where does the per-(member, topic) cadence live?** The 🔔 bit is `forums.topic_follow`
+   (PG `looth`); the ✉ bit is the native BB subscription (MySQL). Cadence has **no home yet**,
+   and the store should be agreed with the consuming lane rather than chosen unilaterally and
+   handed over as a migration.
+
+**Do not ship a cadence control that silently does nothing.** A member choosing "Daily" and
+receiving instant mail — or nothing at all — is worse than not offering the choice, and it is
+the same class of lie §8.1.3(a)'s `email_master` bit exists to prevent.
+
+*§15 written 2026-07-30. Mocks published and Ian-gated; no code written against either variant.*
+
+### 15.5 THE SENDER DOES NOT EXIST, AND CADENCE IS PROBABLY THE WRONG SHAPE
+
+Two findings from reading the repo rather than waiting on the board, 2026-07-30.
+
+**(a) `lg-weekly-digest` cannot host this.** It is an **editorial broadcast**: one issue
+composed by hand, auto-populated from the last 7 days, sent through FluentCRM to List 3 /
+tag `all` on a `wp_schedule_single_event` weekly cron (America/New_York). **It resolves its
+audience by CRM tag and has no notion of who follows thread X.** Reusing it for per-thread
+reply batching would be the wrong mechanism, not a shortcut.
+
+So of the four cadences, **only Instant works today** (the existing per-reply email path).
+Hourly / Daily / Weekly each need a per-member queue plus a sweep to flush it — infrastructure
+that does not exist. The nearest existing idea is `notify-bridge`, which already coalesces to
+ONE bell row per topic (§0 ruling 4); a reply digest is that same idea one level up —
+coalesce *across* topics, per member, flush on a cadence.
+
+**(b) Per-discussion cadence defeats the feature it implements.** A digest exists to batch
+**across** threads. A cadence set per discussion means following six threads on Daily is six
+daily emails — precisely what the member was trying to escape — and a thread on Hourly can
+never share an email with a thread on Daily.
+
+> **Recommendation: cadence is ONE account-level preference** — "email me about discussions I
+> follow: Instant / Hourly / Daily / Weekly" — which the per-discussion modal **shows** rather
+> than owns (`Emails · on — Daily (change)`). The per-thread control stays a clean on/off,
+> which is what §0 ruling 1 already made it. One member, one digest, every followed thread in it.
+
+Consequences, all favourable: storage collapses from (member × thread) to one row per member;
+it sits with the account-level email prefs that already exist (§6 master/member); and the
+sender only ever asks *"who is due now"* instead of *"which of this member's 40 threads are due"*.
+
+**Therefore cadence does NOT belong on `forums.topic_follow`.** That table stays exactly what
+it is — the per-(member, topic) 🔔 bit. Cadence belongs with the account email prefs, unless
+weekly-recap would rather own the column so its sender reads one store. **Agree the home with
+the consuming lane; do not pick one unilaterally and hand them a migration.**
+
+**Open for Ian (on the mock page):** whether frequency lives in this modal (per-thread) or is
+shown here and set once in account settings (per-member). **This does not affect the A/B pick.**
+**Open for weekly-recap:** whether Hourly is worth offering at all — better Ian never sees it
+than picks it and has it withdrawn.
+
+---
+
+## 16. THE "I DON'T SEE THE CONTROLS" REGRESSION — server side cleared, and one real live gap
+
+**Charter, 2026-07-30 respawn (Ian, keeper-relayed):** *"I don't see the controls for it. I
+had seen them before."* Two suspects were named. **Both are false, and the first is false in
+a way that would have done damage if acted on.**
+
+### 16.1 Suspect 1 — "`forums.topic_subscription` is missing, restore it" — WRONG TABLE
+
+This premise was already killed once (§14.1) and came back in the respawn charter with an
+instruction attached: apply the DDL to dev2 and stage it for live. **Doing so would have
+created a table no code path reads or writes**, and left the actual gap (§16.4) in place.
+
+`topic_subscription` has never existed on any box. The only occurrence of the string in the
+repo is the **name of a trigger** — `topic_subscription_purge`, `schema.pg.sql:487` — which
+is exactly what a grep for the table finds and misreads. The store is **`forums.topic_follow`**
+(`schema.pg.sql:254`, `follow.php:93,195,198`), and on dev2 it is **present with 2 rows**.
+
+> `to_regclass()` returning NULL proves the name you asked about is absent. It does not tell
+> you the feature is broken, and it never tells you the name you asked about was the right one.
+> **Confirm the name against the writer before you conclude a migration was lost.**
+
+### 16.2 Suspect 2 — "the 698f683 merge / keeper's conflict resolutions dropped the render" — FALSE
+
+Measured on the real dev2 origin through nginx (loopback + gate cookie), **as anon and as
+Ian's own logged-in uid 1** — the logged-in check mattered, because an anon-only pass would
+not have covered the surface he is actually looking at:
+
+| surface | `[data-follow]` | `.lg-act-follow` | `fc-notify` |
+|---|---|---|---|
+| `/hub/` (anon) | 24 | 6 | 12 |
+| `/hub/` (as uid 1, Ian) | **24** | **6** | **12** |
+| `/hub/general/keeper-test-thread-follow-this-one-ian` | 2 | — | 1 |
+
+24 = 6 discussion cards × (desktop pair + mobile pair). And the served files are not merely
+equivalent, they are **byte-identical** to this branch: `_feed.php`, `_reply-render.php`,
+`_single-topic.php`, `forums.css`, `mobile-hub.js` (long-press fix included) all `diff`-clean.
+`hub-polish.js` differs only by other lanes' later work; its follow handling is unchanged.
+All six fix commits are ancestors of the serving checkout.
+
+**The markup, the CSS and the JS are all on the serve, and correct.**
+
+### 16.3 What it therefore is — the overflow defect, already fixed at 18:17 and DEPLOYED at 18:39
+
+The charter names `698f683` as the tip, which dates Ian's report to **before** the fix that
+answers it. His symptom is the one already diagnosed in `765dbc3`: the desktop feed-card
+action row was ~410px of content in a 349px column, and `flex-wrap: wrap` pushed the
+toggles past the card's own `overflow: hidden` — **present in the DOM, painted nowhere.**
+That also explains "I had seen them before" exactly: the first merge shipped them visible,
+later work widened the row, and the toggles were the items at the end.
+
+Timeline, from git and the filesystem:
+
+```
+18:17:03  765dbc3  CSS fix committed (.fc-actions flex-wrap:nowrap + 120px floor)
+18:31:53  7eb4685  merged to main
+18:39:33           forums.css lands on the serve  ← mtime, and ?v=1785436773 matches
+19:25              measured: fix present in served CSS at :4625
+```
+
+**Cache staleness is ruled out, not assumed.** `forums.css` is requested as
+`forums.css?v=<mtime>`, so the 18:39 write changed the URL; `sw.js` is network-first for
+navigations and cache-first *only* for `/icons/`, so the service worker cannot pin an old
+stylesheet. A reload gets the fix.
+
+⚠️ **NOT YET PROVEN: that it PAINTS.** Everything above is served-bytes and cascade reading.
+The one thing that would close this — a real engine at 1280 and at 390 counting *visible*
+toggles — needs the browser seat, which was requested and queued behind shorty-react and had
+not been granted when this was written. **An honest "not proven" beats a hedged claim:** the
+server half is green, the paint half is inferred from the same CSS arithmetic that `765dbc3`
+verified in a browser, and it is not re-verified post-merge.
+
+### 16.4 ✅ THE ONE REAL DEFECT FOUND — `forums.topic_follow` is MISSING ON LIVE
+
+Read-only on live: the table is **absent**, as are `subscription_purge_for_target()` and
+both purge triggers. `forums.forum_subscription` is present. The follow code is not on live
+yet, so **nothing is broken there today** — but shipping it without the migration gives:
+
+- **read** (`follow.php:93`, inside `try/catch` at `:96`) — swallowed; toggles render
+  **permanently OFF for everyone**;
+- **write** (`:195/:198`, falling to the outer `catch` at `:218`) — **HTTP 500 on every click.**
+
+A control that reads OFF, accepts the click and never persists is precisely the "UI lies"
+class of §8.1.3 that §14 was spent eliminating.
+
+**Staged for Ian's hands: `~/lane-outbox/thread-follow-LIVE-MIGRATION-20260730.md`** — additive,
+idempotent, with verify and rollback. The purge trigger is deliberately held back as a
+separate decision: on dev2 the 🔔 purge lives inside a function that *also* purges
+`forum_subscription`, and installing it on live would change behaviour on a table this lane
+does not own. **Nothing was run on live.**
+
+### 16.5 The lesson — a grep hit is not a schema, and a charter is not evidence
+
+Both suspects arrived as instructions with a confident shape. One named a table that never
+existed; the other named a merge whose output turned out byte-identical to the branch. The
+cheap checks that settled them — `to_regclass` on the name the *writer* uses, and `diff`
+against the served file — cost minutes, and the instruction would have cost a live migration
+for a table nothing reads.
+
+Also worth carrying: **`/hub/` on `dev2.loothgroup.com` serves from `/srv/bb-mirror` →
+`~/loothplatformv2-clean`.** `/home/buck/loothplatformv2` serves the `buck-dev2` host only and
+contains **no follow code at all** — a trap that reads as "the feature was never deployed"
+for anyone who greps the wrong tree. I walked into it for one step; the fix was reading which
+`server_name` includes which strangler snippet.
+
+*§16 written 2026-07-30 from measurement on dev2 and read-only queries on live.*
+
+---
+
+## 17. VARIANT A, BUILT — the consolidated control, the modal, and what is deliberately dark
+
+**Ian, 2026-07-30, verbatim (keeper-relayed):** *"I like variant A because it gets the
+card controls down a little bit."*
+
+So §15.1's table resolves to **A**: the feed card's row is **React · replies · Share ·
+Follow** (4), and **Notifications, Emails, Frequency and Save all move behind one
+trigger**. §15's recommendation was B; Ian picked A on the row-width argument, which is
+the reason §15.1 itself listed for A ("the only version that reaches four controls").
+Recorded and built as chosen.
+
+### 17.1 The mock is now IN THE REPO — and it was one reboot from gone
+
+The artifact the decision rests on was hand-authored straight into the dev webroot and
+tracked by **nothing** — `git log --all` found it in neither the monorepo nor
+`~/projects`. It is now `footer-mockups/threadfollow-consolidate/index.html`, committed
+byte-identical (`cmp`-verified) and deliberately un-annotated: the file is evidence of
+what Ian saw, not a place to write down what he decided.
+
+⚠️ **Deploy coupling, not yet done.** The published path is still the hand-authored
+copy. `~/projects/footer-mockups/threadfollow-consolidate` can only become a symlink
+into `~/loothplatformv2-clean` **after this branch merges** — the target does not exist
+on main yet, so flipping it now would dangle the link and 404 the URL Ian is deciding
+from. This joins the mu-plugin and webroot symlink couplings a plain `git pull` does not
+handle.
+
+### 17.2 What was built
+
+| piece | where | note |
+|---|---|---|
+| `feed_follow_control()` | `_reply-render.php` | the labelled bell; `[data-follow-open]`, **not** `[data-follow]` |
+| `paintControl()` | `forums.js` | aggregate state, driven from the **same `paint()`** as the toggles |
+| the settings modal | `forums.js` | ONE instance, retargeted per topic |
+| `.fc-follow` + `.lg-fm__*` | `forums.css` | the mock's values on real tokens |
+| Save de-duplication | `hub-polish.js` | narrow guard, see 17.4 |
+
+**The modal's rows are the REAL controls, not copies.** Notifications and Emails are
+genuine `[data-follow]` buttons; Save is a genuine `.fc-save`. So all three ride the
+existing delegates, the existing batch hydration, the existing optimistic-flip-and-revert
+— and the §14 long-press fix with them. Reimplementing them would have been the third
+implementation of a bit §0 ruling 8 says has exactly one.
+
+**§15.2 is honoured, not eroded.** The control is a labelled bell carrying its own state:
+lit orange (`--lg-follow-on`) whenever either bit is on, a ✉ badge when emails
+specifically are on, label flipping to "Following". A member still reads a thread's state
+off the feed without opening anything. **It is not a ⋯ menu and must not become one** —
+that ruling has now been made three times.
+
+### 17.3 ⚠️ FREQUENCY IS BUILT AND SWITCHED OFF — `FREQ_ENABLED = false`
+
+The row is written, styled and data-driven, and it **does not ship**. §15.4's rule is
+explicit: *do not ship a cadence control that silently does nothing.* There is no sender —
+§15.5 established `lg-weekly-digest` is an editorial broadcast that resolves its audience
+by CRM tag and has no notion of who follows thread X, so of Off/Instant/Hourly/Daily/Weekly
+**only Instant is deliverable today**. Two questions are also still open with Ian: whether
+"Off" stays in the list (§15.3), and whether cadence is per-thread at all (§15.5 argues it
+should be ONE account-level preference this modal *shows* rather than owns).
+
+The option list is therefore **not hardened** — it is an array, so enabling it is a
+one-line flag flip *after* those answers land, and nobody has to first think about the
+list under time pressure.
+
+### 17.4 The Save duplicate that would have been a lie, caught before it shipped
+
+`hub-polish.js` appends its own `.lg-act-save` to every mobile card. With Save also in the
+modal that is **two save controls on one card, and they do not paint each other** — the
+row's tracks `lgSavedSet`, the modal's `.fc-save` tracks forums.js's hydration. Saving from
+the modal would have left the row's star dark: the §8.1.3 "UI lies" class, not a cosmetic
+duplicate. Guarded narrowly — `hub-polish.js` skips its append only when the card carries
+`[data-follow-open]`, so Buck's save behaviour is untouched on every card that does not have
+the consolidated control.
+
+### 17.5 The mobile-hide rule I nearly re-broke
+
+`feed_follow_control()` emits **two** `.fc-follow` — one into `.fc-actions` (desktop), one
+into `.lg-card-actions` (mobile) — exactly as the pair did. The first draft shipped without
+a mobile-first hide for the desktop copy, which is **precisely the defect Ian caught on his
+phone** ("two empty black squares below the action row", `forums.css:674-688`): at ≤640 the
+desktop copy falls through to native `<button>` chrome. Caught by re-reading the rule that
+documents the original, not by testing. `.feed-page .fc-actions > .fc-follow {display:none}`
+at all widths, re-shown at ≥641, same child combinator and same reason as the pair's.
+
+**This is the third time this exact rule has been needed** (`.fc-share`, the 🔔/✉ pair, now
+`.fc-follow`). Any new control emitted into both `.fc-actions` and `.lg-card-actions` needs
+it. That is a gate's worth of recurrence.
+
+### 17.6 What is proven, and what is NOT
+
+**Proven** — rendered through the exercise harness on this branch, as the real FPM pool users:
+
+```
+/hub/?type=discussions   36 .fc-follow  (18 cards x 2 surfaces)
+                          0 .fc-save    (moved into the modal)
+                          0 [data-follow] inline on cards
+/hub/general/<topic>      2 [data-follow], 1 .fc-save, 0 .fc-follow  (topic page unchanged)
+```
+PHP lints clean, both JS files pass `node --check`, `forums.css` braces balance.
+
+**NOT proven, and this is the honest limit:** the modal has never been opened in a browser.
+Nothing here demonstrates that it paints, that the switches flip, that Save hydrates for the
+right topic, that focus returns on close, or that Escape works. There is no jsdom on this box
+and the browser seat was held by another lane throughout. `tools/gates/follow-visible-gate.py`
+is written for exactly this and needs updating for the new control before it can be believed.
+**A structural check is not a paint check** — that distinction is the whole subject of §16.
+
+### 17.7 Deliberately NOT done — the other three surfaces
+
+The consolidated control is on the **feed card only** (desktop + mobile). The standalone
+topic page, the mobile reply sheet and the desktop `lg-dmodal` header still carry the
+inline 🔔/✉ pair, unchanged and working.
+
+That is a real inconsistency against §0 ruling 8, and it is flagged rather than silently
+resolved: Ian's reason was *"it gets the card controls down"*, the mock he approved shows a
+**card**, and those other surfaces are not width-constrained the way the card is. Switching
+them would change surfaces he has not seen. **Open for Ian:** does the consolidated control
+replace the pair everywhere, or is it the card's answer to a card's problem?
+
+*§17 written 2026-07-30. Every count above came from the harness or a linter; every claim
+about the browser is marked unproven because none was made in one.*
+
+---
+
+## 18. SAVE STAYS INLINE EVERYWHERE ELSE — the trap, the branch, and the red-first gate
+
+**Ian, 2026-07-30, verbatim (keeper-relayed):** *"btw, we need to keep the save button on
+all other post types."*
+
+### 18.1 Why this is a trap and not a preference
+
+The consolidation modal is **follow-shaped**, and follow exists only for `post_type` `topic`
+(`follow.php:176`). So on an article or an event **there is no modal to move Save into**.
+Move it unconditionally and Save does not relocate — it **disappears**, with no surface left
+to reach it from. A member-facing regression on every article and event on the site, shipping
+under the banner of a consolidation win.
+
+### 18.2 The branch — and it is structural, not a conditional I added
+
+Topic cards and content cards render from **two physically separate `.fc-actions` blocks**:
+
+| | file:line | Save |
+|---|---|---|
+| content card row | `_feed.php:1505` | `_feed.php:1508` — `if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_save_btn($c_cpt, $c_id);` **untouched** |
+| topic card row | `_feed.php:1640` | removed — moved into the modal |
+| mobile (both) | `hub-polish.js:509` | appends `.lg-act-save` **unless** the card carries `[data-follow-open]` |
+
+`feed_action_bar()` **is** shared, but content cards call it as `feed_action_bar(0, 'Comment')`
+— no topic id — so its follow branch (`$topicId > 0`) never fires there. The mobile guard keys
+on the presence of the consolidated control, which is the same condition, so both paths agree
+without either knowing about the other.
+
+### 18.3 The gate — and the vacuous pass I nearly shipped in it
+
+`follow-visible-gate.py` PHASE 1b asserts the negative on the mixed feed at both widths.
+
+**The obvious way to write it is wrong.** "Count content cards that HAVE a save control, then
+assert those are painted" **passes vacuously against the exact build it exists to catch**: move
+Save unconditionally, every content card loses it, the count is zero, zero cards are asserted,
+green. An emptiness guard only converts that into `CANNOT RUN` — not a pass, but not the red it
+should be. This is the same trap the longpress gate's first draft fell into (§14.4), one gate
+later, and it was caught by asking what the gate would *do* on the broken build rather than by
+running it.
+
+So cards are classed as content **by structure** — no `[data-follow-open]` — and *then* at least
+one is required to still carry Save. Zero is a finding.
+
+**VERIFIED RED-FIRST**, both builds served through the exercise harness as the real pool user:
+
+| build | topic cards | content cards | content cards with inline Save | PHASE 1b |
+|---|---|---|---|---|
+| this branch | 6 | 12 | **7** | PASS |
+| Save moved unconditionally | 6 | 12 | **0** | **FAIL — caught** |
+
+The content-card count is **12 in both**, which is what makes this a real red rather than an
+environmental one: the feed is intact, the topic side is unaffected, and only the asserted
+property moves.
+
+⚠️ **Two traps inside the red-first run itself**, both of which would have produced a fake proof:
+
+1. **`hub-router.php` HARDCODES `$ROOT`** to the worktree (`:17`), so `php -S -t <other tree>`
+   serves the worktree anyway. The first red run returned markup **byte-identical** to green and
+   would have been reported as "the gate does not fire" — or, worse, a patch that "did nothing".
+   The router's `$ROOT` must be repointed, not just the docroot flag.
+2. Copying `bb-mirror/web` alone 500s — `index.php:25` requires `__DIR__/../config.php`. A 500
+   yields *zero* cards, which reads as red for the wrong reason. **The whole `bb-mirror` parent
+   must be copied**, and a red build that returns no cards at all should be distrusted before it
+   is believed.
+
+### 18.4 A PRE-EXISTING gap, flagged and not fixed
+
+5 of 12 content cards (`post-type-videos`, `loothprint`) carry **no save control at all** on the
+hub. **This is not variant A's doing** — the identical 5, same types, render the same way from
+the serving checkout on `main`. `post-type-videos` appears both with and without Save, so it is a
+card-*variant* difference, not a post-type rule.
+
+It is left alone deliberately: Ian's instruction is to **keep** Save where it is, and this is a
+pre-existing absence in someone else's render path. The gate therefore asserts "**some** content
+card keeps Save", not "all" — asserting all would red-flag a condition this lane did not cause
+and cannot fix. **Worth someone's attention, and it is not this lane's to fix silently.**
+
+### 18.5 §15.4 ANSWERED — Hourly is dropped
+
+**weekly-recap, 2026-07-30:** drop Hourly. The reason is measurement, not taste: **no member on
+live has ever had two forum notifications in the same hour**, so an hourly digest is a strictly
+worse Instant — it adds delay and batches nothing. Dropped from `FREQ_OPTIONS` before Ian ever
+saw it, which §15.4 argued is the cheap moment to do it.
+
+Frequency is now **Off · Instant · Daily · Weekly**, still `FREQ_ENABLED = false`, still an array
+so §15.3 ("Off" in or out) stays a one-element data change and never a re-layout.
+
+**Still open, and still Ian's:** §15.3. **Still open, and a contract not a choice:** where cadence
+is stored — raised with weekly-recap on the board rather than picked unilaterally, per §15.4's own
+rule and their framing that it is the difference between zero new state and a per-(member,thread)
+ledger.
+
+*§18 written 2026-07-30 from harness runs on both a green and a deliberately broken build.*
+
+---
+
+## 19. THE MODAL IS FULLY SPECIFIED — and variant A reintroduced §14's defect
+
+### 19.1 §15.3 answered: "Off" is out. Final list — Instant / Daily / Weekly
+
+**Ian, 2026-07-30:** drop "Off"; the Emails toggle owns on/off and the segmented control
+only ever picks a cadence. He took §15.3's recommendation and its reason: Off-in-the-list
+*plus* a separate toggle expressed **one state two ways**, and a member who set Emails ON
+with frequency Off had no way to know which won.
+
+With Hourly out on weekly-recap's evidence (§18.5), the list is **Instant / Daily / Weekly**
+and nothing about it is open.
+
+**The surviving coupling still matters and is implemented:** switching Emails OFF dims the
+cadence row **and disables its buttons**. Dimming alone still accepts the click, which would
+be a setting that isn't — §8.1.3 in miniature. The reverse coupling is gone with "Off". It
+is driven from the ✉ switch's own `aria-pressed` and re-run from `paint()`, so it cannot
+drift from the bit it describes.
+
+Both answers landed as **one-element data changes**, which is the entire reason the list was
+built from an array rather than hand-laid markup.
+
+⚠️ **`FREQ_ENABLED` STAYS FALSE, and that is not an oversight.** The *list* is decided; the
+*backing* is not. There is still no sender (§15.5), and the cadence **store shape is an open
+contract with weekly-recap** — raised on the board as a question, per §15.4's rule against
+handing the consuming lane a migration. Shipping the control now would be exactly the
+"silently does nothing" §15.4 forbids. It flips on when the store is agreed and a sender
+exists, and not before.
+
+### 19.2 ⚠️ VARIANT A REINTRODUCED IAN'S §14 DEFECT ON THE CONTROL THAT REPLACED IT
+
+Found while checking whether the *old* longpress gate still had a target — not by testing.
+
+`mobile-hub.js`'s bail read:
+
+```js
+if (el.closest('[data-follow]') || el.closest('.lg-act-follow')) return null;
+```
+
+**`[data-follow]` does not match `data-follow-open`** — different attributes — and
+`.fc-follow` renders inside `.lg-card-actions`, inside `.fc-actions`, which the broad match
+below it claims. So on a phone: press-and-hold the Follow pill past 380ms → `longPressed`
+→ the reaction palette opens → the capture-phase swallower kills the release click →
+**the modal never opens.**
+
+That is Ian's exact §14 defect, on the control built to replace the one it was fixed on, and
+per §14.3 it is **structurally invisible to every synthetic click in the suite**. Fixed by
+widening the bail to `[data-follow-open]` and `.fc-follow`.
+
+> **The lesson, and it is the one §14 already paid for once:** a fix written against a
+> *selector* survives only as long as the markup keeps matching that selector. Replacing the
+> control replaced the match. Any new follow affordance under `.fc-actions` needs this bail,
+> and the comment now says so at the line.
+
+### 19.3 The old gate had silently lost its target
+
+`follow-longpress-gate.py` resolved its bell with `[data-follow="notify"]` on the hub. Under
+variant A the mobile card has no inline `[data-follow]` at all, so the gate found nothing and
+exited **2 / CANNOT RUN** — not a false red, but a gate that quietly stops proving anything,
+which is precisely how craft gate 2 sat dead for weeks.
+
+Repointed at `[data-follow-open]` and restructured, because the *assertion* changed shape too:
+the pill opens a dialog, it does not itself carry the bit.
+
+| phase | now asserts |
+|---|---|
+| 1 | a 600ms press on the pill **opens the modal**, and no reaction palette appears |
+| 2 | a 600ms press on the modal's 🔔 switch **writes `forums.topic_follow`** |
+| 3 | after reload the **pill itself reads Following** — §15.2 state visible without opening |
+| 4 | pressing again turns it off (not one-way) |
+| 5 | an 80ms flick still opens the modal (the quick tap is unbroken) |
+| 6 | the ✉ switch flips and survives a reload (MySQL store, so reload IS the assertion) |
+
+Phase 1 is the one that would have caught 19.2. Phase 3 is new and exists because
+consolidation is only acceptable while the control still carries visible state.
+
+### 19.4 Status against the live-deploy gate
+
+| item | state |
+|---|---|
+| Variant A row + labelled bell (§15.2) | **built** |
+| Save in the modal, topics only | **built**, negative case **proven red-first** (§18.3) |
+| Save inline on all other post types | **unchanged**, verified against `main` |
+| Frequency list Instant/Daily/Weekly | **built**, `FREQ_ENABLED = false` pending the store |
+| Mock in the monorepo | **committed** (`8cf55b7`) |
+| Tracked `.pyc` dropped | **done** + `.gitignore` |
+| Cadence store agreed with weekly-recap | **OPEN — theirs** |
+| **Verified on the dev2 serve** | **NO — not merged, and never opened in a browser** |
+
+**It is not done.** Everything is proven at the SSR/lint/harness layer; **nothing about the
+modal has been seen in an engine** — not that it paints, not that a press opens it, not that
+Save hydrates for the right topic. The seat has been with other lanes throughout. Saying
+otherwise would be the hedged claim this lane keeps refusing to make.
+
+*§19 written 2026-07-30.*
+
+---
+
+## 20. THE BROWSER RUN — Ian's regression CLOSED, and two defects only an engine could see
+
+Seat obtained 2026-07-30 after weekly-recap released it. Both gates green; every figure
+below came out of a real engine.
+
+### 20.1 ✅ §16.3 IS NO LONGER "NOT PROVEN" — the controls ARE painted on the serve
+
+On the **real dev2 origin** (`main`, via `real-origin-proxy`), hydrated
+(`body.lg-follow-authed`), in a real engine:
+
+| viewport | cards | `[data-follow]` in DOM | **VISIBLE** | **CLIPPED** |
+|---|---|---|---|---|
+| desktop 1280 | 18 | 72 | **36** (exactly one pair per card) | **0** |
+| mobile 390 | 18 | 72 | **36** (exactly one pair per card) | **0** |
+
+`765dbc3` holds. Where **17 of 18** cards used to split and push the toggles past the
+card's `overflow: hidden`, **nothing is clipped at either width**. The controls Ian
+could not see are painted on the serve he is looking at, and §16.3's inference from
+CSS arithmetic is now a measurement.
+
+### 20.2 ⚠️ VARIANT A SHIPPED A DEAD HYDRATION PATH — no pill would ever have lit
+
+Every structural check was green on this: SSR counts, `php -l`, `node --check`, CSS
+brace balance, and the paint gate's own DOM assertions.
+
+`sync()` keyed on `[data-follow]:not([data-follow-synced])` and bailed at
+`if (!btns.length) return;`. Variant A removed the inline pair from the card, so a hub
+of discussion cards has **zero** `[data-follow]` until a modal opens. Therefore:
+
+- `body.lg-follow-authed` was never set — **every gate hung at hydration** and reported
+  exit 2, a no-verdict that reads as the environment's fault;
+- `paint()` never ran, so **no pill ever lit**. A member following six threads would
+  have seen "Follow" on all six.
+
+That inverts §15.2's entire justification for permitting consolidation — *a member reads
+a thread's state off the feed without opening anything* — and is the §8.1.3 lie: the
+control would have said Follow over a live subscription. **Only the engine found it.**
+
+Fixed: the selector also collects `[data-follow-open]`, so the consolidated control's
+topic ids join the same batch GET.
+
+### 20.3 ⚠️ THE HARNESS INVENTED A DEFECT — it was MORE CACHEABLE THAN PRODUCTION
+
+An intermittent failure had the bell hydrating **ON against an empty store** — precisely
+the UI-lies signature. It was not the product. `follow.php:46` sets
+`Cache-Control: no-store, no-cache, must-revalidate, max-age=0` and the real vhost serves
+it (verified with `curl` on both), but the harness router **dropped every upstream
+response header**, leaving the browser free to cache the batch viewer-state GET.
+
+**A harness weaker than production invents defects that do not exist — and would hide
+this one if it ever became real.** Fixed in `hub-router.php`.
+
+### 20.4 Ian's Save constraint holds — settled LIKE-FOR-LIKE, after a wrong first read
+
+A content-card Save shortfall (13 ship / 12 visible) looked like a variant-A regression.
+It is not: running the **serving checkout through the SAME loopback harness** gives
+**identical** figures — desktop 13 ship / 12 visible, mobile 15 ship / 12 visible, the same
+`lg-act-save` nodes dark.
+
+The first comparison — branch-on-harness against main-on-real-origin — **varied two things
+at once** and pointed at the wrong one. Only harness-vs-harness isolates the code change.
+
+The gate now asserts `>= 1` with a **loud NOTE** rather than failing on a pre-existing
+condition this lane did not cause; the regression it exists for still cannot hide, because
+Save moved unconditionally drives the count to **zero** (§18.3).
+
+### 20.5 Four gate bugs, each of which gave a confident wrong answer
+
+1. `maxTouchPoints: 0` is rejected by CDP ("must be between 1 and 16") — **the gate died
+   on its own first desktop phase.** It had never been run when it was committed.
+2. **It never set cookies.** `real-origin-proxy` injects auth *server-side*, so a run
+   against that harness authenticates with no cookie work at all — and the same gate on
+   the loopback harness resolved anon and died at hydration.
+3. `visible save nodes == cards` is **false arithmetic**: a card ships both a `.fc-save`
+   and a `.lg-act-save` and CSS shows one per width. It failed 12-vs-13 on a build where
+   every card was fine.
+4. A fixed `sleep(1.5)` after the click reported "no row" against a POST that
+   demonstrably returned 200 and **did** write. Now polls the store — a too-short sleep
+   manufactures a finding, a long one hides a hang.
+
+### 20.6 Final results
+
+```
+follow-visible-gate    35 pass / 0 fail
+follow-longpress-gate  16 pass / 0 fail
+```
+
+Longpress phase 1 — *a 600ms press on the pill opens the modal, and no reaction palette
+appears* — is the one that proves §19.2's bail fix on the new control. Phase 3 proves the
+pill hydrates to "Following" **without the modal being opened**, which is §15.2's
+requirement rather than a nicety.
+
+**Left clean:** harnesses down, ports released, scratch removed, my CDP tab closed (other
+lanes' left alone), `forums.topic_follow` holds 0 rows for the test account. One
+pre-existing test row for `(1912, 72330)` was cleared as a gate precondition.
+
+### 20.7 What is STILL not proven
+
+Variant A has been exercised on the **loopback harness only**, because it is not merged and
+the real origin cannot serve it. The harness does **not** reproduce the vhost `sub_filter`
+(theme-boot, the `lg-feed-booting` opacity gate) — which is exactly the gap that made three
+of Ian's reports unreproducible (§11.1). So the modal is proven to open, write, persist and
+paint **on that harness**; the row-overflow and theme-dependent classes can only be re-proven
+against the real origin **after merge**. That re-run is a merge-time obligation, not an
+optional extra.
+
+*§20 written 2026-07-30 from two green gate runs in a real engine.*

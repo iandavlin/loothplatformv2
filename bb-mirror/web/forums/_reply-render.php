@@ -731,9 +731,55 @@ if (!function_exists('feed_save_btn')) {
     }
 }
 
+// ── The CONSOLIDATED follow control (thread-follow §15, Ian picked VARIANT A) ──
+//
+// Ian, 2026-07-30, verbatim: "I like variant A because it gets the card controls
+// down a little bit." So the feed card's action row is Like / replies / Share /
+// Follow — FOUR controls — and Notifications, Emails, Frequency AND Save all move
+// behind this one trigger. Mock (committed): footer-mockups/threadfollow-consolidate/.
+//
+// ⚠️ THIS IS A LABELLED BELL THAT CARRIES ITS OWN STATE — NOT A ⋯ OVERFLOW MENU.
+// §2.3 ruled the ⋯ menu the wrong surface for follow TWICE, and §0 ruling 2 requires
+// the affordance be VISIBLE, not buried. Consolidation puts pressure on exactly that
+// ruling, so the control pays it back: it is lit (orange, --lg-follow-on) whenever
+// either bit is on, carries a ✉ badge when emails specifically are on, and its label
+// reads "Following" rather than "Follow". A member still reads a thread's state off
+// the feed WITHOUT opening anything. Any future change that reduces this to a generic
+// overflow trigger re-breaks a ruling that has already been made twice.
+//
+// It is deliberately NOT a [data-follow] button: forums.js's document-level
+// [data-follow] delegate would treat a click as a channel toggle. This carries
+// [data-follow-open] and opens the settings modal; forums.js's paint() keeps its
+// lit/badge/label state in step with the real toggles on every other surface, so the
+// aggregate display can never drift from the store.
+if (!function_exists('feed_follow_control')) {
+    function feed_follow_control(int $topicId): void
+    {
+        if ($topicId < 1) return;
+        static $BELL = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
+        // Heavier stroke on the badge: it renders at 9px inside a 15px dot, where a
+        // 2px stroke greys into a smudge at 1x.
+        static $MAIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>';
+        echo '<button type="button" class="fc-follow" data-follow-open data-topic-id="' . $topicId
+           . '" aria-haspopup="dialog" aria-expanded="false"'
+           . ' aria-label="Follow this discussion" title="Follow this discussion">'
+           . $BELL
+           . '<span class="fc-follow__lbl">Follow</span>'
+           // aria-hidden: the badge duplicates state the aria-label already states in
+           // words, so announcing it again would just be noise on a screen reader.
+           . '<span class="fc-follow__mail" aria-hidden="true">' . $MAIL . '</span>'
+           . '</button>';
+    }
+}
+
 // The TWO per-discussion opt-in toggles — 🔔 notifications and ✉ emails.
 // thread-follow lane, 2026-07-28. SPEC: docs/atlas/THREAD-FOLLOW-SPEC.md §2.1-2.2,
 // Ian-gated 2026-07-27 (two separate visible icons, NOT one expanding control).
+//
+// STILL LIVE, and still the only implementation of the two bits: §15/variant A moved
+// them BEHIND feed_follow_control() on the feed card, it did not replace them. The
+// settings modal builds these same [data-follow] buttons, and the standalone topic
+// page still emits this pair inline. One contract, every surface (§0 ruling 8).
 //
 // Shared here beside feed_save_btn() for exactly the same reason: the standalone
 // single-topic page loads _reply-render.php and NOT _feed.php, so every

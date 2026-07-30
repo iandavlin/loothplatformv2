@@ -4062,6 +4062,11 @@
     new MutationObserver(function () { clearTimeout(st); st = setTimeout(sync, 120); })
       .observe(saveFeed, { childList: true, subtree: true });
   }
+  // Exposed for the same reason lgFollowSync is (:4024): §15 variant A moved Save
+  // INTO the follow modal, which lives on <body> and not inside the feed — so no
+  // feed mutation ever fires for it and the star would hydrate never. The opener
+  // calls this the moment it retargets the button at a new topic.
+  window.lgSaveSync = sync;
 })();
 
 /* ─── Thread-follow: the TWO per-discussion opt-in toggles (🔔 notify / ✉ email)
@@ -4117,6 +4122,30 @@
       var ch = b.getAttribute('data-follow');
       setState(b, ch === 'notify' ? !!st.notify : !!st.email);
     });
+    paintControl(topicId, !!st.notify, !!st.email);
+    fmSyncFreq();          // §15.3: the cadence row follows the ✉ bit, never leads it
+  }
+
+  /* The consolidated control's AGGREGATE state (§15 variant A, Ian 2026-07-30).
+     Driven from the same paint() the individual toggles use, so the lit bell can
+     never disagree with the store — including the reconcile after a POST and the
+     revert after a failed one. §15.2 is why this exists at all: the control has to
+     carry visible state, or consolidating breaks the "visible, not buried" ruling. */
+  function paintControl(topicId, notify, email) {
+    var on = notify || email;
+    var sel = '[data-follow-open][data-topic-id="' + topicId + '"]';
+    [].slice.call(document.querySelectorAll(sel)).forEach(function (c) {
+      c.classList.toggle('is-on', on);
+      c.classList.toggle('has-mail', email);
+      var l = c.querySelector('.fc-follow__lbl');
+      if (l) l.textContent = on ? 'Following' : 'Follow';
+      // The label is the accessible name; keep the description in words too, since
+      // the ✉ badge is aria-hidden and the colour carries meaning for nobody else.
+      var t = !on ? 'Follow this discussion'
+            : (notify && email) ? 'Following — notifications and emails on'
+            : notify ? 'Following — notifications on' : 'Following — emails on';
+      c.setAttribute('title', t); c.setAttribute('aria-label', t);
+    });
   }
 
   function toggle(btn) {
@@ -4140,9 +4169,23 @@
       .catch(function () { setState(btn, was); });        // revert on failure
   }
 
-  /** Batch viewer-state fetch for any toggles not yet synced. */
+  /** Batch viewer-state fetch for any toggles not yet synced.
+   *
+   * ⚠️ [data-follow-open] IS IN THIS SELECTOR AND MUST STAY. §15 variant A removed the
+   * inline 🔔/✉ pair from the feed card, so a hub full of discussion cards now has
+   * ZERO [data-follow] until a modal is opened. Keyed on [data-follow] alone this
+   * function returned at the `!btns.length` guard, never fetched, and therefore:
+   *   - body.lg-follow-authed was never set (every gate hung at hydration), and
+   *   - paint() never ran, so NO PILL EVER LIT — a member following six threads saw
+   *     "Follow" on all six.
+   * That is §15.2's whole justification for allowing consolidation ("a member reads a
+   * thread's state off the feed without opening anything") silently inverted, and it
+   * is the §8.1.3 lie: the control would have said Follow over a live subscription.
+   * Caught in a real engine 2026-07-30; SSR counts and lint were all green on it.
+   */
   function sync() {
-    var btns = [].slice.call(document.querySelectorAll('[data-follow]:not([data-follow-synced])'));
+    var btns = [].slice.call(document.querySelectorAll(
+      '[data-follow]:not([data-follow-synced]), [data-follow-open]:not([data-follow-synced])'));
     if (!btns.length) return;
     btns.forEach(function (b) { b.setAttribute('data-follow-synced', '1'); });
     var ids = {};
@@ -4187,6 +4230,187 @@
   // Exposed so the modal/sheet openers can hydrate their header toggles the moment
   // they populate, rather than waiting for a feed mutation that may never come.
   window.lgFollowSync = sync;
+
+  /* ══ THE CONSOLIDATED SETTINGS MODAL (§15, variant A — Ian 2026-07-30) ══════════
+     "I like variant A because it gets the card controls down a little bit."
+
+     Holds Notifications, Emails, [Frequency], Save. ONE modal instance, retargeted
+     per topic — the same shape the mock used, and the reason the control can appear
+     on 18 cards without 18 dialogs in the DOM.
+
+     THE ROWS ARE THE REAL CONTROLS, NOT COPIES OF THEM. Notifications and Emails are
+     genuine [data-follow] buttons and Save is a genuine .fc-save, so all three ride
+     the existing delegates, the existing hydration, the existing optimistic-flip and
+     revert — and the mobile-hub long-press fix (§14) with them. Reimplementing them
+     here would have been the third implementation of a bit that §0 ruling 8 says has
+     exactly one.
+
+     ⚠️ FREQUENCY IS BUILT BUT NOT SHIPPED — FREQ_ENABLED is false, deliberately.
+     §15.4/§15.5: storing a cadence does nothing without a batcher, and there is no
+     sender. lg-weekly-digest is an editorial broadcast that resolves its audience by
+     CRM tag and has no notion of who follows thread X, so of Off/Instant/Hourly/
+     Daily/Weekly only Instant is deliverable today. §15.4's rule is explicit — "do
+     not ship a cadence control that silently does nothing" — and a member choosing
+     "Daily" and receiving instant mail is the same lie as §8.1.3's. Ian has also not
+     yet answered whether "Off" stays in the list (§15.3) or whether cadence is
+     per-thread at all (§15.5 argues it should be ONE account-level preference this
+     modal SHOWS rather than owns). So the row is data-driven and dark: flipping the
+     flag must not be the moment anyone first thinks about the option list. */
+  var FREQ_ENABLED = false;
+  /* THE LIST IS NOW FULLY SPECIFIED — both open questions answered 2026-07-30.
+
+     HOURLY IS OUT (§15.4, weekly-recap) on measurement, not taste: NO MEMBER ON LIVE
+     HAS EVER HAD TWO FORUM NOTIFICATIONS IN THE SAME HOUR, so an hourly digest is a
+     strictly worse Instant — it adds delay and batches nothing.
+
+     "OFF" IS OUT (§15.3, Ian): the Emails toggle owns on/off and the segmented
+     control only ever picks a cadence. Off-in-the-list plus a separate toggle
+     expressed ONE state TWO ways, and a member who set Emails ON with frequency Off
+     had no way to know which won.
+
+     Building this from an array is what made both answers one-element data changes
+     instead of re-layouts — the reason §15.3/§15.4 were left open in code rather
+     than guessed at. */
+  var FREQ_OPTIONS = ['Instant', 'Daily', 'Weekly'];
+
+  var fm = null, fmLastFocus = null;
+
+  function fmEnsure() {
+    if (fm) return fm;
+    fm = document.createElement('div');
+    fm.id = 'lg-follow-modal';
+    fm.hidden = true;
+    fm.innerHTML =
+      '<div class="lg-fm__back" data-fm-close></div>' +
+      '<div class="lg-fm__panel" role="dialog" aria-modal="true" aria-labelledby="lg-fm-title">' +
+        '<header class="lg-fm__head">' +
+          '<h2 class="lg-fm__title" id="lg-fm-title">Follow this discussion</h2>' +
+          '<button type="button" class="lg-fm__x" data-fm-close aria-label="Close">&times;</button>' +
+        '</header>' +
+        '<p class="lg-fm__topic"></p>' +
+        '<div class="lg-fm__rows">' +
+          fmRow('notify', 'Notifications', 'A bell row for new replies') +
+          fmRow('email',  'Emails',        'Email me about new replies') +
+          (FREQ_ENABLED ? fmFreqRow() : '') +
+          '<div class="lg-fm__row lg-fm__row--save">' +
+            '<span class="lg-fm__rlbl">Save<small>Bookmark to your saved posts</small></span>' +
+            // A real .fc-save: same delegate, same batch hydration, same store.
+            '<button type="button" class="fc-save" data-save data-post-type="topic" data-item-id="0" ' +
+                    'aria-pressed="false" aria-label="Save" title="Save">' +
+              '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.6l2.95 5.98 6.6.96-4.77 4.65 1.13 6.57L12 17.66 6.09 20.76l1.13-6.57L2.45 9.54l6.6-.96z"/></svg>' +
+              '<span class="fc-save__lbl">Save</span>' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(fm);
+    fm.addEventListener('click', function (e) {
+      if (e.target.closest('[data-fm-close]')) { e.preventDefault(); fmClose(); }
+    });
+    return fm;
+  }
+
+  /* A row is [label + sub] on the left, a SWITCH on the right — the shape Ian saw
+     and approved in the mock. The switch is a real [data-follow] button rather than
+     an <input type=checkbox>: aria-pressed on a <button> is the correct toggle-button
+     pattern, and it is what setState()/paint() already drive on every other surface.
+     No icon inside it — a bell glyph in a switch track reads as neither. */
+  function fmRow(ch, title, sub) {
+    return '<div class="lg-fm__row">' +
+      '<span class="lg-fm__rlbl">' + title + '<small>' + sub + '</small></span>' +
+      '<button type="button" class="lg-fm__sw" data-follow="' + ch + '" ' +
+              'data-topic-id="0" aria-pressed="false"></button>' +
+      '</div>';
+  }
+
+  function fmFreqRow() {
+    return '<div class="lg-fm__row lg-fm__row--freq" id="lg-fm-freq"><span class="lg-fm__rlbl">Frequency' +
+      '<small>How often emails arrive</small></span><div class="lg-fm__seg">' +
+      FREQ_OPTIONS.map(function (o, i) {
+        return '<button type="button" data-freq="' + i + '">' + o + '</button>';
+      }).join('') + '</div></div>';
+  }
+
+  /* §15.3's SURVIVING coupling. With "Off" gone the reverse direction (choosing Off
+     switches Emails off) no longer exists, but this direction still must: with Emails
+     off there is no cadence, and a live-looking segmented control would be a setting
+     that isn't — the §8.1.3 lie in miniature. Dimmed AND inert, because dimming alone
+     still accepts the click. Driven from the ✉ switch's own state so it cannot drift.
+
+     Called on open and after every paint; a no-op while FREQ_ENABLED is false. */
+  function fmSyncFreq() {
+    if (!fm || !FREQ_ENABLED) return;
+    var row = fm.querySelector('#lg-fm-freq');
+    if (!row) return;
+    var em = fm.querySelector('[data-follow="email"]');
+    var on = !!(em && em.getAttribute('aria-pressed') === 'true');
+    row.classList.toggle('is-off', !on);
+    [].slice.call(row.querySelectorAll('button')).forEach(function (b) { b.disabled = !on; });
+  }
+
+  function fmClose() {
+    if (!fm || fm.hidden) return;
+    fm.hidden = true;
+    document.documentElement.classList.remove('lg-fm-open');
+    var opener = document.querySelector('[data-follow-open][aria-expanded="true"]');
+    if (opener) opener.setAttribute('aria-expanded', 'false');
+    // Return focus where it came from, or the dialog strands a keyboard user at
+    // document start — the failure that makes a modal unusable without a mouse.
+    if (fmLastFocus && document.contains(fmLastFocus)) { try { fmLastFocus.focus(); } catch (e) {} }
+    fmLastFocus = null;
+  }
+
+  function fmOpen(trigger) {
+    var id = parseInt(trigger.getAttribute('data-topic-id'), 10);
+    if (!id) return;
+    var m = fmEnsure();
+    fmLastFocus = trigger;
+    trigger.setAttribute('aria-expanded', 'true');
+
+    // Retarget every control at THIS topic, then force a re-hydrate. Clearing
+    // data-follow-synced / data-save-synced is what makes the shared modules treat
+    // them as new — without it the modal would show the PREVIOUS topic's state,
+    // which is the same stale-state bug the mobile sheet had to fix (§13.5-era).
+    [].slice.call(m.querySelectorAll('[data-follow]')).forEach(function (b) {
+      b.setAttribute('data-topic-id', id);
+      b.removeAttribute('data-follow-synced');
+      setState(b, false);
+    });
+    var sv = m.querySelector('.fc-save');
+    if (sv) {
+      sv.setAttribute('data-item-id', id);
+      sv.removeAttribute('data-save-synced');
+      sv.setAttribute('aria-pressed', 'false');
+      sv.classList.remove('is-saved');
+      var svl = sv.querySelector('.fc-save__lbl'); if (svl) svl.textContent = 'Save';
+    }
+
+    var card = trigger.closest('.feed-card');
+    var t = card && card.querySelector('.fc-title, .feed-card__title');
+    var tp = m.querySelector('.lg-fm__topic');
+    if (tp) tp.textContent = t ? (t.textContent || '').trim() : '';
+
+    m.hidden = false;
+    document.documentElement.classList.add('lg-fm-open');
+    sync();                                        // 🔔/✉ state for this topic
+    if (window.lgSaveSync) window.lgSaveSync();    // ☆ state for this topic
+    // Dim/undim before the batch GET lands too, so the row never flashes as live
+    // for a member whose emails are off. paint() calls it again on arrival.
+    fmSyncFreq();
+    var first = m.querySelector('.lg-fm__sw');
+    if (first) { try { first.focus(); } catch (e) {} }
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest && e.target.closest('[data-follow-open]');
+    if (!t) return;
+    e.preventDefault(); e.stopPropagation();       // never open the thread behind it
+    fmOpen(t);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && fm && !fm.hidden) fmClose();
+  });
 })();
 
 /* ─── Desktop SHARE (discussion topics) — Web Share API w/ copy-link

@@ -42,6 +42,15 @@ if (str_starts_with($uri, '/bb-mirror-api/v0/follow')) {
     http_response_code((int) curl_getinfo($ch, CURLINFO_HTTP_CODE));
     curl_close($ch);
     header('Content-Type: application/json');
+    // ⚠️ FORWARD no-store, or THE HARNESS IS MORE CACHEABLE THAN PRODUCTION.
+    // follow.php:46 sets `Cache-Control: no-store, no-cache, must-revalidate,
+    // max-age=0` and the real vhost serves it; this proxy dropped every upstream
+    // response header, so the browser was free to cache the batch viewer-state GET.
+    // Measured 2026-07-30: that produced an INTERMITTENT gate failure in which the
+    // bell hydrated ON against an EMPTY store — the §8.1.3 UI-lies signature,
+    // manufactured entirely by the harness. A harness weaker than production invents
+    // defects that do not exist, and would hide this one if it ever became real.
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
     echo $body;
     return true;
 }

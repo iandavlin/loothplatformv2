@@ -1196,13 +1196,18 @@ function feed_action_bar(int $reply_count, string $zero_label = 'Reply', int $to
        . '<span class="lg-act lg-act-like" role="button" tabindex="0">' . $ICO_LIKE . 'Like</span>'
        . '<span class="lg-act lg-act-replies" role="button" tabindex="0">' . $ICO_REPLIES . htmlspecialchars($label) . '</span>'
        . '<span class="lg-act lg-act-share" role="button" tabindex="0">' . $ICO_SHARE . 'Share</span>';
-    if ($topicId > 0 && function_exists('feed_follow_btns')) {
-        // .lg-act-follow carries margin-left:auto, so the two icons sit at the right
-        // end of a bar that otherwise holds only Like / N replies / Share. Frame 2
-        // showed room to spare at 390px.
-        echo '<span class="lg-act-follow">';
-        feed_follow_btns($topicId);
-        echo '</span>';
+    if ($topicId > 0 && function_exists('feed_follow_control')) {
+        // CONSOLIDATED (§15 variant A, Ian 2026-07-30). Was a .lg-act-follow span
+        // holding the 🔔/✉ pair; now one labelled bell that opens the settings modal.
+        // .fc-follow carries margin-left:auto itself, so it lands at the right end of
+        // a bar holding Like / N replies / Share — the same place the pair sat.
+        //
+        // The mobile pair's disappearance is also why the §14 long-press bail is NOT
+        // removed: mobile-hub.js still guards [data-follow]/.lg-act-follow, and the
+        // MODAL's switches are [data-follow] inside a body-level dialog. Keeping the
+        // bail costs nothing and stops the same swallowed-tap defect reappearing the
+        // moment anything nests a toggle under .fc-actions again.
+        feed_follow_control($topicId);
     }
     echo '</div>';
 }
@@ -1635,12 +1640,24 @@ $header_cat = $scoped_forum
       <div class="fc-actions">
         <?php feed_reactions_bar('topic', $topic_id, $card_reaction_counts['topic:' . $topic_id] ?? []); ?>
         <?php feed_action_bar($reply_count, 'Reply', $topic_id); ?>
-        <?php feed_save_btn('topic', $topic_id); ?>
-        <?php /* The two per-discussion opt-ins (thread-follow §2.2). Ian reviewed and
-                 gated THIS row in the previs — eight controls is the shape he approved,
-                 so the count is settled; do not re-open it. Topic cards only in v1:
-                 content cards have comments, not topic subscriptions (§9.3 q5). */ ?>
-        <?php feed_follow_btns($topic_id); ?>
+        <?php /* CONSOLIDATED — thread-follow §15, variant A. Ian, 2026-07-30, verbatim:
+                 "I like variant A because it gets the card controls down a little bit."
+
+                 This replaces THREE row controls (☆ Save, 🔔 notify, ✉ email) with one
+                 labelled bell that opens the settings modal. The earlier note here said
+                 the eight-control count was settled and not to re-open it — Ian has now
+                 re-opened it himself, and this is that decision. The row it leaves is
+                 React / replies / Share / Follow.
+
+                 It also retires the arithmetic 765dbc3 was built on: that fix bought the
+                 old row a 120px floor to stop flex-wrap dropping the toggles past the
+                 card's overflow. Three fewer fixed-width children is the structural
+                 version of the same fix. The nowrap rule STAYS — it is what makes
+                 flex-shrink work at all, and the row can still grow.
+
+                 Topic cards only, unchanged from v1: content cards have comments, not
+                 topic subscriptions (§9.3 q5). */ ?>
+        <?php feed_follow_control($topic_id); ?>
         <?php feed_share_btn(); ?>
         <?= $reply_cta /* card-level CTA: now hidden by CSS (composer is the reply entry, Ian) but KEPT as the topic/forum data-source that nested reply buttons read via frmOpen() */ ?>
         <?php /* expand-all RETIRED (Ian): SPLIT into "Read more" (full post BODY only,
