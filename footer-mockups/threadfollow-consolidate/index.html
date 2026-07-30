@@ -1,0 +1,401 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Action row — two ways to consolidate (Ian's pick, 2026-07-30)</title>
+<style>
+:root{
+  --cream:#fbfbf8; --sage:#87986a; --sage-d:#586b3f; --sage-tint:#eef2e3;
+  --rust:#c66845; --ink:#262925; --mute:#565a55; --line:#e4e7d8; --card:#fff;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --serif:Lora,Georgia,serif;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:30px 20px 90px;background:var(--cream);color:var(--ink);font:16px/1.55 var(--sans)}
+.wrap{max-width:1080px;margin:0 auto}
+h1{font:700 27px/1.2 var(--serif);margin:0 0 6px}
+.lede{color:var(--mute);margin:0 0 8px;font-size:15.5px;max-width:70ch}
+h2{font:700 12.5px/1.2 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);
+   margin:44px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font:700 16px/1.3 var(--sans);margin:0 0 4px}
+.note{border-left:3px solid var(--rust);padding:10px 0 10px 15px;margin:20px 0;color:var(--mute);font-size:14.5px;max-width:74ch}
+.note strong{color:var(--ink)}
+code{background:#f0f1ea;padding:1px 6px;border-radius:5px;font-size:12.5px}
+
+/* ── the two columns ───────────────────────────────────────────── */
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+@media (max-width:860px){.cols{grid-template-columns:1fr}}
+.pane{border:1px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden}
+.pane__h{padding:14px 17px;border-bottom:1px solid var(--line);background:#fcfcf9}
+.pane__h .tag{display:inline-block;font:700 10.5px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;
+  color:#fff;background:var(--sage-d);padding:4px 8px;border-radius:999px;margin-bottom:7px}
+.pane__h .tag--b{background:var(--rust)}
+.pane__h p{margin:3px 0 0;color:var(--mute);font-size:13.5px}
+.pane__b{padding:19px 17px 22px}
+.rec{display:inline-block;font:700 10.5px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--sage-d);border:1px solid var(--sage);background:var(--sage-tint);padding:4px 8px;border-radius:999px;margin-left:7px;vertical-align:2px}
+
+/* ── a believable feed card ────────────────────────────────────── */
+.card{border:1px solid var(--line);border-radius:13px;background:var(--card);overflow:hidden;max-width:390px}
+.card__body{padding:13px 14px 4px}
+.card__meta{display:flex;align-items:center;gap:8px;color:var(--mute);font:500 11.5px/1.3 var(--sans)}
+.card__av{width:27px;height:27px;border-radius:50%;background:var(--sage);color:#fff;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;font:700 11px/1 var(--sans)}
+.card__t{font:700 16px/1.25 var(--sans);margin:9px 0 5px}
+.card__x{color:var(--mute);font-size:13.5px;margin:0 0 11px}
+.row{display:flex;align-items:center;gap:9px;padding:9px 14px 12px;border-top:1px solid var(--line);
+  color:var(--mute);font:600 12.5px/1 var(--sans);flex-wrap:nowrap}
+.act{display:inline-flex;align-items:center;gap:5px;background:none;border:0;padding:3px 2px;margin:0;
+  color:inherit;font:inherit;cursor:pointer;white-space:nowrap;border-radius:7px}
+.act:hover{color:var(--sage-d)}
+.ico{width:16px;height:16px;flex:0 0 auto}
+.spacer{margin-left:auto}
+
+/* the consolidated control */
+.foll{display:inline-flex;align-items:center;gap:6px;background:none;border:1px solid var(--line);
+  border-radius:999px;padding:5px 11px 5px 9px;color:var(--mute);font:600 12.5px/1 var(--sans);cursor:pointer;
+  position:relative;white-space:nowrap}
+.foll:hover{border-color:var(--sage);color:var(--sage-d)}
+.foll.on{color:var(--rust);border-color:var(--rust);background:rgba(198,104,69,.09)}
+.foll.on .ico{fill:currentColor}
+.foll__mail{position:absolute;right:-3px;top:-4px;width:15px;height:15px;border-radius:50%;
+  background:var(--rust);color:#fff;display:none;align-items:center;justify-content:center}
+.foll.mail .foll__mail{display:flex}
+.foll__mail svg{width:9px;height:9px}
+.star.on{color:var(--rust)} .star.on .ico{fill:currentColor}
+
+/* ── modal ─────────────────────────────────────────────────────── */
+.scrim{position:fixed;inset:0;background:rgba(26,29,26,.45);display:none;z-index:40}
+.scrim.open{display:block}
+.modal{position:fixed;z-index:41;left:50%;top:50%;transform:translate(-50%,-50%);width:min(360px,calc(100vw - 32px));
+  background:var(--card);border-radius:16px;box-shadow:0 22px 60px rgba(26,29,26,.3);display:none;overflow:hidden}
+.modal.open{display:block}
+.modal__h{display:flex;align-items:flex-start;gap:10px;padding:16px 16px 12px;border-bottom:1px solid var(--line)}
+.modal__h h4{margin:0;font:700 15px/1.3 var(--sans);flex:1 1 auto}
+.modal__h .sub{display:block;color:var(--mute);font:500 12px/1.4 var(--sans);margin-top:3px}
+.x{background:none;border:0;font-size:21px;line-height:1;color:var(--mute);cursor:pointer;padding:0 2px}
+.mrow{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line)}
+.mrow:last-child{border-bottom:0}
+.mrow__ico{width:20px;height:20px;flex:0 0 auto;color:var(--mute)}
+.mrow__t{flex:1 1 auto;min-width:0}
+.mrow__t b{display:block;font:600 14px/1.3 var(--sans)}
+.mrow__t span{display:block;color:var(--mute);font:500 12px/1.4 var(--sans);margin-top:1px}
+.sw{width:42px;height:25px;border-radius:999px;background:#d8dbd2;border:0;position:relative;cursor:pointer;flex:0 0 auto;transition:background .15s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.22)}
+.sw.on{background:var(--rust)} .sw.on::after{transform:translateX(17px)}
+.freq{padding:4px 16px 14px}
+.freq.off{opacity:.42;pointer-events:none}
+.freq__l{font:600 11px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:0 0 8px}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{flex:1 1 0;background:var(--card);border:0;border-right:1px solid var(--line);padding:8px 3px;
+  font:600 11.5px/1 var(--sans);color:var(--mute);cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--rust);color:#fff}
+.mfoot{padding:11px 16px 15px;display:flex;justify-content:flex-end;gap:9px;background:#fcfcf9;border-top:1px solid var(--line)}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:9px;padding:8px 15px;font:600 13px/1 var(--sans);color:var(--ink);cursor:pointer}
+.btn--p{background:var(--sage-d);border-color:var(--sage-d);color:#fff}
+
+/* dark */
+.dk{--cream:#15171a;--card:#1e2226;--ink:#e7eae3;--mute:#a6ac9f;--line:#2c3238;--sage-tint:#232a20;--rust:#e2895f;
+   background:var(--cream);color:var(--ink)}
+.dk .pane__h{background:#20252a}
+.dk .mfoot{background:#20252a}
+.dk .seg button{background:var(--card)}
+.dk .sw{background:#3a4149}
+.dk code{background:#252b31}
+table{border-collapse:collapse;width:100%;font-size:14px;margin:12px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font:600 11.5px/1 var(--sans);text-transform:uppercase;letter-spacing:.05em}
+.hint{font-size:12.5px;color:var(--mute);margin:9px 0 0}
+</style>
+
+<!-- Icon sprite. NOT display:none — that can stop <use> resolving in some engines and
+     would render every icon in this page blank. Zero-size + clipped is the safe idiom,
+     and there is no browser here to catch it if it went wrong. -->
+<svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+ <symbol id="i-like" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></symbol>
+ <symbol id="i-rep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></symbol>
+ <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></symbol>
+ <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.6l2.95 5.98 6.6.96-4.77 4.65 1.13 6.57L12 17.66 6.09 20.76l1.13-6.57L2.45 9.54l6.6-.96z"/></symbol>
+ <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
+ <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></symbol>
+</svg>
+
+<div class="wrap">
+
+<h1>The action row, consolidated — two ways</h1>
+<p class="lede">Your call: put notifications, emails, email <em>frequency</em> and Save behind one
+control that opens a small modal. Like, replies and Share stay inline. Both variants are live below —
+<strong>click the control on either card</strong> and the real modal opens.</p>
+
+<div class="note">
+<strong>One thing I did not do, on purpose.</strong> The consolidated control is <em>not</em> a ⋯ menu.
+Burying follow in ⋯ was tried and ruled the wrong surface twice (SPEC §2.3), and your original ruling
+was that the affordance must be <em>visible, not buried</em>. So the control is a labelled bell that
+carries its own state: it lights orange when you're following, and a small ✉ badge appears when emails
+are on. You can still read the state of a thread from the feed without opening anything — which is the
+property consolidation would otherwise cost you.
+</div>
+
+<h2>Today, for comparison</h2>
+<div class="card">
+  <div class="card__body">
+    <div class="card__meta"><span class="card__av">DL</span><span>Doug Lawrence · 2h</span></div>
+    <div class="card__t">Bridge saddle buzz on a '68 Tele — chasing it down</div>
+    <p class="card__x">Swapped the saddles and it's still there on the B string…</p>
+  </div>
+  <div class="row">
+    <button class="act"><svg class="ico"><use href="#i-like"/></svg>Like</button>
+    <button class="act"><svg class="ico"><use href="#i-rep"/></svg>7 replies</button>
+    <button class="act"><svg class="ico"><use href="#i-share"/></svg>Share</button>
+    <button class="act spacer"><svg class="ico"><use href="#i-star"/></svg>Save</button>
+    <button class="act"><svg class="ico"><use href="#i-bell"/></svg></button>
+    <button class="act"><svg class="ico"><use href="#i-mail"/></svg></button>
+  </div>
+</div>
+<p class="hint">Six controls plus the reaction chip — the row that wouldn't fit at 1280 and is about to
+gain a frequency setting on top.</p>
+
+<div class="cols">
+
+  <!-- ══ VARIANT A ══ -->
+  <div class="pane">
+    <div class="pane__h">
+      <span class="tag">Variant A</span>
+      <h3>Everything in the modal</h3>
+      <p>Row keeps Like · replies · Share, plus one Follow control. Save moves inside.</p>
+    </div>
+    <div class="pane__b">
+      <div class="card">
+        <div class="card__body">
+          <div class="card__meta"><span class="card__av">DL</span><span>Doug Lawrence · 2h</span></div>
+          <div class="card__t">Bridge saddle buzz on a '68 Tele — chasing it down</div>
+          <p class="card__x">Swapped the saddles and it's still there on the B string…</p>
+        </div>
+        <div class="row">
+          <button class="act"><svg class="ico"><use href="#i-like"/></svg>Like</button>
+          <button class="act"><svg class="ico"><use href="#i-rep"/></svg>7 replies</button>
+          <button class="act"><svg class="ico"><use href="#i-share"/></svg>Share</button>
+          <button class="foll spacer" id="fa" onclick="openM('a')">
+            <svg class="ico"><use href="#i-bell"/></svg><span id="fa-l">Follow</span>
+            <span class="foll__mail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg></span>
+          </button>
+        </div>
+      </div>
+      <p class="hint"><strong>Four controls.</strong> The roomiest row — it survives a narrow grid
+      column and a phone without any icon-only compromise.</p>
+      <p class="hint" style="margin-top:7px">Cost: Save becomes two taps. It's the most-used control
+      of the four you're consolidating.</p>
+    </div>
+  </div>
+
+  <!-- ══ VARIANT B ══ -->
+  <div class="pane">
+    <div class="pane__h">
+      <span class="tag tag--b">Variant B</span>
+      <h3>Save stays on the row <span class="rec">Recommended</span></h3>
+      <p>Save is tap-often; follow and email are set-once. Only the set-once ones consolidate.</p>
+    </div>
+    <div class="pane__b">
+      <div class="card">
+        <div class="card__body">
+          <div class="card__meta"><span class="card__av">DL</span><span>Doug Lawrence · 2h</span></div>
+          <div class="card__t">Bridge saddle buzz on a '68 Tele — chasing it down</div>
+          <p class="card__x">Swapped the saddles and it's still there on the B string…</p>
+        </div>
+        <div class="row">
+          <button class="act"><svg class="ico"><use href="#i-like"/></svg>Like</button>
+          <button class="act"><svg class="ico"><use href="#i-rep"/></svg>7 replies</button>
+          <button class="act"><svg class="ico"><use href="#i-share"/></svg>Share</button>
+          <button class="act star spacer" id="sv" onclick="this.classList.toggle('on')"><svg class="ico"><use href="#i-star"/></svg>Save</button>
+          <button class="foll" id="fb" onclick="openM('b')">
+            <svg class="ico"><use href="#i-bell"/></svg>
+            <span class="foll__mail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg></span>
+          </button>
+        </div>
+      </div>
+      <p class="hint"><strong>Five controls</strong>, one more than A but two fewer than today, and
+      the bell goes icon-only to pay for it.</p>
+      <p class="hint" style="margin-top:7px">Save stays one tap. Following stays one tap to reach and
+      still shows its state on the card.</p>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+<strong>Why I'd pick B.</strong> The two things being merged are not the same kind of control. Save is
+a reflex you hit while scrolling — a "keep this" — and people do it dozens of times. Follow and email
+are a decision you make once per thread and then forget. Putting a frequent action behind a modal to
+keep company with two rare ones costs a tap every time to save a little width once. B also degrades
+better: if the row ever gets tight again, the bell is already icon-only and Save can drop its label
+without losing meaning.
+<br><br>
+<strong>Where A wins:</strong> it is the only version that gets the row down to four controls, and
+every state control lives in exactly one place, which is easier to explain and easier to keep
+consistent across card, modal and sheet. If you expect the row to grow again, A has the headroom.
+</div>
+
+<h2>The modal (identical in both, except for the Save row)</h2>
+<table>
+  <tr><th>Row</th><th>What it does</th><th>A</th><th>B</th></tr>
+  <tr><td><b>Notifications</b></td><td>Bell rows in the panel for new replies</td><td>✓</td><td>✓</td></tr>
+  <tr><td><b>Emails</b></td><td>Email me about new replies</td><td>✓</td><td>✓</td></tr>
+  <tr><td><b>Frequency</b></td><td>Off · Instant · Hourly · Daily · Weekly</td><td>✓</td><td>✓</td></tr>
+  <tr><td><b>Save</b></td><td>Bookmark to your saved posts</td><td>✓</td><td>— stays on the row</td></tr>
+</table>
+
+<div class="note">
+<strong>A real question in the frequency list, and my answer in the mock.</strong> "Off" and the
+<em>Emails</em> toggle are the same state expressed twice — a member can set the toggle on and the
+frequency to Off and be left wondering which one wins. In the mock they are wired as one thing:
+choosing <b>Off</b> switches the Emails toggle off, and switching Emails off snaps frequency to Off.
+Frequency also dims when Emails is off, so it never looks like a live setting that isn't.
+<br><br>
+If you'd rather not have "Off" in there at all, say so and I'll drop it — the toggle alone would then
+own the on/off state and the segmented control would only ever choose a cadence. That's the tighter
+design; I kept Off because you asked for it explicitly.
+</div>
+
+<h2>Dark</h2>
+<div class="dk" style="border-radius:14px;padding:20px">
+  <div class="card" style="max-width:390px">
+    <div class="card__body">
+      <div class="card__meta"><span class="card__av">DL</span><span>Doug Lawrence · 2h</span></div>
+      <div class="card__t">Bridge saddle buzz on a '68 Tele — chasing it down</div>
+      <p class="card__x">Swapped the saddles and it's still there on the B string…</p>
+    </div>
+    <div class="row">
+      <button class="act"><svg class="ico"><use href="#i-like"/></svg>Like</button>
+      <button class="act"><svg class="ico"><use href="#i-rep"/></svg>7 replies</button>
+      <button class="act"><svg class="ico"><use href="#i-share"/></svg>Share</button>
+      <button class="act star on spacer"><svg class="ico"><use href="#i-star"/></svg>Save</button>
+      <button class="foll on mail"><svg class="ico"><use href="#i-bell"/></svg>
+        <span class="foll__mail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg></span>
+      </button>
+    </div>
+  </div>
+  <p class="hint" style="margin-top:11px">Variant B in dark, everything ON — bell lit, ✉ badge showing
+  emails are on, Save filled. This is the at-a-glance state you keep by not using a ⋯ menu.</p>
+</div>
+
+<h2>Before you settle the frequency control — one finding</h2>
+
+<div class="note">
+<strong>Frequency probably shouldn't be per-discussion.</strong> I went looking for what would send
+these digests and the answer changes the control, so it's worth your ruling before this gets built.
+<br><br>
+A digest exists to <em>batch across threads</em> — one email instead of nine. But this control sets a
+cadence <em>per discussion</em>. Follow six threads on Daily and you have signed up for six separate
+daily emails, which is the thing the member was trying to escape. Set thread A to Hourly and thread B
+to Daily and there is no sensible way to combine them, so they can never share an email.
+<br><br>
+<strong>Recommendation: make the cadence an account-level setting</strong> — "email me about
+discussions I follow: Instant / Hourly / Daily / Weekly" — and let this modal <em>show</em> it rather
+than own it, e.g. <em>Emails · on — Daily (change)</em>. The per-discussion decision stays a clean
+on/off, which is what §0 ruling 1 already made it, and one member gets one digest containing every
+thread they follow.
+<br><br>
+It also collapses the storage problem: one preference per member instead of one per
+(member × thread), and it fits the account-level email prefs that already exist (§6).
+</div>
+
+<h2>What this needs from elsewhere</h2>
+<p class="lede" style="font-size:14.5px">There is <strong>no existing sender</strong> that can do this
+today, and I want to be straight about that rather than let a control ship that quietly does nothing.
+<code>lg-weekly-digest</code> is an <em>editorial newsletter</em> — one issue composed by hand, sent to
+a CRM tag on a weekly cron. It has no notion of "who follows thread X", so it cannot host per-thread
+reply batching; reusing it would be the wrong mechanism. Per-member reply digests are closer to what
+<code>notify-bridge</code> already does for the bell (it coalesces to one row per thread) and would
+need a per-member queue plus a sweep to flush it.
+<br><br>
+So: <strong>Instant works today</strong> — that's the existing per-reply email path. Hourly, Daily and
+Weekly need infrastructure that does not exist yet, and that is weekly-recap's side. Raised with them
+on the board.</p>
+
+</div>
+
+<!-- ── the modal ── -->
+<div class="scrim" id="scrim" onclick="closeM()"></div>
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Follow settings">
+  <div class="modal__h">
+    <div style="flex:1 1 auto">
+      <h4>Bridge saddle buzz on a '68 Tele</h4>
+      <span class="sub">Choose what this discussion sends you.</span>
+    </div>
+    <button class="x" onclick="closeM()" aria-label="Close">&times;</button>
+  </div>
+
+  <div class="mrow">
+    <svg class="mrow__ico"><use href="#i-bell"/></svg>
+    <div class="mrow__t"><b>Notifications</b><span>A bell row when someone replies</span></div>
+    <button class="sw" id="swN" onclick="tgN()" aria-label="Notifications"></button>
+  </div>
+
+  <div class="mrow">
+    <svg class="mrow__ico"><use href="#i-mail"/></svg>
+    <div class="mrow__t"><b>Emails</b><span>Send replies to my inbox</span></div>
+    <button class="sw" id="swE" onclick="tgE()" aria-label="Emails"></button>
+  </div>
+
+  <div class="freq off" id="freq">
+    <p class="freq__l">How often</p>
+    <div class="seg" id="seg">
+      <button onclick="setF(this,0)">Off</button>
+      <button onclick="setF(this,1)">Instant</button>
+      <button onclick="setF(this,2)">Hourly</button>
+      <button onclick="setF(this,3)">Daily</button>
+      <button onclick="setF(this,4)">Weekly</button>
+    </div>
+  </div>
+
+  <div class="mrow" id="saveRow">
+    <svg class="mrow__ico"><use href="#i-star"/></svg>
+    <div class="mrow__t"><b>Save</b><span>Keep this in your saved posts</span></div>
+    <button class="sw" id="swS" onclick="this.classList.toggle('on')" aria-label="Save"></button>
+  </div>
+
+  <div class="mfoot">
+    <button class="btn" onclick="closeM()">Cancel</button>
+    <button class="btn btn--p" onclick="closeM()">Done</button>
+  </div>
+</div>
+
+<script>
+var which='a';
+function openM(v){
+  which=v;
+  document.getElementById('saveRow').style.display = (v==='a') ? '' : 'none';
+  document.getElementById('scrim').classList.add('open');
+  document.getElementById('modal').classList.add('open');
+}
+function closeM(){
+  document.getElementById('scrim').classList.remove('open');
+  document.getElementById('modal').classList.remove('open');
+  paint();
+}
+function tgN(){ document.getElementById('swN').classList.toggle('on'); }
+function tgE(){
+  var e=document.getElementById('swE'); e.classList.toggle('on');
+  var on=e.classList.contains('on');
+  document.getElementById('freq').classList.toggle('off',!on);
+  // Off and the Emails toggle are ONE state — keep them in lockstep so no member
+  // can land on "emails on, frequency off" and wonder which one is winning.
+  if(!on) mark(0); else if(cur()===0) mark(1);
+}
+function cur(){ var b=[...document.querySelectorAll('#seg button')]; return b.findIndex(x=>x.classList.contains('on')); }
+function mark(i){ [...document.querySelectorAll('#seg button')].forEach((b,j)=>b.classList.toggle('on',j===i)); }
+function setF(btn,i){
+  mark(i);
+  var e=document.getElementById('swE');
+  if(i===0){ e.classList.remove('on'); document.getElementById('freq').classList.add('off'); }
+  else e.classList.add('on');
+}
+function paint(){
+  var n=document.getElementById('swN').classList.contains('on');
+  var m=document.getElementById('swE').classList.contains('on');
+  var el=document.getElementById(which==='a'?'fa':'fb');
+  el.classList.toggle('on', n||m);
+  el.classList.toggle('mail', m);
+  if(which==='a') document.getElementById('fa-l').textContent = (n||m)?'Following':'Follow';
+}
+mark(1);
+</script>
