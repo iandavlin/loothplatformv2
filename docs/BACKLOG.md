@@ -3,6 +3,15 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-30 — Front-page admin pencils: KEEP THE BUTTON (Ian) — CLOSED, no work
+
+front-page-editor shipped the edit pencils behind an "Edit page" button, and
+asked whether they should instead be always-on for admins (a one-line flip).
+**Ian ruled 2026-07-30: keep the button.** The reason is the reason it was built
+that way — editor code loads only on intent, so "visitors get zero editor bytes"
+stays provable rather than asserted, and the page keeps its chrome. Recorded so
+a later lane doesn't "improve" it into always-on in good faith. No work owed.
+
 ## 2026-07-29 — Reacting on a shorty fails on LIVE (Ian, screenshot w/ console)
 
 On live, e.g. /shorty/dan-erlewine-stewmac-purfling-jig-mod/: tapping a
@@ -107,9 +116,12 @@ all. Ian's ruling is now gated (`tools/gates/events-tap-navigates-gate.sh`, GATE
 7/7) because it is encoded in an absence and a future lane would undo it in good
 faith.
 
-**One residual, unowned, needing an Ian call:** "Add to calendar" is gone from the
-mobile events flow. It lived only in the sheet, and the event post page has no
-calendar affordance. Natural homes: the event post page, or the landing card.
+**One residual — RULED 2026-07-30, Ian: the EVENT POST PAGE.** "Add to calendar"
+is gone from the mobile events flow; it lived only in the sheet, and the event
+post page has no calendar affordance. Ian chose the event post page over the
+landing card, because that is where every tap now lands, so one build serves
+mobile and desktop alike and it adds no chrome back to the landing surface he
+just had stripped. Scoped as a small work item, not its own lane. Not started.
 
 **Two findings handed to the post-header item below** ("title illegible over
 thumbnails that contain text") rather than filed separately, since they are the
@@ -128,6 +140,11 @@ same hero on the same posters:
    CLAUDE.md, and Ian's ruling just put it on the mobile critical path.
    `post-header` is used by EVERY post, so whoever takes the legibility item
    should take this too.
+
+   **RULED 2026-07-30, Ian: its OWN LANE, spins at the next free memory slot.**
+   Not folded into events-mobile (that branch is approved and merge-ready, and
+   this is cross-cutting work on a block every post renders) and not deferred —
+   the mobile-critical-path argument carried. Charter still to be written.
 
 ## 2026-07-29 — Mirror dispatch must be durable → CHARTERED: mirror-dispatch lane
 
