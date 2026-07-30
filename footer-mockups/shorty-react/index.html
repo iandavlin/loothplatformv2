@@ -154,14 +154,21 @@ are stored, counted, or notified.</p>
 <p>And a build check now fails if the renderer ever learns a new page type that the endpoint
 has not been told about — so this cannot come back quietly.</p>
 
-<h2>One thing I noticed but did not touch</h2>
-<p>While testing at phone width on dev2, the react button ended up mostly <strong>underneath the
-bottom tab bar</strong> — about 32 of its 36 pixels, leaving a 4-pixel sliver to hit. That is a
-separate thing from the 400, and it is <em>not</em> confirmed on your phone or on live; you
-clearly did reach the button, since you got the error twice.</p>
-<p><strong>Worth a look next time you are on a shorty page:</strong> scroll to the bottom and see
-whether the 🙂 is awkward to hit. If it is, say so and I will take it as its own job rather than
-bundling a layout change into a one-line fix.</p>
+<h2>A second problem on the same button — found while testing, not fixed</h2>
+<p>At phone width the reaction button sits <strong>underneath the bottom tab bar</strong>. Not a
+near miss: about <strong>32 of its 36 pixels</strong> are covered, leaving a 4-pixel sliver to
+hit. That is why it feels unresponsive even when nothing is broken.</p>
+<div class="card">
+  <p style="margin:0 0 6px"><strong>This one is on live too.</strong> The button is pinned 18px
+  from the bottom of the screen on a stacking layer of <span class="mono">50</span>; the tab bar
+  sits on layer <span class="mono">2147481000</span>. The tab bar wins, always. Live runs the
+  identical stylesheet and the identical tab-bar file — I checked both, byte for byte.</p>
+  <p class="sub">Measured in a browser on dev2. I have not measured it on your actual phone, so
+  the exact pixel count there may differ — but the layering is not a matter of opinion.</p>
+</div>
+<p><strong>I have not fixed it, deliberately.</strong> Moving that button is a look-and-feel
+decision — does it sit above the tab bar, or move up out of its way? — and that is yours, not
+mine to bury inside a one-line fix. Say which and it becomes its own small job.</p>
 
 <h2>Where it stands</h2>
 <ul class="tight">
