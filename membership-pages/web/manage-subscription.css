@@ -124,3 +124,180 @@
     border-radius: 4px;
     background: #fff;
 }
+
+/* ── "Discussions you're following" ───────────────────────────────────────────
+ * Ian 2026-07-30. Same lg-manage-sub__ prefix and the same var(--token, #hex)
+ * fallback idiom the Email-preferences block next door already uses
+ * (manage-subscription.php:180-191), so the two cards read as one page.
+ *
+ * The 🔔/✉ marks reuse forums.css's .fc-save resting/active idiom — muted at
+ * rest, sage on tint when on — but they are NOT buttons here and the cursor
+ * says so. On this page they report; the discussion is where you toggle.
+ */
+.lg-manage-sub__fol { margin-top: 18px; }
+
+.lg-manage-sub__fol-title { font-size: 1.05rem; margin: 0 0 2px; }
+
+.lg-manage-sub__fol-count { margin: 0 0 4px; font-size: .8rem; color: var(--lg-mute, #6b6f63); }
+.lg-manage-sub__fol-count b { color: var(--lg-ink, #323532); }
+
+.lg-manage-sub__fol-empty { margin: 8px 0 0; font-size: .9rem; color: var(--lg-mute, #6b6f63); }
+.lg-manage-sub__fol-link { font-weight: 700; font-size: .85rem; color: #6b7c52; text-decoration: none; }
+.lg-manage-sub__fol-link:hover { text-decoration: underline; }
+
+/* Could-not-read banner. Never silently short a list — a section that drops
+ * rows while looking complete is the failure this feature exists to prevent. */
+.lg-manage-sub__fol-warn {
+    margin: 6px 0 2px;
+    padding: 8px 11px;
+    border-radius: 7px;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: .8rem;
+}
+
+.lg-manage-sub__fol-list { list-style: none; margin: 0; padding: 0; }
+
+.lg-manage-sub__fol-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 0;
+    border-top: 1px solid var(--lg-line, #e3e1d8);
+}
+.lg-manage-sub__fol-row.is-overflow { display: none; }
+.lg-manage-sub__fol.is-expanded .lg-manage-sub__fol-row.is-overflow { display: flex; }
+/* Removal is animated out rather than yanked, so a mis-tap is legible. */
+.lg-manage-sub__fol-row.is-going { opacity: .4; }
+.lg-manage-sub__fol-row.is-busy { pointer-events: none; opacity: .55; }
+
+.lg-manage-sub__fol-main { min-width: 0; flex: 1 1 auto; }
+
+.lg-manage-sub__fol-name {
+    display: block;
+    font-size: .9rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--lg-ink, #323532);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+a.lg-manage-sub__fol-name:hover { color: #6b7c52; text-decoration: underline; }
+.lg-manage-sub__fol-name.is-gone { font-style: italic; color: var(--lg-mute, #6b6f63); font-weight: 400; }
+
+.lg-manage-sub__fol-meta {
+    display: block;
+    font-size: .78rem;
+    line-height: 1.5;
+    color: var(--lg-mute, #6b6f63);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lg-manage-sub__fol-state { display: flex; gap: 2px; flex: 0 0 auto; }
+
+.lg-manage-sub__fol-mark {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 5px;
+    border-radius: 8px;
+    color: #d8d4c6;                 /* off — visible but plainly inactive */
+    cursor: default;
+}
+.lg-manage-sub__fol-mark.is-on { color: #6b7c52; background: #eef2e3; }
+.lg-manage-sub__fol-ico { width: 15px; height: 15px; display: block; }
+
+/* 44px hit target on the unfollow control — it is the one thing in a row a
+ * member taps on purpose, and the row itself is a link. */
+.lg-manage-sub__fol-x {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 10px;
+    color: var(--lg-mute, #6b6f63);
+    cursor: pointer;
+}
+.lg-manage-sub__fol-x:hover,
+.lg-manage-sub__fol-x:focus-visible { color: #c66845; background: rgba(198, 104, 69, .1); }
+
+.lg-manage-sub__fol-more {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin: 0;
+    padding: 11px 0 3px;
+    background: none;
+    border: 0;
+    border-top: 1px solid var(--lg-line, #e3e1d8);
+    font-size: .8rem;
+    font-weight: 700;
+    color: #6b7c52;
+    cursor: pointer;
+}
+.lg-manage-sub__fol-more:hover { text-decoration: underline; }
+
+/* The one off switch, pinned to the bottom of the card in the same place
+ * whether you follow 2 discussions or 200. */
+.lg-manage-sub__fol-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 12px -1.75rem -1.5rem;
+    padding: 12px 1.75rem;
+    border-top: 1px solid var(--lg-line, #e3e1d8);
+    border-radius: 0 0 7px 7px;
+    background: rgba(198, 104, 69, .05);
+}
+.lg-manage-sub__fol-foot span { font-size: .78rem; color: var(--lg-mute, #6b6f63); }
+
+.lg-manage-sub__fol-stopall {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 7px 15px;
+    background: none;
+    border: 1px solid rgba(198, 104, 69, .45);
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 700;
+    color: #c66845;
+    cursor: pointer;
+}
+.lg-manage-sub__fol-stopall:hover,
+.lg-manage-sub__fol-stopall:focus-visible { background: #c66845; border-color: #c66845; color: #fff; }
+.lg-manage-sub__fol-stopall[disabled] { opacity: .5; cursor: default; }
+
+/* Stop-all confirm — a real dialog, because the button is destructive and the
+ * count is the fact a member needs before pressing it. */
+.lg-manage-sub__fol-dlg {
+    width: min(420px, calc(100vw - 2rem));
+    padding: 1.25rem 1.35rem;
+    border: 1px solid rgba(0, 0, 0, .12);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--lg-ink, #323532);
+}
+.lg-manage-sub__fol-dlg::backdrop { background: rgba(26, 29, 26, .45); }
+.lg-manage-sub__fol-dlg h3 { margin: 0 0 .5rem; font-size: 1rem; }
+.lg-manage-sub__fol-dlg p { margin: 0 0 .55rem; font-size: .85rem; line-height: 1.5; color: var(--lg-mute, #6b6f63); }
+.lg-manage-sub__fol-dlg-btns { display: flex; gap: 9px; justify-content: flex-end; margin-top: 1rem; }
+.lg-manage-sub__fol-dlg-btns .lg-manage-sub__fol-stopall.is-cancel { border-color: var(--lg-line, #e3e1d8); color: var(--lg-mute, #6b6f63); }
+.lg-manage-sub__fol-dlg-btns .lg-manage-sub__fol-stopall.is-go { background: #c66845; border-color: #c66845; color: #fff; }
+
+@media (max-width: 640px) {
+    .lg-manage-sub__fol-foot { margin: 12px -1.25rem -1.25rem; padding: 11px 1.25rem; }
+}
