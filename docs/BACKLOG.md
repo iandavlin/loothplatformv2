@@ -3,6 +3,20 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-30 — Front page: show the latest weekly email to LOGGED-OUT users (Ian)
+
+Ian 7/30: surface the most-recent weekly email on the FRONT PAGE for logged-out
+visitors. Reuse what already exists — the signup page renders the latest sent
+issue dynamically via LG_WD_Signup_Page::latest_sent_issue_id() +
+LG_WD_Issue::get_data() through the same email builder, cached 1h
+(class-lg-wd-signup-page.php). The front page is archive-poc's discovery feed
+(served at / and /front-page/; widgets driven by config.json overlaying
+web/defaults.php). So: add a front-page block/widget, shown only when
+logged-out, that embeds the latest issue preview (same dynamic source, honor the
+1h cache) with a signup CTA. Gate to anon (members already get the digest / the
+Hub). Craft gates apply (public surface). Pairs with the public signup page just
+shipped.
+
 ## 2026-07-30 — Notifications: quick-reply-in-modal vs go-to-post (Ian) — MEDIUM-LOW effort
 
 Ian 7/30 (refined): tapping a notification DEFAULTS to opening a reply MODAL —
