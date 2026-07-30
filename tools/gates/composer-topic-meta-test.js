@@ -476,6 +476,45 @@ console.log(`composer-topic-meta-test — fixture: ${leaves.length} forums, ${ca
      'nothing that would block wrapping survives into the stored body');
 }
 
+/* ── the WIZARD's serializer must not drift from the sheet's ──────────────────
+   "Opening the editor damages the body" is now at FOUR sightings, which is well past
+   the point CRAFT-STANDARD says to encode it: (1) the old edit door flattened every
+   tag out of the rendered OP; (2) getSemanticHTML wrote &nbsp; over every space;
+   (3) the wizard SEEDED with root.innerHTML and silently deleted whole lists; and
+   (4) the wizard SAVED root.innerHTML, storing <ol data-list> + ql-ui spans so a
+   member's bullets came back numbered.
+
+   The discussion wizard (bb-mirror/web/forums.js) and the composer sheet
+   (webroot/hub-polish.js) are separate bundles with separate copies of the same rule,
+   so the thing worth gating is that they AGREE. Both real functions are extracted and
+   run against identical inputs. */
+{
+  const FORUMS_SRC = path.join(ROOT, 'bb-mirror', 'web', 'forums.js');
+  const grab = (file, name) => {
+    const src = fs.readFileSync(file, 'utf8');
+    const start = src.indexOf(`\n  function ${name}(`);
+    if (start < 0) throw new Error(`could not find ${name}() in ${path.basename(file)}`);
+    let i = src.indexOf('{', start), depth = 0, end = -1;
+    for (let j = i; j < src.length; j++) {
+      if (src[j] === '{') depth++;
+      else if (src[j] === '}') { depth--; if (depth === 0) { end = j + 1; break; } }
+    }
+    return new Function(`${src.slice(start, end)}\n return ${name};`)();
+  };
+  const wiz = grab(FORUMS_SRC, 'lgDenbsp');
+  const sheet = grab(SRC, 'lgcDenbsp');
+
+  ok(wiz('a&nbsp;b') === 'a b', 'wizard: a lone &nbsp; becomes a wrapping space');
+  ok(wiz('a&nbsp;&nbsp;b') === 'a&nbsp;&nbsp;b', 'wizard: a deliberate run is left alone');
+  ok(wiz('<p>plain</p>') === '<p>plain</p>', 'wizard: a clean body is untouched');
+  // The drift check — one rule, two bundles. If someone fixes one and not the other,
+  // an edit through the wizard and an edit through the sheet store DIFFERENT bytes.
+  const cases = ['a&nbsp;b', 'a&nbsp;&nbsp;b', 'one&nbsp;two&nbsp;&nbsp;three',
+                 '<p>plain</p>', '', 'x&nbsp;&nbsp;&nbsp;y'];
+  ok(cases.every((c) => wiz(c) === sheet(c)),
+     'the wizard and the composer sheet apply the SAME &nbsp; rule');
+}
+
 console.log(`\ncomposer-topic-meta-test: pass=${pass} fail=${fail}`);
 if (fail) { console.log('==================== COMPOSER TOPIC-META TEST RED ===================='); process.exit(1); }
 console.log('==================== COMPOSER TOPIC-META TEST GREEN ====================');

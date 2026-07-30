@@ -53,7 +53,13 @@ REPO     = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 # (forbidden) or hand-copy into the docroot (forbidden, and untraceable), the branch's
 # bytes are injected per-request over CDP: the page, the DB, the endpoints and the
 # session are all the real dev2 ones, and only this one asset comes from the worktree.
-OVERRIDES = {"hub-polish.js": os.path.join(REPO, "webroot", "hub-polish.js")}
+OVERRIDES = {
+    "hub-polish.js": os.path.join(REPO, "webroot", "hub-polish.js"),
+    # The discussion-edit door and the wizard itself both live in forums.js, which the
+    # hub loads from /hub/forums.js — also symlinked out of the main checkout. Without
+    # this the page runs MAIN's wizard and none of the edit-path work is under test.
+    "forums.js": os.path.join(REPO, "bb-mirror", "web", "forums.js"),
+}
 # ...AND THE SERVE SERVES MAIN'S API TOO, which is the subtler half of the same trap.
 # Injecting only the JS above produced a 13-assertion RED that looked like a broken
 # feature and was nothing of the sort: main's reply.php has no `GET ?topic_id=` topic
