@@ -3,6 +3,28 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-30 — Discussion hub cards: inline-embed pasted YT/IG/FB links (Ian)
+
+Ian wants a discussion whose body carries a YouTube/Instagram/Facebook link to
+show that media EMBEDDED on its hub card — the inline-play treatment video posts
+already get. Fine if the embed is driven by a link pasted in the discussion
+posting modal (the composer already shows "paste a YouTube/Vimeo/Instagram link
+on its own line to embed it" — so IN-BODY embed on the post page likely already
+works; the gap is the HUB CARD).
+
+What exists (verified in _feed.php:1048-1075): the card inline-play facade
+(thumb + play button, iframe swapped in on click by forums.js) is built ONLY for
+card_type='content' with content_kind IN ('video','shorty') — sourced from the
+engine's stored yt_id (ACF youtube_link → v2 embed block). DISCUSSION cards
+(card_type='topic') are excluded, and the yt_id extraction only runs for
+video/shorty. So a discussion with a YT link in its body gets no card embed today.
+
+Scope: (1) extract an embeddable id from a discussion's body/first-embed at index
+or render time; (2) let the topic-card path carry the same facade; (3) IG/FB are
+NOT youtube — they need their own oembed/id handling, more than the yt regex.
+DISCUSSIONS ONLY per Ian. Verify the in-body-on-post-page case first and report
+whether it already works, so the ask narrows to just the card.
+
 ## 2026-07-30 — PWA apps need a launch animation/message (Ian)
 
 The installed PWA apps can take a while to fire up now; there's no feedback
