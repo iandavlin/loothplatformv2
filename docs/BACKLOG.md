@@ -3,6 +3,20 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-30 — Notifications: quick-reply-in-modal vs go-to-post (Ian) — MEDIUM-LOW effort
+
+Ian 7/30: on a notification, offer TWO actions — (a) go to the full post, or
+(b) reply right there in a modal that pops out just the reply that generated the
+notif + a composer. KEEPER ESTIMATE: not hard, most pieces exist —
+- The notif ⋯ menu already exists (the hook for a "Reply" action / two-action row).
+- openComposerSheet is reusable in reply mode (no new composer).
+- Each notif already resolves to its source reply/comment (context to show).
+New work: two-action affordance on the notif row (View → post, Reply → modal),
+the modal showing the source reply as context + composer, submit → existing
+reply-to endpoint. Reuses composer + reply POST. Coordinate with thread-follow
+(owns notif surface) and the composer reset-vs-prefill fix. Member-facing, high
+value now that follow-notifs are live.
+
 ## 2026-07-30 — BUG: a fresh reply is pre-populated with the LAST reply's data (Ian)
 
 Ian 7/30: starting a NEW reply opens the composer already filled with the
