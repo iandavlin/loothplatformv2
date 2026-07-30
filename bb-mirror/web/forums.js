@@ -4242,7 +4242,18 @@
      modal SHOWS rather than owns). So the row is data-driven and dark: flipping the
      flag must not be the moment anyone first thinks about the option list. */
   var FREQ_ENABLED = false;
-  var FREQ_OPTIONS = ['Off', 'Instant', 'Hourly', 'Daily', 'Weekly'];  // NOT hardened — §15.3 open
+  /* HOURLY IS GONE — weekly-recap answered §15.4 on 2026-07-30, and the reason is
+     measurement, not taste: NO MEMBER ON LIVE HAS EVER HAD TWO FORUM NOTIFICATIONS
+     IN THE SAME HOUR. An hourly digest is therefore a strictly worse Instant — it
+     adds delay and batches nothing. Better dropped before Ian settles the list than
+     withdrawn after he picks it (§15.4).
+
+     STILL OPEN (Ian, §15.3): whether 'Off' stays here or the Emails toggle owns
+     on/off alone. Kept for now because he asked for it explicitly. This stays an
+     ARRAY and the segmented control is built from it, so resolving §15.3 either way
+     is a one-element data change and never a re-layout — which is the whole reason
+     it was written this way. */
+  var FREQ_OPTIONS = ['Off', 'Instant', 'Daily', 'Weekly'];
 
   var fm = null, fmLastFocus = null;
 

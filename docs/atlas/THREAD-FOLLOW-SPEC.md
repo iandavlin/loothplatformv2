@@ -1879,3 +1879,99 @@ replace the pair everywhere, or is it the card's answer to a card's problem?
 
 *§17 written 2026-07-30. Every count above came from the harness or a linter; every claim
 about the browser is marked unproven because none was made in one.*
+
+---
+
+## 18. SAVE STAYS INLINE EVERYWHERE ELSE — the trap, the branch, and the red-first gate
+
+**Ian, 2026-07-30, verbatim (keeper-relayed):** *"btw, we need to keep the save button on
+all other post types."*
+
+### 18.1 Why this is a trap and not a preference
+
+The consolidation modal is **follow-shaped**, and follow exists only for `post_type` `topic`
+(`follow.php:176`). So on an article or an event **there is no modal to move Save into**.
+Move it unconditionally and Save does not relocate — it **disappears**, with no surface left
+to reach it from. A member-facing regression on every article and event on the site, shipping
+under the banner of a consolidation win.
+
+### 18.2 The branch — and it is structural, not a conditional I added
+
+Topic cards and content cards render from **two physically separate `.fc-actions` blocks**:
+
+| | file:line | Save |
+|---|---|---|
+| content card row | `_feed.php:1505` | `_feed.php:1508` — `if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_save_btn($c_cpt, $c_id);` **untouched** |
+| topic card row | `_feed.php:1640` | removed — moved into the modal |
+| mobile (both) | `hub-polish.js:509` | appends `.lg-act-save` **unless** the card carries `[data-follow-open]` |
+
+`feed_action_bar()` **is** shared, but content cards call it as `feed_action_bar(0, 'Comment')`
+— no topic id — so its follow branch (`$topicId > 0`) never fires there. The mobile guard keys
+on the presence of the consolidated control, which is the same condition, so both paths agree
+without either knowing about the other.
+
+### 18.3 The gate — and the vacuous pass I nearly shipped in it
+
+`follow-visible-gate.py` PHASE 1b asserts the negative on the mixed feed at both widths.
+
+**The obvious way to write it is wrong.** "Count content cards that HAVE a save control, then
+assert those are painted" **passes vacuously against the exact build it exists to catch**: move
+Save unconditionally, every content card loses it, the count is zero, zero cards are asserted,
+green. An emptiness guard only converts that into `CANNOT RUN` — not a pass, but not the red it
+should be. This is the same trap the longpress gate's first draft fell into (§14.4), one gate
+later, and it was caught by asking what the gate would *do* on the broken build rather than by
+running it.
+
+So cards are classed as content **by structure** — no `[data-follow-open]` — and *then* at least
+one is required to still carry Save. Zero is a finding.
+
+**VERIFIED RED-FIRST**, both builds served through the exercise harness as the real pool user:
+
+| build | topic cards | content cards | content cards with inline Save | PHASE 1b |
+|---|---|---|---|---|
+| this branch | 6 | 12 | **7** | PASS |
+| Save moved unconditionally | 6 | 12 | **0** | **FAIL — caught** |
+
+The content-card count is **12 in both**, which is what makes this a real red rather than an
+environmental one: the feed is intact, the topic side is unaffected, and only the asserted
+property moves.
+
+⚠️ **Two traps inside the red-first run itself**, both of which would have produced a fake proof:
+
+1. **`hub-router.php` HARDCODES `$ROOT`** to the worktree (`:17`), so `php -S -t <other tree>`
+   serves the worktree anyway. The first red run returned markup **byte-identical** to green and
+   would have been reported as "the gate does not fire" — or, worse, a patch that "did nothing".
+   The router's `$ROOT` must be repointed, not just the docroot flag.
+2. Copying `bb-mirror/web` alone 500s — `index.php:25` requires `__DIR__/../config.php`. A 500
+   yields *zero* cards, which reads as red for the wrong reason. **The whole `bb-mirror` parent
+   must be copied**, and a red build that returns no cards at all should be distrusted before it
+   is believed.
+
+### 18.4 A PRE-EXISTING gap, flagged and not fixed
+
+5 of 12 content cards (`post-type-videos`, `loothprint`) carry **no save control at all** on the
+hub. **This is not variant A's doing** — the identical 5, same types, render the same way from
+the serving checkout on `main`. `post-type-videos` appears both with and without Save, so it is a
+card-*variant* difference, not a post-type rule.
+
+It is left alone deliberately: Ian's instruction is to **keep** Save where it is, and this is a
+pre-existing absence in someone else's render path. The gate therefore asserts "**some** content
+card keeps Save", not "all" — asserting all would red-flag a condition this lane did not cause
+and cannot fix. **Worth someone's attention, and it is not this lane's to fix silently.**
+
+### 18.5 §15.4 ANSWERED — Hourly is dropped
+
+**weekly-recap, 2026-07-30:** drop Hourly. The reason is measurement, not taste: **no member on
+live has ever had two forum notifications in the same hour**, so an hourly digest is a strictly
+worse Instant — it adds delay and batches nothing. Dropped from `FREQ_OPTIONS` before Ian ever
+saw it, which §15.4 argued is the cheap moment to do it.
+
+Frequency is now **Off · Instant · Daily · Weekly**, still `FREQ_ENABLED = false`, still an array
+so §15.3 ("Off" in or out) stays a one-element data change and never a re-layout.
+
+**Still open, and still Ian's:** §15.3. **Still open, and a contract not a choice:** where cadence
+is stored — raised with weekly-recap on the board rather than picked unilaterally, per §15.4's own
+rule and their framing that it is the difference between zero new state and a per-(member,thread)
+ledger.
+
+*§18 written 2026-07-30 from harness runs on both a green and a deliberately broken build.*

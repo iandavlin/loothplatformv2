@@ -207,7 +207,7 @@ def goto(p, url, tries=2):
 PAINT_PROBE = r"""
 (() => {
   const out = [];
-  document.querySelectorAll('[data-follow]').forEach((b, i) => {
+  document.querySelectorAll(%SEL%).forEach((b, i) => {
     const cs = getComputedStyle(b);
     const r  = b.getBoundingClientRect();
     // The clipping ancestor that actually ate the toggles in 765dbc3.
@@ -226,7 +226,8 @@ PAINT_PROBE = r"""
       const el = document.elementFromPoint(cx, cy);
       hit = !!(el && (el === b || b.contains(el) || el.closest('[data-follow]') === b));
     }
-    out.push({ i, ch: b.getAttribute('data-follow'), topic: b.getAttribute('data-topic-id'),
+    out.push({ i, ch: b.getAttribute('data-follow') || b.className,
+               topic: b.getAttribute('data-topic-id') || b.getAttribute('data-item-id'),
                styled, sized, inCard, inView, hit,
                w: Math.round(r.width), h: Math.round(r.height) });
   });
@@ -234,8 +235,19 @@ PAINT_PROBE = r"""
 })()
 """
 
-def probe(p):
-    return p.ev(PAINT_PROBE) or []
+def probe(p, selector="[data-follow]"):
+    """Paint-probe every node matching `selector`.
+
+    The selector is injected as a JS string literal via json.dumps — these come from
+    this file only, but building JS by concatenation is how a stray quote turns a
+    gate into a silent syntax error that reports zero findings and passes.
+    """
+    try:
+        return p.ev(PAINT_PROBE.replace("%SEL%", json.dumps(selector))) or []
+    except RuntimeError as e:
+        # :has() is the one selector here a stale engine might not support. Saying so
+        # beats returning [] and letting "0 clipped" read as a pass.
+        cannot_run(f"paint probe failed for selector {selector!r}: {e}")
 
 def summarise(rows, label):
     """A button counts as VISIBLE only if it is styled, sized and inside its card.
@@ -271,28 +283,102 @@ def main():
     try:
         p.send("Page.enable"); p.send("Runtime.enable")
 
-        # ---- PHASE 1 — the hub feed card, at BOTH widths -------------------
-        # Each width asserts a different pair; see the header. 6 discussion cards
-        # x 1 visible pair = 12. The floor is expressed per-card so a short feed
-        # cannot vacuously pass with zero cards.
+        # ---- PHASE 1 — the CONSOLIDATED control on the topic card ----------
+        # §15 variant A (Ian 2026-07-30): the card row is React/replies/Share/Follow,
+        # and the 🔔/✉ pair now lives INSIDE the modal. So on the feed card the thing
+        # to find is ONE .fc-follow per card per width, not a pair. Both widths still
+        # assert different nodes — feed_follow_control() emits a desktop copy into
+        # .fc-actions and a mobile copy into .lg-card-actions, and the mobile-first
+        # hide (forums.css:697) is the only thing stopping BOTH painting on a phone.
+        # That hide has now been needed three times (.fc-share, the pair, .fc-follow),
+        # which is exactly why "exactly one per card" is asserted and not just ">=1".
         for label, w, h, mobile in (("desktop 1280", 1280, 900, False),
                                     ("mobile 390", 390, 844, True)):
             emulate(p, w, h, mobile)
             if not goto(p, base + HUB_PATH):
                 cannot_run(f"hydration never completed for the hub at {label}")
-            cards = p.ev("document.querySelectorAll('.feed-card [data-follow]').length && "
-                         "new Set([...document.querySelectorAll('.feed-card [data-follow]')]"
+            cards = p.ev("new Set([...document.querySelectorAll('.feed-card [data-follow-open]')]"
                          ".map(b => b.closest('.feed-card'))).size")
-            rows = probe(p)
+            rows = probe(p, "[data-follow-open]")
             vis, hittable, clipped = summarise(rows, f"hub {label}")
-            log(f"      ({cards} discussion cards carry toggles)")
-            check(f"hub {label}: no toggle clipped outside its card", len(clipped), 0)
-            check_ge(f"hub {label}: visible toggles", len(vis), 2)
-            check(f"hub {label}: every visible toggle is hittable",
+            log(f"      ({cards} discussion cards carry the consolidated control)")
+            check(f"hub {label}: no control clipped outside its card", len(clipped), 0)
+            check_ge(f"hub {label}: visible follow controls", len(vis), 1)
+            check(f"hub {label}: every visible control is hittable",
                   len([r for r in vis if r["inView"]]) == len(hittable), True)
-            # Exactly one pair per card must be live — never both, never neither.
+            # EXACTLY one per card — two means the mobile-first hide regressed and the
+            # phone is showing an unstyled desktop copy, which is the defect Ian
+            # reported as "two empty black squares below the action row".
             if cards:
-                check(f"hub {label}: exactly one pair per card visible", len(vis), cards * 2)
+                check(f"hub {label}: exactly ONE control per card (not two)", len(vis), cards)
+
+        # ---- PHASE 1b — THE NEGATIVE CASE: Save must SURVIVE elsewhere ------
+        # Ian, 2026-07-30, verbatim: "btw, we need to keep the save button on all
+        # other post types."
+        #
+        # Variant A moves Save behind a modal that is FOLLOW-shaped, and follow only
+        # exists for post_type 'topic' (follow.php:176). So on an article or an event
+        # there is no modal to move Save INTO — move it unconditionally and Save does
+        # not relocate, it DISAPPEARS, with no surface left to reach it from. That
+        # would ship looking like a consolidation win.
+        #
+        # The structural defence is that topic and content cards render from two
+        # SEPARATE .fc-actions blocks (_feed.php:1640 vs :1505) and only the topic one
+        # was touched; the non-topic Save at _feed.php:1508 is untouched. On mobile the
+        # same split is held by hub-polish.js:509, which skips its .lg-act-save append
+        # ONLY when the card carries [data-follow-open].
+        #
+        # But structure is an argument, and this is a gate. A card is "content" here
+        # precisely because it has no [data-follow-open] — the same condition the
+        # mobile guard keys on — so if Save were ever moved unconditionally, these
+        # cards would lose it and this phase goes red. That is the negative the topic
+        # assertions above structurally cannot see.
+        for label, w, h, mobile in (("desktop 1280", 1280, 900, False),
+                                    ("mobile 390", 390, 844, True)):
+            emulate(p, w, h, mobile)
+            if not goto(p, base + "/hub/"):     # ALL types, not ?type=discussions
+                cannot_run(f"hydration never completed for the mixed feed at {label}")
+            # ⚠️ COUNTED IN TWO STEPS ON PURPOSE, and the order is the whole point.
+            #
+            # The obvious version — "count content cards that HAVE a save control,
+            # then assert they are painted" — PASSES VACUOUSLY against the exact
+            # build this phase exists to catch: move Save unconditionally, every
+            # content card loses it, the count is 0, zero cards are asserted, green.
+            # (Or worse, an emptiness guard turns it into CANNOT RUN, which is not a
+            # pass but is not the red it should be either.) This is the same vacuous
+            # trap the longpress gate's first draft fell into, one gate later.
+            #
+            # So: cards WITHOUT a follow control are "content" by structure alone —
+            # the same condition hub-polish.js:509 keys its mobile guard on, and a
+            # condition no Save-side regression can change. THEN require that at
+            # least one of them still carries a save control. Zero is a FINDING.
+            n_cards = p.ev("[...document.querySelectorAll('.feed-card')]"
+                           ".filter(c => !c.querySelector('[data-follow-open]')).length")
+            if not n_cards:
+                # Genuinely environmental: a discussions-only feed has nothing to say
+                # about non-topic Save either way.
+                cannot_run(f"no content cards at all in the {label} feed "
+                           f"— the negative case has nothing to test")
+            n_content = p.ev(
+                "[...document.querySelectorAll('.feed-card')]"
+                ".filter(c => !c.querySelector('[data-follow-open]') && "
+                "             c.querySelector('.fc-save, .lg-act-save')).length")
+            log(f"      ({n_cards} content cards, {n_content} carrying a save control)")
+            # THE red-first assertion. Save moved unconditionally => 0 => FAIL.
+            # NOT "all n_cards": on main, 5 of 12 content cards ship no save control
+            # at all (post-type-videos / loothprint, same on this branch — verified
+            # against the serving checkout, so it is pre-existing and not variant A's
+            # doing). Asserting all would red-flag a condition this lane did not cause
+            # and cannot fix. Flagged in the report instead.
+            check_ge(f"content cards {label}: SOME content card still has inline Save",
+                     n_content, 1)
+            rows = probe(p, ".feed-card:not(:has([data-follow-open])) :is(.fc-save, .lg-act-save)")
+            vis, hittable, clipped = summarise(rows, f"content-card SAVE {label}")
+            check(f"content cards {label}: no Save clipped out of its card", len(clipped), 0)
+            check(f"content cards {label}: every content card's Save is VISIBLE",
+                  len(vis), n_content)
+            check(f"content cards {label}: every visible Save is hittable",
+                  len([r for r in vis if r["inView"]]) == len(hittable), True)
 
         # ---- PHASE 2 — the standalone topic page, at BOTH widths -----------
         # This page is the one that rendered NO toggles at all until 04a8598
@@ -309,7 +395,44 @@ def main():
             check(f"topic {label}: bell + envelope both visible", len(vis), 2)
             check(f"topic {label}: both hittable", len(hittable), 2)
 
-        # ---- PHASE 3 — visible is not the same as WORKING ------------------
+        # ---- PHASE 3 — THE MODAL: does the consolidated control open something
+        # a member can actually use? (§15 variant A)
+        # Consolidation trades one tap for reachability, so the modal's contents have
+        # to clear the same bar the row did: painted, hittable, and inside the panel.
+        # This is also the only place Save is reachable on a topic card now — if the
+        # modal's Save is dark, variant A has REMOVED Save from discussions, which is
+        # the same class of loss Ian's "keep the save button on all other post types"
+        # is guarding against, one post type over.
+        emulate(p, 1280, 900, False)
+        if not goto(p, base + HUB_PATH):
+            cannot_run("hydration never completed for the modal phase")
+        opened = p.ev("(() => { const t = document.querySelector('.feed-card [data-follow-open]');"
+                      "  if (!t) return null; t.click(); return t.getAttribute('data-topic-id'); })()")
+        if not opened:
+            cannot_run("no [data-follow-open] on the feed to open the modal with")
+        time.sleep(0.6)
+        check("modal: it opened", p.ev("!!document.querySelector('#lg-follow-modal:not([hidden])')"), True)
+        check("modal: the trigger reports expanded",
+              p.ev("document.querySelector('.feed-card [data-follow-open]').getAttribute('aria-expanded')"), "true")
+        # Its rows are the REAL controls — two [data-follow] switches and one .fc-save.
+        mrows = probe(p, "#lg-follow-modal :is([data-follow], .fc-save)")
+        mvis, mhit, mclip = summarise(mrows, "modal rows")
+        check("modal: all three rows present (notify, email, save)", len(mrows), 3)
+        check("modal: all three painted", len(mvis), 3)
+        check("modal: all three hittable", len(mhit), 3)
+        check("modal: its controls target the opened topic",
+              p.ev("[...document.querySelectorAll('#lg-follow-modal [data-follow]')]"
+                   ".every(b => b.getAttribute('data-topic-id') === '" + str(opened) + "')"), True)
+        # Frequency is built but flagged OFF (§15.4 — no sender exists). Assert it is
+        # ABSENT, so nobody can enable a dead cadence control without this going red.
+        check("modal: frequency row is NOT shipped (FREQ_ENABLED false)",
+              p.ev("!!document.querySelector('#lg-follow-modal #lg-fm-freq')"), False)
+        p.ev("document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape'}))")
+        time.sleep(0.3)
+        check("modal: Escape closes it",
+              p.ev("!!document.querySelector('#lg-follow-modal[hidden]')"), True)
+
+        # ---- PHASE 4 — visible is not the same as WORKING ------------------
         # A painted control that does not persist is the §8.1.3 "UI lies" defect
         # wearing a different hat, so the gate does not stop at pixels. State is
         # cleared FIRST and the OFF precondition asserted, because the first draft
