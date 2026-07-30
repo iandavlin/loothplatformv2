@@ -19,29 +19,32 @@ run() {  # run <label> <command...>
     *) red=1;;
   esac
 }
-echo "=== GATE 1/8: visibility matrix (the privacy model) ==="
+echo "=== GATE 1/9: visibility matrix (the privacy model) ==="
 run "visibility matrix" php /srv/profile-app/bin/visibility-matrix.php
 echo
-echo "=== GATE 2/8: web-craft gate (images / weight / eager scripts) ==="
+echo "=== GATE 2/9: web-craft gate (images / weight / eager scripts) ==="
 run "web-craft" python3 "$(dirname "$0")/craft-gate.py"
 echo
-echo "=== GATE 3/8: infra-sec gate (cookie auth / source disclosure / cdp) ==="
+echo "=== GATE 3/9: infra-sec gate (cookie auth / source disclosure / cdp) ==="
 run "infra-sec" bash "$(dirname "$0")/infra-sec-gate.sh"
 echo
-echo "=== GATE 4/8: hub paragraph-collapse (content_html keeps its breaks) ==="
+echo "=== GATE 4/9: hub paragraph-collapse (content_html keeps its breaks) ==="
 run "hub-paragraph" bash "$(dirname "$0")/hub-content-paragraph-gate.sh"
 echo
-echo "=== GATE 5/8: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
+echo "=== GATE 5/9: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
 run "looth-auth" bash "$(dirname "$0")/looth-auth-issue-gate.sh"
 echo
-echo "=== GATE 6/8: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
+echo "=== GATE 6/9: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
 run "event-date-tz" bash "$(dirname "$0")/event-date-tz-gate.sh"
 echo
-echo "=== GATE 7/8: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
+echo "=== GATE 7/9: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
 run "events-tap-navigates" bash "$(dirname "$0")/events-tap-navigates-gate.sh"
 echo
-echo "=== GATE 8/8: composer topic-meta (forum picker cloning + tags) ==="
+echo "=== GATE 8/9: composer topic-meta (forum picker cloning + tags) ==="
 run "composer-topic-meta" node "$(dirname "$0")/composer-topic-meta-test.js"
+echo
+echo "=== GATE 9/9: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
+run "react-types" bash "$(dirname "$0")/react-types-cover-standalone-gate.sh"
 echo
 # Two CDP/loopback gates are HELD OUT of the runner — they pass standalone but
 # flake RED in-sequence (CDP under load / loopback /whoami trips infra's

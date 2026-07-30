@@ -43,10 +43,27 @@ function lg_kr_json($payload, int $code = 200): void {
     exit;
 }
 
-// Whitelist the surfaceable post types (managed CPTs + bbPress topics) — same set
-// as the standalone like.php door, since a like is now one of these reactions.
+// Whitelist the surfaceable post types (managed CPTs + bbPress topics).
+//
+// This list is NOT "the hub card's types" — it is EVERY type that can mint a react
+// button, and the standalone renderer mints one for ANY blob it serves
+// (standalone/render.php:602 sets data-pt from the page's own post_type). So the
+// list must cover the whole standalone-servable set, not just the CPTs the hub
+// feed happens to card. It didn't, and that was Ian's live 400 on 2026-07-29:
+// /shorty/… POSTed post_type='shorty', fell off the end of this array, and got
+// bad_request below — on the write AND on the GET door (so the page also showed
+// no count for the 22 shorty reactions already in the store). 'event', 'document'
+// and 'sponsor-page' were broken identically and are fixed in the same breath.
+// Adding a type here is safe: card_reactions.post_type is plain TEXT with no CHECK,
+// and notify-bridge's reaction hook already treats any non-topic/reply type as a
+// generic card (lg_notify_on_reaction, lg-shared/notify-bridge.php:341).
+//
+// If the standalone renderer learns a new post type, it belongs here too —
+// tools/gates/react-types-cover-standalone-gate.sh fails the build when it doesn't.
 const LG_CARD_REACT_TYPES = ['post-imgcap','post-type-videos','sponsor-post','loothprint',
-                             'loothcuts','useful_links','member-benefit','topic','reply'];
+                             'loothcuts','useful_links','member-benefit','topic','reply',
+                             // standalone-page types (dock react) — see above
+                             'shorty','event','document','sponsor-page'];
 
 /** Parse ?items=pt:id,pt:id into [['post_type'=>,'item_id'=>], …] (whitelisted). */
 function lg_kr_parse_items(string $csv): array {
