@@ -110,14 +110,22 @@ $lgws_prefs   = LG_WD_Signup_Page::prefs_url();
    the light page. Three mismatches (width, colour, elevation) were what made it
    read as detached. */
 .lgws .mailsec{background:var(--white);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.lgws .mail{max-width:624px;margin:0 auto;border:1px solid var(--line);border-radius:10px;
+/* 992px is NOT a taste decision — it is the framed document's own width.
+   templates/email.php:68 sets .email-container to max-width:960px, and :64 wraps it
+   in .email-wrapper with padding:24px 16px, i.e. 32px horizontally. 960 + 32 = 992.
+   Framing it at 624 (the email's CONTENT COLUMN, not its DOCUMENT) left 368px
+   outside the box, so a reader had to pan sideways to finish a headline — which is
+   exactly what Ian saw. Approved by him 2026-07-30 as variant B.
+   max-width, never width: below 992 this collapses to the viewport and the email's
+   own 768/480 breakpoints take over, which is what keeps it readable on a phone.
+   dev/verify-preview-frame-fits.php holds both halves of that. */
+.lgws .mail{max-width:992px;margin:0 auto;border:1px solid var(--line);border-radius:10px;
       overflow:hidden;background:var(--mail)}
 .lgws .mailbar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--dark);
       color:var(--paper);font:600 12.5px/1 inherit}
 .lgws .mailbar .dot{width:9px;height:9px;border-radius:50%;background:var(--gold);flex:0 0 auto}
 .lgws .mailbar .from{margin-left:auto;font-weight:400;color:#b7ad9b;font-size:11.5px}
 .lgws .mail iframe{display:block;width:100%;height:600px;border:0;background:var(--mail)}
-.lgws .fcap{max-width:624px;margin:11px auto 0;font-size:12.5px;color:var(--dim);text-align:center}
 
 /* RULING 6 — the member state */
 .lgws .already{max-width:760px;margin:0 auto;background:var(--white);border:1px solid var(--line);
@@ -273,7 +281,6 @@ $lgws_prefs   = LG_WD_Signup_Page::prefs_url();
               title="The most recent issue of the weekly email"
               loading="lazy" referrerpolicy="same-origin"></iframe>
     </div>
-    <p class="fcap">Scroll inside the message to read the whole issue.</p>
   </div>
 </section>
 <?php endif; ?>
