@@ -610,15 +610,45 @@ pull does not handle.
 **Three things a pull cannot do, none of them mine, all of them one line.** Until the first two are
 done the page is not reachable by the people it is for, and the craft gate cannot audit it.
 
-| # | Step | Box | Whose |
-|---|---|---|---|
-| 1 | Page **68595** (`/weekly-email-sign-up/`) content: `[fluentform id="5"]` → `[lg_weekly_signup]` | dev2, then live | keeper on dev2 / **Ian on live** |
-| 2 | Add `/weekly-email-sign-up/` to the **`bp-enable-private-network-public-content`** allow-list (67 entries today) — without it the page **302s anonymous visitors to wp-login**, and its entire audience is anonymous | dev2, then live | keeper on dev2 / **Ian on live** |
-| 3 | Add `"signup": ("/weekly-email-sign-up/", ["anon"])` to `tools/gates/craft-gate.py` PAGES | repo | this lane, **after** step 1 — adding it first would gate a page that does not render |
+| # | Step | Box | Whose | State |
+|---|---|---|---|---|
+| 1 | Page **68595** (`/weekly-email-sign-up/`) content: `[fluentform id="5"]` → `[lg_weekly_signup]` | dev2, then live | keeper on dev2 / **Ian on live** | **DONE on dev2** 2026-07-30 · live outstanding |
+| 2 | Add `/weekly-email-sign-up/` to the **`bp-enable-private-network-public-content`** allow-list (67 entries today) — without it the page **302s anonymous visitors to wp-login**, and its entire audience is anonymous | dev2, then live | keeper on dev2 / **Ian on live** | **DONE on dev2** (67 → 68) · live outstanding |
+| 3 | Add `"wdsignup": ("/weekly-email-sign-up/", ["anon"])` to `tools/gates/craft-gate.py` PAGES | repo | this lane, **after** step 2 | entry **added**; gate **not yet run** (needs the browser seat) |
 
 > **Step 2 is not cosmetic and it is not a redirect nuisance.** The craft gate audits an `anon`
 > viewer. If the page 302s to wp-login the gate will happily audit **the login page** and report
 > green — a pass over the wrong document. So step 2 must land before step 3 means anything.
+
+**Verified on dev2 after steps 1+2** (anon, dev gate passed, from the LAN IP `172.31.78.94` — a
+loopback curl authorizes itself and proves nothing): `/weekly-email-sign-up/` returns **200**, was a
+302 to `wp-login.php?...action=bpnoaccess` before. Title `Weekly Email Sign Up – The Looth Group`,
+exactly one `<form>` on the page and it is ours (`id="lgws-form"`, with `lgws-email`, the `lgws-website`
+honeypot and `lgws-said`), and no raw `[lg_weekly_signup]` left unrendered. *A first probe searched for
+`lg-wd-signup` and found nothing — a class name I guessed rather than read. Check the template for the
+markers before concluding a page is broken.*
+
+> ### ⚠️ STEP 1 ON LIVE: `wp_update_post()` WILL REPORT FAILURE **AFTER** WRITING THE CONTENT
+>
+> Page 68595 carries `_wp_page_template = page-fullwidth.php`, and the active theme is
+> `twentytwentyfive`, which offers only `page-no-title`. **dev2 and live hold exactly the same stale
+> value** (checked read-only on live: same theme, same meta, same content) — this is not a dev2 quirk.
+>
+> `wp_update_post()` merges the post's *existing* `page_template` back into its own input and then
+> validates it, so any content-only update to this page returns
+> `WP_Error('invalid_page_template')` — **but the content has already been written by then.**
+> Proven on dev2 on a throwaway page carrying the same meta: returned `WP_Error`, and the row read
+> back `CHANGED`. Probe page deleted.
+>
+> So on live: **do not retry, and do not assume nothing happened.** Read the row back before acting on
+> the error. The clean way is to write the one column and leave the meta alone —
+> `$wpdb->update($wpdb->posts, ['post_content'=>'[lg_weekly_signup]'], ['ID'=>68595])` then
+> `clean_post_cache(68595)`. Changing the template meta to satisfy the validator would alter how the
+> page renders *and* make dev2 disagree with live.
+>
+> Also note `post_modified` renders in **site-local time (EDT)** while `post_modified_gmt` is UTC —
+> four hours apart. Reading the local column alone made a write that had just happened look four hours
+> old, and briefly made it look like somebody else had done it.
 
 **The old page is not deleted by any of this.** Page 68595 keeps FluentForm 5 in its revision history;
 step 1 is a content change, reversible by restoring the shortcode. Recorded here because the previous

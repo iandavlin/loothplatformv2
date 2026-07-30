@@ -59,6 +59,13 @@ PAGES = {
     "hub":     ("/hub/",               ["anon", "member"]),
     "finder":  ("/directory/members",  ["anon", "member"]),
     "weekly":  ("/weekly/",            ["anon"]),
+    # The public weekly-email signup page. ANON ONLY on purpose — its entire
+    # audience is people without an account. It could only be added here once
+    # /weekly-email-sign-up/ was in bp-enable-private-network-public-content:
+    # before that it 302'd anonymous visitors to wp-login, and this gate audits
+    # an anon viewer, so it would have audited the LOGIN page and reported green.
+    # A pass over the wrong document is worse than no gate.
+    "wdsignup": ("/weekly-email-sign-up/", ["anon"]),
     "events":  ("/events/",            ["anon"]),
     "profile": ("/u/iandavlin",        ["member"]),
 }
