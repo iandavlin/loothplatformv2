@@ -38,12 +38,22 @@ Fixture: topic 72306 "ZZ TEST edit-post-parity (delete me)", author claude_admin
 (1912), forum General(3837), tags vintage+martin, 2 replies, body carrying
 bold + link + list + inline <img>. Recreate instructions in the lane's board post.
 """
-import argparse, asyncio, json, subprocess, sys, urllib.request
+import argparse, asyncio, base64, json, os, subprocess, sys, urllib.request
 
 CDP_HTTP = "http://127.0.0.1:9222"
 HOST     = "dev2.loothgroup.com"
 TOPIC    = 72306
 OWNER    = 1912
+REPO     = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# THE SERVE SERVES MAIN, NOT THIS BRANCH.
+# /var/www/dev/hub-polish.js -> ~/loothplatformv2-clean/webroot/hub-polish.js, and that
+# checkout is on main and ONLY EVER PULLS (box law). So a plain load of /hub/ exercises
+# main's composer and would have "proven" this lane against code it does not contain —
+# every assertion below would be about somebody else's file. Rather than flip the serve
+# (forbidden) or hand-copy into the docroot (forbidden, and untraceable), the branch's
+# bytes are injected per-request over CDP: the page, the DB, the endpoints and the
+# session are all the real dev2 ones, and only this one asset comes from the worktree.
+OVERRIDES = {"hub-polish.js": os.path.join(REPO, "webroot", "hub-polish.js")}
 IPHONE   = {"width": 390, "height": 844, "deviceScaleFactor": 3,
             "mobile": True, "screenWidth": 390, "screenHeight": 844}
 UA_IOS = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
@@ -83,17 +93,70 @@ def mint_cookies():
 
 
 class Session:
-    """One websocket for the whole run so emulation overrides survive."""
-    def __init__(self, ws):
+    """One websocket for the whole run so emulation overrides survive.
+
+    Replies are matched by id through a pending-future table rather than by reading
+    until the id shows up. The old shape dropped every message that was not the reply
+    it wanted, which is fine for pure request/response and fatal here: CDP delivers
+    Fetch.requestPaused as an EVENT, so an interception would have been swallowed by
+    whichever send() happened to be waiting, and the page would hang on that request
+    until it timed out and quietly loaded the ORIGINAL script.
+    """
+    def __init__(self, ws, overrides=None):
         self.ws, self.n = ws, 0
+        self.pending = {}
+        self.overrides = overrides or {}
+        self.served = []
+        self.missed = []
+        self.reader = asyncio.ensure_future(self._read())
+
+    async def _read(self):
+        try:
+            async for raw in self.ws:
+                msg = json.loads(raw)
+                mid = msg.get("id")
+                if mid is not None:
+                    fut = self.pending.pop(mid, None)
+                    if fut and not fut.done():
+                        fut.set_result(msg)
+                elif msg.get("method") == "Fetch.requestPaused":
+                    asyncio.ensure_future(self._intercept(msg["params"]))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass
+
+    async def _intercept(self, p):
+        rid, url = p["requestId"], p.get("request", {}).get("url", "")
+        for frag, path in self.overrides.items():
+            if frag in url.split("?")[0]:
+                try:
+                    body = base64.b64encode(open(path, "rb").read()).decode()
+                except OSError as e:
+                    self.missed.append(f"{url}: {e}")
+                    await self.send("Fetch.continueRequest", {"requestId": rid})
+                    return
+                self.served.append(url)
+                await self.send("Fetch.fulfillRequest", {
+                    "requestId": rid, "responseCode": 200,
+                    "responseHeaders": [
+                        {"name": "Content-Type", "value": "application/javascript; charset=utf-8"},
+                        {"name": "Cache-Control", "value": "no-store"}],
+                    "body": body})
+                return
+        await self.send("Fetch.continueRequest", {"requestId": rid})
 
     async def send(self, method, params=None):
         self.n += 1
-        await self.ws.send(json.dumps({"id": self.n, "method": method, "params": params or {}}))
-        while True:
-            msg = json.loads(await self.ws.recv())
-            if msg.get("id") == self.n:
-                return msg
+        mid = self.n
+        fut = asyncio.get_event_loop().create_future()
+        self.pending[mid] = fut
+        await self.ws.send(json.dumps({"id": mid, "method": method, "params": params or {}}))
+        try:
+            return await asyncio.wait_for(fut, timeout=30)
+        except asyncio.TimeoutError:
+            self.pending.pop(mid, None)
+            return {"error": f"timeout on {method}"}
 
     async def ev(self, expr):
         r = await self.send("Runtime.evaluate",
@@ -119,16 +182,35 @@ async def run(save):
     except Exception as e:
         print(f"No CDP on {CDP_HTTP}: {e}\nStart the engine ONLY with keeper's OK.", file=sys.stderr)
         sys.exit(2)
-    page = next((p for p in pages if p["type"] == "page"), None)
+    # Open a TAB OF OUR OWN rather than attaching to whatever page is already there.
+    # Chrome allows one debugger client per target and rejects the second with a bare
+    # `HTTP 500` on the websocket handshake — which is what attaching to the existing
+    # /hub/ tab produced, because another client still holds it (keeper's craft-gate
+    # run was reported hung on this engine). Two independent reasons to open our own:
+    # that failure is indistinguishable from "the browser is broken", and driving a tab
+    # somebody else is mid-run on would corrupt their result as well as ours.
+    own_target = None
+    try:
+        req = urllib.request.Request(CDP_HTTP + "/json/new?about:blank", method="PUT")
+        own_target = json.load(urllib.request.urlopen(req, timeout=10))
+        page = own_target
+        print(f"  (opened own tab {page['id'][:12]}… — not touching the existing one)")
+    except Exception as e:
+        print(f"  (could not open own tab: {e}; falling back to an existing one)")
+        page = next((p for p in pages if p["type"] == "page"), None)
     if not page:
         print("no page target", file=sys.stderr); sys.exit(2)
 
     cookies = mint_cookies()
     async with websockets.connect(page["webSocketDebuggerUrl"], max_size=None) as ws:
-        s = Session(ws)
+        s = Session(ws, overrides=OVERRIDES)
         await s.send("Network.enable")
         await s.send("Page.enable")
         await s.send("Runtime.enable")
+        await s.send("Network.setCacheDisabled", {"cacheDisabled": True})
+        # must be armed BEFORE the navigation that pulls the script
+        await s.send("Fetch.enable", {"patterns": [{"urlPattern": "*hub-polish.js*",
+                                                    "requestStage": "Request"}]})
         # stale cookies from a prior session outrank fresh ones and break login silently
         await s.send("Network.clearBrowserCookies")
         for c in cookies:
@@ -142,6 +224,12 @@ async def run(save):
         await s.send("Page.navigate", {"url": f"https://{HOST}/hub/"})
         ready = await s.wait_for("document.readyState === 'complete'")
         check("hub page loads", ready)
+        # Kept SEPARATE from the feature assertions on purpose. If the branch file never
+        # got injected, every control below is missing and the run reads as "the feature
+        # is broken" when the truth is "you tested main". Those two need different names.
+        check("THIS BRANCH's hub-polish.js is what the page ran",
+              len(s.served) > 0 and not s.missed,
+              f"{len(s.served)} injected" + (f", MISSED {s.missed}" if s.missed else ""))
         check("emulation really applied (not a desktop false-pass)",
               await s.ev("window.matchMedia('(max-width:640px)').matches") is True,
               await s.ev("innerWidth + 'px'"))
@@ -209,6 +297,17 @@ async def run(save):
             await asyncio.sleep(4)
             print("  (saved — now verify in the DB, NOT in the UI)")
         await s.send("Emulation.clearDeviceMetricsOverride")
+
+    # Close our own tab whatever the verdict — a red run must not leave a tab behind on
+    # a shared, memory-tight box (each one is real RSS, and the box OOMed at 6-7 lanes
+    # before it had swap). Failure to clean up is reported, never raised: losing the
+    # results because the teardown was unhappy would be the worse outcome.
+    if own_target:
+        try:
+            urllib.request.urlopen(CDP_HTTP + "/json/close/" + own_target["id"], timeout=10).read()
+            print("  (closed own tab)")
+        except Exception as e:
+            print(f"  WARNING: could not close own tab {own_target['id']}: {e}")
 
     print("\n" + "=" * 62)
     bad = [r for r in results if not r[1]]
