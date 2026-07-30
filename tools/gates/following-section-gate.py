@@ -26,15 +26,23 @@ GROUND TRUTH IS THE TWO STORES, NEVER THE PAGE. The row set is compared against
 PG forums.topic_follow UNION MySQL wp_usermeta._bbp_subscriptions. A page that
 agrees with itself proves nothing.
 
-PORT 8930 IS THIS LANE'S OWN. /manage-subscription/ on :443 serves from
-/srv/membership-pages -> ~/loothplatformv2-clean, i.e. MAIN — a gate pointed there
-measures a branch that was never deployed and false-PASSES. thread-follow's gate
-learned this the hard way on a SHARED port; ours binds its own. Bring the listener
-up with /etc/nginx/sites-available/lane-account-following.conf.
+IT AIMS AT THE LANE PREVIEW, NOT AT :443's OWN PAGE. /manage-subscription/ on the
+vhost serves /srv/membership-pages -> ~/loothplatformv2-clean, i.e. MAIN — a gate
+pointed there measures a branch that was never deployed and false-PASSES. The
+preview (tools/preview/lane-preview.sh) mounts the WORKTREE at
+/preview/account-following/, which is both what this gate measures and what Ian
+clicks. Testing the thing he is looking at is the point.
 
-Run:   python3 tools/gates/following-section-gate.py [--url ...] [--uid N]
-Needs: chrome-dev on 127.0.0.1:9222, the lane listener on 127.0.0.1:8930,
-       sudo for the two ground-truth reads.
+Run:
+  tools/preview/lane-preview.sh up account-following
+  # an engine that resolves the public name to this box — the shared chrome-dev
+  # service has no --host-resolver-rules, so it would audit Cloudflare's challenge
+  google-chrome-stable --headless=new --remote-debugging-port=9334 \
+    --user-data-dir=/tmp/chrome-preview/profile --disable-gpu --disable-dev-shm-usage \
+    "--host-resolver-rules=MAP dev2.loothgroup.com 127.0.0.1" about:blank &
+  python3 tools/gates/following-section-gate.py --cdp http://127.0.0.1:9334
+
+Needs: that engine, the preview up, and sudo for the two ground-truth reads.
 
 Exit:  0 green, 1 RED (real findings), 2 CANNOT RUN (no verdict).
        The 0/1/2 split is run-all.sh's convention. Most of this gate's failure
@@ -42,10 +50,13 @@ Exit:  0 green, 1 RED (real findings), 2 CANNOT RUN (no verdict).
        reporting those as red would be indistinguishable from a regression, which
        is exactly how craft gate 2 sat "red" for weeks while it was in fact dead.
 """
-import argparse, json, subprocess, sys, time, urllib.request
+import argparse, json, subprocess, sys, time, urllib.request, urllib.parse
 
 CDP         = "http://127.0.0.1:9222"
-DEFAULT_URL = "https://127.0.0.1:8930/manage-subscription/"
+# The lane PREVIEW on the real vhost — the same URL Ian clicks. Reaching it needs
+# an engine that resolves dev2.loothgroup.com to this box (the public name is
+# Cloudflare-proxied and answers a challenge); pass --cdp at one, see the header.
+DEFAULT_URL = "https://dev2.loothgroup.com/preview/account-following/manage-subscription/"
 DEFAULT_UID = 1          # the first real member, and the only one with a long list
 PAGE_SIZE   = 5          # LG_FOLLOWING_PAGE_SIZE
 NO_VERDICT  = 2
@@ -319,6 +330,12 @@ def control_topic(exclude):
     return None
 
 
+def origin_of(url):
+    """scheme://host[:port] — what an absolute href resolves against."""
+    u = urllib.parse.urlsplit(url)
+    return f"{u.scheme}://{u.netloc}"
+
+
 def control_topics(exclude, n):
     """N distinct real topics the member does not follow, for the union phase."""
     r = subprocess.run(
@@ -384,8 +401,14 @@ def main():
     global failures
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default=DEFAULT_URL)
+    # A preview served on the REAL vhost can only be reached by a browser that
+    # resolves dev2.loothgroup.com to this box — the public name is
+    # Cloudflare-proxied and answers a challenge. The shared chrome-dev service
+    # carries no --host-resolver-rules, so point this at an engine that does.
+    ap.add_argument("--cdp", default=CDP, help="CDP endpoint (default 127.0.0.1:9222)")
     ap.add_argument("--uid", type=int, default=DEFAULT_UID)
     args = ap.parse_args()
+    globals()["CDP"] = args.cdp
 
     log("following-section-gate — Discussions you're following")
     log(f"  url={args.url}  uid={args.uid}")
@@ -450,7 +473,15 @@ def main():
             if not r["href"]:
                 check(f"topic {r['topic']} has an href", False, True)
                 continue
-            base = args.url.split("/manage-subscription")[0]
+            # The hrefs are absolute (/hub/…), so they resolve against the
+            # ORIGIN — never against the page's own directory. Deriving the base
+            # by chopping the slug off the url was only ever correct because the
+            # page sat at the site root; under a preview prefix
+            # (/preview/<lane>/manage-subscription/) it turned every link into
+            # /preview/<lane>/hub/… and reported five 404s that do not exist.
+            # A gate that fails on the harness rather than the product is worse
+            # than no gate: it teaches you to ignore it.
+            base = origin_of(args.url)
             st = fetch_status(base + r["href"], cookies)
             check(f"topic {r['topic']} {r['href']} resolves (not 404)",
                   st in (200, 301, 302), True)
@@ -493,6 +524,37 @@ def main():
             check(f"topic {r['topic']} unfollow hittable at 390px", x.get("mine"), True)
         s = hit_test(p, "#lg-fol-stopall")
         check("Stop all hittable at 390px", s.get("mine"), True)
+
+        # AND AT THE HONEST POSITION. Every other hit here calls scrollIntoView
+        # with block:'center', which parks the target in the middle of the
+        # viewport — where nothing fixed lives. That is the right test for "is
+        # something in the page covering this", and the WRONG one for the bottom
+        # bar: NAV#looth-tabbar is pinned to the viewport floor, so centring the
+        # button is exactly how you fail to notice it is buried. That is the
+        # recorded shorty-dock class — 32 of 36px under the tabbar, blind click
+        # PASSED. So: scroll to where a member actually stops, and look there.
+        # Today it clears (body carries 54px of tabbar padding, main another
+        # 64px, against a 55px bar); this assertion is what keeps it that way.
+        bottom = p.ev("""(() => {
+          window.scrollTo(0, document.body.scrollHeight);
+          const b = document.getElementById('lg-fol-stopall');
+          if (!b) return {found:false};
+          const r = b.getBoundingClientRect();
+          const y = Math.round(r.top + r.height / 2);
+          if (y < 0 || y > innerHeight) return {found:true, offscreen:true};
+          const top = document.elementFromPoint(Math.round(r.left + r.width / 2), y);
+          return {found:true, offscreen:false,
+                  mine: !!(top && (top === b || b.contains(top))),
+                  blocker: (top && top !== b && !b.contains(top))
+                           ? top.tagName + (top.id ? '#' + top.id : '') : null};
+        })()""")
+        if bottom.get("offscreen"):
+            log("  (skipped — the card is not at the page bottom for this member)")
+        else:
+            check("Stop all is not buried under the fixed tabbar at the page bottom",
+                  bottom.get("mine"), True)
+            if bottom.get("blocker"):
+                log(f"           buried by: {bottom['blocker']}")
 
         log("\n  [9] THE LIST IS THE UNION — either bit alone must produce a row")
         # THE MOST IMPORTANT ASSERTION IN THIS FILE, and the one the live store
