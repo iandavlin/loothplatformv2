@@ -23,14 +23,31 @@ line into that lane's charter and note the lane name here.
 11. Group chat header: collapse + text scale
 12. Post header: title legibility over text thumbnails
 13. PWA launch animation/message
-14. Mail-containment: gate on host not LG_ENV (latent security)
+14. Craft gate: /hub/share-your-repair-content/ cover missing width/height (pre-existing)
+15. Mail-containment: gate on host not LG_ENV (latent security)
 
 **P3 — big builds (scope first)**
-15. Front-end authoring for all post types ★ vision
-16. Stripe membership: audit → build
+16. Front-end authoring for all post types ★ vision
+17. Stripe membership: audit → build
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 2026-07-30 — Craft gate: /hub/share-your-repair-content/ topic cover has no width/height (keeper)
+
+Found by discussion-card-video 7/30 while measuring its own branch; **pre-existing,
+not introduced by that lane, and byte-identical on main**. A topic cover on
+`/hub/share-your-repair-content/` ships without `width`/`height`
+(`img.php?s=bb_medias/…`), which is an IMG-NODIMS defect. That page is **not** in
+the craft gate's PAGES list, which is why the gate is green today.
+
+Ian 7/30: **leave it** — the lane deliberately did not add the page, because adding
+it turns the *shared* craft gate red for a defect it did not cause and blocks every
+other lane. Logged here instead of fixed in-lane.
+
+Whoever picks this up: add the page to the craft gate's PAGES **and** fix the dims
+in the same change, so the gate never sits red. Confirm byte-identical-on-main
+still holds first.
 
 ## 2026-07-30 — Front page: show the latest weekly email to LOGGED-OUT users (Ian)
 
