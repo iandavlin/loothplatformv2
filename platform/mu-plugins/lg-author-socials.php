@@ -22,25 +22,31 @@
  *
  * ## Exposure gate — LG_AUTHOR_SOCIALS_ALL_MEMBERS
  *
- * Default OFF, and that default is deliberate. 153 members have profile socials but
- * only 24 carry `author_*` meta, so resolving for everyone would newly publish ~129
- * members' handles on their post bylines. Those handles sit behind a block
- * visibility that 150 of 153 members have never set — it defaults to 'members'.
- * Publishing them is a product/privacy call for Ian, not a side effect of a bug fix,
- * so by default we resolve ONLY for authors who already publish socials on their
- * byline today. Net new exposure at the default: 3 rows, all for members already
- * publishing. Flip the constant (or the filter) to extend to all members.
+ * ON, by Ian's call 2026-07-30: "Flag on. No one is going to want to be a private
+ * author." The byline is a PUBLISHING surface — links an author attaches to work
+ * they chose to publish — and the members-only default those handles sit behind is
+ * an unset default, not a member decision.
  *
- * Block-level visibility is not consulted for the members we do resolve: their links
- * are public on the byline today, and applying a members-only default would blank
- * the rail for every logged-out reader. See the audit doc §Visibility.
+ * The scope is smaller than "153 members with socials" suggests. 93 members have
+ * ever authored anything carrying a byline; 24 of them already publish socials. So
+ * ON newly affects ~69 AUTHORS. The other ~60 have profile socials but have never
+ * published, so the flag does nothing for them until they do.
+ *
+ * OFF was not the conservative option it looked like. Eligibility under OFF needs
+ * `author_*` ACF meta, which is settable only through the legacy in-post "Manage
+ * social icons" modal — the very mechanism that caused this bug. OFF therefore
+ * freezes the feature at 24 people forever and hands every FUTURE author a
+ * permanently dead byline.
+ *
+ * Block-level visibility is not consulted: applying a members-only default would
+ * blank the rail for every logged-out reader. See the audit doc §Visibility.
  */
 
 if (!defined('ABSPATH')) exit;
 
-/** Extend the resolved byline to every member with profile socials. Ian's call. */
+/** Resolve for every member, not just those carrying legacy ACF meta (Ian 2026-07-30). */
 if (!defined('LG_AUTHOR_SOCIALS_ALL_MEMBERS')) {
-    define('LG_AUTHOR_SOCIALS_ALL_MEMBERS', false);
+    define('LG_AUTHOR_SOCIALS_ALL_MEMBERS', true);
 }
 
 /** ACF slots that make an author "already publishing socials on the byline". */
