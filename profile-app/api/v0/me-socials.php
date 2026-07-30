@@ -69,9 +69,11 @@ if ($hasItems) {
                 if (!filter_var($value, FILTER_VALIDATE_URL)) profile_app_json(400, ['error' => "bad_url_at_$i"]);
                 break;
             default:
-                // handle/username — strip leading @, strip URL prefix if a full URL was pasted
-                $value = preg_replace('#^https?://[^/]+/#i', '', $value);
-                $value = ltrim($value, '@/');
+                // handle/username — strip leading @, and strip a pasted URL prefix
+                // ONLY when the host belongs to this kind. A foreign host is kept
+                // whole; stripping it blindly is what produced the doubled
+                // facebook.com/facebook.com/... rows (see Profile::SOCIAL_HOSTS).
+                $value = Profile::normalizeSocialValue((string) $kind, $value);
                 if ($value === '' || strlen($value) > 200) profile_app_json(400, ['error' => "bad_handle_at_$i"]);
                 break;
         }
