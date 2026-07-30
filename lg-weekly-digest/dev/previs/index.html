@@ -74,6 +74,22 @@
         box-shadow:0 1px 3px rgba(0,0,0,.07)}
   .shot iframe{display:block;width:100%;height:860px;border:0;background:#fff}
 
+  /* The "after" side of a suppression is not a shorter email — it is no email.
+     Drawn as an absence on purpose: an empty white iframe would read as a
+     rendering failure, and the whole point is that nothing arrives. */
+  .noemail{border:1px dashed var(--bad);border-radius:8px;background:#fff;
+           height:860px;display:flex;flex-direction:column;align-items:center;
+           justify-content:center;text-align:center;padding:24px;gap:10px}
+  .noemail .big{font:700 17px/1.3 inherit;color:var(--bad)}
+  .noemail .sm{font-size:13px;color:var(--dim);max-width:34ch}
+  .noemail .env{font-size:40px;line-height:1;opacity:.5}
+  .d-none{background:var(--bad)}
+  .tag{display:inline-block;font:700 10.5px/1 inherit;letter-spacing:.08em;
+       text-transform:uppercase;padding:4px 7px;border-radius:4px;vertical-align:2px}
+  .t-real{background:var(--mint);color:#14210a}
+  .t-made{background:var(--gold);color:#2B2318}
+  @media (max-width:860px){ .noemail{height:780px} }
+
   .swap{display:none}
   .segbtns{display:inline-flex;border:1px solid var(--line);border-radius:99px;overflow:hidden;
            background:var(--paper);margin:0 0 10px}
@@ -95,6 +111,7 @@
 <header>
   <h1>Weekly digest — the to-do list, as ruled</h1>
   <p class="sub">Built to your 28 July rulings. Real renderer, real live members, before beside after.</p>
+  <p class="sub" style="margin-top:6px"><b>Two measurement dates on this page, said plainly so no number is quoted as the other's.</b> Sections 1–3 and their counts are the <b>28 July</b> live extract, unchanged so the pictures and the figures beside them still agree. <b>Section 4 is 30 July.</b> The recipient list moves every day because the 7-day window slides — 280 mailed on the 28th, 277 on the 29th, <b>258 today</b> — so treat any single figure as a reading, not a constant.</p>
 </header>
 
 <div class="lede">
@@ -244,6 +261,85 @@
   <p class="prov">All three members and every row are real, from LIVE (not dev2 — they hold different data), 28 July. Discussion titles read blank in these frames only because live post ids do not resolve on the dev box; a real send names them.</p>
 </section>
 
+<!-- ─────────── 4. axis 2: what "don't repeat an email" actually costs ─────────── -->
+<section class="cmp">
+  <div class="chead">
+    <h2>4. “Don't tell me twice” — the one that needs your call</h2>
+    <span class="who">The rule you asked about: skip anything we already emailed at the time</span>
+    <span class="delta">rows <span class="arrow">→</span> no email</span>
+  </div>
+
+  <p class="note">You asked for three suppression rules. Two are built and shown above. <b>This is the third, and it is the one I am NOT recommending we build yet</b> — because of what these two pictures show, not because it is hard.</p>
+
+  <p class="note"><b>The trap is that it interacts with your “empty means send nothing” ruling.</b> Skipping already-emailed items sounds like it makes an email shorter. It doesn't always. If the skipped rows were <i>all</i> a member had, the email doesn't shrink — <b>it never arrives</b>.</p>
+
+  <p class="note">And right now that is not the unlucky case, it is <b>every</b> case. Measured on live today: <b>258 members get a digest, 7 of them have a discussion item, and all 7 have nothing else</b>. Discussion people and connection people are, for the moment, two separate groups. So this rule would currently turn 7 emails into 7 silences and shorten none.</p>
+
+  <div class="pair">
+    <div class="pane">
+      <p class="plabel"><span class="dot d-after"></span>Today — D.J. Williams <span class="tag t-real">real</span><span class="cnt">1 row</span></p>
+      <div class="shot"><iframe src="axis2-1039-before.html" title="D.J. Williams, as it sends today" loading="lazy"></iframe></div>
+    </div>
+    <div class="pane">
+      <p class="plabel"><span class="dot d-none"></span>With the rule on<span class="cnt">nothing sent</span></p>
+      <div class="noemail">
+        <div class="env">✉</div>
+        <div class="big">No email at all</div>
+        <div class="sm">His one row was a reply to a discussion he started. If we'd already emailed him about it, there is nothing left — and “empty sends nothing” means we don't write.</div>
+      </div>
+    </div>
+  </div>
+  <div class="swap" data-swap>
+    <div class="segbtns">
+      <button type="button" data-src="axis2-1039-before.html" aria-pressed="true">Today · 1 row</button>
+      <button type="button" data-src="" aria-pressed="false">Rule on · none</button>
+    </div>
+    <div class="shot"><iframe title="D.J. Williams" loading="lazy"></iframe></div>
+    <div class="noemail" hidden>
+      <div class="env">✉</div>
+      <div class="big">No email at all</div>
+      <div class="sm">His one row was a reply to a discussion he started. Nothing is left to send, and “empty sends nothing” means we don't write.</div>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:22px">At one row that is easy to wave away. <b>So here is the same thing at three</b> — which is what a busy week will look like once discussions pick up:</p>
+
+  <div class="pair">
+    <div class="pane">
+      <p class="plabel"><span class="dot d-after"></span>A busier week <span class="tag t-made">constructed</span><span class="cnt">3 rows</span></p>
+      <div class="shot"><iframe src="axis2-constructed-before.html" title="Three rows" loading="lazy"></iframe></div>
+    </div>
+    <div class="pane">
+      <p class="plabel"><span class="dot d-none"></span>With the rule on<span class="cnt">nothing sent</span></p>
+      <div class="noemail">
+        <div class="env">✉</div>
+        <div class="big">No email at all</div>
+        <div class="sm">Three things were waiting on him. He hears about none of them, and nothing anywhere records that we decided not to write.</div>
+      </div>
+    </div>
+  </div>
+  <div class="swap" data-swap>
+    <div class="segbtns">
+      <button type="button" data-src="axis2-constructed-before.html" aria-pressed="true">Busier · 3 rows</button>
+      <button type="button" data-src="" aria-pressed="false">Rule on · none</button>
+    </div>
+    <div class="shot"><iframe title="Three rows" loading="lazy"></iframe></div>
+    <div class="noemail" hidden>
+      <div class="env">✉</div>
+      <div class="big">No email at all</div>
+      <div class="sm">Three things were waiting on him. He hears about none of them, and nothing records that we decided not to write.</div>
+    </div>
+  </div>
+
+  <p class="prov"><b>Straight about which of these is real.</b> D.J. Williams and his row are real, from live today, and his whole digest really is that one row. <b>The three-row panel is assembled by me</b> — the three rows are each real and belong to three <i>different</i> real members, but no member has ever held three. Only eleven discussion notifications have ever been written on live, and the most anyone has had at once is two. I am showing it because the decision is about what the rule does when it fires, and one row makes that too easy to dismiss.</p>
+
+  <div class="ask">
+    <p style="margin:0 0 10px"><b>What I recommend: don't build it yet — but it is no longer safe to call it closed, and I had that wrong.</b> I told the discussion-follow lane this rule could never matter. That was wrong: the digest names <i>“someone replied to your discussion”</i>, and the same reply can also be a per-event email to the same person. One event, two channels.</p>
+    <p style="margin:0 0 10px"><b>Nothing to decide today.</b> Today it is 7 members and 5 emails a fortnight. What changes it is the <b>✉ switch on the discussion toggles</b> — the moment a member can tick “email me” on a discussion they started, this stops being theoretical, and that switch is being built now in the other lane.</p>
+    <p style="margin:0"><b>So the one thing I would ask you to note, not answer:</b> if we do build it, it needs a floor — <i>never suppress a member's last row</i>. Suppression should be allowed to shorten an email. It should not be allowed to cancel one, because a cancelled email looks exactly like a quiet week and nobody can tell the difference afterwards.</p>
+  </div>
+</section>
+
 <footer>
   <p><b>Worth knowing before this sends:</b> “empty sends nothing” suppresses the <i>whole</i> email, so <b>1,383 of 1,663</b> subscribed members receive nothing at all this week — including Upcoming Events, the new videos and loothprint, which have nothing to do with anyone's to-do list. That is what the ruling says and it is built that way; flagging it because it changes what the weekly digest is, not just who it greets.</p>
   <p>The stale counts are small today: 237 members have anything outstanding, <b>224 of them have exactly one</b>, and the largest anyone holds is three — so “You have 1 connection request waiting” is the line most people will actually see. Nobody will see 6 this week.</p>
@@ -255,10 +351,21 @@
 // Mobile: swap the two emails in place. A shrunk side-by-side is unreadable at 390px.
 document.querySelectorAll('[data-swap]').forEach(function (box) {
   var frame = box.querySelector('iframe');
+  var shot  = box.querySelector('.shot');
+  // §4's "rule on" side has NO email to show. An empty iframe src paints a blank
+  // white box, which reads as a failed render — the opposite of the point. So that
+  // button reveals the absence panel instead of loading a document.
+  var none  = box.querySelector('.noemail');
   var btns  = box.querySelectorAll('button');
   function pick(btn) {
     btns.forEach(function (b) { b.setAttribute('aria-pressed', String(b === btn)); });
-    if (frame.getAttribute('src') !== btn.dataset.src) frame.setAttribute('src', btn.dataset.src);
+    var src = btn.dataset.src || '';
+    if (none) {
+      none.hidden = !!src;
+      if (shot) shot.hidden = !src;
+      if (!src) return;               // leave the loaded frame alone underneath
+    }
+    if (frame.getAttribute('src') !== src) frame.setAttribute('src', src);
   }
   btns.forEach(function (b) { b.addEventListener('click', function () { pick(b); }); });
   pick(box.querySelector('button[aria-pressed="true"]') || btns[0]);
@@ -277,7 +384,13 @@ function sizePair(pair) {
     } catch (e) { return 0; }
   });
   var tall = Math.min(CAP, Math.max.apply(null, hs));
-  if (tall > 0) frames.forEach(function (f) { f.style.height = tall + 'px'; });
+  if (tall > 0) {
+    frames.forEach(function (f) { f.style.height = tall + 'px'; });
+    // §4 pairs an email against an ABSENCE panel, which is not an iframe and so was
+    // not being measured or resized — it kept its 860px default while the email
+    // beside it shrank, and the two panes visibly disagreed. Match it to the email.
+    pair.querySelectorAll('.noemail').forEach(function (n) { n.style.height = tall + 'px'; });
+  }
 }
 function sizeAll() { document.querySelectorAll('.pair').forEach(sizePair); }
 document.querySelectorAll('.pair iframe').forEach(function (f) {
