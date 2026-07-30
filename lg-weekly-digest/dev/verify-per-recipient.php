@@ -41,8 +41,9 @@ if ( ! defined( 'ABSPATH' ) ) { fwrite( STDERR, "run me with wp eval-file\n" ); 
 
 $LANE = '/home/ubuntu/worktrees/weekly-digest-recap';
 if ( ! defined( 'LG_WD_RECAP_SMARTCODE' ) ) { define( 'LG_WD_RECAP_SMARTCODE', '##lg_recap.section##' ); }
-require_once $LANE . '/lg-weekly-digest/includes/class-lg-wd-recap.php';
-require_once $LANE . '/lg-weekly-digest/includes/class-lg-wd-recap-source.php';
+require_once __DIR__ . '/_load-under-test.php';
+lg_wd_load_under_test($LANE . '/lg-weekly-digest/includes/class-lg-wd-recap.php', 'LG_WD_Recap');
+lg_wd_load_under_test($LANE . '/lg-weekly-digest/includes/class-lg-wd-recap-source.php', 'LG_WD_Recap_Source');
 
 if ( ! class_exists( '\FluentCrm\App\Models\Subscriber' ) ) {
 	fwrite( STDERR, "FluentCRM not loaded\n" ); exit( 1 );

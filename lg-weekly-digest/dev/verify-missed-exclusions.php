@@ -30,7 +30,8 @@
  * Read-only. No writes, no mail, no network.
  */
 require_once '/srv/profile-app/config.php';
-require_once '/home/ubuntu/worktrees/weekly-digest-recap/profile-app/src/Recap.php';
+require_once __DIR__ . '/_load-under-test.php';
+lg_wd_load_under_test('/home/ubuntu/worktrees/weekly-digest-recap/profile-app/src/Recap.php', '\Looth\ProfileApp\Recap');
 use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Recap;
 

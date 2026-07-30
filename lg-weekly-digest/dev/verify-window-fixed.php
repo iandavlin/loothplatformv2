@@ -29,7 +29,8 @@
 if ( ! defined( 'ABSPATH' ) ) { fwrite( STDERR, "wp eval-file\n" ); exit( 1 ); }
 
 $LANE = '/home/ubuntu/worktrees/weekly-digest-recap';
-require_once $LANE . '/lg-weekly-digest/includes/class-lg-wd-recap-source.php';
+require_once __DIR__ . '/_load-under-test.php';
+lg_wd_load_under_test($LANE . '/lg-weekly-digest/includes/class-lg-wd-recap-source.php', 'LG_WD_Recap_Source');
 
 $fail = 0;
 $chk  = function ( string $what, $got, $want ) use ( &$fail ) {

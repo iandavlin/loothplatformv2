@@ -259,8 +259,12 @@ function lg_weekly_signup_handler() {
  * Mirrors the event-reminder toggle above, but for the members' Weekly Digest
  * FluentCRM list (id 3 — the list the weekly campaign sends to). Logged-in only,
  * cookie-auth via admin-ajax, same-origin checked (lg_evr_user()), idempotent.
+ *
+ * LG_WEEKLY_MEMBER_LIST_ID is declared ONCE, at the top of this file beside
+ * LG_WEEKLY_NONMEMBER_LIST_ID. It used to be declared here as well; two
+ * top-level `const`s of the same name warn on every request that loads
+ * mu-plugins, and two independent declarations of one fact can drift apart.
  * ───────────────────────────────────────────────────────────────────────── */
-const LG_WEEKLY_MEMBER_LIST_ID = 3;   // wp_fc_lists: members' Weekly Digest list
 
 function lg_weekly_member_is_on(string $email): bool {
     $c = FluentCrmApi('contacts')->getContact($email);

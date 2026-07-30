@@ -33,7 +33,8 @@
 if ( ! defined( 'ABSPATH' ) ) { fwrite( STDERR, "run with: wp eval-file\n" ); exit( 1 ); }
 
 $L = '/home/ubuntu/worktrees/weekly-digest-recap';
-require_once $L . '/lg-weekly-digest/includes/class-lg-wd-signup-page.php';
+require_once __DIR__ . '/_load-under-test.php';
+lg_wd_load_under_test($L . '/lg-weekly-digest/includes/class-lg-wd-signup-page.php', 'LG_WD_Signup_Page');
 
 $fail = 0;
 $ck = function ( string $what, $got, $exp ) use ( &$fail ) {
