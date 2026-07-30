@@ -1,0 +1,536 @@
+#!/usr/bin/env python3
+"""
+following-section-gate — "Discussions you're following" RENDERS and is REACHABLE.
+
+WHY THIS GATE EXISTS. The section on /manage-subscription/ is a list of links to
+somewhere else. A list of links has exactly two ways to be worthless, and neither
+of them shows up in "is the element in the DOM":
+
+  1. THE ROW IS THERE BUT NOTHING CAN TOUCH IT. elementFromPoint at a row's centre
+     must come back as that row's own link. This is not paranoia — it is already a
+     recorded defect class on this box: the shorty dock rendered fine at 390px with
+     32 of its 36px underneath NAV#looth-tabbar, and a blind CDP click landed on
+     the tabbar and PASSED. Every hit here is hit-tested before it is believed.
+
+  2. THE ROW IS THERE AND THE LINK IS A 404. The rows are assembled in PHP from two
+     databases and the URL is built, not stored. /hub/ does not serve hidden
+     forums, so two of the first real member's twelve rows must route to the
+     group-native permalink instead; getting that wrong yields twelve rows that
+     look perfect and two that dead-end. Every rendered href is fetched.
+
+It also asserts the two things the design is FOR, because both are one careless
+edit from evaporating: the list stays BOUNDED (5 rows, not all 12), and the single
+"Stop all" control exists and is hittable.
+
+GROUND TRUTH IS THE TWO STORES, NEVER THE PAGE. The row set is compared against
+PG forums.topic_follow UNION MySQL wp_usermeta._bbp_subscriptions. A page that
+agrees with itself proves nothing.
+
+PORT 8930 IS THIS LANE'S OWN. /manage-subscription/ on :443 serves from
+/srv/membership-pages -> ~/loothplatformv2-clean, i.e. MAIN — a gate pointed there
+measures a branch that was never deployed and false-PASSES. thread-follow's gate
+learned this the hard way on a SHARED port; ours binds its own. Bring the listener
+up with /etc/nginx/sites-available/lane-account-following.conf.
+
+Run:   python3 tools/gates/following-section-gate.py [--url ...] [--uid N]
+Needs: chrome-dev on 127.0.0.1:9222, the lane listener on 127.0.0.1:8930,
+       sudo for the two ground-truth reads.
+
+Exit:  0 green, 1 RED (real findings), 2 CANNOT RUN (no verdict).
+       The 0/1/2 split is run-all.sh's convention. Most of this gate's failure
+       modes are ENVIRONMENTAL (no engine, no listener, no member cookie);
+       reporting those as red would be indistinguishable from a regression, which
+       is exactly how craft gate 2 sat "red" for weeks while it was in fact dead.
+"""
+import argparse, json, subprocess, sys, time, urllib.request
+
+CDP         = "http://127.0.0.1:9222"
+DEFAULT_URL = "https://127.0.0.1:8930/manage-subscription/"
+DEFAULT_UID = 1          # the first real member, and the only one with a long list
+PAGE_SIZE   = 5          # LG_FOLLOWING_PAGE_SIZE
+NO_VERDICT  = 2
+
+passes = failures = 0
+_open = {"page": None, "tid": None}
+
+
+def log(*a): print(" ".join(str(x) for x in a), flush=True)
+
+
+def check(label, got, want):
+    global passes, failures
+    ok = got == want
+    if ok: passes += 1
+    else:  failures += 1
+    log(f"  {'PASS' if ok else 'FAIL'}  {label}" + ("" if ok else f"\n           got={got!r}\n           want={want!r}"))
+    return ok
+
+
+def cannot_run(why):
+    try:
+        if _open["page"]: _open["page"].close()
+        if _open["tid"]:  close_page(_open["tid"])
+    except Exception:
+        pass
+    log(f"  CANNOT RUN — {why}")
+    log("  (exit 2: no verdict. This is NOT a pass and NOT a finding.)")
+    sys.exit(NO_VERDICT)
+
+
+try:
+    import websocket  # websocket-client
+except ImportError:
+    cannot_run("python3 websocket-client is not installed")
+
+
+# ── ground truth ─────────────────────────────────────────────────────────────
+def store_notify_ids(uid):
+    """🔔 — PG forums.topic_follow. Read as the same read-only role the page uses."""
+    r = subprocess.run(
+        ["sudo", "-n", "-u", "membership", "psql", "-d", "looth", "-Atc",
+         f"select topic_id from forums.topic_follow where user_id={uid} order by topic_id;"],
+        capture_output=True, text=True)
+    if r.returncode != 0:
+        cannot_run("cannot read forums.topic_follow: " + r.stderr.strip()[:160])
+    return {int(x) for x in r.stdout.split() if x.strip()}
+
+
+def store_email_ids(uid):
+    """✉ — MySQL wp_usermeta._bbp_subscriptions, the CSV bbPress itself answers from."""
+    sql = (f"SELECT meta_value FROM wp_usermeta WHERE user_id={uid} "
+           f"AND meta_key='wp__bbp_subscriptions' LIMIT 1;")
+    r = subprocess.run(
+        ["sudo", "-n", "bash", "-c",
+         'set -a; . /etc/lg-events-db; set +a; '
+         f'mysql -u"$DB_USER" -p"$DB_PASSWORD" -h"$DB_HOST" -N -B -e "{sql}" "$DB_NAME"'],
+        capture_output=True, text=True)
+    if r.returncode != 0:
+        cannot_run("cannot read wp_usermeta subscriptions: " + r.stderr.strip()[:160])
+    csv = r.stdout.strip()
+    return {int(x) for x in csv.split(",") if x.strip().isdigit()}
+
+
+def mint_cookies(uid):
+    """A REAL WP session for the acting member, plus the dev gate cookie.
+
+    Minted rather than harvested: a gate that depends on a human's live browser
+    session is a gate that goes red on a Monday for no reason.
+    """
+    r = subprocess.run(
+        ["sudo", "-n", "-u", "looth-dev", "wp", "eval",
+         f'$e=time()+3600; echo LOGGED_IN_COOKIE."=".wp_generate_auth_cookie({uid},$e,"logged_in")."\\n";'
+         f'echo SECURE_AUTH_COOKIE."=".wp_generate_auth_cookie({uid},$e,"secure_auth")."\\n";',
+         "--skip-themes", "--path=/var/www/dev"],
+        capture_output=True, text=True)
+    pairs = [l for l in r.stdout.splitlines() if l.startswith("wordpress")]
+    if len(pairs) < 2:
+        cannot_run("could not mint a WP session cookie (needs sudo -u looth-dev wp)")
+
+    g = subprocess.run(
+        ["sudo", "-n", "grep", "-oP", r'loothdev_token\s+"\K[^"]+',
+         "/etc/nginx/snippets/loothdev-tokens.conf"], capture_output=True, text=True)
+    tok = (g.stdout.strip().splitlines() or [""])[0]
+    if tok:
+        pairs.append("loothdev_auth=" + tok)
+    return pairs
+
+
+# ── CDP ──────────────────────────────────────────────────────────────────────
+class Page:
+    """ONE persistent CDP connection.
+
+    Deliberately not per-command sockets: session-scoped overrides (device metrics,
+    and here the certificate-error override) are dropped by a fresh socket, and the
+    run then silently measures something else. Recorded trap; this class is the fix.
+    """
+    def __init__(self, ws_url):
+        # suppress_origin: Chrome rejects a CDP websocket carrying an Origin header
+        # unless launched with --remote-allow-origins, and the chrome-dev service is
+        # shared — not sending one needs no change to it.
+        self.ws = websocket.create_connection(ws_url, timeout=30, suppress_origin=True)
+        self.n = 0
+
+    def send(self, method, params=None):
+        self.n += 1; i = self.n
+        self.ws.send(json.dumps({"id": i, "method": method, "params": params or {}}))
+        while True:
+            r = json.loads(self.ws.recv())
+            if r.get("id") == i:
+                if "error" in r: raise RuntimeError(f"{method}: {r['error']}")
+                return r.get("result", {})
+
+    def ev(self, expr):
+        r = self.send("Runtime.evaluate",
+                      {"expression": expr, "returnByValue": True, "awaitPromise": True})
+        if r.get("exceptionDetails"):
+            raise RuntimeError("JS: " + str(r["exceptionDetails"].get("text")))
+        return r["result"].get("value")
+
+    def close(self):
+        try: self.ws.close()
+        except Exception: pass
+
+
+def new_page():
+    # /json/new needs PUT on Chrome 151. Our OWN tab: a second CDP client attached
+    # to someone else's target fails with a bare HTTP 500 on this shared engine.
+    t = json.load(urllib.request.urlopen(
+        urllib.request.Request(CDP + "/json/new?about:blank", method="PUT")))
+    return t["id"], Page(t["webSocketDebuggerUrl"])
+
+
+def close_page(tid):
+    try: urllib.request.urlopen(CDP + f"/json/close/{tid}").read()
+    except Exception: pass
+
+
+def setup(p, url, cookies, width, height):
+    p.send("Page.enable"); p.send("Runtime.enable"); p.send("Network.enable")
+    p.send("Security.enable")
+    # The lane listener carries dev2's certificate but is reached on 127.0.0.1, so
+    # the name will not match. Scoped to THIS tab only.
+    p.send("Security.setIgnoreCertificateErrors", {"ignore": True})
+    p.send("Emulation.setDeviceMetricsOverride",
+           {"width": width, "height": height, "deviceScaleFactor": 2,
+            "mobile": height > width})
+    host = url.split("/")[2].split(":")[0]
+    p.send("Network.setCookies", {"cookies": [
+        {"name": k, "value": v, "domain": host, "path": "/"}
+        for k, v in (c.split("=", 1) for c in cookies)]})
+
+
+def goto(p, url, tries=2):
+    """Navigate and wait for the section's own client pass to finish.
+
+    The marks are server-rendered and then CORRECTED against follow.php's GET;
+    asserting before that lands would test a half-hydrated page. #lg-fol-master
+    is empty until the correction returns, so it is the honest ready signal.
+    Generous timeouts: cold FPM on a 2-core box is slow, and harness latency must
+    never read as a product defect.
+    """
+    for attempt in range(tries):
+        p.send("Page.navigate", {"url": url})
+        for _ in range(120):
+            time.sleep(0.25)
+            try:
+                if p.ev("document.readyState") == "complete": break
+            except Exception: pass
+        for _ in range(120):
+            try:
+                if p.ev("!!document.getElementById('lg-following')") and \
+                   p.ev("(document.getElementById('lg-fol-master')||{}).textContent!==''"):
+                    return True
+            except Exception: pass
+            time.sleep(0.25)
+        if attempt + 1 < tries:
+            log(f"  (hydration slow — reloading, attempt {attempt + 2}/{tries})")
+    return False
+
+
+# ── the assertions ───────────────────────────────────────────────────────────
+def visible_rows(p):
+    """Rows with a real box in THIS viewport — the collapsed overflow has none."""
+    return p.ev("""(() => {
+      const out = [];
+      for (const li of document.querySelectorAll('#lg-following .lg-manage-sub__fol-row')) {
+        const r = li.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) out.push({
+          topic: parseInt(li.getAttribute('data-topic'), 10),
+          href: (li.querySelector('a.lg-manage-sub__fol-name') || {}).getAttribute
+                ? li.querySelector('a.lg-manage-sub__fol-name').getAttribute('href') : null,
+          notify: !!li.querySelector('[data-mark="notify"].is-on'),
+          email:  !!li.querySelector('[data-mark="email"].is-on'),
+        });
+      }
+      return out;
+    })()""")
+
+
+def hit_test(p, selector):
+    """Does the point at the centre of this element belong to this element?
+
+    THE WHOLE POINT OF THE GATE. A row that renders under fixed furniture is
+    present, styled, and untouchable — and a blind click on it passes.
+    """
+    return p.ev("""(() => {
+      const el = document.querySelector(%s);
+      if (!el) return {found:false};
+      // Scroll it under the eye first. The section sits well below the fold on a
+      // real account page, and elementFromPoint only knows the viewport — without
+      // this every row reads "offscreen" and the gate reports a layout defect that
+      // is really just a page the member had not scrolled yet. Centred, so a row
+      // pinned under fixed furniture STILL fails, which is the case we care about.
+      el.scrollIntoView({block: 'center', inline: 'nearest'});
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return {found:true, boxed:false};
+      const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2);
+      if (x < 0 || y < 0 || x > innerWidth || y > innerHeight)
+        return {found:true, boxed:true, onscreen:false};
+      const top = document.elementFromPoint(x, y);
+      return {
+        found:true, boxed:true, onscreen:true, x: x, y: y,
+        w: Math.round(r.width), h: Math.round(r.height),
+        mine: !!(top && (top === el || el.contains(top) || top.contains(el))),
+        blocker: (top && top !== el && !el.contains(top))
+                 ? (top.tagName + (top.id ? '#' + top.id : '') +
+                    (top.className && top.className.baseVal === undefined
+                       ? '.' + String(top.className).trim().split(/\\s+/).join('.') : ''))
+                 : null,
+      };
+    })()""" % json.dumps(selector))
+
+
+def control_topic(exclude):
+    """A real, published topic in a public forum that the member does NOT follow.
+
+    Chosen from the store rather than hardcoded so the gate keeps working as dev2's
+    content changes, and never picks a row the member actually cares about.
+    """
+    r = subprocess.run(
+        ["sudo", "-n", "-u", "membership", "psql", "-d", "looth", "-Atc",
+         "select t.id from forums.topic t join forums.forum f on f.id = t.forum_id "
+         "where t.status = 'publish' and f.visibility = 'public' and t.tier_gate = 'public' "
+         "order by t.last_active_at desc nulls last limit 40;"],
+        capture_output=True, text=True)
+    for line in r.stdout.split():
+        if line.strip().isdigit() and int(line) not in exclude:
+            return int(line)
+    return None
+
+
+def follow_js(topic_id, on):
+    """Drive follow.php from the PAGE's own session — the same contract the UI uses.
+
+    Deliberately not a direct DB write: setting up the fixture through a back door
+    would let a broken endpoint still produce a green round-trip.
+    """
+    return """(async () => {
+      const g = await (await fetch('/bb-mirror-api/v0/follow?topics=%d',
+                                   {credentials:'same-origin'})).json();
+      if (!g || !g.authenticated) return 'not-authenticated';
+      for (const ch of ['notify','email']) {
+        const r = await fetch('/bb-mirror-api/v0/follow', {
+          method:'POST', credentials:'same-origin',
+          headers:{'Content-Type':'application/json','X-WP-Nonce':g.nonce},
+          body: JSON.stringify({topic_id:%d, channel:ch, on:%s})});
+        const j = await r.json().catch(()=>null);
+        if (!j || !j.ok) return 'write-failed:' + ch + ':' + r.status;
+      }
+      return true;
+    })()""" % (topic_id, topic_id, "true" if on else "false")
+
+
+def fetch_status(url, cookies):
+    req = urllib.request.Request(url, method="GET",
+                                 headers={"Cookie": "; ".join(cookies)})
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        with urllib.request.urlopen(req, timeout=20, context=ctx) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
+    except Exception as e:
+        return f"ERR {e}"
+
+
+def main():
+    global failures
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--url", default=DEFAULT_URL)
+    ap.add_argument("--uid", type=int, default=DEFAULT_UID)
+    args = ap.parse_args()
+
+    log("following-section-gate — Discussions you're following")
+    log(f"  url={args.url}  uid={args.uid}")
+
+    try:
+        urllib.request.urlopen(CDP + "/json/version", timeout=5).read()
+    except Exception:
+        cannot_run("chrome-dev is not answering on 127.0.0.1:9222")
+
+    notify = store_notify_ids(args.uid)
+    email  = store_email_ids(args.uid)
+    expect = notify | email
+    log(f"  store: {len(notify)} notify + {len(email)} email = {len(expect)} discussions followed")
+    if not expect:
+        cannot_run(f"uid {args.uid} follows nothing — this gate needs a real member "
+                   f"with real follows, and will not invent them")
+
+    cookies = mint_cookies(args.uid)
+
+    tid, p = new_page()
+    _open["tid"], _open["page"] = tid, p
+    try:
+        # ── desktop ──────────────────────────────────────────────────────────
+        setup(p, args.url, cookies, 1280, 900)
+        if not goto(p, args.url):
+            cannot_run("the section never hydrated (no listener on :8930, or not signed in)")
+
+        log("\n  [1] the section renders, from the real stores")
+        check("section present", p.ev("!!document.getElementById('lg-following')"), True)
+        check("data-total equals the store's union",
+              p.ev("parseInt(document.getElementById('lg-following').dataset.total,10)"), len(expect))
+        check("every followed discussion has a row",
+              set(p.ev("""[...document.querySelectorAll('#lg-following .lg-manage-sub__fol-row')]
+                          .map(li=>parseInt(li.dataset.topic,10))""")), expect)
+
+        log("\n  [2] the list is BOUNDED — the whole point of the design")
+        rows = visible_rows(p)
+        check(f"only {PAGE_SIZE} rows visible before 'Show all'",
+              len(rows), min(PAGE_SIZE, len(expect)))
+
+        log("\n  [3] the marks tell the truth about both stores")
+        for r in rows:
+            check(f"topic {r['topic']} bell/email match the stores",
+                  (r["notify"], r["email"]),
+                  (r["topic"] in notify, r["topic"] in email))
+
+        log("\n  [4] the rows are HITTABLE, not merely present")
+        for r in rows:
+            sel = f'#lg-following .lg-manage-sub__fol-row[data-topic="{r["topic"]}"] a.lg-manage-sub__fol-name'
+            h = hit_test(p, sel)
+            check(f"topic {r['topic']} title link is the top element at its own centre",
+                  h.get("mine"), True)
+            if h.get("blocker"):
+                log(f"           blocked by: {h['blocker']}")
+            x = hit_test(p, f'#lg-following .lg-manage-sub__fol-row[data-topic="{r["topic"]}"] [data-unfollow]')
+            check(f"topic {r['topic']} unfollow control is hittable", x.get("mine"), True)
+            check(f"topic {r['topic']} unfollow control is a 44px target",
+                  (x.get("w", 0) >= 44 and x.get("h", 0) >= 44), True)
+
+        log("\n  [5] every link a member can press actually resolves")
+        for r in rows:
+            if not r["href"]:
+                check(f"topic {r['topic']} has an href", False, True)
+                continue
+            base = args.url.split("/manage-subscription")[0]
+            st = fetch_status(base + r["href"], cookies)
+            check(f"topic {r['topic']} {r['href']} resolves (not 404)",
+                  st in (200, 301, 302), True)
+            if st not in (200, 301, 302):
+                log(f"           status={st}")
+
+        log("\n  [6] the one off switch exists and can be pressed")
+        s = hit_test(p, "#lg-fol-stopall")
+        check("Stop all is hittable", s.get("mine"), True)
+        check("Stop all names the count",
+              p.ev("(document.getElementById('lg-fol-stopall')||{}).textContent||''").strip(),
+              f"Stop all {len(expect)}")
+
+        log("\n  [7] 'Show all' actually reveals the rest")
+        if len(expect) > PAGE_SIZE:
+            m = hit_test(p, "#lg-fol-more")
+            check("Show all is hittable", m.get("mine"), True)
+            p.ev("document.getElementById('lg-fol-more').click()")
+            time.sleep(0.3)
+            check("all rows visible after expanding", len(visible_rows(p)), len(expect))
+        else:
+            log("  (skipped — this member is at or under the page size)")
+
+        # ── phone ────────────────────────────────────────────────────────────
+        log("\n  [8] the same, on a phone — Ian's phone outranks a green suite")
+        p.send("Emulation.setDeviceMetricsOverride",
+               {"width": 390, "height": 844, "deviceScaleFactor": 3, "mobile": True})
+        p.send("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 5})
+        if not goto(p, args.url):
+            cannot_run("the section never hydrated at 390px")
+        mrows = visible_rows(p)
+        check(f"still bounded to {PAGE_SIZE} at 390px", len(mrows), min(PAGE_SIZE, len(expect)))
+        for r in mrows:
+            sel = f'#lg-following .lg-manage-sub__fol-row[data-topic="{r["topic"]}"] a.lg-manage-sub__fol-name'
+            h = hit_test(p, sel)
+            check(f"topic {r['topic']} title hittable at 390px", h.get("mine"), True)
+            if h.get("blocker"):
+                log(f"           blocked by: {h['blocker']}")
+            x = hit_test(p, f'#lg-following .lg-manage-sub__fol-row[data-topic="{r["topic"]}"] [data-unfollow]')
+            check(f"topic {r['topic']} unfollow hittable at 390px", x.get("mine"), True)
+        s = hit_test(p, "#lg-fol-stopall")
+        check("Stop all hittable at 390px", s.get("mine"), True)
+
+        log("\n  [9] unfollow REALLY unfollows — asserted in the stores, not the pixels")
+        # An optimistic row that vanishes on click and leaves the store untouched
+        # is the single worst failure this feature can have: the member believes
+        # they have stopped it, and the email keeps arriving. So the row is removed
+        # by a real press and the verdict comes from Postgres and MySQL.
+        #
+        # On a CONTROL topic the member does not already follow, followed through
+        # the same endpoint first — net zero on their real list either way, and the
+        # cleanup below runs even if the assertions fail.
+        ctl = control_topic(expect)
+        if ctl is None:
+            log("  (skipped — no unfollowed public topic available to use as a control)")
+        else:
+            log(f"  control topic {ctl}")
+            p.send("Emulation.setDeviceMetricsOverride",
+                   {"width": 1280, "height": 900, "deviceScaleFactor": 2, "mobile": False})
+            try:
+                on = p.ev(follow_js(ctl, True))
+                if on is not True:
+                    log(f"  (skipped — could not set up the control follow: {on!r})")
+                else:
+                    check("control is in PG after following",  ctl in store_notify_ids(args.uid), True)
+                    check("control is in MySQL after following", ctl in store_email_ids(args.uid), True)
+
+                    if not goto(p, args.url):
+                        cannot_run("the section never hydrated for the unfollow round-trip")
+                    sel = f'#lg-following .lg-manage-sub__fol-row[data-topic="{ctl}"] [data-unfollow]'
+                    h = hit_test(p, sel)     # scrolls it into view AND proves it is pressable
+                    check("control row's unfollow is hittable before pressing it", h.get("mine"), True)
+                    if h.get("mine"):
+                        p.send("Input.dispatchMouseEvent",
+                               {"type": "mousePressed", "x": h["x"], "y": h["y"],
+                                "button": "left", "clickCount": 1})
+                        p.send("Input.dispatchMouseEvent",
+                               {"type": "mouseReleased", "x": h["x"], "y": h["y"],
+                                "button": "left", "clickCount": 1})
+                        for _ in range(40):
+                            time.sleep(0.25)
+                            if not p.ev(f"!!document.querySelector('"
+                                        f"#lg-following .lg-manage-sub__fol-row[data-topic=\\\"{ctl}\\\"]')"):
+                                break
+                        check("row is gone from the page",
+                              p.ev(f"!!document.querySelector('"
+                                   f"#lg-following .lg-manage-sub__fol-row[data-topic=\\\"{ctl}\\\"]')"), False)
+                        check("🔔 bit is gone from Postgres",  ctl in store_notify_ids(args.uid), False)
+                        check("✉ bit is gone from MySQL",      ctl in store_email_ids(args.uid), False)
+            finally:
+                # Never leave the acting member following something the gate added.
+                if ctl in store_notify_ids(args.uid) or ctl in store_email_ids(args.uid):
+                    log("  (cleaning up leftover control follow)")
+                    try: p.ev(follow_js(ctl, False))
+                    except Exception: pass
+
+        log("\n  [10] nothing here leaks to a signed-out visitor")
+        p.send("Network.clearBrowserCookies")
+        host = args.url.split("/")[2].split(":")[0]
+        g = [c for c in cookies if c.startswith("loothdev_auth")]
+        if g:
+            p.send("Network.setCookies", {"cookies": [
+                {"name": k, "value": v, "domain": host, "path": "/"}
+                for k, v in (c.split("=", 1) for c in g)]})
+        p.send("Page.navigate", {"url": args.url})
+        for _ in range(80):
+            time.sleep(0.25)
+            try:
+                if p.ev("document.readyState") == "complete": break
+            except Exception: pass
+        check("no following section for anon", p.ev("!!document.getElementById('lg-following')"), False)
+
+    finally:
+        try: p.close()
+        except Exception: pass
+        close_page(tid)
+
+    log(f"\n  {passes} passed, {failures} failed")
+    if failures:
+        log("  RED — do not push.")
+        sys.exit(1)
+    log("  GREEN")
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
