@@ -4694,10 +4694,30 @@
     }
     send();
   }
+  /* Quill 2's getSemanticHTML() emits &nbsp; for EVERY ordinary space, so a body that
+     has been through the editor comes back with each word gap non-breaking. That is not
+     cosmetic: a non-breaking space does not wrap, so a long paragraph stops breaking at
+     the screen edge and runs off sideways — on a 390px phone, the exact defect class
+     Ian's phone keeps finding.
+
+     Measured on dev2 before this fix: 0 of 1,313 published topics and 0 replies carried
+     &nbsp;, while a single edit through the composer wrote 11 into one post. The editor
+     is the only thing on the box producing them, so every edited post would have picked
+     them up — the same "opening the editor damages the body" class this lane exists to
+     kill, in a subtler spelling.
+
+     A RUN is left alone: two or more consecutive is deliberate spacing (an indent), and
+     collapsing it to one plain space would silently discard the author's intent. Only a
+     LONE one is restored, which is always an ordinary word gap. */
+  function lgcDenbsp(html) {
+    return html.replace(/(?:&nbsp;)+/g, function (run) {
+      return run.length === 6 ? ' ' : run;      // '&nbsp;'.length === 6 ⇒ exactly one
+    });
+  }
   // Quill body → submit HTML. Empty document serializes as '<p><br></p>' — that is ''.
   function lgcHtml() {
     if (!lgcQuill) return '';
-    var html = lgcQuill.getSemanticHTML().replace(/\uFEFF/g, '');
+    var html = lgcDenbsp(lgcQuill.getSemanticHTML().replace(/\uFEFF/g, ''));
     if (!lgcText() && html.indexOf('<img') === -1 && html.indexOf('bp-suggestions-mention') === -1) return '';
     return html;
   }

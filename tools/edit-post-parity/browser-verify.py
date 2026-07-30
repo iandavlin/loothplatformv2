@@ -54,6 +54,24 @@ REPO     = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 # bytes are injected per-request over CDP: the page, the DB, the endpoints and the
 # session are all the real dev2 ones, and only this one asset comes from the worktree.
 OVERRIDES = {"hub-polish.js": os.path.join(REPO, "webroot", "hub-polish.js")}
+# ...AND THE SERVE SERVES MAIN'S API TOO, which is the subtler half of the same trap.
+# Injecting only the JS above produced a 13-assertion RED that looked like a broken
+# feature and was nothing of the sort: main's reply.php has no `GET ?topic_id=` topic
+# payload handler at all (this branch adds it), so the request fell through to the reply
+# branch and answered `reply_id is required`. The composer then never cleared
+# editLoading, Save stayed disarmed, and every downstream check failed off that ONE
+# cause. Client from the branch + server from main is not a test of anything.
+# So bb-mirror API calls are proxied to the branch's own php -S harness, running as
+# looth-dev — the pool nginx would use — against the real dev2 databases. The browser
+# still sends its real session cookie and nonce; only the code answering is ours.
+# NOTE THE MISSING .php. The client calls `/bb-mirror-api/v0/reply?topic_id=`; nginx
+# maps the extensionless route onto reply.php. A pattern written as "reply.php" matches
+# NOTHING the page actually requests, which is how the first proxied run reported
+# "NOTHING PROXIED" while looking identical to a broken feature. php -S does not do that
+# mapping, so the .php goes back on when the request is replayed against the harness.
+API_ORIGIN = os.environ.get("EPP_API_ORIGIN", "http://127.0.0.1:8794")
+API_ROUTE  = "/bb-mirror-api/v0/"
+API_PROXY  = ("/bb-mirror-api/v0/reply", "/bb-mirror-api/v0/topic-media")
 IPHONE   = {"width": 390, "height": 844, "deviceScaleFactor": 3,
             "mobile": True, "screenWidth": 390, "screenHeight": 844}
 UA_IOS = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
@@ -107,6 +125,7 @@ class Session:
         self.pending = {}
         self.overrides = overrides or {}
         self.served = []
+        self.api_served = []
         self.missed = []
         self.reader = asyncio.ensure_future(self._read())
 
@@ -126,8 +145,53 @@ class Session:
         except Exception:
             pass
 
+    def _proxy_api(self, p):
+        """Replay one paused request against the branch harness. Blocking urllib, run
+        off-thread by the caller: the CDP reader must never stall, or the fulfil for
+        THIS request could not be written and the page would hang on its own fetch."""
+        req = p.get("request", {})
+        url = req.get("url", "")
+        path = url.split(HOST, 1)[1] if HOST in url else url
+        # /bb-mirror-api/v0/reply?topic_id=N  ->  /reply.php?topic_id=N
+        tail = path.split(API_ROUTE, 1)[1] if API_ROUTE in path else path.lstrip("/")
+        file, sep, query = tail.partition("?")
+        if not file.endswith(".php"):
+            file += ".php"
+        path = "/" + file + (sep + query if sep else "")
+        data = req.get("postData")
+        if data is not None:
+            data = data.encode()
+        r = urllib.request.Request(API_ORIGIN + path, data=data, method=req.get("method", "GET"))
+        # Carry the browser's OWN cookie and nonce through, so the harness authenticates
+        # the real session under test rather than one this script minted for itself.
+        for k, v in (req.get("headers") or {}).items():
+            if k.lower() in ("cookie", "x-wp-nonce", "content-type", "accept"):
+                r.add_header(k, v)
+        r.add_header("Host", HOST)
+        try:
+            with urllib.request.urlopen(r, timeout=25) as resp:
+                return resp.status, resp.read(), resp.headers.get("Content-Type", "application/json")
+        except urllib.error.HTTPError as e:          # a 4xx is a RESULT, not a failure
+            return e.code, e.read(), e.headers.get("Content-Type", "application/json")
+
     async def _intercept(self, p):
         rid, url = p["requestId"], p.get("request", {}).get("url", "")
+        bare = url.split("?")[0]
+        if any(seg in bare for seg in API_PROXY):
+            try:
+                code, body, ctype = await asyncio.get_event_loop().run_in_executor(
+                    None, self._proxy_api, p)
+            except Exception as e:
+                self.missed.append(f"{url}: {e}")
+                await self.send("Fetch.continueRequest", {"requestId": rid})
+                return
+            self.api_served.append(f"{p.get('request',{}).get('method','GET')} {bare} -> {code}")
+            await self.send("Fetch.fulfillRequest", {
+                "requestId": rid, "responseCode": code,
+                "responseHeaders": [{"name": "Content-Type", "value": ctype},
+                                    {"name": "Cache-Control", "value": "no-store"}],
+                "body": base64.b64encode(body).decode()})
+            return
         for frag, path in self.overrides.items():
             if frag in url.split("?")[0]:
                 try:
@@ -209,8 +273,10 @@ async def run(save):
         await s.send("Runtime.enable")
         await s.send("Network.setCacheDisabled", {"cacheDisabled": True})
         # must be armed BEFORE the navigation that pulls the script
-        await s.send("Fetch.enable", {"patterns": [{"urlPattern": "*hub-polish.js*",
-                                                    "requestStage": "Request"}]})
+        await s.send("Fetch.enable", {"patterns": [
+            {"urlPattern": "*hub-polish.js*", "requestStage": "Request"},
+            {"urlPattern": "*bb-mirror-api/v0/reply*", "requestStage": "Request"},
+            {"urlPattern": "*bb-mirror-api/v0/topic-media*", "requestStage": "Request"}]})
         # stale cookies from a prior session outrank fresh ones and break login silently
         await s.send("Network.clearBrowserCookies")
         for c in cookies:
@@ -247,6 +313,14 @@ async def run(save):
         loaded = await s.wait_for(
             "(function(){var t=document.getElementById('lgc-title');"
             "return !!(t && t.value && t.value.indexOf('ZZ TEST')===0);})()")
+        # Same reasoning as the JS-injection check, for the SERVER half. With main's API
+        # still answering, the payload fetch returns "reply_id is required" (main has no
+        # GET ?topic_id= handler — this branch adds it), editLoading never clears, and
+        # THIRTEEN assertions go red off that one cause, reading like a broken feature.
+        # Named separately and asserted before them so it can never be mistaken for one.
+        check("bb-mirror API answered by THIS BRANCH, not main",
+              any("/reply" in c for c in s.api_served) and not s.missed,
+              "; ".join(s.api_served) or "NOTHING PROXIED")
         check("server payload seeds the title", loaded)
 
         print("\n== the controls Ian asked for ==")
@@ -268,9 +342,39 @@ async def run(save):
 
         print("\n== the defect this lane exists to kill ==")
         html = await s.ev("document.querySelector('#lgc-editor .ql-editor').innerHTML") or ""
+        # What the editor DISPLAYS and what it SUBMITS are different documents, and only
+        # the second one reaches the database. Quill 2 represents every list internally
+        # as <ol><li data-list="bullet">, so the displayed markup of a bullet list is an
+        # ORDERED list plus an attribute — and `data-list` is exactly the sort of thing
+        # kses strips for a user without unfiltered_html. Assert the submit form too, or
+        # a member's bullets could come back numbered and the display check would still
+        # be green.
+        # lgcQuill is module-scoped inside hub-polish.js's IIFE, so it is NOT reachable
+        # from an evaluate context — probing it returns '' and reads as "the editor
+        # submits nothing", which is alarming and wrong. Quill registers every instance
+        # against its container, so go in through the DOM the way Quill itself does.
+        submit = await s.ev(
+            "(function(){var el=document.querySelector('#lgc-editor');"
+            "if(!el) return 'ERR:no-editor-el';"
+            "if(typeof Quill==='undefined'||!Quill.find) return 'ERR:no-Quill-global';"
+            "var q=Quill.find(el)||Quill.find(el.querySelector('.ql-editor'));"
+            "if(!q||!q.getSemanticHTML) return 'ERR:no-instance';"
+            "return q.getSemanticHTML().replace(/\\uFEFF/g,'');})()") or ""
+        if os.environ.get("EPP_DUMP"):
+            print("---- EDITOR HTML ----\n" + html + "\n---- END ----")
+            print("---- SUBMIT HTML ----\n" + submit + "\n---- END ----")
         check("BOLD survives into the editor", "<strong>" in html or "<b>" in html)
         check("LINK survives into the editor", "example.com" in html)
-        check("LIST survives into the editor", "<li>" in html)
+        # NOT `"<li>" in html` — that was a FALSE RED. Quill 2 emits <li data-list=...>,
+        # so the bare tag never appears even though both items are present and correct.
+        check("LIST survives into the editor", html.count("<li") == 2, f'{html.count("<li")} items')
+        # The one that actually protects the member: bullets must still be BULLETS in the
+        # document that gets submitted, not Quill's internal <ol>+data-list representation.
+        check("LIST submits as a real bullet list (not <ol>, not data-list)",
+              not submit.startswith("ERR:") and "<ul>" in submit
+              and submit.count("<li") == 2 and "data-list" not in submit,
+              submit if submit.startswith("ERR:")
+              else (submit[submit.find("<ul"):][:60] if "<ul" in submit else "no <ul>"))
         check("INLINE IMAGE survives into the editor", "<img" in html,
               "50 dev2 topics depend on this")
         check("Save is armed once the payload landed",

@@ -438,6 +438,44 @@ console.log(`composer-topic-meta-test — fixture: ${leaves.length} forums, ${ca
      'Save is inert while a photo is still uploading');
 }
 
+/* ── the body must survive the editor: &nbsp; ─────────────────────────────────
+   CRAFT-STANDARD's law — a defect class found TWICE becomes a gate before the second
+   fix. "Opening the editor damages the body" is now at two: first the old edit door
+   scraped the rendered OP out of the DOM and flattened every tag out of it, and then
+   Quill 2's getSemanticHTML() was measured writing &nbsp; over every ordinary space
+   (dev2, 2026-07-30: 0 of 1,313 published topics carried one, a single composer edit
+   wrote 11). A non-breaking space does not wrap, so that turns a long paragraph into
+   one unbreakable line and pushes it off the side of a phone.
+
+   Runs the REAL lgcDenbsp extracted from hub-polish.js, not a copy of it. */
+{
+  const [lgcDenbsp] = (function () {
+    const body = extract(fs.readFileSync(SRC, 'utf8'), ['lgcDenbsp']);
+    return [new Function(`${body}\n return lgcDenbsp;`)()];
+  })();
+
+  ok(lgcDenbsp('a&nbsp;b') === 'a b',
+     'a lone &nbsp; between words becomes a real, WRAPPING space');
+  ok(lgcDenbsp('<p>Original&nbsp;body&nbsp;with&nbsp;<strong>bold</strong></p>')
+       === '<p>Original body with <strong>bold</strong></p>',
+     'the measured real-world body comes back clean');
+  ok(lgcDenbsp('a&nbsp;&nbsp;b') === 'a&nbsp;&nbsp;b',
+     'a RUN of two is deliberate spacing and is left alone');
+  ok(lgcDenbsp('a&nbsp;&nbsp;&nbsp;b') === 'a&nbsp;&nbsp;&nbsp;b',
+     'a longer run is left alone too');
+  ok(lgcDenbsp('one&nbsp;two&nbsp;&nbsp;three&nbsp;four')
+       === 'one two&nbsp;&nbsp;three four',
+     'lone ones and runs are judged independently in the same string');
+  ok(lgcDenbsp('<p>plain</p>') === '<p>plain</p>',
+     'a body with none is returned untouched');
+  ok(lgcDenbsp('') === '', 'empty in, empty out');
+  // The whole point is that the SUBMITTED document wraps. Assert on the property, not
+  // just the substitution: no lone &nbsp; may survive into what gets stored.
+  const submitted = lgcDenbsp('The&nbsp;quick&nbsp;brown&nbsp;fox&nbsp;jumps');
+  ok(!/(?:^|[^&])&nbsp;(?!&nbsp;)/.test(submitted) && submitted.split(' ').length === 5,
+     'nothing that would block wrapping survives into the stored body');
+}
+
 console.log(`\ncomposer-topic-meta-test: pass=${pass} fail=${fail}`);
 if (fail) { console.log('==================== COMPOSER TOPIC-META TEST RED ===================='); process.exit(1); }
 console.log('==================== COMPOSER TOPIC-META TEST GREEN ====================');
