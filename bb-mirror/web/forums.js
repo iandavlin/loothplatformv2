@@ -4308,11 +4308,24 @@
     fm.innerHTML =
       '<div class="lg-fm__back" data-fm-close></div>' +
       '<div class="lg-fm__panel" role="dialog" aria-modal="true" aria-labelledby="lg-fm-title">' +
+        /* ⚠️ THE DISCUSSION TITLE IS THE SUBJECT, NOT A CAPTION. Ian, 2026-07-30,
+           looking at the shipped build: "This modal is a bit confusing. Can we get
+           the title of the discussion we are following?" — and the title WAS there,
+           sitting under a generic "Follow this discussion" header in small grey. It
+           read as a caption, so he was hunting for the one thing he needed to know:
+           WHICH discussion am I acting on.
+           Inverted: the eyebrow ("Follow discussion") is the small grey line, and the
+           TITLE is the large text the eye lands on. The generic header was the least
+           useful text in the box, so it stops being the biggest.
+           The h2 is still the dialog's accessible name via aria-labelledby, so the
+           name a screen reader announces is now the topic, not the boilerplate. */
         '<header class="lg-fm__head">' +
-          '<h2 class="lg-fm__title" id="lg-fm-title">Follow this discussion</h2>' +
+          '<div class="lg-fm__hgroup">' +
+            '<p class="lg-fm__eyebrow">Follow discussion</p>' +
+            '<h2 class="lg-fm__title" id="lg-fm-title"></h2>' +
+          '</div>' +
           '<button type="button" class="lg-fm__x" data-fm-close aria-label="Close">&times;</button>' +
         '</header>' +
-        '<p class="lg-fm__topic"></p>' +
         '<div class="lg-fm__rows">' +
           fmRow('notify', 'Notifications', 'A bell row for new replies') +
           fmRow('email',  'Emails',        'Email me about new replies') +
@@ -4410,10 +4423,13 @@
       var svl = sv.querySelector('.fc-save__lbl'); if (svl) svl.textContent = 'Save';
     }
 
+    // The dialog's NAME is the discussion. Fall back to the generic string only when
+    // the card has no title to read — an unnamed dialog is worse than a generic one.
     var card = trigger.closest('.feed-card');
     var t = card && card.querySelector('.fc-title, .feed-card__title');
-    var tp = m.querySelector('.lg-fm__topic');
-    if (tp) tp.textContent = t ? (t.textContent || '').trim() : '';
+    var ttl = t ? (t.textContent || '').trim() : '';
+    var tp = m.querySelector('.lg-fm__title');
+    if (tp) tp.textContent = ttl || 'This discussion';
 
     m.hidden = false;
     document.documentElement.classList.add('lg-fm-open');

@@ -5383,7 +5383,23 @@ body.lg-follow-anon .fc-follow { display: none; }
   display: flex; align-items: flex-start; gap: 10px;
   padding: 16px 16px 12px; border-bottom: 1px solid var(--lg-line, #e3ddd0);
 }
-.lg-fm__title { flex: 1 1 auto; margin: 0; font: 700 15px/1.3 var(--lg-font-sans, var(--font-body)); }
+/* ⚠️ THE TITLE IS THE SUBJECT (Ian, 2026-07-30: "Can we get the title of the
+   discussion we are following?"). It WAS present before and he still had to hunt for
+   it, because a 15px bold generic header sat above it and the topic was 12px grey
+   underneath — the layout said the boilerplate was the headline. Inverted here: the
+   eyebrow is the small grey line, the topic is what the eye lands on. */
+.lg-fm__hgroup { flex: 1 1 auto; min-width: 0; }
+.lg-fm__eyebrow {
+  margin: 0 0 3px; font: 700 10.5px/1 var(--lg-font-sans, var(--font-body));
+  letter-spacing: .07em; text-transform: uppercase; color: var(--lg-mute, var(--fg-muted));
+}
+.lg-fm__title {
+  margin: 0; font: 700 17px/1.28 var(--lg-font-serif, Georgia, serif);
+  color: var(--lg-ink, #1a1d1a);
+  /* Long thread titles are normal; clamp rather than let the header shove the rows
+     off a phone screen. */
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
 .lg-fm__x {
   flex: 0 0 auto; -webkit-appearance: none; appearance: none;
   background: none; border: 0; padding: 0 2px; cursor: pointer;
@@ -5396,7 +5412,30 @@ body.lg-follow-anon .fc-follow { display: none; }
   -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 .lg-fm__topic:empty { display: none; }
-.lg-fm__rows { padding: 6px 16px 16px; }
+/* §3, Ian: "a bit confusing" — and that was about the LAYOUT, not only the title.
+   Three stacked rows carrying two different control shapes (two switches, then a
+   bordered button) with no grouping read as three unrelated settings. The two
+   notification bits are ONE decision expressed twice, so they are now visually one
+   card; Save is a different KIND of action and is separated rather than stacked into
+   the same list. Nothing about which controls exist has changed — that is variant A
+   and it is settled. */
+.lg-fm__rows { padding: 10px 16px 16px; }
+.lg-fm__rows > .lg-fm__row:not(.lg-fm__row--save) {
+  background: var(--lg-sage-tint, #eef2e3);
+  border: 1px solid var(--lg-line, #e3ddd0);
+}
+.lg-fm__rows > .lg-fm__row:not(.lg-fm__row--save):first-of-type {
+  border-radius: 12px 12px 0 0; border-bottom: 0;
+}
+.lg-fm__rows > .lg-fm__row:not(.lg-fm__row--save) + .lg-fm__row:not(.lg-fm__row--save) {
+  border-radius: 0 0 12px 12px; border-top: 1px solid var(--lg-line, #e3ddd0);
+}
+.lg-fm__rows > .lg-fm__row:not(.lg-fm__row--save) { padding: 12px 13px; }
+/* Save sits apart: a different kind of action, not a third notification setting. */
+.lg-fm__row--save {
+  margin-top: 14px; padding-top: 14px;
+  border-top: 1px solid var(--lg-line, #e3ddd0); border-bottom: 0;
+}
 .lg-fm__row {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 0; border-bottom: 1px solid var(--lg-line, #e3ddd0);
