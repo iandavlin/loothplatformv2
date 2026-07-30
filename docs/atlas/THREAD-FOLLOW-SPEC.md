@@ -1649,3 +1649,111 @@ the consuming lane; do not pick one unilaterally and hand them a migration.**
 shown here and set once in account settings (per-member). **This does not affect the A/B pick.**
 **Open for weekly-recap:** whether Hourly is worth offering at all — better Ian never sees it
 than picks it and has it withdrawn.
+
+---
+
+## 16. THE "I DON'T SEE THE CONTROLS" REGRESSION — server side cleared, and one real live gap
+
+**Charter, 2026-07-30 respawn (Ian, keeper-relayed):** *"I don't see the controls for it. I
+had seen them before."* Two suspects were named. **Both are false, and the first is false in
+a way that would have done damage if acted on.**
+
+### 16.1 Suspect 1 — "`forums.topic_subscription` is missing, restore it" — WRONG TABLE
+
+This premise was already killed once (§14.1) and came back in the respawn charter with an
+instruction attached: apply the DDL to dev2 and stage it for live. **Doing so would have
+created a table no code path reads or writes**, and left the actual gap (§16.4) in place.
+
+`topic_subscription` has never existed on any box. The only occurrence of the string in the
+repo is the **name of a trigger** — `topic_subscription_purge`, `schema.pg.sql:487` — which
+is exactly what a grep for the table finds and misreads. The store is **`forums.topic_follow`**
+(`schema.pg.sql:254`, `follow.php:93,195,198`), and on dev2 it is **present with 2 rows**.
+
+> `to_regclass()` returning NULL proves the name you asked about is absent. It does not tell
+> you the feature is broken, and it never tells you the name you asked about was the right one.
+> **Confirm the name against the writer before you conclude a migration was lost.**
+
+### 16.2 Suspect 2 — "the 698f683 merge / keeper's conflict resolutions dropped the render" — FALSE
+
+Measured on the real dev2 origin through nginx (loopback + gate cookie), **as anon and as
+Ian's own logged-in uid 1** — the logged-in check mattered, because an anon-only pass would
+not have covered the surface he is actually looking at:
+
+| surface | `[data-follow]` | `.lg-act-follow` | `fc-notify` |
+|---|---|---|---|
+| `/hub/` (anon) | 24 | 6 | 12 |
+| `/hub/` (as uid 1, Ian) | **24** | **6** | **12** |
+| `/hub/general/keeper-test-thread-follow-this-one-ian` | 2 | — | 1 |
+
+24 = 6 discussion cards × (desktop pair + mobile pair). And the served files are not merely
+equivalent, they are **byte-identical** to this branch: `_feed.php`, `_reply-render.php`,
+`_single-topic.php`, `forums.css`, `mobile-hub.js` (long-press fix included) all `diff`-clean.
+`hub-polish.js` differs only by other lanes' later work; its follow handling is unchanged.
+All six fix commits are ancestors of the serving checkout.
+
+**The markup, the CSS and the JS are all on the serve, and correct.**
+
+### 16.3 What it therefore is — the overflow defect, already fixed at 18:17 and DEPLOYED at 18:39
+
+The charter names `698f683` as the tip, which dates Ian's report to **before** the fix that
+answers it. His symptom is the one already diagnosed in `765dbc3`: the desktop feed-card
+action row was ~410px of content in a 349px column, and `flex-wrap: wrap` pushed the
+toggles past the card's own `overflow: hidden` — **present in the DOM, painted nowhere.**
+That also explains "I had seen them before" exactly: the first merge shipped them visible,
+later work widened the row, and the toggles were the items at the end.
+
+Timeline, from git and the filesystem:
+
+```
+18:17:03  765dbc3  CSS fix committed (.fc-actions flex-wrap:nowrap + 120px floor)
+18:31:53  7eb4685  merged to main
+18:39:33           forums.css lands on the serve  ← mtime, and ?v=1785436773 matches
+19:25              measured: fix present in served CSS at :4625
+```
+
+**Cache staleness is ruled out, not assumed.** `forums.css` is requested as
+`forums.css?v=<mtime>`, so the 18:39 write changed the URL; `sw.js` is network-first for
+navigations and cache-first *only* for `/icons/`, so the service worker cannot pin an old
+stylesheet. A reload gets the fix.
+
+⚠️ **NOT YET PROVEN: that it PAINTS.** Everything above is served-bytes and cascade reading.
+The one thing that would close this — a real engine at 1280 and at 390 counting *visible*
+toggles — needs the browser seat, which was requested and queued behind shorty-react and had
+not been granted when this was written. **An honest "not proven" beats a hedged claim:** the
+server half is green, the paint half is inferred from the same CSS arithmetic that `765dbc3`
+verified in a browser, and it is not re-verified post-merge.
+
+### 16.4 ✅ THE ONE REAL DEFECT FOUND — `forums.topic_follow` is MISSING ON LIVE
+
+Read-only on live: the table is **absent**, as are `subscription_purge_for_target()` and
+both purge triggers. `forums.forum_subscription` is present. The follow code is not on live
+yet, so **nothing is broken there today** — but shipping it without the migration gives:
+
+- **read** (`follow.php:93`, inside `try/catch` at `:96`) — swallowed; toggles render
+  **permanently OFF for everyone**;
+- **write** (`:195/:198`, falling to the outer `catch` at `:218`) — **HTTP 500 on every click.**
+
+A control that reads OFF, accepts the click and never persists is precisely the "UI lies"
+class of §8.1.3 that §14 was spent eliminating.
+
+**Staged for Ian's hands: `~/lane-outbox/thread-follow-LIVE-MIGRATION-20260730.md`** — additive,
+idempotent, with verify and rollback. The purge trigger is deliberately held back as a
+separate decision: on dev2 the 🔔 purge lives inside a function that *also* purges
+`forum_subscription`, and installing it on live would change behaviour on a table this lane
+does not own. **Nothing was run on live.**
+
+### 16.5 The lesson — a grep hit is not a schema, and a charter is not evidence
+
+Both suspects arrived as instructions with a confident shape. One named a table that never
+existed; the other named a merge whose output turned out byte-identical to the branch. The
+cheap checks that settled them — `to_regclass` on the name the *writer* uses, and `diff`
+against the served file — cost minutes, and the instruction would have cost a live migration
+for a table nothing reads.
+
+Also worth carrying: **`/hub/` on `dev2.loothgroup.com` serves from `/srv/bb-mirror` →
+`~/loothplatformv2-clean`.** `/home/buck/loothplatformv2` serves the `buck-dev2` host only and
+contains **no follow code at all** — a trap that reads as "the feature was never deployed"
+for anyone who greps the wrong tree. I walked into it for one step; the fix was reading which
+`server_name` includes which strangler snippet.
+
+*§16 written 2026-07-30 from measurement on dev2 and read-only queries on live.*
