@@ -113,10 +113,47 @@ the other two does.
   `lg-secrets-helper`, add a server-side fetch **with caching** (a per-render call
   to Meta is not acceptable in the feed path), plus a fallback for private/deleted
   posts, which are common in a 12-row corpus this old.
-- Worth noting the current card behaviour has **the same disease this lane just
-  cured**: each IG card pulls `instagram.com/embed.js` on scroll. Even without a
-  thumbnail, a static "Instagram post — tap to load" facade would kill that
-  third-party script until intent. **That is the cheap 80% and it needs no token.**
+- The card behaviour had **the same disease as YouTube**: each IG card pulled
+  `instagram.com/embed.js` on scroll. **This part is now DONE** — see §4.1. It
+  needed no token, because it needs no thumbnail.
+- What remains token-gated is only the *thumbnail*. The load-on-intent placeholder
+  captures the whole privacy/weight win without one.
+
+### 4.1 Load-on-intent placeholder — SHIPPED (`2d22fd1`)
+
+`forums.js` §2e no longer builds a card's provider embed from an
+IntersectionObserver. It renders a static, zero-network placeholder naming the
+provider **and the origin the click will contact** ("Instagram post / Load from
+instagram.com"), and builds the embed only on click.
+
+| /hub/share-your-repair-content/ | before | after |
+|---|---|---|
+| Requests to Meta on scroll | **4** (`embed.js` + 3 post iframes) | **0** |
+| Posts loaded when you click one | all 3 were already loaded | **1** |
+
+Byte weight is not quoted because it cannot be: `instagram.com` does **not** send
+`timing-allow-origin`, so Resource Timing reports `transferSize: 0` for every one
+of those requests. Request count is the honest measure here. (`i.ytimg.com` does
+send it, which is why the YouTube numbers *can* quote KB.)
+
+Notes for whoever touches this next:
+
+- `.bb-embed-load` had to join §4e's exempt list. It is a bare `<button>` inside a
+  topic card, and §4e's capture-phase handler otherwise claims the click for the
+  discussion modal. Mobile needed nothing — `keepContentOnHub` already returns
+  early for `button`.
+- Glyphs are inline `<svg>` constants, deliberately **not** the providers' hosted
+  wordmarks: fetching a brand asset would reintroduce the very request this
+  removes.
+- **The pasted Instagram URL is left in the excerpt on purpose**, which looks
+  inconsistent with the YouTube facade until you see why. The YouTube cover fully
+  replaces the link's function — it plays the video. This placeholder loads an
+  embed *in place* and never navigates, so the link is the reader's only route to
+  the post on Instagram. Do not "tidy" it away.
+- Still eager elsewhere: the **post page** and the discussion modal call
+  `bbProcessEmbeds()`, which builds IG embeds immediately. Left alone — the reader
+  navigated to the post, so intent is already expressed. Only the *feed card* was
+  loading third-party code unasked.
 
 ### Facebook (4 discussions)
 
