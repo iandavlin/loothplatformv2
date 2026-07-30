@@ -107,6 +107,33 @@ class LG_WD_Recap {
 	];
 
 	/**
+	 * Every platform notification type this digest has DELIBERATELY refused, with
+	 * the reason it fails Ian's to-do test.
+	 *
+	 * ── WHY A DENY-LIST NEXT TO AN ALLOW-LIST IS NOT REDUNDANT ──────────────────
+	 * INCLUDED_TYPES already makes the digest safe: anything not in it is excluded,
+	 * so a new platform type can never leak into a member's email. Safe is not the
+	 * same as DECIDED. A type added to profile-app tomorrow would be excluded by
+	 * accident, silently, and nobody would ever be asked whether it belongs — and
+	 * the answer for something like a moderation action or an event reminder is not
+	 * obviously "no".
+	 *
+	 * So these two lists TOGETHER must account for every type
+	 * `profile-app/src/Notifications.php::TYPES` can write. dev/verify-source-boundary
+	 * reads that array from source and fails if any type appears in neither — which
+	 * turns "someone added a notification type" from a silent event into a red
+	 * suite, at the moment it is cheapest to decide.
+	 *
+	 * This is a REGISTER, not a mechanism: nothing reads it at render time.
+	 */
+	const DECIDED_EXCLUDED = [
+		'connection_accept'    => 'they already have the connection — nothing is owed (147 rows all-time)',
+		'reaction.on_post'     => 'someone liked something — nothing is owed (53 rows all-time)',
+		'forum.followed_topic' => 'a reply in a thread you merely WATCH does not wait on you; you are an observer, not the addressee (thread-follow, 2026-07-28)',
+		'message'              => 'dead code in profile-app — unread DMs are read from message_recipients instead, not from the bell',
+	];
+
+	/**
 	 * Buckets in render order. Unread DMs are spliced in after `replies` — they are
 	 * not a notification type at all (profile-app deliberately does not ring the bell
 	 * for a new message), so they are read from message_recipients instead.
