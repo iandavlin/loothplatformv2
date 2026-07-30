@@ -151,6 +151,38 @@ say so** — do not mutate a real member's claim state to get a screenshot.
 
 ---
 
+## 3b. CAPTURE PASS DONE — A-invariant frames (2026-07-28)
+
+**8 frames captured and published (dev-gated):**
+`https://dev.loothgroup.com/footer-mockups/profile-guide-shots/`
+
+B6, B7 (View-as member/public), C1 (another member's profile), C2 (directory) —
+each at phone 390×844 and desktop 1440×900. Engine held ~12 minutes, then parked
+(`pgrep -x chrome` = 0 confirmed).
+
+### Two findings from the pass
+
+**1. `captureBeyondViewport` breaks mobile frames — use viewport-only.** Full-page
+capture renders `position:fixed` chrome at its *viewport* offset, so the mobile tab
+bar lands mid-page across the footer. It looks like a broken site and is purely a
+capture artifact. **Every mobile guide screenshot must be captured viewport-only**
+(scroll + stitch if a taller frame is needed).
+
+**2. B7 confirms three documented claims at once** — worth keeping as the guide's
+privacy anchor frame. In View-as → Public at phone width: the **editor is gone**
+(no picker, no grips, no per-section chips), the **privacy panel remains**, and the
+**master Profile-visibility chip is still there and still interactive**. That is the
+§2 asymmetry — *whole-profile visibility stays editable in preview, per-section does
+not* — visible in a single image, exactly as measured.
+
+### Not captured, and why
+- **D1 / D2** (entry points) — both `/hub/` navigations returned no screenshot data
+  in this pass. Not chased; the engine was scarce. Retry next pass.
+- **B8** (members gate) — still impossible with fixture 1849, which is parked
+  `header=public`. Needs a `header=members` subject (audit §9 item 2b).
+- **C3** (map pins) — not attempted this pass.
+- **A1–A6, B1–B5** — deliberately skipped; they change when option A merges.
+
 ## 4. Naming
 
 `<area><n>-<slug>-<viewport>[-dark].png`, e.g. `a3-sections-open-phone.png`,
