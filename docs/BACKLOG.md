@@ -3,6 +3,28 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-30 — Front-end authoring for all post types via layout-v2, gated (Ian) ★ vision
+
+Ian's direction, 7/30. Near-term ask: **add loothprints as a post type USERS can
+post from the front end** (today discussions are the main user-postable type;
+loothprints join them). Full vision: **author EVERY post type from the front end
+through the layout-v2 block system** — the same block/forms UX, not wp-admin.
+
+Gating model Ian wants:
+- Most post types (video, article, event, sponsor-post, etc.) → **admin-gated**
+  front-end forms.
+- **Discussions and loothprints** → open to members (the un-gated, user-facing
+  authoring path).
+- **Prefer a USER WHITELIST over the WP `author` role** to decide who can post
+  the gated types — explicit allow-list of trusted users, not a role grant.
+
+Notes for whoever scopes this: the stack already has a "Frontend Admin" plugin
+(seen in wp-admin sidebar) and layout-v2 owns the block model (_lg_layout_v2
+meta; see the layoutv2-ian handoff — its backend add-block UX is itself being
+fixed). This is a multi-phase build: (1) loothprints front-end form first, (2)
+generalize the layout-v2 authoring surface to the front end per type, (3) the
+whitelist-based gate. Big item — Ian rules the phasing before any build.
+
 ## 2026-07-30 — Discussion hub cards: PLAY a video inline like a video post (Ian) ★ wants this
 
 Ian restated 7/30: "I want to be able to play a video in a discussion in the hub
