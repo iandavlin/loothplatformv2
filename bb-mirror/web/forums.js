@@ -3899,6 +3899,131 @@
   }
 })();
 
+/* ─── Thread-follow: the TWO per-discussion opt-in toggles (🔔 notify / ✉ email)
+   thread-follow lane 2026-07-28. SPEC docs/atlas/THREAD-FOLLOW-SPEC.md §2-3.
+
+   Structural copy of the fc-save module above — server-renders inert, ONE batch GET
+   resolves auth + nonce + BOTH bits for every card on screen, MutationObserver
+   re-syncs on filter swap and infinite-scroll appends, click is optimistic with
+   revert-on-failure, stopPropagation so it never opens the thread.
+
+   ONE module drives ALL THREE surfaces (§0 ruling 8, parity): the feed card
+   (.fc-notify/.fc-email), the desktop modal header (.lg-dmodal__notify/__email) and
+   the mobile sheet header (.lrs-notify/.lrs-email). They differ only in class name,
+   so everything is delegated on [data-follow] and keyed by data-topic-id.
+
+   BOTH BITS ARE INDEPENDENT. Turning one on never turns the other on.
+
+   ⚠️ email_master — Ian 2026-07-28: "the UI must tell the truth about what is
+   actually going to happen to that member." A subscription row is NOT sufficient
+   for mail to arrive; BuddyBoss gates every send on a per-member preference.
+   Measured on LIVE: 40 rows / 7 members would show a lit envelope while nothing is
+   ever sent. When email_master is false we mark the envelope so it states that
+   plainly instead of implying delivery. ──────────────────────────────────────── */
+(function () {
+  'use strict';
+  var API = '/bb-mirror-api/v0/follow';
+  var nonce = '', authed = false, emailMaster = true;
+
+  function label(btn, ch, on) {
+    var t;
+    if (ch === 'notify') t = on ? 'Stop notifications' : 'Notify me about new replies';
+    else if (!emailMaster) t = 'Your account has discussion emails turned off';
+    else t = on ? 'Stop emails' : 'Email me about new replies';
+    btn.setAttribute('title', t); btn.setAttribute('aria-label', t);
+  }
+
+  function setState(btn, on) {
+    var ch = btn.getAttribute('data-follow');
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.classList.toggle('is-on', !!on);
+    // Truthfulness marker, NOT a disable: the member may still turn the bit off,
+    // which is exactly what Ian's ruling asks for. It only stops the UI implying
+    // that mail is coming when the account-level gate is suppressing it.
+    if (ch === 'email') btn.classList.toggle('is-muted', !emailMaster);
+    label(btn, ch, on);
+  }
+
+  /** Apply one topic's state to every button for that topic, on every surface. */
+  function paint(topicId, st) {
+    if (!st) return;
+    var sel = '[data-follow][data-topic-id="' + topicId + '"]';
+    [].slice.call(document.querySelectorAll(sel)).forEach(function (b) {
+      var ch = b.getAttribute('data-follow');
+      setState(b, ch === 'notify' ? !!st.notify : !!st.email);
+    });
+  }
+
+  function toggle(btn) {
+    if (!authed) return;                                  // anon — no write door
+    var ch = btn.getAttribute('data-follow');
+    var id = parseInt(btn.getAttribute('data-topic-id'), 10);
+    if (!id) return;
+    var was = btn.getAttribute('aria-pressed') === 'true';
+    setState(btn, !was);                                  // optimistic flip
+    fetch(API, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+      body: JSON.stringify({ topic_id: id, channel: ch, on: !was })
+    })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (j) {
+        if (!j || !j.ok) { setState(btn, was); return; }
+        if (typeof j.email_master === 'boolean') emailMaster = j.email_master;
+        paint(id, { notify: j.notify, email: j.email });  // reconcile ALL surfaces from the store
+      })
+      .catch(function () { setState(btn, was); });        // revert on failure
+  }
+
+  /** Batch viewer-state fetch for any toggles not yet synced. */
+  function sync() {
+    var btns = [].slice.call(document.querySelectorAll('[data-follow]:not([data-follow-synced])'));
+    if (!btns.length) return;
+    btns.forEach(function (b) { b.setAttribute('data-follow-synced', '1'); });
+    var ids = {};
+    btns.forEach(function (b) { var i = parseInt(b.getAttribute('data-topic-id'), 10); if (i) ids[i] = 1; });
+    var list = Object.keys(ids);
+    if (!list.length) return;
+    fetch(API + '?topics=' + encodeURIComponent(list.join(',')),
+          { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (d) {
+        if (d && d.authenticated && d.nonce) {
+          nonce = d.nonce; authed = true;
+          emailMaster = d.email_master !== false;
+          document.body.classList.add('lg-follow-authed');
+        } else {
+          document.body.classList.add('lg-follow-anon');  // CSS-hidden, as fc-save does
+          return;
+        }
+        var state = d.state || {};
+        list.forEach(function (id) { paint(id, state[id]); });
+      })
+      .catch(function () {});
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-follow]'); if (!btn) return;
+    e.preventDefault(); e.stopPropagation();              // never open the thread behind it
+    toggle(btn);
+  });
+
+  if (document.readyState !== 'loading') sync();
+  else document.addEventListener('DOMContentLoaded', sync);
+
+  // Re-sync on feed churn (filter swap, infinite scroll) AND on modal/sheet open,
+  // both of which inject fresh [data-follow] buttons after the initial pass.
+  var followRoot = document.getElementById('hub-feed-results') || document.querySelector('.feed');
+  if (followRoot && window.MutationObserver) {
+    var ft = null;
+    new MutationObserver(function () { clearTimeout(ft); ft = setTimeout(sync, 120); })
+      .observe(followRoot, { childList: true, subtree: true });
+  }
+  // Exposed so the modal/sheet openers can hydrate their header toggles the moment
+  // they populate, rather than waiting for a feed mutation that may never come.
+  window.lgFollowSync = sync;
+})();
+
 /* ─── Desktop SHARE (discussion topics) — Web Share API w/ copy-link
    fallback, pointed at the canonical /hub/<forum>/<topic>/ link (data-share-url).
    Delegated on [data-share-topic] so it covers BOTH the standalone single-topic
@@ -4200,6 +4325,21 @@
       '<div class="lg-dmodal__panel" role="dialog" aria-modal="true" aria-label="Discussion">' +
         '<header class="lg-dmodal__head">' +
           '<h2 class="lg-dmodal__title"></h2>' +
+          /* The two per-discussion opt-ins (thread-follow §2.3). They sit BEFORE the
+             size control, so the cluster reads [title] … [🔔] [✉] [S|M|L|XL] [×] —
+             state controls grouped, dismissal rightmost. data-topic-id is stamped
+             when the modal is populated (see lgFollowSync call at populate time).
+             Explicitly NOT in the post ⋯ menu: that trigger is revealed only to a
+             post's AUTHOR or a moderator and its contents are Edit/Delete, so it is
+             both the wrong audience and the wrong semantics for a follow control. */
+          '<button type="button" class="lg-dmodal__notify" data-follow="notify" data-topic-id="0" ' +
+                  'aria-pressed="false" aria-label="Notify me about new replies" title="Notify me about new replies">' +
+            '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>' +
+          '</button>' +
+          '<button type="button" class="lg-dmodal__email" data-follow="email" data-topic-id="0" ' +
+                  'aria-pressed="false" aria-label="Email me about new replies" title="Email me about new replies">' +
+            '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>' +
+          '</button>' +
           '<button type="button" class="lg-dmodal__size" aria-label="Modal size" title="Modal size"></button>' +
           '<button type="button" class="lg-dmodal__x" data-dm-close aria-label="Close">&times;</button>' +
         '</header>' +
@@ -4337,6 +4477,18 @@
     var m = ensure();
     var titleEl = card.querySelector('.fc-title, .feed-card__title');
     m.querySelector('.lg-dmodal__title').textContent = titleEl ? titleEl.textContent.trim() : 'Discussion';
+    // Point the two follow toggles at THIS topic and re-hydrate them (thread-follow
+    // §2.3). Clearing data-follow-synced is what makes the shared module treat them
+    // as fresh — the header markup persists across opens, so without this they would
+    // keep the previous topic's state. Deep-linked cold opens work too: the module's
+    // batch GET simply resolves one topic instead of a screenful.
+    [].slice.call(m.querySelectorAll('[data-follow]')).forEach(function (b) {
+      b.setAttribute('data-topic-id', tid);
+      b.removeAttribute('data-follow-synced');
+      b.setAttribute('aria-pressed', 'false');       // never show the last topic's state while loading
+      b.classList.remove('is-on');
+    });
+    if (window.lgFollowSync) window.lgFollowSync();
     // forum_id is stamped on the card's reply CTA / composer, not the card itself.
     var fidEl = card.querySelector('[data-forum-id]');
     var fid = card.getAttribute('data-forum-id') || (fidEl && fidEl.getAttribute('data-forum-id')) || '';

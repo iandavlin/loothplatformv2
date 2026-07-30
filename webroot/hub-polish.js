@@ -3134,6 +3134,34 @@
         'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '#looth-rep-sheet .lrs-x{flex:0 0 auto;width:32px;height:32px;border:0;border-radius:50%;background:var(--lg-sage-tint,#eef2e3);' +
         'color:var(--lg-sage-d,#6b7c52);font-size:20px;line-height:1;cursor:pointer}',
+      /* thread-follow §2.4 — circular peers of the ×, same 32px visual as .lrs-x but
+         with ≥44px effective touch targets via padding + negative margin, so the
+         header height is unchanged. .is-on = the bit is ON (sage fill), matching the
+         card and modal exactly. .is-muted = account-level email gate is off, the
+         truthfulness marker from Ian's 2026-07-28 ruling. */
+      '#looth-rep-sheet .lrs-notify,#looth-rep-sheet .lrs-email{flex:0 0 auto;width:32px;height:32px;border:0;border-radius:50%;' +
+        'background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);cursor:pointer;' +
+        'display:inline-flex;align-items:center;justify-content:center;padding:0}',
+      '#looth-rep-sheet .lrs-notify .ico,#looth-rep-sheet .lrs-email .ico{width:17px;height:17px}',
+      '#looth-rep-sheet .lrs-notify.is-on,#looth-rep-sheet .lrs-email.is-on{background:var(--lg-sage,#87986a);color:#fff}',
+      /* ON state. The bell is an OPEN path so flooding it reads as a filled bell.
+         The envelope is a <rect> — flooding that paints over the flap and produces a
+         solid block, the same defect the exercise pass caught in forums.css on
+         2026-07-29 (§12.1). This is the FIFTH site of that one rule; per
+         docs/CRAFT-STANDARD.md a class seen twice becomes a gate, so it is now one.
+         Envelope tints, flap stays legible. */
+      '#looth-rep-sheet .lrs-notify.is-on .ico{fill:currentColor}',
+      '#looth-rep-sheet .lrs-email.is-on .ico rect{fill:currentColor;fill-opacity:.3}',
+      /* ≥44px effective touch target (§2.4) without growing the 32px circle: the
+         visible button stays 32, an invisible ::after extends the hit area to 44.
+         Measured 32x32 flat in the exercise pass — under the 44 the card surface
+         already achieves (§2.2b), and this is the SMALLEST screen. */
+      '#looth-rep-sheet .lrs-notify,#looth-rep-sheet .lrs-email{position:relative}',
+      '#looth-rep-sheet .lrs-notify::after,#looth-rep-sheet .lrs-email::after{'
+        + 'content:"";position:absolute;top:50%;left:50%;width:44px;height:44px;'
+        + 'transform:translate(-50%,-50%)}',
+      '#looth-rep-sheet .lrs-email.is-muted{opacity:.55}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-notify,html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-email{background:#262b30;color:#9cb37d}',
       '#looth-rep-sheet .lrs-body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px 24px}',
       '#looth-rep-sheet .lrs-note{padding:20px 6px;color:var(--lg-mute,#6b6f6b);font:14px/1.5 var(--lg-font-sans,system-ui)}',
       // ── OP at the top of the sheet (Buck 2026-06-10: clone the desktop discussion
@@ -3575,6 +3603,21 @@
       });
     }
     if (acts.children.length) op.appendChild(acts);
+    // Point the sheet's two follow toggles at THIS topic and re-hydrate them
+    // (thread-follow §2.4). The sheet chrome persists across opens, so clearing
+    // data-follow-synced is what stops the previous topic's state showing here.
+    if (tid) {
+      var lrsHd = document.querySelector('#looth-rep-sheet .lrs-hd');
+      if (lrsHd) {
+        [].slice.call(lrsHd.querySelectorAll('[data-follow]')).forEach(function (b) {
+          b.setAttribute('data-topic-id', tid);
+          b.removeAttribute('data-follow-synced');
+          b.setAttribute('aria-pressed', 'false');
+          b.classList.remove('is-on');
+        });
+        if (window.lgFollowSync) window.lgFollowSync();
+      }
+    }
     if (!tid) return;
     var base = (window.LG_FORUM_BASE || '/forum').toString().replace(/\/+$/, '');
     fetch(base + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
@@ -3601,7 +3644,24 @@
       sh = document.createElement('div'); sh.id = 'looth-rep-sheet';
       sh.innerHTML = '<div class="lrs-card" data-lg-sheet-card>' +
         '<div class="lrs-grab" aria-hidden="true"></div>' +
-        '<div class="lrs-hd"><span class="lrs-t"></span><button class="lrs-x" type="button" data-lrs-close aria-label="Close">&times;</button></div>' +
+        /* The two per-discussion opt-ins as circular peers between the title and the ×
+           (thread-follow §2.4, IAN-CONFIRMED 2026-07-27, frame 5). The mobile sheet has
+           NO size control, so the desktop instruction "beside S/M/L/XL" has no literal
+           target here; the order still reads title → state → dismiss, identical to the
+           desktop cluster, so the two surfaces stay learnable as one thing.
+           The rejected alternative — a control row BENEATH the header — added permanent
+           vertical chrome to the smallest screen, on a sheet already competing with the
+           composer and the keyboard.
+           Wired by the SAME delegated forums.js module as the card and modal (one
+           implementation, §0 ruling 8) — these need markup only. */
+        '<div class="lrs-hd"><span class="lrs-t"></span>' +
+          '<button class="lrs-notify" type="button" data-follow="notify" data-topic-id="0" aria-pressed="false" aria-label="Notify me about new replies">' +
+            '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>' +
+          '</button>' +
+          '<button class="lrs-email" type="button" data-follow="email" data-topic-id="0" aria-pressed="false" aria-label="Email me about new replies">' +
+            '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>' +
+          '</button>' +
+          '<button class="lrs-x" type="button" data-lrs-close aria-label="Close">&times;</button></div>' +
         '<div class="lrs-body" id="lrs-body"><div class="lrs-op" id="lrs-op" hidden></div><div id="lrs-thread"></div></div>' +
         // Compact Reply BUTTON (Ian 2026-06-25) — replaces the persistent "Write a
         // comment…" input pill. Tapping it opens the floating composer sheet (the

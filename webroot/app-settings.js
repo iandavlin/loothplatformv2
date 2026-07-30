@@ -281,6 +281,18 @@
       D + ' .lg-msg-card__in{background:#1a1d20!important}',
       D + ' .lg-msg-card__nm{color:#e5e7e1!important}',
       D + ' .lg-msg-card__noconn{background:#22262a!important;color:#9aa097!important}',
+      /* thread-follow §3.5 — the per-row ⋯ and its popover in dark. These are new
+         class names, so none of the .lg-notif__* rules above reach them; without
+         their own entries the popover renders cream-on-dark. (D is an html[...]
+         selector, so it still matches even though the popover is appended to
+         <body> rather than living inside the panel.) */
+      D + ' .lg-notif__more{color:#9cb37d!important}',
+      D + ' .lg-notif__more:hover,' + D + ' .lg-notif__more[aria-expanded="true"]{background:#2c312d!important}',
+      D + ' .lg-notif-menu{background:#1c1f22!important;border-color:#2c312d!important;box-shadow:0 12px 32px rgba(0,0,0,.5)!important}',
+      D + ' .lg-notif-menu__item{color:#e5e7e1!important}',
+      D + ' .lg-notif-menu__item:hover{background:#22262a!important}',
+      D + ' .lg-notif-menu__item.is-on,' + D + ' .lg-notif-menu__tick{color:#9cb37d!important}',
+      D + ' .lg-notif-menu__note,' + D + ' .lg-notif-menu__load{color:#9aa097!important}',
       // (OS-dark default-theme header block REMOVED 2026-06-10 pare-back: it
       // blackened ONLY the header when OS was dark with no picked theme — the
       // page stayed light = the "some headers and not others" mismatch. Two

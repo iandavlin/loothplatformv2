@@ -731,6 +731,38 @@ if (!function_exists('feed_save_btn')) {
     }
 }
 
+// The TWO per-discussion opt-in toggles — 🔔 notifications and ✉ emails.
+// thread-follow lane, 2026-07-28. SPEC: docs/atlas/THREAD-FOLLOW-SPEC.md §2.1-2.2,
+// Ian-gated 2026-07-27 (two separate visible icons, NOT one expanding control).
+//
+// Shared here beside feed_save_btn() for exactly the same reason: the standalone
+// single-topic page loads _reply-render.php and NOT _feed.php, so every
+// card-rendering partial can emit these.
+//
+// Server-rendered INERT with aria-pressed="false" — the SSR pass has no viewer
+// context (the bb-mirror FPM pool cannot resolve the WP user), so forums.js
+// batch-hydrates the real state in ONE GET across every card on screen. That is
+// the fc-save contract, copied deliberately rather than reinvented.
+//
+// BOTH DEFAULT OFF for anyone with no existing state (Ian §0 ruling 1). Members who
+// ALREADY hold a subscription hydrate to ON and can turn it off — Ian 2026-07-28,
+// "honour existing subscriptions, show them as ON". Nothing here writes anything.
+if (!function_exists('feed_follow_btns')) {
+    function feed_follow_btns(int $topicId): void
+    {
+        if ($topicId < 1) return;
+        // Bell + envelope. Stroke-only 24px to sit with .fc-save's star and .fc-share.
+        static $BELL = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
+        static $MAIL = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>';
+        echo '<button type="button" class="fc-notify" data-follow="notify" data-topic-id="' . $topicId
+           . '" aria-pressed="false" aria-label="Notify me about new replies" title="Notify me about new replies">'
+           . $BELL . '</button>'
+           . '<button type="button" class="fc-email" data-follow="email" data-topic-id="' . $topicId
+           . '" aria-pressed="false" aria-label="Email me about new replies" title="Email me about new replies">'
+           . $MAIL . '</button>';
+    }
+}
+
 // Inline SHARE control (desktop feed cards) — a bare [data-share-topic] marker;
 // the forums.js desktop SHARE module (window.lgShareTopic) reads the closest card's
 // data-share-url (+ .fc-title text) and runs the Web Share API w/ copy-link fallback.
