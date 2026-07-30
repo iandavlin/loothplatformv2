@@ -2072,3 +2072,113 @@ Save hydrates for the right topic. The seat has been with other lanes throughout
 otherwise would be the hedged claim this lane keeps refusing to make.
 
 *§19 written 2026-07-30.*
+
+---
+
+## 20. THE BROWSER RUN — Ian's regression CLOSED, and two defects only an engine could see
+
+Seat obtained 2026-07-30 after weekly-recap released it. Both gates green; every figure
+below came out of a real engine.
+
+### 20.1 ✅ §16.3 IS NO LONGER "NOT PROVEN" — the controls ARE painted on the serve
+
+On the **real dev2 origin** (`main`, via `real-origin-proxy`), hydrated
+(`body.lg-follow-authed`), in a real engine:
+
+| viewport | cards | `[data-follow]` in DOM | **VISIBLE** | **CLIPPED** |
+|---|---|---|---|---|
+| desktop 1280 | 18 | 72 | **36** (exactly one pair per card) | **0** |
+| mobile 390 | 18 | 72 | **36** (exactly one pair per card) | **0** |
+
+`765dbc3` holds. Where **17 of 18** cards used to split and push the toggles past the
+card's `overflow: hidden`, **nothing is clipped at either width**. The controls Ian
+could not see are painted on the serve he is looking at, and §16.3's inference from
+CSS arithmetic is now a measurement.
+
+### 20.2 ⚠️ VARIANT A SHIPPED A DEAD HYDRATION PATH — no pill would ever have lit
+
+Every structural check was green on this: SSR counts, `php -l`, `node --check`, CSS
+brace balance, and the paint gate's own DOM assertions.
+
+`sync()` keyed on `[data-follow]:not([data-follow-synced])` and bailed at
+`if (!btns.length) return;`. Variant A removed the inline pair from the card, so a hub
+of discussion cards has **zero** `[data-follow]` until a modal opens. Therefore:
+
+- `body.lg-follow-authed` was never set — **every gate hung at hydration** and reported
+  exit 2, a no-verdict that reads as the environment's fault;
+- `paint()` never ran, so **no pill ever lit**. A member following six threads would
+  have seen "Follow" on all six.
+
+That inverts §15.2's entire justification for permitting consolidation — *a member reads
+a thread's state off the feed without opening anything* — and is the §8.1.3 lie: the
+control would have said Follow over a live subscription. **Only the engine found it.**
+
+Fixed: the selector also collects `[data-follow-open]`, so the consolidated control's
+topic ids join the same batch GET.
+
+### 20.3 ⚠️ THE HARNESS INVENTED A DEFECT — it was MORE CACHEABLE THAN PRODUCTION
+
+An intermittent failure had the bell hydrating **ON against an empty store** — precisely
+the UI-lies signature. It was not the product. `follow.php:46` sets
+`Cache-Control: no-store, no-cache, must-revalidate, max-age=0` and the real vhost serves
+it (verified with `curl` on both), but the harness router **dropped every upstream
+response header**, leaving the browser free to cache the batch viewer-state GET.
+
+**A harness weaker than production invents defects that do not exist — and would hide
+this one if it ever became real.** Fixed in `hub-router.php`.
+
+### 20.4 Ian's Save constraint holds — settled LIKE-FOR-LIKE, after a wrong first read
+
+A content-card Save shortfall (13 ship / 12 visible) looked like a variant-A regression.
+It is not: running the **serving checkout through the SAME loopback harness** gives
+**identical** figures — desktop 13 ship / 12 visible, mobile 15 ship / 12 visible, the same
+`lg-act-save` nodes dark.
+
+The first comparison — branch-on-harness against main-on-real-origin — **varied two things
+at once** and pointed at the wrong one. Only harness-vs-harness isolates the code change.
+
+The gate now asserts `>= 1` with a **loud NOTE** rather than failing on a pre-existing
+condition this lane did not cause; the regression it exists for still cannot hide, because
+Save moved unconditionally drives the count to **zero** (§18.3).
+
+### 20.5 Four gate bugs, each of which gave a confident wrong answer
+
+1. `maxTouchPoints: 0` is rejected by CDP ("must be between 1 and 16") — **the gate died
+   on its own first desktop phase.** It had never been run when it was committed.
+2. **It never set cookies.** `real-origin-proxy` injects auth *server-side*, so a run
+   against that harness authenticates with no cookie work at all — and the same gate on
+   the loopback harness resolved anon and died at hydration.
+3. `visible save nodes == cards` is **false arithmetic**: a card ships both a `.fc-save`
+   and a `.lg-act-save` and CSS shows one per width. It failed 12-vs-13 on a build where
+   every card was fine.
+4. A fixed `sleep(1.5)` after the click reported "no row" against a POST that
+   demonstrably returned 200 and **did** write. Now polls the store — a too-short sleep
+   manufactures a finding, a long one hides a hang.
+
+### 20.6 Final results
+
+```
+follow-visible-gate    35 pass / 0 fail
+follow-longpress-gate  16 pass / 0 fail
+```
+
+Longpress phase 1 — *a 600ms press on the pill opens the modal, and no reaction palette
+appears* — is the one that proves §19.2's bail fix on the new control. Phase 3 proves the
+pill hydrates to "Following" **without the modal being opened**, which is §15.2's
+requirement rather than a nicety.
+
+**Left clean:** harnesses down, ports released, scratch removed, my CDP tab closed (other
+lanes' left alone), `forums.topic_follow` holds 0 rows for the test account. One
+pre-existing test row for `(1912, 72330)` was cleared as a gate precondition.
+
+### 20.7 What is STILL not proven
+
+Variant A has been exercised on the **loopback harness only**, because it is not merged and
+the real origin cannot serve it. The harness does **not** reproduce the vhost `sub_filter`
+(theme-boot, the `lg-feed-booting` opacity gate) — which is exactly the gap that made three
+of Ian's reports unreproducible (§11.1). So the modal is proven to open, write, persist and
+paint **on that harness**; the row-overflow and theme-dependent classes can only be re-proven
+against the real origin **after merge**. That re-run is a merge-time obligation, not an
+optional extra.
+
+*§20 written 2026-07-30 from two green gate runs in a real engine.*
