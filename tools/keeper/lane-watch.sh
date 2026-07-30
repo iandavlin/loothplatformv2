@@ -1,20 +1,25 @@
 #!/usr/bin/env bash
-# lane-watch — the keeper's automatic lane-sweep loop. Runs in background and
-# EXITS (re-invoking keeper) the moment a lane needs attention, so keeper never
-# waits to be asked "are the lanes working?". Relaunched by keeper each time it
-# fires. Ian's rule 7/30: put yourself on the check-lanes loop automatically.
-#   args: $1 = expected WORKING count (baseline)
+# lane-watch — keeper's automatic lane-sweep loop. Detached background process:
+# runs independently of the chat, EXITS (re-invoking keeper via task-notify) the
+# moment a lane needs attention, so keeper self-checks without Ian asking.
+# WORKING = a tmux session whose pane shows the active-generation marker.
+# Ian's rule 7/30. Relaunched by keeper each time it fires.
+#   $1 = baseline WORKING count
 set -uo pipefail
-BASE="${1:-3}"
-OUTBOX=/home/ubuntu/lane-outbox
+BASE="${1:-3}"; OUTBOX=/home/ubuntu/lane-outbox
 LAST=$(ls -t "$OUTBOX" 2>/dev/null | head -1)
-for i in $(seq 1 30); do          # ~30 min max, then heartbeat back to keeper
-    W=$(~/keeper-repo/tools/lanes/../../tools/lanes/lane-list.sh 2>/dev/null | grep -c WORKING 2>/dev/null || tmux list-sessions 2>/dev/null >/dev/null && lanes 2>/dev/null | grep -c WORKING)
-    SWAP=$(free -m | awk '/^Swap:/{print $3}')
-    NOW=$(ls -t "$OUTBOX" 2>/dev/null | head -1)
-    if [ "${W:-0}" -lt "$BASE" ]; then echo "WAKE: a lane parked/finished (WORKING=$W < $BASE)"; exit 0; fi
-    if [ "${SWAP:-0}" -gt 1200 ]; then echo "WAKE: swap pressure ($SWAP MB)"; exit 0; fi
-    if [ "$NOW" != "$LAST" ]; then echo "WAKE: new lane-outbox result ($NOW)"; exit 0; fi
-    sleep 60
+count_working() {
+  local n=0 s
+  for s in $(tmux list-sessions -F '#{session_name}' 2>/dev/null); do
+    if tmux capture-pane -t "$s" -p 2>/dev/null | grep -q 'esc to interrupt'; then n=$((n+1)); fi
+  done
+  echo "$n"
+}
+for i in $(seq 1 30); do
+  W=$(count_working); SWAP=$(free -m | awk '/^Swap:/{print $3}'); NOW=$(ls -t "$OUTBOX" 2>/dev/null | head -1)
+  [ "${W:-0}" -lt "$BASE" ] && { echo "WAKE: a lane parked/finished (working=$W < baseline $BASE)"; exit 0; }
+  [ "${SWAP:-0}" -gt 1200 ] && { echo "WAKE: swap pressure (${SWAP}MB)"; exit 0; }
+  [ "$NOW" != "$LAST" ] && { echo "WAKE: new lane-outbox result ($NOW)"; exit 0; }
+  sleep 60
 done
-echo "HEARTBEAT: 30min quiet, all $BASE lanes still working"
+echo "HEARTBEAT: 30min quiet, $BASE lanes still working"
