@@ -1,41 +1,33 @@
 # Work finished, but not deployed
 
 Keeper maintains this at every merge. Rule (Ian 2026-07-29): he gets reminded
-whenever this file is non-empty — see it, clear it, feel good. Newest on top.
-"Deployed" means live is actually running it / the script actually ran.
+whenever this file is non-empty. "Deployed" means live is actually running it.
 
-## Waiting on Ian's `lg-deploy` (one pull clears the section)
+## Waiting on Ian's `lg-deploy` — ⚠ HOLD, do not pull yet
 
-- (section clear)
+Main is ahead of live with tonight's merges: **events-mobile** (mobile tap
+navigates — Ian-verified on dev2), **thread-follow** (follow toggles,
+default-off), the gate harness generation, and the buck-conf disclosure fix.
 
-## Staged scripts awaiting Ian's hands (not pull-shaped)
+**HOLD because:** thread-follow has Ian-reported defects on the hub feed card
+(dead buttons, two glyphless squares, rough mobile layout) — member-visible if
+pulled now. The lane is fixing on its branch. When its fix merges and Ian
+re-passes dev2, ONE lg-deploy carries everything, plus:
+- thread-follow's DB migrations must run live-side in the same window (keeper
+  stages the exact commands here before the pull).
 
-- (section clear — nothing staged)
-- **Re-materialize replies 71678 + 71723** — the two members' answers nobody
-  ever saw; `bb-mirror/bin/rematerialize.php` per its header.
+## Staged scripts awaiting Ian's hands
 
-## dev2 serve (keeper's window, not Ian's)
+- (none)
 
-- dev2's serving checkout is at `0995f2b`; main is ~30 commits ahead (all of
-  today's merges). Keeper pulls in a coordinated serve window — parked until
-  the working lanes don't have in-flight verification against the serve.
+## dev2 serve (keeper's)
 
-## Cleared
+- Current with main (e84dae7), baseline re-cut. All mirror repairs complete on
+  live; reconcile-service failure still undiagnosed (journalctl owed by Ian).
 
-- 2026-07-29 23:2x: **rematerialize RUN — Karl Borum's and Robert Owens' replies
-  restored**; keeper verified both stores agree (71484: 9/9, 71649: 4/4).
-  ALL mirror-orphans repairs now complete on live.
+## Cleared (2026-07-29→30 highlights)
 
-- 2026-07-29 23:1x: **attachment purge RUN on live (DELETE 24, triggers
-  installed)** and **bookmark rewind RUN** (was 1785366600 → 1780272000; that
-  old value is the rollback number). Timer re-walk fixes the drift.
-
-- 2026-07-29 late: **chip accordions + connection-remove confirm DEPLOYED to
-  live** — Ian ran the pull and verified both working. Live current with main.
-
-- 2026-07-29 22:33: **Minton merged + verified on live** — 30/30 ruled pairs now
-  applied; twin drained, survivor holds both halves, duplicate signature 0.
-
-- 2026-07-29 morning `lg-deploy` (57a9ee7): duplicate alarm, member email
-  notice, profile email-change hook + nginx reload, merger toolkit, orphan
-  delete-path fix. 2026-07-29 14:21: the 29-pair merge applied + verified.
+- Slug backfill APPLIED live: 1,634 → 140 patreon URLs, 1,496 living 301s.
+- All mirror repairs run + verified (purge 24, rewind, 2 replies restored).
+- 30/30 duplicate pairs merged + verified; alarm + email notice live.
+- Accordions + connection-confirm deployed, Ian-verified.
