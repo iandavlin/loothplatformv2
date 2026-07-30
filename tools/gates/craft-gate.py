@@ -59,6 +59,13 @@ PAGES = {
     "hub":     ("/hub/",               ["anon", "member"]),
     "finder":  ("/directory/members",  ["anon", "member"]),
     "weekly":  ("/weekly/",            ["anon"]),
+    # The public weekly-email signup page. ANON ONLY on purpose — its entire
+    # audience is people without an account. It could only be added here once
+    # /weekly-email-sign-up/ was in bp-enable-private-network-public-content:
+    # before that it 302'd anonymous visitors to wp-login, and this gate audits
+    # an anon viewer, so it would have audited the LOGIN page and reported green.
+    # A pass over the wrong document is worse than no gate.
+    "wdsignup": ("/weekly-email-sign-up/", ["anon"]),
     "events":  ("/events/",            ["anon"]),
     "profile": ("/u/iandavlin",        ["member"]),
 }
@@ -103,9 +110,39 @@ new Promise(res => setTimeout(() => {
   const res2 = performance.getEntriesByType('resource').map(e =>
     ({ url: e.name.slice(0, 300), type: e.initiatorType, kb: Math.round((e.transferSize || 0) / 1024) }));
   const nav = performance.getEntriesByType('navigation')[0];
-  res(JSON.stringify({ imgs, res: res2, navKb: Math.round(((nav && nav.transferSize) || 0) / 1024) }));
+  res(JSON.stringify({ imgs, res: res2, navKb: Math.round(((nav && nav.transferSize) || 0) / 1024),
+                       title: (document.title || '').slice(0, 200),
+                       href: (location.href || '').slice(0, 300),
+                       bodyLen: (document.body ? document.body.innerHTML.length : 0) }));
 }, 6000))
 """
+
+
+# ── THE GATE MUST NOT AUDIT A DOCUMENT IT DID NOT ASK FOR ────────────────────
+# Without --host-resolver-rules the browser resolves our domain over the public
+# edge and Cloudflare answers with an interstitial. That page is tiny, carries no
+# images and loads no eager scripts, so EVERY check below passes and the gate
+# reports GREEN — across every surface at once. A green over Cloudflare is worse
+# than a red: it is the gate confidently certifying a page it never saw.
+#
+# MEASURED 2026-07-30 against the box's managed chrome-dev.service, which does NOT
+# carry the resolver flag: /weekly-email-sign-up/ loaded as
+# <title>Just a moment...</title> with 0 of our form elements present.
+#
+# Third occurrence of this class in one day (a ?page_id= probe that served the
+# front page; the signup page's iframe framing the front page; now the gate
+# itself), so per CRAFT-STANDARD it is encoded rather than remembered.
+CHALLENGE_TITLES = ("just a moment", "attention required", "access denied", "checking your browser")
+
+
+def wrong_document(data, path):
+    """Return a reason string if this is not our page, else ''."""
+    title = (data.get("title") or "").strip().lower()
+    if any(c in title for c in CHALLENGE_TITLES):
+        return f"edge challenge page (title {data.get('title')!r}) — chrome resolved {DOMAIN} publicly"
+    if data.get("bodyLen", 0) < 500:
+        return f"near-empty document ({data.get('bodyLen')} bytes of body) at {data.get('href')}"
+    return ""
 
 
 async def cdp(ws_url, method, params=None, _id=[0]):
@@ -239,6 +276,19 @@ def main():
             except Exception as e:
                 fails.append(f"GATE-ERROR     {label}  {e}")
                 continue
+
+            # Refuse to grade a page we did not load. Same reasoning as the
+            # CANNOT RUN above: a green earned over the edge challenge would
+            # certify every surface at once without auditing any of them.
+            why = wrong_document(data, path)
+            if why:
+                print("==================== CRAFT GATE CANNOT RUN ====================")
+                print(f"  {label}: {why}")
+                print("  This is NOT a pass and NOT a failure — the browser never reached")
+                print("  our origin, so nothing below was audited. Launch chrome with")
+                print("  $LG_GATE_CHROME_RESOLVER (see gate-env.sh) and re-run.")
+                sys.exit(2)
+
             v, img_kb, total_kb = check(label, data)
             if v:
                 fails.extend(v)

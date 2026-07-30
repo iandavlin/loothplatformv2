@@ -18,7 +18,8 @@
  * Pure in-memory. No DB, no mail, no network.
  */
 if (!defined('ABSPATH')) { fwrite(STDERR,"wp eval-file\n"); exit(1); }
-require_once '/home/ubuntu/worktrees/weekly-digest-recap/lg-weekly-digest/includes/class-lg-wd-recap.php';
+require_once __DIR__ . '/_load-under-test.php';
+lg_wd_load_under_test('/home/ubuntu/worktrees/weekly-digest-recap/lg-weekly-digest/includes/class-lg-wd-recap.php', 'LG_WD_Recap');
 
 $hub = fn($t) => ['type'=>$t,'target_kind'=>'topic','target_id'=>71865,'anchor_id'=>null,
   'target_url'=>'/hub/?topic=tools-and-jigs%2Fsuggest-an-alternative-to-concave-fret-file',

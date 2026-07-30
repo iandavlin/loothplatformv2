@@ -292,6 +292,56 @@ must not ship two of them. How they line up:
 recommendation stands: thread-follow should drop its own `follow-recap` endpoint and let the bell
 be the one spine, which is what NOTIFICATIONS-AUDIT.md §4.3 argues for too.
 
+### 6a. Cadence — answered for thread-follow, 2026-07-30 (their deploy was gated on it)
+
+They asked three questions on the board. Recorded here because a board post scrolls away and this is
+a cross-lane contract.
+
+**1. Is there a scheduler to write a cadence preference into? No** — and their instinct not to reuse
+the newsletter for per-thread reply batching is right. But their conclusion that Hourly/Daily/Weekly
+are *all* new infrastructure is too pessimistic, because of the next point.
+
+**2. A DIGEST DOES NOT NEED A QUEUE.** Their model of this plugin as an editorial broadcast resolving
+its audience by CRM tag is out of date: `class-lg-wd-sender.php:162` calls
+`recipients_with_something_waiting()`, which computes each subscriber's pending items, and the body is
+`raw_html` + smart codes so every recipient gets their own substitution. It does this with **no queue,
+no per-member send record and no table of its own** (there is no `CREATE TABLE` in the plugin), because:
+
+> **WINDOW == CADENCE.** The window is a fixed 7 days (`WINDOW_DAYS`, `class-lg-wd-recap-source.php:91`)
+> and the send is weekly, so *"what is in the window"* **is** *"what I have not already told you"*.
+> No state has to exist to know that.
+
+A digest needs no queue when its events are already durably stored with timestamps. Their followed-thread
+rows land in that same store, so the **read side already exists and is proven at scale**; what is
+genuinely new for them is a second send *trigger*.
+
+**3. PER-MEMBER CADENCE, NOT PER-THREAD.** Their UX argument (follow six threads on Daily ⇒ six daily
+emails, the thing the member was escaping) is right on its own. The mechanical argument decides it:
+
+| | consequence |
+|---|---|
+| **per-member** | window == cadence still holds — one tick for all of a member's threads. **No new state.** |
+| **per-thread** | a member's threads tick differently, so *"have I already told them about this reply"* is no longer derivable from one window → needs a **per-(member,thread) last-sent ledger**, written every send, reconciled on cadence-change and unfollow. |
+
+Per-thread *is* the migration they said they would rather not hand over. Cadence should sit with the
+existing account-level email prefs; `topic_follow` stays the per-(member,topic) bell bit; the modal
+**shows** cadence rather than owning it.
+
+**4. DROP HOURLY.** Live, all-time (`profile_app.notifications`): 15 `forum.*` rows across 14
+recipients — mention 5, reply_to_reply 5, reply_to_topic 5; `forum.followed_topic` **0** (not on live
+yet); 568 rows of all types. **Busiest member-HOUR = 1.** Day = 2, week = 2. No member has ever had two
+forum notifications in the same hour, so an Hourly digest would contain exactly one item for everyone
+who has ever existed here — **mathematically indistinguishable from Instant, except later.** Better Ian
+never sees it than picks it and it is withdrawn. Propose Instant / Daily / Weekly.
+*Honest limit:* 15 rows over 5 days is a small sample of a feature that has barely started. It proves
+Hourly ships with nothing to do **today**, not that it never could.
+
+**5. THE OVERLAP GETS WORSE, and it is joint.** This digest admits `forum.reply_to_topic`,
+`forum.reply_to_reply` and `forum.mention`; their per-event mail covers the same rows; a followed-thread
+digest is a **third** channel on them. Rate is **UNTESTED, not zero**. Not being solved here, because
+Rule 5 means suppression can *delete* a digest rather than shorten it (§4.1b) — flagged so it is a
+decision when volume arrives, not a surprise.
+
 > **CORRECTION (2026-07-27).** An earlier revision of this section said the recap would pick a new
 > type up "for free". **That was wrong, and the opposite is true** — verified in the code, not
 > assumed. `LG_WD_Recap::INCLUDED_TYPES` is an ALLOW-LIST (§6.1): a type absent from it renders
@@ -610,15 +660,45 @@ pull does not handle.
 **Three things a pull cannot do, none of them mine, all of them one line.** Until the first two are
 done the page is not reachable by the people it is for, and the craft gate cannot audit it.
 
-| # | Step | Box | Whose |
-|---|---|---|---|
-| 1 | Page **68595** (`/weekly-email-sign-up/`) content: `[fluentform id="5"]` → `[lg_weekly_signup]` | dev2, then live | keeper on dev2 / **Ian on live** |
-| 2 | Add `/weekly-email-sign-up/` to the **`bp-enable-private-network-public-content`** allow-list (67 entries today) — without it the page **302s anonymous visitors to wp-login**, and its entire audience is anonymous | dev2, then live | keeper on dev2 / **Ian on live** |
-| 3 | Add `"signup": ("/weekly-email-sign-up/", ["anon"])` to `tools/gates/craft-gate.py` PAGES | repo | this lane, **after** step 1 — adding it first would gate a page that does not render |
+| # | Step | Box | Whose | State |
+|---|---|---|---|---|
+| 1 | Page **68595** (`/weekly-email-sign-up/`) content: `[fluentform id="5"]` → `[lg_weekly_signup]` | dev2, then live | keeper on dev2 / **Ian on live** | **DONE on dev2** 2026-07-30 · live outstanding |
+| 2 | Add `/weekly-email-sign-up/` to the **`bp-enable-private-network-public-content`** allow-list (67 entries today) — without it the page **302s anonymous visitors to wp-login**, and its entire audience is anonymous | dev2, then live | keeper on dev2 / **Ian on live** | **DONE on dev2** (67 → 68) · live outstanding |
+| 3 | Add `"wdsignup": ("/weekly-email-sign-up/", ["anon"])` to `tools/gates/craft-gate.py` PAGES | repo | this lane, **after** step 2 | entry **added**; gate **not yet run** (needs the browser seat) |
 
 > **Step 2 is not cosmetic and it is not a redirect nuisance.** The craft gate audits an `anon`
 > viewer. If the page 302s to wp-login the gate will happily audit **the login page** and report
 > green — a pass over the wrong document. So step 2 must land before step 3 means anything.
+
+**Verified on dev2 after steps 1+2** (anon, dev gate passed, from the LAN IP `172.31.78.94` — a
+loopback curl authorizes itself and proves nothing): `/weekly-email-sign-up/` returns **200**, was a
+302 to `wp-login.php?...action=bpnoaccess` before. Title `Weekly Email Sign Up – The Looth Group`,
+exactly one `<form>` on the page and it is ours (`id="lgws-form"`, with `lgws-email`, the `lgws-website`
+honeypot and `lgws-said`), and no raw `[lg_weekly_signup]` left unrendered. *A first probe searched for
+`lg-wd-signup` and found nothing — a class name I guessed rather than read. Check the template for the
+markers before concluding a page is broken.*
+
+> ### ⚠️ STEP 1 ON LIVE: `wp_update_post()` WILL REPORT FAILURE **AFTER** WRITING THE CONTENT
+>
+> Page 68595 carries `_wp_page_template = page-fullwidth.php`, and the active theme is
+> `twentytwentyfive`, which offers only `page-no-title`. **dev2 and live hold exactly the same stale
+> value** (checked read-only on live: same theme, same meta, same content) — this is not a dev2 quirk.
+>
+> `wp_update_post()` merges the post's *existing* `page_template` back into its own input and then
+> validates it, so any content-only update to this page returns
+> `WP_Error('invalid_page_template')` — **but the content has already been written by then.**
+> Proven on dev2 on a throwaway page carrying the same meta: returned `WP_Error`, and the row read
+> back `CHANGED`. Probe page deleted.
+>
+> So on live: **do not retry, and do not assume nothing happened.** Read the row back before acting on
+> the error. The clean way is to write the one column and leave the meta alone —
+> `$wpdb->update($wpdb->posts, ['post_content'=>'[lg_weekly_signup]'], ['ID'=>68595])` then
+> `clean_post_cache(68595)`. Changing the template meta to satisfy the validator would alter how the
+> page renders *and* make dev2 disagree with live.
+>
+> Also note `post_modified` renders in **site-local time (EDT)** while `post_modified_gmt` is UTC —
+> four hours apart. Reading the local column alone made a write that had just happened look four hours
+> old, and briefly made it look like somebody else had done it.
 
 **The old page is not deleted by any of this.** Page 68595 keeps FluentForm 5 in its revision history;
 step 1 is a content change, reversible by restoring the shortcode. Recorded here because the previous
@@ -675,6 +755,27 @@ The page frames the most recent **sent** issue, rendered at request time (transi
 dev2 upload URLs, so on live it shows broken images, and the page's own claim — *"rendered by the same
 code that sends it"* — would go false the first week nobody regenerated it.
 
+> **⚠️ IT FRAMED THE FRONT PAGE. Fixed 2026-07-30 @9418ff5 — this paragraph described the intent, not
+> the behaviour, for as long as the page existed.** `preview_url()` was built from `home_url('/')`, and
+> `maybe_serve_preview()` hangs off `template_redirect`. **archive-poc's strangler owns `/` and answers
+> before WordPress routes**, so the handler never ran and the iframe got the discovery feed. Measured,
+> both anon, both **200**:
+>
+> | URL | bytes | `<title>` | unsubscribe markers |
+> |---|---|---|---|
+> | `/?lg_wd_email_preview=1` | 75,458 | Looth Group — Lutherie Community | **0** |
+> | `/weekly-email-sign-up/?lg_wd_email_preview=1` | 37,321 | The Looth Group — Week of July 30, 2026 | 2 |
+>
+> The URL is now built from the **host page's permalink** (the handler keys on the query var alone, so
+> any WP-routed permalink serves it, and it stays same-origin because it is the same page). If no
+> permalink resolves the section is **dropped** — falling back to `home_url('/')` *is* the bug.
+> Regression test: `dev/verify-preview-frames-the-email.php`, which runs the **negative control first**
+> and reports CANNOT RUN if it cannot tell the two documents apart.
+>
+> Nothing routine could have caught it: 200 status, real markup, a real iframe — and per the blind spot
+> below, the gate cannot look inside a frame anyway. What found it was comparing **byte counts**
+> (75KB served vs 35KB built in-process), then reading `<title>`.
+
 > **The craft gate cannot see inside an iframe.** `craft-gate.py` collects `querySelectorAll('img')`
 > and the resource timeline in the **top frame only**; a frame has its own document and its own
 > timeline. So the heaviest thing on this page is invisible to IMG-RAW, IMG-OVERSIZE and the KB
@@ -683,6 +784,22 @@ code that sends it"* — would go false the first week nobody regenerated it.
 > routes uploads through `/img.php?w=600` (a bucket from the resizer's own `ALLOWED_W`; an unlisted
 > width silently becomes 800). **Not applied to the sent email** — real inboxes fetch with no cookies
 > and `img.php` sits behind the dev gate, so that would break images in every recipient's client.
+>
+> **And the gate had a second, worse blind spot — it greened over a page it never loaded.**
+> `craft-gate.py` requires a browser launched with `$LG_GATE_CHROME_RESOLVER`, but the box's only
+> engine, `chrome-dev.service`, does not carry `--host-resolver-rules`. Pointed at it, every surface
+> loads as Cloudflare's `<title>Just a moment...</title>` — small, imageless, no eager scripts — so
+> **every check passes by construction**. Proven by running the gate's own `check()` over that payload:
+> **0 violations, verdict PASS.** Fixed @09a15da: `wrong_document()` refuses an edge-challenge title or
+> a near-empty body and exits **2 CANNOT RUN**. Run the gate by stopping the service and launching
+> chrome with the resolver; do not `pkill` (systemd restarts it in 3s).
+
+**GATE RESULT FOR THIS PAGE, 2026-07-30, chrome launched WITH the resolver: `wdsignup/anon` PASSES** —
+imgs 39KB, total 969KB against a 2500KB budget. The 969KB is BuddyBoss chrome present on every anon
+page (104 resources); this page's own contribution is the 39KB site logo. **§8.1 step 3 is done.**
+Not over-read: `codemirror.min.js` (57KB) and `buddypress-activity-post-form.min.js` (30KB) load for an
+anonymous visitor here, which CLAUDE.md's *editors load on intent* rule forbids — but `EDITOR_MARKERS`
+only matches `quill`, so the gate cannot see it. Platform-wide BuddyBoss behaviour, not this page's.
 
 ### 10.4 Still open — one word from Ian, and it is not a blocker for this page
 

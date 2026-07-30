@@ -21,7 +21,8 @@
  */
 if (!defined('ABSPATH')) { fwrite(STDERR,"wp eval-file\n"); exit(1); }
 $L='/home/ubuntu/worktrees/weekly-digest-recap';
-require_once $L.'/lg-weekly-digest/includes/class-lg-wd-recap.php';
+require_once __DIR__ . '/_load-under-test.php';
+lg_wd_load_under_test($L . '/lg-weekly-digest/includes/class-lg-wd-recap.php', 'LG_WD_Recap');
 $fail=0;
 $ck=function($w,$g,$e)use(&$fail){$o=$g===$e;printf("  %-52s %s\n",$w,$o?'OK':"FAIL got=".var_export($g,true));if(!$o)$fail++;};
 
