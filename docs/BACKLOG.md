@@ -3,6 +3,13 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-30 — PWA apps need a launch animation/message (Ian)
+
+The installed PWA apps can take a while to fire up now; there's no feedback
+during the cold start — it reads as a hang. Add a splash/loading animation or
+"starting up…" message on launch (service-worker/app-shell boot). Applies to the
+Add-to-Home-Screen PWA path (webroot/pwa.js, sw.js). Small, member-facing polish.
+
 ## 2026-07-30 — Front-page admin pencils: KEEP THE BUTTON (Ian) — CLOSED, no work
 
 front-page-editor shipped the edit pencils behind an "Edit page" button, and
