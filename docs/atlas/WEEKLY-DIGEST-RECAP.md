@@ -292,6 +292,56 @@ must not ship two of them. How they line up:
 recommendation stands: thread-follow should drop its own `follow-recap` endpoint and let the bell
 be the one spine, which is what NOTIFICATIONS-AUDIT.md §4.3 argues for too.
 
+### 6a. Cadence — answered for thread-follow, 2026-07-30 (their deploy was gated on it)
+
+They asked three questions on the board. Recorded here because a board post scrolls away and this is
+a cross-lane contract.
+
+**1. Is there a scheduler to write a cadence preference into? No** — and their instinct not to reuse
+the newsletter for per-thread reply batching is right. But their conclusion that Hourly/Daily/Weekly
+are *all* new infrastructure is too pessimistic, because of the next point.
+
+**2. A DIGEST DOES NOT NEED A QUEUE.** Their model of this plugin as an editorial broadcast resolving
+its audience by CRM tag is out of date: `class-lg-wd-sender.php:162` calls
+`recipients_with_something_waiting()`, which computes each subscriber's pending items, and the body is
+`raw_html` + smart codes so every recipient gets their own substitution. It does this with **no queue,
+no per-member send record and no table of its own** (there is no `CREATE TABLE` in the plugin), because:
+
+> **WINDOW == CADENCE.** The window is a fixed 7 days (`WINDOW_DAYS`, `class-lg-wd-recap-source.php:91`)
+> and the send is weekly, so *"what is in the window"* **is** *"what I have not already told you"*.
+> No state has to exist to know that.
+
+A digest needs no queue when its events are already durably stored with timestamps. Their followed-thread
+rows land in that same store, so the **read side already exists and is proven at scale**; what is
+genuinely new for them is a second send *trigger*.
+
+**3. PER-MEMBER CADENCE, NOT PER-THREAD.** Their UX argument (follow six threads on Daily ⇒ six daily
+emails, the thing the member was escaping) is right on its own. The mechanical argument decides it:
+
+| | consequence |
+|---|---|
+| **per-member** | window == cadence still holds — one tick for all of a member's threads. **No new state.** |
+| **per-thread** | a member's threads tick differently, so *"have I already told them about this reply"* is no longer derivable from one window → needs a **per-(member,thread) last-sent ledger**, written every send, reconciled on cadence-change and unfollow. |
+
+Per-thread *is* the migration they said they would rather not hand over. Cadence should sit with the
+existing account-level email prefs; `topic_follow` stays the per-(member,topic) bell bit; the modal
+**shows** cadence rather than owning it.
+
+**4. DROP HOURLY.** Live, all-time (`profile_app.notifications`): 15 `forum.*` rows across 14
+recipients — mention 5, reply_to_reply 5, reply_to_topic 5; `forum.followed_topic` **0** (not on live
+yet); 568 rows of all types. **Busiest member-HOUR = 1.** Day = 2, week = 2. No member has ever had two
+forum notifications in the same hour, so an Hourly digest would contain exactly one item for everyone
+who has ever existed here — **mathematically indistinguishable from Instant, except later.** Better Ian
+never sees it than picks it and it is withdrawn. Propose Instant / Daily / Weekly.
+*Honest limit:* 15 rows over 5 days is a small sample of a feature that has barely started. It proves
+Hourly ships with nothing to do **today**, not that it never could.
+
+**5. THE OVERLAP GETS WORSE, and it is joint.** This digest admits `forum.reply_to_topic`,
+`forum.reply_to_reply` and `forum.mention`; their per-event mail covers the same rows; a followed-thread
+digest is a **third** channel on them. Rate is **UNTESTED, not zero**. Not being solved here, because
+Rule 5 means suppression can *delete* a digest rather than shorten it (§4.1b) — flagged so it is a
+decision when volume arrives, not a surprise.
+
 > **CORRECTION (2026-07-27).** An earlier revision of this section said the recap would pick a new
 > type up "for free". **That was wrong, and the opposite is true** — verified in the code, not
 > assumed. `LG_WD_Recap::INCLUDED_TYPES` is an ALLOW-LIST (§6.1): a type absent from it renders
@@ -705,6 +755,27 @@ The page frames the most recent **sent** issue, rendered at request time (transi
 dev2 upload URLs, so on live it shows broken images, and the page's own claim — *"rendered by the same
 code that sends it"* — would go false the first week nobody regenerated it.
 
+> **⚠️ IT FRAMED THE FRONT PAGE. Fixed 2026-07-30 @9418ff5 — this paragraph described the intent, not
+> the behaviour, for as long as the page existed.** `preview_url()` was built from `home_url('/')`, and
+> `maybe_serve_preview()` hangs off `template_redirect`. **archive-poc's strangler owns `/` and answers
+> before WordPress routes**, so the handler never ran and the iframe got the discovery feed. Measured,
+> both anon, both **200**:
+>
+> | URL | bytes | `<title>` | unsubscribe markers |
+> |---|---|---|---|
+> | `/?lg_wd_email_preview=1` | 75,458 | Looth Group — Lutherie Community | **0** |
+> | `/weekly-email-sign-up/?lg_wd_email_preview=1` | 37,321 | The Looth Group — Week of July 30, 2026 | 2 |
+>
+> The URL is now built from the **host page's permalink** (the handler keys on the query var alone, so
+> any WP-routed permalink serves it, and it stays same-origin because it is the same page). If no
+> permalink resolves the section is **dropped** — falling back to `home_url('/')` *is* the bug.
+> Regression test: `dev/verify-preview-frames-the-email.php`, which runs the **negative control first**
+> and reports CANNOT RUN if it cannot tell the two documents apart.
+>
+> Nothing routine could have caught it: 200 status, real markup, a real iframe — and per the blind spot
+> below, the gate cannot look inside a frame anyway. What found it was comparing **byte counts**
+> (75KB served vs 35KB built in-process), then reading `<title>`.
+
 > **The craft gate cannot see inside an iframe.** `craft-gate.py` collects `querySelectorAll('img')`
 > and the resource timeline in the **top frame only**; a frame has its own document and its own
 > timeline. So the heaviest thing on this page is invisible to IMG-RAW, IMG-OVERSIZE and the KB
@@ -713,6 +784,22 @@ code that sends it"* — would go false the first week nobody regenerated it.
 > routes uploads through `/img.php?w=600` (a bucket from the resizer's own `ALLOWED_W`; an unlisted
 > width silently becomes 800). **Not applied to the sent email** — real inboxes fetch with no cookies
 > and `img.php` sits behind the dev gate, so that would break images in every recipient's client.
+>
+> **And the gate had a second, worse blind spot — it greened over a page it never loaded.**
+> `craft-gate.py` requires a browser launched with `$LG_GATE_CHROME_RESOLVER`, but the box's only
+> engine, `chrome-dev.service`, does not carry `--host-resolver-rules`. Pointed at it, every surface
+> loads as Cloudflare's `<title>Just a moment...</title>` — small, imageless, no eager scripts — so
+> **every check passes by construction**. Proven by running the gate's own `check()` over that payload:
+> **0 violations, verdict PASS.** Fixed @09a15da: `wrong_document()` refuses an edge-challenge title or
+> a near-empty body and exits **2 CANNOT RUN**. Run the gate by stopping the service and launching
+> chrome with the resolver; do not `pkill` (systemd restarts it in 3s).
+
+**GATE RESULT FOR THIS PAGE, 2026-07-30, chrome launched WITH the resolver: `wdsignup/anon` PASSES** —
+imgs 39KB, total 969KB against a 2500KB budget. The 969KB is BuddyBoss chrome present on every anon
+page (104 resources); this page's own contribution is the 39KB site logo. **§8.1 step 3 is done.**
+Not over-read: `codemirror.min.js` (57KB) and `buddypress-activity-post-form.min.js` (30KB) load for an
+anonymous visitor here, which CLAUDE.md's *editors load on intent* rule forbids — but `EDITOR_MARKERS`
+only matches `quill`, so the gate cannot see it. Platform-wide BuddyBoss behaviour, not this page's.
 
 ### 10.4 Still open — one word from Ian, and it is not a blocker for this page
 
