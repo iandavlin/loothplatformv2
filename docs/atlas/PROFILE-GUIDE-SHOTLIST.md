@@ -305,9 +305,54 @@ header also carries:
 | `/u/buck-van-laarhoven-vl-guitar` | ✅ gate renders |
 | `/u/profileapp-test` | 404 — ignore |
 
-`pilot_pro` is the pick: the frame goes in a published handbook, and the other
-two are real members. **Nothing was mutated to get this** — fixture 1849 is
-untouched and still parked as the matrix expects.
+`pilot_pro` is the pick, and the reason is stronger than it first looked: **the
+gate page still carries the subject's display name** — 7 occurrences plus
+`<title>Pilot Pro · Looth</title>`. The gate hides the *profile*, not *who it
+belongs to*. So a B8 frame necessarily publishes whoever it is shot on, and
+`Steve Cantrell` / `Buck Van Laarhoven` are real members while `Pilot Pro` is a
+fixture name.
+
+⚠️ **Caveat, stated because it is the weakness of this pick:** `pilot_pro` and
+`profileapp-test` are both `archived_at IS NOT NULL`. `pilot_pro` renders the
+gate anyway (the gate decision precedes the archive check), but it is a fragile
+subject — a purge of archived users would take the frame's URL with it. If it
+ever 404s, the fallback is `steve-cantrell`, accepting that a real member's name
+then appears in the handbook.
+
+**Nothing was mutated to get this** — fixture 1849 is untouched and still parked
+as the matrix expects.
+
+### B2 (capped section chip) IS BLOCKED, and not on the engine — say so early
+
+B2 wants a section chip **capped** by a stricter header above it: a
+`header=members` profile carrying a section that is itself `public`. That state
+exists on dev2 — exactly one usable instance:
+
+| subject | capped section |
+|---|---|
+| `buck-van-laarhoven-vl-guitar` (876) | `dropoffs` public under a members header |
+| ~~`profileapp-test`~~ (3) | `craft`, but archived **and** 404s |
+| `buck-…` `socials` | launch-hidden, never renders |
+
+**Fixture 1849 can never show B2** — it is `header=public`, so nothing above any
+section is strict enough to cap it.
+
+The chip is an **owner-editor** affordance, so B2 cannot be shot as a visitor. It
+needs one of three things, and **all three are somebody else's call, not the
+capture pass's**:
+
+1. mint a session as **Buck**, i.e. log in as a real member to take a
+   screenshot — the only zero-setup option, and the least appropriate;
+2. temporarily flip fixture **1849's header to `members`**, shoot, and restore —
+   but §5 says do not leave 1849 in a non-default state, and the visibility
+   matrix reads it concurrently, so a mid-run flip could red another lane's gate;
+3. create a **fresh throwaway fixture** with `header=members` + one public
+   section — clean, touches nothing shared, but it is a write to the dev
+   profile DB and a new permanent-ish fixture.
+
+**Recommendation: (3).** It is the only one that neither impersonates a member
+nor perturbs a fixture another gate depends on. Not doing it unilaterally.
+B2 is otherwise ready — the engine is not what is missing.
 
 ### Build provenance of the old frames: NOT PROVEN
 
