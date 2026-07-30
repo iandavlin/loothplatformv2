@@ -868,8 +868,16 @@ framing the same real email.
   conditional — **Outlook-only, inert in every browser**. Strip conditionals the way a browser does and
   there are **zero** cells over 400px. I would have "fixed" a cell no browser renders.
 - The text sheared in his screenshot — *"…Winding Pickups with Tom Bra…"* — is an **`alt` attribute**,
-  so that image was not painting for him. **Possibly a second, separate defect**; not folded into the
-  width story, because they have not been shown to be the same problem.
+  so that image was not painting for him. Flagged at the time as *possibly a second defect*.
+  **RESOLVED 2026-07-30: it is a dev2 DATA gap, not a code defect, and it does not follow to live.**
+  Two of the preview's nine images fail on dev2 — `/img.php` 302s to the original (its documented
+  fallback for a source it cannot handle) and the original **404s**, because those uploads do not
+  exist on this box. The browser then paints the alt text, which is what he saw.
+  **On live all three checked URLs return 200**, including `/img.php` **with no cookie** — the
+  resizer is public there; the dev gate is a dev2-only thing. So the preview renders correctly for
+  the anonymous audience the page is actually for.
+  *Consequence worth carrying: part of what Ian judged this page by is dev2's missing uploads rather
+  than the page. Do not "fix" broken preview images on dev2 by changing the resizer.*
 
 **Guarded by `dev/verify-preview-frame-fits.php`**, which parses both numbers out of the shipping
 templates so it cannot drift from what serves, and additionally asserts the phone half (max-width with
