@@ -68,13 +68,31 @@
       return slot ? slot.querySelector('.fcr') : null;
     }
     function holdTargetFrom(el) {
+      if (!el.closest) return null;
+      // ⚠️ NOT A HOLD TARGET: the two per-discussion opt-in toggles (🔔 notify / ✉ email).
+      // This bail is load-bearing — Ian, from his phone, 2026-07-30: "I see the buttons on
+      // mobile" + "they don't seem to stay on when pushed."
+      //
+      // The mobile pair is nested .fc-actions > .feed-card__actions.lg-card-actions >
+      // .lg-act-follow > button[data-follow] (measured in the served hub HTML), so the
+      // broad `.fc-actions` match below CLAIMED IT. Any press held ≥HOLD_MS — routine on a
+      // 38px phone target — set longPressed, opened the reaction palette, and then the
+      // capture-phase swallower below killed the release click with
+      // stopImmediatePropagation(). forums.js's document-level [data-follow] delegate is on
+      // the BUBBLE phase, so it never ran: no optimistic flip, no POST, nothing to persist.
+      // The bit was never written, which is exactly what "doesn't stay on" looks like.
+      //
+      // Why the browser suite missed it: CDP/synthetic .click() dispatches instantly, so it
+      // never crosses the 380ms threshold. This defect is only reachable by a human finger.
+      // A press-and-hold is not a reaction gesture on a subscribe control — bail first.
+      if (el.closest('[data-follow]') || el.closest('.lg-act-follow')) return null;
       // open the picker from a press on the like heart OR anywhere on the reaction row —
       // for the POST (.lg-act-like / .fc-actions / .fcr-chips) AND for a COMMENT
       // (its Like / action row / reaction bar).
-      return (el.closest && (
+      return (
         el.closest('.lg-act-like') || el.closest('.fcr-chips') || el.closest('.fc-actions') ||
         el.closest('.lg-fb-like') || el.closest('.lg-fb-actions') || el.closest('.reply-stub__actions')
-      )) || null;
+      ) || null;
     }
     function openShared(bar) {
       if (!bar) return;

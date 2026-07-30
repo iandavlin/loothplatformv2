@@ -1430,3 +1430,115 @@ two stores do not agree today.
 
 *§13 written from execution on dev2, 2026-07-29. Every colour, pixel size and row count
 above was measured in the browser or queried from the database named.*
+
+---
+
+## 14. THE DEFECT THAT AUTOMATION COULD NOT SEE — a swallowed tap, and the gate for it
+
+**Ian, from his phone, 2026-07-30 (keeper-relayed):** *"I see the buttons on mobile"* +
+*"they don't seem to stay on when pushed."* Both halves have ONE cause, and it is not the
+store, the endpoint, or the render.
+
+### 14.1 What it was NOT — three premises killed with measurement, in this order
+
+| Premise | Verdict |
+|---|---|
+| `forums.topic_subscription` is missing; a migration was lost in the reboot | **FALSE — that table never existed.** The store is `forums.topic_follow` (`schema.pg.sql`; `follow.php:20`) and it is present on dev2. `to_regclass()` on the wrong name returning NULL is not evidence of a lost migration. **No live migration should ever be staged for it.** |
+| The render regressed in the 698f683 merge / keeper's conflict resolutions | **FALSE.** SSR emits both surfaces — 6 discussion cards, each with the desktop `.fc-actions` pair AND the mobile `.lg-act-follow` pair (24 `[data-follow]` buttons). Served `forums.css`/`forums.js` are byte-identical to the repo and parse clean. |
+| The write fails / does not persist | **FALSE.** Over real HTTPS through nginx as a logged-in member: `POST notify` → row `(1912, 72330)` in `forums.topic_follow`; `POST email` → ok; `GET` readback → `{notify:true, email:true}`. Verified as Ian's own uid 1 too. |
+
+The whole server half was green before anything was touched. **The bit was never written
+because nothing was ever sent.**
+
+### 14.2 What it was — `mobile-hub.js` ate the tap
+
+`mobile-hub.js`'s long-press-to-react trigger resolved its hold target with
+`el.closest('.fc-actions')`. The mobile follow pair is nested **inside** that container —
+measured with a real HTML parser against the served markup, not assumed:
+
+```
+div.fc-actions > div.feed-card__actions.lg-card-actions
+  > span.lg-act-follow > button.fc-notify[data-follow]
+```
+
+So the bell and the envelope were long-press targets. Holding one past `HOLD_MS` (380ms):
+
+1. `pointerdown` starts the hold timer;
+2. at 380ms `longPressed = true` and the **reaction palette opens** over the toggle;
+3. the release `click` hits the **capture-phase** swallower, which calls
+   `stopImmediatePropagation()`;
+4. forums.js's `[data-follow]` delegate listens on the **bubble** phase — so it never runs.
+
+Instrumented on a failing 600ms press (`fetch` wrapped, document listener attached):
+
+```
+POSTs to /follow:        []       ← nothing ever sent
+clicks at document:      []       ← the click never reached the bubble phase
+.fcr-palette open:       true     ← the long-press hijacked the gesture
+aria-pressed:            'false'  ← the button never even flipped
+```
+
+A deliberate press on a 38px phone target crosses 380ms easily — and *more* easily when
+the person is testing a control they are unsure about. **A quick flick always worked.**
+That fast-passes / slow-fails split is the proof of mechanism: the only variable is the
+threshold.
+
+**Scope:** feed card only. The mobile sheet header (`#looth-rep-sheet > .lrs-card > .lrs-hd`,
+appended to `body`) and the desktop modal sit outside every `holdTargetFrom` selector and
+were never affected. Desktop never loads the module's mobile branch at all.
+
+**Fix:** `holdTargetFrom()` bails on `[data-follow]` / `.lg-act-follow` before the broad
+`.fc-actions` match. Deliberately narrow — `mobile-hub.js` is Buck's module, and his
+"hold anywhere on the engagement row to react" behaviour is untouched everywhere else.
+A press-and-hold is not a reaction gesture on a *subscribe* control.
+
+### 14.3 Why §12's 25/25 and §13 both missed it — and would have missed it again
+
+**Every synthetic click lands in single-digit milliseconds.** CDP
+`Input.dispatchMouseEvent` as a pair, Playwright `.click()`, `el.click()` — none of them
+can cross a 380ms hold. Every automated tap ever aimed at this control took a path a human
+finger cannot take, so the defect was **structurally invisible to the entire test suite**.
+It was not a coverage gap that more of the same testing would have closed.
+
+This is the second tap defect on this exact row to reach Ian through a green suite (the
+first was the §12 "dead taps" report, fixed in d68786d). Per `docs/CRAFT-STANDARD.md`,
+that makes it a **gate**, not merely a fix.
+
+### 14.4 The gate — `tools/gates/follow-longpress-gate.py`
+
+Holds a **real 600ms press** (`touchStart` → *wait* → `touchEnd`) at 390×844 with touch
+emulation and the full overlay stack, then checks the **store**, not the pixel — an
+optimistic UI that flips and silently reverts must read as FAIL, and only Postgres can
+tell the two apart.
+
+| | result |
+|---|---|
+| unfixed (serving checkout @main) | **9 pass / 7 FAIL, exit 1** |
+| fixed (this branch) | **16 pass / 0 fail, exit 0** |
+
+Verified **red on the broken code first** — a gate never run against the defect it claims
+to catch proves nothing.
+
+**Two corrections to the gate itself, both found by distrusting a green line:**
+
+1. **Its first draft passed VACUOUSLY.** It cleared the store *after* loading the page, so
+   the button had already hydrated to ON and "aria-pressed is true" passed without the
+   press doing anything. Every phase now clears state FIRST, reloads, and **asserts the OFF
+   precondition** before pressing.
+2. **It crashed with a traceback** when hydration lost its race mid-run, and reported that
+   as red. Environmental failure is now **exit 2 / CANNOT RUN** per `run-all.sh`'s
+   three-state convention — the same convention that exists because craft gate 2 sat "red"
+   for weeks while it was in fact dead.
+
+Held out of `run-all.sh`'s numbered sequence because it needs the exercise harness on
+:8791/:8792 (not a standing service), with the bring-up recipe recorded there.
+`PHP_CLI_SERVER_WORKERS` is not optional: single-threaded `php -S` serialises the ~19
+overlay scripts, the page loses its hydration race, and the gate correctly returns exit 2
+having proven nothing.
+
+**The lesson worth carrying past this lane:** a surface is not the surface until the
+overlay layer is on it (§12's lesson), *and* a gesture is not the gesture until it takes
+as long as a human takes.
+
+*§14 written from execution on dev2, 2026-07-30. Every figure above was measured in a real
+engine or queried from the database named. All 7 suite gates green; dev2 left clean.*

@@ -40,11 +40,31 @@ echo
 echo "=== GATE 7/7: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
 run "events-tap-navigates" bash "$(dirname "$0")/events-tap-navigates-gate.sh"
 echo
-# Two CDP/loopback gates are HELD OUT of the runner — they pass standalone but
+# THREE CDP/loopback gates are HELD OUT of the runner — they pass standalone but
 # flake RED in-sequence (CDP under load / loopback /whoami trips infra's
 # limit_req zone). Run them manually:
 #   bash /srv/bb-mirror/bin/forum-visibility-gate.sh          # bb-mirror forum-visibility (C2/H6)
 #   bash "$(dirname "$0")/editor-rail-reachable-gate.sh"      # profile editor rail reachable @768 (CDP)
+#   python3 "$(dirname "$0")/follow-longpress-gate.py"        # 🔔/✉ survive a REAL timed press (see below)
+#
+# follow-longpress-gate needs the exercise harness up first — it is held out
+# because it depends on that harness, NOT because it is flaky. Recipe:
+#
+#   BR=/home/ubuntu/worktrees/<lane>   # or the serving checkout, to reproduce a regression
+#   sudo -u looth-dev wp --path=/var/www/dev eval '
+#     $u=1912;$e=time()+604800;
+#     echo LOGGED_IN_COOKIE."=".wp_generate_auth_cookie($u,$e,"logged_in")."\n";
+#     echo SECURE_AUTH_COOKIE."=".wp_generate_auth_cookie($u,$e,"secure_auth")."\n";' \
+#     | grep wordpress > /tmp/tf-gate/cookies.txt
+#   setsid sudo -u bb-mirror env PHP_CLI_SERVER_WORKERS=6 LG_BB_MIRROR_ENV=dev2 \
+#     LG_APPROOT=$BR/bb-mirror/web LG_WEBROOT=$BR/webroot LG_SHARED=$BR/lg-shared \
+#     php -S 127.0.0.1:8791 -t $BR/bb-mirror/web /tmp/tf-gate/router.php &
+#   setsid sudo -u looth-dev env PHP_CLI_SERVER_WORKERS=4 LG_BB_MIRROR_ENV=dev2 \
+#     php -S 127.0.0.1:8792 -t $BR/bb-mirror/api/v0 &
+#
+# PHP_CLI_SERVER_WORKERS is not optional: a single-threaded `php -S` serialises the
+# ~19 overlay scripts and the page loses its hydration race, which the gate then
+# (correctly) reports as exit 2 — no verdict, and no proof of anything.
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
