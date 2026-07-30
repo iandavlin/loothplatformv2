@@ -96,8 +96,15 @@
     <h2>The page</h2>
     <span class="who">scroll it here, or open it full-screen</span>
   </div>
-  <div class="shot"><iframe src="mock-signup.html" title="The signup page mock" loading="lazy"></iframe></div>
-  <p style="text-align:center"><a class="full" href="mock-signup.html">Open the mock full-screen →</a></p>
+  <div class="shot"><iframe src="built-page.html" title="The built signup page" loading="lazy"></iframe></div>
+  <p style="text-align:center"><a class="full" href="built-page.html">Open the built page full-screen →</a></p>
+  <p class="note"><b>This is now the BUILT page, not the mock</b> — the real markup the site will
+    render, from <code>[lg_weekly_signup]</code>. Two honest differences: it is shown outside the
+    site chrome, and <b>the form is dead on purpose</b> — the signup endpoint is live on dev2, so a
+    working form on a preview page would sign people up for real. The four answers it gives are
+    drawn underneath it instead, read from the endpoint's own source. The sample email in it is a
+    real issue, rendered by the code that sends it.
+    (<a class="full" href="mock-signup.html">the original mock is still here</a>.)</p>
 </section>
 
 <section class="cmp">
