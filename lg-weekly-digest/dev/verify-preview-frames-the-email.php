@@ -78,6 +78,15 @@ if ( ! $host_id ) {
 $permalink = (string) get_permalink( $host_id );
 printf( "host page      : %d %s\n", $host_id, $permalink );
 
+/** Does this box hold a sent issue at all? Decides whether an absent section is legitimate. */
+$get_latest_sent_issue_id = static function (): int {
+	if ( ! class_exists( 'LG_WD_Issue' ) ) { return 0; }
+	foreach ( LG_WD_Issue::get_all_issues( 20 ) as $issue ) {
+		if ( ( $issue['status'] ?? '' ) === 'sent' ) { return (int) $issue['id']; }
+	}
+	return 0;
+};
+
 // ── NEGATIVE CONTROL FIRST: the old URL shape must look WRONG ───────────────
 [ $c_old, $b_old ] = $get( add_query_arg( 'lg_wd_email_preview', '1', home_url( '/' ) ) );
 $old_is_front = $looks_like_front( $b_old ) && ! $looks_like_email( $b_old );
@@ -103,10 +112,28 @@ if ( ! $looks_like_email( $b_new ) ) {
 }
 
 // ── And the page itself must actually point its iframe at that URL ──────────
-$rendered = do_shortcode( '[lg_weekly_signup]' );
-$want     = esc_url( add_query_arg( 'lg_wd_email_preview', '1', $permalink ) );
+//
+// THE MISSING-SECTION CASE IS A FAILURE, NOT A NOTE. The fix resolves the URL from
+// get_queried_object_id(), and returns '' — dropping the whole section — when that
+// cannot be resolved. So the fix's own failure mode is the section VANISHING, which
+// an earlier version of this test waved through with a "note" and a green. That
+// would have turned a wrong-document bug into a missing-section bug and called it
+// fixed. A box with no sent issue is the one legitimate reason for an absent
+// section, so that is the only case allowed to pass, and it is checked rather than
+// assumed.
+$rendered  = do_shortcode( '[lg_weekly_signup]' );
+$want      = esc_url( add_query_arg( 'lg_wd_email_preview', '1', $permalink ) );
+$has_issue = (bool) $get_latest_sent_issue_id();
+
 if ( strpos( $rendered, 'lg_wd_email_preview' ) === false ) {
-	echo "  note: shortcode rendered no preview section (no sent issue on this box?)\n";
+	if ( $has_issue ) {
+		echo "  FAIL: this box HAS a sent issue, but the page rendered no preview section at all.\n";
+		echo "        The section is being dropped rather than pointed somewhere wrong — check\n";
+		echo "        preview_url()'s permalink resolution before assuming the URL fix is fine.\n";
+		$fail++;
+	} else {
+		echo "  note: no sent issue on this box, so an absent section is correct\n";
+	}
 } elseif ( strpos( $rendered, $want ) === false ) {
 	echo "  FAIL: the page's iframe does not point at the permalink-based preview URL.\n";
 	echo "        EXPECTED RED until the fix is DEPLOYED — this assertion runs against the\n";
