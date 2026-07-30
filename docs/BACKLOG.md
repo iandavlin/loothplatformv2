@@ -3,6 +3,18 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-30 — Advanced search: dynamic facet narrowing (Ian)
+
+Ian 7/30: as options are picked in advanced search, REDUCE the remaining
+options to only those that would actually return content. E.g. pick author
+"Dan Erlewine" → the tags, content-topics, type, etc. facets update to show
+ONLY values that co-occur with his content (non-empty result guaranteed).
+Dynamic, live as each facet is chosen — no dead-end combinations that return
+zero. Needs: facet counts recomputed against the current filter set on each
+pick (server endpoint returning available values+counts for the remaining
+facets), and the UI disabling/hiding zero-result options. Applies to the adv
+search surface (the Advanced Search fold). Member-facing polish.
+
 ## 2026-07-30 — Admin can edit ANY post, full functionality (Ian)
 
 Ian 7/30: "I need to be able to edit any post as admin as well. Full
