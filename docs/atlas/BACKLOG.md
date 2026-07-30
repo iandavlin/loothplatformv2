@@ -45,11 +45,23 @@ Move finished items to DONE with the date. If an item is blocked, say *on what* 
    cause of the long-standing "www-data wp-cli fatal", and it blocks lanes from
    minting WP cookies without root. Decide the correct group posture.
 
-7. **Events leave the events page too soon** — Ian, 2026-07-28. Events are
-   disappearing from `/events/` earlier than they should. Not yet diagnosed:
-   could be the query window, a timezone/UTC boundary, or an end-date vs
-   start-date comparison. Reproduce against LIVE data (dev2 and live hold
-   different events) before theorising.
+7. ~~**Events leave the events page too soon**~~ — Ian, 2026-07-28.
+   **DIAGNOSED + FIXED** on branch `events-expiring-early`. **Root cause: the
+   timezone/UTC boundary** — of the three candidates listed here it is that one,
+   and it is *not* an end-date problem (there is no end-date field in the data
+   model at all: `event` posts carry only `events_start_date_and_time_` + a free-text
+   `time_of_event`).
+   `gmdate('Ymd')` produced a **UTC** calendar day and compared it against a date an
+   editor typed in **site-local** time, so every event fell out of `upcoming` at
+   **20:00 America/New_York** (19:00 in winter) — 4 hours before its own day ended.
+   **Live proof:** event **72327** "Frank Brothers process and shop tour", start
+   `20260727` at **8:00 pm**, was already absent from the rendered `/events/` page at
+   22:14 local — it vanished at 20:00, *the exact minute it began*.
+   Same bug in **three** places (`events/lib/events-query.php`,
+   `lg-events-shortcode.php`, `lg-patreon-stripe-poller/src/Wp/UpcomingEvents.php`),
+   while `lg-weekly-digest/includes/class-lg-wd-query.php` already had it right with
+   `current_time('Ymd')`. Three occurrences ⇒ gated: `tools/gates/event-date-tz-gate.sh`,
+   now GATE 6/6 (proven RED on the pre-fix tree, GREEN after).
 8. **Everything belongs in the monorepo** — Ian, 2026-07-28: "everything should
    be in mono repo, that's why all the symlink". Standing principle, not a task:
    if a served file is not in the repo and traceable to a commit, it does not
@@ -67,6 +79,19 @@ Move finished items to DONE with the date. If an item is blocked, say *on what* 
 - **Restore with `git checkout HEAD -- <path>`, never the bare form.** The bare
   form restores from the INDEX; on a shared clone it installs another process's
   staged work and exits 0. Measured 2026-07-27.
+
+9. **Mobile needs the desktop search-select for forum posting** — Ian,
+   2026-07-28: "I would like to replicate the search select for forum posting
+   that is on dt on the mobile." The searchable forum/destination picker that
+   desktop shows when composing a forum post does not exist on mobile; mobile
+   gets a lesser control (confirm which — a plain select, or no chooser at all).
+   Bring the desktop one across.
+   *Recorded as Ian said it plus keeper's reading of it — CONFIRM the actual
+   desktop control and the actual mobile control before building. Composer v2
+   phase 3 unified the composer across surfaces, so this may now be a matter of
+   pointing mobile at the existing component rather than writing a second one.
+   Ask Ian for a screenshot if the surface is ambiguous — he decides from
+   pictures.*
 
 ## BLOCKED — named blocker
 

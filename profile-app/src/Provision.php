@@ -206,29 +206,29 @@ final class Provision
         }
     }
 
-    /** Display string -> url-safe slug ('Mikelle Davlin' -> 'mikelle-davlin'). */
+    /**
+     * Display string -> url-safe slug ('Mikelle Davlin' -> 'mikelle-davlin').
+     *
+     * Delegates to Slug::derive — the ONE derivation shared with the rename sync and
+     * bin/backfill-slugs.php. It was a local preg_replace here, which silently
+     * mangled every non-ASCII name it touched (`Åke` -> `ke`, `Ellström` ->
+     * `ellstr-m`) and emptied CJK names entirely, dropping those members through to
+     * the email fallback. Keeping a second copy of this logic is what lets a backfill
+     * and a later rename disagree about the same member's URL.
+     */
     private static function slugify(string $s): string
     {
-        $s = strtolower(trim($s));
-        $s = preg_replace('/[^a-z0-9]+/', '-', $s) ?? '';
-        return trim($s, '-');
+        return Slug::derive($s);
     }
 
     /**
      * Word-boundary trim to the handle cap. Slug::MAX_LEN existed but neither
      * mint site enforced it (identity pass, keeper 02:25 spec 2026-07-26 — the
-     * dev2 34-char strays). Cut at the last dash inside the cap unless the cap
-     * already lands at a word end; hard-cut a single long word.
+     * dev2 34-char strays). Delegates to Slug::fit for the same one-copy reason.
      */
     private static function slugFit(string $s, int $max = Slug::MAX_LEN): string
     {
-        if (strlen($s) <= $max) return $s;
-        $cut = substr($s, 0, $max);
-        if (($s[$max] ?? '') !== '-') {
-            $dash = strrpos($cut, '-');
-            if ($dash !== false && $dash >= Slug::MIN_LEN) $cut = substr($cut, 0, $dash);
-        }
-        return rtrim($cut, '-');
+        return Slug::fit($s, $max);
     }
 
     /**

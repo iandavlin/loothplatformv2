@@ -211,6 +211,7 @@ function lg_notify_on_reply(int $topic_id, int $reply_id, int $author_id, int $p
     // 3. Reply to the topic → the topic author.
     $topic_author = (int) get_post_field('post_author', $topic_id);
     if ($topic_author > 0 && !isset($notified[$topic_author])) {
+        $notified[$topic_author] = true;           // claim it — leg 4 below must not re-ring them
         lg_notify_push([
             'recipient_wp_id' => $topic_author,
             'actor_wp_id'     => $author_id,
@@ -220,6 +221,64 @@ function lg_notify_on_reply(int $topic_id, int $reply_id, int $author_id, int $p
             'anchor_id'       => 0,                // NULL in the dedup key → ONE row per topic…
             'target_url'      => $url,             // …whose link re-points at the newest reply on coalesce
         ]);
+    }
+
+    // 4. Everyone who deliberately FOLLOWS this topic, minus everyone already rung.
+    //    The fourth and least-specific rung (thread-follow lane, SPEC §3.3). It is
+    //    claimed LAST on purpose: a follower who was also @mentioned gets the
+    //    mention, a following topic-author gets reply_to_topic. One person, one row
+    //    per event — the $notified set is the whole mechanism and this leg adds no
+    //    new dedup logic of its own.
+    foreach (lg_notify_topic_followers($topic_id) as $follower_id) {
+        if (isset($notified[$follower_id])) continue;
+        $notified[$follower_id] = true;
+        lg_notify_push([
+            'recipient_wp_id' => $follower_id,
+            'actor_wp_id'     => $author_id,
+            'type'            => 'forum.followed_topic',
+            'target_kind'     => 'topic',
+            'target_id'       => $topic_id,
+            'anchor_id'       => 0,                // as leg 3 — ONE coalesced row per topic
+            'target_url'      => $url,
+        ]);
+    }
+}
+
+/**
+ * Everyone holding the 🔔 NOTIFICATIONS bit on a topic → [wp_user_id, …].
+ *
+ * The bit lives in forums.topic_follow in the `looth` PG database — see
+ * bb-mirror/schema.pg.sql for why it is there and not in profile_app.
+ *
+ * TWO CALLING CONTEXTS, and this must work in BOTH:
+ *   - bb-mirror/api/v0/reply.php, which HAS loaded bb-mirror's config.php
+ *     (bb_mirror_db() already defined → reuse it, no second connection);
+ *   - the bb-mirror-sync mu-plugin, which has NOT. Both run on the WP FPM pool as
+ *     the same OS user, so the same peer-auth socket connection is available; we
+ *     just have to open it ourselves.
+ *
+ * SILENT ON FAILURE, like every other path in this file: a reply that posted must
+ * never fail because the follow store was unreachable. No followers → no leg 4.
+ */
+function lg_notify_topic_followers(int $topic_id): array
+{
+    if ($topic_id < 1) return [];
+
+    try {
+        if (function_exists('bb_mirror_db')) {
+            $pdo = bb_mirror_db(true);                    // reply.php path — reuse the configured connector
+        } else {
+            $db  = defined('LG_BB_MIRROR_PG_DB') ? LG_BB_MIRROR_PG_DB : 'looth';
+            $pdo = new PDO('pgsql:host=/var/run/postgresql;dbname=' . $db, null, null);
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $pdo->exec('SET search_path = forums, public');
+        }
+        $st = $pdo->prepare('SELECT user_id FROM topic_follow WHERE topic_id = :t');
+        $st->execute([':t' => $topic_id]);
+        return array_values(array_filter(array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN))));
+    } catch (Throwable $e) {
+        error_log('[lg-notify] follower lookup failed for topic ' . $topic_id . ': ' . $e->getMessage());
+        return [];
     }
 }
 

@@ -28,6 +28,14 @@ return [
         ['name' => 'Member Benefits',       'url' => 'https://loothgroup.com/archive/?_post_type=member-benefit', 'logo' => 'https://loothgroup.com/wp-content/uploads/2024/06/Member-Benefits-300x80.webp',    'bg' => '#fff'],
     ],
 
+    // The line under "Welcome back, <first name>." on the logged-in front page.
+    // Was hardcoded in index.php until the front-end editor shipped; it is the
+    // only piece of front-page copy that was not already config-driven. Plain
+    // text — index.php renders it through h().
+    'member_greeting' => [
+        'body' => 'Here’s what’s new in the Looth community.',
+    ],
+
     // Featured-member band on the LOGGED-IN front page (Bento layout,
     // Buck/Ian 2026-06-11). Rotate via the config.json overlay; enabled=false
     // hides the band. Dan Erlewine first.

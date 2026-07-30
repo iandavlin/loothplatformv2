@@ -50,3 +50,6 @@ live-bundle/v2-layouts-bundle.json
 # serve-from-repo: archive-poc runtime sqlite (box-local, never track)
 /archive-poc/index.sqlite
 /archive-poc/index.sqlite-*
+
+# merge journals hold member emails and prior values — never commit
+tools/dupe-merge/journal/

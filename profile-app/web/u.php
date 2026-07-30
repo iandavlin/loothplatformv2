@@ -365,6 +365,13 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 /* craft chips */
 .lg-chips{display:flex;flex-wrap:wrap;gap:0}
 .lg-chip{display:inline-block;background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:8px;padding:5px 12px;margin:0 7px 8px 0;font-size:calc(13.5px*var(--lg-read-scale,1))}
+/* taxonomy accordions (Ian previs-approved 7/26, rows2) — cut chips + the
+   show-all/fewer toggle chip. Sage-tinted so it never reads as data; always ends
+   the last visible row (the JS trims until it fits, never a lonely row). */
+.lg-chip--cut{display:none}
+.lg-chip--more{appearance:none;background:var(--lg-sage-tint);border:1px solid var(--lg-sage-3);border-radius:8px;padding:5px 12px;margin:0 7px 8px 0;font:700 calc(12.5px*var(--lg-read-scale,1))/1.55 var(--lg-font-sans);color:var(--lg-sage-d);cursor:pointer}
+.lg-chip--more:hover{border-color:var(--lg-sage)}
+.lg-chip--more .car{font-size:calc(10px*var(--lg-read-scale,1));margin-left:5px}
 
 /* socials / links */
 .lg-socrow{display:flex;gap:9px;flex-wrap:wrap}
@@ -397,16 +404,31 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 /* drop indicator while dragging a caddy block onto the profile */
 .lg-block--drop-before{box-shadow:0 -3px 0 0 var(--lg-sage)}
 .lg-block--drop-after{box-shadow:0 3px 0 0 var(--lg-sage)}
-/* Sections toggle in the View-as bar — a hamburger at the break (Ian 6/15):
-   below 1380px the caddy is an off-canvas drawer, so this reads as a menu
-   button; at >=1380 it's display:none (the caddy is the permanent column). */
-.lg-viewas__caddy{margin-left:auto;display:inline-flex;align-items:center;gap:9px;background:var(--lg-amber);color:#4a3c10;border:0;border-radius:999px;padding:8px 15px;min-height:40px;font:800 calc(12px*var(--lg-read-scale,1))/1 var(--lg-font-sans);cursor:pointer}
-.lg-viewas__caddy:hover{filter:brightness(1.06)}
-/* three-bar hamburger glyph (currentColor inherits the button ink) */
-.lg-burger-ic{display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px;position:relative;flex:0 0 16px}
-.lg-burger-ic::before,.lg-burger-ic::after{content:"";position:absolute;left:0;width:16px;height:2px;background:currentColor;border-radius:2px}
-.lg-burger-ic::before{top:-5px}
-.lg-burger-ic::after{top:5px}
+/* SECTIONS PICKER OPENERS (Ian 2026-07-28, option A) — replaced the amber pill that
+   used to sit in the View-as/privacy bar. Two in-flow affordances, both <1380px only:
+   the "Your layout" row under the identity card, and the dashed add card at the end of
+   the block list. At >=1380 the caddy is a permanent column and both are display:none
+   (see the @media block below). Neither element carries .lg-block/data-block, so the
+   DOM-order-driven layout save is untouched. */
+.lg-layoutrow{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:10px 14px;
+  background:var(--lg-sage-tint);border:1px solid var(--lg-sage-3);border-radius:14px}
+.lg-layoutrow__txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.lg-layoutrow__lbl{font:800 calc(12.5px*var(--lg-read-scale,1))/1.2 var(--lg-font-sans);color:var(--lg-charcoal)}
+.lg-layoutrow__n{font:500 calc(11px*var(--lg-read-scale,1))/1.2 var(--lg-font-sans);color:var(--lg-mute)}
+.lg-secopen{margin-left:auto;display:inline-flex;align-items:center;gap:7px;background:var(--lg-sage);
+  color:#fff;border:0;border-radius:999px;padding:9px 16px;min-height:40px;cursor:pointer;
+  font:800 calc(12px*var(--lg-read-scale,1))/1 var(--lg-font-sans)}
+.lg-secopen:hover{filter:brightness(1.06)}
+.lg-secopen:active{transform:scale(.98)}
+.lg-secopen__plus{font-size:14px;line-height:1}
+/* dashed end-of-list add card — this IS the drop target, drawn */
+.lg-addsec{display:flex;flex-direction:column;align-items:center;gap:3px;width:100%;
+  margin:4px 0 0;padding:18px 14px;cursor:pointer;text-align:center;
+  background:var(--lg-card-bg,#fff);border:1.5px dashed var(--lg-sage-3);border-radius:16px}
+.lg-addsec:hover{border-color:var(--lg-sage);background:var(--lg-sage-tint)}
+.lg-addsec:active{transform:scale(.995)}
+.lg-addsec__big{font:800 calc(13px*var(--lg-read-scale,1))/1.2 var(--lg-font-sans);color:var(--lg-charcoal)}
+.lg-addsec__sm{font:500 calc(11px*var(--lg-read-scale,1))/1.35 var(--lg-font-sans);color:var(--lg-mute)}
 /* caddy panel — slide-in from the right on desktop; off-canvas drawer on mobile */
 .lg-caddy{position:fixed;top:0;right:0;height:100vh;width:300px;max-width:86vw;background:var(--lg-card-bg,#fff);border-left:1px solid var(--lg-line);
   box-shadow:-12px 0 36px rgba(0,0,0,.14);transform:translateX(102%);transition:transform .22s ease;z-index:1200;display:flex;flex-direction:column;padding:18px}
@@ -497,7 +519,8 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
     width:auto;height:auto;max-height:calc(100vh - 109px);overflow-y:auto;transform:none;z-index:30;
     border:1px solid var(--lg-line);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
   .lg-shell--owner .lg-caddy__close{display:none}      /* permanent — no close button */
-  .lg-viewas__caddy{display:none}                       /* permanent — no toggle */
+  /* the sub-1380 openers are redundant here: the caddy IS the column (Ian 2026-07-28) */
+  .lg-layoutrow, .lg-addsec{display:none}
   .lg-caddy__backdrop{display:none}
 }
 .lg-link__grip{color:var(--lg-mute);font-size:13px;line-height:1;letter-spacing:-2px;cursor:grab;user-select:none}
@@ -577,6 +600,18 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-gphoto img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s ease}
 .lg-gallery--grid .lg-gphoto:hover img{transform:scale(1.04)}
 .lg-gphoto figcaption{position:absolute;bottom:0;left:0;right:0;font:600 calc(11px*var(--lg-read-scale,1))/1.3 var(--lg-font-sans);color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.6));padding:16px 8px 6px}
+/* gallery — owner: caption edit affordance (Ian previs-approved 7/26; on-tile inline,
+   the lg-edit contentEditable idiom). The strip is the SAME figcaption overlay all
+   viewers see; owner gets a ✎ tail, a ghost "＋ Add caption" when empty, and an
+   editing state (solid scrim + sage focus bar). Hardcoded white-on-scrim pair is
+   mode-independent (rides the photo, not the theme) — same rule as the carousel nav. */
+.lg-gallery--edit .lg-gphoto figcaption{cursor:text}
+.lg-gallery--edit .lg-gphoto figcaption::after{content:"✎";margin-left:6px;font-size:calc(10px*var(--lg-read-scale,1));opacity:.85}
+.lg-gphoto figcaption.lg-gcap--empty{color:rgba(255,255,255,.92)}
+.lg-gphoto figcaption.editing{background:rgba(10,12,8,.78);border-top:2px solid var(--lg-sage);padding:7px 8px 22px;outline:none;cursor:text}
+.lg-gphoto figcaption.editing::after{content:none}
+.lg-gcap__hint{position:absolute;bottom:4px;left:8px;right:8px;z-index:3;pointer-events:none;display:flex;justify-content:space-between;gap:6px;font:500 calc(9.5px*var(--lg-read-scale,1))/1 var(--lg-font-sans);color:rgba(255,255,255,.66)}
+.lg-gcap__hint .over{color:var(--lg-amber)}
 .lg-gphoto__rm{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;font-size:15px;line-height:1;z-index:3}
 .lg-gphoto__rm:hover{background:var(--lg-rust)}
 .lg-gphoto__add{aspect-ratio:1;border:2px dashed var(--lg-sage-3);background:none;border-radius:10px;cursor:pointer;color:var(--lg-sage-3);font:300 34px/1 var(--lg-font-sans);display:flex;align-items:center;justify-content:center;text-align:center;padding:6px;transition:background .15s,border-color .15s,color .15s}
@@ -732,9 +767,9 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
           <span class="lg-viewas__lbl" style="color:#f0c987">Admin edit</span>
           <span class="lg-viewas__note">You are editing <b><?= looth_h($displayName) ?></b>'s profile as an administrator. Every save is logged.</span>
           <a class="lg-vchip" style="background:rgba(255,255,255,.12);color:#fff;text-decoration:none" href="/u/<?= rawurlencode($slugSafe) ?>">Exit admin edit</a>
-          <?php if ($editing): ?>
-          <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy" aria-label="Open sections menu"><span class="lg-burger-ic" aria-hidden="true"></span><span class="lg-viewas__caddy-lbl">Sections</span></button>
-          <?php endif; ?>
+          <?php /* Sections opener moved OUT of this privacy panel — Ian 2026-07-28,
+                   option A. It now lives in the "Your layout" row under the identity
+                   card + the add card at the end of the blocks (_render_blocks.php). */ ?>
         </div>
         <?php else: ?>
         <div class="lg-viewas__row">
@@ -744,9 +779,9 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
             <a href="<?= looth_h($viewLink('member')) ?>" <?= $role==='member'?'aria-current="true"':'' ?>>Member</a>
             <a href="<?= looth_h($viewLink('me')) ?>"     <?= $role==='me'?'aria-current="true"':'' ?>>Me</a>
           </span>
-          <?php if ($editing): ?>
-          <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy" aria-label="Open sections menu"><span class="lg-burger-ic" aria-hidden="true"></span><span class="lg-viewas__caddy-lbl">Sections</span></button>
-          <?php endif; ?>
+          <?php /* Sections opener moved OUT of this privacy panel — Ian 2026-07-28,
+                   option A. This panel is privacy ONLY now: View-as, Profile
+                   visibility, Discussion posts. See _render_blocks.php. */ ?>
         </div>
         <?php endif; /* /adminEditing banner vs View-as */ ?>
         <?php
@@ -1213,18 +1248,25 @@ window.lgSortable = function (container, opts) {
 
   /* ---- caddy: open / close ---- */
   var caddy    = document.getElementById('lg-caddy');
-  var toggle   = document.getElementById('lg-caddy-toggle');
+  // Openers (Ian 2026-07-28, option A): was ONE #lg-caddy-toggle in the privacy bar;
+  // now any [data-caddy-open] — the "Your layout" row and the end-of-list add card,
+  // both emitted by _render_blocks.php. Kept as a live list so aria-expanded stays in
+  // sync on every opener, not just the one that was clicked.
+  var openers  = Array.prototype.slice.call(document.querySelectorAll('[data-caddy-open]'));
   var backdrop = document.getElementById('lg-caddy-backdrop');
+  function setOpenersExpanded(v) {
+    openers.forEach(function (b) { b.setAttribute('aria-expanded', v ? 'true' : 'false'); });
+  }
   function openCaddy() {
     if (!caddy) return;
     caddy.classList.add('is-open'); caddy.setAttribute('aria-hidden', 'false');
-    if (toggle) toggle.setAttribute('aria-expanded', 'true');
+    setOpenersExpanded(true);
     if (backdrop) { backdrop.hidden = false; requestAnimationFrame(function () { backdrop.classList.add('is-open'); }); }
   }
   function closeCaddy() {
     if (!caddy) return;
     caddy.classList.remove('is-open'); caddy.setAttribute('aria-hidden', 'true');
-    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    setOpenersExpanded(false);
     if (backdrop) { backdrop.classList.remove('is-open'); setTimeout(function () { backdrop.hidden = true; }, 220); }
   }
   // ≥1380px the caddy is a permanent floating sidebar (CSS); below, it's an off-canvas drawer.
@@ -1238,8 +1280,13 @@ window.lgSortable = function (container, opts) {
       caddy.setAttribute('aria-hidden', 'true');
     }
   }
-  if (toggle && caddy) {
-    toggle.addEventListener('click', function () { caddy.classList.contains('is-open') ? closeCaddy() : openCaddy(); });
+  // Gate on `caddy` ALONE. This used to be `if (toggle && caddy)`, which was safe only
+  // while a toggle always existed — with the privacy-bar pill gone that would have
+  // silently killed close, Escape, the backdrop AND the #caddy re-open below.
+  if (caddy) {
+    openers.forEach(function (b) {
+      b.addEventListener('click', function () { caddy.classList.contains('is-open') ? closeCaddy() : openCaddy(); });
+    });
     var closeBtn = document.getElementById('lg-caddy-close');
     if (closeBtn) closeBtn.addEventListener('click', closeCaddy);
     if (backdrop) backdrop.addEventListener('click', closeCaddy);
@@ -2114,8 +2161,10 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
     idx = (i + photos.length) % photos.length;
     var el  = photos[idx];
     var url = el.getAttribute('data-url') || '';
+    // Owner ghost strips ("＋ Add caption", .lg-gcap--empty) are an edit affordance,
+    // not a caption — never surface them as lightbox text.
     var cap = el.querySelector('figcaption');
-    var capText = cap ? cap.textContent : '';
+    var capText = (cap && !cap.classList.contains('lg-gcap--empty')) ? cap.textContent.trim() : '';
     imgEl.src = big(url);
     imgEl.alt = capText;
     capEl.textContent = capText;
@@ -2152,11 +2201,86 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
     if (e.target.closest('.lg-gphoto__rm') || e.target.closest('.lg-gphoto__add')) return;
     var fig = e.target.closest('.lg-gphoto[data-url]');
     if (!fig) return;
+    // In the owner's editor the caption strip is the caption EDITOR (contentEditable),
+    // not a lightbox trigger — visitors' caption clicks still open the lightbox.
+    if (e.target.closest('figcaption') && fig.closest('.lg-gallery--edit')) return;
     scopeEl = fig.closest('.lg-block--gallery') || null;   // this gallery's photos only
     collect();
     var i = photos.indexOf(fig);
     if (i >= 0) { e.preventDefault(); open(i); }
   }, true);
+})();
+</script>
+
+<script>
+/* Taxonomy accordions (all viewers; Ian previs-approved 7/26, threshold = 2 rows) —
+   Instruments / Skills / Music chip sections collapse past two chip ROWS: hidden
+   chips cut to display:none, a sage "Show all N" toggle chip ends the last visible
+   row (the trim loop guarantees it never wraps to a lonely row). Row-based, so the
+   same section cuts harder at 390 than at 1280; re-measured on resize. Guards:
+   fewer than 3 hidden chips isn't worth a toggle (section stays flat); the owner's
+   edit chips (.lg-cat-edit) never collapse. */
+(function () {
+  var MAX_ROWS = 2, MIN_HIDDEN = 3;
+  var wraps = [];
+  ['instruments', 'skills', 'music'].forEach(function (k) {
+    var el = document.querySelector('.lg-block--' + k + ' .lg-chips:not(.lg-cat-edit)');
+    if (el && !el.id) el.id = 'lg-chips-' + k;
+    if (el) wraps.push(el);
+  });
+  if (!wraps.length) return;
+
+  function chipsOf(wrap) {
+    return Array.prototype.filter.call(wrap.querySelectorAll('.lg-chip'), function (c) {
+      return !c.classList.contains('lg-chip--more');
+    });
+  }
+  function reset(wrap) {
+    var btn = wrap.querySelector('.lg-chip--more'); if (btn) btn.remove();
+    chipsOf(wrap).forEach(function (c) { c.classList.remove('lg-chip--cut'); });
+  }
+  function rowTops(chips) {
+    var t = [];
+    chips.forEach(function (c) { if (t.indexOf(c.offsetTop) === -1) t.push(c.offsetTop); });
+    return t.sort(function (a, b) { return a - b; });
+  }
+  function mkBtn(wrap, label, car, expanded) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'lg-chip lg-chip--more';
+    b.innerHTML = label + '<span class="car" aria-hidden="true">' + car + '</span>';
+    b.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    b.setAttribute('aria-controls', wrap.id);
+    b.addEventListener('click', function () {
+      wrap.dataset.accExpanded = expanded ? '' : '1';
+      apply(wrap);
+    });
+    return b;
+  }
+  function apply(wrap) {
+    reset(wrap);
+    var chips = chipsOf(wrap); if (!chips.length) return;
+    if (rowTops(chips).length <= MAX_ROWS) { delete wrap.dataset.accExpanded; return; } // fits → flat
+    if (wrap.dataset.accExpanded) { wrap.appendChild(mkBtn(wrap, 'Show fewer', '▴', true)); return; }
+    var limit = rowTops(chips)[MAX_ROWS - 1], hidden = 0;
+    chips.forEach(function (c) { if (c.offsetTop > limit) { c.classList.add('lg-chip--cut'); hidden++; } });
+    var btn = mkBtn(wrap, 'Show all ' + chips.length, '▾', false);
+    wrap.appendChild(btn);
+    var guard = 0;                      // trim until the toggle joins the last visible row
+    while (btn.offsetTop > limit && guard++ < 60) {
+      var vis = chips.filter(function (c) { return !c.classList.contains('lg-chip--cut'); });
+      if (!vis.length) break;
+      vis[vis.length - 1].classList.add('lg-chip--cut'); hidden++;
+    }
+    if (hidden < MIN_HIDDEN) reset(wrap);
+  }
+
+  function applyAll() { wraps.forEach(apply); }
+  applyAll();
+  var raf = 0;                          // row counts are width-dependent
+  addEventListener('resize', function () {
+    if (raf) return;
+    raf = requestAnimationFrame(function () { raf = 0; applyAll(); });
+  });
 })();
 </script>
 <?php if ($isOwner): /* reopen owner-only region for the gallery editor below */ ?>
@@ -2180,19 +2304,98 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
 
     function currentImages() {
       return Array.prototype.map.call(wrap.querySelectorAll('.lg-gphoto'), function (el) {
+        // Ghost strips ("＋ Add caption") are affordance, not data — save as ''.
         var cap = el.querySelector('figcaption');
-        return { url: el.getAttribute('data-url'), caption: cap ? cap.textContent : '' };
+        var txt = (cap && !cap.classList.contains('lg-gcap--empty')) ? cap.textContent.trim() : '';
+        return { url: el.getAttribute('data-url'), caption: txt };
       });
     }
+    // PUTs are SERIALIZED: a caption blur-commit and a photo remove can fire
+    // back-to-back (commitActiveCap in the remove handler); each snapshots the DOM
+    // synchronously at call time, so dispatching in call order makes last-write-wins
+    // deterministic — an out-of-order landing would resurrect a removed (and
+    // already-GC'd) photo.
+    var putChain = Promise.resolve();
     function putList(images) {
-      return fetch(ep, { method: 'PUT', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ images: images }) })
-        .then(function (r) { return r.ok; });
+      var p = putChain.then(function () {
+        return fetch(ep, { method: 'PUT', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ images: images }) })
+          .then(function (r) { return r.ok; });
+      });
+      putChain = p.catch(function () {});   // a failed PUT never wedges the queue
+      return p;
     }
 
-    // Remove a photo (this gallery only).
+    /* Caption editing (Ian previs-approved 7/26) — the lg-edit contentEditable idiom
+       on the tile's own figcaption strip: click → editable, Enter/blur saves the
+       whole list via the existing PUT, Esc cancels. 200-char cap = the server's
+       mb_substr truth (Block::saveGalleryImages); live counter in a hint row.
+       Caption visibility inherits the gallery — there is deliberately no control. */
+    var CAP_MAX = 200;
+    function commitActiveCap() {
+      var a = document.activeElement;
+      if (a && a.matches && a.matches('figcaption.editing')) a.blur();   // sync-commits via its blur handler
+    }
+    function capEditStart(cap) {
+      var fig  = cap.closest('.lg-gphoto');
+      var hint = document.createElement('span'); hint.className = 'lg-gcap__hint';
+      var keys = document.createElement('span'); keys.textContent = 'Enter saves · Esc cancels';
+      var cnt  = document.createElement('span');
+      hint.appendChild(keys); hint.appendChild(cnt); fig.appendChild(hint);
+      function count() {
+        var n = cap.textContent.length;
+        if (n > CAP_MAX) {                      // hard-stop at the server's cap
+          cap.textContent = cap.textContent.slice(0, CAP_MAX); n = CAP_MAX;
+          var r = document.createRange(); r.selectNodeContents(cap); r.collapse(false);
+          var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        }
+        cnt.textContent = n + '/' + CAP_MAX;
+        cnt.classList.toggle('over', n >= CAP_MAX);
+      }
+      function finish() {
+        cap.contentEditable = 'false'; cap.classList.remove('editing');
+        cap.removeEventListener('keydown', onKey); cap.removeEventListener('input', count);
+        hint.remove();
+      }
+      function settle(val) {                    // write the committed value back into the strip
+        if (val === '') { cap.textContent = '＋ Add caption'; cap.classList.add('lg-gcap--empty'); }
+        else { cap.textContent = val; cap.classList.remove('lg-gcap--empty'); }
+      }
+      function onKey(e) {
+        if (e.key === 'Enter') { e.preventDefault(); cap.blur(); }
+        else if (e.key === 'Escape') { e.preventDefault(); cap.dataset.esc = '1'; cap.blur(); }
+      }
+      var wasEmpty = cap.classList.contains('lg-gcap--empty');
+      cap.dataset.orig = wasEmpty ? '' : cap.textContent.trim();
+      delete cap.dataset.esc;
+      if (wasEmpty) { cap.textContent = ''; cap.classList.remove('lg-gcap--empty'); }
+      cap.classList.add('editing'); cap.contentEditable = 'true'; cap.focus();
+      var r = document.createRange(); r.selectNodeContents(cap); r.collapse(false);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      count();
+      cap.addEventListener('keydown', onKey);
+      cap.addEventListener('input', count);
+      cap.addEventListener('blur', function onBlur() {
+        cap.removeEventListener('blur', onBlur);
+        var orig = cap.dataset.orig || '';
+        var val  = cap.dataset.esc ? orig : cap.innerText.replace(/\s+/g, ' ').trim().slice(0, CAP_MAX);
+        finish(); settle(val);
+        if (val === orig) return;
+        var img = fig.querySelector('img'); if (img) img.alt = val;   // alt = caption, kept live
+        putList(currentImages()).then(function (ok) { if (!ok) { alert('Caption save failed'); location.reload(); } });
+      });
+    }
+    wrap.addEventListener('click', function (e) {
+      var cap = e.target.closest('figcaption.lg-gcap'); if (!cap || !wrap.contains(cap)) return;
+      if (!cap.classList.contains('editing')) capEditStart(cap);
+    });
+
+    // Remove a photo (this gallery only). Commit any open caption edit FIRST so its
+    // in-progress text is saved by its own handler, not silently read mid-edit
+    // (same data-loss guard as lgSortable's commitActiveEdit).
     wrap.addEventListener('click', function (e) {
       var rm = e.target.closest('.lg-gphoto__rm'); if (!rm) return;
+      commitActiveCap();
       rm.closest('.lg-gphoto').remove();
       putList(currentImages()).then(function (ok) { if (!ok) { alert('Remove failed'); location.reload(); } });
     });

@@ -69,7 +69,13 @@ function lg_events_shortcode(array $atts = []): string {
 
     $limit = max(1, min(100, (int) $atts['limit']));
     $is_past = $atts['past'] === '1' || strtolower((string)$atts['past']) === 'true';
-    $today_ymd = gmdate('Ymd');
+    /* SITE-LOCAL today, never gmdate('Ymd'). The meta holds a bare calendar date
+       entered in site-local time; comparing it to a UTC day dropped events off the
+       list at 20:00 America/New_York on the day they belonged to. `current_time`
+       is the WP-native idiom and is already used correctly by lg-weekly-digest's
+       class-lg-wd-query.php. Display below already uses wp_date() (timezone-aware) —
+       only this filter was wrong. */
+    $today_ymd = current_time('Ymd');
 
     $meta_query = [
         [

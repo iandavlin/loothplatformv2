@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — account email preferences, third row (THREAD-FOLLOW-SPEC §6)</title>
+<!--
+  MOCK ONLY — not served anywhere. THREAD-FOLLOW-SPEC.md §6, frame 6.
+  PROPOSAL for the open question "how do per-thread email toggles coexist with the
+  Weekly/Event account toggles already shipped at bf9e3a1".
+
+  The two existing rows are REAL: membership-pages/web/manage-subscription.php:167-176,
+  wired at :202-214 to admin-ajax lg_weekly_member_state/_toggle and
+  lg_event_reminder_state/_signup, both FluentCRM-list backed. Every style value below
+  is copied verbatim from that file's inline <style> (:180-191) so this is what the page
+  would actually look like — .lg-pref-row, .lg-switch, .lg-switch__track and its 20px knob.
+
+  RECOMMENDED (top card): add ONE third row, "Discussion emails", as the master switch,
+  plus a count line. Master OFF ⇒ never send, whatever the per-thread bits say.
+  ALTERNATIVE (bottom card): no master; list every followed thread on the account page.
+  Open with ?theme=dark for the dark frames.
+-->
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { background: var(--lguser-bg); }
+  .card-shell { background: var(--bg-card); border: 1px solid var(--lg-line); border-radius: 14px;
+    padding: 22px 24px 18px; max-width: 620px; margin: 0 0 10px;
+    box-shadow: 0 1px 2px rgba(26,29,26,.04), 0 12px 26px -18px rgba(26,29,26,.3); }
+  @media (max-width: 640px) { .card-shell { padding: 17px 15px 14px; } }
+
+  /* verbatim from manage-subscription.php:180-191 */
+  .lg-manage-sub__prefs-title { font: 700 1.05rem/1.3 var(--lg-font-hub); margin: 0 0 6px; color: var(--lg-ink); }
+  .lg-pref-row { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 12px 0; border-top: 1px solid var(--lg-line); }
+  .lg-pref-row__txt { font: 400 14px/1.45 var(--lg-font-sans); color: var(--lg-ink); }
+  .lg-pref-row__txt b { display: block; font-weight: 700; }
+  .lg-pref-row__txt small { color: var(--lg-mute); }
+  .lg-switch { position: relative; display: inline-block; width: 46px; height: 26px; flex: 0 0 auto; }
+  .lg-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .lg-switch__track { position: absolute; inset: 0; background: #c9cdbf; border-radius: 999px; transition: .2s; cursor: pointer; }
+  .lg-switch__track:before { content: ""; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px;
+    background: #fff; border-radius: 50%; transition: .2s; }
+  .lg-switch input:checked + .lg-switch__track { background: var(--lg-sage-d); }
+  .lg-switch input:checked + .lg-switch__track:before { transform: translateX(20px); }
+  .lg-pref-note { margin: 10px 0 0; font: 400 12.5px/1.5 var(--lg-font-sans); color: var(--lg-mute); }
+
+  /* the NEW row's supporting line */
+  .lg-pref-row--new { background: linear-gradient(90deg, var(--lg-sage-tint), transparent 70%);
+    margin: 0 -10px; padding-left: 10px; padding-right: 10px; border-radius: 8px; }
+  .lg-pref-sub { display: flex; align-items: center; gap: 7px; padding: 0 0 12px;
+    font: 400 12.5px/1.5 var(--lg-font-sans); color: var(--lg-mute); }
+  .lg-pref-sub a { color: var(--lg-sage-d); font-weight: 700; text-decoration: none; }
+  .newtag { display: inline-block; font: 700 9.5px/1 var(--lg-font-sans); letter-spacing: .07em;
+    text-transform: uppercase; color: #fff; background: var(--lg-sage); border-radius: 999px;
+    padding: 4px 7px; margin-left: 7px; vertical-align: 2px; }
+
+  .rulebox { margin: 14px 0 0; padding: 13px 15px; border-radius: 11px;
+    background: var(--lg-sage-tint); font: 400 13px/1.6 var(--lg-font-sans); color: var(--lg-ink); }
+  .rulebox b { font-weight: 700; }
+
+  /* the alternative's long list */
+  .thread-row { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 10px 0; border-top: 1px solid var(--lg-line); font: 400 13.5px/1.4 var(--lg-font-sans); }
+  .thread-row__t { color: var(--lg-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fade { position: relative; max-height: 210px; overflow: hidden; }
+  .fade::after { content: ""; position: absolute; inset: auto 0 0 0; height: 70px;
+    background: linear-gradient(transparent, var(--bg-card)); }
+  .verdict { font: 600 12.5px/1.55 var(--lg-font-sans); margin: 8px 0 0; max-width: 620px; }
+  .verdict--good { color: var(--lg-sage-d); }
+  .verdict--bad { color: var(--lg-rust); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="capt">Frame 6 — account email preferences · spec §6 · <b>PROPOSAL</b></p>
+  <p class="legend"><b>Recommended</b> — one new row. Account = master switch per email <b>class</b>;
+    per-thread toggles = which threads are in that class.</p>
+
+  <div class="card-shell">
+    <h2 class="lg-manage-sub__prefs-title">Email preferences</h2>
+
+    <div class="lg-pref-row">
+      <span class="lg-pref-row__txt"><b>Weekly Digest</b><small>The members’ weekly round-up — news, events, highlights.</small></span>
+      <label class="lg-switch"><input type="checkbox" checked><span class="lg-switch__track"></span></label>
+    </div>
+
+    <div class="lg-pref-row">
+      <span class="lg-pref-row__txt"><b>Event Reminders</b><small>A heads-up email before events you might want to catch.</small></span>
+      <label class="lg-switch"><input type="checkbox" checked><span class="lg-switch__track"></span></label>
+    </div>
+
+    <div class="lg-pref-row lg-pref-row--new">
+      <span class="lg-pref-row__txt"><b>Discussion emails<span class="newtag">new</span></b>
+        <small>New replies in discussions you asked to be emailed about.</small></span>
+      <label class="lg-switch"><input type="checkbox" checked><span class="lg-switch__track"></span></label>
+    </div>
+    <p class="lg-pref-sub">You get emails from <b>3&nbsp;discussions</b>. <a href="#">See them in the Hub →</a></p>
+
+    <p class="lg-pref-note">Changes save automatically.</p>
+
+    <div class="rulebox"><b>The rule that stops this page ever lying:</b> if this switch is off, no
+      discussion email is sent — whatever the individual discussions say. Turn it back on and each
+      discussion goes back to whatever you last set it to.</div>
+  </div>
+  <p class="verdict verdict--good">For a member: one obvious place to make it all stop, and the per-thread
+    switches stay where the threads are. Nothing is hidden and nothing contradicts.</p>
+
+  <p class="capt" style="margin-top:32px">The alternative, for comparison</p>
+  <p class="legend"><b>Alternative</b> — no master; the account page lists every discussion you're emailed about.</p>
+
+  <div class="card-shell">
+    <h2 class="lg-manage-sub__prefs-title">Email preferences</h2>
+    <div class="lg-pref-row">
+      <span class="lg-pref-row__txt"><b>Weekly Digest</b><small>The members’ weekly round-up.</small></span>
+      <label class="lg-switch"><input type="checkbox" checked><span class="lg-switch__track"></span></label>
+    </div>
+    <div class="lg-pref-row">
+      <span class="lg-pref-row__txt"><b>Event Reminders</b><small>A heads-up before events.</small></span>
+      <label class="lg-switch"><input type="checkbox" checked><span class="lg-switch__track"></span></label>
+    </div>
+    <p class="lg-pref-sub" style="padding-top:12px"><b>Discussions you’re emailed about</b></p>
+    <div class="fade">
+      <div class="thread-row"><span class="thread-row__t">Truss rod won’t budge on a ’74 Jazz</span><label class="lg-switch"><input type="checkbox" checked><span class="lg-switch__track"></span></label></div>
+      <div class="thread-row"><span class="thread-row__t">Bookmatched claro walnut top — glue line ghosting</span><label class="lg-switch"><input type="checkbox" checked><span class="lg-switch__track"></span></label></div>
+      <div class="thread-row"><span class="thread-row__t">Nut slot depth: what are you measuring to?</span><label class="lg-switch"><input type="checkbox" checked><span class="lg-switch__track"></span></label></div>
+      <div class="thread-row"><span class="thread-row__t">Best cheap bandsaw for resawing?</span><label class="lg-switch"><input type="checkbox" checked><span class="lg-switch__track"></span></label></div>
+      <div class="thread-row"><span class="thread-row__t">Shellac blushing in humidity</span><label class="lg-switch"><input type="checkbox" checked><span class="lg-switch__track"></span></label></div>
+      <div class="thread-row"><span class="thread-row__t">Fret end dressing — file or stone?</span><label class="lg-switch"><input type="checkbox" checked><span class="lg-switch__track"></span></label></div>
+    </div>
+  </div>
+  <p class="verdict verdict--bad">For a member: honest, but unbounded — someone following thirty threads
+    gets a thirty-row settings page, and there is no single “make it stop” button, which is the exact
+    thing people look for when they are annoyed enough to open this page.</p>
+
+  <p class="note">Weekly Digest stays independent either way, so a member who kills discussion email still
+    gets the weekly recap — which is the whole point of having a recap.</p>
+</div>
+
+<script>
+  (function () {
+    function apply() {
+      var dark = /(?:\?|&)theme=dark\b/.test(location.search);
+      document.documentElement.setAttribute('data-lguser-theme', dark ? 'dark' : 'light');
+    }
+    apply();
+    window.addEventListener('resize', apply);   // headless clamps to 500px then relayouts
+  })();
+</script>
+</body>
+</html>

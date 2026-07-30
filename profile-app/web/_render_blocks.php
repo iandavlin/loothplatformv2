@@ -139,10 +139,50 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
         Block::profileLayout($userId),
         static fn($k) => !isset($hiddenBlocks[$k]) && isset($renderers[$k])
     ));
+    // ── Sections picker openers (Ian 2026-07-28, option A) ────────────────────
+    // The picker's ONLY opener used to be a pill inside the dark "Profile controls"
+    // privacy panel — wrong conceptual group, top-of-page only, and gone in View-as.
+    // It now has its own row here, directly under the identity card, plus a dashed
+    // card at the END of the block list (below) where the "I want another section"
+    // thought actually happens. Both are <1380px affordances; at >=1380 the caddy is
+    // a permanent sidebar and CSS hides them (u.php @media min-width:1380px).
+    //
+    // NEITHER carries `.lg-block` NOR `data-block` — u.php's order() reads the layout
+    // order straight off the DOM (`.lg-block:not(.lg-block--header)` -> data-block), so
+    // adding either attribute here would corrupt the saved section order.
+    $lgIsOwner = ($role === 'me');            // same test the Business pill above uses
+    if ($lgIsOwner) {
+        $lgCount = count($layout);
+        echo '<div class="lg-layoutrow">'
+           . '<div class="lg-layoutrow__txt">'
+           . '<span class="lg-layoutrow__lbl">Your layout</span>'
+           . '<span class="lg-layoutrow__n">' . $lgCount . ' ' . ($lgCount === 1 ? 'section' : 'sections') . ' shown</span>'
+           . '</div>'
+           . '<button type="button" class="lg-secopen" data-caddy-open="1"'
+           . ' aria-haspopup="dialog" aria-controls="lg-caddy" aria-expanded="false">'
+           . '<span class="lg-secopen__plus" aria-hidden="true">＋</span>Sections</button>'
+           . '</div>';
+    }
+
     // The "Add gallery" control lives in the Sections caddy rail (u.php), NOT in the
     // blocks flow (Ian 2026-07-23, rev 2) — see looth_gallery_count() for the countdown.
     foreach ($layout as $key) {
         ($renderers[$key])();
+    }
+
+    // End-of-list add card. Only when something is actually addable — an owner who has
+    // placed everything gets no dead control. availableBlocks() already excludes the
+    // counter-managed extra galleries ('caddy' => false) and launch-hidden keys.
+    if ($lgIsOwner) {
+        $lgAvail = Block::availableBlocks($userId);
+        if ($lgAvail) {
+            $lgNames = implode(' · ', array_slice(array_values($lgAvail), 0, 4));
+            echo '<button type="button" class="lg-addsec" data-caddy-open="1"'
+               . ' aria-haspopup="dialog" aria-controls="lg-caddy" aria-expanded="false">'
+               . '<span class="lg-addsec__big"><span aria-hidden="true">＋</span> Add a section</span>'
+               . '<span class="lg-addsec__sm">' . looth_h($lgNames) . (count($lgAvail) > 4 ? ' …' : '') . '</span>'
+               . '</button>';
+        }
     }
     // (Freeform sections + the "+ New section" affordance removed 2026-06-11, Ian.)
 }
@@ -245,7 +285,16 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
            . '<img src="' . $rz($imgW) . '" srcset="' . $srcset . '" sizes="' . $sizes . '"'
            . ' width="' . $iw . '" height="' . $ih . '" alt="' . looth_h($cap) . '" loading="lazy" decoding="async">';
         if ($isOwner) echo '<button type="button" class="lg-gphoto__rm" aria-label="Remove">×</button>';
-        if ($cap !== '') echo '<figcaption>' . looth_h($cap) . '</figcaption>';
+        // Owner ALWAYS gets the caption strip (ghost placeholder when empty) — it IS
+        // the edit affordance (Ian previs-approved 7/26). Visitors only see real
+        // captions. Caption visibility inherits the gallery (7/25 ruling): the strip
+        // renders wherever the gallery renders, gated identically — no own control.
+        if ($isOwner) {
+            echo '<figcaption class="lg-gcap' . ($cap !== '' ? '' : ' lg-gcap--empty') . '" title="Click to edit caption">'
+               . ($cap !== '' ? looth_h($cap) : '＋ Add caption') . '</figcaption>';
+        } elseif ($cap !== '') {
+            echo '<figcaption>' . looth_h($cap) . '</figcaption>';
+        }
         echo '</figure>';
     }
 

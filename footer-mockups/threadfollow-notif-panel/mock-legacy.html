@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — the 1,519 existing subscriptions (THREAD-FOLLOW-SPEC §9.2)</title>
+<!--
+  MOCK ONLY — not served anywhere. THREAD-FOLLOW-SPEC.md §9.2, frame 7.
+  PROPOSAL for the open question "what happens to the 1,519 topic + 46 forum
+  subscriptions that are emailing real members TODAY".
+
+  Numbers are MEASURED on live, read-only via live-ro, 2026-07-27 (spec §8):
+    1,519 topic subs / 383 users · 46 forum / 38 users · 12,948 group / 1,853 users
+    736 (48%) the subscriber authored that thread; 355 (23%) replied; 428 (28%) never posted
+      → 1,091 of 1,519 = 72% created by involvement, i.e. the auto-subscribe just banned
+    only 112 subs (49 users) sit on threads with any reply in the last 90 days → 93% dormant
+    31 discussion/reply emails sent in the trailing 14 days
+
+  This mock shows the RECOMMENDATION as a member would actually experience it, rather
+  than as a table: the state becomes visible and one click from off, in three places.
+  Open with ?theme=dark for the dark frames.
+-->
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  .num { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 22px; }
+  .stat { flex: 1 1 168px; background: var(--bg-card); border: 1px solid var(--lg-line);
+    border-radius: 12px; padding: 13px 15px; }
+  .stat__n { font: 700 24px/1.1 var(--lg-font-hub); color: var(--lg-ink); }
+  .stat__n small { font: 700 13px/1 var(--lg-font-sans); color: var(--lg-mute); }
+  .stat__l { font: 400 11.5px/1.45 var(--lg-font-sans); color: var(--lg-mute); margin-top: 5px; }
+  .stat--hot .stat__n { color: var(--lg-rust); }
+
+  .step { display: flex; gap: 14px; align-items: flex-start; margin: 0 0 16px; }
+  .step__n { flex: 0 0 auto; width: 25px; height: 25px; border-radius: 50%; background: var(--lg-sage);
+    color: #fff; display: inline-flex; align-items: center; justify-content: center;
+    font: 700 12px/1 var(--lg-font-sans); margin-top: 2px; }
+  .step__b { flex: 1 1 auto; min-width: 0; }
+  .step__t { font: 700 14px/1.4 var(--lg-font-sans); color: var(--lg-ink); margin: 0 0 8px; }
+
+  .surface { background: var(--bg-card); border: 1px solid var(--lg-line); border-radius: 12px;
+    padding: 12px 14px; max-width: 520px; }
+  .surface--email { font-family: var(--lg-font-sans); }
+  .em-h { font: 700 14.5px/1.35 var(--lg-font-hub); color: var(--lg-ink); margin: 0 0 5px; }
+  .em-b { font: 400 13px/1.55 var(--lg-font-sans); color: var(--lg-mute); margin: 0 0 11px; }
+  .em-f { border-top: 1px solid var(--lg-line); padding-top: 10px;
+    font: 400 11.5px/1.6 var(--lg-font-sans); color: var(--lg-mute); }
+  .em-f a { color: var(--lg-sage-d); font-weight: 700; }
+  .em-f mark { background: var(--lg-sage-tint); color: var(--lg-sage-d); font-weight: 700;
+    padding: 1px 4px; border-radius: 4px; }
+
+  .why { background: var(--lg-sage-tint); border-radius: 11px; padding: 13px 15px; margin: 6px 0 0;
+    font: 400 13px/1.6 var(--lg-font-sans); color: var(--lg-ink); max-width: 640px; }
+  .why b { font-weight: 700; }
+  .alt { border: 1px solid var(--lg-rust); border-radius: 12px; padding: 15px 17px; margin: 26px 0 0;
+    max-width: 700px; }
+  html[data-lguser-theme="dark"] .alt { background: #2a1d19; }
+  .alt h3 { font: 700 14px/1.3 var(--lg-font-sans); color: var(--lg-rust); margin: 0 0 7px; }
+  .alt p { font: 400 13px/1.6 var(--lg-font-sans); color: var(--lg-ink); margin: 0 0 8px; }
+  .alt p:last-child { margin: 0; }
+
+  .rowmini { display: flex; align-items: center; gap: 8px; padding: 9px 11px;
+    border-bottom: 1px solid var(--lg-line); }
+  .rowmini__t { flex: 1 1 auto; font: 400 12.5px/1.4 var(--lg-font-sans); color: var(--lg-ink); }
+  .pill { font: 700 10.5px/1 var(--lg-font-sans); color: var(--lg-sage-d);
+    background: var(--lg-sage-tint); border-radius: 999px; padding: 5px 8px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="capt">Frame 7 — the subscriptions that already exist · spec §9.2 · <b>PROPOSAL</b></p>
+  <p class="legend">Measured on live, read-only, 27 July. These are real members getting real email today.</p>
+
+  <div class="num">
+    <div class="stat"><div class="stat__n">1,519</div><div class="stat__l">topic subscriptions<br>held by 383 members</div></div>
+    <div class="stat"><div class="stat__n">72<small>%</small></div><div class="stat__l">created by the auto-subscribe<br>just banned (authored or replied)</div></div>
+    <div class="stat"><div class="stat__n">93<small>%</small></div><div class="stat__l">sit on threads with no reply<br>in 90 days — dormant</div></div>
+    <div class="stat stat--hot"><div class="stat__n">49</div><div class="stat__l">members actually affected today<br>across 112 live subscriptions</div></div>
+  </div>
+
+  <p class="legend"><b>Recommended — change no data; make every one of them visible and one click from off.</b>
+    Here is what that means for a member who never asked for any of this:</p>
+
+  <div class="step">
+    <span class="step__n">1</span>
+    <div class="step__b">
+      <p class="step__t">Every email they already get grows an unsubscribe link that is specific to that discussion.</p>
+      <div class="surface surface--email">
+        <p class="em-h">New reply: “Truss rod won’t budge on a ’74 Jazz”</p>
+        <p class="em-b">Sharon Fisher replied. Open the discussion to read it →</p>
+        <p class="em-f">You’re getting this because you’re subscribed to this discussion.<br>
+          <mark>Stop emails from this discussion</mark> &nbsp;·&nbsp; <a href="#">All email preferences</a></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <span class="step__n">2</span>
+    <div class="step__b">
+      <p class="step__t">The card and the thread now SHOW that they are subscribed — today nothing on the site tells them.</p>
+      <div class="surface" style="max-width:400px">
+        <div style="display:flex;align-items:center;gap:9px">
+          <span style="flex:1 1 auto;font:700 14px/1.3 var(--lg-font-hub);color:var(--lg-ink)">Truss rod won’t budge on a ’74 Jazz</span>
+          <button class="fc-notify" aria-pressed="false" aria-label="Notifications off"><span class="gly"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span></button>
+          <button class="fc-email" aria-pressed="true" aria-label="Emails on"><span class="gly"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>On</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <span class="step__n">3</span>
+    <div class="step__b">
+      <p class="step__t">The account page tells them how many, with a single switch that stops all of it.</p>
+      <div class="surface" style="max-width:400px">
+        <div class="rowmini"><span class="rowmini__t"><b>Discussion emails</b></span><span class="pill">3 discussions</span></div>
+        <div class="rowmini" style="border-bottom:0"><span class="rowmini__t">One switch turns every one of them off.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="why"><b>Why not just delete them?</b> 1,091 of these were created without consent — but
+    removing them without asking would be a second change made on the member’s behalf, in the other
+    direction, and 428 of them look like deliberate subscribes we would be throwing away with the rest.
+    Making the state visible and one click from off is the honest remedy: the people who never wanted
+    it can leave in one tap, from inside the very email that annoyed them, and the ones who did want it
+    keep it. It also clears itself over time without us guessing.</div>
+
+  <div class="alt">
+    <h3>The one alternative worth considering — also retire the dormant tail</h3>
+    <p>Unsubscribe the 1,407 subscriptions on threads nobody has replied to in 90 days; keep the 112 live ones.</p>
+    <p><b>For a member:</b> nobody currently receiving email is affected, because dormant threads send
+      nothing. But if one of those threads wakes up years later, someone who genuinely subscribed
+      stops hearing about it and will never know why.</p>
+  </div>
+
+  <p class="note">The 12,948 <b>group</b> subscriptions (1,853 members) are a separate, larger population this
+    spec has never covered — group-linked forums mail through a different branch. Flagged, untouched, and
+    no decision here should be described as “covering the subscriptions” while that sits there.</p>
+</div>
+
+<script>
+  (function () {
+    function apply() {
+      var dark = /(?:\?|&)theme=dark\b/.test(location.search);
+      document.documentElement.setAttribute('data-lguser-theme', dark ? 'dark' : 'light');
+    }
+    apply();
+    window.addEventListener('resize', apply);   // headless clamps to 500px then relayouts
+  })();
+</script>
+</body>
+</html>

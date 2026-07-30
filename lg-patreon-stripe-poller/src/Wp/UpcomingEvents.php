@@ -88,7 +88,11 @@ final class UpcomingEvents
     public static function nextN( int $count ): array
     {
         $count = max( 1, min( 12, $count ) );
-        $today = gmdate( 'Ymd' );
+        /* SITE-LOCAL today, never gmdate('Ymd') — the meta is a bare calendar date
+           entered in site-local time. Under UTC this widget rolled an event into the
+           "past" fallback bucket at 20:00 America/New_York on its own day, which for
+           an evening event meant it flipped to fallback exactly as it started. */
+        $today = current_time( 'Ymd' );
 
         $q          = self::queryEvents( $count, $today, '>=', 'ASC' );
         $isFallback = false;
