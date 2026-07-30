@@ -3,6 +3,15 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-30 — Add-discussion modal: resizable, with text scaling to modal size (Ian)
+
+Ian 7/30: make the "New post" (add-discussion) 4-step modal RESIZABLE, and have
+the TEXT SIZE scale with the modal size — bigger modal → bigger text, so it
+stays comfortable when enlarged rather than tiny text in a big box. Applies to
+the discussion composer wizard (Where/Write/Photos/Review). Pairs with the
+edit-discussion work (edit reuses this same modal). Likely a resize handle +
+type scale bound to modal width (clamp/container units), both light and dark.
+
 ## 2026-07-30 — Follow controls: collapse the cramped row into a modal + email frequency (Ian)
 
 Ian, looking at the topic action row (Like / 8 replies / Share / bell / envelope
