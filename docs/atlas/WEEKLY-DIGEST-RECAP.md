@@ -342,6 +342,17 @@ like a live feature.
   one where the member is the *addressee* of a bell row.
 - Any future notification type, until someone adds it on purpose.
 
+> **AND SINCE 2026-07-30 "excluded by default" IS NO LONGER ALLOWED TO BE SILENT.** The allow-list
+> made the digest *safe* against a new type; it did not make the answer *decided*. When thread-follow
+> added `forum.followed_topic`, this digest excluded it correctly and silently — the right answer by
+> accident, and nothing here would have said so had the right answer been "include it".
+> `LG_WD_Recap::DECIDED_EXCLUDED` now records every refused type **with its reason**, and
+> `dev/verify-source-boundary.php` reads profile-app's own vocabulary out of source (`TYPES` **and**
+> `HUB_TYPES` — reading only the first made every forum exclusion look stale, which is how that bug
+> was caught) and fails if any type sits in neither list. **Adding a notification type anywhere on
+> the platform now turns this suite red until someone writes down what the digest should do with
+> it.** Today: 8 types, 4 included, 4 excluded on purpose, 0 undecided.
+
 **§9.1 DOES NOT CHANGE THIS DOCUMENT'S SCOPE**, which is a genuine simplification and is all that
 survives of the paragraph that stood here. The digest's admission rule is the to-do test, and that
 test answers `forum.followed_topic` independently of how per-event email is configured.
@@ -585,3 +596,97 @@ precisely what the scanner fetches.
    realpath cache pin the old target.
 5. The digest is still **double-off** (`enabled=false`, `cron_mode=draft_and_notify`) and the
    campaign path leaves campaigns in `draft`. Turning the digest on is a separate, deliberate act.
+
+### 8.1 The public signup page — what a pull does NOT do (2026-07-30)
+
+The page itself deploys with a plain pull: `[lg_weekly_signup]` lives in
+`lg-weekly-digest/includes/class-lg-wd-signup-page.php` + `templates/signup-page.php`, and the plugin
+is symlinked into the docroot **as a whole directory** (verified: `lg-weekly-digest ->
+/home/ubuntu/loothplatformv2-clean/lg-weekly-digest`), so a new file inside it needs **no new
+symlink**. That was the reason for putting it there rather than in a new mu-plugin — mu-plugins are
+symlinked individually, and creating that link in the same window as the pull is the one coupling a
+pull does not handle.
+
+**Three things a pull cannot do, none of them mine, all of them one line.** Until the first two are
+done the page is not reachable by the people it is for, and the craft gate cannot audit it.
+
+| # | Step | Box | Whose |
+|---|---|---|---|
+| 1 | Page **68595** (`/weekly-email-sign-up/`) content: `[fluentform id="5"]` → `[lg_weekly_signup]` | dev2, then live | keeper on dev2 / **Ian on live** |
+| 2 | Add `/weekly-email-sign-up/` to the **`bp-enable-private-network-public-content`** allow-list (67 entries today) — without it the page **302s anonymous visitors to wp-login**, and its entire audience is anonymous | dev2, then live | keeper on dev2 / **Ian on live** |
+| 3 | Add `"signup": ("/weekly-email-sign-up/", ["anon"])` to `tools/gates/craft-gate.py` PAGES | repo | this lane, **after** step 1 — adding it first would gate a page that does not render |
+
+> **Step 2 is not cosmetic and it is not a redirect nuisance.** The craft gate audits an `anon`
+> viewer. If the page 302s to wp-login the gate will happily audit **the login page** and report
+> green — a pass over the wrong document. So step 2 must land before step 3 means anything.
+
+**The old page is not deleted by any of this.** Page 68595 keeps FluentForm 5 in its revision history;
+step 1 is a content change, reversible by restoring the shortcode. Recorded here because the previous
+content was `[fluentform id="5"]` and nothing else.
+
+---
+
+## 10. The public signup page (Ian, 2026-07-29 → built 2026-07-30)
+
+> **"A page where someone WITHOUT a WP account signs up for the weekly email. No WP user may be
+> required or created."** — `docs/BACKLOG.md`. Four named deliverables: the page, a store, unsubscribe,
+> and the digest sender reading that store alongside members.
+
+**Designed INTO the digest, not beside it.** The whole point of the folding is that a non-member's
+email is the *same email*, minus the part that could not apply to them:
+
+| Piece | Where it is | State |
+|---|---|---|
+| the page | `[lg_weekly_signup]` → `includes/class-lg-wd-signup-page.php` + `templates/signup-page.php` | **built** |
+| the store | FluentCRM list **7**, *Non Member Weekly Email Subscriber* | already existed; the page is the only thing that writes it |
+| the write | `wp_ajax_nopriv_lg_weekly_signup`, `platform/mu-plugins/lg-event-reminders.php` | **built** (Ian's ruling 6) |
+| unsubscribe | FluentCRM `##crm.unsubscribe_url##`, already in `templates/email.php` | **proven for account-less contacts** |
+| the sender reading it | audience is now `[{list:3},{list:7}]` + the to-do filter keeps the account-less | **built** |
+
+### 10.1 Why a non-member's email needs no special rendering
+
+The per-recipient seam already produced the right answer before this lane touched it, which is worth
+stating because it is why "fold it in" was cheap rather than a rewrite:
+
+- `LG_WD_Recap_Source::render_for_subscriber()` returns `''` when the subscriber maps to no WP user;
+- `LG_WD_Recap::render()` treats empty as **absent** — no heading, no panel, no zero-state, no greeting;
+- so `##lg_recap.section##` resolves to nothing and the body is **byte-identical to the curated
+  digest**. There is no non-member template, and there is no "Hi," addressed to nobody.
+
+That is exactly Ian's model: *the email announces this week's public content to everyone on the list.*
+
+### 10.2 The four answers the form can give
+
+The endpoint owns this copy, so the page does not duplicate it — the page supplies only the headings.
+
+| State | Who | Written |
+|---|---|---|
+| `already_member` | on list 3 | **nothing** |
+| `member_needs_prefs` | has a WP account, not on list 3 — **233 on live** | **nothing** |
+| `already_signed_up` | already on list 7 | **nothing** |
+| `pending` | nobody | list 7 only, + double opt-in |
+
+**The member list is never written from this path, on any branch.**
+
+### 10.3 The sample email, and a blind spot it revealed
+
+The page frames the most recent **sent** issue, rendered at request time (transient, 1h) with
+`mode => strip`. A committed snapshot was the first design and was wrong: rendered on dev2 it carries
+dev2 upload URLs, so on live it shows broken images, and the page's own claim — *"rendered by the same
+code that sends it"* — would go false the first week nobody regenerated it.
+
+> **The craft gate cannot see inside an iframe.** `craft-gate.py` collects `querySelectorAll('img')`
+> and the resource timeline in the **top frame only**; a frame has its own document and its own
+> timeline. So the heaviest thing on this page is invisible to IMG-RAW, IMG-OVERSIZE and the KB
+> budget, and the page would have gone green while shipping full-size uploads into a 624px column —
+> **measured on dev2 for the July 13 issue: five images, 577KB, the largest 308KB.** The preview now
+> routes uploads through `/img.php?w=600` (a bucket from the resizer's own `ALLOWED_W`; an unlisted
+> width silently becomes 800). **Not applied to the sent email** — real inboxes fetch with no cookies
+> and `img.php` sits behind the dev gate, so that would break images in every recipient's client.
+
+### 10.4 Still open — one word from Ian, and it is not a blocker for this page
+
+*"Everyone on the list"* and Rule 5 (*"empty means send NO EMAIL AT ALL"*) point opposite ways for a
+**member with nothing waiting**. Rule 5 is Ian's own 07-28 ruling, so it has not been retired on
+inference: as built, an account-less subscriber is always kept and a member with an empty to-do list
+is still dropped. If Ian says *"everyone on the list, always"*, the change is deleting one branch.

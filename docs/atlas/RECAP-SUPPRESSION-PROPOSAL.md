@@ -455,7 +455,28 @@ for campaign **379** (*Weekly Digest — July 27, 2026*) holds **1,858 rows**, a
 > introduced the error. A number that agrees with one query is not thereby correct; the campaign's own
 > recipient rows are the authority, and I did not consult them until today.
 
-**WHY THIS BLOCKS THE MERGE.** Two independent faults, either sufficient on its own:
+> ## ✅ **BOTH FAULTS BELOW ARE NOW FIXED AND TESTED (2026-07-30, commit `a41b17e`).**
+> They are kept in full because the reasoning is the record of how the rule was arrived at — and
+> because the second one is a case of correct code answering the wrong question, which is worth
+> being able to re-read.
+>
+> | Fault | Fix |
+> |---|---|
+> | 1. the plugin resolves list 3 only | the sender's audience is now `[{list:3},{list:7}]`, built in the plugin from `fcrm_list_id` + `fcrm_nonmember_list_id`. The live campaigns' second list was added by hand in the FluentCRM UI; it is now in code and travels with a pull. |
+> | 2. Rule 5 drops every account-less subscriber | an account-less subscriber is now **kept**. Their email is not a to-do list, so an empty to-do list is not a reason to withhold it. **A MEMBER with nothing waiting is still dropped — Rule 5 is untouched for the people it was actually about.** |
+>
+> **Proven** by `dev/verify-recipient-filter-at-scale.php` §6, over the REAL two-list audience: with
+> nobody holding a to-do item, every account-less non-member survives. On dev2 — list 7 = 204
+> subscribed, 189 account-less, union of both lists 1,816 with 8 overlapping, zero dropped, zero
+> duplicated. Four assertions in that test went red on the first run because they encoded the old
+> rule; they were re-expressed, not loosened. The section reports **DEAD** rather than green if the
+> non-member list is empty on the box, because a property that cannot be exercised has not been proven.
+>
+> **Unsubscribe for this cohort is proven too** (`dev/verify-unsubscribe-nonmember.php`): the link is
+> `?fluentcrm=1&route=unsubscribe&secure_hash=<md5>__<contactId>` — **the identity in the link is the
+> SUBSCRIBER**, which is why having no WP account cannot break it.
+
+**WHY THIS BLOCKED THE MERGE.** Two independent faults, either sufficient on its own:
 
 1. **The plugin never resolves list 7 at all.** `class-lg-wd-sender.php:107` resolves
    `getSubscriberIdsBySegmentSettings( $subscriber_settings )`, and `$subscriber_settings` is built at
@@ -482,10 +503,18 @@ bounce and no error, and they are the only cohort who subscribed *purely for the
 > everyone on the list, and that content later goes members-only. Non-members are on the list
 > because the announcement is *for* them. There is no carve-out because there is nothing to carve.
 
-**What this means for the code, plainly:** `recipients_with_something_waiting()` currently drops every
-subscriber with no WP account, so it drops all 195. Under the ruling that is wrong — **they are on
+**What this means for the code, plainly:** `recipients_with_something_waiting()` used to drop every
+subscriber with no WP account, so it dropped all 195. Under the ruling that is wrong — **they are on
 the list and the email is the announcement.** The remaining question is only about *members* with
 nothing waiting (above), and that one is Ian's own Rule 5, so it is not mine to infer away.
+
+> **BUILT 2026-07-30 exactly to that paragraph** — the account-less are kept, Rule 5 still governs
+> members. The two cuts of the population are different and both stand: **195** is *list 7 not also
+> on list 3* (what adding list 7 brings into the resolved set) and **188** is *list 7 with no
+> `wp_users` row* (who the filter now always keeps). The difference is people holding a WP account
+> while sitting on the non-member list — **members by Ian's own ruling-6 test**, so Rule 5 applies to
+> them, correctly. Live also carries **25** list-3 subscribers with no `wp_users` row; the same rule
+> keeps them, for the same reason.
 
 ### Rule 6 — fresh items NAMED, stale items COUNTED (Ian, 2026-07-28)
 
