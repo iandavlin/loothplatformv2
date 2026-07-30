@@ -24,6 +24,16 @@ body.bb-mirror{ -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:gray
   --lg-sage-tint:  #eef2e3;
   --lg-amber:      #ecb351;
   --lg-rust:       #c66845;
+  /* ── 🔔/✉ FOLLOW "ON" — brand ORANGE, Ian 2026-07-30 (was sage) ────────────
+     ONE token for all five surfaces (topic page .thread__util, desktop card,
+     desktop modal, mobile card, mobile sheet) so the lit state can never drift
+     between them again — it had already drifted once: four surfaces used
+     --lg-sage-d and the mobile card used --lguser-accent-d, which are different
+     greens. Aliased to --lg-rust rather than a fresh hex: rust is ALREADY this
+     system's "active" colour (.lg-act-like.is-on and .lg-reply-react.is-on both
+     use it), so a lit bell now matches a lit like instead of inventing a sixth
+     brand orange. The dark value is set below, not here. */
+  --lg-follow-on:  var(--lg-rust, #c66845);
   --lg-charcoal:   #1a1d1a;
   --lg-ink:        #262925;  /* a little darker */
   --lg-mute:       #565a55;  /* a little darker */
@@ -127,6 +137,22 @@ body.bb-mirror{ -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:gray
   --lg-charcoal:  #1a1d1a;
   --lg-amber:     #ecb351;
   --lg-rust:      #c66845;
+}
+
+/* 🔔/✉ ON in DARK — the same discipline sage got, applied to orange.
+   Brand rust #c66845 on the dark canvas #15171a measures 4.7:1. That clears AA
+   for a UI component (3:1) but it sits dull against a dark card, and the whole
+   point of the lit state is that it reads as ON at a glance. Lifted to #e2895f
+   = 6.8:1, which is legible without going neon — the icon is a 16-18px stroke
+   glyph, so it needs more contrast than a block of text would.
+   DELIBERATELY OUTSIDE the (min-width:641px) dark bridge below: that bridge is
+   desktop-only by design ("mobile is normalized brand-light"), and the mobile
+   card's toggles still have to light correctly for a member browsing dark on a
+   phone — which is most of them. A token that only existed at >=641 would leave
+   the phone lighting sage while the desktop lit orange, which is exactly the
+   drift --lg-follow-on was introduced to end. */
+html[data-lguser-theme="dark"] {
+  --lg-follow-on: #e2895f;
 }
 
 /* ── DARK-MODE TOKEN BRIDGE (2026-06-10 bespoke-cutover — C10 unification,
@@ -620,7 +646,7 @@ body.lg-follow-anon [data-follow] { display: none !important; }
 .thread__util .fc-notify:hover,
 .thread__util .fc-email:hover { color: var(--lg-sage-d, #586b3f); }
 .thread__util .fc-notify.is-on,
-.thread__util .fc-email.is-on { color: var(--lg-sage-d, #586b3f); }
+.thread__util .fc-email.is-on { color: var(--lg-follow-on, #c66845); }
 /* ON state. The bell is an OPEN path, so filling it reads as a filled bell — the
    idiom Ian gated. The envelope is NOT: its outline is a <rect>, and filling that
    paints a SOLID BLOCK over the flap, which reads as a broken icon rather than an
@@ -4257,7 +4283,7 @@ body:has(.feed-page) #bb-ham{display:none}
     font:600 12px/1 var(--lg-font-sans); color:var(--lg-mute); cursor:pointer; transition:color .12s; }
   .feed-page .fc-notify .ico, .feed-page .fc-email .ico { width:16px; height:16px; flex:0 0 auto; }
   .feed-page .fc-notify:hover, .feed-page .fc-email:hover { color:var(--lg-sage-d,#586b3f); }
-  .feed-page .fc-notify.is-on, .feed-page .fc-email.is-on { color:var(--lg-sage-d,#586b3f); }
+  .feed-page .fc-notify.is-on, .feed-page .fc-email.is-on { color:var(--lg-follow-on,#c66845); }
   .feed-page .fc-notify.is-on .ico { fill:currentColor; }
   .feed-page .fc-email.is-on .ico rect { fill:currentColor; fill-opacity:.18; }   /* tint, never flood — see :624 */
   .feed-page .fc-replies { grid-area:replies; min-width:0; margin-top:6px; }
@@ -4491,10 +4517,15 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   #lg-dmodal .lg-dmodal__email .ico { width: 17px; height: 17px; }
   #lg-dmodal .lg-dmodal__notify:hover,
   #lg-dmodal .lg-dmodal__email:hover { border-color: var(--lg-sage, #87986a); color: var(--fg); }
+  /* Orange ON (Ian 2026-07-30). The chip is a bordered circle, so all three of
+     colour / border / fill move together or it reads half-lit. Tint is an alpha
+     of the SAME orange rather than a --lg-*-tint token: there is no rust tint in
+     the palette, and an alpha keeps the chip correct on the dark canvas too,
+     where a fixed pale tint would glare. */
   #lg-dmodal .lg-dmodal__notify.is-on,
   #lg-dmodal .lg-dmodal__email.is-on {
-    color: var(--lg-sage-d, #586b3f); border-color: var(--lg-sage, #87986a);
-    background: var(--lg-sage-tint);
+    color: var(--lg-follow-on, #c66845); border-color: var(--lg-follow-on, #c66845);
+    background: color-mix(in srgb, var(--lg-follow-on, #c66845) 14%, transparent);
   }
   #lg-dmodal .lg-dmodal__notify.is-on .ico { fill: currentColor; }
   #lg-dmodal .lg-dmodal__email.is-on .ico rect { fill: currentColor; fill-opacity: .18; }   /* see :624 */
@@ -5238,7 +5269,7 @@ html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--shows .hub-rail__s
   .feed-page .lg-card-actions .fc-notify .ico,
   .feed-page .lg-card-actions .fc-email .ico { width: 18px; height: 18px; flex: 0 0 auto; }
   .feed-page .lg-card-actions .fc-notify.is-on,
-  .feed-page .lg-card-actions .fc-email.is-on { color: var(--lguser-accent-d, #52613d); }
+  .feed-page .lg-card-actions .fc-email.is-on { color: var(--lg-follow-on, #c66845); }
   .feed-page .lg-card-actions .fc-notify.is-on .ico { fill: currentColor; }
   .feed-page .lg-card-actions .fc-email.is-on .ico rect { fill: currentColor; fill-opacity: .18; }   /* see :624 */
 }
