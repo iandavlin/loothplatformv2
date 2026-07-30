@@ -42,8 +42,9 @@ meant "the screenshot looks right." Screenshots can't see weight.
 | 5 | `tools/gates/looth-auth-issue-gate.sh` | non-REST mint bounce (recurs on every DB reload) | loopback |
 | 6 | `tools/gates/event-date-tz-gate.sh` | a UTC "today" must not judge a site-local stored date | — |
 | 7 | `tools/gates/events-tap-navigates-gate.sh` | an events tap navigates; the retired mobile modal stays retired | — |
+| 8 | `tools/gates/composer-topic-meta-test.js` | forum picker cloning + tags on the composer | node |
 
-All seven run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
+All eight run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
 the runner because they pass standalone but flake red in sequence (CDP under load,
 and loopback `/whoami` tripping infra's `limit_req` zone) — see the note at the
 foot of `run-all.sh` for how to run `forum-visibility-gate.sh` and
