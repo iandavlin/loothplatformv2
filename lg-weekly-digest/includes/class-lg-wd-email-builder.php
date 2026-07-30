@@ -20,13 +20,51 @@ class LG_WD_Email_Builder {
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    public static function build( array $payload ): string {
+    /**
+     * @param array $payload Curated content sections.
+     * @param array $recap   How to resolve the per-member recap token. One of:
+     *   [ 'mode' => 'token' ]                      keep `##lg_recap.section##` for
+     *                                              FluentCRM to substitute per
+     *                                              recipient — CAMPAIGN SENDS ONLY.
+     *   [ 'mode' => 'render', 'wp_user_id' => N ]  resolve it here, for this member
+     *                                              (compose preview, test send).
+     *   [ 'mode' => 'strip' ]                      remove it. THE DEFAULT.
+     *
+     * Stripping is the default on purpose: every delivery path that is not a
+     * FluentCRM campaign send would otherwise put the literal text
+     * "##lg_recap.section##" in front of a member, and forgetting to pass a mode
+     * must fail safe rather than fail visible.
+     */
+    public static function build( array $payload, array $recap = [] ): string {
         $settings = LG_WD_Settings::get_all();
         $week_str = date_i18n( 'F j, Y' );
 
         ob_start();
         include LG_WD_PLUGIN_DIR . 'templates/email.php';
-        return ob_get_clean();
+        return self::apply_recap( ob_get_clean(), $recap );
+    }
+
+    /** Resolve (or remove) the per-member recap token — see build(). */
+    private static function apply_recap( string $html, array $recap ): string {
+        $mode = $recap['mode'] ?? 'strip';
+
+        if ( $mode === 'token' ) {
+            return $html;   // FluentCRM owns it from here.
+        }
+
+        $replacement = '';
+
+        if ( $mode === 'render' && class_exists( 'LG_WD_Recap_Source' ) && class_exists( 'LG_WD_Recap' ) ) {
+            $uid = (int) ( $recap['wp_user_id'] ?? 0 );
+            if ( $uid > 0 ) {
+                $payload = LG_WD_Recap_Source::payload_for( $uid );
+                if ( $payload ) {
+                    $replacement = LG_WD_Recap::render( $payload );
+                }
+            }
+        }
+
+        return str_replace( LG_WD_RECAP_SMARTCODE, $replacement, $html );
     }
 
     // ── Section renderer (called from email.php template) ─────────────────────

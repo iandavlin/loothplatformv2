@@ -19,6 +19,15 @@ define( 'LG_WD_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'LG_WD_OPTION_KEY', 'lg_wd_settings' );
 define( 'LG_WD_TIMEZONE',   'America/New_York' );
 
+/**
+ * The per-member seam. templates/email.php emits this literally; FluentCRM
+ * substitutes it per RECIPIENT at send time (LG_WD_Recap_Source). Every path that
+ * is NOT a FluentCRM campaign send must resolve or strip it before delivery —
+ * LG_WD_Email_Builder::build() takes a mode for exactly that, and defaults to
+ * stripping, so a token can never reach a member as literal text.
+ */
+define( 'LG_WD_RECAP_SMARTCODE', '##lg_recap.section##' );
+
 // ─────────────────────────────────────────────
 // Includes
 // ─────────────────────────────────────────────
@@ -27,12 +36,15 @@ require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-cpt-registry.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-issue.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-query.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-email-builder.php';
+require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-recap.php';
+require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-recap-source.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-sender.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-pdf.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-admin.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-compose.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-cron.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-frontend.php';
+require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-signup-page.php';
 
 // ─────────────────────────────────────────────
 // Boot
@@ -43,6 +55,8 @@ add_action( 'plugins_loaded', function () {
     LG_WD_Compose::init();
     LG_WD_Cron::init();
     LG_WD_Frontend::init();
+    LG_WD_Recap_Source::init();
+    LG_WD_Signup_Page::init();
 } );
 
 // ─────────────────────────────────────────────

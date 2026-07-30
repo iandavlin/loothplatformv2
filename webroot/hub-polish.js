@@ -3143,7 +3143,14 @@
         'background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);cursor:pointer;' +
         'display:inline-flex;align-items:center;justify-content:center;padding:0}',
       '#looth-rep-sheet .lrs-notify .ico,#looth-rep-sheet .lrs-email .ico{width:17px;height:17px}',
-      '#looth-rep-sheet .lrs-notify.is-on,#looth-rep-sheet .lrs-email.is-on{background:var(--lg-sage,#87986a);color:#fff}',
+      /* Orange ON (Ian 2026-07-30), shared with the other four surfaces via
+         --lg-follow-on. This one is a FILLED PILL, not a coloured glyph, so the
+         label rides ON the orange — white on #c66845 is 4.3:1, which is fine for
+         a 17px icon but the fallback matters if the token is ever missing, hence
+         the literal second arg. Dark gets its own rule below: the sheet sets its
+         own dark background, so the lit state has to be restated there or a lit
+         toggle would inherit the dark OFF pill and look unlit. */
+      '#looth-rep-sheet .lrs-notify.is-on,#looth-rep-sheet .lrs-email.is-on{background:var(--lg-follow-on,#c66845);color:#fff}',
       /* ON state. The bell is an OPEN path so flooding it reads as a filled bell.
          The envelope is a <rect> — flooding that paints over the flap and produces a
          solid block, the same defect the exercise pass caught in forums.css on
@@ -3162,6 +3169,13 @@
         + 'transform:translate(-50%,-50%)}',
       '#looth-rep-sheet .lrs-email.is-muted{opacity:.55}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-notify,html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-email{background:#262b30;color:#9cb37d}',
+      /* ...and the LIT state in dark. Without this the rule above (dark OFF pill)
+         would win on specificity-tie-by-order for a lit toggle and the member
+         would see no difference between following and not — the one thing this
+         control exists to communicate. #e2895f matches --lg-follow-on's dark
+         value; #1a1d1a ink on it beats white here because the lifted orange is
+         light enough that white would drop to ~2.6:1. */
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-notify.is-on,html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-email.is-on{background:var(--lg-follow-on,#e2895f);color:#1a1d1a}',
       '#looth-rep-sheet .lrs-body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px 24px}',
       '#looth-rep-sheet .lrs-note{padding:20px 6px;color:var(--lg-mute,#6b6f6b);font:14px/1.5 var(--lg-font-sans,system-ui)}',
       // ── OP at the top of the sheet (Buck 2026-06-10: clone the desktop discussion

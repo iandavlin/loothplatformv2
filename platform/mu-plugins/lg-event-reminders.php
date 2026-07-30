@@ -96,6 +96,77 @@ add_action('wp_ajax_lg_event_reminder_signup', function () {
  * field + same-origin + a light per-IP rate limit.
  */
 const LG_WEEKLY_NONMEMBER_LIST_ID = 7;   // wp_fc_lists: "Non Member Weekly Email Subscriber"
+const LG_WEEKLY_MEMBER_LIST_ID    = 3;   // wp_fc_lists: "Weekly News Letter" — NEVER written from here
+
+/**
+ * Which audience is this email address? (Ian's ruling 6, 2026-07-30.)
+ *
+ * ── WHY THIS FUNCTION HAD TO EXIST ──────────────────────────────────────────
+ * The handler below used to call attachLists([7]) on ANY already-`subscribed`
+ * contact. Every one of the 1,663 members on list 3 is an already-subscribed
+ * contact, so a member who filled in the public form was SILENTLY ADDED TO THE
+ * NON-MEMBER LIST — the exact thing Ian ruled against ("do NOT silently add;
+ * tell them"). Measured on live: 16 people currently sit on list 7 while holding
+ * a WP account, which is what that branch does when a member uses the form.
+ *
+ * ── THE FOUR ANSWERS, AND WHY THERE ARE FOUR AND NOT THREE ──────────────────
+ *   member_on_list      on list 3. Ian's case: tell them, write nothing.
+ *   member_off_list     HAS A WP ACCOUNT BUT IS NOT ON LIST 3. Ian's spec does
+ *                       not name this case and it is not rare — 233 real people
+ *                       on live. It matters because BOTH obvious answers are
+ *                       wrong for them: "you're already on the list" is a LIE
+ *                       (they are not on it), and adding them to list 7 puts a
+ *                       MEMBER on the non-member list, which is the very drift
+ *                       this ruling exists to stop. So they are told the truth
+ *                       and pointed at their preferences. NOTHING is written.
+ *   already_nonmember   already on list 7 — say so, create no duplicate.
+ *   new                 nobody: the normal path, add to list 7.
+ *
+ * NOTE the member test is BY WP ACCOUNT, not only by list-3 membership. Ian's
+ * wording was "check the email against FluentCRM", but a list-3-only test would
+ * classify all 233 of the above as non-members and add them to list 7 — which
+ * would satisfy the letter of the ruling while breaking its intent.
+ *
+ * WRITES NOTHING. Read-only by construction, so it cannot be the thing that
+ * corrupts a list while deciding which list to use.
+ */
+function lg_weekly_signup_audience(string $email, $contact): array {
+    /**
+     * Is this contact on $listId?
+     *
+     * ⚠️ `$contact->lists` is a FluentCrm\Framework\Database\Orm\Collection, NOT an
+     * array. `(array) $collection` does NOT unwrap it — it casts the OBJECT, so you
+     * get the Collection's internal property bag and the ids are never found. The
+     * first version of this did exactly that and silently classified EVERY member
+     * as a non-member; verify-signup-audience.php caught it against real rows.
+     * Iterate the Collection (it is iterable) and accept either shape of item.
+     */
+    $onList = static function ($c, int $listId): bool {
+        if (!$c) return false;
+        $lists = $c->lists ?? null;
+        if ($lists === null) return false;
+        if (!is_iterable($lists)) {                       // defensive: unexpected shape
+            $lists = method_exists($lists, 'toArray') ? $lists->toArray() : [];
+        }
+        foreach ($lists as $l) {
+            $id = is_object($l) ? ($l->id ?? 0) : (is_array($l) ? ($l['id'] ?? 0) : 0);
+            if ((int) $id === $listId) return true;
+        }
+        return false;
+    };
+
+    if ($onList($contact, LG_WEEKLY_MEMBER_LIST_ID)) {
+        return ['kind' => 'member_on_list'];
+    }
+    // get_user_by returns false for an unknown address; no account = not a member.
+    if (get_user_by('email', $email)) {
+        return ['kind' => 'member_off_list'];
+    }
+    if ($onList($contact, LG_WEEKLY_NONMEMBER_LIST_ID)) {
+        return ['kind' => 'already_nonmember'];
+    }
+    return ['kind' => 'new'];
+}
 
 add_action('wp_ajax_nopriv_lg_weekly_signup', 'lg_weekly_signup_handler');
 add_action('wp_ajax_lg_weekly_signup',        'lg_weekly_signup_handler');  // logged-in fallback: same flow
@@ -120,13 +191,50 @@ function lg_weekly_signup_handler() {
     set_transient($ipKey, $n + 1, HOUR_IN_SECONDS);
 
     try {
-        $api = FluentCrmApi('contacts');
+        $api      = FluentCrmApi('contacts');
         $existing = $api->getContact($email);
-        if ($existing && $existing->status === 'subscribed') {
-            // Already a confirmed contact: just attach the list, no re-confirm spam.
-            $existing->attachLists([LG_WEEKLY_NONMEMBER_LIST_ID]);
-            wp_send_json(['ok' => true, 'state' => 'subscribed']);
+
+        // ── IAN'S RULING 6 (2026-07-30) — decide the audience BEFORE any write ──
+        //
+        // The old code went straight to attachLists([7]) for any `subscribed`
+        // contact, which silently put members on the non-member list. The branch
+        // is chosen first now, and three of the four write NOTHING AT ALL.
+        //
+        // THE MEMBER LIST (3) IS NEVER WRITTEN ON ANY PATH IN THIS HANDLER. There
+        // is deliberately no attachLists/detachLists call naming it anywhere below
+        // — the constant exists only to be READ.
+        $audience = lg_weekly_signup_audience($email, $existing);
+
+        if ($audience['kind'] === 'member_on_list') {
+            wp_send_json([
+                'ok'      => true,
+                'state'   => 'already_member',
+                'message' => "You're already on the list — the weekly email comes with your "
+                           . "membership, so there's nothing to do here.",
+            ]);
         }
+
+        if ($audience['kind'] === 'member_off_list') {
+            // 233 people on live. Telling them "you're already on the list" would be
+            // FALSE, and adding them to the non-member list would put a member on it.
+            // So: the truth, and the one control that can actually fix it for them.
+            wp_send_json([
+                'ok'      => true,
+                'state'   => 'member_needs_prefs',
+                'message' => "You have a Looth Group account, and the weekly email is a "
+                           . "membership setting — turn it on in your email preferences.",
+            ]);
+        }
+
+        if ($audience['kind'] === 'already_nonmember') {
+            wp_send_json([
+                'ok'      => true,
+                'state'   => 'already_signed_up',
+                'message' => "You're already signed up for the weekly email.",
+            ]);
+        }
+
+        // kind === 'new' — the only branch that writes, and only ever to list 7.
         $contact = $api->createOrUpdate([
             'email'  => $email,
             'status' => 'pending',
@@ -135,7 +243,11 @@ function lg_weekly_signup_handler() {
         if ($contact && method_exists($contact, 'sendDoubleOptinEmail')) {
             $contact->sendDoubleOptinEmail();
         }
-        wp_send_json(['ok' => true, 'state' => 'pending']);
+        wp_send_json([
+            'ok'      => true,
+            'state'   => 'pending',
+            'message' => "Almost there — check your inbox and click the confirmation link.",
+        ]);
     } catch (\Throwable $e) {
         error_log('[lg-weekly-signup] ' . $e->getMessage());
         wp_send_json(['ok' => false, 'error' => 'crm_error'], 500);

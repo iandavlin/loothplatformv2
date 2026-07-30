@@ -83,7 +83,7 @@
     // Cover-image placeholder heights (scroll-jump mitigation, Buck 6/11).
     inject('looth-hub-nojump-js', v('/hub-nojump.js', 2), true);
     // Mobile Hub behaviors (≤640): killCompactOnMobile + long-press reactions.
-    if (mobileish) inject('looth-mobile-hub-js', v('/mobile-hub.js', 3));
+    if (mobileish) inject('looth-mobile-hub-js', v('/mobile-hub.js', 4));
     // "Play today's Guitardle" strip under the sort bar; opens the game in a
     // pull-up sheet (mobile) / centered modal (desktop). Buck 6/12.
     // DECOMMISSIONED for launch (Ian 6/12) — Guitardle is a fast-follow;
