@@ -250,13 +250,18 @@ function bb_mirror_new_topic_modal(): void
     // Postable LEAF forums for the <select>. Excludes category containers AND any
     // forum that has children (the placeholder parents that just hold subforums) —
     // you post to a subforum, never to its container.
+    // The explicit exclusions come from config.php so the topic-edit PUT can enforce
+    // the SAME list on the WP pool (LG_BB_MIRROR_NONPOSTABLE_FORUM_IDS). They were a
+    // literal here, which made this list "what we offer" rather than "what is
+    // allowed" — the edit endpoint happily moved posts into one of them.
+    $excluded = implode(',', array_map('intval', LG_BB_MIRROR_NONPOSTABLE_FORUM_IDS));
     $forums = $db->query("
         SELECT f.id, f.slug, f.title, f.parent_forum_id, f.menu_order,
                p.title AS parent_title
           FROM forum f
           LEFT JOIN forum p ON p.id = f.parent_forum_id
          WHERE f.visibility = 'public' AND f.status = 'open' AND f.forum_type = 'forum'
-           AND f.id NOT IN (67251, 3876)
+           AND f.id NOT IN ($excluded)
            AND f.id NOT IN (SELECT parent_forum_id FROM forum WHERE parent_forum_id IS NOT NULL)
          ORDER BY (f.parent_forum_id IS NULL), COALESCE(f.parent_forum_id, f.id), f.menu_order ASC
     ")->fetchAll();

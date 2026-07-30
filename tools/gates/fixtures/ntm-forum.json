@@ -1,0 +1,219 @@
+{
+  "_source": "generated from a live fetch of https://dev2.loothgroup.com/hub/ (bb-mirror _chrome.php postable-leaf query)",
+  "_note": "Order is significant: the composer's forum <select> groups each leaf under the nearest .ntm-fl__cat above it.",
+  "rows": [
+    {
+      "kind": "cat",
+      "label": "Repair and Restoration"
+    },
+    {
+      "kind": "leaf",
+      "id": 45915,
+      "title": "Share Your Repair Content"
+    },
+    {
+      "kind": "leaf",
+      "id": 43277,
+      "title": "Touring Tech"
+    },
+    {
+      "kind": "leaf",
+      "id": 3832,
+      "title": "Neck Reset Database"
+    },
+    {
+      "kind": "leaf",
+      "id": 3837,
+      "title": "General"
+    },
+    {
+      "kind": "leaf",
+      "id": 3829,
+      "title": "Finish Repair"
+    },
+    {
+      "kind": "leaf",
+      "id": 3823,
+      "title": "Acoustic Repair"
+    },
+    {
+      "kind": "leaf",
+      "id": 3820,
+      "title": "Electric Repair"
+    },
+    {
+      "kind": "leaf",
+      "id": 3826,
+      "title": "Amps, Pickups, and Pedals"
+    },
+    {
+      "kind": "leaf",
+      "id": 3835,
+      "title": "Folk, Bluegrass, Irish, Old Time Instruments"
+    },
+    {
+      "kind": "cat",
+      "label": "New Builds"
+    },
+    {
+      "kind": "leaf",
+      "id": 45919,
+      "title": "Share Your New Builds Content"
+    },
+    {
+      "kind": "leaf",
+      "id": 3845,
+      "title": "Acoustic Builds"
+    },
+    {
+      "kind": "leaf",
+      "id": 3847,
+      "title": "Finish New Builds"
+    },
+    {
+      "kind": "leaf",
+      "id": 3854,
+      "title": "Design and Testing"
+    },
+    {
+      "kind": "leaf",
+      "id": 3842,
+      "title": "Electric Builds"
+    },
+    {
+      "kind": "leaf",
+      "id": 3849,
+      "title": "Amps, Pickups, and Pedals"
+    },
+    {
+      "kind": "leaf",
+      "id": 3852,
+      "title": "Folk, Bluegrass, Irish, Old Time Instruments"
+    },
+    {
+      "kind": "cat",
+      "label": "Tools, Spaces, Robots, and Widgets"
+    },
+    {
+      "kind": "leaf",
+      "id": 3871,
+      "title": "Tools and Jigs"
+    },
+    {
+      "kind": "leaf",
+      "id": 3869,
+      "title": "Shop Organisation"
+    },
+    {
+      "kind": "leaf",
+      "id": 3863,
+      "title": "3D Printing"
+    },
+    {
+      "kind": "leaf",
+      "id": 3860,
+      "title": "CNC"
+    },
+    {
+      "kind": "leaf",
+      "id": 3866,
+      "title": "CAD/CAM"
+    },
+    {
+      "kind": "leaf",
+      "id": 7544,
+      "title": "PLEK Machine"
+    },
+    {
+      "kind": "cat",
+      "label": "Business"
+    },
+    {
+      "kind": "leaf",
+      "id": 4829,
+      "title": "Job Postings"
+    },
+    {
+      "kind": "leaf",
+      "id": 15868,
+      "title": "General Business"
+    },
+    {
+      "kind": "leaf",
+      "id": 15862,
+      "title": "Paper Work and Drudgery"
+    },
+    {
+      "kind": "leaf",
+      "id": 15865,
+      "title": "Customer Relations"
+    },
+    {
+      "kind": "leaf",
+      "id": 4832,
+      "title": "Resumes"
+    },
+    {
+      "kind": "cat",
+      "label": "Market Place"
+    },
+    {
+      "kind": "leaf",
+      "id": 7551,
+      "title": "SELL! SELL! SELL!"
+    },
+    {
+      "kind": "leaf",
+      "id": 7549,
+      "title": "BUY! BUY! BUY!"
+    },
+    {
+      "kind": "cat",
+      "label": "Sponsor Fourms"
+    },
+    {
+      "kind": "leaf",
+      "id": 58199,
+      "title": "Go Acoustic Audio"
+    },
+    {
+      "kind": "leaf",
+      "id": 34046,
+      "title": "Total Vise"
+    },
+    {
+      "kind": "leaf",
+      "id": 50121,
+      "title": "StewMac"
+    },
+    {
+      "kind": "leaf",
+      "id": 67776,
+      "title": "Strings Micro Factory"
+    },
+    {
+      "kind": "cat",
+      "label": "General"
+    },
+    {
+      "kind": "leaf",
+      "id": 4052,
+      "title": "Suggestion Box / Bug Reporting"
+    },
+    {
+      "kind": "leaf",
+      "id": 58440,
+      "title": "Middle Tennessee Looths"
+    },
+    {
+      "kind": "leaf",
+      "id": 60681,
+      "title": "Ohio Local Looths"
+    },
+    {
+      "kind": "leaf",
+      "id": 60683,
+      "title": "Basque Country Looths"
+    }
+  ]
+}

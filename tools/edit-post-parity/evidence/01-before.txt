@@ -1,0 +1,62 @@
+### TOPIC ROW (72306)
+72306	1912	2026-07-29 12:09:45	2026-07-29 16:09:45	2026-07-29 18:14:32	2026-07-29 22:14:32	publish	topic	3837	0	0	zz-test-edit-post-parity-delete-me	74c3bbfe502c80c3287dba97bf19027a	ZZ TEST edit-post-parity (delete me)
+
+
+### REPLIES (post_parent=72306, real replies only, never revisions)
+72307	1912	2026-07-29 16:09:46	2026-07-29 16:09:46	publish	72306	0	717d27d3adf14b6dfdaa36d35f56f9ff
+72308	1912	2026-07-29 16:09:47	2026-07-29 16:09:47	publish	72306	0	0e1e3c472151c18631137bd46c430864
+
+
+### REPLY _bbp_forum_id (the denormalised copy a forum move must carry along)
+72307	_bbp_forum_id	3837
+72308	_bbp_forum_id	3837
+
+
+### TOPIC POSTMETA (all of it — _bbp_forum_id, counts, last-active, _lg_anon)
+_bbp_activity_id	19490
+_bbp_author_ip	127.0.0.1
+_bbp_forum_id	3837
+_bbp_last_active_id	72306
+_bbp_last_active_time	2026-07-29 12:09:48
+_bbp_last_reply_id	72307
+_bbp_reply_count	1
+_bbp_reply_count_hidden	0
+_bbp_topic_id	72306
+_bbp_voice_count	1
+bp_media_ids	
+
+
+### TAGS (topic-tag terms, the thing a wrong omission silently wipes)
+537	martin	martin	topic-tag
+188	vintage	vintage	topic-tag
+
+
+### REACTIONS on the topic and its replies
+9982	1185	19819	activity	19490	2026-07-30 05:00:00
+9983	779	19819	activity	19490	2026-07-30 05:00:01
+
+-- reaction rows found:
+2
+
+
+### ACTIVITY ROW (what those reactions actually hang off)
+19490	1912	groups	bbp_topic_create	31	72306	0	0
+
+
+### REVISION COUNT (a save may add one; nothing may delete one)
+10
+
+
+### FORUM COUNTERS (both sides of any move must stay consistent)
+3823	Acoustic Repair	_bbp_reply_count	889
+3823	Acoustic Repair	_bbp_topic_count	181
+3823	Acoustic Repair	_bbp_total_topic_count	181
+3837	General	_bbp_reply_count	434
+3837	General	_bbp_topic_count	107
+3837	General	_bbp_total_topic_count	107
+
+
+### MIRROR (postgres) — topic + replies as the forum front-end actually sees them
+topic|72306|3837|publish|2026-07-29 22:14:32|ZZ TEST edit-post-parity (delete me)
+reply|72307|3837|publish|2026-07-29 16:09:46|
+reply|72308|3837|publish|2026-07-29 16:09:47|

@@ -19,52 +19,35 @@ run() {  # run <label> <command...>
     *) red=1;;
   esac
 }
-echo "=== GATE 1/7: visibility matrix (the privacy model) ==="
+echo "=== GATE 1/8: visibility matrix (the privacy model) ==="
 run "visibility matrix" php /srv/profile-app/bin/visibility-matrix.php
 echo
-echo "=== GATE 2/7: web-craft gate (images / weight / eager scripts) ==="
+echo "=== GATE 2/8: web-craft gate (images / weight / eager scripts) ==="
 run "web-craft" python3 "$(dirname "$0")/craft-gate.py"
 echo
-echo "=== GATE 3/7: infra-sec gate (cookie auth / source disclosure / cdp) ==="
+echo "=== GATE 3/8: infra-sec gate (cookie auth / source disclosure / cdp) ==="
 run "infra-sec" bash "$(dirname "$0")/infra-sec-gate.sh"
 echo
-echo "=== GATE 4/7: hub paragraph-collapse (content_html keeps its breaks) ==="
+echo "=== GATE 4/8: hub paragraph-collapse (content_html keeps its breaks) ==="
 run "hub-paragraph" bash "$(dirname "$0")/hub-content-paragraph-gate.sh"
 echo
-echo "=== GATE 5/7: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
+echo "=== GATE 5/8: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
 run "looth-auth" bash "$(dirname "$0")/looth-auth-issue-gate.sh"
 echo
-echo "=== GATE 6/7: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
+echo "=== GATE 6/8: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
 run "event-date-tz" bash "$(dirname "$0")/event-date-tz-gate.sh"
 echo
-echo "=== GATE 7/7: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
+echo "=== GATE 7/8: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
 run "events-tap-navigates" bash "$(dirname "$0")/events-tap-navigates-gate.sh"
 echo
-# THREE CDP/loopback gates are HELD OUT of the runner — they pass standalone but
+echo "=== GATE 8/8: composer topic-meta (forum picker cloning + tags) ==="
+run "composer-topic-meta" node "$(dirname "$0")/composer-topic-meta-test.js"
+echo
+# Two CDP/loopback gates are HELD OUT of the runner — they pass standalone but
 # flake RED in-sequence (CDP under load / loopback /whoami trips infra's
 # limit_req zone). Run them manually:
 #   bash /srv/bb-mirror/bin/forum-visibility-gate.sh          # bb-mirror forum-visibility (C2/H6)
 #   bash "$(dirname "$0")/editor-rail-reachable-gate.sh"      # profile editor rail reachable @768 (CDP)
-#   python3 "$(dirname "$0")/follow-longpress-gate.py"        # 🔔/✉ survive a REAL timed press (see below)
-#
-# follow-longpress-gate needs the exercise harness up first — it is held out
-# because it depends on that harness, NOT because it is flaky. Recipe:
-#
-#   BR=/home/ubuntu/worktrees/<lane>   # or the serving checkout, to reproduce a regression
-#   sudo -u looth-dev wp --path=/var/www/dev eval '
-#     $u=1912;$e=time()+604800;
-#     echo LOGGED_IN_COOKIE."=".wp_generate_auth_cookie($u,$e,"logged_in")."\n";
-#     echo SECURE_AUTH_COOKIE."=".wp_generate_auth_cookie($u,$e,"secure_auth")."\n";' \
-#     | grep wordpress > /tmp/tf-gate/cookies.txt
-#   setsid sudo -u bb-mirror env PHP_CLI_SERVER_WORKERS=6 LG_BB_MIRROR_ENV=dev2 \
-#     LG_APPROOT=$BR/bb-mirror/web LG_WEBROOT=$BR/webroot LG_SHARED=$BR/lg-shared \
-#     php -S 127.0.0.1:8791 -t $BR/bb-mirror/web /tmp/tf-gate/router.php &
-#   setsid sudo -u looth-dev env PHP_CLI_SERVER_WORKERS=4 LG_BB_MIRROR_ENV=dev2 \
-#     php -S 127.0.0.1:8792 -t $BR/bb-mirror/api/v0 &
-#
-# PHP_CLI_SERVER_WORKERS is not optional: a single-threaded `php -S` serialises the
-# ~19 overlay scripts and the page loses its hydration race, which the gate then
-# (correctly) reports as exit 2 — no verdict, and no proof of anything.
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

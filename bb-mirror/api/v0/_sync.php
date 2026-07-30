@@ -145,6 +145,28 @@ try {
     if ($kind === 'reply' && $reply_topic_id > 0) {
         bb_mirror_refresh_topic_reply_count($reply_topic_id, $db);
     }
+
+    // A topic that MOVED forums drags its replies with it — reply.forum_id is NOT
+    // NULL and denormalised, so a move that only re-materialises the topic row
+    // leaves every reply pointing at the forum the thread just left.
+    //
+    // Nothing else will ever fix them: bbp_move_topic_handler rewrites each reply's
+    // _bbp_forum_id meta WITHOUT touching post_modified_gmt, and the reconcile
+    // sweep only revisits rows whose post_modified_gmt moved — the same watermark
+    // blind spot that hid changed post_authors from the mirror. So the repair has
+    // to happen on the topic's own upsert.
+    //
+    // Unconditional and self-healing rather than flag-driven: the WHERE makes it a
+    // no-op (0 rows) for the overwhelming majority of upserts where nothing moved,
+    // and any drift already sitting in the table gets corrected the next time that
+    // topic is touched.
+    if ($kind === 'topic' && in_array($action, ['upsert', 'restore'], true)) {
+        $db->prepare(
+            "UPDATE reply r SET forum_id = t.forum_id, sync_at = now()
+               FROM topic t
+              WHERE r.topic_id = t.id AND t.id = ? AND r.forum_id <> t.forum_id"
+        )->execute([$id]);
+    }
 } catch (Throwable $e) {
     error_log("[bb-mirror _sync] $kind#$id $action: " . $e->getMessage());
     http_response_code(500); exit('sync error');

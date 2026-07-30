@@ -3578,9 +3578,11 @@
         });
       });
       // Edit the OP (author/admin) — opens the SAME mobile composer used to edit a
-      // reply (openComposerSheet), now with a title field, pre-filled, photos
-      // loaded as removable thumbs; Save → owned topic PUT (+ topic-media). Unified
-      // "new edit" (Ian 2026-06-25): the OP no longer opens the 3-modal wizard.
+      // reply (openComposerSheet), in its topic mode: title, rich body, forum
+      // picker, tags, quick-tags and photos as removable thumbs; Save → owned topic
+      // PUT (+ topic-media). Unified "new edit" (Ian 2026-06-25): the OP no longer
+      // opens the 3-modal wizard. Full add-post parity (Ian 2026-07-29): the
+      // composer offers every control creating a post does.
       // Gated to author (data-author-id) OR mod.
       var opForumId = parseInt(card.getAttribute('data-forum-id'), 10) || 0;
       var edit = document.createElement('button');
@@ -3597,21 +3599,31 @@
           ev.preventDefault(); ev.stopPropagation();
           var tEl = document.querySelector('#looth-rep-sheet .lrs-t');
           var ttl = ((tEl && tEl.textContent) || '').trim();
-          // Plain-text body for the textarea composer (same flatten as reply edit;
-          // rich formatting is desktop-only, by design). body.innerHTML = fetched OP.
-          var bodyText = (body.innerHTML || '')
-            .replace(/<img[^>]*>/gi, '').replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n').replace(/<[^>]+>/g, '').trim();
-          if (typeof openComposerSheet === 'function') {
-            // Leave the replies sheet open BEHIND the composer (parity with reply
-            // edit); we reload on save anyway.
-            openComposerSheet({ editTopicId: tid, tid: tid, fid: opForumId, title: ttl, bodyText: bodyText, focus: true });
-            return;
-          }
-          // Fallback: the old new-topic wizard.
+          // The body is NOT read from the page any more. This used to scrape the
+          // rendered OP and flatten it to plain text, which meant every link, bold
+          // run, list and inline image the member had written was gone the moment
+          // they pressed Save. The composer now fetches the stored post_content
+          // itself (lgcLoadTopicEdit); the title below is only an optimistic
+          // pre-fill so the field is not blank for the length of one round trip.
+          /* A DISCUSSION edits through the ADD-DISCUSSION mechanic (Ian 2026-07-30,
+             correcting the earlier read of this): the "New post" composer — which is
+             the 4-step wizard Where/Write/Photos/Review on desktop and the same flat
+             #ntm-form on mobile — opened pre-filled and landing on Write.
+
+             This used to prefer the reply composer sheet, which is the wrong door: it
+             is not what CREATING a discussion uses on EITHER viewport (measured — the
+             + New post button opens #ntm-form at 1280 and at 390), so editing through
+             it was a second, divergent modal, exactly what Ian asked us not to build.
+             Replies keep the reply composer; only the OP changes door. */
           if (typeof window.lgNtmEditTopic === 'function') {
             lrsClose();
             window.lgNtmEditTopic(tid, opForumId, ttl, body.innerHTML);
+            return;
+          }
+          // Fallback only if the wizard is somehow absent: the composer sheet still
+          // edits correctly, it is simply not the add-post mechanic.
+          if (typeof openComposerSheet === 'function') {
+            openComposerSheet({ editTopicId: tid, tid: tid, fid: opForumId, title: ttl, focus: true });
           }
         });
       });
@@ -3939,6 +3951,19 @@
   var lgcQuill = null;          // the one Quill instance (mobile skin mounts it)
   var lgcDrafts = {};           // tid -> Delta-HTML preserved across accidental dismiss
   var lgcSubmitting = false;
+  var lgcSeeding = false;       // true only while the STORED body is being loaded —
+                                // the img clipboard matcher keeps images when set
+                                // and drops them (a user paste) when not
+  // Load stored HTML into the editor. Used by every edit mode: the body is the
+  // member's own saved markup, so links, bold, lists, mention anchors and any inline
+  // image must all round-trip. Silent (no undo entry, no draft write).
+  function lgcSeedHtml(html) {
+    if (!lgcQuill) return;
+    lgcSeeding = true;
+    try { lgcQuill.clipboard.dangerouslyPasteHTML(html || '', 'silent'); }
+    catch (e) { try { lgcQuill.setText((html || '').replace(/<[^>]+>/g, '') + '\n', 'silent'); } catch (e2) {} }
+    lgcSeeding = false;
+  }
 
   // Quill 2.0.3 ON-INTENT loader (craft law: editors never load eagerly — anon
   // never fetches this; we prefetch when an authed member opens a discussion, so
@@ -4036,6 +4061,27 @@
         '#looth-comp-sheet .lgc-title{flex:0 0 auto;box-sizing:border-box;margin:8px 14px 0;border:0;border-bottom:1px solid var(--lg-line,#e3e0d8);outline:0;background:none;' +
           'font:700 1.0625rem/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);padding:6px 2px}',
         '#looth-comp-sheet .lgc-title::placeholder{color:#9aa097;font-weight:600}',
+        // ── TOPIC META ROW (forum + tags) — topic modes only, hidden for replies.
+        // Ian 2026-07-29: edit must expose every control add-post does. Sits between
+        // the title and the body so the reading order matches the add-post form
+        // (where → what → detail) and the body stays the element nearest the keyboard.
+        '#looth-comp-sheet .lgc-meta{flex:0 0 auto;display:flex;flex-direction:column;gap:8px;padding:10px 14px 2px}',
+        '#looth-comp-sheet .lgc-meta[hidden]{display:none}',
+        '#looth-comp-sheet .lgc-mrow{display:flex;align-items:center;gap:8px}',
+        '#looth-comp-sheet .lgc-mlb{flex:0 0 auto;font:700 .6875rem/1 var(--lg-font-sans,system-ui,sans-serif);letter-spacing:.06em;' +
+          'text-transform:uppercase;color:var(--lg-sage-d,#6b7c52);min-width:44px}',
+        // Native <select>: one tap, OS-native scroll picker on a phone, and no
+        // "two forums selected" bug — the same reason desktop kept a native control.
+        '#looth-comp-sheet .lgc-forum{flex:1 1 auto;min-width:0;box-sizing:border-box;border:1px solid var(--lg-line,#e3e0d8);border-radius:10px;' +
+          'background:var(--lg-card,#fff);color:var(--lg-ink,#1a1d1a);font:600 .875rem/1.2 var(--lg-font-sans,system-ui,sans-serif);padding:9px 10px}',
+        '#looth-comp-sheet .lgc-forum:invalid,#looth-comp-sheet .lgc-forum--err{border-color:#c0392b;box-shadow:0 0 0 1px #c0392b}',
+        '#looth-comp-sheet .lgc-tags{flex:1 1 auto;min-width:0;box-sizing:border-box;border:1px solid var(--lg-line,#e3e0d8);border-radius:10px;' +
+          'background:var(--lg-card,#fff);color:var(--lg-ink,#1a1d1a);font:500 .875rem/1.2 var(--lg-font-sans,system-ui,sans-serif);padding:9px 10px}',
+        '#looth-comp-sheet .lgc-tags::placeholder{color:#9aa097}',
+        '#looth-comp-sheet .lgc-qtags{display:flex;flex-wrap:wrap;gap:6px;padding-left:52px}',
+        '#looth-comp-sheet .lgc-qtag{border:1px solid var(--lg-line,#e3e0d8);border-radius:999px;background:none;color:var(--lg-sage-d,#6b7c52);' +
+          'font:600 .75rem/1 var(--lg-font-sans,system-ui,sans-serif);padding:7px 12px;cursor:pointer}',
+        '#looth-comp-sheet .lgc-qtag.is-on{background:var(--lguser-accent,var(--lg-sage,#87986a));border-color:transparent;color:#fff}',
         // body: the editor scrolls; the mention dropdown floats over it (forums.js)
         '#looth-comp-sheet .lgc-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 14px}',
         '#looth-comp-sheet .lgc-editor{min-height:64px}',
@@ -4111,6 +4157,11 @@
         D + ' #looth-comp-sheet .lgc-post:disabled{background:#2c312d;color:#7e857c}',
         D + ' #looth-comp-sheet .lgc-title{color:#f2f4ee;border-bottom-color:#343a33}',
         D + ' #looth-comp-sheet .lgc-title::placeholder{color:#7e857c}',
+        D + ' #looth-comp-sheet .lgc-mlb{color:#9cb37d}',
+        D + ' #looth-comp-sheet .lgc-forum,' + D + ' #looth-comp-sheet .lgc-tags{background:#1b1e21;color:#e5e7e1;border-color:#343a33}',
+        D + ' #looth-comp-sheet .lgc-tags::placeholder{color:#7e857c}',
+        D + ' #looth-comp-sheet .lgc-qtag{border-color:#343a33;color:#9cb37d}',
+        D + ' #looth-comp-sheet .lgc-qtag.is-on{background:var(--lg-sage-d,#6b7c52);border-color:transparent;color:#fff}',
         D + ' #looth-comp-sheet .ql-editor{color:#e5e7e1}',
         D + ' #looth-comp-sheet .ql-editor.ql-blank::before{color:#7e857c}',
         D + ' #looth-comp-sheet .ql-editor a,' + D + ' #looth-comp-sheet .ql-editor .bp-suggestions-mention{color:#9cb37d}',
@@ -4264,6 +4315,21 @@
         // title row — TOPIC/OP edit only (same double duty lcp carried).
         // autocomplete/correct off: free text, not a credential field (iOS accessory).
         '<input class="lgc-title" id="lgc-title" type="text" placeholder="Post title" maxlength="200" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true" hidden>' +
+        // TOPIC meta — forum + tags + workflow quick-tags. Hidden for reply modes;
+        // shown (and populated) by the topic modes. The <select>'s options are
+        // cloned from the add-post picker at open time — see lgcFillForumSelect.
+        '<div class="lgc-meta" id="lgc-meta" hidden>' +
+          '<div class="lgc-mrow">' +
+            '<label class="lgc-mlb" for="lgc-forum">Forum</label>' +
+            '<select class="lgc-forum" id="lgc-forum" required></select>' +
+          '</div>' +
+          '<div class="lgc-mrow">' +
+            '<label class="lgc-mlb" for="lgc-tags">Tags</label>' +
+            '<input class="lgc-tags" id="lgc-tags" type="text" placeholder="optional, comma-separated" ' +
+              'autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="done">' +
+          '</div>' +
+          '<div class="lgc-qtags" id="lgc-qtags"></div>' +
+        '</div>' +
         '<div class="lgc-body" id="lgc-body"><div class="lgc-editor" id="lgc-editor"></div></div>' +
         '<div class="lgc-strip" id="lgc-strip"></div>' +
         '<div class="lgc-tools" id="lgc-tools">' +
@@ -4310,6 +4376,13 @@
     var titleElW = sh.querySelector('#lgc-title');
     post.addEventListener('click', function () { lcpSubmit(sh); });
     if (titleElW) titleElW.addEventListener('input', function () { lgcRecalcPost(sh); });
+    var tagsElW = sh.querySelector('#lgc-tags');
+    if (tagsElW) tagsElW.addEventListener('input', function () { lgcSyncQuickTags(sh); });
+    var forumElW = sh.querySelector('#lgc-forum');
+    if (forumElW) forumElW.addEventListener('change', function () {
+      forumElW.classList.remove('lgc-forum--err');
+      lgcRecalcPost(sh);
+    });
     // photo attach — same canonical contract as before (media/upload → bbp_media)
     var photoBtn = sh.querySelector('#lgc-photo'), fileIn = sh.querySelector('#lgc-file');
     photoBtn.addEventListener('click', function () { fileIn.click(); });
@@ -4370,6 +4443,151 @@
   var lgcOpenGen = 0;                      // bumped per composer open; an upload that
                                            // outlives its open must not touch the next
                                            // one's media ids or its in-flight count
+  /* ── TOPIC META: forum picker + tags + quick-tags ────────────────────────────
+     Ian 2026-07-29: "edit must be fully functioning like the original add-post
+     modal". These are the three controls add-post had and edit did not.
+
+     ONE SOURCE OF TRUTH FOR THE FORUM LIST. The options are cloned out of the
+     add-post picker (#ntm-forum, server-rendered by _chrome.php from the postable-
+     leaf query) rather than fetched or hard-coded. That query already encodes the
+     eligibility rule — public + open + forum_type 'forum' + not a container, minus
+     the two excluded ids — and it has been corrected twice (the duplicate "General"
+     header, the two-forums bug). A second list here would be a second place for
+     that rule to drift, and the drift would only show up as a post landing in a
+     forum nobody can choose from the composer. */
+  function lgcForumOptionSource() {
+    return document.getElementById('ntm-forum');   // radiogroup of leaf forums
+  }
+  // Returns false when the page carries no add-post picker to clone (the composer
+  // is injected on /hub only — pwa.js:44 — but the chrome is a separate include).
+  // Callers treat false as "hide the row and leave the forum alone", never as an
+  // error: not being able to MOVE a post must not block editing its text.
+  function lgcFillForumSelect(sh, selectedId) {
+    var sel = sh.querySelector('#lgc-forum'); if (!sel) return false;
+    var src = lgcForumOptionSource();
+    var leaves = src ? src.querySelectorAll('input[name="forum_id"]') : [];
+    if (!leaves.length) return false;
+    sel.innerHTML = '';
+    var group = null, groupLabel = null;
+    [].forEach.call(leaves, function (radio) {
+      var leaf = radio.closest('.ntm-fl__leaf');
+      // The category header is a sibling <div class="ntm-fl__cat"> that precedes a
+      // run of leaves; walk back to the nearest one so the <optgroup> labelling
+      // matches what add-post shows.
+      var cat = leaf, label = '';
+      while (cat && (cat = cat.previousElementSibling)) {
+        if (cat.classList && cat.classList.contains('ntm-fl__cat')) { label = (cat.textContent || '').trim(); break; }
+      }
+      if (label !== groupLabel) {
+        groupLabel = label;
+        group = document.createElement('optgroup');
+        group.label = label || 'General';
+        sel.appendChild(group);
+      }
+      var opt = document.createElement('option');
+      opt.value = radio.value;
+      opt.textContent = ((leaf && leaf.querySelector('.ntm-fl__title')) || {}).textContent || radio.value;
+      (group || sel).appendChild(opt);
+    });
+    // A topic can legitimately live in a forum the picker does not offer (archived
+    // or container forums predate the rule). Keep it selectable so a body-only save
+    // does not silently relocate the post to whatever option happened to be first.
+    if (selectedId && !sel.querySelector('option[value="' + selectedId + '"]')) {
+      var keep = document.createElement('option');
+      keep.value = String(selectedId);
+      keep.textContent = 'Current forum (unlisted)';
+      sel.insertBefore(keep, sel.firstChild);
+    }
+    if (selectedId) sel.value = String(selectedId);
+    return true;
+  }
+  // Workflow quick-tags — cloned from #ntm-quicktags so the tag NAMES stay owned by
+  // the add-post markup; only the friendly labels are ours (same map hub-polish
+  // already applies to the mobile add-post composer).
+  function lgcBuildQuickTags(sh) {
+    var host = sh.querySelector('#lgc-qtags'); if (!host) return;
+    if (host.getAttribute('data-built')) { lgcSyncQuickTags(sh); return; }
+    var src = document.getElementById('ntm-quicktags');
+    var defs = [];
+    if (src) {
+      [].forEach.call(src.querySelectorAll('.ntm-qtag'), function (b) {
+        if (b.dataset.tag) defs.push(b.dataset.tag.toLowerCase());
+      });
+    }
+    if (!defs.length) return;
+    var nice = { councilyes: 'Council of Elders', weeklyyes: 'Weekly email' };
+    host.setAttribute('data-built', '1');
+    defs.forEach(function (tag) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'lgc-qtag'; b.setAttribute('data-tag', tag);
+      b.setAttribute('aria-pressed', 'false');
+      b.textContent = nice[tag] || tag;
+      b.addEventListener('click', function () { lgcToggleTag(sh, tag); });
+      host.appendChild(b);
+    });
+    lgcSyncQuickTags(sh);
+  }
+  function lgcTagList(sh) {
+    var el = sh.querySelector('#lgc-tags');
+    return ((el && el.value) || '').split(',')
+      .map(function (t) { return t.trim(); })
+      .filter(function (t) { return t !== ''; });
+  }
+  function lgcSetTagList(sh, list) {
+    var el = sh.querySelector('#lgc-tags');
+    if (el) el.value = list.join(', ');
+    lgcSyncQuickTags(sh);
+  }
+  // The quick-tag pills are a VIEW of the tags field, never a parallel store — the
+  // field is the only thing submit reads, so typing "councilyes" by hand lights the
+  // pill and un-lighting the pill removes it from the text. (The add-post pills work
+  // the same way; keeping the idiom means one mental model across both composers.)
+  function lgcToggleTag(sh, tag) {
+    var list = lgcTagList(sh);
+    var ix = -1;
+    list.forEach(function (t, i) { if (t.toLowerCase() === tag.toLowerCase()) ix = i; });
+    if (ix > -1) list.splice(ix, 1); else list.push(tag);
+    lgcSetTagList(sh, list);
+  }
+  function lgcSyncQuickTags(sh) {
+    var host = sh.querySelector('#lgc-qtags'); if (!host) return;
+    var lower = lgcTagList(sh).map(function (t) { return t.toLowerCase(); });
+    [].forEach.call(host.querySelectorAll('.lgc-qtag'), function (b) {
+      var on = lower.indexOf((b.getAttribute('data-tag') || '').toLowerCase()) > -1;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  /* Did this composer actually OFFER the forum picker / the tags field?
+     These two predicates decide whether the save sends `forum_id` and `topic_tags`
+     at all, and the server reads an ABSENT key as "leave this alone". So they are
+     the client half of a destructive contract:
+       - claim tags were offered when they were not  -> sends topic_tags: []
+                                                     -> WIPES the post's tags
+         (327 of dev2's 1311 topics carry tags)
+       - claim the forum was offered when it was not -> sends a forum_id
+                                                     -> RELOCATES the post
+     Both failures are silent and look like a normal successful save, which is why
+     they are lifted out of lcpSubmit into named, tested functions rather than left
+     as inline booleans. Gate: tools/gates/composer-topic-meta-test.js. */
+  function lgcTopicForumOffered(sh) {
+    var el = sh.querySelector('#lgc-forum');
+    var row = el && el.parentNode;
+    return !!(el && row && !row.hidden && el.value);
+  }
+  function lgcTopicTagsOffered(sh) {
+    var meta = sh.querySelector('#lgc-meta');
+    return !!(meta && !meta.hidden);
+  }
+  // The exact body of the topic-edit PUT. Keys are OMITTED, never nulled.
+  function lgcTopicEditPayload(sh, topicId, title, html) {
+    var p = { topic_id: topicId, title: title, content: html };
+    if (lgcTopicForumOffered(sh)) {
+      p.forum_id = parseInt(sh.querySelector('#lgc-forum').value, 10);
+    }
+    if (lgcTopicTagsOffered(sh)) p.topic_tags = lgcTagList(sh);
+    return p;
+  }
   function lgcSetErr(sh, msg) {
     var tools = sh.querySelector('#lgc-tools'); if (!tools) return;
     var el = tools.querySelector('.lgc-err');
@@ -4499,10 +4717,30 @@
     }
     send();
   }
+  /* Quill 2's getSemanticHTML() emits &nbsp; for EVERY ordinary space, so a body that
+     has been through the editor comes back with each word gap non-breaking. That is not
+     cosmetic: a non-breaking space does not wrap, so a long paragraph stops breaking at
+     the screen edge and runs off sideways — on a 390px phone, the exact defect class
+     Ian's phone keeps finding.
+
+     Measured on dev2 before this fix: 0 of 1,313 published topics and 0 replies carried
+     &nbsp;, while a single edit through the composer wrote 11 into one post. The editor
+     is the only thing on the box producing them, so every edited post would have picked
+     them up — the same "opening the editor damages the body" class this lane exists to
+     kill, in a subtler spelling.
+
+     A RUN is left alone: two or more consecutive is deliberate spacing (an indent), and
+     collapsing it to one plain space would silently discard the author's intent. Only a
+     LONE one is restored, which is always an ordinary word gap. */
+  function lgcDenbsp(html) {
+    return html.replace(/(?:&nbsp;)+/g, function (run) {
+      return run.length === 6 ? ' ' : run;      // '&nbsp;'.length === 6 ⇒ exactly one
+    });
+  }
   // Quill body → submit HTML. Empty document serializes as '<p><br></p>' — that is ''.
   function lgcHtml() {
     if (!lgcQuill) return '';
-    var html = lgcQuill.getSemanticHTML().replace(/\uFEFF/g, '');
+    var html = lgcDenbsp(lgcQuill.getSemanticHTML().replace(/\uFEFF/g, ''));
     if (!lgcText() && html.indexOf('<img') === -1 && html.indexOf('bp-suggestions-mention') === -1) return '';
     return html;
   }
@@ -4514,8 +4752,13 @@
   function lgcHasContent() {
     if (!lgcQuill) return false;
     if (lgcText()) return true;
-    // a lone mention is content
-    return lgcQuill.getContents().ops.some(function (op) { return op.insert && op.insert.lgmention; });
+    // a lone mention is content — and so is a lone inline image, which is exactly
+    // what an image-only legacy post seeds as. Without the image arm, Save on such
+    // a post would stay disabled forever and it could not be edited at all.
+    // (Same rule lgcHtml already applies when it decides the body is non-empty.)
+    return lgcQuill.getContents().ops.some(function (op) {
+      return op.insert && (op.insert.lgmention || op.insert.image);
+    });
   }
   function lgcRecalcPost(sh) {
     // Single owner for the photo-count read-out: every path that adds, removes,
@@ -4531,7 +4774,19 @@
     var busy = lcpUploading > 0;
     if (busy) post.setAttribute('aria-busy', 'true'); else post.removeAttribute('aria-busy');
     var titleEl = sh.querySelector('#lgc-title');
-    if (c.editTopicId) { post.disabled = busy || !(lgcHasContent() && titleEl && titleEl.value.trim()); return; }
+    if (c.editTopicId) {
+      // editLoading: the stored body has not arrived yet, so the editor is empty for
+      // a reason that is NOT "the member emptied it". Saving here would overwrite a
+      // real post with nothing.
+      var forumSel = sh.querySelector('#lgc-forum');
+      var forumRow = forumSel && forumSel.parentNode;
+      // Forum is required only when the picker is actually offered; a page without
+      // the add-post list still edits text (it just cannot move the post).
+      var forumOk = !forumSel || (forumRow && forumRow.hidden) || !!forumSel.value;
+      post.disabled = busy || !!c.editLoading ||
+        !(lgcHasContent() && titleEl && titleEl.value.trim() && forumOk);
+      return;
+    }
     var keepN = (c.keepMedia && c.keepMedia.length) || 0;
     post.disabled = busy || (!lgcHasContent() && !lcpMediaIds.length && !keepN);
   }
@@ -4920,7 +5175,13 @@
       var ed = sh.querySelector('#lgc-editor');
       lgcQuill = new window.Quill(ed, {
         placeholder: 'Write a comment…',
-        formats: ['bold', 'italic', 'strike', 'link', 'list', 'lgmention'],
+        // 'image' is whitelisted so an EXISTING inline image survives being opened
+        // for edit — 50 of dev2's 1311 topics carry one, and without the format
+        // Quill drops the blot on seed and the save writes the body back without it.
+        // This does NOT reopen inline image insertion (plan §1.2, Ian 2026-07-24):
+        // the toolbar's photo button still goes to the attachment strip, and the
+        // clipboard matcher below strips images out of anything the user PASTES.
+        formats: ['bold', 'italic', 'strike', 'link', 'list', 'lgmention', 'image'],
         modules: {
           toolbar: {
             container: sh.querySelector('#lgc-tools'),
@@ -4958,6 +5219,14 @@
           if (op.attributes && op.attributes.link) op.attributes.link = ok || false;
         });
         return delta;
+      });
+      // Images: keep what was already in the post, refuse what the user pastes.
+      // Both arrive through the clipboard module (dangerouslyPasteHTML included),
+      // so the seed marks itself with lgcSeeding — the only way to tell "this is
+      // the stored body being loaded" from "this is a paste". A pasted screenshot
+      // would otherwise land as a multi-megabyte base64 blob inside post_content.
+      lgcQuill.clipboard.addMatcher('img', function (node, delta) {
+        return lgcSeeding ? delta : new Delta();
       });
       var root = lgcQuill.root;
       root.setAttribute('autocorrect', 'off');
@@ -5137,6 +5406,14 @@
     sh.__lcpCtx.editReplyId = parseInt(o.editReplyId, 10) || 0;
     sh.__lcpCtx.editTopicId = parseInt(o.editTopicId, 10) || 0;
     sh.__lcpCtx.keepMedia   = [];
+    sh.__lcpCtx.editLoading = false;
+    // fresh-open scrub for the topic-meta row, same rule as the strip above: a
+    // reply open must never inherit the forum/tags of a topic edit before it.
+    var metaEl = sh.querySelector('#lgc-meta');
+    if (metaEl) metaEl.hidden = true;
+    lgcSetTagList(sh, []);
+    var forumEl0 = sh.querySelector('#lgc-forum');
+    if (forumEl0) forumEl0.classList.remove('lgc-forum--err');
     // ── mode setup (content fills once Quill is ready — warm after the lrs
     //    prefetch, so this is synchronous in practice) ──
     var mode = function () {
@@ -5145,9 +5422,10 @@
       if (sh.__lcpCtx.editTopicId) {
         ctx.hidden = false; ctx.textContent = '✎ Editing your post';
         if (titleEl) { titleEl.hidden = false; titleEl.value = o.title || ''; }
-        if (o.bodyText) lgcQuill.setText(o.bodyText + '\n', 'silent');
         postBtn.textContent = 'Save';
-        lgcLoadEditMedia(sh, '/bb-mirror-api/v0/topic-media?topic_id=' + sh.__lcpCtx.editTopicId, 'editTopicId');
+        // Body, forum, tags and photos ALL come from the server payload — see
+        // lgcLoadTopicEdit. The caller's title is an optimistic pre-fill only.
+        lgcLoadTopicEdit(sh);
       } else if (sh.__lcpCtx.editReplyId) {
         ctx.hidden = false; ctx.textContent = '✎ Editing your reply';
         if (o.bodyText) lgcQuill.setText(o.bodyText + '\n', 'silent');
@@ -5172,6 +5450,71 @@
       if (bd) { try { bd.scrollTo({ top: bd.scrollHeight, behavior: 'smooth' }); } catch (e) { bd.scrollTop = bd.scrollHeight; } }
     }
     lgcInitQuill(sh, mode);
+  }
+  /* Seed a topic edit from the ONE authoritative source: the server.
+     Fills title, body, forum, tags and photos from GET /reply?topic_id=.
+
+     Why not read the page like the old door did: the OP in the DOM is the RENDERED
+     body (shortcodes expanded, mentions resolved to current slugs, media markup
+     injected) and the old code flattened even that to plain text before handing it
+     over. Saving what you scraped is not saving what the member wrote.
+
+     SAVE STAYS DISABLED UNTIL THIS LANDS. A failed fetch that left the composer
+     editable would show an empty body over a real post, and one tap would write
+     that emptiness back. On failure the member gets an error and an inert Save. */
+  function lgcLoadTopicEdit(sh) {
+    var id = sh.__lcpCtx.editTopicId;
+    if (!id) return;
+    sh.__lcpCtx.editLoading = true;
+    var status = sh.querySelector('#lgc-status');
+    if (status) status.textContent = 'Loading…';
+    lgcRecalcPost(sh);
+    fetch('/bb-mirror-api/v0/reply?topic_id=' + id, { credentials: 'same-origin' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: false, j: {} }; }); })
+      .then(function (res) {
+        // A second open (or a close) since this went out owns the sheet now.
+        if (sh.__lcpCtx.editTopicId !== id) return;
+        sh.__lcpCtx.editLoading = false;
+        if (!res.ok || !res.j || !res.j.ok) {
+          if (status) status.textContent = '';
+          lgcSetErr(sh, (res.j && (res.j.message || res.j.error)) || "Couldn't load this post to edit.");
+          lgcRecalcPost(sh);
+          return;
+        }
+        var d = res.j;
+        if (status) status.textContent = '';
+        var titleEl = sh.querySelector('#lgc-title');
+        if (titleEl) titleEl.value = d.title || '';
+        lgcSeedHtml(d.content || '');
+        // Remember what we loaded so submit can tell an untouched field from a
+        // cleared one — the server treats an ABSENT key as "don't touch".
+        sh.__lcpCtx.loadedForumId = parseInt(d.forum_id, 10) || 0;
+        sh.__lcpCtx.loadedTags = (d.tags || []).slice();
+        var metaEl = sh.querySelector('#lgc-meta');
+        var haveForums = lgcFillForumSelect(sh, sh.__lcpCtx.loadedForumId);
+        var forumRow = sh.querySelector('#lgc-forum');
+        if (forumRow && forumRow.parentNode) forumRow.parentNode.hidden = !haveForums;
+        lgcSetTagList(sh, sh.__lcpCtx.loadedTags);
+        lgcBuildQuickTags(sh);
+        if (metaEl) metaEl.hidden = false;
+        (d.media || []).forEach(function (m) {
+          sh.__lcpCtx.topicHadMedia = true;
+          sh.__lcpCtx.keepMedia.push(m.media_id);
+          lgcStripChip(sh, String(m.thumb || m.url), function () {
+            var ix = sh.__lcpCtx.keepMedia.indexOf(m.media_id);
+            if (ix > -1) sh.__lcpCtx.keepMedia.splice(ix, 1);
+            lgcRecalcPost(sh);
+          });
+        });
+        lgcRecalcPost(sh);
+      })
+      .catch(function () {
+        if (sh.__lcpCtx.editTopicId !== id) return;
+        sh.__lcpCtx.editLoading = false;
+        if (status) status.textContent = '';
+        lgcSetErr(sh, 'Network error loading this post.');
+        lgcRecalcPost(sh);
+      });
   }
   function lgcLoadEditMedia(sh, url, ctxKey) {
     var id = sh.__lcpCtx[ctxKey];
@@ -5216,7 +5559,10 @@
        lgOpenComposer({tid, fid})                          -> reply to the topic
        lgOpenComposer({tid, fid, replyTo, replyToName})    -> reply to a reply
        lgOpenComposer({tid, fid, editReplyId, bodyText})   -> edit a reply
-       lgOpenComposer({tid, fid, editTopicId, title, bodyText}) -> edit the OP  */
+       lgOpenComposer({tid, editTopicId})                  -> edit the OP
+     The OP mode takes no body: it loads title, body, forum, tags and photos from
+     GET /bb-mirror-api/v0/reply?topic_id= itself. `title` may still be passed as a
+     pre-fill for the first round trip; any bodyText is ignored. */
   window.lgOpenComposer = function (o) {
     try {
       openComposerSheet(o || {});
@@ -5260,8 +5606,15 @@
     if (ctx.editTopicId) {
       var titleElS = sh.querySelector('#lgc-title');
       var tTitle = (titleElS && titleElS.value.trim()) || '';
+      if (ctx.editLoading) { status.textContent = 'Still loading this post…'; return; }
       if (!html)   { status.textContent = "Post can't be empty."; return; }
       if (!tTitle) { status.textContent = 'Title is required.'; if (titleElS) titleElS.focus(); return; }
+      var forumElS = sh.querySelector('#lgc-forum');
+      if (lgcTopicForumOffered(sh) && !parseInt(forumElS.value, 10)) {
+        status.textContent = 'Please choose a forum.';
+        forumElS.classList.add('lgc-forum--err'); forumElS.focus();
+        return;
+      }
       lgcSubmitting = true; post.disabled = true; status.textContent = 'Saving…';
       lrsGetAuth(function (a) {
         if (!a || !a.authenticated) { status.textContent = 'Sign in to edit.'; post.disabled = false; lgcSubmitting = false; return; }
@@ -5269,10 +5622,11 @@
         var added = lcpMediaIds.slice();
         var keep  = (ctx.keepMedia || []).slice();
         var syncPhotos = ctx.topicHadMedia || added.length > 0;
+        var payloadT = lgcTopicEditPayload(sh, teid, tTitle, html);
         fetch('/bb-mirror-api/v0/reply', {
           method: 'PUT', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
-          body: JSON.stringify({ topic_id: teid, title: tTitle, content: html })
+          body: JSON.stringify(payloadT)
         })
           .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
           .then(function (res) {
