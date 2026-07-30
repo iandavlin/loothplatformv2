@@ -5,9 +5,10 @@ one up, move the line into that lane's charter and note the lane name here.
 
 ## 2026-07-30 — Notifications: quick-reply-in-modal vs go-to-post (Ian) — MEDIUM-LOW effort
 
-Ian 7/30: on a notification, offer TWO actions — (a) go to the full post, or
-(b) reply right there in a modal that pops out just the reply that generated the
-notif + a composer. KEEPER ESTIMATE: not hard, most pieces exist —
+Ian 7/30 (refined): tapping a notification DEFAULTS to opening a reply MODAL —
+the modal shows the reply that generated the notif + a composer, AND carries a
+link/button to the full post. No two-action row; the modal is the default, the
+full-post link lives inside it. KEEPER ESTIMATE: not hard, most pieces exist —
 - The notif ⋯ menu already exists (the hook for a "Reply" action / two-action row).
 - openComposerSheet is reusable in reply mode (no new composer).
 - Each notif already resolves to its source reply/comment (context to show).
