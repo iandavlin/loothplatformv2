@@ -131,7 +131,33 @@ class LG_WD_Sender_FluentCRM implements LG_WD_Sender_Interface {
         // Resolve subscriber IDs
         try {
             $result         = $campaign->getSubscriberIdsBySegmentSettings( $subscriber_settings );
-            $subscriber_ids = $result['subscriber_ids'] ?? [];
+            /**
+             * DE-DUPLICATE HERE, NOT AS A SIDE EFFECT SOMEWHERE ELSE.
+             *
+             * The audience is now TWO {list,tag} pairs (members + non-members), and
+             * 9 live contacts are subscribed to BOTH list 3 and list 7 — measured
+             * 2026-07-30. If a duplicate id survives, that contact gets the digest
+             * twice.
+             *
+             * Until now the only de-duplication we owned was the array_unique()
+             * inside recipients_with_something_waiting(), which exists for an
+             * entirely different reason (Ian's empty-means-no-send filter) and sits
+             * behind a class_exists() guard. That made double-send protection a
+             * SIDE EFFECT of a suppression rule that is itself under active question
+             * (WEEKLY-DIGEST-RECAP §10.4 — Ian's 07-30 "everyone on the list" ruling
+             * points the other way). Retire that filter and 9 people start getting
+             * two copies, silently, with nothing in the diff to say so.
+             *
+             * So the ids are made unique at the point they are resolved, where the
+             * duplication is actually created. Behaviour-neutral today — it is a
+             * no-op on an already-unique list — and it stops being load-bearing on a
+             * ruling that has nothing to do with it.
+             *
+             * NOT PROVEN: whether FluentCRM already unions these internally. I did
+             * not read its resolver. This does not depend on the answer.
+             */
+            $subscriber_ids = array_values( array_unique( array_map(
+                'intval', $result['subscriber_ids'] ?? [] ) ) );
         } catch ( \Exception $e ) {
             self::log( 'ERROR: getSubscriberIdsBySegmentSettings threw: ' . $e->getMessage() );
             return [ 'success' => false, 'message' => 'Subscriber resolution failed.', 'campaign_id' => $campaign->id ];
