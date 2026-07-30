@@ -40,6 +40,7 @@ class LG_WD_Sender_FluentCRM implements LG_WD_Sender_Interface {
 
         $settings   = LG_WD_Settings::get_all();
         $list_id    = (string) ( $settings['fcrm_list_id'] ?? 3 );
+        $nonmember  = (string) ( $settings['fcrm_nonmember_list_id'] ?? 7 );
         $tag        = $settings['fcrm_tag'] ?? 'all';
         $from_name  = $settings['from_name'];
         $from_email = $settings['from_email'];
@@ -47,10 +48,35 @@ class LG_WD_Sender_FluentCRM implements LG_WD_Sender_Interface {
         // FluentCRM requires both 'list' and 'tag' keys; use 'all' to skip filtering
         $tag_value = ( empty( $tag ) ) ? 'all' : $tag;
 
+        /**
+         * TWO LISTS, ONE EMAIL (Ian, 2026-07-29 backlog + his 2026-07-30 ruling).
+         *
+         * List 3 is the members' Weekly News Letter. List 7 is "Non Member Weekly
+         * Email Subscriber" — the store the PUBLIC SIGNUP PAGE writes to, and the
+         * only list that page ever writes.
+         *
+         * Ian's model, in his words: the email announces this week's public content
+         * to everyone on the list, and non-members are on the list BECAUSE THE
+         * ANNOUNCEMENT IS FOR THEM. A digest that reads only list 3 would leave the
+         * signup page collecting addresses that are never mailed — a page that lies.
+         *
+         * The two entries are an OR: FluentCRM resolves each {list,tag} pair and
+         * unions the ids. A contact on both lists resolves once (the ids are
+         * de-duplicated downstream by recipients_with_something_waiting(), which
+         * array_unique()s its input) — and by Ian's ruling 6 no member can be on
+         * list 7 through the signup page anyway.
+         *
+         * Setting-driven so a box can point at different list ids, but defaulting to
+         * the real ones rather than to "off": a digest that silently stops mailing
+         * non-members because a setting is unset is the failure this is meant to fix.
+         */
+        $audience = [ [ 'list' => $list_id, 'tag' => $tag_value ] ];
+        if ( $nonmember !== '' && $nonmember !== '0' && $nonmember !== $list_id ) {
+            $audience[] = [ 'list' => $nonmember, 'tag' => $tag_value ];
+        }
+
         $subscriber_settings = [
-            'subscribers' => [
-                [ 'list' => $list_id, 'tag' => $tag_value ],
-            ],
+            'subscribers'    => $audience,
             'sending_filter' => 'list_tag',
         ];
 
@@ -112,7 +138,7 @@ class LG_WD_Sender_FluentCRM implements LG_WD_Sender_Interface {
         }
 
         if ( empty( $subscriber_ids ) ) {
-            self::log( "WARNING: Zero subscribers resolved for List ID {$list_id}." );
+            self::log( 'WARNING: Zero subscribers resolved for lists ' . implode( '+', array_column( $audience, 'list' ) ) . '.' );
             return [ 'success' => false, 'message' => 'No subscribers resolved.', 'campaign_id' => $campaign->id ];
         }
 

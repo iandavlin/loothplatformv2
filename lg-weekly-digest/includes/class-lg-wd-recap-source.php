@@ -224,10 +224,41 @@ class LG_WD_Recap_Source {
 				$wp = self::wp_user_id_for( $sub );
 				if ( $wp > 0 ) {
 					$wp_by_sub[ (int) $sub->id ] = $wp;
+					continue;
 				}
-				// A subscriber with no WP account has no bell rows and no DMs by
-				// definition. Nothing can be waiting on them, so they are dropped
-				// rather than fail-opened — that is a real answer, not a missing one.
+
+				/**
+				 * ── A SUBSCRIBER WITH NO WP ACCOUNT IS KEPT ──────────────────
+				 *
+				 * This line used to DROP them, with the reasoning: "no WP account
+				 * means no bell rows and no DMs, so nothing can be waiting — that
+				 * is a real answer, not a missing one." The premise is true and the
+				 * conclusion was still wrong, because it answered the wrong
+				 * question. The filter's job is not "does this person have unread
+				 * rows"; it is "is there any reason to mail this person".
+				 *
+				 * WHAT IT COST, measured: 195 real people on the live non-member
+				 * list — every address the public signup page has ever collected —
+				 * were deleted from the recipient set before a single email was
+				 * built. They cannot be greeted by name, they have no to-do list,
+				 * and they were dropped for lacking the one thing they signed up
+				 * precisely because they do not have.
+				 *
+				 * IAN'S RULING (2026-07-30) governs it directly: the email
+				 * announces this week's public content to everyone on the list, and
+				 * non-members are on the list BECAUSE THE ANNOUNCEMENT IS FOR THEM.
+				 * Their email is not a to-do list, so an empty to-do list is not a
+				 * reason to withhold it.
+				 *
+				 * SCOPE, so this is not read as retiring Rule 5: a MEMBER with
+				 * nothing waiting is still dropped, exactly as ruled on 07-28. This
+				 * changes only the people the rule was never about. The one
+				 * question that remains genuinely open — whether Rule 5 should
+				 * still hold for a member now that "everyone on the list" has been
+				 * stated — is Ian's, and is recorded in
+				 * docs/atlas/RECAP-SUPPRESSION-PROPOSAL.md §5.1.
+				 */
+				$keep[] = (int) $sub->id;
 			}
 			if ( ! $wp_by_sub ) {
 				continue;
