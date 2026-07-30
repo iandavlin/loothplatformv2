@@ -831,6 +831,58 @@ code that sends it"* — would go false the first week nobody regenerated it.
 > a near-empty body and exits **2 CANNOT RUN**. Run the gate by stopping the service and launching
 > chrome with the resolver; do not `pkill` (systemd restarts it in 3s).
 
+### 10.3a The frame was 368px too narrow — variant B (Ian, 2026-07-30)
+
+> **"email frame b what the lane recommends is good."** — Ian, approving the option this lane put
+> forward after seeing it drawn.
+
+Framing the right document was not the same as framing it readably. His words on finding it:
+*"the email is now in a container where it floats left and right to see the whole thing with out
+having the text cut off. This sucks."*
+
+| | declared where | px |
+|---|---|---|
+| `.email-container` | `templates/email.php:68` | max-width **960** |
+| `.email-wrapper` padding | `templates/email.php:64` | `24px 16px` → **32** horizontal |
+| **the document therefore needs** | | **992** |
+| `.lgws .mail` | `templates/signup-page.php` | max-width **624** |
+| **overflow** | | **368** |
+
+**The frame had been sized to the email's CONTENT COLUMN; the email is a 992px DOCUMENT.** That also
+explains the wide black gutters in his screenshot — the width was available, the box was not taking it.
+Fixed to 992. The *"Scroll inside the message to read the whole issue"* caption is **deleted**, along
+with its now-dead `.fcap` rule: it existed only to excuse the clipping, and a caption that explains a
+defect is the defect wearing a label.
+
+**`max-width`, never `width` — load-bearing for the phone.** Below 992 the box collapses to the
+viewport and the email's own 768/480 breakpoints take over. A hard width would hold the box open at
+992 inside a 390px screen and move the panning *outside* the iframe: the same defect, one level up.
+
+**The standard this was decided by, and worth keeping:** *A is the evidence, not my explanation of it.
+If A pans and B does not, the fix is right regardless of my reasoning.* Show the defect, then show it
+gone — the mock carried a live 624px panel, a live 992px panel and a **390px phone panel**, all
+framing the same real email.
+
+**Two things I nearly got wrong, both caught by measuring rather than reasoning:**
+- A `<td width="624">` in the served email looked like the culprit. It is inside an `<!--[if mso]>`
+  conditional — **Outlook-only, inert in every browser**. Strip conditionals the way a browser does and
+  there are **zero** cells over 400px. I would have "fixed" a cell no browser renders.
+- The text sheared in his screenshot — *"…Winding Pickups with Tom Bra…"* — is an **`alt` attribute**,
+  so that image was not painting for him. **Possibly a second, separate defect**; not folded into the
+  width story, because they have not been shown to be the same problem.
+
+**Guarded by `dev/verify-preview-frame-fits.php`**, which parses both numbers out of the shipping
+templates so it cannot drift from what serves, and additionally asserts the phone half (max-width with
+no hard width; the ≤480px breakpoint resetting `.event-img`, since the cards ship `<img width="240">`
+with no max-width). *It proves the rules that make the phone case work are present — not that a phone
+rendered it.*
+
+> **Both failure branches were proven red before the green was trusted, and one was VACUOUS.**
+> Narrowing the frame back to 624 failed correctly. Adding a hard `width` beside the max-width
+> **passed** — the check was `[^-]width`, which needs a character before `width` and so could never
+> match `.mail{width:…`, the exact case it was written for. Fixed to a lookbehind and re-proven red.
+> **An assertion that cannot fail is worse than no assertion.**
+
 **GATE RESULT FOR THIS PAGE, 2026-07-30, chrome launched WITH the resolver: `wdsignup/anon` PASSES** —
 imgs 39KB, total 969KB against a 2500KB budget. The 969KB is BuddyBoss chrome present on every anon
 page (104 resources); this page's own contribution is the 39KB site logo. **§8.1 step 3 is done.**
