@@ -105,6 +105,10 @@ $lgws_prefs   = LG_WD_Signup_Page::prefs_url();
 .lgws .wnote{max-width:860px;margin:16px auto 0;text-align:center;font-size:14.5px;color:#41502a}
 .lgws .wnote b{color:var(--dark)}
 
+<?php if ( $lgws_sample ) : /* Flag OFF -> no section, so none of its CSS either.
+   Dead rules are not a visual defect, but shipping the styling for a surface that
+   cannot appear makes the OFF state something you have to explain rather than
+   something you can diff. See LG_WD_SIGNUP_EMAIL_PREVIEW. */ ?>
 /* RULING 2 — the sample email is CONTAINED, not floating: the frame is the
    email's OWN 624px column and its OWN #e8e2d8 body colour, with no shadow, on
    the light page. Three mismatches (width, colour, elevation) were what made it
@@ -118,6 +122,7 @@ $lgws_prefs   = LG_WD_Signup_Page::prefs_url();
 .lgws .mailbar .from{margin-left:auto;font-weight:400;color:#b7ad9b;font-size:11.5px}
 .lgws .mail iframe{display:block;width:100%;height:600px;border:0;background:var(--mail)}
 .lgws .fcap{max-width:624px;margin:11px auto 0;font-size:12.5px;color:var(--dim);text-align:center}
+<?php endif; ?>
 
 /* RULING 6 — the member state */
 .lgws .already{max-width:760px;margin:0 auto;background:var(--white);border:1px solid var(--line);
