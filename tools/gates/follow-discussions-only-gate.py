@@ -194,6 +194,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default="http://127.0.0.1:8896")
     ap.add_argument("--max-cards", type=int, default=3)
+    # THE ASSERTION THAT HAS BEEN MISSING ALL DAY: with the exposure gate OFF, the
+    # feature must be ABSENT — not merely correct. Every gate this lane wrote asserted
+    # what should be PRESENT, which is why three defects reached Ian through green
+    # suites. Point this at a build serving LG_THREAD_FOLLOW_ENABLED=false.
+    ap.add_argument("--expect-flag-off", action="store_true",
+                    help="assert ZERO follow affordances anywhere (flag OFF build)")
     # Real CPT single pages. Defaulted to ones that exist on dev2 today; override
     # when the fixtures rot. Empty list = skip phase C rather than fake it.
     ap.add_argument("--cpt", action="append",
@@ -211,6 +217,31 @@ def main():
     try:
         p.send("Page.enable"); p.send("Runtime.enable")
         set_cookies(p, base)
+
+        if a.expect_flag_off:
+            # OFF must be a TRUE no-op: nothing rendered, not something hidden. Also
+            # assert the server said so, so a page that merely failed to paint cannot
+            # masquerade as a correctly-disabled feature.
+            for label, w, h, mob in (("desktop 1280", 1280, 900, False),
+                                     ("mobile 390", 390, 844, True)):
+                emulate(p, w, h, mob)
+                for path in ("/hub/", "/hub/general/keeper-test-thread-follow-this-one-ian"):
+                    p.send("Page.navigate", {"url": base + path})
+                    for _ in range(240):
+                        time.sleep(0.25)
+                        try:
+                            if p.ev("document.readyState") == "complete": break
+                        except Exception: pass
+                    time.sleep(4)      # let every overlay inject before asserting absence
+                    check(f"{label} {path}: server reports the gate OFF",
+                          p.ev("document.body.getAttribute('data-lg-follow')"), "0")
+                    check(f"{label} {path}: ZERO follow affordances in the DOM (not hidden — absent)",
+                          p.ev("document.querySelectorAll('[data-follow], [data-follow-open], .fc-follow').length"), 0)
+                    check(f"{label} {path}: the follow settings modal was never built",
+                          p.ev("!!document.getElementById('lg-follow-modal')"), False)
+            log("")
+            log(f"follow-discussions-only-gate (flag OFF): {passes} pass / {failures} fail")
+            sys.exit(1 if failures else 0)
 
         for label, w, h, mob in (("desktop 1280", 1280, 900, False),
                                  ("mobile 390", 390, 844, True)):

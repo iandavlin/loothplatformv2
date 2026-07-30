@@ -587,7 +587,7 @@ $lg_can_post = function_exists('lg_bb_mirror_can_post')
     ? lg_bb_mirror_can_post()
     : lg_bb_mirror_wp_logged_in();   // same cookie rule; _reply-render.php not loaded on every page
 ?>
-<body class="bb-mirror<?= !empty($GLOBALS['__bb_hub_rail']) ? ' hub-fmodal-page' : '' ?>" data-lg-can-post="<?= $lg_can_post ? '1' : '0' ?>">
+<body class="bb-mirror<?= !empty($GLOBALS['__bb_hub_rail']) ? ' hub-fmodal-page' : '' ?>" data-lg-can-post="<?= $lg_can_post ? '1' : '0' ?>" data-lg-follow="<?= (function_exists('lg_thread_follow_enabled') && lg_thread_follow_enabled()) ? '1' : '0' ?>"><?php /* data-lg-follow: the thread-follow exposure gate crossing into the client. The desktop reader modal and the mobile sheet build their follow toggles in JS, so the server-side gate alone cannot reach them; this is how the ONE read point (lg_thread_follow_enabled(), _reply-render.php) governs those surfaces too. Same seam as data-lg-can-post. */ ?>
 <?php /* Hub feed: filters live in a CENTERED MODAL (Ian 2026-06-11), not the
          side rail — so the hub emits no nav aside, no hamburger, no drawer
          backdrop, and needs no pre-paint nav-closed state. Forum subpages

@@ -4094,6 +4094,16 @@
   window.lgSaveSync = sync;
 })();
 
+/* THE ONE CLIENT-SIDE READ of the thread-follow exposure gate.
+   Server truth is LG_THREAD_FOLLOW_ENABLED (config.php), surfaced on
+   body[data-lg-follow] by _chrome.php. Nothing else in this file may read that
+   attribute - call this. Defaults to OFF when the attribute is absent, so an older
+   cached shell degrades to 'feature off' rather than to a half-rendered feature. */
+function lgFollowEnabled() {
+  try { return document.body && document.body.getAttribute('data-lg-follow') === '1'; }
+  catch (e) { return false; }
+}
+
 /* ─── Thread-follow: the TWO per-discussion opt-in toggles (🔔 notify / ✉ email)
    thread-follow lane 2026-07-28. SPEC docs/atlas/THREAD-FOLLOW-SPEC.md §2-3.
 
@@ -4762,6 +4772,10 @@
              Explicitly NOT in the post ⋯ menu: that trigger is revealed only to a
              post's AUTHOR or a moderator and its contents are Edit/Delete, so it is
              both the wrong audience and the wrong semantics for a follow control. */
+          /* Exposure gate (config.php -> body[data-lg-follow] -> lgFollowEnabled()).
+             The header markup is built once and persists across opens, so gating at
+             BUILD time is what makes OFF a true no-op rather than a hidden node. */
+          (lgFollowEnabled() ?
           '<button type="button" class="lg-dmodal__notify" data-follow="notify" data-topic-id="0" ' +
                   'aria-pressed="false" aria-label="Notify me about new replies" title="Notify me about new replies">' +
             '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>' +
@@ -4769,7 +4783,7 @@
           '<button type="button" class="lg-dmodal__email" data-follow="email" data-topic-id="0" ' +
                   'aria-pressed="false" aria-label="Email me about new replies" title="Email me about new replies">' +
             '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>' +
-          '</button>' +
+          '</button>' : '') +
           '<button type="button" class="lg-dmodal__size" aria-label="Modal size" title="Modal size"></button>' +
           '<button type="button" class="lg-dmodal__x" data-dm-close aria-label="Close">&times;</button>' +
         '</header>' +

@@ -33,6 +33,13 @@
    Self-contained: one <style> + (on the main Hub only) one tagline node.
    Path-gated to /hub. No deps, no emoji. */
 (function () {
+  /* THE ONE READ of the thread-follow exposure gate in this file. Mirrors
+     forums.js's lgFollowEnabled(); separate because these two files share no
+     scope. Defaults OFF when the attribute is absent. */
+  function lgpFollowEnabled() {
+    try { return document.body && document.body.getAttribute('data-lg-follow') === '1'; }
+    catch (e) { return false; }
+  }
   'use strict';
   if (window.__loothHubPolish) return;
   window.__loothHubPolish = true;
@@ -3696,12 +3703,18 @@
            Wired by the SAME delegated forums.js module as the card and modal (one
            implementation, §0 ruling 8) — these need markup only. */
         '<div class="lrs-hd"><span class="lrs-t"></span>' +
+          /* Exposure gate. The sheet chrome is built ONCE and persists across
+             opens, so the toggles must be gated at BUILD time — a hidden node
+             here would still be a node that retargets and hydrates. Server truth
+             is LG_THREAD_FOLLOW_ENABLED (bb-mirror config.php), crossing into the
+             client on body[data-lg-follow]; read once, below. */
+          (lgpFollowEnabled() ?
           '<button class="lrs-notify" type="button" data-follow="notify" data-topic-id="0" aria-pressed="false" aria-label="Notify me about new replies">' +
             '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>' +
           '</button>' +
           '<button class="lrs-email" type="button" data-follow="email" data-topic-id="0" aria-pressed="false" aria-label="Email me about new replies">' +
             '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>' +
-          '</button>' +
+          '</button>' : '') +
           '<button class="lrs-x" type="button" data-lrs-close aria-label="Close">&times;</button></div>' +
         '<div class="lrs-body" id="lrs-body"><div class="lrs-op" id="lrs-op" hidden></div><div id="lrs-thread"></div></div>' +
         // Compact Reply BUTTON (Ian 2026-06-25) — replaces the persistent "Write a

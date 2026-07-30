@@ -731,6 +731,24 @@ if (!function_exists('feed_save_btn')) {
     }
 }
 
+/**
+ * THE ONE READ POINT for the thread-follow exposure gate (config.php).
+ *
+ * Every follow affordance on every surface asks this and nothing else asks the
+ * constant directly — so turning the feature off is one answer changing, not a hunt
+ * through five files. DEFAULT OFF until Ian has looked at it on live.
+ *
+ * Lives in _reply-render.php because that is the shared partial BOTH the feed
+ * (_feed.php) and the standalone topic page (_single-topic.php) load — the same
+ * reason feed_save_btn() and feed_follow_btns() live here.
+ */
+if (!function_exists('lg_thread_follow_enabled')) {
+    function lg_thread_follow_enabled(): bool
+    {
+        return defined('LG_THREAD_FOLLOW_ENABLED') && LG_THREAD_FOLLOW_ENABLED;
+    }
+}
+
 // ── The CONSOLIDATED follow control (thread-follow §15, Ian picked VARIANT A) ──
 //
 // Ian, 2026-07-30, verbatim: "I like variant A because it gets the card controls
@@ -755,6 +773,7 @@ if (!function_exists('feed_save_btn')) {
 if (!function_exists('feed_follow_control')) {
     function feed_follow_control(int $topicId): void
     {
+        if (!lg_thread_follow_enabled()) return;   // exposure gate — config.php
         if ($topicId < 1) return;
         static $BELL = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
         // Heavier stroke on the badge: it renders at 9px inside a 15px dot, where a
@@ -796,6 +815,7 @@ if (!function_exists('feed_follow_control')) {
 if (!function_exists('feed_follow_btns')) {
     function feed_follow_btns(int $topicId): void
     {
+        if (!lg_thread_follow_enabled()) return;   // exposure gate — config.php
         if ($topicId < 1) return;
         // Bell + envelope. Stroke-only 24px to sit with .fc-save's star and .fc-share.
         static $BELL = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';

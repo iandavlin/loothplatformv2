@@ -409,3 +409,30 @@ function lg_bb_mirror_safe_avatar(?string $url): ?string {
 // been quietly holding 2-6 images that nobody had ever seen. See
 // docs/atlas/REPLY-IMAGE-COUNT-CEILING.md.
 if (!defined('LG_REPLY_IMG_MAX')) define('LG_REPLY_IMG_MAX', 6);
+
+// ---------- LG_THREAD_FOLLOW_ENABLED — the thread-follow exposure gate ----------
+// DEFAULT OFF, and it stays off until Ian turns it on himself on live, having looked
+// at the running thing. Pattern copied from LG_AUTHOR_SOCIALS_ALL_MEMBERS
+// (platform/mu-plugins/lg-author-socials.php:48).
+//
+// WHY IT EXISTS: the follow work merged to main before Ian had clicked it, and it then
+// BLOCKED A ONE-MERGE BYLINE FIX from deploying — a member-facing feature he had not
+// approved was sitting in front of an unrelated change he needed shipped. A flag is
+// what lets work merge before approval instead of holding the queue behind it.
+//
+// SCOPE: every FOLLOW AFFORDANCE — the 🔔 bell, the ✉ envelope, the consolidated pill
+// and its settings modal — on every surface: hub feed cards, the standalone topic page,
+// the desktop reader modal and the mobile sheet. OFF must mean a member sees exactly
+// what they saw before this lane existed.
+//
+// DELIBERATELY NOT IN SCOPE: the two live migrations and the two mu-plugins. They are
+// inert without the UI — no control means nothing writes forums.topic_follow and
+// nothing raises a forum.followed_topic notification — so gating them would only make
+// the deploy more fragile, not less.
+//
+// ONE READ POINT: lg_thread_follow_enabled() in web/forums/_reply-render.php. Nothing
+// else may test this constant; if you need it somewhere new, call that function.
+// Override without editing the repo: LG_BB_MIRROR_FOLLOW=1 in the pool environment.
+if (!defined('LG_THREAD_FOLLOW_ENABLED')) {
+    define('LG_THREAD_FOLLOW_ENABLED', getenv('LG_BB_MIRROR_FOLLOW') === '1');
+}
