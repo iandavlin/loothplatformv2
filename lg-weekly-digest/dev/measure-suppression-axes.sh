@@ -16,13 +16,28 @@
 #
 #   RETIRED  Rule 3a/3b triggers (failed digest recipients, the watermark window,
 #            the floorless-backlog cost). Ian ruled the FIXED 7-DAY WINDOW.
-#   RETIRED  the Rule 2 trigger (forum types exceeding ~10% of listable items).
-#            Rule 2 is retired PERMANENTLY, not deferred: the digest cannot carry
-#            followed-thread activity under ANY §9.1 outcome, because the to-do test
-#            excludes it on its merits. There is no configuration in which the same
-#            reply reaches a member twice through this digest, so there is nothing to
-#            de-duplicate against and no volume at which that changes.
-#            See RECAP-SUPPRESSION-PROPOSAL.md §4.1.
+#   RETIRED  the Rule 2 trigger AS A PERCENTAGE (forum types exceeding ~10% of
+#            listable items). The threshold was the wrong instrument — see §6.
+#
+# ── ⚠️ A RETRACTION, 2026-07-30. THIS HEADER USED TO BE WRONG. ────────────────
+#
+# It said: "Rule 2 is retired PERMANENTLY, not deferred: the digest cannot carry
+# followed-thread activity under ANY §9.1 outcome ... there is nothing to
+# de-duplicate against and no volume at which that changes."
+#
+# EVERY CLAUSE AFTER THE FIRST IS FALSE. The first is true — `forum.followed_topic`
+# is excluded on the to-do test. But the digest NAMES `forum.reply_to_topic`, and
+# BB's reply mailer (`bb_send_forums_subscribed_reply`, class-bp-forums-notification
+# .php:989) removes only the REPLIER from the recipient list, never the topic author
+# — its own comment says otherwise and the comment is wrong. So a member holding the
+# thread-follow ✉ bit on a topic THEY authored receives the same reply twice: once as
+# a per-event email, once as a NAMED digest row.
+#
+# I reasoned correctly about one excluded type and then spoke for the whole axis. A
+# script that tells the next reader a question is permanently closed is the most
+# expensive kind of wrong, because it removes the reason to look again — so the
+# trigger is restored as §6, and it is deliberately NOT a threshold on these
+# numbers. See RECAP-SUPPRESSION-PROPOSAL.md §4.1b and §4.1c.
 #
 # WHAT IS WORTH WATCHING NOW is what the rulings made load-bearing: who gets mail at
 # all, whether the counted register's copy still matches reality, and whether the
@@ -204,3 +219,63 @@ echo "click data 7-10% of apparent clickers are machines hitting 10-20 links ins
 echo "four seconds. A GET that cleared items would wipe a member's recap before they"
 echo "opened it, and the failure would look exactly like the feature working."
 echo "WEEKLY-DIGEST-RECAP.md §9.2."
+
+echo
+echo "=============================================================="
+echo " 6. AXIS 2 — THE TRIGGER I WRONGLY DELETED, RESTORED 2026-07-30"
+echo "=============================================================="
+echo "-- The header of this script used to say Rule 2 was retired PERMANENTLY and"
+echo "-- that there was 'no volume at which that changes'. THAT WAS WRONG. It"
+echo "-- reasoned about forum.followed_topic (excluded, correctly) and then spoke"
+echo "-- for axis 2 as a whole. The digest NAMES forum.reply_to_topic, and BB's"
+echo "-- reply mailer excludes only the REPLIER, never the topic author -- so a"
+echo "-- member with the thread-follow email bit on their OWN topic gets the same"
+echo "-- reply twice: a per-event email and a named digest row."
+echo "-- See RECAP-SUPPRESSION-PROPOSAL.md 4.1b / 4.1c."
+echo "--"
+echo "-- THE TRIGGER IS NOT A PERCENTAGE. It is another lane's ship date:"
+echo "--   reopen when thread-follow's mail toggle ships on the admitted types"
+echo "--   (THREAD-FOLLOW-SPEC 3.5's menu) OR our own sender ships (9.2) --"
+echo "--   whichever lands first, and BEFORE it lands. A threshold on the numbers"
+echo "--   below would let the defect ship while the numbers were still small."
+echo "-- What the numbers are for: sizing the blast radius on the day it reopens."
+echo
+echo "-- (a) HOW BIG IS THE OVERLAPPABLE POPULATION AT ALL"
+ssh -o BatchMode=yes live-ro "$PG -c \"
+SELECT count(*) FILTER (WHERE n.type LIKE 'forum.%')  AS overlappable_items,
+       count(*) FILTER (WHERE n.type NOT LIKE 'forum.%') AS no_email_path_exists
+  FROM notifications n
+  JOIN users u ON u.uuid=n.user_uuid
+  JOIN wp_user_bridge b ON b.user_id=u.id
+  LEFT JOIN connections c ON c.id=n.connection_id
+ WHERE n.type IN ($TODO) AND $OUTSTANDING;
+\""
+echo "   Connections/DMs live in profile_app and NOTHING emails about them, so the"
+echo "   right-hand column can never overlap. It is the left one that can."
+echo
+echo "-- (b) THE ONE THAT DECIDES WHETHER SUPPRESSION IS SAFE AT ALL."
+echo "-- Rule 5 says empty means SEND NO EMAIL. So for any member whose entire"
+echo "-- digest is forum rows, suppressing the emailed ones does not SHORTEN their"
+echo "-- email -- it DELETES it. If 'forum_ONLY_would_be_silenced' is not 0, then"
+echo "-- axis 2 cannot ship without a floor, and the previs frame is the argument."
+ssh -o BatchMode=yes live-ro "$PG -c \"
+WITH item AS (
+  SELECT b.wp_user_id, n.type
+    FROM notifications n
+    JOIN users u ON u.uuid=n.user_uuid
+    JOIN wp_user_bridge b ON b.user_id=u.id
+    LEFT JOIN connections c ON c.id=n.connection_id
+   WHERE n.type IN ($TODO) AND $OUTSTANDING
+), per AS (
+  SELECT wp_user_id, count(*) AS all_items,
+         count(*) FILTER (WHERE type LIKE 'forum.%') AS forum_items
+    FROM item GROUP BY 1
+)
+SELECT count(*)                                        AS members_mailed,
+       count(*) FILTER (WHERE forum_items > 0)         AS have_any_forum_item,
+       count(*) FILTER (WHERE forum_items = all_items) AS forum_ONLY_would_be_silenced
+  FROM per;
+\""
+echo "   Baseline 2026-07-30: 258 mailed, 7 have a forum item, and ALL 7 have"
+echo "   ONLY forum items -- every member axis 2 could touch today would be"
+echo "   silenced completely, not shortened. The two populations are disjoint."
