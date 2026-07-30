@@ -230,17 +230,24 @@
             var count = ids.length;
             if (!count) return;
 
+            // "Stop all 1?" / "for all 1 discussion" is what a counter writes, not
+            // what a person says. Caught by actually reading the dialog a real
+            // click produced.
+            var one   = count === 1;
+            var head  = one ? 'Stop following this discussion?' : 'Stop all ' + count + '?';
+            var scope = one ? 'this discussion' : 'all ' + count + ' discussions you follow';
+
             var dlg = document.createElement('dialog');
             dlg.className = 'lg-manage-sub__fol-dlg';
             dlg.innerHTML =
-                '<h3>Stop all ' + count + '?</h3>' +
-                '<p>This turns off notifications <b>and</b> email for all ' + count +
-                ' discussion' + (count === 1 ? '' : 's') + ' you follow.</p>' +
+                '<h3>' + head + '</h3>' +
+                '<p>This turns off notifications <b>and</b> email for ' + scope + '.</p>' +
                 '<p>Your Weekly Digest and Event Reminders are not affected. You can follow any ' +
                 'discussion again from the discussion itself.</p>' +
                 '<div class="lg-manage-sub__fol-dlg-btns">' +
                 '<button type="button" class="lg-manage-sub__fol-stopall is-cancel" value="no">Cancel</button>' +
-                '<button type="button" class="lg-manage-sub__fol-stopall is-go" value="yes">Stop all ' + count + '</button>' +
+                '<button type="button" class="lg-manage-sub__fol-stopall is-go" value="yes">' +
+                (one ? 'Unfollow it' : 'Stop all ' + count) + '</button>' +
                 '</div>';
             document.body.appendChild(dlg);
 
