@@ -1093,6 +1093,22 @@ function feed_first_embed_url(?string $html): ?string
     return preg_match($re, $html, $m) ? $m[0] : null;
 }
 
+// YouTube video id out of ONE provider URL — the discussion-card facade's source
+// (Ian 7/30: "a discussion with a YouTube link should play on its hub card, same
+// as a video post"). Deliberately takes a single URL, not a body: the caller feeds
+// it feed_first_embed_url()'s answer, so the facade only ever claims a card whose
+// FIRST provider URL is a YouTube one. A body that leads with Vimeo/IG/X keeps the
+// existing lazy .feed-card__embed and is untouched — one video per card, and the
+// non-YouTube providers stay out of scope (they need their own oembed/id path).
+// Pattern matches hub-polish.js lgYtIdFromUrl() so client and server agree on what
+// an id is; the 15-char cap matches the video-facade regex above.
+function feed_yt_id(?string $url): ?string
+{
+    if (!$url) return null;
+    $re = '~^https?://(?:www\\.|m\\.)?(?:youtu\\.be/|youtube\\.com/(?:watch\\?[^#\\s]*v=|embed/|shorts/|live/))([A-Za-z0-9_-]{6,15})~i';
+    return preg_match($re, $url, $m) ? $m[1] : null;
+}
+
 function feed_ctx(array $card): string
 {
     $title = htmlspecialchars($card['forum_title'] ?? '', ENT_QUOTES, 'UTF-8');
@@ -1567,6 +1583,30 @@ $header_cat = $scoped_forum
       $excerpt_plain_len = mb_strlen(strip_tags($excerpt));
       $show_read_more = mb_strlen($plain_full) > $excerpt_plain_len + 8;
       $embed_url     = feed_first_embed_url($full_html);
+      // Discussion video facade (Ian 7/30). A discussion whose body leads with a
+      // YouTube link now gets the SAME cover treatment a video POST gets: thumb +
+      // play button, and forums.js swaps the iframe in on click. No new JS — the
+      // .fc-cover--video[data-yt-play] contract is already generic (forums.js §1's
+      // delegated play handler, its cover-lightbox exception, and §4e's exempt list
+      // all name the class, not the card type), so emitting the markup is the whole
+      // change. Desktop only, exactly like video cards: at ≤640 hub-polish routes a
+      // topic tap to the discussion sheet and no hub video plays inline (Ian 6/17).
+      $t_yt = feed_yt_id($embed_url);
+      // The facade OWNS the video, so drop the lazy .feed-card__embed slot that would
+      // otherwise render a SECOND player for the same URL further down the card.
+      if ($t_yt) $embed_url = null;
+      // Thumb: the member's own attached photo when there is one (already resized +
+      // srcset'd through /img.php), else YouTube's own still. mqdefault is the right
+      // ytimg rung — 320x180 is true 16:9 (hqdefault is 4:3 and letterboxes) and small
+      // enough that a ≤440px cover slot can't trip the craft gate's IMG-OVERSIZE.
+      $t_yt_thumb = $t_yt ? 'https://i.ytimg.com/vi/' . rawurlencode($t_yt) . '/mqdefault.jpg' : null;
+      // An excerpt that is nothing but the pasted URL is noise under a playable cover
+      // — same suppression the video/shorty content cards already do (Buck 6/12).
+      // Only when the URL is ALL there is: a discussion that says something and then
+      // links the video keeps its words.
+      if ($t_yt && preg_match('~^https?://\S+$~', trim(html_entity_decode(strip_tags($excerpt))))) {
+          $excerpt = '';
+      }
 
       // Topic-level reply CTA, rendered inline on the "Started by …" byline row.
       // Authenticated viewers only — anon gets no reply affordance (server 401s).
@@ -1608,7 +1648,16 @@ $header_cat = $scoped_forum
       <?php /* fc-activity beacon removed per Ian 6/7 — the "active … ago" pulse-dot
                was noise on the cards. CSS rules (.fc-activity/.fc-pulse) left in place
                but now unused. */ ?>
-      <?php if (!empty($card_image)): ?>
+      <?php if ($t_yt): /* YouTube discussion → facade: thumb + play; forums.js swaps the iframe in on click (no embed up front) */ ?>
+        <div class="fc-cover feed-card__cover fc-cover--video" data-yt-play="<?= htmlspecialchars($t_yt, ENT_QUOTES) ?>" role="button" tabindex="0" aria-label="Play video">
+          <?php if (!empty($card_image)): ?>
+            <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>"<?= lg_cover_srcset($card_image) ?> alt=""<?= $card_dims ?> <?= lg_cover_loading_attrs() ?>>
+          <?php else: ?>
+            <img class="feed-card__cover-img" src="<?= htmlspecialchars($t_yt_thumb, ENT_QUOTES) ?>" alt="" width="320" height="180" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+          <?php endif; ?>
+          <button type="button" class="fc-play" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+        </div>
+      <?php elseif (!empty($card_image)): ?>
         <a class="fc-cover feed-card__cover" href="<?= $turl ?>" aria-label="<?= htmlspecialchars($topic['topic_title']) ?>">
           <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>"<?= lg_cover_srcset($card_image) ?> alt=""<?= $card_dims ?> <?= lg_cover_loading_attrs() ?>>
         </a>
