@@ -3588,12 +3588,16 @@
             .catch(function (err) { del.disabled = false; alert('Network error: ' + err.message); });
         });
       });
-      // Edit the OP (author/admin) — opens the SAME mobile composer used to edit a
-      // reply (openComposerSheet), in its topic mode: title, rich body, forum
-      // picker, tags, quick-tags and photos as removable thumbs; Save → owned topic
-      // PUT (+ topic-media). Unified "new edit" (Ian 2026-06-25): the OP no longer
-      // opens the 3-modal wizard. Full add-post parity (Ian 2026-07-29): the
-      // composer offers every control creating a post does.
+      // Edit the OP (author/admin) — opens the SAME composer that CREATES a
+      // discussion on THIS viewport (Ian 2026-07-30, superseding the 2026-06-25
+      // "unified new edit"): #ntm-form via lgNtmEditTopic, pre-filled. On a phone
+      // the big centre + in the bottom nav opens exactly that form — bottom-nav.js
+      // openComposer() fires [data-ntm-open] — so create and edit are one code path
+      // here, which is the whole rule. It is NOT the reply composer: lgOpenComposer
+      // has no create-a-discussion mode, so routing edit through it would have been
+      // a second implementation with nothing to reuse.
+      // The desktop/mobile split itself stays by design; edit simply follows create
+      // on whichever side it is on.
       // Gated to author (data-author-id) OR mod.
       var opForumId = parseInt(card.getAttribute('data-forum-id'), 10) || 0;
       var edit = document.createElement('button');
