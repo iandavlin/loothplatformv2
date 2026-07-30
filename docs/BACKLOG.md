@@ -1,7 +1,36 @@
 # Backlog
 
-Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
-one up, move the line into that lane's charter and note the lane name here.
+Items Ian has asked for that no lane owns yet. When a lane picks one up, move the
+line into that lane's charter and note the lane name here.
+
+## PRIORITY INDEX (the order — edit THIS to re-rank; tell keeper "bump X")
+
+**P0 — live/member-facing bugs**
+1. Reacting on a shorty fails on LIVE
+2. BUG: fresh reply prefilled with last reply's data — *edit-post-parity fixing*
+3. Profile social links go stale on posts/events (member-reported)
+
+**P1 — wanted now / deploy-blocking**
+4. Follow-controls consolidation modal — *deploy gate; thread-follow building*
+5. Notifications: quick-reply modal (default) w/ full-post link
+6. Admin can edit ANY post, full functionality
+7. Discussion hub cards: play video inline ★
+8. Front page: latest weekly email for logged-out users
+
+**P2 — polish / UX**
+9. Advanced search: dynamic facet narrowing
+10. Add-discussion modal: resizable + text scaling
+11. Group chat header: collapse + text scale
+12. Post header: title legibility over text thumbnails
+13. PWA launch animation/message
+14. Mail-containment: gate on host not LG_ENV (latent security)
+
+**P3 — big builds (scope first)**
+15. Front-end authoring for all post types ★ vision
+16. Stripe membership: audit → build
+
+---
+*Full item details below, newest-first. The index above is the running order.*
 
 ## 2026-07-30 — Front page: show the latest weekly email to LOGGED-OUT users (Ian)
 
