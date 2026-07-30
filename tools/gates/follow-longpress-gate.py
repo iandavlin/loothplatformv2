@@ -103,11 +103,59 @@ def must_goto(p, url, what):
         cannot_run(f"hydration never completed for: {what}")
 
 
-def must_bell(p, what):
-    b = pick_mobile_bell(p)
+def must_trigger(p, what):
+    b = pick_follow_trigger(p)
     if not b:
-        cannot_run(f"no visible [data-follow=notify] at 390px for: {what}")
+        cannot_run(f"no visible [data-follow-open] at 390px for: {what}")
     return b
+
+
+def modal_open(p):
+    return p.ev("!!document.querySelector('#lg-follow-modal:not([hidden])')")
+
+
+def modal_switch(p, ch):
+    """A VISIBLE switch inside the OPEN modal, with its centre point.
+
+    Scoped to #lg-follow-modal on purpose. A bare [data-follow] lookup would also
+    match the topic page's inline pair and — more dangerously — would return a
+    zero-box node from a CLOSED modal, so a swallowed press would look like a
+    missing element rather than the defect it is.
+    """
+    return p.ev("""(() => {
+      const m = document.querySelector('#lg-follow-modal:not([hidden])');
+      if (!m) return null;
+      const b = m.querySelector('[data-follow="%s"]');
+      if (!b) return null;
+      const r = b.getBoundingClientRect();
+      if (!(r.width > 0 && r.height > 0)) return null;
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+    })()""" % ch)
+
+
+def sw_pressed(p, ch):
+    return p.ev("""(() => {
+      const m = document.querySelector('#lg-follow-modal:not([hidden])');
+      if (!m) return null;
+      const b = m.querySelector('[data-follow="%s"]');
+      return b ? b.getAttribute('aria-pressed') : null;
+    })()""" % ch)
+
+
+def pill_on(p, topic):
+    """Does the CARD's pill show following state, without the modal being opened?
+
+    §15.2 is the reason this is asserted separately from the store: consolidation is
+    only acceptable while the control still carries visible state. A pill that reads
+    "Follow" over a live subscription is the §8.1.3 lie, whatever the DB says.
+    """
+    return p.ev("""(() => {
+      for (const c of document.querySelectorAll('[data-follow-open][data-topic-id="%s"]')) {
+        const r = c.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return c.classList.contains('is-on');
+      }
+      return null;
+    })()""" % topic)
 
 try:
     import websocket  # websocket-client
@@ -212,36 +260,43 @@ def goto(p, url, tries=2):
     return False
 
 
-def pick_mobile_bell(p):
-    """The bell that actually has a box in THIS viewport, and its centre point.
+def pick_follow_trigger(p):
+    """The mobile card's follow affordance that actually has a box in THIS viewport.
 
-    Both a desktop and a mobile copy exist in the DOM for every discussion card;
-    CSS shows one per breakpoint. Resolving by rect is what keeps the gate honest
-    about which surface it is really pressing.
+    ⚠️ §15 VARIANT A MOVED THIS TARGET. The mobile feed card no longer carries an
+    inline [data-follow] pair — it carries ONE consolidated [data-follow-open] pill
+    (Ian 2026-07-30), and the 🔔/✉ switches now live in a body-level modal. Left
+    pointed at [data-follow] this gate finds nothing on the hub and exits 2 — not a
+    false red, but a gate that silently stops proving anything, which is how craft
+    gate 2 sat dead for weeks.
+
+    THE DEFECT IS STILL REACHABLE, which is why this still matters: .fc-follow
+    renders inside .lg-card-actions, inside .fc-actions, and mobile-hub.js's
+    holdTargetFrom() matches .fc-actions. Without the bail covering
+    [data-follow-open]/.fc-follow, a deliberate press opens the reaction palette and
+    the capture-phase swallower eats the release click — the modal never opens. Same
+    defect as §14, one control later.
+
+    Resolving by rect keeps it honest about WHICH copy it is pressing: a desktop and
+    a mobile copy both exist in the DOM and CSS shows one per breakpoint.
     """
     return p.ev("""(() => {
-      for (const b of document.querySelectorAll('[data-follow="notify"]')) {
+      for (const b of document.querySelectorAll('[data-follow-open]')) {
         const r = b.getBoundingClientRect();
         if (r.width > 0 && r.height > 0) {
           return { topic: b.getAttribute('data-topic-id'),
                    x: Math.round(r.left + r.width / 2),
                    y: Math.round(r.top + r.height / 2),
-                   inMobileBar: !!b.closest('.lg-act-follow'),
-                   pressed: b.getAttribute('aria-pressed') };
+                   inMobileBar: !!b.closest('.lg-card-actions'),
+                   // Whether the HOLD was swallowed is now read from the modal, not
+                   // from this pill: variant A's trigger opens a dialog, it does not
+                   // itself carry the bit. A hold that reaches the click opens the
+                   // modal; a swallowed one leaves it shut and pops the palette.
+                   expanded: b.getAttribute('aria-expanded') };
         }
       }
       return null;
     })()""")
-
-
-def aria(p, topic):
-    return p.ev(f"""(() => {{
-      for (const b of document.querySelectorAll('[data-follow="notify"][data-topic-id="{topic}"]')) {{
-        const r = b.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0) return b.getAttribute('aria-pressed');
-      }}
-      return null;
-    }})()""")
 
 
 def main():
@@ -275,110 +330,121 @@ def main():
             cannot_run("page never reached lg-follow-authed on first load — "
                        "hydration did not complete, so nothing was exercised")
 
-        b = pick_mobile_bell(p)
+        b = pick_follow_trigger(p)
         if not b:
-            log("  FAIL  no visible [data-follow=notify] at 390px"); return 1
+            log("  FAIL  no visible [data-follow-open] at 390px"); return 1
         topic = b["topic"]
         log(f"  topic under test: {topic}  at ({b['x']},{b['y']})")
-        check("pressing the MOBILE copy (.lg-act-follow), not the desktop one",
+        check("pressing the MOBILE copy (inside .lg-card-actions), not the desktop one",
               b["inMobileBar"], True)
         check("mobile-hub.js actually loaded (overlay stack present)",
               p.ev("!!window.__loothMobileHub"), True)
 
         # ⚠️ ORDER MATTERS, AND GETTING IT WRONG ONCE ALREADY COST ME A FALSE PASS.
         # The store must be cleared BEFORE the page loads. Clearing it after means the
-        # button has already hydrated to ON, and then "aria-pressed is true" passes
-        # without the press having done anything at all. A gate that can pass
-        # vacuously is worse than no gate, so every phase below re-establishes its
+        # control has already hydrated to ON, and then "it reads Following" passes
+        # without the press having done anything. Every phase re-establishes its
         # precondition and ASSERTS it.
         db_clear(topic)
         must_goto(p, a.hub, "precondition reload")
-        check("precondition: starts OFF (store cleared, page reloaded)",
-              aria(p, topic), "false")
         check("precondition: store really is empty", db_notify(topic), False)
+        check("precondition: the pill reads Follow, not Following",
+              pill_on(p, topic), False)
 
-        # ── 1. A SLOW, DELIBERATE PRESS — the gesture Ian actually makes ──────────
-        log(f"\n  [1] SLOW press ({PRESS_SLOW_MS}ms) — a real finger on a 38px target")
-        b = must_bell(p, "slow press")
+        # ── 1. THE GATE'S WHOLE POINT, on variant A's control ─────────────────────
+        # A slow, deliberate press must REACH ITS CLICK and open the modal. .fc-follow
+        # renders inside .lg-card-actions, inside .fc-actions, and holdTargetFrom()
+        # matches .fc-actions — so without the bail covering [data-follow-open], the
+        # hold opens the reaction palette and the capture-phase swallower eats the
+        # release click. That is Ian's §14 defect on the control that REPLACED the one
+        # it was fixed on, and this phase is the only thing that can see it: a
+        # synthetic click cannot cross 380ms (§14.3).
+        log(f"\n  [1] SLOW press ({PRESS_SLOW_MS}ms) on the Follow pill — must OPEN the modal")
+        b = must_trigger(p, "slow press")
         p.press(b["x"], b["y"], PRESS_SLOW_MS)
-        time.sleep(1.5)
-        check("aria-pressed flipped to true", aria(p, topic), "true")
-        check("row IS in forums.topic_follow (the write actually happened)",
-              db_notify(topic), True)
-        # The long-press must not have opened the reaction picker over a subscribe
-        # control — that popover appearing IS the swallowed-tap signature.
-        check("reaction palette did NOT open on the follow toggle",
+        time.sleep(1.0)
+        check("the settings modal OPENED", modal_open(p), True)
+        check("reaction palette did NOT open over the follow control",
               p.ev("!!document.querySelector('.fcr-palette:not([hidden])')"), False)
 
-        # ── 2. IT SURVIVES A RELOAD — "stay on" is the literal complaint ──────────
-        log("\n  [2] reload — does it STAY on?")
-        must_goto(p, a.hub, "persistence reload")
-        check("still ON after reload", aria(p, topic), "true")
-        check("row still in store", db_notify(topic), True)
-
-        # ── 3. SLOW press again turns it OFF (the toggle is not one-way) ──────────
-        log(f"\n  [3] SLOW press again ({PRESS_SLOW_MS}ms) — turns OFF")
-        b2 = must_bell(p, "slow press OFF")
-        p.press(b2["x"], b2["y"], PRESS_SLOW_MS)
+        # ── 2. THE SWITCH INSIDE IT WRITES ───────────────────────────────────────
+        # The modal is appended to <body>, outside every holdTargetFrom() selector, so
+        # a hold here SHOULD be immune. Asserted rather than assumed — "should be
+        # outside the selector" is exactly the reasoning that was wrong in §14.
+        log(f"\n  [2] SLOW press ({PRESS_SLOW_MS}ms) on the modal's 🔔 switch")
+        sw = modal_switch(p, "notify")
+        if not sw:
+            cannot_run("modal opened but carries no [data-follow=notify] switch")
+        p.press(sw["x"], sw["y"], PRESS_SLOW_MS)
         time.sleep(1.5)
-        check("aria-pressed back to false", aria(p, topic), "false")
+        check("row IS in forums.topic_follow (the write actually happened)",
+              db_notify(topic), True)
+        check("the switch reads ON", sw_pressed(p, "notify"), "true")
+
+        # ── 3. IT SURVIVES A RELOAD, AND THE CARD SHOWS IT ───────────────────────
+        # "Stay on" was the literal complaint. Under variant A the member reads state
+        # off the PILL without opening anything (§15.2), so that is what is asserted.
+        log("\n  [3] reload — does it STAY on, and does the CARD show it?")
+        must_goto(p, a.hub, "persistence reload")
+        check("row still in store", db_notify(topic), True)
+        check("the pill hydrated to Following (state visible WITHOUT opening)",
+              pill_on(p, topic), True)
+
+        # ── 4. IT TURNS OFF AGAIN (the toggle is not one-way) ────────────────────
+        log(f"\n  [4] SLOW press again — turns OFF")
+        b2 = must_trigger(p, "slow press OFF")
+        p.press(b2["x"], b2["y"], PRESS_SLOW_MS)
+        time.sleep(1.0)
+        check("modal reopened", modal_open(p), True)
+        sw2 = modal_switch(p, "notify")
+        if not sw2:
+            cannot_run("modal reopened without a notify switch")
+        p.press(sw2["x"], sw2["y"], PRESS_SLOW_MS)
+        time.sleep(1.5)
         check("row removed from store", db_notify(topic), False)
 
-        # ── 4. A FAST FLICK still works (we must not have broken the quick tap) ───
-        log(f"\n  [4] FAST tap ({PRESS_FAST_MS}ms) — the short gesture must still work")
+        # ── 5. A FAST FLICK still works (we must not have broken the quick tap) ──
+        log(f"\n  [5] FAST tap ({PRESS_FAST_MS}ms) — the short gesture must still work")
         db_clear(topic)
         must_goto(p, a.hub, "fast-tap reload")
-        check("precondition: starts OFF", aria(p, topic), "false")
-        b3 = must_bell(p, "fast tap")
+        b3 = must_trigger(p, "fast tap")
         p.press(b3["x"], b3["y"], PRESS_FAST_MS)
-        time.sleep(1.5)
-        check("fast tap toggled ON", aria(p, topic), "true")
-        check("fast tap wrote the row", db_notify(topic), True)
-
+        time.sleep(1.0)
+        check("fast tap opened the modal", modal_open(p), True)
+        sw3 = modal_switch(p, "notify")
+        if sw3:
+            p.press(sw3["x"], sw3["y"], PRESS_FAST_MS)
+            time.sleep(1.5)
+            check("fast tap wrote the row", db_notify(topic), True)
         db_clear(topic)
 
-        # ── 5. THE ENVELOPE TOO — a different store, the same swallowed gesture ───
+        # ── 6. THE ENVELOPE TOO — a different store, the same swallowed gesture ──
         # ✉ writes the bbPress subscription in MySQL, not forums.topic_follow, so the
-        # DB probe above cannot see it. Surviving a reload IS a server round-trip
-        # assertion (state is hydrated by the batch GET), which is the property that
-        # actually matters here. Both bits ride the same [data-follow] delegate, so a
-        # regression that eats one eats both — this keeps the gate honest about that.
-        log(f"\n  [5] SLOW press ({PRESS_SLOW_MS}ms) on the ✉ ENVELOPE")
+        # DB probe cannot see it. Surviving a reload IS the server round-trip
+        # assertion. Both bits ride the same [data-follow] delegate, so a regression
+        # that eats one eats both — this keeps the gate honest about that.
+        log(f"\n  [6] SLOW press ({PRESS_SLOW_MS}ms) on the modal's ✉ ENVELOPE")
         must_goto(p, a.hub, "envelope reload")
-        em = p.ev("""(() => {
-          for (const b of document.querySelectorAll('[data-follow="email"]')) {
-            const r = b.getBoundingClientRect();
-            if (r.width > 0 && r.height > 0)
-              return { topic: b.getAttribute('data-topic-id'),
-                       x: Math.round(r.left + r.width / 2),
-                       y: Math.round(r.top + r.height / 2),
-                       pressed: b.getAttribute('aria-pressed') };
-          }
-          return null;
-        })()""")
+        b4 = must_trigger(p, "envelope")
+        p.press(b4["x"], b4["y"], PRESS_FAST_MS)
+        time.sleep(1.0)
+        em = modal_switch(p, "email")
         if not em:
-            check("a visible [data-follow=email] exists at 390px", bool(em), True)
+            check("the modal carries a [data-follow=email] switch", bool(em), True)
         else:
-            etopic, start = em["topic"], em["pressed"]
+            start = sw_pressed(p, "email")
             want = "false" if start == "true" else "true"
             p.press(em["x"], em["y"], PRESS_SLOW_MS)
             time.sleep(1.5)
-            eaia = lambda: p.ev(f"""(() => {{
-              for (const b of document.querySelectorAll('[data-follow="email"][data-topic-id="{etopic}"]')) {{
-                const r = b.getBoundingClientRect();
-                if (r.width > 0 && r.height > 0) return b.getAttribute('aria-pressed');
-              }}
-              return null; }})()""")
-            check(f"envelope flipped {start} -> {want}", eaia(), want)
+            check(f"envelope flipped {start} -> {want}", sw_pressed(p, "email"), want)
             must_goto(p, a.hub, "envelope persistence reload")
-            check("envelope state SURVIVED reload (server round-trip)", eaia(), want)
-            # put it back the way we found it, so the gate leaves no state behind
-            em2 = p.ev("""(() => {
-              for (const b of document.querySelectorAll('[data-follow="email"]')) {
-                const r = b.getBoundingClientRect();
-                if (r.width > 0 && r.height > 0)
-                  return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) };
-              } return null; })()""")
+            b5 = must_trigger(p, "envelope re-open")
+            p.press(b5["x"], b5["y"], PRESS_FAST_MS)
+            time.sleep(1.0)
+            check("envelope state SURVIVED reload (server round-trip)",
+                  sw_pressed(p, "email"), want)
+            # Put it back the way we found it — the gate leaves no state behind.
+            em2 = modal_switch(p, "email")
             if em2:
                 p.press(em2["x"], em2["y"], PRESS_FAST_MS)
                 time.sleep(1.5)

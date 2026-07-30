@@ -4123,6 +4123,7 @@
       setState(b, ch === 'notify' ? !!st.notify : !!st.email);
     });
     paintControl(topicId, !!st.notify, !!st.email);
+    fmSyncFreq();          // §15.3: the cadence row follows the ✉ bit, never leads it
   }
 
   /* The consolidated control's AGGREGATE state (§15 variant A, Ian 2026-07-30).
@@ -4242,18 +4243,21 @@
      modal SHOWS rather than owns). So the row is data-driven and dark: flipping the
      flag must not be the moment anyone first thinks about the option list. */
   var FREQ_ENABLED = false;
-  /* HOURLY IS GONE — weekly-recap answered §15.4 on 2026-07-30, and the reason is
-     measurement, not taste: NO MEMBER ON LIVE HAS EVER HAD TWO FORUM NOTIFICATIONS
-     IN THE SAME HOUR. An hourly digest is therefore a strictly worse Instant — it
-     adds delay and batches nothing. Better dropped before Ian settles the list than
-     withdrawn after he picks it (§15.4).
+  /* THE LIST IS NOW FULLY SPECIFIED — both open questions answered 2026-07-30.
 
-     STILL OPEN (Ian, §15.3): whether 'Off' stays here or the Emails toggle owns
-     on/off alone. Kept for now because he asked for it explicitly. This stays an
-     ARRAY and the segmented control is built from it, so resolving §15.3 either way
-     is a one-element data change and never a re-layout — which is the whole reason
-     it was written this way. */
-  var FREQ_OPTIONS = ['Off', 'Instant', 'Daily', 'Weekly'];
+     HOURLY IS OUT (§15.4, weekly-recap) on measurement, not taste: NO MEMBER ON LIVE
+     HAS EVER HAD TWO FORUM NOTIFICATIONS IN THE SAME HOUR, so an hourly digest is a
+     strictly worse Instant — it adds delay and batches nothing.
+
+     "OFF" IS OUT (§15.3, Ian): the Emails toggle owns on/off and the segmented
+     control only ever picks a cadence. Off-in-the-list plus a separate toggle
+     expressed ONE state TWO ways, and a member who set Emails ON with frequency Off
+     had no way to know which won.
+
+     Building this from an array is what made both answers one-element data changes
+     instead of re-layouts — the reason §15.3/§15.4 were left open in code rather
+     than guessed at. */
+  var FREQ_OPTIONS = ['Instant', 'Daily', 'Weekly'];
 
   var fm = null, fmLastFocus = null;
 
@@ -4313,6 +4317,23 @@
       }).join('') + '</div></div>';
   }
 
+  /* §15.3's SURVIVING coupling. With "Off" gone the reverse direction (choosing Off
+     switches Emails off) no longer exists, but this direction still must: with Emails
+     off there is no cadence, and a live-looking segmented control would be a setting
+     that isn't — the §8.1.3 lie in miniature. Dimmed AND inert, because dimming alone
+     still accepts the click. Driven from the ✉ switch's own state so it cannot drift.
+
+     Called on open and after every paint; a no-op while FREQ_ENABLED is false. */
+  function fmSyncFreq() {
+    if (!fm || !FREQ_ENABLED) return;
+    var row = fm.querySelector('#lg-fm-freq');
+    if (!row) return;
+    var em = fm.querySelector('[data-follow="email"]');
+    var on = !!(em && em.getAttribute('aria-pressed') === 'true');
+    row.classList.toggle('is-off', !on);
+    [].slice.call(row.querySelectorAll('button')).forEach(function (b) { b.disabled = !on; });
+  }
+
   function fmClose() {
     if (!fm || fm.hidden) return;
     fm.hidden = true;
@@ -4359,6 +4380,9 @@
     document.documentElement.classList.add('lg-fm-open');
     sync();                                        // 🔔/✉ state for this topic
     if (window.lgSaveSync) window.lgSaveSync();    // ☆ state for this topic
+    // Dim/undim before the batch GET lands too, so the row never flashes as live
+    // for a member whose emails are off. paint() calls it again on arrival.
+    fmSyncFreq();
     var first = m.querySelector('.lg-fm__sw');
     if (first) { try { first.focus(); } catch (e) {} }
   }

@@ -5461,7 +5461,11 @@ body.lg-follow-anon .fc-follow { display: none; }
 }
 .lg-fm__seg button:last-child { border-right: 0; }
 .lg-fm__seg button.is-on { background: var(--lg-follow-on, #c66845); color: #fff; }
+/* §15.3 (Ian 2026-07-30): the Emails toggle owns on/off — "Off" is NOT in the list.
+   With emails off there is no cadence, so the row dims AND its buttons are disabled.
+   Dimming alone still accepts the click, which would be a setting that isn't. */
 .lg-fm__row--freq.is-off { opacity: .5; }
+.lg-fm__seg button:disabled { cursor: default; }
 
 /* Stop the page scrolling behind the dialog. */
 html.lg-fm-open, html.lg-fm-open body { overflow: hidden; }

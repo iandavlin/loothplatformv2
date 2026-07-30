@@ -1975,3 +1975,100 @@ rule and their framing that it is the difference between zero new state and a pe
 ledger.
 
 *§18 written 2026-07-30 from harness runs on both a green and a deliberately broken build.*
+
+---
+
+## 19. THE MODAL IS FULLY SPECIFIED — and variant A reintroduced §14's defect
+
+### 19.1 §15.3 answered: "Off" is out. Final list — Instant / Daily / Weekly
+
+**Ian, 2026-07-30:** drop "Off"; the Emails toggle owns on/off and the segmented control
+only ever picks a cadence. He took §15.3's recommendation and its reason: Off-in-the-list
+*plus* a separate toggle expressed **one state two ways**, and a member who set Emails ON
+with frequency Off had no way to know which won.
+
+With Hourly out on weekly-recap's evidence (§18.5), the list is **Instant / Daily / Weekly**
+and nothing about it is open.
+
+**The surviving coupling still matters and is implemented:** switching Emails OFF dims the
+cadence row **and disables its buttons**. Dimming alone still accepts the click, which would
+be a setting that isn't — §8.1.3 in miniature. The reverse coupling is gone with "Off". It
+is driven from the ✉ switch's own `aria-pressed` and re-run from `paint()`, so it cannot
+drift from the bit it describes.
+
+Both answers landed as **one-element data changes**, which is the entire reason the list was
+built from an array rather than hand-laid markup.
+
+⚠️ **`FREQ_ENABLED` STAYS FALSE, and that is not an oversight.** The *list* is decided; the
+*backing* is not. There is still no sender (§15.5), and the cadence **store shape is an open
+contract with weekly-recap** — raised on the board as a question, per §15.4's rule against
+handing the consuming lane a migration. Shipping the control now would be exactly the
+"silently does nothing" §15.4 forbids. It flips on when the store is agreed and a sender
+exists, and not before.
+
+### 19.2 ⚠️ VARIANT A REINTRODUCED IAN'S §14 DEFECT ON THE CONTROL THAT REPLACED IT
+
+Found while checking whether the *old* longpress gate still had a target — not by testing.
+
+`mobile-hub.js`'s bail read:
+
+```js
+if (el.closest('[data-follow]') || el.closest('.lg-act-follow')) return null;
+```
+
+**`[data-follow]` does not match `data-follow-open`** — different attributes — and
+`.fc-follow` renders inside `.lg-card-actions`, inside `.fc-actions`, which the broad match
+below it claims. So on a phone: press-and-hold the Follow pill past 380ms → `longPressed`
+→ the reaction palette opens → the capture-phase swallower kills the release click →
+**the modal never opens.**
+
+That is Ian's exact §14 defect, on the control built to replace the one it was fixed on, and
+per §14.3 it is **structurally invisible to every synthetic click in the suite**. Fixed by
+widening the bail to `[data-follow-open]` and `.fc-follow`.
+
+> **The lesson, and it is the one §14 already paid for once:** a fix written against a
+> *selector* survives only as long as the markup keeps matching that selector. Replacing the
+> control replaced the match. Any new follow affordance under `.fc-actions` needs this bail,
+> and the comment now says so at the line.
+
+### 19.3 The old gate had silently lost its target
+
+`follow-longpress-gate.py` resolved its bell with `[data-follow="notify"]` on the hub. Under
+variant A the mobile card has no inline `[data-follow]` at all, so the gate found nothing and
+exited **2 / CANNOT RUN** — not a false red, but a gate that quietly stops proving anything,
+which is precisely how craft gate 2 sat dead for weeks.
+
+Repointed at `[data-follow-open]` and restructured, because the *assertion* changed shape too:
+the pill opens a dialog, it does not itself carry the bit.
+
+| phase | now asserts |
+|---|---|
+| 1 | a 600ms press on the pill **opens the modal**, and no reaction palette appears |
+| 2 | a 600ms press on the modal's 🔔 switch **writes `forums.topic_follow`** |
+| 3 | after reload the **pill itself reads Following** — §15.2 state visible without opening |
+| 4 | pressing again turns it off (not one-way) |
+| 5 | an 80ms flick still opens the modal (the quick tap is unbroken) |
+| 6 | the ✉ switch flips and survives a reload (MySQL store, so reload IS the assertion) |
+
+Phase 1 is the one that would have caught 19.2. Phase 3 is new and exists because
+consolidation is only acceptable while the control still carries visible state.
+
+### 19.4 Status against the live-deploy gate
+
+| item | state |
+|---|---|
+| Variant A row + labelled bell (§15.2) | **built** |
+| Save in the modal, topics only | **built**, negative case **proven red-first** (§18.3) |
+| Save inline on all other post types | **unchanged**, verified against `main` |
+| Frequency list Instant/Daily/Weekly | **built**, `FREQ_ENABLED = false` pending the store |
+| Mock in the monorepo | **committed** (`8cf55b7`) |
+| Tracked `.pyc` dropped | **done** + `.gitignore` |
+| Cadence store agreed with weekly-recap | **OPEN — theirs** |
+| **Verified on the dev2 serve** | **NO — not merged, and never opened in a browser** |
+
+**It is not done.** Everything is proven at the SSR/lint/harness layer; **nothing about the
+modal has been seen in an engine** — not that it paints, not that a press opens it, not that
+Save hydrates for the right topic. The seat has been with other lanes throughout. Saying
+otherwise would be the hedged claim this lane keeps refusing to make.
+
+*§19 written 2026-07-30.*
