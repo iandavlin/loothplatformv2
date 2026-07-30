@@ -10,8 +10,6 @@ set -uo pipefail
 # convention here: exit 0 = green, exit 1 = RED (real findings), exit 2 = CANNOT
 # RUN (no verdict — missing engine, unmintable cookies, an unresponsive CDP).
 red=0
-VM="$(dirname "$0")/../../profile-app/bin/visibility-matrix.php"
-[ -r "$VM" ] || VM=/srv/profile-app/bin/visibility-matrix.php
 dead=0
 run() {  # run <label> <command...>
   "${@:2}"
@@ -22,7 +20,7 @@ run() {  # run <label> <command...>
   esac
 }
 echo "=== GATE 1/7: visibility matrix (the privacy model) ==="
-run "visibility matrix" php "$VM"
+run "visibility matrix" php /srv/profile-app/bin/visibility-matrix.php
 echo
 echo "=== GATE 2/7: web-craft gate (images / weight / eager scripts) ==="
 run "web-craft" python3 "$(dirname "$0")/craft-gate.py"

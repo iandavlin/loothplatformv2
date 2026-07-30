@@ -33,12 +33,29 @@ meant "the screenshot looks right." Screenshots can't see weight.
 
 ## Existing gates
 
-| Gate | What it guards | Run |
-|---|---|---|
-| `profile-app/bin/visibility-matrix.php` | the entire visibility model (66 asserts) | `php profile-app/bin/visibility-matrix.php` |
-| `tools/gates/craft-gate.py` | the checklist above, over real pages as anon+member | `python3 tools/gates/craft-gate.py` |
+| # | Gate | What it guards | Needs |
+|---|---|---|---|
+| 1 | `profile-app/bin/visibility-matrix.php` | the entire visibility model (67 asserts) | — |
+| 2 | `tools/gates/craft-gate.py` | the checklist above, over real pages as anon+member | **a browser on CDP :9222** |
+| 3 | `tools/gates/infra-sec-gate.sh` | cookie auth / source disclosure / cdp exposure | loopback |
+| 4 | `tools/gates/hub-content-paragraph-gate.sh` | `content_html` keeps its paragraph breaks | — |
+| 5 | `tools/gates/looth-auth-issue-gate.sh` | non-REST mint bounce (recurs on every DB reload) | loopback |
+| 6 | `tools/gates/event-date-tz-gate.sh` | a UTC "today" must not judge a site-local stored date | — |
+| 7 | `tools/gates/events-tap-navigates-gate.sh` | an events tap navigates; the retired mobile modal stays retired | — |
 
-Both run from `tools/gates/run-all.sh`.
+All seven run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
+the runner because they pass standalone but flake red in sequence (CDP under load,
+and loopback `/whoami` tripping infra's `limit_req` zone) — see the note at the
+foot of `run-all.sh` for how to run `forum-visibility-gate.sh` and
+`editor-rail-reachable-gate.sh` by hand.
+
+**A gate that CANNOT RUN is not a gate that passed, and not one that failed.**
+Gate 2 drives a real Chrome; with no engine on :9222 it reports one `GATE-ERROR`
+per page and exits 1, which is indistinguishable from finding real violations —
+it spent weeks looking red while it was in fact dead. Treat "no engine" as *no
+verdict* and say so, rather than reporting a pass or a failure it never reached.
+`origin/events-fix-verify` carries the three-state fix (exit 2 = CANNOT RUN);
+until that lands, check for the engine before you believe gate 2 either way.
 
 ## Why this works when 13 fixes didn't
 

@@ -76,21 +76,58 @@ rides FluentSMTP→SES; public-facing page → craft gates apply. Needs: the pag
 a store for non-member subscribers, unsubscribe, and the digest sender reading
 that store alongside members.
 
-## 2026-07-29 — Events mobile: banner cut off + time listed twice (Ian, screenshot)
+## 2026-07-29 — ~~Events mobile: banner cut off + time listed twice~~ → CLOSED by the events-mobile lane
 
-RULING ADDED (Ian, later 7/29): on MOBILE, don't open the event modal/sheet at
-all — clicking an event goes straight through to the event's post page. The
-crop + duplicate-time fixes then apply to whatever surfaces still use the sheet
-(desktop).
+RULING (Ian, later 7/29): on MOBILE, don't open the event modal/sheet at all —
+clicking an event goes straight through to the event's post page. The ruling as
+recorded added "the crop + duplicate-time fixes then apply to whatever surfaces
+still use the sheet (desktop)" — **that clause resolves to nothing, and it matters
+that it does: there is no desktop sheet.** `webroot/events-mobile.js` is the only
+thing that ever built one and it hard-returns above `max-width:640px`; desktop has
+navigated to the post page since Buck wrote it. The two other scripts `/pwa.js`
+loads on `/events` without a mobile gate (`events-live.js`, `loothalong.js`) carry
+no modal, no `preventDefault`, no card interception. So the ruling makes mobile
+match desktop, and nothing is left unfixed on desktop.
 
-On the mobile event sheet (seen on "Looth Pro — Intermediate Inlay with CNC"):
-(1) the banner image is cut off — the AUG-2 date chip overlaps the artwork and
-the bottom of the banner crops the "August 2nd, 3PM" text baked into the image;
-(2) the time line "Sunday, August 2, 2026 · 3:00 PM ET" renders TWICE — once
-under the title, again below the PRO tier chip. Exactly one should remain.
-Where: mobile event detail sheet/modal. Unowned — fold into the next events
-lane charter (events-fix died in the 7/29 reboot; its branches are still
-unmerged).
+Original report: on the mobile event sheet ("Looth Pro — Intermediate Inlay with
+CNC", live 72363): (1) the banner was cut off — the AUG-2 chip sat on the artwork
+and the bottom crop ate the "August 2nd, 3PM" typeset into the image;
+(2) "Sunday, August 2, 2026 · 3:00 PM ET" rendered TWICE, under the title and
+again below the PRO chip.
+
+**Both diagnosed, then closed by the ruling itself** — branch `events-mobile`,
+which retires the sheet and so deletes the surface both defects lived on. Verified
+they do not migrate to the destination: under 768px `post-header/shell.css` runs
+the hero at `height:auto; object-fit:unset` (uncropped), and the event header
+states the date once. Causes, for the record: `.lev-cover` pinned `height:170px`
+around a 16:9 poster (81 image px off top and bottom, 22.6% of the height), and
+the description selector led with `.lg-event-header__detail`, whose only `<p>` is
+the byte-identical date line — so it also meant the real blurb never rendered at
+all. Ian's ruling is now gated (`tools/gates/events-tap-navigates-gate.sh`, GATE
+7/7) because it is encoded in an absence and a future lane would undo it in good
+faith.
+
+**One residual, unowned, needing an Ian call:** "Add to calendar" is gone from the
+mobile events flow. It lived only in the sheet, and the event post page has no
+calendar affordance. Natural homes: the event post page, or the landing card.
+
+**Two findings handed to the post-header item below** ("title illegible over
+thumbnails that contain text") rather than filed separately, since they are the
+same hero on the same posters:
+1. That item's fix is **already solved on mobile, in-tree** — under 768px the
+   shell drops the overlay entirely (`object-fit:unset`, scrim hidden) and puts
+   the title on a cream ground BELOW the photo. Its comment says why: "the
+   overlay-on-photo treatment was unreadable on narrow viewports (title + chip
+   collided over a busy image)". One of that item's own candidate treatments — a
+   solid band — is what mobile already does, so the desktop question is really
+   "adopt the mobile answer, or scrim harder".
+2. Separately, `.lg-post-header__photo` is a **raw one-size upload**: no
+   `/img.php?w=`, no `srcset`, no width/height, `loading="eager"
+   fetchpriority="high"`. 263KB of poster at full size on a phone, and the missing
+   dimensions reflow the page on load. Breaks the standing image rule in
+   CLAUDE.md, and Ian's ruling just put it on the mobile critical path.
+   `post-header` is used by EVERY post, so whoever takes the legibility item
+   should take this too.
 
 ## 2026-07-29 — Mirror dispatch must be durable → CHARTERED: mirror-dispatch lane
 
