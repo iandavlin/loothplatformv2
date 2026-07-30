@@ -231,11 +231,28 @@ def build_shots():
              lambda t: scroll_to(t, ".lg-addsec"), ".lg-addsec"),
 
       # --- B. privacy
+      # The master chip is data-pmp-block="header"; every other .lg-vchip is a
+      # PER-SECTION chip. Targeting a bare .lg-vchip grabs whichever comes first
+      # in the DOM and would quietly shoot a section chip as if it were the
+      # profile-wide one -- the exact confusion B1 exists to clear up.
+      "b1": ("Profile-visibility chip menu open", "owner", u,
+             ["phone", "desktop-wide"],
+             lambda t: click(t, '.lg-vchip[data-pmp-block="header"]'), ".lg-pmp-menu"),
+      # B2 is BLOCKED on a decision, not on the engine -- fixture 1849 is
+      # header=public so nothing can cap a chip on it. See the shot list. Left
+      # here, ready, so it is one --only b2 away once a subject is agreed.
+      "b2": ("A capped section chip", "owner", u,
+             ["desktop-wide"],
+             lambda t: scroll_to(t, ".lg-pmp--capped"), ".lg-pmp--capped"),
       "b3": ("Location: both audience dials", "owner", u,
              ["phone", "desktop-wide"],
              lambda t: scroll_to(t, ".lg-block--location"), ".lg-loc__audrow"),
+      "b4": ("Location precision menu open", "owner", u,
+             ["phone"],
+             lambda t: (scroll_to(t, ".lg-block--location"), click(t, ".lg-loc__aud")),
+             ".lg-pmp-menu, .lg-loc__aud[aria-expanded=true]"),
       "b5": ("Discussion-posts toggle", "owner", u,
-             ["phone"], None, ".lg-viewas"),
+             ["phone"], None, ".lg-disc-seg"),
       "b6": ("View as -> Member", "owner", u + "?view=member",
              ["phone", "desktop-wide"], None, ".lg-viewas"),
       "b7": ("View as -> Public (privacy anchor)", "owner", u + "?view=public",
