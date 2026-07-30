@@ -768,7 +768,7 @@ with the measurement, the hook and the deploy window.
 - **Empty means send NO EMAIL AT ALL.** A member whose only digest content would have been a
   followed-thread summary does not get a quieter email; they get none. Any §3.7 design that assumes
   "the digest goes out weekly and we add a section to it" no longer holds — **the digest now goes to
-  280 of 1,663 members**, and only to those with something owed.
+  280 of 1,858 recipients** (not 1,663 — see §5.1), and only to those with something owed.
 - **`forum.reply_to_topic` and `forum.reply_to_reply` ARE admitted**, so a member still hears weekly
   about replies **to their own** topics and comments. The line between that and §3.7 is exactly the
   to-do test: replies *to you* wait on you; replies *near you* do not.

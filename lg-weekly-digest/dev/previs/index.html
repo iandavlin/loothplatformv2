@@ -134,7 +134,7 @@
   <div class="rule">
     <span class="tag">Built</span>
     <h3>Empty sends nothing</h3>
-    <p>Nothing waiting means no email at all. <b>280 of 1,663</b> members would be mailed this week — and 181 of those <i>only</i> because of the counted line.</p>
+    <p>Nothing waiting means no email at all. <b>280 of 1,858</b> recipients would be mailed this week — and 181 of those <i>only</i> because of the counted line. (1,858, not 1,663: the digest goes to two lists, and the second one is 195 non-members. See the note at the foot of this page.)</p>
   </div>
 </div>
 
@@ -341,7 +341,9 @@
 </section>
 
 <footer>
-  <p><b>Worth knowing before this sends:</b> “empty sends nothing” suppresses the <i>whole</i> email, so <b>1,383 of 1,663</b> subscribed members receive nothing at all this week — including Upcoming Events, the new videos and loothprint, which have nothing to do with anyone's to-do list. That is what the ruling says and it is built that way; flagging it because it changes what the weekly digest is, not just who it greets.</p>
+  <p><b>Worth knowing before this sends:</b> “empty sends nothing” suppresses the <i>whole</i> email, so <b>1,578 of 1,858</b> recipients receive nothing at all this week — including Upcoming Events, the new videos and loothprint, which have nothing to do with anyone's to-do list. That is what the ruling says and it is built that way; flagging it because it changes what the weekly digest is, not just who it greets.</p>
+  <p><b>I had that number too low, and correcting it makes the point sharper.</b> It read “1,383 of 1,663”. The weekly digest does not go to one list, it goes to <b>two</b> — the members' list <i>and</i> a second list of <b>195 non-members</b> who signed up on the public page. Campaign 379 on 27 July had <b>1,858</b> recipients, not 1,663. So the number who now get nothing is <b>1,578</b>.</p>
+  <p><b>And those 195 can never be in the 280</b>, because they have no account — no connection requests, no replies, no mentions, so never anything “waiting”. As built they stop receiving the weekly email permanently. <b>That is the one decision I still need from you</b>, and it is written up as §5.1: I think “empty sends nothing” should decide who gets the <i>to-do section</i>, not who gets the <i>email</i>.</p>
   <p>The stale counts are small today: 237 members have anything outstanding, <b>224 of them have exactly one</b>, and the largest anyone holds is three — so “You have 1 connection request waiting” is the line most people will actually see. Nobody will see 6 this week.</p>
   <p>Measurements and queries: <code>docs/atlas/RECAP-SUPPRESSION-PROPOSAL.md</code>. Tests: <code>verify-source-boundary</code>, <code>verify-window-fixed</code>, <code>verify-empty-means-no-send</code>, <code>verify-two-registers</code>.</p>
 </footer>

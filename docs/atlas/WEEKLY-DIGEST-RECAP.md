@@ -499,7 +499,14 @@ named items only, **181 on a counted line only**, 56 on both. The counted regist
 of the recipient list, so `stale` had to join the "is this payload empty" test or 181 members would
 have been silenced while the renderer could perfectly well draw their row.
 
-**Flagged, not re-argued:** this suppresses the *whole* email, so 1,383 of 1,663 members receive
+> ⚠️ **THE DENOMINATOR BELOW WAS WRONG AND THE CORRECTION MAKES THIS FLAG STRONGER (2026-07-30).**
+> It read *"1,383 of 1,663"*, computed as 1,663 − 280. **The digest's real audience is 1,858** —
+> list 3 (1,663) **plus 195 list-7 non-members** — proven by campaign 379's own 1,858 recipient rows.
+> So **1,578 receive nothing, not 1,383**, and the 195 I had omitted are exactly the cohort that
+> *cannot* be in the 280 because they have no account and therefore no to-do list. See
+> RECAP-SUPPRESSION-PROPOSAL.md **§5.1** — it is the open merge blocker.
+
+**Flagged, not re-argued:** this suppresses the *whole* email, so 1,578 of 1,858 recipients receive
 nothing — including Upcoming Events, the videos and loothprint, which have nothing to do with
 anyone's to-do list.
 

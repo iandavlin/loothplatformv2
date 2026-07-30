@@ -68,9 +68,18 @@ useful. That gap is what thread-follow and the digest recap between them close.
   profile name** (the cleaned display name the `/u/` page shows — not the WP login,
   not the Patreon handle).
 - **Empty means SEND NOTHING (Ian, 2026-07-28)** — not the digest minus the section.
-  A member with nothing waiting gets no email at all. Measured on live: **280 of 1,663
-  subscribed members** would be mailed, and **181 of those only because of a counted
-  line**.
+  A member with nothing waiting gets no email at all. Measured on live 2026-07-28:
+  **280 of 1,858 recipients** would be mailed, and **181 of those only because of a
+  counted line**.
+  > ⚠️ **1,858, NOT 1,663 — corrected 2026-07-30, and it is a merge blocker, not a
+  > footnote.** The digest goes to **two** FluentCRM lists: list 3 (1,663 subscribed
+  > members) **and list 7 "Non Member Weekly Email Subscriber" (+195 not on list 3)**.
+  > Campaign 379's own `wp_fc_campaign_emails` rows total **1,858**, exactly.
+  > **188 of the 204 confirmed list-7 people have no `wp_users` row**, so they can never
+  > have anything waiting and this ruling silences them permanently. Whether that is
+  > intended is **still open with Ian** — see RECAP-SUPPRESSION-PROPOSAL.md **§5.1**.
+  > Note also that the plugin only ever resolves **one** list, so **list 7 is being added
+  > by hand in the FluentCRM UI each week** — an undocumented manual step.
 
 ## 4. What is OPEN — **§9.1 IS NO LONGER THE KEYSTONE (2026-07-28)**
 
