@@ -138,3 +138,15 @@ animation; group-chat header collapse.
    quotable approval in the commit body).
 4. Get thread-follow's mock URL to Ian — it unblocks the live deploy.
 5. Keep the fleet full from the priority index; the box can take it now.
+
+---
+
+## LATE ADDITION (at handoff time)
+
+**stripe-audit COMPLETED its audit and parked with FOUR questions for Ian (§9 of
+its doc).** The one it flags hardest: **three over-tiered members** — grandfather
+them at looth3 or correct to looth2, and notify or not? Its own recommendation:
+grandfather, but delete the rows either way so the state stops being accidental.
+Read `docs/atlas/STRIPE-MEMBERSHIP-AUDIT.md` on branch `stripe-audit`, then put
+all four to Ian as decision boxes. It also confirmed the §3 finding: an
+email-keyed minter would run if Stripe onboarding is switched on.
