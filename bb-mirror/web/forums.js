@@ -1678,31 +1678,107 @@
   // Initial scan of any rendered bodies present at load (single-topic pages).
   document.querySelectorAll('.post__body, .feed-card__full-body[data-loaded]').forEach(bbProcessEmbeds);
 
-  // ── 2e. Lazy provider-URL embeds in feed cards ──────────────────────────────
-  // The feed shows the plain excerpt; provider posts (IG/YouTube/Vimeo/X) get an
-  // inline embed for their first provider URL. Built via IntersectionObserver so
-  // we don't pull every provider script up front.
+  // ── 2e. Provider-URL embeds in feed cards: LOAD ON INTENT ───────────────────
+  // WAS: an IntersectionObserver built the embed as soon as the card came near
+  // the viewport. That handed the provider a script AND one iframe per card for
+  // merely SCROLLING PAST — measured on /hub/share-your-repair-content/ (7/30):
+  // 4 requests to Meta (instagram.com/embed.js + 3 post iframes), none of them
+  // asked for. Same bargain the YouTube cover facade makes, so make it here too:
+  // render a static, zero-network placeholder and fetch the provider's code only
+  // when the reader asks for it.
+  //
+  // YouTube no longer reaches this path on a discussion card — _feed.php gives
+  // those the cover facade and drops the slot — so in practice this now serves
+  // Instagram (and Vimeo/X, which no discussion currently uses). The YouTube
+  // branch is kept because the slot is provider-generic by contract.
   (function () {
-    var slots = document.querySelectorAll('.feed-card__embed[data-embed-url]');
-    if (!slots.length) return;
+    // Inline glyphs: one <svg> constant each, so the placeholder costs NOTHING
+    // over the network. Deliberately not the providers' real wordmarks — those
+    // are hosted brand assets and fetching them would reintroduce the request
+    // this whole change exists to remove.
+    var GLYPH = {
+      ig: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">'
+        + '<rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/>'
+        + '<circle cx="17.6" cy="6.4" r="1.2" fill="currentColor" stroke="none"/></svg>',
+      x: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+        + '<path d="M17.7 3h3.1l-6.8 7.8L22 21h-6.3l-4.9-6.4L5.1 21H2l7.3-8.3L2.3 3h6.4l4.4 5.9L17.7 3zm-1.1 16.1h1.7L7.5 4.8H5.7l10.9 14.3z"/></svg>',
+      vimeo: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
+      yt: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>'
+    };
+    // key drives the glyph + a CSS hook; label/host are what the reader is told.
+    // host is the ACTUAL origin the click will contact — say it plainly rather
+    // than making someone click to find out who gets the request.
+    function providerOf(url) {
+      if (/instagram\.com\/(?:p|reel|tv)\//i.test(url))        return { key: 'ig',    label: 'Instagram post', host: 'instagram.com' };
+      if (/(?:twitter\.com|x\.com)\/\w+\/status\//i.test(url)) return { key: 'x',     label: 'Post on X',      host: 'x.com' };
+      if (/vimeo\.com\//i.test(url))                           return { key: 'vimeo', label: 'Vimeo video',    host: 'vimeo.com' };
+      if (/youtu\.?be/i.test(url))                             return { key: 'yt',    label: 'YouTube video',  host: 'youtube.com' };
+      return null;
+    }
+
     function fill(slot) {
       if (slot.dataset.embedded) return;
       slot.dataset.embedded = '1';
       var em = bbBuildEmbed(slot.dataset.embedUrl);
-      if (em) slot.appendChild(em);
+      if (!em) return;
+      slot.textContent = '';          // drop the placeholder, keep the slot box
+      slot.appendChild(em);
     }
-    if (typeof IntersectionObserver === 'undefined') {
-      slots.forEach(fill);
-      return;
+
+    function placehold(slot) {
+      if (slot.dataset.embedded || slot.querySelector('.bb-embed-load')) return;
+      var prov = providerOf(slot.dataset.embedUrl || '');
+      if (!prov) return;              // unknown provider → leave the slot empty, as before
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'bb-embed-load bb-embed-load--' + prov.key;
+      b.setAttribute('aria-label', 'Load this ' + prov.label + ' from ' + prov.host);
+      var ico = document.createElement('span');
+      ico.className = 'bb-embed-load__ico';
+      ico.setAttribute('aria-hidden', 'true');
+      ico.innerHTML = GLYPH[prov.key];          // constant markup, never user data
+      var txt = document.createElement('span');
+      txt.className = 'bb-embed-load__txt';
+      var t = document.createElement('span');
+      t.className = 'bb-embed-load__t';
+      t.textContent = prov.label;               // textContent, not innerHTML
+      var c = document.createElement('span');
+      c.className = 'bb-embed-load__cta';
+      c.textContent = 'Load from ' + prov.host;
+      txt.appendChild(t); txt.appendChild(c);
+      b.appendChild(ico); b.appendChild(txt);
+      slot.appendChild(b);
     }
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (en) {
-        if (!en.isIntersecting) return;
-        io.unobserve(en.target);
-        fill(en.target);
-      });
-    }, { rootMargin: '300px' });
-    slots.forEach(function (s) { io.observe(s); });
+
+    function scan(root) {
+      (root || document).querySelectorAll('.feed-card__embed[data-embed-url]').forEach(placehold);
+    }
+
+    // The click is delegated, so infinite-scroll cards need no rewiring — and it
+    // is on the BUTTON, which forums.js §4e now exempts from the discussion
+    // modal (a bare button in a topic card otherwise opens the modal instead).
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('.bb-embed-load');
+      if (!b) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var slot = b.closest('.feed-card__embed');
+      if (slot) fill(slot);
+    });
+
+    scan();
+    // Infinite scroll / filter-swap replace the feed wholesale; re-placehold what
+    // arrives. Throttled — this is cheap DOM work, but it fires per mutation batch.
+    if ('MutationObserver' in window) {
+      var root = document.getElementById('hub-feed-results') || document.querySelector('.feed');
+      if (root) {
+        var pending = null;
+        new MutationObserver(function () {
+          if (pending) return;
+          pending = setTimeout(function () { pending = null; scan(root); }, 200);
+        }).observe(root, { childList: true, subtree: true });
+      }
+    }
   })();
 
   // ── 3a. Topic-list page: fetch unread IDs + mark them ───────────────────
@@ -4852,7 +4928,10 @@
       // expand (Ian 6/16 — no surprise card-grow). Genuine controls self-handle;
       // read-more + compact-caret + bare chrome now all route to the modal (they used
       // to fall through to the bubble-phase expanders at forums.js §224/§2b/§compact).
-      if (e.target.closest('input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, .fc-actions, [data-comments], .reply-stub, .fc-cover--video, a[href*="/u/"]')) return;   // .fc-composer removed — phase 3
+      // .bb-embed-load = the §2e load-on-intent placeholder. It is a bare <button>
+      // in the card body, so without this it would open the modal instead of doing
+      // the one thing it is labelled to do.
+      if (e.target.closest('input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, .fc-actions, [data-comments], .reply-stub, .fc-cover--video, .bb-embed-load, a[href*="/u/"]')) return;   // .fc-composer removed — phase 3
     }
     e.preventDefault();
     e.stopPropagation();   // beat the legacy inline-expand handlers
