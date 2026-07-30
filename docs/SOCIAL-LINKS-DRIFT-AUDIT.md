@@ -215,3 +215,86 @@ indefinitely:
   correctly either way.
 
 Reproduction script: `tools/audit/social-links-drift.py`.
+
+## What shipped
+
+| file | change |
+|---|---|
+| `lg-layout-v2/blocks/post-header/render.php` | applies `lg_layout_v2_author_links` over the resolved rail |
+| `lg-layout-v2/blocks/post-footer/render.php` | same; its links now carry `key` (markup reads url/title/svg only) |
+| `platform/mu-plugins/lg-author-socials.php` | new — resolver, authority rule, exposure gate, cache |
+| `profile-app/api/v0/internal-byline-socials.php` | new — internal read, hrefs composed server-side |
+| `profile-app/src/Profile.php` | `SOCIAL_HOSTS`, `normalizeSocialValue()`, `socialUrl()` |
+| `profile-app/api/v0/me-socials.php` | host-aware save normalisation |
+| `profile-app/web/_render_blocks.php` | `looth_social_url()` delegates to `Profile::socialUrl` |
+| `platform/nginx/strangler-profile-app.conf` | `/profile-api/v0/internal/byline-socials` location |
+| `tools/gates/author-socials-live-gate.sh` | new gate 9/9 |
+
+## Verified on dev2
+
+dev2 carries the same rows as live for this member (`_looth_uuid` matches
+`users.uuid`), so the reproduction is like-for-like.
+
+1. **Endpoint, real data.** Ran `internal-byline-socials.php` from this branch on a
+   spare port as the `profile-app` user against dev2's `profile_app`:
+   `authoritative=true`, four links, **no linktree**, and Facebook composed as
+   `https://facebook.com/maxmonteguitars/` — the corrupt row repaired at render.
+   Bad `X-LG-Internal-Auth` → 403.
+2. **Live read, real profile edit.** Inserted a `linktree` row for user 629 → it
+   appeared in the byline payload immediately, no post re-save. Deleted it → gone.
+   dev2 restored to its original 4 rows.
+3. **The byline transform.** Ran the real mu-plugin filter as `looth-dev` (the WP
+   pool user) over the real ACF values from dev2's `wp_usermeta`, with the resolver
+   pointed at the running endpoint:
+
+   ```
+   BEFORE  website / instagram / facebook=https://linktr.ee/facebook.com/... /
+           youtube / linktree=https://linktr.ee/maxmonte_guitars? / author_archive
+   AFTER   website / instagram / facebook=https://facebook.com/maxmonteguitars/ /
+           youtube / author_archive
+   ```
+
+   Asserted: deleted Linktree gone, Facebook repaired and matching the profile,
+   computed slots preserved, no duplicate slots. All pass.
+4. **Fail-safe, observed not assumed.** An early harness run could not read
+   `/etc/lg-internal-secret`; the byline correctly rendered the legacy ACF rail
+   rather than blanking.
+5. **Gates.** `tools/gates/run-all.sh` — all 9 green, including the new gate. The
+   new gate was verified to go RED by reintroducing each defect and back to GREEN on
+   restore; one of its checks was silently blind (a BRE `\?` matching nothing) and
+   was fixed to `grep -F` after that test exposed it.
+6. **nginx.** The new location parses (`nginx: syntax is ok`) in an isolated test;
+   it is an anchored regex matching its siblings' shape, so it cannot shadow the
+   parent block's rewrites.
+
+**Not proven:** the full path through nginx + WP on the dev2 serve. The serving
+checkout only pulls, and this branch is unmerged, so `dev2.loothgroup.com` still
+renders main's blocks and cannot exercise the filter. That check belongs to the
+post-merge verification on dev2, before any live deploy.
+
+## Deploy
+
+The pull is not sufficient on its own — two couplings:
+
+1. **nginx reload.** `platform/nginx/strangler-profile-app.conf` is symlinked into
+   the serving checkout, so the pull updates it, but nginx must be reloaded for the
+   new location to exist. Until then the endpoint 404s, the resolver treats that as
+   a failed lookup, and bylines keep rendering the legacy ACF rail — degraded, not
+   broken. **The live reload is Ian's.**
+2. **mu-plugin symlink.** `lg-author-socials.php` is a NEW mu-plugin, and
+   `/var/www/dev/wp-content/mu-plugins/` symlinks each file individually — the pull
+   does not create it. Needs the symlink made in the same window as the pull.
+
+Order that never shows a half-state: pull → create the mu-plugin symlink → `nginx
+-t` → reload.
+
+## Open question for Ian
+
+Extending the resolved byline to **all** members (`LG_AUTHOR_SOCIALS_ALL_MEMBERS`)
+would light up social links on the posts of ~129 members who have profile socials
+but no `author_*` meta. Their handles currently sit behind a socials-block
+visibility that 150 of 153 members have never set, so it defaults to `members`.
+Shipping it OFF fixes the reported bug and adds no exposure. Turning it on is a
+product call — worth asking whether the byline should be treated as a publishing
+surface (author links attached to work they chose to publish) or as an extension of
+the profile's visibility model.
