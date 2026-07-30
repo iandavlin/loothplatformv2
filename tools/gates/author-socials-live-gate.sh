@@ -81,6 +81,17 @@ else
   bad "the byline endpoint composes hrefs some other way"
 fi
 
+echo "--- multi-value kinds must survive the ACF-slot mapping ---"
+# profile_socials has NO unique constraint on (user_id, kind) and 7 live members
+# list two of one kind. The ACF model had one slot per kind, so mapping naively
+# renders two identically-titled icons — found by proving the new-author path on
+# a real member with two websites.
+if grep -q 'kind_counts' "$MUP"; then
+  ok "duplicate kinds are counted and disambiguated, not collapsed"
+else
+  bad "$MUP no longer disambiguates multi-value kinds — two websites render as two identical 'Website' icons"
+fi
+
 echo "--- contact PII must never reach a public byline ---"
 if grep -q "BYLINE_EXCLUDED_KINDS = \['email', 'phone'\]" "$API"; then
   ok "email/phone excluded from byline links"

@@ -196,18 +196,40 @@ add_filter('lg_layout_v2_author_links', function (array $links, $author_id, arra
         return !in_array((string) ($l['key'] ?? ''), $social_keys, true);
     }));
 
+    /* profile_socials has NO unique constraint on (user_id, kind) — a member may
+       legitimately list two websites, and 7 members on live do. The ACF model this
+       replaces had one slot per kind, so a naive map collapses them to two icons
+       with the identical title "Website". Keep both links (dropping a member's
+       second site would be silent data loss) and disambiguate the title by host. */
+    $kind_counts = [];
+    foreach ($resolved['links'] as $l) {
+        $k = (string) ($l['kind'] ?? '');
+        if ($k !== '') $kind_counts[$k] = ($kind_counts[$k] ?? 0) + 1;
+    }
+
     $fresh = [];
+    $seen  = [];
     foreach ($resolved['links'] as $l) {
         $kind = (string) ($l['kind'] ?? '');
         $url  = trim((string) ($l['url'] ?? ''));
         if ($kind === '' || $url === '') continue;
         $slot_key = LG_AUTHOR_SOCIALS_KIND_SLOT[$kind] ?? $kind;
         if (in_array($slot_key, $hidden, true)) continue;   // per-post hide still wins
-        $slot = $slots[$slot_key] ?? null;
+        if (isset($seen[$url])) continue;                   // exact dupe rows add nothing
+        $seen[$url] = true;
+
+        $slot  = $slots[$slot_key] ?? null;
+        $title = (string) ($slot['title'] ?? (LG_AUTHOR_SOCIALS_LABEL[$kind] ?? ucfirst($kind)));
+        if (($kind_counts[$kind] ?? 0) > 1) {
+            $host = (string) (parse_url($url, PHP_URL_HOST) ?: '');
+            $host = preg_replace('/^www\./i', '', $host);
+            if ($host !== '') $title .= ' — ' . $host;
+        }
+
         $fresh[] = [
             'key'   => $slot_key,
             'url'   => $url,
-            'title' => (string) ($slot['title'] ?? (LG_AUTHOR_SOCIALS_LABEL[$kind] ?? ucfirst($kind))),
+            'title' => $title,
             'svg'   => (string) ($slot['svg'] ?? lg_author_socials_generic_svg()),
         ];
     }
