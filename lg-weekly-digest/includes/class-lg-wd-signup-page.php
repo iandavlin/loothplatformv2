@@ -182,7 +182,36 @@ class LG_WD_Signup_Page {
 		);
 	}
 
-	/** The URL the iframe points at, or '' when there is nothing to show. */
+	/**
+	 * The URL the iframe points at, or '' when there is nothing to show.
+	 *
+	 * ── IT MUST NOT BE home_url('/'). THE STRANGLER OWNS THAT PATH ──────────
+	 * maybe_serve_preview() hangs off `template_redirect`, so it only fires for a
+	 * request WordPress actually routes. `/` on this platform is served by
+	 * archive-poc's discovery feed, which answers before WP's template_redirect
+	 * ever runs — so `/?lg_wd_email_preview=1` returns the DISCOVER FEED and the
+	 * handler is never reached.
+	 *
+	 * That is not theoretical. Measured on dev2 2026-07-30, both anon:
+	 *   /?lg_wd_email_preview=1                  -> 75,458B, <title>Looth Group —
+	 *                                               Lutherie Community</title>,
+	 *                                               ZERO unsubscribe markers
+	 *   /weekly-email-sign-up/?lg_wd_email_preview=1
+	 *                                            -> 37,321B, <title>The Looth Group
+	 *                                               — Week of July 30, 2026</title>
+	 * The section promises "this is the most recent issue that actually went out".
+	 * With the old URL it framed the front page instead — the page's centrepiece
+	 * showing the wrong document entirely, and a 200 the whole way, which is why
+	 * nothing caught it.
+	 *
+	 * So: build the URL from the page the shortcode is rendering ON. The handler
+	 * keys on the query var alone, so any WP-routed permalink serves it, and the
+	 * frame stays same-origin because it is literally the same page.
+	 *
+	 * If no permalink can be resolved, return '' and drop the section. Falling back
+	 * to home_url('/') would restore exactly the bug above — better no preview than
+	 * a confident frame around the wrong document.
+	 */
 	private static function preview_url(): string {
 		$cached = get_transient( self::PREVIEW_CACHE );
 		if ( is_string( $cached ) && $cached === '' ) {
@@ -191,7 +220,17 @@ class LG_WD_Signup_Page {
 		if ( ! is_string( $cached ) && ! self::latest_sent_issue_id() ) {
 			return '';
 		}
-		return add_query_arg( self::PREVIEW_QV, '1', home_url( '/' ) );
+
+		$host_id = get_queried_object_id();
+		if ( ! $host_id ) {
+			return '';
+		}
+		$permalink = get_permalink( $host_id );
+		if ( ! is_string( $permalink ) || $permalink === '' ) {
+			return '';
+		}
+
+		return add_query_arg( self::PREVIEW_QV, '1', $permalink );
 	}
 
 	// ── The page ──────────────────────────────────────────────────────────────

@@ -41,6 +41,7 @@ TESTS=(
   verify-signup-audience            # Ian ruling 6: members TOLD, never silently added; list 3 never written
   verify-signup-page                # the public page's BUILD: six rulings, scoped CSS, anon-safe preview
   verify-unsubscribe-nonmember      # the opt-out link resolves for a contact with NO wp_users row
+  verify-preview-frames-the-email   # the iframe shows the EMAIL, not the strangler's front page
 )
 
 # RUNNER IS PER-TEST. verify-missed-exclusions talks to Postgres through profile-app's
@@ -67,6 +68,7 @@ declare -A SENTINEL=(
   [verify-signup-audience]='SIGNUP AUDIENCE HOLDS'
   [verify-signup-page]='SIGNUP PAGE OK'
   [verify-unsubscribe-nonmember]='NONMEMBER UNSUBSCRIBE OK'
+  [verify-preview-frames-the-email]='PREVIEW FRAMES THE EMAIL'
 )
 
 green=0; red=0; dead=0
@@ -90,8 +92,15 @@ for t in "${TESTS[@]}"; do
   if printf '%s' "$clean" | grep -q "${SENTINEL[$t]}"; then
     printf '%-38s %s\n' "$t" "GREEN"
     green=$((green+1))
-  elif printf '%s' "$clean" | grep -qE 'does not seem to be a WordPress|Error establishing|PHP Fatal|not found|No such file|FluentCRM not loaded|Pass --path'; then
+  elif [ "$code" -eq 2 ] || printf '%s' "$clean" | grep -qE 'CANNOT RUN|does not seem to be a WordPress|Error establishing|PHP Fatal|not found|No such file|FluentCRM not loaded|Pass --path'; then
     # The test never got to assert anything. This is the loud case.
+    #
+    # EXIT CODE 2 IS CHECKED FIRST, AND IT IS THE AUTHORITATIVE SIGNAL. This file's
+    # own header has always documented "2 = CANNOT RUN", but the classification below
+    # used to read only the output TEXT — so a test that exited 2 deliberately (the
+    # _load-under-test.php refusal, say) was reported as RED, the quieter verdict,
+    # which is the exact inversion this harness exists to prevent. The string patterns
+    # stay as a fallback for tools that die while exiting 0 or 255, like wp-cli.
     printf '%-38s %s\n' "$t" "!! CANNOT RUN — see detail below"
     DEAD_DETAIL+=("$t (exit $code): $(printf '%s' "$clean" | grep -vE '^\s*$' | tail -3)")
     dead=$((dead+1))
