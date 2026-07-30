@@ -42,9 +42,16 @@ because the harness does not reproduce the vhost's sub_filter (theme-boot, the
 lg-feed-booting opacity gate). Measuring the page Ian does not have is how three of
 his reports stayed unreproducible.
 
-Run:   python3 tools/gates/follow-visible-gate.py [--url http://127.0.0.1:8899]
-Needs: chrome-dev on 127.0.0.1:9222, real-origin-proxy.py on :8899,
+Run:   python3 tools/gates/follow-visible-gate.py [--url http://127.0.0.1:8896]
+Needs: chrome-dev on 127.0.0.1:9222, real-origin-proxy.py on :8896,
        /tmp/tf-gate/cookies.txt (gate + WP auth cookies for the acting member).
+
+       ⚠️ PORT: default is 8896, NOT the 8899 this lane used on 2026-07-30.
+       8899 is the number every exercise-harness recipe in the repo reaches for
+       first, and it was already held by another lane's endpoint-swap-proxy when
+       this gate was written. Binding it would either fail or, worse, silently
+       measure SOMEONE ELSE'S branch through their proxy and report it as ours.
+       Check `ss -ltnp | grep 889` before picking a port on a shared box.
 
 Exit:  0 green, 1 RED (real findings), 2 CANNOT RUN (no verdict).
        The 0/1/2 split is run-all.sh's convention. Most failure modes here are
@@ -245,7 +252,7 @@ def summarise(rows, label):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--url", default="http://127.0.0.1:8899")
+    ap.add_argument("--url", default="http://127.0.0.1:8896")  # NOT 8899 — see header
     args = ap.parse_args()
     base = args.url.rstrip("/")
 
@@ -257,7 +264,7 @@ def main():
         urllib.request.urlopen(base + "/hub/", timeout=10).read(200)
     except Exception as e:
         cannot_run(f"real-origin-proxy not reachable on {base}: {e} "
-                   f"(bring it up: python3 tools/exercise-harness/real-origin-proxy.py --port 8899)")
+                   f"(bring it up: python3 tools/exercise-harness/real-origin-proxy.py --port 8896)")
 
     tid, p = new_page()
     _open["tid"], _open["page"] = tid, p
