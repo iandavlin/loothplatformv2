@@ -237,6 +237,14 @@ async def reply_reset(metrics, ua, label, fresh_sel, edit_pair):
                    % json.dumps(fresh_sel))
         await asyncio.sleep(3)
         fr = await s.ev(REPLY_STATE)
+        # THIS DOES NOT CONTRADICT THE PER-TOPIC DRAFT (Ian 2026-07-30: drafts KEEP).
+        # The close above is PROGRAMMATIC, and a programmatic close deletes the draft by
+        # design — same as the explicit ✕. So "empty" here is the specified outcome, not
+        # evidence that drafts are gone. What this rules out is the actual bug: an EDIT's
+        # content surviving into a fresh reply, i.e. text the member never typed.
+        # If you ever rewrite this step to dismiss by backdrop/esc instead, it SHOULD go
+        # red — that is the feature working. Fix the test, not the draft restore.
+        # The positive proof of the feature lives in draft_keep() below.
         check("FRESH reply opens EMPTY (no leftover from the edit)",
               fr.get("open") and _empty(fr.get("body", "")),
               f"{fr.get('which')}: {fr.get('body','')[:44]}")
@@ -252,6 +260,112 @@ async def reply_reset(metrics, ua, label, fresh_sel, edit_pair):
         await close(tab, ws)
 
 
+TOPIC_B = 72212        # a second, disposable ZZ TEST topic — never written to here
+
+
+async def draft_keep(metrics, ua, label):
+    """THE PER-TOPIC DRAFT IS A FEATURE AND IT STAYS — Ian's ruling, 2026-07-30.
+
+    Read this before "fixing" anything below. Two behaviours look identical from the
+    outside and only one of them was ever the bug:
+
+      FEATURE (keep) : you half-type a reply, get interrupted, come back to THAT topic,
+                       and your own unfinished words are handed back. hub-polish.js
+                       lgcDrafts, keyed by topic id, plan §1.2.
+      BUG (fixed)    : the composer opens showing the LAST reply's text — content you
+                       never typed, belonging to a different post. That was forums.js
+                       frm holding its editor contents after close; frmClose now empties
+                       it. A DIFFERENT composer from the draft store, and they do not
+                       interact.
+
+    Same costume, opposite verdicts. The distinction is not "is there text in the box",
+    it is WHOSE text and HOW IT GOT THERE — so the feature is asserted POSITIVELY, not
+    merely as the absence of the bug. A suite that checked "a fresh reply is always
+    empty" would go red on the behaviour Ian just chose, and the obvious way to green it
+    again is to delete the draft restore. Don't.
+
+    TYPED THROUGH REAL INPUT (CDP Input.insertText into the focused editor), never
+    through Quill's API. Quill.find() on #lgc-editor is NOT a reliable readiness signal:
+    it missed on 3 of 8 opens while the composer was perfectly alive — real typing landed
+    and #lgc-post enabled every time, on the serve's own assets with no injection at all.
+    Gating on it sent whole clusters of draft assertions red against a working composer
+    and briefly looked like a product defect. Wait for what a member needs — an editable
+    .ql-editor — and prove liveness the way a member would, by typing.
+
+    THE SECOND TOPIC IS THE POINT. Reopening the SAME topic and finding text proves
+    little on its own: an editor that was simply never cleared looks exactly like a
+    faithful restore. So between storing and restoring, the composer is opened on a
+    DIFFERENT topic and must come up EMPTY. That one step rules out the stale-editor
+    false pass AND proves the store is keyed per topic, without reaching into internals.
+    """
+    print(f"\n===== {label} — per-topic draft: KEEP (Ian 2026-07-30) =====")
+    tab, ws, s = await fresh(metrics, ua, f"https://{HOST}/hub/?topic={SLUG}")
+
+    # An editable editor plus a Post button: exactly what a member needs, and nothing
+    # about Quill's instance registry.
+    READY = ("(function(){var q=document.querySelector('#lgc-editor .ql-editor');"
+             "return !!(q && q.getAttribute('contenteditable') === 'true'"
+             " && document.getElementById('lgc-post'));})()")
+    BODY = ("(function(){var q=document.querySelector('#lgc-editor .ql-editor');"
+            "return q?q.innerHTML:'(no editor)';})()")
+
+    async def open_on(tid):
+        await s.ev(f"window.lgOpenComposer({{tid:{tid}}})")
+        return await s.wait_for(READY, tries=120)
+
+    async def type_text(text):
+        await s.ev("(function(){var q=document.querySelector('#lgc-editor .ql-editor');"
+                   "if(q)q.focus();return !!q;})()")
+        await asyncio.sleep(0.4)
+        await s.send("Input.insertText", {"text": text})
+        await asyncio.sleep(1.2)
+
+    try:
+        await s.wait_for("typeof window.lgOpenComposer === 'function'", tries=120)
+
+        # 1. Half-type a reply on the fixture topic.
+        up = await open_on(TOPIC)
+        # Its OWN assertion, before anything about drafts: "the composer never opened"
+        # and "the draft store lost your text" are different failures with different
+        # owners, and letting the first surface as the second is how a probe bug gets
+        # filed as data loss.
+        check("the reply composer opened with an editable editor", up)
+        await type_text("HALF TYPED DRAFT")
+        armed = await s.ev("(function(){var b=document.getElementById('lgc-post');"
+                           "return !!(b && !b.disabled);})()")
+        # The app noticing the keystrokes is what proves the editor is LIVE — and it is
+        # also the precondition for the draft being stored at all.
+        check("the composer registered real typing (Post armed)", armed is True,
+              (await s.ev(BODY))[:44])
+
+        # 2. ACCIDENTAL dismiss — backdrop, NOT the ✕. This is the one that must keep.
+        await s.ev("window.LgSheets.close('lcp','backdrop')")
+        await asyncio.sleep(1.5)
+
+        # 3. A DIFFERENT topic must come up empty: no leakage, and the store is per-topic.
+        up_b = await open_on(TOPIC_B)
+        other = await s.ev(BODY)
+        check("a DIFFERENT topic opens EMPTY (no stale editor, store is per-topic)",
+              up_b and _empty(other), other[:44])
+        await s.ev("window.LgSheets.close('lcp','programmatic')")
+        await asyncio.sleep(1.2)
+
+        # 4. Back to the original topic — the member's own words return.
+        await open_on(TOPIC)
+        back = await s.ev(BODY)
+        check("ACCIDENTAL dismiss KEEPS this topic's draft",
+              "HALF TYPED DRAFT" in back, back[:48])
+
+        # 5. ...and the explicit close clears it, so a draft cannot outlive its welcome.
+        await s.ev("window.LgSheets.close('lcp','programmatic')")
+        await asyncio.sleep(1.5)
+        await open_on(TOPIC)
+        gone = await s.ev(BODY)
+        check("the EXPLICIT close (✕ / post) clears it", _empty(gone), gone[:48])
+    finally:
+        await close(tab, ws)
+
+
 async def main():
     await viewport(DESKTOP, UA_DESK, "DESKTOP 1280 — create wizard vs edit wizard",
                    "[data-ntm-open]", ".lg-dmodal__edit")
@@ -262,6 +376,8 @@ async def main():
                       ['.reply-stub[data-reply-id="72307"] .dm-rs-edit'])
     await reply_reset(bv.IPHONE, bv.UA_IOS, "MOBILE 390", "#lrs-replybtn",
                       ['.reply-stub[data-reply-id="72307"] .lg-fb-more', '.lg-fb-menu__edit'])
+    await draft_keep(DESKTOP, UA_DESK, "DESKTOP 1280")
+    await draft_keep(bv.IPHONE, bv.UA_IOS, "MOBILE 390")
     print("\n" + "=" * 64)
     bad = [r for r in results if not r[1]]
     print(f"create-edit-parity: pass={len(results)-len(bad)} fail={len(bad)}")

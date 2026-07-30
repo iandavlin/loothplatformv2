@@ -56,6 +56,47 @@ rse, post-edit, fic, and fb-inline. One implementation of: rich-text editor, tit
 (topic modes), photo tray, mention autocomplete mount, submit/moderation states,
 draft preservation across accidental dismiss.
 
+- **The per-topic draft STAYS (Ian ruling 2026-07-30, binding).** Half-type a reply,
+  navigate away, come back to that topic, and your own unfinished words are handed
+  back. Keyed by topic id (`lgcDrafts`). An ACCIDENTAL dismiss — backdrop, swipe, Esc,
+  back — keeps it; a post or the explicit ✕ (close reason `programmatic`) clears it.
+
+  **Do not confuse this with the bug it was mistaken for.** Two behaviours wear the
+  same costume and only one was ever wrong:
+
+  | | what you see | verdict |
+  |---|---|---|
+  | per-topic draft | text **you typed** on **this** topic returns | FEATURE — keep |
+  | stale composer  | text **you never typed** — a previous reply's, or another post's | BUG — fixed 2026-07-30 |
+
+  The bug was `forums.js` frm retaining its editor contents after close, so any route
+  revealing the overlay without passing through `frmOpen` showed the last reply's words
+  in what read as a blank box. `frmClose` now empties the editor, making stale content
+  impossible by construction. That fix is in a DIFFERENT composer (frm, `forums.js`)
+  from the draft store (sheet, `hub-polish.js`) — they do not interact.
+
+  The distinction is not "is there text in the box", it is WHOSE text and HOW IT GOT
+  THERE. Anyone tempted to make a fresh reply unconditionally blank would be deleting
+  the feature Ian chose. Both halves are asserted in
+  `tools/edit-post-parity/create-edit-parity.py::draft_keep` — 41/41, both viewports,
+  six consecutive clean runs: type a draft with **real keystrokes**, dismiss by
+  backdrop, open a **DIFFERENT topic** and require it to come up EMPTY, return to the
+  first topic and require the words back, then close explicitly and require them gone.
+
+  The second topic is the load-bearing step. Reopening the same topic proves little on
+  its own — an editor that was simply never cleared looks exactly like a faithful
+  restore — so the detour rules out that false pass AND proves the store is keyed per
+  topic, using nothing but what a member can see.
+
+  Two probe traps cost hours here and are worth not repeating. `Quill.find()` on
+  `#lgc-editor` is NOT a readiness signal: it missed on 3 of 8 opens while the composer
+  was entirely alive — real typing landed and `#lgc-post` armed every time, on the
+  serve's own assets with no injection. Gating on it turned whole clusters of draft
+  assertions red against working code and briefly looked like a product defect on main.
+  Wait for an editable `.ql-editor` and prove liveness by typing. Relatedly, the sheet
+  tears its Quill instance down on close, so any assertion that needs a live editor
+  *after* closing is self-defeating.
+
 - **Editor = RICH TEXT on BOTH surfaces (Ian ruling 2026-07-24, binding).** One
   editor engine everywhere — the plain-textarea-mobile / Quill-desktop split does
   not survive v2. Engine choice + toolbar set are phase-2 previs decisions (with a

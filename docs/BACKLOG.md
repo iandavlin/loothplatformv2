@@ -355,3 +355,23 @@ Acceptance sketch: editing a post exposes every control that creating one does
 (forum picker, tags, formatting, images/embeds), through the same code path as
 add-post; saving preserves anything edit doesn't touch (replies, reactions,
 timestamps beyond modified). Unowned — needs a lane.
+
+**Status 2026-07-30 — BUILT AND PROVEN; the API half is already merged to main
+(7825a27, Ian "looks good"). Remaining delta is two JS files on branch
+`edit-post-parity`. Awaiting keeper's dev2-serve verification, then merge.**
+
+Ian's rulings that shaped it, both binding:
+- **The desktop/mobile split STAYS.** Edit reuses the composer CREATE uses *on the
+  same viewport* — desktop edit opens the 4-step wizard on Write, mobile edit opens
+  the same flat form mobile create opens. Parity is per-viewport, not one composer
+  everywhere. Proven through the real controls, not the seams:
+  `tools/edit-post-parity/create-edit-parity.py`, 39/39, both viewports.
+- **Per-topic drafts STAY (2026-07-30).** An unfinished reply comes back when you
+  return to that topic. This is NOT the stale-composer bug that was fixed alongside
+  it — see COMPOSER-V2-PLAN §1.2 for the table of which is which, and do not
+  "fix" the draft restore.
+
+Saving verified in the DB rather than the UI, across a real forum round trip
+(3837 → 3823 → 3837): replies, reactions, the activity row, `post_date`, author,
+counts and every reply row held; the move carried both replies' `_bbp_forum_id`,
+both forums' counters and the postgres mirror with it.
