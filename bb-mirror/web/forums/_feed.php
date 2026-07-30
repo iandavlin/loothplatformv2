@@ -1594,18 +1594,39 @@ $header_cat = $scoped_forum
       $t_yt = feed_yt_id($embed_url);
       // The facade OWNS the video, so drop the lazy .feed-card__embed slot that would
       // otherwise render a SECOND player for the same URL further down the card.
+      $t_yt_url = $t_yt ? $embed_url : null;
       if ($t_yt) $embed_url = null;
-      // Thumb: the member's own attached photo when there is one (already resized +
-      // srcset'd through /img.php), else YouTube's own still. mqdefault is the right
-      // ytimg rung — 320x180 is true 16:9 (hqdefault is 4:3 and letterboxes) and small
-      // enough that a ≤440px cover slot can't trip the craft gate's IMG-OVERSIZE.
+      // Thumb: the member's own attached photo when there is one (that path keeps the
+      // resizer + srcset + dims the craft standard asks for), else YouTube's own still.
+      // mqdefault is the ONLY rung worth taking, and deliberately without a srcset:
+      //   - it is true 16:9 at 320x180. hqdefault/sddefault are 4:3 canvases with the
+      //     letterbox baked in, so they'd put black bars inside the cover box.
+      //   - it is the only rung that always EXISTS. Measured over the 13 YouTube
+      //     discussions on dev2 (7/30): hq720 and maxresdefault 404 on one of them,
+      //     and a 404 in a srcset candidate is a BROKEN image, not a fallback.
+      //   - it is 5-19KB. Those same rungs are 58-206KB each, and a forum page can
+      //     carry 7+ of these — enough on its own to blow the craft gate's 1.5MB
+      //     PAGE-IMG-BUDGET (they count: it measures cross-origin resources too,
+      //     even though IMG-OVERSIZE only inspects same-origin <img>).
+      // Trade accepted: ~1x on desktop, soft on a high-DPR phone. Sharper is available
+      // only at the cost of a broken thumb on some cards and a red page budget.
       $t_yt_thumb = $t_yt ? 'https://i.ytimg.com/vi/' . rawurlencode($t_yt) . '/mqdefault.jpg' : null;
-      // An excerpt that is nothing but the pasted URL is noise under a playable cover
-      // — same suppression the video/shorty content cards already do (Buck 6/12).
-      // Only when the URL is ALL there is: a discussion that says something and then
-      // links the video keeps its words.
-      if ($t_yt && preg_match('~^https?://\S+$~', trim(html_entity_decode(strip_tags($excerpt))))) {
-          $excerpt = '';
+      // The pasted URL is noise on a card whose cover already plays it (Buck 6/12 —
+      // the rule hub-polish.js applies client-side to promoted content cards). Drop
+      // the link to the FACADED video from the excerpt; the member's own words stay.
+      // format_snippet() truncates an anchor's TEXT but always emits the full href and
+      // a closing tag, so matching on the href is reliable even on a cut-off snippet.
+      if ($t_yt_url) {
+          $u = preg_quote(htmlspecialchars($t_yt_url, ENT_QUOTES), '~');
+          $excerpt = preg_replace('~<a href="' . $u . '"[^>]*>.*?</a>~is', '', $excerpt);
+          // …and the same URL sitting as bare text (an excerpt that was never linkified).
+          $excerpt = str_replace(htmlspecialchars($t_yt_url, ENT_QUOTES), '', (string)$excerpt);
+          $excerpt = trim(preg_replace('~\s{2,}~', ' ', (string)$excerpt));
+          // What's left may be nothing but the trailing ellipsis / stray punctuation —
+          // that reads as a broken excerpt under the player, so drop it entirely.
+          if (preg_match('~^[\s\p{P}]*$~u', html_entity_decode(strip_tags($excerpt)))) {
+              $excerpt = '';
+          }
       }
 
       // Topic-level reply CTA, rendered inline on the "Started by …" byline row.
@@ -1663,6 +1684,11 @@ $header_cat = $scoped_forum
         </a>
       <?php endif; ?>
       <h3 class="fc-title feed-card__title"><a href="<?= $turl ?>"><?= htmlspecialchars($topic['topic_title']) ?></a></h3>
+      <?php /* .fc-excerpt carries a border-top + 18px of padding (forums.css :4453), so an
+               EMPTY one draws a stray rule and a dead gap under the title. A video-facade
+               card whose whole body was the pasted link is exactly that case — emit the
+               block only when something goes in it. */
+      if ($excerpt !== '' || $show_read_more || $embed_url): ?>
       <div class="fc-excerpt feed-card__op">
         <?php if ($excerpt !== ''): ?><p class="feed-card__op-excerpt"><?= $can_post ? $excerpt : lg_scrub_anon_contacts((string)$excerpt) ?></p><?php endif; ?>
         <?php if ($show_read_more): ?>
@@ -1671,6 +1697,7 @@ $header_cat = $scoped_forum
         <?php endif; ?>
         <?php if ($embed_url): ?><div class="feed-card__embed" data-embed-url="<?= htmlspecialchars($embed_url, ENT_QUOTES, 'UTF-8') ?>"></div><?php endif; ?>
       </div>
+      <?php endif; ?>
       <?php feed_render_tags(feed_parse_pg_array($topic['tags'] ?? null)); ?>
       <?php /* fc-facepile — up to 3 recent repliers + N replies (NEW; desktop-only ≤640). */
       $fp = $reply_facepile[$topic_id] ?? [];
