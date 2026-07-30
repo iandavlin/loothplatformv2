@@ -1542,3 +1542,70 @@ as long as a human takes.
 
 *§14 written from execution on dev2, 2026-07-30. Every figure above was measured in a real
 engine or queried from the database named. All 7 suite gates green; dev2 left clean.*
+
+---
+
+## 15. CONSOLIDATING THE ACTION ROW — two variants, Ian's pick PENDING
+
+**Ian, 2026-07-30 (via keeper), gated on the defect fixes in §14 which are now shipped:**
+put 🔔 notifications, ✉ emails, **email FREQUENCY** (Off/Instant/Hourly/Daily/Weekly) and
+**Save** behind ONE control that opens a small modal. Like / replies / Share stay inline.
+
+**Mocks (both interactive, not flat frames):**
+https://dev2.loothgroup.com/footer-mockups/threadfollow-consolidate/
+
+### 15.1 The two variants
+
+| | Row | Modal | Row controls |
+|---|---|---|---|
+| **A** | Like · replies · Share · **Follow** | Notifications, Emails, Frequency, **Save** | 4 |
+| **B** *(recommended)* | Like · replies · Share · **Save** · **Follow** | Notifications, Emails, Frequency | 5 |
+
+**The recommendation is B, and the reason generalises past this row:** the controls being
+merged are not the same *kind*. Save is a reflex hit while scrolling, many times a session;
+follow and email are a once-per-thread decision. Putting a frequent action behind a modal to
+keep company with two rare ones spends a tap every time to buy width once. B also degrades
+better — the bell is already icon-only, so if the row tightens again Save can shed its label
+without losing meaning. **A wins if the row is expected to keep growing**: it is the only
+version that reaches four controls, and it puts every state control in exactly one place.
+
+### 15.2 THE CONSOLIDATED CONTROL IS NOT A ⋯ MENU — this is a constraint, not a preference
+
+§2.3 ruled the ⋯ menu the wrong surface for follow, **twice**, and ruling 2 says the
+affordance must be **visible, not buried**. Consolidation puts pressure on exactly that
+ruling, so the mock pays it back explicitly: the control is a **labelled bell that carries its
+own state** — lit orange when following, with a small ✉ badge when emails are on. A member
+still reads a thread's state from the feed without opening anything. **Any future
+implementation that reduces this to a generic overflow menu re-breaks a ruling that has
+already been made twice.**
+
+### 15.3 "Off" in the frequency list is the Emails toggle wearing a second hat
+
+Off/Instant/Hourly/Daily/Weekly **plus** an Emails on/off toggle expresses one state twice: a
+member can set Emails ON and frequency Off and have no way to know which wins. The mock wires
+them as ONE state — choosing Off switches Emails off; switching Emails off snaps frequency to
+Off; the frequency row dims when Emails is off so it never reads as a live setting that isn't.
+
+**Open for Ian:** dropping "Off" from the list is the tighter design (the toggle owns on/off,
+the segmented control only ever picks a cadence). "Off" was kept because it was specified.
+
+### 15.4 ⚠️ FREQUENCY IS HALF A FEATURE — the sending side is NOT this lane's
+
+Storing a cadence does nothing on its own. Instant/Hourly/Daily/Weekly require something to
+**batch and send** the digest, which is **weekly-recap's**. Raised with them on the board
+2026-07-30; three questions must be answered before building past the mock:
+
+1. Is there an existing batching/digest scheduler to write this preference into, or is it
+   still to be built?
+2. **What granularity can actually be honoured** — is Hourly realistic, or should the control
+   offer Daily/Weekly only? *Better to drop it before Ian settles on the list than after.*
+3. **Where does the per-(member, topic) cadence live?** The 🔔 bit is `forums.topic_follow`
+   (PG `looth`); the ✉ bit is the native BB subscription (MySQL). Cadence has **no home yet**,
+   and the store should be agreed with the consuming lane rather than chosen unilaterally and
+   handed over as a migration.
+
+**Do not ship a cadence control that silently does nothing.** A member choosing "Daily" and
+receiving instant mail — or nothing at all — is worse than not offering the choice, and it is
+the same class of lie §8.1.3(a)'s `email_master` bit exists to prevent.
+
+*§15 written 2026-07-30. Mocks published and Ian-gated; no code written against either variant.*
