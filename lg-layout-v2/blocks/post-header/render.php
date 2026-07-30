@@ -243,6 +243,18 @@ if ($author_id) {
             'svg'   => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h12M3 12h12M3 18h8"/><circle cx="19" cy="17" r="3"/><path d="M21.5 19.5L23 21"/></svg>',
         ];
     }
+
+    /* The ACF `author_*` usermeta above is a MIRROR of the member's real links,
+       and it went stale: members edit socials in profile-app, which stopped
+       syncing back on 2026-05-29, so deleted links kept rendering here (P0,
+       docs/SOCIAL-LINKS-DRIFT-AUDIT.md). platform/mu-plugins/lg-author-socials.php
+       hooks this filter to swap the social slots for profile-store truth. Filtering
+       the RESOLVED list (not the slot definitions) keeps the computed slots above
+       intact and leaves the standalone renderer, which runs no WP filters, on the
+       ACF path. $link_slots is passed so a resolved link reuses this block's icon. */
+    if (function_exists('apply_filters')) {
+        $author_links = apply_filters('lg_layout_v2_author_links', $author_links, $author_id, $link_slots, $hidden_links);
+    }
 }
 
 /* ── Editor-mode hook for inline tagline editing ──────────────────── */

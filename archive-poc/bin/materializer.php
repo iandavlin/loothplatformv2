@@ -116,6 +116,38 @@ function lg_materialize_build_blob(int $post_id): ?array {
         if ($v !== '') $author_meta[$k] = $v;
     }
 
+    /* Social slots are baked from the member's CURRENT profile, not from the ACF
+       mirror above. The mirror stopped syncing on 2026-05-29 and rendered links
+       members had deleted (P0 — docs/SOCIAL-LINKS-DRIFT-AUDIT.md); baking it here
+       would carry that same staleness into the standalone blob, one layer deeper.
+
+       The resolved values are written back under the SAME `author_*` keys, so the
+       standalone post-header/post-footer keep reading them through the wp-shim and
+       need no change — the blob just stops carrying wrong values.
+
+       AUTHORITY: only an authoritative answer may rewrite these keys. A member with
+       no profile rows, or a lookup that failed, leaves the ACF values in place —
+       a bake must never blank a rail because a loopback was down.
+
+       LIMIT, stated rather than hidden: profile kinds with no ACF slot (x, tiktok,
+       patreon, bandcamp) are dropped here because the standalone block's slot list
+       is fixed at these five. They render on the live path, not the baked one. */
+    if (function_exists('lg_author_socials_fetch') && function_exists('lg_author_socials_is_eligible')
+        && $author_id && lg_author_socials_is_eligible($author_id)) {
+        $resolved = lg_author_socials_fetch($author_id);
+        if (is_array($resolved) && !empty($resolved['authoritative'])) {
+            foreach (['website', 'instagram', 'facebook', 'youtube', 'linktree'] as $slot) {
+                unset($author_meta['author_' . $slot]);      // deleted kinds must vanish
+            }
+            foreach ($resolved['links'] as $l) {
+                $slot = LG_AUTHOR_SOCIALS_KIND_SLOT[(string) ($l['kind'] ?? '')] ?? null;
+                if ($slot === null) continue;                 // no ACF slot for this kind
+                $url = trim((string) ($l['url'] ?? ''));
+                if ($url !== '') $author_meta['author_' . $slot] = $url;
+            }
+        }
+    }
+
     // ── Featured image ─────────────────────────────────────────────────────
     $thumb_id = (int) get_post_thumbnail_id($post_id);
     $featured = ['id' => 0, 'url' => '', 'alt' => ''];

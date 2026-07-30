@@ -15,6 +15,97 @@ final class Profile
     public const LOCATION_VIS_VALUES = ['public', 'members', 'private'];
     public const SOCIAL_KINDS      = ['instagram','youtube','bandcamp','web','email','phone','x','tiktok','facebook','patreon','linktree'];
 
+    /**
+     * Hosts that legitimately belong to each social kind, for the save-side
+     * normaliser. A pasted URL only has its host stripped when that host is one
+     * of the kind's OWN hosts.
+     *
+     * Why this map exists: the old normaliser was `preg_replace('#^https?://[^/]+/#i', ...)`
+     * — it stripped WHATEVER host was pasted. `https://linktr.ee/facebook.com/x/`
+     * saved under kind=facebook became the handle `facebook.com/x/`, which
+     * socialUrl() then re-prefixed into `https://facebook.com/facebook.com/x/`.
+     * That is live on a real member's profile (maxmonte, 2026-07-30) and is what
+     * made his post byline and his profile disagree in two different wrong ways.
+     */
+    public const SOCIAL_HOSTS = [
+        'instagram' => ['instagram.com'],
+        'youtube'   => ['youtube.com', 'youtu.be', 'm.youtube.com'],
+        'bandcamp'  => ['bandcamp.com'],
+        'x'         => ['x.com', 'twitter.com'],
+        'tiktok'    => ['tiktok.com'],
+        'facebook'  => ['facebook.com', 'fb.com', 'fb.me', 'm.facebook.com'],
+        'patreon'   => ['patreon.com'],
+        'linktree'  => ['linktr.ee', 'linktree.com'],
+    ];
+
+    /** Base URL prepended to a bare handle, per kind. */
+    private const SOCIAL_BASE = [
+        'web'       => 'https://',
+        'instagram' => 'https://instagram.com/',
+        'x'         => 'https://x.com/',
+        'youtube'   => 'https://youtube.com/@',
+        'facebook'  => 'https://facebook.com/',
+        'tiktok'    => 'https://tiktok.com/@',
+        'patreon'   => 'https://patreon.com/',
+        'linktree'  => 'https://linktr.ee/',
+    ];
+
+    /**
+     * Save-side normalisation for handle-style kinds: reduce a pasted URL to a
+     * bare handle, but ONLY when the pasted host belongs to this kind. A
+     * foreign host is left intact (scheme and all) so socialUrl() passes it
+     * through as absolute rather than gluing it onto the wrong base.
+     */
+    public static function normalizeSocialValue(string $kind, string $value): string
+    {
+        $v = trim($value);
+        if ($v === '') return '';
+
+        if (preg_match('#^https?://([^/]+)(/.*)?$#i', $v, $m)) {
+            $host = strtolower(preg_replace('/^www\./i', '', $m[1]));
+            $own  = self::SOCIAL_HOSTS[$kind] ?? [];
+            if (!in_array($host, $own, true)) {
+                return $v;                       // foreign host — keep the URL whole
+            }
+            $v = ltrim((string) ($m[2] ?? ''), '/');
+            // youtube handles carry a leading @ in the path; the base re-adds it
+            if ($kind === 'youtube') $v = ltrim($v, '@');
+        }
+
+        return ltrim($v, '@/');
+    }
+
+    /**
+     * Compose the href for a stored social value. Mirrors (and is the single
+     * source for) looth_social_url() in web/_render_blocks.php.
+     *
+     * A value that is already absolute passes through. A value that merely
+     * LOOKS like `host.tld/path` — the shape legacy rows were left in by the
+     * old host-blind stripper — gets a scheme and nothing else, so an
+     * already-corrupted row renders correctly without a data migration.
+     */
+    public static function socialUrl(string $kind, string $value): string
+    {
+        $v = trim($value);
+        if ($v === '') return '';
+        if ($kind === 'email') return 'mailto:' . $v;
+        if ($kind === 'phone') return 'tel:' . preg_replace('/[^\d+]/', '', $v);
+        if (preg_match('#^https?://#i', $v)) return $v;          // already absolute
+
+        $h = ltrim($v, '@/');
+
+        // Legacy-corruption repair: the value already begins with a hostname, so
+        // prefixing a base would double it (facebook.com/x -> facebook.com/facebook.com/x).
+        if (preg_match('#^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(/|$)#i', $h)) {
+            return 'https://' . $h;
+        }
+
+        if ($kind === 'bandcamp') {
+            return strpos($h, '.') !== false ? 'https://' . $h : 'https://' . $h . '.bandcamp.com';
+        }
+        return (self::SOCIAL_BASE[$kind] ?? 'https://') . $h;
+    }
+
     /** Viewer role can see section of given visibility. Delegates to Visibility — the one truth table. */
     public static function canSee(string $role, string $visibility): bool
     {
