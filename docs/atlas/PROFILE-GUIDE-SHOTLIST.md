@@ -127,9 +127,18 @@ will show it; the profile honours `html[data-lguser-theme="dark"]`.
 > and Gallery behind the counter. If your capture still looks like June, something is
 > wrong with your session, not with this list.
 
-> ### ⚠️ SEQUENCING — READ BEFORE SHOOTING ANY OWNER-VIEW FRAME
+> ### ✅ SEQUENCING — DISCHARGED 2026-07-30. The whole block below is HISTORY.
 >
-> **Option A landed on branch `profile-audit` (`04113b2`) but is NOT on the serve.**
+> **Option A is merged and IS on the serve.** `04113b2` is an ancestor of
+> `origin/main` and of `~/loothplatformv2-clean` HEAD (it landed via merge
+> `5d29eb8`). Confirmed in rendered HTML, not just git: `Your layout` ×3,
+> `lg-secopen` ×6, `lg-addsec` ×9, and the pill it removed, `lg-viewas__caddy`,
+> ×0. **A1–A6 and B1–B5 are shootable now** — see §3c. Kept below for the record;
+> do not act on it.
+>
+> ### ⚠️ SEQUENCING — the original warning, now satisfied
+>
+> ~~**Option A landed on branch `profile-audit` (`04113b2`) but is NOT on the serve.**~~
 > It moves the Sections opener out of the privacy panel into a **"Your layout" row
 > under the identity card** plus a **dashed "＋ Add a section" card at the end of the
 > block list**.
