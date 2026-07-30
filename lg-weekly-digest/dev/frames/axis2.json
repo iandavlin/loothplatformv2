@@ -1,0 +1,47 @@
+[
+    {
+        "wp": 117,
+        "name": "Trevor Healy",
+        "kind": "REAL",
+        "types": "forum.mention",
+        "rows_before": 1,
+        "rows_after": 0,
+        "no_email_after": true
+    },
+    {
+        "wp": 836,
+        "name": "Conor Searl",
+        "kind": "REAL",
+        "types": "forum.reply_to_topic",
+        "rows_before": 1,
+        "rows_after": 0,
+        "no_email_after": true
+    },
+    {
+        "wp": 1039,
+        "name": "D.J. Williams MyLuthier",
+        "kind": "REAL",
+        "types": "forum.reply_to_topic",
+        "rows_before": 1,
+        "rows_after": 0,
+        "no_email_after": true
+    },
+    {
+        "wp": 1773,
+        "name": "Gerry Gentry",
+        "kind": "REAL",
+        "types": "forum.reply_to_reply",
+        "rows_before": 1,
+        "rows_after": 0,
+        "no_email_after": true
+    },
+    {
+        "wp": 0,
+        "name": "A member with a busy week",
+        "kind": "CONSTRUCTED \u2014 3 real rows from 3 different members",
+        "types": "forum.mention,forum.reply_to_topic,forum.reply_to_topic",
+        "rows_before": 3,
+        "rows_after": 0,
+        "no_email_after": true
+    }
+]

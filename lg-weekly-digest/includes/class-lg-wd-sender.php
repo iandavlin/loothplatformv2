@@ -40,6 +40,7 @@ class LG_WD_Sender_FluentCRM implements LG_WD_Sender_Interface {
 
         $settings   = LG_WD_Settings::get_all();
         $list_id    = (string) ( $settings['fcrm_list_id'] ?? 3 );
+        $nonmember  = (string) ( $settings['fcrm_nonmember_list_id'] ?? 7 );
         $tag        = $settings['fcrm_tag'] ?? 'all';
         $from_name  = $settings['from_name'];
         $from_email = $settings['from_email'];
@@ -47,10 +48,35 @@ class LG_WD_Sender_FluentCRM implements LG_WD_Sender_Interface {
         // FluentCRM requires both 'list' and 'tag' keys; use 'all' to skip filtering
         $tag_value = ( empty( $tag ) ) ? 'all' : $tag;
 
+        /**
+         * TWO LISTS, ONE EMAIL (Ian, 2026-07-29 backlog + his 2026-07-30 ruling).
+         *
+         * List 3 is the members' Weekly News Letter. List 7 is "Non Member Weekly
+         * Email Subscriber" — the store the PUBLIC SIGNUP PAGE writes to, and the
+         * only list that page ever writes.
+         *
+         * Ian's model, in his words: the email announces this week's public content
+         * to everyone on the list, and non-members are on the list BECAUSE THE
+         * ANNOUNCEMENT IS FOR THEM. A digest that reads only list 3 would leave the
+         * signup page collecting addresses that are never mailed — a page that lies.
+         *
+         * The two entries are an OR: FluentCRM resolves each {list,tag} pair and
+         * unions the ids. A contact on both lists resolves once (the ids are
+         * de-duplicated downstream by recipients_with_something_waiting(), which
+         * array_unique()s its input) — and by Ian's ruling 6 no member can be on
+         * list 7 through the signup page anyway.
+         *
+         * Setting-driven so a box can point at different list ids, but defaulting to
+         * the real ones rather than to "off": a digest that silently stops mailing
+         * non-members because a setting is unset is the failure this is meant to fix.
+         */
+        $audience = [ [ 'list' => $list_id, 'tag' => $tag_value ] ];
+        if ( $nonmember !== '' && $nonmember !== '0' && $nonmember !== $list_id ) {
+            $audience[] = [ 'list' => $nonmember, 'tag' => $tag_value ];
+        }
+
         $subscriber_settings = [
-            'subscribers' => [
-                [ 'list' => $list_id, 'tag' => $tag_value ],
-            ],
+            'subscribers'    => $audience,
             'sending_filter' => 'list_tag',
         ];
 
@@ -112,11 +138,46 @@ class LG_WD_Sender_FluentCRM implements LG_WD_Sender_Interface {
         }
 
         if ( empty( $subscriber_ids ) ) {
-            self::log( "WARNING: Zero subscribers resolved for List ID {$list_id}." );
+            self::log( 'WARNING: Zero subscribers resolved for lists ' . implode( '+', array_column( $audience, 'list' ) ) . '.' );
             return [ 'success' => false, 'message' => 'No subscribers resolved.', 'campaign_id' => $campaign->id ];
         }
 
         self::log( 'INFO: Resolved ' . count( $subscriber_ids ) . ' subscribers.' );
+
+        // ── EMPTY MEANS SEND NOTHING (Ian, 2026-07-28) ────────────────────────
+        //
+        // Drop recipients with nothing waiting on them BEFORE the CampaignEmail rows
+        // exist, so they are never mailed rather than mailed-and-empty. This is the
+        // one place the recipient set is decided.
+        //
+        // SCOPE WORTH SEEING, because it is larger than the recap: this suppresses
+        // the WHOLE email, including the curated sections (Upcoming Events, new
+        // videos, loothprint) that have nothing to do with the member's to-do list.
+        // Measured on live 2026-07-28: 96 of 1,663 subscribed list-3 members have an
+        // actionable item this week, so ~94% of the list would receive no digest at
+        // all. That is what the ruling says; it is flagged to keeper with the numbers
+        // because it changes what the weekly digest IS, not just who it greets.
+        if ( class_exists( 'LG_WD_Recap_Source' ) ) {
+            $before         = count( $subscriber_ids );
+            $subscriber_ids = LG_WD_Recap_Source::recipients_with_something_waiting( $subscriber_ids );
+            self::log( sprintf(
+                'INFO: to-do filter kept %d of %d subscribers (%d had nothing waiting).',
+                count( $subscriber_ids ), $before, $before - count( $subscriber_ids )
+            ) );
+
+            if ( empty( $subscriber_ids ) ) {
+                // Nobody on the whole list has anything waiting. Send no campaign at
+                // all rather than one with zero recipients — an empty campaign row is
+                // a confusing artifact in Send History and in FluentCRM.
+                self::log( 'INFO: nobody has anything waiting — no digest sent this week.' );
+                return [
+                    'success'     => true,
+                    'message'     => 'No digest sent: no member had an item needing attention.',
+                    'campaign_id' => $campaign->id,
+                    'sent'        => 0,
+                ];
+            }
+        }
 
         // Create CampaignEmail rows
         try {
@@ -248,11 +309,26 @@ class LG_WD_Sender {
             return [ 'success' => false, 'message' => 'No content in issue.', 'campaign_id' => null ];
         }
 
-        // Render HTML
-        $html    = LG_WD_Email_Builder::build( $payload );
         $subject = LG_WD_Email_Builder::build_subject( $payload );
 
+        /**
+         * How the per-member "Your week" token is resolved differs per path, and
+         * getting it wrong is user-visible, so it is decided explicitly here rather
+         * than defaulted anywhere downstream:
+         *
+         *  - PREVIEW  → render the previewing admin's own recap, so the compose
+         *               page shows a real section instead of a placeholder.
+         *  - TEST     → render the test recipient's recap if that address belongs
+         *               to a member; otherwise strip (no literal token in a test).
+         *  - CAMPAIGN → keep the token. This is the ONLY path where FluentCRM gets
+         *               to substitute per recipient.
+         *  - wp_mail fallback → one body, one recipient: render for that member.
+         */
         if ( $dry_run ) {
+            $html = LG_WD_Email_Builder::build( $payload, [
+                'mode'       => 'render',
+                'wp_user_id' => get_current_user_id(),
+            ] );
             return [ 'success' => true, 'message' => 'Preview ready.', 'html' => $html, 'subject' => $subject, 'campaign_id' => null ];
         }
 
@@ -260,11 +336,31 @@ class LG_WD_Sender {
 
         // Test send
         if ( $test_email ) {
+            $tester = get_user_by( 'email', $test_email );
+            $html   = LG_WD_Email_Builder::build( $payload, [
+                'mode'       => $tester ? 'render' : 'strip',
+                'wp_user_id' => $tester ? (int) $tester->ID : 0,
+            ] );
             return $sender->send_test( $test_email, $subject, $html );
         }
 
         // Full send
         $issue_title = get_the_title( $issue_id );
+
+        if ( $sender instanceof LG_WD_Sender_FluentCRM ) {
+            $html = LG_WD_Email_Builder::build( $payload, [ 'mode' => 'token' ] );
+        } else {
+            // wp_mail fallback: a single body to a single address, so the token has
+            // to be resolved here — nothing downstream will do it. LG_WD_Sender_WPMail
+            // takes its recipient from the same setting.
+            $to     = (string) LG_WD_Settings::get( 'review_notify_email', '' );
+            $member = $to ? get_user_by( 'email', $to ) : null;
+            $html   = LG_WD_Email_Builder::build( $payload, [
+                'mode'       => $member ? 'render' : 'strip',
+                'wp_user_id' => $member ? (int) $member->ID : 0,
+            ] );
+        }
+
         $result = $sender->send( $subject, $html, [ 'campaign_title' => $issue_title ] );
 
         if ( $result['success'] ) {

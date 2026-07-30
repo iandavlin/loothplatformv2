@@ -1,0 +1,151 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weekly email signup page — built to the six rulings</title>
+<style>
+  :root{--gold:#ECB351;--dark:#2B2318;--mint:#87986A;--paper:#FAF6EE;
+        --ink:#2B2318;--dim:#6b6357;--line:#e3dbcd;--bad:#b3462f}
+  *{box-sizing:border-box}
+  body{margin:0;background:#f3efe6;color:var(--ink);
+       font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:26px 20px 60px}
+  header h1{font-size:26px;margin:0 0 6px;letter-spacing:-.01em}
+  .sub{color:var(--dim);font-size:14px;margin:0 0 4px}
+  h2{font-size:19px;margin:0}
+  .cmp{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin:22px 0 0}
+  .chead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+  .who{color:var(--dim);font-size:13.5px}
+  .note{font-size:13.5px;color:var(--dim);margin:0 0 12px}
+  .note b{color:var(--ink)}
+  .prov{font-size:12px;color:var(--dim);font-style:italic;margin:10px 0 0}
+  .flag{background:#fdf3f0;border:1px solid #e6bfb3;border-left:4px solid var(--bad);
+        border-radius:8px;padding:14px 16px;margin:0 0 16px;font-size:13.5px}
+  .flag h3{margin:0 0 7px;font-size:15px;color:var(--bad)}
+  .flag b{color:var(--ink)}
+  .done{background:#f2f7e9;border:1px solid #b9c79a;border-left:4px solid var(--mint);
+        border-radius:8px;padding:14px 16px;margin:0 0 16px;font-size:13.5px}
+  .done h3{margin:0 0 7px;font-size:15px;color:#41502a}
+  .done b{color:var(--ink)}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-weight:700;background:var(--paper)}
+  code{font-size:12px;background:var(--paper);border:1px solid var(--line);padding:1px 5px;border-radius:4px}
+  .shot{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+  .shot iframe{display:block;width:100%;height:900px;border:0;background:#fff}
+  .full{display:inline-block;margin:12px 0 0;font:600 13px/1 inherit;color:var(--dark);
+        background:var(--gold);border-radius:6px;padding:10px 15px;text-decoration:none}
+  .rul{counter-reset:r}
+  .rul li{margin:0 0 9px}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>The weekly-email signup page</h1>
+  <p class="sub">Rebuilt to your six rulings of 30 July. <b>Nothing here submits</b> — the mock's
+     button is inert and the page has no form action at all.</p>
+</header>
+
+<section class="cmp">
+  <div class="chead"><h2>Your six rulings, and where each one landed</h2></div>
+  <table>
+    <tr><th>#</th><th>Ruling</th><th>Where it is</th></tr>
+    <tr><td>1</td><td><b>Audience is build AND repair</b></td>
+        <td>Headline is now “For people who build and repair guitars”, the lede names luthiers and
+            repairers, and the sections split into <b>Repairs &amp; restorations</b> and
+            <b>Builds in progress</b> rather than one generic workshop tile.</td></tr>
+    <tr><td>2</td><td><b>The preview box floated</b></td>
+        <td><b>Fixed, and diagnosed rather than nudged</b> — see below.</td></tr>
+    <tr><td>3+4</td><td><b>The hook: public content, then members-only</b></td>
+        <td>Now the page's spine — a three-step band directly under the fold, and the lede itself
+            says “while they're still public”.</td></tr>
+    <tr><td>6</td><td><b>Members are told, never silently added</b></td>
+        <td>Drawn as the exact message a member will see, in the “Already a member?” panel.
+            Endpoint spec below.</td></tr>
+  </table>
+
+  <div class="done">
+    <h3>Ruling 2 — what was actually wrong with the preview</h3>
+    <p style="margin:0 0 8px">Three mismatches at once, which is why it read as a detached card
+      with an odd gap rather than as a slightly-off box:</p>
+    <table>
+      <tr><th>&nbsp;</th><th>Was</th><th>Now</th></tr>
+      <tr><td>Frame width</td><td>640px</td><td><b>624px — the email's own content width</b>, so it fills edge to edge</td></tr>
+      <tr><td>Frame background</td><td>white</td><td><b>#e8e2d8 — the email's own body colour</b>, so no band can show around it</td></tr>
+      <tr><td>Elevation</td><td>heavy drop shadow, on a dark section</td><td><b>no shadow</b>, on the light page, with a labelled bar anchoring it</td></tr>
+    </table>
+    <p style="margin:8px 0 0">The email's outer table is 960px max-width with a 624px content
+      column and a <code>#e8e2d8</code> body — so a 640px white frame was guaranteed to show a
+      mismatched strip down both sides. It was a measurable cause, not a matter of taste.</p>
+  </div>
+
+  <div class="done">
+    <h3>Rulings 3+4 — and I have dropped my framing entirely</h3>
+    <p style="margin:0 0 8px"><b>You were right that it was our invention.</b> I had built up a
+      “non-member carve-out” that made the rule about which <i>audience</i> a <i>section</i>
+      governs. It is gone from this page and from the design docs — not softened, removed.</p>
+    <p style="margin:0"><b>Your model is the one on the page now:</b> the email announces this
+      week's public content to everyone on the list; that content later goes members-only; so the
+      email is how you catch it while it's open. That also answers the thing I was stuck on
+      without needing a special case — <b>non-members get the email because the email is the
+      announcement</b>, not because of an exception carved out for them.</p>
+  </div>
+</section>
+
+<section class="cmp">
+  <div class="chead">
+    <h2>The page</h2>
+    <span class="who">scroll it here, or open it full-screen</span>
+  </div>
+  <div class="shot"><iframe src="built-page.html" title="The built signup page" loading="lazy"></iframe></div>
+  <p style="text-align:center"><a class="full" href="built-page.html">Open the built page full-screen →</a></p>
+  <p class="note"><b>This is now the BUILT page, not the mock</b> — the real markup the site will
+    render, from <code>[lg_weekly_signup]</code>. Two honest differences: it is shown outside the
+    site chrome, and <b>the form is dead on purpose</b> — the signup endpoint is live on dev2, so a
+    working form on a preview page would sign people up for real. The four answers it gives are
+    drawn underneath it instead, read from the endpoint's own source. The sample email in it is a
+    real issue, rendered by the code that sends it.
+    (<a class="full" href="mock-signup.html">the original mock is still here</a>.)</p>
+</section>
+
+<section class="cmp">
+  <div class="chead"><h2>Ruling 6 — what the form will actually do</h2></div>
+  <p class="note">Your spec, as the endpoint implements it. <b>The member list is never written
+    to from this page, under any branch.</b></p>
+  <table>
+    <tr><th>Who submits</th><th>What happens</th><th>Which list</th></tr>
+    <tr><td>Not on either list</td><td>Added, confirmation email sent</td>
+        <td>→ <b>list 7</b> <i>Non Member Weekly Email Subscriber</i></td></tr>
+    <tr><td><b>A member</b> (on list 3)</td>
+        <td><b>Told they are already on the list. Nothing is written.</b></td>
+        <td>— <b>no write at all</b></td></tr>
+    <tr><td>Already on list 7</td><td>Told they are already signed up</td><td>— no duplicate row</td></tr>
+  </table>
+  <p class="note" style="margin-top:10px"><b>The two list ids, stated so they can be checked:</b>
+    <code>3</code> = <i>Weekly News Letter</i> (members, 1,663 subscribed) and <code>7</code> =
+    <i>Non Member Weekly Email Subscriber</i> (296). Both read from live.</p>
+</section>
+
+<section class="cmp">
+  <div class="chead"><h2>One thing still outstanding, and it is a live setting</h2></div>
+  <div class="flag">
+    <h3>The signup page currently sends anonymous visitors to a login screen</h3>
+    <p style="margin:0 0 8px">Measured on live, anonymously, from the live box:</p>
+    <table>
+      <tr><th>URL, requested anonymously</th><th>Result</th></tr>
+      <tr><td><code>/weekly-email-sign-up/</code></td>
+          <td><b style="color:var(--bad)">302 → <code>wp-login.php?…&amp;action=bpnoaccess</code></b></td></tr>
+      <tr><td><code>/looth-group-weekly/</code> (the archive, next door)</td>
+          <td><b style="color:#41502a">200 OK</b></td></tr>
+    </table>
+    <p style="margin:8px 0 0">The cause is <code>bp-enable-private-network-public-content</code>, a
+      hand-maintained allow-list of 67 URLs. The archive is in it; <b>the signup page was
+      missed</b>. Since the whole point of this page is reaching people who don't have accounts, a
+      login wall is the entire door.</p>
+    <p style="margin:8px 0 0"><b>One line in a live admin setting. Yours, not mine — I have not
+      touched it.</b> Worth doing whether or not the mock is approved, because the page is
+      unreachable today.</p>
+  </div>
+  <p class="prov">All figures measured 2026-07-30 on LIVE via <code>live-ro</code>, read-only.
+    dev2 and live hold different data; everything quoted here is live's.</p>
+</section>
+</div>

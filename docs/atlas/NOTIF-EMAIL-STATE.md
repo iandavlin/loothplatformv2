@@ -52,24 +52,79 @@ useful. That gap is what thread-follow and the digest recap between them close.
 - **Per-recipient via a FluentCRM smart code** — the digest sends as ONE campaign with
   a single `email_body`, so per-member content cannot be baked at compose time. The
   template already proves the substitution path with `##crm.unsubscribe_url##`.
-- **"Your week" = UNREAD, last 7 days** — not a duplicate of what they already read
-  in-app, and never resurfacing old news.
+- **THE DIGEST IS A TO-DO LIST, NOT A NEWS FEED (Ian, 2026-07-28).** One question
+  admits a type: *does this wait on the member?* In: connection requests, mentions,
+  replies to your topics and your comments, unread DMs. **Out: connection acceptances
+  and reactions** — nothing is owed on either, and both were deleted rather than
+  disabled.
+- **TWO REGISTERS.** New this week is **named**; still-unresolved from before is
+  **counted** — "You have 3 connection requests waiting". The fixed 7-day window is
+  the fresh/stale line, so this needs no new state.
+- **Outstanding is not the same as unread.** A connection request is suppressed by the
+  edge's own status, never by `is_read` — a member who glanced at the bell has not
+  answered anybody, and the mobile sheet auto-marks everything read 700ms after it
+  opens (`bottom-nav.js:1128`).
 - Ian picked the recommended layout and wants it **personalised with the member's
   profile name** (the cleaned display name the `/u/` page shows — not the WP login,
   not the Patreon handle).
-- Empty means absent: a member with nothing that week gets no section at all.
+- **Empty means SEND NOTHING (Ian, 2026-07-28)** — not the digest minus the section.
+  A member with nothing waiting gets no email at all. Measured on live 2026-07-28:
+  **280 of 1,858 recipients** would be mailed, and **181 of those only because of a
+  counted line**.
+  > ⚠️ **1,858, NOT 1,663 — corrected 2026-07-30, and it is a merge blocker, not a
+  > footnote.** The digest goes to **two** FluentCRM lists: list 3 (1,663 subscribed
+  > members) **and list 7 "Non Member Weekly Email Subscriber" (+195 not on list 3)**.
+  > Campaign 379's own `wp_fc_campaign_emails` rows total **1,858**, exactly.
+  > **188 of the 204 confirmed list-7 people have no `wp_users` row**, so they can never
+  > have anything waiting and this ruling silences them permanently. Whether that is
+  > intended is **still open with Ian** — see RECAP-SUPPRESSION-PROPOSAL.md **§5.1**.
+  > Note also that the plugin only ever resolves **one** list, so **list 7 is being added
+  > by hand in the FluentCRM UI each week** — an undocumented manual step.
 
-## 4. What is OPEN — and §9.1 is the keystone
+## 4. What is OPEN — **§9.1 IS NO LONGER THE KEYSTONE (2026-07-28)**
 
-**§9.1 — per-event vs digest.** Undecided, and it is not a style question: it decides
-whether these are **one feature or two**.
+> **This section said "everything else is downstream of §9.1". That is no longer true,
+> and the correction makes §9.1 SMALLER, not more urgent.**
+>
+> Ian's to-do ruling excludes `forum.followed_topic` from the digest *on its merits* —
+> a reply in a thread you merely follow does not wait on you; you are an observer, not
+> the addressee. **That much is true and still stands.** §9.1 is therefore not the
+> keystone it was called, and can be ruled on its own merits.
 
-- If per-thread ✉ email is its own channel, then a member with ✉ on a thread *and* a
-  weekly recap covering discussion activity **receives the same reply twice** — once
-  per-event, once in the digest. Something must then exclude what the other already
-  sent.
-- If per-thread ✉ email *is* a digest subscription, there is one channel, and the ✉
-  toggle simply decides which discussions appear in that member's recap section.
+> ### ⚠️ BUT THE STRONGER CLAIM THAT FOLLOWED IT IS WITHDRAWN (2026-07-30)
+>
+> This section went on to say the double-send **"cannot happen under any §9.1
+> outcome ... there is nothing to de-duplicate against and no volume at which that
+> changes."** **That is false, and this is the doc the next keeper reads first, so it
+> is corrected here rather than only at source.**
+>
+> The reasoning held for `forum.followed_topic` and was then stated for the whole
+> question. **The digest also NAMES `forum.reply_to_topic`** — a reply on a discussion
+> *you authored*, which does wait on you and is admitted deliberately. And BB's reply
+> mailer (`bb_send_forums_subscribed_reply`, `class-bp-forums-notification.php:989`)
+> removes only the **replier** from its recipient list — its own comment claims it
+> removes the topic author, and the comment is wrong. So a member holding the ✉ bit on
+> a topic they started gets the same reply **twice**: a per-event email and a named
+> digest row. THREAD-FOLLOW-SPEC §3.5's ⋯ menu offers *"Email me"* on exactly that row
+> type, so the affordance that creates it is being built now.
+>
+> **What this means for the next keeper:** de-duplication across channels is **not**
+> structurally unnecessary. It is **deferred on volume** — 5 overlappable sends in 14
+> days, and an overlap rate that is **untested, not zero** — with a live trigger that
+> is *another lane's ship date*, not a number. See RECAP-SUPPRESSION-PROPOSAL.md
+> **§4.1b and §4.1c**, and `dev/measure-suppression-axes.sh` §6.
+
+**§9.1 — per-event vs digest**, and what it does and does not decide:
+
+- A member with ✉ on a thread **they authored**, plus the weekly recap, **can receive
+  the same reply twice** — per-event email and a named `forum.reply_to_topic` row.
+  **This is live, not hypothetical**; it is small (7 forum items across 258 mailed
+  members on 2026-07-30) and it grows the moment the ✉ toggle ships.
+- A member with ✉ on a thread they merely **follow** cannot, because
+  `forum.followed_topic` is excluded on the to-do test. **That leg was right.**
+- If per-thread ✉ email *is* a digest subscription, there is one channel — but note
+  the digest would still not carry it, so this shape needs a separate ruling that a
+  followed-thread reply waits on the member.
 
 Note the mail Ian liked was the **forum-subscription "new discussion"** path (46 subs,
 fires when someone starts a thread), not the **topic-subscription "new reply"** path
@@ -98,21 +153,26 @@ wrong. The overlap is content (double-reporting), not markup.
 | | state |
 |---|---|
 | thread-follow | **spec + mocks only.** No `.php`, no `.js`, no `follow.php` on any serve. |
-| digest recap | partially built — recap source/renderer/sender classes on the branch. Owes the curl→nginx→FPM leg for `/internal/recap` and a real inbox test to Ian, both needing a serve window. |
+| digest recap | **built to all four 07-28 rulings**, suite 4/4 (`verify-source-boundary`, `verify-window-fixed`, `verify-empty-means-no-send`, `verify-two-registers`). The curl→nginx→FPM leg and the real inbox test were both closed in the 07-27 serve window. **Owes only a real send** — nothing has run end to end through the recipient filter and the sender's no-campaign-at-all early return is unexercised. That is Ian's to run. |
 | account prefs | Weekly Digest + Event Reminders **ship today** (bf9e3a1). |
 | legacy BB email | still wired; the kill is an Ian gate, not a code change. |
 
 Previs, both behind the dev gate:
-`/v2/tests/output/threadfollow/index.html` · `/mockups/wd-recap/index.html`
+`/v2/tests/output/threadfollow/index.html` · `/v2/tests/output/wd-recap/index.html`
+(the recap previs moved off `/mockups/` — that path wrote into dev2's docroot, which
+is pull-only; `/v2/tests/output/` is gitignored inside the serving checkout and needs
+no serve window.)
 
 ## 6. What the next keeper should do, in order
 
-1. **Get §9.1 gated.** Everything else is downstream of it, and it can be decided from
-   the two frames above without writing anything.
+1. ~~**Get §9.1 gated.** Everything else is downstream of it.~~ **NO LONGER THE
+   BLOCKER — see §4.** Rule it when convenient, on its own merits. Nothing in the
+   digest waits on it.
 2. **Then §9.2** — it is the only place where members are receiving mail nobody
    designed, and it has a frame with the member-visible consequence spelled out.
 3. Only then spin a thread-follow **build** lane. The spec names the endpoint, the
    store and the surfaces, so it is a build brief, not a research one.
-4. Keep the recap lane moving meanwhile — it is not blocked by any of the above,
-   provided it states its source boundary explicitly so a §9.1 ruling is a scope edit
-   rather than a re-architecture.
+4. The recap lane is **built to Ian's four rulings and blocked only on a real send**,
+   which is his. Its source boundary is stated explicitly in WEEKLY-DIGEST-RECAP.md
+   §6.1 — but note that boundary is now a TEST ("does this wait on the member?") and
+   not a list, so admitting a new type is a ruling, not a scope edit.

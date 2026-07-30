@@ -175,6 +175,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Connections.php';   // social layer
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Messaging.php';     // social layer
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Notifications.php'; // social layer
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Mutes.php';         // social layer (author mute)
+require_once LG_PROFILE_APP_APP_ROOT . '/src/Recap.php';         // social layer read-side (weekly digest "your week")
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Social.php';        // social layer widget + counts
 require_once LG_PROFILE_APP_APP_ROOT . '/src/EraseUser.php';     // user-lifecycle teardown (Phase 1)
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Provision.php';     // user-lifecycle create + email-change (G4/G7)

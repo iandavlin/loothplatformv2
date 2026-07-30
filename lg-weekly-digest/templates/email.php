@@ -116,6 +116,28 @@ $item_count     = array_sum( array_map( fn( $p ) => count( $p['items'] ), $paylo
               <?php echo nl2br( esc_html( wp_unslash( $settings['intro_text'] ?? '' ) ) ); ?>
             </p>
 
+            <?php
+            /**
+             * THE PER-MEMBER SEAM — "Your week".
+             *
+             * NOT rendered here. This is a FluentCRM smart code, substituted per
+             * RECIPIENT at send time by LG_WD_Recap_Source (registered against
+             * `fluent_crm/smartcode_group_callback_lg_recap`), because the digest
+             * ships as one campaign with one `email_body` and therefore cannot bake
+             * per-user content at compose time. Same substitution path
+             * `##crm.unsubscribe_url##` in the footer already rides.
+             *
+             * A member with nothing this week gets '' back and the token simply
+             * disappears — empty means ABSENT, no zero-state block.
+             *
+             * Outside a FluentCRM send (the compose-page preview, a wp_mail test)
+             * nothing is registered to consume the token, so it would render as
+             * literal text; LG_WD_Email_Builder::build() strips it for exactly that
+             * reason. See WEEKLY-DIGEST-RECAP.md §3.
+             */
+            echo LG_WD_RECAP_SMARTCODE; // phpcs:ignore WordPress.Security.EscapeOutput
+            ?>
+
             <?php foreach ( $payload as $key => $data ) : ?>
               <?php if ( ! empty( $data['is_header'] ) ) : ?>
                 <?php echo LG_WD_Email_Builder::render_group_header( $data['section']['label'] ); ?>
