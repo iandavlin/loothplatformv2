@@ -1093,6 +1093,22 @@ function feed_first_embed_url(?string $html): ?string
     return preg_match($re, $html, $m) ? $m[0] : null;
 }
 
+// YouTube video id out of ONE provider URL — the discussion-card facade's source
+// (Ian 7/30: "a discussion with a YouTube link should play on its hub card, same
+// as a video post"). Deliberately takes a single URL, not a body: the caller feeds
+// it feed_first_embed_url()'s answer, so the facade only ever claims a card whose
+// FIRST provider URL is a YouTube one. A body that leads with Vimeo/IG/X keeps the
+// existing lazy .feed-card__embed and is untouched — one video per card, and the
+// non-YouTube providers stay out of scope (they need their own oembed/id path).
+// Pattern matches hub-polish.js lgYtIdFromUrl() so client and server agree on what
+// an id is; the 15-char cap matches the video-facade regex above.
+function feed_yt_id(?string $url): ?string
+{
+    if (!$url) return null;
+    $re = '~^https?://(?:www\\.|m\\.)?(?:youtu\\.be/|youtube\\.com/(?:watch\\?[^#\\s]*v=|embed/|shorts/|live/))([A-Za-z0-9_-]{6,15})~i';
+    return preg_match($re, $url, $m) ? $m[1] : null;
+}
+
 function feed_ctx(array $card): string
 {
     $title = htmlspecialchars($card['forum_title'] ?? '', ENT_QUOTES, 'UTF-8');
@@ -1196,13 +1212,18 @@ function feed_action_bar(int $reply_count, string $zero_label = 'Reply', int $to
        . '<span class="lg-act lg-act-like" role="button" tabindex="0">' . $ICO_LIKE . 'Like</span>'
        . '<span class="lg-act lg-act-replies" role="button" tabindex="0">' . $ICO_REPLIES . htmlspecialchars($label) . '</span>'
        . '<span class="lg-act lg-act-share" role="button" tabindex="0">' . $ICO_SHARE . 'Share</span>';
-    if ($topicId > 0 && function_exists('feed_follow_btns')) {
-        // .lg-act-follow carries margin-left:auto, so the two icons sit at the right
-        // end of a bar that otherwise holds only Like / N replies / Share. Frame 2
-        // showed room to spare at 390px.
-        echo '<span class="lg-act-follow">';
-        feed_follow_btns($topicId);
-        echo '</span>';
+    if ($topicId > 0 && function_exists('feed_follow_control')) {
+        // CONSOLIDATED (§15 variant A, Ian 2026-07-30). Was a .lg-act-follow span
+        // holding the 🔔/✉ pair; now one labelled bell that opens the settings modal.
+        // .fc-follow carries margin-left:auto itself, so it lands at the right end of
+        // a bar holding Like / N replies / Share — the same place the pair sat.
+        //
+        // The mobile pair's disappearance is also why the §14 long-press bail is NOT
+        // removed: mobile-hub.js still guards [data-follow]/.lg-act-follow, and the
+        // MODAL's switches are [data-follow] inside a body-level dialog. Keeping the
+        // bail costs nothing and stops the same swallowed-tap defect reappearing the
+        // moment anything nests a toggle under .fc-actions again.
+        feed_follow_control($topicId);
     }
     echo '</div>';
 }
@@ -1567,6 +1588,51 @@ $header_cat = $scoped_forum
       $excerpt_plain_len = mb_strlen(strip_tags($excerpt));
       $show_read_more = mb_strlen($plain_full) > $excerpt_plain_len + 8;
       $embed_url     = feed_first_embed_url($full_html);
+      // Discussion video facade (Ian 7/30). A discussion whose body leads with a
+      // YouTube link now gets the SAME cover treatment a video POST gets: thumb +
+      // play button, and forums.js swaps the iframe in on click. No new JS — the
+      // .fc-cover--video[data-yt-play] contract is already generic (forums.js §1's
+      // delegated play handler, its cover-lightbox exception, and §4e's exempt list
+      // all name the class, not the card type), so emitting the markup is the whole
+      // change. Desktop only, exactly like video cards: at ≤640 hub-polish routes a
+      // topic tap to the discussion sheet and no hub video plays inline (Ian 6/17).
+      $t_yt = feed_yt_id($embed_url);
+      // The facade OWNS the video, so drop the lazy .feed-card__embed slot that would
+      // otherwise render a SECOND player for the same URL further down the card.
+      $t_yt_url = $t_yt ? $embed_url : null;
+      if ($t_yt) $embed_url = null;
+      // Thumb: the member's own attached photo when there is one (that path keeps the
+      // resizer + srcset + dims the craft standard asks for), else YouTube's own still.
+      // mqdefault is the ONLY rung worth taking, and deliberately without a srcset:
+      //   - it is true 16:9 at 320x180. hqdefault/sddefault are 4:3 canvases with the
+      //     letterbox baked in, so they'd put black bars inside the cover box.
+      //   - it is the only rung that always EXISTS. Measured over the 13 YouTube
+      //     discussions on dev2 (7/30): hq720 and maxresdefault 404 on one of them,
+      //     and a 404 in a srcset candidate is a BROKEN image, not a fallback.
+      //   - it is 5-19KB. Those same rungs are 58-206KB each, and a forum page can
+      //     carry 7+ of these — enough on its own to blow the craft gate's 1.5MB
+      //     PAGE-IMG-BUDGET (they count: it measures cross-origin resources too,
+      //     even though IMG-OVERSIZE only inspects same-origin <img>).
+      // Trade accepted: ~1x on desktop, soft on a high-DPR phone. Sharper is available
+      // only at the cost of a broken thumb on some cards and a red page budget.
+      $t_yt_thumb = $t_yt ? 'https://i.ytimg.com/vi/' . rawurlencode($t_yt) . '/mqdefault.jpg' : null;
+      // The pasted URL is noise on a card whose cover already plays it (Buck 6/12 —
+      // the rule hub-polish.js applies client-side to promoted content cards). Drop
+      // the link to the FACADED video from the excerpt; the member's own words stay.
+      // format_snippet() truncates an anchor's TEXT but always emits the full href and
+      // a closing tag, so matching on the href is reliable even on a cut-off snippet.
+      if ($t_yt_url) {
+          $u = preg_quote(htmlspecialchars($t_yt_url, ENT_QUOTES), '~');
+          $excerpt = preg_replace('~<a href="' . $u . '"[^>]*>.*?</a>~is', '', $excerpt);
+          // …and the same URL sitting as bare text (an excerpt that was never linkified).
+          $excerpt = str_replace(htmlspecialchars($t_yt_url, ENT_QUOTES), '', (string)$excerpt);
+          $excerpt = trim(preg_replace('~\s{2,}~', ' ', (string)$excerpt));
+          // What's left may be nothing but the trailing ellipsis / stray punctuation —
+          // that reads as a broken excerpt under the player, so drop it entirely.
+          if (preg_match('~^[\s\p{P}]*$~u', html_entity_decode(strip_tags($excerpt)))) {
+              $excerpt = '';
+          }
+      }
 
       // Topic-level reply CTA, rendered inline on the "Started by …" byline row.
       // Authenticated viewers only — anon gets no reply affordance (server 401s).
@@ -1608,12 +1674,26 @@ $header_cat = $scoped_forum
       <?php /* fc-activity beacon removed per Ian 6/7 — the "active … ago" pulse-dot
                was noise on the cards. CSS rules (.fc-activity/.fc-pulse) left in place
                but now unused. */ ?>
-      <?php if (!empty($card_image)): ?>
+      <?php if ($t_yt): /* YouTube discussion → facade: thumb + play; forums.js swaps the iframe in on click (no embed up front) */ ?>
+        <div class="fc-cover feed-card__cover fc-cover--video" data-yt-play="<?= htmlspecialchars($t_yt, ENT_QUOTES) ?>" role="button" tabindex="0" aria-label="Play video">
+          <?php if (!empty($card_image)): ?>
+            <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>"<?= lg_cover_srcset($card_image) ?> alt=""<?= $card_dims ?> <?= lg_cover_loading_attrs() ?>>
+          <?php else: ?>
+            <img class="feed-card__cover-img" src="<?= htmlspecialchars($t_yt_thumb, ENT_QUOTES) ?>" alt="" width="320" height="180" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+          <?php endif; ?>
+          <button type="button" class="fc-play" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+        </div>
+      <?php elseif (!empty($card_image)): ?>
         <a class="fc-cover feed-card__cover" href="<?= $turl ?>" aria-label="<?= htmlspecialchars($topic['topic_title']) ?>">
           <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>"<?= lg_cover_srcset($card_image) ?> alt=""<?= $card_dims ?> <?= lg_cover_loading_attrs() ?>>
         </a>
       <?php endif; ?>
       <h3 class="fc-title feed-card__title"><a href="<?= $turl ?>"><?= htmlspecialchars($topic['topic_title']) ?></a></h3>
+      <?php /* .fc-excerpt carries a border-top + 18px of padding (forums.css :4453), so an
+               EMPTY one draws a stray rule and a dead gap under the title. A video-facade
+               card whose whole body was the pasted link is exactly that case — emit the
+               block only when something goes in it. */
+      if ($excerpt !== '' || $show_read_more || $embed_url): ?>
       <div class="fc-excerpt feed-card__op">
         <?php if ($excerpt !== ''): ?><p class="feed-card__op-excerpt"><?= $can_post ? $excerpt : lg_scrub_anon_contacts((string)$excerpt) ?></p><?php endif; ?>
         <?php if ($show_read_more): ?>
@@ -1622,6 +1702,7 @@ $header_cat = $scoped_forum
         <?php endif; ?>
         <?php if ($embed_url): ?><div class="feed-card__embed" data-embed-url="<?= htmlspecialchars($embed_url, ENT_QUOTES, 'UTF-8') ?>"></div><?php endif; ?>
       </div>
+      <?php endif; ?>
       <?php feed_render_tags(feed_parse_pg_array($topic['tags'] ?? null)); ?>
       <?php /* fc-facepile — up to 3 recent repliers + N replies (NEW; desktop-only ≤640). */
       $fp = $reply_facepile[$topic_id] ?? [];
@@ -1635,12 +1716,24 @@ $header_cat = $scoped_forum
       <div class="fc-actions">
         <?php feed_reactions_bar('topic', $topic_id, $card_reaction_counts['topic:' . $topic_id] ?? []); ?>
         <?php feed_action_bar($reply_count, 'Reply', $topic_id); ?>
-        <?php feed_save_btn('topic', $topic_id); ?>
-        <?php /* The two per-discussion opt-ins (thread-follow §2.2). Ian reviewed and
-                 gated THIS row in the previs — eight controls is the shape he approved,
-                 so the count is settled; do not re-open it. Topic cards only in v1:
-                 content cards have comments, not topic subscriptions (§9.3 q5). */ ?>
-        <?php feed_follow_btns($topic_id); ?>
+        <?php /* CONSOLIDATED — thread-follow §15, variant A. Ian, 2026-07-30, verbatim:
+                 "I like variant A because it gets the card controls down a little bit."
+
+                 This replaces THREE row controls (☆ Save, 🔔 notify, ✉ email) with one
+                 labelled bell that opens the settings modal. The earlier note here said
+                 the eight-control count was settled and not to re-open it — Ian has now
+                 re-opened it himself, and this is that decision. The row it leaves is
+                 React / replies / Share / Follow.
+
+                 It also retires the arithmetic 765dbc3 was built on: that fix bought the
+                 old row a 120px floor to stop flex-wrap dropping the toggles past the
+                 card's overflow. Three fewer fixed-width children is the structural
+                 version of the same fix. The nowrap rule STAYS — it is what makes
+                 flex-shrink work at all, and the row can still grow.
+
+                 Topic cards only, unchanged from v1: content cards have comments, not
+                 topic subscriptions (§9.3 q5). */ ?>
+        <?php feed_follow_control($topic_id); ?>
         <?php feed_share_btn(); ?>
         <?= $reply_cta /* card-level CTA: now hidden by CSS (composer is the reply entry, Ian) but KEPT as the topic/forum data-source that nested reply buttons read via frmOpen() */ ?>
         <?php /* expand-all RETIRED (Ian): SPLIT into "Read more" (full post BODY only,

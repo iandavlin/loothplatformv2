@@ -536,26 +536,16 @@ function looth_social_icon(string $kind): string
         . ' aria-hidden="true">' . $p . '</svg>';
 }
 
+/**
+ * Compose the href for a stored social value.
+ *
+ * Thin wrapper — the rule lives in Profile::socialUrl() so the WP-side byline
+ * resolver and this page cannot drift apart on how a stored value becomes a
+ * link. Kept as a free function because templates call it by name everywhere.
+ */
 function looth_social_url(string $kind, string $value): string
 {
-    $v = trim($value);
-    if ($v === '') return '';
-    if ($kind === 'email') return 'mailto:' . $v;
-    if ($kind === 'phone') return 'tel:' . preg_replace('/[^\d+]/', '', $v);
-    if (preg_match('#^https?://#i', $v)) return $v;                 // already absolute (web, or pasted URL)
-    $h = ltrim($v, '@/');
-    switch ($kind) {
-        case 'web':       return 'https://' . $h;
-        case 'instagram': return 'https://instagram.com/' . $h;
-        case 'x':         return 'https://x.com/' . $h;
-        case 'youtube':   return 'https://youtube.com/@' . $h;
-        case 'facebook':  return 'https://facebook.com/' . $h;
-        case 'tiktok':    return 'https://tiktok.com/@' . $h;
-        case 'patreon':   return 'https://patreon.com/' . $h;
-        case 'linktree':  return 'https://linktr.ee/' . $h;
-        case 'bandcamp':  return strpos($h, '.') !== false ? 'https://' . $h : 'https://' . $h . '.bandcamp.com';
-        default:          return 'https://' . $h;
-    }
+    return \Looth\ProfileApp\Profile::socialUrl($kind, $value);
 }
 
 /** One editable link row (owner). data-value = raw stored value → round-trips to me-socials. */

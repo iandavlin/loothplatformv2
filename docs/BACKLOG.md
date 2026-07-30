@@ -23,14 +23,31 @@ line into that lane's charter and note the lane name here.
 11. Group chat header: collapse + text scale
 12. Post header: title legibility over text thumbnails
 13. PWA launch animation/message
-14. Mail-containment: gate on host not LG_ENV (latent security)
+14. Craft gate: /hub/share-your-repair-content/ cover missing width/height (pre-existing)
+15. Mail-containment: gate on host not LG_ENV (latent security)
 
 **P3 — big builds (scope first)**
-15. Front-end authoring for all post types ★ vision
-16. Stripe membership: audit → build
+16. Front-end authoring for all post types ★ vision
+17. Stripe membership: audit → build
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 2026-07-30 — Craft gate: /hub/share-your-repair-content/ topic cover has no width/height (keeper)
+
+Found by discussion-card-video 7/30 while measuring its own branch; **pre-existing,
+not introduced by that lane, and byte-identical on main**. A topic cover on
+`/hub/share-your-repair-content/` ships without `width`/`height`
+(`img.php?s=bb_medias/…`), which is an IMG-NODIMS defect. That page is **not** in
+the craft gate's PAGES list, which is why the gate is green today.
+
+Ian 7/30: **leave it** — the lane deliberately did not add the page, because adding
+it turns the *shared* craft gate red for a defect it did not cause and blocks every
+other lane. Logged here instead of fixed in-lane.
+
+Whoever picks this up: add the page to the craft gate's PAGES **and** fix the dims
+in the same change, so the gate never sits red. Confirm byte-identical-on-main
+still holds first.
 
 ## 2026-07-30 — Front page: show the latest weekly email to LOGGED-OUT users (Ian)
 
@@ -355,3 +372,23 @@ Acceptance sketch: editing a post exposes every control that creating one does
 (forum picker, tags, formatting, images/embeds), through the same code path as
 add-post; saving preserves anything edit doesn't touch (replies, reactions,
 timestamps beyond modified). Unowned — needs a lane.
+
+**Status 2026-07-30 — BUILT AND PROVEN; the API half is already merged to main
+(7825a27, Ian "looks good"). Remaining delta is two JS files on branch
+`edit-post-parity`. Awaiting keeper's dev2-serve verification, then merge.**
+
+Ian's rulings that shaped it, both binding:
+- **The desktop/mobile split STAYS.** Edit reuses the composer CREATE uses *on the
+  same viewport* — desktop edit opens the 4-step wizard on Write, mobile edit opens
+  the same flat form mobile create opens. Parity is per-viewport, not one composer
+  everywhere. Proven through the real controls, not the seams:
+  `tools/edit-post-parity/create-edit-parity.py`, 39/39, both viewports.
+- **Per-topic drafts STAY (2026-07-30).** An unfinished reply comes back when you
+  return to that topic. This is NOT the stale-composer bug that was fixed alongside
+  it — see COMPOSER-V2-PLAN §1.2 for the table of which is which, and do not
+  "fix" the draft restore.
+
+Saving verified in the DB rather than the UI, across a real forum round trip
+(3837 → 3823 → 3837): replies, reactions, the activity row, `post_date`, author,
+counts and every reply row held; the move carried both replies' `_bbp_forum_id`,
+both forums' counters and the postgres mirror with it.

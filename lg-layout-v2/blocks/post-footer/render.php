@@ -106,10 +106,13 @@ if (function_exists('apply_filters')) {
 }
 $author_links = [];
 if ($author_id) {
-    foreach ($link_slots as $slot) {
+    foreach ($link_slots as $slot_key => $slot) {
         $url = trim((string) get_user_meta($author_id, (string) $slot['meta_key'], true));
         if ($url === '') continue;
-        $author_links[] = ['url' => $url, 'title' => (string) ($slot['title'] ?? ''), 'svg' => (string) ($slot['svg'] ?? '')];
+        /* 'key' is carried so the lg_layout_v2_author_links filter can tell a
+           member-editable social slot from a computed one. The markup below
+           reads url/title/svg only. */
+        $author_links[] = ['key' => (string) $slot_key, 'url' => $url, 'title' => (string) ($slot['title'] ?? ''), 'svg' => (string) ($slot['svg'] ?? '')];
     }
     /* Computed slots — mirrored from post-header. BP profile + the Hub
        filtered to this author (matches by NAME — see post-header). */
@@ -117,6 +120,7 @@ if ($author_id) {
         $bp_url = (string) bp_core_get_user_domain($author_id);
         if ($bp_url !== '') {
             $author_links[] = [
+                'key'   => 'bp_profile',
                 'url'   => $bp_url,
                 'title' => 'Member profile',
                 'svg'   => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5.5 6-5.5s6 2.5 6 5.5"/><circle cx="17" cy="6" r="2.4"/><path d="M14 14c1-.6 2-.9 3-.9 2.4 0 4.4 1.7 4.4 4"/></svg>',
@@ -126,10 +130,19 @@ if ($author_id) {
     $archive_url = $author_name !== '' ? ('/hub/?author=' . rawurlencode($author_name)) : '';
     if ($archive_url !== '') {
         $author_links[] = [
+            'key'   => 'author_archive',
             'url'   => $archive_url,
             'title' => $author_name !== '' ? ('All posts by ' . $author_name) : 'All posts by this author',
             'svg'   => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h12M3 12h12M3 18h8"/><circle cx="19" cy="17" r="3"/><path d="M21.5 19.5L23 21"/></svg>',
         ];
+    }
+
+    /* Same swap as post-header — the ACF rail above is a stale mirror of the
+       member's real links. See post-header/render.php and
+       docs/SOCIAL-LINKS-DRIFT-AUDIT.md. The footer has no per-post hide, so the
+       hidden-slot argument is empty. */
+    if (function_exists('apply_filters')) {
+        $author_links = apply_filters('lg_layout_v2_author_links', $author_links, $author_id, $link_slots, []);
     }
 }
 

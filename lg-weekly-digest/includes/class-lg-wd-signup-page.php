@@ -49,6 +49,32 @@ class LG_WD_Signup_Page {
 	/** Transient holding the rendered sample email. */
 	const PREVIEW_CACHE = 'lg_wd_public_email_preview';
 
+	/**
+	 * ── EXPOSURE GATE — LG_WD_SIGNUP_EMAIL_PREVIEW ─────────────────────────────
+	 *
+	 * OFF. Ian turns it on himself, on live, once he has looked at the running thing.
+	 *
+	 * WHY IT EXISTS: this section frames a real issue in an iframe, and Ian's verdict
+	 * on the framing was "This sucks" — the email was 368px wider than its box, so a
+	 * reader had to pan sideways to finish a headline. The fix (variant B, which he
+	 * approved) is not merged yet. Until it is, the honest state for members is that
+	 * the section is ABSENT rather than wrong: a signup page with no sample is a page
+	 * missing a nicety, and a signup page framing a clipped newsletter is a page that
+	 * argues against signing up.
+	 *
+	 * SCOPE: this gates the SAMPLE-EMAIL SECTION ONLY. The signup form, the four
+	 * audience states and the unsubscribe path are untouched by it — they are what the
+	 * page is FOR, Ian has not objected to them, and hiding them would be a bigger
+	 * change than the one being made safe.
+	 *
+	 * ONE READ SITE: preview_url(). Everything downstream already treats '' as "no
+	 * section" — the template's `if ( $lgws_sample )` guard predates this flag — so
+	 * OFF removes the section by the route the code already had, not by a new branch.
+	 *
+	 * The filter seam is for a box that wants it on without editing wp-config.
+	 */
+	const PREVIEW_FLAG = 'LG_WD_SIGNUP_EMAIL_PREVIEW';
+
 	/** How long a rendered sample is reused. One hour: the issue changes weekly. */
 	const PREVIEW_TTL = HOUR_IN_SECONDS;
 
@@ -253,7 +279,23 @@ class LG_WD_Signup_Page {
 	 *
 	 * Still returns '' when there is no sent issue: no section beats an empty frame.
 	 */
+	/**
+	 * Is the sample-email section switched on? Defaults OFF; see PREVIEW_FLAG.
+	 *
+	 * `define('LG_WD_SIGNUP_EMAIL_PREVIEW', true)` in wp-config, or the filter for a
+	 * box that would rather not edit wp-config. The constant wins when it is set, so
+	 * a deliberate define cannot be silently overridden by a stray filter.
+	 */
+	public static function preview_enabled(): bool {
+		$on = defined( self::PREVIEW_FLAG ) ? (bool) constant( self::PREVIEW_FLAG ) : false;
+		return (bool) apply_filters( 'lg_wd_signup_email_preview_enabled', $on );
+	}
+
 	private static function preview_url(): string {
+		if ( ! self::preview_enabled() ) {
+			return '';                      // flag OFF: no section at all.
+		}
+
 		$cached = get_transient( self::PREVIEW_CACHE );
 		if ( is_string( $cached ) && $cached === '' ) {
 			return '';                      // known-empty: no sent issue. Hide the section.

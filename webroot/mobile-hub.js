@@ -85,7 +85,19 @@
       // Why the browser suite missed it: CDP/synthetic .click() dispatches instantly, so it
       // never crosses the 380ms threshold. This defect is only reachable by a human finger.
       // A press-and-hold is not a reaction gesture on a subscribe control — bail first.
-      if (el.closest('[data-follow]') || el.closest('.lg-act-follow')) return null;
+      //
+      // ⚠️ [data-follow-open] IS LOAD-BEARING AND IS NOT COVERED BY [data-follow].
+      // Those are DIFFERENT ATTRIBUTES — the CSS attribute selector [data-follow]
+      // does not match data-follow-open — and §15 variant A made the consolidated
+      // control the ONLY follow affordance on a mobile card. It renders inside
+      // .lg-card-actions, which is inside .fc-actions, so the broad match below
+      // CLAIMS IT: press-and-hold the Follow pill past 380ms and the reaction
+      // palette opens, the capture-phase swallower kills the release click, and the
+      // modal never opens. That is Ian's exact §14 defect reintroduced on the
+      // control that replaced the one it was fixed on — and, per §14.3, structurally
+      // invisible to every synthetic click in the suite.
+      if (el.closest('[data-follow]') || el.closest('[data-follow-open]') ||
+          el.closest('.lg-act-follow') || el.closest('.fc-follow')) return null;
       // open the picker from a press on the like heart OR anywhere on the reaction row —
       // for the POST (.lg-act-like / .fc-actions / .fcr-chips) AND for a COMMENT
       // (its Like / action row / reaction bar).

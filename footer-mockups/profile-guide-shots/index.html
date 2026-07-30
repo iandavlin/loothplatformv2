@@ -1,0 +1,56 @@
+<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Profile guide — frames for the member handbook</title>
+<style>
+:root{--bg:#f4f4f0;--card:#fff;--ink:#1f2420;--mute:#6d746b;--line:#e3e5df;--bad:#a8321f;--badbg:#fdecea}
+@media(prefers-color-scheme:dark){:root{--bg:#15171a;--card:#1d2024;--ink:#e8eae6;--mute:#9aa199;--line:#2b2f34;--bad:#ff9b8a;--badbg:#3a1f1a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:26px 20px 70px}
+.wrap{max-width:1200px;margin:0 auto}
+h1{font-size:23px;margin:0 0 4px}
+.sub{color:var(--mute);max-width:80ch;margin:0 0 18px}
+h2{font-size:17px;margin:34px 0 2px;padding-top:16px;border-top:1px solid var(--line)}
+h2 .k{color:var(--mute);font-weight:400}
+.secnote{color:var(--mute);max-width:80ch;margin:4px 0 14px;font-size:14px}
+.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:20px}
+figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;overflow:hidden}
+figure img{width:100%;height:auto;display:block;border-radius:7px;border:1px solid var(--line);background:#fff}
+figcaption{font-size:12.5px;font-weight:700;margin-top:9px}
+figcaption .d{display:block;font-weight:400;color:var(--mute);margin-top:3px}
+.ok{display:block;color:var(--mute);font-weight:400;font-size:11.5px;margin-top:5px}
+.bad{display:block;background:var(--badbg);color:var(--bad);border-radius:6px;padding:5px 7px;font-weight:600;font-size:11.5px;margin-top:6px}
+.banner{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--bad);border-radius:9px;padding:13px 15px;max-width:80ch;margin:0 0 20px}
+.empty{color:var(--mute);font-style:italic}
+</style>
+<div class="wrap">
+<h1>Profile guide — frames for the member handbook</h1>
+<p class="sub">Captured on the dev2 serve, 2026-07-30. Grouped the way the guide reads.
+Every frame is checked against the viewport it claims, so a bad capture is labelled
+here instead of reaching a reader.</p>
+<div class="banner"><b>5 of 8 frames need reshooting.</b>
+They were captured full-page, which renders the fixed mobile tab bar at its viewport
+offset — it lands mid-page across the footer and looks like a broken site. It is a
+capture artifact, not a site defect. Each one is marked below.</div>
+<h2><span class="k">A.</span> The spine — what an owner sees and edits</h2>
+<p class="secnote">The frames the guide is built around. A3 is the one that answers Ian&#x27;s complaint directly: it shows where sections actually come from.</p>
+<p class="empty">Not captured yet.</p>
+<h2><span class="k">B.</span> Privacy — the part Ian named</h2>
+<p class="secnote">Whole-profile visibility, per-section chips, the two-audience location model, and what a logged-out visitor really hits.</p>
+<div class="g">
+<figure><img src="b6-viewas-member-desktop.png" alt="b6" loading="lazy"><figcaption>B6 · desktop<span class="d">View as Member: the editor is gone entirely.</span><span class="bad">RESHOOT — full-page capture (2882px vs 1800px for desktop) — fixed chrome renders mid-page. Reshoot viewport-only.</span></figcaption></figure>
+<figure><img src="b6-viewas-member-phone.png" alt="b6" loading="lazy"><figcaption>B6 · phone<span class="d">View as Member: the editor is gone entirely.</span><span class="bad">RESHOOT — full-page capture (3740px vs 1688px for phone) — fixed chrome renders mid-page. Reshoot viewport-only.</span></figcaption></figure>
+<figure><img src="b7-viewas-public-desktop.png" alt="b7" loading="lazy"><figcaption>B7 · desktop<span class="d">View as Public: editor gone, privacy panel stays, and the master visibility chip is still live while per-section chips are not. Three claims, one frame.</span><span class="ok">1440×900 viewport-only</span></figcaption></figure>
+<figure><img src="b7-viewas-public-phone.png" alt="b7" loading="lazy"><figcaption>B7 · phone<span class="d">View as Public: editor gone, privacy panel stays, and the master visibility chip is still live while per-section chips are not. Three claims, one frame.</span><span class="bad">RESHOOT — full-page capture (2612px vs 1688px for phone) — fixed chrome renders mid-page. Reshoot viewport-only.</span></figcaption></figure>
+</div>
+<h2><span class="k">C.</span> What other people see</h2>
+<p class="secnote">The same profile from outside, plus the directory.</p>
+<div class="g">
+<figure><img src="c1-other-profile-desktop.png" alt="c1" loading="lazy"><figcaption>C1 · desktop<span class="d">Another member&#x27;s profile: no edit affordances, no privacy chips.</span><span class="bad">RESHOOT — full-page capture (2744px vs 1800px for desktop) — fixed chrome renders mid-page. Reshoot viewport-only.</span></figcaption></figure>
+<figure><img src="c1-other-profile-phone.png" alt="c1" loading="lazy"><figcaption>C1 · phone<span class="d">Another member&#x27;s profile: no edit affordances, no privacy chips.</span><span class="bad">RESHOOT — full-page capture (3370px vs 1688px for phone) — fixed chrome renders mid-page. Reshoot viewport-only.</span></figcaption></figure>
+<figure><img src="c2-directory-desktop.png" alt="c2" loading="lazy"><figcaption>C2 · desktop<span class="d">The directory. Mobile and desktop are separate surfaces.</span><span class="ok">1440×900 viewport-only</span></figcaption></figure>
+<figure><img src="c2-directory-phone.png" alt="c2" loading="lazy"><figcaption>C2 · phone<span class="d">The directory. Mobile and desktop are separate surfaces.</span><span class="ok">390×844 viewport-only</span></figcaption></figure>
+</div>
+<h2><span class="k">D.</span> Entry points</h2>
+<p class="secnote">How a member reaches their own profile at all — different on desktop and phone.</p>
+<p class="empty">Not captured yet.</p>
+</div>

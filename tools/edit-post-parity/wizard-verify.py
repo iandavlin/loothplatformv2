@@ -77,6 +77,59 @@ async def open_session(s, metrics, ua):
     await s.wait_for("document.readyState === 'complete'")
 
 
+async def await_seeded(s):
+    """Wait until the editor has actually been SEEDED, not merely until it looks open.
+
+    THE PROBE BUG THIS REPLACES, measured 2026-07-30 on the merged tree. This file used
+    to wait for the title and then sleep a flat 1.5s. The title is NOT the signal: it is
+    pre-filled optimistically from the page while the authoritative payload is still in
+    flight. On desktop the wizard has four steps to build, so 1.5s landed mid-seed and
+    FIVE body assertions went red — bold, link, list, image, and the <ul> submit check —
+    on a wizard whose content was entirely fine. That reads exactly like "editing a post
+    destroys its formatting", which is the most alarming defect this lane has, and it
+    was the instrument every time.
+
+    Worse, the run then CLICKED SAVE on that half-built editor. Nothing was written,
+    because this branch refuses to arm Save until the body is in — but a harness must
+    not depend on the product's guard to avoid corrupting its own fixture.
+
+    Save is the honest ready signal precisely BECAUSE of that guard: this branch releases
+    Save from the seed callback rather than on payload arrival, so "Save is enabled"
+    means "the body is in the editor". Waiting on it is not circular — if Save ever armed
+    over an empty editor, the body assertions downstream would still catch it, and that
+    is the very defect this lane fixed.
+
+    Bounded and non-fatal: if the seed never completes, this returns anyway and the
+    assertions report what is actually on screen rather than hanging the run.
+
+    THREE SIGNALS, because each alone can be satisfied too early:
+
+      1. the payload landed. Recorded when the PROXY FULFILS the request, which is
+         strictly before the page's own .then() has run, so it is a floor and never a
+         completion.
+      2. the editor is non-empty. This is what actually rules out the mobile failure
+         seen here: mobile is opened via lgNtmEditTopic(TOPIC,3837,'',''), passing an
+         EMPTY body, so anything measured before the fetch seeds reads 0 list items and
+         reports "editing destroys your bullets" against a post that still has them.
+         The same run read the forum as 3837 seconds after a save had moved it to 3823 —
+         it was reading the CALLER's optimistic argument, not the stored post.
+      3. Save is armed — the seed callback's own signal (see the branch's ntmSeedBody).
+
+    Not circular with the body assertions below. This waits for "something arrived";
+    those assert WHICH something — that the bold, the link, both bullets and the inline
+    image are all still in it. A seed that silently dropped the list would satisfy this
+    and still go red down there, which is exactly the defect this lane fixed.
+    """
+    for _ in range(80):                       # payload first — it carries forum and tags
+        if any("/reply" in c for c in s.api_served):
+            break
+        await asyncio.sleep(0.25)
+    await s.wait_for("(function(){var q=document.querySelector('#ntm-editor .ql-editor');"
+                     "return !!(q && q.textContent.trim().length > 0);})()", tries=120)
+    return await s.wait_for("(function(){var b=document.getElementById('ntm-submit');"
+                            "return !!(b && !b.disabled);})()", tries=120)
+
+
 async def run(save):
     import websockets
     req = urllib.request.Request(CDP_HTTP + "/json/new?about:blank", method="PUT")
@@ -99,7 +152,14 @@ async def run(save):
                        .replace("))", ")"))
             await s.wait_for("(function(){var t=document.getElementById('ntm-title-in');"
                              "return !!(t&&t.value&&t.value.indexOf('ZZ TEST')===0);})()")
-            await asyncio.sleep(1.5)
+            seeded = await await_seeded(s)
+            # Named apart from the body checks below on purpose. "The editor never
+            # finished seeding" and "the editor seeded and lost your bold" are different
+            # failures with different owners, and reporting the first as the second is
+            # what sent five assertions red against healthy code.
+            check("the editor finished seeding (Save released)", seeded,
+                  "Save still disabled — body assertions below measure a half-built editor"
+                  if not seeded else "")
             st = await s.ev(STATE)
 
             check("bb-mirror API answered by THIS BRANCH, not main",
@@ -163,21 +223,64 @@ async def run(save):
 
             if save:
                 print("\n== drive a real save through the wizard ==")
-                await s.ev("(function(){var t=document.getElementById('ntm-tags');"
-                           "t.value='vintage, martin, wizardleg';"
-                           "t.dispatchEvent(new Event('input',{bubbles:true}));"
-                           "var r=document.querySelector('input[name=\"forum_id\"][value=\"3823\"]');"
-                           "if(r){r.checked=true;r.dispatchEvent(new Event('change',{bubbles:true}));}"
-                           "return true})()")
+                # Parameterised so the SAME real path can put the fixture back where it
+                # started. A restore done in SQL would leave the postgres mirror and the
+                # two forums' counters stating the old forum, so the next run would begin
+                # from a subtly corrupt fixture — and re-saving through the wizard proves
+                # the move works in BOTH directions rather than only away from home.
+                forum = os.environ.get("EPP_SAVE_FORUM", "3823")
+                tags  = os.environ.get("EPP_SAVE_TAGS", "vintage, martin, wizardleg")
+                print(f"  (saving: forum={forum} tags={tags!r})")
+                # The selector is built HERE and quoted as one string. Building it in JS
+                # as [value='+forum+'] emits [value=3823] — an unquoted attribute value
+                # starting with a digit, which is invalid CSS. querySelector THROWS, the
+                # throw kills the rest of the function, and because the tags line has
+                # already run you get a save that applies the tags and silently ignores
+                # the forum. Measured: the DB showed wizardleg added and the topic still
+                # in 3837, which reads as "the forum picker is broken" and was this bug.
+                sel = 'input[name="forum_id"][value="%s"]' % forum
+                applied = await s.ev(
+                    "(function(){var t=document.getElementById('ntm-tags');"
+                    "t.value=%s;"
+                    "t.dispatchEvent(new Event('input',{bubbles:true}));"
+                    "var r=document.querySelector(%s);"
+                    "if(!r) return 'NO-RADIO';"
+                    "r.checked=true;r.dispatchEvent(new Event('change',{bubbles:true}));"
+                    "return 'ok';})()" % (json.dumps(tags), json.dumps(sel)))
+                # Assert the intent LANDED before saving. Without this, a selector that
+                # matches nothing produces a save that quietly changes less than the run
+                # claims, and the DB diff downstream gets read as the feature's verdict.
+                check("forum radio actually selected before saving", applied == "ok",
+                      str(applied))
                 await s.ev("(function(){var rail=document.querySelectorAll('.lgw-rail__step');"
                            "if(rail[3])rail[3].click();})()")
                 await asyncio.sleep(1)
                 check("Review step reachable before saving",
                       str(await s.ev("(function(){var c=document.querySelector('.lgw-step.is-active');"
                                      "return c?c.dataset.step:null})()")) == "4")
+                # ASSERT SAVE IS ARMED BEFORE CLICKING IT. Without this the run clicks a
+                # DISABLED button, the click is a silent no-op, and the script cheerfully
+                # prints "(saved)" — so a save that never happened reads identically to
+                # one that did, and the DB diff that follows shows "nothing moved", which
+                # is then reported as "edit preserved everything". That is a false GREEN
+                # on the lane's central claim. Measured on this box: the click really did
+                # nothing, and only the byte-identical DB diff gave it away.
+                armed = await s.ev("(function(){var b=document.getElementById('ntm-submit');"
+                                   "return !!(b && !b.disabled);})()")
+                check("Save is armed before we click it", armed is True,
+                      "" if armed is True else "disabled — the click below is a silent no-op")
                 await s.ev("(function(){var b=document.getElementById('ntm-submit');"
                            "if(b)b.click();return true})()")
-                await asyncio.sleep(5)
+                # POLLED, not slept. A flat 5s was not enough for a save that MOVES a
+                # forum: it rewrites both replies' _bbp_forum_id, rebalances two forums'
+                # counters and syncs topic + replies to the postgres mirror, and the run
+                # caught it still showing "Saving…". A fixed sleep turns a slow box into
+                # a red assertion about the feature.
+                closed = await s.wait_for(
+                    "(function(){var o=document.getElementById('ntm-overlay');"
+                    "return !!(o && o.hidden);})()", tries=120)
+                check("the composer closed after saving", closed is True,
+                      await s.ev("(document.getElementById('ntm-status')||{}).textContent || ''"))
                 print("  (saved — verify in the DB, NOT in the UI)")
             await s.send("Emulation.clearDeviceMetricsOverride")
     finally:
@@ -196,6 +299,7 @@ async def run(save):
             await open_session(s, bv.IPHONE, bv.UA_IOS)
             print("\n== mobile 390 — the SAME form create uses there (no wizard by design) ==")
             await s.ev(f"window.lgNtmEditTopic({TOPIC},3837,'','')")
+            await await_seeded(s)   # same probe fix as desktop — see await_seeded()
             await s.wait_for("(function(){var t=document.getElementById('ntm-title-in');"
                              "return !!(t&&t.value&&t.value.indexOf('ZZ TEST')===0);})()")
             await asyncio.sleep(1.5)

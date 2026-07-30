@@ -35,9 +35,13 @@ function lg_krx_json($payload, int $code = 200): void {
     exit;
 }
 
-// Same surfaceable post types as the write door (card-react.php). Keep in lockstep.
+// Same surfaceable post types as the write door (card-react.php). Keep in lockstep —
+// a type the write door accepts must be readable here, or "who reacted" 400s on a
+// card that reacts fine. Widened with the standalone-page types 2026-07-30 alongside
+// card-react.php's LG_CARD_REACT_TYPES; read the reasoning there.
 const LG_CARD_REACTORS_TYPES = ['post-imgcap','post-type-videos','sponsor-post','loothprint',
-                                'loothcuts','useful_links','member-benefit','topic','reply'];
+                                'loothcuts','useful_links','member-benefit','topic','reply',
+                                'shorty','event','document','sponsor-page'];
 
 $postType = isset($_GET['post_type']) ? trim((string) $_GET['post_type']) : '';
 $itemId   = isset($_GET['item_id']) ? (int) $_GET['item_id'] : 0;

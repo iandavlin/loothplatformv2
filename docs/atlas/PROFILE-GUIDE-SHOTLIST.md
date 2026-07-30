@@ -24,8 +24,40 @@ what the pass is for. Treat mismatches as findings, not as shot-list errors.
 
 ## 1. Reaching the site from the box — the part that wastes an hour
 
-`dev.loothgroup.com` resolves to **50.19.198.38, which this box cannot reach** (plain
-curl times out, exit 28). You must pin.
+> ### 🚨 USE `dev2.loothgroup.com`, NOT `dev.loothgroup.com` (corrected 2026-07-30)
+>
+> **This section told you to pin `dev.loothgroup.com`. That host serves BUCK'S STALE
+> TREE, and it is why a capture can silently be of the wrong build.**
+>
+> No nginx `server_name` on this box matches `dev.loothgroup.com`. The vhosts are
+> `buck-dev2.loothgroup.com` and `loothgroup.com www.loothgroup.com
+> dev2.loothgroup.com`. An unmatched Host falls through to the **default server**,
+> which is `buck-dev2.loothgroup.com.conf` (sites-enabled loads alphabetically and
+> it sorts first). That vhost includes `strangler-profile-app-buck.conf`, which
+> points at **`/home/buck/loothplatformv2/profile-app`** — a tree last touched
+> **2026-07-22**.
+>
+> Measured, same URL and same cookies, only the Host differing:
+>
+> | marker | `dev.loothgroup.com` | `dev2.loothgroup.com` |
+> |---|---|---|
+> | `lg-layoutrow` (option A) | **0** | **9** |
+> | `lg-secopen` (option A) | **0** | 6 |
+> | `lg-addsec` (option A) | **0** | 9 |
+> | `lg-viewas__caddy` (removed BY option A) | **5** | **0** |
+> | page size | 174,765 b | 201,219 b |
+>
+> Buck's `u.php`: `lg-viewas__caddy` ×7, `lg-layoutrow` ×0 — the pre-option-A build,
+> exactly what `dev.loothgroup.com` returns. Both hosts answer **200** on `/hub/`,
+> `/directory/members` and `/footer-mockups/`, so **nothing 404s to warn you.** The
+> only symptom is that the app is a week old.
+>
+> ```
+> --host-resolver-rules="MAP dev2.loothgroup.com 172.31.78.94"
+> ```
+
+`dev2.loothgroup.com` resolves publicly to an address **this box cannot reach**
+(plain curl times out, exit 28). You must pin.
 
 **Pin to the box's internal IP `172.31.78.94`, NOT to `127.0.0.1`.** Loopback makes
 `api/v0/users.php:18` treat you as an internal service, which changes what the app
@@ -33,7 +65,7 @@ returns (skips the anon 401, skips slug-stripping on private profiles). For a br
 engine, use a host-resolver rule:
 
 ```
---host-resolver-rules="MAP dev.loothgroup.com 172.31.78.94"
+--host-resolver-rules="MAP dev2.loothgroup.com 172.31.78.94"
 --ignore-certificate-errors        # loopback/internal cert is CN=buck-dev2.loothgroup.com
 ```
 
@@ -95,9 +127,18 @@ will show it; the profile honours `html[data-lguser-theme="dark"]`.
 > and Gallery behind the counter. If your capture still looks like June, something is
 > wrong with your session, not with this list.
 
-> ### ⚠️ SEQUENCING — READ BEFORE SHOOTING ANY OWNER-VIEW FRAME
+> ### ✅ SEQUENCING — DISCHARGED 2026-07-30. The whole block below is HISTORY.
 >
-> **Option A landed on branch `profile-audit` (`04113b2`) but is NOT on the serve.**
+> **Option A is merged and IS on the serve.** `04113b2` is an ancestor of
+> `origin/main` and of `~/loothplatformv2-clean` HEAD (it landed via merge
+> `5d29eb8`). Confirmed in rendered HTML, not just git: `Your layout` ×3,
+> `lg-secopen` ×6, `lg-addsec` ×9, and the pill it removed, `lg-viewas__caddy`,
+> ×0. **A1–A6 and B1–B5 are shootable now** — see §3c. Kept below for the record;
+> do not act on it.
+>
+> ### ⚠️ SEQUENCING — the original warning, now satisfied
+>
+> ~~**Option A landed on branch `profile-audit` (`04113b2`) but is NOT on the serve.**~~
 > It moves the Sections opener out of the privacy panel into a **"Your layout" row
 > under the identity card** plus a **dashed "＋ Add a section" card at the end of the
 > block list**.
@@ -150,6 +191,188 @@ D3/D4 need a member in an unusual auth state. **If staging one is expensive, ski
 say so** — do not mutate a real member's claim state to get a screenshot.
 
 ---
+
+## 3b. CAPTURE PASS DONE — A-invariant frames (2026-07-28)
+
+**8 frames captured and published (dev-gated):**
+`https://dev.loothgroup.com/footer-mockups/profile-guide-shots/`
+
+B6, B7 (View-as member/public), C1 (another member's profile), C2 (directory) —
+each at phone 390×844 and desktop 1440×900. Engine held ~12 minutes, then parked
+(`pgrep -x chrome` = 0 confirmed).
+
+### Two findings from the pass
+
+**1. `captureBeyondViewport` breaks mobile frames — use viewport-only.** Full-page
+capture renders `position:fixed` chrome at its *viewport* offset, so the mobile tab
+bar lands mid-page across the footer. It looks like a broken site and is purely a
+capture artifact. **Every mobile guide screenshot must be captured viewport-only**
+(scroll + stitch if a taller frame is needed).
+
+**2. B7 confirms three documented claims at once** — worth keeping as the guide's
+privacy anchor frame. In View-as → Public at phone width: the **editor is gone**
+(no picker, no grips, no per-section chips), the **privacy panel remains**, and the
+**master Profile-visibility chip is still there and still interactive**. That is the
+§2 asymmetry — *whole-profile visibility stays editable in preview, per-section does
+not* — visible in a single image, exactly as measured.
+
+### Not captured, and why
+- **D1 / D2** (entry points) — both `/hub/` navigations returned no screenshot data
+  in this pass. Not chased; the engine was scarce. Retry next pass.
+- **B8** (members gate) — still impossible with fixture 1849, which is parked
+  `header=public`. Needs a `header=members` subject (audit §9 item 2b).
+- **C3** (map pins) — not attempted this pass.
+- **A1–A6, B1–B5** — deliberately skipped; they change when option A merges.
+
+---
+
+## 3c. RESTART AUDIT — the 8 frames, re-examined 2026-07-30 (profile-guide)
+
+Frames rescued into the monorepo at `footer-mockups/profile-guide-shots/`
+(`c53f70c`, md5-identical to the served copies). Then audited **before** shooting
+anything new. Two things changed the plan.
+
+### OPTION A HAS MERGED, AND IS ON THE SERVE — the A-series is unblocked
+
+`04113b2` is an ancestor of `origin/main` **and** of `~/loothplatformv2-clean` HEAD
+(it landed via merge `5d29eb8`, before today's `e90e536`). Confirmed in the rendered
+HTML on the correct host, not just in git: `Your layout` ×3, `lg-secopen` ×6,
+`lg-addsec` ×9, and the removed `lg-viewas__caddy` ×0.
+
+**So the §3 SEQUENCING block above is DISCHARGED.** A1–A6 and B1–B5 are shootable
+now. That is the spine of the guide plus A3, the money shot.
+
+### MOST OF THE 8 FRAMES NEED RESHOOTING — the pass's own finding #1 bit the pass
+
+Finding #1 (`captureBeyondViewport` breaks mobile frames) was **written up but not
+applied to the frames that shipped**. Measured by pixel dimensions — at DPR 2,
+viewport-only is 780×1688 for phone and 2880×1800 for desktop:
+
+| frame | pixels | verdict |
+|---|---|---|
+| `c2-directory-phone` | 780×**1688** | ✅ viewport-only — clean |
+| `b7-viewas-public-desktop` | 2880×**1800** | ✅ viewport-only — clean |
+| `c2-directory-desktop` | 2880×**1800** | ✅ viewport-only — clean |
+| `b6-viewas-member-phone` | 780×**3740** | ❌ full-page — **tab bar mid-page, confirmed visually** |
+| `b7-viewas-public-phone` | 780×**2612** | ❌ full-page — **tab bar straddling the footer, confirmed visually** |
+| `c1-other-profile-phone` | 780×**3370** | ❌ full-page |
+| `c1-other-profile-desktop` | 2880×**2744** | ❌ full-page |
+| `b6-viewas-member-desktop` | **2850**×2882 | ❌ full-page, and 2850 ⇒ 1425 CSS px — a scrollbar ate 15px of the 1440 viewport |
+
+Only **3 of 8** are usable as-is. **B7 phone — the frame this list designates the
+privacy anchor — is one of the broken ones.** Its three claims are all still legible
+in it, so the finding stands; the image is just not showable to Ian.
+
+### A3 GROUND TRUTH — read this before deciding the money shot is wrong
+
+The A3 row above says the drawer must show `CORE`/`EXTRAS` groups, `FILTERABLE`
+badges and an `Add gallery (N left)` counter, and warns that a capture showing
+"Gallery as a palette bubble and no Services" means **your session is wrong**.
+Measured against the real dev2 DOM, that warning would misfire. The actual
+palette, extracted from the served owner HTML:
+
+| group | blocks |
+|---|---|
+| **Core** | About, Instruments *(Filterable)*, Skills *(Filterable)*, Music *(Filterable)*, Location |
+| **Extras** | Connections, Resume |
+| pinned in the rail, not the list | the **Add gallery** countdown |
+
+- Groups and badges **are** there — the real classes are `.lg-caddy__grp` and
+  `.lg-bubble__find`, and the DOM text is `Core` / `Extras` / `Filterable`. They
+  render as CORE/EXTRAS/FILTERABLE only because
+  `.lg-caddy__grp{text-transform:uppercase}`. **Grepping the HTML for the
+  uppercase strings returns 0 and looks like a defect. It is not.**
+- **Gallery is behind the counter**, as the list says — correct.
+- **Services is absent, and that is DELIBERATE, not a stale session.**
+  `/srv/profile-app/config.php:124` sets
+  `LG_PROFILE_APP_LAUNCH_HIDDEN_BLOCKS = ['services','socials']`, and
+  `Block::launchHiddenBlocks()` strips those from the palette *and* from render.
+  The audit derived "Services in Core" from `Block.php`'s catalogue without the
+  config filter. **Do not chase this and do not "fix" your session over it.**
+
+### Selector reference (verified against the served dev2 DOM, 2026-07-30)
+
+Saves the next pass from finding these with an engine held open:
+`.lg-viewas` · `.lg-block__grip` · `.lg-block--header` · `.lg-block--location` ·
+`.lg-loc__audrow` (B3's two-audience dials) · `#lg-caddy` + `[data-caddy-open]`
+(4 openers) · `.lg-layoutrow` / `.lg-secopen` / `.lg-addsec` (option A) ·
+`.lg-gate` / `.lg-gate__join` (B8).
+
+### B8 IS UNBLOCKED — no mutation needed
+
+The list calls B8 impossible because fixture 1849 is parked `header=public`.
+It does not need 1849. **Three subjects already sit at `header=members`** and
+already render the real gate to an anonymous viewer — verified over HTTP with
+the gate cookie only, asserting `.lg-gate__lock` + "This profile is
+members-only" + `.lg-gate__join`, not merely a "Sign in" string that the site
+header also carries:
+
+| subject | anon result |
+|---|---|
+| `/u/pilot_pro` | ✅ gate renders — **use this one** (not a real person's profile) |
+| `/u/steve-cantrell` | ✅ gate renders |
+| `/u/buck-van-laarhoven-vl-guitar` | ✅ gate renders |
+| `/u/profileapp-test` | 404 — ignore |
+
+`pilot_pro` is the pick, and the reason is stronger than it first looked: **the
+gate page still carries the subject's display name** — 7 occurrences plus
+`<title>Pilot Pro · Looth</title>`. The gate hides the *profile*, not *who it
+belongs to*. So a B8 frame necessarily publishes whoever it is shot on, and
+`Steve Cantrell` / `Buck Van Laarhoven` are real members while `Pilot Pro` is a
+fixture name.
+
+⚠️ **Caveat, stated because it is the weakness of this pick:** `pilot_pro` and
+`profileapp-test` are both `archived_at IS NOT NULL`. `pilot_pro` renders the
+gate anyway (the gate decision precedes the archive check), but it is a fragile
+subject — a purge of archived users would take the frame's URL with it. If it
+ever 404s, the fallback is `steve-cantrell`, accepting that a real member's name
+then appears in the handbook.
+
+**Nothing was mutated to get this** — fixture 1849 is untouched and still parked
+as the matrix expects.
+
+### B2 (capped section chip) IS BLOCKED, and not on the engine — say so early
+
+B2 wants a section chip **capped** by a stricter header above it: a
+`header=members` profile carrying a section that is itself `public`. That state
+exists on dev2 — exactly one usable instance:
+
+| subject | capped section |
+|---|---|
+| `buck-van-laarhoven-vl-guitar` (876) | `dropoffs` public under a members header |
+| ~~`profileapp-test`~~ (3) | `craft`, but archived **and** 404s |
+| `buck-…` `socials` | launch-hidden, never renders |
+
+**Fixture 1849 can never show B2** — it is `header=public`, so nothing above any
+section is strict enough to cap it.
+
+The chip is an **owner-editor** affordance, so B2 cannot be shot as a visitor. It
+needs one of three things, and **all three are somebody else's call, not the
+capture pass's**:
+
+1. mint a session as **Buck**, i.e. log in as a real member to take a
+   screenshot — the only zero-setup option, and the least appropriate;
+2. temporarily flip fixture **1849's header to `members`**, shoot, and restore —
+   but §5 says do not leave 1849 in a non-default state, and the visibility
+   matrix reads it concurrently, so a mid-run flip could red another lane's gate;
+3. create a **fresh throwaway fixture** with `header=members` + one public
+   section — clean, touches nothing shared, but it is a write to the dev
+   profile DB and a new permanent-ish fixture.
+
+**Recommendation: (3).** It is the only one that neither impersonates a member
+nor perturbs a fixture another gate depends on. Not doing it unilaterally.
+B2 is otherwise ready — the engine is not what is missing.
+
+### Build provenance of the old frames: NOT PROVEN
+
+Whether the 8 were shot against buck's stale tree (see the §1 correction) could not
+be settled from the images. The obvious tell — the amber `.lg-viewas__caddy` pill
+that option A removed — is **not diagnostic**: the old CSS already hid it at ≥1380
+(`@media (min-width:1380px){.lg-viewas__caddy{display:none}}`), so no desktop frame
+can show it, and it is absent from the phone frames too, which suggests it never
+emitted in View-as mode. **Stating this as unresolved rather than guessing.** It
+stops mattering in practice: everything is being reshot on `dev2.loothgroup.com`
+anyway, so the next set has a known-good host by construction.
 
 ## 4. Naming
 

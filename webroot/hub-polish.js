@@ -495,7 +495,18 @@
     // Instagram-style SAVE bookmark (Buck 2026-06-08), right-aligned. Persists to the
     // ACCOUNT via the CANONICAL archive-poc save API (discovery.saved_posts) so mobile
     // + desktop share ONE store — wired per the coordinator's contract (b820532).
-    if (!row.querySelector('.lg-act-save')) {
+    // ⚠️ NOT when the card carries the CONSOLIDATED follow control (thread-follow §15
+    // variant A, Ian 2026-07-30: "I like variant A because it gets the card controls
+    // down a little bit"). In A, Save lives INSIDE the follow modal, so appending it
+    // here too would put TWO save controls on one card — and they do not paint each
+    // other: this one tracks lgSavedSet, the modal's .fc-save tracks forums.js's own
+    // hydration. Saving from the modal would leave this star dark, which is the "UI
+    // lies" class (§8.1.3) rather than a cosmetic duplicate.
+    //
+    // Deliberately narrow, like the §14 long-press bail: Buck's save behaviour is
+    // untouched on every card that does NOT have the consolidated control, which is
+    // every non-topic card. Remove this guard and the duplicate comes back.
+    if (!row.querySelector('.lg-act-save') && !row.querySelector('[data-follow-open]')) {
       var sv = document.createElement('span');
       sv.className = 'lg-act lg-act-save'; sv.setAttribute('role', 'button'); sv.setAttribute('tabindex', '0');
       sv.setAttribute('aria-label', 'Save'); sv.innerHTML = ICO_SAVE;
@@ -3577,12 +3588,16 @@
             .catch(function (err) { del.disabled = false; alert('Network error: ' + err.message); });
         });
       });
-      // Edit the OP (author/admin) — opens the SAME mobile composer used to edit a
-      // reply (openComposerSheet), in its topic mode: title, rich body, forum
-      // picker, tags, quick-tags and photos as removable thumbs; Save → owned topic
-      // PUT (+ topic-media). Unified "new edit" (Ian 2026-06-25): the OP no longer
-      // opens the 3-modal wizard. Full add-post parity (Ian 2026-07-29): the
-      // composer offers every control creating a post does.
+      // Edit the OP (author/admin) — opens the SAME composer that CREATES a
+      // discussion on THIS viewport (Ian 2026-07-30, superseding the 2026-06-25
+      // "unified new edit"): #ntm-form via lgNtmEditTopic, pre-filled. On a phone
+      // the big centre + in the bottom nav opens exactly that form — bottom-nav.js
+      // openComposer() fires [data-ntm-open] — so create and edit are one code path
+      // here, which is the whole rule. It is NOT the reply composer: lgOpenComposer
+      // has no create-a-discussion mode, so routing edit through it would have been
+      // a second implementation with nothing to reuse.
+      // The desktop/mobile split itself stays by design; edit simply follows create
+      // on whichever side it is on.
       // Gated to author (data-author-id) OR mod.
       var opForumId = parseInt(card.getAttribute('data-forum-id'), 10) || 0;
       var edit = document.createElement('button');

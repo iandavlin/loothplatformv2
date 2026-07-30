@@ -53,3 +53,7 @@ live-bundle/v2-layouts-bundle.json
 
 # merge journals hold member emails and prior values — never commit
 tools/dupe-merge/journal/
+
+# Python bytecode from tools/gates — build artifact, never tracked
+__pycache__/
+*.pyc
