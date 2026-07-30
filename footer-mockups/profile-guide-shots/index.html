@@ -1,0 +1,26 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Profile guide — A-invariant capture pass (2026-07-28)</title>
+<style>
+body{margin:0;background:#f4f4f0;color:#1f2420;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:24px 18px 60px}
+h1{font-size:21px;margin:0 0 6px}p{color:#6d746b;max-width:78ch}
+.warn{background:#fdf6e6;border:1px solid #e8d9ae;border-radius:9px;padding:12px 14px;color:#1f2420;max-width:78ch;margin:14px 0}
+.g{display:flex;flex-wrap:wrap;gap:22px;margin-top:22px}
+figure{margin:0;background:#fff;border:1px solid #e3e5df;border-radius:12px;padding:10px;max-width:330px}
+figure img{width:100%;height:auto;display:block;border-radius:7px;border:1px solid #eceee8}
+figcaption{font-size:12.5px;font-weight:700;margin-top:8px}
+figcaption span{display:block;font-weight:400;color:#6d746b;margin-top:2px}
+code{background:#e9eae4;padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+<h1>Profile guide — A-invariant capture pass</h1>
+<p>dev2, 2026-07-28. Frames the Membership Guide can use that are <b>not</b> affected by Ian's option-A change (which is on branch, not on the serve). Owner-view frames A1–A6 and B1–B5 are deliberately <b>not</b> here — they change when A merges.</p>
+<div class="warn"><b>Capture note:</b> these use <code>captureBeyondViewport</code>, so the fixed mobile tab bar renders at its viewport position and lands mid-page over the footer. That is a screenshot artifact, <b>not</b> a site defect. Guide screenshots must be captured viewport-only.</div>
+<div class="g">
+<figure><img src="b7-viewas-public-phone.png"><figcaption>B7 · View as → Public · phone<span>Editor gone. Privacy panel stays. The master visibility chip SURVIVES preview — per-section chips do not.</span></figcaption></figure>
+<figure><img src="b6-viewas-member-phone.png"><figcaption>B6 · View as → Member · phone<span>Same, member audience.</span></figcaption></figure>
+<figure><img src="b7-viewas-public-desktop.png"><figcaption>B7 · View as → Public · desktop 1440</figcaption></figure>
+<figure><img src="b6-viewas-member-desktop.png"><figcaption>B6 · View as → Member · desktop 1440</figcaption></figure>
+<figure><img src="c1-other-profile-phone.png"><figcaption>C1 · Another member's profile · phone<span>No edit affordances, no privacy chips.</span></figcaption></figure>
+<figure><img src="c1-other-profile-desktop.png"><figcaption>C1 · Another member's profile · desktop</figcaption></figure>
+<figure><img src="c2-directory-phone.png"><figcaption>C2 · Directory · phone<span>Separate mobile JS surface.</span></figcaption></figure>
+<figure><img src="c2-directory-desktop.png"><figcaption>C2 · Directory · desktop</figcaption></figure>
+</div>
