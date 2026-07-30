@@ -42,6 +42,7 @@ TESTS=(
   verify-signup-page                # the public page's BUILD: six rulings, scoped CSS, anon-safe preview
   verify-unsubscribe-nonmember      # the opt-out link resolves for a contact with NO wp_users row
   verify-preview-frames-the-email   # the iframe shows the EMAIL, not the strangler's front page
+  verify-preview-frame-fits         # ...and the framed email is not wider than its frame
 )
 
 # RUNNER IS PER-TEST. verify-missed-exclusions talks to Postgres through profile-app's
@@ -69,6 +70,7 @@ declare -A SENTINEL=(
   [verify-signup-page]='SIGNUP PAGE OK'
   [verify-unsubscribe-nonmember]='NONMEMBER UNSUBSCRIBE OK'
   [verify-preview-frames-the-email]='PREVIEW FRAMES THE EMAIL'
+  [verify-preview-frame-fits]='PREVIEW FRAME FITS THE EMAIL'
 )
 
 green=0; red=0; dead=0

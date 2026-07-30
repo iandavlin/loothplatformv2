@@ -1,0 +1,86 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weekly signup — the email box, at three widths</title>
+<style>
+  :root{--gold:#ECB351;--dark:#2B2318;--light:#FAF6EE;--mint:#87986A;--bad:#B4432F}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--light);color:var(--dark);
+       font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:23px;margin:0 0 6px}
+  .sub{margin:0 0 20px;font-size:17px}
+  .ask{background:#fff;border:2px solid var(--gold);border-radius:10px;padding:14px 16px;margin:0 0 24px}
+  .ask b{display:block;margin-bottom:4px}
+  .panel{background:#fff;border:1px solid #ddd2bf;border-radius:10px;margin:0 0 22px;overflow:hidden}
+  .cap{padding:11px 14px;font-size:14px;border-bottom:1px solid #eee}
+  .cap .tag{display:inline-block;font-weight:700;font-size:12px;letter-spacing:.04em;
+            padding:2px 8px;border-radius:99px;color:#fff;margin-bottom:5px}
+  .now .tag{background:var(--bad)} .fix .tag{background:var(--mint)} .ph .tag{background:var(--dark)}
+  .stage{background:#2B2318;padding:16px;display:flex;justify-content:center}
+  .box{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+  .box.w624{width:624px;max-width:100%}
+  .box.w992{width:992px;max-width:100%}
+  .box.w390{width:390px;max-width:100%}
+  iframe{display:block;width:100%;height:520px;border:0;background:#fff}
+  .fact{padding:10px 14px;font-size:13px;background:#fbf8f1;border-top:1px solid #eee}
+  .note{margin:8px 0 26px;font-size:14px;background:#fff;border-left:4px solid var(--gold);padding:12px 14px}
+  .note p{margin:0 0 8px}.note p:last-child{margin:0}
+  code{font-size:12px;background:#f4efe4;padding:1px 5px;border-radius:4px}
+</style>
+<div class="wrap">
+
+<h1>The signup page’s email box — why it pans sideways, and what I want to change it to</h1>
+<p class="sub">Same live email in all three. Only the <strong>width of the box around it</strong> changes.</p>
+
+<div class="ask">
+  <b>The one thing to check:</b>
+  In <strong>B</strong> you should be able to read every headline without dragging sideways.
+  If B reads cleanly and <strong>C</strong> (your phone’s width) also reads cleanly, that’s the fix.
+</div>
+
+<div class="panel now">
+  <div class="cap"><span class="tag">A — ON DEV2 NOW</span><br>
+    Box is <code>max-width:624px</code>. The email’s own layout wants <code>960px + 32px</code> of padding.</div>
+  <div class="stage"><div class="box w624">
+    <iframe src="https://dev2.loothgroup.com/weekly-email-sign-up/?lg_wd_email_preview=1"
+            title="The email in today's 624px box" loading="lazy"></iframe>
+  </div></div>
+  <div class="fact">This is the box you saw. Try to read a long headline without dragging.</div>
+</div>
+
+<div class="panel fix">
+  <div class="cap"><span class="tag">B — WHAT I RECOMMEND</span><br>
+    Box sized to the email’s <em>own</em> document width: <code>992px</code> (its 960px container + its 32px outer padding).</div>
+  <div class="stage"><div class="box w992">
+    <iframe src="https://dev2.loothgroup.com/weekly-email-sign-up/?lg_wd_email_preview=1"
+            title="The email at its own designed width" loading="lazy"></iframe>
+  </div></div>
+  <div class="fact">Nothing about the email changes — it is simply given the width it was built for.
+    The “Scroll inside the message” caption gets deleted, because there is nothing left to scroll to.</div>
+</div>
+
+<div class="panel ph">
+  <div class="cap"><span class="tag">C — YOUR PHONE</span><br>
+    Box pinned to <code>390px</code>, an iPhone’s width. The email has its own phone layout at 480px and under.</div>
+  <div class="stage"><div class="box w390">
+    <iframe src="https://dev2.loothgroup.com/weekly-email-sign-up/?lg_wd_email_preview=1"
+            title="The email at phone width" loading="lazy"></iframe>
+  </div></div>
+  <div class="fact">This is the panel I most want your eyes on. It is the one I could not test properly myself.</div>
+</div>
+
+<div class="note">
+  <p><strong>The alternative I did not pick, and why.</strong> I could shrink the whole email to fit the
+  small box (a scale-to-fit). It never pans — but every headline gets smaller than the page around it,
+  and on a phone it would be unreadably small. Giving the email its real width costs nothing and keeps
+  the type at full size, so I would only go the other way if you want the box kept deliberately narrow.</p>
+  <p><strong>Straight about what I have not proven.</strong> I measured the widths out of the email’s own
+  code — a 960px container inside 32px of padding. I have <em>not</em> loaded this in a browser and
+  measured what actually overflows, so panel A is the evidence, not my explanation of it. If A pans and
+  B does not, the fix is right regardless of my reasoning.</p>
+  <p><strong>Separately, and not shown here:</strong> this page is still rendered by WordPress, which is
+  why it came with a nav that isn’t ours. That is a different fix and I am on it.</p>
+</div>
+
+</div>
