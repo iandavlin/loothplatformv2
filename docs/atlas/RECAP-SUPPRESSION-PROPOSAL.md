@@ -413,10 +413,31 @@ nothing, including Upcoming Events, the videos and loothprint, and the `sponsor-
 plugin supports. It changes what the weekly digest *is*, not just who it greets. Built as ruled;
 keeper has the numbers.
 
-### 🔴 5.1 THE FILTER HAS A VICTIM CLASS I NEVER MEASURED: 195 NON-MEMBERS. **MERGE BLOCKER.**
+### 5.1 THE 195 NON-MEMBERS — ✅ **RULED BY IAN 2026-07-30. MY FRAMING WAS WRONG AND IS WITHDRAWN.**
 
-**Found 2026-07-30 while scoping the public signup page, which is how it surfaced at all: the signup
-page recruits into a list this filter can never pass.**
+> **IAN'S MODEL, IN HIS TERMS, AND IT IS SIMPLER THAN MINE:**
+>
+> **Every week the email announces that week's PUBLIC content. That content does not stay public —
+> it later goes members-only. So the email is how non-members catch public content while it is
+> still public. The email announces this-week's-public-content to EVERYONE ON THE LIST.**
+>
+> **He explicitly rejected the framing I had built up here** — *"the non-member carve-out governs
+> the recap section's audience rather than the email's"* — as **our invention and not something he
+> could follow.** It is withdrawn, not softened. I had turned a straightforward product question
+> ("what is this email for?") into an exception carved out of a suppression rule, and then argued
+> for the exception. **The answer was never an exception: non-members get the email because the
+> email IS the announcement**, and announcing to them is the point of having them on a list.
+>
+> **What the measurement was still good for.** The 195 are real and the arithmetic below stands —
+> it is how the question got asked at all. What I got wrong was the *shape* of the answer.
+
+**THE ONE THING THIS LEAVES OPEN, stated in his terms and not mine.** "Everyone on the list" and
+Rule 5 ("empty means send NO EMAIL AT ALL") point opposite ways for a **member with nothing
+waiting**: the to-do filter would drop them, but the email still has this week's public content to
+announce. **Rule 5 is Ian's own ruling from 07-28, so I am not retiring it on inference** — it needs
+one word from him. **Not a blocker for the signup page**, which is being built now.
+
+**The original measurement, unchanged, because it is the evidence:**
 
 **THE DIGEST'S REAL AUDIENCE IS 1,858, NOT 1,663.** The live campaign proves it — `wp_fc_campaign_emails`
 for campaign **379** (*Weekly Digest — July 27, 2026*) holds **1,858 rows**, and the arithmetic is exact:
@@ -451,18 +472,20 @@ for campaign **379** (*Weekly Digest — July 27, 2026*) holds **1,858 rows**, a
 **So shipping this branch as-is removes 195 real people from the weekly digest** — silently, with no
 bounce and no error, and they are the only cohort who subscribed *purely for the content*.
 
-**THE DECISION IS IAN'S AND IT IS NOT THE ONE HE HAS ALREADY RULED.** Rule 5 was ruled about
-**members** with an empty to-do list. Nobody asked whether it should apply to **non-members who have
-no to-do list by construction**. The two readings give opposite answers:
+> **THE TWO-READING TABLE THAT STOOD HERE IS DELETED, not amended (Ian, 2026-07-30).** It offered a
+> choice between *"Rule 5 applies to everyone"* and *"Rule 5 governs the recap section's audience,
+> not the digest's"*, and recommended the second. **Ian rejected the entire frame** — he could not
+> follow it and said it was our invention. He is right that it was: both "readings" were me
+> reasoning outward from a suppression rule instead of asking what the email is for.
+>
+> **The model that replaces it needs no table:** the email announces this week's public content to
+> everyone on the list, and that content later goes members-only. Non-members are on the list
+> because the announcement is *for* them. There is no carve-out because there is nothing to carve.
 
-| Reading | Consequence |
-|---|---|
-| Rule 5 applies to everyone | The 195 never hear from us again. The public signup page becomes a form that subscribes people to silence. |
-| **Rule 5 governs the RECAP SECTION's audience, not the digest's** | Non-members keep receiving Upcoming Events / videos / loothprint with **no recap section** — which is what they signed up for, and what they got on 27 July. |
-
-**I recommend the second**, and it costs one condition: *suppress only subscribers who COULD have had
-a recap* — i.e. apply the to-do test to bridged members, and leave a non-member's digest alone. That
-also makes the signup page honest. **Not built; awaiting his word, because it narrows a ruling.**
+**What this means for the code, plainly:** `recipients_with_something_waiting()` currently drops every
+subscriber with no WP account, so it drops all 195. Under the ruling that is wrong — **they are on
+the list and the email is the announcement.** The remaining question is only about *members* with
+nothing waiting (above), and that one is Ian's own Rule 5, so it is not mine to infer away.
 
 ### Rule 6 — fresh items NAMED, stale items COUNTED (Ian, 2026-07-28)
 

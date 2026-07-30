@@ -1,41 +1,49 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Looth Group Weekly — sign up (MOCK)</title>
+<title>The Looth Group Weekly — sign up (MOCK)</title>
 <!--
   mock-signup.html — DESIGN MOCK for the public weekly-email signup page.
-  NOT THE BUILD. No form posts anywhere; the button is inert by design.
+  NOT THE BUILD. Nothing submits; the button is inert by design.
 
-  WHAT IT REPLACES: WP page 68595 "Weekly Email Sign Up", whose entire content is
-  the string [fluentform id="5"] — an unstyled form on a bare page, with no
-  statement of what the email is, how often it comes, or what happens next.
+  ── BUILT TO IAN'S SIX RULINGS, 2026-07-30 ──────────────────────────────────
+  1  AUDIENCE: people who BUILD AND REPAIR. Not "guitar fans" — luthiers,
+     repairers, and the people doing both. The copy targets the bench.
+  2  THE PREVIEW NO LONGER FLOATS. Diagnosed rather than nudged: the email's own
+     body background is #e8e2d8 and its content column is 624px, and it was
+     sitting in a 640px WHITE frame with a heavy drop shadow on a DARK section.
+     Three mismatches at once — colour, width and elevation — which is why it
+     read as a detached card with an odd gap. Now: the frame is the email's own
+     624px, its background IS #e8e2d8 so no band can show, the shadow is gone,
+     and a labelled bar anchors it so it reads as contained.
+  3+4 THE HOOK, and it is the whole value proposition: each issue announces that
+     week's PUBLIC content, and that content does NOT stay public — it moves
+     members-only later. So the email is how you catch public content while it
+     is still public. Every section of this page is written around that.
+  6  FORM BEHAVIOUR: sign-ups go to the NON-MEMBER list. A member who fills this
+     in is TOLD they are already on the list — never silently added, and the
+     member list is never written to from here. Drawn as the "already
+     subscribed" state below the form.
 
-  CONSTRAINTS THIS MOCK RESPECTS, so the build is a port and not a redesign:
-    - Form 5's real field set is exactly TWO inputs: email + a GDPR consent
-      checkbox. Not a name, not a preference picker. Drawn as those two.
-    - Form 5 has double_opt_in:true, so a confirmation email is unavoidable and
-      the page must say so. Measured: 9 of 128 signups in the last 12 months are
-      still 'pending' (7%) — people who signed up and never confirmed.
-    - list_id 7 = "Non Member Weekly Email Subscriber". 188 of its 204 confirmed
-      subscribers have NO wp_users row, so this page's audience is NON-MEMBERS.
-    - Brand tokens are the email builder's own: gold #ECB351, dark #2B2318,
-      mint #87986A / #D4E0B8, paper #FAF6EE.
-    - Craft standard: checked against tools/gates/craft-gate.py's real thresholds,
-      not asserted. This page has ZERO <img> tags — the section icons are text
-      glyphs — so the resizer/srcset/dimensions rules have nothing to bite on.
-      10KB against a 2500KB page budget, no external hosts, no editor markers,
-      and the single iframe (the sample email) is loading="lazy".
-
-      SAID PLAINLY BECAUSE AN EARLIER DRAFT OF THIS COMMENT CLAIMED OTHERWISE: it
-      described "the one photographic slot" using /img.php?w= with srcset and
-      explicit width/height. There is no such slot and never was. If a real photo
-      is added later that rule applies in full and this note stops being true —
-      the gate is the authority, not this comment.
+  ── CONSTRAINTS, so the build is a port and not a redesign ──────────────────
+  - Form 5's real field set is exactly TWO inputs: email + a GDPR consent
+    checkbox. No name field, no preference picker. Drawn as those two.
+  - Form 5 has double_opt_in:true, so a confirmation email is unavoidable and
+    the page must say so. Measured: 9 of 128 sign-ups in the last 12 months are
+    still 'pending' (7%) — signed up, never confirmed.
+  - Brand tokens are the email builder's own: gold #ECB351, dark #2B2318,
+    mint #87986A / #D4E0B8, paper #FAF6EE, email body #e8e2d8.
+  - Craft: ZERO <img> tags (section icons are text glyphs), so the resizer /
+    srcset / dimension rules have nothing to bite on. ~13KB against a 2500KB
+    page budget, no external hosts, no editor markers, single iframe lazy.
+    Checked against tools/gates/craft-gate.py's real thresholds, not asserted.
+    If a real photo is added later that rule applies in full.
 -->
 <style>
   :root{
     --gold:#ECB351; --dark:#2B2318; --mint:#87986A; --mint-pale:#D4E0B8;
-    --paper:#FAF6EE; --ink:#2B2318; --dim:#6b6357; --line:#e3dbcd; --white:#fff;
+    --paper:#FAF6EE; --ink:#2B2318; --dim:#6b6357; --line:#e3dbcd;
+    --white:#fff; --mail:#e8e2d8;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--paper);color:var(--ink);
@@ -50,7 +58,8 @@
            letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin:0 0 16px}
   .eyebrow::before{content:"";width:22px;height:2px;background:var(--gold)}
   h1{font-size:clamp(28px,4.2vw,42px);line-height:1.12;margin:0 0 14px;letter-spacing:-.02em}
-  .lede{font-size:17.5px;line-height:1.55;color:#e8e0d2;margin:0 0 22px;max-width:46ch}
+  .lede{font-size:17.5px;line-height:1.55;color:#e8e0d2;margin:0 0 22px;max-width:47ch}
+  .lede b{color:var(--gold)}
   .cadence{display:flex;flex-wrap:wrap;gap:8px;margin:0}
   .chip{display:inline-flex;align-items:center;gap:7px;background:rgba(236,179,81,.13);
         border:1px solid rgba(236,179,81,.4);color:var(--gold);border-radius:99px;
@@ -71,17 +80,16 @@
   .btn{display:block;width:100%;margin:17px 0 0;font:700 16px/1 inherit;padding:14px;
        color:var(--dark);background:var(--gold);border:0;border-radius:7px;cursor:pointer}
   .btn:hover{background:#e0a53f}
-  /* The 7% who never confirm are the reason this line is IN the card and not in a
-     footnote — the confirmation step has to be an expectation, not a surprise. */
+  /* The 7% who never confirm are why this sits IN the card, not in small print. */
   .next{display:flex;gap:9px;align-items:flex-start;margin:15px 0 0;padding:11px 12px;
         background:var(--paper);border:1px solid var(--line);border-radius:7px;
         font-size:12.5px;line-height:1.45;color:var(--dim)}
   .next b{color:var(--ink)}
   .next .ico{flex:0 0 auto;font-size:15px;line-height:1.2}
 
-  /* ── what's in it ─────────────────────────────────────────────────────── */
+  /* ── sections ─────────────────────────────────────────────────────────── */
   section{padding:52px 0}
-  .shead{text-align:center;max-width:56ch;margin:0 auto 34px}
+  .shead{text-align:center;max-width:58ch;margin:0 auto 34px}
   .shead h2{font-size:clamp(22px,3vw,30px);margin:0 0 10px;letter-spacing:-.01em}
   .shead p{font-size:15.5px;color:var(--dim);margin:0}
   .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
@@ -91,21 +99,45 @@
   .tile h3{font-size:15px;margin:0 0 6px}
   .tile p{font-size:13.5px;color:var(--dim);margin:0;line-height:1.5}
 
-  /* ── the sample ───────────────────────────────────────────────────────── */
-  .sample{background:var(--dark);color:var(--paper)}
-  .sample .shead h2{color:var(--paper)} .sample .shead p{color:#cfc6b6}
-  .frame{max-width:640px;margin:0 auto;border-radius:10px;overflow:hidden;
-         box-shadow:0 12px 40px rgba(0,0,0,.3);background:var(--white)}
-  .frame iframe{display:block;width:100%;height:560px;border:0;background:#fff}
-  .fcap{max-width:640px;margin:12px auto 0;font-size:12.5px;color:#cfc6b6;text-align:center}
+  /* ── the window (rulings 3+4): why the timing matters ─────────────────── */
+  .window{background:var(--mint-pale)}
+  .wsteps{display:grid;grid-template-columns:repeat(3,1fr);gap:0;max-width:860px;margin:0 auto;
+          background:var(--white);border:1px solid #b9c79a;border-radius:12px;overflow:hidden}
+  .wstep{padding:22px 20px;border-right:1px solid #dfe7cd}
+  .wstep:last-child{border-right:0}
+  .wstep .n{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
+            border-radius:50%;background:var(--dark);color:var(--gold);font:700 13px/1 inherit;margin:0 0 11px}
+  .wstep h3{font-size:15.5px;margin:0 0 6px}
+  .wstep p{font-size:13.5px;color:var(--dim);margin:0;line-height:1.5}
+  .wstep.is-shut .n{background:#8a8578;color:#fff}
+  .wnote{max-width:860px;margin:16px auto 0;text-align:center;font-size:14.5px;color:#41502a}
+  .wnote b{color:var(--dark)}
 
-  /* ── member nudge ─────────────────────────────────────────────────────── */
-  .nudge{max-width:760px;margin:0 auto;background:var(--white);border:1px solid var(--line);
-         border-left:4px solid var(--mint);border-radius:10px;padding:22px 24px}
-  .nudge h3{font-size:17px;margin:0 0 8px}
-  .nudge p{font-size:14.5px;color:var(--dim);margin:0 0 12px}
-  .nudge a{color:var(--dark);font-weight:700;text-decoration:underline;
-           text-decoration-color:var(--gold);text-decoration-thickness:2px;text-underline-offset:3px}
+  /* ── the sample email — RULING 2. Contained, not floating. ───────────────
+     The frame is the email's OWN width (624px) and its OWN background
+     (#e8e2d8), so no band of mismatched colour can appear around it, and it
+     sits on the light page rather than hovering over a dark one. */
+  .mail{max-width:624px;margin:0 auto;border:1px solid var(--line);border-radius:10px;
+        overflow:hidden;background:var(--mail)}
+  .mailbar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--dark);
+           color:var(--paper);font:600 12.5px/1 inherit}
+  .mailbar .dot{width:9px;height:9px;border-radius:50%;background:var(--gold);flex:0 0 auto}
+  .mailbar .from{margin-left:auto;font-weight:400;color:#b7ad9b;font-size:11.5px}
+  .mail iframe{display:block;width:100%;height:600px;border:0;background:var(--mail)}
+  .fcap{max-width:624px;margin:11px auto 0;font-size:12.5px;color:var(--dim);text-align:center}
+
+  /* ── member state (ruling 6) ──────────────────────────────────────────── */
+  .already{max-width:760px;margin:0 auto;background:var(--white);border:1px solid var(--line);
+           border-left:4px solid var(--mint);border-radius:10px;padding:22px 24px}
+  .already h3{font-size:17px;margin:0 0 8px}
+  .already p{font-size:14.5px;color:var(--dim);margin:0 0 10px}
+  .already a{color:var(--dark);font-weight:700;text-decoration:underline;
+             text-decoration-color:var(--gold);text-decoration-thickness:2px;text-underline-offset:3px}
+  .statebox{margin:14px 0 0;padding:13px 15px;border-radius:8px;background:var(--mint-pale);
+            border:1px solid #b9c79a;font-size:13.5px;color:#2f3d1c}
+  .statebox b{color:var(--dark)}
+  .statelbl{display:block;font:700 10.5px/1 inherit;letter-spacing:.09em;text-transform:uppercase;
+            color:#5d6b45;margin:0 0 7px}
 
   footer{background:var(--dark);color:#a99f8d;padding:28px 0;font-size:12.5px;text-align:center}
 
@@ -113,7 +145,10 @@
     .hero{padding:40px 0 36px}
     .hero .wrap{grid-template-columns:1fr;gap:30px}
     .grid{grid-template-columns:repeat(2,1fr)}
-    .frame iframe{height:460px}
+    .wsteps{grid-template-columns:1fr}
+    .wstep{border-right:0;border-bottom:1px solid #dfe7cd}
+    .wstep:last-child{border-bottom:0}
+    .mail iframe{height:520px}
   }
   @media (max-width:520px){ .grid{grid-template-columns:1fr} section{padding:38px 0} }
 </style>
@@ -122,9 +157,9 @@
   <div class="wrap">
     <div>
       <p class="eyebrow">The Looth Group Weekly</p>
-      <h1>Guitar repair worth reading about, once a week.</h1>
-      <p class="lede">Repair and restoration work from the bench, what's coming up, and what the
-        community is building — collected into one email every Monday morning.</p>
+      <h1>For people who build and repair guitars.</h1>
+      <p class="lede">One email a week for luthiers, repairers and benders of truss rods —
+        with <b>this week's public articles and videos, while they're still public</b>.</p>
       <p class="cadence">
         <span class="chip">✉ Once a week, Mondays</span>
         <span class="chip">◔ About a 4-minute read</span>
@@ -145,7 +180,7 @@
           I can unsubscribe at any time.</span>
       </label>
 
-      <button class="btn" type="submit">Sign me up</button>
+      <button class="btn" type="submit">Send me the weekly</button>
 
       <p class="next">
         <span class="ico" aria-hidden="true">→</span>
@@ -156,60 +191,107 @@
   </div>
 </div>
 
+<!-- ── RULINGS 3+4: the hook, and the reason to sign up TODAY ───────────── -->
+<section class="window">
+  <div class="wrap">
+    <div class="shead">
+      <h2>Why it's worth being on the list</h2>
+      <p>New articles and videos go up public. They don't stay that way.</p>
+    </div>
+
+    <div class="wsteps">
+      <div class="wstep">
+        <span class="n">1</span>
+        <h3>It goes up public</h3>
+        <p>A new repair writeup, teardown or video is published and anyone can read it — no
+          account, no membership.</p>
+      </div>
+      <div class="wstep">
+        <span class="n">2</span>
+        <h3>Monday, we tell you</h3>
+        <p>That week's public pieces are listed in the email, with links straight to them.
+          This is the part you're signing up for.</p>
+      </div>
+      <div class="wstep is-shut">
+        <span class="n">3</span>
+        <h3>Later it goes members-only</h3>
+        <p>It moves behind membership and stays there. If you didn't catch it while it was
+          open, that's the door shut.</p>
+      </div>
+    </div>
+
+    <p class="wnote"><b>So the email isn't a summary of things you've missed — it's the window
+      while it's still open.</b> That's the whole reason it exists.</p>
+  </div>
+</section>
+
 <section>
   <div class="wrap">
     <div class="shead">
       <h2>What's actually in it</h2>
-      <p>Every issue is put together by hand. These are the sections the email is built from.</p>
+      <p>Put together by hand each week. These are the sections it's built from.</p>
     </div>
     <div class="grid">
       <div class="tile">
         <div class="ti" aria-hidden="true">🔧</div>
-        <h3>From the workshop</h3>
-        <p>Repair and restoration writeups — what came in, what was wrong, and how it was fixed.</p>
+        <h3>Repairs &amp; restorations</h3>
+        <p>What came in, what was wrong with it, and how it was put right — with the photos.</p>
+      </div>
+      <div class="tile">
+        <div class="ti" aria-hidden="true">🪵</div>
+        <h3>Builds in progress</h3>
+        <p>Bench work from people building instruments: jigs, timber, finishes, mistakes.</p>
       </div>
       <div class="tile">
         <div class="ti" aria-hidden="true">📅</div>
         <h3>Upcoming events</h3>
-        <p>Shows, meetups and workshops worth putting in the diary, with dates and places.</p>
+        <p>Shows, meetups and workshops worth the drive, with dates and places.</p>
       </div>
       <div class="tile">
         <div class="ti" aria-hidden="true">💬</div>
         <h3>From the forum</h3>
-        <p>The discussions people are actually having — problems solved, opinions traded.</p>
-      </div>
-      <div class="tile">
-        <div class="ti" aria-hidden="true">★</div>
-        <h3>Member highlight</h3>
-        <p>One builder or repairer, and the work they've been doing.</p>
+        <p>The problems people brought to the bench this week, and what actually fixed them.</p>
       </div>
     </div>
   </div>
 </section>
 
-<section class="sample">
+<section style="background:var(--white);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
   <div class="wrap">
     <div class="shead">
       <h2>Here's a real one</h2>
-      <p>Not a mockup of an email — this is the actual issue that went out, rendered by the
-        same code that sends it.</p>
+      <p>Not an illustration — this is an issue that actually went out, rendered by the same
+        code that sends it.</p>
     </div>
-    <div class="frame">
+    <div class="mail">
+      <div class="mailbar">
+        <span class="dot" aria-hidden="true"></span>
+        <span>The Looth Group Weekly</span>
+        <span class="from">from noreply@loothgroup.com</span>
+      </div>
       <iframe src="signup-sample-email.html" title="A real recent issue of the weekly email"
-              loading="lazy" scrolling="yes"></iframe>
+              loading="lazy"></iframe>
     </div>
-    <p class="fcap">Scroll inside the frame to read the whole issue.</p>
+    <p class="fcap">Scroll inside the message to read the whole issue.</p>
   </div>
 </section>
 
+<!-- ── RULING 6: what happens if a member fills this in ─────────────────── -->
 <section>
   <div class="wrap">
-    <div class="nudge">
+    <div class="already">
       <h3>Already a Looth Group member?</h3>
-      <p>You're on this list already — it comes with your membership, and it also tells you
-        about anything waiting for you on the site: connection requests, replies to your
-        discussions, and people who mentioned you.</p>
-      <p style="margin:0"><a href="#">Manage your email preferences →</a></p>
+      <p>You already get this — it comes with your membership, and your copy also tells you
+        what's waiting for you on the site: connection requests, replies to your discussions,
+        and anyone who mentioned you.</p>
+      <p><a href="#">Manage your email preferences →</a></p>
+
+      <div class="statebox">
+        <span class="statelbl">What you'll see if you sign up anyway</span>
+        <b>You're already on the list.</b> Your membership includes the weekly email, so there's
+        nothing to do — we haven't changed anything. Check your email preferences if it isn't
+        arriving.
+      </div>
     </div>
   </div>
 </section>

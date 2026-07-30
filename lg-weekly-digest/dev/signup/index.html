@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Weekly email signup page — design + two live defects</title>
+<title>Weekly email signup page — built to the six rulings</title>
 <style>
   :root{--gold:#ECB351;--dark:#2B2318;--mint:#87986A;--paper:#FAF6EE;
         --ink:#2B2318;--dim:#6b6357;--line:#e3dbcd;--bad:#b3462f}
@@ -12,8 +12,7 @@
   header h1{font-size:26px;margin:0 0 6px;letter-spacing:-.01em}
   .sub{color:var(--dim);font-size:14px;margin:0 0 4px}
   h2{font-size:19px;margin:0}
-  .cmp{background:#fff;border:1px solid var(--line);border-radius:10px;
-       padding:20px 22px;margin:22px 0 0}
+  .cmp{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin:22px 0 0}
   .chead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 12px}
   .who{color:var(--dim);font-size:13.5px}
   .note{font-size:13.5px;color:var(--dim);margin:0 0 12px}
@@ -23,154 +22,123 @@
         border-radius:8px;padding:14px 16px;margin:0 0 16px;font-size:13.5px}
   .flag h3{margin:0 0 7px;font-size:15px;color:var(--bad)}
   .flag b{color:var(--ink)}
-  .ask{background:var(--paper);border:1px solid var(--gold);border-radius:8px;
-       padding:14px 16px;margin:16px 0 0;font-size:13.5px}
-  .ask h3{margin:0 0 8px;font-size:15px}
+  .done{background:#f2f7e9;border:1px solid #b9c79a;border-left:4px solid var(--mint);
+        border-radius:8px;padding:14px 16px;margin:0 0 16px;font-size:13.5px}
+  .done h3{margin:0 0 7px;font-size:15px;color:#41502a}
+  .done b{color:var(--ink)}
   table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0}
   th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
   th{font-weight:700;background:var(--paper)}
-  code{font-size:12px;background:var(--paper);border:1px solid var(--line);
-       padding:1px 5px;border-radius:4px}
-  .pair{display:grid;gap:18px;grid-template-columns:1fr 1fr}
-  .pane{min-width:0}
-  .plabel{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin:0 0 7px}
-  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
-  .d-bad{background:var(--bad)} .d-good{background:var(--mint)}
-  .plabel .cnt{margin-left:auto;font-weight:400;color:var(--dim)}
+  code{font-size:12px;background:var(--paper);border:1px solid var(--line);padding:1px 5px;border-radius:4px}
   .shot{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
-  .shot iframe{display:block;width:100%;height:720px;border:0;background:#fff}
-  .gate{height:720px;display:flex;flex-direction:column;align-items:center;justify-content:center;
-        text-align:center;padding:26px;gap:11px;background:#fff;
-        border:1px dashed var(--bad);border-radius:8px}
-  .gate .big{font:700 17px/1.3 inherit;color:var(--bad)}
-  .gate .sm{font-size:13px;color:var(--dim);max-width:36ch}
-  .gate .ico{font-size:38px;opacity:.5;line-height:1}
-  .gate code{font-size:11px;word-break:break-all;display:block;margin-top:4px}
+  .shot iframe{display:block;width:100%;height:900px;border:0;background:#fff}
   .full{display:inline-block;margin:12px 0 0;font:600 13px/1 inherit;color:var(--dark);
         background:var(--gold);border-radius:6px;padding:10px 15px;text-decoration:none}
-  @media (max-width:900px){ .pair{grid-template-columns:1fr} .shot iframe,.gate{height:560px} }
+  .rul{counter-reset:r}
+  .rul li{margin:0 0 9px}
 </style>
 
 <div class="wrap">
 <header>
-  <h1>The public weekly-email signup page</h1>
-  <p class="sub">A design for it — and two things I found on live while measuring it, one of which
-     means the page nobody can reach is the one we ask people to sign up on.</p>
-  <p class="sub"><b>Nothing here is built.</b> The mock submits nowhere. All figures are from LIVE,
-     read-only.</p>
+  <h1>The weekly-email signup page</h1>
+  <p class="sub">Rebuilt to your six rulings of 30 July. <b>Nothing here submits</b> — the mock's
+     button is inert and the page has no form action at all.</p>
 </header>
 
-<!-- ─────────────── the two live defects, before the design ─────────────── -->
 <section class="cmp">
-  <div class="chead"><h2>Two live defects, found while scoping this</h2></div>
+  <div class="chead"><h2>Your six rulings, and where each one landed</h2></div>
+  <table>
+    <tr><th>#</th><th>Ruling</th><th>Where it is</th></tr>
+    <tr><td>1</td><td><b>Audience is build AND repair</b></td>
+        <td>Headline is now “For people who build and repair guitars”, the lede names luthiers and
+            repairers, and the sections split into <b>Repairs &amp; restorations</b> and
+            <b>Builds in progress</b> rather than one generic workshop tile.</td></tr>
+    <tr><td>2</td><td><b>The preview box floated</b></td>
+        <td><b>Fixed, and diagnosed rather than nudged</b> — see below.</td></tr>
+    <tr><td>3+4</td><td><b>The hook: public content, then members-only</b></td>
+        <td>Now the page's spine — a three-step band directly under the fold, and the lede itself
+            says “while they're still public”.</td></tr>
+    <tr><td>6</td><td><b>Members are told, never silently added</b></td>
+        <td>Drawn as the exact message a member will see, in the “Already a member?” panel.
+            Endpoint spec below.</td></tr>
+  </table>
 
+  <div class="done">
+    <h3>Ruling 2 — what was actually wrong with the preview</h3>
+    <p style="margin:0 0 8px">Three mismatches at once, which is why it read as a detached card
+      with an odd gap rather than as a slightly-off box:</p>
+    <table>
+      <tr><th>&nbsp;</th><th>Was</th><th>Now</th></tr>
+      <tr><td>Frame width</td><td>640px</td><td><b>624px — the email's own content width</b>, so it fills edge to edge</td></tr>
+      <tr><td>Frame background</td><td>white</td><td><b>#e8e2d8 — the email's own body colour</b>, so no band can show around it</td></tr>
+      <tr><td>Elevation</td><td>heavy drop shadow, on a dark section</td><td><b>no shadow</b>, on the light page, with a labelled bar anchoring it</td></tr>
+    </table>
+    <p style="margin:8px 0 0">The email's outer table is 960px max-width with a 624px content
+      column and a <code>#e8e2d8</code> body — so a 640px white frame was guaranteed to show a
+      mismatched strip down both sides. It was a measurable cause, not a matter of taste.</p>
+  </div>
+
+  <div class="done">
+    <h3>Rulings 3+4 — and I have dropped my framing entirely</h3>
+    <p style="margin:0 0 8px"><b>You were right that it was our invention.</b> I had built up a
+      “non-member carve-out” that made the rule about which <i>audience</i> a <i>section</i>
+      governs. It is gone from this page and from the design docs — not softened, removed.</p>
+    <p style="margin:0"><b>Your model is the one on the page now:</b> the email announces this
+      week's public content to everyone on the list; that content later goes members-only; so the
+      email is how you catch it while it's open. That also answers the thing I was stuck on
+      without needing a special case — <b>non-members get the email because the email is the
+      announcement</b>, not because of an exception carved out for them.</p>
+  </div>
+</section>
+
+<section class="cmp">
+  <div class="chead">
+    <h2>The page</h2>
+    <span class="who">scroll it here, or open it full-screen</span>
+  </div>
+  <div class="shot"><iframe src="mock-signup.html" title="The signup page mock" loading="lazy"></iframe></div>
+  <p style="text-align:center"><a class="full" href="mock-signup.html">Open the mock full-screen →</a></p>
+</section>
+
+<section class="cmp">
+  <div class="chead"><h2>Ruling 6 — what the form will actually do</h2></div>
+  <p class="note">Your spec, as the endpoint implements it. <b>The member list is never written
+    to from this page, under any branch.</b></p>
+  <table>
+    <tr><th>Who submits</th><th>What happens</th><th>Which list</th></tr>
+    <tr><td>Not on either list</td><td>Added, confirmation email sent</td>
+        <td>→ <b>list 7</b> <i>Non Member Weekly Email Subscriber</i></td></tr>
+    <tr><td><b>A member</b> (on list 3)</td>
+        <td><b>Told they are already on the list. Nothing is written.</b></td>
+        <td>— <b>no write at all</b></td></tr>
+    <tr><td>Already on list 7</td><td>Told they are already signed up</td><td>— no duplicate row</td></tr>
+  </table>
+  <p class="note" style="margin-top:10px"><b>The two list ids, stated so they can be checked:</b>
+    <code>3</code> = <i>Weekly News Letter</i> (members, 1,663 subscribed) and <code>7</code> =
+    <i>Non Member Weekly Email Subscriber</i> (296). Both read from live.</p>
+</section>
+
+<section class="cmp">
+  <div class="chead"><h2>One thing still outstanding, and it is a live setting</h2></div>
   <div class="flag">
-    <h3>1. The signup page redirects anonymous visitors to a login screen</h3>
-    <p style="margin:0 0 8px"><b>Measured on live, from the live box</b> (never a public curl — Cloudflare
-      turns that into a misleading 403):</p>
+    <h3>The signup page currently sends anonymous visitors to a login screen</h3>
+    <p style="margin:0 0 8px">Measured on live, anonymously, from the live box:</p>
     <table>
       <tr><th>URL, requested anonymously</th><th>Result</th></tr>
       <tr><td><code>/weekly-email-sign-up/</code></td>
           <td><b style="color:var(--bad)">302 → <code>wp-login.php?…&amp;action=bpnoaccess</code></b></td></tr>
       <tr><td><code>/looth-group-weekly/</code> (the archive, next door)</td>
-          <td><b style="color:var(--mint)">200 OK</b></td></tr>
+          <td><b style="color:#41502a">200 OK</b></td></tr>
     </table>
-    <p style="margin:8px 0 0"><b>The cause is a hand-maintained allow-list with 67 entries</b> —
-      <code>bp-enable-private-network-public-content</code>. <code>/looth-group-weekly/</code> is in it.
-      <code>/weekly-email-sign-up/</code> <b>is not</b>. The archive got allow-listed and the signup
-      page beside it was missed.</p>
-    <p style="margin:8px 0 0"><b>Why this matters more than it looks:</b> this page's audience is
-      non-members — <b>188 of the 204 confirmed subscribers on that list have no user account at
-      all</b>. A login wall is not an inconvenience for them, it is the whole door.</p>
-    <p style="margin:8px 0 0"><b>The fix is one line in that setting, and it is a live admin change,
-      so it is yours to make, not mine.</b> I have not touched it.</p>
+    <p style="margin:8px 0 0">The cause is <code>bp-enable-private-network-public-content</code>, a
+      hand-maintained allow-list of 67 URLs. The archive is in it; <b>the signup page was
+      missed</b>. Since the whole point of this page is reaching people who don't have accounts, a
+      login wall is the entire door.</p>
+    <p style="margin:8px 0 0"><b>One line in a live admin setting. Yours, not mine — I have not
+      touched it.</b> Worth doing whether or not the mock is approved, because the page is
+      unreachable today.</p>
   </div>
-
-  <div class="flag">
-    <h3>2. Signing up would soon subscribe people to silence</h3>
-    <p style="margin:0 0 8px">Everyone who signs up here lands on list 7,
-      <i>Non Member Weekly Email Subscriber</i>. They have no account, so they can never have a
-      to-do item — and the “empty means send no email” ruling drops anyone with nothing waiting.
-      <b>As my branch stands, all 195 of them would silently stop receiving the digest.</b></p>
-    <p style="margin:0"><b>My recommendation is that the ruling should govern the recap SECTION's
-      audience, not the whole email's</b> — non-members keep getting the events, videos and
-      loothprint, with no recap section. That is exactly what they signed up for and exactly what
-      they received on 27 July. <b>It narrows your ruling, so I have not built it.</b>
-      Full detail: <code>RECAP-SUPPRESSION-PROPOSAL.md §5.1</code>.</p>
-  </div>
-
-  <p class="prov">Both measured 2026-07-30 on LIVE via <code>live-ro</code>, read-only. dev2 and live
-    hold different data; every figure on this page is live's.</p>
-</section>
-
-<!-- ─────────────────────────── the design ─────────────────────────── -->
-<section class="cmp">
-  <div class="chead">
-    <h2>The page today, and the page proposed</h2>
-    <span class="who">left: what is published now — right: the mock</span>
-  </div>
-  <p class="note"><b>What is published today is one line long.</b> Page 68595's entire content is the
-    string <code>[fluentform id="5"]</code> — a form on an otherwise empty page. It never says what
-    the email is, how often it arrives, or that a confirmation step is coming. I cannot show you a
-    screenshot of it because <b>I cannot reach it either</b>, which is defect 1.</p>
-
-  <div class="pair">
-    <div class="pane">
-      <p class="plabel"><span class="dot d-bad"></span>Today<span class="cnt">unreachable</span></p>
-      <div class="gate">
-        <div class="ico" aria-hidden="true">🔒</div>
-        <div class="big">302 → login</div>
-        <div class="sm">An anonymous request for the signup page is redirected to
-          <code>wp-login.php?…action=bpnoaccess</code>. Its content is
-          <code>[fluentform id="5"]</code> and nothing else.</div>
-      </div>
-    </div>
-    <div class="pane">
-      <p class="plabel"><span class="dot d-good"></span>Proposed<span class="cnt">mock</span></p>
-      <div class="shot"><iframe src="mock-signup.html" title="Proposed signup page" loading="lazy"></iframe></div>
-    </div>
-  </div>
-  <p style="text-align:center"><a class="full" href="mock-signup.html">Open the mock full-screen →</a></p>
-
-  <p class="note" style="margin-top:16px"><b>What the design is doing, and why each part is there
-    rather than decorative:</b></p>
-  <table>
-    <tr><th>Element</th><th>Why</th></tr>
-    <tr><td>Cadence stated up front — “once a week, Mondays, ~4 min”</td>
-        <td>The single most common reason people don't subscribe is not knowing how often it will
-            arrive. The current page says nothing.</td></tr>
-    <tr><td>“One more step: we'll email you a confirmation link”</td>
-        <td>Form 5 has <code>double_opt_in: true</code>, so that email is unavoidable. Measured:
-            <b>9 of 128 signups in the last 12 months are still <code>pending</code> (7%)</b> — they
-            signed up and never confirmed. Setting the expectation is the cheapest fix available.</td></tr>
-    <tr><td>Email + consent checkbox, and nothing else</td>
-        <td>That is form 5's <i>actual</i> field set (<code>email</code> + <code>gdpr-agreement</code>).
-            The mock deliberately invents no fields, so the build is a port rather than a redesign.</td></tr>
-    <tr><td>A real issue embedded, scrollable</td>
-        <td>Rendered by the same builder that sends it — not an illustration. Showing the thing
-            beats describing it.</td></tr>
-    <tr><td>“Already a member?” panel at the bottom</td>
-        <td>Members are already on this list via membership. Without this they sign up twice and
-            land in two lists, which is how list 3 and list 7 diverged in the first place.</td></tr>
-    <tr><td>No section for choosing topics or frequency</td>
-        <td>There is one digest and one cadence. A picker would promise control that does not exist.</td></tr>
-  </table>
-
-  <p class="prov">Brand tokens are the email builder's own (gold #ECB351, dark #2B2318, mint #87986A,
-    paper #FAF6EE) so the page and the email it advertises look like one thing. The mock is
-    self-contained HTML, responsive at 880px and 520px, and the sample email is the only iframe.</p>
-
-  <div class="ask">
-    <h3>What I need from you, in order</h3>
-    <p style="margin:0 0 9px"><b>1. Does the mock look right?</b> If yes I build it as a real page.
-      If the answer is “close, but…”, say which part and I redraw before building.</p>
-    <p style="margin:0 0 9px"><b>2. Do non-members keep getting the digest when they have nothing
-      waiting?</b> (Defect 2.) I recommend yes — the ruling should apply to the recap section, not
-      the whole email. <b>Without your answer I cannot merge the digest branch</b>, because as it
-      stands it drops those 195 people silently.</p>
-    <p style="margin:0"><b>3. The allow-list line</b> — <code>/weekly-email-sign-up/</code> needs
-      adding to <code>bp-enable-private-network-public-content</code>. That is a live admin setting.
-      Worth doing whether or not you like the mock, because the page is unreachable today.</p>
-  </div>
+  <p class="prov">All figures measured 2026-07-30 on LIVE via <code>live-ro</code>, read-only.
+    dev2 and live hold different data; everything quoted here is live's.</p>
 </section>
 </div>
