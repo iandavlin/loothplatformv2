@@ -467,6 +467,15 @@ BEGIN
   DELETE FROM forums.forum_subscription
    WHERE target_kind = TG_ARGV[0]::forums.subscription_target_kind
      AND target_id   = OLD.id;
+  -- The 🔔 bit lives in its own table (topic_follow, :254) and was NOT covered when
+  -- that table was added — so a deleted topic left its followers behind. That is the
+  -- exact leak this trigger exists to prevent, reintroduced one table over; found
+  -- 2026-07-30 while checking what else the thread-follow store still owed.
+  -- Topic-only by construction: there is no forum-level follow bit, and a forum
+  -- delete cascades to its topics whose row triggers then fire.
+  IF TG_ARGV[0] = 'topic' THEN
+    DELETE FROM forums.topic_follow WHERE topic_id = OLD.id;
+  END IF;
   RETURN OLD;
 END $$ LANGUAGE plpgsql;
 
