@@ -662,6 +662,56 @@ an untested overlap rate, do not justify a live schema change. It does mean the 
 way §9.1 goes. **That was wrong and I have retracted it to them on the board.** They own the
 affordance that creates the overlap; I own what is in the mail. Neither of us can size this alone.
 
+### 4.1d 🔴 **THE TRIGGER HAS FIRED. Measured 2026-07-30, hours after I wrote §4.1c.**
+
+§4.1c set the trigger as *"thread-follow's ✉ toggle shipping on the digest's admitted types —
+whichever lands first, and **before** it lands."* **It has landed in `main`.** thread-follow merged at
+`e84dae7`; `origin/main` is `9e0895f`.
+
+**The affordance is real, and it is one click from a row this digest names:**
+
+| Step | Where | Evidence in `origin/main` |
+|---|---|---|
+| 1 | Someone replies to a topic the member authored | `notify-bridge.php:212-223` mints `forum.reply_to_topic` — **unconditionally**, no opt-in |
+| 2 | That row renders with a ⋯ button | `social-modals.js` `notifCanFollow()` gates on `ref.kind === 'topic'\|'reply'` — a `reply_to_topic` row's `target_kind` **is** `topic`, so it qualifies |
+| 3 | The menu offers **"Email me about new replies"** | `social-modals.js:264` — `lbl = on ? 'Stop emails' : 'Email me about new replies'` |
+| 4 | It writes the native BB subscription | `bb-mirror/api/v0/follow.php`, `channel:'email'` → `wp_bb_notifications_subscriptions` |
+| 5 | Every later reply emails them **and** re-mints the bell row | BB's mailer excludes only the replier (§4.1b); the row fires regardless of both bits — the menu's own note says so |
+| 6 | The digest **names** that row | `LG_WD_Recap::INCLUDED_TYPES['forum.reply_to_topic']` |
+
+**So the double-send is now reachable in six steps with no configuration, on the digest's single
+most-overlappable type — and the menu is offered on the very row the digest will duplicate.**
+
+> **THE ONE PIECE OF LUCK, and it is the whole reason this is still a decision and not an incident:
+> `follow.php` IS NOT ON LIVE.** Checked directly — `/srv/bb-mirror/api/v0/` on the live box holds
+> ten endpoints and `follow.php` is not among them; `main`'s tip commit says in terms *"UNDEPLOYED —
+> tonight's merges staged for live"*. **No member can create the overlap yet.** I said the trigger had
+> to be caught before it landed; it landed in `main` but not on live, so the window is still open by
+> exactly one deploy.
+
+**WHAT I RECOMMEND NOW, and it is NOT the suppression.** The suppression still needs a floor and
+still has no volume to justify it. But there is something cheaper that expires when that deploy
+happens:
+
+> **Stamp what was emailed, before the toggle reaches live. Do not build the suppression yet.**
+>
+> Without a stamp, the moment members can opt in we begin **destroying the only evidence that could
+> ever size this**. `wp_fsmpt_email_logs` cannot stand in — 14-day retention, subject-string matching,
+> and it records a *recipient address*, not *which item the mail was about* (§2/Rule 2). Every day
+> after that deploy is a day of unmeasurable overlap, and §1.2's "untested, not zero" becomes
+> permanent rather than temporary.
+
+**And the hook to do it already exists, which is what makes this cheap rather than the schema-plus-
+identity-contract I originally priced.** `bb_send_forums_subscribed_reply_email_notifications`
+(`class-bp-forums-notification.php`, in the per-recipient loop) receives **`reply_id`**,
+**`recipient_user_id`** and `type` on **every** subscribed-reply send. A pure observer on that filter
+— returning `$send_mail` untouched — can stamp the matching notification row. **No change to
+BuddyBoss's logic, no new sender, and it works whether or not §9.2's own-sender lands later.**
+
+**What is still Ian's, because it is a live schema change:** one nullable
+`notifications.emailed_at`. **I have not built it and am not going to without his word.** Boarded
+with the measurement, the hook and the deploy window.
+
 ### 4.2 Two more rulings that reach into their spec
 
 - **Empty means send NO EMAIL AT ALL.** A member whose only digest content would have been a
