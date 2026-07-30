@@ -217,15 +217,26 @@ if (!function_exists('lg_following_list')) {
  *   notify_count: int,
  *   email_count: int,
  *   degraded: string,           '' | 'notify' | 'email' — a store we could NOT read
+ *   hydrated: bool,             false = the topic mirror itself was unreadable
  * }
  *
  * `degraded` is not decoration. If Postgres is unreachable the 🔔-only rows are
  * simply absent, and a list that quietly drops rows while looking complete is a
  * lie of exactly the kind this feature exists to stop. The caller renders a
  * plain sentence saying which half could not be read.
+ *
+ * `hydrated` is the sharper case, and it is LIVE'S STATE TODAY: forums.topic_follow
+ * has not been migrated to live yet and the `membership` role does not exist there,
+ * so Postgres answers nothing at all. Without this flag every ✉ row falls through
+ * the not-in-the-mirror branch and renders "This discussion is no longer available"
+ * — eleven perfectly live discussions declared dead. "The mirror says this topic is
+ * gone" and "we could not reach the mirror" are different facts and the page must
+ * not confuse them: on !hydrated the caller drops the list entirely, says so, and
+ * still offers Stop all, which needs only the ids and stays useful.
  */
 function lg_following_list(int $uid): array {
-    $empty = ['items' => [], 'total' => 0, 'notify_count' => 0, 'email_count' => 0, 'degraded' => ''];
+    $empty = ['items' => [], 'total' => 0, 'notify_count' => 0, 'email_count' => 0,
+              'degraded' => '', 'hydrated' => true];
     if ($uid < 1) return $empty;
 
     [$notify_ids, $notify_ok] = lg_following_notify_ids($uid);
@@ -240,8 +251,9 @@ function lg_following_list(int $uid): array {
     // Hydrate titles / forum / last activity from the PG topic mirror. Both the
     // 🔔 and the ✉ ids resolve here — verified 12/12 for the first real member,
     // including the eight that are email-only and have no topic_follow row.
-    $rows = [];
-    $pdo  = lg_following_pg();
+    $rows     = [];
+    $hydrated = false;
+    $pdo      = lg_following_pg();
     if ($pdo) {
         try {
             $in = implode(',', array_fill(0, count($ids), '?'));
@@ -255,6 +267,7 @@ function lg_following_list(int $uid): array {
             );
             $st->execute($ids);
             foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $rows[(int) $r['id']] = $r;
+            $hydrated = true;
         } catch (Throwable $e) {
             error_log('[following] hydrate failed uid=' . $uid . ': ' . $e->getMessage());
             if ($degraded === '') $degraded = 'notify';
@@ -302,6 +315,7 @@ function lg_following_list(int $uid): array {
         'notify_count' => count($notify_ids),
         'email_count'  => count($email_ids),
         'degraded'     => $degraded,
+        'hydrated'     => $hydrated,
     ];
 }
 }

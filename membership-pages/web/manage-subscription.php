@@ -292,6 +292,18 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
                 ?> &middot; <span id="lg-fol-emailcount"><?= (int) $fol['email_count'] ?> of them email you</span><?php endif; ?>
             </p>
 
+            <?php if (!$fol['hydrated']): ?>
+                <?php /* The discussion index itself was unreadable — which is LIVE'S
+                         STATE until forums.topic_follow is migrated there. Do NOT
+                         fall through to the row loop: every row would render
+                         "no longer available", declaring live discussions dead.
+                         Say what happened, and still offer the one useful action. */ ?>
+                <p class="lg-manage-sub__fol-warn">
+                    We can&rsquo;t reach the discussion index right now, so we can&rsquo;t show you
+                    which ones these are. Nothing has changed &mdash; try again shortly.
+                </p>
+            <?php else: ?>
+
             <?php if ($fol['degraded'] !== ''): ?>
                 <p class="lg-manage-sub__fol-warn">
                     <?= $fol['degraded'] === 'notify'
@@ -356,6 +368,11 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
                 </p>
             <?php endif; ?>
 
+            <?php endif; /* hydrated */ ?>
+
+            <?php /* Stop all survives an unreadable index on purpose: it needs only
+                     the ids, and a member who cannot see the list is exactly the one
+                     who wants it to stop. */ ?>
             <div class="lg-manage-sub__fol-foot">
                 <span id="lg-fol-master"></span>
                 <button type="button" class="lg-manage-sub__fol-stopall" id="lg-fol-stopall"
