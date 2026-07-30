@@ -192,7 +192,7 @@ forum types — and forum items are 1 of 128 listable rows this week.**
 > *Trap noted so nobody repeats it:* a naive `subject REGEXP 'group'` returns 5,689 hits. Every one
 > is the string "The Looth Group" in the site name. That number means nothing.
 
-**So the overlappable email volume is 5 sends in 14 days**, against a digest list of 1,663
+**So the overlappable email volume is 5 sends in 14 days**, against a digest list of 1,858
 recipients.
 
 **And the measured overlap is zero — but it is UNTESTED, not CONFIRMED.** This distinction is the
@@ -210,7 +210,7 @@ in either direction, and I am not going to dress a structural expectation up as 
 
 What I *can* say without overreaching: **the overlap is bounded above by the overlappable email
 volume**, because an item that was never emailed cannot be duplicated by email. That bound —
-**5 in 14 days, ≈2.5 per week, across 1,663 subscribed** — does not depend on when the bell started,
+**5 in 14 days, ≈2.5 per week, across 1,858 real recipients** — does not depend on when the bell started,
 because the email side ran for the whole 14 days (sends on 07-13, 07-18, 07-21, 07-23, 07-24).
 
 **One forward-looking caveat, offered as a caveat and not a number:** the mention *minter* shipped
@@ -408,10 +408,61 @@ result. **A first version of that check tested `$payloads === []`, which can nev
 normalises every requested id to `[]` — so it failed CLOSED, silently. One unreachable endpoint
 would have mailed nobody and looked exactly like a quiet week.
 
-**Still flagged, not re-argued:** this suppresses the *whole* email, so **1,383 of 1,663 subscribed
-members receive nothing**, including Upcoming Events, the videos and loothprint, and the
-`sponsor-post` surface the plugin supports. It changes what the weekly digest *is*, not just who it
-greets. Built as ruled; keeper has the numbers.
+**Still flagged, not re-argued:** this suppresses the *whole* email, so most of the list receives
+nothing, including Upcoming Events, the videos and loothprint, and the `sponsor-post` surface the
+plugin supports. It changes what the weekly digest *is*, not just who it greets. Built as ruled;
+keeper has the numbers.
+
+### 🔴 5.1 THE FILTER HAS A VICTIM CLASS I NEVER MEASURED: 195 NON-MEMBERS. **MERGE BLOCKER.**
+
+**Found 2026-07-30 while scoping the public signup page, which is how it surfaced at all: the signup
+page recruits into a list this filter can never pass.**
+
+**THE DIGEST'S REAL AUDIENCE IS 1,858, NOT 1,663.** The live campaign proves it — `wp_fc_campaign_emails`
+for campaign **379** (*Weekly Digest — July 27, 2026*) holds **1,858 rows**, and the arithmetic is exact:
+
+| | |
+|---|---|
+| List 3 *Weekly News Letter*, `subscribed` | **1,663** |
+| List 7 *Non Member Weekly Email Subscriber*, **not also on list 3** | **+ 195** |
+| **= campaign 379's actual recipients** | **1,858** ✓ |
+
+> ⚠️ **I CORRECTED THIS FIGURE THE WRONG WAY EARLIER TODAY AND AM REVERTING MYSELF.** This document
+> originally said 1,858; this morning I "fixed" it to 1,663 on the grounds that 1,663 was the measured
+> subscriber count. **1,663 was the measurement of the wrong question** — it counts list 3 only, and
+> the digest has always gone to list 3 **and list 7**. The original figure was right and my correction
+> introduced the error. A number that agrees with one query is not thereby correct; the campaign's own
+> recipient rows are the authority, and I did not consult them until today.
+
+**WHY THIS BLOCKS THE MERGE.** Two independent faults, either sufficient on its own:
+
+1. **The plugin never resolves list 7 at all.** `class-lg-wd-sender.php:107` resolves
+   `getSubscriberIdsBySegmentSettings( $subscriber_settings )`, and `$subscriber_settings` is built at
+   :49-54 from `$settings['fcrm_list_id']` — **one** list, and live's option is integer `3`. The live
+   campaigns carry `[{list:3},{list:7}]`, so **that second list was added outside the plugin** (the
+   FluentCRM UI). My filter therefore runs over list 3 only and the 195 are invisible to it.
+2. **Even if they were resolved, Rule 5 drops every one of them — by design, in my own comment.**
+   `class-lg-wd-recap-source.php:228-231`: *"A subscriber with no WP account has no bell rows and no
+   DMs by definition. Nothing can be waiting on them, so they are dropped."* Measured on live: of the
+   **204** `subscribed` list-7 people, **188 have no `wp_users` row at all.** They are non-members.
+   **A non-member can never have a to-do item, so `recipients_with_something_waiting()` must return
+   zero for them forever.** It is not a bug in the filter; it is the filter working.
+
+**So shipping this branch as-is removes 195 real people from the weekly digest** — silently, with no
+bounce and no error, and they are the only cohort who subscribed *purely for the content*.
+
+**THE DECISION IS IAN'S AND IT IS NOT THE ONE HE HAS ALREADY RULED.** Rule 5 was ruled about
+**members** with an empty to-do list. Nobody asked whether it should apply to **non-members who have
+no to-do list by construction**. The two readings give opposite answers:
+
+| Reading | Consequence |
+|---|---|
+| Rule 5 applies to everyone | The 195 never hear from us again. The public signup page becomes a form that subscribes people to silence. |
+| **Rule 5 governs the RECAP SECTION's audience, not the digest's** | Non-members keep receiving Upcoming Events / videos / loothprint with **no recap section** — which is what they signed up for, and what they got on 27 July. |
+
+**I recommend the second**, and it costs one condition: *suppress only subscribers who COULD have had
+a recap* — i.e. apply the to-do test to bridged members, and leave a non-member's digest alone. That
+also makes the signup page honest. **Not built; awaiting his word, because it narrows a ruling.**
 
 ### Rule 6 — fresh items NAMED, stale items COUNTED (Ian, 2026-07-28)
 
