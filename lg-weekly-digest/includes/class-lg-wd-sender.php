@@ -153,9 +153,21 @@ class LG_WD_Sender_FluentCRM implements LG_WD_Sender_Interface {
         // SCOPE WORTH SEEING, because it is larger than the recap: this suppresses
         // the WHOLE email, including the curated sections (Upcoming Events, new
         // videos, loothprint) that have nothing to do with the member's to-do list.
-        // Measured on live 2026-07-28: 96 of 1,663 subscribed list-3 members have an
-        // actionable item this week, so ~94% of the list would receive no digest at
-        // all. That is what the ruling says; it is flagged to keeper with the numbers
+        // RE-MEASURED ON LIVE 2026-07-30, and the earlier figure here was WRONG in a
+        // way worth naming: it predated account-less subscribers being kept.
+        //
+        //   recipient set (lists 3 + 7, subscribed)   1,859
+        //     account-less — ALWAYS KEPT                314
+        //     members — subject to Rule 5             1,545
+        //       with something waiting                   159
+        //   RECEIVES the next send                       473
+        //   RECEIVES NOTHING                           1,386   (74.6%)
+        //
+        // The old comment said "96 of 1,663, ~94% get nothing". Both numbers came from
+        // before the account-less branch below, which keeps all 314 unconditionally, so
+        // every pre-07-30 figure UNDERSTATES who still gets mail. Do not quote them.
+        //
+        // That is what the ruling says; it is flagged to keeper with the numbers
         // because it changes what the weekly digest IS, not just who it greets.
         if ( class_exists( 'LG_WD_Recap_Source' ) ) {
             $before         = count( $subscriber_ids );
