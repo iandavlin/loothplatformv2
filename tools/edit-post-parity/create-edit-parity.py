@@ -110,6 +110,10 @@ async def viewport(metrics, ua, label, create_sel, edit_sel):
     tab, ws, s = await fresh(metrics, ua, f"https://{HOST}/hub/")
     try:
         await s.wait_for("typeof window.lgOpenComposer === 'function'")
+        # Wait for the control itself. The phone's bottom nav is BUILT by bottom-nav.js
+        # after load, so .lt-post does not exist at document-complete; clicking then
+        # missed it in 1 run of 3 and reported the create door as absent.
+        await s.wait_for("!!document.querySelector(%s)" % json.dumps(create_sel), tries=120)
         tapped = await s.ev("(function(){var b=document.querySelector(%s);"
                             "if(!b)return false;b.click();return true;})()" % json.dumps(create_sel))
         check(f"CREATE control exists and is tappable ({create_sel})", tapped is True)
