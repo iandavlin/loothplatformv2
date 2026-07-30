@@ -495,7 +495,18 @@
     // Instagram-style SAVE bookmark (Buck 2026-06-08), right-aligned. Persists to the
     // ACCOUNT via the CANONICAL archive-poc save API (discovery.saved_posts) so mobile
     // + desktop share ONE store — wired per the coordinator's contract (b820532).
-    if (!row.querySelector('.lg-act-save')) {
+    // ⚠️ NOT when the card carries the CONSOLIDATED follow control (thread-follow §15
+    // variant A, Ian 2026-07-30: "I like variant A because it gets the card controls
+    // down a little bit"). In A, Save lives INSIDE the follow modal, so appending it
+    // here too would put TWO save controls on one card — and they do not paint each
+    // other: this one tracks lgSavedSet, the modal's .fc-save tracks forums.js's own
+    // hydration. Saving from the modal would leave this star dark, which is the "UI
+    // lies" class (§8.1.3) rather than a cosmetic duplicate.
+    //
+    // Deliberately narrow, like the §14 long-press bail: Buck's save behaviour is
+    // untouched on every card that does NOT have the consolidated control, which is
+    // every non-topic card. Remove this guard and the duplicate comes back.
+    if (!row.querySelector('.lg-act-save') && !row.querySelector('[data-follow-open]')) {
       var sv = document.createElement('span');
       sv.className = 'lg-act lg-act-save'; sv.setAttribute('role', 'button'); sv.setAttribute('tabindex', '0');
       sv.setAttribute('aria-label', 'Save'); sv.innerHTML = ICO_SAVE;

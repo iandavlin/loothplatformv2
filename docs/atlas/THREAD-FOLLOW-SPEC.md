@@ -1757,3 +1757,125 @@ for anyone who greps the wrong tree. I walked into it for one step; the fix was 
 `server_name` includes which strangler snippet.
 
 *§16 written 2026-07-30 from measurement on dev2 and read-only queries on live.*
+
+---
+
+## 17. VARIANT A, BUILT — the consolidated control, the modal, and what is deliberately dark
+
+**Ian, 2026-07-30, verbatim (keeper-relayed):** *"I like variant A because it gets the
+card controls down a little bit."*
+
+So §15.1's table resolves to **A**: the feed card's row is **React · replies · Share ·
+Follow** (4), and **Notifications, Emails, Frequency and Save all move behind one
+trigger**. §15's recommendation was B; Ian picked A on the row-width argument, which is
+the reason §15.1 itself listed for A ("the only version that reaches four controls").
+Recorded and built as chosen.
+
+### 17.1 The mock is now IN THE REPO — and it was one reboot from gone
+
+The artifact the decision rests on was hand-authored straight into the dev webroot and
+tracked by **nothing** — `git log --all` found it in neither the monorepo nor
+`~/projects`. It is now `footer-mockups/threadfollow-consolidate/index.html`, committed
+byte-identical (`cmp`-verified) and deliberately un-annotated: the file is evidence of
+what Ian saw, not a place to write down what he decided.
+
+⚠️ **Deploy coupling, not yet done.** The published path is still the hand-authored
+copy. `~/projects/footer-mockups/threadfollow-consolidate` can only become a symlink
+into `~/loothplatformv2-clean` **after this branch merges** — the target does not exist
+on main yet, so flipping it now would dangle the link and 404 the URL Ian is deciding
+from. This joins the mu-plugin and webroot symlink couplings a plain `git pull` does not
+handle.
+
+### 17.2 What was built
+
+| piece | where | note |
+|---|---|---|
+| `feed_follow_control()` | `_reply-render.php` | the labelled bell; `[data-follow-open]`, **not** `[data-follow]` |
+| `paintControl()` | `forums.js` | aggregate state, driven from the **same `paint()`** as the toggles |
+| the settings modal | `forums.js` | ONE instance, retargeted per topic |
+| `.fc-follow` + `.lg-fm__*` | `forums.css` | the mock's values on real tokens |
+| Save de-duplication | `hub-polish.js` | narrow guard, see 17.4 |
+
+**The modal's rows are the REAL controls, not copies.** Notifications and Emails are
+genuine `[data-follow]` buttons; Save is a genuine `.fc-save`. So all three ride the
+existing delegates, the existing batch hydration, the existing optimistic-flip-and-revert
+— and the §14 long-press fix with them. Reimplementing them would have been the third
+implementation of a bit §0 ruling 8 says has exactly one.
+
+**§15.2 is honoured, not eroded.** The control is a labelled bell carrying its own state:
+lit orange (`--lg-follow-on`) whenever either bit is on, a ✉ badge when emails
+specifically are on, label flipping to "Following". A member still reads a thread's state
+off the feed without opening anything. **It is not a ⋯ menu and must not become one** —
+that ruling has now been made three times.
+
+### 17.3 ⚠️ FREQUENCY IS BUILT AND SWITCHED OFF — `FREQ_ENABLED = false`
+
+The row is written, styled and data-driven, and it **does not ship**. §15.4's rule is
+explicit: *do not ship a cadence control that silently does nothing.* There is no sender —
+§15.5 established `lg-weekly-digest` is an editorial broadcast that resolves its audience
+by CRM tag and has no notion of who follows thread X, so of Off/Instant/Hourly/Daily/Weekly
+**only Instant is deliverable today**. Two questions are also still open with Ian: whether
+"Off" stays in the list (§15.3), and whether cadence is per-thread at all (§15.5 argues it
+should be ONE account-level preference this modal *shows* rather than owns).
+
+The option list is therefore **not hardened** — it is an array, so enabling it is a
+one-line flag flip *after* those answers land, and nobody has to first think about the
+list under time pressure.
+
+### 17.4 The Save duplicate that would have been a lie, caught before it shipped
+
+`hub-polish.js` appends its own `.lg-act-save` to every mobile card. With Save also in the
+modal that is **two save controls on one card, and they do not paint each other** — the
+row's tracks `lgSavedSet`, the modal's `.fc-save` tracks forums.js's hydration. Saving from
+the modal would have left the row's star dark: the §8.1.3 "UI lies" class, not a cosmetic
+duplicate. Guarded narrowly — `hub-polish.js` skips its append only when the card carries
+`[data-follow-open]`, so Buck's save behaviour is untouched on every card that does not have
+the consolidated control.
+
+### 17.5 The mobile-hide rule I nearly re-broke
+
+`feed_follow_control()` emits **two** `.fc-follow` — one into `.fc-actions` (desktop), one
+into `.lg-card-actions` (mobile) — exactly as the pair did. The first draft shipped without
+a mobile-first hide for the desktop copy, which is **precisely the defect Ian caught on his
+phone** ("two empty black squares below the action row", `forums.css:674-688`): at ≤640 the
+desktop copy falls through to native `<button>` chrome. Caught by re-reading the rule that
+documents the original, not by testing. `.feed-page .fc-actions > .fc-follow {display:none}`
+at all widths, re-shown at ≥641, same child combinator and same reason as the pair's.
+
+**This is the third time this exact rule has been needed** (`.fc-share`, the 🔔/✉ pair, now
+`.fc-follow`). Any new control emitted into both `.fc-actions` and `.lg-card-actions` needs
+it. That is a gate's worth of recurrence.
+
+### 17.6 What is proven, and what is NOT
+
+**Proven** — rendered through the exercise harness on this branch, as the real FPM pool users:
+
+```
+/hub/?type=discussions   36 .fc-follow  (18 cards x 2 surfaces)
+                          0 .fc-save    (moved into the modal)
+                          0 [data-follow] inline on cards
+/hub/general/<topic>      2 [data-follow], 1 .fc-save, 0 .fc-follow  (topic page unchanged)
+```
+PHP lints clean, both JS files pass `node --check`, `forums.css` braces balance.
+
+**NOT proven, and this is the honest limit:** the modal has never been opened in a browser.
+Nothing here demonstrates that it paints, that the switches flip, that Save hydrates for the
+right topic, that focus returns on close, or that Escape works. There is no jsdom on this box
+and the browser seat was held by another lane throughout. `tools/gates/follow-visible-gate.py`
+is written for exactly this and needs updating for the new control before it can be believed.
+**A structural check is not a paint check** — that distinction is the whole subject of §16.
+
+### 17.7 Deliberately NOT done — the other three surfaces
+
+The consolidated control is on the **feed card only** (desktop + mobile). The standalone
+topic page, the mobile reply sheet and the desktop `lg-dmodal` header still carry the
+inline 🔔/✉ pair, unchanged and working.
+
+That is a real inconsistency against §0 ruling 8, and it is flagged rather than silently
+resolved: Ian's reason was *"it gets the card controls down"*, the mock he approved shows a
+**card**, and those other surfaces are not width-constrained the way the card is. Switching
+them would change surfaces he has not seen. **Open for Ian:** does the consolidated control
+replace the pair everywhere, or is it the card's answer to a card's problem?
+
+*§17 written 2026-07-30. Every count above came from the harness or a linter; every claim
+about the browser is marked unproven because none was made in one.*
