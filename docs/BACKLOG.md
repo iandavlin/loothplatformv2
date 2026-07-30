@@ -3,6 +3,17 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-30 — BUG: a fresh reply is pre-populated with the LAST reply's data (Ian)
+
+Ian 7/30: starting a NEW reply opens the composer already filled with the
+previous reply's content. The composer isn't clearing its state between uses —
+stale body/photos/fields carry over. Real member-facing bug: risks posting the
+wrong or duplicated content. Likely the reused composer (openComposerSheet) not
+reset on open for a fresh reply (vs edit, which SHOULD prefill). Fix: on open-
+for-new-reply, hard-reset all fields; only prefill when opening in edit mode.
+NOTE for the edit-post-parity/composer lane: this is the same composer you're
+working — the reset-vs-prefill distinction matters (new = empty, edit = filled).
+
 ## 2026-07-30 — Advanced search: dynamic facet narrowing (Ian)
 
 Ian 7/30: as options are picked in advanced search, REDUCE the remaining
