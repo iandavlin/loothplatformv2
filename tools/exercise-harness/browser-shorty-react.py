@@ -29,6 +29,11 @@ PT   = "shorty"
 
 MODE = sys.argv[1] if len(sys.argv) > 1 else "red"
 WANT_SLUG = sys.argv[2] if len(sys.argv) > 2 else "wow"
+# Viewport. Desktop is the default because at phone widths the dock sits inside
+# the fixed tabbar's band on this page (see click()); that is a separate issue
+# from the 400 under test, and it is measured and reported, not silently dodged.
+VIEW = sys.argv[3] if len(sys.argv) > 3 else "desktop"
+VW, VH, VM = (390, 844, True) if VIEW == "mobile" else (1280, 900, False)
 
 # slug -> the button's title, from standalone/render.php:670-674. Kept here
 # because the option buttons expose no data-slug to select on.
@@ -55,8 +60,10 @@ def check(label, got, want):
     return ok
 
 
-def http(p):
-    return json.load(urllib.request.urlopen(CDP + p))
+def http(p, method="GET"):
+    # Chrome >=111 requires PUT on /json/new (GET returns 405 Method Not Allowed).
+    req = urllib.request.Request(CDP + p, method=method)
+    return json.load(urllib.request.urlopen(req))
 
 
 def db_rows():
@@ -110,34 +117,61 @@ class Page:
         return r["result"].get("value")
 
     async def click(self, sel, nth=0):
-        """A REAL mouse click at the element's own centre -- not el.click()."""
-        box = await self.ev(f"""(()=>{{
-            const e=[...document.querySelectorAll({json.dumps(sel)})][{nth}];
-            if(!e) return null;
-            e.scrollIntoView({{block:'center'}});
-            const r=e.getBoundingClientRect();
-            if(!r.width||!r.height) return null;
-            return {{x:r.x+r.width/2, y:r.y+r.height/2}};}})()""")
-        if not box:
-            return False
-        for t in ("mousePressed", "mouseReleased"):
-            await self.send("Input.dispatchMouseEvent",
-                            {"type": t, "x": box["x"], "y": box["y"],
-                             "button": "left", "clickCount": 1})
-        return True
+        """A REAL mouse click at a point that genuinely HIT-TESTS to the element.
+
+        el.click() would always 'work' and prove nothing. A blind click at the
+        centre proves the opposite of what it looks like: on this page the dock
+        sits at the very bottom in normal flow, and the fixed NAV#looth-tabbar
+        (bottom-nav.js, injected by pwa.js) covers it at phone widths — the
+        click lands on the tabbar and the picker never opens. So: find a point
+        inside the rect whose elementFromPoint really is our element, scrolling
+        the page up a little if the first sample is occluded. If no such point
+        exists, say so instead of clicking something else.
+        """
+        for attempt in range(4):
+            pt = await self.ev(f"""(()=>{{
+                const e=[...document.querySelectorAll({json.dumps(sel)})][{nth}];
+                if(!e) return null;
+                if(!{attempt}) e.scrollIntoView({{block:'center'}});
+                const r=e.getBoundingClientRect();
+                if(!r.width||!r.height) return null;
+                // sample the centre, then inset points, before giving up
+                const cands=[[.5,.5],[.5,.25],[.25,.5],[.75,.5],[.5,.75]];
+                for(const [fx,fy] of cands){{
+                    const x=r.x+r.width*fx, y=r.y+r.height*fy;
+                    const el=document.elementFromPoint(x,y);
+                    if(el && (el===e || e.contains(el) || el.closest?.({json.dumps(sel)})===e))
+                        return {{x,y,ok:true}};
+                }}
+                const el=document.elementFromPoint(r.x+r.width/2, r.y+r.height/2);
+                return {{x:r.x+r.width/2, y:r.y+r.height/2, ok:false,
+                         blocker: el? el.tagName+(el.id?'#'+el.id:'') : 'none'}};}})()""")
+            if not pt:
+                return False
+            if pt.get("ok"):
+                for t in ("mousePressed", "mouseReleased"):
+                    await self.send("Input.dispatchMouseEvent",
+                                    {"type": t, "x": pt["x"], "y": pt["y"],
+                                     "button": "left", "clickCount": 1})
+                return True
+            # occluded — lift the page out from under the fixed furniture and retry
+            log(f"    (occluded by {pt.get('blocker')}; scrolling up and retrying)")
+            await self.ev("window.scrollBy(0,-140)")
+            await self.pump(0.4)
+        return False
 
 
 async def main():
     global fails
     import websockets
 
-    log(f"=== shorty-react BROWSER LEG — {MODE.upper()} — tapping '{WANT_SLUG}' ===")
+    log(f"=== shorty-react BROWSER LEG — {MODE.upper()} — tapping '{WANT_SLUG}' @ {VIEW} {VW}x{VH} ===")
     log(f"    page  {PAGE}")
     log(f"    store before: {db_rows()}")
 
     # OUR OWN TAB. One engine box-wide: never attach to a tab we did not create,
     # and close it on every exit path.
-    tab = http("/json/new?about:blank")
+    tab = http("/json/new?about:blank", method="PUT")
     tid = tab["id"]
     log(f"    tab   {tid}")
     try:
@@ -148,7 +182,7 @@ async def main():
             await p.send("Page.enable")
             await p.send("Runtime.enable")
             await p.send("Emulation.setDeviceMetricsOverride",
-                         {"width": 390, "height": 844, "deviceScaleFactor": 2, "mobile": True})
+                         {"width": VW, "height": VH, "deviceScaleFactor": 2, "mobile": VM})
 
             await p.send("Page.navigate", {"url": PAGE})
             await p.pump(6)
@@ -207,12 +241,28 @@ async def main():
                 return b? b.innerText.replace(/\\s+/g,' ').trim().slice(0,120) : null;})()""")
             log(f"    strip reads: {shown!r}")
 
-            await p.send("Page.captureScreenshot", {})
-            shot = await p.send("Page.captureScreenshot", {"format": "png"})
             import base64
-            path = f"/tmp/shorty-react-exercise/shot-{MODE}.png"
+            # Full viewport, plus a tight crop of the dock itself — the crop is
+            # what actually shows Ian the before/after. clip is in PAGE
+            # coordinates, not viewport, so the scroll offset has to go back in.
+            shot = await p.send("Page.captureScreenshot", {"format": "png"})
+            path = f"/tmp/shorty-react-exercise/shot-{MODE}-{VIEW}.png"
             open(path, "wb").write(base64.b64decode(shot["data"]))
             log(f"    screenshot {path}")
+
+            clip = await p.ev("""(()=>{const d=document.querySelector('.lg-dock__react')
+                    ||document.querySelector('[data-lg-react]');
+                if(!d) return null; const r=d.getBoundingClientRect();
+                const pad=14;
+                return {x:Math.max(0,r.x+scrollX-pad), y:Math.max(0,r.y+scrollY-pad),
+                        width:r.width+pad*2, height:r.height+pad*2};})()""")
+            if clip:
+                clip["scale"] = 3
+                crop = await p.send("Page.captureScreenshot", {"format": "png", "clip": clip,
+                                                              "captureBeyondViewport": True})
+                cpath = f"/tmp/shorty-react-exercise/dock-{MODE}-{VIEW}.png"
+                open(cpath, "wb").write(base64.b64decode(crop["data"]))
+                log(f"    dock crop  {cpath}")
     finally:
         try:
             urllib.request.urlopen(f"{CDP}/json/close/{tid}").read()
@@ -221,7 +271,7 @@ async def main():
             log(f"    !! could not close tab {tid}: {e}")
 
     log(f"=== {MODE.upper()}: {passes} passed, {fails} failed ===")
-    open(f"/tmp/shorty-react-exercise/browser-{MODE}.log", "w").write("\n".join(out) + "\n")
+    open(f"/tmp/shorty-react-exercise/browser-{MODE}-{VIEW}.log", "w").write("\n".join(out) + "\n")
     sys.exit(1 if fails else 0)
 
 
