@@ -38,6 +38,7 @@ TESTS=(
   verify-recipient-filter-at-scale  # the same filter over the real subscriber set
   verify-per-recipient              # the REAL smart-code callback, one body -> N emails
   verify-missed-exclusions          # edge status, not is_read, decides (needs the PG role)
+  verify-signup-audience            # Ian ruling 6: members TOLD, never silently added; list 3 never written
 )
 
 # RUNNER IS PER-TEST. verify-missed-exclusions talks to Postgres through profile-app's
@@ -61,6 +62,7 @@ declare -A SENTINEL=(
   [verify-recipient-filter-at-scale]='RECIPIENT FILTER HOLDS AT SCALE'
   [verify-per-recipient]='PER-RECIPIENT SEAM HOLDS'
   [verify-missed-exclusions]='EDGE STATUS IS THE AUTHORITY'
+  [verify-signup-audience]='SIGNUP AUDIENCE HOLDS'
 )
 
 green=0; red=0; dead=0
