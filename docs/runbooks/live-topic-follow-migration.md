@@ -1,36 +1,50 @@
-# LIVE: create `forums.topic_follow` — the migration the follow feature cannot ship without
+# LIVE: the TWO migrations the follow feature cannot ship without
 
 **Rule (Ian, 2026-07-30): "if you are creating a symlink add to runbook and to repo."**
 The same principle applies to a migration: the runbook is where the knowledge lives, the
 repo is where the artifact lives. The artifact is **`cutover/topic-follow-migrate.sh`**.
 
 **Ian's ordering, verbatim 2026-07-30:** *"Get it working on dev2 for my approval and then
-set up a runbook that fixes it."* This runbook is step 2. **It does not run until he has
-seen the feature working on dev2 and approved it.**
+set up a runbook that fixes it."* Working on dev2 came first; this is the runbook.
+**Migration FIRST, then deploy, in one window** — Ian's call, taken over deploying now and
+migrating after.
 
 **Live is Ian's hands.** Nothing here has been run on live. This lane holds read-only
 access (`ssh live-ro`) and used it only for the `SELECT`s quoted below.
 
 ---
 
-## ⚠️ WHY THIS IS NOT OPTIONAL — the deploy hold was protecting a real outage
+## ⚠️ WHY THIS IS NOT OPTIONAL — and it is now the CRITICAL PATH, not a follow-up
 
-This is bigger than a missing table. **Without `forums.topic_follow` on live, the follow
-feature is not one merge from shipping — it is one merge from a member-facing outage:**
+**The follow feature does NOT wait for the consolidation modal. It ships on the next
+`lg-deploy` regardless.** Four thread-follow merges are already on `main` and inside the
+168-commit deploy window (`c57b70f..510ccd8`):
 
-- **Read path** — `bb-mirror/api/v0/follow.php:93` sits inside a `try/catch` at `:96` that
-  logs and swallows. Every 🔔 and ✉ would render **permanently OFF for everyone**, silently.
-- **Write path** — `:195`/`:198` is not individually guarded; it falls to the outer `catch`
-  at `:218` and returns **HTTP 500 on every single click**.
+```
+e84dae7  discussion follow toggles
+2c0a4c0  long-press gate fix (bell/envelope persist)
+46d0575  desktop topic-page toggles + orange ON state
+7eb4685  desktop feed-card action row
+```
+
+So the 🔔/✉ controls become **newly visible to members on this same deploy**. Without the
+two migrations below, on that same deploy:
+
+- **The toggle** — `follow.php:93`'s read sits inside a `try/catch` at `:96` that logs and
+  swallows, so every 🔔 and ✉ renders **permanently OFF for everyone**. The write at
+  `:195`/`:198` falls to the outer `catch` at `:218` and returns **HTTP 500 on every click**.
+- **The bell** — leg 4 (`lg-shared/notify-bridge.php`) raises notification type
+  `forum.followed_topic`. Live's `notifications_type_check` **does not list it**, so the
+  INSERT violates the CHECK, and `internal-notify.php:106-108` catches it and returns
+  **HTTP 500 `db_error`**. A member would follow a thread successfully and then
+  never be told anything.
 
 A control that reads OFF, accepts the click, and never persists is exactly the "the UI
 lies" class Ian ruled against (SPEC §8.1.3) and that §14 was spent eliminating.
 
-So the deploy hold Ian has been carrying was **not** delaying a finished feature. It was
-protecting him from shipping a broken one. That is the reason this migration is a
-precondition of the deploy and not a follow-up to it.
-
----
+**Ian's decision, 2026-07-30: migration FIRST, then deploy, in one window** — chosen over
+deploying now and migrating after. The deploy hold he had been carrying was not delaying a
+finished feature; it was protecting him from shipping a broken one.
 
 ## ⚠️ AND THE TABLE IS NOT THE ONE THE ORIGINAL REPORT NAMED
 
@@ -67,30 +81,83 @@ as `postgres` would create a table the application's own role may not be able to
 
 ---
 
-## WHAT IT TOUCHES, AND WHAT IT CANNOT UNDO
+## IS THE TABLE ALONE SUFFICIENT? NO — there are TWO migrations. Full delta below.
 
-**Touches — all three are additive:**
-1. creates `forums.topic_follow` (empty: `user_id`, `topic_id`, `created_at`, PK on
-   `(user_id, topic_id)`);
-2. creates index `idx_topic_follow_topic` on `(topic_id)`;
-3. grants `SELECT` on it to `looth_ro`.
+The `forums` schema on dev2 and live was enumerated object-by-object (`pg_tables`,
+`information_schema.columns`, `pg_indexes`, `pg_constraint`, `pg_trigger`, `pg_proc`,
+`pg_type`, `information_schema.sequences`, raw `pg_class.relacl`, `pg_default_acl`).
+**This is the complete delta, not the one table anyone noticed.**
 
-**Does NOT touch:** any existing table, `forum_subscription`, the WordPress MySQL side, any
-row of member data. It drops nothing and alters nothing.
+| object | dev2 | live | needed for the feature? |
+|---|---|---|---|
+| `forums.topic_follow` table | present | **MISSING** | **YES — step 1** |
+| its PK `(user_id, topic_id)` | present | missing | yes, created with the table |
+| `idx_topic_follow_topic` | present | missing | yes, step 1 creates it |
+| `GRANT SELECT … TO looth_ro` | present | missing | yes, step 1 grants it |
+| `looth-dev` = `arwd` on the new table | present | **arrives automatically** | yes — see below |
+| `profile-app` = `r` on the new table | present | **arrives automatically** | yes — see below |
+| `profile_app.notifications_type_check` accepts `forum.followed_topic` | yes | **NO** | **YES — step 2** |
+| enum `subscription_target_kind` | present | present | n/a, unchanged |
+| enum `attachment_parent_kind` | present | present | n/a, unchanged |
+| sequences | `attachment_id_seq` only | same | **none needed** — `topic_follow` has no serial |
+| foreign keys on `topic_follow` | none, deliberately | n/a | none — a follow may outlive a sync gap (`schema.pg.sql:251`) |
+| `subscription_purge_for_target()` + its 2 triggers | present | **missing** | **no — hygiene only, see below** |
 
-**⚠️ WHAT IT CANNOT UNDO.** The migration itself is fully reversible **only while the table
-is still empty**. The moment a member clicks a bell on live, the rows are real follow state
-with no other home — the ✉ bit lives in MySQL, the 🔔 bit lives *only* here. After that,
-`DROP TABLE` silently discards live member preferences and there is no second copy to
-restore from. **Rollback is a same-window action, not a next-day one.**
+### The GRANT question, answered properly — because getting it wrong fails silently
 
-**There are no ids, slugs or interpolated values anywhere in this migration.** The DDL is
-fixed text. That is deliberate — the failure this repo has already paid for was an empty
-variable inside a chained `$(...)` in a paste-block, which re-baked an entire catalog on
-2026-07-30 and held Ian's terminal. Nothing here is substituted, so nothing can come out
-empty.
+**`looth-dev`'s write access is NOT granted by this migration and does not need to be.**
+It arrives from the schema's DEFAULT PRIVILEGES, which are **byte-identical on both boxes**
+(`pg_default_acl`, verified 2026-07-30):
 
----
+```
+bb-mirror | tables    | "looth-dev"=arwd/"bb-mirror"  "profile-app"=r/"bb-mirror"
+bb-mirror | sequences | "looth-dev"=rwU/"bb-mirror"
+postgres  | tables    | looth_ro=r/postgres
+```
+
+So a table created **by `bb-mirror`** automatically grants `looth-dev` INSERT/SELECT/
+UPDATE/DELETE — which is precisely what `follow.php` needs to write. `looth_ro` does **not**
+arrive that way (that default belongs to role `postgres`), which is why step 1 grants it
+explicitly, exactly as `forum_subscription` has it.
+
+> ### ⚠️ A TRAP THAT ALMOST PUT A PHANTOM IN THIS RUNBOOK
+> Querying `information_schema.role_table_grants` **as `looth_ro`** returns only the grants
+> visible to that role. Compared naively against dev2 (queried as `bb-mirror`) it reported
+> **127 missing GRANTs on live** — every table, every role. **All of it was an artifact of
+> the view filtering by current user.** The raw `pg_class.relacl` shows the two boxes'
+> ACLs are *identical* apart from `topic_follow` itself and a dev2-only `membership` role.
+> A tool that sanitises on read cannot audit the store — and `information_schema` is such
+> a tool. Audit ACLs with `relacl`.
+
+**`membership` is a dev2-ONLY role.** It does not exist on live at all (`pg_roles` checked
+on both). Its absence from the post-migration grant list is **correct** and is not a
+failure.
+
+### What it touches
+
+**Step 1 (`looth`, as `bb-mirror`)** — creates one empty table, one index, one grant.
+**Step 2 (`profile_app`, as `profile-app`)** — DROP-then-ADD of one CHECK constraint,
+widening the accepted `type` vocabulary by exactly one value.
+
+**Does NOT touch:** any existing row of member data, `forum_subscription`, the WordPress
+MySQL side, or any other constraint. Step 2 rewrites a constraint definition but changes no
+data and only *widens* what is accepted, so nothing already stored can become invalid.
+
+### ⚠️ WHAT CANNOT BE UNDONE
+
+Step 1 is fully reversible **only while the table is still empty**. The moment a member
+clicks a bell on live, those rows are real follow state with no other home — the ✉ bit
+lives in MySQL, the 🔔 bit lives *only* here. After that, `DROP TABLE` silently discards
+live member preferences with no second copy. **Rollback is a same-window action.**
+
+Step 2 is reversible at any time (narrowing the constraint back), **but** narrowing it while
+`forum.followed_topic` rows exist will fail the constraint check — delete those rows first,
+which is what the DOWN block in `profile-app/sql/2026-07-28-followed-topic.sql` does.
+
+**There are no ids, slugs or interpolated values anywhere in either step.** Both are fixed
+text. That is deliberate — the failure this repo has already paid for was an empty variable
+inside a chained `$(...)` in a paste-block, which re-baked an entire catalog on 2026-07-30
+and held Ian's terminal. Nothing here is substituted, so nothing can come out empty.
 
 ## RUN IT — dry run first, always
 
@@ -168,6 +235,16 @@ looth-dev:INSERT,looth-dev:SELECT,looth-dev:UPDATE,looth-dev:DELETE,profile-app:
 > not write** — every toggle would appear to work and then revert. Report it; do not paper
 > over it with an ad-hoc grant without finding out why the default did not apply.
 
+### STEP 2's verification — a different database, a different role
+
+```bash
+sudo -u profile-app psql -d profile_app -tAc \
+  "select pg_get_constraintdef(oid) from pg_constraint where conname='notifications_type_check';"
+```
+
+**Must contain `forum.followed_topic`.** If it does not, the toggle will work and the bell
+will never arrive — the two failures are independent and look nothing alike from the UI.
+
 ### Then smoke it through the real UI, not just the table
 
 Creating the table proves the store exists, not that the feature works. On live, as a
@@ -181,6 +258,95 @@ logged-in member, on a real discussion:
 Step 3 is the one that matters: an optimistic UI that flips and silently reverts looks
 identical to a working one until the page is reloaded, and only the store can tell the two
 apart.
+
+**Then prove the BELL, which step 1 alone does not give you.** With 🔔 on for a thread you
+do not otherwise participate in, have someone reply to it, and confirm a notification row
+appears:
+
+```bash
+sudo -u profile-app psql -d profile_app -tAc \
+  "select type, created_at from notifications
+    where type='forum.followed_topic' order by created_at desc limit 5;"
+```
+
+Zero rows after a reply means step 2 did not take, or leg 4 is not reaching the endpoint.
+Check `error_log` for `[internal-notify] forum.followed_topic … failed`.
+
+---
+
+## ⚠️ THE MIGRATION IS NOT THE ONLY UNSTAGED LIVE STEP — read this before the window
+
+Asked to say whether anything else in the 168-commit window (`c57b70f..510ccd8`) needs a
+live step nobody staged. **It does. Three of them are this lane's, and one of them makes the
+migration pointless on its own.**
+
+### 1. nginx must be reloaded, or `/bb-mirror-api/v0/follow` DOES NOT EXIST on live
+
+`platform/nginx/strangler-bb-mirror.conf` gained the follow endpoint's `location` block in
+`a424c70`. **Live's running nginx has ZERO occurrences of `bb-mirror-api/v0/follow`**
+(grepped read-only on the box, 2026-07-30).
+
+So: create both database objects perfectly and the toggle still **404s**, because nothing
+routes the request. The conf file is symlinked out of the serving checkout, so `git pull`
+deploys the *file* — but **the running workers keep the old config until reloaded.** A
+disclosure fix once sat inert on dev2 for three hours this exact way.
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+# verify the WORKERS restarted, not the master:
+ps -eo lstart,cmd | grep "[n]ginx: worker"
+```
+
+### 2. Three new mu-plugins need symlinks — two of them are this lane's
+
+`platform/mu-plugins/` symlinks each plugin **individually** (35 as of 2026-07-30), and the
+symlink SET is not in the repo, so a pull alone leaves a new plugin dark:
+
+| plugin | lane | what breaks without it |
+|---|---|---|
+| `lg-discussion-unsub.php` | **thread-follow** | the per-discussion unsubscribe link in every reply email 404s — members get a mail they cannot opt out of |
+| `lg-discussion-group-gate.php` | **thread-follow** | Ian's 2026-07-28 ruling is unenforced — LAYOUT groups start producing notifications and emails |
+| `lg-author-socials.php` | profile-social-links | already staged; see `docs/runbooks/deploy-symlink-couplings.md` |
+
+Both thread-follow plugins are self-contained: `lg-discussion-group-gate` registers no
+routes at all, and `lg-discussion-unsub` renders on `template_redirect` rather than a
+rewrite rule — **so neither needs a permalink flush or an nginx route.** The symlink is the
+whole step.
+
+```bash
+REPO=/home/ubuntu/loothplatformv2-clean WP=<live docroot> \
+  bash cutover/symlink-farm.sh                 # DRY RUN, all of them
+REPO=/home/ubuntu/loothplatformv2-clean WP=<live docroot> \
+  bash cutover/symlink-farm.sh --apply
+```
+
+### 3. The other two nginx confs in the window are not this lane's
+
+`strangler-profile-app.conf` (profile-social-links, already staged) and
+`strangler-archive-poc-buck.conf` (archive-poc). Both are covered by the same single
+`nginx -t && reload` in step 1 — **one reload serves all three**, which is the point of
+doing this in one window.
+
+### The order Ian should run it in
+
+```
+1. migrations       bash cutover/topic-follow-migrate.sh          (dry run)
+                    bash cutover/topic-follow-migrate.sh --apply  (both steps)
+2. deploy           lg-deploy
+3. symlinks         cutover/symlink-farm.sh --apply    (3 new mu-plugins)
+4. nginx            sudo nginx -t && sudo systemctl reload nginx
+5. verify           this runbook's verification section, then the UI smoke
+```
+
+**Migrations first is Ian's call and it is also the safe order here:** the objects exist
+before any code can reach them, so there is no window in which the feature is live and the
+store is not. The reverse order gives every member a 500 for however long step 1 takes.
+
+**I have NOT audited the other lanes' 168 commits for steps beyond the files above.** What
+is listed here came from diffing the window for new mu-plugins, new webroot files, changed
+nginx confs and changed `.sql` files. That catches the coupling classes we know about; it
+would not catch a lane that needs, say, a one-off backfill script run. **Each lane should
+confirm its own.**
 
 ---
 
