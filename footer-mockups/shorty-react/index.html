@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reactions on shorty pages — the 400, and the fix</title>
+<style>
+:root{
+  --bg:#f5f3ec; --card:#fff; --ink:#1a1d1a; --muted:#5b5f58; --line:#e3e0d8;
+  --sage:#87986a; --sage-d:#6b7c52; --tint:#eef2e3; --bad:#b3261e; --good:#4a7c3f;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#15171a; --card:#1b1e21; --ink:#e5e7e1; --muted:#9aa097; --line:#2c312d;
+         --sage:#9cb37d; --sage-d:#6b7c52; --tint:#243024; --bad:#f2b8b5; --good:#9cb37d; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  padding:20px 16px 64px;-webkit-text-size-adjust:100%}
+.wrap{max-width:900px;margin:0 auto}
+h1{font-size:1.5rem;line-height:1.25;margin:0 0 6px}
+h2{font-size:1.075rem;margin:34px 0 10px;padding-top:16px;border-top:1px solid var(--line)}
+p{margin:0 0 12px}
+.lede{color:var(--muted);margin-bottom:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:14px 0}
+.tag{display:inline-block;background:var(--tint);color:var(--sage-d);border-radius:999px;
+  padding:4px 11px;font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+@media (prefers-color-scheme:dark){.tag{color:var(--sage)}}
+.bad{color:var(--bad);font-weight:700}
+.good{color:var(--good);font-weight:700}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86em}
+.quote{background:var(--bg);border-left:3px solid var(--line);border-radius:0 8px 8px 0;
+  padding:10px 12px;margin:10px 0;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+td.y{color:var(--good);font-weight:700;white-space:nowrap}
+td.n{color:var(--bad);font-weight:700;white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+ul.tight{margin:0 0 12px;padding-left:20px} ul.tight li{margin:0 0 6px}
+.pair{display:flex;gap:16px;flex-wrap:wrap;margin:14px 0}
+.pane{flex:1 1 330px;min-width:270px;border:1px solid var(--line);border-radius:12px;
+  overflow:hidden;background:var(--card)}
+.pane__h{padding:9px 13px;font-size:.74rem;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase;color:#fff}
+.pane__h.b{background:var(--bad)} .pane__h.a{background:var(--good)}
+.pane__b{padding:13px}
+.shot{flex:1 1 330px;min-width:270px}
+.shot img{width:100%;height:auto;display:block;border:1px solid var(--line);
+  border-radius:12px;background:var(--card)}
+.shot__cap{font-size:.76rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin-bottom:7px}
+.shot__cap.b{color:var(--bad)} .shot__cap.a{color:var(--good)}
+.status{font:700 2rem/1.1 ui-monospace,SFMono-Regular,Menlo,monospace;margin:0 0 4px}
+.status.b{color:var(--bad)} .status.a{color:var(--good)}
+.sub{font-size:.82rem;color:var(--muted);margin:0}
+.note{font-size:.86rem;color:var(--muted);border-left:3px solid var(--sage);
+  padding:8px 12px;margin:14px 0;background:var(--card);border-radius:0 8px 8px 0}
+.big{font-size:1.9rem;font-weight:700;line-height:1;color:var(--bad)}
+.big.g{color:var(--good)}
+.stat{display:flex;gap:22px;flex-wrap:wrap;margin:6px 0 2px}
+.stat>div{min-width:120px}
+.stat .k{font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-top:4px}
+</style></head><body><div class="wrap">
+
+<span class="tag">Fixed and proven in a browser — not deployed</span>
+<h1>Tapping a reaction on a <span class="mono">/shorty/</span> page did nothing</h1>
+<p class="lede">Your report, 29 July, from your phone with the console open:
+<span class="mono">POST /archive-api/v0/card-react</span> → <span class="bad">400</span>, twice.
+You were right, and it was never only shorty pages.</p>
+
+<h2>What was wrong</h2>
+<p>The reaction endpoint keeps a list of the post types it will accept. That list was
+written for the <strong>hub feed's</strong> cards. But the standalone page renderer puts a
+react button on <strong>any</strong> page it serves — and tags it with that page's own type.
+So the button was drawn on pages whose type the endpoint had never been told about,
+and every tap was refused.</p>
+
+<div class="card">
+  <p style="margin:0 0 8px"><strong>One line, four surfaces.</strong> The same list broke all of these
+  on live — the button renders, the tap is rejected:</p>
+  <div class="scroll"><table>
+    <tr><th>Page</th><th>Type it sends</th><th>Tap</th><th>Reactions already stored</th></tr>
+    <tr><td><span class="mono">/shorty/…</span></td><td class="mono">shorty</td><td class="n">400</td><td>22 &nbsp;<span style="color:var(--muted)">on 6 posts</span></td></tr>
+    <tr><td><span class="mono">/event/…</span></td><td class="mono">event</td><td class="n">400</td><td>28 &nbsp;<span style="color:var(--muted)">on 9 posts</span></td></tr>
+    <tr><td><span class="mono">/document/…</span></td><td class="mono">document</td><td class="n">400</td><td>15 &nbsp;<span style="color:var(--muted)">on 3 posts</span></td></tr>
+    <tr><td><span class="mono">/sponsors/…</span></td><td class="mono">sponsor-page</td><td class="n">400</td><td>0</td></tr>
+  </table></div>
+</div>
+
+<h2>There was a second half you could not see</h2>
+<p>The same list also guards the <em>read</em> side. So those pages did not just refuse new
+reactions — they showed <strong>no count at all</strong> for the ones already there.</p>
+<div class="card">
+  <div class="stat">
+    <div><div class="big">65</div><div class="k">reactions on live</div></div>
+    <div><div class="big">18</div><div class="k">posts affected</div></div>
+    <div><div class="big g">all of them</div><div class="k">visible again after the fix</div></div>
+  </div>
+  <p class="sub" style="margin-top:12px">Real reactions members had already left, sitting in the
+  database, invisible on the very page they belong to. Nothing is lost — they reappear.</p>
+</div>
+
+<h2>The button itself, before and after</h2>
+<p>These are real taps on the real button on a real dev2 shorty page — the reaction control,
+then the <span style="font-size:1.1em">😮</span> in the picker. Same tap both times. The only
+thing that changes is which version of the endpoint answers it.</p>
+<div class="pair">
+  <div class="shot"><div class="shot__cap b">Before — the tap does nothing</div>
+    <img src="before.png" alt="Reaction button showing a plain smiley and no count" width="547" height="432" loading="lazy">
+    <p class="sub">Still grey, still the neutral face, still no number. The reaction was thrown away.</p></div>
+  <div class="shot"><div class="shot__cap a">After — the tap lands</div>
+    <img src="after.png" alt="Reaction button showing the chosen emoji, highlighted, with a count of 2" width="631" height="432" loading="lazy">
+    <p class="sub">Your reaction is in, and the button lights up. The <strong>2</strong> is your
+    reaction plus the one from April that this page had never shown you.</p></div>
+</div>
+
+<h2>And the request underneath</h2>
+<p>Same account, same post, same emoji:</p>
+<div class="pair">
+  <div class="pane">
+    <div class="pane__h b">Before — what you hit</div>
+    <div class="pane__b">
+      <p class="status b">400</p>
+      <p class="sub"><span class="mono">{"ok":false,"error":"bad_request"}</span></p>
+      <p class="sub" style="margin-top:9px">The tap is thrown away. Nothing is stored,
+      and the strip shows no count.</p>
+    </div>
+  </div>
+  <div class="pane">
+    <div class="pane__h a">After — this branch</div>
+    <div class="pane__b">
+      <p class="status a">200</p>
+      <p class="sub"><span class="mono">{"ok":true,"counts":{"ouch":1,"wow":1}}</span></p>
+      <p class="sub" style="margin-top:9px">The reaction is stored — and the
+      <span class="mono">ouch</span> from April, hidden until now, comes back with it.</p>
+    </div>
+  </div>
+</div>
+<p class="sub">That <span class="mono">ouch</span> is not a test value. It is a real reaction left on
+that post on 26&nbsp;April by another member, which the page has never once displayed.</p>
+
+<div class="note"><strong>To be exact about what has been proven.</strong> Both pictures above are
+real taps in a real browser on dev2, against the real database, and the dev2 endpoint is
+byte-for-byte the file running on live — so what you hit reproduces here exactly. Nine checks
+pass in each state, and each one is confirmed against the database, not just the screen. The one
+thing I cannot claim is a tap on <em>your</em> phone on <em>live</em>: this was dev2, on a
+desktop-width browser, and live is yours to deploy.</div>
+
+<h2>What changed in the code</h2>
+<p>Four names added to one list, plus the matching list on the "who reacted" endpoint so a
+reaction you can leave is also one you can read back. Nothing else — no change to how reactions
+are stored, counted, or notified.</p>
+<div class="quote">const LG_CARD_REACT_TYPES = [ …the hub feed's types… ,
+                              <span class="good">'shorty','event','document','sponsor-page'</span> ];</div>
+<p>And a build check now fails if the renderer ever learns a new page type that the endpoint
+has not been told about — so this cannot come back quietly.</p>
+
+<h2>One thing I noticed but did not touch</h2>
+<p>While testing at phone width on dev2, the react button ended up mostly <strong>underneath the
+bottom tab bar</strong> — about 32 of its 36 pixels, leaving a 4-pixel sliver to hit. That is a
+separate thing from the 400, and it is <em>not</em> confirmed on your phone or on live; you
+clearly did reach the button, since you got the error twice.</p>
+<p><strong>Worth a look next time you are on a shorty page:</strong> scroll to the bottom and see
+whether the 🙂 is awkward to hit. If it is, say so and I will take it as its own job rather than
+bundling a layout change into a one-line fix.</p>
+
+<h2>Where it stands</h2>
+<ul class="tight">
+  <li>Fixed on branch <span class="mono">shorty-react</span>. <strong>Not deployed</strong> — nothing on live has changed yet.</li>
+  <li>All nine build checks pass.</li>
+  <li>Reactions on hub feed <em>cards</em> for shorty posts are a separate question. That is a
+      product call, not a bug, so I have left it alone — tell me if you want it.</li>
+</ul>
+
+</div></body></html>
