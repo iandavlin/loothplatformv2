@@ -319,26 +319,49 @@ def control_topic(exclude):
     return None
 
 
-def follow_js(topic_id, on):
+def control_topics(exclude, n):
+    """N distinct real topics the member does not follow, for the union phase."""
+    r = subprocess.run(
+        ["sudo", "-n", "-u", "membership", "psql", "-d", "looth", "-Atc",
+         "select t.id from forums.topic t join forums.forum f on f.id = t.forum_id "
+         "where t.status = 'publish' and f.visibility = 'public' and t.tier_gate = 'public' "
+         "order by t.last_active_at desc nulls last limit 60;"],
+        capture_output=True, text=True)
+    out = []
+    for line in r.stdout.split():
+        if line.strip().isdigit() and int(line) not in exclude and int(line) not in out:
+            out.append(int(line))
+            if len(out) == n:
+                break
+    return out
+
+
+def follow_js(topic_id, on, channels=("notify", "email")):
     """Drive follow.php from the PAGE's own session — the same contract the UI uses.
 
     Deliberately not a direct DB write: setting up the fixture through a back door
     would let a broken endpoint still produce a green round-trip.
+
+    `channels` exists for the union phase, which needs a topic carrying exactly ONE
+    of the two bits — the whole point being that either bit alone must produce a row.
     """
+    chans = "[" + ",".join("'%s'" % c for c in channels) + "]"
     return """(async () => {
-      const g = await (await fetch('/bb-mirror-api/v0/follow?topics=%d',
+      const g = await (await fetch('/bb-mirror-api/v0/follow?topics=TOPIC',
                                    {credentials:'same-origin'})).json();
       if (!g || !g.authenticated) return 'not-authenticated';
-      for (const ch of ['notify','email']) {
+      for (const ch of CHANS) {
         const r = await fetch('/bb-mirror-api/v0/follow', {
           method:'POST', credentials:'same-origin',
           headers:{'Content-Type':'application/json','X-WP-Nonce':g.nonce},
-          body: JSON.stringify({topic_id:%d, channel:ch, on:%s})});
+          body: JSON.stringify({topic_id:TOPIC, channel:ch, on:ONOFF})});
         const j = await r.json().catch(()=>null);
         if (!j || !j.ok) return 'write-failed:' + ch + ':' + r.status;
       }
       return true;
-    })()""" % (topic_id, topic_id, "true" if on else "false")
+    })()""".replace("TOPIC", str(int(topic_id))) \
+           .replace("CHANS", chans) \
+           .replace("ONOFF", "true" if on else "false")
 
 
 def fetch_status(url, cookies):
@@ -471,7 +494,61 @@ def main():
         s = hit_test(p, "#lg-fol-stopall")
         check("Stop all hittable at 390px", s.get("mine"), True)
 
-        log("\n  [9] unfollow REALLY unfollows — asserted in the stores, not the pixels")
+        log("\n  [9] THE LIST IS THE UNION — either bit alone must produce a row")
+        # THE MOST IMPORTANT ASSERTION IN THIS FILE, and the one the live store
+        # proved rather than a design argument. Between two runs on 2026-07-30 the
+        # acting member went from 1 bell + 11 email to 0 bell + 12 email: the SAME
+        # twelve discussions, differently composed. A page that listed only
+        # forums.topic_follow would have shown twelve rows, then zero, while twelve
+        # discussions carried on emailing him — an empty page that is a lie.
+        #
+        # Phase [1] compares the row set against notify|email, but that passes
+        # TRIVIALLY whenever one store happens to be empty, which is exactly the
+        # state the member is in right now. So this phase MANUFACTURES both halves:
+        # one topic carrying ONLY the bell, one carrying ONLY the envelope, each
+        # written through follow.php, and demands that BOTH appear.
+        p.send("Emulation.setDeviceMetricsOverride",
+               {"width": 1280, "height": 900, "deviceScaleFactor": 2, "mobile": False})
+        pair = control_topics(expect, 2)
+        if len(pair) < 2:
+            log("  (skipped — could not find two unfollowed public topics)")
+        else:
+            bell_only, mail_only = pair
+            log(f"  bell-only topic {bell_only}, email-only topic {mail_only}")
+            try:
+                a = p.ev(follow_js(bell_only, True, ("notify",)))
+                b = p.ev(follow_js(mail_only, True, ("email",)))
+                if a is not True or b is not True:
+                    log(f"  (skipped — could not set up the union fixture: {a!r} / {b!r})")
+                else:
+                    # The fixture is only meaningful if each topic really carries
+                    # ONE bit. Prove that in the stores before trusting the page.
+                    n_ids, e_ids = store_notify_ids(args.uid), store_email_ids(args.uid)
+                    check("bell-only topic is in PG and NOT in MySQL",
+                          (bell_only in n_ids, bell_only in e_ids), (True, False))
+                    check("email-only topic is in MySQL and NOT in PG",
+                          (mail_only in e_ids, mail_only in n_ids), (True, False))
+
+                    if not goto(p, args.url):
+                        cannot_run("the section never hydrated for the union phase")
+                    dom = set(p.ev("""[...document.querySelectorAll(
+                            '#lg-following .lg-manage-sub__fol-row')].map(li=>parseInt(li.dataset.topic,10))"""))
+                    check("a discussion with ONLY the bell is listed", bell_only in dom, True)
+                    check("a discussion with ONLY the email subscription is listed",
+                          mail_only in dom, True)
+                    check("the total counts both",
+                          p.ev("parseInt(document.getElementById('lg-following').dataset.total,10)"),
+                          len(n_ids | e_ids))
+            finally:
+                for t in pair:
+                    if t in store_notify_ids(args.uid) or t in store_email_ids(args.uid):
+                        try: p.ev(follow_js(t, False))
+                        except Exception: pass
+                left = (store_notify_ids(args.uid) | store_email_ids(args.uid)) & set(pair)
+                if left:
+                    log(f"  ⚠ union fixture NOT fully cleaned up, still followed: {sorted(left)}")
+
+        log("\n  [10] unfollow REALLY unfollows — asserted in the stores, not the pixels")
         # An optimistic row that vanishes on click and leaves the store untouched
         # is the single worst failure this feature can have: the member believes
         # they have stopped it, and the email keeps arriving. So the row is removed
@@ -524,7 +601,7 @@ def main():
                     try: p.ev(follow_js(ctl, False))
                     except Exception: pass
 
-        log("\n  [10] nothing here leaks to a signed-out visitor")
+        log("\n  [11] nothing here leaks to a signed-out visitor")
         p.send("Network.clearBrowserCookies")
         host = args.url.split("/")[2].split(":")[0]
         g = [c for c in cookies if c.startswith("loothdev_auth")]
