@@ -11,8 +11,16 @@
 > | **D** | **Fresh items NAMED, stale-unresolved COUNTED** | `rows_from_stale()`, the second register |
 >
 > Axis 1 (read on the website) shipped earlier and survives, narrowed by B. **Axis 2 (already
-> per-event emailed): still do not build** — measured, the surface does not exist; the overlap rate
-> remains **untested, not zero**. Axis 3 is closed by ruling A.
+> per-event emailed): still do not build** — on VOLUME, not on structure; the overlap rate remains
+> **untested, not zero**. Axis 3 is closed by ruling A.
+>
+> ⚠️ **REVISED 2026-07-30 — I retract a claim from the 07-28 revision.** It said axis 2 was *retired
+> permanently, under every §9.1 outcome*, because the digest cannot carry followed-thread activity.
+> **The digest cannot carry `forum.followed_topic`, but it NAMES `forum.reply_to_topic`, and that is
+> the type that overlaps** — BB's reply mailer excludes only the *replier*, never the topic author.
+> The recommendation ("do not build") is unchanged; its justification is now volume with a live
+> trigger, not impossibility. **§4.1b and §4.1c are the correction, and it is a dependency on the
+> thread-follow lane rather than a number to watch.**
 >
 > **Tests:** `verify-source-boundary`, `verify-window-fixed`, `verify-empty-means-no-send`,
 > `verify-two-registers` — 4/4.
@@ -74,13 +82,26 @@ and `is_read = false` for forum types:
 Counted against bridged members only, which is what the digest can actually mail.
 
 > **These are a DATED SNAPSHOT, not constants — re-derive them, do not quote them.**
-> `dev/measure-suppression-axes.sh` prints all of it in one read-only run. Re-run
-> 2026-07-29, one day later, for comparison: connection_request 94 named / 259 stale,
-> forum items 3+2+1, **277 mailed (38 named-only, 181 counted-only, 58 both)**. The
-> 7-day window slides daily, so the named counts move; what has NOT moved is the shape
-> — **181 counted-only on both days, identical.** That is the load-bearing number,
-> because it is the population that receives an email *only* because the counted
-> register exists, and it is stable.
+> `dev/measure-suppression-axes.sh` prints all of it in one read-only run. **Three runs on three
+> consecutive days**, which is what makes the trend readable rather than a single reading:
+>
+> | | 07-28 | 07-29 | **07-30** |
+> |---|---|---|---|
+> | `connection_request` named / stale | 96 / 257 | 94 / 259 | **88 / 244** |
+> | forum items named (mention+r2t+r2r) | 4+2+4 | 3+2+1 | **4+2+1** |
+> | **total mailed** | **280** | **277** | **258** |
+> | — named only | 43 | 38 | **33** |
+> | — **counted only** | **181** | **181** | **166** |
+> | — both | 56 | 58 | **59** |
+> | would be mailed WITHOUT the counted register | 99 | 96 | **92** |
+>
+> ⚠️ **A CLAIM I MADE HERE ON 07-29 IS NOW WITHDRAWN.** I wrote that 181 counted-only *"on both days,
+> identical"* was **"the load-bearing number ... and it is stable."** The third reading is **166**.
+> **Two equal readings are not a demonstration of stability** — I generalised a trend from n=2, which
+> is the same species of error as inferring the stale split from a total (below). The shape claim that
+> *does* survive all three days is the weaker and sufficient one: **the counted-only group is the
+> majority of the recipient list every time** (65% / 65% / 64%), and without the counted register the
+> list falls by roughly two thirds. That is the load-bearing fact; 181 was never a constant.
 
 > *I got this table wrong first time and it is worth saying how.* I published a per-type stale
 > breakdown of 253/3/1/2 that I had **inferred from the total rather than measured** — the total was
@@ -171,7 +192,7 @@ forum types — and forum items are 1 of 128 listable rows this week.**
 > *Trap noted so nobody repeats it:* a naive `subject REGEXP 'group'` returns 5,689 hits. Every one
 > is the string "The Looth Group" in the site name. That number means nothing.
 
-**So the overlappable email volume is 5 sends in 14 days**, against a digest list of 1,858
+**So the overlappable email volume is 5 sends in 14 days**, against a digest list of 1,663
 recipients.
 
 **And the measured overlap is zero — but it is UNTESTED, not CONFIRMED.** This distinction is the
@@ -189,7 +210,7 @@ in either direction, and I am not going to dress a structural expectation up as 
 
 What I *can* say without overreaching: **the overlap is bounded above by the overlappable email
 volume**, because an item that was never emailed cannot be duplicated by email. That bound —
-**5 in 14 days, ≈2.5 per week, across 1,858 recipients** — does not depend on when the bell started,
+**5 in 14 days, ≈2.5 per week, across 1,663 subscribed** — does not depend on when the bell started,
 because the email side ran for the whole 14 days (sends on 07-13, 07-18, 07-21, 07-23, 07-24).
 
 **One forward-looking caveat, offered as a caveat and not a number:** the mention *minter* shipped
@@ -283,7 +304,15 @@ same WHERE clause: a connection notification is suppressed once the **edge itsel
 outstanding (`connections.status` read live), because a bell row stays unread even after the member
 accepts on the profile.
 
-**Together: 24 of 152 items suppressed, 15.8%.** This is the axis that carries the requirement.
+This is the axis that carries the requirement.
+
+> **The "24 of 152, 15.8%" headline that stood here has been REMOVED, and §1.1 is the reason.** That
+> section retires the figure explicitly — *"'Axis 1 removes 15.8%' is no longer a meaningful statistic
+> and should not be quoted"* — because for `connection_request` the suppressor is now the edge status,
+> not `is_read`, so the read-suppression rate describes only the handful of forum items. **This
+> document was quoting, as Rule 1's headline, a number it had already told the reader not to quote.**
+> There is no replacement percentage, deliberately: the base is single-digit and a ratio on it would
+> be noise dressed as a measurement.
 
 ### Rule 2 — already per-event emailed: **DO NOT BUILD. Re-measure in a fortnight.**
 
@@ -301,25 +330,23 @@ WHERE clause that already handles `is_read`. Exact, permanent, item-granular.
 
 | | |
 |---|---|
-| Listable items this week the rule could possibly touch | **1 of 128** |
+| Listable items this week the rule could possibly touch | **7 named of 95** (2026-07-30; was 1 of 128 under the pre-ruling count) |
 | Overlappable emails in 14 days | **5** |
-| Forum bell rows that have ever existed on live | **3** |
-| Overlap events observed | **0 (and untestable — see §1.2)** |
-| Cost to build | A live schema change, **plus** making BuddyBoss's own sender and our notify-bridge agree on event identity — they share no key today (spec §1.3) |
+| Forum bell rows that have ever existed on live | **3** at first measurement; the type is days old |
+| Overlap events observed | **0 — and UNTESTED, not confirmed (§1.2)** |
+| Cost to build, **as at 2026-07-30** | One nullable column. **The cross-system identity contract is no longer part of the price** — see §4.1c |
 
-**Building a live schema change and a cross-system identity contract to suppress an item class that
-produced three rows in its entire history is out of proportion.** The 87% of the recap that is
-connection traffic has no email path to overlap with, and cannot acquire one without new work that
-would itself be the moment to revisit this.
+**Building a live schema change to suppress an item class that produces single-digit rows a week is
+still out of proportion** — and that, not structural impossibility, is the entire argument. The ~93%
+of the recap that is connection traffic has no email path to overlap with, because connections live in
+`profile_app` and nothing emails about them.
 
-**Two conditions that should reopen it**, either of which is a real trigger rather than a hunch:
-
-1. **Ian rules §9.1 option B** — an explicit ✉ toggle earns per-event mail *and* the digest keeps
-   covering discussion activity. That is the only §9.1 outcome where both channels deliberately
-   cover the same events. Under options A or C ("digest owns per-reply follow-ups") the overlap
-   disappears by construction and rule 2 is permanently unnecessary.
-2. **Forum bell volume becomes non-trivial** — say, forum types exceed 10% of listable items in a
-   week. Re-run §1.2's classification then; it is four queries and they are recorded here.
+> ⚠️ **THE TWO CONDITIONS THAT WERE HERE HAVE BEEN REPLACED — see §4.1c for why.** They were
+> *"Ian rules §9.1 option B"* and *"forum types exceed 10% of listable items"*. The first was
+> answered the wrong way round (§9.1's outcome is no longer the discriminator, because the overlap
+> arrives through `forum.reply_to_topic` regardless of it); the second was a volume threshold on a
+> question that turns out to be a **dependency on another lane's ship date**. Watching a percentage
+> would have let the defect ship while the percentage was still small.
 
 **What to do in the meantime — nothing, and say so in the code.** A comment at the suppression site
 recording that axis 2 was measured, costed and declined, with the trigger to revisit, is worth more
@@ -553,12 +580,87 @@ That does not kill §3.7's intent, but it moves where it can live. A followed-th
 explicit ruling that carves out an exception. **That is a thread-follow decision to take to Ian, not
 a weekly-recap one** — I am only saying that the door I previously said was open is shut.
 
-**One genuine simplification falls out of it, in their favour.** §9.1's option B — an explicit ✉
-toggle earning per-event mail while the digest also covers the same events — **can no longer produce
-a double-send through this digest**, because the digest cannot carry followed-thread activity at all.
-Rule 2 (suppress-what-was-already-emailed) is therefore **retired permanently, under every §9.1
-outcome**, not just under A and C. The seam I posted to them on 07-28 is now simpler than I
-described it: they do not need to tell me which way §9.1 goes.
+### 4.1b ⚠️ **I RETRACT "RULE 2 IS RETIRED PERMANENTLY". IT WAS WRONG WHEN I WROTE IT.** (2026-07-30)
+
+The previous revision of this section ended with a claim I was pleased with, and it does not survive
+contact with the thread-follow spec at `origin/thread-follow` @7fed875:
+
+> *"§9.1's option B ... can no longer produce a double-send through this digest, because the digest
+> cannot carry followed-thread activity at all. Rule 2 is therefore **retired permanently, under
+> every §9.1 outcome**. They do not need to tell me which way §9.1 goes."*
+
+**The error is a substitution.** I proved something true about **`forum.followed_topic`** and then
+stated it about **axis 2 as a whole**. The digest admits *three other* forum types, and every one of
+them has a live per-event email path:
+
+| Admitted type | Waits on you because | Per-event email that covers the SAME event |
+|---|---|---|
+| `forum.reply_to_topic` | a reply on a discussion **you authored** | BB "New reply" to topic subscribers |
+| `forum.reply_to_reply` | a reply to **your** comment | same sender, same trigger |
+| `forum.mention` | you were **addressed** | BB "mentioned you" (4 sends / 14d, §1.2) |
+
+**`forum.followed_topic` is excluded. `forum.reply_to_topic` is ADMITTED — and it is the one that
+overlaps.** My own §1.2 says so in its own table (`replied to` → *"Yes — when the topic author also
+holds the subscription"*), so §4.1 contradicted §1.2 of this same document. Nobody had to move for me
+to be wrong; I just did not read across my own sections.
+
+**Verified in the real sender, not inferred.** `bb_send_forums_subscribed_reply`
+(`bp-forums/classes/class-bp-forums-notification.php:989`) removes exactly one recipient:
+
+```php
+$author_id = ... ?: bbp_get_reply_author_id( $reply_id );
+// Remove topic author from the users.      ← THE COMMENT IS WRONG
+unset( $r['user_ids'][ array_search( $author_id, $r['user_ids'], true ) ] );
+```
+
+The comment says *topic* author; the value is `bbp_get_reply_author_id()` — the **replier**. **The
+topic author is never excluded.** So a member with the ✉ bit on a topic **they authored** is emailed
+for every reply, and `notify-bridge.php:212-223` ("*3. Reply to the topic → the topic author*") mints
+`forum.reply_to_topic` for that same reply, which `INCLUDED_TYPES` **names** in the digest. One reply,
+one person, both channels.
+
+**And their design does not merely permit this — it hands the member a button for it.** §3.5's
+notification-row ⋯ menu offers **"Email me"** on precisely `forum.reply_to_topic`,
+`forum.reply_to_reply` and `forum.mention` rows. The affordance that creates the overlap sits *on the
+digest's own admitted types*, one click from the rows the digest names.
+
+**So the honest status of Rule 2 is unchanged in its recommendation and completely changed in its
+reason:**
+
+| | Previous revision | **Now** |
+|---|---|---|
+| Build it? | No | **No — unchanged** |
+| Why not | *"structurally impossible; no configuration can double-send"* | **volume: 5 overlappable sends / 14 days, and the overlap rate is untested (§1.2)** |
+| Status | *retired permanently* | **deferred, with a live trigger** |
+| Does §9.1's outcome matter to me? | *"no — do not bother telling me"* | **yes, and so does §9.2 — see §4.1c** |
+
+**A structural argument and a volume argument fail differently, and that is the whole cost of the
+error.** A structural impossibility needs no monitoring. A volume judgement needs a trigger and a
+re-measure, and I had deleted both — including out of the measurement script, which said *"no volume
+at which that changes."* Restored: `dev/measure-suppression-axes.sh` §6.
+
+### 4.1c §9.2's re-ruling makes Rule 2 *cheaper*, which is the other half of the reversal
+
+Ian re-ruled §9.2 on 2026-07-29: **we ship our own sender and replace the BB reply path.** That
+removes the larger of my two stated costs. §2/Rule 2 priced the build as *"a live schema change,
+**plus** making BuddyBoss's own sender and our notify-bridge agree on event identity — they share no
+key today"*. **Once the sender is ours, that second cost is gone**: our sender is driven by our own
+store and can stamp the very notification row it just mailed. `notifications.emailed_at` stops being
+a cross-system identity contract and becomes one write in code we own, next to the row that caused it.
+
+**That does not make it worth building today** — 7 forum rows across 258 mailed members (§1.1), and
+an untested overlap rate, do not justify a live schema change. It does mean the two conditions in
+§2/Rule 2 should be replaced, because both were written against the wrong obstacle:
+
+> **THE TRIGGER, restated.** Reopen Rule 2 when **thread-follow's ✉ toggle ships on the digest's
+> admitted types** (§3.5's menu) **or our own sender ships** (§9.2) — whichever lands first, and
+> *before* it lands, because after that the overlap is a member-visible defect rather than a
+> measurement. It is no longer a volume threshold to watch; it is a **dated dependency on another
+> lane**.
+
+**What I owe the thread-follow lane, corrected.** I told them on 07-28 they need not tell me which
+way §9.1 goes. **That was wrong and I have retracted it to them on the board.** They own the
+affordance that creates the overlap; I own what is in the mail. Neither of us can size this alone.
 
 ### 4.2 Two more rulings that reach into their spec
 
@@ -592,17 +694,20 @@ that class; a recap is content inside a class, never a class of its own.*
   postdate it, which is a signal, not a trend.
 - **Group subscriptions (12,948 rows / 1,853 users)** are untouched here, as in the spec. If group
   discussion mail ever overlaps the recap, this proposal does not cover it.
-- **Nothing here is built.** Rule 1 was already shipped; Rules 2 and 3 are written, costed and
-  unwritten in code. **Rule 3b is the one I am asking to build.**
-- **Rule 3b's window query is demonstrated, not deployed.** I ran it against live and it returns the
-  correct reach-back for the six real casualties and the correct no-reach-back for healthy controls
-  (§ Rule 3b). That proves the *data supports it*. It has not been wired into
-  `Recap_Source::payload_for()`, and no send has been rendered through it.
-- **Rule 3b's frames render a simulated failure, not an observed one.** Grace's rows are real and her
-  two-week spread is real; her sends did not fail. The frames show the *shape* of the loss using a
-  member who has the right data, not a member it happened to. The six it did happen to are named in
-  §1.3(b) and their loss is eight weeks old, so there is nothing left to render for them.
-- **I do not know whether the June 1 failure recurs on any schedule.** One event in 19 digests is not
-  a rate. The argument for 3b rests on the failure being *correlated and silent*, not on frequency.
-- **No serve window was held for this work** — it is measurement and design only. The live reads were
-  all through `live-ro`, read-only, on the LIVE box (not dev2; the two hold different data).
+- **I do not know whether the June 1 send failure recurs on any schedule.** One event in 19 digests is
+  not a rate. §1.3(b)'s argument rests on that failure being *correlated and silent*, not on frequency
+  — and Ian ruled the fixed window anyway, having seen it.
+- **The counted register's copy has never been rendered against a non-connection type.** §1.1 and the
+  measurement script both check for this; as of 2026-07-30 it is still 100% `connection_request`, so
+  *"You have 2 replies to your comments waiting"* remains unexercised against real data.
+- **No serve window was held for this work** — it is measurement, design and gitignored previs only.
+  The live reads were all through `live-ro`, read-only, on the LIVE box (not dev2; the two hold
+  different data).
+
+> **§5 WAS FOUR BULLETS LONGER AND EVERY ONE OF THEM WAS STALE (removed 2026-07-30).** They read
+> *"Nothing here is built"*, *"Rule 3b is the one I am asking to build"*, and two caveats about Rule
+> 3b's window query and its frames. **All four describe a document that no longer exists**: Ian
+> declined 3a and 3b on 07-28, the fixed window was built, and §3 records that 3b's frames were
+> *deleted* — so §5 was carrying caveats about artefacts that are gone, in the section whose entire
+> job is to be the honest ledger. A stale "what I could not prove" is worse than none, because it is
+> the section a reader trusts most. Kept as this note rather than silently dropped.
