@@ -40,6 +40,7 @@ TESTS=(
   verify-missed-exclusions          # edge status, not is_read, decides (needs the PG role)
   verify-signup-audience            # Ian ruling 6: members TOLD, never silently added; list 3 never written
   verify-signup-page                # the public page's BUILD: six rulings, scoped CSS, anon-safe preview
+  verify-unsubscribe-nonmember      # the opt-out link resolves for a contact with NO wp_users row
 )
 
 # RUNNER IS PER-TEST. verify-missed-exclusions talks to Postgres through profile-app's
@@ -65,6 +66,7 @@ declare -A SENTINEL=(
   [verify-missed-exclusions]='EDGE STATUS IS THE AUTHORITY'
   [verify-signup-audience]='SIGNUP AUDIENCE HOLDS'
   [verify-signup-page]='SIGNUP PAGE OK'
+  [verify-unsubscribe-nonmember]='NONMEMBER UNSUBSCRIBE OK'
 )
 
 green=0; red=0; dead=0
