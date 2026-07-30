@@ -209,6 +209,19 @@ def goto(p, url, tries=2):
     never read as a product defect.
     """
     for attempt in range(tries):
+        # about:blank FIRST. Every phase after the first re-navigates to the SAME
+        # url, and Chrome keeps the previous document readable until the new one
+        # commits — so `document.readyState === "complete"` answers about the page
+        # we just left, and the hydration poll then races a document that is being
+        # torn down. Measured: standalone this page hydrates in ~1s, but in-sequence
+        # the same navigation reported "never hydrated" every time. Clearing to
+        # about:blank makes each phase start from a document that is definitely new.
+        p.send("Page.navigate", {"url": "about:blank"})
+        for _ in range(20):
+            time.sleep(0.05)
+            try:
+                if p.ev("location.href") == "about:blank": break
+            except Exception: pass
         p.send("Page.navigate", {"url": url})
         for _ in range(120):
             time.sleep(0.25)
@@ -217,8 +230,16 @@ def goto(p, url, tries=2):
             except Exception: pass
         for _ in range(120):
             try:
-                if p.ev("!!document.getElementById('lg-following')") and \
-                   p.ev("(document.getElementById('lg-fol-master')||{}).textContent!==''"):
+                # Both conditions in ONE evaluate: two round trips per poll on a
+                # loaded shared engine is how a 30s budget quietly becomes 15.
+                # And the master line must EXIST — `({}).textContent !== ''` is
+                # true for a missing element, which would call a page with no
+                # section "hydrated" and hand every later phase a null.
+                if p.ev("""(() => {
+                      const s = document.getElementById('lg-following');
+                      const m = document.getElementById('lg-fol-master');
+                      return !!s && !!m && m.textContent.trim() !== '';
+                    })()"""):
                     return True
             except Exception: pass
             time.sleep(0.25)

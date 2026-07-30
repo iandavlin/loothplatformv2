@@ -110,6 +110,15 @@
   .rulebox { margin: 22px 0 0; padding: 13px 15px; border-radius: 11px; max-width: 760px;
     background: var(--lg-sage-tint); font: 400 13px/1.6 var(--lg-font-sans); color: var(--lg-ink); }
   .rulebox b { font-weight: 700; }
+
+  .shots { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; margin: 0 0 6px; }
+  .shots figure { margin: 0; max-width: 100%; }
+  .shots img { display: block; max-width: 100%; height: auto; border: 1px solid var(--lg-line);
+    border-radius: 12px; box-shadow: 0 14px 32px -20px rgba(26,29,26,.5); }
+  .shots figure:nth-child(1) img { width: 620px; }
+  .shots figure:nth-child(2) img { width: 300px; }
+  .shots figure:nth-child(3) img { width: 620px; }
+  .shots figcaption { font: 400 12px/1.5 var(--lg-font-sans); color: var(--lg-mute); margin-top: 7px; max-width: 620px; }
   hr.sep { border: 0; border-top: 1px solid var(--lguser-line); margin: 34px 0 26px; }
 </style>
 </head>
@@ -122,6 +131,32 @@
     subscriptions dating back to August 2023 — <b>twelve discussions</b>, none of them invented.
     That number is the whole design problem: the list has to be bounded and there has to be one
     button that makes it all stop.</p>
+
+  <!-- ══ BUILT ═══════════════════════════════════════════════════════════ -->
+  <p class="capt">Built and running — screenshots, not drawings</p>
+  <p class="legend"><b>A is built.</b> These are photographs of the real page on dev2, signed in as
+    Ian, reading the real stores. 52 assertions green, including a real click that removed a row and
+    cleared both databases.</p>
+  <div class="shots">
+    <figure>
+      <img src="shot-desktop.png" alt="The section on desktop: five rows, Show all 12, Stop all 12">
+      <figcaption>Desktop &mdash; five rows, then the count. Bell lit on one, envelope on the rest.</figcaption>
+    </figure>
+    <figure>
+      <img src="shot-phone.png" alt="The section on a 390px phone">
+      <figcaption>Phone at 390px &mdash; titles wrap to two lines so you can tell threads apart.</figcaption>
+    </figure>
+    <figure>
+      <img src="shot-desktop-expanded.png" alt="All twelve rows after pressing Show all">
+      <figcaption>After &ldquo;Show all 12&rdquo; &mdash; the full list, back to 2023.</figcaption>
+    </figure>
+  </div>
+  <p class="note" style="margin-bottom:30px">Ian&rsquo;s eleven envelope rows are legacy BuddyBoss
+    auto-subscribes from 2023&ndash;2026. He never knowingly turned most of them on. That is what
+    <b>Stop all 12</b> is for.</p>
+
+  <hr class="sep">
+  <p class="capt">The drawings the build came from</p>
 
   <div class="cols">
 

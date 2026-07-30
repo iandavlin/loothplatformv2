@@ -301,3 +301,15 @@ a.lg-manage-sub__fol-name:hover { color: #6b7c52; text-decoration: underline; }
 @media (max-width: 640px) {
     .lg-manage-sub__fol-foot { margin: 12px -1.25rem -1.25rem; padding: 11px 1.25rem; }
 }
+
+/* At 390px a single ellipsised line leaves "Keeper test thread — …", which is
+ * not enough to tell two discussions apart — and telling them apart is the
+ * entire job of this list. Two lines, then clamp. */
+@media (max-width: 640px) {
+    .lg-manage-sub__fol-name {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+}
