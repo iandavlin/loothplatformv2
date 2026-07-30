@@ -3,6 +3,26 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-30 — Follow controls: collapse the cramped row into a modal + email frequency (Ian)
+
+Ian, looking at the topic action row (Like / 8 replies / Share / bell / envelope
+/ Save all crammed on mobile): "this is really cramped. Should we have a button
+that pops a modal?" AND: email frequency controls so users pick cadence —
+"1 per hour, 1 per day, 1 per week or something."
+
+KEEPER SYNTHESIS (recommended): these are one feature. Replace the two inline
+bell+envelope icons with a SINGLE "Follow" control that opens a small
+modal/sheet holding everything: notify on/off, email on/off, AND email
+frequency (Off / Instant / Hourly digest / Daily / Weekly). That de-crams the
+row (two icons → one) and gives the frequency picker a natural home instead of
+inventing a fourth icon.
+
+Cross-lane: thread-follow owns the control + the topic_follow store (add a
+`frequency` column). weekly-recap/digest owns the SENDING — hourly/daily/weekly
+means batching follow-emails into digests per the user's choice, not one mail
+per event. Coordinate on the board. Instant = the current per-event path;
+Off = no email. Ship the modal first (de-cram), frequency second.
+
 ## 2026-07-30 — Front-end authoring for all post types via layout-v2, gated (Ian) ★ vision
 
 Ian's direction, 7/30. Near-term ask: **add loothprints as a post type USERS can
