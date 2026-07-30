@@ -202,8 +202,14 @@ def main():
                     help="assert ZERO follow affordances anywhere (flag OFF build)")
     # Real CPT single pages. Defaulted to ones that exist on dev2 today; override
     # when the fixtures rot. Empty list = skip phase C rather than fake it.
-    ap.add_argument("--cpt", action="append",
-                    default=["/post-type-videos/council-of-elders-june-2026/"])
+    # Ian, 2026-07-30: "On cpts we should get a save button." Three real managed-CPT
+    # single pages, one per type he is likely to hit. Empty list = skip phase C rather
+    # than fake it.
+    ap.add_argument("--cpt", action="append", default=[
+        "/post-type-videos/council-of-elders-june-2026/",
+        "/loothprint/fret-sander-v2/",
+        "/post-imgcap/hummingbird-headstock-repair/",
+    ])
     a = ap.parse_args()
     base = a.url.rstrip("/")
 
