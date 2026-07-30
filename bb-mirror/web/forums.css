@@ -645,6 +645,22 @@ body.lg-follow-anon [data-follow] { display: none !important; }
    hub-polish.js's lg-act-share; shown @ >=641 in the .fc-actions row (forums.css). */
 .feed-page .fc-share { display: none; }
 
+/* ⚠️ THE DESKTOP follow pair must be hidden on mobile the SAME WAY — this was the
+   defect Ian caught on his phone 2026-07-30 ("two empty black squares below the
+   action row"). feed_follow_btns() emits the pair into .fc-actions for desktop AND
+   into .lg-act-follow for mobile. .fc-save and .fc-share both carry a mobile-first
+   hide (this rule and :4124); the new pair shipped WITHOUT one, so at <=640 the
+   desktop copies fell through to native <button> chrome — measured on dev2 in dark
+   at 390px: display:block, 16x21, background rgb(107,107,107), 2px border. Two grey
+   boxes with no glyph, exactly as reported.
+
+   Scoped with the CHILD combinator on purpose: the MOBILE pair lives at
+   .fc-actions > .feed-card__actions > .lg-act-follow > button, so `>` hides the
+   desktop copies only. A blanket `.feed-page .fc-notify{display:none}` would kill
+   both and leave mobile with no toggles at all. */
+.feed-page .fc-actions > .fc-notify,
+.feed-page .fc-actions > .fc-email { display: none; }
+
 .thread {
   display: grid;
   gap: var(--s4);
@@ -4232,6 +4248,10 @@ body:has(.feed-page) #bb-ham{display:none}
      Icon-only on the card (space); they inherit fc-save's margin-left:auto push, so
      the row reads [reactions … replies] … [☆ 🔔 ✉ share]: state controls grouped right.
      .is-on = the bit is ON, filled sage, exactly .fc-save's .is-saved idiom. */
+  /* …and shown again here, at >=641, exactly as .fc-share is (the child combinator
+     matches the mobile-first hide added beside .fc-share so specificity lines up). */
+  .feed-page .fc-actions > .fc-notify,
+  .feed-page .fc-actions > .fc-email { display:inline-flex; }
   .feed-page .fc-notify, .feed-page .fc-email { -webkit-appearance:none; appearance:none;
     display:inline-flex; align-items:center; background:none; border:0; padding:2px 3px;
     font:600 12px/1 var(--lg-font-sans); color:var(--lg-mute); cursor:pointer; transition:color .12s; }
@@ -5195,15 +5215,25 @@ html[data-lguser-theme="dark"] .hub-rail--acc .hub-rail__sec--shows .hub-rail__s
     margin-left: auto;                 /* → right end of the bar */
     flex: 0 0 auto;
   }
-  /* ≥44px effective touch targets (§2.2b) without inflating the 12px bar: the icon
-     stays 18px and the padding does the work. */
+  /* Touch target ≥44px (§2.2b) WITHOUT eating the bar's width budget.
+     Ian, 2026-07-30: the mobile row was overflowing — measured 420px of content in a
+     390px viewport, with the Save bookmark ending 34px off-screen. A 44px-WIDE box per
+     toggle costs 88px of a ~345px row that also carries Like / N replies / Share /
+     Save. So the visible box is 38px and an invisible ::after carries the hit area out
+     to 44 — same trick as the sheet (§13.3), same accessibility result, 12px cheaper. */
   .feed-page .lg-card-actions .fc-notify,
   .feed-page .lg-card-actions .fc-email {
     -webkit-appearance: none; appearance: none;
     display: inline-flex; align-items: center; justify-content: center;
-    min-width: 44px; min-height: 44px; margin: -13px 0;   /* negative margin keeps the bar height */
+    position: relative;
+    min-width: 38px; min-height: 38px; margin: -10px 0;   /* negative margin keeps the bar height */
     padding: 0; background: none; border: 0;
     color: inherit; cursor: pointer; transition: color .12s;
+  }
+  .feed-page .lg-card-actions .fc-notify::after,
+  .feed-page .lg-card-actions .fc-email::after {
+    content: ""; position: absolute; top: 50%; left: 50%;
+    width: 44px; height: 44px; transform: translate(-50%, -50%);
   }
   .feed-page .lg-card-actions .fc-notify .ico,
   .feed-page .lg-card-actions .fc-email .ico { width: 18px; height: 18px; flex: 0 0 auto; }
