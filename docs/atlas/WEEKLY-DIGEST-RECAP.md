@@ -487,6 +487,43 @@ store outside the window's authorised paths, and a lie about his account. So the
 real** (live endpoint, real `display_name`) and the **rows are real stored activity borrowed from
 other members**, with a banner in the email saying so.
 
+> ### ⚠️ IAN, 2026-07-30: *"That didn't have any notifs activity."* HE IS RIGHT, AND SO IS THE LINE ABOVE.
+>
+> The paragraph above is literally true and substantively misleading, which is the worst kind of
+> accurate. The rows were real *in the database sense* and meaningless *in the human sense*.
+>
+> **Reconstructed, not inferred.** The 07-27 renderer was loaded out of git (`ac2c4fa`) under a
+> renamed class and run against the borrowed payload. The four rows it drew are provably **the same
+> four rows the 07-27 build had** — each carries `created_at` inside 2026-07-20..27, and each is
+> **still unread**, which is why today's fetch returns them unchanged:
+>
+> | wp | type | created_at |
+> |---|---|---|
+> | 690 | `reaction.on_post` | 2026-07-24 04:04 |
+> | 197 | `reaction.on_post` | 2026-07-24 14:46 |
+> | 197 | `reaction.on_post` | 2026-07-25 23:31 |
+> | 690 | `forum.reply_to_topic` | 2026-07-26 19:12 |
+>
+> **What that renders as — the actual text of what he opened:**
+>
+> > 2 new replies on your discussion *“NOTIFLANE test topic — click-through gate”* — Ian Davlin The Looth Group and 1 other
+> > Ian Davlin The Looth Group reacted to your discussion *“NOTIFLANE test topic — click-through gate”*
+> > Claude Admin reacted to your reply *“Suggest an alternative to concave fret file”*
+> > Ian Davlin The Looth Group reacted to your post *“Proper Loothing: Back in the Saddle Again!”*
+>
+> **Every actor is Ian himself or a bot. Three of the four rows are reactions. The subject is a test
+> topic.** A section existed; no activity did. *"That didn't have any notifs activity"* is an exact
+> description of that email, and the record above should never have implied otherwise by saying
+> "real stored activity" without saying **whose** and **what**.
+>
+> The whole platform held **8 notification rows** in that entire week (6 `reaction.on_post`,
+> 2 `forum.reply_to_topic`). The demo had to borrow because Ian's recap was empty, and what it
+> borrowed was empty of meaning too. **`reaction.on_post` was still INCLUDED on 07-27** — Ian removed
+> it the next day — so today's renderer draws only 1 of those 4 rows.
+>
+> **This is not a defect in the send.** It is the design being demonstrated over a store with nothing
+> in it, and it is the same finding as §10.4 arriving from a third direction — see the scoping note there.
+
 **The send bypasses `wp_mail` on purpose.** dev2's containment mu-plugin swallows `wp_mail` into
 mailpit and returns `true` — a convincing false positive. `build-inbox-test.php` only *builds*;
 the send is a direct SES call. **Trap for next time:** FluentSMTP stores the SES secret
