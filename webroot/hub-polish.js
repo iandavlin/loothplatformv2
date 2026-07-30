@@ -3591,16 +3591,25 @@
           // they pressed Save. The composer now fetches the stored post_content
           // itself (lgcLoadTopicEdit); the title below is only an optimistic
           // pre-fill so the field is not blank for the length of one round trip.
-          if (typeof openComposerSheet === 'function') {
-            // Leave the replies sheet open BEHIND the composer (parity with reply
-            // edit); we reload on save anyway.
-            openComposerSheet({ editTopicId: tid, tid: tid, fid: opForumId, title: ttl, focus: true });
-            return;
-          }
-          // Fallback: the old new-topic wizard.
+          /* A DISCUSSION edits through the ADD-DISCUSSION mechanic (Ian 2026-07-30,
+             correcting the earlier read of this): the "New post" composer — which is
+             the 4-step wizard Where/Write/Photos/Review on desktop and the same flat
+             #ntm-form on mobile — opened pre-filled and landing on Write.
+
+             This used to prefer the reply composer sheet, which is the wrong door: it
+             is not what CREATING a discussion uses on EITHER viewport (measured — the
+             + New post button opens #ntm-form at 1280 and at 390), so editing through
+             it was a second, divergent modal, exactly what Ian asked us not to build.
+             Replies keep the reply composer; only the OP changes door. */
           if (typeof window.lgNtmEditTopic === 'function') {
             lrsClose();
             window.lgNtmEditTopic(tid, opForumId, ttl, body.innerHTML);
+            return;
+          }
+          // Fallback only if the wizard is somehow absent: the composer sheet still
+          // edits correctly, it is simply not the add-post mechanic.
+          if (typeof openComposerSheet === 'function') {
+            openComposerSheet({ editTopicId: tid, tid: tid, fid: opForumId, title: ttl, focus: true });
           }
         });
       });

@@ -1706,6 +1706,7 @@
     var ntmQuill     = null;   // Quill instance (lazy)
     var ntmMediaIds  = [];      // upload_ids for bbp_media
     var ntmEditId    = null;    // when set, the composer EDITS this topic (PUT) vs creates (POST)
+    var ntmEditLoading = false; // edit mode: the stored body has not arrived yet — Save must stay inert
     var ntmKeepMedia = [];      // edit mode: existing bp_media.id the user is KEEPING (✕ removes)
     var ntmEditHadMedia = false;// edit mode: did the topic have photos at open (so we always sync)
     var ntmRestBase  = ntmForm.dataset.restBase || '/wp-json/buddyboss/v1';
@@ -1824,6 +1825,44 @@
       setTimeout(ntmFocusEntry, 50);
     }
 
+    /* Seed the wizard's editor with stored HTML.
+
+       NOT `ntmQuill.root.innerHTML = html`, which is what this used to do. That writes
+       straight into the DOM behind Quill's back: the document model never learns about
+       the markup, and Quill's own observer then normalises away anything it did not
+       author. Measured on dev2 2026-07-30 — seeding
+         <p>Body with <strong>bold</strong> and a list:</p><ul><li>one</li><li>two</li></ul>
+       left the editor holding
+         <p>Body with <strong>bold</strong> and a list:</p><p><br></p>
+       i.e. the ENTIRE list silently deleted before the member had touched anything.
+       Bold survived, so it looked like it worked.
+
+       dangerouslyPasteHTML runs the clipboard parser, which is how the composer sheet
+       already seeds the same content correctly. 'silent' keeps it out of the undo stack
+       so a stray ctrl-Z cannot rewind the post to empty. */
+    function ntmSeedBody(html) {
+      var tries = 0;
+      (function seed() {
+        if (ntmQuill) {
+          try { ntmQuill.setContents([], 'silent'); } catch (e) {}
+          if (html) { try { ntmQuill.clipboard.dangerouslyPasteHTML(html, 'silent'); } catch (e) {} }
+        } else if (++tries < 30) { setTimeout(seed, 100); }
+      })();
+    }
+
+    /* Tags are part of "everything the composer offers" and were never pre-filled on
+       edit, so opening the wizard and saving used to hand the server an empty tags box.
+       The topic PUT treats an ABSENT key as "leave alone", which is what stopped that
+       wiping tags — but the member still could not SEE or change them, which is the
+       half Ian asked for. Fires input/change so the quick-tag pills re-sync. */
+    function ntmSetTags(tags) {
+      var el = document.getElementById('ntm-tags');
+      if (!el) return;
+      el.value = (tags || []).join(', ');
+      try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+      try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+    }
+
     // EDIT MODE — open the composer (and the 3-modal wizard, which is just a
     // presentation layer over #ntm-form) pre-filled to EDIT an existing topic; the
     // submit handler then PUTs instead of POSTing. Photos are preserved server-side
@@ -1839,12 +1878,54 @@
       if (ntmHdE) ntmHdE.textContent = 'Edit post';    // wizard says "Edit post" (Ian 6/17)
       if (ntmTitleIn) ntmTitleIn.value = title || '';
       if (ntmContentEl) ntmContentEl.value = (bodyHtml || '').replace(/<img[^>]*>/gi, '');
-      var ntmSeedHtml = lgStripBodyImages(bodyHtml || '');
-      var seedTries = 0;
-      (function seed() {
-        if (ntmQuill) { ntmQuill.root.innerHTML = ntmSeedHtml || '<p><br></p>'; }
-        else if (++seedTries < 30) setTimeout(seed, 100);
-      })();
+      // The caller's bodyHtml is the RENDERED OP scraped off the page, so it is only
+      // an optimistic pre-fill to stop the editor sitting blank for one round trip.
+      // The authoritative body arrives from the server below; see ntmSeedBody.
+      ntmSeedBody(lgStripBodyImages(bodyHtml || ''));
+
+      // OPEN ON WRITE (Ian 2026-07-30). ntmShowOverlay -> onOpen() rewinds the wizard
+      // to Step 1 "Where" on every open, which is right for a NEW post and wrong for an
+      // edit: the forum is already chosen, so landing there asks the member to re-answer
+      // a question they are not changing. Step 2 is the one they came for. Every other
+      // step stays reachable — the rail jumps back freely, and forward through valid
+      // steps, both of which hold here because forum and title are pre-filled.
+      if (ntmWiz) ntmWiz.goTo(2);
+
+      // ── the authoritative payload ──────────────────────────────────────────────
+      // Same endpoint and same reasoning as the composer sheet's edit door: the page
+      // only ever has the RENDERED post, and flattening that back into an editor is
+      // what destroyed formatting on save. post_content is the editable truth and only
+      // the server has it. This also carries the tags, which nothing else could supply.
+      // Save is held INERT until it lands, so a failed load can never let one click
+      // write an empty body over a real post.
+      ntmEditLoading = true;
+      if (ntmSubmit) ntmSubmit.disabled = true;
+      var want = ntmEditId;
+      fetch('/bb-mirror-api/v0/reply?topic_id=' + want, { credentials: 'same-origin' })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; },
+                                                  function () { return { ok: false, j: {} }; }); })
+        .then(function (res) {
+          if (ntmEditId !== want) return;               // a later open owns the modal now
+          ntmEditLoading = false;
+          if (ntmSubmit) ntmSubmit.disabled = false;
+          if (!res.ok || !res.j || !res.j.ok) {
+            ntmStatus.textContent = (res.j && (res.j.message || res.j.error))
+              || "Couldn't load this post to edit.";
+            return;
+          }
+          var d = res.j;
+          if (ntmTitleIn && d.title) ntmTitleIn.value = d.title;
+          ntmSeedBody(lgStripBodyImages(d.content || ''));
+          if (d.forum_id) ntmSetForum(d.forum_id);      // the stored forum beats the caller's
+          ntmSetTags(d.tags || []);
+          if (ntmWiz) ntmWiz.goTo(2);                   // stay on Write after the refill
+        })
+        .catch(function () {
+          if (ntmEditId !== want) return;
+          ntmEditLoading = false;
+          if (ntmSubmit) ntmSubmit.disabled = false;
+          ntmStatus.textContent = "Couldn't load this post to edit.";
+        });
       // Load the topic's EXISTING photos as removable thumbs so they can be deleted
       // during edit (the BB PUT can't touch media — see topic-media.php). Each ✕
       // drops the media id from ntmKeepMedia; on submit we send the kept set there.
@@ -2361,6 +2442,11 @@
     ntmForm.addEventListener('submit', function (e) {
       e.preventDefault();
       if (!ntmNonce) { ntmStatus.textContent = 'Not signed in.'; return; }
+      // The editor opens EMPTY and fills from a fetch, so a Save that beats the payload
+      // home would write that emptiness over a real post — one click, silently, with no
+      // error. The button is disabled while loading; this is the second lock, because a
+      // form can also be submitted by Enter.
+      if (ntmEditLoading) { ntmStatus.textContent = 'Still loading this post…'; return; }
       var forum   = ntmGetForum();
       var forumId = forum && forum.id;
       var title   = ntmTitleIn.value.trim();
@@ -4576,14 +4662,18 @@
             // Unified composer: pop it OPEN over the modal (parity with reply edit);
             // on save it updates the modal OP + card in place. body.innerHTML is the
             // full fetched OP content.
-            if (typeof window.lgFrmEditTopic === 'function') {
-              window.lgFrmEditTopic(tid, fid, ttl, body.innerHTML);
+            /* Same correction as the Hub door (Ian 2026-07-30): a DISCUSSION edits
+               through the ADD-DISCUSSION mechanic — the "New post" wizard, pre-filled,
+               landing on Write — not through the frm reply composer. Close the
+               discussion modal first so the wizard is not stacked behind it. */
+            if (typeof window.lgNtmEditTopic === 'function') {
+              var cbW = m.querySelector('[data-dm-close]'); if (cbW) cbW.click();
+              window.lgNtmEditTopic(tid, fid, ttl, body.innerHTML);
               return;
             }
-            // Fallback: the old new-topic wizard (close the modal first).
-            if (typeof window.lgNtmEditTopic !== 'function') return;
-            var cb = m.querySelector('[data-dm-close]'); if (cb) cb.click();
-            window.lgNtmEditTopic(tid, fid, ttl, body.innerHTML);
+            // Fallback only if the wizard is absent.
+            if (typeof window.lgFrmEditTopic !== 'function') return;
+            window.lgFrmEditTopic(tid, fid, ttl, body.innerHTML);
           });
           del.addEventListener('click', function (ev) {
             ev.preventDefault(); ev.stopPropagation();
