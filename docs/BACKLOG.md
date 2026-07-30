@@ -3,6 +3,17 @@
 Items Ian has asked for that no lane owns yet. Newest on top. When a lane picks
 one up, move the line into that lane's charter and note the lane name here.
 
+## 2026-07-30 — Admin can edit ANY post, full functionality (Ian)
+
+Ian 7/30: "I need to be able to edit any post as admin as well. Full
+functionality on any post editing as admin." Admin (or can_edit_others) edits
+ANY post type — discussion, video, article, event, loothprint, sponsor — from
+the front end with the FULL composer (every control creating it offers). Today
+edit is wired for discussions/OP (author or mod); this generalizes it to all
+types for admins. Depends on the composer-unification decision below (one
+composer that handles every type + create/edit + desktop/mobile). Pairs with
+the front-end-authoring-all-types vision.
+
 ## 2026-07-30 — Add-discussion modal: resizable, with text scaling to modal size (Ian)
 
 Ian 7/30: make the "New post" (add-discussion) 4-step modal RESIZABLE, and have
