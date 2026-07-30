@@ -10,12 +10,18 @@ Ian, looking at the topic action row (Like / 8 replies / Share / bell / envelope
 that pops a modal?" AND: email frequency controls so users pick cadence —
 "1 per hour, 1 per day, 1 per week or something."
 
-KEEPER SYNTHESIS (recommended): these are one feature. Replace the two inline
-bell+envelope icons with a SINGLE "Follow" control that opens a small
-modal/sheet holding everything: notify on/off, email on/off, AND email
-frequency (Off / Instant / Hourly digest / Daily / Weekly). That de-crams the
-row (two icons → one) and gives the frequency picker a natural home instead of
-inventing a fourth icon.
+KEEPER SYNTHESIS (recommended): these are one feature. Replace the inline
+personal-action icons with a SINGLE control that opens a small modal/sheet
+holding everything: notify on/off, email on/off, email frequency (Off / Instant
+/ Hourly digest / Daily / Weekly), AND **Save/bookmark** (Ian added Save to the
+consolidation 7/30). Like / N-replies / Share stay inline; the set-once personal
+stuff (follow, email, save) collapses behind one button.
+
+DESIGN NUANCE for the mock: Save is a TAP-OFTEN action while follow/email are
+SET-ONCE — burying Save fully behind a modal may add friction. Mock BOTH:
+(a) everything in the modal, vs (b) Save stays a one-tap on the row while
+notify/email/frequency consolidate. Ian picks from the pictures. Timing: lane
+mocks this AFTER the desktop-flash fix + orange on-state ship (Ian's call 7/30).
 
 Cross-lane: thread-follow owns the control + the topic_follow store (add a
 `frequency` column). weekly-recap/digest owns the SENDING — hourly/daily/weekly
