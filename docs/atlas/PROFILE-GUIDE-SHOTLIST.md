@@ -254,6 +254,61 @@ Only **3 of 8** are usable as-is. **B7 phone — the frame this list designates 
 privacy anchor — is one of the broken ones.** Its three claims are all still legible
 in it, so the finding stands; the image is just not showable to Ian.
 
+### A3 GROUND TRUTH — read this before deciding the money shot is wrong
+
+The A3 row above says the drawer must show `CORE`/`EXTRAS` groups, `FILTERABLE`
+badges and an `Add gallery (N left)` counter, and warns that a capture showing
+"Gallery as a palette bubble and no Services" means **your session is wrong**.
+Measured against the real dev2 DOM, that warning would misfire. The actual
+palette, extracted from the served owner HTML:
+
+| group | blocks |
+|---|---|
+| **Core** | About, Instruments *(Filterable)*, Skills *(Filterable)*, Music *(Filterable)*, Location |
+| **Extras** | Connections, Resume |
+| pinned in the rail, not the list | the **Add gallery** countdown |
+
+- Groups and badges **are** there — the real classes are `.lg-caddy__grp` and
+  `.lg-bubble__find`, and the DOM text is `Core` / `Extras` / `Filterable`. They
+  render as CORE/EXTRAS/FILTERABLE only because
+  `.lg-caddy__grp{text-transform:uppercase}`. **Grepping the HTML for the
+  uppercase strings returns 0 and looks like a defect. It is not.**
+- **Gallery is behind the counter**, as the list says — correct.
+- **Services is absent, and that is DELIBERATE, not a stale session.**
+  `/srv/profile-app/config.php:124` sets
+  `LG_PROFILE_APP_LAUNCH_HIDDEN_BLOCKS = ['services','socials']`, and
+  `Block::launchHiddenBlocks()` strips those from the palette *and* from render.
+  The audit derived "Services in Core" from `Block.php`'s catalogue without the
+  config filter. **Do not chase this and do not "fix" your session over it.**
+
+### Selector reference (verified against the served dev2 DOM, 2026-07-30)
+
+Saves the next pass from finding these with an engine held open:
+`.lg-viewas` · `.lg-block__grip` · `.lg-block--header` · `.lg-block--location` ·
+`.lg-loc__audrow` (B3's two-audience dials) · `#lg-caddy` + `[data-caddy-open]`
+(4 openers) · `.lg-layoutrow` / `.lg-secopen` / `.lg-addsec` (option A) ·
+`.lg-gate` / `.lg-gate__join` (B8).
+
+### B8 IS UNBLOCKED — no mutation needed
+
+The list calls B8 impossible because fixture 1849 is parked `header=public`.
+It does not need 1849. **Three subjects already sit at `header=members`** and
+already render the real gate to an anonymous viewer — verified over HTTP with
+the gate cookie only, asserting `.lg-gate__lock` + "This profile is
+members-only" + `.lg-gate__join`, not merely a "Sign in" string that the site
+header also carries:
+
+| subject | anon result |
+|---|---|
+| `/u/pilot_pro` | ✅ gate renders — **use this one** (not a real person's profile) |
+| `/u/steve-cantrell` | ✅ gate renders |
+| `/u/buck-van-laarhoven-vl-guitar` | ✅ gate renders |
+| `/u/profileapp-test` | 404 — ignore |
+
+`pilot_pro` is the pick: the frame goes in a published handbook, and the other
+two are real members. **Nothing was mutated to get this** — fixture 1849 is
+untouched and still parked as the matrix expects.
+
 ### Build provenance of the old frames: NOT PROVEN
 
 Whether the 8 were shot against buck's stale tree (see the §1 correction) could not
