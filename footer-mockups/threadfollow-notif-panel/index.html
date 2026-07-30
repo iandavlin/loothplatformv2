@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thread-follow v2 — previs for Ian</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { background: var(--lg-cream); color: var(--lg-ink); }
+  .page { max-width: 1080px; margin: 0 auto; padding: 40px 22px 70px; }
+  @media (max-width: 640px) { .page { padding: 24px 14px 50px; } }
+  h1 { font: 700 27px/1.22 var(--lg-font-hub); margin: 0 0 8px; }
+  .lede { font: 400 15px/1.6 var(--lg-font-sans); color: var(--lg-mute); margin: 0 0 6px; max-width: 74ch; }
+  .lede b { color: var(--lg-ink); }
+  .meta { font: 500 12px/1.6 var(--lg-font-sans); color: var(--lg-mute); margin: 14px 0 0; }
+  .meta code { background: var(--lg-sage-tint); border-radius: 5px; padding: 2px 6px; color: var(--lg-sage-d); }
+
+  .rules { margin: 26px 0 0; padding: 18px 20px; border: 1px solid var(--lg-line);
+    border-radius: 14px; background: #fff; }
+  html[data-lguser-theme="dark"] .rules { background: var(--bg-card); }
+  .rules h2 { font: 700 13px/1 var(--lg-font-sans); letter-spacing: .07em; text-transform: uppercase;
+    color: var(--lg-sage-d); margin: 0 0 12px; }
+  .rules ol { margin: 0; padding-left: 20px; }
+  .rules li { font: 400 14px/1.62 var(--lg-font-sans); margin: 0 0 7px; }
+  .rules li b { font-weight: 700; }
+
+  h2.sec { font: 700 12px/1 var(--lg-font-sans); letter-spacing: .08em; text-transform: uppercase;
+    color: var(--lg-mute); margin: 40px 0 4px; }
+  h3.fr { font: 700 18px/1.3 var(--lg-font-hub); margin: 12px 0 4px; }
+  .fr-note { font: 400 13.5px/1.6 var(--lg-font-sans); color: var(--lg-mute); margin: 0 0 14px; max-width: 78ch; }
+  .fr-note b { color: var(--lg-ink); }
+  .decide { display: inline-block; font: 700 10.5px/1 var(--lg-font-sans); letter-spacing: .07em;
+    text-transform: uppercase; color: #fff; background: var(--lg-rust); border-radius: 999px;
+    padding: 5px 9px; margin-left: 8px; vertical-align: 3px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin: 0 0 8px; }
+  figure { margin: 0; border: 1px solid var(--lg-line); border-radius: 14px; overflow: hidden;
+    background: #fff; box-shadow: 0 1px 2px rgba(26,29,26,.04), 0 12px 26px -18px rgba(26,29,26,.3); }
+  html[data-lguser-theme="dark"] figure { background: var(--bg-card); }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption { font: 600 11.5px/1.4 var(--lg-font-sans); color: var(--lg-mute);
+    padding: 9px 12px; border-top: 1px solid var(--lg-line); }
+  .live { font: 500 12.5px/1.6 var(--lg-font-sans); color: var(--lg-mute); margin: 8px 0 0; }
+  .live a { color: var(--lg-sage-d); font-weight: 700; }
+
+  .open { margin: 44px 0 0; padding: 20px 22px; border: 1px solid var(--lg-rust);
+    border-radius: 14px; background: #fdf3ef; }
+  html[data-lguser-theme="dark"] .open { background: #2a1d19; }
+  .open h2 { font: 700 13px/1 var(--lg-font-sans); letter-spacing: .07em; text-transform: uppercase;
+    color: var(--lg-rust); margin: 0 0 12px; }
+  .open p { font: 400 14px/1.62 var(--lg-font-sans); margin: 0 0 12px; }
+  .open p:last-child { margin-bottom: 0; }
+  .open b { font-weight: 700; }
+  .gated { margin: 26px 0 0; padding: 16px 20px; border: 1px solid var(--lg-sage);
+    border-radius: 14px; background: var(--lg-sage-tint); }
+  .gated h2 { font: 700 13px/1 var(--lg-font-sans); letter-spacing: .06em; text-transform: uppercase;
+    color: var(--lg-sage-d); margin: 0 0 9px; }
+  .gated p { font: 400 14px/1.62 var(--lg-font-sans); color: var(--lg-ink); margin: 0; }
+  .ok, .ask { display: inline-block; font: 700 10px/1 var(--lg-font-sans); letter-spacing: .07em;
+    text-transform: uppercase; color: #fff; border-radius: 999px; padding: 5px 8px;
+    margin-left: 8px; vertical-align: 1px; }
+  .ok { background: var(--lg-sage); }
+  .ask { background: var(--lg-rust); }
+  .rules li i { font-style: normal; color: var(--lg-sage-d); font-weight: 700; }
+  .foot { margin: 40px 0 0; padding-top: 16px; border-top: 1px solid var(--lg-line);
+    font: 400 12px/1.7 var(--lg-font-sans); color: var(--lg-mute); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Thread-follow — previs v2</h1>
+  <p class="lede">Per discussion, <b>two independent opt-ins: notifications and emails</b>. Both default
+    <b>OFF</b> for everyone, always. Nothing subscribes you — not creating a topic, not replying, not
+    being @mentioned. You can hold either, both, or neither.</p>
+  <p class="meta">Spec: <code>docs/atlas/THREAD-FOLLOW-SPEC.md</code> · branch <code>threadfollow-spec</code>
+    · cites <code>main@c10df43</code> · <b>spec + mock only, nothing built</b></p>
+
+  <div class="gated">
+    <h2>✓ Gated 27 July — all three placements are settled</h2>
+    <p><b>Desktop card:</b> two icons, not one expanding control. <b>Mobile card:</b> the same two
+      icons at the right end of the mobile action bar. <b>Mobile sheet:</b> round buttons between the
+      title and the ×. Every rejected alternative has been <b>deleted</b> from the mocks and the doc
+      rather than kept around. <b>Frames 1, 2, 3 and 5 are done</b> — two decisions left below.</p>
+  </div>
+
+  <div class="rules">
+    <h2>Two things to decide — each has a recommendation</h2>
+    <ol>
+      <li><b>Account page</b> — how per-thread email fits the Weekly/Event switches you already ship. <i>Recommended: one new master row.</i> → frame 6</li>
+      <li><b>The 1,519 subscriptions already emailing members</b> — <i>Recommended: change no data, make them visible and one tap from off.</i> → frame 7</li>
+    </ol>
+    <p style="font:400 13px/1.6 var(--lg-font-sans);color:var(--lg-mute);margin:12px 0 0">
+      Plus one with no frame: whether an explicit email toggle should send email as it happens, or
+      only feed the weekly recap — at the bottom of this page.</p>
+  </div>
+
+  <h2 class="sec">Frame 1 — the feed card <span class="ok">gated</span></h2>
+  <h3 class="fr">Two icons, as you chose</h3>
+  <p class="fr-note">Bell and envelope as separate visible controls, beside Save. Card A is one on,
+    one off; card B is the default state every discussion starts in and stays in until someone clicks.
+    Eight controls in that row is the shape you approved.</p>
+  <div class="grid">
+    <figure><img src="shots/card-d-light.png" alt="Desktop feed card, light"><figcaption>Desktop 1280 · light — frames 1 and 2 on one page</figcaption></figure>
+    <figure><img src="shots/card-d-dark.png" alt="Desktop feed card, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
+  </div>
+
+  <h2 class="sec">Frame 2 — the mobile card <span class="ok">gated</span></h2>
+  <h3 class="fr">The same two icons, right end of the mobile bar</h3>
+  <p class="fr-note">Mobile cards use a different, sparser action bar — only Like, replies and Share,
+    with wide gaps — so unlike desktop there is room, with space to spare. Icon-only, 44px touch
+    targets. Your reason for choosing it is worth keeping: a card control whose whole point is opting
+    in without opening the thread is worthless if it only exists inside the thread.</p>
+  <div class="grid">
+    <figure><img src="shots/card-m-light.png" alt="Mobile card, light"><figcaption>Mobile 390 · light — recommended above, alternative below</figcaption></figure>
+    <figure><img src="shots/card-m-dark.png" alt="Mobile card, dark"><figcaption>Mobile 390 · dark</figcaption></figure>
+  </div>
+  <p class="live">Live: <a href="mock-card.html">mock-card.html</a> · <a href="mock-card.html?theme=dark">dark</a></p>
+
+  <h2 class="sec">Frames 3 + 5 — the discussion modal <span class="ok">gated</span></h2>
+  <h3 class="fr">Beside the size control</h3>
+  <p class="fr-note">The cluster reads <b>[title] [bell] [mail] [M] [×]</b> — the two state controls
+    grouped together, close rightmost. Second block shows both OFF, which is what every discussion
+    looks like until someone clicks.<br><br>
+    <b>Frame 5, third block — the mobile sheet header.</b> It has no S/M/L/XL control to sit beside,
+    so the two icons are round buttons between the title and the ×, keeping the order
+    title → switches → close, exactly like desktop.</p>
+  <div class="grid">
+    <figure><img src="shots/modal-d-light.png" alt="Modal header, light"><figcaption>Desktop 1280 · light</figcaption></figure>
+    <figure><img src="shots/modal-d-dark.png" alt="Modal header, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
+  </div>
+  <p class="live">Live: <a href="mock-modal.html">mock-modal.html</a> · <a href="mock-modal.html?theme=dark">dark</a></p>
+
+  <h2 class="sec">Frame 4 — the email unsubscribe page</h2>
+  <h3 class="fr">One click, no login, this discussion only</h3>
+  <p class="fr-note">Reached from a signed link in the email, so it works for someone logged out in
+    their inbox. Stopping email for one discussion <b>does not</b> touch its notifications — the page
+    says so. "Stop all discussion emails" is present but secondary. The link shows this page rather
+    than acting immediately, because mail scanners follow links and would otherwise unsubscribe people
+    who never clicked.</p>
+  <div class="grid">
+    <figure><img src="shots/unsub-d-light.png" alt="Unsubscribe page, light"><figcaption>Desktop 1280 · light</figcaption></figure>
+    <figure><img src="shots/unsub-d-dark.png" alt="Unsubscribe page, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
+    <figure><img src="shots/unsub-d-done.png" alt="Unsubscribe confirmed"><figcaption>After the click — with Undo</figcaption></figure>
+    <figure><img src="shots/unsub-m-light.png" alt="Unsubscribe page, mobile"><figcaption>Mobile 390 · light</figcaption></figure>
+  </div>
+  <p class="live">Live: <a href="mock-unsub.html">mock-unsub.html</a> ·
+    <a href="mock-unsub.html?theme=dark">dark</a> · <a href="mock-unsub.html?state=done">after the click</a></p>
+
+  <h2 class="sec">Frame 5 — the notifications panel</h2>
+  <h3 class="fr">The row ⋯ menu carries both switches</h3>
+  <p class="fr-note">New replies in a discussion you follow arrive as <b>one row that counts up</b>,
+    never one row per reply. The ⋯ on the row can switch either channel off — or on, since rows also
+    reach people following nothing. Mention rows offer both plus "Remove my mention", which now
+    unlinks your name and <b>changes nothing else</b>.</p>
+  <div class="grid">
+    <figure><img src="shots/notif-d-light.png" alt="Notifications panel, light"><figcaption>Desktop 1280 · light</figcaption></figure>
+    <figure><img src="shots/notif-d-dark.png" alt="Notifications panel, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
+    <figure><img src="shots/notif-m-light.png" alt="Notifications sheet, light"><figcaption>Mobile 390 · light — mention row menu</figcaption></figure>
+    <figure><img src="shots/notif-m-dark.png" alt="Notifications sheet, dark"><figcaption>Mobile 390 · dark</figcaption></figure>
+  </div>
+  <p class="live">Live: <a href="mock.html">mock.html</a> · <a href="mock.html?theme=dark">dark</a></p>
+
+  <h2 class="sec">Frame 6 — the account page <span class="ask">needs you</span></h2>
+  <h3 class="fr">Recommended: one new "Discussion emails" row</h3>
+  <p class="fr-note">You already ship Weekly Digest and Event Reminders there. The rule that keeps
+    them from contradicting each other: <b>the account page is a master switch per kind of email;
+    the per-discussion switches decide which discussions are in that kind.</b> Master off means
+    nothing is sent, whatever the individual discussions say — so the page can never claim "off"
+    while mail is still arriving. It also shows a count, so a member can see how many discussions
+    are emailing them.<br><br>
+    <b>The alternative</b> — no master, and the account page lists every discussion instead — is
+    drawn underneath. Honest, but someone following thirty threads gets a thirty-row settings page
+    and no single "make it stop" button, which is the one thing people want when they open that page
+    annoyed.</p>
+  <div class="grid">
+    <figure><img src="shots/account-d-light.png" alt="Account email prefs, light"><figcaption>Desktop 1280 · light — recommended above, alternative below</figcaption></figure>
+    <figure><img src="shots/account-d-dark.png" alt="Account email prefs, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
+    <figure><img src="shots/account-m-light.png" alt="Account email prefs, mobile"><figcaption>Mobile 390 · light</figcaption></figure>
+  </div>
+  <p class="live">Live: <a href="mock-account.html">mock-account.html</a> · <a href="mock-account.html?theme=dark">dark</a></p>
+
+  <h2 class="sec">Frame 7 — the 1,519 already emailing members <span class="ask">needs you</span></h2>
+  <h3 class="fr">Recommended: change no data — make them visible and one tap from off</h3>
+  <p class="fr-note">Live has 1,519 topic and 46 forum subscriptions sending real email today —
+    31 discussion emails in the last fortnight. <b>72% of them were created by exactly the
+    auto-subscribe you banned</b> (the person authored or replied in that thread). But <b>93% sit on
+    threads nobody has replied to in 90 days</b>, so the people actually affected today are
+    <b>49 members across 112 subscriptions</b>.<br><br>
+    The frame shows the recommendation as a member would experience it rather than as a table: the
+    email they already get grows a discussion-specific unsubscribe link, the card and thread finally
+    <i>show</i> them they're subscribed, and the account page names the count with one switch that
+    stops all of it. <b>Deleting the 1,091 unasked-for ones is not recommended</b> — that would be a
+    second change made on their behalf, in the other direction, and it would take 428 apparently
+    deliberate subscribes with it. <b>The one alternative</b> — also retire the 1,407 dormant ones —
+    is drawn at the bottom with its cost.</p>
+  <div class="grid">
+    <figure><img src="shots/legacy-d-light.png" alt="Existing subscriptions proposal, light"><figcaption>Desktop 1280 · light</figcaption></figure>
+    <figure><img src="shots/legacy-d-dark.png" alt="Existing subscriptions proposal, dark"><figcaption>Desktop 1280 · dark</figcaption></figure>
+  </div>
+  <p class="live">Live: <a href="mock-legacy.html">mock-legacy.html</a> · <a href="mock-legacy.html?theme=dark">dark</a></p>
+
+  <div class="open">
+    <h2>One thing left that has no frame — the email posture</h2>
+    <p>An earlier ruling turned all per-event discussion email permanently off, with the weekly digest
+      as the only email surface. The email you got on 26 July and called wanted was a
+      <b>"new discussion"</b> email from a <b>forum</b> subscription — 46 of those exist, and they
+      fire only when someone <i>starts</i> a thread. That is a different thing from the
+      <b>"new reply"</b> emails from <b>topic</b> subscriptions — 1,519 of those, firing on every
+      reply. One switch was covering two very different things.</p>
+    <p>With opt-in now the rule, the natural answer is that <b>an explicit envelope toggle is what
+      earns you the email</b> — a per-discussion email switch that never sends email would be a
+      contradiction. But that is your call, not ours, so nothing has been decided.</p>
+  </div>
+
+  <div class="open" style="border-color:var(--lg-sage);background:var(--lg-sage-tint)">
+    <h2 style="color:var(--lg-sage-d)">Heads-up — two lanes are designing your account page</h2>
+    <p>Frame 6 adds a <b>Discussion emails</b> row to the email preferences card. The weekly-recap
+      lane on dev2 is building its per-user digest section into that <b>same card</b>, governed by
+      the Weekly Digest switch you already ship. Nobody has done anything wrong — the two just
+      arrived from opposite ends.</p>
+    <p>The rule we are proposing keeps them from fighting: <b>the account page holds one switch per
+      kind of email; the per-discussion switches decide which discussions are in that kind; and a
+      recap is content inside a kind, never a new kind of its own.</b> If the recap stays under the
+      Weekly Digest switch rather than growing its own, both land cleanly and you keep one coherent
+      page instead of two half-designs.</p>
+  </div>
+
+  <p class="foot">Mock tooling, never shipped. Frames shot serially with headless Chrome on dev1;
+    markup and tokens copied from the real hub surfaces so the previs matches what would actually
+    render. Nothing in this design has been built.</p>
+</div>
+
+<script>
+  // Follow the viewer's OS theme so the page itself reads correctly in both;
+  // re-applied on resize for the same headless-clamp reason the mocks handle.
+  (function () {
+    function apply() {
+      var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (/(?:\?|&)theme=dark\b/.test(location.search)) dark = true;
+      document.documentElement.setAttribute('data-lguser-theme', dark ? 'dark' : 'light');
+    }
+    apply();
+    window.addEventListener('resize', apply);
+  })();
+</script>
+</body>
+</html>

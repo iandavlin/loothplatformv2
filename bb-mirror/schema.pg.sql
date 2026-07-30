@@ -217,6 +217,54 @@ CREATE TABLE IF NOT EXISTS forum_subscription (
 CREATE INDEX IF NOT EXISTS idx_subscription_target ON forum_subscription (target_kind, target_id);
 
 -- ============================================================================
+-- topic_follow — the 🔔 NOTIFICATIONS bit (thread-follow lane, 2026-07-28)
+--
+-- SPEC: docs/atlas/THREAD-FOLLOW-SPEC.md §5. Two INDEPENDENT opt-in bits per
+-- (member, discussion), both default OFF, and the native BB table above holds
+-- exactly ONE state per pair — so the second bit needs its own home:
+--
+--     ✉ EMAILS        → native wp_bb_notifications_subscriptions (BB's mailer
+--                        already reads it; mirrored INTO forum_subscription above)
+--     🔔 NOTIFICATIONS → THIS TABLE (the bell is entirely ours; no BB interop)
+--
+-- ⚠️ DELIBERATE DEVIATION FROM SPEC §5, flagged not buried. §5's *recommended*
+-- placement was the profile_app database keyed by user_uuid, so that leg 4 could
+-- become ONE loopback POST with fanout:'followers' expanded profile-app-side.
+-- Built HERE instead — the `looth` database, keyed by WP user_id, beside the
+-- subscription mirror it is the peer of. Reasons, in order of weight:
+--   1. BOTH the only writer (bb-mirror/api/v0/follow.php) and the only reader
+--      (notify-bridge leg 4) run on the WP pool with native access to THIS
+--      database. profile_app is unreachable from WP (internal-notify.php:24-28),
+--      so §5's placement makes every write — and the HOT batch GET on every feed
+--      render — a loopback HTTP hop.
+--   2. The batch GET already has to read the ✉ bit from WP/MySQL. Keeping the 🔔
+--      bit one connection away rather than one HTTP call away keeps that endpoint
+--      a pair of local queries.
+--   3. user_id (BIGINT, WP id) is the key `forum_subscription` already uses, so
+--      the two bits are joinable without a uuid bridge.
+-- §5 itself offers this as the "simpler fallback … cheaper to build, worse at
+-- scale". The scale caveat is about a topic with thousands of followers; measured
+-- reality is 520 replies in 90 days (LIVE, 2026-07-28), so leg 4 keeps today's
+-- per-recipient POSTs. If that ever bites, the fan-out is an optimisation over the
+-- SAME rows — this shape does not block it.
+--
+-- No FK: `topic` here is a mirror and a follow may legitimately outlive a sync gap.
+-- The (topic_id) index is what leg 4 reads — "everyone following THIS topic".
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS topic_follow (
+  user_id     BIGINT      NOT NULL,
+  topic_id    BIGINT      NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, topic_id)
+);
+CREATE INDEX IF NOT EXISTS idx_topic_follow_topic ON topic_follow (topic_id);
+-- looth-dev (the WP FPM pool that runs follow.php) and profile-app arrive via this
+-- schema's DEFAULT PRIVILEGES; looth_ro does NOT — it is granted per-table, as on
+-- forum_subscription. Without it the read-only audit role cannot see this table,
+-- and "a tool that sanitises on read cannot audit the store" cuts both ways.
+GRANT SELECT ON topic_follow TO looth_ro;
+
+-- ============================================================================
 -- person (denormalized author cache; NOT identity authority)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS person (

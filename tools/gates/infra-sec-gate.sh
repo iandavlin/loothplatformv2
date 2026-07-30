@@ -20,24 +20,30 @@
 # Invoked by tools/gates/run-all.sh. Exit 0 = GREEN, non-zero = RED.
 set -uo pipefail
 
-HOST="https://dev.loothgroup.com"
-CONF="/etc/nginx/sites-available/dev.loothgroup.com.conf"
+# Host / token / vhost come from the shared resolver — never hardcode them here
+# again (see tools/gates/gate-env.sh for why). $CONF stays the VHOST, because
+# the CDP-IN-PROD assertion below greps the perimeter conf itself: pointing it
+# at the token snippet would make that check vacuously green.
+. "$(dirname "$0")/gate-env.sh" || exit 1
+HOST="$LG_GATE_HOST"
+CONF="$LG_GATE_VHOST"
+GATE="$LG_GATE_TOKEN"
 ACT="$HOST/wp-json/looth/v1/activity?limit=1"
 fails=()
 
-. "$(dirname "$0")/lib/gate-token.sh"
-GATE=$(gate_token) || { echo "GATE-ERROR  $GATE_TOKEN_ERR"; exit 1; }
-
 audience() {  # $1 = extra cookie(s) appended to the gate cookie
-  gate_curl -s -D - -o /dev/null -b "loothdev_auth=$GATE${1:+; $1}" "$ACT" \
+  curl -s $LG_GATE_RESOLVE -D - -o /dev/null -b "loothdev_auth=$GATE${1:+; $1}" "$ACT" \
     | grep -i '^X-LG-Activity-Audience:' | tr -d '\r' | awk '{print tolower($2)}'
 }
 
 # ---- 1. junk logged-in cookie must resolve to the PUBLIC bucket ----
 a_junk=$(audience "wordpress_logged_in_x=junkjunkjunk")
 a_anon=$(audience "")
-WPC=$(sudo -n wp --path=/var/www/dev --allow-root eval \
-      '$e=time()+3600; echo LOGGED_IN_COOKIE."=".wp_generate_auth_cookie(1912,$e,"logged_in");' 2>/dev/null)
+# wp-cli as looth-dev, NOT www-data: /etc/looth/live-wp-keys.php is root:looth-dev
+# 0640, so www-data cannot bootstrap WP at all and the positive control came back
+# empty — which trips AUTH-COOKIE-CTRL below, i.e. the gate reports itself blind.
+WPC=$(sudo -u looth-dev wp --path=/var/www/dev eval \
+      '$e=time()+3600; echo LOGGED_IN_COOKIE."=".wp_generate_auth_cookie(1912,$e,"logged_in");' 2>/dev/null | tail -1)
 a_valid=$(audience "$WPC")
 
 if [ "$a_junk" != "public" ]; then
@@ -49,13 +55,13 @@ fi
 
 # ---- 2. /v2/ no autoindex, no PHP source ----
 for d in "/v2/" "/v2/src/"; do
-  code=$(gate_curl -s -o /tmp/.v2body -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST$d")
+  code=$(curl -s $LG_GATE_RESOLVE -o /tmp/.v2body -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST$d")
   if [ "$code" = "200" ] && grep -qi "Index of" /tmp/.v2body; then
     fails+=("V2-AUTOINDEX      $d enumerates the source tree (autoindex must be off)")
   fi
 done
 rm -f /tmp/.v2body
-code_php=$(gate_curl -s -o /dev/null -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST/v2/lg-layout-v2.php")
+code_php=$(curl -s $LG_GATE_RESOLVE -o /dev/null -w '%{http_code}' -b "loothdev_auth=$GATE" "$HOST/v2/lg-layout-v2.php")
 if [ "$code_php" != "403" ]; then
   fails+=("V2-PHP-SOURCE     /v2/lg-layout-v2.php returned $code_php (must be 403 — never serve source)")
 fi

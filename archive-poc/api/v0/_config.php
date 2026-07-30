@@ -11,10 +11,19 @@
  *     "sponsors":     [{ "name":..., "url":..., "logo":..., "bg":... }, ...],
  *     "local_looths": [{ "name":..., "url":..., "avatar":... }, ...],
  *     "cta_member":   [{ "label":..., "url":..., "style":..., "icon"?:..., "action"?:..., "attr"?:... }, ...],
- *     "cta_public":   [...]
+ *     "cta_public":   [...],
+ *     "rows":         [{ "id":..., "type":..., "query": {...} }, ...],
+ *     "featured_member": { "enabled":..., "name":..., "role":..., ... },   // flat map
+ *     "member_greeting": { "body":... }                                    // flat map
  *   }
  *
  * Any subset is accepted — missing keys leave the existing config value alone.
+ *
+ * SANITIZATION (see _html-sanitize.php): `rows[].query.html` is the one field
+ * that reaches the public page as raw markup, so it is whitelist-sanitized here.
+ * `video_id` and `aspect` are likewise normalized because both are interpolated
+ * into the rendered document. This is the ONLY write path to config.json, so
+ * both writers (wp-admin dash, front-end editor) are covered by construction.
  * GET returns the current saved config (no auth needed; nginx already
  * loopback-gates this whole location).
  *
@@ -23,6 +32,10 @@
 
 declare(strict_types=1);
 require __DIR__ . '/../../config.php';
+// The write boundary owns sanitization: rows[].query.html reaches the public
+// page as raw markup, so every writer (wp-admin dash AND the front-end editor)
+// gets scrubbed here rather than each being trusted to scrub itself.
+require __DIR__ . '/_html-sanitize.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -65,8 +78,12 @@ if ($method === 'GET') {
 
         // Per-key overlay (matches index.php's semantics): saved key replaces
         // defaults key wholesale; missing saved key falls through to defaults.
+        // Keep this list in step with $allowed_keys below — a key that is
+        // writable but missing here reads back as its default, which is how a
+        // form ends up silently reverting a saved value on its next save.
         $effective = $defaults;
-        foreach (['sponsors','local_looths','cta_member','cta_public','rows'] as $k) {
+        foreach (['sponsors','local_looths','cta_member','cta_public','rows',
+                  'featured_member','member_greeting','hub_teaser'] as $k) {
             if (isset($saved[$k]) && is_array($saved[$k])) $effective[$k] = $saved[$k];
         }
         echo json_encode($effective, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
@@ -107,7 +124,18 @@ if (!is_array($payload)) {
 // Whitelist + shape-validate each top-level key. Anything not in this set is
 // silently dropped, so a poisoned dash request can't add arbitrary keys.
 // `rows` is the front-page row list — overlays rows.json when present.
-$allowed_keys = ['sponsors', 'local_looths', 'cta_member', 'cta_public', 'rows'];
+//
+// Two shapes live here (see $assoc_keys): LIST-of-maps keys (sponsors, CTAs…)
+// and FLAT-map keys (featured_member, member_greeting). featured_member has been
+// readable in defaults.php + index.php since the Bento band shipped but was
+// never in this list, so it could not be saved through the webhook at all — the
+// value in the live config.json predates the whitelist. The front-end editor
+// edits it, so it joins the list here.
+$allowed_keys = ['sponsors', 'local_looths', 'cta_member', 'cta_public', 'rows',
+                 'featured_member', 'member_greeting'];
+
+/** Keys whose value is a flat key→scalar map, not a list of rows. */
+$assoc_keys = ['featured_member', 'member_greeting'];
 $existing = [];
 if (is_file(LG_ARCHIVE_POC_CONFIG_JSON)) {
     $existing_raw = @file_get_contents(LG_ARCHIVE_POC_CONFIG_JSON);
@@ -128,6 +156,14 @@ foreach ($allowed_keys as $k) {
         // accept any associative structure — just require an `id` and `type`
         // per row.
         $clean = lg_normalize_rows($v);
+    } elseif (in_array($k, $assoc_keys, true)) {
+        // Flat key→scalar map. Every value is rendered through h() on the
+        // front page, so the scalar filter is the whole contract here.
+        $clean = [];
+        foreach ($v as $mk => $mv) {
+            if (!is_string($mk)) continue;
+            if (is_scalar($mv) || $mv === null) $clean[$mk] = $mv;
+        }
     } else {
         // Sponsor / CTA / Looth rows are flat key→scalar maps.
         $clean = [];
@@ -166,7 +202,21 @@ function lg_normalize_rows(array $rows): array {
                 foreach ($v as $qk => $qv) {
                     if (!is_string($qk)) continue;
                     if (is_scalar($qv) || $qv === null) {
-                        $q[$qk] = $qv;
+                        // Three query keys are not opaque scalars — they are
+                        // rendered into the page and must be normalized HERE,
+                        // at the only write boundary, not trusted from a client:
+                        //   html     → echoed RAW by _render-main-row.php:476
+                        //   video_id → interpolated into the YouTube iframe src
+                        //   aspect   → interpolated into a CSS class name
+                        if ($qk === 'html') {
+                            $q[$qk] = lg_archive_poc_sanitize_html((string) $qv);
+                        } elseif ($qk === 'video_id') {
+                            $q[$qk] = lg_archive_poc_youtube_id((string) $qv);
+                        } elseif ($qk === 'aspect') {
+                            $q[$qk] = lg_archive_poc_aspect((string) $qv);
+                        } else {
+                            $q[$qk] = $qv;
+                        }
                     } elseif ($qk === 'exclude' && is_array($qv)) {
                         $q[$qk] = array_values(array_filter(array_map('strval', $qv)));
                     } elseif ($qk === 'exclude_kinds' && is_array($qv)) {

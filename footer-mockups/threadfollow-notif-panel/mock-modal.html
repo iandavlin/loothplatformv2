@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — discussion modal header cluster (THREAD-FOLLOW-SPEC §2.3)</title>
+<!--
+  MOCK ONLY — not served anywhere. THREAD-FOLLOW-SPEC.md §2.3, frame 3.
+  The real header is built in bb-mirror/web/forums.js ensure() at :4215-4220 —
+  [.lg-dmodal__title] [.lg-dmodal__size] [.lg-dmodal__x]. .lg-dmodal__size is the
+  S/M/L/XL panel-size cycle (SIZES :4232, rendered uppercase :4238, cycled :4241);
+  it renders those literal letters, which is the "s m l xl" Ian pointed at.
+  The two new toggles go BEFORE it, so the cluster reads
+    [title] … [🔔] [✉] [M] [×]
+  — state controls grouped, dismissal rightmost.
+
+  NB the --lg-read-scale text-size pill (forums.js:218-244) is NOT in this header and
+  is not on the page at all: retired 2026-06-10, hub_render_view_toggles() emits nothing
+  (_filter-rail.php:103-114) and hub-polish.js:4387 also CSS-hides it. See spec §2.3.
+
+  Also drawn: the ≤640 sheet header (.lrs-hd, hub-polish.js:3628) which has NO size cluster.
+  IAN GATED 2026-07-27: circular 34px buttons between .lrs-t and .lrs-x. The rejected placement
+  (a control row BENEATH the header) has been DELETED, not archived — it added permanent vertical
+  chrome to the smallest screen.
+  Open with ?theme=dark for the dark frames.
+-->
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  .stage { background: rgba(26,29,26,.45); border-radius: 16px; padding: 26px; margin: 0 0 24px; }
+  html[data-lguser-theme="dark"] .stage { background: rgba(0,0,0,.55); }
+
+  /* ── #lg-dmodal panel + head (forums.js:4214-4222 markup; forums.css .lg-dmodal__*) ── */
+  .lg-dmodal__panel { background: var(--bg-card); border-radius: 14px; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,.28); max-width: 720px; margin: 0 auto; }
+  .lg-dmodal__head { display: flex; align-items: center; gap: 6px;
+    padding: 13px 14px; border-bottom: 1px solid var(--lguser-line); }
+  .lg-dmodal__title { flex: 1 1 auto; min-width: 0; margin: 0;
+    font: 700 16px/1.25 var(--lg-font-hub); color: var(--lg-ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lg-dmodal__size, .lg-dmodal__x { -webkit-appearance: none; appearance: none; background: none;
+    border: 0; cursor: pointer; flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font: 700 12px/1 var(--lg-font-sans); color: var(--lg-mute); }
+  .lg-dmodal__x { font-size: 20px; font-weight: 400; }
+  .lg-dmodal__size:hover, .lg-dmodal__x:hover { background: var(--lg-sage-tint); color: var(--lg-ink); }
+  /* the two NEW peers, sharing the header-button geometry */
+  .lg-dmodal__notify, .lg-dmodal__email { -webkit-appearance: none; appearance: none;
+    background: none; border: 0; cursor: pointer; flex: 0 0 auto; height: 30px;
+    padding: 0 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px;
+    font: 700 12px/1 var(--lg-font-sans); color: var(--lg-mute); transition: color .12s, background .12s; }
+  .lg-dmodal__notify .gly, .lg-dmodal__email .gly { font-size: 14px; line-height: 1; }
+  .lg-dmodal__notify:hover, .lg-dmodal__email:hover { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+  .lg-dmodal__notify[aria-pressed="true"], .lg-dmodal__email[aria-pressed="true"] {
+    background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+  .lg-dmodal__body { padding: 16px 18px 22px; font-family: var(--lg-font-hub); }
+  .op-h { display: flex; align-items: center; gap: 9px; margin: 0 0 10px; }
+  .op-av { width: 34px; height: 34px; border-radius: 50%; background: var(--lguser-accent); color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; font: 700 13px/1 var(--lg-font-sans); }
+  .op-n { font: 700 13.5px/1.2 var(--lg-font-sans); color: var(--lg-ink); }
+  .op-t { font: 400 11.5px/1 var(--lg-font-sans); color: var(--lg-mute); margin-top: 2px; }
+  .op-b { font: 400 15px/1.55 var(--lg-font-hub); color: var(--lg-ink); margin: 0; }
+  .rep { display: flex; gap: 9px; margin-top: 16px; }
+  .rep .bub { background: var(--lguser-bubble); border-radius: 16px; padding: 8px 13px; }
+  .rep .bn { font: 700 13px/1.2 var(--lg-font-sans); color: var(--lg-ink); margin-bottom: 2px; }
+  .rep .bb { font: 400 14px/1.42 var(--lg-font-hub); color: var(--lg-ink); margin: 0; }
+
+  /* ── ≤640 sheet header (.lrs-hd, hub-polish.js:3628 + :3171 styles) ── */
+  .lrs-card { background: var(--bg-card); border-radius: 18px 18px 0 0; overflow: hidden;
+    max-width: 380px; margin: 0 auto; box-shadow: 0 -8px 40px rgba(0,0,0,.3); }
+  .lrs-grab { width: 38px; height: 4px; border-radius: 3px; background: var(--lg-line); margin: 9px auto 4px; }
+  .lrs-hd { display: flex; align-items: center; gap: 8px; padding: 2px 14px 11px;
+    border-bottom: 1px solid var(--lguser-line); }
+  .lrs-t { flex: 1 1 auto; min-width: 0; font: 700 15px/1.25 var(--lg-font-hub); color: var(--lg-ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lrs-x { background: none; border: 0; color: var(--lg-mute); font-size: 22px; cursor: pointer;
+    width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto; }
+  .lrs-hd .fc-notify, .lrs-hd .fc-email { width: 34px; height: 34px; justify-content: center;
+    padding: 0; border-radius: 50%; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="capt">Frame 3 — desktop discussion modal · spec §2.3 · header cluster</p>
+  <p class="legend"><b>A</b> · both ON — <code>[title] [bell Notifying] [mail Emailing] [M] [×]</code></p>
+
+  <div class="stage">
+    <div class="lg-dmodal__panel">
+      <header class="lg-dmodal__head">
+        <h2 class="lg-dmodal__title">Truss rod won’t budge on a ’74 Jazz — heat or walk away?</h2>
+        <!-- NEW · spec §2.3, before the size control -->
+        <button type="button" class="lg-dmodal__notify" aria-pressed="true" aria-label="Stop notifications"><span class="gly"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>Notifying</button>
+        <button type="button" class="lg-dmodal__email" aria-pressed="true" aria-label="Stop emails"><span class="gly"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>Emailing</button>
+        <!-- EXISTING · forums.js:4218, SIZES ['s','m','l','xl'] rendered uppercase -->
+        <button type="button" class="lg-dmodal__size" title="Modal size">M</button>
+        <button type="button" class="lg-dmodal__x" aria-label="Close">&times;</button>
+      </header>
+      <div class="lg-dmodal__body">
+        <div class="op-h"><span class="op-av">DP</span><span><span class="op-n">Doug Proper</span><div class="op-t">3h ago · Repair</div></span></div>
+        <p class="op-b">Nut turns maybe 5° then stops hard. I’ve got it strung down and sitting overnight with a lamp on the heel — before I lean on it any further, is there a point where you just call it and pull the fingerboard?</p>
+        <div class="rep"><span class="op-av" style="width:30px;height:30px;font-size:12px">SF</span>
+          <div class="bub"><div class="bn">Sharon Fisher</div><p class="bb">Don’t lean on it. If it’s a single-action rod that stopped that early, the anchor is usually the problem, not the threads.</p></div></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="legend"><b>B</b> · both OFF — the default on every discussion until the member clicks. Same cluster, unpressed.</p>
+
+  <div class="stage">
+    <div class="lg-dmodal__panel">
+      <header class="lg-dmodal__head">
+        <h2 class="lg-dmodal__title">Bookmatched claro walnut top — glue line keeps ghosting</h2>
+        <button type="button" class="lg-dmodal__notify" aria-pressed="false" aria-label="Notify me about new replies"><span class="gly"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>Notify</button>
+        <button type="button" class="lg-dmodal__email" aria-pressed="false" aria-label="Email me about new replies"><span class="gly"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>Email</button>
+        <button type="button" class="lg-dmodal__size" title="Modal size">L</button>
+        <button type="button" class="lg-dmodal__x" aria-label="Close">&times;</button>
+      </header>
+      <div class="lg-dmodal__body">
+        <div class="op-h"><span class="op-av">SF</span><span><span class="op-n">Sharon Fisher</span><div class="op-t">1d ago · Build</div></span></div>
+        <p class="op-b">Third attempt. Cauls are flat, I’m at 90 psi, and it still shows a hairline under finish. Same batch of hide glue, same shop temp.</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="capt" style="margin-top:26px">Frame 5 — the ≤640 sheet header · spec §2.4 · <b>IAN GATED 2026-07-27</b></p>
+  <p class="legend">The mobile sheet has NO size control to sit beside — its header is just title + close.
+    <b>.lrs-notify + .lrs-email as circular 34px buttons between the title and the ×</b>, so the order
+    reads title → state → dismiss and matches desktop.</p>
+  <div class="stage" style="padding:26px 26px 0">
+    <div class="lrs-card">
+      <div class="lrs-grab"></div>
+      <div class="lrs-hd">
+        <span class="lrs-t">Truss rod won’t budge</span>
+        <button class="fc-notify" aria-pressed="true" aria-label="Notifications on"><span class="gly"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span></button>
+        <button class="fc-email" aria-pressed="false" aria-label="Emails off"><span class="gly"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span></button>
+        <button class="lrs-x" aria-label="Close">&times;</button>
+      </div>
+      <div style="padding:14px;font-family:var(--lg-font-hub)">
+        <div class="op-h"><span class="op-av" style="width:30px;height:30px;font-size:12px">DP</span><span><span class="op-n">Doug Proper</span><div class="op-t">3h ago</div></span></div>
+        <p class="op-b" style="font-size:14.5px">Nut turns maybe 5° then stops hard…</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">One state, three surfaces: these controls and the card controls read and write the same two bits,
+    as does the notifications-panel row menu and the email unsubscribe page (spec §0 ruling 3).</p>
+</div>
+
+<script>
+  (function () {
+    function apply() {
+      var dark = /(?:\?|&)theme=dark\b/.test(location.search);
+      document.documentElement.setAttribute('data-lguser-theme', dark ? 'dark' : 'light');
+    }
+    apply();
+    window.addEventListener('resize', apply);   // headless clamps to 500px then relayouts
+  })();
+</script>
+</body>
+</html>
