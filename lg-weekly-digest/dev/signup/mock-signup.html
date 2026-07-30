@@ -20,9 +20,17 @@
       subscribers have NO wp_users row, so this page's audience is NON-MEMBERS.
     - Brand tokens are the email builder's own: gold #ECB351, dark #2B2318,
       mint #87986A / #D4E0B8, paper #FAF6EE.
-    - Craft standard: no image is a raw upload. The one photographic slot uses
-      /img.php?w= with srcset and explicit width/height. Nothing loads eagerly
-      that an anonymous visitor does not need.
+    - Craft standard: checked against tools/gates/craft-gate.py's real thresholds,
+      not asserted. This page has ZERO <img> tags — the section icons are text
+      glyphs — so the resizer/srcset/dimensions rules have nothing to bite on.
+      10KB against a 2500KB page budget, no external hosts, no editor markers,
+      and the single iframe (the sample email) is loading="lazy".
+
+      SAID PLAINLY BECAUSE AN EARLIER DRAFT OF THIS COMMENT CLAIMED OTHERWISE: it
+      described "the one photographic slot" using /img.php?w= with srcset and
+      explicit width/height. There is no such slot and never was. If a real photo
+      is added later that rule applies in full and this note stops being true —
+      the gate is the authority, not this comment.
 -->
 <style>
   :root{
