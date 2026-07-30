@@ -1890,13 +1890,15 @@
        dangerouslyPasteHTML runs the clipboard parser, which is how the composer sheet
        already seeds the same content correctly. 'silent' keeps it out of the undo stack
        so a stray ctrl-Z cannot rewind the post to empty. */
-    function ntmSeedBody(html) {
+    function ntmSeedBody(html, done) {
       var tries = 0;
       (function seed() {
         if (ntmQuill) {
           try { ntmQuill.setContents([], 'silent'); } catch (e) {}
           if (html) { try { ntmQuill.clipboard.dangerouslyPasteHTML(html, 'silent'); } catch (e) {} }
+          if (done) done(true);
         } else if (++tries < 30) { setTimeout(seed, 100); }
+        else if (done) { done(false); }   // Quill never arrived — say so, don't pretend
       })();
     }
 
@@ -1957,9 +1959,9 @@
                                                   function () { return { ok: false, j: {} }; }); })
         .then(function (res) {
           if (ntmEditId !== want) return;               // a later open owns the modal now
-          ntmEditLoading = false;
-          if (ntmSubmit) ntmSubmit.disabled = false;
           if (!res.ok || !res.j || !res.j.ok) {
+            ntmEditLoading = false;
+            if (ntmSubmit) ntmSubmit.disabled = false;
             ntmStatus.textContent = (res.j && (res.j.message || res.j.error))
               || "Couldn't load this post to edit.";
             return;
@@ -1968,7 +1970,20 @@
           if (ntmTitleIn && d.title) ntmTitleIn.value = d.title;
           // The STORED body is the authority on which inline images this post owns.
           ntmEditInlineSrcs = lgBodyImageSrcs(lgStripAttachmentWrappers(d.content || ''));
-          ntmSeedBody(lgStripAttachmentWrappers(d.content || ''));
+          /* Save is released when the BODY IS IN THE EDITOR, not when the payload
+             lands. Those are not the same moment: the editor seeds through a retry
+             loop waiting on Quill, so on a slow load the payload can arrive — arming
+             Save — while the editor is still empty. One click there writes that
+             emptiness over a real post, silently. Measured: 1 run in 3 on this box
+             showed the body still empty shortly after the payload had returned. */
+          ntmSeedBody(lgStripAttachmentWrappers(d.content || ''), function (seeded) {
+            if (ntmEditId !== want) return;
+            ntmEditLoading = false;
+            if (ntmSubmit) ntmSubmit.disabled = false;
+            if (!seeded) {
+              ntmStatus.textContent = "Couldn't load this post's text — reload before saving.";
+            }
+          });
           if (d.forum_id) ntmSetForum(d.forum_id);      // the stored forum beats the caller's
           ntmSetTags(d.tags || []);
           if (ntmWiz) ntmWiz.goTo(2);                   // stay on Write after the refill
@@ -2805,6 +2820,16 @@
       frmOverlay.hidden = true;
       document.body.classList.remove('ntm-active');
       frmStatus.textContent = '';
+      /* Empty the editor on the way OUT, not only on the way in (Ian 2026-07-30:
+         a NEW reply or post must start blank; only an EDIT is pre-filled).
+
+         frmOpen already resets, so this is the belt to that braces — and it is not
+         theoretical: measured on dev2, after editing a reply and closing, the closed
+         composer still held that reply's text, so ANY route that reveals the overlay
+         without going through frmOpen shows the previous reply's words in what the
+         member believes is a blank box. Clearing here makes stale content impossible
+         by construction rather than by remembering to reset at every entrance. */
+      frmResetEditor();
       frmEditReplyId = 0;                                     // exit edit mode
       frmEditTopicId = 0; frmEditTopicForumId = 0;            // exit topic-edit mode
       frmShowTitle(false);
@@ -4715,11 +4740,13 @@
       del.setAttribute('aria-label', 'Delete this post');
       del.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg> Delete';
       // Edit the OP via the SAME Quill composer used to edit a reply
-      // (lgFrmEditTopic) — unified "new edit" (Ian 2026-06-25): the OP no longer
-      // opens the new-topic wizard. The composer shows the title field, pops over
-      // the still-open modal, and updates the OP in place on save. Falls back to
-      // the wizard only if the unified composer isn't present. Gated to author/mod
-      // by the shared auth check below.
+      // (lgNtmEditTopic) — Ian 2026-07-30 SUPERSEDES the 2026-06-25 "unified new
+      // edit": editing a discussion reuses the composer that CREATES one ON THIS
+      // VIEWPORT, which here is the New post WIZARD (Where/Write/Photos/Review),
+      // pre-filled and opened on Write. The desktop/mobile split is deliberate and
+      // stays; what must match per viewport is edit vs CREATE, not desktop vs mobile.
+      // Falls back to the frm composer only if the wizard is absent. Gated to
+      // author/mod by the shared auth check below.
       var edit = document.createElement('button');
       edit.type = 'button'; edit.className = 'lg-dmodal__act lg-dmodal__edit'; edit.hidden = true;
       edit.setAttribute('aria-label', 'Edit this post');
