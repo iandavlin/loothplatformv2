@@ -4593,7 +4593,39 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
     display: flex; align-items: center; gap: 12px;
     padding-top: 10px; border-top: 1px solid var(--border-soft, var(--border));
   }
-  .feed-page .feed-card .fc-actions .fcr { flex: 1 1 auto; min-width: 0; }
+  /* ── THE ACTION ROW MUST NOT SPLIT ITS STATE CLUSTER ──────────────────────
+     Measured on the REAL dev2 origin at 1280px, /hub/?type=discussions:
+     18 of 18 discussion cards overflowed. The row is 349px wide in the desktop
+     grid column, its children add up to 378px (+8px gaps x4), so ~410px of
+     content was being asked to fit 349. Card 1 was worse: its reaction bar alone
+     measured 349px — the entire row.
+
+     The reaction bar ALREADY had `flex:1 1 auto; min-width:0` and still refused
+     to give up a pixel, which is the part worth remembering: with
+     `flex-wrap: wrap`, the browser breaks items onto a NEW LINE *before* it
+     shrinks them. Line-breaking is decided first; flex-shrink only applies
+     within a line that has already been formed. So a shrinkable item next to
+     wrap:wrap never shrinks — it just pushes its neighbours off the line. The
+     victims were whichever controls happened to be last, which is how ☆/🔔/✉/
+     Share ended up scattered across two lines instead of reading as one cluster.
+
+     nowrap makes flex-shrink take effect again, and the reaction bar is the
+     right thing to absorb it: it is the only elastic member (chips, already
+     horizontally scrollable in spirit), while the eight state controls are
+     fixed-size affordances that must all stay reachable. overflow:hidden keeps
+     a squeezed chip row clipping cleanly instead of spilling over Save. */
+     ⚠️ min-width is NOT 0, and that number is arithmetic, not taste. With
+     `min-width:0` the reaction bar shrank all the way to nothing and took the
+     "React" button with it — I had simply traded a missing 🔔/✉ for a missing
+     React, which is the same bug wearing a different hat. The floor keeps the
+     React affordance whole and lets only the chips BEYOND it clip.
+     The budget, measured at the 349px grid column: Save 69 + 🔔 22 + ✉ 22 +
+     Share 65 = 178, plus four 8px gaps = 210. That leaves 139px, so a 120px
+     floor fits with room to spare and still holds at the narrower 1024 column. */
+  .feed-page .feed-card .fc-actions { flex-wrap: nowrap; }
+  .feed-page .feed-card .fc-actions .fcr {
+    flex: 1 1 auto; min-width: 120px; overflow: hidden;
+  }
   .feed-page .feed-card .fc-actions .feed-card__comments-btn,
   .feed-page .feed-card .fc-actions .fc-save {
     flex: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
