@@ -180,6 +180,21 @@ echo
 #     --cookies /tmp/tf-gate/cookies-msg.txt --gate "$LG_GATE_TOKEN" --rewrite-origin &
 #   python3 tools/gates/messages-longpress-react-gate.py --url http://127.0.0.1:8897
 #
+# react-controls-reachable-gate is held out for the same reason (needs a cookie-carrying
+# proxy, and leg B needs a member with a thread). Red/green-proven 2026-07-31: exit 1
+# against the serving checkout, exit 0 against the fix. It guards TWO live defects that
+# were both PRESENT, styled, and impossible to use:
+#   A. the card react palette clipped by its own offset parent (.fcr overflow:hidden,
+#      765dbc3) — reported by Ian as "a bad z" because a clipped popover and one painted
+#      behind something are indistinguishable from outside;
+#   B. the messages React control revealed by :hover ALONE, so on a touchscreen at
+#      >=641px it could never be opened at all.
+# In BOTH red runs a presence-style assertion PASSES ("the palette is open and has a real
+# box"). Only elementFromPoint separates painted-and-reachable from merely present.
+#
+#   python3 tools/gates/react-controls-reachable-gate.py --url http://127.0.0.1:8897
+#   # --leg a  (cards only, no thread needed)   --leg b  (messages only)
+#
 #   ⚠️ --rewrite-origin IS NOT OPTIONAL. profile-app's CSRF guard (_bootstrap.php)
 #   rejects any Origin that is not a loothgroup.com host, so without it EVERY react
 #   answers 403 csrf_origin_rejected and the gate reports the defect it exists to

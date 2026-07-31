@@ -173,6 +173,31 @@ It also carries the absence lesson in its sharpest form: on the broken build the
 DID open, and a presence check said so (that assertion passes in the red run). The
 load-bearing assertion is that it is **still** open once the finger lifts.
 
+### "Bad z-index" is usually a CLIP, and both look identical from outside
+
+`tools/gates/react-controls-reachable-gate.py` (HELD OUT; red/green-proven 2026-07-31)
+guards two live defects that were each **present, correctly styled, and impossible to
+use** — the same class as the Sign-in lockout above, found twice more in one day:
+
+* **The card react palette** was `position:absolute; bottom:calc(100% - 2px)`, i.e. it
+  opened *upward, entirely outside* `.fcr` — and `765dbc3` had put `overflow:hidden` on
+  `.fcr` to let the action row shrink. Its own offset parent clipped it away. Ian
+  reported it as *"the react button modal on all cards has a bad z"*, and that reading is
+  completely reasonable: **a clipped popover and one painted behind something look the
+  same.** `z-index: 20` was being honoured the entire time. When a popover "has a bad z",
+  check `overflow` on every ancestor up to the stacking context *before* touching
+  `z-index` — and fix it by moving the clip onto the in-flow child that actually needed
+  clipping, so the layout guarantee the `overflow:hidden` was bought for survives.
+* **The messages React control** was revealed by `:hover` alone, so on a touchscreen at
+  ≥641px — where the *desktop* modal renders — no hover event ever fires and the only
+  route to reacting was unreachable. Gate the **hover capability** (`hover: none`), never
+  a width breakpoint: absence of hover is the cause, and a large touchscreen is exactly
+  what a width query misses.
+
+In both RED runs a presence-style assertion **passes** ("the palette is open and has a
+real box"). `elementFromPoint` is the only check that separates *painted and reachable*
+from *present*.
+
 **A gate that CANNOT RUN is not a gate that passed, and not one that failed.**
 Gate 2 drives a real Chrome; with no engine on :9222 it reports one `GATE-ERROR`
 per page and exits 1, which is indistinguishable from finding real violations —
