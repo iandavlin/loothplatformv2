@@ -19,44 +19,44 @@ run() {  # run <label> <command...>
     *) red=1;;
   esac
 }
-echo "=== GATE 1/14: visibility matrix (the privacy model) ==="
+echo "=== GATE 1/16: visibility matrix (the privacy model) ==="
 run "visibility matrix" php /srv/profile-app/bin/visibility-matrix.php
 echo
-echo "=== GATE 2/14: web-craft gate (images / weight / eager scripts) ==="
+echo "=== GATE 2/16: web-craft gate (images / weight / eager scripts) ==="
 run "web-craft" python3 "$(dirname "$0")/craft-gate.py"
 echo
-echo "=== GATE 3/14: infra-sec gate (cookie auth / source disclosure / cdp) ==="
+echo "=== GATE 3/16: infra-sec gate (cookie auth / source disclosure / cdp) ==="
 run "infra-sec" bash "$(dirname "$0")/infra-sec-gate.sh"
 echo
-echo "=== GATE 4/14: hub paragraph-collapse (content_html keeps its breaks) ==="
+echo "=== GATE 4/16: hub paragraph-collapse (content_html keeps its breaks) ==="
 run "hub-paragraph" bash "$(dirname "$0")/hub-content-paragraph-gate.sh"
 echo
-echo "=== GATE 5/14: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
+echo "=== GATE 5/16: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
 run "looth-auth" bash "$(dirname "$0")/looth-auth-issue-gate.sh"
 echo
-echo "=== GATE 6/14: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
+echo "=== GATE 6/16: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
 run "event-date-tz" bash "$(dirname "$0")/event-date-tz-gate.sh"
 echo
-echo "=== GATE 7/14: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
+echo "=== GATE 7/16: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
 run "events-tap-navigates" bash "$(dirname "$0")/events-tap-navigates-gate.sh"
 echo
-echo "=== GATE 8/14: composer topic-meta (forum picker cloning + tags) ==="
+echo "=== GATE 8/16: composer topic-meta (forum picker cloning + tags) ==="
 run "composer-topic-meta" node "$(dirname "$0")/composer-topic-meta-test.js"
 echo
-echo "=== GATE 9/14: author socials RESOLVE, never mirror (byline drift class) ==="
+echo "=== GATE 9/16: author socials RESOLVE, never mirror (byline drift class) ==="
 run "author-socials-live" bash "$(dirname "$0")/author-socials-live-gate.sh"
 
-echo "=== GATE 10/14: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
+echo "=== GATE 10/16: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
 run "react-types" bash "$(dirname "$0")/react-types-cover-standalone-gate.sh"
 echo
-echo "=== GATE 11/14: /shop-layout-planner/ still SERVES the planner (live SEO url) ==="
+echo "=== GATE 11/16: /shop-layout-planner/ still SERVES the planner (live SEO url) ==="
 # Defaults to dev2, where it self-reports CANNOT RUN until the standalone render
 # lands (dev2 bounces every anon WP page into the BuddyBoss gate). Run it with
 # --live to prove the production url is healthy, and with
 # LG_SP_EXPECT_STANDALONE=1 once the standalone page is meant to be serving.
 run "shop-planner-url" bash "$(dirname "$0")/shop-planner-url-gate.sh"
 echo
-echo "=== GATE 12/14: an ANON visitor can reach Sign in at every width (Ian's lockout) ==="
+echo "=== GATE 12/16: an ANON visitor can reach Sign in at every width (Ian's lockout) ==="
 # Behaviour, not presence: "Sign in" was in the served HTML the whole time while
 # 641-820px had no way in at all. Starts its own anonymous real-origin proxy and
 # one incognito BrowserContext per width, so it never touches shared browser
@@ -64,14 +64,14 @@ echo "=== GATE 12/14: an ANON visitor can reach Sign in at every width (Ian's lo
 # BOTH green on the day the band was dead.
 run "anon-signin-reachable" python3 "$(dirname "$0")/anon-signin-reachable-gate.py"
 echo
-echo "=== GATE 13/14: follow-digest — flag OFF sends NOTHING (email is unrecallable) ==="
+echo "=== GATE 13/16: follow-digest — flag OFF sends NOTHING (email is unrecallable) ==="
 # Written BEFORE the sender and red on purpose; promoted here in the same window as
 # the merge that defines LG_FOLLOW_DIGEST_ENABLED, per its own rule: "a gate that
 # guards an unrecallable channel and is never promoted is worse than no gate — it
 # reads as covered." Number minted from MAIN's count (12), not the branch's.
 run "follow-digest" python3 "$(dirname "$0")/follow-digest-gate.py"
 echo
-echo "=== GATE 14/14: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
+echo "=== GATE 14/16: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
 # Second time source/behaviour was served to anybody who asked (after the
 # /archive-api/v0/*.php disclosure). lg-weekly-digest/dev/ sat inside a PLUGIN
 # directory, so the catch-all \.php$ handler RAN it for anonymous requests: one
@@ -81,6 +81,29 @@ echo "=== GATE 14/14: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
 # 403s every anonymous request and 403 is a PASS here — pointed at :443 this gate
 # would go green having seen nothing.
 run "dev-files-anon" python3 "$(dirname "$0")/dev-files-anon-unreachable-gate.py"
+echo
+echo "=== GATE 15/16: DEPLOY DRIFT — every box is still reachable by a pull ==="
+# Ian, 2026-07-31: "we have a mandate to only pull except for extreme conditions.
+# What was extreme about this?" — that night live took on three pieces of state git
+# did not know about, and dev2 turned out to hold a fourth that nobody had recorded
+# and nobody could date. Asserts symlinks resolve into the SERVING CHECKOUT (one was
+# found pointing at a lane worktree), that snippets are symlinks and not hand-edited
+# copies (live's strangler-membership.conf was replaced with a real file), that FPM
+# pools use the per-box variant (symlink-farm repointed all seven on live), that the
+# PG roles the apps peer-auth as exist (`membership` did not, on live), that every
+# repo mu-plugin is linked, and that flag state is declared.
+# Its allowlist is docs/runbooks/live-divergences.md: declared divergence is green,
+# undeclared is RED. Numbers minted from MAIN's count (14), not the branch's.
+run "deploy-drift" bash "$(dirname "$0")/deploy-drift-gate.sh"
+echo
+echo "=== GATE 16/16: FPM ERROR LOG — the boxes are not screaming into a log ==="
+# The one that cost the most time on 2026-07-31: `FATAL: role "membership" does not
+# exist` printed on EVERY page load through the whole outage while two people
+# reasoned about code. Reads /var/log/php8.3-fpm.log on dev2 (sudo) and live (NO
+# sudo — it prompts there, and `sudo -n` returns empty, which reads as "no errors").
+# Proves it can read the log before asserting anything is absent, and QUOTES the
+# offending line rather than counting it.
+run "fpm-error-log" bash "$(dirname "$0")/fpm-error-log-gate.sh"
 echo
 # FOUR CDP/loopback gates are HELD OUT of the runner — they pass standalone but
 # flake RED in-sequence (CDP under load / loopback /whoami trips infra's

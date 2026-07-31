@@ -128,6 +128,14 @@ either file can see. So:
 | 12 | `tools/gates/anon-signin-reachable-gate.py` | an ANON visitor can **reach** Sign in in ≤1 tap at every width — visible *and* hit-tested, not merely in the DOM | **a browser on CDP :9222** |
 | 13 | `tools/gates/dev-files-anon-unreachable-gate.py` | lane/dev tooling inside a deployed plugin tree is **unreachable by an anonymous request** — 404/403, not "absent from my checkout" | starts its own **gate-free** nginx (dev2's armed gate would 403 everything and false-pass) |
 
+| 15 | `tools/gates/deploy-drift-gate.sh` | **every box is still reachable by ONE PULL** — symlinks resolve into the serving checkout (not a lane worktree), snippets are symlinks not hand-edited copies, FPM pools use the per-box variant, the PG roles the apps peer-auth as exist, repo mu-plugins are linked, and flag state is declared. Allowlist = `docs/runbooks/live-divergences.md`; declared divergence is green, **undeclared is RED** | `ssh live-ro` for the live half; sudo on dev2 |
+| 16 | `tools/gates/fpm-error-log-gate.sh` | the boxes are not **screaming into a log nobody reads** — FATALs and repeated errors in `/var/log/php8.3-fpm.log`, windowed, with the offending line **quoted** rather than counted | `ssh live-ro` (live); sudo (dev2) |
+
+> **Numbering note.** Rows 15–16 were minted from **main's** count (14 gates in
+> `run-all.sh`), per the rule below. The two `13` rows above are a genuine collision
+> from two lanes merging the same night and are left for their authors to reconcile —
+> renumbering another lane's row silently is how the collision happened.
+
 | 13 | `tools/gates/follow-digest-gate.py` | **PROMOTED into the sequence by this merge** (it was HELD OUT and red on purpose while the sender did not exist). The follow-digest flag's OFF state sends NOTHING: no cron armed, no cadence stored, the suppression filter proven to be the identity function, and the resolver proven to return zero recipients | wp-cli |
 
 **Gate 13 is written BEFORE the feature it guards, and that is the point.** Every

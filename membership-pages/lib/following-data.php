@@ -95,13 +95,33 @@ const LG_FOLLOWING_PAGE_SIZE = 5;
  * Flag pattern copied from LG_AUTHOR_SOCIALS_ALL_MEMBERS
  * (platform/mu-plugins/lg-author-socials.php:48).
  */
+// Two sources, one meaning — the LG_BB_MIRROR_FOLLOW pattern (bb-mirror/config.php:461).
+//
+//   getenv()  — how a BOX turns it on, via env[] in its own tracked FPM pool file
+//               (platform/fpm/{live,dev2}/membership.conf). This is the pull-native
+//               path and it is the one that matters.
+//   $_SERVER  — how a SINGLE nginx location does, via fastcgi_param. That is what
+//               tools/preview/lane-preview.sh uses to give one branch a URL
+//               (platform/nginx/lane-preview-account-following.conf:65), and a
+//               fastcgi_param lands in $_SERVER but not reliably in the process
+//               environment. Both reads are needed; neither is redundant.
+//
+// ⚠️ WHY getenv() WAS ADDED, 2026-07-31. $_SERVER alone meant only a fastcgi_param
+// could set this, and the only per-box nginx file is a snippet SYMLINKED out of the
+// serving checkout — so turning the flag on required replacing that symlink with a
+// hand-edited real file, on live, which then stopped receiving repo updates entirely.
+// Ian: "we have a mandate to only pull except for extreme conditions." Nothing was
+// extreme; the flag was simply unreachable by pull. FPM pool files ARE tracked
+// per-box, so getenv() makes box-level flag state arrive by `git pull` like
+// everything else. See docs/runbooks/live-divergences.md.
+//
+// Neither source is reachable by a visitor: a fastcgi_param can only be set by an
+// nginx conf and env[] only by a pool file. A query string can never set either.
+// Absent (the default on every box) => false, and false is the byte-identical no-op.
 if (!defined('LG_FOLLOWING_ROW_TOGGLES')) {
-    // Server-settable so a lane preview can show Ian the ON state without the
-    // flag being on for anyone else. fastcgi_param only — an nginx block on this
-    // box can set it, a query string never can. Absent (every normal request on
-    // dev and live) => false, and false is the byte-identical no-op.
     define('LG_FOLLOWING_ROW_TOGGLES',
-        (($_SERVER['LG_FOLLOWING_ROW_TOGGLES'] ?? '') === '1'));
+        getenv('LG_FOLLOWING_ROW_TOGGLES') === '1'
+        || (($_SERVER['LG_FOLLOWING_ROW_TOGGLES'] ?? '') === '1'));
 }
 
 if (!function_exists('lg_following_pg')) {
