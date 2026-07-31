@@ -122,6 +122,21 @@ need 'lgsp-layoutCanvas'            'the planner canvas is not on the page. The 
 need 'shop-planner.js'              'the 62KB planner engine is not referenced. The page cannot work.'
 need 'Luthier Shop Layout Planner'  'the indexed <h1> copy is gone. This is what Google ranks the URL for.'
 
+# THE SPONSOR ADS. This is the assertion that exists because nothing else would
+# have caught it. LGApps_Ads::render_ads() injects the rotating StewMac affiliate
+# ads into the planner sidebar for logged-out visitors (3 of them, 8s rotation,
+# config in wp_options.lgapps_settings). It rides wp_footer in the WordPress render
+# and an explicit call in the standalone one — so a standalone page that rendered
+# the planner perfectly and simply forgot the call would be a SILENT REVENUE
+# REGRESSION: 200, planner present, copy present, gate green, money gone.
+# Holds in BOTH renders, which is what makes it a safe before/after assertion.
+need 'lgapps-ad-slot'  'the sponsor ad slot is absent. Affiliate ads are not rendering —
+                  revenue regression. In the standalone render this means the
+                  LGApps_Ads::render_ads() call was lost, or LGApps_Registry::enqueue()
+                  was not called first (render_ads() no-ops on an empty queue).'
+need 'rotateSec'       'the ad ROTATION script is absent, so at most one sponsor would ever
+                  be shown instead of the configured rotation.'
+
 # --- the absence half (opt-in; gates are otherwise blind to it) ----------------
 if [ "$EXPECT_STANDALONE" = "1" ]; then
     if grep -qF 'twentytwentyfive' "$BODY"; then
