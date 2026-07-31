@@ -10,13 +10,17 @@
  *     cd ~/loothplatformv2-clean && sudo -u looth-dev env LG_FOLLOW_DIGEST=1 \
  *       php platform/bin/follow-digest-live-oneshot.php
  *
- *   STEP 2  give yourself a window (sets YOUR cadence + watermark, nobody else's):
+ *   STEP 2  prove the mail channel is not swallowing anything — sends ONE probe
+ *           email to you and nothing else:
+ *     ... php platform/bin/follow-digest-live-oneshot.php --probe
+ *
+ *   STEP 3  give yourself a window (sets YOUR cadence + watermark, nobody else's):
  *     ... php platform/bin/follow-digest-live-oneshot.php --arm --since=2026-07-20
  *
- *   STEP 3  send it, for real, to you:
+ *   STEP 4  send it, for real, to you (re-probes first, then sends):
  *     ... php platform/bin/follow-digest-live-oneshot.php --send
  *
- *   STEP 4  put your account back exactly as it was:
+ *   STEP 5  put your account back exactly as it was:
  *     ... php platform/bin/follow-digest-live-oneshot.php --disarm
  *
  * ── WHY LG_FOLLOW_DIGEST=1 IS ON THE COMMAND LINE AND NOT IN THE TRACKED CONFIG ──
@@ -47,7 +51,9 @@
  * MessageId would mean bypassing wp_mail and calling SES directly, which is a
  * DIFFERENT code path from the one under test — that is what the earlier one-off
  * send did, and it is exactly why it could not answer "does the batcher work?".
- * So the delivery proof here is: wp_mail() returned true, no wp_mail_failed error
+ * So the delivery proof here is: the channel probe passed the WHOLE pre_wp_mail chain
+ * without being short-circuited (which is strictly stronger than wp_mail returning
+ * true — that is exactly what a swallowed send also returns), no wp_mail_failed error
  * fired, the watermark advanced to the newest reply included — and the mail is in
  * Ian's inbox. The last one is the real proof and it needs a human.
  */
@@ -57,10 +63,11 @@ declare( strict_types=1 );
 const IAN_UID   = 1;
 const IAN_EMAIL = 'ian.davlin@gmail.com';
 
-$argvv   = $_SERVER['argv'] ?? array();
-$do_send = in_array( '--send', $argvv, true );
-$do_arm  = in_array( '--arm', $argvv, true );
-$do_dis  = in_array( '--disarm', $argvv, true );
+$argvv    = $_SERVER['argv'] ?? array();
+$do_send  = in_array( '--send', $argvv, true );
+$do_arm   = in_array( '--arm', $argvv, true );
+$do_dis   = in_array( '--disarm', $argvv, true );
+$do_probe = in_array( '--probe', $argvv, true );
 $since   = '';
 foreach ( $argvv as $a ) {
 	if ( 0 === strpos( (string) $a, '--since=' ) ) { $since = substr( (string) $a, 8 ); }
@@ -105,11 +112,37 @@ line( "  ok   live confirmed by home_url() — $home   (LG_ENV is NOT trusted; l
 // ── GUARD 2: nothing may be swallowing the send ──────────────────────────────
 // If containment were somehow present, wp_mail would return TRUE having delivered
 // nowhere, and this run would report a success that never happened.
-if ( has_filter( 'pre_wp_mail' ) ) {
-	die_with( "REFUSING: a pre_wp_mail filter is registered, so something is intercepting mail.\n"
-		. "On live that must not be true — the send would be swallowed and reported as success.", 75 );
+//
+// ⚠️ THIS USED TO REFUSE ON `has_filter('pre_wp_mail')` AND THAT WAS WRONG BOTH WAYS.
+// Too strict: lg-poller-mail-killswitch.php registers on every box where
+// `lgms_poller_mail_enabled` is unset — which is LIVE's state — so the one-shot could
+// never send there at all. It is also SELECTIVE (read it: it returns $short untouched
+// unless the call stack runs through /lg-patreon-stripe-poller/), so it would not have
+// touched this send. A presence test cannot tell a benign filter from a fatal one.
+// Too weak: it would also have passed a box where containment was registered but
+// `has_filter` had been satisfied some other way, and containment returns TRUE.
+//
+// So the question is asked BEHAVIOURALLY instead — a tokenised probe through the real
+// wp_mail(), observed at PHP_INT_MAX where WordPress itself reads the verdict. See
+// platform/lib/lg-fd-mail-probe.php. It costs one extra email TO YOU, and that email
+// is itself the first honest delivery receipt of the run.
+$probe_lib = dirname( __DIR__ ) . '/lib/lg-fd-mail-probe.php';
+if ( ! is_readable( $probe_lib ) ) {
+	die_with( "cannot read $probe_lib — the mail-channel probe is missing, so this run cannot\n"
+		. 'establish that a send would not be swallowed. Pull the merge first.', 75 );
 }
-line( '  ok   no pre_wp_mail interception — a send here really leaves the box' );
+require_once $probe_lib;
+
+$filters = lg_fd_mail_probe_filters();
+if ( $filters ) {
+	line( sprintf( '  ..   %d pre_wp_mail filter(s) registered — presence alone decides nothing; '
+		. 'the probe below decides:', count( $filters ) ) );
+	foreach ( $filters as $f ) {
+		line( sprintf( '         prio %-6s %s', $f['priority'], $f['file'] ?: $f['fn'] ) );
+	}
+} else {
+	line( '  ..   no pre_wp_mail filter registered' );
+}
 
 // ── GUARD 3: the flag ────────────────────────────────────────────────────────
 if ( ! defined( 'LG_FOLLOW_DIGEST_ENABLED' ) || ! LG_FOLLOW_DIGEST_ENABLED ) {
@@ -157,6 +190,41 @@ line( sprintf( '  ..   members holding a batched cadence on live: %d%s',
 if ( $others ) {
 	line( sprintf( '  ..   %d of them are NOT Ian — the allowlist blocks every one; they will be '
 		. 'listed as blocked below', count( $others ) ) );
+}
+
+/**
+ * Run the channel probe and REFUSE unless it comes back clear.
+ *
+ * Placed after GUARD 4 on purpose: the probe is itself behind the allowlist, so it
+ * cannot even be attempted until the allowlist has been proven to be exactly Ian.
+ */
+function probe_channel_or_die(): void {
+	line( "\n--- MAIL CHANNEL PROBE (one real email to you, before any digest) ---" );
+	$p = lg_fd_mail_probe( IAN_UID, IAN_EMAIL );
+	line( sprintf( '       token            : %s', $p['token'] ?: '(none)' ) );
+	line( sprintf( '       wp_mail returned : %s', var_export( $p['wp_mail_returned'], true ) ) );
+	line( sprintf( '       observed at the end of the chain: %s',
+		$p['ran'] ? ( $p['swallowed'] ? 'SHORT-CIRCUITED' : 'still null — nothing intercepted' ) : 'NEVER RAN' ) );
+
+	if ( ! $p['clear'] ) {
+		die_with( "\nREFUSING TO SEND — " . $p['reason'] . "\n\n"
+			. "This is the guard doing its job. A swallowed send returns TRUE from wp_mail(),\n"
+			. "so continuing would report a delivery that never happened. Note that the mere\n"
+			. "PRESENCE of a filter is not what stopped this — the probe was actually eaten.", 75 );
+	}
+	line( '  ok   ' . $p['reason'] );
+	line( sprintf( '  ⚠️  CHECK YOUR INBOX FOR THE PROBE (subject contains %s).', $p['token'] ) );
+	line( '       wp_mail passing the chain means nothing suppressed it — the probe ARRIVING' );
+	line( '       is what proves SES actually delivers. If it does not turn up, stop here.' );
+}
+
+// ── --probe ──────────────────────────────────────────────────────────────────
+// Check the channel on its own, without building or sending a digest. Safe to run
+// any number of times; it only ever mails Ian.
+if ( $do_probe ) {
+	probe_channel_or_die();
+	line( "\n  The channel is clear. Nothing else was done — no digest was built or sent." );
+	exit( 0 );
 }
 
 // ── --disarm ─────────────────────────────────────────────────────────────────
@@ -229,8 +297,13 @@ line( sprintf( "\n  subject        : %s", lg_fd_subject( $batch ) ) );
 
 if ( ! $do_send ) {
 	line( "\n  DRY RUN — nothing was sent. Re-run with --send to deliver it to you." );
+	line( '  (--send probes the mail channel first, with one real email to you.)' );
 	exit( 0 );
 }
+
+// The channel must be proven before the digest is put on it. If this refuses, nothing
+// about your account has changed and the batch is still queued.
+probe_channel_or_die();
 
 // ── SEND, through the real cron callback ─────────────────────────────────────
 // ⚠️ The CLOCK is simulated and nothing else is. lg_fd_tick() only flushes at 08:00
