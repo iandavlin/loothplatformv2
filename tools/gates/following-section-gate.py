@@ -944,12 +944,25 @@ def main():
                     else:
                         opened = open_and_read_modal(p, base + slug)
                         check("the card opens for the control topic", opened.get("topic_id"), ctl)
-                        card = p.ev(f"""(() => {{
-                          const q = c => document.querySelector('[data-follow="' + c + '"][data-topic-id="{ctl}"]');
-                          const n = q('notify'), e = q('email');
-                          return {{notify: n && n.getAttribute('aria-pressed'),
-                                   email:  e && e.getAttribute('aria-pressed')}};
-                        }})()""")
+                        # POLL, do not snapshot. The card's controls are rendered
+                        # inert and their true state arrives from a BATCH GET after
+                        # the modal opens — measured at ~1s here. Reading once on
+                        # open reported both bits false while both stores said true,
+                        # which would have been a false accusation of drift against
+                        # thread-follow's surface. A cross-surface check has to give
+                        # the other surface time to answer; only never-converging is
+                        # a finding.
+                        card = {}
+                        for _ in range(30):
+                            card = p.ev(f"""(() => {{
+                              const q = c => document.querySelector('[data-follow="' + c + '"][data-topic-id="{ctl}"]');
+                              const n = q('notify'), e = q('email');
+                              return {{notify: n && n.getAttribute('aria-pressed'),
+                                       email:  e && e.getAttribute('aria-pressed')}};
+                            }})()""")
+                            if card.get("notify") == "true" and card.get("email") == "true":
+                                break
+                            time.sleep(0.5)
                         check("the CARD shows the same ✉ state the account page set", card.get("email"), "true")
                         check("the CARD shows the same 🔔 state", card.get("notify"), "true")
 

@@ -503,6 +503,17 @@ html[data-lguser-theme="dark"] .lg-switch input:checked + .lg-switch__track:befo
     cursor: pointer;
     transition: color .12s, background .12s;
 }
+/* A <button> keeps the UA's `buttonface` fill even after appearance:none, so
+ * without this every OFF toggle rendered as a solid grey slab — reading as a
+ * second, different ON state rather than as off. Caught in a screenshot, not by
+ * any assertion: the markup, the wiring and the aria were all correct.
+ *
+ * :not(.is-on) is load-bearing. Unscoped, this rule has the SAME specificity as
+ * .lg-manage-sub__fol-mark.is-on and sits later in the file, so it won — and
+ * silently removed the sage tint pill that is how ON reads at a glance. Fixing
+ * one screenshot defect straight into another. */
+.lg-manage-sub__fol-mark.is-toggle:not(.is-on) { background: none; }
+
 .lg-manage-sub__fol-mark.is-toggle:hover { color: #6b7c52; background: #eef2e3; }
 .lg-manage-sub__fol-mark.is-toggle:focus-visible {
     outline: 2px solid #6b7c52;
