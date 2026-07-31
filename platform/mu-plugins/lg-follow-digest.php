@@ -107,6 +107,103 @@ function lg_fd_watermark( int $user_id ): string {
 	return (string) get_user_meta( $user_id, LG_FD_WATERMARK_META, true );
 }
 
+/* ── ONE STORE, ONE WRITE PATH, THREE SURFACES ─────────────────────────────────
+ * Ian, 2026-07-31: the cadence control goes on the MANAGE ACCOUNT page as well as in
+ * the follow modal. So one account-level setting now has three lanes touching it:
+ *
+ *   account-following  the control on /manage-subscription/   ─┐
+ *   thread-follow      the control in the follow modal         ├─ two UI surfaces
+ *   follow-digest      this file: the store, the writer, the   ─┘  one store
+ *                      transports, and the sender that reads it
+ *
+ * ⚠️ IF THE TWO SURFACES CAN EVER DISAGREE ABOUT ONE MEMBER'S CADENCE, that is the
+ * "UI lies" class, and it is found on Ian's phone within a minute. The defence is not
+ * discipline, it is that NEITHER SURFACE CAN REACH THE STORE DIRECTLY: both go through
+ * lg_fd_set_cadence() / lg_fd_cadence() above, and both transports live here.
+ *
+ * AND THE REASON IS CONCRETE, NOT ARCHITECTURAL TASTE: the flood guard (§4.3 — stamp
+ * the watermark to NOW on entry to a batched cadence) lives INSIDE lg_fd_set_cadence.
+ * A surface that writes the usermeta key directly skips it, and that member either
+ * gets nothing forever (no watermark ⇒ the collector refuses) or, if someone later
+ * "fixes" absent-means-epoch, gets the entire reply history of every thread they
+ * follow in one unrecallable email. One write path is what keeps that impossible.
+ *
+ * BOTH TRANSPORTS SHARE THIS SCOPE. follow.php full-bootstraps WP
+ * (`require LG_BB_MIRROR_WP_LOAD`, :43), so mu-plugin functions are available there
+ * exactly as they are to admin-ajax. Verified, not assumed.
+ *
+ * THE DELTA THREAD-FOLLOW OWES follow.php — offered so it is not re-derived, and it
+ * must call the writer rather than touching usermeta:
+ *
+ *     // GET, beside email_master:
+ *     if (lg_fd_cadence_ui_enabled()) $out['cadence'] = lg_fd_cadence($uid);
+ *     // POST:
+ *     if (isset($body['cadence'])) {
+ *         if (!lg_fd_cadence_ui_enabled()) follow_out(404, ['error' => 'not_enabled']);
+ *         if (!lg_fd_set_cadence($uid, (string) $body['cadence']))
+ *             follow_out(400, ['error' => 'bad_cadence']);
+ *     }
+ */
+
+/**
+ * THE SINGLE SOURCE OF TRUTH FOR WHETHER ANY SURFACE SHOWS THE CONTROL.
+ *
+ * Ian chose "show it when the batcher lands" over showing it now, so nobody ever picks
+ * Daily and receives instant mail. Three surfaces must agree about that, and if each
+ * checks its own condition they will eventually disagree — so they all check this.
+ *
+ * It is deliberately the SAME flag as the sender: the control cannot become visible
+ * while the thing that honours it is off, because there is only one switch.
+ */
+function lg_fd_cadence_ui_enabled(): bool {
+	return (bool) LG_FOLLOW_DIGEST_ENABLED;
+}
+
+/* ── THE ACCOUNT-PAGE TRANSPORT ────────────────────────────────────────────────
+ * Matches the idiom already on that page: admin-ajax actions consumed by wire()
+ * (manage-subscription.php:202-215), alongside lg_weekly_member_state/toggle and
+ * lg_event_reminder_state/signup (registered the same way in lg-event-reminders.php).
+ *
+ * REGISTERED ONLY WHILE THE FLAG IS ON. While off the actions do not exist, so the
+ * control cannot be made to work by a client that renders it anyway — the hidden
+ * state is enforced server-side, not merely by not drawing it. That absence is
+ * gateable, which is the point.
+ *
+ * ⚠️ account-following: the existing wire() drives a CHECKBOX and this is a SEGMENTED
+ * control, so it needs its own small wiring — read the state, paint the active pill,
+ * POST on click, revert on failure. Do NOT write the usermeta key from the page. */
+if ( lg_fd_cadence_ui_enabled() ) {
+	add_action( 'wp_ajax_lg_fd_cadence_state', 'lg_fd_ajax_state' );
+	add_action( 'wp_ajax_lg_fd_cadence_set', 'lg_fd_ajax_set' );
+}
+
+function lg_fd_ajax_state(): void {
+	$uid = get_current_user_id();
+	if ( $uid < 1 ) { wp_send_json( array( 'ok' => false ), 401 ); }
+	wp_send_json( array( 'ok' => true, 'cadence' => lg_fd_cadence( $uid ),
+	                     'options' => lg_fd_cadences() ) );
+}
+
+function lg_fd_ajax_set(): void {
+	// Self-scoped ALWAYS: the acting user is the session's, never the body's. Same
+	// posture as follow.php — there is no shape of request that changes another
+	// member's cadence.
+	$uid = get_current_user_id();
+	if ( $uid < 1 ) { wp_send_json( array( 'ok' => false ), 401 ); }
+	if ( ! check_ajax_referer( 'lg_fd_cadence', 'nonce', false ) ) {
+		wp_send_json( array( 'ok' => false, 'error' => 'bad_nonce' ), 403 );
+	}
+	$want = isset( $_POST['cadence'] ) ? sanitize_key( wp_unslash( $_POST['cadence'] ) ) : '';
+	if ( ! lg_fd_set_cadence( $uid, $want ) ) {
+		wp_send_json( array( 'ok' => false, 'error' => 'bad_cadence',
+		                     'options' => lg_fd_cadences() ), 400 );
+	}
+	// Echo the STORED value, never the requested one — the surface repaints from
+	// what actually landed, so a rejected or coerced write can never leave the two
+	// surfaces showing different things.
+	wp_send_json( array( 'ok' => true, 'cadence' => lg_fd_cadence( $uid ) ) );
+}
+
 /* ── SUPPRESSION: the seam that makes Daily/Weekly honest ──────────────────────
  * You cannot build Daily/Weekly without touching the Instant path. A member on Daily
  * whose native per-reply mail keeps running gets instant mail AND a digest — the same

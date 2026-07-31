@@ -187,6 +187,17 @@ $probe = array('recipient_user_id' => 1, 'type' => 'notification_forums_followin
 $out['filter_true_in']  = (bool) apply_filters('%FILTER%', true,  $probe);
 $out['filter_false_in'] = (bool) apply_filters('%FILTER%', false, $probe);
 
+// ── THE THREE SURFACES MUST AGREE ────────────────────────────────────────────
+// Ian added the control to the manage-account page as well as the follow modal, so
+// ONE setting now has two UI surfaces and one store. If they can disagree, that is
+// the "UI lies" class. Assert the single gate helper AND that the account-page
+// transport does not exist while the control is hidden — a control that is merely
+// not drawn, but whose endpoint answers, is one stray render from being live.
+$out['ui_helper']  = function_exists('lg_fd_cadence_ui_enabled');
+$out['ui_enabled'] = function_exists('lg_fd_cadence_ui_enabled') ? (bool) lg_fd_cadence_ui_enabled() : null;
+$out['ajax_state'] = (bool) has_action('wp_ajax_lg_fd_cadence_state');
+$out['ajax_set']   = (bool) has_action('wp_ajax_lg_fd_cadence_set');
+
 // ── THE SCHEDULED SENDER ──────────────────────────────────────────────────────
 $out['cron_scheduled'] = (bool) wp_next_scheduled('%CRON%');
 $out['cron_any']       = false;
@@ -356,6 +367,38 @@ def main():
                 "ever flush their queue. That is the silent-nothing lie §15.4 forbids.")
     if stray:
         red("stray lg_fd_* cron hooks", "unexpected scheduled hooks: %s" % ", ".join(stray))
+
+    # ── THE THREE SURFACES ─────────────────────────────────────────────────────
+    if not d.get("ui_helper"):
+        red("lg_fd_cadence_ui_enabled() does not exist",
+            "Three surfaces (account page, follow modal, sender) must agree about "
+            "whether the control is shown. Without ONE helper they each check their "
+            "own condition and will eventually disagree.")
+    else:
+        ui = d.get("ui_enabled")
+        if ui != flag_on:
+            red("the UI gate and the sender flag DISAGREE",
+                "lg_fd_cadence_ui_enabled()=%s but %s=%s. The control must never be "
+                "visible while the thing that honours it is off — that is exactly the "
+                "member picking Daily and receiving instant mail." % (ui, FLAG, flag_on))
+        else:
+            ok("UI gate agrees with the sender flag", "both %s" % ("ON" if flag_on else "OFF"))
+
+        leaked = [n for n, k in (("state", "ajax_state"), ("set", "ajax_set")) if d.get(k)]
+        if not flag_on and leaked:
+            red("flag OFF but the account-page transport is REGISTERED",
+                "wp_ajax_lg_fd_cadence_%s exists. The hidden state must be enforced "
+                "server-side, not merely by not drawing the control — otherwise one "
+                "stray render makes it live." % "/".join(leaked))
+        elif not flag_on:
+            ok("flag OFF ⇒ account-page ajax transport not registered",
+               "non-vacuous: the helper exists and resolves false")
+        elif len(leaked) == 2:
+            ok("flag ON ⇒ both account-page ajax actions registered")
+        else:
+            red("flag ON but the account-page transport is incomplete",
+                "registered: %s. The account page would read a cadence it cannot write, "
+                "or write one it cannot read back." % (leaked or "none"))
 
     # ── THE STORE ──────────────────────────────────────────────────────────────
     cad = d.get("cadence_rows")
