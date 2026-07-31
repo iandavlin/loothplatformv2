@@ -608,6 +608,62 @@ have been silenced while the renderer could perfectly well draw their row.
 nothing — including Upcoming Events, the videos and loothprint, which have nothing to do with
 anyone's to-do list.
 
+### 9.1b ⚠️ KEPT BY THE FILTER, DRAWN AS NOTHING — the rule above does not hold today (2026-07-31)
+
+**Found while rendering real members on dev2 for Ian's "can we test it" ask, not predicted by
+review.** `dev/verify-kept-but-empty.php` reproduces it and exits RED.
+
+**The filter and the renderer answer the same question by different rules.**
+
+| | asks |
+|---|---|
+| `recipients_with_something_waiting()` | *is the payload non-empty?* — a **shape** test on whatever the endpoint returned (`fetch()`'s `empty(notifications) && empty(dms) && empty(stale)` normalisation) |
+| `LG_WD_Recap::render()` | *does any of it survive the **source boundary**?* — `INCLUDED_TYPES` for live rows, and the `$labels` map in `rows_from_stale()` for counted ones |
+
+`/internal/recap` is a **general read API and does not apply the digest's boundary**. It returns
+every type the bell stores — including the ones §6.1 deliberately refuses on Ian's to-do test
+(`reaction.on_post`, `connection_accept`, both in `LG_WD_Recap::DECIDED_EXCLUDED`).
+
+So a member whose entire week is a reaction or a connection *acceptance* has a **non-empty payload
+and an empty section**. The filter keeps them; the renderer draws nothing; they are mailed a digest
+whose personal section is missing — **the exact outcome §9.1a forbids**.
+
+**Measured on dev2, 2026-07-31** (lists 3+7, 1,816 subscribed, live endpoint, 7-day window):
+
+| | |
+|---|---|
+| filter keeps | **309** (suppresses 1,507) |
+| …kept and drew a section | 90 |
+| …kept, no WP account — **correct**, kept on purpose per Ian 2026-07-30 | 214 |
+| …kept, **is a member, drew nothing** | **5** |
+
+The five: `wp 8` Dan Erlewine, `wp 16` Thom Abell, `wp 135` Michael Bashkin, `wp 171` Sam Hochberg
+(all `connection_accept`), `wp 423` Luke Heaton (`reaction.on_post`).
+
+**Why no existing test sees it.** Every other recap test asserts what should be **present**. This is
+an *absence* that only appears when two components — each correct in isolation — are compared. It is
+the same blind spot as the box's standing rule about gates.
+
+**The fix is one line, at the filter, and it is not mine to merge unreviewed.** `build_rows()` is
+already `public static`, so the filter can ask the renderer instead of guessing from shape:
+
+```php
+// class-lg-wd-recap-source.php, recipients_with_something_waiting()
+- if ( ! empty( $payloads[ $wp ] ) ) {
++ if ( $payloads[ $wp ] && LG_WD_Recap::build_rows( $payloads[ $wp ] ) ) {
+      $keep[] = $sub_id;
+  }
+```
+
+Do **not** instead teach `/internal/recap` the digest's boundary: it is a general read API with
+other callers, and `dev/verify-missed-exclusions.php` legitimately drives it at other widths. The
+boundary belongs to the digest and must stay in one place (§6.1).
+
+**Scale check before this is treated as urgent or as trivial:** 5 of 309 on dev2 — but dev2 gets a
+trickle of traffic and `connection_accept` is one of the highest-volume types on live (147 rows
+all-time, §6.1). The live number should be measured with the same script before the flag is turned
+on, not extrapolated from here.
+
 ### 9.2 The one that is NOT free — click-through from a previous digest (**NOT BUILT, needs Ian**)
 
 **The problem is real and verified.** Nothing marks a notification read when a member clicks a link
