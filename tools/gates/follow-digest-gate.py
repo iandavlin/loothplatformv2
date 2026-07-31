@@ -261,6 +261,30 @@ def build_branch_harness(plugin):
         return None, ("%s is not among the mu-plugins in %s, so the mirror would load it "
                       "alongside the serve's copy rather than in place of it"
                       % (os.path.basename(plugin), MU_DIR))
+    # ⚠️ THE GATE MUST NOT ARM THE SENDER, AND SAYING SO IN A COMMENT WAS NOT ENOUGH.
+    # Running with LG_FOLLOW_DIGEST=1 boots WordPress, `init` fires, lg_fd_sync_schedule()
+    # calls wp_schedule_event() — and a REAL event lands in the serve's wp_options.cron.
+    # The gate found this itself ("stray lg_fd_* cron hooks") on the first flag-ON run.
+    # It self-heals on the next flag-off load, because the sender unschedules itself, so
+    # nothing was ever at risk — but "a test that arms a live sender and relies on
+    # something else to disarm it" is the mirror-dispatch trap with extra steps.
+    #
+    # A guard mu-plugin sorted first (00-) blocks it structurally: pre_schedule_event
+    # short-circuits before anything is written. mu-plugins load before `init`, so this
+    # is in place by the time the scheduler runs. Only lg_fd_* is blocked — blocking
+    # everything would change what other plugins do and make the box a worse liar.
+    guard = os.path.join(HARNESS_DIR, "00-lg-fd-gate-guard.php")
+    with open(guard, "w") as fh:
+        fh.write(
+            "<?php\n"
+            "// Written by tools/gates/follow-digest-gate.py. Harness only; never deployed.\n"
+            "add_filter('pre_schedule_event', function ($pre, $event) {\n"
+            "    if (is_object($event) && strpos((string) $event->hook, 'lg_fd') === 0) {\n"
+            "        return false;   // the gate observes the sender; it never arms it\n"
+            "    }\n"
+            "    return $pre;\n"
+            "}, 10, 2);\n")
+    os.chmod(guard, 0o644)
     os.chmod(HARNESS_DIR, 0o755)
 
     with open(HARNESS_BOOT, "w") as fh:
@@ -372,9 +396,32 @@ $out['filter_false_in'] = (bool) apply_filters('%FILTER%', false, $probe);
 // transport does not exist while the control is hidden — a control that is merely
 // not drawn, but whose endpoint answers, is one stray render from being live.
 $out['ui_helper']  = function_exists('lg_fd_cadence_ui_enabled');
-$out['ui_enabled'] = function_exists('lg_fd_cadence_ui_enabled') ? (bool) lg_fd_cadence_ui_enabled() : null;
 $out['ajax_state'] = (bool) has_action('wp_ajax_lg_fd_cadence_state');
 $out['ajax_set']   = (bool) has_action('wp_ajax_lg_fd_cadence_set');
+
+/* The control is PER-MEMBER now: visible exactly to the members the sender would
+ * really serve. Switching the sender on for a test of one person must not paint a
+ * Daily/Weekly control for the whole membership — they would pick Daily, have their
+ * instant mail suppressed, and be blocked at the send layer, receiving NOTHING.
+ * Probed at three subjects: nobody, an allowlisted member, and a blocked one. */
+if (function_exists('lg_fd_cadence_ui_enabled')) {
+    $out['ui_anon'] = (bool) lg_fd_cadence_ui_enabled(0);
+    $out['ui_for']  = array();
+    global $wpdb;
+    // A REAL member who is not user 1 — the blocked subject has to exist, or
+    // "the control is hidden from them" is a statement about nobody.
+    $other = (int) $wpdb->get_var("SELECT ID FROM {$wpdb->users} WHERE ID <> 1 ORDER BY ID LIMIT 1");
+    foreach (array(1, $other) as $probe_uid) {
+        if ($probe_uid <= 0) { continue; }
+        $u = get_userdata($probe_uid);
+        if (!$u) { continue; }
+        $out['ui_for'][$probe_uid] = array(
+            'ui'      => (bool) lg_fd_cadence_ui_enabled($probe_uid),
+            'allowed' => function_exists('lg_fd_allowed')
+                ? (bool) lg_fd_allowed($probe_uid, (string) $u->user_email) : null,
+        );
+    }
+}
 
 // ── THE SCHEDULED SENDER ──────────────────────────────────────────────────────
 $out['cron_scheduled'] = (bool) wp_next_scheduled('%CRON%');
@@ -786,14 +833,34 @@ def main():
             "whether the control is shown. Without ONE helper they each check their "
             "own condition and will eventually disagree.")
     else:
-        ui = d.get("ui_enabled")
-        if ui != flag_on:
-            red("the UI gate and the sender flag DISAGREE",
-                "lg_fd_cadence_ui_enabled()=%s but %s=%s. The control must never be "
-                "visible while the thing that honours it is off — that is exactly the "
-                "member picking Daily and receiving instant mail." % (ui, FLAG, flag_on))
+        if d.get("ui_anon"):
+            red("the cadence control is enabled for a LOGGED-OUT visitor",
+                "lg_fd_cadence_ui_enabled(0) is true. There is no member to serve, so "
+                "there is nothing the control could honour.")
         else:
-            ok("UI gate agrees with the sender flag", "both %s" % ("ON" if flag_on else "OFF"))
+            ok("the cadence control is hidden from logged-out visitors")
+
+        # ⚠️ THE CONTROL MUST BE VISIBLE EXACTLY WHERE THE SENDER WOULD SERVE.
+        # Not "visible when the feature is on" — that is what would have painted a
+        # Daily/Weekly control for the whole membership during a test of one person.
+        mism = []
+        for uid, r in sorted((d.get("ui_for") or {}).items()):
+            want = bool(flag_on and r.get("allowed"))
+            if bool(r.get("ui")) != want:
+                mism.append("uid %s: control=%s but served=%s (flag %s)"
+                            % (uid, r.get("ui"), r.get("allowed"), "ON" if flag_on else "OFF"))
+        if mism:
+            red("the cadence control is not aligned with who the sender serves",
+                "%s. A member who can SET Daily but is blocked at the send layer has "
+                "their instant mail suppressed and no digest to replace it — they "
+                "receive nothing at all, from a control they just used. The allowlist "
+                "would be CAUSING the silent-nothing lie rather than preventing it."
+                % "; ".join(mism))
+        elif d.get("ui_for"):
+            shown = [u for u, r in (d.get("ui_for") or {}).items() if r.get("ui")]
+            ok("the cadence control is visible exactly to the members the sender serves",
+               "probed %d real member(s); visible to %s"
+               % (len(d["ui_for"]), shown or "nobody"))
 
         leaked = [n for n, k in (("state", "ajax_state"), ("set", "ajax_set")) if d.get(k)]
         if not flag_on and leaked:

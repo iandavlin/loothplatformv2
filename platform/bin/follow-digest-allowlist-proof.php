@@ -293,6 +293,11 @@ function teardown( int $canary_uid, array $seeded_subs, int $topic ): void {
 	delete_user_meta( IAN_UID, LG_FD_WATERMARK_META );
 	delete_option( 'lg_fd_last_flush_daily' );
 	delete_option( 'lg_fd_last_flush_weekly' );
+	// Booting WP with the flag on lets `init` arm the real sender. The harness blocks
+	// that (00-lg-fd-gate-guard.php) and the sender unschedules itself the next time
+	// the flag reads off — but neither is this file's to rely on, so it disarms what
+	// it may have caused rather than leaving a live sender behind.
+	while ( $ts = wp_next_scheduled( LG_FD_CRON_HOOK ) ) { wp_unschedule_event( $ts, LG_FD_CRON_HOOK ); }
 	if ( $canary_uid > 0 ) {
 		require_once ABSPATH . 'wp-admin/includes/user.php';
 		wp_delete_user( $canary_uid );
@@ -337,6 +342,32 @@ say( "\n--- RUN 1: allowlist = Ian only ---" );
 putenv( 'LG_FOLLOW_DIGEST_ALLOWLIST=' . IAN_UID . ':' . IAN_EMAIL );
 $_SERVER['LG_FOLLOW_DIGEST_ALLOWLIST'] = IAN_UID . ':' . IAN_EMAIL;
 say( sprintf( '       allowlist resolves: %s', lg_fd_allowlist()['reason'] ) );
+
+/* ── ⚠️ THE MAIL BLACK HOLE, ASSERTED BEFORE ANYTHING IS SENT ────────────────
+ * Suppressing a member's per-reply mail is only defensible because a digest replaces
+ * it. For a member the allowlist BLOCKS, no digest is coming — so if suppression
+ * still applied, the allowlist would take away the mail they DO get and give nothing
+ * back. That is strictly worse than never having built any of this, and it is the one
+ * way an allowlist can make things worse rather than safer.
+ *
+ * Both members are on cadence=daily here, so the filter has a real decision to make
+ * and neither answer is the default. */
+$filter = 'bb_send_forums_subscribed_reply_email_notifications';
+$ian_suppressed    = ! (bool) apply_filters( $filter, true, array( 'recipient_user_id' => IAN_UID ) );
+$canary_suppressed = ! (bool) apply_filters( $filter, true, array( 'recipient_user_id' => $canary_uid ) );
+
+if ( $ian_suppressed ) {
+	ok( 'Ian is on Daily and IS served, so his per-reply mail is suppressed — the digest replaces it' );
+} else {
+	bad( 'Ian is on Daily but his per-reply mail is NOT suppressed — he would get instant mail AND a digest' );
+}
+if ( ! $canary_suppressed ) {
+	ok( 'the BLOCKED canary is on Daily but its per-reply mail is NOT suppressed — no digest '
+		. 'is coming, so taking away its instant mail would leave it with NOTHING' );
+} else {
+	bad( '⚠️ MAIL BLACK HOLE: the blocked canary is on Daily, its per-reply mail is suppressed, '
+		. 'and the allowlist withholds its digest — it would receive nothing at all' );
+}
 
 $baseline = mailpit_ids();
 tick_at_send_hour();

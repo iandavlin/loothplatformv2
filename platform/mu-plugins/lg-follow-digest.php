@@ -356,8 +356,31 @@ function lg_fd_watermark( int $user_id ): string {
  * It is deliberately the SAME flag as the sender: the control cannot become visible
  * while the thing that honours it is off, because there is only one switch.
  */
-function lg_fd_cadence_ui_enabled(): bool {
-	return (bool) LG_FOLLOW_DIGEST_ENABLED;
+/**
+ * @param int|null $uid the member being asked about; null means the current user.
+ *
+ * ⚠️ PER-MEMBER SINCE THE ALLOWLIST LANDED, AND THAT IS NOT A REFINEMENT — IT IS THE
+ * THING THAT MAKES A CONTROLLED LIVE TEST POSSIBLE AT ALL.
+ *
+ * While this returned a bare flag, switching the sender on for a test of ONE person
+ * also painted the Daily/Weekly control for the WHOLE MEMBERSHIP. Any member picking
+ * Daily would have been written a cadence, had their instant mail suppressed, and
+ * then been blocked at the send layer — receiving NOTHING, from a control they had
+ * just used. That is precisely the "member sets a preference and gets nothing" lie
+ * §15.4 forbids, and the allowlist would have CAUSED it rather than prevented it.
+ *
+ * So the control is visible exactly to the members the sender would really serve.
+ * Same single source of truth as before — every surface still asks this one function
+ * — but it now asks the question that actually matters: not "is the feature on?" but
+ * "is it on FOR YOU?".
+ */
+function lg_fd_cadence_ui_enabled( ?int $uid = null ): bool {
+	if ( ! LG_FOLLOW_DIGEST_ENABLED ) { return false; }
+	if ( null === $uid ) { $uid = get_current_user_id(); }
+	if ( $uid <= 0 ) { return false; }
+	$u = get_userdata( $uid );
+	if ( ! $u || ! is_email( $u->user_email ) ) { return false; }
+	return lg_fd_allowed( (int) $u->ID, (string) $u->user_email );
 }
 
 /* ── THE ACCOUNT-PAGE TRANSPORT ────────────────────────────────────────────────
@@ -373,7 +396,10 @@ function lg_fd_cadence_ui_enabled(): bool {
  * ⚠️ account-following: the existing wire() drives a CHECKBOX and this is a SEGMENTED
  * control, so it needs its own small wiring — read the state, paint the active pill,
  * POST on click, revert on failure. Do NOT write the usermeta key from the page. */
-if ( lg_fd_cadence_ui_enabled() ) {
+/* Registered while the FLAG is on, but each handler re-checks the CALLER against the
+ * allowlist below. The two questions are different: the flag decides whether the
+ * endpoint exists at all, the allowlist decides whether this member may use it. */
+if ( LG_FOLLOW_DIGEST_ENABLED ) {
 	add_action( 'wp_ajax_lg_fd_cadence_state', 'lg_fd_ajax_state' );
 	add_action( 'wp_ajax_lg_fd_cadence_set', 'lg_fd_ajax_set' );
 }
@@ -381,6 +407,11 @@ if ( lg_fd_cadence_ui_enabled() ) {
 function lg_fd_ajax_state(): void {
 	$uid = get_current_user_id();
 	if ( $uid < 1 ) { wp_send_json( array( 'ok' => false ), 401 ); }
+	// A member the sender would not serve must not be told the control exists — the
+	// endpoint answering is what turns "not drawn" into "one stray render from live".
+	if ( ! lg_fd_cadence_ui_enabled( $uid ) ) {
+		wp_send_json( array( 'ok' => false, 'error' => 'not_enabled' ), 404 );
+	}
 	wp_send_json( array( 'ok' => true, 'cadence' => lg_fd_cadence( $uid ),
 	                     'options' => lg_fd_cadences() ) );
 }
@@ -391,6 +422,13 @@ function lg_fd_ajax_set(): void {
 	// member's cadence.
 	$uid = get_current_user_id();
 	if ( $uid < 1 ) { wp_send_json( array( 'ok' => false ), 401 ); }
+	/* ⚠️ REFUSE THE WRITE, not just the render. A member who is not served by the
+	 * sender must not be able to STORE a cadence: storing one suppresses their instant
+	 * mail (see lg_fd_suppress_instant) while the send layer blocks their digest, so
+	 * they would receive nothing at all. Refusing here is what keeps that impossible. */
+	if ( ! lg_fd_cadence_ui_enabled( $uid ) ) {
+		wp_send_json( array( 'ok' => false, 'error' => 'not_enabled' ), 404 );
+	}
 	if ( ! check_ajax_referer( 'lg_fd_cadence', 'nonce', false ) ) {
 		wp_send_json( array( 'ok' => false, 'error' => 'bad_nonce' ), 403 );
 	}
@@ -440,6 +478,19 @@ function lg_fd_suppress_instant( $send_mail, $args ) {
 	// member BB already decided not to mail (blocked, opted out, moderated) stays
 	// unmailed, and the digest must not become a backdoor around that decision.
 	if ( ! $send_mail ) { return $send_mail; }
+
+	/* ⚠️ SUPPRESSION MUST MIRROR DELIVERY EXACTLY, OR IT IS A MAIL BLACK HOLE.
+	 * Suppressing a member's instant mail is only defensible because a digest replaces
+	 * it. For a member the allowlist blocks, no digest is coming — so suppressing them
+	 * would take away the mail they DO get and give nothing back, which is strictly
+	 * worse than never having built this. The allowlist must never be able to make a
+	 * member's notifications quieter; it may only ever withhold the digest.
+	 *
+	 * This is the same condition the send layer uses, asked here so the two cannot
+	 * drift: suppressed ⟺ served. */
+	$u = get_userdata( $uid );
+	if ( ! $u || ! lg_fd_allowed( $uid, (string) $u->user_email ) ) { return $send_mail; }
+
 	return 'instant' === lg_fd_cadence( $uid ) ? $send_mail : false;
 }
 
