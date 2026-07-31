@@ -12,11 +12,13 @@ of them shows up in "is the element in the DOM":
      32 of its 36px underneath NAV#looth-tabbar, and a blind CDP click landed on
      the tabbar and PASSED. Every hit here is hit-tested before it is believed.
 
-  2. THE ROW IS THERE AND THE LINK IS A 404. The rows are assembled in PHP from two
-     databases and the URL is built, not stored. /hub/ does not serve hidden
-     forums, so two of the first real member's twelve rows must route to the
-     group-native permalink instead; getting that wrong yields twelve rows that
-     look perfect and two that dead-end. Every rendered href is fetched.
+  2. THE ROW IS THERE AND THE LINK GOES SOMEWHERE ELSE. This one was found by Ian,
+     not by the suite: "the link in the manage goes to the old foum not to the hub
+     with the right modal open." Twelve rows rendered, hit-tested and 200 — and
+     pointed at a UI he had ruled out. 200 is not the assertion. So every href is
+     now FOLLOWED IN A REAL BROWSER and the hub must open the §4e discussion modal
+     holding THAT topic id. It has to be a browser: the deep link is client-side
+     (forums.js §4f), so curl sees 200 for the feed and learns nothing.
 
 It also asserts the two things the design is FOR, because both are one careless
 edit from evaporating: the list stays BOUNDED (5 rows, not all 12), and the single
@@ -272,6 +274,10 @@ def visible_rows(p):
                 ? li.querySelector('a.lg-manage-sub__fol-name').getAttribute('href') : null,
           notify: !!li.querySelector('[data-mark="notify"].is-on'),
           email:  !!li.querySelector('[data-mark="email"].is-on'),
+          // A linkless row must SAY why. "(private group)" in the meta line is
+          // the page admitting the hub cannot address that discussion.
+          private: /\\(private group\\)/.test(
+            (li.querySelector('.lg-manage-sub__fol-meta') || {}).textContent || ''),
         });
       }
       return out;
@@ -328,6 +334,50 @@ def control_topic(exclude):
         if line.strip().isdigit() and int(line) not in exclude:
             return int(line)
     return None
+
+
+def open_and_read_modal(p, url, timeout_s=20):
+    """Navigate to a deep link and report what the hub actually opened.
+
+    ≥641 the §4e desktop modal (#lg-dmodal), ≤640 hub-polish.js's #looth-rep-sheet
+    — one contract, two surfaces (forums.js:5355). Both are checked so this works
+    at either width. about:blank first for the same stale-document reason as goto().
+    """
+    p.send("Page.navigate", {"url": "about:blank"})
+    for _ in range(20):
+        time.sleep(0.05)
+        try:
+            if p.ev("location.href") == "about:blank": break
+        except Exception: pass
+    p.send("Page.navigate", {"url": url})
+    deadline = time.time() + timeout_s
+    last = {"state": "never-opened"}
+    while time.time() < deadline:
+        time.sleep(0.25)
+        try:
+            r = p.ev("""(() => {
+              for (const id of ['lg-dmodal', 'looth-rep-sheet']) {
+                const d = document.getElementById(id);
+                if (!d || d.hidden) continue;
+                const t = d.querySelector('.fc-title, h1, h2, .feed-card__title');
+                // The two surfaces name the topic differently: the desktop dmodal
+                // stamps data-topic-id, the mobile sheet stamps data-tid. Reading
+                // only the first made the mobile assertion hollow — it opened, the
+                // id came back null, and "holds THAT discussion" would have failed
+                // for a sheet that was in fact correct.
+                const tid = d.getAttribute('data-topic-id') || d.getAttribute('data-tid');
+                return {state:'open', which:id,
+                        topic_id: parseInt(tid, 10) || null,
+                        title: (t ? t.textContent : '').trim().slice(0, 80)};
+              }
+              return {state: document.readyState === 'complete' ? 'not-open-yet' : 'loading'};
+            })()""")
+            if r.get("state") == "open":
+                return r
+            last = r
+        except Exception as e:
+            last = {"state": "error", "err": str(e)[:80]}
+    return last
 
 
 def origin_of(url):
@@ -416,7 +466,11 @@ def main():
     try:
         urllib.request.urlopen(CDP + "/json/version", timeout=5).read()
     except Exception:
-        cannot_run("chrome-dev is not answering on 127.0.0.1:9222")
+        # Name the endpoint we ACTUALLY tried. Hardcoding :9222 here sent me
+        # looking at the shared service while my own engine was the one that had
+        # died — a diagnostic that points at the wrong thing costs more than none.
+        cannot_run(f"no CDP engine answering at {CDP} "
+                   f"(--cdp selects it; the shared chrome-dev is 127.0.0.1:9222)")
 
     notify = store_notify_ids(args.uid)
     email  = store_email_ids(args.uid)
@@ -468,25 +522,73 @@ def main():
             check(f"topic {r['topic']} unfollow control is a 44px target",
                   (x.get("w", 0) >= 44 and x.get("h", 0) >= 44), True)
 
-        log("\n  [5] every link a member can press actually resolves")
-        for r in rows:
+        log("\n  [5] every link GOES SOMEWHERE — the hub, with THAT discussion open")
+        # THE ASSERTION THIS GATE WAS MISSING, and it cost a round trip with Ian:
+        # "the link in the manage goes to the old foum not to the hub with the
+        # right modal open." The suite proved rows RENDER and are HITTABLE and
+        # said nothing about DESTINATION, so a link that resolved 200 to entirely
+        # the wrong UI passed. 200 is not the assertion. Landing on the hub with
+        # the right discussion open is.
+        #
+        # Driven in a real browser because the deep link is CLIENT-side: §4f
+        # (forums.js:5355) reads ?topic=<forum>/<topic> and opens the §4e modal,
+        # fetching the topic standalone when the feed has no card for it. curl
+        # would see 200 for the feed and learn nothing.
+        base = origin_of(args.url)
+        # EVERY row, not the visible five. The rows the hub cannot address are the
+        # OLD ones — a member's private-group follows sink to the bottom of a list
+        # sorted by last activity — so checking only the first page would leave the
+        # exact rows this defect lives in untested.
+        if p.ev("!!document.getElementById('lg-fol-more')"):
+            p.ev("document.getElementById('lg-fol-more').click()")
+            time.sleep(0.4)
+        all_rows = visible_rows(p)
+        log(f"  checking all {len(all_rows)} rows")
+        for r in all_rows:
             if not r["href"]:
-                check(f"topic {r['topic']} has an href", False, True)
+                # A row is allowed to have no link ONLY where the hub genuinely
+                # cannot address the discussion: hidden group forums, which
+                # _single-topic.php gates out at :53 and :72. The page labels
+                # those "(private group)". An unlabelled linkless row is a defect.
+                check(f"topic {r['topic']} is linkless only because it is a private group",
+                      r.get("private"), True)
                 continue
-            # The hrefs are absolute (/hub/…), so they resolve against the
-            # ORIGIN — never against the page's own directory. Deriving the base
-            # by chopping the slug off the url was only ever correct because the
-            # page sat at the site root; under a preview prefix
-            # (/preview/<lane>/manage-subscription/) it turned every link into
-            # /preview/<lane>/hub/… and reported five 404s that do not exist.
-            # A gate that fails on the harness rather than the product is worse
-            # than no gate: it teaches you to ignore it.
-            base = origin_of(args.url)
+
+            check(f"topic {r['topic']} link is the hub deep link, not a permalink or the old forum",
+                  r["href"].startswith("/hub/?topic="), True)
+
             st = fetch_status(base + r["href"], cookies)
-            check(f"topic {r['topic']} {r['href']} resolves (not 404)",
-                  st in (200, 301, 302), True)
+            check(f"topic {r['topic']} link resolves", st in (200, 301, 302), True)
             if st not in (200, 301, 302):
                 log(f"           status={st}")
+                continue
+
+            # BOTH WIDTHS. §4f is one contract over two different openers — the
+            # desktop dmodal and the mobile sheet — and they are separate code
+            # paths, so proving the link on one proves nothing about the other.
+            # Ian reads this on a phone, so the phone is not the optional half.
+            for label, w, hgt, mob in (("desktop", 1280, 900, False), ("phone", 390, 844, True)):
+                p.send("Emulation.setDeviceMetricsOverride",
+                       {"width": w, "height": hgt, "deviceScaleFactor": 2, "mobile": mob})
+                # maxTouchPoints must be 1..16 even when disabling — CDP rejects 0.
+                p.send("Emulation.setTouchEmulationEnabled", {"enabled": mob, "maxTouchPoints": 5})
+                opened = open_and_read_modal(p, base + r["href"])
+                if not check(f"topic {r['topic']} lands with the discussion open ({label})",
+                             opened.get("state"), "open"):
+                    log(f"           {opened}")
+                    continue
+                # The id is read off the opener itself, so this is the hub saying
+                # which discussion it opened — never the account page's opinion.
+                check(f"topic {r['topic']} it is THAT discussion, not another ({label})",
+                      opened.get("topic_id"), r["topic"])
+            p.send("Emulation.setDeviceMetricsOverride",
+                   {"width": 1280, "height": 900, "deviceScaleFactor": 2, "mobile": False})
+            p.send("Emulation.setTouchEmulationEnabled", {"enabled": False, "maxTouchPoints": 5})
+
+        # Back to the section for the phases that follow.
+        must_return = goto(p, args.url)
+        if not must_return:
+            cannot_run("could not return to the section after following its links")
 
         log("\n  [6] the one off switch exists and can be pressed")
         s = hit_test(p, "#lg-fol-stopall")

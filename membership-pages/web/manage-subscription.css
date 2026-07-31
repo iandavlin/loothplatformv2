@@ -313,3 +313,10 @@ a.lg-manage-sub__fol-name:hover { color: #6b7c52; text-decoration: underline; }
         -webkit-box-orient: vertical;
     }
 }
+
+/* An unlinked title must not LOOK like a link. The hub cannot address a private
+ * group's discussions, so those rows carry no anchor — and at rest a <span> and
+ * an <a> here were pixel-identical, which makes a bold title that does nothing
+ * when tapped. That is the dead-control class, so the row states its reason in
+ * the meta line AND stops advertising an affordance it does not have. */
+span.lg-manage-sub__fol-name { color: var(--lg-mute, #6b6f63); font-weight: 600; }
