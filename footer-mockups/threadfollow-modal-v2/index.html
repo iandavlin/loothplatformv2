@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The follow modal, rethought — two ways (Ian, 2026-07-30)</title>
+<style>
+:root{--ink:#1a1d1a;--mute:#6b6f6b;--line:#e3ddd0;--card:#fff;--bg:#f2efe6;
+  --rust:#c66845;--sage:#87986a;--sage-d:#586b3f;--tint:#eef2e3;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--serif:Georgia,serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans)}
+.wrap{max-width:1080px;margin:0 auto;padding:26px 18px 70px}
+h1{font:700 25px/1.2 var(--serif);margin:0 0 6px}
+.lede{color:var(--mute);max-width:70ch;margin:0 0 8px}
+.quote{border-left:3px solid var(--rust);padding:8px 13px;background:#fff;border-radius:0 9px 9px 0;
+  margin:14px 0 22px;max-width:70ch}
+.quote b{color:var(--rust)}
+h2{font:700 13px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--mute);
+  margin:30px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.pane{background:#e8e4d8;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.pane__h{padding:13px 15px;background:#fff;border-bottom:1px solid var(--line)}
+.tag{display:inline-block;font:700 10px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;
+  background:var(--sage);color:#fff;padding:4px 8px;border-radius:999px}
+.tag--b{background:#7a8598}
+.rec{background:var(--rust);margin-left:6px}
+.pane__h h3{margin:8px 0 3px;font:700 16px/1.25 var(--serif)}
+.pane__h p{margin:0;color:var(--mute);font-size:13px}
+.pane__b{padding:22px 15px;display:flex;justify-content:center}
+
+/* ---- the modal ---- */
+.m{width:330px;background:var(--card);border-radius:16px;box-shadow:0 14px 40px rgba(26,29,26,.2);overflow:hidden}
+.m__h{padding:15px 15px 13px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:flex-start}
+.m__hg{flex:1 1 auto;min-width:0}
+.eyebrow{margin:0 0 4px;font:700 10px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.m__t{margin:0;font:700 17px/1.26 var(--serif)}
+.m__x{border:0;background:none;font-size:21px;line-height:1;color:var(--mute);cursor:pointer;padding:0 2px}
+.m__b{padding:13px 15px 16px}
+
+/* A: grouped card */
+.grp{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--tint)}
+.row{display:flex;align-items:center;gap:11px;padding:12px 13px}
+.row+.row{border-top:1px solid var(--line)}
+.row__l{flex:1 1 auto;min-width:0;font-weight:600;font-size:14px}
+.row__l small{display:block;margin-top:2px;font-weight:500;color:var(--mute);font-size:12px}
+.sw{width:42px;height:25px;border-radius:999px;background:#d3d7cd;border:0;position:relative;cursor:pointer;flex:0 0 auto;transition:background .15s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.sw.on{background:var(--rust)}.sw.on::after{transform:translateX(17px)}
+.sep{margin:14px 0 0;padding-top:13px;border-top:1px solid var(--line);display:flex;align-items:center;gap:11px}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;
+  border-radius:999px;padding:8px 13px;font:600 13px/1 var(--sans);color:var(--ink);cursor:pointer}
+.pill.on{color:var(--rust);border-color:var(--rust);background:#fdf1ec}
+.ico{width:15px;height:15px;flex:0 0 auto}
+
+/* B: one question, then detail */
+.lead{display:flex;align-items:center;gap:11px;padding:13px;border:1px solid var(--rust);
+  border-radius:12px;background:#fdf1ec}
+.lead .row__l{font-size:15px}
+.sub{margin:11px 0 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.sub .row{padding:11px 13px}
+.sub.off{opacity:.45}
+.note{margin:12px 0 0;font-size:12px;color:var(--mute);line-height:1.45}
+.hint{margin:12px 15px 0;font-size:13px;color:#4a4d4a;line-height:1.5}
+.hint b{color:var(--ink)}
+.phone{margin-top:26px}
+.phone .m{width:300px}
+table{border-collapse:collapse;width:100%;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13.5px}
+th,td{padding:9px 11px;text-align:left;border-bottom:1px solid var(--line)}
+th{background:#faf8f2;font-weight:700}
+tr:last-child td{border-bottom:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>The follow modal, rethought</h1>
+<p class="lede">You opened it and said it was confusing, and that you could not tell which discussion you were acting on. Both are layout problems, not wording problems — so here are two layouts rather than a reworded version of the one you rejected.</p>
+<div class="quote"><b>&ldquo;This modal is a bit confusing. Can we get the title of the discussion we are following?&rdquo;</b> &mdash; 30 July</div>
+
+<h2>What was wrong with the one you saw</h2>
+<table>
+<tr><th>What you saw</th><th>Why it read badly</th></tr>
+<tr><td>&ldquo;Follow this discussion&rdquo; large and bold at the top</td><td>The <em>least</em> useful text in the box was its headline. You already know you tapped follow.</td></tr>
+<tr><td>&ldquo;Spanish Heel failure&rdquo; small and grey underneath</td><td>The one thing you were looking for was styled like a caption, so it read as a footnote to the header.</td></tr>
+<tr><td>Two switches, then a bordered button, evenly stacked</td><td>Three unrelated-looking rows. Nothing said which controls belong together.</td></tr>
+</table>
+
+<h2>Two ways to fix it</h2>
+<div class="grid">
+
+  <div class="pane">
+    <div class="pane__h">
+      <span class="tag">A</span><span class="tag rec">Recommended</span>
+      <h3>Title on top, notifications grouped</h3>
+      <p>The discussion names the box. The two notification bits become one visual group; Save sits apart.</p>
+    </div>
+    <div class="pane__b">
+      <div class="m">
+        <div class="m__h">
+          <div class="m__hg"><p class="eyebrow">Follow discussion</p><h2 class="m__t" style="font:700 17px/1.26 var(--serif);letter-spacing:0;text-transform:none;color:var(--ink);margin:0;border:0;padding:0">Spanish Heel failure</h2></div>
+          <button class="m__x">&times;</button>
+        </div>
+        <div class="m__b">
+          <div class="grp">
+            <div class="row"><span class="row__l">Notifications<small>A bell row for new replies</small></span><button class="sw on"></button></div>
+            <div class="row"><span class="row__l">Emails<small>Email me about new replies</small></span><button class="sw"></button></div>
+          </div>
+          <div class="sep">
+            <span class="row__l">Save<small>Bookmark to your saved posts</small></span>
+            <button class="pill"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.6l2.95 5.98 6.6.96-4.77 4.65 1.13 6.57L12 17.66 6.09 20.76l1.13-6.57L2.45 9.54l6.6-.96z"/></svg>Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="hint"><b>Why this one.</b> It is the smallest change that fixes both complaints, and it keeps every control exactly where you already found it. Nothing moves except emphasis.</p>
+  </div>
+
+  <div class="pane">
+    <div class="pane__h">
+      <span class="tag tag--b">B</span>
+      <h3>One decision, then the detail</h3>
+      <p>&ldquo;Following&rdquo; is the question. Emails and Save are consequences, and the email row dims until you are following.</p>
+    </div>
+    <div class="pane__b">
+      <div class="m">
+        <div class="m__h">
+          <div class="m__hg"><p class="eyebrow">Follow discussion</p><h2 class="m__t" style="font:700 17px/1.26 var(--serif);letter-spacing:0;text-transform:none;color:var(--ink);margin:0;border:0;padding:0">Spanish Heel failure</h2></div>
+          <button class="m__x">&times;</button>
+        </div>
+        <div class="m__b">
+          <div class="lead"><span class="row__l">Following this discussion<small>You will get a bell for new replies</small></span><button class="sw on"></button></div>
+          <div class="sub">
+            <div class="row"><span class="row__l">Also email me<small>Instead of only the bell</small></span><button class="sw"></button></div>
+            <div class="row"><span class="row__l">Save<small>Bookmark to your saved posts</small></span>
+              <button class="pill"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.6l2.95 5.98 6.6.96-4.77 4.65 1.13 6.57L12 17.66 6.09 20.76l1.13-6.57L2.45 9.54l6.6-.96z"/></svg>Save</button>
+            </div>
+          </div>
+          <p class="note">Turn following off and the email row dims &mdash; it can never read as a live setting that is not.</p>
+        </div>
+      </div>
+    </div>
+    <p class="hint"><b>The trade.</b> Clearer to read, but it makes Notifications the master switch &mdash; today the bell and the email are two independent bits, and B would change that. Only pick B if you want them linked.</p>
+  </div>
+</div>
+
+<h2>On a phone (variant A)</h2>
+<div class="pane"><div class="pane__b phone">
+  <div class="m">
+    <div class="m__h">
+      <div class="m__hg"><p class="eyebrow">Follow discussion</p><h2 class="m__t" style="font:700 17px/1.26 var(--serif);letter-spacing:0;text-transform:none;color:var(--ink);margin:0;border:0;padding:0">Bridge saddle buzz on a &rsquo;68 Tele &mdash; chasing it down</h2></div>
+      <button class="m__x">&times;</button>
+    </div>
+    <div class="m__b">
+      <div class="grp">
+        <div class="row"><span class="row__l">Notifications<small>A bell row for new replies</small></span><button class="sw on"></button></div>
+        <div class="row"><span class="row__l">Emails<small>Email me about new replies</small></span><button class="sw on"></button></div>
+      </div>
+      <div class="sep">
+        <span class="row__l">Save<small>Bookmark to your saved posts</small></span>
+        <button class="pill on"><svg class="ico" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.6l2.95 5.98 6.6.96-4.77 4.65 1.13 6.57L12 17.66 6.09 20.76l1.13-6.57L2.45 9.54l6.6-.96z"/></svg>Saved</button>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="hint">A long title wraps to three lines and then clamps, so the controls never get pushed off the screen. On a phone the box is a bottom sheet, not a centred dialog.</p>
+</div>
+
+<h2>One thing to know either way</h2>
+<p class="lede"><b>There is no Frequency row in these, and there was none in what you clicked.</b> You picked variant A from a mock that had Instant&nbsp;/&nbsp;Daily&nbsp;/&nbsp;Weekly in it. I left it out deliberately: nothing sends those digests yet, and a cadence control that quietly does nothing is worse than no control. It goes in the moment the sending side exists &mdash; say if you would rather see it greyed out in the meantime.</p>
+</div>
+</body></html>

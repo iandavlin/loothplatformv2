@@ -1209,9 +1209,27 @@ function feed_action_bar(int $reply_count, string $zero_label = 'Reply', int $to
     static $ICO_SHARE   = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>';
     $label = $reply_count === 0 ? $zero_label : ($reply_count === 1 ? '1 reply' : $reply_count . ' replies');
     echo '<div class="feed-card__actions lg-card-actions">'
-       . '<span class="lg-act lg-act-like" role="button" tabindex="0">' . $ICO_LIKE . 'Like</span>'
-       . '<span class="lg-act lg-act-replies" role="button" tabindex="0">' . $ICO_REPLIES . htmlspecialchars($label) . '</span>'
-       . '<span class="lg-act lg-act-share" role="button" tabindex="0">' . $ICO_SHARE . 'Share</span>';
+       . '<span class="lg-act lg-act-like" role="button" tabindex="0">' . $ICO_LIKE . 'Like</span>';
+    /* ⚠️ REPLIES IS NO LONGER A BUTTON ON A DISCUSSION CARD — Ian, 2026-07-30 ("love
+       those changes" on the card mock): the replies button goes from the bottom, the
+       stat goes from the top, and replies becomes a NON-INTERACTIVE count inline with
+       the reactions. It now renders exactly ONCE per card.
+
+       SCOPED TO TOPIC CARDS ON PURPOSE. feed_action_bar() is shared: CONTENT cards call
+       it as feed_action_bar(0, 'Comment') and their .lg-act-replies is how a member
+       opens the comments modal (hub-polish.js:2303). Dropping it unconditionally would
+       strand every article and event card with no way into its comments — the same
+       class of loss as Ian's "keep the save button on all other post types", one
+       control over. Content cards keep theirs, unchanged.
+
+       Safe for discussions because the card BODY opens the thread: title/excerpt/cover
+       call openRepliesSheet() and .lg-act-replies sits in that handler's EXEMPT list
+       (hub-polish.js:2286-2291). Verified in a real browser at 390px on the running
+       site before this was cut — tapping the title opened the sheet. */
+    if ($topicId < 1) {
+        echo '<span class="lg-act lg-act-replies" role="button" tabindex="0">' . $ICO_REPLIES . htmlspecialchars($label) . '</span>';
+    }
+    echo '<span class="lg-act lg-act-share" role="button" tabindex="0">' . $ICO_SHARE . 'Share</span>';
     if ($topicId > 0 && function_exists('feed_follow_control')) {
         // CONSOLIDATED (§15 variant A, Ian 2026-07-30). Was a .lg-act-follow span
         // holding the 🔔/✉ pair; now one labelled bell that opens the settings modal.
@@ -1646,6 +1664,12 @@ $header_cat = $scoped_forum
     <article class="feed-card feed-card--topic" data-lg-card="1"
              data-id="<?= $topic_id ?>" data-type="discussion" data-href="<?= $turl ?>" data-share-url="<?= $tshare ?>" data-gated="0"
              data-cat="<?= htmlspecialchars($cat_key) ?>" data-topic-id="<?= $topic_id ?>" data-forum-id="<?= (int)$topic['forum_id'] ?>" data-author-id="<?= (int)($topic['author_id'] ?? 0) ?>" data-reply-count="<?= $reply_count ?>">
+      <?php /* DESKTOP FOLLOW — the card's top-right corner (Ian 2026-07-30). Emitted
+               INSIDE the card and positioned absolutely by forums.css; it is the first
+               child so it cannot be pushed anywhere by the flow content beside it.
+               Desktop-only: the phone keeps its pill at the end of the action row,
+               which is what the approved mock shows. */ ?>
+      <?php if (function_exists('feed_follow_control')) { echo '<span class="fc-follow-corner">'; feed_follow_control($topic_id); echo '</span>'; } ?>
       <?php $av_href = $author_slug ? '/u/' . rawurlencode((string)$author_slug) : null;
             $av_t    = bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 40, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null); ?>
       <?php /* aria-label: the avatar <a> has no text content (image/initials only) —
@@ -1665,12 +1689,13 @@ $header_cat = $scoped_forum
                mobile-hub.css's catch-all stacks it as its own row. Tapping the topic
                card already opens the thread, so no own handler is needed. (hub-editdel,
                Ian 2026-06-25.) */ ?>
-      <?php if ($reply_count > 0): ?>
-        <span class="fc-replycount" aria-label="<?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?>">
-          <svg class="fc-replycount__ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg>
-          <?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?>
-        </span>
-      <?php endif; ?>
+      <?php /* THE MOBILE TOP REPLY STAT IS GONE — Ian, 2026-07-30: "love those changes"
+               on the card mock, which removes it. Measured before cutting: on a phone
+               card with 8 replies the count rendered TWICE, here (.fc-replycount, above
+               the excerpt) and again as .lg-act-replies in the bottom row. It now renders
+               exactly ONCE, beside the reaction counts — see the stat emitted with the
+               reactions bar below. Desktop never showed this element (CSS-hidden; the
+               facepile owns the count there), so nothing changes at >=641px. */ ?>
       <?php /* fc-activity beacon removed per Ian 6/7 — the "active … ago" pulse-dot
                was noise on the cards. CSS rules (.fc-activity/.fc-pulse) left in place
                but now unused. */ ?>
@@ -1715,6 +1740,14 @@ $header_cat = $scoped_forum
       <?php /* fc-actions = the reactions-comments SURFACE lane's engagement-bar slot. */ ?>
       <div class="fc-actions">
         <?php feed_reactions_bar('topic', $topic_id, $card_reaction_counts['topic:' . $topic_id] ?? []); ?>
+        <?php /* #3c — REPLIES AS A STAT, inline with the reaction counts (Ian 2026-07-30).
+                 A <span>, not a button: no role, no tabindex, no handler. It reports that
+                 the thread has activity; the way IN is the card body, which already opens
+                 the thread sheet. Mobile-only by CSS — desktop keeps the facepile, which
+                 is its own affordance and is untouched. */ ?>
+        <?php if ($reply_count > 0): ?>
+        <span class="fc-replies-stat" aria-label="<?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?>"><?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?></span>
+        <?php endif; ?>
         <?php feed_action_bar($reply_count, 'Reply', $topic_id); ?>
         <?php /* CONSOLIDATED — thread-follow §15, variant A. Ian, 2026-07-30, verbatim:
                  "I like variant A because it gets the card controls down a little bit."
@@ -1733,7 +1766,14 @@ $header_cat = $scoped_forum
 
                  Topic cards only, unchanged from v1: content cards have comments, not
                  topic subscriptions (§9.3 q5). */ ?>
-        <?php feed_follow_control($topic_id); ?>
+        <?php /* MOVED OUT OF THIS ROW — Ian, 2026-07-30: "Is it possible to move the
+                 follow button to the upper right hand corner of the card on DT?" The
+                 desktop copy is now emitted at the top of the card (search
+                 fc-follow--corner). What is left here is React / replies / Share, three
+                 doing-actions of equal weight; Follow was the odd one out, a state you
+                 set once. It also removes the control that was pinned to the row's far
+                 right, which is the shape that overflowed and dropped the toggles off
+                 17 of 18 cards earlier today (765dbc3). */ ?>
         <?php feed_share_btn(); ?>
         <?= $reply_cta /* card-level CTA: now hidden by CSS (composer is the reply entry, Ian) but KEPT as the topic/forum data-source that nested reply buttons read via frmOpen() */ ?>
         <?php /* expand-all RETIRED (Ian): SPLIT into "Read more" (full post BODY only,

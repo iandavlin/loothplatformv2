@@ -4094,6 +4094,16 @@
   window.lgSaveSync = sync;
 })();
 
+/* THE ONE CLIENT-SIDE READ of the thread-follow exposure gate.
+   Server truth is LG_THREAD_FOLLOW_ENABLED (config.php), surfaced on
+   body[data-lg-follow] by _chrome.php. Nothing else in this file may read that
+   attribute - call this. Defaults to OFF when the attribute is absent, so an older
+   cached shell degrades to 'feature off' rather than to a half-rendered feature. */
+function lgFollowEnabled() {
+  try { return document.body && document.body.getAttribute('data-lg-follow') === '1'; }
+  catch (e) { return false; }
+}
+
 /* ─── Thread-follow: the TWO per-discussion opt-in toggles (🔔 notify / ✉ email)
    thread-follow lane 2026-07-28. SPEC docs/atlas/THREAD-FOLLOW-SPEC.md §2-3.
 
@@ -4308,11 +4318,24 @@
     fm.innerHTML =
       '<div class="lg-fm__back" data-fm-close></div>' +
       '<div class="lg-fm__panel" role="dialog" aria-modal="true" aria-labelledby="lg-fm-title">' +
+        /* ⚠️ THE DISCUSSION TITLE IS THE SUBJECT, NOT A CAPTION. Ian, 2026-07-30,
+           looking at the shipped build: "This modal is a bit confusing. Can we get
+           the title of the discussion we are following?" — and the title WAS there,
+           sitting under a generic "Follow this discussion" header in small grey. It
+           read as a caption, so he was hunting for the one thing he needed to know:
+           WHICH discussion am I acting on.
+           Inverted: the eyebrow ("Follow discussion") is the small grey line, and the
+           TITLE is the large text the eye lands on. The generic header was the least
+           useful text in the box, so it stops being the biggest.
+           The h2 is still the dialog's accessible name via aria-labelledby, so the
+           name a screen reader announces is now the topic, not the boilerplate. */
         '<header class="lg-fm__head">' +
-          '<h2 class="lg-fm__title" id="lg-fm-title">Follow this discussion</h2>' +
+          '<div class="lg-fm__hgroup">' +
+            '<p class="lg-fm__eyebrow">Follow discussion</p>' +
+            '<h2 class="lg-fm__title" id="lg-fm-title"></h2>' +
+          '</div>' +
           '<button type="button" class="lg-fm__x" data-fm-close aria-label="Close">&times;</button>' +
         '</header>' +
-        '<p class="lg-fm__topic"></p>' +
         '<div class="lg-fm__rows">' +
           fmRow('notify', 'Notifications', 'A bell row for new replies') +
           fmRow('email',  'Emails',        'Email me about new replies') +
@@ -4410,10 +4433,13 @@
       var svl = sv.querySelector('.fc-save__lbl'); if (svl) svl.textContent = 'Save';
     }
 
+    // The dialog's NAME is the discussion. Fall back to the generic string only when
+    // the card has no title to read — an unnamed dialog is worse than a generic one.
     var card = trigger.closest('.feed-card');
     var t = card && card.querySelector('.fc-title, .feed-card__title');
-    var tp = m.querySelector('.lg-fm__topic');
-    if (tp) tp.textContent = t ? (t.textContent || '').trim() : '';
+    var ttl = t ? (t.textContent || '').trim() : '';
+    var tp = m.querySelector('.lg-fm__title');
+    if (tp) tp.textContent = ttl || 'This discussion';
 
     m.hidden = false;
     document.documentElement.classList.add('lg-fm-open');
@@ -4746,6 +4772,10 @@
              Explicitly NOT in the post ⋯ menu: that trigger is revealed only to a
              post's AUTHOR or a moderator and its contents are Edit/Delete, so it is
              both the wrong audience and the wrong semantics for a follow control. */
+          /* Exposure gate (config.php -> body[data-lg-follow] -> lgFollowEnabled()).
+             The header markup is built once and persists across opens, so gating at
+             BUILD time is what makes OFF a true no-op rather than a hidden node. */
+          (lgFollowEnabled() ?
           '<button type="button" class="lg-dmodal__notify" data-follow="notify" data-topic-id="0" ' +
                   'aria-pressed="false" aria-label="Notify me about new replies" title="Notify me about new replies">' +
             '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>' +
@@ -4753,7 +4783,7 @@
           '<button type="button" class="lg-dmodal__email" data-follow="email" data-topic-id="0" ' +
                   'aria-pressed="false" aria-label="Email me about new replies" title="Email me about new replies">' +
             '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>' +
-          '</button>' +
+          '</button>' : '') +
           '<button type="button" class="lg-dmodal__size" aria-label="Modal size" title="Modal size"></button>' +
           '<button type="button" class="lg-dmodal__x" data-dm-close aria-label="Close">&times;</button>' +
         '</header>' +

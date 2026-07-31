@@ -534,6 +534,12 @@ body { margin: 0; background: #f0eee8; color: #323532;
   box-shadow: 0 2px 10px rgba(0,0,0,.15); transition: background .15s, border-color .15s; }
 .lg-dock__btn:hover { background: #f4f1e8; }
 .lg-dock__back svg { width: 15px; height: 15px; }
+/* SAVE reuses .lg-dock__btn's pill so the dock stays ONE row of one shape —
+   inventing a fourth shape for the newest control is how a row stops reading
+   as a row. Lit state matches the rust used for saved/followed elsewhere. */
+.lg-dock__save svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.lg-dock__save.is-on { color: #c66845; border-color: #c66845; background: #fdf1ec; }
+.lg-dock__save.is-on svg { fill: currentColor; }
 /* the dock's Comments button reuses .lg-dock__btn (drop the old standalone pos). */
 .lg-standalone-dock .lg-standalone-comments { position: static; left: auto; bottom: auto; box-shadow: none; }
 .lg-dock__react { position: relative; }
@@ -608,6 +614,24 @@ body { margin: 0; background: #f0eee8; color: #323532;
   </a>
 <?php if ($reactPt !== ''): ?>
   <div class="lg-dock__react" data-lg-react data-pt="<?= htmlspecialchars($reactPt, ENT_QUOTES, 'UTF-8') ?>" data-id="<?= $reactId ?>"></div>
+<?php /* SAVE — Ian, 2026-07-30: "On cpts we should get a save button. We dont' have
+         robust comments on the cpts." A managed CPT's OWN page had NO save affordance
+         at all: the Hub card could be saved, the post itself could not. Measured on
+         2026-07-30 as a logged-in member at 1280 and 390 — video, loothprint and
+         imgcap singles all returned save=0.
+
+         NOT the variant-A relocation. That rule (Save stays inline on non-topic post
+         types) is correct and holds on the Hub; this page simply never had one.
+
+         SAME STORE, SAME ENDPOINT, SAME KEY as the Hub card's .fc-save and as the
+         react dock beside it: /archive-api/v0/save-post keyed post_type:item_id. A
+         second write path would let a post read "saved" on its page and not on its
+         card — the drift Ian ruled against for reactions ("the reaction in post and on
+         card should jive"). Gated on $reactPt for the same reason the react dock is:
+         it is the resolved post_type, and without it there is nothing to key on. */ ?>
+  <button type="button" class="lg-dock__btn lg-dock__save" data-lg-save data-pt="<?= htmlspecialchars($reactPt, ENT_QUOTES, 'UTF-8') ?>" data-id="<?= $reactId ?>" aria-pressed="false" aria-label="Save" title="Save">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.6l2.95 5.98 6.6.96-4.77 4.65 1.13 6.57L12 17.66 6.09 20.76l1.13-6.57L2.45 9.54l6.6-.96z"/></svg><span class="lg-dock__word">Save</span>
+  </button>
 <?php endif; ?>
 <?php if ($commentsUrl !== ''): ?>
   <button type="button" class="lg-dock__btn lg-standalone-comments" id="lg-comments-btn" aria-haspopup="dialog" aria-controls="lg-cmodal">
@@ -664,6 +688,50 @@ body { margin: 0; background: #f0eee8; color: #323532;
       }
     } catch(_){}
   });
+  /* Post SAVE — SAME /archive-api/v0/save-post store and wire format the Hub card's
+     .fc-save uses (post_type:item_id key), so saving here and on the card are ONE
+     saved item. Copied exactly rather than reinvented: batch GET resolves auth +
+     nonce + my_saves; POST carries post_type/item_id/unsave/_wpnonce with the nonce
+     also in X-WP-Nonce. Anon viewers get no nonce, so the button stays inert exactly
+     as it does on a card — visible, never lying about what it will do. */
+  (function(){
+    var SEP = '/archive-api/v0/save-post';
+    var btn = document.querySelector('[data-lg-save]');
+    if (!btn) return;
+    var pt = btn.getAttribute('data-pt'), id = parseInt(btn.getAttribute('data-id'),10);
+    if (!pt || !id) return;
+    var key = pt + ':' + id, nonce = '', authed = false;
+    function paint(on){
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.classList.toggle('is-on', !!on);
+      var l = btn.querySelector('.lg-dock__word');
+      if (l) l.textContent = on ? 'Saved' : 'Save';
+      btn.setAttribute('aria-label', on ? 'Saved' : 'Save');
+      btn.setAttribute('title', on ? 'Saved' : 'Save');
+    }
+    fetch(SEP + '?items=' + encodeURIComponent(key), {
+      credentials:'same-origin', headers:{ 'Accept':'application/json' }
+    }).then(function(r){ return r.ok ? r.json() : Promise.reject(); })
+      .then(function(d){
+        if (!d || !d.authenticated || !d.nonce) return;   // anon → inert
+        nonce = d.nonce; authed = true;
+        if (d.my_saves && d.my_saves[key]) paint(true);
+      }).catch(function(){});
+    btn.addEventListener('click', function(e){
+      e.preventDefault(); e.stopPropagation();
+      if (!authed) return;
+      var was = btn.getAttribute('aria-pressed') === 'true';
+      paint(!was);                                        // optimistic
+      fetch(SEP, {
+        method:'POST', credentials:'same-origin',
+        headers:{ 'Content-Type':'application/json', 'X-WP-Nonce': nonce },
+        body: JSON.stringify({ post_type: pt, item_id: id, unsave: was, _wpnonce: nonce })
+      }).then(function(r){ return r.json(); })
+        .then(function(j){ paint(j && j.ok ? j.saved : was); })   // reconcile / revert
+        .catch(function(){ paint(was); });                        // revert on failure
+    });
+  })();
+
   /* Post React — SAME /archive-api/v0/card-react store the Hub card uses
      (post_type:id key), so post + card share one count ("should jive"). */
   var EP = '/archive-api/v0/card-react', RBASE = '/archive-poc/reactions/';

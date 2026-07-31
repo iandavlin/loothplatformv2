@@ -5383,7 +5383,23 @@ body.lg-follow-anon .fc-follow { display: none; }
   display: flex; align-items: flex-start; gap: 10px;
   padding: 16px 16px 12px; border-bottom: 1px solid var(--lg-line, #e3ddd0);
 }
-.lg-fm__title { flex: 1 1 auto; margin: 0; font: 700 15px/1.3 var(--lg-font-sans, var(--font-body)); }
+/* ⚠️ THE TITLE IS THE SUBJECT (Ian, 2026-07-30: "Can we get the title of the
+   discussion we are following?"). It WAS present before and he still had to hunt for
+   it, because a 15px bold generic header sat above it and the topic was 12px grey
+   underneath — the layout said the boilerplate was the headline. Inverted here: the
+   eyebrow is the small grey line, the topic is what the eye lands on. */
+.lg-fm__hgroup { flex: 1 1 auto; min-width: 0; }
+.lg-fm__eyebrow {
+  margin: 0 0 3px; font: 700 10.5px/1 var(--lg-font-sans, var(--font-body));
+  letter-spacing: .07em; text-transform: uppercase; color: var(--lg-mute, var(--fg-muted));
+}
+.lg-fm__title {
+  margin: 0; font: 700 17px/1.28 var(--lg-font-serif, Georgia, serif);
+  color: var(--lg-ink, #1a1d1a);
+  /* Long thread titles are normal; clamp rather than let the header shove the rows
+     off a phone screen. */
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
 .lg-fm__x {
   flex: 0 0 auto; -webkit-appearance: none; appearance: none;
   background: none; border: 0; padding: 0 2px; cursor: pointer;
@@ -5396,7 +5412,30 @@ body.lg-follow-anon .fc-follow { display: none; }
   -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 .lg-fm__topic:empty { display: none; }
-.lg-fm__rows { padding: 6px 16px 16px; }
+/* §3, Ian: "a bit confusing" — and that was about the LAYOUT, not only the title.
+   Three stacked rows carrying two different control shapes (two switches, then a
+   bordered button) with no grouping read as three unrelated settings. The two
+   notification bits are ONE decision expressed twice, so they are now visually one
+   card; Save is a different KIND of action and is separated rather than stacked into
+   the same list. Nothing about which controls exist has changed — that is variant A
+   and it is settled. */
+.lg-fm__rows { padding: 10px 16px 16px; }
+.lg-fm__rows > .lg-fm__row:not(.lg-fm__row--save) {
+  background: var(--lg-sage-tint, #eef2e3);
+  border: 1px solid var(--lg-line, #e3ddd0);
+}
+.lg-fm__rows > .lg-fm__row:not(.lg-fm__row--save):first-of-type {
+  border-radius: 12px 12px 0 0; border-bottom: 0;
+}
+.lg-fm__rows > .lg-fm__row:not(.lg-fm__row--save) + .lg-fm__row:not(.lg-fm__row--save) {
+  border-radius: 0 0 12px 12px; border-top: 1px solid var(--lg-line, #e3ddd0);
+}
+.lg-fm__rows > .lg-fm__row:not(.lg-fm__row--save) { padding: 12px 13px; }
+/* Save sits apart: a different kind of action, not a third notification setting. */
+.lg-fm__row--save {
+  margin-top: 14px; padding-top: 14px;
+  border-top: 1px solid var(--lg-line, #e3ddd0); border-bottom: 0;
+}
 .lg-fm__row {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 0; border-bottom: 1px solid var(--lg-line, #e3ddd0);
@@ -5479,4 +5518,53 @@ html.lg-fm-open, html.lg-fm-open body { overflow: hidden; }
     padding-bottom: env(safe-area-inset-bottom, 0);
   }
   .lg-fm__row { padding: 14px 0; }        /* ≥44px rows without a hit-area trick */
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   CARD v3 — Ian, 2026-07-30, on the threadfollow-card-v3 mock: "love those changes."
+     · desktop: the follow control moves to the card's TOP-RIGHT corner
+     · mobile:  replies stops being a button and becomes a stat with the reactions
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* The corner wrapper is emitted on every topic card but is DESKTOP-ONLY: the phone
+   keeps its pill at the end of the action row, which is what the approved mock shows.
+   Hidden mobile-first for the same reason .fc-share and the old pair are — an ungated
+   desktop copy falls through to native <button> chrome at <=640, which is exactly the
+   "two empty black squares" Ian reported (forums.css:674-697). Third time that rule
+   has been needed; it is now four. */
+.feed-page .fc-follow-corner { display: none; }
+
+@media (min-width: 641px) {
+  /* The card is the positioning context. .feed-card already carries overflow:hidden
+     (forums.css:4155 block), so the corner is clipped to the card and cannot escape it. */
+  .feed-page .feed-card--topic { position: relative; }
+  .feed-page .fc-follow-corner {
+    display: block; position: absolute; top: 10px; right: 11px; z-index: 3;
+  }
+  /* Inside the corner the pill drops the auto-margin it needed as a row item. */
+  .feed-page .fc-follow-corner > .fc-follow { margin-left: 0; }
+  /* Keep the title clear of the corner so a long one can never collide with it —
+     flagged on the mock as the one thing to look at, and held back rather than
+     letting the corner sit on top of wrapped text. 130px = the pill at its widest
+     ("Following" + badge) plus the 11px inset and a little air. */
+  .feed-page .feed-card--topic > .fc-title,
+  .feed-page .feed-card--topic > .feed-card__title { padding-right: 130px; }
+}
+
+/* REPLIES AS A STAT — mobile only, and NOT interactive. No cursor:pointer, because a
+   pointer cursor on something that does nothing is a promise the card cannot keep;
+   the way into the thread is the card body. Desktop keeps .fc-facepile, untouched. */
+.fc-replies-stat { display: none; }
+@media (max-width: 640px) {
+  .feed-page .fc-replies-stat {
+    display: inline-flex; align-items: center; margin-left: 10px;
+    font: 600 12px/1 var(--lg-font-sans, var(--font-body));
+    color: var(--lg-mute, var(--fg-muted));
+  }
+  /* A dot separator only when it actually follows a reaction chip, so a thread with no
+     reactions does not open with a stray middot. */
+  .feed-page .fcr-chips:not(:empty) + .fc-replies-stat::before,
+  .feed-page .fcr + .fc-replies-stat::before {
+    content: "\00b7"; margin-right: 8px; color: #b9bcb4;
+  }
 }
