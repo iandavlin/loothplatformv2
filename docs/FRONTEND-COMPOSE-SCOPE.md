@@ -359,12 +359,43 @@ Small, and deliberately boring:
    loothprint must render as a real page (§3.1's synthesis, asserted through the real
    submit rather than by reflection).
 
-### Not proven yet, and I am naming it rather than hedging
+### The round-trip — CLOSED 2026-07-31, no longer an open risk
 
-§3.1 proves the meta → page synthesis on a post shaped like the form's output. It does
-**not** yet prove a real `acf_form()` **submit** writes exactly that meta — the render is
-measured, the round-trip is not. That is the first thing to prove in the build, and it is
-the one place this scope could still be wrong.
+This section previously said the submit half was unproven. It is now measured, because
+it was the one place the scope could have been wrong and it did not need Ian's decision.
+
+The real risk was specific: **ACF forms post by field _key_ and ACF stores by field
+_name_.** A mismatch anywhere in that mapping writes nothing at all, the page-builder
+finds empty meta, and the whole pipeline silently produces a blank post — while every
+individual piece still looks correct in isolation.
+
+Driving ACF's actual save handler — `acf_save_post()`, the same one a submitted
+`acf_form()` runs after nonce verification, posting by field key exactly as the form
+does — on a throwaway draft:
+
+```
+META AS STORED BY THE REAL SAVE PATH, vs what the page-builder reads:
+  post_content                     WRITTEN  A test jig for holding nut blanks while slot
+  loothprint_more_images           WRITTEN  [72152,72153]
+  loothprint_3d_file               WRITTEN  72154
+  loothprint_video_instructions    WRITTEN  https://youtu.be/QAAh5wLQJhY
+  loothprint_onshape_link          WRITTEN  https://cad.onshape.com/documents/example
+  loothprint_creative_commons      WRITTEN  BY NC SA (Credit given to creator, Non-Comme
+  loothprint_buy_me_a_coffee       WRITTEN  https://buymeacoffee.com/example
+
+synthesizer built 9 blocks from the SUBMITTED values:
+   post-header, wysiwyg, gallery, embed, callout:files,
+   callout:links, callout:note, callout:links, post-footer
+
+fields the page-builder reads that the save path did NOT write: 0
+```
+
+**Zero gaps.** Submit → meta → synthesized page is proven end to end, on the real save
+path, for every field the renderer consumes.
+
+What remains unproven is only what cannot be proven before the build exists: that our
+own route calls that save path correctly, and that the gate refuses the right people.
+`tools/gates/compose-gate.py` already asserts both, and is **red today by design**.
 
 ---
 

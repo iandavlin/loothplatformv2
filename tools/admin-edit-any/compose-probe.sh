@@ -111,6 +111,52 @@ try {
   echo "draft #$id force-deleted: ".(get_post($id) ? "STILL THERE — CLEAN UP BY HAND" : "gone")."\n";
 }' 2>/dev/null | nowarn
 
+hr "5b. THE ROUND-TRIP — a REAL ACF submit writes what the page-builder reads"
+# The specific risk: ACF forms post by field KEY and ACF stores by field NAME. A
+# mismatch writes nothing, the page-builder finds empty meta, and the pipeline
+# silently yields a blank post while every piece still looks right in isolation.
+# So this drives acf_save_post() — the handler a submitted acf_form() actually
+# runs — posting by key, exactly as the form does.
+$WP eval '
+$admin = get_users(["role"=>"administrator","number"=>1,"fields"=>["ID"]])[0]->ID;
+wp_set_current_user($admin);
+$id = wp_insert_post(["post_type"=>"loothprint","post_status"=>"draft",
+  "post_author"=>$admin,"post_title"=>"PROBE submit — delete me"], true);
+if (is_wp_error($id)) { echo "insert failed\n"; exit; }
+echo "draft #$id\n";
+try {
+  $_POST["acf"] = [
+    "field_69ffa70fe8835" => "A test jig for holding nut blanks while slotting.",
+    "field_6547dafd3f5d6" => [72152, 72153],
+    "field_6547dc013f5d7" => 72154,
+    "field_65b0f1bfc93cd" => "https://youtu.be/QAAh5wLQJhY",
+    "field_65be1d2a06e06" => "https://cad.onshape.com/documents/example",
+    "field_654d2a1394295" => "https://buymeacoffee.com/example",
+    "field_6564e26df56ba" => "BY NC SA (Credit given to creator, Non-Commercial only, Adaptations shared with same terms)",
+  ];
+  acf_save_post($id);                      // the real submit handler
+  $need = ["post_content","loothprint_more_images","loothprint_3d_file",
+           "loothprint_video_instructions","loothprint_onshape_link",
+           "loothprint_creative_commons","loothprint_buy_me_a_coffee"];
+  $miss = 0;
+  echo "\n";
+  foreach ($need as $k) {
+    $v  = ($k === "post_content") ? get_post($id)->post_content : get_post_meta($id, $k, true);
+    $ok = !($v === "" || $v === null || $v === false || $v === []);
+    if (!$ok) $miss++;
+    printf("  %-32s %-8s %s\n", $k, $ok ? "WRITTEN" : "EMPTY",
+      is_array($v) ? "[".implode(",", $v)."]" : substr((string)$v, 0, 44));
+  }
+  $r = new ReflectionMethod("LG\\LayoutV2\\Plugin", "default_loothprint_layout");
+  $r->setAccessible(true);
+  $L = $r->invoke(null, get_post($id));
+  echo "\n  synthesizer built ".count($L["blocks"])." blocks from the SUBMITTED values\n";
+  echo "  fields the page-builder reads that the save path did NOT write: ".$miss."\n";
+} finally {
+  wp_delete_post($id, true);
+  echo "draft #$id force-deleted: ".(get_post($id) ? "STILL THERE — CLEAN UP BY HAND" : "gone")."\n";
+}' 2>/dev/null | nowarn
+
 hr "6. Which types are actually member-authored (this picks the slice)"
 $WP db query "
 SELECT p.post_type,
