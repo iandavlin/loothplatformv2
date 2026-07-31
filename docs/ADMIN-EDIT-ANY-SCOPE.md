@@ -1,5 +1,28 @@
 # Admin can edit ANY post, full functionality — SCOPE
 
+> ## ⚠️ SUPERSEDED 2026-07-31 — do not act on the recommendation below
+>
+> Ian re-scoped this lane the same day: *"I can currently edit on the front end. That is
+> fine. I need to be able to **compose** on the front end with a easy front end form."*
+> Editing was not the problem. **The live scope is [FRONTEND-COMPOSE-SCOPE.md](FRONTEND-COMPOSE-SCOPE.md).**
+>
+> Options A, B and C below were all about reaching an *editor*, and none of them should
+> be built. Kept because three findings still hold and are cited from the new scope:
+>
+> - **§1.3, the dead Elementor form estate** — still the main trap in this area, and it
+>   matters *more* for compose than it did for edit.
+> - **§4, the capability analysis** — still correct for editing, and the new scope's §6
+>   contrasts against it deliberately: the same reasoning **inverts** for create, where
+>   the natural capability is held by 1,820 of 1,824 users.
+> - **§2, the per-type control inventory** — the field lists were right; what this
+>   document got wrong was assuming they would have to be *rebuilt*. They already exist
+>   as ACF groups, and `acf_form()` renders them today.
+>
+> One correction worth stating plainly rather than leaving implied: this document
+> concluded a front-end composer would be a multi-week program. For the two types that
+> matter first — loothprint and event — that is **wrong**. It measured the controls but
+> never checked whether a renderer for them already existed. It does.
+
 **Lane:** admin-edit-any (branch `admin-edit-any`, worktree `~/worktrees/admin-edit-any`)
 **Backlog:** P1 #6. Ian 2026-07-30: *"I need to be able to edit any post as admin as
 well. Full functionality on any post editing as admin."*
