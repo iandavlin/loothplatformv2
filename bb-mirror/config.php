@@ -54,7 +54,25 @@ define('LG_BB_MIRROR_WP_PATH', $shared['wp_path'] ?? $bb_wp_path_default);
 define('LG_BB_MIRROR_WP_USER', $shared['wp_user'] ?? $bb_wp_user_default);
 // APP_ROOT has no shared key — branch-derived (the prod box symlinks /srv/bb-mirror).
 define('LG_BB_MIRROR_APP_ROOT', $bb_app_root_default);
-define('LG_BB_MIRROR_PUBLIC_PATH', '/hub');
+// The mount the app believes it is served under. '/hub' everywhere real; a LANE
+// PREVIEW mounts the same app under /preview/<lane>/hub so Ian can click a branch
+// on the vhost he is already signed into (tools/preview/lane-preview.sh). index.php
+// strips this prefix off REQUEST_URI to route, and every internal link is built from
+// it — so without this the preview 404s on its own front controller, and any link it
+// did render would jump the reader back out to the real /hub/.
+//
+// Same mechanism as membership-pages' LG_MS_PUBLIC_PATH, deliberately: one preview
+// system, not two. A fastcgi_param can only be set by an nginx conf, never by a query
+// string. Validated anyway — a mount is a rooted path of safe characters, nothing
+// else — because "it can only come from a conf" is an assumption, and this value is
+// concatenated into links.
+$bb_public_path = '/hub';
+$bb_pp_param    = (string) ($_SERVER['LG_BB_MIRROR_PUBLIC_PATH'] ?? '');
+if ($bb_pp_param !== '' && preg_match('#^/[A-Za-z0-9/_-]{1,80}$#', $bb_pp_param)
+    && strpos($bb_pp_param, '..') === false) {
+    $bb_public_path = rtrim($bb_pp_param, '/');
+}
+define('LG_BB_MIRROR_PUBLIC_PATH', $bb_public_path);
 
 // ---------- browser-facing / loopback-routing host (request-derived) ----------
 // Single source of truth for both (a) the public host used to build URLs and
@@ -433,6 +451,15 @@ if (!defined('LG_REPLY_IMG_MAX')) define('LG_REPLY_IMG_MAX', 6);
 // ONE READ POINT: lg_thread_follow_enabled() in web/forums/_reply-render.php. Nothing
 // else may test this constant; if you need it somewhere new, call that function.
 // Override without editing the repo: LG_BB_MIRROR_FOLLOW=1 in the pool environment.
+// Two sources, one meaning. getenv() is how a pool or a CLI harness turns it on;
+// $_SERVER is how a SINGLE nginx location does — tools/preview/lane-preview.sh gives
+// a branch a URL by setting fastcgi_param, and a fastcgi_param lands in $_SERVER but
+// not reliably in the process environment. Reading both is what lets the lane preview
+// run the feature ON for Ian while it stays OFF everywhere else on the same vhost.
+// A fastcgi_param can only be set by an nginx conf, never by a query string, so this
+// is not a way for a visitor to switch the feature on.
 if (!defined('LG_THREAD_FOLLOW_ENABLED')) {
-    define('LG_THREAD_FOLLOW_ENABLED', getenv('LG_BB_MIRROR_FOLLOW') === '1');
+    define('LG_THREAD_FOLLOW_ENABLED',
+        getenv('LG_BB_MIRROR_FOLLOW') === '1'
+        || (($_SERVER['LG_BB_MIRROR_FOLLOW'] ?? '') === '1'));
 }
