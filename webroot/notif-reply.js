@@ -88,6 +88,10 @@
     // member who expands the quote is never told they are now seeing all of it.
     '#looth-comp-sheet .lgc-quote__cont{display:block;margin:5px 0 0;' +
       'font:400 11.5px/1.4 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b)}',
+    // COALESCED ROWS. 3 of 17 reply notifications on live right now are merged,
+    // one of them from four different people — a minority case but not a rare one.
+    '#looth-comp-sheet .lgc-quote__multi{margin:7px 0 0;' +
+      'font:600 11.5px/1.4 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b)}',
     // the full-post link — Ian's "link/button to the full post", INSIDE the modal
     '#looth-comp-sheet .lgc-quote__open{display:inline-flex;align-items:center;gap:6px;margin:10px 0 0;' +
       'text-decoration:none;font:700 12.5px/1 var(--lg-font-sans,system-ui,sans-serif);' +
@@ -106,6 +110,7 @@
     dk('#looth-comp-sheet .lg-nqr-quote__empty') + '{color:#9aa79b}',
     dk('#looth-comp-sheet .lgc-quote__more') + '{color:#b0c693}',
     dk('#looth-comp-sheet .lgc-quote__cont') + '{color:#9aa79b}',
+    dk('#looth-comp-sheet .lgc-quote__multi') + '{color:#9aa79b}',
     dk('#looth-comp-sheet .lgc-quote__open') + '{background:#243024;color:#b6c79a}',
     dk('#looth-comp-sheet .lgc-quote__open:active') + '{background:#2c352c}'
   ].join('\n');
@@ -140,6 +145,18 @@
     var fb = (window.LG_FORUM_BASE || '').toString();
     var m = fb.match(/^(\/preview\/[A-Za-z0-9_-]+)\/hub\/?$/);
     return (m ? m[1] : '') + '/bb-mirror-api/v0';
+  }
+
+  /* "Alice and 1 other replied" — the backend coalesces a second replier into ONE
+     row and re-points its link at the NEWEST reply, so the quote is the most recent of
+     several. Say so. Showing one reply and silently hiding three is the kind of quiet
+     wrongness that only surfaces when a member wonders where the other answers went.
+     Measured on live before writing this: 3 of 17 reply rows are coalesced, one of
+     them from four people. */
+  function nqrMultiNote(actors) {
+    var n = parseInt(actors, 10) || 1;
+    if (n < 2) return '';
+    return '<p class="lgc-quote__multi">Showing the most recent of ' + n + ' replies.</p>';
   }
 
   function nqrParse(link) {
@@ -235,7 +252,10 @@
           title:       q.getAttribute('data-topic-title') || '',
           // NO bodyText — the composer's reply mode restores the MEMBER'S OWN
           // per-topic draft, never this quote's words.
-          quoteHtml:   q.outerHTML,
+          // The coalesce note rides WITH the quote so it is scrubbed by the same
+          // clear on the next open — a stale "most recent of 4" over an unrelated
+          // reply would be its own small lie.
+          quoteHtml:   q.outerHTML + nqrMultiNote(o.actors),
           fullPostUrl: p.href,
           focus:       true
         });

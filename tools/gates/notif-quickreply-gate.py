@@ -192,6 +192,18 @@ def wiring_checks():
         check(f"{rel}: reactions/DMs/connections EXCLUDED", not (got & banned),
               "a reaction has nothing to reply to")
 
+    # COALESCED ROWS must say so. The backend merges a second replier into one row and
+    # re-points the link at the NEWEST reply, so the modal quotes the most recent of
+    # several. Showing one and silently hiding three is a quiet untruth, and it is not
+    # rare: 3 of 17 reply rows on live are coalesced, one from four people.
+    check("coalesced rows are declared, not silently truncated",
+          nqr_exists and "lgc-quote__multi" in nqr and "most recent of" in nqr)
+    for rel in ("webroot/bottom-nav.js", "lg-shared/social-modals.js"):
+        body = src(rel)
+        check(f"{rel}: actor_count reaches the modal",
+              "data-notif-actors" in body and "actors:" in body,
+              "rendered on the row AND threaded through the handler")
+
     # The row must carry the type, or the surfaces cannot tell a reply from a reaction
     # (both deep-link the same ?topic= URL).
     for rel in ("webroot/bottom-nav.js", "lg-shared/social-modals.js"):

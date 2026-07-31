@@ -1077,7 +1077,8 @@
     // Inert on its own; the type has always been on the wire, it just was not rendered.
     return link
       ? '<a class="' + cls + '" href="' + ntEsc(link) + '" data-notif-link data-notif-id="' +
-        ntEsc(n.id) + '" data-notif-type="' + ntEsc(n.type || '') + '">' + inner + '</a>'
+        ntEsc(n.id) + '" data-notif-type="' + ntEsc(n.type || '') +
+        '" data-notif-actors="' + ntEsc(String(n.actor_count || 1)) + '">' + inner + '</a>'
       : '<button type="button" class="' + cls + '" data-notif data-notif-id="' + ntEsc(n.id) + '">' + inner + '</button>';
   }
   /* Which notification rows get tap-to-reply (notif-quickreply, Ian 7/30).
@@ -1146,7 +1147,8 @@
             // page does, since hub-polish.js (the composer) is only injected on /hub.
             if (ltNotifCanQuickReply(el.getAttribute('data-notif-type')) &&
                 typeof window.lgOpenNotifReply === 'function' &&
-                window.lgOpenNotifReply({ link: el.getAttribute('href') })) {
+                window.lgOpenNotifReply({ link: el.getAttribute('href'),
+                                          actors: el.getAttribute('data-notif-actors') })) {
               e.preventDefault();
             }
           });

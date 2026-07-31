@@ -246,7 +246,11 @@ function renderNotifItem(n) {
                // reply from a reaction (a reaction on a topic deep-links the same
                // ?topic= URL), so tap-to-reply needs the event type rendered. Inert
                // by itself; the type was always on the wire, just never emitted.
-               ' data-notif-type="' + esc(n.type || '') + '"';
+               ' data-notif-type="' + esc(n.type || '') + '"' +
+               // actor_count: the backend COALESCES a second replier into one row, so
+               // "Alice and 1 other replied" quotes the newest of N. The modal has to
+               // say which, or it shows one reply and silently hides the others.
+               ' data-notif-actors="' + esc(String(n.actor_count || 1)) + '"';
   if (link) attrs += ' href="' + esc(link) + '" data-notif-link';
   var dots = notifCanFollow(n)
     ? '<button class="lg-notif__more" data-notif-more="' + esc(n.ref.id) + '"'
@@ -432,7 +436,8 @@ function loadNotifications() {
              hub-polish.js under /hub only) and correctly keep navigating. */
           if (notifCanQuickReply(row.getAttribute('data-notif-type')) &&
               typeof window.lgOpenNotifReply === 'function' &&
-              window.lgOpenNotifReply({ link: row.getAttribute('href') })) {
+              window.lgOpenNotifReply({ link: row.getAttribute('href'),
+                                        actors: row.getAttribute('data-notif-actors') })) {
             e.preventDefault();
             closeAllModals();   // never leave the bell panel sitting over the composer
           }
