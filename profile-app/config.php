@@ -134,6 +134,26 @@ if (!defined('LG_PROFILE_APP_LAUNCH_SHOW_LOCATION_DETAILS')) {
     define('LG_PROFILE_APP_LAUNCH_SHOW_LOCATION_DETAILS', false);
 }
 
+// Self-heal a `patreon_<id>` PLACEHOLDER slug once the member's real name arrives.
+//
+// The placeholder is minted at first provision, when Patreon has given us an id but no
+// usable human name yet. The name lands later — Provision::ensure() fills it via the
+// COALESCE at :84 on the next poller sweep — but Provision::ensureSlug() then treats the
+// placeholder as a real member-owned handle and refuses to upgrade it, so the member is
+// frozen at /u/patreon_188933584 forever. 146 live members are in that state (2026-07-31).
+//
+// DEFAULT OFF, per the standing member-facing rule: OFF is a proven byte-identical no-op
+// (ensureSlug returns at exactly the same point it does today) so this reaches the dev2
+// serve harmlessly and gets verified on the running thing before it is switched on.
+//
+// Turning it ON hands out permanent public URLs, so read docs/atlas/SLUG-PLACEHOLDER-
+// RECURRENCE.md first: the heal deliberately REFUSES contested bare first names and
+// duplicate-name accounts (Ian's rulings, 2026-07-29). Of today's 146, zero would heal.
+// It closes the RECURRENCE for new members; it is not a backfill.
+if (!defined('LG_SLUG_HEAL_PLACEHOLDER')) {
+    define('LG_SLUG_HEAL_PLACEHOLDER', false);
+}
+
 // Canonical, env-correct site logo. Passed to the shared header/footer
 // (per the site-header.php contract) as an absolute URL so it resolves from
 // preview/sibling hosts too, not just the canonical origin.

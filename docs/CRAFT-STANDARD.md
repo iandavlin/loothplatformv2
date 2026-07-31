@@ -126,9 +126,14 @@ either file can see. So:
 | 10 | `tools/gates/react-types-cover-standalone-gate.sh` | a rendered react button's type is one the endpoint ACCEPTS | loopback |
 | 11 | `tools/gates/shop-planner-url-gate.sh` | `/shop-layout-planner/` still answers 200 **and still mounts the planner** | loopback, or `ssh live-ro` with `--live` |
 | 12 | `tools/gates/anon-signin-reachable-gate.py` | an ANON visitor can **reach** Sign in in ≤1 tap at every width — visible *and* hit-tested, not merely in the DOM | **a browser on CDP :9222** |
-| 13 | `tools/gates/dev-files-anon-unreachable-gate.py` | lane/dev tooling inside a deployed plugin tree is **unreachable by an anonymous request** — 404/403, not "absent from my checkout" | starts its own **gate-free** nginx (dev2's armed gate would 403 everything and false-pass) |
+| 14 | `tools/gates/dev-files-anon-unreachable-gate.py` | lane/dev tooling inside a deployed plugin tree is **unreachable by an anonymous request** — 404/403, not "absent from my checkout" | starts its own **gate-free** nginx (dev2's armed gate would 403 everything and false-pass) |
+| 15 | `tools/gates/slug-placeholder-heal-gate.sh` | a `patreon_<id>` **placeholder** slug heals to the member's real handle once their name arrives, the old URL still 301s, and the four human-ruling cases are REFUSED (contested bare first name, duplicate display_name, held handle, no honest derivation). Runs BOTH flag states; the OFF pass proves the machinery is live before asserting nothing moved | postgres as the `profile-app` role |
 
 | 13 | `tools/gates/follow-digest-gate.py` | **PROMOTED into the sequence by this merge** (it was HELD OUT and red on purpose while the sender did not exist). The follow-digest flag's OFF state sends NOTHING: no cron armed, no cadence stored, the suppression filter proven to be the identity function, and the resolver proven to return zero recipients | wp-cli |
+
+> **Two lanes both minted "13"** (follow-digest and dev-files-anon) because each numbered
+> from its own branch instead of from `main`. Both gates are real and both are kept; the
+> numbers above now match `run-all.sh`'s actual sequence. Mint the next number from **main**.
 
 **Gate 13 is written BEFORE the feature it guards, and that is the point.** Every
 other gate here encodes a defect class found twice. Email is unrecallable, so the

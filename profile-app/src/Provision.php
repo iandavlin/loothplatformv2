@@ -166,7 +166,26 @@ final class Provision
             $pg  = Db::pg();
             $cur = $pg->prepare('SELECT slug FROM users WHERE id = :i');
             $cur->execute([':i' => $userId]);
-            if (trim((string) $cur->fetchColumn()) !== '') return;   // already slugged
+            $current = trim((string) $cur->fetchColumn());
+
+            // A `patreon_<id>` is a PLACEHOLDER, not a handle the member owns — and this
+            // guard could not tell the difference. It is neither NULL nor '', so the
+            // member is treated as already-slugged and the placeholder is frozen for good.
+            //
+            // That is the whole recurrence bug. isPatreonJunk() already encodes "a
+            // placeholder is not a handle" three lines down at :179, where it refuses one
+            // as a slug SOURCE; it was simply never applied to the EXISTING slug. So the
+            // name lands (ensure() fills it via COALESCE at :84 on the next poller sweep),
+            // ensureSlug is called immediately after at :126 — and returns right here.
+            //
+            // Flag-gated and OFF by default, so this line behaves exactly as it always has
+            // until LG_SLUG_HEAL_PLACEHOLDER is switched on.
+            if ($current !== '') {
+                if (LG_SLUG_HEAL_PLACEHOLDER && self::isPatreonJunk($current)) {
+                    self::healPlaceholderSlug($userId, $current, $displayName);
+                }
+                return;   // already slugged
+            }
 
             $base = '';
             foreach ([$nicename, $displayName, preg_replace('/\+.*$/', '', explode('@', $email)[0])] as $cand) {
@@ -244,6 +263,106 @@ final class Provision
     }
 
     /**
+     * Upgrade a `patreon_<id>` PLACEHOLDER to a real handle once a usable human name has
+     * arrived — the recurrence closer. Returns the new slug, or null when it declined.
+     *
+     * The WRITE is delegated to maybeSyncSlugFromName(): that is the one rename
+     * implementation, and it already derives, dedupes against live handles AND every other
+     * member's slug_history, parks the outgoing handle so **`/u/patreon_<id>` keeps 301ing
+     * forever** (u.php step 4 → Slug::currentSlugForRetired), stamps slug_changed_at, and
+     * does it all in one transaction. A second copy of that here is precisely the
+     * split-brain SLUG-CONTRACT §3 exists to prevent.
+     *
+     * What this method contributes is the REFUSALS. An automatic heal is licensed to do
+     * strictly LESS than a human ruling, never more — it runs unattended and hands out a
+     * permanent public URL, so every case that is genuinely a judgement call must fall
+     * through to the ruling queue rather than be decided by whichever poller sweep got
+     * there first. It declines when:
+     *
+     *   - there is no honest slug in the name (non-Latin, too short, reserved) — R1/§3:
+     *     we never latinize, and `deriveUsable('')` is the signal to surface it, not guess;
+     *   - another live member carries the same display_name — that is the duplicate-account
+     *     question (SLUG-DUPLICATE-ACCOUNTS.md), and minting a permanent handle plus a
+     *     slug_history 301 for an account that may be about to merge is unpickable later;
+     *   - the handle is already held, live or retired — R3 bans resolving a collision with
+     *     a numeric suffix, and expansion needs Patreon and a human;
+     *   - the handle is a BARE first name other members also carry — Ian, 2026-07-29:
+     *     `/u/matt` goes to nobody. Measured live 2026-07-31: `matt` ×20, `scott` ×11.
+     *     Allocating the site's scarcest handles by which Patreon import happened to carry
+     *     a first name only is the one thing that ruling exists to refuse.
+     *
+     * Consequence, stated plainly: of the 146 members stranded on a placeholder today,
+     * this heals **zero**. That is correct — they are held by ruling, not by the bug (see
+     * docs/atlas/SLUG-PLACEHOLDER-RECURRENCE.md). This closes the recurrence going forward.
+     *
+     * Called only from ensureSlug(), only behind LG_SLUG_HEAL_PLACEHOLDER, and only when
+     * the current slug is a placeholder — so it is inert until deliberately switched on.
+     */
+    private static function healPlaceholderSlug(int $userId, string $placeholder, ?string $displayName): ?string
+    {
+        $name = trim((string) $displayName);
+        if ($name === '' || self::isPatreonJunk($name)) return null;
+
+        $want = Slug::deriveUsable($name);
+        if ($want === '') return null;
+
+        $pg = Db::pg();
+
+        // Duplicate-account hold (Ian 2026-07-29). Bridged + unarchived only: an archived
+        // or unbridged row is not a member and must not veto a live member's handle.
+        $dup = $pg->prepare('SELECT 1 FROM users u JOIN wp_user_bridge b ON b.user_id = u.id
+                             WHERE u.id <> :self AND u.archived_at IS NULL
+                               AND lower(trim(u.display_name)) = lower(trim(:n)) LIMIT 1');
+        $dup->execute([':self' => $userId, ':n' => $name]);
+        if ($dup->fetchColumn()) return null;
+
+        // Already held — live on someone else, or parked in their history (never re-issued).
+        $taken = $pg->prepare('SELECT 1 FROM users WHERE lower(slug) = lower(:s) AND id <> :self
+                               UNION ALL
+                               SELECT 1 FROM slug_history WHERE lower(slug) = lower(:s2) AND user_id <> :self2');
+        $taken->execute([':s' => $want, ':self' => $userId, ':s2' => $want, ':self2' => $userId]);
+        if ($taken->fetchColumn()) return null;
+
+        if (!str_contains($want, '-') && self::bareNameIsContested($userId, $want)) return null;
+
+        // The candidate was free a moment ago, so maybeSyncSlugFromName lands on exactly
+        // $want. If someone takes it in that window its dedup loop appends a digit rather
+        // than failing — a single race-induced `-2` is a bounded, visible outcome and the
+        // ruling queue can revisit it. Losing the write entirely would be worse.
+        return self::maybeSyncSlugFromName($userId, $placeholder, $name);
+    }
+
+    /**
+     * Does any OTHER live member's name derive to the same first token as this bare handle?
+     *
+     * Deliberately runs the real deriver over the member list instead of comparing raw
+     * names in SQL: `Ake` and `Åke` are the same first token only after the Latin-ASCII
+     * fold, and a SQL LIKE prefilter would silently UNDER-count the contest — which fails
+     * in the unsafe direction, releasing a handle Ian ruled nobody gets.
+     *
+     * The same mistake at population scale is why bin/backfill-slugs.php's
+     * --hold-contested-bare counted its own shortlist and quietly withheld ZERO on a
+     * re-run (fixed 2026-07-31): a contest is a property of the membership, not of the
+     * batch you happen to be looking at.
+     *
+     * Full scan, but only reached when a placeholder is healing AND the candidate is a
+     * single token — rare, and this path already writes to the database.
+     */
+    private static function bareNameIsContested(int $userId, string $bare): bool
+    {
+        $st = Db::pg()->prepare('SELECT u.display_name FROM users u
+                                 JOIN wp_user_bridge b ON b.user_id = u.id
+                                 WHERE u.id <> :self AND u.archived_at IS NULL
+                                   AND u.display_name IS NOT NULL');
+        $st->execute([':self' => $userId]);
+        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $other) {
+            $d = Slug::deriveUsable((string) $other);
+            if ($d !== '' && explode('-', $d)[0] === $bare) return true;
+        }
+        return false;
+    }
+
+    /**
      * Move a member's public @handle (users.slug) to follow a display_name change.
      *
      * PRODUCT RULING (Ian, 2026-07-19, binding): the profile URL ALWAYS follows the
@@ -269,8 +388,27 @@ final class Provision
     public static function maybeSyncSlugFromName(int $userId, string $oldDisplayName, string $newDisplayName): ?string
     {
         try {
+            // A PLACEHOLDER NAME MUST NEVER OVERWRITE A REAL HANDLE.
+            //
+            // This is the one path in the system that can DESTROY a good slug rather than
+            // merely fail to mint one, and it was unguarded. `patreon_188933584` is not
+            // filtered out by the `=== ''` check below — it slugifies to
+            // `patreon-188933584`, which passes checkShape() cleanly (not all-digits, not
+            // reserved, legal charset). So a member whose display_name got set to a
+            // placeholder would have their human handle overwritten AND parked in
+            // slug_history, where it can never be re-issued to them automatically.
+            //
+            // ensureSlug() has always had this guard (:179) and the isPatreonJunk()
+            // docblock already claimed BOTH mint sites applied it. They did not — only
+            // ensureSlug did. Verified unexploited on live 2026-07-31 (zero slugs matching
+            // `^patreon-[0-9]+$`, zero placeholder-shaped display_names), so this closes a
+            // latent hole rather than repairing damage. Checked on the derived form too,
+            // since derive() folds `patreon_1` and `patreon-1` to the same string.
+            if (self::isPatreonJunk($newDisplayName)) return null;
+
             $newBase = self::slugFit(self::slugify($newDisplayName));
             if ($newBase === '') return null;   // new name has no slug-able chars; leave handle as-is
+            if (self::isPatreonJunk($newBase))  return null;
 
             $pg  = Db::pg();
             $cur = $pg->prepare('SELECT slug FROM users WHERE id = :i');

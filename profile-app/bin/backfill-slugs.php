@@ -609,10 +609,30 @@ if (in_array('--hold-duplicate-names', $argv, true)) {
 }
 
 if (in_array('--hold-contested-bare', $argv, true)) {
+    // THE CONTEST IS A PROPERTY OF THE MEMBERSHIP, NOT OF THIS RUN'S SHORTLIST.
+    //
+    // This counted `$actionable` — the rows THIS run proposes to change — and that made
+    // the hold SELF-ERASING: the more successful the previous apply, the fewer candidates
+    // survive, and the less contested every survivor looks. Measured 2026-07-31, live:
+    //
+    //   2026-07-29 apply: pool 1,526 rows -> `scott` seen 11x -> HELD (Ian's ruling held)
+    //   2026-07-31 re-run: pool    42 rows -> `scott` seen  1x -> "withholding 0"
+    //
+    // A second --apply with the exact flags Ian approved would therefore have handed out
+    // all 41 bare handles he ruled nobody gets — /u/matt, /u/scott, /u/dan — silently, and
+    // reported success. The ruling is that a first name OTHER MEMBERS ALSO CARRY goes to
+    // nobody; whether those members happen to be in today's candidate set is irrelevant to
+    // whether they carry the name.
+    //
+    // So count over $cand: every live bridged member, run through the same deriver. That
+    // is stable across runs by construction — it does not move when the candidate set
+    // shrinks, which is exactly the property the ruling needs to survive a re-run.
     $firstNameCount = [];
-    foreach ($actionable as $p) {
-        if ($p['proposed'] === '') continue;
-        $firstNameCount[explode('-', $p['proposed'])[0]] = ($firstNameCount[explode('-', $p['proposed'])[0]] ?? 0) + 1;
+    foreach ($cand as $c) {
+        $d = Slug::deriveUsable((string) ($c['display_name'] ?? ''));
+        if ($d === '') continue;
+        $t = explode('-', $d)[0];
+        $firstNameCount[$t] = ($firstNameCount[$t] ?? 0) + 1;
     }
     $held = [];
     $act = array_values(array_filter($act, function ($p) use ($firstNameCount, &$held) {
