@@ -134,8 +134,18 @@ $item_count     = array_sum( array_map( fn( $p ) => count( $p['items'] ), $paylo
              * nothing is registered to consume the token, so it would render as
              * literal text; LG_WD_Email_Builder::build() strips it for exactly that
              * reason. See WEEKLY-DIGEST-RECAP.md §3.
+             *
+             * ── GATED BY LG_WD_RECAP_ENABLED, DEFAULT OFF ────────────────────
+             * With the flag off NOTHING is emitted here — not the token, not a
+             * placeholder, not whitespace — so the issue is byte-identical to what it
+             * was before this lane existed. That is deliberate and it is checked:
+             * dev/verify-recap-flag-off.php diffs the two renders rather than
+             * asserting they match. Email is unrecallable; this is the switch that
+             * keeps a deploy from being a send.
              */
-            echo LG_WD_RECAP_SMARTCODE; // phpcs:ignore WordPress.Security.EscapeOutput
+            if ( class_exists( 'LG_WD_Recap_Source' ) && LG_WD_Recap_Source::recap_enabled() ) {
+                echo LG_WD_RECAP_SMARTCODE; // phpcs:ignore WordPress.Security.EscapeOutput
+            }
             ?>
 
             <?php foreach ( $payload as $key => $data ) : ?>

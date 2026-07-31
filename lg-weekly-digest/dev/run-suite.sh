@@ -42,6 +42,7 @@ TESTS=(
   verify-signup-page                # the public page's BUILD: six rulings, scoped CSS, anon-safe preview
   verify-unsubscribe-nonmember      # the opt-out link resolves for a contact with NO wp_users row
   verify-preview-flag-off           # flag OFF: the section is ABSENT and nothing else moves
+  verify-recap-flag-off             # the MASTER switch: OFF = pre-feature body AND recipients
   verify-preview-frames-the-email   # the iframe shows the EMAIL, not the strangler's front page
   verify-preview-frame-fits         # ...and the framed email is not wider than its frame
 )
@@ -58,6 +59,7 @@ runner_for() {
     # class, which has no flag yet, and report CANNOT RUN until after the merge it
     # exists to justify.
     verify-preview-flag-off)  echo "php" ;;
+    verify-recap-flag-off)    echo "php" ;;
     *)                        echo "sudo -u looth-dev wp --path=$WP_PATH eval-file" ;;
   esac
 }
@@ -76,6 +78,7 @@ declare -A SENTINEL=(
   [verify-signup-page]='SIGNUP PAGE OK'
   [verify-unsubscribe-nonmember]='NONMEMBER UNSUBSCRIBE OK'
   [verify-preview-flag-off]='PREVIEW FLAG OFF IS A NO-OP'
+  [verify-recap-flag-off]='RECAP FLAG OFF IS A NO-OP'
   [verify-preview-frames-the-email]='PREVIEW FRAMES THE EMAIL'
   [verify-preview-frame-fits]='PREVIEW FRAME FITS THE EMAIL'
 )

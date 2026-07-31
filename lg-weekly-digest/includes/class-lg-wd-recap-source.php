@@ -116,7 +116,46 @@ class LG_WD_Recap_Source {
 
 	// ── Boot ──────────────────────────────────────────────────────────────────
 
+	/**
+	 * ── MASTER SWITCH — LG_WD_RECAP_ENABLED ───────────────────────────────────
+	 *
+	 * OFF. Ian turns it on himself, on live, once he has looked at the running thing.
+	 *
+	 * WHY THIS ONE MATTERS MORE THAN THE SIGNUP-PAGE FLAG: email is unrecallable.
+	 * Live carries a scheduled cron event `lg_wd_send_digest` (next fire
+	 * 2026-08-03 13:00 UTC), so the recap is one boolean away from the real member
+	 * list at all times. Every other blocker on the board is recoverable; a sent
+	 * email is not.
+	 *
+	 * IT GATES THREE THINGS, and the third is the one that actually reaches members:
+	 *   1. the `##lg_recap.section##` token in templates/email.php
+	 *   2. this class's smart-code registration (the per-recipient substitution)
+	 *   3. recipients_with_something_waiting() — WHICH DECIDES WHO IS MAILED AT ALL
+	 *
+	 * (3) is not optional and gating only (1) and (2) would be a trap: the filter is
+	 * called on `class_exists()`, so unregistering the smart code would leave the
+	 * suppression running with nothing to show for it — the digest would still skip
+	 * ~75% of the list while rendering no recap. OFF must mean the issue goes out
+	 * exactly as it did before this work existed, to exactly the same people.
+	 */
+	const ENABLE_FLAG = 'LG_WD_RECAP_ENABLED';
+
+	/**
+	 * Is the per-member recap switched on? Defaults OFF.
+	 *
+	 * `define('LG_WD_RECAP_ENABLED', true)` in wp-config, or the filter for a box
+	 * that would rather not edit it. The constant wins when set, so a deliberate
+	 * define cannot be silently overridden by a stray filter.
+	 */
+	public static function recap_enabled(): bool {
+		$on = defined( self::ENABLE_FLAG ) ? (bool) constant( self::ENABLE_FLAG ) : false;
+		return (bool) apply_filters( 'lg_wd_recap_enabled', $on );
+	}
+
 	public static function init(): void {
+		if ( ! self::recap_enabled() ) {
+			return;                     // flag OFF: never register the substitution.
+		}
 		add_action( 'fluentcrm_loaded', [ __CLASS__, 'register_smartcode' ] );
 	}
 
@@ -206,6 +245,14 @@ class LG_WD_Recap_Source {
 	 * @return int[] the subset to actually mail, order preserved
 	 */
 	public static function recipients_with_something_waiting( array $subscriber_ids ): array {
+		/* FLAG OFF -> NO SUPPRESSION AT ALL. Everyone the campaign resolved is mailed,
+		   which is what happened before this lane existed. Returning the input rather
+		   than an empty set is the whole point: the failure that matters here is
+		   silently mailing FEWER people, not more. */
+		if ( ! self::recap_enabled() ) {
+			return $subscriber_ids;
+		}
+
 		$subscriber_ids = array_values( array_unique( array_filter(
 			array_map( 'intval', $subscriber_ids ), fn( $i ) => $i > 0 ) ) );
 		if ( ! $subscriber_ids ) {
