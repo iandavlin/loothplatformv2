@@ -82,6 +82,34 @@ adding the page would turn a *shared* gate red for a defect the lane did not
 introduce and block every other lane. Tracked on the backlog instead; fix the
 dims and add the page in the same change.
 
+## The class that keeps getting through: presence is not reachability
+
+Twice now Ian has reported a control he could not use while every check we had
+was green, because the check asked whether the element **existed** and he was
+asking whether he could **use** it:
+
+1. **2026-07-30, the 🔔/✉ toggles.** 24 `[data-follow]` nodes in the DOM;
+   `.fc-actions` wrapped to a second line and the card's `overflow: hidden` ate
+   them on 17 of 18 cards. Gated by `follow-visible-gate.py`.
+2. **2026-07-31, Sign in on the anon front page.** `wp-login` ×2 in the served
+   HTML; `.lg-chrome__signin` was `display:none` from 820px down while its
+   stand-in only appeared from 640px down, so **641–820px had no way in at all**
+   — and it was live. Gated by `anon-signin-reachable-gate.py`.
+
+Neither was covered, moved or missing from the markup. Both were rendered and
+then hidden by CSS resolved across *two* stylesheets, which no static check of
+either file can see. So:
+
+- **Assert the goal, not the element.** "A signed-out visitor can reach Sign in"
+  survives a redesign that moves the control; "`.lg-chrome__signin` is visible"
+  gets edited away by the change that breaks the user.
+- **Measure paint and hit-test, in a real engine.** Styled + sized + in-viewport
+  + `elementFromPoint` at its own centre returns it. `querySelectorAll().length`
+  is not evidence and must never be reported as if it were.
+- **Bracket every breakpoint the behaviour crosses.** 1440 and 390 were BOTH
+  green on the day the whole band between them was dead. Sampling "desktop and
+  phone" is how a responsive lockout hides.
+
 ## Existing gates
 
 | # | Gate | What it guards | Needs |
@@ -97,8 +125,9 @@ dims and add the page in the same change.
 | 9 | `tools/gates/author-socials-live-gate.sh` | bylines RESOLVE socials from the profile store, never mirror ACF | loopback |
 | 10 | `tools/gates/react-types-cover-standalone-gate.sh` | a rendered react button's type is one the endpoint ACCEPTS | loopback |
 | 11 | `tools/gates/shop-planner-url-gate.sh` | `/shop-layout-planner/` still answers 200 **and still mounts the planner** | loopback, or `ssh live-ro` with `--live` |
+| 12 | `tools/gates/anon-signin-reachable-gate.py` | an ANON visitor can **reach** Sign in in ≤1 tap at every width — visible *and* hit-tested, not merely in the DOM | **a browser on CDP :9222** |
 
-All eleven run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
+All twelve run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
 the runner because they pass standalone but flake red in sequence (CDP under load,
 and loopback `/whoami` tripping infra's `limit_req` zone) — see the note at the
 foot of `run-all.sh` for how to run `forum-visibility-gate.sh` and
