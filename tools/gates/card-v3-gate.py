@@ -227,6 +227,61 @@ def main():
                   .filter(c => !c.querySelector('[data-follow-open]'));
                 return cc.some(c => window.__vis('.lg-act-replies').some(e => c.contains(e))); })()"""), True)
 
+        # ── BEHAVIOUR: the control must be CLICKABLE, not merely present ───────
+        # Ian, 2026-07-31: "Still no modal from follow button just opens the modal on
+        # dt." The card-v3 gate already asserted the pill was IN THE CORNER and passed
+        # while it was unclickable — being in the corner and being clickable are
+        # different claims, and the gap between them is what reached him. This asserts
+        # the OUTCOME of a real click: the follow modal opens, the READER does not, and
+        # the URL does not become a ?topic= deep link.
+        for lbl, w, h, mob in (("desktop 1280", 1280, 900, False),
+                               ("mobile 390", 390, 844, True)):
+            emulate(p, w, h, mob)
+            if not goto(p, base + "/hub/?type=discussions"):
+                cannot_run(f"hydration never completed for the click test at {lbl}")
+            before = p.ev("location.href")
+            # ⚠️ SCROLL IT INTO A SAFE BAND AND VERIFY THE HIT, don't just take a rect.
+            # First version picked any pill with 0 < top < 800 and clicked its centre.
+            # At 390x844 that chose one at y=774, under the sticky bottom tab bar, so
+            # the click landed on the tabbar and the gate reported "the follow modal did
+            # not open" — a FALSE FAILURE against a build where the control works (the
+            # same click passes when aimed properly). A gate that clicks the wrong pixel
+            # invents defects, which is how the last three hours were spent.
+            box = p.ev("""(() => {
+              const b=[...document.querySelectorAll('[data-follow-open]')]
+                .find(e => { const r=e.getBoundingClientRect(); return r.width>0 && r.height>0; });
+              if (!b) return null;
+              b.scrollIntoView({block:'center'});
+              const r=b.getBoundingClientRect();
+              const x=Math.round(r.left+r.width/2), y=Math.round(r.top+r.height/2);
+              // elementFromPoint is the ground truth for "what will receive this click".
+              const hit=document.elementFromPoint(x,y);
+              const onTarget=!!(hit && (hit===b || b.contains(hit) || hit.closest('[data-follow-open]')===b));
+              return {x, y, onTarget, hit:(hit&&hit.className||'').toString().slice(0,40)}; })()""")
+            if not box:
+                cannot_run(f"no follow control in the DOM at {lbl}")
+            if not box.get("onTarget"):
+                cannot_run(f"at {lbl} the follow control is covered at its own centre by "
+                           f"{box.get('hit')!r} — cannot click it, so the behaviour is untestable "
+                           f"(this is a finding about reachability, report it rather than pass)")
+            # A REAL mouse event at the pixel, not el.click() — el.click() bypasses the
+            # capture-phase card handler that caused this defect, so it would have
+            # passed against the broken build.
+            p.send("Input.dispatchMouseEvent", {"type":"mousePressed","x":box["x"],"y":box["y"],
+                                                "button":"left","clickCount":1})
+            p.send("Input.dispatchMouseEvent", {"type":"mouseReleased","x":box["x"],"y":box["y"],
+                                                "button":"left","clickCount":1})
+            time.sleep(2)
+            check(f"{lbl}: clicking follow opens the FOLLOW settings modal",
+                  p.ev("!!document.querySelector('#lg-follow-modal:not([hidden])')"), True)
+            check(f"{lbl}: clicking follow does NOT open the reader/thread",
+                  p.ev("!!document.querySelector('#lg-dmodal:not([hidden])') "
+                       "|| !!document.querySelector('#looth-rep-sheet.is-open')"), False)
+            check(f"{lbl}: clicking follow does NOT navigate to the topic deep link",
+                  p.ev("location.href") == before, True)
+            p.ev("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
+            time.sleep(0.4)
+
         # ── THE MODAL names the discussion ─────────────────────────────────────
         # The mixed feed is still loaded and carries discussion cards too, so a trigger
         # is present; assert that rather than assume it.

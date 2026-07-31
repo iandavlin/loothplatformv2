@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dark pass — the follow control, both themes (Ian, 2026-07-31)</title>
+<style>
+:root{--ink:#1a1d1a;--mute:#6b6f6b;--line:#e3ddd0;--bg:#f2efe6;--rust:#c66845;
+ --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--serif:Georgia,serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans)}
+.w{max-width:1180px;margin:0 auto;padding:26px 18px 70px}
+h1{font:700 25px/1.2 var(--serif);margin:0 0 6px}
+.lede{color:var(--mute);max-width:74ch;margin:0 0 14px}
+.q{border-left:3px solid var(--rust);padding:8px 13px;background:#fff;border-radius:0 9px 9px 0;margin:0 0 22px;max-width:74ch}
+.q b{color:var(--rust)}
+h2{font:700 13px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--mute);margin:30px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:860px){.g{grid-template-columns:1fr}}
+.p{background:#e8e4d8;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.p--d{background:#22262a;border-color:#333a40}
+.p__h{padding:10px 14px;background:#fff;border-bottom:1px solid var(--line);font:700 13px/1 var(--sans)}
+.p--d .p__h{background:#1e2124;color:#e5e7e1;border-bottom-color:#333a40}
+.p__b{padding:14px;display:flex;justify-content:center}
+img{max-width:100%;height:auto;border-radius:9px;box-shadow:0 3px 14px rgba(0,0,0,.16);display:block}
+table{border-collapse:collapse;width:100%;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13.5px}
+th,td{padding:9px 11px;text-align:left;border-bottom:1px solid var(--line)}
+th{background:#faf8f2;font-weight:700}tr:last-child td{border-bottom:0}
+.ok{color:#3f7d3f;font-weight:700}.bad{color:#b3261e;font-weight:700}
+.note{background:#fdf6e9;border:1px solid #e8cfa8;border-radius:10px;padding:12px 14px;margin:16px 0;max-width:76ch;font-size:14px}
+</style></head><body><div class="w">
+<h1>Dark mode pass — the follow control</h1>
+<div class="q"><b>&ldquo;All of this stuff needs a dark mode pass.&rdquo;</b> &mdash; 31 July</div>
+<p class="lede">Real screenshots of the running branch, both themes, desktop and phone. A defect was found and fixed; the numbers below are measured contrast ratios, not opinions.</p>
+
+<h2>The defect that was there</h2>
+<p class="lede">On a <strong>phone in dark mode</strong> the settings modal painted a <strong>white panel</strong> under near-white text. Desktop was fine, which is why it survived: the only dark re-point of the card background is scoped to an ancestor that a phone-width dialog does not sit under.</p>
+<table>
+<tr><th>Measured</th><th>Before</th><th>After</th></tr>
+<tr><td>Modal panel background (dark, phone)</td><td class="bad">white</td><td class="ok">#1e2124</td></tr>
+<tr><td>Title contrast</td><td class="bad">1.25 : 1 &mdash; invisible</td><td class="ok">12.98 : 1</td></tr>
+<tr><td>&ldquo;Follow discussion&rdquo; eyebrow</td><td class="bad">2.33 : 1</td><td class="ok">6.95 : 1</td></tr>
+<tr><td>Row labels</td><td>&mdash;</td><td class="ok">11.06 : 1</td></tr>
+<tr><td>Switch track (off state)</td><td class="bad">light grey &mdash; read as ON</td><td class="ok">dark, clearly off</td></tr>
+</table>
+
+<h2>The modal &mdash; light and dark</h2>
+<div class="g">
+  <div class="p"><div class="p__h">Light &middot; desktop</div><div class="p__b"><img src="shots/modal-light-desktop.png" alt="Follow modal, light, desktop"></div></div>
+  <div class="p p--d"><div class="p__h">Dark &middot; desktop</div><div class="p__b"><img src="shots/modal-dark-desktop.png" alt="Follow modal, dark, desktop"></div></div>
+</div>
+<div class="g" style="margin-top:20px">
+  <div class="p"><div class="p__h">Light &middot; phone</div><div class="p__b"><img src="shots/modal-light-phone.png" alt="Follow modal, light, phone"></div></div>
+  <div class="p p--d"><div class="p__h">Dark &middot; phone &mdash; this is the one that was broken</div><div class="p__b"><img src="shots/modal-dark-phone.png" alt="Follow modal, dark, phone"></div></div>
+</div>
+
+<h2>The card &mdash; follow pill in the corner, replies as a stat</h2>
+<div class="g">
+  <div class="p"><div class="p__h">Light &middot; desktop</div><div class="p__b"><img src="shots/card-light-desktop.png" alt="Card, light, desktop"></div></div>
+  <div class="p p--d"><div class="p__h">Dark &middot; desktop</div><div class="p__b"><img src="shots/card-dark-desktop.png" alt="Card, dark, desktop"></div></div>
+</div>
+<div class="g" style="margin-top:20px">
+  <div class="p"><div class="p__h">Light &middot; phone</div><div class="p__b"><img src="shots/card-light-phone.png" alt="Card, light, phone"></div></div>
+  <div class="p p--d"><div class="p__h">Dark &middot; phone</div><div class="p__b"><img src="shots/card-dark-phone.png" alt="Card, dark, phone"></div></div>
+</div>
+
+<div class="note"><strong>One thing I did NOT change, because it is your call and not a dark-mode fix.</strong>
+On the <em>light</em> theme, the lit &ldquo;Following&rdquo; label measures <strong>3.45&nbsp;:&nbsp;1</strong> against its own tint &mdash; below the 4.5 accessibility threshold for text that size. That is the brand orange itself, which we deliberately made ONE colour across all five follow surfaces. Fixing it properly means changing that orange everywhere, so I have left it alone and flagged the number rather than quietly altering a brand colour inside a dark-mode pass. Dark uses the lighter orange the rest of the dark theme already uses, and is fine.</div>
+
+<p class="lede">Everything here is behind the off-by-default flag; it is on for this box only, never for live.</p>
+</div></body></html>
