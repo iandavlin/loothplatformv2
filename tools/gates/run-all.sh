@@ -155,6 +155,36 @@ echo
 #
 # WHEN THE ENGINE IS FIXED, this becomes a numbered gate as:
 #   run "following-section" python3 "$(dirname "$0")/following-section-gate.py" --quick
+#
+# messages-longpress-react-gate is held out because it needs a PROXY WITH MEMBER
+# COOKIES and a member who is a PARTICIPANT IN A THREAD THAT HAS MESSAGES — state
+# run-all.sh cannot manufacture. It is not flaky; it is red/green-proven both ways
+# (2026-07-31: exit 1 against the serving checkout, exit 0 against the fix).
+#
+# It guards the THIRD long-press miss to reach Ian through a green suite, and the
+# reason all three got through is the same: a CDP/Playwright .click() dispatches in
+# single-digit ms and CANNOT cross a 380/480ms hold, so the gesture that breaks is
+# the one no synthetic test performs. This gate presses with touchStart → a real
+# wall-clock sleep → touchEnd.
+#
+# Recipe (⚠️ pick the port deliberately — see the 8899 warning above):
+#
+#   # a member who is IN a thread with messages; claude_admin (1912) is NOT, so its
+#   # cookies make every assertion below CANNOT RUN rather than pass vacuously.
+#   sudo -u looth-dev wp --path=/var/www/dev eval '
+#     $u=get_user_by("email","<participant@example.com>"); $e=time()+604800;
+#     echo LOGGED_IN_COOKIE."=".wp_generate_auth_cookie($u->ID,$e,"logged_in")."\n";
+#     echo SECURE_AUTH_COOKIE."=".wp_generate_auth_cookie($u->ID,$e,"secure_auth")."\n";
+#     echo "looth_id=".looth_auth_mint_jwt($u)."\n";' > /tmp/tf-gate/cookies-msg.txt
+#   python3 tools/exercise-harness/endpoint-swap-proxy.py --port 8897 \
+#     --cookies /tmp/tf-gate/cookies-msg.txt --gate "$LG_GATE_TOKEN" --rewrite-origin &
+#   python3 tools/gates/messages-longpress-react-gate.py --url http://127.0.0.1:8897
+#
+#   ⚠️ --rewrite-origin IS NOT OPTIONAL. profile-app's CSRF guard (_bootstrap.php)
+#   rejects any Origin that is not a loothgroup.com host, so without it EVERY react
+#   answers 403 csrf_origin_rejected and the gate reports the defect it exists to
+#   detect — on a build that is fine. The looth_id line is not optional either: the
+#   WP cookies alone authenticate the page but not /profile-api.
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

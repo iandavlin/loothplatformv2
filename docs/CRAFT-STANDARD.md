@@ -152,6 +152,27 @@ and loopback `/whoami` tripping infra's `limit_req` zone) — see the note at th
 foot of `run-all.sh` for how to run `forum-visibility-gate.sh` and
 `editor-rail-reachable-gate.sh` by hand.
 
+### A synthetic click cannot perform the gesture that breaks
+
+`tools/gates/messages-longpress-react-gate.py` (HELD OUT — it needs a proxy with member
+cookies and a member who is a participant in a thread that has messages; red/green-proven
+both ways on 2026-07-31) encodes the class that has now reached Ian **three** times:
+
+1. `mobile-hub.js` `holdTargetFrom()` claiming the 🔔/✉ follow toggles (`8405055`);
+2. the same shape again on the consolidated Follow pill;
+3. the messages action sheet closing on **its own trailing click** — which made
+   reacting to a message on a phone impossible, not merely awkward.
+
+The common cause is not carelessness, it is the harness: **a CDP/Playwright `.click()`
+dispatches in single-digit milliseconds and can never cross a 380/480ms hold threshold.**
+Every automated tap ever run against these controls took a path a human finger cannot
+take, so the defect was not missed — it was *unreachable*. Press with `touchStart` → a
+real wall-clock sleep → `touchEnd`, and assert the STORE, not the pixel.
+
+It also carries the absence lesson in its sharpest form: on the broken build the sheet
+DID open, and a presence check said so (that assertion passes in the red run). The
+load-bearing assertion is that it is **still** open once the finger lifts.
+
 **A gate that CANNOT RUN is not a gate that passed, and not one that failed.**
 Gate 2 drives a real Chrome; with no engine on :9222 it reports one `GATE-ERROR`
 per page and exits 1, which is indistinguishable from finding real violations —
