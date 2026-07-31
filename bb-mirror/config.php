@@ -428,6 +428,30 @@ function lg_bb_mirror_safe_avatar(?string $url): ?string {
 // docs/atlas/REPLY-IMAGE-COUNT-CEILING.md.
 if (!defined('LG_REPLY_IMG_MAX')) define('LG_REPLY_IMG_MAX', 6);
 
+// ---------- LG_FOLLOW_CADENCE_LIVE — the account-level email cadence ------------
+// DEFAULT OFF, and the name states the CONDITION: it turns on when follow-digest's
+// batcher genuinely delivers Daily and Weekly, not when the control is merely built.
+// Ian, 2026-07-31, asked the sequencing question and answered it himself: show the
+// frequency control only when the batcher lands, so nobody picks Daily and receives
+// instant mail. The JS twin is FREQ_BATCHER_LIVE (forums.js) — same condition, and the
+// pair must move together.
+//
+// SEAM (docs/atlas/FOLLOW-DIGEST-DESIGN.md §2.2-2.3, agreed on the board 2026-07-31):
+//   store  WP usermeta lg_disc_email_cadence ∈ instant|daily|weekly, absent ⇒ instant
+//   write  THIS lane, through follow.php, self-scoped from the session
+//   read   follow-digest's sender
+// While this is false, `cadence` is ABSENT from the GET envelope entirely — not null,
+// not a default — so a dark control cannot render a live-looking value, and the
+// absence is gateable. follow-digest gates it from their side too.
+//
+// NEITHER LANE FLIPS THIS ALONE: follow-digest reports a working sender, keeper takes
+// it to Ian, and both flags move in that window.
+if (!defined('LG_FOLLOW_CADENCE_LIVE')) {
+    define('LG_FOLLOW_CADENCE_LIVE',
+        getenv('LG_BB_MIRROR_CADENCE') === '1'
+        || (($_SERVER['LG_BB_MIRROR_CADENCE'] ?? '') === '1'));
+}
+
 // ---------- LG_THREAD_FOLLOW_ENABLED — the thread-follow exposure gate ----------
 // DEFAULT OFF, and it stays off until Ian turns it on himself on live, having looked
 // at the running thing. Pattern copied from LG_AUTHOR_SOCIALS_ALL_MEMBERS
