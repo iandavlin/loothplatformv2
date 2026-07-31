@@ -63,15 +63,22 @@ looth-dev|looth|WordPress (looth-dev pool) + the mu-plugin sync bridges
 looth_ro|looth|read-only auditing role (ssh live-ro)
 "
 
-# role|database|schema|privilege|tables
+# role|database|schema|privilege|tables|grantor
 # GRANT is idempotent in Postgres, so re-running is free.
+#
+# ⚠️ THE GRANTOR COLUMN IS NOT DECORATION. Postgres records WHO granted inside the
+# ACL: dev2 and live both read `membership=r/"bb-mirror"`. Granting the same
+# privilege as `postgres` instead would write `membership=r/postgres` — the same
+# access, but the two boxes would no longer be byte-identical, and byte-identical is
+# exactly what the comparisons in docs/runbooks/live-topic-follow-migration.md
+# assert. Grant as the object OWNER.
 #
 # ⚠️ looth-dev's INSERT/UPDATE/DELETE are NOT granted here and must not be. They
 # arrive from schema `forums`' DEFAULT PRIVILEGES, which are identical on both boxes
 # (see docs/runbooks/live-topic-follow-migration.md). Granting them by hand here
 # would paper over a broken default instead of surfacing it.
 GRANTS="
-membership|looth|forums|SELECT|forum,topic,topic_follow
+membership|looth|forums|SELECT|forum,topic,topic_follow|bb-mirror
 "
 
 PSQL_SUPER=(sudo -u postgres psql -v ON_ERROR_STOP=1 -tAc)
@@ -117,7 +124,7 @@ say "     because of its hyphen, membership is not. That pattern false-reported 
 say "     present grants as MISSING on dev2, 2026-07-31."
 say "  has_table_privilege asks the question the app actually asks: can this role read"
 say "  this table — by any route, direct grant or default privilege."
-while IFS='|' read -r role db schema priv tables; do
+while IFS='|' read -r role db schema priv tables grantor; do
   [ -z "${role:-}" ] && continue
   IFS=',' read -ra TBLS <<< "$tables"
   for t in "${TBLS[@]}"; do
@@ -133,7 +140,7 @@ while IFS='|' read -r role db schema priv tables; do
       else
         say "  MISSING  $role $priv on $schema.$t"
       fi
-      MISSING_GRANTS+=("$role|$db|$schema|$priv|$t")
+      MISSING_GRANTS+=("$role|$db|$schema|$priv|$t|${grantor:-postgres}")
     fi
   done
 done <<< "$GRANTS"
@@ -181,7 +188,7 @@ done
 
 for g in "${MISSING_GRANTS[@]:-}"; do
   [ -z "${g:-}" ] && continue
-  IFS='|' read -r role db schema priv t <<< "$g"
+  IFS='|' read -r role db schema priv t grantor <<< "$g"
   relexists="$(sudo -u postgres psql -d "$db" -tAc "select to_regclass('$schema.$t') is not null;" 2>/dev/null || echo)"
   if [ "$relexists" != "t" ]; then
     say "  -- SKIP $schema.$t — table absent; migration has not run"
@@ -189,11 +196,12 @@ for g in "${MISSING_GRANTS[@]:-}"; do
   fi
   sql="GRANT USAGE ON SCHEMA \"$schema\" TO \"$role\";
 GRANT $priv ON \"$schema\".\"$t\" TO \"$role\";"
-  say "  -- grant $role $priv on $db:$schema.$t"
+  say "  -- grant $role $priv on $db:$schema.$t (as ${grantor:-postgres})"
   say "$sql" | sed 's/^/  /'
   if [ "$MODE" = apply ]; then
-    sudo -u postgres psql -d "$db" -v ON_ERROR_STOP=1 -q -c "$sql"
-    say "  ✔ applied"
+    # As the OWNER, not postgres — the grantor is recorded in the ACL.
+    sudo -u "${grantor:-postgres}" psql -d "$db" -v ON_ERROR_STOP=1 -q -c "$sql"
+    say "  ✔ applied (granted by ${grantor:-postgres})"
   fi
   say ""
 done

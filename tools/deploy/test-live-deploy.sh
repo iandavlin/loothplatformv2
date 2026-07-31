@@ -71,6 +71,14 @@ cat > cutover/topic-follow-migrate.sh <<'X'
 echo "MIGRATION RAN — if you see this in the test output, the wrapper executed it"
 X
 chmod +x cutover/topic-follow-migrate.sh
+# The role manifest ships in the same window; the wrapper must provision roles
+# BEFORE the pull, because .php takes effect the instant the tree moves.
+cat > cutover/ensure-pg-roles.sh <<'X'
+#!/usr/bin/env bash
+echo "ROLE PROVISIONING RAN"
+exit 0
+X
+chmod +x cutover/ensure-pg-roles.sh
 echo "CREATE TABLE t();" > cutover/2026-07-31-follow.sql
 git add -A && git commit -qm "the deploy window"
 git push -q origin main
@@ -103,6 +111,11 @@ check "warns the feature is not tested"           "$T/out1" "THE FEATURE IS NOT 
 # THE CRITICAL ONE: a deploy wrapper must never run a migration unattended.
 check_not "did NOT execute the migration"         "$T/out1" "MIGRATION RAN"
 check "extracted + listed the migration instead"  "$T/out1" "NOT executed (by design)"
+# Roles are provisioned BEFORE the pull — .php takes effect the instant the tree
+# moves, so a role the new code connects as must already exist.
+check "would provision PG roles from the new commit" "$T/out1" "would run: cutover/ensure-pg-roles.sh --apply"
+check "role step runs before the pull"           "$T/out1" "4. MIGRATIONS"
+check_not "did NOT provision roles during a dry run" "$T/out1" "ROLE PROVISIONING RAN"
 # The serving checkout must not have moved during a dry run.
 [ "$(git -C "$T/serve" rev-parse HEAD)" = "$OLD_SHA" ] \
   && { echo "  ✔ serving checkout did not move"; pass=$((pass+1)); } \

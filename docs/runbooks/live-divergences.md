@@ -139,9 +139,34 @@ bash cutover/ensure-pg-roles.sh --apply    # create anything missing
 bash cutover/ensure-pg-roles.sh --check    # preflight; exit 1 if the box does not match
 ```
 
+**The role is also now in the migration itself** (`cutover/topic-follow-migrate.sh`,
+step 1b), because that is the artifact people actually run for this feature.
+
+> **The stale claim that caused it.** That script used to assert the opposite —
+> *"'membership' will NOT appear on live and that is CORRECT"* — written from
+> `pg_roles` on both boxes without asking whether any **code** needed the role. It
+> did. **A role's absence from one box is evidence about the BOX, never about whether
+> the role is needed.** The question to ask is what the app CONNECTS AS: the FPM
+> pool's `user =` plus the DSN. The comment is corrected in place and explains why,
+> so nobody re-removes the role on the old reasoning.
+
+Two things about step 1b that are measured, not assumed:
+
+- **It is NOT gated on the table being absent.** `topic_follow` existing tells you
+  nothing about whether the role exists — on live the table was created first and the
+  role was missing for hours afterwards. Gating the fix on a fresh migration would have
+  skipped the one box that needed it.
+- **CREATE ROLE runs as `postgres`, the GRANTs run as `bb-mirror`.** `bb-mirror` has
+  neither SUPERUSER nor CREATEROLE, so running the whole block as the schema owner
+  fails with `permission denied to create role` (measured on dev2 — the first draft did
+  exactly that). And the GRANT must be issued by the **owner** because Postgres records
+  the grantor in the ACL: both boxes read `membership=r/"bb-mirror"`, and granting as
+  `postgres` would write `membership=r/postgres` and break the byte-identity this
+  runbook asserts.
+
 **Live already satisfies this** (Ian created the role and the three grants on the night;
 `membership=r` on `forums.{forum,topic,topic_follow}`, verified read-only — live and dev2
-ACLs are now identical). The artifact exists so the next box, or the next rebuild, cannot
+ACLs are identical). The artifacts exist so the next box, or the next rebuild, cannot
 repeat it.
 
 > **Deliberately absent:** `events` and `tool-dev` run FPM pools but open no Postgres
@@ -247,6 +272,41 @@ that is a deliberate act for whoever owns those two, not a side effect of a tool
 is a rollback file the farm left behind (§1.3). Harmless — WordPress does not load
 `.php.pre-symlink-*` — but it should be removed once the deploy is settled, and its
 existence is the evidence for what the farm did.
+
+### §4.5 — dev2's poller loader is symlinked; live's is a real file ⚠️ THE PAYWALL TRAP
+`lg-patreon-stripe-poller.php` is a thin loader that does
+`require __DIR__ . '/lg-patreon-stripe-poller/lg-patreon-onboard.php'`.
+
+**PHP resolves symlinks before computing `__DIR__`.** So when `symlink-farm.sh`
+converted that loader into a symlink into the repo on live, `__DIR__` stopped being
+the docroot and became `/home/ubuntu/loothplatformv2-clean`. The loader then
+`return`s **without fatalling** if it cannot read its main file — so the plugin was
+never registered, the poller's REST route never existed, `whoami` could not read
+tiers, **every member and admin computed as `public`, and the site paywalled
+itself.** Nothing 500'd and nothing appeared in an error page.
+
+Current state, and the two boxes disagree:
+
+| box | loader | `__DIR__` lands in | verdict |
+|---|---|---|---|
+| live | **real file** (Ian restored it from `.pre-symlink-20260731-035531`) | the docroot | correct |
+| dev2 | **symlink** into the serving checkout | the **repo** | the shape that broke live |
+
+`tools/gates/deploy-drift-gate.sh` check **[7]** now asserts this and is **RED on
+dev2**, deliberately left red rather than declared: declaring it would make a gate
+green over the exact configuration that caused an outage four hours ago.
+
+> ### The real fix is a code change, and it is not this lane's to make
+> Live's real-file loader is itself a divergence — **it does not arrive by pull.**
+> That is the tooling defect, exactly as Ian's mandate frames it: the file cannot be
+> symlink-deployed *as the code stands*.
+>
+> The proper fix is to make the loader **symlink-safe** — resolve its folder from
+> `WPMU_PLUGIN_DIR` (WordPress's own constant for the mu-plugins directory) instead
+> of `__DIR__`. That is correct whether the loader is a symlink or a real file, and
+> it would let the loader arrive by pull on both boxes and let dev2 stop differing
+> from live. **It touches a PRODUCTION must-use plugin and belongs to whoever owns
+> the poller**, so it is recorded here rather than done at 05:00 by a tooling lane.
 
 ### §4.4 — LIVE IS LOGGING A 404 EVERY FEW MINUTES, RIGHT NOW ⚠️ NOT MINE TO FIX
 Found by `tools/gates/fpm-error-log-gate.sh` on its **first real run** — which is

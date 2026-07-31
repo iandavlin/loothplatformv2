@@ -237,6 +237,48 @@ plan_line "fpm confs touched"    "$TOUCHED_FPM"
 
 # ─── 4. MIGRATIONS — from the FETCHED commit, before the tree moves ─────────────
 step "4. MIGRATIONS (extracted from $(git -C "$SERVE" rev-parse --short "$NEW_SHA"), tree not yet moved)"
+
+# ── 4a. PG ROLES — provisioned BEFORE the pull, and that ordering is the point ──
+# PHP files take effect the instant the pull lands: there is no reload for .php, so
+# the new code is serving requests immediately. A role it connects as must therefore
+# exist BEFORE the tree moves, not after.
+#
+# That is exactly what went wrong on 2026-07-31: the code shipped, the `membership`
+# role did not exist on live, and every load of Manage Account logged
+#   FATAL: role "membership" does not exist
+# with a broken section in front of members until it was fixed by hand.
+#
+# Run from the FETCHED commit, not the running checkout, so a manifest added in this
+# very window is honoured. Unlike a migration this is auto-applied: CREATE ROLE and
+# GRANT SELECT are additive, non-destructive and idempotent — there is no data to
+# lose and no rollback window to think about.
+TMPR="$(mktemp -d /tmp/lgd-roles.XXXXXX)"
+if git -C "$SERVE" archive "$NEW_SHA" cutover 2>/dev/null | tar -x -C "$TMPR" 2>/dev/null \
+   && [ -f "$TMPR/cutover/ensure-pg-roles.sh" ]; then
+  if [ $APPLY = 1 ]; then
+    if bash "$TMPR/cutover/ensure-pg-roles.sh" --check >/dev/null 2>&1; then
+      ok "PG roles/grants already match the incoming manifest — nothing to provision"
+    else
+      note "incoming manifest wants roles/grants this box does not have; applying:"
+      bash "$TMPR/cutover/ensure-pg-roles.sh" --apply 2>&1 | sed 's/^/      /'
+      # VERIFY, against the store, rather than trusting the writes above.
+      if bash "$TMPR/cutover/ensure-pg-roles.sh" --check >/dev/null 2>&1; then
+        ok "verified: every role the apps peer-auth as now exists"
+      else
+        die "role provisioning did not take. Do NOT pull — the code about to land
+       connects as a role this box does not have, and it will fail per-request
+       with a FATAL in /var/log/php8.3-fpm.log, not at deploy time."
+      fi
+    fi
+  else
+    echo "    [dry-run] would run: cutover/ensure-pg-roles.sh --apply (from $NEW_SHA), then re-check"
+  fi
+else
+  note "no cutover/ensure-pg-roles.sh in the incoming commit — roles not provisioned"
+  notdone "PG role provisioning — the incoming commit carries no role manifest"
+fi
+rm -rf "$TMPR"
+
 if [ -z "$NEW_MIGRATIONS" ] && [ -z "$NEW_SQL" ]; then
   skip "no new migration script and no new .sql in this window"
 else
@@ -420,6 +462,44 @@ case "$BOX" in live|dev2)
   done
   [ $bads = 0 ] && ok "all FPM pool symlinks still on platform/fpm/$BOX/"
 ;; esac
+
+# 8b2. PG roles STILL correct after the pull, checked with the manifest that just
+#      landed. Cheap, and it is the assertion whose absence cost the outage.
+if [ $APPLY = 1 ] && [ -x "$HERE/../../cutover/ensure-pg-roles.sh" ]; then
+  if bash "$HERE/../../cutover/ensure-pg-roles.sh" --check >/dev/null 2>&1; then
+    ok "PG roles/grants match the DEPLOYED manifest"
+  else
+    bad "the deployed manifest wants roles/grants this box does not have.
+         Run: bash cutover/ensure-pg-roles.sh --apply   — until then the pages that
+         connect as those roles will fail per-request, silently, in the log."
+  fi
+fi
+
+# 8b3. mu-plugin loaders still resolve their __DIR__-relative code.
+#      Symlinking a loader moves __DIR__ to the repo; the loader then returns
+#      silently and the plugin is NEVER registered — no fatal, no 500. On
+#      2026-07-31 that unregistered the poller REST route, whoami could not read
+#      tiers, and every member computed as `public`. The site paywalled itself.
+#      Step 6b creates mu-plugin symlinks, so this verifies its own work.
+if [ $APPLY = 1 ]; then
+  for f in $(sudo ls -1 "$WP/wp-content/mu-plugins" 2>/dev/null | grep '\.php$'); do
+    sibs="$(sudo cat "$WP/wp-content/mu-plugins/$f" 2>/dev/null \
+            | grep -oE "__DIR__ *\. *'/[A-Za-z0-9._-]+'" | sed -E "s/.*'\/([^']+)'.*/\1/" | sort -u)"
+    [ -z "$sibs" ] && continue
+    real="$(sudo readlink -f "$WP/wp-content/mu-plugins/$f" 2>/dev/null)"; [ -z "$real" ] && continue
+    d="$(dirname "$real")"
+    for s in $sibs; do
+      sudo test -e "$d/$s" \
+        || bad "$f requires ./$s and it does NOT resolve from $d — the plugin will
+         load nothing, silently. This is the paywall trap (CLAUDE.md #7)."
+    done
+    [ "$d" != "$WP/wp-content/mu-plugins" ] \
+      && note "⚠️  $f is symlinked, so __DIR__ is $d, not the docroot — its code is"
+    [ "$d" != "$WP/wp-content/mu-plugins" ] \
+      && note "    served from that tree. Fine today; one box-local file from breaking."
+  done
+  ok "mu-plugin loader __DIR__ requires checked"
+fi
 
 # 8c. New nginx locations must ROUTE. `nginx -t` cannot tell you this: a missing
 #     location passes it just as happily as a present one. A new internal endpoint

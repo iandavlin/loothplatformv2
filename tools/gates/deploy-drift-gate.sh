@@ -61,6 +61,7 @@ done
 # asserts a non-empty result before believing any absence.
 read -r -d '' PROBE <<'PROBE_EOF'
 SERVE=/home/ubuntu/loothplatformv2-clean
+WP_MU=/var/www/dev/wp-content/mu-plugins
 _ls(){ ls -1 "$1" 2>/dev/null || sudo -n ls -1 "$1" 2>/dev/null; }
 _rl(){ readlink "$1" 2>/dev/null || sudo -n readlink "$1" 2>/dev/null; }
 _isl(){ [ -L "$1" ] 2>/dev/null || sudo -n test -L "$1" 2>/dev/null; }
@@ -84,8 +85,42 @@ emit_dir(){ # kind dir
 }
 emit_dir SNIP /etc/nginx/snippets
 emit_dir POOL /etc/php/8.3/fpm/pool.d
-emit_dir MU   /var/www/dev/wp-content/mu-plugins
+emit_dir MU   "$WP_MU"
 emit_dir SRV  /srv
+
+# ── mu-plugin LOADERS and their __DIR__-relative code ──────────────────────────
+# CLAUDE.md trap #7, and it took the whole site down on 2026-07-31.
+#
+# WordPress only auto-loads .php in the mu-plugins ROOT, so folder-structured
+# plugins ship a thin loader that does `require __DIR__ . '/<folder>/main.php'`.
+# PHP RESOLVES SYMLINKS BEFORE COMPUTING __DIR__. So the moment the loader itself
+# becomes a symlink into the repo, __DIR__ stops being the docroot and becomes the
+# repo — and the loader starts resolving its code from a different tree than the one
+# it was deployed into. When that tree lacks the folder (or a box-local vendor/),
+# `is_readable()` fails, the loader `return`s WITHOUT fatalling, and the plugin is
+# simply never registered. Silent.
+#
+# On 2026-07-31 that unregistered the poller's REST route, so whoami could not read
+# tiers, so every member and admin computed as `public`, and the site paywalled
+# itself. Nothing fatalled and nothing 500'd.
+#
+# Emits, per loader: the sibling it requires, whether that sibling RESOLVES from
+# where PHP will really compute __DIR__, and whether __DIR__ lands in the docroot.
+MUDIR="$WP_MU"
+for f in $(_ls "$MUDIR"); do
+  case "$f" in *.php) ;; *) continue ;; esac
+  sibs="$(_cat "$MUDIR/$f" | grep -oE "__DIR__ *\. *'/[A-Za-z0-9._-]+'" \
+          | sed -E "s/.*'\/([^']+)'.*/\1/" | sort -u)"
+  [ -z "$sibs" ] && continue
+  real="$(readlink -f "$MUDIR/$f" 2>/dev/null || sudo -n readlink -f "$MUDIR/$f" 2>/dev/null)"
+  [ -z "$real" ] && continue
+  dir="$(dirname "$real")"
+  case "$dir" in "$MUDIR") loc=docroot ;; *) loc=outside ;; esac
+  for s in $sibs; do
+    if _ex "$dir/$s"; then st=resolves; else st=MISSING; fi
+    echo "LOADER $f $s $st $loc"
+  done
+done
 
 # Repo-side inventory, so "has a repo counterpart" is decided on the box itself.
 for f in $(_ls "$SERVE/platform/nginx"); do echo "REPOSNIP $f"; done
@@ -336,6 +371,41 @@ for box in $BOXES; do
       red=1
     fi
   done <<< "$(printf '%s\n' "$facts" | grep '^FLAG untracked ')"
+
+  # ── CHECK 7 — mu-plugin loaders resolve their __DIR__-relative code ────────
+  # CLAUDE.md trap #7. PHP resolves symlinks BEFORE computing __DIR__, so a
+  # symlinked loader resolves its code from the REPO rather than the docroot it was
+  # deployed into. The loader then `return`s without fatalling, the plugin is never
+  # registered, and nothing anywhere reports an error.
+  # On 2026-07-31 this unregistered the poller's REST route -> whoami could not read
+  # tiers -> every member and admin computed as `public` -> the site paywalled itself.
+  echo "  [7] mu-plugin loaders resolve their __DIR__-relative code"
+  nload=$(printf '%s\n' "$facts" | grep -c '^LOADER ' || true)
+  if [ "$nload" -eq 0 ]; then
+    echo "      ·  no __DIR__-relative loaders found"
+  else
+    while read -r _ f sib st loc; do
+      [ -z "${f:-}" ] && continue
+      if [ "$st" = MISSING ]; then
+        echo "      ❌ $f requires ./$sib and IT DOES NOT RESOLVE from where PHP"
+        echo "         computes __DIR__. The loader returns silently and the plugin is"
+        echo "         NEVER REGISTERED — no fatal, no 500, no error page."
+        red=1
+      elif [ "$loc" = outside ]; then
+        if declared "$box" "loader-outside" "$f"; then
+          echo "      DECLARED  $f resolves ./$sib from outside the docroot"
+        else
+          echo "      ❌ $f is symlinked, so __DIR__ is the REPO, not the docroot."
+          echo "         ./$sib resolves today — from the repo tree — but the plugin is"
+          echo "         now served from a different tree than it was deployed into, and"
+          echo "         is one box-local file (vendor/, .env) away from loading nothing."
+          red=1
+        fi
+      else
+        echo "      ✔ $f -> ./$sib resolves, __DIR__ stays in the docroot"
+      fi
+    done <<< "$(printf '%s\n' "$facts" | grep '^LOADER ')"
+  fi
   echo
 done
 
