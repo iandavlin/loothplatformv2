@@ -8,6 +8,26 @@ recipient set. With the recipient set hard-locked to one person.
 **Status: dev2 side is PROVEN. Live side is a set of commands for Ian — nothing has
 been run on live, and nothing here changes live until he runs it.**
 
+> ### ⚠️ 2026-07-31 — Ian ran it, it REFUSED, and it was right to (but for the wrong reason)
+>
+> The safety held: nothing was sent. But the refusal came from a guard that could
+> **never** have passed on live, so it was not a verdict about this send at all.
+>
+> The one-shot refused on `has_filter('pre_wp_mail')` — *any* filter. On live,
+> `lg-poller-mail-killswitch.php` is always registered (it self-disables only where
+> `lgms_poller_mail_enabled` is truthy, and on live that option is **absent**). So the
+> old guard was a wall, not a gate.
+>
+> And that killswitch is **selective**: read it — it returns `$short` untouched unless
+> the call stack runs through `/lg-patreon-stripe-poller/`, and it exempts anything
+> carrying `X-LG-Poller-Intent`. A follow-digest send matches neither. It would never
+> have swallowed this mail. Live member mail is fine and was never at risk.
+>
+> `has_filter()` was **presence standing in for behaviour**, and it was wrong in both
+> directions — it would equally have *passed* a box where containment was registered,
+> and containment returns `true`, so `wp_mail()` reports success for a message that
+> reached nobody. Replaced with a probe that measures the thing itself (§4a).
+
 ---
 
 ## 1. The short version
@@ -18,7 +38,8 @@ been run on live, and nothing here changes live until he runs it.**
 | Tracked config | `platform/config/follow-digest.php` — arrives by `git pull`, no reload, no root |
 | Value shipped | `enabled => false`, `allowlist => '1:ian.davlin@gmail.com'` |
 | Live blast radius of the test | **One address.** The flag is set on the command line, so it is on for that one process — no cron armed, no member's page changes, nothing persists |
-| Gate | `tools/gates/follow-digest-gate.py` — GATE 13/14, green in both flag states |
+| Mail channel | A **behavioural probe** decides whether a send would be swallowed — not `has_filter()`, which could never pass on live (§4a) |
+| Gate | `tools/gates/follow-digest-gate.py` — GATE 13/14, green in both flag states; `--prove-test-mode` adds the allowlist proof, its red-first, and the probe proof |
 
 ---
 
@@ -98,6 +119,34 @@ linkless digest — to everyone**. It mailed nobody for a reason that had nothin
 the allowlist. Had the driver only ever checked "the canary got nothing", that build would
 have looked like a pass. The stripped copy now keeps the repo shape.
 
+### ⚠️ …and then the identical trap came back through the fix for it (7/31)
+
+The repo-shape fix created the `membership-pages` symlink `if not os.path.lexists(link)`.
+**`lexists()` is `True` for a *dangling* symlink.** `/tmp` is shared by ~110 worktrees on
+this box, so once it held a link to a worktree that had since been removed, it was never
+rebuilt — the link store read as unreachable, the stripped sender refused **everybody**,
+and the leak check reported *"the canary still received nothing"*. That reads as "no
+leak". It actually meant "this build cannot send at all", and it made the entire
+end-to-end proof vacuous. Reproduced deliberately, then fixed three ways:
+
+1. **The symlink is always repointed**, and the target is proven readable *by the user
+   that will read it* (`sudo -u looth-dev`) at build time, with a reason.
+2. **The driver no longer trusts the harness.** Before any tick it exercises the real
+   link path on the real seed topic and **aborts** if the build cannot produce a link:
+
+   ```
+   ok  LIVENESS: this build CAN send — the link store resolved topic 72330 to a real hub
+       url, so a zero below is not "refused to send to everyone"
+   ```
+
+3. **The leak run splits three ways**, because the three causes need different fixes:
+   canary silent + Ian mailed → a canary problem; canary silent + **Ian also silent** →
+   a broken build, said in those words, not filed as "no leak".
+
+**The positive control, in order** (keeper's framing): *Ian mailed* proves the machinery
+delivers at all; *the canary mailed once the allowlist is removed* proves the allowlist
+was the only thing that ever stopped it. Neither half means anything alone.
+
 The recipient oracle is mailpit, and it is a faithful one: dev2's containment rewrites
 the `From:` but preserves every `To:` — so *who a message was addressed to* is directly
 observable. Only the **clock** is simulated (the tick flushes at 08:00 site-local and a
@@ -141,15 +190,35 @@ Prerequisite: this branch is merged and pulled on live (`lg-deploy`, or
 symlink work is needed** — the config is a plain file read through the existing
 mu-plugin symlink, and the flag is passed per-command.
 
+⚠️ **A pull is genuinely required, even though the allowlist is already live.** Checked
+2026-07-31: live already has `lg_fd_allowed`/`lg_fd_allowlist` in its deployed sender and
+`platform/config/follow-digest.php` with `enabled => false`, `allowlist =>
+'1:ian.davlin@gmail.com'`. What is **not** there yet is `platform/lib/lg-fd-mail-probe.php`
+— the new file the probe lives in. Without it the one-shot exits at step 1 saying it
+cannot read the probe library. It needs **no symlink of its own** (it is not a mu-plugin;
+the one-shot reads it by `__DIR__`), so the pull alone is enough.
+
 Everything below runs from `~/loothplatformv2-clean` on **live**.
 
 **Step 1 — look, send nothing.** Prints the real resolver's output and what would go out.
+It now also **lists every registered `pre_wp_mail` filter** — informationally. Seeing
+`lg-poller-mail-killswitch.php` there is expected and is **not** a problem.
 
 ```bash
 sudo -u looth-dev env LG_FOLLOW_DIGEST=1 php platform/bin/follow-digest-live-oneshot.php
 ```
 
-**Step 2 — give yourself a window.** You currently hold no cadence on live, and
+**Step 2 — prove the channel. Sends ONE probe email to you and nothing else.**
+
+```bash
+sudo -u looth-dev env LG_FOLLOW_DIGEST=1 php platform/bin/follow-digest-live-oneshot.php --probe
+```
+
+This sends a real one-line email with a unique token in the subject. **If it lands in
+your inbox, delivery is proven before a digest is ever built** — and if the chain
+swallows it, the script refuses and tells you which filter did it. Safe to repeat.
+
+**Step 3 — give yourself a window.** You currently hold no cadence on live, and
 `lg_fd_set_cadence()` stamps the watermark to *now* (the flood guard — it is what stops a
 first digest being the entire history of every thread you follow). So a backdate is
 required, and it is deliberately not defaulted:
@@ -159,22 +228,69 @@ sudo -u looth-dev env LG_FOLLOW_DIGEST=1 php platform/bin/follow-digest-live-one
   --arm --since=2026-07-20
 ```
 
-**Step 3 — send it, to you.**
+**Step 4 — send it, to you.** Re-runs the probe first, so you get **two** emails: the
+probe, then the digest.
 
 ```bash
 sudo -u looth-dev env LG_FOLLOW_DIGEST=1 php platform/bin/follow-digest-live-oneshot.php --send
 ```
 
-**Step 4 — put your account back.**
+**Step 5 — put your account back.**
 
 ```bash
 sudo -u looth-dev env LG_FOLLOW_DIGEST=1 php platform/bin/follow-digest-live-oneshot.php --disarm
 ```
 
 The script refuses to do anything unless: it is live (by `home_url()`, **not** `LG_ENV`);
-nothing is intercepting `wp_mail`; the allowlist resolves to **exactly** `1:ian.davlin@gmail.com`;
-and the resolver returns nobody but you. Any other allowlist — `1` unpinned, `1,7`,
-`all-members`, malformed — and it exits without sending.
+**the channel probe came back clear**; the allowlist resolves to **exactly**
+`1:ian.davlin@gmail.com`; and the resolver returns nobody but you. Any other allowlist —
+`1` unpinned, `1,7`, `all-members`, malformed — and it exits without sending.
+
+### 4a. What the channel probe actually asks
+
+WordPress runs the filter as `$pre = apply_filters('pre_wp_mail', null, $atts);` and
+treats **any non-null result as "already handled"**. `apply_filters()` runs *every*
+callback regardless, each receiving the running value — so a callback registered **last,
+at `PHP_INT_MAX`, sees exactly what WordPress is about to see.**
+
+- value still `null` → nothing short-circuited → the message went on to real delivery.
+- value anything else → something upstream swallowed it, and `wp_mail()` will return
+  **`true`** anyway.
+
+That is a direct observation of the real chain on the real box — not an inference from
+which plugins happen to be loaded — and it answers correctly for filters nobody has
+written yet. It **fails closed** on every ambiguity, including "the recorder never ran":
+an unanswered question is not a yes.
+
+Proven on dev2 in both directions (`platform/bin/follow-digest-mail-probe-proof.php`,
+wired into the gate):
+
+```
+--- A: with dev2's real containment registered ---
+      ran=yes swallowed=yes wp_mail_returned=true
+ ok   CONTAINMENT IS DETECTED: the probe was short-circuited, so the one-shot REFUSES.
+      Note wp_mail() returned true — which is exactly why returning true is not
+      evidence of delivery.
+
+--- B: killswitch only (live's real chain), containment removed IN-PROCESS ---
+      pre_wp_mail chain now: lg-poller-mail-killswitch.php, Plugin.php
+ ok   containment removed, killswitch STILL REGISTERED — this process now has exactly
+      live's pre_wp_mail chain
+      ran=yes swallowed=no wp_mail_returned=true
+ ok   THE KILLSWITCH DOES NOT SWALLOW A DIGEST SEND: the probe passed the whole chain.
+```
+
+Scenario B is engineered, because dev2 always has containment: the callback is removed
+**from that process only** (no file touched, nothing persisted), PHPMailer is repointed
+at mailpit *first*, and the probe address is `…@dev2.invalid` — RFC 2606 guarantees it
+can never resolve, so even a total escape reaches no person. The run asserts the
+killswitch is *still registered* afterwards, or scenario B would be testing an empty
+chain and proving nothing.
+
+⚠️ **The probe owns a `wp_mail()` call, so it enforces the allowlist itself** and refuses
+any address the digest would refuse. Otherwise the tool built to inspect the wall would
+be a door through it. The gate now sweeps **every** file this lane owns for `wp_mail()`
+call sites, not just the sender — it was blind to this one until it was told to look.
 
 ---
 
@@ -228,10 +344,30 @@ the wrong thing.
 
 **"mailpit shows zero":** mailpit is **not installed on live** (verified: inactive, no
 listeners on 1025/8025), and `lg-dev-mail-containment.php` is **not** symlinked into
-live's mu-plugins. So there is nothing on live that could swallow a send and report
-success — the condition the mailpit-zero check exists to detect cannot arise. The script
-re-checks `has_filter('pre_wp_mail')` at run time anyway and refuses if anything is
-intercepting.
+live's mu-plugins — re-verified over `ssh live-ro` on 2026-07-31, listing live's 39
+mu-plugins directly. So there is nothing on live that could swallow a send and report
+success.
+
+That is a *structural* argument, though, and the script no longer relies on it: it runs
+the §4a probe at run time and refuses if this send is actually intercepted — by anything,
+including something added after this was written. **What it no longer does is refuse
+merely because a filter exists**, which is what stopped Ian's 7/31 run and would have
+stopped every future one.
+
+**Live's mail chain, read read-only 2026-07-31:**
+
+| | |
+|---|---|
+| `lg-dev-mail-containment.php` | **absent** — only the missing symlink protects live's mail |
+| `lg-poller-mail-killswitch.php` | present, registered (`lgms_poller_mail_enabled` absent), **selective — ignores non-poller mail** |
+| `Plugin.php` poller mail-gate | present, selective by the same backtrace test |
+| `enabled` (tracked config) | `false` |
+| `lg_fd_send` in live's cron array | **absent** — nothing is armed |
+| members holding a batched cadence | **0** |
+
+That last row is worth pausing on: **even if every guard failed open at once, the
+resolver has nobody to return** — no member on live holds `daily` or `weekly`. The only
+account that can receive anything is the one you arm in step 3.
 
 ---
 
