@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+"""
+build-live-recap-deck.py — turn render-live-recap.php's output into the page Ian looks at.
+
+    python3 lg-weekly-digest/dev/build-live-recap-deck.py \
+        /tmp/lg-wdr/out  lg-weekly-digest/dev/live-recap
+
+Reads manifest.json + the rendered frames, writes index.html and the per-section
+iframe wrappers into the DESTINATION IN THE REPO. Nothing is hand-authored on the
+box; dev/publish-live-recap.sh only copies the result behind the dev gate.
+
+The sections are shown in IFRAMES rather than inlined. They are email HTML — tables
+with inline styles, sized for a 600px email body — and dropping them straight into a
+page lets the deck's own font, link colour and background bleed into the thing under
+review. An iframe is the only way to be sure the picture Ian judges is the email and
+not the deck's rendering of it. The wrapper forces a light colour-scheme for the same
+reason: the box injects a theme boot script into pages under the dev gate, and an
+email that renders dark here would be a lie about what lands in an inbox.
+"""
+import html
+import json
+import pathlib
+import sys
+
+src = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/lg-wdr/out")
+dst = pathlib.Path(sys.argv[2] if len(sys.argv) > 2 else "lg-weekly-digest/dev/live-recap")
+dst.mkdir(parents=True, exist_ok=True)
+
+man = json.loads((src / "manifest.json").read_text())
+recips = man["recipients"]
+
+# NO MEMBER EMAIL ADDRESSES IN THE PUBLISHED DECK. The manifest carries them because
+# the driver resolves subscribers by them, but this page is committed to the monorepo
+# and the addresses prove nothing Ian needs: the wp id and the FluentCRM subscriber id
+# identify the record, and the display name is already the thing under test (it is the
+# greeting). The rendered emails themselves were checked and carry no address and no
+# resolved unsubscribe hash — ##crm.unsubscribe_url## is left untouched by Parser::parse
+# outside a real campaign context.
+for r in recips:
+    r.pop("email", None)
+
+# ── copy the rendered frames across, and wrap each section as its own document ──
+for r in recips:
+    (dst / r["file"]).write_text((src / r["file"]).read_text())
+    section = r["section_html"]
+    body = section if section.strip() else (
+        '<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#8a8172;'
+        'padding:18px;border:1px dashed #cfc6b4;border-radius:6px;text-align:center;">'
+        'no section — the token resolved to nothing and vanished</div>'
+    )
+    (dst / f"frame-section-{r['wp_id']}.html").write_text(
+        '<!doctype html><meta charset="utf-8">'
+        '<meta name="color-scheme" content="light">'
+        '<body style="margin:0;background:#FAF6EE;padding:14px;color-scheme:light;">'
+        f'<div style="max-width:600px;margin:0 auto;">{body}</div>'
+    )
+
+drawn = [r for r in recips if r["section_bytes"] > 0]
+
+# THE TWO EMPTY CASES ARE TOLD APART BY THE PAYLOAD, NOT BY POSITION IN THE LIST.
+# Both render nothing, and an ordering assumption here would silently swap "correct"
+# for "defect" the first time the cast changes.
+#   raw == []        the source answered and this member genuinely has nothing. The
+#                    recipient filter drops them, so they are never mailed. CORRECT.
+#   raw != []        the source returned material, so the filter KEEPS them — but
+#                    every type in it is one the digest refuses, so the renderer
+#                    draws nothing and they are mailed an empty section. DEFECT.
+quiet = [r for r in recips if r["section_bytes"] == 0 and not r["raw"]]
+kept_but_empty = [r for r in recips if r["section_bytes"] == 0 and r["raw"]]
+
+
+def esc(s):
+    return html.escape(str(s), quote=True)
+
+
+def card(r, tone=""):
+    raw = json.dumps(r["raw"], indent=2) if r["raw"] else "(the endpoint returned nothing for this member)"
+    checks = []
+    checks.append(("source answered", "yes" if r["answered"] else "NO", r["answered"]))
+    checks.append(("token substituted away", "yes" if r["token_gone"] else "NO", r["token_gone"]))
+    if r["section_intact"] is None:
+        checks.append(("body vs flag-OFF", "byte-identical" if r["identical_off"] else "DIFFERS",
+                       r["identical_off"]))
+    else:
+        checks.append(("section verbatim in body", "yes" if r["section_intact"] else "NO",
+                       r["section_intact"]))
+    chk = "".join(
+        f'<li class="{"ok" if good else "bad"}"><span>{esc(k)}</span><b>{esc(v)}</b></li>'
+        for k, v, good in checks
+    )
+    return f"""
+    <article class="card {tone}">
+      <h3>{esc(r['name'])}</h3>
+      <p class="meta">wp {r['wp_id']} · FluentCRM subscriber {r['sub_id']}</p>
+      <p class="why">{esc(r['why'])}</p>
+      <iframe class="sec" src="frame-section-{r['wp_id']}.html" title="recap section for {esc(r['name'])}"></iframe>
+      <ul class="checks">{chk}</ul>
+      <details><summary>what the live endpoint returned for this member</summary>
+        <pre>{esc(raw)}</pre></details>
+      <p class="full"><a href="{esc(r['file'])}" target="_blank" rel="noopener">open the whole email &rarr;</a></p>
+    </article>"""
+
+
+page = f"""<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your week — the per-member recap, real members, real data (dev2)</title>
+<!--
+  GENERATED. Source: lg-weekly-digest/dev/build-live-recap-deck.py from the output of
+  dev/render-live-recap.php. Published by dev/publish-live-recap.sh. Do not edit the
+  copy under /srv — edit the generator and re-publish.
+-->
+<style>
+  :root{{
+    --gold:#ECB351; --dark:#2B2318; --mint:#87986A;
+    --light:#FAF6EE; --ink:#2B2318; --paper:#fff; --line:#e6ded0;
+    --dim:#6b6355; --bad:#b4472e; --good:#4a7a3f;
+  }}
+  @media (prefers-color-scheme:dark){{
+    :root{{--light:#17150f; --ink:#efe8db; --paper:#1f1c15; --line:#3b352a; --dim:#a49b89;
+          --bad:#e08268; --good:#8fbf7f;}}
+  }}
+  :root[data-theme="dark"]{{--light:#17150f; --ink:#efe8db; --paper:#1f1c15; --line:#3b352a;
+                           --dim:#a49b89; --bad:#e08268; --good:#8fbf7f;}}
+  :root[data-theme="light"]{{--light:#FAF6EE; --ink:#2B2318; --paper:#fff; --line:#e6ded0;
+                            --dim:#6b6355; --bad:#b4472e; --good:#4a7a3f;}}
+
+  *{{box-sizing:border-box}}
+  body{{margin:0;background:var(--light);color:var(--ink);
+       font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       -webkit-text-size-adjust:100%}}
+  .wrap{{max-width:1400px;margin:0 auto;padding:24px 16px 80px}}
+  header{{border-bottom:3px solid var(--gold);padding-bottom:14px;margin-bottom:18px}}
+  h1{{font:600 25px/1.25 Georgia,serif;margin:0 0 6px}}
+  .sub{{color:var(--dim);font-size:14px;margin:0}}
+  h2{{font:600 19px/1.3 Georgia,serif;margin:40px 0 6px;padding-top:14px;border-top:1px solid var(--line)}}
+  h2:first-of-type{{border-top:0}}
+  .note{{color:var(--dim);font-size:14px;margin:0 0 16px;max-width:78ch}}
+
+  .lede{{background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--gold);
+        border-radius:8px;padding:16px 18px;margin:0 0 10px}}
+  .lede p{{margin:0 0 8px}} .lede p:last-child{{margin:0}}
+  .headline{{font-size:18px;font-weight:600}}
+
+  .grid{{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}}
+  .card{{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px 14px 10px;
+        display:flex;flex-direction:column}}
+  .card.warn{{border-color:var(--bad);border-width:2px}}
+  .card.calm{{border-style:dashed}}
+  .card h3{{margin:0 0 2px;font:600 16px/1.3 Georgia,serif}}
+  .meta{{margin:0 0 8px;font-size:12px;color:var(--dim);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}}
+  .why{{margin:0 0 10px;font-size:13.5px;color:var(--dim)}}
+  iframe.sec{{width:100%;border:1px solid var(--line);border-radius:6px;background:#FAF6EE;
+             height:210px;display:block}}
+
+  ul.checks{{list-style:none;margin:10px 0 0;padding:0;font-size:12.5px}}
+  ul.checks li{{display:flex;justify-content:space-between;gap:10px;padding:3px 0;
+               border-bottom:1px dotted var(--line)}}
+  ul.checks li span{{color:var(--dim)}}
+  ul.checks li.ok b{{color:var(--good)}}
+  ul.checks li.bad b{{color:var(--bad)}}
+
+  details{{margin-top:10px;font-size:12.5px}}
+  summary{{cursor:pointer;color:var(--dim)}}
+  pre{{background:var(--light);border:1px solid var(--line);border-radius:6px;padding:10px;
+      overflow-x:auto;font-size:11.5px;line-height:1.45;max-height:280px}}
+  .full{{margin:10px 0 0;font-size:13px}}
+  .full a{{color:var(--mint);font-weight:600;text-decoration:none;border-bottom:1px solid var(--gold)}}
+
+  table.prov{{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px}}
+  table.prov th,table.prov td{{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);
+                              vertical-align:top}}
+  table.prov th{{color:var(--dim);font-weight:600;white-space:nowrap;width:1%}}
+  .tag{{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.4px;padding:2px 7px;
+       border-radius:99px;text-transform:uppercase}}
+  .tag.real{{background:#d9e8d2;color:#33612a}}
+  .tag.sim{{background:#f3e0cf;color:#8a4b1d}}
+  @media (prefers-color-scheme:dark){{
+    .tag.real{{background:#26401f;color:#a9d69a}} .tag.sim{{background:#40301f;color:#e0b184}}
+  }}
+  .scroll{{overflow-x:auto}}
+</style>
+<div class="wrap">
+<header>
+  <h1>&ldquo;Your week&rdquo; &mdash; the per-member recap, rendered for real dev2 members</h1>
+  <p class="sub">Generated {esc(man['generated_utc'])} &middot; host issue
+     &ldquo;{esc(man['issue']['title'])}&rdquo; (#{man['issue']['id']}) &middot;
+     {man['window_days']}-day window &middot; <strong>nothing was sent</strong></p>
+</header>
+
+<div class="lede">
+  <p class="headline">One campaign body went in. {man['distinct']} different emails came out of
+     {man['of']}.</p>
+  <p>Every section below was built from that member&rsquo;s <strong>own real unread activity on
+     dev2</strong>, fetched live from
+     <code>/profile-api/v0/internal/recap</code> at render time &mdash; no fixtures, no captured
+     response, no seeded rows. Each email was produced by the same
+     <code>Parser::parse()</code> call FluentCRM makes per recipient at send.</p>
+  <p><strong>Two of the six show no section, for opposite reasons.</strong> Ian&rsquo;s is
+     correct and is the behaviour being proven. Paul McGill&rsquo;s is a defect &mdash; see the
+     last section.</p>
+</div>
+
+<h2>Four members, four different weeks</h2>
+<p class="note">This is the whole point of &ldquo;dynamic per-member&rdquo;. Same issue, same
+   campaign body, same send &mdash; but the greeting, the sentence, the discussion title, the
+   people named and the deep link are all resolved per recipient. Read them side by side.</p>
+<div class="grid">{''.join(card(r) for r in drawn)}</div>
+
+<h2>Empty means absent &mdash; Ian&rsquo;s own week</h2>
+<p class="note">Ian has nothing unread in the window, so the token resolves to an empty string
+   and disappears. No heading, no panel, no &ldquo;you have 0 notifications&rdquo;. The check
+   below is the strong form: his rendered body is <strong>byte-identical</strong> to the same
+   issue built with the flag OFF &mdash; not merely &ldquo;looks the same&rdquo;.</p>
+<div class="grid">{''.join(card(r, 'calm') for r in quiet)}</div>
+
+<h2>&#9888; Kept by the filter, but drawn as nothing</h2>
+<p class="note">Found while rendering, not predicted. The recipient filter and the renderer
+   answer the same question by different rules, and they disagree for a handful of real
+   members &mdash; who would be mailed a digest whose personal section is missing. Details and
+   the exact five are in the report; this is the picture of one of them.</p>
+<div class="grid">{''.join(card(r, 'warn') for r in kept_but_empty)}</div>
+
+<h2>What is real, and what is not</h2>
+<div class="scroll"><table class="prov">
+  <tr><th><span class="tag real">real</span></th>
+      <td><strong>The recap data.</strong> Live POST to
+      <code>https://127.0.0.1/profile-api/v0/internal/recap</code> on dev2, authenticated with
+      <code>/etc/lg-internal-secret</code>, hitting the profile-app FPM pool and the real
+      <code>profile_app</code> Postgres store. No <code>lg_wd_recap_fetch</code> filter was
+      installed, so <code>LG_WD_Recap_Source::post()</code> made the real call.
+      <code>source_answered()</code> was true for every member &mdash; so an empty section here
+      means a quiet week, not a dead endpoint.</td></tr>
+  <tr><th><span class="tag real">real</span></th>
+      <td><strong>The FluentCRM substitution.</strong>
+      <code>FluentCrm\\App\\Services\\Libs\\Parser\\Parser::parse($body, $subscriber)</code> &mdash;
+      the exact call <code>CampaignEmail::getEmailBody()</code> applies to each recipient row at
+      send. The smart code was registered through the real
+      <code>FluentCrmApi('extender')-&gt;addSmartCode()</code> path. These are real FluentCRM
+      subscriber records.</td></tr>
+  <tr><th><span class="tag real">real</span></th>
+      <td><strong>The email body.</strong> Rendered by the deployed
+      <code>LG_WD_Email_Builder::build($payload, ['mode' =&gt; 'token'])</code> from a real
+      <code>weekly_email</code> issue, with the token emitted by the real
+      <code>templates/email.php</code>. The lane&rsquo;s recap files were diffed against the
+      deployed plugin and are byte-identical &mdash; this is the shipping code.</td></tr>
+  <tr><th><span class="tag sim">not real</span></th>
+      <td><strong>The flag.</strong> <code>LG_WD_RECAP_ENABLED</code> is <strong>OFF</strong> on
+      dev2 and was not changed. It was turned on for the lifetime of one CLI process via the
+      <code>lg_wd_recap_enabled</code> filter. dev2 carries an armed
+      <code>lg_wd_send_digest</code> cron (next fire 2026-08-03 13:00 UTC), and the flag also
+      switches on the filter that decides who is mailed &mdash; so defining it in wp-config to
+      take a picture would have armed a real scheduled send.</td></tr>
+  <tr><th><span class="tag sim">not real</span></th>
+      <td><strong>The send.</strong> Nothing was sent, queued or scheduled. No campaign, no
+      <code>CampaignEmail</code> rows, no <code>wp_mail</code>. Bodies were rendered to disk.
+      dev2&rsquo;s mail is swallowed by mailpit, which returns success &mdash; so a send here
+      would have proved nothing anyway.</td></tr>
+  <tr><th><span class="tag sim">not exercised</span></th>
+      <td><strong>Click tracking on recap links.</strong> Known and accepted: FluentCRM caches
+      the click-tracking URL map per campaign, so per-recipient recap links are not tracked. The
+      links themselves are correct. Documented in
+      <code>class-lg-wd-recap-source.php</code>.</td></tr>
+</table></div>
+
+</div>
+<script>
+  // Same-origin: size each frame to its content so nothing is clipped or padded.
+  //
+  // BOTH BRANCHES ARE NEEDED. Listening for 'load' alone loses every frame that
+  // finished before this script ran — which is most of them off a local file, and is
+  // why the empty cards first rendered as 210px of blank. Checking readyState alone
+  // loses the slow ones. So: bind the listener AND fit anything already complete.
+  // COLLAPSE BEFORE MEASURING. documentElement.scrollHeight is clamped to the
+  // iframe's own viewport, so a frame whose content is shorter than its CSS height
+  // reports the CSS height back and can only ever grow — which is why the empty
+  // cards stayed at 210px of blank through the first two attempts at this. Setting
+  // the height to 0 first makes scrollHeight the true content height.
+  const fit = (f) => {{
+    try {{
+      f.style.height = '0px';
+      const h = f.contentDocument.documentElement.scrollHeight;
+      f.style.height = (h ? h + 4 : 210) + 'px';
+    }} catch (e) {{ f.style.height = '210px'; }}
+  }};
+  for (const f of document.querySelectorAll('iframe.sec')) {{
+    f.addEventListener('load', () => fit(f));
+    if (f.contentDocument && f.contentDocument.readyState === 'complete') fit(f);
+  }}
+</script>
+"""
+
+(dst / "index.html").write_text(page)
+print(f"wrote {dst}/index.html  ({len(drawn)} drawn, {len(quiet)} genuinely quiet, "
+      f"{len(kept_but_empty)} kept-but-empty, {man['distinct']} distinct of {man['of']})")
