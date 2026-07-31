@@ -16,6 +16,7 @@ line into that lane's charter and note the lane name here.
 6. Admin can edit ANY post, full functionality
 7. Discussion hub cards: play video inline ★
 8. Front page: latest weekly email for logged-out users
+9. Shop Layout Planner: standalone render + apps index page (live traffic today)
 
 **P2 — polish / UX**
 9. Advanced search: dynamic facet narrowing
@@ -32,6 +33,39 @@ line into that lane's charter and note the lane name here.
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 2026-07-31 — Shop Layout Planner: standalone render + an APPS INDEX page (Ian)
+
+Ian 7/31: "we are getting traffic to our old luthier workshop layout app." Three things:
+
+1. **Render `/shop-layout-planner/` standalone.** It is a WordPress page today, so it
+   paints in whatever theme is active — currently `twentytwentyfive`, the stock default.
+   Nothing on this platform renders from a theme (Ian, 7/30: *"we dont render from the
+   fucking theme"*). Copy the pattern in `membership-pages/web/manage-subscription.php`:
+   own markup, own CSS, served directly. See [[standalone-rendering-not-theme]].
+2. **KEEP THE URL.** `https://loothgroup.com/shop-layout-planner/` is taking real
+   traffic and must not move or 404. Whatever replaces the page has to answer on that
+   exact path.
+3. **Build an APPS INDEX page** — a list page for Looth-made apps, with only the planner
+   on it for now, so future apps have a home rather than each inventing a URL.
+
+**Measured on live 2026-07-31 (read-only):**
+- `/shop-layout-planner/` → **HTTP 200**, WP page ID **68840**, and its `post_title` is
+  **EMPTY** — likely why the page reads as unfinished.
+- A second page exists: ID **63845**, slug `shop-planner-page`, title "Shop Planner
+  Page". Probably a superseded duplicate — establish which one traffic actually hits
+  before touching either. Deleting the wrong one breaks a live URL.
+- Related but not the app: `acf-field` `field_bt_shop_layout` ("Upload Shop Layout
+  PDF"), topic 56217 `workshop-layout`, attachment 61556 `shop-layout-planner-modal`.
+  The modal attachment name suggests the planner may currently be a modal rather than a
+  page — confirm what actually renders before rebuilding it.
+
+**Scope first, then build.** Find what serves the planner today and whether it is a
+modal, an embed, or page content. Do not assume it is page content because a page
+exists.
+
+Live writes are Ian's. The URL is live and earning traffic — treat a redirect or a 404
+here as a member-facing outage, not a refactor detail.
 
 ## 2026-07-30 — Craft gate: /hub/share-your-repair-content/ topic cover has no width/height (keeper)
 
