@@ -152,6 +152,52 @@ and loopback `/whoami` tripping infra's `limit_req` zone) — see the note at th
 foot of `run-all.sh` for how to run `forum-visibility-gate.sh` and
 `editor-rail-reachable-gate.sh` by hand.
 
+### A synthetic click cannot perform the gesture that breaks
+
+`tools/gates/messages-longpress-react-gate.py` (HELD OUT — it needs a proxy with member
+cookies and a member who is a participant in a thread that has messages; red/green-proven
+both ways on 2026-07-31) encodes the class that has now reached Ian **three** times:
+
+1. `mobile-hub.js` `holdTargetFrom()` claiming the 🔔/✉ follow toggles (`8405055`);
+2. the same shape again on the consolidated Follow pill;
+3. the messages action sheet closing on **its own trailing click** — which made
+   reacting to a message on a phone impossible, not merely awkward.
+
+The common cause is not carelessness, it is the harness: **a CDP/Playwright `.click()`
+dispatches in single-digit milliseconds and can never cross a 380/480ms hold threshold.**
+Every automated tap ever run against these controls took a path a human finger cannot
+take, so the defect was not missed — it was *unreachable*. Press with `touchStart` → a
+real wall-clock sleep → `touchEnd`, and assert the STORE, not the pixel.
+
+It also carries the absence lesson in its sharpest form: on the broken build the sheet
+DID open, and a presence check said so (that assertion passes in the red run). The
+load-bearing assertion is that it is **still** open once the finger lifts.
+
+### "Bad z-index" is usually a CLIP, and both look identical from outside
+
+`tools/gates/react-controls-reachable-gate.py` (HELD OUT; red/green-proven 2026-07-31)
+guards two live defects that were each **present, correctly styled, and impossible to
+use** — the same class as the Sign-in lockout above, found twice more in one day:
+
+* **The card react palette** was `position:absolute; bottom:calc(100% - 2px)`, i.e. it
+  opened *upward, entirely outside* `.fcr` — and `765dbc3` had put `overflow:hidden` on
+  `.fcr` to let the action row shrink. Its own offset parent clipped it away. Ian
+  reported it as *"the react button modal on all cards has a bad z"*, and that reading is
+  completely reasonable: **a clipped popover and one painted behind something look the
+  same.** `z-index: 20` was being honoured the entire time. When a popover "has a bad z",
+  check `overflow` on every ancestor up to the stacking context *before* touching
+  `z-index` — and fix it by moving the clip onto the in-flow child that actually needed
+  clipping, so the layout guarantee the `overflow:hidden` was bought for survives.
+* **The messages React control** was revealed by `:hover` alone, so on a touchscreen at
+  ≥641px — where the *desktop* modal renders — no hover event ever fires and the only
+  route to reacting was unreachable. Gate the **hover capability** (`hover: none`), never
+  a width breakpoint: absence of hover is the cause, and a large touchscreen is exactly
+  what a width query misses.
+
+In both RED runs a presence-style assertion **passes** ("the palette is open and has a
+real box"). `elementFromPoint` is the only check that separates *painted and reachable*
+from *present*.
+
 **A gate that CANNOT RUN is not a gate that passed, and not one that failed.**
 Gate 2 drives a real Chrome; with no engine on :9222 it reports one `GATE-ERROR`
 per page and exits 1, which is indistinguishable from finding real violations —

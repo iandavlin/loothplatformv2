@@ -485,11 +485,38 @@
         try { localStorage.setItem('lg-sidechat-hint-dismissed', '1'); } catch (err) {}
         return;
       }
+      // ⚠️ THE LONG-PRESS SWALLOW MUST STAY ABOVE THE BACKDROP-DISMISS CHECKS.
+      // Ian, 2026-07-31: "reacting in the messages seems to be broken." It was, and
+      // this ordering was the whole reason — reacting to a message on a phone was
+      // UNREACHABLE.
+      //
+      // The gesture: touchstart on a bubble arms a 480ms timer; at 480ms, with the
+      // finger STILL DOWN, openActs() adds .is-on and #mg-acts (the full-screen
+      // backdrop) paints UNDER THE FINGER. On release the browser dispatches the
+      // trailing click at those coordinates — and its target is now #mg-acts, not the
+      // bubble. The dismiss check below then read that as "user tapped the backdrop"
+      // and closed the sheet the long-press had just opened, ~200ms after it appeared.
+      //
+      // `lpAt` exists precisely to eat that trailing click, but it was ordered BELOW
+      // the dismiss check, so it never got the chance. Both lines landed the same day
+      // (2026-07-12, 2e14893 and 0f93353) and message reactions arrived the day after
+      // (0c7dd09), which is why the React row shipped into a gesture that could not
+      // stay open long enough to tap it.
+      //
+      // MEASURED on the real dev2 origin at 390px with a REAL 700ms touch hold
+      // (touchStart → wall-clock sleep → touchEnd — a CDP .click() fires in single-digit
+      // ms and can never cross 480ms, which is why every synthetic pass missed this):
+      //   mid-hold   #mg-acts class = "mg-acts is-on"      ← opened
+      //   elementFromPoint at the finger = DIV#mg-acts      ← backdrop now under it
+      //   on lift    CLICK target=DIV#mg-acts → class = "mg-acts"   ← closed again
+      // Post-fix the same gesture leaves it open and the emoji row is tappable.
+      //
+      // A genuine backdrop tap still dismisses: it arrives >600ms after lpAt, so the
+      // window has expired and the checks below run normally.
+      if (lpAt && Date.now() - lpAt < 600) { lpAt = 0; return; }
       // ── group management ──
       if (e.target.id === 'mg-acts') { closeActs(); return; }
       if (e.target.id === 'mg-card') { closeMemberCardMobile(); return; }   // tap the dim backdrop → dismiss
-      // a long-press just fired the action sheet on this same image → swallow the tap
-      if (lpAt && Date.now() - lpAt < 600) { lpAt = 0; return; }
       // member card: bubble avatar/name tap opens it; Message inside routes the shared 1:1 path
       var mcd = C('[data-mg-membercard]'); if (mcd) { openMemberCardMobile(mcd.getAttribute('data-mg-membercard')); return; }
       var cms = C('[data-mg-card-msg]');   if (cms) { var cu = cms.getAttribute('data-mg-card-msg'); closeMemberCardMobile(); openDmFromGroupMobile(cu); return; }

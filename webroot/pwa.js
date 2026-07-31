@@ -116,7 +116,7 @@
     // Tap-to-open sheets + push opt-in: needed soon, not needed for first paint.
     idle('looth-prac-sheet-js', v('/practice-sheet.js', 2));     // /p/<slug> business sheet
     idle('looth-prof-sheet-js', v('/profile-sheet.js', 8));      // /u/ profile sheet
-    idle('looth-msgr-js', v('/messenger-sheet.js', 8));          // DM pull-up (v8: message search)
+    idle('looth-msgr-js', v('/messenger-sheet.js', 9));          // DM pull-up (v9: long-press react fix)
     idle('looth-spon-sheet-js', v('/sponsor-sheet.js', 11));      // sponsors sheet
     idle('looth-push-js', v('/push.js', 2));                     // self-gates mobile-coarse
   }
