@@ -198,8 +198,23 @@ def leg_b_messages_touch(p, base):
     p.goto(base + "/hub/")
 
     if not p.ev("matchMedia('(hover: none)').matches"):
-        cannot_run("hover:none was not applied — the emulation did not take, so a pass "
-                   "here would only prove the hover path works")
+        cannot_run("hover:none is not in effect, so a pass here would only prove the "
+                   "hover path works")
+    # ⚠️ HONEST LIMIT OF THIS GATE, STATED SO NOBODY READS MORE INTO A PASS THAN IS THERE.
+    # CDP's Emulation.setEmulatedMedia does NOT support the `hover`/`pointer` features —
+    # only the prefers-*/color-gamut family. The call above is therefore a no-op, and the
+    # reason matchMedia reports hover:none is that HEADLESS CHROME HAS NO POINTER DEVICE
+    # and natively reports it. That makes leg B a faithful test of the touchscreen case
+    # (which is the defect) and NOT a test of the mouse case.
+    #
+    # So this gate CANNOT prove that a real desktop-with-a-mouse still hides the menu at
+    # rest: in this engine `(hover: hover)` is false no matter what we ask for, and a
+    # "mouse leg" here would silently grade the touch path and always agree with itself.
+    # Measured 2026-07-31: with hover:hover requested, matchMedia('(hover: hover)') was
+    # still False on BOTH builds. The mouse path rests on the definition of the media
+    # query (a pointing device that can hover reports hover:hover, so the @media
+    # (hover: none) block does not apply) — reasoned, not measured. If a headful engine
+    # ever lands on this box, add the mouse leg and assert display:none at rest.
     if not p.ev("!!document.querySelector('[data-lg-msg-link]')"):
         cannot_run("no messages entry point in the header (not signed in?)")
     p.ev("document.querySelector('[data-lg-msg-link]').click()"); time.sleep(3)
