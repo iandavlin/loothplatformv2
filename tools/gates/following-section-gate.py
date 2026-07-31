@@ -994,10 +994,29 @@ def main():
         # A gate that only ever runs with the flag ON cannot see a leak, so this
         # fetches the surface where the flag is absent and demands the report
         # shape: spans, no data-toggle, no aria-pressed, nothing pressable.
+        # ⚠️ DETECT the surface's flag state; do not ASSUME it. This phase went red
+        # the moment keeper enabled the toggles for members on the main membership
+        # location — the assertion was fine, its PREMISE ("/manage-subscription/ is
+        # always the flag-off surface") had expired. A gate that hardcodes which
+        # surface is off reports a deployment as a defect, which is how a red gate
+        # stops being read.
         off_url = origin_of(args.url) + "/manage-subscription/"
         off = fetch_text(off_url, cookies)
         if off is None:
-            log("  (skipped — could not fetch the flag-off surface)")
+            log("  (skipped — could not fetch the member-facing surface)")
+        elif "data-toggle" in off:
+            # Flag ON there. Assert the ON shape is COMPLETE rather than pretending
+            # to test OFF: half-rendered toggles are the failure worth catching here.
+            log("  the member-facing surface has the toggles ENABLED — asserting the ON shape")
+            n_tog  = off.count('data-toggle="')
+            n_mark = off.count("lg-manage-sub__fol-mark")
+            check("every mark is a toggle when the flag is on", n_tog, n_mark)
+            check("toggles carry aria-pressed", 'aria-pressed="' in off, True)
+            check("no orphan report-only spans alongside them",
+                  "<span class=\"lg-manage-sub__fol-mark" in off, False)
+            log("  ⚠ the OFF shape is NOT exercised anywhere right now — no flag-off")
+            log("    surface exists on this box. It stays proven by the byte-identical")
+            log("    render check (md5 7961aa136467c437) rather than by this phase.")
         else:
             check("flag-off surface has NO toggle markup", "data-toggle" in off, False)
             check("flag-off surface has NO is-toggle class", "is-toggle" in off, False)
