@@ -16,10 +16,13 @@
   .said { margin: 18px 0 0; padding: 15px 18px; border-left: 3px solid var(--lg-rust);
     background: #fdf3ef; border-radius: 0 10px 10px 0; }
   html[data-lguser-theme="dark"] .said { background: #2a1d19; }
+  html[data-lguser-theme="dark"] .said .who,
+  html[data-lguser-theme="dark"] .open h2,
+  html[data-lguser-theme="dark"] .decision--built h2 { color: #f0a688; }
   .said p { font: 400 14px/1.6 var(--lg-font-sans); margin: 0; }
   .said b { font-weight: 700; }
   .said .who { display: block; font: 700 10.5px/1 var(--lg-font-sans); letter-spacing: .07em;
-    text-transform: uppercase; color: var(--lg-rust); margin: 0 0 8px; }
+    text-transform: uppercase; color: #aa593b; margin: 0 0 8px; }
 
   .decision { margin: 24px 0 0; padding: 18px 20px; border: 2px solid var(--lg-sage);
     border-radius: 14px; background: var(--lg-sage-tint); }
@@ -163,6 +166,28 @@
   .warn code { font: 500 12px/1.5 ui-monospace, Menlo, monospace; background: rgba(198,104,69,.13);
     border-radius: 4px; padding: 1px 5px; }
 
+  /* ── the sections added after the build. NO INLINE COLOURS: this page is served
+     from the docroot, which INJECTS the theme-boot script, so a member with a dark
+     profile repaints it — and an inline background beats every dark rule, leaving
+     light text on a light block. Learned from a mock that did exactly that. ── */
+  .decision--built { border-color: var(--lg-rust); background: #fdf3ef; }
+  /* NOT var(--lg-rust). #c66845 on this peach measures 3.52:1 — below AA, and at
+     700/13px it is not "large text" so 3:1 does not apply. Darkened to #aa593b =
+     4.58:1, measured in a real browser on the REAL injected page, not eyeballed.
+     The same rust-on-peach pair is used by .said .who and .open h2 below, so those
+     are corrected too rather than left as a known-bad pattern to copy. */
+  .decision--built h2 { color: #aa593b; }
+  html[data-lguser-theme="dark"] .decision--built { background: #2a1d19; border-color: #7a4632; }
+  html[data-lguser-theme="dark"] .decision--built p { color: #e8e3dd; }
+  .cd { background: rgba(198,104,69,.13); border-radius: 4px; padding: 1px 5px;
+    font: 500 12px/1.5 ui-monospace, Menlo, monospace; }
+  html[data-lguser-theme="dark"] .cd { background: rgba(198,104,69,.26); color: #f0c3b0; }
+  .shotfig { margin: 0; border: 1px solid var(--lg-line); border-radius: 14px;
+    overflow: hidden; background: var(--bg-card); }
+  .shotfig img { display: block; width: 100%; height: auto; }
+  .shotfig--dark { background: #101214; }
+  .opts--gap { margin-top: 18px; }
+  .card--gap { margin-top: 20px; }
   .foot { margin: 40px 0 0; font: 400 12.5px/1.7 var(--lg-font-sans); color: var(--lg-mute); }
   .foot code { font: 500 12px/1.5 ui-monospace, Menlo, monospace; background: var(--lg-sage-tint);
     color: var(--lg-sage-d); border-radius: 4px; padding: 1px 5px; }
@@ -191,13 +216,13 @@
     <p><b>A</b> shows just their reply. <b>B</b> shows your post above their reply, dimmed.</p>
   </div>
 
-  <div class="decision" style="border-color:var(--lg-rust);background:#fdf3ef">
-    <h2 style="color:var(--lg-rust)">You picked A — and it is built. This is the real thing.</h2>
+  <div class="decision decision--built">
+    <h2>You picked A — and it is built. This is the real thing.</h2>
     <p>The four pictures below are <b>not drawings</b>. They are screenshots of the actual feature
       running in a real browser, against the real database, as a real signed-in member — phone and
       desktop, light and dark. The drawings further down are kept so you can see what you chose.</p>
     <p><b>You cannot click it yet</b>, and I would rather say so than imply otherwise: the dev2 site
-      serves <code style="background:rgba(198,104,69,.13);border-radius:4px;padding:1px 5px">main</code>,
+      serves <code class="cd">main</code>,
       and this is still on a branch. It merges switched <b>off</b> first; then I turn it on for a
       preview link and you click the real control.</p>
   </div>
@@ -209,38 +234,38 @@
   <div class="opts">
     <div class="opt">
       <h3>Phone — light</h3>
-      <figure style="margin:0;border:1px solid var(--lg-line);border-radius:14px;overflow:hidden;background:#fff">
+      <figure class="shotfig">
         <img src="shots/nqr-phone-light.png" alt="The reply modal on a phone in light theme: the discussion name, the reply that generated the notification, a link to the full discussion, and the composer." style="display:block;width:100%;height:auto">
       </figure>
       <p class="cap">real screenshot · 390px · light</p>
     </div>
     <div class="opt">
       <h3>Phone — dark</h3>
-      <figure style="margin:0;border:1px solid var(--lg-line);border-radius:14px;overflow:hidden;background:#111">
+      <figure class="shotfig shotfig--dark">
         <img src="shots/nqr-phone-dark.png" alt="The same reply modal on a phone in dark theme, with a dark card, light text and a dark sage quote rule." style="display:block;width:100%;height:auto">
       </figure>
       <p class="cap">real screenshot · 390px · dark</p>
     </div>
   </div>
 
-  <div class="opts" style="margin-top:18px">
+  <div class="opts opts--gap">
     <div class="opt">
       <h3>Desktop — light</h3>
-      <figure style="margin:0;border:1px solid var(--lg-line);border-radius:14px;overflow:hidden;background:#fff">
+      <figure class="shotfig">
         <img src="shots/nqr-desktop-light.png" alt="The reply modal at desktop width in light theme." style="display:block;width:100%;height:auto">
       </figure>
       <p class="cap">real screenshot · 1280px · light</p>
     </div>
     <div class="opt">
       <h3>Desktop — dark</h3>
-      <figure style="margin:0;border:1px solid var(--lg-line);border-radius:14px;overflow:hidden;background:#111">
+      <figure class="shotfig shotfig--dark">
         <img src="shots/nqr-desktop-dark.png" alt="The reply modal at desktop width in dark theme." style="display:block;width:100%;height:auto">
       </figure>
       <p class="cap">real screenshot · 1280px · dark</p>
     </div>
   </div>
 
-  <div class="card" style="margin-top:20px">
+  <div class="card card--gap">
     <h4>One thing the pictures changed after you picked</h4>
     <p>Every test was green and the modal still <b>never said which discussion you were in</b> — I only
       saw it by looking at the screenshot. That exact complaint has reached you before, so the
