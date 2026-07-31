@@ -180,6 +180,24 @@ echo
 #     --cookies /tmp/tf-gate/cookies-msg.txt --gate "$LG_GATE_TOKEN" --rewrite-origin &
 #   python3 tools/gates/messages-longpress-react-gate.py --url http://127.0.0.1:8897
 #
+# messages-header-footprint-gate is held out and additionally needs a DB FIXTURE, because
+# dev2's largest organic message thread has FOUR people — not enough to show the defect it
+# guards. Create it first, or the gate reports CANNOT RUN rather than quietly grading a
+# 4-name header and reporting a smaller saving as if it were the answer:
+#
+#   sudo -u profile-app psql -d profile_app -f tools/gates/fixtures/messages-header-12name.sql
+#   python3 tools/gates/messages-header-footprint-gate.py --url http://127.0.0.1:8897
+#
+# Red/green-proven 2026-07-31: exit 1 (1 passed, 8 failed, header 388px, no chip) against
+# the serving checkout; exit 0 (9 passed) against the fix, header 100px.
+#
+# ⚠️ ITS REAL SUBJECT IS THE SAFETY LINE, NOT THE PIXELS. "Group · N people · everyone here
+# sees your reply" used to be a CHILD of .lg-msg__peer-names, so the obvious way to clamp
+# the header hides it — and then a group thread reads as a private 1:1 while replies reach
+# people the header never named. The gate asserts the note is a SIBLING of the clamped
+# element and is VISIBLE IN BOTH the collapsed and expanded states. Do not "simplify" it
+# back into the names element.
+#
 # react-controls-reachable-gate is held out for the same reason (needs a cookie-carrying
 # proxy, and leg B needs a member with a thread). Red/green-proven 2026-07-31: exit 1
 # against the serving checkout, exit 0 against the fix. It guards TWO live defects that
