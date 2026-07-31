@@ -126,6 +126,7 @@ either file can see. So:
 | 10 | `tools/gates/react-types-cover-standalone-gate.sh` | a rendered react button's type is one the endpoint ACCEPTS | loopback |
 | 11 | `tools/gates/shop-planner-url-gate.sh` | `/shop-layout-planner/` still answers 200 **and still mounts the planner** | loopback, or `ssh live-ro` with `--live` |
 | 12 | `tools/gates/anon-signin-reachable-gate.py` | an ANON visitor can **reach** Sign in in ≤1 tap at every width — visible *and* hit-tested, not merely in the DOM | **a browser on CDP :9222** |
+| 13 | `tools/gates/dev-files-anon-unreachable-gate.py` | lane/dev tooling inside a deployed plugin tree is **unreachable by an anonymous request** — 404/403, not "absent from my checkout" | starts its own **gate-free** nginx (dev2's armed gate would 403 everything and false-pass) |
 
 All twelve run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
 the runner because they pass standalone but flake red in sequence (CDP under load,
