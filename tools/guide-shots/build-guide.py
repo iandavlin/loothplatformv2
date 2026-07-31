@@ -133,6 +133,32 @@ STEPS = [
                 "c2", "phone")]),
 ]
 
+# Alt text, per shot. A handbook that explains privacy to members and then ships
+# 17 undescribed images is not usable by the members most likely to care about
+# who can see what. Written to say what the frame SHOWS, not to repeat the prose
+# next to it -- a screen reader gets both, back to back.
+ALT = {
+ "a1": "The top of your own profile, with the dark controls panel above your name.",
+ "a2": "A profile section showing its drag grip, move controls and its own privacy chip.",
+ "a3": "The Sections panel open, listing Core and Extras sections with Filterable badges.",
+ "a4": "A wide screen with the Sections panel fixed down one side and the profile beside it.",
+ "a5": "The profile photo and banner area with their edit overlays.",
+ "a6": "The Your layout row under the identity card, showing a section count and a Sections button.",
+ "a7": "A dashed Add a section card at the bottom of the profile.",
+ "b1": "The profile visibility menu open, offering Public, Members-only and Private.",
+ "b2": "A section chip showing the warning caret, capped by a stricter header above it.",
+ "b3": "The Location section showing two separate dials: Members see, and Public sees.",
+ "b4": "The location precision menu open, offering Private, State, City and Street address.",
+ "b5": "The Discussion posts toggle set between Public and Member-only.",
+ "b6": "The same profile viewed as a member, with all editing controls gone.",
+ "b7": "The same profile viewed as the public, with editing gone but the visibility chip still active.",
+ "b8": "The members-only screen a logged-out visitor sees, offering Join Looth or Sign in.",
+ "c1": "Another member's profile, with no editing controls and no privacy chips.",
+ "c2": "The member directory listing profiles.",
+ "d1": "The account menu open at the top right of the page, showing My Profile.",
+ "d2": "The bottom navigation bar on a phone, with the You tab on the right.",
+}
+
 DPR = 2
 
 
@@ -162,7 +188,8 @@ def figure(d, sid, vp, caption="", rel=""):
     if not f:
         return (f'<div class="shot pending"><span class="tag">{html.escape(sid.upper())}'
                 f' · {html.escape(vp)}</span>'
-                f'<span class="pend">Screenshot still to be taken</span></div>')
+                f'<span class="pend">Screenshot still to be taken — it will show: '
+                f'{html.escape(ALT.get(sid, ""))}</span></div>')
     cls = "shot"
     sz = png_size(os.path.join(d, f))
     warn = ""
@@ -173,7 +200,9 @@ def figure(d, sid, vp, caption="", rel=""):
             warn = ('<span class="warn">This frame was captured full-page — the fixed '
                     'bottom bar renders mid-page. Capture artifact, not a site defect. '
                     'Reshoot before this guide is shown to members.</span>')
-    return (f'<div class="{cls}"><img src="{html.escape(f)}" alt="" loading="lazy">'
+    alt = ALT.get(sid, "")
+    return (f'<div class="{cls}"><img src="{html.escape(f)}" '
+            f'alt="{html.escape(alt)}" loading="lazy">'
             f'{warn}</div>')
 
 
