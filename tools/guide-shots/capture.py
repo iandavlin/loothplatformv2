@@ -164,6 +164,33 @@ class Tab:
         time.sleep(settle)                       # loadEventFired lies about maps/fonts
         self.js("document.fonts && document.fonts.ready")
 
+    def set_theme(self, theme):
+        """Force the user theme and PROVE it took.
+
+        THE SHARED CHROME PROFILE IS NOT NEUTRAL. /var/lib/chrome-dev/profile
+        persists lg-set-theme='dark' from whoever used it last, so a run that
+        merely *intends* light silently renders dark and the frame ships
+        mislabelled. Two further edges, both already paid for by someone:
+          - a localStorage write on about:blank is a NO-OP (different origin),
+            so the caller must already be on the site before this runs;
+          - the light theme's id is 'default', NOT 'light'. Writing 'light'
+            stores a value nothing matches, which falls back to... light, so it
+            appears to work and breaks the day an explicit check is added.
+        Returns the attribute actually applied; the caller asserts on it rather
+        than trusting the write."""
+        want = "dark" if theme == "dark" else "default"
+        self.js(f"localStorage.setItem('lg-set-theme', {json.dumps(want)})")
+        self.send("Page.reload")
+        time.sleep(2.0)
+        got = self.js("document.documentElement.getAttribute('data-lguser-theme')")
+        # Light legitimately renders with the attribute absent or 'default'.
+        ok = (got == "dark") if want == "dark" else (got in (None, "", "default"))
+        if not ok:
+            raise RuntimeError(
+                f"theme did not apply: wanted {want!r}, page reports {got!r} — "
+                f"refusing to shoot a frame that would be labelled wrong")
+        return got
+
     def shot(self, path):
         # captureBeyondViewport is DELIBERATELY absent -- see module docstring.
         r = self.send("Page.captureScreenshot", format="png")
@@ -282,6 +309,9 @@ def main():
     ap.add_argument("--only", default="", help="comma list of shot ids")
     ap.add_argument("--viewport", default="", help="restrict to one viewport")
     ap.add_argument("--skip-resolver", action="store_true")
+    ap.add_argument("--theme", default="light", choices=["light", "dark", "both"],
+                    help="light|dark|both. The shared Chrome profile persists a "
+                         "theme, so this is always set explicitly and asserted.")
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
@@ -297,11 +327,12 @@ def main():
     tab = Tab()
     written, findings = [], []
     try:
+        themes = ["light", "dark"] if args.theme == "both" else [args.theme]
         for sid in want:
             title, role, path, vps, action, need = shots[sid]
             if args.viewport:
                 vps = [v for v in vps if v == args.viewport]
-            for vp in vps:
+            for vp, theme in [(v, t) for v in vps for t in themes]:
                 tab.viewport(vp)
                 # Cookies are re-set per shot because the role changes between
                 # shots and an anon frame must NOT inherit the owner session.
@@ -310,13 +341,18 @@ def main():
                 if sessions[role]:
                     tab.cookie("looth_id", sessions[role])
                 tab.goto(BASE + path)
+                # Theme is forced AFTER navigation on purpose: a localStorage
+                # write on about:blank is a no-op, so setting it before the
+                # first real page silently does nothing.
+                tab.set_theme(theme)
                 if action:
                     action(tab)
                 if need and not tab.js(
                         f"!!document.querySelector({json.dumps(need)})"):
                     findings.append(f"{sid}/{vp}: {need} NOT in DOM -- frame not shot")
                     continue
-                name = f"{sid}-{title.split('(')[0].strip().lower().replace(' ','-')[:28]}-{vp}.png"
+                name = f"{sid}-{title.split('(')[0].strip().lower().replace(' ','-')[:28]}-{vp}"
+                name = name + ("-dark.png" if theme == "dark" else ".png")
                 name = name.replace("/", "-")
                 n = tab.shot(os.path.join(args.out, name))
                 written.append(f"{name}  ({n//1024}kb)")
