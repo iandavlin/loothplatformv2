@@ -126,6 +126,22 @@
      rings before any reply exists, and dev2 still holds a pre-anchor row (id 471,
      2026-07-13) whose link has none. Both come through here as replyId 0, and the
      server quotes the opening post instead. */
+  /* Where the quote is read from. Normally the real endpoint.
+     UNDER A LANE PREVIEW the branch is mounted at /preview/<lane>/hub and the flag is
+     ON for that path only, so the API has to be read from the matching preview path —
+     otherwise the modal would call the REAL endpoint, whose flag is off, get the plain
+     OP fragment back, find no quote and quietly fall back to navigating. A preview
+     that silently demonstrates nothing is worse than no preview, because it reads as
+     "the feature does not work".
+     Derived from the mount the app already publishes (window.LG_FORUM_BASE) rather
+     than a second config, and the pattern cannot match the production mount '/hub',
+     so this is provably inert off a preview. */
+  function nqrApiBase() {
+    var fb = (window.LG_FORUM_BASE || '').toString();
+    var m = fb.match(/^(\/preview\/[A-Za-z0-9_-]+)\/hub\/?$/);
+    return (m ? m[1] : '') + '/bb-mirror-api/v0';
+  }
+
   function nqrParse(link) {
     if (!link) return null;
     var u;
@@ -186,7 +202,7 @@
     var p = nqrParse(o.link);
     if (!p) return false;
 
-    var url = '/bb-mirror-api/v0/topic?forum=' + encodeURIComponent(p.forum) +
+    var url = nqrApiBase() + '/topic?forum=' + encodeURIComponent(p.forum) +
               '&topic=' + encodeURIComponent(p.topic) +
               '&reply_context=' + encodeURIComponent(String(p.replyId));
 
