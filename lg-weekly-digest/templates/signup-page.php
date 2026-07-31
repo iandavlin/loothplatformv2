@@ -117,9 +117,17 @@ $lgws_prefs   = LG_WD_Signup_Page::prefs_url();
 /* 992px is NOT a taste decision — it is the framed document's own width.
    templates/email.php:68 sets .email-container to max-width:960px, and :64 wraps it
    in .email-wrapper with padding:24px 16px, i.e. 32px horizontally. 960 + 32 = 992.
-   Framing it at 624 (the email's CONTENT COLUMN, not its DOCUMENT) left 368px
-   outside the box, so a reader had to pan sideways to finish a headline — which is
-   exactly what Ian saw. Approved by him 2026-07-30 as variant B.
+   Approved by Ian 2026-07-30 as variant B.
+
+   MEASURED CORRECTION 2026-07-31: THERE IS NO OVERFLOW. Swept in a real browser at
+   360/414/480/520/600/700/768/900/1100/1440, reading scrollWidth vs clientWidth on the
+   page AND inside the iframe: the email fits its box exactly at every width
+   (258/258, 312/312, 403/403, 603/603 ...). The "368px" was arithmetic on DECLARED
+   max-widths the layout never reaches — .email-container is max-width:960px + width:100%
+   and its own 768px query makes it fluid, so it renders at whatever the frame gives it.
+   992 is kept because at 1280 it hands the email 990px instead of 603px, which is more of
+   the design at full type size. That is a LEGIBILITY change, not an overflow fix, and on a
+   phone it does nothing at all — max-width:992px never binds at 390px.
    max-width, never width: below 992 this collapses to the viewport and the email's
    own 768/480 breakpoints take over, which is what keeps it readable on a phone.
    dev/verify-preview-frame-fits.php holds both halves of that. */

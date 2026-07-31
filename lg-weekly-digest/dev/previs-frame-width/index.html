@@ -75,10 +75,14 @@
   small box (a scale-to-fit). It never pans — but every headline gets smaller than the page around it,
   and on a phone it would be unreadably small. Giving the email its real width costs nothing and keeps
   the type at full size, so I would only go the other way if you want the box kept deliberately narrow.</p>
-  <p><strong>Straight about what I have not proven.</strong> I measured the widths out of the email’s own
-  code — a 960px container inside 32px of padding. I have <em>not</em> loaded this in a browser and
-  measured what actually overflows, so panel A is the evidence, not my explanation of it. If A pans and
-  B does not, the fix is right regardless of my reasoning.</p>
+  <p><strong>UPDATE, 31 July — I was wrong about why.</strong> I have now loaded this in a real browser
+  at ten screen sizes and measured it: <strong>panel A never actually pans sideways.</strong> The email
+  fits its box at every width. My “368px too narrow” was a subtraction of numbers in the code that the
+  layout never reaches.</p>
+  <p><strong>B is still the better one</strong> — on a desktop it gives the email 990px instead of 603px,
+  so the type is bigger and more of the design shows. But that is about legibility, not about panning,
+  and <strong>on a phone it changes nothing</strong>. So if what you saw was on your phone, B does not
+  fix it and I need to know that before I build anything else.</p>
   <p><strong>Separately, and not shown here:</strong> this page is still rendered by WordPress, which is
   why it came with a nav that isn’t ours. That is a different fix and I am on it.</p>
 </div>

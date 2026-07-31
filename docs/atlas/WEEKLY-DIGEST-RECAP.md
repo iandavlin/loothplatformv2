@@ -848,6 +848,32 @@ having the text cut off. This sucks."*
 | `.lgws .mail` | `templates/signup-page.php` | max-width **624** |
 | **overflow** | | **368** |
 
+> ### ⚠️ CORRECTED 2026-07-31 — THERE WAS NO OVERFLOW. THE TABLE ABOVE IS ARITHMETIC, NOT BEHAVIOUR.
+>
+> Measured in a real browser (lane-preview + CDP) at **360/414/480/520/600/700/768/900/1100/1440**,
+> reading `scrollWidth` vs `clientWidth` on the page **and inside the iframe**:
+>
+> **The email fits its box exactly at every width** — 258/258, 312/312, 403/403, 603/603 … and the
+> widest element inside it never exceeds the frame. **The shipped 624px page does not pan sideways.**
+>
+> `.email-container` is `max-width:960px; width:100%` and its own 768px media query makes it fluid, so
+> it renders at whatever the frame gives it and can never exceed it. The "992 needed / 368 over" is a
+> subtraction of declared numbers the layout never reaches.
+>
+> **Variant B is kept, and re-justified:** at 1280 it hands the email **990px instead of 603px** — more
+> of the design at full type size. That is a **legibility** change. It is **not** an overflow fix, and
+> **on a phone it does nothing at all**: `max-width:992px` never binds at 390px.
+>
+> **So Ian's words are not yet explained.** Best remaining hypothesis, held as a hypothesis: on a phone
+> the email renders into ~260–350px when it is designed for 600–960px — not clipped, *cramped*. Zooming
+> to read it produces the left-right movement he described, and "text cut off" is what heavy wrapping at
+> 260px looks like. If that is right the fix is not frame width but what a phone is shown at all.
+> **Nothing has been built on that guess.**
+>
+> The lesson worth keeping: `dev/verify-preview-frame-fits.php` was green the whole time and its own
+> header states the limit that turned out to be the whole story — *it compares declared widths, not
+> rendered ones*. **A gate written from a theory certifies the theory, not the page.**
+
 **The frame had been sized to the email's CONTENT COLUMN; the email is a 992px DOCUMENT.** That also
 explains the wide black gutters in his screenshot — the width was available, the box was not taking it.
 Fixed to 992. The *"Scroll inside the message to read the whole issue"* caption is **deleted**, along

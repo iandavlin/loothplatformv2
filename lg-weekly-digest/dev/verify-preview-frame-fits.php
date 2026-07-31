@@ -9,6 +9,15 @@
  *
  * A right document, unreadably framed, passed every check we had.
  *
+ * ⚠️ WHAT THIS TEST DOES NOT PROVE, LEARNED THE HARD WAY 2026-07-31. It compares
+ * DECLARED widths, and its own limit note below turned out to be the whole story:
+ * measured in a real browser at ten viewport widths, THE EMAIL NEVER OVERFLOWS ITS
+ * FRAME — not at 624, not at any size. So this test is green on a claim that was
+ * false. It is kept because 'the frame must not be narrower than the document it
+ * frames' is still a rule worth holding, but it did NOT catch what Ian hit and
+ * nobody should read a green here as 'the preview is readable'. Only a rendered
+ * measurement can say that.
+ *
  * WHAT THIS ASSERTS, and why it needs no browser: the email declares its own width
  * in its own markup — an `.email-container` at `max-width:960px` inside an
  * `.email-wrapper` carrying `padding:24px 16px` (32px horizontal). So the document
