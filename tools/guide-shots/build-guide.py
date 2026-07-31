@@ -159,6 +159,44 @@ ALT = {
  "d2": "The bottom navigation bar on a phone, with the You tab on the right.",
 }
 
+# The questions members actually arrive with. Every answer is behaviour verified
+# against the serve, not guessed, and every one says WHY -- a member who
+# understands the rule stops needing the answer.
+FAQ = [
+ ("I set my profile to Private, but my name still shows on my forum posts.",
+  "Those are two different settings that happen to share a panel. Profile "
+  "visibility controls your profile page. <b>Discussion posts</b>, right below "
+  "it, controls whether your name and avatar appear on what you post. Making a "
+  "profile private does not silently anonymise your posts — that would change "
+  "how conversations read for everyone else — so it is set deliberately."),
+ ("I marked a section Public, but it still shows as Members-only.",
+  "Your whole-profile setting is a ceiling, and a section can only be "
+  "<i>stricter</i> than it, never looser. If your profile is Members-only, a "
+  "section set to Public is shown to members only, and its chip says so with a "
+  "warning caret: “Your header is Member-only — viewers see this as Member.” "
+  "Nothing is leaking and nothing is broken. Raise the whole profile to Public "
+  "if you want that section public."),
+ ("Nobody finds me in the member directory.",
+  "The directory filters on the sections marked <b>Filterable</b> — Instruments, "
+  "Skills and Music. Those tag you with the site's own vocabulary, and an empty "
+  "one mostly means not turning up in other people's searches. A well-written "
+  "About section is not searchable in the same way."),
+ ("Where do I add sections? I cannot find the button.",
+  "There are two openers and they do the same thing: a <b>＋ Sections</b> button "
+  "in the <b>Your layout</b> row just under your name, and a dashed <b>＋ Add a "
+  "section</b> card at the very bottom of your profile. On a wide screen there is "
+  "no button at all — the panel is simply always there, down the side."),
+ ("I want a map pin without publishing my street address.",
+  "That is what Location's two dials are for. Set <b>Members see</b> to City or "
+  "Street address and <b>Public sees</b> to Private or State. Precision is chosen "
+  "per audience, so you are never trading a useful pin against your address "
+  "being public."),
+ ("How do I know what other people actually see?",
+  "Use <b>View as</b> at the top of your own profile instead of logging out. All "
+  "your editing controls vanish while you are in it, which is how you know you "
+  "are seeing the real page and not a preview with your own tools layered on."),
+]
+
 DPR = 2
 
 
@@ -244,6 +282,9 @@ p{{margin:0 0 14px}}
 .pending .tag{{font:700 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;color:var(--accent)}}
 .pending .pend{{font-size:13.5px}}
 .warn{{display:block;background:var(--warnbg);color:var(--warn);font-size:12.5px;padding:8px 12px}}
+.faq{{border-left:3px solid var(--line);padding:1px 0 1px 16px;margin:0 0 20px}}
+.faq .q{{font-weight:700;margin:0 0 6px}}
+.faq .a{{margin:0;color:var(--mute)}}
 .status{{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:13px 16px;font-size:14px;color:var(--mute);margin:26px 0 0}}
 </style>
 <div class="wrap">
@@ -257,6 +298,7 @@ worth reading properly.</p>
 
     for s in STEPS:
         out.append(f'<li><a href="#{s["id"]}">{html.escape(s["title"])}</a></li>')
+    out.append('<li><a href="#faq">If it is not behaving the way you expect</a></li>')
     out.append("</ol></div>")
 
     for s in STEPS:
@@ -284,6 +326,18 @@ worth reading properly.</p>
                     pending += 1
                 out.append(fig)
         out.append("</section>")
+
+    # The troubleshooting section carries no frames on purpose: these are the
+    # questions members arrive with already stuck, and a wall of screenshots
+    # between them and the answer is exactly the wrong shape.
+    out.append('<section id="faq"><h2><span class="num">?</span>'
+               'If it is not behaving the way you expect</h2>')
+    out.append('<p>The six things members ask most often. Each answer says '
+               '<i>why</i>, because the rule is easier to keep than the fix.</p>')
+    for q, a in FAQ:
+        out.append(f'<div class="faq"><p class="q">{html.escape(q)}</p>'
+                   f'<p class="a">{a}</p></div>')
+    out.append('</section>')
 
     today = datetime.date.today().isoformat()
     out.append(f"""<div class="status"><b>Draft — {today}.</b> The words are final enough
