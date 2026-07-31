@@ -88,8 +88,22 @@ $send = in_array('--send', $_SERVER['argv'] ?? [], true);
 
 // Bootstrap WP FIRST — we need the real posts, the real titles and the real permalinks,
 // and later the SES client. Root, because the docroot is owned by looth-dev.
+/* ⚠️ RUN AS looth-dev, NOT root. Postgres uses peer auth, so as root the role is
+ * "root", which does not exist — lg_following_pg() returns null, every hub deep link
+ * resolves to '' and the digest renders with NO clickable discussions while looking
+ * completely normal. Measured, not theorised: that is exactly what the first rebuild
+ * after the deep-link fix produced.
+ *   sudo -u looth-dev env LG_FOLLOW_DIGEST=1 php <this file> [--send]
+ * looth-dev owns the docroot, so wp-load.php is readable to it. */
 $wpLoad = '/var/www/dev/wp-load.php';
-if (!is_readable($wpLoad)) { fwrite(STDERR, "cannot read $wpLoad (run as root)\n"); exit(65); }
+if (!is_readable($wpLoad)) { fwrite(STDERR, "cannot read $wpLoad (run as looth-dev)\n"); exit(65); }
+$whoami = function_exists('posix_getpwuid') ? (posix_getpwuid(posix_geteuid())['name'] ?? '?') : '?';
+if ($whoami === 'root') {
+	fwrite(STDERR, "refusing to run as root: Postgres peer auth would fail (role \"root\"),\n"
+		. "every hub link would silently resolve to empty, and the digest would look normal.\n"
+		. "Run: sudo -u looth-dev env LG_FOLLOW_DIGEST=1 php " . __FILE__ . "\n");
+	exit(73);
+}
 define('WP_USE_THEMES', false);
 $pd = ini_get('display_errors'); $pl = ini_get('log_errors');
 ini_set('display_errors', '0'); ini_set('log_errors', '0');
@@ -122,6 +136,18 @@ if (!$batch['items']) {
 $watermark = lg_fd_watermark(1);
 $subject = '[dev2] ' . lg_fd_subject($batch);
 $html    = lg_fd_render($ian, $batch, 'daily');
+
+// The same refusal the real sender makes, enforced here too — an email whose links
+// could not be resolved must not go out, and this one cannot be edited afterwards.
+if (function_exists('lg_fd_links_degraded') && lg_fd_links_degraded()) {
+	fwrite(STDERR, "REFUSING: the link store was unreachable, so every discussion link\n"
+		. "would be missing. Fix that before sending — do NOT send a linkless digest.\n");
+	exit(74);
+}
+$hub = preg_match_all('~href="[^"]*?/hub/\?topic=~', $html);
+$bad = preg_match_all('~href="[^"]*?/(forums|groups)/~', $html);
+if ($bad) { fwrite(STDERR, "REFUSING: $bad link(s) point at the legacy forum Ian rejected.\n"); exit(75); }
+if (!$hub) { fwrite(STDERR, "REFUSING: no hub deep links in the rendered digest.\n"); exit(76); }
 
 /* The banner. It must be exactly true. An earlier draft said "nothing on your account
  * was changed to build this" — which was true when the rows were read from live, and
@@ -156,8 +182,19 @@ if (substr_count($html, 'border-bottom:2px solid #ECB351') !== 1) {
 }
 $html = substr($html, 0, $end) . $banner . substr($html, $end);
 
+/* ⚠️ CHECK THE WRITE. The first version used a bare file_put_contents() into a 0700
+ * directory owned by another user (it had been created by an earlier root run), so the
+ * write FAILED, the script reported the byte count anyway, and the verification step
+ * then read a STALE file and reported zero hub links on a build that had eight. My own
+ * tooling lied to me about my own fix. The send itself was never at risk — it uses the
+ * in-memory $html — but a check that reads the wrong bytes is worse than no check. */
 @mkdir(dirname(OUT), 0700, true);
-file_put_contents(OUT, $html);
+$wrote = @file_put_contents(OUT, $html);
+if ($wrote === false || $wrote !== strlen($html)) {
+	fwrite(STDERR, sprintf("could not write %s (wrote %s of %d bytes) — refusing to continue, "
+		. "because the next step would verify a stale file.\n", OUT, var_export($wrote, true), strlen($html)));
+	exit(77);
+}
 
 $threads = count(array_unique(array_column($batch['items'], 'topic_id')));
 $people  = count(array_unique(array_column($batch['items'], 'post_author')));
@@ -168,6 +205,7 @@ printf("content    : %d replies / %d discussions / %d members\n",
 printf("source     : lg_fd_items_for(1) — the REAL collector, real dev2 posts\n");
 printf("watermark  : %s\n", $watermark);
 printf("borrowed   : NONE — seeded on dev2 at Ian's request, stated in the banner\n");
+printf("links      : %d hub deep link(s), 0 legacy-forum links — DESTINATION checked, not just presence\n", $hub);
 printf("bytes      : %d -> %s\n", strlen($html), OUT);
 printf("resolver   : lg_fd_due_recipients() NOT called — this errand cannot iterate recipients\n");
 

@@ -236,6 +236,43 @@ if (isset($wpdb)) {
            AND meta_value NOT IN ('instant','daily','weekly')", '%CADENCE%'));
 }
 
+// ── WHERE THE LINKS POINT — not merely that there ARE links ──────────────────
+// This is the assertion whose absence let a wrong destination reach Ian's inbox. The
+// gates proved the email SENDS; nothing proved where it POINTED, and get_permalink()
+// was quietly returning the mirrored legacy forum page he had already rejected. A link
+// in a sent email cannot be edited afterwards, so the destination is gated, not the
+// presence of an href.
+$out['link_check'] = null;
+if (function_exists('lg_fd_render') && function_exists('lg_fd_topic_urls')) {
+    global $wpdb;
+    $bb  = $wpdb->prefix . 'bb_notifications_subscriptions';
+    $tids = array_map('intval', (array) $wpdb->get_col(
+        "SELECT DISTINCT item_id FROM {$bb} WHERE type='topic' AND status=1 LIMIT 6"));
+    if ($tids) {
+        $items = array();
+        foreach ($tids as $i => $t) {
+            $items[] = array('ID' => 900000 + $i, 'topic_id' => $t,
+                             'post_author' => 1, 'post_date_gmt' => '2026-01-01 00:00:00');
+        }
+        $u = get_userdata(1);
+        if ($u) {
+            $html = lg_fd_render($u, array('items' => $items, 'capped' => false), 'daily');
+            preg_match_all('~href="([^"]+)"~', $html, $m);
+            $hub = $bad = $other = 0; $badlist = array();
+            foreach ($m[1] as $href) {
+                $h = html_entity_decode($href, ENT_QUOTES);
+                if (strpos($h, '/hub/?topic=') !== false)            { $hub++; }
+                elseif (strpos($h, '/manage-subscription') !== false) { $other++; }
+                // The rejected destinations, named explicitly rather than inferred.
+                elseif (preg_match('~/(forums|groups|topic)/~', $h))  { $bad++; $badlist[] = $h; }
+                else                                                  { $other++; }
+            }
+            $out['link_check'] = array('hub' => $hub, 'bad' => $bad,
+                                       'other' => $other, 'badlist' => array_slice($badlist, 0, 3));
+        }
+    }
+}
+
 // ── THE RECIPIENT SET, if the sender exists ───────────────────────────────────
 // The ONE thing dev2 genuinely proves about an unrecallable channel is the negative.
 if (function_exists('%RESOLVER%')) {
@@ -474,6 +511,28 @@ def main():
             red("cadence=instant resolved %d digest recipient(s)" % rec["instant"],
                 "Instant members are served by the native per-reply path and must NEVER "
                 "appear in a digest — they would get the same reply twice.")
+
+    # ── WHERE THE LINKS POINT ──────────────────────────────────────────────────
+    lc = d.get("link_check")
+    if lc is None:
+        if d.get("resolver_exists"):
+            red("link destinations were not checked",
+                "lg_fd_render/lg_fd_topic_urls unavailable, or no topic to render against. "
+                "A digest's links cannot be edited once sent, so an unchecked destination "
+                "is the defect that already reached Ian once.")
+    elif lc.get("bad"):
+        red("%d link(s) point at the MIRRORED LEGACY FORUM" % lc["bad"],
+            "Ian rejected that destination — \"it has no bearing on actual ui\". A member "
+            "clicking out of the email must land in the HUB with the discussion open. "
+            "Offenders: %s" % ", ".join(lc.get("badlist") or []))
+    elif not lc.get("hub"):
+        red("the rendered digest emitted NO hub links at all",
+            "Every discussion row should carry a /hub/?topic= deep link, or none if the "
+            "hub genuinely cannot serve it. Zero hub links means the deep-link path is "
+            "dead and every row is unclickable.")
+    else:
+        ok("every link points at the HUB", "%d hub deep link(s), 0 legacy-forum links"
+           % lc["hub"])
 
     if not d.get("collector_exists"):
         red("%s() does not exist" % COLLECTOR,

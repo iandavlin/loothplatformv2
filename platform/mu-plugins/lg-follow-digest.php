@@ -442,6 +442,26 @@ function lg_fd_send_one( int $uid, string $cadence ): bool {
 	if ( ! $user || ! is_email( $user->user_email ) ) { return false; }
 
 	$html = lg_fd_render( $user, $batch, $cadence );
+
+	/* ⚠️ REFUSE TO SEND A LINKLESS DIGEST, and do NOT advance the watermark, so the
+	 * next tick retries with the content intact.
+	 *
+	 * This is not hypothetical: the first rebuild after the deep-link fix emitted an
+	 * email with ZERO discussion links, because the process ran as root and Postgres
+	 * uses peer auth — role "root" does not exist, lg_following_pg() returned null, and
+	 * every URL came back ''. Every row still rendered, so it looked like a normal
+	 * digest and was one keystroke from being sent.
+	 *
+	 * "The hub cannot serve this topic" and "we could not reach the store that knows"
+	 * are DIFFERENT FACTS, and an unrecallable channel must not collapse them — the
+	 * same distinction account-following draws between `degraded` and `hydrated`.
+	 * A genuinely unaddressable topic renders without a link, by design; a store we
+	 * could not read means we do not know, and we wait. */
+	if ( lg_fd_links_degraded() ) {
+		error_log( sprintf( '[lg-fd] REFUSING to send uid %d — link store unreachable, '
+			. 'watermark NOT advanced so the next run retries', $user_id ) );
+		return false;
+	}
 	$subj = lg_fd_subject( $batch );
 
 	add_filter( 'wp_mail_content_type', 'lg_fd_html_type' );
@@ -472,6 +492,89 @@ function lg_fd_subject( array $batch ): string {
 	return sprintf( '%d new replies across %d discussions you follow', $n, $t );
 }
 
+/* ── WHERE A LINK IN THIS EMAIL POINTS ────────────────────────────────────────
+ * Ian, 2026-07-31, on the first real digest: "The link goes to the mirroring forum not
+ * the hub with the modal open." He had already rejected that destination on another
+ * surface the same night — "it has no bearing on actual ui."
+ *
+ * THE BUG WAS get_permalink($topic_id), which returns the MIRRORED LEGACY forum page.
+ * Worth naming precisely because my own design note §4.1 specified the right contract
+ * (/hub/?topic=<forum>/<topic>) and the code did not implement it — the spec was right
+ * and the code drifted, which no gate caught because the gates asserted that a URL was
+ * PRESENT, never where it POINTED.
+ *
+ * ⚠️ AND EMAIL RAISES THE STAKES: a link in a sent message cannot be edited afterwards.
+ * A wrong link in a digest is permanent for that issue.
+ *
+ * REUSED, NOT REWRITTEN. account-following already solved this at
+ * membership-pages/lib/following-data.php:218 (lg_following_topic_url, merged d7d78da).
+ * This is the THIRD surface that needs the same answer, so it calls that function
+ * rather than becoming a third URL builder that can drift.
+ *
+ * WHAT THAT FUNCTION KNOWS THAT A NAIVE FIX DOES NOT: topics in HIDDEN BuddyBoss group
+ * forums cannot be opened in the hub at all — _single-topic.php gates both its lookups
+ * on f.visibility='public', so the deep link 404s even for a signed-in admin. Their
+ * first attempt fell back to the group-native URL for those, which is exactly the
+ * mirrored page Ian rejected. So it returns '' and we render NO link.
+ *
+ * NEVER SILENTLY DEGRADE TO THE LEGACY PAGE. It is a rejected behaviour, not a
+ * fallback. A row with no button and an honest line beats a link to a UI he has said
+ * no to — and the report says what it would take to fix it properly (the hub serving
+ * group forums to their own members, which is bb-mirror's gate, not this sender's).
+ */
+/** Did the last lg_fd_topic_urls() call fail to REACH the store, as opposed to
+ *  legitimately finding topics the hub cannot serve? The two are different facts and a
+ *  digest must never collapse them — see the guard in lg_fd_send_one(). */
+function lg_fd_links_degraded( ?bool $set = null ): bool {
+	static $degraded = false;
+	if ( null !== $set ) { $degraded = $set; }
+	return $degraded;
+}
+
+function lg_fd_topic_urls( array $topic_ids ): array {
+	lg_fd_links_degraded( false );
+	$out = array_fill_keys( array_map( 'intval', $topic_ids ), '' );
+	if ( ! $out ) { return $out; }
+
+	/* __DIR__ resolves through the mu-plugin symlink to the REPO, which is where
+	 * membership-pages lives — the same resolution that breaks docroot scripts looking
+	 * for wp-load.php works in our favour here. Guarded rather than assumed: if the
+	 * file is not there we return no links at all, because the alternative is emitting
+	 * the rejected legacy URL. */
+	$lib = dirname( __DIR__, 2 ) . '/membership-pages/lib/following-data.php';
+	if ( ! is_readable( $lib ) ) {
+		error_log( '[lg-fd] following-data.php not readable at ' . $lib . ' — emitting NO links rather than legacy ones' );
+		lg_fd_links_degraded( true );
+		return $out;
+	}
+	require_once $lib;
+	if ( ! function_exists( 'lg_following_topic_url' ) || ! function_exists( 'lg_following_pg' ) ) {
+		error_log( '[lg-fd] lg_following_topic_url/lg_following_pg missing — emitting NO links' );
+		lg_fd_links_degraded( true );
+		return $out;
+	}
+
+	$pdo = lg_following_pg();
+	if ( ! $pdo ) { lg_fd_links_degraded( true ); return $out; }
+
+	try {
+		$in = implode( ',', array_fill( 0, count( $out ), '?' ) );
+		$st = $pdo->prepare(
+			"SELECT t.id, t.slug, f.slug AS forum_slug, f.visibility AS forum_visibility, f.group_id
+			   FROM topic t LEFT JOIN forum f ON f.id = t.forum_id
+			  WHERE t.id IN ($in)"
+		);
+		$st->execute( array_keys( $out ) );
+		foreach ( $st->fetchAll( PDO::FETCH_ASSOC ) as $r ) {
+			$out[ (int) $r['id'] ] = lg_following_topic_url( $r, array() );
+		}
+	} catch ( Throwable $e ) {
+		error_log( '[lg-fd] topic url hydrate failed: ' . $e->getMessage() );
+		lg_fd_links_degraded( true );
+	}
+	return $out;
+}
+
 /**
  * Render. COUNTS, THREAD TITLES AND SENDER DISPLAY NAMES ONLY — never reply text.
  * That is the standing privacy ruling (NOTIF-EMAIL-STATE §1), and it is enforced by
@@ -488,6 +591,8 @@ function lg_fd_render( WP_User $user, array $batch, string $cadence ): string {
 	$name  = $user->display_name ? $user->display_name : $user->user_login;
 	$every = 'daily' === $cadence ? 'once a day' : 'once a week';
 
+	$urls = lg_fd_topic_urls( array_keys( $by_topic ) );
+
 	$rows = '';
 	foreach ( $by_topic as $tid => $items ) {
 		$names = array();
@@ -497,17 +602,30 @@ function lg_fd_render( WP_User $user, array $batch, string $cadence ): string {
 		}
 		$names = array_values( $names );
 		$who   = lg_fd_names_phrase( $names, count( $items ) );
-		$url   = get_permalink( $tid ) ? get_permalink( $tid ) : home_url( '/hub/' );
+
+		// The hub deep link, or '' for a topic the hub cannot serve. NEVER the legacy
+		// forum permalink — that destination is ruled out, not a fallback.
+		$path  = (string) ( $urls[ (int) $tid ] ?? '' );
+		$url   = '' !== $path ? home_url( $path ) : '';
+		$title = esc_html( get_the_title( $tid ) );
 
 		$rows .= '<tr><td style="padding:0 0 16px;">'
 			. '<div style="font:700 16px/1.3 Arial,Helvetica,sans-serif;color:#2B2318;margin:0 0 5px;">'
-			. '<a href="' . esc_url( $url ) . '" style="color:#2B2318;text-decoration:none;">'
-			. esc_html( get_the_title( $tid ) ) . '</a></div>'
+			. ( '' !== $url
+				? '<a href="' . esc_url( $url ) . '" style="color:#2B2318;text-decoration:none;">' . $title . '</a>'
+				: $title )
+			. '</div>'
 			. '<div style="font:13px/1.5 Arial,Helvetica,sans-serif;color:#6b6459;margin:0 0 9px;">'
 			. $who . '</div>'
-			. '<a href="' . esc_url( $url ) . '" style="display:inline-block;background:#87986A;color:#ffffff;'
-			. 'font:700 13px Arial,Helvetica,sans-serif;text-decoration:none;padding:8px 15px;border-radius:4px;">'
-			. 'Open the discussion &rarr;</a></td></tr>';
+			. ( '' !== $url
+				? '<a href="' . esc_url( $url ) . '" style="display:inline-block;background:#87986A;color:#ffffff;'
+					. 'font:700 13px Arial,Helvetica,sans-serif;text-decoration:none;padding:8px 15px;border-radius:4px;">'
+					. 'Open the discussion &rarr;</a>'
+				// Honest, and deliberately NOT a link to the old forum. Says why rather
+				// than leaving a row that looks broken.
+				: '<span style="display:inline-block;font:italic 12px Arial,Helvetica,sans-serif;color:#8a8175;">'
+					. 'This discussion is in a private group and can&rsquo;t be opened from email yet.</span>' )
+			. '</td></tr>';
 	}
 
 	$n   = count( $batch['items'] );
