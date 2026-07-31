@@ -344,13 +344,44 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
                         <?php endif; ?>
                     </div>
 
+                    <?php
+                    /* The two bits. Under LG_FOLLOWING_ROW_TOGGLES they are real
+                     * <button>s a member can press; with the flag off they are the
+                     * <span> report they have always been, byte for byte.
+                     *
+                     * The labels differ by KIND, not just by state: a report says
+                     * what IS ("Notifications on"), a control says what pressing it
+                     * WILL DO ("Turn notifications off") — otherwise a screen reader
+                     * announces the current state as though it were the action. */
+                    $mark = static function (string $channel, bool $on, string $glyph) use ($h, $it, $fol_svg): void {
+                        $noun  = $channel === 'notify' ? 'Notifications' : 'Emails';
+                        $state = $noun . ($on ? ' on' : ' off');
+                        $cls   = 'lg-manage-sub__fol-mark' . ($on ? ' is-on' : '');
+                        if (!LG_FOLLOWING_ROW_TOGGLES) {
+                            // The line breaks are not cosmetic here: OFF must be a
+                            // BYTE-identical no-op, and this reproduces the exact
+                            // bytes the pre-flag template emitted. Verified by md5
+                            // of the rendered section against the commit before the
+                            // toggles existed — whitespace included, because "no-op"
+                            // that needs a whitespace-insensitive diff is a weaker
+                            // claim than the one the flag rule asks for.
+                            printf("<span class=\"%s\"\n"
+                                 . "                              data-mark=\"%s\" title=\"%s\"\n"
+                                 . "                              aria-label=\"%s\">%s</span>",
+                                $cls, $h($channel), $h($state), $h($state), $fol_svg($glyph));
+                            return;
+                        }
+                        $action = 'Turn ' . strtolower($noun) . ' ' . ($on ? 'off' : 'on')
+                                . ($it['gone'] ? '' : ' for ' . $it['title']);
+                        printf('<button type="button" class="%s is-toggle" data-mark="%s" data-toggle="%s"'
+                             . ' aria-pressed="%s" title="%s" aria-label="%s">%s</button>',
+                            $cls, $h($channel), $h($channel), $on ? 'true' : 'false',
+                            $h($state), $h($action), $fol_svg($glyph));
+                    };
+                    ?>
                     <span class="lg-manage-sub__fol-state">
-                        <span class="lg-manage-sub__fol-mark<?= $it['notify'] ? ' is-on' : '' ?>"
-                              data-mark="notify" title="<?= $it['notify'] ? 'Notifications on' : 'Notifications off' ?>"
-                              aria-label="<?= $it['notify'] ? 'Notifications on' : 'Notifications off' ?>"><?= $fol_svg('bell') ?></span>
-                        <span class="lg-manage-sub__fol-mark<?= $it['email'] ? ' is-on' : '' ?>"
-                              data-mark="email" title="<?= $it['email'] ? 'Emails on' : 'Emails off' ?>"
-                              aria-label="<?= $it['email'] ? 'Emails on' : 'Emails off' ?>"><?= $fol_svg('email') ?></span>
+                        <?php $mark('notify', (bool) $it['notify'], 'bell'); ?>
+                        <?php $mark('email',  (bool) $it['email'],  'email'); ?>
                     </span>
 
                     <button type="button" class="lg-manage-sub__fol-x" data-unfollow="<?= (int) $it['id'] ?>"

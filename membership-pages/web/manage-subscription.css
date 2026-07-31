@@ -480,3 +480,48 @@ html[data-lguser-theme="dark"] .lg-switch__track { background: #3a413b; }
 html[data-lguser-theme="dark"] .lg-switch__track:before { background: #d8dcd4; }
 html[data-lguser-theme="dark"] .lg-switch input:checked + .lg-switch__track { background: var(--lgms-sage); }
 html[data-lguser-theme="dark"] .lg-switch input:checked + .lg-switch__track:before { background: #161a17; }
+
+/* ── the marks as CONTROLS (LG_FOLLOWING_ROW_TOGGLES) ────────────────────────
+ * Ian 2026-07-31: from this page a member could only unfollow entirely, never
+ * keep the thread and drop the email. .is-toggle is added only when the flag is
+ * on, so with it off these rules match nothing and the report state is untouched.
+ *
+ * Same resting/active idiom as the hub card's .fc-save pair — muted at rest,
+ * sage on tint when on — because a control that looks different here from the
+ * one on the card invites the member to believe they are different settings.
+ * They are the same two bits, written through the same endpoint.
+ */
+.lg-manage-sub__fol-mark.is-toggle {
+    -webkit-appearance: none;
+    appearance: none;
+    border: 0;
+    /* 34px tall inside a 44px row: a real target, without pushing the row taller
+     * than the unfollow control next to it. */
+    min-width: 34px;
+    min-height: 34px;
+    justify-content: center;
+    cursor: pointer;
+    transition: color .12s, background .12s;
+}
+.lg-manage-sub__fol-mark.is-toggle:hover { color: #6b7c52; background: #eef2e3; }
+.lg-manage-sub__fol-mark.is-toggle:focus-visible {
+    outline: 2px solid #6b7c52;
+    outline-offset: 1px;
+}
+.lg-manage-sub__fol-mark.is-toggle[disabled] { opacity: .5; cursor: progress; }
+
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-mark.is-toggle:hover {
+    color: var(--lgms-sage);
+    background: var(--lgms-tint);
+}
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-mark.is-toggle:focus-visible {
+    outline-color: var(--lgms-sage);
+}
+
+/* At 390px the row now carries two targets plus the X. Tighten the gap rather
+ * than the targets — shrinking a hit area to make room is how the shorty dock
+ * ended up under the tabbar. */
+@media (max-width: 640px) {
+    .lg-manage-sub__fol-row { gap: 6px; }
+    .lg-manage-sub__fol-state { gap: 0; }
+}

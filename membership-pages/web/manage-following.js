@@ -195,8 +195,82 @@
         });
     }
 
-    /* ── 2. per-row unfollow ─────────────────────────────────────────────── */
+    /* ── 2a. per-row 🔔/✉ toggles (LG_FOLLOWING_ROW_TOGGLES) ─────────────────
+     * Ian: "they cant change the setting, just close it out, could they change
+     * the toggles on that page too?" Before this, the only way to stop the EMAIL
+     * from a thread you still wanted to read was to leave the thread.
+     *
+     * ONE BIT AT A TIME, and that is the whole point: the two channels are
+     * independent (follow.php:15) and live in different databases — the bell in
+     * Postgres, the envelope in bbPress's MySQL store — so this sends exactly the
+     * one channel that was pressed and never touches the other.
+     *
+     * SAME ENDPOINT, SAME WIRE FORMAT AS THE HUB CARD. Not "an equivalent write":
+     * literally POST /bb-mirror-api/v0/follow {topic_id, channel, on}, which is
+     * the only writer of forums.topic_follow and the only caller of the bbPress
+     * subscription writers. A second write path is how the two stores drift, and
+     * drift here is the "UI lies" class — the account page saying the bell is off
+     * while the card still shows it lit.
+     *
+     * Optimistic, then RECONCILED AGAINST THE RESPONSE rather than against what
+     * we asked for: the endpoint re-reads both stores after writing and returns
+     * what they now SAY, so a write that half-succeeded shows as it really is.
+     */
+    function paintToggle(btn, on) {
+        var row = btn.closest('.lg-manage-sub__fol-row');
+        var ch  = btn.getAttribute('data-toggle');
+        if (row) paintMark(row, ch, on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        var noun = ch === 'notify' ? 'notifications' : 'emails';
+        btn.setAttribute('aria-label', 'Turn ' + noun + ' ' + (on ? 'off' : 'on'));
+    }
+
+    function toggleBit(btn) {
+        var row = btn.closest('.lg-manage-sub__fol-row');
+        var id  = row && parseInt(row.getAttribute('data-topic'), 10);
+        var ch  = btn.getAttribute('data-toggle');
+        if (!(id > 0) || (ch !== 'notify' && ch !== 'email')) return;
+
+        var was  = btn.getAttribute('aria-pressed') === 'true';
+        var want = !was;
+        btn.disabled = true;
+        paintToggle(btn, want);                       // optimistic
+
+        fetch(API, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+            body: JSON.stringify({ topic_id: id, channel: ch, on: want })
+        })
+            .then(function (r) { return r.json().catch(function () { return null; }); })
+            .then(function (j) {
+                btn.disabled = false;
+                if (!j || !j.ok) { paintToggle(btn, was); alert('Could not save that — try again.'); return; }
+                // The STORE's answer, not our intent, and for BOTH bits: a write to
+                // one channel can legitimately change what the other reports.
+                paintToggle(btn, ch === 'notify' ? !!j.notify : !!j.email);
+                var other = row && row.querySelector('[data-toggle="' + (ch === 'notify' ? 'email' : 'notify') + '"]');
+                if (other) paintToggle(other, ch === 'notify' ? !!j.email : !!j.notify);
+                var master = document.getElementById('lg-fol-master');
+                if (master && typeof j.email_master === 'boolean') {
+                    master.textContent = j.email_master
+                        ? 'Emails are on for your account.'
+                        : "Discussion emails are off for your account, so none of these will email you.";
+                }
+                refreshCounts();
+            })
+            .catch(function () {
+                btn.disabled = false;
+                paintToggle(btn, was);
+                alert('Network error — try again.');
+            });
+    }
+
+    /* ── 2. per-row unfollow, and the toggles ────────────────────────────── */
     sec.addEventListener('click', function (ev) {
+        var tog = ev.target.closest ? ev.target.closest('[data-toggle]') : null;
+        if (tog && sec.contains(tog)) { ev.preventDefault(); toggleBit(tog); return; }
+
         var btn = ev.target.closest ? ev.target.closest('[data-unfollow]') : null;
         if (!btn || !sec.contains(btn)) return;
         ev.preventDefault();

@@ -499,6 +499,19 @@ def follow_js(topic_id, on, channels=("notify", "email")):
            .replace("ONOFF", "true" if on else "false")
 
 
+def fetch_text(url, cookies):
+    """Body of a page, or None. Used to assert the FLAG-OFF shape on a surface
+    the gate is not driving — the OFF state has to be checked somewhere."""
+    import ssl
+    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    try:
+        req = urllib.request.Request(url, headers={"Cookie": "; ".join(cookies)})
+        with urllib.request.urlopen(req, timeout=20, context=ctx) as r:
+            return r.read().decode("utf-8", "replace")
+    except Exception:
+        return None
+
+
 def fetch_status(url, cookies):
     req = urllib.request.Request(url, method="GET",
                                  headers={"Cookie": "; ".join(cookies)})
@@ -871,7 +884,113 @@ def main():
                     log(f"           {key} = {got}:1")
         p.ev("localStorage.setItem('lg-set-theme', 'light'); true")
 
-        log("\n  [12] nothing here leaks to a signed-out visitor")
+        log("\n  [12] THE ROW TOGGLES: one bit each, and the CARD AGREES")
+        # Ian: "they cant change the setting, just close it out, could they change
+        # the toggles on that page too?" Two things have to be true and neither is
+        # visible from the account page alone.
+        #
+        # ONE BIT. The channels are independent and live in DIFFERENT DATABASES —
+        # bell in Postgres, envelope in bbPress's MySQL. A toggle that quietly
+        # wrote both would look perfect here and silently re-subscribe a member to
+        # email they had turned off. So each press is checked against BOTH stores:
+        # the one it targeted must change and the other must NOT.
+        #
+        # AND THE CARD MUST AGREE. Same store, same endpoint — but "same endpoint"
+        # is an argument, not evidence. This drives the account page, then opens
+        # the hub modal and reads ITS control, then changes it from the card and
+        # comes back. A divergence here is the "UI lies" class: the account page
+        # saying the bell is off while the card shows it lit.
+        toggles_on = p.ev("!!document.querySelector('#lg-following [data-toggle]')")
+        check("row toggles are present when the flag is on", toggles_on, True)
+        ctl = control_topic(expect) if toggles_on else None
+        if not toggles_on:
+            log("  (flag off on this surface — nothing to exercise)")
+        elif ctl is None:
+            log("  (skipped — no unfollowed public topic available as a control)")
+        else:
+            log(f"  control topic {ctl}")
+            try:
+                # Start from a KNOWN state rather than whatever the store holds.
+                p.ev(follow_js(ctl, True, ("notify",)))
+                if not goto(p, args.url):
+                    cannot_run("the section never hydrated for the toggle phase")
+                p.ev("(()=>{const b=document.getElementById('lg-fol-more'); if(b)b.click(); return true;})()")
+                time.sleep(0.3)
+
+                sel = f'#lg-following .lg-manage-sub__fol-row[data-topic="{ctl}"] [data-toggle="email"]'
+                hit = hit_test(p, sel)
+                check("the email toggle is hittable", hit.get("mine"), True)
+                if hit.get("mine"):
+                    p.send("Input.dispatchMouseEvent", {"type": "mousePressed", "x": hit["x"], "y": hit["y"],
+                                                        "button": "left", "clickCount": 1})
+                    p.send("Input.dispatchMouseEvent", {"type": "mouseReleased", "x": hit["x"], "y": hit["y"],
+                                                        "button": "left", "clickCount": 1})
+                    for _ in range(40):
+                        time.sleep(0.25)
+                        if ctl in store_email_ids(args.uid): break
+                    check("pressing ✉ wrote the EMAIL bit (MySQL)", ctl in store_email_ids(args.uid), True)
+                    check("…and did NOT touch the bell (Postgres)", ctl in store_notify_ids(args.uid), True)
+                    check("the button reports itself pressed",
+                          p.ev(f"(document.querySelector('{sel}')||{{}}).getAttribute('aria-pressed')"), "true")
+
+                    # ── account page → card ──
+                    base = origin_of(args.url)
+                    slug = p.ev(f"""(() => {{
+                      const a = document.querySelector('#lg-following .lg-manage-sub__fol-row[data-topic="{ctl}"] a.lg-manage-sub__fol-name');
+                      return a ? a.getAttribute('href') : null;
+                    }})()""")
+                    if not slug:
+                        log("  (control has no hub link — cannot cross-check the card)")
+                    else:
+                        opened = open_and_read_modal(p, base + slug)
+                        check("the card opens for the control topic", opened.get("topic_id"), ctl)
+                        card = p.ev(f"""(() => {{
+                          const q = c => document.querySelector('[data-follow="' + c + '"][data-topic-id="{ctl}"]');
+                          const n = q('notify'), e = q('email');
+                          return {{notify: n && n.getAttribute('aria-pressed'),
+                                   email:  e && e.getAttribute('aria-pressed')}};
+                        }})()""")
+                        check("the CARD shows the same ✉ state the account page set", card.get("email"), "true")
+                        check("the CARD shows the same 🔔 state", card.get("notify"), "true")
+
+                        # ── card → account page ──
+                        p.ev(follow_js(ctl, False, ("notify",)))    # change it from the OTHER side
+                        if not goto(p, args.url):
+                            cannot_run("the section never hydrated for the reverse check")
+                        p.ev("(()=>{const b=document.getElementById('lg-fol-more'); if(b)b.click(); return true;})()")
+                        time.sleep(0.4)
+                        back = p.ev(f"""(() => {{
+                          const q = c => document.querySelector('#lg-following .lg-manage-sub__fol-row[data-topic="{ctl}"] [data-toggle="' + c + '"]');
+                          const n = q('notify'), e = q('email');
+                          return {{notify: n && n.getAttribute('aria-pressed'),
+                                   email:  e && e.getAttribute('aria-pressed')}};
+                        }})()""")
+                        check("a change made ELSEWHERE shows on the account page", back.get("notify"), "false")
+                        check("…without disturbing the other bit", back.get("email"), "true")
+            finally:
+                if ctl in store_notify_ids(args.uid) or ctl in store_email_ids(args.uid):
+                    try: p.ev(follow_js(ctl, False))
+                    except Exception: pass
+                left = (store_notify_ids(args.uid) | store_email_ids(args.uid)) & {ctl}
+                if left:
+                    log(f"  ⚠ toggle fixture NOT cleaned up, still followed: {sorted(left)}")
+
+        log("\n  [13] FLAG OFF is a no-op — asserted, not assumed")
+        # CLAUDE.md: "Flag OFF must be a proven byte-identical no-op, and the OFF
+        # state must be GATED — that missing assertion is the whole failure class."
+        # A gate that only ever runs with the flag ON cannot see a leak, so this
+        # fetches the surface where the flag is absent and demands the report
+        # shape: spans, no data-toggle, no aria-pressed, nothing pressable.
+        off_url = origin_of(args.url) + "/manage-subscription/"
+        off = fetch_text(off_url, cookies)
+        if off is None:
+            log("  (skipped — could not fetch the flag-off surface)")
+        else:
+            check("flag-off surface has NO toggle markup", "data-toggle" in off, False)
+            check("flag-off surface has NO is-toggle class", "is-toggle" in off, False)
+            check("flag-off surface still renders the marks", "lg-manage-sub__fol-mark" in off, True)
+
+        log("\n  [14] nothing here leaks to a signed-out visitor")
         p.send("Network.clearBrowserCookies")
         host = args.url.split("/")[2].split(":")[0]
         g = [c for c in cookies if c.startswith("loothdev_auth")]
