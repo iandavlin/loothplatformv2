@@ -58,7 +58,11 @@
     '#looth-comp-sheet .lgc-quote{margin:10px 14px 0;padding:0}',
     '#looth-comp-sheet .lgc-quote[hidden]{display:none}',
     // the server fragment
-    '#looth-comp-sheet .lg-nqr-quote{border-left:3px solid var(--lg-sage,#87986a);padding:1px 0 1px 11px}',
+    // the discussion title — the modal must say WHICH thread it is about
+    '#looth-comp-sheet .lg-nqr-quote__where{margin:0 0 7px;font:700 11px/1.35 var(--lg-font-sans,system-ui,sans-serif);' +
+      'letter-spacing:.04em;text-transform:uppercase;color:var(--lg-mute,#6b6f6b);' +
+      'overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}',
+    '#looth-comp-sheet .lg-nqr-quote__q{border-left:3px solid var(--lg-sage,#87986a);padding:1px 0 1px 11px}',
     '#looth-comp-sheet .lg-nqr-quote__head{display:flex;align-items:center;gap:7px;margin:0 0 4px;min-width:0}',
     '#looth-comp-sheet .lg-nqr-quote__avi{flex:0 0 auto;display:inline-flex}',
     '#looth-comp-sheet .lg-nqr-quote__avi img,#looth-comp-sheet .lg-nqr-quote__avi .avatar-init{' +
@@ -93,7 +97,8 @@
     '@media (max-width:480px){#looth-comp-sheet .lgc-quote__open{padding:12px 13px}' +
       '#looth-comp-sheet .lgc-quote__more{padding:10px 0 4px}}',
     // ── dark: explicit pins, both signals ──
-    dk('#looth-comp-sheet .lg-nqr-quote') + '{border-left-color:#5d6b48}',
+    dk('#looth-comp-sheet .lg-nqr-quote__q') + '{border-left-color:#5d6b48}',
+    dk('#looth-comp-sheet .lg-nqr-quote__where') + '{color:#9aa79b}',
     dk('#looth-comp-sheet .lg-nqr-quote__who') + '{color:#f2f4ee}',
     dk('#looth-comp-sheet .lg-nqr-quote__time') + '{color:#9aa79b}',
     dk('#looth-comp-sheet .lg-nqr-quote__body') + '{color:#e5e7e1}',

@@ -191,7 +191,63 @@
     <p><b>A</b> shows just their reply. <b>B</b> shows your post above their reply, dimmed.</p>
   </div>
 
-  <h2 class="sec">On a phone — 390px, the size that matters</h2>
+  <div class="decision" style="border-color:var(--lg-rust);background:#fdf3ef">
+    <h2 style="color:var(--lg-rust)">You picked A — and it is built. This is the real thing.</h2>
+    <p>The four pictures below are <b>not drawings</b>. They are screenshots of the actual feature
+      running in a real browser, against the real database, as a real signed-in member — phone and
+      desktop, light and dark. The drawings further down are kept so you can see what you chose.</p>
+    <p><b>You cannot click it yet</b>, and I would rather say so than imply otherwise: the dev2 site
+      serves <code style="background:rgba(198,104,69,.13);border-radius:4px;padding:1px 5px">main</code>,
+      and this is still on a branch. It merges switched <b>off</b> first; then I turn it on for a
+      preview link and you click the real control.</p>
+  </div>
+
+  <h2 class="sec">The built thing, running</h2>
+  <p class="secnote">Discussion name, then who replied and when, then what they said, then the
+    full-post link — and the composer under it, already saying who you are answering.</p>
+
+  <div class="opts">
+    <div class="opt">
+      <h3>Phone — light</h3>
+      <figure style="margin:0;border:1px solid var(--lg-line);border-radius:14px;overflow:hidden;background:#fff">
+        <img src="shots/nqr-phone-light.png" alt="The reply modal on a phone in light theme: the discussion name, the reply that generated the notification, a link to the full discussion, and the composer." style="display:block;width:100%;height:auto">
+      </figure>
+      <p class="cap">real screenshot · 390px · light</p>
+    </div>
+    <div class="opt">
+      <h3>Phone — dark</h3>
+      <figure style="margin:0;border:1px solid var(--lg-line);border-radius:14px;overflow:hidden;background:#111">
+        <img src="shots/nqr-phone-dark.png" alt="The same reply modal on a phone in dark theme, with a dark card, light text and a dark sage quote rule." style="display:block;width:100%;height:auto">
+      </figure>
+      <p class="cap">real screenshot · 390px · dark</p>
+    </div>
+  </div>
+
+  <div class="opts" style="margin-top:18px">
+    <div class="opt">
+      <h3>Desktop — light</h3>
+      <figure style="margin:0;border:1px solid var(--lg-line);border-radius:14px;overflow:hidden;background:#fff">
+        <img src="shots/nqr-desktop-light.png" alt="The reply modal at desktop width in light theme." style="display:block;width:100%;height:auto">
+      </figure>
+      <p class="cap">real screenshot · 1280px · light</p>
+    </div>
+    <div class="opt">
+      <h3>Desktop — dark</h3>
+      <figure style="margin:0;border:1px solid var(--lg-line);border-radius:14px;overflow:hidden;background:#111">
+        <img src="shots/nqr-desktop-dark.png" alt="The reply modal at desktop width in dark theme." style="display:block;width:100%;height:auto">
+      </figure>
+      <p class="cap">real screenshot · 1280px · dark</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:20px">
+    <h4>One thing the pictures changed after you picked</h4>
+    <p>Every test was green and the modal still <b>never said which discussion you were in</b> — I only
+      saw it by looking at the screenshot. That exact complaint has reached you before, so the
+      discussion name is now the first line of the modal. It is in the pictures above.</p>
+  </div>
+
+  <h2 class="sec">What you chose, as drawn — kept for reference</h2>
   <p class="secnote">Drawn over the real notification sheet, blurred behind. The <b>orange NEW</b> tag marks
     pixels that do not exist today; the <b>green</b> tag marks the composer, which is the one already
     shipped — I am reusing it, not building a second one.</p>

@@ -197,12 +197,20 @@ if (isset($_GET['reply_context']) && lg_notif_quickreply_enabled()) {
      data-author="<?= htmlspecialchars((string)$rc_author, ENT_QUOTES) ?>"
      data-can-post="<?= $viewer_logged_in ? '1' : '0' ?>"
      data-more="<?= $rc_more ? '1' : '0' ?>">
-  <div class="lg-nqr-quote__head">
-    <span class="lg-nqr-quote__avi"><?= $rc_avatar ?></span>
-    <span class="lg-nqr-quote__who"><?= htmlspecialchars((string)$rc_author) ?></span>
-    <?php if ($rc_when !== ''): ?><time class="lg-nqr-quote__time"><?= htmlspecialchars($rc_when) ?></time><?php endif; ?>
+  <?php /* WHICH DISCUSSION. Added after looking at a real screenshot rather than at
+           the assertions, which were all green: the modal showed who replied and what
+           they said, and never once named the thread. Ian has already been burned by
+           exactly this ("the modal that never says which discussion"), so it is a
+           known defect class here, not a nicety. */ ?>
+  <p class="lg-nqr-quote__where"><?= htmlspecialchars($title) ?></p>
+  <div class="lg-nqr-quote__q">
+    <div class="lg-nqr-quote__head">
+      <span class="lg-nqr-quote__avi"><?= $rc_avatar ?></span>
+      <span class="lg-nqr-quote__who"><?= htmlspecialchars((string)$rc_author) ?></span>
+      <?php if ($rc_when !== ''): ?><time class="lg-nqr-quote__time"><?= htmlspecialchars($rc_when) ?></time><?php endif; ?>
+    </div>
+    <div class="lg-nqr-quote__body"><?= $rc_snip !== '' ? $rc_snip : '<em class="lg-nqr-quote__empty">No text — open the discussion to see it.</em>' ?></div>
   </div>
-  <div class="lg-nqr-quote__body"><?= $rc_snip !== '' ? $rc_snip : '<em class="lg-nqr-quote__empty">No text — open the discussion to see it.</em>' ?></div>
 </div>
 <?php
     exit;
