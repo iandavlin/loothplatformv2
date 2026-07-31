@@ -1003,7 +1003,42 @@ def main():
             check("flag-off surface has NO is-toggle class", "is-toggle" in off, False)
             check("flag-off surface still renders the marks", "lg-manage-sub__fol-mark" in off, True)
 
-        log("\n  [14] nothing here leaks to a signed-out visitor")
+        log("\n  [14] EMAIL FREQUENCY IS HIDDEN — the assertion, not the intention")
+        # Ian ruled the cadence control stays hidden until follow-digest's batcher
+        # genuinely sends Daily and Weekly: until then choosing "Daily" would
+        # deliver instant mail. THREAD-FOLLOW-SPEC §15.4 — do not ship a cadence
+        # control that silently does nothing.
+        #
+        # A hidden thing is exactly what a gate forgets to check, and CLAUDE.md
+        # names that as the whole failure class: gates assert what should be
+        # PRESENT and cannot see what should be ABSENT. So this asserts absence on
+        # the surface members actually reach, and it is the assertion that would
+        # catch a stray flag flip or a default drifting to true.
+        live = fetch_text(origin_of(args.url) + "/manage-subscription/", cookies)
+        if live is None:
+            log("  (skipped — could not fetch the member-facing surface)")
+        else:
+            check("no frequency control on the member-facing page", "lg-fol-freq" in live, False)
+            check("no cadence options either", "data-cadence" in live, False)
+            check("…and the section itself is still there", "lg-following" in live, True)
+
+        # And when it IS rendered, it must not invent a value. follow-digest keep
+        # `cadence` out of the GET envelope while their flag is off, so "no value"
+        # is today's normal case — painting a default would be this page answering
+        # a question the store never answered.
+        if p.ev("!!document.getElementById('lg-fol-freq')"):
+            picked = p.ev("""[...document.querySelectorAll('#lg-fol-freq [data-cadence]')]
+                              .filter(o => o.getAttribute('aria-checked') === 'true').length""")
+            cad = p.ev("""(async () => {
+              const r = await fetch('/bb-mirror-api/v0/follow?topics=1', {credentials:'same-origin'});
+              const j = await r.json().catch(() => null);
+              return j && Object.prototype.hasOwnProperty.call(j, 'cadence') ? String(j.cadence) : '(absent)';
+            })()""")
+            log(f"           endpoint cadence = {cad}")
+            check("nothing is selected while the endpoint reports no cadence",
+                  picked, 0 if cad == "(absent)" else picked)
+
+        log("\n  [15] nothing here leaks to a signed-out visitor")
         p.send("Network.clearBrowserCookies")
         host = args.url.split("/")[2].split(":")[0]
         g = [c for c in cookies if c.startswith("loothdev_auth")]
