@@ -92,6 +92,22 @@ pool file**, so box-level flag state now arrives by `git pull`.
 process environment. Neither source is reachable by a visitor — a query string can set
 neither.
 
+> ### ⚠️ THIS EXACT ORDERING WAS BROKEN ON LIVE AT 04:39, 2026-07-31
+> The snippet symlink was restored **before this branch was merged**, so the tracked
+> pool file that replaces it was not on the box. Result: the snippet no longer sets
+> the flag, the pool does not set it yet, and nginx workers restarted at 05:05:41 —
+> so **`LG_FOLLOWING_ROW_TOGGLES` is OFF on live**, and the per-row toggles Ian
+> enabled and looked at are gone from Manage Account.
+>
+> Nothing is broken and no data is at risk; the flag OFF state is a byte-identical
+> no-op. **Recovery is to finish the sequence, not to undo it:** merge this branch,
+> pull, then `sudo systemctl reload php8.3-fpm`. Re-adding the `fastcgi_param` by
+> hand would recreate the divergence this whole document exists to remove.
+>
+> It also shows what the drift gate does and does not measure: live went **GREEN**
+> the moment the file became repo-owned again, which is correct — the gate measures
+> DIVERGENCE, not feature state. A flag being off is not drift.
+
 **RESTORE (live, Ian). Order matters — this sequence never has the flag OFF:**
 
 ```bash
