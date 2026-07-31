@@ -98,6 +98,17 @@ echo
 # Copy the WHOLE bb-mirror parent too, not just web/ — index.php:25 requires
 # __DIR__/../config.php, and a 500 renders zero cards, which reads as red for
 # entirely the wrong reason.
+#
+# following-section-gate is held out for a DIFFERENT reason: it is not flaky, it
+# is pointed at a lane. /manage-subscription/ on :443 serves from
+# /srv/membership-pages -> ~/loothplatformv2-clean, i.e. MAIN, so until the
+# account-following branch merges the gate must aim at that lane's own listener
+# or it measures a page the section is not on. Its 52 assertions are green there.
+#   python3 "$(dirname "$0")/following-section-gate.py"       # needs :8930 (lane listener)
+# ON MERGE: drop /etc/nginx/sites-enabled/lane-account-following.conf, then move
+# this into the numbered list above as
+#   run "following-section" python3 "$(dirname "$0")/following-section-gate.py" \
+#       --url https://dev2.loothgroup.com/manage-subscription/
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

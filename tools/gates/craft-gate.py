@@ -68,6 +68,13 @@ PAGES = {
     "wdsignup": ("/weekly-email-sign-up/", ["anon"]),
     "events":  ("/events/",            ["anon"]),
     "profile": ("/u/iandavlin",        ["member"]),
+    # Manage Account. MEMBER ONLY on purpose — anon gets a sign-in card, so an
+    # anon audit here would measure a different page and report green for it.
+    # Added when "Discussions you're following" landed (account-following,
+    # 2026-07-30): the section is a list that grows with what a member follows,
+    # which is exactly the shape that quietly gains weight over time. Measured at
+    # 178KB total / 40KB images with twelve rows rendered.
+    "account": ("/manage-subscription/", ["member"]),
 }
 
 OVERSIZE_RATIO   = 1.7        # natural px vs rendered px * dpr

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — "Discussions you're following" on Manage Account</title>
+<!--
+  MOCK — lane account-following, 2026-07-30. Ian's ask (via keeper, 7/30):
+  "in the manage my account page a section for posts I'm following."
+  Scope: DISCUSSIONS ONLY (articles/events were offered and declined).
+
+  EVERY ROW BELOW IS REAL. This is Ian's own account (wp user 1) read off dev2:
+    - 1 row in PG forums.topic_follow  (the 🔔 bit) — topic 72330
+    - 11 rows in wp_usermeta.wp__bbp_subscriptions (the ✉ bit) — 2023-08 → 2026-03
+  Union = 12 discussions. Titles, forums and last-activity dates come from the PG
+  topic mirror. Nothing here is invented.
+
+  The style values are copied from the live page (manage-subscription.php:180-191)
+  and from forums.css's .fc-save idiom via _tokens.css, so this is what the section
+  would actually look like sitting under "Email preferences".
+
+  Open with ?theme=dark for the dark frames.
+-->
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+
+  .card-shell { background: var(--bg-card); border: 1px solid var(--lg-line); border-radius: 14px;
+    padding: 20px 22px 16px; box-shadow: 0 1px 2px rgba(26,29,26,.04), 0 12px 26px -18px rgba(26,29,26,.3); }
+  @media (max-width: 640px) { .card-shell { padding: 16px 14px 13px; } }
+
+  /* verbatim from manage-subscription.php:180-191 — the section sits under these */
+  .lg-manage-sub__prefs-title { font: 700 1.05rem/1.3 var(--lg-font-hub); margin: 0; color: var(--lg-ink); }
+  .lg-pref-note { margin: 10px 0 0; font: 400 12.5px/1.5 var(--lg-font-sans); color: var(--lg-mute); }
+
+  /* ── the new section ── */
+  .fol__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .fol__count { font: 400 12.5px/1.5 var(--lg-font-sans); color: var(--lg-mute); margin: 3px 0 4px; }
+  .fol__count b { color: var(--lg-ink); font-weight: 700; }
+
+  .fol__row { display: flex; align-items: center; gap: 12px; padding: 11px 0;
+    border-top: 1px solid var(--lg-line); }
+  .fol__main { min-width: 0; flex: 1 1 auto; }
+  .fol__t { display: block; font: 600 14px/1.35 var(--lg-font-sans); color: var(--lg-ink);
+    text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fol__t:hover { color: var(--lg-sage-d); text-decoration: underline; }
+  .fol__meta { display: block; font: 400 12px/1.5 var(--lg-font-sans); color: var(--lg-mute);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fol__state { display: flex; gap: 2px; flex: 0 0 auto; }
+  .fol__x { -webkit-appearance: none; appearance: none; background: none; border: 0; flex: 0 0 auto;
+    padding: 6px; border-radius: 8px; color: var(--lg-mute); cursor: pointer; line-height: 0; }
+  .fol__x:hover { color: var(--lg-rust); background: rgba(198,104,69,.1); }
+
+  /* state chips reuse .fc-notify / .fc-email from _tokens.css, but INERT here —
+     on this page they report, they do not toggle. Cursor says so. */
+  .chip { -webkit-appearance: none; appearance: none; display: inline-flex; align-items: center;
+    background: none; border: 0; padding: 4px 5px; border-radius: 8px; cursor: default;
+    color: var(--lg-line); }
+  .chip.on { color: var(--lg-sage-d); background: var(--lg-sage-tint); }
+  html[data-lguser-theme="dark"] .chip { color: #3a413b; }
+
+  .fol__more { display: block; width: 100%; text-align: left; background: none; border: 0;
+    border-top: 1px solid var(--lg-line); padding: 11px 0 3px; cursor: pointer;
+    font: 700 12.5px/1.4 var(--lg-font-sans); color: var(--lg-sage-d); }
+  .fol__more:hover { text-decoration: underline; }
+
+  .fol__foot { margin: 12px -22px -16px; padding: 12px 22px; border-top: 1px solid var(--lg-line);
+    background: rgba(198,104,69,.05); border-radius: 0 0 13px 13px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  @media (max-width: 640px) { .fol__foot { margin: 12px -14px -13px; padding: 11px 14px; } }
+  .fol__foot span { font: 400 12px/1.45 var(--lg-font-sans); color: var(--lg-mute); }
+  .fol__stopall { -webkit-appearance: none; appearance: none; flex: 0 0 auto; cursor: pointer;
+    background: none; border: 1px solid rgba(198,104,69,.45); border-radius: 999px;
+    padding: 6px 13px; font: 700 12px/1 var(--lg-font-sans); color: var(--lg-rust); }
+  .fol__stopall:hover { background: var(--lg-rust); border-color: var(--lg-rust); color: #fff; }
+
+  /* variant B — navigation-first: title only, controls behind ⋯ */
+  .folb__row { display: flex; align-items: center; gap: 8px; padding: 9px 0;
+    border-top: 1px solid var(--lg-line); }
+  .folb__t { flex: 1 1 auto; min-width: 0; font: 600 14px/1.4 var(--lg-font-sans); color: var(--lg-ink);
+    text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .folb__t:hover { color: var(--lg-sage-d); text-decoration: underline; }
+  .folb__age { flex: 0 0 auto; font: 400 11.5px/1.4 var(--lg-font-sans); color: var(--lg-mute); }
+  .folb__dots { -webkit-appearance: none; appearance: none; background: none; border: 0; flex: 0 0 auto;
+    padding: 5px 7px; border-radius: 8px; color: var(--lg-mute); cursor: pointer;
+    font: 700 15px/1 var(--lg-font-sans); letter-spacing: 1px; }
+  .folb__dots:hover { color: var(--lg-ink); background: var(--lg-sage-tint); }
+  .folb__menu { border: 1px solid var(--lg-line); border-radius: 11px; background: var(--bg-card);
+    box-shadow: 0 10px 26px -12px rgba(26,29,26,.4); padding: 5px; margin: 4px 0 4px auto; width: 232px; }
+  .folb__mi { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 8px;
+    font: 400 13px/1.3 var(--lg-font-sans); color: var(--lg-ink); }
+  .folb__mi.hl { background: var(--lg-sage-tint); }
+  .folb__mi small { color: var(--lg-mute); margin-left: auto; font-weight: 700; font-size: 11px; }
+
+  /* phone frames */
+  .phones { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-start; }
+  .phone { width: 390px; max-width: 100%; border: 9px solid #24282a; border-radius: 30px;
+    overflow: hidden; background: var(--lguser-bg); box-shadow: 0 18px 40px -22px rgba(0,0,0,.6); }
+  .phone .inner { padding: 12px 11px 16px; }
+  .phone .card-shell { border-radius: 12px; padding: 15px 13px 12px; }
+  .phone .fol__foot { margin: 12px -13px -12px; padding: 11px 13px; }
+
+  .verdict { font: 600 12.5px/1.55 var(--lg-font-sans); margin: 9px 0 0; }
+  .verdict--good { color: var(--lg-sage-d); }
+  .verdict--mid  { color: var(--lg-mute); }
+  h1 { font: 700 20px/1.3 var(--lg-font-hub); color: var(--lg-ink); margin: 0 0 4px; }
+  .sub { font: 400 13px/1.6 var(--lg-font-sans); color: var(--lg-mute); margin: 0 0 22px; max-width: 760px; }
+  .sub b { color: var(--lg-ink); }
+  .rulebox { margin: 22px 0 0; padding: 13px 15px; border-radius: 11px; max-width: 760px;
+    background: var(--lg-sage-tint); font: 400 13px/1.6 var(--lg-font-sans); color: var(--lg-ink); }
+  .rulebox b { font-weight: 700; }
+
+  .shots { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; margin: 0 0 6px; }
+  .shots figure { margin: 0; max-width: 100%; }
+  .shots img { display: block; max-width: 100%; height: auto; border: 1px solid var(--lg-line);
+    border-radius: 12px; box-shadow: 0 14px 32px -20px rgba(26,29,26,.5); }
+  .shots figure:nth-child(1) img { width: 620px; }
+  .shots figure:nth-child(2) img { width: 300px; }
+  .shots figure:nth-child(3) img { width: 620px; }
+  .shots figcaption { font: 400 12px/1.5 var(--lg-font-sans); color: var(--lg-mute); margin-top: 7px; max-width: 620px; }
+  hr.sep { border: 0; border-top: 1px solid var(--lguser-line); margin: 34px 0 26px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Manage Account — “Discussions you’re following”</h1>
+  <p class="sub">The new section sits directly under <b>Email preferences</b>. Both drawings below use
+    <b>Ian’s real account</b>, read off dev2 this morning: 1&nbsp;bell-follow and 11&nbsp;email
+    subscriptions dating back to August 2023 — <b>twelve discussions</b>, none of them invented.
+    That number is the whole design problem: the list has to be bounded and there has to be one
+    button that makes it all stop.</p>
+
+  <!-- ══ BUILT ═══════════════════════════════════════════════════════════ -->
+  <p class="capt">Built and running — screenshots, not drawings</p>
+  <p class="legend"><b>A is built.</b> These are photographs of the real page on dev2, signed in as
+    Ian, reading the real stores. 52 assertions green, including a real click that removed a row and
+    cleared both databases.</p>
+  <div class="shots">
+    <figure>
+      <img src="shot-desktop.png" alt="The section on desktop: five rows, Show all 12, Stop all 12">
+      <figcaption>Desktop &mdash; five rows, then the count. Bell lit on one, envelope on the rest.</figcaption>
+    </figure>
+    <figure>
+      <img src="shot-phone.png" alt="The section on a 390px phone">
+      <figcaption>Phone at 390px &mdash; titles wrap to two lines so you can tell threads apart.</figcaption>
+    </figure>
+    <figure>
+      <img src="shot-desktop-expanded.png" alt="All twelve rows after pressing Show all">
+      <figcaption>After &ldquo;Show all 12&rdquo; &mdash; the full list, back to 2023.</figcaption>
+    </figure>
+  </div>
+  <p class="note" style="margin-bottom:30px">Ian&rsquo;s eleven envelope rows are legacy BuddyBoss
+    auto-subscribes from 2023&ndash;2026. He never knowingly turned most of them on. That is what
+    <b>Stop all 12</b> is for.</p>
+
+  <hr class="sep">
+  <p class="capt">The drawings the build came from</p>
+
+  <div class="cols">
+
+    <!-- ══ A — RECOMMENDED ══════════════════════════════════════════════ -->
+    <div>
+      <p class="capt">A — recommended · full row</p>
+      <p class="legend"><b>Each row says where it is, when it last moved, and why you’re hearing about it.</b></p>
+
+      <div class="card-shell">
+        <div class="fol__head">
+          <h2 class="lg-manage-sub__prefs-title">Discussions you’re following</h2>
+        </div>
+        <p class="fol__count"><b>12 discussions</b> · 11 of them email you</p>
+
+        <div class="fol__row">
+          <div class="fol__main">
+            <a class="fol__t" href="#">Keeper test thread — follow this one, Ian</a>
+            <span class="fol__meta">General · 6 replies · yesterday</span>
+          </div>
+          <div class="fol__state">
+            <span class="chip on" title="Notifications on"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+            <span class="chip" title="Emails off"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+          </div>
+          <button class="fol__x" title="Unfollow"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+
+        <div class="fol__row">
+          <div class="fol__main">
+            <a class="fol__t" href="#">neck reset guild 512</a>
+            <span class="fol__meta">Acoustic Repair · 21 replies · 11 May</span>
+          </div>
+          <div class="fol__state">
+            <span class="chip" title="Notifications off"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+            <span class="chip on" title="Emails on"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+          </div>
+          <button class="fol__x" title="Unfollow"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+
+        <div class="fol__row">
+          <div class="fol__main">
+            <a class="fol__t" href="#">Gibson L-50 archtop with loose back braces</a>
+            <span class="fol__meta">Acoustic Repair · 4 replies · 29 Mar</span>
+          </div>
+          <div class="fol__state">
+            <span class="chip" title="Notifications off"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+            <span class="chip on" title="Emails on"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+          </div>
+          <button class="fol__x" title="Unfollow"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+
+        <div class="fol__row">
+          <div class="fol__main">
+            <a class="fol__t" href="#">Tiny fret slot blues</a>
+            <span class="fol__meta">General · 5 replies · 14 Mar</span>
+          </div>
+          <div class="fol__state">
+            <span class="chip" title="Notifications off"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+            <span class="chip on" title="Emails on"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+          </div>
+          <button class="fol__x" title="Unfollow"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+
+        <div class="fol__row">
+          <div class="fol__main">
+            <a class="fol__t" href="#">CA Glue crack repair colour burn-through</a>
+            <span class="fol__meta">Finish Repair · 9 replies · 4 Mar</span>
+          </div>
+          <div class="fol__state">
+            <span class="chip" title="Notifications off"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+            <span class="chip on" title="Emails on"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+          </div>
+          <button class="fol__x" title="Unfollow"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+
+        <button class="fol__more">Show all 12 →</button>
+
+        <div class="fol__foot">
+          <span>Emails are on for your account.</span>
+          <button class="fol__stopall">Stop all 12</button>
+        </div>
+      </div>
+
+      <p class="verdict verdict--good">The bell and the envelope <b>report</b> here, they don’t toggle —
+        this page is where you see and leave, the thread is where you tune. Five rows, then a count.
+        One red button, always in the same place, whether you follow 2 or 200.</p>
+    </div>
+
+    <!-- ══ B — ALTERNATIVE ══════════════════════════════════════════════ -->
+    <div>
+      <p class="capt">B — alternative · title-only, controls behind ⋯</p>
+      <p class="legend"><b>Pure navigation.</b> Twice the threads in the same height; state and unfollow hidden one tap deep.</p>
+
+      <div class="card-shell">
+        <div class="fol__head">
+          <h2 class="lg-manage-sub__prefs-title">Discussions you’re following</h2>
+        </div>
+        <p class="fol__count"><b>12 discussions</b> · 11 of them email you</p>
+
+        <div class="folb__row"><a class="folb__t" href="#">Keeper test thread — follow this one, Ian</a><span class="folb__age">yesterday</span><button class="folb__dots">···</button></div>
+        <div class="folb__row"><a class="folb__t" href="#">neck reset guild 512</a><span class="folb__age">11 May</span><button class="folb__dots">···</button></div>
+
+        <div class="folb__menu">
+          <div class="folb__mi"><span class="chip" style="padding:0"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>Notifications <small>OFF</small></div>
+          <div class="folb__mi"><span class="chip on" style="padding:0"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>Emails <small>ON</small></div>
+          <div class="folb__mi hl" style="color:var(--lg-rust)"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>Unfollow this discussion</div>
+        </div>
+
+        <div class="folb__row"><a class="folb__t" href="#">Gibson L-50 archtop with loose back braces</a><span class="folb__age">29 Mar</span><button class="folb__dots">···</button></div>
+        <div class="folb__row"><a class="folb__t" href="#">Tiny fret slot blues</a><span class="folb__age">14 Mar</span><button class="folb__dots">···</button></div>
+        <div class="folb__row"><a class="folb__t" href="#">CA Glue crack repair colour burn-through</a><span class="folb__age">4 Mar</span><button class="folb__dots">···</button></div>
+        <div class="folb__row"><a class="folb__t" href="#">New Proper Vise</a><span class="folb__age">31 Jan</span><button class="folb__dots">···</button></div>
+        <div class="folb__row"><a class="folb__t" href="#">Extra hands</a><span class="folb__age">2 Jan</span><button class="folb__dots">···</button></div>
+        <div class="folb__row"><a class="folb__t" href="#">Guild JF30 Touchups…</a><span class="folb__age">Sep 2025</span><button class="folb__dots">···</button></div>
+
+        <button class="fol__more">Show all 12 →</button>
+
+        <div class="fol__foot">
+          <span>Emails are on for your account.</span>
+          <button class="fol__stopall">Stop all 12</button>
+        </div>
+      </div>
+
+      <p class="verdict verdict--mid">Cleaner, and it fits more. But you can’t tell at a glance <b>which</b>
+        of the twelve are the eleven emailing you — that’s the question people open this page to answer —
+        and every unfollow costs two taps instead of one.</p>
+    </div>
+  </div>
+
+  <div class="rulebox"><b>Why the chips don’t toggle in A.</b> The earlier thread-follow mock put a live
+    switch on every row and was rated bad for it: “honest, but unbounded — someone following thirty
+    threads gets a thirty-row settings page.” Ian’s ask is a different job — <b>see what I follow and
+    get back to it</b>. So the row is a link with a status badge, the per-thread tuning stays on the
+    thread where it already works, and the only control this page adds is the one people actually
+    come here for: <b>make it stop</b>.</div>
+
+  <hr class="sep">
+
+  <!-- ══ phone ═══════════════════════════════════════════════════════════ -->
+  <p class="capt">On the phone — 390px, recommended (A) left, alternative (B) right</p>
+  <div class="phones">
+
+    <div class="phone"><div class="inner">
+      <div class="card-shell">
+        <h2 class="lg-manage-sub__prefs-title">Discussions you’re following</h2>
+        <p class="fol__count"><b>12 discussions</b> · 11 email you</p>
+
+        <div class="fol__row">
+          <div class="fol__main">
+            <a class="fol__t" href="#">Keeper test thread — follow this…</a>
+            <span class="fol__meta">General · yesterday</span>
+          </div>
+          <div class="fol__state">
+            <span class="chip on"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+            <span class="chip"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+          </div>
+          <button class="fol__x"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div class="fol__row">
+          <div class="fol__main">
+            <a class="fol__t" href="#">neck reset guild 512</a>
+            <span class="fol__meta">Acoustic Repair · 11 May</span>
+          </div>
+          <div class="fol__state">
+            <span class="chip"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+            <span class="chip on"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+          </div>
+          <button class="fol__x"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div class="fol__row">
+          <div class="fol__main">
+            <a class="fol__t" href="#">Gibson L-50 archtop with loose…</a>
+            <span class="fol__meta">Acoustic Repair · 29 Mar</span>
+          </div>
+          <div class="fol__state">
+            <span class="chip"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+            <span class="chip on"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+          </div>
+          <button class="fol__x"><svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+        <button class="fol__more">Show all 12 →</button>
+        <div class="fol__foot">
+          <span>Emails are on.</span>
+          <button class="fol__stopall">Stop all 12</button>
+        </div>
+      </div>
+    </div></div>
+
+    <div class="phone"><div class="inner">
+      <div class="card-shell">
+        <h2 class="lg-manage-sub__prefs-title">Discussions you’re following</h2>
+        <p class="fol__count"><b>12 discussions</b> · 11 email you</p>
+        <div class="folb__row"><a class="folb__t" href="#">Keeper test thread — follow this…</a><button class="folb__dots">···</button></div>
+        <div class="folb__row"><a class="folb__t" href="#">neck reset guild 512</a><button class="folb__dots">···</button></div>
+        <div class="folb__row"><a class="folb__t" href="#">Gibson L-50 archtop with loose…</a><button class="folb__dots">···</button></div>
+        <div class="folb__row"><a class="folb__t" href="#">Tiny fret slot blues</a><button class="folb__dots">···</button></div>
+        <div class="folb__row"><a class="folb__t" href="#">CA Glue crack repair colour bu…</a><button class="folb__dots">···</button></div>
+        <div class="folb__row"><a class="folb__t" href="#">New Proper Vise</a><button class="folb__dots">···</button></div>
+        <div class="folb__row"><a class="folb__t" href="#">Extra hands</a><button class="folb__dots">···</button></div>
+        <button class="fol__more">Show all 12 →</button>
+        <div class="fol__foot">
+          <span>Emails are on.</span>
+          <button class="fol__stopall">Stop all 12</button>
+        </div>
+      </div>
+    </div></div>
+
+  </div>
+
+  <hr class="sep">
+
+  <!-- ══ the other two states ════════════════════════════════════════════ -->
+  <p class="capt">The states that aren’t a list</p>
+  <div class="cols">
+    <div>
+      <p class="legend"><b>Following nothing</b> — most members, today.</p>
+      <div class="card-shell">
+        <h2 class="lg-manage-sub__prefs-title">Discussions you’re following</h2>
+        <p class="lg-pref-note" style="margin-top:8px">You’re not following any discussions yet. Open a
+          discussion in the Hub and tap the bell to be told when someone replies.</p>
+        <p style="margin:12px 0 2px"><a href="#" style="font:700 13px/1 var(--lg-font-sans);color:var(--lg-sage-d);text-decoration:none">Browse the Hub →</a></p>
+      </div>
+      <p class="verdict verdict--good">No empty table, no “0 results”. It says what the feature is and
+        where to start it. No <b>Stop all</b> button when there is nothing to stop.</p>
+    </div>
+
+    <div>
+      <p class="legend"><b>Stop all</b> — what the red button asks first.</p>
+      <div class="card-shell" style="max-width:430px">
+        <h2 class="lg-manage-sub__prefs-title" style="font-size:1rem">Stop all 12?</h2>
+        <p class="lg-pref-note" style="margin-top:8px">This turns off notifications <b>and</b> email for
+          all 12 discussions. Your Weekly Digest and Event Reminders are not affected.</p>
+        <p class="lg-pref-note">You can follow any of them again from the discussion itself.</p>
+        <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:14px">
+          <button class="fol__stopall" style="border-color:var(--lg-line);color:var(--lg-mute)">Cancel</button>
+          <button class="fol__stopall" style="background:var(--lg-rust);border-color:var(--lg-rust);color:#fff">Stop all 12</button>
+        </div>
+      </div>
+      <p class="verdict verdict--good">It names the count, says exactly which two things it kills, and
+        says out loud that it does <b>not</b> touch the Weekly Digest — the one thing a member would
+        otherwise be afraid of losing.</p>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:26px">Anon visitors never see this section at all — the page already
+    shows a sign-in card and hides <code>#lg-email-prefs</code> the same way. Data: PG
+    <code>forums.topic_follow</code> (🔔) + <code>wp_usermeta.wp__bbp_subscriptions</code> (✉), titles and
+    last-activity from the PG topic mirror. Unfollow and Stop all both write through the existing
+    <code>/bb-mirror-api/v0/follow</code> endpoint — no second write path.</p>
+</div>
+
+<script>
+  (function () {
+    function apply() {
+      var dark = /(?:\?|&)theme=dark\b/.test(location.search);
+      document.documentElement.setAttribute('data-lguser-theme', dark ? 'dark' : 'light');
+    }
+    apply();
+    window.addEventListener('resize', apply);   // headless clamps to 500px then relayouts
+  })();
+</script>
+</body>
+</html>

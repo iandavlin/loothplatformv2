@@ -27,6 +27,7 @@ declare(strict_types=1);
 require __DIR__ . '/../config.php';
 require __DIR__ . '/../lib/whoami.php';
 require __DIR__ . '/../lib/subscription-data.php';
+require __DIR__ . '/../lib/following-data.php';
 require '/srv/lg-shared/site-header.php';
 require '/srv/lg-shared/site-footer.php';
 
@@ -214,6 +215,173 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
       wire('lg-pref-events','lg_event_reminder_state','lg_event_reminder_signup');
     })();
     </script>
+    <?php endif; ?>
+
+    <?php
+    /* ── Discussions you're following ────────────────────────────────────────
+     * Ian, 2026-07-30: "in the manage my account page a section for posts I'm
+     * following." Discussions only — follow does not exist for articles or
+     * events, and extending it was declined in the same conversation.
+     *
+     * The job is NAVIGATION, not settings: see what you follow, get back to it,
+     * and leave. That distinction decides the two things this markup does that
+     * the earlier thread-follow mock (footer-mockups/threadfollow-notif-panel/
+     * mock-account.html) was rated BAD for missing:
+     *
+     *   BOUNDED. Five rows, then "Show all". Its verdict — "honest, but
+     *   unbounded; someone following thirty threads gets a thirty-row settings
+     *   page" — is not hypothetical: the FIRST REAL MEMBER (Ian, wp user 1) is
+     *   already at twelve, eleven of them legacy BuddyBoss auto-subscribes he
+     *   never knowingly opted into, dating back to August 2023.
+     *
+     *   ONE OFF SWITCH. "Stop all" clears both bits on every followed discussion
+     *   — "the exact thing people look for when they are annoyed enough to open
+     *   this page." It confirms first, and it says out loud that the Weekly
+     *   Digest is untouched, because that is the thing a member is afraid of
+     *   losing when they press a red button.
+     *
+     * The 🔔/✉ marks REPORT, they do not toggle. Per-discussion tuning already
+     * works on the discussion itself; putting live switches here is what turned
+     * the earlier mock into a settings grid. They are rendered from the stores
+     * and then corrected by the client against follow.php's own GET, because
+     * that endpoint is the only thing that knows whether discussion email is
+     * enabled at the ACCOUNT level (§8.1.3(a) — a subscription row alone does
+     * not mean mail will arrive).
+     *
+     * Every write goes out through follow.php's POST. There is no second write
+     * path to topic_follow, and no bulk endpoint exists, so "Stop all" is N
+     * sequential calls to the same contract.
+     */
+    if (!$is_anon):
+        $fol       = lg_following_list($wp_user_id);
+        $fol_max   = 50;                                  // hard DOM bound, see below
+        $fol_shown = array_slice($fol['items'], 0, $fol_max);
+        $fol_svg   = static function (string $which): string {
+            $open = '<svg class="lg-manage-sub__fol-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+                  . ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+            $paths = [
+                'bell'  => '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+                'email' => '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+                'x'     => '<path d="M18 6 6 18M6 6l12 12"/>',
+            ];
+            return $open . ($paths[$which] ?? '') . '</svg>';
+        };
+    ?>
+    <section class="lg-manage-sub__card lg-manage-sub__fol" id="lg-following"
+             aria-label="Discussions you are following"
+             data-total="<?= (int) $fol['total'] ?>" data-page-size="<?= (int) LG_FOLLOWING_PAGE_SIZE ?>"
+             <?php /* every followed id, not just the rendered ones — "Stop all" must
+                      mean all, and above $fol_max the DOM deliberately holds fewer. */ ?>
+             data-all-ids="<?= $h(implode(',', array_column($fol['items'], 'id'))) ?>">
+
+        <h2 class="lg-manage-sub__fol-title">Discussions you&rsquo;re following</h2>
+
+        <?php if ($fol['total'] === 0): ?>
+
+            <p class="lg-manage-sub__fol-empty">
+                You&rsquo;re not following any discussions yet. Open a discussion in the Hub and tap the
+                bell to be told when someone replies.
+            </p>
+            <p><a class="lg-manage-sub__fol-link" href="/hub/">Browse the Hub &rarr;</a></p>
+
+        <?php else: ?>
+
+            <p class="lg-manage-sub__fol-count">
+                <b><?= (int) $fol['total'] ?> discussion<?= $fol['total'] === 1 ? '' : 's' ?></b><?php
+                    if ($fol['email_count'] > 0):
+                ?> &middot; <span id="lg-fol-emailcount"><?= (int) $fol['email_count'] ?> of them email you</span><?php endif; ?>
+            </p>
+
+            <?php if (!$fol['hydrated']): ?>
+                <?php /* The discussion index itself was unreadable — which is LIVE'S
+                         STATE until forums.topic_follow is migrated there. Do NOT
+                         fall through to the row loop: every row would render
+                         "no longer available", declaring live discussions dead.
+                         Say what happened, and still offer the one useful action. */ ?>
+                <p class="lg-manage-sub__fol-warn">
+                    We can&rsquo;t reach the discussion index right now, so we can&rsquo;t show you
+                    which ones these are. Nothing has changed &mdash; try again shortly.
+                </p>
+            <?php else: ?>
+
+            <?php if ($fol['degraded'] !== ''): ?>
+                <p class="lg-manage-sub__fol-warn">
+                    <?= $fol['degraded'] === 'notify'
+                        ? 'We couldn&rsquo;t read your notification settings just now, so this list may be incomplete.'
+                        : 'We couldn&rsquo;t read your email settings just now, so this list may be incomplete.' ?>
+                </p>
+            <?php endif; ?>
+
+            <ul class="lg-manage-sub__fol-list">
+            <?php foreach ($fol_shown as $i => $it): ?>
+                <li class="lg-manage-sub__fol-row<?= $i >= LG_FOLLOWING_PAGE_SIZE ? ' is-overflow' : '' ?>"
+                    data-topic="<?= (int) $it['id'] ?>">
+                    <div class="lg-manage-sub__fol-main">
+                        <?php if ($it['gone']): ?>
+                            <span class="lg-manage-sub__fol-name is-gone">This discussion is no longer available</span>
+                            <span class="lg-manage-sub__fol-meta">It may have been removed &mdash; unfollow it to stop hearing about it.</span>
+                        <?php else: ?>
+                            <?php if ($it['url'] !== ''): ?>
+                                <a class="lg-manage-sub__fol-name" href="<?= $h($it['url']) ?>"><?= $h($it['title']) ?></a>
+                            <?php else: ?>
+                                <span class="lg-manage-sub__fol-name"><?= $h($it['title']) ?></span>
+                            <?php endif; ?>
+                            <span class="lg-manage-sub__fol-meta">
+                                <?php
+                                $bits = array_filter([
+                                    $it['forum'],
+                                    $it['replies'] > 0 ? $it['replies'] . ' repl' . ($it['replies'] === 1 ? 'y' : 'ies') : '',
+                                    lg_following_when($it['active_at']),
+                                ]);
+                                echo $h(implode(' · ', $bits));
+                                ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+
+                    <span class="lg-manage-sub__fol-state">
+                        <span class="lg-manage-sub__fol-mark<?= $it['notify'] ? ' is-on' : '' ?>"
+                              data-mark="notify" title="<?= $it['notify'] ? 'Notifications on' : 'Notifications off' ?>"
+                              aria-label="<?= $it['notify'] ? 'Notifications on' : 'Notifications off' ?>"><?= $fol_svg('bell') ?></span>
+                        <span class="lg-manage-sub__fol-mark<?= $it['email'] ? ' is-on' : '' ?>"
+                              data-mark="email" title="<?= $it['email'] ? 'Emails on' : 'Emails off' ?>"
+                              aria-label="<?= $it['email'] ? 'Emails on' : 'Emails off' ?>"><?= $fol_svg('email') ?></span>
+                    </span>
+
+                    <button type="button" class="lg-manage-sub__fol-x" data-unfollow="<?= (int) $it['id'] ?>"
+                            title="Unfollow" aria-label="Unfollow<?= $it['gone'] ? '' : ' ' . $h($it['title']) ?>"><?= $fol_svg('x') ?></button>
+                </li>
+            <?php endforeach; ?>
+            </ul>
+
+            <?php if ($fol['total'] > LG_FOLLOWING_PAGE_SIZE): ?>
+                <button type="button" class="lg-manage-sub__fol-more" id="lg-fol-more"
+                        aria-expanded="false" aria-controls="lg-following">
+                    Show all <?= (int) min($fol['total'], $fol_max) ?> &rarr;
+                </button>
+            <?php endif; ?>
+
+            <?php if ($fol['total'] > $fol_max): ?>
+                <p class="lg-manage-sub__fol-meta">
+                    Showing the <?= (int) $fol_max ?> most recently active of <?= (int) $fol['total'] ?>.
+                    <b>Stop all</b> below covers every one of them.
+                </p>
+            <?php endif; ?>
+
+            <?php endif; /* hydrated */ ?>
+
+            <?php /* Stop all survives an unreadable index on purpose: it needs only
+                     the ids, and a member who cannot see the list is exactly the one
+                     who wants it to stop. */ ?>
+            <div class="lg-manage-sub__fol-foot">
+                <span id="lg-fol-master"></span>
+                <button type="button" class="lg-manage-sub__fol-stopall" id="lg-fol-stopall"
+                        data-count="<?= (int) $fol['total'] ?>">Stop all <?= (int) $fol['total'] ?></button>
+            </div>
+
+        <?php endif; ?>
+    </section>
+    <script src="<?= $h(LG_MEMBERSHIP_PUBLIC_PATH) ?>/manage-following.js?v=<?= $h((string)(@filemtime(__DIR__ . '/manage-following.js') ?: '1')) ?>" defer></script>
     <?php endif; ?>
 
     <p class="lg-manage-sub__poc-note">

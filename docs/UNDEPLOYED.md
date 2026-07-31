@@ -18,6 +18,26 @@ migration IN THE SAME WINDOW as the pull:
   Run as `sudo -u bb-mirror psql -d looth` on LIVE. Without it, follow toggles
   render but can't persist (the exact dev2 symptom, now fixed on dev2 because
   keeper is applying the table there).
+- **`membership` Postgres role on LIVE** — needed by Manage Account's
+  "Discussions you're following" (account-following lane). SEPARATE from the
+  migration above and NOT covered by it: that script grants `looth_ro` only,
+  while this section runs on the `membership` FPM pool, which authenticates by
+  unix-socket peer auth and so needs a role of its own name. Read-only:
+
+  ```sql
+  CREATE ROLE "membership" LOGIN;
+  GRANT CONNECT ON DATABASE looth TO "membership";
+  GRANT USAGE ON SCHEMA forums TO "membership";
+  GRANT SELECT ON forums.topic_follow, forums.topic, forums.forum TO "membership";
+  ```
+
+  Applied on dev2 2026-07-30 and verified read-only there (DELETE on
+  topic_follow denied; SELECT on forums.reply denied). Rollback:
+  `DROP OWNED BY "membership"; DROP ROLE "membership";`
+  ORDER: run it AFTER the topic_follow migration — granting SELECT on a table
+  that does not exist yet is an error, and the table is created above.
+  Without it the section still renders and "Stop all" still works, but it
+  cannot show WHICH discussions they are.
 
 
 ## Staged scripts awaiting Ian's hands

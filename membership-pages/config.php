@@ -49,7 +49,16 @@ if (isset($shared['host'])) {
     define('LG_MEMBERSHIP_HOST', 'dev.loothgroup.com');
 }
 
-define('LG_MEMBERSHIP_PUBLIC_PATH', '/membership-pages');   // assets mount
+// Assets mount. Overridable by the SERVER, never by a request: a lane preview
+// serves this surface from a path prefix (/preview/<lane>/…), and the CSS/JS
+// links must follow it or the preview renders unstyled — which reads as "the
+// branch is broken" when it is only mounted somewhere else. fastcgi_param, so
+// it can only be set by an nginx block on this box; $_GET can never reach it.
+// Unset (every normal request, on dev and live) → byte-identical to before.
+define('LG_MEMBERSHIP_PUBLIC_PATH',
+    (isset($_SERVER['LG_MS_PUBLIC_PATH']) && $_SERVER['LG_MS_PUBLIC_PATH'] !== '')
+        ? rtrim((string) $_SERVER['LG_MS_PUBLIC_PATH'], '/')
+        : '/membership-pages');
 define('LG_MEMBERSHIP_TABLE_PREFIX', 'wp_');
 define('LG_MEMBERSHIP_UPLOADS_BASE', 'https://' . LG_MEMBERSHIP_HOST . '/wp-content/uploads/');
 define('LG_MEMBERSHIP_LOGO',
