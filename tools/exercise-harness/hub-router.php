@@ -1,6 +1,6 @@
 <?php
 /**
- * Loopback router for the thread-follow EXERCISE PASS.
+ * Loopback router for a lane's EXERCISE PASS.
  *
  * Emulates the nginx `location ^~ /hub/` block (strangler-bb-mirror.conf:60-79):
  *   alias /srv/bb-mirror/web/  +  try_files $uri /hub/index.php
@@ -14,7 +14,25 @@
  * Nothing here is deployed. The serving checkout is untouched.
  */
 
-$ROOT = '/home/ubuntu/worktrees/thread-follow/bb-mirror/web';
+/* WHICH BRANCH THIS SERVES. Was hardcoded to the thread-follow worktree, which meant a
+   second lane running this router served ITS OWN bb-mirror markup but THREAD-FOLLOW's
+   /hub-polish.js and /lg-shared assets — a split-brain page where the branch's JS fix is
+   silently absent and the harness still looks right. One knob, read in all three places.
+   Set LG_HARNESS_BRANCH to your worktree root; it must be an absolute existing path. */
+function lg_harness_branch(): string {
+    static $b = null;
+    if ($b !== null) return $b;
+    $v = getenv('LG_HARNESS_BRANCH') ?: ($_SERVER['LG_HARNESS_BRANCH'] ?? '');
+    $r = $v !== '' ? realpath($v) : false;
+    if ($r === false || !is_dir($r)) {
+        http_response_code(500);
+        header('Content-Type: text/plain');
+        exit("hub-router: LG_HARNESS_BRANCH is unset or not a directory (got " . var_export($v, true) . ")\n");
+    }
+    return $b = rtrim($r, '/');
+}
+
+$ROOT = lg_harness_branch() . '/bb-mirror/web';
 
 $uri  = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 
@@ -88,7 +106,7 @@ if (str_starts_with($uri, '/profile-api/v0/')) {
    the ⋯ popover live — so without this route the popover renders cream-on-dark and a
    naive theme test passes for the wrong reason. Serve them from the BRANCH webroot. */
 if (preg_match('#^/([A-Za-z0-9._-]+\.(?:js|css|json))$#', $uri, $mm)) {
-    $WR = '/home/ubuntu/worktrees/thread-follow/webroot';
+    $WR = lg_harness_branch() . '/webroot';
     $f  = realpath($WR . '/' . $mm[1]);
     if ($f !== false && str_starts_with($f, $WR . DIRECTORY_SEPARATOR) && is_file($f)) {
         $e = strtolower(pathinfo($f, PATHINFO_EXTENSION));
@@ -104,7 +122,7 @@ if (preg_match('#^/([A-Za-z0-9._-]+\.(?:js|css|json))$#', $uri, $mm)) {
    PHP partial itself is still required by _chrome.php via the absolute /srv path,
    i.e. main's; only these static assets are branch. Labelled, not glossed. */
 if (str_starts_with($uri, '/lg-shared/')) {
-    $SH = '/home/ubuntu/worktrees/thread-follow/lg-shared';
+    $SH = lg_harness_branch() . '/lg-shared';
     $f  = realpath($SH . substr($uri, strlen('/lg-shared')));
     if ($f !== false && str_starts_with($f, $SH . DIRECTORY_SEPARATOR) && is_file($f)
         && !str_ends_with(strtolower($f), '.php')) {
