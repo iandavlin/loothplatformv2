@@ -6,6 +6,7 @@ line into that lane's charter and note the lane name here.
 ## PRIORITY INDEX (the order — edit THIS to re-rank; tell keeper "bump X")
 
 **P0 — live/member-facing bugs**
+0. 🔴 MISSION CRITICAL: anon front page nav overlay hides every link INCLUDING Sign in — signed-out members cannot get back in
 1. Reacting on a shorty fails on LIVE
 2. BUG: fresh reply prefilled with last reply's data — *edit-post-parity fixing*
 3. Profile social links go stale on posts/events (member-reported)
@@ -33,6 +34,33 @@ line into that lane's charter and note the lane name here.
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 2026-07-31 — 🔴 MISSION CRITICAL: anon front page — nav overlay hides EVERY link, including Sign in (Ian)
+
+Ian 7/31, from an incognito window on `dev2.loothgroup.com`: **"add to backlog as mission
+critical that this page break has no sign in option."**
+
+**A logged-out visitor cannot sign in.** A white block renders over the whole nav, so the
+menu items paint as unreadable grey-on-white and none of them can be used:
+`The Hub · Events · The Map · Sponsors · Loothtool · Sign in`
+
+**The affordance is NOT missing — it is COVERED.** Measured on the served anon page:
+`wp-login` ×2 and "Sign in" ×2 are present in the HTML, and the link sits *inside* that
+nav list immediately after Loothtool. So this is a RENDERING failure hiding a working
+control, not an absent feature. Do not "add a sign-in link" — find what paints over the
+menu.
+
+What a logged-out visitor CAN reach: `Connect Patreon`, `Join`, `Weekly email`. All three
+are acquisition paths. **There is no path for an EXISTING member who is signed out** —
+they are offered only ways to join something they already belong to.
+
+**Why mission critical:** every returning member who arrives logged-out is locked out of
+the platform at the front door, and the only visible options tell them to sign up again.
+This is on `/`, the highest-traffic page, for the least-authenticated visitor.
+
+Scope note: `/` is served by archive-poc's discovery feed, NOT WordPress — so this is
+chrome/CSS in the standalone render path, not a theme problem. Check z-index/stacking on
+the chrome header and any overlay or mobile-menu panel that may be mounting open.
 
 ## 2026-07-31 — Shop Layout Planner: standalone render + an APPS INDEX page (Ian)
 
