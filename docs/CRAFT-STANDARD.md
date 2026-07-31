@@ -16,6 +16,39 @@ meant "the screenshot looks right." Screenshots can't see weight.
    blocks the push the same way a red visibility matrix does.
 3. **Done = green gates**, not a screenshot.
 
+## Probes that answer about themselves
+
+A defect class of its own, discovered twice on 2026-07-30–31 and therefore
+written down here rather than re-learned: **a check whose own execution creates
+the evidence it then reads.** It does not fail. It returns a confident, specific,
+wrong answer, and it returns it fast.
+
+Both instances, same shape:
+
+| the probe | what it "proved" | what was true |
+|---|---|---|
+| `pgrep -af "chrome.*host-resolver-rules"` | resolver **present** on the shared Chrome | absent — `pgrep -f` matched **its own command line** |
+| `msg inbox \| grep "seat is yours"` | the browser seat had been **granted** | it matched **my own message**, which quoted the phrase while asking for it |
+
+The rule:
+
+- **Never let a probe's own text be searchable by the probe.** For processes read
+  `/proc/<pid>/cmdline` (or `pgrep -x`, which matches the name only, never the
+  arguments). For a message board, read the **sender**, not the body.
+- **Ask who authored the evidence.** If the answer can be "me, just now", the
+  check is worthless no matter how specific its output looks.
+- This is CLAUDE.md trap #3 (`grep -c` counts lines) and trap #4 (verify the
+  thing, not the thing next to it) in their most expensive form, because unlike
+  those two there is no wrong-looking number to notice. `pgrep -af` returned a
+  real PID and a real command line containing the real flag.
+
+A near-relative, same session: **greping for rendered text finds nothing when CSS
+does the rendering.** `CORE` / `EXTRAS` / `FILTERABLE` appear nowhere in the
+profile markup — the DOM says `Core` / `Extras` / `Filterable` and
+`text-transform:uppercase` does the rest. Searching for what you *see* returned 0
+and read exactly like a missing feature. Search the DOM's text, then check the
+CSS before believing an absence.
+
 ## The craft checklist (what the craft gate enforces)
 
 - **Images**: every same-origin content image goes through the resizer

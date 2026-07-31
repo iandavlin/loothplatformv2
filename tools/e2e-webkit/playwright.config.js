@@ -17,8 +17,11 @@
 // RAM PROTOCOL (keeper-watch incident 2026-07-24 ~04:58): a WebKit run spawns ~2x
 // WPEWebProcess (~660MB total) and took the 3.8GB box to 86MB avail with other lanes
 // resident. Before running: (1) board-flag that a heavy browser suite is starting,
-// (2) confirm NO other browser engine is up (pgrep -f 'chrome-linux64|WPEWebProcess|
-// headless_shell'), (3) keep workers:1 (below), (4) suite must be the ONLY engine on
+// (2) confirm NO other browser engine is up -- use `pgrep -x` per name, or read
+// /proc/<pid>/cmdline. NOT `pgrep -f 'chrome-linux64|WPEWebProcess|headless_shell'`:  selfmatch-ok (naming the bad pattern to warn about it)
+// -f matches the FULL command line including pgrep's own, so it reports an engine
+// that is not there (docs/CRAFT-STANDARD.md, "probes that answer about themselves").
+// (3) keep workers:1 (below), (4) suite must be the ONLY engine on
 // the box until it exits. One engine at a time is box law, and Playwright engines
 // count — not just lg-chrome.
 const { defineConfig, devices } = require('@playwright/test');
