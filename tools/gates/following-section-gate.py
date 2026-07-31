@@ -380,6 +380,74 @@ def open_and_read_modal(p, url, timeout_s=20):
     return last
 
 
+
+CONTRAST_JS = r"""(() => {
+  // WCAG 2.x relative luminance + contrast ratio, computed from what the browser
+  // ACTUALLY resolved — not from the stylesheet's intent. A token that failed to
+  // re-point in dark shows up here as a real number, which is the whole point:
+  // "it renders" and "you can read it" are different claims.
+  const lum = (r,g,b) => {
+    const f = c => { c/=255; return c <= 0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); };
+    return 0.2126*f(r) + 0.7152*f(g) + 0.0722*f(b);
+  };
+  const parse = c => {
+    const m = /rgba?\(([^)]+)\)/.exec(c || '');
+    if (!m) return null;
+    const p = m[1].split(',').map(x => parseFloat(x));
+    return {r:p[0], g:p[1], b:p[2], a: p.length > 3 ? p[3] : 1};
+  };
+  // Walk up for the first OPAQUE background, compositing any translucent layers
+  // on the way — the card foot is a translucent wash over the card, and treating
+  // it as transparent would measure the text against the wrong surface.
+  const bgOf = el => {
+    let stack = [];
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      const c = parse(getComputedStyle(n).backgroundColor);
+      if (!c || c.a === 0) continue;
+      stack.push(c);
+      if (c.a === 1) break;
+    }
+    if (!stack.length) return {r:255,g:255,b:255};
+    let out = stack.pop();
+    while (stack.length) {
+      const top = stack.pop();
+      out = {r: top.r*top.a + out.r*(1-top.a),
+             g: top.g*top.a + out.g*(1-top.a),
+             b: top.b*top.a + out.b*(1-top.a), a:1};
+    }
+    return out;
+  };
+  const ratio = el => {
+    if (!el) return null;
+    const fg = parse(getComputedStyle(el).color);
+    if (!fg) return null;
+    const bg = bgOf(el);
+    // Composite a translucent foreground onto its own background too.
+    const f = {r: fg.r*fg.a + bg.r*(1-fg.a),
+               g: fg.g*fg.a + bg.g*(1-fg.a),
+               b: fg.b*fg.a + bg.b*(1-fg.a)};
+    const L1 = lum(f.r,f.g,f.b), L2 = lum(bg.r,bg.g,bg.b);
+    const hi = Math.max(L1,L2), lo = Math.min(L1,L2);
+    return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
+  };
+  const q = sel => document.querySelector(sel);
+  const S = '#lg-following ';
+  return {
+    theme:      document.documentElement.getAttribute('data-lguser-theme') || 'default',
+    title:      ratio(q(S + '.lg-manage-sub__fol-name')),
+    meta:       ratio(q(S + '.lg-manage-sub__fol-meta')),
+    count:      ratio(q(S + '.lg-manage-sub__fol-count')),
+    heading:    ratio(q(S + '.lg-manage-sub__fol-title')),
+    showall:    ratio(q('#lg-fol-more')),
+    stopall:    ratio(q('#lg-fol-stopall')),
+    footnote:   ratio(q('#lg-fol-master')),
+    mark_on:    ratio(q(S + '.lg-manage-sub__fol-mark.is-on')),
+    mark_off:   ratio(q(S + '.lg-manage-sub__fol-mark:not(.is-on)')),
+    unfollow:   ratio(q(S + '[data-unfollow]')),
+  };
+})()"""
+
+
 def origin_of(url):
     """scheme://host[:port] — what an absolute href resolves against."""
     u = urllib.parse.urlsplit(url)
@@ -765,7 +833,45 @@ def main():
                     try: p.ev(follow_js(ctl, False))
                     except Exception: pass
 
-        log("\n  [11] nothing here leaks to a signed-out visitor")
+        log("\n  [11] BOTH THEMES — measured contrast, not 'it renders'")
+        # Ian, 2026-07-31: "All of this stuff needs a dark mode pass." A
+        # single-theme gate cannot see this class AT ALL: the page had zero dark
+        # rules, so the card stayed white while the ink flipped near-white, and
+        # every assertion above still passed because the elements were all
+        # present, hittable and correctly wired. Presence is not legibility.
+        #
+        # The prior art is the messages-search lane: sage tints that were never
+        # re-pointed for dark. #eef2e3 is a wash designed to sit on white; left
+        # alone it becomes a bright chip on a dark card. So this measures the
+        # RESOLVED colours out of the browser, composites translucent layers, and
+        # reports ratios — a token that failed to re-point shows up as a number.
+        #
+        # WCAG AA is 4.5:1 for normal text. The two marks are ICONS, not text, and
+        # the OFF one is deliberately quiet — but it must still be VISIBLE, because
+        # an invisible "off" is indistinguishable from a missing control: the
+        # member cannot tell the bell is off from the bell not being there.
+        AA_TEXT, ICON_MIN, OFF_MIN = 4.5, 3.0, 1.6
+        for theme in ("light", "dark"):
+            p.ev(f"localStorage.setItem('lg-set-theme', '{theme}'); true")
+            if not goto(p, args.url):
+                cannot_run(f"the section never hydrated in {theme} theme")
+            c = p.ev(CONTRAST_JS)
+            want_attr = "dark" if theme == "dark" else "default"
+            check(f"{theme}: the theme really applied", c.get("theme"), want_attr)
+            for key, floor in (("heading", AA_TEXT), ("title", AA_TEXT), ("meta", AA_TEXT),
+                               ("count", AA_TEXT), ("showall", AA_TEXT), ("stopall", AA_TEXT),
+                               ("footnote", AA_TEXT), ("unfollow", ICON_MIN),
+                               ("mark_on", ICON_MIN), ("mark_off", OFF_MIN)):
+                got = c.get(key)
+                ok = isinstance(got, (int, float)) and got >= floor
+                check(f"{theme}: {key} contrast >= {floor}", ok, True)
+                if not ok:
+                    log(f"           measured {got!r}")
+                else:
+                    log(f"           {key} = {got}:1")
+        p.ev("localStorage.setItem('lg-set-theme', 'light'); true")
+
+        log("\n  [12] nothing here leaks to a signed-out visitor")
         p.send("Network.clearBrowserCookies")
         host = args.url.split("/")[2].split(":")[0]
         g = [c for c in cookies if c.startswith("loothdev_auth")]

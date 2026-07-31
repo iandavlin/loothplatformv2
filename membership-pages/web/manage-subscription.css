@@ -204,7 +204,12 @@ a.lg-manage-sub__fol-name:hover { color: #6b7c52; text-decoration: underline; }
     align-items: center;
     padding: 4px 5px;
     border-radius: 8px;
-    color: #d8d4c6;                 /* off — visible but plainly inactive */
+    /* OFF, and it must still be SEEN. #d8d4c6 measured 1.48:1 against the card —
+     * below any usable floor, so the bell simply was not there for a member
+     * scanning the row, and "off" became indistinguishable from "no control".
+     * #b3ad9a measures 2.24:1: still plainly inactive next to the sage ON state,
+     * but present. Found by measuring, not by looking at it. */
+    color: #b3ad9a;
     cursor: default;
 }
 .lg-manage-sub__fol-mark.is-on { color: #6b7c52; background: #eef2e3; }
@@ -274,11 +279,14 @@ a.lg-manage-sub__fol-name:hover { color: #6b7c52; text-decoration: underline; }
     border-radius: 999px;
     font-size: .78rem;
     font-weight: 700;
-    color: #c66845;
+    /* 4.83:1 on the pink wash it sits on. #c66845 measured 3.63:1 — under AA, on
+     * the single control this card exists to offer. The border keeps the lighter
+     * rust so the shape is unchanged; only the LABEL darkened. */
+    color: #b0522f;
     cursor: pointer;
 }
 .lg-manage-sub__fol-stopall:hover,
-.lg-manage-sub__fol-stopall:focus-visible { background: #c66845; border-color: #c66845; color: #fff; }
+.lg-manage-sub__fol-stopall:focus-visible { background: #b0522f; border-color: #b0522f; color: #fff; }
 .lg-manage-sub__fol-stopall[disabled] { opacity: .5; cursor: default; }
 
 /* Stop-all confirm — a real dialog, because the button is destructive and the
@@ -320,3 +328,155 @@ a.lg-manage-sub__fol-name:hover { color: #6b7c52; text-decoration: underline; }
  * when tapped. That is the dead-control class, so the row states its reason in
  * the meta line AND stops advertising an affordance it does not have. */
 span.lg-manage-sub__fol-name { color: var(--lg-mute, #6b6f63); font-weight: 600; }
+
+/* ═══ DARK MODE ═══════════════════════════════════════════════════════════════
+ * Ian, 2026-07-31, on everything built today: "All of this stuff needs a dark
+ * mode pass."
+ *
+ * THE SIGNAL is html[data-lguser-theme="dark"] — a RESOLVED APP THEME set by
+ * app-settings.js from localStorage 'lg-set-theme' (and the OS default since
+ * Buck's #64). NOT prefers-color-scheme: keying off the media query would
+ * disagree with the app's own switch, which is the whole point of the attribute.
+ * Same contract /srv/lg-shared/site-header.php:128 documents.
+ *
+ * WHAT WAS ACTUALLY BROKEN, measured on the preview before writing a line: this
+ * stylesheet had ZERO dark rules, so the card stayed `background:#fff` while the
+ * row ink rides var(--lg-ink), which the dark theme flips near-white. Result:
+ * pale titles on a white slab — literally the defect the shared header's own
+ * comment records from Ian's earlier screenshot, repeated on this page. The
+ * "off" bell marks (#d8d4c6) vanished into the white, and the row separators
+ * went BLACK because var(--lg-line) flipped under a card that did not.
+ *
+ * ADDITIVE ON PURPOSE. Every rule below is a new selector carrying the
+ * html[data-lguser-theme="dark"] prefix; not one light rule is edited. So light
+ * mode is byte-identical BY CONSTRUCTION rather than by inspection — and the
+ * attribute selector also outranks the page's inline <style> block, which is how
+ * the Email-preferences switches get themed from here at all.
+ *
+ * SAGE TINTS ARE RE-POINTED, NOT REUSED. This is the messages-search lane's
+ * defect class: #eef2e3 is a pale wash designed to sit on white, and on a dark
+ * card it reads as a bright chip with near-white text on it. Dark gets the
+ * chrome's own dark tokens (#243024 tint, #b0c693 accent) rather than the light
+ * values dimmed.
+ */
+html[data-lguser-theme="dark"] {
+    --lgms-card:    #1b1e21;   /* matches the chrome's --lg-panel-bg */
+    --lgms-card-2:  #22262a;   /* raised strips: card foot, dialog */
+    --lgms-border:  #2c312d;
+    --lgms-ink:     #e5e7e1;
+    --lgms-mute:    #9aa097;
+    --lgms-sage:    #b0c693;   /* dark-mode accent, NOT the light #6b7c52 */
+    --lgms-tint:    #243024;
+    --lgms-rust:    #e08a63;   /* chrome's --lg-panel-danger */
+    --lgms-rust-bg: #3a2320;
+}
+
+/* ── the cards themselves ── */
+html[data-lguser-theme="dark"] .lg-manage-sub__card {
+    background: var(--lgms-card);
+    border-color: var(--lgms-border);
+    box-shadow: 0 1px 3px rgba(0,0,0,.5);
+    color: var(--lgms-ink);
+}
+html[data-lguser-theme="dark"] .lg-manage-sub__title,
+html[data-lguser-theme="dark"] .lg-manage-sub__tier,
+html[data-lguser-theme="dark"] .lg-manage-sub__details dd,
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-title { color: var(--lgms-ink); }
+html[data-lguser-theme="dark"] .lg-manage-sub__details dt,
+html[data-lguser-theme="dark"] .lg-manage-sub__note,
+html[data-lguser-theme="dark"] .lg-manage-sub__hint,
+html[data-lguser-theme="dark"] .lg-manage-sub__sublabel,
+html[data-lguser-theme="dark"] .lg-manage-sub__poc-note { color: var(--lgms-mute); }
+html[data-lguser-theme="dark"] .lg-manage-sub__changepw a,
+html[data-lguser-theme="dark"] .lg-manage-sub__hint a { color: var(--lgms-sage); }
+
+/* Status pills: the light washes are all pale-on-white. */
+html[data-lguser-theme="dark"] .lg-manage-sub__status-pill            { background: #2a2f2b; color: var(--lgms-mute); }
+html[data-lguser-theme="dark"] .lg-manage-sub__status-pill--active    { background: #1f3524; color: #9fd8ae; }
+html[data-lguser-theme="dark"] .lg-manage-sub__status-pill--declined  { background: #3a2320; color: #f0a08a; }
+
+/* ── "Discussions you're following" ── */
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-count b,
+html[data-lguser-theme="dark"] a.lg-manage-sub__fol-name { color: var(--lgms-ink); }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-count,
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-meta,
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-empty,
+html[data-lguser-theme="dark"] span.lg-manage-sub__fol-name { color: var(--lgms-mute); }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-row { border-top-color: var(--lgms-border); }
+html[data-lguser-theme="dark"] a.lg-manage-sub__fol-name:hover { color: var(--lgms-sage); }
+
+/* The two marks. OFF must stay VISIBLE-but-inactive: #d8d4c6 was tuned against
+ * white and disappears here, and an invisible "off" is indistinguishable from a
+ * missing control — the member cannot tell the bell is off from the bell being
+ * absent. Dark gets a mid-grey that reads as present-and-inactive. */
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-mark { color: #4e554e; }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-mark.is-on {
+    color: var(--lgms-sage);
+    background: var(--lgms-tint);
+}
+
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-x { color: var(--lgms-mute); }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-x:hover,
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-x:focus-visible {
+    color: var(--lgms-rust);
+    background: var(--lgms-rust-bg);
+}
+
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-more,
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-link { color: var(--lgms-sage); }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-more { border-top-color: var(--lgms-border); }
+
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-foot {
+    background: var(--lgms-card-2);
+    border-top-color: var(--lgms-border);
+}
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-foot span { color: var(--lgms-mute); }
+
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-stopall {
+    border-color: rgba(224,138,99,.5);
+    color: var(--lgms-rust);
+}
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-stopall:hover,
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-stopall:focus-visible {
+    background: var(--lgms-rust);
+    border-color: var(--lgms-rust);
+    color: #201512;                       /* dark ink on a light-ish rust fill */
+}
+
+/* The could-not-read banner. #fef3c7 is a headlight on a dark card. */
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-warn {
+    background: #3a3320;
+    color: #f2d79a;
+}
+
+/* Stop-all confirm. */
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-dlg {
+    background: var(--lgms-card-2);
+    border-color: var(--lgms-border);
+    color: var(--lgms-ink);
+}
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-dlg h3 { color: var(--lgms-ink); }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-dlg p  { color: var(--lgms-mute); }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-dlg::backdrop { background: rgba(0,0,0,.62); }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-dlg-btns .lg-manage-sub__fol-stopall.is-cancel {
+    border-color: var(--lgms-border);
+    color: var(--lgms-mute);
+}
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-dlg-btns .lg-manage-sub__fol-stopall.is-go {
+    background: var(--lgms-rust);
+    border-color: var(--lgms-rust);
+    color: #201512;
+}
+
+/* ── Email preferences, next door. Its rules live in an inline <style> in
+ * manage-subscription.php, which loads AFTER this file — the attribute selector
+ * is what lets these win without touching that block. Themed here because a
+ * half-dark card reads as a bug, not as scope. ── */
+html[data-lguser-theme="dark"] .lg-pref-row { border-top-color: var(--lgms-border); }
+html[data-lguser-theme="dark"] .lg-pref-row__txt { color: var(--lgms-ink); }
+html[data-lguser-theme="dark"] .lg-pref-row__txt small,
+html[data-lguser-theme="dark"] .lg-pref-note { color: var(--lgms-mute); }
+html[data-lguser-theme="dark"] .lg-switch__track { background: #3a413b; }
+html[data-lguser-theme="dark"] .lg-switch__track:before { background: #d8dcd4; }
+html[data-lguser-theme="dark"] .lg-switch input:checked + .lg-switch__track { background: var(--lgms-sage); }
+html[data-lguser-theme="dark"] .lg-switch input:checked + .lg-switch__track:before { background: #161a17; }
