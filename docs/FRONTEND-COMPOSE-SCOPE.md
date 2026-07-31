@@ -114,7 +114,10 @@ single-screen form is the model** — which is convenient, because that is also 
 These are not hypothetical field lists. They are the ACF groups behind the old front-end
 pages, written for members in members' language:
 
-**Add Post – Loothprints** (12 fields, 5 required)
+**Add Post – Loothprints** (12 fields, **6** required — Title, the gallery, the 3D file,
+Type, Content Topic, and the licence, which ships with a sensible default already
+selected. The mock asks for **five** things because it puts Type and Content Topic in one
+question; that is a design choice in the mock, not a property of the field group.)
 Title of your Loothprint\* · Summary · Featured image · *"Add one or more image(s) of
 your print in action"*\* · **3D File Upload ZIP File**\* · Video instructions for
 use/build · Onshape Project Link · Type of Loothprint\* · Content Topic\* · *"Link to

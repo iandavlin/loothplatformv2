@@ -1,0 +1,376 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Post a Loothprint — an easy front-end form (2026-07-31)</title>
+<style>
+:root{
+  --cream:#fbfbf8; --sage:#87986a; --sage-d:#586b3f; --sage-tint:#eef2e3;
+  --rust:#c66845; --rust-tint:#fbeee8; --ink:#262925; --mute:#565a55;
+  --line:#e4e7d8; --card:#fff; --warn:#b5442a;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --serif:Lora,Georgia,serif;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:30px 20px 90px;background:var(--cream);color:var(--ink);font:16px/1.55 var(--sans)}
+.wrap{max-width:1120px;margin:0 auto}
+h1{font:700 27px/1.2 var(--serif);margin:0 0 6px}
+.lede{color:var(--mute);margin:0 0 8px;font-size:15.5px;max-width:74ch}
+h2{font:700 12.5px/1.2 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);
+   margin:46px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+p{max-width:76ch}
+.note{border-left:3px solid var(--rust);padding:10px 0 10px 15px;margin:20px 0;color:var(--mute);font-size:14.5px;max-width:76ch}
+.note strong{color:var(--ink)}
+.note--warn{border-left-color:var(--warn)}
+code{background:#f0f1ea;padding:1px 6px;border-radius:5px;font-size:12.5px}
+.rec{display:inline-block;font:700 10.5px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--sage-d);border:1px solid var(--sage);background:var(--sage-tint);padding:4px 8px;border-radius:999px;
+  margin-left:7px;vertical-align:2px}
+.rec--alt{color:var(--mute);border-color:var(--line);background:#f4f5ee}
+
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:26px;align-items:start}
+/* On a narrow screen the columns stack — and the PHONE drawing must come first.
+   Read on a phone, the desktop column landed on top, so the frame above the fold
+   was the desktop form squeezed to 390px sitting under a label saying "1280px".
+   Ian reads this on his phone; a mislabelled first impression is the one defect a
+   comparison document cannot afford. */
+@media (max-width:980px){
+  .cols{grid-template-columns:1fr}
+  .cols > *:nth-child(2){order:-1}
+}
+.vp{font:700 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--mute);margin:0 0 9px}
+
+/* ── the form itself ───────────────────────────────────────────── */
+.form{border:1px solid var(--line);border-radius:16px;background:var(--card);overflow:hidden;
+  box-shadow:0 10px 34px rgba(38,41,37,.06)}
+.form--phone{max-width:360px}
+.form__h{padding:19px 21px 15px;border-bottom:1px solid var(--line);background:#fcfcf9}
+.form__h h3{margin:0;font:700 19px/1.25 var(--serif)}
+.form__h p{margin:5px 0 0;color:var(--mute);font-size:13.5px}
+.form--phone .form__h{padding:16px 16px 13px}
+.form--phone .form__h h3{font-size:17px}
+.form__b{padding:6px 21px 20px}
+.form--phone .form__b{padding:4px 16px 18px}
+
+.fld{padding:15px 0;border-bottom:1px solid #f0f1ea}
+.fld:last-of-type{border-bottom:0}
+.fld__l{display:flex;align-items:baseline;gap:7px;margin-bottom:3px}
+.fld__l b{font:700 14.5px/1.3 var(--sans)}
+.req{font:700 9.5px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--rust);
+  background:var(--rust-tint);border-radius:4px;padding:3px 5px}
+.fld__hint{color:var(--mute);font-size:12.8px;margin:0 0 9px;line-height:1.45}
+.inp{border:1px solid var(--line);border-radius:9px;padding:10px 12px;font:500 14px/1.4 var(--sans);
+  color:var(--ink);background:#fdfdfa}
+.inp--ph{color:#a3a89e}
+.inp--tall{min-height:74px}
+
+/* drop zones */
+.drop{border:1.5px dashed #cfd5c1;border-radius:11px;background:#fbfcf7;padding:15px;text-align:center}
+.drop b{display:block;font:700 13.5px/1.3 var(--sans);color:var(--sage-d)}
+.drop span{display:block;color:var(--mute);font-size:12.3px;margin-top:3px}
+.thumbs{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+.th{width:52px;height:52px;border-radius:8px;background:linear-gradient(135deg,#dfe4d2,#c6d0b1);flex:0 0 auto}
+.th--add{background:#f4f6ee;border:1.5px dashed #cfd5c1;display:flex;align-items:center;justify-content:center;
+  color:var(--sage-d);font:700 19px/1 var(--sans)}
+.filerow{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:9px;
+  padding:9px 11px;background:#fdfdfa}
+.filerow .zip{width:31px;height:31px;border-radius:7px;background:var(--sage-tint);color:var(--sage-d);
+  display:flex;align-items:center;justify-content:center;font:700 10px/1 var(--sans);flex:0 0 auto}
+.filerow .nm{font:600 13.3px/1.3 var(--sans);flex:1 1 auto;min-width:0}
+.filerow .nm small{display:block;color:var(--mute);font-weight:500;font-size:11.6px}
+
+/* chips */
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:600 12.3px/1 var(--sans);border:1px solid var(--line);border-radius:999px;padding:7px 11px;
+  color:var(--mute);background:#fdfdfa;cursor:pointer}
+.chip.on{background:var(--sage-d);border-color:var(--sage-d);color:#fff}
+
+/* the pre-answered licence */
+.preset{display:flex;align-items:center;gap:10px;border:1px solid var(--sage);background:var(--sage-tint);
+  border-radius:10px;padding:10px 12px}
+.preset .tick{width:19px;height:19px;border-radius:50%;background:var(--sage-d);color:#fff;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;font-size:11px}
+.preset .tx{flex:1 1 auto;min-width:0;font:600 13.2px/1.35 var(--sans)}
+.preset .tx small{display:block;color:var(--mute);font-weight:500;font-size:11.8px}
+.preset .ch{font:700 12px/1 var(--sans);color:var(--sage-d);text-decoration:underline;cursor:pointer;flex:0 0 auto}
+
+/* the optional fold */
+.fold{margin-top:4px;border:1px solid var(--line);border-radius:11px;background:#fcfcf9;overflow:hidden}
+.fold__t{display:flex;align-items:center;gap:9px;width:100%;background:none;border:0;padding:13px 14px;
+  font:700 13.5px/1 var(--sans);color:var(--sage-d);cursor:pointer;text-align:left}
+.fold__t .cv{margin-left:auto;color:var(--mute);font-size:12px;font-weight:600}
+.fold__b{padding:0 14px 6px;display:none}
+.fold.open .fold__b{display:block}
+.fold.open .fold__t .cv::after{content:' ▲'}
+.fold:not(.open) .fold__t .cv::after{content:' ▼'}
+
+.form__f{padding:15px 21px 19px;border-top:1px solid var(--line);background:#fcfcf9;
+  display:flex;align-items:center;gap:11px}
+.form--phone .form__f{padding:13px 16px 16px}
+.btn{font:700 14px/1 var(--sans);border-radius:10px;padding:12px 20px;border:1px solid var(--sage-d);
+  background:var(--sage-d);color:#fff;cursor:pointer}
+.btn--ghost{background:none;color:var(--sage-d)}
+.form__f .sm{margin-left:auto;color:var(--mute);font-size:12.3px}
+
+/* ── the alternative: wizard ───────────────────────────────────── */
+.wiz{border:1px solid var(--line);border-radius:16px;background:var(--card);overflow:hidden}
+.wiz__rail{display:flex;gap:0;border-bottom:1px solid var(--line);background:#fcfcf9}
+.wiz__step{flex:1 1 0;padding:13px 8px;text-align:center;font:700 12px/1.2 var(--sans);color:var(--mute);
+  border-bottom:2px solid transparent}
+.wiz__step.on{color:var(--sage-d);border-bottom-color:var(--sage-d);background:#fff}
+.wiz__step small{display:block;font-weight:600;font-size:10.5px;color:#9aa093;margin-top:2px}
+.wiz__b{padding:17px 19px 19px;min-height:210px}
+.wiz__f{padding:13px 19px 16px;border-top:1px solid var(--line);background:#fcfcf9;display:flex;gap:10px;align-items:center}
+
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:6px 0 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:700 10.5px/1.2 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.yes{color:var(--sage-d);font-weight:700}
+.no{color:var(--warn);font-weight:700}
+.gate{border:1px solid var(--line);border-radius:14px;background:#fff;overflow:hidden;margin-top:6px}
+.gate table{margin:0}
+.bad{background:var(--rust-tint)}
+</style>
+
+<div class="wrap">
+
+<h1>Post a Loothprint</h1>
+<p class="lede">Ian, 7/31: <em>“I need to be able to compose on the front end with a easy front end form.”</em>
+This is that form, for the type your backlog already names first. Two shapes, recommendation first.
+<strong>The words in it aren’t invented</strong> — every label and hint below is the copy that already
+exists for this post type; it was written for members and then stranded when the old page builder was
+switched off. The form and the page-builder behind it are both already there. What’s missing is the door.</p>
+
+<h2>Recommended — one screen, five things, extras folded away <span class="rec">what I’d build</span></h2>
+<p>The type asks for twelve fields. A member should not feel twelve. Five carry the whole post —
+title, photos, the files, what kind of thing it is, and a licence that is <em>already answered</em> —
+and everything else folds out of the way until someone wants it. This is the same flat single-screen
+shape your members already use to start a discussion on a phone.</p>
+
+<div class="cols">
+  <div>
+    <p class="vp">Desktop · 1280px</p>
+    <div class="form">
+      <div class="form__h">
+        <h3>Share a Loothprint</h3>
+        <p>Your 3D print, free for the rest of the group to make.</p>
+      </div>
+      <div class="form__b">
+
+        <div class="fld">
+          <div class="fld__l"><b>What’s it called?</b><span class="req">needed</span></div>
+          <div class="inp inp--ph">Fret sander with swappable radius cauls</div>
+        </div>
+
+        <div class="fld">
+          <div class="fld__l"><b>Show it off</b><span class="req">needed</span></div>
+          <p class="fld__hint">One or more photos of your print — finished, or better still in use.</p>
+          <div class="drop"><b>Drop photos here</b><span>or tap to choose · JPG, PNG, HEIC</span></div>
+          <div class="thumbs"><span class="th"></span><span class="th"></span><span class="th th--add">+</span></div>
+        </div>
+
+        <div class="fld">
+          <div class="fld__l"><b>The print files</b><span class="req">needed</span></div>
+          <p class="fld__hint">A ZIP with your STLs — and the editable source too, if you’re happy to share it.</p>
+          <div class="filerow">
+            <span class="zip">ZIP</span>
+            <span class="nm">FretSander-V2-print-files.zip<small>5 STLs + parametric source · 4.2 MB</small></span>
+            <span class="chip">Replace</span>
+          </div>
+        </div>
+
+        <div class="fld">
+          <div class="fld__l"><b>Tell people about it</b></div>
+          <p class="fld__hint">What it does, what it’s for, anything worth knowing before they print it.</p>
+          <div class="inp inp--tall inp--ph">My old fret sander didn’t fit my hand well, and its radius only suited medium frets…</div>
+        </div>
+
+        <div class="fld">
+          <div class="fld__l"><b>What kind of print is it?</b><span class="req">needed</span></div>
+          <div class="chips">
+            <span class="chip on">Jig</span><span class="chip">Tool</span><span class="chip">Fixture</span>
+            <span class="chip">Clamp</span><span class="chip">Replacement part</span><span class="chip">Other</span>
+          </div>
+          <p class="fld__hint" style="margin:10px 0 6px">And roughly what area of work?</p>
+          <div class="chips">
+            <span class="chip on">Fretwork</span><span class="chip">Setup</span><span class="chip">Finishing</span>
+            <span class="chip">Repair</span><span class="chip">Electronics</span>
+          </div>
+        </div>
+
+        <div class="fld">
+          <div class="fld__l"><b>Licence</b><span class="req">needed</span></div>
+          <div class="preset">
+            <span class="tick">✓</span>
+            <span class="tx">Credit me, non-commercial, share alike<small>The usual choice — leave it unless you know you want something else.</small></span>
+            <span class="ch">Change</span>
+          </div>
+        </div>
+
+        <div class="fold" id="fold-d">
+          <button class="fold__t" type="button" data-fold="fold-d">Add extras <span class="cv">4 optional</span></button>
+          <div class="fold__b">
+            <div class="fld">
+              <div class="fld__l"><b>A video of it in use</b></div>
+              <div class="inp inp--ph">Paste a YouTube or Vimeo link</div>
+            </div>
+            <div class="fld">
+              <div class="fld__l"><b>Onshape / CAD link</b></div>
+              <div class="inp inp--ph">https://cad.onshape.com/…</div>
+            </div>
+            <div class="fld">
+              <div class="fld__l"><b>Tip jar</b></div>
+              <p class="fld__hint">Buy Me A Coffee or similar, if you’d like one.</p>
+              <div class="inp inp--ph">https://buymeacoffee.com/…</div>
+            </div>
+            <div class="fld">
+              <div class="fld__l"><b>Let people comment</b></div>
+              <div class="chips"><span class="chip on">Yes</span><span class="chip">No</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="form__f">
+        <button class="btn">Post it</button>
+        <button class="btn btn--ghost">Save for later</button>
+        <span class="sm">Your hero image is the first photo unless you pick another.</span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="vp">Phone · 390px</p>
+    <div class="form form--phone">
+      <div class="form__h">
+        <h3>Share a Loothprint</h3>
+        <p>Your 3D print, free for the group to make.</p>
+      </div>
+      <div class="form__b">
+        <div class="fld">
+          <div class="fld__l"><b>What’s it called?</b><span class="req">needed</span></div>
+          <div class="inp inp--ph">Fret sander with swappable cauls</div>
+        </div>
+        <div class="fld">
+          <div class="fld__l"><b>Show it off</b><span class="req">needed</span></div>
+          <div class="drop"><b>Take a photo</b><span>or choose from your camera roll</span></div>
+          <div class="thumbs"><span class="th"></span><span class="th th--add">+</span></div>
+        </div>
+        <div class="fld">
+          <div class="fld__l"><b>The print files</b><span class="req">needed</span></div>
+          <div class="filerow">
+            <span class="zip">ZIP</span>
+            <span class="nm">FretSander-V2.zip<small>4.2 MB</small></span>
+          </div>
+        </div>
+        <div class="fld">
+          <div class="fld__l"><b>Tell people about it</b></div>
+          <div class="inp inp--tall inp--ph">What it does, what it’s for…</div>
+        </div>
+        <div class="fld">
+          <div class="fld__l"><b>What kind?</b><span class="req">needed</span></div>
+          <div class="chips"><span class="chip on">Jig</span><span class="chip">Tool</span><span class="chip">Fixture</span><span class="chip">More…</span></div>
+        </div>
+        <div class="fld">
+          <div class="fld__l"><b>Licence</b><span class="req">needed</span></div>
+          <div class="preset">
+            <span class="tick">✓</span>
+            <span class="tx">Credit me, non-commercial<small>Leave it unless you know otherwise.</small></span>
+          </div>
+        </div>
+        <div class="fold" id="fold-p">
+          <button class="fold__t" type="button" data-fold="fold-p">Add extras <span class="cv">4 optional</span></button>
+          <div class="fold__b">
+            <div class="fld"><div class="fld__l"><b>Video of it in use</b></div><div class="inp inp--ph">Paste a link</div></div>
+            <div class="fld"><div class="fld__l"><b>CAD link</b></div><div class="inp inp--ph">https://cad.onshape.com/…</div></div>
+            <div class="fld"><div class="fld__l"><b>Tip jar</b></div><div class="inp inp--ph">https://buymeacoffee.com/…</div></div>
+            <div class="fld"><div class="fld__l"><b>Comments</b></div><div class="chips"><span class="chip on">Yes</span><span class="chip">No</span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="form__f"><button class="btn">Post it</button><span class="sm">5 things needed</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>The alternative — the same wizard your discussion composer uses <span class="rec rec--alt">if you prefer it</span></h2>
+<p>You approved this shape for discussions on 7/30, so it is a fair alternative and I have drawn it
+rather than argued it away. Three steps instead of four, because a loothprint has fewer decisions.</p>
+
+<div class="cols">
+  <div>
+    <p class="vp">Desktop · 1280px · step 2 of 3</p>
+    <div class="wiz">
+      <div class="wiz__rail">
+        <div class="wiz__step">1<small>Your print</small></div>
+        <div class="wiz__step on">2<small>Photos &amp; files</small></div>
+        <div class="wiz__step">3<small>Review</small></div>
+      </div>
+      <div class="wiz__b">
+        <div class="fld">
+          <div class="fld__l"><b>Show it off</b><span class="req">needed</span></div>
+          <p class="fld__hint">One or more photos of your print — finished, or better still in use.</p>
+          <div class="drop"><b>Drop photos here</b><span>or tap to choose</span></div>
+          <div class="thumbs"><span class="th"></span><span class="th"></span><span class="th th--add">+</span></div>
+        </div>
+        <div class="fld">
+          <div class="fld__l"><b>The print files</b><span class="req">needed</span></div>
+          <div class="filerow"><span class="zip">ZIP</span><span class="nm">FretSander-V2-print-files.zip<small>4.2 MB</small></span></div>
+        </div>
+      </div>
+      <div class="wiz__f"><button class="btn btn--ghost">← Back</button><button class="btn">Next →</button></div>
+    </div>
+  </div>
+  <div>
+    <p class="vp">Why I’d still pick the single screen</p>
+    <p class="note" style="margin-top:0"><strong>It is five fields.</strong> A wizard earns its clicks
+    when a form is long enough to frighten someone; this one fits on a phone screen with room to spare
+    once the extras are folded. Three steps here mostly adds two taps and hides how nearly-done you are.</p>
+    <p class="note"><strong>And the wizard we have is not reusable.</strong> The discussion one is
+    desktop-only — below 641px it switches itself off and serves the flat form, so your members on
+    phones are already using the single-screen shape. It is also hand-wired to six specific fields of
+    the discussion form, so pointing it at loothprints means writing a second one, not configuring
+    this one.</p>
+  </div>
+</div>
+
+<h2>What this is actually made of</h2>
+<p>Worth knowing before you pick, because it is why this is small:</p>
+<table>
+  <tr><th>Piece</th><th>State</th><th>What that means</th></tr>
+  <tr><td>The field list &amp; wording</td><td class="yes">already written</td><td>The labels above are the real ones — “Add one or more image(s) of your print in action”, “leave default if unsure”.</td></tr>
+  <tr><td>The form renderer</td><td class="yes">already active</td><td>Renders every control this type needs — photo gallery, ZIP upload, video link — today, measured.</td></tr>
+  <tr><td>The finished page</td><td class="yes">builds itself</td><td>A loothprint’s page is assembled from these fields automatically, paywall and all. Proven end to end.</td></tr>
+  <tr><td>The front door</td><td class="no">missing</td><td>This is the build.</td></tr>
+</table>
+<p class="note"><strong>Loothprints and events work this way. Videos, articles and sponsor posts do
+not</strong> — their pages are laid out by hand, so a form alone would give you a post with no page.
+That is a separate, bigger job and I would not fold it into this one.</p>
+
+<h2>One thing I need you to decide</h2>
+<p>Who gets this form, and does what they post go live straight away?</p>
+<div class="gate">
+<table>
+  <tr><th>Gate</th><th>Who could post</th><th>Verdict</th></tr>
+  <tr class="bad"><td>The obvious one WordPress gives us</td><td class="n">~1,850 members — essentially everyone signed up</td><td class="no">Too broad for videos and articles</td></tr>
+  <tr><td>Open for loothprints, allow-list for the rest <em>(what I’d build — it’s what your backlog already asks for)</em></td><td class="n">Any member for loothprints; named people for the rest</td><td class="yes">Matches how you already run it</td></tr>
+</table>
+</div>
+<p class="note"><strong>My default, unless you say otherwise:</strong> a member’s loothprint publishes
+straight away — they already submit these — and anything on the gated types from someone not on the
+list lands as <em>pending</em> for you rather than going live. So even a mistake in the gate is a
+queue, not a page on the site.</p>
+
+<h2>What I need from you</h2>
+<p><strong>Single screen or wizard</strong>, and <strong>loothprint first</strong> — or name a
+different type. Then I build it behind a flag, off by default, so it reaches the box harmlessly and
+you click the real form before anyone else can see it.</p>
+
+<script>
+document.addEventListener('click', function (e) {
+  var t = e.target.closest('[data-fold]');
+  if (!t) return;
+  document.getElementById(t.getAttribute('data-fold')).classList.toggle('open');
+});
+</script>
+</div>
