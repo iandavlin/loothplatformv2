@@ -12,6 +12,7 @@ line into that lane's charter and note the lane name here.
 3. Profile social links go stale on posts/events (member-reported)
 
 **P1 — wanted now / deploy-blocking**
+3.5 SEO/sitemap: zero discussions submitted — Google indexes the mirrored forum + defunct /shop/ and /merch/ (200s)
 4. Follow-controls consolidation modal — *deploy gate; thread-follow building*
 5. Notifications: quick-reply modal (default) w/ full-post link
 6. Admin can edit ANY post, full functionality
@@ -34,6 +35,53 @@ line into that lane's charter and note the lane name here.
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 2026-07-31 — Sitemap / SEO: Google indexes the MIRRORED FORUM and a defunct merch page (Ian)
+
+Ian 7/31: "we need to work on our site map. Google is showing results like the mirroring
+forum rather than the hub and our defunct merch page."
+
+**Measured read-only on LIVE, 2026-07-31 — the sitemap contains 2,391 URLs and ZERO
+discussions:**
+
+| sitemap | urls | contents |
+|---|---:|---|
+| `sitemap-static.xml` | 2 | the hub INDEX and `/` |
+| `sitemap-content.xml` | 655 | 304 videos, 168 loothprints, 67 imgcaps, 39 useful_links, 30 shorty |
+| `sitemap-profiles.xml` | 1734 | 1733 member profiles |
+
+**Not one thread/topic URL is submitted.** The hub appears once, as an index page. So
+Google has no canonical URL to index for any discussion — and falls back to whatever it
+can crawl, which is the MIRRORED LEGACY FORUM. That is the direct cause of Ian's first
+complaint, and it is a sitemap OMISSION, not a ranking problem.
+
+`robots.txt` `Allow: /` with targeted Disallows (`/archive-api/`, `/profile-api/`,
+`/bb-mirror-api/`, `/claim`, `/thumb/`, `/mailpit/`, faceted hub filters). **Nothing
+disallows the mirrored forum paths**, so they are freely crawlable and are the only
+discussion URLs Google can see.
+
+**The defunct merch pages are LIVE and returning 200:** `/shop/` and `/merch/` both
+answer 200 (`/store/` and `/product/` 404). They are reachable, therefore indexable.
+
+### The work, in the order it should be done
+
+1. **Add discussions to the sitemap** — canonical `/hub/<forum>/<topic>/` URLs. This is
+   the fix for "the mirroring forum ranks instead of the hub". Coordinate with whoever
+   owns hub URL construction; `lg_following_topic_url()` (`membership-pages/lib/following-data.php:251`)
+   already resolves a topic to its canonical hub URL and knows the hidden-group-forum
+   404 trap — reuse it rather than writing a fourth URL builder.
+2. **Decide what happens to the mirrored forum paths** — `Disallow` them, canonicalise
+   them at the hub equivalent, or 301 them. Canonical tags are the gentler option; a
+   blanket Disallow on already-indexed URLs leaves them in the index without content.
+   ⚠️ Ian on that page: *"it has no bearing on actual ui"* — it is legacy, so removing
+   it from search is safe from a product standpoint.
+3. **`/shop/` and `/merch/`** — 410, 301 to something current, or noindex. Ian called
+   them defunct; pick deliberately, because a 301 keeps whatever authority they have and
+   a 410 discards it.
+
+**Do not fix by deleting pages that are live and earning traffic without checking first**
+— same rule as `/shop-layout-planner/`. Measure what each URL currently gets before
+changing its status code.
 
 ## 2026-07-31 — 🔴 MISSION CRITICAL: anon front page — nav overlay hides EVERY link, including Sign in (Ian)
 
