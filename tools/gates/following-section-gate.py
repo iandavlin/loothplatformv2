@@ -360,8 +360,14 @@ def open_and_read_modal(p, url, timeout_s=20):
                 const d = document.getElementById(id);
                 if (!d || d.hidden) continue;
                 const t = d.querySelector('.fc-title, h1, h2, .feed-card__title');
+                // The two surfaces name the topic differently: the desktop dmodal
+                // stamps data-topic-id, the mobile sheet stamps data-tid. Reading
+                // only the first made the mobile assertion hollow — it opened, the
+                // id came back null, and "holds THAT discussion" would have failed
+                // for a sheet that was in fact correct.
+                const tid = d.getAttribute('data-topic-id') || d.getAttribute('data-tid');
                 return {state:'open', which:id,
-                        topic_id: parseInt(d.getAttribute('data-topic-id'), 10) || null,
+                        topic_id: parseInt(tid, 10) || null,
                         title: (t ? t.textContent : '').trim().slice(0, 80)};
               }
               return {state: document.readyState === 'complete' ? 'not-open-yet' : 'loading'};
@@ -557,16 +563,27 @@ def main():
                 log(f"           status={st}")
                 continue
 
-            opened = open_and_read_modal(p, base + r["href"])
-            check(f"topic {r['topic']} lands with the discussion modal OPEN",
-                  opened.get("state"), "open")
-            if opened.get("state") == "open":
-                # data-topic-id is set by the modal itself, so this is the hub
-                # saying which discussion it opened — not the page's opinion.
-                check(f"topic {r['topic']} modal holds THAT discussion",
+            # BOTH WIDTHS. §4f is one contract over two different openers — the
+            # desktop dmodal and the mobile sheet — and they are separate code
+            # paths, so proving the link on one proves nothing about the other.
+            # Ian reads this on a phone, so the phone is not the optional half.
+            for label, w, hgt, mob in (("desktop", 1280, 900, False), ("phone", 390, 844, True)):
+                p.send("Emulation.setDeviceMetricsOverride",
+                       {"width": w, "height": hgt, "deviceScaleFactor": 2, "mobile": mob})
+                # maxTouchPoints must be 1..16 even when disabling — CDP rejects 0.
+                p.send("Emulation.setTouchEmulationEnabled", {"enabled": mob, "maxTouchPoints": 5})
+                opened = open_and_read_modal(p, base + r["href"])
+                if not check(f"topic {r['topic']} lands with the discussion open ({label})",
+                             opened.get("state"), "open"):
+                    log(f"           {opened}")
+                    continue
+                # The id is read off the opener itself, so this is the hub saying
+                # which discussion it opened — never the account page's opinion.
+                check(f"topic {r['topic']} it is THAT discussion, not another ({label})",
                       opened.get("topic_id"), r["topic"])
-            else:
-                log(f"           {opened}")
+            p.send("Emulation.setDeviceMetricsOverride",
+                   {"width": 1280, "height": 900, "deviceScaleFactor": 2, "mobile": False})
+            p.send("Emulation.setTouchEmulationEnabled", {"enabled": False, "maxTouchPoints": 5})
 
         # Back to the section for the phases that follow.
         must_return = goto(p, args.url)
