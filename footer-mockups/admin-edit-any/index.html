@@ -1,0 +1,307 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Edit any post as admin — what you can have, and what it costs (2026-07-31)</title>
+<style>
+:root{
+  --cream:#fbfbf8; --sage:#87986a; --sage-d:#586b3f; --sage-tint:#eef2e3;
+  --rust:#c66845; --rust-tint:#fbeee8; --ink:#262925; --mute:#565a55;
+  --line:#e4e7d8; --card:#fff; --warn:#b5442a;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --serif:Lora,Georgia,serif;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:30px 20px 90px;background:var(--cream);color:var(--ink);font:16px/1.55 var(--sans)}
+.wrap{max-width:1080px;margin:0 auto}
+h1{font:700 27px/1.2 var(--serif);margin:0 0 6px}
+.lede{color:var(--mute);margin:0 0 8px;font-size:15.5px;max-width:72ch}
+h2{font:700 12.5px/1.2 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);
+   margin:46px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font:700 16px/1.3 var(--sans);margin:0 0 4px}
+p{max-width:74ch}
+.note{border-left:3px solid var(--rust);padding:10px 0 10px 15px;margin:20px 0;color:var(--mute);font-size:14.5px;max-width:74ch}
+.note strong{color:var(--ink)}
+.note--warn{border-left-color:var(--warn)}
+code{background:#f0f1ea;padding:1px 6px;border-radius:5px;font-size:12.5px}
+.rec{display:inline-block;font:700 10.5px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--sage-d);border:1px solid var(--sage);background:var(--sage-tint);padding:4px 8px;border-radius:999px;
+  margin-left:7px;vertical-align:2px}
+.rec--no{color:var(--warn);border-color:#e0b3a6;background:var(--rust-tint)}
+
+/* ── the viewer switch: the whole point of the page ─────────────── */
+.switch{position:sticky;top:0;z-index:30;background:var(--cream);padding:14px 0 12px;margin:0 0 4px;
+  border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.switch b{font:700 12.5px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--mute)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff}
+.seg button{background:none;border:0;padding:8px 15px;font:600 13.5px/1 var(--sans);color:var(--mute);cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--sage-d);color:#fff}
+.switch .why{color:var(--mute);font-size:13.5px;margin:0}
+
+/* ── panes ─────────────────────────────────────────────────────── */
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+@media (max-width:900px){.cols{grid-template-columns:1fr}}
+.pane{border:1px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden}
+.pane__h{padding:14px 17px;border-bottom:1px solid var(--line);background:#fcfcf9}
+.pane__h .tag{display:inline-block;font:700 10.5px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;
+  color:#fff;background:var(--sage-d);padding:4px 8px;border-radius:999px;margin-bottom:7px}
+.pane__h .tag--b{background:var(--rust)}
+.pane__h p{margin:3px 0 0;color:var(--mute);font-size:13.5px}
+.pane__b{padding:19px 17px 22px;display:flex;flex-direction:column;gap:18px;align-items:flex-start}
+.vp{font:700 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--mute);margin:0}
+
+/* ── a believable feed card ────────────────────────────────────── */
+.card{border:1px solid var(--line);border-radius:13px;background:var(--card);overflow:hidden;width:100%;max-width:420px}
+.card--phone{max-width:340px}
+.card__body{padding:13px 14px 4px}
+.card__meta{display:flex;align-items:center;gap:8px;color:var(--mute);font:500 11.5px/1.3 var(--sans)}
+.card__av{width:27px;height:27px;border-radius:50%;background:var(--sage);color:#fff;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;font:700 11px/1 var(--sans)}
+.kind{display:inline-block;font:700 9.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;
+  color:var(--sage-d);background:var(--sage-tint);border-radius:4px;padding:3px 6px}
+.card__cov{height:132px;background:linear-gradient(135deg,#dfe4d2,#c9d2b6);position:relative}
+.card--phone .card__cov{height:112px}
+.card__t{font:700 16px/1.25 var(--sans);margin:9px 0 5px}
+.card--phone .card__t{font-size:15px}
+.card__x{color:var(--mute);font-size:13.5px;margin:0 0 11px}
+.row{display:flex;align-items:center;gap:9px;padding:9px 14px 12px;border-top:1px solid var(--line);
+  color:var(--mute);font:600 12.5px/1 var(--sans)}
+.act{display:inline-flex;align-items:center;gap:5px;background:none;border:0;padding:3px 2px;margin:0;
+  color:inherit;font:inherit;cursor:pointer;white-space:nowrap;border-radius:7px}
+.ico{width:16px;height:16px;flex:0 0 auto}
+.spacer{margin-left:auto}
+
+/* THE AFFORDANCE — the one new thing on the page */
+.edit{display:inline-flex;align-items:center;gap:5px;background:none;border:1px solid var(--line);
+  border-radius:999px;padding:5px 11px 5px 9px;color:var(--mute);font:600 12.5px/1 var(--sans);cursor:pointer;
+  white-space:nowrap}
+.edit:hover{border-color:var(--sage);color:var(--sage-d);background:var(--sage-tint)}
+.edit .ico{width:14px;height:14px}
+[data-viewer=member] .edit{display:none}          /* the ABSENCE is the assertion */
+[data-viewer=member] .absent{display:flex}
+.absent{display:none;align-items:center;gap:7px;color:#93998f;font:600 12px/1.3 var(--sans);
+  border:1px dashed #d6dac9;border-radius:9px;padding:6px 10px}
+
+/* ── option C's quick-edit sheet ───────────────────────────────── */
+.sheet{border:1px solid var(--line);border-radius:14px;background:#fff;width:100%;max-width:420px;overflow:hidden;
+  box-shadow:0 10px 30px rgba(38,41,37,.07)}
+.sheet--phone{max-width:340px}
+.sheet__h{display:flex;align-items:flex-start;gap:10px;padding:14px 15px 11px;border-bottom:1px solid var(--line)}
+.sheet__h h4{margin:0;font:700 15px/1.3 var(--sans);flex:1 1 auto}
+.sheet__h .sub{display:block;color:var(--mute);font:500 12px/1.4 var(--sans);margin-top:3px}
+.x{background:none;border:0;font-size:21px;line-height:1;color:var(--mute);cursor:pointer;padding:0 2px}
+.f{padding:11px 15px;border-bottom:1px solid var(--line)}
+.f label{display:block;font:700 10.5px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin-bottom:6px}
+.f .inp{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:500 13.5px/1.35 var(--sans);color:var(--ink);background:#fdfdfa}
+.f .inp--tall{min-height:52px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:600 11.5px/1 var(--sans);border:1px solid var(--line);border-radius:999px;padding:5px 9px;color:var(--mute);background:#fdfdfa}
+.sheet__f{padding:12px 15px;display:flex;align-items:center;gap:10px}
+.btn{font:700 13px/1 var(--sans);border-radius:9px;padding:9px 15px;border:1px solid var(--sage-d);
+  background:var(--sage-d);color:#fff;cursor:pointer}
+.btn--ghost{background:none;color:var(--sage-d)}
+.more{margin-left:auto;font:600 12.5px/1 var(--sans);color:var(--rust)}
+
+/* ── the cost table for option B ───────────────────────────────── */
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:6px 0 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:700 10.5px/1.2 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.yes{color:var(--sage-d);font-weight:700}
+.no{color:var(--warn);font-weight:700}
+
+/* ── who gets the button ───────────────────────────────────────── */
+.gate{border:1px solid var(--line);border-radius:14px;background:#fff;overflow:hidden;margin-top:6px}
+.gate table{margin:0}
+.gate td.n{font:600 12.5px/1 var(--sans)}
+.bad{background:var(--rust-tint)}
+</style>
+
+<div class="wrap">
+
+<h1>Edit any post as admin</h1>
+<p class="lede">Ian, 7/30: <em>“I need to be able to edit any post as admin as well. Full functionality on any
+post editing as admin.”</em> This page is the decision, not the build — nothing has been built yet.
+The short version: <strong>the front-end composer this ask assumes only exists for discussions.</strong>
+Video, article, event, loothprint and sponsor have no front-end create <em>or</em> edit form at all.
+So there are three real shapes this can take, and they are days, weeks and “a bit of both” apart.</p>
+
+<div class="switch">
+  <b>View as</b>
+  <span class="seg">
+    <button id="v-admin"  aria-pressed="true">Admin</button>
+    <button id="v-member" aria-pressed="false">Ordinary member</button>
+  </span>
+  <p class="why">Flip this. On <em>every</em> drawing below, the Edit control has to vanish —
+  on someone else’s post, on every type, on both viewports. That absence is the part I’ll be gating.</p>
+</div>
+
+<h2>Option A — the Edit button reaches the editor that already has every control <span class="rec">Recommended · days</span></h2>
+<p>An <strong>Edit</strong> control on every post — hub cards and the standalone pages — shown only to
+someone who genuinely may edit that particular post. It opens the real editor the post was made in.
+“Full functionality” isn’t approximated here, it’s guaranteed: it’s literally the same editor,
+with all 7–28 of that type’s controls. And it adds <strong>no new save path</strong>, so the
+content-destroying bugs we fixed yesterday can’t come back through it.</p>
+<p class="note"><strong>The honest cost:</strong> that editor is wp-admin, not the front end.
+This is the fastest route from “Ian is looking at a bad post” to “Ian has fixed it”, on every type,
+this week — but it is not the front-end composer, and I’m not going to call it one.</p>
+
+<div class="cols">
+  <div class="pane">
+    <div class="pane__h"><span class="tag">A · desktop</span>
+      <h3>Hub card — a loothprint</h3>
+      <p>The control joins the existing action row. Nothing else moves.</p></div>
+    <div class="pane__b">
+      <p class="vp">1280px</p>
+      <article class="card">
+        <div class="card__cov"></div>
+        <div class="card__body">
+          <div class="card__meta"><span class="card__av">DS</span>
+            <span>Dave Slimmer</span> · <span class="kind">Loothprint</span> · <span>2d</span></div>
+          <h4 class="card__t">Fret Sander V2</h4>
+          <p class="card__x">A revised sanding beam that indexes off the fretboard rather than the neck…</p>
+        </div>
+        <div class="row">
+          <button class="act"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 1 0-7.8 7.8l8.8 8.8 8.8-8.8a5.5 5.5 0 0 0 0-7.8z"/></svg>24</button>
+          <button class="act"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z"/></svg>6</button>
+          <button class="act"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
+          <span class="spacer"></span>
+          <button class="edit"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>
+          <span class="absent">no Edit — not your post</span>
+        </div>
+      </article>
+    </div>
+  </div>
+
+  <div class="pane">
+    <div class="pane__h"><span class="tag">A · phone</span>
+      <h3>Same card at 390px</h3>
+      <p>The row is already tight here, so Edit is the only thing added and it stays on one line.</p></div>
+    <div class="pane__b">
+      <p class="vp">390px</p>
+      <article class="card card--phone">
+        <div class="card__cov"></div>
+        <div class="card__body">
+          <div class="card__meta"><span class="card__av">JR</span>
+            <span>James Roadman</span> · <span class="kind">Article</span></div>
+          <h4 class="card__t">Hummingbird Headstock Repair</h4>
+        </div>
+        <div class="row">
+          <button class="act"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 1 0-7.8 7.8l8.8 8.8 8.8-8.8a5.5 5.5 0 0 0 0-7.8z"/></svg>11</button>
+          <button class="act"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z"/></svg>3</button>
+          <span class="spacer"></span>
+          <button class="edit"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>
+          <span class="absent">no Edit — not your post</span>
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+<h2>Option C — a front-end quick-edit for the common fields <span class="rec rec--no">I’d argue against · ~1 week</span></h2>
+<p>A real front-end sheet on every type, but only the fields every type shares — title, excerpt,
+cover, tags, tier, status — with “Open the full editor” for the rest. It is genuinely front-end,
+and it covers the everyday admin fix.</p>
+<p class="note note--warn"><strong>Why I’d still not build it.</strong> It needs a brand-new write
+endpoint for content posts — which is exactly what re-opens the content-destruction failure class we
+just spent yesterday closing on discussions. And it is explicitly <em>not</em> “full functionality”,
+which is the phrase you used. It buys the least per unit of risk of the three. I’m drawing it because
+it’s the obvious middle and I don’t want it picked by accident.</p>
+
+<div class="cols">
+  <div class="pane">
+    <div class="pane__h"><span class="tag tag--b">C · desktop</span>
+      <h3>Quick-edit sheet</h3>
+      <p>Six shared fields. Everything type-specific is behind the link at the bottom.</p></div>
+    <div class="pane__b">
+      <p class="vp">1280px</p>
+      <div class="sheet">
+        <div class="sheet__h"><div><h4>Edit post<span class="sub">Loothprint · Fret Sander V2 · by Dave Slimmer</span></h4></div><button class="x">×</button></div>
+        <div class="f"><label>Title</label><div class="inp">Fret Sander V2</div></div>
+        <div class="f"><label>Excerpt</label><div class="inp inp--tall">A revised sanding beam that indexes off the fretboard rather than the neck…</div></div>
+        <div class="f"><label>Tags</label><div class="chips"><span class="chip">fretwork</span><span class="chip">jigs</span><span class="chip">3d-printing</span><span class="chip">+ add</span></div></div>
+        <div class="f"><label>Tier</label><div class="chips"><span class="chip">Public</span><span class="chip">Lite</span><span class="chip">Pro</span></div></div>
+        <div class="sheet__f"><button class="btn">Save</button><button class="btn btn--ghost">Cancel</button>
+          <span class="more">Open the full editor →</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pane">
+    <div class="pane__h"><span class="tag tag--b">C · phone</span>
+      <h3>Same sheet at 390px</h3>
+      <p>Bottom sheet. The “full editor” escape hatch stays visible without scrolling.</p></div>
+    <div class="pane__b">
+      <p class="vp">390px</p>
+      <div class="sheet sheet--phone">
+        <div class="sheet__h"><div><h4>Edit post<span class="sub">Article · Hummingbird Headstock Repair</span></h4></div><button class="x">×</button></div>
+        <div class="f"><label>Title</label><div class="inp">Hummingbird Headstock Repair</div></div>
+        <div class="f"><label>Excerpt</label><div class="inp inp--tall">Splicing a clean scarf into a snapped Gibson headstock…</div></div>
+        <div class="f"><label>Tags</label><div class="chips"><span class="chip">repair</span><span class="chip">acoustic</span><span class="chip">+ add</span></div></div>
+        <div class="sheet__f"><button class="btn">Save</button><span class="more">Full editor →</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Option B — the real front-end composer, every type <span class="rec rec--no">weeks · this is backlog #16</span></h2>
+<p>The literal reading of the ask. I’m not drawing a picture of it, because an honest picture would
+just be this table — the controls each type’s create flow actually offers today, all of which a
+front-end composer would have to reproduce, on top of a front-end block editor that doesn’t exist yet
+(layout-v2’s authoring UI is a wp-admin panel, and it’s mid-repair right now).</p>
+
+<table>
+  <tr><th>Type</th><th>Front-end composer today</th><th class="n">Controls</th><th class="n">Taxonomies</th><th>Body</th></tr>
+  <tr><td>Discussion</td><td class="yes">yes — the 4-step wizard</td><td class="n">5</td><td class="n">1</td><td>plain text</td></tr>
+  <tr><td>Loothprint</td><td class="no">none</td><td class="n">28</td><td class="n">5</td><td>layout-v2 blocks</td></tr>
+  <tr><td>Video</td><td class="no">none</td><td class="n">28</td><td class="n">6</td><td>layout-v2 blocks</td></tr>
+  <tr><td>Article</td><td class="no">none</td><td class="n">20</td><td class="n">6</td><td>layout-v2 blocks</td></tr>
+  <tr><td>Event</td><td class="no">none</td><td class="n">11</td><td class="n">4</td><td>layout-v2 blocks</td></tr>
+  <tr><td>Sponsor post</td><td class="no">none</td><td class="n">7</td><td class="n">3</td><td>layout-v2 blocks</td></tr>
+</table>
+
+<p class="note"><strong>One thing worth knowing before you decide.</strong> WordPress still holds a
+full set of front-end “Add / Edit your Loothprint / Video / Article…” pages from the old theme — on
+paper, this whole feature, already built. They’re dead: their forms were Elementor widgets, and
+Elementor was switched off when we moved to the current theme, on <em>both</em> boxes. I loaded one as
+you and as an ordinary member: the instructions render, the form has zero fields. Turning Elementor
+back on to resurrect them would be a bigger and riskier change than Option A, and it would drag
+seventeen pages of stale layout back into the live theme with it.</p>
+
+<h2>Whoever gets this button — the bit I want signed off</h2>
+<p>The obvious way to gate it is the flag every existing Edit button already uses. That flag means
+“forum moderator”, and a forum moderator is <em>not</em> someone WordPress lets edit an article.
+Reusing it would quietly hand every moderator edit rights over the whole content library:</p>
+
+<div class="gate">
+<table>
+  <tr><th>If we gate on…</th><th class="n">You (admin)</th><th class="n">A forum moderator</th><th class="n">An ordinary member</th></tr>
+  <tr class="bad"><td>the existing moderator flag</td><td class="n yes">edits everything</td><td class="n no">edits everything ✗</td><td class="n">own posts only</td></tr>
+  <tr><td>“can this person edit <em>this</em> post?”</td><td class="n yes">edits everything</td><td class="n yes">discussions only ✓</td><td class="n yes">own posts only</td></tr>
+</table>
+</div>
+<p class="note"><strong>Nobody is over-granted today</strong> — there are no forum moderators on either
+box right now, so this is one role assignment away from mattering rather than a live hole. The second
+row is what I’d build, and the server would re-check it on every save regardless of what the button
+shows.</p>
+
+<h2>What I need from you</h2>
+<p><strong>A, C, or B.</strong> My recommendation is <strong>A now</strong> — behind a flag, off by
+default, so it reaches the box harmlessly and you can click the real thing before it’s switched on —
+and treat <strong>B</strong> as the front-end-authoring program it already is on the backlog, phased
+by you. If A is too much of a compromise, say so and I’ll size B properly instead of starting it
+sideways.</p>
+
+<script>
+(function () {
+  var body = document.body, a = document.getElementById('v-admin'), m = document.getElementById('v-member');
+  function set(v) {
+    body.setAttribute('data-viewer', v);
+    a.setAttribute('aria-pressed', v === 'admin');
+    m.setAttribute('aria-pressed', v === 'member');
+  }
+  a.addEventListener('click', function () { set('admin'); });
+  m.addEventListener('click', function () { set('member'); });
+  set('admin');
+})();
+</script>
+</div>
