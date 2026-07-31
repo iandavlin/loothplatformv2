@@ -128,6 +128,12 @@ VIS = """(sel) => [...document.querySelectorAll(sel)].filter(b => {
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default="http://127.0.0.1:8791")
+    # The frequency control is HIDDEN until follow-digest's batcher is real (Ian,
+    # 2026-07-31). Default asserts ABSENT; pass this once the sender exists to assert
+    # PRESENT and account-wide. Both directions live in one file so flipping the
+    # product flag has an assertion waiting either way.
+    ap.add_argument("--expect-freq", action="store_true",
+                    help="assert the frequency control is PRESENT and labelled account-wide")
     a = ap.parse_args()
     base = a.url.rstrip("/")
     try: urllib.request.urlopen(CDP + "/json/version", timeout=5).read()
@@ -290,6 +296,36 @@ def main():
         p.ev("document.querySelector('[data-follow-open]').click()")
         time.sleep(1.2)
         check("modal: it opened", p.ev("!!document.querySelector('#lg-follow-modal:not([hidden])')"), True)
+        # ── THE FREQUENCY CONTROL: ABSENT while the batcher is off ─────────────
+        # Ian, 2026-07-31, chose "show it when the batcher lands" over showing it now,
+        # so that nobody picks Daily and receives instant mail. This asserts the HIDDEN
+        # state — the half a presence-only gate cannot see. The companion assertion
+        # (PRESENT, and labelled account-wide) runs under --expect-freq, so the day
+        # follow-digest's sender is real the same file proves the other direction.
+        freq_on = p.ev("!!document.querySelector('#lg-fm-freq')")
+        if a.expect_freq:
+            check("modal: the frequency control is PRESENT (batcher live)", freq_on, True)
+            # Present is not enough — Ian's requirement is that it cannot be mistaken
+            # for a per-thread setting. Assert the SIGNALS, not just the widget.
+            check("modal: frequency is visibly ACCOUNT-WIDE, not per-thread",
+                  p.ev("""(() => { const s=document.querySelector('#lg-fm-freq');
+                    if (!s) return 'absent';
+                    const badge=(s.querySelector('.lg-fm__acct-badge')||{}).textContent||'';
+                    const note=(s.querySelector('.lg-fm__acct-note')||{}).textContent||'';
+                    const head=(s.querySelector('.lg-fm__acct-t')||{}).textContent||'';
+                    const outside=!s.closest('.lg-fm__rows > .lg-fm__row');
+                    return (/all discussions/i.test(badge)
+                            && /every discussion you follow/i.test(note)
+                            && /email/i.test(head)
+                            && outside) ? 'unmistakable' : 'weak: '+badge+'|'+head; })()"""),
+                  "unmistakable")
+            check("modal: the options are exactly Instant / Daily / Weekly",
+                  p.ev("""[...document.querySelectorAll('#lg-fm-freq button[data-freq]')]
+                       .map(b=>b.getAttribute('data-freq')).join(',')"""), "instant,daily,weekly")
+        else:
+            check("modal: the frequency control is ABSENT (batcher not live — must not "
+                  "offer a cadence nothing can honour)", freq_on, False)
+
         check("modal: the TITLE is the discussion, not boilerplate",
               p.ev("""(() => { const t = document.querySelector('.lg-fm__title');
                 const e = document.querySelector('.lg-fm__eyebrow');

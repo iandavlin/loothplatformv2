@@ -5481,30 +5481,61 @@ body.lg-follow-anon .fc-follow { display: none; }
 .lg-fm__row--save .fc-save.is-saved .ico { fill: currentColor; }
 .lg-fm__row--save .fc-save__lbl { display: inline; }
 
-/* Frequency — STYLED BUT NOT SHIPPED. forums.js's FREQ_ENABLED is false: there is
-   no batcher behind Hourly/Daily/Weekly (§15.4/§15.5), and §15.4's rule is that a
-   cadence control which silently does nothing must not ship. Kept here so the
-   decision to enable it is a one-line flag flip AFTER Ian settles §15.3 (does
-   "Off" stay) and weekly-recap owns a sender — not a from-scratch build under
-   time pressure. */
-.lg-fm__row--freq { display: block; }
+/* ── THE ACCOUNT-WIDE FREQUENCY SECTION ──────────────────────────────────────
+   Ian, 2026-07-31: "give the control in the modal, but make it known it's a global
+   setting." The risk is a member reading it as THIS thread's cadence, so the
+   separation is structural, not decorative: its own rule, its own heading, and a
+   badge carrying the words rather than prose. Everything above it in the modal is
+   per-discussion; this section visibly is not.
+
+   Hidden until follow-digest's sender is real (forums.js FREQ_BATCHER_LIVE) — a
+   cadence control with nothing behind it would be the §8.1.3 lie. */
+.lg-fm__acct {
+  margin: 16px -16px 0; padding: 14px 16px 4px;
+  border-top: 1px solid var(--lg-line, #e3ddd0);
+  background: var(--lg-paper, #faf8f2);
+}
+.lg-fm__acct-h { display: flex; align-items: center; gap: 8px; }
+.lg-fm__acct-t {
+  margin: 0; flex: 0 0 auto;
+  font: 700 13px/1.2 var(--lg-font-sans, var(--font-body)); color: var(--lg-ink, #323532);
+}
+/* The badge is the load-bearing word. Not a tooltip, not a hover: it is on screen
+   next to the heading, in the same glance as the control itself. */
+.lg-fm__acct-badge {
+  /* ⚠️ THE DARK SAGE, NOT THE MID ONE. White on --lg-sage (#87986a) measured 3.12:1 —
+     below AA — and this badge is the load-bearing signal that the control is global.
+     An illegible "All discussions" is the whole safeguard failing quietly. --lg-sage-d
+     takes it to 6.4:1. (The separate 3.45:1 finding on the lit follow label is NOT
+     this: that is the shared brand orange across five surfaces and Ian's call to move;
+     this badge is a new element of mine, so its contrast is mine to fix.) */
+  flex: 0 0 auto; padding: 3px 8px; border-radius: 999px;
+  background: var(--lg-sage-d, #586b3f); color: #fff;
+  font: 700 9.5px/1 var(--lg-font-sans, var(--font-body));
+  letter-spacing: .07em; text-transform: uppercase; white-space: nowrap;
+}
+.lg-fm__acct-note {
+  margin: 6px 0 10px; font-size: 12px; line-height: 1.45;
+  color: var(--lg-mute, var(--fg-muted));
+}
+.lg-fm__acct-note strong { color: var(--lg-ink, #323532); font-weight: 700; }
+
 .lg-fm__seg {
-  display: flex; margin-top: 9px;
-  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 9px; overflow: hidden;
+  display: flex; border: 1px solid var(--lg-line, #e3ddd0);
+  border-radius: 9px; overflow: hidden;
 }
 .lg-fm__seg button {
   flex: 1 1 0; -webkit-appearance: none; appearance: none;
   background: var(--bg-card, #fff); border: 0;
-  border-right: 1px solid var(--lg-line, #e3ddd0); padding: 8px 3px; cursor: pointer;
-  font: 600 11.5px/1 var(--lg-font-sans, var(--font-body)); color: var(--lg-ink, #323532);
+  border-right: 1px solid var(--lg-line, #e3ddd0); padding: 9px 3px; cursor: pointer;
+  font: 600 12px/1 var(--lg-font-sans, var(--font-body)); color: var(--lg-ink, #323532);
 }
 .lg-fm__seg button:last-child { border-right: 0; }
 .lg-fm__seg button.is-on { background: var(--lg-follow-on, #c66845); color: #fff; }
-/* §15.3 (Ian 2026-07-30): the Emails toggle owns on/off — "Off" is NOT in the list.
-   With emails off there is no cadence, so the row dims AND its buttons are disabled.
-   Dimming alone still accepts the click, which would be a setting that isn't. */
-.lg-fm__row--freq.is-off { opacity: .5; }
 .lg-fm__seg button:disabled { cursor: default; }
+/* §15.3's surviving coupling: with Emails off there is no cadence, so the whole
+   section dims AND its buttons are inert. Dimming alone still accepts the click. */
+.lg-fm__acct.is-off { opacity: .5; }
 
 /* Stop the page scrolling behind the dialog. */
 html.lg-fm-open, html.lg-fm-open body { overflow: hidden; }
@@ -5629,3 +5660,17 @@ html[data-lguser-theme="dark"] .lg-fm__seg button.is-on { background: #e2895f; c
    theme's #c66845 which goes muddy on a dark card. */
 html[data-lguser-theme="dark"] .fc-follow { border-color: #333a40; color: #a6ac9f; }
 html[data-lguser-theme="dark"] .fc-replies-stat { color: #a6ac9f; }
+
+/* Dark pass for the account-wide frequency section (Ian: the dark pass applies to it
+   too). Own colours rather than inherited tokens, for the same measured reason the
+   modal panel needed them: --bg-card's dark value is scoped to an ancestor a
+   body-level dialog does not sit under at phone width. */
+html[data-lguser-theme="dark"] .lg-fm__acct {
+  background: #191c1f; border-top-color: #333a40;
+}
+html[data-lguser-theme="dark"] .lg-fm__acct-t { color: #e5e7e1; }
+html[data-lguser-theme="dark"] .lg-fm__acct-note { color: #a6ac9f; }
+html[data-lguser-theme="dark"] .lg-fm__acct-note strong { color: #e5e7e1; }
+/* The badge keeps a solid fill so the word stays legible on either theme; the sage
+   is lightened so it does not go muddy against the darker panel. */
+html[data-lguser-theme="dark"] .lg-fm__acct-badge { background: #9db07c; color: #1a1d1a; }

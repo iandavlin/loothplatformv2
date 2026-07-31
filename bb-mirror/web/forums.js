@@ -4280,32 +4280,19 @@ function lgFollowEnabled() {
      here would have been the third implementation of a bit that §0 ruling 8 says has
      exactly one.
 
-     ⚠️ FREQUENCY IS BUILT BUT NOT SHIPPED — FREQ_ENABLED is false, deliberately.
-     §15.4/§15.5: storing a cadence does nothing without a batcher, and there is no
-     sender. lg-weekly-digest is an editorial broadcast that resolves its audience by
-     CRM tag and has no notion of who follows thread X, so of Off/Instant/Hourly/
-     Daily/Weekly only Instant is deliverable today. §15.4's rule is explicit — "do
-     not ship a cadence control that silently does nothing" — and a member choosing
-     "Daily" and receiving instant mail is the same lie as §8.1.3's. Ian has also not
-     yet answered whether "Off" stays in the list (§15.3) or whether cadence is
-     per-thread at all (§15.5 argues it should be ONE account-level preference this
-     modal SHOWS rather than owns). So the row is data-driven and dark: flipping the
-     flag must not be the moment anyone first thinks about the option list. */
-  var FREQ_ENABLED = false;
-  /* THE LIST IS NOW FULLY SPECIFIED — both open questions answered 2026-07-30.
+     ⚠️ HIDDEN UNTIL THE BATCHER IS REAL — FREQ_BATCHER_LIVE is false, and the name
+     says the CONDITION rather than merely "off". Ian, 2026-07-31, asked exactly this
+     question and answered it himself: show the frequency control only when the batcher
+     lands, so nobody ever picks Daily and receives instant mail. That is his own
+     §8.1.3 / §15.4 rule — a UI must not lie — reaffirmed by him.
 
-     HOURLY IS OUT (§15.4, weekly-recap) on measurement, not taste: NO MEMBER ON LIVE
-     HAS EVER HAD TWO FORUM NOTIFICATIONS IN THE SAME HOUR, so an hourly digest is a
-     strictly worse Instant — it adds delay and batches nothing.
+     WHO FLIPS IT: not this lane, and not follow-digest either. When follow-digest's
+     sender genuinely delivers Daily and Weekly they say so on the board, keeper takes
+     it to Ian, and it is flipped in that window. One line.
 
-     "OFF" IS OUT (§15.3, Ian): the Emails toggle owns on/off and the segmented
-     control only ever picks a cadence. Off-in-the-list plus a separate toggle
-     expressed ONE state TWO ways, and a member who set Emails ON with frequency Off
-     had no way to know which won.
-
-     Building this from an array is what made both answers one-element data changes
-     instead of re-layouts — the reason §15.3/§15.4 were left open in code rather
-     than guessed at. */
+     Everything below is built, styled, dark-passed and gated in BOTH states, so
+     flipping the flag is never the moment anyone first thinks about any of it. */
+  var FREQ_BATCHER_LIVE = false;
   var FREQ_OPTIONS = ['Instant', 'Daily', 'Weekly'];
 
   var fm = null, fmLastFocus = null;
@@ -4339,7 +4326,7 @@ function lgFollowEnabled() {
         '<div class="lg-fm__rows">' +
           fmRow('notify', 'Notifications', 'A bell row for new replies') +
           fmRow('email',  'Emails',        'Email me about new replies') +
-          (FREQ_ENABLED ? fmFreqRow() : '') +
+          (FREQ_BATCHER_LIVE ? fmFreqRow() : '') +
           '<div class="lg-fm__row lg-fm__row--save">' +
             '<span class="lg-fm__rlbl">Save<small>Bookmark to your saved posts</small></span>' +
             // A real .fc-save: same delegate, same batch hydration, same store.
@@ -4355,6 +4342,7 @@ function lgFollowEnabled() {
     fm.addEventListener('click', function (e) {
       if (e.target.closest('[data-fm-close]')) { e.preventDefault(); fmClose(); }
     });
+    fmWireFreq(fm);
     return fm;
   }
 
@@ -4371,12 +4359,52 @@ function lgFollowEnabled() {
       '</div>';
   }
 
+  /* THE FREQUENCY CONTROL — an ACCOUNT-WIDE setting living inside a per-thread modal.
+     Ian, 2026-07-31: "give the control in the modal, but make it known it's a global
+     setting."
+
+     THAT IS THE WHOLE RISK AND IT IS SOLVED IN THE LAYOUT, NOT IN A TOOLTIP. Everything
+     above this point in the modal is about THIS discussion; a segmented control dropped
+     among those rows would read as this thread's cadence, and a member would set "Daily"
+     believing they had quieted one thread while actually changing every one. So it is
+     lifted OUT of the per-thread group entirely and given its own section with:
+       · a rule and a section heading, so it is visibly not one of the rows above;
+       · the words ALL DISCUSSIONS as a badge, not prose someone can skip;
+       · a plain sentence naming the consequence — it applies to every discussion you
+         follow, not just this one;
+       · a heading that says "Email frequency" rather than "Frequency", because the bare
+         noun reads as a property of the thing you are looking at.
+     Three signals, any one of which is enough on its own. A tooltip would be none. */
   function fmFreqRow() {
-    return '<div class="lg-fm__row lg-fm__row--freq" id="lg-fm-freq"><span class="lg-fm__rlbl">Frequency' +
-      '<small>How often emails arrive</small></span><div class="lg-fm__seg">' +
+    return '<section class="lg-fm__acct" id="lg-fm-freq" aria-labelledby="lg-fm-freq-h">' +
+      '<div class="lg-fm__acct-h">' +
+        '<h3 class="lg-fm__acct-t" id="lg-fm-freq-h">Email frequency</h3>' +
+        '<span class="lg-fm__acct-badge">All discussions</span>' +
+      '</div>' +
+      '<p class="lg-fm__acct-note">Applies to <strong>every discussion you follow</strong>, not just this one.</p>' +
+      '<div class="lg-fm__seg" role="radiogroup" aria-labelledby="lg-fm-freq-h">' +
       FREQ_OPTIONS.map(function (o, i) {
-        return '<button type="button" data-freq="' + i + '">' + o + '</button>';
-      }).join('') + '</div></div>';
+        // role=radio + aria-checked: this is a single-choice setting, and a row of
+        // plain buttons would announce as three unrelated actions.
+        return '<button type="button" role="radio" aria-checked="' + (i === 0 ? 'true' : 'false') +
+               '" data-freq="' + o.toLowerCase() + '"' + (i === 0 ? ' class="is-on"' : '') +
+               '>' + o + '</button>';
+      }).join('') + '</div></section>';
+  }
+
+  /* THE WRITE PATH, deliberately ONE function and deliberately not implemented.
+     follow-digest owns where the account-level cadence lives (asked on the board
+     2026-07-31); this lane owns the control that writes it. Pointing this at whatever
+     we agree is a one-line change, which is the point of isolating it — and it is why
+     no store was chosen unilaterally here. Until then it cannot be reached: the control
+     only renders when FREQ_BATCHER_LIVE is true. */
+  function fmSaveCadence(value) {
+    if (!FREQ_BATCHER_LIVE) return;              // unreachable while hidden
+    if (typeof window.lgFollowCadenceWrite === 'function') {
+      try { window.lgFollowCadenceWrite(value); } catch (e) {}
+    }
+    // No fallback POST on purpose. Inventing an endpoint here would be exactly the
+    // "chose a store alone and handed it over" failure the seam exists to prevent.
   }
 
   /* §15.3's SURVIVING coupling. With "Off" gone the reverse direction (choosing Off
@@ -4385,15 +4413,36 @@ function lgFollowEnabled() {
      that isn't — the §8.1.3 lie in miniature. Dimmed AND inert, because dimming alone
      still accepts the click. Driven from the ✉ switch's own state so it cannot drift.
 
-     Called on open and after every paint; a no-op while FREQ_ENABLED is false. */
+     Called on open and after every paint; a no-op while FREQ_BATCHER_LIVE is false. */
   function fmSyncFreq() {
-    if (!fm || !FREQ_ENABLED) return;
+    if (!fm || !FREQ_BATCHER_LIVE) return;
     var row = fm.querySelector('#lg-fm-freq');
     if (!row) return;
     var em = fm.querySelector('[data-follow="email"]');
     var on = !!(em && em.getAttribute('aria-pressed') === 'true');
     row.classList.toggle('is-off', !on);
-    [].slice.call(row.querySelectorAll('button')).forEach(function (b) { b.disabled = !on; });
+    [].slice.call(row.querySelectorAll('button')).forEach(function (b) {
+      b.disabled = !on;
+      b.setAttribute('aria-disabled', on ? 'false' : 'true');
+    });
+  }
+
+  /* Selecting a cadence. Delegated on the modal so it survives the section being
+     rebuilt, and scoped to #lg-fm-freq so it can never catch the [data-follow]
+     switches above it. aria-checked moves with .is-on — a radiogroup whose visual
+     state and accessible state disagree is worse than an unlabelled one. */
+  function fmWireFreq(m) {
+    m.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('#lg-fm-freq button[data-freq]');
+      if (!b || b.disabled) return;
+      e.preventDefault(); e.stopPropagation();
+      [].slice.call(m.querySelectorAll('#lg-fm-freq button[data-freq]')).forEach(function (o) {
+        var sel = o === b;
+        o.classList.toggle('is-on', sel);
+        o.setAttribute('aria-checked', sel ? 'true' : 'false');
+      });
+      fmSaveCadence(b.getAttribute('data-freq'));
+    });
   }
 
   function fmClose() {
