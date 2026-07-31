@@ -664,6 +664,41 @@ trickle of traffic and `connection_accept` is one of the highest-volume types on
 all-time, §6.1). The live number should be measured with the same script before the flag is turned
 on, not extrapolated from here.
 
+**Severity, corrected 2026-07-31 (see §11):** with no auto-send in Ian's workflow, the symptom is
+"a handful of members get a digest whose personal section is missing", **not** "members are
+auto-mailed an empty email". Still worth fixing, still Ian's call, no longer a turn-on blocker.
+
+## 11. THE CRON IS NOT ARMED — turn-on risk, corrected (Ian, 2026-07-31)
+
+> **Ian: "I never run the weekly digest as a cron, I always manually set it up and send it through
+> fluent."** Earlier notes in this lane (and the first version of the render deck) framed
+> `LG_WD_RECAP_ENABLED` as "one boolean away from the real member list". **That framing was too
+> strong.** Corrected here rather than quietly edited, because it is the reason the flag was
+> treated as high-risk.
+
+**Verified against live's own stored settings, read-only — not from recollection:**
+
+| check | live value | consequence |
+|---|---|---|
+| `lg_wd_settings['enabled']` | **`false`** | `LG_WD_Cron::fire()` logs "digest is disabled. Skipping" and returns — `class-lg-wd-cron.php:31-35` |
+| `lg_wd_settings['cron_mode']` | **`draft_and_notify`** | even with `enabled` true it creates a draft and `wp_mail`s **one admin** a review link — `class-lg-wd-cron.php:67-85`. It does not call the sender. |
+| `LG_WD_Sender::send_issue()` end state | `$campaign->status = 'draft'` | `class-lg-wd-sender.php:237` — the plugin **never dispatches**. Ian reviews and sends from FluentCRM. |
+
+The `lg_wd_send_digest` event *is* scheduled on live, so "there is no cron event" would be wrong —
+but it is a **no-op behind two independent brakes**, both currently set to stop.
+
+**So turning the flag on does not mail anyone.** It makes `##lg_recap.section##` substitute when he
+next builds an issue.
+
+**The one thing to be deliberate about is not the send, it is the RECIPIENT SET.**
+`recipients_with_something_waiting()` runs at campaign-creation time
+(`class-lg-wd-sender.php:200`), before `$campaign->subscribe()` — so with the flag on, the campaign
+Ian reviews in FluentCRM is built from the *suppressed* list, and §9.1a's "1,578 of 1,858 receive
+nothing" is what he would be looking at. **That is visible before he sends:** `send_issue()` returns
+"Campaign created with *N* subscribers", and the sender logs `to-do filter kept N of M`. A
+surprising *N* in FluentCRM is the check to make before pressing send — which is a real safety
+property this workflow has and an auto-send workflow would not.
+
 ### 9.2 The one that is NOT free — click-through from a previous digest (**NOT BUILT, needs Ian**)
 
 **The problem is real and verified.** Nothing marks a notification read when a member clicks a link

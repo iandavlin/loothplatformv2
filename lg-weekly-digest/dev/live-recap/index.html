@@ -102,6 +102,15 @@
 <p class="note">This is the whole point of &ldquo;dynamic per-member&rdquo;. Same issue, same
    campaign body, same send &mdash; but the greeting, the sentence, the discussion title, the
    people named and the deep link are all resolved per recipient. Read them side by side.</p>
+<div class="lede" style="margin:0 0 16px">
+  <p><strong>&ldquo;Does this cover replies to your own replies?&rdquo; &mdash; YES, and
+     Mikelle&rsquo;s card is the proof.</strong> Her row is a real
+     <code>forum.reply_to_reply</code>: someone replied to a comment <em>she left</em>, not to a
+     discussion she started. It gets its own sentence &mdash; &ldquo;1 reply to your
+     comment&rdquo; &mdash; distinct from Markus&rsquo;s and Corey&rsquo;s &ldquo;reply on your
+     discussion&rdquo;, which are <code>forum.reply_to_topic</code>. Both rungs are covered and
+     nothing falls between them.</p>
+</div>
 <div class="grid">
     <article class="card ">
       <h3>Markus Heidarsson Heidarsson Guitars</h3>
@@ -273,11 +282,28 @@
       deployed plugin and are byte-identical &mdash; this is the shipping code.</td></tr>
   <tr><th><span class="tag sim">not real</span></th>
       <td><strong>The flag.</strong> <code>LG_WD_RECAP_ENABLED</code> is <strong>OFF</strong> on
-      dev2 and was not changed. It was turned on for the lifetime of one CLI process via the
-      <code>lg_wd_recap_enabled</code> filter. dev2 carries an armed
-      <code>lg_wd_send_digest</code> cron (next fire 2026-08-03 13:00 UTC), and the flag also
-      switches on the filter that decides who is mailed &mdash; so defining it in wp-config to
-      take a picture would have armed a real scheduled send.</td></tr>
+      dev2 and was not changed &mdash; it was turned on for the lifetime of one CLI process via
+      the <code>lg_wd_recap_enabled</code> filter, so nothing about this box was left armed.
+      <br><br>
+      <strong>Turning it on does NOT auto-mail anyone</strong> (corrected 2026-07-31 after Ian
+      said he never runs the digest on cron). Verified against <em>live&rsquo;s own stored
+      settings</em>, read-only, not from recollection: live has
+      <code>enabled = false</code>, so <code>LG_WD_Cron::fire()</code> logs and returns at
+      <code>class-lg-wd-cron.php:31</code> before doing anything; and
+      <code>cron_mode = draft_and_notify</code>, so even with that brake released it would
+      create a draft and email <em>one admin</em> a review link
+      (<code>class-lg-wd-cron.php:67</code>) rather than call the sender. On top of that,
+      <code>LG_WD_Sender::send_issue()</code> finishes by setting
+      <code>$campaign-&gt;status = 'draft'</code>
+      (<code>class-lg-wd-sender.php:237</code>) &mdash; the plugin never dispatches; Ian
+      reviews and sends from FluentCRM.
+      <br><br>
+      <strong>What the flag does change</strong> is worth being deliberate about: when the next
+      issue is built through the plugin, <code>recipients_with_something_waiting()</code> runs
+      at campaign-creation time (<code>class-lg-wd-sender.php:200</code>) and decides who gets a
+      <code>CampaignEmail</code> row. That is visible before sending &mdash; the result reads
+      &ldquo;Campaign created with <em>N</em> subscribers&rdquo;, so a surprising <em>N</em> is
+      the check to make in FluentCRM before pressing send.</td></tr>
   <tr><th><span class="tag sim">not real</span></th>
       <td><strong>The send.</strong> Nothing was sent, queued or scheduled. No campaign, no
       <code>CampaignEmail</code> rows, no <code>wp_mail</code>. Bodies were rendered to disk.
