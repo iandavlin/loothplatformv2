@@ -45,7 +45,26 @@ WHAT IT WILL NOT DO: assert that mail was sent. dev2's containment mu-plugin
 Every assertion below is about the RECIPIENT SET and the STORE — prove who would be
 mailed, never that mailing happened. Real delivery is Ian's, deliberate and one-shot.
 
+⚠️ BY DEFAULT THIS GATE MEASURES THE SERVE, WHICH RUNS `main` — NOT YOUR BRANCH.
+mu-plugins are symlinked individually into the docroot, so a lane's unmerged plugin
+file is invisible here and the gate reports RED however finished the branch is. That
+is the documented "a lane verifying on dev2 is usually testing main" trap, and left
+unaddressed it means this gate could only ever go green AFTER merge — exactly the
+ordering that keeps putting production-shaped defects in front of Ian.
+
+    --plugin platform/mu-plugins/lg-follow-digest.php
+
+loads a specific file into the probe first, so a branch can be proven BEFORE it
+merges. The file must exist and must actually define the flag, or the run is DEAD
+rather than red — loading nothing and reporting "not defined" would be the same
+vacuous answer this gate exists to refuse.
+
+    --expect-on   assert the flag resolves ON (use with LG_FOLLOW_DIGEST=1 in the
+                  environment) so the ON path is exercised deliberately rather than
+                  only ever being observed in its OFF state.
+
 Run:   python3 tools/gates/follow-digest-gate.py [--wp-path /var/www/dev]
+       python3 tools/gates/follow-digest-gate.py --plugin platform/mu-plugins/lg-follow-digest.php
 Exit:  0 green, 1 RED (real findings), 2 CANNOT RUN (no verdict).
        The 0/1/2 split is run-all.sh's convention. Environmental failure must never
        be reported as red — craft gate 2 sat "red" for weeks while it was in fact
@@ -54,6 +73,7 @@ Exit:  0 green, 1 RED (real findings), 2 CANNOT RUN (no verdict).
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -75,6 +95,8 @@ RESOLVER = "lg_fd_due_recipients"      # (string $cadence) => array of wp user i
 COLLECTOR = "lg_fd_items_for"          # (int $uid) => array of reply rows since watermark
 
 RED, GREEN, DEAD = [], [], []
+PLUGIN = ""
+EXPECT_ON = False
 
 
 def red(name, detail):
@@ -99,7 +121,13 @@ def wp_eval(php):
     """
     cmd = ["wp", "eval", php, "--path=" + WP_PATH, "--skip-themes"]
     if shutil.which("sudo"):
-        cmd = ["sudo", "-u", WP_USER] + cmd
+        # ⚠️ sudo STRIPS THE ENVIRONMENT, so `LG_FOLLOW_DIGEST=1 python3 thisgate.py`
+        # would run the probe with the flag still OFF and report the OFF behaviour as
+        # though it were the ON behaviour — a confident wrong answer about who gets
+        # mail. Forwarded explicitly through `env`. This was caught by --expect-on,
+        # which is exactly why that guard exists: the run went DEAD instead of green.
+        cmd = ["sudo", "-u", WP_USER, "env",
+               "LG_FOLLOW_DIGEST=" + (os.environ.get("LG_FOLLOW_DIGEST") or "")] + cmd
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     except Exception as e:                                    # noqa: BLE001
@@ -118,6 +146,16 @@ def wp_eval(php):
 
 PROBE = r"""
 $out = array();
+
+// Optional: load a branch's plugin file so an UNMERGED branch can be proven. The
+// serve runs main, so without this the gate can only ever go green after merge.
+$out['loaded'] = null;
+$lane = '%PLUGIN%';
+if ($lane !== '') {
+    if (!is_readable($lane)) { echo json_encode(array('load_error' => "unreadable: $lane")); return; }
+    require_once $lane;
+    $out['loaded'] = $lane;
+}
 
 // ── LIVENESS: is this even a WordPress that could send anything? ───────────────
 // Without this, every absence assertion below is vacuous.
@@ -199,21 +237,36 @@ def build_probe():
             .replace("%CADENCE%", CADENCE_META)
             .replace("%WATERMARK%", WATERMARK_META)
             .replace("%RESOLVER%", RESOLVER)
-            .replace("%COLLECTOR%", COLLECTOR))
+            .replace("%COLLECTOR%", COLLECTOR)
+            .replace("%PLUGIN%", PLUGIN or ""))
 
 
 def main():
-    global WP_PATH
+    global WP_PATH, PLUGIN, EXPECT_ON
     ap = argparse.ArgumentParser()
     ap.add_argument("--wp-path", default=WP_PATH)
+    ap.add_argument("--plugin", default="",
+                    help="load this plugin file into the probe (prove a branch pre-merge)")
+    ap.add_argument("--expect-on", action="store_true",
+                    help="assert the flag resolves ON, so the ON path is exercised deliberately")
     args = ap.parse_args()
     WP_PATH = args.wp_path
+    EXPECT_ON = args.expect_on
+    if args.plugin:
+        PLUGIN = os.path.abspath(args.plugin)
+        if not os.path.isfile(PLUGIN):
+            dead("--plugin", "no such file: %s" % PLUGIN)
+            return verdict()
+        print("    (probing WITH %s — branch mode, not the serve)\n" % PLUGIN)
 
     print("=== follow-digest gate — the OFF state must send NOTHING ===\n")
 
     d, err = wp_eval(build_probe())
     if d is None:
         dead("wp probe", err)
+        return verdict()
+    if d.get("load_error"):
+        dead("--plugin load", d["load_error"])
         return verdict()
 
     # ── LIVENESS FIRST. Everything below is meaningless without it. ─────────────
@@ -247,6 +300,17 @@ def main():
     # ── THE FLAG ───────────────────────────────────────────────────────────────
     flag_defined = bool(d.get("flag_defined"))
     flag_on = bool(d.get("flag_value"))
+    if not flag_defined and PLUGIN:
+        dead(FLAG + " not defined even though the plugin was loaded",
+             "The file at --plugin does not define the flag, so every assertion below "
+             "would be about nothing. Loading a file and then reporting 'absent' is the "
+             "vacuous answer this gate refuses to give.")
+        return verdict()
+    if flag_defined and EXPECT_ON and not flag_on:
+        dead("--expect-on but the flag resolved OFF",
+             "Set LG_FOLLOW_DIGEST=1 in the environment. Exercising the ON path against "
+             "an OFF flag would report the OFF behaviour as if it were the ON behaviour.")
+        return verdict()
     if not flag_defined:
         red(FLAG + " is not defined",
             "The sender does not exist yet. THIS IS THE EXPECTED RED-FIRST STATE — the "
