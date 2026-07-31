@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shop Layout Planner — standalone render, two options</title>
+<link rel="stylesheet" href="_mock.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="doc-head">
+  <h1>/shop-layout-planner/ — rendered standalone, two ways</h1>
+  <p class="sub">
+    Same URL, same planner, no WordPress theme. Both options keep every word of the copy that
+    currently earns the Google traffic, and both keep the planner exactly as it is today —
+    the only question is whether the visitor <em>lands on the tool</em> or <em>lands on a page about the tool</em>.
+    Pick one and I'll build it.
+  </p>
+
+  <div class="callout info">
+    <strong>What's broken today is only the wrapper.</strong> The planner is already
+    <code>position:fixed; inset:0</code> — once it opens it covers the whole screen and you never see
+    the theme. What renders in stock WordPress is the marketing page around the button. So this is a
+    wrapper rebuild; the app itself is untouched either way.
+  </div>
+
+  <div class="callout">
+    <strong>Before you choose — the planner is desktop-only right now.</strong> The canvas listens for
+    mouse events only (no touch handlers at all), so drag-to-move doesn't work on a phone; and the
+    whole editing sidebar is hidden below 600px, so there's no rename, resize, rotate or
+    <em>delete</em> on a small screen. That's true of the page as it stands today — it isn't something
+    this rebuild causes. Both phone mocks below therefore show an <strong>honest</strong> small-screen
+    state rather than a tool that would frustrate people. Making it actually work on touch is real
+    work and I'd book it separately.
+  </div>
+</div>
+
+<div class="cols">
+
+  <!-- ═══════════════════ OPTION A ═══════════════════ -->
+  <div class="col">
+    <h2>Option A — Tool first <span class="pill pill--rec">Recommended</span></h2>
+    <p class="why">
+      The planner is <strong>already on the screen</strong> when the page loads — no click to get in.
+      A slim title bar sits above it; all the SEO copy moves below it. Someone who searched
+      "luthier shop layout planner" is looking at a working planner within a second of arriving,
+      and Google still reads every word of the copy underneath.
+    </p>
+
+    <div class="frame-label">Desktop</div>
+    <div class="desktop">
+      <div class="chrome-bar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <div class="urlbar">loothgroup.com<b>/shop-layout-planner/</b></div>
+      </div>
+
+      <div class="lgc">
+        <span class="lgc__burger">☰</span>
+        <span class="lgc__mark">The Looth Group</span>
+        <div class="lgc__menu"><span>Discussions</span><span>Articles</span><span class="on">Tools</span><span>Events</span></div>
+        <span class="lgc__spacer"></span>
+        <span class="lgc__cta">Join</span>
+      </div>
+
+      <div class="sp">
+        <div class="sp__hero--slim">
+          <div class="row">
+            <div>
+              <span class="sp__badge">Free Tool</span>
+              <h1 class="sp__h1">Luthier Shop Layout Planner</h1>
+              <p class="sp__sub">Drag-and-drop workshop floor plan tool — built for instrument makers</p>
+            </div>
+            <div class="trust">
+              <div><span class="k">No signup</span><span class="v">nothing to install</span></div>
+              <div><span class="k">Saves locally</span><span class="v">export PDF or JSON</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="toolstrip">
+          <div class="pl" style="height:376px;">
+            <div class="pl__head">
+              <span class="pl__title">The Roadman Shop Planner <span>@jroadman</span></span>
+              <span class="pl__headbtn">⛶ Full screen</span>
+            </div>
+
+            <div class="pl__controls">
+              <div class="pl__row">
+                <span class="ctl ctl--lab">Room W:</span><span class="ctl ctl--in">24</span>
+                <span class="ctl ctl--lab">H:</span><span class="ctl ctl--in">16</span>
+                <span class="ctl">Feet</span>
+                <span class="ctl ctl--pri">Apply Room</span>
+                <span class="ctl ctl--lab" style="margin-left:8px;">Rect:</span>
+                <span class="ctl ctl--in" style="min-width:52px;">Label</span>
+                <span class="ctl ctl--lab">W:</span><span class="ctl ctl--in">3</span>
+                <span class="ctl ctl--lab">D:</span><span class="ctl ctl--in">2</span>
+                <span class="ctl">Add Rect</span>
+                <span class="ctl">Add Circle</span>
+              </div>
+              <div class="pl__row">
+                <span class="ctl ctl--lab">Tool:</span>
+                <span class="ctl ctl--on">Select / Items</span>
+                <span class="ctl">Add Wall</span><span class="ctl">Add Door</span>
+                <span class="ctl">Add Window</span><span class="ctl">Add Label</span>
+                <span class="ctl ctl--lab">|</span>
+                <span class="ctl">Undo</span><span class="ctl">Redo</span><span class="ctl">Snap: On</span>
+                <span class="ctl ctl--lab">|</span>
+                <span class="ctl">Download JSON</span>
+                <span class="ctl ctl--pri">Save PDF</span>
+              </div>
+            </div>
+
+            <div class="pl__body">
+              <div class="pl__canvas">
+                <div class="plan">
+                  <svg viewBox="0 0 560 260" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                      <pattern id="gA" width="20" height="20" patternUnits="userSpaceOnUse">
+                        <path d="M20 0H0V20" fill="none" stroke="#eef0ea" stroke-width="1"/>
+                      </pattern>
+                    </defs>
+                    <rect width="560" height="260" fill="url(#gA)"/>
+                    <!-- room -->
+                    <rect x="46" y="26" width="470" height="208" fill="#fff" stroke="#1a1e12" stroke-width="4"/>
+                    <!-- interior wall -->
+                    <line x1="352" y1="26" x2="352" y2="150" stroke="#666" stroke-width="3"/>
+                    <!-- door + swing -->
+                    <line x1="46" y1="150" x2="46" y2="196" stroke="#fff" stroke-width="6"/>
+                    <path d="M46 196 A46 46 0 0 1 92 150" fill="none" stroke="#87986a" stroke-width="1.6" stroke-dasharray="4 3"/>
+                    <line x1="46" y1="150" x2="46" y2="196" stroke="#87986a" stroke-width="2.5"/>
+                    <!-- windows -->
+                    <line x1="150" y1="26" x2="216" y2="26" stroke="#8fb3d9" stroke-width="5"/>
+                    <line x1="252" y1="26" x2="318" y2="26" stroke="#8fb3d9" stroke-width="5"/>
+                    <!-- equipment -->
+                    <g font-family="system-ui, sans-serif" font-size="9" text-anchor="middle">
+                      <rect x="70" y="52" width="122" height="40" fill="#cfe0f2" stroke="#5b7fa6" stroke-width="1.5" rx="2"/>
+                      <text x="131" y="76" fill="#2b4562">Workbench</text>
+
+                      <rect x="70" y="120" width="86" height="52" fill="#d7e8c8" stroke="#6f9152" stroke-width="1.5" rx="2"/>
+                      <text x="113" y="150" fill="#3c5228">Assembly</text>
+
+                      <rect x="218" y="60" width="66" height="52" fill="#f7ddb8" stroke="#c69447" stroke-width="1.5" rx="2"/>
+                      <text x="251" y="90" fill="#6b4c14">Band Saw</text>
+
+                      <rect x="218" y="140" width="60" height="44" fill="#e2e2e2" stroke="#8f8f8f" stroke-width="1.5" rx="2"/>
+                      <text x="248" y="166" fill="#4a4a4a">Drill</text>
+
+                      <rect x="300" y="140" width="40" height="62" fill="#f7ddb8" stroke="#c69447" stroke-width="1.5" rx="2"/>
+                      <text x="320" y="175" fill="#6b4c14">Router</text>
+
+                      <rect x="378" y="48" width="118" height="88" fill="#e9e2f2" stroke="#8b78a8" stroke-width="1.5" rx="2"/>
+                      <text x="437" y="96" fill="#4d3d66">Spray Booth</text>
+
+                      <rect x="378" y="164" width="118" height="48" fill="#d7e8c8" stroke="#6f9152" stroke-width="1.5" rx="2"/>
+                      <text x="437" y="192" fill="#3c5228">Wood Storage</text>
+
+                      <circle cx="185" cy="200" r="26" fill="#e2e2e2" stroke="#8f8f8f" stroke-width="1.5"/>
+                      <text x="185" y="203" fill="#4a4a4a">Stool</text>
+                    </g>
+                    <!-- selection handles on workbench -->
+                    <g fill="#fff" stroke="#ecb351" stroke-width="2">
+                      <rect x="66" y="48" width="7" height="7"/><rect x="189" y="48" width="7" height="7"/>
+                      <rect x="66" y="89" width="7" height="7"/><rect x="189" y="89" width="7" height="7"/>
+                    </g>
+                    <!-- dimension -->
+                    <g stroke="#999" stroke-width="1" font-family="system-ui" font-size="9" fill="#777">
+                      <line x1="46" y1="248" x2="516" y2="248"/>
+                      <text x="281" y="245" text-anchor="middle">24 ft</text>
+                    </g>
+                  </svg>
+                </div>
+              </div>
+
+              <div class="pl__side">
+                <h3>Workbench</h3>
+                <div class="fld">Name</div><div class="box">Workbench</div>
+                <div class="fld">Width</div><div class="box">6</div>
+                <div class="fld">Depth</div><div class="box">2</div>
+                <div class="fld">Rotation</div><div class="box">0°</div>
+                <div class="btn-pri">Apply Changes</div>
+                <div class="btn-dgr">Delete Item</div>
+              </div>
+            </div>
+
+            <div class="pl__hint">
+              Click to select, drag to move, [ ] to rotate. Right-click+drag = pan. Scroll = zoom.
+            </div>
+          </div>
+        </div>
+
+        <div class="pad">
+          <h2 class="sp__h2">Built for Luthiers, By Luthiers</h2>
+          <p class="sp__p">Most floor plan tools are designed for kitchens and living rooms. This one was built by J. Roadman specifically for instrument makers and repair shops. The starter layout includes a workbench, assembly table, band saw, drill press, router table, spray booth, and wood storage — all sized to real-world dimensions.</p>
+
+          <h2 class="sp__h2">What You Can Do</h2>
+          <div class="sp__cards">
+            <div class="sp__card"><h3>Design Your Room</h3><p>Custom dimensions in feet or metric with snap-to-grid precision.</p></div>
+            <div class="sp__card"><h3>Place Equipment</h3><p>Rectangles or circles with custom names, sizes and colour-coding.</p></div>
+            <div class="sp__card"><h3>Architectural Details</h3><p>Doors with swing direction, windows, and text labels.</p></div>
+            <div class="sp__card"><h3>Save &amp; Export</h3><p>Auto-saves locally. Download JSON, or export a print-ready PDF.</p></div>
+          </div>
+
+          <a class="sp__ad">
+            <div class="sp__ad-img"></div>
+            <div>
+              <span class="sp__ad-label">Sponsored</span>
+              <h3>StewMac Ghost Drive</h3>
+              <p>Build the legendary Klon Centaur circuit yourself — real germanium diodes, hand-wired.</p>
+            </div>
+          </a>
+
+          <h2 class="sp__h2">Why Luthier Workshop Layout Matters</h2>
+          <p class="sp__p">A well-planned lutherie shop isn't about having more space — it's about using what you have efficiently. Think about workflow: tonewood comes in the door, gets rough-cut near the entry, moves to the workbench for shaping, then to assembly, finishing, and finally setup.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame-label">Phone — 390px</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="lgc">
+        <span class="lgc__burger">☰</span>
+        <span class="lgc__mark">The Looth Group</span>
+      </div>
+      <div class="sp">
+        <div class="sp__hero--slim">
+          <div class="row">
+            <div>
+              <span class="sp__badge">Free Tool</span>
+              <h1 class="sp__h1">Luthier Shop Layout Planner</h1>
+              <p class="sp__sub">Workshop floor plan tool for instrument makers</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="desk-note">
+          <span class="ico">🖥️</span>
+          <div>
+            <b>The planner needs a mouse</b>
+            <p>Drag-and-drop editing isn't available on touch screens yet. Open this page on a
+               laptop or desktop to build your layout — or read on to see what it does.</p>
+          </div>
+        </div>
+
+        <div class="toolstrip">
+          <div class="pl" style="height:180px;">
+            <div class="pl__head">
+              <span class="pl__title" style="font-size:11px;">The Roadman Shop Planner</span>
+            </div>
+            <div class="pl__body">
+              <div class="pl__canvas">
+                <div class="plan">
+                  <svg viewBox="0 0 300 150" preserveAspectRatio="xMidYMid meet">
+                    <rect width="300" height="150" fill="#fafafa"/>
+                    <rect x="22" y="16" width="256" height="118" fill="#fff" stroke="#1a1e12" stroke-width="3"/>
+                    <line x1="196" y1="16" x2="196" y2="82" stroke="#666" stroke-width="2"/>
+                    <g font-family="system-ui, sans-serif" font-size="7" text-anchor="middle">
+                      <rect x="36" y="30" width="70" height="24" fill="#cfe0f2" stroke="#5b7fa6" rx="2"/><text x="71" y="45" fill="#2b4562">Workbench</text>
+                      <rect x="36" y="72" width="52" height="32" fill="#d7e8c8" stroke="#6f9152" rx="2"/><text x="62" y="91" fill="#3c5228">Assembly</text>
+                      <rect x="124" y="34" width="42" height="30" fill="#f7ddb8" stroke="#c69447" rx="2"/><text x="145" y="52" fill="#6b4c14">Saw</text>
+                      <rect x="124" y="84" width="40" height="26" fill="#e2e2e2" stroke="#8f8f8f" rx="2"/><text x="144" y="100" fill="#4a4a4a">Drill</text>
+                      <rect x="212" y="28" width="54" height="46" fill="#e9e2f2" stroke="#8b78a8" rx="2"/><text x="239" y="54" fill="#4d3d66">Spray</text>
+                      <rect x="212" y="90" width="54" height="30" fill="#d7e8c8" stroke="#6f9152" rx="2"/><text x="239" y="108" fill="#3c5228">Storage</text>
+                    </g>
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <div class="pl__hint" style="font-size:8.6px;">A sample luthier workshop — this is what you'd start from.</div>
+          </div>
+        </div>
+
+        <div class="pad">
+          <h2 class="sp__h2">Built for Luthiers, By Luthiers</h2>
+          <p class="sp__p">Most floor plan tools are designed for kitchens and living rooms. This one was built by J. Roadman specifically for instrument makers and repair shops.</p>
+          <div class="sp__cards">
+            <div class="sp__card"><h3>Design Your Room</h3><p>Custom dimensions in feet or metric, snap-to-grid.</p></div>
+            <div class="sp__card"><h3>Place Equipment</h3><p>Named, sized, colour-coded benches and tools.</p></div>
+          </div>
+          <a class="sp__ad">
+            <div class="sp__ad-img"></div>
+            <div>
+              <span class="sp__ad-label">Sponsored</span>
+              <h3>StewMac Ghost Drive</h3>
+              <p>Build the Klon Centaur circuit yourself.</p>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ OPTION B ═══════════════════ -->
+  <div class="col">
+    <h2>Option B — Landing page, Looth chrome <span class="pill pill--alt">Alternative</span></h2>
+    <p class="why">
+      <strong>Exactly the page you have today</strong>, just rendered in our own chrome instead of stock
+      WordPress. Hero, big gold button, copy underneath; the button opens the planner full-screen the
+      way it does now. Lowest-risk option and it gives the sponsor block a stronger position —
+      the trade is that the visitor still has to click before they see a tool.
+    </p>
+
+    <div class="frame-label">Desktop</div>
+    <div class="desktop">
+      <div class="chrome-bar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <div class="urlbar">loothgroup.com<b>/shop-layout-planner/</b></div>
+      </div>
+
+      <div class="lgc">
+        <span class="lgc__burger">☰</span>
+        <span class="lgc__mark">The Looth Group</span>
+        <div class="lgc__menu"><span>Discussions</span><span>Articles</span><span class="on">Tools</span><span>Events</span></div>
+        <span class="lgc__spacer"></span>
+        <span class="lgc__cta">Join</span>
+      </div>
+
+      <div class="sp">
+        <div class="pad" style="padding-top:26px;">
+          <span class="sp__badge">Free Tool</span>
+          <h1 class="sp__h1">Luthier Shop Layout Planner</h1>
+          <p class="sp__sub">Drag-and-drop workshop floor plan tool — built for instrument makers</p>
+          <p class="sp__intro">Whether you're setting up your first repair bench in a spare bedroom or designing a full production lutherie shop, getting the layout right makes everything easier. Place workbenches, tools, walls, doors, and windows to design your ideal luthier workshop — right in your browser, no software to install.</p>
+
+          <div class="sp__cta-block">
+            <p class="sp__cta-text">Starts with a <strong>sample luthier workshop</strong> you can customise, or clear and start from scratch.</p>
+            <span class="btn-open">Open the Shop Planner — It's Free</span>
+          </div>
+
+          <h2 class="sp__h2">Built for Luthiers, By Luthiers</h2>
+          <p class="sp__p">Most floor plan tools are designed for kitchens and living rooms. This one was built by J. Roadman specifically for instrument makers and repair shops. The starter layout includes a workbench, assembly table, band saw, drill press, router table, spray booth, and wood storage — all sized to real-world dimensions. Delete what you don't need, add what you do.</p>
+
+          <h2 class="sp__h2">What You Can Do</h2>
+          <div class="sp__cards">
+            <div class="sp__card"><h3>Design Your Room</h3><p>Set custom dimensions in feet or metric with snap-to-grid precision. Add interior walls for finish rooms or spray areas.</p></div>
+            <div class="sp__card"><h3>Place Equipment</h3><p>Add rectangular or circular items with custom names and dimensions. Colour-code by category.</p></div>
+            <div class="sp__card"><h3>Architectural Details</h3><p>Doors with configurable swing direction, windows along any wall, and text labels to annotate.</p></div>
+            <div class="sp__card"><h3>Save &amp; Export</h3><p>Auto-saves in your browser between visits. Download as JSON. Export a print-ready PDF.</p></div>
+          </div>
+
+          <a class="sp__ad">
+            <div class="sp__ad-img"></div>
+            <div>
+              <span class="sp__ad-label">Sponsored</span>
+              <h3>StewMac Ghost Drive</h3>
+              <p>Build the legendary Klon Centaur circuit yourself — real 1N34A germanium diodes, hand-wired, no epoxy required.</p>
+            </div>
+          </a>
+
+          <h2 class="sp__h2">Why Luthier Workshop Layout Matters</h2>
+          <p class="sp__p">A well-planned lutherie shop isn't about having more space — it's about using what you have efficiently. Think about workflow: tonewood comes in the door, gets rough-cut near the entry, moves to the workbench for shaping, then to assembly, finishing, and finally setup. Your layout should follow that flow without backtracking.</p>
+
+          <div class="sp__cta-block" style="margin-top:22px;">
+            <p class="sp__cta-text">Ready to plan your shop?</p>
+            <span class="btn-open">Start Planning Your Shop</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame-label">Phone — 390px</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="lgc">
+        <span class="lgc__burger">☰</span>
+        <span class="lgc__mark">The Looth Group</span>
+      </div>
+      <div class="sp">
+        <div class="pad" style="padding-top:18px;">
+          <span class="sp__badge">Free Tool</span>
+          <h1 class="sp__h1">Luthier Shop Layout Planner</h1>
+          <p class="sp__sub">Workshop floor plan tool for instrument makers</p>
+          <p class="sp__intro">Place workbenches, tools, walls, doors and windows to design your ideal luthier workshop — right in your browser, no software to install.</p>
+        </div>
+
+        <div class="desk-note">
+          <span class="ico">🖥️</span>
+          <div>
+            <b>The planner needs a mouse</b>
+            <p>Drag-and-drop editing isn't available on touch screens yet. Open this page on a
+               laptop or desktop to build your layout.</p>
+          </div>
+        </div>
+
+        <div class="pad" style="padding-top:14px;">
+          <h2 class="sp__h2">Built for Luthiers, By Luthiers</h2>
+          <p class="sp__p">Most floor plan tools are designed for kitchens and living rooms. This one was built by J. Roadman specifically for instrument makers and repair shops.</p>
+          <div class="sp__cards">
+            <div class="sp__card"><h3>Design Your Room</h3><p>Custom dimensions in feet or metric, snap-to-grid.</p></div>
+            <div class="sp__card"><h3>Place Equipment</h3><p>Named, sized, colour-coded benches and tools.</p></div>
+          </div>
+          <a class="sp__ad">
+            <div class="sp__ad-img"></div>
+            <div>
+              <span class="sp__ad-label">Sponsored</span>
+              <h3>StewMac Ghost Drive</h3>
+              <p>Build the Klon Centaur circuit yourself.</p>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="foot">
+  <h3>What's the same in both</h3>
+  <ul>
+    <li><strong>The URL doesn't change.</strong> <code>/shop-layout-planner/</code> keeps answering 200 throughout — I'll prove it before and after, and gate it so a future change can't quietly break it.</li>
+    <li><strong>Every word of copy survives</strong>, including the FAQ and the sponsor block. That copy is what Google indexes and I'm not touching it.</li>
+    <li><strong>The planner itself is unchanged</strong> — same 62KB engine, same features, no rewrite.</li>
+    <li>Page 63845 (<code>shop-planner-page</code>) is left completely alone. It's members-gated, gets no public traffic, and isn't part of this.</li>
+  </ul>
+
+  <h3>What I'd book separately</h3>
+  <ul>
+    <li><strong>Touch support for the canvas.</strong> This is the real gap. Today a phone visitor can't use the tool at all, and both mocks above just tell them so honestly rather than pretending. Adding touch drag + a mobile editing panel is a proper piece of work, not a tweak.</li>
+    <li><strong>jsPDF is loaded from a third-party CDN</strong> (cdnjs) rather than served by us. PDF export is advertised on this page and currently depends on someone else's uptime. Worth vendoring.</li>
+  </ul>
+</div>
+
+</div>
+</body>
+</html>
