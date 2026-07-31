@@ -5133,7 +5133,21 @@ function lgFollowEnabled() {
       // expand (Ian 6/16 — no surprise card-grow). Genuine controls self-handle;
       // read-more + compact-caret + bare chrome now all route to the modal (they used
       // to fall through to the bubble-phase expanders at forums.js §224/§2b/§compact).
-      if (e.target.closest('input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, .fc-actions, [data-comments], .reply-stub, .fc-cover--video, a[href*="/u/"]')) return;   // .fc-composer removed — phase 3
+      // ⚠️ [data-follow-open] AND .fc-follow-corner ARE LOAD-BEARING HERE.
+      // Ian, 2026-07-31: "Still no modal from follow button just opens the modal on
+      // dt." Card v3 moved the consolidated follow pill OUT of .fc-actions and into
+      // the card's top-right corner, so it stopped being covered by the .fc-actions
+      // entry above and this handler claimed its click. This listener is CAPTURE
+      // phase and calls stopPropagation(), so forums.js's own bubble-phase
+      // [data-follow-open] delegate never ran: the reader modal opened instead of the
+      // follow settings modal, on every desktop card.
+      //
+      // THIRD TIME THIS EXACT SHAPE: mobile-hub.js:89 carries the same warning for the
+      // long-press bail, and sync() at :4174 for the batch GET. A guard written against
+      // a control's POSITION or its old selector survives only until the control moves.
+      // Both names are listed because [data-follow] does NOT match data-follow-open —
+      // different attributes — and the wrapper is what the corner CSS positions.
+      if (e.target.closest('input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, .fc-actions, [data-follow-open], .fc-follow-corner, [data-comments], .reply-stub, .fc-cover--video, a[href*="/u/"]')) return;   // .fc-composer removed — phase 3
     }
     e.preventDefault();
     e.stopPropagation();   // beat the legacy inline-expand handlers
