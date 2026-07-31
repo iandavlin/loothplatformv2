@@ -51,8 +51,23 @@
 declare(strict_types=1);
 
 /**
- * The Postgres role this pool authenticates as (unix-socket peer auth, so the
- * role name must equal the pool's unix user: `membership`).
+ * The Postgres role this pool authenticates as.
+ *
+ * ⚠️ READ THIS BEFORE DIAGNOSING A DEGRADED SECTION. lg_following_pg() calls
+ * bb_mirror_db(), which does `new PDO('pgsql:host=/var/run/postgresql;…',
+ * null, null)` — a UNIX-SOCKET connection with a NULL USERNAME. libpq then falls
+ * back to the OPERATING-SYSTEM USER OF THE CALLING PROCESS, and Postgres peer
+ * auth demands a role of that name. So this code borrows bb-mirror's connection
+ * BUILDER and never its IDENTITY: the identity is whichever FPM pool is
+ * executing, which for this surface is the unix user `membership`.
+ *
+ * That distinction cost a live P0 on 2026-07-31. The section degraded on live to
+ * "we can't reach the discussion index"; the natural read was that it borrows
+ * bb-mirror's connection and therefore bb-mirror's role, so the missing
+ * `membership` role was ruled out and the real cause hunted elsewhere. The
+ * confirming asymmetry, if it happens again: WRITES still work (follow.php runs
+ * on the looth-dev pool, and `looth-dev` is a role) while READS fail. Writes fine
+ * + reads degraded = this role is missing.
  *
  * PROVISIONED 2026-07-30, read-only, three tables:
  *     CREATE ROLE "membership" LOGIN;
@@ -63,8 +78,14 @@ declare(strict_types=1);
  * Rollback is one line: DROP OWNED BY "membership"; DROP ROLE "membership";
  *
  * Verified read-only by attempting a DELETE on topic_follow (permission denied)
- * and a SELECT on forums.reply (permission denied). LIVE STILL NEEDS THIS ROLE —
- * without it the section degrades as described in lg_following_list().
+ * and a SELECT on forums.reply (permission denied).
+ *
+ * WHERE THE FAILURE IS LOGGED, because the next person will look: error_log()
+ * under PHP-FPM lands in the MASTER log — /var/log/php8.3-fpm.log, tagged
+ * [pool membership] — which is root-owned 0640 and therefore invisible to a
+ * read-only shell. `sudo grep '[following]' /var/log/php8.3-fpm.log`. If that is
+ * empty while the section is still degraded, the pool lacks catch_workers_output
+ * and the line is being discarded rather than not written.
  */
 const LG_FOLLOWING_PG_ROLE = 'membership';
 
@@ -320,10 +341,17 @@ if (!function_exists('lg_following_list')) {
  *
  * `hydrated` is the sharper case: the topic mirror itself was unreadable. This is
  * ORDINARY ERROR HANDLING for an unreachable store — a Postgres restart, a
- * saturated box, a revoked grant — and NOT a mode the feature is designed around.
- * The section assumes forums.topic_follow exists and is readable; that is the
- * contract, and thread-follow's migration makes it true on live in the same window
- * as the deploy (docs/UNDEPLOYED.md).
+ * saturated box, a revoked grant, or a MISSING PG ROLE (see LG_FOLLOWING_PG_ROLE:
+ * that is what actually fired on live 2026-07-31, after the table migration had
+ * already succeeded). It is NOT a mode the feature is designed around.
+ *
+ * ⚠️ AND THE COPY IS NOT ENOUGH ON ITS OWN. "Try again shortly" is honest for a
+ * restart and MISLEADING for a missing grant, which never resolves by waiting —
+ * Ian sat looking at a box that invited him to wait for something that was never
+ * going to happen. The sentence should be kept, but whoever next touches this
+ * should make the degraded state distinguish TRANSIENT from STRUCTURAL, and the
+ * cheap signal is already in hand: the PDO throws SQLSTATE 08006 with 'role "x"
+ * does not exist' for the structural case.
  *
  * It earns its place because without it the failure is silent and confident: every
  * ✉ row falls through the not-in-the-mirror branch and renders "This discussion is
