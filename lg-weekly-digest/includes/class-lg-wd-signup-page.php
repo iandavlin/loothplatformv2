@@ -40,18 +40,72 @@ defined( 'ABSPATH' ) || exit;
 
 class LG_WD_Signup_Page {
 
-	/** Query var that serves the sample email for the iframe. */
+	/** Query var that serves the sample email for the iframe (legacy route). */
 	const PREVIEW_QV = 'lg_wd_email_preview';
+
+	/** admin-ajax action that serves it — the route that does not depend on page routing. */
+	const PREVIEW_ACTION = 'lg_wd_email_preview';
 
 	/** Transient holding the rendered sample email. */
 	const PREVIEW_CACHE = 'lg_wd_public_email_preview';
+
+	/**
+	 * ── EXPOSURE GATE — LG_WD_SIGNUP_EMAIL_PREVIEW ─────────────────────────────
+	 *
+	 * OFF. Ian turns it on himself, on live, once he has looked at the running thing.
+	 *
+	 * WHY IT EXISTS: this section frames a real issue in an iframe, and Ian's verdict
+	 * on the framing was "This sucks" — the email was 368px wider than its box, so a
+	 * reader had to pan sideways to finish a headline. The fix (variant B, which he
+	 * approved) is not merged yet. Until it is, the honest state for members is that
+	 * the section is ABSENT rather than wrong: a signup page with no sample is a page
+	 * missing a nicety, and a signup page framing a clipped newsletter is a page that
+	 * argues against signing up.
+	 *
+	 * SCOPE: this gates the SAMPLE-EMAIL SECTION ONLY. The signup form, the four
+	 * audience states and the unsubscribe path are untouched by it — they are what the
+	 * page is FOR, Ian has not objected to them, and hiding them would be a bigger
+	 * change than the one being made safe.
+	 *
+	 * ONE READ SITE: preview_url(). Everything downstream already treats '' as "no
+	 * section" — the template's `if ( $lgws_sample )` guard predates this flag — so
+	 * OFF removes the section by the route the code already had, not by a new branch.
+	 *
+	 * The filter seam is for a box that wants it on without editing wp-config.
+	 */
+	const PREVIEW_FLAG = 'LG_WD_SIGNUP_EMAIL_PREVIEW';
 
 	/** How long a rendered sample is reused. One hour: the issue changes weekly. */
 	const PREVIEW_TTL = HOUR_IN_SECONDS;
 
 	public static function init(): void {
 		add_shortcode( 'lg_weekly_signup', [ __CLASS__, 'render' ] );
-		// Priority 0: claim the request before any 404/interstitial handler can.
+
+		/**
+		 * THE PREVIEW IS SERVED FROM admin-ajax, NOT FROM A PAGE ROUTE.
+		 *
+		 * It used to hang off `template_redirect`, which meant the URL had to be one
+		 * WordPress routes. That coupling produced two bugs in two days:
+		 *
+		 *   home_url('/')  -> the strangler owns `/` and answered first, so the frame
+		 *                     got the DISCOVERY FEED (fixed by moving to the permalink)
+		 *   the permalink  -> only exists while this is a WP-rendered PAGE. Ian has
+		 *                     ruled that it must render STANDALONE like the rest of the
+		 *                     platform, and the moment it does, get_permalink() returns
+		 *                     nothing, preview_url() returns '' and the section is
+		 *                     silently DROPPED. Not a wrong document — no document.
+		 *
+		 * admin-ajax is routed by WordPress unconditionally. It cannot be intercepted by
+		 * the strangler, needs no rewrite and no new symlink, and is completely
+		 * indifferent to what renders the page framing it. So the preview stops caring
+		 * where the page lives, which is the property both bugs were missing.
+		 *
+		 * `nopriv` because the entire audience of this page is logged out.
+		 */
+		add_action( 'wp_ajax_'        . self::PREVIEW_ACTION, [ __CLASS__, 'serve_preview' ] );
+		add_action( 'wp_ajax_nopriv_' . self::PREVIEW_ACTION, [ __CLASS__, 'serve_preview' ] );
+
+		// Kept so URLs already in the wild (and the merged permalink form) still answer.
 		add_action( 'template_redirect', [ __CLASS__, 'maybe_serve_preview' ], 0 );
 	}
 
@@ -81,7 +135,15 @@ class LG_WD_Signup_Page {
 		if ( ! isset( $_GET[ self::PREVIEW_QV ] ) ) {
 			return;
 		}
+		self::serve_preview();
+	}
 
+	/**
+	 * Emit the sample email and exit. ONE implementation behind both routes, so the
+	 * admin-ajax route and the legacy page route can never drift into rendering
+	 * different documents — which is the failure mode this whole area keeps having.
+	 */
+	public static function serve_preview(): void {
 		$html = get_transient( self::PREVIEW_CACHE );
 		if ( ! is_string( $html ) || $html === '' ) {
 			$html = self::build_email_preview();
@@ -204,15 +266,36 @@ class LG_WD_Signup_Page {
 	 * showing the wrong document entirely, and a 200 the whole way, which is why
 	 * nothing caught it.
 	 *
-	 * So: build the URL from the page the shortcode is rendering ON. The handler
-	 * keys on the query var alone, so any WP-routed permalink serves it, and the
-	 * frame stays same-origin because it is literally the same page.
+	 * THE PERMALINK WAS THE SECOND ANSWER AND IT WAS ALSO WRONG, for a subtler
+	 * reason. It required this to be a WP-rendered PAGE. Ian ruled on 2026-07-30 that
+	 * the platform renders STANDALONE — "nothing renders from the theme" — and the
+	 * moment this page moves, get_permalink() returns nothing, this method returns ''
+	 * and the section is DROPPED. Not the wrong document: no document.
 	 *
-	 * If no permalink can be resolved, return '' and drop the section. Falling back
-	 * to home_url('/') would restore exactly the bug above — better no preview than
-	 * a confident frame around the wrong document.
+	 * So the URL is now admin-ajax, which WordPress routes unconditionally and which
+	 * no page-routing decision can take away. Same origin, no rewrite, no new
+	 * symlink, and immune to the strangler. The preview stops caring where the page
+	 * lives — the property both previous answers were missing.
+	 *
+	 * Still returns '' when there is no sent issue: no section beats an empty frame.
 	 */
+	/**
+	 * Is the sample-email section switched on? Defaults OFF; see PREVIEW_FLAG.
+	 *
+	 * `define('LG_WD_SIGNUP_EMAIL_PREVIEW', true)` in wp-config, or the filter for a
+	 * box that would rather not edit wp-config. The constant wins when it is set, so
+	 * a deliberate define cannot be silently overridden by a stray filter.
+	 */
+	public static function preview_enabled(): bool {
+		$on = defined( self::PREVIEW_FLAG ) ? (bool) constant( self::PREVIEW_FLAG ) : false;
+		return (bool) apply_filters( 'lg_wd_signup_email_preview_enabled', $on );
+	}
+
 	private static function preview_url(): string {
+		if ( ! self::preview_enabled() ) {
+			return '';                      // flag OFF: no section at all.
+		}
+
 		$cached = get_transient( self::PREVIEW_CACHE );
 		if ( is_string( $cached ) && $cached === '' ) {
 			return '';                      // known-empty: no sent issue. Hide the section.
@@ -221,16 +304,7 @@ class LG_WD_Signup_Page {
 			return '';
 		}
 
-		$host_id = get_queried_object_id();
-		if ( ! $host_id ) {
-			return '';
-		}
-		$permalink = get_permalink( $host_id );
-		if ( ! is_string( $permalink ) || $permalink === '' ) {
-			return '';
-		}
-
-		return add_query_arg( self::PREVIEW_QV, '1', $permalink );
+		return add_query_arg( 'action', self::PREVIEW_ACTION, admin_url( 'admin-ajax.php' ) );
 	}
 
 	// ── The page ──────────────────────────────────────────────────────────────

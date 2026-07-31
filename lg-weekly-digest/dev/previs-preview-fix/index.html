@@ -1,0 +1,77 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weekly signup page — the sample email box</title>
+<style>
+  :root{--gold:#ECB351;--dark:#2B2318;--light:#FAF6EE;--mint:#87986A;--bad:#B4432F}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--light);color:var(--dark);
+       font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:23px;margin:0 0 6px}
+  .sub{margin:0 0 22px;font-size:17px}
+  .ask{background:#fff;border:2px solid var(--gold);border-radius:10px;padding:14px 16px;margin:0 0 26px}
+  .ask b{display:block;margin-bottom:4px}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media (max-width:820px){.pair{grid-template-columns:1fr}}
+  .panel{background:#fff;border:1px solid #ddd2bf;border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+  .cap{padding:11px 14px;font-size:14px;border-bottom:1px solid #eee}
+  .cap .tag{display:inline-block;font-weight:700;font-size:12px;letter-spacing:.04em;
+            padding:2px 8px;border-radius:99px;color:#fff;margin-bottom:5px}
+  .now .tag{background:var(--bad)} .fix .tag{background:var(--mint)}
+  .cap code{font-size:12px;background:#f4efe4;padding:1px 5px;border-radius:4px;word-break:break-all}
+  .mailbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f4efe4;
+           border-bottom:1px solid #e6dcc8;font-size:12px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--gold);flex:none}
+  iframe{display:block;width:100%;height:460px;border:0;background:#fff}
+  .fact{padding:10px 14px;font-size:13px;border-top:1px solid #eee;background:#fbf8f1}
+  .fact b{font-variant-numeric:tabular-nums}
+  .note{margin:26px 0 0;font-size:14px;background:#fff;border-left:4px solid var(--gold);padding:12px 14px}
+  .note p{margin:0 0 8px} .note p:last-child{margin:0}
+</style>
+<div class="wrap">
+
+<h1>The weekly signup page: the box that shows “a real one”</h1>
+<p class="sub">The page has a panel that says <em>“Here’s a real one — this is the most recent issue
+that actually went out.”</em> It has been showing the front page instead.</p>
+
+<div class="ask">
+  <b>The one thing to check:</b>
+  On the right you should see <strong>an email</strong> — masthead, stories, an unsubscribe link at the
+  bottom. If that looks like the right thing to show someone deciding whether to sign up, this is ready.
+</div>
+
+<div class="pair">
+
+  <div class="panel now">
+    <div class="cap"><span class="tag">ON DEV2 NOW</span><br>
+      The panel frames <code>/?lg_wd_email_preview=1</code> — the site front page.</div>
+    <div class="mailbar"><span class="dot"></span><span>The Looth Group Weekly</span></div>
+    <iframe src="https://dev2.loothgroup.com/?lg_wd_email_preview=1"
+            title="What the signup page frames today" loading="lazy"></iframe>
+    <div class="fact">Loads as <b>“Looth Group — Lutherie Community”</b>, 75,458 bytes,
+      <b>0</b> unsubscribe links. Not an email.</div>
+  </div>
+
+  <div class="panel fix">
+    <div class="cap"><span class="tag">AFTER THE FIX</span><br>
+      The panel frames <code>/weekly-email-sign-up/?lg_wd_email_preview=1</code> — the real issue.</div>
+    <div class="mailbar"><span class="dot"></span><span>The Looth Group Weekly</span>
+      <span style="margin-left:auto;color:#6b6152">from noreply@loothgroup.com</span></div>
+    <iframe src="https://dev2.loothgroup.com/weekly-email-sign-up/?lg_wd_email_preview=1"
+            title="What the signup page frames after the fix" loading="lazy"></iframe>
+    <div class="fact">Loads as <b>“The Looth Group — Week of July 30, 2026”</b>, 37,321 bytes,
+      unsubscribe present. The issue that actually went out.</div>
+  </div>
+
+</div>
+
+<div class="note">
+  <p><strong>Nothing here is a mock.</strong> Both panels are live pages on dev2 right now, loaded
+  straight from the server — not screenshots, not drawings. The right-hand one already works; the bug
+  is only that the signup page points its panel at the left-hand address.</p>
+  <p><strong>If a panel is blank</strong>, it needs the dev cookie — open
+  <code>dev2.loothgroup.com</code> in the same browser first, then reload this page.</p>
+</div>
+
+</div>

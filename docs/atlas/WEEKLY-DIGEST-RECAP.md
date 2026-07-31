@@ -487,6 +487,43 @@ store outside the window's authorised paths, and a lie about his account. So the
 real** (live endpoint, real `display_name`) and the **rows are real stored activity borrowed from
 other members**, with a banner in the email saying so.
 
+> ### ⚠️ IAN, 2026-07-30: *"That didn't have any notifs activity."* HE IS RIGHT, AND SO IS THE LINE ABOVE.
+>
+> The paragraph above is literally true and substantively misleading, which is the worst kind of
+> accurate. The rows were real *in the database sense* and meaningless *in the human sense*.
+>
+> **Reconstructed, not inferred.** The 07-27 renderer was loaded out of git (`ac2c4fa`) under a
+> renamed class and run against the borrowed payload. The four rows it drew are provably **the same
+> four rows the 07-27 build had** — each carries `created_at` inside 2026-07-20..27, and each is
+> **still unread**, which is why today's fetch returns them unchanged:
+>
+> | wp | type | created_at |
+> |---|---|---|
+> | 690 | `reaction.on_post` | 2026-07-24 04:04 |
+> | 197 | `reaction.on_post` | 2026-07-24 14:46 |
+> | 197 | `reaction.on_post` | 2026-07-25 23:31 |
+> | 690 | `forum.reply_to_topic` | 2026-07-26 19:12 |
+>
+> **What that renders as — the actual text of what he opened:**
+>
+> > 2 new replies on your discussion *“NOTIFLANE test topic — click-through gate”* — Ian Davlin The Looth Group and 1 other
+> > Ian Davlin The Looth Group reacted to your discussion *“NOTIFLANE test topic — click-through gate”*
+> > Claude Admin reacted to your reply *“Suggest an alternative to concave fret file”*
+> > Ian Davlin The Looth Group reacted to your post *“Proper Loothing: Back in the Saddle Again!”*
+>
+> **Every actor is Ian himself or a bot. Three of the four rows are reactions. The subject is a test
+> topic.** A section existed; no activity did. *"That didn't have any notifs activity"* is an exact
+> description of that email, and the record above should never have implied otherwise by saying
+> "real stored activity" without saying **whose** and **what**.
+>
+> The whole platform held **8 notification rows** in that entire week (6 `reaction.on_post`,
+> 2 `forum.reply_to_topic`). The demo had to borrow because Ian's recap was empty, and what it
+> borrowed was empty of meaning too. **`reaction.on_post` was still INCLUDED on 07-27** — Ian removed
+> it the next day — so today's renderer draws only 1 of those 4 rows.
+>
+> **This is not a defect in the send.** It is the design being demonstrated over a store with nothing
+> in it, and it is the same finding as §10.4 arriving from a third direction — see the scoping note there.
+
 **The send bypasses `wp_mail` on purpose.** dev2's containment mu-plugin swallows `wp_mail` into
 mailpit and returns `true` — a convincing false positive. `build-inbox-test.php` only *builds*;
 the send is a direct SES call. **Trap for next time:** FluentSMTP stores the SES secret
@@ -793,6 +830,92 @@ code that sends it"* — would go false the first week nobody regenerated it.
 > **0 violations, verdict PASS.** Fixed @09a15da: `wrong_document()` refuses an edge-challenge title or
 > a near-empty body and exits **2 CANNOT RUN**. Run the gate by stopping the service and launching
 > chrome with the resolver; do not `pkill` (systemd restarts it in 3s).
+
+### 10.3a The frame was 368px too narrow — variant B (Ian, 2026-07-30)
+
+> **"email frame b what the lane recommends is good."** — Ian, approving the option this lane put
+> forward after seeing it drawn.
+
+Framing the right document was not the same as framing it readably. His words on finding it:
+*"the email is now in a container where it floats left and right to see the whole thing with out
+having the text cut off. This sucks."*
+
+| | declared where | px |
+|---|---|---|
+| `.email-container` | `templates/email.php:68` | max-width **960** |
+| `.email-wrapper` padding | `templates/email.php:64` | `24px 16px` → **32** horizontal |
+| **the document therefore needs** | | **992** |
+| `.lgws .mail` | `templates/signup-page.php` | max-width **624** |
+| **overflow** | | **368** |
+
+> ### ⚠️ CORRECTED 2026-07-31 — THERE WAS NO OVERFLOW. THE TABLE ABOVE IS ARITHMETIC, NOT BEHAVIOUR.
+>
+> Measured in a real browser (lane-preview + CDP) at **360/414/480/520/600/700/768/900/1100/1440**,
+> reading `scrollWidth` vs `clientWidth` on the page **and inside the iframe**:
+>
+> **The email fits its box exactly at every width** — 258/258, 312/312, 403/403, 603/603 … and the
+> widest element inside it never exceeds the frame. **The shipped 624px page does not pan sideways.**
+>
+> `.email-container` is `max-width:960px; width:100%` and its own 768px media query makes it fluid, so
+> it renders at whatever the frame gives it and can never exceed it. The "992 needed / 368 over" is a
+> subtraction of declared numbers the layout never reaches.
+>
+> **Variant B is kept, and re-justified:** at 1280 it hands the email **990px instead of 603px** — more
+> of the design at full type size. That is a **legibility** change. It is **not** an overflow fix, and
+> **on a phone it does nothing at all**: `max-width:992px` never binds at 390px.
+>
+> **So Ian's words are not yet explained.** Best remaining hypothesis, held as a hypothesis: on a phone
+> the email renders into ~260–350px when it is designed for 600–960px — not clipped, *cramped*. Zooming
+> to read it produces the left-right movement he described, and "text cut off" is what heavy wrapping at
+> 260px looks like. If that is right the fix is not frame width but what a phone is shown at all.
+> **Nothing has been built on that guess.**
+>
+> The lesson worth keeping: `dev/verify-preview-frame-fits.php` was green the whole time and its own
+> header states the limit that turned out to be the whole story — *it compares declared widths, not
+> rendered ones*. **A gate written from a theory certifies the theory, not the page.**
+
+**The frame had been sized to the email's CONTENT COLUMN; the email is a 992px DOCUMENT.** That also
+explains the wide black gutters in his screenshot — the width was available, the box was not taking it.
+Fixed to 992. The *"Scroll inside the message to read the whole issue"* caption is **deleted**, along
+with its now-dead `.fcap` rule: it existed only to excuse the clipping, and a caption that explains a
+defect is the defect wearing a label.
+
+**`max-width`, never `width` — load-bearing for the phone.** Below 992 the box collapses to the
+viewport and the email's own 768/480 breakpoints take over. A hard width would hold the box open at
+992 inside a 390px screen and move the panning *outside* the iframe: the same defect, one level up.
+
+**The standard this was decided by, and worth keeping:** *A is the evidence, not my explanation of it.
+If A pans and B does not, the fix is right regardless of my reasoning.* Show the defect, then show it
+gone — the mock carried a live 624px panel, a live 992px panel and a **390px phone panel**, all
+framing the same real email.
+
+**Two things I nearly got wrong, both caught by measuring rather than reasoning:**
+- A `<td width="624">` in the served email looked like the culprit. It is inside an `<!--[if mso]>`
+  conditional — **Outlook-only, inert in every browser**. Strip conditionals the way a browser does and
+  there are **zero** cells over 400px. I would have "fixed" a cell no browser renders.
+- The text sheared in his screenshot — *"…Winding Pickups with Tom Bra…"* — is an **`alt` attribute**,
+  so that image was not painting for him. Flagged at the time as *possibly a second defect*.
+  **RESOLVED 2026-07-30: it is a dev2 DATA gap, not a code defect, and it does not follow to live.**
+  Two of the preview's nine images fail on dev2 — `/img.php` 302s to the original (its documented
+  fallback for a source it cannot handle) and the original **404s**, because those uploads do not
+  exist on this box. The browser then paints the alt text, which is what he saw.
+  **On live all three checked URLs return 200**, including `/img.php` **with no cookie** — the
+  resizer is public there; the dev gate is a dev2-only thing. So the preview renders correctly for
+  the anonymous audience the page is actually for.
+  *Consequence worth carrying: part of what Ian judged this page by is dev2's missing uploads rather
+  than the page. Do not "fix" broken preview images on dev2 by changing the resizer.*
+
+**Guarded by `dev/verify-preview-frame-fits.php`**, which parses both numbers out of the shipping
+templates so it cannot drift from what serves, and additionally asserts the phone half (max-width with
+no hard width; the ≤480px breakpoint resetting `.event-img`, since the cards ship `<img width="240">`
+with no max-width). *It proves the rules that make the phone case work are present — not that a phone
+rendered it.*
+
+> **Both failure branches were proven red before the green was trusted, and one was VACUOUS.**
+> Narrowing the frame back to 624 failed correctly. Adding a hard `width` beside the max-width
+> **passed** — the check was `[^-]width`, which needs a character before `width` and so could never
+> match `.mail{width:…`, the exact case it was written for. Fixed to a lookbehind and re-proven red.
+> **An assertion that cannot fail is worse than no assertion.**
 
 **GATE RESULT FOR THIS PAGE, 2026-07-30, chrome launched WITH the resolver: `wdsignup/anon` PASSES** —
 imgs 39KB, total 969KB against a 2500KB budget. The 969KB is BuddyBoss chrome present on every anon

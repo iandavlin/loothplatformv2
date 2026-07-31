@@ -1,0 +1,159 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Front page — the latest weekly email, for logged-out visitors</title>
+<style>
+  :root{--gold:#ECB351;--dark:#2B2318;--paper:#FAF6EE;--mint:#87986A;--mint-pale:#D4E0B8;
+        --ink:#2B2318;--dim:#6b6357;--line:#e3dbcd;--card:#fff;--page:#FAF6EE}
+  @media (prefers-color-scheme:dark){
+    :root{--ink:#EDE6D8;--dim:#a79d8c;--line:#3a3228;--card:#231d15;--page:#171310}
+  }
+  :root[data-theme="dark"]{--ink:#EDE6D8;--dim:#a79d8c;--line:#3a3228;--card:#231d15;--page:#171310}
+  :root[data-theme="light"]{--ink:#2B2318;--dim:#6b6357;--line:#e3dbcd;--card:#fff;--page:#FAF6EE}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);
+       font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 70px}
+  h1{font-size:23px;margin:0 0 6px}
+  .sub{margin:0 0 18px;font-size:17px;color:var(--dim)}
+  .ask{background:var(--card);border:2px solid var(--gold);border-radius:10px;padding:14px 16px;margin:0 0 22px}
+  .ask b{display:block;margin-bottom:4px}
+  .toolbar{display:flex;gap:8px;margin:0 0 22px;flex-wrap:wrap}
+  .toolbar button{font:600 13px/1 inherit;padding:9px 14px;border-radius:99px;cursor:pointer;
+        border:1px solid var(--line);background:var(--card);color:var(--ink)}
+  .toolbar button[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:#2B2318}
+  .lane{margin:0 0 30px}
+  .lane>h2{font-size:15px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
+  .tag{display:inline-block;font:700 11px/1 inherit;letter-spacing:.05em;padding:3px 9px;
+       border-radius:99px;color:#fff;margin-right:8px;vertical-align:2px}
+  .rec .tag{background:var(--mint)} .alt .tag{background:#8a8578}
+  .stage{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;
+         display:flex;gap:18px;justify-content:center;flex-wrap:wrap}
+  .vp{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--page)}
+  .vp .vphead{font:600 11px/1 inherit;letter-spacing:.05em;color:var(--dim);
+        padding:7px 10px;border-bottom:1px solid var(--line);background:var(--card)}
+  .vp.desk{width:760px;max-width:100%} .vp.phone{width:390px;max-width:100%}
+
+  /* ── the block itself ─────────────────────────────────────────── */
+  .wblock{padding:20px}
+  .wb-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 4px}
+  .wb-eyebrow{font:700 11px/1 inherit;letter-spacing:.13em;text-transform:uppercase;color:var(--gold)}
+  .wb-issue{font-size:12.5px;color:var(--dim)}
+  .wblock h3{font-size:20px;margin:0 0 4px;letter-spacing:-.01em}
+  .wb-lede{font-size:14px;color:var(--dim);margin:0 0 14px}
+  .wb-list{list-style:none;margin:0 0 14px;padding:0;display:grid;gap:1px;background:var(--line);
+        border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .wb-list li{background:var(--card);padding:11px 13px;display:flex;gap:10px;align-items:baseline}
+  .wb-kind{flex:0 0 auto;font:700 10px/1.5 inherit;letter-spacing:.05em;text-transform:uppercase;
+        color:var(--mint);min-width:64px}
+  .wb-t{font-size:14.5px;line-height:1.4}
+  .wb-cta{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+  .wb-btn{font:700 14px/1 inherit;padding:11px 16px;border-radius:7px;background:var(--gold);
+        color:#2B2318;text-decoration:none;display:inline-block}
+  .wb-link{font-size:13.5px;color:var(--dim);text-decoration:underline;
+        text-decoration-color:var(--gold);text-underline-offset:3px}
+  .phone .wb-list li{flex-direction:column;gap:2px}
+  .phone .wblock{padding:16px}
+  .phone .wblock h3{font-size:18px}
+
+  /* ── the alternative: the email in a frame ─────────────────────── */
+  .mailbox{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#e8e2d8}
+  .mailbar{background:var(--dark);color:var(--paper);font:600 11.5px/1 inherit;padding:8px 11px}
+  .mailbox .fake{height:230px;background:
+      repeating-linear-gradient(180deg,#efe9dd 0 14px,#e8e2d8 14px 28px);position:relative}
+  .mailbox .fake::after{content:"the real issue, in an iframe";position:absolute;inset:0;
+      display:flex;align-items:center;justify-content:center;color:#8a8578;font:600 12px/1 inherit}
+  .note{background:var(--card);border-left:4px solid var(--gold);padding:12px 14px;
+        font-size:14px;margin:12px 0 0;border-radius:0 8px 8px 0}
+  .note p{margin:0 0 8px}.note p:last-child{margin:0}
+  code{font-size:12px;background:var(--page);padding:1px 5px;border-radius:4px}
+</style>
+<div class="wrap">
+
+<h1>Front page: the latest weekly email, for logged-out visitors</h1>
+<p class="sub">Backlog #8. Shown only when signed out — members already get the email.</p>
+
+<div class="ask">
+  <b>The one thing to decide:</b>
+  do we show the <strong>issue's contents as normal front-page cards</strong> (A, my
+  recommendation), or <strong>the actual email in a frame</strong> (B)?
+</div>
+
+<div class="toolbar">
+  <button id="t-light" aria-pressed="true">Light</button>
+  <button id="t-dark"  aria-pressed="false">Dark</button>
+</div>
+
+<div class="lane rec">
+  <h2><span class="tag">A — RECOMMENDED</span> the issue, rendered as our own cards</h2>
+  <div class="stage">
+    <div class="vp desk"><div class="vphead">DESKTOP</div><div id="a-desk"></div></div>
+    <div class="vp phone"><div class="vphead">PHONE · 390px</div><div id="a-phone" class="phone"></div></div>
+  </div>
+  <div class="note">
+    <p><strong>Why I recommend it.</strong> It is built from the same issue data the email is
+    (<code>latest_sent_issue_id()</code> + <code>get_data()</code>), but drawn with the front page's own
+    type and colours. So it resizes properly, reads the same on a phone, and follows dark mode —
+    none of which an email can do, because an email is a fixed-width document with its own light-only
+    styling baked in.</p>
+    <p>It is also nearly weightless: text and links, no images, no second document to load.</p>
+  </div>
+</div>
+
+<div class="lane alt">
+  <h2><span class="tag">B — ALTERNATIVE</span> the actual email, in a frame</h2>
+  <div class="stage">
+    <div class="vp desk"><div class="vphead">DESKTOP</div><div id="b-desk"></div></div>
+    <div class="vp phone"><div class="vphead">PHONE · 390px</div><div id="b-phone" class="phone"></div></div>
+  </div>
+  <div class="note">
+    <p><strong>Why I did not pick it.</strong> It shows the literal thing you are signing up for,
+    which is a real advantage. But it is the same pattern you have already objected to on the signup
+    page: an email designed for a wide screen squeezed into a narrow box. On a phone it lands in about
+    300px and gets cramped, and it cannot follow dark mode — the email is light-only by design, so it
+    would sit as a white rectangle on a dark front page.</p>
+    <p><strong>Straight about one thing:</strong> I still do not know what you saw on the signup page.
+    I measured it at ten screen sizes and never reproduced the sideways movement. That is exactly why I
+    am not recommending we put the same frame on the front page as well.</p>
+  </div>
+</div>
+
+</div>
+<script>
+const ISSUE = { title: "Weekly Digest — July 13, 2026", items: [
+  {kind:"Video",      t:"Santa Cruz Guitars: 50 Years of Custom Guitars"},
+  {kind:"Video",      t:"Electric Guitar Builders Club: Winding Pickups with Tom Brantley"},
+  {kind:"Article",    t:"Resin Casting a Replacement Pickup Cover for an Ibanez Musician"},
+  {kind:"Loothprint", t:"Total Vise Quick Dock Neck Rest — Flat-Lay Variant"},
+  {kind:"Event",      t:"Gluboost AMA"} ] };
+
+function blockA(){
+  return `<div class="wblock">
+    <div class="wb-top"><span class="wb-eyebrow">The Looth Group Weekly</span>
+      <span class="wb-issue">${ISSUE.title}</span></div>
+    <h3>This week, while it's still public</h3>
+    <p class="wb-lede">New articles and videos go up public, then move behind membership.
+      Here's what went out on Monday.</p>
+    <ul class="wb-list">${ISSUE.items.map(i=>
+      `<li><span class="wb-kind">${i.kind}</span><span class="wb-t">${i.t}</span></li>`).join('')}</ul>
+    <div class="wb-cta"><a class="wb-btn" href="#">Get it every Monday</a>
+      <a class="wb-link" href="#">Read this issue</a></div>
+  </div>`;
+}
+function blockB(){
+  return `<div class="wblock">
+    <div class="wb-top"><span class="wb-eyebrow">The Looth Group Weekly</span>
+      <span class="wb-issue">${ISSUE.title}</span></div>
+    <div class="mailbox"><div class="mailbar">The Looth Group Weekly</div><div class="fake"></div></div>
+    <div class="wb-cta" style="margin-top:13px"><a class="wb-btn" href="#">Get it every Monday</a></div>
+  </div>`;
+}
+a_desk.innerHTML=blockA(); a_phone.innerHTML=blockA();
+b_desk.innerHTML=blockB(); b_phone.innerHTML=blockB();
+
+const root=document.documentElement;
+function theme(t){ root.setAttribute('data-theme',t);
+  t_light.setAttribute('aria-pressed', t==='light'); t_dark.setAttribute('aria-pressed', t==='dark'); }
+t_light.onclick=()=>theme('light'); t_dark.onclick=()=>theme('dark');
+theme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>

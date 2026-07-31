@@ -131,7 +131,33 @@ class LG_WD_Sender_FluentCRM implements LG_WD_Sender_Interface {
         // Resolve subscriber IDs
         try {
             $result         = $campaign->getSubscriberIdsBySegmentSettings( $subscriber_settings );
-            $subscriber_ids = $result['subscriber_ids'] ?? [];
+            /**
+             * DE-DUPLICATE HERE, NOT AS A SIDE EFFECT SOMEWHERE ELSE.
+             *
+             * The audience is now TWO {list,tag} pairs (members + non-members), and
+             * 9 live contacts are subscribed to BOTH list 3 and list 7 — measured
+             * 2026-07-30. If a duplicate id survives, that contact gets the digest
+             * twice.
+             *
+             * Until now the only de-duplication we owned was the array_unique()
+             * inside recipients_with_something_waiting(), which exists for an
+             * entirely different reason (Ian's empty-means-no-send filter) and sits
+             * behind a class_exists() guard. That made double-send protection a
+             * SIDE EFFECT of a suppression rule that is itself under active question
+             * (WEEKLY-DIGEST-RECAP §10.4 — Ian's 07-30 "everyone on the list" ruling
+             * points the other way). Retire that filter and 9 people start getting
+             * two copies, silently, with nothing in the diff to say so.
+             *
+             * So the ids are made unique at the point they are resolved, where the
+             * duplication is actually created. Behaviour-neutral today — it is a
+             * no-op on an already-unique list — and it stops being load-bearing on a
+             * ruling that has nothing to do with it.
+             *
+             * NOT PROVEN: whether FluentCRM already unions these internally. I did
+             * not read its resolver. This does not depend on the answer.
+             */
+            $subscriber_ids = array_values( array_unique( array_map(
+                'intval', $result['subscriber_ids'] ?? [] ) ) );
         } catch ( \Exception $e ) {
             self::log( 'ERROR: getSubscriberIdsBySegmentSettings threw: ' . $e->getMessage() );
             return [ 'success' => false, 'message' => 'Subscriber resolution failed.', 'campaign_id' => $campaign->id ];
@@ -153,9 +179,21 @@ class LG_WD_Sender_FluentCRM implements LG_WD_Sender_Interface {
         // SCOPE WORTH SEEING, because it is larger than the recap: this suppresses
         // the WHOLE email, including the curated sections (Upcoming Events, new
         // videos, loothprint) that have nothing to do with the member's to-do list.
-        // Measured on live 2026-07-28: 96 of 1,663 subscribed list-3 members have an
-        // actionable item this week, so ~94% of the list would receive no digest at
-        // all. That is what the ruling says; it is flagged to keeper with the numbers
+        // RE-MEASURED ON LIVE 2026-07-30, and the earlier figure here was WRONG in a
+        // way worth naming: it predated account-less subscribers being kept.
+        //
+        //   recipient set (lists 3 + 7, subscribed)   1,859
+        //     account-less — ALWAYS KEPT                314
+        //     members — subject to Rule 5             1,545
+        //       with something waiting                   159
+        //   RECEIVES the next send                       473
+        //   RECEIVES NOTHING                           1,386   (74.6%)
+        //
+        // The old comment said "96 of 1,663, ~94% get nothing". Both numbers came from
+        // before the account-less branch below, which keeps all 314 unconditionally, so
+        // every pre-07-30 figure UNDERSTATES who still gets mail. Do not quote them.
+        //
+        // That is what the ruling says; it is flagged to keeper with the numbers
         // because it changes what the weekly digest IS, not just who it greets.
         if ( class_exists( 'LG_WD_Recap_Source' ) ) {
             $before         = count( $subscriber_ids );

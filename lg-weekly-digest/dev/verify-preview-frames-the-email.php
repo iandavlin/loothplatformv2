@@ -78,6 +78,15 @@ if ( ! $host_id ) {
 $permalink = (string) get_permalink( $host_id );
 printf( "host page      : %d %s\n", $host_id, $permalink );
 
+/** Does this box hold a sent issue at all? Decides whether an absent section is legitimate. */
+$get_latest_sent_issue_id = static function (): int {
+	if ( ! class_exists( 'LG_WD_Issue' ) ) { return 0; }
+	foreach ( LG_WD_Issue::get_all_issues( 20 ) as $issue ) {
+		if ( ( $issue['status'] ?? '' ) === 'sent' ) { return (int) $issue['id']; }
+	}
+	return 0;
+};
+
 // ── NEGATIVE CONTROL FIRST: the old URL shape must look WRONG ───────────────
 [ $c_old, $b_old ] = $get( add_query_arg( 'lg_wd_email_preview', '1', home_url( '/' ) ) );
 $old_is_front = $looks_like_front( $b_old ) && ! $looks_like_email( $b_old );
@@ -91,8 +100,17 @@ if ( ! $old_is_front ) {
 }
 
 // ── THE ASSERTION: the real preview URL must serve the EMAIL ────────────────
-[ $c_new, $b_new ] = $get( add_query_arg( 'lg_wd_email_preview', '1', $permalink ) );
-printf( "actual   <permalink>?lg_wd_email_preview=1 -> %d, %d bytes\n", $c_new, strlen( $b_new ) );
+//
+// THE URL MOVED TO admin-ajax (2026-07-30). The permalink form worked but required
+// this to stay a WP-rendered PAGE, and Ian ruled the platform renders STANDALONE —
+// at which point get_permalink() returns nothing and the section is dropped
+// entirely. admin-ajax is routed by WordPress unconditionally, so the preview no
+// longer depends on any page-routing decision. Proven anon-reachable on dev2: an
+// unregistered action returns WP's 400/"0", i.e. the request reaches the ajax
+// dispatcher rather than being redirected by the private-network gate.
+$preview = add_query_arg( 'action', 'lg_wd_email_preview', admin_url( 'admin-ajax.php' ) );
+[ $c_new, $b_new ] = $get( $preview );
+printf( "actual   admin-ajax?action=lg_wd_email_preview -> %d, %d bytes\n", $c_new, strlen( $b_new ) );
 
 if ( $c_new !== 200 )              { echo "  FAIL: expected 200\n"; $fail++; }
 if ( $looks_like_front( $b_new ) ) { echo "  FAIL: served the DISCOVER FEED — the strangler answered, not WordPress\n"; $fail++; }
@@ -103,10 +121,28 @@ if ( ! $looks_like_email( $b_new ) ) {
 }
 
 // ── And the page itself must actually point its iframe at that URL ──────────
-$rendered = do_shortcode( '[lg_weekly_signup]' );
-$want     = esc_url( add_query_arg( 'lg_wd_email_preview', '1', $permalink ) );
+//
+// THE MISSING-SECTION CASE IS A FAILURE, NOT A NOTE. preview_url() returns '' —
+// dropping the whole section — whenever it cannot produce a URL. So this area's own
+// failure mode is the section VANISHING, which
+// an earlier version of this test waved through with a "note" and a green. That
+// would have turned a wrong-document bug into a missing-section bug and called it
+// fixed. A box with no sent issue is the one legitimate reason for an absent
+// section, so that is the only case allowed to pass, and it is checked rather than
+// assumed.
+$rendered  = do_shortcode( '[lg_weekly_signup]' );
+$want      = esc_url( $preview );
+$has_issue = (bool) $get_latest_sent_issue_id();
+
 if ( strpos( $rendered, 'lg_wd_email_preview' ) === false ) {
-	echo "  note: shortcode rendered no preview section (no sent issue on this box?)\n";
+	if ( $has_issue ) {
+		echo "  FAIL: this box HAS a sent issue, but the page rendered no preview section at all.\n";
+		echo "        The section is being dropped rather than pointed somewhere wrong — check\n";
+		echo "        preview_url()'s early returns before assuming the URL fix is fine.\n";
+		$fail++;
+	} else {
+		echo "  note: no sent issue on this box, so an absent section is correct\n";
+	}
 } elseif ( strpos( $rendered, $want ) === false ) {
 	echo "  FAIL: the page's iframe does not point at the permalink-based preview URL.\n";
 	echo "        EXPECTED RED until the fix is DEPLOYED — this assertion runs against the\n";

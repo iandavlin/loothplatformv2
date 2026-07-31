@@ -820,7 +820,25 @@ with the measurement, the hook and the deploy window.
 - **Empty means send NO EMAIL AT ALL.** A member whose only digest content would have been a
   followed-thread summary does not get a quieter email; they get none. Any §3.7 design that assumes
   "the digest goes out weekly and we add a section to it" no longer holds — **the digest now goes to
-  280 of 1,858 recipients** (not 1,663 — see §5.1), and only to those with something owed.
+  473 of 1,859 recipients** (not 1,663 — see §5.1), and only to those with something owed.
+
+> **RE-MEASURED ON LIVE 2026-07-30 — and every earlier figure in this document
+> UNDERSTATES who still receives the email.** 96 and 280 both predate the change that keeps
+> **account-less subscribers unconditionally**, and there are **314** of them.
+>
+> | | |
+> |---|---|
+> | recipient set (lists 3 + 7, subscribed) | **1,859** |
+> | account-less — always kept | 314 |
+> | members — subject to Rule 5 | 1,545 |
+> | …of those, something waiting today | **159** |
+> | **receives the next send** | **473** |
+> | **receives nothing** | **1,386 — 74.6%** |
+>
+> Method: `Recap::OUTSTANDING` replicated against live's `profile_app` (hub rows need
+> `is_read=false`; `connection_request` is decided by the EDGE being `pending` and does not
+> consult `is_read`), plus `message_recipients.unread_count > 0`. 269 wp ids have something
+> waiting platform-wide; **159** are on the list. **Do not quote 96 or 280 again.**
 - **`forum.reply_to_topic` and `forum.reply_to_reply` ARE admitted**, so a member still hears weekly
   about replies **to their own** topics and comments. The line between that and §3.7 is exactly the
   to-do test: replies *to you* wait on you; replies *near you* do not.
