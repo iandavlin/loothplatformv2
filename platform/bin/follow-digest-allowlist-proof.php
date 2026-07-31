@@ -106,11 +106,72 @@ ini_set( 'display_errors', '0' );
 require_once $wp_load;
 ini_set( 'display_errors', (string) $prev_display );
 
+/* ── --expect=hold | leak ─────────────────────────────────────────────────────
+ * RED-FIRST FOR AN END-TO-END ASSERTION, which is harder than red-first for a unit:
+ * you cannot prove "the canary got nothing because of the allowlist" by deleting the
+ * allowlist and observing nothing, because nothing is also what a broken harness
+ * produces. So the driver can be told which outcome it is checking for:
+ *
+ *   --expect=hold   (default) the allowlist HOLDS: Ian is mailed, the canary is not.
+ *   --expect=leak             the allowlist is GONE: the canary IS mailed.
+ *
+ * Run against a build with lg_fd_allowed() forced true, `--expect=leak` PASSES — which
+ * is what proves this driver can actually see the failure it claims to rule out. A
+ * driver that reports "held" against both builds is measuring nothing, and that is the
+ * failure mode a plain red-first would not catch here.
+ *
+ * tools/gates/follow-digest-gate.py --prove-test-mode runs BOTH and requires both.
+ */
+$expect = 'hold';
+foreach ( $argvv = ( $_SERVER['argv'] ?? array() ) as $a ) {
+	if ( 0 === strpos( (string) $a, '--expect=' ) ) { $expect = substr( (string) $a, 9 ); }
+}
+if ( ! in_array( $expect, array( 'hold', 'leak' ), true ) ) {
+	fwrite( STDERR, "--expect must be 'hold' or 'leak'\n" );
+	exit( 64 );
+}
+
 $FAIL = [];
 $OK   = [];
 function ok( string $s ): void   { global $OK;   $OK[] = $s;   printf( "  ok   %s\n", $s ); }
 function bad( string $s ): void  { global $FAIL; $FAIL[] = $s; printf( "  FAIL %s\n", $s ); }
 function say( string $s ): void  { printf( "%s\n", $s ); }
+
+/* ── THE ATTEMPT RECORDER — keeper, 2026-07-31 ───────────────────────────────
+ * "A swallowed-but-attempted send to a non-allowlist member is a FAIL even if
+ * containment ate it."
+ *
+ * Exactly right, and mailpit alone answers it only INDIRECTLY. Containment hooks
+ * pre_wp_mail at priority 1, so anything handed to wp_mail() does reach mailpit and a
+ * mailpit zero does imply no attempt — but that is a chain of reasoning about someone
+ * else's plugin, and it would break silently if containment's priority ever changed.
+ *
+ * This sits at priority 0 — BEFORE containment — records every address wp_mail() is
+ * asked to send to, and returns $null so the mail continues to containment untouched.
+ * It measures the ATTEMPT rather than the capture, so "nothing was even tried for the
+ * blocked member" becomes a direct observation instead of an inference.
+ *
+ * ⚠️ It must never short-circuit. Returning anything non-null here would itself
+ * suppress the send and make every assertion below vacuous.
+ */
+$ATTEMPTS = array();
+add_filter( 'pre_wp_mail', static function ( $null, $atts ) use ( &$ATTEMPTS ) {
+	$to = $atts['to'] ?? '';
+	foreach ( ( is_array( $to ) ? $to : explode( ',', (string) $to ) ) as $addr ) {
+		$addr = trim( (string) $addr );
+		if ( preg_match( '/<([^>]+)>/', $addr, $m ) ) { $addr = $m[1]; }
+		if ( '' !== $addr ) { $ATTEMPTS[] = strtolower( $addr ); }
+	}
+	return $null;                    // pass through — never suppress
+}, 0, 2 );
+
+/** Addresses wp_mail() was asked to send to since the last reset, and reset it. */
+function attempts_take(): array {
+	global $ATTEMPTS;
+	$out = $ATTEMPTS;
+	$ATTEMPTS = array();
+	return $out;
+}
 
 function mailpit( string $path ) {
 	$raw = @file_get_contents( MAILPIT . $path );
@@ -209,6 +270,14 @@ if ( ! $ian || 0 !== strcasecmp( (string) $ian->user_email, IAN_EMAIL ) ) {
 // ─────────────────────────────────────────────────────────────────────────────
 say( "\n--- seeding (dev2 only; torn down at the end) ---" );
 
+/* ⚠️ CLEAR THE FLUSH INTERVAL GUARD FIRST. lg_fd_flush() refuses to run again inside
+ * 20 hours, so a value left by ANY earlier run — including a crashed one — makes the
+ * tick a silent no-op and every assertion below fail for a reason that has nothing to
+ * do with the allowlist. Cleared here rather than only in teardown, so this run cannot
+ * inherit a previous run's state. */
+delete_option( 'lg_fd_last_flush_daily' );
+delete_option( 'lg_fd_last_flush_weekly' );
+
 global $wpdb;
 $subs_table = $wpdb->prefix . 'bb_notifications_subscriptions';
 
@@ -280,6 +349,23 @@ say( sprintf( '       (Ian qualifies too: %d repl(y|ies) across his %d real subs
 	(int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$subs_table} WHERE user_id=%d AND type='topic' AND status=1", IAN_UID ) ) ) );
 
 $canary_expected = count( $canary_batch['items'] );
+
+/* ⚠️ TEARDOWN MUST SURVIVE A FATAL, and the first version did not — which cost a
+ * whole confusing run to diagnose. A crash AFTER the tick but BEFORE the end left
+ * `lg_fd_last_flush_daily` set and Ian's watermark advanced; the next run then found
+ * the interval guard closed and his queue already consumed, and reported four
+ * failures that were entirely artefacts of the previous crash. A test that poisons
+ * its own next run is worse than one that simply fails.
+ *
+ * Registered as a shutdown function so it runs on a fatal, on exit(), and on the
+ * normal path — guarded so it happens exactly once. */
+$TORN = false;
+register_shutdown_function( static function () use ( &$TORN, &$canary_uid, &$seeded_subs, &$topic ) {
+	if ( $TORN ) { return; }
+	$TORN = true;
+	fwrite( STDERR, "[proof] emergency teardown (the run did not reach its own teardown)\n" );
+	teardown( (int) $canary_uid, (array) $seeded_subs, (int) $topic );
+} );
 
 function teardown( int $canary_uid, array $seeded_subs, int $topic ): void {
 	global $wpdb;
@@ -361,23 +447,94 @@ if ( $ian_suppressed ) {
 } else {
 	bad( 'Ian is on Daily but his per-reply mail is NOT suppressed — he would get instant mail AND a digest' );
 }
-if ( ! $canary_suppressed ) {
-	ok( 'the BLOCKED canary is on Daily but its per-reply mail is NOT suppressed — no digest '
-		. 'is coming, so taking away its instant mail would leave it with NOTHING' );
-} else {
-	bad( '⚠️ MAIL BLACK HOLE: the blocked canary is on Daily, its per-reply mail is suppressed, '
-		. 'and the allowlist withholds its digest — it would receive nothing at all' );
+if ( 'hold' === $expect ) {
+	if ( ! $canary_suppressed ) {
+		ok( 'the BLOCKED canary is on Daily but its per-reply mail is NOT suppressed — no digest '
+			. 'is coming, so taking away its instant mail would leave it with NOTHING' );
+	} else {
+		bad( '⚠️ MAIL BLACK HOLE: the blocked canary is on Daily, its per-reply mail is suppressed, '
+			. 'and the allowlist withholds its digest — it would receive nothing at all' );
+	}
 }
 
+/* What the REAL resolver hands the flush, printed before the tick. Without this, a
+ * tick that mails nobody is indistinguishable from a resolver that returned nobody,
+ * and the two have completely different causes. */
+say( sprintf( '       resolver says due(daily) = [%s]',
+	implode( ',', lg_fd_due_recipients( 'daily' ) ) ) );
+
 $baseline = mailpit_ids();
+attempts_take();                       // reset the recorder immediately before the tick
 tick_at_send_hour();
-$run1 = mailpit_since( $baseline );
+$run1     = mailpit_since( $baseline );
+$attempts = attempts_take();
+
+/* ── WHAT wp_mail() WAS ASKED TO DO, before containment saw any of it ────────
+ * The direct answer to "no SES call, no queue entry": for a blocked member, wp_mail()
+ * is never invoked at all — so there is nothing for containment to swallow, nothing
+ * for FluentSMTP to queue, and nothing that would have become an SES call on a box
+ * without containment. Measured at pre_wp_mail priority 0, ahead of containment's 1. */
+$att_ian    = count( array_filter( $attempts, static fn( $a ) => 0 === strcasecmp( $a, IAN_EMAIL ) ) );
+$att_canary = count( array_filter( $attempts, static fn( $a ) => 0 === strcasecmp( $a, CANARY_EMAIL ) ) );
+$att_other  = array_values( array_filter( $attempts, static fn( $a ) =>
+	0 !== strcasecmp( $a, IAN_EMAIL ) && 0 !== strcasecmp( $a, CANARY_EMAIL ) ) );
+
+say( sprintf( '       wp_mail() attempts this tick: %s', $attempts ? implode( ', ', $attempts ) : 'none' ) );
+if ( 'hold' === $expect ) {
+	if ( 0 === $att_canary ) {
+		ok( 'wp_mail() was NEVER INVOKED for the blocked canary — nothing to swallow, nothing '
+			. 'to queue, and nothing that would have been an SES call on a box without containment' );
+	} else {
+		bad( sprintf( '⚠️ wp_mail() was invoked %d time(s) for the blocked canary. Containment ate it, '
+			. 'but on live that is an SES call to a non-allowlisted address.', $att_canary ) );
+	}
+}
+if ( 1 === $att_ian ) {
+	ok( 'wp_mail() was invoked EXACTLY ONCE for Ian — the allowlisted send really happened' );
+} else {
+	bad( sprintf( 'wp_mail() was invoked %d time(s) for Ian, expected exactly 1', $att_ian ) );
+}
+if ( $att_other ) {
+	bad( 'wp_mail() was invoked for address(es) outside this test: ' . implode( ', ', $att_other ) );
+} else {
+	ok( 'wp_mail() was invoked for NO other address — the whole tick attempted '
+		. count( $attempts ) . ' send(s)' );
+}
 
 $ian_got    = to_count( $run1, IAN_EMAIL );
 $canary_got = to_count( $run1, CANARY_EMAIL );
 
 if ( 1 === $ian_got ) { ok( sprintf( 'Ian received EXACTLY ONE digest — %s', reset( $run1 )['subject'] ?? '' ) ); }
 else { bad( sprintf( 'Ian received %d digests, expected exactly 1', $ian_got ) ); }
+
+if ( 'leak' === $expect ) {
+	/* ── THE RED-FIRST HALF ───────────────────────────────────────────────────
+	 * Run against a build with lg_fd_allowed() forced true. If the canary is mailed
+	 * here, this driver demonstrably CAN see an allowlist failure — which is what
+	 * makes the 'hold' run's zero mean something. If the canary is NOT mailed even
+	 * with the allowlist gone, the zero in the other run was never evidence. */
+	if ( $canary_got >= 1 && $att_canary >= 1 ) {
+		ok( sprintf( 'ALLOWLIST REMOVED ⇒ the canary WAS mailed (%d message, %d wp_mail attempt). '
+			. 'The driver can see the failure, so a zero in --expect=hold is evidence.',
+			$canary_got, $att_canary ) );
+	} else {
+		bad( sprintf( 'ALLOWLIST REMOVED and the canary STILL got nothing (mailpit %d, attempts %d). '
+			. 'This driver cannot detect an allowlist failure, so its "held" result proves NOTHING '
+			. '— the canary is inert for some other reason.', $canary_got, $att_canary ) );
+	}
+	say( "\n--- teardown (leak run: no control needed) ---" );
+	$TORN = true;
+	teardown( $canary_uid, $seeded_subs, $topic );
+	say( '' );
+	if ( $FAIL ) {
+		printf( "############ RED-FIRST CHECK FAILED — %d finding(s) ############\n", count( $FAIL ) );
+		exit( 1 );
+	}
+	printf( "############ RED-FIRST CHECK PASSED — %d assertion(s) ############\n", count( $OK ) );
+	say( 'Without the allowlist the canary IS mailed. The hold run\'s zero is therefore' );
+	say( 'caused by the allowlist and not by an inert test subject.' );
+	exit( 0 );
+}
 
 if ( 0 === $canary_got ) {
 	ok( sprintf( 'the canary received ZERO — and it qualified with %d repl(y|ies). '
@@ -453,6 +610,7 @@ if ( 0 === $ian_got2 ) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 say( "\n--- teardown ---" );
+$TORN = true;
 teardown( $canary_uid, $seeded_subs, $topic );
 $left = get_user_by( 'login', CANARY_LOGIN );
 $ian_left = get_user_meta( IAN_UID, LG_FD_CADENCE_META, true );

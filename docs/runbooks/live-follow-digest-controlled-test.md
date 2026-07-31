@@ -48,6 +48,56 @@ RUN 2 (THE CONTROL)  allowlist = Ian + the canary
 that never qualified, a flush that never ran, and a box with no WordPress. Run 2 is what
 makes run 1 evidence.
 
+### The attempt recorder — "nothing was even tried"
+
+A send that containment swallows is still a send that would have reached SES on live, so
+mailpit alone is not enough. A filter at `pre_wp_mail` **priority 0 — ahead of
+containment's 1** — records every address `wp_mail()` is asked to send to, and passes it
+through untouched. The blocked member's zero is therefore a direct observation, not an
+inference about someone else's plugin:
+
+```
+ok  wp_mail() was NEVER INVOKED for the blocked canary — nothing to swallow, nothing to
+    queue, and nothing that would have been an SES call on a box without containment
+ok  wp_mail() was invoked EXACTLY ONCE for Ian — the allowlisted send really happened
+```
+
+### Red-first, end to end
+
+The same driver is run against a build with `lg_fd_allowed()` forced to return `true` —
+**one line different, nothing else** — and is required to *see the leak*. Otherwise a
+"held" result would be indistinguishable from a driver that cannot detect a failure at
+all. Same seed, same tick:
+
+| build | `wp_mail()` attempts that tick |
+|---|---|
+| allowlist **removed** | `ian.davlin@gmail.com`, `follow-digest-canary@dev2.invalid` |
+| allowlist **present** | `ian.davlin@gmail.com` |
+
+Both halves are gated together:
+
+```bash
+python3 tools/gates/follow-digest-gate.py \
+  --plugin platform/mu-plugins/lg-follow-digest.php --prove-test-mode
+```
+
+```
+ok  RED-FIRST: with the allowlist stripped, the driver SEES the canary being mailed
+ok  TEST MODE HOLDS: flag ON, allowlist=[1], a QUALIFYING non-allowlisted member
+    received ZERO — and wp_mail() was never invoked for them
+```
+
+`--prove-test-mode` **mutates the DB** (seeds, then tears down — including on a fatal, via
+a shutdown handler), so it is opt-in and `run-all.sh` does not use it. The non-mutating
+assertions still run there as GATE 13/14.
+
+⚠️ **The red-first build caught a real trap in its own first version.** The stripped copy
+was written to a flat `/tmp` path, so `dirname(__DIR__, 2)` no longer found
+`membership-pages/lib/following-data.php`, and the sender **correctly refused to send a
+linkless digest — to everyone**. It mailed nobody for a reason that had nothing to do with
+the allowlist. Had the driver only ever checked "the canary got nothing", that build would
+have looked like a pass. The stripped copy now keeps the repo shape.
+
 The recipient oracle is mailpit, and it is a faithful one: dev2's containment rewrites
 the `From:` but preserves every `To:` — so *who a message was addressed to* is directly
 observable. Only the **clock** is simulated (the tick flushes at 08:00 site-local and a
