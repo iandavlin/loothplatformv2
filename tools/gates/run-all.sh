@@ -109,6 +109,22 @@ echo
 # this into the numbered list above as
 #   run "following-section" python3 "$(dirname "$0")/following-section-gate.py" \
 #       --url https://dev2.loothgroup.com/manage-subscription/
+#
+# compose-gate is held out for a THIRD reason, and it is deliberate: it is RED BY
+# DESIGN until front-end compose exists. It was written before the feature so that
+# its assertions fail against today's build first — an absence assertion written
+# after the fact tends to encode whatever the build happens to do.
+#
+# Wiring a red-first gate into the SHARED runner would turn every other lane's
+# run-all red for a feature they did not touch, which is exactly the trap logged in
+# the backlog on 7/30 (a craft-gate page was deliberately NOT added for the same
+# reason: a shared gate sitting red blocks everybody and the alert channel dies).
+# So it stays out until it is green, and the lane runs it by hand:
+#   python3 "$(dirname "$0")/compose-gate.py" --type loothprint \
+#       --allowed <admin_login> --denied <member_login>
+# ON GREEN: add it to the numbered list above and renumber FROM MAIN, not from this
+# branch — two lanes have already both minted "9/9" and collided.
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
