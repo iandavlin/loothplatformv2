@@ -4636,8 +4636,30 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
      Share 65 = 178, plus four 8px gaps = 210. That leaves 139px, so a 120px
      floor fits with room to spare and still holds at the narrower 1024 column. */
   .feed-page .feed-card .fc-actions { flex-wrap: nowrap; }
+  /* ⚠️ THE CLIP GOES ON THE CHIPS, NEVER ON .fcr — .fcr IS THE PALETTE'S OFFSET PARENT.
+     Ian, 2026-07-31: "The react button modal on all cards on dev2 has a bad z. It's the
+     same on live." It was not a z-index at all. 765dbc3 put `overflow:hidden` on .fcr to
+     let the row shrink; .fcr-palette is `position:absolute; bottom:calc(100% - 2px)`, i.e.
+     it opens UPWARD ENTIRELY OUTSIDE .fcr's box — so its own parent clipped it away.
+     A clipped popover reads exactly like one stacked behind something, which is why the
+     report came in as a z-index bug; z-index:20 was being honoured the whole time.
+
+     MEASURED on the serving checkout at 1280 (= what live serves), palette open:
+       all four sample points across the palette hit-tested to ARTICLE.feed-card /
+       P.feed-card__op-excerpt — never .fcr-palette. Not one pixel of the picker was
+       clickable on any desktop card.
+
+     .fcr-chips is the element that actually needs clipping: it holds the variable-count
+     chips that overflowed the narrow bar, and it is IN-FLOW, so clipping it preserves
+     765dbc3's guarantee (the row shrinks instead of splitting across two lines and
+     dropping the toggles off 17 of 18 cards) without touching the popover. min-width:0
+     is what lets a flex item shrink below its content — the property 765dbc3 was really
+     reaching for when it used overflow:hidden. */
   .feed-page .feed-card .fc-actions .fcr {
-    flex: 1 1 auto; min-width: 120px; overflow: hidden;
+    flex: 1 1 auto; min-width: 120px; overflow: visible;
+  }
+  .feed-page .feed-card .fc-actions .fcr > .fcr-chips {
+    min-width: 0; overflow: hidden; flex: 1 1 auto;
   }
   .feed-page .feed-card .fc-actions .feed-card__comments-btn,
   .feed-page .feed-card .fc-actions .fc-save {

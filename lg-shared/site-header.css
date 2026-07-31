@@ -1204,6 +1204,25 @@ html[data-lguser-theme="dark"] .lg-msg__mark { background: var(--lg-sage-d, #6b7
 /* a peer's bubble is align-self:flex-start, so anchor its menu on the LEFT edge instead */
 .lg-msg__msg:not(.lg-msg__msg--mine) .lg-msg__acts { right: auto; left: 4px; }
 .lg-msg__msg:hover .lg-msg__acts, .lg-msg__acts:hover { display: inline-flex; }
+/* ⚠️ HOVER IS NOT AVAILABLE ON A TOUCHSCREEN, AND THIS MENU IS THE ONLY WAY TO REACT.
+   Ian, 2026-07-31, confirming it broken: the React control lives in .lg-msg__acts, which
+   was revealed by :hover ALONE (this rule, since 0c7dd09). On a touch device at >=641px —
+   an iPad, a touchscreen laptop — the desktop messages modal is what renders, no hover
+   event ever fires, and the control is therefore UNREACHABLE while sitting in the DOM the
+   whole time. That is the "presence is not reachability" class, and hit-testing is the
+   only check that catches it: a presence assertion passes on the broken build.
+
+   Two additions, deliberately narrow:
+     :focus-within  — keyboard users had exactly the same problem, and it costs nothing.
+     @media (hover: none) — devices with NO hover capability get the menu permanently.
+       Scoped to `hover: none` rather than a width breakpoint on purpose: the thing that
+       makes the control unreachable is the absence of hover, not a narrow viewport, and
+       a large touchscreen is precisely the case a width query would miss. Mouse users are
+       untouched and keep the reveal-on-hover behaviour. */
+.lg-msg__msg:focus-within .lg-msg__acts { display: inline-flex; }
+@media (hover: none) {
+  .lg-msg__acts { display: inline-flex; }
+}
 .lg-msg__act {
   appearance: none; border: 0; background: none; cursor: pointer;
   font: 600 11.5px/1 var(--lg-font-sans, system-ui); color: var(--lg-ink, #323532);
