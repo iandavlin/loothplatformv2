@@ -95,6 +95,42 @@ const LG_FOLLOWING_PAGE_SIZE = 5;
  * Flag pattern copied from LG_AUTHOR_SOCIALS_ALL_MEMBERS
  * (platform/mu-plugins/lg-author-socials.php:48).
  */
+/**
+ * The account-level EMAIL CADENCE control. DEFAULT OFF, and it must stay off.
+ *
+ * Ian, 2026-07-31: "we need the email frequency on there too."
+ *
+ * ⚠️ HIDDEN UNTIL THE BATCHER IS REAL, and that is a RULE, not caution.
+ * THREAD-FOLLOW-SPEC §15.4: do not ship a cadence control that silently does
+ * nothing. thread-follow already built the same control in the follow modal and
+ * shipped it dark for exactly this reason (forums.js:4294, FREQ_ENABLED=false) —
+ * a control on THIS page that stores a value no sender reads is precisely as
+ * dishonest as one in the modal. Measured 2026-07-31: `cadence` appears in
+ * follow.php zero times on main AND on origin/thread-follow, and wp_usermeta
+ * holds zero lg_disc_email_cadence rows. Nothing writes it, nothing sends on it.
+ *
+ * IT FLIPS ON follow-digest's SIGNAL, relayed by keeper to Ian (their ruling 3).
+ * Not by me, and not because this page happens to be ready.
+ *
+ * ── ONE SETTING, TWO SURFACES, AND NO STORE OF MINE ──────────────────────────
+ * The value lives in WP usermeta as lg_disc_email_cadence ∈ {instant, daily,
+ * weekly}, absent ⇒ instant — follow-digest's §2.1, and explicitly NOT
+ * forums.topic_follow, which is per-thread while this is per-account. I define
+ * no store, no endpoint and no migration: this page READS the cadence from
+ * follow.php's GET envelope (§2.3) and, once the seam is confirmed on the board,
+ * will write through that same endpoint's POST. Three lanes touching one setting
+ * is how drift gets built in, so this one owns none of it.
+ */
+if (!defined('LG_FOLLOWING_CADENCE')) {
+    define('LG_FOLLOWING_CADENCE',
+        (($_SERVER['LG_FOLLOWING_CADENCE'] ?? '') === '1'));
+}
+
+/** The allow-list, as ruled. Hourly is out (measured: no member has ever had two
+ *  forum notifications in one hour); "Off" is out because the ✉ toggle owns
+ *  on/off and a cadence that can mean "never" is two settings wearing one hat. */
+const LG_FOLLOWING_CADENCES = ['instant' => 'Instant', 'daily' => 'Daily', 'weekly' => 'Weekly'];
+
 if (!defined('LG_FOLLOWING_ROW_TOGGLES')) {
     // Server-settable so a lane preview can show Ian the ON state without the
     // flag being on for anyone else. fastcgi_param only — an nginx block on this

@@ -536,3 +536,82 @@ html[data-lguser-theme="dark"] .lg-manage-sub__fol-mark.is-toggle:focus-visible 
     .lg-manage-sub__fol-row { gap: 6px; }
     .lg-manage-sub__fol-state { gap: 0; }
 }
+
+/* ── Email frequency (LG_FOLLOWING_CADENCE, default OFF) ─────────────────────
+ * An ACCOUNT-level control living below a per-row list, which is a real risk of
+ * being misread as "frequency for this discussion". Three things keep it honest:
+ * it sits outside the <ul>, it carries its own label, and the label says
+ * "every discussion you follow" rather than leaving the scope to be inferred
+ * from where it happens to sit.
+ */
+.lg-manage-sub__fol-freq {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 12px 0 2px;
+    border-top: 1px solid var(--lg-line, #e3e1d8);
+}
+.lg-manage-sub__fol-freq-lbl b { display: block; font-size: .85rem; color: var(--lg-ink, #323532); }
+.lg-manage-sub__fol-freq-lbl small { font-size: .78rem; color: var(--lg-mute, #6b6f63); }
+
+/* Segmented, not a dropdown: three values that all fit, and the current one
+ * should be readable without opening anything. */
+.lg-manage-sub__fol-freq-seg {
+    display: inline-flex;
+    flex: 0 0 auto;
+    padding: 2px;
+    border: 1px solid var(--lg-line, #e3e1d8);
+    border-radius: 999px;
+    background: #f7f7f3;
+}
+.lg-manage-sub__fol-freq-opt {
+    -webkit-appearance: none;
+    appearance: none;
+    background: none;
+    border: 0;
+    /* 32px keeps three targets on one line at 390px without any of them going
+     * under the comfortable minimum — the row above already spends its width on
+     * two toggles and an X. */
+    min-height: 32px;
+    padding: 0 13px;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 700;
+    color: var(--lg-mute, #6b6f63);
+    cursor: pointer;
+    transition: color .12s, background .12s;
+}
+.lg-manage-sub__fol-freq-opt:hover { color: #6b7c52; }
+.lg-manage-sub__fol-freq-opt:focus-visible { outline: 2px solid #6b7c52; outline-offset: 1px; }
+.lg-manage-sub__fol-freq-opt[aria-checked="true"] {
+    background: #fff;
+    color: #4f5d3c;
+    box-shadow: 0 1px 2px rgba(0,0,0,.12);
+}
+.lg-manage-sub__fol-freq-opt[disabled] { opacity: .55; cursor: progress; }
+
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-freq { border-top-color: var(--lgms-border); }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-freq-lbl b { color: var(--lgms-ink); }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-freq-lbl small { color: var(--lgms-mute); }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-freq-seg {
+    background: #14171a;                       /* recessed against the card, not raised */
+    border-color: var(--lgms-border);
+}
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-freq-opt { color: var(--lgms-mute); }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-freq-opt:hover { color: var(--lgms-sage); }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-freq-opt:focus-visible { outline-color: var(--lgms-sage); }
+/* The selected chip is the one place the light idiom inverts: on white the chip
+ * is white and the trough is grey; on dark a white chip would be a headlight, so
+ * the chip is the RAISED card colour and the trough is the recess. */
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-freq-opt[aria-checked="true"] {
+    background: var(--lgms-card-2);
+    color: #cfe0b4;
+    box-shadow: 0 1px 2px rgba(0,0,0,.6);
+}
+
+@media (max-width: 640px) {
+    .lg-manage-sub__fol-freq { gap: 8px; }
+    .lg-manage-sub__fol-freq-opt { padding: 0 11px; }
+}
