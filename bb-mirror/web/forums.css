@@ -5568,3 +5568,64 @@ html.lg-fm-open, html.lg-fm-open body { overflow: hidden; }
     content: "\00b7"; margin-right: 8px; color: #b9bcb4;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   DARK PASS for the card-v3 / variant-A surfaces — Ian, 2026-07-31: "All of this
+   stuff needs a dark mode pass."
+
+   MEASURED DEFECT, not a precaution: at ≤640 in dark the settings modal painted a
+   WHITE panel (rgb(255,255,255)) under near-white text — contrast 1.25 on the title
+   and 2.33 on the eyebrow, i.e. invisible. Desktop was fine (#1e2124), because the
+   only dark re-point of --bg-card is scoped to `.hub-fmodal` (forums.css:5237) and
+   that ancestor is not in play for a body-level dialog at phone width.
+
+   So these rules OWN their colours instead of inheriting a token whose dark value
+   depends on someone else's ancestor — the same "page-owned dark theming" pattern
+   the BUCKET-C sweep uses. That is the recorded lesson from the messages-search
+   lane: a sage tint that is never re-pointed reads fine on light and muddy or
+   invisible on dark.
+   ══════════════════════════════════════════════════════════════════════════════ */
+html[data-lguser-theme="dark"] .lg-fm__panel {
+  background: #1e2124;
+  color: var(--lg-ink, #e5e7e1);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .55);
+}
+html[data-lguser-theme="dark"] .lg-fm__head,
+html[data-lguser-theme="dark"] .lg-fm__row,
+html[data-lguser-theme="dark"] .lg-fm__row--save { border-color: #333a40; }
+html[data-lguser-theme="dark"] .lg-fm__title { color: #e5e7e1; }
+html[data-lguser-theme="dark"] .lg-fm__eyebrow,
+html[data-lguser-theme="dark"] .lg-fm__topic,
+html[data-lguser-theme="dark"] .lg-fm__rlbl small,
+html[data-lguser-theme="dark"] .lg-fm__x { color: #a6ac9f; }
+html[data-lguser-theme="dark"] .lg-fm__rlbl { color: #e5e7e1; }
+
+/* The grouped notification card. --lg-sage-tint IS re-pointed in dark (measured
+   rgb(36,48,36)), so this only fixes its border against the darker panel. */
+html[data-lguser-theme="dark"] .lg-fm__rows > .lg-fm__row:not(.lg-fm__row--save) {
+  background: #243024; border-color: #333a40;
+}
+
+/* The switch track was a hardcoded light grey (#d3d7cd) — on a dark panel that reads
+   as an ON control that is actually OFF, which is worse than merely ugly. */
+html[data-lguser-theme="dark"] .lg-fm__sw { background: #3a4149; }
+html[data-lguser-theme="dark"] .lg-fm__sw::after { background: #e5e7e1; }
+html[data-lguser-theme="dark"] .lg-fm__sw.is-on { background: var(--lg-follow-on, #e2895f); }
+
+/* Save inside the modal, and the segmented frequency control when it ships. */
+html[data-lguser-theme="dark"] .lg-fm__row--save .fc-save { border-color: #333a40; color: #a6ac9f; }
+html[data-lguser-theme="dark"] .lg-fm__row--save .fc-save.is-saved,
+html[data-lguser-theme="dark"] .fc-follow.is-on {
+  color: #e2895f; border-color: #e2895f; background: rgba(226, 137, 95, .14);
+}
+html[data-lguser-theme="dark"] .lg-fm__seg { border-color: #333a40; }
+html[data-lguser-theme="dark"] .lg-fm__seg button {
+  background: #1e2124; color: #e5e7e1; border-right-color: #333a40;
+}
+html[data-lguser-theme="dark"] .lg-fm__seg button.is-on { background: #e2895f; color: #1a1d1a; }
+
+/* The corner pill and the inline replies stat: readable, and the ON state uses the
+   LIGHTER orange the dark sweep already standardised on (#e2895f), not the light
+   theme's #c66845 which goes muddy on a dark card. */
+html[data-lguser-theme="dark"] .fc-follow { border-color: #333a40; color: #a6ac9f; }
+html[data-lguser-theme="dark"] .fc-replies-stat { color: #a6ac9f; }
