@@ -5519,3 +5519,52 @@ html.lg-fm-open, html.lg-fm-open body { overflow: hidden; }
   }
   .lg-fm__row { padding: 14px 0; }        /* ≥44px rows without a hit-area trick */
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   CARD v3 — Ian, 2026-07-30, on the threadfollow-card-v3 mock: "love those changes."
+     · desktop: the follow control moves to the card's TOP-RIGHT corner
+     · mobile:  replies stops being a button and becomes a stat with the reactions
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* The corner wrapper is emitted on every topic card but is DESKTOP-ONLY: the phone
+   keeps its pill at the end of the action row, which is what the approved mock shows.
+   Hidden mobile-first for the same reason .fc-share and the old pair are — an ungated
+   desktop copy falls through to native <button> chrome at <=640, which is exactly the
+   "two empty black squares" Ian reported (forums.css:674-697). Third time that rule
+   has been needed; it is now four. */
+.feed-page .fc-follow-corner { display: none; }
+
+@media (min-width: 641px) {
+  /* The card is the positioning context. .feed-card already carries overflow:hidden
+     (forums.css:4155 block), so the corner is clipped to the card and cannot escape it. */
+  .feed-page .feed-card--topic { position: relative; }
+  .feed-page .fc-follow-corner {
+    display: block; position: absolute; top: 10px; right: 11px; z-index: 3;
+  }
+  /* Inside the corner the pill drops the auto-margin it needed as a row item. */
+  .feed-page .fc-follow-corner > .fc-follow { margin-left: 0; }
+  /* Keep the title clear of the corner so a long one can never collide with it —
+     flagged on the mock as the one thing to look at, and held back rather than
+     letting the corner sit on top of wrapped text. 130px = the pill at its widest
+     ("Following" + badge) plus the 11px inset and a little air. */
+  .feed-page .feed-card--topic > .fc-title,
+  .feed-page .feed-card--topic > .feed-card__title { padding-right: 130px; }
+}
+
+/* REPLIES AS A STAT — mobile only, and NOT interactive. No cursor:pointer, because a
+   pointer cursor on something that does nothing is a promise the card cannot keep;
+   the way into the thread is the card body. Desktop keeps .fc-facepile, untouched. */
+.fc-replies-stat { display: none; }
+@media (max-width: 640px) {
+  .feed-page .fc-replies-stat {
+    display: inline-flex; align-items: center; margin-left: 10px;
+    font: 600 12px/1 var(--lg-font-sans, var(--font-body));
+    color: var(--lg-mute, var(--fg-muted));
+  }
+  /* A dot separator only when it actually follows a reaction chip, so a thread with no
+     reactions does not open with a stray middot. */
+  .feed-page .fcr-chips:not(:empty) + .fc-replies-stat::before,
+  .feed-page .fcr + .fc-replies-stat::before {
+    content: "\00b7"; margin-right: 8px; color: #b9bcb4;
+  }
+}
