@@ -27,8 +27,14 @@ MODEL="${LANE_MODEL:-opus[1m]}"
 [[ -x "$CLAUDE"    ]] || { echo "spin-lane: claude not executable at $CLAUDE" >&2; exit 1; }
 
 # ── the point of this script ───────────────────────────────────────────────────
-git -C "$WT" config --local user.name  "${LANE} lane"
-git -C "$WT" config --local user.email "claude@loothgroup.com"
+# `--local` is WRONG here and silently breaks signing: git worktrees SHARE one
+# .git/config, so every lane's --local write lands in the same file and the LAST
+# one wins. Measured 2026-07-30: all seven worktrees reported "commit-provenance
+# lane". `--worktree` writes per-worktree, and needs extensions.worktreeConfig on
+# the parent repo, so set that first (idempotent).
+git -C "$WT" config extensions.worktreeConfig true
+git -C "$WT" config --worktree user.name  "${LANE} lane"
+git -C "$WT" config --worktree user.email "claude@loothgroup.com"
 
 echo "spin-lane: $LANE signs as '$(git -C "$WT" config --local user.name) <$(git -C "$WT" config --local user.email)>'"
 
