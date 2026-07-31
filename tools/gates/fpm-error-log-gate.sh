@@ -51,6 +51,30 @@ done
 
 red=0; dead=0
 
+# Group log lines by FAULT IDENTITY, print `<count>\t<a real example line>`.
+#
+# GROUPING and QUOTING are deliberately separate, and that distinction is the whole
+# reason this works. The grouping key strips the timestamp, the pid and EVERY run of
+# digits, so the same fault about different rows collapses to one entry. The line
+# actually printed is the untouched original, so the reader still sees a real,
+# copy-pasteable error rather than a mangled one.
+#
+# Getting this wrong hid a live defect on this gate's first real run: `[whoami]
+# poller fetch failed: status=404 .../user-context/<id>` was firing 27 times an hour
+# on live, but keyed by user id it split into a dozen singletons, none of which
+# crossed the repeat threshold. Normalising only 2+ digit runs was not enough
+# either — `/user-context/1` kept its own group.
+group_by_fault() {
+  awk '
+    { raw = $0; key = $0
+      sub(/^\[[^]]*\] */, "", key)
+      gsub(/[0-9]+/, "#", key)
+      if (!(key in cnt)) first[key] = raw
+      cnt[key]++ }
+    END { for (k in cnt) printf "%d\t%s\n", cnt[k], first[k] }
+  ' | sort -rn
+}
+
 # Read the log for a box, on stdout. The per-box difference is confined to here.
 #   dev2 → local, sudo REQUIRED
 #   live → ssh live-ro, sudo MUST NOT be used (it prompts, fails, and reads as clean)
@@ -112,12 +136,15 @@ for box in $BOXES; do
     n=$(printf '%s\n' "$findings" | wc -l)
     echo "  ❌ RED — $n line(s) matching FATAL/Uncaught in the last ${MINUTES}m:"
     echo
-    # Dedup on the message body (strip timestamp + pid) so one recurring fault
-    # reports once with a count, rather than burying the pane.
-    printf '%s\n' "$findings" \
-      | sed -E 's/^\[[^]]*\] *//; s/child [0-9]+/child <pid>/' \
-      | sort | uniq -c | sort -rn \
-      | while read -r count line; do
+    # Dedup on the NORMALISED message body so one recurring fault reports once with
+    # a count, rather than burying the pane. Normalising the varying integers is not
+    # cosmetic: the first real run of this gate found
+    #   [whoami] poller fetch failed: status=404 ... /user-context/<id>
+    # firing continuously on live, and WITHOUT id-normalisation it deduped into
+    # 15+8+4+... separate one-off-looking lines, none of which crossed the repeat
+    # threshold. A recurring fault keyed by user id would have stayed invisible.
+    printf '%s\n' "$findings" | group_by_fault \
+      | while IFS=$'\t' read -r count line; do
           printf '     %sx  %s\n' "$count" "$line"
         done
     echo
@@ -128,13 +155,16 @@ for box in $BOXES; do
 
   # Repeated warnings/notices: not fatal, but a pool emitting the same warning
   # hundreds of times is a defect that has simply not fallen over yet.
+  # Threshold 10, not 20. A fault repeating ten times an hour on a serving box is a
+  # defect that simply has not fallen over yet; 20 was an arbitrary number that the
+  # live `[whoami]` 404s sat underneath once their ids split them apart.
   noisy="$(printf '%s\n' "$windowed" \
     | grep -aiE 'PHP Warning|PHP Notice|WARNING: \[pool' \
-    | sed -E 's/^\[[^]]*\] *//; s/child [0-9]+/child <pid>/' \
-    | sort | uniq -c | sort -rn | awk '$1 >= 20' || true)"
+    | grep -avE 'FATAL|Uncaught' \
+    | group_by_fault | awk -F'\t' '$1 >= 10' || true)"
   if [ -n "$noisy" ]; then
-    echo "  ❌ RED — repeated warning(s) (≥20 in ${MINUTES}m):"
-    printf '%s\n' "$noisy" | while read -r count line; do
+    echo "  ❌ RED — repeated fault(s) (≥10 in ${MINUTES}m):"
+    printf '%s\n' "$noisy" | while IFS=$'\t' read -r count line; do
       printf '     %sx  %s\n' "$count" "$line"
     done
     red=1

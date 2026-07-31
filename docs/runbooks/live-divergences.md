@@ -248,6 +248,28 @@ is a rollback file the farm left behind (§1.3). Harmless — WordPress does not
 `.php.pre-symlink-*` — but it should be removed once the deploy is settled, and its
 existence is the evidence for what the farm did.
 
+### §4.4 — LIVE IS LOGGING A 404 EVERY FEW MINUTES, RIGHT NOW ⚠️ NOT MINE TO FIX
+Found by `tools/gates/fpm-error-log-gate.sh` on its **first real run** — which is
+the gate justifying itself before it was even merged.
+
+```
+[pool profile-app] "NOTICE: PHP message: [whoami] poller fetch failed:
+ status=404 err= url=https://127.0.0.1/wp-json/looth-internal/v1/user-context/<id>"
+```
+
+**27 occurrences in one hour on live**, across many different user ids, still
+running. The internal WP REST route `looth-internal/v1/user-context/<id>` is
+returning **404** to the profile-app whoami poller.
+
+Nobody reported it, because it degrades quietly — which is exactly the shape of the
+`membership` role failure four hours earlier. **Whoever owns profile-app's whoami
+poller should look**: either the route is not registered on live, or nginx does not
+route `/wp-json/looth-internal/` there. This lane did not touch it.
+
+> It also improved the gate that found it. Keyed by user id the fault split into a
+> dozen singletons and crossed no threshold; the gate now groups by **fault
+> identity** (all digits normalised) while still quoting an untouched example line.
+
 ### §4.3 — per-pool error logs go nowhere on either box
 Every pool sets `php_admin_value[error_log] = /var/log/php-fpm/<pool>-error.log`, and
 **`/var/log/php-fpm/` does not exist on dev2 or live.** Errors survive only because
