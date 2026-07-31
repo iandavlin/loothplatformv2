@@ -49,6 +49,27 @@ run "author-socials-live" bash "$(dirname "$0")/author-socials-live-gate.sh"
 echo "=== GATE 10/10: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
 run "react-types" bash "$(dirname "$0")/react-types-cover-standalone-gate.sh"
 echo
+# ─────────────────────────────────────────────────────────────────────────────
+# HELD OUT — follow-digest, and it is held out for a DIFFERENT reason than the four
+# below: it is RED ON PURPOSE, right now, because the sender it guards has not been
+# built yet.
+#
+#   python3 "$(dirname "$0")/follow-digest-gate.py"           # flag OFF sends NOTHING
+#
+# It is written before its feature deliberately (email is unrecallable; the second
+# occurrence of a defect class is not survivable, so this one is gated before the
+# first). Wiring a deliberately-red gate into the numbered sequence would turn the
+# shared suite red and block every other lane's push for a feature that does not
+# exist — so it runs standalone until then.
+#
+# ⚠️ PROMOTION IS PART OF THE SENDER'S OWN COMMIT, not a follow-up. The commit that
+# defines LG_FOLLOW_DIGEST_ENABLED must also move this into the sequence as GATE
+# 11/11 and renumber 1/10..10/10 -> 1/11..10/11. A gate that guards an unrecallable
+# channel and is never promoted is worse than no gate: it reads as covered.
+# (Number minted from MAIN's count, not this branch — two lanes both minted "9/9"
+# and collided in this file. On conflict here, KEEP BOTH.)
+# ─────────────────────────────────────────────────────────────────────────────
+#
 # FOUR CDP/loopback gates are HELD OUT of the runner — they pass standalone but
 # flake RED in-sequence (CDP under load / loopback /whoami trips infra's
 # limit_req zone). Run them manually:

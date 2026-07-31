@@ -97,7 +97,25 @@ dims and add the page in the same change.
 | 9 | `tools/gates/author-socials-live-gate.sh` | bylines RESOLVE socials from the profile store, never mirror ACF | loopback |
 | 10 | `tools/gates/react-types-cover-standalone-gate.sh` | a rendered react button's type is one the endpoint ACCEPTS | loopback |
 
-All ten run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
+| 11 | `tools/gates/follow-digest-gate.py` | **HELD OUT — red on purpose.** The follow-digest flag's OFF state sends NOTHING: no cron armed, no cadence stored, the suppression filter proven to be the identity function, and the resolver proven to return zero recipients | wp-cli |
+
+**Gate 11 is written BEFORE the feature it guards, and that is the point.** Every
+other gate here encodes a defect class found twice. Email is unrecallable, so the
+second occurrence is not survivable — this one is gated before the first. It is held
+out of the runner only because a deliberately-red gate in the shared sequence would
+block every other lane's push for a feature that does not exist; **the commit that
+defines `LG_FOLLOW_DIGEST_ENABLED` must promote it into the sequence in the same
+commit.** A gate guarding an unrecallable channel that is never promoted is worse
+than no gate, because it reads as covered.
+
+It also carries the answer to the trap that makes most OFF-state gates worthless:
+**an absence assertion passes vacuously whenever the machinery that would produce the
+presence is itself missing.** "No cron event is scheduled" is true on a box with no
+WordPress at all. So every absence assertion in gate 11 is paired with a *liveness*
+assertion proving the mechanism exists and is reachable first. Absence without
+liveness is not evidence.
+
+All ten of gates 1–10 run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
 the runner because they pass standalone but flake red in sequence (CDP under load,
 and loopback `/whoami` tripping infra's `limit_req` zone) — see the note at the
 foot of `run-all.sh` for how to run `forum-visibility-gate.sh` and
