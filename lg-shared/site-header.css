@@ -655,6 +655,21 @@ body.lg-sm-open { overflow: hidden; }
   color: var(--lg-ink, #323532); margin: 0;
   word-break: break-word;
 }
+/* DESKTOP message sizing — Ian, 2026-07-31: the DM panel text is too small on DT.
+   Approved off the mock at 15px. Gated >=641 because that is what he asked for and
+   because the phone is a DIFFERENT surface entirely (messenger-sheet.js carries its own
+   styles); bumping the shared base would have silently resized the mobile sheet too.
+   Padding and gap move with the type so the bubbles breathe rather than just grow. */
+@media (min-width: 641px) {
+  .lg-msg__msg-text {
+    font: 400 15px/1.5 var(--lg-font-sans, system-ui);
+    padding: 10px 14px;
+    border-radius: 14px 14px 14px 5px;
+  }
+  .lg-msg__msg--mine .lg-msg__msg-text { border-radius: 14px 14px 5px 14px; }
+  .lg-msg__msg { max-width: 74%; }
+  .lg-msg__messages { gap: 12px; padding: 18px 22px; }
+}
 .lg-msg__msg--mine .lg-msg__msg-text {
   background: var(--lg-sage, #87986a); color: #fff;
   border-radius: 12px 12px 4px 12px;
@@ -838,6 +853,39 @@ a.lg-msg__peer-name:hover { text-decoration: underline; }
   min-width: 0;
 }
 .lg-msg__peer-sep { color: var(--lg-mute, #6b6f6b); }
+/* ── Header footprint: clamp the NAMES, never the note (Ian approved 2026-07-31) ──
+   A 4-name thread wrapped to four lines and spent 148px before the first message.
+   The name list clamps to one line and a "+N more" chip expands it in place.
+   MEASURED on a 12-participant fixture at 1440: 214px -> 80px collapsed, and the
+   "everyone here sees your reply" line survives in BOTH states — it is a SIBLING of
+   the clamped element now, not a child, which is the whole reason this is safe. */
+.lg-msg__peer-namelist { display: block; min-width: 0; }
+@media (min-width: 641px) {
+  .lg-msg__peer-namelist {
+    display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .lg-msg__peer-names.is-expanded .lg-msg__peer-namelist {
+    display: block; -webkit-line-clamp: none; overflow: visible;
+  }
+}
+/* With a subject the names are the SUBLINE, so they keep the muted note type they had
+   before this change — only their clampability is new. */
+.lg-msg__peer-namelist--sub {
+  font: 400 11.5px/1.35 var(--lg-font-sans, system-ui);
+  color: var(--lg-mute, #6b6f6b);
+}
+.lg-msg__peer-more {
+  display: inline-block; margin: 3px 0 0; padding: 3px 9px;
+  font: 600 12px/1 var(--lg-font-sans, system-ui);
+  color: var(--lg-sage-d, #586b3f); background: var(--lg-sage-tint, #eef2e3);
+  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 999px; cursor: pointer;
+}
+.lg-msg__peer-more:hover { background: var(--lg-sage, #87986a); color: #fff;
+  border-color: var(--lg-sage, #87986a); }
+.lg-msg__peer-more:focus-visible { outline: 2px solid var(--lg-sage-d, #586b3f);
+  outline-offset: 2px; }
+.lg-msg__peer-more[hidden] { display: none; }   /* [hidden] must beat display:inline-block */
 /* "everyone here sees your reply" — the whole point of the header, on its own line. */
 .lg-msg__peer-note {
   display: block;   /* own line, under the names */

@@ -691,18 +691,71 @@ function renderPeerHeader(peers) {
       + '<path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
       + '</button>'
     : '';
+  /* ── HEADER FOOTPRINT (Ian approved the mock 2026-07-31) ──────────────────────────
+     A long participant list wrapped to four lines and ate 148px before a single message
+     was visible. The names now clamp to ONE line with a "+N more" chip that expands them.
+
+     THE NOTE MOVES OUT OF THE NAME LIST, and that is the load-bearing part of this
+     change. "Group · N people · everyone here sees your reply" used to be a CHILD of
+     .lg-msg__peer-names, so clamping that element hid it — and that line is the one thing
+     the header exists to say. A group that reads as a private 1:1 means a reply reaches
+     people the header never named; the existing comment on .lg-msg__peer-name calls a
+     truncated list "exactly the lie this header exists to stop telling". So: the names
+     clamp, the note NEVER does, and the chip states the count out loud rather than
+     silently swallowing names.
+
+     .lg-msg__peer-namelist is a new element rather than a class on the existing one
+     because both shapes need it: with a subject the names live in the SUBLINE, without
+     one they are the title. The --sub modifier keeps the subject shape looking exactly as
+     it did (muted note type) while still being clampable. */
+  var noteHtml = groupNote ? '<span class="lg-msg__peer-note">' + groupNote + '</span>' : '';
   el.innerHTML = avatarStack(ps, 36)
     + '<span class="lg-msg__peer-names">'
     + (subject
         ? '<span class="lg-msg__peer-name lg-msg__peer-title">' + esc(subject) + '</span>'
-          + '<span class="lg-msg__peer-note">' + names
-            + (groupNote ? '<span class="lg-msg__peer-sep"> · </span>' + groupNote : '') + '</span>'
-        : names
-          + (groupNote ? '<span class="lg-msg__peer-note">' + groupNote + '</span>' : ''))
+          + '<span class="lg-msg__peer-namelist lg-msg__peer-namelist--sub">' + names + '</span>'
+        : '<span class="lg-msg__peer-namelist">' + names + '</span>')
+    + '<button type="button" class="lg-msg__peer-more" data-lg-peer-more hidden></button>'
+    + noteHtml
     + '</span>'
     + manageBtn;
   el.hidden = false;
+  syncPeerMore(el, ps.length);
   setReplyPlaceholder(ps);
+}
+
+/* Label the "+N more" chip with the number of names the clamp is actually hiding, and
+   show it ONLY when the list really overflows.
+   Counting peers-minus-one instead would be a lie on the common case: a two-peer thread
+   whose names both fit on the line would advertise "+1 more" and expand to reveal nothing.
+   So measure — a name is visible when it sits on the first line AND inside the box. */
+function syncPeerMore(el, total) {
+  var wrap = el.querySelector('.lg-msg__peer-names');
+  var list = el.querySelector('.lg-msg__peer-namelist');
+  var btn  = el.querySelector('.lg-msg__peer-more');
+  if (!wrap || !list || !btn) return;
+  wrap.classList.remove('is-expanded');
+  /* Deferred a frame: fonts/avatars still settling give a rect that under- or
+     over-reports how much fits, and this decides whether the chip appears at all. */
+  requestAnimationFrame(function () {
+    var lr = list.getBoundingClientRect();
+    var names = list.querySelectorAll('.lg-msg__peer-name');
+    var lh = parseFloat(getComputedStyle(list).lineHeight) || 20;
+    var shown = 0;
+    for (var i = 0; i < names.length; i++) {
+      var r = names[i].getBoundingClientRect();
+      if (r.top < lr.top + lh * 0.9 && r.right <= lr.right + 0.5) shown++;
+    }
+    var hidden = Math.max(0, (total || names.length) - shown);
+    if (hidden > 0) {
+      btn.textContent = '+' + hidden + ' more';
+      btn.setAttribute('aria-expanded', 'false');
+      btn.hidden = false;
+      btn.dataset.lgPeerHidden = String(hidden);
+    } else {
+      btn.hidden = true;
+    }
+  });
 }
 /* The last place a reply can be misread as private is the box you type into, so the
    composer says where it is going. */
@@ -2117,6 +2170,19 @@ document.addEventListener('click', function (e) {
   if (hit('[data-lg-mm-rename]'))   { mmRename(); return; }
   if (hit('[data-lg-mm-add]'))      { openAddPicker(); return; }
   if (hit('[data-lg-mm-leave]'))    { mmLeave(); return; }
+  /* "+N more" — expand the clamped participant list in place (and collapse again). The
+     header must never be a dead end: the count is stated, and the names behind it are one
+     tap away. */
+  var pm = hit('[data-lg-peer-more]');
+  if (pm) {
+    var pw = pm.closest('.lg-msg__peer-names');
+    if (pw) {
+      var open = pw.classList.toggle('is-expanded');
+      pm.setAttribute('aria-expanded', open ? 'true' : 'false');
+      pm.textContent = open ? 'Show less' : '+' + (pm.dataset.lgPeerHidden || '') + ' more';
+    }
+    return;
+  }
   if (hit('[data-lg-edit]'))        { var be = hit('[data-lg-msg-id]'); if (be) beginEdit(be); return; }
   if (hit('[data-lg-del]'))         { var bd = hit('[data-lg-msg-id]'); if (bd) deleteMsg(bd.getAttribute('data-lg-msg-id')); return; }
   /* React: reveal this bubble's six-emoji picker (only one open at a time). It opens
