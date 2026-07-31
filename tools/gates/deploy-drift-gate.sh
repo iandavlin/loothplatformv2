@@ -116,9 +116,26 @@ for f in $(_ls "$MUDIR"); do
   [ -z "$real" ] && continue
   dir="$(dirname "$real")"
   case "$dir" in "$MUDIR") loc=docroot ;; *) loc=outside ;; esac
+  # A loader that resolves its folder from WPMU_PLUGIN_DIR (WordPress's own
+  # mu-plugins path) is SYMLINK-SAFE: that constant names the deployed tree whether
+  # or not the loader itself is a symlink, so __DIR__ landing outside is harmless.
+  #
+  # ⚠️ COMMENTS ARE STRIPPED FIRST, AND THAT IS NOT FUSSINESS. The stock loader
+  # carries the comment "plugins_url() detects WPMU_PLUGIN_DIR and returns the
+  # mu-plugins URL" — so a plain grep matched PROSE and reported the pre-fix loader
+  # as symlink-safe. That is a FALSE GREEN on the exact check guarding the outage,
+  # which is worse than having no check. Measured on dev2, 2026-07-31.
+  # PHP's own tokenizer decides what is code; nothing else is trustworthy here.
+  if _cat "$MUDIR/$f" | php -r '''$t=token_get_all(stream_get_contents(STDIN));
+      foreach($t as $x){ if(is_array($x)&&in_array($x[0],[T_COMMENT,T_DOC_COMMENT])) continue;
+      echo is_array($x)?$x[1]:$x; }''' 2>/dev/null | grep -q "WPMU_PLUGIN_DIR"; then
+    safe=safe
+  else
+    safe=unsafe
+  fi
   for s in $sibs; do
     if _ex "$dir/$s"; then st=resolves; else st=MISSING; fi
-    echo "LOADER $f $s $st $loc"
+    echo "LOADER $f $s $st $loc $safe"
   done
 done
 
@@ -384,13 +401,16 @@ for box in $BOXES; do
   if [ "$nload" -eq 0 ]; then
     echo "      ·  no __DIR__-relative loaders found"
   else
-    while read -r _ f sib st loc; do
+    while read -r _ f sib st loc safe; do
       [ -z "${f:-}" ] && continue
-      if [ "$st" = MISSING ]; then
+      if [ "$st" = MISSING ] && [ "${safe:-unsafe}" != safe ]; then
         echo "      ❌ $f requires ./$sib and IT DOES NOT RESOLVE from where PHP"
         echo "         computes __DIR__. The loader returns silently and the plugin is"
         echo "         NEVER REGISTERED — no fatal, no 500, no error page."
         red=1
+      elif [ "$loc" = outside ] && [ "${safe:-unsafe}" = safe ]; then
+        echo "      ✔ $f is symlinked, but resolves ./$sib via WPMU_PLUGIN_DIR"
+        echo "         — symlink-safe, so __DIR__ landing in the repo is harmless"
       elif [ "$loc" = outside ]; then
         if declared "$box" "loader-outside" "$f"; then
           echo "      DECLARED  $f resolves ./$sib from outside the docroot"

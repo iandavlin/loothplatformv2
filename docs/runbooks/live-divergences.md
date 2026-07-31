@@ -312,17 +312,41 @@ Current state, and the two boxes disagree:
 dev2**, deliberately left red rather than declared: declaring it would make a gate
 green over the exact configuration that caused an outage four hours ago.
 
-> ### The real fix is a code change, and it is not this lane's to make
+> ### FIXED, 2026-07-31 — the loader is now symlink-safe
+> `lg-patreon-stripe-poller.php` now prefers **`WPMU_PLUGIN_DIR`** (WordPress's own
+> constant for the mu-plugins directory) and falls back to `__DIR__`. That constant
+> names the tree the plugin was actually deployed into whether or not the loader is
+> a symlink — and it is the only tree guaranteed to carry box-local files
+> (`vendor/`, `.env`). The fallback preserves the old behaviour wherever the
+> constant is undefined, so the change can only ever find MORE than before.
+>
+> `tools/deploy/test-poller-loader.sh` encodes it against a stubbed WordPress, and
+> was written RED-FIRST — against the old loader it reported `NOT-LOADED` for the
+> outage scenario and `LOADED:repo` for the tree-swap. Three scenarios, all green
+> after the fix: real-file loader, symlinked loader with code only in the docroot
+> (the outage), and symlinked loader with code in both trees (must prefer docroot).
+>
+> **What the real box showed, and it is worse than expected.** On dev2 the loader
+> ran but resolved `LGPO_PLUGIN_DIR = /home/ubuntu/loothplatformv2-clean/…` — the
+> REPO, not the docroot. It works only because the repo happens to carry everything,
+> and it means `plugins_url()` was deriving the plugin's asset URLs from a path
+> outside the webroot. The fix points both back at the docroot, matching live.
+
+> ### The original assessment, kept because the reasoning still applies elsewhere
 > Live's real-file loader is itself a divergence — **it does not arrive by pull.**
 > That is the tooling defect, exactly as Ian's mandate frames it: the file cannot be
 > symlink-deployed *as the code stands*.
 >
-> The proper fix is to make the loader **symlink-safe** — resolve its folder from
-> `WPMU_PLUGIN_DIR` (WordPress's own constant for the mu-plugins directory) instead
-> of `__DIR__`. That is correct whether the loader is a symlink or a real file, and
-> it would let the loader arrive by pull on both boxes and let dev2 stop differing
-> from live. **It touches a PRODUCTION must-use plugin and belongs to whoever owns
-> the poller**, so it is recorded here rather than done at 05:00 by a tooling lane.
+> It touches a PRODUCTION must-use plugin, so it is called out for review rather
+> than slipped in quietly — but it is squarely "make the deploy pull-only", it is
+> additive, and it is covered by a red-first test, so it is done rather than left as
+> a trap for the next `symlink-farm --apply`.
+>
+> **Any other folder-structured mu-plugin loader should get the same treatment.**
+> Gate check [7] flags them; it strips comments with PHP's tokenizer before deciding,
+> because the stock loader mentions `WPMU_PLUGIN_DIR` in PROSE and a plain grep
+> therefore reported the unfixed loader as safe — a false green on the one check
+> guarding this outage.
 
 ### §4.4 — LIVE IS LOGGING A 404 EVERY FEW MINUTES, RIGHT NOW ⚠️ NOT MINE TO FIX
 Found by `tools/gates/fpm-error-log-gate.sh` on its **first real run** — which is
