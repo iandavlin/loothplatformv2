@@ -71,6 +71,39 @@ const LG_FOLLOWING_PG_ROLE = 'membership';
 /** How many rows render before "Show all". Bounded on purpose — see the section comment. */
 const LG_FOLLOWING_PAGE_SIZE = 5;
 
+/**
+ * Per-row 🔔/✉ TOGGLES on this page. DEFAULT OFF.
+ *
+ * Ian, 2026-07-31: "on the account manage page, they cant change the setting,
+ * just close it out, could they change the toggles on that page too?" He is
+ * describing a real dead end — the row's only action is the X, so a member who
+ * wants to keep reading a thread but stop the EMAIL has no move except leaving
+ * the discussion altogether.
+ *
+ * ⚠️ THIS REVERSES A DELIBERATE EARLIER DECISION, and the reversal is his to
+ * make. The marks were built to REPORT and not toggle, because thread-follow's
+ * own mock (footer-mockups/threadfollow-notif-panel/mock-account.html) rated a
+ * switch-per-row BAD: "unbounded — someone following thirty threads gets a
+ * thirty-row settings page." That verdict is not wrong; it is answered. The list
+ * is bounded at LG_FOLLOWING_PAGE_SIZE with "Show all", and "Stop all" is the
+ * single make-it-stop control the verdict said was missing. Those two are what
+ * make a per-row switch safe here, so if either is ever removed, this should go
+ * back to reporting.
+ *
+ * OFF is a byte-identical no-op: the same <span> markup, no data attributes, no
+ * behaviour — see the gate, which asserts the OFF state rather than assuming it.
+ * Flag pattern copied from LG_AUTHOR_SOCIALS_ALL_MEMBERS
+ * (platform/mu-plugins/lg-author-socials.php:48).
+ */
+if (!defined('LG_FOLLOWING_ROW_TOGGLES')) {
+    // Server-settable so a lane preview can show Ian the ON state without the
+    // flag being on for anyone else. fastcgi_param only — an nginx block on this
+    // box can set it, a query string never can. Absent (every normal request on
+    // dev and live) => false, and false is the byte-identical no-op.
+    define('LG_FOLLOWING_ROW_TOGGLES',
+        (($_SERVER['LG_FOLLOWING_ROW_TOGGLES'] ?? '') === '1'));
+}
+
 if (!function_exists('lg_following_pg')) {
 /**
  * Postgres handle, using bb-mirror's own connection builder.
