@@ -96,8 +96,9 @@ dims and add the page in the same change.
 | 8 | `tools/gates/composer-topic-meta-test.js` | forum picker cloning + tags on the composer | node |
 | 9 | `tools/gates/author-socials-live-gate.sh` | bylines RESOLVE socials from the profile store, never mirror ACF | loopback |
 | 10 | `tools/gates/react-types-cover-standalone-gate.sh` | a rendered react button's type is one the endpoint ACCEPTS | loopback |
+| 11 | `tools/gates/shop-planner-url-gate.sh` | `/shop-layout-planner/` still answers 200 **and still mounts the planner** | loopback, or `ssh live-ro` with `--live` |
 
-All ten run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
+All eleven run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
 the runner because they pass standalone but flake red in sequence (CDP under load,
 and loopback `/whoami` tripping infra's `limit_req` zone) — see the note at the
 foot of `run-all.sh` for how to run `forum-visibility-gate.sh` and
