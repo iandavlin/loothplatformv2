@@ -1,5 +1,30 @@
 # Deploy couplings a `git pull` does NOT do
 
+> ## ⚠️ THERE IS NOW ONE COMMAND FOR ALL OF THIS
+>
+> ```bash
+> bash tools/deploy/live-deploy.sh            # DRY RUN — the default
+> bash tools/deploy/live-deploy.sh --apply
+> ```
+>
+> It records the rollback SHA first, derives every coupling from
+> `git diff --name-status <old>..<new>` rather than a checklist, runs the couplings
+> in order, **verifies** each step instead of merely running it, and prints what it
+> did **not** do so silence is never mistaken for coverage. It refuses to continue
+> when a step fails.
+>
+> Built 2026-07-31 after a live deploy that needed five manual interventions. Ian:
+> *"Are we doing a lot of hand work? This looks like stuff that should have been
+> pulled?"* Read `docs/runbooks/live-divergences.md` alongside it — that is where
+> anything which genuinely cannot arrive by pull is recorded, and it is the
+> allowlist for `tools/gates/deploy-drift-gate.sh`.
+>
+> **The rest of this document is still accurate and is the WHY behind those steps.**
+> Two things it did not cover, both now handled by the script: **new nginx snippet
+> symlinks** (nothing covered them at all — a new snippet arrives in the pull with no
+> `/etc/nginx/snippets/` link, so `nginx -t` fails and the reload is correctly
+> refused), and **Postgres roles/grants** (`cutover/ensure-pg-roles.sh`).
+
 **Rule (Ian, 2026-07-30): "if you are creating a symlink add to runbook and to repo."**
 A symlink made by hand exists only on the box that saw it made. This runbook is where
 that knowledge lives; the *tool* below is where the symlink SET lives.
