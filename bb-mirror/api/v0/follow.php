@@ -83,6 +83,30 @@ function follow_email_master(int $uid): bool {
     return (bool) bb_is_notification_enabled($uid, $key);
 }
 
+/**
+ * ✉ CADENCE — the ACCOUNT-LEVEL email frequency (instant|daily|weekly).
+ *
+ * Store agreed with follow-digest on the board 2026-07-31 and specced in
+ * docs/atlas/FOLLOW-DIGEST-DESIGN.md §2.1: WP usermeta `lg_disc_email_cadence`, one row
+ * per member, ABSENT MEANS INSTANT. It sits beside follow_email_master() above for the
+ * reason that settled the debate — that function already reads an account-level email
+ * preference out of usermeta, so the master and the cadence live in ONE store rather
+ * than straddling MySQL and Postgres for a single scalar.
+ *
+ * NOT forums.topic_follow: that table is the per-(member, topic) 🔔 bit, and cadence is
+ * neither per-topic nor about the bell (SPEC §15.5, and follow-digest agrees).
+ *
+ * Unknown/garbage values normalise to 'instant' rather than erroring: this is a
+ * preference read on a hot path, and the safe default is the behaviour members already
+ * have. The WRITE is where validation is strict.
+ */
+const LG_DISC_CADENCES = ['instant', 'daily', 'weekly'];
+function follow_cadence(int $uid): string {
+    if ($uid < 1) return 'instant';
+    $v = (string) get_user_meta($uid, 'lg_disc_email_cadence', true);
+    return in_array($v, LG_DISC_CADENCES, true) ? $v : 'instant';
+}
+
 /** 🔔 — does this member follow this topic? (PG, forums.topic_follow) */
 function follow_notify_state(int $uid, array $topicIds): array {
     $out = [];
@@ -138,8 +162,12 @@ if ($method === 'GET') {
         // Per Ian's ruling: the client renders the ✉ bit honestly, and when this is
         // false it must say emails are off account-wide rather than imply delivery.
         'email_master'  => follow_email_master($uid),
+        // ⚠️ ABSENT, not null and not a default, while the batcher is not live. A dark
+        // control must not be able to render a live-looking value, and "the key is not
+        // there" is the only version of that a client cannot misread. Gated on both
+        // sides (follow-digest §5, and this lane's card-v3 gate).
         'state'         => $state ?: (object) [],
-    ]);
+    ] + (LG_FOLLOW_CADENCE_LIVE ? ['cadence' => follow_cadence($uid)] : []));
 }
 
 if ($method !== 'POST') {
@@ -158,6 +186,32 @@ if (!wp_verify_nonce((string) ($_SERVER['HTTP_X_WP_NONCE'] ?? ''), 'wp_rest')) {
 $body    = json_decode(file_get_contents('php://input') ?: '', true) ?: [];
 $topicId = (int) ($body['topic_id'] ?? 0);
 $action  = (string) ($body['action'] ?? '');
+
+/* ── ACCOUNT-LEVEL CADENCE WRITE ──────────────────────────────────────────────
+   ONE STORE, ONE WRITE PATH, TWO UI SURFACES. This lane's follow modal and
+   account-following's /manage-subscription/ control BOTH post here; neither writes
+   usermeta directly. That is the point of the seam — if two surfaces could write the
+   same member's cadence independently they could disagree about it, which is the
+   "UI lies" class Ian has ruled against repeatedly.
+
+   Handled BEFORE the topic_id guard below, because a cadence write is account-level
+   and carries no topic. SELF-SCOPED: $uid comes from the session, never the body, so
+   this can never be used to set someone else's preference. */
+if (array_key_exists('cadence', $body)) {
+    if (!LG_FOLLOW_CADENCE_LIVE) {
+        // Refused rather than silently stored: accepting a cadence nothing can honour
+        // would let a member believe they had set one. §15.4 / §8.1.3.
+        follow_out(409, ['ok' => false, 'error' => 'cadence_unavailable',
+                         'message' => 'Email frequency is not available yet.']);
+    }
+    $cadence = strtolower(trim((string) $body['cadence']));
+    if (!in_array($cadence, LG_DISC_CADENCES, true)) {
+        follow_out(400, ['ok' => false, 'error' => 'cadence',
+                         'message' => "cadence must be one of: " . implode(', ', LG_DISC_CADENCES) . '.']);
+    }
+    update_user_meta($uid, 'lg_disc_email_cadence', $cadence);
+    follow_out(200, ['ok' => true, 'cadence' => follow_cadence($uid)]);   // echo the STORED value
+}
 
 if ($topicId < 1) {
     follow_out(400, ['ok' => false, 'error' => 'topic_id', 'message' => 'A topic id is required.']);
