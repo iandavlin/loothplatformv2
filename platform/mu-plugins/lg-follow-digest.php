@@ -350,18 +350,229 @@ function lg_fd_advance_watermark( int $user_id, array $items ): void {
  * dropping everything in between. That is a decision, not an accident: for an
  * unrecallable channel, "silently drops" is the wrong failure.
  *
- * ⚠️ NOTHING IS SCHEDULED IN THIS COMMIT, AND THAT IS DELIBERATE. The flush loop and
- * the template are not written yet. Scheduling the hook now would arm an event with
- * no callback: it would fire, do nothing, and — worse — satisfy the gate's "flag ON ⇒
- * lg_fd_send is scheduled" assertion, turning it green while no member would ever
- * receive anything. That is precisely the silent-nothing lie §15.4 forbids, rebuilt
- * inside the gate meant to catch it.
- *
- * So this only ever UNSCHEDULES, defensively. The scheduling half lands in the SAME
- * commit as the flush it drives, which keeps the gate's ON-path assertion honestly
- * red until there is something real behind it. */
+ * ONE HOURLY HOOK, FIXED SEND HOURS — not a per-member clock. A daily digest goes out
+ * at the same local hour for everyone, so "who is due" is a property of the CLOCK, not
+ * of each member, and no per-member last-sent state is needed. Times are site-local
+ * (America/New_York) because 08:00 must mean breakfast, not 03:00. */
+const LG_FD_DAILY_HOUR  = 8;   // 08:00 site-local
+const LG_FD_WEEKLY_HOUR = 8;   // Sunday 08:00 site-local
+const LG_FD_WEEKLY_DOW  = 0;   // Sunday
+const LG_FD_MAX_PER_RUN = 500; // a ceiling, not an expectation — see the guard below
+
 add_action( 'init', 'lg_fd_sync_schedule' );
 function lg_fd_sync_schedule(): void {
 	$next = wp_next_scheduled( LG_FD_CRON_HOOK );
-	if ( $next ) { wp_unschedule_event( $next, LG_FD_CRON_HOOK ); }
+	if ( ! LG_FOLLOW_DIGEST_ENABLED ) {
+		// Unscheduled on flag-off. mirror-dispatch's outbox timer is the precedent for
+		// what an armed-ahead-of-its-code sender does to the alert channel — and this
+		// one would also mail real members from a feature nobody switched on.
+		if ( $next ) { wp_unschedule_event( $next, LG_FD_CRON_HOOK ); }
+		return;
+	}
+	if ( ! $next ) { wp_schedule_event( time() + 300, 'hourly', LG_FD_CRON_HOOK ); }
+}
+
+add_action( LG_FD_CRON_HOOK, 'lg_fd_tick' );
+
+/**
+ * One hourly tick. Decides whether anything is due, then flushes it.
+ *
+ * ⚠️ THE DOUBLE-SEND QUESTION, SETTLED TWO WAYS because this is unrecallable.
+ *   1. STRUCTURALLY: the content query is watermark-driven and the watermark only
+ *      moves on a send, so a second fire in the same hour finds zero new items for
+ *      everyone already flushed and mails nobody. A repeat of the SAME content is
+ *      impossible by construction, not by care.
+ *   2. BY AN INTERVAL GUARD anyway: (1) still permits an unexpectedly-early SECOND
+ *      digest if new replies land between two fires. Belt and braces are cheap here
+ *      and the failure they prevent is not.
+ */
+function lg_fd_tick(): void {
+	if ( ! LG_FOLLOW_DIGEST_ENABLED ) { return; }
+
+	$now = (int) current_time( 'timestamp' );          // site-local
+	$h   = (int) wp_date( 'G', $now );
+	$dow = (int) wp_date( 'w', $now );
+
+	if ( LG_FD_DAILY_HOUR === $h )                              { lg_fd_flush( 'daily', 20 * HOUR_IN_SECONDS ); }
+	if ( LG_FD_WEEKLY_DOW === $dow && LG_FD_WEEKLY_HOUR === $h ) { lg_fd_flush( 'weekly', 6 * DAY_IN_SECONDS ); }
+}
+
+/**
+ * Flush one cadence.
+ *
+ * MISSED RUNS ROLL FORWARD AND LOSE NOTHING. Because the content query is bounded by
+ * the member's watermark rather than by a fixed window, a box that was down for two
+ * days sends a two-day digest on the next tick. Only the TIMING slips; no reply is
+ * ever silently dropped. That is the decision §4.3 of the design note records, and it
+ * is the reason this sender carries per-member state at all.
+ *
+ * @param int $min_interval refuse to run again inside this many seconds.
+ */
+function lg_fd_flush( string $cadence, int $min_interval ): void {
+	$opt  = 'lg_fd_last_flush_' . $cadence;
+	$last = (int) get_option( $opt, 0 );
+	if ( $last && ( time() - $last ) < $min_interval ) { return; }
+	update_option( $opt, time(), false );   // claim the slot BEFORE sending, so a slow
+	                                        // run overlapping the next tick cannot double up
+
+	$sent = 0;
+	foreach ( lg_fd_due_recipients( $cadence ) as $uid ) {
+		if ( $sent >= LG_FD_MAX_PER_RUN ) {
+			// Never truncate silently — a cap that says nothing reads as "covered
+			// everyone" when it did not.
+			error_log( sprintf( '[lg-fd] %s flush hit the %d cap; remainder rolls to the next run (watermarks unadvanced, so nothing is lost)',
+				$cadence, LG_FD_MAX_PER_RUN ) );
+			break;
+		}
+		if ( lg_fd_send_one( $uid, $cadence ) ) { $sent++; }
+	}
+	if ( $sent ) { error_log( sprintf( '[lg-fd] %s flush: %d sent', $cadence, $sent ) ); }
+}
+
+/**
+ * Build and send one member's digest. Returns false when there was nothing to send —
+ * EMPTY MEANS SEND NOTHING, never "the digest minus the section" (Ian, 2026-07-28,
+ * ruled for the weekly recap and it governs here for the same reason).
+ */
+function lg_fd_send_one( int $uid, string $cadence ): bool {
+	$batch = lg_fd_items_for( $uid );
+	if ( ! $batch['items'] ) { return false; }
+
+	$user = get_userdata( $uid );
+	if ( ! $user || ! is_email( $user->user_email ) ) { return false; }
+
+	$html = lg_fd_render( $user, $batch, $cadence );
+	$subj = lg_fd_subject( $batch );
+
+	add_filter( 'wp_mail_content_type', 'lg_fd_html_type' );
+	$ok = wp_mail( $user->user_email, $subj, $html );
+	remove_filter( 'wp_mail_content_type', 'lg_fd_html_type' );
+
+	/* ⚠️ THE WATERMARK ADVANCES EITHER WAY, AND THAT IS A DELIBERATE CHOICE.
+	 * Holding it back on a false return would re-send the same content on every
+	 * subsequent tick — an unbounded retry loop on a channel that cannot be recalled.
+	 * The asymmetry is the whole argument: under-sending one digest is recoverable,
+	 * mailing the same member the same thing hourly is not. It is also the honest
+	 * choice on this box, where containment makes wp_mail's return value meaningless
+	 * in the first place (it swallows into mailpit and returns TRUE). Failures are
+	 * logged rather than retried. */
+	if ( ! $ok ) { error_log( sprintf( '[lg-fd] wp_mail returned false for uid %d', $uid ) ); }
+	lg_fd_advance_watermark( $uid, $batch['items'] );
+	return true;
+}
+
+function lg_fd_html_type(): string { return 'text/html'; }
+
+/** Subject. Reads correctly at n=1, which is the NORMAL case (design note §1.2). */
+function lg_fd_subject( array $batch ): string {
+	$n = count( $batch['items'] );
+	$t = count( array_unique( wp_list_pluck( $batch['items'], 'topic_id' ) ) );
+	if ( 1 === $n ) { return 'One new reply in a discussion you follow'; }
+	if ( 1 === $t ) { return sprintf( '%d new replies in a discussion you follow', $n ); }
+	return sprintf( '%d new replies across %d discussions you follow', $n, $t );
+}
+
+/**
+ * Render. COUNTS, THREAD TITLES AND SENDER DISPLAY NAMES ONLY — never reply text.
+ * That is the standing privacy ruling (NOTIF-EMAIL-STATE §1), and it is enforced by
+ * lg_fd_items_for never selecting post_content, so there is nothing here to leak.
+ *
+ * Table-based with inline styles, matching lg-weekly-digest/templates/email.php's
+ * posture — the brand palette and the constraints of real mail clients are the same
+ * whoever is sending.
+ */
+function lg_fd_render( WP_User $user, array $batch, string $cadence ): string {
+	$by_topic = array();
+	foreach ( $batch['items'] as $it ) { $by_topic[ (int) $it['topic_id'] ][] = $it; }
+
+	$name  = $user->display_name ? $user->display_name : $user->user_login;
+	$every = 'daily' === $cadence ? 'once a day' : 'once a week';
+
+	$rows = '';
+	foreach ( $by_topic as $tid => $items ) {
+		$names = array();
+		foreach ( $items as $i ) {
+			$a = get_userdata( (int) $i['post_author'] );
+			if ( $a ) { $names[ $a->ID ] = $a->display_name ? $a->display_name : $a->user_login; }
+		}
+		$names = array_values( $names );
+		$who   = lg_fd_names_phrase( $names, count( $items ) );
+		$url   = get_permalink( $tid ) ? get_permalink( $tid ) : home_url( '/hub/' );
+
+		$rows .= '<tr><td style="padding:0 0 16px;">'
+			. '<div style="font:700 16px/1.3 Arial,Helvetica,sans-serif;color:#2B2318;margin:0 0 5px;">'
+			. '<a href="' . esc_url( $url ) . '" style="color:#2B2318;text-decoration:none;">'
+			. esc_html( get_the_title( $tid ) ) . '</a></div>'
+			. '<div style="font:13px/1.5 Arial,Helvetica,sans-serif;color:#6b6459;margin:0 0 9px;">'
+			. $who . '</div>'
+			. '<a href="' . esc_url( $url ) . '" style="display:inline-block;background:#87986A;color:#ffffff;'
+			. 'font:700 13px Arial,Helvetica,sans-serif;text-decoration:none;padding:8px 15px;border-radius:4px;">'
+			. 'Open the discussion &rarr;</a></td></tr>';
+	}
+
+	$n   = count( $batch['items'] );
+	$t   = count( $by_topic );
+	$sum = 1 === $n ? 'One new reply in a discussion you follow.'
+		: ( 1 === $t ? sprintf( '%d new replies in a discussion you follow.', $n )
+		             : sprintf( '%d new replies across %d discussions you follow.', $n, $t ) );
+	if ( $batch['capped'] ) { $sum .= ' (Showing the first ' . $n . '.)'; }
+
+	/* ⚠️ THE <head> IS NOT OPTIONAL, and the first draft of this template had none.
+	 * Measured: without a viewport meta, innerWidth reports 980 at EVERY emulated
+	 * width, because a mobile client with no viewport declaration lays out at 980px
+	 * and zooms out — the mail arrives readable-only-after-pinching on the device
+	 * most members open it on. And without a charset the em-dash, the middot and any
+	 * accented display name mojibake. Both are exactly what
+	 * lg-weekly-digest/templates/email.php declares, for the same reasons. */
+	return '<!DOCTYPE html><html lang="en"><head>'
+		. '<meta charset="UTF-8">'
+		. '<meta name="viewport" content="width=device-width,initial-scale=1.0">'
+		. '<meta http-equiv="X-UA-Compatible" content="IE=edge">'
+		. '<title>' . esc_html( lg_fd_subject( $batch ) ) . '</title>'
+		/* The fixed 600 table is for Outlook, which ignores max-width; the media query
+		 * is for everything else, which would otherwise lay out at 628px on a 390px
+		 * phone and zoom the whole mail out. Measured both ways — this is the same
+		 * split lg-weekly-digest/templates/email.php uses, not a second idiom. */
+		. '<style>@media only screen and (max-width:480px){'
+		. '.lgfd-c{width:100%!important;max-width:100%!important}'
+		. '.lgfd-p{padding:18px 16px!important}'
+		. '.lgfd-w{padding:8px 4px!important}}</style>'
+		. '</head>'
+		. '<body style="margin:0;padding:0;background:#e8e2d8;">'
+		. '<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr><td align="center" class="lgfd-w" style="padding:14px;">'
+		. '<table width="600" class="lgfd-c" cellpadding="0" cellspacing="0" border="0" role="presentation" style="max-width:600px;background:#ffffff;">'
+		. '<tr><td style="background:#2B2318;padding:18px 22px;">'
+		. '<div style="font:700 15px Arial,Helvetica,sans-serif;color:#ECB351;letter-spacing:.6px;">THE LOOTH GROUP</div>'
+		. '<div style="font:11px Arial,Helvetica,sans-serif;color:#b9b0a0;padding-top:3px;">Your discussions</div>'
+		. '</td></tr>'
+		. '<tr><td class="lgfd-p" style="padding:22px;">'
+		. '<p style="font:700 19px Arial,Helvetica,sans-serif;color:#2B2318;margin:0 0 3px;">'
+		. esc_html( $name ) . ' &mdash;</p>'
+		. '<p style="font:14px Arial,Helvetica,sans-serif;color:#5a5245;margin:0 0 18px;padding-bottom:14px;border-bottom:2px solid #ECB351;">'
+		. esc_html( $sum ) . '</p>'
+		. '<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">' . $rows . '</table>'
+		. '</td></tr>'
+		. '<tr><td style="background:#faf8f3;border-top:1px solid #e3e1d8;padding:15px 22px;'
+		. 'font:11px/1.7 Arial,Helvetica,sans-serif;color:#7a7264;">'
+		. 'You get these <b>' . esc_html( $every ) . '</b>. '
+		. '<a href="' . esc_url( home_url( '/manage-subscription/' ) ) . '" style="color:#5a6b3f;">Change how often</a>'
+		. '</td></tr></table></td></tr></table></body></html>';
+}
+
+/** "Gerry Gentry, Ian Davlin and 2 others replied · 14 replies" — and it must read
+ *  correctly at ONE name and ONE reply, which is the case most members will get. */
+function lg_fd_names_phrase( array $names, int $count ): string {
+	$n = count( $names );
+	if ( 0 === $n ) { $who = 'Someone'; }
+	elseif ( 1 === $n ) { $who = '<b>' . esc_html( $names[0] ) . '</b>'; }
+	elseif ( 2 === $n ) { $who = '<b>' . esc_html( $names[0] ) . '</b> and <b>' . esc_html( $names[1] ) . '</b>'; }
+	else {
+		$shown = array_slice( $names, 0, 2 );
+		$who   = '<b>' . esc_html( $shown[0] ) . '</b>, <b>' . esc_html( $shown[1] ) . '</b> and '
+			. ( $n - 2 ) . ' other' . ( $n - 2 > 1 ? 's' : '' );
+	}
+	// At one reply the tally is redundant — "Ian Davlin replied · 1 reply" is clumsy in
+	// the case MOST members will actually receive (design note §1.2), so it is dropped.
+	if ( 1 === $count ) { return $who . ' replied'; }
+	return $who . ' replied &middot; ' . $count . ' replies';
 }

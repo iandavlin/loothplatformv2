@@ -200,6 +200,14 @@ $out['ajax_set']   = (bool) has_action('wp_ajax_lg_fd_cadence_set');
 
 // ── THE SCHEDULED SENDER ──────────────────────────────────────────────────────
 $out['cron_scheduled'] = (bool) wp_next_scheduled('%CRON%');
+// Is the FLUSH actually wired to the hook? In --plugin mode `init` has long since
+// fired before the file was required, so the scheduler cannot have run and
+// "is it scheduled" says nothing. This says the real thing: when init DOES run with
+// the flag on, there is a callback for it to arm. The gate must never arm it itself
+// — that would write a real event into wp_options.cron on the serve, which is the
+// mirror-dispatch trap and the very thing this file exists to forbid.
+$out['tick_attached']    = (bool) has_action('%CRON%');
+$out['scheduler_exists'] = function_exists('lg_fd_sync_schedule');
 $out['cron_any']       = false;
 if (function_exists('_get_cron_array')) {
     $c = _get_cron_array();
@@ -358,6 +366,20 @@ def main():
     elif not flag_on:
         ok("flag OFF ⇒ no %s event scheduled" % CRON_HOOK,
            "non-vacuous: cron array is populated (liveness above)")
+    elif PLUGIN:
+        # Branch mode: `init` fired before the file was loaded, so the scheduler
+        # cannot have run. Asserting "is it scheduled" here would be measuring the
+        # probe, not the code — and the gate must NOT arm it to find out.
+        if d.get("tick_attached") and d.get("scheduler_exists"):
+            ok("flag ON ⇒ flush is wired to %s and the scheduler exists" % CRON_HOOK,
+               "branch mode: init already fired, so arming is not observable here — "
+               "and the gate must never arm it itself")
+        else:
+            red("flag ON but the flush is not wired to %s" % CRON_HOOK,
+                "tick_attached=%s scheduler_exists=%s. The control would be visible and "
+                "the member picked Daily, but nothing would ever flush their queue — the "
+                "silent-nothing lie §15.4 forbids."
+                % (d.get("tick_attached"), d.get("scheduler_exists")))
     else:
         if d.get("cron_scheduled"):
             ok("flag ON ⇒ %s is scheduled" % CRON_HOOK)
