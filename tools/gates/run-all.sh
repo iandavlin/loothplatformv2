@@ -19,35 +19,42 @@ run() {  # run <label> <command...>
     *) red=1;;
   esac
 }
-echo "=== GATE 1/10: visibility matrix (the privacy model) ==="
+echo "=== GATE 1/11: visibility matrix (the privacy model) ==="
 run "visibility matrix" php /srv/profile-app/bin/visibility-matrix.php
 echo
-echo "=== GATE 2/10: web-craft gate (images / weight / eager scripts) ==="
+echo "=== GATE 2/11: web-craft gate (images / weight / eager scripts) ==="
 run "web-craft" python3 "$(dirname "$0")/craft-gate.py"
 echo
-echo "=== GATE 3/10: infra-sec gate (cookie auth / source disclosure / cdp) ==="
+echo "=== GATE 3/11: infra-sec gate (cookie auth / source disclosure / cdp) ==="
 run "infra-sec" bash "$(dirname "$0")/infra-sec-gate.sh"
 echo
-echo "=== GATE 4/10: hub paragraph-collapse (content_html keeps its breaks) ==="
+echo "=== GATE 4/11: hub paragraph-collapse (content_html keeps its breaks) ==="
 run "hub-paragraph" bash "$(dirname "$0")/hub-content-paragraph-gate.sh"
 echo
-echo "=== GATE 5/10: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
+echo "=== GATE 5/11: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
 run "looth-auth" bash "$(dirname "$0")/looth-auth-issue-gate.sh"
 echo
-echo "=== GATE 6/10: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
+echo "=== GATE 6/11: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
 run "event-date-tz" bash "$(dirname "$0")/event-date-tz-gate.sh"
 echo
-echo "=== GATE 7/10: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
+echo "=== GATE 7/11: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
 run "events-tap-navigates" bash "$(dirname "$0")/events-tap-navigates-gate.sh"
 echo
-echo "=== GATE 8/10: composer topic-meta (forum picker cloning + tags) ==="
+echo "=== GATE 8/11: composer topic-meta (forum picker cloning + tags) ==="
 run "composer-topic-meta" node "$(dirname "$0")/composer-topic-meta-test.js"
 echo
-echo "=== GATE 9/10: author socials RESOLVE, never mirror (byline drift class) ==="
+echo "=== GATE 9/11: author socials RESOLVE, never mirror (byline drift class) ==="
 run "author-socials-live" bash "$(dirname "$0")/author-socials-live-gate.sh"
 
-echo "=== GATE 10/10: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
+echo "=== GATE 10/11: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
 run "react-types" bash "$(dirname "$0")/react-types-cover-standalone-gate.sh"
+echo
+echo "=== GATE 11/11: /shop-layout-planner/ still SERVES the planner (live SEO url) ==="
+# Defaults to dev2, where it self-reports CANNOT RUN until the standalone render
+# lands (dev2 bounces every anon WP page into the BuddyBoss gate). Run it with
+# --live to prove the production url is healthy, and with
+# LG_SP_EXPECT_STANDALONE=1 once the standalone page is meant to be serving.
+run "shop-planner-url" bash "$(dirname "$0")/shop-planner-url-gate.sh"
 echo
 # FOUR CDP/loopback gates are HELD OUT of the runner — they pass standalone but
 # flake RED in-sequence (CDP under load / loopback /whoami trips infra's
