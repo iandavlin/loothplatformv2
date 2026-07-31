@@ -201,6 +201,59 @@ draft #72415 force-deleted: gone
 The download callout also picked up `[gated: looth-lite]` automatically from the post's
 tier — so the paywall behaves without the author touching anything.
 
+### 3.1b event: also yes — but it is proven a DIFFERENT WAY, and that matters
+
+Event was originally recommended as the second type on the strength of being in the
+same `$synth` list. That is true but it is not sufficient, and checking it properly
+turned up a methodological trap worth recording.
+
+**`default_event_layout()` reads almost nothing.** It touches exactly one field —
+`zoom_url_for_looth_group_virtual_event`, and only to *strip* it out of the body, so
+that the only route to the Zoom link is the gated CTA rather than the public prose.
+It emits `post-header → event-header → wysiwyg → post-footer`.
+
+The date, the time, the Zoom CTA and the region are consumed **by the `event-header`
+block renderer**, not by the synthesizer (`blocks/event-header/render.php:43-53`).
+
+> **So the method that proved loothprint would have produced a FALSE NEGATIVE for
+> event.** Reflecting on the synthesizer shows almost no field consumption and would
+> read as "event does not work". The consumption is one layer further down. Anyone
+> re-verifying this — including me, later — has to render the block, not inspect the
+> layout function. This is the box's own "verify the thing, not the thing next to
+> it" rule, arriving in a new disguise.
+
+Proven the right way, on a throwaway draft, through ACF's real save handler and then
+by rendering the actual block:
+
+```
+  events_start_date_and_time_                '20260815'
+  time_of_event                              '19:30:00'
+  zoom_url_for_looth_group_virtual_event     'https://zoom.us/j/PROBE'
+
+  event-header rendered 706 bytes
+  month    PRESENT   AUG
+  day      PRESENT   15
+  time     PRESENT   7:30 PM
+  CTA      PRESENT   Join on Zoom
+```
+
+Field names line up exactly with what the form collects — `events_start_date_and_time_`
+(trailing underscore and all), `time_of_event`,
+`zoom_url_for_looth_group_virtual_event`, `region`. So **event stands as the
+recommended second type**, on evidence rather than on list membership.
+
+One loose end, flagged not hidden: the form also collects `language_`, and I did not
+find a consumer for it. Harmless — an unread field — but it means the event form has
+one control that currently does nothing, and the build should either wire it or drop
+it from the form rather than ship a dead input.
+
+**A probe bug worth recording too**, because it reported healthy code as broken: the
+first render attempt returned 0 bytes and looked like "the block does not work for a
+form-created event". The block reads `$ctx['post_id']`; passing a bare `$post_id` is
+useless because line 19 overwrites it with `(int) ($ctx['post_id'] ?? 0)` = 0, so no
+meta was read and the block's own "nothing resolvable → don't emit an empty box"
+guard fired. The harness was wrong, not the code.
+
 ### 3.2 video, article, sponsor, shorty: no — their pages are hand-built
 
 Not in `$synth`. Their standalone page comes from an explicit `_lg_layout_v2` block

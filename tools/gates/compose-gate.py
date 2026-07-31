@@ -82,9 +82,14 @@ COMPOSE_PATH = os.environ.get("LG_COMPOSE_PATH", "/compose/?type={type}")
 # A form is "present" only if it is the real thing: a form element AND the fields
 # this post type cannot be posted without. A page that merely says the word
 # "loothprint" is not a compose form.
+# NB the event names are the REAL ones, verified against the field group. An
+# earlier draft of this file guessed "event_start_date"; the actual name is
+# "events_start_date_and_time_", trailing underscore and all. A guessed marker
+# makes assertion 1 unfalsifiable — it would stay red after the form was built
+# and correct, and the obvious conclusion would be that the build was broken.
 REQUIRED_MARKERS = {
     "loothprint": ["<form", "loothprint_3d_file", "loothprint_more_images"],
-    "event":      ["<form", "event_start_date"],
+    "event":      ["<form", "events_start_date_and_time_", "time_of_event"],
 }
 
 
