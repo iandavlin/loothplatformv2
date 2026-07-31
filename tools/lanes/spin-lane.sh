@@ -36,7 +36,7 @@ git -C "$WT" config extensions.worktreeConfig true
 git -C "$WT" config --worktree user.name  "${LANE} lane"
 git -C "$WT" config --worktree user.email "claude@loothgroup.com"
 
-echo "spin-lane: $LANE signs as '$(git -C "$WT" config --local user.name) <$(git -C "$WT" config --local user.email)>'"
+echo "spin-lane: $LANE signs as '$(git -C "$WT" config user.name) <$(git -C "$WT" config user.email)>'"
 
 cd "$WT"
 exec "$CLAUDE" --dangerously-skip-permissions --model "$MODEL" "$(cat "$CHARTER")"
