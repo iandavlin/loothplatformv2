@@ -204,18 +204,46 @@ with no new hook.
 
 ---
 
-## 4. What this lane should now do
+## 4. What shipped
 
-1. **Fix the guard** (`ensureSlug`) so a `patreon_<id>` placeholder counts as "no handle" —
-   re-derive only when a usable human name exists, uniqueness-guarded, and **respecting
-   the contested-bare and duplicate-name holds**. Flag-gated, default OFF.
-2. **Close the latent clobber hole** — one `isPatreonJunk` call in
-   `maybeSyncSlugFromName`, which its own docblock already promises.
-3. **Fix `--hold-contested-bare`** to count against the population, not the shortlist.
-   Until then the backfill must not be re-run on live.
-4. **No backfill SQL.** There is no safe subset. What Ian gets is the ruling queue —
-   41 contested bare names, 57 collisions, 6 email-names, 4 unlatinizable, 4 too short,
-   1 duplicate pair.
+1. **The guard is fixed** (`ensureSlug`) — a `patreon_<id>` placeholder now counts as "no
+   handle" and re-derives once a usable human name exists, behind
+   `LG_SLUG_HEAL_PLACEHOLDER`, **default OFF**. The write delegates to
+   `maybeSyncSlugFromName` (the one rename implementation, which parks the old handle for
+   the 301); `healPlaceholderSlug()` adds the four refusals — contested bare name,
+   duplicate display_name, held handle, no honest derivation.
+2. **The latent clobber hole is closed** — `isPatreonJunk` now guards
+   `maybeSyncSlugFromName`, as its own docblock always claimed.
+3. **`--hold-contested-bare` counts the population**, not the shortlist. Verified: it went
+   from withholding **0** to withholding **41**, and `acting-on` from 41 to **0**.
+   The tool now independently reproduces this document's headline finding.
+4. **No backfill SQL, because there is no safe subset.** Ian gets the ruling queue instead:
+   `/footer-mockups/slug-rulings.html` (behind the dev gate, PII-free — the six members
+   whose display_name IS an email are redacted, since the gate is a shared credential).
+
+### Proof
+
+`GATE 15/15` (`tools/gates/slug-placeholder-heal-gate.sh`) runs **both** flag states. The
+OFF pass asserts liveness first — the row exists, is bridged, sits on a placeholder, has a
+name that derives, and the target handle is free — so "nothing moved" is not vacuous. The
+flag is set from argv **before** `config.php`, never from the environment, because `sudo`
+strips the environment and the run would false-GREEN on the untested path; the script
+refuses to report a verdict if the mode it resolved is not the mode it was asked for.
+
+The gate resolves the script from **its own tree, not `/srv`** — on dev2 `/srv/profile-app`
+symlinks into `loothplatformv2-clean`, which serves `main`, so a `/srv`-hardcoded gate tests
+main's bytes while reporting on the branch.
+
+And because a green suite is not evidence, it was proved on the dev2 serve over real HTTP:
+
+| flag | `/u/patreon_990000099` | `/u/wilhelmina-ashgrove` |
+|---|---|---|
+| **ON** | **301** → `/u/wilhelmina-ashgrove` (then 200) | 200 |
+| **OFF** | 200, served directly, no redirect | 404 |
+
+Full suite: **14/15 green.** The one red is gate 2 (`craft`, `finder/anon` — an oversized
+`Optimum.png`), which is pre-existing, unrelated to this lane, and already filed by Ian on
+2026-07-31 as "deploy anyway".
 
 **Every number here is from live, read-only. Nothing was written to live.**
 Row-level detail carries member emails and is kept outside the repo at
