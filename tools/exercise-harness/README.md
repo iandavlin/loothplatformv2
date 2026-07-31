@@ -34,7 +34,11 @@ BR=/home/ubuntu/worktrees/<lane>          # your worktree
 
 # The Hub, as the Hub's own pool user. Emulates nginx `alias` + `try_files`, and
 # proxies /bb-mirror-api/v0/follow to the WP-pool server below (see hub-router.php).
-sudo -u bb-mirror env LG_BB_MIRROR_ENV=dev2 \
+# LG_HARNESS_BRANCH is REQUIRED — it is the single knob that points the router's THREE
+# roots (bb-mirror/web, webroot/ overlays, lg-shared/) at YOUR worktree. It used to be
+# hardcoded to thread-follow's, so a second lane got its own PHP with thread-follow's
+# /hub-polish.js: a page where your JS fix is simply not there and nothing says so.
+sudo -u bb-mirror env LG_BB_MIRROR_ENV=dev2 LG_HARNESS_BRANCH=$BR \
   php -S 127.0.0.1:8791 -t $BR/bb-mirror/web  $BR/tools/exercise-harness/hub-router.php &
 
 # A bb-mirror API endpoint that needs WP, on the pool it is actually routed to.
