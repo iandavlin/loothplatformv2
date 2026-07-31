@@ -111,6 +111,13 @@ neither.
 **RESTORE (live, Ian). Order matters — this sequence never has the flag OFF:**
 
 ```bash
+# 0. PRECONDITION — must print 1. `lg-deploy` pulls MAIN, so pulling first is necessary
+#    but NOT sufficient: if the branch defining the flag is not merged, main does not
+#    carry it and step 3 still turns it off. THAT IS EXACTLY WHAT HAPPENED AT 04:39 —
+#    the pull was not skipped, the merge had simply not landed.
+git -C ~/keeper-repo show origin/main:platform/fpm/live/membership.conf \
+  | grep -c LG_FOLLOWING_ROW_TOGGLES
+
 # 1. pull first: brings the getenv() read AND the tracked pool file that sets the flag
 lg-deploy
 
@@ -127,7 +134,38 @@ sudo nginx -t && sudo systemctl reload nginx
 bash tools/gates/deploy-drift-gate.sh --box live
 ```
 
-Same three commands on dev2, minus `lg-deploy`.
+**RESTORE (dev2). NOT "the same commands minus `lg-deploy`" — dev2 needs a pull too.**
+
+> ⚠️ **This line used to read "Same three commands on dev2, minus `lg-deploy`", and
+> that instruction reproduced the 04:39 outage above.** dev2's pull is spelled
+> differently from live's, so "minus `lg-deploy`" reads as *skip the pull* — which is
+> precisely the step whose omission turned the flag off on live. The pull is not the
+> part that is live-specific; only its NAME is.
+
+**Precondition, and it is the whole point:** `platform/fpm/dev2/membership.conf` carries
+`env[LG_FOLLOWING_ROW_TOGGLES] = "1"` **only on the `deploy-tooling` branch.** Verify it
+is on `main` before touching the symlink — if it is not, step 3 turns the flag OFF on
+dev2 exactly as it did on live:
+
+```bash
+# 0. PRECONDITION — must print 1. If it prints 0, STOP: the branch is not merged yet.
+git -C ~/keeper-repo show origin/main:platform/fpm/dev2/membership.conf \
+  | grep -c LG_FOLLOWING_ROW_TOGGLES
+
+# 1. pull — dev2's spelling of lg-deploy
+git -C ~/loothplatformv2-clean pull --ff-only origin main
+
+# 2. reload FPM: flag now set by BOTH the pool and the old hand-edited snippet
+sudo systemctl reload php8.3-fpm
+
+# 3. NOW restore the symlink
+sudo ln -sfn /home/ubuntu/loothplatformv2-clean/platform/nginx/strangler-membership.conf \
+             /etc/nginx/snippets/strangler-membership.conf
+sudo nginx -t && sudo systemctl reload nginx
+
+# 4. prove it
+bash tools/gates/deploy-drift-gate.sh --box dev2
+```
 
 ### §1.2 — a Postgres ROLE that existed in no file
 
@@ -216,12 +254,29 @@ flag simply had no tracked home. It now has one, in `platform/fpm/dev2/bb-mirror
 which live's directory deliberately does not mirror — **the follow feature stays dark on
 live even with `main` deployed.**
 
-**RESTORE (dev2):**
+**RESTORE (dev2) — SAME ORDERING TRAP AS §1.1. Pull first, or the flag goes OFF.**
+
+> ⚠️ `env[LG_BB_MIRROR_FOLLOW] = "1"` is in `platform/fpm/dev2/bb-mirror.conf` **only on
+> the `deploy-tooling` branch.** Repointing the pool symlink at `main`'s copy and
+> reloading would swap a real file that HAS the flag for a tracked file that does NOT
+> — turning **thread-follow OFF on dev2**, where lanes are actively testing it, for the
+> same reason and in the same way as the live outage in §1.1.
 
 ```bash
+# 0. PRECONDITION — must print 1. If it prints 0, STOP: the branch is not merged yet.
+git -C ~/keeper-repo show origin/main:platform/fpm/dev2/bb-mirror.conf \
+  | grep -c LG_BB_MIRROR_FOLLOW
+
+# 1. pull, so the tracked pool file that carries the flag is actually on the box
+git -C ~/loothplatformv2-clean pull --ff-only origin main
+
+# 2. NOW repoint the pool and reload
 sudo ln -sfn /home/ubuntu/loothplatformv2-clean/platform/fpm/dev2/bb-mirror.conf \
              /etc/php/8.3/fpm/pool.d/bb-mirror.conf
 sudo systemctl reload php8.3-fpm
+
+# 3. prove the flag survived — reload proves the pool parsed, never that it set anything
+bash tools/gates/deploy-drift-gate.sh --box dev2
 ```
 
 ### §1.5 — nginx snippet symlinks are created by nothing

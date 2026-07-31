@@ -219,6 +219,53 @@ REQ_ROLES="$(sed -n '/^ROLES="/,/^"/p' "$ROLE_SRC" 2>/dev/null \
 
 red=0; dead=0
 
+# ─── REGISTER LINT — a RESTORE sequence must not silently drop a flag ────────────
+# THE DEFECT CLASS, found twice, so per docs/CRAFT-STANDARD.md it is encoded here.
+#
+# Every §1 fix has the same shape: a hand-edited real file (which HAS a flag) is
+# replaced by a symlink to a tracked per-box file (which has the flag only once the
+# branch defining it is on main). Restore the symlink before that merge and the flag
+# is set by NEITHER — it goes silently OFF.
+#
+#   1. LIVE, 04:39 2026-07-31. The snippet symlink was restored ahead of the merge.
+#      LG_FOLLOWING_ROW_TOGGLES went off; the toggles Ian had enabled vanished.
+#   2. THE REGISTER ITSELF then told you to do it twice more: §1.1 said "same three
+#      commands on dev2, minus `lg-deploy`" (i.e. skip the pull) and §1.4's dev2
+#      block repointed the bb-mirror pool with no pull at all. Both would have
+#      turned a flag off on dev2, from the document written to prevent exactly that.
+#
+# So: any fenced block that repoints a symlink INTO the serving checkout must also
+# carry a PRECONDITION line. This lints prose, which is weak — but the failure was
+# in prose, and a sequence nobody can follow safely at 04:00 is the actual defect.
+# It is box-independent: it reads the repo, so it cannot pass vacuously on an
+# unreachable box the way every check below could.
+echo "── register ──────────────────────────────────────────────────────────────"
+echo "  [0] every RESTORE block that repoints a symlink states its precondition"
+if [ ! -r "$REPO_DOC" ]; then
+  echo "      ⚠️  CANNOT RUN — $REPO_DOC unreadable"; dead=1
+else
+  # Walk fenced blocks; a block is any ```…``` run. Flag blocks that relink into
+  # the serving checkout without a PRECONDITION guard.
+  lint="$(awk '
+    /^```/        { infence = !infence; if (infence) { blk=""; ln=NR } else {
+                      if (blk ~ /ln -sfn[^\n]*loothplatformv2-clean\/platform/ &&
+                          blk !~ /PRECONDITION/) print ln
+                    } next }
+    infence       { blk = blk "\n" $0 }
+  ' "$REPO_DOC")"
+  if [ -n "$lint" ]; then
+    for ln in $lint; do
+      echo "      ❌ block at ${REPO_DOC##*/}:$ln repoints a symlink into the serving"
+      echo "         checkout with no PRECONDITION line. Following it before the branch"
+      echo "         that defines the flag is on main sets the flag by NEITHER source."
+    done
+    red=1
+  else
+    echo "      ✔ all relink blocks guard the merge-first ordering"
+  fi
+fi
+echo
+
 for box in $BOXES; do
   echo "── $box ──────────────────────────────────────────────────────────────"
   facts="$(probe_box "$box")"
