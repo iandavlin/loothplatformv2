@@ -951,8 +951,24 @@ body.view-grid .lg-chrome__back { display: inline-flex; }
   .lg-chrome__menu { flex-direction: column; padding: 12px; gap: 2px; }
   .lg-chrome__menu a { padding: 12px 14px; }
   .lg-chrome__wordmark { display: none; }
-  .lg-chrome__signin { display: none; }
   .lg-chrome__account-name { display: none; }
+}
+
+/* Sign in is hidden at the PHONE cutoff (640), NOT at the nav-collapse one (820),
+   and that number is not free to choose — it has to match the width at which
+   something else starts offering a way in. Below 640 two stand-ins appear: the
+   drawer's .lg-chrome__menu-signin (site-header.css) and the bottom bar's account
+   sheet (bottom-nav.js). Above 640 there is no stand-in, so this pill IS the
+   sign-in path and hiding it locks a returning member out.
+
+   It was 820 here until 2026-07-31, which left 641-820px — every tablet and every
+   narrow desktop window — with the pill hidden and no replacement yet. The
+   hamburger opened onto Hub / Events / Map / Sponsors / Loothtool and nothing
+   else. Ian found it in an incognito window and it was live. The anchor was in
+   the HTML the whole time, which is why nothing caught it; the behaviour, not the
+   markup, is now gated by tools/gates/anon-signin-reachable-gate.py. */
+@media (max-width: 640px) {
+  .lg-chrome__signin { display: none; }
 }
 
 /* Live banner sits ABOVE the sticky header */
