@@ -140,6 +140,7 @@
                         ? 'Emails are on for your account.'
                         : "Discussion emails are off for your account, so none of these will email you.";
                 }
+                paintCadence(j.cadence);
                 refreshCounts();
             })
             .catch(function () { /* marks keep the server's read; nothing claimed falsely */ });
@@ -193,6 +194,38 @@
             refreshCounts();
             return ok;
         });
+    }
+
+    /* ── EMAIL FREQUENCY — READ ONLY, DELIBERATELY, FOR NOW ──────────────────
+     * One ACCOUNT-level setting with two surfaces: this page and thread-follow's
+     * follow modal. The store is WP usermeta lg_disc_email_cadence, absent =>
+     * instant (follow-digest's §2.1); the write goes through follow.php's
+     * POST {cadence} (their §2.3), which thread-follow owns.
+     *
+     * ⚠️ NO WRITE PATH HERE YET, AND THAT IS ON PURPOSE. Three lanes are touching
+     * one setting, so the seam is agreed on the board BEFORE anyone writes —
+     * keeper's instruction, and the right order. I asked thread-follow to confirm
+     * they accept a second caller of their POST; until they answer, this reads and
+     * does not write. The control is hidden behind LG_FOLLOWING_CADENCE anyway, so
+     * nothing is lost by waiting and a wrong guess would have cost a store.
+     *
+     * `cadence` is ABSENT from the GET envelope while the frequency flag is off —
+     * follow-digest's own rule, so a dark control cannot render a live-looking
+     * value. Absent is therefore the NORMAL case today and must not be painted as
+     * "instant": the member has not chosen instant, we simply do not know.
+     */
+    function paintCadence(value) {
+        var box = document.getElementById('lg-fol-freq');
+        if (!box) return;                       // flag off — nothing rendered
+        var opts = box.querySelectorAll('[data-cadence]');
+        var known = typeof value === 'string' && value !== '';
+        for (var i = 0; i < opts.length; i++) {
+            var on = known && opts[i].getAttribute('data-cadence') === value;
+            opts[i].setAttribute('aria-checked', on ? 'true' : 'false');
+        }
+        // Nothing is selected when the endpoint did not tell us. Showing a default
+        // would be this page inventing an answer the store never gave.
+        box.setAttribute('data-known', known ? '1' : '0');
     }
 
     /* ── 2a. per-row 🔔/✉ toggles (LG_FOLLOWING_ROW_TOGGLES) ─────────────────

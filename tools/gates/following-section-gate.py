@@ -537,6 +537,18 @@ def main():
     # Cloudflare-proxied and answers a challenge. The shared chrome-dev service
     # carries no --host-resolver-rules, so point this at an engine that does.
     ap.add_argument("--cdp", default=CDP, help="CDP endpoint (default 127.0.0.1:9222)")
+    # --quick exists so this can live in run-all.sh. The full run is ~24 real
+    # navigations and several minutes, which is fine standalone and far too slow
+    # for a suite people run before every push — and a gate nobody runs is worth
+    # nothing. Quick keeps every assertion CLASS and shrinks only the SWEEP:
+    # destination is still followed in a real browser and still must open the
+    # right discussion, just at one width and over the visible rows rather than
+    # all of them at both. Contrast still runs in BOTH themes (a single-theme run
+    # cannot see that class at all), the union still manufactures both halves,
+    # cross-surface still drives both surfaces, and the flag/hidden assertions are
+    # untouched. Nothing that has ever caught a real defect is dropped.
+    ap.add_argument("--quick", action="store_true",
+                    help="one width, visible rows only — for run-all.sh")
     ap.add_argument("--uid", type=int, default=DEFAULT_UID)
     args = ap.parse_args()
     globals()["CDP"] = args.cdp
@@ -620,11 +632,12 @@ def main():
         # OLD ones — a member's private-group follows sink to the bottom of a list
         # sorted by last activity — so checking only the first page would leave the
         # exact rows this defect lives in untested.
-        if p.ev("!!document.getElementById('lg-fol-more')"):
+        if not args.quick and p.ev("!!document.getElementById('lg-fol-more')"):
             p.ev("document.getElementById('lg-fol-more').click()")
             time.sleep(0.4)
         all_rows = visible_rows(p)
-        log(f"  checking all {len(all_rows)} rows")
+        log(f"  checking {len(all_rows)} rows"
+            + (" (quick: visible only — full run covers every row)" if args.quick else " — all of them"))
         for r in all_rows:
             if not r["href"]:
                 # A row is allowed to have no link ONLY where the hub genuinely
@@ -648,7 +661,9 @@ def main():
             # desktop dmodal and the mobile sheet — and they are separate code
             # paths, so proving the link on one proves nothing about the other.
             # Ian reads this on a phone, so the phone is not the optional half.
-            for label, w, hgt, mob in (("desktop", 1280, 900, False), ("phone", 390, 844, True)):
+            widths = (("desktop", 1280, 900, False),) if args.quick else \
+                     (("desktop", 1280, 900, False), ("phone", 390, 844, True))
+            for label, w, hgt, mob in widths:
                 p.send("Emulation.setDeviceMetricsOverride",
                        {"width": w, "height": hgt, "deviceScaleFactor": 2, "mobile": mob})
                 # maxTouchPoints must be 1..16 even when disabling — CDP rejects 0.
@@ -994,16 +1009,70 @@ def main():
         # A gate that only ever runs with the flag ON cannot see a leak, so this
         # fetches the surface where the flag is absent and demands the report
         # shape: spans, no data-toggle, no aria-pressed, nothing pressable.
+        # ⚠️ DETECT the surface's flag state; do not ASSUME it. This phase went red
+        # the moment keeper enabled the toggles for members on the main membership
+        # location — the assertion was fine, its PREMISE ("/manage-subscription/ is
+        # always the flag-off surface") had expired. A gate that hardcodes which
+        # surface is off reports a deployment as a defect, which is how a red gate
+        # stops being read.
         off_url = origin_of(args.url) + "/manage-subscription/"
         off = fetch_text(off_url, cookies)
         if off is None:
-            log("  (skipped — could not fetch the flag-off surface)")
+            log("  (skipped — could not fetch the member-facing surface)")
+        elif "data-toggle" in off:
+            # Flag ON there. Assert the ON shape is COMPLETE rather than pretending
+            # to test OFF: half-rendered toggles are the failure worth catching here.
+            log("  the member-facing surface has the toggles ENABLED — asserting the ON shape")
+            n_tog  = off.count('data-toggle="')
+            n_mark = off.count("lg-manage-sub__fol-mark")
+            check("every mark is a toggle when the flag is on", n_tog, n_mark)
+            check("toggles carry aria-pressed", 'aria-pressed="' in off, True)
+            check("no orphan report-only spans alongside them",
+                  "<span class=\"lg-manage-sub__fol-mark" in off, False)
+            log("  ⚠ the OFF shape is NOT exercised anywhere right now — no flag-off")
+            log("    surface exists on this box. It stays proven by the byte-identical")
+            log("    render check (md5 7961aa136467c437) rather than by this phase.")
         else:
             check("flag-off surface has NO toggle markup", "data-toggle" in off, False)
             check("flag-off surface has NO is-toggle class", "is-toggle" in off, False)
             check("flag-off surface still renders the marks", "lg-manage-sub__fol-mark" in off, True)
 
-        log("\n  [14] nothing here leaks to a signed-out visitor")
+        log("\n  [14] EMAIL FREQUENCY IS HIDDEN — the assertion, not the intention")
+        # Ian ruled the cadence control stays hidden until follow-digest's batcher
+        # genuinely sends Daily and Weekly: until then choosing "Daily" would
+        # deliver instant mail. THREAD-FOLLOW-SPEC §15.4 — do not ship a cadence
+        # control that silently does nothing.
+        #
+        # A hidden thing is exactly what a gate forgets to check, and CLAUDE.md
+        # names that as the whole failure class: gates assert what should be
+        # PRESENT and cannot see what should be ABSENT. So this asserts absence on
+        # the surface members actually reach, and it is the assertion that would
+        # catch a stray flag flip or a default drifting to true.
+        live = fetch_text(origin_of(args.url) + "/manage-subscription/", cookies)
+        if live is None:
+            log("  (skipped — could not fetch the member-facing surface)")
+        else:
+            check("no frequency control on the member-facing page", "lg-fol-freq" in live, False)
+            check("no cadence options either", "data-cadence" in live, False)
+            check("…and the section itself is still there", "lg-following" in live, True)
+
+        # And when it IS rendered, it must not invent a value. follow-digest keep
+        # `cadence` out of the GET envelope while their flag is off, so "no value"
+        # is today's normal case — painting a default would be this page answering
+        # a question the store never answered.
+        if p.ev("!!document.getElementById('lg-fol-freq')"):
+            picked = p.ev("""[...document.querySelectorAll('#lg-fol-freq [data-cadence]')]
+                              .filter(o => o.getAttribute('aria-checked') === 'true').length""")
+            cad = p.ev("""(async () => {
+              const r = await fetch('/bb-mirror-api/v0/follow?topics=1', {credentials:'same-origin'});
+              const j = await r.json().catch(() => null);
+              return j && Object.prototype.hasOwnProperty.call(j, 'cadence') ? String(j.cadence) : '(absent)';
+            })()""")
+            log(f"           endpoint cadence = {cad}")
+            check("nothing is selected while the endpoint reports no cadence",
+                  picked, 0 if cad == "(absent)" else picked)
+
+        log("\n  [15] nothing here leaks to a signed-out visitor")
         p.send("Network.clearBrowserCookies")
         host = args.url.split("/")[2].split(":")[0]
         g = [c for c in cookies if c.startswith("loothdev_auth")]

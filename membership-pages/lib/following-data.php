@@ -51,8 +51,23 @@
 declare(strict_types=1);
 
 /**
- * The Postgres role this pool authenticates as (unix-socket peer auth, so the
- * role name must equal the pool's unix user: `membership`).
+ * The Postgres role this pool authenticates as.
+ *
+ * ⚠️ READ THIS BEFORE DIAGNOSING A DEGRADED SECTION. lg_following_pg() calls
+ * bb_mirror_db(), which does `new PDO('pgsql:host=/var/run/postgresql;…',
+ * null, null)` — a UNIX-SOCKET connection with a NULL USERNAME. libpq then falls
+ * back to the OPERATING-SYSTEM USER OF THE CALLING PROCESS, and Postgres peer
+ * auth demands a role of that name. So this code borrows bb-mirror's connection
+ * BUILDER and never its IDENTITY: the identity is whichever FPM pool is
+ * executing, which for this surface is the unix user `membership`.
+ *
+ * That distinction cost a live P0 on 2026-07-31. The section degraded on live to
+ * "we can't reach the discussion index"; the natural read was that it borrows
+ * bb-mirror's connection and therefore bb-mirror's role, so the missing
+ * `membership` role was ruled out and the real cause hunted elsewhere. The
+ * confirming asymmetry, if it happens again: WRITES still work (follow.php runs
+ * on the looth-dev pool, and `looth-dev` is a role) while READS fail. Writes fine
+ * + reads degraded = this role is missing.
  *
  * PROVISIONED 2026-07-30, read-only, three tables:
  *     CREATE ROLE "membership" LOGIN;
@@ -63,8 +78,14 @@ declare(strict_types=1);
  * Rollback is one line: DROP OWNED BY "membership"; DROP ROLE "membership";
  *
  * Verified read-only by attempting a DELETE on topic_follow (permission denied)
- * and a SELECT on forums.reply (permission denied). LIVE STILL NEEDS THIS ROLE —
- * without it the section degrades as described in lg_following_list().
+ * and a SELECT on forums.reply (permission denied).
+ *
+ * WHERE THE FAILURE IS LOGGED, because the next person will look: error_log()
+ * under PHP-FPM lands in the MASTER log — /var/log/php8.3-fpm.log, tagged
+ * [pool membership] — which is root-owned 0640 and therefore invisible to a
+ * read-only shell. `sudo grep '[following]' /var/log/php8.3-fpm.log`. If that is
+ * empty while the section is still degraded, the pool lacks catch_workers_output
+ * and the line is being discarded rather than not written.
  */
 const LG_FOLLOWING_PG_ROLE = 'membership';
 
@@ -95,6 +116,42 @@ const LG_FOLLOWING_PAGE_SIZE = 5;
  * Flag pattern copied from LG_AUTHOR_SOCIALS_ALL_MEMBERS
  * (platform/mu-plugins/lg-author-socials.php:48).
  */
+/**
+ * The account-level EMAIL CADENCE control. DEFAULT OFF, and it must stay off.
+ *
+ * Ian, 2026-07-31: "we need the email frequency on there too."
+ *
+ * ⚠️ HIDDEN UNTIL THE BATCHER IS REAL, and that is a RULE, not caution.
+ * THREAD-FOLLOW-SPEC §15.4: do not ship a cadence control that silently does
+ * nothing. thread-follow already built the same control in the follow modal and
+ * shipped it dark for exactly this reason (forums.js:4294, FREQ_ENABLED=false) —
+ * a control on THIS page that stores a value no sender reads is precisely as
+ * dishonest as one in the modal. Measured 2026-07-31: `cadence` appears in
+ * follow.php zero times on main AND on origin/thread-follow, and wp_usermeta
+ * holds zero lg_disc_email_cadence rows. Nothing writes it, nothing sends on it.
+ *
+ * IT FLIPS ON follow-digest's SIGNAL, relayed by keeper to Ian (their ruling 3).
+ * Not by me, and not because this page happens to be ready.
+ *
+ * ── ONE SETTING, TWO SURFACES, AND NO STORE OF MINE ──────────────────────────
+ * The value lives in WP usermeta as lg_disc_email_cadence ∈ {instant, daily,
+ * weekly}, absent ⇒ instant — follow-digest's §2.1, and explicitly NOT
+ * forums.topic_follow, which is per-thread while this is per-account. I define
+ * no store, no endpoint and no migration: this page READS the cadence from
+ * follow.php's GET envelope (§2.3) and, once the seam is confirmed on the board,
+ * will write through that same endpoint's POST. Three lanes touching one setting
+ * is how drift gets built in, so this one owns none of it.
+ */
+if (!defined('LG_FOLLOWING_CADENCE')) {
+    define('LG_FOLLOWING_CADENCE',
+        (($_SERVER['LG_FOLLOWING_CADENCE'] ?? '') === '1'));
+}
+
+/** The allow-list, as ruled. Hourly is out (measured: no member has ever had two
+ *  forum notifications in one hour); "Off" is out because the ✉ toggle owns
+ *  on/off and a cadence that can mean "never" is two settings wearing one hat. */
+const LG_FOLLOWING_CADENCES = ['instant' => 'Instant', 'daily' => 'Daily', 'weekly' => 'Weekly'];
+
 if (!defined('LG_FOLLOWING_ROW_TOGGLES')) {
     // Server-settable so a lane preview can show Ian the ON state without the
     // flag being on for anyone else. fastcgi_param only — an nginx block on this
@@ -284,10 +341,17 @@ if (!function_exists('lg_following_list')) {
  *
  * `hydrated` is the sharper case: the topic mirror itself was unreadable. This is
  * ORDINARY ERROR HANDLING for an unreachable store — a Postgres restart, a
- * saturated box, a revoked grant — and NOT a mode the feature is designed around.
- * The section assumes forums.topic_follow exists and is readable; that is the
- * contract, and thread-follow's migration makes it true on live in the same window
- * as the deploy (docs/UNDEPLOYED.md).
+ * saturated box, a revoked grant, or a MISSING PG ROLE (see LG_FOLLOWING_PG_ROLE:
+ * that is what actually fired on live 2026-07-31, after the table migration had
+ * already succeeded). It is NOT a mode the feature is designed around.
+ *
+ * ⚠️ AND THE COPY IS NOT ENOUGH ON ITS OWN. "Try again shortly" is honest for a
+ * restart and MISLEADING for a missing grant, which never resolves by waiting —
+ * Ian sat looking at a box that invited him to wait for something that was never
+ * going to happen. The sentence should be kept, but whoever next touches this
+ * should make the degraded state distinguish TRANSIENT from STRUCTURAL, and the
+ * cheap signal is already in hand: the PDO throws SQLSTATE 08006 with 'role "x"
+ * does not exist' for the structural case.
  *
  * It earns its place because without it the failure is silent and confident: every
  * ✉ row falls through the not-in-the-mirror branch and renders "This discussion is

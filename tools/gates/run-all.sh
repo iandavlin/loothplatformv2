@@ -132,16 +132,29 @@ echo
 # __DIR__/../config.php, and a 500 renders zero cards, which reads as red for
 # entirely the wrong reason.
 #
-# following-section-gate is held out for a DIFFERENT reason: it is not flaky, it
-# is pointed at a lane. /manage-subscription/ on :443 serves from
-# /srv/membership-pages -> ~/loothplatformv2-clean, i.e. MAIN, so until the
-# account-following branch merges the gate must aim at that lane's own listener
-# or it measures a page the section is not on. Its 52 assertions are green there.
-#   python3 "$(dirname "$0")/following-section-gate.py"       # needs :8930 (lane listener)
-# ON MERGE: drop /etc/nginx/sites-enabled/lane-account-following.conf, then move
-# this into the numbered list above as
-#   run "following-section" python3 "$(dirname "$0")/following-section-gate.py" \
-#       --url https://dev2.loothgroup.com/manage-subscription/
+# following-section-gate is held out, and the reason CHANGED — the lane merged, so
+# it is no longer "pointed at a branch". Two things keep it out of the numbered
+# list, and only one of them is mine:
+#
+#   1. IT NEEDS AN ENGINE THIS BOX DOES NOT PROVIDE. chrome-dev.service carries no
+#      --host-resolver-rules, so a browser gate here resolves dev2 over the public
+#      edge and audits Cloudflare's challenge page. That is the SAME blocker that
+#      makes craft gate 2 report CANNOT RUN. Fix the service and both become
+#      runnable in the same move.
+#   2. Runtime. The full sweep is ~24 real navigations and several minutes.
+#      --quick exists for exactly this: same assertion CLASSES, smaller sweep —
+#      destination still followed in a real browser and still must open the right
+#      discussion, just one width over the visible rows; contrast still BOTH
+#      themes; union, cross-surface and the flag assertions untouched.
+#
+# Standalone recipe (works today):
+#   google-chrome-stable --headless=new --remote-debugging-port=9334 \
+#     --user-data-dir=/tmp/chrome-preview/profile --disable-gpu --disable-dev-shm-usage \
+#     "--host-resolver-rules=MAP dev2.loothgroup.com 127.0.0.1" about:blank &
+#   python3 "$(dirname "$0")/following-section-gate.py" --cdp http://127.0.0.1:9334 --quick
+#
+# WHEN THE ENGINE IS FIXED, this becomes a numbered gate as:
+#   run "following-section" python3 "$(dirname "$0")/following-section-gate.py" --quick
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

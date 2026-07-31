@@ -406,6 +406,40 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
 
             <?php endif; /* hydrated */ ?>
 
+            <?php if (LG_FOLLOWING_CADENCE): ?>
+                <?php /* ── Email frequency — ONE ACCOUNT-LEVEL SETTING ─────────────
+                 * Ian: "we need the email frequency on there too."
+                 *
+                 * Placed OUTSIDE the row list on purpose. It is not per-discussion
+                 * — per-thread cadence was offered and declined, because following
+                 * six threads on Daily is six daily emails, which defeats the
+                 * feature. Putting it in a row would say the opposite of what it
+                 * does, so it sits with the account-level email line instead, and
+                 * says "every discussion you follow" in as many words.
+                 *
+                 * Renders only under LG_FOLLOWING_CADENCE, which is OFF and stays
+                 * off until follow-digest's batcher genuinely sends Daily and
+                 * Weekly. Until then choosing "Daily" would deliver instant mail.
+                 *
+                 * aria-checked/radio rather than a <select>: three mutually
+                 * exclusive values that all fit, and the current one should be
+                 * readable without opening anything. */ ?>
+                <div class="lg-manage-sub__fol-freq" id="lg-fol-freq" role="radiogroup"
+                     aria-label="How often to send discussion emails">
+                    <span class="lg-manage-sub__fol-freq-lbl">
+                        <b>Email frequency</b>
+                        <small>Applies to every discussion you follow.</small>
+                    </span>
+                    <span class="lg-manage-sub__fol-freq-seg">
+                        <?php foreach (LG_FOLLOWING_CADENCES as $value => $label): ?>
+                            <button type="button" class="lg-manage-sub__fol-freq-opt"
+                                    role="radio" aria-checked="false"
+                                    data-cadence="<?= $h($value) ?>"><?= $h($label) ?></button>
+                        <?php endforeach; ?>
+                    </span>
+                </div>
+            <?php endif; ?>
+
             <?php /* Stop all survives an unreadable index on purpose: it needs only
                      the ids, and a member who cannot see the list is exactly the one
                      who wants it to stop. */ ?>
