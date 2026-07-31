@@ -127,7 +127,25 @@ either file can see. So:
 | 11 | `tools/gates/shop-planner-url-gate.sh` | `/shop-layout-planner/` still answers 200 **and still mounts the planner** | loopback, or `ssh live-ro` with `--live` |
 | 12 | `tools/gates/anon-signin-reachable-gate.py` | an ANON visitor can **reach** Sign in in ≤1 tap at every width — visible *and* hit-tested, not merely in the DOM | **a browser on CDP :9222** |
 
-All twelve run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
+| 13 | `tools/gates/follow-digest-gate.py` | **PROMOTED into the sequence by this merge** (it was HELD OUT and red on purpose while the sender did not exist). The follow-digest flag's OFF state sends NOTHING: no cron armed, no cadence stored, the suppression filter proven to be the identity function, and the resolver proven to return zero recipients | wp-cli |
+
+**Gate 13 is written BEFORE the feature it guards, and that is the point.** Every
+other gate here encodes a defect class found twice. Email is unrecallable, so the
+second occurrence is not survivable — this one is gated before the first. It was held
+out of the runner only because a deliberately-red gate in the shared sequence would
+block every other lane's push for a feature that does not exist; **the commit that
+defines `LG_FOLLOW_DIGEST_ENABLED` must promote it into the sequence in the same
+commit.** A gate guarding an unrecallable channel that is never promoted is worse
+than no gate, because it reads as covered.
+
+It also carries the answer to the trap that makes most OFF-state gates worthless:
+**an absence assertion passes vacuously whenever the machinery that would produce the
+presence is itself missing.** "No cron event is scheduled" is true on a box with no
+WordPress at all. So every absence assertion in gate 13 is paired with a *liveness*
+assertion proving the mechanism exists and is reachable first. Absence without
+liveness is not evidence.
+
+All thirteen run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
 the runner because they pass standalone but flake red in sequence (CDP under load,
 and loopback `/whoami` tripping infra's `limit_req` zone) — see the note at the
 foot of `run-all.sh` for how to run `forum-visibility-gate.sh` and
