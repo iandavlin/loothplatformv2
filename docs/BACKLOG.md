@@ -12,6 +12,7 @@ line into that lane's charter and note the lane name here.
 3. Profile social links go stale on posts/events (member-reported)
 
 **P1 — wanted now / deploy-blocking**
+3.7 Mobile: discussion embed broken + card video won't play (member-facing)
 3.5 SEO/sitemap: zero discussions submitted — Google indexes the mirrored forum + defunct /shop/ and /merch/ (200s)
 4. Follow-controls consolidation modal — *deploy gate; thread-follow building*
 5. Notifications: quick-reply modal (default) w/ full-post link
@@ -36,6 +37,15 @@ line into that lane's charter and note the lane name here.
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 2026-07-31 — Mobile: discussion embed broken + card video won't play (Ian)
+
+Ian 7/31: on MOBILE, the embed isn't working for discussions, and the video can't be
+played from the card. Two symptoms on the discussion card / discussion view on mobile:
+(1) embedded media (the discussion's embed) does not render/work; (2) the card's video
+cannot be played inline. Likely related to the discussion-card-video (YouTube facade) +
+card-v3 work. Reproduce as a real logged-in member on a phone (not anon curl); name the
+surface (hub card vs single discussion) and file:line. Fix deploys by pull.
 
 ## 2026-07-31 — Craft gate RED on finder/anon: Optimum.png oversized + raw (pre-existing)
 
