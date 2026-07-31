@@ -659,14 +659,65 @@ Do **not** instead teach `/internal/recap` the digest's boundary: it is a genera
 other callers, and `dev/verify-missed-exclusions.php` legitimately drives it at other widths. The
 boundary belongs to the digest and must stay in one place (§6.1).
 
-**Scale check before this is treated as urgent or as trivial:** 5 of 309 on dev2 — but dev2 gets a
-trickle of traffic and `connection_accept` is one of the highest-volume types on live (147 rows
-all-time, §6.1). The live number should be measured with the same script before the flag is turned
-on, not extrapolated from here.
+**MEASURED ON LIVE 2026-07-31, read-only — and it is 6× worse there than on dev2.** The dev2 figure
+was 5, with a note not to extrapolate it. Correct not to: replicating `Recap.php`'s `OUTSTANDING`
+predicate and the renderer's admission rules against live's own store (lists 3+7, 1,860 subscribed):
+
+| | live | dev2 |
+|---|---|---|
+| filter keeps | 400 | 309 |
+| …no WP account (correct, kept on purpose) | 213 | 214 |
+| …member, drew a section | 156 | 90 |
+| …**member, drew NOTHING** | **31** | 5 |
+
+So **31 real members — 17% of the 187 members who would be mailed — get a digest with a hole where
+their personal section goes.** Every one is explained by a `DECIDED_EXCLUDED` type and nothing else:
+21 `connection_accept`, 9 `reaction.on_post`, 1 carrying both `connection_accept` and
+`forum.followed_topic`. That is the diagnosis confirmed on the box that matters.
 
 **Severity, corrected 2026-07-31 (see §11):** with no auto-send in Ian's workflow, the symptom is
 "a handful of members get a digest whose personal section is missing", **not** "members are
 auto-mailed an empty email". Still worth fixing, still Ian's call, no longer a turn-on blocker.
+
+## 12. REPLIES-TO-REPLIES ARE COVERED — asked twice, now gated (2026-07-31)
+
+> Ian, 2026-07-31: *"fill replies to replies gap, deploy."* **There is no gap to fill.**
+> `forum.reply_to_reply` has been covered since the recap was built. The instruction was written
+> from `Recap.php:58`, which names `forum.reply_to_topic` — but that line is inside a comment about
+> **per-event email overlap**, where topic-authorship is the only relevant case because that is all
+> BuddyBoss's reply mailer touches. It is not the coverage list. **No code was changed.**
+
+**Confirmed it is WRITTEN** — `lg-shared/notify-bridge.php:194-209` raises it when a reply has a
+`$parent_reply_id` and that parent's author is not already claimed. Real rows exist on both boxes:
+
+| | dev2 | live |
+|---|---|---|
+| `forum.reply_to_reply` | 2 all-time, 1 unread | **8 all-time, 2 unread, latest 2026-07-31** |
+| `forum.reply_to_topic` | 3 | 7 |
+
+On **live it is the highest-volume forum type**, and both unread rows are in-window with resolvable
+deep links — i.e. two members would see the row the moment the flag goes on.
+
+**Confirmed the endpoint RETURNS it** — `profile-app/src/Recap.php:120-123`. `OUTSTANDING` has **no
+type allow-list for hub rows**; its third arm is `n.connection_id IS NULL AND n.is_read = false`, a
+catch-all. There is nothing to add a type *to*, and converting that catch-all into an explicit list
+is the one change that could actually create the gap being asked about.
+
+**Confirmed the renderer ADMITS it** — `class-lg-wd-recap.php:105` (`INCLUDED_TYPES`), with its own
+wording at `:305-310` ("1 reply to your comment", distinct from reply_to_topic's "reply on your
+discussion") and its own counted-register labels at `:570-571`.
+
+**On double-counting** (the specific worry): already impossible, and not by luck. `notify-bridge.php
+:177-234` carries a `$notified` set and claims recipients most-specific-first — mention →
+reply_to_reply → reply_to_topic → followed_topic. A member who is BOTH topic-author and
+parent-reply-author is claimed by leg 2 and skipped by leg 3: **one row, the more specific one.**
+Note a member may legitimately hold a reply_to_reply AND a reply_to_topic for the same topic from
+*different events*, so a store-level "same topic" check would be a false red, not a detector.
+
+**Now gated:** `dev/verify-reply-to-reply-covered.php` (in `run-suite.sh`). It asserts LIVENESS (≥1
+real qualifying member, else INCONCLUSIVE — never a green on an empty box), COVERAGE, and TEETH (the
+claim must vanish when the type is stripped from the payload, so the assertion cannot pass
+vacuously). Green today on wp 1953.
 
 ## 11. THE CRON IS NOT ARMED — turn-on risk, corrected (Ian, 2026-07-31)
 

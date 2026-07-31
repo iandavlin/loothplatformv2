@@ -37,6 +37,29 @@ if ( ! class_exists( '\FluentCrm\App\Models\Subscriber' ) ) {
 	exit( 1 );
 }
 
+/**
+ * ── THE FLAG MUST BE ON OR THIS FILE TESTS NOTHING (added 2026-07-31) ────────
+ *
+ * `recipients_with_something_waiting()` opens with
+ * `if ( ! self::recap_enabled() ) { return $subscriber_ids; }` — flag OFF means the
+ * function RETURNS ITS INPUT VERBATIM and its body never runs.
+ *
+ * This test predates the master switch (0733ee4). When the flag landed, every
+ * assertion below silently became a test of the pass-through: "all dropped" got
+ * [1,2,3,4], "zero/negative ids are dropped" got [0,-5] back. It has been RED ever
+ * since, which LOOKED like the test doing its job while the filter it exists to guard
+ * had in fact been untested for the whole life of the flag.
+ *
+ * That is the box's standing trap — a flag-ON gate silently exercising the OFF path —
+ * and the fix is to arm it here rather than to depend on the box's wp-config, which
+ * is deliberately OFF and must stay that way.
+ */
+add_filter( 'lg_wd_recap_enabled', '__return_true' );
+if ( ! LG_WD_Recap_Source::recap_enabled() ) {
+	fwrite( STDERR, "CANNOT RUN: could not enable the recap in-process\n" );
+	exit( 2 );
+}
+
 $fail = 0;
 $chk  = function ( string $what, $got, $want ) use ( &$fail ) {
 	$ok = $got === $want;

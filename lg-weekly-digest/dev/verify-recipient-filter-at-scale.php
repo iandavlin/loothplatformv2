@@ -43,6 +43,20 @@ require_once __DIR__ . '/_load-under-test.php';
 lg_wd_load_under_test($LANE . '/lg-weekly-digest/includes/class-lg-wd-recap.php', 'LG_WD_Recap');
 lg_wd_load_under_test($LANE . '/lg-weekly-digest/includes/class-lg-wd-recap-source.php', 'LG_WD_Recap_Source');
 
+/**
+ * ── THE FLAG MUST BE ON OR THIS FILE TESTS NOTHING (added 2026-07-31) ────────
+ *
+ * See the same note in verify-empty-means-no-send.php. `recipients_with_something_
+ * waiting()` returns its input verbatim while the flag is off, so every assertion here
+ * was measuring the pass-through: "no member with an empty to-do list survives" got
+ * 1,596. RED since the master switch landed, for a reason that had nothing to do with
+ * the filter's logic — and therefore hiding whether that logic still works at all.
+ */
+add_filter( 'lg_wd_recap_enabled', '__return_true' );
+if ( ! LG_WD_Recap_Source::recap_enabled() ) {
+	fwrite( STDERR, "CANNOT RUN: could not enable the recap in-process\n" ); exit( 2 );
+}
+
 if ( ! class_exists( '\FluentCrm\App\Models\Subscriber' ) ) {
 	fwrite( STDERR, "FluentCRM not loaded\n" ); exit( 1 );
 }

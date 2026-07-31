@@ -45,6 +45,7 @@ TESTS=(
   verify-recap-flag-off             # the MASTER switch: OFF = pre-feature body AND recipients
   verify-preview-frames-the-email   # the iframe shows the EMAIL, not the strangler's front page
   verify-preview-frame-fits         # ...and the framed email is not wider than its frame
+  verify-reply-to-reply-covered     # the reply LADDER: a reply to YOUR COMMENT reaches the recap
 )
 
 # RUNNER IS PER-TEST. verify-missed-exclusions talks to Postgres through profile-app's
@@ -81,6 +82,7 @@ declare -A SENTINEL=(
   [verify-recap-flag-off]='RECAP FLAG OFF IS A NO-OP'
   [verify-preview-frames-the-email]='PREVIEW FRAMES THE EMAIL'
   [verify-preview-frame-fits]='PREVIEW FRAME FITS THE EMAIL'
+  [verify-reply-to-reply-covered]='REPLY-TO-REPLY IS COVERED'
 )
 
 green=0; red=0; dead=0
