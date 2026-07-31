@@ -26,6 +26,7 @@ line into that lane's charter and note the lane name here.
 11. Group chat header: collapse + text scale
 12. Post header: title legibility over text thumbnails
 13. PWA launch animation/message
+13.5 Craft gate RED: finder/anon Optimum.png oversized + raw (pre-existing, Nov 2024)
 14. Craft gate: /hub/share-your-repair-content/ cover missing width/height (pre-existing)
 15. Mail-containment: gate on host not LG_ENV (latent security)
 
@@ -35,6 +36,29 @@ line into that lane's charter and note the lane name here.
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 2026-07-31 — Craft gate RED on finder/anon: Optimum.png oversized + raw (pre-existing)
+
+Found by the craft gate on 2026-07-31, the first run after the Chrome resolver was fixed
+so the gate could actually reach our origin (it had been reporting CANNOT RUN, and before
+that it had reported PASS while auditing Cloudflare's challenge page).
+
+```
+IMG-OVERSIZE  finder/anon  .../uploads/2024/11/Optimum.png?w=96  natural=1000px rendered=42px@1x (107KB)
+IMG-RAW       finder/anon  .../uploads/2024/11/Optimum.png?w=96  (107KB)
+```
+
+**Pre-existing, NOT a regression.** The finder page was untouched across the entire
+c57b70f..main deploy window, and the image was uploaded **2024-11-27** — eight months
+earlier. Ian's call, 7/31: deploy anyway rather than block a live sign-in lockout fix on
+an eight-month-old image.
+
+**The fix:** route it through the resizer (`/img.php?w=`) with a sensible width plus
+`srcset` and explicit width/height, per CRAFT-STANDARD. 107KB delivered for a 42px render.
+
+**Worth checking the class, not just this instance** — one page carrying two violations
+suggests others may too, and the craft gate only covers pages someone thought to add to
+its PAGES list. A sweep of uploads referenced at small render sizes would find the rest.
 
 ## 2026-07-31 — Sitemap / SEO: Google indexes the MIRRORED FORUM and a defunct merch page (Ian)
 
