@@ -174,14 +174,24 @@ def main():
             cannot_run("the chosen discussion card has 0 replies — the count assertions "
                        "would pass vacuously")
 
-        check("mobile: replies appears EXACTLY ONCE on the card",
+        # ⚠️ COUNT THE COUNT-AFFORDANCES, NOT ANYTHING THAT SAYS "REPLIES".
+        # This assertion has now been wrong twice, in opposite directions, and both
+        # versions still produced the "right" verdict — which is exactly why it needed
+        # fixing rather than accepting:
+        #   v1 skipped any element with a child, and BOTH pre-change carriers wrap an
+        #      <svg>, so it counted ZERO on a card that visibly showed the count twice.
+        #   v2 counted innermost text matches, which swept in .fc-replies — the reply
+        #      PREVIEW block (real reply content, with its own view-all control). That
+        #      is card content, not a count affordance, and it is present on BOTH
+        #      builds; counting it made the assertion fail on the fixed build too.
+        # Scoped now to the three elements that have ever CARRIED the count:
+        #   .fc-replycount   the old top stat      (must be gone)
+        #   .lg-act-replies  the old bottom button (must be gone on topic cards)
+        #   .fc-replies-stat the new inline stat   (must be the only one left)
+        check("mobile: exactly ONE replies-count affordance on the card",
               p.ev("""(() => { const c = document.querySelector('[data-gate-card]');
-                return [...c.querySelectorAll('*')].filter(el => {
-                  if (el.children.length) return false;
-                  if (!/[0-9]+\\s*repl/i.test((el.textContent||'').trim())) return false;
-                  const cs = getComputedStyle(el), r = el.getBoundingClientRect();
-                  return cs.display !== 'none' && r.width > 0;
-                }).length; })()"""), 1)
+                return window.__vis('.fc-replycount, .lg-act-replies, .fc-replies-stat')
+                  .filter(e => c.contains(e)).length; })()"""), 1)
         check("mobile: the replies count is NOT interactive (no button/link/handler)",
               p.ev("""(() => { const c = document.querySelector('[data-gate-card]');
                 const s = c.querySelector('.fc-replies-stat');
