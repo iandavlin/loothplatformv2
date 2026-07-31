@@ -82,10 +82,36 @@ def make_handler(cookie_header):
 
             out = {}
             for k, v in self.headers.items():
-                if k.lower() in HOP or k.lower() in ("host", "cookie", "accept-encoding"):
+                if k.lower() in HOP or k.lower() in ("host", "cookie", "accept-encoding",
+                                                     "origin", "referer"):
                     continue
                 out[k] = v
             out["Host"] = UPSTREAM_HOST
+            # ⚠️ ORIGIN/REFERER MUST BE REWRITTEN, NOT FORWARDED, OR EVERY MUTATION
+            # FALSE-FAILS. The browser is on http://127.0.0.1:<port>, so it sends that
+            # as Origin. profile-app's CSRF guard (_bootstrap.php
+            # profile_app_request_is_same_site) only accepts loothgroup.com hosts and
+            # answers 403 {"error":"csrf_origin_rejected"} to everything else — on
+            # EVERY POST/PUT/PATCH/DELETE under /profile-api/v0/me/*, for any request
+            # carrying a looth_id cookie (which this proxy injects).
+            #
+            # Measured 2026-07-31 (react-fix lane): reacting to a message through this
+            # proxy returned 403 while the IDENTICAL request via
+            # `curl --resolve` returned 200. The front end was innocent — the picker
+            # opened, the click landed, the POST carried the right body. Read without
+            # this note, that 403 reads as "reacting in messages is broken", which is
+            # exactly the live-regression claim the lane was sent to test. A harness
+            # that fabricates the defect it is being used to investigate is worse than
+            # no harness. Host is already rewritten two lines up for the same reason;
+            # Origin/Referer are the same class and were simply missed.
+            self_origin = f"https://{UPSTREAM_HOST}"
+            if "origin" in {k.lower() for k in self.headers}:
+                out["Origin"] = self_origin
+            ref = self.headers.get("Referer")
+            if ref:
+                # keep the path, move it onto the upstream origin
+                tail = ref.split("//", 1)[-1]
+                out["Referer"] = self_origin + ("/" + tail.split("/", 1)[1] if "/" in tail else "/")
             # identity only: we forward the body verbatim, so letting nginx gzip it
             # would mean decompressing here for no reason. It also keeps sub_filter
             # active — sub_filter does not run on an already-compressed response.
