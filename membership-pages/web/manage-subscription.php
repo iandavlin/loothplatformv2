@@ -324,12 +324,17 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
                             <?php if ($it['url'] !== ''): ?>
                                 <a class="lg-manage-sub__fol-name" href="<?= $h($it['url']) ?>"><?= $h($it['title']) ?></a>
                             <?php else: ?>
+                                <?php /* No link, and the row says so rather than looking dead. The
+                                         hub gates on forum visibility, so a private group's
+                                         discussions are not addressable there — following one
+                                         still emails you, so the row (and its unfollow) must
+                                         stay. */ ?>
                                 <span class="lg-manage-sub__fol-name"><?= $h($it['title']) ?></span>
                             <?php endif; ?>
                             <span class="lg-manage-sub__fol-meta">
                                 <?php
                                 $bits = array_filter([
-                                    $it['forum'],
+                                    $it['forum'] . (!empty($it['private']) ? ' (private group)' : ''),
                                     $it['replies'] > 0 ? $it['replies'] . ' repl' . ($it['replies'] === 1 ? 'y' : 'ies') : '',
                                     lg_following_when($it['active_at']),
                                 ]);

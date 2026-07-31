@@ -178,32 +178,56 @@ function lg_following_group_slugs(array $group_ids): array {
 
 if (!function_exists('lg_following_topic_url')) {
 /**
- * Where a row's title links to.
+ * Where a row's title links to: THE HUB, WITH THAT DISCUSSION OPEN.
  *
- * /hub/ is the canonical reader and resolves a topic by its OWN slug — the forum
- * segment is decorative, which is why two forums sharing the slug `acoustic`
- * (ids 3823 and 3845) both resolve correctly.
+ * Ian, 2026-07-31, on the first version: "the link in the manage goes to the old
+ * foum not to the hub with the right modal open."
  *
- * IT DOES NOT SERVE HIDDEN FORUMS. Two of the first real member's twelve
- * followed discussions are in "The Jannies" (forum 23813, visibility=hidden, a
- * BuddyBoss group forum) and /hub/the-jannies-3/to-do-list/ is a hard 404. For
- * those, link the group-native permalink instead: BuddyBoss gates it by group
- * membership, so a non-member gets its redirect rather than the content, and a
- * member gets the thread. A row whose link 404s is worse than no row.
+ * The addressable form is the §4f deep link (bb-mirror/web/forums.js:5355):
+ *
+ *     /hub/?topic=<forum-slug>/<topic-slug>
+ *
+ * a query param on the FEED route, which auto-opens the §4e discussion modal —
+ * the loaded card if the feed already has it, else a standalone fetch of the
+ * canonical permalink poured into a synthetic card (the cold deep-link path).
+ * One contract, both surfaces: ≥641 the desktop dmodal, ≤640 hub-polish.js's
+ * #looth-rep-sheet via window.lgOpenTopicMobile. That is exactly what Ian asked
+ * for, and it is why this does NOT link /hub/<forum>/<topic>/ — that is the
+ * standalone permalink, the right thing to SHARE and the wrong thing to arrive
+ * at from your account page.
+ *
+ * Both slugs are needed: §4f's parseTopicParam requires two path parts and
+ * returns null on one, so the modal would silently never open.
+ *
+ * ── HIDDEN GROUP FORUMS GET NO LINK, DELIBERATELY ────────────────────────────
+ * The hub cannot serve them and it is not an oversight: _single-topic.php gates
+ * BOTH its lookups on `f.visibility = 'public'` (:53 and :72), and the feed does
+ * the same (forums/index.php:33). So for a topic in a hidden BuddyBoss group
+ * forum there is no loaded card AND the cold fetch 404s — the deep link would
+ * open nothing. Measured on dev2 2026-07-31 as an authenticated ADMIN, not
+ * anonymously: /hub/the-jannies-3/to-do-list/ is 404 for a signed-in member too.
+ *
+ * The earlier version sent those rows to the BuddyBoss group permalink. It
+ * worked, and Ian rejected it — the old forum is not where members get sent from
+ * their account page. So the row renders with NO link and says where it lives
+ * instead. That is INTERIM: the real fix is for the hub to serve group forums to
+ * their own members, which is bb-mirror's gate to change, not this page's. Never
+ * silently restore the old-forum link — it is a rejected behaviour, not a
+ * fallback.
  */
 function lg_following_topic_url(array $t, array $group_slugs): string {
     $topic_slug = (string) ($t['slug'] ?? '');
-    if ($topic_slug === '') return '';
-
-    $hidden = (string) ($t['forum_visibility'] ?? 'public') !== 'public';
-    if ($hidden) {
-        $gs = $group_slugs[(int) ($t['group_id'] ?? 0)] ?? '';
-        if ($gs !== '') return '/groups/' . rawurlencode($gs) . '/forum/topic/' . rawurlencode($topic_slug) . '/';
-        return '';                                   // unknown group → no link, not a guess
-    }
     $forum_slug = (string) ($t['forum_slug'] ?? '');
-    if ($forum_slug === '') return '';
-    return '/hub/' . rawurlencode($forum_slug) . '/' . rawurlencode($topic_slug) . '/';
+    if ($topic_slug === '' || $forum_slug === '') return '';
+
+    // Hidden forum → the hub has nothing to open. No link beats a dead link, and
+    // beats a link to a UI Ian has ruled out.
+    if ((string) ($t['forum_visibility'] ?? 'public') !== 'public') return '';
+
+    // encodeURIComponent's shape, matching §4f's own shareUrl(): the slash between
+    // the two slugs is encoded, which is what the address bar and the weekly
+    // digest links already produce.
+    return '/hub/?topic=' . rawurlencode($forum_slug . '/' . $topic_slug);
 }
 }
 
@@ -303,6 +327,10 @@ function lg_following_list(int $uid): array {
             'notify'     => isset($notify[$tid]),
             'email'      => isset($email[$tid]),
             'gone'       => $gone,
+            // The row has no link and it is NOT broken: the hub does not serve
+            // hidden group forums, so the page says where the discussion lives
+            // rather than rendering a title that goes nowhere.
+            'private'    => !$gone && (string) ($r['forum_visibility'] ?? 'public') !== 'public',
         ];
     }
 
