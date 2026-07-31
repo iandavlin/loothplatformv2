@@ -76,6 +76,16 @@
   if (onHub) {
     // Hub feed visual polish (app-card feed, desktop mosaic, action row …).
     inject('looth-hub-polish-js', v('/hub-polish.js', 227), true);
+    // Tap-a-notification → reply modal (notif-quickreply lane, Ian 7/30 layout A).
+    // GATED HERE, not just inside the file: with LG_NOTIF_QUICKREPLY_ENABLED off,
+    // _chrome.php emits no data-lg-notifreply attribute and this file is never even
+    // REQUESTED — flag OFF ships zero bytes rather than dead code. Loaded under onHub
+    // beside hub-polish because it drives that file's composer through
+    // window.lgOpenComposer; off /hub there is no composer and the notification rows
+    // keep their existing navigation.
+    if (document.body && document.body.getAttribute('data-lg-notifreply') === '1') {
+      inject('looth-notif-reply-js', v('/notif-reply.js', 1), true);
+    }
     // Hub infinite scroll (auto-append older feed items at the bottom).
     inject('looth-hub-infinite-js', v('/hub-infinite.js', 4));
     // Spotlight sponsor cards in the feed (Ian+Buck greenlight 2026-06-11).

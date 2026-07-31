@@ -587,13 +587,20 @@ $lg_can_post = function_exists('lg_bb_mirror_can_post')
     ? lg_bb_mirror_can_post()
     : lg_bb_mirror_wp_logged_in();   // same cookie rule; _reply-render.php not loaded on every page
 ?>
-<body class="bb-mirror<?= !empty($GLOBALS['__bb_hub_rail']) ? ' hub-fmodal-page' : '' ?>" data-lg-can-post="<?= $lg_can_post ? '1' : '0' ?>" data-lg-follow="<?= (function_exists('lg_thread_follow_enabled') && lg_thread_follow_enabled()) ? '1' : '0' ?>"><?php /* PREVIEW-ONLY NOTE. Rendered only when the app is mounted under a lane
+<body class="bb-mirror<?= !empty($GLOBALS['__bb_hub_rail']) ? ' hub-fmodal-page' : '' ?>" data-lg-can-post="<?= $lg_can_post ? '1' : '0' ?>" data-lg-follow="<?= (function_exists('lg_thread_follow_enabled') && lg_thread_follow_enabled()) ? '1' : '0' ?>"<?= (function_exists('lg_notif_quickreply_enabled') && lg_notif_quickreply_enabled()) ? ' data-lg-notifreply="1"' : '' ?>><?php /* PREVIEW-ONLY NOTE. Rendered only when the app is mounted under a lane
          preview path (LG_BB_MIRROR_PUBLIC_PATH is overridden by the preview
          nginx conf; on /hub/ this is exactly "/hub" and nothing renders). It
          exists so Ian does not report a KNOWN GAP as a defect -- he picked
          variant A from a mock that had a frequency segment, and this build has
          none. Self-removing: it cannot appear on the real Hub or on live. */ ?>
-<?php if (defined('LG_BB_MIRROR_PUBLIC_PATH') && strpos(LG_BB_MIRROR_PUBLIC_PATH, '/preview/') === 0): ?>
+<?php /* SCOPED TO ITS OWN LANE, not to "/preview/" (notif-quickreply, 2026-07-31).
+         This banner names the thread-follow branch and tells Ian to go click follow
+         controls. Keyed on the bare "/preview/" prefix it also fired on
+         /preview/notif-quickreply/hub — a second lane's preview URL, where it would
+         have sent him hunting for a pill that build does not switch on, and he would
+         have reported the miss as a defect in the wrong feature. Every lane banner
+         must test its OWN path. */ ?>
+<?php if (defined('LG_BB_MIRROR_PUBLIC_PATH') && strpos(LG_BB_MIRROR_PUBLIC_PATH, '/preview/thread-follow') === 0): ?>
 <div style="background:#fdf6e9;border-bottom:1px solid #e8cfa8;padding:10px 16px;font:500 13.5px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#4a4d4a">
   <strong>Preview of the thread-follow branch.</strong> The follow controls are switched ON here only &mdash; the real Hub is unchanged. <strong>Things to try:</strong> the <em>Follow</em> pill in each card's top-right corner (desktop); tap it to open the settings modal and check it names the discussion; on a phone, the replies count now sits with the reactions and is no longer a button.
   <br><strong>Not a bug:</strong> there is no <em>Frequency</em> row (Instant/Daily/Weekly) in the modal. It was in the mock you picked from, but nothing sends those digests yet, so shipping the control would have been a setting that quietly does nothing. It goes in when the sending side exists.

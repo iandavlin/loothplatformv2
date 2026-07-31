@@ -4358,6 +4358,14 @@
           '</div>' +
           '<div class="lgc-qtags" id="lgc-qtags"></div>' +
         '</div>' +
+        // NOTIFICATION QUOTE SLOT (notif-quickreply lane, Ian 7/30 layout A). Empty
+        // and hidden in every mode except a notification-originated reply, where
+        // notif-reply.js fills it with the server-rendered quote of the reply that
+        // rang you + the link to the full discussion. It lives INSIDE the composer
+        // rather than in a second stacked sheet because Ian's ask is one surface:
+        // their reply, then the box you answer in. Styling is owned by
+        // notif-reply.js, which is the only file that ever writes here.
+        '<div class="lgc-quote" id="lgc-quote" hidden></div>' +
         '<div class="lgc-body" id="lgc-body"><div class="lgc-editor" id="lgc-editor"></div></div>' +
         '<div class="lgc-strip" id="lgc-strip"></div>' +
         '<div class="lgc-tools" id="lgc-tools">' +
@@ -5439,6 +5447,27 @@
     // reply open must never inherit the forum/tags of a topic edit before it.
     var metaEl = sh.querySelector('#lgc-meta');
     if (metaEl) metaEl.hidden = true;
+    // SAME RULE, for the notification quote (notif-quickreply). This scrub is the
+    // whole reason the slot is filled here rather than injected from outside: the
+    // sheet is built ONCE and reused, so a quote left standing would reappear above
+    // an unrelated reply opened from a feed card later. That is the same shape as the
+    // prefill bug edit-post-parity fixed today — a stale surface from the previous
+    // open reading as if it belonged to this one. Cleared on EVERY open, then filled
+    // only when this open actually carries a quote.
+    var quoteEl = sh.querySelector('#lgc-quote');
+    if (quoteEl) { quoteEl.innerHTML = ''; quoteEl.hidden = true; }
+    if (quoteEl && o.quoteHtml) {
+      quoteEl.innerHTML = o.quoteHtml +
+        (o.fullPostUrl
+          ? '<a class="lgc-quote__open" href="' + String(o.fullPostUrl).replace(/"/g, '&quot;') + '">' +
+            '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" ' +
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>' +
+            '<polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
+            'Open the full discussion</a>'
+          : '');
+      quoteEl.hidden = false;
+    }
     lgcSetTagList(sh, []);
     var forumEl0 = sh.querySelector('#lgc-forum');
     if (forumEl0) forumEl0.classList.remove('lgc-forum--err');
