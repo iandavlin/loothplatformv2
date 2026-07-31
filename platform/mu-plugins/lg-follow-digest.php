@@ -38,18 +38,219 @@
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
+/* ── THE TRACKED CONFIG ────────────────────────────────────────────────────────
+ * platform/config/follow-digest.php carries the master switch AND the recipient
+ * allowlist. Read that file first — it explains why this is a PHP file and not an
+ * FPM env var, and the reason is not taste:
+ *
+ *   ⚠️ THE DIGEST IS SENT BY CRON, AND THE CRON CONTEXT HAS NO ENVIRONMENT.
+ *
+ * lg-wp-cron.service carries no `Environment=` line; `systemd-run --uid=looth-dev
+ * /usr/bin/env` on dev2 prints PATH and nothing else. So an env-only flag is visible
+ * to FPM (which arms the cron event on `init`) and INVISIBLE to the cron that fires
+ * it — the event exists, the log stays silent, and nobody is ever mailed. Measured on
+ * 2026-07-31, and it is the reason this seam changed shape.
+ *
+ * __DIR__ resolves through the mu-plugin symlink into the REPO, so this lands with a
+ * plain `git pull`: no symlink of its own, no daemon-reload, no root. Unreadable ⇒ the
+ * defaults below, which are the SAFE ones (off, and nobody). */
+function lg_fd_config(): array {
+	static $cfg = null;
+	if ( null !== $cfg ) { return $cfg; }
+
+	// The safe defaults are the FAILURE defaults, deliberately: anything that goes
+	// wrong reading the config leaves the sender off and the allowlist empty.
+	$cfg  = array( 'enabled' => false, 'allowlist' => '' );
+	$path = dirname( __DIR__ ) . '/config/follow-digest.php';
+	if ( ! is_readable( $path ) ) {
+		error_log( '[lg-fd] tracked config unreadable at ' . $path
+			. ' — sender OFF and allowlist EMPTY (fail-closed default)' );
+		return $cfg;
+	}
+	$raw = require $path;
+	if ( ! is_array( $raw ) ) {
+		error_log( '[lg-fd] tracked config did not return an array — fail-closed' );
+		return $cfg;
+	}
+	$cfg = array(
+		// Strictly boolean true, never a truthy string: a config that says "false"
+		// (the string) must not read as on.
+		'enabled'   => ( true === ( $raw['enabled'] ?? false ) ),
+		'allowlist' => is_string( $raw['allowlist'] ?? null ) ? $raw['allowlist'] : '',
+	);
+	return $cfg;
+}
+
 /* ── THE FLAG ──────────────────────────────────────────────────────────────────
  * Defaulted OFF, copying LG_THREAD_FOLLOW_ENABLED (bb-mirror/config.php:461) and
- * LG_AUTHOR_SOCIALS_ALL_MEMBERS. Override without editing the repo:
- * LG_FOLLOW_DIGEST=1 in the pool environment.
+ * LG_AUTHOR_SOCIALS_ALL_MEMBERS. Two ways on, both deliberate:
+ *   - the tracked config above (the one that reaches CRON, so the one that matters)
+ *   - LG_FOLLOW_DIGEST=1 in the environment, for gate runs and one-shots
  *
  * ⚠️ THIS FLAG GOVERNS AN UNRECALLABLE CHANNEL. It is not flipped by this lane and
  * not flipped because the gates are green. It flips when the batcher is proven to
- * deliver, keeper takes that to Ian, and Ian says so. */
+ * deliver, keeper takes that to Ian, and Ian says so.
+ *
+ * ⚠️ AND THE FLAG IS NOT THE RECIPIENT CONTROL. Turning it on sends to whoever the
+ * ALLOWLIST admits — which defaults to nobody. Two independent switches, because one
+ * switch means "on" and "on to everyone" are the same act. */
 if ( ! defined( 'LG_FOLLOW_DIGEST_ENABLED' ) ) {
 	define( 'LG_FOLLOW_DIGEST_ENABLED',
-		getenv( 'LG_FOLLOW_DIGEST' ) === '1'
+		lg_fd_config()['enabled']
+		|| getenv( 'LG_FOLLOW_DIGEST' ) === '1'
 		|| ( ( $_SERVER['LG_FOLLOW_DIGEST'] ?? '' ) === '1' ) );
+}
+
+/* ── THE RECIPIENT ALLOWLIST ───────────────────────────────────────────────────
+ * Ian, 2026-07-31: a CONTROLLED end-to-end test — the real cron, the real batching,
+ * his real followed threads, with the recipient set hard-locked to himself before it
+ * ever touches the membership.
+ *
+ * "Prove the recipient set before the content" is already this file's second rule.
+ * The allowlist is what makes it enforceable rather than aspirational, and the only
+ * question it has to answer is:
+ *
+ *     ⚠️ COULD THIS SEND TO SOMEONE WHO IS NOT ON THE LIST?
+ *
+ * It is answered structurally, in three places, so that no single mistake is enough:
+ *
+ *   1. lg_fd_due_recipients() drops non-allowlisted members, so no batch is even
+ *      built for them and no work touches their rows.
+ *   2. lg_fd_send_one() re-checks before rendering, and a blocked member's WATERMARK
+ *      DOES NOT MOVE — see the note there, it is the subtle one.
+ *   3. lg_fd_deliver() re-checks at the send layer and is the ONLY wp_mail() call
+ *      site in this file. The gate asserts that uniqueness, so a future code path
+ *      cannot route around the allowlist without the gate going red.
+ *
+ * IT FAILS CLOSED, AND CLOSED MEANS NOBODY — NEVER THE REAL LIST. Every degenerate
+ * input (empty, unreadable, malformed, '*', a bare email, a negative id) resolves to
+ * ZERO recipients. There is no input that turns a broken allowlist into an open one;
+ * the only way to reach the membership is the literal word below. */
+
+/** The one token that means everyone. A WORD, not a symbol: splitting '' on ',' gives
+ *  array(''), and no parsing accident produces this string. The gate asserts the
+ *  tracked config does not contain it. */
+const LG_FD_ALLOW_ALL = 'all-members';
+
+/**
+ * Parse the allowlist into a decision.
+ *
+ * @return array{mode:string,uids:int[],emails:array<int,string>,raw:string,reason:string}
+ *         mode is 'none' (nobody), 'list' (these uids) or 'all' (everyone).
+ *
+ * ⚠️ ANY MALFORMED TOKEN VOIDS THE WHOLE LIST rather than being skipped. Dropping a
+ * bad token silently changes who gets mail; refusing sends nobody and logs why, and
+ * for an unrecallable channel those two outcomes are not close.
+ *
+ * Empty tokens ARE tolerated ('1,' and '1,,2'), because skipping an empty token
+ * cannot ADD a recipient. That is the test applied to every leniency here: leniency
+ * is allowed only where it is incapable of widening the set.
+ */
+function lg_fd_allowlist(): array {
+	return lg_fd_parse_allowlist( lg_fd_allowlist_raw() );
+}
+
+/**
+ * WHERE the allowlist value comes from. Split out from the grammar below so the gate
+ * can exercise every degenerate input exhaustively without depending on what the
+ * tracked config happens to say today — a grammar test that silently reads the real
+ * config would pass for the wrong reason the day someone edits it.
+ */
+function lg_fd_allowlist_raw(): string {
+	// The environment may override the tracked config — for gate runs and one-shots.
+	// It is not a live risk: the cron context (the only thing that actually sends on
+	// a real box) has no environment at all, which is the whole reason the tracked
+	// config exists. It can only be read where somebody set it on purpose.
+	$raw = getenv( 'LG_FOLLOW_DIGEST_ALLOWLIST' );
+	if ( ! is_string( $raw ) || '' === trim( $raw ) ) {
+		$raw = (string) ( $_SERVER['LG_FOLLOW_DIGEST_ALLOWLIST'] ?? '' );
+	}
+	if ( '' === trim( $raw ) ) { $raw = lg_fd_config()['allowlist']; }
+	return (string) $raw;
+}
+
+/**
+ * The GRAMMAR, pure: a string in, a decision out. No environment, no config, no I/O —
+ * so the gate's adversarial table is a complete statement about what this accepts.
+ *
+ * @return array{mode:string,uids:int[],emails:array<int,string>,raw:string,reason:string}
+ */
+function lg_fd_parse_allowlist( string $raw ): array {
+	$none = function ( string $r, string $why ) {
+		return array( 'mode' => 'none', 'uids' => array(), 'emails' => array(),
+		              'raw'  => $r,  'reason' => $why );
+	};
+
+	$t = trim( $raw );
+	if ( '' === $t ) { return $none( $t, 'empty — the fail-closed default, NOBODY' ); }
+	if ( 0 === strcasecmp( $t, LG_FD_ALLOW_ALL ) ) {
+		return array( 'mode' => 'all', 'uids' => array(), 'emails' => array(),
+		              'raw'  => $t, 'reason' => 'the literal ' . LG_FD_ALLOW_ALL . ' token' );
+	}
+
+	$uids = array();
+	$mail = array();
+	foreach ( explode( ',', $t ) as $tok ) {
+		$tok = trim( $tok );
+		if ( '' === $tok ) { continue; }          // cannot widen; see the docblock
+
+		$email = '';
+		if ( false !== strpos( $tok, ':' ) ) {
+			$parts = explode( ':', $tok, 2 );
+			$tok   = trim( $parts[0] );
+			$email = trim( $parts[1] );
+			if ( ! is_email( $email ) ) {
+				return $none( $t, sprintf( 'token "%s" pins an address that is not an email — VOID', $tok ) );
+			}
+		}
+		// Strictly digits. is_numeric() would accept '1e2', ' 1' and '0x1'; intval()
+		// would turn 'abc' into 0 and '1abc' into 1 — both are how a typo becomes a
+		// recipient. Neither is used here on purpose.
+		if ( ! preg_match( '/^[0-9]+$/', $tok ) ) {
+			return $none( $t, sprintf( 'token "%s" is not a user id — VOID (a bare email is not valid; use uid or uid:email)', $tok ) );
+		}
+		$uid = (int) $tok;
+		if ( $uid <= 0 ) { return $none( $t, sprintf( 'token "%s" is not a positive user id — VOID', $tok ) ); }
+
+		$uids[] = $uid;
+		if ( '' !== $email ) { $mail[ $uid ] = $email; }
+	}
+	if ( ! $uids ) { return $none( $t, 'no usable user ids — NOBODY' ); }
+
+	return array( 'mode' => 'list', 'uids' => array_values( array_unique( $uids ) ),
+	              'emails' => $mail, 'raw' => $t,
+	              'reason' => sprintf( '%d allowlisted user id(s)', count( array_unique( $uids ) ) ) );
+}
+
+/**
+ * May this member, at this address, be mailed a digest?
+ *
+ * ⚠️ BOTH ARGUMENTS ARE CHECKED, and that is not belt-and-braces — it is the case
+ * where a uid-only allowlist quietly mails a stranger. If user 1's address is ever
+ * changed, '1' alone still says yes; '1:ian.davlin@gmail.com' says no and the digest
+ * stops. The address is checked against the one the CALLER is about to mail, so a
+ * caller that passes the wrong WP_User is caught here too.
+ *
+ * Every path that is not an explicit allow returns FALSE. There is no fall-through.
+ */
+function lg_fd_allowed( int $uid, string $email ): bool {
+	/* ⚠️ THE SANITY CHECK COMES BEFORE THE MODE, and the first draft had it after —
+	 * which meant 'all-members' mode returned TRUE for uid 0 and for an address that
+	 * is not an address, because the 'all' branch answered before anything was
+	 * validated. Caught by the gate's decision table, not by reading the code. A
+	 * nonsense subject is not a member, whatever the allowlist says. */
+	if ( $uid <= 0 || ! is_email( $email ) ) { return false; }
+
+	$a = lg_fd_allowlist();
+
+	if ( 'all' === $a['mode'] ) { return true; }
+	if ( 'list' !== $a['mode'] ) { return false; }       // 'none', or anything unknown
+	if ( ! in_array( $uid, $a['uids'], true ) ) { return false; }
+
+	$pinned = (string) ( $a['emails'][ $uid ] ?? '' );
+	if ( '' !== $pinned && 0 !== strcasecmp( $pinned, $email ) ) { return false; }
+
+	return true;
 }
 
 const LG_FD_CADENCE_META   = 'lg_disc_email_cadence';
@@ -268,7 +469,32 @@ function lg_fd_due_recipients( string $cadence ): array {
 		  WHERE c.meta_key = %s AND c.meta_value = %s",
 		LG_FD_WATERMARK_META, LG_FD_CADENCE_META, $cadence
 	);
-	return array_map( 'intval', (array) $wpdb->get_col( $sql ) );
+	$due = array_map( 'intval', (array) $wpdb->get_col( $sql ) );
+
+	/* ── THE ALLOWLIST, APPLIED FIRST ─────────────────────────────────────────
+	 * Defence 1 of 3. Dropping non-allowlisted members here means no batch is built
+	 * for them, no render runs, and nothing touches their rows — so a bug anywhere
+	 * downstream has nobody to mail. It is NOT the authoritative check (that is
+	 * lg_fd_deliver, at the send layer, which every future code path must also pass);
+	 * it is the one that makes the blast radius empty rather than merely unused.
+	 *
+	 * Deliberately re-resolves the address per member rather than trusting the id:
+	 * the pinned form of the allowlist is only meaningful against a real address. */
+	$allowed = array();
+	$blocked = 0;
+	foreach ( $due as $uid ) {
+		$u = get_userdata( $uid );
+		if ( $u && lg_fd_allowed( $uid, (string) $u->user_email ) ) { $allowed[] = $uid; continue; }
+		$blocked++;
+	}
+	if ( $blocked ) {
+		// Never silently — a recipient set that shrank without saying so reads as
+		// "nobody qualified" when the truth is "the allowlist held".
+		$a = lg_fd_allowlist();
+		error_log( sprintf( '[lg-fd] %s: allowlist admitted %d of %d due member(s), blocked %d (%s)',
+			$cadence, count( $allowed ), count( $due ), $blocked, $a['reason'] ) );
+	}
+	return $allowed;
 }
 
 /* ── THE CONTENT ───────────────────────────────────────────────────────────────
@@ -441,6 +667,24 @@ function lg_fd_send_one( int $uid, string $cadence ): bool {
 	$user = get_userdata( $uid );
 	if ( ! $user || ! is_email( $user->user_email ) ) { return false; }
 
+	/* ── THE ALLOWLIST, BEFORE ANY STATE MOVES ────────────────────────────────
+	 * Defence 2 of 3. Checked here as well as in the resolver because this function
+	 * is callable directly, and a caller that hand-picks a uid must not be a way
+	 * around the list.
+	 *
+	 * ⚠️ AND IT RETURNS BEFORE THE WATERMARK, WHICH IS THE SUBTLE PART. A blocked
+	 * member must be left EXACTLY as they were found. If the watermark advanced on a
+	 * blocked send, their replies would be consumed without being delivered — and the
+	 * damage would only surface later, when the allowlist is widened and their first
+	 * real digest silently omits everything from the test window. Blocking is a
+	 * no-op on the member, not a discarded send. */
+	if ( ! lg_fd_allowed( $uid, (string) $user->user_email ) ) {
+		$a = lg_fd_allowlist();
+		error_log( sprintf( '[lg-fd] BLOCKED uid %d — not on the allowlist (%s); '
+			. 'watermark NOT advanced, so nothing is lost when it is widened', $uid, $a['reason'] ) );
+		return false;
+	}
+
 	$html = lg_fd_render( $user, $batch, $cadence );
 
 	/* ⚠️ REFUSE TO SEND A LINKLESS DIGEST, and do NOT advance the watermark, so the
@@ -459,16 +703,20 @@ function lg_fd_send_one( int $uid, string $cadence ): bool {
 	 * could not read means we do not know, and we wait. */
 	if ( lg_fd_links_degraded() ) {
 		error_log( sprintf( '[lg-fd] REFUSING to send uid %d — link store unreachable, '
-			. 'watermark NOT advanced so the next run retries', $user_id ) );
+			. 'watermark NOT advanced so the next run retries', $uid ) );
 		return false;
 	}
 	$subj = lg_fd_subject( $batch );
 
-	add_filter( 'wp_mail_content_type', 'lg_fd_html_type' );
-	$ok = wp_mail( $user->user_email, $subj, $html );
-	remove_filter( 'wp_mail_content_type', 'lg_fd_html_type' );
+	$verdict = lg_fd_deliver( $uid, (string) $user->user_email, $subj, $html );
 
-	/* ⚠️ THE WATERMARK ADVANCES EITHER WAY, AND THAT IS A DELIBERATE CHOICE.
+	/* A blocked send is not a failed send. Nothing left the box and nothing about this
+	 * member changed, so the watermark stays exactly where it was — same reasoning as
+	 * the pre-render check above, restated here because this is the path a future
+	 * caller would reach if it skipped that one. */
+	if ( 'blocked' === $verdict ) { return false; }
+
+	/* ⚠️ THE WATERMARK ADVANCES ON 'sent' AND ON 'failed', AND THAT IS DELIBERATE.
 	 * Holding it back on a false return would re-send the same content on every
 	 * subsequent tick — an unbounded retry loop on a channel that cannot be recalled.
 	 * The asymmetry is the whole argument: under-sending one digest is recoverable,
@@ -476,9 +724,47 @@ function lg_fd_send_one( int $uid, string $cadence ): bool {
 	 * choice on this box, where containment makes wp_mail's return value meaningless
 	 * in the first place (it swallows into mailpit and returns TRUE). Failures are
 	 * logged rather than retried. */
-	if ( ! $ok ) { error_log( sprintf( '[lg-fd] wp_mail returned false for uid %d', $uid ) ); }
+	if ( 'failed' === $verdict ) { error_log( sprintf( '[lg-fd] wp_mail returned false for uid %d', $uid ) ); }
 	lg_fd_advance_watermark( $uid, $batch['items'] );
 	return true;
+}
+
+/**
+ * THE SEND LAYER. Defence 3 of 3, and the authoritative one.
+ *
+ * ⚠️ THIS IS THE ONLY wp_mail() CALL SITE IN THIS FILE, AND THE GATE ASSERTS THAT.
+ * The allowlist is not a policy that callers are trusted to consult — it is a wall
+ * that every message must physically pass through, because the checks upstream can be
+ * forgotten by code that does not exist yet. A future "send me a preview" button, a
+ * one-shot, a retry path: all of them land here, or the gate goes red.
+ *
+ * @return string 'sent' | 'failed' | 'blocked' — three outcomes, never a bare bool.
+ *                'blocked' and 'failed' are different facts and the caller must not
+ *                collapse them: one means nothing happened, the other means we tried.
+ *                (The same distinction lg_fd_links_degraded() draws, for the same
+ *                reason — an unrecallable channel must not confuse "we didn't" with
+ *                "we couldn't".)
+ */
+function lg_fd_deliver( int $uid, string $email, string $subject, string $html ): string {
+	// The master switch is re-checked here too. This function must be safe to call
+	// from anywhere, including code written by someone who has not read the flag.
+	if ( ! LG_FOLLOW_DIGEST_ENABLED ) { return 'blocked'; }
+	if ( $uid <= 0 || ! is_email( $email ) || '' === trim( $subject ) || '' === trim( $html ) ) {
+		return 'blocked';
+	}
+
+	if ( ! lg_fd_allowed( $uid, $email ) ) {
+		$a = lg_fd_allowlist();
+		error_log( sprintf( '[lg-fd] SEND-LAYER BLOCK: uid %d <%s> is not on the allowlist (%s) '
+			. '— no message was handed to wp_mail()', $uid, $email, $a['reason'] ) );
+		return 'blocked';
+	}
+
+	add_filter( 'wp_mail_content_type', 'lg_fd_html_type' );
+	$ok = wp_mail( $email, $subject, $html );
+	remove_filter( 'wp_mail_content_type', 'lg_fd_html_type' );
+
+	return $ok ? 'sent' : 'failed';
 }
 
 function lg_fd_html_type(): string { return 'text/html'; }
