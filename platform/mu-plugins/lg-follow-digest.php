@@ -612,12 +612,38 @@ add_action( LG_FD_CRON_HOOK, 'lg_fd_tick' );
  *      digest if new replies land between two fires. Belt and braces are cheap here
  *      and the failure they prevent is not.
  */
+/**
+ * What the site clock says right now, as (hour, day-of-week), site-local.
+ *
+ * ⚠️ SPLIT OUT SO IT CAN BE GATED, BECAUSE THE FIRST VERSION APPLIED THE TIMEZONE
+ * OFFSET TWICE and no test could see it. It read:
+ *
+ *     $now = (int) current_time( 'timestamp' );   // already site-local
+ *     $h   = (int) wp_date( 'G', $now );          // ...shifted AGAIN
+ *
+ * current_time('timestamp') returns time()+offset — a "local" number that is no longer
+ * a real UTC timestamp — and wp_date() then treats it as UTC and converts it to local
+ * a second time. Measured on dev2 at 15:45 UTC / 11:45 New York: the tick computed
+ * hour SEVEN. So a digest whose comment says "08:00 must mean breakfast, not 03:00"
+ * would have gone out at NOON, every day, and the weekly on Sunday at noon.
+ *
+ * Nothing about that is visible in a green suite: the sender works, the batch is
+ * right, the mail arrives — at the wrong time of day. It is Ian's-phone-shaped, which
+ * is why the hour is now a value the gate reads rather than an argument nobody checks.
+ *
+ * @return array{h:int,dow:int}
+ */
+function lg_fd_local_now(): array {
+	// No timestamp argument. wp_date() with none uses time() and converts once.
+	return array( 'h' => (int) wp_date( 'G' ), 'dow' => (int) wp_date( 'w' ) );
+}
+
 function lg_fd_tick(): void {
 	if ( ! LG_FOLLOW_DIGEST_ENABLED ) { return; }
 
-	$now = (int) current_time( 'timestamp' );          // site-local
-	$h   = (int) wp_date( 'G', $now );
-	$dow = (int) wp_date( 'w', $now );
+	$t   = lg_fd_local_now();
+	$h   = $t['h'];
+	$dow = $t['dow'];
 
 	if ( LG_FD_DAILY_HOUR === $h )                              { lg_fd_flush( 'daily', 20 * HOUR_IN_SECONDS ); }
 	if ( LG_FD_WEEKLY_DOW === $dow && LG_FD_WEEKLY_HOUR === $h ) { lg_fd_flush( 'weekly', 6 * DAY_IN_SECONDS ); }

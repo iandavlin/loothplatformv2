@@ -464,6 +464,28 @@ if (function_exists('%RESOLVER%')) {
     }
 }
 
+/* ── WHAT HOUR THE SENDER THINKS IT IS ────────────────────────────────────────
+ * A digest that goes out at the wrong time of day is invisible to every other
+ * assertion here: the batch is right, the recipients are right, the mail arrives.
+ * The first version of lg_fd_tick() applied the timezone offset TWICE and computed
+ * hour 7 when the site clock said 11 — so an 08:00 digest would have gone out at
+ * noon. Asserted against the site's own clock rather than believed. */
+$out['clock'] = null;
+if (function_exists('lg_fd_local_now')) {
+    $t = lg_fd_local_now();
+    $out['clock'] = array(
+        'sender_h'   => (int) ($t['h'] ?? -1),
+        'sender_dow' => (int) ($t['dow'] ?? -1),
+        'true_h'     => (int) wp_date('G'),
+        'true_dow'   => (int) wp_date('w'),
+        'tz'         => (string) (get_option('timezone_string') ?: ('UTC' . get_option('gmt_offset'))),
+        // The exact expression that was wrong, kept as a REGRESSION WITNESS: if this
+        // ever equals the true hour again the double-shift is back and harmless, but
+        // if the sender's hour equals THIS, the bug has returned.
+        'double_shifted' => (int) wp_date('G', (int) current_time('timestamp')),
+    );
+}
+
 // ── THE ALLOWLIST ─────────────────────────────────────────────────────────────
 $out['parser_exists']  = function_exists('%PARSER%');
 $out['allowed_exists'] = function_exists('%ALLOWED%');
@@ -868,6 +890,32 @@ def main():
         red("%s() does not exist" % COLLECTOR,
             "Cannot assert the two content invariants that matter: a member's own reply "
             "never appears in their own digest, and a fresh cadence never backfills.")
+
+    # ── WHAT HOUR THE SENDER THINKS IT IS ──────────────────────────────────────
+    clk = d.get("clock")
+    if clk is None:
+        if d.get("resolver_exists"):
+            red("lg_fd_local_now() does not exist",
+                "The send hour is computed inline and cannot be asserted. That is how "
+                "a double timezone shift went unnoticed: every other check passes while "
+                "the digest goes out four hours late.")
+    elif clk["sender_h"] != clk["true_h"] or clk["sender_dow"] != clk["true_dow"]:
+        red("the sender thinks it is %02d:00 (day %d) but the site clock says %02d:00 (day %d)"
+            % (clk["sender_h"], clk["sender_dow"], clk["true_h"], clk["true_dow"]),
+            "Timezone %s. A daily digest fires on LG_FD_DAILY_HOUR, so every member "
+            "would get it %d hour(s) from the intended time — the mail is correct and "
+            "arrives at the wrong time of day, which no content assertion can see. "
+            "(The known-bad expression wp_date('G', current_time('timestamp')) gives "
+            "%02d:00 here.)"
+            % (clk["tz"], abs(clk["sender_h"] - clk["true_h"]), clk["double_shifted"]))
+    else:
+        note = ""
+        if clk["double_shifted"] != clk["true_h"]:
+            note = " — and the double-shifted expression that used to be here gives " \
+                   "%02d:00, so this is a live regression witness, not a tautology" \
+                   % clk["double_shifted"]
+        ok("the sender's clock agrees with the site clock",
+           "%02d:00 day %d, %s%s" % (clk["true_h"], clk["true_dow"], clk["tz"], note))
 
     # ── THE RECIPIENT ALLOWLIST ────────────────────────────────────────────────
     # Ian's controlled end-to-end test: the real cron, the real batching, his real
