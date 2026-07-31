@@ -22,6 +22,14 @@
 > concluded a front-end composer would be a multi-week program. For the two types that
 > matter first — loothprint and event — that is **wrong**. It measured the controls but
 > never checked whether a renderer for them already existed. It does.
+>
+> **Citations re-resolved 2026-07-31 22:40 UTC against `origin/main` @`c259885`.** §1.1's
+> two entry-point line numbers had drifted and are corrected in place: `forums.js`
+> `4972-5005` → **`5194-5227`** (+222; main's `forums.js` grew 318 lines) and
+> `hub-polish.js` `3591-3645` → **`3598-3652`** (+7). Not cosmetic — the *old*
+> `forums.js:4972` now lands on the follow-bell markup, so the stale citation would read
+> as if the discussion-edit door had been removed. `ntmOpenForEdit` is still exactly
+> `forums.js:1923`, exported at `:2012`.
 
 **Lane:** admin-edit-any (branch `admin-edit-any`, worktree `~/worktrees/admin-edit-any`)
 **Backlog:** P1 #6. Ian 2026-07-30: *"I need to be able to edit any post as admin as
@@ -65,8 +73,8 @@ Merged today by edit-post-parity. Two entry points, one destination.
 
 | Surface | File:line | What it does |
 |---|---|---|
-| Desktop discussion modal | `bb-mirror/web/forums.js:4972-5005` | builds an Edit button, gates it, calls `window.lgNtmEditTopic` |
-| Mobile reply sheet (OP) | `webroot/hub-polish.js:3591-3645` | same button, same call |
+| Desktop discussion modal | `bb-mirror/web/forums.js:5194-5227` | builds an Edit button, gates it, calls `window.lgNtmEditTopic` |
+| Mobile reply sheet (OP) | `webroot/hub-polish.js:3598-3652` | same button, same call |
 | The composer itself | `bb-mirror/web/forums.js:1923` `ntmOpenForEdit()`, exported at `:2012` | opens `#ntm-form` — the 4-step Where/Write/Photos/Review wizard — pre-filled, landing on Write |
 | Authoritative body load | `bb-mirror/web/forums.js:1958-1990` | `GET /bb-mirror-api/v0/reply?topic_id=` — the stored `post_content`, never the rendered DOM |
 | Existing photos | `bb-mirror/api/v0/topic-media.php` | loaded as removable thumbs |

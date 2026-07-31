@@ -212,6 +212,56 @@ else
   echo "SKIPPED — live-ro unreachable from this box."
 fi
 
+hr "9. DO THE DOCS' file:line CITATIONS STILL RESOLVE? (drifted once already)"
+# On 2026-07-31 main moved 96 commits past the tree this scope was measured on and
+# forums.js grew 318 lines, pushing the discussion-edit entry point +222. The stale
+# citation did NOT dangle — it landed on the follow-bell markup, which reads as if
+# the edit door had been deleted. A citation that resolves to the WRONG code is worse
+# than one that resolves to nothing, so this checks the symbol, not the line's
+# existence. Same family as the box's "verify the thing, not the thing next to it".
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+cite_check() {   # file : line : symbol-that-must-appear-within-6-lines
+  local f="$1" ln="$2" sym="$3" hit
+  if [ ! -f "$REPO/$f" ]; then printf '  %-46s FILE MISSING\n' "$f:$ln"; return 1; fi
+  hit=$(sed -n "$((ln>3?ln-3:1)),$((ln+6))p" "$REPO/$f" | grep -c -- "$sym")
+  if [ "$hit" -gt 0 ]; then printf '  %-46s OK      (%s)\n' "$f:$ln" "$sym"
+  else
+    printf '  %-46s DRIFTED (%s not near line) -> ' "$f:$ln" "$sym"
+    grep -n -- "$sym" "$REPO/$f" | head -1 | cut -d: -f1 | sed 's/^/now ~line /'
+    return 1
+  fi
+}
+# TWO KNOWN-EXPECTED DRIFTS UNTIL THIS BRANCH REBASES, and they are left visible on
+# purpose rather than pinned to whichever tree happens to be checked out. The two
+# entry-point citations below are resolved against origin/main @c259885, because that
+# is the tree the build lands on. This branch is 96 commits behind main, so on THIS
+# worktree they sit ~222 / ~7 lines earlier and correctly report DRIFTED. That output
+# IS the rebase reminder. After the rebase both must read OK — if either still says
+# DRIFTED then main moved again and the docs need re-resolving, not silencing.
+#
+# LIMITATION, stated because the output invites the wrong reading: on a miss this
+# reports the symbol's FIRST occurrence in the file, not the nearest one, so the
+# "now ~line N" hint can point at a definition rather than at the call site you want.
+# Treat it as "go look", not as the corrected citation.
+rc=0
+cite_check bb-mirror/web/forums.js      1923 "function ntmOpenForEdit"   || rc=1
+cite_check bb-mirror/web/forums.js      2012 "window.lgNtmEditTopic ="   || rc=1
+cite_check bb-mirror/web/forums.js      2106 "function buildNtmWizard"   || rc=1
+cite_check bb-mirror/web/forums.js      5194 "lgNtmEditTopic"            || true   # main-resolved; see above
+cite_check webroot/hub-polish.js        3598 "lgNtmEditTopic"            || true   # main-resolved; see above
+cite_check lg-layout-v2/src/Plugin.php   257 "\$synth = \['event'"      || rc=1
+cite_check lg-layout-v2/src/Plugin.php   344 "default_loothprint_layout" || rc=1
+cite_check lg-layout-v2/src/MetaBox.php   39 "add_action('add_meta_boxes'" || rc=1
+if [ "$rc" -eq 0 ]; then
+  # Deliberately does NOT say "all resolve" — the two main-resolved lines above may
+  # read DRIFTED on an un-rebased branch, and a summary that contradicts the rows
+  # printed right above it is worth less than no summary at all.
+  echo "  No UNEXPECTED drift. (The 2 main-resolved rows above are expected to read"
+  echo "  DRIFTED until this branch rebases onto main — read them, do not skim them.)"
+else
+  echo "  ^^ UNEXPECTED DRIFT — FIX THE DOCS before quoting them to anyone."
+fi
+
 hr "done"
 echo "Every number above is what docs/FRONTEND-COMPOSE-SCOPE.md cites. A disagreement"
 echo "between this output and that document means the document is stale — fix the"

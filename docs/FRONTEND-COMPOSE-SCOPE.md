@@ -13,6 +13,35 @@ had for edit (§6).
 
 Everything below is measured. `tools/admin-edit-any/compose-probe.sh` re-runs it.
 
+### RE-VALIDATED 2026-07-31 22:40 UTC against `origin/main` @`c259885` — 96 commits on
+
+The scope was measured against a tree that main has since moved 96 commits past, and Ian
+is being asked to decide from it. Re-checked rather than assumed. **Every load-bearing
+finding holds; two citations had drifted and are corrected.**
+
+| Claim | Re-measured | Verdict |
+|---|---|---|
+| The easy forms are alive | 51 acf-field-groups, **42 active**; `Add Post - Loothprints` and `Add Post - Event` both `publish` | HOLDS |
+| The renderer is alive, Elementor-free | `acf_form()` **YES**, `acf_form_head()` **YES**, ACF **6.7.1** | HOLDS |
+| The synthesis pipeline | `lg-layout-v2` `Plugin.php` / `MetaBox.php` **untouched** by all 96 commits | HOLDS |
+| Capability inverts for create | dev2 **1824** users, **1820** hold `edit_posts`, **1819** `publish_posts` — unchanged | HOLDS |
+| Correct edit cap still discriminates | `loothprint`→`edit_others_posts` via the live registry | HOLDS |
+| Backlog cross-reference | front-end authoring is still item **#16** | HOLDS |
+| Gate numbering | main's `run-all.sh` now carries gates **1–14**; `compose-gate.py` is held out and **unnumbered**, so it cannot collide | HOLDS |
+| No lane collision | the 5 backlog items added since (mobile embed, craft-gate finder, sitemap/SEO, anon nav overlay, shop planner) touch no compose surface | HOLDS |
+
+**The two drifts, both in the SUPERSEDED edit doc's §1.1 and both now fixed there.**
+main's `forums.js` grew 318 lines and pushed the discussion-edit entry point **+222**:
+`4972-5005` → **`5194-5227`**. `webroot/hub-polish.js` moved **+7**: `3591-3645` →
+**`3598-3652`**. This is worth more than tidiness: at the *old* line, main's `forums.js`
+now holds the follow-bell markup, so anyone following the stale citation reads working
+code as if the edit door had been deleted — the same "verify the thing, not the thing
+next to it" trap in a new disguise. `forums.js:1923 ntmOpenForEdit` and `:2012` are
+**unmoved**, and `buildNtmWizard` is at **2106** as documented.
+
+A rebase onto main is therefore a prerequisite for the build, but nothing in the scope's
+conclusions or its recommended slice changes.
+
 ---
 
 ## TL;DR
