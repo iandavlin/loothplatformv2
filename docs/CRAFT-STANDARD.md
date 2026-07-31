@@ -126,7 +126,8 @@ either file can see. So:
 | 10 | `tools/gates/react-types-cover-standalone-gate.sh` | a rendered react button's type is one the endpoint ACCEPTS | loopback |
 | 11 | `tools/gates/shop-planner-url-gate.sh` | `/shop-layout-planner/` still answers 200 **and still mounts the planner** | loopback, or `ssh live-ro` with `--live` |
 | 12 | `tools/gates/anon-signin-reachable-gate.py` | an ANON visitor can **reach** Sign in in ≤1 tap at every width — visible *and* hit-tested, not merely in the DOM | **a browser on CDP :9222** |
-| 13 | `tools/gates/dev-files-anon-unreachable-gate.py` | lane/dev tooling inside a deployed plugin tree is **unreachable by an anonymous request** — 404/403, not "absent from my checkout" | starts its own **gate-free** nginx (dev2's armed gate would 403 everything and false-pass) |
+| 14 | `tools/gates/dev-files-anon-unreachable-gate.py` | lane/dev tooling inside a deployed plugin tree is **unreachable by an anonymous request** — 404/403, not "absent from my checkout" | starts its own **gate-free** nginx (dev2's armed gate would 403 everything and false-pass) |
+| 15 | `tools/gates/notif-quickreply-gate.py` | tap-to-reply's OFF state is a real no-op, and a reaction never grows a composer | `sudo -u bb-mirror` + mirror |
 
 | 13 | `tools/gates/follow-digest-gate.py` | **PROMOTED into the sequence by this merge** (it was HELD OUT and red on purpose while the sender did not exist). The follow-digest flag's OFF state sends NOTHING: no cron armed, no cadence stored, the suppression filter proven to be the identity function, and the resolver proven to return zero recipients | wp-cli |
 
@@ -146,7 +147,13 @@ WordPress at all. So every absence assertion in gate 13 is paired with a *livene
 assertion proving the mechanism exists and is reachable first. Absence without
 liveness is not evidence.
 
-All thirteen run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
+**The numbers in this table are minted from MAIN, never from a lane branch.** Two rows
+arrived here both numbered 13 (`dev-files-anon` and `follow-digest`) because two lanes
+each counted the gates their own branch could see; `dev-files-anon` is 14 in
+`run-all.sh` and is corrected to 14 above. That is the second time this exact collision
+has happened. Rebase before you number, and read the number off `run-all.sh`.
+
+All fifteen run from `tools/gates/run-all.sh`. Two more are deliberately HELD OUT of
 the runner because they pass standalone but flake red in sequence (CDP under load,
 and loopback `/whoami` tripping infra's `limit_req` zone) — see the note at the
 foot of `run-all.sh` for how to run `forum-visibility-gate.sh` and
