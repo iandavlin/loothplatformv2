@@ -108,6 +108,13 @@ echo "=== GATE 15/15: the cadence control is ABSENT when its flag is off ==="
 # hidden attribute), and the "never writes the usermeta key" check went red against
 # correct code because the file's own COMMENT names the key it deliberately avoids.
 # Both are fixed; both would have shipped as green noise without the inversion pass.
+# The HTTP phases run here. The BROWSER phase is opt-in so this gate never depends
+# on chrome-dev being up, but it is the strongest assertion of the three and worth
+# running by hand — flag ON in the HTML, control REMOVED from the member's DOM,
+# proven non-vacuous by a stub that makes it reappear:
+#   python3 tools/gates/cadence-control-gate.py --cdp http://127.0.0.1:9222 --prove
+# (chrome-dev.service DOES now carry --host-resolver-rules, so it reaches nginx
+#  directly instead of auditing a Cloudflare challenge page.)
 run "cadence-control" python3 "$(dirname "$0")/cadence-control-gate.py" --prove
 echo
 # FOUR CDP/loopback gates are HELD OUT of the runner — they pass standalone but

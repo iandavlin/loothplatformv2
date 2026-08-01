@@ -54,6 +54,7 @@ import json
 import re
 import ssl
 import subprocess
+import time
 import sys
 import urllib.request
 
@@ -231,6 +232,256 @@ def run_set(title, assertions):
         ok(name) if passed else bad(name)
 
 
+def browser_phase(args, cookies):
+    """What the HTML alone cannot show: what the member's browser ENDS UP WITH.
+
+    ⚠️ THIS IS THE STRONGEST ABSENCE ASSERTION AVAILABLE, and it needs no stub,
+    because dev2's real state IS the interesting state: LG_FOLLOW_DIGEST_ENABLED is
+    false in the tracked config, so lg_fd_cadence_state genuinely 404s and the JS
+    must genuinely remove the node. Flag ON in the markup, control GONE in the DOM.
+    That is "present in the HTML but absent to the member", which no fetch can see.
+
+    ⚠️ AND IT NEEDS A BROWSER THAT RESOLVES dev2 INTERNALLY. chrome-dev.service now
+    carries --host-resolver-rules=MAP dev2.loothgroup.com 172.31.78.94, so it reaches
+    nginx directly. WITHOUT that, Chrome goes out through Cloudflare, gets a challenge
+    page, finds no cadence control on it, and every absence assertion here PASSES
+    having audited nothing. So the challenge page is detected and refused.
+    """
+    log("\n  [7] BROWSER — what the member's DOM actually ends up holding")
+    try:
+        import websocket
+    except ImportError:
+        bad("websocket-client not installed — browser phase could not run")
+        return
+
+    on_url = args.origin + ON_PATH
+    try:
+        req = urllib.request.Request(args.cdp + "/json/new?about:blank", method="PUT")
+        tgt = json.loads(urllib.request.urlopen(req, timeout=10).read())
+        ws = websocket.create_connection(tgt["webSocketDebuggerUrl"], timeout=30,
+                                         suppress_origin=True)
+    except Exception as e:
+        bad("could not open a CDP target", str(e)[:140])
+        return
+
+    n = [0]
+
+    def send(method, params=None):
+        n[0] += 1
+        ws.send(json.dumps({"id": n[0], "method": method, "params": params or {}}))
+        while True:
+            m = json.loads(ws.recv())
+            if m.get("id") == n[0]:
+                if "error" in m:
+                    raise RuntimeError("%s: %s" % (method, m["error"]))
+                return m.get("result", {})
+
+    def ev(expr, awaitp=False):
+        r = send("Runtime.evaluate", {"expression": expr, "returnByValue": True,
+                                      "awaitPromise": awaitp})
+        return r.get("result", {}).get("value")
+
+    try:
+        send("Page.enable")
+        send("Runtime.enable")
+        send("Network.enable")
+        send("Security.setIgnoreCertificateErrors", {"ignore": True})
+        # ⚠️ CLEAR FIRST, AND THE TWO COOKIE KINDS TAKE DIFFERENT DOMAINS. This cost
+        # a FALSE GREEN, caught only by the liveness control below.
+        #
+        # chrome-dev runs on a SHARED profile that already holds WordPress session
+        # cookies from whoever ran last. Those are HOST-ONLY (domain
+        # "dev2.loothgroup.com"). Setting ours with a leading dot does not replace
+        # them — it creates a SECOND cookie of the same name, both get sent, and the
+        # server picks one. The run then executes as a different member: here, one
+        # with no followed discussions, so the whole block (control AND "Stop all")
+        # never rendered, and "the control is absent" came back TRUE for a reason
+        # that had nothing to do with the flag or the endpoint.
+        #
+        # So: wipe the jar, then WP session cookies HOST-ONLY (no dot) exactly as
+        # WordPress sets them, and the dev gate cookie WITH the leading dot, which is
+        # the recorded trap in the other direction.
+        send("Network.clearBrowserCookies")
+        jar = []
+        for c in cookies:
+            k, v = c.split("=", 1)
+            jar.append({"name": k, "value": v, "path": "/",
+                        "domain": ".dev2.loothgroup.com" if k == "loothdev_auth"
+                                  else "dev2.loothgroup.com"})
+        send("Network.setCookies", {"cookies": jar})
+        send("Emulation.setDeviceMetricsOverride",
+             {"width": 1280, "height": 900, "deviceScaleFactor": 1, "mobile": False})
+        send("Page.navigate", {"url": on_url})
+
+        state = None
+        for _ in range(70):
+            time.sleep(0.4)
+            state = ev("""(() => {
+              if (!document.getElementById('lg-following')) return 'no-section';
+              const b = document.getElementById('lg-fol-freq');
+              if (!b) return 'removed';
+              const cs = getComputedStyle(b);
+              if (b.hidden || cs.display === 'none') return 'hidden';
+              return 'VISIBLE';
+            })()""")
+            if state in ("removed", "VISIBLE"):
+                break
+
+        # LIVENESS FIRST. "No cadence control" is also true of a Cloudflare
+        # challenge page, a 403, and a blank tab.
+        title = ev("document.title || ''") or ""
+        body_len = ev("(document.body && document.body.innerHTML.length) || 0") or 0
+        if "just a moment" in title.lower() or "attention required" in title.lower():
+            bad("the browser landed on a Cloudflare challenge page — every absence "
+                "assertion here would pass having audited nothing",
+                "title=%r; chrome-dev needs --host-resolver-rules" % title[:60])
+            return
+        if state == "no-section":
+            bad("the following section never rendered — not a verdict about the "
+                "cadence control", "title=%r len=%d" % (title[:50], body_len))
+            return
+        ok("the real page rendered in a real browser",
+           "title=%r, %d bytes of body" % (title[:44], body_len))
+
+        # ⚠️ THE BLOCK THE CONTROL LIVES IN MUST HAVE RENDERED AT ALL. The cadence
+        # control sits beside "Stop all" inside a section that only renders for a
+        # member who follows something. Run as a member with zero follows and the
+        # control is absent for a reason that has nothing to do with the flag or the
+        # endpoint — which is precisely the false green this phase produced once.
+        rows = ev("document.querySelectorAll('.lg-manage-sub__fol-row').length") or 0
+        stopall = ev("!!document.getElementById('lg-fol-stopall')")
+        if not stopall:
+            bad("this member follows nothing, so the block holding the control never "
+                "rendered — 'the control is absent' would be true for the wrong "
+                "reason", "%d rows; pick a --uid that follows discussions" % rows)
+            return
+        ok("the member has follows, so the block really rendered",
+           "%d row(s), Stop all present — the control's absence below is about the "
+           "control" % rows)
+
+        # The assertion. The markup IS present (phase 2 proved it); the endpoint
+        # refuses this member; therefore the member's DOM must not hold it.
+        served = ev("""(async () => {
+          const d = new URLSearchParams(); d.set('action','lg_fd_cadence_state');
+          const r = await fetch('/wp-admin/admin-ajax.php', {method:'POST',
+            credentials:'same-origin',
+            headers:{'Content-Type':'application/x-www-form-urlencoded'},
+            body:d.toString()});
+          return r.status;
+        })()""", awaitp=True)
+        log("           lg_fd_cadence_state answered HTTP %s" % served)
+
+        if state == "removed":
+            ok("flag ON + endpoint refuses ⇒ the control is REMOVED FROM THE DOM",
+               "present in the HTML, absent to the member — which no fetch can see")
+        elif state == "hidden":
+            ok("flag ON + endpoint refuses ⇒ the control is not displayed",
+               "still in the DOM but computed display:none")
+        elif state == "VISIBLE":
+            bad("THE CONTROL IS VISIBLE TO A MEMBER THE SENDER WILL NOT SERVE — "
+                "they can set a cadence, have their instant mail suppressed, and "
+                "receive nothing at all")
+        else:
+            bad("could not determine the control's runtime state", repr(state))
+
+        # ── THE CONTROL FOR THAT ABSENCE ─────────────────────────────────────
+        # "The control was removed" is equally true of a page whose JavaScript never
+        # ran, 404'd, or threw on line one. Under that reading the phase above would
+        # report a serene green over a completely dead surface — the vacuous pass
+        # that feedback-absence-assertion-needs-liveness describes.
+        #
+        # So: reload with ONLY the endpoint's answer stubbed to ok, and require the
+        # control to APPEAR. If it appears, the JS is alive and the removal above was
+        # genuinely caused by the refusal. If it does not, the earlier "removed"
+        # proved nothing, and this goes red instead of green.
+        #
+        # The stub replaces one fetch response and nothing else — same markup, same
+        # CSS, same script.
+        STUB = """
+        (() => { const real = window.fetch;
+          window.fetch = function (input, init) {
+            const u = (typeof input === 'string') ? input : (input && input.url) || '';
+            const b = (init && init.body) ? String(init.body) : '';
+            if (u.indexOf('admin-ajax.php') >= 0 && b.indexOf('lg_fd_cadence_state') >= 0) {
+              return Promise.resolve(new Response(JSON.stringify({ok:true, cadence:'daily',
+                options:['instant','daily','weekly'], nonce:'gate-stub'}),
+                {status:200, headers:{'Content-Type':'application/json'}}));
+            }
+            return real.apply(this, arguments); }; })();
+        """
+        send("Page.addScriptToEvaluateOnNewDocument", {"source": STUB})
+        send("Page.navigate", {"url": on_url})
+        live = None
+        for _ in range(70):
+            time.sleep(0.4)
+            live = ev("""(() => {
+              const b = document.getElementById('lg-fol-freq');
+              if (!b) return 'removed';
+              if (b.hidden || getComputedStyle(b).display === 'none') return 'hidden';
+              const opts = [...b.querySelectorAll('[data-cadence]')];
+              const on = opts.filter(o => o.getAttribute('aria-checked') === 'true')
+                             .map(o => o.getAttribute('data-cadence'));
+              return 'VISIBLE:' + opts.length + ':' + on.join(',');
+            })()""")
+            if live and live.startswith("VISIBLE"):
+                break
+        if live and live.startswith("VISIBLE"):
+            parts = live.split(":")
+            ok("CONTROL — with the endpoint stubbed to ok, the control APPEARS",
+               "%s options, %s selected — so the removal above was the REFUSAL, "
+               "not dead javascript" % (parts[1], parts[2] or "none"))
+            if parts[1] == "3":
+                ok("…built from the endpoint's own options list", "3 pills")
+            else:
+                bad("the stub offered 3 options and the page built %s" % parts[1])
+            if parts[2] == "daily":
+                ok("…and painted from the STORED value the endpoint echoed", "daily")
+            else:
+                bad("painted %r, but the endpoint said 'daily'" % parts[2])
+            # Reachability, not presence — twice Ian has reported a control that
+            # was in the DOM the whole time and could not be pressed.
+            hit = ev("""(() => {
+              const b = document.querySelector('#lg-fol-freq [data-cadence="weekly"]');
+              if (!b) return 'no-button';
+              b.scrollIntoView({block:'center'});
+              const r = b.getBoundingClientRect();
+              const el = document.elementFromPoint(r.left + r.width/2, r.top + r.height/2);
+              if (!el) return 'nothing-at-point';
+              if (r.width < 24 || r.height < 24) return 'too-small:' + r.width + 'x' + r.height;
+              return (b === el || b.contains(el)) ? 'REACHABLE'
+                     : 'BLOCKED by ' + (el.id || el.className || el.tagName);
+            })()""")
+            ok("…and it is REACHABLE, hit-tested", str(hit)) if hit == "REACHABLE" \
+                else bad("the control is present but NOT reachable", str(hit))
+        else:
+            bad("with the endpoint stubbed to ok the control STILL did not appear — "
+                "so the 'removed' verdict above was vacuous: this page's javascript "
+                "is not running at all", repr(live))
+
+        # And the cascade, measured rather than inferred from the stylesheet text.
+        probe = ev("""(() => {
+          const d = document.createElement('div');
+          d.className = 'lg-manage-sub__fol-freq';
+          d.hidden = true;
+          document.body.appendChild(d);
+          const v = getComputedStyle(d).display;
+          d.remove();
+          return v;
+        })()""")
+        if probe == "none":
+            ok("a hidden container computes to display:none", "measured in the browser")
+        else:
+            bad("`hidden` does NOT hide — computed display is %r, so the attribute is "
+                "overridden by .lg-manage-sub__fol-freq{display:flex}" % probe)
+    except Exception as e:
+        bad("browser phase failed", str(e)[:160])
+    finally:
+        try:
+            ws.close()
+        except Exception:
+            pass
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--origin", default=DEV2)
@@ -374,16 +625,7 @@ def main():
 
     # ── [7] optional: the browser phases ─────────────────────────────────────
     if args.cdp:
-        log("\n  [7] BROWSER — computed style and the endpoint-refusal path")
-        log("      (needs chrome-dev with --host-resolver-rules, or it audits the")
-        log("       Cloudflare challenge page and reports green on nothing)")
-        try:
-            import websocket  # noqa: F401
-        except ImportError:
-            bad("websocket-client not installed — browser phases skipped")
-        else:
-            bad("browser phases are NOT IMPLEMENTED yet — refusing to print a "
-                "green for an assertion that did not run")
+        browser_phase(args, cookies)
 
     print("\n" + "-" * 74)
     if FAIL:
