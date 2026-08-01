@@ -382,8 +382,198 @@ diffs that arrive by pull. Three things happen at once, and they are worth sayin
 2. The Daily/Weekly control becomes visible to the allowlisted members, and **only** to
    them. It is per-member on purpose: switching the sender on for one person must not
    paint a control the other members can use but the sender would not serve.
+
+   ⚠️ **NOT YET — and this row was wrong until 8/1.** The sender's half of that is
+   correct and per-member (`lg_fd_cadence_ui_enabled()`), but the account page gates the
+   control on its **own second switch**, `LG_FOLLOWING_CADENCE`
+   (`manage-subscription.php:409`), defined from `$_SERVER` in
+   `membership-pages/lib/following-data.php:145` and **set in no tracked config, no nginx
+   conf and no fpm pool on either box**. So the control currently renders for *nobody*,
+   including the allowlisted account. See §8.
 3. `allowlist => 'all-members'` is the only value that reaches the membership, and the
    gate goes **RED** on it by design — so general release changes the gate in the same
    commit. That is intended: one visible, reviewable diff rather than a silent widening.
 
 **Nothing above happens as a side effect of the §4 test.**
+
+---
+
+## 8. The footer promise, and the seam account-following owns
+
+**Ian, 8/1:** *"the link to change frequency doesn't seem to have a setting on the manage
+account page."* He was right. This is the UI-lies class in its worst venue — a **sent
+email**, which cannot be edited after it leaves.
+
+### What was wrong
+
+The footer linked **"Change how often"** → `/manage-subscription/`. The frequency control
+on that page renders only under `LG_FOLLOWING_CADENCE`, which is set nowhere on either
+box. Every recipient who clicked it landed on a page with no such setting.
+
+### Why the second switch is itself the bug
+
+`lg_fd_cadence_ui_enabled()` is documented as **the single source of truth**, precisely so
+"the control cannot become visible while the thing that honours it is off, because there
+is only one switch." It is already **per-member allowlist-scoped**, so it asks the
+question that matters: not *is the feature on* but *is it on for you*. The account page
+checks its own condition instead — the exact drift that comment predicted.
+
+### Why we did NOT just turn `LG_FOLLOWING_CADENCE` on
+
+Turning it on globally paints Daily/Weekly for the **whole membership** while the sender
+serves only the allowlist. Any member picking Daily would get a cadence written, their
+instant mail suppressed, and then be blocked at the send layer — **receiving nothing from
+a control they had just used.** That is the §15.4 lie, and the allowlist would have
+*caused* it rather than prevented it. It is not merely "needs Ian's ok" — it is unsafe
+while the allowlist is on.
+
+### What shipped instead (already on the branch, no approval needed)
+
+The footer promises the control **only when it actually renders for that member**. Today
+that is nobody, so the footer reads **"Manage your discussion emails"** — a *different
+claim that is true*, not a hedge on the same one. That page really does carry the ✉
+discussion-email toggle, the followed-thread list and **Stop all**. **The link never
+moved; only the dead promise went.**
+
+The switch is one tracked constant, `LG_FD_CADENCE_CONTROL_SHIPPED`, living with the store
+in `platform/mu-plugins/lg-follow-digest.php`, default `false`, consulted per-member
+through `lg_fd_cadence_control_reachable()`.
+
+> It deliberately does **not** read the page's constant. `$_SERVER` is empty under WP cron
+> (`lg-wp-cron.service` carries no `Environment=`), so the sender's answer would be "off"
+> whatever the page did — accidentally right today and **permanently wrong the day the
+> control ships**.
+
+### The handoff — account-following owns this, one line
+
+```diff
+- <?php if (LG_FOLLOWING_CADENCE): ?>
++ <?php if (function_exists('lg_fd_cadence_ui_enabled') && lg_fd_cadence_ui_enabled()): ?>
+```
+
+…and **in the same commit** flip `LG_FD_CADENCE_CONTROL_SHIPPED` to `true`. Then the
+control renders for exactly the members the sender serves (today: Ian alone) and the
+footer wording returns to "Change how often" on its own.
+
+### It is gated as a biconditional, both directions
+
+Because "don't promise what isn't there" alone lets the **opposite** defect ship in
+silence — the control goes live and the footer keeps the generic wording, so the member
+never learns the setting exists.
+
+| tree state | gate |
+|---|---|
+| footer promises a frequency control, constant `false` | **RED** — promises a setting that renders for nobody |
+| constant `true`, footer never mentions it | **RED** — the control ships and the digest never says so |
+| both agree | green |
+| constant renamed / unreadable | **CANNOT RUN** — never a quiet "off" |
+
+The switch is **lexed, not grepped**: its name appears 3× in the plugin's own comment
+explaining why it is off, so `grep -q` matches the prose and reports ON. Only the
+`define()`'s captured value is consulted.
+
+**Red-first, proven both ways:** run bare (serve WP = main's mu-plugins) the gate reports
+*"the digest promises a setting that renders for NOBODY — anchor 'Change how often'"*; run
+`--plugin` against this branch it is green. Two builds, one assertion, opposite verdicts.
+
+---
+
+## 9. What can run on LIVE, and what cannot — measured, not assumed
+
+keeper, 8/1: *"your three-way split must actually fire ON LIVE (live has its own /tmp)."*
+The `/tmp` half was real and is fixed. The rest of that requirement rests on a premise
+worth stating plainly, because the alternative is someone trying to satisfy it.
+
+**Neither seeded proof can run on live, and neither should.** Both refuse by
+`home_url()` — not `LG_ENV`, which says `dev2` on live and cannot tell the boxes apart:
+
+| file | refuses off dev2 because | exit |
+|---|---|---|
+| `follow-digest-allowlist-proof.php` | it **seeds a canary member and sends mail** | 74 |
+| `follow-digest-mail-probe-proof.php` | it **removes mail containment from the process** | 74 |
+
+Running either on live means seeding a fake member on the production box, or stripping
+the only thing standing between a test and a real inbox. The refusals are the feature.
+The allowlist proof additionally requires containment **and** mailpit and exits 75/76
+without them — so on a box with real mail it stops before its first assertion rather
+than misreporting a zero.
+
+**What does run on live is the probe LIBRARY, and that is the whole design:**
+
+```
+platform/lib/lg-fd-mail-probe.php     ← no dev2 check, no mailpit, no hardcoded path,
+                                        no exit() — audited, it is box-agnostic
+      ├── proven on dev2 by  follow-digest-mail-probe-proof.php   (scenario D)
+      └── used on live by    follow-digest-live-oneshot.php       (§4a, at run time)
+```
+
+Prove the instrument where proving it is safe; then carry the proven instrument to the
+box where the mail is real. Scenario D is what makes that carry legitimate: it registers
+a **swallowing** filter and a **selective** one (killswitch-shaped — runs on every
+message, hands the value back untouched) and requires **opposite** verdicts. A probe
+stuck on "clear" fails D1; one stuck on "swallowed" fails D2. It needs no particular
+plugin, so the property it establishes holds on live's chain too.
+
+### The portability defects that were real, and are fixed
+
+1. **A shared `/tmp` scratch root** (`f76569c`) — four fixed names across ~110 worktrees
+   and two users. Replaced with a private `mkdtemp` root per run, which cannot collide
+   or inherit residue **on any box**. That was the live-relevant half.
+2. **`MU_DIR` did not follow `WP_PATH`** (`7a11e28`) — only `--wp-path` had a flag, so
+   `--wp-path /var/www/html` would boot one docroot's WordPress while mirroring
+   another's mu-plugins. Live has **both** `/var/www/dev` and `/var/www/html`, and
+   `looth-dev` exists there, so the defaults resolve and the gate would have run —
+   against the wrong tree. Now derived, with `--mu-dir` / `--wp-user` overrides.
+
+---
+
+## 10. The cadence loop, end to end (GATE 13 `--prove-cadence`)
+
+*"A member sets Daily, the sender honours it, and changing it changes the next send."*
+
+```bash
+python3 tools/gates/follow-digest-gate.py \
+  --plugin platform/mu-plugins/lg-follow-digest.php --expect-on --prove-cadence
+```
+
+28 assertions on one seeded canary and one real dev2 topic:
+
+| | claim |
+|---|---|
+| C1 | absent means **instant**, and an instant member is in **neither** digest bucket |
+| C2 | the write path stores the cadence **and stamps the watermark to NOW** — asserted as *within 300s of now*, not merely non-empty |
+| C3 | the resolver moves them into daily, and **only** daily |
+| C4 | a fresh watermark sends **nothing** — empty means send nothing, not an empty digest |
+| C5 | **the positive control** — backdate, and the digest arrives, exactly once |
+| C6 | **the headline** — Daily→Weekly empties the daily bucket, fills the weekly one, the next daily tick mails nothing **and** the weekly tick mails them |
+| C7 | Instant restores per-reply mail and takes the watermark with it |
+
+**Every negative is paired with a positive on the same member, topic and tick**, because
+here "received nothing" has five causes: a member who never qualified, a build that
+cannot render a link and refuses everybody, a flush-interval guard left by a crashed
+run, the allowlist, and a watermark stamped to now. Only the cadence is allowed to vary.
+
+**The allowlist is pointed at the canary alone** — an RFC 2606 `.invalid` address — and
+the proof **aborts** if the allowlist resolves to uid 1 or to `all`. It cannot mail Ian
+even if every guard inside it fails at once.
+
+### Red-first, proven by breaking the sender
+
+With the resolver's cadence filter defeated (`c.meta_value = %s OR 1=1`) it fails four
+ways, and they are the right four:
+
+```
+FAIL the canary is due for BOTH daily and weekly
+FAIL they are still due for daily after switching to weekly     <- the headline claim
+FAIL a weekly member was mailed by the daily flush              <- the member-visible harm
+FAIL the weekly flush did not mail a member who is due          <- the honest cascade:
+     the daily flush already sent and advanced the watermark, so nothing was left
+```
+
+C1 correctly **still passes** on that build: with no cadence row the JOIN matches
+nothing, so `1=1` cannot rescue it. A break that reddens everything would say less than
+one that reddens exactly the claims it invalidates.
+
+`--prove-cadence` seeds and mutates, so it is opt-in and `run-all.sh` does not use it.
+Teardown is registered **before the first assertion**, so a fatal cannot leave a member
+holding a cadence — the exact state the gate reds on. Verified clean after every run.

@@ -938,6 +938,48 @@ function lg_fd_topic_urls( array $topic_ids ): array {
 	return $out;
 }
 
+/* ── DOES THE "CHANGE HOW OFTEN" CONTROL ACTUALLY RENDER FOR THIS MEMBER? ──────
+ * Ian, 8/1: "the link to change frequency doesn't seem to have a setting on the
+ * manage account page." He was right, and this is the UI-lies class in its worst
+ * venue: a SENT EMAIL, which cannot be edited afterwards.
+ *
+ * The footer promised a frequency control. The control on /manage-subscription/
+ * renders behind that page's own LG_FOLLOWING_CADENCE (manage-subscription.php:409),
+ * a constant defined from $_SERVER in membership-pages/lib/following-data.php:145
+ * and set in NO tracked config, NO nginx conf and NO fpm pool on either box. It
+ * rendered for nobody, so the promise was dead for every recipient.
+ *
+ * ⚠️ AND THAT SECOND SWITCH IS ITSELF THE BUG. lg_fd_cadence_ui_enabled() above is
+ * documented as THE SINGLE SOURCE OF TRUTH precisely so "the control cannot become
+ * visible while the thing that honours it is off, because there is only one switch."
+ * The account page checks its own condition instead — which is the drift that comment
+ * predicted, and it is why the promise and the control could disagree at all.
+ *
+ * So this does NOT read the page's constant. Reading it would be worse than useless:
+ * $_SERVER is empty under WP cron (lg-wp-cron.service carries no Environment=), so
+ * the answer would be "off" in the sender no matter what the page does — accidentally
+ * right today and permanently wrong the day the control ships.
+ *
+ * Instead, ONE tracked constant, here with the store, default FALSE. account-following
+ * flips it in the SAME commit that points the page at lg_fd_cadence_ui_enabled(), and
+ * the footer wording returns on its own. The gate asserts the biconditional, so the
+ * promise and the control cannot drift apart again in either direction.
+ */
+if ( ! defined( 'LG_FD_CADENCE_CONTROL_SHIPPED' ) ) {
+	define( 'LG_FD_CADENCE_CONTROL_SHIPPED', false );
+}
+
+/**
+ * Per-member, because the control is per-member: it is painted only for the members
+ * the sender would really serve (the allowlist), so that nobody can pick "Daily",
+ * have their instant mail suppressed, and then be blocked at the send layer —
+ * receiving nothing from a control they had just used (§15.4).
+ */
+function lg_fd_cadence_control_reachable( int $uid ): bool {
+	if ( ! LG_FD_CADENCE_CONTROL_SHIPPED ) { return false; }
+	return lg_fd_cadence_ui_enabled( $uid );
+}
+
 /**
  * Render. COUNTS, THREAD TITLES AND SENDER DISPLAY NAMES ONLY — never reply text.
  * That is the standing privacy ruling (NOTIF-EMAIL-STATE §1), and it is enforced by
@@ -953,6 +995,15 @@ function lg_fd_render( WP_User $user, array $batch, string $cadence ): string {
 
 	$name  = $user->display_name ? $user->display_name : $user->user_login;
 	$every = 'daily' === $cadence ? 'once a day' : 'once a week';
+
+	/* Promise the frequency control only to members for whom it actually renders.
+	 * The fallback is not a weaker version of the same claim — it is a DIFFERENT and
+	 * true one: /manage-subscription/ really does carry the ✉ discussion-email toggle,
+	 * the followed-thread list and "Stop all", so the link stays useful and only the
+	 * dead promise goes. */
+	$manage = lg_fd_cadence_control_reachable( (int) $user->ID )
+		? 'Change how often'
+		: 'Manage your discussion emails';
 
 	$urls = lg_fd_topic_urls( array_keys( $by_topic ) );
 
@@ -1036,7 +1087,8 @@ function lg_fd_render( WP_User $user, array $batch, string $cadence ): string {
 		. '<tr><td style="background:#faf8f3;border-top:1px solid #e3e1d8;padding:15px 22px;'
 		. 'font:11px/1.7 Arial,Helvetica,sans-serif;color:#7a7264;">'
 		. 'You get these <b>' . esc_html( $every ) . '</b>. '
-		. '<a href="' . esc_url( home_url( '/manage-subscription/' ) ) . '" style="color:#5a6b3f;">Change how often</a>'
+		. '<a href="' . esc_url( home_url( '/manage-subscription/' ) ) . '" style="color:#5a6b3f;">'
+		. esc_html( $manage ) . '</a>'
 		. '</td></tr></table></td></tr></table></body></html>';
 }
 

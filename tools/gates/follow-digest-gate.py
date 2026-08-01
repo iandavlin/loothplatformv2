@@ -72,20 +72,50 @@ Exit:  0 green, 1 RED (real findings), 2 CANNOT RUN (no verdict).
 """
 
 import argparse
+import atexit
 import glob
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 WP_PATH = "/var/www/dev"
 WP_USER = "looth-dev"
 MU_DIR = "/var/www/dev/wp-content/mu-plugins"
 
-# Scratch paths for --plugin (branch) mode. Rebuilt every run; never read back.
-HARNESS_DIR = "/tmp/lg-fd-gate-mu"
-HARNESS_BOOT = "/tmp/lg-fd-gate-boot.php"
+# ⚠️ THESE USED TO BE FIXED /tmp PATHS, AND THAT MADE THE WHOLE END-TO-END PROOF
+# UNABLE TO FAIL HONESTLY. They were /tmp/lg-fd-gate-mu and friends: one name, shared
+# by ~110 worktrees, ~40 lanes and two users (the gate runs as the invoking user, the
+# proof driver as looth-dev via sudo). Three ways that goes wrong, all REPRODUCED on
+# 2026-08-01, not theorised:
+#
+#   1. ANOTHER USER OWNS IT. /tmp is sticky, so shutil.rmtree(ignore_errors=True)
+#      cannot remove a directory owned by looth-dev and — because of ignore_errors —
+#      says nothing. The run then wrote into a directory it did not build.
+#   2. THE CRASH. With that directory unwritable, the guard-file write raised an
+#      unhandled PermissionError. The gate died at line 286 with a traceback, printed
+#      NO verdict block at all (every assertion computed so far was discarded), and
+#      exited 1 — which run-all.sh reads as RED-with-findings. A crash wearing a
+#      red's clothes.
+#   3. THE SILENT ONE, WHICH IS THE DANGEROUS ONE. build_branch_harness() set
+#      swapped=True BEFORE attempting the symlink and swallowed OSError, so a
+#      pre-existing entry left by another run meant the harness kept pointing at
+#      SOMEONE ELSE'S build while the function reported success. For the stripped
+#      (allowlist-removed) harness that is fatal to the argument: the red-first would
+#      quietly exercise the REAL sender, the canary would receive nothing, and the
+#      gate would report "with the allowlist stripped, the canary STILL received
+#      nothing" — the exact finding keeper hit — or, worse, if the two harnesses ever
+#      crossed, report a green "TEST MODE HOLDS" about a build with no allowlist.
+#
+# A per-run private root removes the whole class rather than tidying up after it, and
+# it removes it on ANY box — live has its own /tmp with its own unknown residue, so
+# "clean dev2's /tmp" was never a fix. mkdtemp() cannot collide, cannot inherit
+# residue, and cannot be owned by anyone else.
+RUN_ROOT = None                        # created lazily by ensure_run_root()
+HARNESS_DIR = None                     # <run root>/mu
+HARNESS_BOOT = None                    # <run root>/boot.php
 
 # The names the sender is contracted to use. If a build renames one of these, this
 # gate must be updated in the SAME commit — a gate pointed at a stale name reports a
@@ -105,7 +135,8 @@ DELIVER = "lg_fd_deliver"              # THE ONLY wp_mail() call site
 ALLOW_ALL_TOKEN = "all-members"        # the one token that reaches the membership
 CONFIG_REL = "platform/config/follow-digest.php"
 
-RED, GREEN, DEAD = [], [], []
+RED, GREEN, DEAD, VACUOUS = [], [], [], []
+PROVE_CADENCE = False
 PLUGIN = ""
 EXPECT_ON = False
 PROVE_TEST_MODE = False
@@ -204,6 +235,29 @@ def dead(name, detail):
     DEAD.append((name, detail))
 
 
+def vac(name, detail):
+    """An assertion that RAN, was satisfied, and asserted NOTHING on this box.
+
+    keeper, 8/1: sweep for assertions that pass vacuously — the class that has bitten
+    this lane twice (the dangling symlink; "the canary got nothing"). Three greens in
+    this gate were in it: with the flag ON and no member holding a cadence, the store
+    check printed "cadence rows present — 0 member(s)", the resolver printed "resolver
+    answers — all zeros", and the allowlist check printed "every due recipient is on
+    the allowlist — 0 due". All three are true on a box with no WordPress at all.
+
+    They are NOT reds — nothing is broken, dev2 genuinely has no member on a cadence.
+    But they must not be counted as coverage either, because the reassuring sentence is
+    indistinguishable from the one a working system emits. So they get their own
+    channel: printed, counted, named in the banner, and never filed under ok().
+    """
+    VACUOUS.append((name, detail))
+
+
+def repo_root_of_gate():
+    """The lane root, from THIS file. tools/gates/x.py -> three dirnames up."""
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 def build_branch_harness(plugin, harness_dir=None, boot_path=None):
     """Make a WordPress that loads THIS BRANCH's mu-plugin, without touching the serve.
 
@@ -230,6 +284,9 @@ def build_branch_harness(plugin, harness_dir=None, boot_path=None):
     # went to the shared boot path it would silently repoint the normal harness at
     # the stripped sender — a later manual proof run would then be testing a build
     # with no allowlist while believing it tested the real one.
+    root, why = ensure_run_root()
+    if root is None:
+        return None, why
     harness_dir = harness_dir or HARNESS_DIR
     boot_path = boot_path or HARNESS_BOOT
     # Enumerating the real mu-plugin dir needs root: it is 0750 root:loothdevs.
@@ -247,9 +304,29 @@ def build_branch_harness(plugin, harness_dir=None, boot_path=None):
                      "mu-plugins, and every liveness probe below would fail for the "\
                      "wrong reason" % MU_DIR
 
+    # ⚠️ rmtree(ignore_errors=True) IS A LIE DETECTOR THAT WAS SWITCHED OFF. Under the
+    # old shared /tmp name it could fail to remove a directory owned by another user
+    # and say nothing, and everything below then wrote into somebody else's harness.
+    # Inside a per-run root it cannot happen — but the assertion is cheap and the
+    # failure it catches is a wrong answer, not a crash, so it stays.
     shutil.rmtree(harness_dir, ignore_errors=True)
-    os.makedirs(harness_dir, 0o755, exist_ok=True)
+    if os.path.exists(harness_dir):
+        return None, ("%s survived rmtree — it is held by another user or process, so this "
+                      "run would report on a harness it did not build" % harness_dir)
+    try:
+        os.makedirs(harness_dir, 0o755, exist_ok=False)
+    except OSError as e:
+        return None, "could not create the harness dir %s: %s" % (harness_dir, e)
+
+    # ⚠️ swapped USED TO BE SET BEFORE THE SYMLINK WAS ATTEMPTED, and the attempt
+    # swallowed OSError. So a link that failed to be created still reported success,
+    # and WordPress loaded whatever was (or was not) at that path. For the stripped
+    # harness that silently turns the red-first into a run of the REAL sender — the
+    # canary receives nothing, and the gate blames the canary. Failures are collected
+    # and reported now, and `swapped` means "the branch file is linked", not
+    # "the branch file was mentioned".
     swapped = False
+    failures = []
     for src in entries:
         base = os.path.basename(src)
         # Resolve through the docroot symlink to the real file in the repo.
@@ -257,12 +334,21 @@ def build_branch_harness(plugin, harness_dir=None, boot_path=None):
                               capture_output=True, text=True, timeout=30).stdout.strip()
         if not real:
             continue
-        if base == os.path.basename(plugin):
-            real, swapped = plugin, True
+        is_target = (base == os.path.basename(plugin))
+        if is_target:
+            real = plugin
         try:
             os.symlink(real, os.path.join(harness_dir, base))
-        except OSError:
-            pass
+        except OSError as e:
+            failures.append("%s (%s)" % (base, e))
+            continue
+        if is_target:
+            swapped = True
+    if failures:
+        return None, ("could not link %d mu-plugin(s) into %s: %s. A partial mirror is a "
+                      "DIFFERENT WordPress from the one under test, and the missing plugin "
+                      "is usually the one whose behaviour an assertion depends on."
+                      % (len(failures), harness_dir, "; ".join(failures[:5])))
     if not swapped:
         # The branch file would be loaded IN ADDITION to the serve's copy rather than
         # INSTEAD of it. Say so instead of producing a confident answer about a
@@ -282,23 +368,56 @@ def build_branch_harness(plugin, harness_dir=None, boot_path=None):
     # short-circuits before anything is written. mu-plugins load before `init`, so this
     # is in place by the time the scheduler runs. Only lg_fd_* is blocked — blocking
     # everything would change what other plugins do and make the box a worse liar.
+    #
+    # ⚠️ AND THIS WRITE USED TO BE UNGUARDED. Against a harness dir owned by another
+    # user it raised PermissionError all the way out of main(): traceback, no verdict
+    # block, every assertion already computed thrown away, exit 1 — which run-all.sh
+    # scores as RED-with-findings. An environmental failure must report CANNOT RUN, so
+    # it is caught and returned as a reason like every other step here.
     guard = os.path.join(harness_dir, "00-lg-fd-gate-guard.php")
-    with open(guard, "w") as fh:
-        fh.write(
-            "<?php\n"
-            "// Written by tools/gates/follow-digest-gate.py. Harness only; never deployed.\n"
-            "add_filter('pre_schedule_event', function ($pre, $event) {\n"
-            "    if (is_object($event) && strpos((string) $event->hook, 'lg_fd') === 0) {\n"
-            "        return false;   // the gate observes the sender; it never arms it\n"
-            "    }\n"
-            "    return $pre;\n"
-            "}, 10, 2);\n")
-    os.chmod(guard, 0o644)
-    os.chmod(harness_dir, 0o755)
+    try:
+        with open(guard, "w") as fh:
+            fh.write(
+                "<?php\n"
+                "// Written by tools/gates/follow-digest-gate.py. Harness only; never deployed.\n"
+                "add_filter('pre_schedule_event', function ($pre, $event) {\n"
+                "    if (is_object($event) && strpos((string) $event->hook, 'lg_fd') === 0) {\n"
+                "        return false;   // the gate observes the sender; it never arms it\n"
+                "    }\n"
+                "    return $pre;\n"
+                "}, 10, 2);\n")
+        os.chmod(guard, 0o644)
+        os.chmod(harness_dir, 0o755)
 
-    with open(boot_path, "w") as fh:
-        fh.write('<?php define("WPMU_PLUGIN_DIR", %r);\n' % harness_dir)
-    os.chmod(boot_path, 0o644)
+        with open(boot_path, "w") as fh:
+            fh.write('<?php define("WPMU_PLUGIN_DIR", %r);\n' % harness_dir)
+        os.chmod(boot_path, 0o644)
+    except OSError as e:
+        return None, "could not write the harness into %s: %s" % (harness_dir, e)
+
+    # ── THE HARNESS IS NOW ASSERTED, NOT ASSUMED ────────────────────────────────
+    # Everything above can succeed step by step and still leave WordPress loading a
+    # different file than the one named on the command line — that is precisely the
+    # failure that made the red-first vacuous. So read the built harness back and
+    # require it to resolve to the plugin under test. This is the one assertion that
+    # makes "the gate tested THIS build" a fact rather than an intention.
+    linked = os.path.join(harness_dir, os.path.basename(plugin))
+    try:
+        got = os.path.realpath(linked)
+    except OSError as e:
+        return None, "could not resolve %s: %s" % (linked, e)
+    want = os.path.realpath(plugin)
+    if got != want:
+        return None, ("the harness at %s resolves to %s, but the build under test is %s. "
+                      "Refusing to report on a WordPress running someone else's sender."
+                      % (linked, got or "(nothing)", want))
+    if not os.path.isfile(got):
+        return None, ("%s resolves to %s, which is not a readable file — the harness would "
+                      "load no sender at all and every absence assertion below would be "
+                      "vacuously true" % (linked, got))
+    if not os.path.isfile(guard):
+        return None, ("the scheduler guard %s is missing, so booting the harness with the "
+                      "flag ON could arm a REAL cron event in the serve" % guard)
     return boot_path, None
 
 
@@ -306,7 +425,7 @@ BOOT = None            # set by build_branch_harness() in --plugin mode
 ALLOWLIST_ENV = ""     # forwarded into the probe; see wp_eval()
 
 PROOF_REL = "platform/bin/follow-digest-allowlist-proof.php"
-STRIPPED_DIR = "/tmp/lg-fd-gate-mu-noallow"
+STRIPPED_DIR = None                    # <run root>/mu-noallow
 # ⚠️ THE STRIPPED COPY MUST KEEP BOTH ITS BASENAME AND ITS DEPTH.
 #   basename — build_branch_harness() swaps by basename, so a copy called anything
 #     else is loaded ALONGSIDE the real sender rather than in place of it.
@@ -317,8 +436,56 @@ STRIPPED_DIR = "/tmp/lg-fd-gate-mu-noallow"
 #     that and mailed nobody for a reason that had nothing to do with the allowlist,
 #     which is precisely the false conclusion --expect=leak exists to prevent.
 # So the copy lives in a minimal mirror of the repo shape.
-STRIPPED_ROOT = "/tmp/lg-fd-noallow-src"
-STRIPPED_PHP = STRIPPED_ROOT + "/platform/mu-plugins/lg-follow-digest.php"
+STRIPPED_ROOT = None                   # <run root>/noallow-src
+STRIPPED_PHP = None                    # <run root>/noallow-src/platform/mu-plugins/<name>
+
+
+def ensure_run_root():
+    """Create this run's PRIVATE scratch root and point every harness path inside it.
+
+    Idempotent; returns (root, None) or (None, reason).
+
+    Why mkdtemp and not a fixed name: see the note on HARNESS_DIR. The requirement is
+    not "a clean directory" but "a directory NO OTHER PROCESS OR USER CAN BE HOLDING",
+    which a fixed name in a shared /tmp can never be, on any box.
+
+    ⚠️ 0755, NOT mkdtemp's 0700. The proof driver runs as WP_USER through sudo, and a
+    0700 root would make the harness unreadable to the very process that must load it —
+    the sender would then refuse to send to ANYBODY and the leak check would misread
+    that as "no leak". Same failure the dangling-symlink bug produced, by a new route.
+    """
+    global RUN_ROOT, HARNESS_DIR, HARNESS_BOOT, STRIPPED_DIR, STRIPPED_ROOT, STRIPPED_PHP
+    if RUN_ROOT:
+        return RUN_ROOT, None
+    try:
+        root = tempfile.mkdtemp(prefix="lg-fd-gate.")
+        os.chmod(root, 0o755)
+    except OSError as e:
+        return None, "could not create a private scratch root: %s" % e
+    RUN_ROOT = root
+    HARNESS_DIR = os.path.join(root, "mu")
+    HARNESS_BOOT = os.path.join(root, "boot.php")
+    STRIPPED_DIR = os.path.join(root, "mu-noallow")
+    STRIPPED_ROOT = os.path.join(root, "noallow-src")
+    STRIPPED_PHP = os.path.join(STRIPPED_ROOT, "platform", "mu-plugins",
+                                "lg-follow-digest.php")
+    atexit.register(_cleanup_run_root)
+    return root, None
+
+
+def _cleanup_run_root():
+    """Remove this run's scratch root. LG_FD_KEEP_HARNESS=1 keeps it for inspection.
+
+    Best-effort by design: a failure to tidy up must never change the verdict. It is
+    safe to leave behind precisely because the name is unique — the next run builds its
+    own root and cannot be poisoned by this one.
+    """
+    if not RUN_ROOT:
+        return
+    if os.environ.get("LG_FD_KEEP_HARNESS") == "1":
+        print("\n    (LG_FD_KEEP_HARNESS=1 — harness kept at %s)" % RUN_ROOT)
+        return
+    shutil.rmtree(RUN_ROOT, ignore_errors=True)
 
 
 def build_stripped_plugin(src, dest):
@@ -333,6 +500,10 @@ def build_stripped_plugin(src, dest):
 
     @return (path, None) or (None, reason)
     """
+    root, why = ensure_run_root()
+    if root is None:
+        return None, why
+    dest = dest or STRIPPED_PHP
     try:
         with open(src) as fh:
             body = fh.read()
@@ -369,7 +540,9 @@ def build_stripped_plugin(src, dest):
         # send at all". Exactly the trap the STRIPPED_ROOT note above warns about,
         # walked straight back into by the guard meant to be cheap.
         #
-        # /tmp is shared by ~110 worktrees on this box, so this is not a rare state.
+        # The run root is private now, so the dangling link cannot arrive from another
+        # lane any more — the repoint stays anyway. It costs one syscall, and the bug it
+        # prevents is not a crash but a CONFIDENT WRONG VERDICT about who can be mailed.
         repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         link = os.path.join(STRIPPED_ROOT, "membership-pages")
         want = os.path.join(repo, "membership-pages")
@@ -416,6 +589,36 @@ def run_proof(mu_dir, expect, repo_root):
         return None, "could not run the proof driver: %s" % e
     out = [l for l in (p.stdout or "").splitlines() if l.strip()]
     return p.returncode == 0, "\n         ".join(out[-6:]) if out else (p.stderr or "")[:300]
+
+
+CADENCE_PROOF_REL = "platform/bin/follow-digest-cadence-proof.php"
+
+
+def run_cadence_proof(mu_dir, repo_root):
+    """Drive the whole cadence loop a member actually experiences.
+
+    keeper, 8/1 item 4: "a member sets Daily on the account page, the sender honours it,
+    changing it changes the next send." Everything else this gate says about cadence is
+    about shapes, and on dev2 those checks are vacuous anyway — nobody holds a cadence,
+    so the store and resolver assertions are satisfied by an empty store.
+
+    Each negative is paired with a positive on the SAME member, topic and tick, because
+    "received nothing" has five different causes here and only one of them is the one
+    under test.
+
+    @return (passed, tail-of-output)
+    """
+    proof = os.path.join(repo_root, CADENCE_PROOF_REL)
+    if not os.path.isfile(proof):
+        return None, "missing %s" % proof
+    cmd = ["sudo", "-u", WP_USER, "env", "LG_FOLLOW_DIGEST=1", "LG_FD_MU_DIR=" + mu_dir,
+           "php", proof]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except Exception as e:                                    # noqa: BLE001
+        return None, "could not run the cadence proof: %s" % e
+    out = [l for l in (p.stdout or "").splitlines() if l.strip()]
+    return p.returncode == 0, "\n         ".join(out[-8:]) if out else (p.stderr or "")[:300]
 
 
 PROBE_PROOF_REL = "platform/bin/follow-digest-mail-probe-proof.php"
@@ -644,6 +847,42 @@ if (function_exists('lg_fd_render') && function_exists('lg_fd_topic_urls')) {
             }
             $out['link_check'] = array('hub' => $hub, 'bad' => $bad,
                                        'other' => $other, 'badlist' => array_slice($badlist, 0, 3));
+
+            /* ── WHAT THE FOOTER PROMISES ─────────────────────────────────────
+             * Ian, 8/1: "the link to change frequency doesn't seem to have a setting
+             * on the manage account page." He was right. The footer said "Change how
+             * often" and linked to /manage-subscription/, where the frequency control
+             * renders only under LG_FOLLOWING_CADENCE — a flag set in NO tracked
+             * config, NO nginx conf and NO fpm pool on either box. It rendered for
+             * nobody, so the promise was dead for every recipient.
+             *
+             * The destination was already gated; the PROMISE was not. Both halves are
+             * collected here so the assertion can compare them. */
+            preg_match_all('~<a\b[^>]*href="([^"]*)"[^>]*>(.*?)</a>~is', $html, $am, PREG_SET_ORDER);
+            $promises = array(); $frags = array();
+            foreach ($am as $a) {
+                $href = html_entity_decode($a[1], ENT_QUOTES);
+                $txt  = trim(preg_replace('~\s+~', ' ', strip_tags(html_entity_decode($a[2], ENT_QUOTES))));
+                if (preg_match('~how often|frequenc|cadence|daily or weekly~i', $txt)) {
+                    $promises[] = array('text' => $txt, 'href' => $href);
+                }
+                if (strpos($href, '#') !== false) {
+                    $frags[] = array('href' => $href, 'text' => $txt,
+                                     'frag' => substr($href, strpos($href, '#') + 1));
+                }
+            }
+            $out['setting_promises'] = $promises;
+            $out['link_fragments']   = $frags;
+
+            /* ⚠️ THE SWITCH IS READ FROM THE BUILD THAT RENDERED THE HTML ABOVE, not
+             * from a file on disk. Reading the lane's own copy compared MAIN's rendered
+             * footer against THIS BRANCH's constant whenever the gate ran bare (no
+             * --plugin, so WordPress loads the serve's mu-plugins) — two different
+             * builds, one verdict, and the biconditional silently became a comparison
+             * between two programs. null means the constant is not defined in the
+             * loaded build at all, which is a CANNOT RUN rather than a quiet "off". */
+            $out['cadence_shipped'] = defined('LG_FD_CADENCE_CONTROL_SHIPPED')
+                ? (bool) constant('LG_FD_CADENCE_CONTROL_SHIPPED') : null;
         }
     }
 }
@@ -876,8 +1115,16 @@ def call_lines(path, fname):
 
 def main():
     global WP_PATH, PLUGIN, EXPECT_ON, BOOT, ALLOWLIST_ENV, PROVE_TEST_MODE
+    global MU_DIR, WP_USER, PROVE_CADENCE
     ap = argparse.ArgumentParser()
     ap.add_argument("--wp-path", default=WP_PATH)
+    ap.add_argument("--mu-dir", default="",
+                    help="mu-plugins dir to mirror into the harness. Defaults to "
+                         "<wp-path>/wp-content/mu-plugins — override only if the box "
+                         "puts them elsewhere, never to point at another docroot.")
+    ap.add_argument("--wp-user", default=WP_USER,
+                    help="unix user the proof driver runs as via sudo (default %s)"
+                         % WP_USER)
     ap.add_argument("--plugin", default="",
                     help="run WordPress against THIS branch's plugin file (prove a branch pre-merge)")
     ap.add_argument("--expect-on", action="store_true",
@@ -888,10 +1135,27 @@ def main():
                          "same driver against a build with the allowlist stripped, which "
                          "must observe the leak. MUTATES the DB (with teardown), so it is "
                          "opt-in and run-all.sh does not use it.")
+    ap.add_argument("--prove-cadence", action="store_true",
+                    help="drive the full cadence loop end to end: set Daily, honour it, "
+                         "change it, and prove the change reaches the next send. MUTATES "
+                         "the DB (seeded canary, torn down), so it is opt-in like "
+                         "--prove-test-mode and run-all.sh does not use it.")
     args = ap.parse_args()
     WP_PATH = args.wp_path
+
+    # ⚠️ MU_DIR FOLLOWS WP_PATH, or the harness mirrors a DIFFERENT DOCROOT than the
+    # WordPress it boots. Both were module constants pinned to /var/www/dev, and only
+    # WP_PATH had a flag — so `--wp-path /var/www/html` on live would have booted html's
+    # WordPress while symlinking dev's mu-plugin set into the harness. That is "the proof
+    # reports on a build it never made" again, by a second route, and it would have been
+    # invisible: a harness full of plausible plugins, every assertion running, the verdict
+    # describing a build that exists nowhere. Derived unless explicitly overridden.
+    MU_DIR = args.mu_dir or os.path.join(WP_PATH, "wp-content", "mu-plugins")
+    WP_USER = args.wp_user
+
     EXPECT_ON = args.expect_on
     PROVE_TEST_MODE = args.prove_test_mode
+    PROVE_CADENCE = args.prove_cadence
     ALLOWLIST_ENV = os.environ.get("LG_FOLLOW_DIGEST_ALLOWLIST") or ""
     if args.plugin:
         PLUGIN = os.path.abspath(args.plugin)
@@ -1078,8 +1342,13 @@ def main():
                 "stored-cadence-with-no-sender state this whole lane exists to prevent.")
         elif not flag_on:
             ok("flag OFF ⇒ no member carries a cadence", "usermeta rows = 0")
-        else:
+        elif cad:
             ok("cadence rows present", "%d member(s)" % cad)
+        else:
+            vac("cadence rows present",
+                "0 member(s) — the flag is ON and NOBODY holds a cadence, so this "
+                "assertion is satisfied by an empty store and says nothing about the "
+                "store working. It read as a green claiming rows were 'present'.")
     if d.get("cadence_bad"):
         red("%d cadence row(s) outside the allow-list" % d["cadence_bad"],
             "Only instant|daily|weekly are deliverable. Anything else is a value the "
@@ -1115,8 +1384,13 @@ def main():
             else:
                 ok("flag OFF ⇒ resolver returns ZERO recipients for every cadence",
                    "the negative dev2 CAN prove: %s" % rec)
-        else:
+        elif sum(v for v in rec.values() if isinstance(v, int)):
             ok("resolver answers", "%s" % rec)
+        else:
+            vac("resolver answers",
+                "%s — every cadence resolved ZERO, so 'the resolver answers' is true of "
+                "a resolver that can only ever say nobody. With the flag ON this is the "
+                "one place a real recipient set would show up, and it is empty." % rec)
         if rec.get("instant", 0) > 0:
             red("cadence=instant resolved %d digest recipient(s)" % rec["instant"],
                 "Instant members are served by the native per-reply path and must NEVER "
@@ -1143,6 +1417,89 @@ def main():
     else:
         ok("every link points at the HUB", "%d hub deep link(s), 0 legacy-forum links"
            % lc["hub"])
+
+    # ── AND WHAT THE FOOTER PROMISES MUST EXIST ────────────────────────────────
+    # The destination was gated from the day a link went wrong. The PROMISE was not,
+    # and that is the half Ian found on 8/1: "the link to change frequency doesn't seem
+    # to have a setting on the manage account page." The anchor said "Change how often";
+    # the control behind it renders only under LG_FOLLOWING_CADENCE, which is set in no
+    # tracked config, no nginx conf and no fpm pool on either box. Dead for everyone.
+    #
+    # This is the UI-lies class in a SENT EMAIL, where it cannot be edited afterwards.
+    # So: an anchor may promise a frequency control only when something in the tree
+    # actually turns that control on. When account-following ships the flag, this goes
+    # green on its own and the wording can come back in the same change.
+    # IT IS ASSERTED AS A BICONDITIONAL, in both directions, on purpose. "Don't promise
+    # what isn't there" alone would let the opposite defect ship silently: the control
+    # goes live and the footer keeps offering the weaker wording, so the member never
+    # learns the setting exists. Same drift, same store, other sign.
+    if lc is not None:
+        promises = d.get("setting_promises") or []
+        # From the LOADED build — the same one that rendered the HTML these promises
+        # were lexed out of. See the note in the probe.
+        shipped = d.get("cadence_shipped")
+
+        # ABSENT MEANS NOT SHIPPED, and that is a verdict rather than a shrug. A build
+        # with no such constant has no way to make the control render for anybody — it
+        # is precisely the pre-fix build — so if it promises a frequency control, the
+        # promise is dead. That is a TRUE statement about main today, and reporting it
+        # as CANNOT RUN would have been the more comfortable answer, not the honest one:
+        # it turns a real member-facing finding into an environment complaint, and it
+        # would have left run-all.sh reporting INCOMPLETE instead of the defect Ian
+        # actually hit. It clears itself the moment this branch merges.
+        absent = shipped is None
+        if absent:
+            shipped = False
+        if promises and not shipped:
+            red("the digest promises a setting that renders for NOBODY",
+                "%s — LG_FD_CADENCE_CONTROL_SHIPPED is %s in the build that rendered "
+                "this (%s), so the frequency control is painted for no member, and the "
+                "recipient lands on an account page with no such setting. A link in a "
+                "sent email cannot be edited afterwards. Either ship the control "
+                "(account-following owns the page) or promise only what is there."
+                % ("; ".join("anchor %r -> %s" % (p.get("text"), p.get("href"))
+                             for p in promises[:3]),
+                   "NOT DEFINED" if absent else "false",
+                   d.get("loaded") or "unknown build"))
+        elif shipped and not promises:
+            red("the frequency control ships, but the digest never mentions it",
+                "LG_FD_CADENCE_CONTROL_SHIPPED is true, so the Daily/Weekly control is "
+                "live on /manage-subscription/ — and the footer still offers only the "
+                "generic wording, so the member is never told the setting exists. The "
+                "footer's 'Change how often' wording returns in the same change that "
+                "flips the constant.")
+        elif promises:
+            ok("the digest promises a frequency control, and that control renders",
+               "LG_FD_CADENCE_CONTROL_SHIPPED is true, so 'Change how often' lands on a "
+               "real setting for the members the sender actually serves")
+        else:
+            ok("the digest promises no setting that does not exist",
+               "no anchor offers a frequency/cadence control while "
+               "LG_FD_CADENCE_CONTROL_SHIPPED is false — the footer links to what is "
+               "actually on the page (✉ toggle, followed list, Stop all)")
+
+        # A deep link to an anchor that is not on the page is the same lie, one level
+        # down: the member arrives at the top of a long account page and concludes the
+        # control is missing. Cheap to check, and it is the fix's own foundation.
+        for fr in (d.get("link_fragments") or []):
+            frag = (fr.get("frag") or "").strip()
+            if not frag or "/manage-subscription" not in (fr.get("href") or ""):
+                continue
+            page = os.path.join(repo_root_of_gate(),
+                                "membership-pages", "web", "manage-subscription.php")
+            try:
+                with open(page) as fh:
+                    src = fh.read()
+            except OSError as e:
+                dead("digest deep-link target", "cannot read %s: %s" % (page, e))
+                break
+            if ('id="%s"' % frag) in src or ("id='%s'" % frag) in src:
+                ok("the digest's deep link lands on a real section",
+                   "#%s exists in manage-subscription.php" % frag)
+            else:
+                red("the digest deep-links to #%s, which is not on the page" % frag,
+                    "The member arrives at the top of the account page and concludes the "
+                    "control is missing — the same defect as a dead link, one level down.")
 
     if not d.get("collector_exists"):
         red("%s() does not exist" % COLLECTOR,
@@ -1410,8 +1767,20 @@ def main():
                     "than here." % (", ".join(strangers[:6]), RESOLVER))
             elif d.get("resolver_exists"):
                 tot = sum(len(v) for v in (d.get("recipient_ids") or {}).values())
-                ok("every due recipient on this box is on the allowlist",
-                   "%d due across all cadences, all within uids %s" % (tot, allow_uids))
+                if tot:
+                    ok("every due recipient on this box is on the allowlist",
+                       "%d due across all cadences, all within uids %s" % (tot, allow_uids))
+                else:
+                    # THE HEADLINE VACUITY. This is the sentence a reader most wants to
+                    # be true, and with nobody due it is true of a box with no WordPress.
+                    # The real end-to-end evidence is --prove-test-mode, which SEEDS a
+                    # qualifying member; this check is only corroboration when the box
+                    # happens to have real due members, and must say so when it does not.
+                    vac("every due recipient on this box is on the allowlist",
+                        "0 due across all cadences — so NO recipient was tested against "
+                        "uids %s. Nothing was excluded because nothing qualified. The "
+                        "allowlist's real end-to-end evidence is --prove-test-mode, which "
+                        "seeds a member who genuinely qualifies." % allow_uids)
 
         # ── TEST MODE, END TO END, WITH ITS OWN RED-FIRST ──────────────────────
         # Everything above is about functions and shapes. This is the system: a member
@@ -1428,6 +1797,15 @@ def main():
             src = PLUGIN or (d.get("loaded") or "")
 
             # 1) RED-FIRST: strip the allowlist, and require the leak to be observed.
+            #
+            # ⚠️ control_proved GATES THE CLAIM BELOW. keeper, 2026-08-01: "with the
+            # allowlist STRIPPED, the canary must DEMONSTRABLY RECEIVE. If it doesn't,
+            # abort loudly as broken build, never report held." Until this run, a failed
+            # control produced a red AND, three lines later, a green reading "TEST MODE
+            # HOLDS: a QUALIFYING non-allowlisted member received ZERO" — the single most
+            # reassuring line this gate can print, emitted in the one state where it is
+            # known to mean nothing. A reader skimming for greens would have taken it.
+            control_proved = False
             stripped, why = build_stripped_plugin(src, STRIPPED_PHP)
             if stripped is None:
                 dead("test-mode red-first", why)
@@ -1442,6 +1820,7 @@ def main():
                     if leaked is None:
                         dead("test-mode red-first", tail)
                     elif leaked:
+                        control_proved = True
                         ok("RED-FIRST: with the allowlist stripped, the driver SEES the "
                            "canary being mailed",
                            "so a zero from the real build is caused by the allowlist, not "
@@ -1452,7 +1831,7 @@ def main():
                             "result proves NOTHING — the canary is inert for some other "
                             "reason and the whole end-to-end proof is vacuous.\n         " + tail)
 
-            # 2) THE CLAIM: the real build must hold.
+            # 2) THE CLAIM: the real build must hold — REPORTABLE ONLY IF THE CONTROL RAN.
             if not PLUGIN:
                 held, tail = None, ("test mode needs --plugin: without it the driver would "
                                     "exercise the serve, which runs main")
@@ -1460,11 +1839,22 @@ def main():
                 held, tail = run_proof(HARNESS_DIR, "hold", repo_root)
             if held is None:
                 dead("test-mode proof", tail)
-            elif held:
+            elif held and control_proved:
                 ok("TEST MODE HOLDS: flag ON, allowlist=[1], a QUALIFYING non-allowlisted "
                    "member received ZERO",
                    "and wp_mail() was never invoked for them — nothing swallowed, nothing "
                    "queued, nothing that would have been an SES call without containment")
+            elif held:
+                # The driver said "held". It is not reported as held, because the only
+                # evidence that this driver can SEE a leak just failed to appear. A zero
+                # from an instrument that cannot register a one is not a measurement.
+                red("BROKEN PROOF: the hold run passed, but its positive control did not",
+                    "The driver reported the canary received nothing WITH the allowlist — "
+                    "and also received nothing WITHOUT it. That is an instrument reading "
+                    "zero in both directions, so this run is NOT evidence that the "
+                    "allowlist held, and it is not being recorded as such. Fix the control "
+                    "first: the stripped build must demonstrably mail the canary.\n         "
+                    + tail)
             else:
                 red("TEST MODE FAILED: the allowlist did not hold end to end",
                     "flag ON with allowlist=[1] and a qualifying member was not fully "
@@ -1489,18 +1879,55 @@ def main():
                     "Either it would report a swallowed send as delivered, or it would "
                     "refuse forever on live. Do NOT run the one-shot.\n         " + tail)
 
+    # ── THE CADENCE LOOP, END TO END ───────────────────────────────────────────
+    # Independent of --prove-test-mode: that one proves WHO is reachable (the allowlist),
+    # this proves WHETHER THE MEMBER'S CHOICE IS HONOURED. Both mutate the DB, so both
+    # are opt-in, but a box can legitimately want one without the other.
+    if PROVE_CADENCE:
+        repo_root = repo_root_of_gate()
+        if not PLUGIN:
+            dead("cadence proof",
+                 "--prove-cadence needs --plugin: without it the driver would exercise "
+                 "the serve, which runs main")
+        else:
+            cp, tail = run_cadence_proof(HARNESS_DIR, repo_root)
+            if cp is None:
+                dead("cadence proof", tail)
+            elif cp:
+                ok("CADENCE HOLDS END TO END: Daily is honoured, and changing it changes "
+                   "the next send",
+                   "the flood guard sends nothing on a fresh watermark, the backdated "
+                   "control proves that zero was the watermark, Daily->Weekly empties the "
+                   "daily bucket and fills the weekly one, and Instant restores per-reply "
+                   "mail and clears the watermark")
+            else:
+                red("the cadence loop does not hold end to end",
+                    "A member's stored choice is not reaching the sender. Until this is "
+                    "green the Daily/Weekly control must NOT be shown to anyone — a "
+                    "member setting a preference and getting the wrong mail (or none) is "
+                    "the §15.4 lie.\n         " + tail)
+
     return verdict()
 
 
 def verdict():
     for n, det in GREEN:
         print("  ok   %s%s" % (n, ("  — " + det) if det else ""))
+    for n, det in VACUOUS:
+        print("  --   %s (ASSERTED NOTHING)\n         %s" % (n, det))
     for n, det in DEAD:
         print("  ??   %s\n         %s" % (n, det))
     for n, det in RED:
         print("  RED  %s\n         %s" % (n, det))
 
     print()
+    # Vacuous assertions are named in EVERY banner, including the red one. A reader who
+    # fixes the red and re-runs must still see how much of the green was empty.
+    if VACUOUS:
+        print("%d assertion(s) were satisfied but asserted NOTHING on this box "
+              "(listed above as --)." % len(VACUOUS))
+        print("They are not failures and not coverage. Treat them as untested.")
+        print()
     if RED:
         print("############ follow-digest gate RED — %d finding(s) ############" % len(RED))
         print("If the sender has not been built yet, this red is EXPECTED and correct:")
