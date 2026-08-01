@@ -136,7 +136,7 @@ DELIVER = "lg_fd_deliver"              # THE ONLY wp_mail() call site
 ALLOW_ALL_TOKEN = "all-members"        # the one token that reaches the membership
 CONFIG_REL = "platform/config/follow-digest.php"
 
-RED, GREEN, DEAD = [], [], []
+RED, GREEN, DEAD, VACUOUS = [], [], [], []
 PLUGIN = ""
 EXPECT_ON = False
 PROVE_TEST_MODE = False
@@ -233,6 +233,24 @@ def ok(name, detail=""):
 
 def dead(name, detail):
     DEAD.append((name, detail))
+
+
+def vac(name, detail):
+    """An assertion that RAN, was satisfied, and asserted NOTHING on this box.
+
+    keeper, 8/1: sweep for assertions that pass vacuously — the class that has bitten
+    this lane twice (the dangling symlink; "the canary got nothing"). Three greens in
+    this gate were in it: with the flag ON and no member holding a cadence, the store
+    check printed "cadence rows present — 0 member(s)", the resolver printed "resolver
+    answers — all zeros", and the allowlist check printed "every due recipient is on
+    the allowlist — 0 due". All three are true on a box with no WordPress at all.
+
+    They are NOT reds — nothing is broken, dev2 genuinely has no member on a cadence.
+    But they must not be counted as coverage either, because the reassuring sentence is
+    indistinguishable from the one a working system emits. So they get their own
+    channel: printed, counted, named in the banner, and never filed under ok().
+    """
+    VACUOUS.append((name, detail))
 
 
 def repo_root_of_gate():
@@ -1309,8 +1327,13 @@ def main():
                 "stored-cadence-with-no-sender state this whole lane exists to prevent.")
         elif not flag_on:
             ok("flag OFF ⇒ no member carries a cadence", "usermeta rows = 0")
-        else:
+        elif cad:
             ok("cadence rows present", "%d member(s)" % cad)
+        else:
+            vac("cadence rows present",
+                "0 member(s) — the flag is ON and NOBODY holds a cadence, so this "
+                "assertion is satisfied by an empty store and says nothing about the "
+                "store working. It read as a green claiming rows were 'present'.")
     if d.get("cadence_bad"):
         red("%d cadence row(s) outside the allow-list" % d["cadence_bad"],
             "Only instant|daily|weekly are deliverable. Anything else is a value the "
@@ -1346,8 +1369,13 @@ def main():
             else:
                 ok("flag OFF ⇒ resolver returns ZERO recipients for every cadence",
                    "the negative dev2 CAN prove: %s" % rec)
-        else:
+        elif sum(v for v in rec.values() if isinstance(v, int)):
             ok("resolver answers", "%s" % rec)
+        else:
+            vac("resolver answers",
+                "%s — every cadence resolved ZERO, so 'the resolver answers' is true of "
+                "a resolver that can only ever say nobody. With the flag ON this is the "
+                "one place a real recipient set would show up, and it is empty." % rec)
         if rec.get("instant", 0) > 0:
             red("cadence=instant resolved %d digest recipient(s)" % rec["instant"],
                 "Instant members are served by the native per-reply path and must NEVER "
@@ -1714,8 +1742,20 @@ def main():
                     "than here." % (", ".join(strangers[:6]), RESOLVER))
             elif d.get("resolver_exists"):
                 tot = sum(len(v) for v in (d.get("recipient_ids") or {}).values())
-                ok("every due recipient on this box is on the allowlist",
-                   "%d due across all cadences, all within uids %s" % (tot, allow_uids))
+                if tot:
+                    ok("every due recipient on this box is on the allowlist",
+                       "%d due across all cadences, all within uids %s" % (tot, allow_uids))
+                else:
+                    # THE HEADLINE VACUITY. This is the sentence a reader most wants to
+                    # be true, and with nobody due it is true of a box with no WordPress.
+                    # The real end-to-end evidence is --prove-test-mode, which SEEDS a
+                    # qualifying member; this check is only corroboration when the box
+                    # happens to have real due members, and must say so when it does not.
+                    vac("every due recipient on this box is on the allowlist",
+                        "0 due across all cadences — so NO recipient was tested against "
+                        "uids %s. Nothing was excluded because nothing qualified. The "
+                        "allowlist's real end-to-end evidence is --prove-test-mode, which "
+                        "seeds a member who genuinely qualifies." % allow_uids)
 
         # ── TEST MODE, END TO END, WITH ITS OWN RED-FIRST ──────────────────────
         # Everything above is about functions and shapes. This is the system: a member
@@ -1820,12 +1860,21 @@ def main():
 def verdict():
     for n, det in GREEN:
         print("  ok   %s%s" % (n, ("  — " + det) if det else ""))
+    for n, det in VACUOUS:
+        print("  --   %s (ASSERTED NOTHING)\n         %s" % (n, det))
     for n, det in DEAD:
         print("  ??   %s\n         %s" % (n, det))
     for n, det in RED:
         print("  RED  %s\n         %s" % (n, det))
 
     print()
+    # Vacuous assertions are named in EVERY banner, including the red one. A reader who
+    # fixes the red and re-runs must still see how much of the green was empty.
+    if VACUOUS:
+        print("%d assertion(s) were satisfied but asserted NOTHING on this box "
+              "(listed above as --)." % len(VACUOUS))
+        print("They are not failures and not coverage. Treat them as untested.")
+        print()
     if RED:
         print("############ follow-digest gate RED — %d finding(s) ############" % len(RED))
         print("If the sender has not been built yet, this red is EXPECTED and correct:")
