@@ -76,7 +76,6 @@ import atexit
 import glob
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -257,37 +256,6 @@ def vac(name, detail):
 def repo_root_of_gate():
     """The lane root, from THIS file. tools/gates/x.py -> three dirnames up."""
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
-# define( 'LG_FD_CADENCE_CONTROL_SHIPPED', false );  — value captured, spacing free.
-_SHIPPED_RE = re.compile(
-    r"""define\(\s*['"]LG_FD_CADENCE_CONTROL_SHIPPED['"]\s*,\s*(\w+)\s*\)""")
-
-
-def cadence_control_shipped(repo_root):
-    """Is the frequency control actually turned on for anybody?
-
-    ⚠️ LEXED, NOT GREPPED, and the difference is not pedantry here. The constant's
-    NAME now appears ~4 times in this plugin's own explanatory comment, so
-    `grep -q LG_FD_CADENCE_CONTROL_SHIPPED` matches the prose that explains why the
-    thing is OFF and reports it ON — a red-first that stays green, which is the exact
-    failure this lane has already hit twice (7/31). Only the define's captured VALUE
-    is consulted.
-
-    Returns True/False, or None when the define cannot be found at all — an unreadable
-    or renamed constant is a CANNOT-RUN, never a quiet "off" that greens the absence
-    branch by default.
-    """
-    path = os.path.join(repo_root, "platform", "mu-plugins", "lg-follow-digest.php")
-    try:
-        with open(path) as fh:
-            src = fh.read()
-    except OSError:
-        return None
-    m = _SHIPPED_RE.search(src)
-    if not m:
-        return None
-    return m.group(1).strip().lower() == "true"
 
 
 def build_branch_harness(plugin, harness_dir=None, boot_path=None):
@@ -905,6 +873,16 @@ if (function_exists('lg_fd_render') && function_exists('lg_fd_topic_urls')) {
             }
             $out['setting_promises'] = $promises;
             $out['link_fragments']   = $frags;
+
+            /* ⚠️ THE SWITCH IS READ FROM THE BUILD THAT RENDERED THE HTML ABOVE, not
+             * from a file on disk. Reading the lane's own copy compared MAIN's rendered
+             * footer against THIS BRANCH's constant whenever the gate ran bare (no
+             * --plugin, so WordPress loads the serve's mu-plugins) — two different
+             * builds, one verdict, and the biconditional silently became a comparison
+             * between two programs. null means the constant is not defined in the
+             * loaded build at all, which is a CANNOT RUN rather than a quiet "off". */
+            $out['cadence_shipped'] = defined('LG_FD_CADENCE_CONTROL_SHIPPED')
+                ? (bool) constant('LG_FD_CADENCE_CONTROL_SHIPPED') : null;
         }
     }
 }
@@ -1457,22 +1435,32 @@ def main():
     # learns the setting exists. Same drift, same store, other sign.
     if lc is not None:
         promises = d.get("setting_promises") or []
-        shipped = cadence_control_shipped(repo_root_of_gate())
-        if shipped is None:
-            dead("the cadence-control switch cannot be read",
-                 "LG_FD_CADENCE_CONTROL_SHIPPED was not found as a define() in "
-                 "platform/mu-plugins/lg-follow-digest.php. Renamed or removed, this "
-                 "assertion silently degrades to 'off', which greens the no-promise "
-                 "branch by default — so it reports CANNOT RUN instead.")
-        elif promises and not shipped:
+        # From the LOADED build — the same one that rendered the HTML these promises
+        # were lexed out of. See the note in the probe.
+        shipped = d.get("cadence_shipped")
+
+        # ABSENT MEANS NOT SHIPPED, and that is a verdict rather than a shrug. A build
+        # with no such constant has no way to make the control render for anybody — it
+        # is precisely the pre-fix build — so if it promises a frequency control, the
+        # promise is dead. That is a TRUE statement about main today, and reporting it
+        # as CANNOT RUN would have been the more comfortable answer, not the honest one:
+        # it turns a real member-facing finding into an environment complaint, and it
+        # would have left run-all.sh reporting INCOMPLETE instead of the defect Ian
+        # actually hit. It clears itself the moment this branch merges.
+        absent = shipped is None
+        if absent:
+            shipped = False
+        if promises and not shipped:
             red("the digest promises a setting that renders for NOBODY",
-                "%s — LG_FD_CADENCE_CONTROL_SHIPPED is false, so the frequency control "
-                "is painted for no member, and the recipient lands on an account page "
-                "with no such setting. A link in a sent email cannot be edited "
-                "afterwards. Either ship the control (account-following owns the page) "
-                "or promise only what is there."
-                % "; ".join("anchor %r -> %s" % (p.get("text"), p.get("href"))
-                            for p in promises[:3]))
+                "%s — LG_FD_CADENCE_CONTROL_SHIPPED is %s in the build that rendered "
+                "this (%s), so the frequency control is painted for no member, and the "
+                "recipient lands on an account page with no such setting. A link in a "
+                "sent email cannot be edited afterwards. Either ship the control "
+                "(account-following owns the page) or promise only what is there."
+                % ("; ".join("anchor %r -> %s" % (p.get("text"), p.get("href"))
+                             for p in promises[:3]),
+                   "NOT DEFINED" if absent else "false",
+                   d.get("loaded") or "unknown build"))
         elif shipped and not promises:
             red("the frequency control ships, but the digest never mentions it",
                 "LG_FD_CADENCE_CONTROL_SHIPPED is true, so the Daily/Weekly control is "
