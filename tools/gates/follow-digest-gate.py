@@ -793,11 +793,22 @@ if (function_exists('_get_cron_array')) {
         // Liveness: SOMETHING is scheduled on this box, so "our hook is absent" is a
         // real observation rather than "cron is empty/broken".
         $out['cron_any'] = count($c) > 0;
+        // "Stray" means an lg_fd_* hook that is NOT the sender's own. The sender's hook
+        // is asserted separately just above (flag ON must schedule it, flag OFF must
+        // not), so counting it here too made arming the sender turn the gate RED BY
+        // CONSTRUCTION — measured 2026-08-01, the first flag-ON run on a box where the
+        // event was legitimately scheduled. A gate that cannot be green once the feature
+        // it guards is switched on teaches people to ignore it, which costs more than
+        // the check is worth.
+        $legit = defined('LG_FD_CRON_HOOK') ? (string) LG_FD_CRON_HOOK : 'lg_fd_send';
         foreach ($c as $ts => $hooks) {
             foreach ((array) $hooks as $h => $_) {
-                if (strpos((string) $h, 'lg_fd') === 0) { $out['cron_stray'][] = $h; }
+                $h = (string) $h;
+                if ($h === $legit) { continue; }
+                if (strpos($h, 'lg_fd') === 0) { $out['cron_stray'][] = $h; }
             }
         }
+        $out['cron_stray'] = array_values(array_unique($out['cron_stray'] ?? array()));
     }
 }
 

@@ -265,14 +265,38 @@ function lg_fd_cadences(): array {
 }
 
 /**
- * A member's cadence. ABSENT MEANS INSTANT — deliberately, and it is what makes the
- * flag's OFF state a no-op for the whole membership on day one: nobody carries a
- * cadence, so nobody is suppressed and nobody is batched.
+ * THE DEFAULT CADENCE — what a member gets before they have ever touched the control.
+ *
+ * ⚠️ IT IS 'weekly', AND IT USED TO BE 'instant'. Ian, 2026-08-01, choosing this before
+ * widening the allowlist. The old value was not careless — the comment here argued it
+ * made the flag's OFF state a no-op, "nobody carries a cadence, so nobody is suppressed
+ * and nobody is batched". That argument was TRUE and is now REDUNDANT: the OFF state is
+ * a no-op because lg_fd_maybe_suppress() returns $send_mail unchanged for anyone the
+ * allowlist rejects (:509) and the filter is not even registered while the master switch
+ * is off. The default cadence never carried that guarantee; two other mechanisms did.
+ *
+ * What the old value DID carry was a trap on the widening step, which is the one moment
+ * this constant matters: flipping 'allowlist' to the membership with an 'instant' default
+ * would have started a per-reply email to every member who ever tapped the bell, at a
+ * frequency none of them chose, through a channel that cannot be recalled. Nobody would
+ * have had to make a mistake for that to happen — it was the default path.
+ *
+ * 'weekly' inverts it. The quiet option is the one you get by doing nothing, and instant
+ * is available to anyone who asks for it on the Manage Account control.
+ */
+const LG_FD_DEFAULT_CADENCE = 'weekly';
+
+/**
+ * A member's cadence, or LG_FD_DEFAULT_CADENCE if they have not chosen one.
+ *
+ * Reads only — the fallback is NOT written back to user meta, so "never chose" stays
+ * distinguishable from "chose weekly" and a future change to the default reaches every
+ * member who never expressed a preference.
  */
 function lg_fd_cadence( int $user_id ): string {
-	if ( $user_id <= 0 ) { return 'instant'; }
+	if ( $user_id <= 0 ) { return LG_FD_DEFAULT_CADENCE; }
 	$c = (string) get_user_meta( $user_id, LG_FD_CADENCE_META, true );
-	return in_array( $c, lg_fd_cadences(), true ) ? $c : 'instant';
+	return in_array( $c, lg_fd_cadences(), true ) ? $c : LG_FD_DEFAULT_CADENCE;
 }
 
 /**
