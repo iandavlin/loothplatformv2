@@ -137,6 +137,7 @@ ALLOW_ALL_TOKEN = "all-members"        # the one token that reaches the membersh
 CONFIG_REL = "platform/config/follow-digest.php"
 
 RED, GREEN, DEAD, VACUOUS = [], [], [], []
+PROVE_CADENCE = False
 PLUGIN = ""
 EXPECT_ON = False
 PROVE_TEST_MODE = False
@@ -620,6 +621,36 @@ def run_proof(mu_dir, expect, repo_root):
         return None, "could not run the proof driver: %s" % e
     out = [l for l in (p.stdout or "").splitlines() if l.strip()]
     return p.returncode == 0, "\n         ".join(out[-6:]) if out else (p.stderr or "")[:300]
+
+
+CADENCE_PROOF_REL = "platform/bin/follow-digest-cadence-proof.php"
+
+
+def run_cadence_proof(mu_dir, repo_root):
+    """Drive the whole cadence loop a member actually experiences.
+
+    keeper, 8/1 item 4: "a member sets Daily on the account page, the sender honours it,
+    changing it changes the next send." Everything else this gate says about cadence is
+    about shapes, and on dev2 those checks are vacuous anyway — nobody holds a cadence,
+    so the store and resolver assertions are satisfied by an empty store.
+
+    Each negative is paired with a positive on the SAME member, topic and tick, because
+    "received nothing" has five different causes here and only one of them is the one
+    under test.
+
+    @return (passed, tail-of-output)
+    """
+    proof = os.path.join(repo_root, CADENCE_PROOF_REL)
+    if not os.path.isfile(proof):
+        return None, "missing %s" % proof
+    cmd = ["sudo", "-u", WP_USER, "env", "LG_FOLLOW_DIGEST=1", "LG_FD_MU_DIR=" + mu_dir,
+           "php", proof]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except Exception as e:                                    # noqa: BLE001
+        return None, "could not run the cadence proof: %s" % e
+    out = [l for l in (p.stdout or "").splitlines() if l.strip()]
+    return p.returncode == 0, "\n         ".join(out[-8:]) if out else (p.stderr or "")[:300]
 
 
 PROBE_PROOF_REL = "platform/bin/follow-digest-mail-probe-proof.php"
@@ -1106,7 +1137,7 @@ def call_lines(path, fname):
 
 def main():
     global WP_PATH, PLUGIN, EXPECT_ON, BOOT, ALLOWLIST_ENV, PROVE_TEST_MODE
-    global MU_DIR, WP_USER
+    global MU_DIR, WP_USER, PROVE_CADENCE
     ap = argparse.ArgumentParser()
     ap.add_argument("--wp-path", default=WP_PATH)
     ap.add_argument("--mu-dir", default="",
@@ -1126,6 +1157,11 @@ def main():
                          "same driver against a build with the allowlist stripped, which "
                          "must observe the leak. MUTATES the DB (with teardown), so it is "
                          "opt-in and run-all.sh does not use it.")
+    ap.add_argument("--prove-cadence", action="store_true",
+                    help="drive the full cadence loop end to end: set Daily, honour it, "
+                         "change it, and prove the change reaches the next send. MUTATES "
+                         "the DB (seeded canary, torn down), so it is opt-in like "
+                         "--prove-test-mode and run-all.sh does not use it.")
     args = ap.parse_args()
     WP_PATH = args.wp_path
 
@@ -1141,6 +1177,7 @@ def main():
 
     EXPECT_ON = args.expect_on
     PROVE_TEST_MODE = args.prove_test_mode
+    PROVE_CADENCE = args.prove_cadence
     ALLOWLIST_ENV = os.environ.get("LG_FOLLOW_DIGEST_ALLOWLIST") or ""
     if args.plugin:
         PLUGIN = os.path.abspath(args.plugin)
@@ -1853,6 +1890,34 @@ def main():
                     "killswitch",
                     "Either it would report a swallowed send as delivered, or it would "
                     "refuse forever on live. Do NOT run the one-shot.\n         " + tail)
+
+    # ── THE CADENCE LOOP, END TO END ───────────────────────────────────────────
+    # Independent of --prove-test-mode: that one proves WHO is reachable (the allowlist),
+    # this proves WHETHER THE MEMBER'S CHOICE IS HONOURED. Both mutate the DB, so both
+    # are opt-in, but a box can legitimately want one without the other.
+    if PROVE_CADENCE:
+        repo_root = repo_root_of_gate()
+        if not PLUGIN:
+            dead("cadence proof",
+                 "--prove-cadence needs --plugin: without it the driver would exercise "
+                 "the serve, which runs main")
+        else:
+            cp, tail = run_cadence_proof(HARNESS_DIR, repo_root)
+            if cp is None:
+                dead("cadence proof", tail)
+            elif cp:
+                ok("CADENCE HOLDS END TO END: Daily is honoured, and changing it changes "
+                   "the next send",
+                   "the flood guard sends nothing on a fresh watermark, the backdated "
+                   "control proves that zero was the watermark, Daily->Weekly empties the "
+                   "daily bucket and fills the weekly one, and Instant restores per-reply "
+                   "mail and clears the watermark")
+            else:
+                red("the cadence loop does not hold end to end",
+                    "A member's stored choice is not reaching the sender. Until this is "
+                    "green the Daily/Weekly control must NOT be shown to anyone — a "
+                    "member setting a preference and getting the wrong mail (or none) is "
+                    "the §15.4 lie.\n         " + tail)
 
     return verdict()
 
