@@ -140,7 +140,6 @@
                         ? 'Emails are on for your account.'
                         : "Discussion emails are off for your account, so none of these will email you.";
                 }
-                paintCadence(j.cadence);
                 refreshCounts();
             })
             .catch(function () { /* marks keep the server's read; nothing claimed falsely */ });
@@ -196,36 +195,159 @@
         });
     }
 
-    /* ── EMAIL FREQUENCY — READ ONLY, DELIBERATELY, FOR NOW ──────────────────
-     * One ACCOUNT-level setting with two surfaces: this page and thread-follow's
-     * follow modal. The store is WP usermeta lg_disc_email_cadence, absent =>
-     * instant (follow-digest's §2.1); the write goes through follow.php's
-     * POST {cadence} (their §2.3), which thread-follow owns.
+    /* ── EMAIL FREQUENCY — ACCOUNT-LEVEL, AND IT WRITES ──────────────────────
+     * The sent digest's footer links here promising "Change how often"
+     * (lg-follow-digest.php:1039). Until this wiring existed that link landed a
+     * member on a page with no such setting — the UI-lies class, in an email that
+     * had already been sent. This is the half that makes the link true.
      *
-     * ⚠️ NO WRITE PATH HERE YET, AND THAT IS ON PURPOSE. Three lanes are touching
-     * one setting, so the seam is agreed on the board BEFORE anyone writes —
-     * keeper's instruction, and the right order. I asked thread-follow to confirm
-     * they accept a second caller of their POST; until they answer, this reads and
-     * does not write. The control is hidden behind LG_FOLLOWING_CADENCE anyway, so
-     * nothing is lost by waiting and a wrong guess would have cost a store.
+     * ── ONE STORE, ONE WRITE PATH ────────────────────────────────────────────
+     * The store is WP usermeta lg_disc_email_cadence, absent ⇒ instant. This page
+     * does NOT touch it, and does NOT go through follow.php's POST {cadence}
+     * either. Both writes here go through follow-digest's admin-ajax transports,
+     * which are the only callers of lg_fd_set_cadence():
      *
-     * `cadence` is ABSENT from the GET envelope while the frequency flag is off —
-     * follow-digest's own rule, so a dark control cannot render a live-looking
-     * value. Absent is therefore the NORMAL case today and must not be painted as
-     * "instant": the member has not chosen instant, we simply do not know.
+     *   GET-ish  action=lg_fd_cadence_state → {ok, cadence, options, nonce}
+     *   write    action=lg_fd_cadence_set   → {ok, cadence}   (echoes the STORED value)
+     *
+     * WHY NOT follow.php, WHICH ALSO ACCEPTS A CADENCE: because it writes the
+     * usermeta key directly (follow.php:212) and so skips the flood guard inside
+     * lg_fd_set_cadence — the watermark stamp. A member written that way has their
+     * instant mail suppressed (lg-follow-digest.php:494) while the collector
+     * refuses to build them a batch for want of a watermark (:512-521), and
+     * receives NOTHING. Reported to the board 2026-08-01; not this lane's file to
+     * fix. Routing around it is not a workaround, it is the correct path — the
+     * transports below are the ones follow-digest built for this surface (:396).
+     *
+     * ── THE SERVER DECIDES WHETHER THIS EXISTS ───────────────────────────────
+     * The markup ships `hidden`. lg_fd_cadence_state is per-member — it 404s
+     * anyone the sender would not actually serve — so it, not the page's flag, is
+     * what reveals the control. Anything other than a clean ok:true REMOVES the
+     * block outright. A member who cannot be served must not see the setting at
+     * all, because seeing it and setting it is what causes the silence.
      */
-    function paintCadence(value) {
+    var FREQ_LABELS = { instant: 'Instant', daily: 'Daily', weekly: 'Weekly' };
+
+    /** admin-ajax, form-encoded — the idiom the rest of this page already uses. */
+    function ajax(action, extra) {
+        var d = new URLSearchParams();
+        d.set('action', action);
+        for (var k in extra) { if (extra.hasOwnProperty(k)) d.set(k, extra[k]); }
+        return fetch('/wp-admin/admin-ajax.php', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: d.toString()
+        }).then(function (r) { return r.json().catch(function () { return null; }); });
+    }
+
+    function initCadence() {
         var box = document.getElementById('lg-fol-freq');
-        if (!box) return;                       // flag off — nothing rendered
-        var opts = box.querySelectorAll('[data-cadence]');
-        var known = typeof value === 'string' && value !== '';
-        for (var i = 0; i < opts.length; i++) {
-            var on = known && opts[i].getAttribute('data-cadence') === value;
-            opts[i].setAttribute('aria-checked', on ? 'true' : 'false');
+        if (!box) return;                       // page flag off — nothing rendered at all
+
+        var seg   = box.querySelector('.lg-manage-sub__fol-freq-seg');
+        var note  = document.getElementById('lg-fol-freq-note');
+        var tok   = '';
+        var value = '';
+
+        /** Fail-closed: the control leaves the DOM rather than sitting there inert. */
+        function drop() {
+            if (box.parentNode) box.parentNode.removeChild(box);
         }
-        // Nothing is selected when the endpoint did not tell us. Showing a default
-        // would be this page inventing an answer the store never gave.
-        box.setAttribute('data-known', known ? '1' : '0');
+
+        function opts() {
+            return Array.prototype.slice.call(seg.querySelectorAll('[data-cadence]'));
+        }
+
+        /* Repaint from a value the SERVER returned, never from the click. Roving
+         * tabindex so the group is one tab stop and arrows move within it. */
+        function paint(v) {
+            value = v;
+            opts().forEach(function (b) {
+                var on = b.getAttribute('data-cadence') === v;
+                b.setAttribute('aria-checked', on ? 'true' : 'false');
+                b.tabIndex = on ? 0 : -1;
+            });
+            // Nothing checked ⇒ the group still needs a tab stop.
+            if (!opts().some(function (b) { return b.tabIndex === 0; }) && opts()[0]) {
+                opts()[0].tabIndex = 0;
+            }
+        }
+
+        function busy(on) {
+            box.setAttribute('data-busy', on ? '1' : '0');
+            opts().forEach(function (b) { b.disabled = !!on; });
+        }
+
+        function say(msg) { if (note) note.textContent = msg || ''; }
+
+        function choose(want) {
+            if (!want || want === value) return;
+            var was = value;
+            busy(true);
+            say('Saving…');
+            paint(want);                        // optimistic, reverted below on failure
+            ajax('lg_fd_cadence_set', { cadence: want, nonce: tok }).then(function (j) {
+                if (j && j.ok && typeof j.cadence === 'string') {
+                    paint(j.cadence);           // the STORED value, which may differ
+                    say(j.cadence === want ? 'Saved.' : 'Saved as ' + (FREQ_LABELS[j.cadence] || j.cadence) + '.');
+                } else {
+                    paint(was);
+                    say('Could not save — try again.');
+                }
+            }).catch(function () {
+                paint(was);
+                say('Network error — try again.');
+            }).then(function () { busy(false); });
+        }
+
+        seg.addEventListener('click', function (e) {
+            var b = e.target.closest ? e.target.closest('[data-cadence]') : null;
+            if (b && !b.disabled) choose(b.getAttribute('data-cadence'));
+        });
+
+        /* Radiogroup keyboard contract. Without this the control is a row of
+         * buttons wearing radio roles — it announces as a radiogroup and then does
+         * not behave like one, which is its own small lie. */
+        seg.addEventListener('keydown', function (e) {
+            var list = opts();
+            if (!list.length) return;
+            var i = list.indexOf(document.activeElement);
+            if (i < 0) return;
+            var to = -1;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') to = (i + 1) % list.length;
+            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') to = (i - 1 + list.length) % list.length;
+            else if (e.key === 'Home') to = 0;
+            else if (e.key === 'End') to = list.length - 1;
+            if (to < 0) return;
+            e.preventDefault();
+            list[to].focus();
+            choose(list[to].getAttribute('data-cadence'));
+        });
+
+        ajax('lg_fd_cadence_state', {}).then(function (j) {
+            if (!j || !j.ok || typeof j.cadence !== 'string') { drop(); return; }
+            tok = j.nonce || '';
+            if (!tok) { drop(); return; }       // no nonce ⇒ every write would 403
+
+            /* Rebuild the pills from the endpoint's list so this page can never
+             * offer a cadence lg_fd_cadences() would refuse. The server-rendered
+             * skeleton is only a placeholder. */
+            if (Array.isArray(j.options) && j.options.length) {
+                seg.textContent = '';
+                j.options.forEach(function (v) {
+                    var b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'lg-manage-sub__fol-freq-opt';
+                    b.setAttribute('role', 'radio');
+                    b.setAttribute('data-cadence', v);
+                    b.textContent = FREQ_LABELS[v] || (v.charAt(0).toUpperCase() + v.slice(1));
+                    seg.appendChild(b);
+                });
+            }
+            paint(j.cadence);
+            box.setAttribute('data-state', 'ready');
+            box.hidden = false;
+        }).catch(drop);
     }
 
     /* ── 2a. per-row 🔔/✉ toggles (LG_FOLLOWING_ROW_TOGGLES) ─────────────────
@@ -399,4 +521,9 @@
     }
 
     hydrate();
+    /* Independent of hydrate() on purpose: the cadence is account-level, so it is
+     * still the right setting to show a member whose follow list failed to read or
+     * is empty. Coupling them would hide the control on exactly the page state
+     * where "why am I getting these emails" gets asked. */
+    initCadence();
 }());

@@ -412,8 +412,25 @@ function lg_fd_ajax_state(): void {
 	if ( ! lg_fd_cadence_ui_enabled( $uid ) ) {
 		wp_send_json( array( 'ok' => false, 'error' => 'not_enabled' ), 404 );
 	}
+	/* THE NONCE RIDES THE STATE RESPONSE — account-following, 2026-08-01.
+	 *
+	 * lg_fd_ajax_set() checks_ajax_referer('lg_fd_cadence'), and /manage-subscription/
+	 * is a STANDALONE front controller with NO WP BOOT (its :3 says so), so that page
+	 * cannot call wp_create_nonce() at render time. Without this line the transport
+	 * built for that surface is unusable FROM that surface — the write would 403 every
+	 * time, which is the "control that does nothing" §15.4 forbids, arriving by a
+	 * different door.
+	 *
+	 * Handing it out HERE and not on the page is also the stricter placement: this
+	 * endpoint has already refused non-served members two lines up, so the nonce only
+	 * ever reaches someone whose write would be accepted anyway. It cannot widen who
+	 * may write; it only lets the one surface that may write actually reach the writer.
+	 *
+	 * Additive, and scoped to the flag being on (the action is only registered under
+	 * LG_FOLLOW_DIGEST_ENABLED, :402), so the OFF state is untouched. */
 	wp_send_json( array( 'ok' => true, 'cadence' => lg_fd_cadence( $uid ),
-	                     'options' => lg_fd_cadences() ) );
+	                     'options' => lg_fd_cadences(),
+	                     'nonce' => wp_create_nonce( 'lg_fd_cadence' ) ) );
 }
 
 function lg_fd_ajax_set(): void {
