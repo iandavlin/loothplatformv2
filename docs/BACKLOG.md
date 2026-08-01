@@ -26,6 +26,7 @@ line into that lane's charter and note the lane name here.
 10. Add-discussion modal: resizable + text scaling
 11. Group chat header: collapse + text scale
 11.5 Emoji picker for the messages composer (Ian 8/1)
+11.6 Notifications: filter by type + bulk delete of that type (Ian 8/1)
 12. Post header: title legibility over text thumbnails
 13. PWA launch animation/message
 13.5 Craft gate RED: finder/anon Optimum.png oversized + raw (pre-existing, Nov 2024)
@@ -38,6 +39,30 @@ line into that lane's charter and note the lane name here.
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 2026-08-01 — Notifications: filter by type + bulk delete (Ian)
+
+Ian 8/1: let a member FILTER their notifications by type — e.g. select "accepted your
+connection request" — and then DELETE ALL of that type at once. Today the bell is a flat
+list with no way to clear a class of noise in bulk.
+
+Shape: a type filter on the notifications panel (the types are already first-class —
+`connection_request`, `connection_accept`, `forum.reply_to_topic`, `forum.reply_to_reply`,
+`forum.mention`, `forum.followed_topic`, `reaction.on_post` — see profile-app/src/
+Notifications.php and the notifications_type_check constraint). Filter the list to one
+type, then a bulk action that dismisses/deletes every row of that type for that member.
+
+⚠️ Two things to get right:
+1. DELETE vs DISMISS. `notifications` is member-deletable and 30-day-pruned — an inbox,
+   not a ledger (recap-notif-bridge, 7/31). A bulk delete is destructive and permanent for
+   that member. Decide whether "delete" means soft-dismiss (recoverable, keeps the
+   occurred-record) or a real row delete, and say which in the UI.
+2. THE RECAP READS THIS STORE. The weekly-digest recap is sourced from
+   `profile_app.notifications`. Bulk-deleting a type would silently empty that member's
+   recap for those items. Coordinate with whatever owns the recap before shipping.
+
+Member-facing: mock first (phone + desktop), flag OFF-default, gate the bulk action
+affects ONLY the selected type and ONLY that member. Deploy by pull.
 
 ## 2026-08-01 — Emoji picker for messages (Ian)
 
