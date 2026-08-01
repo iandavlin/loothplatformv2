@@ -1,0 +1,54 @@
+=== 1. IN-WINDOW HUB ROWS THE DIGEST ADMITS, BY TYPE AND READ STATE ===
+(read rows are the ones the current rule DISCARDS)
++----------------------+-----------+-------------+----------------+
+|         type         | in_window | unread_kept | read_discarded |
++----------------------+-----------+-------------+----------------+
+| forum.mention        |         7 |           4 |              3 |
+| forum.reply_to_reply |         6 |           3 |              3 |
+| forum.reply_to_topic |         9 |           5 |              4 |
++----------------------+-----------+-------------+----------------+
+(3 rows)
+
+
+=== 2. THE SAME ROWS, ALL-TIME — is the read gate discarding most of the corpus? ===
++----------------------+----------+--------+-------+
+|         type         | all_time | unread | read_ |
++----------------------+----------+--------+-------+
+| forum.mention        |        7 |      4 |     3 |
+| forum.reply_to_reply |        6 |      3 |     3 |
+| forum.reply_to_topic |        9 |      5 |     4 |
++----------------------+----------+--------+-------+
+(3 rows)
+
+
+=== 3. THE HEADLINE: members whose digest the read gate CANCELS ===
+holds >=1 in-window admitted forum row, ALL of them read, and NOTHING else to send:
+no pending connection_request, no unread in-window DM. Today these members get NO EMAIL.
++------------+------------------------------------+---------------------+
+| wp_user_id |            display_name            | read_rows_discarded |
++------------+------------------------------------+---------------------+
+|        621 | Sean RT  / Gold City Guitar Repair |                   3 |
+|          1 | Ian Davlin                         |                   1 |
+|        118 | Mike Kugler Kugler Guitars         |                   1 |
+|        627 | Karl Borum - Borum Acoustics       |                   1 |
++------------+------------------------------------+---------------------+
+(4 rows)
+
+
+=== 4. SAME, AS COUNTS (cancelled) vs merely SHORTENED ===
++---------------------+------------------+-----------------+
+| members_losing_rows | merely_shortened | email_cancelled |
++---------------------+------------------+-----------------+
+|                   7 |                2 |               4 |
++---------------------+------------------+-----------------+
+(1 row)
+
+
+=== 5. IAN HIMSELF — the case that prompted the question ===
++------------+--------------+---------------+---------+-------------------------------+-----------+
+| wp_user_id | display_name |     type      | is_read |          created_at           | in_window |
++------------+--------------+---------------+---------+-------------------------------+-----------+
+|          1 | Ian Davlin   | forum.mention | t       | 2026-07-31 22:37:42.590675+00 | t         |
++------------+--------------+---------------+---------+-------------------------------+-----------+
+(1 row)
+
