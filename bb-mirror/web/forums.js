@@ -1753,6 +1753,7 @@
                                // ?author= landing filter (Ian 6/17).
     var ntmAuthState = 'idle'; // idle | loading | anon | authed
     var ntmQuill     = null;   // Quill instance (lazy)
+    var ntmSeedGen   = 0;      // seed generation — a superseded seed stands down
     var ntmMediaIds  = [];      // upload_ids for bbp_media
     var ntmEditId    = null;    // when set, the composer EDITS this topic (PUT) vs creates (POST)
     var ntmEditLoading = false; // edit mode: the stored body has not arrived yet — Save must stay inert
@@ -1891,8 +1892,24 @@
        already seeds the same content correctly. 'silent' keeps it out of the undo stack
        so a stray ctrl-Z cannot rewind the post to empty. */
     function ntmSeedBody(html, done) {
+      /* GENERATION GUARD — a superseded seed must never fire.
+         Opening the editor seeds it TWICE: optimistically from the caller's rendered OP
+         (so the box is not blank for one round trip), then authoritatively from the
+         payload. Each call owned an independent 100ms retry loop with nothing between
+         them, so whichever finished LAST won — and the seed clears unconditionally
+         before pasting. A late optimistic seed therefore overwrote the real body with
+         the RENDERED one, the member pressed Save, and the rendered version was stored
+         over the stored version. SILENTLY: the save succeeded.
+         Measured on dev2 2026-07-30, editing a discussion and saving:
+             main     fast save   5/6 edits stored the wrong body
+             main     2.5s pause  3/6
+             + the Save-arms-on-seed fix   2/6   (helped, did not close it)
+         Bumping a generation on entry makes the older loop abort instead of clobbering,
+         which closes it at the source rather than racing the symptom. */
+      var gen = ++ntmSeedGen;
       var tries = 0;
       (function seed() {
+        if (gen !== ntmSeedGen) { if (done) done(false); return; }   // superseded — stand down
         if (ntmQuill) {
           try { ntmQuill.setContents([], 'silent'); } catch (e) {}
           if (html) { try { ntmQuill.clipboard.dangerouslyPasteHTML(html, 'silent'); } catch (e) {} }

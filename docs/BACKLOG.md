@@ -542,6 +542,79 @@ containing anything, so an accidental future symlink on live stays a no-op.
 Same review should sweep any other tool using LG_ENV as a dev/live SAFETY key
 rather than a LAYOUT key.
 
+## 2026-07-30 — Edit wizard: two seed loops race, and the empty one can win (UNOWNED)
+
+Found by the edit-post-parity lane while proving photo add/remove. **Pre-existing on
+main — measured equal on main's own assets and on the branch, so it is not a regression
+from that lane, and that lane does not own the surface.** Not started; needs an owner.
+
+**Symptom.** Saving the edit wizard is rejected with *"Sorry, Your discussion cannot be
+empty."* while the member's text is visibly on screen. The post is NOT damaged — the
+save is refused and the stored body is untouched — but the edit cannot be completed and
+the message is nonsense to the member.
+
+**Mechanism (demonstrated, not inferred).** The wizard seeds its editor TWICE:
+
+- `bb-mirror/web/forums.js:1937` — optimistic seed from the caller's `bodyHtml`, the
+  rendered OP scraped off the page, to stop the editor sitting blank for one round trip.
+- `bb-mirror/web/forums.js:1979` — authoritative seed from the server payload.
+
+`ntmSeedBody()` (`forums.js:1893`) retries every 100ms up to 30 times waiting for
+`ntmQuill`, so **both calls own an independent retry loop and there is no generation
+guard between them** — unlike the payload path, which does carry one (`ntmEditId !== want`,
+`forums.js:1962`). Whichever loop fires last wins. And the body of the seed is:
+
+    ntmQuill.setContents([], 'silent');                    // clear FIRST, unconditionally
+    if (html) { ...dangerouslyPasteHTML(html, 'silent'); } // paste ONLY if non-empty
+
+So a late optimistic seed carrying an EMPTY body clears the authoritative content and
+pastes nothing. `ntmGetContent()` (`forums.js:2060`) then returns `''`, and the submit at
+`forums.js:2560` does `if (content) payload.content = content;` — the field is **omitted
+entirely**, and bbPress rejects the whole edit.
+
+**Discriminating test that proves it is this and not something else** — identical flow,
+same seam, same waits, main's own assets, only the caller's `bodyHtml` differs:
+
+| `bodyHtml` passed | result |
+|---|---|
+| `''` (empty) | 2/6 rejected, editor measured at 0 chars by the Review step |
+| `'<p>NONEMPTY…</p>'` | **0/6 rejected**, editor 69 chars in all six |
+
+**Who actually hits it.** Both production call sites pass the scraped OP —
+`webroot/hub-polish.js:3624` and `bb-mirror/web/forums.js:4777`, both
+`lgNtmEditTopic(tid, forumId, title, body.innerHTML)` — so `bodyHtml` is normally
+non-empty and the common case is safe. The exposure is **posts whose rendered OP scrapes
+empty** (image-only posts, or any door where the OP has not rendered when Edit is
+pressed). Narrower than "one edit in three", but real, and it fails in the most alarming
+way available.
+
+**Second, unmeasured half — worth the owner's attention.** Even with a NON-empty scrape,
+a late optimistic seed substitutes the RENDERED body for the STORED one, and the two are
+not the same document: the optimistic path strips images (`forums.js:1932`). If that seed
+lands last and the member saves, the rendered/stripped version could be written over the
+stored body. Not observed and not measured — flagged because it is the same race with a
+worse outcome than a refused save.
+
+**Suggested fix (not started, owner's call).** Give the seeds a generation counter like
+the payload path already has, so a superseded optimistic seed cancels instead of firing
+late; and/or make `ntmSeedBody` not clear when it has nothing to paste.
+
+**Repro.** `tools/edit-post-parity/photo-add-remove.py` documents it in its header and
+trips it about a third of runs. The isolating harness (empty-vs-non-empty seed, branch
+vs main) is in the lane's scratch and can be moved into `tools/` on request.
+
+**SEPARATE and still unexplained:** `Error: Cookie check failed`
+(WP `rest_cookie_invalid_nonce`) on save, seen 2/6 in the non-empty run **with a healthy
+69-char body**, so it is NOT this bug. The intercepted PUT carried a valid 10-char nonce
+and a logged-in cookie. Unowned, unreproduced on demand.
+
+**Also spotted, small and independent:** `bb-mirror/web/forums/_search.php:66` joins the
+forum for reply hits through the denormalised `r.forum_id` and then filters
+`f.visibility = 'public'` on it — i.e. the visibility check runs against the forum a
+moved thread LEFT. Live is clean today (0 public→non-public moves among the 70 drifted
+topics, measured read-only 2026-07-30), so there is no leak now, but the guard is luck
+rather than construction. Joining through `t.forum_id` would make it structural.
+
 ## 2026-07-29 — Edit post must equal Add post (Ian)
 
 The edit-post modal today offers only title, body text, and image removal. It

@@ -23,37 +23,31 @@ HTMLInputElement.prototype.click so a file input parks itself in the document un
 known id instead of opening a chooser. The app's own onchange handler is untouched and
 runs exactly as it would for a member.
 
-STATUS, stated honestly: the MECHANISM IS PROVEN, the RUN IS NOT DETERMINISTIC.
-Two full runs went 14/14 with the DB agreeing at every step — one picked file produced
-exactly one bp_media row, and removing it returned the topic to no photos. But roughly a
-third of runs fail, and NOT in the photo code:
+STATUS: PROVEN on both viewports, and now deterministic — but read the next paragraph
+before trusting a red run.
 
-  Error: Sorry, Your discussion cannot be empty.
+  DESKTOP 1280 : the wizard's Photos step, control .lgw-addphoto
+  MOBILE  390  : no wizard by design (buildNtmWizard returns null below 641px), so the
+                 tray sits inline under the editor and the control is the fbStyleComposer
+                 Photo button [data-fbc-photo], which calls lgNtmPhoto() directly — the
+                 iOS-gesture-safe path (hub-polish.js:1284). Same tray helper underneath.
+  Select with EPP_VIEWPORT=mobile.
 
-That is bbPress rejecting the save because the composer omitted `content`. The submit
-does `if (content) payload.content = content;`, so an empty ntmGetContent() drops the
-field entirely and bbPress refuses the whole edit. Sampling the editor shows why: the
-body is present right after open (69 chars, waited for), and measured EMPTY (0 chars) by
-the time the Review step is reached. Something between opening the wizard and stepping
-to Photos/Review clears the editor.
+THIS TOOL ONCE FAILED ~1/3 OF RUNS FOR A REASON THAT WAS NOT THE PHOTO CODE, and the
+avoidance is deliberate rather than cosmetic. open_edit() passes a NON-EMPTY bodyHtml to
+lgNtmEditTopic. With an EMPTY one, the wizard's two seed loops race (forums.js:1937
+optimistic vs :1979 authoritative, no generation guard) and a late empty optimistic seed
+clears the editor; the submit then omits `content` entirely (forums.js:2560) and bbPress
+rejects the save with "Sorry, Your discussion cannot be empty." That is a real
+PRE-EXISTING bug on main — measured equal on main's own assets and on this branch — and
+it is written up as its own backlog item; it is NOT this lane's and NOT this tool's
+subject. Passing a non-empty body is what a real Edit button does anyway (both call
+sites pass the scraped OP: hub-polish.js:3624, forums.js:4777), so this is the member's
+path, not a workaround that hides anything.
 
-NOT THIS BRANCH, and that was checked before it was written down. Same flow, same seam,
-same waits, the only difference being whose forums.js the page ran:
-
-  main   (serve's own assets, NO injection) : 2/6 runs rejected, bodyLen 0
-  branch (this worktree's assets)           : 2/6 runs rejected, bodyLen 0
-
-Pre-existing, equal rate, so it is not a regression here and this lane does not own it.
-Worth a lane of its own: a member editing a post, glancing at Photos and pressing Save is
-told their discussion cannot be empty about one time in three. NO DATA IS LOST — the save
-is REJECTED and the post is untouched — but the edit cannot be completed. The stray
-"Error: Cookie check failed" flagged earlier in this lane also coincided with bodyLen 0,
-so the two observations are probably one bug.
-
-Consequence for THIS tool: a red run is not evidence that photo add/remove is broken.
-Check the status line first — if it says the discussion cannot be empty, the save never
-reached the media code. --clean (EPP_PHOTO_CLEAN=1) strips any photos a failed run left
-behind and may itself need a retry for the same reason.
+  If a run still dies on "cannot be empty", it is that bug, not the photo code — the save
+  never reached the media endpoint. EPP_PHOTO_CLEAN=1 strips photos a failed run left
+  behind.
 
   EPP_API_ORIGIN=http://127.0.0.1:8797 python3 tools/edit-post-parity/photo-add-remove.py
   EPP_API_ORIGIN=http://127.0.0.1:8797 EPP_PHOTO_CLEAN=1 python3 …/photo-add-remove.py
@@ -68,6 +62,14 @@ DESKTOP = {"width": 1280, "height": 1000, "deviceScaleFactor": 1, "mobile": Fals
            "screenWidth": 1280, "screenHeight": 1000}
 UA_DESK = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
            "Chrome/151.0.0.0 Safari/537.36")
+# VIEWPORT. Desktop drives the WIZARD's Photos step; mobile has no wizard by design
+# (buildNtmWizard returns null below 641px), so its tray is inline under the editor and
+# its photo control is the fbStyleComposer's own button, which calls lgNtmPhoto() direct
+# — the iOS-gesture-safe path (hub-polish.js:1284). Same tray helper underneath, so this
+# proves the SAME add/remove on the surface a phone actually uses.
+MOBILE  = os.environ.get("EPP_VIEWPORT", "desktop").lower().startswith("m")
+ADD_SEL = "[data-fbc-photo]" if MOBILE else ".lgw-addphoto"
+VP      = "MOBILE 390" if MOBILE else "DESKTOP 1280"
 PHOTO = os.environ.get("EPP_PHOTO", "/tmp/claude-1000/-home-ubuntu-worktrees-edit-post-parity/"
                                     "55596bd1-abe0-471f-ad25-20d285d0b750/scratchpad/reprove/"
                                     "zz-edit-parity-photo.png")
@@ -121,8 +123,14 @@ TRAY = ("(function(){return {items:document.querySelectorAll('.lg-mtray__item').
         "status:(document.getElementById('ntm-status')||{}).textContent||''};})()")
 
 
+# The rendered-OP pre-fill a real Edit button passes. NOT cosmetic — see the header:
+# an EMPTY bodyHtml trips the pre-existing seed race and the save is refused, which has
+# nothing to do with photos and would make this tool flaky about a third of the time.
+SEED_BODY = "<p>optimistic pre-fill, as the real Edit control passes</p>"
+
+
 async def open_edit(s):
-    await s.ev(f"window.lgNtmEditTopic({TOPIC},3837,'','')")
+    await s.ev("window.lgNtmEditTopic(%d,3837,'',%s)" % (TOPIC, json.dumps(SEED_BODY)))
     for _ in range(80):
         if any("/reply" in c for c in s.api_served):
             break
@@ -139,6 +147,15 @@ async def goto_step(s, n):
     await asyncio.sleep(1)
     return await s.ev("(function(){var c=document.querySelector('.lgw-step.is-active');"
                       "return c?c.dataset.step:null})()")
+
+
+async def to_step(s, n):
+    """Desktop: move the wizard. Mobile: nothing to move — the flat form shows the
+    editor, the inline tray and Post all at once, which is exactly why parity here is
+    per-viewport rather than one composer everywhere."""
+    if MOBILE:
+        return "flat"
+    return await goto_step(s, n)
 
 
 async def save(s):
@@ -165,8 +182,12 @@ async def session():
     await s.send("Network.clearBrowserCookies")
     for c in bv.mint_cookies():
         await s.send("Network.setCookie", c)
-    await s.send("Emulation.setDeviceMetricsOverride", DESKTOP)
-    await s.send("Emulation.setUserAgentOverride", {"userAgent": UA_DESK})
+    await s.send("Emulation.setDeviceMetricsOverride", bv.IPHONE if MOBILE else DESKTOP)
+    if MOBILE:
+        await s.send("Emulation.setTouchEmulationEnabled",
+                     {"enabled": True, "maxTouchPoints": 5})
+    await s.send("Emulation.setUserAgentOverride",
+                 {"userAgent": bv.UA_IOS if MOBILE else UA_DESK})
     await s.send("Page.navigate", {"url": f"https://{HOST}/hub/"})
     await s.wait_for("document.readyState === 'complete'")
     return tab, ws, s
@@ -180,7 +201,7 @@ async def clean_only():
     tab, ws, s = await session()
     try:
         await open_edit(s)
-        await goto_step(s, 3)
+        await to_step(s, 3)
         await s.wait_for("document.querySelectorAll('.lg-mtray__item').length > 0", tries=120)
         n = await s.ev("(function(){var xs=document.querySelectorAll('.lg-mtray__rm');"
                        "Array.prototype.forEach.call(xs,function(x){x.click();});"
@@ -188,7 +209,7 @@ async def clean_only():
         print(f"  cleared {n} thumb(s)")
         await asyncio.sleep(1.5)
         left = await s.ev("document.querySelectorAll('.lg-mtray__item').length")
-        step = await goto_step(s, 4)
+        step = await to_step(s, 4)
         closed = await save(s)
         status = await s.ev("(document.getElementById('ntm-status')||{}).textContent||''")
         print(f"  thumbs left={left} step={step} closed={closed} status={status!r}")
@@ -214,14 +235,16 @@ async def main():
         return 2
 
     # ── ADD ────────────────────────────────────────────────────────────────────
-    print("\n===== ADD a photo through the wizard's Photos step =====")
+    print(f"\n===== {VP}: ADD a photo through the real photo control =====")
     tab, ws, s = await session()
     try:
         check("edit opens and seeds", await open_edit(s))
-        check("Photos step reachable", str(await goto_step(s, 3)) == "3")
+        st3 = await to_step(s, 3)
+        check("photo control reachable", st3 in ("3", "flat"), str(st3))
         check("photo control parked (no OS chooser)", await s.ev(PARK) in ("ok", "already"))
-        await s.ev("(function(){var b=document.querySelector('.lgw-addphoto');"
-                   "if(b)b.click();return !!b;})()")
+        tapped = await s.ev("(function(){var b=document.querySelector(%s);"
+                            "if(!b)return false;b.click();return true;})()" % json.dumps(ADD_SEL))
+        check(f"the real photo control exists and is tappable ({ADD_SEL})", tapped is True)
         parked = await s.wait_for("window.__lgFileReady === true", tries=40)
         check("the composer asked for a file", parked)
 
@@ -245,7 +268,7 @@ async def main():
         check("a thumb appears in the tray after upload", got, json.dumps(await s.ev(TRAY)))
         # Upload must have SETTLED before saving, or keep/add ids are sent half-built.
         await s.wait_for("!document.querySelector('.lg-mtray.is-uploading')", tries=160)
-        await goto_step(s, 4)
+        await to_step(s, 4)
         print(f"    body len: at-step4-before-save = {await s.ev(BODY)}")
         check("saved (composer closed)", await save(s),
               await s.ev("(document.getElementById('ntm-status')||{}).textContent||''"))
@@ -263,11 +286,12 @@ async def main():
           f"{len(before)} -> {len(after_add)}")
 
     # ── REMOVE ─────────────────────────────────────────────────────────────────
-    print("\n===== REMOVE that photo through the same tray =====")
+    print(f"\n===== {VP}: REMOVE that photo through the same tray =====")
     tab, ws, s = await session()
     try:
         check("edit reopens and seeds", await open_edit(s))
-        check("Photos step reachable again", str(await goto_step(s, 3)) == "3")
+        st3b = await to_step(s, 3)
+        check("photo control reachable again", st3b in ("3", "flat"), str(st3b))
         # The stored photo must come back as a removable thumb, or there is nothing
         # to take away and "remove" would pass by having nothing to do.
         shown = await s.wait_for("document.querySelectorAll('.lg-mtray__item').length > 0",
@@ -285,7 +309,7 @@ async def main():
         check("thumb removed in the UI",
               await s.ev("document.querySelectorAll('.lg-mtray__item').length") == 0,
               json.dumps(await s.ev(TRAY)))
-        await goto_step(s, 4)
+        await to_step(s, 4)
         check("saved (composer closed)", await save(s),
               await s.ev("(document.getElementById('ntm-status')||{}).textContent||''"))
     finally:
