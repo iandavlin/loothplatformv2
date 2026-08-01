@@ -126,9 +126,23 @@ either file can see. So:
 | 10 | `tools/gates/react-types-cover-standalone-gate.sh` | a rendered react button's type is one the endpoint ACCEPTS | loopback |
 | 11 | `tools/gates/shop-planner-url-gate.sh` | `/shop-layout-planner/` still answers 200 **and still mounts the planner** | loopback, or `ssh live-ro` with `--live` |
 | 12 | `tools/gates/anon-signin-reachable-gate.py` | an ANON visitor can **reach** Sign in in ≤1 tap at every width — visible *and* hit-tested, not merely in the DOM | **a browser on CDP :9222** |
-| 13 | `tools/gates/dev-files-anon-unreachable-gate.py` | lane/dev tooling inside a deployed plugin tree is **unreachable by an anonymous request** — 404/403, not "absent from my checkout" | starts its own **gate-free** nginx (dev2's armed gate would 403 everything and false-pass) |
-
 | 13 | `tools/gates/follow-digest-gate.py` | **PROMOTED into the sequence by this merge** (it was HELD OUT and red on purpose while the sender did not exist). The follow-digest flag's OFF state sends NOTHING: no cron armed, no cadence stored, the suppression filter proven to be the identity function, and the resolver proven to return zero recipients | wp-cli |
+| 14 | `tools/gates/dev-files-anon-unreachable-gate.py` | lane/dev tooling inside a deployed plugin tree is **unreachable by an anonymous request** — 404/403, not "absent from my checkout" | starts its own **gate-free** nginx (dev2's armed gate would 403 everything and false-pass) |
+| 15 | `tools/gates/cadence-control-gate.py` | the account-level email-frequency control is **PRESENT when `LG_FOLLOWING_CADENCE` is on and ABSENT when it is off** — and still hidden when the flag is on but the sender would not serve that member. Also: `hidden` actually hides (the UA rule loses to `display:flex`), and the page's only cadence write is follow-digest's transport, never usermeta and never `follow.php` | needs the lane preview up: `sudo tools/preview/lane-preview.sh up account-following` |
+
+> **Two rows both said "13" until 2026-08-01** — dev-files-anon and follow-digest,
+> minted by different lanes in the same window. Same collision as the "9/9" one in
+> `run-all.sh`. **Mint a gate number from `origin/main`'s count, never your
+> branch's**, and re-check it immediately before you push.
+
+**Gate 15 asserts an ABSENCE, which is the half this codebase kept missing.** Gates
+assert what should be PRESENT; all six defects that reached Ian's phone through a
+green suite were things that should have been absent and were not. A control that is
+meant to be invisible is precisely what nobody writes an assertion for. It proves
+both directions by diffing two surfaces that really exist — the live page and the
+lane preview — and its `--prove` pass runs every predicate against the surface it was
+written to REJECT. That pass immediately caught two of the gate's own assertions
+being worthless, which is the argument for having it.
 
 **Gate 13 is written BEFORE the feature it guards, and that is the point.** Every
 other gate here encodes a defect class found twice. Email is unrecallable, so the
