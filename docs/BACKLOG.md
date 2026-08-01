@@ -6,25 +6,19 @@ line into that lane's charter and note the lane name here.
 ## PRIORITY INDEX (the order — edit THIS to re-rank; tell keeper "bump X")
 
 **P0 — live/member-facing bugs**
-0. 🔴 MISSION CRITICAL: anon front page nav overlay hides every link INCLUDING Sign in — signed-out members cannot get back in
-1. Reacting on a shorty fails on LIVE
-2. BUG: fresh reply prefilled with last reply's data — *edit-post-parity fixing*
-3. Profile social links go stale on posts/events (member-reported)
 
 **P1 — wanted now / deploy-blocking**
 3.7 Mobile: discussion embed broken + card video won't play (member-facing)
 3.5 SEO/sitemap: zero discussions submitted — Google indexes the mirrored forum + defunct /shop/ and /merch/ (200s)
-4. Follow-controls consolidation modal — *deploy gate; thread-follow building*
 5. Notifications: quick-reply modal (default) w/ full-post link
 6. Admin can edit ANY post, full functionality
 7. Discussion hub cards: play video inline ★
 8. Front page: latest weekly email for logged-out users
-9. Shop Layout Planner: standalone render + apps index page (live traffic today)
+9. Shop Layout Planner — apps index page ONLY (standalone render SHIPPED to live)
 
 **P2 — polish / UX**
 9. Advanced search: dynamic facet narrowing
 10. Add-discussion modal: resizable + text scaling
-11. Group chat header: collapse + text scale
 11.5 Emoji picker for the messages composer (Ian 8/1)
 11.6 Notifications: filter by type + bulk delete of that type (Ian 8/1)
 12. Post header: title legibility over text thumbnails
@@ -39,6 +33,18 @@ line into that lane's charter and note the lane name here.
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## ✅ SHIPPED TO LIVE — cleared from the index 2026-08-01
+
+- **anon front page nav overlay hides every link INCLUDING Sign in — signed-out members cannot get back in** — anon-frontdoor, live @ e8362fa — gated 10/10 widths
+- **Reacting on a shorty fails on LIVE** — shorty-react, live — proven through the real button 9/9
+- **BUG: fresh reply prefilled with last reply's data — *edit-post-parity fixing*** — edit-post-parity, live — Ian: keep drafts per topic
+- **Profile social links go stale on posts/events (member-reported)** — profile-social-links, live — bylines resolve live, flag ON
+- **Follow-controls consolidation modal — *deploy gate; thread-follow building*** — thread-follow variant A, live — modal + card v3
+- **Group chat header: collapse + text scale** — react-fix, live — 148px→80px clamp + '+N more', text 15px
+- **Follow/topic-activity email (follow-digest)** — batcher proven end-to-end to Ian's inbox; cadence control built, flag OFF
+- **Messages: react reachable + sizing** — react-fix, live
+
 
 ## 2026-08-01 — Notifications: filter by type + bulk delete (Ian)
 
