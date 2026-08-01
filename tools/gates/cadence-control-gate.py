@@ -80,11 +80,18 @@ def log(msg):
 
 
 def cannot_run(why):
+    """No verdict. EXIT 2 — run-all.sh's third state, and getting this wrong is not
+    cosmetic: its run() helper treats 0 as green, 2 as NO VERDICT and *anything
+    else* as RED. This exited 3 in the first draft, which would have counted a
+    missing lane preview as a real finding and blocked every other lane's push for
+    a reason that has nothing to do with their code. One unflagged lane blocking
+    everyone else's deploy is the failure CLAUDE.md is loudest about."""
     print("\n############ cadence-control gate CANNOT RUN ############")
     print("  " + why)
     print("  Not reported as GREEN: an unrun gate that prints green is worse than")
-    print("  no gate, because it retires the question.")
-    sys.exit(3)
+    print("  no gate, because it retires the question. Not reported as RED either:")
+    print("  a red with no findings is indistinguishable from real ones.")
+    sys.exit(2)
 
 
 def mint_cookies(uid):

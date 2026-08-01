@@ -97,7 +97,7 @@ foreach ( array( 'lg_fd_cadence', 'lg_fd_set_cadence', 'lg_fd_due_recipients',
 	if ( ! function_exists( $fn ) ) {
 		bad( "$fn() is not loaded — the branch sender did not boot" );
 		say( "\nCANNOT RUN: the sender is not in this process. Set LG_FD_MU_DIR.\n" );
-		exit( 70 );
+		exit( 2 );
 	}
 }
 ok( 'the branch sender is loaded' );
@@ -106,7 +106,7 @@ if ( ! defined( 'LG_FOLLOW_DIGEST_ENABLED' ) || ! LG_FOLLOW_DIGEST_ENABLED ) {
 	say( "\nCANNOT RUN: lg_fd_due_recipients() returns array() unconditionally while the\n"
 	   . "flag is off, so both arms would 'pass' by being empty. Re-run with\n"
 	   . "  env LG_FOLLOW_DIGEST=1 …   (and note that sudo strips it)\n" );
-	exit( 70 );
+	exit( 2 );
 }
 ok( 'LG_FOLLOW_DIGEST_ENABLED is true' );
 
@@ -123,7 +123,7 @@ if ( $uid < 1 ) {
 	) );
 	if ( is_wp_error( $uid ) ) {
 		bad( 'could not create the canary: ' . $uid->get_error_message() );
-		exit( 70 );
+		exit( 2 );
 	}
 	$uid  = (int) $uid;
 	$made = true;
@@ -164,7 +164,7 @@ if ( ! lg_fd_allowed( $uid, (string) $u->user_email ) ) {
 	say( "\nCANNOT RUN: re-run with\n"
 	   . "  env LG_FOLLOW_DIGEST_ALLOWLIST='$uid:" . CANARY_EMAIL . "' …\n"
 	   . "Without it both arms come out 'not due' and the run proves nothing.\n" );
-	exit( 70 );
+	exit( 2 );
 }
 ok( 'the canary is on the resolved allowlist' );
 
@@ -258,7 +258,13 @@ if ( 'daily' === lg_fd_cadence( $uid ) && ! $gets_instant( $uid ) && ! $due_b ) 
  *
  * ⚠️ THIS PHASE IS EXPECTED RED until follow-digest lands that condition. It is
  * reported as an OPEN DEFECT rather than a failed assertion so that nobody reads this
- * script's non-zero exit as "the harness is broken". */
+ * script's non-zero exit as "the harness is broken".
+ *
+ * EXIT CODES FOLLOW run-all.sh's HOUSE CONVENTION: 0 green, 1 RED (real findings —
+ * which an open defect is), 2 CANNOT RUN (no verdict). Getting that wrong is not
+ * cosmetic: run() treats anything other than 0 or 2 as red, so a script that exits 3
+ * or 70 for "could not run" reports a missing environment as a finding and blocks
+ * every other lane's push for a reason unrelated to their code. */
 say( "\n[5] THE REPAIR INVARIANT — can a member in the black hole get out?" );
 say( "    (arm B left this row: cadence=daily, no watermark)" );
 eq( 'the writer accepts the same cadence again', lg_fd_set_cadence( $uid, 'daily' ), true );
@@ -340,7 +346,7 @@ if ( $DEFECT ) {
 	foreach ( $DEFECT as $d ) { printf( "  · %s\n", $d ); }
 	say( "" );
 	say( "Non-zero exit is CORRECT: the defect is real and still open." );
-	exit( 2 );
+	exit( 1 );
 }
 say( "\nGREEN — and the repair invariant holds too." );
 exit( 0 );
