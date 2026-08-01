@@ -1,5 +1,47 @@
 # Recap under-reporting — the trace (recap-notif-bridge lane, 2026-08-01)
 
+> ## ⏸ STATUS: PARKED 2026-08-01 (keeper). Trace complete, NOTHING BUILT.
+>
+> Parked by keeper: this is **WEEKLY DIGEST** territory — the `weekly-recap` lane in
+> `BACKLOG.md` owns that project — and Ian was at 95% budget closing out follow-digest.
+> The trace below is finished and needs no rework. **Two findings survive it, and they are
+> NOT the same kind of thing:**
+>
+> **LEAK A — the bell hard-DELETEs the recap's only source data. A bug under ANY reading;
+> does NOT depend on Ian's ruling.**
+> `me-notifications.php:75` → `Notifications::delete()` `:262` (dismiss one) and
+> `me-notifications.php:71` → `deleteAll()` `:277` (Clear all) issue a real `DELETE`.
+> The recap reads that same table, so clearing your bell erases your week — `deleteAll`
+> nukes it in one click. Measured: **on 2026-07-31, 17 hub notifications were raised and
+> only 12 survive.** Fix shape (not built): soft-delete, or an immutable `occurred` record
+> so the inbox stays clearable without costing the digest its history.
+>
+> **LEAK B — the recap is unread-only. BLOCKED ON IAN, and the two sources of truth
+> disagree.**
+> `Recap.php:120-123` (`OUTSTANDING`, spliced at `:209`): hub rows have no `connection_id`,
+> so the filter is `n.is_read = false`. `Recap.php:15` records this as Ian's own 2026-07-27
+> ruling — *"THE SECTION IS 'WHAT YOU MISSED', NOT 'YOUR WEEK'"*. **This lane's charter
+> asserts the opposite** ("a 'what happened this week' list, not 'what you haven't read'").
+> Those are two different products. **Do not resolve this by reading the code — the code is
+> one side of the disagreement.** Ian breaks the tie.
+>
+> **BLOCKED BY:** Ian. **UNBLOCKED BY:** one ruling — *is the recap "what you missed"
+> (keep `is_read=false`) or "what happened this week" (drop it)?* Leak A can proceed
+> without that answer.
+>
+> **RESUME NOTES**
+> - Branch `recap-notif-bridge` @ `ba57ad4`, pushed, tree clean. Doc-only — **zero code
+>   changed**, so there is nothing to unwind and nothing to flag.
+> - **The charter's gate as written would PASS TODAY** and must not be built as specified:
+>   the bridge already raises the row, so "member gets a `forum.reply_to_topic` row" is
+>   green over a live defect. It has to assert against `Recap::forMembers()` output *after*
+>   a dismiss and *after* a mark-read. See §4.
+> - Anything member-facing out of this merges behind a flag, defaulted OFF, with the OFF
+>   state itself gated.
+> - Stale memory corrected in passing: `forums.topic_follow` **is** present on live (3 rows).
+>   The "MISSING ON LIVE" memory is out of date.
+
+
 Ian, 2026-08-01: the weekly-digest RECAP under-reports. Measured on LIVE (read-only):
 `profile_app.notifications` holds exactly ONE row for him (`forum.mention`, `is_read=TRUE`)
 while `wp_bp_notifications` holds 5 unread `bbp_new_reply` rows.
