@@ -3,10 +3,14 @@
  * follow-digest-allowlist-proof.php — prove the allowlist HOLDS against real rows.
  *
  *   # build the branch harness once (this is the gate's own, and it is why the run
- *   # tests THIS branch instead of main — the serve symlinks main's sender):
- *   python3 tools/gates/follow-digest-gate.py --plugin platform/mu-plugins/lg-follow-digest.php
+ *   # tests THIS branch instead of main — the serve symlinks main's sender). The
+ *   # harness lives in a PRIVATE per-run directory; LG_FD_KEEP_HARNESS=1 keeps it and
+ *   # prints the path, because a fixed /tmp name is what let one run report on
+ *   # another run's harness:
+ *   LG_FD_KEEP_HARNESS=1 python3 tools/gates/follow-digest-gate.py \
+ *        --plugin platform/mu-plugins/lg-follow-digest.php
  *
- *   sudo -u looth-dev env LG_FOLLOW_DIGEST=1 LG_FD_MU_DIR=/tmp/lg-fd-gate-mu \
+ *   sudo -u looth-dev env LG_FOLLOW_DIGEST=1 LG_FD_MU_DIR=<the path it printed> \
  *        php platform/bin/follow-digest-allowlist-proof.php
  *
  * Standalone rather than `wp eval-file`, for two reasons that both bite: eval-file
@@ -252,8 +256,8 @@ ok( 'mailpit answers — the recipient oracle is live, so a zero is an observati
 
 if ( ! function_exists( 'lg_fd_allowed' ) || ! function_exists( 'lg_fd_tick' ) ) {
 	fwrite( STDERR, "refusing: the allowlist is not loaded. You are almost certainly testing MAIN.\n"
-		. "Run the gate once with --plugin to build /tmp/lg-fd-gate-boot.php, then pass\n"
-		. "--require=/tmp/lg-fd-gate-boot.php to wp.\n" );
+		. "Run the gate once with LG_FD_KEEP_HARNESS=1 --plugin <sender> to build a harness;\n"
+		. "it prints the private directory it kept. Pass that as LG_FD_MU_DIR.\n" );
 	exit( 77 );
 }
 $loaded = ( new ReflectionFunction( 'lg_fd_allowed' ) )->getFileName();

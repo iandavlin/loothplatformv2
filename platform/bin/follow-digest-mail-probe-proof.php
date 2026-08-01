@@ -2,8 +2,17 @@
 /**
  * follow-digest-mail-probe-proof.php — prove the CHANNEL PROBE tells the two apart.
  *
- *   sudo -u looth-dev env LG_FOLLOW_DIGEST=1 LG_FD_MU_DIR=/tmp/lg-fd-gate-mu \
+ *   sudo -u looth-dev env LG_FOLLOW_DIGEST=1 LG_FD_MU_DIR=<harness> \
  *        php platform/bin/follow-digest-mail-probe-proof.php
+ *
+ * <harness> is built by the gate, in a PRIVATE per-run directory — there is no longer a
+ * fixed /tmp name to hard-code, because sharing one was what let a run report on a
+ * harness it did not build. To get one to hand:
+ *
+ *   LG_FD_KEEP_HARNESS=1 LG_FOLLOW_DIGEST=1 python3 tools/gates/follow-digest-gate.py \
+ *        --plugin platform/mu-plugins/lg-follow-digest.php --expect-on
+ *
+ * which prints the path it kept. Normally the gate runs this file itself.
  *
  * ── THE CLAIM UNDER TEST ─────────────────────────────────────────────────────
  * The live one-shot used to refuse whenever ANY pre_wp_mail filter was registered.
@@ -17,6 +26,10 @@
  *   A  containment registered (dev2's true state)  ⇒  SWALLOWED, one-shot refuses
  *   B  killswitch only (LIVE's true state)         ⇒  CLEAR, one-shot may proceed
  *   C  an address that is not on the allowlist     ⇒  refused before anything is sent
+ *   D  a SYNTHETIC swallowing filter vs a SYNTHETIC selective one, registered by this
+ *      file ⇒ opposite verdicts. A and B are evidence about dev2's plugin set and are
+ *      skippable when a plugin is missing; D asserts the DISCRIMINATION itself, needs
+ *      no particular plugin, and cannot be satisfied by a probe stuck on either answer.
  *
  * B is the one that had to be engineered, because dev2 always has containment. It is
  * simulated by removing containment's callback FROM THIS PROCESS ONLY — no file is
@@ -95,7 +108,8 @@ if ( ! is_readable( $probe_lib ) ) { fwrite( STDERR, "cannot read $probe_lib\n" 
 require_once $probe_lib;
 if ( ! function_exists( 'lg_fd_allowed' ) ) {
 	fwrite( STDERR, "refusing: lg_fd_allowed() is not loaded — you are testing a build with no\n"
-		. "allowlist. Pass LG_FD_MU_DIR=/tmp/lg-fd-gate-mu after building the harness.\n" );
+		. "allowlist. Build a harness with LG_FD_KEEP_HARNESS=1 and pass the path it prints\n"
+		. "as LG_FD_MU_DIR.\n" );
 	exit( 77 );
 }
 ok( 'the probe library and the allowlist are both loaded' );
@@ -213,6 +227,107 @@ if ( $still_contained ) {
 	} else {
 		bad( sprintf( 'the probe reported NOT CLEAR with only the killswitch registered (%s). '
 			. 'The one-shot would still be unable to send on live.', $b['reason'] ) );
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D — THE DISCRIMINATION ITSELF, ON FILTERS THIS FILE OWNS.
+//
+// A and B are evidence about DEV2'S PLUGINS. They answer "does the probe read this
+// box correctly?" — and they can only be asked where those two plugins happen to be
+// loaded. Neither of them asks the question the one-shot's safety actually rests on:
+//
+//     can this probe tell a filter that EATS the message from one that merely RUNS?
+//
+// That is the distinction the old has_filter() guard could not make, and it is the
+// reason the one-shot refused on live for a filter that would never have touched it.
+// So it is asserted directly, against a swallowing filter and a selective one that
+// this file registers and removes itself.
+//
+// Two properties follow, and both matter:
+//   - IT CANNOT PASS ONE-SIDED. A probe hard-wired to "clear" fails D1; one hard-wired
+//     to "swallowed" fails D2. There is no answer that satisfies both but discriminates
+//     nothing, which is exactly the vacuity A and B are exposed to when a plugin is
+//     missing and the scenario is skipped.
+//   - IT IS BOX-INDEPENDENT. It needs no containment and no killswitch, so it holds on
+//     any chain, including live's — the harness stops being a dev2-only argument.
+// ─────────────────────────────────────────────────────────────────────────────
+say( "\n--- D: a SWALLOWING filter vs a SELECTIVE one, both synthetic ---" );
+
+$self     = basename( __FILE__ );
+$in_chain = static function () use ( $self ): int {
+	$n = 0;
+	foreach ( lg_fd_mail_probe_filters() as $f ) {
+		if ( basename( (string) $f['file'] ) === $self ) { ++$n; }
+	}
+	return $n;
+};
+
+if ( $still_contained ) {
+	bad( 'D SKIPPED: containment is still registered, so "clear" is unreachable and BOTH '
+		. 'halves would read SWALLOWED — the probe would look consistent while discriminating '
+		. 'nothing, which is the failure D exists to catch' );
+} else {
+	/* D1 — SWALLOWS. Returns non-null for every message, exactly as containment does. */
+	$swallow = static function ( $short, $atts ) { return true; };
+	add_filter( 'pre_wp_mail', $swallow, 11, 2 );
+	if ( 1 !== $in_chain() ) {
+		bad( 'the synthetic swallowing filter did not register — D1 would be testing the bare chain' );
+	}
+	$d1 = lg_fd_mail_probe( PROBE_UID, PROBE_EMAIL );
+	remove_filter( 'pre_wp_mail', $swallow, 11 );
+	/* Leaving it registered would make D2 a second run of D1 and hide a probe that always
+	 * says "swallowed" — the mutating-while-iterating trap from scenario B, restated. */
+	if ( 0 !== $in_chain() ) {
+		bad( 'the synthetic swallowing filter SURVIVED removal — D2 below would be re-running D1' );
+	}
+	say( sprintf( '       D1 swallowing: ran=%s swallowed=%s clear=%s',
+		$d1['ran'] ? 'yes' : 'no', $d1['swallowed'] ? 'yes' : 'no', $d1['clear'] ? 'yes' : 'no' ) );
+
+	/* D2 — SELECTIVE, shaped like the poller killswitch: it RUNS on every message and
+	 * hands the value straight back unless the message is one of its own. */
+	$sel_runs    = new stdClass();
+	$sel_runs->n = 0;
+	$selective   = static function ( $short, $atts ) use ( $sel_runs ) {
+		++$sel_runs->n;
+		$subj = is_array( $atts ) ? (string) ( $atts['subject'] ?? '' ) : '';
+		if ( false !== strpos( $subj, '[lg-poller]' ) ) { return true; }   // not our message
+		return $short;
+	};
+	add_filter( 'pre_wp_mail', $selective, 11, 2 );
+	$d2 = lg_fd_mail_probe( PROBE_UID, PROBE_EMAIL );
+	remove_filter( 'pre_wp_mail', $selective, 11 );
+	say( sprintf( '       D2 selective:  ran=%s swallowed=%s clear=%s (filter fired %d time(s))',
+		$d2['ran'] ? 'yes' : 'no', $d2['swallowed'] ? 'yes' : 'no', $d2['clear'] ? 'yes' : 'no',
+		$sel_runs->n ) );
+
+	if ( $d1['ran'] && $d1['swallowed'] && ! $d1['clear'] ) {
+		ok( 'D1: a filter that returns non-null is reported SWALLOWED' );
+	} else {
+		bad( 'D1: a filter that EATS the message was NOT reported as swallowed — the probe '
+			. 'would clear the one-shot to send into a black hole' );
+	}
+
+	/* ⚠️ THE FILTER MUST HAVE ACTUALLY FIRED. "clear" from a selective filter that never
+	 * ran is the same vacuous pass as an empty chain, and it is what a mis-registered
+	 * callback produces. Liveness before the absence claim, again. */
+	if ( $sel_runs->n < 1 ) {
+		bad( 'D2: the selective filter never fired, so "clear" says nothing about selective '
+			. 'filters — it only says the chain was empty' );
+	} elseif ( $d2['ran'] && ! $d2['swallowed'] && $d2['clear'] ) {
+		ok( 'D2: a filter that RUNS but passes the value through is reported CLEAR — presence '
+			. 'is not interception, which is the whole distinction has_filter() could not make' );
+	} else {
+		bad( sprintf( 'D2: a harmless selective filter was reported NOT CLEAR (%s) — the '
+			. 'one-shot would refuse forever on live for a filter that never touches it', $d2['reason'] ) );
+	}
+
+	if ( $d1['clear'] !== $d2['clear'] ) {
+		ok( 'THE PROBE DISCRIMINATES: the same probe, the same address, the same chain — '
+			. 'opposite verdicts, decided only by whether the filter ate the message' );
+	} else {
+		bad( 'the probe returned the SAME verdict for a swallowing and a selective filter. '
+			. 'It is not measuring interception at all.' );
 	}
 }
 

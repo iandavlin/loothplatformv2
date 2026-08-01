@@ -72,20 +72,50 @@ Exit:  0 green, 1 RED (real findings), 2 CANNOT RUN (no verdict).
 """
 
 import argparse
+import atexit
 import glob
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 WP_PATH = "/var/www/dev"
 WP_USER = "looth-dev"
 MU_DIR = "/var/www/dev/wp-content/mu-plugins"
 
-# Scratch paths for --plugin (branch) mode. Rebuilt every run; never read back.
-HARNESS_DIR = "/tmp/lg-fd-gate-mu"
-HARNESS_BOOT = "/tmp/lg-fd-gate-boot.php"
+# ⚠️ THESE USED TO BE FIXED /tmp PATHS, AND THAT MADE THE WHOLE END-TO-END PROOF
+# UNABLE TO FAIL HONESTLY. They were /tmp/lg-fd-gate-mu and friends: one name, shared
+# by ~110 worktrees, ~40 lanes and two users (the gate runs as the invoking user, the
+# proof driver as looth-dev via sudo). Three ways that goes wrong, all REPRODUCED on
+# 2026-08-01, not theorised:
+#
+#   1. ANOTHER USER OWNS IT. /tmp is sticky, so shutil.rmtree(ignore_errors=True)
+#      cannot remove a directory owned by looth-dev and — because of ignore_errors —
+#      says nothing. The run then wrote into a directory it did not build.
+#   2. THE CRASH. With that directory unwritable, the guard-file write raised an
+#      unhandled PermissionError. The gate died at line 286 with a traceback, printed
+#      NO verdict block at all (every assertion computed so far was discarded), and
+#      exited 1 — which run-all.sh reads as RED-with-findings. A crash wearing a
+#      red's clothes.
+#   3. THE SILENT ONE, WHICH IS THE DANGEROUS ONE. build_branch_harness() set
+#      swapped=True BEFORE attempting the symlink and swallowed OSError, so a
+#      pre-existing entry left by another run meant the harness kept pointing at
+#      SOMEONE ELSE'S build while the function reported success. For the stripped
+#      (allowlist-removed) harness that is fatal to the argument: the red-first would
+#      quietly exercise the REAL sender, the canary would receive nothing, and the
+#      gate would report "with the allowlist stripped, the canary STILL received
+#      nothing" — the exact finding keeper hit — or, worse, if the two harnesses ever
+#      crossed, report a green "TEST MODE HOLDS" about a build with no allowlist.
+#
+# A per-run private root removes the whole class rather than tidying up after it, and
+# it removes it on ANY box — live has its own /tmp with its own unknown residue, so
+# "clean dev2's /tmp" was never a fix. mkdtemp() cannot collide, cannot inherit
+# residue, and cannot be owned by anyone else.
+RUN_ROOT = None                        # created lazily by ensure_run_root()
+HARNESS_DIR = None                     # <run root>/mu
+HARNESS_BOOT = None                    # <run root>/boot.php
 
 # The names the sender is contracted to use. If a build renames one of these, this
 # gate must be updated in the SAME commit — a gate pointed at a stale name reports a
@@ -230,6 +260,9 @@ def build_branch_harness(plugin, harness_dir=None, boot_path=None):
     # went to the shared boot path it would silently repoint the normal harness at
     # the stripped sender — a later manual proof run would then be testing a build
     # with no allowlist while believing it tested the real one.
+    root, why = ensure_run_root()
+    if root is None:
+        return None, why
     harness_dir = harness_dir or HARNESS_DIR
     boot_path = boot_path or HARNESS_BOOT
     # Enumerating the real mu-plugin dir needs root: it is 0750 root:loothdevs.
@@ -247,9 +280,29 @@ def build_branch_harness(plugin, harness_dir=None, boot_path=None):
                      "mu-plugins, and every liveness probe below would fail for the "\
                      "wrong reason" % MU_DIR
 
+    # ⚠️ rmtree(ignore_errors=True) IS A LIE DETECTOR THAT WAS SWITCHED OFF. Under the
+    # old shared /tmp name it could fail to remove a directory owned by another user
+    # and say nothing, and everything below then wrote into somebody else's harness.
+    # Inside a per-run root it cannot happen — but the assertion is cheap and the
+    # failure it catches is a wrong answer, not a crash, so it stays.
     shutil.rmtree(harness_dir, ignore_errors=True)
-    os.makedirs(harness_dir, 0o755, exist_ok=True)
+    if os.path.exists(harness_dir):
+        return None, ("%s survived rmtree — it is held by another user or process, so this "
+                      "run would report on a harness it did not build" % harness_dir)
+    try:
+        os.makedirs(harness_dir, 0o755, exist_ok=False)
+    except OSError as e:
+        return None, "could not create the harness dir %s: %s" % (harness_dir, e)
+
+    # ⚠️ swapped USED TO BE SET BEFORE THE SYMLINK WAS ATTEMPTED, and the attempt
+    # swallowed OSError. So a link that failed to be created still reported success,
+    # and WordPress loaded whatever was (or was not) at that path. For the stripped
+    # harness that silently turns the red-first into a run of the REAL sender — the
+    # canary receives nothing, and the gate blames the canary. Failures are collected
+    # and reported now, and `swapped` means "the branch file is linked", not
+    # "the branch file was mentioned".
     swapped = False
+    failures = []
     for src in entries:
         base = os.path.basename(src)
         # Resolve through the docroot symlink to the real file in the repo.
@@ -257,12 +310,21 @@ def build_branch_harness(plugin, harness_dir=None, boot_path=None):
                               capture_output=True, text=True, timeout=30).stdout.strip()
         if not real:
             continue
-        if base == os.path.basename(plugin):
-            real, swapped = plugin, True
+        is_target = (base == os.path.basename(plugin))
+        if is_target:
+            real = plugin
         try:
             os.symlink(real, os.path.join(harness_dir, base))
-        except OSError:
-            pass
+        except OSError as e:
+            failures.append("%s (%s)" % (base, e))
+            continue
+        if is_target:
+            swapped = True
+    if failures:
+        return None, ("could not link %d mu-plugin(s) into %s: %s. A partial mirror is a "
+                      "DIFFERENT WordPress from the one under test, and the missing plugin "
+                      "is usually the one whose behaviour an assertion depends on."
+                      % (len(failures), harness_dir, "; ".join(failures[:5])))
     if not swapped:
         # The branch file would be loaded IN ADDITION to the serve's copy rather than
         # INSTEAD of it. Say so instead of producing a confident answer about a
@@ -282,23 +344,56 @@ def build_branch_harness(plugin, harness_dir=None, boot_path=None):
     # short-circuits before anything is written. mu-plugins load before `init`, so this
     # is in place by the time the scheduler runs. Only lg_fd_* is blocked — blocking
     # everything would change what other plugins do and make the box a worse liar.
+    #
+    # ⚠️ AND THIS WRITE USED TO BE UNGUARDED. Against a harness dir owned by another
+    # user it raised PermissionError all the way out of main(): traceback, no verdict
+    # block, every assertion already computed thrown away, exit 1 — which run-all.sh
+    # scores as RED-with-findings. An environmental failure must report CANNOT RUN, so
+    # it is caught and returned as a reason like every other step here.
     guard = os.path.join(harness_dir, "00-lg-fd-gate-guard.php")
-    with open(guard, "w") as fh:
-        fh.write(
-            "<?php\n"
-            "// Written by tools/gates/follow-digest-gate.py. Harness only; never deployed.\n"
-            "add_filter('pre_schedule_event', function ($pre, $event) {\n"
-            "    if (is_object($event) && strpos((string) $event->hook, 'lg_fd') === 0) {\n"
-            "        return false;   // the gate observes the sender; it never arms it\n"
-            "    }\n"
-            "    return $pre;\n"
-            "}, 10, 2);\n")
-    os.chmod(guard, 0o644)
-    os.chmod(harness_dir, 0o755)
+    try:
+        with open(guard, "w") as fh:
+            fh.write(
+                "<?php\n"
+                "// Written by tools/gates/follow-digest-gate.py. Harness only; never deployed.\n"
+                "add_filter('pre_schedule_event', function ($pre, $event) {\n"
+                "    if (is_object($event) && strpos((string) $event->hook, 'lg_fd') === 0) {\n"
+                "        return false;   // the gate observes the sender; it never arms it\n"
+                "    }\n"
+                "    return $pre;\n"
+                "}, 10, 2);\n")
+        os.chmod(guard, 0o644)
+        os.chmod(harness_dir, 0o755)
 
-    with open(boot_path, "w") as fh:
-        fh.write('<?php define("WPMU_PLUGIN_DIR", %r);\n' % harness_dir)
-    os.chmod(boot_path, 0o644)
+        with open(boot_path, "w") as fh:
+            fh.write('<?php define("WPMU_PLUGIN_DIR", %r);\n' % harness_dir)
+        os.chmod(boot_path, 0o644)
+    except OSError as e:
+        return None, "could not write the harness into %s: %s" % (harness_dir, e)
+
+    # ── THE HARNESS IS NOW ASSERTED, NOT ASSUMED ────────────────────────────────
+    # Everything above can succeed step by step and still leave WordPress loading a
+    # different file than the one named on the command line — that is precisely the
+    # failure that made the red-first vacuous. So read the built harness back and
+    # require it to resolve to the plugin under test. This is the one assertion that
+    # makes "the gate tested THIS build" a fact rather than an intention.
+    linked = os.path.join(harness_dir, os.path.basename(plugin))
+    try:
+        got = os.path.realpath(linked)
+    except OSError as e:
+        return None, "could not resolve %s: %s" % (linked, e)
+    want = os.path.realpath(plugin)
+    if got != want:
+        return None, ("the harness at %s resolves to %s, but the build under test is %s. "
+                      "Refusing to report on a WordPress running someone else's sender."
+                      % (linked, got or "(nothing)", want))
+    if not os.path.isfile(got):
+        return None, ("%s resolves to %s, which is not a readable file — the harness would "
+                      "load no sender at all and every absence assertion below would be "
+                      "vacuously true" % (linked, got))
+    if not os.path.isfile(guard):
+        return None, ("the scheduler guard %s is missing, so booting the harness with the "
+                      "flag ON could arm a REAL cron event in the serve" % guard)
     return boot_path, None
 
 
@@ -306,7 +401,7 @@ BOOT = None            # set by build_branch_harness() in --plugin mode
 ALLOWLIST_ENV = ""     # forwarded into the probe; see wp_eval()
 
 PROOF_REL = "platform/bin/follow-digest-allowlist-proof.php"
-STRIPPED_DIR = "/tmp/lg-fd-gate-mu-noallow"
+STRIPPED_DIR = None                    # <run root>/mu-noallow
 # ⚠️ THE STRIPPED COPY MUST KEEP BOTH ITS BASENAME AND ITS DEPTH.
 #   basename — build_branch_harness() swaps by basename, so a copy called anything
 #     else is loaded ALONGSIDE the real sender rather than in place of it.
@@ -317,8 +412,56 @@ STRIPPED_DIR = "/tmp/lg-fd-gate-mu-noallow"
 #     that and mailed nobody for a reason that had nothing to do with the allowlist,
 #     which is precisely the false conclusion --expect=leak exists to prevent.
 # So the copy lives in a minimal mirror of the repo shape.
-STRIPPED_ROOT = "/tmp/lg-fd-noallow-src"
-STRIPPED_PHP = STRIPPED_ROOT + "/platform/mu-plugins/lg-follow-digest.php"
+STRIPPED_ROOT = None                   # <run root>/noallow-src
+STRIPPED_PHP = None                    # <run root>/noallow-src/platform/mu-plugins/<name>
+
+
+def ensure_run_root():
+    """Create this run's PRIVATE scratch root and point every harness path inside it.
+
+    Idempotent; returns (root, None) or (None, reason).
+
+    Why mkdtemp and not a fixed name: see the note on HARNESS_DIR. The requirement is
+    not "a clean directory" but "a directory NO OTHER PROCESS OR USER CAN BE HOLDING",
+    which a fixed name in a shared /tmp can never be, on any box.
+
+    ⚠️ 0755, NOT mkdtemp's 0700. The proof driver runs as WP_USER through sudo, and a
+    0700 root would make the harness unreadable to the very process that must load it —
+    the sender would then refuse to send to ANYBODY and the leak check would misread
+    that as "no leak". Same failure the dangling-symlink bug produced, by a new route.
+    """
+    global RUN_ROOT, HARNESS_DIR, HARNESS_BOOT, STRIPPED_DIR, STRIPPED_ROOT, STRIPPED_PHP
+    if RUN_ROOT:
+        return RUN_ROOT, None
+    try:
+        root = tempfile.mkdtemp(prefix="lg-fd-gate.")
+        os.chmod(root, 0o755)
+    except OSError as e:
+        return None, "could not create a private scratch root: %s" % e
+    RUN_ROOT = root
+    HARNESS_DIR = os.path.join(root, "mu")
+    HARNESS_BOOT = os.path.join(root, "boot.php")
+    STRIPPED_DIR = os.path.join(root, "mu-noallow")
+    STRIPPED_ROOT = os.path.join(root, "noallow-src")
+    STRIPPED_PHP = os.path.join(STRIPPED_ROOT, "platform", "mu-plugins",
+                                "lg-follow-digest.php")
+    atexit.register(_cleanup_run_root)
+    return root, None
+
+
+def _cleanup_run_root():
+    """Remove this run's scratch root. LG_FD_KEEP_HARNESS=1 keeps it for inspection.
+
+    Best-effort by design: a failure to tidy up must never change the verdict. It is
+    safe to leave behind precisely because the name is unique — the next run builds its
+    own root and cannot be poisoned by this one.
+    """
+    if not RUN_ROOT:
+        return
+    if os.environ.get("LG_FD_KEEP_HARNESS") == "1":
+        print("\n    (LG_FD_KEEP_HARNESS=1 — harness kept at %s)" % RUN_ROOT)
+        return
+    shutil.rmtree(RUN_ROOT, ignore_errors=True)
 
 
 def build_stripped_plugin(src, dest):
@@ -333,6 +476,10 @@ def build_stripped_plugin(src, dest):
 
     @return (path, None) or (None, reason)
     """
+    root, why = ensure_run_root()
+    if root is None:
+        return None, why
+    dest = dest or STRIPPED_PHP
     try:
         with open(src) as fh:
             body = fh.read()
@@ -369,7 +516,9 @@ def build_stripped_plugin(src, dest):
         # send at all". Exactly the trap the STRIPPED_ROOT note above warns about,
         # walked straight back into by the guard meant to be cheap.
         #
-        # /tmp is shared by ~110 worktrees on this box, so this is not a rare state.
+        # The run root is private now, so the dangling link cannot arrive from another
+        # lane any more — the repoint stays anyway. It costs one syscall, and the bug it
+        # prevents is not a crash but a CONFIDENT WRONG VERDICT about who can be mailed.
         repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         link = os.path.join(STRIPPED_ROOT, "membership-pages")
         want = os.path.join(repo, "membership-pages")
@@ -1428,6 +1577,15 @@ def main():
             src = PLUGIN or (d.get("loaded") or "")
 
             # 1) RED-FIRST: strip the allowlist, and require the leak to be observed.
+            #
+            # ⚠️ control_proved GATES THE CLAIM BELOW. keeper, 2026-08-01: "with the
+            # allowlist STRIPPED, the canary must DEMONSTRABLY RECEIVE. If it doesn't,
+            # abort loudly as broken build, never report held." Until this run, a failed
+            # control produced a red AND, three lines later, a green reading "TEST MODE
+            # HOLDS: a QUALIFYING non-allowlisted member received ZERO" — the single most
+            # reassuring line this gate can print, emitted in the one state where it is
+            # known to mean nothing. A reader skimming for greens would have taken it.
+            control_proved = False
             stripped, why = build_stripped_plugin(src, STRIPPED_PHP)
             if stripped is None:
                 dead("test-mode red-first", why)
@@ -1442,6 +1600,7 @@ def main():
                     if leaked is None:
                         dead("test-mode red-first", tail)
                     elif leaked:
+                        control_proved = True
                         ok("RED-FIRST: with the allowlist stripped, the driver SEES the "
                            "canary being mailed",
                            "so a zero from the real build is caused by the allowlist, not "
@@ -1452,7 +1611,7 @@ def main():
                             "result proves NOTHING — the canary is inert for some other "
                             "reason and the whole end-to-end proof is vacuous.\n         " + tail)
 
-            # 2) THE CLAIM: the real build must hold.
+            # 2) THE CLAIM: the real build must hold — REPORTABLE ONLY IF THE CONTROL RAN.
             if not PLUGIN:
                 held, tail = None, ("test mode needs --plugin: without it the driver would "
                                     "exercise the serve, which runs main")
@@ -1460,11 +1619,22 @@ def main():
                 held, tail = run_proof(HARNESS_DIR, "hold", repo_root)
             if held is None:
                 dead("test-mode proof", tail)
-            elif held:
+            elif held and control_proved:
                 ok("TEST MODE HOLDS: flag ON, allowlist=[1], a QUALIFYING non-allowlisted "
                    "member received ZERO",
                    "and wp_mail() was never invoked for them — nothing swallowed, nothing "
                    "queued, nothing that would have been an SES call without containment")
+            elif held:
+                # The driver said "held". It is not reported as held, because the only
+                # evidence that this driver can SEE a leak just failed to appear. A zero
+                # from an instrument that cannot register a one is not a measurement.
+                red("BROKEN PROOF: the hold run passed, but its positive control did not",
+                    "The driver reported the canary received nothing WITH the allowlist — "
+                    "and also received nothing WITHOUT it. That is an instrument reading "
+                    "zero in both directions, so this run is NOT evidence that the "
+                    "allowlist held, and it is not being recorded as such. Fix the control "
+                    "first: the stripped build must demonstrably mail the canary.\n         "
+                    + tail)
             else:
                 red("TEST MODE FAILED: the allowlist did not hold end to end",
                     "flag ON with allowlist=[1] and a qualifying member was not fully "
