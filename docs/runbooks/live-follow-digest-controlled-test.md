@@ -475,3 +475,105 @@ explaining why it is off, so `grep -q` matches the prose and reports ON. Only th
 **Red-first, proven both ways:** run bare (serve WP = main's mu-plugins) the gate reports
 *"the digest promises a setting that renders for NOBODY — anchor 'Change how often'"*; run
 `--plugin` against this branch it is green. Two builds, one assertion, opposite verdicts.
+
+---
+
+## 9. What can run on LIVE, and what cannot — measured, not assumed
+
+keeper, 8/1: *"your three-way split must actually fire ON LIVE (live has its own /tmp)."*
+The `/tmp` half was real and is fixed. The rest of that requirement rests on a premise
+worth stating plainly, because the alternative is someone trying to satisfy it.
+
+**Neither seeded proof can run on live, and neither should.** Both refuse by
+`home_url()` — not `LG_ENV`, which says `dev2` on live and cannot tell the boxes apart:
+
+| file | refuses off dev2 because | exit |
+|---|---|---|
+| `follow-digest-allowlist-proof.php` | it **seeds a canary member and sends mail** | 74 |
+| `follow-digest-mail-probe-proof.php` | it **removes mail containment from the process** | 74 |
+
+Running either on live means seeding a fake member on the production box, or stripping
+the only thing standing between a test and a real inbox. The refusals are the feature.
+The allowlist proof additionally requires containment **and** mailpit and exits 75/76
+without them — so on a box with real mail it stops before its first assertion rather
+than misreporting a zero.
+
+**What does run on live is the probe LIBRARY, and that is the whole design:**
+
+```
+platform/lib/lg-fd-mail-probe.php     ← no dev2 check, no mailpit, no hardcoded path,
+                                        no exit() — audited, it is box-agnostic
+      ├── proven on dev2 by  follow-digest-mail-probe-proof.php   (scenario D)
+      └── used on live by    follow-digest-live-oneshot.php       (§4a, at run time)
+```
+
+Prove the instrument where proving it is safe; then carry the proven instrument to the
+box where the mail is real. Scenario D is what makes that carry legitimate: it registers
+a **swallowing** filter and a **selective** one (killswitch-shaped — runs on every
+message, hands the value back untouched) and requires **opposite** verdicts. A probe
+stuck on "clear" fails D1; one stuck on "swallowed" fails D2. It needs no particular
+plugin, so the property it establishes holds on live's chain too.
+
+### The portability defects that were real, and are fixed
+
+1. **A shared `/tmp` scratch root** (`f76569c`) — four fixed names across ~110 worktrees
+   and two users. Replaced with a private `mkdtemp` root per run, which cannot collide
+   or inherit residue **on any box**. That was the live-relevant half.
+2. **`MU_DIR` did not follow `WP_PATH`** (`7a11e28`) — only `--wp-path` had a flag, so
+   `--wp-path /var/www/html` would boot one docroot's WordPress while mirroring
+   another's mu-plugins. Live has **both** `/var/www/dev` and `/var/www/html`, and
+   `looth-dev` exists there, so the defaults resolve and the gate would have run —
+   against the wrong tree. Now derived, with `--mu-dir` / `--wp-user` overrides.
+
+---
+
+## 10. The cadence loop, end to end (GATE 13 `--prove-cadence`)
+
+*"A member sets Daily, the sender honours it, and changing it changes the next send."*
+
+```bash
+python3 tools/gates/follow-digest-gate.py \
+  --plugin platform/mu-plugins/lg-follow-digest.php --expect-on --prove-cadence
+```
+
+28 assertions on one seeded canary and one real dev2 topic:
+
+| | claim |
+|---|---|
+| C1 | absent means **instant**, and an instant member is in **neither** digest bucket |
+| C2 | the write path stores the cadence **and stamps the watermark to NOW** — asserted as *within 300s of now*, not merely non-empty |
+| C3 | the resolver moves them into daily, and **only** daily |
+| C4 | a fresh watermark sends **nothing** — empty means send nothing, not an empty digest |
+| C5 | **the positive control** — backdate, and the digest arrives, exactly once |
+| C6 | **the headline** — Daily→Weekly empties the daily bucket, fills the weekly one, the next daily tick mails nothing **and** the weekly tick mails them |
+| C7 | Instant restores per-reply mail and takes the watermark with it |
+
+**Every negative is paired with a positive on the same member, topic and tick**, because
+here "received nothing" has five causes: a member who never qualified, a build that
+cannot render a link and refuses everybody, a flush-interval guard left by a crashed
+run, the allowlist, and a watermark stamped to now. Only the cadence is allowed to vary.
+
+**The allowlist is pointed at the canary alone** — an RFC 2606 `.invalid` address — and
+the proof **aborts** if the allowlist resolves to uid 1 or to `all`. It cannot mail Ian
+even if every guard inside it fails at once.
+
+### Red-first, proven by breaking the sender
+
+With the resolver's cadence filter defeated (`c.meta_value = %s OR 1=1`) it fails four
+ways, and they are the right four:
+
+```
+FAIL the canary is due for BOTH daily and weekly
+FAIL they are still due for daily after switching to weekly     <- the headline claim
+FAIL a weekly member was mailed by the daily flush              <- the member-visible harm
+FAIL the weekly flush did not mail a member who is due          <- the honest cascade:
+     the daily flush already sent and advanced the watermark, so nothing was left
+```
+
+C1 correctly **still passes** on that build: with no cadence row the JOIN matches
+nothing, so `1=1` cannot rescue it. A break that reddens everything would say less than
+one that reddens exactly the claims it invalidates.
+
+`--prove-cadence` seeds and mutates, so it is opt-in and `run-all.sh` does not use it.
+Teardown is registered **before the first assertion**, so a fatal cannot leave a member
+holding a cadence — the exact state the gate reds on. Verified clean after every run.
