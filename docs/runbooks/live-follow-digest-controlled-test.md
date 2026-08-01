@@ -382,8 +382,96 @@ diffs that arrive by pull. Three things happen at once, and they are worth sayin
 2. The Daily/Weekly control becomes visible to the allowlisted members, and **only** to
    them. It is per-member on purpose: switching the sender on for one person must not
    paint a control the other members can use but the sender would not serve.
+
+   ⚠️ **NOT YET — and this row was wrong until 8/1.** The sender's half of that is
+   correct and per-member (`lg_fd_cadence_ui_enabled()`), but the account page gates the
+   control on its **own second switch**, `LG_FOLLOWING_CADENCE`
+   (`manage-subscription.php:409`), defined from `$_SERVER` in
+   `membership-pages/lib/following-data.php:145` and **set in no tracked config, no nginx
+   conf and no fpm pool on either box**. So the control currently renders for *nobody*,
+   including the allowlisted account. See §8.
 3. `allowlist => 'all-members'` is the only value that reaches the membership, and the
    gate goes **RED** on it by design — so general release changes the gate in the same
    commit. That is intended: one visible, reviewable diff rather than a silent widening.
 
 **Nothing above happens as a side effect of the §4 test.**
+
+---
+
+## 8. The footer promise, and the seam account-following owns
+
+**Ian, 8/1:** *"the link to change frequency doesn't seem to have a setting on the manage
+account page."* He was right. This is the UI-lies class in its worst venue — a **sent
+email**, which cannot be edited after it leaves.
+
+### What was wrong
+
+The footer linked **"Change how often"** → `/manage-subscription/`. The frequency control
+on that page renders only under `LG_FOLLOWING_CADENCE`, which is set nowhere on either
+box. Every recipient who clicked it landed on a page with no such setting.
+
+### Why the second switch is itself the bug
+
+`lg_fd_cadence_ui_enabled()` is documented as **the single source of truth**, precisely so
+"the control cannot become visible while the thing that honours it is off, because there
+is only one switch." It is already **per-member allowlist-scoped**, so it asks the
+question that matters: not *is the feature on* but *is it on for you*. The account page
+checks its own condition instead — the exact drift that comment predicted.
+
+### Why we did NOT just turn `LG_FOLLOWING_CADENCE` on
+
+Turning it on globally paints Daily/Weekly for the **whole membership** while the sender
+serves only the allowlist. Any member picking Daily would get a cadence written, their
+instant mail suppressed, and then be blocked at the send layer — **receiving nothing from
+a control they had just used.** That is the §15.4 lie, and the allowlist would have
+*caused* it rather than prevented it. It is not merely "needs Ian's ok" — it is unsafe
+while the allowlist is on.
+
+### What shipped instead (already on the branch, no approval needed)
+
+The footer promises the control **only when it actually renders for that member**. Today
+that is nobody, so the footer reads **"Manage your discussion emails"** — a *different
+claim that is true*, not a hedge on the same one. That page really does carry the ✉
+discussion-email toggle, the followed-thread list and **Stop all**. **The link never
+moved; only the dead promise went.**
+
+The switch is one tracked constant, `LG_FD_CADENCE_CONTROL_SHIPPED`, living with the store
+in `platform/mu-plugins/lg-follow-digest.php`, default `false`, consulted per-member
+through `lg_fd_cadence_control_reachable()`.
+
+> It deliberately does **not** read the page's constant. `$_SERVER` is empty under WP cron
+> (`lg-wp-cron.service` carries no `Environment=`), so the sender's answer would be "off"
+> whatever the page did — accidentally right today and **permanently wrong the day the
+> control ships**.
+
+### The handoff — account-following owns this, one line
+
+```diff
+- <?php if (LG_FOLLOWING_CADENCE): ?>
++ <?php if (function_exists('lg_fd_cadence_ui_enabled') && lg_fd_cadence_ui_enabled()): ?>
+```
+
+…and **in the same commit** flip `LG_FD_CADENCE_CONTROL_SHIPPED` to `true`. Then the
+control renders for exactly the members the sender serves (today: Ian alone) and the
+footer wording returns to "Change how often" on its own.
+
+### It is gated as a biconditional, both directions
+
+Because "don't promise what isn't there" alone lets the **opposite** defect ship in
+silence — the control goes live and the footer keeps the generic wording, so the member
+never learns the setting exists.
+
+| tree state | gate |
+|---|---|
+| footer promises a frequency control, constant `false` | **RED** — promises a setting that renders for nobody |
+| constant `true`, footer never mentions it | **RED** — the control ships and the digest never says so |
+| both agree | green |
+| constant renamed / unreadable | **CANNOT RUN** — never a quiet "off" |
+
+The switch is **lexed, not grepped**: its name appears 3× in the plugin's own comment
+explaining why it is off, so `grep -q` matches the prose and reports ON. Only the
+`define()`'s captured value is consulted.
+
+**Red-first, proven both ways:** run bare (serve WP = main's mu-plugins) the gate reports
+*"the digest promises a setting that renders for NOBODY — anchor 'Change how often'"*; run
+`--plugin` against this branch it is green. Two builds, one assertion, opposite verdicts.
