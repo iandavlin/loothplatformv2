@@ -50,8 +50,21 @@ return array(
 	 *
 	 * Turning this on WITHOUT widening 'allowlist' below is the intended controlled
 	 * state: the real cron, the real batching, the real data — mailing one person.
+	 *
+	 * ── ON, 2026-08-01, in exactly that controlled state ─────────────────────────
+	 * Ian asked three times for the cadence control on live ("ship it", then "still no
+	 * cadence" twice). LG_FOLLOWING_CADENCE (nginx, eec21c9) was only the FIRST of two
+	 * gates: the picker also asks lg_fd_cadence_ui_enabled(), which returns false while
+	 * this switch is off — by design, because a cadence picker that no sender honours is
+	 * the UI-lies class. So the control could not appear until this flipped.
+	 *
+	 * 'allowlist' below is UNCHANGED and still pins user 1. Consequence to state plainly
+	 * rather than discover: the cadence control is visible ONLY to Ian, because
+	 * lg_fd_cadence_ui_enabled() gates on lg_fd_allowed() too. Any other member's
+	 * Manage Account page is byte-identical to before. Widening to the membership is a
+	 * separate one-line diff and a separate decision.
 	 */
-	'enabled' => false,
+	'enabled' => true,
 
 	/**
 	 * THE RECIPIENT ALLOWLIST — the answer to the only question that matters here,
