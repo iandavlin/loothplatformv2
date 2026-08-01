@@ -72,6 +72,7 @@ Exit:  0 green, 1 RED (real findings), 2 CANNOT RUN (no verdict).
 """
 
 import argparse
+import glob
 import json
 import os
 import shutil
@@ -356,15 +357,46 @@ def build_stripped_plugin(src, dest):
         # link library — see the note on STRIPPED_ROOT. Without this the stripped build
         # refuses every send and the leak check reports a leak-free build that is
         # simply broken.
+        #
+        # ⚠️ ALWAYS REPOINT IT. This was `if not os.path.lexists(link)` and that is the
+        # bug that made the whole end-to-end proof vacuous — REPRODUCED, not theorised:
+        # os.path.lexists() is TRUE for a DANGLING symlink, so once /tmp held a link
+        # from another lane's worktree (or one whose worktree had since been removed),
+        # it was never rebuilt. The link library then resolved to nothing,
+        # lg_fd_links_degraded() returned true, and the stripped sender refused to mail
+        # ANYONE — including Ian. The leak check duly reported "the canary still
+        # received nothing", which reads as "no leak" and is really "this build cannot
+        # send at all". Exactly the trap the STRIPPED_ROOT note above warns about,
+        # walked straight back into by the guard meant to be cheap.
+        #
+        # /tmp is shared by ~110 worktrees on this box, so this is not a rare state.
         repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         link = os.path.join(STRIPPED_ROOT, "membership-pages")
-        if not os.path.lexists(link):
-            os.symlink(os.path.join(repo, "membership-pages"), link)
+        want = os.path.join(repo, "membership-pages")
+        if os.path.lexists(link):
+            os.remove(link)
+        os.symlink(want, link)
         for d in (STRIPPED_ROOT, os.path.join(STRIPPED_ROOT, "platform"),
                   os.path.dirname(dest)):
             os.chmod(d, 0o755)
     except OSError as e:
         return None, "could not write %s: %s" % (dest, e)
+
+    # ⚠️ AND PROVE THE LINK LIBRARY IS ACTUALLY READABLE, BY THE USER THAT WILL READ IT.
+    # The symlink being right is not the same as the target being there, and the driver
+    # runs as WP_USER via sudo — a path readable by the gate's user is not necessarily
+    # readable by that one. If this is wrong the red-first build silently becomes
+    # "refuses to send to everyone", which is a FALSE GREEN dressed as a red-first.
+    # Caught here, at build time, with a reason — rather than surfacing as a mysterious
+    # zero three minutes later.
+    lib = os.path.join(STRIPPED_ROOT, "membership-pages", "lib", "following-data.php")
+    probe = subprocess.run(["sudo", "-u", WP_USER, "test", "-r", lib],
+                           capture_output=True, text=True)
+    if probe.returncode != 0:
+        return None, ("the red-first build's link library is unreadable by %s at %s.\n"
+                      "         The stripped sender would refuse to mail ANYONE (link store "
+                      "degraded), and the leak check would misread that as 'no leak'."
+                      % (WP_USER, lib))
     return dest, None
 
 
@@ -382,6 +414,35 @@ def run_proof(mu_dir, expect, repo_root):
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     except Exception as e:                                    # noqa: BLE001
         return None, "could not run the proof driver: %s" % e
+    out = [l for l in (p.stdout or "").splitlines() if l.strip()]
+    return p.returncode == 0, "\n         ".join(out[-6:]) if out else (p.stderr or "")[:300]
+
+
+PROBE_PROOF_REL = "platform/bin/follow-digest-mail-probe-proof.php"
+
+
+def run_probe_proof(mu_dir, repo_root):
+    """Prove the mail-channel probe tells containment from the poller killswitch.
+
+    The one-shot's old guard refused on `has_filter('pre_wp_mail')`, which on live is
+    ALWAYS true (the killswitch registers whenever lgms_poller_mail_enabled is unset)
+    and therefore could never send — while being no protection against the case that
+    matters, containment, which returns true and makes wp_mail report success.
+
+    A behavioural probe replaced it, and a probe is only worth having if it answers the
+    two cases DIFFERENTLY. This asserts both against the real plugins on this box.
+
+    @return (passed, tail-of-output)
+    """
+    proof = os.path.join(repo_root, PROBE_PROOF_REL)
+    if not os.path.isfile(proof):
+        return None, "missing %s" % proof
+    cmd = ["sudo", "-u", WP_USER, "env", "LG_FOLLOW_DIGEST=1", "LG_FD_MU_DIR=" + mu_dir,
+           "php", proof]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    except Exception as e:                                    # noqa: BLE001
+        return None, "could not run the mail-probe proof: %s" % e
     out = [l for l in (p.stdout or "").splitlines() if l.strip()]
     return p.returncode == 0, "\n         ".join(out[-6:]) if out else (p.stderr or "")[:300]
 
@@ -779,6 +840,40 @@ def check_choke_point(path):
     return [(n, lines[n - 1].strip() if n <= len(lines) else "") for n in nums], None
 
 
+def call_lines(path, fname):
+    """Line numbers where $fname is invoked FOR REAL — tokenised, never grepped.
+
+    ⚠️ THIS EXISTS BECAUSE THE SUBSTRING VERSION WENT GREEN ON A BUILD WITH THE WALL
+    REMOVED, and the red-first caught it. The guard check used to be
+    `any("lg_fd_allowed(" in line ...)`, which is satisfied by the probe's own error
+    text — 'lg_fd_allowed() is not loaded ...'. So deleting the actual check left the
+    assertion green: prose standing in for code, in the one assertion whose whole job
+    is to prove the code is there.
+
+    That is the same mistake check_choke_point() documents at length for FINDING call
+    sites, made again while CHECKING they are guarded. Both halves have to be lexical.
+
+    @return (list of line numbers, None) or (None, reason-it-is-DEAD)
+    """
+    if not shutil.which("php"):
+        return None, "php not on PATH — cannot tokenise, and a textual search would "\
+                     "count the prose in the file's own comments and error strings"
+    php = ('$t = token_get_all(file_get_contents($argv[1])); $o = array();'
+           'foreach ($t as $x) { if (is_array($x) && $x[0] === T_STRING && $x[1] === $argv[2])'
+           ' { $o[] = $x[2]; } } echo json_encode($o);')
+    try:
+        p = subprocess.run(["php", "-r", php, "--", path, fname],
+                           capture_output=True, text=True, timeout=60)
+    except Exception as e:                                    # noqa: BLE001
+        return None, "could not tokenise %s: %s" % (path, e)
+    if p.returncode != 0:
+        return None, "php failed on %s: %s" % (path, (p.stderr or "").strip()[:200])
+    try:
+        return json.loads((p.stdout or "").strip()), None
+    except Exception as e:                                    # noqa: BLE001
+        return None, "unparseable tokeniser output (%s): %r" % (e, (p.stdout or "")[:200])
+
+
 def main():
     global WP_PATH, PLUGIN, EXPECT_ON, BOOT, ALLOWLIST_ENV, PROVE_TEST_MODE
     ap = argparse.ArgumentParser()
@@ -1172,7 +1267,62 @@ def main():
                 "somebody without passing it, and the gate cannot test a path that does "
                 "not exist yet — which is why the SHAPE is asserted, not just the "
                 "behaviour. Sites: %s" % (DELIVER, ", ".join("line %d" % c[0] for c in calls)))
-        else:
+        # ── AND EVERY OTHER wp_mail() THIS LANE OWNS ───────────────────────────
+        # ⚠️ THE ASSERTION ABOVE READS ONE FILE, so it went green the moment the mail
+        # probe was added — a SECOND wp_mail() call site, in a second file, invisible to
+        # the check written to prevent exactly that. The wall is a property of the repo,
+        # not of the sender file, and a gate scoped to one file cannot see a hole cut
+        # next to it.
+        #
+        # So: sweep every PHP file this lane owns, tokenise each (never grep — these
+        # files DISCUSS wp_mail in prose), and require every call site to consult the
+        # allowlist inside its own enclosing function. A tool built to inspect the wall
+        # must not be a door through it.
+        lane_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        others = sorted(glob.glob(os.path.join(lane_root, "platform/lib/lg-fd-*.php"))
+                        + glob.glob(os.path.join(lane_root, "platform/bin/follow-digest-*.php")))
+        unguarded, scanned, sites = [], 0, 0
+        for path in others:
+            if os.path.abspath(path) == os.path.abspath(src):
+                continue
+            found, why2 = check_choke_point(path)
+            if found is None:
+                dead("choke point sweep (%s)" % os.path.basename(path), why2)
+                continue
+            scanned += 1
+            if not found:
+                continue
+            with open(path) as fh:
+                lines = fh.read().splitlines()
+            # Real lg_fd_allowed() invocations, lexed — NOT a substring search. See
+            # call_lines(): the substring form is satisfied by the file's own prose.
+            guard_lines, why3 = call_lines(path, ALLOWED)
+            if guard_lines is None:
+                dead("choke point sweep (%s)" % os.path.basename(path), why3)
+                continue
+            for ln, _txt in found:
+                sites += 1
+                st = 0
+                for i in range(ln - 1, 0, -1):
+                    if lines[i - 1].lstrip().startswith("function "):
+                        st = i
+                        break
+                if not st or not any(st <= g < ln for g in guard_lines):
+                    unguarded.append("%s:%d" % (os.path.basename(path), ln))
+        if unguarded:
+            red("%d wp_mail() call site(s) outside the sender are NOT behind %s()"
+                % (len(unguarded), ALLOWED),
+                "Every one of these can put a message on the wire without passing the "
+                "allowlist, which is the wall this whole lane exists to build. "
+                "Sites: %s" % ", ".join(unguarded))
+        elif scanned:
+            ok("every wp_mail() in the lane's other %d file(s) is behind %s()"
+               % (scanned, ALLOWED),
+               "%d call site(s) swept — the mail probe owns one, and it refuses any "
+               "address the digest would refuse, so inspecting the wall cannot breach it"
+               % sites)
+
+        if calls is not None and len(calls) == 1:
             line = calls[0][0]
             with open(src) as fh:
                 body = fh.read().splitlines()
@@ -1184,7 +1334,12 @@ def main():
                     start = i
                     break
             fn = body[start - 1].split("(")[0].replace("function ", "").strip() if start else "?"
-            guarded = any(ALLOWED + "(" in body[i - 1] for i in range(start, line))
+            # Lexed, not grepped — the substring form is satisfied by the sender's own
+            # comments and error strings. See call_lines() for how that went green once.
+            gl, why_g = call_lines(src, ALLOWED)
+            guarded = bool(gl) and any(start <= g < line for g in (gl or []))
+            if gl is None:
+                dead("choke point guard", why_g)
             if fn != DELIVER:
                 red("the only wp_mail() is in %s(), not %s()" % (fn, DELIVER),
                     "The send layer is where the allowlist is enforced; a send from "
@@ -1314,6 +1469,25 @@ def main():
                 red("TEST MODE FAILED: the allowlist did not hold end to end",
                     "flag ON with allowlist=[1] and a qualifying member was not fully "
                     "excluded. Do NOT run this on live.\n         " + tail)
+
+            # 3) THE MAIL CHANNEL. The allowlist decides WHO; this decides whether a
+            #    "sent" is real. Both have to be true before anything runs on live.
+            if not PLUGIN:
+                pp, tail = None, "the mail-probe proof needs --plugin"
+            else:
+                pp, tail = run_probe_proof(HARNESS_DIR, repo_root)
+            if pp is None:
+                dead("mail-probe proof", tail)
+            elif pp:
+                ok("the channel probe REFUSES on real containment and PASSES the poller "
+                   "killswitch",
+                   "so the live one-shot can tell 'a filter exists' from 'my mail dies' — "
+                   "the old has_filter() guard could not, and could never have sent on live")
+            else:
+                red("the mail-channel probe does not distinguish containment from the "
+                    "killswitch",
+                    "Either it would report a swallowed send as delivered, or it would "
+                    "refuse forever on live. Do NOT run the one-shot.\n         " + tail)
 
     return verdict()
 

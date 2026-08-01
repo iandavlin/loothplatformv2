@@ -207,6 +207,14 @@ function to_count( array $msgs, string $addr ): int {
 	return $n;
 }
 
+/** The subject of the message addressed to $addr — NOT merely the first message. */
+function subject_to( array $msgs, string $addr ): string {
+	foreach ( $msgs as $m ) {
+		if ( in_array( strtolower( $addr ), $m['to'], true ) ) { return (string) $m['subject']; }
+	}
+	return '(none)';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GUARDS. Each one is a reason this file would be dangerous somewhere else.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -311,6 +319,56 @@ if ( ! $topic ) {
 	exit( 81 );
 }
 say( sprintf( '       seed topic %d — %s', $topic, get_the_title( $topic ) ) );
+
+/* ── ⚠️ LIVENESS: CAN THIS BUILD SEND TO ANYONE AT ALL? ──────────────────────
+ * THE ASSERTION THAT MAKES EVERY ZERO BELOW MEAN SOMETHING, and its absence is what
+ * made this whole proof vacuous once already.
+ *
+ * lg_fd_send_one() REFUSES to send — to everybody, allowlisted or not — when the link
+ * store is unreachable, because a digest with no clickable discussions is worse than
+ * no digest. That refusal is correct behaviour and it is indistinguishable, from the
+ * outside, from "the allowlist held": in both cases the canary gets nothing.
+ *
+ * It really happened. The red-first build resolves its link library through
+ * dirname(__DIR__, 2), so the gate mirrors the repo shape in /tmp with a symlink to
+ * membership-pages. That symlink went stale (another worktree, since removed) and was
+ * not rebuilt, because the guard used os.path.lexists(), which is TRUE for a dangling
+ * link. Every send then refused, nobody was mailed, and the leak check reported "the
+ * canary still received nothing" — which reads as "no leak" and actually meant "this
+ * build cannot send at all".
+ *
+ * So: exercise the REAL link path on the REAL seed topic, before any tick. A build
+ * that cannot produce a link cannot produce a digest, and the correct response is to
+ * ABORT — a proof that cannot fail is not a proof. */
+$probe_urls = lg_fd_topic_urls( array( $topic ) );
+if ( lg_fd_links_degraded() ) {
+	fwrite( STDERR, sprintf(
+		"ABORTING: the link store is UNREACHABLE for the sender under test, so it will refuse\n"
+		. "to send to EVERYONE — allowlisted or not — and every 'received nothing' below would\n"
+		. "be caused by that, not by the allowlist.\n\n"
+		. "  sender under test : %s\n"
+		. "  it looks for      : %s\n\n"
+		. "If that path is a dangling symlink, the red-first harness is stale: rebuild it with\n"
+		. "  python3 tools/gates/follow-digest-gate.py --plugin platform/mu-plugins/lg-follow-digest.php\n"
+		. "(which now always repoints it, and checks it is readable by this user).\n"
+		. "If it is not a symlink problem, check Postgres peer auth — running as root makes the\n"
+		. "role \"root\", which does not exist, and every link silently resolves to ''.\n",
+		/* ⚠️ dirname($loaded, 3), NOT 2. The sender resolves dirname(__DIR__, 2) where
+		 * __DIR__ is its own DIRECTORY, so from its FILE path that is three levels up.
+		 * An off-by-one here prints a plausible path that does not exist and sends the
+		 * reader hunting in the wrong directory — which is the entire job of this line. */
+		$loaded, dirname( $loaded, 3 ) . '/membership-pages/lib/following-data.php' ) );
+	exit( 84 );
+}
+if ( '' === (string) ( $probe_urls[ $topic ] ?? '' ) ) {
+	fwrite( STDERR, sprintf(
+		"ABORTING: the link store answered but produced an EMPTY url for seed topic %d.\n"
+		. "The sender would emit a digest with no clickable discussion, and more to the point a\n"
+		. "zero below could be caused by that rather than by the allowlist.\n", $topic ) );
+	exit( 84 );
+}
+ok( sprintf( 'LIVENESS: this build CAN send — the link store resolved topic %d to a real hub url, '
+	. 'so a zero below is not "refused to send to everyone"', $topic ) );
 
 /** Subscribe BOTH to the same topic, so the ONLY difference between them is the
  *  allowlist. Same topic, same replies, same cadence, same watermark: if one is
@@ -504,7 +562,10 @@ if ( $att_other ) {
 $ian_got    = to_count( $run1, IAN_EMAIL );
 $canary_got = to_count( $run1, CANARY_EMAIL );
 
-if ( 1 === $ian_got ) { ok( sprintf( 'Ian received EXACTLY ONE digest — %s', reset( $run1 )['subject'] ?? '' ) ); }
+/* ⚠️ reset() would print whichever message happens to be FIRST, which in a leak run is
+ * often the CANARY's — quoting another recipient's subject as Ian's. The subject also
+ * carries the reply count, so the wrong one silently misreports what he received. */
+if ( 1 === $ian_got ) { ok( sprintf( 'Ian received EXACTLY ONE digest — %s', subject_to( $run1, IAN_EMAIL ) ) ); }
 else { bad( sprintf( 'Ian received %d digests, expected exactly 1', $ian_got ) ); }
 
 if ( 'leak' === $expect ) {
@@ -513,12 +574,36 @@ if ( 'leak' === $expect ) {
 	 * here, this driver demonstrably CAN see an allowlist failure — which is what
 	 * makes the 'hold' run's zero mean something. If the canary is NOT mailed even
 	 * with the allowlist gone, the zero in the other run was never evidence. */
+	/* ── THE POSITIVE CONTROL, IN TWO ORDERED STEPS ───────────────────────────
+	 * keeper, 2026-07-31: "make the canary a member who DEMONSTRABLY WOULD receive
+	 * without the allowlist — prove the positive first."
+	 *
+	 * Step 1 is IAN, and it is asserted just above: wp_mail() invoked exactly once for
+	 * him, one message arrived. That establishes THE MACHINERY DELIVERS in this build —
+	 * the tick ran, the collector found content, the render produced links, wp_mail was
+	 * reached. Nothing said about the canary means anything without it.
+	 *
+	 * Step 2 is the CANARY, here. Ian mailed while the canary is not says the two are
+	 * distinguishable; the canary mailed once the allowlist is gone says the ONLY thing
+	 * that distinguished them WAS the allowlist.
+	 *
+	 * The three-way split matters because the three causes need different fixes, and
+	 * collapsing them into one FAIL is what sent the last diagnosis to the wrong place. */
+	$machinery_delivers = ( 1 === $att_ian && 1 === $ian_got );
 	if ( $canary_got >= 1 && $att_canary >= 1 ) {
 		ok( sprintf( 'ALLOWLIST REMOVED ⇒ the canary WAS mailed (%d message, %d wp_mail attempt). '
 			. 'The driver can see the failure, so a zero in --expect=hold is evidence.',
 			$canary_got, $att_canary ) );
+	} elseif ( ! $machinery_delivers ) {
+		bad( sprintf( 'THE BUILD UNDER TEST CANNOT SEND AT ALL — not to the canary (mailpit %d, '
+			. 'attempts %d) and not to Ian either (mailpit %d, attempts %d). This is NOT "no leak": '
+			. 'it is a BROKEN red-first build, and it would make the hold run pass for a reason '
+			. 'that has nothing to do with the allowlist. Check the stripped harness\'s '
+			. 'membership-pages symlink first — a dangling one degrades the link store and makes '
+			. 'the sender refuse everybody.', $canary_got, $att_canary, $ian_got, $att_ian ) );
 	} else {
-		bad( sprintf( 'ALLOWLIST REMOVED and the canary STILL got nothing (mailpit %d, attempts %d). '
+		bad( sprintf( 'ALLOWLIST REMOVED, IAN WAS MAILED, and the canary STILL got nothing '
+			. '(mailpit %d, attempts %d). The machinery delivers, so this is specific to the canary. '
 			. 'This driver cannot detect an allowlist failure, so its "held" result proves NOTHING '
 			. '— the canary is inert for some other reason.', $canary_got, $att_canary ) );
 	}
