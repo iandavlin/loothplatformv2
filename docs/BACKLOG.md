@@ -25,6 +25,7 @@ line into that lane's charter and note the lane name here.
 9. Advanced search: dynamic facet narrowing
 10. Add-discussion modal: resizable + text scaling
 11. Group chat header: collapse + text scale
+11.5 Emoji picker for the messages composer (Ian 8/1)
 12. Post header: title legibility over text thumbnails
 13. PWA launch animation/message
 13.5 Craft gate RED: finder/anon Optimum.png oversized + raw (pre-existing, Nov 2024)
@@ -37,6 +38,12 @@ line into that lane's charter and note the lane name here.
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 2026-08-01 — Emoji picker for messages (Ian)
+
+Ian 8/1: add an emoji picker to the messages composer (DM/group chat). Members should be
+able to insert emoji into a message. Pairs with the recent messages sizing + react work
+(react-fix). Mock first, phone + desktop, dev gate. Deploy by pull.
 
 ## 2026-07-31 — Mobile: discussion embed broken + card video won't play (Ian)
 
