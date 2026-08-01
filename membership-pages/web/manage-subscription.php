@@ -423,9 +423,33 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
                  *
                  * aria-checked/radio rather than a <select>: three mutually
                  * exclusive values that all fit, and the current one should be
-                 * readable without opening anything. */ ?>
+                 * readable without opening anything.
+                 *
+                 * ── SHIPPED HIDDEN, REVEALED BY THE SERVER, AND THAT IS THE DESIGN ──
+                 * `hidden` is not a nicety here, it is the gate. This page has NO WP
+                 * BOOT (:3), so it cannot ask lg_fd_cadence_ui_enabled() — the single
+                 * source of truth for whether ANY surface shows this control
+                 * (lg-follow-digest.php:377) — at render time. A page-local flag is
+                 * exactly the "each surface checks its own condition and they
+                 * eventually disagree" failure that function exists to prevent.
+                 *
+                 * So the flag below is only a CHEAP PRE-GATE (off ⇒ not a byte of
+                 * this, and nobody pays for a fetch). The authoritative answer comes
+                 * over the wire from lg_fd_cadence_state, which is per-member: it
+                 * refuses anyone the sender would not actually serve. manage-
+                 * following.js reveals this on ok:true and REMOVES it otherwise.
+                 *
+                 * FAIL-CLOSED ON PURPOSE: if the JS never runs, the fetch fails, or
+                 * the member is not served, the control stays hidden. The failure mode
+                 * of a hidden control is that a member does not see a setting; the
+                 * failure mode of a visible one is that they set it and get nothing.
+                 *
+                 * The options below are a SKELETON, not the truth — the JS rebuilds
+                 * them from the endpoint's `options` so the list cannot drift from
+                 * lg_fd_cadences(). */ ?>
                 <div class="lg-manage-sub__fol-freq" id="lg-fol-freq" role="radiogroup"
-                     aria-label="How often to send discussion emails">
+                     aria-label="How often to send discussion emails"
+                     data-state="pending" hidden>
                     <span class="lg-manage-sub__fol-freq-lbl">
                         <b>Email frequency</b>
                         <small>Applies to every discussion you follow.</small>
@@ -433,10 +457,12 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
                     <span class="lg-manage-sub__fol-freq-seg">
                         <?php foreach (LG_FOLLOWING_CADENCES as $value => $label): ?>
                             <button type="button" class="lg-manage-sub__fol-freq-opt"
-                                    role="radio" aria-checked="false"
+                                    role="radio" aria-checked="false" tabindex="-1"
                                     data-cadence="<?= $h($value) ?>"><?= $h($label) ?></button>
                         <?php endforeach; ?>
                     </span>
+                    <span class="lg-manage-sub__fol-freq-note" id="lg-fol-freq-note"
+                          role="status" aria-live="polite"></span>
                 </div>
             <?php endif; ?>
 

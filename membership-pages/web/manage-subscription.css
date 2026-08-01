@@ -553,6 +553,24 @@ html[data-lguser-theme="dark"] .lg-manage-sub__fol-mark.is-toggle:focus-visible 
     padding: 12px 0 2px;
     border-top: 1px solid var(--lg-line, #e3e1d8);
 }
+/* ⚠️ THIS RULE IS THE HIDDEN STATE, NOT THE `hidden` ATTRIBUTE.
+ * The UA sheet's [hidden]{display:none} is specificity (0,1,0) and loses to the
+ * .class{display:flex} above at the same weight but later origin — so shipping
+ * `hidden` WITHOUT this line hides nothing, and the control paints for exactly
+ * the members lg_fd_cadence_state refuses to serve. That is the failure the
+ * hidden default exists to prevent, arriving through CSS instead of PHP.
+ * Asserted by the gate (computed display, not the attribute) rather than trusted. */
+.lg-manage-sub__fol-freq[hidden] { display: none; }
+
+/* Saving/Saved/error line. aria-live, so a screen reader hears the outcome the
+ * sighted user reads — the write is silent otherwise. */
+.lg-manage-sub__fol-freq-note {
+    flex: 1 0 100%;
+    min-height: 1em;
+    font-size: .74rem;
+    color: var(--lg-mute, #6b6f63);
+}
+.lg-manage-sub__fol-freq[data-busy="1"] .lg-manage-sub__fol-freq-seg { opacity: .7; }
 .lg-manage-sub__fol-freq-lbl b { display: block; font-size: .85rem; color: var(--lg-ink, #323532); }
 .lg-manage-sub__fol-freq-lbl small { font-size: .78rem; color: var(--lg-mute, #6b6f63); }
 
@@ -610,6 +628,7 @@ html[data-lguser-theme="dark"] .lg-manage-sub__fol-freq-opt[aria-checked="true"]
     color: #cfe0b4;
     box-shadow: 0 1px 2px rgba(0,0,0,.6);
 }
+html[data-lguser-theme="dark"] .lg-manage-sub__fol-freq-note { color: var(--lgms-mute); }
 
 @media (max-width: 640px) {
     .lg-manage-sub__fol-freq { gap: 8px; }
