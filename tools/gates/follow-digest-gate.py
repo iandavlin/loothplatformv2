@@ -76,6 +76,7 @@ import atexit
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -232,6 +233,42 @@ def ok(name, detail=""):
 
 def dead(name, detail):
     DEAD.append((name, detail))
+
+
+def repo_root_of_gate():
+    """The lane root, from THIS file. tools/gates/x.py -> three dirnames up."""
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+# define( 'LG_FD_CADENCE_CONTROL_SHIPPED', false );  — value captured, spacing free.
+_SHIPPED_RE = re.compile(
+    r"""define\(\s*['"]LG_FD_CADENCE_CONTROL_SHIPPED['"]\s*,\s*(\w+)\s*\)""")
+
+
+def cadence_control_shipped(repo_root):
+    """Is the frequency control actually turned on for anybody?
+
+    ⚠️ LEXED, NOT GREPPED, and the difference is not pedantry here. The constant's
+    NAME now appears ~4 times in this plugin's own explanatory comment, so
+    `grep -q LG_FD_CADENCE_CONTROL_SHIPPED` matches the prose that explains why the
+    thing is OFF and reports it ON — a red-first that stays green, which is the exact
+    failure this lane has already hit twice (7/31). Only the define's captured VALUE
+    is consulted.
+
+    Returns True/False, or None when the define cannot be found at all — an unreadable
+    or renamed constant is a CANNOT-RUN, never a quiet "off" that greens the absence
+    branch by default.
+    """
+    path = os.path.join(repo_root, "platform", "mu-plugins", "lg-follow-digest.php")
+    try:
+        with open(path) as fh:
+            src = fh.read()
+    except OSError:
+        return None
+    m = _SHIPPED_RE.search(src)
+    if not m:
+        return None
+    return m.group(1).strip().lower() == "true"
 
 
 def build_branch_harness(plugin, harness_dir=None, boot_path=None):
@@ -793,6 +830,32 @@ if (function_exists('lg_fd_render') && function_exists('lg_fd_topic_urls')) {
             }
             $out['link_check'] = array('hub' => $hub, 'bad' => $bad,
                                        'other' => $other, 'badlist' => array_slice($badlist, 0, 3));
+
+            /* ── WHAT THE FOOTER PROMISES ─────────────────────────────────────
+             * Ian, 8/1: "the link to change frequency doesn't seem to have a setting
+             * on the manage account page." He was right. The footer said "Change how
+             * often" and linked to /manage-subscription/, where the frequency control
+             * renders only under LG_FOLLOWING_CADENCE — a flag set in NO tracked
+             * config, NO nginx conf and NO fpm pool on either box. It rendered for
+             * nobody, so the promise was dead for every recipient.
+             *
+             * The destination was already gated; the PROMISE was not. Both halves are
+             * collected here so the assertion can compare them. */
+            preg_match_all('~<a\b[^>]*href="([^"]*)"[^>]*>(.*?)</a>~is', $html, $am, PREG_SET_ORDER);
+            $promises = array(); $frags = array();
+            foreach ($am as $a) {
+                $href = html_entity_decode($a[1], ENT_QUOTES);
+                $txt  = trim(preg_replace('~\s+~', ' ', strip_tags(html_entity_decode($a[2], ENT_QUOTES))));
+                if (preg_match('~how often|frequenc|cadence|daily or weekly~i', $txt)) {
+                    $promises[] = array('text' => $txt, 'href' => $href);
+                }
+                if (strpos($href, '#') !== false) {
+                    $frags[] = array('href' => $href, 'text' => $txt,
+                                     'frag' => substr($href, strpos($href, '#') + 1));
+                }
+            }
+            $out['setting_promises'] = $promises;
+            $out['link_fragments']   = $frags;
         }
     }
 }
@@ -1292,6 +1355,79 @@ def main():
     else:
         ok("every link points at the HUB", "%d hub deep link(s), 0 legacy-forum links"
            % lc["hub"])
+
+    # ── AND WHAT THE FOOTER PROMISES MUST EXIST ────────────────────────────────
+    # The destination was gated from the day a link went wrong. The PROMISE was not,
+    # and that is the half Ian found on 8/1: "the link to change frequency doesn't seem
+    # to have a setting on the manage account page." The anchor said "Change how often";
+    # the control behind it renders only under LG_FOLLOWING_CADENCE, which is set in no
+    # tracked config, no nginx conf and no fpm pool on either box. Dead for everyone.
+    #
+    # This is the UI-lies class in a SENT EMAIL, where it cannot be edited afterwards.
+    # So: an anchor may promise a frequency control only when something in the tree
+    # actually turns that control on. When account-following ships the flag, this goes
+    # green on its own and the wording can come back in the same change.
+    # IT IS ASSERTED AS A BICONDITIONAL, in both directions, on purpose. "Don't promise
+    # what isn't there" alone would let the opposite defect ship silently: the control
+    # goes live and the footer keeps offering the weaker wording, so the member never
+    # learns the setting exists. Same drift, same store, other sign.
+    if lc is not None:
+        promises = d.get("setting_promises") or []
+        shipped = cadence_control_shipped(repo_root_of_gate())
+        if shipped is None:
+            dead("the cadence-control switch cannot be read",
+                 "LG_FD_CADENCE_CONTROL_SHIPPED was not found as a define() in "
+                 "platform/mu-plugins/lg-follow-digest.php. Renamed or removed, this "
+                 "assertion silently degrades to 'off', which greens the no-promise "
+                 "branch by default — so it reports CANNOT RUN instead.")
+        elif promises and not shipped:
+            red("the digest promises a setting that renders for NOBODY",
+                "%s — LG_FD_CADENCE_CONTROL_SHIPPED is false, so the frequency control "
+                "is painted for no member, and the recipient lands on an account page "
+                "with no such setting. A link in a sent email cannot be edited "
+                "afterwards. Either ship the control (account-following owns the page) "
+                "or promise only what is there."
+                % "; ".join("anchor %r -> %s" % (p.get("text"), p.get("href"))
+                            for p in promises[:3]))
+        elif shipped and not promises:
+            red("the frequency control ships, but the digest never mentions it",
+                "LG_FD_CADENCE_CONTROL_SHIPPED is true, so the Daily/Weekly control is "
+                "live on /manage-subscription/ — and the footer still offers only the "
+                "generic wording, so the member is never told the setting exists. The "
+                "footer's 'Change how often' wording returns in the same change that "
+                "flips the constant.")
+        elif promises:
+            ok("the digest promises a frequency control, and that control renders",
+               "LG_FD_CADENCE_CONTROL_SHIPPED is true, so 'Change how often' lands on a "
+               "real setting for the members the sender actually serves")
+        else:
+            ok("the digest promises no setting that does not exist",
+               "no anchor offers a frequency/cadence control while "
+               "LG_FD_CADENCE_CONTROL_SHIPPED is false — the footer links to what is "
+               "actually on the page (✉ toggle, followed list, Stop all)")
+
+        # A deep link to an anchor that is not on the page is the same lie, one level
+        # down: the member arrives at the top of a long account page and concludes the
+        # control is missing. Cheap to check, and it is the fix's own foundation.
+        for fr in (d.get("link_fragments") or []):
+            frag = (fr.get("frag") or "").strip()
+            if not frag or "/manage-subscription" not in (fr.get("href") or ""):
+                continue
+            page = os.path.join(repo_root_of_gate(),
+                                "membership-pages", "web", "manage-subscription.php")
+            try:
+                with open(page) as fh:
+                    src = fh.read()
+            except OSError as e:
+                dead("digest deep-link target", "cannot read %s: %s" % (page, e))
+                break
+            if ('id="%s"' % frag) in src or ("id='%s'" % frag) in src:
+                ok("the digest's deep link lands on a real section",
+                   "#%s exists in manage-subscription.php" % frag)
+            else:
+                red("the digest deep-links to #%s, which is not on the page" % frag,
+                    "The member arrives at the top of the account page and concludes the "
+                    "control is missing — the same defect as a dead link, one level down.")
 
     if not d.get("collector_exists"):
         red("%s() does not exist" % COLLECTOR,
