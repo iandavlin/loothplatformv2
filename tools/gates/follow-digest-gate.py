@@ -1088,8 +1088,16 @@ def call_lines(path, fname):
 
 def main():
     global WP_PATH, PLUGIN, EXPECT_ON, BOOT, ALLOWLIST_ENV, PROVE_TEST_MODE
+    global MU_DIR, WP_USER
     ap = argparse.ArgumentParser()
     ap.add_argument("--wp-path", default=WP_PATH)
+    ap.add_argument("--mu-dir", default="",
+                    help="mu-plugins dir to mirror into the harness. Defaults to "
+                         "<wp-path>/wp-content/mu-plugins — override only if the box "
+                         "puts them elsewhere, never to point at another docroot.")
+    ap.add_argument("--wp-user", default=WP_USER,
+                    help="unix user the proof driver runs as via sudo (default %s)"
+                         % WP_USER)
     ap.add_argument("--plugin", default="",
                     help="run WordPress against THIS branch's plugin file (prove a branch pre-merge)")
     ap.add_argument("--expect-on", action="store_true",
@@ -1102,6 +1110,17 @@ def main():
                          "opt-in and run-all.sh does not use it.")
     args = ap.parse_args()
     WP_PATH = args.wp_path
+
+    # ⚠️ MU_DIR FOLLOWS WP_PATH, or the harness mirrors a DIFFERENT DOCROOT than the
+    # WordPress it boots. Both were module constants pinned to /var/www/dev, and only
+    # WP_PATH had a flag — so `--wp-path /var/www/html` on live would have booted html's
+    # WordPress while symlinking dev's mu-plugin set into the harness. That is "the proof
+    # reports on a build it never made" again, by a second route, and it would have been
+    # invisible: a harness full of plausible plugins, every assertion running, the verdict
+    # describing a build that exists nowhere. Derived unless explicitly overridden.
+    MU_DIR = args.mu_dir or os.path.join(WP_PATH, "wp-content", "mu-plugins")
+    WP_USER = args.wp_user
+
     EXPECT_ON = args.expect_on
     PROVE_TEST_MODE = args.prove_test_mode
     ALLOWLIST_ENV = os.environ.get("LG_FOLLOW_DIGEST_ALLOWLIST") or ""
