@@ -281,6 +281,46 @@ lg_fd_set_cadence( $uid, 'daily' );
 eq( 'control — a real transition still stamps', '' !== lg_fd_watermark( $uid ), true );
 eq( 'control — and that member IS due', $is_due( $uid, 'daily' ), true );
 
+/* ── 6. THE EMAIL'S PROMISE IS TRUE ───────────────────────────────────────────
+ * The whole reason this lane exists. The sent digest's footer says "Change how
+ * often" and links to /manage-subscription/ (lg-follow-digest.php:1056). For that
+ * sentence to be honest, EVERY member who can receive the email must be able to see
+ * the control when they follow the link.
+ *
+ * It holds structurally rather than by coincidence, and that is worth asserting so
+ * it cannot drift: lg_fd_cadence_ui_enabled() and the send layer both gate on
+ * lg_fd_allowed(). One predicate, two questions — "may we mail you?" and "may you
+ * see the setting?" — so the set of people who get the promise and the set who can
+ * act on it are the same set BY CONSTRUCTION. If someone ever gives the control its
+ * own condition, this goes red. */
+say( "\n[6] the digest footer links to a control the recipient can actually see" );
+$served    = lg_fd_allowed( $uid, (string) $u->user_email );
+$can_see   = lg_fd_cadence_ui_enabled( $uid );
+eq( 'the sender would serve this member', $served, true );
+eq( 'and the control is visible to them', $can_see, true );
+$served === $can_see
+	? ok( 'mailable ⟺ can-see — the footer promise cannot be made to someone who '
+	    . 'would land on a page with no such setting' )
+	: bad( 'MAILABLE AND CAN-SEE HAVE DIVERGED — the email would promise a control '
+	     . 'the recipient cannot find, which is the defect this lane was opened for' );
+
+/* The negative half. A member the sender would NOT serve must not see it either —
+ * otherwise they set a cadence, get suppressed, and receive nothing. */
+$stranger = 0;
+foreach ( get_users( array( 'number' => 25, 'fields' => 'ID' ) ) as $cand ) {
+	$cu = get_userdata( (int) $cand );
+	if ( $cu && ! lg_fd_allowed( (int) $cand, (string) $cu->user_email ) ) {
+		$stranger = (int) $cand;
+		break;
+	}
+}
+if ( $stranger ) {
+	eq( sprintf( 'a NON-served member (uid %d) cannot see the control', $stranger ),
+		lg_fd_cadence_ui_enabled( $stranger ), false );
+} else {
+	say( '  (no non-served member available on this box to check the negative half)' );
+}
+
 /* ── verdict ──────────────────────────────────────────────────────────────── */
 say( "\n" . str_repeat( '─', 74 ) );
 if ( $FAIL ) {
