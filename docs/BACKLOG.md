@@ -6,6 +6,8 @@ line into that lane's charter and note the lane name here.
 ## PRIORITY INDEX (the order — edit THIS to re-rank; tell keeper "bump X")
 
 **P0 — live/member-facing bugs**
+3.9 Hub: "Newest" sort returns TRENDING order on live (Ian 8/3, reported from live)
+4.0 Weekly digest: discussion images SOMETIMES missing from the email (Ian 8/3)
 
 **P1 — wanted now / deploy-blocking**
 3.7 Mobile: discussion embed broken + card video won't play (member-facing)
@@ -33,6 +35,47 @@ line into that lane's charter and note the lane name here.
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 4.0 Weekly digest: discussion images SOMETIMES missing (P0, LIVE) — Ian 8/3
+
+Ian, from live: *"images from discussions are now sometimes not making it into the
+weekly digest."*
+
+**"NOW" AND "SOMETIMES" ARE BOTH LOAD-BEARING — do not drop either.**
+
+*Now* means this is a REGRESSION: it used to work. Bisect against the digest's own
+sent history rather than reasoning from current source — find a past send where the
+image IS present and one where it is not, and diff the discussions behind them, not
+the code first.
+
+*Sometimes* means a whole-feature explanation is already wrong. Something about
+PARTICULAR discussions decides it. Candidates worth separating before touching code,
+because they fail identically in the email and differently in the fix: image attached
+to the topic vs. embedded in the body; first-post image vs. a later reply's; an
+uploaded attachment vs. a hotlinked/remote URL; a private or hidden source forum;
+and the resizer — `/img.php?w=` needs the source readable by the mail renderer, which
+runs as a different user than the web request that uploaded it.
+
+Get a FAILING and a PASSING discussion side by side from a real send before forming a
+theory. This is the weekly digest (editorial, FluentCRM), NOT the follow-digest — two
+different projects that share a word.
+
+## 3.9 Hub: "Newest" sort returns TRENDING order (P0, LIVE) — Ian 8/3
+
+Ian, from live: *"the hub is sorting discussion on the newest setting as trending."*
+Selecting **Newest** on the discussions hub appears to return the trending order
+instead of a date sort.
+
+NOT YET REPRODUCED — this is Ian's report, recorded verbatim, not a measurement.
+Whoever picks it up starts by reproducing it **on live as a logged-in member** (dev2
+and live hold different data, and sort bugs hide behind thin fixtures), with a
+control: capture the ID order under Newest and under Trending and show they match.
+If they match, that IS the defect; if they differ, the bug is something else and the
+charter is wrong — say so rather than hunting for a way to agree with it.
+
+Then check the obvious seam: whether the sort parameter survives the hub router into
+the query, or is dropped and left to fall through to a default. A dropped param and a
+mislabelled default look identical from the outside and have different fixes.
 
 ## ✅ SHIPPED TO LIVE — cleared from the index 2026-08-01
 

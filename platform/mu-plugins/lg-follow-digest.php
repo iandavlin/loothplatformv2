@@ -315,7 +315,21 @@ function lg_fd_set_cadence( int $user_id, string $cadence ): bool {
 	$was = lg_fd_cadence( $user_id );
 	update_user_meta( $user_id, LG_FD_CADENCE_META, $cadence );
 
-	if ( 'instant' !== $cadence && $cadence !== $was ) {
+	/* ⚠️ "&& $cadence !== $was" WAS A SILENT NOTHING ONCE THE DEFAULT STOPPED BEING
+	 * 'instant'. A member who had never touched the control already READ as the default
+	 * cadence, so choosing that same value on the control was $cadence === $was — no
+	 * watermark written, and without a watermark the resolver never returns them. They
+	 * picked Weekly, the UI said Weekly, and they would never have received a digest.
+	 * Measured on dev2 2026-08-03: picking 'weekly' wrote NO watermark; picking 'daily'
+	 * (which differed from the default) wrote one. Same control, same member, opposite
+	 * outcomes, and the broken one was the option the UI defaults to showing.
+	 *
+	 * The real condition is not "did the value change" but "is a watermark missing".
+	 * The change-check is kept only as the RE-ENTRY guard it was always doing double
+	 * duty as: moving between two non-instant cadences must re-anchor the window so the
+	 * new cadence does not inherit a stale one. */
+	if ( 'instant' !== $cadence
+		&& ( $cadence !== $was || '' === (string) get_user_meta( $user_id, LG_FD_WATERMARK_META, true ) ) ) {
 		// NOW, never epoch. A digest is never a backfill.
 		update_user_meta( $user_id, LG_FD_WATERMARK_META, gmdate( 'Y-m-d H:i:s' ) );
 	}
@@ -532,7 +546,47 @@ function lg_fd_suppress_instant( $send_mail, $args ) {
 	$u = get_userdata( $uid );
 	if ( ! $u || ! lg_fd_allowed( $uid, (string) $u->user_email ) ) { return $send_mail; }
 
-	return 'instant' === lg_fd_cadence( $uid ) ? $send_mail : false;
+	if ( 'instant' === lg_fd_cadence( $uid ) ) { return $send_mail; }
+
+	/* ⚠️ ENROL BEFORE SUPPRESSING — the half of "suppressed ⟺ served" the allowlist
+	 * check above does NOT cover, and the half that was missing.
+	 *
+	 * The allowlist answers "may we mail them"; it does not answer "will the resolver
+	 * find them". lg_fd_due_recipients() requires a WATERMARK, and a member who has
+	 * never touched the cadence control has none — so before this line existed, taking
+	 * a default-cadence member's instant mail away handed them to a resolver that would
+	 * never return them. Measured on dev2 2026-08-03 under an all-members allowlist:
+	 * cadence 'weekly', instant mail SUPPRESSED, due-list membership NO. That is the
+	 * mail black hole this function's own comment forbids, reachable by widening the
+	 * allowlist and by nothing else — which is why Ian-only hid it.
+	 *
+	 * Seeding here rather than at follow time is deliberate: this is the exact moment
+	 * we take responsibility for a member's mail, so it is the moment the debt is
+	 * recorded. It writes at most once per member (both writes are absence-guarded). */
+	lg_fd_ensure_enrolled( $uid );
+	return false;
+}
+
+/**
+ * Make sure the resolver can actually find a member we are about to suppress.
+ *
+ * Writes ONLY the watermark, never the cadence: keeping the cadence row absent is what
+ * preserves the distinction between "never chose" and "chose the default", so a future
+ * change to LG_FD_DEFAULT_CADENCE still reaches everyone who never expressed a
+ * preference. lg_fd_due_recipients() reads the default through COALESCE for exactly
+ * this reason.
+ *
+ * The watermark is 'now', never epoch — a digest is never a backfill, so the first one
+ * covers activity from enrolment forward and no member is mailed a history they already
+ * read.
+ *
+ * @return bool true if this call enrolled them (i.e. they were not enrolled before).
+ */
+function lg_fd_ensure_enrolled( int $user_id ): bool {
+	if ( $user_id <= 0 ) { return false; }
+	if ( '' !== (string) get_user_meta( $user_id, LG_FD_WATERMARK_META, true ) ) { return false; }
+	update_user_meta( $user_id, LG_FD_WATERMARK_META, gmdate( 'Y-m-d H:i:s' ) );
+	return true;
 }
 
 /* ── THE RECIPIENT SET ─────────────────────────────────────────────────────────
@@ -550,16 +604,31 @@ function lg_fd_due_recipients( string $cadence ): array {
 	global $wpdb;
 	if ( ! isset( $wpdb ) ) { return array(); }
 
-	// A member is due only if they hold this cadence AND a watermark. No watermark
-	// means the flood guard has not run for them, and the correct response is to send
-	// them nothing rather than to invent a window.
+	/* A member is due only if their EFFECTIVE cadence is this one AND they hold a
+	 * watermark. No watermark means nobody has taken responsibility for their mail yet,
+	 * and the correct response is to send nothing rather than to invent a window.
+	 *
+	 * ⚠️ THE WATERMARK IS THE ANCHOR, NOT THE CADENCE ROW, and it used to be the other
+	 * way round. An INNER JOIN from the cadence row meant "effective cadence" silently
+	 * meant "explicitly chosen cadence": every member who had never touched the control
+	 * was unreachable, however LG_FD_DEFAULT_CADENCE was set. Paired with a non-instant
+	 * default that suppresses their instant mail, that is a black hole — suppressed by
+	 * one code path, invisible to the other. Measured on dev2 2026-08-03: 1824 users,
+	 * 0 holding a cadence, 0 due at any cadence, under an all-members allowlist.
+	 *
+	 * COALESCE(NULLIF(...)) resolves the same default lg_fd_cadence() returns, so the
+	 * resolver and the UI cannot disagree about who is on what cadence. Reading the
+	 * default rather than writing it keeps "never chose" distinguishable from "chose
+	 * the default", so changing LG_FD_DEFAULT_CADENCE still moves everyone who never
+	 * expressed a preference. */
 	$sql = $wpdb->prepare(
-		"SELECT c.user_id
-		   FROM {$wpdb->usermeta} c
-		   JOIN {$wpdb->usermeta} w
-		     ON w.user_id = c.user_id AND w.meta_key = %s AND w.meta_value <> ''
-		  WHERE c.meta_key = %s AND c.meta_value = %s",
-		LG_FD_WATERMARK_META, LG_FD_CADENCE_META, $cadence
+		"SELECT w.user_id
+		   FROM {$wpdb->usermeta} w
+		   LEFT JOIN {$wpdb->usermeta} c
+		     ON c.user_id = w.user_id AND c.meta_key = %s
+		  WHERE w.meta_key = %s AND w.meta_value <> ''
+		    AND COALESCE(NULLIF(c.meta_value, ''), %s) = %s",
+		LG_FD_CADENCE_META, LG_FD_WATERMARK_META, LG_FD_DEFAULT_CADENCE, $cadence
 	);
 	$due = array_map( 'intval', (array) $wpdb->get_col( $sql ) );
 
