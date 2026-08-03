@@ -184,9 +184,26 @@ class LG_WD_Email_Builder {
 
     /**
      * Build an author HTML snippet with contextual link.
-     * - bbPress topics → BuddyBoss member forums tab (/members/{slug}/forums/)
-     * - Other CPTs → author archive (/author/{nicename}/)
-     * - All other authors → author archive (/author/{nicename}/)
+     *
+     * EVERY author links to their profile at /u/{slug}. The archive is a fallback for
+     * the slugless, not a destination.
+     *
+     * ⚠️ IT USED TO BRANCH ON POST TYPE, and that is the bug Ian reported on 2026-08-03:
+     * "the username in the weeklydigest are now not going to the profile of the user.
+     * They are going to the legacy archive page which sucks." Only `topic` got /u/;
+     * every article and CPT fell through to /archive/?_post_author=, so the byline on
+     * exactly the content the digest is built to showcase went to a filtered list
+     * instead of the person.
+     *
+     * Verified on live before changing, because a 404 would be worse than the archive:
+     * all 150+ distinct non-topic post authors resolve. The unhealed patreon_<id> slugs
+     * 301 to the human profile and land 200 (/u/patreon_95515498 ->
+     * /u/chip-tait-brooklyn-fretworks), and a fabricated slug 404s — so the probe
+     * discriminates rather than blanket-200ing.
+     *
+     * Preferring the healed _looth_slug mirror over user_nicename also skips that
+     * redirect hop and keeps patreon_<id> out of the visible URL.
+     *
      * Returns "By <a>Author Name</a>" or "By <strong>Author Name</strong>".
      */
     public static function author_html( int $post_id ): string {
@@ -199,18 +216,18 @@ class LG_WD_Email_Builder {
         $nicename = get_the_author_meta( 'user_nicename', $author_id );
         $url      = '';
 
-        // bbPress topic -> author's public profile (/u/<slug>) in the new system.
+        // Author's public profile (/u/<slug>) — for EVERY post type, not just topics.
         // Prefer the healed _looth_slug mirror; fall back to user_nicename (same
         // convention lg-membership-chrome uses for the account chip).
-        if ( get_post_type( $post_id ) === 'topic' ) {
-            $slug = get_user_meta( $author_id, '_looth_slug', true );
-            if ( ! $slug ) { $slug = $nicename; }
-            if ( $slug ) {
-                $url = home_url( '/u/' . rawurlencode( $slug ) );
-            }
+        $slug = get_user_meta( $author_id, '_looth_slug', true );
+        if ( ! $slug ) { $slug = $nicename; }
+        if ( $slug ) {
+            $url = home_url( '/u/' . rawurlencode( $slug ) );
         }
 
-        // Other CPTs → Search & Filter archive by author
+        // Slugless author only. Not a post-type case: an author with neither a healed
+        // slug nor a nicename has no profile to link, and the filtered archive is the
+        // one honest destination left.
         if ( ! $url && $nicename ) {
             $url = home_url( '/archive/?_post_author=' . $nicename );
         }
