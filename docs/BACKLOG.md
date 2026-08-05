@@ -78,22 +78,23 @@ Get a FAILING and a PASSING discussion side by side from a real send before form
 theory. This is the weekly digest (editorial, FluentCRM), NOT the follow-digest — two
 different projects that share a word.
 
-## 3.9 Hub: "Newest" sort returns TRENDING order (P0, LIVE) — Ian 8/3
+## ✅ 3.9 Hub: "Newest" sorted as TRENDING — FIXED, LIVE @ 0e80c5b (Ian 8/3)
 
-Ian, from live: *"the hub is sorting discussion on the newest setting as trending."*
-Selecting **Newest** on the discussions hub appears to return the trending order
-instead of a date sort.
+Ian: *"toggling newest is producing the same results as trending. Which is to say
+the that any activity on the post pushes it to the top."* Confirmed on live by Ian
+after deploy: "It looks like it worked."
 
-NOT YET REPRODUCED — this is Ian's report, recorded verbatim, not a measurement.
-Whoever picks it up starts by reproducing it **on live as a logged-in member** (dev2
-and live hold different data, and sort bugs hide behind thin fixtures), with a
-control: capture the ID order under Newest and under Trending and show they match.
-If they match, that IS the defect; if they differ, the bug is something else and the
-charter is wrong — say so rather than hunting for a way to agree with it.
+Cause: `bb-mirror/web/forums/_feed.php` ordered the default sort by
+`t.last_active_at`, so Newest and Trending were one ordering. Both feeds fixed —
+per-forum (`new` and `old`) and the site-wide union, whose `event_time` IS
+`last_active_at`. The union already sorted `old` by `created_at` while sorting
+`new` by activity; that asymmetry is what gave it away.
 
-Then check the obvious seam: whether the sort parameter survives the hub router into
-the query, or is dropped and left to fall through to a default. A dropped param and a
-mislabelled default look identical from the outside and have different fixes.
+⚠️ LESSON WORTH KEEPING: dev2 CANNOT reproduce this class. Every dev2 topic has
+`created_at == last_active_at` because nobody replies here, so both orderings are
+byte-identical and the fix reads as a no-op. Live had 1031 topics with
+`last_active_at > created_at`. Any activity-vs-creation ordering bug must be proven
+against live data.
 
 ## ✅ SHIPPED TO LIVE — cleared from the index 2026-08-01
 
