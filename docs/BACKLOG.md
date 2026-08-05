@@ -6,7 +6,7 @@ line into that lane's charter and note the lane name here.
 ## PRIORITY INDEX (the order — edit THIS to re-rank; tell keeper "bump X")
 
 **P0 — live/member-facing bugs**
-3.9 Hub: "Newest" sort returns TRENDING order on live (Ian 8/3, reported from live)
+4.1 Recap: the mobile bell's 700ms mark-all-read empties the recap and CANCELS the digest (Ian ruled unread-only 8/3 — this makes that ruling behave as labelled)
 4.0 Weekly digest: discussion images SOMETIMES missing from the email (Ian 8/3)
 
 **P1 — wanted now / deploy-blocking**
@@ -35,6 +35,24 @@ line into that lane's charter and note the lane name here.
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 4.1 Recap emptied by the mobile bell (P0) — surfaced 8/3
+
+Ian ruled the recap stays "what you missed" (unread only) — see
+docs/IAN-RULINGS-2026-08-03.md §1. He ruled on the FRAMING; this defect was not
+part of what he chose, and it makes that framing misfire.
+
+`webroot/bottom-nav.js:1125` fires markAllNotifsRead 700ms after the mobile notif
+sheet renders, POSTing {action:'read_all'} for EVERY row, not the visible eight.
+Under unread-only that empties the recap; under "empty means send no email" it
+cancels the member's digest. The member most engaged with the bell is the one most
+reliably unmailed.
+
+The fix already exists one arm over and was never extended: Recap.php:110-113
+refuses to consult is_read for connection_request for exactly this reason.
+
+Mark read what was actually SEEN, not the whole store. Red-first: a member with 12
+notifications who opens the sheet and closes it must still have unread rows.
 
 ## 4.0 Weekly digest: discussion images SOMETIMES missing (P0, LIVE) — Ian 8/3
 
