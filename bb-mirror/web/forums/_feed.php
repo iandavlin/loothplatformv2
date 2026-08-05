@@ -300,7 +300,10 @@ foreach ($db->query("SELECT slug FROM forum WHERE visibility = 'public'")->fetch
 // arbitrary per-query order and offset paging repeats/skips those cards.
 switch ($sort_param) {
     case 'old':
-        $order_by = 'ORDER BY t.last_active_at ASC NULLS LAST, t.id ASC';
+        // created_at, NOT last_active_at — see the note on 'new' below. "Oldest"
+        // meaning "least recently replied to" put busy old threads last and silent
+        // new ones first, which is neither of the two things the label can mean.
+        $order_by = 'ORDER BY t.created_at ASC NULLS LAST, t.id ASC';
         break;
     case 'hot':
         // GREATEST guards rows newer than the frozen clock (negative age
@@ -318,7 +321,20 @@ switch ($sort_param) {
         ) DESC";
         break;
     default: // new
-        $order_by = 'ORDER BY t.last_active_at DESC NULLS FIRST, t.id DESC';
+        /* ⚠️ created_at — WHEN THE DISCUSSION WAS STARTED, not when it was last
+         * touched. This ordered by t.last_active_at, which made "Newest" a second
+         * copy of "Trending": every reply bumped its topic back to the top, so the
+         * feed reordered under members as people talked and a thread started months
+         * ago outranked one posted this morning.
+         *
+         * Ian, 2026-08-03: "toggling newest is producing the same results as
+         * trending. Which is to say the that any activity on the post pushes it to
+         * the top." Two of the four sorts were the same sort, and the one the hub
+         * DEFAULTS to was the broken one.
+         *
+         * NULLS LAST, not FIRST: a topic with no creation timestamp is a mirror gap,
+         * and a gap must not be the first thing on the page. */
+        $order_by = 'ORDER BY t.created_at DESC NULLS LAST, t.id DESC';
         break;
 }
 
@@ -363,7 +379,17 @@ switch ($sort_param) {
         ) DESC";
         break;
     default: // new
-        $union_order_by = 'ORDER BY event_time DESC NULLS LAST, card_type ASC, topic_id DESC';
+        /* created_at, matching the per-forum feed above. event_time is
+         * t.last_active_at for topics (:532, :667) and COALESCE(c.last_activity,
+         * c.published_at) for content items (:732) — an ACTIVITY clock, so sorting
+         * "Newest" by it reproduced Trending site-wide too. The 'old' branch already
+         * used created_at, and that asymmetry is what gave the bug away: one label
+         * measured creation, its own opposite measured activity.
+         *
+         * created_at is a real alias in all three union arms — t.created_at at :538
+         * and :672, c.published_at AS created_at at :737 — so this needs no change
+         * to the SELECT list. */
+        $union_order_by = 'ORDER BY created_at DESC NULLS LAST, card_type ASC, topic_id DESC';
         break;
 }
 
