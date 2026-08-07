@@ -44,7 +44,11 @@
     person: '<circle cx="12" cy="8.5" r="3.8"/><path d="M5 20c0-3.6 3-6 7-6s7 2.4 7 6"/>',
     // Back chevron (Nav tray top-left Back button, Ian 2026-06-25): a left-
     // pointing chevron, fill:none + stroke inherited like the other glyphs.
-    back: '<path d="M15 5l-7 7 7 7"/>'
+    back: '<path d="M15 5l-7 7 7 7"/>',
+    // Sign in (anon centre slot) — arrow entering a door. Same glyph the anon You
+    // sheet already uses for its Sign in link, so the two read as one action.
+    signin: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>' +
+            '<polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>'
   };
 
   // Destinations shown in the Nav tray (the slide-up "Go to" sheet) — pure
@@ -75,6 +79,74 @@
   // Sign-in / Join cluster instead. It's in the initial HTML (and only display:none
   // on mobile), so this is reliable at build time. (Ian 2026-06-24.)
   function isAuthed() { return !!document.querySelector('.lg-chrome__account'); }
+
+  // Read an href off the shared header's anon cluster so our copies of these
+  // destinations cannot drift from the canonical ones. (Hoisted out of the You
+  // sheet 2026-08-07 — the dash's Sign in slot needs the same URL.)
+  function hdrHref(sel, fallback) {
+    var el = document.querySelector(sel);
+    return (el && el.getAttribute('href')) || fallback;
+  }
+
+  // ---- LG_ANON_DASH_SIGNIN (anon-mobile-dash lane, Ian 2026-08-05) -----------
+  //
+  //   "I also want to change the logged out bottom dash for the mobile view.
+  //    It's currently showing the + icon for adding a post and it's not entirely
+  //    clear that you cant post logged out. In general I want logged out users to
+  //    be able to log in easily and see the login easily, but I still want logged
+  //    out users to be able to tool around and see all of the stuff that might get
+  //    them to join."
+  //
+  // ON + anonymous: the centre slot stops being "+" and becomes Sign in. That is
+  // one pixel serving both halves of the ask — the control that could not do what
+  // it promised is gone, and the thing Ian wants visible takes the highest-traffic
+  // spot on the screen. NOTHING else about anonymous browsing changes: every
+  // destination in the Nav tray, the You sheet, and every page an anon could read
+  // before is untouched. This must never become a login wall; the visitor who
+  // wants to keep looking around must be able to keep looking around.
+  //
+  // Why the centre slot and not an extra one: the bar is three slots wide at
+  // 360px. A fourth crowds Nav and You, and the "+" slot is both the most
+  // prominent pixel on the phone AND the one that was lying, so replacing it
+  // fixes and promotes in the same move.
+  //
+  // DEFAULTED OFF. The dev2 serve serves main, so a member-facing change can only
+  // be verified there after it is merged; shipping it OFF lets it land harmlessly
+  // and be looked at for real before it is switched on.
+  //
+  // Flipping it is a one-line edit to a TRACKED FILE, read at runtime with no
+  // environment dependency — deliberately NOT an env/fastcgi_param flag, because
+  // those do not reach every context that renders this bar (a flag that is set in
+  // one pool and absent in another serves the OFF path on the very URL built to
+  // preview it).
+  var LG_ANON_DASH_SIGNIN = false;
+  //
+  // Preview override, following the house ?lgdebug=1 convention: ?lgdash=signin
+  // forces ON and ?lgdash=plus forces OFF, for that pageview only. This is what
+  // lets Ian look at the real running thing on the real serve, from his phone,
+  // before the default flips — without changing what any other visitor is served.
+  // Read-only and per-request: it sets nothing and persists nothing.
+  function anonDashSignin() {
+    try {
+      var m = /[?&]lgdash=(signin|plus)(?:&|#|$)/.exec(location.search || '');
+      if (m) return m[1] === 'signin';
+    } catch (e) {}
+    return LG_ANON_DASH_SIGNIN;
+  }
+
+  // Where the dash's Sign in slot points. Mirrors the shared header's canonical
+  // sign-in URL, then makes sure the visitor comes BACK to the page they were
+  // reading — signing in must not cost them their place, or we have punished the
+  // exact curiosity we are trying to convert.
+  function dashSigninUrl() {
+    var href = hdrHref('.lg-chrome__signin, .lg-chrome__menu-signin a', '/wp-login.php');
+    try {
+      if (/^https?:/i.test(href) || /redirect_to=/.test(href)) return href;
+      var here = location.pathname + location.search + location.hash;
+      return href + (href.indexOf('?') === -1 ? '?' : '&') +
+             'redirect_to=' + encodeURIComponent(here);
+    } catch (e) { return href; }
+  }
 
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
@@ -288,6 +360,53 @@
     (document.head || document.documentElement).appendChild(s);
   }
 
+  // Styles for the anon Sign in slot. DELIBERATELY A SEPARATE BLOCK, injected only
+  // when that slot is actually built: with LG_ANON_DASH_SIGNIN off, injectStyles()
+  // above emits the same bytes it always did and this never runs, so the OFF state
+  // is a no-op in the stylesheet as well as in the DOM — not merely dead CSS that
+  // happens to match nothing.
+  var SIGNIN_STYLE_ID = 'looth-tabbar-signin-style';
+  function injectSigninStyles() {
+    if (document.getElementById(SIGNIN_STYLE_ID)) return;
+    var css =
+      // The slot keeps the raised, filled, cream-ringed language of the Post
+      // button it replaces — it is still the primary action, so it should still
+      // look like one — but it is a PILL WITH THE WORD ON IT. A bare glyph would
+      // be mystery meat, and "see the login easily" is the whole requirement.
+      '#' + BAR_ID + ' .lt-post--signin{flex:0 0 auto;width:auto;justify-content:flex-start;' +
+        'color:#fff !important;padding-left:2px;padding-right:2px}' +
+      '#' + BAR_ID + ' .lt-signin-pill{margin-top:-18px;height:42px;box-sizing:border-box;' +
+        'padding:0 15px;border-radius:21px;background:var(--lg-sage-d,#52613d);' +
+        'display:inline-flex;align-items:center;justify-content:center;gap:7px;' +
+        'border:3px solid var(--lg-cream,#fbfbf8);box-shadow:0 6px 16px rgba(82,97,61,.45);' +
+        'transition:transform .12s ease}' +
+      '#' + BAR_ID + ' .lt-signin-pill svg{width:19px;height:19px;flex:0 0 auto;display:block;' +
+        'fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}' +
+      '#' + BAR_ID + ' .lt-signin-tx{font:600 14px/1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;' +
+        'color:#fff;white-space:nowrap;letter-spacing:.01em}' +
+      '#' + BAR_ID + ' .lt-post--signin:active .lt-signin-pill{transform:scale(.93)}' +
+      // DARK THEME: --lg-sage-d is not a fill there, it is a FOREGROUND colour —
+      // the palette flips it #586b3f -> #b0c693 (CONTRAST-AUDIT-C.md) so a filled
+      // control keeps the same var but comes out LIGHT. White-on-light-sage
+      // measures 1.85:1, well under AA, and this control's entire job is to be
+      // read. So in dark the ink flips instead of the fill: measured 9.9:1.
+      //
+      // NB the existing "+" circle (.lt-post-ico) has this same 1.85:1 in dark on
+      // main today — inherited, not introduced here, and reported separately
+      // rather than fixed silently, since touching it would change the member
+      // surface this branch is supposed to leave alone.
+      'html[data-lguser-theme="dark"] #' + BAR_ID + ' .lt-signin-tx{color:#15171a}' +
+      'html[data-lguser-theme="dark"] #' + BAR_ID + ' .lt-signin-pill svg{stroke:#15171a}' +
+      // At the narrowest phones the three slots must still fit without the pill
+      // squeezing Nav/You into wrapped text.
+      '@media (max-width:359px){#' + BAR_ID + ' .lt-signin-pill{padding:0 11px}' +
+        '#' + BAR_ID + ' .lt-signin-tx{font-size:13px}}';
+    var s = document.createElement('style');
+    s.id = SIGNIN_STYLE_ID;
+    s.textContent = css;
+    (document.head || document.documentElement).appendChild(s);
+  }
+
   function openShop() {
     // The Shop is now its own full page (Buck 2026-06-09) instead of a side
     // drawer — navigate there. (Old behavior: clicked the #looth-shop-fab drawer.)
@@ -391,14 +510,34 @@
     navBtn.addEventListener('click', openNav);
     nav.appendChild(navBtn);
 
-    // Post (big center) — pops the existing composer modal
-    var postBtn = document.createElement('button');
-    postBtn.type = 'button';
-    postBtn.className = 'lt-post';
-    postBtn.setAttribute('aria-label', 'New post');
-    postBtn.innerHTML = '<span class="lt-post-ico"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.plus + '</svg></span>';
-    postBtn.addEventListener('click', openComposer);
-    nav.appendChild(postBtn);
+    // Centre slot. Anonymous + flag ON => Sign in; otherwise the historic Post
+    // button, byte-for-byte unchanged (see LG_ANON_DASH_SIGNIN above).
+    //
+    // It is a real <a href> to wp-login, not a button with a handler, so it
+    // behaves like a link should: long-press, open-in-new-tab, and the browser's
+    // own "where does this go" preview all work, and it still works if our JS
+    // errors after this point.
+    if (anonDashSignin() && !isAuthed()) {
+      injectSigninStyles();
+      var signinBtn = document.createElement('a');
+      signinBtn.className = 'lt-post lt-post--signin';
+      signinBtn.href = dashSigninUrl();
+      // The label is the accessible name; no aria-label, so the two cannot drift.
+      signinBtn.innerHTML =
+        '<span class="lt-signin-pill">' +
+          '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.signin + '</svg>' +
+          '<span class="lt-signin-tx">Sign in</span>' +
+        '</span>';
+      nav.appendChild(signinBtn);
+    } else {
+      var postBtn = document.createElement('button');
+      postBtn.type = 'button';
+      postBtn.className = 'lt-post';
+      postBtn.setAttribute('aria-label', 'New post');
+      postBtn.innerHTML = '<span class="lt-post-ico"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.plus + '</svg></span>';
+      postBtn.addEventListener('click', openComposer);
+      nav.appendChild(postBtn);
+    }
 
     // You (opens the profile sheet — unchanged behavior)
     var youBtn = document.createElement('a');
@@ -539,10 +678,8 @@
     var grab = document.createElement('div'); grab.className = 'lt-sheet__grab';
     sheet.appendChild(grab);
 
-    function hdrHref(sel, fallback) {
-      var el = document.querySelector(sel);
-      return (el && el.getAttribute('href')) || fallback;
-    }
+    // hdrHref is module-scope now (hoisted 2026-08-07 so the dash's Sign in slot
+    // reads the same canonical hrefs); same function body, same behaviour.
     var signinHref  = hdrHref('.lg-chrome__signin, .lg-chrome__menu-signin a', '/wp-login.php');
     var joinHref    = hdrHref('.lg-chrome__join', 'https://www.patreon.com/c/theloothgroup/membership');
     var connectHref = hdrHref('.lg-chrome__connect', '/connect-your-patreon/');
