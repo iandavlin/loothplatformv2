@@ -28,12 +28,43 @@ whole time (the first: the 🔔/✉ toggles, tools/gates/follow-visible-gate.py)
 shared lesson is that PRESENCE IS NOT REACHABILITY, so nothing here counts an
 element. Every assertion is about what a person can actually do.
 
-WHAT IT ASSERTS — one behaviour, stated as the user's goal, not as an element:
+WHAT IT ASSERTS — the user's goals, not elements. Two halves, and the second was
+missing for the whole life of this gate:
 
-    At every tested viewport width, an anonymous visitor on / must be able to
-    reach a sign-in control in AT MOST ONE deliberate tap, and that control must
-    be VISIBLE (styled, sized, in the viewport) and HIT-TESTABLE (elementFromPoint
-    at its centre resolves to the link itself, not to something painted over it).
+  (A) REACHABLE. At every tested viewport width, an anonymous visitor on / must be
+      able to reach a sign-in control in AT MOST ONE deliberate tap, and that
+      control must be VISIBLE (styled, sized, in the viewport) and HIT-TESTABLE
+      (elementFromPoint at its centre resolves to the link itself, not to
+      something painted over it).
+
+  (B) NOT LIED TO. At phone widths, the mobile bottom dash must NOT offer an
+      anonymous visitor a control that claims they can post. (Ian 2026-08-05:
+      "It's currently showing the + icon for adding a post and it's not entirely
+      clear that you cant post logged out.")
+
+WHY (B) HAD TO BE ADDED HERE RATHER THAN AS ITS OWN GATE. (A) and (B) are the
+same surface and the same visitor, and they PULL AGAINST EACH OTHER: the cheap way
+to make sign-in obvious is to wall off browsing, and the cheap way to keep browsing
+open is to leave a compose button that lies. A single gate that must satisfy both
+at once cannot be quietly half-satisfied. Splitting them into two files is how one
+gets relaxed to make the other go green.
+
+Measured BEFORE the fix (2026-08-07, anon, /hub/, 390/430/360/640 — all four): the
+dash renders Nav | + | You. The "+" is a 64x53 filled circle, fully hit-testable,
+the single most prominent control on the screen. Tapping it navigates to
+/hub/?compose=1 (forums.js opens the composer on that param with NO auth check),
+and the modal that appears says "Sign in to post to the forums." while ALSO
+painting the live post form under it — Title field, Forum picker, "Next", "STEP 1
+OF 4". So the anon is told they cannot post and invited to start typing, on one
+screen. That is the defect class this half of the gate now holds shut.
+
+THE ABSENCE HALF NEEDS A LIVENESS HALF, or it is vacuous. "No compose control in
+the dash" is trivially TRUE on a page where the dash never rendered, or where JS
+died, or where we accidentally measured a desktop width. So (B) refuses to return
+a verdict unless it can first prove the dash is ALIVE: rendered, displayed, and
+carrying its other slots. An absence that cannot show the machinery around it is
+not evidence. (See the 2026-08-01 false green: an assertion came back TRUE because
+the run was executing as a different member entirely.)
 
 Deliberately ROUTE-AGNOSTIC. The gate tries, in order: already visible in the
 header → after one tap on the hamburger → after one tap on the bottom-bar account
@@ -256,6 +287,72 @@ OPENER = r"""
 })()
 """
 
+# (B) The dash must not offer an anonymous visitor a way to "post".
+#
+# ROUTE-AGNOSTIC ON PURPOSE, in both directions. It does not look for "#looth-tabbar
+# button.lt-post" — a redesign that renames the class, swaps the element, or moves
+# the affordance to another slot must still be caught. It asks the question a person
+# asks: is anything in this bar CLAIMING I can make a post? So it matches on what
+# the control says about itself (aria-label / visible label / an href that lands in
+# a composer), not on how it is built.
+#
+# It counts a control as "offered" only when it is VISIBLE and HIT-TESTABLE — the
+# same standard as (A). A compose button left in the DOM at display:none is not
+# offered to anyone, and failing on it would be counting nodes again, which is the
+# habit this whole file exists to break.
+NO_COMPOSE = r"""
+(() => {
+  const desc = e => e ? e.tagName.toLowerCase() + (e.id ? '#'+e.id : '') +
+    (e.className && typeof e.className === 'string'
+      ? '.' + e.className.trim().split(/\s+/).join('.') : '') : null;
+  const bar = document.getElementById('looth-tabbar');
+  if (!bar) return {alive: false, why: 'no #looth-tabbar in the document'};
+  const barCs = getComputedStyle(bar), barR = bar.getBoundingClientRect();
+  if (barCs.display === 'none' || !barR.height)
+    return {alive: false, why: `#looth-tabbar is not displayed (display:${barCs.display}, h=${Math.round(barR.height)})`};
+
+  const slots = [];
+  bar.querySelectorAll(':scope > a, :scope > button').forEach(e => {
+    const cs = getComputedStyle(e), r = e.getBoundingClientRect();
+    const cx = r.left + r.width/2, cy = r.top + r.height/2;
+    const styled = cs.display !== 'none' && cs.visibility !== 'hidden'
+                   && parseFloat(cs.opacity) > 0.01;
+    const sized = r.width > 0 && r.height > 0;
+    const inView = cx >= 0 && cy >= 0 && cx <= innerWidth && cy <= innerHeight;
+    let hit = null, top = null;
+    if (styled && sized && inView) {
+      const el = document.elementFromPoint(cx, cy);
+      top = desc(el);
+      hit = !!(el && (el === e || e.contains(el)));
+    }
+    const label = ((e.getAttribute('aria-label') || '') + ' ' + (e.textContent || '')).trim();
+    const href = e.getAttribute('href') || '';
+    slots.push({el: desc(e), label: label.replace(/\s+/g,' ').slice(0,30), href,
+                styled, sized, inView, hit, top,
+                w: Math.round(r.width), h: Math.round(r.height),
+                x: Math.round(cx), y: Math.round(cy)});
+  });
+
+  // LIVENESS. Prove the bar actually built before believing anything is absent
+  // from it. Two independent signs: it has more than one usable slot, and it has
+  // the account/"You" door that every build of this bar has always carried.
+  const usable = slots.filter(s => s.styled && s.sized);
+  const hasYou = slots.some(s => /\byou\b|account|profile/i.test(s.label + ' ' + s.href));
+  if (usable.length < 2)
+    return {alive: false, why: `the dash rendered only ${usable.length} usable slot(s)`, slots};
+  if (!hasYou)
+    return {alive: false, why: 'the dash has no You/account slot — this is not the built bar', slots};
+
+  // A control that CLAIMS you can post.
+  const CLAIMS_POST = s =>
+    /new post|^post$|\bcompose\b|create post|add post/i.test(s.label) ||
+    /[?&]compose(=|&|$)/.test(s.href);
+  const offered = slots.filter(s => CLAIMS_POST(s) && s.styled && s.sized && s.inView && s.hit);
+  return {alive: true, slots, offered,
+          present: slots.filter(CLAIMS_POST).map(s => s.el)};
+})()
+"""
+
 HAMBURGER = "'.lg-chrome__hamburger', '[data-lg-mobile-toggle]'"
 ACCOUNT_TAB = ("'#looth-tabbar a[aria-label=\"You\"]', '#looth-tabbar button[aria-label=\"You\"]', "
                "'#looth-tabbar [aria-label=\"Account\"]'")
@@ -296,10 +393,17 @@ def run_width(browser, base, w, mobile):
         if not live["anon"]:
             return None, "no anon CTA cluster — cannot confirm the logged-out header"
 
+        # ---- (B) the dash must not claim an anon can post ----
+        # Phone widths only: the bar is mobile-only (bottom-nav.js MOBILE_MQ is
+        # max-width:640px), so asking this at 1440 would pass on an absence that
+        # means nothing.
+        compose = p.ev(NO_COMPOSE) if mobile else None
+
         # ---- route 1: already there, no interaction ----
         r = p.ev(REACHABLE)
         if r["ok"]:
-            return {"route": "header (no tap)", "link": r["ok"][0], "all": r["all"]}, None
+            return {"route": "header (no tap)", "link": r["ok"][0], "all": r["all"],
+                    "compose": compose}, None
 
         # ---- routes 2 & 3: exactly one deliberate tap ----
         for name, sels in (("hamburger", HAMBURGER), ("bottom-bar account tab", ACCOUNT_TAB)):
@@ -310,11 +414,11 @@ def run_width(browser, base, w, mobile):
             r = p.ev(REACHABLE)
             if r["ok"]:
                 return {"route": f"one tap on {name} ({op['sel']})",
-                        "link": r["ok"][0], "all": r["all"]}, None
+                        "link": r["ok"][0], "all": r["all"], "compose": compose}, None
             # leave it open; the next opener may still be reachable underneath
 
         r = p.ev(REACHABLE)
-        return {"route": None, "link": None, "all": r["all"]}, None
+        return {"route": None, "link": None, "all": r["all"], "compose": compose}, None
     finally:
         inc.close()
 
@@ -375,7 +479,7 @@ def main():
         cannot_run(f"chrome-dev is not answering on {CDP} ({e})")
     browser = Sock(bws)
 
-    broken = []
+    broken, dash_lies = [], []
     try:
         for w in widths:
             mobile = w <= 640
@@ -406,6 +510,27 @@ def main():
                     log(f"        candidate {c['el']} {c['href']} -> {reason}")
                 if not res["all"]:
                     log("        no wp-login anchor in the DOM at all")
+
+            # ---- (B) the dash must not claim an anonymous visitor can post ----
+            comp = res.get("compose")
+            if comp is not None:
+                if not comp.get("alive"):
+                    # Refuse to score an absence we cannot stand behind.
+                    browser.close()
+                    if proc: proc.terminate()
+                    cannot_run(f"{w}px: dash liveness failed — {comp.get('why')}. "
+                               "An absence assertion is vacuous without it.")
+                okc = check(f"{w}px: the dash offers an anonymous visitor NO way to 'post'",
+                            not comp["offered"],
+                            "a compose control is visible and tappable to a logged-out visitor")
+                if okc:
+                    log(f"        dash slots: " +
+                        ", ".join(f"{s['label'] or s['el']}" for s in comp["slots"]))
+                else:
+                    dash_lies.append(w)
+                    for o in comp["offered"]:
+                        log(f"        LIES: {o['el']} label={o['label']!r} "
+                            f"{o['w']}x{o['h']} @{o['x']},{o['y']} — visible and hit-testable")
     finally:
         browser.close()
         if proc: proc.terminate()
@@ -414,10 +539,17 @@ def main():
     log(f"  {passes} passed, {failures} failed")
     if failures:
         log("")
-        log(f"  RED — a signed-out member is locked out at: {', '.join(str(x) for x in broken)}px")
-        log("  Presence in the HTML is not the question; reachability is.")
+        if broken:
+            log(f"  RED — a signed-out member is locked out at: "
+                f"{', '.join(str(x) for x in broken)}px")
+            log("  Presence in the HTML is not the question; reachability is.")
+        if dash_lies:
+            log(f"  RED — the mobile dash offers a logged-out visitor a compose control at: "
+                f"{', '.join(str(x) for x in dash_lies)}px")
+            log("  A control that cannot do what it claims is worse than a missing one:")
+            log("  it spends the one tap a stranger was willing to give the site.")
         return 1
-    log("  GREEN — every tested width offers a way back in.")
+    log("  GREEN — every tested width offers a way back in, and none offers a post it cannot honour.")
     return 0
 
 
