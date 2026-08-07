@@ -47,7 +47,13 @@ final class Notifications
     {
         if (self::$cfg !== null) return self::$cfg;
         $defaults = ['read_seen_only' => false, 'max_ids' => 200];
-        $path = __DIR__ . '/../config/notifications.php';
+        // A CONSTANT, deliberately, not an env var: it lets notif-read-seen-gate.py
+        // exercise BOTH flag values without editing the tracked file, and a constant
+        // cannot be set by a request, nor stripped by sudo the way a flag-ON gate run
+        // once silently exercised the OFF path. Production never defines it.
+        $path = defined('LG_NOTIF_CONFIG_PATH')
+            ? (string)LG_NOTIF_CONFIG_PATH
+            : __DIR__ . '/../config/notifications.php';
         $got  = is_file($path) ? @include $path : null;
         self::$cfg = is_array($got) ? ($got + $defaults) : $defaults;
         return self::$cfg;
@@ -284,6 +290,32 @@ final class Notifications
               WHERE user_uuid = :v AND is_read = false'
         );
         $st->execute([':v' => $viewerUuid]);
+    }
+
+    /**
+     * Apply the read-scoping POLICY to a set of ids a surface says it showed.
+     *
+     * THE FLAG IS BRANCHED HERE, next to the function that reads it, and nowhere
+     * else — the endpoint is transport and holds no policy. Recap::OUTSTANDING is
+     * the precedent and the warning: the recap's two registers each expressed the
+     * same rule in their own shape and drifted apart on 2026-07-29, costing a member
+     * their digest. One shape, one place.
+     *
+     * marked = -1 under 'all' because a sweep has no meaningful per-id count; the
+     * endpoint omits the key rather than reporting a number that means something else.
+     *
+     * @param int[] $ids
+     * @return array{policy: string, marked: int}
+     */
+    public static function applySeenRead(string $viewerUuid, array $ids): array
+    {
+        if (self::readSeenOnly()) {
+            return ['policy' => 'seen', 'marked' => self::markReadMany($viewerUuid, $ids)];
+        }
+        // OFF: the SAME sweep read_all has always performed, whatever ids arrived.
+        // That is what makes OFF a provable no-op rather than an argued one.
+        self::markAllRead($viewerUuid);
+        return ['policy' => 'all', 'marked' => -1];
     }
 
     /**
