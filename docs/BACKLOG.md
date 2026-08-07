@@ -121,6 +121,14 @@ only possible image source is `bp_media` now resolve — 633px median, 70KB mean
 that return **HTTP 200** on live: topic 72509 → a 616px/48KB rung (its original
 is 2545×1652 / 689KB), topic 72447 → 480×640 / 59KB.
 
+**KNOWN GAP, deliberate.** Of the 47 live discussions since 2026-07-01: 29 carry
+media on the topic and are fixed by this; 16 have no image anywhere and correctly
+stay text-only; **2 have images only in a REPLY** and are still imageless. Those
+were left alone on purpose — a topic card showing a photo that is not in the topic
+misrepresents what the reader is clicking through to. If Ian would rather have the
+image than the strictness, it is a small change: fall back to the newest reply's
+`bp_media_ids`. Not guessed at without him.
+
 **STILL TO DO — this is the part that needs Ian.** The flag defaults OFF, so
 live behaviour is unchanged until it is switched on:
 
