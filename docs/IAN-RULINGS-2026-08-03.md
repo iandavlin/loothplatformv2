@@ -93,24 +93,52 @@ Two things that looked like bugs and were not:
     watermark unadvanced — the guard working. Run as `looth-dev`, the same user
     lg-wp-cron.service uses.
 
-### ⚠️ THE REMAINING PRE-WIDENING BLOCKER: there is no delivery record
+### ✅ DELIVERY LOGGING WORKS — an earlier note here said it did not. It was WRONG.
 
-`fluentmail-settings` has `log_emails => yes` and `simulate_emails => no`, but the
-table FluentSMTP logs INTO does not exist — only `wp_fluentform_*` tables are
-present. So logging is on, writing nowhere, and silently.
+Keeper searched for `%fsmtp%` and found nothing, and wrote up "logging is on but the
+table does not exist" as a pre-widening blocker. **FluentSMTP's own constant is
+`FLUENT_MAIL_DB_PREFIX = 'fsmpt_'`** (boot.php:8) — a transposition in the plugin
+itself. The table is `wp_fsmpt_email_logs`, it holds 5530 rows, and it has been
+logging all along.
 
-With the allowlist pinned to one address that is survivable: "did it send?" is
-answerable by grepping syslog for `[lg-fd]` and asking Ian. **At 384 members it is
-not.** A failed run and a quiet run look identical.
+So there IS a full delivery record, queryable read-only, and it is how you answer
+"did that actually send?" without excavating syslog:
+
+```sql
+SELECT id, status, LEFT(subject,60), created_at
+  FROM wp_fsmpt_email_logs WHERE `to` LIKE '%someone@example.com%'
+ ORDER BY id DESC LIMIT 10;      -- note: `to` is a reserved word, backtick it
+```
+⚠️ `created_at` is SITE-LOCAL (America/New_York), not UTC. 14:57 local = 18:57 UTC.
+
+It also settled a second false alarm. Keeper suspected BuddyBoss's per-reply
+"instant" mail was silently failing for the 384 members on that path. It is not:
+row 10813 `[The Looth Group] Karl Borum...` at 13:42:11 local is exactly reply 72589
+(17:42:10 UTC). Instant mail sends, and it is logged.
+
+**Net effect on widening: the observability objection is withdrawn.** Both paths are
+logged and both are proven to deliver.
+
+Remaining, and unchanged: the sender needs Postgres reachable from the sending
+process. At one recipient a failure is one delayed email; at 384 the whole run
+refuses — correctly, and it DOES log the refusal, but nothing pages anyone.
 
 Scope, measured: 384 members hold `wp__bbp_subscriptions`, 79 hold
 `wp__bbp_forum_subscriptions`. Widening moves them from BuddyBoss per-reply mail to
 one batched email at the weekly default — quieter, not louder, but a change none of
 them asked for.
 
-Also note the sender has a hard dependency on Postgres being reachable from the
-sending process. At one recipient a failure is one delayed email; at 384 the whole
-run refuses — correctly, but invisibly unless someone is reading syslog.
+### NO, WIDENING DOES NOT SEND A BACKLOG — asked by Ian, verified in code
+
+A member who has never been enrolled has NO watermark, and:
+  - `lg_fd_ensure_enrolled()` stamps the watermark `gmdate('Y-m-d H:i:s')` — NOW,
+    never epoch — at the moment their first mail is suppressed.
+  - `lg_fd_items_for()` returns EMPTY when the watermark is `''`:
+    `if ( '' === $since ) { return $empty; }   // REFUSE rather than backfill. §4.3.`
+
+So the first digest covers from enrolment FORWARD. Nobody receives a history dump of
+everything they missed before widening. A 50-item-per-member cap bounds the tail, and
+it sets a `capped` flag rather than truncating silently.
 
 ### Before flipping
 
