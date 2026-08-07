@@ -198,6 +198,44 @@ if not os.path.isfile(BOTTOM_NAV):
 js = open(BOTTOM_NAV, encoding="utf-8").read()
 
 
+def strip_js_comments(src):
+    """Remove // and /* */ comments, leaving string literals intact.
+
+    NOT cosmetic. Red-firsting this gate caught it asserting on PROSE: the
+    "See all asks for the whole store" check looked for `limit=200`, and that string
+    ALSO appears in the comment a dozen lines below explaining the change. Deleting
+    the actual fetch left the comment behind and the assertion stayed GREEN — the
+    same failure as a guard-check that matched the file's own error text instead of
+    its code. A structural gate must read code only.
+    """
+    out = []
+    i, n = 0, len(src)
+    quote = None
+    while i < n:
+        c = src[i]
+        if quote:
+            out.append(c)
+            if c == "\\" and i + 1 < n:
+                out.append(src[i + 1]); i += 2; continue
+            if c == quote:
+                quote = None
+            i += 1
+            continue
+        if c == "/" and i + 1 < n and src[i + 1] == "/":
+            j = src.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        if c == "/" and i + 1 < n and src[i + 1] == "*":
+            j = src.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            out.append(" ")
+            continue
+        if c in "'\"`":
+            quote = c
+        out.append(c); i += 1
+    return "".join(out)
+
+
 def body_of(fn_name):
     """The source of one top-level `function name(...) { ... }`, brace-matched.
 
@@ -220,6 +258,7 @@ def body_of(fn_name):
     return None
 
 
+# Every check below reads CODE, never comments — see strip_js_comments.
 close_fn = body_of("closeNotifSheet")
 load_fn = body_of("loadSheetNotifs")
 seen_fn = body_of("markNotifsSeenRead")
@@ -231,22 +270,26 @@ check("markNotifsSeenRead() exists", seen_fn is not None, True)
 if close_fn:
     # RED-B: the dwell used to be unclearable, so a sheet dismissed at 300ms still
     # marked its rows read 700ms after it was gone.
+    code = strip_js_comments(close_fn).replace(" ", "")
     check("closing the sheet CANCELS the dwell timer",
-          "clearTimeout(notifDwellTimer)" in close_fn.replace(" ", ""), True)
+          "clearTimeout(notifDwellTimer)" in code, True)
 if load_fn:
-    compact = load_fn.replace(" ", "").replace("\n", "")
+    code = strip_js_comments(load_fn)
+    compact = code.replace(" ", "").replace("\n", "")
     check("the dwell path posts read_seen, not read_all",
           "markNotifsSeenRead(" in compact, True)
     check("the dwell re-checks the sheet is OPEN when it fires",
-          ".is-open')" in load_fn and "return;" in load_fn, True)
+          ".is-open')" in code and "return;" in code, True)
     check("'See all' asks for the whole store so the badge stays reachable",
           "limit=200" in compact, True)
 if seen_fn:
-    check("markNotifsSeenRead sends action read_seen", "'read_seen'" in seen_fn, True)
-    check("markNotifsSeenRead sends the ids", "ids: ids" in seen_fn or "ids:ids" in seen_fn.replace(" ", ""), True)
+    code = strip_js_comments(seen_fn).replace(" ", "")
+    check("markNotifsSeenRead sends action read_seen", "'read_seen'" in code, True)
+    check("markNotifsSeenRead sends the ids", "ids:ids" in code, True)
 
 # read_all must survive as the EXPLICIT verb, but nothing may schedule it on a timer.
-timer_read_all = re.search(r"setTimeout\([^)]*markAllNotifsRead", js) is not None
+timer_read_all = re.search(r"setTimeout\([^)]*markAllNotifsRead",
+                           strip_js_comments(js)) is not None
 check("no timer schedules markAllNotifsRead directly", timer_read_all, False)
 
 log("")
