@@ -6,6 +6,7 @@ line into that lane's charter and note the lane name here.
 ## PRIORITY INDEX (the order — edit THIS to re-rank; tell keeper "bump X")
 
 **P0 — live/member-facing bugs**
+4.2 Logged-out mobile bottom dash: "+" implies you can post; Sign in not obvious (Ian 8/5)
 4.1 Recap: the mobile bell's 700ms mark-all-read empties the recap and CANCELS the digest (Ian ruled unread-only 8/3 — this makes that ruling behave as labelled)
 4.0 Weekly digest: discussion images SOMETIMES missing from the email (Ian 8/3)
 
@@ -35,6 +36,36 @@ line into that lane's charter and note the lane name here.
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 4.2 Logged-out mobile bottom dash — the "+" lies, and Sign in hides (P0) — Ian 8/5
+
+Ian: *"It's currently showing the + icon for adding a post and it's not entirely
+clear that you cant post logged out. In general I want logged out users to be able to
+log in easily and see the login easily, but I still want logged out users to be able
+to tool around and see all of the stuff that might get them to join."*
+
+**TWO REQUIREMENTS THAT PULL AGAINST EACH OTHER — hold both.**
+  1. Signing in must be OBVIOUS on mobile when logged out.
+  2. Logged-out visitors must still ROAM FREELY. This is the top of the funnel; it
+     is what converts. Do NOT solve requirement 1 by gating browsing, adding an
+     interstitial, or bouncing anonymous users to a login wall.
+
+The specific defect: the bottom dash shows the "+" compose affordance to logged-out
+visitors. Tapping it cannot do what it promises. Either it does nothing (dead
+control) or it dumps them at a login — both are the UI-lies class, and the second
+spends the click a stranger was willing to give you.
+
+Replace the "+" slot with Sign in for anonymous visitors. That solves both
+requirements with the same pixel: the lying control disappears and the thing Ian
+wants visible takes its place, in the highest-traffic spot on the screen.
+
+⚠️ THE SIGN-IN LOCKOUT IS THIS EXACT SURFACE'S HISTORY. An anon nav overlay once hid
+every link INCLUDING Sign in, and the gate that now guards it
+(`an ANON visitor can reach Sign in at every width`) exists because of it. Extend
+that gate rather than writing a new one, and assert the "+" is ABSENT for anon —
+absence is the half that gets skipped and it is the actual bug here.
+
+Mock first, phone widths, both themes. Ian decides from pictures.
 
 ## 4.1 Recap emptied by the mobile bell (P0) — surfaced 8/3
 
@@ -73,6 +104,15 @@ to the topic vs. embedded in the body; first-post image vs. a later reply's; an
 uploaded attachment vs. a hotlinked/remote URL; a private or hidden source forum;
 and the resizer — `/img.php?w=` needs the source readable by the mail renderer, which
 runs as a different user than the web request that uploaded it.
+
+**IAN NARROWED IT 8/5: "the images are mostly affected in the discussion section of
+the email."** That is the strongest clue on the table — the digest renders several
+section types through the SAME card templates, so an image failure confined to the
+discussion section is unlikely to be the renderer and much more likely to be how a
+DISCUSSION's image is resolved. Discussions are bbPress topics mirrored into
+Postgres; other sections come from content_item. Different source, different image
+field, same card. Start by diffing how the two resolve a thumbnail, not by reading
+the card template.
 
 Get a FAILING and a PASSING discussion side by side from a real send before forming a
 theory. This is the weekly digest (editorial, FluentCRM), NOT the follow-digest — two
