@@ -960,6 +960,12 @@
   // 2026-06-24): the Nav-tray "Alerts" item and the You-sheet Notifications row
   // both open it; Clear lives here, not on the You card. Reuses the .lt-sheet infra.
   var NOTIF_ID = 'looth-notifsheet', NOTIF_BD_ID = 'looth-notifsheet-bd';
+  // How long the rendered rows must stay in front of the member before they count as
+  // seen, and the handle that lets closing the sheet CANCEL that. The handle is the
+  // fix for half the defect: this timer used to be unclearable, so a sheet dismissed
+  // at 300ms still marked its rows read 700ms after it was gone. 700 is Buck's
+  // original dwell, kept deliberately — the argument here is about scope, not speed.
+  var NOTIF_DWELL_MS = 700, notifDwellTimer = null;
   function buildNotifSheet() {
     var existing = document.getElementById(NOTIF_ID);
     if (existing) return existing;
@@ -998,6 +1004,9 @@
     document.addEventListener('keydown', onNotifKey);
   }
   function closeNotifSheet() {
+    // Dismissing the sheet un-sees whatever had not yet counted as seen. Without
+    // this the dwell fired against a sheet that no longer existed.
+    clearTimeout(notifDwellTimer); notifDwellTimer = null;
     var sheet = document.getElementById(NOTIF_ID), bd = document.getElementById(NOTIF_BD_ID);
     if (sheet) sheet.classList.remove('is-open');
     if (bd) bd.classList.remove('is-open');
@@ -1089,7 +1098,12 @@
   function loadSheetNotifs(box, showAll) {
     if (!box) return;
     box.innerHTML = '<div class="lt-notif-empty">Loading…</div>';
-    fetch('/profile-api/v0/me/notifications/', { credentials: 'include' })
+    // A row the sheet cannot RENDER is a row whose unread badge the member can never
+    // clear by reading, now that marking-read is scoped to what was rendered. So
+    // "See all" asks for the whole store, not the default page. (The server clamps
+    // this to config/notifications.php max_ids; 30-day retention is enforced by
+    // prune-notifications.timer, so "the whole store" is a bounded ask.)
+    fetch('/profile-api/v0/me/notifications/' + (showAll ? '?limit=200' : ''), { credentials: 'include' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         // Unread-only — the sheet shows what's new (auto-marked read on view below).
@@ -1118,20 +1132,79 @@
             closeNotifSheet();     // the sheet must not sit over the modal we're opening
           });
         });
-        // Seeing them clears the indicator (Buck 2026-06-08): mark read + zero the
-        // badge once the list is shown. Fire when the badge shows ANY unread
-        // (social-counts), not just when one of the visible top-8 is unread —
-        // otherwise unread items older than the 8 shown never get marked and the
-        // badge "comes back" after an app reset. markAllRead is idempotent.
+        // ── Seeing them clears the indicator — but only the ones SEEN ───────────
+        //
+        // Buck 2026-06-08 asked that showing the list clear the badge, and that is
+        // still what happens. What changed is the SCOPE, because the old scope was a
+        // silent-email bug: this fired markAllNotifsRead(), which POSTed read_all —
+        // the member's ENTIRE store, when the sheet had rendered eight rows. The
+        // weekly recap is "what you missed", UNREAD ONLY (Ian,
+        // docs/IAN-RULINGS-2026-08-03.md §1), and empty means no email, so one 700ms
+        // glance at the bell emptied the recap and cancelled the digest. The member
+        // most engaged with the bell was the member most reliably unmailed.
+        // Measured on dev2 2026-08-07: 12 unread, 8 rendered, 12 went read.
+        //
+        // The original comment justified the wide scope: fire on ANY unread per
+        // social-counts, "otherwise unread items older than the 8 shown never get
+        // marked and the badge comes back". That concern is real and is answered
+        // properly rather than by sweeping — the member reaches those rows through
+        // "See all notifications", which now fetches the whole store (?limit=200
+        // above) and renders it, so reading really can take the badge to zero. What
+        // it can no longer do is take it to zero without the member seeing anything.
+        //
+        // SEEN = rendered into this sheet AND the sheet still open when the dwell
+        // elapses. Both halves were defects: the timer was never cleared on close
+        // either, so dismissing the sheet at 300ms still marked everything read
+        // 700ms after the sheet stopped existing (RED-B, same measurement).
+        // Boundary and its defence: docs/RECAP-READ-TIMER.md §Boundary.
+        //
+        // read_policy comes from the server in this same response, so there is no
+        // flag transport here and no extra round-trip; 'all' is the OFF state and is
+        // byte-identical to the behaviour above. An older cached copy of this file
+        // simply never sees the key and keeps posting read_all — also the OFF state.
+        var seenIds = items.map(function (n) { return n.id; });
         var lgBdg = document.querySelector('#' + BAR_ID + ' .lt-badge');
-        if ((lgBdg && !lgBdg.hidden) || items.some(function (n) { return !n.is_read; }))
-          setTimeout(function () { markAllNotifsRead(); }, 700);
+        if ((lgBdg && !lgBdg.hidden) || items.some(function (n) { return !n.is_read; })) {
+          clearTimeout(notifDwellTimer);
+          notifDwellTimer = setTimeout(function () {
+            // Re-check at FIRE time, not at schedule time: the sheet may have been
+            // dismissed during the dwell, and a row the member no longer has in
+            // front of them was not seen.
+            if (!document.querySelector('#' + NOTIF_ID + '.is-open')) return;
+            if ((d && d.read_policy) === 'seen') markNotifsSeenRead(seenIds);
+            else markAllNotifsRead();
+          }, NOTIF_DWELL_MS);
+        }
       })
       .catch(function () { box.innerHTML = '<div class="lt-notif-empty">Couldn’t load notifications.</div>'; });
   }
-  // Mark all notifications read → drains the You-tab badge. This is the auto-on-view
-  // action (dims the rows, they stay); it is NOT delete. The "Clear" button DELETEs
-  // via clearAllNotifs(), and a per-row swipe DELETEs via deleteOneNotif().
+  // Mark read exactly the rows this sheet SHOWED the member. The auto-on-view action
+  // under read_policy 'seen' (dims those rows, they stay); it is NOT delete.
+  //
+  // The badge is NOT blanked optimistically here, unlike markAllNotifsRead below.
+  // It cannot be: rows the member has not seen are staying unread on purpose, so the
+  // truthful count after this call is usually NOT zero, and guessing zero would show
+  // them a cleared bell that the very next refresh contradicts. refreshNotifBadge()
+  // asks social-counts for the real number instead. The per-row dot IS cleared
+  // straight away, because those rows we do know about.
+  function markNotifsSeenRead(ids) {
+    if (!ids || !ids.length) return;
+    var box = document.getElementById('lt-notifs');
+    if (box) ids.forEach(function (id) {
+      var r = box.querySelector('.lt-notif[data-notif-id="' + id + '"]');
+      if (!r) return;
+      r.classList.remove('is-unread');
+      var d = r.querySelector('.lt-notif-dot'); if (d) d.remove();
+    });
+    fetch('/profile-api/v0/me/notifications/', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'read_seen', ids: ids })
+    }).then(function () { refreshNotifBadge(); }).catch(function () {});
+  }
+  // Mark ALL notifications read → drains the You-tab badge. This is the OFF-state
+  // auto-on-view action (dims the rows, they stay); it is NOT delete. The "Clear"
+  // button DELETEs via clearAllNotifs(), and a per-row swipe via deleteOneNotif().
   function markAllNotifsRead() {
     var bdg = document.querySelector('#' + BAR_ID + ' .lt-badge'); if (bdg) bdg.hidden = true;   // optimistic
     var box = document.getElementById('lt-notifs');

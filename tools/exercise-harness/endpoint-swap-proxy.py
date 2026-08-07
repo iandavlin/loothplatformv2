@@ -181,7 +181,17 @@ def main():
     ap.add_argument("--rewrite-origin", action="store_true")
     ap.add_argument("--route", action="append", default=[],
                     help="/path/prefix=127.0.0.1:PORT (repeatable)")
-    ap.add_argument("--route-strip", action="store_true", default=True)
+    # store_true WITH default=True cannot be turned off, so --route-strip was
+    # unconditional and every swapped route got "<prefix>.php" appended: a static
+    # asset route (/bottom-nav.js) fetched /bottom-nav.js.php and 404'd, and a
+    # backend with its OWN router never saw the real path. Both fail as a swap that
+    # silently serves nothing, which reads like the branch being broken.
+    # Default kept (the docroot'd-endpoint case is the common one); now overridable.
+    ap.add_argument("--route-strip", action="store_true", default=True,
+                    help="rewrite a swapped path to /<leaf>.php (default: on)")
+    ap.add_argument("--no-route-strip", dest="route_strip", action="store_false",
+                    help="pass the REAL path to the backend — for static assets and "
+                         "for backends that route themselves")
     a = ap.parse_args()
 
     routes = []
