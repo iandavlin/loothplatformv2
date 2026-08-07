@@ -13,6 +13,198 @@ class LG_WD_Query {
     /** Post-meta cache key for the resolved 16:9 YouTube thumb (see video_thumb_fix). */
     const YT_THUMB_META = '_lg_wd_yt_thumb';
 
+    /**
+     * ── Discussion thumbnails — LG_WD_TOPIC_MEDIA_THUMBS ─────────────────────
+     *
+     * THE BUG (Ian 2026-08-03, "images from discussions are now sometimes not
+     * making it into the weekly digest", narrowed 08-05 to "mostly the discussion
+     * section"): a topic resolved a thumb from exactly two places — a featured
+     * image (bbPress topics never have one) and the first inline <img> in
+     * post_content. So the ONLY discussions that ever showed an image were the
+     * ones whose post_content carried raw <img> HTML.
+     *
+     * MEASURED on live (wp_posts, post_type=topic, 2026):
+     *     month   topics  with inline <img>   with bp_media_ids
+     *     01        30            0                 14
+     *     ...
+     *     06        41            9                 10
+     *     07        37            0                 22
+     *     08        10            0                  7
+     *
+     * Every single inline-<img> topic came from FluentForm — the src is always
+     * /wp-content/uploads/fluentform/ff-*. The last one is 2026-06-17. That form
+     * pathway stopped producing topics, and with it the digest's only image
+     * source went to zero. That is the "now".
+     *
+     * The "sometimes" is the same fact seen earlier: form-created topics had
+     * images, composer-created topics never did. The hub composer deliberately
+     * strips inline previews — bb-mirror/web/forums.js: "strip inline preview
+     * images (bbp_media carries the real ones)" — and stores them as BuddyBoss
+     * media, listed in the `bp_media_ids` post meta. The digest has never read it.
+     *
+     * "Mostly the discussion section" follows: every other section renders a
+     * featured image, which is untouched by any of this.
+     *
+     * SO: read bp_media_ids as a THIRD fallback, after the two that exist. It
+     * cannot alter a card that already resolves a thumb, which is what keeps the
+     * FluentForm-era cards byte-identical.
+     *
+     * Flag DEFAULTS OFF — a member-facing surface merges dark, gets verified on
+     * the serve, and Ian flips it (keeper rule). Flip with a one-liner in
+     * wp-config.php:  define('LG_WD_TOPIC_MEDIA_THUMBS', true);
+     * A PHP constant, NOT an env var: the digest can be sent by WP-cron, and
+     * lg-wp-cron.service carries no Environment= (see trap-wp-cron-has-no-environment).
+     */
+    const MEDIA_FLAG = 'LG_WD_TOPIC_MEDIA_THUMBS';
+
+    /**
+     * The widest the discussion thumb is ever RENDERED, in CSS px.
+     *
+     * The card lays the thumb out in a 240px column; templates/email.php stacks it
+     * to the full content width only in the <=480px block, so ~448px after the
+     * 16px phone padding is the true ceiling. 240 is the desktop case.
+     */
+    const THUMB_SLOT_PX = 448;
+
+    /** CRAFT-STANDARD: no image ships wider than 1.7x the pixels it renders into. */
+    const THUMB_MAX_PX = 762;
+
+    /**
+     * Pick a size by WIDTH, not by name.
+     *
+     * WHY NOT A NAMED CHAIN: BuddyBoss's rungs are BOUNDING BOXES, so the same
+     * name is a different width per orientation, and forum photos are mostly phone
+     * photos. Measured over 393 live-shaped bb_medias attachments on dev2:
+     *
+     *     rung                          portrait   landscape   square
+     *     bb-media-activity-image          300         546        400
+     *     ...album-directory-image-medium  401         755        534
+     *     bb-media-photos-popup-image      675        1195        900
+     *
+     * A named chain that reads well for landscape (activity-image at 546px) hands
+     * portrait a 300px file into a 448px slot. Choosing the narrowest rung that
+     * actually COVERS the slot picks activity-image for landscape and popup-image
+     * for portrait — one rule, right answer for both.
+     *
+     * WHY NOT 'large'/'medium': WP's own sizes are never generated for bb_medias
+     * uploads, so asking for 'large' falls silently back to the ORIGINAL —
+     * 2545x1652 / 705KB on the very topic in Ian's report.
+     *
+     * MEASURED over those 393 attachments: this rule ships a 640px median at 67KB
+     * mean, against 900px / 439KB for the originals — 6.5x lighter — with 1 of 393
+     * exceeding THUMB_MAX_PX (a 782px original that has no rungs at all).
+     */
+    private static function pick_size_by_width( array $meta ): string {
+        $candidates = [];
+        foreach ( ( $meta['sizes'] ?? [] ) as $name => $size ) {
+            if ( ! empty( $size['width'] ) ) {
+                $candidates[] = [ 'w' => (int) $size['width'], 'name' => (string) $name ];
+            }
+        }
+        // 'full' is a real candidate: some uploads are small enough to have no rungs.
+        if ( ! empty( $meta['width'] ) ) {
+            $candidates[] = [ 'w' => (int) $meta['width'], 'name' => 'full' ];
+        }
+        if ( ! $candidates ) {
+            return '';
+        }
+
+        usort( $candidates, static fn( $a, $b ) => $a['w'] <=> $b['w'] );
+
+        $chosen = null;
+        foreach ( $candidates as $c ) {
+            if ( $c['w'] >= self::THUMB_SLOT_PX ) { $chosen = $c; break; }
+        }
+        $chosen ??= end( $candidates );  // nothing covers the slot: take the widest.
+
+        // A too-wide ORIGINAL is the one case worth trading sharpness for: prefer
+        // the widest real rung over shipping a multi-megapixel upload into email.
+        if ( $chosen['w'] > self::THUMB_MAX_PX && $chosen['name'] === 'full' ) {
+            $rungs = array_values( array_filter( $candidates, static fn( $c ) => $c['name'] !== 'full' ) );
+            if ( $rungs ) {
+                $chosen = end( $rungs );
+            }
+        }
+
+        return $chosen['name'];
+    }
+
+    /** Is the discussion-media thumb fallback armed? */
+    public static function topic_media_enabled(): bool {
+        $on = defined( self::MEDIA_FLAG ) ? (bool) constant( self::MEDIA_FLAG ) : false;
+        return (bool) apply_filters( 'lg_wd_topic_media_thumbs', $on );
+    }
+
+    /**
+     * First usable BuddyBoss photo attached to a bbPress topic/reply, as a URL.
+     *
+     * Returns '' for anything it cannot resolve, so every caller degrades to
+     * exactly today's behaviour.
+     *
+     * privacy='forums' is an allowlist, not a formality: wp_bp_media also holds
+     * message (332), grouponly (29), loggedin (39), friends (1) and onlyme (2)
+     * photos. All 1836 media actually referenced by a topic's bp_media_ids are
+     * 'forums', so the filter costs nothing today and stops a DM attachment from
+     * ever reaching an inbox if a future composer reuses the meta key.
+     */
+    public static function topic_media_thumb( int $post_id ): string {
+        if ( ! $post_id || ! self::topic_media_enabled() ) {
+            return '';
+        }
+
+        $raw = (string) get_post_meta( $post_id, 'bp_media_ids', true );
+        if ( $raw === '' ) {
+            return '';
+        }
+
+        $ids = array_values( array_filter( array_map( 'absint', explode( ',', $raw ) ) ) );
+        if ( ! $ids ) {
+            return '';
+        }
+
+        global $wpdb;
+        $in   = implode( ',', $ids );
+        $rows = $wpdb->get_col(
+            "SELECT attachment_id FROM {$wpdb->prefix}bp_media
+              WHERE id IN ($in)
+                AND status  = 'published'
+                AND type    = 'photo'
+                AND privacy = 'forums'
+              ORDER BY menu_order ASC, id ASC"
+        );
+        if ( ! $rows ) {
+            return '';
+        }
+
+        foreach ( $rows as $attachment_id ) {
+            $url = self::attachment_url_at_email_width( (int) $attachment_id );
+            if ( $url ) {
+                return $url;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Resolve an attachment to the narrowest registered rung that still covers
+     * the email's thumb slot. '' when the attachment is gone or not an image.
+     */
+    private static function attachment_url_at_email_width( int $attachment_id ): string {
+        if ( ! $attachment_id || ! wp_attachment_is_image( $attachment_id ) ) {
+            return '';
+        }
+
+        $meta = wp_get_attachment_metadata( $attachment_id );
+        $size = is_array( $meta ) ? self::pick_size_by_width( $meta ) : '';
+        if ( $size === '' ) {
+            $size = 'full';  // metadata missing entirely — still better than no image.
+        }
+
+        $src = wp_get_attachment_image_src( $attachment_id, $size );
+        return ( $src && ! empty( $src[0] ) ) ? (string) $src[0] : '';
+    }
+
     // ── Mode 1: Auto-populate ────────────────────────────────────────────────
 
     /**
@@ -347,6 +539,12 @@ class LG_WD_Query {
             if ( preg_match( '/<img[^>]+src=["\']([^"\']+)/i', $post->post_content, $m ) ) {
                 $thumb_url = $m[1];
             }
+        }
+
+        // Fallback: BuddyBoss media attached to a discussion. Runs only when the
+        // two above found nothing, so cards that render today are unchanged.
+        if ( ! $thumb_url && in_array( $post->post_type, [ 'topic', 'reply' ], true ) ) {
+            $thumb_url = self::topic_media_thumb( $post->ID );
         }
 
         // Video posts: swap letterboxed 4:3 stills for a true 16:9 source
