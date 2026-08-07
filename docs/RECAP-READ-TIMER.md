@@ -148,6 +148,43 @@ read_seen(top 8)  ->  4 unread  ->  recap 4 rows   NON-EMPTY, digest sends
 read_all          ->  0 unread  ->  recap 0 rows   EMPTY, no email at all
 ```
 
+### Reproducing it
+
+```bash
+BR=/home/ubuntu/worktrees/recap-read-timer
+H=$BR/tools/exercise-harness
+
+# The 12-row fixture. `snapshot` first — `restore` puts the member's real rows back.
+$H/notif-read-fixture.sh snapshot && $H/notif-read-fixture.sh seed
+
+# RED: the real origin, serving checkout (== main). No --route, so no branch code.
+python3 $H/real-origin-proxy.py --port 8881 --cookies <cookies> --gate <token> &
+
+# GREEN: same page, two files swapped to the branch. --no-route-strip is REQUIRED
+# for a static asset and for a self-routing backend; --rewrite-origin is REQUIRED or
+# profile-app's CSRF guard 403s every POST, red and green alike.
+sudo -u profile-app env RRT_BRANCH=$BR php -S 127.0.0.1:8793 $H/profile-api-router.php &
+php -S 127.0.0.1:8794 -t $BR/webroot &
+python3 $H/endpoint-swap-proxy.py --port 8895 --cookies <cookies> --gate <token> \
+  --rewrite-origin --no-route-strip \
+  --route /bottom-nav.js=127.0.0.1:8794 \
+  --route /profile-api/v0/me/notifications=127.0.0.1:8793 &
+
+python3 $H/browser-notif-read-scope.py --port 8895 --dwell 2500              # GREEN-ON
+python3 $H/browser-notif-read-scope.py --port 8895 --dwell 2500 --close-at 300
+python3 $H/browser-notif-read-scope.py --port 8895 --dwell 2500 --expand-all
+$H/notif-read-fixture.sh counts && $H/notif-read-fixture.sh restore
+```
+
+Two harness bugs were fixed to get here, both of which had made a working branch look
+broken. `endpoint-swap-proxy.py --route-strip` was `store_true` **with**
+`default=True`, so it could not be turned off and every swapped route fetched
+`<prefix>.php` — `/bottom-nav.js` became `/bottom-nav.js.php` and 404'd. And the
+control's own `tap()` called `scrollIntoView` unconditionally, which shoves an element
+inside a fixed bottom sheet out of the viewport, after which `elementFromPoint`
+returns null and the run reports the control "covered by None" — a harness artefact
+that reads exactly like an unreachable control.
+
 Harness limits, stated: both proxies rewrite `Origin`/`Referer` to the public host,
 because profile-app's CSRF guard rejects a foreign Origin and a browser parked on
 `127.0.0.1` would otherwise 403 on every POST, red and green alike. The guard still
@@ -168,6 +205,31 @@ Red-firsted with `tools/gates/lib/notif-read-seen-redfirst.sh` — ten inversion
 each going red for the reason it claims. That pass caught the gate asserting on its
 own comment prose (`limit=200` appears in both the fetch and the comment explaining
 it), which would have shipped as green noise.
+
+## Suite result, 2026-08-07 — and which red is whose
+
+`tools/gates/run-all.sh` ends **RED**, and none of it is this branch:
+
+| gate | verdict | whose |
+|---|---|---|
+| **16/16 notif-read-seen** | **GREEN, 35/35** — standalone AND in-sequence | this branch |
+| 2/16 web-craft | **RED**, `finder/anon` only: `Optimum.png` served raw at 1000px into a 42px slot (107KB) | **main's content**, backlog 13.5, dating to Nov 2024 and named in the standing note of `IAN-RULINGS-2026-08-03.md`. `hub/anon` and `hub/member` pass, as that note says |
+| 1/16 visibility matrix | **GREEN standalone (0 failures), RED in-sequence (12)** | **not a red at all** — see below |
+| the other 13 | green | — |
+
+0 gates reached NO VERDICT.
+
+**Gate 1's in-sequence red is a flake of the class `run-all.sh` already documents**
+("they pass standalone but flake RED in-sequence — CDP under load / loopback
+`/whoami` trips infra's `limit_req` zone"). The signature fits: anon and member get
+404 while owner and admin get 200, and the directory listings come back absent —
+throttling, not a privacy regression. Re-run on its own it is clean.
+
+It also **cannot** see this branch either way: `run-all.sh` line 23 invokes
+`php /srv/profile-app/bin/visibility-matrix.php`, which is the SERVING CHECKOUT, so
+its verdict is always main's regardless of which worktree the suite runs from. Worth
+keeper's attention as a candidate to hold out of the numbered sequence, but it is not
+this lane's to change.
 
 ## Status
 
