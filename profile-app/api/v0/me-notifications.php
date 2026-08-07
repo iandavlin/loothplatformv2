@@ -72,20 +72,20 @@ if ($method === 'POST') {
     }
     // read_seen — "mark read the rows I actually SHOWED the member", named as ids.
     //
-    // THE FLAG LIVES HERE, and nowhere else. Under read_seen_only = false this runs
-    // the SAME markAllRead() SQL that read_all has always run, so OFF is a no-op on
-    // the store no matter what a client sends. That is what makes the OFF state
-    // provable rather than argued, and notif-read-seen-gate.py asserts it in both
-    // directions — including the absent half, that unseen rows are STILL UNREAD.
+    // Transport only: the policy branch is Notifications::applySeenRead, next to the
+    // function that reads the flag, so this endpoint cannot drift from it. Under
+    // read_seen_only = false that runs the SAME markAllRead() SQL read_all has always
+    // run, so OFF is a no-op on the store no matter what a client sends — which is
+    // what makes the OFF state provable rather than argued.
+    // notif-read-seen-gate.py asserts both directions, including the absent half:
+    // that rows the member did NOT see are STILL UNREAD.
     if ($action === 'read_seen') {
         $ids = $in['ids'] ?? [];
         if (!is_array($ids)) profile_app_json(400, ['error' => 'ids_must_be_array']);
-        if (Notifications::readSeenOnly()) {
-            profile_app_json(200, ['ok' => true, 'policy' => 'seen',
-                                   'marked' => Notifications::markReadMany($uuid, $ids)]);
-        }
-        Notifications::markAllRead($uuid);
-        profile_app_json(200, ['ok' => true, 'policy' => 'all']);
+        $r = Notifications::applySeenRead($uuid, $ids);
+        $body = ['ok' => true, 'policy' => $r['policy']];
+        if ($r['marked'] >= 0) $body['marked'] = $r['marked'];
+        profile_app_json(200, $body);
     }
     if ($action === 'read_all') {
         // Kept, unconditionally, as the EXPLICIT verb: "I mean all of them." It is
