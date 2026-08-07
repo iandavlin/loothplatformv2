@@ -130,6 +130,8 @@ either file can see. So:
 | 14 | `tools/gates/dev-files-anon-unreachable-gate.py` | lane/dev tooling inside a deployed plugin tree is **unreachable by an anonymous request** — 404/403, not "absent from my checkout" | starts its own **gate-free** nginx (dev2's armed gate would 403 everything and false-pass) |
 | 15 | `tools/gates/cadence-control-gate.py` | the account-level email-frequency control is **PRESENT when `LG_FOLLOWING_CADENCE` is on and ABSENT when it is off** — and still hidden when the flag is on but the sender would not serve that member. Also: `hidden` actually hides (the UA rule loses to `display:flex`), and the page's only cadence write is follow-digest's transport, never usermeta and never `follow.php` | needs the lane preview up: `sudo tools/preview/lane-preview.sh up account-following` |
 
+| 16 | `tools/gates/notif-read-seen-gate.py` | marking notifications read is scoped to **what the member actually SAW** — and, the decisive half, **rows they did NOT see are STILL UNREAD**. Also: owner scoping (a foreign id marks nothing), `markAllRead` still sweeps, the recap keeps unseen rows and is emptied by a sweep, and `applySeenRead` measured under **BOTH** values of `read_seen_only` | `sudo -u profile-app php` + the `profile_app` DB. No browser: it runs in a transaction that is **never committed** |
+
 > **Two rows both said "13" until 2026-08-01** — dev-files-anon and follow-digest,
 > minted by different lanes in the same window. Same collision as the "9/9" one in
 > `run-all.sh`. **Mint a gate number from `origin/main`'s count, never your
@@ -143,6 +145,18 @@ both directions by diffing two surfaces that really exist — the live page and 
 lane preview — and its `--prove` pass runs every predicate against the surface it was
 written to REJECT. That pass immediately caught two of the gate's own assertions
 being worthless, which is the argument for having it.
+
+**Gate 16 is the second time the SAME absent-half class cost a member their digest**,
+which is exactly the trigger this document defines for minting a gate. The class is
+"a read that was never a read": on 2026-07-29 the recap's two registers disagreed
+about what "still outstanding" meant, and on 2026-08-07 the mobile sheet's 700ms
+timer marked a member's whole store read after rendering eight rows. In both cases
+"the rows the member saw are read" was true and green throughout; nobody had written
+down "the rows the member did NOT see are still unread". Its red-first pass
+(`lib/notif-read-seen-redfirst.sh`, ten inversions) caught the gate matching its OWN
+COMMENT PROSE — `limit=200` appears in both the fetch and the comment explaining it —
+so the check now strips comments before reading code. Full account:
+`docs/RECAP-READ-TIMER.md`.
 
 **Gate 13 is written BEFORE the feature it guards, and that is the point.** Every
 other gate here encodes a defect class found twice. Email is unrecallable, so the

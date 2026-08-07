@@ -19,44 +19,44 @@ run() {  # run <label> <command...>
     *) red=1;;
   esac
 }
-echo "=== GATE 1/15: visibility matrix (the privacy model) ==="
+echo "=== GATE 1/16: visibility matrix (the privacy model) ==="
 run "visibility matrix" php /srv/profile-app/bin/visibility-matrix.php
 echo
-echo "=== GATE 2/15: web-craft gate (images / weight / eager scripts) ==="
+echo "=== GATE 2/16: web-craft gate (images / weight / eager scripts) ==="
 run "web-craft" python3 "$(dirname "$0")/craft-gate.py"
 echo
-echo "=== GATE 3/15: infra-sec gate (cookie auth / source disclosure / cdp) ==="
+echo "=== GATE 3/16: infra-sec gate (cookie auth / source disclosure / cdp) ==="
 run "infra-sec" bash "$(dirname "$0")/infra-sec-gate.sh"
 echo
-echo "=== GATE 4/15: hub paragraph-collapse (content_html keeps its breaks) ==="
+echo "=== GATE 4/16: hub paragraph-collapse (content_html keeps its breaks) ==="
 run "hub-paragraph" bash "$(dirname "$0")/hub-content-paragraph-gate.sh"
 echo
-echo "=== GATE 5/15: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
+echo "=== GATE 5/16: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
 run "looth-auth" bash "$(dirname "$0")/looth-auth-issue-gate.sh"
 echo
-echo "=== GATE 6/15: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
+echo "=== GATE 6/16: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
 run "event-date-tz" bash "$(dirname "$0")/event-date-tz-gate.sh"
 echo
-echo "=== GATE 7/15: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
+echo "=== GATE 7/16: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
 run "events-tap-navigates" bash "$(dirname "$0")/events-tap-navigates-gate.sh"
 echo
-echo "=== GATE 8/15: composer topic-meta (forum picker cloning + tags) ==="
+echo "=== GATE 8/16: composer topic-meta (forum picker cloning + tags) ==="
 run "composer-topic-meta" node "$(dirname "$0")/composer-topic-meta-test.js"
 echo
-echo "=== GATE 9/15: author socials RESOLVE, never mirror (byline drift class) ==="
+echo "=== GATE 9/16: author socials RESOLVE, never mirror (byline drift class) ==="
 run "author-socials-live" bash "$(dirname "$0")/author-socials-live-gate.sh"
 
-echo "=== GATE 10/15: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
+echo "=== GATE 10/16: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
 run "react-types" bash "$(dirname "$0")/react-types-cover-standalone-gate.sh"
 echo
-echo "=== GATE 11/15: /shop-layout-planner/ still SERVES the planner (live SEO url) ==="
+echo "=== GATE 11/16: /shop-layout-planner/ still SERVES the planner (live SEO url) ==="
 # Defaults to dev2, where it self-reports CANNOT RUN until the standalone render
 # lands (dev2 bounces every anon WP page into the BuddyBoss gate). Run it with
 # --live to prove the production url is healthy, and with
 # LG_SP_EXPECT_STANDALONE=1 once the standalone page is meant to be serving.
 run "shop-planner-url" bash "$(dirname "$0")/shop-planner-url-gate.sh"
 echo
-echo "=== GATE 12/15: an ANON visitor can reach Sign in at every width (Ian's lockout) ==="
+echo "=== GATE 12/16: an ANON visitor can reach Sign in at every width (Ian's lockout) ==="
 # Behaviour, not presence: "Sign in" was in the served HTML the whole time while
 # 641-820px had no way in at all. Starts its own anonymous real-origin proxy and
 # one incognito BrowserContext per width, so it never touches shared browser
@@ -64,14 +64,14 @@ echo "=== GATE 12/15: an ANON visitor can reach Sign in at every width (Ian's lo
 # BOTH green on the day the band was dead.
 run "anon-signin-reachable" python3 "$(dirname "$0")/anon-signin-reachable-gate.py"
 echo
-echo "=== GATE 13/15: follow-digest — flag OFF sends NOTHING (email is unrecallable) ==="
+echo "=== GATE 13/16: follow-digest — flag OFF sends NOTHING (email is unrecallable) ==="
 # Written BEFORE the sender and red on purpose; promoted here in the same window as
 # the merge that defines LG_FOLLOW_DIGEST_ENABLED, per its own rule: "a gate that
 # guards an unrecallable channel and is never promoted is worse than no gate — it
 # reads as covered." Number minted from MAIN's count (12), not the branch's.
 run "follow-digest" python3 "$(dirname "$0")/follow-digest-gate.py"
 echo
-echo "=== GATE 14/15: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
+echo "=== GATE 14/16: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
 # Second time source/behaviour was served to anybody who asked (after the
 # /archive-api/v0/*.php disclosure). lg-weekly-digest/dev/ sat inside a PLUGIN
 # directory, so the catch-all \.php$ handler RAN it for anonymous requests: one
@@ -82,7 +82,7 @@ echo "=== GATE 14/15: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
 # would go green having seen nothing.
 run "dev-files-anon" python3 "$(dirname "$0")/dev-files-anon-unreachable-gate.py"
 echo
-echo "=== GATE 15/15: the cadence control is ABSENT when its flag is off ==="
+echo "=== GATE 15/16: the cadence control is ABSENT when its flag is off ==="
 # Number minted from MAIN's count (14), not the branch's — two lanes both minted
 # "9/9" once and collided in this file.
 #
@@ -116,6 +116,39 @@ echo "=== GATE 15/15: the cadence control is ABSENT when its flag is off ==="
 # (chrome-dev.service DOES now carry --host-resolver-rules, so it reaches nginx
 #  directly instead of auditing a Cloudflare challenge page.)
 run "cadence-control" python3 "$(dirname "$0")/cadence-control-gate.py" --prove
+echo
+echo "=== GATE 16/16: marking notifications read is scoped to what was SEEN ==="
+# Number minted from MAIN's count (15), not the branch's — two lanes both minted
+# "9/9" once and collided in this file. Rebase before running; on a conflict here,
+# KEEP BOTH gates and renumber.
+#
+# ANOTHER ABSENT-HALF GATE, and the second time this exact class has cost a member
+# their digest. "A read that was never a read":
+#   2026-07-29  the recap's two registers disagreed on "still outstanding", so a
+#               member who had merely LOOKED at a connection request dropped out of
+#               one and not the other. Empty means no email, so they got nothing.
+#   2026-08-07  bottom-nav.js posted {action:'read_all'} 700ms after the mobile
+#               sheet rendered EIGHT rows — marking the member's WHOLE store read.
+#               The recap is "what you missed", unread only (IAN-RULINGS §1), so one
+#               glance at the bell cancelled the digest. Backlog 4.1.
+#
+# The assertion missing both times was never "the rows they saw are read" — that was
+# always green. It was "the rows they did NOT see are STILL UNREAD".
+#
+# No browser and no nginx: it drives the real model against the real profile_app
+# database inside ONE transaction that is NEVER committed, so it mutates no member
+# data (verified: zero rows left behind). It also measures BOTH values of the
+# read_seen_only flag, because a master flag otherwise neuters the tests that
+# already covered the thing it gates.
+#
+# Red-firsted, all ten inversions, each going red for the reason it claims:
+#   bash "$(dirname "$0")/lib/notif-read-seen-redfirst.sh"
+# That pass caught this gate asserting on its OWN COMMENT PROSE ("limit=200" appears
+# in both the fetch and the comment explaining it), which would have shipped green.
+#
+# The end-to-end browser proof is NOT here — it needs a bespoke three-server harness
+# (endpoint-swap-proxy + two php -S). It is recorded in docs/RECAP-READ-TIMER.md.
+run "notif-read-seen" python3 "$(dirname "$0")/notif-read-seen-gate.py"
 echo
 # FOUR CDP/loopback gates are HELD OUT of the runner — they pass standalone but
 # flake RED in-sequence (CDP under load / loopback /whoami trips infra's
