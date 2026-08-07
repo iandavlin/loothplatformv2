@@ -72,7 +72,49 @@ other. Three defects fixed in `f0943d6`, live at `0e80c5b`.
 'allowlist' => 'all-members',      // currently '1:ian.davlin@gmail.com'
 ```
 
-Before flipping it, re-run the measurement that caught the black hole rather than
+### ✅ VERIFIED END-TO-END ON LIVE, 2026-08-07 — the sender is not the risk
+
+Ian said email "didn't seem to be working". It was. Proven on live, in order:
+
+  - `wp_mail()` -> Amazon SES delivers. Test message arrived in his inbox.
+  - Resolver finds him: `daily due: 1`, and only him.
+  - Content query found 4 qualifying replies (authors 627/160/665, his own excluded).
+  - `[lg-fd] daily flush: 1 sent`, and **Ian confirmed the email arrived**.
+  - Watermark advanced to `2026-08-07 17:42:10` — the timestamp of the LAST INCLUDED
+    reply, not `now`, so nothing falls through the gap between query and send.
+
+Two things that looked like bugs and were not:
+  - A manual `wp cron event run lg_fd_send` sends NOTHING outside the window.
+    `lg_fd_tick()` only flushes when the local hour equals LG_FD_DAILY_HOUR (8, i.e.
+    08:00 America/New_York). The Aug 4 send was 12:58 UTC = 08:58 local. To test off
+    -schedule call `lg_fd_flush('daily', 0)` directly.
+  - `sudo wp --allow-root` FAILS: Postgres is peer-authed and `root` has no role, so
+    the link store is unreachable. The sender then REFUSED to send and left the
+    watermark unadvanced — the guard working. Run as `looth-dev`, the same user
+    lg-wp-cron.service uses.
+
+### ⚠️ THE REMAINING PRE-WIDENING BLOCKER: there is no delivery record
+
+`fluentmail-settings` has `log_emails => yes` and `simulate_emails => no`, but the
+table FluentSMTP logs INTO does not exist — only `wp_fluentform_*` tables are
+present. So logging is on, writing nowhere, and silently.
+
+With the allowlist pinned to one address that is survivable: "did it send?" is
+answerable by grepping syslog for `[lg-fd]` and asking Ian. **At 384 members it is
+not.** A failed run and a quiet run look identical.
+
+Scope, measured: 384 members hold `wp__bbp_subscriptions`, 79 hold
+`wp__bbp_forum_subscriptions`. Widening moves them from BuddyBoss per-reply mail to
+one batched email at the weekly default — quieter, not louder, but a change none of
+them asked for.
+
+Also note the sender has a hard dependency on Postgres being reachable from the
+sending process. At one recipient a failure is one delayed email; at 384 the whole
+run refuses — correctly, but invisibly unless someone is reading syslog.
+
+### Before flipping
+
+Re-run the measurement that caught the black hole rather than
 trusting that the fix held — under an all-members allowlist, a member with no
 explicit cadence must come back BOTH suppressed AND due:
 
