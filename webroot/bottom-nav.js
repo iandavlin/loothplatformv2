@@ -122,15 +122,35 @@
   var LG_ANON_DASH_SIGNIN = false;
   //
   // Preview override, following the house ?lgdebug=1 convention: ?lgdash=signin
-  // forces ON and ?lgdash=plus forces OFF, for that pageview only. This is what
-  // lets Ian look at the real running thing on the real serve, from his phone,
-  // before the default flips — without changing what any other visitor is served.
-  // Read-only and per-request: it sets nothing and persists nothing.
-  function anonDashSignin() {
+  // forces ON and ?lgdash=plus forces OFF. This is what lets Ian look at the real
+  // running thing on the real serve, from his phone, before the default flips —
+  // without changing what any other visitor is served.
+  //
+  // CAPTURED AT PARSE TIME, AND REMEMBERED FOR THE TAB, and both halves are load-
+  // bearing. The front page runs archive.js enterDiscover(), which does
+  //   history.replaceState(null, '', '/')
+  // and wipes EVERY query param a moment after load (measured 2026-08-07; it
+  // takes ?lgdebug=1 with it too). A flag that read location.search lazily would
+  // therefore see nothing on "/", and the preview URL built for Ian to click
+  // would quietly serve the OFF path — a preview that lies about what is
+  // deployed is worse than no preview, because it is believed.
+  //
+  // So: read the param the instant this file is parsed, and persist the choice
+  // for the tab. That also means Ian can set it once and then ROAM — every page
+  // he opens afterwards keeps the preview, which is the only way to actually
+  // judge "can a logged-out visitor still tool around". ?lgdash=plus clears it.
+  var LGDASH_OVERRIDE = (function () {
+    var m = null;
+    try { m = /[?&]lgdash=(signin|plus)(?:&|#|$)/.exec(location.search || ''); } catch (e) {}
     try {
-      var m = /[?&]lgdash=(signin|plus)(?:&|#|$)/.exec(location.search || '');
-      if (m) return m[1] === 'signin';
-    } catch (e) {}
+      if (m) { sessionStorage.setItem('lgdash', m[1]); return m[1]; }
+      return sessionStorage.getItem('lgdash') || '';
+    } catch (e) { return m ? m[1] : ''; }
+  })();
+
+  function anonDashSignin() {
+    if (LGDASH_OVERRIDE === 'signin') return true;
+    if (LGDASH_OVERRIDE === 'plus')   return false;
     return LG_ANON_DASH_SIGNIN;
   }
 

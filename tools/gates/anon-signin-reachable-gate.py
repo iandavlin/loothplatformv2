@@ -108,7 +108,7 @@ Needs: chrome-dev on 127.0.0.1:9222, python3-websocket, the dev gate token.
 
 Exit:  0 green, 1 RED (a width with no way in), 2 CANNOT RUN (no verdict).
 """
-import argparse, json, socket, subprocess, sys, time, urllib.request
+import argparse, json, re, socket, subprocess, sys, time, urllib.request
 
 CDP = "http://127.0.0.1:9222"
 REPO = __file__.rsplit("/tools/", 1)[0]
@@ -121,6 +121,14 @@ NO_VERDICT = 2
 WIDTHS = [1440, 1024, 821, 820, 768, 700, 641, 640, 480, 390]
 
 PATH = "/"          # the anon front door: the one page a returning member lands on
+
+# The preview leg CANNOT run on PATH. The front page's archive.js enterDiscover()
+# calls history.replaceState(null, '', '/') during load and wipes every query
+# param — measured 2026-08-07, and it takes ?lgdebug=1 with it. A preview override
+# asserted on "/" would therefore always read as OFF and this leg would fail
+# forever for a reason that has nothing to do with the dash. /hub/ keeps its query
+# string, and is where the composer being replaced actually lived.
+PREVIEW_PATH = "/hub/"
 
 passes = failures = 0
 def log(*a): print(" ".join(str(x) for x in a), flush=True)
@@ -370,6 +378,56 @@ def tap(p, x, y, mobile):
     time.sleep(1.2)
 
 
+def read_flag(base):
+    """Read LG_ANON_DASH_SIGNIN out of the SERVED bottom-nav.js.
+
+    The gate must not hardcode which state is current, or flipping the flag turns
+    it red and someone edits the assertion to make it green again — which is how a
+    gate stops meaning anything. Instead it reads what is actually being served and
+    holds THAT state to its own contract:
+
+        flag OFF  -> the dash must still be the historic Nav | + | You, i.e. the
+                     OFF path is the no-op it claims to be
+                     AND ?lgdash=signin must already show the fixed shape
+        flag ON   -> the dash must be the fixed shape by default
+
+    So the day Ian flips the default, this gate starts demanding the fix without
+    anyone touching this file.
+    """
+    for path in ("/bottom-nav.js", "/hub/bottom-nav.js"):
+        try:
+            src = urllib.request.urlopen(base + path, timeout=20).read().decode("utf-8", "replace")
+        except Exception:
+            continue
+        m = re.search(r"var\s+LG_ANON_DASH_SIGNIN\s*=\s*(true|false)\s*;", src)
+        if m:
+            return m.group(1) == "true", path
+        # served, but the flag is not in it — that is a real answer: this build
+        # predates the flag entirely.
+        if "looth-tabbar" in src:
+            return None, path
+    return None, None
+
+
+# The fixed shape, measured in its own incognito so the (A) taps cannot bleed in.
+def run_preview(browser, base, w, query):
+    inc = Incognito(browser)
+    p = inc.page
+    try:
+        emulate(p, w, 844, True)
+        if not goto(p, base + PREVIEW_PATH + query):
+            return None, "preview page never reached readyState complete"
+        live = p.ev("(()=>({chrome: !!document.querySelector('.lg-chrome'),"
+                    " authed: !!document.querySelector('.lg-chrome__account')}))()")
+        if not live["chrome"]:
+            return None, "preview: no .lg-chrome"
+        if live["authed"]:
+            return None, "preview: rendered an ACCOUNT cluster — not anonymous"
+        return {"compose": p.ev(NO_COMPOSE), "reach": p.ev(REACHABLE)}, None
+    finally:
+        inc.close()
+
+
 def run_width(browser, base, w, mobile):
     h = 844 if mobile else 900
     inc = Incognito(browser)
@@ -479,6 +537,22 @@ def main():
         cannot_run(f"chrome-dev is not answering on {CDP} ({e})")
     browser = Sock(bws)
 
+    flag_on, flag_path = read_flag(base)
+    # A build that predates the flag has no preview to exercise. Saying so and
+    # skipping that leg keeps the gate honest during the window between a merge and
+    # the serving checkout's pull, when the repo holds the new gate and the origin
+    # is still serving the old asset — otherwise it reports a deploy lag as a
+    # finding, and a gate that cries wolf gets ignored or edited away.
+    flag_known = flag_on is not None
+    if not flag_known:
+        log("  note: LG_ANON_DASH_SIGNIN is not in the served bottom-nav.js"
+            f" ({flag_path or 'not served'}) — pre-flag build.")
+        log("  Asserting the historic bar only; the preview leg is SKIPPED, not passed.")
+        flag_on = False
+    else:
+        log(f"  LG_ANON_DASH_SIGNIN = {str(flag_on).lower()}  (read from {flag_path})")
+    log("")
+
     broken, dash_lies = [], []
     try:
         for w in widths:
@@ -520,17 +594,63 @@ def main():
                     if proc: proc.terminate()
                     cannot_run(f"{w}px: dash liveness failed — {comp.get('why')}. "
                                "An absence assertion is vacuous without it.")
-                okc = check(f"{w}px: the dash offers an anonymous visitor NO way to 'post'",
-                            not comp["offered"],
-                            "a compose control is visible and tappable to a logged-out visitor")
-                if okc:
-                    log(f"        dash slots: " +
-                        ", ".join(f"{s['label'] or s['el']}" for s in comp["slots"]))
+                slotlist = ", ".join(f"{s['label'] or s['el']}" for s in comp["slots"])
+
+                if flag_on:
+                    # The fix is live by default: nothing may claim "post".
+                    if not check(f"{w}px: the dash offers an anonymous visitor NO way to 'post'",
+                                 not comp["offered"],
+                                 "a compose control is visible and tappable to a logged-out visitor"):
+                        dash_lies.append(w)
+                        for o in comp["offered"]:
+                            log(f"        LIES: {o['el']} label={o['label']!r} "
+                                f"{o['w']}x{o['h']} @{o['x']},{o['y']} — visible and hit-testable")
+                    else:
+                        log(f"        dash slots: {slotlist}")
                 else:
+                    # Flag OFF. The contract is that OFF is the HISTORIC bar,
+                    # unchanged — so the "+" being here is what we assert, and a
+                    # dash that has silently drifted is the finding.
+                    if not check(f"{w}px: flag OFF is the historic bar (unchanged no-op)",
+                                 bool(comp["offered"]),
+                                 "flag is OFF but the compose control is already gone — "
+                                 "the OFF path is not the no-op it claims to be"):
+                        dash_lies.append(w)
+                    log(f"        dash slots: {slotlist}   [LG_ANON_DASH_SIGNIN=false]")
+
+                # Whichever way the flag is set, the FIXED shape must be correct
+                # and reachable under the preview override — that is what Ian
+                # clicks before the default flips, so it is gated too.
+                if not flag_known:
+                    log("        (preview leg skipped — this build has no flag)")
+                    continue
+                pv, pwhy = run_preview(browser, base, w, "?lgdash=signin")
+                if pwhy:
+                    browser.close()
+                    if proc: proc.terminate()
+                    cannot_run(f"{w}px preview: {pwhy}")
+                pc = pv["compose"]
+                if not pc.get("alive"):
+                    browser.close()
+                    if proc: proc.terminate()
+                    cannot_run(f"{w}px preview: dash liveness failed — {pc.get('why')}")
+                if not check(f"{w}px: with the fix ON, nothing in the dash claims 'post'",
+                             not pc["offered"]):
                     dash_lies.append(w)
-                    for o in comp["offered"]:
-                        log(f"        LIES: {o['el']} label={o['label']!r} "
-                            f"{o['w']}x{o['h']} @{o['x']},{o['y']} — visible and hit-testable")
+                    for o in pc["offered"]:
+                        log(f"        LIES: {o['el']} label={o['label']!r}")
+                # ...and the fix must not have cost the visitor anything.
+                if not check(f"{w}px: with the fix ON, sign-in is reachable with NO tap at all",
+                             bool(pv["reach"]["ok"]),
+                             "the replacement slot is not a visible, hit-testable wp-login link"):
+                    dash_lies.append(w)
+                else:
+                    l = pv["reach"]["ok"][0]
+                    log(f"        -> {l['el']} {l['text']!r} {l['w']}x{l['h']} @{l['x']},{l['y']}")
+                if not check(f"{w}px: with the fix ON, browsing is NOT reduced "
+                             f"(dash keeps all its slots)",
+                             len(pc["slots"]) >= 3, f"only {len(pc['slots'])} slots"):
+                    dash_lies.append(w)
     finally:
         browser.close()
         if proc: proc.terminate()
