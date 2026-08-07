@@ -67,6 +67,49 @@ The escape hatch already works: a discussion that carries its own attached photo
 uses *that* as the thumb, and that path is fully compliant — resizer, `srcset`,
 `width`/`height`.
 
+### Discussion media in the weekly digest EMAIL — one width, no resizer, no `srcset`
+
+`lg-weekly-digest` renders a discussion card's thumb from the BuddyBoss media
+attached to the topic (`LG_WD_Query::topic_media_thumb`). It ships a **single
+same-origin upload URL**, no `/img.php`, no `srcset`. All three departures are
+forced by the medium:
+
+- **The resizer is unreachable from an inbox.** Real mail clients fetch images
+  with no cookies and `img.php` sits behind the dev gate, so routing sent mail
+  through it breaks the image for every recipient. This is already settled and
+  documented at `class-lg-wd-signup-page.php:223` — the resizer is for the
+  on-page preview only.
+- **One URL has to serve both layouts.** `srcset` support across mail clients is
+  not dependable, and the card lays the thumb out in a 240px column that stacks
+  to ~448px in the `<=480px` block of `templates/email.php`. 448 is therefore the
+  slot the single URL must cover.
+
+**The rule is width-driven, not name-driven**: pick the narrowest registered rung
+whose width is `>= 448`, and prefer a real rung over an oversized original.
+BuddyBoss's rungs are *bounding boxes*, so one name is a different width per
+orientation — measured over 393 attachments on dev2:
+
+| rung | portrait | landscape | square |
+|---|---|---|---|
+| `bb-media-activity-image` | 300 | 546 | 400 |
+| `…album-directory-image-medium` | 401 | 755 | 534 |
+| `bb-media-photos-popup-image` | 675 | 1195 | 900 |
+
+Forum photos are mostly portrait phone photos, so a fixed *name* that reads well
+for landscape (546px) hands portrait a 300px file into a 448px slot.
+
+**Do not "fix" this by asking for `large` or `medium`.** WP's own sizes are never
+generated for `bb_medias` uploads, so core falls all the way back to the ORIGINAL
+— measured at 2545×1652 / **689 KB** on the topic in Ian's 2026-08-03 report.
+
+MEASURED: 393 attachments on dev2 → **640px median, 67 KB mean**, against 900px /
+439 KB for the originals. 29 live discussions from 2026-07-01 on → 633px median,
+70 KB mean, **0** narrower than the slot, **0** above the 1.7× ceiling.
+
+**Known cost: soft on a high-DPR phone**, and above 1.7× the 240px *desktop*
+column. Both are accepted because a single URL must serve both layouts and mail
+is read mostly on phones. Known, not missed.
+
 ### Not an exception: `img.php?s=bb_medias/…` without dims
 
 `/hub/<forum>/` ships a topic cover through the resizer *without* `width`/`height`.
