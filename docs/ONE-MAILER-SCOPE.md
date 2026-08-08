@@ -97,9 +97,19 @@ ruling 4 and is held pending §5 below and Ian's instant-vs-weekly call.
 ### 2.2 `forum` — *"New discussion: X"*. **THE REAL GAP. C must grow.**
 
 38 members hold 46 forum subscriptions; 18 of them were mailed in the last two weeks.
-This is a genuinely wanted signal — a forum subscription is an explicit act (there is no
-"you posted here so you're subscribed" side effect for forums, unlike topics), so unlike
-the 71% of topic subscribers who never chose email, **these 38 all chose it**.
+This is a genuinely wanted signal, and that claim is load-bearing enough to have been
+checked in the source rather than assumed:
+
+- **Topics auto-subscribe you for posting.** `bp-forums/replies/functions.php:1006`
+  calls `bbp_add_user_subscription( $author_id, $topic_id )` when you reply. That is
+  where the 71% of topic subscribers who never chose email come from.
+- **Forums have no equivalent.** The only callers of `bbp_add_user_forum_subscription()`
+  are the explicit subscribe/unsubscribe handlers (`users/functions.php:952`, `:1056`) —
+  i.e. somebody clicking the control. Nothing creates a `type='forum'` row as a side
+  effect of posting, joining or registering.
+
+So **all 38 chose it**, which is exactly the opposite of the group population and is why
+these two get opposite recommendations.
 
 **Recommendation: C absorbs it, and it is a small change.** The digest already renders
 "N new replies in a discussion you follow". It needs a second item kind — "N new
