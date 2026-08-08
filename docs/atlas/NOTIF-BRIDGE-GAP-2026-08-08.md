@@ -143,11 +143,41 @@ Recorded so they are not rediscovered as new:
    it means the delivery guarantee is "best effort", which is worth saying out loud now
    that the bell is a default channel rather than a nicety.
 
-## 5. What this lane builds
+## 5. What this lane built — and what is owed
 
-- **D1 (Ian-ruled): delete = dismiss.** Row kept, hidden from the bell, still counted by
-  the recap. Fixes leak A of the trace.
-- **D2: leg 4 reads both follow stores**, flag OFF-default — plus §3's label fix, which
-  must land with it.
+**D1 — delete = dismiss (Ian-ruled). BUILT, flag OFF.**
+`profile-app/config/notifications.php` → `dismiss_instead_of_delete`. Row kept and
+stamped `dismissed_at`, hidden from the bell, and the recap counts unread AND
+undismissed. 36 assertions in `profile-app/bin/notif-dismiss-proof.php`.
 
-Neither §4 item is in scope; both are filed here rather than fixed.
+> ⚠️ **Honest scope note.** Under "counts unread AND undismissed" this changes NO
+> member's recap *content* — a dismissed item was already absent back when dismissing
+> deleted it. What changes is that the event SURVIVES: auditable, and recoverable by a
+> future policy. If the intent was to *recover* the items the bell eats, the recap rule
+> would have to count dismissed-but-unread rows, and that contradicts the ruling as
+> recorded. Ian's call, not this lane's.
+
+**D2 — BUILT, flag OFF**, in the order the §3 prerequisite forces:
+- `bottom-nav.js` gains the `forum.followed_topic` sentence (not flagged — the OFF
+  state of a flag here would mean keeping a known-broken string in front of members).
+- `lg_notify_topic_followers()` splits into a native half and a BuddyBoss half,
+  unioned. `platform/config/notify-bridge.php` → `bell_follows_bb_subscriptions`.
+  14 assertions in `lg-shared/bin/notif-followers-proof.php`.
+
+Gates 16 and 17 (`tools/gates/`), both in `run-all.sh`.
+
+### ⏳ OWED FROM IAN — two flags, and neither is keeper's to flip
+
+1. `dismiss_instead_of_delete` — needs the migration run on live first (he runs the
+   SQL), then the flip. See the note above about what it does and does not change.
+2. `bell_follows_bb_subscriptions` — the real product question. It reads an EMAIL
+   follow as a BELL follow, and ruling 6 made those separate controls on purpose. For:
+   71% of those 1,515 rows were auto-subscribed by replying and never chosen (ruling
+   4), so treating them as "wants to hear about this" is truer to intent. Against: it
+   is still an inference about consent, and inferring consent is how the mail problem
+   started. Plus the blast radius is lopsided — user 779 alone holds 340 of them.
+
+### Not in scope, filed not fixed
+
+Both §4 items — the moderated reply that never rings, and the absent retry/dead-letter.
+

@@ -137,6 +137,9 @@ either file can see. So:
 
 > ⚠️ **Row 19 is missing from this table, not from the suite.** `tools/gates/social-actions-wired-gate.py` is registered in `run-all.sh` as GATE 19/21 but was never added here, so this table under-reports the suite by one. Left for that gate's owner to describe rather than guessed at from here. Two later lanes have now numbered PAST the gap (hub-topic-landing took 20, this lane 21), so it will not close itself.
 
+| 16 | `tools/gates/notif-renderer-parity-gate.sh` | every type the store can HOLD has a **sentence on both bells**. The required set is read from `Notifications.php` (TYPES + HUB_TYPES), not by diffing the two renderers — that would go green the day a type is added to neither. `forum.followed_topic` shipped 2026-07-28 with a desktop sentence and none on mobile, whose `default:` renders a bare actor name; eleven days on live, and both rows it ever produced went to real members, one of them Ian | none (source parity); `--prove` red-firsts against the real pre-fix file at `862feb9` |
+| 17 | `tools/gates/notif-dismiss-gate.sh` | the bell's **delete/dismiss contract** and **leg 4's follow stores**, per flag state. Today's `deleteAll` really destroys; dismissal keeps the row, hides it, and still lets the NEXT reply through; the `ON CONFLICT` arbiter matches the index that actually exists in all four pairings *including the failing one*; and leg 4 honours `status=0` so the 8/8 group-sub sweep cannot be undone through the bell | passwordless sudo to `profile-app` and `looth-dev` (peer auth — neither database is reachable as `ubuntu`); reports **CANNOT RUN**, never RED, without it |
+
 > **Two rows both said "13" until 2026-08-01** — dev-files-anon and follow-digest,
 > minted by different lanes in the same window. Same collision as the "9/9" one in
 > `run-all.sh`. **Mint a gate number from `origin/main`'s count, never your
