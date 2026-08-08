@@ -224,6 +224,25 @@ Ian runs it).
 ⚠️ wp_bp_groups_members drives the forum LAYOUT and must survive untouched. Only the
 notification-subscription side effect dies.
 
+### ✅ EXECUTED 2026-08-08 — the group-sub sweep, verified
+
+Ian deactivated bp-auto-group-join on live himself (kills the registration
+firehose), then ran the sweep: the 5 forum-layout groups (31 Repair, 32 New Builds,
+33 Tools, 34 Business, 35 Market Place) went 9,297 → 0 email subscriptions.
+KEPT by his instruction: all regional Looths groups (esp. 41 DMV = 365, untouched),
+Jannies, Partners, chat groups. Keeper verified independently over live-ro:
+layout_subs_left=0, dmv=365, flipped=9297=backup, memberships 12,877 untouched so
+the layout survives.
+
+Before-state facts that matter later: no status=0 rows existed on 31–35 before the
+sweep (nobody had manually muted), so a rollback cannot trample hand-set state.
+Rollback = flip status back to 1 for exactly the ids in wp_lg_group_unsub_20260808.
+
+⏳ OWED: drop table wp_lg_group_unsub_20260808 after a few quiet days (it IS the
+rollback — do not drop early). Layout/posting were proven membership-independent
+before the sweep: no serving code reads wp_bp_groups_members, publish_topics passes
+for non-members, all forums visibility=public.
+
 This also reframes the open cadence question: once BB's instant mail is retired
 rather than preserved, the default cadence is a pure product choice, not a
 compatibility one. Still Ian's call, still open.
