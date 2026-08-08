@@ -10,6 +10,12 @@ comes from an earlier session it is marked as such and not re-derived.
 
 Extends `docs/IAN-RULINGS-2026-08-03.md` §4 and §5. It does not restart that project.
 
+**Terminology is `docs/EMAIL-GLOSSARY.md` (Ian, 2026-08-08).** "Digest" means the
+editorial **Weekly Digest** and nothing else. What `lg-follow-digest.php` sends is the
+**follow roundup** — cadences *instant* (a per-reply follow notification), *daily
+roundup*, *weekly roundup*. Code names are unchanged; this doc uses the pinned terms.
+The charter's A/B/C shorthand is dropped here in favour of them.
+
 ⚠️ Ian ran the group-sub sweep (ruling 5) partway through this work. §4 is written
 against the **post-sweep** state and the draft SQL that preceded it has been removed —
 it would have trampled his decision to keep the regional groups.
@@ -26,7 +32,7 @@ Four things that were assumed going in turned out to be wrong. Three make the jo
    subscriptions had produced no mail in the entire logged window.
 2. **The "84% delivery" gap is an artifact**, not a leak. Nobody is silently unmailed.
    The real reconciliation is 22 matched / 3 / 4, and every one of the 7 is explained.
-3. **We found a real double-send**, and it hit the one member the follow-digest is
+3. **We found a real double-send**, and it hit the one member the follow roundup is
    switched on for. That is a blocker for widening, and it is §5. Seven candidate
    mechanisms were tested and all seven are refuted.
 4. **⚠️ What the sweep KEPT is probably not what it looks like.** 3,735 subscriptions
@@ -84,17 +90,18 @@ not a history.
 
 ---
 
-## 2. DELIVERABLE 2 — what C must absorb before B can be switched off
+## 2. DELIVERABLE 2 — what the follow roundup must absorb before BB's mail can be switched off
 
-Our follow-digest covers `type='topic'` and nothing else (`lg_fd_items_for()` joins
+Our follow roundup covers `type='topic'` and nothing else (`lg_fd_items_for()` joins
 `type='topic'` literally). Taking the three in turn:
 
 ### 2.1 `topic` — replies. **Already covered.** No work.
 
-C replaces it exactly, per-recipient, and the allowlist is Ian-only today. Widening is
-ruling 4 and is held pending §5 below and Ian's instant-vs-weekly call.
+The follow roundup replaces it exactly, per-recipient, and the allowlist is Ian-only
+today. Widening is ruling 4 and is held pending §5 below and Ian's instant-vs-weekly-
+roundup call.
 
-### 2.2 `forum` — *"New discussion: X"*. **THE REAL GAP. C must grow.**
+### 2.2 `forum` — *"New discussion: X"*. **THE REAL GAP. The roundup must grow.**
 
 38 members hold 46 forum subscriptions; 18 of them were mailed in the last two weeks.
 This is a genuinely wanted signal, and that claim is load-bearing enough to have been
@@ -111,14 +118,14 @@ checked in the source rather than assumed:
 So **all 38 chose it**, which is exactly the opposite of the group population and is why
 these two get opposite recommendations.
 
-**Recommendation: C absorbs it, and it is a small change.** The digest already renders
+**Recommendation: the roundup absorbs it, and it is a small change.** It already renders
 "N new replies in a discussion you follow". It needs a second item kind — "N new
 discussions in a forum you follow" — sharing the same watermark, the same cadence, the
 same suppression seam (`bb_send_forums_subscribed_discussion_email_notifications`,
 identical shape to the one we already own). No new schedule, no new store.
 
 **Do not let it die unreplaced.** These 38 opted in explicitly and get roughly 3
-messages a week; silently dropping them is the "mail black hole" failure the digest was
+messages a week; silently dropping them is the "mail black hole" failure the roundup was
 built to avoid, just relocated.
 
 ### 2.3 `group` — **Recommendation: DIES UNREPLACED. Do not build a replacement.**
@@ -131,12 +138,13 @@ group system for forums."* Beyond that ruling, the evidence says nobody would mi
   (`class-bp-groups-member.php:321`). Not one is an opt-in.
 - **The subscription is per-GROUP, and the five main groups hold all 1,830 members.**
   So "subscribed" here means "will be told about every discussion on the site". That is
-  the weekly digest's job, and the weekly digest already does it — to ~1,860 people,
+  the **Weekly Digest**'s job, and the Weekly Digest already does it — to ~1,860 people,
   editorially curated. A second, uncurated copy of the same firehose is precisely the
   "two systems" Ian is objecting to.
 - **Its discussion leg has been off for weeks already** and nobody has reported a loss.
 
-So the end state is: **C covers topic + forum. Group mail is deleted, not migrated.**
+So the end state is: **the follow roundup covers topic + forum. Group mail is deleted,
+not migrated.**
 
 ---
 
@@ -299,21 +307,21 @@ it does **not** measure the un-flushed behaviour. That is why any repeat sweep m
 `UPDATE` fires none of its invalidation hooks. Skipping it makes a sweep look like it did
 nothing.
 
-## 5. ⚠️ FINDING — the follow-digest double-sent to the one member it is on for
+## 5. ⚠️ FINDING — the follow roundup double-sent to the one member it is on for
 
 This is the part Ian needs before widening, and it is the opposite of the reassuring
 result in `IAN-RULINGS-2026-08-03.md` §4.
 
-**Three replies were mailed to Ian twice — once instantly by BuddyBoss, once by our
-digest.** Proven from the delivery record:
+**Three replies were mailed to Ian twice — once instantly by BuddyBoss, once in our
+daily roundup.** Proven from the delivery record:
 
-| reply | posted (UTC) | BB instant mail | in his 08-07 digest |
+| reply | posted (UTC) | BB instant mail | in his 08-07 roundup |
 |---|---|---|---|
 | 72583 | 2026-08-06 18:56:09 | `fsmpt` 10796 | yes |
 | 72588 | 2026-08-07 15:47:14 | `fsmpt` 10810 | yes |
 | 72589 | 2026-08-07 17:42:10 | `fsmpt` 10813 | yes |
 
-The digest side is not inferred: the rulings doc records that flush as 4 replies by
+The roundup side is not inferred: the rulings doc records that flush as 4 replies by
 authors 627/160/665, and the only 4 candidates are {72565, 72583, 72588, 72589} — authors
 160, 665, 160, 627. The watermark then advanced to `2026-08-07 17:42:10`, which is
 reply 72589's exact `post_date_gmt`.
@@ -387,7 +395,7 @@ Matching pair-by-pair on recipient address and timestamp: **22 matched, 3 owed-n
 
 - **3 owed-not-sent** — all Ian, replies 72539 / 72545 / 72565, all before the 08-05
   deploy. **This is our own suppression working as designed**, and his 08-04 and 08-07
-  digests carry them. Not a defect. (The same three are the "before" half of §5.)
+  daily roundups carry them. Not a defect. (The same three are the "before" half of §5.)
 - **3 sent-not-owed** — all `fradenburgh@gmail.com` (user 160), all on topic 72472, all
   on 08-02/08-03. He holds no subscription to 72472 **now**, but he was mailed then and
   later posted in the thread himself. He unsubscribed. Snapshot drift, not a leak.
@@ -405,9 +413,9 @@ So, against the four candidate causes in the charter:
   subscriber. Nobody was mailed who should not have been, and nobody was silently
   dropped.
 
-**B is a trustworthy baseline for C to match**, with one caveat now on the record: BB's
+**BuddyBoss's native mail is a trustworthy baseline for the roundup to match**, with one caveat now on the record: BB's
 instant path can duplicate (once in 26 sends, ~4%), most plausibly a background-updater
-re-dispatch. C's watermark design cannot do this — the watermark only advances on a send
+re-dispatch. The roundup's watermark design cannot do this — the watermark only advances on a send
 — which is a point in favour of the consolidation Ian is asking for.
 
 ---
@@ -419,11 +427,12 @@ re-dispatch. C's watermark design cannot do this — the watermark only advances
    discussion leg on for those groups on purpose. Doing neither leaves 853 people
    reachable by the one notification nobody evaluated. Ian's call, and it is the only
    item here that is his rather than a lane's.
-2. **Understand the §5 double-send** before widening the follow-digest allowlist. Blocks
+2. **Understand the §5 double-send** before widening the follow roundup's allowlist. Blocks
    ruling 4, and blocks it harder than the instant-vs-weekly question does.
-3. **Grow C to cover `forum`** subscriptions — the 38 explicit opt-ins (§2.2).
-4. *Then* B has nothing left to send, and switching it off is a formality rather than a
-   cutover.
+3. **Grow the follow roundup to cover `forum`** subscriptions — the 38 explicit opt-ins
+   (§2.2).
+4. *Then* BuddyBoss's native mail has nothing left to send, and switching it off is a
+   formality rather than a cutover.
 
 Steps 1, 2 and 3 are mutually independent. 3 is the only one that is a build, and it is
 small; 1 is a decision plus one statement; 2 needs a live deploy to instrument.

@@ -49,7 +49,6 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 MU = os.path.join(REPO, "platform", "mu-plugins")
 
 GROUP_GATE = os.path.join(MU, "lg-discussion-group-gate.php")
-FOLLOW_DIGEST = os.path.join(MU, "lg-follow-digest.php")
 
 # The filter BuddyBoss passes the group-leg recipient list through. Our gate claims it.
 FORUM_SUB_FILTER = "bbp_forum_subscription_user_ids"
@@ -218,8 +217,8 @@ for path in php_files():
 if not hooks:
     red(
         "nothing hooks %s. lg_fd_suppress_instant is the ONLY thing standing between a "
-        "digest member and BuddyBoss's per-reply mail; without it every batched member "
-        "gets instant mail AND a digest." % REPLY_EMAIL_FILTER
+        "roundup member and BuddyBoss's per-reply mail; without it every batched member "
+        "gets instant mail AND a roundup." % REPLY_EMAIL_FILTER
     )
 elif len(hooks) == 1 and hooks[0][1] == REPLY_EMAIL_OWNER:
     ok("sole claimant on %s is %s" % (REPLY_EMAIL_FILTER, REPLY_EMAIL_OWNER))
