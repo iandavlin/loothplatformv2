@@ -2587,6 +2587,16 @@
       if (ntmAnonChk && ntmAnonChk.checked) payload._lg_anon = 1;
       if (ntmEditId) payload.id = ntmEditId;   // edit existing topic (PUT) vs create (POST)
 
+      /* Ruling 6 — follow intents ride the CREATE only. An EDIT must never touch the
+         author's follow state: they may have unfollowed since posting, and re-asserting
+         the composer's defaults would silently re-subscribe them. (BuddyBoss's own edit
+         path is the other half of the P0 hazard, which lg-preserve-forum-subscription
+         .php repairs — this is the client side of the same rule.) */
+      if (!ntmEditId) {
+        var ntmFollow = lgPostFollowParams('ntm');
+        for (var nk in ntmFollow) { if (Object.prototype.hasOwnProperty.call(ntmFollow, nk)) payload[nk] = ntmFollow[nk]; }
+      }
+
       fetch(ntmRestBase + '/topics' + (ntmEditId ? '/' + ntmEditId : ''), {
         method: ntmEditId ? 'PUT' : 'POST',
         credentials: 'same-origin',
@@ -3132,6 +3142,9 @@
       if (!topicId) { frmStatus.textContent = 'Missing topic.'; return; }
       frmSubmit.disabled = true; frmStatus.textContent = 'Posting…';
       var frmPayload = { topic_id: topicId, forum_id: forumId };
+      // Ruling 6 — merge the follow intents. Returns {} when the feature is off.
+      var frmFollow = lgPostFollowParams('frm');
+      for (var fk in frmFollow) { if (Object.prototype.hasOwnProperty.call(frmFollow, fk)) frmPayload[fk] = frmFollow[fk]; }
       if (content) frmPayload.content = content;
       if (frmMediaIds.length) frmPayload.media_ids = frmMediaIds;
       if (frmParentId) frmPayload.reply_to = frmParentId;   // nested reply
@@ -4116,6 +4129,37 @@
    body[data-lg-follow] by _chrome.php. Nothing else in this file may read that
    attribute - call this. Defaults to OFF when the attribute is absent, so an older
    cached shell degrades to 'feature off' rather than to a half-rendered feature. */
+/* ─── RULING 6: the post→follow controls on the composer and reply box ─────────
+   Ian, 2026-08-08 (re-amended): 🔔 Notifications TICKED by default, ✉ Emails PRESENT
+   but UNTICKED. The markup is server-rendered and BUILD-TIME gated (_chrome.php), so
+   when the feature is off these elements do not exist and this returns {} — no params,
+   byte-identical request.
+
+   ⚠️ AN UNTICKED ✉ SENDS NOTHING — NOT subscribe:false. This is the whole hazard.
+   BuddyBoss reads a `subscribe` of false as "the member unticked the box" and REMOVES
+   an existing subscription (bbp_update_reply, replies/functions.php:996-1008). Someone
+   who already follows this discussion by email and leaves the box alone must keep their
+   subscription: unticking a box on one reply is not a request to unfollow. Sending
+   `false` here would silently destroy their data — the exact P0 that
+   lg-preserve-forum-subscription.php exists to repair. Omit the key.
+
+   The 🔔 param is safe to send either way, because the server side only ever ADDS. */
+function lgPostFollowEnabled() {
+  try { return document.body && document.body.getAttribute('data-lg-post-follow') === '1'; }
+  catch (e) { return false; }
+}
+
+function lgPostFollowParams(prefix) {
+  var out = {};
+  if (!lgPostFollowEnabled()) return out;                 // feature off → no params at all
+  var notify = document.getElementById(prefix + '-pf-notify');
+  var email  = document.getElementById(prefix + '-pf-email');
+  if (!notify && !email) return out;                      // markup absent → nothing to say
+  if (notify) out.lg_follow_notify = !!notify.checked;
+  if (email && email.checked) out.subscribe = true;       // ONLY when ticked. See above.
+  return out;
+}
+
 function lgFollowEnabled() {
   try { return document.body && document.body.getAttribute('data-lg-follow') === '1'; }
   catch (e) { return false; }

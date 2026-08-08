@@ -40,8 +40,35 @@
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
+/**
+ * ONE SOURCE OF TRUTH, shared with the UI. platform/config/post-follow.php is read by
+ * this file AND by bb-mirror's forums app, because a constant in each would let the
+ * control and the write disagree — a rendered control that does nothing is the "UI
+ * lies" class, and it is silent.
+ *
+ * Fails CLOSED: an unreadable or malformed config leaves the feature off.
+ */
+function lg_pfc_config_enabled(): bool {
+	static $on = null;
+	if ( null !== $on ) { return $on; }
+	$on   = false;
+	$path = dirname( __DIR__ ) . '/config/post-follow.php';
+	if ( is_readable( $path ) ) {
+		$raw = require $path;
+		$on  = is_array( $raw ) && true === ( $raw['enabled'] ?? false );
+	} else {
+		error_log( '[lg-pfc] tracked config unreadable at ' . $path . ' — feature OFF (fail-closed)' );
+	}
+	return $on;
+}
+
 if ( ! defined( 'LG_POST_FOLLOW_CONTROLS' ) ) {
-	define( 'LG_POST_FOLLOW_CONTROLS', false );
+	// Both override sources, for the same reason the config header gives: a
+	// fastcgi_param set by a lane preview lands in $_SERVER but not in getenv().
+	define( 'LG_POST_FOLLOW_CONTROLS',
+		lg_pfc_config_enabled()
+		|| getenv( 'LG_POST_FOLLOW' ) === '1'
+		|| ( ( $_SERVER['LG_POST_FOLLOW'] ?? '' ) === '1' ) );
 }
 
 /** The request param the composer and reply box set when 🔔 is ticked. */

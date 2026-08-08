@@ -68,16 +68,37 @@ def parse(out):
 
 
 # ── the shipped default, READ not assumed ────────────────────────────────────
+# The flag is COMPUTED from a tracked config shared with bb-mirror's UI, so the value
+# lives in platform/config/post-follow.php and the mu-plugin only wires it up. Read
+# both: the config for the state, the mu-plugin for the wiring. Asserting a literal
+# in the define would have broken the moment the two runtimes were given one source
+# of truth — which is exactly what happened, and this gate caught it.
+CONFIG = os.path.join(REPO, "platform", "config", "post-follow.php")
 try:
     with open(MU, "r", encoding="utf-8") as fh:
         src = fh.read()
-    m = re.search(r"define\(\s*'LG_POST_FOLLOW_CONTROLS'\s*,\s*(true|false)\s*\)", src)
-    if m:
-        GREEN.append(f"shipped default: LG_POST_FOLLOW_CONTROLS = {m.group(1)} (read, not assumed)")
-    else:
+    if "define( 'LG_POST_FOLLOW_CONTROLS'" not in src:
         RED.append("lg-post-follow-controls.php no longer defines LG_POST_FOLLOW_CONTROLS")
+    elif "lg_pfc_config_enabled()" not in src:
+        RED.append(
+            "LG_POST_FOLLOW_CONTROLS no longer reads the tracked config — the UI flag "
+            "and the write flag can now disagree, which renders a control that does nothing"
+        )
+    else:
+        GREEN.append("the flag is wired to the tracked config (not a literal in the define)")
 except OSError:
     DEAD.append(f"cannot read {MU} — the feature this gate guards is not in the tree")
+
+try:
+    with open(CONFIG, "r", encoding="utf-8") as fh:
+        cfg = fh.read()
+    m = re.search(r"'enabled'\s*=>\s*(true|false)", cfg)
+    if m:
+        GREEN.append(f"shipped default: post-follow.php enabled = {m.group(1)} (read, not assumed)")
+    else:
+        RED.append("platform/config/post-follow.php no longer states 'enabled' => true|false")
+except OSError:
+    DEAD.append(f"cannot read {CONFIG} — the shared flag this feature depends on is missing")
 
 topic = os.environ.get("LG_PFC_TOPIC")
 if not topic and not DEAD:

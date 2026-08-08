@@ -749,6 +749,41 @@ if (!function_exists('lg_thread_follow_enabled')) {
     }
 }
 
+/**
+ * THE ONE READ POINT for ruling 6's post→follow controls (the composer and reply-box
+ * 🔔/✉ pair). Same discipline as lg_thread_follow_enabled() above — nothing else may
+ * test the flag, so turning it off is one answer changing.
+ *
+ * ⚠️ IT READS THE SHARED TRACKED CONFIG, NOT A bb-mirror CONSTANT. The write half of
+ * this feature lives in a WordPress mu-plugin (lg-post-follow-controls.php) which
+ * reads the same platform/config/post-follow.php. Two constants would let the control
+ * and the write disagree — a rendered control that silently does nothing, which is
+ * the "UI lies" class. One file, read by both, makes that state unreachable.
+ *
+ * Fails CLOSED, and honours the same two override sources as the config header
+ * describes: a lane preview sets fastcgi_param, which lands in $_SERVER but not
+ * reliably in getenv().
+ */
+if (!function_exists('lg_post_follow_enabled')) {
+    function lg_post_follow_enabled(): bool
+    {
+        static $on = null;
+        if ($on !== null) return $on;
+
+        if (getenv('LG_POST_FOLLOW') === '1' || (($_SERVER['LG_POST_FOLLOW'] ?? '') === '1')) {
+            return $on = true;
+        }
+        // bb-mirror/web/forums/ -> repo root is four levels up.
+        $path = dirname(__DIR__, 3) . '/platform/config/post-follow.php';
+        if (!is_readable($path)) {
+            error_log('[lg-post-follow] tracked config unreadable at ' . $path . ' — OFF (fail-closed)');
+            return $on = false;
+        }
+        $raw = require $path;
+        return $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+    }
+}
+
 // ── The CONSOLIDATED follow control (thread-follow §15, Ian picked VARIANT A) ──
 //
 // Ian, 2026-07-30, verbatim: "I like variant A because it gets the card controls

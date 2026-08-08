@@ -390,6 +390,36 @@ function bb_mirror_new_topic_modal(): void
           <span class="ntm-anon__hint">— your name &amp; avatar are hidden from other members</span></span>
       </label>
 
+<?php /* ── RULING 6: the post→follow controls ────────────────────────────────────
+           Ian, 2026-08-08 (re-amended): both surfaces carry BOTH controls, with
+           🔔 Notifications TICKED and ✉ Emails PRESENT BUT UNTICKED.
+
+           ⚠️ GATED AT BUILD TIME, not hidden with CSS. The markup is absent entirely
+           when the flag is off, so OFF is a true no-op rather than a node a stray rule
+           could reveal — the same reason the reader modal builds its follow pair
+           conditionally (forums.js:4985).
+
+           Labels and sublabels are lifted verbatim from the follow modal
+           (forums.js fmRow) and Manage Account so the platform speaks ONE language
+           about these two bits. Real checkboxes, not switch divs: "ticked by default"
+           is ruling 6's own word, and a checkbox is the control that says it to a
+           keyboard and a screen reader without extra ARIA.
+
+           ✉ unticked is a CONSENT position, not a style choice — see gate 18. */ ?>
+      <?php if (function_exists('lg_post_follow_enabled') && lg_post_follow_enabled()): ?>
+      <fieldset class="pf-strip" id="ntm-pf">
+        <legend class="pf-strip__lg">Follow discussion</legend>
+        <label class="pf-row">
+          <input type="checkbox" class="pf-row__cb" id="ntm-pf-notify" checked>
+          <span class="pf-row__tx">Notifications<small>A bell row for new replies</small></span>
+        </label>
+        <label class="pf-row">
+          <input type="checkbox" class="pf-row__cb" id="ntm-pf-email">
+          <span class="pf-row__tx">Emails<small>Email me about new replies</small></span>
+        </label>
+      </fieldset>
+      <?php endif; ?>
+
       <div class="ntm-row">
         <button type="submit" class="ntm-submit" id="ntm-submit">Post</button>
         <button type="button" class="ntm-cancel" id="ntm-cancel">Cancel</button>
@@ -435,6 +465,36 @@ function bb_mirror_new_topic_modal(): void
                new-TOPIC composer only. forums.js guards on the checkbox's
                existence, so no _lg_anon ever rides a reply now; the API door
                is closed server-side too (reply.php). */ ?>
+<?php /* ── RULING 6: the post→follow controls ────────────────────────────────────
+           Ian, 2026-08-08 (re-amended): both surfaces carry BOTH controls, with
+           🔔 Notifications TICKED and ✉ Emails PRESENT BUT UNTICKED.
+
+           ⚠️ GATED AT BUILD TIME, not hidden with CSS. The markup is absent entirely
+           when the flag is off, so OFF is a true no-op rather than a node a stray rule
+           could reveal — the same reason the reader modal builds its follow pair
+           conditionally (forums.js:4985).
+
+           Labels and sublabels are lifted verbatim from the follow modal
+           (forums.js fmRow) and Manage Account so the platform speaks ONE language
+           about these two bits. Real checkboxes, not switch divs: "ticked by default"
+           is ruling 6's own word, and a checkbox is the control that says it to a
+           keyboard and a screen reader without extra ARIA.
+
+           ✉ unticked is a CONSENT position, not a style choice — see gate 18. */ ?>
+      <?php if (function_exists('lg_post_follow_enabled') && lg_post_follow_enabled()): ?>
+      <fieldset class="pf-strip" id="frm-pf">
+        <legend class="pf-strip__lg">Follow discussion</legend>
+        <label class="pf-row">
+          <input type="checkbox" class="pf-row__cb" id="frm-pf-notify" checked>
+          <span class="pf-row__tx">Notifications<small>A bell row for new replies</small></span>
+        </label>
+        <label class="pf-row">
+          <input type="checkbox" class="pf-row__cb" id="frm-pf-email">
+          <span class="pf-row__tx">Emails<small>Email me about new replies</small></span>
+        </label>
+      </fieldset>
+      <?php endif; ?>
+
       <div class="ntm-row">
         <button type="submit" class="ntm-submit" id="frm-submit">Post reply</button>
         <button type="button" class="ntm-cancel" id="frm-cancel">Cancel</button>
@@ -587,7 +647,7 @@ $lg_can_post = function_exists('lg_bb_mirror_can_post')
     ? lg_bb_mirror_can_post()
     : lg_bb_mirror_wp_logged_in();   // same cookie rule; _reply-render.php not loaded on every page
 ?>
-<body class="bb-mirror<?= !empty($GLOBALS['__bb_hub_rail']) ? ' hub-fmodal-page' : '' ?>" data-lg-can-post="<?= $lg_can_post ? '1' : '0' ?>" data-lg-follow="<?= (function_exists('lg_thread_follow_enabled') && lg_thread_follow_enabled()) ? '1' : '0' ?>"><?php /* PREVIEW-ONLY NOTE. Rendered only when the app is mounted under a lane
+<body class="bb-mirror<?= !empty($GLOBALS['__bb_hub_rail']) ? ' hub-fmodal-page' : '' ?>" data-lg-can-post="<?= $lg_can_post ? '1' : '0' ?>" data-lg-follow="<?= (function_exists('lg_thread_follow_enabled') && lg_thread_follow_enabled()) ? '1' : '0' ?>" data-lg-post-follow="<?= (function_exists('lg_post_follow_enabled') && lg_post_follow_enabled()) ? '1' : '0' ?>"><?php /* PREVIEW-ONLY NOTE. Rendered only when the app is mounted under a lane
          preview path (LG_BB_MIRROR_PUBLIC_PATH is overridden by the preview
          nginx conf; on /hub/ this is exactly "/hub" and nothing renders). It
          exists so Ian does not report a KNOWN GAP as a defect -- he picked
@@ -599,7 +659,14 @@ $lg_can_post = function_exists('lg_bb_mirror_can_post')
   <br><strong>Not a bug:</strong> there is no <em>Frequency</em> row (Instant/Daily/Weekly) in the modal. It was in the mock you picked from, but nothing sends those digests yet, so shipping the control would have been a setting that quietly does nothing. It goes in when the sending side exists.
 </div>
 <?php endif; ?>
-<?php /* data-lg-follow: the thread-follow exposure gate crossing into the client. The desktop reader modal and the mobile sheet build their follow toggles in JS, so the server-side gate alone cannot reach them; this is how the ONE read point (lg_thread_follow_enabled(), _reply-render.php) governs those surfaces too. Same seam as data-lg-can-post. */ ?>
+<?php /* data-lg-post-follow: ruling 6's post→follow controls crossing into the client, by
+     the same seam and for the same reason. Its source is the SHARED tracked config
+     (platform/config/post-follow.php) that the WordPress write-half also reads, so the
+     rendered control and the write it triggers cannot disagree about whether the
+     feature is on. Read via lg_post_follow_enabled() (_reply-render.php) — the one
+     read point; nothing else may test it.
+
+     data-lg-follow: the thread-follow exposure gate crossing into the client. The desktop reader modal and the mobile sheet build their follow toggles in JS, so the server-side gate alone cannot reach them; this is how the ONE read point (lg_thread_follow_enabled(), _reply-render.php) governs those surfaces too. Same seam as data-lg-can-post. */ ?>
 <?php /* Hub feed: filters live in a CENTERED MODAL (Ian 2026-06-11), not the
          side rail — so the hub emits no nav aside, no hamburger, no drawer
          backdrop, and needs no pre-paint nav-closed state. Forum subpages
