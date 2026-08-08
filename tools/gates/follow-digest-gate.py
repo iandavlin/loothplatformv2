@@ -1748,11 +1748,30 @@ def main():
 
         live = d.get("live_allowlist") or {}
         if live.get("mode") == "all":
-            red("the tracked allowlist is %r — THE WHOLE MEMBERSHIP" % ALLOW_ALL_TOKEN,
-                "Test mode requires the full member list to be UNREACHABLE. This is the "
-                "one input that reaches it. If general release is genuinely intended, "
-                "this gate line changes in the SAME commit — that is the point of it "
-                "being one visible, reviewable diff rather than a silent widening.")
+            # GENERAL RELEASE — the line below changed in the SAME commit that widened
+            # the tracked allowlist, exactly as the pre-release version of this gate
+            # demanded. It is not a free pass: 'all' is acceptable ONLY while a recorded,
+            # quotable Ian decision exists in the repo. Delete the ruling doc, or the
+            # ruling from it, and this goes red again — widening stays tied to the
+            # decision that authorised it, not to whoever last edited the config.
+            _ruling = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   "..", "..", "docs", "IAN-RULINGS-2026-08-03.md")
+            try:
+                with open(_ruling, "r") as _f:
+                    _rtxt = _f.read()
+            except OSError:
+                _rtxt = ""
+            if ALLOW_ALL_TOKEN in _rtxt and "widen to all members" in _rtxt:
+                ok("the tracked allowlist reaches the whole membership — BY RECORDED DECISION",
+                   "Ian ruled 'widen to all members' (docs/IAN-RULINGS-2026-08-03.md §4, "
+                   "2026-08-03; default-cadence ruling 2026-08-08). The ruling doc is the "
+                   "licence; this assertion fails without it.")
+            else:
+                red("the tracked allowlist is %r with NO recorded decision" % ALLOW_ALL_TOKEN,
+                    "The whole membership is reachable but docs/IAN-RULINGS-2026-08-03.md "
+                    "is missing or no longer records the widening ruling. A widening that "
+                    "cannot cite its authorisation is a silent widening — shrink the "
+                    "allowlist or restore the ruling.")
         elif live.get("mode") == "list":
             ok("the tracked allowlist admits a bounded set",
                "uids %s — %s" % (live.get("uids"), live.get("reason")))
@@ -1764,7 +1783,7 @@ def main():
         # recipients cannot prove the allowlist held; these are the ids themselves.
         allow_uids = live.get("uids") or []
         if live.get("mode") == "all":
-            pass                       # already red above
+            pass   # under a decision-backed 'all', every due member is allowed by definition
         else:
             strangers = []
             for cad, ids in (d.get("recipient_ids") or {}).items():

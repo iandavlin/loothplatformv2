@@ -97,5 +97,17 @@ return array(
 	 * The gate asserts this file does not contain it. Setting it is a separate, visible,
 	 * reviewable one-line diff and is Ian's decision, not a lane's.
 	 */
-	'allowlist' => '1:ian.davlin@gmail.com',
+	/* ── GENERAL RELEASE, 2026-08-08 ──────────────────────────────────────────────
+	 * Ian ruled "widen to all members" on 8/3 and confirmed the flip on 8/8 after the
+	 * pre-flight lifecycle passed on dev2 under this exact value: a never-touched
+	 * member resolves cadence 'daily' (his 8/8 ruling), their FIRST event is delivered
+	 * instantly and enrols them, their second is suppressed into the daily roundup,
+	 * and the resolver returns them due. docs/IAN-RULINGS-2026-08-03.md §4 is the
+	 * recorded decision — the gate now REQUIRES that ruling to exist for this value
+	 * to be green, so the licence and the config cannot drift apart.
+	 *
+	 * Blast radius at flip time, measured: 381 members hold topic subscriptions; each
+	 * gets ≤1 roundup/day, ≤500/run, allowlist re-checked at the send layer. Kill is
+	 * 'enabled' => false, arriving by pull. */
+	'allowlist' => 'all-members',
 );
