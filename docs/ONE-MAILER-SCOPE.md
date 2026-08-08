@@ -292,12 +292,28 @@ comment calls it *"the same lie in a new costume"*.
   72545, 72565) are all before it; the three he was double-mailed are all after it.
   Six replies, three each side, boundary exact.
 
-**Not proven — and I am not going to guess it into the record:** the mechanism. The
-`f0943d6` diff is behaviour-identical for a member who already holds a cadence and a
-watermark, so the commit that landed at the boundary does not explain the change by
-inspection. The remaining candidate worth investigating first is that BB sends this mail
-from its **background updater** (a separate loopback request — the suppression comment
-already flags this), and the dev2 probe exercised the WP-CLI context, not that one.
+**Not proven, and deliberately not guessed:** the mechanism. Seven candidates were
+tested and **all seven are refuted**. Recorded individually so the next person does not
+re-run them:
+
+| # | hypothesis | verdict | evidence |
+|---|---|---|---|
+| 1 | plain logic bug in `lg_fd_suppress_instant` | **refuted** | dev2 probe against the real DB: `ENABLED true / allowed true / cadence weekly / hooked at 10 / FILTER RESULT false` |
+| 2 | the filter does not fire in BB's **background updater** (the comment's own caveat) | **refuted** | reproduced the real chain on dev2 — `bbp_notify_topic_subscribers()` on a live reply, 2 subscribers → `BACKGROUND`, then `handle()` invoked directly. Witness at p99: `recipient=4 send_mail=true` → `wp_mail` fired; `recipient=1 send_mail=false` → no mail. **Suppression works there, and the non-allowlisted control still got mailed.** |
+| 3 | per-user BB notification preference | **refuted** | Ian holds no `notification_*` usermeta at all; `bb_is_notification_enabled` falls through to enabled |
+| 4 | `f0943d6` (the commit at the boundary) changed suppression | **refuted** | the diff is behaviour-identical for a member already holding a cadence and a watermark |
+| 5 | tracked config unreadable by the FPM user → fail-closed `enabled=false` | **refuted** | `namei -l` on live: `/home/ubuntu` is `drwxr-x--x`, which grants traversal, and every component below is world-readable. Confirmed independently by #7. |
+| 6 | a second mu-plugin re-enabling the mail | **refuted** | only `lg-discussion-unsub.php` mentions the filter on live, and only in a comment; it hooks `bp_get_email` / `bp_email_set_tokens` / `template_redirect` |
+| 7 | live is running a different build than the one read here | **refuted** | `md5sum` of live's deployed `lg-follow-digest.php` == local `0e80c5b` == local `HEAD`: `16b88fab23c1a552fc91ba3ca60205b6` |
+
+Live's `debug.log` is current (380 lines across 08-06/08-07) and other mu-plugins log to
+it, yet it contains **zero** `[lg-fd]` lines across 04-Jul → 08-Aug. `lg_fd_config()`
+logs loudly on an unreadable config, so that silence is what independently kills #5.
+
+What is left is what read-only access cannot reach: live's own execution of that filter.
+The next step is instrumentation, not more inference — a temporary `error_log()` in
+`lg_fd_suppress_instant` recording `(recipient, cadence, allowed, returned)` would name
+the cause on the first reply that lands. That is a live deploy and therefore Ian's.
 
 **Consequence for widening:** at allowlist = Ian, this is one person getting three
 duplicate emails. At `all-members` it is the same defect across 381. **Widening should
