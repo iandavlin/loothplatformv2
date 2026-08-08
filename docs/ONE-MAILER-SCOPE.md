@@ -8,22 +8,32 @@ Everything below was measured on **live, read-only, 2026-08-08**. Code paths wer
 in the deployed BuddyBoss 2.20.0 tree on dev2 (same version as live). Where a number
 comes from an earlier session it is marked as such and not re-derived.
 
-Extends `docs/IAN-RULINGS-2026-08-03.md` §4. It does not restart that project.
+Extends `docs/IAN-RULINGS-2026-08-03.md` §4 and §5. It does not restart that project.
+
+⚠️ Ian ran the group-sub sweep (ruling 5) partway through this work. §4 is written
+against the **post-sweep** state and the draft SQL that preceded it has been removed —
+it would have trampled his decision to keep the regional groups.
 
 ---
 
 ## 0. The headline, before the detail
 
-Three things that were assumed going in turned out to be wrong, and all three make the
-job **smaller**:
+Four things that were assumed going in turned out to be wrong. Three make the job
+**smaller**; the fourth is the one that needs Ian:
 
-1. **BuddyBoss's group mailer is already dead in its main leg** — not by BB config, but
-   by our own `lg-discussion-group-gate.php`. That is why 13,032 group subscriptions
-   have produced no mail.
+1. **BuddyBoss's group mailer was already dead in its main leg before the sweep** — not
+   by BB config, but by our own `lg-discussion-group-gate.php`. That is why 13,032 group
+   subscriptions had produced no mail in the entire logged window.
 2. **The "84% delivery" gap is an artifact**, not a leak. Nobody is silently unmailed.
    The real reconciliation is 22 matched / 3 / 4, and every one of the 7 is explained.
-3. **But we found a real double-send**, and it hit the one member the follow-digest is
-   switched on for. That is a blocker for widening, and it is §5.
+3. **We found a real double-send**, and it hit the one member the follow-digest is
+   switched on for. That is a blocker for widening, and it is §5. Seven candidate
+   mechanisms were tested and all seven are refuted.
+4. **⚠️ What the sweep KEPT is probably not what it looks like.** 3,735 subscriptions
+   across 15 groups were deliberately left armed, but per §3 the only thing they can
+   still deliver is the group *activity-update* email — the discussion leg is dead for
+   every group. One activity update in Tri State Looths mails **853 people** who never
+   chose it. §4 lays out the two coherent options.
 
 ---
 
@@ -158,56 +168,109 @@ Rare, but real, and members can do it — the `activity` component is active. Th
 predates the email log entirely, so **this path has never been observed either way.** I
 am not claiming it is broken and I am not claiming it works.
 
-What I am claiming is the shape of the risk: **one group activity update in Repair And
-Restoration mails 1,830 people, and the only thing standing in the way is that nobody
-has happened to post one since 30 April.**
+What I am claiming is the shape of the risk. Before ruling 5's sweep it was: *one group
+activity update in Repair And Restoration mails 1,830 people, and the only thing standing
+in the way is that nobody has happened to post one since 30 April.*
+
+**The sweep removed that for the five layout groups and left it standing for the fifteen
+kept ones.** Post-sweep the same sentence reads: one activity update in Tri State Looths
+(NYC) mails 853 people. Smaller, still ungated, and now the largest unreviewed email
+surface on the platform — which is why §4 asks Ian to decide about it rather than
+treating the sweep as the end of the job.
 
 ---
 
-## 4. DELIVERABLE 1, RE-SCOPED — the sweep is enough; do not build the bridge-breaker
+## 4. DELIVERABLE 1 — the sweep RAN while this was being written. Here is what is left.
 
-Ian deactivated `bp-auto-group-join` on live himself (confirmed: absent from
-`active_plugins`, 38 plugins remain). That kills the registration firehose — a new
-member no longer gets 12 memberships and 12 subscriptions on day one.
+`docs/IAN-RULINGS-2026-08-03.md` §5 records it: Ian deactivated `bp-auto-group-join`
+himself, then swept the **five forum-layout groups** — 9,297 subscriptions to status 0 —
+and **kept the regional Looths, Jannies, Partners and chat groups by explicit
+instruction**. Verified independently here over `live-ro`, 2026-08-08:
 
-**Recommendation: run the sweep. Do NOT build the join-veto mu-plugin.** Reasons, in
-order of weight:
+```
+type='group'   status=0   9,297 rows / 1,830 members     <- swept
+type='group'   status=1   3,735 rows / 1,007 members     <- KEPT, and still armed
+wp_lg_group_unsub_20260808                9,297 rows     <- the rollback set, intact
+wp_bp_groups_members (confirmed)         12,877 rows     <- untouched, layout survives
+```
 
-1. **The veto does nothing about the 13,032 rows that already exist**, and those rows
-   are the entire risk in §3.2. It only prevents new ones.
-2. **The refill is now small.** Weekly new group-subscription rows over the last ten
-   weeks ran 24–180, but always in multiples of 12 across 2–15 users — the auto-join
-   signature. With auto-join off, what remains is manual joins only.
-3. **The sweep already closes leg B.** `bb_send_notifications_to_subscribers()` resolves
-   recipients with `bb_get_subscription_users([... 'status' => true])`, so a `status=0`
-   row is invisible to the sender. Setting status 0 disarms the blast directly.
-4. It is one `UPDATE` Ian runs once, versus a new mu-plugin with a flag, a gate, a
-   red-first proof and a deploy coupling — for a strictly smaller effect.
+**The sweep SQL that was drafted here has been deleted rather than left in place.** It
+swept all 13,032 and would have trampled a decision Ian had already taken. Anyone
+needing the shape of that statement should read ruling 5 and
+`wp_lg_group_unsub_20260808`, not this file.
 
-### The one thing the sweep does not do: it decays
+### So: does the bridge-breaker still need building? **No — and it never was the fix.**
 
-Every future manual group join re-creates a `status=1` row. If Ian wants group mail dead
-*permanently* rather than dead *today* — and his wording says he does — the durable
-version is **not** the originally-charted join-veto. It is a ~15-line tracked mu-plugin
-hooking `bb_send_subscribed_group_email_notifications` and returning `false`, which:
+The join-veto mu-plugin would only stop *new* subscriptions. The risk was always the
+rows already there, and 9,297 of them are now disarmed by one `UPDATE`. Nothing in the
+original D1 build would have improved on that.
 
-- kills group email at the send seam regardless of what the subscription rows say, so it
-  cannot decay;
-- covers **both** legs, including the ungated activity leg;
-- leaves the bell alone (`bb_send_subscribed_group_notifications`, without `_email_`, is
-  a separate filter) — same split Ian chose for replies;
-- changes no routing. Filtering `bb_enable_group_subscriptions` to false would look
-  tempting and is **wrong**: it flips the §1 if/else, so group-forum discussions would
-  start mailing forum subscribers instead of nobody. That is more mail, not less.
+### ⚠️ But what Ian kept is probably not what he thinks he kept
 
-I have not built it. It is a follow-up if Ian wants it, and it is genuinely small.
+This is the finding worth his attention, and it follows from §3 rather than from the
+sweep. The 3,735 armed rows are spread across 15 groups:
 
-### ✅ THE SWEEP IS PROVEN TO DISARM THE MAILER — not inferred from the code
+| group | armed subs | | group | armed subs |
+|---|---:|---|---|---:|
+| 38 Tri State Looths (NYC) | 853 | | 21 General Chat | 97 |
+| 39 SoCal Looths | 852 | | 24 Dank Memes | 53 |
+| 42 Looth Troop PNW | 366 | | 22 Music | 35 |
+| 41 DMV Looths | 365 | | 23 Charla General | 14 |
+| 40 SW Ontario Looths | 363 | | 47 Ohio Local Looths | 11 |
+| 45 Middle Tennessee Looths | 360 | | 43 Looths of Ireland | 10 |
+| 46 Basque Country Looths | 349 | | 44 Looth Group Partners | 5 |
+| | | | 36 The Jannies | 2 |
 
-Ian is being asked to `UPDATE` 13,032 rows on the strength of "`status=0` makes the
-sender blind to them". That claim was demonstrated on dev2 rather than read off the
-source, using group 36 (2 subscribers) and counting **queued background jobs**, which is
-the dispatcher's actual output and needs no email template to render:
+Keeping a group subscription reads as "these members can still be told about activity in
+their regional group". **It does not currently mean that.** Per §3, the group type has
+two legs, and for *every* group on the platform:
+
+- **the discussion leg is dead** — `lg-discussion-group-gate.php` returns an empty
+  recipient list for every group, because its allow-list is empty on purpose. So a new
+  discussion in Tri State Looths notifies nobody, kept subscription or not.
+- **the activity leg is live and ungated** — `bp_groups_posted_update` reaches the
+  dispatcher directly.
+
+So what those 3,735 rows actually buy is **exactly one thing: the group activity-update
+email**. Not discussions. One activity update in Tri State Looths mails **853 people**,
+none of whom chose the subscription (they were auto-joined), and that is the largest
+single unreviewed email surface left on the platform.
+
+**Ian should decide knowing that.** Two coherent options, and this lane recommends the
+first:
+
+1. **Sweep the remainder too.** It makes the kept groups consistent with the swept ones,
+   and costs nothing that is currently working — because nothing currently works through
+   them. Same statement shape as ruling 5's, same reversibility, new backup table.
+2. **Keep them and make them mean something** — i.e. add the regional groups' type slug
+   to `lg_discussion_group_allow()` so the discussion leg turns on for them. That is a
+   product decision to start mailing ~850 people per regional discussion, and it should
+   be taken deliberately, never as a side effect of a lane editing that allow-list.
+
+What must not happen is the current state persisting *unexamined*, where the kept rows
+look like a considered exception but deliver only the one notification nobody evaluated.
+
+### The residual decay, now small and precise
+
+`bp-auto-group-join` is off, so registration no longer refills anything. What remains is
+manual joins, and only into the 15 kept groups — every join still creates a `status=1`
+row via `BP_Groups_Member::save()`. If option 1 is taken, that decay is the argument for
+the durable version: a ~15-line tracked mu-plugin hooking
+`bb_send_subscribed_group_email_notifications` and returning `false`, which cannot decay
+because it kills the mail at the send seam rather than the subscription store. It also
+covers the ungated activity leg by construction.
+
+Do **not** reach for `bb_enable_group_subscriptions` instead. Filtering that to false
+flips the §1 exclusive if/else, so group-forum discussions would start mailing *forum*
+subscribers instead of nobody — more mail, not less.
+
+### ✅ THE MECHANISM THE SWEEP RELIES ON IS PROVEN
+
+Ruling 5's sweep, and any repeat of it, rests on "`status=0` makes the sender blind to
+those rows". That was inferred from `bb_send_notifications_to_subscribers()` resolving
+recipients with `status => true`. It is now demonstrated on dev2 — group 36, counting
+**queued background jobs**, which is the dispatcher's real output and needs no email
+template to render:
 
 ```
 ARMED    (status=1):  dispatcher sees 2 recipient(s) | queue 0 -> 1 | JOBS QUEUED: 1
@@ -215,69 +278,16 @@ SWEPT    (status=0):  dispatcher sees 0 recipient(s) | queue 1 -> 1 | JOBS QUEUE
 RESTORED (status=1):  dispatcher sees 2 recipient(s) | queue 1 -> 2 | JOBS QUEUED: 1
 ```
 
-The ARMED and RESTORED rows are the point: without them, "0 jobs queued" would be true
-on a box where the mailer is broken for unrelated reasons, and the absence assertion
-would be vacuous. dev2 was left exactly as found — both rows back to `status=1`, and the
-job rows this test created deleted.
+ARMED and RESTORED are the point: "0 jobs queued" is also true on a box where the mailer
+is broken for unrelated reasons, so the absence assertion is vacuous without proof the
+machinery is live. RESTORED additionally exercises the rollback direction. dev2 was left
+exactly as found.
 
-The test flushed the object cache between phases, deliberately and from the outset — BB
-caches subscription lookups and a raw `UPDATE` fires none of its invalidation hooks. So
-this run does **not** measure what happens without the flush; it is the reason the
-runbook below carries `wp cache flush` as a required step rather than a suggestion.
-
-### THE SWEEP — for Ian to run on live
-
-All live writes are Ian's. Counts verified 2026-08-08: **13,032 rows, 1,830 members,
-and zero `type='group'` rows currently at status 0** — so the snapshot below is an exact
-rollback set, not an approximation.
-
-Membership is untouched. This statement never names `wp_bp_groups_members`.
-
-```sql
--- 0. BEFORE — record these two numbers before doing anything.
-SELECT COUNT(*) FROM wp_bb_notifications_subscriptions WHERE type='group' AND status=1;  -- expect 13032
-SELECT COUNT(*) FROM wp_bb_notifications_subscriptions WHERE type='group' AND status=0;  -- expect 0
-
--- 1. SNAPSHOT the exact set being changed, so rollback cannot over-reach.
-CREATE TABLE lg_group_sub_sweep_20260808 AS
-  SELECT id FROM wp_bb_notifications_subscriptions WHERE type='group' AND status=1;
-SELECT COUNT(*) FROM lg_group_sub_sweep_20260808;   -- MUST equal 13032. Stop if it does not.
-
--- 2. THE SWEEP.
-UPDATE wp_bb_notifications_subscriptions s
-  JOIN lg_group_sub_sweep_20260808 k ON k.id = s.id
-   SET s.status = 0;
-
--- 3. AFTER — expect status 0 => 13032, and NO status 1 rows for type='group'.
-SELECT status, COUNT(*) FROM wp_bb_notifications_subscriptions WHERE type='group' GROUP BY status;
-
--- 4. Untouched-control: these two must be identical to before.
-SELECT type, status, COUNT(*) FROM wp_bb_notifications_subscriptions
- WHERE type IN ('topic','forum') GROUP BY type, status;   -- expect topic/1/1515, forum/1/46
-```
-
-**Then flush the object cache**, as `looth-dev` on live:
-
-```bash
-wp cache flush
-```
-
-BB invalidates its subscription cache on `bb_create_subscription`, which a raw `UPDATE`
-does not fire. Skipping this makes the sweep look like it did nothing.
-
-**Rollback** — restores exactly the rows the sweep changed and nothing else:
-
-```sql
-UPDATE wp_bb_notifications_subscriptions s
-  JOIN lg_group_sub_sweep_20260808 k ON k.id = s.id
-   SET s.status = 1;
--- then: wp cache flush
-```
-
-Nothing is deleted, so who-was-subscribed history survives in full. Keep
-`lg_group_sub_sweep_20260808` until Ian is satisfied; it is 13,032 integers.
-
----
+The test flushed the object cache between phases, deliberately and from the outset, so
+it does **not** measure the un-flushed behaviour. That is why any repeat sweep must run
+`wp cache flush` afterwards as `looth-dev`: BB caches subscription lookups and a raw
+`UPDATE` fires none of its invalidation hooks. Skipping it makes a sweep look like it did
+nothing.
 
 ## 5. ⚠️ FINDING — the follow-digest double-sent to the one member it is on for
 
@@ -394,15 +404,19 @@ re-dispatch. C's watermark design cannot do this — the watermark only advances
 
 ## 7. Sequence, if Ian approves
 
-1. **Sweep** the 13,032 group subscriptions (§4). Immediate, reversible, closes the
-   ungated activity leg. Ian runs it.
+0. ~~Sweep the group subscriptions~~ — **DONE**, ruling 5. 9,297 rows disarmed.
+1. **Decide what to do about the 3,735 kept rows** (§4): sweep them too, or turn the
+   discussion leg on for those groups on purpose. Doing neither leaves 853 people
+   reachable by the one notification nobody evaluated. Ian's call, and it is the only
+   item here that is his rather than a lane's.
 2. **Understand the §5 double-send** before widening the follow-digest allowlist. Blocks
-   ruling 4.
+   ruling 4, and blocks it harder than the instant-vs-weekly question does.
 3. **Grow C to cover `forum`** subscriptions — the 38 explicit opt-ins (§2.2).
 4. *Then* B has nothing left to send, and switching it off is a formality rather than a
    cutover.
 
-Steps 1 and 3 are independent of each other and of step 2.
+Steps 1, 2 and 3 are mutually independent. 3 is the only one that is a build, and it is
+small; 1 is a decision plus one statement; 2 needs a live deploy to instrument.
 
 ---
 
