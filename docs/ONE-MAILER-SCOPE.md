@@ -398,7 +398,14 @@ Matching pair-by-pair on recipient address and timestamp: **22 matched, 3 owed-n
   daily roundups carry them. Not a defect. (The same three are the "before" half of §5.)
 - **3 sent-not-owed** — all `fradenburgh@gmail.com` (user 160), all on topic 72472, all
   on 08-02/08-03. He holds no subscription to 72472 **now**, but he was mailed then and
-  later posted in the thread himself. He unsubscribed. Snapshot drift, not a leak.
+  later posted in the thread himself.
+
+  ⚠️ **I first wrote this up as "he unsubscribed". That was wrong, and the truth is a
+  live defect** — see §8. He was mailed as a subscriber of 72472 through 08-03 18:52
+  local, replied himself at 08-04 02:17 UTC, and the reply is what removed his
+  subscription. Not snapshot drift and not a member decision: our reply path strips the
+  subscription of anyone who replies to a discussion they were following. The
+  reconciliation arithmetic is unchanged; the explanation for these three is not.
 - **1 sent-not-owed** — **a genuine duplicate send.** `fsmpt` 10818 and 10819, to
   `wgbluetone1@gmail.com`, 50 seconds apart, **byte-identical** (same length 11,854, same
   MD5 `4391d18f…`), for a single reply (72592, the only reply in that window). BB sent
@@ -454,3 +461,74 @@ small; 1 is a decision plus one statement; 2 needs a live deploy to instrument.
 - The membership row is inserted **before** `bb_create_group_subscription()` is called
   (`class-bp-groups-member.php:306` vs `:321`), so vetoing the subscription can never
   affect membership.
+
+
+---
+
+## 8. ⚠️ FINDING — replying through our own box UNSUBSCRIBES you
+
+Ruling 6 flags this as a hazard for the implementer and says *"Our endpoint evidently
+never executes that block (repliers kept their subs all summer)"*. **That parenthetical
+is wrong. The block executes, and it has been firing all along.**
+
+Proven in-process on dev2 against the deployed code, using the exact call
+`bb-mirror/api/v0/reply.php:485-491` makes:
+
+```
+BEFORE  subscribed=true
+reply created id=72429
+AFTER   subscribed=false
+>>> HAZARD CONFIRMED: replying through our path UNSUBSCRIBED an existing subscriber.
+```
+
+**The chain, all in the deployed tree.** `reply.php` posts in-process to
+`/buddyboss/v1/reply`; `create_item()` fires `do_action('bbp_new_reply')`; and
+`bbp_update_reply` is hooked to that action at priority 10
+(`bp-forums/core/actions.php:177`). `bbp_update_reply:996-1008` then runs:
+
+```php
+$subscribed = bbp_is_user_subscribed( $author_id, $topic_id );
+$subscheck  = ( ! empty($_POST['bbp_topic_subscription']) && 'bbp_subscribe' === $_POST['bbp_topic_subscription'] );
+if ( true === $subscribed && false === $subscheck ) { bbp_remove_user_subscription( $author_id, $topic_id ); }
+```
+
+We send no `subscribe` param, so `class-bp-rest-reply-endpoint.php:2748` never sets
+`$_POST['bbp_topic_subscription']`, so `$subscheck` is false, so an existing subscriber
+is removed. **Editing a discussion does the same thing** — confirmed separately through
+the composer's topic route (`/buddyboss/v1/topics/<id>`), which carries the identical
+block at `class-bp-rest-topics-endpoint.php:1622`.
+
+⚠️ The first attempt at that second test errored on a missing `parent` param and
+reported "hazard did NOT fire". An errored request proves nothing; it was re-run with
+the param and *then* confirmed. Recorded because the false negative was convincing.
+
+### Why this matters more than the missing checkbox
+
+Ruling 6's framing is that posting stopped *subscribing* people. It is worse: posting
+*unsubscribes* them. Participation is what stops you hearing about the thread — the
+exact inverse of the loop the ruling restores. It also erodes the existing 381, silently,
+every time one of them takes part.
+
+**Live corroboration**, which I already had and had misread (§6): Neil Fradenburgh
+received the subscriber notifications for replies 72478/72511/72539 on topic 72472 —
+mail that goes *only* to `type='topic'` subscribers of that topic, so he provably held
+the row — then replied at 08-04 02:17 UTC and holds no row now.
+
+Aggregate, **suggestive but not conclusive** (there is no history table, so "no row now"
+is also the expected state for someone who never subscribed): repliers still holding a
+subscription to the topic they replied in ran **5/61 (8%)** since 07-25, against
+**161/523 (31%)** for Jan–May.
+
+### The design constraint it imposes on deliverable 4
+
+Ian has ruled ✉ **unticked** by default. The naive implementation of "unticked" is
+`subscribe: false` — and that is precisely what fires the removal branch. So:
+
+> **ticked ⇒ send `subscribe: true`. Unticked ⇒ send no `subscribe` field at all.**
+
+Unticking a follow box on one reply is not the same act as unfollowing a discussion; the
+🔔/✉ controls in the follow modal remain the deliberate way out. This is the assertion
+the hazard gate exists to hold, and it must be broken red-first before it is trusted.
+
+This is a live member-facing defect independent of deliverable 4's feature work, so the
+one-line repair could ship ahead of the checkbox if Ian wants it sooner.
