@@ -272,8 +272,25 @@ their subs all summer) — but any change that runs more of BB's save chain must
 against it: "an existing subscriber replying with the box unticked stays subscribed
 unless they untick it deliberately" needs to be asserted RED-FIRST.
 
+AMENDED SAME DAY — Ian: "Can we add bell and email to the composer?" So the
+composer and reply box carry BOTH follow controls, in the same 🔔/✉ vocabulary the
+follow modal and Manage Account already use — one visual language everywhere:
+
+  ✉  email follow — the ruled tick box, TICKED by default. Writes the
+     type='topic' subscription row the roundup reads.
+  🔔 bell follow — on-site notifications. Writes forums.topic_follow. Keeper set
+     the default TICKED as well (a poster almost certainly wants answers in their
+     bell, and it costs no email); the mock shows both defaults and Ian rules on
+     the drawing before anything ships.
+
+⚠️ Bell DELIVERY is only as good as the notification bridge, which is a known gap
+(BuddyBoss reply events under-reach profile_app.notifications — recap-notif-bridge
+lane, blocked on a ruling). The composer control writes the follow row correctly
+either way; do not let its gate claim bell notifications ARRIVE — that is the
+bridge's contract, not the composer's.
+
 Owner: one-mailer lane. Member-facing ⇒ flag OFF-default, both surfaces (new-topic
-composer + reply box), sub row must be the type='topic' row the roundup reads.
+composer + reply box), mock first at phone widths in both themes.
 
 ---
 
