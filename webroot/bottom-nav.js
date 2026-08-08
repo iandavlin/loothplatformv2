@@ -1051,6 +1051,17 @@
       case 'forum.reply_to_reply': return ntActors(n) + ' replied to your comment';
       case 'forum.mention':        return ntActors(n) + ' mentioned you in a discussion';
       case 'reaction.on_post':     return ntActors(n) + ' reacted to your post';
+      /* thread-follow §3.3, the fourth rung — wording copied VERBATIM from
+         social-modals.js:190 and it has to stay that way: "a discussion you follow",
+         not "your post", because this row only ever reaches someone who opted in and
+         is claimed last, after mention > reply_to_reply > reply_to_topic.
+         THIS CASE WAS MISSING FROM 2026-07-28 (when the type shipped) TO 2026-08-08.
+         The comment above claims this switch mirrors social-modals.js; it did not,
+         and `default:` renders a bare actor name with no sentence — which is what
+         both existing live rows looked like, one of them Ian's. Gated now by
+         tools/gates/notif-renderer-parity-gate.sh, which diffs the two type sets so
+         the next type to land cannot go out mobile-blind. */
+      case 'forum.followed_topic': return ntActors(n) + ' replied in a discussion you follow';
       default: return ntEsc(who);
     }
   }

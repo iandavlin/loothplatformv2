@@ -264,6 +264,25 @@ function lg_notify_topic_followers(int $topic_id): array
 {
     if ($topic_id < 1) return [];
 
+    $ids = array_merge(
+        lg_notify_topic_followers_native($topic_id),
+        lg_notify_topic_followers_bb($topic_id)
+    );
+    // Dedupe: a member may hold BOTH bits on the same topic, and leg 4 must push
+    // once per person. (The $notified set in lg_notify_on_reply would collapse a
+    // duplicate anyway, but returning a clean list keeps that the caller's dedup
+    // across LEGS rather than a cleanup for this one.)
+    return array_values(array_unique($ids));
+}
+
+/**
+ * The 🔔 bit in `forums.topic_follow` — our own store, written by the follow modal
+ * and (ruling 6) by the composer's ticked-by-default bell checkbox.
+ */
+function lg_notify_topic_followers_native(int $topic_id): array
+{
+    if ($topic_id < 1) return [];
+
     try {
         if (function_exists('bb_mirror_db')) {
             $pdo = bb_mirror_db(true);                    // reply.php path — reuse the configured connector
@@ -278,6 +297,65 @@ function lg_notify_topic_followers(int $topic_id): array
         return array_values(array_filter(array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN))));
     } catch (Throwable $e) {
         error_log('[lg-notify] follower lookup failed for topic ' . $topic_id . ': ' . $e->getMessage());
+        return [];
+    }
+}
+
+/** The tracked bridge config (platform/config/notify-bridge.php). Absent ⇒ all off. */
+function lg_notify_bridge_config(): array
+{
+    // CLI-only test seam, so bin/notif-followers-proof.php can exercise BOTH states
+    // in one run without editing the tracked file (a harness that mutates tracked
+    // config is one crash from being the outage). Refusing under any web SAPI means
+    // this can never become a request-time switch.
+    if (PHP_SAPI === 'cli' && isset($GLOBALS['lg_notify_bridge_config_test'])) {
+        return (array) $GLOBALS['lg_notify_bridge_config_test'];
+    }
+    static $cfg = null;
+    if ($cfg !== null) return $cfg;
+    $path = __DIR__ . '/../platform/config/notify-bridge.php';
+    $loaded = is_file($path) ? require $path : null;
+    return $cfg = is_array($loaded) ? $loaded : [];
+}
+
+/**
+ * BuddyBoss's own discussion subscribers — `wp_bb_notifications_subscriptions`,
+ * type='topic', status=1. OFF by default; see platform/config/notify-bridge.php for
+ * the measurement that motivates it and the two questions that are Ian's to answer.
+ *
+ * WHY THIS IS A SEPARATE STORE AT ALL: `forums.topic_follow` is the 🔔 bit (Postgres,
+ * `looth` database) and this is the ✉ bit (MySQL, WP). Ruling 6 made them separate
+ * controls on purpose. Reading both here says "a discussion you asked to hear about
+ * rings your bell", whichever box the member happened to tick — it does not merge the
+ * stores and it writes nothing.
+ *
+ * ⚠️ status=1 IS LOAD-BEARING, NOT DECORATION. The 2026-08-08 group-sub sweep
+ * disarmed 9,297 subscriptions by setting status=0 rather than deleting them
+ * (IAN-RULINGS §5), precisely so it stays reversible. Dropping this predicate would
+ * resurrect every one of them as a bell recipient — the sweep undone through a side
+ * door. Asserted by bin/notif-followers-proof.php.
+ *
+ * Silent on failure, like every path in this file: a reply that posted must never
+ * fail because a follow store was unreachable.
+ */
+function lg_notify_topic_followers_bb(int $topic_id): array
+{
+    if ($topic_id < 1) return [];
+    if (empty(lg_notify_bridge_config()['bell_follows_bb_subscriptions'])) return [];
+
+    global $wpdb;
+    if (!isset($wpdb) || !is_object($wpdb)) return [];
+
+    try {
+        $table = $wpdb->prefix . 'bb_notifications_subscriptions';
+        $rows  = $wpdb->get_col($wpdb->prepare(
+            "SELECT user_id FROM `{$table}` WHERE type = 'topic' AND item_id = %d AND status = 1",
+            $topic_id
+        ));
+        if (!is_array($rows)) return [];
+        return array_values(array_filter(array_map('intval', $rows)));
+    } catch (Throwable $e) {
+        error_log('[lg-notify] BB subscriber lookup failed for topic ' . $topic_id . ': ' . $e->getMessage());
         return [];
     }
 }
