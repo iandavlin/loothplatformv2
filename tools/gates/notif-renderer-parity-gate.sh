@@ -46,12 +46,24 @@ done
 required=$(awk "
   /public const TYPES/,/\];/     { print }
   /public const HUB_TYPES/,/\];/ { print }
-" "$MODEL" | grep -oE "'[a-z]+(\.[a-z_]+)?'" | tr -d "'" | sort -u)
+" "$MODEL" | grep -oE "'[a-z][a-z_]*(\.[a-z_]+)?'" | tr -d "'" | sort -u)
 
 [ -n "$required" ] || { echo "CANNOT RUN: no types parsed from $MODEL"; exit 2; }
+echo "required (from Notifications.php): $(echo "$required" | paste -sd' ' -)"
+
+# ── THE PARSE MUST NOT SILENTLY UNDER-ASSERT ────────────────────────────────
+# This gate shipped for about an hour with `[a-z]+` as the first segment, which
+# does not match an underscore — so `connection_request` and `connection_accept`
+# were dropped from `required` and NEVER CHECKED, while the gate printed a
+# confident GREEN. A gate that asserts less than it claims is worse than no gate.
+#
+# The cross-check is mutual and needs no hardcoded list: anything either renderer
+# has a case for, but the model parse does not contain, means one of the two is
+# wrong — an incomplete parse here, or a stale type in a renderer. Both are worth
+# stopping for, and this cannot rot the way a hardcoded floor would.
 
 # Rendered set: case labels only. Comments cannot produce `case 'x':`.
-cases_in() { grep -oE "case '[a-z]+(\.[a-z_]+)?':" "$1" | sed "s/case '//; s/'://" | sort -u; }
+cases_in() { grep -oE "case '[a-z][a-z_]*(\.[a-z_]+)?':" "$1" | sed "s/case '//; s/'://" | sort -u; }
 
 if [ "${1:-}" = "--prove" ]; then
   # RED-FIRST against the real defect, with no file mutated: the mobile renderer as
@@ -74,6 +86,14 @@ if [ "${1:-}" = "--prove" ]; then
 fi
 
 rc=0
+stray=$(comm -13 <(echo "$required") <(cat <(cases_in "$DESKTOP") <(cases_in "$MOBILE") | sort -u))
+if [ -n "$stray" ]; then
+  rc=1
+  echo "FAIL a renderer handles types the model parse does not list:"
+  echo "$stray" | sed 's/^/       /'
+  echo "       => either the parse above is incomplete, or a renderer carries a dead type."
+fi
+
 for pair in "desktop:$DESKTOP" "mobile:$MOBILE"; do
   name="${pair%%:*}"; file="${pair#*:}"
   missing=$(comm -23 <(echo "$required") <(cases_in "$file"))
@@ -85,6 +105,28 @@ for pair in "desktop:$DESKTOP" "mobile:$MOBILE"; do
     echo "PASS $name renders every storable type"
   fi
 done
+
+# ── THE GOAL, not the proxy ──────────────────────────────────────────────────
+# A `case` label is only EVIDENCE of a sentence. `case 'forum.x': return esc(who);`
+# would satisfy every check above and still be exactly the defect this gate exists
+# for. So execute each label function for real and look at what a member would read.
+if command -v node >/dev/null 2>&1; then
+  types=$(echo "$required" | paste -sd, -)
+  echo "--- executing the real label functions ---"
+  for spec in "desktop:$DESKTOP:notifText:notifActors:esc" "mobile:$MOBILE:ntText:ntActors:ntEsc"; do
+    IFS=: read -r nm f fn af ef <<< "$spec"
+    echo "  [$nm]"
+    node "$(dirname "$0")/lib/notif-text-exec.js" "$f" "$fn" "$af" "$ef" "$types"
+    case $? in
+      0) ;;
+      2) echo "  CANNOT RUN: could not execute $nm's $fn"; exit 2 ;;
+      *) rc=1 ;;
+    esac
+  done
+else
+  echo "CANNOT RUN: node is not on PATH (needed to execute the label functions)"
+  exit 2
+fi
 
 # And the two must agree with each other, so one surface cannot quietly grow a type
 # the other lacks even when both cover the model.
