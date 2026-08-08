@@ -202,6 +202,29 @@ hooking `bb_send_subscribed_group_email_notifications` and returning `false`, wh
 
 I have not built it. It is a follow-up if Ian wants it, and it is genuinely small.
 
+### ✅ THE SWEEP IS PROVEN TO DISARM THE MAILER — not inferred from the code
+
+Ian is being asked to `UPDATE` 13,032 rows on the strength of "`status=0` makes the
+sender blind to them". That claim was demonstrated on dev2 rather than read off the
+source, using group 36 (2 subscribers) and counting **queued background jobs**, which is
+the dispatcher's actual output and needs no email template to render:
+
+```
+ARMED    (status=1):  dispatcher sees 2 recipient(s) | queue 0 -> 1 | JOBS QUEUED: 1
+SWEPT    (status=0):  dispatcher sees 0 recipient(s) | queue 1 -> 1 | JOBS QUEUED: 0
+RESTORED (status=1):  dispatcher sees 2 recipient(s) | queue 1 -> 2 | JOBS QUEUED: 1
+```
+
+The ARMED and RESTORED rows are the point: without them, "0 jobs queued" would be true
+on a box where the mailer is broken for unrelated reasons, and the absence assertion
+would be vacuous. dev2 was left exactly as found — both rows back to `status=1`, and the
+job rows this test created deleted.
+
+The test flushed the object cache between phases, deliberately and from the outset — BB
+caches subscription lookups and a raw `UPDATE` fires none of its invalidation hooks. So
+this run does **not** measure what happens without the flush; it is the reason the
+runbook below carries `wp cache flush` as a required step rather than a suggestion.
+
 ### THE SWEEP — for Ian to run on live
 
 All live writes are Ian's. Counts verified 2026-08-08: **13,032 rows, 1,830 members,
