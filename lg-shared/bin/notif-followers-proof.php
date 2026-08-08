@@ -169,5 +169,75 @@ ok('the tracked config has bell_follows_bb_subscriptions OFF',
    'it is ON — that needs Ian, see platform/config/notify-bridge.php');
 ok('and with it off, leg 4 ignores BuddyBoss', lg_notify_topic_followers_bb($topic) === []);
 
+phase('PHASE 6 — TRIPWIRE: a held reply that is later APPROVED rings nothing');
+// THE DEFECT, stated so it cannot be rediscovered as new. reply.php returns
+// `reply_out(202, …)` for a pending/spam reply BEFORE it reaches the bell call, which
+// is correct — an unpublished reply must not notify anyone. But approving it later is
+// a STATUS TRANSITION: it goes through neither reply.php nor `bbp_new_reply`, so the
+// notification is not deferred, it is lost permanently.
+//
+// It is dormant on live today — moderation is disarmed and no reply has ever been
+// held — so this lane did NOT ship a fix. Adding an untested hook to the live reply
+// path for zero present benefit, with a real double-fire risk, is the worse trade.
+//
+// What ships instead is this: the structural fact is asserted on the CODE every run,
+// and the moderation SETTINGS decide whether that fact is tolerable. Arm moderation
+// and this gate goes RED, which is exactly when the fix becomes worth its risk.
+// A comment would not have done that — a comment is not an assertion.
+$replyPhp = @file_get_contents(dirname(__DIR__, 2) . '/bb-mirror/api/v0/reply.php');
+if (!is_string($replyPhp) || $replyPhp === '') {
+    echo "  SKIP  reply.php unreadable from here\n";
+} else {
+    $held = strpos($replyPhp, "in_array(\$reply->post_status, ['pending', 'spam'], true)");
+    $bell = strpos($replyPhp, 'lg_notify_on_reply(');
+    ok('the early-return for held replies still precedes the bell call',
+       $held !== false && $bell !== false && $held < $bell,
+       'if this moved, re-read the tripwire below — it may no longer describe the code');
+}
+
+// Is an approval path present anywhere? If someone builds one, this tripwire relaxes
+// on its own rather than needing to be remembered.
+$bridgeSrc = (string) @file_get_contents(dirname(__DIR__) . '/notify-bridge.php');
+$syncSrc   = (string) @file_get_contents(dirname(__DIR__, 2) . '/platform/mu-plugins/bb-mirror-sync.php');
+$hasApproval = (strpos($bridgeSrc . $syncSrc, 'bbp_approved_reply') !== false)
+            || (strpos($syncSrc, 'transition_post_status') !== false);
+
+$moderationArmed = static function (): array {
+    $why = [];
+    foreach (['moderation_keys', 'disallowed_keys', 'blacklist_keys'] as $opt) {
+        if (trim((string) get_option($opt, '')) !== '') $why[] = $opt;
+    }
+    if ((string) get_option('comment_moderation', '') === '1') $why[] = 'comment_moderation';
+    return $why;
+};
+$why   = $moderationArmed();
+$modOn = $why !== [];
+
+if ($hasApproval) {
+    ok('an approval → bell path exists, so moderation is safe to arm', true);
+} elseif (!$modOn) {
+    ok('moderation is DISARMED, so the approval gap cannot bite today', true);
+    echo "        (no approval hook exists — arming moderation will turn this RED, by design)\n";
+} else {
+    ok('moderation is ARMED but nothing rings the bell on approval', false,
+       'armed by: ' . implode(', ', $why) . ' — held replies will notify NOBODY, ever. '
+       . 'Add an approval hook (bbp_approved_reply / transition_post_status pending→publish) '
+       . 'calling lg_notify_on_reply, and guard it against double-firing.');
+}
+
+// RED-FIRST for the tripwire itself. A tripwire that has never been shown to trip is
+// decoration — and this one is GREEN precisely because the condition it watches for is
+// absent, which is the exact shape of an assertion that quietly measures nothing
+// (feedback-absence-assertion-needs-liveness). Armed with a FILTER, so no option is
+// written and there is nothing to clean up if this process dies.
+$arm = static fn($v) => 'spamword';
+add_filter('pre_option_moderation_keys', $arm);
+$armedWhy = $moderationArmed();
+remove_filter('pre_option_moderation_keys', $arm);
+ok('RED-FIRST: with moderation armed, the tripwire detects it',
+   in_array('moderation_keys', $armedWhy, true),
+   'the tripwire cannot see an armed moderation setting — it would never fire');
+ok('…and it reads DISARMED again once the filter is removed', $moderationArmed() === $why);
+
 echo "\n" . ($fail ? "RED — $fail of $did assertions failed\n" : "GREEN — all $did assertions passed\n");
 exit($fail ? 1 : 0);
