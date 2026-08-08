@@ -249,6 +249,34 @@ compatibility one. Still Ian's call, still open.
 
 ---
 
+## 6. Post→follow: RESTORE the ticked-by-default checkbox — Ian, 2026-08-08
+
+THE FINDING THAT FORCED THE QUESTION. Posting stopped subscribing members in June:
+194 June replies → 4 new subscriptions, 138 July replies → 0. Not a disabled
+setting (_bbp_enable_subscriptions is still 1) — BB's "auto"-subscribe was only ever
+a TICKED-BY-DEFAULT CHECKBOX on its native reply form (replies/functions.php:996
+reads $_POST['bbp_topic_subscription']). Our composer replaced that form in June and
+sends no such field, so the ask-a-question→get-told-when-answered loop has been
+severed for every post made through our path since. This is also the real anatomy of
+the "71% never chose email" cohort: they didn't tick a box, they didn't UN-tick it.
+
+RULING: our composer and reply box get a "Follow this discussion" checkbox, ticked
+by default — restoring pre-June behaviour, now feeding the ROUNDUP (daily default,
+one email/day max, Manage Account control to silence). Chosen over author-only
+auto-follow and over unticked-by-default.
+
+⚠️ HAZARD FOR THE IMPLEMENTER, verified in BB source: on BB's own save path, an
+already-subscribed member replying WITHOUT the field is UNSUBSCRIBED (the first
+branch at :1001). Our endpoint evidently never executes that block (repliers kept
+their subs all summer) — but any change that runs more of BB's save chain must gate
+against it: "an existing subscriber replying with the box unticked stays subscribed
+unless they untick it deliberately" needs to be asserted RED-FIRST.
+
+Owner: one-mailer lane. Member-facing ⇒ flag OFF-default, both surfaces (new-topic
+composer + reply box), sub row must be the type='topic' row the roundup reads.
+
+---
+
 ## Standing note on gate colour
 
 `tools/gates/run-all.sh` currently ends RED on a **pre-existing** failure:

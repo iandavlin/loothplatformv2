@@ -284,7 +284,14 @@ function lg_fd_cadences(): array {
  * 'weekly' inverts it. The quiet option is the one you get by doing nothing, and instant
  * is available to anyone who asks for it on the Manage Account control.
  */
-const LG_FD_DEFAULT_CADENCE = 'weekly';
+/* 'daily' IS IAN'S RULING, 2026-08-08, and it replaced two earlier candidates:
+ * 'instant' (keeper's recommendation — rejected: "I don't like instant being
+ * default") and 'weekly' (Ian's own 8/3 ruling, which rested on keeper's wrong
+ * claim that an instant default would cause an email blast; it cannot — see
+ * docs/IAN-RULINGS-2026-08-03.md). Daily is the deliberate middle: an unanswered
+ * question waits overnight, never a week, and nobody is buried per-reply unless
+ * they opt into instant on the Manage Account control. */
+const LG_FD_DEFAULT_CADENCE = 'daily';
 
 /**
  * A member's cadence, or LG_FD_DEFAULT_CADENCE if they have not chosen one.
@@ -562,8 +569,17 @@ function lg_fd_suppress_instant( $send_mail, $args ) {
 	 *
 	 * Seeding here rather than at follow time is deliberate: this is the exact moment
 	 * we take responsibility for a member's mail, so it is the moment the debt is
-	 * recorded. It writes at most once per member (both writes are absence-guarded). */
-	lg_fd_ensure_enrolled( $uid );
+	 * recorded. It writes at most once per member (both writes are absence-guarded).
+	 *
+	 * ⚠️ THE FIRST EVENT PASSES THROUGH, and the first draft suppressed it. The reply
+	 * that triggers enrolment happened milliseconds BEFORE the watermark stamp, and
+	 * lg_fd_items_for() selects strictly AFTER the watermark — so suppressing the
+	 * triggering mail meant it was never delivered by either system. At widening that
+	 * would have silently eaten the first notification for every enrolled member at
+	 * once (caught 2026-08-08, pre-flip). So: the member's LAST instant email doubles
+	 * as their enrolment — it is delivered normally, and batching owns everything from
+	 * the next event on. No seam, no lost mail. */
+	if ( lg_fd_ensure_enrolled( $uid ) ) { return $send_mail; }
 	return false;
 }
 
@@ -829,7 +845,8 @@ function lg_fd_flush( string $cadence, int $min_interval ): void {
 	                                        // run overlapping the next tick cannot double up
 
 	$sent = 0;
-	foreach ( lg_fd_due_recipients( $cadence ) as $uid ) {
+	$due  = lg_fd_due_recipients( $cadence );
+	foreach ( $due as $uid ) {
 		if ( $sent >= LG_FD_MAX_PER_RUN ) {
 			// Never truncate silently — a cap that says nothing reads as "covered
 			// everyone" when it did not.
@@ -839,7 +856,12 @@ function lg_fd_flush( string $cadence, int $min_interval ): void {
 		}
 		if ( lg_fd_send_one( $uid, $cadence ) ) { $sent++; }
 	}
-	if ( $sent ) { error_log( sprintf( '[lg-fd] %s flush: %d sent', $cadence, $sent ) ); }
+	/* EVERY flush logs, including zero-sent ones. The sent-only version made "ran and
+	 * found nothing" indistinguishable from "never ran", which cost a real hour of
+	 * diagnosis on 2026-08-08 — the 8/5 and 8/6 windows looked dead when they were
+	 * quiet. due vs sent also separates "nobody qualified" from "everyone's batch was
+	 * empty", which is the first question the morning after widening. */
+	error_log( sprintf( '[lg-fd] %s flush: %d due, %d sent', $cadence, count( $due ), $sent ) );
 }
 
 /**
