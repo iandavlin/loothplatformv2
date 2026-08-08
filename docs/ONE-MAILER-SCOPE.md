@@ -584,3 +584,71 @@ topic they replied in ran **5/61 (8%)** since 07-25 against **161/523 (31%)** fo
 Jan–May. It is consistent with erosion and it is *not* proof — "no row now" is also the
 expected state for someone who never subscribed. Anyone quoting a number for this
 should quote 1 (proven) and the 8%/31% shape, never a figure derived from the 381.
+
+---
+
+## 9. RULING 7 — the Weekly Recap, scoped to bell-only types
+
+Ian, 2026-08-08: the Weekly Recap survives, carrying **only notification types that have
+no email channel of their own**. That scoping dissolves the roundup-versus-recap
+overlap by construction rather than by a dedup rule — a type is in exactly one channel.
+
+*(Nothing was removed from this doc for it: the roundup/recap dedup problem was never in
+scope here. Recorded so "dropped from scope" is not read as a deletion that happened.)*
+
+### The inventory, measured — not recalled
+
+Every type the bell actually holds on live, against whether an email exists for it.
+Counts are the logged window, 2026-07-25 → 08-08, from `profile_app.notifications` and
+`wp_fsmpt_email_logs`:
+
+| type | notifs | emails | email channel | recap? |
+|---|---:|---:|---|---|
+| `connection_request` | 258 | **0** | `friends-request` template EXISTS but never fires | ✅ **bell-only** |
+| `reaction.on_post` | 71 | **0** | none — no template exists at all | ✅ **bell-only** |
+| `connection_accept` | 44 | **0** | `friends-request-accepted` exists, never fires | ✅ **bell-only** |
+| `forum.reply_to_reply` | 29 | — | `bbp-new-forum-reply` → the follow roundup | ❌ has email |
+| `forum.reply_to_topic` | 20 | — | `bbp-new-forum-reply` → the follow roundup | ❌ has email |
+| `forum.mention` | 7 | **2** | `new-mention` — and it demonstrably fires | ❌ has email |
+| `forum.followed_topic` | 2 | — | the follow roundup, by definition | ❌ has email |
+
+Those seven are the complete set: `lg-shared/notify-bridge.php` is the only pusher, and
+its five forum/reaction types plus profile-app's two connection types are everything the
+store holds.
+
+**So the recap's remit is three types: connection requests, connection accepts, and
+reactions.** Between them they are the *majority* of all bell traffic — 373 of 431 rows
+in the window — so a bell-only recap is not a rump. It is most of what members actually
+receive, and none of it reaches them by email today.
+
+### ⚠️ Two of the three are emailless by WIRING, not by design
+
+This distinction decides whether the list can be hardcoded, and it cannot.
+
+- **`reaction.on_post` is structurally emailless** — BuddyBoss has no reaction email
+  template. Nothing could send one without new work.
+- **The connection types are emailless only because our flow bypasses BuddyBoss.**
+  `friends-request` and `friends-request-accepted` are live, publishable templates with
+  real subjects. Connections live in profile-app (`src/Connections.php`) and never enter
+  BB's friends component, so the templates sit unused — 258 requests, zero emails.
+
+The consequence: **a future lane wiring connection emails would silently take those two
+types out of the recap's remit**, and a hardcoded list would keep putting them in — a
+member getting the same connection request by email and again in the recap, which is the
+exact double-send this project exists to end. The recap must therefore derive
+"has an email channel" from a live check, and any change to it should turn a gate red.
+
+### The consent guard — bell-only is a property of the TYPE, never of the member
+
+Recorded because the mistake is easy and the cost is high. "No email channel" must mean
+*this type has no email route at all*. It must never mean *this member declined the ✉*.
+
+A member who set their follow roundup to off, or who unticked ✉ on a discussion, has
+made a decision about a type that **does** have an email channel. Sweeping their reply
+notifications into the recap because "they aren't getting an email for it" would route
+around an opt-out and mail them the very thing they declined — dressed as a different
+product. An opt-out is not recap fodder.
+
+Concretely, the recap's filter is on `notifications.type` and nothing else. It must not
+consult `lg_disc_email_cadence`, the `type='topic'` subscription rows, or any other
+per-member email preference when deciding what is eligible.
