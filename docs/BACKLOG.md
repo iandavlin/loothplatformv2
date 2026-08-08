@@ -6,6 +6,8 @@ line into that lane's charter and note the lane name here.
 ## PRIORITY INDEX (the order — edit THIS to re-rank; tell keeper "bump X")
 
 **P0 — live/member-facing bugs**
+4.4 Mobile: DMs broken when opened from the profile tray (Ian 8/8)
+4.3 Profile 3-dots menu does nothing (Ian 8/8)
 4.2 Logged-out mobile bottom dash: "+" implies you can post; Sign in not obvious (Ian 8/5)
 4.1 Recap: the mobile bell's 700ms mark-all-read empties the recap and CANCELS the digest (Ian ruled unread-only 8/3 — this makes that ruling behave as labelled)
 4.0 Weekly digest: discussion images SOMETIMES missing from the email (Ian 8/3)
@@ -36,6 +38,23 @@ line into that lane's charter and note the lane name here.
 
 ---
 *Full item details below, newest-first. The index above is the running order.*
+
+## 4.4 Mobile: DMs broken from the profile tray (P0) — Ian 8/8
+
+Ian: *"we have a problem with dms on mobile when accessing from the user's profile
+tray."* Recorded verbatim — NOT yet reproduced, and "problem" is unspecified: could
+be broken navigation, broken layout, or a dead control. Whoever picks this up
+reproduces it FIRST, on a phone-width viewport as a logged-in member, from the
+profile tray path specifically — the direct /messages/ route may work fine, and the
+difference between the two entry paths is probably the bug.
+
+## 4.3 Profile 3-dots menu dead (P0) — Ian 8/8
+
+Ian: *"The 3 dots for the profile menu don't work either."* Verbatim, not
+reproduced. A control that renders and does nothing is the UI-lies class. Check
+whether the handler is missing, errors, or is swallowed by an overlay — and check
+BOTH member-viewing-own-profile and member-viewing-another profile, which often have
+different menus. Fix the real control, not the thing next to it.
 
 ## 4.2 Logged-out mobile bottom dash — the "+" lies, and Sign in hides (P0) — Ian 8/5
 
