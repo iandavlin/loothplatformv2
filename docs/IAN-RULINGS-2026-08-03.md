@@ -276,12 +276,20 @@ AMENDED SAME DAY — Ian: "Can we add bell and email to the composer?" So the
 composer and reply box carry BOTH follow controls, in the same 🔔/✉ vocabulary the
 follow modal and Manage Account already use — one visual language everywhere:
 
-  ✉  email follow — the ruled tick box, TICKED by default. Writes the
-     type='topic' subscription row the roundup reads.
-  🔔 bell follow — on-site notifications. Writes forums.topic_follow. Keeper set
-     the default TICKED as well (a poster almost certainly wants answers in their
-     bell, and it costs no email); the mock shows both defaults and Ian rules on
-     the drawing before anything ships.
+  🔔 bell follow — TICKED BY DEFAULT (Ian, superseding the email-ticked default
+     minutes after setting it: "give people the option and make bell the
+     default"). Writes forums.topic_follow. Posting = you see answers in your
+     bell; email is a deliberate extra tick.
+  ✉  email follow — PRESENT, UNTICKED by default. Writes the type='topic'
+     subscription row the roundup reads.
+
+⚠️ THE CONSEQUENCE OF BELL-AS-DEFAULT, stated when ruled: the default channel for
+"your question was answered" is now the bell — and bell delivery rides the
+notification bridge, which is the KNOWN GAP (BuddyBoss reply events under-reach
+profile_app.notifications). Until the bridge is fixed, a default-settings poster
+may get neither email (unticked) nor a reliable bell ping. Bell-as-default
+therefore PROMOTES THE BRIDGE FIX to the top of this project's order — it is no
+longer a recap-side nicety, it is the delivery path of the composer's default.
 
 ⚠️ Bell DELIVERY is only as good as the notification bridge, which is a known gap
 (BuddyBoss reply events under-reach profile_app.notifications — recap-notif-bridge
