@@ -123,10 +123,54 @@ Remaining, and unchanged: the sender needs Postgres reachable from the sending
 process. At one recipient a failure is one delayed email; at 384 the whole run
 refuses — correctly, and it DOES log the refusal, but nothing pages anyone.
 
-Scope, measured: 384 members hold `wp__bbp_subscriptions`, 79 hold
-`wp__bbp_forum_subscriptions`. Widening moves them from BuddyBoss per-reply mail to
-one batched email at the weekly default — quieter, not louder, but a change none of
-them asked for.
+### ⚠️ WHO THE SUBSCRIBERS ACTUALLY ARE — and why this REVISES ruling 4's premise
+
+Ian asked, 2026-08-07: *"what exactly are those 384 members actually signed up for?"*
+and *"Are they individual discussion[s]?"* Measured on live:
+
+```
+type    members   rows      per-member topic subs
+topic     381     1515      1 topic  185 (49%)   6-20   53 (14%)
+group    1830    13032      2-5      138 (36%)   21+     5 ( 1%)
+forum      38       46
+```
+
+Individual discussions, yes — `lg_fd_items_for()` joins `type='topic'`, so the 1830
+group subscribers are NOT in scope. And **half of the 381 follow exactly one topic.**
+
+How they got there:
+
+```
+subscribed to a topic they POSTED IN          1082  (71%)
+subscribed to a topic they never posted in     433  (29%)
+```
+
+**71% never chose email.** They replied to a discussion and were subscribed as a side
+effect of participating. So the typical subscriber is someone who asked a question in
+one thread and is told when it is answered — which is exactly the case where INSTANT
+is right and WEEKLY is harmful. Ask a question, get answered in twenty minutes, find
+out next Tuesday.
+
+### ❌ THE PREMISE OF RULING 4's 'weekly first' WAS MINE, AND IT WAS WRONG
+
+On 8/3 keeper told Ian an `instant` default would "start a per-reply email to every
+member who ever tapped the bell", and he reasonably chose weekly to avoid that blast.
+
+**That blast cannot happen.** Those members ALREADY receive per-reply mail from
+BuddyBoss — proven by `wp_fsmpt_email_logs` row 10813 (2026-08-07), which is the
+instant notification for reply 72589. `lg_fd_suppress_instant()` returns `$send_mail`
+untouched when the cadence is `instant`, so an instant default adds NOTHING; it
+preserves exactly what already happens.
+
+Which inverts the choice:
+  - default `instant` ⇒ widening is a TRUE no-op. No member's mail changes. The
+    cadence control appears and lets them opt DOWN. Zero blast radius by construction.
+  - default `weekly`  ⇒ widening silently moves 381 members from "told when answered"
+    to "told within a week", and 71% of them never asked for email either way.
+
+The feature's value is letting members turn the volume DOWN themselves, not quieting
+them by default. **This needs Ian's call before widening — it is not keeper's to
+reverse, because he ruled weekly on 8/3 in good faith on bad information.**
 
 ### NO, WIDENING DOES NOT SEND A BACKLOG — asked by Ian, verified in code
 
