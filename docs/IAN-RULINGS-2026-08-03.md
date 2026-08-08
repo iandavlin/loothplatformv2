@@ -331,6 +331,25 @@ Consequences, all simplifying:
 
 ---
 
+## 8. Stripe membership: ONE tier, resolving pro — Ian, 2026-08-08
+
+Verbatim: "We are going to be dual wielding stripe and patreon [for] some time...
+two tiers on patreon for 5 and 11 dollars... people [can] still log in with patreon
+and have the two tiers respected for gating, but... one tier for the stripe
+memberships and all tiered content open to the one tier through stripe."
+
+So: Patreon $5→looth2(lite) and $11→looth3(pro), login and gating untouched.
+Stripe's single membership ALWAYS resolves looth3(pro). Dual-holders get the max —
+which is what the Arbiter already does. NO gating-surface changes anywhere; the
+entire build is resolution-layer + lifecycle + hygiene.
+
+Owner: stripe-build lane, standing on the stripe-audit atlas (origin/stripe-audit,
+docs/atlas/STRIPE-MEMBERSHIP-AUDIT.md). Phase 0 hygiene first: the 41 orphaned
+stripe rows (3 members holding looth3 free today), the hot email-keyed minter, and
+the blind pipeline logging.
+
+---
+
 ## Standing note on gate colour
 
 `tools/gates/run-all.sh` currently ends RED on a **pre-existing** failure:
