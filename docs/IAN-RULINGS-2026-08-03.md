@@ -302,6 +302,35 @@ composer + reply box), mock first at phone widths in both themes.
 
 ---
 
+## 7. Weekly Recap SCOPE — bell-only types. Ian, 2026-08-08.
+
+Ian questioned whether the recap should exist at all, given members can now set
+their own follow emails and cadences. Ruled: it survives, NARROWED — "weekly
+digest for bell only stuff."
+
+THE RULE: the recap section covers ONLY notification types that have no email
+channel of their own. Discussions email through the follow roundup; mentions and
+connections email through BuddyBoss's native notices; what remains (reactions,
+and whatever else lives only in the bell — the lane inventories the exact set)
+is the recap's whole territory.
+
+Consequences, all simplifying:
+  - The roundup/recap DEDUP DESIGN DIES UNBUILT. Nothing can appear twice
+    because every type has exactly one email home — by construction, not by
+    filtering.
+  - ⚠️ THE CONSENT GUARD: "bell-only" means the TYPE has no email channel —
+    NEVER "the member turned email off". A member who unticked ✉ on a
+    discussion said no to email about it; the recap must not be the loophole
+    that overrides an explicit opt-out. Gate this: a bell-only FOLLOW (email
+    declined) must never surface its items in the recap.
+  - Ruling 1 (unread-only) and the delete=dismiss ruling apply to this narrowed
+    recap unchanged: it counts unread AND undismissed rows of emailless types.
+  - Still gated behind the notification bridge landing (the source rows must
+    exist to count). weekly-digest-recap lane stays PARKED until then; its
+    evidence run re-scopes to bell-only types when it wakes.
+
+---
+
 ## Standing note on gate colour
 
 `tools/gates/run-all.sh` currently ends RED on a **pre-existing** failure:
