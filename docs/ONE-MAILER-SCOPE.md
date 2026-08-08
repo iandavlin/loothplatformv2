@@ -532,3 +532,55 @@ the hazard gate exists to hold, and it must be broken red-first before it is tru
 
 This is a live member-facing defect independent of deliverable 4's feature work, so the
 one-line repair could ship ahead of the checkbox if Ian wants it sooner.
+
+### THE FIX — built, gated, and it needs one deploy step a pull does not do
+
+`platform/mu-plugins/lg-preserve-forum-subscription.php`. It reads the member's
+current subscription state before BuddyBoss's handler runs and passes `subscribe` to
+match, which makes both of BB's branches no-ops. It **preserves**; it never subscribes
+anyone — restoring the ticked-by-default checkbox is ruling 6 and a separate surface,
+and an explicit `subscribe` param always wins so ruling 6 composes cleanly on top.
+
+Proven on dev2 through the real routes, `tools/gates/subscription-preserved-gate.py`:
+
+```
+negative control (repair absent) : reply UNSUBSCRIBES, topic edit UNSUBSCRIBES   ← the defect
+flag ON                          : reply PRESERVES,    topic edit PRESERVES      ← the repair
+flag OFF                         : identical to absent on both routes            ← the no-op
+```
+
+**The flag defaults ON, and that is a deliberate deviation** from the house
+flag-OFF rule. That rule protects against unverifiable *features*; this is a repair for
+ongoing data destruction, and OFF-by-default would ship the destruction. Precedent:
+edit-post-parity (`b99570b`) landed as a direct P0 repair. The gate reads the constant
+rather than assuming it, so flipping it needs no gate edit.
+
+⚠️ **DEPLOY COUPLING.** This is a NEW mu-plugin, and the mu-plugin symlink *set* is not
+in the repo — `wp-content/mu-plugins/` links each file individually. A pull alone will
+NOT activate it. The symlink must be created in the same window as the pull:
+
+```bash
+ln -s /home/ubuntu/loothplatformv2-clean/platform/mu-plugins/lg-preserve-forum-subscription.php \
+      /var/www/dev/wp-content/mu-plugins/lg-preserve-forum-subscription.php
+```
+
+Until that link exists the repair is inert and the data loss continues, with nothing
+to notice — which is exactly the failure mode the file exists to end.
+
+### How many of the 381 have been eroded? **The honest answer is: unknowable.**
+
+Asked, and worth stating plainly rather than answering with a number that looks solid.
+There is no subscription history table, and `wp_fsmpt_email_logs` only reaches back to
+2026-07-25 — so the only members who can be *proven* to have held a subscription and
+lost it are those who received a subscriber-only notification inside that 14-day window
+and then replied.
+
+**That query returns exactly one: Neil Fradenburgh, topic 72472.** Not because one
+member was affected, but because the evidence window is 14 days wide against a defect
+that has been running since June.
+
+The suggestive aggregate, flagged as such: repliers still holding a subscription to the
+topic they replied in ran **5/61 (8%)** since 07-25 against **161/523 (31%)** for
+Jan–May. It is consistent with erosion and it is *not* proof — "no row now" is also the
+expected state for someone who never subscribed. Anyone quoting a number for this
+should quote 1 (proven) and the 8%/31% shape, never a figure derived from the 381.
