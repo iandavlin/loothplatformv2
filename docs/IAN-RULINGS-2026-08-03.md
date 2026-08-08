@@ -201,6 +201,35 @@ recorded decision" — citing this file — **not** to delete the check.
 
 ---
 
+## 5. ONE MAILER — Ian, 2026-08-08 (supersedes the framing of ruling 4)
+
+Verbatim: "I don't want users to get emails from two different systems. I want just
+one from ours. I also don't want them to get emails from our legacy group system for
+forums."
+
+So the end state is: BuddyBoss's member-activity mail fully retired; our follow-digest
+is the only activity mailer. Ruling 4's widening becomes step one of this, not the
+whole project. The one-mailer lane (charter ~/lane-prompts/one-mailer.md) owns the
+scope: break the join→subscribe bridge first, then scope what our digest must absorb
+("New discussion" for forum subs, group notifications) before BB mail can die.
+
+THE BRIDGE, proven on live 8/8: bp-auto-group-join (active) hooks user_register and
+joins every new member to the 12 groups whose groupmeta aj_new_registrations =
+'all_members'; BuddyBoss then auto-creates the type='group' email subscription on
+join. Newest member (uid 2092, onboarded that morning) held 12 memberships + 12 email
+subs on day one. A one-time unsub sweep therefore DECAYS — the bridge must break
+first, then the 13,032 existing type='group' rows get swept (status=0, reversible,
+Ian runs it).
+
+⚠️ wp_bp_groups_members drives the forum LAYOUT and must survive untouched. Only the
+notification-subscription side effect dies.
+
+This also reframes the open cadence question: once BB's instant mail is retired
+rather than preserved, the default cadence is a pure product choice, not a
+compatibility one. Still Ian's call, still open.
+
+---
+
 ## Standing note on gate colour
 
 `tools/gates/run-all.sh` currently ends RED on a **pre-existing** failure:
