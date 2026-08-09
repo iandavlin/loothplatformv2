@@ -23,9 +23,12 @@ WHAT IT ASSERTS, and why each is here:
   C. IT IS NOT OFFERED WHERE IT MAKES NO SENSE. "Back to the Hub" on the hub is a
      control that lies about where it takes you; the path guard must be present.
 
-  D. IT CAN COME BACK. The hide-on-scroll behaviour is the whole reason Ian picked
-     D over C, and a control that hides and never returns is strictly worse than
-     one that never hides. Both directions must exist in the source.
+  D. THE APPEAR-ON-SCROLL CONTRACT, all three parts. Ian refined the ruling to a
+     hybrid: option C's lower-left position with an appear-on-scroll behaviour that
+     is NOT plain D — it must be HIDDEN AT THE TOP, hidden while scrolling down, and
+     revealed on the way back up. Assert all three, because each alone is a
+     different control: without the top-zone rule it just sits in the corner (the
+     thing he asked to avoid); without the reveal it can never come back.
 
   E. THE HIDDEN STATE IS NOT CLICKABLE. It slides out with opacity 0 — without
      pointer-events:none that leaves an invisible tap target over the page, which
@@ -125,15 +128,35 @@ def main():
     elif body:
         OK.append("scoped by path: offered on /hub/<...>, not on the hub itself")
 
-    # ── D. it hides AND returns ─────────────────────────────────────────────
+    # ── D. the appear-on-scroll contract, all three parts ───────────────────
     adds = body.count("classList.add('is-away')") if body else 0
     rems = body.count("classList.remove('is-away')") if body else 0
-    if body and not (adds and rems):
-        RED.append(f"the hide/show pair is incomplete (add={adds} remove={rems}) — a "
-                   f"control that hides and never returns is worse than one that never "
-                   f"hides, and hide-on-scroll is why Ian chose D over C")
+    if body and not rems:
+        RED.append("nothing ever removes is-away — the chip would hide and never come "
+                   "back, which is worse than one that never hides")
+    if body and adds < 2:
+        RED.append(f"only {adds} branch adds is-away — the contract needs TWO (at the "
+                   f"top of the page, and while scrolling down); with one it just sits "
+                   f"in the corner, which is exactly what Ian asked to avoid")
+    if body and not re.search(r"y\s*<=\s*PILL_TOP_ZONE", body):
+        RED.append("no top-zone rule — the chip must be HIDDEN at the top of the page; "
+                   "Ian's refinement was 'appear on scroll', not 'always there'")
+    if body and not re.search(r"className\s*=\s*'is-away'", body):
+        RED.append("the chip is not created hidden — it would flash into the corner on "
+                   "load before the first scroll event corrects it")
+    if body and adds >= 2 and rems and re.search(r"y\s*<=\s*PILL_TOP_ZONE", body):
+        OK.append("appear-on-scroll contract complete: starts hidden, hidden at the top, "
+                  "hidden scrolling down, revealed scrolling up")
+
+    # ── position: the lower-left thumb corner, clear of the tab bar ─────────
+    if body and not re.search(r"left:\s*14px", body):
+        RED.append("the chip is not pinned to the left — Ian asked for the lower LEFT "
+                   "corner specifically")
+    elif body and not re.search(r"bottom:calc\(var\(--lg-tabbar-h", body):
+        RED.append("the chip's bottom is not offset by the tab bar height — it would "
+                   "sit on top of the bottom nav")
     elif body:
-        OK.append("hides on scroll-down AND returns on scroll-up (both branches present)")
+        OK.append("pinned lower-left, offset above the tab bar")
 
     # ── E. the hidden state must not be tappable ────────────────────────────
     if body and not re.search(r"is-away\{[^}]*pointer-events\s*:\s*none", body):
