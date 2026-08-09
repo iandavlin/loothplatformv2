@@ -100,7 +100,8 @@ zero by reading alone. The existing "Clear" button (a real server-side DELETE,
 member-initiated) is the escape.
 
 This is a bounded worry, not a theoretical one: `prune-notifications.timer` is live
-on this box (last run verified 2026-08-07) and enforces the 30-day retention, and
+on this box — `active` + `enabled`, re-verified after the 2026-08-09 reboot with a run
+4 minutes prior — and it enforces the 30-day retention, and
 the largest holding measured on dev2 was **4 rows**. Say so plainly rather than
 claiming the tail cannot exist.
 
@@ -208,25 +209,50 @@ it), which would have shipped as green noise.
 
 ## Suite result
 
-### 2026-08-09, rebased onto main (88 commits) — **ALL 20 GATES GREEN**
+### 2026-08-09, second rebase (main @20 gates) — 21/21 run, **only red is a CDP flake**
 
-`tools/gates/run-all.sh` from this worktree: **20/20 run, 0 FAIL, 0 NO VERDICT,
-`############ ALL GATES GREEN ############`**. Gate 20 (this branch) 35/35, in-sequence
-as well as standalone. Nothing held back, nothing attributed elsewhere.
+`tools/gates/run-all.sh` from this worktree, after re-minting as 21/21:
+**21/21 gates ran, 0 `FAIL` lines, 0 NO VERDICT, 0 CANNOT RUN** — and yet
+`############ GATES RED ############`. Attribution matters more than the banner:
 
-That is a first for this lane and it is worth saying why, because two of the three
-things that were red on 8/7 were fixed by other lanes in the meantime:
+| gate | verdict | whose |
+|---|---|---|
+| **21/21 notif-read-seen** | **GREEN 35/35**, in-sequence AND standalone | this branch |
+| 2 web-craft | **RED in-sequence on ONE page**, `GATE-ERROR weekly/anon — no close frame received or sent`. **GREEN standalone: exit 0, 11/11 pages, `weekly/anon` 39KB.** | neither — a CDP transport flake |
+| the other 19 | green | — |
 
-- **Gate 2 web-craft is now GREEN.** The Nov-2024 `finder/anon` `Optimum.png`
-  violation (backlog 13.5) was fixed on main. The standing note in
-  `IAN-RULINGS-2026-08-03.md` — "run-all.sh currently ends RED on a pre-existing
-  failure" — is therefore **stale**, and so is the copy of that claim in the 8/7
-  section below.
-- **Gates 17/18 run now.** They used to die `Cannot redeclare lg_pfs_target()` from
-  any lane worktree; main's deploy-aware fix cleared it.
-- **Gate 1 visibility-matrix passed in-sequence** this time (67 asserts), where on 8/7
-  it produced 12 in-sequence failures and 0 standalone. Its flake is load-dependent,
-  not fixed — do not read one green run as a repair.
+`no close frame received or sent` is a **WebSocket disconnect**, not an image finding:
+the browser connection died mid-audit, so that page was never measured at all. Ten of
+the eleven pages passed in the same run, `finder/anon` among them at 185KB — main's fix
+for the Nov-2024 `Optimum.png` holding.
+
+⚠️ **This is a gate reporting an environment failure as a finding, and it will
+mis-attribute to whichever lane happens to be running.** `run-all.sh`'s own header
+defines the convention — *"exit 0 = green, exit 1 = RED (real findings), exit 2 =
+CANNOT RUN … reporting red for a gate that never executed is indistinguishable from
+real findings"* — and `craft-gate.py` exits **1** for a `GATE-ERROR`, which is a
+no-verdict condition, not a violation. Flagged for that gate's owner rather than
+changed from here: altering a shared gate's verdict semantics could mask a real craft
+violation, which is a worse failure than a flake. It is why this branch's suite reads
+red while nothing in this branch is red.
+
+Also confirmed unchanged in this run: my diff **cannot** affect gate 2 either way —
+craft-gate audits pages served by nginx from the SERVING CHECKOUT (`main`), so the
+branch's `bottom-nav.js` is never in play.
+
+### 2026-08-09, first rebase (main @88 commits) — ALL 20 GATES GREEN
+
+Same suite, before `hub-topic-landing` merged: **20/20 run, 0 FAIL, 0 NO VERDICT,
+`############ ALL GATES GREEN ############`**, gate 20 (this branch, as numbered then)
+35/35. Two of the three 8/7 reds had been fixed by other lanes:
+
+- **Gate 2 web-craft GREEN** — the Nov-2024 `finder/anon` `Optimum.png` fixed on main.
+  So the standing note in `IAN-RULINGS-2026-08-03.md` ("run-all.sh currently ends RED
+  on a pre-existing failure") is **stale**, and must not be used to excuse a red.
+- **Gates 17/18 RUN now** — main's deploy-aware fix cleared the
+  `Cannot redeclare lg_pfs_target()` fatal that killed them from any lane worktree.
+- **Gate 1 passed in-sequence** (67 asserts) where on 8/7 it failed 12 in-sequence and
+  0 standalone. Load-dependent flake, not a repair — one green run is not evidence.
 
 ### 2026-08-07, pre-rebase — kept because the attribution reasoning still applies
 
@@ -252,13 +278,22 @@ is always main's regardless of which worktree the suite runs from.
 
 ## Status
 
-- Rebased onto `origin/main` 2026-08-09, **0 behind**. Main had moved 88 commits and
-  now runs 20 gates; this gate was minted as 16/16 and **collided with main's gate 16**
-  (`group-mail-dead`), so it was renumbered to **20/20** — the collision the
-  gate-numbering notes exist to catch, caught by them.
-- All six behaviour controls were **re-measured after the rebase**, not carried over,
-  and every one reproduced its original number. Flag-OFF byte-identity re-confirmed
-  end-to-end: main and branch-with-flag-OFF are indistinguishable on the store.
+- Rebased onto `origin/main` twice on 2026-08-09, **0 behind**.
+- **This gate has held three numbers, and two of them were live collisions.** 16 at
+  first write; **20** after main moved 88 commits (colliding with main's gate 16,
+  `group-mail-dead`); **21** after main moved 15 more and `hub-topic-landing` merged
+  as its own gate 20. The second collision is the instructive one: it **auto-merged
+  cleanly**, leaving two blocks in `run-all.sh` both printing `GATE 20/20` with no
+  conflict raised. Grep the roster for duplicates after every rebase — a quiet merge
+  is not evidence of a free number.
+- All six behaviour controls were **re-measured after the first rebase** (fresh
+  session, fresh fixture, ids 3537–3548) and every one reproduced its original number,
+  including flag-OFF byte-identity end-to-end. They were **not** re-run for the second
+  rebase, and deliberately so: main's later 15 commits touched none of this fix's
+  dependencies (`bottom-nav.js`, `pwa.js`, `pwa-loader.php`, `social-modals.js`,
+  `site-header.php`, `Recap.php`, `Notifications.php` — all zero commits), so the
+  measurement still describes the code under test. The gate and all ten of its
+  red-first inversions WERE re-run after both rebases.
 - Flag **OFF**. Not yet verified on the dev2 serve, which serves `main` — that is
   what the flag is for: it lands harmlessly, gets verified on the running thing, and
   is switched on after Ian has looked at it.
