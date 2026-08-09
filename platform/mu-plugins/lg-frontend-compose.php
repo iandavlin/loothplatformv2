@@ -88,34 +88,29 @@
  * documents for discussions, and it is the difference between "the client cannot
  * easily forge this" and "the client does not supply this".
  *
- * ══ WHO GETS IT — AND WHAT IAN HAS NOT RULED ON ══════════════════════════════
+ * ══ WHO GETS IT — RULED 2026-08-09: ALL MEMBERS ══════════════════════════════
  *
- * The capability system carries NO usable signal for who may create WHAT. The
- * natural check, create_posts, maps to edit_posts, held by 1,820 of 1,824 users
- * on dev2 and by subscriber + every looth tier on live (scope §6). Gating on it
- * would let ~1,850 accounts publish a video or an article unreviewed on day one.
+ * Ian: allow-list = ALL MEMBERS, drop the gated-tier path entirely. So it is
+ * deleted, not disabled. A tier system with one tier left in it is something the
+ * next reader has to disprove, and an unused `lg_fc_on_allow_list()` would read
+ * as a gate that merely happens to be switched off.
  *
- * So there are two tiers, which is what backlog #16 already asks for:
+ * He ruled this having been shown the argument the other way — the scope's §6
+ * said the natural capability (`create_posts` -> `edit_posts`) is held by 1,820
+ * of 1,824 accounts here, so gating on it discriminates nobody. That is now the
+ * intended behaviour rather than the problem.
  *
- *   OPEN   loothprint  any signed-in member holding the caps to submit one
- *                      (edit_posts + upload_files) -> publish
- *   GATED  everything  an explicit allow-list -> publish
- *          else        not served the form at all, and if that refusal ever has
- *                      a hole, post_status falls back to PENDING, so the worst
- *                      case is a moderation queue rather than a live page.
+ * ⚠️ THE FLAG IS THEREFORE THE ONLY SAFETY LEFT. Nothing else narrows who gets
+ * this once it is on, which is exactly why LG_FRONTEND_COMPOSE stays OFF by
+ * default and why flipping it is Ian's call and not a lane's.
  *
- * Both layers are implemented on purpose. The refusal is the gate; the pending
- * fallback is what makes a bug in the gate survivable.
- *
- * ⚠️ IAN HAS NOT RULED ON THE ALLOW-LIST. §3 of the rulings answered the SHAPE
- * question (single screen) and nothing else. The mock's own closing section asked
- * him who administers the list and whether a member's loothprint publishes
- * immediately, and that ask is still open. What is implemented here is the
- * default the mock told him it would be — "a member's loothprint publishes
- * straight away; gated types from someone not on the list land as pending" — so
- * the code matches the picture he approved rather than quietly choosing something
- * he was not shown. LG_FRONTEND_COMPOSE_ALLOW exists so his answer is a one-line
- * change, not a rewrite.
+ * WHAT STILL REFUSES SOMEONE IS A FUNCTIONAL FLOOR, NOT A POLICY. `upload_files`
+ * is what the photo field needs to work at all, and the gallery is REQUIRED — a
+ * member without it cannot complete the form, so serving it would be showing a
+ * door that cannot open. `edit_posts` is WordPress's own precondition for the
+ * post existing. Those accounts are not members-who-may-not-post; they are
+ * accounts that could not post regardless. If Ian wants even them to see the
+ * form, lg_fc_may_compose() is the one place to change.
  *
  * ══ THE FLAG ═════════════════════════════════════════════════════════════════
  *
@@ -154,14 +149,6 @@ if (!defined('LG_FRONTEND_COMPOSE')) {
     define('LG_FRONTEND_COMPOSE', false);
 }
 
-/**
- * Extra logins allowed to compose the GATED types, beyond those who already hold
- * edit_others_posts. Ian's answer to "who administers the list" replaces this.
- */
-if (!defined('LG_FRONTEND_COMPOSE_ALLOW')) {
-    define('LG_FRONTEND_COMPOSE_ALLOW', '');
-}
-
 const LG_FC_PATH = 'compose';
 
 /* ──────────────────────────────────────────────── the per-type registry ───── */
@@ -190,8 +177,7 @@ const LG_FC_PATH = 'compose';
  * down here, raised in the report, and drawn for him side by side rather than
  * left as a silent substitution. Flipping any row back is a one-line edit.
  *
- * `tier`: 'open' = any member holding the submit capabilities; 'gated' = the
- * allow-list. `synth` records that lg-layout-v2 builds the page from this meta,
+ * `synth` records that lg-layout-v2 builds the page from this meta,
  * which is the reason only these types are offered — a form for a non-synthesized
  * type would produce a post with no page (scope §3.2).
  */
@@ -200,18 +186,15 @@ function lg_fc_types(): array
     /**
      * The registry is filterable so a second type (event is the scope's
      * recommended next one, §4) can be added without editing this function, and
-     * so tools/frontend-compose/tier-probe.php can exercise the GATED tier —
-     * which no request can otherwise reach, because every registered type today
-     * is open. A guard that cannot be reached cannot be tested, and an untested
-     * guard against an escalation is the worst kind to ship.
+     * and so tools/frontend-compose/access-probe.php can register a throwaway
+     * type to prove an UNKNOWN type is refused without shipping a second one.
      *
      * This is a CODE-level extension point, not user input: nothing here reads a
      * request. lg_fc_may_compose() still refuses any type not in the returned
-     * map, and post_status still falls back to pending for a gated type.
+     * map.
      */
     return apply_filters('lg_fc_types', [
         'loothprint' => [
-            'tier'     => 'open',
             'synth'    => true,
             'title'    => 'Share a Loothprint',
             'sub'      => 'Your 3D print, free for the rest of the group to make.',
@@ -256,10 +239,30 @@ function lg_fc_types(): array
 /**
  * May this user compose this type? The ONLY answer to that question.
  *
- * Deliberately behaviour-shaped and capability-based rather than role-based: the
- * gate that matters is asserted by compose-gate.py against two real accounts, and
- * that gate does not know how the list is implemented, so Ian can change the
- * mechanism without rewriting the assertion.
+ * ══ IAN RULED ALL MEMBERS, 2026-08-09 — THE ALLOW-LIST IS GONE ═══════════════
+ *
+ * The previous version carried two tiers and an allow-list, because the scope's
+ * §6 argued that letting ~1,850 accounts publish a video unreviewed was too
+ * broad. Ian ruled the other way: ALL MEMBERS, and drop the gated path entirely.
+ * So it is deleted rather than left dormant — a tier system with one tier in it
+ * is a thing the next reader has to disprove, and `lg_fc_on_allow_list()` sitting
+ * unused would read as a gate that is merely switched off.
+ *
+ * THE FLAG IS NOW THE ONLY SAFETY, which is the deliberate consequence of that
+ * ruling and is why LG_FRONTEND_COMPOSE stays OFF by default: nothing else
+ * narrows who gets this once it is on.
+ *
+ * WHAT REMAINS IS NOT A GATE, IT IS A FUNCTIONAL FLOOR, and the distinction
+ * matters because Ian ruled on the gate and not on this. `upload_files` is what
+ * the photo field needs to work at all — the gallery is REQUIRED, so a member
+ * without it cannot complete the form, and serving it to them would be showing a
+ * door that cannot open. `edit_posts` is what `create_posts` maps to for these
+ * types, i.e. WordPress's own precondition for the post existing. Refusing those
+ * accounts is the honest behaviour; it is not a policy narrower than "all
+ * members", because they are not members who could post anyway.
+ *
+ * If that reading is wrong and Ian wants even those accounts to see the form,
+ * this is the one place to change.
  */
 function lg_fc_may_compose(string $type, int $user_id = 0): bool
 {
@@ -276,45 +279,26 @@ function lg_fc_may_compose(string $type, int $user_id = 0): bool
         return false;
     }
 
-    // The capabilities a member must already hold to submit this type at all.
-    // These do NOT discriminate (scope §6) — they are a floor, not the gate.
-    if (!user_can($user, 'edit_posts') || !user_can($user, 'upload_files')) {
-        return false;
-    }
-
-    if ($types[$type]['tier'] === 'open') {
-        return true;
-    }
-
-    return lg_fc_on_allow_list($user);
-}
-
-function lg_fc_on_allow_list(WP_User $user): bool
-{
-    if (user_can($user, 'edit_others_posts')) {
-        return true;
-    }
-    $extra = array_filter(array_map('trim', explode(',', (string) LG_FRONTEND_COMPOSE_ALLOW)));
-    return in_array($user->user_login, $extra, true);
+    // Functional floor, not policy — see the header above.
+    return user_can($user, 'edit_posts') && user_can($user, 'upload_files');
 }
 
 /**
- * The safety valve (scope §6). Computed from the AUTHENTICATED user on the
- * request that writes, never carried from the request that rendered.
+ * Every member publishes. There is no pending path any more.
  *
- * An allow-listed author on a gated type publishes; anyone else lands pending.
- * They should never reach this — lg_fc_may_compose() already refused them — so
- * a 'pending' here means the refusal has a hole, and the hole produces a queue
- * instead of a live page.
+ * The old 'pending' fallback existed as a safety valve UNDER the allow-list: if
+ * the refusal ever had a hole, the hole produced a moderation queue instead of a
+ * live page. With no allow-list there is nothing for it to be a valve on, and
+ * leaving it would silently hold back posts Ian has said should publish.
+ *
+ * Kept as a function rather than inlined because the value is still computed
+ * server-side from the authenticated user on the request that WRITES, never
+ * carried from the request that rendered — that property is what stops a client
+ * choosing its own post_status, and it survives the ruling.
  */
 function lg_fc_post_status(string $type, int $user_id): string
 {
-    $types = lg_fc_types();
-    if (($types[$type]['tier'] ?? '') === 'open') {
-        return 'publish';
-    }
-    $user = get_userdata($user_id);
-    return ($user && lg_fc_on_allow_list($user)) ? 'publish' : 'pending';
+    return 'publish';
 }
 
 /**
