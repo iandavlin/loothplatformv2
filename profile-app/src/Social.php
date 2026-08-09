@@ -90,10 +90,46 @@ final class Social
              . '</div>';
     }
 
+    /**
+     * THE FLAG (platform/config/social-actions.php) — read once per request.
+     *
+     * Tracked PHP file resolved through __DIR__ rather than an env var, so it is
+     * visible in every context that renders this widget. getenv() AND $_SERVER
+     * because a lane-preview fastcgi_param lands only in $_SERVER; see the config
+     * file's header for the full argument.
+     */
+    private static function cfg(): array
+    {
+        static $cfg = null;
+        if ($cfg !== null) return $cfg;
+
+        $cfg = ['enabled' => false, 'src' => '/lg-social-actions.js'];
+        $file = __DIR__ . '/../../platform/config/social-actions.php';
+        if (is_readable($file)) {
+            $loaded = require $file;
+            if (is_array($loaded)) $cfg = $loaded + $cfg;
+        }
+        foreach ([getenv('LG_SOCIAL_ACTIONS_SRC'), $_SERVER['LG_SOCIAL_ACTIONS_SRC'] ?? false] as $o) {
+            if ($o !== false && $o !== '') $cfg['enabled'] = ($o === '1' || $o === 'true');
+        }
+        return $cfg;
+    }
+
     private static function wrap(string $inner, string $more = ''): string
     {
+        // Flag ON: stamp the widget with WHERE its behaviour lives. A client that
+        // relocates this markup — the mobile profile tray lifts .lg-profile out of
+        // /u/ and injects it into another page, where an inline script could never
+        // have run — reads the stamp and loads that one file onto the host page.
+        // Flag OFF: no attribute, so nothing can act on it and the bytes are as
+        // they have always been.
+        $cfg  = self::cfg();
+        $stamp = !empty($cfg['enabled'])
+            ? ' data-lg-social-src="' . htmlspecialchars((string)$cfg['src'], ENT_QUOTES) . '"'
+            : '';
+
         return self::styles()
-             . '<div class="lg-social-actions" data-lg-social-actions>' . $inner . $more . '</div>'
+             . '<div class="lg-social-actions" data-lg-social-actions' . $stamp . '>' . $inner . $more . '</div>'
              . self::script();
     }
 
@@ -154,12 +190,28 @@ html[data-lguser-theme="dark"] .lg-social-btn[data-lg-social="connect"],html[dat
 CSS;
     }
 
-    /** One-time inline wiring (guarded so it prints once even with many widgets). */
+    /**
+     * One-time wiring (guarded so it prints once even with many widgets).
+     *
+     * Flag ON  → one <script src>, the SAME url the widget stamps, so the full page
+     *            and a relocated copy share one file and one browser cache entry.
+     * Flag OFF → the inline block below, unchanged and untouched.
+     *
+     * The two must stay identical while the flag lives. That is not a hope: gate 19
+     * extracts the IIFE from this heredoc and diffs it against webroot's copy, and
+     * goes RED on any drift. Edit ONE of them and the gate will tell you.
+     */
     private static function script(): string
     {
         static $printed = false;
         if ($printed) return '';
         $printed = true;
+
+        $cfg = self::cfg();
+        if (!empty($cfg['enabled'])) {
+            return '<script src="' . htmlspecialchars((string)$cfg['src'], ENT_QUOTES)
+                 . '" defer></script>';
+        }
 
         return <<<'JS'
 <script>

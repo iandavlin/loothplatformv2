@@ -788,6 +788,22 @@ if(document.readyState==='complete')go();else window.addEventListener('load',go,
 <?php endif; ?>
 <!-- Single source of the forum base path for forums.js (self-links, lazy fetches). -->
 <script>window.LG_FORUM_BASE = <?= json_encode(LG_BB_MIRROR_PUBLIC_PATH) ?>;</script>
+<?php
+/* Backlog 3.7 — the mobile reader sheet renders embeds. hub-polish.js is a static
+   docroot overlay and cannot read PHP, so the bit is emitted here.
+
+   EMITTED ONLY WHEN ON, never as `= false`: with the flag off this block writes
+   nothing at all, so the served page is byte-for-byte what it is today and the
+   client guard reads undefined. A `= false` would be a behavioural no-op but not a
+   byte-identical one. See platform/config/sheet-embeds.php. */
+$lg_se = @include __DIR__ . '/../../platform/config/sheet-embeds.php';
+$lg_se_on = is_array($lg_se) && !empty($lg_se['enabled']);
+foreach ([getenv('LG_SHEET_EMBEDS'), $_SERVER['LG_SHEET_EMBEDS'] ?? false] as $lg_se_o) {
+    if ($lg_se_o !== false && $lg_se_o !== '') $lg_se_on = ($lg_se_o === '1' || $lg_se_o === 'true');
+}
+if ($lg_se_on): ?>
+<script>window.LG_SHEET_EMBEDS = true;</script>
+<?php endif; ?>
 <script src="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/forums.js?v=<?= bb_mirror_asset_ver('forums.js') ?>" defer></script>
 <!-- Hub toolbar type-ahead: live search + author autocomplete (forums/_suggest.php). -->
 <script src="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/hub-filters.js?v=<?= bb_mirror_asset_ver('hub-filters.js') ?>" defer></script>
