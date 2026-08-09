@@ -1339,6 +1339,26 @@ function feed_sort_url(string $sort_val, string $forum_slug): string
 
 // -- Render --
 $page_title = $scoped_forum ? (string)$scoped_forum['title'] : 'The Hub';
+
+/* ── THE SERVER-RENDERED DISCUSSION MODAL (hub-seo-landing lane, 2026-08-09) ──
+   Set by index.php when /hub/<forum>/<topic>/ resolved a topic and
+   LG_HUB_TOPIC_LANDING is on. The feed is otherwise untouched: this block is the
+   ONLY thing the flag adds to this file, and with no landing topic it produces
+   not one byte.
+
+   BUILT HERE, BEFORE chrome_header(), ON PURPOSE. lg_topic_modal_html() captures
+   the ?body= and ?replies= endpoints, which call header() — a warning once
+   output has started, and a corrupted page with display_errors on. It also has
+   to run before the <title> is chosen, because a search result landing on a
+   discussion must be titled with THAT DISCUSSION, not "The Hub". */
+$lg_landing = $GLOBALS['lg_topic_landing'] ?? null;
+$lg_landing_modal = '';
+if ($lg_landing) {
+    require_once __DIR__ . '/_topic-modal.php';
+    $lg_landing_modal = lg_topic_modal_html($db, $lg_landing);
+    $page_title       = (string)$lg_landing['title'];
+}
+
 bb_mirror_chrome_header($page_title);
 
 // Posting is authenticated-only (BuddyBoss REST 401s anonymous writes). Gate
@@ -1862,4 +1882,17 @@ $header_cat = $scoped_forum
   </div><!-- #hub-feed-results -->
 </div><!-- .page.feed-page -->
 
+<?php /* The landing modal, already open, at the end of <body> — the same place
+         §4e's ensure() appends the one it builds, so the ≥641px `position:fixed`
+         rules land identically. forums.js ADOPTS this node (data-lg-ssr="1")
+         rather than building a second one; below 641px forums.css hides it and
+         hub-polish.js moves its contents into the mobile sheet. Either way the
+         discussion's text is already in the HTML a crawler reads.
+
+         ONE `echo` INSIDE THE PHP BLOCK, not a `<?=` on its own line. The first
+         cut used a separate output tag and shipped ONE EXTRA NEWLINE on every
+         hub page with the flag OFF — a 1-byte diff against the merge-base, which
+         is precisely what "OFF is a byte-identical no-op" forbids. Caught by the
+         no-op diff, which is why that check exists. */
+      echo $lg_landing_modal; ?>
 <?php bb_mirror_chrome_footer(); ?>

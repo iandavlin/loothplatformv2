@@ -29,6 +29,48 @@ if (!function_exists('lg_cover_src')) {
     }
 }
 
+// ── Fragment endpoints running EMBEDDED (hub-seo-landing lane, 2026-08-09) ────
+// _topic-body.php and _topic-replies.php are both a standalone endpoint (?body=,
+// ?replies=) AND, since the hub+modal landing, a fragment captured mid-page by
+// _topic-modal.php. Two side effects are correct in the first role and actively
+// harmful in the second:
+//
+//   http_response_code()  — a body lookup that misses would turn the WHOLE hub
+//                           page into an HTTP 404. The landing page is fine; one
+//                           fragment inside it is not.
+//   the error text        — "not found" echoed into .lg-dmodal__body reads to a
+//                           visitor as the discussion saying "not found".
+//
+// So the embedder raises this flag and the endpoints stay silent about failures
+// they are no longer authoritative for. NOTE the paired `return;` at every call
+// site: a top-level `return` ends the included file and hands control back, and
+// it is behaviour-identical in the endpoint role because index.php already
+// `exit;`s immediately after each of those requires.
+if (!function_exists('lg_fragment_embedded')) {
+    function lg_fragment_embedded(): bool
+    {
+        return !empty($GLOBALS['lg_fragment_embedded']);
+    }
+}
+if (!function_exists('lg_fragment_fail')) {
+    function lg_fragment_fail(int $code, string $msg): void
+    {
+        if (lg_fragment_embedded()) return;
+        http_response_code($code);
+        echo $msg;
+    }
+}
+if (!function_exists('lg_fragment_content_type')) {
+    /** Content-Type is the ENDPOINT's to set; embedded, the page already owns it
+     *  and headers are long gone (a bare header() there is a warning, and with
+     *  display_errors on, a corrupted page). */
+    function lg_fragment_content_type(): void
+    {
+        if (lg_fragment_embedded() || headers_sent()) return;
+        header('Content-Type: text/html; charset=utf-8');
+    }
+}
+
 // Whether the current viewer may post (create topics/replies). Posting is
 // authenticated-only and the BuddyBoss REST API rejects anonymous writes (401) —
 // that 401 is the real, inspector-proof backstop. This is the SERVER-rendered UI

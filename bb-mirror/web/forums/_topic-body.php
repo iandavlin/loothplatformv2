@@ -17,9 +17,8 @@ $db = bb_mirror_db();
 
 $tid = (int)($_GET['body'] ?? 0);
 if (!$tid) {
-    http_response_code(400);
-    echo 'bad request';
-    exit;
+    lg_fragment_fail(400, 'bad request');
+    return;
 }
 
 // Forum-visibility gate (C2): a topic body is readable only when its parent
@@ -29,7 +28,7 @@ $stmt = $db->prepare(
     "SELECT t.content_html
        FROM forums.topic t
        JOIN forums.forum f ON f.id = t.forum_id
-      WHERE t.id = :id AND t.status = 'publish' AND f.visibility = 'public'
+      WHERE t.id = :id AND t.status IN ('publish', 'closed') AND f.visibility = 'public'
       LIMIT 1"
 );
 $stmt->bindValue(':id', $tid, PDO::PARAM_INT);
@@ -37,12 +36,11 @@ $stmt->execute();
 $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$row) {
-    http_response_code(404);
-    echo 'not found';
-    exit;
+    lg_fragment_fail(404, 'not found');
+    return;
 }
 
-header('Content-Type: text/html; charset=utf-8');
+lg_fragment_content_type();
 require_once __DIR__ . '/../_anon-scrub.php';
 $lg_body_html = bb_mirror_paragraphs(bb_mirror_resolve_mentions((string)$row['content_html'], $db));
 if (!lg_bb_mirror_can_post()) $lg_body_html = lg_scrub_anon_contacts($lg_body_html);
