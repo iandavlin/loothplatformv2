@@ -274,6 +274,33 @@ echo "=== GATE 16/34: BuddyBoss group mail stays DEAD (an empty list is load-bea
 # cookies, no CDP, so it cannot go DEAD for environmental reasons.
 run "group-mail-dead" python3 "$(dirname "$0")/group-mail-dead-gate.py"
 
+# ⚠️ GATES 17 AND 18 REACH NO VERDICT FROM A LANE WORKTREE — ATTRIBUTED 2026-08-09
+# (frontend-compose lane). Both are main's, neither is caused by the branch that
+# happens to be running them, and both need per-gate attribution rather than being
+# read as "my diff broke something".
+#
+#   FROM A WORKTREE, both die identically:
+#       Fatal error: Cannot redeclare lg_pfs_target() (previously declared in
+#       /home/ubuntu/loothplatformv2-clean/platform/mu-plugins/lg-preserve-forum-subscription.php:92)
+#       in /home/ubuntu/worktrees/<lane>/platform/mu-plugins/lg-preserve-forum-subscription.php:115
+#     The probe requires the mu-plugin by a path relative to ITS OWN repo root,
+#     while WordPress has already loaded the same file from the SERVING checkout.
+#     Two paths, one set of function names. So this is structural: gates 17 and 18
+#     cannot run from ANY lane worktree, on any branch, and the surrounding gates
+#     going green tells you nothing about these two.
+#
+#   FROM ~/loothplatformv2-clean, gate 17 gets past that and stops for a DIFFERENT,
+#   pre-existing reason — its own negative control:
+#       DEAD  negative control did not reproduce the reply data loss
+#             (REPLY_AFTER=subscribed) ... so a green below would be unearned.
+#     That is the gate behaving correctly. The repair it guards is now shipped and
+#     ON (LG_PRESERVE_FORUM_SUBSCRIPTION = true, live @ 10ea816) and is loaded by
+#     WordPress from the docroot, so the probe cannot un-load it to stage the
+#     "repair absent" control it needs. The gate that proved the fix is the thing
+#     the fix now prevents from proving itself. Needs a probe that can neutralise
+#     the repair in-process — not a lane's problem to solve mid-charter, but it
+#     should not be mistaken for a regression either.
+#
 echo "=== GATE 17/34: participation must never silently UNSUBSCRIBE you (P0 data loss) ==="
 # Numbered 17 because 16 is this same branch's group-mail gate and MAIN is still on 15.
 # If another lane lands a gate first, keep BOTH and renumber on merge — two lanes both
