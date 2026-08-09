@@ -184,6 +184,15 @@ def main():
         s.call("Emulation.setTouchEmulationEnabled", enabled=metrics["mobile"])
 
         for theme in ("light", "dark"):
+            # Re-assert the session EVERY iteration. This browser is shared with
+            # the other lanes, and a Network.clearBrowserCookies from any other
+            # CDP session wipes it for everyone mid-run — a member iteration then
+            # renders as anon with nothing in this script at fault. Observed once
+            # as a lone mobile/dark/member failure that would not reproduce.
+            if WP_COOKIE and "=" in WP_COOKIE:
+                cn, cv = WP_COOKIE.split("=", 1)
+                s.call("Network.setCookie", name=cn, value=cv,
+                       domain="dev2.loothgroup.com", path="/", secure=True)
             # Navigate to the origin BEFORE writing localStorage — a write on
             # about:blank lands nowhere and the shared profile's stored theme
             # then wins, which is how "light" shots come out dark.
@@ -252,7 +261,11 @@ def main():
               var root=document.getElementById('looth-rep-sheet')||document.getElementById('lg-dmodal');
               if(!root) return null;
               return { reply: !!root.querySelector('[data-frm-open], #lrs-replybtn, .lrs-comp__input'),
-                       signin: !!root.querySelector('.lg-dmodal__signin, .lrs-signin') };})()""")
+                       signin: !!root.querySelector('.lg-dmodal__signin, .lrs-signin'),
+                       // SERVER's verdict on this request. lgCanPost() reads this
+                       // synchronously, so a mismatch here is not a client race —
+                       // it means the request arrived without a valid session.
+                       canPost: document.body.getAttribute('data-lg-can-post') };})()""")
             if composer:
                 want_reply = viewer == "member"
                 check(f"{surface}/{theme}/{viewer}: composer matches the viewer",
