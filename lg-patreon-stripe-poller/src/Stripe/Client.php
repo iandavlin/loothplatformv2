@@ -60,6 +60,16 @@ final class Client
         return $this->sdk->subscriptions->retrieve( $id, $params );
     }
 
+    /**
+     * Create a Checkout Session. Used by the lifecycle's checkout-session
+     * endpoint (CheckoutRestController) to start the single-tier membership
+     * checkout with the member's identity stamped into metadata.
+     */
+    public function createCheckoutSession(array $params): object
+    {
+        return $this->sdk->checkout->sessions->create( $params );
+    }
+
     public function retrieveCheckoutSession(string $id, array $expand = []): object
     {
         $params = $expand !== [] ? [ 'expand' => $expand ] : [];

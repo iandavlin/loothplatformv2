@@ -44,7 +44,7 @@ final class Plugin
      * option; on a fresh MUST-USE load (no register_activation_hook fires) the
      * installer self-applies once when the stored version differs.
      */
-    public const INSTALL_VERSION = '2.0.0-mu2';
+    public const INSTALL_VERSION = '2.0.0-mu3';
 
     public static function activate(): void
     {
@@ -193,6 +193,13 @@ final class Plugin
         add_action( 'rest_api_init', [ Wp\InternalRestController::class, 'register' ] );
         PurgeNotifier::register();
         add_action( 'rest_api_init', [ Wp\RestController::class, 'register' ] );
+
+        // Stripe lifecycle (webhook ingest + checkout-session creation),
+        // behind lgms_stripe_lifecycle. Each maybeRegister() checks the flag
+        // at request time, so OFF means the routes do not exist (WP answers
+        // the same rest_no_route 404 as today) and ON needs no redeploy.
+        add_action( 'rest_api_init', [ Wp\WebhookRestController::class, 'maybeRegister' ] );
+        add_action( 'rest_api_init', [ Wp\CheckoutRestController::class, 'maybeRegister' ] );
 
         // Front-end shortcodes (gift redemption etc.).
         add_action( 'init', [ Wp\Shortcodes::class, 'register' ] );

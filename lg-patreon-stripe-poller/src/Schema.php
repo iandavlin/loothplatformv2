@@ -68,6 +68,33 @@ final class Schema
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         SQL);
 
+        // Stripe lifecycle journal (StripeLifecycle). One row per APPLIED
+        // role-source change, written BEFORE the mutation and verified (the
+        // ross journal property, in a real table because the webhook stream
+        // is continuous — a wp_options batch index would grow forever).
+        // had_row distinguishes a tier=NULL row from an absent one; the two
+        // are opposite situations (2026-08-08 handoff §6). Rows are never
+        // deleted by code — money + roles keep their audit trail.
+        $pdo->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS lg_lifecycle_journal (
+                id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                event_id     VARCHAR(64)     NULL,
+                event_type   VARCHAR(64)     NOT NULL,
+                wp_user_id   BIGINT UNSIGNED NOT NULL,
+                customer_id  BIGINT UNSIGNED NULL,
+                source       VARCHAR(32)     NOT NULL DEFAULT 'stripe',
+                tier_before  VARCHAR(32)     NULL,
+                had_row      TINYINT(1)      NOT NULL DEFAULT 0,
+                tier_after   VARCHAR(32)     NULL,
+                state        VARCHAR(32)     NOT NULL,
+                note         VARCHAR(255)    NULL,
+                created_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_user    (wp_user_id),
+                KEY idx_event   (event_id),
+                KEY idx_created (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        SQL);
+
         // QA feedback log written from /test-checklist/. Testers (logged-in
         // or password-only) submit per-item bugs / notes / questions; admins
         // triage by flipping status (open → fixed | wontfix).
