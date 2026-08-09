@@ -123,7 +123,8 @@ $src  = (string) file_get_contents( $LOGSRC );
 // grep -c counts LINES; count OCCURRENCES.
 $note( preg_match_all( '/@file_put_contents/', $tick ) === 0, 'zero @file_put_contents in Tick.php' );
 $note( preg_match_all( '/LGMS_PLUGIN_DIR\s*\.\s*[\'"]tick\.log/', $tick ) === 0, 'Tick.php does not write into the plugin dir' );
-$note( preg_match_all( '/Log::line\(/', $tick ) === 15, 'all 15 call sites route through Log::line' );
+// 15 original sites + the retraction-sweep pass's FAILED line (Pass 3).
+$note( preg_match_all( '/Log::line\(/', $tick ) === 16, 'all 16 call sites route through Log::line' );
 $note( strpos( $tick, 'Runs hourly' ) === false, 'the stale "Runs hourly" docblock is corrected' );
 $note( preg_match_all( "/\\\$up\\['basedir'\\]/", $src ) === 0
     && preg_match_all( '/function_exists\s*\(\s*.wp_upload_dir/', $src ) === 0,

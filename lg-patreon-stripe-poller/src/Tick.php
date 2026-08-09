@@ -209,6 +209,26 @@ final class Tick
             ) );
         }
 
+        // Pass 3: retraction-sweep DETECTION (design doc §4, Phase 1).
+        // Iterates the OPINIONS — lg_role_sources WHERE source='stripe' —
+        // never the customers table: sweeping customers is exactly how the
+        // 41 orphans survived (their customer rows were deleted, so nothing
+        // ever visited their opinions again). Behind lgms_retraction_sweep,
+        // DEFAULT OFF; OFF is a total no-op. Detection only: journals +
+        // notifies via LGMS\Log and NEVER moves a member — retraction is the
+        // explicit apply-retraction-sweep.php invocation. Companion to the
+        // stuck-source detector (2c2f0f5), which reads the same defect class
+        // operator-side across all sources.
+        try {
+            RetractionSweep::tick();
+        } catch ( Throwable $e ) {
+            Log::line( sprintf(
+                "[%s] retraction sweep FAILED: %s\n",
+                gmdate( 'c' ),
+                $e->getMessage(),
+            ) );
+        }
+
         } finally {
             try {
                 $pdo->query( "SELECT RELEASE_LOCK('lgms_tick_lock')" );
