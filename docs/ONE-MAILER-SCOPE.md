@@ -710,6 +710,35 @@ does nothing, or a param nobody sends. `platform/config/post-follow.php` is read
 which makes those states unreachable, and gate 18 asserts the *wiring* as well as the
 value so removing the shared read is itself red.
 
+### ✅ The bridge dependency is RESOLVED — checked, not assumed
+
+§10 was written with the notification bridge as the top-order risk: 🔔 is the default
+control, it writes `forums.topic_follow`, and if nothing delivered from that store the
+default would be a control that does nothing. Ian ruled on the bridge's flag on
+2026-08-09 — **`bell_follows_bb_subscriptions` stays OFF** — so it is worth stating
+exactly what that does and does not touch, because the name sounds like it might kill
+this.
+
+It does not. On the bridge branch `lg_notify_topic_followers()` merges two readers:
+
+| reader | store | state |
+|---|---|---|
+| `lg_notify_topic_followers_native()` | `forums.topic_follow` — **what 🔔 writes** | **ungated** |
+| `lg_notify_topic_followers_bb()` | `wp_bb_notifications_subscriptions` type='topic' | gated by the flag, **OFF** |
+
+So leg 4 still raises `forum.followed_topic` from our own store, and it does so today as
+well — the bridge's two-reader refactor is not merged, and main's single reader is the
+native one. The chain 🔔 → `topic_follow` → leg 4 → bell row holds under both versions.
+The bridge lane's own comment already names ruling 6 as a writer of that store, so the
+two lanes agree about the contract rather than merely not colliding.
+
+**What the ruling does mean, and it sharpens ruling 6 rather than threatening it:** the
+381 members holding BuddyBoss `type='topic'` subscriptions stay bell-less by decision.
+Their channel is email and only email. So the two controls are genuinely two channels
+into two stores with two deliveries — **ticking 🔔 gives no email, ticking ✉ gives no
+bell, and neither substitutes for the other.** That is worth saying plainly on the
+surface itself if Ian ever asks why both exist.
+
 ### What is left, and who owns it
 
 - **Ian**: look at the mock (`/footer-mockups/post-follow-checkbox/`) and say whether the
