@@ -6,51 +6,65 @@
  * create+1..3s for ALL 11 dropped replies and all 61 that landed — indistinguishable.
  * The hook fired, the POST arrived, the receiver answered 200, and wrote nothing.
  *
- * This reproduces that branch deterministically. bb_mirror_upsert_reply() has two
- * exits that yield a 200 and no row, both meaning "the reply's own data was not
- * readable at that instant" — an unreadable post, or unreadable _bbp_topic_id /
- * _bbp_forum_id. Neither throws, neither logs. "I cannot read it yet" is handled
- * as "there is nothing to do".
+ * bb_mirror_upsert_reply() has two exits that yield 200-and-no-row, both meaning
+ * "the reply's own data was not readable at that instant": an unreadable post, or
+ * unreadable _bbp_topic_id / _bbp_forum_id. Neither throws, neither logs, neither
+ * retries. This confirms the second one on REAL unparented data (reply 71433,
+ * which genuinely has no _bbp_topic_id rows), against /srv/bb-mirror — MAIN's
+ * DEPLOYED copy, the code live actually runs.
  *
- * Runs against /srv/bb-mirror — MAIN's DEPLOYED copy, the code live actually runs,
- * not this branch's. Non-mutating: it poisons only the per-request meta cache and
- * the control upsert it performs is idempotent.
+ * Non-mutating: 71433 cannot be written (that is the point), and the control
+ * upserts are idempotent re-materialisations of rows that already exist.
  *
- * WHY IT ONLY BITES LIVE: live carries a wp-content/object-cache.php drop-in with
- * redis on :6379; dev2 has redis but NO drop-in, so its object cache is per-request
- * and cannot serve a stale read across processes. dev2 structurally cannot exhibit
- * this, which is why 120/120 idle and 60/60 under pool saturation landed there —
- * a green result on dev2 was never evidence about live.
+ * TWO MEASUREMENT TRAPS THIS PROBE WAS BUILT WRONG AROUND FIRST, both worth
+ * keeping in mind for anything that touches this table:
  *
- * NOT PROVEN: which upstream cause makes the read bad. A stale persistent-cache
- * entry fits; so does "not yet visible to the second request". See
- * docs/BB-MIRROR-STALL-3.9.md §5.
+ *   1. POISONING THE OBJECT CACHE DOES NOTHING TO THE META PATH.
+ *      bb_mirror_post_meta_all() runs a direct $wpdb SELECT on wp_postmeta with no
+ *      cache layer, so wp_cache_set($id, [], 'post_meta') is not a lever on it.
+ *      The first draft "forced" the branch that way and forced nothing.
+ *
+ *   2. sync_at HAS ONE-SECOND RESOLUTION, so "sync_at did not advance" is NOT
+ *      "nothing was written". Two genuine upserts milliseconds apart are
+ *      indistinguishable from one upsert and one no-op. The first draft used that
+ *      as its detector and reported a no-write that had not happened. It reached
+ *      the right verdict by luck. This version checks ROW EXISTENCE, and proves
+ *      the granularity trap on itself at the end rather than asserting it.
  *
  * Run: sudo -u looth-dev wp --path=/var/www/dev eval-file <this>
  */
+
 require_once '/srv/bb-mirror/config.php';
-require_once '/srv/bb-mirror/lib/materializers.php';   // MAIN's deployed copy — the code live runs
+require_once '/srv/bb-mirror/lib/materializers.php';   // DEPLOYED copy = what live runs
 global $wpdb;
 $db = bb_mirror_db(false);
 
-$id = (int) $wpdb->get_var("SELECT ID FROM {$wpdb->posts} WHERE post_type='reply' AND post_status='publish' ORDER BY ID DESC LIMIT 1");
-$st = $db->prepare("SELECT extract(epoch from sync_at)::bigint FROM reply WHERE id = ?");
-$st->execute([$id]); $before = (int) $st->fetchColumn();
-echo "probe reply: $id   mirror row present: " . ($before ? "yes" : "NO") . "\n";
+// A REAL orphan: exists in WP as a published reply, has no _bbp_topic_id at all.
+$id = 71433;
+$type = $wpdb->get_var("SELECT post_type FROM {$wpdb->posts} WHERE ID=$id");
+$meta = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE post_id=$id AND meta_key='_bbp_topic_id'");
+echo "reply $id: post_type=$type  _bbp_topic_id rows in wp_postmeta=$meta\n";
 
-echo "\n-- control: normal upsert --\n";
-bb_mirror_upsert_reply($id, $db);
-$st->execute([$id]); $mid = (int) $st->fetchColumn();
-echo "sync_at advanced: " . ($mid > $before ? "YES (row written)" : "no") . "\n";
+$cnt = $db->prepare("SELECT count(*) FROM reply WHERE id = ?");
+$cnt->execute([$id]); $before = (int)$cnt->fetchColumn();
+echo "mirror row before: $before\n\n";
 
-echo "\n-- poisoned: meta cache says the reply has no parentage --\n";
-wp_cache_set($id, [], 'post_meta');           // what a stale persistent entry looks like
 $threw = false;
 try { bb_mirror_upsert_reply($id, $db); }
-catch (Throwable $e) { $threw = true; echo "THREW: " . get_class($e) . "\n"; }
-$st->execute([$id]); $after = (int) $st->fetchColumn();
-echo "threw an error:   " . ($threw ? "yes" : "NO — it returned quietly") . "\n";
-echo "sync_at advanced: " . ($after > $mid ? "yes" : "NO — nothing was written") . "\n";
-echo "\nVERDICT: " . ((!$threw && $after <= $mid)
-    ? "SILENT NO-WRITE reproduced — the caller cannot tell this from success."
-    : "not reproduced") . "\n";
+catch (Throwable $e) { $threw = true; echo "THREW: ".get_class($e).": ".$e->getMessage()."\n"; }
+$cnt->execute([$id]); $after = (int)$cnt->fetchColumn();
+
+echo "threw:            " . ($threw ? "yes" : "NO — returned quietly") . "\n";
+echo "mirror row after: $after\n";
+echo "\nVERDICT: " . ((!$threw && $after === 0)
+  ? "SILENT NO-WRITE confirmed on REAL data — no throw, no row, caller sees success."
+  : "not reproduced") . "\n";
+
+// And the flaw in the first probe, demonstrated rather than asserted.
+echo "\n-- why the first probe's method was unsound --\n";
+$live = (int)$wpdb->get_var("SELECT ID FROM {$wpdb->posts} WHERE post_type='reply' AND post_status='publish' ORDER BY ID DESC LIMIT 1");
+$s = $db->prepare("SELECT extract(epoch from sync_at)::bigint FROM reply WHERE id = ?");
+bb_mirror_upsert_reply($live, $db); $s->execute([$live]); $a = (int)$s->fetchColumn();
+bb_mirror_upsert_reply($live, $db); $s->execute([$live]); $b = (int)$s->fetchColumn();
+echo "two back-to-back REAL upserts of reply $live: sync_at $a -> $b\n";
+echo ($b > $a ? "second write detected" : "second write INVISIBLE at 1-second granularity — this is how the first probe manufactured its 'no write'") . "\n";

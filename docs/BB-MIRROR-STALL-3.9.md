@@ -328,35 +328,65 @@ if (!$p || $p->post_type !== 'reply') { /* DELETE */ return; }   // 1
 if (!$topic_id || !$forum_id) return;                            // 2  <- silent
 ```
 
-**Reproduced deterministically on dev2** against `/srv/bb-mirror`'s deployed
-copy — i.e. the code live is running — with
-`tools/mirror-sync/repro-silent-return.php`:
+**Confirmed on real data**, against `/srv/bb-mirror`'s deployed copy — i.e. the
+code live is running — with `tools/mirror-sync/repro-silent-return.php`. The
+subject is reply **71433**, which genuinely has zero `_bbp_topic_id` rows in
+`wp_postmeta`:
 
 ```
--- control: normal upsert --
-sync_at advanced: YES (row written)
--- poisoned: meta cache says the reply has no parentage --
-threw an error:   NO — it returned quietly
-sync_at advanced: NO — nothing was written
-VERDICT: SILENT NO-WRITE reproduced — the caller cannot tell this from success.
+reply 71433: post_type=reply  _bbp_topic_id rows in wp_postmeta=0
+threw:            NO — returned quietly
+mirror row after: 0
+VERDICT: SILENT NO-WRITE confirmed on REAL data — no throw, no row, caller sees success.
 ```
 
 That is the defect: **"I cannot read it yet" is handled as "there is nothing to
 do."** No throw, no log, no retry, and a 200 on the wire that makes the access
 log agree that all is well.
 
-### Why it never reproduced on dev2
+> **The first version of this probe was unsound and its output should not have
+> been quoted here.** It tried to force the branch by poisoning the object cache
+> (`wp_cache_set($id, [], 'post_meta')`) and detected the outcome by watching
+> whether `sync_at` advanced. Both halves were wrong. `bb_mirror_post_meta_all()`
+> reads `wp_postmeta` with a **direct `$wpdb` query and no cache**, so the lever
+> moved nothing; and `sync_at` has one-second resolution, so two real upserts
+> milliseconds apart look exactly like one upsert and one no-op. The probe now
+> demonstrates that second point on itself rather than asserting it:
+>
+> ```
+> two back-to-back REAL upserts of reply 72513: sync_at 1786308308 -> 1786308308
+> second write INVISIBLE at 1-second granularity
+> ```
+>
+> It reached the right verdict by luck. The replacement uses real unparented data
+> and checks row existence.
 
-**Live runs a persistent object cache; dev2 does not.** Live has a
-`wp-content/object-cache.php` drop-in with redis active on :6379. dev2 has redis
-running but **no drop-in**, so its object cache is per-request and cannot serve a
-stale read across processes. That is why 120/120 landed idle and 60/60 landed
-under pool saturation on dev2 — the box could not exhibit the failure, and a
-green result there was never evidence about live.
+### Which of the two silent exits fired — unknown, and the fix does not need it
 
-It also explains the heal-on-edit signature exactly: an edit calls
-`update_post_meta`, which invalidates the poisoned entry, so the edit's dispatch
-reads correct parentage and writes the row.
+Both produce exactly what live shows (200, no row), and the evidence cannot
+separate them:
+
+- **The meta branch** (`!$topic_id || !$forum_id`). `bb_mirror_post_meta_all()`
+  is a direct `$wpdb` query with no cache, so an empty result means `wp_postmeta`
+  genuinely held no `_bbp_topic_id` for that reply **at that instant** — a
+  read-after-write ordering problem between the creating request and the
+  receiver, which runs in a different process.
+- **The post branch** (`!$p`). `get_post()` *does* read WordPress's object cache,
+  and live runs a persistent one (`wp-content/object-cache.php` + redis:6379)
+  while dev2 has redis but **no drop-in**. A stale `posts` entry there makes a
+  live reply look deleted — and that branch runs a `DELETE`, which was harmless
+  here only because there was no row yet.
+
+An earlier draft named the object cache as *the* mechanism. That was over-reach:
+it cannot explain the meta branch at all, because that read never touches the
+cache. It also means the dev2 transport results (120/120 idle, 60/60 saturated)
+prove less than they appeared to — they were measured with `wp-cli`, which never
+holds an FPM worker and never races a creating request.
+
+**The fix does not depend on settling this**, which is why it is worth shipping
+before the ambiguity is: re-reading past the caches repairs the post branch,
+re-querying repairs the meta branch, and throwing instead of returning makes
+whichever one fired visible the next time it happens.
 
 ### What is still NOT proven — do not skip this
 
