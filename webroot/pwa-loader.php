@@ -29,7 +29,45 @@ foreach ($it as $f) {
 }
 ksort($vers);
 
+/**
+ * Feature flags the static JS bundles need but cannot read for themselves.
+ *
+ * This is the ONLY place a flag reaches every DM surface at once. The desktop
+ * composer (lg-shared/social-modals.js) has two PHP loaders, and the phone sheet
+ * (webroot/messenger-sheet.js) has none at all — pwa.js idle-loads it. But
+ * /pwa.js is sub_filter-injected into every page's </head>, and it is served
+ * no-cache with an ETag over the whole body, so a flag flip propagates on the
+ * next request instead of waiting out a 1y immutable asset cache.
+ *
+ * ⚠️ EMITTED ONLY WHEN ON, AND THAT IS THE POINT. An OFF feature must add zero
+ * bytes here, so the served /pwa.js stays byte-identical to the pre-feature
+ * asset and "OFF is a no-op" is a fact about the wire, not a hope. Readers treat
+ * absent as OFF (fail-closed), so there is nothing to emit for a false.
+ *
+ * __DIR__ resolves through the docroot symlink into the repo webroot/, so the
+ * repo root is one level up — the same path arithmetic the LG_V map above relies
+ * on. Never build this from a docroot-relative path: the file it needs is in the
+ * monorepo, not the webroot.
+ */
+$flags = array();
+$_epk  = dirname($dir) . '/platform/config/emoji-picker.php';
+if (is_readable($_epk)) {
+    $_raw = require $_epk;
+    if (is_array($_raw) && ($_raw['enabled'] ?? false) === true) $flags['LG_EMOJI_PICKER'] = 1;
+}
+// Lane-preview overrides: getenv() for a pool or CLI harness, $_SERVER for a
+// single nginx location (a fastcgi_param lands in $_SERVER but NOT reliably in
+// the process environment — reading only getenv() serves the OFF path on the
+// very preview URL built for Ian to click).
+if (getenv('LG_EMOJI_PICKER') === '1' || (($_SERVER['LG_EMOJI_PICKER'] ?? '') === '1')) {
+    $flags['LG_EMOJI_PICKER'] = 1;
+}
+
+$flagJs = '';
+foreach ($flags as $k => $v) $flagJs .= 'window.' . $k . '=' . json_encode($v) . ";\n";
+
 $body = 'window.LG_V=' . json_encode($vers, JSON_UNESCAPED_SLASHES) . ";\n"
+      . $flagJs
       . file_get_contents($dir . '/pwa.js');
 $etag = '"' . md5($body) . '"';
 
