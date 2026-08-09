@@ -303,8 +303,22 @@ def main():
         c2 = probe(p)
         line("menu_hidden AFTER", c2.get("menu_hidden"))
         shot(p, "control-2-menu-open")
+        # 4.4's control: the SAME Message button on the full page must actually DM.
+        p.ev("document.body.click()")          # dismiss the menu we just opened
+        time.sleep(0.4)
+        cdm_before = p.ev("(window.__dmEvents||[]).length")
+        okc, hitc = tap(p, '[data-lg-social="message"]')
+        line("tap Message", f"{okc} ({hitc})")
+        time.sleep(1.8)
+        c_dm = p.ev("(window.__dmEvents||[]).length") - cdm_before
+        c_msgr = p.ev("!!(document.getElementById('looth-msgr')&&"
+                      "document.getElementById('looth-msgr').classList.contains('is-open'))")
+        line("lg:open-dm fired", c_dm)
+        line("messenger opened", c_msgr)
+        shot(p, "control-3-after-message-tap")
         control_pass = (c.get("more_btn") and c2.get("menu_hidden") is False)
         print(f"  >> CONTROL {'PASS — the 3-dots menu OPENS here' if control_pass else 'FAILED — cannot trust the defect below'}")
+        print(f"  >> CONTROL {'PASS — Message OPENS the messenger here' if c_msgr else 'Message did NOT open the messenger here either'}")
 
         # ---------------------------------------------------------------- DEFECT
         print(f"\n=== DEFECT — the same profile opened in the MOBILE TRAY ===")
@@ -376,7 +390,14 @@ def main():
               f"({'control PASSES — entry-path specific' if c2.get('menu_hidden') is False else 'CONTROL BROKEN'})")
         print(f"  wiring            : full page __lgSocialWired={c.get('wired')} "
               f"vs tray host __lgSocialWired={d.get('wired')}")
-        print(f"  4.4  Message btn  : {'present' if d.get('msg_btn') else 'ABSENT (needs an ACCEPTED connection)'}")
+        dm_fired = p.ev("(window.__dmEvents||[]).length") - dm_before
+        print(f"  4.4  tray Message : btn {'PRESENT' if d.get('msg_btn') else 'ABSENT (needs an ACCEPTED connection)'}, "
+              f"tap fired {dm_fired} lg:open-dm, messenger={d3.get('messenger_open')} "
+              f"({'DEFECT REPRODUCED' if d.get('msg_btn') and not d3.get('messenger_open') else 'not reproduced'})")
+        print(f"  4.4  control      : fired {c_dm} lg:open-dm, messenger={c_msgr} "
+              f"({'control PASSES — entry-path specific' if c_msgr else 'CONTROL BROKEN'})")
+        print(f"  4.4  You-sheet    : the OTHER reading of Ian's words — measured above; "
+              f"if it opened, the You tray is NOT the bug and the profile sheet is")
         print(f"\n  shots -> {SHOTS}")
     finally:
         p.close()
