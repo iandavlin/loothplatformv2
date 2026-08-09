@@ -69,6 +69,37 @@ if (!function_exists('lg_shared_render_site_header')) {
  *   before_nav?: string,   // raw HTML injected between logo and <nav> (e.g. archive-poc back-link)
  * } $ctx
  */
+/**
+ * Is the DM composer's emoji picker on? (ruling 2026-08-03 §2)
+ *
+ * Reads the SAME tracked config webroot/pwa-loader.php hands the browser as
+ * window.LG_EMOJI_PICKER, so this server-rendered composer and the two JS-built
+ * ones cannot disagree — a picker on the phone and not on the desktop is the
+ * "UI lies" class, and it is silent. See platform/config/emoji-picker.php.
+ *
+ * Fails CLOSED: unreadable or malformed config leaves the feature off. Both
+ * override sources for the same reason the config header gives — a lane
+ * preview's fastcgi_param lands in $_SERVER but not reliably in getenv().
+ */
+function lg_shared_emoji_picker_enabled(): bool
+{
+    static $on = null;
+    if (null !== $on) return $on;
+    if (getenv('LG_EMOJI_PICKER') === '1' || (($_SERVER['LG_EMOJI_PICKER'] ?? '') === '1')) {
+        return $on = true;
+    }
+    // /srv/lg-shared → <repo>/lg-shared, so the repo root is one level up. __DIR__
+    // resolves THROUGH the symlink into the checkout, which is what makes this the
+    // same file the other two runtimes read.
+    $path = dirname(__DIR__) . '/platform/config/emoji-picker.php';
+    if (!is_readable($path)) {
+        error_log('[lg-emoji-picker] tracked config unreadable at ' . $path . ' — OFF (fail-closed)');
+        return $on = false;
+    }
+    $raw = require $path;
+    return $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+}
+
 function lg_shared_render_site_header(array $ctx): void
 {
     // ---------- unpack with sane defaults ----------
@@ -89,6 +120,13 @@ function lg_shared_render_site_header(array $ctx): void
     $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'stream'|'hub'|'events'|'members'|'sponsors'
     // Raw HTML injected between logo and nav — consumer responsibility to escape
     $before_nav    = $ctx['before_nav'] ?? null;
+
+    // DM composer emoji picker (ruling 2026-08-03 §2). BUILD-TIME gate, not a CSS
+    // hide: flag off => the ☺ button is not in the document at all, so an OFF state
+    // cannot be revealed by a stray rule and there is nothing for a probe to find.
+    // Same tracked config social-modals.js and messenger-sheet.js read through
+    // window.LG_EMOJI_PICKER, so the three DM surfaces cannot disagree.
+    $emoji_picker  = lg_shared_emoji_picker_enabled();
 
     // Logo: consumer may pass its own logo URL (env-specific); fall back to
     // a host-relative path so each environment serves its own copy and the
@@ -973,6 +1011,31 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
                 <path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/>
               </svg>
             </button>
+<?php if ($emoji_picker): /* flush-left tags on purpose: an indented <?php if ?> emits
+   its OWN leading spaces even when the branch is skipped, and OFF then differs from
+   pre-feature main by 24 stray spaces. Measured, not theorised. */ ?>
+            <!-- Emoji picker (ruling 2026-08-03 §2). Sits between attach and the input,
+                 the order Ian approved in the mock. The PANEL is not here: it is built
+                 on first open by social-modals.js, because a composer must load on
+                 INTENT (craft standard) and nobody pays for ~250 emoji nodes they never
+                 open. This button is the whole always-present cost.
+                 SVG, not a literal ☺ glyph: every other control on this row is an
+                 18px currentColor stroke icon, and a text glyph renders differently on
+                 every platform and cannot inherit the stroke treatment. The mock drew a
+                 ☺ because the whole mock was text buttons; matching the REAL row's
+                 vocabulary is what the brief asks for. -->
+            <button type="button" class="lg-msg__emoji-btn" data-lg-emoji
+                    aria-label="Insert emoji" title="Insert emoji"
+                    aria-expanded="false" aria-haspopup="dialog">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/>
+                <line x1="9" y1="9.5" x2="9.01" y2="9.5"/>
+                <line x1="15" y1="9.5" x2="15.01" y2="9.5"/>
+              </svg>
+            </button>
+<?php endif; ?>
             <!-- Same noun as the mobile sheet ("Message…"); the keyboard hint is kept
                  because only this surface has a hardware keyboard (HK-086). -->
             <textarea id="lg-msg-reply-input" class="lg-msg__reply-input"

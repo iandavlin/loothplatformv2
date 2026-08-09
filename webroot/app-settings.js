@@ -293,6 +293,31 @@
       D + ' .lg-notif-menu__item:hover{background:#22262a!important}',
       D + ' .lg-notif-menu__item.is-on,' + D + ' .lg-notif-menu__tick{color:#9cb37d!important}',
       D + ' .lg-notif-menu__note,' + D + ' .lg-notif-menu__load{color:#9aa097!important}',
+      /* DM composer emoji picker (ruling 2026-08-03 §2). New class names, so NONE of
+         the .lg-msg__* rules above reach them — the same reason the .lg-notif-menu
+         rows needed their own entries, and the exact way a sage tint gets missed in
+         the dark pass. D is an html[...] selector so it still matches even though the
+         panel is appended to <body> rather than living inside the modal.
+
+         The panel takes the POPOVER dark (#1c1f22), not the page dark (--lg-cream is
+         #15171a in dark): a popover that matches the page background loses its edge
+         and reads as a hole. Same choice .lg-notif-menu makes one block up.
+
+         ⚠️ .lg-msg__emoji-btn is deliberately ABSENT here. It rides --lg-sage-d and
+         --lg-sage-tint exactly as its sibling .lg-msg__attach-btn does, and that
+         button has no dark entry either — both tokens already flip (#b0c693 /
+         #243024). Adding an override would make the two buttons on one row stop
+         matching, which is the defect, not the fix. */
+      D + ' .lg-epk{background:#1c1f22!important;border-color:#2c312d!important;box-shadow:0 12px 32px rgba(0,0,0,.5)!important}',
+      D + ' .lg-epk__search{border-color:#2c312d!important}',
+      D + ' .lg-epk__q{background:#22262a!important;border-color:#333833!important;color:#e7ebe1!important}',
+      /* the sticky category heading must repaint the SAME dark as the panel, or the
+         emoji scroll under a transparent strip as you scroll */
+      D + ' .lg-epk__h{background:#1c1f22!important;color:#9aa097!important}',
+      D + ' .lg-epk__tabs{background:#1c1f22!important;border-top-color:#2c312d!important}',
+      D + ' .lg-epk__e:hover{background:#243024!important}',
+      D + ' .lg-epk__tab[aria-selected="true"]{background:#243024!important;border-top-color:#9cb37d!important}',
+      D + ' .lg-epk__none{color:#9aa097!important}',
       // (OS-dark default-theme header block REMOVED 2026-06-10 pare-back: it
       // blackened ONLY the header when OS was dark with no picked theme — the
       // page stayed light = the "some headers and not others" mismatch. Two

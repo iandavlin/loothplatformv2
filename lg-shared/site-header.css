@@ -701,6 +701,81 @@ body.lg-sm-open { overflow: hidden; }
   color: var(--lg-sage-d, #6b7c52);
 }
 .lg-msg__attach-btn:hover { background: var(--lg-sage-tint, #eef2e3); }
+/* Emoji ☺ — deliberately the SAME box as attach (36px circle, sage-d currentColor,
+   sage-tint hover). It is a sibling control on the same row and inventing a second
+   button style for it would read as a different KIND of thing. */
+.lg-msg__emoji-btn {
+  appearance: none; background: none; border: 0; cursor: pointer;
+  width: 36px; height: 36px; border-radius: 50%; flex: 0 0 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--lg-sage-d, #6b7c52); padding: 0;
+}
+.lg-msg__emoji-btn:hover,
+.lg-msg__emoji-btn[aria-expanded="true"] { background: var(--lg-sage-tint, #eef2e3); }
+
+/* ── The picker panel ──────────────────────────────────────────────────────────
+   position:fixed + body-appended for the reason .lg-notif-menu is (see its note):
+   the composer's ancestors carry overflow:hidden, so an absolutely-positioned
+   panel gets its TOP SLICED OFF — the same regression react-fix repaired for the
+   card react palette. JS anchors it to the ☺ and flips it below when there is no
+   room above. z-index matches .lg-notif-menu's band, which clears the fixed
+   tabbar (NAV#looth-tabbar sits at 2147481000+). */
+.lg-epk {
+  position: fixed; z-index: 2147483000;
+  width: 300px; max-width: calc(100vw - 16px);
+  max-height: 286px;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--lg-cream, #fbfbf8);
+  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(26,29,26,.22);
+}
+.lg-epk[hidden] { display: none; }
+.lg-epk__search { flex: 0 0 auto; padding: 8px; border-bottom: 1px solid var(--lg-line, #e3ddd0); }
+.lg-epk__q {
+  width: 100%; border: 1px solid var(--lg-line, #e3ddd0); border-radius: 7px;
+  padding: 6px 10px; font: 400 13px/1.4 var(--lg-font-sans, system-ui);
+  background: #fff; color: var(--lg-ink, #323532); outline: none;
+}
+.lg-epk__q:focus { border-color: var(--lg-sage, #87986a); }
+/* overscroll-behavior: contain — scrolling to the end of the emoji list must not
+   start scrolling the conversation behind it. */
+.lg-epk__scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 2px 6px 6px; }
+.lg-epk__h {
+  font: 700 10px/1 var(--lg-font-sans, system-ui); letter-spacing: .08em; text-transform: uppercase;
+  color: var(--lg-mute, #6b6f6b); padding: 10px 4px 6px;
+  position: sticky; top: 0; background: var(--lg-cream, #fbfbf8);
+}
+.lg-epk__grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; }
+.lg-epk__e {
+  appearance: none; border: 0; background: none; cursor: pointer;
+  font-size: 20px; line-height: 1; padding: 5px 0; border-radius: 7px;
+  transition: transform .08s ease;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+.lg-epk__e:hover { transform: scale(1.28); background: var(--lg-sage-tint, #eef2e3); }
+.lg-epk__e:focus-visible { outline: 2px solid var(--lg-sage, #87986a); outline-offset: -2px; }
+.lg-epk__tabs {
+  flex: 0 0 auto; display: flex;
+  border-top: 1px solid var(--lg-line, #e3ddd0); background: var(--lg-cream, #fbfbf8);
+}
+.lg-epk__tab {
+  flex: 1; appearance: none; border: 0; background: none; cursor: pointer;
+  padding: 7px 0; font-size: 16px; line-height: 1; opacity: .55;
+  border-top: 2px solid transparent; margin-top: -1px;
+}
+.lg-epk__tab[aria-selected="true"] {
+  opacity: 1; border-top-color: var(--lg-sage, #87986a); background: var(--lg-sage-tint, #eef2e3);
+}
+.lg-epk__none { padding: 22px 8px; text-align: center; color: var(--lg-mute, #6b6f6b); font-size: 12.5px; }
+/* Phones: full-width panel and ≥44px emoji targets. The tabbar-clearance and
+   keyboard behaviour live with the phone sheet's own picker in messenger-sheet.js —
+   this rule only covers a narrow viewport that still renders the DESKTOP modal. */
+@media (max-width: 480px) {
+  .lg-epk { width: calc(100vw - 16px); }
+  .lg-epk__grid { grid-template-columns: repeat(7, 1fr); }
+  .lg-epk__e { padding: 9px 0; font-size: 22px; }
+  .lg-epk__tab { padding: 11px 0; }
+}
 .lg-msg__attach-preview { display: flex; }
 /* display:flex above beats the UA [hidden] rule (same trap as .lg-msg-detail, Buck
    6/11) — without this counter-rule the EMPTY preview strip renders permanently:

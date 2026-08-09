@@ -996,6 +996,20 @@ function ensureSideChatDom() {
           + '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
           + '<path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg>'
         + '</button>'
+        /* emoji ☺ — same build-time gate as the modal composer in site-header.php,
+           reading the same tracked config through window.LG_EMOJI_PICKER. Flag off
+           => the node is never created. Attach-parity rule (Ian 7/26) applies here
+           too: the side dock is the REAL composer component, never a stripped fork,
+           so it gets the picker or members find the one surface missing it. */
+        + (epkOn()
+            ? '<button type="button" class="lg-msg__emoji-btn" data-lg-emoji'
+              + ' aria-label="Insert emoji" title="Insert emoji"'
+              + ' aria-expanded="false" aria-haspopup="dialog">'
+              + '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+              + '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/>'
+              + '<line x1="9" y1="9.5" x2="9.01" y2="9.5"/><line x1="15" y1="9.5" x2="15.01" y2="9.5"/>'
+              + '</svg></button>'
+            : '')
         + '<textarea id="lg-msg-side-input" class="lg-msg__reply-input" placeholder="Message… (Enter to send)" rows="2"></textarea>'
         + '<button type="button" class="lg-msg__send-btn" data-lg-side-send aria-label="Send">'
           + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>'
@@ -2226,6 +2240,283 @@ document.addEventListener('keydown', function (e) {
     e.preventDefault(); pickerAdd(e.target.getAttribute('data-lg-pick-add'));
   }
 });
+
+/* ══ DM composer emoji picker (ruling 2026-08-03 §2) ═══════════════════════════
+   Mock: /footer-mockups/emoji-picker/ — the panel variant, first on the page and
+   tagged Recommended.
+
+   SCOPE. This is the COMPOSER. Reactions above stay the FIXED SIX, server-validated
+   against Messaging::REACTION_EMOJI — Ian ruled against a picker there on 2026-07-13
+   ("no full picker, no keyboard — this is a phone-first surface") and nothing here
+   touches it. Composer emoji are ordinary text in the message body; reactions are
+   structured rows in message_reactions. One emoji vocabulary, two jobs, not a second
+   react system. The six DO open this picker as "Frequently used" so the glyphs a
+   member already knows from reacting are the ones under the cursor.
+
+   FLAG. window.LG_EMOJI_PICKER is emitted by webroot/pwa-loader.php ONLY when the
+   tracked config platform/config/emoji-picker.php says enabled. Absent => OFF, so a
+   loader that never ran cannot expose the feature. Read at BUILD time (below), not
+   at parse time: the composer is built long after /pwa.js has executed, so there is
+   no ordering race to lose. Flag off => no button, no panel, no listeners bound to
+   anything that exists, no nodes. Gate 19 proves the DOM equivalence.
+
+   LOAD ON INTENT. The panel is built on FIRST OPEN and then reused. ~250 emoji
+   buttons is not a cost anyone pays for a picker they never click, and "editors and
+   composers load on intent, never eagerly" is the craft standard.            */
+
+/* Is the picker on? Fail-closed — anything but an explicit 1 is off. */
+function epkOn() { return window.LG_EMOJI_PICKER === 1; }
+
+/* The six, kept in sync with Messaging::REACTION_EMOJI by REACTION_EMOJI above —
+   referenced, never re-typed, so the "Frequently used" row cannot drift from the
+   reaction set it exists to mirror. */
+/* Vocabulary. Each entry is "<emoji> <keyword> <keyword>…": the first token is what
+   gets inserted, the rest is what search matches. Real keywords, because the mock
+   said plainly that its own name-only search was a mock shortcut and the shipped one
+   would index the emoji's own words. A member typing "fire", "beer" or "guitar"
+   finds the glyph; typing "music" finds the category too (the category name is
+   searched as well, below). */
+var EPK_CATS = [
+  { tab: '🕘', name: 'Frequently used', list: null },   /* filled from REACTION_EMOJI at build */
+  { tab: '😀', name: 'Smileys', list: [
+    '😀 grin happy smile', '😃 smiley happy joy', '😄 laugh happy grin', '😁 beam grin teeth',
+    '😆 laugh squint haha', '😅 sweat laugh relief', '🤣 rofl rolling laugh', '😂 joy tears laugh cry',
+    '🙂 slight smile', '🙃 upside down silly', '😉 wink', '😊 blush smile warm',
+    '😇 halo angel innocent', '🥰 love hearts adore', '😍 heart eyes love', '😘 kiss blow',
+    '😋 yum tasty tongue', '😛 tongue cheeky', '😜 wink tongue crazy', '🤪 zany goofy wild',
+    '🤗 hug hands', '🤭 oops giggle hand', '🤫 shush quiet secret', '🤔 think hmm ponder',
+    '😐 neutral blank meh', '😑 expressionless', '😶 no mouth silent', '😏 smirk sly',
+    '😒 unamused meh done', '🙄 eye roll whatever', '😬 grimace awkward yikes', '😌 relieved calm',
+    '😔 sad down pensive', '😴 sleep zzz tired', '😷 mask sick', '🤒 sick fever ill',
+    '🤢 sick nausea gross', '🥵 hot heat sweat', '🥶 cold freeze', '😵 dizzy dead knocked',
+    '🤯 mind blown explode', '🤠 cowboy hat', '🥳 party celebrate hat', '😎 cool sunglasses',
+    '🤓 nerd glasses geek', '🧐 monocle inspect', '😕 confused unsure', '🙁 frown sad',
+    '😮 wow open mouth surprise', '😯 hushed surprise', '😲 astonished shock', '😳 flushed embarrassed',
+    '🥺 pleading puppy beg', '😨 fearful scared', '😰 anxious sweat worried', '😢 cry sad tear',
+    '😭 sob cry bawl', '😱 scream shock fear', '😖 confounded', '😞 disappointed sad',
+    '😩 weary tired', '😫 tired exhausted', '🥱 yawn bored', '😤 huff triumph steam',
+    '😡 angry mad rage', '😠 angry mad', '🤬 curse swear censored' ] },
+  { tab: '🤘', name: 'Gestures', list: [
+    '👍 thumbs up yes good like', '👎 thumbs down no bad', '👌 ok perfect nice', '🤌 pinch chef italian',
+    '🤏 pinch small tiny', '✌️ peace victory two', '🤞 fingers crossed luck hope', '🤟 love you sign',
+    '🤘 rock horns metal', '🤙 call shaka hang loose', '👈 point left', '👉 point right',
+    '👆 point up', '👇 point down', '☝️ point up one', '👋 wave hi hello bye',
+    '🤚 hand raised stop', '🖐️ hand fingers splayed', '✋ hand stop high five', '🖖 vulcan spock',
+    '👏 clap applause bravo', '🙌 raise hands praise yay', '🫶 heart hands love', '👐 open hands',
+    '🤲 palms up', '🤝 handshake deal agree', '🙏 pray thanks please namaste', '✍️ write sign',
+    '💪 muscle strong flex', '🦾 mechanical arm', '👀 eyes look watch', '👁️ eye',
+    '🧠 brain smart mind', '👂 ear listen', '👃 nose smell' ] },
+  { tab: '❤️', name: 'Hearts & symbols', list: [
+    '❤️ heart love red', '🧡 orange heart', '💛 yellow heart', '💚 green heart',
+    '💙 blue heart', '💜 purple heart', '🖤 black heart', '🤍 white heart', '🤎 brown heart',
+    '💔 broken heart sad', '❣️ heart exclamation', '💕 two hearts love', '💞 revolving hearts',
+    '💓 beating heart', '💗 growing heart', '💖 sparkling heart', '💘 cupid arrow heart',
+    '💝 heart gift ribbon', '⭐ star', '🌟 glowing star sparkle', '✨ sparkles shine magic',
+    '⚡ lightning bolt zap fast', '🔥 fire lit hot flame', '💥 boom explosion', '💫 dizzy star',
+    '💤 sleep zzz', '✅ check tick done yes', '❌ cross no wrong', '❗ exclamation important',
+    '❓ question', '💯 hundred perfect score', '🎉 party tada celebrate', '🎊 confetti party',
+    '🏆 trophy win champion', '🥇 gold medal first', '🎯 target bullseye', '♻️ recycle' ] },
+  { tab: '🎸', name: 'Music', list: [
+    '🎸 guitar rock strat les paul', '🪕 banjo', '🎵 note music', '🎶 notes music song',
+    '🎼 score sheet music', '🎹 piano keys keyboard', '🥁 drums drum kit', '🪘 conga drum',
+    '🎷 sax saxophone', '🎺 trumpet horn', '🎻 violin fiddle strings', '🪗 accordion',
+    '🎤 mic microphone sing vocals', '🎧 headphones listen mix', '📻 radio', '🔊 loud speaker volume',
+    '🔉 speaker volume', '🔈 speaker quiet', '🔇 mute silent', '📢 megaphone announce',
+    '🎚️ fader level mix', '🎛️ knobs control mix', '💿 cd disc', '📀 dvd disc',
+    '🎬 film clapper video', '🎭 theatre drama masks', '🎨 art paint palette', '🕺 dance man',
+    '💃 dance woman', '🎪 circus tent show' ] },
+  { tab: '☕', name: 'Things', list: [
+    '🍺 beer pint pub', '🍻 cheers beers toast', '🥂 champagne cheers toast', '🍷 wine glass',
+    '☕ coffee tea cup brew', '🍵 tea green', '🍕 pizza slice', '🍔 burger',
+    '🌮 taco', '🍰 cake slice', '🎂 birthday cake', '🍎 apple fruit',
+    '🎁 gift present', '🎈 balloon party', '📷 camera photo', '📱 phone mobile',
+    '💻 laptop computer', '⌨️ keyboard type', '🖥️ desktop monitor screen', '⌚ watch time',
+    '🔧 wrench tool fix', '🔨 hammer tool', '🪛 screwdriver tool', '🔑 key',
+    '💡 idea lightbulb', '📖 book read', '✏️ pencil write', '📌 pin',
+    '🚗 car drive', '✈️ plane fly travel', '🚀 rocket launch fast', '🏠 house home',
+    '🌍 earth world globe', '☀️ sun sunny', '🌙 moon night', '⛅ cloud sun weather',
+    '☔ rain umbrella', '❄️ snow cold winter', '🌈 rainbow', '🌊 wave sea ocean',
+    '🌲 tree forest', '🌵 cactus', '🐶 dog puppy', '🐱 cat kitten' ] }
+];
+
+var epkPanel = null;      /* the one panel, built on first open and reused */
+var epkBtn   = null;      /* the ☺ currently open, or null */
+var epkTa    = null;      /* the textarea that open ☺ belongs to */
+
+/* THE ONE THING THAT MATTERS. `.value = x` does NOT fire `input`, and BOTH composers
+   compute the Send-enabled state AND the auto-grow height in their `input` handler.
+   An insert that skips the event leaves Send disabled on a composer that visibly has
+   text in it — a dead button, the "UI lies" class. setRangeText puts the glyph at the
+   caret (not the end) and a dispatched InputEvent tells the app it happened. */
+function epkInsert(ta, emoji) {
+  if (!ta) return;
+  var s = ta.selectionStart, e = ta.selectionEnd;
+  if (typeof ta.setRangeText === 'function') {
+    ta.setRangeText(emoji, s, e, 'end');           /* caret lands AFTER the emoji */
+  } else {
+    ta.value = ta.value.slice(0, s) + emoji + ta.value.slice(e);
+    ta.selectionStart = ta.selectionEnd = s + emoji.length;
+  }
+  ta.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  ta.focus();                                      /* Enter must still send */
+}
+
+/* "<emoji> kw kw" → the emoji */
+function epkGlyph(entry) { return entry.split(' ')[0]; }
+
+function epkFreq() {
+  return REACTION_EMOJI.map(function (e) { return e + ' reaction'; });
+}
+
+function epkListFor(c) { return c.list || epkFreq(); }
+
+/* Grid HTML for one category, or '' when the filter excludes it all. */
+function epkSection(c, i, q) {
+  var list = epkListFor(c);
+  if (q) {
+    var catHit = c.name.toLowerCase().indexOf(q) > -1;
+    list = catHit ? list : list.filter(function (entry) {
+      return entry.toLowerCase().indexOf(' ') > -1 &&
+             entry.slice(entry.indexOf(' ') + 1).toLowerCase().indexOf(q) > -1;
+    });
+  }
+  if (!list.length) return '';
+  return '<div class="lg-epk__h" id="lg-epk-c' + i + '">' + esc(c.name) + '</div>'
+       + '<div class="lg-epk__grid">'
+       + list.map(function (entry) {
+           var g = epkGlyph(entry);
+           return '<button class="lg-epk__e" type="button" tabindex="-1" '
+                + 'aria-label="' + esc(entry.slice(entry.indexOf(' ') + 1)) + '">' + g + '</button>';
+         }).join('')
+       + '</div>';
+}
+
+function epkPaint(q) {
+  var scroll = epkPanel.querySelector('.lg-epk__scroll');
+  var html = '';
+  for (var i = 0; i < EPK_CATS.length; i++) html += epkSection(EPK_CATS[i], i, q);
+  scroll.innerHTML = html || '<p class="lg-epk__none">Nothing matching that.</p>';
+}
+
+/* Built ONCE, on first open. */
+function epkBuild() {
+  var p = document.createElement('div');
+  p.className = 'lg-epk';
+  p.setAttribute('role', 'dialog');
+  p.setAttribute('aria-label', 'Insert emoji');
+  p.innerHTML =
+      '<div class="lg-epk__search">'
+    +   '<input type="search" class="lg-epk__q" placeholder="Search emoji…" aria-label="Search emoji" autocomplete="off">'
+    + '</div>'
+    + '<div class="lg-epk__scroll"></div>'
+    + '<div class="lg-epk__tabs" role="tablist"></div>';
+  document.body.appendChild(p);
+  epkPanel = p;
+  epkPaint('');
+  p.querySelector('.lg-epk__tabs').innerHTML = EPK_CATS.map(function (c, i) {
+    return '<button class="lg-epk__tab" type="button" role="tab" aria-selected="' + (i === 0)
+         + '" title="' + esc(c.name) + '" aria-label="' + esc(c.name) + '" data-lg-epk-tab="' + i + '">'
+         + c.tab + '</button>';
+  }).join('');
+  return p;
+}
+
+/* Anchor to the ☺, flipped up when there is no room below. Fixed-position and
+   body-appended for the reason .lg-notif-menu is: the composer's ancestors carry
+   overflow:hidden, and an absolutely-positioned panel gets its top SLICED OFF —
+   the exact regression react-fix repaired for the card react palette (@0cd0a72,
+   "clipped by its own parent, not stacked wrong"). Overlaying the thread is
+   correct and expected; being cut off by an ancestor is the bug. */
+function epkPlace() {
+  if (!epkPanel || !epkBtn) return;
+  var r = epkBtn.getBoundingClientRect();
+  var h = epkPanel.offsetHeight || 286, w = epkPanel.offsetWidth || 300;
+  var top = (r.top - h - 8 >= 8) ? (r.top - h - 8) : (r.bottom + 8);
+  if (top + h > window.innerHeight - 8) top = Math.max(8, window.innerHeight - h - 8);
+  epkPanel.style.top  = Math.max(8, top) + 'px';
+  epkPanel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+}
+
+function epkClose() {
+  if (epkPanel) epkPanel.setAttribute('hidden', '');
+  if (epkBtn) epkBtn.setAttribute('aria-expanded', 'false');
+  epkBtn = null; epkTa = null;
+}
+
+function epkOpen(btn, ta) {
+  closeReactionPickers();            /* one picker open at a time, shared with reactions */
+  var p = epkPanel || epkBuild();    /* INTENT: first open is what builds it */
+  epkBtn = btn; epkTa = ta;
+  btn.setAttribute('aria-expanded', 'true');
+  var q = p.querySelector('.lg-epk__q');
+  if (q) q.value = '';
+  epkPaint('');
+  p.removeAttribute('hidden');
+  epkPlace();
+}
+
+/* Which textarea does this ☺ type into? Its own composer's — never a global lookup,
+   because the modal composer and the side dock can both be in the document at once
+   and a global getElementById would type into whichever came first. */
+function epkTargetFor(btn) {
+  var row = btn.closest('.lg-msg__compose');
+  return row ? row.querySelector('textarea') : null;
+}
+
+if (epkOn()) {
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-lg-emoji]') : null;
+    if (b) {
+      if (epkBtn === b) { epkClose(); }
+      else { epkOpen(b, epkTargetFor(b)); }
+      return;
+    }
+    var pick = e.target.closest ? e.target.closest('.lg-epk__e') : null;
+    if (pick) {
+      epkInsert(epkTa, pick.textContent);
+      epkClose();                    /* panel closes on pick (the approved variant) */
+      return;
+    }
+    var tab = e.target.closest ? e.target.closest('[data-lg-epk-tab]') : null;
+    if (tab && epkPanel) {
+      var tabs = epkPanel.querySelectorAll('.lg-epk__tab');
+      for (var i = 0; i < tabs.length; i++) tabs[i].setAttribute('aria-selected', 'false');
+      tab.setAttribute('aria-selected', 'true');
+      var qi = epkPanel.querySelector('.lg-epk__q'); if (qi) qi.value = '';
+      epkPaint('');
+      var scroll = epkPanel.querySelector('.lg-epk__scroll');
+      var head = epkPanel.querySelector('#lg-epk-c' + tab.getAttribute('data-lg-epk-tab'));
+      if (head && scroll) scroll.scrollTop = head.offsetTop - scroll.offsetTop;
+      return;
+    }
+    if (epkPanel && !epkPanel.hasAttribute('hidden') && !e.target.closest('.lg-epk')) epkClose();
+  });
+
+  /* mousedown, not click: pressing inside the panel would otherwise collapse the
+     textarea's selection before we ever read selectionStart, and the emoji would
+     land at the end instead of at the caret. */
+  document.addEventListener('mousedown', function (e) {
+    if (e.target.closest && e.target.closest('.lg-epk') && !e.target.closest('.lg-epk__q')) {
+      e.preventDefault();
+    }
+  });
+
+  document.addEventListener('input', function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains('lg-epk__q')) {
+      epkPaint(e.target.value.trim().toLowerCase());
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && epkPanel && !epkPanel.hasAttribute('hidden')) {
+      var ta = epkTa; epkClose(); if (ta) ta.focus();
+    }
+  });
+
+  window.addEventListener('resize', function () { if (epkBtn) epkPlace(); });
+  /* Reposition on scroll: fixed-position panels do not follow their anchor. */
+  window.addEventListener('scroll', function () { if (epkBtn) epkPlace(); }, true);
+}
 
 /* ── init ── */
 refreshCounts();   /* one call now sets msg + notif + conn badges */
