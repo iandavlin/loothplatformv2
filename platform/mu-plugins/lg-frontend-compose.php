@@ -197,7 +197,19 @@ const LG_FC_PATH = 'compose';
  */
 function lg_fc_types(): array
 {
-    return [
+    /**
+     * The registry is filterable so a second type (event is the scope's
+     * recommended next one, §4) can be added without editing this function, and
+     * so tools/frontend-compose/tier-probe.php can exercise the GATED tier —
+     * which no request can otherwise reach, because every registered type today
+     * is open. A guard that cannot be reached cannot be tested, and an untested
+     * guard against an escalation is the worst kind to ship.
+     *
+     * This is a CODE-level extension point, not user input: nothing here reads a
+     * request. lg_fc_may_compose() still refuses any type not in the returned
+     * map, and post_status still falls back to pending for a gated type.
+     */
+    return apply_filters('lg_fc_types', [
         'loothprint' => [
             'tier'     => 'open',
             'synth'    => true,
@@ -236,7 +248,7 @@ function lg_fc_types(): array
             // raised as an open question rather than invented here.
             'hero_from' => 'loothprint_more_images',
         ],
-    ];
+    ]);
 }
 
 /* ────────────────────────────────────────────────────────────── the gate ───── */
