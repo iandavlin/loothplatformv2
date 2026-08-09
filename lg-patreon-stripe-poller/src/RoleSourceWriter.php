@@ -50,7 +50,31 @@ final class RoleSourceWriter
         // only ever heard back the role it had just written). The adapter is a
         // fallback for a patreon-managed user with no persisted row yet (e.g. a
         // fresh onboard before the first sweep); its tier may be null (lapsed).
-        if ( ! array_key_exists( 'patreon', $out ) ) {
+        //
+        // NULL-SHADOW FIX (flagged): array_key_exists is TRUE for a persisted
+        // row whose tier is NULL, so a stale NULL row SHADOWS a reader that
+        // would have said looth2/looth3 — that is how four paying members were
+        // nearly demoted (STRIPE-PHASE0-FINDINGS §3.1), and live carries two
+        // more (612, 1768: $11 active patrons whose ONLY source row is a
+        // May-07 patreon NULL — a wrongful demotion loaded to fire on their
+        // next Arbiter run). With lgms_null_shadow_fix ON, a NULL-tier row no
+        // longer blocks the reader: when the reader speaks (payment_source =
+        // patreon) its answer replaces the shadowing NULL; when it is silent,
+        // the NULL stands. A NON-null persisted row remains authoritative in
+        // both states — the sweep wrote it from the Patreon API, and consulting
+        // the reader over it would reopen the circular-read bug above.
+        //
+        // Behind its own flag, DEFAULT OFF, because it changes the Arbiter's
+        // computed outcome for members with a persisted NULL patreon row —
+        // measured 2026-08-09: 2 members on live (612, 1768), 3 on dev2 (17,
+        // 612, 1768), every one of them a paying member whose FIXED outcome
+        // equals the tier they already hold. See classify-null-shadow.php.
+        $hasPatreonRow = array_key_exists( 'patreon', $out );
+        $nullShadowFix = $hasPatreonRow
+            && $out['patreon'] === null
+            && (bool) get_option( 'lgms_null_shadow_fix', false );
+
+        if ( ! $hasPatreonRow || $nullShadowFix ) {
             $patreon = PatreonSourceReader::readForUser( $wpUserId );
             if ( $patreon !== null ) {
                 $out['patreon'] = $patreon['tier'];
