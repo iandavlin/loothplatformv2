@@ -43,7 +43,7 @@ if (preg_match('#/sitemap-([a-z]+)\.xml$#', $path, $m)) {
 if ($section === '') {
     echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
     echo '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
-    foreach (['static', 'content', 'profiles'] as $s) {
+    foreach (['static', 'content', 'profiles', 'discussions'] as $s) {
         echo '  <sitemap><loc>' . sm_esc("$base/sitemap-$s.xml") . '</loc></sitemap>' . "\n";
     }
     echo '</sitemapindex>' . "\n";
@@ -108,6 +108,58 @@ try {
         foreach ($rows as $r) {
             $lm = !empty($r['updated_at']) ? date('Y-m-d', strtotime((string) $r['updated_at'])) : null;
             $emit('/u/' . rawurlencode((string) $r['slug']), $lm);
+        }
+
+    } elseif ($section === 'discussions') {
+        /* THE DISCUSSIONS, and why they were missing until 2026-08-09.
+         *
+         * Every discussion has had a clean, server-rendered, correctly-titled page
+         * all along — /hub/<forum-slug>/<topic-slug>/ — and the hub cards link to
+         * it. What it never had was a way for Google to FIND it:
+         *
+         *   - This sitemap listed content_item and users, never the forum tables.
+         *   - The rich listing that links to all of them is /hub/?type=discussions,
+         *     and robots.txt says `Disallow: /hub/?` — a correct rule against
+         *     infinite faceted crawl space that also happens to block the only
+         *     complete index of the discussions.
+         *   - Bare /hub/ is crawlable but shows ~38 links: whatever is on the front
+         *     page today. Everything older was unreachable.
+         *
+         * So the community's own content — the reason anyone searches for this site
+         * — was invisible while /login/ and /merch/ ranked. Listing the clean URLs
+         * here bypasses the robots-blocked listing entirely.
+         *
+         * GATING, and it is not one column: `visibility` is the forum's own privacy
+         * (public/private/hidden) and `tier_gate` is the paywall. Measured on live:
+         * 1335 topics public/public, 14 in HIDDEN forums, 3 in PRIVATE. A hidden
+         * forum's topics must never appear in a public sitemap, so both are asserted
+         * — and tier_gate mirrors content_item's rule above rather than inventing a
+         * second policy.
+         *
+         * lastmod is last_active_at, not created_at: a thread that gains a reply is
+         * changed content and should be re-crawled. That is the whole point of the
+         * field, and the hub-sort bug of 8/3 is a reminder these two clocks differ.
+         */
+        $db = lg_archive_poc_pdo();
+        $rows = $db->query("
+            SELECT f.slug AS forum_slug, t.slug AS topic_slug, t.last_active_at
+              FROM forums.topic t
+              JOIN forums.forum f ON f.id = t.forum_id
+             WHERE f.visibility = 'public'
+               AND f.tier_gate IN ('public', 'lite')
+               AND t.slug IS NOT NULL AND t.slug <> ''
+               AND f.slug IS NOT NULL AND f.slug <> ''
+             ORDER BY t.last_active_at DESC NULLS LAST
+        ");
+        foreach ($rows as $r) {
+            $lm = !empty($r['last_active_at'])
+                ? date('Y-m-d', strtotime((string) $r['last_active_at']))
+                : null;
+            $emit(
+                '/hub/' . rawurlencode((string) $r['forum_slug'])
+                . '/' . rawurlencode((string) $r['topic_slug']) . '/',
+                $lm
+            );
         }
     }
 } catch (Throwable $e) {
