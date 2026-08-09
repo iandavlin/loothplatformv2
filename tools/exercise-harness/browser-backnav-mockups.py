@@ -100,6 +100,61 @@ OPTION_B = """(function(){
   return 'ok';
 })()"""
 
+# ── OPTION C — floating back chip, thumb corner, always there ───────────────
+# Ian 8/9: "Is there any other lowprofile way to go back that is sticky so it's
+# always available?" C is the smallest thing that is ALWAYS on screen: a translucent
+# circle pinned bottom-left, clear of the tab bar, that never moves.
+OPTION_C = """(function(){
+  var s=document.createElement('style');
+  s.textContent = [
+    '.lgmock-chip{position:fixed;left:14px;bottom:calc(var(--lg-tabbar-h,64px) + 16px);',
+      'z-index:2147481200;width:46px;height:46px;border-radius:50%;display:flex;',
+      'align-items:center;justify-content:center;text-decoration:none;',
+      'background:rgba(28,34,22,.62);color:#fff;backdrop-filter:blur(8px);',
+      '-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.22);',
+      'box-shadow:0 4px 14px rgba(0,0,0,.28)}',
+    '.lgmock-chip svg{width:22px;height:22px}'
+  ].join('');
+  document.head.appendChild(s);
+  var a=document.createElement('a'); a.className='lgmock-chip'; a.href='/hub/';
+  a.setAttribute('aria-label','Back to the Hub');
+  a.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"'+
+    ' stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
+  document.body.appendChild(a);
+  return 'ok';
+})()"""
+
+# ── OPTION D — slim sticky pill that hides on scroll-down, returns on scroll-up ─
+# The iOS-app convention: out of the way while you read, back the instant you
+# gesture upward. Costs ~32px only when it is showing.
+OPTION_D = """(function(){
+  var s=document.createElement('style');
+  s.textContent = [
+    '.lgmock-pill{position:fixed;top:8px;left:50%;transform:translate(-50%,0);',
+      'z-index:2147481200;display:inline-flex;align-items:center;gap:7px;height:32px;',
+      'padding:0 14px;border-radius:999px;text-decoration:none;',
+      'background:rgba(28,34,22,.72);color:#fff;backdrop-filter:blur(8px);',
+      '-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.18);',
+      'font:700 13px/1 var(--lg-font-sans,system-ui);box-shadow:0 3px 12px rgba(0,0,0,.24);',
+      'transition:transform .22s ease,opacity .22s ease}',
+    '.lgmock-pill svg{width:15px;height:15px}',
+    '.lgmock-pill.is-away{transform:translate(-50%,-160%);opacity:0}'
+  ].join('');
+  document.head.appendChild(s);
+  var a=document.createElement('a'); a.className='lgmock-pill'; a.href='/hub/';
+  a.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"'+
+    ' stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg><span>Hub</span>';
+  document.body.appendChild(a);
+  var last=window.scrollY;
+  window.addEventListener('scroll', function(){
+    var y=window.scrollY;
+    if (y > last + 6 && y > 80) a.classList.add('is-away');     // scrolling DOWN — get out of the way
+    else if (y < last - 6)      a.classList.remove('is-away');  // scrolling UP — come back
+    last=y;
+  }, {passive:true});
+  return 'ok';
+})()"""
+
 
 def gate(): return open("/tmp/mobile-bugs-exercise/gate.txt").read().strip()
 
@@ -181,6 +236,27 @@ def main():
         go(); check("A"); print("  inject:", p.ev(OPTION_A)); time.sleep(0.7); shot("11-option-a")
         print("=== OPTION B — Back in the bottom bar ===")
         go(); check("B"); print("  inject:", p.ev(OPTION_B)); time.sleep(0.7); shot("12-option-b")
+
+        # C and D are FLOATING chrome — they touch no page markup, so they are
+        # layout-independent and can be shot against today's post while the layout
+        # underneath is replaced separately. Each is shown AT REST and MID-SCROLL,
+        # because "sticky" is a claim about what happens when you scroll and a
+        # single at-rest frame cannot show it.
+        for label, inject, name in (("C — floating chip", OPTION_C, "13-option-c"),
+                                    ("D — sticky pill",   OPTION_D, "14-option-d")):
+            print(f"=== OPTION {label} ===")
+            go(); check(label); print("  inject:", p.ev(inject)); time.sleep(0.7)
+            shot(name + "-rest")
+            # scroll DOWN a long way, in steps, so a scroll-linked control reacts
+            for _ in range(6):
+                p.ev("window.scrollBy(0, 260)"); time.sleep(0.18)
+            time.sleep(0.9); shot(name + "-scrolled")
+            p.ev("window.scrollBy(0, -200)"); time.sleep(1.0); shot(name + "-scrollup")
+            print("   scrollY:", p.ev("Math.round(window.scrollY)"),
+                  "| still on screen:", p.ev("""(function(){
+                     var e=document.querySelector('.lgmock-chip,.lgmock-pill');
+                     if(!e) return null; var r=e.getBoundingClientRect();
+                     return !!(r.width&&r.height&&r.top>-40&&r.top<innerHeight);})()"""))
         print(f"\n  frames -> {OUT}")
     finally:
         try: p.ws.close()

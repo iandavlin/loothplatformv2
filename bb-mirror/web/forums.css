@@ -923,6 +923,13 @@ body.lg-follow-anon [data-follow] { display: none !important; }
   color: var(--fg-soft);
 }
 
+/* Same cause as .post__menu above (backlog 3.6), found by sweeping for it: forums.js
+   shows/hides this with `el.hidden` (show/hide at forums.js:3340-3341, called from
+   3377/3384), and the `display:flex` below defeated the attribute — so every topic
+   page rendered the "↩ replying to …" banner with its cancel link, telling the member
+   they were replying to someone when they were not. */
+.reply-form__replying-to[hidden] { display: none; }
+
 .reply-form__replying-to {
   display: flex;
   align-items: center;
@@ -4869,6 +4876,20 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   background: rgba(0, 0, 0, .07);
   color: var(--fg, #1c1c1c);
 }
+/* [hidden] MUST WIN, and this rule is why it did not (backlog 3.6).
+   `hidden` is only `display:none` from the UA stylesheet, so ANY author `display:`
+   on the same element beats it. `.post__menu` sets `display:flex` below, which meant
+   the Edit/Delete dropdown was painted OPEN from first render for every viewer who
+   can edit a post — two of them on a one-reply thread, sitting over the body — while
+   its own toggle worked perfectly: forums.js flips `menu.hidden` and sets
+   aria-expanded, so the button honestly reported "false" next to a visible menu.
+   Nothing was wrong with the behaviour; the attribute simply had no visual effect.
+   This wins on SPECIFICITY, not order — `.post__menu[hidden]` is (0,2,0) against the
+   base rule's (0,1,0) — so it holds wherever it sits in the file. It is placed here
+   only so the next reader meets it before the `display:flex` that made it necessary.
+   Never express this component's open/closed state as a `display` on `.post__menu`. */
+.post__menu[hidden] { display: none; }
+
 .post__menu {
   position: absolute; top: calc(100% + 4px); right: 0; z-index: 60;
   min-width: 176px; padding: 6px;
