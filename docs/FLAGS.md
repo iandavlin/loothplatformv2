@@ -29,6 +29,9 @@ as-verified on 2026-08-09; live = commit `021ff38` unless noted.
 |---|---|---|---|---|
 | `lgms_retraction_sweep` | absent=OFF | OFF | OFF | Phase 1 wave 1 (29fe64e): detection-only sweep; retraction stays the explicit script |
 | `lgms_null_shadow_fix` | absent=OFF | OFF | OFF | Phase 1 wave 1: NULL patreon row stops shadowing the reader; measured blast radius = members 612/1768 (fix PROTECTS them) |
+| `lgms_stripe_lifecycle` | absent=OFF | OFF | OFF | Phase 1 (0ffb32f): webhook-driven single-tier membership. OFF = no route/no read/no log (keeper-verified). ⚠️ INTERLOCK: refuses while `lgms_identity_gate` dark. FLIP ORDER live: identity_gate ON → lifecycle ON |
+| `lgms_stripe_webhook_secret` | unset | unset | unset | Stripe dashboard webhook signing secret — set on live before lifecycle flip |
+| `lgms_stripe_price_id` | unset | unset | unset | The single Stripe price for looth3 — set on live before lifecycle flip |
 | `lgms_stripe_frozen` | (see poller) | — | — | Stripe ingest freeze — Phase 1 proper unfreezes; stripe seat owns |
 | `lgms_poller_mail_enabled` etc. | (see poller settings) | — | — | Poller operational toggles; stripe seat owns |
 
