@@ -803,6 +803,21 @@ foreach ([getenv('LG_SHEET_EMBEDS'), $_SERVER['LG_SHEET_EMBEDS'] ?? false] as $l
 }
 if ($lg_se_on): ?>
 <script>window.LG_SHEET_EMBEDS = true;</script>
+<?php endif;
+/* Backlog 3.8 — the mobile/PWA "← Hub" sticky pill (Ian ruled option D, 8/9).
+   Built inside webroot/bottom-nav.js, which is a static docroot layer and cannot
+   read PHP, so the bit is emitted here.
+
+   EMITTED ONLY WHEN ON, never as `= false`: flag off writes nothing at all, so the
+   served page is byte-for-byte unchanged and the client guard reads undefined.
+   See platform/config/back-pill.php. */
+$lg_bp = @include __DIR__ . '/../../platform/config/back-pill.php';
+$lg_bp_on = is_array($lg_bp) && !empty($lg_bp['enabled']);
+foreach ([getenv('LG_BACK_PILL'), $_SERVER['LG_BACK_PILL'] ?? false] as $lg_bp_o) {
+    if ($lg_bp_o !== false && $lg_bp_o !== '') $lg_bp_on = ($lg_bp_o === '1' || $lg_bp_o === 'true');
+}
+if ($lg_bp_on): ?>
+<script>window.LG_BACK_PILL = true;</script>
 <?php endif; ?>
 <script src="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/forums.js?v=<?= bb_mirror_asset_ver('forums.js') ?>" defer></script>
 <!-- Hub toolbar type-ahead: live search + author autocomplete (forums/_suggest.php). -->

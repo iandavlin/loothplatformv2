@@ -1436,9 +1436,75 @@
     }, 150);
   }
 
+  /* ---- "← Hub" sticky pill (backlog 3.8, Ian ruled option D 2026-08-09) ----
+   *
+   * Ian: "on mobile and pwa we need some kind of back nav to the hub once you click
+   * through to the post. there is one in the nav tab but it should be exposed" —
+   * then, of four mockups: "is there any other lowprofile way to go back that is
+   * sticky so it's always available?"
+   *
+   * THE PROBLEM IS SHARPEST IN THE INSTALLED APP, and it is measurable rather than
+   * a guess: manifest.json is display:standalone, so there is no browser chrome and
+   * no back button at all. The only way back to the hub was the Back INSIDE the Nav
+   * tray, a few lines up in this same file — two taps, invisible until the first.
+   * The pill is that button, promoted. Keeping both in one file is deliberate: they
+   * cannot drift apart, and the next reader meets them together.
+   *
+   * Gated on a bit bb-mirror's _chrome.php emits ONLY when the flag is on, so with
+   * the flag off this is `undefined &&` and nothing is created or measured.
+   */
+  var PILL_ID = 'looth-backpill';
+  function buildBackPill() {
+    if (!window.LG_BACK_PILL) return;                       // flag off → nothing at all
+    if (!window.matchMedia(MOBILE_MQ).matches) return;      // phones only
+    if (document.getElementById(PILL_ID)) return;
+    // Never offer "back to the Hub" while you are ON the hub. /hub/ and /hub/?x are
+    // the hub itself; /hub/<forum>/<topic>/ is the post you clicked through to.
+    var path = (location.pathname || '').replace(/\/+$/, '');
+    if (!/^\/hub\/.+/.test(path)) return;
+    try { if (window.top !== window.self) return; } catch (e) { return; }   // not in a frame
+
+    var st = document.createElement('style');
+    st.textContent =
+      '#' + PILL_ID + '{position:fixed;top:8px;left:50%;transform:translate(-50%,0);' +
+        'z-index:2147481250;display:inline-flex;align-items:center;gap:7px;height:32px;' +
+        'padding:0 14px;border-radius:999px;text-decoration:none;' +
+        'background:rgba(28,34,22,.72);color:#fff;' +
+        '-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);' +
+        'border:1px solid rgba(255,255,255,.18);' +
+        'font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);' +
+        'box-shadow:0 3px 12px rgba(0,0,0,.24);' +
+        'transition:transform .22s ease,opacity .22s ease}' +
+      '#' + PILL_ID + ' svg{width:15px;height:15px;fill:none;stroke:currentColor;' +
+        'stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}' +
+      '#' + PILL_ID + '.is-away{transform:translate(-50%,-160%);opacity:0;' +
+        'pointer-events:none}' +
+      // A member who has asked for less motion gets the pill without the slide.
+      '@media (prefers-reduced-motion:reduce){#' + PILL_ID + '{transition:none}}';
+    (document.head || document.documentElement).appendChild(st);
+
+    var a = document.createElement('a');
+    a.id = PILL_ID;
+    a.href = '/hub/';
+    a.setAttribute('aria-label', 'Back to the Hub');
+    a.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.back + '</svg><span>Hub</span>';
+    document.body.appendChild(a);
+
+    // Hide going DOWN, return going UP. The 6px dead-zone stops it flickering on
+    // the tiny scroll jitter a touch scroll produces at rest, and the 80px floor
+    // keeps it put at the top of the page where there is nothing to get out of.
+    var last = window.scrollY || 0;
+    window.addEventListener('scroll', function () {
+      var y = window.scrollY || 0;
+      if (y > last + 6 && y > 80) a.classList.add('is-away');
+      else if (y < last - 6) a.classList.remove('is-away');
+      last = y;
+    }, { passive: true });
+  }
+
   function start() {
-    if (document.body) { build(); startDesktopSettings(); maybeAutoCompose(); }
-    else document.addEventListener('DOMContentLoaded', function () { build(); startDesktopSettings(); maybeAutoCompose(); });
+    if (document.body) { build(); startDesktopSettings(); maybeAutoCompose(); buildBackPill(); }
+    else document.addEventListener('DOMContentLoaded', function () { build(); startDesktopSettings(); maybeAutoCompose(); buildBackPill(); });
   }
   start();
 })();
