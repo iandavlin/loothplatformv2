@@ -41,9 +41,10 @@ return array(
 	/**
 	 * ON 2026-08-09, Ian's flip (decision box: "sheet-embeds"), after confirming
 	 * this half is his actual 3.7 complaint: "THE MAIn problem was no imbed in
-	 * the modal." Flipped for his real-phone check on the dev2 serve; reverts to
-	 * false if his look fails. Reached the serve merged-OFF first per the house
-	 * rule (byte-identical, gate 19), which is what made this a one-line flip.
+	 * the modal." VERIFIED by Ian on his phone the same night ("looks good",
+	 * test-3 tapped from the hub). Reached the serve merged-OFF first per the
+	 * house rule (byte-identical, gate 19), which is what made this a one-line
+	 * flip — and what lets it ride to live with the next ordinary pull.
 	 *
 	 * Lower-risk than most flags here — it renders a player where a bare link is
 	 * today, writes nothing, and deletes nothing.
