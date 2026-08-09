@@ -99,6 +99,69 @@ Six controls, one post type.
 **no working front-end create path**. There is no CPT write endpoint in the monorepo
 (inventory in the superseded doc, §1.2).
 
+### ⚠️ THIRD PASS, SAME DAY — I OVERCLAIMED IN THE SECOND, AND HERE IS THE WITHDRAWAL
+
+The second correction said members "actually use" the eight live pages, and told
+Ian the two-tier gate is therefore a RESTRICTION on today rather than a new limit.
+**That is not supported and I have withdrawn it**, on his page and here.
+
+What broke it: the member-authored posts do not look like form submissions.
+Checking `post-type-videos` #72508 (posted 2026-08-08 by an ordinary member) and
+the four next-newest, all show the same signature:
+
+* **2 of the 9 fields** the video field group collects — only `video_category` and
+  `content_category_`. A real ACF submit writes every rendered field, empties
+  included, plus its `_fieldname` key-mirror.
+* **no `_edit_last`, no `_edit_lock`, zero revisions** — nobody edited them in
+  wp-admin either.
+* a full `_lg_layout_v2` blob (23KB, ten blocks, *including a transcript*) while
+  the group's own `transcript_` field is **absent from the post**. The content is
+  in the blob, not in the fields.
+
+That is the signature of something creating these programmatically and crediting
+the member, not of a member filling in a form. The AUTHORSHIP counts in the second
+correction stand; the inference about HOW those posts were made does not.
+
+**AND THEN I WATCHED IT HAPPEN.** Mid-investigation, `post-type-videos` went 368 →
+369. The new row, #72766 "Electric Guitar Builders Club: Curved Frets", was
+authored by `patreon_94888385`, carried `_thumbnail_id`, `_lg_layout_v2` and
+`patreon-level` and **not one ACF field**, and was created on a `lg-wp-cron.timer`
+tick (that timer fires every minute and runs due WP cron events; the WP cron array
+holds `lgpo_patreon_auto_sync`). Nobody was at a form: the only submission in that
+window was mine, as a different member, with a different title, and it created
+nothing.
+
+So the answer to "what writes `_lg_layout_v2` for a new member-attributed video" is
+**the scheduled Patreon sync**, not a human and not a member. I have not pinpointed
+the exact writing function — the repo grep still only shows `lg-legacy-import`
+Cli.php:187 and EditorButton.php:290 — so the last inch is unproven, but the
+pipeline is not in doubt.
+
+⚠️ **A TIMING TRAP inside this, worth the line:** WP's clock on this box runs FOUR
+HOURS behind server local (`date` said 17:54, `current_time('mysql')` said 13:54).
+I first read #72766's 13:53 timestamp as "hours ago, before my probe" and nearly
+filed it as unrelated background. It was forty seconds old. Compare post
+timestamps against `current_time()`, never against `date`.
+
+**So the live question is narrower and still open: do those eight forms actually
+submit?** Rendering is proven. Submitting is not.
+
+⚠️ **AND MY ATTEMPT TO SETTLE IT WAS THE WRONG SHAPE — do not repeat it.** I POSTed
+the form's own hidden fields back to `/add-video-post/` as an ordinary member:
+HTTP 200, zero posts created, and the response did not echo the submitted title.
+That reads like "the form refuses members" and it means nothing of the sort.
+frontend-admin submits over **admin-ajax.php** (`wp_ajax_fea`, `acf_frontend`,
+`frontend_admin`), so a plain page POST is simply never handled. A null result from
+the wrong channel is not evidence of a closed door.
+
+Settling it means reproducing frontend-admin's AJAX contract — its own action,
+nonce and payload shape — and force-deleting whatever it creates. That is a
+contained job but a real one, and it is **not on the critical path**: the two-tier
+gate is correct in both worlds (it closes an old hole, or it prevents a new one),
+and nothing in the loothprint slice depends on the answer.
+
+---
+
 ### ⚠️ SECOND CORRECTION, 2026-08-09 — §1.3 IS WRONG ABOUT ALL NINE PAGES, AND §6 DESCRIBES THE STATUS QUO
 
 The first correction below found that `/add-your-own-loothprint/` is alive. Having
