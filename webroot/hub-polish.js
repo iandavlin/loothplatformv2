@@ -3431,6 +3431,25 @@
   }
   // Walk the canonical .replies-loadmore (forums.js's delegated handler fetches the
   // next page + inserts it) until every reply is in the sheet.
+  /* ---- embeds in the reader sheet (backlog 3.7, Ian 7/31) ----
+   *
+   * Every assignment below writes SERVER HTML into the sheet, and server HTML
+   * carries provider links as plain <a>. bbProcessEmbeds is what turns those into
+   * players; forums.js sweeps .post__body with it on load, and the DESKTOP reader
+   * modal calls it on this identical data path. The sheet — the only way to read a
+   * discussion on a phone — never did, so a discussion whose body is a YouTube link
+   * was a naked URL on mobile and a video everywhere else.
+   *
+   * Gated on a bit bb-mirror's _chrome.php emits ONLY when the flag is on, so with
+   * the flag off this is `undefined && ...` and the sheet behaves exactly as before.
+   * bbProcessEmbeds itself is already loaded here (forums.js exports it on window);
+   * the guard on it is for load-order, not for the flag.
+   */
+  function lrsEmbeds(node) {
+    if (!window.LG_SHEET_EMBEDS || !node) return;
+    if (window.bbProcessEmbeds) window.bbProcessEmbeds(node);
+  }
+
   function lrsLoadAll(full, tid) {
     lrsEnhance(full);
     var tries = 0;
@@ -3472,6 +3491,7 @@
         body.innerHTML = '<div class="feed-card__replies-full lg-rshow"></div>';
         var full = body.querySelector('.feed-card__replies-full');
         full.innerHTML = html;
+        lrsEmbeds(full);
         if (!full.querySelector('.reply-stub')) { body.innerHTML = '<div class="lrs-note">No replies yet. Be the first to reply.</div>'; if (sh) sh.__lgToReplies = 0; return; }
         lrsLoadAll(full, tid);
         lrsScrollToReplies();
@@ -3535,6 +3555,7 @@
     var body = document.createElement('div'); body.className = 'lrs-op__body';
     var ex = card.querySelector('.feed-card__full-body, .fc-full-body, .feed-card__op-excerpt, .fc-excerpt');
     body.innerHTML = ex ? ex.innerHTML : '';
+    lrsEmbeds(body);
     op.appendChild(body);
     // React to the OP itself (dmodal parity, Ian 2026-06-11): clone the card's
     // TOPIC reaction bar into the sheet. Canonical forums.js delegates .fcr
@@ -3671,7 +3692,7 @@
     fetch(base + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
       .then(function (html) {
-        if (html && html.trim()) body.innerHTML = html;
+        if (html && html.trim()) { body.innerHTML = html; lrsEmbeds(body); }
         // the full OP grows above the thread → re-anchor a replies-intent open
         // (again shortly after, for images in the OP body landing late)
         lrsScrollToReplies();
