@@ -15,7 +15,7 @@ line into that lane's charter and note the lane name here.
 4.5 Participation silently UNSUBSCRIBES you from the discussion → ✅ MERGED + LIVE @ 10ea816 (was eroding the 381 followers since June)
 
 **P1 — wanted now / deploy-blocking**
-3.7 Mobile: discussion embed → ✅ FIXED, flag ON, Ian-VERIFIED on his phone 8/9 ("looks good", tapped test-3 from the hub). Reaches live with the next lg-deploy. His words on scope: "THE MAIn problem was no imbed in the modal." Card half → item 7, not a bug
+3.7 Mobile: discussion embed → ✅ LIVE @ 021ff38 (Ian ran lg-deploy 8/9; keeper smoke-verified ON the live box: bit emitted, guard served, social-actions stamp absent). Ian-VERIFIED on his phone on dev2 first ("looks good", test-3). His words on scope: "THE MAIn problem was no imbed in the modal." Card half → item 7, not a bug
 3.5 SEO/sitemap: zero discussions submitted — Google indexes the mirrored forum + defunct /shop/ and /merch/ (200s) — UNOWNED, findings on origin/sitemap-seo
 6. Front-end COMPOSE for all post types (Ian re-scoped 8/3: editing was never the problem) → frontend-compose, Option A ruled
 5. Notifications: quick-reply modal (default) w/ full-post link — UNOWNED, 9 commits on origin/notif-quickreply
