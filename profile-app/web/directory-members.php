@@ -370,8 +370,25 @@ function dirCardHTML(it) {
   // (Per-member teaser cards removed, Ian 6/12 pm: the anon stack is visible
   // profiles only; members-only members appear as anonymous dots on the map.)
   const dn = decodeEnt(it.display_name) || 'Member';
-  // profile-media resize buckets (craft gate 6/12): avatars 96, banners 480
-  const rs = (u,w) => u ? u + (u.indexOf('?')>=0?'&':'?') + 'w=' + w : u;
+  // profile-media resize buckets (craft gate 6/12): avatars 96, banners 480.
+  //
+  // ⚠️ TWO KINDS OF URL LIVE IN avatar_url AND ONLY ONE UNDERSTANDS ?w=.
+  // profile-media URLs are served by a resizer that reads ?w=. RAW WordPress
+  // uploads (/wp-content/uploads/...) are served by nginx, which IGNORES it —
+  // so `?w=96` on those looked like a resize and did nothing. That is the whole
+  // of craft-gate item 13.5, RED since Nov 2024: the default avatar
+  // (uploads/2024/11/Optimum.png) is a 1000px 107KB PNG painted at 42px, on
+  // every photo-less member card on the anonymous finder — the first page a
+  // stranger sees. It read as fixed because the param was right there.
+  //
+  // Uploads now go through the real resizer (bb-mirror/web/img.php?s=<path>&w=),
+  // whose ALLOWED_W includes the 96 avatar bucket and which serves cached WebP.
+  const rs = (u,w) => {
+    if (!u) return u;
+    const m = u.match(/\/wp-content\/uploads\/(.+?)(?:\?.*)?$/);
+    if (m) return '/img.php?s=' + encodeURIComponent(m[1]) + '&w=' + w;
+    return u + (u.indexOf('?')>=0?'&':'?') + 'w=' + w;
+  };
   const ini = escH(dn.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase());
   const avi = it.avatar_url
     ? `<img class="avi-sm" src="${escH(rs(it.avatar_url,96))}" alt="" loading="lazy" data-ini="${ini}" onerror="dirAviFallback(this)">`
