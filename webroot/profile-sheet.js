@@ -318,6 +318,46 @@
   });
 
   var inflight = null;
+  /* ---- wake the injected social widget (backlog 4.4 + 4.3, Ian 8/8) ----
+   *
+   * The Connect / Message / Accept / Decline / "..." controls are server-rendered
+   * by profile-app's Social.php, and their behaviour is ONE delegated document
+   * click listener. On the full /u/ page that listener is installed by a script in
+   * the same response. Here it never can be: DOMParser scripts are inert, and the
+   * strip above removes them anyway (deliberately — u.php also carries the owner
+   * editor and other page scripts that must NOT run inside the host page).
+   *
+   * So the tray rendered all seven controls and wired none of them. Tapping the
+   * 3 dots did nothing and tapping Message never even dispatched lg:open-dm, which
+   * is exactly what Ian reported from a phone.
+   *
+   * The fix does not guess: the SERVER tells us where the behaviour lives, by
+   * stamping data-lg-social-src on the widget when its flag is on. No stamp — flag
+   * off, or a build that predates it — and this is a no-op, which is what keeps
+   * the OFF state byte-identical.
+   *
+   * Loading it on the HOST page (not the sheet) is the point: the listener is
+   * delegated off document, so one load covers this profile and every profile
+   * opened afterwards. __lgSocialWired makes a duplicate load harmless, so we
+   * never need to know whether the page already had it.
+   */
+  var socialLoading = false;
+  function initSocialActions(prof) {
+    if (window.__lgSocialWired || socialLoading) return;     // already wired here
+    var widget = prof.querySelector('[data-lg-social-src]');
+    if (!widget) return;                                     // flag OFF — do nothing
+    var src = widget.getAttribute('data-lg-social-src') || '';
+    if (src.charAt(0) !== '/' || src.charAt(1) === '/') return;  // same-origin, ours only
+    if (document.querySelector('script[data-lg-social-wiring]')) return;
+    socialLoading = true;
+    var s = document.createElement('script');
+    s.src = src;
+    s.async = false;
+    s.setAttribute('data-lg-social-wiring', '');
+    s.onerror = function () { socialLoading = false; };      // let a later open retry
+    (document.head || document.documentElement).appendChild(s);
+  }
+
   function openProfileSheet(slug) {
     if (!slug) return;
     slug = String(slug).replace(/^\/?u\//, '').split(/[?#/]/)[0];
@@ -361,6 +401,7 @@
         if (bavi) { var src = pic && (pic.tagName === 'IMG' ? pic.src : (pic.querySelector && pic.querySelector('img') && pic.querySelector('img').src)); if (src) bavi.src = src; }
         initMaps(prof);
         initCarousels(prof);
+        initSocialActions(prof);
         // Reveal "Edit profile" only when this is the viewer's OWN profile.
         meSlug().then(function (mine) {
           if (inflight !== token) return;
