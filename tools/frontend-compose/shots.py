@@ -112,6 +112,12 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--tag", default="shot")
     ap.add_argument("--full", action="store_true", help="full-page rather than viewport")
+    # There is no PIL and no ImageMagick on this box, and the resizer only serves
+    # from wp-content/uploads (measured: /img.php 302s anything outside it), so
+    # the renderer is the only thing here that can downscale. A fractional
+    # deviceScaleFactor makes Chrome do it at capture time.
+    ap.add_argument("--scale", type=float, default=0,
+                    help="override deviceScaleFactor, e.g. 0.3 for a small overview strip")
     args = ap.parse_args()
 
     env = gate_env()
@@ -142,8 +148,9 @@ def main():
 
         for theme in THEMES:
             for label, w, h, mobile, scale in VIEWPORTS:
+                dsf = args.scale if args.scale else scale
                 tab.call("Emulation.setDeviceMetricsOverride",
-                         width=w, height=h, deviceScaleFactor=scale,
+                         width=w, height=h, deviceScaleFactor=dsf,
                          mobile=mobile, screenWidth=w, screenHeight=h)
                 if mobile:
                     tab.call("Emulation.setTouchEmulationEnabled", enabled=True,
@@ -151,25 +158,48 @@ def main():
                 else:
                     tab.call("Emulation.setTouchEmulationEnabled", enabled=False)
 
-                # trap 4: navigate BEFORE writing the theme, then re-navigate so
-                # the page boots with it already set.
-                tab.call("Page.navigate", url=url)
-                time.sleep(2.5)
-                tab.call("Runtime.evaluate", expression=(
-                    f"localStorage.setItem('lg-set-theme','{theme}');"
-                    f"document.documentElement.setAttribute('data-lguser-theme','{theme}');"
-                ))
-                tab.call("Page.navigate", url=url)
-                time.sleep(3.5)
+                # RE-ASSERT THE COOKIES EVERY FRAME, and retry a frame that came
+                # back signed-out. Setting them once at the top looked correct and
+                # was not: two of four frames in a run came back as the branded
+                # 404 — the route's signed-out answer — while the other two were
+                # fine. Whatever drops them (the site re-issuing an auth cookie,
+                # or contention with a gate run hammering the same box), a
+                # screenshot that silently photographs the logged-out state is
+                # exactly the "verify the thing, not the thing next to it" trap,
+                # and it would have been published to Ian as the built form.
+                #
+                # The verify-then-retry is what makes this honest: the loop below
+                # only accepts a frame once the page says the form is there, and
+                # the per-frame line printed at the end reports what was ACTUALLY
+                # captured, not what was requested.
+                got, ok = "{}", False
+                for attempt in range(3):
+                    tab.call("Network.setCookies", cookies=cookies)
+                    # trap 4: navigate BEFORE writing the theme, then re-navigate
+                    # so the page boots with it already set.
+                    tab.call("Page.navigate", url=url)
+                    time.sleep(2.5)
+                    tab.call("Runtime.evaluate", expression=(
+                        f"localStorage.setItem('lg-set-theme','{theme}');"
+                        f"document.documentElement.setAttribute('data-lguser-theme','{theme}');"
+                    ))
+                    tab.call("Page.navigate", url=url)
+                    time.sleep(3.5)
 
-                # Prove what we actually photographed rather than trusting the set.
-                got = tab.call("Runtime.evaluate", expression=(
-                    "JSON.stringify({"
-                    "theme: document.documentElement.getAttribute('data-lguser-theme'),"
-                    "w: innerWidth,"
-                    "form: !!document.querySelector('.lgfc__card'),"
-                    "title: (document.title||'').slice(0,60)})"
-                ), returnByValue=True)["result"].get("value", "{}")
+                    got = tab.call("Runtime.evaluate", expression=(
+                        "JSON.stringify({"
+                        "theme: document.documentElement.getAttribute('data-lguser-theme'),"
+                        "w: innerWidth,"
+                        "form: !!document.querySelector('.lgfc__card'),"
+                        "title: (document.title||'').slice(0,60)})"
+                    ), returnByValue=True)["result"].get("value", "{}")
+                    ok = '"form":true' in got.replace(" ", "")
+                    # An anon run has no form to wait for, so one pass is correct.
+                    if ok or not args.login:
+                        break
+                    print(f"  retry {attempt + 1}: {theme}/{label} came back signed-out")
+                if args.login and not ok:
+                    print(f"  !! {theme}/{label} NEVER got the form — frame is NOT the feature")
 
                 shot = tab.call("Page.captureScreenshot", format="png",
                                 captureBeyondViewport=bool(args.full))

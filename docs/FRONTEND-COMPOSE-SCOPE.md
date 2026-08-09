@@ -99,6 +99,48 @@ Six controls, one post type.
 **no working front-end create path**. There is no CPT write endpoint in the monorepo
 (inventory in the superseded doc, §1.2).
 
+### ⚠️ CORRECTED 2026-08-09 BY THE BUILD LANE — §1.3 AND THE COPY CLAIM ARE WRONG
+
+Two claims this scope rests on did not survive contact with the build. Both are
+corrected in place rather than quietly worked around, because the mock Ian
+approved repeats them and he is entitled to know what he was told.
+
+**1. `/add-your-own-loothprint/` IS NOT DEAD.** §1.3 says the nine "Add Post"
+pages return "188 KB of instructional prose and **zero form inputs**". Measured
+today as an ordinary member (`bangers`), that page returns a **working ACF form**:
+95 inputs, the real field keys (`field_6547dafd3f5d6` = `loothprint_more_images`,
+`field_6547dc013f5d7` = `loothprint_3d_file`, `field_6564e26df56ba` = the
+licence), the real labels, and frontend-admin's `acff[...]` naming. A member can
+post a Loothprint through it right now.
+
+What is true is that it is **unusable, not absent**: unstyled browser defaults,
+no platform chrome, and **11,353 px tall at 1280 px** — 23,896 px on a phone —
+with every licence explained twice and a wall of help text under the form.
+Photographed at `/footer-mockups/frontend-compose-build/`.
+
+This matters to how the work is described. "Only the front door is missing" is
+the wrong framing: the door exists and it is horrible. The build is a
+**replacement**, and the honest headline is 11,353 px → 1,695 px, not
+nothing → something. It also means there is an existing surface to retire or
+redirect once the flag goes on — which this lane has NOT done and which nobody
+should assume is handled.
+
+Why the original measurement disagreed is not established. It was taken "as a
+real admin" and this one as a member, so an admin-only difference is plausible
+but unproven — named rather than guessed at.
+
+**2. THE MOCK'S COPY IS NOT THE EXISTING COPY.** The mock's lede claims "every
+label and hint below is the copy that already exists for this post type", and its
+evidence table cites two ACF strings that appear nowhere in the drawn form.
+Checked field by field against the live group: essentially every label is new
+wording. The mock drew the *spirit* of the ACF copy, not the copy.
+
+The build ships the mock's words — those are the ones Ian ruled on — with each
+ACF original recorded beside it in `lg_fc_types()` and the full swap drawn for
+him side by side on the comparison page. Reverting any row is a one-line edit.
+
+---
+
 ### 1.3 The estate that looks like one (carried forward — this is still the main trap)
 
 WordPress holds nine front-end "Add Post" pages (`add-your-own-loothprint`,
@@ -486,3 +528,42 @@ own route calls that save path correctly, and that the gate refuses the right pe
 `tools/admin-edit-any/compose-probe.sh` re-runs every measurement here: the compose-path
 inventory, the `acf_form()` render, the synth-vs-hand-authored split, the end-to-end
 draft proof, the authorship counts and the create-capability population on both boxes.
+
+---
+
+## 9. Deploying this (written by the build lane, 2026-08-09)
+
+A pull is NOT enough, because the mu-plugin symlink SET is not in the repo
+(CLAUDE.md). In the same window as the pull:
+
+```bash
+git -C ~/loothplatformv2-clean pull --ff-only origin main
+sudo ln -sfn /home/ubuntu/loothplatformv2-clean/platform/mu-plugins/lg-frontend-compose.php \
+             /var/www/dev/wp-content/mu-plugins/lg-frontend-compose.php
+```
+
+Without the second line the pull leaves the feature absent — and gate 19 would
+then report the flag-OFF no-op as GREEN, because "no plugin at all" and "plugin
+loaded with the flag off" produce the identical 404. Confirm it is actually
+LOADED before trusting that green:
+
+```bash
+sudo -n wp --allow-root --path=/var/www/dev eval \
+  'echo defined("LG_FRONTEND_COMPOSE") ? "loaded, flag=".var_export(LG_FRONTEND_COMPOSE,true) : "NOT LOADED";'
+```
+
+**To arm it for a look (dev2 only, box-local, untracked):**
+
+```bash
+sudo tee /var/www/dev/wp-content/mu-plugins/00-lg-fc-flag-TEMP.php >/dev/null <<'PHP'
+<?php defined('ABSPATH') || exit;
+if (!defined('LG_FRONTEND_COMPOSE')) define('LG_FRONTEND_COMPOSE', true);
+PHP
+```
+
+Then `https://dev2.loothgroup.com/compose/?type=loothprint`. Delete that file to
+disarm. The tracked default stays OFF until Ian says otherwise.
+
+**The lane left the box clean**: no temp flag, and no symlink into its worktree.
+A symlink from the running docroot into `~/worktrees/<lane>` breaks the moment the
+worktree is removed, which is a worse failure than the feature being absent.
