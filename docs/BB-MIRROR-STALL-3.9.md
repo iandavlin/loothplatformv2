@@ -221,23 +221,57 @@ Optionally clear the cosmetic failed state (the next success clears it anyway):
 sudo systemctl reset-failed bb-mirror-reconcile.service
 ```
 
-### Ian — a data decision, not urgent
+### Ian — a data decision, now traced so it is a decision and not a task
 
 Four replies are **unmirrorable** because their WP parentage is broken. They have
-been invisible on the hub for ~2 months and the deploy will not change that:
+been invisible on the hub for ~2 months and the deploy will not change that. I
+traced each one; the blast radius is exactly these four (nothing else in
+`wp_postmeta` points at either bad id).
 
-| reply | posted | parent it claims | what that is |
+**Two are test posts by a deleted account — safe to trash, zero member impact.**
+User 1890 is `deleted-member`, blank email, registered 2026-06-04 16:43:20. Both
+posts are literally the string `my forum reply`, made minutes after that account
+was created, with **no `_bbp_topic_id` at all**. Their real content (topic 71489
+and reply 71725) is unaffected and already mirrored.
+
+| reply | posted | content | verdict |
 |---|---|---|---|
-| 71433 | 2026-06-04 | `post_parent=0` | nothing at all |
-| 71720 | 2026-06-15 | 71685 | an **attachment** |
-| 71722 | 2026-06-15 | 71685 | an **attachment** |
-| 71728 | 2026-06-16 | 71671 | does not exist |
+| 71432 | 2026-06-04 16:39 | `my forum reply` | test post — trash |
+| 71433 | 2026-06-04 16:43 | `my forum reply` | test post — trash |
 
-Either repoint `_bbp_topic_id`/`post_parent` at the right topic, or trash them.
-Until then reconcile reports `skipped=4` on every run and the watch keeps them in
-its known-backlog baseline (silent unless the set grows). **These are live
-writes, so they are yours** — no command staged, because the right topic id is a
-judgement call per reply.
+71432 is *also* the single STALE row the tripwire reports (mirror content behind
+WP), so trashing it clears that alert too.
+
+**Two are real member content with a corrupt topic pointer — your call.** Both
+name attachment **71685** (`archtop-invisible-repair-005`) as their topic. That
+attachment has `post_parent = 0` and **nothing anywhere embeds it**, so the true
+topic is not recoverable from the data — it needs a human who remembers the
+thread. The replies read as answers to a "how do I flatten warped wood" question.
+
+| reply | posted | author | content opens |
+|---|---|---|---|
+| 71720 | 2026-06-15 13:49 | 317 | "I spray the wood with veneer softener and put a saturated length paper towel between the two pieces…" |
+| 71722 | 2026-06-15 14:19 | 828 | "You could try wetting it and then compressing in a clamp sandwich using two thick and level boards…" |
+
+**One is a real reply to a topic that no longer exists.** 71728 (2026-06-16,
+author 1816, *"The bubbles do appear to follow the grain."*) names topic 71671,
+which is **absent from `wp_posts`** — deleted. If the discussion is gone the
+reply is genuinely orphaned.
+
+Once you decide, the commands are ordinary WP:
+
+```bash
+# trash a test post (reversible — goes to trash, not deleted)
+wp post delete 71432 71433                    # add --force only if you want them gone
+
+# OR repoint a real reply at its true topic (both meta AND post_parent)
+wp post meta update 71720 _bbp_topic_id <TOPIC_ID>
+wp post update 71720 --post_parent=<TOPIC_ID>
+```
+
+**These are live writes, so they are yours.** Nothing here is urgent — the deploy
+in the previous section is what stops the bleeding; this only clears a ~2-month-old
+backlog of 4 and quiets the watch's known-backlog line.
 
 ---
 
