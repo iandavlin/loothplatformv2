@@ -32,15 +32,27 @@ $U    = (int) ( getenv( 'LG_PFC_USER' ) ?: 1 );
 if ( ! in_array( $mode, array( 'absent', 'off', 'on-default', 'on-email' ), true ) ) { echo "ERROR=bad_mode\n"; return; }
 if ( $T < 1 ) { echo "ERROR=no_topic\n"; return; }
 
-define( 'LG_POST_FOLLOW_CONTROLS', ! in_array( $mode, array( 'absent', 'off' ), true ) );
-$root  = dirname( __DIR__, 2 ) . '/platform/mu-plugins/';
-$files = array( 'lg-preserve-forum-subscription.php' );
-if ( 'absent' !== $mode ) { $files[] = 'lg-post-follow-controls.php'; }
-foreach ( $files as $f ) {
-	if ( ! is_readable( $root . $f ) ) { echo "ERROR=mu_unreadable_$f\n"; return; }
-	require_once $root . $f;
+/* ── FLAG STATE COMES FROM flag-boot.php (via `wp --require`), NOT FROM HERE ──
+ * Once the mu-plugin is deployed WordPress has already loaded it, so defining its
+ * constant here is too late and requiring the file again is a fatal redeclare. The
+ * branch copy is required ONLY as a fallback for a box that has not pulled it. */
+$deployed = function_exists( 'lg_pfc_record_follow' );
+if ( ! $deployed ) {
+	$root = dirname( __DIR__, 2 ) . '/platform/mu-plugins/';
+	foreach ( array( 'lg-preserve-forum-subscription.php', 'lg-post-follow-controls.php' ) as $f ) {
+		if ( ! is_readable( $root . $f ) ) { echo "ERROR=mu_unreadable_$f\n"; return; }
+		require_once $root . $f;
+	}
 }
-echo 'FLAG=' . ( 'absent' === $mode ? 'absent' : ( LG_POST_FOLLOW_CONTROLS ? 'on' : 'off' ) ) . "\n";
+echo 'SOURCE=' . ( $deployed ? 'deployed' : 'branch' ) . "\n";
+
+/* `absent` SIMULATES the pre-feature box by detaching the hook, since a loaded
+ * mu-plugin cannot be unloaded. Asserted below rather than assumed. */
+if ( 'absent' === $mode ) {
+	remove_filter( 'rest_request_after_callbacks', 'lg_pfc_record_follow', 10 );
+}
+echo 'FLAG=' . ( 'absent' === $mode ? 'absent'
+	: ( defined( 'LG_POST_FOLLOW_CONTROLS' ) && LG_POST_FOLLOW_CONTROLS ? 'on' : 'off' ) ) . "\n";
 echo 'HOOKED=' . ( has_filter( 'rest_request_after_callbacks', 'lg_pfc_record_follow' ) ? 'yes' : 'no' ) . "\n";
 
 if ( ! function_exists( 'lg_pfc_db' ) ) {

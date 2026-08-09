@@ -47,12 +47,22 @@ WPUSER = os.environ.get("LG_PFS_WPUSER", "looth-dev")
 RED, GREEN, DEAD = [], [], []
 
 
+BOOT = os.path.join(REPO, "tools", "gates", "flag-boot.php")
+
+# Flag state is forced PRE-BOOT via `wp --require`, because once the mu-plugin is
+# deployed WordPress has already loaded it and the probe cannot define its constant.
+FLAG_FOR_MODE = {"nofix": "1", "fix-on": "1", "fix-off": "0"}
+
+
 def wp(sql_or_args, mode=None, topic=None, user=1):
     env = ["env"]
+    pre = ""
     if mode:
-        env += [f"LG_PFS_MODE={mode}", f"LG_PFS_TOPIC={topic}", f"LG_PFS_USER={user}"]
+        env += [f"LG_PFS_MODE={mode}", f"LG_PFS_TOPIC={topic}", f"LG_PFS_USER={user}",
+                f"LG_BOOT_PFS={FLAG_FOR_MODE[mode]}"]
+        pre = f"--require={BOOT} "
     cmd = ["sudo", "-n", "-u", WPUSER] + env + [
-        "bash", "-lc", f"cd {DOCROOT} && wp {sql_or_args} 2>&1"
+        "bash", "-lc", f"cd {DOCROOT} && wp {pre}{sql_or_args} 2>&1"
     ]
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
@@ -90,6 +100,42 @@ elif shipped:
     GREEN.append(f"shipped default: LG_PRESERVE_FORUM_SUBSCRIPTION = {shipped} (read, not assumed)")
 
 # ── find a usable topic on this box ──────────────────────────────────────────
+
+# ── ⚠️ WHICH COPY DID WE ACTUALLY TEST? ───────────────────────────────────────
+# Once the mu-plugin is deployed, WordPress loads it from the SERVING CHECKOUT and the
+# probe exercises that file — not the one in this branch. A branch whose changes are
+# unmerged would then go green on somebody else's code. That is the standing "a lane
+# verifying on dev2 is usually testing MAIN" trap, so it is encoded rather than
+# remembered: if the two copies differ, this gate has no verdict about THIS branch.
+SERVE = os.environ.get("LG_SERVE_ROOT", "/home/ubuntu/loothplatformv2-clean")
+
+
+def _md5(path):
+    try:
+        import hashlib
+        with open(path, "rb") as fh:
+            return hashlib.md5(fh.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def check_copy_drift(mu_path, label):
+    served = os.path.join(SERVE, "platform", "mu-plugins", os.path.basename(mu_path))
+    a, b = _md5(mu_path), _md5(served)
+    if b is None:
+        GREEN.append(f"{label}: not deployed on this box — the branch copy is under test")
+    elif a == b:
+        GREEN.append(f"{label}: branch and serving copies are identical (md5 {a[:8]})")
+    else:
+        DEAD.append(
+            f"{label}: the SERVING copy differs from this branch (branch {a[:8]} vs "
+            f"serving {b[:8]}). WordPress loads the serving copy, so this run says "
+            "nothing about the branch's changes. Merge+pull, or run on a box without "
+            "the symlink, before trusting a verdict."
+        )
+
+check_copy_drift(MU, "lg-preserve-forum-subscription.php")
+
 topic = os.environ.get("LG_PFS_TOPIC")
 if not topic:
     rc, out = wp(
@@ -159,6 +205,23 @@ if not DEAD and not RED:
 
     if on.get("HOOKED") != "yes" or off.get("HOOKED") != "yes":
         RED.append("the repair did not register its filter when loaded — it cannot be doing anything")
+
+    # The negative control simulates absence by UNHOOKING (a loaded mu-plugin cannot be
+    # unloaded). Prove the unhook actually happened, or "the defect reproduced" is a
+    # claim about a run that still had the repair attached.
+    if nofix.get("HOOKED") == "no":
+        GREEN.append("negative control genuinely ran with the repair detached (HOOKED=no)")
+    else:
+        DEAD.append(
+            f"negative control did NOT detach the repair (HOOKED={nofix.get('HOOKED')}) — "
+            "it was not testing the unrepaired path, so nothing below it is earned"
+        )
+
+    # Which copy is under test matters: a green against the branch file says nothing
+    # about the box, and a green against the deployed file says nothing about the branch.
+    src = on.get("SOURCE")
+    if src:
+        GREEN.append(f"exercised the {src} copy of the repair")
 
 for line in GREEN:
     print("  PASS  %s" % line)
