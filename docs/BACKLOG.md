@@ -19,7 +19,7 @@ line into that lane's charter and note the lane name here.
 3.5 SEO/sitemap: zero discussions submitted — Google indexes the mirrored forum + defunct /shop/ and /merch/ (200s) — UNOWNED, findings on origin/sitemap-seo
 6. Front-end COMPOSE for all post types (Ian re-scoped 8/3: editing was never the problem) → frontend-compose, Option A ruled
 5. Notifications: quick-reply modal (default) w/ full-post link — UNOWNED, 9 commits on origin/notif-quickreply
-7. Discussion hub cards: play video inline ★ — DORMANT (Ian 8/9, asked directly with full context: "THE MAIn problem was no imbed in the modal" — his 3.7 complaint was the reader sheet, not the card). The 6/17 desktop-only ruling STANDS. Reopen only if Ian raises card playback himself; it then still needs his cover-tap choice first (a tap cannot both play and open)
+7. Discussion hub cards: play video inline ★ — ✅ CLOSED BY RULING (Ian 8/9, three answers in one night, each asked directly with full context). (a) His 3.7 complaint was the reader sheet, not the card: "THE MAIn problem was no imbed in the modal." (b) Scroll-autoplay, with the measured costs in front of him: TAP-TO-PLAY STAYS everywhere — do NOT build autoplay as an improvement. (c) Mobile cards keep opening the sheet (video one tap deep): "Keep as-is." The 6/17 desktop-only facade ruling stands in full. Reopens only by a new ruling from Ian himself
 8. Front page: latest weekly email for logged-out users — UNOWNED
 9. Shop Layout Planner — apps index page ONLY (standalone render SHIPPED to live) — UNOWNED
 
