@@ -5882,24 +5882,91 @@ function lgFollowEnabled() {
     fetchStandalone(ft, window.lgOpenTopicMobile);
   }
 
-  // Cold deep-link: fetch the canonical standalone page, scrape its OP into a
-  // synthetic feed-card carrying exactly the attrs/selectors §4e open() reads
-  // (incl. the .fc-actions .fcr reaction bar _single-topic.php now renders), then
-  // hand it to open() — which hydrates ?body=/?replies= by id identically to a
-  // normal card-clone open. Hard failure falls back to the real page.
+  /* Cold deep-link: the topic is not in the loaded feed (infinite scroll has not
+     reached it), so fetch its OP and build the synthetic feed-card §4e open()
+     reads, then hand it over — open() hydrates ?body=/?replies= by id exactly as
+     for a real card.
+
+     SOURCE CHANGED 2026-08-09 (hub-seo-landing lane): this used to fetch the
+     canonical PERMALINK and scrape `.post--op` out of _single-topic.php. That is
+     the second of the two jobs keeping that file alive, and it was expensive —
+     ~114KB of full page, chrome and nav tree included, to read one post. The
+     purpose-built fragment is ~2KB, runs on the same FPM pool, and carries the
+     SAME server-side masks (non-public forum → 404, is_anon → "Anonymous",
+     member-only author → "Private member", logged-out contact scrub). &withrx=1
+     asks it for the OP reaction bar, which is what the standalone page was being
+     scraped for.
+
+     The permalink stays as the FALLBACK, not as the source. Ordering matters:
+     the fragment is the thing built for this, and it must be tried first, or
+     retiring the page it replaces would silently take the cold path with it. */
   function fetchStandalone(ft, opener) {
-    fetch(permalink(ft), { credentials: 'same-origin' })
+    var api = '/bb-mirror-api/v0/topic?forum=' + encodeURIComponent(ft.forum) +
+              '&topic=' + encodeURIComponent(ft.topic) + '&withrx=1';
+    fetch(api, { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
       .then(function (html) {
-        if (!html) return fail(ft);
-        var doc = new DOMParser().parseFromString(html, 'text/html');
-        var op = doc.querySelector('.post--op');
-        var card = op && buildSyntheticCard(doc, op, ft);
+        var card = html && buildCardFromFragment(html, ft);
         var fn = opener || window.lgDmodalOpen;
         if (!card || typeof fn !== 'function') return fail(ft);
         fn(card);
       })
       .catch(function () { fail(ft); });
+  }
+  /* The fragment (api/v0/topic.php) → a .feed-card--topic carrying exactly the
+     attributes and selectors open() and the mobile sheet read off a real card.
+     Every field is an explicit attribute on .lg-fpd-op rather than something
+     scraped out of prose, which is why this replaces a DOMParser pass over a
+     whole page. */
+  function buildCardFromFragment(html, ft) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    var op = tmp.querySelector('.lg-fpd-op');
+    if (!op) return null;                       // 404 fragment / unexpected shape
+    var tid = op.getAttribute('data-topic-id');
+    if (!tid) return null;
+
+    var card = document.createElement('article');
+    card.className = 'feed-card feed-card--topic';
+    card.setAttribute('data-topic-id', tid);
+    card.setAttribute('data-forum-id', op.getAttribute('data-forum-id') || '');
+    card.setAttribute('data-author-id', op.getAttribute('data-author-id') || '0');
+    card.setAttribute('data-href', permalink(ft));
+    card.setAttribute('data-share-url', shareUrl(ft));   // Share = the deep link (parity with _feed.php cards)
+
+    var meta = op.querySelector('.lg-dmodal__meta');
+    var av = meta && meta.querySelector('.fc-avatar');
+    card.appendChild(el('span', 'fc-avatar lg-card-avatar', av ? av.innerHTML : ''));
+
+    var au = meta && meta.querySelector('.fc-author');
+    var fcAuthor = el('div', 'fc-author', '');
+    var nameWrap = el('span', 'fc-author__name lg-card-author', '');
+    if (au) nameWrap.innerHTML = au.innerHTML;
+    fcAuthor.appendChild(nameWrap);
+    card.appendChild(fcAuthor);
+
+    var tm = meta && meta.querySelector('.fc-time');
+    card.appendChild(el('time', 'fc-time lg-card-time', tm ? tm.innerHTML : ''));
+
+    card.appendChild(el('h3', 'fc-title feed-card__title',
+      (op.getAttribute('data-title') || 'Discussion').replace(/[&<>]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
+      })));
+
+    // The fragment already carries the FULL resolved body, so this is not the
+    // usual excerpt placeholder — open()'s ?body= fetch replaces it with the
+    // identical thing. Kept for exactly that reason: one code path in open().
+    var bodyEl = op.querySelector('.lg-dmodal__body');
+    var exc = el('div', 'fc-excerpt feed-card__op', '');
+    exc.appendChild(el('p', 'feed-card__op-excerpt', bodyEl ? bodyEl.innerHTML : ''));
+    card.appendChild(exc);
+
+    var fcr = op.querySelector('.fcr');          // &withrx=1
+    var acts = el('div', 'fc-actions', '');
+    if (fcr) acts.appendChild(fcr);
+    card.appendChild(acts);
+
+    return card;
   }
   function fail(ft) { location.href = permalink(ft); }   // graceful: the real page
 
@@ -5909,55 +5976,10 @@ function lgFollowEnabled() {
     if (html != null) e.innerHTML = html;
     return e;
   }
-  function buildSyntheticCard(doc, op, ft) {
-    // IDs come off the OP edit button (server-rendered even when hidden), with the
-    // #topic-<id> anchor as the fallback for the topic id.
-    var editBtn = op.querySelector('.post__edit-btn');
-    var tid = editBtn && editBtn.getAttribute('data-edit-id');
-    var fid = editBtn && editBtn.getAttribute('data-forum-id');
-    var aid = editBtn && editBtn.getAttribute('data-author-id');
-    if (!tid) { var mm = /topic-(\d+)/.exec(op.id || ''); tid = mm && mm[1]; }
-    if (!tid) return null;
-
-    var card = document.createElement('article');
-    card.className = 'feed-card feed-card--topic';
-    card.setAttribute('data-topic-id', tid);
-    if (fid) card.setAttribute('data-forum-id', fid);
-    if (aid) card.setAttribute('data-author-id', aid);
-    card.setAttribute('data-href', permalink(ft));
-    card.setAttribute('data-share-url', shareUrl(ft));   // Share = the deep link (parity with _feed.php cards)
-
-    var avatar = op.querySelector('.post__avatar');
-    card.appendChild(el('span', 'fc-avatar lg-card-avatar', avatar ? avatar.innerHTML : ''));
-
-    var author = op.querySelector('.post__author');
-    var fcAuthor = el('div', 'fc-author', '');
-    var nameWrap = el('span', 'fc-author__name lg-card-author', '');
-    if (author) nameWrap.appendChild(author.cloneNode(true));
-    fcAuthor.appendChild(nameWrap);
-    card.appendChild(fcAuthor);
-
-    var time = op.querySelector('.post__time');
-    card.appendChild(el('time', 'fc-time lg-card-time', time ? time.innerHTML : ''));
-
-    var titleEl = doc.querySelector('.topic-header__title');
-    card.appendChild(el('h3', 'fc-title feed-card__title', titleEl ? titleEl.textContent : 'Discussion'));
-
-    // Instant excerpt placeholder; open() replaces it with the full ?body= fetch.
-    var bodyEl = op.querySelector('.post__body');
-    var exc = el('div', 'fc-excerpt feed-card__op', '');
-    exc.appendChild(el('p', 'feed-card__op-excerpt', bodyEl ? bodyEl.innerHTML : ''));
-    card.appendChild(exc);
-
-    // The reaction bar — same .fc-actions .fcr markup the feed card carries; open()
-    // clones it into the modal for full OP reaction parity.
-    var fcr = op.querySelector('.fc-actions .fcr') || doc.querySelector('.fc-actions .fcr');
-    var acts = el('div', 'fc-actions', '');
-    if (fcr) acts.appendChild(fcr.cloneNode(true));
-    card.appendChild(acts);
-
-    return card;
-  }
+  /* buildSyntheticCard() lived here: it scraped `.post--op` out of the
+     STANDALONE PAGE for the cold deep-link path. Removed 2026-08-09 with the
+     switch to buildCardFromFragment() above — that was the last code holding
+     _single-topic.php in place as a data source rather than a page. */
 
   // ── Address-bar sync (modal open/close → history) ────────────────────────────
   // Watch only #lg-dmodal's own `hidden` attribute (the modal is created lazily on
