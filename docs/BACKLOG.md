@@ -8,7 +8,7 @@ line into that lane's charter and note the lane name here.
 *Owner shown as `→ lane` when a seat is on it, `→ MERGED` when it is in main.*
 
 **P0 — live/member-facing bugs**
-4.4 + 4.3 Mobile profile tray: DMs AND the 3-dots menu — ONE cause (all 7 social controls were inert) → mobile-bugs, FIX BUILT flag-off, reproduced+verified at 390px, gate 19; awaiting Ian's look then switch-on
+4.4 + 4.3 Mobile profile tray: DMs AND the 3-dots menu — ✅ ONE cause (all 7 social controls were inert), flag ON, Ian-VERIFIED on his phone on dev2 8/9 ("workds" — Message + 3-dots tapped for real). Files already on live from the 021ff38 pull; the ON flip reaches live at his next lg-deploy
 4.2 Logged-out mobile bottom dash: "+" implies you can post → anon-mobile-dash (fix BUILT, flag off; awaiting Ian's mock look + keeper merge)
 4.1 Recap: the mobile bell's 700ms mark-all-read empties the recap → recap-read-timer (fix BUILT; in keeper's merge queue)
 4.0 Weekly digest: discussion images SOMETIMES missing → digest-images (fix BUILT: bp_media resolution; in keeper's merge queue)
