@@ -19,44 +19,44 @@ run() {  # run <label> <command...>
     *) red=1;;
   esac
 }
-echo "=== GATE 1/21: visibility matrix (the privacy model) ==="
+echo "=== GATE 1/22: visibility matrix (the privacy model) ==="
 run "visibility matrix" php /srv/profile-app/bin/visibility-matrix.php
 echo
-echo "=== GATE 2/21: web-craft gate (images / weight / eager scripts) ==="
+echo "=== GATE 2/22: web-craft gate (images / weight / eager scripts) ==="
 run "web-craft" python3 "$(dirname "$0")/craft-gate.py"
 echo
-echo "=== GATE 3/21: infra-sec gate (cookie auth / source disclosure / cdp) ==="
+echo "=== GATE 3/22: infra-sec gate (cookie auth / source disclosure / cdp) ==="
 run "infra-sec" bash "$(dirname "$0")/infra-sec-gate.sh"
 echo
-echo "=== GATE 4/21: hub paragraph-collapse (content_html keeps its breaks) ==="
+echo "=== GATE 4/22: hub paragraph-collapse (content_html keeps its breaks) ==="
 run "hub-paragraph" bash "$(dirname "$0")/hub-content-paragraph-gate.sh"
 echo
-echo "=== GATE 5/21: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
+echo "=== GATE 5/22: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
 run "looth-auth" bash "$(dirname "$0")/looth-auth-issue-gate.sh"
 echo
-echo "=== GATE 6/21: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
+echo "=== GATE 6/22: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
 run "event-date-tz" bash "$(dirname "$0")/event-date-tz-gate.sh"
 echo
-echo "=== GATE 7/21: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
+echo "=== GATE 7/22: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
 run "events-tap-navigates" bash "$(dirname "$0")/events-tap-navigates-gate.sh"
 echo
-echo "=== GATE 8/21: composer topic-meta (forum picker cloning + tags) ==="
+echo "=== GATE 8/22: composer topic-meta (forum picker cloning + tags) ==="
 run "composer-topic-meta" node "$(dirname "$0")/composer-topic-meta-test.js"
 echo
-echo "=== GATE 9/21: author socials RESOLVE, never mirror (byline drift class) ==="
+echo "=== GATE 9/22: author socials RESOLVE, never mirror (byline drift class) ==="
 run "author-socials-live" bash "$(dirname "$0")/author-socials-live-gate.sh"
 
-echo "=== GATE 10/21: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
+echo "=== GATE 10/22: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
 run "react-types" bash "$(dirname "$0")/react-types-cover-standalone-gate.sh"
 echo
-echo "=== GATE 11/21: /shop-layout-planner/ still SERVES the planner (live SEO url) ==="
+echo "=== GATE 11/22: /shop-layout-planner/ still SERVES the planner (live SEO url) ==="
 # Defaults to dev2, where it self-reports CANNOT RUN until the standalone render
 # lands (dev2 bounces every anon WP page into the BuddyBoss gate). Run it with
 # --live to prove the production url is healthy, and with
 # LG_SP_EXPECT_STANDALONE=1 once the standalone page is meant to be serving.
 run "shop-planner-url" bash "$(dirname "$0")/shop-planner-url-gate.sh"
 echo
-echo "=== GATE 12/21: an ANON visitor can reach Sign in at every width (Ian's lockout) ==="
+echo "=== GATE 12/22: an ANON visitor can reach Sign in at every width (Ian's lockout) ==="
 # Behaviour, not presence: "Sign in" was in the served HTML the whole time while
 # 641-820px had no way in at all. Starts its own anonymous real-origin proxy and
 # one incognito BrowserContext per width, so it never touches shared browser
@@ -64,14 +64,14 @@ echo "=== GATE 12/21: an ANON visitor can reach Sign in at every width (Ian's lo
 # BOTH green on the day the band was dead.
 run "anon-signin-reachable" python3 "$(dirname "$0")/anon-signin-reachable-gate.py"
 echo
-echo "=== GATE 13/21: follow-digest — flag OFF sends NOTHING (email is unrecallable) ==="
+echo "=== GATE 13/22: follow-digest — flag OFF sends NOTHING (email is unrecallable) ==="
 # Written BEFORE the sender and red on purpose; promoted here in the same window as
 # the merge that defines LG_FOLLOW_DIGEST_ENABLED, per its own rule: "a gate that
 # guards an unrecallable channel and is never promoted is worse than no gate — it
 # reads as covered." Number minted from MAIN's count (12), not the branch's.
 run "follow-digest" python3 "$(dirname "$0")/follow-digest-gate.py"
 echo
-echo "=== GATE 14/21: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
+echo "=== GATE 14/22: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
 # Second time source/behaviour was served to anybody who asked (after the
 # /archive-api/v0/*.php disclosure). lg-weekly-digest/dev/ sat inside a PLUGIN
 # directory, so the catch-all \.php$ handler RAN it for anonymous requests: one
@@ -82,7 +82,7 @@ echo "=== GATE 14/21: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
 # would go green having seen nothing.
 run "dev-files-anon" python3 "$(dirname "$0")/dev-files-anon-unreachable-gate.py"
 echo
-echo "=== GATE 15/21: the cadence control is ABSENT when its flag is off ==="
+echo "=== GATE 15/22: the cadence control is ABSENT when its flag is off ==="
 # Number minted from MAIN's count (14), not the branch's — two lanes both minted
 # "9/9" once and collided in this file.
 #
@@ -254,7 +254,7 @@ echo
 #   detect — on a build that is fine. The looth_id line is not optional either: the
 #   WP cookies alone authenticate the page but not /profile-api.
 
-echo "=== GATE 16/21: BuddyBoss group mail stays DEAD (an empty list is load-bearing) ==="
+echo "=== GATE 16/22: BuddyBoss group mail stays DEAD (an empty list is load-bearing) ==="
 # Number minted from MAIN's count (15), not the branch's — two lanes both minted
 # "9/9" once and collided in this file.
 #
@@ -274,7 +274,7 @@ echo "=== GATE 16/21: BuddyBoss group mail stays DEAD (an empty list is load-bea
 # cookies, no CDP, so it cannot go DEAD for environmental reasons.
 run "group-mail-dead" python3 "$(dirname "$0")/group-mail-dead-gate.py"
 
-echo "=== GATE 17/21: participation must never silently UNSUBSCRIBE you (P0 data loss) ==="
+echo "=== GATE 17/22: participation must never silently UNSUBSCRIBE you (P0 data loss) ==="
 # Numbered 17 because 16 is this same branch's group-mail gate and MAIN is still on 15.
 # If another lane lands a gate first, keep BOTH and renumber on merge — two lanes both
 # minted "9/9" once and collided in this file.
@@ -292,7 +292,7 @@ echo "=== GATE 17/21: participation must never silently UNSUBSCRIBE you (P0 data
 # three routes — this gate is what caught it.
 run "subscription-preserved" python3 "$(dirname "$0")/subscription-preserved-gate.py"
 
-echo "=== GATE 18/21: ruling 6 defaults — bell ticked, EMAIL UNTICKED (consent) ==="
+echo "=== GATE 18/22: ruling 6 defaults — bell ticked, EMAIL UNTICKED (consent) ==="
 # 18 because 16 and 17 are this same branch's; MAIN is still on 15. Keep BOTH and
 # renumber on merge if another lane lands one first.
 #
@@ -311,7 +311,7 @@ echo "=== GATE 18/21: ruling 6 defaults — bell ticked, EMAIL UNTICKED (consent
 run "post-follow-controls" python3 "$(dirname "$0")/post-follow-controls-gate.py"
 echo
 
-echo "=== GATE 19/21: a rendered control CARRIES ITS BEHAVIOUR (the UI-lies class) ==="
+echo "=== GATE 19/22: a rendered control CARRIES ITS BEHAVIOUR (the UI-lies class) ==="
 # Numbered from MAIN, which is on 18. Two lanes both minted a "9/9" once and collided;
 # rebase before pushing and on conflict KEEP BOTH and renumber.
 #
@@ -341,7 +341,7 @@ echo "=== GATE 19/21: a rendered control CARRIES ITS BEHAVIOUR (the UI-lies clas
 run "social-actions-wired" python3 "$(dirname "$0")/social-actions-wired-gate.py"
 echo
 
-echo "=== GATE 20/21: a sitemapped discussion lands on THE HUB, with its text in the HTML ==="
+echo "=== GATE 20/22: a sitemapped discussion lands on THE HUB, with its text in the HTML ==="
 # 20 numbered from MAIN, which reached 19 while this lane was in flight
 # (its own 19 is the UI-lies gate). RE-MINTED AT REBASE, not at first write —
 # this branch and main both held a "19" for a few hours, which is precisely
@@ -369,7 +369,7 @@ echo "=== GATE 20/21: a sitemapped discussion lands on THE HUB, with its text in
 # — throw it when the default flips. LG_TL_PREFIX gates a lane preview instead.
 run "hub-topic-landing" python3 "$(dirname "$0")/hub-topic-landing-gate.py"
 
-echo "=== GATE 21/21: marking notifications read is scoped to what was SEEN ==="
+echo "=== GATE 21/22: marking notifications read is scoped to what was SEEN ==="
 # 21 minted from MAIN, which reached 20 while this lane was in flight (hub-topic-landing
 # took 20). THIRD number this gate has held: 16 at first write, 20 at the first
 # rebase, 21 now. Two of those were live collisions — with main's group-mail gate
@@ -406,6 +406,31 @@ echo "=== GATE 21/21: marking notifications read is scoped to what was SEEN ==="
 # (endpoint-swap-proxy + two php -S). It is recorded in docs/RECAP-READ-TIMER.md.
 run "notif-read-seen" python3 "$(dirname "$0")/notif-read-seen-gate.py"
 echo
+
+echo "=== GATE 22/22: a rendered NAV control must actually NAVIGATE ==="
+# Numbered from MAIN's 21. A number can collide through a CLEAN auto-merge, so the
+# roster was grepped for duplicates before minting rather than trusting a quiet rebase.
+#
+# Backlog 3.8, Ian's ruling of 2026-08-09 (option D of four mockups). Gate 19 guards
+# markup that arrives WITHOUT its behaviour; this guards the step after — a control
+# that is present, is wired, and still takes you nowhere. Ian's complaint was a back
+# button that existed and could not be reached; one that is reachable and inert is
+# the same sentence with a new subject, and "it renders" is exactly the assertion
+# that would miss it.
+#
+# Also asserts the two things that make THIS control honest rather than merely
+# present: it must not be offered while you are already on the Hub (a control that
+# lies about where it takes you), and its hidden state must carry pointer-events:none
+# — it slides out at opacity 0, so without that it leaves an INVISIBLE tap target
+# over the page, which is the mirror image of the bug.
+#
+# All 10 assertions were reddened by mutation first
+# (tools/gates/back-pill-navigates-redfirst.sh). That pass caught this gate reading
+# the code NEXT TO the thing under test: the path-guard check tested only that
+# "location.pathname" appeared somewhere in the function, and stayed GREEN through
+# the mutation that deleted the actual return. Same shape as the bug gate 19's
+# inversion pass found. It now matches the guard itself.
+run "back-pill-navigates" python3 "$(dirname "$0")/back-pill-navigates-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then

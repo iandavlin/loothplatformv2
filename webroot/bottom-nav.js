@@ -1436,9 +1436,95 @@
     }, 150);
   }
 
+  /* ---- "← Hub" scroll-reveal chip (backlog 3.8, Ian 2026-08-09) ----
+   *
+   * Ian's ask, then his refinement of it:
+   *   "on mobile and pwa we need some kind of back nav to the hub once you click
+   *    through to the post. there is one in the nav tab but it should be exposed"
+   *   "is there any other lowprofile way to go back that is sticky so it's always
+   *    available?"
+   *   "can we have the back button be the appear on scroll hub button but have it
+   *    in the lower left?"
+   *
+   * So this is a HYBRID of two of the four mockups: option C's POSITION (floating,
+   * lower-left, in the thumb corner clear of the tab bar) with option D's
+   * APPEAR-ON-SCROLL behaviour. Note the behaviour is NOT plain D — D sat visible at
+   * rest. This is hidden at the top and reveals as you scroll, so it never just
+   * occupies the corner:
+   *
+   *     at the top of the page   hidden — you have not gone anywhere to come back from
+   *     scrolling DOWN           hidden — out of the way while you read
+   *     scrolling UP             revealed, lower-left, one thumb-reach away
+   *
+   * THE PROBLEM IS SHARPEST IN THE INSTALLED APP, and it is measurable rather than a
+   * guess: manifest.json is display:standalone, so there is no browser chrome and no
+   * back button at all. The only way back to the hub was the Back INSIDE the Nav
+   * tray, a few lines up in this same file — two taps, invisible until the first.
+   * This is that button, promoted. Keeping both here is deliberate: they cannot
+   * drift apart, and the next reader meets them together.
+   *
+   * Lower-left rather than lower-right on purpose: the composer's "+" owns the
+   * centre and "You" the right, so the left corner is the one place a floating
+   * control does not sit on an existing target.
+   *
+   * Gated on a bit bb-mirror's _chrome.php emits ONLY when the flag is on, so with
+   * the flag off this is `undefined &&` and nothing is created or measured.
+   */
+  var PILL_ID = 'looth-backpill';
+  var PILL_TOP_ZONE = 80;      // px from the top where it stays hidden
+  var PILL_DEADZONE = 6;       // ignore sub-6px jitter a touch scroll makes at rest
+  function buildBackPill() {
+    if (!window.LG_BACK_PILL) return;                       // flag off → nothing at all
+    if (!window.matchMedia(MOBILE_MQ).matches) return;      // phones only
+    if (document.getElementById(PILL_ID)) return;
+    // Never offer "back to the Hub" while you are ON the hub. /hub/ and /hub/?x are
+    // the hub itself; /hub/<forum>/<topic>/ is the post you clicked through to.
+    var path = (location.pathname || '').replace(/\/+$/, '');
+    if (!/^\/hub\/.+/.test(path)) return;
+    try { if (window.top !== window.self) return; } catch (e) { return; }   // not in a frame
+
+    var st = document.createElement('style');
+    st.textContent =
+      '#' + PILL_ID + '{position:fixed;left:14px;z-index:2147481250;' +
+        'bottom:calc(var(--lg-tabbar-h,64px) + 16px);' +
+        'display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 15px 0 12px;' +
+        'border-radius:999px;text-decoration:none;' +
+        'background:rgba(28,34,22,.72);color:#fff;' +
+        '-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);' +
+        'border:1px solid rgba(255,255,255,.20);' +
+        'font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);' +
+        'box-shadow:0 4px 14px rgba(0,0,0,.28);' +
+        'transition:transform .22s ease,opacity .22s ease}' +
+      '#' + PILL_ID + ' svg{width:16px;height:16px;fill:none;stroke:currentColor;' +
+        'stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}' +
+      // Hidden state slides DOWN and out, the direction it came from. pointer-events
+      // is load-bearing, not tidiness: at opacity 0 it would otherwise leave an
+      // invisible tap target sitting over the page.
+      '#' + PILL_ID + '.is-away{transform:translateY(140%);opacity:0;pointer-events:none}' +
+      '@media (prefers-reduced-motion:reduce){#' + PILL_ID + '{transition:none}}';
+    (document.head || document.documentElement).appendChild(st);
+
+    var a = document.createElement('a');
+    a.id = PILL_ID;
+    a.href = '/hub/';
+    a.className = 'is-away';        // STARTS HIDDEN — it appears on scroll, never at rest
+    a.setAttribute('aria-label', 'Back to the Hub');
+    a.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.back + '</svg><span>Hub</span>';
+    document.body.appendChild(a);
+
+    var last = window.scrollY || 0;
+    window.addEventListener('scroll', function () {
+      var y = window.scrollY || 0;
+      if (y <= PILL_TOP_ZONE) a.classList.add('is-away');           // at the top: nothing to go back from
+      else if (y > last + PILL_DEADZONE) a.classList.add('is-away');    // reading on: stay out of the way
+      else if (y < last - PILL_DEADZONE) a.classList.remove('is-away'); // came back up: here it is
+      last = y;
+    }, { passive: true });
+  }
+
   function start() {
-    if (document.body) { build(); startDesktopSettings(); maybeAutoCompose(); }
-    else document.addEventListener('DOMContentLoaded', function () { build(); startDesktopSettings(); maybeAutoCompose(); });
+    if (document.body) { build(); startDesktopSettings(); maybeAutoCompose(); buildBackPill(); }
+    else document.addEventListener('DOMContentLoaded', function () { build(); startDesktopSettings(); maybeAutoCompose(); buildBackPill(); });
   }
   start();
 })();
