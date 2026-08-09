@@ -51,19 +51,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/_reply-render.php';
 require_once __DIR__ . '/../_anon-scrub.php';
 
-if (!function_exists('lg_hub_topic_landing_enabled')) {
-    /**
-     * THE ONE READ POINT for LG_HUB_TOPIC_LANDING (bb-mirror/config.php).
-     * Nothing else may test the constant — same discipline as
-     * lg_thread_follow_enabled(), and for the same reason: when the default
-     * flips, exactly one line has to be true.
-     */
-    function lg_hub_topic_landing_enabled(): bool
-    {
-        return defined('LG_HUB_TOPIC_LANDING') && LG_HUB_TOPIC_LANDING;
-    }
-}
-
 if (!function_exists('lg_topic_modal_lookup')) {
     /**
      * Resolve {forum-slug, topic-slug} → the topic row, masks already applied.

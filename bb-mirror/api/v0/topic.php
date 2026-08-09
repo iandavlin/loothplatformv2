@@ -11,8 +11,9 @@
  *     which carries reply reactions + the ↪@parent prefix server-rendered.
  *
  * Runs on the bb-mirror FPM pool (PG-only, no WP) — the SAME pool + masks as
- * the /hub single-topic page, so the modal == the page. Visibility is enforced
- * SERVER-SIDE exactly as _single-topic.php does:
+ * the /hub discussion landing, so the modal == the page. Visibility is enforced
+ * SERVER-SIDE exactly as web/forums/_topic-modal.php does (both inherited these
+ * rules from the retired _single-topic.php):
  *   • forum visibility != 'public'  → 404 (hidden/private threads never load)
  *   • topic status not publish/closed → 404
  *   • is_anon author        → masked to "Anonymous" for non-moderators
@@ -55,7 +56,7 @@ if ($forum_slug === '' || $topic_slug === '') topic_404();
 $db = bb_mirror_db();
 
 // ── Lookup + gating — JOIN on BOTH slugs (two forums share slug='finish'; a
-//    forum-first lookup is non-deterministic). Mirrors _single-topic.php. ──────
+//    forum-first lookup is non-deterministic). Mirrors _topic-modal.php. ───────
 $q = $db->prepare("
     SELECT t.id, t.slug, t.title, t.author_name, t.author_slug, t.author_id,
            t.is_anon::int                              AS is_anon,

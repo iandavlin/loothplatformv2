@@ -54,6 +54,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -70,7 +71,18 @@ SAMPLE = int(os.environ.get("LG_TL_SAMPLE", "3"))
 #   2. It is the switch to throw when the flag's default flips ON. At that point
 #      the legacy layout reaching a visitor IS a regression, and the gate should
 #      say so without anyone editing an assertion.
-REQUIRE_ON = os.environ.get("LG_TL_REQUIRE_ON", "0") == "1"
+#
+# THAT SWITCH IS NOW THROWN (2026-08-09). Ian approved the running thing, the
+# default flipped ON, and forums/_single-topic.php has been deleted — so the
+# legacy layout reaching a visitor is a regression, and this gate demands the hub
+# layout by default.
+#
+# The OFF-RECOGNISING ARM IS DELIBERATELY KEPT, and LG_TL_REQUIRE_ON=0 still
+# disarms it. Nothing can serve that layout today, which is exactly why the check
+# is worth keeping: it is what would NAME a bad deploy that somehow resurrected
+# it, instead of leaving a confusing generic failure. An assertion whose subject
+# is gone costs one string compare; deleting it costs the diagnosis.
+REQUIRE_ON = os.environ.get("LG_TL_REQUIRE_ON", "1") == "1"
 
 # LG_TL_PREFIX — gate a LANE PREVIEW instead of the live mount. The sitemap
 # always advertises /hub/<forum>/<topic>/ (that is the promise made to Google);
@@ -175,11 +187,31 @@ def main():
     #    presence check on a dead box is vacuously red — or worse, a layout
     #    check on an empty hub is vacuously green. Prove the hub is serving a
     #    real feed before judging anything about a topic URL.
-    hub, code = fetch(env, PREFIX + "/", want_status=True)
+    # RETRY THE LIVENESS PROBE. The dev gate on this box intermittently answers
+    # 403 to a correctly-cookied request: observed twice, three-in-a-row each
+    # time, with the IDENTICAL curl argv returning 200 seconds later and plain
+    # shell curls returning 200 throughout the same window. Cause not
+    # established — it is NOT the limit_req zone (that returns 429, not 403) and
+    # NOT the token (byte-identical to the shell's). It always self-clears.
+    #
+    # A single blip should not cost a whole run, but it must not be swallowed
+    # either: the retry is bounded, and a run that needed one SAYS SO — so a
+    # transient stays visible and a persistent fault still reports CANNOT RUN.
+    hub, code, tries = "", 0, 0
+    for tries in range(1, 4):
+        hub, code = fetch(env, PREFIX + "/", want_status=True)
+        if code == 200 and "feed-card" in hub:
+            break
+        if tries < 3:
+            time.sleep(2 * tries)
     if code != 200 or "feed-card" not in hub:
-        print(f"CANNOT RUN  {PREFIX}/ did not serve a feed (HTTP {code}, "
-              f"{len(hub)}b, feed-card present: {'feed-card' in hub})")
+        print(f"CANNOT RUN  {PREFIX}/ did not serve a feed after {tries} "
+              f"attempt(s) (HTTP {code}, {len(hub)}b, feed-card present: "
+              f"{'feed-card' in hub})")
         return 2
+    if tries > 1:
+        print(f"liveness    NOTE: needed {tries} attempts — the dev gate blipped "
+              f"(transient, self-clearing; see the comment above)")
     hub_cards = len(re.findall(r"feed-card feed-card--", hub))
     print(f"liveness    {PREFIX}/ HTTP 200, {hub_cards} feed cards, {len(hub)}b")
 

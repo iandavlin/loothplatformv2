@@ -1341,10 +1341,10 @@ function feed_sort_url(string $sort_val, string $forum_slug): string
 $page_title = $scoped_forum ? (string)$scoped_forum['title'] : 'The Hub';
 
 /* ── THE SERVER-RENDERED DISCUSSION MODAL (hub-seo-landing lane, 2026-08-09) ──
-   Set by index.php when /hub/<forum>/<topic>/ resolved a topic and
-   LG_HUB_TOPIC_LANDING is on. The feed is otherwise untouched: this block is the
-   ONLY thing the flag adds to this file, and with no landing topic it produces
-   not one byte.
+   Set by index.php when /hub/<forum>/<topic>/ resolved a topic. The feed is
+   otherwise untouched, and with no landing topic this block produces not one
+   byte — which is what let it ship behind an OFF-default flag, and what keeps
+   every other hub route byte-identical now that the flag is gone.
 
    BUILT HERE, BEFORE chrome_header(), ON PURPOSE. lg_topic_modal_html() captures
    the ?body= and ?replies= endpoints, which call header() — a warning once

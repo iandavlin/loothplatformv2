@@ -10,7 +10,8 @@
  * URL shapes (pre-cutover):
  *   /forums-poc/                          → forums/_feed.php     (site-wide activity feed)
  *   /forums-poc/<forum-slug>/             → forums/_feed.php     (scoped to forum + descendants)
- *   /forums-poc/<forum-slug>/<topic>/     → forums/_single-topic.php
+ *   /forums-poc/<forum-slug>/<topic>/     → forums/_feed.php + the open modal
+ *                                           (forums/_topic-modal.php)
  *   /forums-poc/?q=<query>               → forums/_search.php   (any URL shape)
  *
  * Post-cutover the mount becomes /forums/ — config.php exposes that as
@@ -92,33 +93,30 @@ switch ($seg_count) {
 
         /* THE SITEMAPPED URL (hub-seo-landing lane, Ian 2026-08-09).
            e9ddc28 listed 1,352 discussions in the sitemap, every one of them
-           this route — so this is now Google's front door, not a fallback.
-           Ian, shown where it lands: "does this look like the fucking hub with
-           a fucking modal open?"
+           this route — so this is Google's front door, not a fallback. Ian,
+           shown where it used to land: "does this look like the fucking hub
+           with a fucking modal open?"
 
-           ON  → the hub, with this discussion's modal open ON it, and the
-                 discussion's text in the SERVER HTML (that last part is the
-                 whole difficulty — see _topic-modal.php's header).
-           OFF → the legacy standalone page, byte-for-byte as before. This is
-                 the default, and _topic-modal.php is a definitions-only file
-                 that _single-topic.php's own require of _reply-render.php
-                 already pays for, so OFF costs nothing and emits nothing.
+           It renders the hub with this discussion's modal open ON it, and the
+           discussion's text in the SERVER HTML — that last part is the whole
+           difficulty, see _topic-modal.php's header.
+
+           Was behind LG_HUB_TOPIC_LANDING, defaulted OFF, whose OFF branch
+           rendered forums/_single-topic.php. Ian approved the running thing
+           ("I like it"), the default flipped ON, and BOTH the flag and that
+           file are now gone — docs/HUB-SINGLE-TOPIC-RETIREMENT.md records what
+           moved off it rather than being lost with it.
 
            The feed is deliberately left UNSCOPED — forum_slug is cleared before
            the handoff. A visitor landing from a search result should see the
            whole hub behind the modal, which is what Ian asked for; scoping it
            to the topic's forum would put a one-category feed behind it. */
         require_once __DIR__ . '/forums/_topic-modal.php';
-        if (lg_hub_topic_landing_enabled()) {
-            $lg_landing_topic = lg_topic_modal_route(bb_mirror_db(), $segments[0], $segments[1]);
-            if ($lg_landing_topic === null) break;   // 301 or 404 already sent
-            $GLOBALS['lg_topic_landing'] = $lg_landing_topic;
-            unset($_GET['forum_slug'], $_GET['topic_slug']);
-            require __DIR__ . '/forums/_feed.php';
-            break;
-        }
-
-        require __DIR__ . '/forums/_single-topic.php';
+        $lg_landing_topic = lg_topic_modal_route(bb_mirror_db(), $segments[0], $segments[1]);
+        if ($lg_landing_topic === null) break;   // 301 or 404 already sent
+        $GLOBALS['lg_topic_landing'] = $lg_landing_topic;
+        unset($_GET['forum_slug'], $_GET['topic_slug']);
+        require __DIR__ . '/forums/_feed.php';
         break;
 
     default:
