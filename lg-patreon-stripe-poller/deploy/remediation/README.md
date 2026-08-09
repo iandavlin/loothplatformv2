@@ -8,19 +8,22 @@ live after the engine code they depend on is deployed. All default to a
 Run as the live WP system user, from the plugin's `deploy/remediation/` dir:
 
 ```bash
-# on live (system user = looth-live; confirm with `id`)
-cd /var/www/<live>/wp-content/plugins/lg-patreon-stripe-poller/deploy/remediation
+# on live. VERIFIED 2026-08-08: the system user is looth-dev (there is NO
+# looth-live user on the box), the poller is an mu-plugin loaded from the
+# serving checkout rather than wp-content/plugins/, and --path is required
+# because the working directory sits outside the docroot.
+cd /home/ubuntu/loothplatformv2-clean/lg-patreon-stripe-poller/deploy/remediation
 
 # ALWAYS dry-run first, read the output, then apply
-sudo -u looth-live wp eval-file dedupe-multirole.php          # review
-sudo -u looth-live wp eval-file dedupe-multirole.php apply    # execute
+sudo -u looth-dev wp eval-file --path=/var/www/dev dedupe-multirole.php          # review
+sudo -u looth-dev wp eval-file --path=/var/www/dev dedupe-multirole.php apply    # execute
 
-sudo -u looth-live wp eval-file backfill-blank-emails.php       # review
-sudo -u looth-live wp eval-file backfill-blank-emails.php apply # execute
+sudo -u looth-dev wp eval-file --path=/var/www/dev backfill-blank-emails.php       # review
+sudo -u looth-dev wp eval-file --path=/var/www/dev backfill-blank-emails.php apply # execute
 
-sudo -u looth-live wp eval-file reconcile-patreon-skeletons.php             # review
-sudo -u looth-live wp eval-file reconcile-patreon-skeletons.php apply       # execute (prints a batch id)
-sudo -u looth-live wp eval-file reconcile-patreon-skeletons.php revert <id> # undo that batch
+sudo -u looth-dev wp eval-file --path=/var/www/dev reconcile-patreon-skeletons.php             # review
+sudo -u looth-dev wp eval-file --path=/var/www/dev reconcile-patreon-skeletons.php apply       # execute (prints a batch id)
+sudo -u looth-dev wp eval-file --path=/var/www/dev reconcile-patreon-skeletons.php revert <id> # undo that batch
 ```
 
 Take a DB backup first (`wp db export` of `wp_usermeta`, `wp_users`, and
@@ -84,7 +87,7 @@ roster-confirms it.
 running:
 
 ```bash
-sudo -u looth-live wp eval 'var_dump(
+sudo -u looth-dev wp eval --path=/var/www/dev 'var_dump(
   method_exists("LGPO_Sync_Engine","fetch_member_roster"),
   method_exists("LGPO_Sync_Engine","stamp_looth_uuid"));'   # must be true, true
 ```

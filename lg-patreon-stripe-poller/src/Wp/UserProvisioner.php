@@ -27,6 +27,20 @@ final class UserProvisioner
             return (int) $bridged;
         }
 
+        // IDENTITY GATE (audit R1). Flag OFF (the default, and the state of
+        // live today) leaves everything below byte-identical to the behaviour
+        // that has always shipped. Flag ON routes the lookup through
+        // IdentityMatcher and REFUSES TO MINT rather than creating a duplicate
+        // account for a member we merely failed to recognise.
+        //
+        // This flag MUST be ON before any member can reach Stripe onboarding.
+        // It is item 1 on the launch checklist, ahead of unfreezing ingest,
+        // because the window between "we started building" and "identity is
+        // safe" must never be open.
+        if ( self::identityGateOn() ) {
+            return self::findOrProvisionGated( $customerId, $email, $name );
+        }
+
         // WP user exists by email? Bridge and return.
         $existing = get_user_by( 'email', $email );
         if ( $existing ) {
@@ -76,6 +90,55 @@ final class UserProvisioner
         do_action( 'looth_tier_changed', (int) $userId, null, 'looth1', 'new' );
 
         return (int) $userId;
+    }
+
+    /**
+     * Is the identity gate armed? An OPTION, not an env var or a
+     * fastcgi_param: WP-Cron runs with no environment at all, and the tick is
+     * the main caller of this code, so an env-based flag would read as unset
+     * in exactly the context that matters.
+     */
+    public static function identityGateOn(): bool
+    {
+        return (bool) get_option( 'lgms_identity_gate', false );
+    }
+
+    /**
+     * Gated provisioning: match, or refuse. Never mints.
+     *
+     * The refusal is deliberately loud and deliberately terminal. A Stripe
+     * customer we cannot confidently tie to an existing account is a support
+     * ticket, not a new row — minting is what produced the duplicate accounts
+     * in the first place. Sync::customer catches the throw and reports
+     * 'provision failed', which now reaches an operator because the tick has
+     * a real log again (LGMS\Log).
+     */
+    private static function findOrProvisionGated(int $customerId, string $email, ?string $name): int
+    {
+        $match = IdentityMatcher::match( $customerId, $email );
+
+        if ( $match !== null ) {
+            self::writeBridge( $customerId, $match['wp_user_id'] );
+            \LGMS\Log::line( sprintf(
+                "[%s] identity gate: customer %d -> WP #%d via %s\n",
+                gmdate( 'c' ), $customerId, $match['wp_user_id'], $match['via']
+            ) );
+            return $match['wp_user_id'];
+        }
+
+        $detail = sprintf(
+            'Stripe customer %d (%s) could not be matched to a WP account, and the identity gate '
+            . 'forbids minting one. %s',
+            $customerId, $email, IdentityMatcher::describeConflict( $customerId, $email )
+        );
+
+        \LGMS\Log::line( sprintf( "[%s] provision REFUSED: %s\n", gmdate( 'c' ), $detail ) );
+
+        if ( function_exists( 'lgpo_notify_failure' ) ) {
+            lgpo_notify_failure( $email, (string) ( $name ?? '' ), 'stripe.identity_unmatched', $detail );
+        }
+
+        throw new RuntimeException( $detail );
     }
 
     private static function writeBridge(int $customerId, int $wpUserId): void

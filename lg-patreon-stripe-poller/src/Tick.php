@@ -11,8 +11,16 @@ use LGMS\Stripe\Poller as StripePoller;
 use Throwable;
 
 /**
- * Cron entrypoint. Runs hourly via WP cron (driven by OS cron on prod).
+ * Cron entrypoint. Runs EVERY 5 MINUTES via WP cron on live — verified twice
+ * against live's `cron` option (the schedule advanced 1786226777 -> 1786227077,
+ * exactly +300s, which only happens when the event fires). The old "hourly"
+ * here was wrong by 12x and is the sort of thing that makes an operator
+ * mis-judge how fast a bad deploy spreads.
  * Also callable on demand via REST /run-now.
+ *
+ * Logging goes through LGMS\Log, never file_put_contents to the plugin dir:
+ * that path is inside the serving checkout and the web user cannot write it,
+ * so the previous `@`-silenced writes produced no log on live at all.
  *
  * Two passes:
  *   1. Pull new Stripe events → update lg_membership state.
@@ -25,8 +33,6 @@ final class Tick
 {
     public static function run(): void
     {
-        $log = LGMS_PLUGIN_DIR . 'tick.log';
-
         // Non-blocking advisory lock: prevents WP-Cron + manual /run-now from
         // racing on the Stripe cursor and entitlement state. Auto-released
         // when the PDO connection ends (non-persistent), so a fatal mid-tick
@@ -34,14 +40,14 @@ final class Tick
         $pdo  = Db::pdo();
         $got  = $pdo->query( "SELECT GET_LOCK('lgms_tick_lock', 0)" )->fetchColumn();
         if ( (int) $got !== 1 ) {
-            @file_put_contents( $log, sprintf(
+            Log::line( sprintf(
                 "[%s] tick SKIPPED: another tick is already running\n",
                 gmdate( 'c' )
-            ), FILE_APPEND );
+            ) );
             return;
         }
 
-        @file_put_contents( $log, sprintf( "[%s] tick start\n", gmdate( 'c' ) ), FILE_APPEND );
+        Log::line( sprintf( "[%s] tick start\n", gmdate( 'c' ) ) );
 
         try {
 
@@ -54,32 +60,32 @@ final class Tick
         // no Stripe API call is made, and EventHandler's wp_mail() can never
         // fire. Set the option to a falsey value to resume Stripe polling.
         if ( (bool) get_option( 'lgms_stripe_frozen', true ) ) {
-            @file_put_contents( $log, sprintf(
+            Log::line( sprintf(
                 "[%s] stripe poll SKIPPED: lgms_stripe_frozen (Stripe R&D paused)\n",
                 gmdate( 'c' )
-            ), FILE_APPEND );
+            ) );
         } else {
             try {
                 $client  = new StripeClient();
                 $handler = new StripeEventHandler( $client );
                 $poller  = new StripePoller( $client, $handler );
                 $result  = $poller->poll();
-                @file_put_contents( $log, sprintf(
+                Log::line( sprintf(
                     "[%s] stripe poll: status=%s processed=%d cursor=%s\n",
                     gmdate( 'c' ),
                     $result['status'],
                     $result['processed'],
                     $result['cursor'] ?? '(none)',
-                ), FILE_APPEND );
+                ) );
                 foreach ( $result['log'] as $entry ) {
-                    @file_put_contents( $log, "  {$entry}\n", FILE_APPEND );
+                    Log::line( "  {$entry}\n" );
                 }
             } catch ( Throwable $e ) {
-                @file_put_contents( $log, sprintf(
+                Log::line( sprintf(
                     "[%s] stripe poll FAILED: %s\n",
                     gmdate( 'c' ),
                     $e->getMessage(),
-                ), FILE_APPEND );
+                ) );
             }
         }
 
@@ -87,18 +93,18 @@ final class Tick
         try {
             $expired = EntitlementRepo::sweepExpiredGiftEntitlements();
             if ( $expired !== [] ) {
-                @file_put_contents( $log, sprintf(
+                Log::line( sprintf(
                     "[%s] expiry sweep: revoked gift entitlements for customer_ids=%s\n",
                     gmdate( 'c' ),
                     implode( ',', $expired ),
-                ), FILE_APPEND );
+                ) );
             }
         } catch ( Throwable $e ) {
-            @file_put_contents( $log, sprintf(
+            Log::line( sprintf(
                 "[%s] expiry sweep FAILED: %s\n",
                 gmdate( 'c' ),
                 $e->getMessage(),
-            ), FILE_APPEND );
+            ) );
         }
 
         // Pass 1.7: reconcile orphaned Stripe Checkout sessions.
@@ -114,11 +120,11 @@ final class Tick
             $base   = (string) get_option( 'lgms_billing_base_url', home_url( '/billing' ) );
             $secret = (string) get_option( 'lgms_shared_secret', '' );
             if ( $secret === '' ) {
-                @file_put_contents( $log, sprintf(
+                Log::line( sprintf(
                     "[%s] reconcile-pending SKIPPED: no shared secret configured
 ",
                     gmdate( 'c' )
-                ), FILE_APPEND );
+                ) );
             } else {
                 $url   = rtrim( $base, '/' ) . '/v1/reconcile-pending';
                 $parts = parse_url( $url );
@@ -147,29 +153,29 @@ final class Tick
                 $code = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE );
                 curl_close( $ch );
                 if ( $err !== '' ) {
-                    @file_put_contents( $log, sprintf(
+                    Log::line( sprintf(
                         "[%s] reconcile-pending FAILED: %s
 ",
                         gmdate( 'c' ),
                         $err
-                    ), FILE_APPEND );
+                    ) );
                 } else {
-                    @file_put_contents( $log, sprintf(
+                    Log::line( sprintf(
                         "[%s] reconcile-pending: HTTP %d %s
 ",
                         gmdate( 'c' ),
                         $code,
                         substr( $body, 0, 400 )
-                    ), FILE_APPEND );
+                    ) );
                 }
             }
         } catch ( Throwable $e ) {
-            @file_put_contents( $log, sprintf(
+            Log::line( sprintf(
                 "[%s] reconcile-pending threw: %s
 ",
                 gmdate( 'c' ),
                 $e->getMessage()
-            ), FILE_APPEND );
+            ) );
         }
 
         // Pass 2: sync sweep
@@ -182,25 +188,25 @@ final class Tick
                     $ok++;
                 } else {
                     $errs++;
-                    @file_put_contents( $log, sprintf(
+                    Log::line( sprintf(
                         "  sync customer %d: %s\n",
                         $cid,
                         $r['message'] ?? 'unknown error',
-                    ), FILE_APPEND );
+                    ) );
                 }
             }
-            @file_put_contents( $log, sprintf(
+            Log::line( sprintf(
                 "[%s] sync sweep: ok=%d errors=%d\n",
                 gmdate( 'c' ),
                 $ok,
                 $errs,
-            ), FILE_APPEND );
+            ) );
         } catch ( Throwable $e ) {
-            @file_put_contents( $log, sprintf(
+            Log::line( sprintf(
                 "[%s] sync sweep FAILED: %s\n",
                 gmdate( 'c' ),
                 $e->getMessage(),
-            ), FILE_APPEND );
+            ) );
         }
 
         } finally {
