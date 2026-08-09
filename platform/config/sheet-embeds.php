@@ -39,13 +39,14 @@
 return array(
 
 	/**
-	 * OFF until Ian has looked at the running thing.
+	 * ON 2026-08-09, Ian's flip (decision box: "sheet-embeds"), after confirming
+	 * this half is his actual 3.7 complaint: "THE MAIn problem was no imbed in
+	 * the modal." Flipped for his real-phone check on the dev2 serve; reverts to
+	 * false if his look fails. Reached the serve merged-OFF first per the house
+	 * rule (byte-identical, gate 19), which is what made this a one-line flip.
 	 *
 	 * Lower-risk than most flags here — it renders a player where a bare link is
-	 * today, writes nothing, and deletes nothing. It is still off by default,
-	 * because the honest reason for the rule is that the dev2 serve runs main and
-	 * nothing can be verified on it until it is merged. Off is what lets this reach
-	 * the serve harmlessly so Ian can tap a real video on a real phone.
+	 * today, writes nothing, and deletes nothing.
 	 *
 	 * ⚠️ SCOPE: this is 3.7's EMBED half only. The other half of that backlog line —
 	 * "the video can't be played from the card" — is NOT this flag and must not be
@@ -54,5 +55,5 @@ return array(
 	 * cover tap cannot both play the video and open the discussion. It needs a
 	 * ruling from him before any code, and it gets its own flag when it does.
 	 */
-	'enabled' => false,
+	'enabled' => true,
 );
