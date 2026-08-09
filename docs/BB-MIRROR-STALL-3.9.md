@@ -208,8 +208,16 @@ deploy. Within 10 minutes the timer should produce its first clean run since
 
 ```bash
 systemctl status bb-mirror-reconcile.service        # expect: inactive (dead), 0/SUCCESS
-journalctl -u bb-mirror-reconcile -n 30 --no-pager  # expect: "Reconcile complete: ... skipped=4"
+journalctl -u bb-mirror-reconcile -n 30 --no-pager  # expect: "Reconcile complete: ... skipped=0"
 ```
+
+**`skipped=0` is the correct number here, not 4.** The 4 orphaned replies of §4
+are not counted as skips on this branch: `bb_mirror_upsert_reply()` returns
+*quietly* when a reply has no readable parentage, so the walk never sees an
+error for them. They surface as MISSING rows in the tripwire instead, which is
+the channel that audits the store rather than trusting the writer. Making them
+loud skips is exactly the receiver fix held out in §5 — after that lands this
+line becomes `skipped=4`.
 
 **Expect the first run to be big and slow-ish** (~92 topics + ~385 replies, plus
 the ghost sweep and rollups that have not run in 11 days). It took ~20s on dev2.
