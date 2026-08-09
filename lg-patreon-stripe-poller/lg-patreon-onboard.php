@@ -1137,6 +1137,14 @@ function lgpo_persist_creator_tokens( array $token_body ): bool {
 
     if ( ! empty( $token_body['expires_in'] ) ) {
         update_option( 'lgpo_creator_token_expires_at', time() + (int) $token_body['expires_in'] );
+    } else {
+        // A rotation without expires_in must not leave the OLD token's expiry
+        // standing: live sat at "expires 2026-07-31" while the token verified
+        // valid on 2026-08-09, which reads "expired" for a token that works
+        // and trains the operator to ignore the one field meant to warn them.
+        // No prediction is honest here, so delete — the Settings badge already
+        // renders the absent state as "no expires_at recorded".
+        delete_option( 'lgpo_creator_token_expires_at' );
     }
 
     update_option( 'lgpo_creator_token_obtained_at', time() );
