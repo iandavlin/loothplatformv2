@@ -1,0 +1,14 @@
+{
+  "event": {
+    "bytes": 5106,
+    "path": "/compose/?type=event",
+    "sha256": "eb01f66ea51a6d931c3603375a829e8306dfba34b713d50735a351a30c10c498",
+    "status": 404
+  },
+  "loothprint": {
+    "bytes": 5106,
+    "path": "/compose/?type=loothprint",
+    "sha256": "eb01f66ea51a6d931c3603375a829e8306dfba34b713d50735a351a30c10c498",
+    "status": 404
+  }
+}
