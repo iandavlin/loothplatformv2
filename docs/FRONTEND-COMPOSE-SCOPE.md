@@ -99,6 +99,72 @@ Six controls, one post type.
 **no working front-end create path**. There is no CPT write endpoint in the monorepo
 (inventory in the superseded doc, §1.2).
 
+### ⚠️ SECOND CORRECTION, 2026-08-09 — §1.3 IS WRONG ABOUT ALL NINE PAGES, AND §6 DESCRIBES THE STATUS QUO
+
+The first correction below found that `/add-your-own-loothprint/` is alive. Having
+been wrong once in that direction, I checked the rest rather than assuming the one
+was an exception. **Eight of the nine are live**, measured as an ordinary member
+(`bangers`), each rendering a real ACF form with real field keys and `_acf_form`:
+
+| page | forms | inputs | distinct field keys |
+|---|---|---|---|
+| add-your-own-loothprint | 1 | 95 | 21 |
+| add-video-post | 1 | 88 | 20 |
+| add-image-caption-post | 1 | 104 | 27 |
+| add-post-shorty | 1 | 25 | 10 |
+| add-post-regular | 1 | 49 | 5 |
+| add-your-own-loothcut | 1 | 76 | 30 |
+| add-post-useful-link | 1 | 17 | 5 |
+| sponsor-add-sponsor-post | 1 | 18 | 4 |
+| add-new-content | 0 | 0 | 0 — genuinely dead |
+| /user-post-dashboard/ | 0 | 0 | 0 — genuinely dead |
+
+⚠️ **A DETECTION TRAP, recorded because I fell into it in the same session.** My
+first sweep reported all nine dead, because I grepped for `acff[field_…]` while the
+real markup is `acff[file_data][field_…]`. That is the same class of error as the
+original measurement it was correcting — a pattern that cannot match, reported as
+an absence. Detect with several independent signals (`<form`, `<input` count,
+`field_[0-9a-f]{13}`, `_acf_form`) and disbelieve a clean zero.
+
+**AND MEMBERS ACTUALLY USE THEM.** Posts by authors WITHOUT `edit_others_posts`:
+
+| type | member posts (24mo) | last 90d | newest |
+|---|---|---|---|
+| post-type-videos | 182 | 22 | **2026-08-08** |
+| loothprint | 94 | 6 | 2026-07-19 |
+| post-imgcap | 36 | 7 | 2026-07-26 |
+| sponsor-post | 17 | 3 | 2026-06-08 |
+| event | 8 | 0 | 2026-03-01 |
+
+A video posted **yesterday** by an ordinary member, and those accounts carry recent
+`last_login` timestamps, so this is not an import artefact.
+
+**WHAT THAT DOES TO §6.** §6 warns that gating a compose form on the natural
+capability would let "essentially the entire membership publish a video, an
+article or a sponsor post, live, unreviewed… ~1,850 live accounts on day one."
+**That is not a risk this build would introduce. It is the situation today.**
+The two-tier gate is therefore a RESTRICTION relative to the status quo, not a
+liberalisation — which is the opposite of how the scope frames the decision, and
+Ian should be told that before he rules on the allow-list.
+
+⚠️ **NOT PROVEN, and it matters:** that those posts were created *through those
+pages*. Members are redirected out of `/wp-admin/` pages (measured: 302 for a
+member, 200 for an admin) while `admin-ajax.php` answers 200 for both, so the
+front end is the plausible route — but I have not traced a single post to a page.
+
+**§3.2 ("video/article/sponsor need a layout generator") — STILL STANDS, and the
+operational cost is worse than it reads.** Every member-authored video (90),
+article (13) and sponsor post (9) in the last 12 months carries a `_lg_layout_v2`
+blob and is managed by v2 — including yesterday's, a 23KB 10-block layout with a
+transcript. So they are not pageless. But only two code paths write that meta —
+`lg-legacy-import/src/Cli.php:187` and `EditorButton.php:290` — and neither is an
+automatic on-save hook. A new post cannot have come from the importer. So either
+someone materialises these by hand after each submission, or there is a path I did
+not find. **Named, not resolved.** If it is the former, "build a generator" is not
+new work so much as replacing a person.
+
+---
+
 ### ⚠️ CORRECTED 2026-08-09 BY THE BUILD LANE — §1.3 AND THE COPY CLAIM ARE WRONG
 
 Two claims this scope rests on did not survive contact with the build. Both are
