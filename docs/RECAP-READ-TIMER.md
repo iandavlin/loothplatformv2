@@ -206,33 +206,59 @@ each going red for the reason it claims. That pass caught the gate asserting on 
 own comment prose (`limit=200` appears in both the fetch and the comment explaining
 it), which would have shipped as green noise.
 
-## Suite result, 2026-08-07 — and which red is whose
+## Suite result
 
-`tools/gates/run-all.sh` ends **RED**, and none of it is this branch:
+### 2026-08-09, rebased onto main (88 commits) — **ALL 20 GATES GREEN**
 
-| gate | verdict | whose |
+`tools/gates/run-all.sh` from this worktree: **20/20 run, 0 FAIL, 0 NO VERDICT,
+`############ ALL GATES GREEN ############`**. Gate 20 (this branch) 35/35, in-sequence
+as well as standalone. Nothing held back, nothing attributed elsewhere.
+
+That is a first for this lane and it is worth saying why, because two of the three
+things that were red on 8/7 were fixed by other lanes in the meantime:
+
+- **Gate 2 web-craft is now GREEN.** The Nov-2024 `finder/anon` `Optimum.png`
+  violation (backlog 13.5) was fixed on main. The standing note in
+  `IAN-RULINGS-2026-08-03.md` — "run-all.sh currently ends RED on a pre-existing
+  failure" — is therefore **stale**, and so is the copy of that claim in the 8/7
+  section below.
+- **Gates 17/18 run now.** They used to die `Cannot redeclare lg_pfs_target()` from
+  any lane worktree; main's deploy-aware fix cleared it.
+- **Gate 1 visibility-matrix passed in-sequence** this time (67 asserts), where on 8/7
+  it produced 12 in-sequence failures and 0 standalone. Its flake is load-dependent,
+  not fixed — do not read one green run as a repair.
+
+### 2026-08-07, pre-rebase — kept because the attribution reasoning still applies
+
+The first full run ended RED, and none of it was this branch. Recorded because the
+*method* matters more than the numbers: a suite verdict is useless without per-gate
+attribution, and both reds were main's.
+
+| gate | verdict then | whose |
 |---|---|---|
-| **16/16 notif-read-seen** | **GREEN, 35/35** — standalone AND in-sequence | this branch |
-| 2/16 web-craft | **RED**, `finder/anon` only: `Optimum.png` served raw at 1000px into a 42px slot (107KB) | **main's content**, backlog 13.5, dating to Nov 2024 and named in the standing note of `IAN-RULINGS-2026-08-03.md`. `hub/anon` and `hub/member` pass, as that note says |
-| 1/16 visibility matrix | **GREEN standalone (0 failures), RED in-sequence (12)** | **not a red at all** — see below |
-| the other 13 | green | — |
+| 16/16 notif-read-seen (now 20/20) | GREEN 35/35 | this branch |
+| 2 web-craft | RED, `finder/anon` only: `Optimum.png` raw at 1000px into a 42px slot | main's content, backlog 13.5 — **since fixed** |
+| 1 visibility matrix | GREEN standalone (0 fails), RED in-sequence (12) | neither — a flake, see below |
 
-0 gates reached NO VERDICT.
+**Gate 1's in-sequence red was a flake of the class `run-all.sh` documents** ("they
+pass standalone but flake RED in-sequence — CDP under load / loopback `/whoami` trips
+infra's `limit_req` zone"). The signature is the tell: anon and member 404 while
+**owner and admin get 200**, and the directory listings come back absent — throttling,
+not a privacy regression.
 
-**Gate 1's in-sequence red is a flake of the class `run-all.sh` already documents**
-("they pass standalone but flake RED in-sequence — CDP under load / loopback
-`/whoami` trips infra's `limit_req` zone"). The signature fits: anon and member get
-404 while owner and admin get 200, and the directory listings come back absent —
-throttling, not a privacy regression. Re-run on its own it is clean.
-
-It also **cannot** see this branch either way: `run-all.sh` line 23 invokes
-`php /srv/profile-app/bin/visibility-matrix.php`, which is the SERVING CHECKOUT, so
-its verdict is always main's regardless of which worktree the suite runs from. Worth
-keeper's attention as a candidate to hold out of the numbered sequence, but it is not
-this lane's to change.
+It also **cannot see this branch either way**: `run-all.sh` invokes
+`php /srv/profile-app/bin/visibility-matrix.php`, the SERVING CHECKOUT, so its verdict
+is always main's regardless of which worktree the suite runs from.
 
 ## Status
 
+- Rebased onto `origin/main` 2026-08-09, **0 behind**. Main had moved 88 commits and
+  now runs 20 gates; this gate was minted as 16/16 and **collided with main's gate 16**
+  (`group-mail-dead`), so it was renumbered to **20/20** — the collision the
+  gate-numbering notes exist to catch, caught by them.
+- All six behaviour controls were **re-measured after the rebase**, not carried over,
+  and every one reproduced its original number. Flag-OFF byte-identity re-confirmed
+  end-to-end: main and branch-with-flag-OFF are indistinguishable on the store.
 - Flag **OFF**. Not yet verified on the dev2 serve, which serves `main` — that is
   what the flag is for: it lands harmlessly, gets verified on the running thing, and
   is switched on after Ian has looked at it.
