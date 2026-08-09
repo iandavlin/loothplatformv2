@@ -290,6 +290,9 @@ if (!function_exists('lg_topic_modal_html')) {
         ?>
 <div id="lg-dmodal" data-topic-id="<?= $tid ?>" data-lg-ssr="1"
      data-forum-id="<?= $fid ?>" data-author-id="<?= (int)($topic['author_id'] ?? 0) ?>"
+     <?php /* data-title mirrors api/v0/topic.php's .lg-fpd-op so ONE builder in
+              forums.js (buildCardFromOp) reads both shapes. */ ?>
+     data-title="<?= $esc($title) ?>"
      data-lg-forum-slug="<?= $esc($topic['forum_slug']) ?>" data-lg-topic-slug="<?= $esc($topic['slug']) ?>"
      data-lg-share-url="<?= $esc($share) ?>" data-lg-permalink="<?= $esc($permalink) ?>">
   <div class="lg-dmodal__back" data-dm-close></div>

@@ -5906,22 +5906,27 @@ function lgFollowEnabled() {
     fetch(api, { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
       .then(function (html) {
-        var card = html && buildCardFromFragment(html, ft);
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html || '';
+        var op = tmp.querySelector('.lg-fpd-op');
+        var card = op && buildCardFromOp(op, ft);
         var fn = opener || window.lgDmodalOpen;
         if (!card || typeof fn !== 'function') return fail(ft);
         fn(card);
       })
       .catch(function () { fail(ft); });
   }
-  /* The fragment (api/v0/topic.php) → a .feed-card--topic carrying exactly the
-     attributes and selectors open() and the mobile sheet read off a real card.
-     Every field is an explicit attribute on .lg-fpd-op rather than something
-     scraped out of prose, which is why this replaces a DOMParser pass over a
-     whole page. */
-  function buildCardFromFragment(html, ft) {
-    var tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    var op = tmp.querySelector('.lg-fpd-op');
+  /* An OP block → the .feed-card--topic carrying exactly the attributes and
+     selectors open() and the mobile sheet read off a real card.
+
+     TWO CALLERS, ONE BUILDER, because the two OP blocks are the same shape by
+     design: api/v0/topic.php's `.lg-fpd-op` (the cold deep-link path) and the
+     server-rendered `#lg-dmodal` itself (the landing's mobile path). Both carry
+     data-topic-id / -forum-id / -author-id / -title and the same
+     .lg-dmodal__meta / __body / .fcr children, so neither needs its own builder.
+     Every field is an explicit attribute rather than something scraped out of
+     prose — which is why this replaced a DOMParser pass over a whole page. */
+  function buildCardFromOp(op, ft) {
     if (!op) return null;                       // 404 fragment / unexpected shape
     var tid = op.getAttribute('data-topic-id');
     if (!tid) return null;
@@ -5961,9 +5966,13 @@ function lgFollowEnabled() {
     exc.appendChild(el('p', 'feed-card__op-excerpt', bodyEl ? bodyEl.innerHTML : ''));
     card.appendChild(exc);
 
-    var fcr = op.querySelector('.fcr');          // &withrx=1
+    /* Scoped to __opacts, and CLONED. Bare `.fcr` would also match a reply's bar
+       on the server-rendered node (whose replies are in the same subtree), and
+       appending the live node would MOVE the reaction bar out of the modal the
+       visitor is looking at. */
+    var fcr = op.querySelector('.lg-dmodal__opacts .fcr');
     var acts = el('div', 'fc-actions', '');
-    if (fcr) acts.appendChild(fcr);
+    if (fcr) acts.appendChild(fcr.cloneNode(true));
     card.appendChild(acts);
 
     return card;
@@ -6087,10 +6096,27 @@ function lgFollowEnabled() {
          after ~3s, fall back to the desktop modal made visible: an unstyled but
          READABLE discussion beats a hidden one, and the visitor keeps the text
          they came for. */
+      /* THREE RUNGS, and the middle one is not belt-and-braces — it is a
+         deploy-skew requirement. forums.js ships inside bb-mirror and reaches
+         the box by `git pull`; hub-polish.js is a WEBROOT file reached through
+         its own symlink set, which a pull does NOT update (see CLAUDE.md's two
+         deploy couplings). The two can therefore be at different commits on a
+         real box, so this must not assume the sheet knows the new export.
+           1. lgOpenTopicMobileSSR — the seeded path, re-fetches nothing.
+           2. lgOpenTopicMobile    — ANY hub-polish, incl. one predating this
+                                     lane. Costs a ?body=/?replies= round trip;
+                                     the served HTML already carried the text, so
+                                     the SEO contract is untouched either way.
+           3. the desktop modal, unstyled but READABLE — better than a hidden
+              discussion when hub-polish never arrives at all. */
       (function waitForSheet(tries) {
-        if (typeof window.lgOpenTopicMobileSSR === 'function') {
-          if (window.lgOpenTopicMobileSSR(n)) return;
-        } else if ((tries || 0) < 25) {
+        if (typeof window.lgOpenTopicMobileSSR === 'function' &&
+            window.lgOpenTopicMobileSSR(n)) return;
+        if (typeof window.lgOpenTopicMobile === 'function') {
+          var card = buildCardFromOp(n, ft);
+          if (card) { window.lgOpenTopicMobile(card); return; }
+        }
+        if ((tries || 0) < 25) {
           setTimeout(function () { waitForSheet((tries || 0) + 1); }, 120);
           return;
         }
