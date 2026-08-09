@@ -189,6 +189,23 @@ if not DEAD:
         elif d.get("RESTORED") != "yes":
             RED.append(f"{mode}: probe did not restore the box to its entry state")
 
+# ── ⚠️ AN ABSENT OUTCOME IS "COULD NOT RUN", NEVER A FINDING ─────────────────
+# If a leg never executed, its *_AFTER key is missing and d.get() returns None. The
+# assertions below compare against "subscribed"/"NOT-subscribed", so None fell through
+# to RED and the gate announced "participation still destroys data" about a probe that
+# had not run — a false RED that reads as a P0 and, being exit 1, blocks every lane.
+# Reported by the notif-bridge lane, 2026-08-09; reproduced by forcing a leg to fail in
+# fix-on only (nofix alone is caught earlier by the negative control).
+if not DEAD and not RED:
+    for _mode, _d in results.items():
+        for _leg, _key in (("reply", "REPLY_AFTER"), ("topic edit", "TOPIC_AFTER")):
+            if _d.get(_key) is None:
+                why = _d.get(_key.split("_")[0] + "_SKIPPED") or "the leg produced no result"
+                DEAD.append(
+                    f"{_mode}: the {_leg} leg did not run ({why}). No observation means no "
+                    "verdict — this is CANNOT RUN, not evidence of data loss."
+                )
+
 if not DEAD and not RED:
     nofix, on, off = results["nofix"], results["fix-on"], results["fix-off"]
 

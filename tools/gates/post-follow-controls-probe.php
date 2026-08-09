@@ -129,5 +129,16 @@ if ( $res->is_error() ) {
 $clear_follow();
 if ( $entry_sub && ! bbp_is_user_subscribed( $U, $T ) )  { bbp_add_user_subscription( $U, $T ); }
 if ( ! $entry_sub && bbp_is_user_subscribed( $U, $T ) )  { bbp_remove_user_subscription( $U, $T ); }
-echo 'RESTORED=' . ( ( bbp_is_user_subscribed( $U, $T ) === $entry_sub && 0 === $follow_rows() ) ? 'yes' : 'NO' ) . "\n";
+/* Same store-not-cache rule as subscription-preserved-probe.php: bbp_is_user_subscribed()
+ * reads through BuddyBoss's cache, which is not reliably invalidated in-request after an
+ * add/remove, so the confirming read can return the PRE-restore value and report NO on a
+ * box that is in fact clean. The follow half is already read over its own PDO connection;
+ * this brings the subscription half up to the same standard. Green today — fixed before it
+ * becomes an intermittent red that teaches people to ignore reds. */
+wp_cache_flush();
+global $wpdb;
+$now_sub = (bool) $wpdb->get_var( $wpdb->prepare(
+	"SELECT COUNT(*) FROM {$wpdb->base_prefix}bb_notifications_subscriptions
+	  WHERE type='topic' AND item_id=%d AND user_id=%d AND status=1", $T, $U ) );
+echo 'RESTORED=' . ( ( $now_sub === (bool) $entry_sub && 0 === $follow_rows() ) ? 'yes' : 'NO' ) . "\n";
 echo "DONE=1\n";
