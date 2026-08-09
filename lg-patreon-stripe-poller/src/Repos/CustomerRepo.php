@@ -79,4 +79,27 @@ final class CustomerRepo
         $id = (int) Db::pdo()->lastInsertId();
         return self::findById( $id ) ?? [];
     }
+
+    /**
+     * Merge keys into customers.metadata (JSON), read-modify-write.
+     * Used by the lifecycle ingest to absorb the identity a member's own
+     * checkout session asserted (metadata.wp_user_id / patreon_user_id) —
+     * the store IdentityMatcher's branch 2/3 reads. Existing keys are
+     * overwritten by design: the newest checkout assertion wins.
+     */
+    public static function mergeMetadata(int $customerId, array $kv): void
+    {
+        if ( $kv === [] ) {
+            return;
+        }
+        $st = Db::pdo()->prepare( 'SELECT metadata FROM customers WHERE id = ? LIMIT 1' );
+        $st->execute( [ $customerId ] );
+        $raw = $st->fetchColumn();
+        $cur = is_string( $raw ) && $raw !== '' ? json_decode( $raw, true ) : [];
+        if ( ! is_array( $cur ) ) {
+            $cur = [];
+        }
+        Db::pdo()->prepare( 'UPDATE customers SET metadata = ? WHERE id = ?' )
+            ->execute( [ json_encode( array_merge( $cur, $kv ) ), $customerId ] );
+    }
 }
