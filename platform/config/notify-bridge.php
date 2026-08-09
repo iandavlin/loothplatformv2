@@ -50,8 +50,21 @@ return array(
 	 *    still an inference about consent, and inferring consent is how the mail
 	 *    problem started. NOT keeper's call. Ian's.
 	 *
-	 * Leave false until he rules. The gap is documented, gated and reversible; what it
-	 * is not is a decision that should be made by whoever happens to be editing.
+	 * ── ✅ RULED 2026-08-09: LEAVE OFF. Ian. ─────────────────────────────────
+	 * He took the case AGAINST, on both counts: ruling 6's bell/email separation
+	 * STANDS, and inferring consent from rows nobody chose is how the mail problem
+	 * started in the first place.
+	 *
+	 * So this stays false, and it is now a DECISION rather than a default awaiting
+	 * one. Do not flip it as tidy-up, and do not read the measured gap below as a
+	 * standing argument to — the gap is real and is knowingly accepted. If the bell
+	 * should reach those 381 members, the route Ian left open is the one ruling 6
+	 * built: they tick 🔔 on the composer, and forums.topic_follow fills up
+	 * honestly. Re-opening this needs him, not a lane.
+	 *
+	 * The code stays because the measurement stays true and reversing the ruling
+	 * must not require rediscovering any of it. It is gated in both states
+	 * (tools/gates/notif-dismiss-gate.sh) so OFF is asserted, not assumed.
 	 */
 	'bell_follows_bb_subscriptions' => false,
 

@@ -52,17 +52,36 @@
 -- Flag-OFF was not the safe state — on a migrated box it was the BROKEN one, and
 -- running this file on live would have taken the bell out on the spot.
 --
--- THE FIX IS IN THE CODE, NOT IN THE ORDERING: the statements now follow the
--- DATABASE (Notifications::schemaHasDismiss(), a cached catalog lookup), and the
--- flag decides only dismiss-vs-delete. Both shapes are self-consistent, so:
+-- ⚠️⚠️ AND THE ORDER IS NOT FREE. I WROTE "EITHER ORDER IS SAFE" HERE AND IT WAS
+-- WRONG — PROVEN ON DEV2, 2026-08-09, BY BREAKING IT.
 --
---   * the code and this migration may land in EITHER order, with no bad window;
---   * flip `dismiss_instead_of_delete => true` only AFTER this has been applied
---     (with it applied, flag-off simply means nothing is ever dismissed).
+-- The code fix (Notifications::schemaHasDismiss(), a cached catalog lookup) makes
+-- THIS LANE'S code work against either index shape. It does nothing whatever for the
+-- code already deployed. I applied this migration to dev2 while the serving checkout
+-- was still on `main`, and every hub notification on the box died instantly:
+--
+--     POST /profile-api/v0/internal/notify  ->  500  {"ok":false,"error":"db_error"}
+--
+-- Silently, because lg_notify_push() swallows its own errors by contract. It stayed
+-- broken until the index was reverted, and nothing anywhere would have told anyone.
+--
+--   ✅ SAFE ORDER:   deploy the code, THEN apply this migration, THEN flip the flag.
+--   ❌ WHAT I DID:   migration first, against old code. Bell dead, no alarm.
+--
+-- So: **DO NOT RUN THIS ON LIVE UNTIL THE CODE IS DEPLOYED THERE.** Live pulls all of
+-- main, so the check is `grep -c schemaHasDismiss /srv/profile-app/src/Notifications.php`
+-- on the live box — 0 means STOP.
+--
+-- The transitional state is genuinely safe in the other direction, which is what
+-- dev2 sits in now: COLUMN present, index still two-term. Old code emits two-term
+-- against a two-term index and works; new code emits three-term against a two-term
+-- index and ALSO works, because A^B^C implies A^B. Only the narrowed index is
+-- exclusive. That is why the column and the index are separable, and why reverting
+-- just the index was enough to bring dev2's bell straight back.
 --
 -- All four pairings are asserted in profile-app/bin/notif-dismiss-proof.php phase 5,
 -- including the failing one — because only proving the working direction is exactly
--- how this got reasoned about wrongly the first time.
+-- how this got reasoned about wrongly the first time, twice.
 --
 -- APPLY (dev2 — the table is owned by the `profile-app` role, peer auth):
 --     sudo -u profile-app psql -d profile_app -f 2026-08-08-notification-dismiss.sql

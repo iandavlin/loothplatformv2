@@ -69,8 +69,34 @@ function lg_notify_push(array $ev): void
     // https://127.0.0.1 + Host header + no peer verify — the SAME loopback convention
     // the whoami shim uses (profile-app/deploy/profile-whoami-shim.mu-plugin.php:42).
     // Plain http:// gets a 301 to https from the vhost and the POST body is lost.
-    $host = defined('LG_BB_MIRROR_HOST') ? LG_BB_MIRROR_HOST
-          : (defined('LG_ARCHIVE_POC_HOST') ? LG_ARCHIVE_POC_HOST : 'localhost');
+    // The Host header picks the VHOST this loopback POST lands on, so getting it
+    // wrong does not error — it delivers the notification to the wrong site.
+    //
+    // ⚠️ THE OLD FALLBACK WAS 'localhost', AND THAT IS A SILENT-LOSS VECTOR. Both
+    // constants are defined by their own entry points (bb-mirror's config.php,
+    // archive-poc's), so ANY other caller — WP-CLI, cron, a one-shot, a future hook —
+    // got `Host: localhost`, which matches no server_name on this box and is therefore
+    // served by the UNMATCHED-host default vhost (trap-hub-serves-from-srv-not-buck).
+    // The POST then 404s or reaches another tree entirely, lg_notify_push logs a line
+    // nobody reads, and the notification is gone. Measured 2026-08-09: an end-to-end
+    // harness calling lg_notify_on_reply() under plain wp-load delivered NOTHING,
+    // while the identical curl with the right Host returned {"ok":true,"raised":true}.
+    //
+    // We are inside WordPress, so the site can simply say who it is. home_url() is
+    // also the correct tell in general — LG_ENV says "dev2" on live
+    // (trap-live-lg-env-says-dev2), so it must never be used for this.
+    $host = defined('LG_BB_MIRROR_HOST') ? (string) LG_BB_MIRROR_HOST
+          : (defined('LG_ARCHIVE_POC_HOST') ? (string) LG_ARCHIVE_POC_HOST : '');
+    if ($host === '' && function_exists('home_url')) {
+        $host = (string) wp_parse_url((string) home_url(), PHP_URL_HOST);
+    }
+    if ($host === '') {
+        // Last resort, and loud: a notification about to be posted at a vhost that
+        // almost certainly is not ours is worth a log line that names the cause.
+        error_log('[lg-notify] no resolvable Host — falling back to localhost; '
+                . 'this notification will probably be delivered nowhere');
+        $host = 'localhost';
+    }
     $payload = wp_json_encode($ev);
     $ch = curl_init('https://127.0.0.1/profile-api/v0/internal/notify');
     curl_setopt_array($ch, [

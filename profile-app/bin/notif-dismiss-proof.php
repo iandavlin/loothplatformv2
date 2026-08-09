@@ -115,6 +115,20 @@ try {
     // (impossible via rollback, but a hand-run INSERT is not) cannot skew counts.
     $pg->exec("DELETE FROM notifications WHERE user_uuid = '$victim' AND target_id >= 990000");
 
+    // ── THE PROOF BUILDS THE INDEX SHAPE IT NEEDS; IT DOES NOT REQUIRE THE BOX TO
+    //    SIT IN IT. Learned the hard way on 2026-08-09: leaving dev2 on the narrowed
+    //    index so this script could exercise it also broke every hub notification on
+    //    the box, because the DEPLOYED code still emitted the two-term arbiter. A
+    //    harness must never need production to hold a shape production cannot serve.
+    //    Postgres has transactional DDL, so this is reshaped here and rolled back with
+    //    everything else — the box keeps whatever shape it had.
+    $pg->exec("DROP INDEX IF EXISTS uq_notifications_target_unread");
+    $pg->exec(
+        "CREATE UNIQUE INDEX uq_notifications_target_unread
+           ON notifications (user_uuid, type, target_kind, target_id, COALESCE(anchor_id, 0))
+          WHERE target_kind IS NOT NULL AND is_read = false AND dismissed_at IS NULL"
+    );
+
     // ─────────────────────────────────────────────────────────────────────────
     phase('PHASE 1 — RED-FIRST: today (flag OFF) DESTROYS. This must be true.');
     Flags::forTest('notifications', ['dismiss_instead_of_delete' => false]);
