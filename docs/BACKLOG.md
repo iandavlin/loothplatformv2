@@ -15,6 +15,7 @@ line into that lane's charter and note the lane name here.
 4.5 Participation silently UNSUBSCRIBES you from the discussion → ✅ MERGED + LIVE @ 10ea816 (was eroding the 381 followers since June)
 
 **P1 — wanted now / deploy-blocking**
+3.6 Post page: Edit/Delete overflow menus render ALREADY OPEN at 390px for anyone who can edit (Ian will hit this on every post) — UNOWNED, measured 8/9
 4.6 Mobile sponsor sheet: carousels/buttons injected with no behaviour — UNOWNED, static evidence only, test written (same class as 4.4/4.3/3.7)
 3.7 Mobile: discussion embed → ✅ LIVE @ 021ff38 (Ian ran lg-deploy 8/9; keeper smoke-verified ON the live box: bit emitted, guard served, social-actions stamp absent). Ian-VERIFIED on his phone on dev2 first ("looks good", test-3). His words on scope: "THE MAIn problem was no imbed in the modal." Card half → item 7, not a bug
 3.8 Mobile/PWA: post → hub BACK NAV must be EXPOSED — UNOWNED, MOCKUPS FIRST. Ian 8/9: "on mobile and pwa we need some kind of back nav to the hub once you click through to the post. there is one in the nav tab but it should be exposed. Need mockups." House rule applies: draw it behind the dev gate (recommendation + at most one alternative, side by side), hand him a URL; no code before his pick
@@ -199,6 +200,34 @@ the card template.
 Get a FAILING and a PASSING discussion side by side from a real send before forming a
 theory. This is the weekly digest (editorial, FluentCRM), NOT the follow-digest — two
 different projects that share a word.
+
+## 3.6 Post page: the Edit/Delete overflow menus render ALREADY OPEN on mobile (P1) — found 8/9
+
+Found while capturing 390px frames for 3.8. **Not reported by Ian yet, but he will hit
+it on every post he opens on his phone** — it only shows for people who can edit, and
+he can edit everything.
+
+On a fresh load of a topic page at 390x844, with **zero interaction**, the "..."
+overflow menu on each post is already visible. Measured `visibility:visible`,
+`display:flex`, two of them on a one-reply thread, sitting over the post body:
+
+```
+ZERO interaction since load.
+ VISIBLE menu w/ Edit : BUTTON.post__menu-item post__edit-btn           vis=visible disp=flex y=402
+                        BUTTON.post__menu-item post__menu-item--danger  vis=visible disp=flex y=784
+```
+
+Markup is `bb-mirror/web/forums/_single-topic.php` (the "FB-style ... overflow menu
+(Edit + Delete) for one post" block). Scoped to viewers with edit rights, which is
+exactly why an anonymous or plain-member check calls this page clean — the same blind
+spot that let 4.4/4.3 through.
+
+Reproduce: `tools/exercise-harness/browser-backnav-captures.py` hides them on purpose
+so the 3.8 mockups are readable; drop that line and they are there.
+
+⚠️ Whatever fixes it needs an assertion for the CLOSED state. CLAUDE.md's standing
+point applies squarely: gates assert what should be PRESENT and cannot see what should
+be ABSENT, and a menu that is supposed to be invisible until tapped is the absent case.
 
 ## ✅ 3.9 Hub: "Newest" sorted as TRENDING — FIXED, LIVE @ 0e80c5b (Ian 8/3)
 
