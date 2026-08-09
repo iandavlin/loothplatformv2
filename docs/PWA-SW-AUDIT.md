@@ -146,3 +146,45 @@ reaches the server leaves no server-side evidence by definition, and Ian's brows
 not instrumented. What is proven is that **the handler has no deadline**, so whatever
 the upstream cause, the user is stranded rather than bounded. The fix is written to
 make the strand impossible regardless of cause, not to explain the cause.
+
+## Suite result, 2026-08-09 — 23/23 ran, and neither red is this branch
+
+`tools/gates/run-all.sh` from this worktree: **23/23 gates ran, 0 NO VERDICT**, exit 1.
+
+| gate | verdict | whose |
+|---|---|---|
+| **23/23 sw-fetch-bounded** | **GREEN 24/24**, in-sequence and standalone | this branch |
+| 1 visibility matrix | 4 fails in-sequence; **GREEN standalone: `MATRIX GREEN`, pass=67 fail=0** | neither — flake |
+| 17 subscription-preserved | 1 fail in-sequence (`nofix: probe did not restore the box to its entry state`); **GREEN standalone: 10/10** | neither — flake |
+| the other 20 | green | — |
+
+Both reds are the load-dependent in-sequence flake family `run-all.sh` documents, and both
+were re-run standalone before being called flakes rather than after being assumed to be.
+
+Worth noting for whoever owns gate 1: **the failing assertions were DIFFERENT from the
+last observation.** On 2026-08-07 it failed the S1 page/api set with `code=404`; this run
+it failed `S0 default layout: about NOT auto-placed`, `S0 … gallery`, and two S2 probes.
+Same family, different symptoms — so the flake is not a fixed set of assertions and
+"gate 1 fails on S1" is not a reliable fingerprint for it. The reliable tell is that it
+is green standalone.
+
+Nothing here is attributable to this diff, which touches `sw.js`, `pwa.js`,
+`pwa-loader.php`, `offline.html`, this lane's gate/harness and docs — nothing in the
+visibility model or forum subscriptions.
+
+## Arming the flag — no decision recorded yet
+
+⚠️ **This heading is deliberately NOT the one the gate looks for.** Gate 23 searches for a
+heading reading exactly `Decision to arm`; had this placeholder used that wording, the
+tripwire would have been satisfied by the very text saying no decision exists. (That
+false-green was caught for real on the 4.1 lane, which is why it is avoided here.)
+
+To arm `resilient_fetch`, add a section headed **`## Decision to arm`** naming who decided
+and when, then flip the value. Arming it without that section turns gate 23 red, and the
+correct response is to record the decision — **not** to delete the check.
+
+### What flipping it costs, so the decision is informed
+
+A different script URL is a different worker, so turning the flag on (or back off)
+re-runs `install` once per client. The cache name is unchanged, so nobody loses cached
+shell assets; expect one extra install per client per flip and nothing worse.
