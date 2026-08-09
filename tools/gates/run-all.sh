@@ -309,6 +309,31 @@ echo "=== GATE 18/19: ruling 6 defaults — bell ticked, EMAIL UNTICKED (consent
 # Does NOT assert a bell notification is delivered — that is the bridge's contract.
 # All six assertions were reddened by mutation before this was committed.
 run "post-follow-controls" python3 "$(dirname "$0")/post-follow-controls-gate.py"
+echo
+echo "=== GATE 19/19: a sitemapped discussion lands on THE HUB, with its text in the HTML ==="
+# 19 numbered from MAIN (which carries 18), not from this branch — two lanes both
+# minting the same number is how run-all.sh collided last time. Rebase before
+# running; on conflict keep BOTH and renumber.
+#
+# TWO HALVES THAT FAIL INDEPENDENTLY, which is why both are gated. e9ddc28 put
+# 1,352 discussions in the sitemap, all pointing at /hub/<forum>/<topic>/. The
+# obvious fix — route that URL at the feed and let forums.js §4f open the modal —
+# gives Ian the right picture and silently destroys the SEO half, because §4f's
+# cold path fetches the body AFTER load: a crawler would read an empty modal and
+# nothing would look wrong to anyone running JS.
+#   A. CONTENT — OP body + reply text in `curl`, no JS, no cookies; title in <title>
+#   B. LAYOUT  — the hub feed grid with a discussion modal already open on it
+# Half A also guards the REPLACEMENT: the legacy page did server-render its
+# content, and that must not regress on the way out.
+#
+# Plus the visibility masks, differentially against the fragment API (audit H6 was
+# that leak on this exact permalink), and a hidden-forum topic 404ing through both
+# the landing route and the fragment API.
+#
+# READS the flag state rather than hardcoding it, so an OFF default does not redden
+# every other lane. LG_TL_REQUIRE_ON=1 promotes "legacy layout served" to a finding
+# — throw it when the default flips. LG_TL_PREFIX gates a lane preview instead.
+run "hub-topic-landing" python3 "$(dirname "$0")/hub-topic-landing-gate.py"
 
 echo "=== GATE 19/19: a rendered control CARRIES ITS BEHAVIOUR (the UI-lies class) ==="
 # Numbered from MAIN, which is on 18. Two lanes both minted a "9/9" once and collided;
