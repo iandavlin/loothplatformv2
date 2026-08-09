@@ -110,12 +110,20 @@ function makeScope(fetchImpl) {
 function absolute(u) { return new URL(u, 'https://dev2.loothgroup.com').toString(); }
 
 /* ---- per-case fetch behaviour -------------------------------------------- */
-let calls = 0;
+let calls = 0;      // every fetch, including install's shell fetches
+let navCalls = 0;   // ONLY the navigation-path fetches
 function fetchFor(kase) {
   return function (req) {
     calls++;
     const url = typeof req === 'string' ? absolute(req) : req.url;
     const p = new URL(url).pathname;
+    // COUNT THE NAVIGATION FETCHES SEPARATELY. install() fetches the two SHELL assets
+    // first, so a `calls <= 1` test spent its budget before the navigation ever ran and
+    // slow-then-ok's FIRST attempt already succeeded — the retry was never exercised
+    // and the assertion "the retry still wins a transient blip" was VACUOUS in both
+    // flag directions. Caught by red-firsting the gate, not by reading it.
+    const isShell = (p === '/offline.html' || p.startsWith('/icons/'));
+    if (!isShell) navCalls++;
     // The shell fetches during install follow the gate matrix we measured.
     if (kase === 'install-partial') {
       if (p === '/offline.html') return Promise.resolve(makeResponse('forbidden', 403, url));
@@ -128,8 +136,10 @@ function fetchFor(kase) {
       case 'hang':     return new Promise(() => {});                 // never settles
       case 'reject':   return Promise.reject(new TypeError('Failed to fetch'));
       case 'slow-then-ok':
-        return calls <= 1 ? Promise.reject(new TypeError('Failed to fetch'))
-                          : Promise.resolve(makeResponse('REAL PAGE', 200, url));
+        // navCalls, not calls: the FIRST navigation attempt must fail and the retry
+        // must succeed, whatever install did beforehand.
+        return navCalls <= 1 ? Promise.reject(new TypeError('Failed to fetch'))
+                             : Promise.resolve(makeResponse('REAL PAGE', 200, url));
       case 'gate-403': return Promise.resolve(makeResponse('403 Forbidden\nnginx', 403, url));
       default:         return Promise.resolve(makeResponse('REAL PAGE', 200, url));
     }
@@ -164,7 +174,7 @@ function fire(type, event) {
   if (kase === 'install-partial') {
     out.notes = notes;
     console.log(JSON.stringify(out));
-    return;
+    process.exit(0);
   }
 
   const navUrl = kase === 'dev-path'
@@ -183,12 +193,21 @@ function fire(type, event) {
     out.settled = true; out.ms = 0; out.served = '(not intercepted — browser handles it)';
     out.notes = notes;
     console.log(JSON.stringify(out));
-    return;
+    process.exit(0);
   }
 
-  const timeout = new Promise((res) => setTimeout(() => res('__BUDGET_EXCEEDED__'), BUDGET));
+  // The budget timer MUST stay ref'd: in the `hang` case it is the only pending work,
+  // and unref'ing it made node exit with NO OUTPUT — the gate then read the decisive
+  // case as CANNOT RUN and silently stopped measuring the very thing it exists for.
+  // So hold the loop open, and CLEAR it the moment the race is decided, or every fast
+  // case pays the full budget (13 cases x 12s = a gate that looks hung).
+  let budgetTimer = null;
+  const timeout = new Promise((res) => {
+    budgetTimer = setTimeout(() => res('__BUDGET_EXCEEDED__'), BUDGET);
+  });
   const winner = await Promise.race([responded.catch((e) => '__REJECTED__ ' + e.message), timeout]);
   out.ms = Date.now() - t0;
+  if (budgetTimer) clearTimeout(budgetTimer);
 
   if (winner === '__BUDGET_EXCEEDED__') {
     out.settled = false;
@@ -209,11 +228,22 @@ function fire(type, event) {
     else if (winner && typeof winner.text === 'function') {
       try { text = await winner.text(); } catch (e) { text = null; }
     }
-    out.served = text === null ? '(empty)' : text.replace(/\s+/g, ' ').trim().slice(0, 90);
+    // TWO fields on purpose. `served` stays short so a human scanning a matrix can
+    // read it; `served_full` is what an ASSERTION must use. The gate first asserted on
+    // `served` and went RED against a WORKING claim prompt, because the strings it
+    // looked for sat past the truncation — a gate reading a display field instead of
+    // content. Red-firsting then caught the same coupling a second time, when
+    // shrinking the display field reddened four unrelated assertions.
+    const flat = text === null ? '' : text.replace(/\s+/g, ' ').trim();
+    out.served = text === null ? '(empty)' : flat.slice(0, 90);
+    out.served_full = text === null ? null : flat.slice(0, 8000);
+    out.served_len = text === null ? 0 : text.length;
     out.status = winner && winner.status;
     out.verdict = 'settled';
   }
   out.fetch_calls = calls;
+  out.nav_fetch_calls = navCalls;
   out.notes = notes;
   console.log(JSON.stringify(out));
+  process.exit(0);   // do not wait on timers the worker itself left pending
 })();
