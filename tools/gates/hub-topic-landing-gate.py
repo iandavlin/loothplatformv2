@@ -72,6 +72,16 @@ SAMPLE = int(os.environ.get("LG_TL_SAMPLE", "3"))
 #      say so without anyone editing an assertion.
 REQUIRE_ON = os.environ.get("LG_TL_REQUIRE_ON", "0") == "1"
 
+# LG_TL_PREFIX — gate a LANE PREVIEW instead of the live mount. The sitemap
+# always advertises /hub/<forum>/<topic>/ (that is the promise made to Google);
+# a preview serves the identical routes under its own prefix, so the URL set is
+# taken from the sitemap and then re-based. Rebasing rather than hand-listing
+# slugs is what keeps the preview run and the /hub/ run the SAME assertions over
+# the SAME discussions — otherwise a green preview would prove nothing about the
+# URLs Google actually holds.
+#   LG_TL_PREFIX=/preview/hub-seo-landing/hub LG_TL_REQUIRE_ON=1 python3 …
+PREFIX = os.environ.get("LG_TL_PREFIX", "/hub").rstrip("/")
+
 
 def gate_env():
     """Resolve host/token/edge-pin through the ONE resolver (gate-env.sh)."""
@@ -165,13 +175,13 @@ def main():
     #    presence check on a dead box is vacuously red — or worse, a layout
     #    check on an empty hub is vacuously green. Prove the hub is serving a
     #    real feed before judging anything about a topic URL.
-    hub, code = fetch(env, "/hub/", want_status=True)
+    hub, code = fetch(env, PREFIX + "/", want_status=True)
     if code != 200 or "feed-card" not in hub:
-        print(f"CANNOT RUN  /hub/ did not serve a feed (HTTP {code}, "
+        print(f"CANNOT RUN  {PREFIX}/ did not serve a feed (HTTP {code}, "
               f"{len(hub)}b, feed-card present: {'feed-card' in hub})")
         return 2
     hub_cards = len(re.findall(r"feed-card feed-card--", hub))
-    print(f"liveness    /hub/ HTTP 200, {hub_cards} feed cards, {len(hub)}b")
+    print(f"liveness    {PREFIX}/ HTTP 200, {hub_cards} feed cards, {len(hub)}b")
 
     # ── The URL set under test is the SITEMAP's own, not a hand-picked slug.
     #    This is what e9ddc28 promised Google, so it is what must work.
@@ -199,7 +209,11 @@ def main():
         parts = [p for p in path.split("/") if p]
         if len(parts) < 3:
             continue
-        forum, topic = parts[1], parts[2]
+        forum, topic = parts[-2], parts[-1]
+        # Re-base onto the mount under test. The sitemap's own /hub/ path is what
+        # a live run uses unchanged; a preview run gates the same discussions
+        # through the branch.
+        path = "%s/%s/%s/" % (PREFIX, forum, topic)
         page, code = fetch(env, path, want_status=True)
 
         if code != 200:
@@ -256,7 +270,47 @@ def main():
                 "OP body text is NOT in the served HTML "
                 f"(looked for {probe[:60]!r})")
 
-        reps, rcode = fetch(env, f"/hub/?replies={tid}", want_status=True)
+        # ── VISIBILITY MASKS SURVIVE THE MOVE (keeper, 2026-08-09) ──────────
+        # Differential, not hardcoded: the fragment API and the landing page are
+        # two different renderers over one masking contract (is_anon →
+        # "Anonymous", member-only author → "Private member", logged-out contact
+        # scrub). Ask BOTH for the same discussion as the same anonymous viewer
+        # and the author block must agree. If the landing leaks a real name the
+        # fragment masked, these differ — which is audit H6 exactly, and H6 was
+        # this bug on this permalink.
+        # No DB role, no fixture list, and it covers every sampled discussion
+        # rather than the one or two somebody remembered to write down.
+        # BOUNDED to the OP's own meta block. An unbounded `.*?` reaches past it
+        # into the REPLY authors — the landing page carries the whole thread, so
+        # the first cut of the /u/ check matched a replier's profile link and
+        # reported a correctly-masked page as leaking. Scope first, assert second.
+        def meta_of(doc):
+            mm = re.search(r'(?s)<div class="lg-dmodal__meta">(.*?)'
+                           r'<div class="lg-dmodal__body">', doc)
+            return mm.group(1) if mm else None
+
+        def author_of(doc):
+            blk = meta_of(doc)
+            if not blk:
+                return None
+            mm = re.search(r'(?s)class="fc-author__name"[^>]*>(.*?)</span>', blk)
+            return text_of(mm.group(1)) if mm else None
+        f_author, p_author = author_of(frag), author_of(page)
+        if f_author and p_author and f_author != p_author:
+            problems.append(
+                f"author block DISAGREES with the fragment API — mask lost in "
+                f"the move (fragment says {f_author!r}, page says {p_author!r})")
+        # A masked author must not keep a clickable identity either: the mask
+        # nulls author_id/slug, so a /u/<slug> link on the page that the fragment
+        # does not carry is the same leak wearing a different hat.
+        f_meta, p_meta = meta_of(frag), meta_of(page)
+        if f_meta is not None and p_meta is not None:
+            if 'href="/u/' in p_meta and 'href="/u/' not in f_meta:
+                problems.append(
+                    f"OP author {p_author!r} renders a /u/ profile link the "
+                    f"fragment API masks away")
+
+        reps, rcode = fetch(env, f"{PREFIX}/?replies={tid}", want_status=True)
         # Compare the reply BODY only. The first cut compared whole stubs and
         # tripped over their CHROME — the fragment renders a relative time ("1h")
         # where a page may render an absolute date, and the author line differs
@@ -298,6 +352,37 @@ def main():
             print("    RED   unrecognised layout")
         else:
             print("    OK    hub grid + open modal")
+
+    # ── A HIDDEN FORUM'S TOPIC MUST 404 THROUGH EVERY PATH ─────────────────
+    # The landing route resolves topics itself now, so "public forums only" had
+    # to be re-implemented on a second code path — and a visibility gate that
+    # exists on one path and not the other is worth more than a comment.
+    # 14 topics live in hidden forums and 3 in private ones; none may render.
+    #
+    # THE FIXTURE GUARDS ITSELF. If this topic were ever made public it would
+    # appear in the sitemap, and a 404 assertion against a public topic is a
+    # green that measures nothing. So the sitemap is checked first and the
+    # sub-check reports CANNOT RUN rather than passing vacuously.
+    hidden = os.environ.get("LG_TL_HIDDEN", "the-jannies-3/website-changes-to-be-made")
+    hf, _, ht = hidden.partition("/")
+    if any(f"/{hf}/{ht}/" in loc for loc in locs):
+        print(f"\n  hidden-forum check  CANNOT RUN — fixture {hidden} is now IN "
+              f"the sitemap, so it is not hidden any more. Set LG_TL_HIDDEN.")
+    else:
+        for label, path in (
+            ("landing route", f"{PREFIX}/{hf}/{ht}/"),
+            ("fragment API", "/bb-mirror-api/v0/topic?forum=%s&topic=%s"
+                             % (urllib.parse.quote(hf), urllib.parse.quote(ht))),
+        ):
+            hbody, hcode = fetch(env, path, want_status=True)
+            leaked = "lg-dmodal__body" in hbody or "lg-fpd-op" in hbody
+            if hcode == 200 and leaked:
+                findings.append(
+                    f"{path} — HIDDEN forum topic RENDERED via the {label} "
+                    f"(HTTP 200 with discussion markup)")
+                print(f"  hidden via {label}: RED  HTTP {hcode}, discussion rendered")
+            else:
+                print(f"  hidden via {label}: ok   HTTP {hcode}, no discussion markup")
 
     if not states:
         print("CANNOT RUN  no sampled URL yielded ground truth")
