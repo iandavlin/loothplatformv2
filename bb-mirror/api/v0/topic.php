@@ -100,6 +100,31 @@ require __DIR__ . '/../../web/forums/_topic-body.php';
 $body_html = ob_get_clean();
 
 $login_url = '/wp-login.php?redirect_to=' . rawurlencode('/hub/' . $topic['forum_slug'] . '/' . $topic['slug'] . '/');
+
+// ── ?withrx=1 — include the OP reaction bar (hub-seo-landing lane, 2026-08-09) ─
+// OPT-IN, and off by default, so every existing caller gets byte-identical HTML.
+//
+// forums.js §4f's cold deep-link path used to scrape the STANDALONE PAGE, which
+// renders `.fc-actions .fcr` precisely so the synthetic card could clone it into
+// the modal. Repointing that path here (114KB of page → 2KB of fragment, and the
+// step that lets _single-topic.php be retired) would have silently dropped the
+// OP's reactions on exactly that path.
+//
+// It is a parameter rather than the default because the OTHER consumer — the
+// front page's fp-discuss.js — runs without forums.js, so a reaction bar there
+// would render a control with nothing wired to it. A dead button is worse than
+// no button, and that is the defect class Ian's phone keeps finding.
+$with_rx = ($_GET['withrx'] ?? '') === '1';
+$op_rx_counts = [];
+if ($with_rx) {
+    try {
+        require_once __DIR__ . '/../../../archive-poc/api/v0/_reactions.php';
+        $rx_map       = lg_card_reactions_for_items($db, [['post_type' => 'topic', 'item_id' => $tid]]);
+        $op_rx_counts = $rx_map['topic:' . $tid] ?? [];
+    } catch (\Throwable $e) {
+        $op_rx_counts = [];   // unreadable store → no bar, never no fragment
+    }
+}
 ?>
 <div class="lg-fpd-op" data-topic-id="<?= $tid ?>" data-forum-id="<?= $fid ?>"
      data-title="<?= htmlspecialchars($title, ENT_QUOTES) ?>"
@@ -118,7 +143,12 @@ $login_url = '/wp-login.php?redirect_to=' . rawurlencode('/hub/' . $topic['forum
   </div>
   <div class="lg-dmodal__body"><?= $body_html ?></div>
   <div class="lg-dmodal__opacts">
-    <?php if ($viewer_logged_in): ?>
+    <?php /* Folded into the SAME php tag as the branch below, deliberately. On
+             its own line its leading indent was still emitted with withrx off,
+             which shifted every existing caller's output by four spaces — a
+             whitespace-only diff is still not byte-identical. */
+          if ($with_rx && function_exists('feed_reactions_bar')) feed_reactions_bar('topic', $tid, $op_rx_counts);
+          if ($viewer_logged_in): ?>
       <button type="button" class="lg-dmodal__act feed-card__reply-cta" data-frm-open
               data-topic-id="<?= $tid ?>" data-forum-id="<?= $fid ?>"
               data-topic-title="<?= htmlspecialchars($title, ENT_QUOTES) ?>">&#8617; Reply</button>

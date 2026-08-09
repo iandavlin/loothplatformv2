@@ -16,7 +16,7 @@ require __DIR__ . '/_reply-render.php';
 
 $tid  = (int)($_GET['replies'] ?? 0);
 $sort = (($_GET['sort'] ?? '') === 'oldest') ? 'oldest' : 'newest';   // default newest
-if (!$tid) { http_response_code(400); echo 'bad request'; exit; }
+if (!$tid) { lg_fragment_fail(400, 'bad request'); return; }
 
 $db = bb_mirror_db();
 
@@ -31,7 +31,7 @@ $vis = $db->prepare("
 ");
 $vis->bindValue(':tid', $tid, PDO::PARAM_INT);
 $vis->execute();
-if (!$vis->fetch()) { http_response_code(404); echo 'not found'; exit; }
+if (!$vis->fetch()) { lg_fragment_fail(404, 'not found'); return; }
 
 $rs = $db->prepare("
     SELECT r.id AS reply_id, r.parent_reply_id,
@@ -83,7 +83,7 @@ $rs->bindValue(':tid', $tid, PDO::PARAM_INT);
 $rs->execute();
 $flat = $rs->fetchAll();
 
-if (!$flat) { header('Content-Type: text/html; charset=utf-8'); echo ''; exit; }
+if (!$flat) { lg_fragment_content_type(); echo ''; return; }
 
 // Build the tree: index by id, attach child ids, collect top-level roots.
 // Anonymous-posting mask (anon-rebuild lane): scrub anon authors leak-safe for
@@ -136,9 +136,20 @@ foreach ($top as $rid) {
     $flatten($rid, 0, null);
 }
 
-$PER    = 5;
-$offset = max(0, (int)($_GET['offset'] ?? 0));
+// ?all=1 — THE WHOLE THREAD IN ONE RENDER (hub-seo-landing lane, 2026-08-09).
+// The 5-at-a-time paging exists so a card's "View N replies" stays cheap. The
+// server-rendered landing modal (_topic-modal.php) needs the opposite: every
+// reply present in the served HTML, because that text IS the SEO contract, and
+// a crawler will not press "Load 5 more".
+//
+// This is not extra work, it is LESS: §4e's drain() already walks every page on
+// open, so the modal ends up showing exactly this. Cheap at the current corpus —
+// median 4 replies, p95 12, max 35 (measured 2026-08-09) — and the load-more
+// button is suppressed below, so nothing is left for drain() to chase.
+$all    = ($_GET['all'] ?? '') === '1';
 $total  = count($ordered);
+$PER    = $all ? max(1, $total) : 5;
+$offset = $all ? 0 : max(0, (int)($_GET['offset'] ?? 0));
 $page   = array_slice($ordered, $offset, $PER);
 
 // Reply reaction counts for the visible page (ec9a30e: 'reply' is a reactable
@@ -155,7 +166,7 @@ if ($rx_reply_items) {
     }
 }
 
-header('Content-Type: text/html; charset=utf-8');
+lg_fragment_content_type();
 
 // Newest/Oldest toggle — first page only, and only when there's more than one reply.
 if ($offset === 0 && $total > 1) {

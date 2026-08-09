@@ -5010,6 +5010,20 @@ function lgFollowEnabled() {
   }
   function ensure() {
     if (modal) return modal;
+    /* ADOPT a server-rendered modal instead of building a second one
+       (hub-seo-landing lane, 2026-08-09). /hub/<forum>/<topic>/ now ships
+       #lg-dmodal already populated and already open — see
+       forums/_topic-modal.php, whose markup is this markup. Building here
+       regardless would put TWO nodes with id="lg-dmodal" in the document, and
+       every getElementById below (including §4f's) would bind to whichever the
+       browser handed back first.
+       The wiring after this branch is identical for both nodes on purpose: a
+       modal that arrived from the server must close, resize and Esc exactly like
+       one this function built. */
+    var pre = document.getElementById('lg-dmodal');
+    if (pre) {
+      modal = pre;
+    } else {
     modal = document.createElement('div');
     modal.id = 'lg-dmodal';
     modal.hidden = true;
@@ -5046,6 +5060,7 @@ function lgFollowEnabled() {
         '</div>' +
       '</div>';
     document.body.appendChild(modal);
+    }
     modal.addEventListener('click', function (e) {
       if (e.target.closest('[data-dm-close]')) { close(); return; }
       if (!e.target.closest('.post__menu-wrap--rs')) dmCloseMenus();   // dismiss any open reply ⋯ menu
@@ -5167,6 +5182,87 @@ function lgFollowEnabled() {
     });
   }
 
+  /* OP owner controls (Edit / Delete), lifted out of open() so a modal that
+     arrived SERVER-RENDERED gets exactly the same pair (hub-seo-landing lane,
+     2026-08-09). Without this the two doors into one discussion disagree: a
+     member who clicked a card can edit their own post, and the SAME member
+     arriving on the SAME post from a search result cannot — the kind of split
+     that only ever shows up on Ian’s phone. Reveal is author-match OR
+     can_edit_others; the server re-checks the cap on every write, so this gate
+     is convenience, not security.
+     o = { m, tid, fid, body, card, authorId } — card is null on a landing. */
+  function dmOwnerActions(opacts, o) {
+    var del = document.createElement('button');
+    del.type = 'button'; del.className = 'lg-dmodal__act lg-dmodal__del'; del.hidden = true;
+    del.setAttribute('aria-label', 'Delete this post');
+    del.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg> Delete';
+    // Edit the OP via the SAME Quill composer used to edit a reply
+    // (lgNtmEditTopic) — Ian 2026-07-30 SUPERSEDES the 2026-06-25 "unified new
+    // edit": editing a discussion reuses the composer that CREATES one ON THIS
+    // VIEWPORT, which here is the New post WIZARD (Where/Write/Photos/Review),
+    // pre-filled and opened on Write. The desktop/mobile split is deliberate and
+    // stays; what must match per viewport is edit vs CREATE, not desktop vs mobile.
+    // Falls back to the frm composer only if the wizard is absent. Gated to
+    // author/mod by the shared auth check below.
+    var edit = document.createElement('button');
+    edit.type = 'button'; edit.className = 'lg-dmodal__act lg-dmodal__edit'; edit.hidden = true;
+    edit.setAttribute('aria-label', 'Edit this post');
+    edit.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit';
+    opacts.appendChild(edit);
+    opacts.appendChild(del);
+    fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (a) {
+        if (!a || !a.authenticated) return;
+        var mine = o.authorId && a.wp_user_id && parseInt(a.wp_user_id, 10) === o.authorId;
+        if (!mine && !a.can_edit_others) return;
+        del.hidden = false;
+        edit.hidden = false;
+        edit.addEventListener('click', function (ev) {
+          ev.preventDefault(); ev.stopPropagation();
+          var ttlEl = o.m.querySelector('.lg-dmodal__title');
+          var ttl = ttlEl ? (ttlEl.textContent || '').trim() : '';
+          // Unified composer: pop it OPEN over the modal (parity with reply edit);
+          // on save it updates the modal OP + card in place. body.innerHTML is the
+          // full fetched OP content.
+          /* Same correction as the Hub door (Ian 2026-07-30): a DISCUSSION edits
+             through the ADD-DISCUSSION mechanic — the "New post" wizard, pre-filled,
+             landing on Write — not through the frm reply composer. Close the
+             discussion modal first so the wizard is not stacked behind it. */
+          if (typeof window.lgNtmEditTopic === 'function') {
+            var cbW = o.m.querySelector('[data-dm-close]'); if (cbW) cbW.click();
+            window.lgNtmEditTopic(o.tid, o.fid, ttl, o.body.innerHTML);
+            return;
+          }
+          // Fallback only if the wizard is absent.
+          if (typeof window.lgFrmEditTopic !== 'function') return;
+          window.lgFrmEditTopic(o.tid, o.fid, ttl, o.body.innerHTML);
+        });
+        del.addEventListener('click', function (ev) {
+          ev.preventDefault(); ev.stopPropagation();
+          if (!a.nonce) { alert('Not signed in.'); return; }
+          if (!window.confirm('Delete this post? This removes the discussion and its replies and can’t be undone.')) return;
+          del.disabled = true;
+          fetch('/bb-mirror-api/v0/reply', {
+            method: 'DELETE', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+            body: JSON.stringify({ topic_id: parseInt(o.tid, 10) })
+          })
+            .then(function (r) { return r.json().then(function (j) { return { s: r.status, ok: r.ok, j: j }; }, function () { return { s: r.status, ok: r.ok, j: {} }; }); })
+            .then(function (res) {
+              if (res.s === 401) { del.disabled = false; alert('Please sign in.'); return; }
+              if (res.s === 403) { del.disabled = false; alert('You can only delete your own posts.'); return; }
+              if (!res.ok) { del.disabled = false; alert('Could not delete: ' + ((res.j && (res.j.message || res.j.error)) || 'failed')); return; }
+              var cb = o.m.querySelector('[data-dm-close]'); if (cb) cb.click();
+              /* A LANDING has no card to remove: the modal arrived server-rendered,
+                   not from a click. Guarded, not assumed. */
+                try { if (o.card) o.card.remove(); } catch (e) {}
+            })
+            .catch(function (err) { del.disabled = false; alert('Network error: ' + err.message); });
+        });
+      }).catch(function () {});
+  }
+
   function open(card) {
     var tid = card.getAttribute('data-topic-id') ||
       (card.querySelector('.feed-card__expand') || { getAttribute: function () { return null; } }).getAttribute('data-topic-id');
@@ -5237,79 +5333,10 @@ function lgFollowEnabled() {
       if (opPal) opPal.hidden = true;
       opacts.insertBefore(opBar, opacts.firstChild);
     }
-    // Delete the post — author (viewer wp_user_id === card's data-author-id) OR
-    // moderator (can_edit_others). Server (api/v0/reply.php DELETE {topic_id})
-    // re-checks the cap. Coord 2026-06-15: desktop-modal parity with the mobile sheet.
-    (function () {
-      var opAuthorId = parseInt(card.getAttribute('data-author-id'), 10) || 0;
-      var del = document.createElement('button');
-      del.type = 'button'; del.className = 'lg-dmodal__act lg-dmodal__del'; del.hidden = true;
-      del.setAttribute('aria-label', 'Delete this post');
-      del.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg> Delete';
-      // Edit the OP via the SAME Quill composer used to edit a reply
-      // (lgNtmEditTopic) — Ian 2026-07-30 SUPERSEDES the 2026-06-25 "unified new
-      // edit": editing a discussion reuses the composer that CREATES one ON THIS
-      // VIEWPORT, which here is the New post WIZARD (Where/Write/Photos/Review),
-      // pre-filled and opened on Write. The desktop/mobile split is deliberate and
-      // stays; what must match per viewport is edit vs CREATE, not desktop vs mobile.
-      // Falls back to the frm composer only if the wizard is absent. Gated to
-      // author/mod by the shared auth check below.
-      var edit = document.createElement('button');
-      edit.type = 'button'; edit.className = 'lg-dmodal__act lg-dmodal__edit'; edit.hidden = true;
-      edit.setAttribute('aria-label', 'Edit this post');
-      edit.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit';
-      opacts.appendChild(edit);
-      opacts.appendChild(del);
-      fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (a) {
-          if (!a || !a.authenticated) return;
-          var mine = opAuthorId && a.wp_user_id && parseInt(a.wp_user_id, 10) === opAuthorId;
-          if (!mine && !a.can_edit_others) return;
-          del.hidden = false;
-          edit.hidden = false;
-          edit.addEventListener('click', function (ev) {
-            ev.preventDefault(); ev.stopPropagation();
-            var ttlEl = m.querySelector('.lg-dmodal__title');
-            var ttl = ttlEl ? (ttlEl.textContent || '').trim() : '';
-            // Unified composer: pop it OPEN over the modal (parity with reply edit);
-            // on save it updates the modal OP + card in place. body.innerHTML is the
-            // full fetched OP content.
-            /* Same correction as the Hub door (Ian 2026-07-30): a DISCUSSION edits
-               through the ADD-DISCUSSION mechanic — the "New post" wizard, pre-filled,
-               landing on Write — not through the frm reply composer. Close the
-               discussion modal first so the wizard is not stacked behind it. */
-            if (typeof window.lgNtmEditTopic === 'function') {
-              var cbW = m.querySelector('[data-dm-close]'); if (cbW) cbW.click();
-              window.lgNtmEditTopic(tid, fid, ttl, body.innerHTML);
-              return;
-            }
-            // Fallback only if the wizard is absent.
-            if (typeof window.lgFrmEditTopic !== 'function') return;
-            window.lgFrmEditTopic(tid, fid, ttl, body.innerHTML);
-          });
-          del.addEventListener('click', function (ev) {
-            ev.preventDefault(); ev.stopPropagation();
-            if (!a.nonce) { alert('Not signed in.'); return; }
-            if (!window.confirm('Delete this post? This removes the discussion and its replies and can’t be undone.')) return;
-            del.disabled = true;
-            fetch('/bb-mirror-api/v0/reply', {
-              method: 'DELETE', credentials: 'same-origin',
-              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
-              body: JSON.stringify({ topic_id: parseInt(tid, 10) })
-            })
-              .then(function (r) { return r.json().then(function (j) { return { s: r.status, ok: r.ok, j: j }; }, function () { return { s: r.status, ok: r.ok, j: {} }; }); })
-              .then(function (res) {
-                if (res.s === 401) { del.disabled = false; alert('Please sign in.'); return; }
-                if (res.s === 403) { del.disabled = false; alert('You can only delete your own posts.'); return; }
-                if (!res.ok) { del.disabled = false; alert('Could not delete: ' + ((res.j && (res.j.message || res.j.error)) || 'failed')); return; }
-                var cb = m.querySelector('[data-dm-close]'); if (cb) cb.click();
-                try { card.remove(); } catch (e) {}
-              })
-              .catch(function (err) { del.disabled = false; alert('Network error: ' + err.message); });
-          });
-        }).catch(function () {});
-    })();
+    dmOwnerActions(opacts, {
+      m: m, tid: tid, fid: fid, body: body, card: card,
+      authorId: parseInt(card.getAttribute('data-author-id'), 10) || 0,
+    });
     op.appendChild(opacts);
     fetch(BASE + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
@@ -5407,10 +5434,71 @@ function lgFollowEnabled() {
     open(card);
   }, true);
 
+  /* ── ADOPT A SERVER-RENDERED MODAL (hub-seo-landing lane, 2026-08-09) ────────
+     /hub/<forum>/<topic>/ ships #lg-dmodal already populated and already open
+     (forums/_topic-modal.php) so the discussion's text is in the HTML a crawler
+     reads. This is the hand-off: wire that node up as if open() had built it,
+     WITHOUT re-fetching a single byte of what is already on screen.
+
+     That "without re-fetching" is the entire point. §4f's cold path fetches the
+     discussion after load; if this function called open() instead, the page
+     would flash, the server-rendered thread would be thrown away, and the two
+     halves of the feature would be fighting each other.
+
+     What open() does that the server could not, and this therefore must:
+       · ensure()          — close / size / Esc / reply-menu dismissal
+       · the scroll lock   — else the hub scrolls underneath an open modal
+       · fbRows()          — reaction + Reply rows per stub, ⋯ menus, no self-react
+       · bbProcessEmbeds() — provider URLs in the OP body and in the replies
+       · reconcileCount()  — the card's reply count matches what is on screen
+       · lgFollowSync()    — the 🔔/✉ pair reflects THIS viewer's subscriptions
+       · dmOwnerActions()  — Edit/Delete for the author or a moderator
+     Skip any one of them and the landing looks right while a control quietly
+     does nothing. */
+  function adoptServerRendered() {
+    var pre = document.getElementById('lg-dmodal');
+    if (!pre || pre.getAttribute('data-lg-ssr') !== '1') return null;
+
+    var m = ensure();                       // adopts `pre` — see ensure()
+    var tid = m.dataset.topicId || pre.getAttribute('data-topic-id') || '';
+    if (!tid) return null;
+    m.dataset.topicId = String(tid);
+    document.body.style.overflow = 'hidden';
+
+    var body = m.querySelector('.lg-dmodal__body');
+    if (body && window.bbProcessEmbeds) window.bbProcessEmbeds(body);
+
+    var t = m.querySelector('.lg-dmodal__thread');
+    if (t) {
+      fbRows(t, tid);
+      if (window.bbProcessEmbeds) window.bbProcessEmbeds(t);
+      // The server rendered the WHOLE thread (?replies=&all=1), so there is no
+      // .replies-loadmore for drain() to chase — the count on screen is final.
+      reconcileCount(t, tid);
+    }
+
+    var opacts = m.querySelector('.lg-dmodal__opacts');
+    if (opacts) {
+      dmOwnerActions(opacts, {
+        m: m, tid: tid,
+        fid: pre.getAttribute('data-forum-id') || '',
+        body: body,
+        card: null,                          // a landing has no originating card
+        authorId: parseInt(pre.getAttribute('data-author-id'), 10) || 0,
+      });
+    }
+
+    if (window.lgFollowSync) window.lgFollowSync();
+    return m;
+  }
+
   // §4f deep-link router opens the discussion modal programmatically (a real
   // in-feed card, or a synthetic card built from a cold standalone fetch). Tail
   // export keeps it out of open()'s body (hub-editdel owns that). Ian 2026-06-25.
   window.lgDmodalOpen = open;
+  // Exposed for §4f, which owns the history seating for a landing and must know
+  // whether a server-rendered modal was adopted BEFORE it decides to route.
+  window.lgDmodalAdoptSSR = adoptServerRendered;
 })();
 
 /* ── §9 Pinned mosaic columns (desktop) ─────────────────────────────────────
@@ -5794,24 +5882,100 @@ function lgFollowEnabled() {
     fetchStandalone(ft, window.lgOpenTopicMobile);
   }
 
-  // Cold deep-link: fetch the canonical standalone page, scrape its OP into a
-  // synthetic feed-card carrying exactly the attrs/selectors §4e open() reads
-  // (incl. the .fc-actions .fcr reaction bar _single-topic.php now renders), then
-  // hand it to open() — which hydrates ?body=/?replies= by id identically to a
-  // normal card-clone open. Hard failure falls back to the real page.
+  /* Cold deep-link: the topic is not in the loaded feed (infinite scroll has not
+     reached it), so fetch its OP and build the synthetic feed-card §4e open()
+     reads, then hand it over — open() hydrates ?body=/?replies= by id exactly as
+     for a real card.
+
+     SOURCE CHANGED 2026-08-09 (hub-seo-landing lane): this used to fetch the
+     canonical PERMALINK and scrape `.post--op` out of _single-topic.php. That is
+     the second of the two jobs keeping that file alive, and it was expensive —
+     ~114KB of full page, chrome and nav tree included, to read one post. The
+     purpose-built fragment is ~2KB, runs on the same FPM pool, and carries the
+     SAME server-side masks (non-public forum → 404, is_anon → "Anonymous",
+     member-only author → "Private member", logged-out contact scrub). &withrx=1
+     asks it for the OP reaction bar, which is what the standalone page was being
+     scraped for.
+
+     The permalink stays as the FALLBACK, not as the source. Ordering matters:
+     the fragment is the thing built for this, and it must be tried first, or
+     retiring the page it replaces would silently take the cold path with it. */
   function fetchStandalone(ft, opener) {
-    fetch(permalink(ft), { credentials: 'same-origin' })
+    var api = '/bb-mirror-api/v0/topic?forum=' + encodeURIComponent(ft.forum) +
+              '&topic=' + encodeURIComponent(ft.topic) + '&withrx=1';
+    fetch(api, { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
       .then(function (html) {
-        if (!html) return fail(ft);
-        var doc = new DOMParser().parseFromString(html, 'text/html');
-        var op = doc.querySelector('.post--op');
-        var card = op && buildSyntheticCard(doc, op, ft);
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html || '';
+        var op = tmp.querySelector('.lg-fpd-op');
+        var card = op && buildCardFromOp(op, ft);
         var fn = opener || window.lgDmodalOpen;
         if (!card || typeof fn !== 'function') return fail(ft);
         fn(card);
       })
       .catch(function () { fail(ft); });
+  }
+  /* An OP block → the .feed-card--topic carrying exactly the attributes and
+     selectors open() and the mobile sheet read off a real card.
+
+     TWO CALLERS, ONE BUILDER, because the two OP blocks are the same shape by
+     design: api/v0/topic.php's `.lg-fpd-op` (the cold deep-link path) and the
+     server-rendered `#lg-dmodal` itself (the landing's mobile path). Both carry
+     data-topic-id / -forum-id / -author-id / -title and the same
+     .lg-dmodal__meta / __body / .fcr children, so neither needs its own builder.
+     Every field is an explicit attribute rather than something scraped out of
+     prose — which is why this replaced a DOMParser pass over a whole page. */
+  function buildCardFromOp(op, ft) {
+    if (!op) return null;                       // 404 fragment / unexpected shape
+    var tid = op.getAttribute('data-topic-id');
+    if (!tid) return null;
+
+    var card = document.createElement('article');
+    card.className = 'feed-card feed-card--topic';
+    card.setAttribute('data-topic-id', tid);
+    card.setAttribute('data-forum-id', op.getAttribute('data-forum-id') || '');
+    card.setAttribute('data-author-id', op.getAttribute('data-author-id') || '0');
+    card.setAttribute('data-href', permalink(ft));
+    card.setAttribute('data-share-url', shareUrl(ft));   // Share = the deep link (parity with _feed.php cards)
+
+    var meta = op.querySelector('.lg-dmodal__meta');
+    var av = meta && meta.querySelector('.fc-avatar');
+    card.appendChild(el('span', 'fc-avatar lg-card-avatar', av ? av.innerHTML : ''));
+
+    var au = meta && meta.querySelector('.fc-author');
+    var fcAuthor = el('div', 'fc-author', '');
+    var nameWrap = el('span', 'fc-author__name lg-card-author', '');
+    if (au) nameWrap.innerHTML = au.innerHTML;
+    fcAuthor.appendChild(nameWrap);
+    card.appendChild(fcAuthor);
+
+    var tm = meta && meta.querySelector('.fc-time');
+    card.appendChild(el('time', 'fc-time lg-card-time', tm ? tm.innerHTML : ''));
+
+    card.appendChild(el('h3', 'fc-title feed-card__title',
+      (op.getAttribute('data-title') || 'Discussion').replace(/[&<>]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
+      })));
+
+    // The fragment already carries the FULL resolved body, so this is not the
+    // usual excerpt placeholder — open()'s ?body= fetch replaces it with the
+    // identical thing. Kept for exactly that reason: one code path in open().
+    var bodyEl = op.querySelector('.lg-dmodal__body');
+    var exc = el('div', 'fc-excerpt feed-card__op', '');
+    exc.appendChild(el('p', 'feed-card__op-excerpt', bodyEl ? bodyEl.innerHTML : ''));
+    card.appendChild(exc);
+
+    /* Scoped to __opacts, and CLONED. Bare `.fcr` would also match a reply's bar
+       on the server-rendered node (whose replies are in the same subtree), and
+       appending the live node would MOVE the reaction bar out of the modal the
+       visitor is looking at. */
+    var fcr = op.querySelector('.lg-dmodal__opacts .fcr');
+    var acts = el('div', 'fc-actions', '');
+    if (fcr) acts.appendChild(fcr.cloneNode(true));
+    card.appendChild(acts);
+
+    return card;
   }
   function fail(ft) { location.href = permalink(ft); }   // graceful: the real page
 
@@ -5821,55 +5985,10 @@ function lgFollowEnabled() {
     if (html != null) e.innerHTML = html;
     return e;
   }
-  function buildSyntheticCard(doc, op, ft) {
-    // IDs come off the OP edit button (server-rendered even when hidden), with the
-    // #topic-<id> anchor as the fallback for the topic id.
-    var editBtn = op.querySelector('.post__edit-btn');
-    var tid = editBtn && editBtn.getAttribute('data-edit-id');
-    var fid = editBtn && editBtn.getAttribute('data-forum-id');
-    var aid = editBtn && editBtn.getAttribute('data-author-id');
-    if (!tid) { var mm = /topic-(\d+)/.exec(op.id || ''); tid = mm && mm[1]; }
-    if (!tid) return null;
-
-    var card = document.createElement('article');
-    card.className = 'feed-card feed-card--topic';
-    card.setAttribute('data-topic-id', tid);
-    if (fid) card.setAttribute('data-forum-id', fid);
-    if (aid) card.setAttribute('data-author-id', aid);
-    card.setAttribute('data-href', permalink(ft));
-    card.setAttribute('data-share-url', shareUrl(ft));   // Share = the deep link (parity with _feed.php cards)
-
-    var avatar = op.querySelector('.post__avatar');
-    card.appendChild(el('span', 'fc-avatar lg-card-avatar', avatar ? avatar.innerHTML : ''));
-
-    var author = op.querySelector('.post__author');
-    var fcAuthor = el('div', 'fc-author', '');
-    var nameWrap = el('span', 'fc-author__name lg-card-author', '');
-    if (author) nameWrap.appendChild(author.cloneNode(true));
-    fcAuthor.appendChild(nameWrap);
-    card.appendChild(fcAuthor);
-
-    var time = op.querySelector('.post__time');
-    card.appendChild(el('time', 'fc-time lg-card-time', time ? time.innerHTML : ''));
-
-    var titleEl = doc.querySelector('.topic-header__title');
-    card.appendChild(el('h3', 'fc-title feed-card__title', titleEl ? titleEl.textContent : 'Discussion'));
-
-    // Instant excerpt placeholder; open() replaces it with the full ?body= fetch.
-    var bodyEl = op.querySelector('.post__body');
-    var exc = el('div', 'fc-excerpt feed-card__op', '');
-    exc.appendChild(el('p', 'feed-card__op-excerpt', bodyEl ? bodyEl.innerHTML : ''));
-    card.appendChild(exc);
-
-    // The reaction bar — same .fc-actions .fcr markup the feed card carries; open()
-    // clones it into the modal for full OP reaction parity.
-    var fcr = op.querySelector('.fc-actions .fcr') || doc.querySelector('.fc-actions .fcr');
-    var acts = el('div', 'fc-actions', '');
-    if (fcr) acts.appendChild(fcr.cloneNode(true));
-    card.appendChild(acts);
-
-    return card;
-  }
+  /* buildSyntheticCard() lived here: it scraped `.post--op` out of the
+     STANDALONE PAGE for the cold deep-link path. Removed 2026-08-09 with the
+     switch to buildCardFromFragment() above — that was the last code holding
+     _single-topic.php in place as a data source rather than a page. */
 
   // ── Address-bar sync (modal open/close → history) ────────────────────────────
   // Watch only #lg-dmodal's own `hidden` attribute (the modal is created lazily on
@@ -5929,8 +6048,119 @@ function lgFollowEnabled() {
     }
   }
 
+  /* ── THE SERVER-RENDERED LANDING (hub-seo-landing lane, Ian 2026-08-09) ──────
+     /hub/<forum>/<topic>/ arrives with #lg-dmodal already populated and already
+     OPEN (forums/_topic-modal.php). Nothing here opens anything — the picture is
+     correct before this file parses. What §4f still owns is HISTORY, and that is
+     the part a landing gets wrong for free.
+
+     A cold landing has ONE history entry. Close the modal and there is nowhere
+     to go back to: the visitor leaves the site, which is the dead end this lane
+     was told not to ship. So seat the SAME two-entry stack routeFromUrl() seats
+     for a ?topic= deep link — feed underneath, topic on top — and every existing
+     path (Back, ✕, Esc, backdrop, the mobile sheet's own popstate) then works
+     unchanged, because from here on the URL is the ordinary ?topic= shape.
+
+     The address bar changes from the permalink to the ?topic= share URL. That is
+     deliberate and it is NOT cloaking: the swap happens client-side AFTER load,
+     the bytes served to every client are identical, and pushState does not
+     change which URL Google indexes — it indexes the one it fetched.
+
+     ORDER MATTERS. This runs BEFORE setupModalObserver(). The observer's first
+     check() sees an already-open modal and calls onOpened(), which pushes a
+     topic entry unless the URL already carries ?topic= — seating first is what
+     makes it bail instead of stacking a third entry. */
+  var ssrHandled = false;
+  function ssrNode() {
+    var m = dmodal();
+    return (m && m.getAttribute('data-lg-ssr') === '1') ? m : null;
+  }
+  function routeFromLanding() {
+    var n = ssrNode();
+    if (!n) return false;
+    var ft = { forum: n.getAttribute('data-lg-forum-slug'), topic: n.getAttribute('data-lg-topic-slug') };
+    if (!ft.forum || !ft.topic) return false;
+
+    history.replaceState({}, '', FORUM_BASE + '/');
+    history.pushState({ lgTopic: ft.forum + '/' + ft.topic }, '', shareUrl(ft));
+
+    if (deskt()) {
+      // §4e adopts the node: close/size/Esc, per-stub rows, embeds, follow
+      // state, owner controls — everything open() would have wired.
+      if (typeof window.lgDmodalAdoptSSR === 'function') window.lgDmodalAdoptSSR();
+    } else {
+      /* ≤640 the sheet is the reading surface and forums.css hides #lg-dmodal,
+         so hand the server-rendered nodes to hub-polish rather than fetching
+         them again. It is an overlay script that can land after us on a cold
+         load — poll briefly, exactly as openTopicMobile() does. Still absent
+         after ~3s, fall back to the desktop modal made visible: an unstyled but
+         READABLE discussion beats a hidden one, and the visitor keeps the text
+         they came for. */
+      /* CLOSE THE DESKTOP MODAL FOR REAL BEFORE HANDING OFF, and do it here —
+         before hub-polish loads, not after.
+
+         The server-rendered node has no `hidden` attribute (it IS open; ≤640 is
+         where it should not be) and forums.css only hides it with `display:none`.
+         hub-polish.js's wireDmodalMobileHistory() watches exactly that attribute
+         and pushes a {lgDm:1} history entry whenever the modal is "not hidden" —
+         so a node nobody could see was claiming a back-gesture entry. Measured:
+         history.length 4 instead of 3, and ONE Back left the visitor on
+         ?topic= with the sheet still open. Two Backs to reach the feed is the
+         dead end this lane was told not to ship; it just took two presses to see.
+
+         Setting the attribute means the phone's modal is genuinely closed rather
+         than merely invisible, which is also what makes §4f's own
+         `open = !m.hidden` test read true on the surface that is actually open.
+         The SEO contract is untouched: this happens at RUNTIME, so the served
+         HTML — the bytes a crawler reads — still carries the modal fully open
+         with the discussion in it. */
+      n.hidden = true;
+
+      /* THREE RUNGS, and the middle one is not belt-and-braces — it is a
+         deploy-skew requirement. forums.js ships inside bb-mirror and reaches
+         the box by `git pull`; hub-polish.js is a WEBROOT file reached through
+         its own symlink set, which a pull does NOT update (see CLAUDE.md's two
+         deploy couplings). The two can therefore be at different commits on a
+         real box, so this must not assume the sheet knows the new export.
+           1. lgOpenTopicMobileSSR — the seeded path, re-fetches nothing.
+           2. lgOpenTopicMobile    — ANY hub-polish, incl. one predating this
+                                     lane. Costs a ?body=/?replies= round trip;
+                                     the served HTML already carried the text, so
+                                     the SEO contract is untouched either way.
+           3. the desktop modal, unstyled but READABLE — better than a hidden
+              discussion when hub-polish never arrives at all. */
+      (function waitForSheet(tries) {
+        if (typeof window.lgOpenTopicMobileSSR === 'function' &&
+            window.lgOpenTopicMobileSSR(n)) return;
+        if (typeof window.lgOpenTopicMobile === 'function') {
+          var card = buildCardFromOp(n, ft);
+          if (card) { window.lgOpenTopicMobile(card); return; }
+        }
+        if ((tries || 0) < 25) {
+          setTimeout(function () { waitForSheet((tries || 0) + 1); }, 120);
+          return;
+        }
+        // Last resort: no sheet is coming. Put the modal back — un-hide the
+        // attribute AND mark it so forums.css's ≤640 display:none lets it
+        // through. A readable discussion beats a hidden one; from here
+        // hub-polish's back-gesture entry is CORRECT, because now it really is
+        // the open surface.
+        n.removeAttribute('hidden');
+        n.setAttribute('data-lg-ssr-fallback', '1');
+        if (typeof window.lgDmodalAdoptSSR === 'function') window.lgDmodalAdoptSSR();
+      })(0);
+    }
+    ssrHandled = true;
+    return true;
+  }
+
   // ── Page-load routing ────────────────────────────────────────────────────────
   function routeFromUrl() {
+    // A landing is already open and already populated. Routing here would call
+    // openTopic() → no matching card → fetchStandalone(), i.e. re-downloading
+    // the discussion that is on screen. That fetch is exactly what this feature
+    // exists to remove.
+    if (ssrHandled) return;
     var ft = parseTopicParam();
     if (!ft) return;
     // Capture the reply anchor BEFORE the history rewrite below strips it from the
@@ -5958,6 +6188,7 @@ function lgFollowEnabled() {
   };
 
   function boot() {
+    routeFromLanding();          // BEFORE the observer — see its header comment
     setupModalObserver();
     window.addEventListener('popstate', onPopState);
     routeFromUrl();

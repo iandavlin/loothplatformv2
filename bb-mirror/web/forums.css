@@ -5756,3 +5756,26 @@ html[data-lguser-theme="dark"] .lg-fm__acct-badge { background: #9db07c; color: 
 @media (pointer: coarse) {
   .pf-row { min-height: 44px; }
 }
+
+/* ══ SERVER-RENDERED LANDING MODAL, ≤640 (hub-seo-landing lane, 2026-08-09) ══
+   /hub/<forum>/<topic>/ ships #lg-dmodal populated and open so the discussion's
+   text is in the HTML a crawler reads (forums/_topic-modal.php). On a phone the
+   reading surface is hub-polish.js's #looth-rep-sheet, and forums.js §4f moves
+   this node's content into it.
+
+   Every #lg-dmodal rule lives inside the `min-width: 641px` block above, so
+   below that this node has NO styling at all: left visible it renders as an
+   unstyled copy of the whole discussion dumped under the hub feed — which is
+   precisely the "looks aweful" Ian was objecting to, reintroduced on the
+   smallest screen.
+
+   HIDDEN, NOT REMOVED. display:none keeps the text in the served HTML, and the
+   served HTML is the entire SEO contract; nothing here is user-agent dependent,
+   so the bytes a crawler gets are the bytes a visitor gets.
+
+   The fallback attribute is set by §4f ONLY when hub-polish never loaded, so the
+   sheet is never coming — an unstyled but readable discussion beats a hidden
+   one, and the visitor keeps the text they arrived for. */
+@media (max-width: 640px) {
+  #lg-dmodal:not([data-lg-ssr-fallback]) { display: none; }
+}

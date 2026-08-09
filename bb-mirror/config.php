@@ -487,3 +487,35 @@ if (!defined('LG_THREAD_FOLLOW_ENABLED')) {
         getenv('LG_BB_MIRROR_FOLLOW') === '1'
         || (($_SERVER['LG_BB_MIRROR_FOLLOW'] ?? '') === '1'));
 }
+
+// ── LG_HUB_TOPIC_LANDING — /hub/<forum>/<topic>/ renders THE HUB WITH THE MODAL
+//    OPEN instead of the legacy standalone page (hub-seo-landing lane, Ian
+//    2026-08-09). ────────────────────────────────────────────────────────────
+//
+// Ian: "we need google to go to the modals on the hub page." / "I don't want
+// people landing on the pages we are mirroring for hub. They look aweful."
+//
+// e9ddc28 put 1,352 discussions in the sitemap; every URL is this permalink, and
+// this permalink rendered forums/_single-topic.php. The sitemap made a fallback
+// page into the front door, so the fix belongs on the ROUTE, not on the sitemap.
+//
+// OFF is the default and is a true no-op: web/index.php's `case 2` still
+// requires _single-topic.php byte-for-byte, and _feed.php emits not one extra
+// byte (the seed is built only when a topic was resolved, which only happens on
+// the ON branch). Gated by tools/gates/hub-topic-landing-gate.py, which READS
+// which layout is being served rather than assuming one — so this default can
+// flip without editing an assertion.
+//
+// Two sources, one meaning — same reasoning as LG_THREAD_FOLLOW_ENABLED above:
+// getenv() is how a pool or a CLI harness arms it, $_SERVER is how a single
+// nginx location does (tools/preview/lane-preview.sh sets a fastcgi_param, and
+// a fastcgi_param lands in $_SERVER but not reliably in the environment). A
+// fastcgi_param cannot be set by a query string, so this is not a visitor-
+// flippable switch.
+//
+// ONE READ POINT: lg_hub_topic_landing_enabled() in web/forums/_topic-modal.php.
+if (!defined('LG_HUB_TOPIC_LANDING')) {
+    define('LG_HUB_TOPIC_LANDING',
+        getenv('LG_BB_MIRROR_TOPIC_LANDING') === '1'
+        || (($_SERVER['LG_BB_MIRROR_TOPIC_LANDING'] ?? '') === '1'));
+}
