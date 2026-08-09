@@ -16,6 +16,11 @@ editorial **Weekly Digest** and nothing else. What `lg-follow-digest.php` sends 
 roundup*, *weekly roundup*. Code names are unchanged; this doc uses the pinned terms.
 The charter's A/B/C shorthand is dropped here in favour of them.
 
+**STATE, 2026-08-09.** Three things have shipped since this doc was started, so read it
+as a live record rather than a proposal: the group-sub sweep ran (§4), the
+unsubscribe-on-post repair is deployed and ON on dev2 (§8), and ruling 6's controls are
+deployed but inert (§10). §11 lists what is left and who owns each piece.
+
 ⚠️ Ian ran the group-sub sweep (ruling 5) partway through this work. §4 is written
 against the **post-sweep** state and the draft SQL that preceded it has been removed —
 it would have trampled his decision to keep the regional groups.
@@ -427,44 +432,6 @@ re-dispatch. The roundup's watermark design cannot do this — the watermark onl
 
 ---
 
-## 7. Sequence, if Ian approves
-
-0. ~~Sweep the group subscriptions~~ — **DONE**, ruling 5. 9,297 rows disarmed.
-1. **Decide what to do about the 3,735 kept rows** (§4): sweep them too, or turn the
-   discussion leg on for those groups on purpose. Doing neither leaves 853 people
-   reachable by the one notification nobody evaluated. Ian's call, and it is the only
-   item here that is his rather than a lane's.
-2. **Understand the §5 double-send** before widening the follow roundup's allowlist. Blocks
-   ruling 4, and blocks it harder than the instant-vs-weekly question does.
-3. **Grow the follow roundup to cover `forum`** subscriptions — the 38 explicit opt-ins
-   (§2.2).
-4. *Then* BuddyBoss's native mail has nothing left to send, and switching it off is a
-   formality rather than a cutover.
-
-Steps 1, 2 and 3 are mutually independent. 3 is the only one that is a build, and it is
-small; 1 is a decision plus one statement; 2 needs a live deploy to instrument.
-
----
-
-## Facts worth not re-deriving
-
-- `wp_fsmpt_email_logs` reaches back only to **2026-07-25**. It is a delivery record, not
-  a history — a 60-day query silently answers about 14 days.
-- Live's MySQL session runs **UTC** (`NOW()` = `UTC_TIMESTAMP()`), but `fsmpt.created_at`
-  is written **site-local** (UTC−4). Comparing the two without the offset skews 4 hours.
-- `bb_subscriptions_validate_before_save` (`class-bb-subscriptions.php:310`) is the veto
-  seam for subscription *creation* — return false and `save()` returns before the INSERT.
-  `BP_Core_Notification_Abstract::$no_validate === true` distinguishes an auto-created
-  group subscription from a member clicking Subscribe (set only at
-  `class-bp-groups-member.php:1578` and `:1638`). Unused by us — recorded because it was
-  the intended mechanism for the bridge-breaker, and finding it is most of that work.
-- The membership row is inserted **before** `bb_create_group_subscription()` is called
-  (`class-bp-groups-member.php:306` vs `:321`), so vetoing the subscription can never
-  affect membership.
-
-
----
-
 ## 8. ⚠️ FINDING — replying through our own box UNSUBSCRIBES you
 
 Ruling 6 flags this as a hazard for the implementer and says *"Our endpoint evidently
@@ -555,17 +522,26 @@ ongoing data destruction, and OFF-by-default would ship the destruction. Precede
 edit-post-parity (`b99570b`) landed as a direct P0 repair. The gate reads the constant
 rather than assuming it, so flipping it needs no gate edit.
 
-⚠️ **DEPLOY COUPLING.** This is a NEW mu-plugin, and the mu-plugin symlink *set* is not
-in the repo — `wp-content/mu-plugins/` links each file individually. A pull alone will
-NOT activate it. The symlink must be created in the same window as the pull:
+### ✅ SHIPPED — and the deploy coupling was honoured
+
+Merged to main and pulled into the serving checkout, with **both** mu-plugin symlinks
+created (verified non-dangling, 2026-08-09). Confirmed from the box rather than from
+intent: gate 17 now reports `exercised the deployed copy of the repair`, and the flag
+reads ON. **Participation no longer unsubscribes anyone on dev2.**
+
+⚠️ **LIVE STILL NEEDS THE SYMLINK.** The mu-plugin symlink *set* is not in the repo —
+`wp-content/mu-plugins/` links each file individually, so a pull alone leaves the repair
+INERT with nothing to notice. On live, in the same window as the pull:
 
 ```bash
 ln -s /home/ubuntu/loothplatformv2-clean/platform/mu-plugins/lg-preserve-forum-subscription.php \
       /var/www/dev/wp-content/mu-plugins/lg-preserve-forum-subscription.php
+ln -s /home/ubuntu/loothplatformv2-clean/platform/mu-plugins/lg-post-follow-controls.php \
+      /var/www/dev/wp-content/mu-plugins/lg-post-follow-controls.php
 ```
 
-Until that link exists the repair is inert and the data loss continues, with nothing
-to notice — which is exactly the failure mode the file exists to end.
+The second is ruling 6's feature and arrives **inert** (`platform/config/post-follow.php`
+is `enabled => false`), so linking it early is safe and saves a second deploy window.
 
 ### How many of the 381 have been eroded? **The honest answer is: unknowable.**
 
@@ -652,3 +628,89 @@ product. An opt-out is not recap fodder.
 Concretely, the recap's filter is on `notifications.type` and nothing else. It must not
 consult `lg_disc_email_cadence`, the `type='topic'` subscription rows, or any other
 per-member email preference when deciding what is eligible.
+
+## 10. RULING 6 — the post→follow controls: BUILT, shipped inert
+
+Ian, 2026-08-08 and re-amended the same day: both surfaces carry both controls,
+**🔔 Notifications ticked, ✉ Emails present but unticked.** Merged and deployed, with
+`platform/config/post-follow.php` at `enabled => false`, so nothing about a member's
+experience has changed yet.
+
+| piece | where | state |
+|---|---|---|
+| the 🔔 write | `platform/mu-plugins/lg-post-follow-controls.php` | shipped, flag OFF |
+| the ✉ write | **none needed** — BuddyBoss's own `subscribe` param | — |
+| the controls | `bb-mirror/web/_chrome.php` (both forms) + `forums.css` | shipped, build-time gated |
+| the params | `lgPostFollowParams()` in `forums.js` | shipped |
+| the flag | `platform/config/post-follow.php`, read by BOTH runtimes | `false` |
+| the proof | gate 18, 10 assertions | green |
+
+**The ✉ half needed no server code at all**, which was worth establishing before writing
+any: BuddyBoss's REST endpoints already accept `subscribe`, and passing it writes exactly
+the row the follow roundup reads. The P0 repair (§8) already stands down when an explicit
+`subscribe` arrives, so the two compose without either knowing about the other.
+
+**One flag, two runtimes.** The write is a WordPress mu-plugin; the UI is bb-mirror's
+forums app. A constant in each would let them disagree — a rendered control that silently
+does nothing, or a param nobody sends. `platform/config/post-follow.php` is read by both,
+which makes those states unreachable, and gate 18 asserts the *wiring* as well as the
+value so removing the shared read is itself red.
+
+### What is left, and who owns it
+
+- **Ian**: look at the mock (`/footer-mockups/post-follow-checkbox/`) and say whether the
+  strip is right. It is drawn on both surfaces, both themes, at 320px. Then flipping
+  `enabled` to `true` is a one-line diff and needs no gate edit.
+- **Not verified on a serve.** bb-mirror serves from the serving checkout, so the branch
+  UI was never reachable on dev2 without a lane preview. Now that it is merged the
+  markup is deployed but gated off; a preview with `LG_POST_FOLLOW=1` would let Ian click
+  the real control rather than the mock. Worth doing before the flip, not after.
+- ⚠️ **The mock shows checkboxes because that is what shipped.** It originally drew the
+  follow modal's switches. The mock is what Ian approves, so it was changed to match the
+  build rather than the other way round — if he prefers the switch look, that is CSS only.
+
+---
+
+## 11. Sequence — what is done, and what is waiting on whom
+
+**Done and deployed (dev2):**
+
+0. ~~Sweep the group subscriptions~~ — ruling 5, 9,297 rows disarmed.
+1. ~~Repair the unsubscribe-on-post defect~~ — §8, live on dev2 with the flag ON.
+2. ~~Build ruling 6's controls~~ — §10, shipped inert behind `enabled => false`.
+3. ~~Inventory the bell-only types for ruling 7~~ — §9.
+
+**Waiting on Ian, in the order they matter:**
+
+1. **The §5 double-send** blocks widening the roundup's allowlist. Seven mechanisms
+   refuted; the next step is instrumentation on live, which is a deploy and therefore his.
+2. **The 3,735 kept group subscriptions** (§4) — sweep the remainder, or turn the
+   discussion leg on for those groups deliberately. Doing neither leaves 853 people
+   reachable by the one notification nobody evaluated.
+3. **Ruling 6's flip** — after he has looked at the control (§10).
+4. **Live deploy of the P0 repair** — needs the pull *and* the symlink (§8).
+
+**Still a lane's to build, none of it blocked:**
+
+- **Grow the roundup to cover `forum` subscriptions** — the 38 explicit opt-ins (§2.2).
+  This is the last thing standing between here and "BuddyBoss has nothing left to send".
+- **A live check for ruling 7's type list** (§9) rather than a hardcoded three.
+
+## Facts worth not re-deriving
+
+- `wp_fsmpt_email_logs` reaches back only to **2026-07-25**. It is a delivery record, not
+  a history — a 60-day query silently answers about 14 days.
+- Live's MySQL session runs **UTC** (`NOW()` = `UTC_TIMESTAMP()`), but `fsmpt.created_at`
+  is written **site-local** (UTC−4). Comparing the two without the offset skews 4 hours.
+- `bb_subscriptions_validate_before_save` (`class-bb-subscriptions.php:310`) is the veto
+  seam for subscription *creation* — return false and `save()` returns before the INSERT.
+  `BP_Core_Notification_Abstract::$no_validate === true` distinguishes an auto-created
+  group subscription from a member clicking Subscribe (set only at
+  `class-bp-groups-member.php:1578` and `:1638`). Unused by us — recorded because it was
+  the intended mechanism for the bridge-breaker, and finding it is most of that work.
+- The membership row is inserted **before** `bb_create_group_subscription()` is called
+  (`class-bp-groups-member.php:306` vs `:321`), so vetoing the subscription can never
+  affect membership.
+
+
+---
