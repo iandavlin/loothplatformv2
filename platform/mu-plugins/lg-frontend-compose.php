@@ -206,18 +206,27 @@ function lg_fc_types(): array
             'sub_narrow' => 'Your 3D print, free for the group to make.',
             'submit'   => 'Post it',
             'foot'     => 'Your hero image is the first photo unless you pick another.',
+            // ORDER IS THE MOCK'S, and getting it needs a word of explanation.
+            // acf_form()'s post_title/post_content args APPEND their pseudo-fields
+            // ABOVE everything else (form-front.php:463-476), which puts "Tell
+            // people about it" second — the mock has it fourth, after the files.
+            // So those args are left false and '_post_title'/'_post_content' are
+            // named in the field list instead: render_form registers them as
+            // local fields BEFORE resolving the list, so they resolve by key and
+            // sit wherever they are put. Verified both resolve rather than
+            // assumed — a silently-unresolved selector renders as nothing at all.
             'fields'   => [
-                // name                        label                    hint                                                             extra  acf_label
-                ['post_title',                 "What’s it called?",     '',                                                              false, 'Title of your Loothprint'],
-                ['loothprint_more_images',     'Show it off',           'One or more photos of your print — finished, or better still in use.', false, 'Add one or more image(s) of your print in action'],
-                ['loothprint_3d_file',         'The print files',       'A ZIP with your STLs — and the editable source too, if you’re happy to share it.', false, '3D File Upload ZIP File'],
-                ['post_content',               'Tell people about it',  'What it does, what it’s for, anything worth knowing before they print it.', false, 'Summary'],
-                ['loothprint_category',        'What kind of print is it?', '',                                                          false, 'Type of Loothprint'],
-                ['content_topic_broad_terms',  'And roughly what area of work?', '',                                                     false, 'Content Topic'],
-                ['loothprint_creative_commons','Licence',               'The usual choice — leave it unless you know you want something else.', false, 'Creative Commons Use License (leave default if unsure)'],
-                ['loothprint_video_instructions', 'A video of it in use', '',                                                            true,  'Video instructions for use/build'],
-                ['loothprint_onshape_link',    'Onshape / CAD link',    '',                                                              true,  'Onshape Project Link'],
-                ['loothprint_buy_me_a_coffee', 'Tip jar',               'Buy Me A Coffee or similar, if you’d like one.',                true,  "Link to your Buy Me A Coffee or other 'leave me a tip' site (optional)"],
+                // name                          label                    hint                                                             extra  acf_label
+                ['_post_title',                  "What’s it called?",     '',                                                              false, 'Title of your Loothprint'],
+                ['loothprint_more_images',       'Show it off',           'One or more photos of your print — finished, or better still in use.', false, 'Add one or more image(s) of your print in action'],
+                ['loothprint_3d_file',           'The print files',       'A ZIP with your STLs — and the editable source too, if you’re happy to share it.', false, '3D File Upload ZIP File'],
+                ['_post_content',                'Tell people about it',  'What it does, what it’s for, anything worth knowing before they print it.', false, 'Summary'],
+                ['loothprint_category',          'What kind of print is it?', '',                                                          false, 'Type of Loothprint'],
+                ['content_topic_broad_terms',    'And roughly what area of work?', '',                                                     false, 'Content Topic'],
+                ['loothprint_creative_commons',  'Licence',               'The usual choice — leave it unless you know you want something else.', false, 'Creative Commons Use License (leave default if unsure)'],
+                ['loothprint_video_instructions','A video of it in use',  '',                                                              true,  'Video instructions for use/build'],
+                ['loothprint_onshape_link',      'Onshape / CAD link',    '',                                                              true,  'Onshape Project Link'],
+                ['loothprint_buy_me_a_coffee',   'Tip jar',               'Buy Me A Coffee or similar, if you’d like one.',                true,  "Link to your Buy Me A Coffee or other 'leave me a tip' site (optional)"],
             ],
             // Rendered by us, not by ACF — see lg_fc_comment_status().
             'comments' => ['label' => 'Let people comment', 'acf_label' => 'Commenting'],
@@ -352,6 +361,7 @@ function lg_fc_route(): void
     // request, from THIS user — so the POST recomputes them rather than trusting
     // whatever the GET produced.
     $uid = get_current_user_id();
+    $t   = $types[$type];
     acf_register_form([
         'id'                 => 'lg-fc-' . $type,
         'post_id'            => 'new_post',
@@ -361,17 +371,32 @@ function lg_fc_route(): void
             'post_author'    => $uid,
             'comment_status' => lg_fc_comment_status(),
         ],
-        'post_title'         => true,
-        'post_content'       => true,
+        // Both false on purpose — the pseudo-fields are ordered via 'fields'.
+        'post_title'         => false,
+        'post_content'       => false,
         'fields'             => lg_fc_acf_field_names($type),
         'form'               => true,
         'honeypot'           => true,
-        'uploader'           => 'basic',
-        'submit_value'       => $types[$type]['submit'],
+        'submit_value'       => $t['submit'],
         'updated_message'    => '',
-        'html_submit_button' => '<input type="submit" class="lgfc__submit" value="%s" />',
+        // ACF emits its OWN <form>, so ours must be it rather than wrap it. A
+        // wrapper produced nested forms, the browser closed the outer one, and
+        // the comments control below ended up OUTSIDE the form — present, styled,
+        // and never submitted. Exactly the "a control that looks right and writes
+        // nothing" class this lane was warned about, found by looking at the
+        // rendered page rather than at the code.
+        'form_attributes'    => [
+            'class'             => 'acf-form lgfc__form',
+            'data-lgfc-type'    => $type,
+            'data-lgfc-extras'  => implode(',', lg_fc_extra_field_names($type)),
+        ],
+        'html_after_fields'  => lg_fc_own_controls($t),
+        'html_submit_button' => '<input type="submit" class="lgfc__submit" value="%s" />'
+            . '<span class="lgfc__foot">' . esc_html($t['foot']) . '</span>',
         'return'             => add_query_arg('lg_fc', 'posted', get_permalink() ?: home_url('/')),
     ]);
+
+    add_action('wp_enqueue_scripts', 'lg_fc_shed_site_chrome', PHP_INT_MAX);
 
     // Processes the submission (nonce-checked) and redirects on success. Must run
     // before any output.
@@ -391,14 +416,63 @@ function lg_fc_route(): void
  */
 function lg_fc_acf_field_names(string $type): array
 {
-    $out = [];
-    foreach (lg_fc_types()[$type]['fields'] as $f) {
-        if ($f[0] === 'post_title' || $f[0] === 'post_content') {
-            continue;
+    return array_column(lg_fc_types()[$type]['fields'], 0);
+}
+
+/**
+ * The controls we render ourselves, placed INSIDE ACF's form via
+ * html_after_fields. See lg_fc_comment_status() for why comments is ours.
+ */
+function lg_fc_own_controls(array $t): string
+{
+    $label = esc_html($t['comments']['label']);
+    return <<<HTML
+<div class="acf-field lgfc-field lgfc__own" data-lgfc-extra="1" data-name="lg_fc_comments">
+  <div class="acf-label"><label>{$label}</label></div>
+  <div class="acf-input"><div class="lgfc__chips">
+    <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="open" checked> <span>Yes</span></label>
+    <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="closed"> <span>No</span></label>
+  </div></div>
+</div>
+HTML;
+}
+
+/**
+ * Drop the site chrome from this standalone page.
+ *
+ * The first render pulled 91 scripts and 37 stylesheets — the whole BuddyBoss,
+ * BuddyPress, FluentForms and theme stack — into a page that is one card on an
+ * empty background. It also painted a floating "ADMIN →" pill over the form.
+ *
+ * A DENY-LIST, NOT AN ALLOW-LIST, and that is the important decision. acf_form()
+ * for this type needs the gallery, the media modal, select2, the colour picker
+ * and their dependency closure; an allow-list that misses one member of that
+ * closure breaks the photo uploader SILENTLY — the field still renders, the
+ * button just stops working — which is precisely the kind of defect a page-level
+ * screenshot passes and a member reports. Naming what we know we do not want is
+ * the direction of error we can afford.
+ *
+ * wp_head() itself is still called, because it is what prints ACF's own
+ * enqueues. This trims what it prints; it does not bypass it.
+ */
+function lg_fc_shed_site_chrome(): void
+{
+    $drop = apply_filters('lg_fc_drop_handle_prefixes', [
+        'bp-', 'bb-', 'buddy', 'fluent', 'fea-', 'wp-ulike', 'tutor', 'meprlms',
+        'lg-shared-site-header', 'lg-site-footer', 'lg-wd-',
+        'twentytwentyfive', 'wp-block-library', 'global-styles',
+    ]);
+
+    foreach ([wp_scripts(), wp_styles()] as $dep) {
+        foreach ((array) $dep->queue as $handle) {
+            foreach ($drop as $prefix) {
+                if (strpos($handle, $prefix) === 0) {
+                    $dep->dequeue($handle);
+                    break;
+                }
+            }
         }
-        $out[] = $f[0];
     }
-    return $out;
 }
 
 /* ──────────────────────────────────────────────────────── the save path ───── */
@@ -469,29 +543,14 @@ function lg_fc_render(string $type): void
 
     lg_fc_page_open($t['title']);
     ?>
-<form class="lgfc__card" method="post" data-lgfc-type="<?php echo esc_attr($type); ?>"
-      data-lgfc-extras="<?php echo esc_attr(implode(',', lg_fc_extra_field_names($type))); ?>">
+<div class="lgfc__card">
   <div class="lgfc__h">
     <h1><?php echo esc_html($t['title']); ?></h1>
     <p class="lgfc__sub lgfc__sub--wide"><?php echo esc_html($t['sub']); ?></p>
     <p class="lgfc__sub lgfc__sub--narrow"><?php echo esc_html($t['sub_narrow'] ?? $t['sub']); ?></p>
   </div>
-  <div class="lgfc__b">
-    <?php acf_form('lg-fc-' . $type); ?>
-
-    <?php // Our own control, not ACF's — see lg_fc_comment_status(). ?>
-    <div class="lgfc__own" data-lgfc-extra="1">
-      <div class="lgfc__ownlabel"><?php echo esc_html($t['comments']['label']); ?></div>
-      <div class="lgfc__chips">
-        <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="open" checked> <span>Yes</span></label>
-        <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="closed"> <span>No</span></label>
-      </div>
-    </div>
-  </div>
-  <div class="lgfc__f">
-    <span class="lgfc__foot"><?php echo esc_html($t['foot']); ?></span>
-  </div>
-</form>
+  <?php acf_form('lg-fc-' . $type); ?>
+</div>
     <?php
     lg_fc_page_close();
     remove_filter('acf/prepare_field', 'lg_fc_relabel', 20);
@@ -625,12 +684,20 @@ function lg_fc_css(): string
   color:var(--lg-charcoal,#1a1d1a)}
 .lgfc__sub{margin:5px 0 0;color:var(--lg-mute,#6b6f6b);font-size:13.5px}
 .lgfc__sub--narrow{display:none}
-.lgfc__b{padding:6px 21px 20px}
+.lgfc .acf-form-fields{padding:6px 21px 20px}
 
-/* ---- one field ---- */
+/* ---- one field ----
+   ACF lays its fields out as floated 50% columns and carries an inline
+   width from each field's wrapper setting, so "single screen, one column"
+   has to be taken rather than asked for. This is the one place !important
+   is load-bearing: the inline style cannot be beaten otherwise, and the
+   mock is a single column at BOTH widths. */
 .lgfc .acf-fields>.acf-field{padding:15px 0;border-bottom:1px solid var(--lg-line,#e3ddd0);
-  border-top:0;margin:0;width:auto;float:none}
-.lgfc .acf-fields>.acf-field:last-child{border-bottom:0}
+  border-top:0;margin:0;float:none!important;width:100%!important;
+  min-height:0;clear:both;display:block}
+.lgfc .acf-fields>.acf-field:last-of-type{border-bottom:0}
+.lgfc .acf-fields{border:0;padding-left:21px;padding-right:21px}
+.lgfc .acf-field[data-name="_validate_email"]{display:none!important}
 .lgfc .acf-label{margin:0 0 3px;padding:0}
 .lgfc .acf-label label{font:700 14.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);
   color:var(--lg-ink,#323532);margin:0}
@@ -668,15 +735,58 @@ function lg_fc_css(): string
   border-color:var(--lg-sage-d,#6b7c52);color:#fff}
 .lgfc li:has(input:focus-visible)>label{outline:2px solid var(--lg-sage,#87986a);outline-offset:2px}
 
+/* The taxonomy lists are the REAL terms, and there are a lot of them —
+   loothprint_type runs to a dozen and shared_category is hierarchical. The mock
+   drew a tidy six ("Jig, Tool, Fixture, Clamp, Replacement part, Other") that do
+   not exist in either taxonomy, so the real ones are shown and given a bounded,
+   scrollable box rather than being invented to fit the drawing. */
+.lgfc .acf-field-taxonomy .acf-input>ul,
+.lgfc .acf-taxonomy-field .acf-checkbox-list{max-height:184px;overflow-y:auto;
+  border:1px solid var(--lg-line,#e3ddd0);border-radius:10px;padding:9px;
+  background:var(--lg-paper,#fdfdfa);align-content:flex-start}
+.lgfc .acf-checkbox-list ul{display:flex;flex-wrap:wrap;gap:6px;list-style:none;
+  margin:6px 0 0 12px;padding:0;flex-basis:100%}
+
 /* the licence list is long prose, so it stacks rather than wrapping as pills */
 .lgfc .acf-field[data-name="loothprint_creative_commons"] .acf-radio-list{flex-direction:column;gap:5px}
 .lgfc .acf-field[data-name="loothprint_creative_commons"] .acf-radio-list label{
   border-radius:10px;padding:10px 12px;width:100%;font-weight:600;line-height:1.35}
 
-/* ---- gallery / file ---- */
-.lgfc .acf-gallery,.lgfc .acf-field-file .acf-input>.acf-file-uploader{
+/* ---- gallery ----
+   ACF gives .acf-gallery a FIXED 400px height and absolutely positions its
+   inner panes, so an empty gallery is a 400px void — which is what the first
+   render showed, and the mock draws a compact drop zone. Unwinding the
+   positioning is what lets the box size to its contents.
+   The empty state is styled through :empty so it reads as the mock's drop zone
+   without a second element to keep in sync: when ACF puts an attachment in
+   there, the dashed zone stops applying by itself. */
+.lgfc .acf-gallery{height:auto!important;min-height:0;border:0;background:none}
+.lgfc .acf-gallery-main,.lgfc .acf-gallery-attachments,.lgfc .acf-gallery-toolbar{
+  position:static;width:auto;height:auto;padding:0;border:0;background:none}
+.lgfc .acf-gallery-attachments{min-height:64px}
+/* :has(), NOT :empty. ACF leaves a whitespace text node inside the attachments
+   container, and :empty does not match an element containing one — so the
+   drop-zone styling silently never applied and the field rendered as a blank
+   64px gap. Measured in the live DOM (1 child node, innerHTML "\n\t\t\t\t\t")
+   rather than inferred from the screenshot, which only showed "nothing there".
+   :has() asks the question that was actually meant: are there any attachments? */
+.lgfc .acf-gallery-attachments:not(:has(.acf-gallery-attachment)){display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:104px;
+  border:1.5px dashed var(--lg-sage,#87986a);border-radius:11px;
+  background:var(--lg-paper,#fdfdfa)}
+.lgfc .acf-gallery-attachments:not(:has(.acf-gallery-attachment))::before{content:"Drop photos here";
+  font:700 13.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-sage-d,#6b7c52)}
+.lgfc .acf-gallery-attachments:not(:has(.acf-gallery-attachment))::after{content:"or tap to choose · JPG, PNG, HEIC";
+  font-size:12.3px;color:var(--lg-mute,#6b6f6b)}
+.lgfc .acf-gallery-toolbar{margin-top:10px}
+.lgfc .acf-gallery-toolbar .acf-hl{display:flex;align-items:center;gap:8px;
+  list-style:none;margin:0;padding:0}
+.lgfc .acf-gallery-toolbar .acf-fr{margin-left:auto}
+.lgfc .acf-gallery-side{border-radius:11px;border:1px solid var(--lg-line,#e3ddd0)}
+
+/* ---- file ---- */
+.lgfc .acf-field-file .acf-input>.acf-file-uploader{
   border:1px solid var(--lg-line,#e3ddd0);border-radius:11px;background:var(--lg-paper,#fdfdfa)}
-.lgfc .acf-gallery{min-height:190px}
 .lgfc .acf-file-uploader .file-wrap,.lgfc .acf-file-uploader .show-if-value{padding:9px 11px}
 .lgfc input[type=file]{font-size:13px;color:var(--lg-mute,#6b6f6b)}
 .lgfc .acf-button,.lgfc .acf-gallery .acf-button{font:600 12.5px/1 var(--lg-font-sans,system-ui,sans-serif);
@@ -706,10 +816,10 @@ function lg_fc_css(): string
 .lgfc__fold.is-open .lgfc__foldt .cv::after{content:" \25B2"}
 .lgfc__fold:not(.is-open) .lgfc__foldt .cv::after{content:" \25BC"}
 
-/* ---- footer ---- */
-.lgfc__f{padding:15px 21px 19px;border-top:1px solid var(--lg-line,#e3ddd0);
+/* ---- footer: ACF's own submit row, dressed as the mock's ---- */
+.lgfc .acf-form-submit{margin:0;padding:15px 21px 19px;
+  border-top:1px solid var(--lg-line,#e3ddd0);
   display:flex;align-items:center;gap:11px;flex-wrap:wrap}
-.lgfc .acf-form-submit{margin:0;padding:0}
 .lgfc__submit,.lgfc .acf-form-submit input[type=submit]{
   font:700 14px/1 var(--lg-font-sans,system-ui,sans-serif);border-radius:10px;padding:13px 22px;
   border:1px solid var(--lg-sage-d,#6b7c52);background:var(--lg-sage-d,#6b7c52);color:#fff;cursor:pointer}
@@ -730,8 +840,8 @@ function lg_fc_css(): string
   .lgfc__h h1{font-size:17px}
   .lgfc__sub--wide{display:none}
   .lgfc__sub--narrow{display:block}
-  .lgfc__b{padding:4px 16px 18px}
-  .lgfc__f{padding:13px 16px 16px}
+  .lgfc .acf-fields{padding-left:16px;padding-right:16px}
+  .lgfc .acf-form-submit{padding:13px 16px 16px}
   .lgfc__foot{margin-left:0;flex:1 1 100%}
   /* 16px stops iOS zooming the viewport on focus */
   .lgfc .acf-input input[type=text],.lgfc .acf-input input[type=url],
@@ -760,7 +870,7 @@ function lg_fc_js(): string
 {
     return <<<'JS'
 (function () {
-  var form = document.querySelector('.lgfc__card[data-lgfc-extras]');
+  var form = document.querySelector('[data-lgfc-extras]');
   if (!form) return;
   var names = (form.getAttribute('data-lgfc-extras') || '').split(',').filter(Boolean);
   var nodes = [];
@@ -768,7 +878,9 @@ function lg_fc_js(): string
     var el = form.querySelector('.acf-field[data-name="' + n + '"]');
     if (el) nodes.push(el);
   });
-  form.querySelectorAll('[data-lgfc-extra]').forEach(function (el) { nodes.push(el); });
+  form.querySelectorAll('[data-lgfc-extra]').forEach(function (el) {
+    if (nodes.indexOf(el) === -1) nodes.push(el);
+  });
   if (!nodes.length) return;
 
   var fold = document.createElement('div');
