@@ -19,44 +19,44 @@ run() {  # run <label> <command...>
     *) red=1;;
   esac
 }
-echo "=== GATE 1/19: visibility matrix (the privacy model) ==="
+echo "=== GATE 1/20: visibility matrix (the privacy model) ==="
 run "visibility matrix" php /srv/profile-app/bin/visibility-matrix.php
 echo
-echo "=== GATE 2/19: web-craft gate (images / weight / eager scripts) ==="
+echo "=== GATE 2/20: web-craft gate (images / weight / eager scripts) ==="
 run "web-craft" python3 "$(dirname "$0")/craft-gate.py"
 echo
-echo "=== GATE 3/19: infra-sec gate (cookie auth / source disclosure / cdp) ==="
+echo "=== GATE 3/20: infra-sec gate (cookie auth / source disclosure / cdp) ==="
 run "infra-sec" bash "$(dirname "$0")/infra-sec-gate.sh"
 echo
-echo "=== GATE 4/19: hub paragraph-collapse (content_html keeps its breaks) ==="
+echo "=== GATE 4/20: hub paragraph-collapse (content_html keeps its breaks) ==="
 run "hub-paragraph" bash "$(dirname "$0")/hub-content-paragraph-gate.sh"
 echo
-echo "=== GATE 5/19: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
+echo "=== GATE 5/20: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
 run "looth-auth" bash "$(dirname "$0")/looth-auth-issue-gate.sh"
 echo
-echo "=== GATE 6/19: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
+echo "=== GATE 6/20: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
 run "event-date-tz" bash "$(dirname "$0")/event-date-tz-gate.sh"
 echo
-echo "=== GATE 7/19: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
+echo "=== GATE 7/20: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
 run "events-tap-navigates" bash "$(dirname "$0")/events-tap-navigates-gate.sh"
 echo
-echo "=== GATE 8/19: composer topic-meta (forum picker cloning + tags) ==="
+echo "=== GATE 8/20: composer topic-meta (forum picker cloning + tags) ==="
 run "composer-topic-meta" node "$(dirname "$0")/composer-topic-meta-test.js"
 echo
-echo "=== GATE 9/19: author socials RESOLVE, never mirror (byline drift class) ==="
+echo "=== GATE 9/20: author socials RESOLVE, never mirror (byline drift class) ==="
 run "author-socials-live" bash "$(dirname "$0")/author-socials-live-gate.sh"
 
-echo "=== GATE 10/19: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
+echo "=== GATE 10/20: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
 run "react-types" bash "$(dirname "$0")/react-types-cover-standalone-gate.sh"
 echo
-echo "=== GATE 11/19: /shop-layout-planner/ still SERVES the planner (live SEO url) ==="
+echo "=== GATE 11/20: /shop-layout-planner/ still SERVES the planner (live SEO url) ==="
 # Defaults to dev2, where it self-reports CANNOT RUN until the standalone render
 # lands (dev2 bounces every anon WP page into the BuddyBoss gate). Run it with
 # --live to prove the production url is healthy, and with
 # LG_SP_EXPECT_STANDALONE=1 once the standalone page is meant to be serving.
 run "shop-planner-url" bash "$(dirname "$0")/shop-planner-url-gate.sh"
 echo
-echo "=== GATE 12/19: an ANON visitor can reach Sign in at every width (Ian's lockout) ==="
+echo "=== GATE 12/20: an ANON visitor can reach Sign in at every width (Ian's lockout) ==="
 # Behaviour, not presence: "Sign in" was in the served HTML the whole time while
 # 641-820px had no way in at all. Starts its own anonymous real-origin proxy and
 # one incognito BrowserContext per width, so it never touches shared browser
@@ -64,14 +64,14 @@ echo "=== GATE 12/19: an ANON visitor can reach Sign in at every width (Ian's lo
 # BOTH green on the day the band was dead.
 run "anon-signin-reachable" python3 "$(dirname "$0")/anon-signin-reachable-gate.py"
 echo
-echo "=== GATE 13/19: follow-digest — flag OFF sends NOTHING (email is unrecallable) ==="
+echo "=== GATE 13/20: follow-digest — flag OFF sends NOTHING (email is unrecallable) ==="
 # Written BEFORE the sender and red on purpose; promoted here in the same window as
 # the merge that defines LG_FOLLOW_DIGEST_ENABLED, per its own rule: "a gate that
 # guards an unrecallable channel and is never promoted is worse than no gate — it
 # reads as covered." Number minted from MAIN's count (12), not the branch's.
 run "follow-digest" python3 "$(dirname "$0")/follow-digest-gate.py"
 echo
-echo "=== GATE 14/19: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
+echo "=== GATE 14/20: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
 # Second time source/behaviour was served to anybody who asked (after the
 # /archive-api/v0/*.php disclosure). lg-weekly-digest/dev/ sat inside a PLUGIN
 # directory, so the catch-all \.php$ handler RAN it for anonymous requests: one
@@ -82,7 +82,7 @@ echo "=== GATE 14/19: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
 # would go green having seen nothing.
 run "dev-files-anon" python3 "$(dirname "$0")/dev-files-anon-unreachable-gate.py"
 echo
-echo "=== GATE 15/19: the cadence control is ABSENT when its flag is off ==="
+echo "=== GATE 15/20: the cadence control is ABSENT when its flag is off ==="
 # Number minted from MAIN's count (14), not the branch's — two lanes both minted
 # "9/9" once and collided in this file.
 #
@@ -254,7 +254,7 @@ echo
 #   detect — on a build that is fine. The looth_id line is not optional either: the
 #   WP cookies alone authenticate the page but not /profile-api.
 
-echo "=== GATE 16/19: BuddyBoss group mail stays DEAD (an empty list is load-bearing) ==="
+echo "=== GATE 16/20: BuddyBoss group mail stays DEAD (an empty list is load-bearing) ==="
 # Number minted from MAIN's count (15), not the branch's — two lanes both minted
 # "9/9" once and collided in this file.
 #
@@ -274,7 +274,7 @@ echo "=== GATE 16/19: BuddyBoss group mail stays DEAD (an empty list is load-bea
 # cookies, no CDP, so it cannot go DEAD for environmental reasons.
 run "group-mail-dead" python3 "$(dirname "$0")/group-mail-dead-gate.py"
 
-echo "=== GATE 17/19: participation must never silently UNSUBSCRIBE you (P0 data loss) ==="
+echo "=== GATE 17/20: participation must never silently UNSUBSCRIBE you (P0 data loss) ==="
 # Numbered 17 because 16 is this same branch's group-mail gate and MAIN is still on 15.
 # If another lane lands a gate first, keep BOTH and renumber on merge — two lanes both
 # minted "9/9" once and collided in this file.
@@ -292,7 +292,7 @@ echo "=== GATE 17/19: participation must never silently UNSUBSCRIBE you (P0 data
 # three routes — this gate is what caught it.
 run "subscription-preserved" python3 "$(dirname "$0")/subscription-preserved-gate.py"
 
-echo "=== GATE 18/19: ruling 6 defaults — bell ticked, EMAIL UNTICKED (consent) ==="
+echo "=== GATE 18/20: ruling 6 defaults — bell ticked, EMAIL UNTICKED (consent) ==="
 # 18 because 16 and 17 are this same branch's; MAIN is still on 15. Keep BOTH and
 # renumber on merge if another lane lands one first.
 #
@@ -310,32 +310,8 @@ echo "=== GATE 18/19: ruling 6 defaults — bell ticked, EMAIL UNTICKED (consent
 # All six assertions were reddened by mutation before this was committed.
 run "post-follow-controls" python3 "$(dirname "$0")/post-follow-controls-gate.py"
 echo
-echo "=== GATE 19/19: a sitemapped discussion lands on THE HUB, with its text in the HTML ==="
-# 19 numbered from MAIN (which carries 18), not from this branch — two lanes both
-# minting the same number is how run-all.sh collided last time. Rebase before
-# running; on conflict keep BOTH and renumber.
-#
-# TWO HALVES THAT FAIL INDEPENDENTLY, which is why both are gated. e9ddc28 put
-# 1,352 discussions in the sitemap, all pointing at /hub/<forum>/<topic>/. The
-# obvious fix — route that URL at the feed and let forums.js §4f open the modal —
-# gives Ian the right picture and silently destroys the SEO half, because §4f's
-# cold path fetches the body AFTER load: a crawler would read an empty modal and
-# nothing would look wrong to anyone running JS.
-#   A. CONTENT — OP body + reply text in `curl`, no JS, no cookies; title in <title>
-#   B. LAYOUT  — the hub feed grid with a discussion modal already open on it
-# Half A also guards the REPLACEMENT: the legacy page did server-render its
-# content, and that must not regress on the way out.
-#
-# Plus the visibility masks, differentially against the fragment API (audit H6 was
-# that leak on this exact permalink), and a hidden-forum topic 404ing through both
-# the landing route and the fragment API.
-#
-# READS the flag state rather than hardcoding it, so an OFF default does not redden
-# every other lane. LG_TL_REQUIRE_ON=1 promotes "legacy layout served" to a finding
-# — throw it when the default flips. LG_TL_PREFIX gates a lane preview instead.
-run "hub-topic-landing" python3 "$(dirname "$0")/hub-topic-landing-gate.py"
 
-echo "=== GATE 19/19: a rendered control CARRIES ITS BEHAVIOUR (the UI-lies class) ==="
+echo "=== GATE 19/20: a rendered control CARRIES ITS BEHAVIOUR (the UI-lies class) ==="
 # Numbered from MAIN, which is on 18. Two lanes both minted a "9/9" once and collided;
 # rebase before pushing and on conflict KEEP BOTH and renumber.
 #
@@ -363,6 +339,34 @@ echo "=== GATE 19/19: a rendered control CARRIES ITS BEHAVIOUR (the UI-lies clas
 # DEFINITION, and two mutations that silently did nothing. The harness now fails loud
 # on a no-op or syntax-invalid mutation.
 run "social-actions-wired" python3 "$(dirname "$0")/social-actions-wired-gate.py"
+
+echo "=== GATE 20/20: a sitemapped discussion lands on THE HUB, with its text in the HTML ==="
+# 20 numbered from MAIN, which reached 19 while this lane was in flight
+# (its own 19 is the UI-lies gate). RE-MINTED AT REBASE, not at first write —
+# this branch and main both held a "19" for a few hours, which is precisely
+# the collision the rule exists to stop. Keep BOTH on conflict and renumber — two lanes both
+# minting the same number is how run-all.sh collided last time. Rebase before
+# running; on conflict keep BOTH and renumber.
+#
+# TWO HALVES THAT FAIL INDEPENDENTLY, which is why both are gated. e9ddc28 put
+# 1,352 discussions in the sitemap, all pointing at /hub/<forum>/<topic>/. The
+# obvious fix — route that URL at the feed and let forums.js §4f open the modal —
+# gives Ian the right picture and silently destroys the SEO half, because §4f's
+# cold path fetches the body AFTER load: a crawler would read an empty modal and
+# nothing would look wrong to anyone running JS.
+#   A. CONTENT — OP body + reply text in `curl`, no JS, no cookies; title in <title>
+#   B. LAYOUT  — the hub feed grid with a discussion modal already open on it
+# Half A also guards the REPLACEMENT: the legacy page did server-render its
+# content, and that must not regress on the way out.
+#
+# Plus the visibility masks, differentially against the fragment API (audit H6 was
+# that leak on this exact permalink), and a hidden-forum topic 404ing through both
+# the landing route and the fragment API.
+#
+# READS the flag state rather than hardcoding it, so an OFF default does not redden
+# every other lane. LG_TL_REQUIRE_ON=1 promotes "legacy layout served" to a finding
+# — throw it when the default flips. LG_TL_PREFIX gates a lane preview instead.
+run "hub-topic-landing" python3 "$(dirname "$0")/hub-topic-landing-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
