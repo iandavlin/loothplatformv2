@@ -81,13 +81,14 @@ FOLLOWER=$(pgapp "SELECT b.wp_user_id FROM wp_user_bridge b JOIN users u ON u.id
 echo "topic=$TOPIC (author $AUTHOR)   follower=wp:$FOLLOWER"
 
 PREEXISTING=$(pglooth "SELECT count(*) FROM forums.topic_follow WHERE user_id=$FOLLOWER AND topic_id=$TOPIC;" | tr -d ' ')
+# Everything this run raises is scoped by (fixture topic, created after START), so
+# cleanup cannot reach a real member's real notification no matter which leg fired.
+START=$(pgapp "SELECT now()::text;")
 
 cleanup() {
   # Ordered so a failure in one still attempts the others.
   [ "${PREEXISTING:-1}" = "0" ] && pglooth "DELETE FROM forums.topic_follow WHERE user_id=$FOLLOWER AND topic_id=$TOPIC;" >/dev/null
-  pgapp "DELETE FROM notifications WHERE type='forum.followed_topic' AND target_id=$TOPIC
-           AND user_uuid IN (SELECT u.uuid FROM users u JOIN wp_user_bridge b ON b.user_id=u.id
-                              WHERE b.wp_user_id=$FOLLOWER) AND created_at > now() - interval '10 minutes';" >/dev/null
+  pgapp "DELETE FROM notifications WHERE target_id=$TOPIC AND created_at >= '$START';" >/dev/null
 }
 trap cleanup EXIT
 
@@ -102,6 +103,22 @@ fire() {
     lg_notify_on_reply($TOPIC, $TOPIC, $AUTHOR, 0, 'plain body, no mentions here');
     echo 'fired';
   " 2>/dev/null | tail -1
+}
+# Fire an arbitrary reply shape, so each leg can be driven in isolation.
+fire_as() {  # fire_as <reply_id> <author_wp> <parent_reply_id> <content>
+  sudo -n -u looth-dev php -d error_reporting=0 -r "
+    \$_SERVER['HTTP_HOST']='dev2.loothgroup.com'; \$_SERVER['REQUEST_URI']='/';
+    require '/var/www/dev/wp-load.php';
+    require '$ROOT/lg-shared/notify-bridge.php';
+    lg_notify_on_reply($TOPIC, $1, $2, $3, '$4');
+    echo 'fired';
+  " 2>/dev/null | tail -1
+}
+rows_of() {  # rows_of <wp_id> <type>
+  pgapp "SELECT count(*) FROM notifications n
+           JOIN users u ON u.uuid=n.user_uuid JOIN wp_user_bridge b ON b.user_id=u.id
+          WHERE b.wp_user_id=$1 AND n.type='$2' AND n.target_id=$TOPIC
+            AND n.created_at >= '$START';" | tr -d ' '
 }
 rows_for_follower() {
   pgapp "SELECT count(*) FROM notifications n
@@ -160,9 +177,70 @@ phase 'PHASE 3 — a second reply coalesces onto the same row'
 n2=$(rows_for_follower)
 ok "$([ "$n2" = "1" ] && echo 1 || echo 0)" "still exactly 1 row, not 2" "got $n2"
 
+# ── PHASE 4 — the other three legs deliver too ──────────────────────────────
+phase 'PHASE 4 — legs 1-3 deliver (the ones that need NO subscription at all)'
+# Leg 4 is the opt-in rung and was the whole reason this gate exists. But legs 1-3
+# fire for people holding ZERO subscriptions — a reply to your discussion, a reply to
+# your comment, an @mention — which is most members most of the time. The 2026-08-01
+# trace reconciled them against live's access log; nothing ASSERTED them, so a
+# regression in any of the three would be invisible until someone complained.
+#
+# Each leg is driven in isolation by choosing the authorship so the others cannot
+# claim the recipient first ($notified runs mention > reply_to_reply > reply_to_topic).
+REPLY=$(sudo -n -u looth-dev wp --path=/var/www/dev db query "
+  SELECT r.ID FROM wp_posts r JOIN wp_posts t ON t.ID=r.post_parent
+   WHERE r.post_type='reply' AND r.post_status='publish' AND r.post_parent=$TOPIC
+     AND r.post_author<>0 ORDER BY r.ID DESC LIMIT 1;" 2>/dev/null | grep -E '^[0-9]+$' | tail -1)
+RAUTH=$(sudo -n -u looth-dev wp --path=/var/www/dev db query \
+  "SELECT post_author FROM wp_posts WHERE ID=${REPLY:-0};" 2>/dev/null | grep -E '^[0-9]+$' | tail -1)
+
+if [ -z "${REPLY:-}" ] || [ -z "${RAUTH:-}" ]; then
+  echo "  SKIP  no published reply on the fixture topic — legs 1-3 not exercised"
+else
+  # LEG 3 — reply to a TOPIC you authored. Reply author is anyone but the topic
+  # author, so leg 3 is the only leg with a recipient.
+  fire_as "$REPLY" "$RAUTH" 0 'plain body, no mentions' >/dev/null
+  ok "$([ "$(rows_of "$AUTHOR" forum.reply_to_topic)" = "1" ] && echo 1 || echo 0)" \
+     "leg 3: the TOPIC author (wp:$AUTHOR) got forum.reply_to_topic" \
+     "got $(rows_of "$AUTHOR" forum.reply_to_topic)"
+
+  # LEG 2 — reply to a REPLY you wrote. Parent is $REPLY (author $RAUTH); the new
+  # reply's author is the TOPIC author, so leg 3 self-skips and only leg 2 has a
+  # recipient. Requires $RAUTH != $AUTHOR, which the fixture query guarantees.
+  if [ "$RAUTH" != "$AUTHOR" ]; then
+    fire_as "$REPLY" "$AUTHOR" "$REPLY" 'plain body, no mentions' >/dev/null
+    ok "$([ "$(rows_of "$RAUTH" forum.reply_to_reply)" = "1" ] && echo 1 || echo 0)" \
+       "leg 2: the PARENT-REPLY author (wp:$RAUTH) got forum.reply_to_reply" \
+       "got $(rows_of "$RAUTH" forum.reply_to_reply)"
+  else
+    echo "  SKIP  leg 2: fixture reply shares its author with the topic"
+  fi
+
+  # LEG 1 — @mention, in the canonical minted form the composer writes. The mention
+  # must WIN over the other legs, so this fires with the topic author as the mentioned
+  # party: if leg 1 did not claim them first they would get reply_to_topic instead,
+  # and asserting the TYPE is what catches that.
+  pgapp "DELETE FROM notifications WHERE target_id=$TOPIC AND created_at >= '$START';" >/dev/null
+  fire_as "$REPLY" "$RAUTH" 0 "hey {{mention_user_id_${AUTHOR}}} take a look" >/dev/null
+  ok "$([ "$(rows_of "$AUTHOR" forum.mention)" = "1" ] && echo 1 || echo 0)" \
+     "leg 1: the MENTIONED member (wp:$AUTHOR) got forum.mention" \
+     "got $(rows_of "$AUTHOR" forum.mention)"
+  ok "$([ "$(rows_of "$AUTHOR" forum.reply_to_topic)" = "0" ] && echo 1 || echo 0)" \
+     "…and the mention WON — no duplicate reply_to_topic row for the same event" \
+     "got $(rows_of "$AUTHOR" forum.reply_to_topic) — one event raised two rows"
+fi
+
 # ── Cleanup, asserted ───────────────────────────────────────────────────────
 phase 'CLEANUP — the harness leaves nothing behind'
 cleanup
+# ⚠️ ASSERT WHAT THE CLEANUP ACTUALLY COVERS, NOT ONE CORNER OF IT. This first
+# checked only the follower's rows — while phase 4 raises rows for the TOPIC author
+# and the parent-reply author too, neither of which that check could see. A cleanup
+# assertion narrower than the cleanup itself is worse than none: it reports "nothing
+# left behind" while rows sit in a real table for real members.
+left_all=$(pgapp "SELECT count(*) FROM notifications WHERE target_id=$TOPIC AND created_at >= '$START';" | tr -d ' ')
+ok "$([ "$left_all" = "0" ] && echo 1 || echo 0)" \
+   "EVERY row this run raised is gone, for every recipient" "got $left_all"
 left_n=$(rows_for_follower)
 left_f=$(pglooth "SELECT count(*) FROM forums.topic_follow WHERE user_id=$FOLLOWER AND topic_id=$TOPIC;" | tr -d ' ')
 ok "$([ "$left_n" = "0" ] && echo 1 || echo 0)" "no notification rows left behind" "got $left_n"
