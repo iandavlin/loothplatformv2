@@ -15,8 +15,8 @@ line into that lane's charter and note the lane name here.
 4.5 Participation silently UNSUBSCRIBES you from the discussion → ✅ MERGED + LIVE @ 10ea816 (was eroding the 381 followers since June)
 
 **P1 — wanted now / deploy-blocking**
+4.6 Mobile sponsor sheet → ✅ CLOSED 8/9, NOT a defect: tested in a browser, everything works; my static read counted attributes as elements and desktop-only arrows as mobile controls
 3.6 Post page: Edit/Delete overflow menus render ALREADY OPEN at 390px for anyone who can edit (Ian will hit this on every post) — UNOWNED, measured 8/9
-4.6 Mobile sponsor sheet: carousels/buttons injected with no behaviour — UNOWNED, static evidence only, test written (same class as 4.4/4.3/3.7)
 3.7 Mobile: discussion embed → ✅ LIVE @ 021ff38 (Ian ran lg-deploy 8/9; keeper smoke-verified ON the live box: bit emitted, guard served, social-actions stamp absent). Ian-VERIFIED on his phone on dev2 first ("looks good", test-3). His words on scope: "THE MAIn problem was no imbed in the modal." Card half → item 7, not a bug
 3.8 Mobile/PWA: post → hub BACK NAV must be EXPOSED — UNOWNED, MOCKUPS FIRST. Ian 8/9: "on mobile and pwa we need some kind of back nav to the hub once you click through to the post. there is one in the nav tab but it should be exposed. Need mockups." House rule applies: draw it behind the dev gate (recommendation + at most one alternative, side by side), hand him a URL; no code before his pick
 3.10 PWA service worker: fetches HANG or fall back to offline.html — bit Ian TWICE on 8/9 trying to view mocks (phone: offline.html + gate-403s from the installed app's separate cookie jar; desktop Chrome: eternal blank spin, request provably never reached nginx while every SW-bypassing path answered in ms). Same sw.js serves LIVE members. Needs: sw.js fetch-handler audit (timeout + network-first for uncached paths), plus a decision on scoping the SW out of /footer-mockups/ — UNOWNED
@@ -85,42 +85,43 @@ flag-ON path 404s.
 
 Pictures for Ian: https://dev2.loothgroup.com/footer-mockups/mobile-profile-tray/
 
-## 4.6 Mobile sponsor sheet: carousels + buttons injected with no behaviour (P1) — keeper sweep 8/9, NOT reproduced
+## ✅ 4.6 Mobile sponsor sheet — CLOSED, NOT A DEFECT (tested 8/9, my static read was wrong)
 
-Found sweeping the class behind 4.4/4.3/3.7 ("relocated markup arrives without its
-behaviour"). **Static evidence only — nobody has tapped it yet.** Worth someone's
-time precisely because the first three of these reached Ian's phone.
+I filed this from a static sweep and it does not survive contact with a browser.
+Closing it with the measurements, and with why the static method misled me, because
+the method is the reusable part.
 
-`webroot/sponsor-sheet.js` intercepts taps on `/sponsors/` and `/sponsors/<slug>/`,
-fetches the page, lifts `<main>` out with DOMParser, strips `script`, injects it —
-**and re-inits nothing** (0 re-init calls; it copies CSS only). Compare
-`profile-sheet.js` and `practice-sheet.js`, which both re-implement `initMaps` +
-`initCarousels` for exactly this reason.
+Measured at 390x844, the same sponsor (`/sponsors/stewmac/`) standalone vs opened as
+a sheet from `/sponsors/` (which does NOT load the v2 bundle):
 
-Measured on dev2 (`/sponsors/stewmac/`, `gluboost`, `total-vise` — all three alike):
+| control | standalone | in the sheet |
+|---|---|---|
+| Play video | tap → 1 iframe | tap → **1 iframe** |
+| carousels | native scroll | **native scroll** |
+| Send message | native form submit | native form submit |
 
-| | |
-|---|---|
-| lifted node | 12–21 KB, **12 carousel/gallery elements, 7–8 buttons** |
-| inline `<script>` inside the node | 0 — so the wiring is page-level, not carried |
-| what wires it | `/archive-poc/assets/lg-v2-front.<hash>.js` (4 DOMContentLoaded inits, 9 document-level delegates, **0 MutationObserver, no exported re-init**) |
-| `/sponsors/<slug>/` loads that bundle | **yes** ← works standalone |
-| `/sponsors/` (the list — where you tap from) loads it | **no** |
-| `/hub/` loads it | **no** |
+**Why the static case was wrong, in three ways, all of the same shape — counting
+markup is not counting behaviour:**
 
-So the sheet opened from the list injects carousels and buttons into a page that has
-none of their behaviour, and the bundle has no MutationObserver or re-init hook that
-would heal it. Same shape as 4.4: the standalone page works, the sheet does not, and
-the entry path is the whole difference.
+1. The "12 carousel/gallery elements" were 12 `data-lg-carousel-prev/next`
+   **attributes**, not elements. `class="...lg-carousel..."` occurs **zero** times on
+   the page. A regex over HTML counted attribute names and I read it as components.
+2. Those nav arrows are `display:none` at 390px — **desktop only, by design**. A
+   control that is not rendered at the width under test cannot be the defect, and I
+   never checked.
+3. The mobile carousel needs **no JS at all**: the track is `overflow-x:auto` with
+   `scroll-snap-type: x mandatory`, scrollWidth 724 > clientWidth 358. A member swipes
+   it. The v2 bundle wires the *arrows*, which mobile never shows. So "the bundle is
+   absent on the list page" — which is true — implies nothing about mobile behaviour.
 
-**The test, ready to run** (`tools/exercise-harness/browser-profile-tray-repro.py` is
-the pattern): at 390px as a member, tap a sponsor from `/sponsors/`, then swipe a
-carousel in the sheet and tap a button. CONTROL: the same carousel on
-`/sponsors/stewmac/` at the same width. If the control works and the sheet does not,
-it is the same bug and gate 19 should gain a third instance.
+NOT TESTED, deliberately: whether the contact form is AJAX-enhanced on the standalone
+page and would fall back to a full-page navigation inside the sheet. Finding out means
+submitting a contact form, i.e. sending mail, and the worst case is a navigation
+instead of an inline success — not a dead control. Not worth the send.
 
-⚠️ Do not "fix" it by loading the v2 bundle from the sheet without checking what its
-4 DOMContentLoaded inits do to an already-booted page.
+The sweep that produced this was still worth running — it is how 3.7's second surface
+was found. The lesson is narrower: **a relocated-markup lead is not evidence until a
+control is tapped at the width the member uses.**
 
 ## 4.2 Logged-out mobile bottom dash — the "+" lies, and Sign in hides (P0) — Ian 8/5
 
