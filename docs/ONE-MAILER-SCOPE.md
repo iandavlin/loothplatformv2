@@ -334,6 +334,57 @@ reply 72589's exact `post_date_gmt`.
 That is precisely the outcome `lg_fd_suppress_instant()` exists to prevent — its own
 comment calls it *"the same lie in a new costume"*.
 
+### ⚠️ CURRENCY, 2026-08-09 — the widening HAPPENED, and this code has moved since
+
+Two things changed under this section after it was written, and both matter to how it
+should be read.
+
+**1. Ruling 4's widening shipped.** `fd0d196` — *"roundup: GENERAL RELEASE — allowlist
+widened to all members (Ian 8/3, confirmed 8/8)"* — is on main, on dev2 and **on live**
+(config mtime 2026-08-08 21:03 UTC). So the blast radius sentence below ("at
+`all-members` it is the same defect across 381") is no longer hypothetical.
+
+**2. The sender gained a first-event pass-through on 08-08, and it changes the shape of
+the whole thing.** The deployed `lg_fd_suppress_instant()` now ends:
+
+```php
+if ( lg_fd_ensure_enrolled( $uid ) ) { return $send_mail; }   // first event passes through
+return false;
+```
+
+with the note *"the member's LAST instant email doubles as their enrolment ... caught
+2026-08-08, pre-flip"*. That is not this lane's work, and it is why the general release
+behaves as a **lazy ramp**: a member is enrolled by their first post-widening reply
+notification, which is delivered normally, and batching owns everything after it.
+
+### Measured on live after the flip, and it is working as designed
+
+Six hours after the widening reached live:
+
+```
+enrolled (hold a watermark)   2      user 1 (cadence daily), user 779 (default)
+779 enrolled at               2026-08-09 01:29:39
+779's instant mail at         2026-08-09 01:29:40 UTC   ← the same event
+roundups sent since the flip  0      (the weekly flush fires Sunday 08:00 local)
+members receiving BOTH kinds  0
+deployed default cadence      'daily'  (was 'weekly' when §5 was written)
+```
+
+⚠️ **I nearly filed this as "the general release is inert".** Two members enrolled after
+six hours of an all-members allowlist looks exactly like suppression failing, and the
+first probe I ran — a no-cadence member on dev2 — returned `FILTER RESULT = true` while
+*also* writing a watermark, which reads as flatly contradictory. It is not: the mail
+passing through **is** the enrolment. Reading the deployed function rather than my
+branch's copy of it settled it in one step. Recorded because the false alarm was
+convincing, and because "suppression isn't firing" would have been a bad thing to hand
+Ian about a channel he had just switched on.
+
+**What this does NOT explain** is §5 itself: Ian's duplicate mail was 08-06 and 08-07, and
+he had been enrolled since 08-07 17:42 — so the pass-through did not exist yet and would
+not have applied to him anyway. §5's seven refutations stand, and the mechanism there
+remains unfound. What has changed is that the code under investigation is no longer the
+code that produced it, so anyone reopening §5 should re-measure before re-deriving.
+
 ### What is proven, and what is not
 
 **Proven:**
@@ -709,6 +760,35 @@ forums app. A constant in each would let them disagree — a rendered control th
 does nothing, or a param nobody sends. `platform/config/post-follow.php` is read by both,
 which makes those states unreachable, and gate 18 asserts the *wiring* as well as the
 value so removing the shared read is itself red.
+
+### ✅ The bridge dependency is RESOLVED — checked, not assumed
+
+§10 was written with the notification bridge as the top-order risk: 🔔 is the default
+control, it writes `forums.topic_follow`, and if nothing delivered from that store the
+default would be a control that does nothing. Ian ruled on the bridge's flag on
+2026-08-09 — **`bell_follows_bb_subscriptions` stays OFF** — so it is worth stating
+exactly what that does and does not touch, because the name sounds like it might kill
+this.
+
+It does not. On the bridge branch `lg_notify_topic_followers()` merges two readers:
+
+| reader | store | state |
+|---|---|---|
+| `lg_notify_topic_followers_native()` | `forums.topic_follow` — **what 🔔 writes** | **ungated** |
+| `lg_notify_topic_followers_bb()` | `wp_bb_notifications_subscriptions` type='topic' | gated by the flag, **OFF** |
+
+So leg 4 still raises `forum.followed_topic` from our own store, and it does so today as
+well — the bridge's two-reader refactor is not merged, and main's single reader is the
+native one. The chain 🔔 → `topic_follow` → leg 4 → bell row holds under both versions.
+The bridge lane's own comment already names ruling 6 as a writer of that store, so the
+two lanes agree about the contract rather than merely not colliding.
+
+**What the ruling does mean, and it sharpens ruling 6 rather than threatening it:** the
+381 members holding BuddyBoss `type='topic'` subscriptions stay bell-less by decision.
+Their channel is email and only email. So the two controls are genuinely two channels
+into two stores with two deliveries — **ticking 🔔 gives no email, ticking ✉ gives no
+bell, and neither substitutes for the other.** That is worth saying plainly on the
+surface itself if Ian ever asks why both exist.
 
 ### What is left, and who owns it
 

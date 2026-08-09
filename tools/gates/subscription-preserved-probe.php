@@ -76,6 +76,11 @@ $arm = function () use ( $U, $T ) {
 // ── LEG 1: posting a reply ───────────────────────────────────────────────────
 $armed = $arm();
 echo 'REPLY_BEFORE=' . ( $armed ? 'subscribed' : 'NOT-subscribed' ) . "\n";
+/* ⚠️ A LEG THAT CANNOT ARM MUST SAY SO. Falling silent here leaves REPLY_AFTER
+ * absent, and the gate then compared None against 'subscribed' and reported a
+ * FALSE RED claiming active data loss — from a probe that never ran. Reported
+ * by the notif-bridge lane, 2026-08-09. */
+if ( ! $armed ) { echo "REPLY_SKIPPED=could_not_arm_subscription\n"; }
 if ( $armed ) {
 	$GLOBALS['lg_bb_mirror_reply_owned'] = true;              // as reply.php:483
 	$req = new WP_REST_Request( 'POST', '/buddyboss/v1/reply' );
@@ -96,6 +101,11 @@ if ( $armed ) {
 // ── LEG 2: editing the topic ─────────────────────────────────────────────────
 $armed = $arm();
 echo 'TOPIC_BEFORE=' . ( $armed ? 'subscribed' : 'NOT-subscribed' ) . "\n";
+/* ⚠️ A LEG THAT CANNOT ARM MUST SAY SO. Falling silent here leaves TOPIC_AFTER
+ * absent, and the gate then compared None against 'subscribed' and reported a
+ * FALSE RED claiming active data loss — from a probe that never ran. Reported
+ * by the notif-bridge lane, 2026-08-09. */
+if ( ! $armed ) { echo "TOPIC_SKIPPED=could_not_arm_subscription\n"; }
 if ( $armed ) {
 	$topic = get_post( $T );
 	// ⚠️ `parent` is REQUIRED. Omitting it makes the route 400 before it ever reaches
@@ -116,7 +126,19 @@ if ( $armed ) {
 }
 
 // ── restore entry state ──────────────────────────────────────────────────────
+/* ⚠️ VERIFY THE RESTORE AGAINST THE STORE, NOT THE CACHED HELPER. bbp_is_user_subscribed()
+ * reads through BuddyBoss's subscription cache, which is not reliably invalidated within
+ * the same request after an add/remove — so the confirming read could return the PRE-restore
+ * value and the probe reported RESTORED=NO on a box it had correctly put back. That made the
+ * gate intermittently RED ("did not restore the box to its entry state") with no defect
+ * present, which is worse than no gate: a flaky red teaches people to ignore reds.
+ * Observed twice, seconds apart, one RED one GREEN, 2026-08-09. */
 if ( $entry_sub && ! bbp_is_user_subscribed( $U, $T ) )      { bbp_add_user_subscription( $U, $T ); }
 if ( ! $entry_sub && bbp_is_user_subscribed( $U, $T ) )      { bbp_remove_user_subscription( $U, $T ); }
-echo 'RESTORED=' . ( bbp_is_user_subscribed( $U, $T ) === $entry_sub ? 'yes' : 'NO' ) . "\n";
+wp_cache_flush();
+global $wpdb;
+$now_sub = (bool) $wpdb->get_var( $wpdb->prepare(
+	"SELECT COUNT(*) FROM {$wpdb->base_prefix}bb_notifications_subscriptions
+	  WHERE type='topic' AND item_id=%d AND user_id=%d AND status=1", $T, $U ) );
+echo 'RESTORED=' . ( $now_sub === (bool) $entry_sub ? 'yes' : 'NO' ) . "\n";
 echo "DONE=1\n";
