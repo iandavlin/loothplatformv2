@@ -54,10 +54,12 @@ return array(
 	 * where every hour off is unrecoverable. This one wakes up seven controls that
 	 * currently no-op. A dead button is inert; a button that has just started
 	 * working can Remove connection, and that one DELETES an edge with no undo.
-	 * Waking it unverified is the larger risk, so it merges OFF, gets verified on
-	 * the dev2 serve where the serve actually runs it, and Ian switches it on.
+	 * Waking it unverified is the larger risk, so it merged OFF, and Ian switched
+	 * it ON 2026-08-09 (decision box: "Flip ON") after hitting the dead controls
+	 * on his phone — his real-device tap on the dev2 serve is the verification
+	 * gate; reverts if that fails.
 	 */
-	'enabled' => false,
+	'enabled' => true,
 
 	/**
 	 * The docroot URL the widget points relocating clients at. Same-origin and
