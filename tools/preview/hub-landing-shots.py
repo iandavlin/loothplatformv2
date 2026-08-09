@@ -47,6 +47,24 @@ LIVE = "/hub"
 SLUG = os.environ.get("LG_TL_SLUG",
                       "acoustic/old-yamaha-classical-guitar-top-crack-repair-top-crack-repair-repair")
 
+# LG_TL_WPCOOKIE="<name>=<value>" adds a real WordPress session, so the run
+# captures the MEMBER view (Reply composer, follow controls, owner Edit/Delete)
+# alongside the anonymous one. Mint it with:
+#
+#   sudo -u looth-dev LG_SHOT_UID=<id> wp --path=/var/www/dev \
+#        --skip-plugins --skip-themes eval-file tools/preview/mint-wp-session.php
+#
+# wp_generate_auth_cookie ALONE is not enough — WP validates the session token
+# against user meta, so it has to be registered through WP_Session_Tokens or
+# every request still reads as logged out.
+#
+# ⚠️ HOST-ONLY, no leading dot. The dev gate cookie is DOTTED and the WP cookie is
+# not; setting the WP one on the dotted domain leaves the profile holding TWO
+# cookies of the same name, and the run then executes as whichever the browser
+# sends — a different member than the one under test, with an absence assertion
+# going green for the wrong reason.
+WP_COOKIE = os.environ.get("LG_TL_WPCOOKIE", "")
+
 DESKTOP = {"width": 1440, "height": 900, "mobile": False, "deviceScaleFactor": 1}
 PHONE = {"width": 390, "height": 844, "mobile": True, "deviceScaleFactor": 2}
 
@@ -144,6 +162,13 @@ def main():
     s.call("Network.clearBrowserCookies")
     s.call("Network.setCookie", name="loothdev_auth", value=tok,
            domain=".dev2.loothgroup.com", path="/", secure=True)
+    viewer = "anon"
+    if WP_COOKIE and "=" in WP_COOKIE:
+        cname, cval = WP_COOKIE.split("=", 1)
+        s.call("Network.setCookie", name=cname, value=cval,
+               domain="dev2.loothgroup.com", path="/", secure=True)   # host-only
+        viewer = "member"
+    print(f"  viewer      {viewer}")
 
     results = []
     failures = []
@@ -223,7 +248,18 @@ def main():
             check(f"{surface}/{theme}: theme applied", state["theme"] == want_attr,
                   f"want {want_attr!r}, got {state['theme']!r}")
 
-            png = outdir / f"landing-{surface}-{theme}.png"
+            composer = s.js("""(function(){
+              var root=document.getElementById('looth-rep-sheet')||document.getElementById('lg-dmodal');
+              if(!root) return null;
+              return { reply: !!root.querySelector('[data-frm-open], #lrs-replybtn, .lrs-comp__input'),
+                       signin: !!root.querySelector('.lg-dmodal__signin, .lrs-signin') };})()""")
+            if composer:
+                want_reply = viewer == "member"
+                check(f"{surface}/{theme}/{viewer}: composer matches the viewer",
+                      composer["reply"] == want_reply and composer["signin"] != want_reply,
+                      json.dumps(composer))
+
+            png = outdir / f"landing-{surface}-{theme}-{viewer}.png"
             check(f"{surface}/{theme}: screenshot", s.shot(png) > 20000, str(png))
 
             # ── BACK must return to the FEED, not off-site, and must not reload.
@@ -255,7 +291,7 @@ def main():
                   json.dumps({k: after[k] for k in ("modalVisible", "sheetOpen")}))
             check(f"{surface}/{theme}: the hub feed is underneath",
                   after["feedCards"] > 0, f"{after['feedCards']} cards")
-            s.shot(outdir / f"after-back-{surface}-{theme}.png")
+            s.shot(outdir / f"after-back-{surface}-{theme}-{viewer}.png")
 
     # ── The BEFORE picture, for the side-by-side Ian actually compares ─────────
     for surface, metrics in (("desktop", DESKTOP), ("mobile", PHONE)):
@@ -267,7 +303,7 @@ def main():
                  f"localStorage.setItem('lg-set-boot',JSON.stringify("
                  f"{{theme:'{theme}',dark:{'true' if theme=='dark' else 'false'}}}));1")
             s.goto(f"{HOST}{LIVE}/{SLUG}/", settle=3.0)
-            s.shot(outdir / f"before-legacy-{surface}-{theme}.png")
+            s.shot(outdir / f"before-legacy-{surface}-{theme}-{viewer}.png")
             print(f"  ok    before/legacy {surface}/{theme} from {LIVE}/{SLUG}/")
 
     s.finish()
