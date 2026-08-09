@@ -241,34 +241,104 @@ judgement call per reply.
 
 ---
 
-## 5. What this does NOT fix — the honest part
+## 5. What this does NOT fix — and what the drop actually is
 
 **The realtime dispatch still drops ~16% of replies.** This work removes the
 *permanence*, not the drop: after the deploy a missed reply is invisible for up
 to ~10 minutes instead of forever. That is the difference between "the hub is
 slightly behind" and "members post into the void", but it is not zero.
 
-The dispatch is `wp_remote_post(blocking=false, timeout=1)` over TLS loopback,
-and it **discards its return value entirely** — so a WP_Error, a 5xx, a refused
-connection and a successful POST are indistinguishable to the caller. Nothing
-retries and nothing logs.
+### The transport theory was wrong. Here is the evidence that killed it.
 
-What was measured on dev2, not guessed:
-- idle box: **120/120 dispatches landed**. The transport is not inherently lossy.
-- looth-dev FPM pool saturated (`pm.max_children=8`, all busy): **60/60 landed**,
-  but each dispatch took ~1s instead of ~0.2s — the firing loop went from 13s to
-  61s. Under load the call spends its **entire 1-second timeout**, and the margin
-  before a silent drop is exactly that one second.
-- `fastcgi_ignore_client_abort` is absent from nginx everywhere (default `off`),
-  and `_sync.php` runs on **the same 8-worker pool** as the request that fires it.
+An earlier draft of this section blamed the transport —
+`wp_remote_post(blocking=false, timeout=1)` discarding its return value, a
+1-second budget spent under load, `fastcgi_ignore_client_abort` defaulting off.
+It was labelled plausible-not-proven. **It is now disproven**, by the log that
+was sitting there the whole time.
 
-That is a plausible mechanism, not a proven one — the drop did not reproduce on
-dev2 under the load it was possible to generate there. **Do not treat it as
-diagnosed.** The tripwire now logs the 5-minute lag count every 15 minutes, so
-the next person gets a real rate to work against instead of an anecdote. Worth a
-follow-on backlog item: a durable outbox, or simply reading the dispatch's return
-value and logging failures. Note `docs/` records an outbox timer that is
-**installed but deliberately disabled** on dev2 — read that history first.
+`/var/log/nginx/dev.loothgroup.access.log*` on live records every loopback POST,
+back to 2026-07-26. Across that window there are 290 `POST
+/bb-mirror-api/v0/_sync` lines, **all HTTP 200**. Correlated against the 72
+replies posted since the wedge began:
+
+| | replies | had a sync POST at create time | POST status |
+|---|---|---|---|
+| landed ≤60s | 61 | **61/61** | 200 |
+| **dropped** | 11 | **11/11** | 200 |
+
+Timing is indistinguishable too: the POST lands at create **+1 to +3s** for both
+groups (dropped mean +1.5s, landed +1.4s; identical range).
+
+So for every dropped reply the hook **did** fire, the POST **was** delivered, and
+the receiver **did** answer 200. Nothing was lost in flight. `_sync.php` ran and
+wrote nothing.
+
+### What it actually is: a silent early return in the receiver
+
+For `['reply','upsert']` there are exactly two ways out of
+`bb_mirror_upsert_reply()` that produce a 200 and no row, and both are the same
+shape — *the reply's own data was not readable at that instant*:
+
+```php
+$p = get_post($id);
+if (!$p || $p->post_type !== 'reply') { /* DELETE */ return; }   // 1
+...
+if (!$topic_id || !$forum_id) return;                            // 2  <- silent
+```
+
+**Reproduced deterministically on dev2** against `/srv/bb-mirror`'s deployed
+copy — i.e. the code live is running — with
+`tools/mirror-sync/repro-silent-return.php`:
+
+```
+-- control: normal upsert --
+sync_at advanced: YES (row written)
+-- poisoned: meta cache says the reply has no parentage --
+threw an error:   NO — it returned quietly
+sync_at advanced: NO — nothing was written
+VERDICT: SILENT NO-WRITE reproduced — the caller cannot tell this from success.
+```
+
+That is the defect: **"I cannot read it yet" is handled as "there is nothing to
+do."** No throw, no log, no retry, and a 200 on the wire that makes the access
+log agree that all is well.
+
+### Why it never reproduced on dev2
+
+**Live runs a persistent object cache; dev2 does not.** Live has a
+`wp-content/object-cache.php` drop-in with redis active on :6379. dev2 has redis
+running but **no drop-in**, so its object cache is per-request and cannot serve a
+stale read across processes. That is why 120/120 landed idle and 60/60 landed
+under pool saturation on dev2 — the box could not exhibit the failure, and a
+green result there was never evidence about live.
+
+It also explains the heal-on-edit signature exactly: an edit calls
+`update_post_meta`, which invalidates the poisoned entry, so the edit's dispatch
+reads correct parentage and writes the row.
+
+### What is still NOT proven — do not skip this
+
+The *branch taken* is proven and the live/dev2 difference is proven. **The
+upstream cause of the bad read is not.** A stale persistent-cache entry fits
+every observation, but "the row was not yet visible to the second request" fits
+the same observations, and this investigation did not instrument live to tell
+them apart. Do not write "Redis race" into a commit message as though it were
+established.
+
+### The fix that follows, and why it is not in this merge
+
+Whatever the upstream cause, the receiver's contract is wrong and can be fixed
+without knowing it: **an unreadable reply must not be treated as a no-op.** Throw
+a typed exception instead of returning — `bb_mirror_walk_ids` already records
+those in reconcile, and `_sync.php` answering non-200 would have made the
+existing access log answer this question in one grep instead of a lane. A short
+retry before giving up is worth measuring too.
+
+Held out of this merge on purpose: it touches the materializer that both
+`_sync.php` and reconcile share, and this branch was already clean and awaiting
+merge when the evidence landed. Keeper's call whether it rides here or follows.
+Note `docs/` records an outbox timer **installed but deliberately disabled** —
+read that history before building a queue.
 
 ---
 
