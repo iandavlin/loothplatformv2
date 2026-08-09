@@ -1,0 +1,172 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Front-end compose — built (2026-08-09)</title>
+<style>
+/* The docroot injects a boot script into pages under /footer-mockups/, and a dark
+   profile then repaints this page via `html[data-lguser-theme="dark"] body`
+   (0,1,2). A plain `body{...!important}` LOSES on that, and so does `html body`.
+   An id on <body> is (1,0,1) and wins outright — recorded trap, applied. */
+body#lgfcpage{margin:0;padding:28px 18px 90px;background:#fbfbf8;color:#262925;
+  font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+.w{max-width:1180px;margin:0 auto}
+h1{font:800 30px/1.15 Lora,Georgia,serif;margin:0 0 8px;color:#1a1d1a}
+.lede{color:#565a55;margin:0 0 6px;max-width:78ch;font-size:16px}
+h2{font:700 12.5px/1.2 inherit;letter-spacing:.08em;text-transform:uppercase;color:#565a55;
+   margin:52px 0 14px;padding-bottom:7px;border-bottom:1px solid #e4e7d8}
+p{max-width:80ch}
+.big{display:flex;gap:26px;flex-wrap:wrap;margin:22px 0 6px}
+.stat{background:#fff;border:1px solid #e4e7d8;border-radius:14px;padding:15px 19px;min-width:210px}
+.stat b{display:block;font:800 27px/1.1 Lora,Georgia,serif;color:#586b3f}
+.stat span{display:block;color:#565a55;font-size:13px;margin-top:4px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;margin-top:10px}
+@media (max-width:860px){.cols{grid-template-columns:1fr}}
+.pane{min-width:0}
+.cap{font:700 11px/1.2 inherit;letter-spacing:.07em;text-transform:uppercase;color:#565a55;margin:0 0 8px}
+.cap em{font-style:normal;color:#b5442a}
+.cap b{color:#586b3f}
+figure{margin:0;border:1px solid #e4e7d8;border-radius:13px;background:#fff;overflow:hidden}
+figure img{display:block;width:100%;height:auto}
+.scroll{max-height:620px;overflow-y:auto;background:#fff}
+figcaption{font-size:12.3px;color:#565a55;padding:9px 12px;border-top:1px solid #eceee2;background:#fcfcf9}
+.phone{max-width:330px}
+.note{border-left:3px solid #c66845;padding:11px 0 11px 15px;margin:20px 0;color:#565a55;font-size:14.6px;max-width:80ch}
+.note strong{color:#262925}
+.note--ask{border-left-color:#586b3f;background:#f6f8ef;padding:14px 16px;border-radius:0 10px 10px 0}
+table{border-collapse:collapse;width:100%;font-size:13.6px;margin:8px 0 0;background:#fff;
+  border:1px solid #e4e7d8;border-radius:12px;overflow:hidden}
+th,td{text-align:left;padding:9px 11px;border-bottom:1px solid #eceee2;vertical-align:top}
+th{font:700 10.5px/1.2 inherit;letter-spacing:.06em;text-transform:uppercase;color:#565a55;background:#fcfcf9}
+tr:last-child td{border-bottom:0}
+.y{color:#586b3f;font-weight:700}
+.n{color:#b5442a;font-weight:700}
+code{background:#f0f1ea;padding:1px 6px;border-radius:5px;font-size:12.6px}
+a{color:#586b3f}
+</style>
+<body id="lgfcpage">
+<div class="w">
+
+<h1>Front-end compose — built</h1>
+<p class="lede">Backlog 6. You ruled <strong>Option A, the single screen</strong> on 3 August. This is it,
+running on dev2 behind a flag that is <strong>off</strong> — nobody can reach it but us until you say so.
+Everything below is a photograph of the real thing, taken as an ordinary member (<code>bangers</code>),
+not a drawing.</p>
+
+<h2>One correction first — you already had a form, and this is what it looks like</h2>
+<p>The scope this was built from said the old “Add your own Loothprint” page was <em>dead</em>: no form at
+all. <strong>That is wrong, and you should know it before you look at anything else.</strong> The page works.
+A member can post a Loothprint through it today. The problem was never that it was missing.</p>
+
+<div class="big">
+  <div class="stat"><b>11,353 px</b><span>the page you have now, on a laptop</span></div>
+  <div class="stat"><b>1,695 px</b><span>the same job, after</span></div>
+  <div class="stat"><b>6.7×</b><span>shorter — and 6.2× shorter on a phone</span></div>
+</div>
+
+<div class="cols">
+  <div class="pane">
+    <p class="cap"><em>Before</em> · what a member gets today · 1280px</p>
+    <figure>
+      <a href="before-light-desktop.png"><img src="before-small-light-desktop.png" width="380" height="3406" alt="The existing add-a-loothprint page, unstyled and extremely long"></a>
+      <figcaption>Shown small so the <em>length</em> is the point — tap for full size. Unstyled browser
+      defaults, no platform chrome, every licence explained twice, and a wall of help text under the form.</figcaption>
+    </figure>
+  </div>
+  <div class="pane">
+    <p class="cap"><b>After</b> · the same job · 1280px</p>
+    <figure>
+      <img src="after-light-desktop.png" width="1280" height="1695" alt="The new single-screen compose form">
+      <figcaption>One card. Five things needed, the licence already answered, four optional extras folded away.</figcaption>
+    </figure>
+  </div>
+</div>
+
+<h2>On a phone</h2>
+<div class="cols">
+  <div class="pane">
+    <p class="cap"><em>Before</em> · 390px</p>
+    <figure class="phone">
+      <a href="before-light-phone.png"><img src="before-small-light-phone.png" width="117" height="3583" alt="The existing page on a phone"></a>
+      <figcaption>11,948 px of scrolling.</figcaption>
+    </figure>
+  </div>
+  <div class="pane">
+    <p class="cap"><b>After</b> · 390px</p>
+    <figure class="phone scroll">
+      <img src="after-light-phone.png" width="780" height="3844" alt="The new form on a phone">
+    </figure>
+    <p class="cap" style="margin-top:8px">1,922 px. Scroll the frame above.</p>
+  </div>
+</div>
+
+<h2>Dark</h2>
+<div class="cols">
+  <div class="pane">
+    <p class="cap"><b>After</b> · dark · 1280px</p>
+    <figure><img src="after-dark-desktop.png" width="1280" height="1695" alt="The new form in the dark theme"></figure>
+  </div>
+  <div class="pane">
+    <p class="cap"><b>After</b> · dark · 390px</p>
+    <figure class="phone scroll"><img src="after-dark-phone.png" width="780" height="3844" alt="The new form in the dark theme on a phone"></figure>
+  </div>
+</div>
+<p class="note">Dark is not a second stylesheet — the form reads the platform’s own colour tokens, so it
+follows whatever the theme does. That is why the light and dark shots are the same layout with nothing
+re-laid-out between them.</p>
+
+<p class="note note--ask" style="margin-top:26px"><strong>There is a second page:</strong> <a href="entry-point.html">where the door goes</a> — how a member actually reaches this form. It turns out your Hub already has the button; it just opens the wrong thing. Two options drawn there, and they can be ruled on in the same sitting as the two below.</p>
+
+<h2>Two things I need you to decide</h2>
+
+<div class="note note--ask">
+<p style="margin-top:0"><strong>1. The words.</strong> The mock you approved claimed its labels were the
+copy that already existed for this post type. <strong>They aren’t</strong> — I checked every field against
+the live form and nearly all of them are new wording. I built the mock’s words, because those are the ones
+you actually looked at and said yes to. But you should know you are changing the copy, so here is the swap:</p>
+<table>
+  <tr><th>What it says now (the real form)</th><th>What I built (the mock’s words)</th></tr>
+  <tr><td>Title of your Loothprint</td><td>What’s it called?</td></tr>
+  <tr><td>Add one or more image(s) of your print in action</td><td>Show it off</td></tr>
+  <tr><td>3D File Upload ZIP File</td><td>The print files</td></tr>
+  <tr><td>Summary</td><td>Tell people about it</td></tr>
+  <tr><td>Type of Loothprint</td><td>What kind of print is it?</td></tr>
+  <tr><td>Content Topic</td><td>And roughly what area of work?</td></tr>
+  <tr><td>Creative Commons Use License (leave default if unsure)</td><td>Licence</td></tr>
+  <tr><td>Video instructions for use/build</td><td>A video of it in use</td></tr>
+  <tr><td>Link to your Buy Me A Coffee or other ‘leave me a tip’ site</td><td>Tip jar</td></tr>
+  <tr><td>Commenting</td><td>Let people comment</td></tr>
+</table>
+<p style="margin-bottom:0">Say the word and any row goes back to the left-hand column — it is one line each.</p>
+</div>
+
+<div class="note note--ask">
+<p style="margin-top:0"><strong>2. Who gets it, and does it go live straight away.</strong> You ruled the
+shape in August; this part was asked in the same mock and never answered, so I built the default the mock
+told you it would be:</p>
+<table>
+  <tr><th>Type</th><th>Who can post it</th><th>What happens</th></tr>
+  <tr><td>Loothprint</td><td>any signed-in member</td><td class="y">publishes straight away</td></tr>
+  <tr><td>Video, article, sponsor, event</td><td>a named list only</td><td>publishes; anyone else isn’t offered the form, and if that ever leaks they land in a queue, not on the site</td></tr>
+</table>
+<p style="margin-bottom:0">The reason it can’t just use WordPress’s own permission: ~1,850 of your members
+hold it. Gating on that would let essentially everyone publish a video unreviewed.</p>
+</div>
+
+<h2>What is proven, and what isn’t</h2>
+<table>
+  <tr><th>Claim</th><th>How</th></tr>
+  <tr><td class="y">A member’s post becomes a real page</td><td>Posted a Loothprint through the real form over HTTP; it built its page automatically — header, write-up, gallery, download, licence, footer — and was deleted again. Row counts before and after match.</td></tr>
+  <tr><td class="y">The hero image promise is kept</td><td>The form has no “featured image” box, so the first photo becomes the hero. Verified on the post above.</td></tr>
+  <tr><td class="y">Off really is off</td><td>With the flag off, the address is byte-for-byte the same 404 it was before this existed — checked as a logged-in member, and against a fingerprint recorded before a line of it was written.</td></tr>
+  <tr><td class="y">The wrong people can’t get in</td><td>A member without posting rights is refused, a signed-out visitor is refused, and a refused submission writes nothing to the database. Each of those was deliberately broken first to confirm the check actually fires.</td></tr>
+  <tr><td class="n">Nobody can find it yet</td><td>There is no button anywhere that links to this. That is the next decision — where it lives — and it needs a mock of its own rather than me picking a spot in your navigation.</td></tr>
+  <tr><td class="n">Not tested with a real photo upload from a phone</td><td>The picker is WordPress’s own, unchanged, but I could not drive a real camera-roll upload headlessly. Worth you tapping it once.</td></tr>
+</table>
+
+<p class="note"><strong>What the fixed furniture in the phone shots is doing:</strong> the bottom bar and the
+“Install Looth” prompt are drawn wherever the page happened to be scrolled when the long screenshot was
+stitched, so ignore their position. Whether they actually cover the <em>Post it</em> button was checked
+separately, by asking the browser what is under that exact point: the button, not the bar.</p>
+
+</div>

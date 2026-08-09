@@ -1,0 +1,205 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Where the door goes — front-end compose (2026-08-09)</title>
+<style>
+/* Same background defence as the sibling page: the docroot injects
+   `html[data-lguser-theme="dark"] body` (0,1,2) into /footer-mockups/, which a
+   plain body{...!important} loses to. An id on <body> is (1,0,1) and wins. */
+body#lgfcentry{margin:0;padding:28px 18px 90px;background:#fbfbf8;color:#262925;
+  font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+.w{max-width:1120px;margin:0 auto}
+h1{font:800 30px/1.15 Lora,Georgia,serif;margin:0 0 8px;color:#1a1d1a}
+.lede{color:#565a55;margin:0 0 6px;max-width:78ch}
+h2{font:700 12.5px/1.2 inherit;letter-spacing:.08em;text-transform:uppercase;color:#565a55;
+   margin:50px 0 12px;padding-bottom:7px;border-bottom:1px solid #e4e7d8}
+p{max-width:80ch}
+.rec{display:inline-block;font:700 10.5px/1 inherit;letter-spacing:.08em;text-transform:uppercase;
+  color:#586b3f;border:1px solid #87986a;background:#eef2e3;padding:4px 8px;border-radius:999px;margin-left:8px;vertical-align:2px}
+.rec--alt{color:#565a55;border-color:#e4e7d8;background:#f4f5ee}
+.note{border-left:3px solid #c66845;padding:11px 0 11px 15px;margin:18px 0;color:#565a55;font-size:14.6px;max-width:80ch}
+.note strong{color:#262925}
+.note--ok{border-left-color:#586b3f}
+code{background:#f0f1ea;padding:1px 6px;border-radius:5px;font-size:12.6px}
+
+/* real-screenshot crop */
+/* The evidence image is a MEASURED clip captured by CDP (Page.captureScreenshot
+   with an explicit rect), not a CSS crop of a full-page shot — the CSS version
+   drifted and put the marker under the button instead of around it. The marker
+   below is positioned in PERCENTAGES taken from the same measurement, so it
+   cannot slide out of register at any page width. */
+.shot{border:1px solid #e4e7d8;border-radius:12px;overflow:hidden;background:#fff}
+/* The clip is the TOP 215px of a 1280x1400 frame — the measurement said top=0,
+   so no offset is needed and an aspect-ratio box does the whole job. Using the
+   full frame rather than a re-captured strip because THIS file is the one I
+   looked at and confirmed is the light theme; two attempts at a fresh clip came
+   back painted dark while reporting theme "default", and shipping a dark strip
+   inside a light page — unlabelled — is exactly the kind of mismatch that gets
+   spotted in the picture. Not chasing that here; the sibling frames are
+   unaffected and the finding does not depend on the theme. */
+.shot .clip{position:relative;line-height:0;aspect-ratio:1280/215;overflow:hidden}
+.shot .clip img{display:block;width:100%;height:auto}
+.shot figcaption{font-size:12.4px;color:#565a55;padding:9px 12px;border-top:1px solid #eceee2;background:#fcfcf9;line-height:1.5}
+.mark{position:absolute;border:2px solid #c66845;border-radius:9px;pointer-events:none;
+  left:43.83%;top:75.81%;width:11.17%;height:17.21%;box-shadow:0 0 0 4px rgba(198,104,69,.16)}
+
+/* the drawn sort bar */
+.bar{display:flex;align-items:center;gap:9px;border:1px solid #e4e7d8;border-radius:13px;
+  background:#fff;padding:13px 15px;flex-wrap:wrap}
+.pill{font:700 12.5px/1 inherit;border:1px solid #e4e7d8;border-radius:999px;padding:9px 13px;color:#565a55;background:#fdfdfa}
+.pill.on{background:#1a1d1a;border-color:#1a1d1a;color:#fff}
+.newpost{font:700 13px/1 inherit;border:1px solid #87986a;background:#87986a;color:#fff;
+  border-radius:999px;padding:10px 17px;margin:0 auto}
+.newpost.alt{background:#586b3f;border-color:#586b3f}
+.search{font-size:12.6px;color:#8b8f88;border:1px solid #e4e7d8;border-radius:999px;padding:9px 15px;background:#fdfdfa;min-width:180px}
+.filters{display:flex;align-items:center;gap:8px;border:1px solid #e4e7d8;border-radius:13px;background:#fff;padding:11px 15px;margin-bottom:9px;font-size:13px;color:#565a55}
+.chip{border:1px solid #87986a;background:#eef2e3;border-radius:999px;padding:5px 11px;font:600 12.4px/1 inherit;color:#3f4a2c}
+
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+@media (max-width:900px){.cols{grid-template-columns:1fr}}
+.cap{font:700 11px/1.2 inherit;letter-spacing:.07em;text-transform:uppercase;color:#565a55;margin:0 0 8px}
+
+/* the chooser sheet */
+.sheet{border:1px solid #e4e7d8;border-radius:14px;background:#fff;overflow:hidden;max-width:390px;
+  box-shadow:0 10px 30px rgba(38,41,37,.09)}
+.sheet__h{padding:14px 16px 11px;border-bottom:1px solid #eceee2}
+.sheet__h b{font:700 15px/1.2 Lora,Georgia,serif}
+.row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #f2f3ec;cursor:pointer}
+.row:last-child{border-bottom:0}
+.row .ic{width:36px;height:36px;border-radius:10px;background:#eef2e3;color:#586b3f;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;font-size:17px}
+.row .tx{min-width:0}
+.row .tx b{display:block;font:700 14px/1.3 inherit}
+.row .tx small{display:block;color:#565a55;font-size:12.4px;margin-top:1px}
+
+/* phone frame */
+.phone{max-width:300px;border:1px solid #e4e7d8;border-radius:13px;overflow:hidden;background:#fff;margin:0}
+.phone img{display:block;width:100%;height:auto}
+
+table{border-collapse:collapse;width:100%;font-size:13.6px;margin:8px 0 0;background:#fff;
+  border:1px solid #e4e7d8;border-radius:12px;overflow:hidden}
+th,td{text-align:left;padding:9px 11px;border-bottom:1px solid #eceee2;vertical-align:top}
+th{font:700 10.5px/1.2 inherit;letter-spacing:.06em;text-transform:uppercase;color:#565a55;background:#fcfcf9}
+tr:last-child td{border-bottom:0}
+.y{color:#586b3f;font-weight:700}.n{color:#b5442a;font-weight:700}
+a{color:#586b3f}
+</style>
+<body id="lgfcentry">
+<div class="w">
+
+<h1>Where the door goes</h1>
+<p class="lede">The form is built and photographed on the
+<a href="./">sibling page</a>. Nothing links to it yet — this is that decision, and it
+turns out to be smaller than expected, because <strong>the button already exists.</strong></p>
+
+<h2>The thing worth knowing first</h2>
+<p>Your Hub already has a <strong>“+ New post”</strong> button, and when a member filters
+the Hub to <strong>Loothprints</strong> it is sitting right there above their Loothprints —
+in the right place, with the right label. It just opens a <strong>discussion</strong>.</p>
+
+<figure class="shot">
+  <div class="clip"><img src="hublp-light-desktop.png" width="1280" height="1400" alt="The Hub filtered to Loothprints, showing the filter chip and the + New post button"><span class="mark"></span></div>
+  <figcaption>Real screenshot, <code>/hub/?type=loothprint</code>, signed in as a member.
+  Light theme. The filter says <em>Type · Loothprints</em>; the marked button says <em>+ New post</em>.</figcaption>
+</figure>
+
+<p class="note"><strong>How I know what it opens:</strong> from the source, not from a
+click — <code>_feed.php:1425</code> renders that button with <code>data-ntm-open</code>,
+and <code>forums.js</code> binds any <code>data-ntm-open</code> to the discussion composer.
+There is no reference to the Hub’s type filter anywhere in that path. I tried to click it
+to confirm behaviourally and the click would not land — a transparent chrome wrapper sits
+over it in the hit-test — so I am telling you what the code says rather than claiming I
+saw it happen.</p>
+
+<p class="note note--ok"><strong>The mobile “+” comes free either way.</strong>
+<code>bottom-nav.js</code>’s centre “+” doesn’t have its own composer — it fires the same
+<code>data-ntm-open</code> trigger. So whichever option you pick below, the phone button
+inherits it without a second decision. Your 7/08 ruling that the bar stays
+<em>Nav | + | You</em> is untouched.</p>
+
+<h2>Option A — the button follows the filter <span class="rec">what I’d build</span></h2>
+<p>On a Hub filtered to Loothprints, “+ New post” opens the Loothprint form. Everywhere
+else it does exactly what it does today. No new chrome, no extra tap, and nothing moves.</p>
+
+<div class="cols">
+  <div>
+    <p class="cap">Filtered to Loothprints</p>
+    <div class="filters">Filters <span class="chip">Type · Loothprints ×</span></div>
+    <div class="bar">
+      <span class="pill on">Newest</span><span class="pill">Random</span><span class="pill">Trending</span>
+      <span class="newpost alt">+ Share a Loothprint</span>
+      <span class="search">Search the Hub…</span>
+    </div>
+    <p class="cap" style="margin-top:9px">The label says what you’ll get.</p>
+  </div>
+  <div>
+    <p class="cap">Everywhere else — unchanged</p>
+    <div class="filters">Filters <span style="color:#8b8f88">none</span></div>
+    <div class="bar">
+      <span class="pill on">Newest</span><span class="pill">Random</span><span class="pill">Trending</span>
+      <span class="newpost">+ New post</span>
+      <span class="search">Search the Hub…</span>
+    </div>
+    <p class="cap" style="margin-top:9px">Discussion composer, exactly as today.</p>
+  </div>
+</div>
+
+<p class="note"><strong>The one thing I don’t like about A:</strong> it is only findable if
+a member already thought to filter the Hub to Loothprints. Someone who has never posted one
+may never see it. That is the honest cost, and it is why B exists.</p>
+
+<h2>Option B — the button asks <span class="rec rec--alt">if you prefer it</span></h2>
+<p>“+ New post” always opens a two-line chooser first. Findable from anywhere, at the cost
+of one extra tap on <em>every</em> post — including discussions, which are 386 authors a
+year against Loothprints’ 38.</p>
+
+<div class="cols">
+  <div>
+    <p class="cap">The chooser</p>
+    <div class="sheet">
+      <div class="sheet__h"><b>What are you posting?</b></div>
+      <div class="row"><span class="ic">💬</span><span class="tx"><b>Start a discussion</b><small>Ask something, or share what you’re working on.</small></span></div>
+      <div class="row"><span class="ic">🧩</span><span class="tx"><b>Share a Loothprint</b><small>Your 3D print, free for the group to make.</small></span></div>
+    </div>
+  </div>
+  <div>
+    <p class="cap">On a phone — the same sheet, from the “+”</p>
+    <figure class="phone">
+      <img src="evidence-phone-plus.png" width="780" height="1520" alt="The Hub on a phone with the bottom bar and its + button in frame">
+    </figure>
+    <p class="cap" style="margin-top:9px">Real screenshot — <strong>dark theme</strong>, and a
+    <em>viewport</em> one, so the bottom bar and its “+” sit where they actually do rather than where a
+    stitched full-page shot would put them. The sheet would rise from there, like the Hub picker.</p>
+  </div>
+</div>
+
+<h2>Side by side</h2>
+<table>
+  <tr><th></th><th>A — follows the filter</th><th>B — always asks</th></tr>
+  <tr><td>Taps to post a discussion</td><td class="y">unchanged</td><td class="n">one more, for everyone</td></tr>
+  <tr><td>Taps to post a Loothprint</td><td>filter the Hub first, then one</td><td class="y">one, from anywhere</td></tr>
+  <tr><td>Findable if you’ve never posted one</td><td class="n">no</td><td class="y">yes</td></tr>
+  <tr><td>New chrome to design and dark-pass</td><td class="y">none</td><td>a sheet</td></tr>
+  <tr><td>Fixes “+ New post gives a discussion on a Loothprints page”</td><td class="y">yes</td><td class="y">yes</td></tr>
+  <tr><td>Adds a third type later (events, videos)</td><td>each needs its own filtered view</td><td class="y">one more row</td></tr>
+</table>
+
+<p class="note"><strong>They are not exclusive.</strong> A is a subset of B’s behaviour, so
+A now and B later costs nothing extra — B just replaces the branch. If you can’t decide,
+A is the reversible one.</p>
+
+<h2>One guard, whichever you pick</h2>
+<p class="note"><strong>Signed-out members must not be offered it.</strong> There is already
+an open P0 about exactly this shape — backlog 4.2, the logged-out mobile “+” implying you
+can post — and an entry point that repeats it would be the same bug twice. The button only
+renders for someone who can actually post: the server already refuses the form itself to
+anyone else, and that refusal is gated both ways. Nothing here changes who may post; it only
+changes who is <em>shown the way in</em>.</p>
+
+<h2>What I need from you</h2>
+<p><strong>A or B</strong> — and if A, whether the label should read
+<em>“+ Share a Loothprint”</em> as drawn, or stay <em>“+ New post”</em>. That is the whole
+decision; the form behind it is already built and waiting behind its flag.</p>
+
+</div>
