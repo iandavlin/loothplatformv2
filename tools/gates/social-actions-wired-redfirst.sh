@@ -10,7 +10,8 @@ cd "$(dirname "$0")/../.."
 
 GATE="python3 tools/gates/social-actions-wired-gate.py"
 FILES=(profile-app/src/Social.php webroot/lg-social-actions.js webroot/profile-sheet.js
-       platform/config/social-actions.php)
+       platform/config/social-actions.php webroot/hub-polish.js
+       bb-mirror/web/_chrome.php platform/config/sheet-embeds.php)
 SNAP=$(mktemp -d /tmp/sa-redfirst-XXXX)
 for f in "${FILES[@]}"; do mkdir -p "$SNAP/$(dirname "$f")"; cp -p "$f" "$SNAP/$f"; done
 restore() { for f in "${FILES[@]}"; do cp -p "$SNAP/$f" "$f"; done; }
@@ -102,6 +103,24 @@ try "loader drops the already-wired check" 1 "second copy" \
 # F — the gate must READ the flag, never assume it.
 try "config 'enabled' becomes unreadable" 2 "must READ the flag" \
   bash -c "perl -0pi -e \"s/'enabled' => false,/'enabled' => THE_CONSTANT,/\" platform/config/social-actions.php"
+
+# ── INSTANCE 2: the mobile reader sheet (3.7) ───────────────────────────────
+try "sheet: the embed pass is deleted outright" 1 "no lrsEmbeds" \
+  bash -c "perl -0pi -e 's/  function lrsEmbeds\\(node\\) \\{/  function lrsEmbedsX(node) {/' webroot/hub-polish.js"
+
+try "sheet: the pass stops being gated on the flag" 1 "not gated on LG_SHEET_EMBEDS" \
+  bash -c "perl -0pi -e 's/if \\(!window.LG_SHEET_EMBEDS \\|\\| !node\\) return;/if (!node) return;/' webroot/hub-polish.js"
+
+# THE ONE MOST LIKELY TO ROT: a call site quietly disappears (or a fourth write is
+# added without one) and the sheet silently stops embedding on that path.
+try "sheet: one of the three call sites disappears" 1 "call site" \
+  bash -c "perl -0pi -e 's/\\n        lrsEmbeds\\(full\\);//' webroot/hub-polish.js"
+
+try "sheet: _chrome.php emits the bit as false instead of omitting it" 1 "byte-identical" \
+  bash -c "perl -0pi -e 's/window.LG_SHEET_EMBEDS = true;/window.LG_SHEET_EMBEDS = false;/' bb-mirror/web/_chrome.php"
+
+try "sheet: _chrome.php stops emitting the bit at all" 1 "never emits" \
+  bash -c "perl -0pi -e 's/LG_SHEET_EMBEDS/LG_NOPE_EMBEDS/g' bb-mirror/web/_chrome.php"
 
 # LIVENESS — an absence assertion on an empty widget is vacuous.
 echo "  --- liveness (the gate must refuse a fixture that renders nothing) ---"

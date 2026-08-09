@@ -242,10 +242,86 @@ def check_sheet():
         ok("the loader is called on the injected profile node")
 
 
+# ── SECOND INSTANCE OF THE SAME CLASS: the mobile reader sheet ──────────────
+# CRAFT-STANDARD: a defect class found TWICE must be encoded as a gate before the
+# second fix. This is that second occurrence, so it is asserted HERE rather than in
+# a second gate — one class, one gate, however many surfaces.
+#
+# The sheet writes SERVER HTML into the DOM in three places and must follow each with
+# the embed call, or a discussion whose body is a provider link is a naked URL on a
+# phone. Static, because the browser proof lives in
+# tools/exercise-harness/browser-sheet-embed-repro.py and a gate that needs CDP
+# cannot live in the runner.
+HUBJS = os.path.join(REPO, "webroot", "hub-polish.js")   # NB: not SHEET —
+# that name is already the PROFILE sheet above, and reusing it silently
+# repointed check_sheet() at hub-polish.js. The gate went red claiming
+# initSocialActions was missing from a file that never had it.
+CHROME = os.path.join(REPO, "bb-mirror", "web", "_chrome.php")
+SHEET_CFG = os.path.join(REPO, "platform", "config", "sheet-embeds.php")
+
+
+def check_sheet_embeds():
+    try:
+        js = open(HUBJS).read()
+        chrome = open(CHROME).read()
+    except OSError as e:
+        DEAD.append(f"cannot read the reader-sheet sources: {e}")
+        return
+
+    m = re.search(r"function lrsEmbeds\(node\) \{(.*?)\n  \}", js, re.S)
+    if not m:
+        RED.append("hub-polish.js has no lrsEmbeds — the reader sheet would write "
+                   "server HTML with no embed pass again (3.7)")
+        return
+    helper = m.group(1)
+    if "LG_SHEET_EMBEDS" not in helper:
+        RED.append("lrsEmbeds is not gated on LG_SHEET_EMBEDS — it would run with the "
+                   "flag off, so OFF stops being a no-op")
+    else:
+        ok("the sheet's embed pass is gated on the server-emitted bit")
+    if "bbProcessEmbeds" not in helper:
+        RED.append("lrsEmbeds does not call bbProcessEmbeds — it does nothing")
+
+    # THE ASSERTION MOST LIKELY TO ROT: a FOURTH assignment gets added later and
+    # nobody remembers the pass. Count the server-HTML writes and require a call
+    # for each, rather than pinning the three we happen to know about.
+    calls = len(re.findall(r"(?<!function )\blrsEmbeds\(", js))
+    if calls < 3:
+        RED.append(f"only {calls} lrsEmbeds call site(s) in the reader sheet; the OP "
+                   f"body, the pre-paint excerpt and the replies each write server "
+                   f"HTML and each need one")
+    else:
+        ok(f"all {calls} server-HTML writes in the reader sheet run the embed pass")
+
+    # The bit must be emitted ONLY when on — an emitted `false` is a behavioural
+    # no-op but not a byte-identical one, and byte-identical is the rule.
+    if "LG_SHEET_EMBEDS" not in chrome:
+        RED.append("_chrome.php never emits LG_SHEET_EMBEDS — flag ON could not reach "
+                   "the client and 3.7 would still be broken with the flag on")
+    elif re.search(r"LG_SHEET_EMBEDS\s*=\s*false", chrome):
+        RED.append("_chrome.php emits LG_SHEET_EMBEDS = false — OFF must emit NOTHING, "
+                   "or the served page is no longer byte-identical")
+    else:
+        ok("_chrome.php emits the bit only when on (OFF changes no bytes)")
+
+    try:
+        txt = open(SHEET_CFG).read()
+        if not re.search(r"'enabled'\s*=>\s*(true|false)", txt):
+            DEAD.append("could not read 'enabled' from sheet-embeds.php")
+        else:
+            ok("sheet-embeds default read from disk: "
+               f"enabled={re.search(chr(39)+'enabled'+chr(39)+r'\s*=>\s*(true|false)', txt).group(1)}")
+    except OSError as e:
+        DEAD.append(f"cannot read {SHEET_CFG}: {e}")
+
+
 def main():
-    print("=== social-actions-wired: a rendered control must carry its behaviour ===")
+    print("=== a rendered control must carry its behaviour (the UI-lies class) ===")
+    print("    instance 1: the profile social widget (4.4 + 4.3)")
+    print("    instance 2: the mobile reader sheet's embeds (3.7)")
 
     check_drift()
+    check_sheet_embeds()
     default_on = check_default()
     check_sheet()
 
