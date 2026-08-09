@@ -49,25 +49,45 @@
  * No rewrite rule, so nothing to flush — one less deploy coupling on a box where
  * the symlink set is already not in the repo.
  *
- * ══ CREATE-ONLY, AND WHY THAT IS A SECURITY PROPERTY ══════════════════════════
+ * ══ CREATE-ONLY, AND WHY ══════════════════════════════════════════════════════
  *
  * This route can only ever create. It never accepts a post_id, so it cannot be
- * pointed at an existing post — no IDOR, and, more importantly, it is structurally
- * immune to the defect class this lane was told to not repeat:
+ * pointed at an existing post — no IDOR. It was ALSO believed to be structurally
+ * immune to the defect class this lane was told not to repeat:
  *
  *   lg-preserve-forum-subscription.php (live @ 10ea816) documents BuddyBoss
  *   treating the ABSENCE of a field as an instruction to DELETE the member's
  *   subscription. Our composer omitted bbp_topic_subscription, so every reply
  *   posted through our box silently unsubscribed its own author.
  *
- * ACF has the same shape: a field that is RENDERED and submitted empty is SAVED
- * as empty. On an edit form, dropping a field from the field list — exactly what
- * this design does with `featured_image`, which the mock removes — would wipe it.
- * On a create form there is no prior value to destroy, so the hazard cannot fire.
- * Keeping this route create-only is therefore not a scope cut; it is what makes
- * the omission in the field list safe. If a future change makes this form edit
- * an existing post, THAT change must render the complete field set or explicitly
- * preserve what it omits, and must say which.
+ * ⚠️ I ASSERTED ACF HAS THE SAME SHAPE, AND IT DOES NOT. Corrected 2026-08-09
+ * when Ian asked for front-end EDIT and the claim stopped being background. This
+ * header used to say that dropping a field from an edit form's field list "would
+ * wipe it" — that is FALSE, and measured false on a throwaway draft through ACF's
+ * real save handler (tools/frontend-compose/clobber-probe.php, 6/6):
+ *
+ *   OMITTED from the form   -> nothing is posted for it -> ACF leaves it ALONE.
+ *                              Featured image, gallery and a URL field all
+ *                              survived a save that posted only the licence.
+ *   RENDERED and cleared    -> IS saved empty. That one is real, and it is the
+ *                              member's own intent, not a defect.
+ *
+ * So an edit form may safely show a SUBSET of the fields; omission is not
+ * destruction. The BuddyBoss defect this was modelled on is genuinely different:
+ * bbp_update_reply() reads the ABSENCE of a field as an instruction to delete,
+ * which ACF never does. I had the right instinct about the class and the wrong
+ * mechanism, and a safety argument resting on a false premise is worth less than
+ * no argument, so it is corrected rather than quietly softened.
+ *
+ * CREATE-ONLY IS STILL RIGHT FOR THIS ROUTE, for the reason that does hold: it
+ * accepts no post_id, so it cannot be pointed at somebody else's post. That is an
+ * IDOR property, not a data-preservation one.
+ *
+ * THE EDIT SLICE (Ian, 2026-08-09) THEREFORE NEEDS EXACTLY ONE THING THIS ROUTE
+ * DOES NOT: an ownership check. `current_user_can('edit_post', $id)` discriminates
+ * correctly for edit — the superseded edit scope established that — and it is the
+ * whole difference. It must NOT be built by relaxing this route's create-only
+ * rule; it is a separate entry point with its own gate.
  *
  * The plugin header's other half of that lesson — "pass explicit intent" — is
  * applied literally below: every wp_insert_post argument is stated, including the
