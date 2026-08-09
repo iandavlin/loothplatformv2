@@ -11,9 +11,19 @@
   if (window.top !== window.self) return;
 
   // Register the service worker on every viewport (needed for installability).
+  //
+  // window.LG_SW is a ready-made query string emitted by pwa-loader.php ONLY when
+  // platform/config/pwa-sw.php has resilient_fetch on (backlog 3.10). sw.js is static
+  // and cannot read PHP, so the flag rides the registration URL; when the global is
+  // absent this registers '/sw.js' exactly as it always has. Deliberately opaque here
+  // — this file never learns the parameter names, so there is one source of truth.
+  //
+  // A different script URL is a different worker at the same scope, which is how the
+  // flag reaches clients that already have '/sw.js' installed: it supersedes.
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+      var swUrl = '/sw.js' + (window.LG_SW ? '?' + window.LG_SW : '');
+      navigator.serviceWorker.register(swUrl, { scope: '/' }).catch(function () {});
     });
   }
 
