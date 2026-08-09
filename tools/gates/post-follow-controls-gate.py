@@ -111,6 +111,26 @@ except OSError:
     DEAD.append(f"cannot read {CONFIG} — the shared flag this feature depends on is missing")
 
 
+
+# ── the wp user must be able to READ our files, or the failure is unreadable ──
+# `wp --require=` reports only "Required file 'x' doesn't exist" when the path is
+# merely unreadable by the running user, which sends the next person hunting a
+# missing file that is right there. A lane worktree under an unreadable parent hits
+# this, so say the real thing instead.
+def _readable_by_wpuser(path):
+    p = subprocess.run(["sudo", "-n", "-u", WPUSER, "test", "-r", path],
+                       capture_output=True, text=True)
+    return p.returncode == 0
+
+
+for _p, _what in ((BOOT, "flag-boot.php"), (PROBE, "the probe")):
+    if not _readable_by_wpuser(_p):
+        DEAD.append(
+            f"{_what} at {_p} is not readable by {WPUSER}. WP-CLI will report it as "
+            f"\"doesn't exist\", which it does. Make the path traversable+readable "
+            f"for {WPUSER} (this bites when a gate is run from an unreadable directory)."
+        )
+
 # ── ⚠️ WHICH COPY DID WE ACTUALLY TEST? ───────────────────────────────────────
 # Once the mu-plugin is deployed, WordPress loads it from the SERVING CHECKOUT and the
 # probe exercises that file — not the one in this branch. A branch whose changes are
