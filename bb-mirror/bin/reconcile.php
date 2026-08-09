@@ -64,25 +64,48 @@ echo "  " . count($group_ids) . " groups\n";
 // ---------- forums + topics + replies (delta walk) ------------------------
 echo "Reconciling forums/topics/replies modified since $window_start_iso...\n";
 
-$counts = ['forum' => 0, 'topic' => 0, 'reply' => 0];
+$counts  = ['forum' => 0, 'topic' => 0, 'reply' => 0];
+$skipped = ['forum' => [], 'topic' => [], 'reply' => []];
 
+// ORDER BY ID so the walk is deterministic: without it the skip report below is
+// not reproducible between runs, and "died at row 109" is not a diagnosis.
 foreach (['forum', 'topic', 'reply'] as $kind) {
     $rows = $wpdb->get_col($wpdb->prepare(
         "SELECT ID FROM {$wpdb->posts}
           WHERE post_type = %s
-            AND post_modified_gmt >= %s",
+            AND post_modified_gmt >= %s
+          ORDER BY ID",
         $kind, $window_start_iso
     ));
-    foreach ($rows as $id) {
-        $id = (int)$id;
-        switch ($kind) {
-            case 'forum': bb_mirror_upsert_forum($id, $db); break;
-            case 'topic': bb_mirror_upsert_topic($id, $db); break;
-            case 'reply': bb_mirror_upsert_reply($id, $db); break;
-        }
-        $counts[$kind]++;
-    }
+    // bb_mirror_walk_ids, NOT a bare foreach: one unmirrorable row must never
+    // wedge the walk, the bookmark, and every pass that follows. See the
+    // function's header for the 11-day outage this encodes.
+    $r = bb_mirror_walk_ids($rows, match ($kind) {
+        'forum' => fn(int $id) => bb_mirror_upsert_forum($id, $db),
+        'topic' => fn(int $id) => bb_mirror_upsert_topic($id, $db),
+        'reply' => fn(int $id) => bb_mirror_upsert_reply($id, $db),
+    }, $db);
+    $counts[$kind]  = $r['done'];
+    $skipped[$kind] = $r['skipped'];
     echo "  {$counts[$kind]} {$kind}(s)\n";
+}
+
+// Skips are the loud part. A silent skip is the same failure as a silent drop —
+// it just fails slower. One line per row, capped so a systemic break cannot
+// flood the journal into uselessness.
+$skipped_total = array_sum(array_map('count', $skipped));
+if ($skipped_total > 0) {
+    echo "SKIPPED $skipped_total unmirrorable row(s) — the walk continued:\n";
+    foreach ($skipped as $kind => $rows) {
+        $n = 0;
+        foreach ($rows as $id => $err) {
+            if ($n++ >= 10) {
+                echo "  {$kind}: … and " . (count($rows) - 10) . " more\n";
+                break;
+            }
+            echo "  SKIP {$kind} {$id}: " . str_replace("\n", ' ', substr($err, 0, 300)) . "\n";
+        }
+    }
 }
 
 // ---------- ghost sweep (the reverse pass) --------------------------------
@@ -98,12 +121,22 @@ foreach (['forum', 'topic', 'reply'] as $kind) {
 $sweep_ghosts = getenv('BB_MIRROR_SWEEP_GHOSTS') === '1';
 echo "Ghost sweep — " . ($sweep_ghosts ? "ACTIVE" : "report-only (BB_MIRROR_SWEEP_GHOSTS=1 to delete)") . "\n";
 
-$ghost_report = bb_mirror_sweep_ghosts(
-    $db,
-    fn(string $kind) => $wpdb->get_col($wpdb->prepare(
-        "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s", $kind)),
-    $sweep_ghosts
-);
+// Same rule as the delta walk: a throw in the tail sections must not skip the
+// bookmark write below. If it did, the window would never advance and every
+// later run would rewalk a forever-growing set — the exact wedge, one section
+// over. Each tail step reports its own failure and the run carries on.
+$ghost_report = [];
+try {
+    $ghost_report = bb_mirror_sweep_ghosts(
+        $db,
+        fn(string $kind) => $wpdb->get_col($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s", $kind)),
+        $sweep_ghosts
+    );
+} catch (Throwable $e) {
+    if ($db->inTransaction()) { try { $db->rollBack(); } catch (Throwable) {} }
+    echo "  ghost sweep FAILED (continuing): " . $e->getMessage() . "\n";
+}
 foreach ($ghost_report as $kind => $r) {
     $sample = implode(', ', array_slice($r['ids'], 0, 20)) . (count($r['ids']) > 20 ? ', …' : '');
     switch ($r['status']) {
@@ -137,14 +170,20 @@ foreach ($ghost_report as $kind => $r) {
 // shows avatars). Recompute every topic's reply_count from WP published replies
 // (authoritative). Idempotent — only drifted rows are written.
 echo "Refreshing topic reply_count...\n";
-$rc_fixed = bb_mirror_refresh_all_reply_counts($db);
-echo "  $rc_fixed topic(s) corrected\n";
+try {
+    $rc_fixed = bb_mirror_refresh_all_reply_counts($db);
+    echo "  $rc_fixed topic(s) corrected\n";
+} catch (Throwable $e) {
+    if ($db->inTransaction()) { try { $db->rollBack(); } catch (Throwable) {} }
+    echo "  reply_count rollup FAILED (continuing): " . $e->getMessage() . "\n";
+}
 
 // ---------- rollup refresh ------------------------------------------------
 // Both rollups: ancestor chains are shallow, descendant trees too. Cheap to
 // re-run sitewide; saves us from drift if per-row sync missed an ancestor
 // chain refresh somewhere.
 echo "Refreshing total_last_active_at...\n";
+try {
 $db->exec("
     WITH RECURSIVE descendants AS (
       SELECT id, id AS root_id FROM forum
@@ -172,11 +211,22 @@ $db->exec("
        LIMIT 1
     )
 ");
+} catch (Throwable $e) {
+    if ($db->inTransaction()) { try { $db->rollBack(); } catch (Throwable) {} }
+    echo "  rollup refresh FAILED (continuing): " . $e->getMessage() . "\n";
+}
 
 // ---------- bookmark update -----------------------------------------------
 $upsert = $db->prepare(bb_mirror_upsert_sql('sync_state', ['key','value','updated_at'], 'key'));
 $upsert->execute(['last_reconcile_at', (string)$now, bb_mirror_ts($now)]);
 
 $total_rows = array_sum($counts) + count($group_ids);
-echo "Reconcile complete: $total_rows row(s) touched (forums={$counts['forum']}, topics={$counts['topic']}, replies={$counts['reply']}, groups=" . count($group_ids) . ")\n";
+echo "Reconcile complete: $total_rows row(s) touched (forums={$counts['forum']}, topics={$counts['topic']}, replies={$counts['reply']}, groups=" . count($group_ids) . "), skipped=$skipped_total\n";
 echo "Next window starts: " . gmdate('Y-m-d H:i:s', $now) . " UTC\n";
+
+// EXIT 0 EVEN WITH SKIPS, on purpose. A non-zero exit parks the unit in
+// `systemctl --failed` for as long as the bad rows exist — live has 4 orphaned
+// June replies that only Ian can repair — and a permanently-red unit is a dead
+// alert channel, not an alert. Skips are reported in the journal and alerted on
+// by tools/mirror-sync/watch-mirror-sync.sh, which can tell a NEW skip from the
+// known backlog. The run itself succeeded: it walked everything it could.
