@@ -99,6 +99,22 @@ Six controls, one post type.
 **no working front-end create path**. There is no CPT write endpoint in the monorepo
 (inventory in the superseded doc, §1.2).
 
+### ⚠️ SMALL BUT LOAD-BEARING: §2.1's "mobile is already the flat form" IS STALE
+
+§2.1 argues for the single screen partly on the grounds that `buildNtmWizard()`
+returns null below 641px, so "the mobile experience is already the flat form, and
+it is the one Ian's members mostly use." Photographed on a phone today
+(`/hub/?compose=1`, 390px), the composer shows **"STEP 1 OF 4 · TITLE & FORUM"**
+with its own Cancel/Next header — mobile is stepped, by some path that is not
+`buildNtmWizard` (grepping `TITLE & FORUM` finds nothing in `webroot/` or
+`bb-mirror/web/`, so it comes from elsewhere and I have not chased it).
+
+It does not change the ruling — Ian chose the single screen for loothprint on its
+own merits — but it removes one of the arguments the scope used to get there, and
+anyone re-deriving that argument from §2.1 would be building on a stale fact.
+
+---
+
 ### ⚠️ THIRD PASS, SAME DAY — I OVERCLAIMED IN THE SECOND, AND HERE IS THE WITHDRAWAL
 
 The second correction said members "actually use" the eight live pages, and told

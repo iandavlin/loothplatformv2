@@ -1,0 +1,218 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The type toggle, inside the composer (2026-08-09)</title>
+<style>
+/* Background defence, as on the sibling pages: the docroot injects
+   `html[data-lguser-theme="dark"] body` (0,1,2) into /footer-mockups/. An id on
+   <body> is (1,0,1) and wins. */
+body#lgfctoggle{margin:0;padding:28px 18px 90px;background:#fbfbf8;color:#262925;
+  font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+.w{max-width:1180px;margin:0 auto}
+h1{font:800 30px/1.15 Lora,Georgia,serif;margin:0 0 8px;color:#1a1d1a}
+.lede{color:#565a55;margin:0 0 6px;max-width:78ch}
+h2{font:700 12.5px/1.2 inherit;letter-spacing:.08em;text-transform:uppercase;color:#565a55;
+   margin:50px 0 14px;padding-bottom:7px;border-bottom:1px solid #e4e7d8}
+p{max-width:80ch}
+.note{border-left:3px solid #c66845;padding:11px 0 11px 15px;margin:18px 0;color:#565a55;font-size:14.6px;max-width:80ch}
+.note strong{color:#262925}
+.note--ok{border-left-color:#586b3f}
+code{background:#f0f1ea;padding:1px 6px;border-radius:5px;font-size:12.6px}
+a{color:#586b3f}
+.cap{font:700 11px/1.2 inherit;letter-spacing:.07em;text-transform:uppercase;color:#565a55;margin:0 0 8px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+@media (max-width:940px){.cols{grid-template-columns:1fr}}
+
+/* the real screenshot */
+.shot{border:1px solid #e4e7d8;border-radius:12px;overflow:hidden;background:#fff;margin:0}
+.shot img{display:block;width:100%;height:auto}
+.shot figcaption{font-size:12.4px;color:#565a55;padding:9px 12px;border-top:1px solid #eceee2;background:#fcfcf9}
+
+/* ── the drawn dialog ─────────────────────────────────────────── */
+.dlg{border:1px solid #e4e7d8;border-radius:14px;background:#fff;overflow:hidden;
+  box-shadow:0 14px 40px rgba(38,41,37,.10)}
+.dlg__h{padding:17px 20px 0}
+.dlg__h h3{margin:0;font:700 20px/1.2 Lora,Georgia,serif;color:#1a1d1a}
+
+/* THE TOGGLE — the thing being decided */
+.seg{display:inline-flex;margin:13px 0 4px;border:1px solid #d8dcc9;border-radius:999px;
+  background:#f4f5ee;padding:3px}
+.seg button{font:700 13px/1 inherit;border:0;border-radius:999px;padding:9px 17px;
+  background:none;color:#565a55;cursor:pointer}
+.seg button.on{background:#586b3f;color:#fff;box-shadow:0 1px 3px rgba(38,41,37,.18)}
+
+.rail{display:flex;gap:0;margin:14px 0 0;border-bottom:1px solid #eceee2}
+.rail div{flex:1 1 0;padding:0 0 10px;font:700 13px/1.2 inherit;color:#9aa093;
+  display:flex;align-items:center;gap:7px}
+.rail div.on{color:#1a1d1a;box-shadow:inset 0 -2px 0 #586b3f}
+.rail .n{width:21px;height:21px;border-radius:50%;background:#eceee2;color:#8b8f88;
+  font-size:11.5px;display:flex;align-items:center;justify-content:center}
+.rail div.on .n{background:#586b3f;color:#fff}
+
+.dlg__b{padding:15px 20px 6px}
+.lbl{font:700 14px/1.3 inherit;margin:0 0 6px}
+.lbl small{font-weight:500;color:#8b8f88}
+.inp{border:1px solid #e4e7d8;border-radius:9px;padding:10px 12px;color:#a3a89e;
+  font-size:14px;background:#fdfdfa;margin-bottom:12px}
+.inp--tall{min-height:64px}
+.flist{border:1px solid #eceee2;border-radius:10px;overflow:hidden;margin-bottom:6px}
+.flist div{display:flex;align-items:center;gap:9px;padding:10px 12px;border-bottom:1px solid #f4f5ee;
+  font:700 12px/1 inherit;letter-spacing:.03em;color:#3b3f3a;background:#fcfcf9}
+.flist div:last-child{border-bottom:0}
+.flist i{width:9px;height:9px;border-radius:2px;display:block;font-style:normal}
+.drop{border:1.5px dashed #87986a;border-radius:11px;background:#fbfcf7;padding:16px;text-align:center;margin-bottom:12px}
+.drop b{display:block;font:700 13.5px/1.3 inherit;color:#586b3f}
+.drop span{display:block;color:#565a55;font-size:12.2px;margin-top:3px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{font:600 12.2px/1 inherit;border:1px solid #e4e7d8;border-radius:999px;padding:7px 11px;color:#565a55;background:#fdfdfa}
+.chip.on{background:#586b3f;border-color:#586b3f;color:#fff}
+.req{font:700 9.5px/1 inherit;letter-spacing:.06em;text-transform:uppercase;color:#c66845;
+  background:#fbeee8;border-radius:4px;padding:3px 5px;margin-left:6px;vertical-align:1px}
+.scrollnote{font-size:12px;color:#8b8f88;text-align:center;padding:6px 0 2px}
+.dlg__f{padding:13px 20px 16px;border-top:1px solid #eceee2;background:#fcfcf9;
+  display:flex;align-items:center;gap:10px}
+.btn{font:700 13.5px/1 inherit;border-radius:9px;padding:11px 18px;border:1px solid #586b3f;
+  background:#586b3f;color:#fff;cursor:pointer}
+.btn--ghost{background:none;color:#565a55;border-color:#e4e7d8}
+.dlg__f .sp{margin-left:auto;color:#8b8f88;font-size:12.2px}
+.phone{max-width:340px}
+table{border-collapse:collapse;width:100%;font-size:13.6px;margin:8px 0 0;background:#fff;
+  border:1px solid #e4e7d8;border-radius:12px;overflow:hidden}
+th,td{text-align:left;padding:9px 11px;border-bottom:1px solid #eceee2;vertical-align:top}
+th{font:700 10.5px/1.2 inherit;letter-spacing:.06em;text-transform:uppercase;color:#565a55;background:#fcfcf9}
+tr:last-child td{border-bottom:0}
+.y{color:#586b3f;font-weight:700}.n{color:#b5442a;font-weight:700}
+</style>
+<body id="lgfctoggle">
+<div class="w">
+
+<h1>The type toggle, inside the composer</h1>
+<p class="lede">Your call: <em>“part of the compose package in the new post in the hub… toggle between
+discussion and loothprint… two different forms.”</em> This is that, drawn on your real composer. The
+Loothprint form itself is finished and photographed on the <a href="./">first page</a>; this is only about
+where it lives and how you get to it.</p>
+
+<h2>What the composer looks like today</h2>
+<figure class="shot">
+  <img src="ntm-desktop.png" width="2560" height="2000" alt="The hub composer as it is today: New post, four steps, forum picker">
+  <figcaption>Real screenshot, <code>/hub/?compose=1</code>, signed in as a member. Four steps —
+  <em>Where · Write · Photos · Review</em> — starting with the forum picker.</figcaption>
+</figure>
+
+<h2>With the toggle</h2>
+<p>One control, directly under the title, above everything that changes. Tap it and the whole body of the
+dialog is replaced — because these really are two different forms, not one form with a setting.</p>
+
+<div class="cols">
+  <div>
+    <p class="cap">Discussion — untouched, exactly as today</p>
+    <div class="dlg">
+      <div class="dlg__h">
+        <h3>New post</h3>
+        <div class="seg"><button class="on">Discussion</button><button>Loothprint</button></div>
+        <div class="rail">
+          <div class="on"><span class="n">1</span>Where</div>
+          <div><span class="n">2</span>Write</div>
+          <div><span class="n">3</span>Photos</div>
+          <div><span class="n">4</span>Review</div>
+        </div>
+      </div>
+      <div class="dlg__b">
+        <p class="lbl">Forum <small>(pick one)</small></p>
+        <div class="inp">Filter forums…</div>
+        <div class="flist">
+          <div><i style="background:#7d9b5e"></i>REPAIR AND RESTORATION</div>
+          <div><i style="background:#5e93a0"></i>NEW BUILDS</div>
+          <div><i style="background:#a08a4e"></i>TOOLS, SPACES, ROBOTS, AND WIDGETS</div>
+        </div>
+      </div>
+      <div class="dlg__f"><button class="btn btn--ghost">Cancel</button><span class="sp"></span><button class="btn">Next →</button></div>
+    </div>
+    <p class="cap" style="margin-top:9px">Four steps, forum first. Nothing moves.</p>
+  </div>
+
+  <div>
+    <p class="cap">Loothprint — the single screen you approved</p>
+    <div class="dlg">
+      <div class="dlg__h">
+        <h3>New post</h3>
+        <div class="seg"><button>Discussion</button><button class="on">Loothprint</button></div>
+      </div>
+      <div class="dlg__b">
+        <p class="lbl">What’s it called?<span class="req">needed</span></p>
+        <div class="inp">Fret sander with swappable radius cauls</div>
+        <p class="lbl">Show it off<span class="req">needed</span></p>
+        <div class="drop"><b>Drop photos here</b><span>or tap to choose · JPG, PNG, HEIC</span></div>
+        <p class="lbl">The print files<span class="req">needed</span></p>
+        <div class="inp">Choose a ZIP…</div>
+        <p class="lbl">What kind of print is it?<span class="req">needed</span></p>
+        <div class="chips"><span class="chip on">Jigs</span><span class="chip">Fixtures</span><span class="chip">Cauls</span><span class="chip">Templates</span></div>
+        <div class="scrollnote">⌄ licence, description and 4 optional extras below</div>
+      </div>
+      <div class="dlg__f"><button class="btn btn--ghost">Cancel</button><span class="sp">5 things needed</span><button class="btn">Post it</button></div>
+    </div>
+    <p class="cap" style="margin-top:9px">No steps — one screen, scrolled. No forum to pick: a Loothprint
+    doesn’t live in a forum.</p>
+  </div>
+</div>
+
+<p class="note note--ok"><strong>Why the toggle sits above the step rail rather than inside step 1.</strong>
+The rail itself is one of the things that changes: a discussion has four steps, a Loothprint has none. A
+control that changes the steps cannot live inside them.</p>
+
+<h2>On a phone</h2>
+<div class="cols">
+  <div>
+    <p class="cap">Today</p>
+    <figure class="shot phone">
+      <img src="ntm-phone.png" width="780" height="1640" alt="The composer on a phone today">
+    </figure>
+  </div>
+  <div>
+    <p class="cap">With the toggle</p>
+    <div class="dlg phone">
+      <div class="dlg__h">
+        <h3>New post</h3>
+        <div class="seg"><button>Discussion</button><button class="on">Loothprint</button></div>
+      </div>
+      <div class="dlg__b">
+        <p class="lbl">What’s it called?<span class="req">needed</span></p>
+        <div class="inp">Fret sander with swappable cauls</div>
+        <p class="lbl">Show it off<span class="req">needed</span></p>
+        <div class="drop"><b>Take a photo</b><span>or choose from your camera roll</span></div>
+        <p class="lbl">The print files<span class="req">needed</span></p>
+        <div class="inp">Choose a ZIP…</div>
+        <div class="scrollnote">⌄ the rest below</div>
+      </div>
+      <div class="dlg__f"><button class="btn">Post it</button><span class="sp">5 needed</span></div>
+    </div>
+    <p class="cap" style="margin-top:9px">The toggle is the full width of two taps — it does not compete
+    with the close button.</p>
+  </div>
+</div>
+
+<h2>One thing I want to flag before building it</h2>
+<p class="note"><strong>The Loothprint form is long, and you already think this modal is cramped.</strong>
+That is your own open complaint — “resizable, with text scaling” (backlog 10). Full height, the form is
+about 1,700px on a laptop; in a dialog it becomes a scrolling panel. I think that is still fine, because
+the five needed things are all above the fold and the four extras stay folded — but it is the one place
+this could feel worse than the full-page version, and you should hear it from me now rather than notice it
+later. If it does feel cramped, the fix is the same fix backlog 10 already asks for.</p>
+
+<h2>How it gets built, in one line</h2>
+<p>The toggle asks the server for the other form and swaps it in — the Loothprint half is the route that
+already exists and is already proven end to end, just rendered without its page furniture. Nothing about
+the form, its saving, or its photo uploads changes; only where it is shown.</p>
+<table>
+  <tr><th>Piece</th><th>State</th></tr>
+  <tr><td>The Loothprint form, its save path, its uploads</td><td class="y">built and proven — a real post through the real route builds its page</td></tr>
+  <tr><td>The composer, the wizard, the discussion flow</td><td class="y">untouched</td></tr>
+  <tr><td>The toggle, and serving the form without page furniture</td><td class="n">this is the build</td></tr>
+</table>
+
+<p class="note"><strong>Also now true, from your other ruling:</strong> every member gets this. The
+allow-list and the “some types need approval” path are deleted, not switched off. The flag is the only
+thing holding it back, and it stays off until you say.</p>
+
+</div>
