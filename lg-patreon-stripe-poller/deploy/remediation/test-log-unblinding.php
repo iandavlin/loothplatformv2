@@ -6,143 +6,144 @@
  *
  * Exit 0 green, 1 a real defect, 3 cannot run.
  *
- * The assertion that matters is not "a log file appears". It is that a line is
- * NEVER SILENTLY LOST — the old code's whole failure was that it dropped every
- * line and said nothing. So the unwritable-directory case is tested explicitly,
- * and is required to (a) not throw and (b) still surface the line.
+ * Two properties, and the second was added after checking live rather than
+ * assuming it:
  *
- * An absence assertion is vacuous without a liveness assertion: "no log written"
- * is trivially true on a box with no PHP at all. Every negative case here is
- * paired with a positive one proving the writer is alive.
+ *   1. A LINE IS NEVER SILENTLY LOST. The original bug was that every line was
+ *      dropped by an `@` and nothing said so. So the unwritable case must not
+ *      throw and must still emit.
+ *   2. A LINE IS NEVER WRITTEN SOMEWHERE THE PUBLIC CAN READ IT. The first cut
+ *      of this class defaulted to `wp-content/uploads/lg-logs`. On live that
+ *      path answers HTTP 200, and it is an R2 bucket over rclone FUSE rather
+ *      than local disk. The `.htaccess` deny written alongside it was
+ *      decorative — live runs nginx, which never reads .htaccess. The log
+ *      carries member emails, so that was a real exposure.
+ *
+ * Each scenario runs in its own SUBPROCESS: ABSPATH and LGMS_LOG_DIR are
+ * constants and cannot be redefined within one process, so a single-process
+ * gate could only ever have tested one path — which is how the uploads default
+ * went unchallenged the first time.
  */
 
 declare(strict_types=1);
 
-if ( ! is_readable( __DIR__ . '/../../src/Log.php' ) ) {
-    fwrite( STDERR, "CANNOT RUN: src/Log.php not found\n" ); exit( 3 );
-}
+$HARNESS = __DIR__ . '/_log-harness.php';
+$LOGSRC  = __DIR__ . '/../../src/Log.php';
+if ( ! is_readable( $HARNESS ) ) { fwrite( STDERR, "CANNOT RUN: harness missing\n" ); exit( 3 ); }
+if ( ! is_readable( $LOGSRC ) )  { fwrite( STDERR, "CANNOT RUN: src/Log.php missing\n" ); exit( 3 ); }
 
-// ---- capture error_log() so "did the line survive?" is observable
-$ERRLOG = sys_get_temp_dir() . '/lgms-log-gate-' . getmypid() . '.err';
-ini_set( 'error_log', $ERRLOG );
-ini_set( 'log_errors', '1' );
-ini_set( 'display_errors', '0' );
+$ROOT = sys_get_temp_dir() . '/lgms-log-gate-' . getmypid();
+@mkdir( $ROOT . '/web', 0775, true );          // stands in for ABSPATH
+@mkdir( $ROOT . '/outside', 0775, true );      // a legitimate log dir
 
-function errlog_read( string $p ): string { return is_file( $p ) ? (string) file_get_contents( $p ) : ''; }
-function errlog_clear( string $p ): void { if ( is_file( $p ) ) { unlink( $p ); } }
+$fail = 0; $pass = 0; $skip = 0;
+$note = function ( bool $ok, string $l, string $d = '' ) use ( &$fail, &$pass ) {
+    if ( $ok ) { $pass++; printf( "  ok   %s\n", $l ); }
+    else       { $fail++; printf( "  FAIL %s%s\n", $l, $d ? "  ({$d})" : '' ); }
+};
 
-$ROOT = sys_get_temp_dir() . '/lgms-log-gate-root-' . getmypid();
-@mkdir( $ROOT, 0775, true );
-
-// wp_upload_dir stub — the second candidate in Log's resolution order.
-$GLOBALS['UPLOAD_BASEDIR'] = $ROOT . '/uploads';
-@mkdir( $GLOBALS['UPLOAD_BASEDIR'], 0775, true );
-function wp_upload_dir( $t = null, $c = true ) {
-    return [ 'basedir' => $GLOBALS['UPLOAD_BASEDIR'], 'error' => false ];
-}
-
-require_once __DIR__ . '/../../src/Log.php';
-use LGMS\Log;
-
-$fail = 0; $pass = 0;
-$note = function ( bool $ok, string $label, string $detail = '' ) use ( &$fail, &$pass ) {
-    if ( $ok ) { $pass++; printf( "  ok   %s\n", $label ); }
-    else       { $fail++; printf( "  FAIL %s%s\n", $label, $detail ? "  ({$detail})" : '' ); }
+$run = function ( string $logdir, array $extra = [] ) use ( $HARNESS, $ROOT ): array {
+    static $n = 0;
+    $err = $ROOT . '/err-' . ( ++$n ) . '.log';
+    $cmd = escapeshellcmd( PHP_BINARY ) . ' ' . escapeshellarg( $HARNESS )
+         . ' ' . escapeshellarg( $ROOT . '/web' )
+         . ' ' . escapeshellarg( $logdir )
+         . ' ' . escapeshellarg( $err );
+    foreach ( $extra as $e ) { $cmd .= ' ' . escapeshellarg( $e ); }
+    exec( $cmd . ' 2>/dev/null', $out );
+    return json_decode( (string) end( $out ), true ) ?: [];
 };
 
 echo "=== LGMS\\Log — red-first gate (audit R4) ===\n";
 
-// ---------------------------------------------------------- 1. happy path
-echo "\n[1] a writable uploads dir gets a real log file\n";
-Log::reset();
-errlog_clear( $ERRLOG );
-Log::line( "[t] tick start\n" );
-$path = Log::file();
-$note( $path !== null && is_file( $path ), 'log file created under uploads/lg-logs', (string) $path );
-$note( $path !== null && strpos( $path, '/uploads/lg-logs/tick.log' ) !== false, 'path is uploads/lg-logs/tick.log' );
-$note( strpos( (string) @file_get_contents( (string) $path ), 'tick start' ) !== false, 'the line is IN the file' );
-$note( strpos( errlog_read( $ERRLOG ), 'tick start' ) === false, 'a successful write does NOT also spam error_log' );
+// ------------------------------------------------ 1. the happy path
+echo "\n[1] a writable dir OUTSIDE the web root gets a real file\n";
+$r = $run( $ROOT . '/outside/lg-logs' );
+$note( ( $r['path'] ?? null ) !== null, 'a path is resolved', (string) ( $r['path'] ?? 'null' ) );
+$note( ( $r['sink'] ?? '' ) === 'file', 'sink is the file', $r['sink'] ?? '?' );
+$note( ( $r['in_file'] ?? false ) === true, 'the line is IN the file' );
+$note( ( $r['threw'] ?? true ) === false, 'does not throw' );
 
-$st = Log::status();
-$note( $st['writable'] === true && $st['exists'] === true, 'status() reports writable + exists' );
+// ------------------------------------------------ 2. THE EXPOSURE BUG
+echo "\n[2] a dir inside the web root is REFUSED — it would be publicly fetchable\n";
+$r = $run( $ROOT . '/web/wp-content/uploads/lg-logs' );
+$note( array_key_exists( 'path', $r ) && $r['path'] === null, 'no file path is used', var_export( $r['path'] ?? 'missing', true ) );
+$note( ( $r['uploads_used'] ?? true ) === false, 'uploads is NOT written to' );
+$note( strpos( $r['errlog'] ?? '', 'inside the web root' ) !== false,
+       'the refusal says WHY, naming public fetchability' );
+$note( ( $r['sink'] ?? '' ) === 'syslog', 'the line goes to syslog instead', $r['sink'] ?? '?' );
+$note( (int) ( $r['emitted'] ?? 0 ) === 1, 'THE LINE STILL SURVIVES — exactly one emission' );
+$note( ( $r['threw'] ?? true ) === false, 'and it does not throw' );
 
-// the log must not be web-readable — it sits under a served uploads dir
-$note( is_file( dirname( (string) $path ) . '/.htaccess' ), 'lg-logs carries a deny .htaccess' );
+// uploads must not be picked even when it is the ONLY writable thing around
+echo "\n[3] uploads is never chosen even with no LGMS_LOG_DIR set\n";
+$r = $run( '-' );
+$note( array_key_exists( 'path', $r ) && $r['path'] === null, 'no path — uploads is not a candidate at all' );
+$note( ( $r['uploads_used'] ?? true ) === false, 'uploads still not written to' );
+$note( ( $r['sink'] ?? '' ) === 'syslog', 'falls straight to syslog', $r['sink'] ?? '?' );
+$note( (int) ( $r['emitted'] ?? 0 ) === 1, 'the line survives' );
+$note( ( $r['htaccess'] ?? false ) === false,
+       'no .htaccess theatre is written — nginx would never read it' );
 
-// ---------------------------------------------------------- 2. THE BUG
-echo "\n[2] an UNWRITABLE directory must fail loudly, never silently\n";
+// ------------------------------------------------ 4. unwritable, outside root
+echo "\n[4] an unwritable dir outside the web root still loses nothing\n";
 $ro = $ROOT . '/readonly';
-@mkdir( $ro, 0500, true );
-@chmod( $ro, 0500 );
-
+@mkdir( $ro, 0500, true ); @chmod( $ro, 0500 );
 if ( posix_getuid() === 0 ) {
-    echo "  skip  (running as root — mode 0500 does not block root)\n";
+    echo "  skip  (running as root — mode 0500 does not block root)\n"; $skip++;
 } else {
-    Log::reset();
-    errlog_clear( $ERRLOG );
-    $GLOBALS['UPLOAD_BASEDIR'] = $ro;          // uploads itself unwritable
-    define( 'LGMS_LOG_DIR', $ro . '/nope' );   // and the override too
-
-    $threw = false;
-    try { Log::line( "[t] provision failed: boom\n" ); }
-    catch ( \Throwable $e ) { $threw = true; }
-
-    $err = errlog_read( $ERRLOG );
-    $note( ! $threw, 'logging to an unwritable dir does NOT throw' );
-    $note( strpos( $err, 'provision failed: boom' ) !== false,
-           'THE LINE SURVIVES — routed to error_log, not dropped' );
-    $note( strpos( $err, 'no writable log directory' ) !== false,
-           'the inability to log is ITSELF logged (the R4 gap)' );
-    $note( Log::file() === null, 'file() reports null rather than a lying path' );
-
-    // liveness: the same call site works the moment a writable dir exists
-    Log::reset();
-    $GLOBALS['UPLOAD_BASEDIR'] = $ROOT . '/uploads';
-    Log::line( "[t] recovered\n" );
-    $note( Log::file() !== null && strpos( (string) @file_get_contents( (string) Log::file() ), 'recovered' ) !== false,
-           'liveness: the writer works again once a dir is writable' );
+    $r = $run( $ro . '/nope' );
+    $note( array_key_exists( 'path', $r ) && $r['path'] === null, 'no path' );
+    $note( (int) ( $r['emitted'] ?? 0 ) === 1, 'the line survives' );
+    $note( strpos( $r['errlog'] ?? '', 'not writable' ) !== false, 'the reason is logged' );
 }
 
-// ---------------------------------------------------------- 3. no @-silencing left
-echo "\n[3] the silenced writes are gone from the tick\n";
+// ------------------------------------------------ 5. does syslog really receive?
+echo "\n[5] syslog genuinely receives (end-to-end, not just 'we called it')\n";
+$r = $run( '-' );
+exec( 'journalctl -t lgms-poller -n 40 --no-pager 2>/dev/null', $j, $jc );
+if ( $jc !== 0 || ! $j ) {
+    printf( "  skip  journalctl unreadable here — cannot prove the far end (sink was '%s')\n", $r['sink'] ?? '?' );
+    $skip++;
+} else {
+    $note( strpos( implode( "\n", $j ), (string) $r['marker'] ) !== false,
+           'the exact line appears in the journal under tag lgms-poller' );
+}
+
+// ------------------------------------------------ 6. rotation
+echo "\n[6] rotation keeps a 5-minute tick from filling the disk\n";
+$r = $run( $ROOT . '/outside/rot', [ 'rotate' ] );
+$note( ( $r['rotated'] ?? false ) === true, 'oversized log rotated to .1' );
+$note( ( $r['in_file'] ?? false ) === true, 'the triggering line is in the NEW file' );
+
+// ------------------------------------------------ 7. code shape
+echo "\n[7] the silenced writes are gone from the tick\n";
 $tick = (string) file_get_contents( __DIR__ . '/../../src/Tick.php' );
+$src  = (string) file_get_contents( $LOGSRC );
 // grep -c counts LINES; count OCCURRENCES.
-$silenced = preg_match_all( '/@file_put_contents/', $tick );
-$plugindir = preg_match_all( '/LGMS_PLUGIN_DIR\s*\.\s*[\'"]tick\.log/', $tick );
-$lines     = preg_match_all( '/Log::line\(/', $tick );
-$note( $silenced === 0, 'zero @file_put_contents remain in Tick.php', "found {$silenced}" );
-$note( $plugindir === 0, 'Tick.php no longer writes into the plugin dir', "found {$plugindir}" );
-$note( $lines === 15, 'all 15 call sites route through Log::line', "found {$lines}" );
-$note( strpos( $tick, 'Runs hourly' ) === false, 'the stale "Runs hourly" docblock is corrected (it is 5-minutely)' );
+$note( preg_match_all( '/@file_put_contents/', $tick ) === 0, 'zero @file_put_contents in Tick.php' );
+$note( preg_match_all( '/LGMS_PLUGIN_DIR\s*\.\s*[\'"]tick\.log/', $tick ) === 0, 'Tick.php does not write into the plugin dir' );
+$note( preg_match_all( '/Log::line\(/', $tick ) === 15, 'all 15 call sites route through Log::line' );
+$note( strpos( $tick, 'Runs hourly' ) === false, 'the stale "Runs hourly" docblock is corrected' );
+$note( preg_match_all( "/\\\$up\\['basedir'\\]/", $src ) === 0
+    && preg_match_all( '/function_exists\s*\(\s*.wp_upload_dir/', $src ) === 0,
+       'src/Log.php builds no candidate from uploads (naming it in a comment is fine)' );
 
-// ---------------------------------------------------------- 4. rotation
-echo "\n[4] rotation keeps a 5-minute tick from filling the disk\n";
-Log::reset();
-$GLOBALS['UPLOAD_BASEDIR'] = $ROOT . '/uploads';
-$p = Log::file();
-file_put_contents( (string) $p, str_repeat( 'x', 8388609 ) );   // just over MAX_BYTES
-Log::line( "[t] after rotate\n" );
-$note( is_file( (string) $p . '.1' ), 'oversized log is rotated to .1' );
-$note( filesize( (string) $p ) < 1000, 'the live file starts fresh', (string) filesize( (string) $p ) );
-$note( strpos( (string) file_get_contents( (string) $p ), 'after rotate' ) !== false, 'the triggering line is in the NEW file' );
-
-// ---------------------------------------------------------- 5. mutation
-echo "\n[5] mutation — the gate must be able to fail\n";
-// Prove [3] is not vacuous: the same assertions run against the ORIGINAL
-// pre-fix shape of the code and must all go red.
-$old = "<?php\n\$log = LGMS_PLUGIN_DIR . 'tick.log';\n@file_put_contents( \$log, 'x', FILE_APPEND );\n * Runs hourly via WP cron\n";
+// ------------------------------------------------ 8. mutation
+echo "\n[8] mutation — the gate must be able to fail\n";
+$old = "<?php\n\$log = LGMS_PLUGIN_DIR . 'tick.log';\n@file_put_contents( \$log, 'x', FILE_APPEND );\n * Runs hourly\n";
 $note( preg_match_all( '/@file_put_contents/', $old ) === 1
-    && preg_match_all( '/LGMS_PLUGIN_DIR\s*\.\s*[\'"]tick\.log/', $old ) === 1
     && preg_match_all( '/Log::line\(/', $old ) === 0
     && strpos( $old, 'Runs hourly' ) !== false,
-       'the [3] assertions all go RED against the pre-fix code' );
+       'the [7] assertions all go RED against the pre-fix code' );
+$deep = $run( $ROOT . '/web/x' );
+$note( array_key_exists( 'path', $deep ) && $deep['path'] === null,
+       'any path under the web root is refused, not just uploads' );
 
-// ---------------------------------------------------------- cleanup
 @chmod( $ro, 0755 );
 exec( 'rm -rf ' . escapeshellarg( $ROOT ) );
-errlog_clear( $ERRLOG );
 
-printf( "\n%d passed, %d failed\n", $pass, $fail );
+printf( "\n%d passed, %d failed, %d skipped\n", $pass, $fail, $skip );
 if ( $fail ) { echo "RED\n"; exit( 1 ); }
-echo "GREEN — the tick can log, and cannot lose a line in silence.\n";
+echo "GREEN — the tick can log, loses no line, and cannot write where the public can read.\n";
 exit( 0 );

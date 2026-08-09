@@ -30,10 +30,12 @@ namespace LGMS;
  *   1. `LGMS_LOG_DIR` — a constant, not an env var. WP-Cron runs with NO
  *      environment (lg-wp-cron.service carries no Environment=), so a getenv()
  *      knob would read as unset in exactly the context that matters most.
- *   2. `wp_upload_dir()['basedir'] . '/lg-logs'` — owned by the web user by
- *      construction, and outside the repo so it can never dirty the serving
- *      checkout.
- *   3. none — everything falls through to error_log().
+ *      REFUSED if it resolves inside the web root (see resolveDir).
+ *   2. syslog, ident `lgms-poller` — `journalctl -t lgms-poller`.
+ *
+ * `wp_upload_dir()` is deliberately NOT a candidate: on live that path is an
+ * R2 bucket over rclone FUSE **and** is publicly served (HTTP 200). See
+ * resolveDir() for the full reasoning.
  */
 final class Log
 {
@@ -44,6 +46,9 @@ final class Log
     private static bool    $resolved = false;
     private static bool    $disabled = false;
     private static ?string $reason   = null;
+    /** Where lines are actually going: file | syslog | error_log | none. */
+    private static string  $sink     = 'none';
+    private static int     $emitted  = 0;
 
     /**
      * Absolute path of a named log file, or null when nothing is writable.
@@ -83,6 +88,8 @@ final class Log
             // concurrently (the DB advisory lock stops the work, not the log).
             $bytes = file_put_contents( $path, $message, FILE_APPEND | LOCK_EX );
 
+            if ( $bytes !== false ) { self::$sink = 'file'; self::$emitted++; }
+
             if ( $bytes === false ) {
                 self::$disabled = true;
                 self::$reason   = 'write failed: ' . $path;
@@ -111,6 +118,8 @@ final class Log
             'exists'   => $path !== null && file_exists( $path ),
             'size'     => ( $path !== null && file_exists( $path ) ) ? filesize( $path ) : 0,
             'reason'   => self::$reason,
+            'sink'     => self::$sink,
+            'emitted'  => self::$emitted,
         ];
     }
 
@@ -118,18 +127,50 @@ final class Log
     public static function reset(): void
     {
         self::$dir = null; self::$resolved = false; self::$disabled = false; self::$reason = null;
-    }
-
-    private static function fallback( string $message ): void
-    {
-        error_log( 'LGMS tick: ' . rtrim( $message, "\n" ) );
+        self::$sink = 'none'; self::$emitted = 0;
     }
 
     /**
-     * Pick a directory we can actually write, and prove it by writing.
-     * `is_dir()`/`file_exists()` are not proof: a dangling symlink, a
-     * root-owned directory, or a full disk all pass a existence check and then
-     * fail the write — which is the failure mode this class exists to end.
+     * Where a line goes when there is no log file: syslog.
+     *
+     * NOT error_log(). On live the looth-dev pool sets
+     * `php_value[error_log] = /var/www/dev/wp-content/debug.log`, and that file
+     * answers **HTTP 200** — routing member emails there would be the same
+     * exposure by a different door. syslog is local, never web-served, and
+     * rotates on its own. Read it with `journalctl -t lgms-poller`.
+     */
+    private static function fallback( string $message ): void
+    {
+        $line = 'LGMS tick: ' . rtrim( $message, "\n" );
+        self::$emitted++;
+        if ( function_exists( 'openlog' ) && openlog( 'lgms-poller', LOG_PID | LOG_ODELAY, LOG_DAEMON ) ) {
+            syslog( LOG_INFO, $line );
+            closelog();
+            self::$sink = 'syslog';
+            return;
+        }
+        self::$sink = 'error_log';
+        error_log( $line );
+    }
+
+    /**
+     * Pick a directory we can actually write, prove it by writing, and REFUSE
+     * anything inside the web root.
+     *
+     * The uploads directory was the original choice here and it was wrong on
+     * live, in two independent ways found by checking rather than assuming:
+     *
+     *   1. `wp-content/uploads` on live is a **Cloudflare R2 bucket mounted
+     *      over rclone FUSE**, not local disk. Object storage has no real
+     *      append, so a 5-minutely appending log means constant
+     *      read-modify-reupload, and LOCK_EX is not dependable there.
+     *   2. It is **publicly served** — `wp-content/uploads/...` answers HTTP 200
+     *      on live. This log carries member emails and provisioning detail, so
+     *      that is a data exposure. The `.htaccess` deny that used to be written
+     *      here was decorative: **live runs nginx, which never reads .htaccess.**
+     *
+     * So a candidate is rejected outright if it resolves inside ABSPATH. That
+     * encodes the lesson instead of patching the one path that tripped it.
      */
     private static function resolveDir(): ?string
     {
@@ -139,21 +180,48 @@ final class Log
             $candidates[] = rtrim( LGMS_LOG_DIR, '/' );
         }
 
-        if ( function_exists( 'wp_upload_dir' ) ) {
-            $up = wp_upload_dir( null, false );
-            if ( is_array( $up ) && empty( $up['error'] ) && ! empty( $up['basedir'] ) ) {
-                $candidates[] = rtrim( (string) $up['basedir'], '/' ) . '/lg-logs';
-            }
-        }
-
+        $rejected = [];
         foreach ( $candidates as $dir ) {
+            if ( self::insideWebRoot( $dir ) ) {
+                $rejected[] = $dir . ' (inside the web root — would be publicly fetchable)';
+                continue;
+            }
             if ( self::prepare( $dir ) ) {
                 return $dir;
             }
+            $rejected[] = $dir . ' (not writable)';
         }
 
-        error_log( 'LGMS\Log: no writable log directory (tried: ' . ( $candidates ? implode( ', ', $candidates ) : 'none' ) . ')' );
-        return null;
+        if ( $rejected ) {
+            error_log( 'LGMS\Log: no usable log directory — ' . implode( '; ', $rejected ) . '. Falling back to syslog.' );
+        }
+        return null;   // -> syslog, which is never web-served
+    }
+
+    /**
+     * True when $dir resolves inside the web root. Compares REAL paths so a
+     * symlink out of the docroot (or into it) is judged by where it lands, not
+     * by how it is spelled — live's uploads path is exactly such a symlink.
+     */
+    private static function insideWebRoot( string $dir ): bool
+    {
+        if ( ! defined( 'ABSPATH' ) ) {
+            return false;
+        }
+        $root = realpath( ABSPATH );
+        if ( $root === false ) {
+            return false;
+        }
+        // Resolve the nearest existing ancestor, since $dir may not exist yet.
+        $probe = $dir;
+        while ( $probe !== '' && $probe !== '/' && ! file_exists( $probe ) ) {
+            $probe = dirname( $probe );
+        }
+        $real = realpath( $probe );
+        if ( $real === false ) {
+            return false;
+        }
+        return $real === $root || strpos( $real, rtrim( $root, '/' ) . '/' ) === 0;
     }
 
     /** Create if needed, then PROVE writability with a real write. */
@@ -163,12 +231,9 @@ final class Log
             // Deliberately not guarded by file_exists(): a dangling symlink is
             // not a directory but does occupy the name, and mkdir's failure is
             // the honest signal.
-            if ( ! @mkdir( $dir, 0775, true ) && ! is_dir( $dir ) ) {
+            if ( ! @mkdir( $dir, 0770, true ) && ! is_dir( $dir ) ) {
                 return false;
             }
-            // Uploads is web-served; keep the logs out of reach.
-            @file_put_contents( $dir . '/.htaccess', "Require all denied\n" );
-            @file_put_contents( $dir . '/index.html', '' );
         }
 
         $probe = $dir . '/.writable-probe';
