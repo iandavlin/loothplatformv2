@@ -69,6 +69,50 @@ def build_cookie(gate_token, cookie_file):
     return "; ".join(parts)
 
 
+def head_injection():
+    """nginx's server-level sub_filter, read FROM nginx — not copied.
+
+    ⚠️ THIS IS WHY A SWAPPED HTML PAGE USED TO COME BACK CRIPPLED, and it is silent.
+    dev2's server block rewrites '</head>' in every text/html response to add the
+    manifest, the theme boot script and — the one that matters — <script src="/pwa.js">.
+    pwa.js is what loads EVERY client layer: bottom-nav, profile-sheet, messenger-sheet,
+    mobile-hub, push. A swapped route never touches nginx, so its HTML arrives with
+    none of that, the page renders perfectly, and every mobile behaviour is simply
+    absent. That reads as "the branch broke the sheet" when the branch is fine.
+
+    Measured while proving backlog 4.4: the harness-served /u/ had window.openMessenger
+    undefined, so tapping Message could not open a DM no matter what the code did.
+
+    The string is read out of the running conf so it cannot drift from what nginx
+    actually does. If it cannot be read we say so loudly rather than serving a page
+    that is quietly missing its whole client layer.
+    """
+    import re as _re, subprocess
+    conf = "/etc/nginx/sites-enabled/dev2.loothgroup.com.conf"
+    out = subprocess.run(["sudo", "grep", "-h", "-m1", "sub_filter '</head>'", conf],
+                         capture_output=True, text=True).stdout
+    m = _re.search(r"sub_filter\s+'</head>'\s+'(.*)';\s*$", out.strip())
+    if not m:
+        print("  !! could not read nginx's sub_filter from " + conf +
+              "\n     Swapped HTML will have NO /pwa.js and therefore NO client layers."
+              "\n     Do not trust any mobile-behaviour result from this run.",
+              file=sys.stderr)
+        return None
+    return m.group(1).encode()
+
+
+HEAD_INJECT = None      # set in main()
+
+
+def inject_head(data, ctype):
+    """Apply nginx's injection to a swapped HTML body. sub_filter_once is on, so once."""
+    if HEAD_INJECT is None or "text/html" not in (ctype or ""):
+        return data
+    if b"</head>" not in data or b"/pwa.js" in data:
+        return data
+    return data.replace(b"</head>", HEAD_INJECT, 1)
+
+
 def make_handler(cookie_header, routes, rewrite_origin, strip):
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -141,6 +185,7 @@ def make_handler(cookie_header, routes, rewrite_origin, strip):
 
             if dest:
                 print(f"  [SWAPPED->{dest}] {method} {self.path} -> {r.status}", file=sys.stderr)
+                data = inject_head(data, r.getheader("Content-Type", ""))
 
             self.send_response(r.status)
             for k, v in r.getheaders():
@@ -181,8 +226,28 @@ def main():
     ap.add_argument("--rewrite-origin", action="store_true")
     ap.add_argument("--route", action="append", default=[],
                     help="/path/prefix=127.0.0.1:PORT (repeatable)")
-    ap.add_argument("--route-strip", action="store_true", default=True)
+    # store_true WITH default=True cannot be turned off, so every swapped route was
+    # rewritten to "<prefix>.php" whether or not that was the right shape. Fine for a
+    # single endpoint whose file really is <leaf>.php; wrong for anything else:
+    #   /profile-sheet.js  ->  /profile-sheet.js.php   404, reads as "the branch is broken"
+    #   /u/<slug>          ->  /u.php                  slug DISCARDED, wrong profile or 404
+    # A branch server that routes on the real path needs the real path.
+    ap.add_argument("--route-strip", action="store_true", default=True,
+                    help="rewrite a swapped path to /<leaf>.php (php -S docroot'd at the endpoint dir)")
+    ap.add_argument("--no-route-strip", action="store_false", dest="route_strip",
+                    help="pass the swapped path through UNCHANGED — needed for static assets "
+                         "and for any branch server doing its own routing")
+    ap.add_argument("--no-head-inject", action="store_false", dest="head_inject",
+                    help="do NOT re-apply nginx's </head> sub_filter to swapped HTML "
+                         "(you almost never want this — see head_injection())")
     a = ap.parse_args()
+
+    global HEAD_INJECT
+    if a.head_inject:
+        HEAD_INJECT = head_injection()
+        if HEAD_INJECT:
+            print(f"  head-inject: ON ({len(HEAD_INJECT)} bytes of nginx sub_filter, "
+                  f"incl. /pwa.js) — swapped HTML keeps its client layers", file=sys.stderr)
 
     routes = []
     for r in a.route:

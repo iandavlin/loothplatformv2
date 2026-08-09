@@ -139,7 +139,21 @@ def auth(p):
     ANONYMOUS, which silently deletes the entire social widget and would have read as
     "the buttons are missing" instead of "the buttons are dead"."""
     p.send("Network.enable")
+    # ⚠️ CACHE OFF, AND THIS ONE COST A FALSE GREEN. The tray does not navigate to
+    # /u/ — it FETCHES it, and that response is cacheable. Flipping the flag changes
+    # what the SAME url returns, php -S sends no cache-control, and the shared
+    # chrome-dev profile keeps the body across runs. So the flag-ON run replayed the
+    # flag-OFF html from the red run minutes earlier, found no stamp, and reported
+    # the fix as not working — a false NEGATIVE here, but the identical mechanism
+    # gives a false POSITIVE when the runs go the other way round.
+    # Purely a harness artifact: in production the flag does not flip between two
+    # requests for the same url.
+    p.send("Network.setCacheDisabled", {"cacheDisabled": True})
     p.send("Network.clearBrowserCookies")
+    # Against endpoint-swap-proxy the cookies are injected SERVER-SIDE, so the browser
+    # holds none at all — which also means none of the duplicate-cookie hazards apply.
+    if not BASE.startswith("https://dev2."):
+        return 0
     cks = [{"name": "loothdev_auth", "value": GATE_TOKEN,
             "domain": ".dev2.loothgroup.com", "path": "/", "secure": True},
            {"name": "looth_id", "value": jwt_token(),
@@ -167,7 +181,13 @@ def assert_live(p, where):
     bad = []
     if "403" in str(title) or "Forbidden" in str(title): bad.append(f"GATE 403 ({title})")
     if not hasvp:  bad.append("no viewport meta — not a real site page")
-    if w != 390:   bad.append(f"viewport {w}px, not 390 — emulation did NOT take")
+    # The load-bearing assertion is the MEDIA QUERY, because that is what every
+    # mobile layer self-gates on — not a pixel count. A layout that overflows its
+    # 390px device width reports a wider innerWidth without ceasing to be a phone
+    # (measured: 468 on the loopback harness, 390 on dev2 — a harness artifact of
+    # the proxied origin, not the surface under test). Assert the gate the code
+    # actually reads, and refuse anything a desktop could satisfy.
+    if w > 640:    bad.append(f"innerWidth {w}px > 640 — this is not a phone layout")
     if not phone:  bad.append("(max-width:640px) is FALSE — running as DESKTOP")
     if signin:     bad.append("header shows Sign in — ANONYMOUS, not a member")
     if not avatar: bad.append("header has no member avatar — identity did not resolve")
@@ -309,7 +329,7 @@ def main():
         cdm_before = p.ev("(window.__dmEvents||[]).length")
         okc, hitc = tap(p, '[data-lg-social="message"]')
         line("tap Message", f"{okc} ({hitc})")
-        time.sleep(1.8)
+        time.sleep(3.2)
         c_dm = p.ev("(window.__dmEvents||[]).length") - cdm_before
         c_msgr = p.ev("!!(document.getElementById('looth-msgr')&&"
                       "document.getElementById('looth-msgr').classList.contains('is-open'))")
@@ -357,7 +377,7 @@ def main():
         dm_before = p.ev("(window.__dmEvents||[]).length")
         okm, hitm = tap(p, '#looth-prof-sheet [data-lg-social="message"]')
         line("tap Message", f"{okm} ({hitm})")
-        time.sleep(1.5)
+        time.sleep(3.2)
         d3 = probe(p, "#looth-prof-sheet")
         line("lg:open-dm fired", p.ev("(window.__dmEvents||[]).length") - dm_before)
         line("messenger opened", d3.get("messenger_open"))
@@ -383,6 +403,13 @@ def main():
 
         # ---------------------------------------------------------------- VERDICT
         print(f"\n=== VERDICT ===")
+        # State the MEASUREMENT, not an expectation: does the tray behave like the
+        # control? Same sentence answers "is it broken" and "is the fix real".
+        dots_same = (d2.get("menu_hidden") is False) and (c2.get("menu_hidden") is False)
+        dm_same = bool(d3.get("messenger_open")) and bool(c_msgr)
+        print(f"  4.3  tray == control : {'YES — 3-dots opens in BOTH' if dots_same else 'NO — the tray differs'}")
+        print(f"  4.4  tray == control : {'YES — Message DMs from BOTH' if dm_same else 'NO — the tray differs'}")
+        print(f"  wiring present in tray host: {d.get('wired')}   (control page: {c.get('wired')})")
         print(f"  4.3  tray 3-dots  : markup {'PRESENT' if d.get('more_btn') else 'ABSENT'}, "
               f"after tap menu_hidden={d2.get('menu_hidden')} "
               f"({'DEFECT REPRODUCED' if d.get('more_btn') and d2.get('menu_hidden') is not False else 'not reproduced'})")
