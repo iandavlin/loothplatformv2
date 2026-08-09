@@ -166,6 +166,32 @@ undismissed. 36 assertions in `profile-app/bin/notif-dismiss-proof.php`.
 
 Gates 16 and 17 (`tools/gates/`), both in `run-all.sh`.
 
+### Deploy-path verification (2026-08-09, on the deployed tree)
+
+Both flags live in tracked PHP read relative to `__DIR__`, and both are reached through
+a `/srv` symlink on the real call path (`reply.php` requires
+`/srv/lg-shared/notify-bridge.php`). `trap-__DIR__-resolves-through-symlink` says that
+is exactly where this shape breaks, so it was measured rather than assumed:
+
+```
+/srv/lg-shared/notify-bridge.php     __DIR__ → …/loothplatformv2-clean/lg-shared
+  ⇒ ../platform/config/notify-bridge.php   — dir EXISTS, sibling follow-digest.php readable
+/srv/profile-app/src/Notifications.php  __DIR__ → …/loothplatformv2-clean/profile-app/src
+  ⇒ ../config/notifications.php            — the exact path the pull will populate
+```
+
+PHP resolves `__DIR__` to the realpath, so both land inside the repo — correct. New
+files are `0644`/`0755` `ubuntu:ubuntu`, matching the already-deployed
+`platform/config/follow-digest.php`, and both FPM users (`profile-app`, `bb-mirror`)
+were confirmed able to read a config file at that location.
+
+⚠️ **"The config did not load" and "the flag is off" are opposite states that `empty()`
+reads identically** — the same shape as the NULL-source-row trap. An unreadable or
+mis-pathed config would present as a permanently-OFF flag, look healthy, and guarantee
+that flipping it on live does nothing. Both proofs now assert the KEY IS PRESENT before
+reading its value, and that assertion was broken first to confirm it is not vacuous
+(`Flags::all('no-such-config')` → `[]` → RED).
+
 ### ⏳ OWED FROM IAN — two flags, and neither is keeper's to flip
 
 1. `dismiss_instead_of_delete` — needs the migration run on live first (he runs the

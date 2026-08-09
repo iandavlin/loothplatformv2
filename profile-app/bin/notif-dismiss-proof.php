@@ -327,6 +327,24 @@ try {
     Flags::forTest('notifications', []);
     ok('an absent key reads as OFF', Notifications::dismissEnabled() === false);
 
+    // ⚠️ …WHICH IS EXACTLY WHY THE REAL FILE MUST BE PROVEN TO LOAD. The assertion
+    // just above is the hazard stated as a feature: an absent key and a disabled
+    // flag are indistinguishable to every caller. So a config that failed to load —
+    // wrong path, unreadable by the FPM user, a stray parse error — would present as
+    // a permanently-OFF flag that looks perfectly healthy, and flipping it on live
+    // would silently do nothing. Same shape as the NULL-source-row trap: "no row"
+    // and "a row saying nothing" are opposite states that one falsy check conflates.
+    Flags::resetCache();
+    $real = Flags::all('notifications');
+    ok('THE REAL FILE LOADS (key present, not merely falsy)',
+        array_key_exists('dismiss_instead_of_delete', $real),
+        'Flags::all() returned ' . json_encode($real)
+        . ' — check config/notifications.php is readable by the running user');
+    ok('…and __DIR__ resolved it through the deploy symlink',
+        is_readable(__DIR__ . '/../config/notifications.php'));
+    ok('the shipped default is OFF', $real['dismiss_instead_of_delete'] === false,
+        'it is ON — that needs the migration applied first');
+
 } catch (Throwable $e) {
     echo "\nEXCEPTION: " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n";
     $fail++;

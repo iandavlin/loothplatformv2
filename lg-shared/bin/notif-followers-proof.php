@@ -164,6 +164,17 @@ unset($GLOBALS['lg_notify_bridge_config_test']);
 // ── The shipped state ────────────────────────────────────────────────────────
 phase('PHASE 5 — what this box actually ships');
 $shipped = lg_notify_bridge_config();
+// ⚠️ "THE FILE DID NOT LOAD" AND "THE FLAG IS OFF" ARE OPPOSITE STATES, and
+// empty() reads them identically — the same shape as the NULL-source-row trap. An
+// unreadable or mis-pathed config would present as a permanently-OFF flag, look
+// entirely healthy, and quietly guarantee that flipping it on live does nothing.
+// So prove the file LOADED before reading anything out of it.
+ok('the tracked config actually LOADED (key present, not just falsy)',
+   array_key_exists('bell_follows_bb_subscriptions', $shipped),
+   'lg_notify_bridge_config() returned ' . json_encode($shipped)
+   . ' — a missing file reads exactly like a disabled flag');
+ok('…and __DIR__ resolved it through the deploy symlink, not a stale path',
+   is_readable(dirname(__DIR__) . '/../platform/config/notify-bridge.php'));
 ok('the tracked config has bell_follows_bb_subscriptions OFF',
    empty($shipped['bell_follows_bb_subscriptions']),
    'it is ON — that needs Ian, see platform/config/notify-bridge.php');
