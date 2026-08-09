@@ -8,19 +8,18 @@ line into that lane's charter and note the lane name here.
 *Owner shown as `→ lane` when a seat is on it, `→ MERGED` when it is in main.*
 
 **P0 — live/member-facing bugs**
-4.4 Mobile: DMs broken when opened from the profile tray (Ian 8/8) → mobile-bugs
-4.3 Profile 3-dots menu does nothing (Ian 8/8) → mobile-bugs
+4.4 + 4.3 Mobile profile tray: DMs AND the 3-dots menu — ONE cause (all 7 social controls were inert) → mobile-bugs, FIX BUILT flag-off, reproduced+verified at 390px, gate 19; awaiting Ian's look then switch-on
 4.2 Logged-out mobile bottom dash: "+" implies you can post → anon-mobile-dash (fix BUILT, flag off; awaiting Ian's mock look + keeper merge)
 4.1 Recap: the mobile bell's 700ms mark-all-read empties the recap → recap-read-timer (fix BUILT; in keeper's merge queue)
 4.0 Weekly digest: discussion images SOMETIMES missing → digest-images (fix BUILT: bp_media resolution; in keeper's merge queue)
 4.5 Participation silently UNSUBSCRIBES you from the discussion → ✅ MERGED + LIVE @ 10ea816 (was eroding the 381 followers since June)
 
 **P1 — wanted now / deploy-blocking**
-3.7 Mobile: discussion embed broken + card video won't play → mobile-bugs (reproduced 7/31 on origin/mobile-embed, never fixed)
+3.7 Mobile: discussion embed → mobile-bugs, EMBED HALF FIXED flag-off (gate 19); CARD VIDEO is a REVERSAL of Ian 6/17, needs his ruling before code — see the item, do not pick it up as a bug
 3.5 SEO/sitemap: zero discussions submitted — Google indexes the mirrored forum + defunct /shop/ and /merch/ (200s) — UNOWNED, findings on origin/sitemap-seo
 6. Front-end COMPOSE for all post types (Ian re-scoped 8/3: editing was never the problem) → frontend-compose, Option A ruled
 5. Notifications: quick-reply modal (default) w/ full-post link — UNOWNED, 9 commits on origin/notif-quickreply
-7. Discussion hub cards: play video inline ★ — UNOWNED (overlaps 3.7; may fall out of mobile-bugs)
+7. Discussion hub cards: play video inline ★ — UNOWNED. Does NOT fall out of mobile-bugs: it is 3.7's card half and needs Ian to choose what a cover tap does (it cannot both play and open)
 8. Front page: latest weekly email for logged-out users — UNOWNED
 9. Shop Layout Planner — apps index page ONLY (standalone render SHIPPED to live) — UNOWNED
 
@@ -54,22 +53,32 @@ S3 dev2's vhost is a REGULAR FILE, not the repo symlink — tracked nginx change
 ---
 *Full item details below, newest-first. The index above is the running order.*
 
-## 4.4 Mobile: DMs broken from the profile tray (P0) — Ian 8/8
+## 4.4 + 4.3 Mobile profile tray: DMs and the 3-dots menu — FIXED, FLAG OFF, awaiting Ian
 
-Ian: *"we have a problem with dms on mobile when accessing from the user's profile
-tray."* Recorded verbatim — NOT yet reproduced, and "problem" is unspecified: could
-be broken navigation, broken layout, or a dead control. Whoever picks this up
-reproduces it FIRST, on a phone-width viewport as a logged-in member, from the
-profile tray path specifically — the direct /messages/ route may work fine, and the
-difference between the two entry paths is probably the bug.
+Ian 8/8: *"we have a problem with dms on mobile when accessing from the user's
+profile tray."* / *"The 3 dots for the profile menu don't work either."*
 
-## 4.3 Profile 3-dots menu dead (P0) — Ian 8/8
+**ONE CAUSE, and wider than both tickets.** profile-app renders the whole social
+widget and shipped its behaviour as an inline `<script>`; the mobile tray RELOCATES
+that markup (fetches /u/, lifts `.lg-profile` out with DOMParser, injects it into
+another page) where an inline script can never run. **All seven controls** —
+Connect, Message, Accept, Decline, Cancel, Mute, Remove connection — rendered and
+did nothing. Ian hit two because there were seven to hit.
 
-Ian: *"The 3 dots for the profile menu don't work either."* Verbatim, not
-reproduced. A control that renders and does nothing is the UI-lies class. Check
-whether the handler is missing, errors, or is swallowed by an overlay — and check
-BOTH member-viewing-own-profile and member-viewing-another profile, which often have
-different menus. Fix the real control, not the thing next to it.
+Reproduced 390×844 as a member, with a control that passes: the SAME buttons on the
+full /u/ page work. Fixed by having the server stamp `data-lg-social-src` and ship
+the wiring as one file both entry paths load. Flag `platform/config/social-actions.php`,
+**OFF by default**; OFF proven byte-identical (9677 bytes, md5 09b2216239e1…).
+Gate 19. Branch `mobile-bugs`.
+
+**"Profile tray" had two readings and only one was broken** — the bottom You-sheet's
+Messages row opens the messenger fine. Measured, not assumed.
+
+⚠️ **Deploy coupling:** `webroot/lg-social-actions.js` is a NEW webroot file;
+`install-symlinks.sh --new-only` must run in the same window as the pull or the
+flag-ON path 404s.
+
+Pictures for Ian: https://dev2.loothgroup.com/footer-mockups/mobile-profile-tray/
 
 ## 4.2 Logged-out mobile bottom dash — the "+" lies, and Sign in hides (P0) — Ian 8/5
 
@@ -215,11 +224,26 @@ able to insert emoji into a message. Pairs with the recent messages sizing + rea
 ## 2026-07-31 — Mobile: discussion embed broken + card video won't play (Ian)
 
 Ian 7/31: on MOBILE, the embed isn't working for discussions, and the video can't be
-played from the card. Two symptoms on the discussion card / discussion view on mobile:
-(1) embedded media (the discussion's embed) does not render/work; (2) the card's video
-cannot be played inline. Likely related to the discussion-card-video (YouTube facade) +
-card-v3 work. Reproduce as a real logged-in member on a phone (not anon curl); name the
-surface (hub card vs single discussion) and file:line. Fix deploys by pull.
+played from the card.
+
+**SPLIT — the two halves are different animals and only one is a bug.**
+
+**(1) EMBEDS — FIXED, flag OFF** (`platform/config/sheet-embeds.php`, gate 19,
+branch `mobile-bugs`). Surface is the mobile READER SHEET, not the card and not the
+standalone page. It writes server HTML in three places and never called
+`bbProcessEmbeds`; the desktop reader modal calls it on the identical data path.
+Measured at 390px: sheet players 0→1, bare link 1→0, with the standalone page as a
+passing control in both states. OFF byte-identical (242500 bytes, md5 34e182df…).
+Same defect class as 4.4/4.3.
+
+**(2) CARD VIDEO — NOT a regression, and NOT started.** It is a REVERSAL of Ian's own
+2026-06-17 ruling (`docs/atlas/DISCUSSION-CARD-VIDEO.md`, "Desktop only, on purpose").
+Four coupled off-switches, all deliberate. A cover tap cannot both play the video and
+open the discussion, so **Ian must pick before any code**: does the cover play inline
+with title/body still opening the sheet, and is "play" tap-to-play or the old
+scroll-autoplay-muted engine? Gets its own flag once ruled.
+
+First reproduced by the mobile-embed lane (`docs/atlas/MOBILE-EMBED-FINDINGS.md`).
 
 ## 2026-07-31 — Craft gate RED on finder/anon: Optimum.png oversized + raw (pre-existing)
 
