@@ -291,6 +291,49 @@
       '#looth-msgr .mg-rxrow{display:flex;justify-content:space-around;gap:4px;padding:6px 4px 10px;border-bottom:1px solid var(--lg-line,#e3ddd0);margin-bottom:4px}',
       '#looth-msgr .mg-rxbtn{border:0;background:none;font-size:30px;line-height:1;padding:4px 6px;border-radius:50%;cursor:pointer}',
       '#looth-msgr .mg-rxbtn:active{background:var(--lg-sage-tint,#eef2e3);transform:scale(1.15)}',
+
+      // ── composer emoji picker (ruling 2026-08-03 §2) ──────────────────────────
+      // IT SITS IN THE KEYBOARD'S FOOTPRINT, BELOW THE COMPOSER — never over it.
+      // The brief is explicit that the picker must not cover the input it types
+      // into and must not fight the keyboard, and on a phone those are the same
+      // requirement: .mg-comp is translated up by exactly the keyboard height
+      // (kb() below), so a panel ABOVE the composer would sit on the conversation
+      // AND jump every time the keyboard opened. Keyboard XOR picker, swapped in
+      // the same slot, is how native messengers solve it and the only shape that
+      // keeps the input visible with the panel open.
+      // Height is the LAST MEASURED keyboard height, so the swap is seamless
+      // rather than a resize; --mg-epk-h is set from kb() and falls back to 280px
+      // for a first open that has never seen the keyboard.
+      '#looth-msgr .mg-epk{flex:0 0 auto;display:none;flex-direction:column;overflow:hidden;' +
+        'height:var(--mg-epk-h,280px);max-height:52vh;border-top:1px solid var(--lg-line,#e3ddd0);' +
+        'background:var(--lg-cream,#fbfbf8)}',
+      '#looth-msgr .mg-epk.is-on{display:flex}',
+      '#looth-msgr .mg-epk-scroll{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;padding:2px 8px 8px;-webkit-overflow-scrolling:touch}',
+      '#looth-msgr .mg-epk-h{font:700 10px/1 var(--lg-font-sans,system-ui);letter-spacing:.08em;text-transform:uppercase;' +
+        'color:var(--lg-mute,#6b6f6b);padding:10px 4px 6px;position:sticky;top:0;background:var(--lg-cream,#fbfbf8)}',
+      '#looth-msgr .mg-epk-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}',
+      // 44px targets: these are thumb-sized taps sitting directly above Send, and a
+      // mis-tap here is a wrong emoji in a sent message.
+      '#looth-msgr .mg-epk-e{border:0;background:none;cursor:pointer;font-size:26px;line-height:1;' +
+        'min-height:44px;padding:4px 0;border-radius:9px;' +
+        'font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}',
+      '#looth-msgr .mg-epk-e:active{background:var(--lg-sage-tint,#eef2e3);transform:scale(1.12)}',
+      '#looth-msgr .mg-epk-tabs{flex:0 0 auto;display:flex;border-top:1px solid var(--lg-line,#e3ddd0);' +
+        'background:var(--lg-cream,#fbfbf8);padding-bottom:env(safe-area-inset-bottom,0px)}',
+      '#looth-msgr .mg-epk-tab{flex:1;border:0;background:none;cursor:pointer;padding:10px 0;font-size:19px;' +
+        'line-height:1;opacity:.55;border-top:2px solid transparent;margin-top:-1px}',
+      '#looth-msgr .mg-epk-tab[aria-selected="true"]{opacity:1;border-top-color:var(--lg-sage,#87986a);' +
+        'background:var(--lg-sage-tint,#eef2e3)}',
+      '#looth-msgr .mg-epk-btn{flex:0 0 auto;border:0;background:none;cursor:pointer;' +
+        'color:var(--lg-sage-d,#52613d);padding:6px;display:inline-flex;align-items:center;justify-content:center}',
+      // dark — new class names, so NONE of the .mg-* dark rules above reach them.
+      // The sticky heading and the tab bar must repaint the SAME dark as the panel
+      // or the emoji scroll under a transparent strip.
+      D + ' #looth-msgr .mg-epk,' + D + ' #looth-msgr .mg-epk-h,' + D + ' #looth-msgr .mg-epk-tabs{background:#1b1e21}',
+      D + ' #looth-msgr .mg-epk,' + D + ' #looth-msgr .mg-epk-tabs{border-color:#2c312d}',
+      D + ' #looth-msgr .mg-epk-h{color:#9aa097}',
+      D + ' #looth-msgr .mg-epk-e:active{background:#243024}',
+      D + ' #looth-msgr .mg-epk-tab[aria-selected="true"]{background:#243024;border-top-color:#9cb37d}',
       // secondary panel (picker + member manager) slides over the chat/home
       '#looth-msgr .mg-p2{position:absolute;inset:0;z-index:2;display:none;flex-direction:column;background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0}',
       '#looth-msgr .mg-p2.is-on{display:flex}',
@@ -394,6 +437,176 @@
     (document.head || document.documentElement).appendChild(st);
   }
 
+  /* ══ composer emoji picker — PHONE (ruling 2026-08-03 §2) ═════════════════════
+     Companion to the desktop picker in lg-shared/social-modals.js. Same flag, same
+     vocabulary, same insert contract; a different SHAPE, because a phone has a
+     keyboard in the way and a desktop does not.
+
+     ⚠️ THE VOCABULARY BELOW IS DUPLICATED FROM social-modals.js (EPK_CATS) ON
+     PURPOSE. The two files share no module and live in different served trees
+     (/lg-shared/ vs the webroot), and wiring a third shared file in would add a
+     webroot symlink — one of the two deploy couplings a plain `git pull` does NOT
+     handle. So it is duplicated, exactly as REACTION_EMOJI already is, and gate 19
+     ASSERTS THE TWO LISTS ARE IDENTICAL so the drift becomes a red gate instead of
+     a phone that offers emoji the desktop does not.
+
+     ── WHY THERE IS NO SEARCH FIELD HERE, AND THERE IS ONE ON DESKTOP ──
+     A search input inside a panel that OCCUPIES THE KEYBOARD SLOT would summon the
+     keyboard, resize the visual viewport, and collapse the very panel it lives in.
+     The two are structurally incompatible on a phone. Tabs reach every category
+     without a keystroke, and the phone keyboard already has its own emoji key —
+     the mock's own argument for why desktop is the audience for this feature. */
+
+  function mgEpkOn() { return window.LG_EMOJI_PICKER === 1; }
+
+  var MG_EPK_FREQ = ['👍', '❤️', '😂', '😮', '😢', '🙏'];   /* == Messaging::REACTION_EMOJI */
+  var MG_EPK_CATS = [
+    { tab: '🕘', name: 'Frequently used', list: null },
+    { tab: '😀', name: 'Smileys', list: [
+      '😀 grin happy smile', '😃 smiley happy joy', '😄 laugh happy grin', '😁 beam grin teeth',
+      '😆 laugh squint haha', '😅 sweat laugh relief', '🤣 rofl rolling laugh', '😂 joy tears laugh cry',
+      '🙂 slight smile', '🙃 upside down silly', '😉 wink', '😊 blush smile warm',
+      '😇 halo angel innocent', '🥰 love hearts adore', '😍 heart eyes love', '😘 kiss blow',
+      '😋 yum tasty tongue', '😛 tongue cheeky', '😜 wink tongue crazy', '🤪 zany goofy wild',
+      '🤗 hug hands', '🤭 oops giggle hand', '🤫 shush quiet secret', '🤔 think hmm ponder',
+      '😐 neutral blank meh', '😑 expressionless', '😶 no mouth silent', '😏 smirk sly',
+      '😒 unamused meh done', '🙄 eye roll whatever', '😬 grimace awkward yikes', '😌 relieved calm',
+      '😔 sad down pensive', '😴 sleep zzz tired', '😷 mask sick', '🤒 sick fever ill',
+      '🤢 sick nausea gross', '🥵 hot heat sweat', '🥶 cold freeze', '😵 dizzy dead knocked',
+      '🤯 mind blown explode', '🤠 cowboy hat', '🥳 party celebrate hat', '😎 cool sunglasses',
+      '🤓 nerd glasses geek', '🧐 monocle inspect', '😕 confused unsure', '🙁 frown sad',
+      '😮 wow open mouth surprise', '😯 hushed surprise', '😲 astonished shock', '😳 flushed embarrassed',
+      '🥺 pleading puppy beg', '😨 fearful scared', '😰 anxious sweat worried', '😢 cry sad tear',
+      '😭 sob cry bawl', '😱 scream shock fear', '😖 confounded', '😞 disappointed sad',
+      '😩 weary tired', '😫 tired exhausted', '🥱 yawn bored', '😤 huff triumph steam',
+      '😡 angry mad rage', '😠 angry mad', '🤬 curse swear censored' ] },
+    { tab: '🤘', name: 'Gestures', list: [
+      '👍 thumbs up yes good like', '👎 thumbs down no bad', '👌 ok perfect nice', '🤌 pinch chef italian',
+      '🤏 pinch small tiny', '✌️ peace victory two', '🤞 fingers crossed luck hope', '🤟 love you sign',
+      '🤘 rock horns metal', '🤙 call shaka hang loose', '👈 point left', '👉 point right',
+      '👆 point up', '👇 point down', '☝️ point up one', '👋 wave hi hello bye',
+      '🤚 hand raised stop', '🖐️ hand fingers splayed', '✋ hand stop high five', '🖖 vulcan spock',
+      '👏 clap applause bravo', '🙌 raise hands praise yay', '🫶 heart hands love', '👐 open hands',
+      '🤲 palms up', '🤝 handshake deal agree', '🙏 pray thanks please namaste', '✍️ write sign',
+      '💪 muscle strong flex', '🦾 mechanical arm', '👀 eyes look watch', '👁️ eye',
+      '🧠 brain smart mind', '👂 ear listen', '👃 nose smell' ] },
+    { tab: '❤️', name: 'Hearts & symbols', list: [
+      '❤️ heart love red', '🧡 orange heart', '💛 yellow heart', '💚 green heart',
+      '💙 blue heart', '💜 purple heart', '🖤 black heart', '🤍 white heart', '🤎 brown heart',
+      '💔 broken heart sad', '❣️ heart exclamation', '💕 two hearts love', '💞 revolving hearts',
+      '💓 beating heart', '💗 growing heart', '💖 sparkling heart', '💘 cupid arrow heart',
+      '💝 heart gift ribbon', '⭐ star', '🌟 glowing star sparkle', '✨ sparkles shine magic',
+      '⚡ lightning bolt zap fast', '🔥 fire lit hot flame', '💥 boom explosion', '💫 dizzy star',
+      '💤 sleep zzz', '✅ check tick done yes', '❌ cross no wrong', '❗ exclamation important',
+      '❓ question', '💯 hundred perfect score', '🎉 party tada celebrate', '🎊 confetti party',
+      '🏆 trophy win champion', '🥇 gold medal first', '🎯 target bullseye', '♻️ recycle' ] },
+    { tab: '🎸', name: 'Music', list: [
+      '🎸 guitar rock strat les paul', '🪕 banjo', '🎵 note music', '🎶 notes music song',
+      '🎼 score sheet music', '🎹 piano keys keyboard', '🥁 drums drum kit', '🪘 conga drum',
+      '🎷 sax saxophone', '🎺 trumpet horn', '🎻 violin fiddle strings', '🪗 accordion',
+      '🎤 mic microphone sing vocals', '🎧 headphones listen mix', '📻 radio', '🔊 loud speaker volume',
+      '🔉 speaker volume', '🔈 speaker quiet', '🔇 mute silent', '📢 megaphone announce',
+      '🎚️ fader level mix', '🎛️ knobs control mix', '💿 cd disc', '📀 dvd disc',
+      '🎬 film clapper video', '🎭 theatre drama masks', '🎨 art paint palette', '🕺 dance man',
+      '💃 dance woman', '🎪 circus tent show' ] },
+    { tab: '☕', name: 'Things', list: [
+      '🍺 beer pint pub', '🍻 cheers beers toast', '🥂 champagne cheers toast', '🍷 wine glass',
+      '☕ coffee tea cup brew', '🍵 tea green', '🍕 pizza slice', '🍔 burger',
+      '🌮 taco', '🍰 cake slice', '🎂 birthday cake', '🍎 apple fruit',
+      '🎁 gift present', '🎈 balloon party', '📷 camera photo', '📱 phone mobile',
+      '💻 laptop computer', '⌨️ keyboard type', '🖥️ desktop monitor screen', '⌚ watch time',
+      '🔧 wrench tool fix', '🔨 hammer tool', '🪛 screwdriver tool', '🔑 key',
+      '💡 idea lightbulb', '📖 book read', '✏️ pencil write', '📌 pin',
+      '🚗 car drive', '✈️ plane fly travel', '🚀 rocket launch fast', '🏠 house home',
+      '🌍 earth world globe', '☀️ sun sunny', '🌙 moon night', '⛅ cloud sun weather',
+      '☔ rain umbrella', '❄️ snow cold winter', '🌈 rainbow', '🌊 wave sea ocean',
+      '🌲 tree forest', '🌵 cactus', '🐶 dog puppy', '🐱 cat kitten' ] }
+  ];
+
+  /* Flag off => empty string => the node is never created. Not a CSS hide. */
+  function mgEpkBtnHtml() {
+    if (!mgEpkOn()) return '';
+    return '<button class="mg-epk-btn" type="button" data-mg-epk aria-label="Insert emoji" ' +
+           'aria-expanded="false" aria-haspopup="true">' +
+           '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" ' +
+           'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+           '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/>' +
+           '<line x1="9" y1="9.5" x2="9.01" y2="9.5"/><line x1="15" y1="9.5" x2="15.01" y2="9.5"/>' +
+           '</svg></button>';
+  }
+
+  /* The panel SHELL only. Its ~250 emoji are painted on FIRST OPEN (mgEpkPaint),
+     never at sheet-build time — load on intent, and a phone pays most for nodes
+     nobody asked for. */
+  function mgEpkPanelHtml(id) {
+    if (!mgEpkOn()) return '';
+    return '<div class="mg-epk" id="' + id + '" role="group" aria-label="Insert emoji">' +
+             '<div class="mg-epk-scroll"></div><div class="mg-epk-tabs" role="tablist"></div>' +
+           '</div>';
+  }
+
+  function mgEpkGlyph(entry) { return entry.split(' ')[0]; }
+
+  function mgEpkPaint(panel) {
+    if (panel.getAttribute('data-painted') === '1') return;
+    var scroll = panel.querySelector('.mg-epk-scroll'), html = '';
+    for (var i = 0; i < MG_EPK_CATS.length; i++) {
+      var c = MG_EPK_CATS[i];
+      var list = c.list || MG_EPK_FREQ.map(function (e) { return e + ' reaction'; });
+      html += '<div class="mg-epk-h" id="' + panel.id + '-c' + i + '">' + c.name + '</div>' +
+              '<div class="mg-epk-grid">' +
+              list.map(function (entry) {
+                return '<button class="mg-epk-e" type="button">' + mgEpkGlyph(entry) + '</button>';
+              }).join('') + '</div>';
+    }
+    scroll.innerHTML = html;
+    panel.querySelector('.mg-epk-tabs').innerHTML = MG_EPK_CATS.map(function (c, i) {
+      return '<button class="mg-epk-tab" type="button" role="tab" aria-selected="' + (i === 0) +
+             '" aria-label="' + c.name + '" data-mg-epk-tab="' + i + '">' + c.tab + '</button>';
+    }).join('');
+    panel.setAttribute('data-painted', '1');
+  }
+
+  /* Same contract as the desktop insert, and for the same reason: `.value = x` does
+     not fire `input`, and the sheet computes BOTH Send-enabled and the auto-grow
+     height in its `input` handler. No focus() call here — see mgEpkOpen. */
+  function mgEpkInsert(ta, emoji) {
+    if (!ta) return;
+    var s = ta.selectionStart, e = ta.selectionEnd;
+    if (typeof ta.setRangeText === 'function') {
+      ta.setRangeText(emoji, s, e, 'end');
+    } else {
+      ta.value = ta.value.slice(0, s) + emoji + ta.value.slice(e);
+      ta.selectionStart = ta.selectionEnd = s + emoji.length;
+    }
+    ta.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  }
+
+  function mgEpkCloseAll(sheet) {
+    var open = sheet.querySelectorAll('.mg-epk.is-on');
+    for (var i = 0; i < open.length; i++) open[i].classList.remove('is-on');
+    var btns = sheet.querySelectorAll('[data-mg-epk][aria-expanded="true"]');
+    for (var j = 0; j < btns.length; j++) btns[j].setAttribute('aria-expanded', 'false');
+  }
+
+  /* THE SWAP. Opening the picker BLURS the textarea, which dismisses the keyboard;
+     the panel then fills the slot the keyboard vacated, so the composer never moves
+     and the input stays visible above it. We deliberately do NOT re-focus on insert:
+     focus would summon the keyboard, which would resize the viewport and collapse
+     the picker under the member's thumb mid-run. selectionStart survives the blur,
+     so consecutive taps keep landing at the caret. */
+  function mgEpkOpen(sheet, btn) {
+    var comp  = btn.closest('.mg-comp');
+    var panel = comp && comp.querySelector('.mg-epk');
+    var ta    = comp && comp.querySelector('.mg-in');
+    if (!panel || !ta) return;
+    mgEpkCloseAll(sheet);
+    mgEpkPaint(panel);                      /* INTENT: first open builds the grid */
+    ta.blur();                              /* dismiss the keyboard; keep the caret */
+    panel.classList.add('is-on');
+    btn.setAttribute('aria-expanded', 'true');
+  }
+
   function ensureSheet() {
     if (sheet) return sheet;
     ensureCss();
@@ -427,10 +640,12 @@
               '<button class="mg-attach-btn" id="mg-attach-btn" type="button" aria-label="Attach photo">' +
                 '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
                 '<path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg></button>' +
+              mgEpkBtnHtml() +
               '<div class="mg-compwrap">' +
                 '<textarea class="mg-in" id="mg-in" rows="1" placeholder="Message…"></textarea>' +
                 '<button class="mg-send" id="mg-send" type="button" disabled>Send</button></div>' +
             '</div>' +
+            mgEpkPanelHtml('mg-epk') +
           '</div>' +
         '</div>' +
         // side conversation layer: a 1:1 OVER the group; the group DOM stays put underneath
@@ -450,10 +665,12 @@
               '<button class="mg-attach-btn" id="mg2-attach-btn" type="button" aria-label="Attach photo">' +
                 '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
                 '<path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg></button>' +
+              mgEpkBtnHtml() +
               '<div class="mg-compwrap">' +
                 '<textarea class="mg-in" id="mg2-in" rows="1" placeholder="Message…"></textarea>' +
                 '<button class="mg-send" id="mg2-send" type="button" disabled>Send</button></div>' +
             '</div>' +
+            mgEpkPanelHtml('mg2-epk') +
           '</div>' +
         '</div>' +
         // secondary panel: compose picker + member manager (slides over home/chat)
@@ -609,6 +826,10 @@
       }
       var vv = window.visualViewport;
       var k = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      // Remember the keyboard's real height so the emoji panel can take exactly the
+      // slot it vacates. Measured per device rather than guessed; the 280px CSS
+      // fallback only ever applies to a first open that has never seen a keyboard.
+      if (k > 120) sheet.style.setProperty('--mg-epk-h', k + 'px');
       [].forEach.call(comps, function (c) { c.style.transform = k > 1 ? ('translateY(-' + k + 'px)') : ''; });
       if (k > 1) {
         // follow the keyboard in whichever chat is on top
@@ -625,6 +846,43 @@
     ta.addEventListener('blur', function () { setTimeout(kb, 80); });
     ta2.addEventListener('focus', function () { setTimeout(kb, 120); setTimeout(kb, 330); });
     ta2.addEventListener('blur', function () { setTimeout(kb, 80); });
+
+    // ── emoji picker wiring (no-op when the flag is off: no button exists to hit,
+    //    no .mg-epk exists to open, and these listeners simply never match) ──
+    if (mgEpkOn()) {
+      sheet.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-mg-epk]');
+        if (b) {
+          var panel = b.closest('.mg-comp').querySelector('.mg-epk');
+          if (panel && panel.classList.contains('is-on')) mgEpkCloseAll(sheet);
+          else mgEpkOpen(sheet, b);
+          return;
+        }
+        var pick = e.target.closest('.mg-epk-e');
+        if (pick) {
+          // Stays OPEN across picks. Closing would hand the keyboard straight back
+          // and make a run of three emoji three keyboard animations; the desktop
+          // panel closes on pick because there is no keyboard to thrash there.
+          var comp = pick.closest('.mg-comp');
+          mgEpkInsert(comp && comp.querySelector('.mg-in'), pick.textContent);
+          return;
+        }
+        var tab = e.target.closest('[data-mg-epk-tab]');
+        if (tab) {
+          var p = tab.closest('.mg-epk');
+          var tabs = p.querySelectorAll('.mg-epk-tab');
+          for (var i = 0; i < tabs.length; i++) tabs[i].setAttribute('aria-selected', 'false');
+          tab.setAttribute('aria-selected', 'true');
+          var scroll = p.querySelector('.mg-epk-scroll');
+          var head = p.querySelector('#' + p.id + '-c' + tab.getAttribute('data-mg-epk-tab'));
+          if (head && scroll) scroll.scrollTop = head.offsetTop - scroll.offsetTop;
+        }
+      });
+      // Tapping the input asks for the keyboard back — the picker must yield the
+      // slot rather than fight it. This is the other half of the swap.
+      ta.addEventListener('focus', function () { mgEpkCloseAll(sheet); });
+      ta2.addEventListener('focus', function () { mgEpkCloseAll(sheet); });
+    }
 
     // picker search (delegated — the input is re-rendered inside #mg-p2body)
     sheet.addEventListener('input', function (e) {
