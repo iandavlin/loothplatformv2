@@ -16,6 +16,7 @@ as-verified on 2026-08-09; live = commit `021ff38` unless noted.
 | follow-digest `enabled` | platform/config/follow-digest.php | **true** | ON | ON | E1 GA since 8/8 (fd0d196); the nested second `enabled=false` is §2.2 forum-items — see below |
 | follow-digest forum-items (nested) | platform/config/follow-digest.php | **false** | OFF | n/a | §2.2 build in flight (one-mailer); lane refuses merge until preview-armed verification — arm previews via `LG_FD_FORUM_ITEMS` env/$_SERVER only |
 | `bell_follows_bb_subscriptions` | platform/config/notify-bridge.php | **false** | OFF | OFF | ❌ CLOSED — Ian ruled leave OFF 8/9 (consent inference; ruling 6 separation stands) |
+| back-pill `enabled` | platform/config/back-pill.php | **false** | OFF | OFF (code not on live yet) | 3.8 back-nav hybrid (lower-left, appear-on-scroll). Gate 22 (nav must navigate). Merged 8/9; awaiting Ian on the serve, then flip |
 | `LG_FD_CADENCE_CONTROL_SHIPPED` | mu-plugin define | **false** | OFF | OFF | Cadence control behind it; gate 15 asserts absence when off |
 | `LG_PRESERVE_FORUM_SUBSCRIPTION` | mu-plugin define | **true** | ON | ON | P0 4.5 fix, LIVE since 8/8 — never turn off (data loss) |
 | `LG_AUTHOR_SOCIALS_ALL_MEMBERS` | bb-mirror/config.php define | **true** | ON | ON | The original flag-pattern exemplar; GA |
