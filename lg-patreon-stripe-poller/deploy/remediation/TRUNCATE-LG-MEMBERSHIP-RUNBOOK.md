@@ -119,8 +119,13 @@ What retraction would actually do, computed against the code (`Arbiter.php`,
   manufactures three orphans the day after Phase 0, and the stuck-source
   detector will (correctly) flag them forever.
 
-**This needs your (or keeper's) explicit sign-off — it is not folded into the
-script.** Step 3 below has the literal SQL for option B, held until you rule.
+**CHOSEN 2026-08-09, keeper default: B with B2 — the nothing-changes option.**
+Ian was asked and the question was not worth his time; keeper picked the option
+that provably changes nothing (`manual_admin = looth2` written first, stripe row
+deleted after, user-1 role snapshot required byte-identical in Step 5) and stays
+reversible with a single row delete whenever Ian cares. His admin role and login
+are not involved in any option and are asserted unchanged by the snapshot.
+Step 3 below carries the literal SQL for B2.
 
 ---
 
