@@ -425,6 +425,60 @@ So, against the four candidate causes in the charter:
   subscriber. Nobody was mailed who should not have been, and nobody was silently
   dropped.
 
+### ⚠️ The wgbluetone anomaly — the baseline is one member
+
+Closing the last open thread from the reconciliation. `wgbluetone1@gmail.com` (user 779)
+kept appearing in every list, and the reason is not a defect — it is scale:
+
+```
+topic subscriptions held by 779        340  of 1,515 platform-wide   = 22.4%
+reply notifications sent to 779         18  of 33 in the logged window = 54.5%
+next-highest subscriber                 49  subscriptions
+replies 779 has EVER posted              4  (last: 2026-05-21)
+```
+
+**One member holds 22% of every topic subscription on the platform and receives more
+than half of all reply email.** That is the single most important thing to know before
+quoting any per-member average from §6: "26 reply emails in 7 days" is really *18 to one
+person and 8 to everyone else*. Blast-radius and volume reasoning for the roundup must
+not average over that — widening the allowlist changes almost nothing for 380 members
+and changes one member's inbox a great deal.
+
+They did not get there by posting: 4 replies, ever. They subscribe to new discussions
+deliberately, and at remarkable rate.
+
+### And that makes them an independent witness to ruling 6's June break
+
+Ruling 6 dated the break from the *posting* pathway — 194 June replies producing 4 new
+subscriptions. 779 never used that pathway. Their subscribing broke at the same moment
+anyway, and discussion volume rules out the obvious alternative explanation:
+
+| month | discussions created | 779 subscribed to | coverage |
+|---|---:|---:|---:|
+| 2026-01 | 30 | 18 | 60% |
+| 2026-02 | 45 | 31 | 69% |
+| 2026-03 | 57 | 31 | 54% |
+| 2026-04 | 25 | 15 | 60% |
+| 2026-05 | 53 | 36 | 68% |
+| **2026-06** | **40** | **1** | **2.5%** |
+| **2026-07** | **38** | **0** | **0%** |
+| 2026-08 | 13 | 5 | 38% |
+
+Discussion creation did **not** fall in June or July (40 and 38, both normal). Their
+coverage fell off a cliff and then partially recovered in August.
+
+So the June composer cutover took away **two** subscribe routes, not one: the implicit
+post→follow checkbox that ruling 6 restores, *and* an explicit subscribe affordance that
+at least one member was using on ~60% of all new discussions. Ruling 6 addresses the
+first. **Nothing in this lane addresses the second**, and it is worth Ian knowing that
+the ✉ control on a discussion — not just the one on the composer — is load-bearing for
+the members who use it most.
+
+The August partial recovery is consistent with the thread-follow ✉ control reaching them,
+but the logged window is too short to prove which affordance they used, and I am not
+going to assert a mechanism I cannot see. What is proven is the shape: a steady ~60%
+habit, a two-month gap that discussion volume does not explain, and a partial return.
+
 **BuddyBoss's native mail is a trustworthy baseline for the roundup to match**, with one caveat now on the record: BB's
 instant path can duplicate (once in 26 sends, ~4%), most plausibly a background-updater
 re-dispatch. The roundup's watermark design cannot do this — the watermark only advances on a send
