@@ -15,11 +15,11 @@ line into that lane's charter and note the lane name here.
 4.5 Participation silently UNSUBSCRIBES you from the discussion → ✅ MERGED + LIVE @ 10ea816 (was eroding the 381 followers since June)
 
 **P1 — wanted now / deploy-blocking**
-3.7 Mobile: discussion embed → mobile-bugs, EMBED HALF FIXED flag-off (gate 19); CARD VIDEO is a REVERSAL of Ian 6/17, needs his ruling before code — see the item, do not pick it up as a bug
+3.7 Mobile: discussion embed → mobile-bugs, EMBED HALF MERGED flag-off 8/9 (gate 19), awaiting Ian's flip. Ian 8/9 confirmed the embed half IS the whole complaint: "THE MAIn problem was no imbed in the modal." Card half → item 7, not a bug
 3.5 SEO/sitemap: zero discussions submitted — Google indexes the mirrored forum + defunct /shop/ and /merch/ (200s) — UNOWNED, findings on origin/sitemap-seo
 6. Front-end COMPOSE for all post types (Ian re-scoped 8/3: editing was never the problem) → frontend-compose, Option A ruled
 5. Notifications: quick-reply modal (default) w/ full-post link — UNOWNED, 9 commits on origin/notif-quickreply
-7. Discussion hub cards: play video inline ★ — UNOWNED. Does NOT fall out of mobile-bugs: it is 3.7's card half and needs Ian to choose what a cover tap does (it cannot both play and open)
+7. Discussion hub cards: play video inline ★ — DORMANT (Ian 8/9, asked directly with full context: "THE MAIn problem was no imbed in the modal" — his 3.7 complaint was the reader sheet, not the card). The 6/17 desktop-only ruling STANDS. Reopen only if Ian raises card playback himself; it then still needs his cover-tap choice first (a tap cannot both play and open)
 8. Front page: latest weekly email for logged-out users — UNOWNED
 9. Shop Layout Planner — apps index page ONLY (standalone render SHIPPED to live) — UNOWNED
 
