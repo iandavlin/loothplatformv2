@@ -19,44 +19,44 @@ run() {  # run <label> <command...>
     *) red=1;;
   esac
 }
-echo "=== GATE 1/33: visibility matrix (the privacy model) ==="
+echo "=== GATE 1/34: visibility matrix (the privacy model) ==="
 run "visibility matrix" php /srv/profile-app/bin/visibility-matrix.php
 echo
-echo "=== GATE 2/33: web-craft gate (images / weight / eager scripts) ==="
+echo "=== GATE 2/34: web-craft gate (images / weight / eager scripts) ==="
 run "web-craft" python3 "$(dirname "$0")/craft-gate.py"
 echo
-echo "=== GATE 3/33: infra-sec gate (cookie auth / source disclosure / cdp) ==="
+echo "=== GATE 3/34: infra-sec gate (cookie auth / source disclosure / cdp) ==="
 run "infra-sec" bash "$(dirname "$0")/infra-sec-gate.sh"
 echo
-echo "=== GATE 4/33: hub paragraph-collapse (content_html keeps its breaks) ==="
+echo "=== GATE 4/34: hub paragraph-collapse (content_html keeps its breaks) ==="
 run "hub-paragraph" bash "$(dirname "$0")/hub-content-paragraph-gate.sh"
 echo
-echo "=== GATE 5/33: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
+echo "=== GATE 5/34: looth-auth-issue (non-REST mint bounce; recurs every DB reload) ==="
 run "looth-auth" bash "$(dirname "$0")/looth-auth-issue-gate.sh"
 echo
-echo "=== GATE 6/33: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
+echo "=== GATE 6/34: event-date TZ (a UTC 'today' must not judge a site-local date) ==="
 run "event-date-tz" bash "$(dirname "$0")/event-date-tz-gate.sh"
 echo
-echo "=== GATE 7/33: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
+echo "=== GATE 7/34: events tap NAVIGATES (Ian retired the mobile modal 2026-07-29) ==="
 run "events-tap-navigates" bash "$(dirname "$0")/events-tap-navigates-gate.sh"
 echo
-echo "=== GATE 8/33: composer topic-meta (forum picker cloning + tags) ==="
+echo "=== GATE 8/34: composer topic-meta (forum picker cloning + tags) ==="
 run "composer-topic-meta" node "$(dirname "$0")/composer-topic-meta-test.js"
 echo
-echo "=== GATE 9/33: author socials RESOLVE, never mirror (byline drift class) ==="
+echo "=== GATE 9/34: author socials RESOLVE, never mirror (byline drift class) ==="
 run "author-socials-live" bash "$(dirname "$0")/author-socials-live-gate.sh"
 
-echo "=== GATE 10/33: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
+echo "=== GATE 10/34: react button RENDERED => endpoint ACCEPTS it (Ian's shorty 400) ==="
 run "react-types" bash "$(dirname "$0")/react-types-cover-standalone-gate.sh"
 echo
-echo "=== GATE 11/33: /shop-layout-planner/ still SERVES the planner (live SEO url) ==="
+echo "=== GATE 11/34: /shop-layout-planner/ still SERVES the planner (live SEO url) ==="
 # Defaults to dev2, where it self-reports CANNOT RUN until the standalone render
 # lands (dev2 bounces every anon WP page into the BuddyBoss gate). Run it with
 # --live to prove the production url is healthy, and with
 # LG_SP_EXPECT_STANDALONE=1 once the standalone page is meant to be serving.
 run "shop-planner-url" bash "$(dirname "$0")/shop-planner-url-gate.sh"
 echo
-echo "=== GATE 12/33: an ANON visitor can reach Sign in at every width (Ian's lockout) ==="
+echo "=== GATE 12/34: an ANON visitor can reach Sign in at every width (Ian's lockout) ==="
 # Behaviour, not presence: "Sign in" was in the served HTML the whole time while
 # 641-820px had no way in at all. Starts its own anonymous real-origin proxy and
 # one incognito BrowserContext per width, so it never touches shared browser
@@ -64,14 +64,14 @@ echo "=== GATE 12/33: an ANON visitor can reach Sign in at every width (Ian's lo
 # BOTH green on the day the band was dead.
 run "anon-signin-reachable" python3 "$(dirname "$0")/anon-signin-reachable-gate.py"
 echo
-echo "=== GATE 13/33: follow-digest — flag OFF sends NOTHING (email is unrecallable) ==="
+echo "=== GATE 13/34: follow-digest — flag OFF sends NOTHING (email is unrecallable) ==="
 # Written BEFORE the sender and red on purpose; promoted here in the same window as
 # the merge that defines LG_FOLLOW_DIGEST_ENABLED, per its own rule: "a gate that
 # guards an unrecallable channel and is never promoted is worse than no gate — it
 # reads as covered." Number minted from MAIN's count (12), not the branch's.
 run "follow-digest" python3 "$(dirname "$0")/follow-digest-gate.py"
 echo
-echo "=== GATE 14/33: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
+echo "=== GATE 14/34: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
 # Second time source/behaviour was served to anybody who asked (after the
 # /archive-api/v0/*.php disclosure). lg-weekly-digest/dev/ sat inside a PLUGIN
 # directory, so the catch-all \.php$ handler RAN it for anonymous requests: one
@@ -82,7 +82,7 @@ echo "=== GATE 14/33: lane tooling in a deployed tree is ANON-UNREACHABLE ==="
 # would go green having seen nothing.
 run "dev-files-anon" python3 "$(dirname "$0")/dev-files-anon-unreachable-gate.py"
 echo
-echo "=== GATE 15/33: the cadence control is ABSENT when its flag is off ==="
+echo "=== GATE 15/34: the cadence control is ABSENT when its flag is off ==="
 # Number minted from MAIN's count (14), not the branch's — two lanes both minted
 # "9/9" once and collided in this file.
 #
@@ -254,7 +254,7 @@ echo
 #   detect — on a build that is fine. The looth_id line is not optional either: the
 #   WP cookies alone authenticate the page but not /profile-api.
 
-echo "=== GATE 16/33: BuddyBoss group mail stays DEAD (an empty list is load-bearing) ==="
+echo "=== GATE 16/34: BuddyBoss group mail stays DEAD (an empty list is load-bearing) ==="
 # Number minted from MAIN's count (15), not the branch's — two lanes both minted
 # "9/9" once and collided in this file.
 #
@@ -274,7 +274,7 @@ echo "=== GATE 16/33: BuddyBoss group mail stays DEAD (an empty list is load-bea
 # cookies, no CDP, so it cannot go DEAD for environmental reasons.
 run "group-mail-dead" python3 "$(dirname "$0")/group-mail-dead-gate.py"
 
-echo "=== GATE 17/33: participation must never silently UNSUBSCRIBE you (P0 data loss) ==="
+echo "=== GATE 17/34: participation must never silently UNSUBSCRIBE you (P0 data loss) ==="
 # Numbered 17 because 16 is this same branch's group-mail gate and MAIN is still on 15.
 # If another lane lands a gate first, keep BOTH and renumber on merge — two lanes both
 # minted "9/9" once and collided in this file.
@@ -292,7 +292,7 @@ echo "=== GATE 17/33: participation must never silently UNSUBSCRIBE you (P0 data
 # three routes — this gate is what caught it.
 run "subscription-preserved" python3 "$(dirname "$0")/subscription-preserved-gate.py"
 
-echo "=== GATE 18/33: ruling 6 defaults — bell ticked, EMAIL UNTICKED (consent) ==="
+echo "=== GATE 18/34: ruling 6 defaults — bell ticked, EMAIL UNTICKED (consent) ==="
 # 18 because 16 and 17 are this same branch's; MAIN is still on 15. Keep BOTH and
 # renumber on merge if another lane lands one first.
 #
@@ -311,7 +311,7 @@ echo "=== GATE 18/33: ruling 6 defaults — bell ticked, EMAIL UNTICKED (consent
 run "post-follow-controls" python3 "$(dirname "$0")/post-follow-controls-gate.py"
 echo
 
-echo "=== GATE 19/33: a rendered control CARRIES ITS BEHAVIOUR (the UI-lies class) ==="
+echo "=== GATE 19/34: a rendered control CARRIES ITS BEHAVIOUR (the UI-lies class) ==="
 # Numbered from MAIN, which is on 18. Two lanes both minted a "9/9" once and collided;
 # rebase before pushing and on conflict KEEP BOTH and renumber.
 #
@@ -341,7 +341,7 @@ echo "=== GATE 19/33: a rendered control CARRIES ITS BEHAVIOUR (the UI-lies clas
 run "social-actions-wired" python3 "$(dirname "$0")/social-actions-wired-gate.py"
 echo
 
-echo "=== GATE 20/33: a sitemapped discussion lands on THE HUB, with its text in the HTML ==="
+echo "=== GATE 20/34: a sitemapped discussion lands on THE HUB, with its text in the HTML ==="
 # 20 numbered from MAIN, which reached 19 while this lane was in flight
 # (its own 19 is the UI-lies gate). RE-MINTED AT REBASE, not at first write —
 # this branch and main both held a "19" for a few hours, which is precisely
@@ -369,7 +369,7 @@ echo "=== GATE 20/33: a sitemapped discussion lands on THE HUB, with its text in
 # — throw it when the default flips. LG_TL_PREFIX gates a lane preview instead.
 run "hub-topic-landing" python3 "$(dirname "$0")/hub-topic-landing-gate.py"
 
-echo "=== GATE 21/33: marking notifications read is scoped to what was SEEN ==="
+echo "=== GATE 21/34: marking notifications read is scoped to what was SEEN ==="
 # 21 minted from MAIN, which reached 20 while this lane was in flight (hub-topic-landing
 # took 20). THIRD number this gate has held: 16 at first write, 20 at the first
 # rebase, 21 now. Two of those were live collisions — with main's group-mail gate
@@ -407,7 +407,7 @@ echo "=== GATE 21/33: marking notifications read is scoped to what was SEEN ==="
 run "notif-read-seen" python3 "$(dirname "$0")/notif-read-seen-gate.py"
 echo
 
-echo "=== GATE 22/33: a rendered NAV control must actually NAVIGATE ==="
+echo "=== GATE 22/34: a rendered NAV control must actually NAVIGATE ==="
 # Numbered from MAIN's 21. A number can collide through a CLEAN auto-merge, so the
 # roster was grepped for duplicates before minting rather than trusting a quiet rebase.
 #
@@ -432,7 +432,7 @@ echo "=== GATE 22/33: a rendered NAV control must actually NAVIGATE ==="
 # inversion pass found. It now matches the guard itself.
 run "back-pill-navigates" python3 "$(dirname "$0")/back-pill-navigates-gate.py"
 
-echo "=== GATE 23/33: a service-worker navigation must always SETTLE (never spin) ==="
+echo "=== GATE 23/34: a service-worker navigation must always SETTLE (never spin) ==="
 # 23 minted from MAIN, which reached 22 while this lane was in flight. Grep the roster
 # for duplicates after every rebase — a gate collision can AUTO-MERGE CLEANLY, leaving
 # two blocks printing the same number with no conflict raised (that happened to gate 21
@@ -467,7 +467,7 @@ echo "=== GATE 23/33: a service-worker navigation must always SETTLE (never spin
 #   bash "$(dirname "$0")/lib/sw-fetch-bounded-redfirst.sh"
 run "sw-fetch-bounded" python3 "$(dirname "$0")/sw-fetch-bounded-gate.py"
 echo
-echo "=== GATE 24/33: with the origin UP, a nav must render the PAGE, not the offline shell ==="
+echo "=== GATE 24/34: with the origin UP, a nav must render the PAGE, not the offline shell ==="
 # 24 minted from MAIN's 22 plus this lane's 23. Grep the roster for duplicates after every
 # rebase — a gate collision can auto-merge CLEANLY (that happened to gate 21), and the
 # Buck fence now lives in this same region, so check its position too: the fence is a
@@ -503,7 +503,7 @@ echo "=== GATE 24/33: with the origin UP, a nav must render the PAGE, not the of
 # ONE BROWSER AT A TIME — the box is 2-core (Ian, cost, 2026-08-11).
 run "sw-no-offline-shell" python3 "$(dirname "$0")/sw-no-offline-shell-gate.py"
 echo
-echo "=== GATE 25/33: one bad row must not wedge the mirror sweep (the silent-stall class) ==="
+echo "=== GATE 25/34: one bad row must not wedge the mirror sweep (the silent-stall class) ==="
 # Re-minted TWICE while this lane sat unmerged: 20 -> 21 -> 23. main gained 27
 # commits and two more gates in between. On collision the rule is KEEP BOTH and
 # renumber your own, never someone else's. Re-check the number immediately before
@@ -530,7 +530,7 @@ echo "=== GATE 25/33: one bad row must not wedge the mirror sweep (the silent-st
 # escaped the gate itself so a real regression exited 255 with no verdict.
 run "mirror-reconcile-poison" php "$(dirname "$0")/mirror-reconcile-poison-gate.php"
 echo
-echo "=== GATE 26/33: every notification type has a SENTENCE on BOTH bells ==="
+echo "=== GATE 26/34: every notification type has a SENTENCE on BOTH bells ==="
 # Numbered from MAIN, which is on 19. These two were minted as 16/17 while main was
 # on 15 and renumbered on merge — on conflict KEEP BOTH and renumber, never drop one.
 #
@@ -549,7 +549,7 @@ echo "=== GATE 26/33: every notification type has a SENTENCE on BOTH bells ==="
 # directions against each other and prints the required set on every run.
 run "notif-renderer-parity" bash "$(dirname "$0")/notif-renderer-parity-gate.sh"
 echo
-echo "=== GATE 27/33: bell dismiss/delete contract + leg 4's follow stores ==="
+echo "=== GATE 27/34: bell dismiss/delete contract + leg 4's follow stores ==="
 # Runs two red-first proofs as the OS users that own their databases (peer auth —
 # neither is reachable as `ubuntu`), and reports CANNOT RUN rather than RED when that
 # sudo is unavailable, per the exit-code-3 rule above.
@@ -564,7 +564,7 @@ echo "=== GATE 27/33: bell dismiss/delete contract + leg 4's follow stores ==="
 # opposite states that empty() reads identically.
 run "notif-dismiss" bash "$(dirname "$0")/notif-dismiss-gate.sh"
 echo
-echo "=== GATE 28/33: a FOLLOW actually produces a BELL ROW (end to end) ==="
+echo "=== GATE 28/34: a FOLLOW actually produces a BELL ROW (end to end) ==="
 # IAN-RULINGS §6, verbatim: "do not let its gate claim bell notifications ARRIVE —
 # that is the bridge's contract, not the composer's." Gate 18 proves the composer
 # WRITES forums.topic_follow; nothing proved the other half, and Ian made the bell the
@@ -582,7 +582,7 @@ echo "=== GATE 28/33: a FOLLOW actually produces a BELL ROW (end to end) ==="
 # caller outside reply.php — delivering notifications to an unmatched vhost, silently.
 run "notif-bell-delivery" bash "$(dirname "$0")/notif-bell-delivery-gate.sh"
 echo
-echo "=== GATE 29/33: the bell's DELETE endpoint honours the flag, per state ==="
+echo "=== GATE 29/34: the bell's DELETE endpoint honours the flag, per state ==="
 # The dismiss proof covers the MODEL. When Ian flips dismiss_instead_of_delete on
 # live, what runs is the ENDPOINT — and nothing exercised that branch, so a mis-wire
 # there means he flips the flag and gets the old destructive behaviour, or a 500, on
@@ -604,7 +604,7 @@ echo
 run "buck-surface-fence" bash "$(dirname "$0")/buck-surface-guard.sh"
 
 echo
-echo "=== GATE 30/33: a legacy URL reaches its OWN permalink, not a generic landing ==="
+echo "=== GATE 30/34: a legacy URL reaches its OWN permalink, not a generic landing ==="
 # 24 RE-MINTED AT REBASE, not at first write. Main went 22 → 23 while this lane
 # was in flight (the Buck fence), so the 23 I pushed would have collided. FOURTH
 # time this number has moved under this lane in two days — the rule is re-check
@@ -630,7 +630,7 @@ echo "=== GATE 30/33: a legacy URL reaches its OWN permalink, not a generic land
 run "legacy-url-redirect" python3 "$(dirname "$0")/legacy-url-redirect-gate.py"
 
 echo
-echo "=== GATE 31/33: /hub/<category>/ looks like THE HUB and says which URL it is ==="
+echo "=== GATE 31/34: /hub/<category>/ looks like THE HUB and says which URL it is ==="
 # 25 minted from MAIN at push time. Ian, 2026-08-11: the category pages were never
 # rebuilt — legacy forum-style view, no canonical, no robots meta, and Google
 # lists them.
@@ -652,7 +652,7 @@ echo "=== GATE 31/33: /hub/<category>/ looks like THE HUB and says which URL it 
 # default does not redden every other lane. LG_HC_REQUIRE_RAIL=1 demands it.
 run "hub-category-page" python3 "$(dirname "$0")/hub-category-page-gate.py"
 echo
-echo "=== GATE 32/33: retired pages 301 per-URL to a destination that ANSWERS ==="
+echo "=== GATE 32/34: retired pages 301 per-URL to a destination that ANSWERS ==="
 # Ian's rulings 2026-08-11: /shop-organisation/ -> /hub/shop-organisation/ ,
 # /featured-content/ -> /hub/ , /merch/ -> loothtool.com , /shop/ LEFT ALONE.
 #
@@ -666,6 +666,29 @@ echo "=== GATE 32/33: retired pages 301 per-URL to a destination that ANSWERS ==
 # also rot later with nobody touching our code — a conf comment cannot catch
 # that; this can.
 run "stale-page-redirect" python3 "$(dirname "$0")/stale-page-redirect-gate.py"
+
+# ── 34 ─────────────────────────────────────────────────────────────────────
+# Front-end compose + edit (backlog 6; Ian ruled Option A 2026-08-03, all-members
+# and front-end edit 2026-08-09). PER-STATE, and that is the point: it READS the
+# feature's own lg_fc_enabled() off the box rather than assuming a state, so
+# flipping the default needs no edit here.
+#   flag OFF/absent -> asserts the route is BYTE-IDENTICAL to the recorded
+#                      before-state, for an ALLOWED user (anon 404s either way,
+#                      so an anon-only probe cannot tell the states apart).
+#   flag ON         -> the form reaches the allowed member and NOBODY else; a
+#                      refused POST writes no row; the OWNER gets the edit form
+#                      and a STRANGER does not (IDOR); a stranger's edit POST is
+#                      non-2xx AND does not move post_modified; and embed=1 serves
+#                      the furniture-free variant that the hub composer's type
+#                      toggle frames.
+# --denied must be a user the tier genuinely refuses. Loothprint is open to ALL
+# MEMBERS by Ian's ruling, so that means someone without edit_posts/upload_files
+# (erin.vogel: customer,bbp_participant) — NOT an ordinary member, who is supposed
+# to get this form. --owner/--stranger/--post drive the edit half.
+echo "=== GATE 34/34: front-end compose+edit reaches the right people, and OFF is inert ==="
+run "compose" python3 "$(dirname "$0")/compose-gate.py" \
+    --type loothprint --allowed bangers --denied erin.vogel \
+    --owner patreon_77159883 --stranger bangers --post 72155
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then

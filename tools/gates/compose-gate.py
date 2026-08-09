@@ -150,6 +150,24 @@ def has_form(body, ptype):
     return all(m in body for m in markers)
 
 
+def flag_state():
+    """
+    READ the flag; never assume it. Two recorded traps make the env var the wrong
+    source: sudo strips the environment, so a flag-ON run can silently exercise
+    the OFF path and report on the wrong one; and this box has had a gate sit
+    "red" for weeks while it was in fact dead. LG_COMPOSE_FLAG still overrides,
+    but only to force a state deliberately — the default is the truth.
+    """
+    forced = os.environ.get("LG_COMPOSE_FLAG")
+    if forced in ("on", "off"):
+        return forced, "forced by LG_COMPOSE_FLAG"
+    out = wp_eval("echo defined('LG_FRONTEND_COMPOSE') ? "
+                  "(LG_FRONTEND_COMPOSE ? 'on' : 'off') : 'absent';").strip()
+    if out not in ("on", "off", "absent"):
+        raise CannotRun(f"could not read LG_FRONTEND_COMPOSE (got {out!r})")
+    return out, "read from the box"
+
+
 def count_posts(ptype):
     return int(wp_eval(
         f"global $wpdb; echo (int)$wpdb->get_var($wpdb->prepare("
@@ -191,8 +209,49 @@ def main():
             raise CannotRun("--allowed and --denied are both required (or use --baseline)")
 
         findings = []
+        state, how = flag_state()
         c_allow = cookie_for(args.allowed)
         c_deny = cookie_for(args.denied)
+
+        # ── FLAG OFF / ABSENT: the ONLY correct behaviour is the before-state ──
+        # Asserted for an ALLOWED user, not for anon. Anon is a 404 whether the
+        # flag is on or off, so an anon-only probe cannot tell the two apart and
+        # goes green either way — which is how assertion 5 first passed against a
+        # flag that was ON. The allowed user is the one whose response actually
+        # changes, so they are the witness.
+        if state in ("off", "absent"):
+            b, c = fetch(env, path, c_allow)
+            print(f"compose-gate  type={args.type}  path={path}")
+            print(f"  flag: {state.upper()} ({how}) — asserting the NO-OP, not the feature")
+            if has_form(b, args.type):
+                findings.append(
+                    f"[5] the flag is {state.upper()} but an allowed user WAS served "
+                    f"the compose form at {path}. OFF must be inert.")
+            if not os.path.exists(FIXTURE):
+                findings.append("[5] no flag-OFF fixture — run --baseline on a tree "
+                                "WITHOUT the feature; OFF cannot be checked against a "
+                                "belief, only against a recorded before-state.")
+            else:
+                fx = json.load(open(FIXTURE)).get(args.type)
+                if not fx:
+                    findings.append(f"[5] fixture has no entry for {args.type}.")
+                else:
+                    sha = hashlib.sha256(b.encode()).hexdigest()
+                    print(f"  [5] allowed user gets HTTP {c} / {len(b)}B "
+                          f"(before: {fx['status']} / {fx['bytes']}B)")
+                    if c != fx["status"] or sha != fx["sha256"]:
+                        findings.append(
+                            f"[5] flag {state.upper()} is NOT byte-identical: {path} was "
+                            f"HTTP {fx['status']} / {fx['bytes']}B before the feature, "
+                            f"now HTTP {c} / {len(b)}B.")
+            print()
+            if findings:
+                print(f"{len(findings)} FINDING(S):")
+                for f in findings:
+                    print(f"  \u2717 {f}")
+                return 1
+            print("GREEN — the flag is off and the route is byte-identical to before it existed.")
+            return 0
 
         # ---- 1. an allowed user GETS the form (RED until the build exists) ----
         body, code = fetch(env, path, c_allow)
@@ -229,24 +288,9 @@ def main():
                 f"[4] a POST by non-allowed member {args.denied!r} returned {code_p}; "
                 f"a refusal must not be 2xx even when nothing was written.")
 
-        # ---- 5. flag OFF is byte-identical to the recorded before-state --------
-        if not os.path.exists(FIXTURE):
-            print(f"note: no flag-OFF fixture yet — run --baseline BEFORE building. "
-                  f"Assertion 5 skipped.")
-        else:
-            fx = json.load(open(FIXTURE)).get(args.type)
-            if not fx:
-                print(f"note: fixture has no entry for {args.type}; assertion 5 skipped.")
-            elif os.environ.get("LG_COMPOSE_FLAG", "off") == "off":
-                b, c = fetch(env, path)
-                sha = hashlib.sha256(b.encode()).hexdigest()
-                if c != fx["status"] or sha != fx["sha256"]:
-                    findings.append(
-                        f"[5] flag OFF is NOT a no-op: {path} was HTTP {fx['status']} / "
-                        f"{fx['bytes']}B before the feature, now HTTP {c} / {len(b)}B.")
-
         # ---- verdict ----------------------------------------------------------
         print(f"compose-gate  type={args.type}  path={path}")
+        print(f"  flag: ON ({how}) — asserting the FEATURE")
         print(f"  [1] allowed  {args.allowed:<16} form served: "
               f"{'YES' if got_allowed else 'no'}")
         print(f"  [2] denied   {args.denied:<16} form served: "
