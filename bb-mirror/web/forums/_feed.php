@@ -1359,7 +1359,18 @@ if ($lg_landing) {
     $page_title       = (string)$lg_landing['title'];
 }
 
-bb_mirror_chrome_header($page_title);
+/* The landing's canonical address is the SITEMAP'S EXACT PERMALINK — the same
+   string sitemap-discussions.xml advertises — so the two cannot drift. Only the
+   discussion landing declares one: the feed's own routes carry sort/filter/search
+   params that legitimately produce different pages, and naming one of them
+   canonical would be a claim nobody has made. */
+bb_mirror_chrome_header(
+    $page_title,
+    $lg_landing
+        ? LG_BB_MIRROR_PUBLIC_PATH . '/' . rawurlencode((string)$lg_landing['forum_slug'])
+              . '/' . rawurlencode((string)$lg_landing['slug']) . '/'
+        : null
+);
 
 // Posting is authenticated-only (BuddyBoss REST 401s anonymous writes). Gate
 // every post/reply affordance on this server-side so anon viewers receive no

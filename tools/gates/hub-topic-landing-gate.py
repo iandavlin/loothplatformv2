@@ -188,22 +188,32 @@ def main():
     #    check on an empty hub is vacuously green. Prove the hub is serving a
     #    real feed before judging anything about a topic URL.
     # RETRY THE LIVENESS PROBE. The dev gate on this box intermittently answers
-    # 403 to a correctly-cookied request: observed twice, three-in-a-row each
-    # time, with the IDENTICAL curl argv returning 200 seconds later and plain
-    # shell curls returning 200 throughout the same window. Cause not
-    # established — it is NOT the limit_req zone (that returns 429, not 403) and
-    # NOT the token (byte-identical to the shell's). It always self-clears.
+    # 403 to a correctly-cookied request, in WINDOWS of a few seconds during
+    # which every client is refused — not just this one.
+    #
+    # Chased properly before writing this off, because "shell curl 200, gate
+    # 403, back to back" looked damning for the gate: the token is byte-identical
+    # to the shell's, the argv is identical (reconstructed and run side by side),
+    # a cookie-less request 403s exactly as it should, and interleaving fetch()
+    # with a hand-built reconstruction in ONE process gives 200/200 four rounds
+    # running. The apparent shell-vs-gate split was two different windows, not
+    # two different clients. It is NOT the limit_req zone either — that returns
+    # 429, not 403.
+    #
+    # So: an environment-level flap in $loothdev_is_authorized, not this lane's
+    # code and not this script's. Worth keeper knowing; not worth a gate that
+    # cannot run.
     #
     # A single blip should not cost a whole run, but it must not be swallowed
     # either: the retry is bounded, and a run that needed one SAYS SO — so a
     # transient stays visible and a persistent fault still reports CANNOT RUN.
     hub, code, tries = "", 0, 0
-    for tries in range(1, 4):
+    for tries in range(1, 6):
         hub, code = fetch(env, PREFIX + "/", want_status=True)
         if code == 200 and "feed-card" in hub:
             break
-        if tries < 3:
-            time.sleep(2 * tries)
+        if tries < 5:
+            time.sleep(3 * tries)          # 3+6+9+12 = up to 30s of window
     if code != 200 or "feed-card" not in hub:
         print(f"CANNOT RUN  {PREFIX}/ did not serve a feed after {tries} "
               f"attempt(s) (HTTP {code}, {len(hub)}b, feed-card present: "
@@ -341,6 +351,45 @@ def main():
                 problems.append(
                     f"OP author {p_author!r} renders a /u/ profile link the "
                     f"fragment API masks away")
+
+        # ── A SELF-REFERENCING CANONICAL (Ian, 2026-08-09) ──────────────────
+        # Ian caught this by eye on the flipped serve, and it is exactly the gap
+        # the two original halves could not see: the content IS served, so half A
+        # passes, and the layout IS the hub, so half B passes — while nothing on
+        # the page tells Google WHICH url owns that content.
+        #
+        # It matters because forums.js §4f rewrites the address bar to
+        # /hub/?topic=<forum>/<topic> once the modal is up, and live robots.txt
+        # carries `Disallow: /hub/?` (verified on live, not assumed). So the
+        # shareable form of every discussion is a URL Google is FORBIDDEN to
+        # fetch. Without a canonical there is nothing anchoring the permalink,
+        # and the sitemap's promise is left arguing with the address bar.
+        #
+        # Asserted ABSOLUTE and SELF-REFERENCING — the canonical must name this
+        # exact page on the host that served it, which is what makes it a
+        # consolidation signal rather than decoration.
+        want_canon = env["LG_GATE_HOST"].rstrip("/") + path
+        m_can = re.search(r'<link[^>]+rel=["\']canonical["\'][^>]*>', page, re.I)
+        if not m_can:
+            problems.append("NO <link rel=canonical> — nothing anchors Google to "
+                            "the permalink, and the ?topic= address-bar form is "
+                            "robots-blocked on live")
+        else:
+            m_href = re.search(r'href=["\']([^"\']+)["\']', m_can.group(0), re.I)
+            got = (m_href.group(1) if m_href else "").strip()
+            if got.rstrip("/") != want_canon.rstrip("/"):
+                problems.append(
+                    f"canonical is not self-referencing: {got!r} != {want_canon!r}")
+
+        m_og = re.search(r'<meta[^>]+property=["\']og:url["\'][^>]*>', page, re.I)
+        if not m_og:
+            problems.append("no og:url — the share/social form of the URL is "
+                            "unanchored too")
+        else:
+            m_c = re.search(r'content=["\']([^"\']+)["\']', m_og.group(0), re.I)
+            gotog = (m_c.group(1) if m_c else "").strip()
+            if gotog.rstrip("/") != want_canon.rstrip("/"):
+                problems.append(f"og:url disagrees with the canonical: {gotog!r}")
 
         reps, rcode = fetch(env, f"{PREFIX}/?replies={tid}", want_status=True)
         # Compare the reply BODY only. The first cut compared whole stubs and
