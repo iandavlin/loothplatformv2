@@ -3476,10 +3476,31 @@
     if (!body || !th) return;
     body.scrollTop += th.getBoundingClientRect().top - body.getBoundingClientRect().top - 6;
   }
-  function lrsLoadThread(tid, sort) {
+  // seedHtml — the ?replies fragment ALREADY IN THE PAGE (hub-seo-landing lane,
+  // 2026-08-09). /hub/<forum>/<topic>/ server-renders the whole thread so the
+  // discussion's text is in the HTML a crawler reads; re-fetching it on the phone
+  // would throw that away and pay for it twice. Same rendering path either way —
+  // only the source of the HTML differs, so the sheet cannot drift from the fetch.
+  function lrsLoadThread(tid, sort, seedHtml) {
     var sh = document.getElementById('looth-rep-sheet'); if (!sh) return;
     // Replies land in #lrs-thread so reloading after a post keeps the OP above intact.
     var body = sh.querySelector('#lrs-thread') || sh.querySelector('#lrs-body'); if (!body) return;
+    var render = function (html) {
+      body.innerHTML = '<div class="feed-card__replies-full lg-rshow"></div>';
+      var full = body.querySelector('.feed-card__replies-full');
+      full.innerHTML = html;
+      // lrsEmbeds arrived on main while this refactor was in flight. It belongs
+      // INSIDE render(), not on the fetch branch it was written on: the seeded
+      // path pours the same ?replies fragment from the page instead of the
+      // network, so a provider link in a reply must embed identically either
+      // way. Keeping it on the fetch side only would have made the phone's
+      // server-rendered landing the one surface where embeds silently stopped.
+      lrsEmbeds(full);
+      if (!full.querySelector('.reply-stub')) { body.innerHTML = '<div class="lrs-note">No replies yet. Be the first to reply.</div>'; if (sh) sh.__lgToReplies = 0; return; }
+      lrsLoadAll(full, tid);
+      lrsScrollToReplies();
+    };
+    if (typeof seedHtml === 'string') { render(seedHtml); return; }
     body.innerHTML = '<div class="lrs-note">Loading replies…</div>';
     var base = (window.LG_FORUM_BASE || '/forum').toString().replace(/\/+$/, '');
     // Optional sort (newest|oldest) — the ?replies fragment re-emits its own sort bar
@@ -3487,15 +3508,7 @@
     var url = base + '/?replies=' + encodeURIComponent(tid) + (sort ? '&sort=' + encodeURIComponent(sort) : '');
     fetch(url, { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
-      .then(function (html) {
-        body.innerHTML = '<div class="feed-card__replies-full lg-rshow"></div>';
-        var full = body.querySelector('.feed-card__replies-full');
-        full.innerHTML = html;
-        lrsEmbeds(full);
-        if (!full.querySelector('.reply-stub')) { body.innerHTML = '<div class="lrs-note">No replies yet. Be the first to reply.</div>'; if (sh) sh.__lgToReplies = 0; return; }
-        lrsLoadAll(full, tid);
-        lrsScrollToReplies();
-      })
+      .then(render)
       .catch(function () { body.innerHTML = '<div class="lrs-note">Couldn’t load replies right now.</div>'; });
   }
   // Reply-sort toggle (Newest/Oldest) INSIDE the mobile discussion sheet must stay in
@@ -3688,6 +3701,15 @@
       }
     }
     if (!tid) return;
+    // The card's excerpt is a PLACEHOLDER that ?body= replaces — except on a
+    // server-rendered landing, where the synthetic card already carries the full
+    // resolved body (mentions, links, attachments) straight out of the page.
+    // Fetching there would re-download what is already on screen.
+    if (card.getAttribute('data-lg-full-body') === '1') {
+      lrsScrollToReplies();
+      setTimeout(lrsScrollToReplies, 450);
+      return;
+    }
     var base = (window.LG_FORUM_BASE || '/forum').toString().replace(/\/+$/, '');
     fetch(base + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
@@ -3945,8 +3967,72 @@
     var compEl = sh.querySelector('.lrs-comp');
     if (compEl) compEl.style.display = tid ? '' : 'none';
     if (!tid) { (sh.querySelector('#lrs-thread') || sh.querySelector('#lrs-body')).innerHTML = '<div class="lrs-note">Couldn’t load replies.</div>'; return; }
-    lrsLoadThread(tid);
+    lrsLoadThread(tid, '', opts && opts.seedThread);
   }
+
+  /* ── MOBILE LANDING: open the sheet from the SERVER-RENDERED modal ───────────
+     (hub-seo-landing lane, 2026-08-09.) /hub/<forum>/<topic>/ ships #lg-dmodal
+     populated and open so the discussion's text is in the served HTML. At ≤640px
+     forums.css hides that node — the phone's reading surface is this sheet — so
+     the content is MOVED here rather than fetched again.
+
+     Built as a synthetic .feed-card because that is the sheet's one input shape:
+     openRepliesSheet() and lrsLoadOp() read a card, and giving them a second
+     input would be a second implementation of the OP header, the reaction bar
+     and the author/mod controls. §4f already builds a synthetic card for its
+     cold path (forums.js buildSyntheticCard) — same idea, but every field here
+     comes off the page instead of off the network.
+
+     data-lg-full-body="1" is what tells lrsLoadOp the excerpt is already the
+     real body, so it skips its ?body= fetch. */
+  function lrsCardFromSsr(node) {
+    if (!node) return null;
+    var tid = node.getAttribute('data-topic-id');
+    if (!tid) return null;
+    var q = function (sel) { return node.querySelector(sel); };
+
+    var card = document.createElement('article');
+    card.className = 'feed-card feed-card--topic';
+    card.setAttribute('data-topic-id', tid);
+    card.setAttribute('data-forum-id', node.getAttribute('data-forum-id') || '');
+    card.setAttribute('data-author-id', node.getAttribute('data-author-id') || '0');
+    card.setAttribute('data-href', node.getAttribute('data-lg-permalink') || '');
+    card.setAttribute('data-share-url', node.getAttribute('data-lg-share-url') || '');
+    card.setAttribute('data-lg-full-body', '1');
+
+    var ttl = q('.lg-dmodal__title');
+    var h = document.createElement('h3');
+    h.className = 'fc-title feed-card__title';
+    h.textContent = ttl ? (ttl.textContent || '').trim() : 'Discussion';
+    card.appendChild(h);
+
+    var av = q('.lg-dmodal__meta .fc-avatar'); if (av) card.appendChild(av.cloneNode(true));
+    var au = q('.lg-dmodal__meta .fc-author'); if (au) card.appendChild(au.cloneNode(true));
+    var tm = q('.lg-dmodal__meta .fc-time');   if (tm) card.appendChild(tm.cloneNode(true));
+
+    var bodyEl = q('.lg-dmodal__body');
+    var exc = document.createElement('div');
+    exc.className = 'fc-excerpt feed-card__op';
+    exc.innerHTML = bodyEl ? bodyEl.innerHTML : '';
+    card.appendChild(exc);
+
+    // The OP reaction bar, under .fc-actions where lrsLoadOp looks for it first.
+    var bar = q('.lg-dmodal__opacts .fcr');
+    var acts = document.createElement('div');
+    acts.className = 'fc-actions';
+    if (bar) acts.appendChild(bar.cloneNode(true));
+    card.appendChild(acts);
+
+    return card;
+  }
+  // Called by forums.js §4f on a ≤640 landing. Returns true when it took over.
+  window.lgOpenTopicMobileSSR = function (node) {
+    var card = lrsCardFromSsr(node);
+    if (!card) return false;
+    var thread = node.querySelector('.lg-dmodal__thread');
+    openRepliesSheet(card, { seedThread: thread ? thread.innerHTML : '' });
+    return true;
+  };
   // Public sheet opener — forums.js §4f routes mobile ?topic= deep-links (cold
   // load + forward-nav) here so a shared link opens the sheet over the feed
   // instead of bouncing to the legacy page. Card = a .feed-card element, real or

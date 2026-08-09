@@ -256,6 +256,23 @@ if (!function_exists('lg_topic_modal_html')) {
             ['replies' => (string)$tid, 'all' => '1']
         );
 
+        // OP reaction bar — the SAME .fc-actions .fcr surface the feed card and
+        // the standalone page emit, through the shared count contract + shared
+        // renderer. §4e's open() gets this by CLONING the card's bar; a landing
+        // has no card to clone from, so without it a visitor arriving from a
+        // search result could read the discussion and not react to it, while the
+        // same discussion opened from the feed is fully reactable. forums.js §4d
+        // wires .fcr generically, so this needs no JS of its own.
+        // Try/catch so an unreadable store degrades to "no bar", never to no page.
+        $op_rx_counts = [];
+        try {
+            require_once __DIR__ . '/../../../archive-poc/api/v0/_reactions.php';
+            $rx_map       = lg_card_reactions_for_items($db, [['post_type' => 'topic', 'item_id' => $tid]]);
+            $op_rx_counts = $rx_map['topic:' . $tid] ?? [];
+        } catch (\Throwable $e) {
+            $op_rx_counts = [];
+        }
+
         $viewer_logged_in = lg_bb_mirror_can_post();
         $author = $topic['author_name'] ?: 'Anonymous';
         $aslug  = $topic['author_slug'] ?? null;
@@ -272,6 +289,7 @@ if (!function_exists('lg_topic_modal_html')) {
         ob_start();
         ?>
 <div id="lg-dmodal" data-topic-id="<?= $tid ?>" data-lg-ssr="1"
+     data-forum-id="<?= $fid ?>" data-author-id="<?= (int)($topic['author_id'] ?? 0) ?>"
      data-lg-forum-slug="<?= $esc($topic['forum_slug']) ?>" data-lg-topic-slug="<?= $esc($topic['slug']) ?>"
      data-lg-share-url="<?= $esc($share) ?>" data-lg-permalink="<?= $esc($permalink) ?>">
   <div class="lg-dmodal__back" data-dm-close></div>
@@ -309,6 +327,8 @@ if (!function_exists('lg_topic_modal_html')) {
         </div>
         <div class="lg-dmodal__body"><?= $body_html ?></div>
         <div class="lg-dmodal__opacts">
+          <?php /* First child, matching open()'s insertBefore(opBar, firstChild). */
+                if (function_exists('feed_reactions_bar')) feed_reactions_bar('topic', $tid, $op_rx_counts); ?>
           <?php if ($viewer_logged_in): ?>
             <button type="button" class="lg-dmodal__act feed-card__reply-cta" data-frm-open
                     data-topic-id="<?= $tid ?>" data-forum-id="<?= $fid ?>"
