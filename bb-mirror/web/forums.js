@@ -6096,6 +6096,26 @@ function lgFollowEnabled() {
          after ~3s, fall back to the desktop modal made visible: an unstyled but
          READABLE discussion beats a hidden one, and the visitor keeps the text
          they came for. */
+      /* CLOSE THE DESKTOP MODAL FOR REAL BEFORE HANDING OFF, and do it here —
+         before hub-polish loads, not after.
+
+         The server-rendered node has no `hidden` attribute (it IS open; ≤640 is
+         where it should not be) and forums.css only hides it with `display:none`.
+         hub-polish.js's wireDmodalMobileHistory() watches exactly that attribute
+         and pushes a {lgDm:1} history entry whenever the modal is "not hidden" —
+         so a node nobody could see was claiming a back-gesture entry. Measured:
+         history.length 4 instead of 3, and ONE Back left the visitor on
+         ?topic= with the sheet still open. Two Backs to reach the feed is the
+         dead end this lane was told not to ship; it just took two presses to see.
+
+         Setting the attribute means the phone's modal is genuinely closed rather
+         than merely invisible, which is also what makes §4f's own
+         `open = !m.hidden` test read true on the surface that is actually open.
+         The SEO contract is untouched: this happens at RUNTIME, so the served
+         HTML — the bytes a crawler reads — still carries the modal fully open
+         with the discussion in it. */
+      n.hidden = true;
+
       /* THREE RUNGS, and the middle one is not belt-and-braces — it is a
          deploy-skew requirement. forums.js ships inside bb-mirror and reaches
          the box by `git pull`; hub-polish.js is a WEBROOT file reached through
@@ -6120,6 +6140,12 @@ function lgFollowEnabled() {
           setTimeout(function () { waitForSheet((tries || 0) + 1); }, 120);
           return;
         }
+        // Last resort: no sheet is coming. Put the modal back — un-hide the
+        // attribute AND mark it so forums.css's ≤640 display:none lets it
+        // through. A readable discussion beats a hidden one; from here
+        // hub-polish's back-gesture entry is CORRECT, because now it really is
+        // the open surface.
+        n.removeAttribute('hidden');
         n.setAttribute('data-lg-ssr-fallback', '1');
         if (typeof window.lgDmodalAdoptSSR === 'function') window.lgDmodalAdoptSSR();
       })(0);
