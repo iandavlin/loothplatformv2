@@ -515,7 +515,13 @@ if (!defined('LG_THREAD_FOLLOW_ENABLED')) {
 //
 // ONE READ POINT: lg_hub_topic_landing_enabled() in web/forums/_topic-modal.php.
 if (!defined('LG_HUB_TOPIC_LANDING')) {
+    // DEFAULT FLIPPED ON — Ian, 2026-08-09 (decision box "Flip ON now"), so the
+    // sitemapped /hub/<forum>/<topic>/ permalinks render THE HUB WITH THE MODAL
+    // instead of the legacy standalone page he wants gone. An explicit env or
+    // $_SERVER value of '0' still forces OFF (kept as the one-line revert and as
+    // the escape hatch a lane preview or a bad-deploy rollback needs).
+    $lg_tl_env = getenv('LG_BB_MIRROR_TOPIC_LANDING');
+    $lg_tl_srv = $_SERVER['LG_BB_MIRROR_TOPIC_LANDING'] ?? '';
     define('LG_HUB_TOPIC_LANDING',
-        getenv('LG_BB_MIRROR_TOPIC_LANDING') === '1'
-        || (($_SERVER['LG_BB_MIRROR_TOPIC_LANDING'] ?? '') === '1'));
+        !($lg_tl_env === '0' || $lg_tl_srv === '0'));
 }

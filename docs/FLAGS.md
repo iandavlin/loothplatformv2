@@ -11,7 +11,7 @@ as-verified on 2026-08-09; live = commit `021ff38` unless noted.
 |---|---|---|---|---|---|
 | sheet-embeds `enabled` | platform/config/sheet-embeds.php | **true** | ON | **ON** (smoke-verified on box) | ✅ DONE — Ian-verified both boxes 8/9 ("looks good") |
 | social-actions `enabled` | platform/config/social-actions.php | **true** | ON | **OFF** (flip commit post-dates live's pull) | Ian-verified dev2 ("workds"); reaches live on next lg-deploy |
-| `LG_HUB_TOPIC_LANDING` | bb-mirror/config.php (getenv/$_SERVER too) | **false** | OFF | code not on live yet | Merged 8/9, Ian likes the pictures; flip after real-mount verification (hub-seo-landing Phase 2) |
+| `LG_HUB_TOPIC_LANDING` | bb-mirror/config.php (env/$_SERVER '0' forces OFF) | **true** | **ON** | code not on live yet | Flipped ON 8/9 (Ian). Serves the hub+modal at the permalink instead of the legacy page. Reaches live on next lg-deploy; Ian testing dev2 serve first |
 | post-follow `enabled` | platform/config/post-follow.php | **false** | OFF | OFF | E3 server half built (one-mailer); gate 18 asserts ruling-6 defaults |
 | follow-digest `enabled` | platform/config/follow-digest.php | **true** | ON | ON | E1 GA since 8/8 (fd0d196); the nested second `enabled=false` is §2.2 forum-items — see below |
 | follow-digest forum-items (nested) | platform/config/follow-digest.php | **false** | OFF | n/a | §2.2 build in flight (one-mailer); lane refuses merge until preview-armed verification — arm previews via `LG_FD_FORUM_ITEMS` env/$_SERVER only |
