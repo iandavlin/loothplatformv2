@@ -15,6 +15,8 @@ line into that lane's charter and note the lane name here.
 4.5 Participation silently UNSUBSCRIBES you from the discussion → ✅ MERGED + LIVE @ 10ea816 (was eroding the 381 followers since June)
 
 **P1 — wanted now / deploy-blocking**
+3.6 Post page: Edit/Delete overflow menus render ALREADY OPEN at 390px for anyone who can edit (Ian will hit this on every post) — UNOWNED, measured 8/9
+4.6 Mobile sponsor sheet: carousels/buttons injected with no behaviour — UNOWNED, static evidence only, test written (same class as 4.4/4.3/3.7)
 3.7 Mobile: discussion embed → ✅ LIVE @ 021ff38 (Ian ran lg-deploy 8/9; keeper smoke-verified ON the live box: bit emitted, guard served, social-actions stamp absent). Ian-VERIFIED on his phone on dev2 first ("looks good", test-3). His words on scope: "THE MAIn problem was no imbed in the modal." Card half → item 7, not a bug
 3.8 Mobile/PWA: post → hub BACK NAV must be EXPOSED — UNOWNED, MOCKUPS FIRST. Ian 8/9: "on mobile and pwa we need some kind of back nav to the hub once you click through to the post. there is one in the nav tab but it should be exposed. Need mockups." House rule applies: draw it behind the dev gate (recommendation + at most one alternative, side by side), hand him a URL; no code before his pick
 3.9 bb-mirror realtime sync SILENTLY STALLS — UNOWNED, measured 8/9 on live (forums.reply sync_at−created_at, realtime era only): typical stall 10–30min, worst 23h47m (72589) and 2d22h (72560 — a member's reply invisible on the hub for ~3 days). The instant path is proven capable (2s) and something (reconcile?) heals late, so this is an intermittent stall, not a dead pipe. Member-facing. Found 8/9 while proving Ian's "erroneous" notif email was in fact correct. Needs: root cause + a lag tripwire (alert when sync_at−created_at > 5min on new replies)
@@ -81,6 +83,43 @@ Messages row opens the messenger fine. Measured, not assumed.
 flag-ON path 404s.
 
 Pictures for Ian: https://dev2.loothgroup.com/footer-mockups/mobile-profile-tray/
+
+## 4.6 Mobile sponsor sheet: carousels + buttons injected with no behaviour (P1) — keeper sweep 8/9, NOT reproduced
+
+Found sweeping the class behind 4.4/4.3/3.7 ("relocated markup arrives without its
+behaviour"). **Static evidence only — nobody has tapped it yet.** Worth someone's
+time precisely because the first three of these reached Ian's phone.
+
+`webroot/sponsor-sheet.js` intercepts taps on `/sponsors/` and `/sponsors/<slug>/`,
+fetches the page, lifts `<main>` out with DOMParser, strips `script`, injects it —
+**and re-inits nothing** (0 re-init calls; it copies CSS only). Compare
+`profile-sheet.js` and `practice-sheet.js`, which both re-implement `initMaps` +
+`initCarousels` for exactly this reason.
+
+Measured on dev2 (`/sponsors/stewmac/`, `gluboost`, `total-vise` — all three alike):
+
+| | |
+|---|---|
+| lifted node | 12–21 KB, **12 carousel/gallery elements, 7–8 buttons** |
+| inline `<script>` inside the node | 0 — so the wiring is page-level, not carried |
+| what wires it | `/archive-poc/assets/lg-v2-front.<hash>.js` (4 DOMContentLoaded inits, 9 document-level delegates, **0 MutationObserver, no exported re-init**) |
+| `/sponsors/<slug>/` loads that bundle | **yes** ← works standalone |
+| `/sponsors/` (the list — where you tap from) loads it | **no** |
+| `/hub/` loads it | **no** |
+
+So the sheet opened from the list injects carousels and buttons into a page that has
+none of their behaviour, and the bundle has no MutationObserver or re-init hook that
+would heal it. Same shape as 4.4: the standalone page works, the sheet does not, and
+the entry path is the whole difference.
+
+**The test, ready to run** (`tools/exercise-harness/browser-profile-tray-repro.py` is
+the pattern): at 390px as a member, tap a sponsor from `/sponsors/`, then swipe a
+carousel in the sheet and tap a button. CONTROL: the same carousel on
+`/sponsors/stewmac/` at the same width. If the control works and the sheet does not,
+it is the same bug and gate 19 should gain a third instance.
+
+⚠️ Do not "fix" it by loading the v2 bundle from the sheet without checking what its
+4 DOMContentLoaded inits do to an already-booted page.
 
 ## 4.2 Logged-out mobile bottom dash — the "+" lies, and Sign in hides (P0) — Ian 8/5
 
@@ -162,6 +201,34 @@ the card template.
 Get a FAILING and a PASSING discussion side by side from a real send before forming a
 theory. This is the weekly digest (editorial, FluentCRM), NOT the follow-digest — two
 different projects that share a word.
+
+## 3.6 Post page: the Edit/Delete overflow menus render ALREADY OPEN on mobile (P1) — found 8/9
+
+Found while capturing 390px frames for 3.8. **Not reported by Ian yet, but he will hit
+it on every post he opens on his phone** — it only shows for people who can edit, and
+he can edit everything.
+
+On a fresh load of a topic page at 390x844, with **zero interaction**, the "..."
+overflow menu on each post is already visible. Measured `visibility:visible`,
+`display:flex`, two of them on a one-reply thread, sitting over the post body:
+
+```
+ZERO interaction since load.
+ VISIBLE menu w/ Edit : BUTTON.post__menu-item post__edit-btn           vis=visible disp=flex y=402
+                        BUTTON.post__menu-item post__menu-item--danger  vis=visible disp=flex y=784
+```
+
+Markup is `bb-mirror/web/forums/_single-topic.php` (the "FB-style ... overflow menu
+(Edit + Delete) for one post" block). Scoped to viewers with edit rights, which is
+exactly why an anonymous or plain-member check calls this page clean — the same blind
+spot that let 4.4/4.3 through.
+
+Reproduce: `tools/exercise-harness/browser-backnav-captures.py` hides them on purpose
+so the 3.8 mockups are readable; drop that line and they are there.
+
+⚠️ Whatever fixes it needs an assertion for the CLOSED state. CLAUDE.md's standing
+point applies squarely: gates assert what should be PRESENT and cannot see what should
+be ABSENT, and a menu that is supposed to be invisible until tapped is the absent case.
 
 ## ✅ 3.9 Hub: "Newest" sorted as TRENDING — FIXED, LIVE @ 0e80c5b (Ian 8/3)
 
