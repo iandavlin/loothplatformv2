@@ -50,11 +50,21 @@ WPUSER = os.environ.get("LG_PFC_WPUSER", "looth-dev")
 RED, GREEN, DEAD = [], [], []
 
 
+BOOT = os.path.join(REPO, "tools", "gates", "flag-boot.php")
+
+# Forced PRE-BOOT via `wp --require`: once deployed, WordPress has already loaded the
+# mu-plugin and the probe can no longer define its constant.
+FLAG_FOR_MODE = {"absent": "0", "off": "0", "on-default": "1", "on-email": "1"}
+
+
 def wp(args, mode=None, topic=None, user=1):
     env = ["env"]
+    pre = ""
     if mode:
-        env += [f"LG_PFC_MODE={mode}", f"LG_PFC_TOPIC={topic}", f"LG_PFC_USER={user}"]
-    cmd = ["sudo", "-n", "-u", WPUSER] + env + ["bash", "-lc", f"cd {DOCROOT} && wp {args} 2>&1"]
+        env += [f"LG_PFC_MODE={mode}", f"LG_PFC_TOPIC={topic}", f"LG_PFC_USER={user}",
+                f"LG_BOOT_PFC={FLAG_FOR_MODE[mode]}"]
+        pre = f"--require={BOOT} "
+    cmd = ["sudo", "-n", "-u", WPUSER] + env + ["bash", "-lc", f"cd {DOCROOT} && wp {pre}{args} 2>&1"]
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
         return p.returncode, p.stdout
@@ -99,6 +109,62 @@ try:
         RED.append("platform/config/post-follow.php no longer states 'enabled' => true|false")
 except OSError:
     DEAD.append(f"cannot read {CONFIG} — the shared flag this feature depends on is missing")
+
+
+
+# ── the wp user must be able to READ our files, or the failure is unreadable ──
+# `wp --require=` reports only "Required file 'x' doesn't exist" when the path is
+# merely unreadable by the running user, which sends the next person hunting a
+# missing file that is right there. A lane worktree under an unreadable parent hits
+# this, so say the real thing instead.
+def _readable_by_wpuser(path):
+    p = subprocess.run(["sudo", "-n", "-u", WPUSER, "test", "-r", path],
+                       capture_output=True, text=True)
+    return p.returncode == 0
+
+
+for _p, _what in ((BOOT, "flag-boot.php"), (PROBE, "the probe")):
+    if not _readable_by_wpuser(_p):
+        DEAD.append(
+            f"{_what} at {_p} is not readable by {WPUSER}. WP-CLI will report it as "
+            f"\"doesn't exist\", which it does. Make the path traversable+readable "
+            f"for {WPUSER} (this bites when a gate is run from an unreadable directory)."
+        )
+
+# ── ⚠️ WHICH COPY DID WE ACTUALLY TEST? ───────────────────────────────────────
+# Once the mu-plugin is deployed, WordPress loads it from the SERVING CHECKOUT and the
+# probe exercises that file — not the one in this branch. A branch whose changes are
+# unmerged would then go green on somebody else's code. That is the standing "a lane
+# verifying on dev2 is usually testing MAIN" trap, so it is encoded rather than
+# remembered: if the two copies differ, this gate has no verdict about THIS branch.
+SERVE = os.environ.get("LG_SERVE_ROOT", "/home/ubuntu/loothplatformv2-clean")
+
+
+def _md5(path):
+    try:
+        import hashlib
+        with open(path, "rb") as fh:
+            return hashlib.md5(fh.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def check_copy_drift(mu_path, label):
+    served = os.path.join(SERVE, "platform", "mu-plugins", os.path.basename(mu_path))
+    a, b = _md5(mu_path), _md5(served)
+    if b is None:
+        GREEN.append(f"{label}: not deployed on this box — the branch copy is under test")
+    elif a == b:
+        GREEN.append(f"{label}: branch and serving copies are identical (md5 {a[:8]})")
+    else:
+        DEAD.append(
+            f"{label}: the SERVING copy differs from this branch (branch {a[:8]} vs "
+            f"serving {b[:8]}). WordPress loads the serving copy, so this run says "
+            "nothing about the branch's changes. Merge+pull, or run on a box without "
+            "the symlink, before trusting a verdict."
+        )
+
+check_copy_drift(MU, "lg-post-follow-controls.php")
 
 topic = os.environ.get("LG_PFC_TOPIC")
 if not topic and not DEAD:
@@ -147,6 +213,13 @@ if not DEAD and not RED:
     if off.get("HOOKED") != "yes":
         RED.append("flag OFF did not even register the filter — the OFF path is untested, "
                    "so its no-op is unproven rather than proven")
+    if absent.get("HOOKED") == "no":
+        GREEN.append("the `absent` baseline genuinely ran with the feature detached (HOOKED=no)")
+    else:
+        DEAD.append(f"`absent` did NOT detach the feature (HOOKED={absent.get('HOOKED')}) — "
+                    "it was not a pre-feature baseline, so the no-op comparison is unearned")
+    if dflt.get("SOURCE"):
+        GREEN.append(f"exercised the {dflt.get('SOURCE')} copy of the feature")
 
     # 2. RULING 6's DEFAULTS — the assertion this gate exists for.
     if dflt.get("AFTER_FOLLOW") == "1":

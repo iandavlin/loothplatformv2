@@ -31,18 +31,29 @@ if ( ! in_array( $mode, array( 'nofix', 'fix-on', 'fix-off' ), true ) ) {
 }
 if ( $T < 1 ) { echo "ERROR=no_topic\n"; return; }
 
-// Load the repair for the fix modes, pinning the flag BEFORE the file defines it.
-if ( 'fix-on' === $mode || 'fix-off' === $mode ) {
-	define( 'LG_PRESERVE_FORUM_SUBSCRIPTION', 'fix-on' === $mode );
+/* ── FLAG STATE COMES FROM flag-boot.php (via `wp --require`), NOT FROM HERE ──
+ * The mu-plugin is normally already loaded by WordPress from the serving checkout, so
+ * requiring it again is a fatal redeclare. It is required ONLY as a fallback for a box
+ * that has not pulled it yet — which is also why `nofix` cannot simply not-load it. */
+$deployed = function_exists( 'lg_pfs_preserve' );
+if ( ! $deployed ) {
 	$mu = dirname( __DIR__, 2 ) . '/platform/mu-plugins/lg-preserve-forum-subscription.php';
 	if ( ! is_readable( $mu ) ) { echo "ERROR=mu_unreadable\n"; return; }
 	require_once $mu;
-	echo 'FLAG=' . ( LG_PRESERVE_FORUM_SUBSCRIPTION ? 'on' : 'off' ) . "\n";
-	echo 'HOOKED=' . ( has_filter( 'rest_request_before_callbacks', 'lg_pfs_preserve' ) ? 'yes' : 'no' ) . "\n";
-} else {
-	echo "FLAG=absent\n";
-	echo 'HOOKED=' . ( has_filter( 'rest_request_before_callbacks', 'lg_pfs_preserve' ) ? 'yes' : 'no' ) . "\n";
 }
+echo 'SOURCE=' . ( $deployed ? 'deployed' : 'branch' ) . "\n";
+echo 'FLAG=' . ( defined( 'LG_PRESERVE_FORUM_SUBSCRIPTION' )
+	? ( LG_PRESERVE_FORUM_SUBSCRIPTION ? 'on' : 'off' ) : 'undef' ) . "\n";
+
+/* ⚠️ `nofix` SIMULATES ABSENCE BY UNHOOKING, because a loaded mu-plugin cannot be
+ * unloaded. That is faithful for THIS defect — the repair's entire effect is that one
+ * filter — but it is a simulation, and it is asserted rather than assumed: if the
+ * filter is still attached afterwards the probe says so and the gate refuses a verdict
+ * rather than reporting a negative control that never actually ran. */
+if ( 'nofix' === $mode ) {
+	remove_filter( 'rest_request_before_callbacks', 'lg_pfs_preserve', 10 );
+}
+echo 'HOOKED=' . ( has_filter( 'rest_request_before_callbacks', 'lg_pfs_preserve' ) ? 'yes' : 'no' ) . "\n";
 
 wp_set_current_user( $U );
 
