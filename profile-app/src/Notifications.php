@@ -34,6 +34,49 @@ final class Notifications
 {
     public const TYPES = ['message', 'connection_request', 'connection_accept'];
 
+    /** Tracked config (config/notifications.php), memoised. */
+    private static ?array $cfg = null;
+
+    /**
+     * The tracked config, read through __DIR__ so it resolves in FPM, CLI and cron
+     * alike. A missing/malformed file falls back to the SHIPPED DEFAULTS rather than
+     * throwing: the read path must not 500 because a config file went absent, and the
+     * default is the conservative one (sweep-everything, i.e. today's behaviour).
+     */
+    private static function cfg(): array
+    {
+        if (self::$cfg !== null) return self::$cfg;
+        $defaults = ['read_seen_only' => false, 'max_ids' => 200];
+        // A CONSTANT, deliberately, not an env var: it lets notif-read-seen-gate.py
+        // exercise BOTH flag values without editing the tracked file, and a constant
+        // cannot be set by a request, nor stripped by sudo the way a flag-ON gate run
+        // once silently exercised the OFF path. Production never defines it.
+        $path = defined('LG_NOTIF_CONFIG_PATH')
+            ? (string)LG_NOTIF_CONFIG_PATH
+            : __DIR__ . '/../config/notifications.php';
+        $got  = is_file($path) ? @include $path : null;
+        self::$cfg = is_array($got) ? ($got + $defaults) : $defaults;
+        return self::$cfg;
+    }
+
+    /**
+     * Is marking-read scoped to the rows the member actually SAW?
+     *
+     * THE ONE READER of the flag, so the endpoint and any future consumer cannot
+     * drift the way the recap's two registers did on 2026-07-29 (Recap::OUTSTANDING
+     * exists for exactly that reason). See docs/RECAP-READ-TIMER.md.
+     */
+    public static function readSeenOnly(): bool
+    {
+        return (bool)self::cfg()['read_seen_only'];
+    }
+
+    /** Ceiling on ids per read_seen call and on the feed's ?limit=. */
+    public static function maxIds(): int
+    {
+        return max(1, (int)self::cfg()['max_ids']);
+    }
+
     /** Hub-event types — a (kind,id) target + a deep link, no FK. */
     public const HUB_TYPES = [
         'forum.reply_to_topic',
@@ -247,6 +290,74 @@ final class Notifications
               WHERE user_uuid = :v AND is_read = false'
         );
         $st->execute([':v' => $viewerUuid]);
+    }
+
+    /**
+     * Apply the read-scoping POLICY to a set of ids a surface says it showed.
+     *
+     * THE FLAG IS BRANCHED HERE, next to the function that reads it, and nowhere
+     * else — the endpoint is transport and holds no policy. Recap::OUTSTANDING is
+     * the precedent and the warning: the recap's two registers each expressed the
+     * same rule in their own shape and drifted apart on 2026-07-29, costing a member
+     * their digest. One shape, one place.
+     *
+     * marked = -1 under 'all' because a sweep has no meaningful per-id count; the
+     * endpoint omits the key rather than reporting a number that means something else.
+     *
+     * @param int[] $ids
+     * @return array{policy: string, marked: int}
+     */
+    public static function applySeenRead(string $viewerUuid, array $ids): array
+    {
+        if (self::readSeenOnly()) {
+            return ['policy' => 'seen', 'marked' => self::markReadMany($viewerUuid, $ids)];
+        }
+        // OFF: the SAME sweep read_all has always performed, whatever ids arrived.
+        // That is what makes OFF a provable no-op rather than an argued one.
+        self::markAllRead($viewerUuid);
+        return ['policy' => 'all', 'marked' => -1];
+    }
+
+    /**
+     * Mark an EXPLICIT SET of notifications read — the rows a surface can name
+     * because it actually rendered them. Returns how many rows changed.
+     *
+     * ── WHY THIS EXISTS ──────────────────────────────────────────────────────
+     * markAllRead() was the only mark-read-in-bulk verb, and the mobile sheet used
+     * it to clear a badge after rendering EIGHT rows. So one 700ms glance marked a
+     * member's whole store read, including rows that never entered the DOM — and
+     * because the weekly recap is "what you missed, unread only" with empty meaning
+     * no email, that glance cancelled their digest. Measured on dev2 2026-08-07: a
+     * member holding 12 unread rows opened the sheet, 8 rendered, 12 went read.
+     * Recap::OUTSTANDING already refused to trust `is_read` for connection rows for
+     * this exact reason, naming this timer; hub rows had no such protection because
+     * `is_read` is the only resolution signal they have.
+     *
+     * Owner-scoped by the same `WHERE user_uuid` clause markRead() uses, so a
+     * foreign id simply matches nothing — ids arrive from a client and are not
+     * trusted to belong to the caller. Ints are cast and the list is capped
+     * (Notifications::maxIds()) so a client cannot hand us an unbounded IN list.
+     *
+     * @param int[] $ids
+     */
+    public static function markReadMany(string $viewerUuid, array $ids): int
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map('intval', $ids),
+            static fn (int $i): bool => $i > 0
+        )));
+        if (!$ids) return 0;
+        $ids = array_slice($ids, 0, self::maxIds());
+
+        // Postgres array binding keeps this ONE prepared statement whatever the id
+        // count is — a built-up IN(?,?,…) list would reprepare per distinct length.
+        $st = Db::pg()->prepare(
+            'UPDATE notifications SET is_read = true, read_at = now()
+              WHERE user_uuid = :v AND is_read = false
+                AND id = ANY(string_to_array(:ids, \',\')::bigint[])'
+        );
+        $st->execute([':v' => $viewerUuid, ':ids' => implode(',', $ids)]);
+        return $st->rowCount();
     }
 
     /**
