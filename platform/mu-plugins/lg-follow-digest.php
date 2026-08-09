@@ -77,6 +77,8 @@ function lg_fd_config(): array {
 		// (the string) must not read as on.
 		'enabled'   => ( true === ( $raw['enabled'] ?? false ) ),
 		'allowlist' => is_string( $raw['allowlist'] ?? null ) ? $raw['allowlist'] : '',
+		// Same strict-boolean rule: a config that says "false" must not read as on.
+		'forum_items' => ( true === ( $raw['forum_items'] ?? false ) ),
 	);
 	return $cfg;
 }
@@ -99,6 +101,31 @@ if ( ! defined( 'LG_FOLLOW_DIGEST_ENABLED' ) ) {
 		lg_fd_config()['enabled']
 		|| getenv( 'LG_FOLLOW_DIGEST' ) === '1'
 		|| ( ( $_SERVER['LG_FOLLOW_DIGEST'] ?? '' ) === '1' ) );
+}
+
+/**
+ * Does the roundup carry NEW DISCUSSIONS from forums the member subscribes to, as well
+ * as replies in discussions they follow? ONE-MAILER-SCOPE.md §2.2.
+ *
+ * Gated separately from LG_FOLLOW_DIGEST_ENABLED because it is a different risk:
+ * 'enabled' decides whether we mail at all; this decides whether we TAKE OVER a channel
+ * BuddyBoss is currently serving to 38 members who explicitly opted in. It governs BOTH
+ * halves — the content and the suppression — so the two cannot disagree.
+ */
+function lg_fd_forum_items(): bool {
+	if ( ! LG_FOLLOW_DIGEST_ENABLED ) { return false; }
+	/* Two override sources, the same pair and the same reason as LG_FOLLOW_DIGEST above:
+	 * getenv() is how a CLI harness or pool turns it on, $_SERVER is how a single nginx
+	 * location does (a lane preview's fastcgi_param lands in $_SERVER but not reliably in
+	 * the environment). Neither can be set by a visitor.
+	 *
+	 * ⚠️ AND NEITHER REACHES CRON, which is the point rather than a limitation: the cron
+	 * context carries no environment at all, so an override can arm this for a test run
+	 * or a preview URL but can never silently arm the real sender. The tracked config is
+	 * the only thing that does that. */
+	if ( getenv( 'LG_FD_FORUM_ITEMS' ) === '1' ) { return true; }
+	if ( ( $_SERVER['LG_FD_FORUM_ITEMS'] ?? '' ) === '1' ) { return true; }
+	return true === ( lg_fd_config()['forum_items'] ?? false );
 }
 
 /* ── THE RECIPIENT ALLOWLIST ───────────────────────────────────────────────────
@@ -531,6 +558,44 @@ function lg_fd_ajax_set(): void {
  *
  * THE OFF PATH IS THE IDENTITY FUNCTION. That is the whole no-op claim, and it is
  * asserted by the gate rather than believed. */
+/* ── THE SECOND SEAM: BuddyBoss's "New discussion: X" (§2.2) ───────────────────
+ * Exactly the shape of lg_fd_suppress_instant below, on the sibling filter, and it MUST
+ * stay that way — the two are the same promise about two channels.
+ *
+ * ⚠️ IT IS GATED BY lg_fd_forum_items(), THE SAME SWITCH THAT PUTS DISCUSSIONS IN THE
+ * ROUNDUP. That coupling is the whole safety argument: suppressing here while the
+ * roundup does not carry discussions would take a signal 38 members explicitly asked
+ * for and give nothing back — the mail black hole. One switch means the replacement
+ * cannot lag the removal.
+ *
+ * ⚠️ AND IT MUST NOT CLAIM THE GROUP LEG. bbp_notify_forum_subscribers() takes an
+ * EXCLUSIVE if/else: a group-linked forum notifies GROUP subscribers and never reaches
+ * this filter (ONE-MAILER-SCOPE.md §1). So this only ever sees the forum branch, which
+ * is the 46 rows we mean to absorb — and lg-discussion-group-gate.php still owns the
+ * other side. Nothing here touches it.
+ */
+add_filter( 'bb_send_forums_subscribed_discussion_email_notifications', 'lg_fd_suppress_discussion', 10, 2 );
+function lg_fd_suppress_discussion( $send_mail, $args ) {
+	if ( ! lg_fd_forum_items() ) { return $send_mail; }               // ← the OFF no-op
+	$uid = (int) ( is_array( $args ) ? ( $args['recipient_user_id'] ?? 0 ) : 0 );
+	if ( $uid <= 0 ) { return $send_mail; }
+	// Only ever REMOVES mail, never turns a false into a true — a member BuddyBoss has
+	// already decided not to mail stays unmailed. Same rule as the reply seam.
+	if ( ! $send_mail ) { return $send_mail; }
+
+	$u = get_userdata( $uid );
+	if ( ! $u || ! lg_fd_allowed( $uid, (string) $u->user_email ) ) { return $send_mail; }
+
+	if ( 'instant' === lg_fd_cadence( $uid ) ) { return $send_mail; }
+
+	/* The first event passes through AND enrols, exactly as the reply seam does: a member
+	 * with no watermark yet is invisible to the resolver, and lg_fd_items_for() selects
+	 * strictly AFTER the watermark — so suppressing the triggering mail would lose it in
+	 * both systems. Their last instant "New discussion" doubles as their enrolment. */
+	if ( lg_fd_ensure_enrolled( $uid ) ) { return $send_mail; }
+	return false;
+}
+
 add_filter( 'bb_send_forums_subscribed_reply_email_notifications', 'lg_fd_suppress_instant', 10, 2 );
 function lg_fd_suppress_instant( $send_mail, $args ) {
 	if ( ! LG_FOLLOW_DIGEST_ENABLED ) { return $send_mail; }          // ← proven no-op
@@ -714,7 +779,51 @@ function lg_fd_items_for( int $user_id, int $limit = 50 ): array {
 		$user_id, $since, $user_id, $limit + 1
 	), ARRAY_A );
 
-	$rows   = (array) $rows;
+	$rows = (array) $rows;
+	foreach ( $rows as &$r ) { $r['kind'] = 'reply'; }
+	unset( $r );
+
+	/* ── NEW DISCUSSIONS in forums this member subscribes to (§2.2) ───────────────
+	 * The second stream, and the reason BuddyBoss's "New discussion: X" can be retired
+	 * rather than merely switched off. Shape matches the reply stream exactly — same
+	 * keys, plus 'kind' — so everything downstream (the cap, the sort, the watermark,
+	 * the per-topic grouping in the renderer) treats both alike.
+	 *
+	 * ⚠️ ONE WATERMARK SERVES BOTH STREAMS, which is only correct because they are
+	 * MERGED BEFORE the watermark advances. lg_fd_advance_watermark() takes the newest
+	 * post_date_gmt across whatever it is handed, so advancing on the merged list can
+	 * never consume one stream's items on the strength of the other's. Keeping them in
+	 * separate batches would have needed a second watermark and a second way to lose
+	 * mail; this way the existing guarantee extends unchanged.
+	 *
+	 * A topic's post_parent IS its forum, so the join mirrors the reply query with
+	 * type='forum' and one less hop. */
+	if ( lg_fd_forum_items() ) {
+		$disc = $wpdb->get_results( $wpdb->prepare(
+			"SELECT t.ID, t.ID AS topic_id, t.post_author, t.post_date_gmt,
+			        t.post_title AS topic_title, f.post_title AS forum_title
+			   FROM {$wpdb->posts} t
+			   JOIN {$subs} s
+			     ON s.item_id = t.post_parent AND s.type = 'forum' AND s.status = 1
+			    AND s.user_id = %d
+			   JOIN {$wpdb->posts} f ON f.ID = t.post_parent
+			  WHERE t.post_type    = 'topic'
+			    AND t.post_status  = 'publish'
+			    AND t.post_date_gmt > %s
+			    AND t.post_author <> %d
+			  ORDER BY t.post_date_gmt ASC
+			  LIMIT %d",
+			$user_id, $since, $user_id, $limit + 1
+		), ARRAY_A );
+		foreach ( (array) $disc as $d ) { $d['kind'] = 'discussion'; $rows[] = $d; }
+
+		// Re-sort: two streams arrive individually ordered, and the cap below must take
+		// the OLDEST across both, not the oldest of one and then the other.
+		usort( $rows, static function ( $a, $b ) {
+			return strcmp( (string) $a['post_date_gmt'], (string) $b['post_date_gmt'] );
+		} );
+	}
+
 	$capped = count( $rows ) > $limit;
 	if ( $capped ) { $rows = array_slice( $rows, 0, $limit ); }
 
@@ -979,12 +1088,52 @@ function lg_fd_deliver( int $uid, string $email, string $subject, string $html )
 function lg_fd_html_type(): string { return 'text/html'; }
 
 /** Subject. Reads correctly at n=1, which is the NORMAL case (design note §1.2). */
+/**
+ * Split a batch into its two kinds. Items written before §2.2 carry no 'kind' at all, so
+ * ABSENT MEANS REPLY — that is what keeps an OFF-flag batch byte-identical through the
+ * subject and the renderer rather than merely similar.
+ *
+ * @return array{0:array,1:array} [replies, discussions]
+ */
+function lg_fd_split_kinds( array $items ): array {
+	$replies = array();
+	$discs   = array();
+	foreach ( $items as $it ) {
+		if ( 'discussion' === ( $it['kind'] ?? 'reply' ) ) { $discs[] = $it; } else { $replies[] = $it; }
+	}
+	return array( $replies, $discs );
+}
+
+/** "N new discussions" phrasing, kept next to the reply phrasing so they cannot drift. */
+function lg_fd_disc_phrase( int $d, int $forums ): string {
+	if ( 1 === $d )      { return 'one new discussion in a forum you follow'; }
+	if ( 1 === $forums ) { return sprintf( '%d new discussions in a forum you follow', $d ); }
+	return sprintf( '%d new discussions across %d forums you follow', $d, $forums );
+}
+
 function lg_fd_subject( array $batch ): string {
-	$n = count( $batch['items'] );
-	$t = count( array_unique( wp_list_pluck( $batch['items'], 'topic_id' ) ) );
-	if ( 1 === $n ) { return 'One new reply in a discussion you follow'; }
-	if ( 1 === $t ) { return sprintf( '%d new replies in a discussion you follow', $n ); }
-	return sprintf( '%d new replies across %d discussions you follow', $n, $t );
+	list( $replies, $discs ) = lg_fd_split_kinds( $batch['items'] );
+
+	/* ⚠️ THE REPLY-ONLY BRANCH IS UNCHANGED, CHARACTER FOR CHARACTER. With §2.2 off there
+	 * are no discussion items, so every existing subject line is produced by exactly the
+	 * code that produced it before — the OFF no-op is structural, not a promise. */
+	if ( ! $discs ) {
+		$n = count( $replies );
+		$t = count( array_unique( wp_list_pluck( $replies, 'topic_id' ) ) );
+		if ( 1 === $n ) { return 'One new reply in a discussion you follow'; }
+		if ( 1 === $t ) { return sprintf( '%d new replies in a discussion you follow', $n ); }
+		return sprintf( '%d new replies across %d discussions you follow', $n, $t );
+	}
+
+	$d  = count( $discs );
+	$df = count( array_unique( wp_list_pluck( $discs, 'topic_id' ) ) );
+
+	if ( ! $replies ) { return ucfirst( lg_fd_disc_phrase( $d, $df ) ); }
+
+	// Mixed. Lead with replies because that is the older, more frequent signal.
+	$n = count( $replies );
+	$rp = 1 === $n ? 'one new reply' : sprintf( '%d new replies', $n );
+	return ucfirst( $rp ) . ' and ' . lg_fd_disc_phrase( $d, $df );
 }
 
 /* ── WHERE A LINK IN THIS EMAIL POINTS ────────────────────────────────────────
@@ -1175,10 +1324,13 @@ function lg_fd_render( WP_User $user, array $batch, string $cadence ): string {
 	}
 
 	$n   = count( $batch['items'] );
-	$t   = count( $by_topic );
-	$sum = 1 === $n ? 'One new reply in a discussion you follow.'
-		: ( 1 === $t ? sprintf( '%d new replies in a discussion you follow.', $n )
-		             : sprintf( '%d new replies across %d discussions you follow.', $n, $t ) );
+	/* The summary sentence must describe what is actually in the batch. Reusing the
+	 * subject builder keeps the envelope and the first line of the body from ever
+	 * disagreeing — two places computing "what is in here" is how a mail says "2 new
+	 * replies" above a list containing a discussion. Reply-only batches are unchanged:
+	 * lg_fd_subject() returns the identical wording, and the period is added here as it
+	 * always was. */
+	$sum = lg_fd_subject( $batch ) . '.';
 	if ( $batch['capped'] ) { $sum .= ' (Showing the first ' . $n . '.)'; }
 
 	/* ⚠️ THE <head> IS NOT OPTIONAL, and the first draft of this template had none.

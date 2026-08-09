@@ -110,4 +110,24 @@ return array(
 	 * gets ≤1 roundup/day, ≤500/run, allowlist re-checked at the send layer. Kill is
 	 * 'enabled' => false, arriving by pull. */
 	'allowlist' => 'all-members',
+
+	/**
+	 * FORUM SUBSCRIPTIONS — does the roundup absorb BuddyBoss's "New discussion: X"?
+	 *
+	 * 38 members hold 46 forum subscriptions, and unlike the topic subscribers EVERY ONE
+	 * chose it: nothing creates a type='forum' row as a side effect of posting or joining
+	 * (bbp_add_user_forum_subscription's only callers are the explicit handlers). So this
+	 * channel cannot simply be switched off — it has to be absorbed, or those 38 lose a
+	 * signal they asked for. ONE-MAILER-SCOPE.md §2.2.
+	 *
+	 * ⚠️ ONE SWITCH FOR BOTH HALVES, DELIBERATELY. Turning this on makes the roundup CARRY
+	 * new discussions AND suppresses BuddyBoss's own mail for them. Two flags would create
+	 * two ways to be wrong — mailed twice, or mailed not at all — and the second is the
+	 * mail black hole lg_fd_suppress_instant's comment forbids.
+	 *
+	 * OFF until Ian rules. Note the allowlist above is already 'all-members', so flipping
+	 * this reaches everyone holding a forum subscription immediately — there is no longer a
+	 * one-recipient rehearsal state to hide behind.
+	 */
+	'forum_items' => false,
 );
