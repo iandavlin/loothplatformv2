@@ -5,32 +5,47 @@ line into that lane's charter and note the lane name here.
 
 ## PRIORITY INDEX (the order — edit THIS to re-rank; tell keeper "bump X")
 
+*Owner shown as `→ lane` when a seat is on it, `→ MERGED` when it is in main.*
+
 **P0 — live/member-facing bugs**
-4.4 Mobile: DMs broken when opened from the profile tray (Ian 8/8)
-4.3 Profile 3-dots menu does nothing (Ian 8/8)
-4.2 Logged-out mobile bottom dash: "+" implies you can post; Sign in not obvious (Ian 8/5)
-4.1 Recap: the mobile bell's 700ms mark-all-read empties the recap and CANCELS the digest (Ian ruled unread-only 8/3 — this makes that ruling behave as labelled)
-4.0 Weekly digest: discussion images SOMETIMES missing from the email (Ian 8/3)
+4.4 Mobile: DMs broken when opened from the profile tray (Ian 8/8) → mobile-bugs
+4.3 Profile 3-dots menu does nothing (Ian 8/8) → mobile-bugs
+4.2 Logged-out mobile bottom dash: "+" implies you can post → anon-mobile-dash (fix BUILT, flag off; awaiting Ian's mock look + keeper merge)
+4.1 Recap: the mobile bell's 700ms mark-all-read empties the recap → recap-read-timer (fix BUILT; in keeper's merge queue)
+4.0 Weekly digest: discussion images SOMETIMES missing → digest-images (fix BUILT: bp_media resolution; in keeper's merge queue)
+4.5 Participation silently UNSUBSCRIBES you from the discussion → ✅ MERGED + LIVE @ 10ea816 (was eroding the 381 followers since June)
 
 **P1 — wanted now / deploy-blocking**
-3.7 Mobile: discussion embed broken + card video won't play (member-facing)
-3.5 SEO/sitemap: zero discussions submitted — Google indexes the mirrored forum + defunct /shop/ and /merch/ (200s)
-5. Notifications: quick-reply modal (default) w/ full-post link
-6. Admin can edit ANY post, full functionality
-7. Discussion hub cards: play video inline ★
-8. Front page: latest weekly email for logged-out users
-9. Shop Layout Planner — apps index page ONLY (standalone render SHIPPED to live)
+3.7 Mobile: discussion embed broken + card video won't play → mobile-bugs (reproduced 7/31 on origin/mobile-embed, never fixed)
+3.5 SEO/sitemap: zero discussions submitted — Google indexes the mirrored forum + defunct /shop/ and /merch/ (200s) — UNOWNED, findings on origin/sitemap-seo
+6. Front-end COMPOSE for all post types (Ian re-scoped 8/3: editing was never the problem) → frontend-compose, Option A ruled
+5. Notifications: quick-reply modal (default) w/ full-post link — UNOWNED, 9 commits on origin/notif-quickreply
+7. Discussion hub cards: play video inline ★ — UNOWNED (overlaps 3.7; may fall out of mobile-bugs)
+8. Front page: latest weekly email for logged-out users — UNOWNED
+9. Shop Layout Planner — apps index page ONLY (standalone render SHIPPED to live) — UNOWNED
+
+**EMAIL PROJECT — Ian's rulings 4-7, see docs/IAN-RULINGS-2026-08-03.md**
+E1 Follow roundup general release → ✅ LIVE @ fd0d196, all members, daily default, watched by cron
+E2 Legacy group email → ✅ DEAD (plugin deactivated + 9,297-row sweep, 8/8)
+E3 Post→follow controls (bell ticked, email unticked) → one-mailer, server half BUILT flag-off
+E4 Bell delivery gap + delete=dismiss → notif-bridge
+E5 Weekly Recap, scoped to bell-only types → PARKED behind E4 by design
 
 **P2 — polish / UX**
-9. Advanced search: dynamic facet narrowing
-10. Add-discussion modal: resizable + text scaling
-11.5 Emoji picker for the messages composer (Ian 8/1)
-11.6 Notifications: filter by type + bulk delete of that type (Ian 8/1)
-12. Post header: title legibility over text thumbnails
-13. PWA launch animation/message
-13.5 Craft gate RED: finder/anon Optimum.png oversized + raw (pre-existing, Nov 2024)
-14. Craft gate: /hub/share-your-repair-content/ cover missing width/height (pre-existing)
-15. Mail-containment: gate on host not LG_ENV (latent security)
+11.5 Emoji picker for the messages composer (Ian 8/1, Variant 1 ruled) → emoji-picker-build
+11.6 Notifications: filter by type + bulk delete of that type (Ian 8/1) — UNOWNED
+9. Advanced search: dynamic facet narrowing — UNOWNED
+10. Add-discussion modal: resizable + text scaling — UNOWNED
+12. Post header: title legibility over text thumbnails — UNOWNED
+13. PWA launch animation/message — UNOWNED
+13.5 Craft gate RED: finder/anon Optimum.png oversized + raw → ✅ FIXED + LIVE @ 10ea816 (107KB → 3KB via the real resizer)
+14. Craft gate: /hub/share-your-repair-content/ cover missing width/height (pre-existing) — UNOWNED
+15. Mail-containment: gate on host not LG_ENV (latent security) — UNOWNED, fix exists on origin/mail-safety
+
+**SECURITY / HYGIENE**
+S1 /v2/ serves 177 non-PHP files to anon on live (docs, fixtures; no secrets, PHP 403s) — blocked on the untracked live vhost, see dev-live-split
+S2 /footer-mockups/ anon-readable on live — one `sudo rm` of the symlink, awaiting Ian
+S3 dev2's vhost is a REGULAR FILE, not the repo symlink — tracked nginx changes have silently missed dev2 since lane-preview.sh sed -i'd it
 
 **P3 — big builds (scope first)**
 16. Front-end authoring for all post types ★ vision
