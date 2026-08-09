@@ -92,13 +92,15 @@ mutate "$S" "          if (resp && resp.status === 403 && IS_DEV2) return claimP
 # The FIRST attempt at this mutation was a bad mutation, not a weak assertion: it left
 # `.then(onOk, onRejected)` in place, so install still RESOLVED via the rejection handler
 # and the defect was never reintroduced. Drop the handler as well.
-mutate "$S" "    )).then(() => self.skipWaiting(), () => self.skipWaiting())" \
-            "    )).then(() => self.skipWaiting())" \
-  && mutate "$S" "caches.open(CACHE).then((c) => Promise.all(SHELL.map((u) =>
+mutate "$S" "  event.waitUntil(
+    caches.open(CACHE).then((c) => Promise.all(SHELL.map((u) =>
       fetch(u, { cache: 'reload' })
         .then((r) => (r && r.ok ? c.put(u, r) : null))
         .catch(() => null)
-    ))" "caches.open(CACHE).then((c) => c.addAll(SHELL)" \
+    ))).then(() => self.skipWaiting(), () => self.skipWaiting())
+  );" "  event.waitUntil(
+    caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())
+  );" \
   && case_run "6. install back to all-or-nothing" "install SURVIVES a 403 shell asset"
 
 # 7. dev2-only guard inverted -> a claim prompt could reach LIVE members.
