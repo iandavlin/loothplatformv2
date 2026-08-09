@@ -15,6 +15,7 @@ line into that lane's charter and note the lane name here.
 4.5 Participation silently UNSUBSCRIBES you from the discussion → ✅ MERGED + LIVE @ 10ea816 (was eroding the 381 followers since June)
 
 **P1 — wanted now / deploy-blocking**
+4.6 Mobile sponsor sheet: carousels/buttons injected with no behaviour — UNOWNED, static evidence only, test written (same class as 4.4/4.3/3.7)
 3.7 Mobile: discussion embed → ✅ LIVE @ 021ff38 (Ian ran lg-deploy 8/9; keeper smoke-verified ON the live box: bit emitted, guard served, social-actions stamp absent). Ian-VERIFIED on his phone on dev2 first ("looks good", test-3). His words on scope: "THE MAIn problem was no imbed in the modal." Card half → item 7, not a bug
 3.8 Mobile/PWA: post → hub BACK NAV must be EXPOSED — UNOWNED, MOCKUPS FIRST. Ian 8/9: "on mobile and pwa we need some kind of back nav to the hub once you click through to the post. there is one in the nav tab but it should be exposed. Need mockups." House rule applies: draw it behind the dev gate (recommendation + at most one alternative, side by side), hand him a URL; no code before his pick
 3.5 SEO/sitemap: zero discussions submitted — Google indexes the mirrored forum + defunct /shop/ and /merch/ (200s) — UNOWNED, findings on origin/sitemap-seo
@@ -80,6 +81,43 @@ Messages row opens the messenger fine. Measured, not assumed.
 flag-ON path 404s.
 
 Pictures for Ian: https://dev2.loothgroup.com/footer-mockups/mobile-profile-tray/
+
+## 4.6 Mobile sponsor sheet: carousels + buttons injected with no behaviour (P1) — keeper sweep 8/9, NOT reproduced
+
+Found sweeping the class behind 4.4/4.3/3.7 ("relocated markup arrives without its
+behaviour"). **Static evidence only — nobody has tapped it yet.** Worth someone's
+time precisely because the first three of these reached Ian's phone.
+
+`webroot/sponsor-sheet.js` intercepts taps on `/sponsors/` and `/sponsors/<slug>/`,
+fetches the page, lifts `<main>` out with DOMParser, strips `script`, injects it —
+**and re-inits nothing** (0 re-init calls; it copies CSS only). Compare
+`profile-sheet.js` and `practice-sheet.js`, which both re-implement `initMaps` +
+`initCarousels` for exactly this reason.
+
+Measured on dev2 (`/sponsors/stewmac/`, `gluboost`, `total-vise` — all three alike):
+
+| | |
+|---|---|
+| lifted node | 12–21 KB, **12 carousel/gallery elements, 7–8 buttons** |
+| inline `<script>` inside the node | 0 — so the wiring is page-level, not carried |
+| what wires it | `/archive-poc/assets/lg-v2-front.<hash>.js` (4 DOMContentLoaded inits, 9 document-level delegates, **0 MutationObserver, no exported re-init**) |
+| `/sponsors/<slug>/` loads that bundle | **yes** ← works standalone |
+| `/sponsors/` (the list — where you tap from) loads it | **no** |
+| `/hub/` loads it | **no** |
+
+So the sheet opened from the list injects carousels and buttons into a page that has
+none of their behaviour, and the bundle has no MutationObserver or re-init hook that
+would heal it. Same shape as 4.4: the standalone page works, the sheet does not, and
+the entry path is the whole difference.
+
+**The test, ready to run** (`tools/exercise-harness/browser-profile-tray-repro.py` is
+the pattern): at 390px as a member, tap a sponsor from `/sponsors/`, then swipe a
+carousel in the sheet and tap a button. CONTROL: the same carousel on
+`/sponsors/stewmac/` at the same width. If the control works and the sheet does not,
+it is the same bug and gate 19 should gain a third instance.
+
+⚠️ Do not "fix" it by loading the v2 bundle from the sheet without checking what its
+4 DOMContentLoaded inits do to an already-booted page.
 
 ## 4.2 Logged-out mobile bottom dash — the "+" lies, and Sign in hides (P0) — Ian 8/5
 
