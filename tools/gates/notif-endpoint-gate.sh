@@ -35,6 +35,31 @@ phase() { echo; echo "=== $1 ==="; }
 [ -r "$RUNNER" ] || { echo "CANNOT RUN: no $RUNNER"; exit 2; }
 sudo -n -u profile-app true 2>/dev/null || { echo "CANNOT RUN: no passwordless sudo to profile-app"; exit 2; }
 
+# ── ⚠️ REFUSE TO START FROM AN UNEXPECTED STATE ────────────────────────────
+# The restore below runs under a `trap`, and a trap does not run when the BOX DIES.
+# dev2 reboots routinely (Ian, 8/8), so "interrupted mid-flip" is a real state, not a
+# hypothetical — and it leaves a MEMBER-FACING FLAG SET TO true IN A TRACKED FILE.
+# Commit that by accident and the feature ships on by default, which is the one thing
+# the flag discipline exists to prevent.
+#
+# So: compare against git HEAD before touching anything. That catches the crashed-run
+# leftover AND stops this gate clobbering someone's deliberate in-progress edit —
+# flipping-and-restoring on top of an unexpected state is wrong either way. It reports
+# CANNOT RUN rather than RED, because a dirty tree is a missing environment, not a
+# finding.
+#
+# (Belt: notif-dismiss-proof.php phase 6 also asserts the shipped default is false, so
+# a leftover flip goes RED in gate 21 even if nobody runs this gate again.)
+if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  if ! git -C "$ROOT" diff --quiet -- "$CFG" 2>/dev/null; then
+    echo "CANNOT RUN: $CFG differs from git HEAD."
+    echo "  If a previous run was interrupted (a reboot skips the restore trap), the"
+    echo "  flag may be left flipped. Inspect, then: git checkout -- $CFG"
+    git -C "$ROOT" diff -- "$CFG" | sed 's/^/    /' | head -12
+    exit 2
+  fi
+fi
+
 SNAP="$(mktemp)"; cp -p "$CFG" "$SNAP"
 SNAP_MD5="$(md5sum "$CFG" | cut -d' ' -f1)"
 restore() { cp -p "$SNAP" "$CFG"; rm -f "$SNAP"; }
