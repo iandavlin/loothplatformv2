@@ -129,8 +129,10 @@ def cookie_for(login):
     return out
 
 
-def fetch(env, path, cookie=None, method="GET", data=None):
+def fetch(env, path, cookie=None, method="GET", data=None, headers=False):
     cmd = ["curl", "-s", "-o", "-", "-w", "\n@@%{http_code}", "-X", method]
+    if headers:
+        cmd.append("-i")
     jar = f"loothdev_auth={env['LG_GATE_TOKEN']}"
     if cookie:
         jar += "; " + cookie
@@ -341,6 +343,36 @@ def main():
                          f"  [8] stranger POST: HTTP {code_ep}, post_modified "
                          f"{'UNCHANGED' if mod_before == mod_after else 'CHANGED (BAD)'}\n")
 
+        # ---- 9. EMBED: the toggle's contract with this route ------------------
+        # The hub composer's type toggle loads this in a same-origin iframe, so
+        # two things have to hold and neither is visible from the normal render:
+        # the furniture-free variant must actually apply (not just exist in the
+        # CSS — an earlier check of mine counted the stylesheet text and "passed"
+        # on the non-embed page), and the response must be FRAMEABLE. An
+        # X-Frame-Options of DENY would break the toggle with an empty box and no
+        # error anywhere.
+        b_e, code_e = fetch(env, path + "&embed=1", c_allow, headers=True)
+        if not has_form(b_e, args.type):
+            findings.append(f"[9] embed=1 did not serve the form (HTTP {code_e}).")
+        if 'class="lgfc-body lgfc-body--embed"' not in b_e:
+            findings.append("[9] embed=1 served the form but WITHOUT the embed body "
+                            "class — the page furniture is still on it.")
+        xfo = ""
+        for line in b_e.splitlines():
+            if line.lower().startswith("x-frame-options:"):
+                xfo = line.split(":", 1)[1].strip().upper()
+        if xfo == "DENY":
+            findings.append("[9] X-Frame-Options: DENY — the composer cannot frame "
+                            "this, and the failure is a silent empty box.")
+        # and the non-embed render must NOT carry the class
+        b_n, _ = fetch(env, path, c_allow)
+        if 'lgfc-body--embed' in b_n.split("<main")[0].split("<body")[-1]:
+            findings.append("[9] the NON-embed render carries the embed body class.")
+        embed_note = (f"  [9] embed    form: {'YES' if has_form(b_e, args.type) else 'no'}, "
+                      f"body class applied: "
+                      f"{'YES' if 'lgfc-body lgfc-body--embed' in b_e else 'no'}, "
+                      f"X-Frame-Options: {xfo or '(none)'}\n")
+
         # ---- verdict ----------------------------------------------------------
         print(f"compose-gate  type={args.type}  path={path}")
         print(f"  flag: ON ({how}) — asserting the FEATURE")
@@ -353,6 +385,7 @@ def main():
         print(f"  [4] denied POST wrote {after - before} row(s), HTTP {code_p}")
         if edit_note:
             print(edit_note, end="")
+        print(embed_note, end="")
         print()
         if findings:
             print(f"{len(findings)} FINDING(S):")

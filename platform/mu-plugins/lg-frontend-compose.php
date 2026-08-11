@@ -373,6 +373,10 @@ function lg_fc_route(): void
 
     $types = lg_fc_types();
     $edit  = isset($_GET['id']) ? absint($_GET['id']) : 0;
+    // EMBED: the same form, without the page furniture, for the hub composer's
+    // type toggle (Ian, 2026-08-09). See lg_fc_page_open() for why this is still
+    // a complete document rather than a fragment.
+    $embed = !empty($_GET['embed']);
 
     // ── EDIT MODE (Ian, 2026-08-09: members edit their own loothprints) ───────
     //
@@ -469,7 +473,7 @@ function lg_fc_route(): void
     // before any output.
     acf_form_head();
 
-    lg_fc_render($type, $edit);
+    lg_fc_render($type, $edit, $embed);
     exit;
 }
 
@@ -596,7 +600,7 @@ function lg_fc_refuse(string $what): void
     lg_fc_page_close();
 }
 
-function lg_fc_render(string $type, int $edit = 0): void
+function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
 {
     $t = lg_fc_types()[$type];
 
@@ -608,7 +612,7 @@ function lg_fc_render(string $type, int $edit = 0): void
     // The mock's labels replace ACF's for the duration of this render only.
     add_filter('acf/prepare_field', 'lg_fc_relabel', 20);
 
-    lg_fc_page_open($t['title']);
+    lg_fc_page_open($t['title'], $embed);
     ?>
 <div class="lgfc__card">
   <div class="lgfc__h">
@@ -686,7 +690,23 @@ function lg_fc_extra_field_names(string $type): array
     return $out;
 }
 
-function lg_fc_page_open(string $title): void
+/**
+ * EMBED IS STILL A WHOLE DOCUMENT, DELIBERATELY, and it is meant to be iframed.
+ *
+ * The obvious alternative — return an HTML fragment and inject it into the hub
+ * page — does not work without dragging ACF's entire front-end stack onto the
+ * hub: the gallery, the media modal, select2 and their dependency closure are
+ * printed by wp_head() on THIS route, and the hub has none of them. Injecting the
+ * markup alone would produce a form whose photo picker silently does nothing,
+ * which is the exact "a control that looks right and writes nothing" failure this
+ * lane has already hit once.
+ *
+ * A same-origin iframe keeps that stack where it already works, and keeps this
+ * route's CSS from leaking into the hub (and the hub's from leaking in). What
+ * `embed` changes is only the page furniture: no outer padding, no page
+ * background, no min-height — so the card fills the frame it is given.
+ */
+function lg_fc_page_open(string $title, bool $embed = false): void
 {
     ?>
 <!doctype html>
@@ -699,8 +719,8 @@ function lg_fc_page_open(string $title): void
 <?php wp_head(); ?>
 <style><?php echo lg_fc_css(); ?></style>
 </head>
-<body class="lgfc-body">
-<main class="lgfc">
+<body class="lgfc-body<?php echo $embed ? ' lgfc-body--embed' : ''; ?>">
+<main class="lgfc<?php echo $embed ? ' lgfc--embed' : ''; ?>">
     <?php
 }
 
@@ -914,6 +934,11 @@ function lg_fc_css(): string
   .lgfc .acf-input input[type=text],.lgfc .acf-input input[type=url],
   .lgfc .acf-input textarea{font-size:16px}
 }
+
+/* ---- embed: the same card, no page furniture (it is inside an iframe) ---- */
+.lgfc-body--embed{background:transparent}
+.lgfc--embed{max-width:none;padding:0}
+.lgfc--embed .lgfc__card{border:0;border-radius:0;box-shadow:none}
 
 /* The dark theme re-points the tokens, so only surfaces with no suitable token
    need saying twice. --lg-paper and --lg-rust-tint are light-only in the current
