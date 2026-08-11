@@ -49,7 +49,21 @@ otherwise neuters the tests that cover what it gates:
 
 Run:   python3 tools/gates/sw-fetch-bounded-gate.py [--self-check-only]
 Needs: node. No browser, no nginx, no database — so it is cheap enough to live in the
-       numbered sequence and cannot flake on CDP or limit_req.
+       numbered sequence and cannot flake on CDP or limit_req, the two failure modes
+       that make gates 1/2/14/17 unreliable in-sequence.
+
+⚠️ IT IS NOT FLAKE-PROOF IN GENERAL — it has real timing assertions, so the honest claim
+is narrower than "cannot flake". The ON hang case must SETTLE inside BUDGET, and that
+margin was re-measured when the box was downgraded to 2 cores on 2026-08-10:
+
+    idle              8355 / 8365 / 8360 ms   (margin to the 12000 budget: ~3.64s)
+    both cores pegged 8385 ms                 (margin ~3.62s — drift of 25ms)
+
+25ms under full load, because the deadline is a wall-clock setTimeout and not CPU-bound,
+so halving the core count does not move it. The margin stays comfortable and the budgets
+were deliberately LEFT ALONE. Do not "optimise" the 12000 budget down to save the ~8s the
+OFF hang case spends: that case has no deadline at all so any budget proves it, but a
+smaller budget would stop catching a regression that put a deadline on the OFF path.
 
 Exit:  0 green, 1 RED (real findings), 2 CANNOT RUN (no verdict).
        run-all.sh reads ONLY 0/1/2 — never invent a third code, an exit of 3 or 70 is
