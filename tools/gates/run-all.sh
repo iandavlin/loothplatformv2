@@ -432,6 +432,9 @@ echo "=== GATE 22/22: a rendered NAV control must actually NAVIGATE ==="
 # inversion pass found. It now matches the guard itself.
 run "back-pill-navigates" python3 "$(dirname "$0")/back-pill-navigates-gate.py"
 
+# THE FENCE: our work must not touch Buck's files (Ian, 2026-08-11).
+run "buck-surface-fence" bash "$(dirname "$0")/buck-surface-guard.sh"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
