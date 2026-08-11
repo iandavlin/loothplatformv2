@@ -111,8 +111,13 @@ Three things existed only to serve the flag, and outlived it:
   (a stray newline, and its own empty-render false green) and is deleted rather
   than left to rot into a green that means nothing.
 - `platform/nginx/lane-preview-hub-seo-landing.conf` — armed the flag at
-  `/hub/preview-seo/`. The real mount now does exactly what the preview did.
-  Torn down and deleted.
+  `/hub/preview-seo/`, so it went with the flag. **Restored within the hour**,
+  flag-free: the flag was its *argument*, not its *purpose*. A preview exists to
+  serve the BRANCH over HTTP so a change can be verified before merge, and that
+  need did not go away — the very next change (the canonical) could not have been
+  verified without it. Corrected here rather than left standing, because a doc
+  that says a live file was deleted is the same defect class as a stale
+  file:line.
 - The `LG_HUB_TOPIC_LANDING` constant and `lg_hub_topic_landing_enabled()`, its
   single read point. Written as one read point precisely so this was a one-line
   removal.
