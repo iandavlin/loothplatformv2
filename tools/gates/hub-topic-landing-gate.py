@@ -127,17 +127,31 @@ def fetch(env, path, want_status=False):
     if want_status:
         cmd += ["-w", "\n__HTTP__%{http_code}"]
     cmd.append(url)
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    except Exception:                                         # noqa: BLE001
-        return "", 0
-    body = r.stdout
-    code = 0
-    if want_status:
-        m = re.search(r"\n__HTTP__(\d+)$", body)
-        if m:
-            code = int(m.group(1))
-            body = body[: m.start()]
+    # RETRY A 403 PER REQUEST, not just on the liveness probe. The dev gate on
+    # this box refuses correctly-cookied requests in bursts: a single fetch()
+    # always succeeds, and interleaving fetch() with a hand-built curl gives
+    # 200/200 every time — but a FULL RUN, which fires ~20 requests over pages of
+    # 170-200KB, trips it reproducibly. The token is byte-identical to a fresh
+    # shell resolve, so this is pacing, not authorisation.
+    #
+    # A short backoff also stops the suite hammering a 2-core box, which is worth
+    # having on its own merits.
+    for attempt in range(3):
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        except Exception:                                     # noqa: BLE001
+            return "", 0
+        body = r.stdout
+        code = 0
+        if want_status:
+            m = re.search(r"\n__HTTP__(\d+)$", body)
+            if m:
+                code = int(m.group(1))
+                body = body[: m.start()]
+        if code != 403:
+            return body, code
+        if attempt < 2:
+            time.sleep(1.5 * (attempt + 1))
     return body, code
 
 

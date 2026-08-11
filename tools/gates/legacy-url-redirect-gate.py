@@ -44,6 +44,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -88,7 +89,15 @@ def location_of(env, path):
         cmd += env["LG_GATE_RESOLVE"].split()
     cmd += ["-b", "loothdev_auth=" + env["LG_GATE_TOKEN"],
             env["LG_GATE_HOST"] + path]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
+    # Per-request 403 retry — same reason as the hub-topic-landing gate: this
+    # box's dev gate refuses correctly-cookied requests in bursts, and a suite
+    # firing many requests trips it while a single one never does.
+    for attempt in range(3):
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
+        if " 403" not in r.stdout.split("\n")[0]:
+            break
+        if attempt < 2:
+            time.sleep(1.5 * (attempt + 1))
     code, loc = 0, ""
     for line in r.stdout.splitlines():
         if line.startswith("HTTP/"):
