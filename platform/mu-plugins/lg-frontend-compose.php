@@ -1,16 +1,20 @@
 <?php
 /**
  * Plugin Name: LG — front-end compose
- * Description: One screen, one route, for CREATING a managed CPT from the front
- *              end. Ian ruled Option A on 2026-08-03. Flag OFF by default.
+ * Description: One screen, one route, for CREATING and EDITING a managed CPT from
+ *              the front end. Ian ruled Option A 2026-08-03, edit 2026-08-09.
+ *              Flag OFF by default.
  * Version:     0.1.0
  *
  * ══ WHAT THIS IS, AND THE ONE SENTENCE THAT SCOPES IT ═════════════════════════
  *
  * Ian, re-scoping the lane: "I can currently edit on the front end. That is fine.
  * I need to be able to COMPOSE on the front end with a easy front end form."
- * EDITING WAS NEVER THE PROBLEM. This file adds no edit path and deliberately
- * refuses to be one (see CREATE-ONLY below).
+ * COMPOSE was the original problem; editing a DISCUSSION already worked and was
+ * explicitly fine. Editing a LOOTHPRINT did not — the legacy edit pages render
+ * zero ACF fields under every parameter tried — and Ian added it on 2026-08-09,
+ * so this file now does both. See EDIT below for the one thing it needs that
+ * create does not.
  *
  * Ruling: docs/IAN-RULINGS-2026-08-03.md §3 — "Front-end compose — Option A,
  * single screen", chosen over the 3-step wizard he approved for discussions.
@@ -49,11 +53,21 @@
  * No rewrite rule, so nothing to flush — one less deploy coupling on a box where
  * the symlink set is already not in the repo.
  *
- * ══ CREATE-ONLY, AND WHY ══════════════════════════════════════════════════════
+ * ══ EDIT, AND THE HAZARD THAT TURNED OUT NOT TO EXIST ════════════════════════
  *
- * This route can only ever create. It never accepts a post_id, so it cannot be
- * pointed at an existing post — no IDOR. It was ALSO believed to be structurally
- * immune to the defect class this lane was told not to repeat:
+ * This route was create-only until 2026-08-09. Two arguments were given for that,
+ * and only one of them was true.
+ *
+ * The TRUE one: taking no post_id means it cannot be aimed at somebody else's
+ * post. Now that it does take one, that protection has to be MADE rather than
+ * inherited — see `?id=` in lg_fc_route(): the type is derived from the STORED
+ * post (never from `?type=`), and `current_user_can('edit_post', $id)` is the
+ * gate. That single call resolves ownership and the moderator case together,
+ * which is why the superseded edit scope found it discriminated perfectly where a
+ * capability check could not.
+ *
+ * The FALSE one was that create-only made it structurally immune to the defect
+ * class this lane was told not to repeat:
  *
  *   lg-preserve-forum-subscription.php (live @ 10ea816) documents BuddyBoss
  *   treating the ABSENCE of a field as an instruction to DELETE the member's
@@ -357,20 +371,50 @@ function lg_fc_route(): void
         return;
     }
 
-    $type  = isset($_GET['type']) ? sanitize_key((string) $_GET['type']) : '';
     $types = lg_fc_types();
+    $edit  = isset($_GET['id']) ? absint($_GET['id']) : 0;
 
-    // An unknown type, and an anonymous visitor, both get the ordinary 404. We
-    // do not redirect anon to sign-in: there is no entry point linking here yet,
-    // so the only way to arrive signed-out is to have guessed the URL, and a 404
-    // tells that visitor nothing about what exists.
-    if (!isset($types[$type]) || !is_user_logged_in()) {
-        return; // falls through to lg-error-pages.php's branded 404
-    }
+    // ── EDIT MODE (Ian, 2026-08-09: members edit their own loothprints) ───────
+    //
+    // THE TYPE IS DERIVED FROM THE POST, never from the query string. `?type=`
+    // is ignored entirely once `?id=` is present, so a caller cannot name one
+    // type and be handed another type's field list — the same "re-check on the
+    // STORED post type, never a client-supplied one" rule reply.php:205
+    // documents for discussions.
+    if ($edit) {
+        $post = get_post($edit);
+        $type = $post ? $post->post_type : '';
 
-    if (!lg_fc_may_compose($type)) {
-        lg_fc_refuse($types[$type]['title'] ?? 'This form');
-        exit;
+        // Not a post, or not a type this route composes -> the ordinary 404.
+        // Deliberately indistinguishable from "no such post": a member probing
+        // ids should not learn which ones exist.
+        if (!$post || !isset($types[$type])) {
+            return;
+        }
+        if (!is_user_logged_in()) {
+            return;
+        }
+        // THE WHOLE GATE FOR EDIT, and the only thing edit needs that create
+        // does not. current_user_can('edit_post', $id) resolves ownership AND
+        // the moderator case in one call, which is why the superseded edit scope
+        // found it discriminated perfectly where a capability check could not.
+        if (!current_user_can('edit_post', $edit) || !lg_fc_may_compose($type)) {
+            lg_fc_refuse($types[$type]['title'] ?? 'This post');
+            exit;
+        }
+    } else {
+        $type = isset($_GET['type']) ? sanitize_key((string) $_GET['type']) : '';
+
+        // An unknown type, and an anonymous visitor, both get the ordinary 404.
+        // We do not redirect anon to sign-in: a visitor who guessed the URL
+        // learns nothing from a 404.
+        if (!isset($types[$type]) || !is_user_logged_in()) {
+            return; // falls through to lg-error-pages.php's branded 404
+        }
+        if (!lg_fc_may_compose($type)) {
+            lg_fc_refuse($types[$type]['title'] ?? 'This form');
+            exit;
+        }
     }
 
     // Registered so the settings never travel with the POST. Built here, on THIS
@@ -378,10 +422,15 @@ function lg_fc_route(): void
     // whatever the GET produced.
     $uid = get_current_user_id();
     $t   = $types[$type];
+    // On edit, post_id is the REAL id and new_post is unused — ACF branches on
+    // post_id === 'new_post'. post_status and post_author are deliberately NOT
+    // restated for an edit: they are the member's existing values and changing
+    // them is not what "edit your loothprint" means. comment_status is ours to
+    // set either way, because the control is on screen either way.
     acf_register_form([
         'id'                 => 'lg-fc-' . $type,
-        'post_id'            => 'new_post',
-        'new_post'           => [
+        'post_id'            => $edit ?: 'new_post',
+        'new_post'           => $edit ? [] : [
             'post_type'      => $type,
             'post_status'    => lg_fc_post_status($type, $uid),
             'post_author'    => $uid,
@@ -409,7 +458,9 @@ function lg_fc_route(): void
         'html_after_fields'  => lg_fc_own_controls($t),
         'html_submit_button' => '<input type="submit" class="lgfc__submit" value="%s" />'
             . '<span class="lgfc__foot">' . esc_html($t['foot']) . '</span>',
-        'return'             => add_query_arg('lg_fc', 'posted', get_permalink() ?: home_url('/')),
+        'return'             => $edit
+            ? add_query_arg('lg_fc', 'saved', get_permalink($edit) ?: home_url('/'))
+            : add_query_arg('lg_fc', 'posted', get_permalink() ?: home_url('/')),
     ]);
 
     add_action('wp_enqueue_scripts', 'lg_fc_shed_site_chrome', PHP_INT_MAX);
@@ -418,7 +469,7 @@ function lg_fc_route(): void
     // before any output.
     acf_form_head();
 
-    lg_fc_render($type);
+    lg_fc_render($type, $edit);
     exit;
 }
 
@@ -545,7 +596,7 @@ function lg_fc_refuse(string $what): void
     lg_fc_page_close();
 }
 
-function lg_fc_render(string $type): void
+function lg_fc_render(string $type, int $edit = 0): void
 {
     $t = lg_fc_types()[$type];
 

@@ -180,6 +180,9 @@ def main():
     ap.add_argument("--type", default="loothprint")
     ap.add_argument("--allowed", help="login of a user who SHOULD get the form")
     ap.add_argument("--denied", help="login of a member who should NOT")
+    ap.add_argument("--owner", help="login of a member who OWNS --post (edit mode)")
+    ap.add_argument("--stranger", help="login of a member who does NOT own --post")
+    ap.add_argument("--post", type=int, default=0, help="an existing post id to edit")
     ap.add_argument("--baseline", action="store_true",
                     help="record the flag-OFF fingerprint fixture and exit")
     args = ap.parse_args()
@@ -288,6 +291,56 @@ def main():
                 f"[4] a POST by non-allowed member {args.denied!r} returned {code_p}; "
                 f"a refusal must not be 2xx even when nothing was written.")
 
+        # ---- 6/7/8. EDIT: the owner gets it, a stranger does not, and a
+        # stranger's POST writes nothing. Added with the edit path, red-first:
+        # it was written and run BEFORE the ownership check was trusted.
+        #
+        # Edit is the half where "refused" and "silently wrote anyway" look
+        # identical from outside, so 8 reads post_modified rather than the status
+        # code — a refusal that still saved would answer 403 and look perfect.
+        edit_note = ""
+        if args.post and args.owner and args.stranger:
+            epath = f"/compose/?id={args.post}"
+            c_owner = cookie_for(args.owner)
+            c_strange = cookie_for(args.stranger)
+
+            b_o, code_o = fetch(env, epath, c_owner)
+            got_owner = code_o == 200 and has_form(b_o, args.type)
+            if not got_owner:
+                findings.append(
+                    f"[6] the OWNER {args.owner!r} did not get an edit form at {epath} "
+                    f"(HTTP {code_o}, {len(b_o)}B).")
+
+            b_s, code_s = fetch(env, epath, c_strange)
+            if has_form(b_s, args.type):
+                findings.append(
+                    f"[7] a STRANGER {args.stranger!r} WAS SERVED the edit form for "
+                    f"post {args.post} (HTTP {code_s}). This is the IDOR the "
+                    f"ownership check exists for.")
+
+            # NB deliberately NOT named before/after — those hold assertion 4's
+            # row COUNTS and shadowing them made this crash on a subtraction.
+            # It surfaced loudly, which is the good version of that mistake.
+            mod_before = wp_eval(f"echo get_post_field('post_modified', {args.post});").strip()
+            _, code_ep = fetch(env, epath, c_strange, method="POST",
+                               data=f"acf[_post_title]=compose-gate+stranger+edit")
+            mod_after = wp_eval(f"echo get_post_field('post_modified', {args.post});").strip()
+            if mod_before != mod_after:
+                findings.append(
+                    f"[8] a stranger's POST CHANGED post {args.post} "
+                    f"(post_modified {mod_before!r} -> {mod_after!r}). The store is "
+                    f"the witness, not the status code.")
+            if 200 <= code_ep < 300:
+                findings.append(
+                    f"[8] a stranger's edit POST returned {code_ep}; a refusal must "
+                    f"not be 2xx even when nothing was written.")
+            edit_note = (f"  [6] owner    {args.owner:<16} edit form: "
+                         f"{'YES' if got_owner else 'no'}\n"
+                         f"  [7] stranger {args.stranger:<16} edit form: "
+                         f"{'YES (BAD)' if has_form(b_s, args.type) else 'no'}\n"
+                         f"  [8] stranger POST: HTTP {code_ep}, post_modified "
+                         f"{'UNCHANGED' if mod_before == mod_after else 'CHANGED (BAD)'}\n")
+
         # ---- verdict ----------------------------------------------------------
         print(f"compose-gate  type={args.type}  path={path}")
         print(f"  flag: ON ({how}) — asserting the FEATURE")
@@ -298,6 +351,8 @@ def main():
         print(f"  [3] anon     {'-':<16} form served: "
               f"{'YES (BAD)' if has_form(body_a, args.type) else 'no'}")
         print(f"  [4] denied POST wrote {after - before} row(s), HTTP {code_p}")
+        if edit_note:
+            print(edit_note, end="")
         print()
         if findings:
             print(f"{len(findings)} FINDING(S):")
