@@ -341,3 +341,34 @@ const CACHE = 'looth-pwa-v3'     <- no fetchWithDeadline anywhere in it
 So live members are on the no-deadline worker right now, and live's `offline.html` is
 equally exposed to the heuristic-caching staleness the v4 bump exists to clear. That is
 the whole argument for the rollout shape below.
+
+## Suite result with the flag ARMED, 2026-08-12 — 24/24 ALL GREEN
+
+Re-run after arming, because a flag flip changes which branch gate 23's DEFAULT phase
+takes and that phase had never been exercised in-sequence:
+
+```
+24 gates run | 0 FAIL | 0 NO VERDICT | 0 GATE-ERROR
+############ ALL GATES GREEN ############   (exit 0)
+Buck-surface guard: clean (nothing of Buck's is touched).
+```
+
+Gate 23 took the **armed** branch and passed on the recorded decision:
+
+```
+=== 3. DEFAULT: member-facing flags ship OFF unless a decision is recorded ===
+  flag is ARMED. That is allowed, but only with a recorded decision:
+  a '## Decision to arm' section in docs/PWA-SW-AUDIT.md naming who and when.
+  PASS  arming the flag is recorded in the audit doc
+```
+
+Gate 24 green 4/4 — controller confirmed, real page on screen, no shell.
+
+### An operational note, not a finding
+
+The first armed run **died at gate 3 with no verdict** — no OOM, CDP healthy, 3.4GB free,
+and gate 2 had actually passed (craft GREEN, 11 pages) before it went. Same quiet process
+death that killed a session earlier the same day. It is **not** attributed to any gate:
+a run that ends without a verdict is neither a pass nor a finding. Re-run under `setsid`
+so session churn could not take the process group, and it completed clean. If a suite
+vanishes mid-run on this box, detach it before concluding anything about a gate.
