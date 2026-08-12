@@ -10,6 +10,10 @@
 #   parked-long    — a lane sat parked >10 min and is not on the expected-park
 #                    list (~/.lane-park-ok, one lane name per line)
 set -u
+# KEEPER RULE (after the 8/12 gap): reading an ALERT and relaunching this script
+# happen in the SAME tool call, never separately. Every alert below prints the
+# relaunch order as its last line so the wake-up itself carries the instruction.
+trap 'echo "==> RELAUNCH NOW (same tool call): bash ~/keeper-repo/tools/lanes/stall-watchdog.sh in background"' EXIT
 MANIFEST="$HOME/.fleet-manifest"
 OKFILE="$HOME/.lane-park-ok"
 STATED="$HOME/.lane-park-state"
