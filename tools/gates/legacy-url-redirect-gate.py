@@ -80,6 +80,25 @@ def psql(sql):
     return [l for l in r.stdout.strip().split("\n") if l]
 
 
+# ── PACING, not just retrying ────────────────────────────────────────────────
+# This box's dev gate refuses correctly-cookied requests in BURSTS. Measured
+# repeatedly: a single request always succeeds, `auth=1` at /gatetest, the token
+# is byte-identical to the snippet nginx reads — but a full run's ~20 requests
+# over 170-200KB pages trips it, and retries alone only fight the symptom while
+# still arriving as a burst. A small gap between requests addresses the cause,
+# and on a 2-core box it is the polite thing regardless.
+_LAST = [0.0]
+_GAP = float(os.environ.get("LG_GATE_PACE", "0.45"))
+
+
+def _pace():
+    now = time.monotonic()
+    wait = _GAP - (now - _LAST[0])
+    if wait > 0:
+        time.sleep(wait)
+    _LAST[0] = time.monotonic()
+
+
 def location_of(env, path):
     """First-hop Location for a path — the redirect TARGET, which is the thing
     under test. Following the chain would hide a many-to-one hop behind a
@@ -93,6 +112,7 @@ def location_of(env, path):
     # box's dev gate refuses correctly-cookied requests in bursts, and a suite
     # firing many requests trips it while a single one never does.
     for attempt in range(3):
+        _pace()
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
         if " 403" not in r.stdout.split("\n")[0]:
             break

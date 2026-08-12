@@ -70,6 +70,25 @@ def gate_env():
     return env, None
 
 
+# ── PACING, not just retrying ────────────────────────────────────────────────
+# This box's dev gate refuses correctly-cookied requests in BURSTS. Measured
+# repeatedly: a single request always succeeds, `auth=1` at /gatetest, the token
+# is byte-identical to the snippet nginx reads — but a full run's ~20 requests
+# over 170-200KB pages trips it, and retries alone only fight the symptom while
+# still arriving as a burst. A small gap between requests addresses the cause,
+# and on a 2-core box it is the polite thing regardless.
+_LAST = [0.0]
+_GAP = float(os.environ.get("LG_GATE_PACE", "0.45"))
+
+
+def _pace():
+    now = time.monotonic()
+    wait = _GAP - (now - _LAST[0])
+    if wait > 0:
+        time.sleep(wait)
+    _LAST[0] = time.monotonic()
+
+
 def head(env, path):
     """First hop only — the redirect TARGET is what is under test. Following the
     chain would hide a many-to-one hop behind a correct-looking 200. Retries a
@@ -80,6 +99,7 @@ def head(env, path):
     cmd += ["-b", "loothdev_auth=" + env["LG_GATE_TOKEN"], env["LG_GATE_HOST"] + path]
     out = ""
     for attempt in range(3):
+        _pace()
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
         out = r.stdout
         if " 403" not in out.split("\n")[0]:
@@ -134,6 +154,8 @@ def main():
             # REQUEST host (absolute_redirect on) — "/hub/" and
             # "<request-host>/hub/" are the same correct conf, so both pass.
             # A redirect to any OTHER host is a real finding, never normalized.
+            # (The lane fixed this same inverted compare independently in the
+            # same window; this same-host-only form is the one that survived.)
             loc_cmp, want_cmp = loc.rstrip("/"), want.rstrip("/")
             hit = loc_cmp == want_cmp or loc_cmp == base + want_cmp
         else:
