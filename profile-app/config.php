@@ -156,6 +156,7 @@ if (!defined('LG_PROFILE_APP_HOOK_SECRET')) {
 }
 
 require_once LG_PROFILE_APP_APP_ROOT . '/vendor/autoload.php';
+require_once LG_PROFILE_APP_APP_ROOT . '/src/Flags.php';  // tracked config/*.php reader (needs nothing)
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Identity.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Db.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Auth.php';

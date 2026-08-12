@@ -17,6 +17,7 @@ as-verified on 2026-08-09; live = commit `021ff38` unless noted.
 | follow-digest forum-items (nested) | platform/config/follow-digest.php | **false** | OFF | n/a | §2.2 build in flight (one-mailer); lane refuses merge until preview-armed verification — arm previews via `LG_FD_FORUM_ITEMS` env/$_SERVER only |
 | `bell_follows_bb_subscriptions` | platform/config/notify-bridge.php | **false** | OFF | OFF | ❌ CLOSED — Ian ruled leave OFF 8/9 (consent inference; ruling 6 separation stands) |
 | back-pill `enabled` | platform/config/back-pill.php | **false** | OFF | OFF (code not on live yet) | 3.8 back-nav hybrid (lower-left, appear-on-scroll). Gate 22 (nav must navigate). Merged 8/9; awaiting Ian on the serve, then flip |
+| `dismiss_instead_of_delete` | profile-app/config/notifications.php | **false** | OFF | OFF (code not on live yet) | E4 delete=dismiss (ruling 9). ⚠️ **HAS A SCHEMA DEPENDENCY AND AN ORDER — see below.** Gates 23 + 25 assert both states |
 | `LG_FD_CADENCE_CONTROL_SHIPPED` | mu-plugin define | **false** | OFF | OFF | Cadence control behind it; gate 15 asserts absence when off |
 | `LG_PRESERVE_FORUM_SUBSCRIPTION` | mu-plugin define | **true** | ON | ON | P0 4.5 fix, LIVE since 8/8 — never turn off (data loss) |
 | `LG_AUTHOR_SOCIALS_ALL_MEMBERS` | bb-mirror/config.php define | **true** | ON | ON | The original flag-pattern exemplar; GA |
@@ -39,9 +40,37 @@ as-verified on 2026-08-09; live = commit `021ff38` unless noted.
 
 | Flag | Branch | State |
 |---|---|---|
-| E4 bell-delivery flag | origin/notif-bridge | Ian approved merge 8/9; bounced for gate renumber (22-25); re-merge on push. Sequence: code → SQL → flip; live pre-flight: `grep -c schemaHasDismiss /srv/profile-app/src/Notifications.php` ≠ 0 |
+| `dismiss_instead_of_delete` (E4) | origin/notif-bridge | Ian approved merge 8/9; bounced for gate renumber, re-minted 22-25 and re-merged. Now listed in the member-facing table above — **read the ordering note below before flipping it** |
+| `bell_follows_bb_subscriptions` (E4) | origin/notif-bridge | ❌ CLOSED by Ian 8/9, ships OFF. Listed above; the code stays so reversing the ruling needs no rediscovery |
 | notif-read-seen flag (P0 4.1) | origin/recap-read-timer | 35/35 green; renumbering to gate 21; needs `## Decision to arm` before ARM (not before merge) |
 | digest-images flag (P0 4.0) | origin/digest-images | ❌ WRONG PATTERN — documented as wp-config define (untracked on live, breaks deploy-by-pull). Must be reworked to tracked config BEFORE merge. Unowned |
+
+## ⚠️ `dismiss_instead_of_delete` — the one flag here with a SCHEMA DEPENDENCY
+
+Every other flag in this file is safe to flip in any order. This one is not, and the
+constraint runs the opposite way to the intuition, so it is written out rather than
+left to be re-derived.
+
+**ORDER: deploy the code → apply the migration → flip the flag.**
+Live pre-flight: `grep -c schemaHasDismiss /srv/profile-app/src/Notifications.php`
+on the live box — **0 means STOP**, the code is not there yet.
+
+Migration: `profile-app/sql/2026-08-08-notification-dismiss.sql` (Ian runs live SQL).
+
+**Why the order is not free, measured not theorised.** The migration narrows
+`uq_notifications_target_unread` to add `AND dismissed_at IS NULL`. Postgres infers an
+ON CONFLICT arbiter whose predicate is IMPLIED BY the clause, and implication runs one
+way — so code emitting the OLD two-term clause matches nothing against the new index
+and throws `42P10` on every hub push. Applied to dev2 while the serving checkout was
+still on `main`, this killed every notification on the box instantly and **silently**
+(`lg_notify_push` swallows its errors by contract). Repaired by reverting the index.
+
+**Per-box oddity worth knowing:** dev2 currently has the `dismissed_at` COLUMN but the
+OLD two-term index. That transitional state is deliberate and safe both ways — old code
+emits two-term against a two-term index; new code emits three-term against it and also
+works, since `A∧B∧C` implies `A∧B`. Only the narrowed index is exclusive.
+
+Full reasoning in the migration header and `[[trap-on-conflict-arbiter-implication-direction]]`.
 
 ## Related, not flags
 

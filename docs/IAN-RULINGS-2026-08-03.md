@@ -348,6 +348,50 @@ docs/atlas/STRIPE-MEMBERSHIP-AUDIT.md). Phase 0 hygiene first: the 41 orphaned
 stripe rows (3 members holding looth3 free today), the hot email-keyed minter, and
 the blind pipeline logging.
 
+> **Both `stripe-build` and `notif-bridge` minted a "§8" on 2026-08-08**, in the
+> same window and neither wrong. Same collision as the "9/9" one in `run-all.sh`
+> and the gate-number one that bounced E4 twice. Kept BOTH and renumbered —
+> dropping one loses a ruling, which is the single outcome this file exists to
+> prevent.
+
+---
+
+## 9. Bell DELETE = DISMISS. Ian, 2026-08-08.
+
+⚠️ **PROVENANCE, stated because it matters:** §7 above cites "the delete=dismiss
+ruling" as though it were already written down here. It was not — it existed only
+in the notif-bridge lane charter (keeper-signed). This section records it so a lane
+can quote the decision it is building against, per this file's own opening rule.
+The wording below is the charter's, not a transcript of Ian.
+
+THE RULING: the bell's per-row × and its Clear-all become a **dismissal**. The row
+is KEPT and flagged; it leaves the bell. The weekly recap counts rows that are
+**unread AND undismissed**.
+
+WHY: `notifications` was doing two incompatible jobs — a transient inbox the member
+is invited to empty, and the recap's only record of the week. Emptying the first
+destroyed the second. Measured in `docs/atlas/RECAP-NOTIF-BRIDGE-TRACE.md` §1d: on
+2026-07-31, 17 internal/notify calls all returned `raised:true` and only 12 of that
+day's rows still exist. Four of the five destroyed were Ian's, and his empty recap
+was the direct result.
+
+BUILT 2026-08-08 by the notif-bridge lane, flag OFF
+(`profile-app/config/notifications.php`). Migration staged for live at
+`profile-app/sql/2026-08-08-notification-dismiss.sql` — **Ian runs it**, before the
+flag is flipped. Gate 17.
+
+### ⚠️ WHAT IT DOES NOT DO, AND THIS NEEDS ANSWERING
+
+Under "counts unread AND undismissed", **no member's recap content changes**. A
+dismissed item was already absent from the recap back when dismissing deleted it.
+The gain is that the EVENT SURVIVES — auditable, and available to a future policy.
+
+If the intent was to *recover* the items the bell eats, the recap would have to count
+dismissed-but-unread rows, which is the opposite of the rule as recorded. The lane
+built exactly what was ruled and flagged the tension rather than quietly resolving it.
+Pairs with backlog 4.1 (the 700ms mark-all-read), which is the same wound from the
+`is_read` side and is still open.
+
 ---
 
 ## Standing note on gate colour
