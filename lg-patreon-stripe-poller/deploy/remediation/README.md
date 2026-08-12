@@ -207,3 +207,41 @@ gate), so it flips at launch with **no redeploy**:
 Non-poller site mail is never touched (the gate only fires on mail originating in
 this plugin). On dev, `lg-dev-mail-containment` additionally routes anything that
 does send to mailpit.
+
+## Stripe soft-launch cohort — who the lifecycle may touch
+
+Design: `docs/STRIPE-SOFT-LAUNCH-ALLOWLIST.md`. The webhook lifecycle only
+transitions members whose WP user id is on **`lgms_stripe_lifecycle_allowlist`**
+(per-box option, array of ints). Everyone else's events are acknowledged 200 (no
+Stripe retry-storm), journaled in `lg_lifecycle_journal` as
+`state=skipped / note=skipped: not in soft-launch cohort (uid=N)`, and change
+**nothing** — in either direction: a member removed from the cohort is frozen,
+never half-retracted. If a removed member must lose access, retract by hand.
+
+- **Empty / absent / malformed list = CLOSED for everyone.** Flipping the
+  lifecycle ON with no cohort grants nobody — this fail-safe is gated, not just
+  coded.
+- **Interlock order on live:** `lgms_identity_gate` ON → `lgms_stripe_lifecycle`
+  ON → the allowlist governs WHO. The cohort cannot bypass the identity gate and
+  cannot arm anything on its own.
+- **Edit the cohort (no redeploy):** wp-admin → Settings → **LG Member Sync** →
+  **Stripe Cohort** tab — add by email / login / user id (two-step: look up, then
+  confirm the resolved id+login+email), one-click remove, table view with date
+  added. CLI equivalent, same option, same shape:
+
+  ```bash
+  wp option update lgms_stripe_lifecycle_allowlist '[101,202]' --format=json   # ids are PER BOX
+  wp option get    lgms_stripe_lifecycle_allowlist --format=json               # verify
+  ```
+
+- **Ids are per box** — resolve the live cohort against live's own WP DB
+  (`looth_import`), never copy dev2 ids across.
+- `lgms_stripe_lifecycle_allowlist_added` is dash bookkeeping only (uid → date
+  added, feeds the table). The gate never reads it.
+
+Gates (gate # allocated by keeper at merge): `test-soft-launch-allowlist.php`
+(39 assertions — empty=closed, skip journaling, byte-identical discrimination,
+frozen-both-directions, dash write shape === gate read shape, interlock intact)
+and `e2e-stripe-lifecycle-dev2.php` §6 (12 assertions on the real
+WP/MySQL/Arbiter stack — both reddened first against the ungated lifecycle:
+18 FAIL unit / 7 FAIL e2e, then green).
