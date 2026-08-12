@@ -197,6 +197,10 @@ function flag_on(): void {
     $GLOBALS['OPTS']['lgms_stripe_lifecycle']    = true;
     $GLOBALS['OPTS']['lgms_identity_gate']       = true;
     $GLOBALS['OPTS']['lgms_stripe_webhook_secret'] = WHSEC;
+    // Soft-launch cohort armed for every fixture member: THIS gate proves
+    // the lifecycle CORE. The cohort's own semantics (empty=closed, skip
+    // journaling, dash write shape) are test-soft-launch-allowlist.php.
+    $GLOBALS['OPTS'][ StripeLifecycle::ALLOWLIST_OPT ] = [ 501, 502, 503 ];
 }
 
 function sign( string $payload, ?string $secret = null, ?int $t = null ): string {

@@ -22,6 +22,9 @@ final class Admin
         add_action( 'wp_ajax_lgms_search_posts', [ self::class, 'ajaxSearchPosts' ] );
         add_action( 'wp_ajax_lgms_search_users', [ self::class, 'ajaxSearchUsers' ] );
         add_action( 'admin_post_lgms_create_affiliate_user', [ self::class, 'handleCreateAffiliateUser' ] );
+        add_action( 'admin_post_lgms_cohort_lookup', [ self::class, 'handleCohortLookup' ] );
+        add_action( 'admin_post_lgms_cohort_add',    [ self::class, 'handleCohortAdd' ] );
+        add_action( 'admin_post_lgms_cohort_remove', [ self::class, 'handleCohortRemove' ] );
     }
 
     public static function menu(): void
@@ -121,6 +124,222 @@ final class Admin
             admin_url( 'options-general.php' )
         ) );
         exit;
+    }
+
+    // -------------------------------------------------------------------------
+    // Stripe soft-launch cohort (docs/STRIPE-SOFT-LAUNCH-ALLOWLIST.md)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Deterministic, loud resolution — never a guess: all digits = user ID,
+     * contains @ = email, anything else = login. One column each; no
+     * fuzzy fallback, so "who did this store?" always has one answer.
+     */
+    private static function resolveCohortUser( string $q ): ?\WP_User
+    {
+        if ( $q === '' ) {
+            return null;
+        }
+        if ( ctype_digit( $q ) ) {
+            return get_user_by( 'id', (int) $q ) ?: null;
+        }
+        if ( str_contains( $q, '@' ) ) {
+            return get_user_by( 'email', $q ) ?: null;
+        }
+        return get_user_by( 'login', $q ) ?: null;
+    }
+
+    private static function cohortRedirect( array $extra ): void
+    {
+        wp_safe_redirect( add_query_arg(
+            array_merge( [ 'page' => self::OPT_PAGE, 'tab' => 'stripe_cohort' ], $extra ),
+            admin_url( 'options-general.php' )
+        ) );
+        exit;
+    }
+
+    /** Step 1 of add: resolve the input and bounce to the confirm panel. */
+    public static function handleCohortLookup(): void
+    {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Insufficient permissions.', 403 );
+        }
+        check_admin_referer( 'lgms_cohort_lookup' );
+
+        $q = trim( sanitize_text_field( (string) ( $_POST['cohort_query'] ?? '' ) ) );
+        if ( $q === '' ) {
+            self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode( 'Enter an email, login, or user ID.' ) ] );
+        }
+
+        $u = self::resolveCohortUser( $q );
+        if ( $u === null ) {
+            self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode(
+                "No user on this box matches \"{$q}\" — nothing stored. Check the value; user IDs differ per box."
+            ) ] );
+        }
+        self::cohortRedirect( [ 'lgms_cohort_confirm' => (int) $u->ID ] );
+    }
+
+    /** Step 2 of add: the id from the confirm panel, re-verified at write time. */
+    public static function handleCohortAdd(): void
+    {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Insufficient permissions.', 403 );
+        }
+        check_admin_referer( 'lgms_cohort_add' );
+
+        $uid = (int) ( $_POST['cohort_user_id'] ?? 0 );
+        $u   = $uid > 0 ? get_user_by( 'id', $uid ) : false;
+        if ( ! $u ) {
+            // Never store an id this box cannot name, even one a stale
+            // confirm panel asserted.
+            self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode( "User #{$uid} does not exist on this box — nothing stored." ) ] );
+        }
+
+        if ( CohortAllowlist::add( $uid ) ) {
+            self::cohortRedirect( [ 'lgms_cohort_ok' => rawurlencode( sprintf(
+                'Added to the soft-launch cohort: #%d %s (%s).', $uid, $u->user_login, $u->user_email
+            ) ) ] );
+        }
+        self::cohortRedirect( [ 'lgms_cohort_ok' => rawurlencode( sprintf(
+            '#%d %s is already in the cohort — nothing changed.', $uid, $u->user_login
+        ) ) ] );
+    }
+
+    public static function handleCohortRemove(): void
+    {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Insufficient permissions.', 403 );
+        }
+        $uid = (int) ( $_POST['cohort_user_id'] ?? 0 );
+        check_admin_referer( 'lgms_cohort_remove_' . $uid );
+
+        if ( CohortAllowlist::remove( $uid ) ) {
+            $u = get_user_by( 'id', $uid );
+            self::cohortRedirect( [ 'lgms_cohort_ok' => rawurlencode( sprintf(
+                'Removed #%d%s from the cohort. The lifecycle no longer touches them in EITHER direction — if they should lose access, retract by hand.',
+                $uid, $u ? ' ' . $u->user_login : ''
+            ) ) ] );
+        }
+        self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode( "#{$uid} was not in the cohort." ) ] );
+    }
+
+    private static function renderStripeCohortTab(): void
+    {
+        $ok  = isset( $_GET['lgms_cohort_ok'] )  ? rawurldecode( (string) $_GET['lgms_cohort_ok'] )  : '';
+        $err = isset( $_GET['lgms_cohort_err'] ) ? rawurldecode( (string) $_GET['lgms_cohort_err'] ) : '';
+        $confirmId = (int) ( $_GET['lgms_cohort_confirm'] ?? 0 );
+
+        $ids         = CohortAllowlist::ids();
+        $lifecycleOn = StripeLifecycle::flagOn();
+        $gateOn      = (bool) get_option( StripeLifecycle::IDENTITY_GATE_OPT, false );
+
+        if ( $ok !== '' ) : ?>
+            <div class="notice notice-success is-dismissible"><p><?php echo esc_html( $ok ); ?></p></div>
+        <?php endif;
+        if ( $err !== '' ) : ?>
+            <div class="notice notice-error is-dismissible"><p><?php echo esc_html( $err ); ?></p></div>
+        <?php endif; ?>
+
+        <h2>Stripe soft-launch cohort</h2>
+        <p class="description" style="max-width:720px;">
+            Only members on this list transition through the Stripe webhook lifecycle. Everyone else's
+            events are acknowledged and journaled but change <strong>nothing</strong> — an
+            <strong>empty list means closed for everyone</strong>, even with the lifecycle flag on.
+            Removing a member freezes them (cancellations are skipped too); it does not take their
+            access away.
+        </p>
+
+        <p>
+            <span class="lgms-chip" style="background:<?php echo $lifecycleOn ? '#dcfce7;color:#15803d' : '#f0f0f1;color:#666'; ?>;">lifecycle <?php echo $lifecycleOn ? 'ON' : 'OFF'; ?></span>
+            <span class="lgms-chip" style="background:<?php echo $gateOn ? '#dcfce7;color:#15803d' : '#f0f0f1;color:#666'; ?>;">identity gate <?php echo $gateOn ? 'ON' : 'OFF'; ?></span>
+            <span class="lgms-chip" style="background:#e0f2fe;color:#0369a1;">cohort: <?php echo count( $ids ); ?></span>
+            <style>.lgms-chip { display:inline-block; padding:.15em .55em; border-radius:3px; font-size:.85em; font-weight:600; margin-right:.4em; }</style>
+        </p>
+
+        <?php if ( $confirmId > 0 ) :
+            $cu = get_user_by( 'id', $confirmId );
+            if ( ! $cu ) : ?>
+                <div class="notice notice-error"><p>User #<?php echo $confirmId; ?> no longer exists on this box — nothing stored.</p></div>
+            <?php elseif ( in_array( $confirmId, $ids, true ) ) : ?>
+                <div class="notice notice-info"><p>#<?php echo $confirmId; ?> <strong><?php echo esc_html( $cu->user_login ); ?></strong> is already in the cohort.</p></div>
+            <?php else : ?>
+                <div style="border:1px solid #b8d0f0;background:#f0f6ff;border-radius:4px;padding:1em 1.2em;max-width:560px;margin-bottom:1.5em;">
+                    <p style="margin:0 0 .6em;font-weight:600;">Confirm before it lands — is this the right member?</p>
+                    <table class="widefat" style="margin-bottom:.8em;max-width:520px;">
+                        <tr><th style="width:8em;">User ID</th><td>#<?php echo (int) $cu->ID; ?></td></tr>
+                        <tr><th>Login</th><td><?php echo esc_html( $cu->user_login ); ?></td></tr>
+                        <tr><th>Email</th><td><?php echo esc_html( $cu->user_email ); ?></td></tr>
+                        <tr><th>Display name</th><td><?php echo esc_html( $cu->display_name ); ?></td></tr>
+                        <tr><th>Roles</th><td><?php echo esc_html( implode( ', ', (array) $cu->roles ) ?: '—' ); ?></td></tr>
+                    </table>
+                    <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-right:.5em;">
+                        <?php wp_nonce_field( 'lgms_cohort_add' ); ?>
+                        <input type="hidden" name="action" value="lgms_cohort_add">
+                        <input type="hidden" name="cohort_user_id" value="<?php echo (int) $cu->ID; ?>">
+                        <button type="submit" class="button button-primary">Add #<?php echo (int) $cu->ID; ?> to the cohort</button>
+                    </form>
+                    <a class="button" href="<?php echo esc_url( add_query_arg( [ 'page' => self::OPT_PAGE, 'tab' => 'stripe_cohort' ], admin_url( 'options-general.php' ) ) ); ?>">Cancel</a>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
+
+        <h3>Add a member</h3>
+        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-bottom:2em;">
+            <?php wp_nonce_field( 'lgms_cohort_lookup' ); ?>
+            <input type="hidden" name="action" value="lgms_cohort_lookup">
+            <input type="text" name="cohort_query" class="regular-text" placeholder="email, login, or user ID"
+                   autocomplete="off" required>
+            <button type="submit" class="button">Look up</button>
+            <p class="description">All digits = user ID · contains @ = email · anything else = login. Nothing is stored until you confirm the resolved member.</p>
+        </form>
+
+        <h3>Current cohort (<?php echo count( $ids ); ?>)</h3>
+        <?php if ( $ids === [] ) : ?>
+            <p><em>Empty — the lifecycle is closed for everyone until a member is added.</em></p>
+        <?php else : ?>
+        <table class="widefat striped" style="max-width:760px;">
+            <thead>
+                <tr>
+                    <th style="width:5em;">ID</th>
+                    <th>Login</th>
+                    <th>Email</th>
+                    <th style="width:11em;">Date added (UTC)</th>
+                    <th style="width:6em;"></th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ( $ids as $id ) :
+                $u = get_user_by( 'id', $id );
+            ?>
+                <tr>
+                    <td>#<?php echo (int) $id; ?></td>
+                    <?php if ( $u ) : ?>
+                        <td><strong><?php echo esc_html( $u->user_login ); ?></strong></td>
+                        <td><?php echo esc_html( $u->user_email ); ?></td>
+                    <?php else : ?>
+                        <td colspan="2" style="color:#dc2626;">user no longer exists on this box — remove it</td>
+                    <?php endif; ?>
+                    <td><?php echo esc_html( CohortAllowlist::addedAt( (int) $id ) ?? '—' ); ?></td>
+                    <td>
+                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                            <?php wp_nonce_field( 'lgms_cohort_remove_' . (int) $id ); ?>
+                            <input type="hidden" name="action" value="lgms_cohort_remove">
+                            <input type="hidden" name="cohort_user_id" value="<?php echo (int) $id; ?>">
+                            <button type="submit" class="button button-small">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php endif; ?>
+
+        <p class="description" style="margin-top:1.5em;">
+            CLI equivalent (same option, same shape):
+            <code>wp option update <?php echo esc_html( StripeLifecycle::ALLOWLIST_OPT ); ?> '[<?php echo esc_html( implode( ',', $ids ) ); ?>]' --format=json</code>
+        </p>
+        <?php
     }
 
     // -------------------------------------------------------------------------
@@ -256,6 +475,7 @@ final class Admin
             'settings'      => 'Settings',
             'member_tools'  => 'Member Tools',
             'welcome_email' => 'Welcome Email',
+            'stripe_cohort' => 'Stripe Cohort',
         ];
         ?>
         <div class="wrap">
@@ -274,6 +494,7 @@ final class Admin
             match ( $tab ) {
                 'member_tools'  => MemberTools::renderContent(),
                 'welcome_email' => self::renderWelcomeEmailTab(),
+                'stripe_cohort' => self::renderStripeCohortTab(),
                 default         => self::renderSettingsTab(),
             };
             ?>

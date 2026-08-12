@@ -67,9 +67,13 @@ $pdo->exec( "CREATE TABLE IF NOT EXISTS lg_lifecycle_journal (
 // --- in-process flags (never persisted) -----------------------------------
 $WHSEC = 'whsec_e2e_' . bin2hex( random_bytes( 12 ) );
 $GLOBALS['e2e_identity_gate'] = '1';
+$GLOBALS['e2e_allowlist']     = [];   // armed with the fixture uid once it exists
 add_filter( 'pre_option_lgms_stripe_lifecycle',    static fn() => '1' );
 add_filter( 'pre_option_lgms_identity_gate',       static fn() => $GLOBALS['e2e_identity_gate'] );
 add_filter( 'pre_option_lgms_stripe_webhook_secret', static fn() => $WHSEC );
+// Soft-launch cohort, shadowed in-process like every other flag here (an
+// array short-circuits the pre_option filter fine; wp_options untouched).
+add_filter( 'pre_option_' . StripeLifecycle::ALLOWLIST_OPT, static fn() => $GLOBALS['e2e_allowlist'] );
 
 // --- helpers ---------------------------------------------------------------
 $fail = 0; $pass = 0;
@@ -108,23 +112,29 @@ $confirm = static function ( string $status ) use ( $sub_obj ): void {
     };
 };
 
-$uid = 0; $localCustomer = 0;
-$cleanup = function () use ( $pdo, &$uid, &$localCustomer, $cusId, $subId, $rand ) {
-    // Rows first (so the deleted_user fan-out finds nothing), user last.
-    if ( $localCustomer > 0 ) {
-        $pdo->prepare( 'DELETE FROM entitlements WHERE customer_id = ?' )->execute( [ $localCustomer ] );
-        $pdo->prepare( 'DELETE FROM subscriptions WHERE customer_id = ?' )->execute( [ $localCustomer ] );
-        $pdo->prepare( 'DELETE FROM wp_user_bridge WHERE customer_id = ?' )->execute( [ $localCustomer ] );
-        $pdo->prepare( 'DELETE FROM customers WHERE id = ?' )->execute( [ $localCustomer ] );
+$uid = 0; $localCustomer = 0; $uidB = 0; $localCustomerB = 0;
+$cleanup = function () use ( $pdo, &$uid, &$localCustomer, &$uidB, &$localCustomerB, $cusId, $subId, $rand ) {
+    // Rows first (so the deleted_user fan-out finds nothing), users last.
+    foreach ( [ $localCustomer, $localCustomerB ] as $c ) {
+        if ( $c > 0 ) {
+            $pdo->prepare( 'DELETE FROM entitlements WHERE customer_id = ?' )->execute( [ $c ] );
+            $pdo->prepare( 'DELETE FROM subscriptions WHERE customer_id = ?' )->execute( [ $c ] );
+            $pdo->prepare( 'DELETE FROM wp_user_bridge WHERE customer_id = ?' )->execute( [ $c ] );
+            $pdo->prepare( 'DELETE FROM customers WHERE id = ?' )->execute( [ $c ] );
+        }
     }
-    if ( $uid > 0 ) {
-        $pdo->prepare( 'DELETE FROM lg_role_sources WHERE wp_user_id = ?' )->execute( [ $uid ] );
-        $pdo->prepare( 'DELETE FROM lg_lifecycle_journal WHERE wp_user_id = ?' )->execute( [ $uid ] );
+    foreach ( [ $uid, $uidB ] as $u ) {
+        if ( $u > 0 ) {
+            $pdo->prepare( 'DELETE FROM lg_role_sources WHERE wp_user_id = ?' )->execute( [ $u ] );
+            $pdo->prepare( 'DELETE FROM lg_lifecycle_journal WHERE wp_user_id = ?' )->execute( [ $u ] );
+        }
     }
     $pdo->prepare( "DELETE FROM lg_processed_events WHERE event_id LIKE ?" )->execute( [ "evt_e2e_{$rand}%" ] );
-    if ( $uid > 0 ) {
-        require_once ABSPATH . 'wp-admin/includes/user.php';
-        wp_delete_user( $uid );
+    foreach ( [ $uid, $uidB ] as $u ) {
+        if ( $u > 0 ) {
+            require_once ABSPATH . 'wp-admin/includes/user.php';
+            wp_delete_user( $u );
+        }
     }
 };
 
@@ -144,6 +154,11 @@ $uid = wp_insert_user( [
 ] );
 if ( is_wp_error( $uid ) ) { throw new RuntimeException( 'fixture user failed: ' . $uid->get_error_message() ); }
 $uid = (int) $uid;
+
+// Soft-launch cohort armed for the fixture member: sections 1–5 are the
+// IN-cohort path (spec side (a): a cohort member's active event grants
+// looth3). Section 6 exercises the out-of-cohort and empty-cohort sides.
+$GLOBALS['e2e_allowlist'] = [ $uid ];
 
 // Local customer mirrored with the checkout-asserted identity already
 // absorbed (metadata.wp_user_id) — i.e. the state the completed-session
@@ -219,9 +234,109 @@ $st = $pdo->prepare( 'SELECT COUNT(*) FROM entitlements WHERE customer_id = ? AN
 $st->execute( [ $localCustomer ] );
 $note( (int) $st->fetchColumn() === 0, 'entitlement revoked (row kept for audit)' );
 
+// --- 6. soft-launch allowlist governs WHO ----------------------------------
+echo "\n[6] soft-launch allowlist (docs/STRIPE-SOFT-LAUNCH-ALLOWLIST.md) — cohort in, everyone else acknowledged + skipped\n";
+
+// Second member, identical in every way, NOT in the cohort.
+$cusIdB = "cus_e2f_{$rand}";
+$subIdB = "sub_e2f_{$rand}";
+$emailB = "e2e2-{$rand}@lifecycle-e2e.test";
+$uidB   = wp_insert_user( [
+    'user_login' => "e2e_lc2_{$rand}",
+    'user_email' => $emailB,
+    'user_pass'  => wp_generate_password( 24, true, true ),
+    'role'       => 'looth1',
+] );
+if ( is_wp_error( $uidB ) ) { throw new RuntimeException( 'fixture user B failed: ' . $uidB->get_error_message() ); }
+$uidB = (int) $uidB;
+$pdo->prepare( 'INSERT INTO customers (uuid, stripe_customer_id, email, name, metadata) VALUES (?,?,?,?,?)' )
+    ->execute( [ wp_generate_uuid4(), $cusIdB, $emailB, 'E2E Scratch B', json_encode( [ 'wp_user_id' => (string) $uidB ] ) ] );
+$localCustomerB = (int) $pdo->lastInsertId();
+
+$sub_objB = static function ( string $status ) use ( $subIdB, $cusIdB ): array {
+    return [
+        'id' => $subIdB, 'object' => 'subscription', 'customer' => $cusIdB, 'status' => $status,
+        'items' => [ 'data' => [ [ 'price' => [ 'id' => 'price_e2e_any' ] ] ] ],
+        'cancel_at_period_end' => false,
+        'current_period_start' => time() - 86400, 'current_period_end' => time() + 86400 * 29,
+        'canceled_at' => null,
+    ];
+};
+$confirmB = static function ( string $status ) use ( $sub_objB ): void {
+    StripeLifecycle::$confirmFactory = static fn(): object => new class( $sub_objB( $status ) ) {
+        public function __construct( private array $sub ) {}
+        public function retrieveSubscription( string $id, array $expand = [] ): object {
+            if ( $id !== $this->sub['id'] ) { throw new RuntimeException( "no such sub {$id}" ); }
+            return json_decode( (string) json_encode( $this->sub ) );
+        }
+    };
+};
+
+// (b) NON-cohort member, structurally identical active event: acknowledged,
+// skipped, journaled — and the REAL wp_capabilities never move.
+$confirmB( 'active' );
+$p6  = $evt( "evt_e2e_{$rand}_6a", 'customer.subscription.updated', $sub_objB( 'active' ) );
+$res = StripeLifecycle::ingest( $p6, $sign( $p6, $WHSEC ) );
+$note( $res['status'] === 200, 'non-cohort active event -> 200 acknowledged (no Stripe retry-storm)', json_encode( $res ) );
+$note( str_contains( (string) ( $res['body']['result'] ?? '' ), "skipped: not in soft-launch cohort (uid={$uidB})" ),
+       'and the result names the skip + uid', json_encode( $res['body'] ?? [] ) );
+$st = $pdo->prepare( "SELECT COUNT(*) FROM lg_role_sources WHERE wp_user_id = ? AND source = 'stripe'" );
+$st->execute( [ $uidB ] );
+$note( (int) $st->fetchColumn() === 0, 'NO stripe opinion row for the non-cohort member' );
+clean_user_cache( $uidB );
+$uB = get_user_by( 'id', $uidB );
+$note( in_array( 'looth1', (array) $uB->roles, true ) && ! in_array( 'looth3', (array) $uB->roles, true ),
+       'REAL wp_capabilities untouched: still looth1, no looth3', implode( ',', (array) $uB->roles ) );
+$st = $pdo->prepare( 'SELECT COUNT(*) FROM entitlements WHERE customer_id = ? AND revoked_at IS NULL' );
+$st->execute( [ $localCustomerB ] );
+$note( (int) $st->fetchColumn() === 0, 'NO entitlement granted behind the skip' );
+$st = $pdo->prepare( "SELECT COUNT(*) FROM lg_lifecycle_journal WHERE wp_user_id = ? AND state = 'skipped' AND note LIKE '%not in soft-launch cohort%'" );
+$st->execute( [ $uidB ] );
+$note( (int) $st->fetchColumn() === 1, 'the skip is JOURNALED (state=skipped, note names the cohort)' );
+$st = $pdo->prepare( 'SELECT COUNT(*) FROM lg_processed_events WHERE event_id = ?' );
+$st->execute( [ "evt_e2e_{$rand}_6a" ] );
+$note( (int) $st->fetchColumn() === 1, 'the skipped event is marked processed — a deliberate skip, not a defer' );
+
+// (c) EMPTY cohort + lifecycle ON = no-op for EVERYONE, including the
+// member who was in the cohort for sections 1–5.
+$GLOBALS['e2e_allowlist'] = [];
+$p6b = $evt( "evt_e2e_{$rand}_6b", 'customer.subscription.updated', $sub_objB( 'active' ) );
+$res = StripeLifecycle::ingest( $p6b, $sign( $p6b, $WHSEC ) );
+$st = $pdo->prepare( "SELECT COUNT(*) FROM lg_role_sources WHERE wp_user_id = ? AND source = 'stripe'" );
+$st->execute( [ $uidB ] );
+$note( $res['status'] === 200 && (int) $st->fetchColumn() === 0,
+       'empty cohort: member B still skipped', json_encode( $res['body'] ?? [] ) );
+$confirm( 'active' );
+$p6c = $evt( "evt_e2e_{$rand}_6c", 'customer.subscription.updated', $sub_obj( 'active' ) );
+$res = StripeLifecycle::ingest( $p6c, $sign( $p6c, $WHSEC ) );
+$st = $pdo->prepare( "SELECT tier FROM lg_role_sources WHERE wp_user_id = ? AND source = 'stripe'" );
+$st->execute( [ $uid ] );
+clean_user_cache( $uid );
+$uA = get_user_by( 'id', $uid );
+$note( $res['status'] === 200
+       && str_contains( (string) ( $res['body']['result'] ?? '' ), 'skipped: not in soft-launch cohort' )
+       && $st->fetchColumn() === null
+       && ! in_array( 'looth3', (array) $uA->roles, true ),
+       'empty cohort: even the section-1–5 member is skipped — tier stays NULL, no looth3 back',
+       json_encode( $res['body'] ?? [] ) );
+
+// (a′) adding the member = editing the option, no redeploy: the SAME shape
+// of event then grants.
+$GLOBALS['e2e_allowlist'] = [ $uidB ];
+$confirmB( 'active' );
+$p6d = $evt( "evt_e2e_{$rand}_6d", 'customer.subscription.updated', $sub_objB( 'active' ) );
+$res = StripeLifecycle::ingest( $p6d, $sign( $p6d, $WHSEC ) );
+$note( $res['status'] === 200, 'after ADDING member B to the cohort the same-shaped event is accepted', json_encode( $res ) );
+$st = $pdo->prepare( "SELECT tier FROM lg_role_sources WHERE wp_user_id = ? AND source = 'stripe'" );
+$st->execute( [ $uidB ] );
+$note( $st->fetchColumn() === 'looth3', 'and grants looth3 — add-to-cohort is an option edit, not a redeploy' );
+clean_user_cache( $uidB );
+$uB = get_user_by( 'id', $uidB );
+$note( in_array( 'looth3', (array) $uB->roles, true ), 'REAL wp_capabilities carries looth3 for the added member', implode( ',', (array) $uB->roles ) );
+
 printf( "\n%d passed, %d failed\n", $pass, $fail );
 echo $fail === 0
-    ? "E2E GREEN — the full path holds on the real stack: sign, verify, dedupe, match, journal, arbitrate, retract.\n"
+    ? "E2E GREEN — the full path holds on the real stack: sign, verify, dedupe, match, journal, arbitrate, retract — and the soft-launch cohort alone decides who.\n"
     : "E2E RED\n";
 
 } catch ( \Throwable $e ) {
