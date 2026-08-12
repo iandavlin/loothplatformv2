@@ -109,10 +109,24 @@ def main():
 
     # ── Liveness first: a presence check on a dead box is vacuously red, and an
     #    absence check on one is vacuously GREEN, which is worse.
-    hub, code = fetch(env, PREFIX + "/")
+    # Bounded liveness retry, same as the hub-topic-landing gate. fetch()'s own
+    # per-request 403 retry (~4.5s) is not always enough: this box's dev gate
+    # refuses in WINDOWS that can outlast it, and the liveness probe is the first
+    # request a run makes — so a window here costs the whole run for a reason
+    # unrelated to the code under test. A run that needed a retry SAYS SO.
+    hub, code, tries = "", 0, 0
+    for tries in range(1, 6):
+        hub, code = fetch(env, PREFIX + "/")
+        if code == 200 and "feed-card" in hub:
+            break
+        if tries < 5:
+            time.sleep(3 * tries)          # 3+6+9+12 = up to 30s of window
     if code != 200 or "feed-card" not in hub:
-        print(f"CANNOT RUN  {PREFIX}/ did not serve a feed (HTTP {code}, {len(hub)}b)")
+        print(f"CANNOT RUN  {PREFIX}/ did not serve a feed after {tries} "
+              f"attempt(s) (HTTP {code}, {len(hub)}b)")
         return 2
+    if tries > 1:
+        print(f"liveness    NOTE: needed {tries} attempts — the dev gate blipped")
     if 'class="nav-tree"' in hub:
         print(f"CANNOT RUN  {PREFIX}/ itself renders the legacy nav-tree — the "
               f"control this gate measures categories against is not valid")

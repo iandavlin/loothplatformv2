@@ -1359,18 +1359,36 @@ if ($lg_landing) {
     $page_title       = (string)$lg_landing['title'];
 }
 
-/* The landing's canonical address is the SITEMAP'S EXACT PERMALINK — the same
-   string sitemap-discussions.xml advertises — so the two cannot drift. Only the
-   discussion landing declares one: the feed's own routes carry sort/filter/search
-   params that legitimately produce different pages, and naming one of them
-   canonical would be a claim nobody has made. */
-bb_mirror_chrome_header(
-    $page_title,
-    $lg_landing
-        ? LG_BB_MIRROR_PUBLIC_PATH . '/' . rawurlencode((string)$lg_landing['forum_slug'])
-              . '/' . rawurlencode((string)$lg_landing['slug']) . '/'
-        : null
-);
+/* CANONICAL — two surfaces declare one, and the bare site-wide feed deliberately
+   does not.
+
+   1. A DISCUSSION LANDING: the SITEMAP'S EXACT PERMALINK, the same string
+      sitemap-discussions.xml advertises, so the two cannot drift.
+
+   2. A CATEGORY PAGE (/hub/<category>/): its own bare address — Ian, 2026-08-11,
+      "Google lists them" with no canonical at all. 45 public categories, each a
+      real listing with internal links, so canonical rather than noindex: noindex
+      would discard a legitimate surface.
+
+      ⚠️ The canonical is the BARE category path, deliberately stripped of
+      sort/type/q/page. Those variants are near-duplicates of the same listing and
+      pointing each at itself is what lets Google index forty copies of one
+      category. Note robots.txt's `Disallow: /hub/?` does NOT cover
+      /hub/<category>/?… — it is a literal prefix match on /hub/? — so the
+      variants ARE crawlable today and this is the only thing consolidating them.
+
+   3. The bare site-wide feed still declares NOTHING. Its routes carry filters
+      that legitimately produce different pages, and naming one of them canonical
+      would be a claim nobody has made. A wrong canonical is worse than none — it
+      actively tells Google to consolidate on the wrong URL. */
+$lg_canonical_path = null;
+if ($lg_landing) {
+    $lg_canonical_path = LG_BB_MIRROR_PUBLIC_PATH . '/' . rawurlencode((string)$lg_landing['forum_slug'])
+                       . '/' . rawurlencode((string)$lg_landing['slug']) . '/';
+} elseif ($scoped_forum && !empty($scoped_forum['slug'])) {
+    $lg_canonical_path = LG_BB_MIRROR_PUBLIC_PATH . '/' . rawurlencode((string)$scoped_forum['slug']) . '/';
+}
+bb_mirror_chrome_header($page_title, $lg_canonical_path);
 
 // Posting is authenticated-only (BuddyBoss REST 401s anonymous writes). Gate
 // every post/reply affordance on this server-side so anon viewers receive no
