@@ -318,6 +318,43 @@ function bb_mirror_new_topic_modal(): void
   <div class="ntm-backdrop" id="ntm-backdrop"></div>
   <div class="ntm-dialog">
     <h2 class="ntm-heading" id="ntm-heading">New post</h2>
+<?php /* ── TYPE TOGGLE (Ian 2026-08-09) ────────────────────────────────────────
+     "part of the compose package in the new post in the hub… toggle between
+     discussion and loothprint… two different forms."
+
+     IT SITS ABOVE THE STEP RAIL BECAUSE THE RAIL IS ONE OF THE THINGS IT CHANGES:
+     a discussion has four steps (Where/Write/Photos/Review), a Loothprint has none
+     — Ian ruled the single screen — and a Loothprint has no forum to pick. A
+     control that changes the steps cannot live inside them.
+
+     RENDERED ONLY WHEN BOTH HALVES AGREE. lg_frontend_compose_enabled() reads the
+     SAME platform/config/frontend-compose.php the WordPress form reads, so this
+     cannot render a toggle whose iframe 404s. With the flag off nothing is emitted
+     at all — not hidden, absent — which is what keeps OFF a byte-identical no-op.
+     The can-post test calls lg_bb_mirror_can_post() DIRECTLY rather than reading
+     $lg_can_post. That variable is assigned at FILE scope further down (~:678) and
+     this markup lives inside bb_mirror_new_topic_modal(), so it is simply not in
+     scope here — the condition was silently false and the toggle never rendered,
+     with nothing in the HTML to say why. Same shape as the recorded wp eval-file
+     function-scope trap: the value exists, just not where it is being read. */ ?>
+<?php if (function_exists('lg_bb_mirror_can_post') && lg_bb_mirror_can_post()
+          && function_exists('lg_frontend_compose_enabled') && lg_frontend_compose_enabled()): ?>
+    <div class="ntm-typetoggle" id="ntm-typetoggle" role="tablist" aria-label="What are you posting?"
+         data-compose-base="<?= htmlspecialchars(LG_FC_COMPOSE_BASE) ?>">
+      <button type="button" class="ntm-typetoggle__opt is-on" data-ntm-type="discussion"
+              role="tab" aria-selected="true">Discussion</button>
+      <button type="button" class="ntm-typetoggle__opt" data-ntm-type="loothprint"
+              role="tab" aria-selected="false">Loothprint</button>
+    </div>
+    <?php /* The Loothprint form is served by the compose route and shown in a
+             same-origin iframe. NOT injected as markup: ACF's gallery, media modal
+             and select2 are printed by wp_head() on that route and the hub has
+             none of them, so injected markup would give a photo picker that
+             silently does nothing. src is set by JS on first switch, so the flag
+             being on still costs a discussion-poster no request. */ ?>
+    <iframe class="ntm-lpframe" id="ntm-lpframe" hidden title="Share a Loothprint"
+            referrerpolicy="same-origin"></iframe>
+<?php endif; ?>
 
     <div class="ntm-state ntm-state--loading" id="ntm-loading" hidden>
       Loading…
@@ -685,10 +722,21 @@ $lg_can_post = function_exists('lg_bb_mirror_can_post')
          exists so Ian does not report a KNOWN GAP as a defect -- he picked
          variant A from a mock that had a frequency segment, and this build has
          none. Self-removing: it cannot appear on the real Hub or on live. */ ?>
-<?php if (defined('LG_BB_MIRROR_PUBLIC_PATH') && strpos(LG_BB_MIRROR_PUBLIC_PATH, '/preview/') === 0): ?>
+<?php /* ⚠️ SCOPED TO ITS OWN LANE, 2026-08-11 (frontend-compose). This banner used
+         to render on ANY /preview/ mount, so every other lane's preview announced
+         itself as "the thread-follow branch" — I hit it on mine and it is exactly
+         the recorded "scope preview banners to their own lane path" trap. The
+         mount now has to match. */ ?>
+<?php if (defined('LG_BB_MIRROR_PUBLIC_PATH') && strpos(LG_BB_MIRROR_PUBLIC_PATH, '/preview/thread-follow/') === 0): ?>
 <div style="background:#fdf6e9;border-bottom:1px solid #e8cfa8;padding:10px 16px;font:500 13.5px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#4a4d4a">
   <strong>Preview of the thread-follow branch.</strong> The follow controls are switched ON here only &mdash; the real Hub is unchanged. <strong>Things to try:</strong> the <em>Follow</em> pill in each card's top-right corner (desktop); tap it to open the settings modal and check it names the discussion; on a phone, the replies count now sits with the reactions and is no longer a button.
   <br><strong>Not a bug:</strong> there is no <em>Frequency</em> row (Instant/Daily/Weekly) in the modal. It was in the mock you picked from, but nothing sends those digests yet, so shipping the control would have been a setting that quietly does nothing. It goes in when the sending side exists.
+</div>
+<?php endif; ?>
+<?php if (defined('LG_BB_MIRROR_PUBLIC_PATH') && strpos(LG_BB_MIRROR_PUBLIC_PATH, '/preview/frontend-compose/') === 0): ?>
+<div style="background:#fdf6e9;border-bottom:1px solid #e8cfa8;padding:10px 16px;font:500 13.5px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#4a4d4a">
+  <strong>Preview of the frontend-compose branch.</strong> The compose form is switched ON here only &mdash; the real Hub is unchanged and <em>/compose/</em> still 404s. <strong>Things to try:</strong> the <em>Discussion / Loothprint</em> toggle at the top of this composer; switching to Loothprint swaps in the real form (photos, print files, licence pre-answered), and switching back restores the discussion wizard untouched.
+  <br><strong>Not a bug:</strong> the Loothprint side has no step rail &mdash; you ruled the single screen, and a Loothprint has no forum to pick. It scrolls inside the dialog; that length is the thing to judge.
 </div>
 <?php endif; ?>
 <?php /* data-lg-post-follow: ruling 6's post→follow controls crossing into the client, by

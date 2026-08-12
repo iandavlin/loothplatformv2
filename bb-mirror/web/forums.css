@@ -2576,6 +2576,59 @@ html[data-lguser-theme="dark"] .ntm-overlay {
   color: var(--fg);
 }
 
+/* ── TYPE TOGGLE (Ian 2026-08-09) ──────────────────────────────────────────────
+   Discussion <-> Loothprint, directly under the heading and above the step rail.
+   Uses this file's own tokens so it follows the hub's dark pass with nothing
+   restated — same reason the compose form itself reads --lg-* tokens rather than
+   hex. */
+.ntm-typetoggle {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line, #e3ddd0);
+  border-radius: 999px;
+  background: var(--bg-subtle, #f4f5ee);
+}
+.ntm-typetoggle__opt {
+  font: 700 13px/1 var(--font-body);
+  border: 0;
+  border-radius: 999px;
+  padding: 9px 17px;
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.ntm-typetoggle__opt.is-on {
+  background: var(--accent, #586b3f);
+  color: #fff;
+}
+/* Keyboard reachability: the segmented control is two real buttons, so it is
+   tabbable already — this only makes the focus visible against the pill. */
+.ntm-typetoggle__opt:focus-visible {
+  outline: 2px solid var(--accent, #586b3f);
+  outline-offset: 2px;
+}
+
+/* The Loothprint form, in a same-origin iframe. Height is set by JS from the
+   frame's own document so the dialog scrolls once rather than twice — a frame
+   with its own scrollbar inside a scrolling dialog is the cramped-modal
+   complaint (backlog 10) made worse. */
+.ntm-lpframe {
+  width: 100%;
+  border: 0;
+  display: block;
+  min-height: 320px;
+  background: transparent;
+  /* flex-shrink:0 IS THE WHOLE FIX. .ntm-dialog is a flex COLUMN with
+     max-height:calc(100vh - …) and overflow-y:auto, so a flex item defaults to
+     flex-shrink:1 and gets SQUASHED to fit rather than making the dialog scroll.
+     Measured: JS set height:1630px and the element still rendered at 535px — the
+     auto-fit looked broken when it was working perfectly and the layout was
+     overruling it. */
+  flex: 0 0 auto;
+}
+
 /* State panels */
 .ntm-state--loading {
   font: 14px var(--font-body);

@@ -74,6 +74,45 @@ if ($bb_pp_param !== '' && preg_match('#^/[A-Za-z0-9/_-]{1,80}$#', $bb_pp_param)
 }
 define('LG_BB_MIRROR_PUBLIC_PATH', $bb_public_path);
 
+// ---------- front-end compose: the toggle's half of ONE shared flag ----------
+// Ian ruled the compose entry point is a TYPE TOGGLE in the hub composer, so this
+// app renders a control whose form is served by a WordPress mu-plugin in a
+// different FPM pool. Two flags would let them disagree — a toggle whose iframe
+// 404s is the "UI lies" class — so both read platform/config/frontend-compose.php.
+// Identical arrangement to lg_post_follow_enabled() in forums/_reply-render.php;
+// read that one's header for the longer argument.
+//
+// Fails CLOSED. Overrides honour getenv() AND $_SERVER because a lane preview sets
+// a fastcgi_param, which lands in $_SERVER but not reliably in the environment.
+if (!function_exists('lg_frontend_compose_enabled')) {
+    function lg_frontend_compose_enabled(): bool
+    {
+        static $on = null;
+        if ($on !== null) return $on;
+        if (getenv('LG_FC_PREVIEW') === '1' || (($_SERVER['LG_FC_PREVIEW'] ?? '') === '1')) {
+            return $on = true;
+        }
+        // bb-mirror/ -> repo root is one level up.
+        $path = dirname(__DIR__) . '/platform/config/frontend-compose.php';
+        if (!is_readable($path)) {
+            error_log('[lg-frontend-compose] tracked config unreadable at ' . $path . ' — OFF (fail-closed)');
+            return $on = false;
+        }
+        $raw = require $path;
+        return $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+    }
+}
+
+// Where the toggle's Loothprint form is fetched from. Preview-aware: under a lane
+// preview the compose route is mounted beside the hub, and hardcoding /compose/
+// would send the iframe to the REAL route, which is flagged off — the preview
+// would show a broken toggle and the branch would look wrong when it is not.
+$bb_compose_base = '/compose/';
+if (strpos(LG_BB_MIRROR_PUBLIC_PATH, '/preview/') === 0) {
+    $bb_compose_base = preg_replace('#/hub$#', '/compose/', LG_BB_MIRROR_PUBLIC_PATH);
+}
+define('LG_FC_COMPOSE_BASE', $bb_compose_base);
+
 // ---------- browser-facing / loopback-routing host (request-derived) ----------
 // Single source of truth for both (a) the public host used to build URLs and
 // (b) the loopback CURL 'Host:' header that picks this box's nginx vhost.
