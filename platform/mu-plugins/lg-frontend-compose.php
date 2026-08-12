@@ -135,7 +135,7 @@
  * intended behaviour rather than the problem.
  *
  * ⚠️ THE FLAG IS THEREFORE THE ONLY SAFETY LEFT. Nothing else narrows who gets
- * this once it is on, which is exactly why LG_FRONTEND_COMPOSE stays OFF by
+ * this once it is on, which is exactly why the shared config stays OFF by
  * default and why flipping it is Ian's call and not a lane's.
  *
  * WHAT STILL REFUSES SOMEONE IS A FUNCTIONAL FLOOR, NOT A POLICY. `upload_files`
@@ -148,15 +148,19 @@
  *
  * ══ THE FLAG ═════════════════════════════════════════════════════════════════
  *
- * LG_FRONTEND_COMPOSE, default FALSE, copying LG_AUTHOR_SOCIALS_ALL_MEMBERS
- * (lg-author-socials.php:48). Member-facing, so OFF-default is the house rule and
- * this one has no reason to deviate: it is a new capability, not a repair for
- * ongoing damage, so arriving inert is correct.
+ * platform/config/frontend-compose.php, 'enabled' => false. Member-facing, so
+ * OFF-default is the house rule and this one has no reason to deviate: a new
+ * capability, not a repair for ongoing damage, so arriving inert is correct.
  *
- * A tracked PHP constant, NOT an env var, and that is deliberate. Two recorded
- * traps make env the wrong carrier on this box: WP cron has no Environment= at
- * all, and an fpm fastcgi_param lands in $_SERVER but never in getenv(), so a
- * getenv()-only flag serves OFF on the very preview URL built for Ian to click.
+ * It began as a constant here (copying LG_AUTHOR_SOCIALS_ALL_MEMBERS) and MOVED to
+ * a shared tracked file when Ian ruled the entry point is a toggle inside the hub
+ * composer — bb-mirror runs in a different pool and cannot see a WP constant, and
+ * two flags would let the toggle and the form disagree. See lg_fc_enabled().
+ *
+ * A tracked PHP FILE, NOT an env var, and that is deliberate. Two recorded traps
+ * make env the wrong carrier on this box: WP cron has no Environment= at all, and
+ * an fpm fastcgi_param lands in $_SERVER but never in getenv(), so a getenv()-only
+ * flag serves OFF on the very preview URL built for Ian to click.
  *
  * Flag OFF is asserted byte-identical against a fixture recorded BEFORE this file
  * existed (tools/gates/fixtures/compose-flag-off.json — /compose/ was a stable
@@ -179,34 +183,43 @@ defined('ABSPATH') || exit;
 
 /* ─────────────────────────────────────────────────────────── the flag ───── */
 
-if (!defined('LG_FRONTEND_COMPOSE')) {
-    define('LG_FRONTEND_COMPOSE', false);
-}
-
 /**
  * Is the route live for THIS request?
  *
- * The tracked constant is the answer everywhere that matters, and it is FALSE.
- * The one exception is the lane preview: Ian's toggle loads this route in an
- * iframe from /preview/frontend-compose/, and with the flag off that iframe
- * would 404 and the toggle would look broken for a reason that has nothing to do
- * with the toggle.
+ * ⚠️ THE SOURCE OF TRUTH IS A SHARED TRACKED FILE, NOT A CONSTANT HERE, and that
+ * changed when Ian ruled the entry point is a TYPE TOGGLE inside the hub
+ * composer. The toggle is rendered by bb-mirror — a different FPM pool with no
+ * WordPress loaded, which cannot see a constant defined in this file. A second
+ * flag over there would let the two disagree: toggle on / form off renders a
+ * control whose iframe 404s, which is the "UI lies" class. One file, read by
+ * both, makes that unreachable. Same split, same fix, as
+ * platform/config/post-follow.php.
  *
- * LG_FC_PREVIEW IS A fastcgi_param, WHICH IS WHY THIS IS SAFE. Only an nginx conf
- * can set one — never a query string, never a client header — so the arm exists
- * on exactly one path (platform/nginx/lane-preview-frontend-compose.conf) and
- * nowhere else. /compose/ on the real vhost stays exactly as flagged.
+ * FAILS CLOSED. An unreadable config is OFF and says so in the log, because the
+ * failure mode of guessing ON here is a member-facing surface nobody decided to
+ * open.
  *
- * Read from $_SERVER and NOT getenv(): recorded box trap — a fastcgi_param lands
- * in $_SERVER only, so a getenv()-only check serves OFF on the very preview URL
- * the param was added for.
+ * TWO OVERRIDE SOURCES, both only settable by infrastructure: getenv() for a pool
+ * or CLI harness, $_SERVER for a single nginx location — a lane preview sets
+ * fastcgi_param, which lands in $_SERVER but NOT reliably in getenv(). Reading
+ * only one would serve OFF on the very preview URL built for Ian to click.
  */
 function lg_fc_enabled(): bool
 {
-    if (LG_FRONTEND_COMPOSE) {
-        return true;
+    static $on = null;
+    if ($on !== null) {
+        return $on;
     }
-    return !empty($_SERVER['LG_FC_PREVIEW']);
+    if (getenv('LG_FC_PREVIEW') === '1' || (($_SERVER['LG_FC_PREVIEW'] ?? '') === '1')) {
+        return $on = true;
+    }
+    $path = dirname(__DIR__) . '/config/frontend-compose.php';
+    if (!is_readable($path)) {
+        error_log('[lg-frontend-compose] tracked config unreadable at ' . $path . ' — OFF (fail-closed)');
+        return $on = false;
+    }
+    $raw = require $path;
+    return $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
 }
 
 const LG_FC_PATH = 'compose';
@@ -309,7 +322,7 @@ function lg_fc_types(): array
  * unused would read as a gate that is merely switched off.
  *
  * THE FLAG IS NOW THE ONLY SAFETY, which is the deliberate consequence of that
- * ruling and is why LG_FRONTEND_COMPOSE stays OFF by default: nothing else
+ * ruling and is why the shared config stays OFF by default: nothing else
  * narrows who gets this once it is on.
  *
  * WHAT REMAINS IS NOT A GATE, IT IS A FUNCTIONAL FLOOR, and the distinction

@@ -163,8 +163,12 @@ def flag_state():
     forced = os.environ.get("LG_COMPOSE_FLAG")
     if forced in ("on", "off"):
         return forced, "forced by LG_COMPOSE_FLAG"
-    out = wp_eval("echo defined('LG_FRONTEND_COMPOSE') ? "
-                  "(LG_FRONTEND_COMPOSE ? 'on' : 'off') : 'absent';").strip()
+    # Ask the FUNCTION, not a constant. The flag moved to a shared tracked file
+    # (platform/config/frontend-compose.php) so bb-mirror's toggle and this form
+    # cannot disagree; reading the constant would now report 'absent' forever and
+    # the gate would assert the no-op even with the feature on.
+    out = wp_eval("echo function_exists('lg_fc_enabled') ? "
+                  "(lg_fc_enabled() ? 'on' : 'off') : 'absent';").strip()
     if out not in ("on", "off", "absent"):
         raise CannotRun(f"could not read LG_FRONTEND_COMPOSE (got {out!r})")
     return out, "read from the box"

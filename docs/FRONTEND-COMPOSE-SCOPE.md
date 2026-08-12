@@ -694,16 +694,17 @@ LOADED before trusting that green:
 
 ```bash
 sudo -n wp --allow-root --path=/var/www/dev eval \
-  'echo defined("LG_FRONTEND_COMPOSE") ? "loaded, flag=".var_export(LG_FRONTEND_COMPOSE,true) : "NOT LOADED";'
+  'echo function_exists("lg_fc_enabled") ? "loaded, flag=".var_export(lg_fc_enabled(),true) : "NOT LOADED";'
 ```
 
 **To arm it for a look (dev2 only, box-local, untracked):**
 
 ```bash
-sudo tee /var/www/dev/wp-content/mu-plugins/00-lg-fc-flag-TEMP.php >/dev/null <<'PHP'
-<?php defined('ABSPATH') || exit;
-if (!defined('LG_FRONTEND_COMPOSE')) define('LG_FRONTEND_COMPOSE', true);
-PHP
+# The flag now lives in the SHARED tracked config, read by both WordPress and
+# bb-mirror. For a look, flip it there (and put it back), or use the lane preview
+# at /preview/frontend-compose/ which arms it for that path only.
+sed -i "s/'enabled' => false/'enabled' => true/" \
+  ~/loothplatformv2-clean/platform/config/frontend-compose.php
 ```
 
 Then `https://dev2.loothgroup.com/compose/?type=loothprint`. Delete that file to

@@ -85,21 +85,31 @@ PAGES = {
 # wdsignup note above was written about, so these are declared separately and
 # SKIPPED WITH A REASON until their flag is on, rather than quietly audited.
 #
-# The flag is READ off the box, never assumed, so flipping the default needs no
-# edit here — the surface simply starts being audited.
+# The flag is READ off the box via the feature's own reader function, never
+# assumed, so flipping the default needs no edit here — the surface simply starts
+# being audited.
 FLAGGED_PAGES = {
     # front-end compose (backlog 6, Ian's Option A). Member-only by construction:
     # anon gets the branded 404, so an anon audit would measure that instead.
-    "compose": ("/compose/?type=loothprint", ["member"], "LG_FRONTEND_COMPOSE"),
+    "compose": ("/compose/?type=loothprint", ["member"], "lg_fc_enabled"),
 }
 
 
-def _flag_is_on(const):
-    """Read a PHP constant off the box. Absent or unreadable => treat as OFF."""
+def _flag_is_on(reader):
+    """
+    Ask the feature's own READER FUNCTION off the box. Absent or unreadable =>
+    treat as OFF.
+
+    A function, not a constant: front-end compose moved its flag into a shared
+    tracked file so bb-mirror's toggle and the WordPress form cannot disagree, and
+    a constant check would have reported OFF forever — the page would have skipped
+    on every run and this entry would have been pure decoration while looking
+    like coverage.
+    """
     try:
         r = subprocess.run(
             ["sudo", "-n", "wp", "--allow-root", "--path=/var/www/dev", "eval",
-             f"echo defined('{const}') && {const} ? 'on' : 'off';"],
+             f"echo function_exists('{reader}') && {reader}() ? 'on' : 'off';"],
             capture_output=True, text=True, timeout=60)
         return r.returncode == 0 and r.stdout.strip().endswith("on")
     except (OSError, subprocess.SubprocessError):
@@ -109,11 +119,11 @@ def _flag_is_on(const):
 def active_pages():
     """PAGES, plus any FLAGGED_PAGES whose flag is currently on."""
     out = {k: v for k, v in PAGES.items()}
-    for name, (path, viewers, const) in FLAGGED_PAGES.items():
-        if _flag_is_on(const):
+    for name, (path, viewers, reader) in FLAGGED_PAGES.items():
+        if _flag_is_on(reader):
             out[name] = (path, viewers)
         else:
-            print(f"  SKIP  {name}: {const} is off — surface does not exist yet "
+            print(f"  SKIP  {name}: {reader}() is off — surface does not exist yet "
                   f"(auditing its 404 would pass and mean nothing)")
     return out
 
