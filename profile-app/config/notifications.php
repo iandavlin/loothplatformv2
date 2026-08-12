@@ -62,4 +62,39 @@ return array(
 	 * existing "Clear" button (a real DELETE, member-initiated) is the escape.
 	 */
 	'max_ids' => 200,
+
+	/* ── notif-bridge (E4), 2026-08-09 ─────────────────────────────────────
+	   Added by a different lane than the two keys above. Notifications::cfg()
+	   merges unknown keys through `$got + $defaults` and Flags::bool() reads the
+	   whole array, so the three coexist — but DELETE NONE OF THEM on a future
+	   conflict: each one silently disables a shipped, gated behaviour. */
+    /**
+     * DELETE = DISMISS (Ian, 2026-08-08).
+     *
+     * false  — TODAY'S BEHAVIOUR, unchanged and byte-identical. The bell's × and
+     *          Clear-all really DELETE the row, and the weekly recap loses that
+     *          event forever (leak A, docs/atlas/RECAP-NOTIF-BRIDGE-TRACE.md §1d).
+     * true   — the row is KEPT and stamped `dismissed_at`. It leaves the bell
+     *          immediately and permanently; the recap still counts it while it is
+     *          unread AND undismissed.
+     *
+     * ⚠️ FLIP THIS ONLY AFTER THE MIGRATION HAS BEEN APPLIED.
+     * `true` makes the endpoint call dismiss(), which writes the `dismissed_at`
+     * column added by profile-app/sql/2026-08-08-notification-dismiss.sql (Ian runs
+     * it on live). Before that migration, `true` means every dismissal throws.
+     *
+     * ⚠️ AND NOTE WHAT THIS FLAG DOES *NOT* CONTROL — this was got wrong once and
+     * the red-first caught it. It does not decide the SQL. The statements follow the
+     * DATABASE (Notifications::schemaHasDismiss()), because the ON CONFLICT arbiter
+     * predicate must match the unique index that actually exists; gating the SQL on
+     * this flag instead meant a migrated box running flag-OFF code threw
+     * SQLSTATE[42P10] on every hub push and lost every notification. Behaviour here,
+     * schema there, and the two deploy in either order.
+     *
+     * The OFF state is gated: tools/gates/notif-dismiss-gate.sh, and the full
+     * red-first is profile-app/bin/notif-dismiss-proof.php (36 assertions, both flag
+     * states, all four arbiter/index pairings including the failing one).
+     */
+    'dismiss_instead_of_delete' => false,
+
 );

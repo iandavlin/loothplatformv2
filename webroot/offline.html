@@ -19,11 +19,38 @@
     if (busy) return;
     busy = true;
     if (manual) { btn.disabled = true; btn.textContent = 'Reconnecting…'; }
-    // Probe a tiny same-origin asset, bypassing the HTTP cache so a 200 genuinely
-    // means the network is back (the SW doesn't intercept non-/icons/ GETs).
+    // TWO STEPS, and the second one is the fix (backlog 3.10).
+    //
+    // Step 1 probes a tiny same-origin asset to learn whether the radio is back.
+    // /manifest.json is ideal for that and deliberately exempt from dev2's cookie
+    // gate — which is exactly why step 1 ALONE was wrong: on dev2 without the dev
+    // cookie the probe answers 200 while the page you actually wanted answers 403, so
+    // this reloaded into a 403 every 5 seconds forever. Measured in a real browser
+    // against the real gate: "PROBE SAYS ONLINE (status=200)" / "the reload target
+    // answers 403". See docs/PWA-SW-AUDIT.md §4.
+    //
+    // Step 2 therefore asks the question we actually care about — is THIS url
+    // reachable — before reloading. A cheap poll that only escalates to the real
+    // request when the network looks alive, so the common offline case still costs one
+    // tiny asset every 5s and we never reload into a wall.
     fetch('/manifest.json', { cache: 'no-store' }).then(function (r) {
       if (!r || !r.ok) throw 0;
-      location.reload();                       // back online -> load the real page
+      return fetch(location.href, { cache: 'no-store', redirect: 'follow' });
+    }).then(function (r) {
+      if (!r) throw 0;
+      if (r.status === 403) {                  // reachable, but refused — not "offline"
+        busy = false;
+        if (manual) {
+          btn.disabled = false;
+          btn.textContent = 'Refresh connection';
+        }
+        status.innerHTML = 'Connected, but this page is <strong>forbidden</strong> ' +
+          '(403). On the dev site an installed app keeps its own cookies — ' +
+          '<a href="/claim">claim this device</a>.';
+        return;
+      }
+      if (!r.ok) throw 0;
+      location.reload();                       // genuinely reachable -> load it
     }).catch(function () {
       busy = false;
       if (manual) {

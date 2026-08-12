@@ -77,6 +77,96 @@ final class Notifications
         return max(1, (int)self::cfg()['max_ids']);
     }
 
+    // ── TWO LANES, ONE CONFIG FILE (notif-bridge + recap-read-timer, 2026-08-09) ──
+    // cfg() above and Flags::bool() below BOTH read config/notifications.php. That is
+    // duplication, not a conflict: cfg() does `$got + $defaults` so unknown keys pass
+    // through, and Flags returns the whole array, so each lane's keys are invisible to
+    // the other. Deliberately NOT unified here — recap-read-timer's gate asserts cfg()'s
+    // exact behaviour, and a rebase is the wrong moment to refactor code someone else
+    // is gating. Filed for a later single-reader pass; the file itself carries all keys.
+    /**
+     * DELETE = DISMISS (Ian, 2026-08-08) — config/notifications.php.
+     *
+     * This flag decides ONE thing: whether the endpoint's DELETE routes to
+     * dismiss() or to delete(). It deliberately does NOT decide the SQL — see
+     * schemaHasDismiss() for why that separation is load-bearing.
+     */
+    public static function dismissEnabled(): bool
+    {
+        return Flags::bool('notifications', 'dismiss_instead_of_delete');
+    }
+
+    /**
+     * Does THIS DATABASE carry the dismissal migration?
+     *
+     * ── WHY THE SQL FOLLOWS THE SCHEMA AND NOT THE FLAG ─────────────────────
+     * The first cut of this gated the SQL text on dismissEnabled(), reasoning that
+     * "flag OFF emits the old statements, so the code is safe to deploy before the
+     * migration". The red-first (bin/notif-dismiss-proof.php) refuted it on the
+     * first run, and the failure is worth stating precisely because the reasoning
+     * looked airtight:
+     *
+     *     SQLSTATE[42P10]: there is no unique or exclusion constraint matching
+     *     the ON CONFLICT specification
+     *
+     * Postgres infers an arbiter index whose predicate is IMPLIED BY the ON CONFLICT
+     * WHERE clause — that direction, not the other. Once the migration narrows
+     * uq_notifications_target_unread to `… AND dismissed_at IS NULL`, the old
+     * two-term clause no longer implies it and EVERY hub push throws. So flag-OFF
+     * was not the safe state at all: on a migrated box it was the BROKEN one, and
+     * it would have taken the bell out the moment Ian ran the SQL on live.
+     *
+     * The honest invariant is that the arbiter predicate must match the index that
+     * actually exists. So the statements track the DATABASE, the flag tracks the
+     * BEHAVIOUR, and the two deploy independently in either order:
+     *
+     *     unmigrated box  → two-term SQL, two-term index      → works
+     *     migrated box    → three-term SQL, three-term index  → works
+     *
+     * Cached per process (an FPM worker asks once, not once per push). A catalog
+     * lookup here is worth its cost: the alternative is a deploy window in which
+     * every notification on the platform is silently lost.
+     */
+    public static function schemaHasDismiss(): bool
+    {
+        if (self::$schemaOverride !== null) return self::$schemaOverride;
+        static $has = null;
+        if ($has !== null) return $has;
+        try {
+            $has = (bool) Db::pg()->query(
+                "SELECT 1 FROM information_schema.columns
+                  WHERE table_name = 'notifications' AND column_name = 'dismissed_at'"
+            )->fetchColumn();
+        } catch (\Throwable $e) {
+            // Unreachable catalog → assume the old shape. Serving the pre-migration
+            // statements against a pre-migration database is the recoverable error;
+            // naming a column that may not exist is not.
+            $has = false;
+        }
+        return $has;
+    }
+
+    /** @var bool|null Test-only pin for the detected schema shape. */
+    private static ?bool $schemaOverride = null;
+
+    /**
+     * Test seam: pin the schema shape, so the red-first can reshape the index
+     * mid-transaction and exercise BOTH arbiter predicates in one run. CLI only —
+     * the same reasoning as Flags::forTest(): a switch an HTTP caller can move is
+     * not a switch.
+     */
+    public static function pinSchemaForTest(?bool $has): void
+    {
+        if (PHP_SAPI !== 'cli') throw new \LogicException('pinSchemaForTest is CLI-only');
+        self::$schemaOverride = $has;
+    }
+
+    /** ` AND <alias>dismissed_at IS NULL` iff this database has the column. */
+    private static function liveClause(string $alias = ''): string
+    {
+        return self::schemaHasDismiss() ? " AND {$alias}dismissed_at IS NULL" : '';
+    }
+
     /** Hub-event types — a (kind,id) target + a deep link, no FK. */
     public const HUB_TYPES = [
         'forum.reply_to_topic',
@@ -168,12 +258,23 @@ final class Notifications
         if ($targetKind === '' || $targetId < 1 || $targetUrl === '') return false;
         if ($actorUuid !== null && $actorUuid === $userUuid) return false;   // no self-notify
 
+        // ⚠️ THE ARBITER PREDICATE MUST TRACK THE INDEX, AND IT IS LOAD-BEARING.
+        // With dismissal on, a dismissed row is still UNREAD, so without the extra
+        // term it would keep arbitrating this ON CONFLICT: the next reply to the
+        // same target would UPDATE the row the member has already hidden and they
+        // would never hear about it again. A dismissal would silently become
+        // permanent deafness for that discussion — and it would ship green, because
+        // the push still returns raised:true. `dismissed_at IS NULL` here (and in
+        // uq_notifications_target_unread, 2026-08-08 migration) makes a dismissed
+        // row stop arbitrating, so the next event rings a FRESH row.
+        // Safe against BOTH index shapes: Postgres infers an arbiter whose predicate
+        // is implied by this WHERE, and `A AND B AND C` implies `A AND B`.
         $st = Db::pg()->prepare(
             "INSERT INTO notifications
                     (user_uuid, actor_uuid, type, target_kind, target_id, anchor_id, target_url)
              VALUES (:u, :actor, :type, :kind, :tid, :anchor, :url)
              ON CONFLICT (user_uuid, type, target_kind, target_id, COALESCE(anchor_id, 0))
-                     WHERE target_kind IS NOT NULL AND is_read = false
+                     WHERE target_kind IS NOT NULL AND is_read = false" . self::liveClause() . "
              DO UPDATE SET
                     actor_uuid  = EXCLUDED.actor_uuid,
                     actor_count = CASE
@@ -207,7 +308,7 @@ final class Notifications
                     a.slug AS actor_slug, a.avatar_url AS actor_avatar
                FROM notifications n
                LEFT JOIN users a ON a.uuid = n.actor_uuid
-              WHERE n.user_uuid = :u
+              WHERE n.user_uuid = :u" . self::liveClause('n.') . "
               ORDER BY n.created_at DESC
               LIMIT :lim OFFSET :off"
         );
@@ -267,6 +368,7 @@ final class Notifications
     {
         $st = Db::pg()->prepare(
             'SELECT COUNT(*) FROM notifications WHERE user_uuid = :u AND is_read = false'
+            . self::liveClause()
         );
         $st->execute([':u' => $uuid]);
         return (int)$st->fetchColumn();
@@ -386,6 +488,53 @@ final class Notifications
     {
         $st = Db::pg()->prepare(
             'DELETE FROM notifications WHERE user_uuid = :v'
+        );
+        $st->execute([':v' => $viewerUuid]);
+        return $st->rowCount();
+    }
+
+    /**
+     * DISMISS one notification — the ruled replacement for delete() (Ian, 2026-08-08).
+     *
+     * The row is KEPT and stamped. It leaves the bell (listFor/unreadCount filter on
+     * `dismissed_at IS NULL`) and it stops arbitrating the coalescing index, so the
+     * next reply to the same target rings a fresh row rather than silently updating
+     * the hidden one. The weekly recap still counts it while it is unread AND
+     * undismissed.
+     *
+     * NOT idempotent by design: `AND dismissed_at IS NULL` means a second dismiss of
+     * the same id reports false, which is what lets the endpoint keep returning 404
+     * for "not yours / already gone" without inventing a third answer. The member
+     * cannot tell the two apart, same deny model as delete().
+     *
+     * Deliberately does NOT touch is_read. Dismissing is not reading — a member who
+     * sweeps their bell without opening anything has still not seen those events, and
+     * conflating the two would hand the recap the very "engaged member gets an empty
+     * digest" inversion that backlog 4.1 is open about.
+     */
+    public static function dismiss(string $viewerUuid, int $id): bool
+    {
+        $st = Db::pg()->prepare(
+            'UPDATE notifications SET dismissed_at = now()
+              WHERE id = :id AND user_uuid = :v AND dismissed_at IS NULL'
+        );
+        $st->execute([':id' => $id, ':v' => $viewerUuid]);
+        return $st->rowCount() > 0;
+    }
+
+    /**
+     * DISMISS ALL of a viewer's notifications — the ruled replacement for deleteAll().
+     *
+     * This is the one that mattered: Clear-all used to destroy a member's entire week
+     * in a single tap, and on 2026-07-31 it took four of Ian's five reply
+     * notifications with it. Returns rows dismissed, matching deleteAll()'s contract
+     * so the surfaces' toast/no-op handling needs no change.
+     */
+    public static function dismissAll(string $viewerUuid): int
+    {
+        $st = Db::pg()->prepare(
+            'UPDATE notifications SET dismissed_at = now()
+              WHERE user_uuid = :v AND dismissed_at IS NULL'
         );
         $st->execute([':v' => $viewerUuid]);
         return $st->rowCount();

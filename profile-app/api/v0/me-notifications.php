@@ -106,13 +106,25 @@ if ($method === 'DELETE') {
     $all = !empty($_GET['all']) || !empty($in['all']);
     $id  = (int)($_GET['id'] ?? $in['id'] ?? 0);
 
+    // DELETE = DISMISS (Ian, 2026-08-08), behind config/notifications.php.
+    //
+    // The WIRE CONTRACT IS UNCHANGED in both states — same methods, same params, same
+    // `{ok, deleted:N}` / `{ok}` / 404 shapes — because the surfaces (bottom-nav.js's
+    // sheet, social-modals.js's modal) must not need to know which state the box is
+    // in. Only the row's fate changes: gone, or kept-and-hidden. Keeping the
+    // `deleted` key name when the flag is on is deliberate and not sloppiness — a
+    // renamed key would be a silent client break the moment the flag flips, and from
+    // the member's side "deleted" is still exactly what happened to it.
+    $dismiss = Notifications::dismissEnabled();
     if ($all) {
-        // Clear-all: DELETEs server-side (the retired watermark's real replacement).
-        profile_app_json(200, ['ok' => true, 'deleted' => Notifications::deleteAll($uuid)]);
+        // Clear-all. This is the tap that used to destroy a member's whole week.
+        $n = $dismiss ? Notifications::dismissAll($uuid) : Notifications::deleteAll($uuid);
+        profile_app_json(200, ['ok' => true, 'deleted' => $n]);
     }
     if ($id > 0) {
         // Owner-scoped in the model; not-yours / already-gone are one 404 (deny model).
-        if (!Notifications::delete($uuid, $id)) profile_app_json(404, ['error' => 'not_found']);
+        $ok = $dismiss ? Notifications::dismiss($uuid, $id) : Notifications::delete($uuid, $id);
+        if (!$ok) profile_app_json(404, ['error' => 'not_found']);
         profile_app_json(200, ['ok' => true]);
     }
     // Neither id nor all → refuse, so a malformed request can never wipe the list.

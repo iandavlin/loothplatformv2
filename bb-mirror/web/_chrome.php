@@ -546,7 +546,31 @@ function lg_bb_mirror_viewer_from_whoami(): array {
 }
 }
 
-function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
+/**
+ * $canonical_path — emit a SELF-REFERENCING <link rel=canonical> + og:url for
+ * pages that have one canonical address (hub-seo-landing lane, Ian 2026-08-09).
+ *
+ * WHY, and it is not boilerplate. forums.js §4f rewrites the address bar to
+ * /hub/?topic=<forum>/<topic> the moment the discussion modal is up, and live
+ * robots.txt carries `Disallow: /hub/?` — VERIFIED on live, not assumed. So the
+ * form a reader copies out of the address bar and shares is a URL Google is
+ * FORBIDDEN to fetch. Serving the right content at the permalink is not enough
+ * on its own: without a canonical, nothing tells Google that the permalink owns
+ * that content, and the sitemap's promise is left arguing with the address bar.
+ * Ian caught this by eye on the flipped serve — the content and the layout were
+ * both already correct, which is exactly why no existing assertion saw it.
+ *
+ * ABSOLUTE and built from LG_BB_MIRROR_HOST, the single request-derived host
+ * source this app already uses (config.php sanitises it), so the tag names this
+ * page on the host that actually served it — self-referencing on dev2, on live,
+ * and under any preview mount, with no per-env edit.
+ *
+ * Pass null (the default) and nothing is emitted, so every page that has NOT
+ * decided what its canonical address is stays byte-identical rather than
+ * asserting a wrong one. A wrong canonical is worse than none: it actively tells
+ * Google to consolidate on the wrong URL.
+ */
+function bb_mirror_chrome_header(string $page_title = 'The Hub', ?string $canonical_path = null): void
 {
     require_once '/srv/lg-shared/site-header.php';
 
@@ -598,6 +622,14 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= $title ?> — Looth Group</title>
+<?php if ($canonical_path !== null && $canonical_path !== ''):
+        $lg_canon = 'https://' . LG_BB_MIRROR_HOST . '/' . ltrim($canonical_path, '/');
+        $lg_canon = htmlspecialchars($lg_canon, ENT_QUOTES, 'UTF-8'); ?>
+<link rel="canonical" href="<?= $lg_canon ?>">
+<meta property="og:url" content="<?= $lg_canon ?>">
+<meta property="og:type" content="article">
+<meta property="og:title" content="<?= $title ?>">
+<?php endif; ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <?php /* Google Fonts CSS INLINED (perf lane 2026-06-11): the css2 <link> for

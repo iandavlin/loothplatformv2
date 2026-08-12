@@ -53,6 +53,8 @@ S2 /footer-mockups/ anon-readable on live — one `sudo rm` of the symlink, awai
 S3 dev2's vhost is a REGULAR FILE, not the repo symlink — tracked nginx changes have silently missed dev2 since lane-preview.sh sed -i'd it
 
 **P3 — big builds (scope first)**
+19. NEW-MEMBER PROFILES ARRIVE ALIVE (Ian 8/12, from the empty-directory screenshot) — UNOWNED. Auto-creation works (12/12 newest have profiles, all 'onboard' same-day) but 9/12 are BARE SHELLS: placeholder avatar, no location/skills/instruments — a directory of identical placeholder faces reads as a dead community to prospects. Build: sign-up step (or first-login prompt) asking photo + city + what-you-do so the shell arrives filled. Member-facing → flag, mocks for Ian first. Note: May's one-time backfill_location (659 rows) is why OLD members look fuller; new joiners since get nothing.
+20. DIRECTORY SHOWS CITY/STATE ONLY (Ian 8/12, member-safety) — UNOWNED. Member 'Luke' (WP 2091) typed his full home street address into the location field and the public directory renders it verbatim. Render city/state only in directory rows regardless of what the field holds (full text can stay on the member's own profile if they chose it, but list views truncate to locality). Small, discrete, gate-able.
 16. Front-end authoring for all post types ★ vision
 17. Stripe membership: audit → build
 

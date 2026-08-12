@@ -116,11 +116,28 @@ final class Recap
      *                       hand back a lie either way.
      *   hub rows            no edge exists, so is_read is the only resolution signal
      *                       they have. Documented as a limit, not a preference.
+     *   dismissed rows      NEVER outstanding, whatever their type. Added 2026-08-08
+     *                       with the delete=dismiss ruling: keeping the row is what
+     *                       stops Clear-all destroying the week, and the flip side of
+     *                       keeping it is that the recap must honour the dismissal or
+     *                       the email becomes a way to re-nag about things the member
+     *                       explicitly swept. "Counts unread AND undismissed" is the
+     *                       ruling's own wording. It wraps the whole disjunction — a
+     *                       dismissed connection_request is out too, even though the
+     *                       EDGE would otherwise keep it in.
      */
-    private const OUTSTANDING = "
-              (n.type = 'connection_request' AND c.status = 'pending')
+    private static function outstanding(): string
+    {
+        // Assembled, not a const, for one reason: on a box whose database has not
+        // been migrated this must not name `dismissed_at` at all, or the weekly
+        // digest's recap pull 500s. Keyed on the SCHEMA, not on the flag — see the
+        // long note at Notifications::schemaHasDismiss() for the red-first that
+        // proved gating this on the flag breaks the moment the migration lands.
+        $live = Notifications::schemaHasDismiss() ? ' AND n.dismissed_at IS NULL' : '';
+        return "((n.type = 'connection_request' AND c.status = 'pending')
            OR (n.type = 'connection_accept'  AND c.status = 'accepted' AND n.is_read = false)
-           OR (n.connection_id IS NULL AND n.is_read = false)";
+           OR (n.connection_id IS NULL AND n.is_read = false))" . $live;
+    }
 
     /** Hard ceiling per member — a runaway week cannot make one recipient's payload huge. */
     private const MAX_ROWS = 50;
@@ -206,7 +223,7 @@ final class Recap
                   LEFT JOIN connections c ON c.id = n.connection_id
                  WHERE n.user_uuid IN ($uph)
                    AND n.created_at >= now() - make_interval(days => ?)
-                   AND (" . self::OUTSTANDING . ")
+                   AND (" . self::outstanding() . ")
                  ORDER BY n.user_uuid, n.created_at DESC";
         $st = $pg->prepare($sql);
         $st->execute(array_merge($uuids, [$days]));
@@ -300,7 +317,7 @@ final class Recap
                   LEFT JOIN connections c ON c.id = n.connection_id
                  WHERE n.user_uuid IN ($uph)
                    AND n.created_at < now() - make_interval(days => ?)
-                   AND (" . self::OUTSTANDING . ")
+                   AND (" . self::outstanding() . ")
                  GROUP BY n.user_uuid, n.type";
         $st = $pg->prepare($sql);
         $st->execute(array_merge($uuids, [$days]));

@@ -54,6 +54,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -70,7 +71,18 @@ SAMPLE = int(os.environ.get("LG_TL_SAMPLE", "3"))
 #   2. It is the switch to throw when the flag's default flips ON. At that point
 #      the legacy layout reaching a visitor IS a regression, and the gate should
 #      say so without anyone editing an assertion.
-REQUIRE_ON = os.environ.get("LG_TL_REQUIRE_ON", "0") == "1"
+#
+# THAT SWITCH IS NOW THROWN (2026-08-09). Ian approved the running thing, the
+# default flipped ON, and forums/_single-topic.php has been deleted — so the
+# legacy layout reaching a visitor is a regression, and this gate demands the hub
+# layout by default.
+#
+# The OFF-RECOGNISING ARM IS DELIBERATELY KEPT, and LG_TL_REQUIRE_ON=0 still
+# disarms it. Nothing can serve that layout today, which is exactly why the check
+# is worth keeping: it is what would NAME a bad deploy that somehow resurrected
+# it, instead of leaving a confusing generic failure. An assertion whose subject
+# is gone costs one string compare; deleting it costs the diagnosis.
+REQUIRE_ON = os.environ.get("LG_TL_REQUIRE_ON", "1") == "1"
 
 # LG_TL_PREFIX — gate a LANE PREVIEW instead of the live mount. The sitemap
 # always advertises /hub/<forum>/<topic>/ (that is the promise made to Google);
@@ -115,17 +127,31 @@ def fetch(env, path, want_status=False):
     if want_status:
         cmd += ["-w", "\n__HTTP__%{http_code}"]
     cmd.append(url)
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    except Exception:                                         # noqa: BLE001
-        return "", 0
-    body = r.stdout
-    code = 0
-    if want_status:
-        m = re.search(r"\n__HTTP__(\d+)$", body)
-        if m:
-            code = int(m.group(1))
-            body = body[: m.start()]
+    # RETRY A 403 PER REQUEST, not just on the liveness probe. The dev gate on
+    # this box refuses correctly-cookied requests in bursts: a single fetch()
+    # always succeeds, and interleaving fetch() with a hand-built curl gives
+    # 200/200 every time — but a FULL RUN, which fires ~20 requests over pages of
+    # 170-200KB, trips it reproducibly. The token is byte-identical to a fresh
+    # shell resolve, so this is pacing, not authorisation.
+    #
+    # A short backoff also stops the suite hammering a 2-core box, which is worth
+    # having on its own merits.
+    for attempt in range(3):
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        except Exception:                                     # noqa: BLE001
+            return "", 0
+        body = r.stdout
+        code = 0
+        if want_status:
+            m = re.search(r"\n__HTTP__(\d+)$", body)
+            if m:
+                code = int(m.group(1))
+                body = body[: m.start()]
+        if code != 403:
+            return body, code
+        if attempt < 2:
+            time.sleep(1.5 * (attempt + 1))
     return body, code
 
 
@@ -175,11 +201,41 @@ def main():
     #    presence check on a dead box is vacuously red — or worse, a layout
     #    check on an empty hub is vacuously green. Prove the hub is serving a
     #    real feed before judging anything about a topic URL.
-    hub, code = fetch(env, PREFIX + "/", want_status=True)
+    # RETRY THE LIVENESS PROBE. The dev gate on this box intermittently answers
+    # 403 to a correctly-cookied request, in WINDOWS of a few seconds during
+    # which every client is refused — not just this one.
+    #
+    # Chased properly before writing this off, because "shell curl 200, gate
+    # 403, back to back" looked damning for the gate: the token is byte-identical
+    # to the shell's, the argv is identical (reconstructed and run side by side),
+    # a cookie-less request 403s exactly as it should, and interleaving fetch()
+    # with a hand-built reconstruction in ONE process gives 200/200 four rounds
+    # running. The apparent shell-vs-gate split was two different windows, not
+    # two different clients. It is NOT the limit_req zone either — that returns
+    # 429, not 403.
+    #
+    # So: an environment-level flap in $loothdev_is_authorized, not this lane's
+    # code and not this script's. Worth keeper knowing; not worth a gate that
+    # cannot run.
+    #
+    # A single blip should not cost a whole run, but it must not be swallowed
+    # either: the retry is bounded, and a run that needed one SAYS SO — so a
+    # transient stays visible and a persistent fault still reports CANNOT RUN.
+    hub, code, tries = "", 0, 0
+    for tries in range(1, 6):
+        hub, code = fetch(env, PREFIX + "/", want_status=True)
+        if code == 200 and "feed-card" in hub:
+            break
+        if tries < 5:
+            time.sleep(3 * tries)          # 3+6+9+12 = up to 30s of window
     if code != 200 or "feed-card" not in hub:
-        print(f"CANNOT RUN  {PREFIX}/ did not serve a feed (HTTP {code}, "
-              f"{len(hub)}b, feed-card present: {'feed-card' in hub})")
+        print(f"CANNOT RUN  {PREFIX}/ did not serve a feed after {tries} "
+              f"attempt(s) (HTTP {code}, {len(hub)}b, feed-card present: "
+              f"{'feed-card' in hub})")
         return 2
+    if tries > 1:
+        print(f"liveness    NOTE: needed {tries} attempts — the dev gate blipped "
+              f"(transient, self-clearing; see the comment above)")
     hub_cards = len(re.findall(r"feed-card feed-card--", hub))
     print(f"liveness    {PREFIX}/ HTTP 200, {hub_cards} feed cards, {len(hub)}b")
 
@@ -309,6 +365,45 @@ def main():
                 problems.append(
                     f"OP author {p_author!r} renders a /u/ profile link the "
                     f"fragment API masks away")
+
+        # ── A SELF-REFERENCING CANONICAL (Ian, 2026-08-09) ──────────────────
+        # Ian caught this by eye on the flipped serve, and it is exactly the gap
+        # the two original halves could not see: the content IS served, so half A
+        # passes, and the layout IS the hub, so half B passes — while nothing on
+        # the page tells Google WHICH url owns that content.
+        #
+        # It matters because forums.js §4f rewrites the address bar to
+        # /hub/?topic=<forum>/<topic> once the modal is up, and live robots.txt
+        # carries `Disallow: /hub/?` (verified on live, not assumed). So the
+        # shareable form of every discussion is a URL Google is FORBIDDEN to
+        # fetch. Without a canonical there is nothing anchoring the permalink,
+        # and the sitemap's promise is left arguing with the address bar.
+        #
+        # Asserted ABSOLUTE and SELF-REFERENCING — the canonical must name this
+        # exact page on the host that served it, which is what makes it a
+        # consolidation signal rather than decoration.
+        want_canon = env["LG_GATE_HOST"].rstrip("/") + path
+        m_can = re.search(r'<link[^>]+rel=["\']canonical["\'][^>]*>', page, re.I)
+        if not m_can:
+            problems.append("NO <link rel=canonical> — nothing anchors Google to "
+                            "the permalink, and the ?topic= address-bar form is "
+                            "robots-blocked on live")
+        else:
+            m_href = re.search(r'href=["\']([^"\']+)["\']', m_can.group(0), re.I)
+            got = (m_href.group(1) if m_href else "").strip()
+            if got.rstrip("/") != want_canon.rstrip("/"):
+                problems.append(
+                    f"canonical is not self-referencing: {got!r} != {want_canon!r}")
+
+        m_og = re.search(r'<meta[^>]+property=["\']og:url["\'][^>]*>', page, re.I)
+        if not m_og:
+            problems.append("no og:url — the share/social form of the URL is "
+                            "unanchored too")
+        else:
+            m_c = re.search(r'content=["\']([^"\']+)["\']', m_og.group(0), re.I)
+            gotog = (m_c.group(1) if m_c else "").strip()
+            if gotog.rstrip("/") != want_canon.rstrip("/"):
+                problems.append(f"og:url disagrees with the canonical: {gotog!r}")
 
         reps, rcode = fetch(env, f"{PREFIX}/?replies={tid}", want_status=True)
         # Compare the reply BODY only. The first cut compared whole stubs and
