@@ -184,15 +184,27 @@ def main():
         s.call("Emulation.setTouchEmulationEnabled", enabled=metrics["mobile"])
 
         for theme in ("light", "dark"):
-            # Re-assert the session EVERY iteration. This browser is shared with
-            # the other lanes, and a Network.clearBrowserCookies from any other
-            # CDP session wipes it for everyone mid-run — a member iteration then
-            # renders as anon with nothing in this script at fault. Observed once
-            # as a lone mobile/dark/member failure that would not reproduce.
+            # RE-ESTABLISH THE VIEWER FROM SCRATCH EVERY ITERATION — clear, then
+            # set exactly the cookies this viewer should have. Setting only the
+            # member cookie was not enough, and the failure ran BOTH ways on this
+            # shared browser:
+            #   · a member iteration rendered as ANON (its session wiped by some
+            #     other lane's Network.clearBrowserCookies);
+            #   · an anon iteration rendered as a MEMBER (a WP session appearing
+            #     mid-run, so the server sent data-lg-can-post="1" and the sheet
+            #     correctly built a composer).
+            # The second one is the dangerous shape: it looks exactly like "anon
+            # gets a composer", which is a defect worth stopping a release for.
+            # Pure curl with no session says data-lg-can-post="0" and ships
+            # "Sign in to reply", so the product was never wrong — the harness was
+            # inheriting an identity instead of declaring one.
+            s.call("Network.clearBrowserCookies")
+            s.call("Network.setCookie", name="loothdev_auth", value=tok,
+                   domain=".dev2.loothgroup.com", path="/", secure=True)
             if WP_COOKIE and "=" in WP_COOKIE:
                 cn, cv = WP_COOKIE.split("=", 1)
                 s.call("Network.setCookie", name=cn, value=cv,
-                       domain="dev2.loothgroup.com", path="/", secure=True)
+                       domain="dev2.loothgroup.com", path="/", secure=True)   # host-only
             # Navigate to the origin BEFORE writing localStorage — a write on
             # about:blank lands nowhere and the shared profile's stored theme
             # then wins, which is how "light" shots come out dark.

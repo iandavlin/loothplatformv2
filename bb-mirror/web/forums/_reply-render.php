@@ -781,7 +781,7 @@ if (!function_exists('feed_save_btn')) {
  * through five files. DEFAULT OFF until Ian has looked at it on live.
  *
  * Lives in _reply-render.php because that is the shared partial BOTH the feed
- * (_feed.php) and the standalone topic page (_single-topic.php) load — the same
+ * (_feed.php) and the server-rendered discussion modal (_topic-modal.php) load — the same
  * reason feed_save_btn() and feed_follow_btns() live here.
  */
 if (!function_exists('lg_thread_follow_enabled')) {

@@ -62,7 +62,7 @@ $rs = $db->prepare("
         --
         -- `total` is the UNCAPPED count, so a legacy reply holding more than the
         -- cap can render a +N affordance instead of silently dropping them
-        -- again. ORDER BY position matches _single-topic.php's render_attachments()
+        -- again. ORDER BY position matched the retired _single-topic.php's render_attachments()
         -- (verified: position order == id order for all 506 existing rows, so the
         -- first image — and therefore the feed teaser — is unchanged).
         SELECT json_agg(json_build_object('url', a.url, 'w', a.width, 'h', a.height)) AS imgs,

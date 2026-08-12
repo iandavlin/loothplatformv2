@@ -1341,10 +1341,10 @@ function feed_sort_url(string $sort_val, string $forum_slug): string
 $page_title = $scoped_forum ? (string)$scoped_forum['title'] : 'The Hub';
 
 /* ── THE SERVER-RENDERED DISCUSSION MODAL (hub-seo-landing lane, 2026-08-09) ──
-   Set by index.php when /hub/<forum>/<topic>/ resolved a topic and
-   LG_HUB_TOPIC_LANDING is on. The feed is otherwise untouched: this block is the
-   ONLY thing the flag adds to this file, and with no landing topic it produces
-   not one byte.
+   Set by index.php when /hub/<forum>/<topic>/ resolved a topic. The feed is
+   otherwise untouched, and with no landing topic this block produces not one
+   byte — which is what let it ship behind an OFF-default flag, and what keeps
+   every other hub route byte-identical now that the flag is gone.
 
    BUILT HERE, BEFORE chrome_header(), ON PURPOSE. lg_topic_modal_html() captures
    the ?body= and ?replies= endpoints, which call header() — a warning once
@@ -1359,7 +1359,36 @@ if ($lg_landing) {
     $page_title       = (string)$lg_landing['title'];
 }
 
-bb_mirror_chrome_header($page_title);
+/* CANONICAL — two surfaces declare one, and the bare site-wide feed deliberately
+   does not.
+
+   1. A DISCUSSION LANDING: the SITEMAP'S EXACT PERMALINK, the same string
+      sitemap-discussions.xml advertises, so the two cannot drift.
+
+   2. A CATEGORY PAGE (/hub/<category>/): its own bare address — Ian, 2026-08-11,
+      "Google lists them" with no canonical at all. 45 public categories, each a
+      real listing with internal links, so canonical rather than noindex: noindex
+      would discard a legitimate surface.
+
+      ⚠️ The canonical is the BARE category path, deliberately stripped of
+      sort/type/q/page. Those variants are near-duplicates of the same listing and
+      pointing each at itself is what lets Google index forty copies of one
+      category. Note robots.txt's `Disallow: /hub/?` does NOT cover
+      /hub/<category>/?… — it is a literal prefix match on /hub/? — so the
+      variants ARE crawlable today and this is the only thing consolidating them.
+
+   3. The bare site-wide feed still declares NOTHING. Its routes carry filters
+      that legitimately produce different pages, and naming one of them canonical
+      would be a claim nobody has made. A wrong canonical is worse than none — it
+      actively tells Google to consolidate on the wrong URL. */
+$lg_canonical_path = null;
+if ($lg_landing) {
+    $lg_canonical_path = LG_BB_MIRROR_PUBLIC_PATH . '/' . rawurlencode((string)$lg_landing['forum_slug'])
+                       . '/' . rawurlencode((string)$lg_landing['slug']) . '/';
+} elseif ($scoped_forum && !empty($scoped_forum['slug'])) {
+    $lg_canonical_path = LG_BB_MIRROR_PUBLIC_PATH . '/' . rawurlencode((string)$scoped_forum['slug']) . '/';
+}
+bb_mirror_chrome_header($page_title, $lg_canonical_path);
 
 // Posting is authenticated-only (BuddyBoss REST 401s anonymous writes). Gate
 // every post/reply affordance on this server-side so anon viewers receive no
