@@ -63,10 +63,26 @@
 return array(
 
 	/**
-	 * OFF until Ian has seen it on the serve. This is member-visible on LIVE — the
-	 * same sw.js serves live members, byte-identical, and the deadline changes what a
-	 * hung navigation does for them — so it merges OFF per CLAUDE.md and is flipped
-	 * when he has looked at the running thing, not when the gates are green.
+	 * OFF. Not yet ruled on.
+	 *
+	 * ⚠️ A 2026-08-11 decision-box click that read as "ship ON" was RETRACTED: Ian had
+	 * misread the box as being about the keeper watchdog, not the offline fix. It is NOT a
+	 * ruling and must not be quoted as one. Keeper is re-asking cleanly. History and the
+	 * argument that will be put to him: docs/PWA-SW-AUDIT.md "## Arming — retracted click,
+	 * awaiting a clean ruling".
+	 *
+	 * This is member-visible on LIVE — the same sw.js serves live members — so it merges
+	 * OFF per CLAUDE.md and is flipped when Ian says so, not when the gates are green.
+	 *
+	 * The unusual part, and the reason this one is worth a real decision rather than a
+	 * default: the version live is running RIGHT NOW is the broken one (re-measured
+	 * 2026-08-12 over ssh live-ro: CACHE 'looth-pwa-v3', no fetchWithDeadline in it), and
+	 * the new behaviour is "stop stranding the user". So OFF here does not protect a member
+	 * from a new surface — it preserves the wall. That is the argument FOR arming; it is
+	 * still Ian's call to make.
+	 *
+	 * The armed path IS verified end to end in a real browser (see the audit doc), so
+	 * arming is a one-line flip plus a pull whenever the ruling lands.
 	 */
 	'resilient_fetch' => false,
 

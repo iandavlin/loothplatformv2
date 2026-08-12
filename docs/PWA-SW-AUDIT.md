@@ -172,16 +172,69 @@ Nothing here is attributable to this diff, which touches `sw.js`, `pwa.js`,
 `pwa-loader.php`, `offline.html`, this lane's gate/harness and docs — nothing in the
 visibility model or forum subscriptions.
 
-## Arming the flag — no decision recorded yet
+## Arming — retracted click, awaiting a clean ruling
 
-⚠️ **This heading is deliberately NOT the one the gate looks for.** Gate 23 searches for a
-heading reading exactly `Decision to arm`; had this placeholder used that wording, the
-tripwire would have been satisfied by the very text saying no decision exists. (That
-false-green was caught for real on the 4.1 lane, which is why it is avoided here.)
+**NOT ARMED. `resilient_fetch` is `false`.**
 
-To arm `resilient_fetch`, add a section headed **`## Decision to arm`** naming who decided
-and when, then flip the value. Arming it without that section turns gate 23 red, and the
-correct response is to record the decision — **not** to delete the check.
+⚠️ **A 2026-08-11 decision-box click that read as "ship the deadline ON" was RETRACTED.**
+Ian had misread the box as being about the keeper watchdog, not this offline fix. It is
+**not a ruling and must not be quoted as one** — including by anyone who later finds the
+click itself, or finds the commit in this branch's history that briefly acted on it.
+Keeper is re-asking cleanly.
+
+This heading is deliberately **not** the one gate 23 greps for. The gate looks for a
+heading reading exactly `Decision to arm`, and using that wording here would let the very
+text explaining that no ruling exists satisfy the tripwire built to require one. The same
+false-green was caught for real on the recap-read-timer lane.
+
+To arm once a real ruling lands: add a section headed **`## Decision to arm`** naming who
+decided and when, and flip `resilient_fetch` to `true`. Arming without that section turns
+gate 23 red, and the correct response is to record the decision — **not** to delete the
+check.
+
+### The argument that will be put to Ian, so the re-ask is clean
+
+- **The version live is running right now IS the broken one.** Re-measured 2026-08-12 over
+  `ssh live-ro`: `const CACHE = 'looth-pwa-v3'` with no `fetchWithDeadline` anywhere in it.
+- **The default-OFF argument inverts here.** A flag defaults OFF to keep a *new* behaviour
+  away from members. This new behaviour is "stop stranding the user", so OFF preserves the
+  defect rather than guarding against it. That is why this flag is worth a decision instead
+  of a default — and it is still Ian's decision.
+- **The old version is the undo**, at the cost spelled out below.
+- **Arming cannot expose the dev2-only behaviour.** The claim prompt and the dev-path bypass
+  are gated on `self.location.hostname === 'dev2.loothgroup.com'` — an explicit allowlist,
+  never a negation — so on live this flag turns on the deadline and the per-asset install,
+  and nothing else.
+
+### The armed path is already verified, so the flip is cheap
+
+Measured in a real browser against this branch (`/sw.js` + `/pwa.js` swapped in through
+`endpoint-swap-proxy.py --no-route-strip`, flag armed for the run only, then reverted):
+
+```
+window.LG_SW      "f=resilient&t=8000&b=%2Ffooter-mockups%2F,..."
+controller        /sw.js?f=resilient&t=8000&b=...      registered WITH the flag
+state             activated
+caches.keys()     ["looth-pwa-v4"]   <- v3 purged by activate(), the bump works
+shell cached      /offline.html AND /icons/icon-192.png
+the page          title "Test — Looth Group", 3822 chars, shell: false
+```
+
+So whenever the ruling lands, arming is one line plus a pull — the behaviour behind it is
+already known to work rather than hoped to.
+
+### The undo, stated precisely
+
+`'resilient_fetch' => false` + a pull. `pwa-loader.php` then stops emitting
+`window.LG_SW`, `pwa.js` registers plain `/sw.js`, that registration supersedes the
+flagged one, and `sw.js` reads no query so `RESILIENT` is false and every branch takes its
+original path. Gate 23 asserts that OFF path in both directions, so the undo is measured
+rather than hoped.
+
+Two honest caveats on the word "instant": it is a **deploy**, not a runtime toggle — it
+needs `git pull` on the serving checkout — and each client picks it up on its next visit,
+not immediately. The cache name stays `v4`; that is only a name, and nothing is lost by
+leaving it.
 
 ### What flipping it costs, so the decision is informed
 
