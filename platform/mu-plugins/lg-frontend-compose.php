@@ -357,6 +357,47 @@ function lg_fc_may_compose(string $type, int $user_id = 0): bool
 }
 
 /**
+ * Is this post's page FROZEN away from its fields?
+ *
+ * A loothprint's page is SYNTHESIZED from its meta — that is the whole reason the
+ * compose form is cheap. But Plugin::load_layout() gives an explicit
+ * `_lg_layout_v2` blob priority over synthesis, and managed singles already carry
+ * an "Edit page" button (FeEditor::render_header_button) whose save writes exactly
+ * that blob (EditorRest.php:290).
+ *
+ * So a member who edits their page once has, silently, decoupled it from their
+ * fields — and every later edit through THIS form would change the data and not
+ * the page. Proven on a throwaway, not inferred:
+ * tools/frontend-compose/synth-freeze-probe.php (the body froze at the blob's
+ * text and a subsequent field change never reached the page).
+ *
+ * This does not resolve the clash — that is Ian's call, and the options are
+ * genuinely different (drop the page editor for synthesized types, have this form
+ * clear the blob, or leave both and accept the split). What it does is refuse to
+ * LIE about it: the form says so rather than accepting an edit that will not show.
+ */
+function lg_fc_page_is_frozen(int $post_id): bool
+{
+    if (!$post_id) {
+        return false;
+    }
+    if (!class_exists('\LG\LayoutV2\Plugin')) {
+        return false;   // layout-v2 absent — nothing to be frozen by
+    }
+    $synth = ['event', 'loothprint', 'loothcuts', 'useful_links', 'document', 'member-benefit'];
+    if (!in_array(get_post_type($post_id), $synth, true)) {
+        return false;   // non-synth types are blob-driven by design
+    }
+    // Use layout-v2's OWN constant rather than spelling the key here. I first
+    // wrote two guesses ('lg_layout_v2' and '_lg_layout_v2') hoping one would
+    // stick — a key that never matches reports "not frozen" for every post and
+    // the warning would simply never appear, which is the silent-no-op class this
+    // file keeps running into.
+    $key = defined('LG_LAYOUT_V2_META_KEY') ? LG_LAYOUT_V2_META_KEY : '_lg_layout_v2';
+    return !empty(get_post_meta($post_id, $key, true));
+}
+
+/**
  * Every member publishes. There is no pending path any more.
  *
  * The old 'pending' fallback existed as a safety valve UNDER the allow-list: if
@@ -659,6 +700,13 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     <p class="lgfc__sub lgfc__sub--wide"><?php echo esc_html($t['sub']); ?></p>
     <p class="lgfc__sub lgfc__sub--narrow"><?php echo esc_html($t['sub_narrow'] ?? $t['sub']); ?></p>
   </div>
+  <?php if ($edit && lg_fc_page_is_frozen($edit)): ?>
+    <div class="lgfc__frozen" role="status">
+      <strong>Heads up — this post’s page was customised.</strong>
+      Changes you make here will be saved, but they won’t show on the page until the
+      custom layout is removed. Tell us and we’ll sort it.
+    </div>
+  <?php endif; ?>
   <?php acf_form('lg-fc-' . $type); ?>
 </div>
     <?php
@@ -973,6 +1021,13 @@ function lg_fc_css(): string
   .lgfc .acf-input input[type=text],.lgfc .acf-input input[type=url],
   .lgfc .acf-input textarea{font-size:16px}
 }
+
+/* ---- the frozen-page warning (see lg_fc_page_is_frozen) ---- */
+.lgfc__frozen{margin:0 21px 4px;padding:11px 13px;border-radius:10px;
+  border:1px solid var(--lg-rust,#c66845);background:var(--lg-rust-tint,#fbeee8);
+  color:var(--lg-ink,#323532);font-size:13.4px;line-height:1.5}
+.lgfc__frozen strong{display:block;margin-bottom:2px}
+@media (max-width:640px){.lgfc__frozen{margin:0 16px 4px}}
 
 /* ---- embed: the same card, no page furniture (it is inside an iframe) ---- */
 .lgfc-body--embed{background:transparent}
