@@ -14,3 +14,11 @@
    edit with that?" Lane to answer whether layout-v2's front-end edit covers the
    169 before the A/B/C ruling is re-posed (it may dissolve the question).
 6. **Stripe join**: "Our own private page" (ruled in the stripe seat's chat).
+
+7. **Category pages = GOOGLE DOORS, kept and rebuilt** ("Keep as Google doors"):
+   they exist only so Google can rank each topic area; rebuilt in the hub look;
+   NO member-facing nav gets added (Ian: "There's currently no nav to the
+   category page... We can already filter for the categories in the hub page" —
+   correct, and stays true).
+8. **Door contents = OPTION A, discussions + related content mixed** — the
+   richer first impression for a stranger landing from Google.
