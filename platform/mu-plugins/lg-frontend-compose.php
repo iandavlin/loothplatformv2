@@ -690,6 +690,9 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     header('Content-Type: text/html; charset=utf-8');
 
     // The mock's labels replace ACF's for the duration of this render only.
+    // $edit rides along so the pseudo-fields can be given their CURRENT values —
+    // see lg_fc_relabel()'s prefill block for why ACF does not do it for us here.
+    $GLOBALS['lg_fc_editing'] = $edit;
     add_filter('acf/prepare_field', 'lg_fc_relabel', 20);
 
     lg_fc_page_open($t['title'], $embed);
@@ -712,6 +715,7 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     <?php
     lg_fc_page_close();
     remove_filter('acf/prepare_field', 'lg_fc_relabel', 20);
+    unset($GLOBALS['lg_fc_editing']);
 }
 
 /**
@@ -754,6 +758,31 @@ function lg_fc_relabel($field)
     if ($name === '_post_content') {
         $field['type'] = 'textarea';
         $field['rows'] = 4;
+    }
+
+    // ⚠️ PREFILL THE PSEUDO-FIELDS OURSELVES ON EDIT. ACF only fills _post_title
+    // and _post_content from the post when they are requested via the
+    // post_title/post_content ARGS (form-front.php:463-476). This form names them
+    // in the `fields` list instead — the only way to get Ian's field ORDER, since
+    // those args always append them at the top — and that path resolves the bare
+    // local field with NO value.
+    //
+    // On CREATE that is invisible: there is nothing to prefill. On EDIT it is a
+    // DATA-LOSS BUG, and the worst-shaped kind: the title renders EMPTY, and
+    // clobber-probe.php already proved that a field which is rendered and
+    // submitted empty is SAVED empty. A member opening their own loothprint to
+    // fix a typo would have blanked its title and body by pressing Post.
+    //
+    // Found by LOOKING at the rendered form. My earlier check greped the whole
+    // page for the title text and reported "prefilled" — it had matched the
+    // <title> tag. Assert on the input's value attribute, not on the document.
+    $edit_id = (int) ($GLOBALS['lg_fc_editing'] ?? 0);
+    if ($edit_id) {
+        if ($name === '_post_title') {
+            $field['value'] = get_post_field('post_title', $edit_id);
+        } elseif ($name === '_post_content') {
+            $field['value'] = get_post_field('post_content', $edit_id);
+        }
     }
     return $field;
 }

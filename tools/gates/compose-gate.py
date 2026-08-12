@@ -71,7 +71,7 @@ Exit: 0 green, 1 RED (real findings), 2 CANNOT RUN (no verdict).
       unreachable. Reporting those as RED is indistinguishable from a regression,
       which is how a gate once sat "red" for weeks while it was in fact dead.
 """
-import argparse, hashlib, json, os, subprocess, sys
+import argparse, hashlib, json, os, re, subprocess, sys
 
 REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 FIXTURE = os.path.join(REPO, "tools", "gates", "fixtures", "compose-flag-off.json")
@@ -351,6 +351,32 @@ def main():
                          f"  [8] stranger POST: HTTP {code_ep}, post_modified "
                          f"{'UNCHANGED' if mod_before == mod_after else 'CHANGED (BAD)'}\n")
 
+        # ---- 10. EDIT PREFILLS. A rendered-but-empty field SAVES EMPTY (proven
+        # by clobber-probe.php), so an edit form that fails to prefill is not a
+        # cosmetic bug — it is data loss the member triggers by pressing Post.
+        # This shipped broken once: naming _post_title in the `fields` list (the
+        # only way to get Ian's field order) bypasses the ONE path where ACF
+        # fills those pseudo-fields from the post.
+        #
+        # Asserts on the input's VALUE ATTRIBUTE. My hand-check greped the page
+        # for the title text, matched the <title> tag, and reported "prefilled"
+        # for a form that was blank.
+        prefill_note = ""
+        if args.post and args.owner:
+            b_e2, _ = fetch(env, f"/compose/?id={args.post}", cookie_for(args.owner))
+            title = wp_eval(f"echo get_post_field('post_title', {args.post});").strip()
+            m = re.search(r'<input[^>]*name="acf\[_post_title\]"[^>]*>', b_e2)
+            tag = m.group(0) if m else ""
+            prefilled = bool(tag) and ('value="' + title.replace('&', '&amp;') in tag
+                                       or 'value="' + title in tag)
+            if not prefilled:
+                findings.append(
+                    f"[10] the edit form did NOT prefill the title for post "
+                    f"{args.post}. A rendered-but-empty field saves EMPTY, so this "
+                    f"blanks the member's title when they press Post. tag={tag[:120]!r}")
+            prefill_note = (f"  [10] edit prefill: title "
+                            f"{'PRESENT' if prefilled else 'MISSING (DATA LOSS)'}\n")
+
         # ---- 9. EMBED: the toggle's contract with this route ------------------
         # The hub composer's type toggle loads this in a same-origin iframe, so
         # two things have to hold and neither is visible from the normal render:
@@ -394,6 +420,7 @@ def main():
         if edit_note:
             print(edit_note, end="")
         print(embed_note, end="")
+        print(prefill_note, end="")
         print()
         if findings:
             print(f"{len(findings)} FINDING(S):")
