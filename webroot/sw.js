@@ -3,7 +3,24 @@
    cache-first only for our own /icons/ assets; offline.html fallback.
    Plus Web Push: a `push` handler renders the notification and a
    `notificationclick` handler focuses/opens the target URL. */
-const CACHE = 'looth-pwa-v3';
+/* ── CACHE GENERATION ──────────────────────────────────────────────────────────
+   v3 -> v4 for backlog 3.10. activate() deletes every key that is not CACHE, so a
+   bump purges the previous generation's shell instead of trusting an overwrite.
+
+   ⚠️ BE PRECISE ABOUT WHAT A BUMP DOES, because it is easy to over-credit: a cache
+   name does NOT replace a stale service worker. What replaces the worker is CHANGED
+   sw.js BYTES plus `Cache-Control: no-cache` on /sw.js (measured on dev2 — nginx sets
+   it in `location = /sw.js`, deliberately, "or browsers never pick up SW updates").
+   Any client that visits after this lands therefore gets the new worker on its own.
+
+   What the bump IS for: /offline.html is served with NO Cache-Control header at all
+   (measured — /sw.js says no-cache and /icons/ says max-age=2592000, offline.html says
+   nothing), so the browser applies heuristic caching and `addAll` can legitimately
+   hand back a stale shell. This lane CHANGED offline.html's recovery probe, so a fresh
+   generation is how that change actually reaches people rather than sitting behind a
+   heuristically-cached copy. The resilient install path also fetches with
+   `cache: 'reload'` for the same reason, belt and braces. */
+const CACHE = 'looth-pwa-v4';
 const SHELL = ['/offline.html', '/icons/icon-192.png'];
 
 /* ── The 3.10 flag, and how it gets in here ────────────────────────────────────
