@@ -89,9 +89,13 @@ tr:last-child td{border-bottom:0}
 
 <h1>The type toggle, inside the composer</h1>
 <p class="lede">Your call: <em>“part of the compose package in the new post in the hub… toggle between
-discussion and loothprint… two different forms.”</em> This is that, drawn on your real composer. The
-Loothprint form itself is finished and photographed on the <a href="./">first page</a>; this is only about
-where it lives and how you get to it.</p>
+discussion and loothprint… two different forms.”</em> <strong>It is built.</strong> Everything below is a
+photograph of the working thing, taken as an ordinary member — not a drawing. And you can click it
+yourself: <a href="/preview/frontend-compose/hub/?compose=1">open the composer on the preview</a>.</p>
+
+<p class="note note--ok"><strong>The real Hub is untouched.</strong> That link serves this branch on a
+preview path; <code>/hub/</code> is exactly as it was and <code>/compose/</code> still answers 404. Nothing
+here is switched on for anyone else.</p>
 
 <h2>What the composer looks like today</h2>
 <figure class="shot">
@@ -107,53 +111,19 @@ dialog is replaced — because these really are two different forms, not one for
 <div class="cols">
   <div>
     <p class="cap">Discussion — untouched, exactly as today</p>
-    <div class="dlg">
-      <div class="dlg__h">
-        <h3>New post</h3>
-        <div class="seg"><button class="on">Discussion</button><button>Loothprint</button></div>
-        <div class="rail">
-          <div class="on"><span class="n">1</span>Where</div>
-          <div><span class="n">2</span>Write</div>
-          <div><span class="n">3</span>Photos</div>
-          <div><span class="n">4</span>Review</div>
-        </div>
-      </div>
-      <div class="dlg__b">
-        <p class="lbl">Forum <small>(pick one)</small></p>
-        <div class="inp">Filter forums…</div>
-        <div class="flist">
-          <div><i style="background:#7d9b5e"></i>REPAIR AND RESTORATION</div>
-          <div><i style="background:#5e93a0"></i>NEW BUILDS</div>
-          <div><i style="background:#a08a4e"></i>TOOLS, SPACES, ROBOTS, AND WIDGETS</div>
-        </div>
-      </div>
-      <div class="dlg__f"><button class="btn btn--ghost">Cancel</button><span class="sp"></span><button class="btn">Next →</button></div>
-    </div>
-    <p class="cap" style="margin-top:9px">Four steps, forum first. Nothing moves.</p>
+    <figure class="shot">
+      <img src="toggle-discussion-light-desktop.png" width="2560" height="2200" alt="The composer with the toggle on Discussion: the four-step wizard, unchanged">
+      <figcaption>Real screenshot. The toggle sits under the heading; below it the four-step rail and the
+      forum picker are exactly as they are today.</figcaption>
+    </figure>
   </div>
-
   <div>
     <p class="cap">Loothprint — the single screen you approved</p>
-    <div class="dlg">
-      <div class="dlg__h">
-        <h3>New post</h3>
-        <div class="seg"><button>Discussion</button><button class="on">Loothprint</button></div>
-      </div>
-      <div class="dlg__b">
-        <p class="lbl">What’s it called?<span class="req">needed</span></p>
-        <div class="inp">Fret sander with swappable radius cauls</div>
-        <p class="lbl">Show it off<span class="req">needed</span></p>
-        <div class="drop"><b>Drop photos here</b><span>or tap to choose · JPG, PNG, HEIC</span></div>
-        <p class="lbl">The print files<span class="req">needed</span></p>
-        <div class="inp">Choose a ZIP…</div>
-        <p class="lbl">What kind of print is it?<span class="req">needed</span></p>
-        <div class="chips"><span class="chip on">Jigs</span><span class="chip">Fixtures</span><span class="chip">Cauls</span><span class="chip">Templates</span></div>
-        <div class="scrollnote">⌄ licence, description and 4 optional extras below</div>
-      </div>
-      <div class="dlg__f"><button class="btn btn--ghost">Cancel</button><span class="sp">5 things needed</span><button class="btn">Post it</button></div>
-    </div>
-    <p class="cap" style="margin-top:9px">No steps — one screen, scrolled. No forum to pick: a Loothprint
-    doesn’t live in a forum.</p>
+    <figure class="shot">
+      <img src="toggle-loothprint-light-desktop.png" width="2560" height="2200" alt="The composer with the toggle on Loothprint: the real compose form inside the dialog">
+      <figcaption>Real screenshot, same dialog, one tap later. No step rail and no forum to pick — the
+      whole body is the Loothprint form.</figcaption>
+    </figure>
   </div>
 </div>
 
@@ -164,51 +134,46 @@ control that changes the steps cannot live inside them.</p>
 <h2>On a phone</h2>
 <div class="cols">
   <div>
-    <p class="cap">Today</p>
-    <figure class="shot phone">
-      <img src="ntm-phone.png" width="780" height="1640" alt="The composer on a phone today">
-    </figure>
+    <p class="cap">Discussion · 390px</p>
+    <figure class="shot phone"><img src="toggle-discussion-light-phone.png" width="780" height="1640" alt="The composer on a phone, Discussion side"></figure>
   </div>
   <div>
-    <p class="cap">With the toggle</p>
-    <div class="dlg phone">
-      <div class="dlg__h">
-        <h3>New post</h3>
-        <div class="seg"><button>Discussion</button><button class="on">Loothprint</button></div>
-      </div>
-      <div class="dlg__b">
-        <p class="lbl">What’s it called?<span class="req">needed</span></p>
-        <div class="inp">Fret sander with swappable cauls</div>
-        <p class="lbl">Show it off<span class="req">needed</span></p>
-        <div class="drop"><b>Take a photo</b><span>or choose from your camera roll</span></div>
-        <p class="lbl">The print files<span class="req">needed</span></p>
-        <div class="inp">Choose a ZIP…</div>
-        <div class="scrollnote">⌄ the rest below</div>
-      </div>
-      <div class="dlg__f"><button class="btn">Post it</button><span class="sp">5 needed</span></div>
-    </div>
-    <p class="cap" style="margin-top:9px">The toggle is the full width of two taps — it does not compete
-    with the close button.</p>
+    <p class="cap">Loothprint · 390px</p>
+    <figure class="shot phone"><img src="toggle-loothprint-light-phone.png" width="780" height="1640" alt="The composer on a phone, Loothprint side"></figure>
   </div>
 </div>
 
+<h2>Dark</h2>
+<div class="cols">
+  <div>
+    <p class="cap">Loothprint · dark · 1280px</p>
+    <figure class="shot"><img src="toggle-loothprint-dark-desktop.png" width="2560" height="2200" alt="The toggle and form in the dark theme"></figure>
+  </div>
+  <div>
+    <p class="cap">Loothprint · dark · 390px</p>
+    <figure class="shot phone"><img src="toggle-loothprint-dark-phone.png" width="780" height="1640" alt="The toggle and form in the dark theme on a phone"></figure>
+  </div>
+</div>
+<p class="note">The toggle reads the hub's own colour tokens, so dark follows with nothing restated —
+same as the form itself.</p>
+
 <h2>One thing I want to flag before building it</h2>
 <p class="note"><strong>The Loothprint form is long, and you already think this modal is cramped.</strong>
-That is your own open complaint — “resizable, with text scaling” (backlog 10). Full height, the form is
-about 1,700px on a laptop; in a dialog it becomes a scrolling panel. I think that is still fine, because
-the five needed things are all above the fold and the four extras stay folded — but it is the one place
-this could feel worse than the full-page version, and you should hear it from me now rather than notice it
-later. If it does feel cramped, the fix is the same fix backlog 10 already asks for.</p>
+That is your own open complaint — “resizable, with text scaling” (backlog 10). Now measured rather than
+guessed: inside the dialog the form is <strong>1,630px on a laptop and about 1,800px on a phone</strong>,
+so the dialog scrolls. The five needed things are above the fold and the four extras stay folded, and I
+think it holds — but this is the one place it could feel worse than the full-page version, and it is the
+thing to judge when you open it. If it does feel cramped, the fix is the one backlog 10 already asks for.</p>
 
-<h2>How it gets built, in one line</h2>
+<h2>What it is made of</h2>
 <p>The toggle asks the server for the other form and swaps it in — the Loothprint half is the route that
-already exists and is already proven end to end, just rendered without its page furniture. Nothing about
-the form, its saving, or its photo uploads changes; only where it is shown.</p>
+was already proven end to end, rendered without its page furniture. Nothing about the form, its saving or
+its photo uploads changed; only where it is shown.</p>
 <table>
   <tr><th>Piece</th><th>State</th></tr>
   <tr><td>The Loothprint form, its save path, its uploads</td><td class="y">built and proven — a real post through the real route builds its page</td></tr>
   <tr><td>The composer, the wizard, the discussion flow</td><td class="y">untouched</td></tr>
-  <tr><td>The toggle, and serving the form without page furniture</td><td class="n">this is the build</td></tr>
+  <tr><td>The toggle, and serving the form without page furniture</td><td class="y">built — and driven in a real browser, not just read</td></tr>
 </table>
 
 <p class="note"><strong>Also now true, from your other ruling:</strong> every member gets this. The
