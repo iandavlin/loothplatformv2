@@ -239,7 +239,7 @@ never half-retracted. If a removed member must lose access, retract by hand.
 - `lgms_stripe_lifecycle_allowlist_added` is dash bookkeeping only (uid → date
   added, feeds the table). The gate never reads it.
 
-Gates (gate # allocated by keeper at merge): `test-soft-launch-allowlist.php`
+Gates (gate #34): `test-soft-launch-allowlist.php`
 (39 assertions — empty=closed, skip journaling, byte-identical discrimination,
 frozen-both-directions, dash write shape === gate read shape, interlock intact)
 and `e2e-stripe-lifecycle-dev2.php` §6 (12 assertions on the real
