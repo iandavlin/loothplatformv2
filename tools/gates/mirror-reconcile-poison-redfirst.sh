@@ -137,6 +137,36 @@ mutate "bookmark key renamed (the window freezes)" "$REC" \
 "\$upsert->execute(['last_reconcile_at', (string)\$now, bb_mirror_ts(\$now)]);" \
 "\$upsert->execute(['last_reconcile_at_DISABLED', (string)\$now, bb_mirror_ts(\$now)]);"
 
+# 8-11. Section 4: an unreadable post must be LOUD. Each mutation restores one
+#       piece of the silent-drop shape that cost 11 replies their visibility.
+mutate "the typed exception disappears" "$MAT" \
+'if (!class_exists('"'"'BbMirrorUnreadable'"'"')) {
+    class BbMirrorUnreadable extends RuntimeException {}
+}' \
+'if (!class_exists('"'"'BbMirrorUnreadableRenamed'"'"')) {
+    class BbMirrorUnreadableRenamed extends RuntimeException {}
+}
+class_alias('"'"'RuntimeException'"'"', '"'"'BbMirrorUnreadableGone'"'"');'
+
+mutate "upsert_reply returns quietly again (the ~16% drop, restored)" "$MAT" \
+'            throw new BbMirrorUnreadable(
+                "reply $id has no _bbp_topic_id/_bbp_forum_id even after a cache-bypassing re-read"
+            );' \
+'            return;'
+
+mutate "upsert_topic returns quietly again" "$MAT" \
+'            throw new BbMirrorUnreadable(
+                "topic $id has no _bbp_forum_id even after a cache-bypassing re-read"
+            );' \
+'            return;'
+
+mutate "upsert_reply stops re-reading past the caches" "$MAT" \
+'        [, $m] = bb_mirror_reread_uncached($id);
+        $topic_id = (int)($m['"'"'_bbp_topic_id'"'"'] ?? 0);
+        $forum_id = (int)($m['"'"'_bbp_forum_id'"'"'] ?? 0);' \
+'        $topic_id = (int)($m['"'"'_bbp_topic_id'"'"'] ?? 0);
+        $forum_id = (int)($m['"'"'_bbp_forum_id'"'"'] ?? 0);'
+
 printf '\n=== summary ===\n'
 if [ "$fails" -ne 0 ]; then
     echo "$fails assertion(s) did not redden — the gate is not trustworthy yet"

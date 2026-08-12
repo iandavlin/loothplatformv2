@@ -251,6 +251,117 @@ if (!$bookmark_literal) {
     ok("the last_reconcile_at bookmark write is present");
 }
 
+// ---------------------------------------------------------------------------
+// 4. An unreadable post must be LOUD, never a quiet no-op.
+// ---------------------------------------------------------------------------
+// The second half of the same disease. The sweep-wedge above made one bad row
+// kill every later row; this one makes a bad row kill ITSELF in silence. Measured
+// on live 2026-08-09: all 11 replies that never reached the hub DID send a _sync
+// POST at create+1..3s and it DID return 200. Nothing was lost in flight — the
+// receiver ran, took a silent `return`, and answered success. No throw, no log,
+// no retry, and an access log that agreed everything was fine.
+//
+// So both materializers must, when a post or its parentage will not read:
+//   a. re-read past the caches first — "not readable yet" and "genuinely gone"
+//      are opposite states, and one of them costs a member their post; the
+//      unreadable-POST branch runs a DELETE, so conflating them destroys rows.
+//   b. then THROW rather than return, so bb_mirror_walk_ids records a skip and
+//      api/v0/_sync.php's catch turns it into a 500 that lands in the nginx log.
+echo "\n4. an unreadable post is loud, not a silent no-op\n";
+
+if (!class_exists('BbMirrorUnreadable')) {
+    finding("BbMirrorUnreadable is not defined — nothing types 'this row is bad data' apart from a real fault");
+} elseif (!is_subclass_of('BbMirrorUnreadable', 'Throwable', true)) {
+    finding("BbMirrorUnreadable is not throwable");
+} else {
+    ok("BbMirrorUnreadable exists and is throwable");
+}
+if (!function_exists('bb_mirror_reread_uncached')) {
+    finding("bb_mirror_reread_uncached() is gone — a stale read can again be mistaken for a deleted post");
+} else {
+    ok("bb_mirror_reread_uncached() exists");
+}
+
+/** Token span of a named function body, so assertions are scoped to it. */
+$span = function (string $fn) use ($code): array {
+    foreach ($code as $i => $t) {
+        if (($t['type'] ?? null) !== T_STRING || $t['text'] !== $fn) continue;
+        if (($code[$i - 1]['type'] ?? null) !== T_FUNCTION) continue;
+        $depth = 0; $started = false;
+        for ($j = $i; $j < count($code); $j++) {
+            if ($code[$j]['text'] === '{') { $depth++; $started = true; }
+            elseif ($code[$j]['text'] === '}') { $depth--; if ($started && $depth === 0) return [$i, $j]; }
+        }
+    }
+    return [-1, -1];
+};
+
+$mat_src = file_get_contents($materializers);
+$mat_tokens = [];
+foreach (token_get_all($mat_src) as $t) {
+    if (is_array($t)) {
+        if (in_array($t[0], [T_COMMENT, T_DOC_COMMENT, T_WHITESPACE, T_INLINE_HTML], true)) continue;
+        $mat_tokens[] = ['type' => $t[0], 'text' => $t[1], 'line' => $t[2]];
+    } else {
+        $mat_tokens[] = ['type' => null, 'text' => $t, 'line' => 0];
+    }
+}
+$mat_span = function (string $fn) use ($mat_tokens): array {
+    foreach ($mat_tokens as $i => $t) {
+        if (($t['type'] ?? null) !== T_STRING || $t['text'] !== $fn) continue;
+        if (($mat_tokens[$i - 1]['type'] ?? null) !== T_FUNCTION) continue;
+        $depth = 0; $started = false;
+        for ($j = $i; $j < count($mat_tokens); $j++) {
+            if ($mat_tokens[$j]['text'] === '{') { $depth++; $started = true; }
+            elseif ($mat_tokens[$j]['text'] === '}') { $depth--; if ($started && $depth === 0) return [$i, $j]; }
+        }
+    }
+    return [-1, -1];
+};
+
+// Expected number of BbMirrorUnreadable throws per function — one per give-up
+// point. COUNTED, not merely detected: an earlier version asked only "does this
+// function throw somewhere", and a mutation that restored one silent `return`
+// sailed through because the OTHER throw still satisfied it. The mutation harness
+// caught that too. If you add or remove a give-up branch, change the number here
+// deliberately; that is the point of it being explicit.
+//   upsert_reply: (1) parentage unreadable, (2) parent topic unmirrorable
+//   upsert_topic: (1) forum unreadable
+$expected_throws = ['bb_mirror_upsert_reply' => 2, 'bb_mirror_upsert_topic' => 1];
+
+foreach (['bb_mirror_upsert_reply', 'bb_mirror_upsert_topic'] as $fn) {
+    [$s0, $s1] = $mat_span($fn);
+    if ($s0 < 0) { finding("$fn() not found in materializers.php"); continue; }
+    $body = array_slice($mat_tokens, $s0, $s1 - $s0 + 1);
+    $texts = array_column($body, 'text');
+    $types = array_column($body, 'type');
+
+    // BOTH give-up branches must re-read: the unreadable-POST one (which DELETEs,
+    // and for a topic cascades every reply away) and the unreadable-PARENTAGE one.
+    // Counting, not merely finding: a single mention satisfied an earlier version
+    // of this check while one of the two branches had lost its re-read entirely —
+    // caught by the mutation harness, which is what that harness is for.
+    $rereads = count(array_filter($texts, fn($t) => $t === 'bb_mirror_reread_uncached'));
+    if ($rereads < 2) {
+        finding("$fn() re-reads past the caches $rereads time(s), expected 2 — one give-up branch can still mistake a stale read for a deleted post");
+    } else {
+        ok("$fn() re-reads past the caches on both give-up branches");
+    }
+    $want = $expected_throws[$fn];
+    $throws = 0;
+    foreach ($body as $k => $t) {
+        if (($t['type'] ?? null) !== T_STRING || $t['text'] !== 'BbMirrorUnreadable') continue;
+        if (($body[$k - 1]['type'] ?? null) === T_NEW && ($body[$k - 2]['type'] ?? null) === T_THROW) {
+            $throws++;
+        }
+    }
+    if ($throws < $want) {
+        finding("$fn() throws BbMirrorUnreadable $throws time(s), expected $want — a give-up branch returns quietly again, which is the ~16% drop");
+    } else {
+        ok("$fn() throws BbMirrorUnreadable at all $want give-up points");
+    }
+}
+
 echo "\n";
 if ($red) {
     echo "############ GATE RED — " . count($red) . " finding(s) ############\n";

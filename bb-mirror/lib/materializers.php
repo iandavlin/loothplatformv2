@@ -17,6 +17,40 @@ define('LG_BB_MIRROR_MATERIALIZERS_LOADED', true);
 
 // ---------- small helpers --------------------------------------------------
 
+/**
+ * Raised when a post's own row or parentage cannot be read even after a
+ * cache-bypassing re-read — i.e. it is genuinely unmirrorable, not merely
+ * unreadable-right-now. Typed so callers can tell "this row is bad data" from
+ * "the mirror is broken": bb_mirror_walk_ids() records it as a skip and keeps
+ * walking, while api/v0/_sync.php's catch turns it into a 500 that shows up in
+ * the nginx access log.
+ */
+if (!class_exists('BbMirrorUnreadable')) {
+    class BbMirrorUnreadable extends RuntimeException {}
+}
+
+/**
+ * bb_mirror_reread_uncached — drop this post's caches and read it from the DB.
+ *
+ * The receiver runs in a DIFFERENT process from the request that created the
+ * post, and live serves WordPress with a persistent object cache
+ * (wp-content/object-cache.php + redis:6379). A cache entry primed before the
+ * post's meta was written therefore outlives the request that primed it, and
+ * every reader after it sees a reply with no parent. dev2 has redis but NO
+ * drop-in, so its object cache is per-request and cannot reproduce this — which
+ * is exactly why 120/120 dispatches "landed" there while live dropped 16%.
+ *
+ * Deletes the two cache keys directly instead of calling clean_post_cache(),
+ * which fires actions BuddyBoss hooks; a read-repair must not have side effects.
+ *
+ * Returns [WP_Post|null, array $meta].
+ */
+function bb_mirror_reread_uncached(int $id): array {
+    wp_cache_delete($id, 'posts');
+    wp_cache_delete($id, 'post_meta');
+    return [get_post($id), bb_mirror_post_meta_all($id)];
+}
+
 function _bb_mirror_decode(?string $s): ?string {
     return $s === null ? null : html_entity_decode($s, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 }
@@ -345,6 +379,14 @@ function bb_mirror_sync_attachments(int $parent_id, string $kind, PDO $db, strin
 function bb_mirror_upsert_topic(int $id, PDO $db): void {
     $p = get_post($id);
     if (!$p || $p->post_type !== 'topic') {
+        // THE MOST DESTRUCTIVE READ IN THIS FILE. Deleting a topic cascades every
+        // reply under it away (reply.topic_id FK) plus both sets of attachment
+        // rows — so if `get_post()` came back empty only because this process read
+        // a stale cache entry, a live discussion and its whole thread vanish from
+        // the hub on a 200. Confirm against the database before destroying it.
+        [$p, ] = bb_mirror_reread_uncached($id);
+    }
+    if (!$p || $p->post_type !== 'topic') {
         // A SECOND delete path, and not the endpoint's: this is how reconcile
         // (bin/reconcile.php) drops a topic whose WP post vanished or was
         // retyped. Its `attachment` rows — and those of every reply cascaded
@@ -356,7 +398,19 @@ function bb_mirror_upsert_topic(int $id, PDO $db): void {
     }
     $m = bb_mirror_post_meta_all($id);
     $forum_id = (int)($m['_bbp_forum_id'] ?? 0);
-    if (!$forum_id) return;
+    if (!$forum_id) {
+        // Same silent-drop shape as bb_mirror_upsert_reply's parentage branch —
+        // a topic that reads as unparented would vanish from the hub without a
+        // word. Re-read past the caches, then be loud. A dropped TOPIC is worse
+        // than a dropped reply: its whole thread goes with it.
+        [, $m] = bb_mirror_reread_uncached($id);
+        $forum_id = (int)($m['_bbp_forum_id'] ?? 0);
+        if (!$forum_id) {
+            throw new BbMirrorUnreadable(
+                "topic $id has no _bbp_forum_id even after a cache-bypassing re-read"
+            );
+        }
+    }
 
     $body_text = wp_strip_all_tags((string)$p->post_content);
     $person = bb_mirror_person_for((int)$p->post_author, $db);
@@ -421,15 +475,46 @@ function bb_mirror_upsert_topic(int $id, PDO $db): void {
 function bb_mirror_upsert_reply(int $id, PDO $db): void {
     $p = get_post($id);
     if (!$p || $p->post_type !== 'reply') {
-        // Reconcile's reply-delete path (see bb_mirror_upsert_topic above).
-        // The reply's `attachment` rows go by AFTER DELETE trigger.
-        $db->prepare("DELETE FROM reply WHERE id = ?")->execute([$id]);
-        return;
+        // NEVER delete on a possibly-stale read. "Gone" and "not readable from
+        // this process yet" are opposite states, and one of them costs a member
+        // their post. Confirm against the database before destroying anything.
+        [$p, ] = bb_mirror_reread_uncached($id);
+        if (!$p || $p->post_type !== 'reply') {
+            // Reconcile's reply-delete path (see bb_mirror_upsert_topic above).
+            // The reply's `attachment` rows go by AFTER DELETE trigger.
+            $db->prepare("DELETE FROM reply WHERE id = ?")->execute([$id]);
+            return;
+        }
     }
     $m = bb_mirror_post_meta_all($id);
     $topic_id = (int)($m['_bbp_topic_id'] ?? 0);
     $forum_id = (int)($m['_bbp_forum_id'] ?? 0);
-    if (!$topic_id || !$forum_id) return;
+    if (!$topic_id || !$forum_id) {
+        // THIS BRANCH WAS THE ~16% DROP. It used to `return` — silently, so the
+        // receiver answered 200 and wrote nothing, and no log anywhere recorded
+        // that a member's reply had just been discarded. Measured on live
+        // 2026-08-09: all 11 dropped replies had a _sync POST at create+1..3s
+        // that returned 200. Nothing was lost in flight; this line ate them.
+        //
+        // "Not readable yet" and "genuinely unparented" are opposite states.
+        // Re-read past the caches to tell them apart — live runs a persistent
+        // object cache (dev2 does not, which is why dev2 could never show this).
+        [, $m] = bb_mirror_reread_uncached($id);
+        $topic_id = (int)($m['_bbp_topic_id'] ?? 0);
+        $forum_id = (int)($m['_bbp_forum_id'] ?? 0);
+        if (!$topic_id || !$forum_id) {
+            // Still nothing after a database read: genuinely unmirrorable (live
+            // carries 4 such replies from June). Say so LOUDLY rather than
+            // returning — bb_mirror_walk_ids records it as a skip for reconcile,
+            // and _sync.php's catch turns it into a 500, which makes the nginx
+            // access log a real signal. That log already existed; had this thrown
+            // from the start, one grep would have answered in a minute what took
+            // a lane to work out.
+            throw new BbMirrorUnreadable(
+                "reply $id has no _bbp_topic_id/_bbp_forum_id even after a cache-bypassing re-read"
+            );
+        }
+    }
 
     // SELF-HEAL the reply->topic FK before we hit it.
     //
@@ -450,9 +535,25 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
     $has_topic = $db->prepare("SELECT 1 FROM topic WHERE id = ?");
     $has_topic->execute([$topic_id]);
     if (!$has_topic->fetchColumn()) {
-        bb_mirror_upsert_topic($topic_id, $db);
+        try {
+            bb_mirror_upsert_topic($topic_id, $db);
+        } catch (BbMirrorUnreadable) {
+            // The parent is unmirrorable for its own reasons; report THIS reply's
+            // failure below rather than the parent's, which the parent's own walk
+            // entry already covers.
+        }
         $has_topic->execute([$topic_id]);
-        if (!$has_topic->fetchColumn()) return;   // case 2 — unmirrorable, not fatal
+        if (!$has_topic->fetchColumn()) {
+            // Case 2 — broken parentage (live: 71720/71722 -> an ATTACHMENT,
+            // 71728 -> a deleted topic). THIS USED TO `return`, which is the same
+            // silent no-write as the branch above: the reply never appears on the
+            // hub and nothing anywhere says so. It is loud now for the same
+            // reason — walk_ids records it, _sync answers 500. Still not fatal:
+            // bb_mirror_walk_ids keeps walking.
+            throw new BbMirrorUnreadable(
+                "reply $id names topic $topic_id, which cannot be materialised (not a topic, or gone)"
+            );
+        }
     }
 
     // SELF-HEAL the reply->parent_reply FK, the same way and for the same reasons.
