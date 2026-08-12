@@ -266,38 +266,38 @@ hdr "9. Host-pinned drift (dev. vs dev2. / loothgroup.com)"
 if S test -f "$WPROOT/wp-config.php"; then
   DBNAME="$(S grep -oE "define\(\s*'DB_NAME'\s*,\s*'[^']+'" "$WPROOT/wp-config.php" 2>/dev/null | grep -oE "'[^']+'\$" | tr -d "'")"
   DBNAME="${DBNAME:-looth_import}"
-  CNT_DEV="$(S mysql -N -e "SELECT COUNT(*) FROM wp_posts WHERE post_content LIKE '%dev.loothgroup.com%';" "$DBNAME" 2>/dev/null | head -1)"
+  CNT_DEV="$(S mysql -N -e "SELECT COUNT(*) FROM wp_posts WHERE post_content LIKE '%dev2.loothgroup.com%';" "$DBNAME" 2>/dev/null | head -1)"
   CNT_DEV2="$(S mysql -N -e "SELECT COUNT(*) FROM wp_posts WHERE post_content LIKE '%dev2.loothgroup.com%';" "$DBNAME" 2>/dev/null | head -1)"
   note "wp_posts ($DBNAME): dev.=${CNT_DEV:-?}  dev2.=${CNT_DEV2:-?}"
   if [ "${CNT_DEV:-x}" = "0" ]; then
-    ok "no wp_posts content URLs pointing at dev.loothgroup.com (search-replace done — dev2-test hygiene)"
+    ok "no wp_posts content URLs pointing at dev2.loothgroup.com (search-replace done — dev2-test hygiene)"
   elif [ -z "$CNT_DEV" ]; then
     warn "could not count wp_posts URLs (DB unreachable)"
   else
-    warn "$CNT_DEV wp_posts still carry dev.loothgroup.com (dev2-test hygiene search-replace; THROWAWAY at cut — not a blocker)"
+    warn "$CNT_DEV wp_posts still carry dev2.loothgroup.com (dev2-test hygiene search-replace; THROWAWAY at cut — not a blocker)"
   fi
 else
   warn "wp-config.php not readable — skipping wp_posts URL count"
 fi
 
-# bb-mirror _chrome.php logo host: LG_BB_MIRROR_ENV==='dev' ternary points at dev1's dev.loothgroup.com
+# bb-mirror _chrome.php logo host: LG_BB_MIRROR_ENV==='dev' ternary points at dev1's dev2.loothgroup.com
 CHROME="$CLONE/bb-mirror/web/_chrome.php"
 if S test -f "$CHROME"; then
-  if S grep -q "dev.loothgroup.com/wp-content/uploads/2024/05/Looth-Group-Logo" "$CHROME"; then
-    warn "_chrome.php logo_url hardcodes dev.loothgroup.com when ENV=dev (line ~499) — header logo points at dev1; flag for cut"
+  if S grep -q "dev2.loothgroup.com/wp-content/uploads/2024/05/Looth-Group-Logo" "$CHROME"; then
+    warn "_chrome.php logo_url hardcodes dev2.loothgroup.com when ENV=dev (line ~499) — header logo points at dev1; flag for cut"
   else
-    ok "_chrome.php logo host not pinned to dev.loothgroup.com"
+    ok "_chrome.php logo host not pinned to dev2.loothgroup.com"
   fi
 else
   warn "$CHROME not found (clone layout differs)"
 fi
 
-# any dev.loothgroup.com in served plugin files
-PLUG_HITS="$(S grep -rl "dev.loothgroup.com" "$WPROOT/wp-content/plugins" 2>/dev/null | head -5)"
+# any dev2.loothgroup.com in served plugin files
+PLUG_HITS="$(S grep -rl "dev2.loothgroup.com" "$WPROOT/wp-content/plugins" 2>/dev/null | head -5)"
 if [ -z "$PLUG_HITS" ]; then
-  ok "no served plugin file references dev.loothgroup.com"
+  ok "no served plugin file references dev2.loothgroup.com"
 else
-  warn "served plugin files reference dev.loothgroup.com:"
+  warn "served plugin files reference dev2.loothgroup.com:"
   printf '%s\n' "$PLUG_HITS" | while read -r l; do note "$l"; done
 fi
 

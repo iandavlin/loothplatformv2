@@ -58,7 +58,7 @@ Slug fallback is `u/<users.id>` (internal id, not wp_user_id).
 | `bin/test-identity.php`         | tiny test: case/whitespace email variants → same uuid; namespace stability assertion. |
 | `bin/backfill.php`              | wp_users + wp_bp_xprofile_data(field_id=96) + lg_membership.customers → Postgres. |
 | `deploy/profile-app-fpm-pool.conf`   | FPM pool template (installed at /etc/php/8.3/fpm/pool.d/profile-app.conf). |
-| `deploy/profile-app.nginx-snippet.conf` | nginx snippet template (installed inline in dev.loothgroup.com.conf). |
+| `deploy/profile-app.nginx-snippet.conf` | nginx snippet template (installed inline in dev2.loothgroup.com.conf). |
 | `deploy/profile-sync.mu-plugin.php`  | mu-plugin source (installed at /var/www/dev/wp-content/mu-plugins/profile-sync.php). |
 
 ## The identity contract (READ THIS)
@@ -133,7 +133,7 @@ cd /home/ubuntu/projects/profile-app && php bin/test-identity.php
 # Webhook (loopback only)
 SECRET=$(sudo cat /etc/lg-profile-app-secret)
 curl -sk -X POST \
-  -H "Host: dev.loothgroup.com" \
+  -H "Host: dev2.loothgroup.com" \
   -H "X-Hook-Secret: $SECRET" \
   -H "Content-Type: application/json" \
   --data '{"wp_user_id":99999,"email":"smoke@example.com","display_name":"Smoke"}' \
@@ -142,7 +142,7 @@ curl -sk -X POST \
 # Read
 TOK='qShCjBdCVXLie7wcQddsprkYj4SuaXu7UJeYAHHG'
 UUID=$(php -r 'require "/home/ubuntu/projects/profile-app/config.php"; echo \Looth\ProfileApp\Identity::computeUuid("smoke@example.com");')
-curl -sk -H "Host: dev.loothgroup.com" --cookie "loothdev_auth=$TOK" \
+curl -sk -H "Host: dev2.loothgroup.com" --cookie "loothdev_auth=$TOK" \
   https://127.0.0.1/profile-api/v0/user/$UUID
 ```
 
@@ -159,9 +159,9 @@ curl -sk -H "Host: dev.loothgroup.com" --cookie "loothdev_auth=$TOK" \
 ## Live-deploy artifacts (staged on dev)
 
 - Source zip: `/var/www/dev/.well-known/profile-app.zip`
-  (URL: `https://dev.loothgroup.com/.well-known/profile-app.zip`)
+  (URL: `https://dev2.loothgroup.com/.well-known/profile-app.zip`)
 - Bootstrap: `/var/www/dev/.well-known/profile-app-live-bootstrap.sh`
-  (URL: `https://dev.loothgroup.com/.well-known/profile-app-live-bootstrap.sh`)
+  (URL: `https://dev2.loothgroup.com/.well-known/profile-app-live-bootstrap.sh`)
 - `deploy/LIVE-DEPLOY.md` — one-shot run instructions + rollback steps.
 
 The bootstrap script is idempotent. Step 7 pauses for a manual one-line

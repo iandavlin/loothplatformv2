@@ -76,7 +76,7 @@ ok    /bb-mirror-api/v0/_sync                               ✓
    url, alt, mime, width, height, position, sync_at`. No `filename` or `wp_id`
    column. LATERAL join uses `parent_kind = 'topic' AND parent_id = t.id`.
 
-2. **URL format**: attachment URLs are full absolute `https://dev.loothgroup.com/wp-content/uploads/bb_medias/...`
+2. **URL format**: attachment URLs are full absolute `https://dev2.loothgroup.com/wp-content/uploads/bb_medias/...`
    — safe to use directly in `style="background-image: url(...)"`.
 
 3. **grep -c 'forum-header' returns 5** on the feed page (CSS class names
@@ -120,35 +120,35 @@ ok    /bb-mirror-api/v0/_sync                               ✓
 
 ```bash
 TOK=$(sudo grep -E 'set \$loothdev_token' \
-  /etc/nginx/sites-available/dev.loothgroup.com.conf | \
+  /etc/nginx/sites-available/dev2.loothgroup.com.conf | \
   head -1 | grep -oE '"[^"]+"' | tr -d '"')
-curl -s "https://dev.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
+curl -s "https://dev2.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
 
 # Header element (use <header tag, not class name grep)
-curl -s -b /tmp/bbjar https://dev.loothgroup.com/forums-poc/ | grep -c '<header class="forum-header'
+curl -s -b /tmp/bbjar https://dev2.loothgroup.com/forums-poc/ | grep -c '<header class="forum-header'
 # expect: 1
 
 # Card images (at least some topics have attachments)
-curl -s -b /tmp/bbjar https://dev.loothgroup.com/forums-poc/ | grep -c 'feed-card__thumb'
+curl -s -b /tmp/bbjar https://dev2.loothgroup.com/forums-poc/ | grep -c 'feed-card__thumb'
 # expect: >0
 
 # Scoped header: forum name + bg image
-curl -s -b /tmp/bbjar https://dev.loothgroup.com/forums-poc/acoustic/ | grep -A3 'forum-header'
+curl -s -b /tmp/bbjar https://dev2.loothgroup.com/forums-poc/acoustic/ | grep -A3 'forum-header'
 # expect: forum-header--has-image, bg div with background-image url, "Acoustic Repair" title
 
 # Sort bar: expect 1
-curl -s -b /tmp/bbjar https://dev.loothgroup.com/forums-poc/ | grep -c 'feed-sort-bar'
+curl -s -b /tmp/bbjar https://dev2.loothgroup.com/forums-poc/ | grep -c 'feed-sort-bar'
 
 # Single topic: expect 200
 curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" \
-  https://dev.loothgroup.com/forums-poc/general/stripped-out-trussrod/
+  https://dev2.loothgroup.com/forums-poc/general/stripped-out-trussrod/
 
 # Search: expect 50
-curl -s -b /tmp/bbjar 'https://dev.loothgroup.com/forums-poc/?q=guitar' | grep -c 'search-result__title'
+curl -s -b /tmp/bbjar 'https://dev2.loothgroup.com/forums-poc/?q=guitar' | grep -c 'search-result__title'
 
 # Sync: expect {"ok":true,...}
 curl -sk -X POST https://127.0.0.1/bb-mirror-api/v0/_sync \
-  -H 'Host: dev.loothgroup.com' -H 'X-BB-Mirror-Sync: 1' \
+  -H 'Host: dev2.loothgroup.com' -H 'X-BB-Mirror-Sync: 1' \
   -H 'Content-Type: application/json' \
   -d '{"kind":"topic","id":68963,"action":"upsert"}'
 ```

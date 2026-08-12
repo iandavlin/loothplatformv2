@@ -39,7 +39,7 @@ Behind `?proto=cards` (sticky; `?proto=off` clears). Default feed untouched with
 - **Webroot (not git, buck/ubuntu-owned):** `hub-polish.js` v50→v51 (relayCard wires behaviors for
   pre-rendered cards; relocateFilterToggle wires the proxy chip; hideEmptyFilterRows no-op;
   injection defer→async=false). `pwa.js` hub-polish ref → v51. nginx pwa.js cache-buster v2→v3
-  (`/etc/nginx/sites-available/dev.loothgroup.com.conf`, reloaded). Backups beside each file.
+  (`/etc/nginx/sites-available/dev2.loothgroup.com.conf`, reloaded). Backups beside each file.
 
 ## Cut-blocker verification (2026-06-06) — SHIPPABLE
 Verified via CDP + curl (anon with gate cookie; admin = uid 1 iandavlin minted cookies):

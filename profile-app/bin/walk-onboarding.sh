@@ -9,7 +9,7 @@
 # Requires:
 #   - chrome-dev.service (CDP on 127.0.0.1:9222)
 #   - wp-cli on the dev WP install
-#   - the cookie-gate token in /etc/nginx/sites-available/dev.loothgroup.com.conf
+#   - the cookie-gate token in /etc/nginx/sites-available/dev2.loothgroup.com.conf
 #
 # Usage:
 #   bin/walk-onboarding.sh            # creates a fresh user, runs the walk
@@ -69,7 +69,7 @@ echo "  slug=$SLUG"
 
 # ── 3. mint JWT via /wp-json/looth/auth/issue ────────────────────────────
 step "minting JWT for new user"
-LOOTHDEV_TOK=$(sudo grep '\$loothdev_token' /etc/nginx/sites-available/dev.loothgroup.com.conf | head -1 | awk -F'"' '{print $2}')
+LOOTHDEV_TOK=$(sudo grep '\$loothdev_token' /etc/nginx/sites-available/dev2.loothgroup.com.conf | head -1 | awk -F'"' '{print $2}')
 
 read LOGGED_IN_NAME LOGGED_IN_VAL AUTH_NAME AUTH_VAL < <(sudo -u www-data wp --path=/var/www/dev eval "
 \$exp = time() + 86400;
@@ -81,7 +81,7 @@ echo (\$secure ? SECURE_AUTH_COOKIE : AUTH_COOKIE) . ' ' . wp_generate_auth_cook
 
 curl -sk -o /dev/null -D /tmp/cw-issue-headers.txt \
     -H "Cookie: loothdev_auth=$LOOTHDEV_TOK; ${LOGGED_IN_NAME}=${LOGGED_IN_VAL}; ${AUTH_NAME}=${AUTH_VAL}" \
-    "https://dev.loothgroup.com/wp-json/looth/auth/issue?return=/profile/edit"
+    "https://dev2.loothgroup.com/wp-json/looth/auth/issue?return=/profile/edit"
 LOOTH_ID=$(grep -oP 'looth_id=[^;]+' /tmp/cw-issue-headers.txt | head -1 | sed 's/^looth_id=//')
 
 echo "  looth_id=${LOOTH_ID:0:24}..."
@@ -95,7 +95,7 @@ CLAIM_RESP=$(curl -sk -X POST \
     -H "Cookie: loothdev_auth=$LOOTHDEV_TOK; looth_id=$LOOTH_ID" \
     -H "Content-Type: application/json" \
     -d '{"via":"direct"}' \
-    "https://dev.loothgroup.com/profile-api/v0/me/claim")
+    "https://dev2.loothgroup.com/profile-api/v0/me/claim")
 echo "  claim: $CLAIM_RESP"
 echo "$CLAIM_RESP" | grep -qE '"claimed":(true|false)' || die "claim endpoint did not respond as expected"
 
@@ -114,17 +114,17 @@ import asyncio, json, urllib.request, websockets, base64
 pages = json.load(urllib.request.urlopen('http://127.0.0.1:9222/json'))
 page  = [p for p in pages if p['id']=='$PAGE_ID'][0]
 cookies = [
-  {'domain':'dev.loothgroup.com','name':'loothdev_auth','value':'$LOOTHDEV_TOK','path':'/','secure':True,'httpOnly':True},
-  {'domain':'dev.loothgroup.com','name':'${LOGGED_IN_NAME}','value':'${LOGGED_IN_VAL}','path':'/','secure':True,'httpOnly':True},
-  {'domain':'dev.loothgroup.com','name':'${AUTH_NAME}','value':'${AUTH_VAL}','path':'/','secure':True,'httpOnly':True},
-  {'domain':'dev.loothgroup.com','name':'looth_id','value':'${LOOTH_ID}','path':'/','secure':True,'httpOnly':True},
+  {'domain':'dev2.loothgroup.com','name':'loothdev_auth','value':'$LOOTHDEV_TOK','path':'/','secure':True,'httpOnly':True},
+  {'domain':'dev2.loothgroup.com','name':'${LOGGED_IN_NAME}','value':'${LOGGED_IN_VAL}','path':'/','secure':True,'httpOnly':True},
+  {'domain':'dev2.loothgroup.com','name':'${AUTH_NAME}','value':'${AUTH_VAL}','path':'/','secure':True,'httpOnly':True},
+  {'domain':'dev2.loothgroup.com','name':'looth_id','value':'${LOOTH_ID}','path':'/','secure':True,'httpOnly':True},
 ]
 async def go():
   async with websockets.connect(page['webSocketDebuggerUrl'], max_size=None) as ws:
     await ws.send(json.dumps({'id':1,'method':'Network.clearBrowserCookies'})); await ws.recv()
     for i,c in enumerate(cookies, 2):
       await ws.send(json.dumps({'id':i,'method':'Network.setCookie','params':c})); await ws.recv()
-    await ws.send(json.dumps({'id':99,'method':'Page.navigate','params':{'url':'https://dev.loothgroup.com/profile/edit'}})); await ws.recv()
+    await ws.send(json.dumps({'id':99,'method':'Page.navigate','params':{'url':'https://dev2.loothgroup.com/profile/edit'}})); await ws.recv()
     await asyncio.sleep(2.5)
     await ws.send(json.dumps({'id':100,'method':'Page.captureScreenshot','params':{'format':'png'}}))
     r = json.loads(await ws.recv())
@@ -198,7 +198,7 @@ DB_VIS=$(sudo -u profile-app psql -At -d profile_app -c "SELECT location_visibil
 
 # ── 7. /u/<slug> — anon vs self ──────────────────────────────────────────
 step "/u/$SLUG anon → location should be omitted"
-ANON_HTML=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev.loothgroup.com/u/$SLUG")
+ANON_HTML=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev2.loothgroup.com/u/$SLUG")
 echo "$ANON_HTML" > "$OUT_DIR/05-u-anon.html"
 if echo "$ANON_HTML" | grep -q 'class="loc"'; then
     die "anon /u/$SLUG leaked location element"
@@ -207,7 +207,7 @@ fi
 # ── 8. /directory/members — confirm visible ──────────────────────────────
 step "/directory/members — new user should appear"
 LIST=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK; looth_id=$LOOTH_ID" \
-    "https://dev.loothgroup.com/profile-api/v0/directory/members?page_size=200")
+    "https://dev2.loothgroup.com/profile-api/v0/directory/members?page_size=200")
 echo "$LIST" > "$OUT_DIR/06-directory.json"
 COUNT=$(echo "$LIST" | python3 -c "import sys,json;d=json.load(sys.stdin);print(sum(1 for i in d.get('items',[]) if i.get('slug')=='$SLUG'))")
 [[ "$COUNT" -ge 1 ]] || die "new user not in directory (page_size=200)"
@@ -215,7 +215,7 @@ COUNT=$(echo "$LIST" | python3 -c "import sys,json;d=json.load(sys.stdin);print(
 # ── 9. page_size cap test ────────────────────────────────────────────────
 step "page_size cap test"
 CAPPED=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK; looth_id=$LOOTH_ID" \
-    "https://dev.loothgroup.com/profile-api/v0/directory/members?page_size=500" \
+    "https://dev2.loothgroup.com/profile-api/v0/directory/members?page_size=500" \
     | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('page_size'))")
 [[ "$CAPPED" == "200" ]] || die "page_size cap broken (got $CAPPED, want 200)"
 
@@ -224,7 +224,7 @@ step "PATCH /me/name with business_name + display_name"
 COOKIE="loothdev_auth=$LOOTHDEV_TOK; looth_id=$LOOTH_ID"
 BIZ_RESP=$(curl -sk -X PATCH -H "Cookie: $COOKIE" -H "Content-Type: application/json" \
     -d '{"display_name":"Cold Walk","business_name":"Walk Test Repairs"}' \
-    "https://dev.loothgroup.com/profile-api/v0/me/name")
+    "https://dev2.loothgroup.com/profile-api/v0/me/name")
 echo "  $BIZ_RESP"
 echo "$BIZ_RESP" | grep -q '"business_name":"Walk Test Repairs"' || die "business_name not echoed"
 
@@ -235,13 +235,13 @@ WP_DN=$(sudo -u www-data wp --path=/var/www/dev user get $WP_ID --field=display_
 [[ "$WP_DN" == "Cold Walk" ]] || die "wp_users.display_name not mirrored (wp=$WP_DN)"
 
 step "/u/$SLUG shows business name on header"
-U_HTML_BIZ=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev.loothgroup.com/u/$SLUG")
+U_HTML_BIZ=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev2.loothgroup.com/u/$SLUG")
 echo "$U_HTML_BIZ" | grep -q 'class="biz"' || die "business_name not rendered on public /u page"
 echo "$U_HTML_BIZ" | grep -q 'Walk Test Repairs' || die "business_name string not on /u page"
 
 # ── 9c. /whoami smoke + self-purge (slice 3.5) ──────────────────────────
 step "/profile-api/v0/whoami returns authed shape with correct identity"
-WHOAMI=$(curl -sk -H "Cookie: $COOKIE" "https://dev.loothgroup.com/profile-api/v0/whoami")
+WHOAMI=$(curl -sk -H "Cookie: $COOKIE" "https://dev2.loothgroup.com/profile-api/v0/whoami")
 echo "$WHOAMI" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
@@ -256,32 +256,32 @@ print('  whoami shape ok: tier=%s prov=%s caps=%s' % (d['tier'], d.get('provenan
 
 step "/whoami self-purge: PATCH name → next /whoami reflects new value"
 curl -sk -X PATCH -H "Cookie: $COOKIE" -H "Content-Type: application/json" \
-    -d '{"display_name":"Cold Walk Renamed"}' "https://dev.loothgroup.com/profile-api/v0/me/name" >/dev/null
-DN_NOW=$(curl -sk -H "Cookie: $COOKIE" "https://dev.loothgroup.com/profile-api/v0/whoami" \
+    -d '{"display_name":"Cold Walk Renamed"}' "https://dev2.loothgroup.com/profile-api/v0/me/name" >/dev/null
+DN_NOW=$(curl -sk -H "Cookie: $COOKIE" "https://dev2.loothgroup.com/profile-api/v0/whoami" \
     | python3 -c "import sys,json;print(json.load(sys.stdin).get('display_name'))")
 [[ "$DN_NOW" == "Cold Walk Renamed" ]] || die "self-purge failed: whoami still says '$DN_NOW' after rename"
 
 # WP shim returns same shape
 step "/wp-json/looth/v1/whoami shim returns identical shape"
-SHIM=$(curl -sk -H "Cookie: $COOKIE" "https://dev.loothgroup.com/wp-json/looth/v1/whoami")
+SHIM=$(curl -sk -H "Cookie: $COOKIE" "https://dev2.loothgroup.com/wp-json/looth/v1/whoami")
 SHIM_DN=$(echo "$SHIM" | python3 -c "import sys,json;print(json.load(sys.stdin).get('display_name'))")
 [[ "$SHIM_DN" == "Cold Walk Renamed" ]] || die "WP shim display_name mismatch: '$SHIM_DN'"
 
 # Batch users endpoint
 step "/profile-api/v0/users?uuids=<self> returns one item"
 SELF_UUID=$(sudo -u profile-app psql -At -d profile_app -c "SELECT uuid FROM users WHERE id=$PA_ID")
-BATCH_COUNT=$(curl -sk -H "Cookie: $COOKIE" "https://dev.loothgroup.com/profile-api/v0/users?uuids=$SELF_UUID" \
+BATCH_COUNT=$(curl -sk -H "Cookie: $COOKIE" "https://dev2.loothgroup.com/profile-api/v0/users?uuids=$SELF_UUID" \
     | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('count'))")
 [[ "$BATCH_COUNT" == "1" ]] || die "batch users wrong count: $BATCH_COUNT"
 
 # Internal purge auth
 step "/profile-api/v0/internal/purge-whoami requires X-LG-Internal-Auth"
-NO_AUTH=$(curl -sk -o /dev/null -w '%{http_code}' -X POST -H "Host: dev.loothgroup.com" \
+NO_AUTH=$(curl -sk -o /dev/null -w '%{http_code}' -X POST -H "Host: dev2.loothgroup.com" \
     -H "Content-Type: application/json" -d "{\"wp_user_id\":$WP_ID}" \
     "https://127.0.0.1/profile-api/v0/internal/purge-whoami")
 [[ "$NO_AUTH" == "403" ]] || die "internal purge no-auth returned $NO_AUTH (want 403)"
 SECRET=$(sudo cat /etc/lg-internal-secret)
-WITH_AUTH=$(curl -sk -o /dev/null -w '%{http_code}' -X POST -H "Host: dev.loothgroup.com" \
+WITH_AUTH=$(curl -sk -o /dev/null -w '%{http_code}' -X POST -H "Host: dev2.loothgroup.com" \
     -H "X-LG-Internal-Auth: $SECRET" -H "Content-Type: application/json" \
     -d "{\"wp_user_id\":$WP_ID}" "https://127.0.0.1/profile-api/v0/internal/purge-whoami")
 [[ "$WITH_AUTH" == "204" ]] || die "internal purge with-auth returned $WITH_AUTH (want 204)"
@@ -292,7 +292,7 @@ COOKIE="loothdev_auth=$LOOTHDEV_TOK; looth_id=$LOOTH_ID"
 PR_NAME="Bench Test Guitars ${RAND}"
 CREATE_RESP=$(curl -sk -X POST -H "Cookie: $COOKIE" -H "Content-Type: application/json" \
     -d "{\"name\":\"$PR_NAME\",\"tagline\":\"slice-3 walk\",\"location_text\":\"Brooklyn, NY\",\"location_visibility\":\"public\"}" \
-    "https://dev.loothgroup.com/profile-api/v0/me/practices")
+    "https://dev2.loothgroup.com/profile-api/v0/me/practices")
 echo "  create: $CREATE_RESP"
 PR_UUID=$(echo "$CREATE_RESP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('uuid',''))")
 PR_SLUG=$(echo "$CREATE_RESP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('slug',''))")
@@ -300,14 +300,14 @@ PR_SLUG=$(echo "$CREATE_RESP" | python3 -c "import sys,json;print(json.load(sys.
 [[ -n "$PR_SLUG" ]] || die "practice create returned no slug"
 
 step "/p/$PR_SLUG renders publicly with staff roster"
-PR_HTML=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev.loothgroup.com/p/$PR_SLUG")
+PR_HTML=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev2.loothgroup.com/p/$PR_SLUG")
 echo "$PR_HTML" > "$OUT_DIR/07-p-anon.html"
 echo "$PR_HTML" | grep -q "$PR_NAME"          || die "/p/$PR_SLUG missing practice name"
 echo "$PR_HTML" | grep -q 'id="staff"'        || die "/p/$PR_SLUG missing staff roster card"
 echo "$PR_HTML" | grep -q "/u/$SLUG"          || die "/p/$PR_SLUG missing creator in staff roster"
 
 step "/u/$SLUG shows practice in Practices card"
-U_HTML=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev.loothgroup.com/u/$SLUG")
+U_HTML=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev2.loothgroup.com/u/$SLUG")
 echo "$U_HTML" > "$OUT_DIR/08-u-with-practice.html"
 echo "$U_HTML" | grep -q 'id="practices"'    || die "/u/$SLUG missing Practices section"
 echo "$U_HTML" | grep -q "/p/$PR_SLUG"        || die "/u/$SLUG missing practice link"
@@ -315,24 +315,24 @@ echo "$U_HTML" | grep -q "/p/$PR_SLUG"        || die "/u/$SLUG missing practice 
 step "update practice tagline"
 UPDATE_RESP=$(curl -sk -X PATCH -H "Cookie: $COOKIE" -H "Content-Type: application/json" \
     -d '{"tagline":"updated tagline"}' \
-    "https://dev.loothgroup.com/profile-api/v0/me/practices/$PR_UUID")
+    "https://dev2.loothgroup.com/profile-api/v0/me/practices/$PR_UUID")
 echo "  update: $UPDATE_RESP"
-PR_HTML2=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev.loothgroup.com/p/$PR_SLUG")
+PR_HTML2=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev2.loothgroup.com/p/$PR_SLUG")
 echo "$PR_HTML2" | grep -q 'updated tagline'  || die "tagline update didn't render"
 
 step "leave practice"
-LEAVE_RESP=$(curl -sk -X DELETE -H "Cookie: $COOKIE" "https://dev.loothgroup.com/profile-api/v0/me/practices/$PR_UUID")
+LEAVE_RESP=$(curl -sk -X DELETE -H "Cookie: $COOKIE" "https://dev2.loothgroup.com/profile-api/v0/me/practices/$PR_UUID")
 echo "  leave: $LEAVE_RESP"
 
 step "/u/$SLUG no longer lists the practice"
-U_HTML2=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev.loothgroup.com/u/$SLUG")
+U_HTML2=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev2.loothgroup.com/u/$SLUG")
 echo "$U_HTML2" > "$OUT_DIR/09-u-after-leave.html"
 if echo "$U_HTML2" | grep -q "/p/$PR_SLUG"; then
     die "/u/$SLUG still references practice after leave"
 fi
 
 step "/p/$PR_SLUG persists as orphan with empty staff roster"
-PR_HTML3=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev.loothgroup.com/p/$PR_SLUG")
+PR_HTML3=$(curl -sk -H "Cookie: loothdev_auth=$LOOTHDEV_TOK" "https://dev2.loothgroup.com/p/$PR_SLUG")
 echo "$PR_HTML3" | grep -q "$PR_NAME"         || die "/p/$PR_SLUG disappeared after leave"
 if echo "$PR_HTML3" | grep -q "/u/$SLUG"; then
     die "/p/$PR_SLUG still lists creator in roster after leave"

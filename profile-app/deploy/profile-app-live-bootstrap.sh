@@ -39,7 +39,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
 
 echo "[2/11] pulling + unzipping slice-zero source…"
 curl -fSL --cookie "loothdev_auth=$TOK" \
-  https://dev.loothgroup.com/.well-known/profile-app.zip -o "$SRC_ZIP"
+  https://dev2.loothgroup.com/.well-known/profile-app.zip -o "$SRC_ZIP"
 sudo rm -rf "$APP_ROOT"
 sudo unzip -q "$SRC_ZIP" -d /srv/
 test -f "$APP_ROOT/config.php" || { echo "ERROR: unpack failed"; exit 1; }

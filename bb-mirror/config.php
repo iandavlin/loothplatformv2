@@ -86,7 +86,7 @@ define('LG_BB_MIRROR_PUBLIC_PATH', $bb_public_path);
 // Sanitized: the value is interpolated into curl 'Host:' headers, so strip
 // anything outside a valid hostname[:port] to close Host-header injection.
 $bb_host_fallback = getenv('LG_BB_MIRROR_PUBLIC_HOST')
-    ?: (($env === 'live') ? 'loothgroup.com' : 'dev.loothgroup.com');
+    ?: (($env === 'live') ? 'loothgroup.com' : 'dev2.loothgroup.com');
 $bb_req_host = preg_replace('/[^A-Za-z0-9.\-:]/', '', (string)($_SERVER['HTTP_HOST'] ?? ''));
 // Shared host (if /etc/looth/env present) is authoritative; else request-derived, else fallback.
 define('LG_BB_MIRROR_HOST', $shared['host'] ?? ($bb_req_host !== '' ? $bb_req_host : $bb_host_fallback));

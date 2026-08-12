@@ -23,7 +23,7 @@
 
 ## State
 
-WordPress plugin at `/var/www/dev/wp-content/plugins/lg-patreon-stripe-poller/` on `dev.loothgroup.com` (php-fpm pool `php8.3-fpm-looth-dev.sock`). Two databases: WordPress (`wp_*`, accessed via `$wpdb`) and `lg_membership` (own PDO via `LGMS\Db::pdo()`). The plugin's hourly cron (`lgms_poll_tick` → `Tick::run`) is the heart: pulls Stripe events, sweeps expired entitlements, calls back to Slim's `/v1/reconcile-pending`, and runs the customer sync.
+WordPress plugin at `/var/www/dev/wp-content/plugins/lg-patreon-stripe-poller/` on `dev2.loothgroup.com` (php-fpm pool `php8.3-fpm-looth-dev.sock`). Two databases: WordPress (`wp_*`, accessed via `$wpdb`) and `lg_membership` (own PDO via `LGMS\Db::pdo()`). The plugin's hourly cron (`lgms_poll_tick` → `Tick::run`) is the heart: pulls Stripe events, sweeps expired entitlements, calls back to Slim's `/v1/reconcile-pending`, and runs the customer sync.
 
 **Server WIP not yet committed (canonical version):** `Plugin.php`, `Pages.php`, `Shortcodes.php`, `class-lgpo-sync-engine.php`, `Schema.php` (membership-guide table), plus untracked `src/Membership.php`, `src/Wp/MembershipGuide.php`, `src/Wp/UpcomingEvents.php`, `templates/page/*.php`, `assets/video/`, `seed-elders.php`, `snippets/admin-view-as-toggle.php`. The session-16 revert (`2d679fc`) restored `origin/main` to *before* a stale local laptop version of these. Don't pull origin over the server's working tree.
 
@@ -113,15 +113,15 @@ cd /var/www/dev && wp cron event run lgms_poll_tick
 
 # Manually run Tick::run via REST (exercises GET_LOCK)
 SECRET=$(wp --path=/var/www/dev option get lgms_shared_secret)
-curl -sS -X POST 'https://dev.loothgroup.com/wp-json/lg-member-sync/v1/run-now' \
-  --resolve dev.loothgroup.com:443:127.0.0.1 -k \
+curl -sS -X POST 'https://dev2.loothgroup.com/wp-json/lg-member-sync/v1/run-now' \
+  --resolve dev2.loothgroup.com:443:127.0.0.1 -k \
   -H "X-LGMS-Token: $SECRET" -H 'Content-Type: application/json' -d '{}'
 
 # Sync one customer
 curl -sS -X POST -H "X-LGMS-Token: $SECRET" -H 'Content-Type: application/json' \
   -d '{"customer_id":3}' \
-  --resolve dev.loothgroup.com:443:127.0.0.1 -k \
-  https://dev.loothgroup.com/wp-json/lg-member-sync/v1/sync-customer
+  --resolve dev2.loothgroup.com:443:127.0.0.1 -k \
+  https://dev2.loothgroup.com/wp-json/lg-member-sync/v1/sync-customer
 
 # Inspect role sources for a user
 wp eval 'print_r(\LGMS\RoleSourceWriter::readAllForUser(1838));' --path=/var/www/dev
@@ -132,7 +132,7 @@ wp transient delete lgms_bb_allowlist_synced --path=/var/www/dev
 # Smoke-test the rate limit on /refund-request (6th+ should be silently throttled)
 for i in 1 2 3 4 5 6; do
   curl -sS -o /dev/null -w "$i: %{http_code} %{time_total}s\n" -X POST \
-    'https://dev.loothgroup.com/wp-json/lg-member-sync/v1/refund-request' \
+    'https://dev2.loothgroup.com/wp-json/lg-member-sync/v1/refund-request' \
     -H 'Content-Type: application/json' \
     -d '{"name":"smoke","email":"smoke@example.com","reasons":["test"],"items":[]}'
 done

@@ -114,7 +114,7 @@ sudo -u bb-mirror psql -d looth -c "SELECT value, updated_at FROM forums.sync_st
 - Coordination doc: [/home/ubuntu/projects/docs/STRANGLER-COORDINATION.md](../docs/STRANGLER-COORDINATION.md)
 - P5 briefing: [/home/ubuntu/projects/docs/reply-to-bb-mirror-p5.md](../docs/reply-to-bb-mirror-p5.md)
 - Audit briefing: [/home/ubuntu/projects/docs/reply-to-bb-mirror-audit-findings.md](../docs/reply-to-bb-mirror-audit-findings.md)
-- Mockup v2: https://dev.loothgroup.com/mockups/forums.html
+- Mockup v2: https://dev2.loothgroup.com/mockups/forums.html
 - Prior handoffs: [handoffs/](handoffs/) — latest before this is `2026-05-28-audit-steps-1-4.md`
 
 ## Handoff rotation

@@ -5,7 +5,7 @@
  * Routes /forums-poc/* URLs to the right template under web/forums/. The
  * templates under web/forums/ are includes, not directly addressable
  * (nginx denies any .php under web/ other than this one — see
- * dev.loothgroup.com.conf).
+ * dev2.loothgroup.com.conf).
  *
  * URL shapes (pre-cutover):
  *   /forums-poc/                          → forums/_feed.php     (site-wide activity feed)

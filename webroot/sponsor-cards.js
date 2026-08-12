@@ -2,7 +2,7 @@
  *
  * Spotlight sponsor cards scattered through the Hub feed — the "Spotlight
  * Cards" placement Buck + Ian greenlit from the 2026-06-11 sponsors deck
- * (hub-styles/sponsors-deck.html → dev.loothgroup.com/sponsors-deck/).
+ * (hub-styles/sponsors-deck.html → dev2.loothgroup.com/sponsors-deck/).
  *
  * - One sponsor card after every Nth organic feed card — N scales with the
  *   mosaic column count (6 per column) so it's ~one ad per screenful on phone

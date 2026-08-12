@@ -92,7 +92,7 @@ function me_discussion_vis_poke_person(int $wpId): void
 {
     if ($wpId <= 0) return;
     try {
-        $host = $_SERVER['HTTP_HOST'] ?? 'dev.loothgroup.com';
+        $host = $_SERVER['HTTP_HOST'] ?? 'dev2.loothgroup.com';
         $hdrs = ['Host: ' . $host, 'Content-Type: application/json', 'X-BB-Mirror-Sync: 1'];
         $gate = $_COOKIE['loothdev_auth'] ?? '';
         if ($gate !== '') $hdrs[] = 'Cookie: loothdev_auth=' . $gate;

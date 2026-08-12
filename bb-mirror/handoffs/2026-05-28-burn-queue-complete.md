@@ -87,16 +87,16 @@ The 5 burn-queue items are landed. Remaining:
 
 ```bash
 TOK=$(sudo grep -E 'set \$loothdev_token' \
-  /etc/nginx/sites-available/dev.loothgroup.com.conf | \
+  /etc/nginx/sites-available/dev2.loothgroup.com.conf | \
   head -1 | grep -oE '"[^"]+"' | tr -d '"')
-curl -s "https://dev.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
+curl -s "https://dev2.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
 
 # search
-curl -s -b /tmp/bbjar 'https://dev.loothgroup.com/forums-poc/?q=guitar' \
+curl -s -b /tmp/bbjar 'https://dev2.loothgroup.com/forums-poc/?q=guitar' \
   | grep -c 'search-result__title'   # expect 50
 
 # topic with attachments
-curl -s -b /tmp/bbjar 'https://dev.loothgroup.com/forums-poc/acoustic/crusty-old-gibson-l7/' \
+curl -s -b /tmp/bbjar 'https://dev2.loothgroup.com/forums-poc/acoustic/crusty-old-gibson-l7/' \
   | grep -c 'attachment--image'      # expect 7
 
 # stickies
@@ -108,11 +108,11 @@ sudo -u bb-mirror psql -d looth -c "
 # mark-seen / unread round-trip (substitute real WP cookies)
 curl -sk -b /tmp/bbjar -b "<wp_logged_in_cookie>" \
   -X POST -H 'Content-Type: application/json' -d '{"topic_id":68963}' \
-  https://dev.loothgroup.com/bb-mirror-api/v0/mark-seen.php
+  https://dev2.loothgroup.com/bb-mirror-api/v0/mark-seen.php
 curl -sk -b /tmp/bbjar -b "<wp_logged_in_cookie>" \
   -X POST -H 'Content-Type: application/json' \
   -d '{"topic_ids":[68963,68899]}' \
-  https://dev.loothgroup.com/bb-mirror-api/v0/unread.php
+  https://dev2.loothgroup.com/bb-mirror-api/v0/unread.php
 ```
 
 ## Pointers
@@ -121,7 +121,7 @@ curl -sk -b /tmp/bbjar -b "<wp_logged_in_cookie>" \
 - Burn-queue briefing: [/home/ubuntu/projects/docs/reply-to-bb-mirror-burn-queue.md](../docs/reply-to-bb-mirror-burn-queue.md)
 - Reply form briefing (prior): [/home/ubuntu/projects/docs/reply-to-bb-mirror-reply-form.md](../docs/reply-to-bb-mirror-reply-form.md)
 - Audit briefing: [/home/ubuntu/projects/docs/reply-to-bb-mirror-audit-findings.md](../docs/reply-to-bb-mirror-audit-findings.md)
-- Mockup v2: https://dev.loothgroup.com/mockups/forums.html
+- Mockup v2: https://dev2.loothgroup.com/mockups/forums.html
 - Prior handoffs: [handoffs/](handoffs/) — latest before this is `2026-05-28-reply-form.md`
 
 ## Handoff rotation

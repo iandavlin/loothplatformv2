@@ -14,7 +14,7 @@ declare(strict_types=1);
  *   php /home/ubuntu/worktrees/composer-v2-p2/tools/composer-p2/s1-proof.php
  */
 
-define('LG_BB_MIRROR_HOST', getenv('LG_BB_MIRROR_PUBLIC_HOST') ?: 'dev.loothgroup.com');
+define('LG_BB_MIRROR_HOST', getenv('LG_BB_MIRROR_PUBLIC_HOST') ?: 'dev2.loothgroup.com');
 
 require_once dirname(__DIR__, 2) . '/bb-mirror/web/forums/_reply-render.php';
 require_once dirname(__DIR__, 2) . '/bb-mirror/web/_anon-scrub.php';

@@ -55,7 +55,7 @@ function profile_sync_dispatch_user_created(int $user_id): void {
         'blocking'  => true,   // onboard needs slug provisioned BEFORE the wp_login mint (else slug-less cookie → /profile/edit)
         'sslverify' => false,
         'headers'   => [
-            'Host'           => $_SERVER['HTTP_HOST'] ?? 'dev.loothgroup.com',
+            'Host'           => $_SERVER['HTTP_HOST'] ?? 'dev2.loothgroup.com',
             'Content-Type'   => 'application/json',
             'X-Hook-Secret'  => $secret,
         ],
@@ -95,7 +95,7 @@ function profile_sync_dispatch_email_changed(int $user_id, string $email): void 
         'blocking'  => true,
         'sslverify' => false,
         'headers'   => [
-            'Host'          => $_SERVER['HTTP_HOST'] ?? 'dev.loothgroup.com',
+            'Host'          => $_SERVER['HTTP_HOST'] ?? 'dev2.loothgroup.com',
             'Content-Type'  => 'application/json',
             'X-Hook-Secret' => $secret,
         ],

@@ -121,7 +121,7 @@ const CONFIG = {
   // ── WP REST bridge (sheets-bot) ─────────────────────────────
   // Configure via menu: "Set WP Credentials" — values stored in Script Properties.
   // Falls back to these defaults if Script Properties not set.
-  WP_DEFAULT_BASE_URL: 'https://dev.loothgroup.com',
+  WP_DEFAULT_BASE_URL: 'https://dev2.loothgroup.com',
   WP_TIER_OPTIONS: ['Public', 'Looth Lite', 'Looth Pro'],
 };
 
@@ -1533,7 +1533,7 @@ function onFormSubmit(e) {
 // ── WP REST BRIDGE ──────────────────────────────────────────
 // Publishes a row to the WordPress `event` CPT on dev (or prod).
 // Required Script Properties (set via "Set WP Credentials…" menu):
-//   WP_BASE_URL       e.g. https://dev.loothgroup.com
+//   WP_BASE_URL       e.g. https://dev2.loothgroup.com
 //   WP_USERNAME       e.g. sheets-bot
 //   WP_APP_PASSWORD   the WP Application Password (no spaces)
 // ============================================================
@@ -1541,7 +1541,7 @@ function onFormSubmit(e) {
 function setWpCredentials() {
   const ui = SpreadsheetApp.getUi();
   const props = PropertiesService.getScriptProperties();
-  const r1 = ui.prompt('WP Base URL', 'e.g. https://dev.loothgroup.com (no trailing slash)', ui.ButtonSet.OK_CANCEL);
+  const r1 = ui.prompt('WP Base URL', 'e.g. https://dev2.loothgroup.com (no trailing slash)', ui.ButtonSet.OK_CANCEL);
   if (r1.getSelectedButton() !== ui.Button.OK) return;
   const baseUrl = r1.getResponseText().trim().replace(/\/$/, '');
   if (!baseUrl) { ui.alert('Base URL required.'); return; }

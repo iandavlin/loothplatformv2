@@ -22,7 +22,7 @@ one server, schema per strangler).
 - Sync end-to-end proven (mu-plugin → loopback POST → `_sync.php` materialize)
 
 ### New since 2026-05-27
-- **Mockup v2** live at https://dev.loothgroup.com/mockups/forums.html — dashboard-style forum index with hero + regional groups + activity rail, threaded reply rendering, image layers (avatars / topic thumbnails / inline images / attachment rows), schema-implications section, mobile breakpoint at 960 + 640.
+- **Mockup v2** live at https://dev2.loothgroup.com/mockups/forums.html — dashboard-style forum index with hero + regional groups + activity rail, threaded reply rendering, image layers (avatars / topic thumbnails / inline images / attachment rows), schema-implications section, mobile breakpoint at 960 + 640.
 - **Postgres migration ruling from Ian** ([briefing-bb-mirror-postgres.md](../docs/briefing-bb-mirror-postgres.md), §3i): all three stranglers on one postgres server, schema per strangler. Driver is "mobile is imminent" — not theoretical future flex.
 - **Migration plan proposed, awaiting green-light.** Three decisions pending (see below).
 
@@ -66,7 +66,7 @@ Once these are green-lit I execute the 10-step plan in the proposal (see next se
 
 ## Mockup v2 — what shipped
 
-Six sections at https://dev.loothgroup.com/mockups/forums.html (cookie-gated, 61 KB):
+Six sections at https://dev2.loothgroup.com/mockups/forums.html (cookie-gated, 61 KB):
 
 1. **Forum dashboard** — hero card (Spring Build Challenge example), 9-region Local Looths strip, category-grouped forum cards with monogram + warm-gradient icons, right rail (Recent Activity / Trending / Your Subscriptions). Replaces v1's flat list.
 2. **Topic list** — adds optional thumbnail column + `📷 N` image-count chip + "threaded discussion" sub-meta.
@@ -86,7 +86,7 @@ Dev data: **1,592 of 4,404 replies (36%) use `_bbp_reply_to`**. Threading is loa
 - `?bb_native=1` kill-switch still in nginx
 - `/bb-mirror-api/v0/_sync` loopback route, runs on WP FPM pool for `$wpdb` access
 - SQLite ownership: `bb-mirror:loothdevs` 664, `umask(0002)` in config.php
-- nginx routes inline in `dev.loothgroup.com.conf` (extraction to `snippets/strangler-bb-mirror.conf` is a future tidy-up — mentioned in the postgres briefing as "still extracted in...", but on dev it's not extracted yet)
+- nginx routes inline in `dev2.loothgroup.com.conf` (extraction to `snippets/strangler-bb-mirror.conf` is a future tidy-up — mentioned in the postgres briefing as "still extracted in...", but on dev it's not extracted yet)
 
 ## How to test (current SQLite state)
 
@@ -98,13 +98,13 @@ sudo -u bb-mirror sqlite3 /home/ubuntu/projects/bb-mirror/index.sqlite \
    SELECT 'replies',COUNT(*) FROM reply;"
 
 # Live wired routes
-TOK=$(sudo grep -E 'set \$loothdev_token' /etc/nginx/sites-available/dev.loothgroup.com.conf | head -1 | grep -oE '"[^"]+"' | tr -d '"')
-curl -s "https://dev.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
-curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" https://dev.loothgroup.com/forums-poc/
-curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" https://dev.loothgroup.com/forums-poc/acoustic/
+TOK=$(sudo grep -E 'set \$loothdev_token' /etc/nginx/sites-available/dev2.loothgroup.com.conf | head -1 | grep -oE '"[^"]+"' | tr -d '"')
+curl -s "https://dev2.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
+curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" https://dev2.loothgroup.com/forums-poc/
+curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" https://dev2.loothgroup.com/forums-poc/acoustic/
 
 # Mockup
-curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" https://dev.loothgroup.com/mockups/forums.html
+curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" https://dev2.loothgroup.com/mockups/forums.html
 ```
 
 ## Pointers
@@ -112,7 +112,7 @@ curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" https://dev.loothgroup.co
 - Coordination doc: [/home/ubuntu/projects/docs/STRANGLER-COORDINATION.md](../docs/STRANGLER-COORDINATION.md)
 - Original scope briefing: [/home/ubuntu/projects/docs/briefing-bb-mirror.md](../docs/briefing-bb-mirror.md)
 - Postgres briefing: [/home/ubuntu/projects/docs/briefing-bb-mirror-postgres.md](../docs/briefing-bb-mirror-postgres.md)
-- Mockup (live): https://dev.loothgroup.com/mockups/forums.html — source at [/var/www/dev/mockups/forums.html](../../var/www/dev/mockups/forums.html)
+- Mockup (live): https://dev2.loothgroup.com/mockups/forums.html — source at [/var/www/dev/mockups/forums.html](../../var/www/dev/mockups/forums.html)
 - Prior handoffs: [handoffs/](handoffs/) — `2026-05-27-scaffold-stub.md`, `2026-05-27-scaffold-drafts.md`, `2026-05-27-post-deploy.md`, `2026-05-27-step7-done.md`
 
 ## Handoff rotation

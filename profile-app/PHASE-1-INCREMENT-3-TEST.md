@@ -60,11 +60,11 @@ header a "public" socials block caps to member); owner (`me`) always sees both,
 with vis chips.
 
 ## 3. HTTP round-trips — inc 1 + inc 2 + inc 3 (mint now live)
-Bearer auth; base `https://dev.loothgroup.com/profile-api/v0`. (If the dev cookie
+Bearer auth; base `https://dev2.loothgroup.com/profile-api/v0`. (If the dev cookie
 gate intercepts `/profile-api/`, add `--cookie "loothdev_auth=<v>"`; the API path is
 normally ungated.)
 ```
-H="Authorization: Bearer $TOKEN"; B=https://dev.loothgroup.com/profile-api/v0
+H="Authorization: Bearer $TOKEN"; B=https://dev2.loothgroup.com/profile-api/v0
 
 # inc 1 — header
 curl -sS -H "$H" $B/me/header

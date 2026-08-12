@@ -22,7 +22,7 @@ overrides + navigation + evaluation all inside it.
 BOX FACTS, measured 2026-07-29 — the chrome-dev-login skill is STALE on dev2:
   - chrome-dev.service is INACTIVE and /var/lib/chrome-dev does NOT exist.
   - the binary is /opt/lg-chrome/chrome-linux64/chrome
-  - the skill's "domain must NOT have a leading dot" rule is for dev.loothgroup.com;
+  - the skill's "domain must NOT have a leading dot" rule is for dev2.loothgroup.com;
     dev2 sets loothdev_auth on ".dev2.loothgroup.com" WITH the dot (nginx conf :119)
   - the cookie gate is currently OFF for the cut (conf :140 commented out) — an
     un-cookied /hub/ fetch returns 200 — but the cookie is set anyway so this keeps

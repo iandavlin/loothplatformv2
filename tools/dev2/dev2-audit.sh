@@ -56,7 +56,7 @@ g=$(sudo -u archive-poc psql -d looth -tAc "SELECT has_table_privilege('archive-
 [ "$g" = t ] && PASS "archive-poc has forums.topic SELECT (front-page discussion grant e2ac627)" || FAIL "MISSING forums grant -> front page 500s for members"
 
 hdr "8. Gates"
-echo "  tools/gates/run-all.sh hardcodes dev.loothgroup.com — repoint needs a HOST override (separate task)."
+echo "  tools/gates/run-all.sh hardcodes dev2.loothgroup.com — repoint needs a HOST override (separate task)."
 echo "  Checks 1-7 above are the dev2-specific gate."
 
 echo; echo "################ audit done — FAIL/red lines = pre-cut punch-list ################"

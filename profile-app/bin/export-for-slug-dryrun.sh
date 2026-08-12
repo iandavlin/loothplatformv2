@@ -14,7 +14,7 @@
 #        --from-tsv=/tmp/live-members.tsv --owners-tsv=/tmp/live-owners.tsv \
 #        --html=/tmp/live-dryrun.html --tsv=/tmp/live-dryrun.tsv
 #
-# TRAP (OPERATOR.md): on the live box `looth_dev` is a DECOY — it is dev.loothgroup.com's
+# TRAP (OPERATOR.md): on the live box `looth_dev` is a DECOY — it is dev2.loothgroup.com's
 # own frozen database. The live WP DB is `looth_import`; `siteurl` is the fastest tell.
 # This script only touches Postgres, but the check is printed so the operator can confirm
 # they are on the box they think they are on before trusting anything downstream.

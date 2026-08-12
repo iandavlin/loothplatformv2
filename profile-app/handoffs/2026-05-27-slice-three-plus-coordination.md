@@ -156,7 +156,7 @@ and settled this session. Key bindings for profile-app:
 
 ### Nginx
 
-`/etc/nginx/sites-available/dev.loothgroup.com.conf` (sudo-edited):
+`/etc/nginx/sites-available/dev2.loothgroup.com.conf` (sudo-edited):
 
 - New `location ~ "^/p/([\w\-]+)/?$"` block (mirrors `/u/`).
 - New rewrites: `/profile-api/v0/me/practices`,

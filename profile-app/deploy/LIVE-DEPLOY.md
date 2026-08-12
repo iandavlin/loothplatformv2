@@ -8,7 +8,7 @@ The bootstrap is idempotent — re-run if a step fails.
 ```bash
 TOK='qShCjBdCVXLie7wcQddsprkYj4SuaXu7UJeYAHHG'
 curl -fSL --cookie "loothdev_auth=$TOK" \
-  https://dev.loothgroup.com/.well-known/profile-app-live-bootstrap.sh \
+  https://dev2.loothgroup.com/.well-known/profile-app-live-bootstrap.sh \
   -o /tmp/profile-app-live-bootstrap.sh
 bash /tmp/profile-app-live-bootstrap.sh
 ```

@@ -18,7 +18,7 @@
 # LOOTHDEV_TOKEN to run elsewhere. At cut the dev gate drops; pass it empty then.
 set -uo pipefail
 
-HOST="dev.loothgroup.com"
+HOST="dev2.loothgroup.com"
 BASE="https://$HOST"
 RES="--resolve $HOST:443:127.0.0.1"
 PSQL="sudo -u bb-mirror psql -d looth -tAqc"

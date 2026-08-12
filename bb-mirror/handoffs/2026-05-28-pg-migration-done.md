@@ -42,9 +42,9 @@ Backfill skipped 34 orphan topics + 83 orphan replies that referenced deleted fo
 - Direct curl POST to `/bb-mirror-api/v0/_sync` also 200s
 
 ### Live URLs (cookie-gated, real-data)
-- `https://dev.loothgroup.com/forums-poc/` — forum list (postgres-backed, 200, ~12KB)
-- `https://dev.loothgroup.com/forums-poc/<slug>/` — topic list (postgres-backed)
-- `https://dev.loothgroup.com/forums-poc/<slug>/<topic>/` — still mock data (single-topic template not yet wired; held until v2 restyle)
+- `https://dev2.loothgroup.com/forums-poc/` — forum list (postgres-backed, 200, ~12KB)
+- `https://dev2.loothgroup.com/forums-poc/<slug>/` — topic list (postgres-backed)
+- `https://dev2.loothgroup.com/forums-poc/<slug>/<topic>/` — still mock data (single-topic template not yet wired; held until v2 restyle)
 
 ## Files changed in this migration
 
@@ -122,10 +122,10 @@ sudo -u bb-mirror psql -d looth -c "
   ORDER BY ts_rank(search_doc, plainto_tsquery('english','guitar')) DESC LIMIT 5;"
 
 # Live URLs (forum-list, topic-list)
-TOK=$(sudo grep -E 'set \$loothdev_token' /etc/nginx/sites-available/dev.loothgroup.com.conf | head -1 | grep -oE '"[^"]+"' | tr -d '"')
-curl -s "https://dev.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
-curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" https://dev.loothgroup.com/forums-poc/
-curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" https://dev.loothgroup.com/forums-poc/acoustic/
+TOK=$(sudo grep -E 'set \$loothdev_token' /etc/nginx/sites-available/dev2.loothgroup.com.conf | head -1 | grep -oE '"[^"]+"' | tr -d '"')
+curl -s "https://dev2.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
+curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" https://dev2.loothgroup.com/forums-poc/
+curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" https://dev2.loothgroup.com/forums-poc/acoustic/
 
 # Sync receiver (E2E via wp-cli)
 cd /var/www/dev && sudo -u www-data wp eval 'do_action("bbp_edit_topic", 68963);'
@@ -152,7 +152,7 @@ LG_BB_MIRROR_DB=sqlite sudo -u bb-mirror psql -d looth -c "SELECT 1;"  # would f
 - Coordination doc: [/home/ubuntu/projects/docs/STRANGLER-COORDINATION.md](../docs/STRANGLER-COORDINATION.md)
 - Scope briefing: [/home/ubuntu/projects/docs/briefing-bb-mirror.md](../docs/briefing-bb-mirror.md)
 - Postgres briefing: [/home/ubuntu/projects/docs/briefing-bb-mirror-postgres.md](../docs/briefing-bb-mirror-postgres.md)
-- Mockup v2: https://dev.loothgroup.com/mockups/forums.html — source [/var/www/dev/mockups/forums.html](../../var/www/dev/mockups/forums.html)
+- Mockup v2: https://dev2.loothgroup.com/mockups/forums.html — source [/var/www/dev/mockups/forums.html](../../var/www/dev/mockups/forums.html)
 - Pattern source (service shape): [/home/ubuntu/projects/archive-poc/](../archive-poc/) — also migrating to pg per coordinator
 - Prior handoffs: [handoffs/](handoffs/) — five rotated stubs spanning 2026-05-27 (scaffold → drafts → post-deploy → step7-done) through 2026-05-28 (pre-pg-migration)
 

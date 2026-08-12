@@ -77,7 +77,7 @@ echo "== SYNC discovery stores (save-hooks do NOT fire reliably from wp-cli) =="
 # Adjust host/loopback for live. Each call upserts-or-deletes blob + index row.
 for id in 67625 67638 68956 50134 3666 13651; do
   curl -sk -X POST 'https://127.0.0.1/archive-api/v0/_sync' \
-    -H 'Host: dev.loothgroup.com' -H 'Content-Type: application/json' \
+    -H 'Host: dev2.loothgroup.com' -H 'Content-Type: application/json' \
     -d "{\"post_id\":$id,\"action\":\"upsert\"}"; echo
 done
 # Blob store (run from archive-poc checkout):

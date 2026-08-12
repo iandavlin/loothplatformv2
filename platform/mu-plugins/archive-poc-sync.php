@@ -9,7 +9,7 @@
  *        bbp_new_topic, bbp_new_reply, edit_post, deleted_post.
  *
  * Notes:
- *   - Calls https://127.0.0.1/archive-api/v0/_sync with Host: dev.loothgroup.com
+ *   - Calls https://127.0.0.1/archive-api/v0/_sync with Host: dev2.loothgroup.com
  *     so traffic stays on the box and the loopback allow-rule fires.
  *   - sslverify is off (self-signed-friendly path; dev only).
  *   - timeout=1s, blocking=false → save_post returns immediately.

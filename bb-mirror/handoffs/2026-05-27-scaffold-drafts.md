@@ -45,7 +45,7 @@ In order. Each step is independently shippable.
    `X-BB-Mirror-Sync: 1` header, dispatches to `bin/indexer.php` logic.
 5. **Wire FPM pool** — `/etc/php/8.3/fpm/pool.d/bb-mirror.conf`. Copy
    archive-poc's pool config, swap socket path + user. systemctl reload php8.3-fpm.
-6. **Include nginx snippet** — drop into `dev.loothgroup.com.conf`, reload
+6. **Include nginx snippet** — drop into `dev2.loothgroup.com.conf`, reload
    nginx. At this point `/forums/index.php` should 200 with mock data.
 7. **Deploy mu-plugin to mu-plugins/.** Only after steps 1–6. Verify with
    `wp shell` create a test topic → see _sync POST hit, see row appear in
@@ -85,7 +85,7 @@ Per STRANGLER-COORDINATION.md §4:
 - Coordination doc: [/home/ubuntu/projects/docs/STRANGLER-COORDINATION.md](../docs/STRANGLER-COORDINATION.md)
 - Briefing: [/home/ubuntu/projects/docs/briefing-bb-mirror.md](../docs/briefing-bb-mirror.md)
 - Pattern to mirror (service shape): [/home/ubuntu/projects/archive-poc/](../archive-poc/)
-- BB REST inventory: `curl -b /tmp/devjar https://dev.loothgroup.com/wp-json/buddyboss/v1` (~80 routes; forum/topic/reply ones live under `/forums`, `/topics`, `/reply`)
+- BB REST inventory: `curl -b /tmp/devjar https://dev2.loothgroup.com/wp-json/buddyboss/v1` (~80 routes; forum/topic/reply ones live under `/forums`, `/topics`, `/reply`)
 - lg-layout-v2 SiteHeader (reference for the swap at §4.3): [/var/www/dev/wp-content/plugins/lg-layout-v2/src/SiteHeader.php](../../var/www/dev/wp-content/plugins/lg-layout-v2/src/SiteHeader.php)
 
 ## Handoff rotation

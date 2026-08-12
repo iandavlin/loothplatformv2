@@ -118,29 +118,29 @@ corner-hamburger present on every page
 
 ```bash
 TOK=$(sudo grep -E 'set \$loothdev_token' \
-  /etc/nginx/sites-available/dev.loothgroup.com.conf | \
+  /etc/nginx/sites-available/dev2.loothgroup.com.conf | \
   head -1 | grep -oE '"[^"]+"' | tr -d '"')
-curl -s "https://dev.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
+curl -s "https://dev2.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
 
 # Site-wide feed: expect 50 cards
-curl -s -b /tmp/bbjar https://dev.loothgroup.com/forums-poc/ | grep -c '<article class="feed-card'
+curl -s -b /tmp/bbjar https://dev2.loothgroup.com/forums-poc/ | grep -c '<article class="feed-card'
 
 # Scoped feed: expect 50 cards
-curl -s -b /tmp/bbjar https://dev.loothgroup.com/forums-poc/acoustic/ | grep -c '<article class="feed-card'
+curl -s -b /tmp/bbjar https://dev2.loothgroup.com/forums-poc/acoustic/ | grep -c '<article class="feed-card'
 
 # Repair+Restoration container (recursive CTE)
-curl -s -b /tmp/bbjar https://dev.loothgroup.com/forums-poc/repair-and-restoration/ | grep -c '<article class="feed-card'
+curl -s -b /tmp/bbjar https://dev2.loothgroup.com/forums-poc/repair-and-restoration/ | grep -c '<article class="feed-card'
 
 # Single topic
 curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}\n" \
-  https://dev.loothgroup.com/forums-poc/general/stripped-out-trussrod/
+  https://dev2.loothgroup.com/forums-poc/general/stripped-out-trussrod/
 
 # Search
-curl -s -b /tmp/bbjar 'https://dev.loothgroup.com/forums-poc/?q=guitar' | grep -c 'search-result__title'
+curl -s -b /tmp/bbjar 'https://dev2.loothgroup.com/forums-poc/?q=guitar' | grep -c 'search-result__title'
 
 # Sync
 curl -sk -X POST https://127.0.0.1/bb-mirror-api/v0/_sync \
-  -H 'Host: dev.loothgroup.com' -H 'X-BB-Mirror-Sync: 1' \
+  -H 'Host: dev2.loothgroup.com' -H 'X-BB-Mirror-Sync: 1' \
   -H 'Content-Type: application/json' \
   -d '{"kind":"topic","id":68963,"action":"upsert"}'
 ```

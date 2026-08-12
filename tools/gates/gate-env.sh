@@ -9,7 +9,7 @@
 # every lane. A harness that dies on its own environment drift is itself a defect
 # class; the cure is one resolver, not five copies of a path.
 #
-# NO HOSTNAME IS WRITTEN IN THIS FILE. The old `dev.loothgroup.com` pair is
+# NO HOSTNAME IS WRITTEN IN THIS FILE. The old `dev2.loothgroup.com` pair is
 # RETIRED (Ian, 2026-07-27) and is deliberately not kept as a fallback — a gate
 # that can silently resolve to a dead host is worse than one that fails loudly.
 # The box states its own identity instead, so the harness follows whatever box it

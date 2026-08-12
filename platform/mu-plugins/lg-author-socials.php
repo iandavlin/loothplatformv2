@@ -127,7 +127,7 @@ function lg_author_socials_fetch(int $user_id): ?array {
         'blocking'  => true,
         'sslverify' => false,
         'headers'   => [
-            'Host'                => $_SERVER['HTTP_HOST'] ?? 'dev.loothgroup.com',
+            'Host'                => $_SERVER['HTTP_HOST'] ?? 'dev2.loothgroup.com',
             'Content-Type'        => 'application/json',
             'X-LG-Internal-Auth'  => $secret,
         ],

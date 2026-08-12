@@ -15,9 +15,9 @@ Steps 1–6 of the prior handoff are **done**. Step 7 (mu-plugin deploy) and
 first-live-read are **held**.
 
 **Live on dev, behind cookie gate:**
-- https://dev.loothgroup.com/forums-poc/ → 200 (forum index, mock data)
-- https://dev.loothgroup.com/forums-poc/<slug>/ → 200 (topic list, mock)
-- https://dev.loothgroup.com/forums-poc/<slug>/<topic>/ → 200 (single topic, mock)
+- https://dev2.loothgroup.com/forums-poc/ → 200 (forum index, mock data)
+- https://dev2.loothgroup.com/forums-poc/<slug>/ → 200 (topic list, mock)
+- https://dev2.loothgroup.com/forums-poc/<slug>/<topic>/ → 200 (single topic, mock)
 - `?bb_native=1` kill-switch → 302 to WP. Pre-cutover this falls back to
   whatever WP would have served; post-cutover (when mount flips from
   `/forums-poc/` → `/forums/`) this lets us peek at BB's native render.
@@ -41,9 +41,9 @@ edits in nginx + config.
 | Forum templates | [web/forums/](web/forums/) | three sketches, mock data, placeholder header (red dashed) |
 | FPM pool | `/etc/php/8.3/fpm/pool.d/bb-mirror.conf` | live, socket at `/run/php/php8.3-fpm-bb-mirror.sock` |
 | System user | `bb-mirror` (uid 993, gid 983) | owns the SQLite + FPM workers |
-| nginx routes | inserted in `/etc/nginx/sites-available/dev.loothgroup.com.conf` (after archive-poc block) | live, `nginx -t` clean |
+| nginx routes | inserted in `/etc/nginx/sites-available/dev2.loothgroup.com.conf` (after archive-poc block) | live, `nginx -t` clean |
 
-Nginx-config backup before edit: `dev.loothgroup.com.conf.bak.bb-mirror-*`.
+Nginx-config backup before edit: `dev2.loothgroup.com.conf.bak.bb-mirror-*`.
 
 ## Why `try_files` looks weird in the nginx block
 
@@ -120,13 +120,13 @@ a try_files-fallback nested location with alias resolves wrong. Don't
 
 ```bash
 # Mint cookie
-TOK=$(sudo grep -E 'set \$loothdev_token' /etc/nginx/sites-available/dev.loothgroup.com.conf | head -1 | grep -oE '"[^"]+"' | tr -d '"')
-curl -s "https://dev.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
+TOK=$(sudo grep -E 'set \$loothdev_token' /etc/nginx/sites-available/dev2.loothgroup.com.conf | head -1 | grep -oE '"[^"]+"' | tr -d '"')
+curl -s "https://dev2.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
 
 # Three routes
 for url in '' 'anonymous-questions/' 'anonymous-questions/some-topic/'; do
   curl -s -b /tmp/bbjar -o /dev/null -w "%{http_code}  %{size_download}b  /forums-poc/$url\n" \
-    "https://dev.loothgroup.com/forums-poc/$url"
+    "https://dev2.loothgroup.com/forums-poc/$url"
 done
 
 # DB tables

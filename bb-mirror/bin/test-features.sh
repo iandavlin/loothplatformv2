@@ -17,7 +17,7 @@
 set -uo pipefail
 
 # ── Config ──────────────────────────────────────────────────────────────────
-HOST="dev.loothgroup.com"
+HOST="dev2.loothgroup.com"
 BASE="https://$HOST"
 POC="/forum"                                     # canonical base (§0d); was /forums-poc
 WP_PATH="/var/www/dev"
@@ -57,9 +57,9 @@ def main():
     if cmd=="pageid": print(p["id"])
     elif cmd=="cookies":
         env=dict(l.split("=",1) for l in open("/tmp/bbtest-cookies.env") if "=" in l)
-        cks=[{"domain":"dev.loothgroup.com","name":"loothdev_auth","value":env["GATE"].strip(),"path":"/","secure":True,"httpOnly":True},
-             {"domain":"dev.loothgroup.com","name":env["LOGGED_IN_NAME"].strip(),"value":env["LOGGED_IN_VAL"].strip(),"path":"/","secure":True,"httpOnly":True},
-             {"domain":"dev.loothgroup.com","name":env["AUTH_NAME"].strip(),"value":env["AUTH_VAL"].strip(),"path":"/","secure":True,"httpOnly":True}]
+        cks=[{"domain":"dev2.loothgroup.com","name":"loothdev_auth","value":env["GATE"].strip(),"path":"/","secure":True,"httpOnly":True},
+             {"domain":"dev2.loothgroup.com","name":env["LOGGED_IN_NAME"].strip(),"value":env["LOGGED_IN_VAL"].strip(),"path":"/","secure":True,"httpOnly":True},
+             {"domain":"dev2.loothgroup.com","name":env["AUTH_NAME"].strip(),"value":env["AUTH_VAL"].strip(),"path":"/","secure":True,"httpOnly":True}]
         async def go():
             async with websockets.connect(ws,max_size=None) as s:
                 await s.send(json.dumps({"id":1,"method":"Network.clearBrowserCookies"})); await s.recv()

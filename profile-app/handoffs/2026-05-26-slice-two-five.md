@@ -133,14 +133,14 @@ sudo -u profile-app psql -d profile_app -c '\dt'              # → 16 tables (1
 
 # Directory radius spot-check
 TOK='qShCjBdCVXLie7wcQddsprkYj4SuaXu7UJeYAHHG'
-curl -sk -H "Host: dev.loothgroup.com" -H "Cookie: loothdev_auth=$TOK" \
+curl -sk -H "Host: dev2.loothgroup.com" -H "Cookie: loothdev_auth=$TOK" \
   "https://127.0.0.1/profile-api/v0/directory/members?lat=45.5&lng=-122.7&radius=50" | jq '.total'
 
 # Re-run geocode for any leftovers (idempotent)
 sudo -u profile-app php /home/ubuntu/projects/profile-app/bin/geocode.php
 
 # Auto-mint via issue
-curl -skI -H "Host: dev.loothgroup.com" -H "Cookie: loothdev_auth=$TOK; <wp_logged_in_cookie>" \
+curl -skI -H "Host: dev2.loothgroup.com" -H "Cookie: loothdev_auth=$TOK; <wp_logged_in_cookie>" \
   "https://127.0.0.1/wp-json/looth/auth/issue?return=/profile/edit"
 ```
 

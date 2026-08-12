@@ -54,7 +54,7 @@ function profile_sync_dispatch_user_created(int $user_id): void {
         'blocking'  => false,
         'sslverify' => false,
         'headers'   => [
-            'Host'           => $_SERVER['HTTP_HOST'] ?? 'dev.loothgroup.com',
+            'Host'           => $_SERVER['HTTP_HOST'] ?? 'dev2.loothgroup.com',
             'Content-Type'   => 'application/json',
             'X-Hook-Secret'  => $secret,
         ],

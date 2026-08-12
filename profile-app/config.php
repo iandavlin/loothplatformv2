@@ -67,7 +67,7 @@ if (!$env) {
     // and correctly resolves 'live'.
     if (str_starts_with((string)$host, 'dev2.') || str_contains((string)$host, 'ip-172-31-47-205')) {
         $env = 'dev2';
-    } elseif (str_starts_with((string)$host, 'dev.') || str_contains((string)$host, '.dev.loothgroup.com') || str_contains((string)$host, 'ip-172-31-81-87') || str_contains((string)$host, 'claude.loothgroup')) {
+    } elseif (str_starts_with((string)$host, 'dev.') || str_contains((string)$host, '.dev2.loothgroup.com') || str_contains((string)$host, 'ip-172-31-81-87') || str_contains((string)$host, 'claude.loothgroup')) {
         $env = 'dev';
     } else {
         $env = 'live';
@@ -92,7 +92,7 @@ if ($env === 'live') {
     $d_mysql_db   = 'looth_import';
     $d_billing_db = 'lg_membership';
 } else {
-    $d_host       = 'dev.loothgroup.com';
+    $d_host       = 'dev2.loothgroup.com';
     $d_wp_path    = '/var/www/dev';
     $d_mysql_db   = 'looth_import';
     $d_billing_db = 'lg_membership';

@@ -17,7 +17,7 @@
 set -uo pipefail
 
 WP_USER_ID="${1:-1918}"
-BASE="https://dev.loothgroup.com/profile-api/v0"
+BASE="https://dev2.loothgroup.com/profile-api/v0"
 MINT="/home/ubuntu/projects/profile-app/bin/mint-dev-token.php"
 
 TOKEN="$(sudo -u profile-app php "$MINT" "$WP_USER_ID")" || { echo "mint failed"; exit 1; }

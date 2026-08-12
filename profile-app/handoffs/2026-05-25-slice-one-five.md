@@ -157,7 +157,7 @@ sudo -u profile-app psql -d profile_app -c '\dt'                # → 6 tables
 
 # Schema check
 TOK='qShCjBdCVXLie7wcQddsprkYj4SuaXu7UJeYAHHG'
-curl -sk -H "Host: dev.loothgroup.com" -H "Cookie: loothdev_auth=$TOK" \
+curl -sk -H "Host: dev2.loothgroup.com" -H "Cookie: loothdev_auth=$TOK" \
   https://127.0.0.1/profile-api/v0/schema | jq .
 
 # JWT for Ian + load editor in browser via chrome-dev-login skill

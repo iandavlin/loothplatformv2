@@ -31,7 +31,7 @@ if (PHP_SAPI !== 'cli') { fwrite(STDERR, "CLI only\n"); exit(2); }
 
 /**
  * Host / token come from the ONE resolver (tools/gates/gate-env.sh) so this gate
- * cannot drift out of the box again — a hardcoded dev.loothgroup.com pair here
+ * cannot drift out of the box again — a hardcoded dev2.loothgroup.com pair here
  * is what made gate 1/5 die on "cannot read dev gate token" once the box became
  * dev2 and the tokens moved into a box-local nginx include.
  * LG_MATRIX_HOST still overrides for the LIVE acceptance run.

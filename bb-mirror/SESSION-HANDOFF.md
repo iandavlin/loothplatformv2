@@ -70,5 +70,5 @@ Default feed is 100% untouched without the flag. Mockup: `/mockups/hub-card-tier
 ## Test accounts / verify
 - admin uid 1 (iandavlin, bypasses reply flood throttle). Headless CDP is **anon to WP** → moderation
   controls stay hidden + posts hit the auth gate there; test mod actions logged in.
-- Raw canonical: `curl /hub/ --resolve dev.loothgroup.com:443:127.0.0.1 -H "Cookie: loothdev_auth=<$loothdev_token>"`.
+- Raw canonical: `curl /hub/ --resolve dev2.loothgroup.com:443:127.0.0.1 -H "Cookie: loothdev_auth=<$loothdev_token>"`.
 - Phone/real view: `chrome-dev-login` skill.

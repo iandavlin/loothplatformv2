@@ -26,12 +26,12 @@ if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/looth-vendor/autoload.php';
 
 // Derive the public host from the shared env so the cookie domain + issuer
-// auto-correct per box (dev1→.dev.loothgroup.com, dev2→.dev2.loothgroup.com,
+// auto-correct per box (dev1→.dev2.loothgroup.com, dev2→.dev2.loothgroup.com,
 // prod→.loothgroup.com). Absent-safe: on a box WITHOUT /etc/looth/env the
 // fallback is the current dev literal, so behavior is byte-identical to today.
 if (is_file('/srv/lg-shared/lg-env.php')) require_once '/srv/lg-shared/lg-env.php';
 $lg_shared = function_exists('lg_env') ? lg_env() : [];
-$lg_host   = $lg_shared['host'] ?? 'dev.loothgroup.com';   // fallback = dev literal → absent-env behaves EXACTLY as before
+$lg_host   = $lg_shared['host'] ?? 'dev2.loothgroup.com';   // fallback = dev literal → absent-env behaves EXACTLY as before
 
 const LOOTH_AUTH_NAMESPACE      = 'eaef23f7-9bc9-4a95-ac49-ffff632e6646';
 const LOOTH_AUTH_COOKIE         = 'looth_id';
@@ -173,7 +173,7 @@ add_action('rest_api_init', function () {
             if (!is_string($return) || $return === '' || $return[0] !== '/') {
                 $return = '/profile/edit';
             }
-            $back = 'https://' . ($_SERVER['HTTP_HOST'] ?? $GLOBALS['lg_host'] ?? 'dev.loothgroup.com') . $return;
+            $back = 'https://' . ($_SERVER['HTTP_HOST'] ?? $GLOBALS['lg_host'] ?? 'dev2.loothgroup.com') . $return;
             if (!is_user_logged_in()) {
                 $login = wp_login_url($back);
                 wp_redirect($login); exit;

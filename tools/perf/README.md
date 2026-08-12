@@ -1,6 +1,6 @@
 # perf-czar harness
 
-Server + browser perf measurement for dev.loothgroup.com. Results live in ../../docs/PERF-BASELINE.md.
+Server + browser perf measurement for dev2.loothgroup.com. Results live in ../../docs/PERF-BASELINE.md.
 
 ## Login (both scripts need it)
 Mint cookies into ~/.perfck/ (gate.txt, wpcookies.tsv, jwt.txt) per the chrome-dev-login skill.

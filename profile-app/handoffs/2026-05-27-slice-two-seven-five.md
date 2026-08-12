@@ -85,7 +85,7 @@
 - `web/edit.css` — picker dropdown + visibility row styles appended.
 - Google Maps SDK script tag removed from the editor.
 
-Routing: nginx `/etc/nginx/sites-available/dev.loothgroup.com.conf` got a
+Routing: nginx `/etc/nginx/sites-available/dev2.loothgroup.com.conf` got a
 new rewrite for `/profile-api/v0/me/location/search` → `me-location-search.php`,
 and the file added to the authed regex. Reloaded; `nginx -t` clean.
 

@@ -13,7 +13,7 @@ add a SUPERSEDED banner to the rotated copy, and write a fresh pointer here.
 - **Workflow is git-native off `main`:** lanes edit in their own worktree
   (`git worktree add ~/worktrees/<lane> -b <lane> main`), commit small tested
   increments, and route to `main` through the **keeper** (no self-push, no
-  self-merge). The old **buck-clone / `buck.dev.loothgroup.com` preview /
+  self-merge). The old **buck-clone / `buck.dev2.loothgroup.com` preview /
   coordinator-merge** flow is DEAD — ignore any handoff that assumes it.
 - Pre-2026-06-20 handoffs in `handoffs/` are historical only (old-box era).
 

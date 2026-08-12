@@ -74,11 +74,11 @@ looth_render_profile_blocks(<UID>, "public", "Pro");'
 With a valid profile-app session (looth_id), against the dev host:
 ```
 # write: set bio + open the ceiling to public
-curl -sS -X PATCH https://dev.loothgroup.com/profile-api/v0/me/header \
+curl -sS -X PATCH https://dev2.loothgroup.com/profile-api/v0/me/header \
   -H 'Content-Type: application/json' --cookie "<session>" \
   -d '{"at_a_glance":"Repairs, setups, restorations","visibility":"public"}'
 # read back
-curl -sS https://dev.loothgroup.com/profile-api/v0/me/header --cookie "<session>"
+curl -sS https://dev2.loothgroup.com/profile-api/v0/me/header --cookie "<session>"
 ```
 (Confirm the actual route prefix in the profile-app nginx snippet; the file is
 `api/v0/me-header.php`.) Expect:

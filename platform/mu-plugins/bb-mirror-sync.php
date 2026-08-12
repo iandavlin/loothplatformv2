@@ -51,7 +51,7 @@ if (!function_exists('bb_mirror_sync_host')) {
  *   1. BB_MIRROR_SYNC_HOST_OVERRIDE define (wp-config escape hatch)
  *   2. BB_MIRROR_SYNC_HOST env var (escape hatch)
  *   3. /etc/looth/env shared host via lg_env() -- the box-static migration source
- *      (dev1->dev.loothgroup.com, dev2->dev2.loothgroup.com, prod->loothgroup.com)
+ *      (dev1->dev2.loothgroup.com, dev2->dev2.loothgroup.com, prod->loothgroup.com)
  *   4. request-host detection (dev.* / claude.loothgroup -> dev, else live)
  *   5. 'loothgroup.com' final fallback
  * lg_env() is the preferred source (matches the live deployed form); the override
@@ -66,7 +66,7 @@ function bb_mirror_sync_host(): string {
     }
     $host = $_SERVER['HTTP_HOST'] ?? '';
     if (str_contains($host, 'dev.') || str_contains($host, 'claude.loothgroup')) {
-        return 'dev.loothgroup.com';
+        return 'dev2.loothgroup.com';
     }
     return 'loothgroup.com';
 }

@@ -84,16 +84,16 @@ The "Reply" button on each post (revealed when authed) prefills `parent_reply_id
 
 ```bash
 TOK=$(sudo grep -E 'set \$loothdev_token' \
-  /etc/nginx/sites-available/dev.loothgroup.com.conf | \
+  /etc/nginx/sites-available/dev2.loothgroup.com.conf | \
   head -1 | grep -oE '"[^"]+"' | tr -d '"')
-curl -s "https://dev.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
+curl -s "https://dev2.loothgroup.com/claim?t=$TOK" -c /tmp/bbjar -o /dev/null
 
 # auth endpoint — anon
-curl -s -b /tmp/bbjar https://dev.loothgroup.com/bb-mirror-api/v0/auth.php
+curl -s -b /tmp/bbjar https://dev2.loothgroup.com/bb-mirror-api/v0/auth.php
 # expected: {"authenticated":false}
 
 # Render a single topic — form, per-post Reply buttons (hidden until JS reveals)
-curl -s -b /tmp/bbjar https://dev.loothgroup.com/forums-poc/general/stripped-out-trussrod/ \
+curl -s -b /tmp/bbjar https://dev2.loothgroup.com/forums-poc/general/stripped-out-trussrod/ \
   | grep -cE 'reply-form-wrap|post__reply-btn|forums.js'
 # expected: 20+ (one wrap, many reply-btns, one script tag)
 
@@ -102,11 +102,11 @@ cd /var/www/dev
 WP_COOKIE=$(sudo -u www-data wp eval '$exp=time()+3600;$m=WP_Session_Tokens::get_instance(1);$t=$m->create($exp);echo wp_generate_auth_cookie(1,$exp,"logged_in",$t);' 2>&1 | tail -1)
 COOKIE_NAME=$(sudo -u www-data wp eval 'echo "wordpress_logged_in_".COOKIEHASH;' 2>&1 | tail -1)
 NONCE=$(curl -s -b /tmp/bbjar -b "$COOKIE_NAME=$WP_COOKIE" \
-  https://dev.loothgroup.com/bb-mirror-api/v0/auth.php \
+  https://dev2.loothgroup.com/bb-mirror-api/v0/auth.php \
   | python3 -c "import json,sys;print(json.load(sys.stdin)['nonce'])")
 TID=56941; FID=3876   # pick any real topic + its forum
 curl -sk -b /tmp/bbjar -b "$COOKIE_NAME=$WP_COOKIE" \
-  -X POST "https://dev.loothgroup.com/wp-json/buddyboss/v1/reply" \
+  -X POST "https://dev2.loothgroup.com/wp-json/buddyboss/v1/reply" \
   -H "Content-Type: application/json" -H "X-WP-Nonce: $NONCE" \
   -d "{\"content\":\"smoke test\",\"topic_id\":$TID,\"forum_id\":$FID}"
 sleep 3
@@ -122,7 +122,7 @@ sudo -u bb-mirror psql -d looth -c "
 - Reply form briefing: [/home/ubuntu/projects/docs/reply-to-bb-mirror-reply-form.md](../docs/reply-to-bb-mirror-reply-form.md)
 - P5 briefing: [/home/ubuntu/projects/docs/reply-to-bb-mirror-p5.md](../docs/reply-to-bb-mirror-p5.md)
 - Audit briefing: [/home/ubuntu/projects/docs/reply-to-bb-mirror-audit-findings.md](../docs/reply-to-bb-mirror-audit-findings.md)
-- Mockup v2: https://dev.loothgroup.com/mockups/forums.html
+- Mockup v2: https://dev2.loothgroup.com/mockups/forums.html
 - Prior handoffs: [handoffs/](handoffs/) — latest before this is `2026-05-28-p5-reconcile.md`
 
 ## Handoff rotation

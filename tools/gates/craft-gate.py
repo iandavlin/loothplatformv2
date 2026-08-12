@@ -34,7 +34,7 @@ import os
 def gate_env():
     """Host / domain / token from the ONE resolver (tools/gates/gate-env.sh).
 
-    Never hardcode them here again: this module's `dev.loothgroup.com` pair is
+    Never hardcode them here again: this module's `dev2.loothgroup.com` pair is
     what took gates 1/2/3/5 down box-wide when the box became dev2 and the
     tokens moved into a box-local nginx include.
     """

@@ -42,7 +42,7 @@ add_action('rest_api_init', function () {
             $url = 'https://127.0.0.1/profile-api/v0/whoami';
 
             $headers = [
-                'Host: ' . ($_SERVER['HTTP_HOST'] ?? 'dev.loothgroup.com'),
+                'Host: ' . ($_SERVER['HTTP_HOST'] ?? 'dev2.loothgroup.com'),
                 'Accept: application/json',
             ];
 

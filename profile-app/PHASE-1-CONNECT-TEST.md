@@ -51,7 +51,7 @@ foreach (["public","member","me"] as $r) { echo "== $r ==\n";
 ## 4. HTTP round-trip — VERIFIED GREEN (mint live)
 ```
 TOK=$(sudo -u profile-app php /home/ubuntu/projects/profile-app/bin/mint-dev-token.php 1918)
-B=https://dev.loothgroup.com/profile-api/v0
+B=https://dev2.loothgroup.com/profile-api/v0
 curl -sS -H "Authorization: Bearer $TOK" $B/me/connect                                   # 200 assembled block
 curl -sS -X PATCH -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' \
   -d '{"visibility":"public"}' $B/me/connect                                              # 200 {ok, connect:{vis:public}}

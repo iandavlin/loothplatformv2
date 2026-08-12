@@ -12,7 +12,7 @@
  *
  * Contract from the mu-plugin:
  *   POST /bb-mirror-api/v0/_sync
- *   Headers: X-BB-Mirror-Sync: 1, Host: dev.loothgroup.com
+ *   Headers: X-BB-Mirror-Sync: 1, Host: dev2.loothgroup.com
  *   Body: { "kind": "forum|topic|reply|subscription|bp_group", "id": int,
  *           "action": "upsert|delete|spam|trash|restore|subscribe|unsubscribe",
  *           "user_id"?: int }

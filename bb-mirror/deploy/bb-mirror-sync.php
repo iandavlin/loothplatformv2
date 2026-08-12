@@ -42,7 +42,7 @@
 if (!defined('ABSPATH')) exit;
 
 if (is_file('/srv/lg-shared/lg-env.php')) require_once '/srv/lg-shared/lg-env.php';
-$lg_host = (function_exists('lg_env') ? (lg_env()['host'] ?? null) : null) ?? 'dev.loothgroup.com';
+$lg_host = (function_exists('lg_env') ? (lg_env()['host'] ?? null) : null) ?? 'dev2.loothgroup.com';
 
 const BB_MIRROR_SYNC_URL = 'https://127.0.0.1/bb-mirror-api/v0/_sync';
 define('BB_MIRROR_SYNC_HOST', $lg_host);

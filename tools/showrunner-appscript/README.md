@@ -5,7 +5,7 @@ Reference copy + runbook for the Google Apps Script bound to the Sheet
 (Extensions → Apps Script); `Code.gs` here is the canonical reference copy.
 
 > **Environment: dev2.** All dev work targets `dev2.loothgroup.com`. The old
-> `dev.loothgroup.com` box is decommissioned. dev2 serves from `main`.
+> `dev2.loothgroup.com` box is decommissioned. dev2 serves from `main`.
 
 ## Files
 - `Code.gs` — canonical reference copy of the bound Apps Script (keep in sync with Google).

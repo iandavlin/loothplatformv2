@@ -3,15 +3,15 @@
   "version": "0.0.1-draft",
   "db_path": "/home/ubuntu/projects/bb-mirror/index.sqlite",
   "wp": {
-    "host": "dev.loothgroup.com",
-    "rest_base": "https://dev.loothgroup.com/wp-json",
+    "host": "dev2.loothgroup.com",
+    "rest_base": "https://dev2.loothgroup.com/wp-json",
     "buddyboss_ns": "buddyboss/v1",
     "looth_ns": "looth/v1",
     "looth_internal_ns": "looth-internal/v1"
   },
   "identity": {
-    "whoami_url": "https://dev.loothgroup.com/api/v0/whoami",
-    "user_context_url": "https://dev.loothgroup.com/wp-json/looth-internal/v1/user-context/{wp_user_id}",
+    "whoami_url": "https://dev2.loothgroup.com/api/v0/whoami",
+    "user_context_url": "https://dev2.loothgroup.com/wp-json/looth-internal/v1/user-context/{wp_user_id}",
     "lg_tier_cookie": "lg_tier",
     "wp_login_cookie_prefix": "wordpress_logged_in_"
   },

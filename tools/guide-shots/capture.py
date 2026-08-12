@@ -10,7 +10,7 @@ RUN:  python3 tools/guide-shots/capture.py --out ~/projects/footer-mockups/profi
 
 THE FIVE THINGS THAT MAKE THIS DIFFERENT FROM "JUST SCREENSHOT IT"
 
-1. HOST = dev2.loothgroup.com, NEVER dev.loothgroup.com.
+1. HOST = dev2.loothgroup.com, NEVER dev2.loothgroup.com.
    No nginx server_name matches `dev`, so it falls through to the default vhost
    (buck-dev2, alphabetically first) and serves /home/buck/loothplatformv2 --
    a tree from 2026-07-22, i.e. the pre-option-A build. It answers 200 on every
