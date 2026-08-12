@@ -70,6 +70,25 @@ def gate_env():
     return env, None
 
 
+# ── PACING, not just retrying ────────────────────────────────────────────────
+# This box's dev gate refuses correctly-cookied requests in BURSTS. Measured
+# repeatedly: a single request always succeeds, `auth=1` at /gatetest, the token
+# is byte-identical to the snippet nginx reads — but a full run's ~20 requests
+# over 170-200KB pages trips it, and retries alone only fight the symptom while
+# still arriving as a burst. A small gap between requests addresses the cause,
+# and on a 2-core box it is the polite thing regardless.
+_LAST = [0.0]
+_GAP = float(os.environ.get("LG_GATE_PACE", "0.45"))
+
+
+def _pace():
+    now = time.monotonic()
+    wait = _GAP - (now - _LAST[0])
+    if wait > 0:
+        time.sleep(wait)
+    _LAST[0] = time.monotonic()
+
+
 def head(env, path):
     """First hop only — the redirect TARGET is what is under test. Following the
     chain would hide a many-to-one hop behind a correct-looking 200. Retries a
@@ -80,6 +99,7 @@ def head(env, path):
     cmd += ["-b", "loothdev_auth=" + env["LG_GATE_TOKEN"], env["LG_GATE_HOST"] + path]
     out = ""
     for attempt in range(3):
+        _pace()
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
         out = r.stdout
         if " 403" not in out.split("\n")[0]:
@@ -128,9 +148,15 @@ def main():
 
     for path, want, check_dest in EXPECT:
         code, loc = head(env, path)
-        loc_cmp = loc.rstrip("/") if loc.startswith("http") else re.sub(
-            r"^https?://[^/]+", "", loc).rstrip("/")
-        if code in (301, 308) and loc_cmp == want.rstrip("/"):
+        # NORMALISE BOTH SIDES TO ABSOLUTE before comparing. nginx emits an
+        # ABSOLUTE Location for an internal redirect ("https://host/hub/") while
+        # the expectation here is written as a path ("/hub/") — and an external
+        # target is absolute on both sides. The first cut compared an absolute
+        # actual against a relative expected and reported /featured-content/ as
+        # broken while it was redirecting perfectly. Resolve, then compare.
+        def _abs(u):
+            return u if u.startswith("http") else env["LG_GATE_HOST"].rstrip("/") + u
+        if code in (301, 308) and _abs(loc).rstrip("/") == _abs(want).rstrip("/"):
             print(f"  ok    {path:<22} 301 -> {loc}")
             ok += 1
         else:
