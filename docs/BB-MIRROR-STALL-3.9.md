@@ -95,9 +95,12 @@ CRAFT law.
   level is a cosmetic defect; not rendering at all is the defect we are here to
   kill.** The link is re-read from `_bbp_reply_to` on every later upsert, so it
   repairs itself.
-- Genuinely unmirrorable rows return quietly instead of throwing. Detection of
-  those belongs to the tripwire, which audits the store rather than trusting the
-  writer.
+- Genuinely unmirrorable rows **throw a typed `BbMirrorUnreadable`** rather than
+  returning quietly, at all three give-up points, after re-reading past the
+  caches (§5). `bb_mirror_walk_ids` records them as skips so reconcile still
+  completes, and `_sync.php` turns them into a 500 that lands in the nginx log.
+  The tripwire still audits the store independently — it is what catches a row
+  the writer never even tried to write.
 
 **`bb-mirror/bin/reconcile.php`**
 - The delta walk goes through `bb_mirror_walk_ids`, `ORDER BY ID` so the skip
@@ -208,16 +211,26 @@ deploy. Within 10 minutes the timer should produce its first clean run since
 
 ```bash
 systemctl status bb-mirror-reconcile.service        # expect: inactive (dead), 0/SUCCESS
-journalctl -u bb-mirror-reconcile -n 30 --no-pager  # expect: "Reconcile complete: ... skipped=0"
+journalctl -u bb-mirror-reconcile -n 30 --no-pager  # expect: "Reconcile complete: ... skipped=5"
 ```
 
-**`skipped=0` is the correct number here, not 4.** The 4 orphaned replies of §4
-are not counted as skips on this branch: `bb_mirror_upsert_reply()` returns
-*quietly* when a reply has no readable parentage, so the walk never sees an
-error for them. They surface as MISSING rows in the tripwire instead, which is
-the channel that audits the store rather than trusting the writer. Making them
-loud skips is exactly the receiver fix held out in §5 — after that lands this
-line becomes `skipped=4`.
+**`skipped=5` is the correct number, and the five will be named.** The receiver
+fix in this same merge makes an unmirrorable row LOUD instead of quiet, so the
+walk reports each one and carries on:
+
+```
+SKIPPED 5 unmirrorable row(s) — the walk continued:
+  SKIP reply 71432: no _bbp_topic_id/_bbp_forum_id even after a cache-bypassing re-read
+  SKIP reply 71433: no _bbp_topic_id/_bbp_forum_id even after a cache-bypassing re-read
+  SKIP reply 71720: names topic 71685, which cannot be materialised (not a topic, or gone)
+  SKIP reply 71722: names topic 71685, which cannot be materialised (not a topic, or gone)
+  SKIP reply 71728: names topic 71671, which cannot be materialised (not a topic, or gone)
+```
+
+That is five, not the four of §4, because 71432 has a mirror row already (it is
+the STALE one) while the other four have none. **Exit is still 0 and the run is
+still complete** — skips are data, not failure. The number drops as Ian resolves
+them (§4); it should never grow, and the tripwire alerts if it does.
 
 **Expect the first run to be big and slow-ish** (~92 topics + ~385 replies, plus
 the ghost sweep and rollups that have not run in 11 days). It took ~20s on dev2.
@@ -367,18 +380,34 @@ the same observations, and this investigation did not instrument live to tell
 them apart. Do not write "Redis race" into a commit message as though it were
 established.
 
-### The fix that follows, and why it is not in this merge
+### The fix, which IS in this merge
 
-Whatever the upstream cause, the receiver's contract is wrong and can be fixed
-without knowing it: **an unreadable reply must not be treated as a no-op.** Throw
-a typed exception instead of returning — `bb_mirror_walk_ids` already records
-those in reconcile, and `_sync.php` answering non-200 would have made the
-existing access log answer this question in one grep instead of a lane. A short
-retry before giving up is worth measuring too.
+Whatever the upstream cause, the receiver's contract was wrong and could be fixed
+without knowing it: **an unreadable post must not be treated as a no-op.** All
+three give-up points now re-read past the caches first, then throw a typed
+`BbMirrorUnreadable`:
 
-Held out of this merge on purpose: it touches the materializer that both
-`_sync.php` and reconcile share, and this branch was already clean and awaiting
-merge when the evidence landed. Keeper's call whether it rides here or follows.
+1. `bb_mirror_upsert_reply` — parentage unreadable (this is the ~16% drop)
+2. `bb_mirror_upsert_reply` — parent topic unmirrorable
+3. `bb_mirror_upsert_topic` — forum unreadable
+
+`bb_mirror_walk_ids` already records those as skips, so reconcile stays green and
+names them; `api/v0/_sync.php`'s existing catch turns them into a 500 that lands
+in the nginx access log — the log that would have answered this whole question in
+one grep.
+
+**It also closes a destructive read, which is worse than the drop.** Both
+materializers `DELETE` when `get_post()` comes back empty, and `get_post()` reads
+the object cache. A stale entry there made a live post look deleted — and
+deleting a TOPIC cascades every reply under it away via the FK plus both
+attachment triggers. Both now confirm against the database before destroying
+anything; verified on dev2 that a row with a poisoned `posts` entry SURVIVED.
+
+An earlier draft of this document said the fix was held out of the merge to avoid
+delaying the deploy. That was true when it was written and is not true now —
+keeper's closeout ruling brought it in. Gate 23 gained a fourth section for it;
+11/11 mutations redden.
+
 Note `docs/` records an outbox timer **installed but deliberately disabled** —
 read that history before building a queue.
 
