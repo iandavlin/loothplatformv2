@@ -198,11 +198,11 @@ final class Admin
 
         if ( CohortAllowlist::add( $uid ) ) {
             self::cohortRedirect( [ 'lgms_cohort_ok' => rawurlencode( sprintf(
-                'Added to the soft-launch cohort: #%d %s (%s).', $uid, $u->user_login, $u->user_email
+                'Added to the test group: #%d %s (%s).', $uid, $u->user_login, $u->user_email
             ) ) ] );
         }
         self::cohortRedirect( [ 'lgms_cohort_ok' => rawurlencode( sprintf(
-            '#%d %s is already in the cohort — nothing changed.', $uid, $u->user_login
+            '#%d %s is already in the test group — nothing changed.', $uid, $u->user_login
         ) ) ] );
     }
 
@@ -217,7 +217,7 @@ final class Admin
         if ( CohortAllowlist::remove( $uid ) ) {
             $u = get_user_by( 'id', $uid );
             self::cohortRedirect( [ 'lgms_cohort_ok' => rawurlencode( sprintf(
-                'Removed #%d%s from the cohort. The lifecycle no longer touches them in EITHER direction — if they should lose access, retract by hand.',
+                'Removed #%d%s from the test group. The Stripe system no longer touches them in EITHER direction — if they should lose access, retract by hand.',
                 $uid, $u ? ' ' . $u->user_login : ''
             ) ) ] );
         }
@@ -241,7 +241,7 @@ final class Admin
             <div class="notice notice-error is-dismissible"><p><?php echo esc_html( $err ); ?></p></div>
         <?php endif; ?>
 
-        <h2>Stripe soft-launch cohort</h2>
+        <h2>Stripe test group — the members allowed into the live test</h2>
         <p class="description" style="max-width:720px;">
             Only members on this list transition through the Stripe webhook lifecycle. Everyone else's
             events are acknowledged and journaled but change <strong>nothing</strong> — an
@@ -253,7 +253,7 @@ final class Admin
         <p>
             <span class="lgms-chip" style="background:<?php echo $lifecycleOn ? '#dcfce7;color:#15803d' : '#f0f0f1;color:#666'; ?>;">lifecycle <?php echo $lifecycleOn ? 'ON' : 'OFF'; ?></span>
             <span class="lgms-chip" style="background:<?php echo $gateOn ? '#dcfce7;color:#15803d' : '#f0f0f1;color:#666'; ?>;">identity gate <?php echo $gateOn ? 'ON' : 'OFF'; ?></span>
-            <span class="lgms-chip" style="background:#e0f2fe;color:#0369a1;">cohort: <?php echo count( $ids ); ?></span>
+            <span class="lgms-chip" style="background:#e0f2fe;color:#0369a1;">in the test group: <?php echo count( $ids ); ?></span>
             <style>.lgms-chip { display:inline-block; padding:.15em .55em; border-radius:3px; font-size:.85em; font-weight:600; margin-right:.4em; }</style>
         </p>
 
@@ -262,7 +262,7 @@ final class Admin
             if ( ! $cu ) : ?>
                 <div class="notice notice-error"><p>User #<?php echo $confirmId; ?> no longer exists on this box — nothing stored.</p></div>
             <?php elseif ( in_array( $confirmId, $ids, true ) ) : ?>
-                <div class="notice notice-info"><p>#<?php echo $confirmId; ?> <strong><?php echo esc_html( $cu->user_login ); ?></strong> is already in the cohort.</p></div>
+                <div class="notice notice-info"><p>#<?php echo $confirmId; ?> <strong><?php echo esc_html( $cu->user_login ); ?></strong> is already in the test group.</p></div>
             <?php else : ?>
                 <div style="border:1px solid #b8d0f0;background:#f0f6ff;border-radius:4px;padding:1em 1.2em;max-width:560px;margin-bottom:1.5em;">
                     <p style="margin:0 0 .6em;font-weight:600;">Confirm before it lands — is this the right member?</p>
@@ -475,7 +475,7 @@ final class Admin
             'settings'      => 'Settings',
             'member_tools'  => 'Member Tools',
             'welcome_email' => 'Welcome Email',
-            'stripe_cohort' => 'Stripe Cohort',
+            'stripe_cohort' => 'Stripe Test Group',
         ];
         ?>
         <div class="wrap">
