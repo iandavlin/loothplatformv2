@@ -503,6 +503,33 @@ echo "=== GATE 24/24: with the origin UP, a nav must render the PAGE, not the of
 # ONE BROWSER AT A TIME — the box is 2-core (Ian, cost, 2026-08-11).
 run "sw-no-offline-shell" python3 "$(dirname "$0")/sw-no-offline-shell-gate.py"
 echo
+echo "=== GATE 23/23: one bad row must not wedge the mirror sweep (the silent-stall class) ==="
+# Re-minted TWICE while this lane sat unmerged: 20 -> 21 -> 23. main gained 27
+# commits and two more gates in between. On collision the rule is KEEP BOTH and
+# renumber your own, never someone else's. Re-check the number immediately before
+# pushing, and GREP THE ROSTER for duplicates afterwards — a gate number can
+# collide through a perfectly CLEAN auto-merge, with no conflict to warn you.
+#
+# Backlog 3.9 (Ian 8/9): hub replies going invisible for hours. bb-mirror-reconcile
+# — the ONLY safety net under a fire-and-forget realtime sync — had been dying on a
+# foreign-key violation every 10 minutes since 2026-07-29 23:20 UTC. Eleven days.
+# The bookmark write sits AFTER the walk, so each death also guaranteed the next
+# one: same window, same poisoned row, same exit 255, for 3,084 runs.
+#
+# The measured cost: 11 of the 70 replies posted in that window (16%) never reached
+# the hub, and every one was rescued only when its AUTHOR happened to edit the post
+# — one of them 2d22h later. `systemctl status` said "failed" the whole time and
+# nobody was watching that unit, which is why this merge also ships
+# tools/mirror-sync/watch-mirror-sync.sh.
+#
+# Pure static + in-process behaviour: no DB, no browser, no network, so it cannot
+# go DEAD for environmental reasons. All 7 assertions were reddened by mutation
+# first (tools/gates/mirror-reconcile-poison-redfirst.sh) — a pass that caught TWO
+# decorative assertions in this very gate: a str_contains() bookmark check that
+# passed happily on 'last_reconcile_at_DISABLED', and a fixture whose exception
+# escaped the gate itself so a real regression exited 255 with no verdict.
+run "mirror-reconcile-poison" php "$(dirname "$0")/mirror-reconcile-poison-gate.php"
+echo
 # THE FENCE: our work must not touch Buck's files (Ian, 2026-08-11).
 run "buck-surface-fence" bash "$(dirname "$0")/buck-surface-guard.sh"
 

@@ -431,6 +431,57 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
     $forum_id = (int)($m['_bbp_forum_id'] ?? 0);
     if (!$topic_id || !$forum_id) return;
 
+    // SELF-HEAL the reply->topic FK before we hit it.
+    //
+    // reply.topic_id is a FOREIGN KEY. Two ways to arrive here with no parent row:
+    //   1. RACE (real, and the whole point of this block): the realtime dispatch is
+    //      fire-and-forget, so a topic's sync POST and its first reply's can land out
+    //      of order — or the topic's can be dropped outright. The reply then has a
+    //      perfectly good topic that simply is not mirrored YET. Materializing the
+    //      parent on the spot fixes the reply AND the missing discussion.
+    //   2. BROKEN PARENTAGE: _bbp_topic_id points at something that is not a topic at
+    //      all. Live carries 4 of these from June (71720/71722 -> 71685, an
+    //      ATTACHMENT; 71728 -> 71671, absent; 71433 -> nothing). No amount of
+    //      retrying invents a topic; the row is unmirrorable until the WP data is
+    //      repaired, so we return quietly and let the caller's skip-report and the
+    //      lag tripwire carry it. What we must NOT do is throw, because an uncaught
+    //      PDOException here is exactly what wedged live's reconcile for 11 days
+    //      (2026-07-29 23:20 UTC -> 2026-08-09, see tools/mirror-sync/).
+    $has_topic = $db->prepare("SELECT 1 FROM topic WHERE id = ?");
+    $has_topic->execute([$topic_id]);
+    if (!$has_topic->fetchColumn()) {
+        bb_mirror_upsert_topic($topic_id, $db);
+        $has_topic->execute([$topic_id]);
+        if (!$has_topic->fetchColumn()) return;   // case 2 — unmirrorable, not fatal
+    }
+
+    // SELF-HEAL the reply->parent_reply FK, the same way and for the same reasons.
+    // reply.parent_reply_id is ALSO a foreign key, so a reply-to-reply whose parent
+    // is unmirrored throws exactly as hard as a missing topic did (reproduced on
+    // dev2 2026-08-09: reply_parent_reply_id_fkey, parent 71422 absent).
+    //
+    // Ordering here is the reverse of the topic case: the parent is a sibling row,
+    // so ONE non-recursive attempt to materialize it is worth making — but if it
+    // still will not land we drop the thread link rather than the reply. A reply
+    // that renders at the top level is a cosmetic defect; a reply that does not
+    // render at all is the defect we are here to kill. The link is not lost for
+    // good either: this is read fresh from _bbp_reply_to on every later upsert.
+    $parent_reply_id = (int)($m['_bbp_reply_to'] ?? 0) ?: null;
+    if ($parent_reply_id !== null) {
+        static $healing_parent = [];   // no A->B->A cascade, and no deep recursion
+        $has_parent = $db->prepare("SELECT 1 FROM reply WHERE id = ?");
+        $has_parent->execute([$parent_reply_id]);
+        if (!$has_parent->fetchColumn()) {
+            if (!isset($healing_parent[$parent_reply_id])) {
+                $healing_parent[$parent_reply_id] = true;
+                try { bb_mirror_upsert_reply($parent_reply_id, $db); } catch (Throwable) {}
+                unset($healing_parent[$parent_reply_id]);
+                $has_parent->execute([$parent_reply_id]);
+            }
+            if (!$has_parent->fetchColumn()) { $parent_reply_id = null; }
+        }
+    }
+
     $body_text = wp_strip_all_tags((string)$p->post_content);
     $person = bb_mirror_person_for((int)$p->post_author, $db);
 
@@ -439,7 +490,7 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
              'status','created_at','modified_at','sync_at'];
     $sql = bb_mirror_upsert_sql('reply', $cols);
     $db->prepare($sql)->execute([
-        $id, $topic_id, $forum_id, (int)($m['_bbp_reply_to'] ?? 0) ?: null,
+        $id, $topic_id, $forum_id, $parent_reply_id,
         wp_kses_post(_bb_mirror_decode($p->post_content)), $body_text,
         (int)$p->post_author ?: null, $person['name'], $person['slug'],
         $m['_bbp_anonymous_name'] ?? null,
@@ -450,6 +501,55 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
         bb_mirror_ts(time()),
     ]);
     bb_mirror_sync_attachments($id, 'reply', $db, (string)$p->post_content);
+}
+
+/**
+ * bb_mirror_walk_ids — run a materializer over a list of ids so that ONE BAD ROW
+ * CANNOT WEDGE THE WALK.
+ *
+ * THE DEFECT THIS ENCODES (live, 2026-07-29 23:20 UTC -> 2026-08-09, 11 days):
+ * bin/reconcile.php ran the delta walk as a bare `foreach { upsert($id); }` and
+ * ended with the `last_reconcile_at` bookmark write. On 07-29 23:20 the bookmark
+ * was rewound to 2026-06-01, which widened the walk to include reply 71720 —
+ * whose _bbp_topic_id points at an ATTACHMENT. The FK threw, the exception was
+ * uncaught, the process died at row 109 of 385, and because the bookmark write
+ * lives AFTER the walk it never ran. So the next run rewalked the same window,
+ * hit the same row, and died again — every 10 minutes for 11 days. The ghost
+ * sweep, the reply_count rollup and both forum rollups never ran either.
+ *
+ * The compounding part is the silence: reconcile is the ONLY safety net under a
+ * fire-and-forget realtime dispatch, so from the moment it wedged, a dropped sync
+ * POST became permanent. 11 of 70 replies posted in that window (16%) went
+ * invisible on the hub, and every single one was rescued only by its author
+ * happening to EDIT the post — up to 2d22h later.
+ *
+ * So: a throwing row is DATA, not control flow. Skip it, record it, keep walking,
+ * and always reach the bookmark. Callers report $skipped; the tripwire
+ * (tools/mirror-sync/watch-mirror-sync.sh) is what makes it loud.
+ *
+ * Returns ['done' => int, 'skipped' => [id => error string, ...]].
+ *
+ * Pass $db so a row that throws mid-transaction cannot poison the rest of the
+ * walk: Postgres fails every subsequent statement on an aborted transaction with
+ * "current transaction is aborted", which would turn one bad row into a whole
+ * dead run again by a different route.
+ */
+function bb_mirror_walk_ids(array $ids, callable $fn, ?PDO $db = null): array {
+    $done = 0;
+    $skipped = [];
+    foreach ($ids as $id) {
+        $id = (int) $id;
+        try {
+            $fn($id);
+            $done++;
+        } catch (Throwable $e) {
+            if ($db !== null && $db->inTransaction()) {
+                try { $db->rollBack(); } catch (Throwable) { /* already unwound */ }
+            }
+            $skipped[$id] = $e->getMessage();
+        }
+    }
+    return ['done' => $done, 'skipped' => $skipped];
 }
 
 /**
