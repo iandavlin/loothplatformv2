@@ -16,3 +16,9 @@
 
 4. **Featured members** (backlog item 18) — opt-in tickbox + admin dash +
    auto-publish to front page; "fairly soon."
+
+5. **Stale-page forwards (fence work, ruled via decision box):**
+   - `/featured-content/` → forward (301) to **the Hub** (`/hub/`).
+   - `/merch/` → forward (301) to **loothtool.com** (Ian's exact word: "loothtool.com";
+     pending since July, now ruled). Lane should confirm the canonical form
+     (https + working) before shipping the redirect.
