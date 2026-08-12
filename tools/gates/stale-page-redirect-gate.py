@@ -126,11 +126,19 @@ def main():
 
     RED, ok = [], 0
 
+    base = env["LG_GATE_HOST"].rstrip("/")
     for path, want, check_dest in EXPECT:
         code, loc = head(env, path)
-        loc_cmp = loc.rstrip("/") if loc.startswith("http") else re.sub(
-            r"^https?://[^/]+", "", loc).rstrip("/")
-        if code in (301, 308) and loc_cmp == want.rstrip("/"):
+        if want.startswith("/"):
+            # A path `return 301 /x/` is absolutized by nginx against the
+            # REQUEST host (absolute_redirect on) — "/hub/" and
+            # "<request-host>/hub/" are the same correct conf, so both pass.
+            # A redirect to any OTHER host is a real finding, never normalized.
+            loc_cmp, want_cmp = loc.rstrip("/"), want.rstrip("/")
+            hit = loc_cmp == want_cmp or loc_cmp == base + want_cmp
+        else:
+            hit = loc.rstrip("/") == want.rstrip("/")
+        if code in (301, 308) and hit:
             print(f"  ok    {path:<22} 301 -> {loc}")
             ok += 1
         else:
