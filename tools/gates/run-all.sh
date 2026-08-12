@@ -432,6 +432,77 @@ echo "=== GATE 22/26: a rendered NAV control must actually NAVIGATE ==="
 # inversion pass found. It now matches the guard itself.
 run "back-pill-navigates" python3 "$(dirname "$0")/back-pill-navigates-gate.py"
 
+echo "=== GATE 23/24: a service-worker navigation must always SETTLE (never spin) ==="
+# 23 minted from MAIN, which reached 22 while this lane was in flight. Grep the roster
+# for duplicates after every rebase — a gate collision can AUTO-MERGE CLEANLY, leaving
+# two blocks printing the same number with no conflict raised (that happened to gate 21
+# two days ago). On conflict KEEP BOTH and renumber; never drop one.
+#
+# THE CLASS, twice: AN UNBOUNDED WAIT PRESENTED TO THE USER AS "LOADING".
+#   2026-06-25  one dropped navigation dead-ended the user on offline.html, no retry.
+#   2026-08-09  Ian, twice in a day. A tab spinning on a request that PROVABLY never
+#               reached nginx (no access-log entry) while every SW-bypassing path
+#               answered in ms; the phone showed offline.html plus raw gate 403s.
+# The 2026-06-25 retry could not help: it is .catch-guarded, and a hung fetch never
+# rejects. Backlog 3.10, audit in docs/PWA-SW-AUDIT.md.
+#
+# The missing assertion is a LIVENESS one, which no presence-style check can express:
+# not "the handler returns the right page" (it did) but "the handler ALWAYS returns,
+# within a bounded time, for every input INCLUDING one that never answers".
+#
+# It drives the REAL webroot/sw.js inside a stubbed ServiceWorkerGlobalScope
+# (lib/sw-handler-harness.js), so it tests the shipped file and not a paraphrase, and
+# the decisive input is a fetch stubbed to `new Promise(() => {})` — which is what a
+# hung request IS and what a browser makes awkward to stage. No browser, no nginx, no
+# DB, so it cannot flake on CDP or limit_req.
+#
+# ⚠️ THE HARNESS ASSERTS ITS OWN FIDELITY FIRST. A vm context gets V8 intrinsics only:
+# URL, Response, AbortController and setTimeout are absent unless injected. Without
+# setTimeout the retry's promise executor THROWS, which rejects, which lands in the very
+# catch that serves offline.html — so a case "passes" down a path no browser takes. And
+# without URL the flag reads as absent and every flag-ON assertion is vacuous. Phase 0
+# checks both before believing anything else.
+#
+# Red-firsted: 9 inversions + 2 controls, all accounted for.
+#   bash "$(dirname "$0")/lib/sw-fetch-bounded-redfirst.sh"
+run "sw-fetch-bounded" python3 "$(dirname "$0")/sw-fetch-bounded-gate.py"
+echo
+echo "=== GATE 24/24: with the origin UP, a nav must render the PAGE, not the offline shell ==="
+# 24 minted from MAIN's 22 plus this lane's 23. Grep the roster for duplicates after every
+# rebase — a gate collision can auto-merge CLEANLY (that happened to gate 21), and the
+# Buck fence now lives in this same region, so check its position too: the fence is a
+# WHOLE-DIFF check and must stay LAST, after every numbered gate.
+#
+# BITTEN THREE TIMES, which is why this is encoded before the next fix:
+#   2026-06-25  a dropped navigation dead-ended the user on offline.html, no retry.
+#   2026-08-09  blank spin on a request that never reached nginx; phone showed the shell.
+#   2026-08-11  Ian clicked a discussion URL that answers 200 server-side and got a blank
+#               spin then the "You're offline" shell.
+#
+# THE COMPANION SPLIT, and it is deliberate:
+#   gate 23 (node)  "does the handler SETTLE when the network never answers?" — a hung
+#                   fetch cannot be staged in a browser, so it needs a stub.
+#   gate 24 (this)  "with the server plainly reachable, does the worker put the REAL PAGE
+#                   on screen?" — a stub cannot answer that, because the stub IS what
+#                   decides what the network returns. Real browser, real registered
+#                   worker, real page, real origin.
+#
+# It asserts BOTH halves: the shell markers are ABSENT *and* the real content is PRESENT.
+# "Shell absent" alone passes on a blank page, and a blank page was literally the other
+# half of what Ian saw.
+#
+# ⚠️ It audits WHATEVER NGINX SERVES, i.e. the SERVING CHECKOUT (main), not a lane's
+# branch — the right default for a regression tripwire, but a green here is NOT evidence
+# about an unmerged fix. Swap /sw.js through endpoint-swap-proxy.py for that.
+#
+# RED-FIRST, and it earned it: `--prove` registers a deliberately broken worker (scoped to
+# a dev-gated fixture dir, so it can never touch /hub/ or a member) that always serves the
+# shell, and asserts this gate CATCHES it. Verified: both assertions went red.
+#   python3 tools/gates/sw-no-offline-shell-gate.py --prove
+#
+# ONE BROWSER AT A TIME — the box is 2-core (Ian, cost, 2026-08-11).
+run "sw-no-offline-shell" python3 "$(dirname "$0")/sw-no-offline-shell-gate.py"
+echo
 # THE FENCE: our work must not touch Buck's files (Ian, 2026-08-11).
 run "buck-surface-fence" bash "$(dirname "$0")/buck-surface-guard.sh"
 

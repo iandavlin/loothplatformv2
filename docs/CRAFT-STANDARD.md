@@ -247,3 +247,4 @@ until that lands, check for the engine before you believe gate 2 either way.
 The visibility model stopped leaking the week it became ONE function plus a
 test that fails. Nothing else in this project has ever stopped a recurrence.
 This document exists to make that the default move, not the last resort.
+| 23 | `tools/gates/sw-fetch-bounded-gate.py` | a service-worker navigation **always SETTLES** — the decisive input is a `fetch` that neither resolves nor rejects, which is what Ian's spinning tab actually was. Also: the one retry is not traded away for the deadline, dev-gated paths are **not intercepted at all**, a gate 403 becomes a **claim prompt** instead of raw nginx output, and a 403 shell asset no longer kills the whole install. Asserts the harness's OWN fidelity first — a `vm` context lacks `setTimeout`/`URL`, and without them cases pass down paths no browser takes | node. No browser, no nginx, no DB |
