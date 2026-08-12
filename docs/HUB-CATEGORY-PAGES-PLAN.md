@@ -130,3 +130,72 @@ those; item 2 blocks only the two WP pages, and item 3 only a cosmetic detail.
 `/shop-organisation/`'s redirect is nginx — `strangler-*.conf` is symlinked into
 the serving checkout, so it needs **a reload**, and on live that reload is Ian's.
 Same coupling as the reply-permalink rewrite already waiting in this lane.
+
+---
+
+# SIZING ADDENDUM — the rail rebuild (measured 2026-08-12)
+
+§3B flagged a risk: *"the scoped and unscoped branches build different query
+state, and the rail's facet counts are computed in the unscoped branch only …
+if it turns out large, I will come back with a revised estimate."*
+
+**Measured, and the risk was wrong in the helpful direction. This is SMALL-TO-
+MEDIUM, not large** — because the fix is not the thing I feared.
+
+## Why it is smaller than flagged
+
+I framed it as "compute the rail's state for the scoped branch". That would
+indeed have been large. But the hub rail **already has a category dimension**,
+already exercised by its own UI:
+
+```
+/hub/?cat=repair     → 18 cards, hub rail present, no legacy tree
+/hub/?leaf=3845      → 18 cards, hub rail present, no legacy tree
+/hub/acoustic/       → 18 cards, NO rail, legacy tree
+```
+
+`hub_filters` already carries `cats`, `leaves`, `types`, `tags`, `authors`, `q`,
+`saved`. So the rebuild is **routing `/hub/<category>/` into filter machinery
+that exists and runs every day**, not writing new query state. The facet-count
+concern evaporates: the unscoped branch already computes facets *with filters
+applied*, which is exactly the case a category page needs.
+
+## What actually differs, measured
+
+| | `/hub/?leaf=3845` | `/hub/acoustic/` |
+|---|---|---|
+| cards | 18 | 18 |
+| of which topics | 12 | 18 |
+| hub rail | **yes** | no |
+| legacy nav-tree | no | **yes** |
+| `<title>` | "The Hub" | "Acoustic Builds" |
+
+Three gaps, all bounded:
+
+1. **Unified vs topics-only.** The leaf-filtered hub shows topics ∪ content (12
+   topics + 6 content); the category page shows topics only. This is a **product
+   decision for Ian**, not an obstacle — and "the hub look" arguably means the
+   unified feed, which is the whole point of the rebuild.
+2. **Title.** The filtered hub says "The Hub"; the category page names the
+   category. Trivial, and the canonical work already threads a per-page value
+   through `bb_mirror_chrome_header()`.
+3. **Subtree semantics.** The category page uses a RECURSIVE descendant query;
+   `leaf` is per-forum. Measured: only **6 of 45** public forums have children,
+   and for `acoustic` the subtree and the single forum are identical (87 topics
+   either way). So this affects 6 categories and is handled by passing the
+   subtree's ids to the existing multi-value `leaf` filter.
+
+## Estimate
+
+**Small-to-medium.** Routing + the three items above + the flag + gate 25's rail
+arm flipping to demanded. No new query state, no facet rewrite, no migration.
+The single largest unknown is now **Ian's answer on unified-vs-topics-only**,
+which changes what the page shows far more than it changes the code.
+
+## Recommendation
+
+Per keeper's own framing this is **its own charter, with Ian pictures first** —
+and that is the right call for a reason the sizing makes sharper: the decision
+that matters here is a *product* one (does a category page show content items
+alongside discussions?), and it should be settled from a picture, not from a
+diff. The current batch merges without it.
