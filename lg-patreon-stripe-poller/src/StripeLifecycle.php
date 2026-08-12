@@ -82,6 +82,7 @@ final class StripeLifecycle
     public const SECRET_OPT       = 'lgms_stripe_webhook_secret';
     public const PRICE_OPT        = 'lgms_stripe_price_id';
     public const IDENTITY_GATE_OPT = 'lgms_identity_gate';
+    public const ALLOWLIST_OPT    = 'lgms_stripe_lifecycle_allowlist';
 
     /**
      * THE single Stripe tier. A ruling, not a lookup — no ProductRepo, no
@@ -119,6 +120,42 @@ final class StripeLifecycle
     public static function flagOn(): bool
     {
         return (bool) get_option( self::FLAG, false );
+    }
+
+    /**
+     * SOFT-LAUNCH COHORT (docs/STRIPE-SOFT-LAUNCH-ALLOWLIST.md): the option
+     * holds an array of WP user IDs; only members on it transition. An
+     * absent, empty, or malformed value is CLOSED FOR EVERYONE — flipping
+     * the lifecycle ON grants nobody until the cohort is populated (the
+     * fail-safe, gated by test-soft-launch-allowlist.php §1/§4). Numeric
+     * strings are accepted because `wp option update ... --format=json`
+     * legitimately lands them; everything else is dropped, never guessed.
+     * The Admin dash writes this option through CohortAllowlist, whose
+     * canonical shape is exactly what this reader accepts.
+     *
+     * @return array<int, true> normalized set of allowed WP user ids
+     */
+    public static function allowlist(): array
+    {
+        $raw = get_option( self::ALLOWLIST_OPT, [] );
+        if ( ! is_array( $raw ) ) {
+            return [];
+        }
+        $ids = [];
+        foreach ( $raw as $v ) {
+            if ( is_int( $v ) || ( is_string( $v ) && ctype_digit( trim( $v ) ) ) ) {
+                $n = (int) trim( (string) $v );
+                if ( $n > 0 ) {
+                    $ids[ $n ] = true;
+                }
+            }
+        }
+        return $ids;
+    }
+
+    private static function inCohort( int $wpUserId ): bool
+    {
+        return isset( self::allowlist()[ $wpUserId ] );
     }
 
     /* ------------------------------------------------------------------ */
@@ -362,16 +399,34 @@ final class StripeLifecycle
             isset( $confirmed->canceled_at ) && $confirmed->canceled_at !== null ? (int) $confirmed->canceled_at : null,
         );
 
+        // SOFT-LAUNCH GATE (docs/STRIPE-SOFT-LAUNCH-ALLOWLIST.md): identity
+        // is resolved HERE, before either mutation branch, because the gate
+        // must sit after the resolved wp user id exists and before ANY
+        // membership mutation — the EntitlementRepo write included (the
+        // spec's "before the Arbiter/EntitlementRepo write"). Out-of-cohort
+        // is a journaled, acknowledged 200 skip in BOTH directions: a
+        // member pulled from the cohort is frozen, never half-retracted.
+        // The limbo path below stays resolution-free — it mutates nothing,
+        // so an unresolvable customer in limbo still answers 200 as before.
+
         if ( in_array( $status, self::STATUS_ACTIVE, true ) || in_array( $status, self::STATUS_GRACE, true ) ) {
-            $state = in_array( $status, self::STATUS_GRACE, true ) ? 'past_due' : 'active';
+            $state    = in_array( $status, self::STATUS_GRACE, true ) ? 'past_due' : 'active';
+            $wpUserId = self::resolveMember( $customer );
+            if ( ! self::inCohort( $wpUserId ) ) {
+                return self::journalCohortSkip( $customer, $wpUserId, $state, $eventId, $type );
+            }
             EntitlementRepo::grantMembershipFromSubscription( $customerId, self::TIER, (int) $subRow['id'] );
-            $out = self::applyOpinion( $customer, self::TIER, $state, $eventId, $type );
+            $out = self::applyOpinion( $customer, $wpUserId, self::TIER, $state, $eventId, $type );
             return "{$type}: customer {$customerId} {$state} → " . self::TIER . " ({$out})";
         }
 
         if ( in_array( $status, self::STATUS_DEAD, true ) ) {
+            $wpUserId = self::resolveMember( $customer );
+            if ( ! self::inCohort( $wpUserId ) ) {
+                return self::journalCohortSkip( $customer, $wpUserId, 'canceled', $eventId, $type );
+            }
             EntitlementRepo::revokeBySource( EntitlementRepo::SOURCE_SUBSCRIPTION, (int) $subRow['id'] );
-            $out = self::applyOpinion( $customer, null, 'canceled', $eventId, $type );
+            $out = self::applyOpinion( $customer, $wpUserId, null, 'canceled', $eventId, $type );
             return "{$type}: customer {$customerId} retracted ({$status}; {$out})";
         }
 
@@ -381,15 +436,53 @@ final class StripeLifecycle
     }
 
     /**
+     * Journal a soft-launch cohort skip. NOT a membership mutation — tier
+     * and had_row are recorded unchanged (tier_after = tier_before) so the
+     * journal is an honest audit trail of every event the cohort turned
+     * away, tied to the event id. The caller returns this note straight to
+     * Stripe as a 200 result; handleEvent's standard log line carries it.
+     */
+    private static function journalCohortSkip( array $customer, int $wpUserId, string $state, string $eventId, string $type ): string
+    {
+        $st = Db::pdo()->prepare(
+            "SELECT tier, COUNT(*) AS n FROM lg_role_sources WHERE wp_user_id = ? AND source = 'stripe'"
+        );
+        $st->execute( [ $wpUserId ] );
+        $cur    = $st->fetch( PDO::FETCH_ASSOC );
+        $hadRow = (int) ( $cur['n'] ?? 0 ) > 0;
+        $before = $hadRow && $cur['tier'] !== null ? (string) $cur['tier'] : null;
+
+        Db::pdo()->prepare(
+            'INSERT INTO lg_lifecycle_journal
+                (event_id, event_type, wp_user_id, customer_id, source, tier_before, had_row, tier_after, state, note, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        )->execute( [
+            $eventId,
+            $type,
+            $wpUserId,
+            (int) $customer['id'],
+            'stripe',
+            $before,
+            $hadRow ? 1 : 0,
+            $before,
+            'skipped',
+            "skipped: not in soft-launch cohort (uid={$wpUserId})",
+            gmdate( 'Y-m-d H:i:s' ),
+        ] );
+
+        return "skipped: not in soft-launch cohort (uid={$wpUserId})";
+    }
+
+    /**
      * Move the stripe opinion for this customer's member to $tier, through
      * the journal and the Arbiter. tier=NULL is the retracted state the
      * RetractionSweep treats as correct — NEVER row deletion (deletion is
-     * for debris, and only the remediation scripts do it).
+     * for debris, and only the remediation scripts do it). $wpUserId is
+     * resolved by the caller (applyConfirmed), where the soft-launch cohort
+     * gate needs it before the entitlement write.
      */
-    private static function applyOpinion( array $customer, ?string $tier, string $state, string $eventId, string $type ): string
+    private static function applyOpinion( array $customer, int $wpUserId, ?string $tier, string $state, string $eventId, string $type ): string
     {
-        $wpUserId = self::resolveMember( $customer );
-
         // Current opinion — tier AND row-existence. A NULL row and an absent
         // row are opposite situations (handoff §6): select the count alongside.
         $st = Db::pdo()->prepare(
