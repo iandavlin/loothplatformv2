@@ -41,8 +41,10 @@ import websocket
 CDP = "http://127.0.0.1:9222"
 HOST = "https://dev2.loothgroup.com"
 SLUG = os.environ.get("LG_CAT_SLUG", "acoustic")
-DESKTOP = {"width": 1440, "height": 1000, "mobile": False, "deviceScaleFactor": 1}
-PHONE = {"width": 390, "height": 844, "mobile": True, "deviceScaleFactor": 2}
+DESKTOP = {"width": 1440, "height": 1600, "mobile": False, "deviceScaleFactor": 1}
+# Tall on purpose — see shot(). 390 wide keeps it a genuine phone render; the
+# height is what makes the two options visibly different in one image.
+PHONE = {"width": 390, "height": 2400, "mobile": True, "deviceScaleFactor": 2}
 
 
 def sh(cmd):
@@ -90,7 +92,22 @@ class S:
         time.sleep(settle)
 
     def shot(self, path):
+        # A TALL BOUNDED VIEWPORT, not captureBeyondViewport.
+        #
+        # Viewport-only at 390x844 caught header + filter strip + the top of one
+        # card — identical between the two options, which diverge further down.
+        # That produced two BYTE-IDENTICAL phone PNGs: Ian asked to choose
+        # between the same picture twice.
+        #
+        # captureBeyondViewport was the obvious fix and it FAILED: the hub feed
+        # is effectively endless, so CDP returned an error with no data at all
+        # (a bare KeyError here). The viewport height is set tall per surface
+        # instead — enough feed to show the card mix, still a real 390px-wide
+        # mobile render with touch emulation on.
         r = self.call("Page.captureScreenshot", format="png")
+        if "data" not in r:
+            raise RuntimeError(f"captureScreenshot returned no data: "
+                               f"{str(r)[:200]}")
         pathlib.Path(path).write_bytes(base64.b64decode(r["data"]))
         return os.path.getsize(path)
 
@@ -138,6 +155,19 @@ def main():
             s.call("Network.setCookie", name="loothdev_auth", value=tok,
                    domain=".dev2.loothgroup.com", path="/", secure=True)
             s.goto(HOST + path)
+            # DISMISS THE PWA INSTALL PROMPT before capturing. pwa.js appends an
+            # .lpw-* banner that sits over the bottom of the feed — and the whole
+            # point of these shots is the CARD MIX, so a promo covering a card is
+            # noise in the one thing Ian is being asked to judge. (The standing
+            # note records it landing on the very control a previous mock was
+            # showing.) Clicked, not CSS-hidden, so it goes away the way it does
+            # for a real visitor; the bottom nav STAYS, because that is genuinely
+            # part of the phone experience.
+            s.js("""(function(){var x=document.querySelector('.lpw-x');
+                     if(x){x.click();return 'clicked';}
+                     var b=document.querySelector('[class^=lpw-],[class*=" lpw-"]');
+                     if(b){b.remove();return 'removed';} return 'absent';})()""")
+            time.sleep(0.6)
             st = s.js("""({topics: document.querySelectorAll('.feed-card--topic').length,
                            content: document.querySelectorAll('.feed-card--content').length,
                            rail: !!document.querySelector('.hub-rail, .hub-frail'),
@@ -149,8 +179,22 @@ def main():
                   f"content={st['content']:<3} rail={st['rail']} legacy={st['legacy']}")
     s.finish()
 
-    # The pictures must actually differ in the ONE dimension under question,
-    # otherwise Ian is being asked to choose between two identical images.
+    # ── THE PICTURES THEMSELVES MUST DIFFER ─────────────────────────────────
+    # The DOM assertions below check the PAGE; this checks the ARTEFACT. They are
+    # not the same claim, and the gap between them shipped: the DOM counts were
+    # correct per view (12/6 vs 18/0) while the two phone PNGs came out
+    # byte-identical, because a viewport-only capture at 390px caught nothing but
+    # the shared header. A picture-based decision is only as good as the picture.
+    import hashlib
+    def _md5(p):
+        return hashlib.md5(pathlib.Path(p).read_bytes()).hexdigest()
+    for sf in ("desktop", "phone"):
+        a, b = out / f"cat-a-unified-{sf}.png", out / f"cat-b-discussions-{sf}.png"
+        if _md5(a) == _md5(b):
+            print(f"RED  {sf}: the two option images are BYTE-IDENTICAL — this is "
+                  f"not a choice, it is the same picture twice")
+            return 1
+
     d = {(sf, k): st for sf, k, st, _ in rows}
     bad = []
     for sf in ("desktop", "phone"):
