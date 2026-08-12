@@ -248,3 +248,36 @@ it would have left the gate green and proven nothing.
 ⚠️ The gate audits **whatever nginx serves**, i.e. the serving checkout (`main`), not a
 lane's branch. Correct default for a regression tripwire; not evidence about an unmerged
 fix.
+
+## Suite result, 2026-08-12 — 24/24, ALL GREEN
+
+`tools/gates/run-all.sh` from this worktree, after registering gate 24:
+
+```
+24 gates run | 0 FAIL | 0 NO VERDICT | 0 GATE-ERROR
+############ ALL GATES GREEN ############   (exit 0)
+Buck-surface guard: clean (nothing of Buck's is touched).
+```
+
+Gate 23 (node, the deadline) 24/24. Gate 24 (browser, the shell) 4/4 — controller
+confirmed as `https://dev2.loothgroup.com/sw.js`, the real page on screen, no shell.
+
+Notable because the four documented in-sequence flake shapes (gate 1 `limit_req`, gate 2
+dead CDP socket, gate 14 its own nginx, gate 17 a `None` probe) **all stayed green on a
+2-core box**, which is the opposite of what the downgrade predicted. One clean run is not
+proof they are fixed — they are load-dependent — but it does mean a red suite today should
+not be waved away as "probably the usual flakes" without checking.
+
+### Live is still running the unfixed worker
+
+Re-measured over `ssh live-ro` the same day:
+
+```
+/sw.js 200   /offline.html 200
+const CACHE = 'looth-pwa-v3'     <- no fetchWithDeadline anywhere in it
+/offline.html Cache-Control:     (none — same as dev2)
+```
+
+So live members are on the no-deadline worker right now, and live's `offline.html` is
+equally exposed to the heuristic-caching staleness the v4 bump exists to clear. That is
+the whole argument for the rollout shape below.
