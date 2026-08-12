@@ -134,11 +134,17 @@ is not a filled-in field.
 | **a real "what I do" line** (`at_a_glance`, or an independent `business_name`) | **81** | **5%** |
 | an About section (any visibility) | 29 | 2% |
 | skills / instruments / gallery / banner / genres | 12–27 each | 1–2% |
-| **an About marked PUBLIC** (the only source of a card bio) | **6** | **0.3%** |
+| **an About marked PUBLIC** (the only source of a card bio) | **7** | **0.4%** |
 
 **Members who could make a complete card today (photo + what-they-do + where): 66.**
 986 have a photo and nothing else; 645 have a photo and a location but nothing
 saying what they do.
+
+(Of those 7, **6** also clear the card bar — hence "6 cards could carry a bio".)
+
+**Every number above is reproducible**: `tools/profile-completeness-report.sql`,
+read-only, runs against live via `ssh live-ro`. It carries the `business_name`
+trap in its header so the next person does not repeat the mistake.
 
 Note the section system is barely used at all — only **29** members on live have
 *any* `profile_sections` row. The structured tables (`profile_socials`,
