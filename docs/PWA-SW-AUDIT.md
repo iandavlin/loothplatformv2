@@ -172,56 +172,63 @@ Nothing here is attributable to this diff, which touches `sw.js`, `pwa.js`,
 `pwa-loader.php`, `offline.html`, this lane's gate/harness and docs — nothing in the
 visibility model or forum subscriptions.
 
-## Arming — retracted click, awaiting a clean ruling
+## Decision to arm
 
-**NOT ARMED. `resilient_fetch` is `false`.**
+**ARMED. Ian ruled it in a clean decision box, 2026-08-11**, after the bug was explained
+to him plainly — a jumpy offline screen shown to people whose internet is fine, which hit
+him twice on 8/9 — and he chose **"Active right away"**.
 
-⚠️ **A 2026-08-11 decision-box click that read as "ship the deadline ON" was RETRACTED.**
-Ian had misread the box as being about the keeper watchdog, not this offline fix. It is
-**not a ruling and must not be quoted as one** — including by anyone who later finds the
-click itself, or finds the commit in this branch's history that briefly acted on it.
-Keeper is re-asking cleanly.
+As relayed by keeper, and quotable: *Ian ruled the fix ships ACTIVE for members immediately
+on live deploy; today's live version is the broken one, arriving asleep helps nobody,
+instant undo stays available.*
 
-This heading is deliberately **not** the one gate 23 greps for. The gate looks for a
-heading reading exactly `Decision to arm`, and using that wording here would let the very
-text explaining that no ruling exists satisfy the tripwire built to require one. The same
-false-green was caught for real on the recap-read-timer lane.
+`platform/config/pwa-sw.php` → `'resilient_fetch' => true`.
 
-To arm once a real ruling lands: add a section headed **`## Decision to arm`** naming who
-decided and when, and flip `resilient_fetch` to `true`. Arming without that section turns
-gate 23 red, and the correct response is to record the decision — **not** to delete the
-check.
+### The sequence, recorded on purpose
 
-### The argument that will be put to Ian, so the re-ask is clean
+There were **two** decision-box clicks and only the second is a ruling. Written down
+because the first one is still in the history and must never be mistaken for authority:
+
+1. **2026-08-11, first click — RETRACTED.** It read as "ship ON", but Ian had misread the
+   box as being about the keeper watchdog rather than this offline fix. Keeper caught it,
+   the arming was reverted the same turn, and it is **not** a ruling.
+2. **2026-08-11, re-asked cleanly — THIS IS THE RULING.** The defect was described in
+   member terms first, then the choice put. That is the click quoted above.
+
+If you are reading a commit or a click that says "ship ON" and cannot tell which of the two
+it belongs to: the ruling is the one accompanied by the member-terms explanation, and the
+retraction is documented in this branch's history rather than erased from it.
+
+### Why the usual default-OFF rule is not the safe choice here
+
+A member-facing flag defaults OFF to keep a *new* behaviour away from members until it has
+been looked at. This case inverts that, which is exactly what was put to Ian:
 
 - **The version live is running right now IS the broken one.** Re-measured 2026-08-12 over
   `ssh live-ro`: `const CACHE = 'looth-pwa-v3'` with no `fetchWithDeadline` anywhere in it.
-- **The default-OFF argument inverts here.** A flag defaults OFF to keep a *new* behaviour
-  away from members. This new behaviour is "stop stranding the user", so OFF preserves the
-  defect rather than guarding against it. That is why this flag is worth a decision instead
-  of a default — and it is still Ian's decision.
-- **The old version is the undo**, at the cost spelled out below.
+- So **OFF does not protect a member from a new surface — it preserves the wall.** The new
+  behaviour is "stop stranding the user".
 - **Arming cannot expose the dev2-only behaviour.** The claim prompt and the dev-path bypass
   are gated on `self.location.hostname === 'dev2.loothgroup.com'` — an explicit allowlist,
-  never a negation — so on live this flag turns on the deadline and the per-asset install,
-  and nothing else.
+  never a negation of `loothgroup.com`, because live's `/etc/looth/env` says `LG_ENV=dev2`
+  and the environment name cannot be trusted. On live this flag turns on the deadline and
+  the per-asset install, and nothing else.
 
-### The armed path is already verified, so the flip is cheap
+### The armed path was verified before it was armed
 
 Measured in a real browser against this branch (`/sw.js` + `/pwa.js` swapped in through
-`endpoint-swap-proxy.py --no-route-strip`, flag armed for the run only, then reverted):
+`endpoint-swap-proxy.py --no-route-strip`):
 
 ```
 window.LG_SW      "f=resilient&t=8000&b=%2Ffooter-mockups%2F,..."
 controller        /sw.js?f=resilient&t=8000&b=...      registered WITH the flag
 state             activated
-caches.keys()     ["looth-pwa-v4"]   <- v3 purged by activate(), the bump works
+caches.keys()     ["looth-pwa-v4"]   <- v3 purged by activate(), so the bump works
 shell cached      /offline.html AND /icons/icon-192.png
 the page          title "Test — Looth Group", 3822 chars, shell: false
 ```
 
-So whenever the ruling lands, arming is one line plus a pull — the behaviour behind it is
-already known to work rather than hoped to.
+So the flip is not a leap: the behaviour behind it was known to work before the flag moved.
 
 ### The undo, stated precisely
 

@@ -63,28 +63,42 @@
 return array(
 
 	/**
-	 * OFF. Not yet ruled on.
+	 * ── ON. Ian ruled it in a CLEAN decision box, 2026-08-11: "Active right away." ──
 	 *
-	 * ⚠️ A 2026-08-11 decision-box click that read as "ship ON" was RETRACTED: Ian had
-	 * misread the box as being about the keeper watchdog, not the offline fix. It is NOT a
-	 * ruling and must not be quoted as one. Keeper is re-asking cleanly. History and the
-	 * argument that will be put to him: docs/PWA-SW-AUDIT.md "## Arming — retracted click,
-	 * awaiting a clean ruling".
+	 * He was shown the defect in member terms first — a jumpy offline screen shown to people
+	 * whose internet is fine, which hit him twice on 8/9 — and then given the choice. As
+	 * relayed by keeper: the fix ships ACTIVE for members immediately on live deploy;
+	 * today's live version is the broken one; arriving asleep helps nobody; the instant undo
+	 * stays available.
 	 *
-	 * This is member-visible on LIVE — the same sw.js serves live members — so it merges
-	 * OFF per CLAUDE.md and is flipped when Ian says so, not when the gates are green.
+	 * ⚠️ TWO CLICKS EXIST AND ONLY THE SECOND IS A RULING. An earlier 2026-08-11 click that
+	 * also read as "ship ON" was RETRACTED — Ian had misread the box as being about the
+	 * keeper watchdog, not this fix. That one is not authority for anything. The sequence is
+	 * written out in docs/PWA-SW-AUDIT.md "## Decision to arm" so a later reader can tell
+	 * the two apart instead of guessing.
 	 *
-	 * The unusual part, and the reason this one is worth a real decision rather than a
-	 * default: the version live is running RIGHT NOW is the broken one (re-measured
-	 * 2026-08-12 over ssh live-ro: CACHE 'looth-pwa-v3', no fetchWithDeadline in it), and
-	 * the new behaviour is "stop stranding the user". So OFF here does not protect a member
-	 * from a new surface — it preserves the wall. That is the argument FOR arming; it is
-	 * still Ian's call to make.
+	 * WHY THIS OVERRIDES THE USUAL MERGE-OFF RULE. A member-facing flag defaults OFF to keep
+	 * a NEW behaviour away from members. Here the version live is running right now IS the
+	 * broken one (re-measured 2026-08-12 over ssh live-ro: CACHE 'looth-pwa-v3', no
+	 * fetchWithDeadline in it), and the new behaviour is "stop stranding the user" — so OFF
+	 * would preserve the defect rather than guard against it. That inversion is the whole
+	 * argument, and Ian was given it before ruling.
 	 *
-	 * The armed path IS verified end to end in a real browser (see the audit doc), so
-	 * arming is a one-line flip plus a pull whenever the ruling lands.
+	 * THE UNDO: set this false and pull. pwa-loader.php stops emitting window.LG_SW, pwa.js
+	 * registers plain '/sw.js', that supersedes the flagged registration, and sw.js reads no
+	 * query so every branch takes its original path — asserted in both directions by
+	 * tools/gates/sw-fetch-bounded-gate.py. It is a DEPLOY, not a runtime toggle, and clients
+	 * pick it up on next visit.
+	 *
+	 * ⚠️ Arming does NOT expose the dev2-only behaviours to members. The claim prompt and the
+	 * dev-path bypass are gated on self.location.hostname === 'dev2.loothgroup.com' — an
+	 * explicit allowlist, never a negation, because live's /etc/looth/env says LG_ENV=dev2
+	 * and the environment name cannot be trusted. On live this turns on the deadline and the
+	 * per-asset install, and nothing else.
+	 *
+	 * Gate 23 REQUIRES the "## Decision to arm" section to exist while this is true.
 	 */
-	'resilient_fetch' => false,
+	'resilient_fetch' => true,
 
 	/**
 	 * How long a navigation may wait on the network before the SW stops waiting and
