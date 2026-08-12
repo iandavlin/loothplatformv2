@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Featured members — the front-page card (mock)</title>
+<link rel="stylesheet" href="_mock.css">
+<style>
+body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
+/* field-map table (mock chrome only) */
+#lgfm table.map { width:100%; border-collapse:collapse; background:#fff; color:#33362f; border:1px solid #e3ddd0; border-radius:10px; overflow:hidden; }
+#lgfm table.map th { text-align:left; font:800 11px/1.3 var(--lg-font-sans); letter-spacing:.05em; text-transform:uppercase; color:#6b6f6b; background:#faf9f5; border-bottom:1px solid #e3ddd0; padding:9px 12px; }
+#lgfm table.map td { border-bottom:1px solid #f1efe7; padding:9px 12px; font:500 12.5px/1.5 var(--lg-font-sans); color:#3d4038; vertical-align:top; }
+#lgfm table.map tr:last-child td { border-bottom:0; }
+#lgfm table.map code { background:#f1efe7; color:#4a4d44; border-radius:4px; padding:1px 5px; font:600 11.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
+</style>
+</head>
+<body id="lgfm">
+<div class="wrap">
+
+  <div class="mockhead">
+    <h1>3 &middot; The card on the front page</h1>
+    <p>The good news: <b>this band already exists and already ships.</b> It is the
+       &ldquo;Featured member&rdquo; strip on the front page &mdash; today it is hand-typed into a config file and has
+       said <i>Dan Erlewine</i> since June. The work is not designing a card; it is feeding this card from a
+       real member who said yes.</p>
+    <nav class="crumbs">
+      <a href="./">&larr; Overview</a>
+      <a href="tickbox.html">1 &middot; Tickbox</a>
+      <a href="dash.html">2 &middot; Admin dash</a>
+      <a href="frontpage.html" aria-current="page">3 &middot; Front page</a>
+    </nav>
+  </div>
+
+  <h2 class="sec">Today &mdash; hand-typed into a config file</h2>
+  <p class="secsub">Every word below was typed by hand. It is not linked to any member account, so it cannot go stale,
+     be corrected, or be withdrawn by the person it is about.</p>
+
+  <div class="stage stage--fp view-discover">
+    <span class="stagelbl stagelbl--off">Live on the front page right now</span>
+    <section class="row row--featured-member">
+      <div class="lg-fm">
+        <span class="lg-fm__badge">Featured member</span>
+        <span class="lg-fm__avi"><img src="https://i.ytimg.com/vi/2IBxue3zPxE/hqdefault.jpg" alt="" width="104" height="104" loading="lazy"></span>
+        <div class="lg-fm__body">
+          <h2 class="lg-fm__name">Dan Erlewine</h2>
+          <div class="lg-fm__role">Master Luthier &amp; Repair Authority</div>
+          <div class="lg-fm__where">Athens, Ohio</div>
+          <p class="lg-fm__bio">Sixty years on the bench. Author of the Guitar Player Repair Guide - now sharing the craft, hands-on, with the Looth Group.</p>
+        </div>
+        <div class="lg-fm__act"><a class="lg-fm__cta" href="#today">See Dan&rsquo;s videos</a></div>
+      </div>
+    </section>
+  </div>
+
+  <h2 class="sec">After &mdash; the same band, fed by a member who ticked the box</h2>
+  <p class="secsub">Same component, same styling, nothing redrawn. The words now come from the member&rsquo;s own profile,
+     so when they update their profile the front page updates with it.</p>
+
+  <div class="stage stage--fp view-discover">
+    <span class="stagelbl stagelbl--on">Signed-in member sees</span>
+    <section class="row row--featured-member">
+      <div class="lg-fm">
+        <span class="lg-fm__badge">Featured member</span>
+        <span class="lg-fm__avi"><img src="/profile-media/avatars/3aa726b4-2e73-59e9-9741-0894df80837a/3.webp?v=3" alt="" width="104" height="104" loading="lazy"></span>
+        <div class="lg-fm__body">
+          <h2 class="lg-fm__name">Beau Hannam</h2>
+          <div class="lg-fm__role">Guitar Maker and Repairer. Since 2003</div>
+          <div class="lg-fm__where">Grand Junction, Colorado</div>
+          <p class="lg-fm__bio">I studied lutherie at Gilet Guitars Sydney, Australia in 2003 (and latter worked there) and have been building high end guitars and ukuleles since then. As well as building, I have been repairing stringed instruments since 2013 when I moved to Grand Junction, Colorado.</p>
+        </div>
+        <div class="lg-fm__act"><a class="lg-fm__cta" href="#profile">See Beau&rsquo;s profile</a></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="stage stage--fp view-discover">
+    <span class="stagelbl stagelbl--warn">Logged-out visitor sees &mdash; no location</span>
+    <section class="row row--featured-member">
+      <div class="lg-fm">
+        <span class="lg-fm__badge">Featured member</span>
+        <span class="lg-fm__avi"><img src="/profile-media/avatars/3aa726b4-2e73-59e9-9741-0894df80837a/3.webp?v=3" alt="" width="104" height="104" loading="lazy"></span>
+        <div class="lg-fm__body">
+          <h2 class="lg-fm__name">Beau Hannam</h2>
+          <div class="lg-fm__role">Guitar Maker and Repairer. Since 2003</div>
+          <p class="lg-fm__bio">I studied lutherie at Gilet Guitars Sydney, Australia in 2003 (and latter worked there) and have been building high end guitars and ukuleles since then. As well as building, I have been repairing stringed instruments since 2013 when I moved to Grand Junction, Colorado.</p>
+        </div>
+        <div class="lg-fm__act"><a class="lg-fm__cta" href="#profile">See Beau&rsquo;s profile</a></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="note">
+    <b>The location line is already handled &mdash; and it needs one more turn of the screw.</b>
+    The band today hides <code>where</code> from logged-out visitors, and that rule stays. But a real member also
+    has their own location settings (&ldquo;city&rdquo;, &ldquo;state only&rdquo;, &ldquo;private&rdquo;, set separately
+    for members and for the public), and the card must honour those too &mdash; not just &ldquo;is this a member&rdquo;.
+    A member whose location is private shows no location line to anybody.
+  </div>
+
+  <h2 class="sec">The same card when the profile is thinner</h2>
+  <p class="secsub">Most members are not as filled-in as Beau. The card has to look deliberate, not broken, when there is less to say.</p>
+
+  <div class="stage stage--fp view-discover">
+    <span class="stagelbl">No bio &mdash; member has no About section</span>
+    <section class="row row--featured-member">
+      <div class="lg-fm">
+        <span class="lg-fm__badge">Featured member</span>
+        <span class="lg-fm__avi"><img src="/profile-media/avatars/143a8a92-c39c-5d8b-8891-d76d612071b1/3.webp?v=3" alt="" width="104" height="104" loading="lazy"></span>
+        <div class="lg-fm__body">
+          <h2 class="lg-fm__name">James Roadman</h2>
+          <div class="lg-fm__role">Full service independent repair shop, host of the Looth Group&rsquo;s 3d club</div>
+          <div class="lg-fm__where">San Antonio, Texas</div>
+        </div>
+        <div class="lg-fm__act"><a class="lg-fm__cta" href="#profile">See James&rsquo;s profile</a></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="note note--q">
+    <b>A real one worth knowing about.</b> A member&rsquo;s About section has its own privacy setting.
+    Karl Borum&rsquo;s, for instance, is <b>members-only</b> &mdash; so his words must never be pulled onto a page that
+    logged-out visitors can read. Drawn rule: <b>the card only ever quotes an About section marked Public;</b>
+    otherwise it shows the one-line tagline and no bio. Nothing a member marked members-only leaks to the open web.
+  </div>
+
+  <h2 class="sec">When nobody is selected</h2>
+  <p class="secsub">The band simply does not render &mdash; the rows above and below close up, exactly as they do today when the config is off.</p>
+
+  <div class="stage stage--fp">
+    <span class="stagelbl stagelbl--off">No featured member &mdash; no band</span>
+    <div style="border:1px dashed #cfc9b8;border-radius:12px;padding:26px 18px;text-align:center;background:#fff;color:#7a7f72;font:500 13px/1.5 var(--lg-font-sans)">
+      Nothing renders here. No empty frame, no placeholder face, no &ldquo;coming soon&rdquo;.
+    </div>
+  </div>
+
+  <h2 class="sec">Where each line comes from</h2>
+  <p class="secsub">So you can see exactly what the front page would say about a member before we build it.</p>
+
+  <table class="map">
+    <thead>
+      <tr><th style="width:22%">On the card</th><th style="width:34%">Comes from</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr><td data-l="On the card"><b>Photo</b></td><td data-l="Comes from">Their profile photo</td><td data-l="Notes">The same image the directory and their profile use.</td></tr>
+      <tr><td data-l="On the card"><b>Name</b></td><td data-l="Comes from">Their display name</td><td data-l="Notes">Whatever they call themselves on their profile.</td></tr>
+      <tr><td data-l="On the card"><b>One-liner</b></td><td data-l="Comes from">Their &ldquo;at a glance&rdquo; tagline</td><td data-l="Notes">Already written by nearly every filled-in member. Falls back to business name.</td></tr>
+      <tr><td data-l="On the card"><b>Location</b></td><td data-l="Comes from">Their city / state</td><td data-l="Notes">Members only, and only at the precision <i>they</i> chose. Hidden from logged-out visitors.</td></tr>
+      <tr><td data-l="On the card"><b>Bio</b></td><td data-l="Comes from">Their About section</td><td data-l="Notes"><b>Only if they marked it Public.</b> Otherwise the card runs without a bio.</td></tr>
+      <tr><td data-l="On the card"><b>Button</b></td><td data-l="Comes from">Link to their profile</td><td data-l="Notes">Today&rsquo;s hand-typed card links to a video search; a real member&rsquo;s card should send you to them.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note note--q">
+    <b>Two things for you to rule on, Ian.</b>
+    <ul>
+      <li><b>Live or frozen?</b> Drawn as <b>live</b> &mdash; the card reads their profile on every page load, so
+          fixing a typo on their profile fixes the front page. The alternative is to copy their details at the moment
+          you pick them, so the card cannot change under you. Recommend live: it is the whole point of &ldquo;automatically added&rdquo;.</li>
+      <li><b>What the button says.</b> Drawn as <i>See Beau&rsquo;s profile</i>. Could be
+          <i>Visit their shop</i> where a member has a business link, or stay one fixed phrase for everyone.</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

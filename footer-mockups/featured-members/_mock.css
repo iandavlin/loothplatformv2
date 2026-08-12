@@ -1,0 +1,443 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   featured-members lane — shared mock stylesheet.
+
+   Two parts:
+     1. REAL tokens + REAL component CSS lifted verbatim from the running
+        surfaces, so what Ian sees is what the platform renders:
+          · tokens            ← lg-shared/site-header.css :root
+          · .lg-viewas / .lg-disc-seg  ← profile-app/web/u.php <style>
+          · .lg-fm*           ← archive-poc/web/archive.css (body.view-discover)
+     2. MOCK chrome (page frame, annotation callouts) — clearly not-the-product,
+        so nothing here can be mistaken for a shipped style.
+
+   ⚠️ DARK-INJECTION DEFENCE. Every page served from the dev2 docroot gets the
+   platform boot script injected, which under a dark profile appends
+   `html[data-lguser-theme="dark"] body{background:#15171a!important;…}`.
+   A mock is a FIXED artifact, not a themed surface, so we pin it:
+     · `body#lgfm{…!important}` — id (1,0,1) + !important beats the injected
+       attribute-qualified rule (0,1,2) among important declarations.
+     · EVERY light-background element below sets its own `color`. The injected
+       rule sets a light `color` on body, and anything inheriting it renders
+       pale-grey-on-white. Belt and braces.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ---------- REAL design tokens (lg-shared/site-header.css) ---------- */
+:root {
+  --lg-cream:      #fbfbf8;
+  --lg-sage:       #87986a;
+  --lg-sage-d:     #6b7c52;
+  --lg-sage-3:     #d4e0b8;
+  --lg-sage-tint:  #eef2e3;
+  --lg-amber:      #ecb351;
+  --lg-rust:       #c66845;
+  --lg-charcoal:   #1a1d1a;
+  --lg-ink:        #323532;
+  --lg-mute:       #6b6f6b;
+  --lg-line:       #e3ddd0;
+  --lg-font-serif: "Lora", Georgia, serif;
+  --lg-font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* archive.css front-page tokens used by the featured band */
+  --lg-card-bg:    #fff;
+  --fp-img-ph:     #d4ccb8;
+  --fp-cta-ink:    #fff;
+  --fp-cta-hover-bg: #3a4a3a;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TOKEN PIN — the second half of the dark-injection defence, and the half the
+   lane memory did not have. Measured 2026-08-12: pinning `body#lgfm`'s own
+   background/colour is NOT enough, because app-settings.js does not merely
+   repaint the body — it REDEFINES the brand tokens, writing the dark map
+   (--lg-charcoal:#f2f4ee, --lg-card-bg:#1e2124, --lg-ink:#e5e7e1 …) as inline
+   style on <html>. Every rule below is token-driven by design (it is the real
+   product CSS), so the components inverted while the body stayed correct:
+   the charcoal privacy slab rendered near-WHITE and the white featured card
+   rendered near-BLACK — the exact opposite of the design, on Ian's phone.
+
+   So the mock re-declares the whole token set on its own <body>. Inheritance
+   does the rest: an inline value on <html> is overridden for the subtree by
+   body's own declaration, and !important holds the line if a future inject
+   ever targets body directly. --lg-read-scale and --lg-font-sans are pinned
+   too — a mock must render the same for every viewer, whatever they picked
+   in app settings.
+   Proven by tools/gates/… style check: scratchpad theme-proof.py compares 20
+   computed colours per page across light and dark; they must be identical.
+   ══════════════════════════════════════════════════════════════════════════ */
+body#lgfm {
+  --lg-cream:      #fbfbf8 !important;
+  --lg-sage:       #87986a !important;
+  --lg-sage-d:     #6b7c52 !important;
+  --lg-sage-3:     #d4e0b8 !important;
+  --lg-sage-tint:  #eef2e3 !important;
+  --lg-amber:      #ecb351 !important;
+  --lg-rust:       #c66845 !important;
+  --lg-charcoal:   #1a1d1a !important;
+  --lg-ink:        #323532 !important;
+  --lg-mute:       #6b6f6b !important;
+  --lg-line:       #e3ddd0 !important;
+  --lg-card-bg:    #fff    !important;
+  --fp-img-ph:     #d4ccb8 !important;
+  --fp-cta-ink:    #fff    !important;
+  --fp-cta-hover-bg: #3a4a3a !important;
+  --lg-font-serif: "Lora", Georgia, serif !important;
+  --lg-font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important;
+  --lg-read-scale: 1 !important;
+  /* the --lguser-* half of the dark map, for completeness */
+  --lguser-bg:     #fbfbf8 !important;
+  --lguser-card:   #fff    !important;
+  --lguser-accent: #87986a !important;
+  --lguser-accent-d:#6b7c52 !important;
+  --lguser-pill:   #eef2e3 !important;
+  --lguser-line:   #e3ddd0 !important;
+  --lguser-ink:    #323532 !important;
+  --lguser-mute:   #6b6f6b !important;
+  --lguser-bubble: #f1efe7 !important;
+}
+
+/* ---------- mock page frame ---------- */
+body#lgfm {
+  margin: 0 !important;
+  background: #f2f1ec !important;
+  color: #26281f !important;
+  font-family: var(--lg-font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+}
+#lgfm .wrap { max-width: 1080px; margin: 0 auto; padding: 22px 18px 72px; }
+#lgfm .wrap--wide { max-width: 1240px; }
+
+#lgfm .mockhead {
+  background: var(--lg-charcoal); color: #e8eae2;
+  border-radius: 14px; padding: 20px 22px; margin: 0 0 22px;
+}
+#lgfm .mockhead h1 {
+  margin: 0 0 6px; font: 400 26px/1.15 var(--lg-font-serif); color: #fff;
+}
+#lgfm .mockhead p { margin: 0; font: 500 13px/1.55 var(--lg-font-sans); color: #b9bfb2; }
+#lgfm .mockhead a { color: var(--lg-sage-3); }
+#lgfm .mockhead .crumbs { margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+#lgfm .mockhead .crumbs a {
+  display: inline-block; text-decoration: none;
+  background: rgba(255,255,255,.09); color: #d7dbd0;
+  border: 1px solid rgba(255,255,255,.16); border-radius: 999px;
+  padding: 6px 13px; font: 700 12px/1 var(--lg-font-sans);
+}
+#lgfm .mockhead .crumbs a[aria-current="page"] { background: var(--lg-sage); color: #fff; border-color: transparent; }
+
+/* section heads */
+#lgfm h2.sec {
+  margin: 34px 0 4px; font: 400 21px/1.2 var(--lg-font-serif); color: #1a1d1a;
+}
+#lgfm h2.sec:first-of-type { margin-top: 6px; }
+#lgfm p.secsub { margin: 0 0 14px; font: 500 13px/1.55 var(--lg-font-sans); color: #5e6158; max-width: 780px; }
+
+/* the stage a real surface sits on, so the mock reads as "this is the product" */
+#lgfm .stage {
+  background: var(--lg-cream); color: var(--lg-ink);
+  border: 1px solid #ddd9cc; border-radius: 14px;
+  padding: 20px; margin: 0 0 10px; overflow: hidden;
+}
+#lgfm .stage--fp { background: #f7f6f1; color: var(--lg-ink); padding: 22px 20px; }
+#lgfm .stage--dark { background: #eceae2; color: var(--lg-ink); }
+#lgfm .stagelbl {
+  display: inline-block; margin: 0 0 12px;
+  font: 800 10px/1 var(--lg-font-sans); letter-spacing: .12em; text-transform: uppercase;
+  color: #7a7f72; background: #e6e4da; border-radius: 5px; padding: 5px 8px;
+}
+#lgfm .stagelbl--on  { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+#lgfm .stagelbl--off { background: #ece9e0; color: #75796d; }
+#lgfm .stagelbl--warn{ background: #fdf0d8; color: #8a6326; }
+
+/* two-up comparison */
+#lgfm .two { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 18px; align-items: start; }
+@media (max-width: 900px) { #lgfm .two { grid-template-columns: 1fr; } }
+
+/* annotation callout */
+#lgfm .note {
+  background: #fff; color: #33362f;
+  border: 1px solid #e3ddd0; border-left: 4px solid var(--lg-amber);
+  border-radius: 10px; padding: 12px 15px; margin: 12px 0 0;
+  font: 500 13px/1.6 var(--lg-font-sans);
+}
+#lgfm .note b, #lgfm .note strong { color: #1a1d1a; }
+#lgfm .note code {
+  background: #f1efe7; color: #4a4d44; border-radius: 4px;
+  padding: 1px 5px; font: 600 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+#lgfm .note--pick { border-left-color: var(--lg-sage); }
+#lgfm .note--q    { border-left-color: var(--lg-rust); }
+#lgfm .note ul { margin: 7px 0 0; padding-left: 19px; }
+#lgfm .note li { margin: 3px 0; }
+
+#lgfm .pill {
+  display: inline-block; vertical-align: middle;
+  font: 800 10px/1 var(--lg-font-sans); letter-spacing: .07em; text-transform: uppercase;
+  border-radius: 5px; padding: 4px 7px; margin-left: 7px;
+}
+#lgfm .pill--rec  { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+#lgfm .pill--alt  { background: #ece9e0; color: #6d7165; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REAL COMPONENT CSS — owner privacy slab (profile-app/web/u.php)
+   Copied verbatim; --lg-read-scale defaults to 1 outside the profile shell.
+   ══════════════════════════════════════════════════════════════════════════ */
+#lgfm .lg-viewas {
+  display: flex; flex-direction: column; align-items: stretch; gap: 9px;
+  background: var(--lg-charcoal); color: #cfd3cb;
+  border-radius: 12px; padding: 12px 16px; margin: 0;
+  font: 600 calc(12.5px*var(--lg-read-scale,1))/1 var(--lg-font-sans);
+}
+#lgfm .lg-viewas__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#lgfm .lg-viewas__lbl { flex: 0 0 122px; font: 700 calc(12px*var(--lg-read-scale,1))/1.3 var(--lg-font-sans); }
+#lgfm .lg-viewas__seg { display: flex; border: 1px solid rgba(255,255,255,.18); border-radius: 999px; overflow: hidden; }
+#lgfm .lg-viewas__seg a { padding: 6px 14px; color: #cfd3cb; text-decoration: none; font: 700 calc(12px*var(--lg-read-scale,1))/1 var(--lg-font-sans); }
+#lgfm .lg-viewas__seg a[aria-current="true"] { background: var(--lg-sage); color: #fff; }
+#lgfm .lg-viewas__note { flex: 1 1 240px; min-width: 200px; font: 500 calc(11px*var(--lg-read-scale,1))/1.45 var(--lg-font-sans); opacity: .8; }
+#lgfm .lg-viewas__hint { font: 500 calc(11px*var(--lg-read-scale,1))/1.45 var(--lg-font-sans); color: #9aa091; border-top: 1px solid rgba(255,255,255,.14); padding-top: 9px; }
+#lgfm .lg-disc-seg { display: inline-flex; border: 1px solid rgba(255,255,255,.18); border-radius: 999px; overflow: hidden; }
+#lgfm .lg-disc-seg button { border: 0; background: none; color: #cfd3cb; cursor: pointer; padding: 6px 13px; font: 700 calc(12px*var(--lg-read-scale,1))/1 var(--lg-font-sans); }
+#lgfm .lg-disc-seg button[aria-checked="true"] { background: var(--lg-sage); color: #fff; }
+#lgfm .lg-vchip {
+  display: inline-block; vertical-align: middle;
+  font: 800 calc(9px*var(--lg-read-scale,1))/1 var(--lg-font-sans); letter-spacing: .06em;
+  text-transform: uppercase; border-radius: 5px; padding: 3px 7px; margin-left: 6px;
+}
+#lgfm .lg-vchip--public { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+#lgfm .lg-vchip--private { background: #f0e6e2; color: var(--lg-rust); }
+
+/* ── NEW (this proposal): the featured-member consent row ─────────────────
+   Styled from the slab's own vocabulary — no new colours, no new type ramp. */
+#lgfm .lg-feat {
+  display: flex; align-items: flex-start; gap: 9px; cursor: pointer;
+  flex: 1 1 340px; min-width: 260px;
+}
+#lgfm .lg-feat input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  flex: 0 0 auto; width: 17px; height: 17px; margin: 1px 0 0;
+  border: 1.5px solid rgba(255,255,255,.42); border-radius: 4px;
+  background: rgba(255,255,255,.06); cursor: pointer; position: relative;
+}
+#lgfm .lg-feat input[type="checkbox"]:checked { background: var(--lg-sage); border-color: var(--lg-sage); }
+#lgfm .lg-feat input[type="checkbox"]:checked::after {
+  content: ""; position: absolute; left: 5px; top: 1px;
+  width: 4px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+#lgfm .lg-feat input[type="checkbox"]:disabled { opacity: .35; cursor: not-allowed; }
+#lgfm .lg-feat__txt {
+  font: 600 calc(12px*var(--lg-read-scale,1))/1.5 var(--lg-font-sans);
+  color: #dfe3d9;
+}
+#lgfm .lg-feat--off .lg-feat__txt { color: #cfd3cb; }
+#lgfm .lg-feat--disabled .lg-feat__txt { color: #8f948a; }
+
+/* Variant B — the consent CARD under the slab */
+#lgfm .lg-featcard {
+  background: var(--lg-card-bg,#fff); color: var(--lg-ink);
+  border: 1px solid var(--lg-line); border-left: 4px solid var(--lg-sage);
+  border-radius: 12px; padding: 15px 17px;
+}
+#lgfm .lg-featcard--in { border-left-color: var(--lg-amber); background: #fffdf7; color: var(--lg-ink); }
+#lgfm .lg-featcard__h {
+  margin: 0 0 4px; font: 800 13px/1.3 var(--lg-font-sans);
+  color: var(--lg-charcoal); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+#lgfm .lg-featcard__p { margin: 0 0 11px; font: 500 12.5px/1.6 var(--lg-font-sans); color: #4c4f47; }
+#lgfm .lg-featcard__row { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
+#lgfm .lg-featcard__row input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  flex: 0 0 auto; width: 18px; height: 18px; margin: 1px 0 0;
+  border: 1.5px solid #b9b4a3; border-radius: 4px; background: #fff;
+  cursor: pointer; position: relative;
+}
+#lgfm .lg-featcard__row input[type="checkbox"]:checked { background: var(--lg-sage); border-color: var(--lg-sage); }
+#lgfm .lg-featcard__row input[type="checkbox"]:checked::after {
+  content: ""; position: absolute; left: 5.5px; top: 1.5px;
+  width: 4px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+#lgfm .lg-featcard__row input[type="checkbox"]:disabled { background: #ecebe4; border-color: #cfcabb; cursor: not-allowed; }
+#lgfm .lg-featcard__lbl { font: 600 13px/1.55 var(--lg-font-sans); color: #2c2f28; }
+#lgfm .lg-featcard__meta {
+  margin: 10px 0 0; padding-top: 9px; border-top: 1px solid #eceadf;
+  font: 500 11.5px/1.5 var(--lg-font-sans); color: #6b6f6b;
+}
+#lgfm .lg-featcard__meta b { color: #3d4038; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REAL COMPONENT CSS — front-page featured band (archive-poc/web/archive.css)
+   Copied verbatim from `body.view-discover .lg-fm*`, rooted at .view-discover
+   here so it renders identically outside the front page.
+   ══════════════════════════════════════════════════════════════════════════ */
+#lgfm .view-discover .row--featured-member { margin: 26px 0; }
+#lgfm .view-discover .row--featured-member:first-child { margin-top: 0; }
+#lgfm .view-discover .lg-fm {
+  position: relative; display: grid; grid-template-columns: auto minmax(0,1fr) auto;
+  gap: 22px; align-items: center;
+  background: var(--lg-card-bg, #fff);
+  border: 1px solid var(--lg-line, #ebe9e2);
+  border-left: 5px solid var(--lg-sage-d, #6f7c54);
+  border-radius: 14px; padding: 22px 26px;
+  color: var(--lg-ink);
+}
+#lgfm .view-discover .lg-fm__badge {
+  position: absolute; top: 14px; right: 18px;
+  font: 700 10px/1 var(--lg-font-sans); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--lg-amber, #ecb351);
+}
+#lgfm .view-discover .lg-fm__avi {
+  width: 104px; height: 104px; border-radius: 50%; overflow: hidden; display: block;
+  border: 3px solid var(--lg-card-bg, #fff); box-shadow: 0 0 0 1px var(--lg-line, #ebe9e2);
+  background: var(--fp-img-ph, #d4ccb8); flex: 0 0 auto;
+}
+#lgfm .view-discover .lg-fm__avi img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#lgfm .view-discover .lg-fm__name { margin: 0 0 2px; font: 400 26px/1.12 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
+#lgfm .view-discover .lg-fm__role { font: 600 13px/1.3 var(--lg-font-sans); color: var(--lg-sage-d, #6f7c54); }
+#lgfm .view-discover .lg-fm__where { font: 500 12px/1.3 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); margin-top: 1px; }
+#lgfm .view-discover .lg-fm__bio { margin: 9px 0 0; font: 400 14px/1.55 var(--lg-font-sans); color: var(--lg-ink, #323532); max-width: 600px; }
+#lgfm .view-discover .lg-fm__cta {
+  display: inline-block; background: var(--lg-sage-d, #6f7c54); color: var(--fp-cta-ink, #fff);
+  font: 700 13px/1 var(--lg-font-sans); border-radius: 999px; padding: 11px 18px;
+  text-decoration: none; white-space: nowrap;
+}
+@media (max-width: 1080px) {
+  #lgfm .view-discover .lg-fm { grid-template-columns: auto minmax(0,1fr); }
+  #lgfm .view-discover .lg-fm__act { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  #lgfm .view-discover .lg-fm { grid-template-columns: 1fr; text-align: center; }
+  #lgfm .view-discover .lg-fm__avi { margin: 0 auto; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   WP-ADMIN mock chrome — the dash lives as a submenu under LG Layout v2,
+   beside the existing "Archive POC — Front Page" page, so it is drawn in
+   WordPress admin's own vocabulary rather than an invented one.
+   ══════════════════════════════════════════════════════════════════════════ */
+#lgfm .wpwrap {
+  background: #f0f0f1; color: #3c434a;
+  border: 1px solid #dcdcde; border-radius: 10px;
+  padding: 18px 20px 24px; font: 400 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+#lgfm .wpwrap h1 { margin: 0 0 4px; font: 400 23px/1.3 inherit; color: #1d2327; }
+#lgfm .wpwrap h2 { margin: 26px 0 8px; font: 600 15px/1.4 inherit; color: #1d2327; }
+#lgfm .wpwrap h2:first-of-type { margin-top: 18px; }
+#lgfm .wpwrap .description { margin: 0 0 4px; font-size: 13px; color: #646970; max-width: 760px; }
+#lgfm .wpcard {
+  background: #fff; color: #3c434a;
+  border: 1px solid #c3c4c7; border-radius: 4px; padding: 15px 17px; margin: 0 0 12px;
+  box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+#lgfm table.wpt { width: 100%; border-collapse: collapse; background: #fff; color: #3c434a; border: 1px solid #c3c4c7; border-radius: 4px; overflow: hidden; }
+#lgfm table.wpt th {
+  text-align: left; font: 600 12.5px/1.4 inherit; color: #2c3338;
+  background: #fff; border-bottom: 1px solid #c3c4c7; padding: 9px 12px; white-space: nowrap;
+}
+#lgfm table.wpt td { border-bottom: 1px solid #f0f0f1; padding: 10px 12px; vertical-align: middle; color: #3c434a; }
+#lgfm table.wpt tr:last-child td { border-bottom: 0; }
+#lgfm table.wpt tr.is-featured td { background: #fcf9e8; color: #3c434a; }
+#lgfm .wpavi { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; display: block; background: var(--fp-img-ph); }
+#lgfm .who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+#lgfm .who__n { font-weight: 600; color: #1d2327; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lgfm .who__s { font-size: 11.5px; color: #787c82; }
+#lgfm .muted { color: #787c82; }
+#lgfm .btn {
+  display: inline-block; border-radius: 3px; padding: 5px 12px; cursor: pointer;
+  font: 400 13px/1.7 inherit; text-decoration: none; border: 1px solid transparent; white-space: nowrap;
+}
+#lgfm .btn--pri { background: #2271b1; color: #fff; border-color: #2271b1; }
+#lgfm .btn--sec { background: #f6f7f7; color: #2271b1; border-color: #2271b1; }
+#lgfm .btn--del { background: #f6f7f7; color: #b32d2e; border-color: #b32d2e; }
+#lgfm .btn[aria-disabled="true"] { background: #f6f7f7; color: #a7aaad; border-color: #dcdcde; cursor: not-allowed; }
+#lgfm .wpnotice {
+  background: #fff; color: #3c434a; border: 1px solid #c3c4c7; border-left: 4px solid #72aee6;
+  border-radius: 0 4px 4px 0; padding: 10px 13px; margin: 0 0 14px; font-size: 13px;
+}
+#lgfm .wpnotice--warn { border-left-color: #dba617; }
+#lgfm .wpnotice--ok   { border-left-color: #00a32a; }
+#lgfm .tag {
+  display: inline-block; font: 600 11px/1 inherit; border-radius: 3px; padding: 4px 7px;
+}
+#lgfm .tag--live { background: #edf7ee; color: #1a6b2a; }
+#lgfm .tag--pool { background: #eef2e3; color: #55663c; }
+#lgfm .tag--past { background: #f0f0f1; color: #646970; }
+#lgfm .empty {
+  background: #fff; color: #646970; border: 1px dashed #c3c4c7; border-radius: 4px;
+  padding: 26px 18px; text-align: center; font-size: 13px;
+}
+#lgfm .empty b { display: block; color: #1d2327; font-size: 14px; margin-bottom: 4px; }
+
+/* phone frame (Ian looks on his phone — render at his width, in his browser) */
+#lgfm .phones { display: flex; gap: 20px; flex-wrap: wrap; }
+#lgfm .phone { flex: 0 0 auto; }
+#lgfm .phone iframe {
+  width: 390px; height: 620px; border: 0; display: block;
+  background: #fff; border-radius: 22px;
+}
+#lgfm .phone__f {
+  border: 9px solid #23261f; border-radius: 30px; overflow: hidden;
+  background: #23261f; width: 408px; max-width: 100%; box-shadow: 0 8px 24px rgba(0,0,0,.14);
+}
+#lgfm .phone__c { margin: 8px 0 0; font: 600 12px/1.4 var(--lg-font-sans); color: #5e6158; text-align: center; }
+#lgfm .phone__c a { color: var(--lg-sage-d); text-decoration: none; }
+#lgfm .phone__c a:hover { text-decoration: underline; }
+@media (max-width: 460px) { #lgfm .phone__f { width: 100%; } #lgfm .phone iframe { width: 100%; } }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PHONE: the admin table must not side-scroll the page.
+   Measured 2026-08-12 at 390px: `table.wpt` laid out at 654px, so Chrome
+   widened the layout viewport to 694 and the whole mock rendered zoomed-out
+   with a horizontal scroll — on the one device Ian actually reviews from.
+   Below 760px each row becomes a stacked card and the header row is dropped,
+   with each cell carrying its own label via `data-l`.
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 760px) {
+  #lgfm table.wpt, #lgfm table.wpt tbody, #lgfm table.wpt tr, #lgfm table.wpt td { display: block; width: auto; }
+  #lgfm table.wpt { border: 0; background: none; }
+  #lgfm table.wpt thead { display: none; }
+  #lgfm table.wpt tr {
+    background: #fff; color: #3c434a;
+    border: 1px solid #c3c4c7; border-radius: 4px;
+    margin: 0 0 10px; padding: 12px 14px;
+  }
+  #lgfm table.wpt tr.is-featured { background: #fcf9e8; color: #3c434a; }
+  #lgfm table.wpt td { border: 0; padding: 5px 0; }
+  #lgfm table.wpt td[data-l]::before {
+    content: attr(data-l);
+    display: block; margin: 0 0 2px;
+    font: 600 10.5px/1.3 inherit; letter-spacing: .06em; text-transform: uppercase; color: #787c82;
+  }
+  #lgfm table.wpt td[data-l="Member"]::before { display: none; }
+  #lgfm table.wpt td:first-child { padding-top: 0; }
+  #lgfm table.wpt td:last-child { padding-bottom: 0; padding-top: 11px; }
+  #lgfm .who__s { word-break: break-all; }
+  /* the map table on the front-page page gets the same treatment */
+  #lgfm table.map, #lgfm table.map tbody, #lgfm table.map tr, #lgfm table.map td { display: block; width: auto; }
+  #lgfm table.map { border: 0; }
+  #lgfm table.map thead { display: none; }
+  #lgfm table.map tr {
+    background: #fff; color: #33362f;
+    border: 1px solid #e3ddd0; border-radius: 10px; margin: 0 0 10px; padding: 12px 14px;
+  }
+  #lgfm table.map td { border: 0; padding: 3px 0; }
+  #lgfm table.map td[data-l]::before {
+    content: attr(data-l); display: block; margin: 0 0 2px;
+    font: 800 10px/1.3 var(--lg-font-sans); letter-spacing: .06em; text-transform: uppercase; color: #8a8f83;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PLATFORM CHROME OFF THE MOCKS.
+   The dev2 docroot injects pwa.js + bottom-nav.js into every page it serves,
+   mocks included. Measured 2026-08-12 at 390px: `NAV#looth-tabbar` renders
+   fixed across the bottom 55px at z-index 2147481200 — it covers the foot of
+   every drawing on Ian's phone and makes a static mock read as a live app
+   screen. (Same furniture that has stolen taps from real controls before.)
+   A mock is a fixed artifact: no app chrome on it.
+   ══════════════════════════════════════════════════════════════════════════ */
+nav#looth-tabbar,        /* mobile tab bar — covers the foot of every mock   */
+#looth-pwa-banner,       /* "Install Looth" prompt — landed ON the tickbox row */
+#looth-ios-sheet,        /* its iOS "add to home screen" sibling               */
+#looth-shop-ov,          /* shop bubble overlay                                */
+#looth-skel {            /* skeleton loader                                    */
+  display: none !important;
+}

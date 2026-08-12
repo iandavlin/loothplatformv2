@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Featured members — the admin dash (mock)</title>
+<link rel="stylesheet" href="_mock.css">
+<style>
+body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
+</style>
+</head>
+<body id="lgfm">
+<div class="wrap wrap--wide">
+
+  <div class="mockhead">
+    <h1>2 &middot; The admin dash</h1>
+    <p>Who has said yes, who is on the front page right now, and who has been there before.
+       Drawn as a WordPress admin page under <b>LG Layout v2</b>, next to the
+       <i>Archive POC &mdash; Front Page</i> dash you already use to edit the front page.
+       Admin-only (<code style="color:#cdd3c4">manage_options</code>).</p>
+    <nav class="crumbs">
+      <a href="./">&larr; Overview</a>
+      <a href="tickbox.html">1 &middot; Tickbox</a>
+      <a href="dash.html" aria-current="page">2 &middot; Admin dash</a>
+      <a href="frontpage.html">3 &middot; Front page</a>
+    </nav>
+  </div>
+
+  <div class="note note--q">
+    <b>Sample data.</b> Nobody has been asked yet, so there is no real pool. The rows below are real
+    public profiles standing in, so you can see what the dash will actually look like when it fills up.
+    On day one it will be empty &mdash; that state is drawn at the bottom.
+  </div>
+
+  <h2 class="sec">The dash, once the pool has filled</h2>
+  <p class="secsub">One click features someone. There is no second &ldquo;publish&rdquo; step &mdash; the front page follows the dash.</p>
+
+  <div class="wpwrap">
+    <h1>Featured Member</h1>
+    <p class="description">Members who have ticked <b>&ldquo;include me as a possible featured member&rdquo;</b> on their own
+       profile. Featuring someone puts them on the front page immediately; removing them takes the band down.</p>
+
+    <div class="wpnotice wpnotice--ok" style="margin-top:14px">
+      <b>Front-page band is live.</b> Showing <b>Beau Hannam</b> since 9 August 2026.
+    </div>
+
+    <h2>On the front page now</h2>
+    <div class="wpcard">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <img class="wpavi" style="width:56px;height:56px" src="/profile-media/avatars/3aa726b4-2e73-59e9-9741-0894df80837a/3.webp?v=3" alt="" width="56" height="56" loading="lazy">
+        <div style="flex:1 1 240px;min-width:0">
+          <div style="font:600 15px/1.3 inherit;color:#1d2327">Beau Hannam <span class="tag tag--live">Live</span></div>
+          <div class="muted" style="font-size:12.5px">Guitar Maker and Repairer. Since 2003 &middot; Grand Junction, Colorado</div>
+          <div class="muted" style="font-size:12px;margin-top:3px">Featured since 9 Aug 2026 (3 days) &middot; <a href="frontpage.html">see the front-page card &rarr;</a></div>
+        </div>
+        <a class="btn btn--del" href="#remove">Remove from front page</a>
+      </div>
+    </div>
+
+    <h2>Selectable pool <span class="muted" style="font-weight:400">&mdash; 9 members have opted in</span></h2>
+    <p class="description">Everyone here ticked the box themselves. Untick on their profile and the row disappears from this list.</p>
+    <table class="wpt">
+      <thead>
+        <tr>
+          <th style="width:32%">Member</th>
+          <th>What they do</th>
+          <th style="width:15%">Where</th>
+          <th style="width:11%">Opted in</th>
+          <th style="width:12%">Last featured</th>
+          <th style="width:9%"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="is-featured">
+          <td data-l="Member">
+            <div class="who">
+              <img class="wpavi" src="/profile-media/avatars/3aa726b4-2e73-59e9-9741-0894df80837a/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">Beau Hannam</div><div class="who__s">/u/beau-hannam-beau-hannam-guitars</div></div>
+            </div>
+          </td>
+          <td data-l="What they do">Guitar Maker and Repairer. Since 2003</td>
+          <td data-l="Where">Grand Junction, CO</td>
+          <td data-l="Opted in">2 Aug 2026</td>
+          <td data-l="Last featured"><span class="tag tag--live">On now</span></td>
+          <td><a class="btn" aria-disabled="true" href="#featured">Featured</a></td>
+        </tr>
+        <tr>
+          <td data-l="Member">
+            <div class="who">
+              <img class="wpavi" src="/profile-media/avatars/143a8a92-c39c-5d8b-8891-d76d612071b1/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">James Roadman</div><div class="who__s">/u/james-roadman-roadman-guitars</div></div>
+            </div>
+          </td>
+          <td data-l="What they do">Full service independent repair shop, host of the Looth Group&rsquo;s 3d club</td>
+          <td data-l="Where">San Antonio, TX</td>
+          <td data-l="Opted in">2 Aug 2026</td>
+          <td data-l="Last featured" class="muted">Jul 2026</td>
+          <td><a class="btn btn--pri" href="#feature">Feature</a></td>
+        </tr>
+        <tr>
+          <td data-l="Member">
+            <div class="who">
+              <img class="wpavi" src="/profile-media/avatars/8552b4ad-62da-5f90-b5a1-5636e5f0c54e/4.webp?v=4" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">Karl Borum</div><div class="who__s">/u/karl-borum-borum-acoustics</div></div>
+            </div>
+          </td>
+          <td data-l="What they do">Acoustic Guitar Builder in St. Charles, MO</td>
+          <td data-l="Where">Saint Charles, MO</td>
+          <td data-l="Opted in">3 Aug 2026</td>
+          <td data-l="Last featured" class="muted">&mdash;</td>
+          <td><a class="btn btn--pri" href="#feature">Feature</a></td>
+        </tr>
+        <tr>
+          <td data-l="Member">
+            <div class="who">
+              <img class="wpavi" src="/profile-media/avatars/63a6675c-6f31-58c6-bbdd-c565127e07a0/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">Marius Mezei</div><div class="who__s">/u/marius-mezei-guitarcarepro</div></div>
+            </div>
+          </td>
+          <td data-l="What they do">Guitar repair technician &mdash; setups, fretwork, electronics, acoustic repairs</td>
+          <td data-l="Where">Marghita, RO</td>
+          <td data-l="Opted in">4 Aug 2026</td>
+          <td data-l="Last featured" class="muted">&mdash;</td>
+          <td><a class="btn btn--pri" href="#feature">Feature</a></td>
+        </tr>
+        <tr>
+          <td data-l="Member">
+            <div class="who">
+              <img class="wpavi" src="/profile-media/avatars/036ab8ac-1c4c-5702-8b02-1495c80f9eea/6.webp?v=6" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">Eisenman Guitars</div><div class="who__s">/u/eisenman-guitars</div></div>
+            </div>
+          </td>
+          <td data-l="What they do">Custom guitar builder and full service repair shop in Asheville, NC</td>
+          <td data-l="Where">North Carolina</td>
+          <td data-l="Opted in">5 Aug 2026</td>
+          <td data-l="Last featured" class="muted">&mdash;</td>
+          <td><a class="btn btn--pri" href="#feature">Feature</a></td>
+        </tr>
+        <tr>
+          <td data-l="Member">
+            <div class="who">
+              <img class="wpavi" src="/profile-media/avatars/e7399820-be30-59a2-b1cf-8b3024f23ee6/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">Robert Owens</div><div class="who__s">/u/robert-owens</div></div>
+            </div>
+          </td>
+          <td data-l="What they do">Hobbyist building acoustic guitars, repairs &amp; restorations in retirement</td>
+          <td data-l="Where">Louisville, KY</td>
+          <td data-l="Opted in">7 Aug 2026</td>
+          <td data-l="Last featured" class="muted">&mdash;</td>
+          <td><a class="btn btn--pri" href="#feature">Feature</a></td>
+        </tr>
+        <tr>
+          <td data-l="Member">
+            <div class="who">
+              <img class="wpavi" src="/profile-media/avatars/d20d0a60-9eb9-543f-8ee2-5992ddeba677/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">Rick Liftig</div><div class="who__s">/u/rick-liftig-luthier-wannabe</div></div>
+            </div>
+          </td>
+          <td data-l="What they do">Retired dentist; Loothing has a lot in common with dentistry, without the blood</td>
+          <td data-l="Where">West Hartford, CT</td>
+          <td data-l="Opted in">8 Aug 2026</td>
+          <td data-l="Last featured" class="muted">&mdash;</td>
+          <td><a class="btn btn--pri" href="#feature">Feature</a></td>
+        </tr>
+        <tr>
+          <td data-l="Member">
+            <div class="who">
+              <img class="wpavi" src="/profile-media/avatars/4d1f1090-3f00-51a9-8965-bccc23863a4c/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">John Wilmink</div><div class="who__s">/u/john-wilmink-thomas-muse-guitars</div></div>
+            </div>
+          </td>
+          <td data-l="What they do">Thomas Muse Guitars</td>
+          <td data-l="Where">Valley View, OH</td>
+          <td data-l="Opted in">9 Aug 2026</td>
+          <td data-l="Last featured" class="muted">&mdash;</td>
+          <td><a class="btn btn--pri" href="#feature">Feature</a></td>
+        </tr>
+        <tr>
+          <td data-l="Member">
+            <div class="who">
+              <img class="wpavi" src="/profile-media/avatars/a8a06a20-b651-546b-86bc-f39e521fd7a9/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">Mr fid l sticks</div><div class="who__s">/u/mr-fid-l-sticks</div></div>
+            </div>
+          </td>
+          <td data-l="What they do">Building &hellip; Playing &hellip; Learning &hellip;</td>
+          <td data-l="Where">Otisville, MI</td>
+          <td data-l="Opted in">11 Aug 2026</td>
+          <td data-l="Last featured" class="muted">&mdash;</td>
+          <td><a class="btn btn--pri" href="#feature">Feature</a></td>
+        </tr>
+        <tr>
+          <td data-l="Member">
+            <div class="who" style="opacity:.55">
+              <img class="wpavi" src="/profile-media/avatars/4d1f1090-3f00-51a9-8965-bccc23863a4c/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">Jay Daniels</div><div class="who__s">/u/jay-daniels-j-daniels-guitars</div></div>
+            </div>
+          </td>
+          <td class="muted" colspan="4"><b>Opted in, not currently eligible</b> &mdash; profile visibility is set to Private, so they cannot go on a public page. Their tick is kept; they return to the pool if they go Public again.</td>
+          <td><a class="btn" aria-disabled="true" href="#ineligible">Feature</a></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Featured history</h2>
+    <p class="description">Every stint on the front page, newest first &mdash; so you can see who has had a turn and who has not.</p>
+    <table class="wpt">
+      <thead>
+        <tr>
+          <th style="width:32%">Member</th>
+          <th style="width:16%">From</th>
+          <th style="width:16%">To</th>
+          <th style="width:12%">Days</th>
+          <th>Chosen by</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="is-featured">
+          <td data-l="Member"><div class="who"><img class="wpavi" src="/profile-media/avatars/3aa726b4-2e73-59e9-9741-0894df80837a/3.webp?v=3" alt="" width="36" height="36" loading="lazy"><div class="who__n">Beau Hannam</div></div></td>
+          <td data-l="From">9 Aug 2026</td>
+          <td data-l="To"><span class="tag tag--live">On now</span></td>
+          <td data-l="Days">3</td>
+          <td data-l="Chosen by" class="muted">ian</td>
+        </tr>
+        <tr>
+          <td data-l="Member"><div class="who"><img class="wpavi" src="/profile-media/avatars/143a8a92-c39c-5d8b-8891-d76d612071b1/3.webp?v=3" alt="" width="36" height="36" loading="lazy"><div class="who__n">James Roadman</div></div></td>
+          <td data-l="From">26 Jul 2026</td>
+          <td data-l="To">9 Aug 2026</td>
+          <td data-l="Days">14</td>
+          <td data-l="Chosen by" class="muted">ian</td>
+        </tr>
+        <tr>
+          <td data-l="Member"><div class="who"><img class="wpavi" src="/wp-content/uploads/2024/11/Optimum.png" alt="" width="36" height="36" loading="lazy"><div class="who__n">Dan Erlewine</div></div></td>
+          <td data-l="From">12 Jun 2026</td>
+          <td data-l="To">26 Jul 2026</td>
+          <td data-l="Days">44</td>
+          <td data-l="Chosen by" class="muted">hand-set in config</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="wpnotice" style="margin:14px 0 0">
+      <b>Nothing goes on that page by itself.</b> The pool only ever contains members who ticked the
+      box; the front page only ever shows the one member an admin picked from that pool.
+    </div>
+  </div>
+
+  <h2 class="sec">Day one &mdash; before anyone has ticked the box</h2>
+  <p class="secsub">The state you will actually see first. It has to explain itself, not look broken.</p>
+
+  <div class="wpwrap">
+    <h1>Featured Member</h1>
+    <p class="description">Members who have ticked <b>&ldquo;include me as a possible featured member&rdquo;</b> on their own profile.</p>
+
+    <div class="wpnotice wpnotice--warn" style="margin-top:14px">
+      <b>No one is on the front page.</b> The featured-member band is not rendering.
+    </div>
+
+    <h2>Selectable pool</h2>
+    <div class="empty">
+      <b>Nobody has opted in yet.</b>
+      Members join this list by ticking &ldquo;include me as a possible featured member&rdquo; on their own profile.
+      You cannot add someone from here &mdash; that is the point.
+    </div>
+
+    <h2>Featured history</h2>
+    <div class="empty">
+      <b>No one has been featured yet.</b>
+      Stints on the front page will be listed here with dates.
+    </div>
+  </div>
+
+  <div class="note note--q">
+    <b>Two things for you to rule on, Ian.</b>
+    <ul>
+      <li><b>One at a time, or several?</b> Drawn as <b>one</b> featured member, because that is what the
+          front-page band renders today. If you want a rotation (say three, cycling daily) the dash grows a
+          running order and the band picks one per page load &mdash; say so now, it is much cheaper before the build than after.</li>
+      <li><b>Should the dash be able to ask?</b> Drawn deliberately with <b>no</b> way to add someone who has
+          not ticked the box &mdash; no override, not even for you. If you want a &ldquo;nudge this member to opt in&rdquo;
+          button that emails them, that is a separate build and needs its own ruling.</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>
