@@ -67,8 +67,23 @@ endpoint rather than a cross-DB join from WP.
 
 `archive-poc/web/sitemap.php:91-95` is the precedent: archive-poc opens
 `pgsql:…dbname=profile_app` directly under a **column-scoped SELECT grant**
-(`tools/cut/sitemap-grants.sql`, currently `slug, profile_visibility,
-updated_at`). Auto-publish needs that grant widened to the card's columns.
+(`tools/cut/sitemap-grants.sql`, verified: `GRANT SELECT (slug,
+profile_visibility, updated_at) ON public.users TO "archive-poc"`).
+Auto-publish needs that grant widened to the card's columns.
+
+**Two operational facts from that file that the build inherits, both of which
+fail SILENTLY:**
+
+- **Grants do not survive a PG restore** and must be re-applied every time — so
+  after any `profile_app` restore the featured band would quietly stop
+  resolving its member.
+- **PG16 revokes public-schema USAGE from PUBLIC**, so the column grant *alone*
+  returns **zero rows rather than an error**. Confirmed on the cut box 6/15:
+  column grant only → 0 profiles; adding `CONNECT` + `USAGE` → 1,904.
+
+Both mean a broken grant looks exactly like "nobody is featured". Whatever
+resolves the card must distinguish *no member selected* from *cannot read the
+member*, and say so in the dash — otherwise the failure is invisible.
 
 Note archive-poc's own `person` table (`schema.pg.sql:71`) is only
 `id, display_name, slug, avatar_url` — not enough for the card (no tagline, no
@@ -92,6 +107,39 @@ These are not hypotheticals; each is an existing rule the card would otherwise b
    members-only bio leaks to the open web. Otherwise: tagline, no bio.
 4. **`at_a_glance` is the tagline** that maps to the card's `role` line, with
    `business_name` as the fallback. There is no "role" field.
+
+## 3b. How many members could actually be featured (measured, LIVE)
+
+Ian's "one at a time or a rotation?" question needs a real denominator, and it
+is not the member count. Measured on **live** (`ssh live-ro`, read-only) —
+dev2's own numbers are close but its newest rows are test fixtures, so live is
+the honest source:
+
+| Step | Live |
+|---|---|
+| profiles | 1,886 |
+| public visibility | 1,886 |
+| real slug (not a `patreon_NNNNN` placeholder) | 1,743 |
+| + has a real photo (`avatar_version > 0`) | 1,711 |
+| + has a tagline or business name | **1,477** |
+| + **and** a PUBLIC About section (a card *with a bio*) | **6** |
+
+Two conclusions, and the second one is a design change:
+
+1. **A rotation is viable.** ~1,477 members could produce a good card, so
+   nothing about the pool size argues against rotating.
+2. **The bio line is effectively dead.** Only **6 members on the whole site**
+   have an About marked public. A members-only About must never be quoted onto
+   the front page (§3.3), so for ~1,471 of the 1,477 the card is photo + name +
+   tagline + location and nothing else. **The bio-less card is the DEFAULT
+   case, not the edge case** — the mock now leads with it.
+
+That raises a question the backlog line did not anticipate, now question 8 on
+the overview page: when a member ticks the box, should they get an optional
+one-line "what should we say about you?" box? It is a small addition to the
+consent row, it is the only way most cards get a sentence, and it is written
+knowingly *for* the front page — which is cleaner consent than reusing prose
+they wrote for their profile.
 
 ## 4. Flag plan (house rule: member-facing ships OFF and the OFF state is gated)
 
