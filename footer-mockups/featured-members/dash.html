@@ -24,6 +24,7 @@ body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
       <a href="tickbox.html">1 &middot; Tickbox</a>
       <a href="dash.html" aria-current="page">2 &middot; Admin dash</a>
       <a href="frontpage.html">3 &middot; Front page</a>
+      <a href="completeness.html">4 &middot; Completeness</a>
     </nav>
   </div>
 
@@ -59,16 +60,17 @@ body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
     </div>
 
     <h2>Selectable pool <span class="muted" style="font-weight:400">&mdash; 9 members have opted in</span></h2>
-    <p class="description">Everyone here ticked the box themselves. Untick on their profile and the row disappears from this list.</p>
+    <p class="description">Everyone here ticked the box themselves. Untick on their profile and the row disappears from this list. <b>Profile</b> is how complete their profile is &mdash; <b>Feature is only offered when their card would actually look good</b> (photo + name + what they do + where). <a href="completeness.html">How the percentage works &rarr;</a></p>
     <table class="wpt">
       <thead>
         <tr>
-          <th style="width:32%">Member</th>
+          <th style="width:23%">Member</th>
           <th>What they do</th>
-          <th style="width:15%">Where</th>
-          <th style="width:11%">Opted in</th>
-          <th style="width:12%">Last featured</th>
-          <th style="width:9%"></th>
+          <th style="width:12%">Profile</th>
+          <th style="width:11%">Where</th>
+          <th style="width:9%">Opted in</th>
+          <th style="width:10%">Last featured</th>
+          <th style="width:8%"></th>
         </tr>
       </thead>
       <tbody>
@@ -80,6 +82,7 @@ body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
             </div>
           </td>
           <td data-l="What they do">Guitar Maker and Repairer. Since 2003</td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill" style="width:100%"></span></span><span class="minimeter__n">100%</span></span></td>
           <td data-l="Where">Grand Junction, CO</td>
           <td data-l="Opted in">2 Aug 2026</td>
           <td data-l="Last featured"><span class="tag tag--live">On now</span></td>
@@ -93,6 +96,7 @@ body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
             </div>
           </td>
           <td data-l="What they do">Full service independent repair shop, host of the Looth Group&rsquo;s 3d club</td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill" style="width:62%"></span></span><span class="minimeter__n">62%</span></span></td>
           <td data-l="Where">San Antonio, TX</td>
           <td data-l="Opted in">2 Aug 2026</td>
           <td data-l="Last featured" class="muted">Jul 2026</td>
@@ -106,6 +110,7 @@ body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
             </div>
           </td>
           <td data-l="What they do">Acoustic Guitar Builder in St. Charles, MO</td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill" style="width:50%"></span></span><span class="minimeter__n">50%</span></span></td>
           <td data-l="Where">Saint Charles, MO</td>
           <td data-l="Opted in">3 Aug 2026</td>
           <td data-l="Last featured" class="muted">&mdash;</td>
@@ -119,6 +124,7 @@ body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
             </div>
           </td>
           <td data-l="What they do">Guitar repair technician &mdash; setups, fretwork, electronics, acoustic repairs</td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill" style="width:50%"></span></span><span class="minimeter__n">50%</span></span></td>
           <td data-l="Where">Marghita, RO</td>
           <td data-l="Opted in">4 Aug 2026</td>
           <td data-l="Last featured" class="muted">&mdash;</td>
@@ -132,6 +138,7 @@ body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
             </div>
           </td>
           <td data-l="What they do">Custom guitar builder and full service repair shop in Asheville, NC</td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill minimeter__fill--low" style="width:37%"></span></span><span class="minimeter__n">37%</span></span></td>
           <td data-l="Where">North Carolina</td>
           <td data-l="Opted in">5 Aug 2026</td>
           <td data-l="Last featured" class="muted">&mdash;</td>
@@ -145,10 +152,11 @@ body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
             </div>
           </td>
           <td data-l="What they do">Hobbyist building acoustic guitars, repairs &amp; restorations in retirement</td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill minimeter__fill--low" style="width:25%"></span></span><span class="minimeter__n">25%</span></span></td>
           <td data-l="Where">Louisville, KY</td>
           <td data-l="Opted in">7 Aug 2026</td>
           <td data-l="Last featured" class="muted">&mdash;</td>
-          <td><a class="btn btn--pri" href="#feature">Feature</a></td>
+          <td><a class="btn" aria-disabled="true" href="#notready" title="No line about what he does">Feature</a></td>
         </tr>
         <tr>
           <td data-l="Member">
@@ -158,6 +166,7 @@ body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
             </div>
           </td>
           <td data-l="What they do">Retired dentist; Loothing has a lot in common with dentistry, without the blood</td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill minimeter__fill--low" style="width:37%"></span></span><span class="minimeter__n">37%</span></span></td>
           <td data-l="Where">West Hartford, CT</td>
           <td data-l="Opted in">8 Aug 2026</td>
           <td data-l="Last featured" class="muted">&mdash;</td>
@@ -171,10 +180,11 @@ body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
             </div>
           </td>
           <td data-l="What they do">Thomas Muse Guitars</td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill minimeter__fill--low" style="width:25%"></span></span><span class="minimeter__n">25%</span></span></td>
           <td data-l="Where">Valley View, OH</td>
           <td data-l="Opted in">9 Aug 2026</td>
           <td data-l="Last featured" class="muted">&mdash;</td>
-          <td><a class="btn btn--pri" href="#feature">Feature</a></td>
+          <td><a class="btn" aria-disabled="true" href="#notready" title="No location set">Feature</a></td>
         </tr>
         <tr>
           <td data-l="Member">
@@ -184,6 +194,7 @@ body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
             </div>
           </td>
           <td data-l="What they do">Building &hellip; Playing &hellip; Learning &hellip;</td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill minimeter__fill--low" style="width:37%"></span></span><span class="minimeter__n">37%</span></span></td>
           <td data-l="Where">Otisville, MI</td>
           <td data-l="Opted in">11 Aug 2026</td>
           <td data-l="Last featured" class="muted">&mdash;</td>
@@ -273,9 +284,7 @@ body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
   <div class="note note--q">
     <b>Two things for you to rule on, Ian.</b>
     <ul>
-      <li><b>One at a time, or several?</b> Drawn as <b>one</b> featured member, because that is what the
-          front-page band renders today. Measured on live, the pool is not the constraint: <b>1,477</b> members
-          already have a photo and a line to show. If you want a rotation (say three, cycling daily) the dash grows a
+      <li style="opacity:.62"><b>One at a time, or several?</b> &mdash; <b>RULED 12 Aug: one at a time.</b> No rotation. If you want a rotation (say three, cycling daily) the dash grows a
           running order and the band picks one per page load &mdash; say so now, it is much cheaper before the build than after.</li>
       <li><b>Should the dash be able to ask?</b> Drawn deliberately with <b>no</b> way to add someone who has
           not ticked the box &mdash; no override, not even for you. If you want a &ldquo;nudge this member to opt in&rdquo;

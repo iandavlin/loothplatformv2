@@ -108,38 +108,97 @@ These are not hypotheticals; each is an existing rule the card would otherwise b
 4. **`at_a_glance` is the tagline** that maps to the card's `role` line, with
    `business_name` as the fallback. There is no "role" field.
 
-## 3b. How many members could actually be featured (measured, LIVE)
+## 3b. ⚠️ CORRECTION + the real numbers (measured on LIVE)
 
-Ian's "one at a time or a rotation?" question needs a real denominator, and it
-is not the member count. Measured on **live** (`ssh live-ro`, read-only) —
-dev2's own numbers are close but its newest rows are test fixtures, so live is
-the honest source:
+**An earlier version of this note said ~1,477 members could make a good featured
+card. That was wrong by a factor of 22, and the error is instructive.**
 
-| Step | Live |
-|---|---|
-| profiles | 1,886 |
-| public visibility | 1,886 |
-| real slug (not a `patreon_NNNNN` placeholder) | 1,743 |
-| + has a real photo (`avatar_version > 0`) | 1,711 |
-| + has a tagline or business name | **1,477** |
-| + **and** a PUBLIC About section (a card *with a bio*) | **6** |
+The query counted `business_name` as "what they do". It is not: for **97%** of
+members (1,427 of 1,465) `business_name` is a **suffix slice of their own
+`display_name`** — "Brian Kuchta" → `business_name` "Kuchta", "Basil Smoke" →
+"Smoke". It is a name-parsing artifact from profile creation, not something a
+member wrote. Only **38** members have a `business_name` independent of their
+display name.
 
-Two conclusions, and the second one is a design change:
+Verified with `display_name LIKE '%'||business_name`. **The lesson is the
+standing one — verify the thing, not the thing next to it.** A non-empty column
+is not a filled-in field.
 
-1. **A rotation is viable.** ~1,477 members could produce a good card, so
-   nothing about the pool size argues against rotating.
-2. **The bio line is effectively dead.** Only **6 members on the whole site**
-   have an About marked public. A members-only About must never be quoted onto
-   the front page (§3.3), so for ~1,471 of the 1,477 the card is photo + name +
-   tagline + location and nothing else. **The bio-less card is the DEFAULT
-   case, not the edge case** — the mock now leads with it.
+### What is actually there (live, 1,743 public profiles with a real slug)
 
-That raises a question the backlog line did not anticipate, now question 8 on
-the overview page: when a member ticks the box, should they get an optional
-one-line "what should we say about you?" box? It is a small addition to the
-consent row, it is the only way most cards get a sentence, and it is written
-knowingly *for* the front page — which is cleaner consent than reusing prose
-they wrote for their profile.
+| Signal | Members | Share |
+|---|---|---|
+| a photo (`avatar_version > 0`) | 1,711 | 98% |
+| a location (city or region) | 715 | 41% |
+| at least one social/link | 152 | 9% |
+| **a real "what I do" line** (`at_a_glance`, or an independent `business_name`) | **81** | **5%** |
+| an About section (any visibility) | 29 | 2% |
+| skills / instruments / gallery / banner / genres | 12–27 each | 1–2% |
+| **an About marked PUBLIC** (the only source of a card bio) | **6** | **0.3%** |
+
+**Members who could make a complete card today (photo + what-they-do + where): 66.**
+986 have a photo and nothing else; 645 have a photo and a location but nothing
+saying what they do.
+
+Note the section system is barely used at all — only **29** members on live have
+*any* `profile_sections` row. The structured tables (`profile_socials`,
+`profile_skills`, `profile_instruments`, `profile_genres`) carry what little
+else exists.
+
+## 3c. The completeness percentage (Ian 8/12) — design
+
+> "It should be more than that. Can we have a percent completed of the profile
+> and have it be a percentage?"
+
+Mocked at `/footer-mockups/featured-members/completeness.html`.
+
+### The eight items, 12.5% each
+
+photo · where you are · what you do (one line) · a bit about you · a link or two ·
+skills/instruments · photos of your work · banner. Every one maps to a field that
+already exists. Equal weighting until Ian says otherwise.
+
+### The distribution that scoring produces (live, today)
+
+| % | Members | Share |
+|---|---|---|
+| 0% | 25 | 1.4% |
+| **12%** | **978** | **56.1%** |
+| 25% | 553 | 31.7% |
+| 37% | 135 | 7.7% |
+| 50% | 23 | 1.3% |
+| 62% | 10 | 0.6% |
+| 75% | 8 | 0.5% |
+| 87% | 6 | 0.3% |
+| 100% | 5 | 0.3% |
+
+**88% of the membership sits at 25% or below, and 29 members are above 60%.**
+That is not a scoring artifact — it is what a photo-and-a-name membership looks
+like when you measure it. It is also the whole argument for the meter.
+
+### Two measures, deliberately separate
+
+- **Profile %** — the member's own progress across all eight items. A nudge.
+- **Card ready** — only the four things the front-page card renders (photo,
+  name, what-you-do, where). This is what gates the dash's **Feature** button.
+
+A member can be 62% and make a perfect card; a member at 37% can be missing
+exactly the one line that matters. Conflating them would either block good cards
+or ship empty ones.
+
+### Recommendation: nudge, do not gate consent
+
+Anyone may tick the box. **Feature** is only *offered* when the card would look
+good. Blocking consent behind a percentage refuses someone who is trying to say
+yes, and makes the pool look empty for reasons nobody can see. (A hard 50% floor
+would today leave 52 members able to volunteer at all.)
+
+### The percentage must never become a public score
+
+It is shown to the member about themselves, and to admins in the dash. It is not
+a badge, not a directory sort key, and not visible member-to-member. Nothing in
+Ian's ask suggests otherwise, and it is much easier to keep that line now than to
+walk it back.
 
 ## 4. Flag plan (house rule: member-facing ships OFF and the OFF state is gated)
 
@@ -166,6 +225,22 @@ Recommendation: build 18 first (it is small and self-contained), but whoever tak
 19 should reuse the consent row's placement in the privacy slab rather than
 inventing a second settings surface.
 
+**The completeness meter (§3c) tightens this overlap into a shared dependency.**
+The meter's first three items — photo, where you are, what you do — are exactly
+what item 19 wants to collect at sign-up. So:
+
+- **One definition of "complete", not two.** Whatever function computes the
+  percentage should be the same one item 19's sign-up prompt drives toward, or
+  the two will drift and a member will be told different things in different
+  places.
+- **The meter measures; item 19 fills.** The numbers in §3b are item 19's
+  business case, quantified: 978 members with a photo and nothing else, 56% of
+  the membership. Featuring is limited by that, not by consent.
+- Still **not built here**. Ian's 8/12 ruling explicitly kept them separate
+  ("Does the meter go site-wide, or stay in this flow?" is question 3 on the
+  completeness mock — if he says site-wide, the two jobs should merge and be
+  re-chartered as one).
+
 ## 6. What Ian has to rule on
 
 Listed on the mock overview page; repeated here so the build has one source.
@@ -173,10 +248,15 @@ Listed on the mock overview page; repeated here so the build has one source.
 1. Tickbox placement: **A** (row in the privacy slab, recommended) or **B** (own card).
 2. The consent wording.
 3. Untick while featured → **off immediately** (recommended) or stays until swapped.
-4. **One** featured member (as drawn, matching today's band) or a rotation.
+4. ~~One featured member or a rotation~~ — **RULED 2026-08-12: ONE at a time.**
+   No rotation, no running order; the dash selects exactly one.
 5. Card reads the profile **live** (recommended) or a snapshot frozen at selection.
 6. Whether the dash may invite/nudge members (drawn: **no** — no override at all).
 7. The CTA label.
+8. ~~Should the tickbox also ask for a one-line blurb~~ — **RULED 2026-08-12:
+   go further, a profile-completeness percentage.** Designed in §3c; it needs
+   three rulings of its own (the eight items, nudge-vs-gate, and whether the
+   meter goes site-wide or stays in this flow).
 
 ## 7. Verification done on the mocks themselves
 
