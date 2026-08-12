@@ -188,3 +188,63 @@ correct response is to record the decision — **not** to delete the check.
 A different script URL is a different worker, so turning the flag on (or back off)
 re-runs `install` once per client. The cache name is unchanged, so nobody loses cached
 shell assets; expect one extra install per client per flip and nothing worse.
+
+## 2026-08-11, the THIRD bite — and it was a different origin
+
+Ian clicked `https://dev.loothgroup.com/hub/touring-tech/test-3/`, got a blank spin, then
+the offline shell. The URL was verified 200 server-side. Both facts are true and they are
+about **two different hosts**.
+
+| measured | result |
+|---|---|
+| `dev.loothgroup.com` resolves to | `50.19.198.38` — **unreachable from this box**; `/hub/…` and `/sw.js` both time out |
+| `dev2.loothgroup.com` resolves to | Cloudflare → us |
+| our only vhost's `server_name` | `loothgroup.com www.loothgroup.com dev2.loothgroup.com` — the retired name is **not** there; it appears in that file only inside a comment |
+| the same path on dev2 | **200**, 184146 bytes, `<title>Test — Looth Group</title>` |
+
+`dev.loothgroup.com` was retired 2026-07-27. **Service workers are per-origin**, so a
+worker registered on that origin while it was live still holds `/offline.html` in its own
+cache; it intercepts the navigation, its fetch to a dead host rejects, and it serves its
+own shell. That reproduces "blank spin, then the offline shell" precisely while dev2 serves
+the page.
+
+Two things follow, and both are worth stating rather than glossing:
+
+1. **No change to dev2's `sw.js` can reach that worker.** Different origin, different
+   registration. The fix in this branch does not and cannot address it.
+2. **On that origin the shell was arguably correct** — the server really was unreachable.
+   "Never show the shell when the server is reachable" is the right rule, and it was not
+   violated there.
+
+The remedy is Ian's and takes seconds: unregister the worker for `dev.loothgroup.com`
+(DevTools → Application → Service Workers → Unregister), or simply use
+`dev2.loothgroup.com`. It lives in his browser profile and no lane can reach it.
+
+### Both dev2-side paths were measured, to rule them in or out
+
+| client state | what the user actually sees |
+|---|---|
+| valid gate cookie | the REAL page — title `Test — Looth Group`, 3540 chars, no shell |
+| worker installed, then cookie removed | `403 Forbidden nginx`, **19 chars** — not the shell |
+
+A 403 is a **resolved** fetch, so the worker passes it straight through; the shell needs a
+**rejection**. So neither dev2 path produces the symptom. Note the second row is itself an
+ugly 19-character wall, and it is exactly what this lane's claim prompt replaces.
+
+## Gate 24 — the browser half
+
+`tools/gates/sw-no-offline-shell-gate.py`. Real browser, real registered worker, real page,
+real origin, as a real user. Asserts the shell markers are ABSENT **and** the real content
+is PRESENT — "shell absent" alone passes on a blank page, and a blank page was the other
+half of what Ian saw.
+
+Red-firsted with `--prove`, which registers a deliberately broken worker that always
+answers navigations with a shell lookalike, scoped to a dev-gated fixture directory (a
+worker cannot claim a scope above its own path, so it can never touch `/hub/`). Both
+assertions went red. **The first attempt at that prove was thrown away**: it hijacked the
+real worker's cache, and with the origin UP the shipped handler never consults the cache —
+it would have left the gate green and proven nothing.
+
+⚠️ The gate audits **whatever nginx serves**, i.e. the serving checkout (`main`), not a
+lane's branch. Correct default for a regression tripwire; not evidence about an unmerged
+fix.
