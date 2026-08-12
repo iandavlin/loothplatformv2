@@ -202,7 +202,11 @@ def main():
                 prior = json.load(open(FIXTURE))
             prior[args.type] = {
                 "path": path, "status": code,
-                "sha256": hashlib.sha256(body.encode()).hexdigest(),
+                    "sha256": hashlib.sha256(body.encode()).hexdigest(),
+                # CHARACTERS, not bytes — body is a decoded str and the branded
+                # 404 carries multi-byte glyphs, so this reads 5106 where curl's
+                # %{size_download} reads 5114. Same document, different unit. The
+                # sha256 is the real comparison; do not "fix" this to match curl.
                 "bytes": len(body),
             }
             json.dump(prior, open(FIXTURE, "w"), indent=2, sort_keys=True)

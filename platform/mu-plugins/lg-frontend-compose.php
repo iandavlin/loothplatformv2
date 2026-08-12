@@ -183,6 +183,32 @@ if (!defined('LG_FRONTEND_COMPOSE')) {
     define('LG_FRONTEND_COMPOSE', false);
 }
 
+/**
+ * Is the route live for THIS request?
+ *
+ * The tracked constant is the answer everywhere that matters, and it is FALSE.
+ * The one exception is the lane preview: Ian's toggle loads this route in an
+ * iframe from /preview/frontend-compose/, and with the flag off that iframe
+ * would 404 and the toggle would look broken for a reason that has nothing to do
+ * with the toggle.
+ *
+ * LG_FC_PREVIEW IS A fastcgi_param, WHICH IS WHY THIS IS SAFE. Only an nginx conf
+ * can set one — never a query string, never a client header — so the arm exists
+ * on exactly one path (platform/nginx/lane-preview-frontend-compose.conf) and
+ * nowhere else. /compose/ on the real vhost stays exactly as flagged.
+ *
+ * Read from $_SERVER and NOT getenv(): recorded box trap — a fastcgi_param lands
+ * in $_SERVER only, so a getenv()-only check serves OFF on the very preview URL
+ * the param was added for.
+ */
+function lg_fc_enabled(): bool
+{
+    if (LG_FRONTEND_COMPOSE) {
+        return true;
+    }
+    return !empty($_SERVER['LG_FC_PREVIEW']);
+}
+
 const LG_FC_PATH = 'compose';
 
 /* ──────────────────────────────────────────────── the per-type registry ───── */
@@ -362,7 +388,7 @@ function lg_fc_route(): void
     // Flag OFF: not merely "renders nothing" but "returns before anything is
     // registered, enqueued or emitted", which is what makes the byte-identical
     // assertion true rather than approximately true.
-    if (!LG_FRONTEND_COMPOSE) {
+    if (!lg_fc_enabled()) {
         return;
     }
 
