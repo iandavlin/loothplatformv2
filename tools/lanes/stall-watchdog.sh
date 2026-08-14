@@ -30,6 +30,14 @@ while true; do
     if printf '%s' "$PANE" | grep -qE "Do you want to proceed\?"; then
       echo "ALERT confirm-prompt $L — a lane is frozen on a yes/no dialog"; exit 0
     fi
+    # Lost instruction: parked with NON-EMPTY composer text ("❯ something").
+    # No 10-minute grace — a sticky note nobody pressed Enter on is a stall
+    # the moment it exists (the 8/14 class: 'draw the door pictures' sat idle).
+    if lanes 2>/dev/null | grep -E "^$L " | grep -q parked; then
+      if printf '%s' "$PANE" | grep -qE "^❯ .*[[:alnum:]]"; then
+        echo "ALERT lost-instruction $L — parked with unsent composer text"; exit 0
+      fi
+    fi
     if lanes 2>/dev/null | grep -E "^$L " | grep -q parked; then
       grep -qxF "$L" "$OKFILE" 2>/dev/null && { rm -f "$STATED/$L"; continue; }
       NOW=$(date +%s)
