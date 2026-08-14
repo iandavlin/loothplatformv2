@@ -1,0 +1,605 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The licence block — built (2026-08-14)</title>
+<style>
+/* Same id-on-body trick as the other pages here: the docroot injects a boot
+   script under /footer-mockups/, and a dark profile repaints via
+   `html[data-lguser-theme="dark"] body` (0,1,2). body#lgfcpage is (1,0,1) and
+   wins outright. The block CSS below sets its own --lg-* tokens ON the block
+   selector, so a dark token rewrite on <html> cannot invert the samples. */
+body#lgfcpage{margin:0;padding:28px 18px 90px;background:#fbfbf8;color:#262925;
+  font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+.w{max-width:1180px;margin:0 auto}
+h1{font:800 30px/1.15 Lora,Georgia,serif;margin:0 0 8px;color:#1a1d1a}
+.lede{color:#565a55;margin:0 0 6px;max-width:78ch}
+h2{font:700 12.5px/1.2 inherit;letter-spacing:.08em;text-transform:uppercase;color:#565a55;
+   margin:52px 0 14px;padding-bottom:7px;border-bottom:1px solid #e4e7d8}
+p{max-width:80ch}
+.big{display:flex;gap:26px;flex-wrap:wrap;margin:22px 0 6px}
+.stat{background:#fff;border:1px solid #e4e7d8;border-radius:14px;padding:15px 19px;min-width:200px}
+.stat b{display:block;font:800 27px/1.1 Lora,Georgia,serif;color:#586b3f}
+.stat span{display:block;color:#565a55;font-size:13px;margin-top:4px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;margin-top:10px}
+@media (max-width:860px){.cols{grid-template-columns:1fr}}
+.pane{min-width:0}
+.cap{font:700 11px/1.2 inherit;letter-spacing:.07em;text-transform:uppercase;color:#565a55;margin:0 0 8px}
+.cap em{font-style:normal;color:#b5442a}
+.cap b{color:#586b3f}
+figure{margin:0;border:1px solid #e4e7d8;border-radius:13px;background:#fff;overflow:hidden}
+figcaption{font-size:12.3px;color:#565a55;padding:9px 12px;border-top:1px solid #eceee2;background:#fcfcf9}
+.stage{padding:14px 18px;background:#fff}
+.note{border-left:3px solid #c66845;padding:11px 0 11px 15px;margin:20px 0;color:#565a55;font-size:14.6px;max-width:80ch}
+.note strong{color:#262925}
+.note--ask{border-left-color:#586b3f;background:#f6f8ef;padding:14px 16px;border-radius:0 10px 10px 0}
+.note--warn{border-left-color:#b5442a;background:#fdf4f1;padding:14px 16px;border-radius:0 10px 10px 0}
+table{border-collapse:collapse;width:100%;font-size:13.6px;margin:8px 0 0;background:#fff;
+  border:1px solid #e4e7d8;border-radius:12px;overflow:hidden}
+th,td{text-align:left;padding:9px 11px;border-bottom:1px solid #eceee2;vertical-align:top}
+th{font:700 10.5px/1.2 inherit;letter-spacing:.06em;text-transform:uppercase;color:#565a55;background:#fcfcf9}
+code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:#f2f3ee;padding:1px 5px;border-radius:4px}
+.grid4{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:860px){.grid4{grid-template-columns:1fr}}
+.pill{display:inline-block;font:700 10.5px/1 inherit;letter-spacing:.06em;text-transform:uppercase;
+  padding:5px 9px;border-radius:999px;background:#eef1e4;color:#4a5a35;vertical-align:middle}
+.pill--off{background:#f0eeea;color:#6b6560}
+/* ── real shipped block CSS, lifted verbatim from the generated v2 bundle ── */
+.lg-callout .lg-ts-link {
+    color: var(--lg-link-color, #6b7c52);
+    text-decoration: none;
+  }
+.lg-callout .lg-ts-link:hover { text-decoration: underline; }
+.lg-callout__title {
+    margin: 0 0 12px;
+    font: 700 11px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--lg-title-color, #b8842b);
+  }
+.lg-callout__items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+.lg-callout__items li + li {
+    border-top: 1px dashed var(--lg-tags-border, #e7e3da);
+  }
+.lg-callout__row {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    padding: 10px 0;
+    color: var(--lg-charcoal, #1a1d1a);
+    text-decoration: none;
+  }
+.lg-callout__row:hover {
+    color: var(--lg-accent-color, #b8842b);
+  }
+.lg-callout__row:hover .lg-callout__label {
+    text-decoration: underline;
+  }
+.lg-callout__icon {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    color: var(--lg-accent-color, #b8842b);
+    opacity: 0.88;
+  }
+.lg-callout__icon svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+  }
+.lg-callout__text {
+    display: block;
+    min-width: 0;   /* allow truncation inside grid */
+  }
+.lg-callout__label {
+    display: block;
+    font: 600 15px/1.3 var(--lg-font-sans, system-ui);
+  }
+.lg-callout__meta {
+    display: block;
+    font: 400 13px/1.3 var(--lg-font-sans, system-ui);
+    color: #7a7c75;
+    margin-top: 2px;
+  }
+.lg-callout__chev {
+    color: #9c9b91;
+    opacity: 0.6;
+    transition: transform 0.15s, color 0.15s, opacity 0.15s;
+  }
+.lg-callout__chev svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+  }
+.lg-callout__row:hover .lg-callout__chev {
+    color: var(--lg-accent-color, #b8842b);
+    opacity: 1;
+    transform: translateX(2px);
+  }
+.lg-callout--files .lg-callout__filemeta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+.lg-callout--files .lg-callout__ext {
+    font: 700 10px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: var(--lg-amber, #ecb351);
+    color: var(--lg-ink, #323532);
+    padding: 3px 6px;
+    border-radius: 3px;
+  }
+.lg-callout--files .lg-callout__size {
+    font: 600 12px/1 var(--lg-font-sans, system-ui);
+    color: #7a7c75;
+  }
+.lg-callout--people .lg-callout__row {
+    grid-template-columns: 48px 1fr auto;
+  }
+.lg-callout--people .lg-callout__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #fff;
+    overflow: hidden;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  }
+.lg-callout--people .lg-callout__icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+  }
+.lg-callout--people .lg-callout__initials {
+    font: 700 16px/1 var(--lg-font-serif, Georgia, serif);
+    color: var(--lg-accent-color, #586b3f);
+  }
+.lg-callout--data .lg-callout__row {
+    padding: 8px 0;
+  }
+.lg-callout--data .lg-callout__items li + li {
+    border-top-color: #dad7cc;
+  }
+.lg-callout--data .lg-callout__icon {
+    color: #666864;
+  }
+.lg-callout--note .lg-callout__body {
+    margin: 0;
+    font: 400 15px/1.55 var(--lg-font-serif, Georgia, serif);
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+.lg-callout--note .lg-callout__body :first-child { margin-top: 0; }
+.lg-callout--note .lg-callout__body :last-child { margin-bottom: 0; }
+.lg-callout--note .lg-callout__body p { margin: 0 0 10px; }
+.lg-callout--note .lg-callout__body p:last-child { margin-bottom: 0; }
+.lg-callout--quote .lg-callout__quote {
+    margin: 0 0 12px;
+    font: italic 400 22px/1.4 var(--lg-font-serif, Georgia, serif);
+    color: var(--lg-charcoal, #1a1d1a);
+  }
+.lg-callout--quote .lg-callout__quote :first-child { margin-top: 0; }
+.lg-callout--quote .lg-callout__quote :last-child { margin-bottom: 0; }
+.lg-callout--quote .lg-callout__quote p { margin: 0 0 0.5em; }
+.lg-callout--quote .lg-callout__attr {
+    font: 600 13px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--lg-accent-color, #b8842b);
+  }
+.lg-callout--people .lg-callout__row {
+      grid-template-columns: 40px 1fr auto;
+    }
+.lg-callout--people .lg-callout__icon {
+      width: 36px;
+      height: 36px;
+    }
+.lg-download .lg-callout__title { color: #cfcdc4; }
+.lg-download .lg-callout__row { color: #f4f3ef; }
+.lg-download .lg-callout__row:hover { color: #ffffff; }
+.lg-download .lg-callout__row:hover .lg-callout__label { text-decoration: underline; }
+.lg-download .lg-callout__icon { color: #f4f3ef; opacity: 1; }
+.lg-download .lg-callout__items li + li { border-top-color: rgba(255, 255, 255, 0.12); }
+.lg-download .lg-callout__size { color: #a8a89f; }
+.lg-license__title {
+    margin: 0 0 12px;
+    font: 700 11px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--lg-title-color, #b8842b);
+  }
+.lg-license__name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--lg-accent-color, #b8842b);
+    text-decoration: none;
+  }
+.lg-license a.lg-license__name:hover { text-decoration: underline; }
+.lg-license__mark {
+    flex: 0 0 auto;
+    display: inline-flex;
+    width: 20px;
+    height: 20px;
+  }
+.lg-license__mark svg { width: 100%; height: 100%; }
+.lg-license__out {
+    flex: 0 0 auto;
+    display: inline-flex;
+    width: 12px;
+    height: 12px;
+    opacity: 0.7;
+  }
+.lg-license__out svg { width: 100%; height: 100%; }
+.lg-license__clauses {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0 0;
+    padding: 0;
+  }
+.lg-license__clause {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--lg-chip-color, #6b5220);
+    font-size: 12.5px;
+    line-height: 1.2;
+  }
+.lg-license--note .lg-license__clause {
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--lg-chip-bg, #f6efdc);
+    font-weight: 600;
+  }
+.lg-license__clause-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    width: 14px;
+    height: 14px;
+  }
+.lg-license__clause-icon svg { width: 100%; height: 100%; }
+.lg-license__empty {
+    color: var(--lg-chip-color, #6b5220);
+    font-style: italic;
+    opacity: 0.8;
+  }
+.lg-license--compact {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: var(--lg-padding, 12px 18px);
+    margin-block: var(--lg-margin-block, 16px);
+  }
+.lg-license--compact .lg-license__title { margin: 0; }
+.lg-license--compact .lg-license__clauses { margin: 0; }
+.lg-license--compact .lg-license__clause + .lg-license__clause::before {
+    content: "·";
+    margin-right: 8px;
+    opacity: 0.6;
+  }
+.lg-callout {
+    --lg-padding: 18px 24px 18px 26px;
+    --lg-margin-block: 22px;
+    --lg-bg: #fdfbf4;
+    --lg-border-color: #ecb351;
+    --lg-radius: 8px;
+    --lg-title-color: #b8842b;
+    --lg-accent-color: #b8842b;
+  }
+.lg-callout--files {
+    --lg-bg: #fdf7e8;
+  }
+.lg-callout--people {
+    --lg-bg: #f3f6ec;
+    --lg-border-color: #87986a;
+    --lg-title-color: #586b3f;
+    --lg-accent-color: #586b3f;
+  }
+.lg-callout--data {
+    --lg-bg: #f7f5f0;
+    --lg-border-color: #323532;
+    --lg-title-color: #323532;
+    --lg-accent-color: #323532;
+  }
+.lg-callout--note {
+    --lg-bg: #fdfaf0;
+  }
+.lg-callout--quote {
+    --lg-padding: 24px 28px 22px 32px;
+    --lg-bg: #fdfaf0;
+  }
+.lg-license {
+    --lg-padding: 18px 24px 18px 26px;
+    --lg-margin-block: 22px;
+    --lg-bg: #fdfaf0;
+    --lg-border-color: #ecb351;
+    --lg-radius: 8px;
+    --lg-title-color: #b8842b;
+    --lg-accent-color: #b8842b;
+    --lg-chip-bg: #f6efdc;
+    --lg-chip-color: #6b5220;
+  }
+.lg-license--compact {
+    --lg-padding: 12px 18px;
+    --lg-margin-block: 16px;
+  }
+/* ── real editor popover CSS, lifted from assets/lg-fe-editor.css ── */
+.lg-tier-pop {
+    position: absolute;
+    top: 16px;            /* sits just below the pill */
+    left: 50%;
+    transform: translateX(-50%);
+    background: #111;
+    color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    padding: 6px 4px;
+    z-index: 60;
+    min-width: 140px;
+}
+.lg-tier-pop__title {
+    font: 600 10px/1 system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #999;
+    padding: 4px 8px 6px;
+}
+.lg-tier-pop__opt {
+    display: block;
+    width: 100%;
+    text-align: left;
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: #fff;
+    font: 500 12px/1 system-ui, sans-serif;
+    padding: 7px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.lg-tier-pop__opt:hover { background: rgba(255, 255, 255, 0.12); }
+.lg-tier-pop__opt.is-current { background: rgba(255, 255, 255, 0.18); position: relative; }
+.lg-tier-pop__opt.is-current::after {
+    content: "●";
+    position: absolute;
+    right: 10px;
+    font-size: 10px;
+    opacity: 0.7;
+}
+.lg-license-pop { min-width: 260px; }
+.lg-license-pop .lg-tier-pop__opt {
+    line-height: 1.35;
+    /* Right padding clears the is-current ● at right:10px — without it the dot
+       lands on top of the hint text, which is longest on the very option that
+       is current by default ("…own details. Recommended."). */
+    padding: 8px 28px 8px 10px;
+}
+.lg-license-pop .lg-tier-pop__opt strong {
+    display: block;
+    font-weight: 600;
+}
+.lg-license-pop .lg-tier-pop__opt span {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    color: #b9b9b9;
+}
+.lg-license-pop .lg-tier-pop__opt.is-current::after { top: 50%; transform: translateY(-50%); }
+</style>
+<body id="lgfcpage">
+<div class="w">
+
+<h1>The licence block</h1>
+<p class="lede">You asked: <em>“if we don’t have a block that can handle anything in the new form, like
+the license, we need to spin up v2 to produce the block.”</em> Built. This is what it looks like.
+It is <strong>switched off</strong> — nothing on the site has changed yet.</p>
+
+<div class="big">
+  <div class="stat"><b>4</b><span>licence choices, as choices</span></div>
+  <div class="stat"><b>257</b><span>posts carrying a licence today</span></div>
+  <div class="stat"><b>0</b><span>pages changed so far (flag off)</span></div>
+</div>
+
+<h2>Today, and what it becomes</h2>
+<p>Same post, same licence. On the left is what the page serves right now.</p>
+<div class="cols">
+  <div class="pane">
+    <p class="cap"><em>Today</em> — a sentence</p>
+    <figure><div class="stage">  <aside class="lg-callout lg-callout--note">
+    <div class="lg-callout__title">License</div>
+
+
+    <div class="lg-callout__body"><p>BY NC SA (Credit given to creator, Non-Commercial only, Adaptations shared with same terms)</p></div>
+
+
+  </aside></div>
+    <figcaption>The form’s raw text, dropped into a generic note box. The page doesn’t
+    know it’s a licence — and the only way to change it in v2 is to retype that sentence.</figcaption></figure>
+  </div>
+  <div class="pane">
+    <p class="cap"><b>Now</b> — a licence</p>
+    <figure><div class="stage">  <aside class="lg-license lg-license--note" aria-label="Licence: Attribution–NonCommercial–ShareAlike 4.0" data-lg-license-code="by-nc-sa" data-lg-license-resolved="by-nc-sa">
+    <div class="lg-license__title">License</div>
+    <a class="lg-license__name" href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="license noopener" target="_blank">
+      <span class="lg-license__mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M10.1 9.9a2.7 2.7 0 1 0 0 4.2"/><path d="M16.4 9.9a2.7 2.7 0 1 0 0 4.2"/></svg></span>
+      <span class="lg-license__label">Attribution–NonCommercial–ShareAlike 4.0</span>
+      <span class="lg-license__out" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></span>
+    </a>
+    <ul class="lg-license__clauses">
+      <li class="lg-license__clause" title="Credit the creator when you use or share this."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8.4" r="1.9"/><path d="M8.6 17.6v-3a3.4 3.4 0 0 1 6.8 0v3"/></svg></span>Credit required</li>
+      <li class="lg-license__clause" title="You may not use this for commercial purposes."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M14.8 9.3a3 3 0 0 0-2.8-1.6c-1.6 0-2.7.9-2.7 2.1 0 2.9 6 1.5 6 4.4 0 1.3-1.2 2.2-2.9 2.2a3.2 3.2 0 0 1-3-1.7"/><path d="M12 6.2v11.6"/><path d="M5.6 5.6l12.8 12.8"/></svg></span>Non-commercial only</li>
+      <li class="lg-license__clause" title="Adaptations must be shared under these same terms."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16.8 12a4.8 4.8 0 0 1-8.2 3.4"/><path d="M7.2 12a4.8 4.8 0 0 1 8.2-3.4"/><path d="M15.4 5.4v3.2h-3.2"/><path d="M8.6 18.6v-3.2h3.2"/></svg></span>Share-alike</li>
+    </ul>
+  </aside></div>
+    <figcaption>The licence name, a link to the actual legal deed, and one chip per rule it
+    imposes. A reader sees what they may and may not do without decoding “BY NC SA”.</figcaption></figure>
+  </div>
+</div>
+
+<h2>All four choices</h2>
+<p>Every licence the form offers, drawn by the block. This is real output from the page
+renderer, not a drawing.</p>
+<div class="grid4">
+  <figure><div class="stage">  <aside class="lg-license lg-license--note" aria-label="Licence: Attribution 4.0" data-lg-license-code="by" data-lg-license-resolved="by">
+    <div class="lg-license__title">License</div>
+    <a class="lg-license__name" href="https://creativecommons.org/licenses/by/4.0/" rel="license noopener" target="_blank">
+      <span class="lg-license__mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M10.1 9.9a2.7 2.7 0 1 0 0 4.2"/><path d="M16.4 9.9a2.7 2.7 0 1 0 0 4.2"/></svg></span>
+      <span class="lg-license__label">Attribution 4.0</span>
+      <span class="lg-license__out" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></span>
+    </a>
+    <ul class="lg-license__clauses">
+      <li class="lg-license__clause" title="Credit the creator when you use or share this."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8.4" r="1.9"/><path d="M8.6 17.6v-3a3.4 3.4 0 0 1 6.8 0v3"/></svg></span>Credit required</li>
+    </ul>
+  </aside></div><figcaption><b>BY</b> — 2 posts</figcaption></figure>
+  <figure><div class="stage">  <aside class="lg-license lg-license--note" aria-label="Licence: Attribution–ShareAlike 4.0" data-lg-license-code="by-sa" data-lg-license-resolved="by-sa">
+    <div class="lg-license__title">License</div>
+    <a class="lg-license__name" href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener" target="_blank">
+      <span class="lg-license__mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M10.1 9.9a2.7 2.7 0 1 0 0 4.2"/><path d="M16.4 9.9a2.7 2.7 0 1 0 0 4.2"/></svg></span>
+      <span class="lg-license__label">Attribution–ShareAlike 4.0</span>
+      <span class="lg-license__out" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></span>
+    </a>
+    <ul class="lg-license__clauses">
+      <li class="lg-license__clause" title="Credit the creator when you use or share this."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8.4" r="1.9"/><path d="M8.6 17.6v-3a3.4 3.4 0 0 1 6.8 0v3"/></svg></span>Credit required</li>
+      <li class="lg-license__clause" title="Adaptations must be shared under these same terms."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16.8 12a4.8 4.8 0 0 1-8.2 3.4"/><path d="M7.2 12a4.8 4.8 0 0 1 8.2-3.4"/><path d="M15.4 5.4v3.2h-3.2"/><path d="M8.6 18.6v-3.2h3.2"/></svg></span>Share-alike</li>
+    </ul>
+  </aside></div><figcaption><b>BY SA</b> — 1 post</figcaption></figure>
+  <figure><div class="stage">  <aside class="lg-license lg-license--note" aria-label="Licence: Attribution–NonCommercial–ShareAlike 4.0" data-lg-license-code="by-nc-sa" data-lg-license-resolved="by-nc-sa">
+    <div class="lg-license__title">License</div>
+    <a class="lg-license__name" href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="license noopener" target="_blank">
+      <span class="lg-license__mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M10.1 9.9a2.7 2.7 0 1 0 0 4.2"/><path d="M16.4 9.9a2.7 2.7 0 1 0 0 4.2"/></svg></span>
+      <span class="lg-license__label">Attribution–NonCommercial–ShareAlike 4.0</span>
+      <span class="lg-license__out" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></span>
+    </a>
+    <ul class="lg-license__clauses">
+      <li class="lg-license__clause" title="Credit the creator when you use or share this."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8.4" r="1.9"/><path d="M8.6 17.6v-3a3.4 3.4 0 0 1 6.8 0v3"/></svg></span>Credit required</li>
+      <li class="lg-license__clause" title="You may not use this for commercial purposes."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M14.8 9.3a3 3 0 0 0-2.8-1.6c-1.6 0-2.7.9-2.7 2.1 0 2.9 6 1.5 6 4.4 0 1.3-1.2 2.2-2.9 2.2a3.2 3.2 0 0 1-3-1.7"/><path d="M12 6.2v11.6"/><path d="M5.6 5.6l12.8 12.8"/></svg></span>Non-commercial only</li>
+      <li class="lg-license__clause" title="Adaptations must be shared under these same terms."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16.8 12a4.8 4.8 0 0 1-8.2 3.4"/><path d="M7.2 12a4.8 4.8 0 0 1 8.2-3.4"/><path d="M15.4 5.4v3.2h-3.2"/><path d="M8.6 18.6v-3.2h3.2"/></svg></span>Share-alike</li>
+    </ul>
+  </aside></div><figcaption><b>BY NC SA</b> — 251 posts (the default)</figcaption></figure>
+  <figure><div class="stage">  <aside class="lg-license lg-license--note" aria-label="Licence: Attribution–NonCommercial–NoDerivatives 4.0" data-lg-license-code="by-nc-nd" data-lg-license-resolved="by-nc-nd">
+    <div class="lg-license__title">License</div>
+    <a class="lg-license__name" href="https://creativecommons.org/licenses/by-nc-nd/4.0/" rel="license noopener" target="_blank">
+      <span class="lg-license__mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M10.1 9.9a2.7 2.7 0 1 0 0 4.2"/><path d="M16.4 9.9a2.7 2.7 0 1 0 0 4.2"/></svg></span>
+      <span class="lg-license__label">Attribution–NonCommercial–NoDerivatives 4.0</span>
+      <span class="lg-license__out" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></span>
+    </a>
+    <ul class="lg-license__clauses">
+      <li class="lg-license__clause" title="Credit the creator when you use or share this."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8.4" r="1.9"/><path d="M8.6 17.6v-3a3.4 3.4 0 0 1 6.8 0v3"/></svg></span>Credit required</li>
+      <li class="lg-license__clause" title="You may not use this for commercial purposes."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M14.8 9.3a3 3 0 0 0-2.8-1.6c-1.6 0-2.7.9-2.7 2.1 0 2.9 6 1.5 6 4.4 0 1.3-1.2 2.2-2.9 2.2a3.2 3.2 0 0 1-3-1.7"/><path d="M12 6.2v11.6"/><path d="M5.6 5.6l12.8 12.8"/></svg></span>Non-commercial only</li>
+      <li class="lg-license__clause" title="You may share this, but not modified versions of it."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M7.6 10.2h8.8M7.6 13.8h8.8"/></svg></span>No derivatives</li>
+    </ul>
+  </aside></div><figcaption><b>BY ND NC</b> — 3 posts. See the question below.</figcaption></figure>
+</div>
+
+<h2>One alternative, if you want it quieter</h2>
+<p>Same licence, same information, one line instead of a box. Worth having for pages that
+already carry a lot — but the boxed version is what I'd ship as the default, because the
+rules are the part people actually need to read.</p>
+<div class="cols">
+  <div class="pane">
+    <p class="cap"><b>Recommended</b> — boxed</p>
+    <figure><div class="stage">  <aside class="lg-license lg-license--note" aria-label="Licence: Attribution–NonCommercial–ShareAlike 4.0" data-lg-license-code="by-nc-sa" data-lg-license-resolved="by-nc-sa">
+    <div class="lg-license__title">License</div>
+    <a class="lg-license__name" href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="license noopener" target="_blank">
+      <span class="lg-license__mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M10.1 9.9a2.7 2.7 0 1 0 0 4.2"/><path d="M16.4 9.9a2.7 2.7 0 1 0 0 4.2"/></svg></span>
+      <span class="lg-license__label">Attribution–NonCommercial–ShareAlike 4.0</span>
+      <span class="lg-license__out" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></span>
+    </a>
+    <ul class="lg-license__clauses">
+      <li class="lg-license__clause" title="Credit the creator when you use or share this."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8.4" r="1.9"/><path d="M8.6 17.6v-3a3.4 3.4 0 0 1 6.8 0v3"/></svg></span>Credit required</li>
+      <li class="lg-license__clause" title="You may not use this for commercial purposes."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M14.8 9.3a3 3 0 0 0-2.8-1.6c-1.6 0-2.7.9-2.7 2.1 0 2.9 6 1.5 6 4.4 0 1.3-1.2 2.2-2.9 2.2a3.2 3.2 0 0 1-3-1.7"/><path d="M12 6.2v11.6"/><path d="M5.6 5.6l12.8 12.8"/></svg></span>Non-commercial only</li>
+      <li class="lg-license__clause" title="Adaptations must be shared under these same terms."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16.8 12a4.8 4.8 0 0 1-8.2 3.4"/><path d="M7.2 12a4.8 4.8 0 0 1 8.2-3.4"/><path d="M15.4 5.4v3.2h-3.2"/><path d="M8.6 18.6v-3.2h3.2"/></svg></span>Share-alike</li>
+    </ul>
+  </aside></div>
+    <figcaption>Sits exactly where the licence sits today, so nothing else on the page moves.</figcaption></figure>
+  </div>
+  <div class="pane">
+    <p class="cap">Alternative — one line</p>
+    <figure><div class="stage">  <aside class="lg-license lg-license--compact" aria-label="Licence: Attribution–NonCommercial–ShareAlike 4.0" data-lg-license-code="by-nc-sa" data-lg-license-resolved="by-nc-sa">
+    <div class="lg-license__title">License</div>
+    <a class="lg-license__name" href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="license noopener" target="_blank">
+      <span class="lg-license__mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M10.1 9.9a2.7 2.7 0 1 0 0 4.2"/><path d="M16.4 9.9a2.7 2.7 0 1 0 0 4.2"/></svg></span>
+      <span class="lg-license__label">CC BY-NC-SA 4.0</span>
+      <span class="lg-license__out" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></span>
+    </a>
+    <ul class="lg-license__clauses">
+      <li class="lg-license__clause" title="Credit the creator when you use or share this."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8.4" r="1.9"/><path d="M8.6 17.6v-3a3.4 3.4 0 0 1 6.8 0v3"/></svg></span>Credit required</li>
+      <li class="lg-license__clause" title="You may not use this for commercial purposes."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M14.8 9.3a3 3 0 0 0-2.8-1.6c-1.6 0-2.7.9-2.7 2.1 0 2.9 6 1.5 6 4.4 0 1.3-1.2 2.2-2.9 2.2a3.2 3.2 0 0 1-3-1.7"/><path d="M12 6.2v11.6"/><path d="M5.6 5.6l12.8 12.8"/></svg></span>Non-commercial only</li>
+      <li class="lg-license__clause" title="Adaptations must be shared under these same terms."><span class="lg-license__clause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16.8 12a4.8 4.8 0 0 1-8.2 3.4"/><path d="M7.2 12a4.8 4.8 0 0 1 8.2-3.4"/><path d="M15.4 5.4v3.2h-3.2"/><path d="M8.6 18.6v-3.2h3.2"/></svg></span>Share-alike</li>
+    </ul>
+  </aside></div>
+    <figcaption>Shorter, but the rules read as small print rather than as the point.</figcaption></figure>
+  </div>
+</div>
+
+<h2>How a member changes it</h2>
+<div class="cols">
+  <div class="pane">
+    <figure><div class="stage" style="background:#f4f4f0"><div class="lg-tier-pop lg-license-pop" style="position:static;transform:none;display:inline-block;text-align:left;min-width:280px"><div class="lg-tier-pop__title">Licence</div><button type="button" class="lg-tier-pop__opt is-current"><strong>Follow the post’s licence</strong><span>Tracks the licence set in the post’s own details. Recommended.</span></button><button type="button" class="lg-tier-pop__opt"><strong>CC BY 4.0</strong><span>Credit required</span></button><button type="button" class="lg-tier-pop__opt"><strong>CC BY-SA 4.0</strong><span>Credit required · Share-alike</span></button><button type="button" class="lg-tier-pop__opt"><strong>CC BY-NC-SA 4.0</strong><span>Credit required · Non-commercial only · Share-alike</span></button><button type="button" class="lg-tier-pop__opt"><strong>CC BY-NC-ND 4.0</strong><span>Credit required · Non-commercial only · No derivatives</span></button></div></div>
+    <figcaption>Click the licence on the page, pick from the list. No typing, so no typos —
+    and it can only ever offer a licence the page knows how to draw.</figcaption></figure>
+  </div>
+  <div class="pane">
+    <p><strong>The first option is the important one.</strong> “Follow the post’s licence” is the
+    default: the page reads the licence from the post’s own details every time it renders. So when
+    a member changes their licence in the form, <strong>the page changes with it</strong>.</p>
+    <p>That matters because everything else on a loothprint page is <em>baked in</em> at the moment
+    it’s built. It’s the same fault as the print-files ZIP I reported: swap the file, the page keeps
+    serving the old one, and because it still downloads, nobody notices it’s wrong. The licence had
+    that fault too. It no longer does.</p>
+    <p class="note"><strong>Not yet clicked in a browser.</strong> The picture above is drawn with the
+    real editor styling, but the branch isn’t on the dev site yet, so I have not tapped the control
+    myself. That is the next thing I verify — I’m not calling it done on markup alone.</p>
+  </div>
+</div>
+
+<h2>One question for you</h2>
+<div class="note note--warn">
+<p style="margin-top:0"><strong>The fourth choice contradicts itself, and it’s in the form, not the block.</strong></p>
+<p>It reads: <code>BY ND NC (Credit given to creator, No Derivatives, Adaptations shared with same terms)</code>.</p>
+<p><em>No Derivatives</em> means nobody may publish a modified version. <em>Adaptations shared with
+same terms</em> is a rule <strong>about</strong> modified versions. They can’t both be true — if there
+are no adaptations, there is nothing for the second rule to govern.</p>
+<p>The code it names, <code>BY-NC-ND</code>, is a real licence, so that is what the block draws:
+<strong>credit, non-commercial, no derivatives</strong>. I dropped the impossible share-alike part.
+<strong>I have not touched the stored wording</strong> — 3 posts use it, and rewording a licence
+members already agreed to is your call, not mine.</p>
+<p style="margin-bottom:0"><strong>Want me to fix the wording in the form?</strong> One line, and those
+3 posts keep the same licence either way.</p>
+</div>
+
+<h2>Where this stands</h2>
+<table>
+<tr><th>Thing</th><th>State</th></tr>
+<tr><td>The licence block itself</td><td><span class="pill">Built</span> Renders, tested, in the branch.</td></tr>
+<tr><td>Loothprint pages using it</td><td><span class="pill pill--off">Off</span> Behind a switch, defaulted off. Every page still serves exactly what it served yesterday.</td></tr>
+<tr><td>Merged to the site</td><td><span class="pill pill--off">No</span> Nothing merged. Nothing on dev2 or live has moved.</td></tr>
+<tr><td>Clicked in a real browser</td><td><span class="pill pill--off">Not yet</span> Next step.</td></tr>
+</table>
+
+<div class="note note--ask">
+<p style="margin-top:0"><strong>What I need from you:</strong></p>
+<p style="margin-bottom:0">1. Does this look right? &nbsp;2. Fix the contradictory wording, yes or no?
+&nbsp;3. Anything you want different before I build the other three blocks
+(print files, the CAD/tip-jar editor, and the type/topic chips).</p>
+</div>
+
+<p style="margin-top:34px;color:#8a8a82;font-size:12.5px">
+Built 2026-08-14 · branch <code>frontend-compose</code> · block 1 of 4 · samples on this page are
+real output from the layout-v2 renderer</p>
+
+</div>

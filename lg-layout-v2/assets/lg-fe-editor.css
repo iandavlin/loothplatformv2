@@ -419,7 +419,10 @@
 .lg-license-pop { min-width: 260px; }
 .lg-license-pop .lg-tier-pop__opt {
     line-height: 1.35;
-    padding: 8px 10px;
+    /* Right padding clears the is-current ● at right:10px — without it the dot
+       lands on top of the hint text, which is longest on the very option that
+       is current by default ("…own details. Recommended."). */
+    padding: 8px 28px 8px 10px;
 }
 .lg-license-pop .lg-tier-pop__opt strong {
     display: block;
