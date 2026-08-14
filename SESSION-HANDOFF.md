@@ -1,185 +1,215 @@
-# SESSION HANDOFF — lane `frontend-compose`, re-chartered as **the layout-v2 lane**
+# SESSION HANDOFF — lane `frontend-compose`, **the layout-v2 lane**
 
-**Written 2026-08-14 at 97% context. Assume you are a fresh lane with zero
-context: this is your charter. Everything below was measured on this box, not
-remembered — where something is unproven it says so.**
+**Written 2026-08-14. Assume you are a fresh lane with zero context: this is your
+charter. Everything below was measured on this box — where something is unproven
+it says so, and there are two such things.**
 
 | | |
 |---|---|
-| Branch | `frontend-compose`, pushed, tip **`8002184`** |
-| Base | main **`a29c5fd`** — ⚠️ you are **10 behind**; rebase before your first gate run |
-| State | **29 commits, NOTHING MERGED.** Working tree clean, nothing session-only |
-| Flag | `platform/config/frontend-compose.php` → `'enabled' => false`. Everything is inert on the serve |
-| Merge | **NOT merge-ready and do not declare it.** keeper merges on the lane's word; the block work below lands first |
-| Ian | has ruled five times (below). He approved the four-block plan: *"Yes — build all four."* |
+| Branch | `frontend-compose`, pushed, tip **`e4fb146`** |
+| Base | rebased onto main earlier this session; **re-check, main moves fast** |
+| State | **36 commits, NOTHING MERGED.** Working tree clean |
+| Flags | `lg-layout-v2/config/license-block.php` and `.../download-block.php`, both `'enabled' => false` |
+| Merge | **NOT merge-ready.** Two browser checks are open (below) |
+| Prior | `handoffs/2026-08-14-layout-v2-charter.md` — the audit that started this |
 
 ---
 
-## YOUR JOB NOW, in order
+## CHARTER (Ian, 8/14: *"Yes — build all four"*)
 
-Ian, 2026-08-14: *"If we don't have a block that can handle anything in the new
-form, like the license, we need to spin up v2 to produce the block."* Then, on the
-plan: **"Yes — build all four."** Build them in this order:
+1. **LICENCE block** — ✅ built. Four CC choices as choices.
+2. **PRINT FILES** via the download block + file picker — ✅ built, and **smaller
+   than the charter thought** (see the correction below).
+3. **ITEMS EDITOR** for `callout` (CAD link + tip jar) — ⬜ NOT STARTED. Next.
+4. **WORK-TYPE taxonomy block** (Type of Loothprint + Content Topic) — ⬜ NOT
+   STARTED. Genuinely new ground; nothing renders these today.
 
-1. **A licence block.** His named example. The four Creative Commons choices as
-   *choices*, not prose.
-2. **Point print files at the existing `download` block, and give it a file
-   picker.** Closes the stale-ZIP defect in the same move (see below).
-3. **An items editor for `callout`.** Closes the CAD link and the tip jar together.
-4. **A taxonomy/chips block** for Type of Loothprint + Content Topic. The only
-   genuinely new ground.
-
-Full evidence: **`docs/V2-BLOCK-COVERAGE.md`**. Read it before you start.
+Blocks 1 and 2 are both behind OFF-default flags. Nothing member-facing has moved.
 
 ---
 
-## (a) V2's SOURCE OF TRUTH — settled, build in the monorepo
+## ⚠️ THE CORRECTION THAT MATTERS MOST
 
-The docroot loads `/var/www/dev/wp-content/plugins/lg-layout-v2 ->
-~/loothplatformv2-clean/lg-layout-v2`, and layout-v2 is **tracked in the monorepo**
-(232 files). **v2 work is monorepo work — build in your worktree, as normal.**
-No stop condition; this was checked first because keeper required it.
+**The previous handoff's premise for block 2 was wrong, and it was wrong in a way
+that flattered the plan.** It came from `LIKE '%"type":"download"%'` against
+`_lg_layout_v2`, which is **PHP-serialized, not JSON** — so the query matched
+almost nothing and "the page does not use the download block" was an artifact of
+the measurement. Re-measured with `wp eval`:
 
-⚠️ **`~/projects/lg-layout-v2` also exists and differs in 68 files. Do not edit it.**
-It has no `.git`, and every file sampled is OLDER and SHORTER than the monorepo's
-(post-header 06-16/488 lines vs 07-30/500; wysiwyg 05-23/24 vs 07-12/45). It is a
-stale leftover — not a second source, not unlanded work — but editing it changes
-nothing on the serve while looking exactly like it should.
+| | |
+|---|---|
+| loothprints total | **172** |
+| with a STORED layout | **168** |
+| no layout → SYNTHESIZED | **4** |
+| stored layouts using `download` + `file_id` | **168 (all of them)** |
+| stored layouts baking a download URL | **0** |
+| file_ids that still match the form's current file | **168 — zero drift** |
 
----
+**Consequences, both of which reshaped the work:**
 
-## (b) THE FOUR BLOCKS — what is already measured
+* **The stale-ZIP defect is LATENT, not active.** It bites only when a member
+  uploads a *new* file (new attachment id) while the stored layout keeps the old
+  one. Nobody has yet. Fixed structurally anyway — see block 2 below.
+* **Anything that only changes the SYNTHESIZER reaches 4 posts.** That was true
+  of the whole licence block as first built. Fixed by the read-path upgrade below.
 
-**Catalogue: 20 blocks.** Editability comes from each block's
-`manifest.json` → `editor.inline_editable_props` / `custom_picker`. Read it there;
-do not infer from the renderer.
-
-Coverage of the 12 loothprint fields: **4 covered both ways** (description, hero,
-photos, video), **4 display but v2 cannot edit** (print files, CAD, tip jar,
-licence-as-a-choice), **2 not on the page at all** (both taxonomies).
-
-**Licence (block 1).** `grep -rli licen[cs]e lg-layout-v2/blocks/` returns
-**nothing** — v2 has no idea what a licence is. `default_loothprint_layout()`
-drops the licence *sentence* into a generic `callout`, whose `body` happens to be
-inline-editable, so today v2 can only retype the prose. The four choices live in
-ACF (`loothprint_creative_commons`, radio, default *BY NC SA…*).
-
-**Print files (block 2) — the cheap win.** A **`download` block already exists and
-the loothprint page does not use it.** Props: `file_id, url, label, title`.
-`file_id` is an attachment id — exactly what would let the page follow a replaced
-ZIP. The synthesizer emits `callout` variant `files` with a **baked `url`**
-instead, and `download` declares no inline-editable props and no picker. Two small
-jobs: use the block, then give it a picker.
-
-**Why any of this matters — the defect it fixes.** A layout-v2 page **stores** its
-content. Measured: `post-header` reads title/hero/author/tier live, so those
-track; everything else is baked (`wysiwyg.html`, `gallery.image_ids`, `embed.url`,
-the download `url`+`label`, the licence `body`). So a member replaces their ZIP,
-the form says saved, **and the page keeps serving the old file.** It still
-downloads, so nobody notices it is wrong. That is reported to Ian and is why
-block 2 matters more than its size suggests.
+**Rule for the next lane: `_lg_layout_v2` is serialized. Read it with `wp eval`
+and `get_post_meta`, never with a SQL `LIKE` for JSON.**
 
 ---
 
-## (c) BRANCH STATE — 29 commits, none merged
+## WHAT IS BUILT
 
-Nothing of this lane is in main. In dependency order, what is on the branch:
+### Block 1 — `license` (commits `7057bbb`, `3afd0d7`, `580cd03`)
 
-* **The route.** `platform/mu-plugins/lg-frontend-compose.php` —
-  `/compose/?type=loothprint` (create) and `/compose/?id=<post>` (edit).
-  `&embed=1` serves it furniture-free for the composer's iframe.
-* **Edit is ownership-gated** on `current_user_can('edit_post',$id)`, and the type
-  is derived from the **stored post**, never from `?type=`.
-* **The composer type toggle** — Discussion ↔ Loothprint, in
-  `bb-mirror/web/_chrome.php` + `forums.js` + `forums.css`. Driven in a real
-  browser through the preview, not read.
-* **The flag is a shared tracked config** (`platform/config/frontend-compose.php`)
-  read by BOTH WordPress and bb-mirror, so the toggle and the form cannot disagree.
-  Same pattern as `platform/config/post-follow.php`.
-* **Gate 35** (`tools/gates/compose-gate.py`) — 10 assertions, per-state, reading
-  `lg_fc_enabled()` off the box. **Every assertion falsified by mutation.**
-  ⚠️ **34 is the stripe seat's** — annotated as a deliberate gap in `run-all.sh`.
-  **Gate numbers come from keeper. Never mint one.**
-* **Three decision pages** at `/footer-mockups/frontend-compose-build/`
-  (`index.html`, `toggle.html`, `freeze.html`), also committed under
-  `footer-mockups/` so they survive a box rebuild.
+* `lg-layout-v2/blocks/license/` + `src/Licenses.php` (the model: 4 codes, their
+  clauses, deed URLs, the ACF-choice recogniser) + CC glyphs in `src/Icons.php`.
+* **`code: ""` means FOLLOW THE POST** — resolves `loothprint_creative_commons`
+  live at render, the same pattern `post-header` uses for title/hero. So the form
+  and the page cannot disagree. An explicit code deliberately pins it instead.
+* **A post with no licence gets NO default invented.** Renders nothing.
+* Real framework picker `license-choice` (`EditorPickers` + `lg-fe-editor.js`),
+  choices shipped from `Licenses::picker_choices()` so the editor cannot offer a
+  licence the renderer cannot draw. The licence is **deliberately not**
+  inline-editable — retyping prose is the failure the block exists to end.
+* **Read-path upgrade (`580cd03`) is what makes it reach anyone.** 164 stored
+  loothprint layouts (+7 loothcuts) hold the licence as a prose `callout:note`.
+  `Plugin::upgrade_license_callouts()` swaps those for the block **on read,
+  writing nothing** — flag off or an unrecognised body returns the layout
+  untouched. No migration to reverse, no half-migrated corpus.
+* The recogniser is **strict**: the body must be an EXACT ACF choice string
+  (`Licenses::from_exact_prose`). Verified against the WHOLE corpus — 707 stored
+  layouts, 346 `callout:note` blocks, 171 replaced, 175 left alone, and nothing
+  left alone is a licence **except one**: post **71142** has a hand-written CC
+  sentence and keeps its prose on purpose. Widening the rule means matching by
+  resemblance, which is how an author's surrounding paragraph gets deleted.
+* All 164 stored bodies already agree with the form's current answer, so turning
+  the flag on changes how the licence **looks**, never which licence a page states.
 
-### Run the gate
-```bash
-sudo ln -sfn ~/worktrees/frontend-compose/platform/mu-plugins/lg-frontend-compose.php \
-             /var/www/dev/wp-content/mu-plugins/lg-frontend-compose.php
-python3 tools/gates/compose-gate.py --type loothprint --allowed bangers \
-  --denied erin.vogel --owner patreon_77159883 --stranger bangers --post 72155
-sudo rm -f /var/www/dev/wp-content/mu-plugins/lg-frontend-compose.php   # ALWAYS restore
-```
-`--denied` must be an account the tier genuinely refuses — loothprint is open to
-ALL members, so that means someone without `edit_posts`/`upload_files`
-(`erin.vogel`), **not** an ordinary member. To exercise the ON path, flip
-`platform/config/frontend-compose.php` and flip it back.
+### Block 2 — print files (commit `e4fb146`)
 
-### The lane preview (already installed and surviving reboots)
-`https://dev2.loothgroup.com/preview/frontend-compose/hub/?compose=1` —
-`sudo bash tools/preview/lane-preview.sh up|down frontend-compose`.
-**You need it**: `/srv/bb-mirror` symlinks to `loothplatformv2-clean`, so the hub
-serves **main's** `forums.js`/`_chrome.php` and a branch edit is invisible on
-dev2. The preview conf arms `LG_FC_PREVIEW` on **both** its hub and compose
-locations — arming only one gives a preview whose JS is present and whose markup
-is absent.
-
----
-
-## (d) THE FORM IS DETAILS-ONLY — the interim shape, and it stays
-
-Ian, 2026-08-14: *"I want all the old posts and the new posts to be handled by
-layout-v2. I thought we made this decision."*
-
-* **The PAGE belongs to layout-v2** — every loothprint, old and new. The 169 with
-  stored pages keep them, untouched.
-* **The FORM owns the DETAILS** — licence, type/area, print files, title: exactly
-  the gap this audit measured.
-* **The form must never synthesize or replace a page.** It does not today.
-* This holds **until the block coverage closes**. The four blocks are what let the
-  page show and edit what the form collects.
-
-`freeze.html` records the ruling; the earlier A/B/C options are marked WITHDRAWN
-and kept only as the record of how it got there.
+* **`blocks/download/render.php`: empty `file_id` now means FOLLOW THE POST**
+  (`loothprint_3d_file` / `loothcut_cnc_file`, resolved at render). This is the
+  real fix and it is **not flagged**, because it is invisible until a file is
+  replaced. Safe because `media_resolver` is `WpMedia::resolve`, a **live**
+  callable — checked, not assumed.
+* **The `file` picker** (any mime). `download` previously had empty
+  `inline_editable_props` and a null picker, so "swap the print file" was
+  unreachable from the page. Clearing the file is a real choice — empty =
+  follow the post — and the UI says so. Setting a file clears any baked `url`,
+  which would otherwise outrank `file_id` and make the swap look like a no-op.
+* **Synthesizer switch behind `config/download-block.php`** — governs **4 posts**.
+  A separate flag from the licence one on purpose, so Ian can accept one and not
+  the other.
 
 ---
 
-## TRAPS THIS LANE PAID FOR — do not re-learn them
+## ⬜ THE TWO OPEN CHECKS — do these before claiming block 1 or 2 is finished
 
-1. **Assert on the value, not the document.** I greped a page for a post's title
-   and reported "prefilled"; it had matched the `<title>` tag while the input was
-   empty. That hid a real data-loss bug — a rendered-but-empty field **saves
-   empty**, so an edit form that fails to prefill blanks the member's post.
-2. **Counting CSS text is not counting a control.** Grepping `lgfc__frozen` gave
-   3 vs 4 because the stylesheet contains the class. Assert on the rendered
-   element.
-3. **`querySelector` returns the FIRST match, not the right one.** `[data-ntm-open]`
-   found a hidden button measuring 0×0; `[type=submit]` on the legacy form returns
-   **Add Media**, not the submit.
-4. **Hit-test before clicking** (`elementFromPoint`) — a transparent chrome wrapper
-   swallowed a click that "succeeded".
-5. **Variable scope.** The toggle silently never rendered because `$lg_can_post` is
-   assigned at file scope ~430 lines *below* the function it was read in.
-6. **A flex item with a set height still gets shrunk.** The iframe was set to
-   1630px and rendered at 535 until `flex: 0 0 auto`.
-7. **WP's clock here runs 4h behind server local.** Compare post timestamps against
+Both exist for the same reason: **the branch is not on the dev2 serve**, because
+`/var/www/dev/wp-content/plugins/lg-layout-v2` symlinks into
+`~/loothplatformv2-clean` (main). A branch's v2 behaviour is invisible on dev2.
+
+1. **The pickers CLICKED.** Licence popover and file picker are drawn with the
+   real editor CSS but have never been tapped. Ian's phone has beaten a green
+   suite six times; markup is not a control.
+2. **The licence read-path swap RENDERING on a real loothprint page.** The
+   recogniser is corpus-verified; the swap itself is not eyes-on.
+
+To do either you must point the plugin symlink at this worktree (and **restore
+it** — the serving checkout only ever pulls), or use the lane preview.
+
+---
+
+## WHAT IAN HAS BEEN SHOWN, AND THE ONE THING HE OWES AN ANSWER ON
+
+**Page:** `https://dev2.loothgroup.com/footer-mockups/frontend-compose-build/licence.html`
+(also committed under `footer-mockups/` so it survives a box rebuild). Samples on
+it are **real renderer output**, not drawn markup.
+
+**Open question (non-blocking):** the ACF choice
+`BY ND NC (Credit given to creator, No Derivatives, Adaptations shared with same terms)`
+**contradicts itself** — ND forbids the adaptations SA would govern. 3 posts.
+The block draws the licence its code names (BY-NC-ND) and drops the impossible
+share-alike clause. **The stored wording is untouched** pending his yes/no on
+fixing the form. Either way those 3 posts keep the same licence.
+
+---
+
+## FINDINGS ON MAIN THAT ARE NOT THIS LANE'S — someone should own them
+
+1. **The v2 snapshot harness was UNRUNNABLE, not red** (fixed, `b1b6065`).
+   `render-test.php` diffs 4 artifacts per fixture; the monorepo root
+   `.gitignore`'s blanket `*.log` silently excluded every
+   `tests/expected/<fixture>/validation.log`, so `file_get_contents` returned
+   false into `strlen()` and `--all` **fataled on the first fixture**. With it
+   running, **main is 0 passed / 10 failed**: `bundle.css` stale in all ten (it
+   is a GLOBAL artifact copied into every fixture; `whos-talking`'s CSS landed
+   after the last capture), plus real `rendered.html` drift in `embed-minimal`,
+   `simple-article` and `loothprint-sample`. **Deliberately NOT mass-updated** —
+   `--update-snapshots` rewrites all ten and buries the drift. Someone should
+   decide what those three are.
+2. **`bin/lint-block.php` was wrong about a SHIPPING block.** It knew a
+   `gallery-items` picker nothing implements while rejecting the `gallery` that
+   `blocks/gallery` declares and `lg-fe-editor.js` runs. M7 now derives from
+   `EditorPickers::KNOWN`; M8 now lists what the editor actually renders.
+3. **7 blocks declare pill buttons that do not exist** — brand-gallery,
+   brand-hero, contact-form, event-header, featured-products, recent-posts,
+   whos-talking declare `move-up`/`move-down`, which `lg-fe-editor.js` does not
+   implement, so they draw the literal string "move-up". Pre-existing; reported
+   not fixed, to keep this diff inside the charter.
+4. **`gallery` and `embed-url` pickers are FRONT-END-EDITOR ONLY** — no
+   `render()`/`sanitize()` arm in `EditorPickers`, so the admin metabox cannot
+   edit those props. Recorded in that file.
+
+---
+
+## HOW TO WORK HERE
+
+* **Build in the monorepo.** v2 is tracked (`lg-layout-v2/`, 232 files) and the
+  docroot symlinks to `~/loothplatformv2-clean`. ⚠️ `~/projects/lg-layout-v2`
+  also exists, differs in 68 files, has no `.git`, and is a **stale leftover** —
+  editing it changes nothing while looking exactly like it should.
+* **New block = the 7 steps in `lg-layout-v2/docs/BLOCK-ONBOARDING.md`.** Design
+  doc first (`bin/block-new.php` refuses without one), then manifest, then CSS,
+  then render.
+* **Do NOT chase a clean `lint-block`.** No block in the tree is clean —
+  `license` is 4, `callout` 15, `post-footer` 83. The shared conventions
+  (`--lg-tags-border`, `@media` at-rules, bare root font-size) are tree-wide.
+  Fix what is yours; do not reformat the tree.
+* **Inert-addition testing, since the committed baselines are stale:** capture
+  `tests/output/` to a scratch dir BEFORE your change, then diff `rendered.html`
+  + `variables-resolved.json` after. `bundle.css` legitimately changes for every
+  fixture (it is global), so it cannot be part of that check.
+* **Gate numbers come from keeper. Never mint one.** 35 is this lane's. A gate
+  for the licence/print-file assertions (OFF byte-identical / ON substitutes /
+  absence paired with liveness) is still **owed a number** — ask.
+* **Pictures for Ian:** `tools/frontend-compose/shots.py` already handles the
+  five screenshot traps on this box. Publish under
+  `~/projects/footer-mockups/…` (symlinked to `/var/www/dev/footer-mockups`) and
+  give him a URL, never a path. Copy it into `footer-mockups/` in the repo too.
+* **Reporting:** `SendMessage` to the keeper session (plain `ubuntu`, newest) for
+  questions; `msg send ubuntu` for durable reports. Questions for Ian route
+  THROUGH keeper. Report and keep working — do not park.
+
+---
+
+## TRAPS THIS LANE HAS PAID FOR — do not re-learn them
+
+1. **`_lg_layout_v2` is SERIALIZED.** A SQL `LIKE` for JSON silently measures
+   nothing and produces a confident wrong number. This cost the charter a block.
+2. **Assert on the value, not the document.** Grepping a page for a title matched
+   the `<title>` tag while the input was empty — hiding that a rendered-but-empty
+   field **saves empty** and blanks the member's post.
+3. **Counting CSS text is not counting a control**, and `querySelector` returns
+   the FIRST match, not the right one.
+4. **Hit-test before clicking** (`elementFromPoint`).
+5. **A flex item with a set height still gets shrunk** (`flex: 0 0 auto`).
+6. **WP's clock here runs 4h behind server local** — compare against
    `current_time()`, never `date`.
-8. **Never name a script `enum.py`** — it shadows the stdlib and Python dies with a
-   circular-import trace.
-9. **Restore the box every time**: 40 mu-plugins, none of yours, and zero probe
-   rows. Every probe force-deletes and proves it.
-
----
-
-## OPEN, NOT BLOCKED ON IAN
-
-* **Do the eight legacy "Add Post" forms actually submit?** Still unsettled and
-  fully written up in `tools/frontend-compose/legacy-submit-notes.md`, including
-  the three attempts and why each proved less than it looked. Next run: fill every
-  required field including the repeater rows and **watch the network** for
-  `frontend_admin/form_submit`, rather than inferring from the DOM.
-* **Should the form keep the page's download link, licence and photos in step when
-  a member edits those details?** Reported to Ian, not yet answered. Blocks 1–3
-  may make it moot.
+7. **Never name a script `enum.py`** — it shadows the stdlib.
+8. **Restore the box every time.** 40 mu-plugins, none of them yours.
+9. **An assertion that has never failed is not evidence.** Break it first. Both
+   the licence parser test and the screenshot overflow detector were red-firsted
+   in this session, and the overflow one only proved itself when a block was
+   forced to 900px.
