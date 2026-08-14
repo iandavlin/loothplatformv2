@@ -1082,7 +1082,35 @@
       openLicensePicker(path, host);
       return;
     }
+    if (picker === 'file') {
+      openFilePicker(path);
+      return;
+    }
     flashError('Unknown picker: ' + picker);
+  }
+
+  /* ── File picker (wp.media, any mime) ────────────────────────────────
+     The download block had no editor affordance at all — empty
+     inline_editable_props and a null picker — so the one control a member most
+     needs, "swap the print file", could not be reached from the page.
+
+     Not restricted to images: these are ZIP / DXF / STL / PDF. */
+  function openFilePicker(path) {
+    if (!window.wp || !window.wp.media) { flashError('wp.media not loaded'); return; }
+    var frame = window.wp.media({
+      title:    'Choose the file to offer',
+      button:   { text: 'Use this file' },
+      multiple: false,
+    });
+    frame.on('select', function () {
+      var a = frame.state().get('selection').first();
+      if (!a) return;
+      /* Clear any baked url at the same time: a stale explicit url would win
+         over the file_id being set here and the swap would look like a no-op. */
+      rest('update', { path: path, props: { file_id: a.id, url: '' } })
+        .then(reload, function (e) { flashError('File save failed: ' + e.message); });
+    });
+    frame.open();
   }
 
   /* ── Licence picker ──────────────────────────────────────────────────

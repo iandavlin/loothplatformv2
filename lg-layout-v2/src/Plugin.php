@@ -404,19 +404,31 @@ final class Plugin
      */
     public static function license_block_enabled(): bool
     {
-        static $cached = null;
-        if ($cached !== null) return $cached;
+        return self::block_flag('license-block', 'LG_V2_LICENSE_BLOCK');
+    }
 
-        foreach ([getenv('LG_V2_LICENSE_BLOCK'), $_SERVER['LG_V2_LICENSE_BLOCK'] ?? null] as $override) {
+    /** Is a synthesized page's print file routed through the `download` block? */
+    public static function download_block_enabled(): bool
+    {
+        return self::block_flag('download-block', 'LG_V2_DOWNLOAD_BLOCK');
+    }
+
+    /** Shared reader for the config/<name>.php block flags. */
+    private static function block_flag(string $name, string $envVar): bool
+    {
+        static $cache = [];
+        if (isset($cache[$name])) return $cache[$name];
+
+        foreach ([getenv($envVar), $_SERVER[$envVar] ?? null] as $override) {
             if ($override !== false && $override !== null && $override !== '') {
-                return $cached = in_array(strtolower((string) $override), ['1', 'true', 'on', 'yes'], true);
+                return $cache[$name] = in_array(strtolower((string) $override), ['1', 'true', 'on', 'yes'], true);
             }
         }
 
-        $path = dirname(__DIR__) . '/config/license-block.php';
-        if (!is_readable($path)) return $cached = false;
+        $path = dirname(__DIR__) . '/config/' . $name . '.php';
+        if (!is_readable($path)) return $cache[$name] = false;
         $cfg = include $path;
-        return $cached = (is_array($cfg) && !empty($cfg['enabled']));
+        return $cache[$name] = (is_array($cfg) && !empty($cfg['enabled']));
     }
 
     /**
@@ -459,11 +471,17 @@ final class Plugin
             $blocks[] = ['type' => 'embed', 'id' => 'lp_video', 'url' => $video];
         }
         if ($file_url !== '') {
-            $dl = [
-                'type' => 'callout', 'id' => 'lp_download', 'variant' => 'files',
-                'title' => 'Download',
-                'items' => [['icon' => 'file-zip', 'label' => $file_name ?: 'Download File', 'url' => $file_url]],
-            ];
+            if (self::download_block_enabled()) {
+                /* No file_id baked: the block resolves the post's own print file
+                   at render, so replacing it through the form changes the page. */
+                $dl = ['type' => 'download', 'id' => 'lp_download', 'title' => 'Download'];
+            } else {
+                $dl = [
+                    'type' => 'callout', 'id' => 'lp_download', 'variant' => 'files',
+                    'title' => 'Download',
+                    'items' => [['icon' => 'file-zip', 'label' => $file_name ?: 'Download File', 'url' => $file_url]],
+                ];
+            }
             if ($gate) $dl['gated_tier'] = $gate;
             $blocks[] = $dl;
         }

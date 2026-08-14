@@ -33,7 +33,7 @@ final class EditorPickers
      *  ⚠️ `gallery` and `embed-url` are FRONT-END-EDITOR ONLY: lg-fe-editor.js
      *  runs them, but there is no render()/sanitize() arm below, so the admin
      *  metabox cannot edit those props. Pre-existing gap, recorded not fixed. */
-    public const KNOWN = ['embed-url', 'gallery', 'image', 'license-choice', 'rich-text'];
+    public const KNOWN = ['embed-url', 'file', 'gallery', 'image', 'license-choice', 'rich-text'];
 
     /** Manifest prop names a picker owns. These are excluded from the metabox's
      *  generic-field walker so the picker has exclusive control. */
@@ -43,6 +43,7 @@ final class EditorPickers
             'image'          => ['image_id', 'url'],
             'rich-text'      => ['html'],
             'license-choice' => ['code'],
+            'file'           => ['file_id', 'url'],
             default          => [],
         };
     }
@@ -61,6 +62,7 @@ final class EditorPickers
             'image'          => self::render_image($block, $namePrefix, $domSuffix),
             'rich-text'      => self::render_rich_text($block, $namePrefix, $domSuffix),
             'license-choice' => self::render_license_choice($block, $namePrefix, $domSuffix),
+            'file'           => self::render_file($block, $namePrefix, $domSuffix),
             default          => '',
         };
     }
@@ -73,6 +75,7 @@ final class EditorPickers
             'image'          => self::sanitize_image($post),
             'rich-text'      => self::sanitize_rich_text($post),
             'license-choice' => self::sanitize_license_choice($post),
+            'file'           => self::sanitize_file($post),
             default          => [],
         };
     }
@@ -238,5 +241,58 @@ final class EditorPickers
         $code = isset($post['code']) && is_string($post['code']) ? strtolower(trim($post['code'])) : '';
         if ($code !== '' && !Licenses::is_valid($code)) $code = '';
         return ['code' => $code];
+    }
+
+    /* ── file picker ──────────────────────────────────────────────────── */
+
+    /**
+     * Attachment picker for the `download` block — any mime type, not just
+     * images. The block had NO editor affordance at all before this: empty
+     * inline_editable_props and a null picker, so the one control a member most
+     * needs (swap the print file) could not be reached from the page.
+     *
+     * Clearing the file is a real choice, not a mistake: an EMPTY file_id means
+     * "follow the post", and the download block then resolves the post's own
+     * print file at render. That is the state that cannot go stale, so the UI
+     * says so rather than treating empty as broken.
+     */
+    private static function render_file(array $block, string $namePrefix, string $domSuffix): string
+    {
+        $id   = (int) ($block['file_id'] ?? 0);
+        $name = $namePrefix . '[file_id]';
+
+        $filename = '';
+        if ($id > 0) {
+            $path = function_exists('get_attached_file') ? (string) get_attached_file($id) : '';
+            $filename = $path !== '' ? basename($path) : (string) get_the_title($id);
+        }
+
+        ob_start();
+        ?>
+        <div class="lg-v2-mb-picker lg-v2-mb-picker--file" data-picker="file">
+            <input type="hidden" name="<?php echo esc_attr($name); ?>" value="<?php echo esc_attr((string) $id); ?>" data-lg-file-id />
+            <p data-lg-file-label>
+                <?php if ($id > 0): ?>
+                    <strong><?php echo esc_html($filename); ?></strong>
+                <?php else: ?>
+                    <em>Following the post’s own file.</em>
+                <?php endif; ?>
+            </p>
+            <p>
+                <button type="button" class="button" data-lg-file-pick><?php echo $id > 0 ? 'Change file' : 'Choose a file'; ?></button>
+                <button type="button" class="button-link" data-lg-file-clear
+                        <?php echo $id > 0 ? '' : 'style="display:none"'; ?>>Follow the post instead</button>
+            </p>
+        </div>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    /** 0 is meaningful here — it is "follow the post" — so it is STORED, not
+     *  dropped the way the image picker drops an unset id. */
+    private static function sanitize_file(array $post): array
+    {
+        $id = isset($post['file_id']) ? (int) $post['file_id'] : 0;
+        return ['file_id' => max(0, $id)];
     }
 }
