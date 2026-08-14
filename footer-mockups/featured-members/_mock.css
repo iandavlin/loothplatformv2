@@ -475,7 +475,7 @@ nav#looth-tabbar,        /* mobile tab bar — covers the foot of every mock   *
   background: var(--lg-sage-tint); color: var(--lg-sage-d);
   font: 800 9px/15px var(--lg-font-sans); text-align: center;
 }
-#lgfm .meter__item--todo { color: #8a8f83; }
+#lgfm .meter__item--todo { color: var(--lg-mute); }   /* was #8a8f83, 3.31:1 on white — WCAG AA fail */
 #lgfm .meter__item--todo .meter__tick { background: #f0eee6; color: #b3b0a4; }
 #lgfm .meter__item--next { color: #2c2f28; font-weight: 700; }
 #lgfm .meter__item--next .meter__tick { background: #fdf0d8; color: #8a6326; }
@@ -491,7 +491,7 @@ nav#looth-tabbar,        /* mobile tab bar — covers the foot of every mock   *
 #lgfm .meter--dark .meter__lbl { color: #a8aea0; }
 #lgfm .meter--dark .meter__bar { background: rgba(255,255,255,.12); }
 #lgfm .meter--dark .meter__item { color: #cfd3cb; }
-#lgfm .meter--dark .meter__item--todo { color: #8f948a; }
+#lgfm .meter--dark .meter__item--todo { color: var(--lg-mute); }   /* was #8f948a, 4.23:1 on the real u.php-pinned slab bg — WCAG AA fail */
 #lgfm .meter--dark .meter__next { color: #cfd3cb; border-top-color: rgba(255,255,255,.14); }
 #lgfm .meter--dark .meter__next b { color: #fff; }
 
@@ -584,7 +584,7 @@ nav#looth-tabbar,        /* mobile tab bar — covers the foot of every mock   *
 #lgfm .tp-dark .meter__lbl       { color: var(--lg-mute); }
 #lgfm .tp-dark .meter__bar       { background: #2c312d; }
 #lgfm .tp-dark .meter__item      { color: #c3c8bd; }
-#lgfm .tp-dark .meter__item--todo{ color: #7d837a; }
+#lgfm .tp-dark .meter__item--todo{ color: var(--lg-mute); }   /* was #7d837a, 4.16:1 on #1e2124 — WCAG AA fail */
 #lgfm .tp-dark .meter__item--next{ color: var(--lg-charcoal); }
 #lgfm .tp-dark .meter__tick      { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
 #lgfm .tp-dark .meter__item--todo .meter__tick { background: #262b26; color: #5f655d; }

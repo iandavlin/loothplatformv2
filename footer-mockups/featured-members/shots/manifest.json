@@ -22,12 +22,12 @@
  "meter-light": {
   "w": 1240,
   "h": 331,
-  "bytes": 78054
+  "bytes": 78912
  },
  "meter-dark": {
   "w": 1240,
   "h": 331,
-  "bytes": 69358
+  "bytes": 70514
  },
  "flow-light": {
   "w": 1240,
