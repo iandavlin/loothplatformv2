@@ -413,6 +413,12 @@ final class Plugin
         return self::block_flag('download-block', 'LG_V2_DOWNLOAD_BLOCK');
     }
 
+    /** Is a synthesized page showing its Loothprint Type / Content Topic? */
+    public static function taxonomy_block_enabled(): bool
+    {
+        return self::block_flag('taxonomy-block', 'LG_V2_TAXONOMY_BLOCK');
+    }
+
     /** Shared reader for the config/<name>.php block flags. */
     private static function block_flag(string $name, string $envVar): bool
     {
@@ -514,6 +520,12 @@ final class Plugin
                 'type' => 'callout', 'id' => 'lp_bmc', 'variant' => 'links',
                 'items' => [['icon' => 'link', 'label' => 'Support the creator on Buy Me a Coffee', 'url' => $bmc]],
             ];
+        }
+        /* Filed-under chips sit ABOVE the footer: they belong to the article,
+           not to the site chrome that follows it. Nothing renders if the post
+           carries no terms, so this is not an empty row on an unfiled post. */
+        if (self::taxonomy_block_enabled()) {
+            $blocks[] = ['type' => 'taxonomy', 'id' => 'lp_filed', 'title' => 'Filed under'];
         }
         $blocks[] = ['type' => 'post-footer', 'id' => 'lp_footer'];
 

@@ -1,0 +1,83 @@
+/* taxonomy — the categories a post is filed under, as chips.
+
+   Sits flat by default (transparent, no padding) so it can trail an article
+   without drawing a second box underneath the post-footer. Chip colors are
+   their own vars rather than derived from the container, so a themed
+   background cannot silently drop chip contrast.
+*/
+
+@layer block-shell {
+  .lg-taxonomy {
+    display: block;
+    padding: var(--lg-padding, 0);
+    margin-block: var(--lg-margin-block, 20px);
+    background: var(--lg-bg, transparent);
+    border-radius: var(--lg-radius, 0);
+    font-family: var(--lg-font-sans, system-ui);
+  }
+
+  .lg-taxonomy__title {
+    margin: 0 0 10px;
+    font: 700 11px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--lg-title-color, #8a8d84);
+  }
+
+  .lg-taxonomy__list {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .lg-taxonomy__chip {
+    display: inline-flex;
+    align-items: center;
+    color: var(--lg-chip-color, #4a5a35);
+    font-size: 13px;
+    line-height: 1.2;
+    text-decoration: none;
+  }
+
+  /* The pill is applied in `chips` only, rather than set on the base and unset
+     in `inline`. Same result, nothing to undo — and undoing a background is
+     what would have needed a bare `background: none`. */
+  .lg-taxonomy--chips .lg-taxonomy__chip {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--lg-chip-border, #e0e3d6);
+    background: var(--lg-chip-bg, #f2f3ee);
+    font-weight: 600;
+  }
+
+  .lg-taxonomy a.lg-taxonomy__chip:hover {
+    text-decoration: underline;
+  }
+
+  /* Editor-only: a block on a post with no terms still needs to be visible
+     so it can be seen and removed. */
+  .lg-taxonomy__empty {
+    margin: 0;
+    color: var(--lg-chip-color, #4a5a35);
+    font-style: italic;
+    opacity: 0.75;
+  }
+
+  /* ── inline variant — a middot-separated run ─────────────────────────── */
+
+  .lg-taxonomy--inline .lg-taxonomy__list { gap: 0; }
+
+  .lg-taxonomy--inline .lg-taxonomy__chip::after {
+    content: "·";
+    margin: 0 8px;
+    opacity: 0.55;
+  }
+
+  .lg-taxonomy--inline .lg-taxonomy__item:last-child .lg-taxonomy__chip::after {
+    content: "";
+    margin: 0;
+  }
+}

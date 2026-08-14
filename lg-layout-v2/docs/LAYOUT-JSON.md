@@ -201,7 +201,7 @@ A single downloadable file rendered as a download button. Resolves file_id throu
 
 | Name | Required | Type | Default | Notes |
 |---|---|---|---|---|
-| `file_id` | no | `int` | `0` | Attachment ID of the downloadable file. Resolved to a URL + filename + size via the media map. |
+| `file_id` | no | `int` | `0` | Attachment ID of the downloadable file. Resolved to a URL + filename + size via the media map. EMPTY/0 means FOLLOW THE POST: the block resolves the post's own print file (loothprint_3d_file / loothcut_cnc_file) at render, so replacing the file through the form changes the page instead of leaving the layout pointing at the old attachment. |
 | `url` | no | `string` | `""` | Explicit download URL. Overrides file_id resolution when set (e.g. off-site file). |
 | `label` | no | `string` | `""` | Override for the row label. Empty falls back to the file's title, then its filename, then 'Download File'. |
 | `title` | no | `string` | `"Download"` | Eyebrow shown above the download row. Empty = no eyebrow. |
@@ -499,6 +499,28 @@ Boxed section heading — like heading, but wrapped in a container with bg/borde
     - `text.color`: `var(--lg-amber, #ecb351)`
 
 **Context normalization**: participates in `columns`.
+
+---
+
+### `taxonomy`
+
+*Version 1. Selector `.lg-taxonomy`. Insertable.*
+
+The categories a post is filed under — Loothprint Type and Content Topic — as chips linking to their term archives. Reads the post's terms LIVE at render, so the page cannot drift from the form. Declares no term picker on purpose: the form owns the details, and a second editor for one value is how the two end up disagreeing.
+
+**Props**
+
+| Name | Required | Type | Default | Notes |
+|---|---|---|---|---|
+| `taxonomies` | no | `array` | `["loothprint_type","shared_category"]` | Taxonomy slugs to show, in order. Unregistered ones and ones the post has no terms in are skipped silently rather than rendered as an empty row. |
+| `title` | no | `string` | `""` | Optional uppercase eyebrow above the chips. Empty = no title row. |
+| `link` | no | `bool` | `true` | Link each chip to its term archive. When false the chips are plain text — never a link-styled element that does nothing. |
+| `variant` | no | `string` | `"chips"` | chips renders pills; inline renders a middot-separated run for dense pages. Enum: `chips` / `inline`. |
+
+**Variants**
+
+- `chips` (extends `defaults`)
+- `inline` (extends `defaults`)
 
 ---
 
