@@ -17,3 +17,9 @@
 4. **V2 blocks for every form detail** — "If we do not have a block that can handle anything in the new form, like the license, we need to spin up v2 to produce the block... the lane should check. You can have the lane turn into a v2 type lane if we need it to." Lane: coverage table first (28 fields vs block catalog), gaps to Ian, then build. V2 source-of-truth question flagged (projects/ vs monorepo).
 
 5. **V2 blocks: build all four, approved order** — licence block, print-files via download-block + picker, items editor (CAD + tip jar), work-type taxonomy block. Compose lane RE-CHARTERED as the layout-v2 lane ("Yes — build all four").
+
+6. **Featured members, all four design rulings (decision box, after decide.html):**
+   - Tickbox = OPTION B, its own block on the profile.
+   - The EIGHT completeness items LOCKED as proposed (12.5% each): photo, location, what-you-do, bio, links, skills+instruments, work photos, banner.
+   - Volunteering: ACCEPT ANY % — tick welcomed at any completeness, member shown their card preview, meter does the nudging. No floor.
+   - Meter scope: THIS FEATURE ONLY (profile + tickbox flow + dash); site-wide push stays backlog 19.
