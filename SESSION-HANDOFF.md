@@ -20,11 +20,28 @@ it says so, and there are two such things.**
 1. **LICENCE block** — ✅ built. Four CC choices as choices.
 2. **PRINT FILES** via the download block + file picker — ✅ built, and **smaller
    than the charter thought** (see the correction below).
-3. **ITEMS EDITOR** for `callout` (CAD link + tip jar) — ⬜ NOT STARTED. Next.
-4. **WORK-TYPE taxonomy block** (Type of Loothprint + Content Topic) — ⬜ NOT
-   STARTED. Genuinely new ground; nothing renders these today.
+3. **ITEMS EDITOR** for `callout` (CAD link + tip jar) — ✅ **ALREADY EXISTED.
+   Nothing was built, and nothing needed to be.** See the correction below.
+4. **WORK-TYPE taxonomy block** (Type of Loothprint + Content Topic) — ✅ built.
+   The only one of the four that was genuinely missing.
 
-Blocks 1 and 2 are both behind OFF-default flags. Nothing member-facing has moved.
+All flags are OFF-default. Nothing member-facing has moved.
+
+### Block 3 was already built — do not rebuild it
+
+`lg-fe-editor.js` `doEdit()` has a hardcoded `type === 'callout'` branch: for
+list variants (links/files/people/data) it opens `openItemsModal()`, a full
+add/remove/reorder repeater over `items[]` that saves via REST. `callout`'s
+render.php emits `<script data-lg-callout-state>` in editor mode to seed it, and
+`MetaBox` has a matching `array_of_objects` repeater. **So the CAD link and the
+tip jar have been editable in v2 all along.**
+
+The audit called them gaps because it read `manifest.editor.inline_editable_props`
+— and its own methodology note said *"read it there; do not infer from the
+renderer."* **That instruction was the trap.** The manifest is not the whole
+truth: `lg-fe-editor.js` carries per-type branches that no manifest declares. To
+know whether a prop is editable you must check BOTH the manifest AND the
+editor's per-type branches.
 
 ---
 
@@ -85,6 +102,20 @@ and `get_post_meta`, never with a SQL `LIKE` for JSON.**
   resemblance, which is how an author's surrounding paragraph gets deleted.
 * All 164 stored bodies already agree with the form's current answer, so turning
   the flag on changes how the licence **looks**, never which licence a page states.
+
+### Block 4 — `taxonomy` (commit `067f62b`)
+
+* `blocks/taxonomy/` — Loothprint Type + Content Topic as chips linking to their
+  term archives. **`lint-block: clean`, the only clean block in the tree.**
+* Reads terms LIVE. **No term picker on purpose** — the form owns the details,
+  and a second editor for one value is how they end up disagreeing.
+* Measured before building: of 168 published loothprints, **125 carry both
+  taxonomies, 29 type only, 3 topic only, 11 neither**. The 11 render nothing.
+* ⚠️ **`config/taxonomy-block.php` reaches FOUR POSTS** — the synthesizer only.
+  The 168 stored layouts would need the block INSERTED. The licence work could
+  *swap* a block already present; this would *add* content to 157 pages that has
+  never appeared on any of them. **Where the chips belong on the page is Ian's
+  design call, with a picture** — deliberately not taken by this lane.
 
 ### Block 2 — print files (commit `e4fb146`)
 
