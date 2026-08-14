@@ -2,66 +2,66 @@
  "1a-light": {
   "w": 1240,
   "h": 258,
-  "bytes": 73451
+  "bytes": 48178
  },
  "1a-dark": {
   "w": 1240,
   "h": 258,
-  "bytes": 73673
+  "bytes": 47420
  },
  "1b-light": {
   "w": 1240,
   "h": 264,
-  "bytes": 66308
+  "bytes": 53814
  },
  "1b-dark": {
   "w": 1240,
   "h": 264,
-  "bytes": 67339
+  "bytes": 52238
  },
  "meter-light": {
   "w": 1240,
   "h": 331,
-  "bytes": 96836
+  "bytes": 78054
  },
  "meter-dark": {
   "w": 1240,
   "h": 331,
-  "bytes": 97676
+  "bytes": 69358
  },
  "flow-light": {
   "w": 1240,
   "h": 301,
-  "bytes": 61679
+  "bytes": 46624
  },
  "flow-dark": {
   "w": 1240,
   "h": 301,
-  "bytes": 62453
+  "bytes": 46158
  },
  "card-light": {
   "w": 1240,
   "h": 317,
-  "bytes": 117530
+  "bytes": 75668
  },
  "card-dark": {
   "w": 1240,
   "h": 317,
-  "bytes": 118527
+  "bytes": 75438
  },
  "plain-light": {
   "w": 1240,
   "h": 267,
-  "bytes": 69402
+  "bytes": 37414
  },
  "plain-dark": {
   "w": 1240,
   "h": 267,
-  "bytes": 70945
+  "bytes": 37382
  },
  "dash-light": {
   "w": 1240,
   "h": 528,
-  "bytes": 177168
+  "bytes": 111004
  }
 }

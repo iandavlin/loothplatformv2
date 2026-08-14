@@ -5,6 +5,20 @@ Lane: `featured-members`. Ian asked 2026-08-11 ("fairly soon type of thing").
 lane found while drawing them, because most of the surprises are load-bearing
 for the build and are not discoverable from the backlog line.
 
+**Where things stand (2026-08-14).** Ian has ruled twice; four decisions remain,
+all boxed on one page with pictures:
+
+| Page | What it is |
+|---|---|
+| `decide.html` | **the one to send him** — four questions, each with its screenshot, a recommendation, and a settled-already block |
+| `desktop.html` | every surface at 1280w, light AND dark |
+| `index.html` | overview + the flow |
+| `tickbox.html` / `dash.html` / `frontpage.html` / `completeness.html` | each surface in detail |
+
+RULED: one featured member at a time (no rotation); the completeness percentage
+replaces the one-line-blurb idea; consent explicit/opt-in with no admin override.
+OPEN: tickbox A vs B · the eight items · nudge-vs-gate · meter here vs site-wide.
+
 Mocks (behind the dev gate): `/footer-mockups/featured-members/`
 Source (in-repo): `footer-mockups/featured-members/`, symlinked into
 `~/projects/footer-mockups/featured-members` so nothing is written to `/var/www/dev`.
@@ -291,3 +305,44 @@ aggressively — every CDP measurement here needed `Network.setCacheDisabled`, a
 two "the fix did not work" readings were stale cache. `Emulation.setDeviceMetricsOverride`
 is dropped by navigation and **re-sending identical params is deduped**, so clear
 the override then set it, and assert `window.innerWidth` before trusting a shot.
+
+
+---
+
+## 8. What drawing it in DARK changed (2026-08-14)
+
+Ian asked for desktop views in light and dark. The dark pass is not cosmetic —
+it found three faults, all in **this proposal's own components**, none in the
+surfaces that already ship:
+
+| Component | Fault in dark | Why |
+|---|---|---|
+| consent card (Variant B) | body text invisible | `#4c4f47` on a `#1e2124` card |
+| consent card, "in the pool" | stayed white | background hardcoded `#fffdf7` |
+| completeness meter | text, track and ticks unreadable | fixed light greys throughout |
+
+The existing surfaces were fine because they already carry dark handling —
+`u.php:732` pins the privacy slab to `#22262a` so it does **not** flip white when
+`--lg-charcoal` inverts to near-white, and `u.php:733-739` flip selected sage
+chips to dark ink. The mock's `.tp-dark` scope reproduces both verbatim, so the
+dark drawings are the real rendering rather than a guess.
+
+**Rule for the build:** any new component here must be token-driven or carry its
+own dark rule. A hardcoded light grey is a latent dark-mode defect, and it will
+not show up in any light-only check.
+
+**No dark admin dash**, and that is a fact rather than an omission: the dash is a
+WP *admin* page and the member theme picker does not reach WP admin. WordPress's
+own admin colour schemes are the answer if Ian wants one.
+
+## 9. Two verification traps this lane paid for
+
+1. **A colour check is blind to geometry.** Meter and distribution bars shipped as
+   *empty tracks* for a whole revision — `<span>` fills inside a non-flex parent
+   stay inline and silently ignore `width`/`height`. Every colour assertion was
+   green. Now asserted in `tools/mock-theme-proof.py` (zero-width bars +
+   horizontal overflow).
+2. **A breakpoint gap hides between the widths you test.** `dash.html` stacked
+   below 760px and fitted above ~830px, so it side-scrolled at **768px — iPad
+   portrait** — while both 390 and 1280 were clean. Breakpoint raised to 900 and
+   bracketed at 899/901. Test *between* your breakpoints, not just at the extremes.
