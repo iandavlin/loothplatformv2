@@ -170,8 +170,26 @@ def main():
     print(f"liveness    {PREFIX}/ serves the hub rail and no legacy tree "
           f"(the control)")
 
-    cats = psql("SELECT slug FROM forums.forum WHERE visibility='public' "
-                "AND slug <> '' ORDER BY id LIMIT %d" % SAMPLE)
+    # ── GROUND TRUTH FOR "should this door show content?" ────────────────────
+    # NOT a label lookup. Content attaches to a category through
+    # hub_reconcile_cat_key(forum_label) — a coarse cat_key bucket, not the
+    # forum title and not the forum id — so an exact-label query in this gate
+    # would be a SECOND implementation of that mapping, free to drift from the
+    # one the product uses. (I wrote that version first; it passed a category
+    # that has 5 content rows by label, for the wrong reason.)
+    #
+    # Instead the gate asks the PRODUCT: the hub's own category filter
+    # (/hub/?leaf=<subtree ids>) is the same query the door routes into, so the
+    # door must show what that view shows. Differential, self-sourcing, and it
+    # asserts the thing this lane actually controls — the routing — rather than
+    # re-deriving which content belongs to which category.
+    cats = psql("SELECT f.slug, string_agg(s.id::text, ',') FROM forums.forum f "
+                "JOIN LATERAL (WITH RECURSIVE sub AS ("
+                "  SELECT id FROM forums.forum WHERE id = f.id "
+                "  UNION ALL SELECT c.id FROM forums.forum c JOIN sub ON c.parent_forum_id = sub.id "
+                "  WHERE c.visibility='public') SELECT id FROM sub) s ON true "
+                "WHERE f.visibility='public' AND f.slug <> '' "
+                "GROUP BY f.id, f.slug ORDER BY f.id LIMIT %d" % SAMPLE)
     if not cats:
         print("CANNOT RUN  no public categories from the DB")
         return 2
@@ -179,8 +197,13 @@ def main():
 
     findings, states, ok = [], [], 0
 
-    for slug in cats:
+    for row in cats:
+        slug, leaf_ids = (row.split("|") + [""])[:2]
         path = f"{PREFIX}/{slug}/"
+        # What the hub's OWN category filter shows for this same category.
+        ref, _rc = fetch(env, f"{PREFIX}/?leaf={leaf_ids}")
+        want_content = len(re.findall(r"feed-card--content", ref))
+        has_content = want_content > 0
         page, code = fetch(env, path)
         if code != 200:
             findings.append(f"{path} — HTTP {code}, a public category must serve 200")
@@ -194,7 +217,7 @@ def main():
         content = len(re.findall(r"feed-card--content", page))
         # DOOR = the shape Ian ruled: hub cards, both kinds, and NO member nav of
         # either sort. Anything else is named so a failure says which.
-        if not legacy and not railed and topics and content:
+        if not legacy and not railed and topics and (content or not has_content):
             state = "DOOR"
         elif legacy:
             state = "LEGACY"
@@ -233,9 +256,11 @@ def main():
             if railed:
                 problems.append("renders the HUB RAIL/chipbar — that ADDS member "
                                 "nav, which Ian's ruling 7 forbids on a door")
-            if not content:
-                problems.append("no content items — ruling 8 is option A, "
-                                "discussions AND related content mixed")
+            if has_content and not content:
+                problems.append(
+                    f"the hub's own category filter shows {want_content} content "
+                    f"item(s) here and the door shows none — ruling 8 is option A, "
+                    f"discussions AND related content mixed")
             if not topics:
                 problems.append("no discussions on a category door")
         else:
