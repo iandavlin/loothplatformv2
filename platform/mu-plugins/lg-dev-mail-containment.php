@@ -31,10 +31,30 @@ if (!defined('ABSPATH')) { exit; }
     $isDev = in_array($env, ['dev', 'dev2', 'development', 'staging'], true);
     if (!$isDev) { return; }
 
-    // Belt (code-level): FluentSMTP must never hand anything to SES from here.
-    if (!defined('FLUENTMAIL_SIMULATE_EMAILS')) { define('FLUENTMAIL_SIMULATE_EMAILS', true); }
+    // KEEPER PASS (Ian, 2026-08-14: "when work is done. Can you email me"):
+    // CLI-ONLY + IAN-ONLY escape hatch. Two independent locks:
+    //   1. The env var can only exist on a shell invocation (FPM pools and
+    //      lg-wp-cron carry no such env) — web traffic can NEVER set it.
+    //   2. Even with the var set, the filter below still contains anything not
+    //      addressed to EXACTLY ian.davlin@gmail.com, alone.
+    // So the guarantee this file exists for — members can never be emailed
+    // from a dev box — is untouched.
+    $keeperPass = (getenv('LG_KEEPER_MAIL_PASS') === '1');
 
-    add_filter('pre_wp_mail', function ($null, $atts) {
+    // Belt (code-level): FluentSMTP must never hand anything to SES from here
+    // — except a keeper-pass CLI process, whose recipients are locked below.
+    if (!$keeperPass && !defined('FLUENTMAIL_SIMULATE_EMAILS')) { define('FLUENTMAIL_SIMULATE_EMAILS', true); }
+
+    add_filter('pre_wp_mail', function ($null, $atts) use ($keeperPass) {
+        if ($keeperPass) {
+            $to  = $atts['to'] ?? '';
+            $tos = is_array($to) ? $to : array_filter(array_map('trim', explode(',', (string) $to)));
+            if (count($tos) === 1 && strtolower(trim($tos[0])) === 'ian.davlin@gmail.com') {
+                return $null;   // fall through to FluentSMTP/SES — Ian only
+            }
+            // keeper pass but wrong recipients: contain as usual (fall through
+            // to the mailpit path below).
+        }
         $to      = $atts['to']      ?? '';
         $subject = (string) ($atts['subject'] ?? '(no subject)');
         $message = (string) ($atts['message'] ?? '');

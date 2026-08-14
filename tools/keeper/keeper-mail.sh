@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
-# keeper-mail "Subject" "Body..." — emails Ian via the WP Fluent/SES stack
-# (Ian 8/14: "when work is done. Can you email me at ian.davlin@gmail.com?"
-#  + "you can use the wordpress ses fluent setup").
-# dev2 has NO local MTA (verified 7/29) — WP's configured mailer is the ONE
-# working transport on this box. wp_mail returning true = handed to the stack.
-# USE FOR: work-done moments (deliverable ready, decision waiting, batch
-# landed/live-ready). NOT routine progress — an inbox ping that teaches Ian
-# to ignore pings is worse than none.
+# keeper-mail "Subject" "Body..." — emails Ian THROUGH WordPress' Fluent/SES
+# stack via the CLI-only keeper pass in lg-dev-mail-containment.php.
+# (Ian 8/14: work-done emails; ruled "Send THROUGH WordPress" — no raw key on
+#  the box.) The pass is double-locked: env var = CLI-only, and the containment
+# still traps any recipient except ian.davlin@gmail.com alone.
+# USE FOR work-done moments only — never routine progress.
 set -euo pipefail
 SUBJ="${1:?usage: keeper-mail \"Subject\" \"Body\"}"
 BODY="${2:?usage: keeper-mail \"Subject\" \"Body\"}"
-S="$SUBJ" B="$BODY" sudo -u looth-dev -E wp eval \
-  'exit(wp_mail("ian.davlin@gmail.com", getenv("S"), getenv("B")) ? 0 : 1);' \
+S="$SUBJ" B="$BODY" sudo -u looth-dev LG_KEEPER_MAIL_PASS=1 S="$SUBJ" B="$BODY" \
+  wp eval 'exit(wp_mail("ian.davlin@gmail.com", getenv("S"), getenv("B")) ? 0 : 1);' \
   --path=/var/www/dev 2>/dev/null && echo "mailed: $SUBJ"
