@@ -1,0 +1,147 @@
+/* license — the Creative Commons licence a post carries, shown as a choice.
+
+   The shell deliberately mirrors callout's `note` treatment (same padding,
+   margin, bg, 5px accent border-left) so the block drops into the loothprint
+   page exactly where the licence callout sits today without moving anything
+   around it.
+
+   Container colors (padding, margin, bg, border-color, radius) and the text
+   colors (title/accent/chip) come from manifest vars in the block-defaults
+   layer. Only structure and per-variant layout live here.
+*/
+
+@layer block-shell {
+  .lg-license {
+    display: block;
+    position: relative;
+    padding: var(--lg-padding, 18px 24px 18px 26px);
+    margin-block: var(--lg-margin-block, 22px);
+    background: var(--lg-bg, #fdfaf0);
+    border: 1px solid var(--lg-tags-border, #e7e3da);
+    border-left: 5px solid var(--lg-border-color, #ecb351);
+    border-radius: var(--lg-radius, 8px);
+    color: var(--lg-charcoal, #1a1d1a);
+    font-family: var(--lg-font-sans, system-ui);
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  /* Eyebrow — same metrics as .lg-callout__title so the two blocks stack
+     without a visible seam when a page carries both. */
+  .lg-license__title {
+    margin: 0 0 12px;
+    font: 700 11px/1 var(--lg-font-sans, system-ui);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--lg-title-color, #b8842b);
+  }
+
+  /* The licence name row: (cc) glyph + full human name + deed arrow. */
+  .lg-license__name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--lg-accent-color, #b8842b);
+    text-decoration: none;
+  }
+
+  /* Only the linked form gets hover feedback — underlining the <span> the
+     show_deed=false path emits would promise a click that does nothing. */
+  .lg-license a.lg-license__name:hover { text-decoration: underline; }
+
+  .lg-license__mark {
+    flex: 0 0 auto;
+    display: inline-flex;
+    width: 20px;
+    height: 20px;
+  }
+
+  .lg-license__mark svg { width: 100%; height: 100%; }
+
+  /* Trailing ↗ on the deed link. Decorative — the accessible name is the
+     licence name itself, never the glyph. */
+  .lg-license__out {
+    flex: 0 0 auto;
+    display: inline-flex;
+    width: 12px;
+    height: 12px;
+    opacity: 0.7;
+  }
+
+  .lg-license__out svg { width: 100%; height: 100%; }
+
+  /* Clause chips — one per CC element. These carry the actual obligations,
+     so they are words first; the glyph is aria-hidden decoration. */
+  .lg-license__clauses {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0 0;
+    padding: 0;
+  }
+
+  .lg-license__clause {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--lg-chip-color, #6b5220);
+    font-size: 12.5px;
+    line-height: 1.2;
+  }
+
+  /* The pill is applied in `note` only, rather than set on the base and unset
+     in `compact`. Same result, but nothing has to be undone — and unsetting a
+     background is what would have needed a bare `background: none`. */
+  .lg-license--note .lg-license__clause {
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--lg-chip-bg, #f6efdc);
+    font-weight: 600;
+  }
+
+  .lg-license__clause-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    width: 14px;
+    height: 14px;
+  }
+
+  .lg-license__clause-icon svg { width: 100%; height: 100%; }
+
+  /* Editor-only placeholder: a license block whose post has no licence yet
+     still needs a click target, otherwise it cannot be re-pointed. */
+  .lg-license__empty {
+    color: var(--lg-chip-color, #6b5220);
+    font-style: italic;
+    opacity: 0.8;
+  }
+
+  /* ── compact variant — one line, for dense pages ─────────────────────── */
+
+  .lg-license--compact {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: var(--lg-padding, 12px 18px);
+    margin-block: var(--lg-margin-block, 16px);
+  }
+
+  .lg-license--compact .lg-license__title { margin: 0; }
+
+  .lg-license--compact .lg-license__clauses { margin: 0; }
+
+  /* Chips stay a plain run of words in compact — at one-line density a pill
+     reads as a button, which it is not. Separated by a middot instead. */
+  .lg-license--compact .lg-license__clause + .lg-license__clause::before {
+    content: "·";
+    margin-right: 8px;
+    opacity: 0.6;
+  }
+
+  @media (max-width: 480px) {
+    .lg-license--compact { align-items: flex-start; flex-direction: column; gap: 8px; }
+  }
+}

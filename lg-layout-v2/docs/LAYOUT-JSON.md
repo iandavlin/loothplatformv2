@@ -37,6 +37,44 @@ Every block, regardless of type, may carry these fields in addition to its type-
 
 Alphabetical. Each block lists its current `manifest.version`, props, variants, and any structural notes.
 
+### `brand-gallery`
+
+*Version 1. Selector `.lg-brand-gallery`. Insertable.*
+
+Sponsor-page image gallery. Reads the resolved image URLs from $ctx['sponsor'].gallery_urls (Lane-A baked these as URLs, not attachment IDs — so unlike the `gallery` block it needs no media resolver). Renders a horizontal lightbox carousel (reuses the shared [data-lg-carousel] + [data-lg-lightbox] front-end). Optional `heading`. Empty gallery_urls → block renders nothing. Auto-themes via --brand-primary.
+
+**Props**
+
+| Name | Required | Type | Default | Notes |
+|---|---|---|---|---|
+| `heading` | no | `string` | `"Gallery"` | Section heading shown above the carousel (inline-editable). |
+
+**Variants**
+
+- `variant-1` (extends `defaults`)
+
+---
+
+### `brand-hero`
+
+*Version 1. Selector `.lg-brand-hero`. Insertable.*
+
+Sponsor-page hero. Reads the sponsor record from $ctx['sponsor'] (resolved from the layout's sponsor key / Lane-A API): optional hero banner image, brand logo, brand name, a social-icon row (facebook / instagram / youtube / website), and a CTA strip (Visit Website / Visit Forum / Related Content). Auto-themes from the article root's --brand-* vars. Every piece degrades gracefully when its field is null — a sparse sponsor renders just the parts it has, never a broken image or empty bar. Page-level block (the top of a sponsor page); not for inline article use.
+
+**Props**
+
+| Name | Required | Type | Default | Notes |
+|---|---|---|---|---|
+| `show_hero_image` | no | `boolean` | `true` | Render sponsor.hero.url as a full-bleed banner above the brand bar. Skipped when the sponsor has no hero image. |
+| `tagline` | no | `string` | `""` | Optional short line shown under the brand name (inline-editable). Falls back to sponsor.hero.caption when empty. |
+| `related_label` | no | `string` | `"Related Content"` | Label for the tag_url CTA button. |
+
+**Variants**
+
+- `variant-1` (extends `defaults`)
+
+---
+
 ### `callout`
 
 *Version 2. Selector `.lg-callout`. Insertable.*
@@ -118,6 +156,26 @@ Column count is `columns.length` and must be 2 or 3. Nesting columns inside colu
 
 ---
 
+### `contact-form`
+
+*Version 1. Selector `.lg-contact-form`. Insertable.*
+
+Sponsor-page lead-gen form (replaces the old [fluentform id=13]). Native name / email / message fields that POST to the sponsor-contact endpoint, which emails sponsor.email (the durable bridge key). The sponsor slug + recipient are carried in hidden fields so the endpoint never trusts a client-supplied address. When sponsor.email is present a 'or email us directly' mailto: fallback renders so the form is never a dead end; when it's null the form is suppressed (no recipient to send to). Auto-themes via --brand-primary. NOTE: the POST endpoint (POST /archive-api/v0/sponsor-contact { slug, name, email, message }) is the one server-side piece this block depends on.
+
+**Props**
+
+| Name | Required | Type | Default | Notes |
+|---|---|---|---|---|
+| `heading` | no | `string` | `"Get in touch"` | Section heading (inline-editable). |
+| `blurb` | no | `string` | `""` | Optional intro line under the heading (inline-editable). |
+| `action` | no | `string` | `"/archive-api/v0/sponsor-contact"` | Form POST endpoint. Receives { slug, name, email, message } and emails the sponsor. Override only if the endpoint path changes. |
+
+**Variants**
+
+- `variant-1` (extends `defaults`)
+
+---
+
 ### `divider`
 
 *Version 1. Selector `.lg-divider`. Insertable.*
@@ -130,6 +188,23 @@ Horizontal rule with brand styling. Variants: default line, dots, or invisible s
     - `container.color`: `var(--lg-sage)`
 - `space` (extends `defaults`)
     - `container.margin-block`: `48px`
+
+---
+
+### `download`
+
+*Version 1. Selector `.lg-download`. Insertable.*
+
+A single downloadable file rendered as a download button. Resolves file_id through the media map (url, filename, mime, human size are pre-baked) — no WP attachment calls at render. Visually reuses the callout 'files' treatment. Emitted by the loothprint/loothcut conversion as a bare { type: download, file_id }.
+
+**Props**
+
+| Name | Required | Type | Default | Notes |
+|---|---|---|---|---|
+| `file_id` | no | `int` | `0` | Attachment ID of the downloadable file. Resolved to a URL + filename + size via the media map. |
+| `url` | no | `string` | `""` | Explicit download URL. Overrides file_id resolution when set (e.g. off-site file). |
+| `label` | no | `string` | `""` | Override for the row label. Empty falls back to the file's title, then its filename, then 'Download File'. |
+| `title` | no | `string` | `"Download"` | Eyebrow shown above the download row. Empty = no eyebrow. |
 
 ---
 
@@ -190,6 +265,26 @@ Event header strip for the `event` CPT: date pill + full date/time line, region 
     - `text.link-color`: `var(--lg-charcoal, #1a1d1a)`
 
 **Context normalization**: participates in `columns`.
+
+---
+
+### `featured-products`
+
+*Version 1. Selector `.lg-feat-products`. Insertable.*
+
+Sponsor-page product carousel. Shows the sponsor's `sponsor-product` CPT items as a horizontal scroll-snap strip of cards (thumbnail + title + optional price + optional CTA). The cards are baked into the `items` prop at author/materialize time by querying WHERE author = sponsor.wp_user_id (the `author` prop records that link so write-sponsor-v2 can refresh) — so render stays WordPress-free in the standalone path. Reuses the shared [data-lg-carousel] front-end (prev/next + scroll-snap). Auto-themes from the article root's --brand-primary. Empty items → block renders nothing (no empty strip).
+
+**Props**
+
+| Name | Required | Type | Default | Notes |
+|---|---|---|---|---|
+| `heading` | no | `string` | `"Featured Products"` | Section heading shown above the carousel (inline-editable). |
+| `author` | no | `integer` | `0` | Sponsor wp_user_id this feed is keyed to. Render uses the baked `items`; this records the author link so the authoring skill can re-query and re-bake. |
+| `items` | no | `array` | `[]` | Baked product cards: [{ title, url, image, price?, badge? }]. Order = render order. Resolved from sponsor-product at author time. |
+
+**Variants**
+
+- `variant-1` (extends `defaults`)
 
 ---
 
@@ -255,6 +350,30 @@ Image with optional caption underneath. All chrome flows through dash-tweakable 
     - `container.shadow`: `0 6px 18px rgba(0, 0, 0, 0.18)`
 
 **Context normalization**: participates in `columns`.
+
+---
+
+### `license`
+
+*Version 1. Selector `.lg-license`. Insertable.*
+
+The Creative Commons licence a post is published under, rendered as a choice: the licence name, a link to its canonical deed, and one chip per clause it imposes (credit / non-commercial / share-alike / no-derivatives). With `code` empty (the default) the block resolves the licence LIVE from the post's loothprint_creative_commons meta, so a member changing it in the form changes the page. Setting `code` pins the block to one licence instead.
+
+**Props**
+
+| Name | Required | Type | Default | Notes |
+|---|---|---|---|---|
+| `code` | no | `string` | `""` | Which Creative Commons licence. EMPTY (default) means follow the post's own licence meta at render time — that is what keeps a loothprint page in step with the form. A non-empty code pins this block to that licence and stops it tracking the post. Enum: `` / `by` / `by-sa` / `by-nc-sa` / `by-nc-nd`. |
+| `title` | no | `string` | `"License"` | Short uppercase eyebrow above the licence row. Empty = no eyebrow. |
+| `show_deed` | no | `bool` | `true` | Link the licence name to its canonical creativecommons.org deed. The link carries rel="license", the standard machine-readable licence signal. |
+| `variant` | no | `string` | `"note"` | note stacks the licence name over its clause chips, matching the callout `note` treatment the loothprint page uses today. compact puts name and clauses on one line. Enum: `note` / `compact`. |
+
+**Variants**
+
+- `note` (extends `defaults`)
+- `compact` (extends `defaults`)
+    - `container.padding`: `12px 18px`
+    - `container.margin-block`: `16px`
 
 ---
 
@@ -331,6 +450,26 @@ Article header: featured image with gradient scrim, title + byline overlaid, tag
 
 ---
 
+### `recent-posts`
+
+*Version 1. Selector `.lg-recent-posts`. Insertable.*
+
+Sponsor-page post carousel. Shows the sponsor's `sponsor-post` CPT items as a horizontal scroll-snap strip of cards (thumbnail + title + date + excerpt). Cards are baked into the `items` prop at author/materialize time by querying WHERE author = sponsor.wp_user_id (the `author` prop records that link for write-sponsor-v2 to refresh) — render stays WordPress-free in the standalone path. Reuses the shared [data-lg-carousel] front-end. Auto-themes from --brand-primary. Empty items → block renders nothing.
+
+**Props**
+
+| Name | Required | Type | Default | Notes |
+|---|---|---|---|---|
+| `heading` | no | `string` | `"Recent Posts"` | Section heading shown above the carousel (inline-editable). |
+| `author` | no | `integer` | `0` | Sponsor wp_user_id this feed is keyed to. Render uses the baked `items`; this records the author link for re-baking. |
+| `items` | no | `array` | `[]` | Baked post cards: [{ title, url, image, date?, excerpt? }]. Order = render order. Resolved from sponsor-post at author time. |
+
+**Variants**
+
+- `variant-1` (extends `defaults`)
+
+---
+
 ### `section-heading`
 
 *Version 1. Selector `.lg-section-heading`. Insertable.*
@@ -376,6 +515,25 @@ Collapsible transcript body. Renders as a native HTML <details>/<summary> accord
 | `label` | no | `string` | `"Show transcript"` | Summary text shown on the collapsed accordion (the clickable affordance). |
 | `body` | no | `string` | `""` | Transcript HTML — paragraphs, in-line timestamps, light emphasis. Sanitized with wp_kses_post on save. Lives in the DOM whether the accordion is open or closed. |
 | `open` | no | `boolean` | `false` | Initial state. Default closed (collapsed). |
+
+---
+
+### `whos-talking`
+
+*Version 1. Selector `.lg-whos-talking`. Insertable.*
+
+Sponsor-page social-proof / cross-link panel. Reads sponsor.forum_url + sponsor.tag_url + name from $ctx['sponsor'] and renders a 'See who's talking about <brand>' card with up to two CTAs: the sponsor's forum thread and its tagged-content archive. Each CTA only renders if its URL is present (a sponsor with no forum still shows the tag link, or nothing). Auto-themes via --brand-primary / --brand-header.
+
+**Props**
+
+| Name | Required | Type | Default | Notes |
+|---|---|---|---|---|
+| `heading` | no | `string` | `""` | Override the auto 'See who's talking about <brand>' heading (inline-editable). |
+| `blurb` | no | `string` | `""` | Optional intro line under the heading (inline-editable). |
+
+**Variants**
+
+- `variant-1` (extends `defaults`)
 
 ---
 

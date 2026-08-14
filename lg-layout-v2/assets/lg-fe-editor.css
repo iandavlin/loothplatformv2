@@ -411,6 +411,29 @@
     opacity: 0.7;
 }
 
+/* ── Licence picker ────────────────────────────────────────────────
+   Reuses the tier popover shell, but each option is two lines: the licence
+   on top, what it actually obliges underneath. The hint is the point — a
+   member picking a licence should not have to already know what BY-NC-SA
+   means. Wider than the tier popover because the hints are phrases. */
+.lg-license-pop { min-width: 260px; }
+.lg-license-pop .lg-tier-pop__opt {
+    line-height: 1.35;
+    padding: 8px 10px;
+}
+.lg-license-pop .lg-tier-pop__opt strong {
+    display: block;
+    font-weight: 600;
+}
+.lg-license-pop .lg-tier-pop__opt span {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    color: #b9b9b9;
+}
+/* The current-choice dot is vertically centered against a 2-line option. */
+.lg-license-pop .lg-tier-pop__opt.is-current::after { top: 50%; transform: translateY(-50%); }
+
 /* ── Image edit-mode: grey overlay + centered "Edit Image" button ── */
 .lg-edit-active .lg-image__frame {
     position: relative;     /* anchor the grey pseudo + overlay button */

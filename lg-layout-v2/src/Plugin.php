@@ -335,10 +335,41 @@ final class Plugin
     }
 
     /**
+     * Is the loothprint page's licence routed through the `license` block?
+     *
+     * Reads config/license-block.php relative to __DIR__ — the same file on
+     * disk in every runtime (FPM, WP-CLI, cron, the standalone renderer), which
+     * an env var would not be. Missing or unreadable config means OFF: a
+     * member-facing change must never switch itself on by accident.
+     *
+     * The env/$_SERVER overrides are how a lane preview or a gate run exercises
+     * the ON path without editing tracked config. Both are read because a
+     * fastcgi_param lands in $_SERVER but not reliably in getenv(), and reading
+     * only getenv() would serve the OFF path on the very preview URL built to
+     * show the ON one.
+     */
+    public static function license_block_enabled(): bool
+    {
+        static $cached = null;
+        if ($cached !== null) return $cached;
+
+        foreach ([getenv('LG_V2_LICENSE_BLOCK'), $_SERVER['LG_V2_LICENSE_BLOCK'] ?? null] as $override) {
+            if ($override !== false && $override !== null && $override !== '') {
+                return $cached = in_array(strtolower((string) $override), ['1', 'true', 'on', 'yes'], true);
+            }
+        }
+
+        $path = dirname(__DIR__) . '/config/license-block.php';
+        if (!is_readable($path)) return $cached = false;
+        $cfg = include $path;
+        return $cached = (is_array($cfg) && !empty($cfg['enabled']));
+    }
+
+    /**
      * Synthesize a loothprint layout from postmeta.
      * post-header → wysiwyg(desc) → gallery → embed(video) →
      * callout:files(download) → callout:links(onshape) →
-     * callout:note(license) → callout:links(bmc) → post-footer
+     * license OR callout:note(license) → callout:links(bmc) → post-footer
      */
     private static function default_loothprint_layout(\WP_Post $post): array
     {
@@ -392,10 +423,19 @@ final class Plugin
             $blocks[] = $os;
         }
         if ($cc !== '') {
-            $blocks[] = [
-                'type' => 'callout', 'id' => 'lp_license', 'variant' => 'note',
-                'title' => 'License', 'body' => '<p>' . esc_html($cc) . '</p>',
-            ];
+            if (self::license_block_enabled()) {
+                /* No `code`: the block resolves the licence from this post's own
+                   meta at render, so changing it in the form changes the page.
+                   Baking the code here would reintroduce the staleness the
+                   block exists to remove. */
+                $blocks[] = ['type' => 'license', 'id' => 'lp_license'];
+            } else {
+                /* OFF — byte-identical to what shipped before the block existed. */
+                $blocks[] = [
+                    'type' => 'callout', 'id' => 'lp_license', 'variant' => 'note',
+                    'title' => 'License', 'body' => '<p>' . esc_html($cc) . '</p>',
+                ];
+            }
         }
         if ($bmc !== '') {
             $blocks[] = [

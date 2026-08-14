@@ -31,8 +31,25 @@
 
 declare(strict_types=1);
 
-const KNOWN_PICKERS = [null, 'image', 'rich-text', 'carousel-slots', 'embed-url', 'gallery-items', 'media'];
-const KNOWN_PILL_BUTTONS = ['edit', 'edit-link', 'ratio', 'tier', 'delete', 'move-up', 'move-down', 'rotate'];
+/* M7's picker list is DERIVED from the implementation, not restated here.
+   Four registries had drifted apart: this file knew a 'gallery-items' and a
+   'carousel-slots' that nothing implements, while REJECTING the 'gallery' that
+   blocks/gallery declares and lg-fe-editor.js actually runs — so the linter
+   was wrong about a shipping block. Reading EditorPickers::KNOWN means adding
+   a picker in one place cannot leave the linter behind. */
+require_once __DIR__ . '/../src/EditorPickers.php';
+/* A function, not a global: the M7 check runs inside checkBlock(), where a
+   top-level $var would simply not exist and every picker would silently pass. */
+function known_pickers(): array
+{
+    return array_merge([null], \LG\LayoutV2\EditorPickers::KNOWN);
+}
+
+/* M8's list is the vocabulary lg-fe-editor.js actually renders (its
+   PILL_LABELS map). Anything else falls through to `PILL_LABELS[name] || name`
+   and draws the raw string as the button label — which is why this list must
+   be the implemented set and not the union of what manifests happen to say. */
+const KNOWN_PILL_BUTTONS = ['edit', 'change', 'delete', 'tier', 'ratio', 'variant', 'add', 'up', 'down', 'left', 'right'];
 
 /* Properties that are "chrome" — must be wrapped in var() on the main block
    selector. On sub-element selectors (e.g. .lg-image-caption__num), only the
@@ -226,7 +243,7 @@ function lintBlock(string $name, string $blocksDir): array {
 
     /* M7 — custom_picker known */
     $picker = $manifest['editor']['custom_picker'] ?? null;
-    if ($picker !== null && !in_array($picker, KNOWN_PICKERS, true)) {
+    if ($picker !== null && !in_array($picker, known_pickers(), true)) {
         $violations[] = "M7: editor.custom_picker '$picker' is not a known picker";
     }
 

@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "_meta": {
+    "title": "license — minimal fixture",
+    "post_id": 1,
+    "post_type": "post-imgcap",
+    "fixture_purpose": "All four Creative Commons licences in the note variant, plus the compact variant and the show_deed=false case. The trailing block has no code and no WP to resolve one from, which is the standalone degradation path: it must render NOTHING rather than inventing a default licence."
+  },
+  "blocks": [
+    { "type": "wysiwyg", "id": "intro", "html": "<p>The four choices, as choices.</p>" },
+
+    { "type": "license", "id": "l_by",       "code": "by" },
+    { "type": "license", "id": "l_by_sa",    "code": "by-sa" },
+    { "type": "license", "id": "l_by_nc_sa", "code": "by-nc-sa" },
+    { "type": "license", "id": "l_by_nc_nd", "code": "by-nc-nd" },
+
+    { "type": "wysiwyg", "id": "mid", "html": "<p>Compact, and without the deed link.</p>" },
+
+    { "type": "license", "id": "l_compact",  "code": "by-nc-sa", "variant": "compact" },
+    { "type": "license", "id": "l_nodeed",   "code": "by-sa",    "show_deed": false },
+    { "type": "license", "id": "l_notitle",  "code": "by",       "title": "" },
+
+    { "type": "wysiwyg", "id": "outro", "html": "<p>Below this line, a licence block with no code and no post to read one from — it renders nothing.</p>" },
+
+    { "type": "license", "id": "l_unresolved" }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "name": "license",
+  "version": 1,
+  "selector": ".lg-license",
+  "description": "The Creative Commons licence a post is published under, rendered as a choice: the licence name, a link to its canonical deed, and one chip per clause it imposes (credit / non-commercial / share-alike / no-derivatives). With `code` empty (the default) the block resolves the licence LIVE from the post's loothprint_creative_commons meta, so a member changing it in the form changes the page. Setting `code` pins the block to one licence instead.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "code": {
+        "type": "string",
+        "default": "",
+        "enum": ["", "by", "by-sa", "by-nc-sa", "by-nc-nd"],
+        "description": "Which Creative Commons licence. EMPTY (default) means follow the post's own licence meta at render time — that is what keeps a loothprint page in step with the form. A non-empty code pins this block to that licence and stops it tracking the post."
+      },
+      "title": {
+        "type": "string",
+        "default": "License",
+        "description": "Short uppercase eyebrow above the licence row. Empty = no eyebrow."
+      },
+      "show_deed": {
+        "type": "bool",
+        "default": true,
+        "description": "Link the licence name to its canonical creativecommons.org deed. The link carries rel=\"license\", the standard machine-readable licence signal."
+      },
+      "variant": {
+        "type": "string",
+        "default": "note",
+        "enum": ["note", "compact"],
+        "description": "note stacks the licence name over its clause chips, matching the callout `note` treatment the loothprint page uses today. compact puts name and clauses on one line."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": ["padding", "margin-block", "bg", "border-color", "radius"],
+    "text": ["title-color", "accent-color", "chip-bg", "chip-color"]
+  },
+  "defaults": {
+    "container": {
+      "padding": "18px 24px 18px 26px",
+      "margin-block": "22px",
+      "bg": "#fdfaf0",
+      "border-color": "#ecb351",
+      "radius": "8px"
+    },
+    "text": {
+      "title-color": "#b8842b",
+      "accent-color": "#b8842b",
+      "chip-bg": "#f6efdc",
+      "chip-color": "#6b5220"
+    }
+  },
+  "variants": {
+    "note":    { "extends": "defaults" },
+    "compact": {
+      "extends": "defaults",
+      "container": { "padding": "12px 18px", "margin-block": "16px" }
+    }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["title"],
+    "custom_picker": "license-choice",
+    "variant_prop": "variant",
+    "pill_buttons": ["up", "down", "edit", "change", "variant", "tier", "delete"]
+  }
+}

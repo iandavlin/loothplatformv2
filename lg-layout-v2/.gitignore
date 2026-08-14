@@ -12,3 +12,10 @@
 *.swp
 *.swo
 *~
+
+# …but snapshot baselines are NOT scratch. The monorepo root .gitignore carries
+# a blanket `*.log`, which silently excluded every tests/expected/<fixture>/
+# validation.log from the commit that captured the snapshots — leaving 3 of the
+# 4 artifacts the harness diffs, so render-test.php fataled on a missing file
+# and the whole suite was unrunnable. Keep these tracked.
+!/tests/expected/**/validation.log
