@@ -703,7 +703,13 @@ $lg_can_post = function_exists('lg_bb_mirror_can_post')
          side rail — so the hub emits no nav aside, no hamburger, no drawer
          backdrop, and needs no pre-paint nav-closed state. Forum subpages
          keep the classic left nav + hamburger below. */ ?>
-<?php if (empty($GLOBALS['__bb_hub_rail'])): ?>
+<?php /* A GOOGLE DOOR ADDS NO MEMBER NAV (Ian 2026-08-12, ruling 7). Both
+         branches below are member navigation: the legacy category tree, and the
+         hub rail that the door's own category filter would otherwise bring with
+         it. A door suppresses BOTH — that is the whole distinction between
+         "rebuilt in the hub look" and "turned into another hub". */ ?>
+<?php $lg_door = !empty($GLOBALS['__bb_hub_door']); ?>
+<?php if (!$lg_door && empty($GLOBALS['__bb_hub_rail'])): ?>
 <!-- Fixed triangle-corner hamburger (top-left, always on top) -->
 <button class="corner-hamburger" id="bb-ham"
         aria-label="Toggle navigation" aria-expanded="true">
@@ -729,7 +735,7 @@ $lg_can_post = function_exists('lg_bb_mirror_can_post')
     ]);
 ?>
 
-<?php if (!empty($GLOBALS['__bb_hub_rail']) && function_exists('hub_render_rail')): ?>
+<?php if (!$lg_door && !empty($GLOBALS['__bb_hub_rail']) && function_exists('hub_render_rail')): ?>
 <?php /* Centered filters modal (Ian 2026-06-11): the rail content — Categories
          AND Types both visible — in a dialog the sort-bar "Filters" chip opens.
          Server-rendered, link-driven (zero-JS filtering still round-trips);
