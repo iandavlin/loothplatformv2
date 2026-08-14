@@ -18,6 +18,10 @@ Asserts, per page, in BOTH themes:
   · body background + colour
   · every light-background component's own text colour (inheritance routes
     around a body-only fix the moment anything re-specifies it)
+  · GEOMETRY: no meter/distribution bar renders 0px wide, and the page does not
+    scroll horizontally. A colour check is blind to both — the bars shipped as
+    empty tracks for a whole revision because <span> fills inside a non-flex
+    parent stay inline and ignore width/height.
 Fails loud on any mismatch, and loudly on the dark render matching the
 injected #15171a (which would mean the pin lost).
 """
@@ -59,6 +63,15 @@ PROBE = r"""
     step_bg    : g('.step', 'backgroundColor'),
     step_fg    : g('.step__p', 'color'),
     map_fg     : g('table.map td', 'color'),
+    // GEOMETRY. A colour comparison cannot see a bar that renders 0px wide —
+    // which is exactly what happened when meter/distribution fills were <span>s
+    // inside non-flex parents: they stayed inline and silently ignored width.
+    zero_width_bars: [...document.querySelectorAll(
+        '.meter__fill,.minimeter__fill,.dist__b,.minimeter__bar,.dist__track')]
+      .filter(e => e.getBoundingClientRect().width <= 0.5)
+      .map(e => e.className).join('|'),
+    bar_count  : document.querySelectorAll('.meter__fill,.minimeter__fill,.dist__b').length,
+    h_overflow : Math.round(document.documentElement.scrollWidth - window.innerWidth),
     tok_charcoal: getComputedStyle(document.body).getPropertyValue('--lg-charcoal').trim(),
     tok_cardbg : getComputedStyle(document.body).getPropertyValue('--lg-card-bg').trim(),
   });
@@ -145,9 +158,18 @@ async def main():
                 if dark["body_bg"] == INJECTED_DARK:
                     failures.append(f"{page}: body repainted to injected dark {INJECTED_DARK}")
 
-                # 3. every probe identical across themes
+                # 3. geometry: no zero-width bars, no horizontal overflow
+                for label, shot in (("dark", dark), ("light", light)):
+                    if shot.get("zero_width_bars"):
+                        failures.append(f"{page}: [{label}] zero-width bar(s): "
+                                        f"{shot['zero_width_bars'][:120]}")
+                    if shot.get("h_overflow", 0) > 1:
+                        failures.append(f"{page}: [{label}] page scrolls horizontally by "
+                                        f"{shot['h_overflow']}px")
+
+                # 4. every probe identical across themes
                 for k in dark:
-                    if k in ("theme_attr", "boot_crit"):
+                    if k in ("theme_attr", "boot_crit", "zero_width_bars", "h_overflow"):
                         continue
                     checked += 1
                     if dark[k] != light[k]:

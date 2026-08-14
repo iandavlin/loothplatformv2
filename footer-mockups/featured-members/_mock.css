@@ -390,7 +390,12 @@ body#lgfm {
    Below 760px each row becomes a stacked card and the header row is dropped,
    with each cell carrying its own label via `data-l`.
    ══════════════════════════════════════════════════════════════════════════ */
-@media (max-width: 760px) {
+/* Breakpoint raised 760 -> 900 on 2026-08-14. At 760 there was a DEAD ZONE:
+   the table stopped stacking at 761px but the 7-column layout needs ~830px, so
+   every width from 761 to ~830 side-scrolled the page — including 768px, iPad
+   portrait. Caught by the geometry assertion in tools/mock-theme-proof.py, not
+   by eye, and not by any 390/1280 check. */
+@media (max-width: 900px) {
   #lgfm table.wpt, #lgfm table.wpt tbody, #lgfm table.wpt tr, #lgfm table.wpt td { display: block; width: auto; }
   #lgfm table.wpt { border: 0; background: none; }
   #lgfm table.wpt thead { display: none; }
@@ -505,3 +510,103 @@ nav#looth-tabbar,        /* mobile tab bar — covers the foot of every mock   *
 #lgfm .dist__b { display: block; height: 100%; background: var(--lg-sage); border-radius: 3px; min-width: 3px; }
 #lgfm .dist__b--hi { background: var(--lg-sage-d); }
 #lgfm .dist__v { font: 500 12px/1.3 var(--lg-font-sans); color: #6b6f6b; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   .tp-dark — A TRUE DARK RENDERING OF THE PRODUCT, for the desktop mock page.
+   (Ian 8/14: desktop views of every surface in light AND dark.)
+
+   Everything else in this file PINS the mocks light, because a mock is a fixed
+   artifact. This scope does the opposite on purpose: inside .tp-dark we
+   reproduce exactly what a member with the Dark theme picked would see, so Ian
+   is judging the real rendering rather than a guess.
+
+   Three layers, in this order:
+     1. the platform's own dark token map, verbatim from app-settings.js
+        THEMES[dark].vars — note --lg-charcoal INVERTS to near-white and
+        --lg-card-bg goes dark, which is what breaks naive components;
+     2. the product's real dark overrides, verbatim from profile-app/web/u.php
+        (u.php:732 pins the privacy slab to #22262a so it does NOT go white;
+        u.php:733-739 flip selected sage chips to dark ink);
+     3. dark treatments for THIS PROPOSAL's new components. Drawing them dark is
+        what exposed that they hardcoded light greys (#4c4f47 body text on a
+        #1e2124 card ≈ invisible). Those are fixed here rather than left for
+        someone to find on a phone.
+   ══════════════════════════════════════════════════════════════════════════ */
+#lgfm .tp-dark {
+  /* 1. platform dark tokens (app-settings.js THEMES[dark].vars) */
+  --lg-cream:      #15171a;
+  --lg-sage:       #9cb37d;
+  --lg-sage-d:     #b0c693;
+  --lg-sage-tint:  #243024;
+  --lg-sage-3:     #2f3d2c;
+  --lg-line:       #2c312d;
+  --lg-charcoal:   #f2f4ee;
+  --lg-ink:        #e5e7e1;
+  --lg-mute:       #a6ac9f;
+  --lg-amber:      #ecb351;
+  --lg-rust:       #d57a55;
+  --lg-card-bg:    #1e2124;
+  --fp-img-ph:     #2c312d;
+  --fp-cta-ink:    #15171a;
+  --fp-cta-hover-bg: #c3d6a6;
+  background: #15171a;
+  color: var(--lg-ink);
+}
+
+/* 2. the product's own dark rules, so the slab is faithful and not a guess */
+#lgfm .tp-dark .lg-viewas { background: #22262a; }
+#lgfm .tp-dark .lg-viewas__seg a[aria-current="true"],
+#lgfm .tp-dark .lg-disc-seg button[aria-checked="true"] { color: #15171a; }
+#lgfm .tp-dark .lg-vchip--member  { background: #3a3220; color: #ecb351; }
+#lgfm .tp-dark .lg-vchip--private { background: #3a2a24; color: #d57a55; }
+#lgfm .tp-dark .lg-vchip--public  { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+
+/* 3a. the consent row (Variant A) */
+#lgfm .tp-dark .lg-feat input[type="checkbox"]:checked::after { border-color: #15171a; }
+
+/* 3b. the consent card (Variant B) — every one of these was a hardcoded light
+       grey that vanished on the dark card. */
+#lgfm .tp-dark .lg-featcard        { background: var(--lg-card-bg); color: var(--lg-ink); border-color: var(--lg-line); }
+#lgfm .tp-dark .lg-featcard--in    { background: #24211a; border-left-color: var(--lg-amber); color: var(--lg-ink); }
+#lgfm .tp-dark .lg-featcard__h     { color: var(--lg-charcoal); }
+#lgfm .tp-dark .lg-featcard__p     { color: #c3c8bd; }
+#lgfm .tp-dark .lg-featcard__lbl   { color: var(--lg-ink); }
+#lgfm .tp-dark .lg-featcard__meta  { color: var(--lg-mute); border-top-color: var(--lg-line); }
+#lgfm .tp-dark .lg-featcard__meta b { color: var(--lg-ink); }
+#lgfm .tp-dark .lg-featcard__row input[type="checkbox"] { background: #15171a; border-color: #4a504a; }
+#lgfm .tp-dark .lg-featcard__row input[type="checkbox"]:checked { background: var(--lg-sage); border-color: var(--lg-sage); }
+#lgfm .tp-dark .lg-featcard__row input[type="checkbox"]:checked::after { border-color: #15171a; }
+#lgfm .tp-dark .lg-featcard__row input[type="checkbox"]:disabled { background: #23262a; border-color: #3a403a; }
+
+/* 3c. the completeness meter */
+#lgfm .tp-dark .meter            { background: var(--lg-card-bg); color: var(--lg-ink); border-color: var(--lg-line); }
+#lgfm .tp-dark .meter__pct       { color: var(--lg-charcoal); }
+#lgfm .tp-dark .meter__lbl       { color: var(--lg-mute); }
+#lgfm .tp-dark .meter__bar       { background: #2c312d; }
+#lgfm .tp-dark .meter__item      { color: #c3c8bd; }
+#lgfm .tp-dark .meter__item--todo{ color: #7d837a; }
+#lgfm .tp-dark .meter__item--next{ color: var(--lg-charcoal); }
+#lgfm .tp-dark .meter__tick      { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
+#lgfm .tp-dark .meter__item--todo .meter__tick { background: #262b26; color: #5f655d; }
+#lgfm .tp-dark .meter__item--next .meter__tick { background: #3a3220; color: var(--lg-amber); }
+#lgfm .tp-dark .meter__next      { color: #c3c8bd; border-top-color: var(--lg-line); }
+#lgfm .tp-dark .meter__next b    { color: var(--lg-charcoal); }
+
+/* 3d. the front-page band: token-driven already, but the badge/CTA need checking */
+#lgfm .tp-dark .lg-fm       { background: var(--lg-card-bg); border-color: var(--lg-line); }
+#lgfm .tp-dark .lg-fm__avi  { border-color: var(--lg-card-bg); box-shadow: 0 0 0 1px var(--lg-line); }
+#lgfm .tp-dark .lg-fm__cta  { background: var(--lg-sage-d); color: #15171a; }
+
+/* the frame each rendering sits in on the desktop page */
+#lgfm .tp { border-radius: 14px; padding: 22px 24px; margin: 0 0 12px; overflow: hidden; }
+#lgfm .tp--light { background: #f7f6f1; color: var(--lg-ink); border: 1px solid #ddd9cc; }
+#lgfm .tp--dark  { border: 1px solid #2c312d; }
+#lgfm .tp__lbl {
+  display: inline-block; margin: 0 0 14px;
+  font: 800 10px/1 var(--lg-font-sans); letter-spacing: .12em; text-transform: uppercase;
+  border-radius: 5px; padding: 6px 9px;
+}
+#lgfm .tp--light .tp__lbl { background: #e6e4da; color: #6b6f6b; }
+#lgfm .tp--dark  .tp__lbl { background: #262b26; color: #a6ac9f; }
+/* the profile shell is max-width:760px in the real product — keep mocks honest */
+#lgfm .tp__shell { max-width: 760px; margin: 0 auto; }   /* the real profile column is centred */
