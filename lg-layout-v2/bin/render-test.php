@@ -169,11 +169,22 @@ function runFixture(
         return ['status' => 'snapshot-written'];
     }
 
-    /* Diff */
+    /* Diff.
+       A missing EXPECTED artifact is a reportable failure, not a crash. The
+       monorepo's root .gitignore carries a blanket `*.log`, which silently
+       excluded every tests/expected/<fixture>/validation.log from the commit
+       that captured the snapshots — so the committed baselines have 3 of the 4
+       artifacts and file_get_contents() returned false straight into strlen().
+       That fataled the whole harness (`--all` died on the first fixture), which
+       is why nothing has been snapshot-tested in a while. Report and continue. */
     $diffs = [];
     foreach (['rendered.html', 'bundle.css', 'variables-resolved.json', 'validation.log'] as $artifact) {
-        $a = file_get_contents("$fixOutDir/$artifact");
-        $b = file_get_contents("$fixExpectedDir/$artifact");
+        if (!is_file("$fixExpectedDir/$artifact")) {
+            $diffs[] = "$artifact: no expected baseline committed (re-capture with --update-snapshots)";
+            continue;
+        }
+        $a = (string) file_get_contents("$fixOutDir/$artifact");
+        $b = (string) file_get_contents("$fixExpectedDir/$artifact");
         if ($a !== $b) {
             $aLen = strlen($a);
             $bLen = strlen($b);
