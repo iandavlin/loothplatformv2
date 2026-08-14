@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Featured members — four decisions, with pictures</title>
+<link rel="stylesheet" href="_mock.css">
+<style>
+body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
+#lgfm .q { background:#fff; color:#33362f; border:1px solid #e3ddd0; border-left:5px solid var(--lg-rust);
+           border-radius:12px; padding:18px 20px; margin:0 0 26px; }
+#lgfm .q--settled { border-left-color:var(--lg-sage); background:#fafbf7; }
+#lgfm .q__n { display:inline-block; background:var(--lg-rust); color:#fff; border-radius:999px;
+              padding:3px 11px; font:800 11px/1.5 var(--lg-font-sans); letter-spacing:.06em; text-transform:uppercase; }
+#lgfm .q--settled .q__n { background:var(--lg-sage); }
+#lgfm .q__h { margin:10px 0 6px; font:400 22px/1.25 var(--lg-font-serif); color:#1a1d1a; }
+#lgfm .q__p { margin:0 0 14px; font:500 13.5px/1.65 var(--lg-font-sans); color:#4c4f47; max-width:840px; }
+#lgfm .q__p b { color:#1a1d1a; }
+#lgfm .opt { margin:0 0 18px; }
+#lgfm .opt__h { margin:0 0 8px; font:800 12px/1.4 var(--lg-font-sans); letter-spacing:.05em;
+                text-transform:uppercase; color:#6b6f6b; }
+#lgfm .shot { display:block; width:100%; height:auto; border:1px solid #ddd9cc; border-radius:10px; margin:0 0 6px; }
+#lgfm .shot__c { margin:0 0 16px; font:600 11.5px/1.4 var(--lg-font-sans); color:#7a7f72; }
+#lgfm .rec { background:var(--lg-sage-tint); color:#3f4a2f; border-radius:9px; padding:11px 14px;
+             font:500 13px/1.6 var(--lg-font-sans); margin:4px 0 0; }
+#lgfm .rec b { color:#2f3a22; }
+#lgfm .ans { margin:14px 0 0; padding-top:12px; border-top:1px dashed #ddd9cc;
+             font:700 13px/1.5 var(--lg-font-sans); color:#8a4a30; }
+#lgfm .q--settled .ans { color:#4a6b2f; }
+#lgfm .nums { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 14px; }
+#lgfm .num { background:#faf9f5; border:1px solid #e9e5d8; border-radius:9px; padding:9px 13px; }
+#lgfm .num b { display:block; font:400 21px/1.1 var(--lg-font-serif); color:#1a1d1a; }
+#lgfm .num span { font:600 11px/1.4 var(--lg-font-sans); color:#6b6f6b; }
+</style>
+</head>
+<body id="lgfm">
+<div class="wrap">
+
+  <div class="mockhead">
+    <h1>Featured members &mdash; four decisions</h1>
+    <p>Everything is drawn and measured; these four are what still need you. Each one has the picture
+       under it, a recommendation, and what happens if you say nothing.
+       <b>Nothing is built</b> &mdash; the build starts when you have ruled.</p>
+    <nav class="crumbs">
+      <a href="./">Overview</a>
+      <a href="desktop.html">Desktop light/dark</a>
+      <a href="tickbox.html">1 &middot; Tickbox</a>
+      <a href="dash.html">2 &middot; Dash</a>
+      <a href="frontpage.html">3 &middot; Front page</a>
+      <a href="completeness.html">4 &middot; Completeness</a>
+    </nav>
+  </div>
+
+  <!-- ══════════════ Q1 ══════════════ -->
+  <div class="q">
+    <span class="q__n">Decision 1</span>
+    <h2 class="q__h">The tickbox: A or B?</h2>
+    <p class="q__p">Where a member gives permission to be featured. Same words either way, two placements.
+       Both shown in the light theme and the dark theme, at the width they really appear.</p>
+
+    <div class="opt">
+      <p class="opt__h">Option A &mdash; a row in the privacy bar the member already has</p>
+      <img class="shot" src="shots/1a-light.png" alt="Variant A in light theme" width="1240" height="258" loading="lazy" decoding="async">
+      <img class="shot" src="shots/1a-dark.png" alt="Variant A in dark theme" width="1240" height="258" loading="lazy" decoding="async">
+      <p class="shot__c">Light, then dark. They look nearly identical because that bar is a deliberate dark slab in both &mdash; one rendering to design and maintain.</p>
+    </div>
+
+    <div class="opt">
+      <p class="opt__h">Option B &mdash; its own card underneath</p>
+      <img class="shot" src="shots/1b-light.png" alt="Variant B in light theme" width="1240" height="264" loading="lazy" decoding="async">
+      <img class="shot" src="shots/1b-dark.png" alt="Variant B in dark theme" width="1240" height="264" loading="lazy" decoding="async">
+      <p class="shot__c">Light, then dark. More room for the sentence and for state (&ldquo;in the pool since&hellip;&rdquo;).</p>
+    </div>
+
+    <p class="rec"><b>Recommended: A.</b> It sits with the other three permission controls, in the one bar a member
+       thinks of as &ldquo;who sees what about me&rdquo;. Nothing new to find, no new surface to build or keep in step.
+       B is the better answer only if you want featuring to feel like its own thing rather than a privacy setting.</p>
+    <p class="ans">Needs your word. Nothing is built either way until you pick.</p>
+  </div>
+
+  <!-- ══════════════ Q2 ══════════════ -->
+  <div class="q">
+    <span class="q__n">Decision 2</span>
+    <h2 class="q__h">The eight things that make a profile &ldquo;complete&rdquo;</h2>
+    <p class="q__p">Your percentage needs a list behind it. This is the proposed one &mdash; each worth 12.5%,
+       every one a field that already exists:
+       <b>a photo &middot; where you are &middot; what you do &middot; a bit about you &middot; a link or two &middot;
+       skills &amp; instruments &middot; photos of your work &middot; a banner</b>.</p>
+
+    <img class="shot" src="shots/meter-light.png" alt="The completeness meter at 25% and 100%, light theme" width="1240" height="331" loading="lazy" decoding="async">
+    <img class="shot" src="shots/meter-dark.png" alt="The completeness meter at 25% and 100%, dark theme" width="1240" height="331" loading="lazy" decoding="async">
+    <p class="shot__c">Where most members are today (25%), and a finished profile (100%). Light, then dark.</p>
+
+    <p class="rec"><b>Recommended: take the eight as listed.</b> Add, drop or reorder any of them &mdash; but each
+       change moves every member's number, so it is much cheaper to settle now than after members have seen a score.</p>
+    <p class="ans">Needs your word on the list. Equal weighting unless you say otherwise.</p>
+  </div>
+
+  <!-- ══════════════ Q3 ══════════════ -->
+  <div class="q">
+    <span class="q__n">Decision 3</span>
+    <h2 class="q__h">Does a low percentage <em>stop</em> someone volunteering?</h2>
+    <p class="q__p">A member ticks the box at 25% complete. Do we take the tick and simply tell them what their card
+       would look like &mdash; or refuse it until they fill more in?</p>
+
+    <div class="nums">
+      <div class="num"><b>978</b><span>members at 12% (a photo, nothing else)</span></div>
+      <div class="num"><b>88%</b><span>of everyone at 25% or below</span></div>
+      <div class="num"><b>66</b><span>could make a complete card today</span></div>
+      <div class="num"><b>52</b><span>would clear a 50% floor</span></div>
+    </div>
+
+    <img class="shot" src="shots/flow-light.png" alt="The meter inside the tickbox flow, light theme" width="1240" height="301" loading="lazy" decoding="async">
+    <img class="shot" src="shots/flow-dark.png" alt="The meter inside the tickbox flow, dark theme" width="1240" height="301" loading="lazy" decoding="async">
+    <p class="shot__c">The drawn behaviour: the tick is accepted, and the member is told plainly &mdash; &ldquo;your card would be a photo and a name&rdquo;.</p>
+
+    <p class="rec"><b>Recommended: nudge, never refuse.</b> Blocking consent behind a score turns someone away who is
+       trying to say yes, and makes the pool look empty for reasons nobody can see. The front page is still protected:
+       the dash only offers <b>Feature</b> when the card would actually look good.</p>
+    <p class="ans">Needs your word. A hard floor is the alternative &mdash; at 50% it would leave 52 people able to volunteer at all.</p>
+  </div>
+
+  <!-- ══════════════ Q4 ══════════════ -->
+  <div class="q">
+    <span class="q__n">Decision 4</span>
+    <h2 class="q__h">Does the meter stay in this flow, or go site-wide?</h2>
+    <p class="q__p">Drawn as: the member sees it on their own profile and in the tickbox flow, and you see it in the dash.
+       The bigger version &mdash; asking every <b>new</b> member for a photo, a city and what they do at sign-up &mdash;
+       is backlog item 19, which nobody is building yet.</p>
+
+    <img class="shot" src="shots/dash-light.png" alt="The admin dash with the completeness column" width="1240" height="528" loading="lazy" decoding="async">
+    <p class="shot__c">The dash: the percentage, and whether their card is ready. One featured member at a time, per your ruling.</p>
+
+    <p class="rec"><b>Recommended: keep it here for now, and merge later deliberately.</b> This lane can ship the meter
+       inside featuring without touching sign-up. But the meter and item 19 must share <b>one</b> definition of
+       &ldquo;complete&rdquo;, or a member will be told different things in different places &mdash; so if you want them as
+       one job, say so now and the two should be re-chartered together.</p>
+    <p class="ans">Needs your word. &ldquo;Stay here&rdquo; is the cheap answer and does not close the door.</p>
+  </div>
+
+  <!-- ══════════════ settled ══════════════ -->
+  <div class="q q--settled">
+    <span class="q__n">Already ruled</span>
+    <h2 class="q__h">Settled &mdash; no need to revisit</h2>
+    <p class="q__p"><b>One featured member at a time</b> (11 Aug), no rotation. <b>The percentage replaces the
+       one-line blurb idea</b> (12 Aug). <b>Consent is explicit and opt-in</b>, off for everybody until they tick it,
+       with no admin override at all &mdash; the only way into the pool is a member ticking their own box.</p>
+
+    <img class="shot" src="shots/card-light.png" alt="The front-page featured card, light theme" width="1240" height="317" loading="lazy" decoding="async">
+    <img class="shot" src="shots/card-dark.png" alt="The front-page featured card, dark theme" width="1240" height="317" loading="lazy" decoding="async">
+    <p class="shot__c">The front-page card, light and dark &mdash; fed from a real member instead of the hand-typed config it uses today.</p>
+
+    <img class="shot" src="shots/plain-light.png" alt="The ordinary featured card without a bio, light theme" width="1240" height="267" loading="lazy" decoding="async">
+    <img class="shot" src="shots/plain-dark.png" alt="The ordinary featured card without a bio, dark theme" width="1240" height="267" loading="lazy" decoding="async">
+    <p class="shot__c">And the ordinary case: only 7 members site-wide have a public About, so most cards run without a paragraph.</p>
+  </div>
+
+  <div class="note">
+    <b>One thing worth repeating.</b> The front-page featured band <b>already exists and already ships</b> &mdash; it has
+    been hand-typed to Dan Erlewine since June. This job is not designing a card; it is giving that card a source
+    (members who consented) and giving you a way to choose. That is why it is smaller than it sounds.
+  </div>
+
+  <div class="note">
+    Every number here is re-runnable: <code>tools/profile-completeness-report.sql</code>, read-only against live.
+    Full drawings: <a href="desktop.html">desktop, light and dark</a> &middot;
+    <a href="completeness.html">the percentage in detail</a> &middot; <a href="./">overview</a>.
+  </div>
+
+</div>
+</body>
+</html>
