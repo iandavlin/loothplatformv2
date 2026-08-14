@@ -13,3 +13,5 @@
    variants, dash, front-page card, %-complete meter) — in build.
 
 3. Fleet: relight all 3 teams after the multi-day shutdown ("Relight all 3").
+
+4. **V2 blocks for every form detail** — "If we do not have a block that can handle anything in the new form, like the license, we need to spin up v2 to produce the block... the lane should check. You can have the lane turn into a v2 type lane if we need it to." Lane: coverage table first (28 fields vs block catalog), gaps to Ian, then build. V2 source-of-truth question flagged (projects/ vs monorepo).
