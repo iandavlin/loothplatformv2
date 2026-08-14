@@ -24,6 +24,22 @@ page, a 500, or a redirect — the classic vacuous green. Every rail check here
 pairs "the legacy tree is gone" with "the hub rail is actually there", so the
 only way to pass is to render the right thing.
 
+THE TARGET SHAPE, per Ian's ruling of 2026-08-12 (IAN-RULINGS items 7-8):
+a category page is a GOOGLE DOOR. It exists so Google can rank a topic area —
+"There's currently no nav to the category page... We can already filter for the
+categories in the hub page", and that stays true. So it is a THIRD shape, not
+either of the two that exist today:
+
+    legacy tree   NO  — it is member nav, and it is what is being replaced
+    hub rail      NO  — adding it would ADD member nav, which the ruling forbids
+    hub cards     YES — "rebuilt in the hub look"
+    content items YES — ruling 8, option A: discussions + related content mixed
+
+That middle line is the one worth writing down, because the obvious
+implementation — route the page through the hub's existing category filter — hands
+it the rail for free and would sail past a gate that only checked "is the legacy
+tree gone". Absence of the OLD nav is not the goal; absence of ANY member nav is.
+
 TWO HALVES WITH DIFFERENT LIFECYCLES, and they are gated differently on purpose:
 
   A. CANONICAL — not member-visible, so it ships unflagged exactly as the topic
@@ -154,8 +170,26 @@ def main():
     print(f"liveness    {PREFIX}/ serves the hub rail and no legacy tree "
           f"(the control)")
 
-    cats = psql("SELECT slug FROM forums.forum WHERE visibility='public' "
-                "AND slug <> '' ORDER BY id LIMIT %d" % SAMPLE)
+    # ── GROUND TRUTH FOR "should this door show content?" ────────────────────
+    # NOT a label lookup. Content attaches to a category through
+    # hub_reconcile_cat_key(forum_label) — a coarse cat_key bucket, not the
+    # forum title and not the forum id — so an exact-label query in this gate
+    # would be a SECOND implementation of that mapping, free to drift from the
+    # one the product uses. (I wrote that version first; it passed a category
+    # that has 5 content rows by label, for the wrong reason.)
+    #
+    # Instead the gate asks the PRODUCT: the hub's own category filter
+    # (/hub/?leaf=<subtree ids>) is the same query the door routes into, so the
+    # door must show what that view shows. Differential, self-sourcing, and it
+    # asserts the thing this lane actually controls — the routing — rather than
+    # re-deriving which content belongs to which category.
+    cats = psql("SELECT f.slug, string_agg(s.id::text, ',') FROM forums.forum f "
+                "JOIN LATERAL (WITH RECURSIVE sub AS ("
+                "  SELECT id FROM forums.forum WHERE id = f.id "
+                "  UNION ALL SELECT c.id FROM forums.forum c JOIN sub ON c.parent_forum_id = sub.id "
+                "  WHERE c.visibility='public') SELECT id FROM sub) s ON true "
+                "WHERE f.visibility='public' AND f.slug <> '' "
+                "GROUP BY f.id, f.slug ORDER BY f.id LIMIT %d" % SAMPLE)
     if not cats:
         print("CANNOT RUN  no public categories from the DB")
         return 2
@@ -163,8 +197,13 @@ def main():
 
     findings, states, ok = [], [], 0
 
-    for slug in cats:
+    for row in cats:
+        slug, leaf_ids = (row.split("|") + [""])[:2]
         path = f"{PREFIX}/{slug}/"
+        # What the hub's OWN category filter shows for this same category.
+        ref, _rc = fetch(env, f"{PREFIX}/?leaf={leaf_ids}")
+        want_content = len(re.findall(r"feed-card--content", ref))
+        has_content = want_content > 0
         page, code = fetch(env, path)
         if code != 200:
             findings.append(f"{path} — HTTP {code}, a public category must serve 200")
@@ -172,8 +211,20 @@ def main():
             continue
 
         legacy = 'class="nav-tree"' in page
-        railed = ("hub-fmodal-page" in page) and ("hub-rail" in page or "hub-frail" in page)
-        state = "RAIL" if (railed and not legacy) else ("LEGACY" if legacy else "?")
+        railed = ("hub-rail" in page or "hub-frail" in page
+                  or "hub-chipbar" in page)
+        topics = len(re.findall(r"feed-card--topic", page))
+        content = len(re.findall(r"feed-card--content", page))
+        # DOOR = the shape Ian ruled: hub cards, both kinds, and NO member nav of
+        # either sort. Anything else is named so a failure says which.
+        if not legacy and not railed and topics and (content or not has_content):
+            state = "DOOR"
+        elif legacy:
+            state = "LEGACY"
+        elif railed:
+            state = "RAIL"
+        else:
+            state = "?"
         states.append(state)
 
         problems = []
@@ -195,21 +246,35 @@ def main():
             problems.append("no feed cards in the served HTML — a category listing "
                             "whose content only arrives via JS is not indexable")
 
-        # ── B. THE RAIL — flag-state aware ───────────────────────────────────
-        if state == "LEGACY":
-            if REQUIRE_RAIL:
-                problems.append("renders the LEGACY category tree, not the hub rail")
-            else:
-                print(f"  OFF   {path:<44} legacy rail served (flag off) — not asserted")
-        elif state == "?":
-            problems.append(f"renders neither rail (nav-tree={legacy}, hub rail={railed})")
+        # ── B. THE DOOR SHAPE — flag-state aware ─────────────────────────────
+        if state == "DOOR":
+            pass                                   # asserted below via problems
+        elif REQUIRE_RAIL:
+            if legacy:
+                problems.append("renders the LEGACY category tree — member nav "
+                                "that the rebuild replaces")
+            if railed:
+                problems.append("renders the HUB RAIL/chipbar — that ADDS member "
+                                "nav, which Ian's ruling 7 forbids on a door")
+            if has_content and not content:
+                problems.append(
+                    f"the hub's own category filter shows {want_content} content "
+                    f"item(s) here and the door shows none — ruling 8 is option A, "
+                    f"discussions AND related content mixed")
+            if not topics:
+                problems.append("no discussions on a category door")
+        else:
+            print(f"  OFF   {path:<44} not rebuilt yet "
+                  f"(legacy={legacy} rail={railed} topics={topics} content={content})"
+                  f" — door shape not asserted")
 
         for p in problems:
             findings.append(f"{path} — {p}")
             print(f"  RED   {path:<44} {p}")
         if not problems:
             ok += 1
-            print(f"  ok    {path:<44} state={state}, canonical self-referencing")
+            print(f"  ok    {path:<44} state={state} topics={topics} "
+                  f"content={content}, canonical self-referencing")
 
     # ── A hidden category must not become a public listing ───────────────────
     if hidden:
@@ -229,9 +294,9 @@ def main():
         for f in findings:
             print(f"  - {f}")
         return 1
-    if states and all(s == "LEGACY" for s in states):
-        print(f"GREEN (rail flag OFF)  canonical + content intact on {ok} check(s); "
-              f"the hub rail is not armed yet.")
+    if states and all(s != "DOOR" for s in states):
+        print(f"GREEN (door not built yet)  canonical + content intact on {ok} "
+              f"check(s); the Google-door rebuild is not armed.")
     else:
         print(f"GREEN  {ok} check(s): category pages render the hub, carry a "
               f"self-referencing canonical, and keep their content server-side.")

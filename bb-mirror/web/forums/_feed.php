@@ -504,6 +504,32 @@ if ($scoped_forum) {
     $scope_ids = array_column($scope_stmt->fetchAll(), 'id');
 }
 
+/* ── THE GOOGLE DOOR (Ian 2026-08-12, IAN-RULINGS 7-8) ───────────────────────
+   A category page is a door for Google, not a member surface. Rebuilt in the hub
+   look, with discussions AND related content mixed (option A), and with NO
+   member-facing nav added.
+
+   The trick is that the hub ALREADY produces exactly this feed — its own
+   category filter (`leaves`) yields the unified topics ∪ content query scoped to
+   a forum. So the door does not need a new query: it seeds that filter from the
+   RECURSIVE subtree already computed above and then takes the unified branch,
+   which is why this is routing rather than a second feed implementation.
+
+   What the door must NOT inherit is the rail and chipbar that filter normally
+   brings with it — that would ADD member nav, which ruling 7 forbids. The
+   suppression lives on __bb_hub_door and is honoured in _chrome.php.
+
+   Subtree, not the single forum: 6 of the 45 public forums have children, and a
+   door for a parent category that omitted its children would under-report the
+   topic area it exists to rank. */
+$lg_hub_door = false;
+if ($scoped_forum && defined('LG_HUB_CATEGORY_DOOR') && LG_HUB_CATEGORY_DOOR) {
+    $lg_hub_door = true;
+    $GLOBALS['__bb_hub_door'] = ['slug'  => (string)$scoped_forum['slug'],
+                                 'title' => (string)$scoped_forum['title']];
+    $hub_filters['leaves'] = array_map('strval', $scope_ids ?: [(int)$scoped_forum['id']]);
+}
+
 // -- Header image: explicit override (admin pencil) wins, else auto.
 //    Scoped forum -> forum.header_image_url; site-wide -> sync_state.site_header_image.
 $header_image_url = null;
@@ -537,7 +563,9 @@ if ($scoped_forum && !empty($scoped_forum['header_image_url'])) {
 }
 
 // -- Topic query with LATERAL join for first attachment image --
-if ($scoped_forum) {
+// A DOOR takes the unified branch below (topics + content), not this
+// topics-only one — see the __bb_hub_door block above.
+if ($scoped_forum && !$lg_hub_door) {
     $topic_sql = "
         WITH RECURSIVE scope AS (
           SELECT id FROM forum WHERE id = :seed_id
@@ -1434,7 +1462,12 @@ $header_cat = $scoped_forum
     <?php endif; ?>
   </header>
 
-  <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_chipbar($hub_filters, $hub_muted, $sort_param, $hub_leaf_labels ?? [], $hub_cat_tree ?? []); ?>
+  <?php /* Chipbar suppressed on a door — it is the rail's filter UI, i.e. member
+         nav (ruling 7). ONE php block, not a comment block plus the original
+         line: the second form emitted its own two-space indent and cost 2 bytes
+         on every hub page with the flag OFF. A 2-byte diff is still not a
+         no-op. */
+      if (empty($GLOBALS['__bb_hub_door']) && !empty($GLOBALS['__bb_hub_rail'])) hub_render_chipbar($hub_filters, $hub_muted, $sort_param, $hub_leaf_labels ?? [], $hub_cat_tree ?? []); ?>
 
   <!-- Sort bar (+ post button, right-aligned) -->
   <nav class="feed-sort-bar<?= !empty($GLOBALS['__bb_hub_rail']) ? ' feed-sort-bar--zones' : '' ?>" aria-label="Sort activity" data-lg-bar="1">

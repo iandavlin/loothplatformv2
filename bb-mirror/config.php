@@ -482,6 +482,34 @@ if (!defined('LG_FOLLOW_CADENCE_LIVE')) {
 // run the feature ON for Ian while it stays OFF everywhere else on the same vhost.
 // A fastcgi_param can only be set by an nginx conf, never by a query string, so this
 // is not a way for a visitor to switch the feature on.
+// ── LG_HUB_CATEGORY_DOOR — /hub/<category>/ is a GOOGLE DOOR ─────────────────
+// Ian, 2026-08-12 (IAN-RULINGS items 7-8): "Keep as Google doors". A category
+// page exists so Google can rank a topic area — "There's currently no nav to the
+// category page... We can already filter for the categories in the hub page",
+// and that stays true. So the door is a THIRD shape, not either of the two that
+// exist today:
+//     legacy category tree  NO  — member nav, and what the rebuild replaces
+//     hub rail / chipbar    NO  — adding it would ADD member nav, which the
+//                                 ruling forbids. This is the subtle one: the
+//                                 obvious implementation (route the page through
+//                                 the hub's own category filter) hands it the
+//                                 rail for free.
+//     hub cards             YES — "rebuilt in the hub look"
+//     content items         YES — ruling 8, option A: discussions AND related
+//                                 content mixed, the richer first impression for
+//                                 a stranger arriving from Google.
+//
+// Member-facing, so OFF by default and OFF a byte-identical no-op. Gated by
+// tools/gates/hub-category-page-gate.py, which READS which shape is served.
+//
+// Two sources, one meaning — same reasoning as the flags above: getenv() is how
+// a pool or CLI arms it, $_SERVER is how a single nginx location does.
+if (!defined('LG_HUB_CATEGORY_DOOR')) {
+    define('LG_HUB_CATEGORY_DOOR',
+        getenv('LG_BB_MIRROR_CATEGORY_DOOR') === '1'
+        || (($_SERVER['LG_BB_MIRROR_CATEGORY_DOOR'] ?? '') === '1'));
+}
+
 if (!defined('LG_THREAD_FOLLOW_ENABLED')) {
     define('LG_THREAD_FOLLOW_ENABLED',
         getenv('LG_BB_MIRROR_FOLLOW') === '1'
