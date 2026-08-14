@@ -371,10 +371,21 @@ function lg_fc_may_compose(string $type, int $user_id = 0): bool
  * tools/frontend-compose/synth-freeze-probe.php (the body froze at the blob's
  * text and a subsequent field change never reached the page).
  *
- * This does not resolve the clash — that is Ian's call, and the options are
- * genuinely different (drop the page editor for synthesized types, have this form
- * clear the blob, or leave both and accept the split). What it does is refuse to
- * LIE about it: the form says so rather than accepting an edit that will not show.
+ * ⚠️ RULED 2026-08-14, and the ruling changes what this notice MEANS. Ian: "I want
+ * all the old posts and the new posts to be handled by layout-v2." So a stored page
+ * is no longer an anomaly to warn about — it is the intended state for every
+ * loothprint. This form is DETAILS ONLY; the page belongs to layout-v2.
+ *
+ * The notice therefore stops proposing that the layout be removed (that would now
+ * be working against the ruling) and states the split plainly instead: title and
+ * hero reach the page because post-header reads them live; description, photos,
+ * print files and licence are BAKED into the stored blocks and do not.
+ *
+ * ⚠️ THE PRINT FILES ARE THE ONE THAT BITES, and it is reported to Ian rather than
+ * designed around: a member replaces their ZIP, the form says saved, and the page
+ * keeps offering the OLD download. It still works, so nobody notices it is wrong.
+ * Whether the form should keep those pieces of the page in step is his call and is
+ * on the decision page; until he answers, this notice is what stops it lying.
  */
 function lg_fc_page_is_frozen(int $post_id): bool
 {
@@ -705,9 +716,10 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
   </div>
   <?php if ($edit && lg_fc_page_is_frozen($edit)): ?>
     <div class="lgfc__frozen" role="status">
-      <strong>Heads up — this post’s page was customised.</strong>
-      Changes you make here will be saved, but they won’t show on the page until the
-      custom layout is removed. Tell us and we’ll sort it.
+      <strong>Heads up — the page and these details are kept separately.</strong>
+      Your changes here are saved. The title and main photo update the page straight
+      away; the description, photos, print files and licence live on the page itself,
+      so those will not change here. Tell us and we’ll update them.
     </div>
   <?php endif; ?>
   <?php acf_form('lg-fc-' . $type); ?>

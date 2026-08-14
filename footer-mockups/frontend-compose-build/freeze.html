@@ -55,11 +55,43 @@ a{color:#586b3f}
 <body id="lgfcfreeze">
 <div class="w">
 
-<h1>Two editors, one page</h1>
-<p class="lede">A decision I need from you before members get the edit form. It is not about the form —
-that part works. It is about something that already exists on your site and quietly disagrees with it.</p>
+<h1>Two editors, one page — <span style="color:#586b3f">settled</span></h1>
 
-<h2>What I found</h2>
+<div class="note note--ok" style="background:#f6f8ef;padding:14px 16px;border-radius:0 10px 10px 0">
+<p style="margin:0 0 8px"><strong>You ruled, 14 August:</strong> <em>“I want all the old posts and the new
+posts to be handled by layout-v2. I thought we made this decision.”</em></p>
+<p style="margin:0"><strong>So: the page belongs to layout-v2, for every Loothprint, old and new.</strong>
+The form is <strong>details only</strong> — licence, type and area, print files, title: exactly the things
+layout-v2 cannot reach. The two editors stop competing, and the freeze problem below dissolves. A/B/C is
+withdrawn; this page is kept as the record of how it got here.</p>
+</div>
+
+<p class="note"><strong>One wrinkle you asked to hear about before I build around it — and it is real.</strong>
+A layout-v2 page stores its content rather than looking it up. So once a post has a page, editing a detail in
+the form saves the detail but does <em>not</em> change the page:</p>
+
+<table style="margin-bottom:18px">
+  <tr><th>Detail edited in the form</th><th>Does the page follow?</th></tr>
+  <tr><td>Title</td><td class="y">yes — the header reads it live</td></tr>
+  <tr><td>Main photo / hero</td><td class="y">yes — same reason</td></tr>
+  <tr><td>Description</td><td class="n">no</td></tr>
+  <tr><td>Photos</td><td class="n">no</td></tr>
+  <tr><td><strong>Print files (the ZIP)</strong></td><td class="n"><strong>no — the page keeps offering the old download</strong></td></tr>
+  <tr><td>Licence</td><td class="n">no</td></tr>
+  <tr><td>Video / CAD / tip jar links</td><td class="n">no</td></tr>
+</table>
+
+<p class="note"><strong>The one that actually bites is the print files.</strong> A member replaces their ZIP,
+the form says saved, and the page carries on handing out the old file. That is the worst possible version of
+this because nobody notices — the download still works, it is just wrong.</p>
+
+<p class="note note--ok"><strong>What I would do about it, if you agree:</strong> when a member changes one of
+those details, update the matching piece of the page too — the download link, the licence line, the photos —
+and leave everything else in their page exactly as it is. That keeps your rule (layout-v2 owns the page)
+without the form quietly lying about the ZIP. <strong>I have not built it yet</strong>; you said tell you
+first, so I am telling you first.</p>
+
+<h2>How it got here (the record)</h2>
 <p>A Loothprint's page is <strong>built from its fields</strong>. You fill in the title, the photos, the
 files and the licence, and the page assembles itself. That is why this whole job was small.</p>
 <p>But every Loothprint already has an <strong>“Edit page”</strong> button for its author, which opens the
@@ -175,7 +207,7 @@ time, and nothing announces it. That is why I would still rather take A or B —
 stable — than adopt C as a permanent arrangement. C remains fine as a <em>holding</em>
 position while you decide; it is just not a resting place.</p>
 
-<h2>The three ways out</h2>
+<h2>The three ways out — WITHDRAWN, kept for the record</h2>
 <div class="three">
 
   <div class="opt">
@@ -222,10 +254,11 @@ position while you decide; it is just not a resting place.</p>
 
 </div>
 
-<h2>What I need from you</h2>
-<p><strong>A, B or C.</strong> If you lean towards A, do not take it from me that the stored pages are
-disposable — say so and I will render a few of them both ways, side by side, so you can see what would
-actually change before anything is touched. That is a short job and it is the honest order to do it in.</p>
+<h2>What I still need from you</h2>
+<p><strong>Nothing — this is settled.</strong> The only open question is the wrinkle at the top: whether I
+should keep the page's download link, licence and photos in step when a member edits those details. Say yes
+and I will build it; say no and the form will save details that the page does not show, which I would rather
+you chose on purpose than discover.</p>
 
 <p class="note"><strong>Nothing is switched on.</strong> The compose and edit forms are behind a flag that
 is off; <code>/compose/</code> still answers 404 on the site. This decision only needs making before that
