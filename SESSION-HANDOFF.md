@@ -2,14 +2,14 @@
 
 **Written 2026-08-14. Assume you are a fresh lane with zero context: this is your
 charter. Everything below was measured on this box — where something is unproven
-it says so, and there are two such things.**
+it says so, and there are two such things — both listed under OPEN CHECKS.**
 
 | | |
 |---|---|
-| Branch | `frontend-compose`, pushed, tip **`e4fb146`** |
+| Branch | `frontend-compose`, pushed, tip **`e2c19e4`** |
 | Base | rebased onto main earlier this session; **re-check, main moves fast** |
-| State | **36 commits, NOTHING MERGED.** Working tree clean |
-| Flags | `lg-layout-v2/config/license-block.php` and `.../download-block.php`, both `'enabled' => false` |
+| State | **38 commits, NOTHING MERGED.** Working tree clean |
+| Flags | `lg-layout-v2/config/{license,download,taxonomy}-block.php` — all three `'enabled' => false` |
 | Merge | **NOT merge-ready.** Two browser checks are open (below) |
 | Prior | `handoffs/2026-08-14-layout-v2-charter.md` — the audit that started this |
 
