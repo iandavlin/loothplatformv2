@@ -72,6 +72,43 @@ final class Licenses
     /** The code the ACF field defaults to (251 of 257 posts carry it). */
     public const DEFAULT_CODE = 'by-nc-sa';
 
+    /**
+     * The four ACF choice strings, VERBATIM, mapped to codes.
+     *
+     * These exist for one job: recognising a legacy licence callout with
+     * certainty. 164 of the 168 stored loothprint layouts carry the licence as
+     * a prose `callout` variant `note` whose body is exactly one of these four
+     * strings (measured: exactly 4 distinct bodies, all exact ACF choices).
+     *
+     * Matching on the WHOLE string rather than sniffing for licence-ish words
+     * is deliberate: a note callout that merely MENTIONS a licence inside a
+     * longer paragraph must not be swallowed and replaced, which would delete
+     * an author's prose.
+     */
+    public const ACF_CHOICES = [
+        'BY (Credit given to creator)'                                                                 => 'by',
+        'BY SA (Credit given to creator, Adaptations shared with same terms)'                          => 'by-sa',
+        'BY NC SA (Credit given to creator, Non-Commercial only, Adaptations shared with same terms)'  => 'by-nc-sa',
+        'BY ND NC (Credit given to creator, No Derivatives, Adaptations shared with same terms)'       => 'by-nc-nd',
+    ];
+
+    /**
+     * Resolve ONLY an exact ACF choice string to its code; '' for anything
+     * else. Whitespace is normalised (the stored bodies arrive as `<p>…</p>`
+     * and strip to the choice with incidental spacing), but nothing else is
+     * tolerated — this is the recogniser for a legacy licence block, and a
+     * loose match here would rewrite author content.
+     */
+    public static function from_exact_prose(string $text): string
+    {
+        $t = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+        if ($t === '') return '';
+        foreach (self::ACF_CHOICES as $choice => $code) {
+            if (strcasecmp($t, $choice) === 0) return $code;
+        }
+        return '';
+    }
+
     /** True if $code names one of the four licences. */
     public static function is_valid(string $code): bool
     {

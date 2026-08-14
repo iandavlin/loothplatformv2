@@ -272,7 +272,8 @@ final class Plugin
         $raw = get_post_meta($post_id, LG_LAYOUT_V2_META_KEY, true);
         if (!empty($raw)) {
             $data = is_array($raw) ? $raw : json_decode((string) $raw, true);
-            return is_array($data) ? $data : null;
+            if (!is_array($data)) return null;
+            return self::upgrade_license_callouts($data);
         }
         $post = get_post($post_id);
         if (!$post instanceof \WP_Post) return null;
@@ -332,6 +333,59 @@ final class Plugin
         $html = preg_replace('~<h([1-6])\b[^>]*>.*?' . $q . '.*?</h\1>~is', '', $html) ?? $html;
         $html = preg_replace('~<a\b[^>]*href="[^"]*' . $q . '[^"]*"[^>]*>.*?</a>~is', '', $html) ?? $html;
         return $html;
+    }
+
+    /**
+     * Swap a legacy prose licence callout for the `license` block, on READ.
+     *
+     * ── why this exists, and why it is not a migration ──────────────────────
+     * Measured on dev2: 172 loothprints, 168 of them carry a STORED layout, and
+     * only 4 are synthesized. So changing the synthesizer alone would have
+     * reached 4 posts — the licence block would have been correct and invisible.
+     * 164 of the stored layouts hold the licence as a `callout` variant `note`
+     * whose body is exactly one of the four ACF choice strings.
+     *
+     * This runs on the read path and writes NOTHING. Flag off, or an
+     * unrecognised body, and the layout is returned byte-identical — so there
+     * is no migration to reverse, no half-migrated corpus if it is switched off
+     * mid-way, and no risk of rewriting 164 posts' stored content to find out
+     * whether Ian likes it.
+     *
+     * The recogniser is deliberately strict (an EXACT ACF choice string, via
+     * Licenses::from_exact_prose): a note callout that merely mentions a licence
+     * inside a longer paragraph must not be swallowed, because replacing it
+     * would drop the author's surrounding prose.
+     *
+     * The replacement carries NO `code`, so the block resolves the licence live
+     * from the post — which also closes the gap where a stored page's prose and
+     * the form's current answer could disagree. Measured today: all 164 agree,
+     * so switching this on changes how the licence LOOKS and never which
+     * licence a page states.
+     *
+     * `gated_tier` is carried across; dropping it would un-gate a gated block.
+     */
+    private static function upgrade_license_callouts(array $layout): array
+    {
+        if (!self::license_block_enabled()) return $layout;
+        if (empty($layout['blocks']) || !is_array($layout['blocks'])) return $layout;
+
+        foreach ($layout['blocks'] as $i => $b) {
+            if (!is_array($b)) continue;
+            if (($b['type'] ?? '') !== 'callout') continue;
+            if (($b['variant'] ?? '') !== 'note') continue;
+
+            $body = (string) ($b['body'] ?? '');
+            if ($body === '') continue;
+            $text = function_exists('wp_strip_all_tags') ? wp_strip_all_tags($body) : strip_tags($body);
+            if (Licenses::from_exact_prose($text) === '') continue;
+
+            $new = ['type' => 'license'];
+            if (isset($b['id']))          $new['id']          = $b['id'];
+            if (isset($b['title']))       $new['title']       = $b['title'];
+            if (isset($b['gated_tier']))  $new['gated_tier']  = $b['gated_tier'];
+            $layout['blocks'][$i] = $new;
+        }
+        return $layout;
     }
 
     /**
