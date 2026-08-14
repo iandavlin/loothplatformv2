@@ -505,9 +505,14 @@ if (!defined('LG_FOLLOW_CADENCE_LIVE')) {
 // Two sources, one meaning — same reasoning as the flags above: getenv() is how
 // a pool or CLI arms it, $_SERVER is how a single nginx location does.
 if (!defined('LG_HUB_CATEGORY_DOOR')) {
+    // DEFAULT FLIPPED ON — Ian, 2026-08-14, on the BUILT door ("I like the hub
+    // door", after the informed rich-AND-thin look). Same pattern as
+    // LG_HUB_TOPIC_LANDING above: an explicit env or $_SERVER value of '0'
+    // still forces OFF — the one-line revert and the lane-preview escape hatch.
+    $lg_cd_env = getenv('LG_BB_MIRROR_CATEGORY_DOOR');
+    $lg_cd_srv = $_SERVER['LG_BB_MIRROR_CATEGORY_DOOR'] ?? '';
     define('LG_HUB_CATEGORY_DOOR',
-        getenv('LG_BB_MIRROR_CATEGORY_DOOR') === '1'
-        || (($_SERVER['LG_BB_MIRROR_CATEGORY_DOOR'] ?? '') === '1'));
+        !($lg_cd_env === '0' || $lg_cd_srv === '0'));
 }
 
 if (!defined('LG_THREAD_FOLLOW_ENABLED')) {
