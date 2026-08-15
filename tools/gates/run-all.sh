@@ -9,13 +9,12 @@ set -uo pipefail
 # findings, and gate 2 spent weeks looking red while it was in fact dead. By
 # convention here: exit 0 = green, exit 1 = RED (real findings), exit 2 = CANNOT
 # RUN (no verdict — missing engine, unmintable cookies, an unresponsive CDP).
-# Gate-token env for gates that probe the armed vhost (gate 39 §E et al).
-# Resolved here once so no gate reports CANNOT RUN for a missing env that the
-# box can mint itself; gates resolve dev2 via loopback+Host (f02c0ed) so this
-# works under the sandboxed shells too. Harmless if gate-env fails: gates keep
-# their own CANNOT RUN honesty.
-export LG_GATE_HOST="${LG_GATE_HOST:-dev2.loothgroup.com}"
-export LG_GATE_COOKIE="${LG_GATE_COOKIE:-$(bash "$(dirname "$0")/gate-env.sh" 2>/dev/null | grep '^LG_GATE_TOKEN=' | cut -d= -f2)}"
+# ⚠️ NEVER export gate-token env GLOBALLY here. Tried 2026-08-15: the
+# visibility matrix reads LG_GATE_HOST for its base URL, a global export
+# re-pointed it at the public host, and gate 1 went red in two consecutive
+# suite runs while green standalone — a self-inflicted interferer that got a
+# lane falsely suspected. Per-gate env goes INLINE on that gate's run line.
+LG_GATE_TOKEN_MINTED="$(bash "$(dirname "$0")/gate-env.sh" 2>/dev/null | grep '^LG_GATE_TOKEN=' | cut -d= -f2)"
 
 red=0
 dead=0
@@ -803,7 +802,7 @@ echo "=== GATE 39: featured members — schema constraints, completeness parity,
 # other lanes are concurrently bumping for their own gates tonight (34, 35),
 # and it feeds no counter in this script — see run(), which tracks red/dead
 # by exit code only.
-run "featured-member" python3 "$(dirname "$0")/featured-member-gate.py"
+run "featured-member" env LG_GATE_HOST=dev2.loothgroup.com LG_GATE_COOKIE="$LG_GATE_TOKEN_MINTED" python3 "$(dirname "$0")/featured-member-gate.py"
 echo
 # Gate number 40 assigned by keeper 2026-08-15 (ledger: 38 v2 insert path,
 # 39 taken, 40 this — next free is 41).
