@@ -53,11 +53,12 @@ DB checks use passwordless sudo peer-auth (profile-app / postgres roles), same
 posture as gate 21/27/28. Exit codes follow run-all.sh: 0 green, 1 RED, 2
 CANNOT RUN.
 """
+import http.client
 import os
 import re
+import ssl
 import subprocess
 import sys
-import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 U_PHP = os.path.join(REPO, "profile-app", "web", "u.php")
@@ -272,16 +273,34 @@ def section_d_no_admin_override():
         OK.append("[D] me-featured.php stays off the admin-impersonation allowlist, as ruled")
 
 
-def check_http(url, headers, expect_key=None):
-    req = urllib.request.Request(url, headers=headers)
+def check_http(path, host, headers, expect_key=None):
+    """GET `path` against the BOX'S OWN LOOPBACK, never public DNS.
+
+    Found by keeper 2026-08-15: the original version built the request URL as
+    f"https://{host}/..." and let urllib resolve `host` normally — which
+    means a real DNS lookup, out through Cloudflare's edge, in front of the
+    box. Cloudflare bot-challenges an unrecognized client into a 403 (the
+    documented box trap 2: "Never smoke live with a plain public curl — it
+    reads as an outage"), and this gate's §E would have read that exact 403
+    as "nginx is blocking the route" — the identical false-red the finding
+    #1 fix was written to catch for real, now capable of firing on a
+    Cloudflare artifact instead. CONNECT to 127.0.0.1 (the box's own door);
+    the Host header alone decides which vhost answers, matching every curl
+    --resolve invocation used throughout this lane's own verification.
+    """
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    conn = http.client.HTTPSConnection("127.0.0.1", 443, timeout=5, context=ctx)
     try:
-        with urllib.request.urlopen(req, timeout=5) as r:
-            body = r.read(4000).decode("utf-8", "replace")
-            return r.status, body
-    except urllib.error.HTTPError as e:
-        return e.code, ""
+        conn.request("GET", path, headers={**headers, "Host": host})
+        r = conn.getresponse()
+        body = r.read(4000).decode("utf-8", "replace")
+        return r.status, body
     except Exception as e:
         return None, str(e)
+    finally:
+        conn.close()
 
 
 def section_e_live_routes():
@@ -300,7 +319,7 @@ def section_e_live_routes():
     # response that proves the route is live AND reaches the PHP endpoint.
     # 403 is now its own branch — RED, not swallowed — because it is exactly
     # the signature of "nginx is blocking this before PHP ever runs."
-    status, body = check_http(f"https://{host}/profile-api/v0/me/featured",
+    status, body = check_http("/profile-api/v0/me/featured", host,
                                {"Cookie": f"loothdev_auth={gate_cookie}"})
     if status is None:
         DEAD.append(f"[E1] request to /profile-api/v0/me/featured failed: {body[:160]}")
