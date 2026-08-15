@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-anon-dark-contrast-gate — GATE <<NUMBER-TBD-FROM-KEEPER>>/33 — does a LOGGED-OUT
+anon-dark-contrast-gate — GATE 36/36 — does a LOGGED-OUT
 visitor in DARK MODE get text and form fields they can actually read?
 
 WHY THIS GATE EXISTS (CRAFT-STANDARD: a defect class found TWICE becomes a gate,
@@ -13,9 +13,10 @@ no dark-mode styling at all — the whole three-card login skin predates dark mo
 entirely); the mobile compose "+" is a white icon on a fill that REPOINTS TO A
 LIGHT COLOUR in dark (--lg-sage-d: #586b3f -> #b0c693) while the icon stays
 hardcoded white — 1.85:1, confirmed by hand and reproduced by this exact probe.
-KEEPER GATE NUMBER: per charter ("gate number FROM KEEPER — ask; never mint") —
-requested 2026-08-14, filled in here once assigned. Do not renumber without
-asking; two lanes have collided minting 9/9 independently before.
+KEEPER GATE NUMBER: 36, assigned by keeper 2026-08-15 (roster at assignment:
+34 stripe, 35 compose/v2, 36 dark-anon). Requested per charter ("gate number
+FROM KEEPER — ask; never mint") — two lanes have collided minting 9/9
+independently before. Do not renumber without asking.
 
 WHAT IT ASSERTS. On every anon-reachable surface a visitor meets in the sign-in
 / join / sign-up path — /wp-login.php, its lostpassword and bpnoaccess (failed
@@ -130,7 +131,7 @@ def gate_env():
 class Session:
     def __init__(self):
         req = urllib.request.Request(CDP + "/json/new?about:blank", method="PUT")
-        t = json.load(urllib.request.urlopen(req))
+        t = json.load(urllib.request.urlopen(req, timeout=15))
         self.target_id = t["id"]
         self.ws = websocket.create_connection(t["webSocketDebuggerUrl"], max_size=None,
                                               timeout=15, suppress_origin=True)
@@ -138,7 +139,7 @@ class Session:
 
     def finish(self):
         for fn in (lambda: self.ws.close(),
-                   lambda: urllib.request.urlopen(CDP + "/json/close/" + self.target_id).read()):
+                   lambda: urllib.request.urlopen(CDP + "/json/close/" + self.target_id, timeout=10).read()):
             try:
                 fn()
             except Exception:                                  # noqa: BLE001
@@ -181,6 +182,27 @@ def arm_anon(s, tok):
            domain=".dev2.loothgroup.com", path="/", secure=True)
 
 
+def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics):
+    """Arm anon, navigate into the requested dark state, and probe. Returns
+    the raw probe result (theme, findings, truncated, ...)."""
+    path = path_tpl.replace("{host}", host.replace("https://", "").replace("http://", ""))
+    url = host + path
+    arm_anon(s, tok)
+    s.call("Emulation.setDeviceMetricsOverride", **metrics)
+    s.call("Emulation.setTouchEmulationEnabled", enabled=metrics["mobile"])
+    s.call("Emulation.setEmulatedMedia", features=[
+        {"name": "prefers-color-scheme", "value": "dark" if mode == "os-dark" else "light"}])
+    s.goto(url, settle=0.8)
+    if mode == "app-dark":
+        s.js("try{localStorage.setItem('lg-set-theme','dark')}catch(e){}")
+    else:
+        s.js("try{localStorage.clear()}catch(e){}")
+    s.goto(url, settle=1.6)
+    if mode == "app-dark":
+        s.goto(url, settle=2.0)
+    return s.js(probe_js)
+
+
 def main():
     env = gate_env()
     host = env["LG_GATE_HOST"]
@@ -189,52 +211,89 @@ def main():
 
     s = Session()
     red = []
+    cannot_run = []
     try:
         s.call("Page.enable"); s.call("Runtime.enable"); s.call("Network.enable")
         for device, metrics in (("desktop", DESKTOP), ("mobile", PHONE)):
-            s.call("Emulation.setDeviceMetricsOverride", **metrics)
-            s.call("Emulation.setTouchEmulationEnabled", enabled=metrics["mobile"])
             for mode in ("app-dark", "os-dark"):
-                s.call("Emulation.setEmulatedMedia", features=[
-                    {"name": "prefers-color-scheme", "value": "dark" if mode == "os-dark" else "light"}])
                 for key, path_tpl in GATED_SURFACES:
-                    path = path_tpl.replace("{host}", host.replace("https://", "").replace("http://", ""))
-                    url = host + path
-                    arm_anon(s, tok)
-                    s.goto(url, settle=0.8)
-                    if mode == "app-dark":
-                        s.js("try{localStorage.setItem('lg-set-theme','dark')}catch(e){}")
-                    else:
-                        s.js("try{localStorage.clear()}catch(e){}")
-                    s.goto(url, settle=1.6)
-                    if mode == "app-dark":
-                        s.goto(url, settle=2.0)
-
-                    try:
-                        data = s.js(probe_js)
-                    except Exception as e:                     # noqa: BLE001
-                        print(f"CANNOT RUN  {key}/{mode}/{device}: probe threw: {str(e)[:160]}")
-                        sys.exit(2)
-
                     label = f"{key}/{mode}/{device}"
+                    data = None
+                    # ONE reconnect on a dead/timed-out connection — same
+                    # shape as tools/preview/dark-anon-sweep.py, and for the
+                    # same reason: a single stuck CDP call otherwise takes
+                    # down every remaining surface behind it, and this box's
+                    # contention is real (measured live, 2026-08-14/15).
+                    for attempt in range(2):
+                        try:
+                            data = measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics)
+                            break
+                        except Exception as e:                 # noqa: BLE001
+                            print(f"  WARN  {label}: {str(e)[:100]}"
+                                  + (" — reconnecting" if attempt == 0 else ""))
+                            try:
+                                s.finish()
+                            except Exception:                   # noqa: BLE001
+                                pass
+                            s = Session()
+                            s.call("Page.enable"); s.call("Runtime.enable"); s.call("Network.enable")
+                    if data is None:
+                        cannot_run.append(f"{label}: connection failed twice")
+                        continue
+
+                    # LIVENESS, not just absence. A page that silently stayed
+                    # LIGHT would report zero findings and this gate would go
+                    # green having measured nothing — the exact class this
+                    # whole backlog item is about. One retry with more settle
+                    # time first (this box's contention produces real,
+                    # transient timing misses — confirmed on the sweep's
+                    # first-ever run, 2/48 rows, both cleared on a retry); if
+                    # it still won't resolve dark, that IS a finding, not a
+                    # thing to shrug past.
+                    if mode == "app-dark" and data.get("theme") != "dark":
+                        try:
+                            data2 = measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics)
+                            if data2.get("theme") == "dark":
+                                data = data2
+                            else:
+                                red.append(f"RED  {label}  DARK NEVER RESOLVED (theme={data2.get('theme')}) "
+                                          f"— every 'clean' finding below this surface is unearned, "
+                                          f"it was measured in LIGHT")
+                        except Exception:                       # noqa: BLE001
+                            red.append(f"RED  {label}  DARK NEVER RESOLVED and retry errored")
+
                     for f in data.get("findings", []):
                         red.append(
                             f"RED  {label}  {f['kind']} {f['ratio']}:1 (need {f['need']}:1)  "
                             f"{f['fg']} on {f['bg']}  [{f['sel'][-70:]}]  \"{f['sample'][:50]}\"")
                     if data.get("truncated"):
-                        print(f"WARN  {label}  scan truncated ({data['truncReason']}, "
+                        print(f"  WARN  {label}  scan truncated ({data['truncReason']}, "
                               f"{data['scannedElements']}/{data['totalElements']} elements) — "
                               f"findings below are a LOWER BOUND, not exhaustive")
                     print(f"  ok   {label}  {len(data.get('findings', []))} finding(s), "
-                          f"theme={data.get('resolvedTheme')}")
+                          f"theme={data.get('theme')}")
     finally:
         s.finish()
+
+    # RED beats CANNOT RUN beats GREEN — same priority run-all.sh itself uses
+    # (it checks $red before $dead). A real, confirmed finding on one surface
+    # must not be swallowed by an unrelated connection failure on another; the
+    # inverse (reporting only "cannot run" while hiding 5 confirmed defects)
+    # would understate a genuinely broken state.
+    if cannot_run:
+        print(f"\n{len(cannot_run)} surface(s) COULD NOT BE MEASURED (connection failed twice each):")
+        for line in cannot_run:
+            print(" ", line)
 
     if red:
         print(f"\n{len(red)} finding(s) below WCAG AA on anon dark sign-in/join surfaces:\n")
         for line in red:
             print(line)
         sys.exit(1)
+
+    if cannot_run:
+        print("\nCANNOT RUN — no verdict on the surfaces above. Not a pass.")
+        sys.exit(2)
 
     print("\nGREEN — every anon sign-in/join surface clears AA contrast in both dark paths.")
     sys.exit(0)

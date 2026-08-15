@@ -74,7 +74,7 @@ SURFACES = [
 class Session:
     def __init__(self):
         req = urllib.request.Request(CDP + "/json/new?about:blank", method="PUT")
-        t = json.load(urllib.request.urlopen(req))
+        t = json.load(urllib.request.urlopen(req, timeout=15))
         self.target_id = t["id"]
         # 15s, not 90s. This box is shared and load spikes are real (measured
         # 6+ load average from other lanes' concurrent Chrome sessions,
@@ -88,7 +88,7 @@ class Session:
 
     def finish(self):
         for fn in (lambda: self.ws.close(),
-                   lambda: urllib.request.urlopen(CDP + "/json/close/" + self.target_id).read()):
+                   lambda: urllib.request.urlopen(CDP + "/json/close/" + self.target_id, timeout=10).read()):
             try:
                 fn()
             except Exception:                                  # noqa: BLE001

@@ -864,6 +864,35 @@ echo "=== GATE 42: the puzzle LIBRARY and SEQUENCE never reach a browser ==="
 # before both flags are on everywhere is a blank board, not a degraded one.
 run "guitardle-daypuzzle" python3 "$(dirname "$0")/guitardle-daypuzzle-gate.py"
 
+# Gate number 36 assigned by keeper 2026-08-15 (ledger: 34 stripe, 35 compose/
+# v2, 36 dark-anon, 37 guitardle, 38 v2 insert path). Bare number, no "/N" —
+# matching gate 38's own precedent rather than the old shared-denominator
+# convention, which turned every new gate into a 30+-hunk merge conflict
+# across every prior "GATE n/N" banner (hit exactly that trying to land this
+# one after the roster moved twice underneath it).
+echo "=== GATE 36: anon dark-mode contrast — sign-in/join/sign-up path clears AA ==="
+# Backlog 21, Ian 2026-08-14: "the dark mode needs some love for the login
+# stuff" + "a ton of instructions and fields not ready for primetime in dark
+# for logged out". Measured on /wp-login.php, /join, /lgjoin and the front
+# page, in BOTH dark paths (app-dark: the visitor picked Dark; os-dark:
+# prefers-color-scheme, since dark here is a resolved app theme rather than a
+# media query) at desktop and mobile.
+#
+# RED-FIRST ON PURPOSE (charter METHOD: gate before fixing). Confirmed live,
+# 2026-08-14: the login page's three-card skin (lg-snippets/snippets/86.php)
+# had no dark styling at all — the card stayed white while the page around it
+# force-darkened; the mobile "+" compose icon is 1.85:1 (--lg-sage-d repoints
+# to a LIGHT colour under dark while the icon's stroke stays hardcoded
+# white); and /join's intro paragraph inherited the nginx boot script's
+# body{color:#e5e7e1!important} while its own card background never moved,
+# landing near-invisible pale-on-white. The login page, /join and the shared
+# pre-launch stub fixes have since landed (unflagged — none of the three is
+# member-visible, a logged-in member never sees them in normal use); the "+"
+# icon fix has ALSO landed, behind LG_DARK_POST_ICON_FIX (webroot/bottom-
+# nav.js), OFF by default and held pending keeper's ruling on whether a pure
+# dark-mode colour correction needs a flag at all.
+run "anon-dark-contrast" python3 "$(dirname "$0")/anon-dark-contrast-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
