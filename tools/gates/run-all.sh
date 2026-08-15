@@ -1050,6 +1050,35 @@ echo "=== GATE 51: new members arrive alive — the profile-setup step, flag OFF
 # Companion: profile-setup-redfirst.py mutates the source 12 ways and requires a
 # RED from each — run it after touching either the feature or this gate.
 run "profile-setup" python3 "$(dirname "$0")/profile-setup-gate.py"
+echo
+echo "=== GATE 52: tap a notification, get a reply modal — and OFF is UNREACHABLE ==="
+# Number 52 ASSIGNED BY KEEPER 2026-08-15. Not read off this file: when this was
+# minted, 50 was already here and 51 belonged to a lane that had NOT yet merged —
+# so the highest number visible was not the next free one. Gate 51 has since
+# landed directly above, which is the proof rather than the refutation: the
+# number was safe only because it came from keeper. That is how the old "9/9"
+# collision happened, and it is why 52 survived a rebase onto a main that had
+# meanwhile taken 51 and 53.
+#
+# Backlog 5, Ian's layout A (2026-07-30): the quote is THEIR reply, never the
+# member's own post, with a full-post link beside the composer.
+#
+# THE ABSENCES ARE THE POINT. Three defects reached Ian on 7/30 through gates that
+# asserted only what should be PRESENT — a composer that kept the previous reply's
+# text, a reaction row that grew a composer it should never have had, and a flag
+# whose OFF state quietly did something. So this runs the SHIPPED state (flag off)
+# and asserts the quote branch is unreachable rather than merely uncalled, and that
+# the response is BYTE-IDENTICAL to origin/main with the parameter sent.
+#
+# AND THE ABSENCE IS PROVED NON-VACUOUS, which is the assertion that makes the rest
+# worth anything: `--expect-off --force-flag-on` MUST exit 1. Verified on the
+# replanted tree — it fails on exactly the two OFF assertions and nothing else.
+#   off:                    25 pass / 0 fail
+#   on:                     25 pass / 0 fail  (incl. a reply from another topic
+#                           refused — r.topic_id scoping is what stops the
+#                           visibility gate being walked around)
+#   off --force-flag-on:    22 pass / 2 fail, exit 1  ← the counter-proof
+run "notif-quickreply" python3 "$(dirname "$0")/notif-quickreply-gate.py" --expect-off
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
