@@ -2,7 +2,7 @@
 
 **Written 2026-08-14. Assume you are a fresh lane with zero context: this is your
 charter. Everything below was measured on this box — where something is unproven
-it says so, and there are two such things — both listed under OPEN CHECKS.**
+it says so — see OPEN CHECK.**
 
 | | |
 |---|---|
@@ -10,7 +10,7 @@ it says so, and there are two such things — both listed under OPEN CHECKS.**
 | Base | rebased onto main earlier this session; **re-check, main moves fast** |
 | State | **38 commits, NOTHING MERGED.** Working tree clean |
 | Flags | `lg-layout-v2/config/{license,download,taxonomy}-block.php` — all three `'enabled' => false` |
-| Merge | **NOT merge-ready.** Two browser checks are open (below) |
+| Merge | **NOT merge-ready.** One browser check is open (below) |
 | Prior | `handoffs/2026-08-14-layout-v2-charter.md` — the audit that started this |
 
 ---
@@ -102,6 +102,13 @@ and `get_post_meta`, never with a SQL `LIKE` for JSON.**
   resemblance, which is how an author's surrounding paragraph gets deleted.
 * All 164 stored bodies already agree with the form's current answer, so turning
   the flag on changes how the licence **looks**, never which licence a page states.
+* ⚠️ **THREE POSTS PUBLISH A LICENCE NO READER CAN SEE.** 72155, 72146 and 71927
+  have a licence set in the form and **no licence block of any kind** in their
+  stored layout — the newest, hand-authored-in-v2 ones. The read-path swap
+  cannot help them: there is nothing to swap. They need the block INSERTED,
+  which is the same "insert vs swap" decision the taxonomy block is waiting on.
+  (A fourth, 71142, does show a licence — hand-written prose the strict
+  recogniser deliberately leaves alone.) **Ian's call, reported not taken.**
 
 ### Block 4 — `taxonomy` (commit `067f62b`)
 
@@ -135,7 +142,7 @@ and `get_post_meta`, never with a SQL `LIKE` for JSON.**
 
 ---
 
-## ⬜ THE TWO OPEN CHECKS — do these before claiming block 1 or 2 is finished
+## ⬜ ONE OPEN CHECK (was two — the second is now closed)
 
 Both exist for the same reason: **the branch is not on the dev2 serve**, because
 `/var/www/dev/wp-content/plugins/lg-layout-v2` symlinks into
@@ -144,8 +151,13 @@ Both exist for the same reason: **the branch is not on the dev2 serve**, because
 1. **The pickers CLICKED.** Licence popover and file picker are drawn with the
    real editor CSS but have never been tapped. Ian's phone has beaten a green
    suite six times; markup is not a control.
-2. **The licence read-path swap RENDERING on a real loothprint page.** The
-   recogniser is corpus-verified; the swap itself is not eyes-on.
+2. ~~**The licence read-path swap RENDERING.**~~ ✅ **CLOSED.** Post 70937's
+   REAL stored layout was pulled from the DB, run through the same recogniser,
+   and rendered: exactly ONE block swapped, `lg-callout--note` gone, the licence
+   rendered as `Attribution–NonCommercial–ShareAlike 4.0` with its three clause
+   chips, and gallery / wysiwyg / download / post-header / post-footer all
+   survived untouched. Verified through the real render pipeline — **not** in a
+   browser, which is what check 1 still covers.
 
 To do either you must point the plugin symlink at this worktree (and **restore
 it** — the serving checkout only ever pulls), or use the lane preview.
