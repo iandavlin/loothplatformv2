@@ -9,6 +9,14 @@ set -uo pipefail
 # findings, and gate 2 spent weeks looking red while it was in fact dead. By
 # convention here: exit 0 = green, exit 1 = RED (real findings), exit 2 = CANNOT
 # RUN (no verdict — missing engine, unmintable cookies, an unresponsive CDP).
+# Gate-token env for gates that probe the armed vhost (gate 39 §E et al).
+# Resolved here once so no gate reports CANNOT RUN for a missing env that the
+# box can mint itself; gates resolve dev2 via loopback+Host (f02c0ed) so this
+# works under the sandboxed shells too. Harmless if gate-env fails: gates keep
+# their own CANNOT RUN honesty.
+export LG_GATE_HOST="${LG_GATE_HOST:-dev2.loothgroup.com}"
+export LG_GATE_COOKIE="${LG_GATE_COOKIE:-$(bash "$(dirname "$0")/gate-env.sh" 2>/dev/null | grep '^LG_GATE_TOKEN=' | cut -d= -f2)}"
+
 red=0
 dead=0
 run() {  # run <label> <command...>
