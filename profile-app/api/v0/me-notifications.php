@@ -48,8 +48,22 @@ if ($method === 'GET') {
     // unread badge the member can never clear by reading. Clamped to maxIds().
     $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 30;
     $limit = max(1, min(Notifications::maxIds(), $limit));
-    profile_app_json(200, [
-        'items'  => Notifications::listFor($uuid, $limit),
+
+    // BACKLOG 11.6 — ?type= narrows the list; `counts` feeds the filter chips.
+    // Both are inert while the flag is off, so an OFF box answers exactly as before
+    // even if a client sends ?type= (a cached client must never change behaviour
+    // because of a parameter the server is not honouring yet).
+    $typeOn  = Notifications::typeFilterEnabled();
+    $type    = $typeOn ? Notifications::filterType($_GET['type'] ?? null) : null;
+    if ($typeOn && isset($_GET['type']) && $type === null) {
+        // Named a type we do not recognise. Refuse rather than silently return the
+        // WHOLE list — a member who thinks they are looking at one type and is shown
+        // everything is one tap from clearing everything.
+        profile_app_json(400, ['error' => 'unknown_type',
+                               'allowed' => Notifications::FILTER_TYPES]);
+    }
+    $payload = [
+        'items'  => Notifications::listFor($uuid, $limit, 0, $type),
         'unread' => Notifications::unreadCount($uuid),
         // The read policy travels WITH the rows it governs, in the same response,
         // so the client needs no second round-trip and no flag of its own. A client
@@ -57,7 +71,12 @@ if ($method === 'GET') {
         // is exactly the OFF behaviour — so an unversioned cached bottom-nav.js is
         // safe. 'all' => sweep the store (today). 'seen' => only what was rendered.
         'read_policy' => Notifications::readSeenOnly() ? 'seen' : 'all',
-    ]);
+    ];
+    if ($typeOn) {
+        $payload['type']   = $type;                       // echo what was applied
+        $payload['counts'] = Notifications::countsByType($uuid);
+    }
+    profile_app_json(200, $payload);
 }
 
 if ($method === 'POST') {
@@ -116,6 +135,25 @@ if ($method === 'DELETE') {
     // renamed key would be a silent client break the moment the flag flips, and from
     // the member's side "deleted" is still exactly what happened to it.
     $dismiss = Notifications::dismissEnabled();
+    // BACKLOG 11.6 — clear ONE type. Checked BEFORE $all so that a request naming a
+    // type can never be serviced by the clear-everything branch, even if a client
+    // sends both. Same wire shape as clear-all ({ok, deleted:N}) so the surfaces
+    // need no new response handling.
+    $btype = Notifications::typeFilterEnabled()
+        ? Notifications::filterType($_GET['type'] ?? $in['type'] ?? null) : null;
+    if ($btype !== null) {
+        $n = $dismiss ? Notifications::dismissAllOfType($uuid, $btype)
+                      : Notifications::deleteAllOfType($uuid, $btype);
+        profile_app_json(200, ['ok' => true, 'deleted' => $n, 'type' => $btype]);
+    }
+    if (Notifications::typeFilterEnabled() && (isset($_GET['type']) || isset($in['type']))) {
+        // A type was named and it is not one we know. REFUSE — never fall through to
+        // the clear-everything branch below, which is the one destructive mistake
+        // this endpoint could make.
+        profile_app_json(400, ['error' => 'unknown_type',
+                               'allowed' => Notifications::FILTER_TYPES]);
+    }
+
     if ($all) {
         // Clear-all. This is the tap that used to destroy a member's whole week.
         $n = $dismiss ? Notifications::dismissAll($uuid) : Notifications::deleteAll($uuid);
