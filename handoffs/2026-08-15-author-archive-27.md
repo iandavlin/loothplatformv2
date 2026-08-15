@@ -74,10 +74,42 @@ filter.
 - **Why it's a defect, not a policy:** the Hub **feed** shows that same anon
   **14 author bylines by name** on the unfiltered front page. `_suggest.php`'s
   own comment claims "same mask as the Hub feed". Measured, it is not.
-- **My read** (a ruling, not my call): the *search* over-masks rather than the
-  feed leaking — a byline on published work is already public, and
-  `discussion_visibility` is a *discussions* setting being used to hide the
-  authors of articles and videos too.
+### The exact divergence (pinned down 2026-08-15, code + measured)
+
+| | rule |
+|---|---|
+| **Feed** (`_feed.php:846-853`) | masks by `discussion_visibility` **only where `card_type === 'topic'`**. Its own comment: *"content cards are CPTs, never anonymous."* A CONTENT byline is always published. |
+| **Search** (`_suggest.php`) | applies `discussion_visibility = 'public'` to the **whole UNION** — topics *and* content — in one outer WHERE on the joined person row. |
+
+So the search hides **content** authors the feed publishes by name. Proof, not
+inference — the bylines a signed-out visitor sees on the unfiltered hub are
+almost entirely content authors, and every one is unsearchable to that same
+visitor:
+
+| author | content rows | topic rows |
+|---|---|---|
+| Doug Proper Guitar Specialist | 69 | 0 |
+| James Roadman | 37 | 0 |
+| Michael Bashkin Bashkin Guitars | 30 | 0 |
+| Dave Slimmer OldSchoolGuitar | 29 | 14 |
+| Seth Lee Jones | 1 | 0 |
+
+They are hidden on the strength of a **discussions** privacy setting they never
+used for discussions — `discussion_visibility` is `'member'` for 506 of 517 rows
+purely because that is the default.
+
+**The fix, matching the feed:** apply the `discussion_visibility` condition to
+the **topic leg of the union only**, leaving the content leg alone. Small and
+precise.
+
+**Two wrinkles not to paper over:**
+1. For an author with both (Dave Slimmer), `n` would need to mean *what this
+   viewer can see*, or the count overstates.
+2. Filtering the feed by his name as anon today returns all 43 cards with 14
+   rendered "Private member". Pre-existing; out of scope without a ruling.
+
+- **My read** (still a ruling, not my call): the *search* over-masks rather than
+  the feed leaking — a byline on published work is already public.
 - **NOW MEASURED** (was read-from-code; verified 2026-08-15 with minted
   `looth_id` bearers): the signed-in path is **fine**. Same query, three
   viewers — `q=erlewine`: anon **0**, member **1** (Dan Erlewine, n=54, avatar),

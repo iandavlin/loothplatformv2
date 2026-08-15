@@ -103,13 +103,13 @@ Neither was found by inspection:
 The rule is now stated as **shape preservation**: the clamp may only subtract
 *precision*, never *presence*. Both directions are asserted.
 
-## 5. Gate
+## 5. Gate 44
 
 `tools/gates/directory-location-gate.py` + `directory-location-probe.php`,
-wired into `run-all.sh` under an **unnumbered placeholder banner** — the number
-is keeper's to allocate and was still outstanding when this was written. The
-ledger's "NEXT FREE: 41" is already claimed by an unmerged branch, so minting
-from it would collide a third time.
+registered in `run-all.sh` as **GATE 44** (keeper-allocated 2026-08-15). Not 41:
+the ledger line read "NEXT FREE: 41" while 41 and 42 were already registered
+above and 43 was spoken for by the offline-shell gate — it under-counted by
+three. Keeper corrects the line separately, so this branch does not touch it.
 
 - **A** — the rule, deterministically, over synthetic places. Cannot go vacuous.
 - **B** — the real endpoint, 3 audiences × 3 surfaces, both flag states.
@@ -141,13 +141,15 @@ own `Flags` class instead, which resolves via `src/` and reads strictly `=== tru
 
 1. **Gate number** — still outstanding.
 2. **Which branch lands** — this one or `featured-members` (`cd0a2ed`).
-3. **Shops.** 6 of the 7 public street rows have a `business_name`: they are
-   guitar shops that turned street precision on *so customers can find them*.
-   This takes the street line out of their directory row (profile page keeps
-   it). The codebase already carves out storefront drop-off addresses as
-   "deliberately published… NOT coarsened", so this is a product question, not
-   only a safety one. If Ian wants shops exempt, the honest discriminator is
-   `business_name` set — wire it as a second flag rather than guess.
+3. **Shops — RULED, 2026-08-15: no exemption.** 6 of the 7 public street rows
+   have a `business_name` (guitar shops that turned street precision on so
+   customers could find them), so this was raised as a product question, not
+   only a safety one. Ian: **truncate everyone uniformly**, reasoning *"I'm
+   going to trust that they can fix their position as it suits them"* — members
+   adjust their own location text — and a proper **business profile** is coming
+   later as its own feature. **No code change was needed**: the clamp keys on
+   precision alone and never had a `business_name` branch. Do not add one
+   without a new ruling.
 4. **The store is still unfixed.** This changes rendering only. Luke's row, and
    the 2 text-only address rows, still hold street addresses in `location_text`.
 
