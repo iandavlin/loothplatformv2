@@ -227,4 +227,31 @@ final class Licenses
         }
         return $out;
     }
+
+    /**
+     * LOOSE detection: does this text look like it is already stating a licence?
+     *
+     * Deliberately the OPPOSITE strictness to from_exact_prose(), and the
+     * asymmetry is the point:
+     *   · REPLACING an author's block demands certainty — exact ACF choice only,
+     *     or we delete prose we did not understand.
+     *   · DECIDING NOT TO INSERT a second licence demands only suspicion — if
+     *     anything licence-shaped is already on the page, adding another is
+     *     worse than adding none.
+     * Post 71142 is exactly this case: a hand-written "Creative Commons BY-NC-SA
+     * — credit the creator…" sentence that from_exact_prose() will not touch. It
+     * must still suppress the insert, or that page ends up stating its licence
+     * twice.
+     */
+    public static function looks_like_licence(string $text): bool
+    {
+        $t = trim($text);
+        if ($t === '') return false;
+        if (stripos($t, 'creative commons') !== false) return true;
+        if (preg_match('/\bCC[\s-]?BY\b/i', $t)) return true;
+        /* A bare CC element run: "BY NC SA", "BY-NC-ND", "BY SA". */
+        if (preg_match('/\bBY[\s-]+(NC|SA|ND)\b/i', $t)) return true;
+        if (preg_match('/\bBY\b.*\bcredit given to creator\b/i', $t)) return true;
+        return false;
+    }
 }

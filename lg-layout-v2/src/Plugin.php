@@ -273,7 +273,7 @@ final class Plugin
         if (!empty($raw)) {
             $data = is_array($raw) ? $raw : json_decode((string) $raw, true);
             if (!is_array($data)) return null;
-            return self::upgrade_license_callouts($data);
+            return self::upgrade_stored_layout($data, $post_id);
         }
         $post = get_post($post_id);
         if (!$post instanceof \WP_Post) return null;
@@ -334,6 +334,69 @@ final class Plugin
         $html = preg_replace('~<a\b[^>]*href="[^"]*' . $q . '[^"]*"[^>]*>.*?</a>~is', '', $html) ?? $html;
         return $html;
     }
+
+    /**
+     * Read-path upgrades for a STORED layout: swap what is stale, insert what is
+     * missing. Writes nothing — flags off and this is the identity function.
+     *
+     * Ian, 2026-08-15 (ruling 7): v2 MAY insert a missing block into a stored
+     * page, with the scope guard that an insert only ever SURFACES something the
+     * author already declared in the form, and never invents content. Both
+     * inserts below read the post first and bail if the author declared nothing.
+     */
+    private static function upgrade_stored_layout(array $layout, int $post_id): array
+    {
+        $layout = self::upgrade_license_callouts($layout);
+        $layout = self::insert_missing_blocks($layout, $post_id);
+        return $layout;
+    }
+
+    /**
+     * Insert blocks for details the author declared in the form but which no
+     * block on their stored page shows.
+     *
+     * Measured: 3 loothprints (72155, 72146, 71927) publish a licence chosen in
+     * the form that appears NOWHERE on the page, and 157 carry taxonomy terms
+     * that no block has ever rendered.
+     *
+     * ── the strict/loose asymmetry, which is the whole safety of this ────────
+     * Deciding to REPLACE a block demands certainty (an exact ACF choice string).
+     * Deciding NOT TO INSERT demands only suspicion: if anything licence-shaped
+     * is already on the page, adding a second licence is worse than adding none.
+     * Post 71142 is exactly that case — a hand-written "Creative Commons
+     * BY-NC-SA — credit the creator…" sentence that the strict recogniser will
+     * not touch, and which must still suppress the insert.
+     *
+     * Position: immediately before `post-footer`. The chips and the licence
+     * belong to the article, not to the site chrome that follows it.
+     */
+    private static function insert_missing_blocks(array $layout, int $post_id): array
+    {
+        if ($post_id <= 0 || empty($layout['blocks']) || !is_array($layout['blocks'])) return $layout;
+        if (!function_exists('get_post_meta')) return $layout;
+
+        $wantLicense  = self::license_block_enabled();
+        $wantTaxonomy = self::taxonomy_block_enabled();
+        if (!$wantLicense && !$wantTaxonomy) return $layout;
+
+        /* Read the post's OWN answers, then hand the decision to a pure
+           function. Splitting it this way is what makes the insert rule
+           testable without booting the plugin: plan_inserts() takes facts, not
+           a database. */
+        $declared = Licenses::from_meta((string) get_post_meta($post_id, 'loothprint_creative_commons', true));
+
+        $filed = false;
+        if (function_exists('get_the_terms')) {
+            foreach (['loothprint_type', 'shared_category'] as $tax) {
+                if (function_exists('taxonomy_exists') && !taxonomy_exists($tax)) continue;
+                $terms = get_the_terms($post_id, $tax);
+                if (is_array($terms) && $terms) { $filed = true; break; }
+            }
+        }
+
+        return LayoutUpgrade::plan_inserts($layout, $declared, $filed, $wantLicense, $wantTaxonomy);
+    }
+
 
     /**
      * Swap a legacy prose licence callout for the `license` block, on READ.
