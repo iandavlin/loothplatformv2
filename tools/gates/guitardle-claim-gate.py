@@ -61,7 +61,16 @@ GAME_HTML = os.path.join(ROOT, 'archive-poc', 'web', 'guitardle', 'index.html')
 FLAGS = os.path.join(ROOT, 'archive-poc', 'api', 'v0', '_flags.php')
 
 WP_PATH = '/var/www/dev'
-PROBE_LOGIN = 'gdle_gate_probe'
+# A PER-RUN probe identity. The shared `gdle_gate_probe` account was a real
+# defect, not a tidiness issue: any other process touching it -- a second gate
+# run, or a lane hand-testing the feature -- lands rows inside this run and the
+# gate reports them as FAILURES. That happened on 2026-08-15 and produced five
+# false reds on a healthy feature, blocking keeper's merge train. A false red
+# blocks every lane, which is strictly worse than the coverage a gate buys.
+#
+# So each run gets its own account, keyed to the PID, created on demand and
+# DELETED at the end. Two runs can now overlap without seeing each other.
+PROBE_LOGIN = 'gdle_gate_probe_%d' % os.getpid()
 PLAY_DATE = time.strftime('%Y-%m-%d', time.gmtime())
 
 fails = []
@@ -82,7 +91,12 @@ def wp(php):
     r = sh("sudo -u looth-dev wp --path=%s eval %s" % (WP_PATH, shlex.quote(php)))
     if r.returncode != 0:
         cannot_run('wp-cli failed: ' + (r.stderr or r.stdout).strip()[:300])
-    return [l for l in r.stdout.splitlines() if not l.startswith(('PHP Warning', 'Warning'))][-1].strip()
+    lines = [l for l in r.stdout.splitlines()
+             if not l.startswith(('PHP Warning', 'Warning', 'Notice', 'Deprecated'))]
+    if not lines:
+        cannot_run('wp-cli returned nothing for: %s\n  stdout=%r\n  stderr=%r'
+                   % (php[:120], r.stdout[-200:], (r.stderr or '')[-200:]))
+    return lines[-1].strip()
 
 def psql(sql):
     r = sh("sudo -u postgres psql -tAd looth -c %s" % shlex.quote(sql))
@@ -108,12 +122,14 @@ if cols != 'claimed_at,resume_state':
                '(found: %r)' % cols)
 
 uid = wp(
-    '$u = get_user_by("login","%s");'
-    'if (!$u) { $id = wp_insert_user(["user_login"=>"%s","user_pass"=>wp_generate_password(24),'
-    '"user_email"=>"gdle-gate-probe@invalid.local","role"=>"subscriber"]); $u = get_user_by("id",$id); }'
-    'echo $u->ID;' % (PROBE_LOGIN, PROBE_LOGIN))
+    '$login = "%s"; $u = get_user_by("login",$login);'
+    'if (!$u) { $id = wp_insert_user(["user_login"=>$login,"user_pass"=>wp_generate_password(24),'
+    '"user_email"=>$login."@invalid.local","role"=>"subscriber"]);'
+    ' if (is_wp_error($id)) { echo "ERR:".$id->get_error_message(); return; }'
+    ' $u = get_user_by("id",$id); }'
+    'echo $u ? $u->ID : "ERR:no-user";' % PROBE_LOGIN)
 if not uid.isdigit():
-    cannot_run('could not resolve the probe user: ' + uid)
+    cannot_run('could not create the per-run probe user %s: %s' % (PROBE_LOGIN, uid))
 UID = int(uid)
 
 cookie_name = wp('echo LOGGED_IN_COOKIE;')
@@ -396,6 +412,10 @@ print()
 wipe()
 check(psql("SELECT count(*) FROM discovery.guitardle_results WHERE wp_user_id=%d;" % UID) == '0',
       'the gate cleaned up every row it wrote')
+wp('$u = get_user_by("login","%s"); if ($u) { require_once ABSPATH."wp-admin/includes/user.php"; '
+   'wp_delete_user($u->ID); } echo "gone";' % PROBE_LOGIN)
+check(wp('$u = get_user_by("login","%s"); echo $u ? "STILL-THERE" : "gone";' % PROBE_LOGIN) == 'gone',
+      'and removed its own per-run probe account')
 
 print()
 if fails:
