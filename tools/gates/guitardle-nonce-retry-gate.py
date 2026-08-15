@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GATE NN — a finished Guitardle result must not be LOST to an expired nonce.
+GATE 40 — a finished Guitardle result must not be LOST to an expired nonce.
 
 Backlog 24. Measured on live over 7 days: 101 finished games POSTed, **8 came
 back 403**, from 8 distinct IPs across 6 days. A WP nonce lives ~12h and the
@@ -119,7 +119,7 @@ def call(retry_flag, method='GET', body=None, nonce='', claim=True):
     except ValueError:
         cannot_run('probe did not return JSON: ' + out[-1][:300])
 
-print('=== GATE NN: a finished result survives an EXPIRED NONCE ===')
+print('=== GATE 40: a finished result survives an EXPIRED NONCE ===')
 print('endpoint: %s' % ENDPOINT)
 print('game.js : %s' % GAME_JS)
 print('probe member: wp_user_id=%d\n' % UID)
@@ -210,9 +210,9 @@ check(psql("SELECT count(*) FROM discovery.guitardle_results WHERE wp_user_id=%d
 
 print()
 if fails:
-    print('############ GATE NN RED — %d assertion(s) failed ############' % len(fails))
+    print('############ GATE 40 RED — %d assertion(s) failed ############' % len(fails))
     for f in fails:
         print('  - ' + f)
     sys.exit(1)
-print('############ GATE NN GREEN ############')
+print('############ GATE 40 GREEN ############')
 sys.exit(0)
