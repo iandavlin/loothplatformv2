@@ -786,7 +786,7 @@ run "compose" python3 "$(dirname "$0")/compose-gate.py" \
 
 # THE GATE-NUMBER LEDGER (single source of truth; keeper mints, lanes never):
 #   34 stripe (34a webhook + 34b pages + 34c price + 34d sweep) · 35 compose/v2 · 36 dark-anon · 37 guitardle claim · 38 insert
-#   path · 39 featured-members · 40 guitardle score-integrity — NEXT FREE: 41.
+#   path · 39 featured-members · 40 guitardle score-integrity — NEXT FREE: 45. (43 offline-shell, 44 directory-location; cd0a2ed stays unmerged - superseded by 88c0fac.)
 # Gate 38 runs on the real stored-layout corpus via direct mysql; needs
 # neither Redis nor a WP bootstrap.
 echo "=== GATE 38: v2 insert path — OFF is identity, an insert only SURFACES declared meta ==="
