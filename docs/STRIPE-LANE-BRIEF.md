@@ -38,6 +38,8 @@ All of this is in `main` today (verified with `git merge-base --is-ancestor`):
 | **Gate 34** (`test-soft-launch-allowlist.php`) | Merged and **passing today — I ran it, 39 checks, all green.** |
 | **Plain-English rename** (`f840d95`) | "Cohort" became "Stripe Test Group" everywhere on screen. Ian asked what cohort meant; that was the answer. |
 | **The member pages** (`membership-pages/`) | Built and serving, behind an admin-only pre-launch gate. |
+| **Test Group unlocks the pages** (gate 34b) | Built 8/15, **switched off**. Adds a `testgroup` visibility to the pages router. |
+| **Price in the dash** (gate 34c) | Built 8/15, **no price set**. Settings → LG Member Sync → Stripe Price. |
 
 The bespoke private signup page that the 8/12 chat was building is **dead** —
 Ian superseded it on 8/14 in favour of reusing the existing pages, and it never
@@ -132,31 +134,44 @@ Flip order at go-live: **identity gate on → lifecycle on → the list governs 
 
 ---
 
-## 6. Open items
+## 6. What is now waiting on Ian
 
-**Owed by Ian, nobody else can do them:**
+Everything below is a decision, not a task. Nothing here is blocked on code.
 
-- **The price itself.** How much, and monthly or yearly. Not needed until real
-  money. The dash control ships with no price set.
-- **Key rotation.** Ian already has a real, charges-enabled Stripe account
-  ("Loothgroup", `acct_1LJOi5Hg6gcIV22b`) that he had forgotten — it predates
-  this work. A working master key to it sat in the website database for years.
-  Roll it, then we stage the removal of the old copy.
-- **Grandfather vs correct** for the three over-tiered members. They are **held,
-  untouched**, pending his ruling.
-- **The live retraction run.** Keeper carries the command; Ian runs it. (Dev2's
-  sweep currently reports zero findings.)
+### The four he must make
 
-**Known and deliberately not built:** no `payment_source` writes — the dual-holder
-guards await Ian's ruling, and writing that meta early would arm them wrongly
-against members paying both Patreon and Stripe.
+1. **The price.** How much, and monthly or yearly. The control is built and
+   ships with **no price set** — this is the one number nobody else can pick.
+   Not needed until real money.
+2. **Grandfather or correct** the four over-tiered members. They are **held,
+   untouched**. Three are paying for Lite and receiving Pro; the fourth has
+   stopped paying entirely. Names and amounts:
+   `docs/STRIPE-HELD-MEMBERS-2026-08-15.md`. **Aron Bach needs deciding
+   separately** — his card was declined on 14 Aug, and his revisit was already
+   owed for the 18th.
+3. **Who is in the Test Group.** The list is empty, which means closed. Adding
+   people is a dash action, no deploy.
+4. **When to switch the pages on.** Flip order: identity gate on → lifecycle on
+   → the list governs who → the pages flag on.
 
-**Needs a keeper decision:** gate 34 is merged and green but was **never wired
-into `run-all.sh`**, so it has not run in any nightly since it merged. The suite
-still carries a note saying the gap closes when stripe merges — that note is out
-of date.
+### The two he must do himself
 
----
+- **Rotate the key.** He already has a real, charges-enabled Stripe account
+  ("Loothgroup", `acct_1LJOi5Hg6gcIV22b`) that predates this work, and a working
+  master key to it sat in the website database for years. Roll it, then we stage
+  removal of the old copy.
+- **The live retraction run**, once he has ruled on item 2. Keeper carries the
+  command; the run is his.
+
+### Not built, on purpose
+
+- **No migration of existing subscribers** to a new price — that is a separate
+  decision of his, and grandfathering is the default until he says otherwise.
+- **No `payment_source` writes** — the dual-holder guards await his ruling, and
+  writing that meta early would arm them wrongly against members paying both.
+- **No tokened invite links.** Login plus the list is enough for the test, and a
+  token that bypassed the list would defeat it. Revisit only if he wants
+  pre-login invites.
 
 ## 7. Corrections to this lane's charter
 
