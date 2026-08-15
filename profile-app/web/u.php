@@ -303,6 +303,19 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-disc-seg button[aria-checked="true"]{background:var(--lg-sage);color:#fff}
 .lg-disc-seg button:disabled{opacity:.6;cursor:wait}
 
+<?php if ($lg_fmOn): ?>
+<?php /* Found by the REAL click-through against the merged serve, 2026-08-15
+   — a static gate check cannot see this class of gap. The MARKUP was already
+   correctly PHP-gated (gate 39 §C2 proved it), but these are plain CSS text
+   inside a shared <style> block with no PHP around them at all: the class
+   RULES shipped on EVERY /u/<slug> page regardless of the flag, unconditionally,
+   the whole time. Inert with no matching DOM to attach to — no visible
+   change, nothing clickable, no data exposed — but "flag OFF is byte-
+   identical" is this codebase's own bar (back-pill.php, sheet-embeds.php),
+   and inert bytes are still bytes that were not there before this feature
+   shipped. Wrapped in $lg_fmOn, already computed well above this point in
+   the file (used for the tickbox markup itself), so this costs nothing new
+   to compute. */ ?>
 /* Featured member — Ian's Option B ruling 8/14: its own block, not a privacy-bar
    row. Vocabulary borrowed straight from .lg-block (border/radius/padding) so it
    reads as one more card, not an invented style. */
@@ -327,6 +340,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-fm-meter__fill--low{background:var(--lg-amber)}
 .lg-fm-meter__next{margin:0;font:500 12px/1.55 var(--lg-font-sans);color:#4c4f47}
 .lg-fm-meter__next b{color:var(--lg-charcoal)}
+<?php endif; /* /lg_fmOn: featured-member CSS */ ?>
 
 /* Block shell */
 .lg-block{position:relative;background:var(--lg-card-bg,#fff);border:1px solid var(--lg-line);border-radius:16px;padding:22px 24px;margin:0 0 16px}
@@ -793,6 +807,7 @@ html[data-lguser-theme="dark"] .lg-link-form .ok{color:#15171a}
 html[data-lguser-theme="dark"] .lg-vchip--member{background:#3a3220;color:#ecb351}
 html[data-lguser-theme="dark"] .lg-vchip--private{background:#3a2a24;color:#d57a55}
 html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gradient(45deg,var(--lg-sage-tint) 0,var(--lg-sage-tint) 10px,#1e2124 10px,#1e2124 20px)}
+<?php if ($lg_fmOn): ?>
 /* Featured member, dark — values proven against WCAG AA on the mock before this
    was built (footer-mockups/featured-members/_mock.css .tp-dark rules); ported
    verbatim rather than re-derived, incl. the fix for the meter's "not yet done"
@@ -815,6 +830,7 @@ html[data-lguser-theme="dark"] .lg-fm-meter__lbl{color:var(--lg-mute)}
 html[data-lguser-theme="dark"] .lg-fm-meter__bar{background:#2c312d}
 html[data-lguser-theme="dark"] .lg-fm-meter__next{color:#c3c8bd}
 html[data-lguser-theme="dark"] .lg-fm-meter__next b{color:var(--lg-charcoal)}
+<?php endif; /* /lg_fmOn: featured-member dark CSS */ ?>
 </style>
 </head>
 <body class="mode-view">
@@ -1623,11 +1639,17 @@ window.lgSortable = function (container, opts) {
 })();
 </script>
 
+<?php if ($lg_fmOn): ?>
 <script>
 /* Featured member (owner) — the Option B card's tickbox. Same optimistic-PUT
    shape as the discussion-visibility toggle above. Ian's ruling: "accept any
    %% — tick welcomed at any completeness, no floor" — this never disables the
-   checkbox on score; the meter below it is informational only. */
+   checkbox on score; the meter below it is informational only.
+   Gated behind $lg_fmOn, same as the CSS above and the markup itself — found
+   via the real click-through against the merged serve, 2026-08-15, same
+   defect class as the CSS: inert (the #lg-featcard-cb guard below means it
+   does nothing without the markup) but unconditionally present is still not
+   byte-identical. */
 (function () {
   var cb = document.getElementById('lg-featcard-cb');
   if (!cb) return;
@@ -1651,6 +1673,7 @@ window.lgSortable = function (container, opts) {
   });
 })();
 </script>
+<?php endif; /* /lg_fmOn: featured-member tickbox script */ ?>
 
 <script>
 /* Location editor (owner/Me) — verbatim address bar + drag-a-pin fallback.
