@@ -292,6 +292,40 @@ if (!preg_match_all('/data-item="([^"]+)"/', $html, $dm)) {
 }
 
 /* ---------------------------------------------------------------------- */
+section("[5c2] THE ROW YOU CLICK OPENS THE ITEM YOU CLICKED");
+
+// Ian hit this on the live board: he clicked a row in one project and got a
+// different item's modal. The key was a COUNTER incremented in two separate
+// loops — the payload built walking the file's P-bands, the rows rendered
+// walking the sorted project accordions. Same key name, different item.
+//
+// So this does not check that keys are unique (they were) or that a payload
+// entry exists (it did). It checks the thing that was actually wrong: that the
+// TITLE ON THE ROW matches the TITLE IN ITS MODAL. Uniqueness was true while
+// the mapping was nonsense.
+$rowPairs = [];
+if (preg_match_all('/data-item="([^"]+)"[^>]*>\s*<span class="row__t">([^<]*)</s', $html, $rp, PREG_SET_ORDER)) {
+    foreach ($rp as $m) { $rowPairs[] = [ $m[1], html_entity_decode($m[2], ENT_QUOTES | ENT_HTML5) ]; }
+}
+is_($rowPairs !== [], sprintf("rows expose their title alongside their key (%d)", count($rowPairs)));
+
+$payload2 = [];
+if (preg_match('/id="lgb-details">(.*?)<\/script>/s', $html, $pm2)) {
+    $payload2 = json_decode($pm2[1], true) ?: [];
+}
+$mismatch = [];
+foreach ($rowPairs as [$key, $title]) {
+    $title = trim($title);
+    $head  = (string) ($payload2[$key]['heading'] ?? '');
+    if ($head === '' || ($title !== '' && !str_contains($head, mb_substr($title, 0, 30)))) {
+        $mismatch[] = $key . ' (row "' . mb_substr($title, 0, 22) . '" vs modal "' . mb_substr($head, 0, 22) . '")';
+    }
+}
+is_($mismatch === [], sprintf(
+    "every row's modal is THAT row's item (%d checked; wrong: %s)",
+    count($rowPairs), $mismatch === [] ? 'none' : implode(' | ', array_slice($mismatch, 0, 3))));
+
+/* ---------------------------------------------------------------------- */
 section("[5d] PROJECT NESTING — and a mapping gap must be VISIBLE");
 
 // Ian: "nested and have names of the projects rather than the p0 etc." The
@@ -376,15 +410,55 @@ if (!is_readable($DESK)) {
 }
 
 /* ---------------------------------------------------------------------- */
+section("[5f] THE COPY-FOR-CHAT BRIDGE");
+
+// Ian: "it should have a copy and paste section for me to bring back here into
+// vs." Render-only — it produces text, it writes nothing. The value is that the
+// block carries the QUESTION and a blank answer line, so what he pastes back
+// says what it is answering; a bare "yes" in a chat is the thing this replaces.
+is_(preg_match_all('/class="cpy" data-copy="/', $html) > 0,
+    sprintf("needs-you rows carry a copy button (%d)", preg_match_all('/class="cpy" data-copy="/', $html)));
+is_(str_contains($html, 'id="lgb-copytext"'), "the modal carries its own copy block");
+is_(str_contains($html, 'My answer:'), "the block leaves a blank ANSWER line — the point of the bridge");
+is_(str_contains($html, 'BOARD ITEM '), "...and names the item, so a pasted reply says what it answers");
+
+// Every copy button must point at a payload entry that exists, or it silently
+// copies an empty string — a button that appears to work and does nothing.
+$copyKeys = preg_match_all('/class="cpy" data-copy="([^"]+)"/', $html, $ck) ? $ck[1] : [];
+$orphanCopy = array_values(array_diff($copyKeys, array_keys($payload2 ?? [])));
+is_($orphanCopy === [], sprintf(
+    "every copy button resolves to a real item (dangling: %s)",
+    $orphanCopy === [] ? 'none' : implode(',', $orphanCopy)));
+
+// A clipboard API is not always available (older browsers, blocked contexts).
+is_(str_contains($html, 'execCommand'), "there is a fallback, so the button cannot silently do nothing");
+is_(str_contains($html, 'e.stopPropagation()'), "copying does not also open the modal");
+
+// Still read-only: the bridge must not have smuggled in a write path.
+is_(!preg_match('/fetch\(|XMLHttpRequest|navigator\.sendBeacon/', $html),
+    "the copy bridge sends nothing anywhere — it is render-only, as specified");
+
+/* ---------------------------------------------------------------------- */
 section("[6] PHASE 1 CANNOT WRITE");
 
 // Read-only is the property that lets this ship without a flag, so it is
 // asserted against the SOURCE rather than trusted. Comments are stripped first
 // so prose about writing is not mistaken for a write.
 $src  = (string) file_get_contents($PAGE);
+
+// Strip comments, then the INLINE JAVASCRIPT — because this assertion is about
+// SERVER-side writes, and a client-side helper called copy() is not one. The
+// first version matched the JS and reported a healthy page as writing, which is
+// a false positive of exactly the kind that gets an assertion deleted rather
+// than fixed. Any <script> containing PHP is left in place and still checked,
+// so nothing can hide a write inside one.
 $code = (string) preg_replace('!/\*.*?\*/!s', '', $src);
-$code = (string) preg_replace('!^\s*//.*$!m', $code === null ? '' : $code, $code);
-$code = (string) preg_replace('!^\s*//.*$!m', '', (string) preg_replace('!/\*.*?\*/!s', '', $src));
+$code = (string) preg_replace('!^\s*//.*$!m', '', $code);
+$code = (string) preg_replace_callback(
+    '!<script\b[^>]*>(.*?)</script>!s',
+    static fn (array $m): string => str_contains($m[1], '<?') ? $m[0] : '<script></script>',
+    $code
+);
 
 $writes = [];
 foreach ([
@@ -396,6 +470,8 @@ foreach ([
 is_($writes === [], sprintf("the page makes no write or shell call (%s)", $writes === [] ? 'clean' : 'FOUND: ' . implode(', ', $writes)));
 is_(!preg_match('/\$_POST|\$_REQUEST|\$_FILES/', $code), "it reads no POST, request or upload input");
 is_(!preg_match('/\$_GET/', $code), "it takes no query input at all — nothing to fuzz in phase 1");
+is_(!preg_match('/fetch\(|XMLHttpRequest|sendBeacon/', $src),
+    "and the CLIENT side posts nothing either — the stripped-out JS is checked separately, not excused");
 
 /* ---------------------------------------------------------------------- */
 echo "\n$pass passed, $fail failed\n";

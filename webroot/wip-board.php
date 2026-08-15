@@ -422,6 +422,20 @@ header('X-Robots-Tag: noindex, nofollow');
   .desk--empty .desk__t{color:var(--good)}
   .desk a{color:var(--accent)}
 
+  /* COPY-FOR-CHAT. Ian: "it should have a copy and paste section for me to
+     bring back here into vs" — a block he can paste into the keeper chat and
+     answer in place. Render-only; the board writes nothing. */
+  .cpy{border:0;background:#fff;color:var(--ink-soft);border:1px solid var(--line);border-radius:7px;
+       font-size:.72rem;font-weight:600;padding:4px 9px;cursor:pointer;white-space:nowrap;flex:none}
+  .cpy:hover{border-color:var(--accent);color:var(--accent)}
+  .cpy--done{border-color:var(--good);color:var(--good)}
+  .cpy--big{font-size:.78rem;padding:6px 12px}
+  .cpybox{margin:12px 0 0;background:#fbf8f2;border:1px solid var(--line);border-radius:9px;padding:11px 13px}
+  .cpybox__h{display:flex;justify-content:space-between;align-items:center;gap:9px;margin:0 0 8px}
+  .cpybox__t{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-mute)}
+  .cpybox pre{margin:0;white-space:pre-wrap;word-wrap:break-word;
+              font:12.5px/1.6 ui-monospace,Menlo,monospace;color:var(--ink-soft)}
+
   /* PROJECT ACCORDION. Priority lives in the dot's colour and in the sort —
      never in a heading. */
   .proj{border:1px solid var(--line);border-radius:10px;background:#fff;margin:0 0 8px;overflow:hidden}
@@ -646,6 +660,21 @@ header('X-Robots-Tag: noindex, nofollow');
             $k = $key ?? '_unsorted';
             if (!isset($groups[$k])) { $groups[$k] = $meta + ['open' => [], 'done' => [], 'minw' => 9]; }
             $it['_w'] = $w;
+            // THE KEY IS ASSIGNED HERE, ONCE, AND NOWHERE ELSE.
+            //
+            // Ian hit this on the live board: he clicked a row in one project
+            // and got a different item's modal. Cause — the key was a COUNTER
+            // incremented in two separate loops: the payload was built walking
+            // the file's P-bands, the rows were rendered walking the sorted
+            // project accordions. Same name "r7", different item in each. Two
+            // orders, one counter, and every modal off by however far the two
+            // walks had diverged.
+            //
+            // Deriving it once and carrying it on the item makes the two
+            // physically incapable of disagreeing, which is the only fix worth
+            // having: re-syncing two counters would just be the same bug
+            // waiting for the next sort order to change.
+            $it['_key'] = 'r' . (++$GLOBALS['LGB_ROW']);
             if ($it['done']) { $groups[$k]['done'][] = $it; }
             else {
                 $groups[$k]['open'][] = $it;
@@ -664,7 +693,7 @@ header('X-Robots-Tag: noindex, nofollow');
     foreach ($groups as $g) { usort($g['open'], static fn ($p, $q) => $p['_w'] <=> $q['_w']); }
 
     $renderRow = function (array $it): void {
-        $rowKey = 'r' . (++$GLOBALS['LGB_ROW']); ?>
+        $rowKey = (string) ($it['_key'] ?? ''); ?>
         <div class="row row--open<?= $it['done'] ? ' row--done' : '' ?> w<?= (int) ($it['_w'] ?? 9) ?>"
              data-item="<?= lgb_h($rowKey) ?>" tabindex="0" role="button" title="Open this item">
           <span class="row__t"><?= lgb_h($it['title']) ?></span>
@@ -675,6 +704,10 @@ header('X-Robots-Tag: noindex, nofollow');
             <?php if (!$it['done'] && $it['unowned']): ?><span class="bdg bdg--unowned">unowned</span><?php endif; ?>
             <?php if ($it['done']): ?><span class="bdg bdg--done">done</span><?php endif; ?>
           </span>
+          <?php if (!$it['done'] && ($it['needsIan'] || $it['look'])): ?>
+            <button class="cpy" data-copy="<?= lgb_h($rowKey) ?>"
+                    title="Copy this for the chat">Copy for chat</button>
+          <?php endif; ?>
           <span class="row__o"><?= $it['owner'] !== null ? lgb_h($it['owner']) : '' ?></span>
           <span class="row__n"><?= lgb_h($it['id']) ?></span>
         </div>
@@ -734,6 +767,16 @@ header('X-Robots-Tag: noindex, nofollow');
       <div class="modal__b">
         <div class="modal__meta" id="lgb-meta"></div>
         <pre id="lgb-body"></pre>
+        <!-- COPY FOR CHAT. Ian: "it should have a copy and paste section for me
+             to bring back here into vs." Preformatted so he can answer in place
+             and paste the whole thing back. Render-only — no write path. -->
+        <div class="cpybox">
+          <div class="cpybox__h">
+            <span class="cpybox__t">Copy this into the chat and answer it there</span>
+            <button class="cpy cpy--big" id="lgb-copy">Copy</button>
+          </div>
+          <pre id="lgb-copytext"></pre>
+        </div>
         <div class="phase2">Read-only for now. Answering decisions, the per-item
           thread, images and drag-to-rank all write, so they come with phase 2.</div>
       </div>
@@ -754,18 +797,22 @@ header('X-Robots-Tag: noindex, nofollow');
     // does carry "9" twice (Shop Layout Planner in P1, Advanced search in P2),
     // so an id-keyed map silently collapses them and both rows open the second
     // one's text. Two rows, one payload, wrong content, no error.
-    $payload = []; $n = 0;
-    foreach ($backlog['bands'] as $b) {
-        foreach ($b['items'] as $it) {
-            $d = $details[$it['id']] ?? null;
-            $payload['r' . (++$n)] = [
-                'heading' => $it['id'] . ' · ' . $it['title'],
-                'line'    => $it['raw'],
-                'band'    => $b['name'] !== '' ? $b['name'] : $b['label'],
-                'owner'   => $it['owner'],
-                'detail'  => $d['body']    ?? '',
-                'dhead'   => $d['heading'] ?? '',
-            ];
+    // Built from the SAME grouped items the rows come from, using the SAME
+    // stored key — so a row and its modal cannot drift apart again.
+    $payload = [];
+    foreach ($groups as $g) {
+        foreach ([ $g['open'], $g['done'] ] as $bucket) {
+            foreach ($bucket as $it) {
+                $d = $details[$it['id']] ?? null;
+                $payload[(string) $it['_key']] = [
+                    'heading' => $it['id'] . ' · ' . $it['title'],
+                    'line'    => $it['raw'],
+                    'band'    => $g['name'],
+                    'owner'   => $it['owner'],
+                    'detail'  => $d['body']    ?? '',
+                    'dhead'   => $d['heading'] ?? '',
+                ];
+            }
         }
     }
     echo json_encode($payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
@@ -790,6 +837,7 @@ header('X-Robots-Tag: noindex, nofollow');
       body.innerHTML = esc(text).replace(
         /(https?:\/\/[^\s<)]+|\/[a-z0-9][\w./-]*\/)/gi,
         function (m) { return '<a href="' + m + '" target="_blank" rel="noopener">' + m + '</a>'; });
+      document.getElementById('lgb-copytext').textContent = blockFor(id);
       meta.innerHTML = '';
       row.querySelectorAll('.bdg').forEach(function (b) { meta.appendChild(b.cloneNode(true)); });
       scrim.classList.add('on');
@@ -802,6 +850,56 @@ header('X-Robots-Tag: noindex, nofollow');
       row.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(row.getAttribute('data-item'), row); }
       });
+    });
+    /**
+     * The paste block. Deliberately plain text with a blank answer line: the
+     * point is that he pastes it into the chat, types under it, and keeper has
+     * both the question and the answer in one message — no hunting for which
+     * item "yes" referred to.
+     */
+    function blockFor(id) {
+      var d = data[id]; if (!d) return '';
+      var out = 'BOARD ITEM ' + (d.heading || id) + '\n';
+      if (d.band)  { out += 'Project: ' + d.band + '\n'; }
+      if (d.owner) { out += 'Team: ' + d.owner + '\n'; }
+      out += '\n' + (d.line || '').trim() + '\n';
+      if (d.detail) {
+        var det = d.detail.trim();
+        out += '\n' + (det.length > 900 ? det.slice(0, 900) + '\n…(trimmed)' : det) + '\n';
+      }
+      out += '\nMy answer:\n';
+      return out;
+    }
+
+    function copy(text, btn) {
+      var done = function () {
+        if (!btn) return;
+        var was = btn.textContent;
+        btn.textContent = 'Copied'; btn.classList.add('cpy--done');
+        setTimeout(function () { btn.textContent = was; btn.classList.remove('cpy--done'); }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallback(text); done(); });
+      } else { fallback(text); done(); }
+    }
+    // Older browsers, and any context where the clipboard API is blocked —
+    // a copy button that silently does nothing would be worse than none.
+    function fallback(text) {
+      var t = document.createElement('textarea');
+      t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(t);
+    }
+
+    document.querySelectorAll('.cpy[data-copy]').forEach(function (b) {
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();          // copying must not also open the modal
+        copy(blockFor(b.getAttribute('data-copy')), b);
+      });
+    });
+    document.getElementById('lgb-copy').addEventListener('click', function () {
+      copy(document.getElementById('lgb-copytext').textContent, this);
     });
     document.getElementById('lgb-close').addEventListener('click', close);
     scrim.addEventListener('click', function (e) { if (e.target === scrim) close(); });
