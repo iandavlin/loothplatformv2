@@ -267,6 +267,40 @@ STABILISE_JS = """(function(){
 })()"""
 
 
+# ── DO NOT MEASURE AN UNRESOLVED PAGE ───────────────────────────────────────
+# The gate used to probe on a WALL-CLOCK settle and then notice afterwards, and
+# only on the app-dark path, that the theme had never resolved. That ordering is
+# the bug: a page whose theme has not resolved yet is still showing its LIGHT
+# paint, so the probe reads light ink on light backgrounds and reports enormous
+# ratios-of-nothing — 1.2:1 findings against hex backgrounds that only exist in
+# the light palette. Those are not defects on the page, they are photographs of
+# a page mid-boot.
+#
+# Measured on this box, 2026-08-15, while verifying the .lgpo-subtext fix: two
+# of four app-dark runs came back theme='default' and reported 3 findings each
+# on a surface whose real dark count is 0, and one app-dark/desktop needed FOUR
+# attempts before the theme resolved. A "0 findings, CLEARED" from one of those
+# runs is not a pass — it measured the light page, where the dark rule under
+# test does not even apply.
+#
+# So resolution is now a PRECONDITION, asserted before the probe walks anything,
+# on BOTH dark paths rather than only app-dark. Polls the attribute app-settings.js
+# actually sets instead of sleeping longer and hoping, so it is also faster on
+# the common case: it returns the moment the page is ready.
+def wait_dark_resolved(s, deadline=8.0):
+    """True once <html data-lguser-theme='dark'> is set. Polls, never sleeps blind."""
+    start = time.monotonic()
+    while time.monotonic() - start < deadline:
+        try:
+            if s.js("document.documentElement.getAttribute('data-lguser-theme')",
+                    quiet=True) == "dark":
+                return True
+        except Exception:                                      # noqa: BLE001
+            pass
+        time.sleep(0.2)
+    return False
+
+
 def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_css=None):
     """Arm anon, navigate into the requested dark state, and probe. Returns
     the raw probe result (theme, findings, truncated, ...). extra_css, when
@@ -296,6 +330,16 @@ def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_
     s.goto(url, settle=1.6)
     if mode == "app-dark":
         s.goto(url, settle=2.0)
+
+    # PRECONDITION: the theme must have resolved before anything is measured.
+    # One extra navigation is allowed (this box's contention produces real,
+    # transient misses); after that the surface is reported as unresolved and
+    # its numbers are discarded rather than believed.
+    resolved = wait_dark_resolved(s)
+    if not resolved:
+        s.goto(url, settle=2.4)
+        resolved = wait_dark_resolved(s)
+
     if extra_css:
         s.js("""(function(css){
             var st = document.createElement('style');
@@ -309,7 +353,12 @@ def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_
                            # real fix as still broken (see the 86.php commit).
     s.js(STABILISE_JS)
     time.sleep(0.4)          # let the removal settle before the probe walks the DOM
-    return s.js(probe_js)
+    out = s.js(probe_js)
+    # Carried so the caller can tell "this surface is genuinely clean" from
+    # "this surface was never dark when we looked at it".
+    if isinstance(out, dict):
+        out["resolved"] = resolved
+    return out
 
 
 # ---- --verify-fixes: does gate 36's scope actually clear AA once the queued
@@ -600,26 +649,25 @@ def main():
                         cannot_run.append(f"{label}: connection failed twice")
                         continue
 
-                    # LIVENESS, not just absence. A page that silently stayed
-                    # LIGHT would report zero findings and this gate would go
-                    # green having measured nothing — the exact class this
-                    # whole backlog item is about. One retry with more settle
-                    # time first (this box's contention produces real,
-                    # transient timing misses — confirmed on the sweep's
-                    # first-ever run, 2/48 rows, both cleared on a retry); if
-                    # it still won't resolve dark, that IS a finding, not a
-                    # thing to shrug past.
-                    if mode == "app-dark" and data.get("theme") != "dark":
-                        try:
-                            data2 = measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics)
-                            if data2.get("theme") == "dark":
-                                data = data2
-                            else:
-                                red.append(f"RED  {label}  DARK NEVER RESOLVED (theme={data2.get('theme')}) "
-                                          f"— every 'clean' finding below this surface is unearned, "
-                                          f"it was measured in LIGHT")
-                        except Exception:                       # noqa: BLE001
-                            red.append(f"RED  {label}  DARK NEVER RESOLVED and retry errored")
+                    # LIVENESS, not just absence, and now on BOTH dark paths
+                    # rather than only app-dark. measure() has already asserted
+                    # resolution as a precondition and re-navigated once; if the
+                    # theme STILL never resolved, this surface was photographed
+                    # mid-boot and its numbers are worthless in both directions:
+                    # a 0 is unearned (the dark rules never applied) and a >0 is
+                    # a phantom (light ink read against the light palette, the
+                    # 1.2:1-on-a-light-hex signature).
+                    #
+                    # So the findings are DISCARDED, not ratcheted. Reporting
+                    # them as regressions is precisely the false-red epidemic
+                    # this change exists to end — but silently passing the
+                    # surface would be worse, so it is called out by name.
+                    if not data.get("resolved") or data.get("theme") != "dark":
+                        red.append(f"RED  {label}  DARK NEVER RESOLVED (theme={data.get('theme')}) "
+                                   f"— findings DISCARDED, not counted: this surface was measured "
+                                   f"mid-boot in LIGHT, so neither its zeros nor its findings are real. "
+                                   f"Re-run standalone before believing anything about this surface.")
+                        continue
 
                     # RATCHET, not "any finding at all" — see BASELINE's own
                     # comment for why. A REGRESSION (more findings than the

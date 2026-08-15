@@ -1004,6 +1004,25 @@ echo "=== GATE 49: every copy of a paired feature flag agrees ==="
 # against the REAL live half-state before the fix, not a synthetic one.
 run "paired-flag-agreement" python3 "$(dirname "$0")/paired-flag-agreement-gate.py"
 
+echo "=== GATE 53: .lgpo-subtext keeps a dark-theme ink (and OFF stays a no-op) ==="
+# Number 53 ASSIGNED BY KEEPER 2026-08-15 (52 is frontend-compose's; ledger next 54).
+#
+# THE DEFECT THE CHARTER DID NOT NAME. The re-chartered dark-anon-sweep seat was
+# sent to fix "invisible accordion labels at 1.21:1" on bpnoaccess. Measured in
+# all four dark states, that defect does not exist — 86.php moves the summary ink
+# AND the .lg-acc background together. What WAS on that surface was the mirror
+# image, in a different plugin: .lgpo-subtext, hardcoded #666, on the dark card
+# #1b1e21 = 2.92:1. The card follows the theme because 86.php owns it; that one
+# piece of ink did not, because 86.php's block never reaches another plugin's
+# markup. A fix in 86.php was structurally incapable of touching it.
+#
+# Static render, no browser, no network — cannot flake. Asserts BOTH flag states
+# independently (OFF adds nothing, ON emits an AA-clearing rule) and only REPORTS
+# the shipped default, so flipping the default in either direction needs no edit
+# here. Red-first: tools/gates/dark-onboard-subtext-redfirst.sh breaks all five
+# assertions and requires each to redden.
+run "dark-onboard-subtext" python3 "$(dirname "$0")/dark-onboard-subtext-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; echo "RED GATES: ${RED_GATES:-unknown}"; exit 1; fi
 
 echo "=== GATE 50: the work board renders EVERY item, and phase 1 cannot write ==="

@@ -1,3 +1,9 @@
+> **Superseded by `handoffs/2026-08-15-dark-anon-sweep-2.md`** (re-chartered seat,
+> same day). That note carries the measurement showing the accordion defect the
+> next charter named does not exist, the real defect that was there instead
+> (`.lgpo-subtext`, 2.92:1, another plugin), and why the uncommitted 86.php
+> `prefers-color-scheme` block was reverted rather than shipped.
+
 # dark-anon-sweep — state note (2026-08-15)
 
 **RESOLVED, not parked.** Fleet-quiet order (Ian browsing dev2) came and went;
