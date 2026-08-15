@@ -744,9 +744,11 @@ run "compose" python3 "$(dirname "$0")/compose-gate.py" \
     --type loothprint --allowed bangers --denied erin.vogel \
     --owner patreon_77159883 --stranger bangers --post 72155
 
-# Gate number 38 minted by keeper 2026-08-15 (ledger: 34 stripe, 35 compose/v2,
-# 36 dark-anon, 37 guitardle, 38 this — next free is 39). Runs on the real
-# stored-layout corpus via direct mysql; needs neither Redis nor a WP bootstrap.
+# THE GATE-NUMBER LEDGER (single source of truth; keeper mints, lanes never):
+#   34 stripe · 35 compose/v2 · 36 dark-anon · 37 guitardle claim · 38 insert
+#   path · 39 featured-members · 40 guitardle score-integrity — NEXT FREE: 41.
+# Gate 38 runs on the real stored-layout corpus via direct mysql; needs
+# neither Redis nor a WP bootstrap.
 echo "=== GATE 38: v2 insert path — OFF is identity, an insert only SURFACES declared meta ==="
 run "license-insert" python3 "$(dirname "$0")/license-insert-gate.py"
 
