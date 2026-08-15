@@ -28,7 +28,19 @@
  * it by playing, their result is never recorded (guitardle-score.php rejects
  * uid<=0), and the weekly board reads only guitardle_results. It buys nothing.
  *
- *   GET [?local_date=YYYY-MM-DD] -> { phrase_id, phrase }
+ * ── IT TAKES NO PARAMETERS AT ALL. THIS IS THE POINT (keeper 2026-08-15) ────
+ * Not a date, not an index, not an audience. The SERVER'S OWN CLOCK picks the
+ * day. An earlier draft accepted ?local_date with the same +/-1 clamp the score
+ * API uses, which felt consistent -- but a read-only endpoint that answers for a
+ * day you name is the answer key rebuilt on a delay, one query at a time. There
+ * is no window small enough to make that safe, so there is no window.
+ *
+ * COST, stated rather than hidden: the logged-out day now turns over at the
+ * server's midnight instead of the player's. For a UK-centred audience those
+ * are the same hour; for a US player the puzzle changes in the evening. If that
+ * ever matters, the fix is a site-timezone constant HERE -- never a parameter.
+ *
+ *   GET -> { phrase_id, phrase }
  *
  * Runs on the archive-poc pool with no WordPress boot, like guitardle-board.php
  * -- it is on the render path of every logged-out game load.
@@ -38,7 +50,16 @@ declare(strict_types=1);
 require_once __DIR__ . '/_guitardle-puzzle.php';
 
 header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
+// MUST NOT survive the day boundary. On live this sits behind Cloudflare, and
+// an unauthenticated GET that caches across midnight either serves yesterday's
+// phrase to everyone or pre-bakes today's for anyone who asks early. no-store
+// rather than an expiry pinned to midnight: an edge that mis-rounds a pinned
+// expiry by a minute is the same bug, and this response is one small row on a
+// path that is already doing a DB-free file read.
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('CDN-Cache-Control: no-store');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
     http_response_code(405);
@@ -46,22 +67,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
     exit;
 }
 
-/**
- * Same +/-1 day clamp as the score and board endpoints. Without it this would
- * be a "read me any day you like" oracle, which is the whole thing we are
- * closing -- a client could simply walk the calendar forward.
- */
-function lg_gdle_day_date($raw): ?string {
-    if (!is_string($raw) || !preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $raw, $m)) return null;
-    if (!checkdate((int) $m[2], (int) $m[3], (int) $m[1])) return null;
-    $client = strtotime($raw . ' 00:00:00 UTC');
-    $server = strtotime(gmdate('Y-m-d') . ' 00:00:00 UTC');
-    if ($client === false || $server === false) return null;
-    $diff = (int) round(($client - $server) / 86400);
-    return ($diff >= -1 && $diff <= 1) ? $raw : null;
-}
-
-$day = lg_gdle_day_date($_GET['local_date'] ?? null) ?? gmdate('Y-m-d');
+// The server's clock, and nothing else. Deliberately not derived from input:
+// there is no request shape that can ask this endpoint about another day.
+$day = gmdate('Y-m-d');
 
 // false = the LOGGED-OUT track. Hardcoded, not derived from input.
 $pid    = lg_gdle_phrase_id($day, false);
