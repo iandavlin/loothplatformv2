@@ -597,19 +597,31 @@ def verify_fixes(host, tok, probe_js):
 # Nothing on those pages changed. The old numbers were inflated by pre-resolve
 # phantoms, so this is the instrument getting honest, not the product improving.
 #
-# bpnoaccess still reads 1 EVERYWHERE and that one is real: it is the
-# .lgpo-subtext defect (2.92:1, gate 53). It is FIXED on this branch but the
-# gate reads the SERVE, which is main — so it should drop to 0 once this merges
-# and deploys. LOWER IT THEN, in the same commit as the measurement.
+# UPDATE, later the same day: that happened, exactly as written. The
+# .lgpo-subtext fix merged and reached the serve, and signin AND bpnoaccess both
+# went 1 -> 0 on all four states. Lowered here in the same commit as the
+# measurement, per the note that used to live in this paragraph.
+#
+# NOT lowered on one run alone. The zeros are CAUSALLY confirmed rather than
+# merely repeated: the served bytes now contain
+# `html[data-lguser-theme='dark'] .lgpo-subtext { color: #a8ada6; }`, checked by
+# curling the real page. A cause beats a second correlated sample — and the same
+# curl confirms the accordion's `transition: all 0.25s ease` is STILL on the
+# serve, so LG_DARK_ACC_FLASH_FIX has not deployed yet and none of these zeros
+# are borrowing credit from it.
+#
+# signin carried the identical finding because it renders the same
+# [lg_patreon_onboard] shortcode — one fix, two surfaces, which is why both moved
+# together.
 #
 # front/* 10 is the Guitardle leaderboard, explicitly another lane's surface.
 BASELINE = {
-    "signin/app-dark/desktop": 1, "signin/app-dark/mobile": 1,
-    "signin/os-dark/desktop": 1, "signin/os-dark/mobile": 1,
+    "signin/app-dark/desktop": 0, "signin/app-dark/mobile": 0,
+    "signin/os-dark/desktop": 0, "signin/os-dark/mobile": 0,
     "lostpassword/app-dark/desktop": 0, "lostpassword/app-dark/mobile": 0,
     "lostpassword/os-dark/desktop": 0, "lostpassword/os-dark/mobile": 0,
-    "bpnoaccess/app-dark/desktop": 1, "bpnoaccess/app-dark/mobile": 1,
-    "bpnoaccess/os-dark/desktop": 1, "bpnoaccess/os-dark/mobile": 1,
+    "bpnoaccess/app-dark/desktop": 0, "bpnoaccess/app-dark/mobile": 0,
+    "bpnoaccess/os-dark/desktop": 0, "bpnoaccess/os-dark/mobile": 0,
     "join/app-dark/desktop": 0, "join/app-dark/mobile": 0,
     "join/os-dark/desktop": 0, "join/os-dark/mobile": 0,
     "lgjoin/app-dark/desktop": 0, "lgjoin/app-dark/mobile": 0,
