@@ -672,6 +672,42 @@ final class Block
         return $lat === null ? (string)($place['text'] ?? '') : '';
     }
 
+    /**
+     * The ONLY text a LIST surface (directory row, map-pin popup, click-through
+     * stub) may print for a member's location. $level picks which structured
+     * label: 'city' -> "City, Region", 'state' -> "Region, Country".
+     *
+     * Deliberately STRICTER than coarseText(): a structured label or the empty
+     * string, with NO fallback to the row's literal text. coarseText() makes that
+     * fallback because its text-only rows are snapshot-migrated coarse PLACE
+     * NAMES — but the same column is also where members type an address by hand,
+     * and on live today 2 of the 6 text-only rows with no structured labels hold
+     * a full street address ("900 South 5th Street ste 103, Milwaukee...",
+     * "2310 Ballan Road ANAKIE Vic 3213"). Both are rendered verbatim to every
+     * member and admin right now, and a precision downgrade alone does NOT reach
+     * them: with no pin, coarseText() falls straight through to the literal text.
+     *
+     * So a list may not bet on the contents of that column. Ian's rule is
+     * "City/State only REGARDLESS of what the field holds" (backlog 20), and
+     * "regardless" is precisely the instruction not to trust it — which is also
+     * why this is a hard rule and not a street-address heuristic: address shapes
+     * are not reliably detectable across countries, and one miss is a leak.
+     *
+     * The cost is honest and small: 4 live rows hold real place names
+     * ("Teesside, UK", "NYC & Lower Westchester", "Sparta , New Jersey",
+     * "Wisteria Design Group Seattle Washington") and will show no location line
+     * on list surfaces until those rows are geocoded into structured columns —
+     * profile-app/bin/regeocode-from-bb.php is the existing path for that. An
+     * empty location line is a cosmetic loss; a printed home address is not.
+     */
+    public static function listLocationText(array $place, string $level = 'city'): string
+    {
+        $parts = $level === 'state'
+            ? [(string)($place['region'] ?? ''), (string)($place['country'] ?? '')]
+            : [(string)($place['city']   ?? ''), (string)($place['region']  ?? '')];
+        return trim(implode(', ', array_filter($parts)));
+    }
+
     /** Validate an incoming precision level; returns it or null. */
     public static function precisionFromInput($p): ?string
     {
