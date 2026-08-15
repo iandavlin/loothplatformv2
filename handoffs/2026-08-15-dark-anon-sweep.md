@@ -205,3 +205,37 @@ could ship; both are real defects and neither is closed. Fix as wave work.
   under-report. Fix before tightening any gate-45 number.
 - The avatar-initials palette and `loothalong.js`'s crew avatars — both fail in
   BOTH themes, gate 45's founding instances, still unfixed.
+
+
+## The instrument was photographing injected chrome (root cause, 2026-08-15)
+
+Root-caused by the **featured-members** seat, not by me, and their evidence is
+what finally named it: 10 of 24 surfaces changed counts on the SAME tree minutes
+apart, **bidirectionally**. I had been circling this all night and kept calling
+it "CPU-contention render timing", then padding baselines to absorb it. Padding
+a noisy instrument treats the symptom; the instrument was wrong.
+
+Two pieces of injected chrome moved underneath the probe:
+- the **PWA install banner** — its own injection schedule (`pv>=2` or a scroll),
+  so whether it EXISTS to be measured depends on navigation history
+- the **notification badges** — LIVE counts fetched at runtime, so both their
+  text and their visibility change between runs
+
+`STABILISE_JS` (in gate 36, imported by gate 45 rather than copied) now dismisses
+the banner using `tools/preview/category-door-shots.py`'s existing mechanism, and
+pins the badges.
+
+### A defect that now falls BETWEEN two gates — do not lose it
+
+The badges are pinned to **hidden**, which is their true anon state:
+`site-header.php` renders `<span class="lg-chrome__badge" … hidden>0</span>`
+whenever a viewer has no counts, so a logged-out visitor never sees a pip. They
+only appeared here because JS populates them at runtime off the dev-gate cookie.
+Forcing them visible to keep measuring would have been measuring a fiction.
+
+**Consequence:** the badge contrast defect (1.51:1, fixed behind
+`LG_DARK_BADGE_INK_FIX`, still OFF) is **no longer covered by gate 36** — and it
+should not be, because gate 36 is the anon gate and this is a signed-in surface.
+Gate 45 does not cover it either: it is dark-only, and 45 asserts both-themes.
+So it is currently **ungated**. It needs a member-surface dark gate to own it.
+That gate does not exist yet and is not this lane's to mint.
