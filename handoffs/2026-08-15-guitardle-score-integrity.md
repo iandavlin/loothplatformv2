@@ -94,6 +94,13 @@ Read off `game.js` — get this wrong and you reject honest players:
 
 > `moves = 1 + (revealed consonants) + 2 × (revealed vowels) + 1 × (pending purchased)`
 
+**VERIFIED empirically, not just read off the source** (2026-08-15): drove real
+clicks on the real keyboard — 2 consonants, one vowel bought only, one vowel
+bought *and* placed — giving `revealed=[P,L,U] purchased=[O]`. Formula derives
+**5**; `state.moves` was **5**. Worth doing before either option is built: get
+this wrong and the server rejects honest players, which is a far worse failure
+than the hole being fixed.
+
 ## 4. Traps hit this phase
 
 - **A stale CDP tab makes your run execute as another member.** My first
