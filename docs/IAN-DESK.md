@@ -1,7 +1,5 @@
 # Ian's desk — everything waiting on Ian, nothing else
 
-- **Live paste 2 — ready, run whenever.** Pull-only, nothing member-visible
-  changes; the blocks are in chat and in docs/LIVE-PASTE-2-2026-08-15.md.
 
 *Keeper maintains this file the moment anything starts or stops waiting on
 Ian (his rule, 8/15: "If you have anything waiting for me ask me always" +
