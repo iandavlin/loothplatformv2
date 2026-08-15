@@ -17,9 +17,11 @@
  *
  * HOW TO ADD ONE. Add the project to PROJECTS (order = where it sits before
  * priority weighting), then a rule to RULES. `ids` is the stable handle;
- * `title` is a case-insensitive regex for when an id is ambiguous — and one is:
- * the index carries the id "9" TWICE (Shop Layout Planner in P1, Advanced
- * search in P2), so those two are separated by title, not id.
+ * `title` is a case-insensitive regex for when an id is ambiguous. One WAS:
+ * the index carried "9" twice (Shop Layout Planner in P1, Advanced search in
+ * P2) until 2026-08-15, when Advanced search became 32. The title guards for
+ * that pair are kept anyway — they cost nothing and they record why those two
+ * were ever confusable.
  *
  * Nothing here changes what the backlog MEANS. Delete this file and the board
  * still renders — every item simply lands in "unsorted".
@@ -54,9 +56,12 @@ return [
         ['project' => 'featured',   'ids' => ['18']],
         ['project' => 'darkmode',   'ids' => ['21']],
 
-        // The id-9 collision: separated by title, never by id alone.
-        ['project' => 'apps',       'ids' => ['9'], 'title' => '/shop\s*layout|planner/i'],
-        ['project' => 'hub',        'ids' => ['9'], 'title' => '/advanced\s*search|facet/i'],
+        // The id-9 collision was RESOLVED in the file on 2026-08-15 (Advanced
+        // search became 32). The title guards stay anyway: they cost nothing,
+        // they keep working if the ids ever move again, and they document why
+        // these two were ever confusable.
+        ['project' => 'apps',       'ids' => ['9'],  'title' => '/shop\s*layout|planner/i'],
+        ['project' => 'hub',        'ids' => ['32'], 'title' => '/advanced\s*search|facet/i'],
 
         ['project' => 'profiles',   'ids' => ['19', '20', '31', '4.4', '4.5', '4.6']],
         ['project' => 'security',   'ids' => ['S1', 'S2', 'S3', '15']],

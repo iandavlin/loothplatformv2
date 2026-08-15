@@ -39,7 +39,7 @@ E5 Weekly Recap, scoped to bell-only types → PARKED behind E4 by design
 **P2 — polish / UX**
 11.5 Emoji picker for the messages composer (Ian 8/1, Variant 1 ruled) → emoji-picker-build
 11.6 Notifications: filter by type + bulk delete of that type (Ian 8/1) — UNOWNED
-9. Advanced search: dynamic facet narrowing — UNOWNED
+32. Advanced search: dynamic facet narrowing — UNOWNED
 10. Add-discussion modal: resizable + text scaling — UNOWNED
 12. Post header: title legibility over text thumbnails — UNOWNED
 13. PWA launch animation/message — UNOWNED
