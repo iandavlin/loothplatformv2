@@ -46,6 +46,13 @@ let claimSaveInFlight = false;
 // it must not have to wait for the fairness change to be switched on.
 let helpEnabled  = false;
 
+// Backlog 24: a WP nonce lives ~12h and this game sits in a front-page iframe
+// people leave open, so a tab opened last night carries a dead one. Measured on
+// live: 8 of 101 finished games came back 403 and were thrown away silently,
+// because every one of these calls ended in `.catch(() => {})` -- the player saw
+// their win card and it never reached the board.
+let retryEnabled = false;
+
 // Audience: the front-page block passes ?aud=m (member) / ?aud=p (logged-out)
 // from its SSR member check. Logged-out players get a DIFFERENT daily phrase
 // (Ian 6/11) — same shared sequence, day index shifted by half its length, so
@@ -242,6 +249,7 @@ function initScoreSync() {
             if (res.ok) scoreAuth = await res.json();
             claimEnabled = !!(scoreAuth && scoreAuth.claim);
             helpEnabled  = !!(scoreAuth && scoreAuth.help);
+            retryEnabled = !!(scoreAuth && scoreAuth.retry);
             if (helpEnabled) {
                 // The rules overlay only becomes reachable under its own flag,
                 // so OFF leaves the chrome exactly as it was.
@@ -271,20 +279,46 @@ function postScore(won, streak) {
     const localDate = todayString();
     scoreSyncPromise.then(() => {
         if (!scoreAuth.authenticated || !scoreAuth.nonce) return;
-        return fetch(SCORE_API, {
-            method:      'POST',
-            credentials: 'same-origin',
-            headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
-            body: JSON.stringify({
-                phrase_id:  PHRASE_ID,
-                won:        !!won,
-                moves:      moves,
-                streak:     streak,
-                local_date: localDate,
-                hardcore:   HARDCORE,   // 2× points on the weekly board
-            }),
+        return postWithNonce({
+            phrase_id:  PHRASE_ID,
+            won:        !!won,
+            moves:      moves,
+            streak:     streak,
+            local_date: localDate,
+            hardcore:   HARDCORE,   // 2× points on the weekly board
         });
     }).catch(() => {});
+}
+
+// Fetch a fresh nonce and adopt it. Returns whether we got one.
+function refreshNonce() {
+    return fetch(`${SCORE_API}?local_date=${todayString()}`, { credentials: 'same-origin' })
+        .then(res => (res.ok ? res.json() : null))
+        .then(json => {
+            if (json && json.nonce) { scoreAuth.nonce = json.nonce; return true; }
+            return false;
+        })
+        .catch(() => false);
+}
+
+// The one door every nonce-bearing call goes through. With the flag OFF this is
+// exactly what each call did before: send it, swallow anything that comes back.
+// With it ON, a 403 (the expired-nonce answer) buys ONE fresh nonce and ONE
+// resend of the same body -- never a loop, so a genuinely rejected request
+// still costs a single extra request and then stops.
+function postWithNonce(body) {
+    const send = () => fetch(SCORE_API, {
+        method:      'POST',
+        credentials: 'same-origin',
+        headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
+        body:        JSON.stringify(body),
+    });
+    if (!retryEnabled) return send().catch(() => {});
+    return send()
+        .then(res => (res.status === 403
+            ? refreshNonce().then(got => (got ? send() : res))
+            : res))
+        .catch(() => {});
 }
 
 // Take today's allowance, then keep the position server-side. Fire-and-forget:
@@ -295,17 +329,15 @@ function claimAttempt() {
     if (!claimEnabled || !scoreAuth.authenticated || !scoreAuth.nonce) return;
     if (claimTaken) return;
     claimTaken = true;
-    fetch(SCORE_API, {
-        method:      'POST',
-        credentials: 'same-origin',
-        headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
-        body: JSON.stringify({
-            action:     'start',
-            phrase_id:  PHRASE_ID,
-            hardcore:   HARDCORE,
-            local_date: todayString(),
-        }),
-    }).catch(() => {});
+    // Worth retrying as much as the finish is: a start-claim lost to a stale
+    // nonce means the day is never claimed and the allowance fix silently does
+    // not apply to this game.
+    postWithNonce({
+        action:     'start',
+        phrase_id:  PHRASE_ID,
+        hardcore:   HARDCORE,
+        local_date: todayString(),
+    });
 }
 
 // Mirror the localStorage snapshot to the server so ANOTHER device can resume.
@@ -315,21 +347,17 @@ function saveGameRemote() {
     if (!claimEnabled || !scoreAuth.authenticated || !scoreAuth.nonce) return;
     if (state.gameOver || claimSaveInFlight) return;
     claimSaveInFlight = true;
-    fetch(SCORE_API, {
-        method:      'POST',
-        credentials: 'same-origin',
-        headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
-        body: JSON.stringify({
-            action:     'save',
-            hardcore:   HARDCORE,
-            local_date: todayString(),
-            state: {
-                moves:     state.moves,
-                revealed:  [...state.revealedLetters],
-                purchased: [...state.purchasedVowels],
-            },
-        }),
-    }).catch(() => {}).then(() => { claimSaveInFlight = false; });
+    postWithNonce({
+        action:     'save',
+        hardcore:   HARDCORE,
+        local_date: todayString(),
+        state: {
+            moves:     state.moves,
+            revealed:  [...state.revealedLetters],
+            purchased: [...state.purchasedVowels],
+        },
+    }).then(() => { claimSaveInFlight = false; },
+            () => { claimSaveInFlight = false; });
 }
 
 // Replay a server-held position onto the board. Same replay as

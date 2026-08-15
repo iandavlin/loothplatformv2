@@ -10,6 +10,9 @@ if (getenv('GDLE_FLAG') !== '') {
 if (getenv('GDLE_HELP') !== '') {
     define('LG_GUITARDLE_HOW_TO_PLAY', getenv('GDLE_HELP') === '1');
 }
+if (getenv('GDLE_RETRY') !== '') {
+    define('LG_GUITARDLE_SCORE_RETRY', getenv('GDLE_RETRY') === '1');
+}
 $cn = getenv('GDLE_COOKIE_NAME');
 if ($cn && getenv('GDLE_COOKIE')) $_COOKIE[$cn] = getenv('GDLE_COOKIE');
 $_SERVER['REQUEST_METHOD'] = getenv('GDLE_METHOD') ?: 'GET';
