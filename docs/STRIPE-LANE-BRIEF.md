@@ -68,8 +68,16 @@ that looks completely reasonable.
 page two visibility settings — one for pre-launch, one for go-live — and a single
 switch (`lgms_stripe_pages_live`, **0 on dev2**) chooses which column applies.
 Off means the Stripe purchase pages are administrator-only and everyone else gets
-a stub. That mechanism is finished; what it does **not** yet have is a
-"Test Group only" setting, which is this lane's job.
+a stub.
+
+**This lane added a third setting to that router: `testgroup`.** It is a strict
+*widening* of administrator-only — administrators as before, plus signed-in
+members on the Test Group list — so with its switch off, or the list empty, it
+behaves exactly as administrator-only did. That is what makes the off state
+byte-identical to today's site. Its own switch is `lgms_stripe_testgroup_pages`,
+and **either** it or an empty list refuses everyone. An administrator is never
+held behind the list, deliberately: Ian must not be able to lock himself out of
+the pages he is building on by forgetting to add himself.
 
 ---
 
