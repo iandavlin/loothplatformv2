@@ -42,5 +42,8 @@ return array(
 	 * verifiable there until merged, and OFF is what lets it arrive
 	 * harmlessly first.
 	 */
-	'enabled' => false,
+	// ON since 2026-08-15 — Ian (decision box): "Yes, flip when landed" for his
+	// dev2 look, after the byte-identical-OFF fix train deployed. Live gets it
+	// only on his next paste, after the look.
+	'enabled' => true,
 );
