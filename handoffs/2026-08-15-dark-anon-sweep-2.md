@@ -1,5 +1,33 @@
 # dark-anon-sweep — state note (2026-08-15, re-chartered seat)
 
+> ## ⚠ CORRECTION (later the same session) — THE ACCORDION DEFECT IS REAL
+>
+> The section below says the charter's accordion defect does not exist. **That
+> was wrong**, and it is left in place rather than deleted because the reasoning
+> error is the useful part.
+>
+> Every measurement below is of the **settled** page, and the settled page really
+> is correct (~11:1). What none of them measured is the **quarter second after
+> the theme flips**. `.lg-acc` carried `transition: all 0.25s ease` while the
+> label colour has no transition, so on a theme flip the ink snaps to `#e5e7e1`
+> instantly while the card background *animates* `#fbfcf8 → #1b1e21`. Sampled
+> frame by frame: **t=0 is 1.21:1** — the charter's exact number — under AA to
+> ~t=100ms, settling at t=272ms.
+>
+> **The defect is a frame, not a state, so a settled probe cannot see it by
+> construction.** That is also why gate 36 (which sleeps 400ms) read 1 finding
+> while the sweep (which probes sooner) read 7. I read that disagreement as
+> sweep contamination when it was the sweep being right.
+>
+> Fixed at source behind `LG_DARK_ACC_FLASH_FIX` (default ON): the transition is
+> narrowed to `border-color, box-shadow` — the hover polish it was written for —
+> so a theme flip no longer animates the background. Measured: 3 light-card
+> frames become 0.
+>
+> Still true from below: the **join footer** addendum genuinely does not
+> reproduce, and the `.lgpo-subtext` fix and all instrument work are unaffected.
+
+
 **The charter's headline defect was a phantom. The surface had a real defect
 anyway, it was a different element in a different plugin, and it is fixed,
 committed and pushed (`bc52b29`, branch `dark-anon-sweep`).**

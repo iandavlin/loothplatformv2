@@ -19,6 +19,51 @@
  *   Mint4 #97A97C   Mint5  #87986A   Coral #FE6A4F
  */
 
+/* ---- LG_DARK_ACC_FLASH_FIX (dark-anon-sweep lane, gate 36 family) ---------
+ *
+ * THE DEFECT, and it is the one the charter named — I disproved it twice before
+ * measuring the right moment, so the reasoning is written down properly here.
+ *
+ * `.lg-acc` below carried `transition: all 0.25s ease`, while the label colour
+ * (`.lg-acc summary`) has no colour transition at all. So when the theme
+ * resolves to dark, the INK snaps to #e5e7e1 instantly and the CARD BACKGROUND
+ * ANIMATES from #fbfcf8 to #1b1e21 over a quarter of a second. Sampled frame by
+ * frame on the real page: t=0ms is #e5e7e1 on #fbfcf8 = 1.21:1, it stays under
+ * the 4.5:1 AA bar until roughly t=100ms, and it does not settle until t=272ms.
+ *
+ * For that window the instruction labels are effectively invisible. Every probe
+ * of the SETTLED page says the accordion is correct (~11:1) and that is true —
+ * which is exactly why this survived: it is not a state, it is a frame, and a
+ * settled probe cannot see it by construction.
+ *
+ * WHO SEES IT: anyone whose theme resolves AFTER first paint — a first-time
+ * dark visitor, or anyone with cleared storage. A returning visitor is fine,
+ * because the nginx boot script sets the attribute pre-paint and a transition
+ * does not animate on initial paint.
+ *
+ * THE FIX is to stop `all` animating the background across a theme flip, while
+ * keeping the hover polish the transition was actually written for
+ * (`.lg-acc:hover` moves border-color and box-shadow, nothing else). The
+ * background change on `[open]` becomes instant, which is imperceptible.
+ *
+ * Deliberately NOT fixed by repainting the card earlier (e.g. a
+ * prefers-color-scheme block): that treats the symptom, and the predecessor's
+ * uncommitted attempt at it would have given dark cards to a visitor who
+ * explicitly chose Light on an OS-dark machine. The transition is the cause.
+ *
+ * Defaults ON, consistent with keeper's standing call for this family. OFF
+ * emits the original `all 0.25s ease` byte-for-byte. Reads getenv() AND
+ * $_SERVER because a fastcgi_param preview lands in $_SERVER only.
+ */
+if ( ! defined( 'LG_DARK_ACC_FLASH_FIX' ) ) {
+	$lg_acc_flag = getenv( 'LG_DARK_ACC_FLASH_FIX' );
+	if ( $lg_acc_flag === false && isset( $_SERVER['LG_DARK_ACC_FLASH_FIX'] ) ) {
+		$lg_acc_flag = $_SERVER['LG_DARK_ACC_FLASH_FIX'];
+	}
+	define( 'LG_DARK_ACC_FLASH_FIX', ! in_array( (string) $lg_acc_flag, array( '0', 'false', 'off', 'no' ), true ) );
+	unset( $lg_acc_flag );
+}
+
 /* ==========================================================================
  * [01] CONFIG
  * ========================================================================== */
@@ -57,6 +102,12 @@ add_filter('login_headertext', function () {
 add_action('login_enqueue_scripts', function () {
 
 	$logo_url = lg_login_get_logo_url();
+
+	// See LG_DARK_ACC_FLASH_FIX at the top of this file. OFF reproduces the
+	// original `all 0.25s ease` byte-for-byte.
+	$lg_acc_transition = LG_DARK_ACC_FLASH_FIX
+		? 'border-color 0.25s ease, box-shadow 0.25s ease'
+		: 'all 0.25s ease';
 
 	$css = "
 	/* ===== COLOR PALETTE ===== */
@@ -264,7 +315,7 @@ add_action('login_enqueue_scripts', function () {
 		background: #fbfcf8;
 		overflow: hidden;
 		box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-		transition: all 0.25s ease;
+		transition: {$lg_acc_transition};
 	}
 	.lg-acc:hover {
 		border-color: rgba(135,152,106,0.70);
