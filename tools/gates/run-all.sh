@@ -668,10 +668,12 @@ echo "=== GATE 32/33: retired pages 301 per-URL to a destination that ANSWERS ==
 run "stale-page-redirect" python3 "$(dirname "$0")/stale-page-redirect-gate.py"
 echo
 
-echo "=== GATE 36: featured members — schema constraints, completeness parity, flag-off, no admin override ==="
+echo "=== GATE 39: featured members — schema constraints, completeness parity, flag-off, no admin override ==="
 # Backlog 18 (Ian 8/11), rulings 2026-08-14. Roster number allocated by
-# keeper 2026-08-15 (not minted from this branch — the two-lanes-both-mint-9/9
-# collision is exactly the failure this convention exists to avoid). No "/N"
+# keeper 2026-08-15 — first as 36, RENUMBERED to 39 the same night when
+# keeper caught a collision with dark-anon-sweep also wiring 36 (not minted
+# from this branch either time — exactly the two-lanes-both-mint-9/9 failure
+# this convention exists to avoid, caught by keeper instead of repeated). No "/N"
 # suite-total in the banner on purpose: that total is a cosmetic echo string
 # other lanes are concurrently bumping for their own gates tonight (34, 35),
 # and it feeds no counter in this script — see run(), which tracks red/dead
