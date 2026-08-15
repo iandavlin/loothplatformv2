@@ -51,7 +51,7 @@ while IFS= read -r LANE; do
     # makes the resumed lane re-verify the world instead of trusting pre-reboot
     # state — running processes, seats, and serving checkouts all changed.
     tmux new-session -d -s "$LANE" \
-        "cd '$WT' && exec '$CLAUDE' --continue --dangerously-skip-permissions --model '$MODEL' \
+        "cd '$WT' && export LG_LANE=1 && exec '$CLAUDE' --continue --dangerously-skip-permissions --model '$MODEL' \
          'keeper: the box rebooted and you have been resumed with your prior context. Files and pushes survived; RUNNING STATE did not — re-verify anything you believed about live processes (gates mid-run, browsers, cron state) before continuing your charter work from where you left off.'"
     echo "respawn-fleet: $LANE resumed"
 done < "$MANIFEST"

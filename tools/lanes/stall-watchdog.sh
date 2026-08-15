@@ -39,7 +39,18 @@ while true; do
       fi
     fi
     if lanes 2>/dev/null | grep -E "^$L " | grep -q parked; then
-      grep -qxF "$L" "$OKFILE" 2>/dev/null && { rm -f "$STATED/$L"; continue; }
+      # A lane parked ON A QUESTION is answered, not aged: escalate immediately
+      # (Ian 8/15: "If it stops to ask a question, we should answer the question").
+      QF="$HOME/worktrees/$L/.lane-state/QUESTION"
+      if [ -f "$QF" ]; then
+        echo "ALERT question-waiting $L — ANSWER IT: $(head -c 300 "$QF")"; exit 0
+      fi
+      # Park-ok entries EXPIRE (8/15: a stale exemption is a silent blind spot).
+      # Format: "<lane> <expires-epoch> [# comment]". Bare legacy lines = expired.
+      OKEXP=$(awk -v l="$L" '$1==l {print $2}' "$OKFILE" 2>/dev/null | head -1)
+      if [ -n "$OKEXP" ] && [ "$OKEXP" -gt "$(date +%s)" ] 2>/dev/null; then
+        rm -f "$STATED/$L"; continue
+      fi
       NOW=$(date +%s)
       if [ -f "$STATED/$L" ]; then
         FIRST=$(cat "$STATED/$L")

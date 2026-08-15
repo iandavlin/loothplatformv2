@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash tools/lanes/lane-stop-hook.sh",
+            "timeout": 15,
+            "statusMessage": "lane charter check"
+          }
+        ]
+      }
+    ]
+  }
+}
