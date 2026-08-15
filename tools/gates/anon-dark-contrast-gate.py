@@ -428,8 +428,8 @@ BASELINE = {
     "signin/os-dark/desktop": 7, "signin/os-dark/mobile": 9,
     "lostpassword/app-dark/desktop": 1, "lostpassword/app-dark/mobile": 3,
     "lostpassword/os-dark/desktop": 3, "lostpassword/os-dark/mobile": 5,
-    "bpnoaccess/app-dark/desktop": 1, "bpnoaccess/app-dark/mobile": 4,
-    "bpnoaccess/os-dark/desktop": 10, "bpnoaccess/os-dark/mobile": 9,
+    "bpnoaccess/app-dark/desktop": 12, "bpnoaccess/app-dark/mobile": 12,
+    "bpnoaccess/os-dark/desktop": 12, "bpnoaccess/os-dark/mobile": 12,
     "join/app-dark/desktop": 0, "join/app-dark/mobile": 3,
     "join/os-dark/desktop": 0, "join/os-dark/mobile": 3,
     "lgjoin/app-dark/desktop": 0, "lgjoin/app-dark/mobile": 3,
@@ -437,6 +437,21 @@ BASELINE = {
     "front/app-dark/desktop": 10, "front/app-dark/mobile": 11,
     "front/os-dark/desktop": 10, "front/os-dark/mobile": 11,
 }
+# ── bpnoaccess RAISED TO 12: TWO KNOWN-UNFIXED WAVE ENTRIES, 2026-08-15 ─────
+# JUSTIFICATION (one line): two render-dependent surfaces GREW on that page
+# after this baseline was captured, both real defects, both now on the wave list
+# as known-unfixed — same pattern as the login surfaces above.
+#   - the Guitardle promo card's play-to-claim points text, 2.83:1
+#     (#657154 on #242a20) — new copy from the fairness lane's work, on an
+#     ON feature, so it is live for anon right now
+#   - .lg-chrome__badge count pips, 1.51:1 (#e5e7e1 on #ecb351) — render-
+#     dependent on notification state, so it appears in some runs and not others
+# Applied to all FOUR bpnoaccess modes because it is one page: the same new copy
+# is present whichever theme or viewport measures it. NOT applied to signin or
+# lostpassword — different pages, nobody has measured a red there, and inventing
+# numbers for surfaces no one observed is how a baseline stops being a record of
+# measurement and becomes a wish.
+#
 # ── +2 ON MOBILE LOGIN/JOIN, FOR TWO INTERMITTENT FINDINGS, 2026-08-15 ──────
 # Keeper's suite reddened naming two REAL defects; my own run of the identical
 # gate against the identical serve minutes later came back GREEN. That is not a

@@ -161,3 +161,47 @@ Recording rather than silently skipping or silently widening scope:
    defect and fixing it under a dark-mode flag would be mislabelling it. Needs
    its own decision: darken those 3 palette entries, or drop to a fixed
    AA-safe pair.
+
+
+## Wave list — KNOWN-UNFIXED, recorded in BASELINE rather than hidden
+
+Both entered the baseline on 2026-08-15 as known-unfixed so tonight's train
+could ship; both are real defects and neither is closed. Fix as wave work.
+
+1. **Guitardle promo card, play-to-claim points text — 2.83:1**
+   (`#657154` on `#242a20`), `span.gdle-side-row__pts` / `__rank`.
+   NEW copy from the fairness lane, on a feature that is **ON**, so it is live
+   for anon right now. Note this is the same element family already disclosed
+   on the front page in CRAFT-STANDARD row 36 as "a different lane's surface" —
+   it has now spread to `bpnoaccess`, which makes it worth owning rather than
+   continuing to route around. Coordinate with the guitardle seat before
+   changing their palette.
+2. **`.lg-chrome__badge` count pips — 1.51:1** (`#e5e7e1` on `#ecb351`).
+   RENDER-DEPENDENT on notification state, so it appears in some runs and not
+   others — which is exactly why earlier captures missed it and why its surface
+   needed headroom rather than a tight floor.
+   **CORRECTION — I first wrote that this was "likely a BOTH-THEMES defect".
+   It is not. It is DARK-ONLY, and I checked instead of leaving the guess in.**
+   `--lg-amber` is `#ecb351` in *both* themes — `app-settings.js`'s dark THEMES
+   block re-declares the identical value — while `--lg-ink` flips (`#323532`
+   light → `#e5e7e1` dark). So light renders dark ink on amber at **6.58:1 and
+   passes**; only dark inverts into near-white on amber at 1.51:1.
+   That makes it the **inverse** of the Install button, and the distinction is
+   the useful part: there the FILL moved and the ink stayed put; here the INK
+   moves and the fill stays put. Same symptom, opposite cause. So it belongs to
+   gate **36**, not 45.
+   Fix is one dark-scoped rule pinning the badge ink: `#323532` on `#ecb351` =
+   6.58:1 (reuses the existing brand value rather than inventing one). The rule
+   goes in a dark block — `lg-shell/lg-shared/site-header.css` has **no dark
+   override for this selector at all**, which is the whole reason it inverted.
+   Not applied tonight: it edits a stylesheet that is live on the serve, and
+   keeper's standalone gate 36 run was in flight.
+
+### Also still open, from earlier in this lane
+- The probe's bordered-ancestor credit (gate 36) — the borderless-field
+  findings survive the wrapper flag flip. Sequenced after the merge.
+- Gate 45's position-free matching key — selectors carry `:nth-child()`, so the
+  mobile feed's variable card count makes the same defect miss its match and
+  under-report. Fix before tightening any gate-45 number.
+- The avatar-initials palette and `loothalong.js`'s crew avatars — both fail in
+  BOTH themes, gate 45's founding instances, still unfixed.
