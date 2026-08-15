@@ -228,6 +228,43 @@ is_(str_contains($audit, 'actor=ian-via-board'), 'the actor is in the audit line
 is_(substr_count($audit, "\n") >= 10, sprintf('every call left a line (%d)', substr_count($audit, "\n")));
 
 /* ---------------------------------------------------------------------- */
+section("[9] AN AMBIGUOUS INDEX IS REFUSED, NOT RESOLVED");
+
+/**
+ * The regression this exists for, and it is not hypothetical: the index really
+ * did carry "9" twice until 2026-08-15. Measured before the fix — the duplicate
+ * makes `$rows` keep only the SECOND line while `$slots` keeps both positions,
+ * so the permutation check PASSES and the rewrite silently DELETES one item and
+ * writes the other twice. A drag that deletes work while reporting success is
+ * the worst outcome this service can have, so it is refused outright.
+ *
+ * Red-first: with the fence removed, assertions 2-4 below go red and the file
+ * comes back with the duplicate line doubled and the other item gone.
+ */
+$bl  = $clone . '/docs/BACKLOG.md';
+$was = (string) file_get_contents($bl);
+file_put_contents($bl, str_replace("\nE1 ", "\n27 A SECOND ITEM WEARING 27\nE1 ", $was));
+sh('git add -A && git -c user.name=t -c user.email=t@t commit -q -m dupe', $clone);
+sh('git push -q origin HEAD:main', $clone);
+
+$dupIds = indexIds($clone);
+is_(count($dupIds) === 5 && count(array_unique($dupIds)) === 4,
+    'the fixture now carries a duplicate id (' . implode(',', $dupIds) . ')');
+
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'reorder',
+                        'order' => ['4.1', '4.2', '27', '27', 'E1']]);
+is_(($r['json']['refused'] ?? false) === true, 'a reorder against a duplicated id is REFUSED');
+is_(in_array('27', (array) ($r['json']['duplicate_ids'] ?? []), true),
+    '...and NAMES the duplicate, so it can be renumbered');
+$after = indexIds($clone);
+is_($after === $dupIds, '...and the index is untouched — nothing was deleted or doubled');
+
+/* Put the fixture back so the audit tallies below are not skewed. */
+file_put_contents($bl, $was);
+sh('git add -A && git -c user.name=t -c user.email=t@t commit -q -m undupe', $clone);
+sh('git push -q origin HEAD:main', $clone);
+
+/* ---------------------------------------------------------------------- */
 sh('rm -rf ' . escapeshellarg($tmp));
 echo "\n$pass passed, $fail failed\n";
 if ($fail > 0) { echo "RED — the committer's fences are not holding.\n"; exit(1); }

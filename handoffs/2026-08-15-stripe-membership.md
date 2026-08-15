@@ -113,8 +113,15 @@ ours executes. Fix is one admin line: add `lg-member-sync/v1` to the WP option
    `STRIPE_BROKER_TARGET` exists for exactly that.
 2. **I leaked the sandbox key into my transcript** via a raw `db query` on a
    status check — having built the broker that afternoon precisely so keys never
-   enter conversations. **Rotation is owed** (test key, free, opus seat per the
-   keys rule). A tool only helps if it's the thing you reach for.
+   enter conversations. A tool only helps if it's the thing you reach for.
+   **~~Rotation is owed~~ — RULED OUT BY IAN, 2026-08-15: *"keep sandbox keys.
+   not worth rotating."*** The key stays as it is: it is sandbox-mode
+   (`sk_test_`), it buys nothing, and he judged the rotation not worth the time.
+   **Do not re-open this** — a later seat reading "rotation is owed" and doing it
+   would be redoing work he has already declined. The LESSON is untouched and
+   still binds: read a key through `stripe-broker.php`, never a raw `db query`.
+   (The separate **live**-key rotation in the brief's §6 is Ian's own and is
+   still open — different key, different decision.)
 
 ---
 

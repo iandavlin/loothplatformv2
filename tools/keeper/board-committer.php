@@ -163,6 +163,35 @@ function applyReorder( string $repo, array $order ): array
     }
     if ( $rows === [] ) { fail( 'no PRIORITY INDEX rows found — refusing to rewrite a file I cannot read' ); }
 
+    /**
+     * FENCE 1c — AN AMBIGUOUS INDEX CANNOT BE REORDERED SAFELY.
+     *
+     * The permutation rule assumes an id names exactly one line. IDS IN THIS
+     * FILE ARE NOT UNIQUE: the index really did carry "9" twice (Shop Layout
+     * Planner in P1, Advanced search in P2) until it was renumbered on
+     * 2026-08-15, and nothing stops it happening again.
+     *
+     * Measured, not theorised: with "9" twice, `$rows` keeps only the SECOND
+     * line while `$slots` keeps both positions — so the permutation check
+     * PASSES, and the rewrite silently deletes one item and writes the other
+     * twice. That is precisely the "a drag cannot add, drop or rename"
+     * guarantee failing, quietly, on the one operation it exists to protect.
+     *
+     * So a duplicate id is refused rather than resolved. Guessing which "9" the
+     * drag meant is not available to this code, and picking one would be a
+     * coin-flip that destroys an item when it loses.
+     */
+    if ( count( $rows ) !== count( $slots ) ) {
+        $seen = []; $dupes = [];
+        foreach ( $ids as $id ) {
+            if ( isset( $seen[ '#' . $id ] ) ) { $dupes[ '#' . $id ] = $id; }
+            $seen[ '#' . $id ] = true;
+        }
+        refuse( 'the priority index uses the same id more than once, so a reorder cannot say which line it means — renumber the duplicate first', [
+            'duplicate_ids' => array_values( $dupes ),
+        ] );
+    }
+
     $have = array_map( 'strval', $ids );
     sort( $have ); $want = array_map( 'strval', $order ); sort( $want );
     if ( $have !== $want ) {

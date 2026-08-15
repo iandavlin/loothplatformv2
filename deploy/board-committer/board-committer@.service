@@ -1,0 +1,26 @@
+# One instance per connection (Accept=yes). Runs as ubuntu — the user that owns
+# the committer's clone and holds the git credentials. The web user never does.
+#
+# NOTE ON systemctl --failed: this is socket-activated, so it does not run when
+# nobody calls it and cannot sit in the failed list waiting for its code, which
+# is how the mirror outbox timer poisoned the alert channel in July.
+[Unit]
+Description=Work board committer (connection %i)
+Requires=board-committer.socket
+After=board-committer.socket
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+# Pre-merge override lives here; the file says in its own text to delete itself.
+EnvironmentFile=-/etc/default/board-committer
+ExecStart=/usr/bin/php /home/ubuntu/loothplatformv2-clean/tools/keeper/board-committer-listen.php
+# A client that connects and never speaks cannot pin a process forever.
+RuntimeMaxSec=120
+# The committer needs its clone, git and ssh; it needs nothing else.
+PrivateTmp=yes
+NoNewPrivileges=yes
