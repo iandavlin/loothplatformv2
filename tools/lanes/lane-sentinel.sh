@@ -58,4 +58,11 @@ while read -r L; do
     rm -f "$STATE/$L.first" "$STATE/$L.nudged" 2>/dev/null
   fi
 done < "$MANIFEST"
+
+# Status stamp for Ian's VS Code status line (8/15: "build a time into the
+# vs code that I can see that is the cron for the lane checking"). One line,
+# overwritten every patrol; keeper-statusline.sh renders it.
+W=$(lanes 2>/dev/null | grep -c WORKING || echo "?")
+T=$(lanes 2>/dev/null | wc -l || echo "?")
+echo "$(date +%s) $(date +%H:%M:%S) working=$W total=$T" > "$HOME/.sentinel-status"
 exit 0
