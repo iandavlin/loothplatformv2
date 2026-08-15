@@ -204,6 +204,97 @@ is_(str_contains($noBack, 'not readable'), "...and says WHY it is empty");
 is_(str_contains($noBack, 'class="rail"'), "...while the sentinel half still renders — one dead source does not blank the page");
 
 /* ---------------------------------------------------------------------- */
+section("[5c] EVERY ROW OPENS ITS OWN ITEM — ids are NOT unique");
+
+// The read-only work modal. The trap here is real and was hit: the PRIORITY
+// INDEX carries the id "9" TWICE (Shop Layout Planner in P1, Advanced search in
+// P2). An id-keyed payload silently collapses them, so both rows open the
+// second one's text — two rows, one payload, wrong content, no error. Rows are
+// therefore keyed per ROW, and this asserts it stays that way.
+if (!preg_match_all('/data-item="([^"]+)"/', $html, $dm)) {
+    bad("no openable rows at all");
+} else {
+    $keys = $dm[1];
+    is_(count($keys) === count(array_unique($keys)), sprintf(
+        "every row carries a UNIQUE key (%d rows, %d unique)", count($keys), count(array_unique($keys))));
+    is_(count($keys) === count($ids), sprintf(
+        "and there is one openable row per index item (%d vs %d)", count($keys), count($ids)));
+
+    $payload = [];
+    if (preg_match('/id="lgb-details">(.*?)<\/script>/s', $html, $pm)) {
+        $payload = json_decode($pm[1], true) ?: [];
+    }
+    is_(count($payload) === count($keys), sprintf(
+        "the payload has an entry for every row (%d vs %d)", count($payload), count($keys)));
+    is_(array_diff($keys, array_keys($payload)) === [], "no row points at a payload entry that does not exist");
+
+    // The duplicate-id case specifically: if the file still has one, the two
+    // rows must carry DIFFERENT text.
+    $dupes = array_values(array_diff_assoc($ids, array_unique($ids)));
+    if ($dupes !== []) {
+        $seen = [];
+        foreach ($payload as $entry) {
+            $h = (string) ($entry['heading'] ?? '');
+            foreach ($dupes as $d) {
+                if (str_starts_with($h, $d . ' ')) { $seen[$d][] = $h; }
+            }
+        }
+        $collapsed = [];
+        foreach ($seen as $d => $headings) {
+            if (count(array_unique($headings)) < 2) { $collapsed[] = $d; }
+        }
+        is_($collapsed === [], sprintf(
+            "the duplicated id(s) %s open DIFFERENT items, not the same one twice (collapsed: %s)",
+            implode(',', $dupes), $collapsed === [] ? 'none' : implode(',', $collapsed)));
+    } else {
+        ok("no duplicate ids in the index today — nothing to collapse");
+    }
+}
+
+/* ---------------------------------------------------------------------- */
+section("[5d] PROJECT NESTING — and a mapping gap must be VISIBLE");
+
+// Ian: "nested and have names of the projects rather than the p0 etc." The
+// danger in any auto-grouping is a WRONG group: it hides work under a name its
+// owner would never look under, and unlike a missing row it leaves no hole to
+// notice. So the map is explicit (docs/board-projects.php) and anything it does
+// not cover must land in a VISIBLE "unsorted" group — never be quietly filed
+// somewhere plausible.
+is_(str_contains($html, 'class="proj'), "items are grouped into project accordions");
+is_(!preg_match('/class="band__n">P\d</', $html), "P-bands are NOT section headings any more");
+
+// Every row still lands inside some project panel.
+$inPanels = preg_match_all('/<details class="proj.*?<\/details>/s', $html, $pm);
+$rowsInPanels = 0;
+foreach ($pm[0] ?? [] as $panel) { $rowsInPanels += preg_match_all('/data-item="/', $panel); }
+is_($rowsInPanels === count($ids), sprintf(
+    "every item sits inside a project panel (%d of %d)", $rowsInPanels, count($ids)));
+
+// THE ASSERTION THAT MATTERS: with a rule removed, the orphan must SHOW UP as
+// unsorted rather than vanish or be absorbed. Proven by running the page
+// against a map with no rules at all.
+$empty = tempnam(sys_get_temp_dir(), 'lgbp') . '.php';
+file_put_contents($empty, "<?php return ['projects' => [], 'rules' => []];\n");
+$tmpRepo = sys_get_temp_dir() . '/lgb-proj-' . getmypid();
+@mkdir($tmpRepo . '/docs', 0755, true);
+@copy($empty, $tmpRepo . '/docs/board-projects.php');
+@copy($BACK, $tmpRepo . '/docs/BACKLOG.md');
+@mkdir($tmpRepo . '/webroot', 0755, true);
+@copy($PAGE, $tmpRepo . '/webroot/wip-board.php');
+$orphaned = (string) shell_exec(PHP_BINARY . ' ' . escapeshellarg($tmpRepo . '/webroot/wip-board.php') . ' 2>/dev/null');
+is_(str_contains($orphaned, 'Unsorted'), "with an EMPTY map, items surface as Unsorted — the gap is visible, not absorbed");
+$unsortedRows = preg_match('/proj--unsorted.*?<\/details>/s', $orphaned, $um) ? preg_match_all('/data-item="/', $um[0]) : 0;
+is_($unsortedRows === count($ids), sprintf(
+    "...and ALL %d items are in it, so nothing is silently dropped when the map is empty (%d)",
+    count($ids), $unsortedRows));
+@unlink($empty);
+@unlink($tmpRepo . '/docs/board-projects.php'); @unlink($tmpRepo . '/docs/BACKLOG.md');
+@unlink($tmpRepo . '/webroot/wip-board.php'); @rmdir($tmpRepo . '/docs'); @rmdir($tmpRepo . '/webroot'); @rmdir($tmpRepo);
+
+// Done work leaves the active list by STATE, not by hand (Ian's other ruling).
+is_(str_contains($html, 'class="donebox"'), "finished work collapses into a drawer rather than sitting in the list");
+
+/* ---------------------------------------------------------------------- */
 section("[6] PHASE 1 CANNOT WRITE");
 
 // Read-only is the property that lets this ship without a flag, so it is

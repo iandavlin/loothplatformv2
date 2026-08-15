@@ -165,6 +165,82 @@ function lgb_item(string $id, string $text): array
     return compact('id', 'title', 'owner', 'done', 'needsIan', 'look', 'blocked', 'unowned') + ['raw' => $plain];
 }
 
+/**
+ * The DETAIL sections — everything below the index, keyed by item id.
+ *
+ * The file's own shape: `## <id> <title> …` headings, each running until the
+ * next `##`. The index says what the order is; these say what the work IS. The
+ * modal shows one, so an item can be opened without leaving the board or
+ * hunting through a 64 KB markdown file.
+ *
+ * @return array<string,array{heading:string,body:string}>
+ */
+function lgb_parse_details(string $path): array
+{
+    if (!is_readable($path)) { return []; }
+    $raw   = str_replace([ "\r\n", "\r" ], "\n", (string) file_get_contents($path));
+    $lines = explode("\n", $raw);
+
+    $out = []; $curId = null; $curHead = ''; $buf = [];
+    $flush = static function () use (&$out, &$curId, &$curHead, &$buf): void {
+        if ($curId !== null) {
+            $out[$curId] = ['heading' => $curHead, 'body' => trim(implode("\n", $buf))];
+        }
+    };
+    foreach ($lines as $line) {
+        if (str_starts_with($line, '## ')) {
+            $flush();
+            $head = trim(substr($line, 3));
+            // The id is the first token, after any leading tick.
+            $probe = ltrim($head, "✅ \t");
+            $curId = preg_match('/^([A-Z]?\d+(?:\.\d+)?)/u', $probe, $m) ? $m[1] : null;
+            $curHead = $head; $buf = [];
+            continue;
+        }
+        if ($curId !== null) { $buf[] = $line; }
+    }
+    $flush();
+    return $out;
+}
+
+/* ---------------------------------------------------------------------- *
+ * Items → PROJECTS
+ *
+ * Ian: "nested and have names of the projects rather than the p0 etc." The
+ * P-band still decides ORDER and badge colour; it just stops being a heading.
+ * The map itself lives in docs/board-projects.php — explicit and committed,
+ * because a wrong grouping hides work under a name its owner would never look
+ * under. Anything unmatched goes to "unsorted", ON THE BOARD, so a gap in the
+ * map is visible rather than absorbed.
+ * ---------------------------------------------------------------------- */
+
+function lgb_projects(string $repo): array
+{
+    $f = $repo . '/docs/board-projects.php';
+    if (!is_readable($f)) { return ['projects' => [], 'rules' => []]; }
+    $cfg = require $f;
+    return is_array($cfg) ? $cfg + ['projects' => [], 'rules' => []] : ['projects' => [], 'rules' => []];
+}
+
+/** First matching rule wins; null means unsorted, which is a visible state. */
+function lgb_project_for(array $it, array $cfg): ?string
+{
+    foreach ($cfg['rules'] as $rule) {
+        $idOk    = !isset($rule['ids'])   || in_array($it['id'], (array) $rule['ids'], true);
+        $titleOk = !isset($rule['title']) || (bool) preg_match($rule['title'], $it['raw']);
+        if ($idOk && $titleOk && (isset($rule['ids']) || isset($rule['title']))) {
+            return (string) $rule['project'];
+        }
+    }
+    return null;
+}
+
+/** P0 sorts above P1 and so on; unknown bands sort last. Priority, made silent. */
+function lgb_weight(string $band): int
+{
+    return preg_match('/^P(\d)$/', $band, $m) ? (int) $m[1] : 9;
+}
+
 /* ---------------------------------------------------------------------- *
  * The sentinel stamp → lane lights + capacity strip
  * ---------------------------------------------------------------------- */
@@ -191,6 +267,9 @@ const LGB_DISK_RED_PCT  = 90;
 function lgb_h(string $s): string { return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'); }
 
 $backlog  = lgb_parse_backlog($BACKLOG);
+$GLOBALS['LGB_ROW'] = 0;   // row keys; see the payload note below
+$details  = lgb_parse_details($BACKLOG);
+$projCfg  = lgb_projects($REPO);
 $sentinel = lgb_sentinel($SENTINEL);
 
 $totalItems = 0; $needsYou = 0;
@@ -248,11 +327,64 @@ header('X-Robots-Tag: noindex, nofollow');
   .absent{font-size:.8rem;color:var(--ink-soft);background:#fdf3f0;border:1px solid #eccfc4;
           border-radius:8px;padding:9px 11px}
 
-  .band__h{display:flex;align-items:baseline;gap:9px;margin:16px 0 8px;padding-top:10px;border-top:2px solid var(--line)}
-  .band__n{font-size:.78rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
-  .band__l{font-size:.75rem;color:var(--ink-mute);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .band__c{font-size:.74rem;color:var(--ink-mute)}
-  .P0 .band__n{color:#8a3208} .P1 .band__n{color:#7a5c04} .P2 .band__n{color:var(--ink-soft)} .P3 .band__n{color:var(--ink-mute)}
+  /* ONE CONTINUOUS LIST (Ian: "one surface like the order"). A band change is a
+     thin marker in the flow, not a wall across it — the eye should read top to
+     bottom as one ranking, with the band available as context rather than as a
+     section it has to cross. */
+  .band__h{display:flex;align-items:center;gap:8px;margin:14px 0 6px}
+  .band__h:first-of-type{margin-top:2px}
+  .band__dot{width:9px;height:9px;border-radius:99px;flex:none}
+  .band__n{font-size:.7rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-mute)}
+  .band__l{font-size:.72rem;color:var(--ink-mute);flex:1;min-width:0;overflow:hidden;
+           text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid var(--line-soft);
+           padding-bottom:2px;margin-bottom:-2px}
+  .band__c{font-size:.72rem;color:var(--ink-mute)}
+  .P0 .band__dot{background:#8a3208} .P1 .band__dot{background:#b8860b}
+  .P2 .band__dot{background:#8a8478} .P3 .band__dot{background:#cfc7b8}
+  .P0 .band__n{color:#8a3208} .P1 .band__n{color:#7a5c04}
+
+  /* HUMAN TITLES LEAD. The engineering id is a suffix you can find when you
+     want it, not the first thing you read. */
+  .row__t{font-size:.9rem;font-weight:500;flex:1;min-width:0}
+  .row__n{font-family:ui-monospace,Menlo,monospace;font-size:.68rem;color:#a9a294;flex:none;
+          margin-left:2px;font-weight:400}
+
+  /* PROJECT ACCORDION. Priority lives in the dot's colour and in the sort —
+     never in a heading. */
+  .proj{border:1px solid var(--line);border-radius:10px;background:#fff;margin:0 0 8px;overflow:hidden}
+  .proj[open]{box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .proj__h{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;
+           padding:11px 13px;background:#fbf8f2;user-select:none}
+  .proj__h::-webkit-details-marker{display:none}
+  .proj__h::before{content:"▸";color:var(--ink-mute);font-size:.8rem;flex:none}
+  .proj[open] .proj__h::before{content:"▾"}
+  .proj__h:hover{background:#f7f2e8}
+  .proj__dot{width:9px;height:9px;border-radius:99px;flex:none;background:var(--ink-mute)}
+  .proj__n{font-size:.93rem;font-weight:700;flex:1;min-width:0;overflow:hidden;
+           text-overflow:ellipsis;white-space:nowrap}
+  .proj__roll{display:flex;align-items:center;gap:8px;flex:none}
+  .proj__c{font-size:.76rem;color:var(--ink-soft)}
+  .proj__d{font-size:.73rem;color:var(--ink-mute)}
+  .proj__b{padding:10px 13px 12px}
+  .proj__empty{font-size:.79rem;color:var(--ink-mute);padding:2px 0 4px}
+  .proj--unsorted{border-color:var(--accent-soft);background:#fffaf3}
+  .proj--unsorted .proj__h{background:#fff3e8}
+  .proj--unsorted .proj__n{color:var(--accent)}
+
+  /* Priority, as colour only — P0 hottest, P3 coolest. */
+  .w0{background:#8a3208} .w1{background:#b8860b} .w2{background:#8a8478} .w3,.w9{background:#cfc7b8}
+  .row.w0{border-left:3px solid #8a3208} .row.w1{border-left:3px solid #b8860b}
+  .row.w2{border-left:3px solid #d8d0c0} .row.w3,.row.w9{border-left:3px solid var(--line)}
+
+  /* DONE COLLAPSES AWAY. Open work is the list; finished work is a drawer. */
+  .donebox{margin-top:20px;border-top:1px solid var(--line);padding-top:12px}
+  .donebox>summary{cursor:pointer;font-size:.8rem;color:var(--ink-mute);list-style:none;
+                   display:flex;align-items:center;gap:7px;padding:4px 0}
+  .donebox>summary::-webkit-details-marker{display:none}
+  .donebox>summary::before{content:"▸";font-size:.75rem;transition:none}
+  .donebox[open]>summary::before{content:"▾"}
+  .donebox>summary:hover{color:var(--ink-soft)}
+  .donebox .row{opacity:.62}
 
   .row{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line);
        border-radius:8px;padding:8px 11px;margin:0 0 6px}
@@ -264,12 +396,32 @@ header('X-Robots-Tag: noindex, nofollow');
   .bdg{font-size:.66rem;font-weight:700;padding:2px 7px;border-radius:99px;white-space:nowrap;
        display:inline-flex;align-items:center;gap:4px}
   .bdg::before{content:"";width:6px;height:6px;border-radius:99px;background:currentColor}
-  .bdg--decide{background:#fbe3d8;color:var(--accent)}
+  .bdg--decide{background:var(--accent);color:#fff;box-shadow:0 1px 3px rgba(185,69,11,.35)}
   .bdg--look{background:#f7ecd5;color:var(--warn)}
   .bdg--blocked{background:#f3dcd4;color:var(--blocked)}
   .bdg--unowned{background:#eee9df;color:var(--ink-mute)}
   .bdg--done{background:#e8efe2;color:var(--good)}
 
+  .row--open{cursor:pointer}
+  .row--open:hover{border-color:var(--accent);background:#fffdf8}
+  .row--open:focus{outline:2px solid var(--accent);outline-offset:1px}
+
+  /* the work modal — read-only in phase 1 */
+  .scrim{position:fixed;inset:0;background:rgba(31,29,26,.45);display:none;align-items:flex-start;
+         justify-content:center;padding:32px 18px;z-index:50;overflow:auto}
+  .scrim.on{display:flex}
+  .modal{background:#fff;border-radius:12px;max-width:760px;width:100%;box-shadow:0 18px 44px rgba(0,0,0,.3);
+         display:flex;flex-direction:column;max-height:calc(100vh - 64px)}
+  .modal__h{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
+  .modal__t{font-size:1rem;font-weight:700;line-height:1.35;flex:1}
+  .modal__x{border:0;background:none;color:var(--ink-mute);font-size:1.3rem;line-height:1;cursor:pointer;padding:0 2px}
+  .modal__b{padding:15px 18px;overflow:auto}
+  .modal__b pre{white-space:pre-wrap;word-wrap:break-word;font:13px/1.62 ui-monospace,Menlo,monospace;
+                margin:0;color:var(--ink-soft)}
+  .modal__b a{color:var(--accent)}
+  .modal__meta{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 12px}
+  .phase2{margin:14px 0 0;padding:10px 12px;background:#fbf8f2;border:1px solid var(--line-soft);
+          border-radius:8px;font-size:.79rem;color:var(--ink-mute)}
   .foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);font-size:.76rem;color:var(--ink-mute);line-height:1.6}
   .foot b{color:var(--ink-soft)}
   .err{background:#fdf3f0;border:1px solid #eccfc4;border-radius:9px;padding:12px 14px;color:#7a3a22;margin:0 0 14px}
@@ -372,27 +524,84 @@ header('X-Robots-Tag: noindex, nofollow');
     </div>
   </div>
 
-  <!-- the ranked list -->
-  <?php foreach ($backlog['bands'] as $band): ?>
-    <div class="band__h <?= lgb_h($band['name']) ?>">
-      <span class="band__n"><?= lgb_h($band['name']) ?></span>
-      <span class="band__l"><?= lgb_h($band['label']) ?></span>
-      <span class="band__c"><?= count($band['items']) ?></span>
-    </div>
-    <?php foreach ($band['items'] as $it): ?>
-      <div class="row<?= $it['done'] ? ' row--done' : '' ?>" title="<?= lgb_h(mb_substr($it['raw'], 0, 400)) ?>">
-        <span class="row__n"><?= lgb_h($it['id']) ?></span>
-        <span class="row__t"><?= lgb_h($it['title']) ?></span>
-        <span class="row__b">
-          <?php if ($it['done']): ?><span class="bdg bdg--done">done</span><?php endif; ?>
-          <?php if (!$it['done'] && $it['needsIan']): ?><span class="bdg bdg--decide">needs you</span><?php endif; ?>
-          <?php if (!$it['done'] && $it['look']): ?><span class="bdg bdg--look">look</span><?php endif; ?>
-          <?php if (!$it['done'] && $it['blocked']): ?><span class="bdg bdg--blocked">blocking</span><?php endif; ?>
-          <?php if (!$it['done'] && $it['unowned']): ?><span class="bdg bdg--unowned">unowned</span><?php endif; ?>
+  <!-- ACCORDION OF NAMED PROJECTS (Ian, on the live board: "nested and have
+       names of the projects rather than the p0 etc." + "I'd like the sub tasks
+       in an accordion"). Panels are INDEPENDENT — opening one does not close
+       another, because comparing two projects is a normal thing to want.
+       Priority is still here; it just sorts and colours instead of shouting. -->
+  <?php
+    $groups = [];   // key => ['name'=>, 'order'=>, 'open'=>[], 'done'=>[]]
+    foreach ($backlog['bands'] as $band) {
+        $w = lgb_weight($band['name']);
+        foreach ($band['items'] as $it) {
+            $key  = lgb_project_for($it, $projCfg);
+            $meta = $key !== null && isset($projCfg['projects'][$key])
+                ? $projCfg['projects'][$key]
+                : ['name' => 'Unsorted — not in the project map', 'order' => 9999];
+            $k = $key ?? '_unsorted';
+            if (!isset($groups[$k])) { $groups[$k] = $meta + ['open' => [], 'done' => [], 'minw' => 9]; }
+            $it['_w'] = $w;
+            if ($it['done']) { $groups[$k]['done'][] = $it; }
+            else {
+                $groups[$k]['open'][] = $it;
+                $groups[$k]['minw'] = min($groups[$k]['minw'], $w);
+            }
+        }
+    }
+    // Projects with the most urgent OPEN work first; then the resting order.
+    // Unsorted always sits last so it reads as a gap, not as a project.
+    uasort($groups, static function (array $x, array $y): int {
+        if ($x['name'] === $y['name']) { return 0; }
+        $xu = str_starts_with($x['name'], 'Unsorted'); $yu = str_starts_with($y['name'], 'Unsorted');
+        if ($xu !== $yu) { return $xu ? 1 : -1; }
+        return [$x['minw'], $x['order']] <=> [$y['minw'], $y['order']];
+    });
+    foreach ($groups as $g) { usort($g['open'], static fn ($p, $q) => $p['_w'] <=> $q['_w']); }
+
+    $renderRow = function (array $it): void {
+        $rowKey = 'r' . (++$GLOBALS['LGB_ROW']); ?>
+        <div class="row row--open<?= $it['done'] ? ' row--done' : '' ?> w<?= (int) ($it['_w'] ?? 9) ?>"
+             data-item="<?= lgb_h($rowKey) ?>" tabindex="0" role="button" title="Open this item">
+          <span class="row__t"><?= lgb_h($it['title']) ?></span>
+          <span class="row__b">
+            <?php if (!$it['done'] && $it['needsIan']): ?><span class="bdg bdg--decide">needs you</span><?php endif; ?>
+            <?php if (!$it['done'] && $it['look']): ?><span class="bdg bdg--look">look</span><?php endif; ?>
+            <?php if (!$it['done'] && $it['blocked']): ?><span class="bdg bdg--blocked">blocking</span><?php endif; ?>
+            <?php if (!$it['done'] && $it['unowned']): ?><span class="bdg bdg--unowned">unowned</span><?php endif; ?>
+            <?php if ($it['done']): ?><span class="bdg bdg--done">done</span><?php endif; ?>
+          </span>
+          <span class="row__o"><?= $it['owner'] !== null ? lgb_h($it['owner']) : '' ?></span>
+          <span class="row__n"><?= lgb_h($it['id']) ?></span>
+        </div>
+      <?php };
+  ?>
+
+  <?php foreach ($groups as $g):
+        $needs = 0; foreach ($g['open'] as $o) { if ($o['needsIan'] || $o['look']) { $needs++; } }
+        $unsorted = str_starts_with($g['name'], 'Unsorted'); ?>
+    <details class="proj<?= $unsorted ? ' proj--unsorted' : '' ?>"<?= ($needs > 0 || $unsorted) ? ' open' : '' ?>>
+      <summary class="proj__h">
+        <span class="proj__dot w<?= (int) $g['minw'] ?>"></span>
+        <span class="proj__n"><?= lgb_h($g['name']) ?></span>
+        <span class="proj__roll">
+          <?php if ($needs > 0): ?><span class="bdg bdg--decide"><?= (int) $needs ?> need you</span><?php endif; ?>
+          <span class="proj__c"><?= count($g['open']) ?> open</span>
+          <?php if ($g['done'] !== []): ?><span class="proj__d"><?= count($g['done']) ?> done</span><?php endif; ?>
         </span>
-        <span class="row__o"><?= $it['owner'] !== null ? lgb_h($it['owner']) : '' ?></span>
+      </summary>
+      <div class="proj__b">
+        <?php if ($g['open'] === []): ?>
+          <div class="proj__empty">nothing open here</div>
+        <?php endif; ?>
+        <?php foreach ($g['open'] as $it) { $renderRow($it); } ?>
+        <?php if ($g['done'] !== []): ?>
+          <details class="donebox">
+            <summary>done (<?= count($g['done']) ?>)</summary>
+            <?php foreach ($g['done'] as $it) { $renderRow($it); } ?>
+          </details>
+        <?php endif; ?>
       </div>
-    <?php endforeach; ?>
+    </details>
   <?php endforeach; ?>
 
   <div class="foot">
@@ -407,6 +616,93 @@ header('X-Robots-Tag: noindex, nofollow');
     the per-item work modal with its thread, and the keeper chat; all of those
     write, and get fenced as writes.
   </div>
+
+  <!-- The work modal. READ-ONLY in phase 1: it shows what an item IS. The
+       decisions, the per-item thread, images and "Other" are phase 2, and every
+       one of those writes. -->
+  <div class="scrim" id="lgb-scrim" role="dialog" aria-modal="true" aria-labelledby="lgb-title">
+    <div class="modal">
+      <div class="modal__h">
+        <div class="modal__t" id="lgb-title"></div>
+        <button class="modal__x" id="lgb-close" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="modal__b">
+        <div class="modal__meta" id="lgb-meta"></div>
+        <pre id="lgb-body"></pre>
+        <div class="phase2">Read-only for now. Answering decisions, the per-item
+          thread, images and drag-to-rank all write, so they come with phase 2.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail bodies, embedded rather than fetched: it keeps the page free of
+       query input (which the gate asserts, and which is a real property for a
+       surface with no auth of its own beyond the dev gate). -->
+  <script type="application/json" id="lgb-details"><?php
+    // ONE ENTRY PER ITEM, always. Only 7 of the file's 39 detail sections are
+    // id-headed — the other 30 are the date-headed shipped archive — so keying
+    // the modal on detail alone would have made 42 of 49 items unopenable.
+    // What every item DOES have is its full index line, which the row itself
+    // truncates to fit. So the modal always has something true to show, and the
+    // detail section is a bonus when the file carries one.
+    // KEYED PER ROW, NOT PER ID — because ids are not unique. The index really
+    // does carry "9" twice (Shop Layout Planner in P1, Advanced search in P2),
+    // so an id-keyed map silently collapses them and both rows open the second
+    // one's text. Two rows, one payload, wrong content, no error.
+    $payload = []; $n = 0;
+    foreach ($backlog['bands'] as $b) {
+        foreach ($b['items'] as $it) {
+            $d = $details[$it['id']] ?? null;
+            $payload['r' . (++$n)] = [
+                'heading' => $it['id'] . ' · ' . $it['title'],
+                'line'    => $it['raw'],
+                'band'    => $b['name'] !== '' ? $b['name'] : $b['label'],
+                'owner'   => $it['owner'],
+                'detail'  => $d['body']    ?? '',
+                'dhead'   => $d['heading'] ?? '',
+            ];
+        }
+    }
+    echo json_encode($payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
+  ?></script>
+  <script>
+  (function () {
+    var data = {};
+    try { data = JSON.parse(document.getElementById('lgb-details').textContent || '{}'); } catch (e) {}
+    var scrim = document.getElementById('lgb-scrim'),
+        title = document.getElementById('lgb-title'),
+        body  = document.getElementById('lgb-body'),
+        meta  = document.getElementById('lgb-meta');
+
+    function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+    function open(id, row) {
+      var d = data[id]; if (!d) return;
+      title.textContent = d.dhead || d.heading || id;
+      var text = d.line || '';
+      if (d.detail) { text += '\n\n────────\n\n' + d.detail; }
+      // Links are made clickable, everything else stays literal text.
+      body.innerHTML = esc(text).replace(
+        /(https?:\/\/[^\s<)]+|\/[a-z0-9][\w./-]*\/)/gi,
+        function (m) { return '<a href="' + m + '" target="_blank" rel="noopener">' + m + '</a>'; });
+      meta.innerHTML = '';
+      row.querySelectorAll('.bdg').forEach(function (b) { meta.appendChild(b.cloneNode(true)); });
+      scrim.classList.add('on');
+      document.getElementById('lgb-close').focus();
+    }
+    function close() { scrim.classList.remove('on'); }
+
+    document.querySelectorAll('.row[data-item]').forEach(function (row) {
+      row.addEventListener('click', function () { open(row.getAttribute('data-item'), row); });
+      row.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(row.getAttribute('data-item'), row); }
+      });
+    });
+    document.getElementById('lgb-close').addEventListener('click', close);
+    scrim.addEventListener('click', function (e) { if (e.target === scrim) close(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  })();
+  </script>
 </div>
 </body>
 </html>
