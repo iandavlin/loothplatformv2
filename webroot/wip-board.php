@@ -366,6 +366,8 @@ header('X-Robots-Tag: noindex, nofollow');
   .d--waiting{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   .lane__n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .lane__s{color:var(--ink-mute);font-size:.74rem}
+  .lane__watch{margin-left:auto;font-size:.72rem;color:var(--accent,#6b7d4f);text-decoration:none;border:1px solid currentColor;border-radius:9px;padding:0 .5em;opacity:.75}
+  .lane__watch:hover{opacity:1}
   .meter{margin:0 0 8px}
   .meter:last-child{margin-bottom:0}
   .meter__l{display:flex;justify-content:space-between;font-size:.76rem;margin:0 0 3px}
@@ -545,6 +547,13 @@ header('X-Robots-Tag: noindex, nofollow');
             <span class="lane__d d--<?= lgb_h($cls) ?>"></span>
             <span class="lane__n"><?= lgb_h((string) ($lane['name'] ?? '?')) ?></span>
             <span class="lane__s"><?= lgb_h($st) ?></span>
+            <?php // Watch-only live terminal (Ian ruled watch-only 8/15) —
+                  // /lane-view/ is ttyd behind the same dev gate; ?arg= is
+                  // allowlist-checked server-side against the fleet manifest.
+                  $ln = (string) ($lane['name'] ?? ''); if ($ln !== ''): ?>
+              <a class="lane__watch" target="_blank" rel="noopener"
+                 href="/lane-view/?arg=<?= lgb_h(rawurlencode($ln)) ?>">watch</a>
+            <?php endif; ?>
           </div>
         <?php endforeach; ?>
       <?php else: ?>

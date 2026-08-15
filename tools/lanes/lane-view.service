@@ -1,0 +1,27 @@
+# lane-view — ttyd serving WATCH-ONLY lane terminals for the work board.
+# Install (dev2 only — this never runs on live):
+#   sudo cp ~/keeper-repo/tools/lanes/lane-view.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now lane-view
+# The repo copy is canonical; if this drifts from /etc/systemd/system/, the
+# repo wins (backlog 33 is what un-audited unit drift looks like).
+#
+# Security posture, in one place:
+#   - binds 127.0.0.1 only; the world reaches it through nginx /lane-view/,
+#     which sits behind the dev-gate 403 like every other dev tool
+#   - NO -W flag: ttyd read-only, browser input is dropped at the door
+#   - the command is lane-view.sh, which allowlists lane names from the fleet
+#     manifest and attaches tmux with -r (read-only client) — see that script
+#   - -m 6: at most 6 concurrent viewers, so a stuck tab can't pile up clients
+
+[Unit]
+Description=Watch-only lane terminals for the work board (ttyd, dev-gated via nginx)
+After=network.target
+
+[Service]
+User=ubuntu
+ExecStart=/usr/bin/ttyd -p 7681 -i 127.0.0.1 -m 6 -a -t disableLeaveAlert=true -t titleFixed=lane-view /home/ubuntu/keeper-repo/tools/lanes/lane-view.sh
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
