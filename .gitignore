@@ -57,3 +57,4 @@ tools/dupe-merge/journal/
 # Python bytecode from tools/gates — build artifact, never tracked
 __pycache__/
 *.pyc
+archive-poc/api/v0/_flags.local.php

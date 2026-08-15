@@ -18,6 +18,19 @@
 declare(strict_types=1);
 
 /**
+ * Per-box overrides, loaded FIRST so their defined() guards win over the
+ * tracked defaults below (and gate/probe pre-definitions win over both).
+ * The file is untracked and gitignored: dev2 uses it to run a flag ON for
+ * Ian's look while the tracked default stays false — so an ordinary live
+ * pull can NEVER switch a member-facing behaviour on unverified. This is
+ * the lesson of 2026-08-15: an "ON for dev2" edit to a tracked constant is
+ * an ON for every box that pulls, whether anyone meant it or not.
+ */
+if (is_file(__DIR__ . '/_flags.local.php')) {
+    require __DIR__ . '/_flags.local.php';
+}
+
+/**
  * Backlog 22 (Ian 2026-08-14): the daily Guitardle attempt is claimed
  * SERVER-SIDE against the member account at the START of a game, so a second
  * device or an incognito window gets the same day back rather than a fresh set
@@ -108,10 +121,11 @@ if (!defined('LG_GUITARDLE_SCORE_RETRY')) {
  * everywhere and the assets are then restricted. That is a two-stage deploy.
  */
 if (!defined('LG_GUITARDLE_SERVER_PLAY')) {
-    // ON on dev2 since 2026-08-15 — Ian (decision box, keeper turn): "Flip it
-    // on dev2" so he can run the desktop-to-mobile continuation test himself.
-    // Live stays OFF until he has looked at it running here.
-    define('LG_GUITARDLE_SERVER_PLAY', true);
+    // Tracked default is FALSE. dev2 runs it ON via _flags.local.php (Ian,
+    // 2026-08-15 decision box) — kept out of this tracked file so assembling
+    // live paste 2 could not silently switch cheat-proofing on for live.
+    // The live flip is its own paste line once Ian has looked at dev2.
+    define('LG_GUITARDLE_SERVER_PLAY', false);
 }
 
 /**
