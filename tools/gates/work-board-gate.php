@@ -252,6 +252,49 @@ if (!preg_match_all('/data-item="([^"]+)"/', $html, $dm)) {
 }
 
 /* ---------------------------------------------------------------------- */
+section("[5d] PROJECT NESTING — and a mapping gap must be VISIBLE");
+
+// Ian: "nested and have names of the projects rather than the p0 etc." The
+// danger in any auto-grouping is a WRONG group: it hides work under a name its
+// owner would never look under, and unlike a missing row it leaves no hole to
+// notice. So the map is explicit (docs/board-projects.php) and anything it does
+// not cover must land in a VISIBLE "unsorted" group — never be quietly filed
+// somewhere plausible.
+is_(str_contains($html, 'class="proj'), "items are grouped into project accordions");
+is_(!preg_match('/class="band__n">P\d</', $html), "P-bands are NOT section headings any more");
+
+// Every row still lands inside some project panel.
+$inPanels = preg_match_all('/<details class="proj.*?<\/details>/s', $html, $pm);
+$rowsInPanels = 0;
+foreach ($pm[0] ?? [] as $panel) { $rowsInPanels += preg_match_all('/data-item="/', $panel); }
+is_($rowsInPanels === count($ids), sprintf(
+    "every item sits inside a project panel (%d of %d)", $rowsInPanels, count($ids)));
+
+// THE ASSERTION THAT MATTERS: with a rule removed, the orphan must SHOW UP as
+// unsorted rather than vanish or be absorbed. Proven by running the page
+// against a map with no rules at all.
+$empty = tempnam(sys_get_temp_dir(), 'lgbp') . '.php';
+file_put_contents($empty, "<?php return ['projects' => [], 'rules' => []];\n");
+$tmpRepo = sys_get_temp_dir() . '/lgb-proj-' . getmypid();
+@mkdir($tmpRepo . '/docs', 0755, true);
+@copy($empty, $tmpRepo . '/docs/board-projects.php');
+@copy($BACK, $tmpRepo . '/docs/BACKLOG.md');
+@mkdir($tmpRepo . '/webroot', 0755, true);
+@copy($PAGE, $tmpRepo . '/webroot/wip-board.php');
+$orphaned = (string) shell_exec(PHP_BINARY . ' ' . escapeshellarg($tmpRepo . '/webroot/wip-board.php') . ' 2>/dev/null');
+is_(str_contains($orphaned, 'Unsorted'), "with an EMPTY map, items surface as Unsorted — the gap is visible, not absorbed");
+$unsortedRows = preg_match('/proj--unsorted.*?<\/details>/s', $orphaned, $um) ? preg_match_all('/data-item="/', $um[0]) : 0;
+is_($unsortedRows === count($ids), sprintf(
+    "...and ALL %d items are in it, so nothing is silently dropped when the map is empty (%d)",
+    count($ids), $unsortedRows));
+@unlink($empty);
+@unlink($tmpRepo . '/docs/board-projects.php'); @unlink($tmpRepo . '/docs/BACKLOG.md');
+@unlink($tmpRepo . '/webroot/wip-board.php'); @rmdir($tmpRepo . '/docs'); @rmdir($tmpRepo . '/webroot'); @rmdir($tmpRepo);
+
+// Done work leaves the active list by STATE, not by hand (Ian's other ruling).
+is_(str_contains($html, 'class="donebox"'), "finished work collapses into a drawer rather than sitting in the list");
+
+/* ---------------------------------------------------------------------- */
 section("[6] PHASE 1 CANNOT WRITE");
 
 // Read-only is the property that lets this ship without a flag, so it is
