@@ -7,7 +7,8 @@ earlier desk-plus-list). These are the things that decide the *build*, found
 while drawing it.
 
 Mocks: `/footer-mockups/wip-board/` (round 1, shape), `rank.html` (round 2,
-drag-to-rank) and **`board.html` (round 3, the current shape — supersedes 1–2)**.
+drag-to-rank), `board.html` (round 3, one surface) and
+**`final.html` (round 4 — THE ONE TO BUILD; supersedes 1–3)**.
 
 > ⚠️ There is still no numbered entry for this in `docs/BACKLOG.md` — the file
 > stops at 28. Scope here comes from keeper's brief and Ian's three rounds of
@@ -71,6 +72,39 @@ truth get born.
 to a minute** when a lane is mid-run. That is person-paced, not instant. The mock
 states this in fine print, because a chat that *feels* broken is worse than one
 that is honestly a little slow.
+
+### Round 4, Ian's last two changes — both load-bearing
+
+**1. Every decision carries an "Other…" free-text option.** He caught its
+absence. Two buttons quietly assert that those are the only two answers, and
+often they are not — which is exactly why the chat's own decision boxes always
+carry one.
+
+Build it as a **first-class answer, not an escape hatch**: what he types is
+recorded as *his ruling in his words*, lands in the item's thread, and the lane
+works to that rather than to whichever button was nearest. The worked example on
+the mock is him rejecting both options on the author-archive question with *"only
+list authors with 2+ posts"* — a perfectly reasonable answer neither button
+offered.
+
+**2. The chat moves INTO the item.** Each item gets its own thread (a tab in its
+modal), kept with it forever — the pull-request-comments pattern. The side panel
+shrinks to one **Ask keeper** button for questions belonging to no item.
+
+Why it earns its place: comments on a PR work because they are stuck to the code
+they are about. In three months, *"why did we point it at the Map instead of
+building the index?"* is answered by opening the item rather than by anyone
+remembering. It also means **a decision and the reasoning behind it live in the
+same place** — the thing that goes missing first when a ruling is made in chat.
+
+Consequences for the build:
+
+- the thread is **per-item and durable**, so it needs a store keyed to the item —
+  and, like the ranking, it must survive being written from a page that cannot
+  write to the serving checkout (§1);
+- a ruling made **in the thread** and one made **on the Decisions tab** must be
+  the same event, or the two views will disagree about what was decided;
+- the item's chat badge count comes from the thread — derived, per the rule below.
 
 ### The badge must be DERIVED, never typed
 
