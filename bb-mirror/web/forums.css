@@ -5905,3 +5905,23 @@ html[data-lguser-theme="dark"] #lpm-body .acf-gallery-toolbar .acf-button {
   color: #c3d6ab;                    /* 8.82:1 on the background above */
   border-color: #3c4436;
 }
+
+/* ACF's own PANELS in dark. These carry no text of their own, so the contrast
+   pass never looked at them and reported green while a 286x398 WHITE dropzone
+   sat in the middle of the dark modal — the first dark screenshot is what
+   caught it, not the measurement. Matched to #22262a, the colour the hub
+   already paints the form's inputs, so the field furniture reads as one
+   surface rather than three different greys. */
+html[data-lguser-theme="dark"] #lpm-body .acf-gallery-main,
+html[data-lguser-theme="dark"] #lpm-body .acf-gallery-toolbar,
+html[data-lguser-theme="dark"] #lpm-body .acf-gallery-side,
+html[data-lguser-theme="dark"] #lpm-body .acf-oembed,
+html[data-lguser-theme="dark"] #lpm-body .acf-oembed .canvas,
+html[data-lguser-theme="dark"] #lpm-body .canvas {
+  background: #22262a;
+  border-color: #32373c;
+  color: #e5e7e1;
+}
+html[data-lguser-theme="dark"] #lpm-body .acf-gallery {
+  border-color: #32373c;
+}
