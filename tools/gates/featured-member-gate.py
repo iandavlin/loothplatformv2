@@ -53,11 +53,12 @@ DB checks use passwordless sudo peer-auth (profile-app / postgres roles), same
 posture as gate 21/27/28. Exit codes follow run-all.sh: 0 green, 1 RED, 2
 CANNOT RUN.
 """
+import http.client
 import os
 import re
+import ssl
 import subprocess
 import sys
-import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 U_PHP = os.path.join(REPO, "profile-app", "web", "u.php")
@@ -231,6 +232,73 @@ def section_c_flag_off():
         else:
             OK.append("[C2] u.php's card markup is gated behind the flag check ($lg_fmOn)")
 
+        # C2b: the CSS RULES, separately from the markup. Found by the real
+        # click-through against the merged serve, 2026-08-15 — a gate that
+        # only checked the markup (C2, above) missed this: the .lg-featcard*
+        # class definitions lived as plain text inside the shared <style>
+        # block with NO php around them at all, so they shipped on every
+        # /u/<slug> page regardless of the flag. Inert (no matching DOM to
+        # style) but not byte-identical — this codebase's own bar
+        # (back-pill.php, sheet-embeds.php).
+        #
+        # Went through TWO broken versions before this one, each caught only
+        # by red-firing it, not by inspection — worth keeping both fixes
+        # visible so neither regresses back in:
+        #   v1 used `.*?` unbounded forward search for "if ($lg_fmOn) appears
+        #      BEFORE the CSS rule somewhere in the file" — true of almost
+        #      any pairing regardless of whether an endif closed the block in
+        #      between, so it could not tell "gated" from "merely preceded by
+        #      an unrelated if elsewhere in the file".
+        #   v2 added a lookbehind to stop the light-block search matching
+        #      inside the dark rule's own selector text (`.lg-featcard{` is a
+        #      literal substring of `html[...="dark"] .lg-featcard{`), but
+        #      still used unbounded `.*?` — so removing the DARK block's own
+        #      `if` still passed, because the LIGHT block's `if` (still
+        #      present, far earlier in the file) satisfied the same
+        #      unbounded "appears somewhere before" test for the dark rule.
+        # v3 (this one): find the exact byte offset of each CSS rule, then
+        # require the NEAREST preceding `if ($lg_fmOn)` to be closer than the
+        # nearest preceding `endif` — i.e., no `endif` has closed the
+        # matching if-block between the gate and the rule. This is the
+        # smallest check that actually distinguishes "textually gated" from
+        # "somewhere after an unrelated if used once".
+        def _rule_is_gated(src, rule_marker):
+            rule_pos = src.find(rule_marker)
+            if rule_pos < 0:
+                return False
+            preceding = src[:rule_pos]
+            last_if = preceding.rfind("if ($lg_fmOn):")
+            last_endif = preceding.rfind("endif;")
+            return last_if >= 0 and last_if > last_endif
+
+        css_gated = (
+            _rule_is_gated(u_src, ".lg-featcard{") and
+            _rule_is_gated(u_src, 'html[data-lguser-theme="dark"] .lg-featcard{')
+        )
+        if not css_gated:
+            RED.append("[C2b] the featured-member CSS RULES (not just the markup) are not both "
+                       "gated behind $lg_fmOn — inert but not byte-identical: the class "
+                       "definitions would ship on every profile page regardless of the flag")
+        else:
+            OK.append("[C2b] both the light and dark featured-member CSS blocks are gated "
+                      "behind the flag check, matching the markup")
+
+        # C2c: the tickbox toggle <script> block, same defect class as C2b,
+        # found in the same click-through sweep — the script's own
+        # `if (!cb) return;` guard makes it inert without the markup, but
+        # inert bytes shipping unconditionally is exactly what C2b already
+        # established is not good enough. Same _rule_is_gated helper, same
+        # position-based check (no unbounded regex this time — learned that
+        # lesson once already on C2b, no need to relearn it here).
+        script_gated = _rule_is_gated(u_src, "document.getElementById('lg-featcard-cb')")
+        if not script_gated:
+            RED.append("[C2c] the featured-member tickbox <script> block is not gated behind "
+                       "$lg_fmOn — inert (guards on a missing element) but not byte-identical: "
+                       "the handler would ship on every profile page regardless of the flag")
+        else:
+            OK.append("[C2c] the featured-member tickbox script is gated behind the flag check, "
+                      "matching the markup and CSS")
+
     idx_src = read(INDEX_PHP)
     if idx_src is None:
         DEAD.append("[C] archive-poc/web/index.php is missing")
@@ -272,16 +340,34 @@ def section_d_no_admin_override():
         OK.append("[D] me-featured.php stays off the admin-impersonation allowlist, as ruled")
 
 
-def check_http(url, headers, expect_key=None):
-    req = urllib.request.Request(url, headers=headers)
+def check_http(path, host, headers, expect_key=None):
+    """GET `path` against the BOX'S OWN LOOPBACK, never public DNS.
+
+    Found by keeper 2026-08-15: the original version built the request URL as
+    f"https://{host}/..." and let urllib resolve `host` normally — which
+    means a real DNS lookup, out through Cloudflare's edge, in front of the
+    box. Cloudflare bot-challenges an unrecognized client into a 403 (the
+    documented box trap 2: "Never smoke live with a plain public curl — it
+    reads as an outage"), and this gate's §E would have read that exact 403
+    as "nginx is blocking the route" — the identical false-red the finding
+    #1 fix was written to catch for real, now capable of firing on a
+    Cloudflare artifact instead. CONNECT to 127.0.0.1 (the box's own door);
+    the Host header alone decides which vhost answers, matching every curl
+    --resolve invocation used throughout this lane's own verification.
+    """
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    conn = http.client.HTTPSConnection("127.0.0.1", 443, timeout=5, context=ctx)
     try:
-        with urllib.request.urlopen(req, timeout=5) as r:
-            body = r.read(4000).decode("utf-8", "replace")
-            return r.status, body
-    except urllib.error.HTTPError as e:
-        return e.code, ""
+        conn.request("GET", path, headers={**headers, "Host": host})
+        r = conn.getresponse()
+        body = r.read(4000).decode("utf-8", "replace")
+        return r.status, body
     except Exception as e:
         return None, str(e)
+    finally:
+        conn.close()
 
 
 def section_e_live_routes():
@@ -300,7 +386,7 @@ def section_e_live_routes():
     # response that proves the route is live AND reaches the PHP endpoint.
     # 403 is now its own branch — RED, not swallowed — because it is exactly
     # the signature of "nginx is blocking this before PHP ever runs."
-    status, body = check_http(f"https://{host}/profile-api/v0/me/featured",
+    status, body = check_http("/profile-api/v0/me/featured", host,
                                {"Cookie": f"loothdev_auth={gate_cookie}"})
     if status is None:
         DEAD.append(f"[E1] request to /profile-api/v0/me/featured failed: {body[:160]}")
