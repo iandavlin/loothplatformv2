@@ -5862,6 +5862,42 @@ html[data-lguser-theme="dark"] .lg-fm__acct-badge { background: #9db07c; color: 
 .lpm-body { flex: 1 1 auto; }
 .lpm-row { justify-content: flex-end; }
 
+/* ── ONE SUBTITLE, NOT TWO (Ian, 2026-08-15: "there is redundant text in the
+      beginning") ──────────────────────────────────────────────────────────────
+   The header ships BOTH wordings and lets CSS pick one by width:
+
+     .lgfc__sub--wide    "Your 3D print, free for the rest of the group to make."
+     .lgfc__sub--narrow  "Your 3D print, free for the group to make."
+
+   On the standalone page the route's own rules hide one of them. In the MODAL
+   they do not, and the reason is structural rather than a missing line: the
+   compose route emits its CSS as an INLINE <style> block, and loadForm() in
+   forums.js copies <link rel=stylesheet> and <script> from the fetched document
+   — not <style>. So every .lgfc rule is absent here, and the two near-identical
+   sentences both render, at every width.
+
+   MEASURED in the modal before writing this, rather than inferred from the
+   markup: both computed display:block at 1280 AND at 390, and .lgfc__sub came
+   out at 16px instead of the route's 13.5px — which is the same fact from the
+   other side, the inline sheet is simply not present.
+
+   Fixed HERE because this file is already where the injected form's styling
+   lives: the dark-mode pass below had to solve the same missing-inline-CSS
+   problem and did it with #lpm-body rules. Reproducing the route's own
+   breakpoint keeps the modal honest to the page it is a copy of — the short
+   sentence on a phone, the full one above 640px — rather than arbitrarily
+   deleting one wording.
+
+   ⚠️ The general gap is bigger than this symptom and is NOT closed by these four
+   lines: no .lgfc rule reaches the modal at all. Carrying <style> across in
+   loadForm() is the root fix and is a larger change than a same-day copy
+   correction, so it is reported rather than smuggled in here. */
+#lpm-body .lgfc__sub--narrow { display: none; }
+@media (max-width: 640px) {
+  #lpm-body .lgfc__sub--wide   { display: none; }
+  #lpm-body .lgfc__sub--narrow { display: block; }
+}
+
 /* ── DARK MODE for the composer type toggle + the injected Loothprint form ────
    Ian, 2026-08-15: "compose works well. Needs some dark mode love."
    MEASURED with tools/frontend-compose/dark-contrast-sweep.py, which reads the
