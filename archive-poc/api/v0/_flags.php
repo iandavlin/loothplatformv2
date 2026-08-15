@@ -33,7 +33,9 @@ declare(strict_types=1);
  * bottom of archive-poc/sql/guitardle-claim.pg.sql.
  */
 if (!defined('LG_GUITARDLE_DAILY_CLAIM')) {
-    define('LG_GUITARDLE_DAILY_CLAIM', false);
+    // ON since 2026-08-15 — Ian, after the dev2 preview + merge: "Flip it on
+    // dev2" (decision box, keeper turn). Verified on the dev2 serve same night.
+    define('LG_GUITARDLE_DAILY_CLAIM', true);
 }
 
 /**
@@ -52,5 +54,7 @@ if (!defined('LG_GUITARDLE_DAILY_CLAIM')) {
  * so the chrome is byte-identical -- asserted per state by gate 37.
  */
 if (!defined('LG_GUITARDLE_HOW_TO_PLAY')) {
-    define('LG_GUITARDLE_HOW_TO_PLAY', false);
+    // ON since 2026-08-15 — same ruling as the daily claim above; the rules
+    // overlay was split to its own flag precisely so it could ship first.
+    define('LG_GUITARDLE_HOW_TO_PLAY', true);
 }
