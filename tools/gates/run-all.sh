@@ -904,6 +904,35 @@ echo "=== GATE 36: anon dark-mode contrast — sign-in/join/sign-up path clears 
 # dark-mode colour correction needs a flag at all.
 run "anon-dark-contrast" python3 "$(dirname "$0")/anon-dark-contrast-gate.py"
 
+echo "=== GATE 44: directory location — backlog 20, no list surface prints more than City/State ==="
+# Ian 8/12, member safety. Number 44 ALLOCATED BY KEEPER 2026-08-15, never
+# self-minted. Worth recording WHY it is not 41: the ledger line below still
+# read "NEXT FREE: 41" while 41 and 42 were already registered above (they
+# landed with guitardle score-integrity without the line being updated), and 43
+# was already spoken for by the offline-shell gate on an unmerged branch. So the
+# ledger under-counted by three, and minting from it would have collided with a
+# gate already on main. Keeper is correcting the line to next-free 45 separately
+# — deliberately NOT touched here, so the two edits cannot conflict.
+#
+# Scope note for whoever renumbers this: the leak was never just the 7 public
+# rows. Visibility::precisionForAudience() hands 'street' to the OWNER and to
+# every ADMIN unconditionally, so an admin's directory page rendered 15-16 full
+# street addresses per page across ~1,900 members. The gate covers anon,
+# member and admin for exactly that reason.
+run "directory-location" python3 "$(dirname "$0")/directory-location-gate.py"
+
+echo "=== GATE (unnumbered — pending keeper): author-search mask — backlog 27, the search uses the FEED's mask ==="
+# Ian 8/15 via keeper, folded into 27. The Hub author search was effectively dead
+# for LOGGED-OUT visitors: ?suggest=author&q=erlewine returned 0 on dev2 AND live
+# for a man with 54 posts, because the discussion_visibility condition was applied
+# to the whole union instead of the topic leg the FEED applies it to — so it hid
+# content authors whose bylines the feed prints by name on the front page.
+# Number NOT self-minted; asked keeper. Runs meanwhile: all six mutations of the
+# product code were run and each went red for its own reason, including the two
+# that only fire because the gate itself was fixed first (a call-site check
+# instead of a name grep, and a fixture with a real tier mix).
+run "author-search-mask" python3 "$(dirname "$0")/author-search-mask-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

@@ -15,6 +15,42 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/_hub-filters.php';
 
+/**
+ * THE ONE READ POINT for backlog 27's author-search mask fix. Nothing else may
+ * test this flag, so turning it off is one answer changing.
+ *
+ * Reads the shared tracked config, fails CLOSED, and honours the same two
+ * override sources as the config header describes: a lane preview sets
+ * fastcgi_param, which lands in $_SERVER but not reliably in getenv().
+ */
+if (!function_exists('lg_author_search_feed_mask')) {
+    function lg_author_search_feed_mask(): bool
+    {
+        static $on = null;
+        if ($on !== null) return $on;
+
+        // Test seam, CLI-ONLY BY ENFORCEMENT so it can never become a request-time
+        // switch: lets a gate exercise the OFF path even once the tracked default
+        // has been flipped ON. Same reasoning as profile-app's Flags::forTest.
+        if (PHP_SAPI === 'cli' && defined('LG_AUTHOR_SEARCH_MASK_FORCE_OFF')) return $on = false;
+
+        if (getenv('LG_AUTHOR_SEARCH_MASK') === '1' || (($_SERVER['LG_AUTHOR_SEARCH_MASK'] ?? '') === '1')) {
+            return $on = true;
+        }
+        // bb-mirror/web/forums/ -> repo root is three levels up. Depth copied
+        // from lg_post_follow_enabled() in _reply-render.php, which reads a
+        // config from THIS SAME directory — a hand-counted ../../../ is the bug
+        // class that made me_featured_flag_on() serve OFF on the live serve.
+        $path = dirname(__DIR__, 3) . '/platform/config/author-search-mask.php';
+        if (!is_readable($path)) {
+            error_log('[lg-author-search-mask] tracked config unreadable at ' . $path . ' — OFF (fail-closed)');
+            return $on = false;
+        }
+        $raw = require $path;
+        return $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+    }
+}
+
 header('Content-Type: application/json; charset=utf-8');
 header('X-Robots-Tag: noindex');
 
@@ -51,17 +87,33 @@ if ($mode === 'author') {
     $wa     = function_exists('lg_bb_mirror_whoami') ? lg_bb_mirror_whoami() : null;
     $lgAnon = !($wa['authenticated'] ?? false);
     $visWhere = " AND COALESCE(fp.profile_visibility, 'public') <> 'private'";
-    if ($lgAnon) $visWhere .= " AND COALESCE(fp.discussion_visibility, 'member') = 'public'";
+    // BACKLOG 27: the discussion_visibility condition belongs to the TOPIC leg
+    // only — that is where the FEED applies it (_feed.php masks only
+    // card_type==='topic'; its comment: "content cards are CPTs, never
+    // anonymous"). Applied to the whole union, as OFF still does, it hides
+    // content authors whose bylines the feed prints publicly: measured, a
+    // logged-out visitor could be suggested 4 authors out of 432 while reading
+    // Doug Proper's name (69 content rows, 0 topics) on the front page.
+    $topicVis = '';
+    if ($lgAnon) {
+        if (lg_author_search_feed_mask()) {
+            $topicVis = " AND COALESCE(tp.discussion_visibility, 'member') = 'public'";
+        } else {
+            $visWhere .= " AND COALESCE(fp.discussion_visibility, 'member') = 'public'";
+        }
+    }
     // Names group across both sources (the ?author= filter is name-keyed);
     // MAX(author_id) picks the person row for the avatar/visibility join.
     $sql = "
         SELECT z.name, z.n, fp.avatar_url
           FROM (
             SELECT name, MAX(author_id) AS author_id, SUM(n) AS n FROM (
-                SELECT author_name AS name, MAX(author_id) AS author_id, count(*) AS n
-                  FROM topic
-                 WHERE status = 'publish' AND author_name ILIKE :like1
-                 GROUP BY author_name
+                SELECT t.author_name AS name, MAX(t.author_id) AS author_id, count(*) AS n
+                  FROM topic t
+                  LEFT JOIN forums.person tp ON tp.id = t.author_id
+                 WHERE t.status = 'publish' AND t.author_name ILIKE :like1
+                       $topicVis
+                 GROUP BY t.author_name
                 UNION ALL
                 SELECT author_name, MAX(author_id), count(*)
                   FROM discovery.content_item
