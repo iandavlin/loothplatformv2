@@ -121,6 +121,17 @@ body#lgpa .hl {
   margin: 0 0 12px; font: 500 14.5px/1.7 var(--lg-font-sans); color: #4c4f47; max-width: 860px;
 }
 #lgpa .mockhead p b { color: #1a1d1a; }
+
+/* The ruling banner. Literal hex like every other rule in this file — the docroot
+   injects the app's boot script into mocks and rewrites the --lg-* colour tokens
+   as inline style on <html>, so a token-coloured mock INVERTS in dark. Fonts are
+   the only tokens used here, for exactly that reason. */
+#lgpa .ruled {
+  margin: 14px 0 0; padding: 13px 17px; border-radius: 6px;
+  background: #eef3e2; border: 1px solid #c3d2a4; border-left: 4px solid #4a6b21;
+  font: 500 13px/1.7 var(--lg-font-sans); color: #38402f;
+}
+#lgpa .ruled b { color: #1a1d1a; }
 #lgpa .tag {
   display: inline-block; background: var(--lg-rust); color: #fff; border-radius: 999px;
   padding: 4px 12px; font: 800 11px/1.5 var(--lg-font-sans);
