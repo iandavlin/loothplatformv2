@@ -61,6 +61,7 @@ S3 dev2's vhost is a REGULAR FILE, not the repo symlink — tracked nginx change
 24. GUITARDLE: ~8% of daily results binned on an expired nonce (measured by the fairness lane 8/15) — players lose a finished game to a token timeout. OWNED: guitardle-fairness phase 3, keeper green-lit 8/15, flag-gated.
 25. GUITARDLE: moves/won/hardcore are CLIENT-SUPPLIED while hardcore doubles points — a forgeable leaderboard input, same fairness class as the device-hop hole. OWNED: guitardle-fairness phase 3, keeper green-lit 8/15, flag-gated.
 27. AUTHOR ARCHIVE BUTTON in the hub header links (Ian 8/15: "We seem to not have a button for the user archive in the hub. Which would be the author search... basically in the header where the links go") — from a member profile, a header link opens the hub filtered to that author's posts. OWNED: featured-members seat, queued after backlog 20.
+28. WP-ADMIN MUST NEVER RENDER THE PWA OFFLINE SHELL (keeper 8/15, from Ian's screenshot: a slow dash click showed the game-like "You're offline" page on an admin URL) — scope the service worker so admin/dev surfaces bypass it (network-only), keeping the offline shell for member-facing pages where it belongs. Remember the pwa.js deploy coupling: nginx sub_filter injects /pwa.js?v=N, so any change needs the conf v-bump + reload on the same train. OWNED: guitardle-fairness seat, 8/15.
 16. Front-end authoring for all post types ★ vision
 17. Stripe membership: audit → build
 
