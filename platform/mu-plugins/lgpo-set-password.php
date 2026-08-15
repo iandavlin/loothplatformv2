@@ -19,6 +19,28 @@ add_action('init', function () {
     $slug = (string) get_user_meta($uid, '_looth_slug', true);
     $cont = $slug !== '' ? '/u/' . rawurlencode($slug) : '/profile/edit';
 
+    /**
+     * Backlog 19 — the Patreon rail's hand-off to the arrive-alive step.
+     *
+     * Ian 8/15: "Both patreon onboarding like after Password gen and for the
+     * stripe." This is the "after Password gen" half; the Stripe half is the
+     * CTA in membership-pages/web/welcome.php. Both point at the SAME screen,
+     * which is what keeps the two rails identical.
+     *
+     * ⚠️ NEW MEMBERS ONLY. ?change=1 is an EXISTING member changing their
+     * password from Manage Subscription — sending them to a "set up your
+     * profile" screen would be nonsense, so the hand-off is deliberately not
+     * applied on that path.
+     *
+     * FLAG OFF ⇒ $onboardNext stays exactly what it has always been
+     * (home_url('/') on a successful set, $cont on skip), so this file's
+     * behaviour is byte-identical to before.
+     */
+    $psOn        = function_exists('lg_profile_setup_enabled') && lg_profile_setup_enabled() && !isset($_GET['change']);
+    $psPath      = $psOn && function_exists('lg_profile_setup_path') ? lg_profile_setup_path() : '';
+    $onboardDone = $psOn ? home_url($psPath) : home_url('/');
+    $onboardSkip = $psOn ? $psPath : $cont;
+
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $nonce_ok = (bool) wp_verify_nonce($_POST['_lgpo_pw'] ?? '', 'lgpo_set_password');
         $pw  = (string) ($_POST['lgpo_password'] ?? '');
@@ -33,7 +55,9 @@ add_action('init', function () {
             wp_set_auth_cookie($uid, true);
             if ($u) do_action('wp_login', $u->user_login, $u);
             error_log('[lgpo-pw] set OK uid=' . $uid);
-            wp_safe_redirect(home_url('/')); exit;   // successful set/change → front page (Ian 6/16)
+            // Successful set → front page (Ian 6/16), or the arrive-alive step when
+            // backlog 19's flag is on and this is a NEW member (never on ?change=1).
+            wp_safe_redirect($onboardDone); exit;
         }
         $kp = isset($_GET['change']) ? ['pwerr' => $err, 'change' => 1] : ['pwerr' => $err];
         wp_safe_redirect(add_query_arg($kp, home_url('/patreon-password/'))); exit;
@@ -127,7 +151,12 @@ add_action('init', function () {
       <button type="submit" class="go" id="go" disabled>Set password</button>
     </form>
   </div>
-  <a class="skip" href="<?php echo esc_url($cont); ?>">Skip &mdash; continue to my profile &rarr;</a>
+  <?php /* The label has to follow the destination. With backlog 19's flag ON this
+           skip goes to the profile-setup step, not straight to the profile, and a
+           link that misdescribes where it lands is its own small defect. */ ?>
+  <a class="skip" href="<?php echo esc_url($onboardSkip); ?>"><?php
+      echo $psOn ? 'Skip &mdash; set up my profile instead &rarr;' : 'Skip &mdash; continue to my profile &rarr;';
+  ?></a>
 </div>
 <?php if (function_exists('lg_shared_render_site_footer')) lg_shared_render_site_footer(); ?>
 <script>
