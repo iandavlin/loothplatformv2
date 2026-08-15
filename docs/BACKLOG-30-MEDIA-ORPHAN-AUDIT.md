@@ -1,0 +1,100 @@
+# Backlog 30 — historical media orphan audit (PHASE 1: classification only)
+
+**Nothing has been deleted, changed or moved.** This is a classified list for
+Ian to rule on. Every number below was measured on **dev2** — see §6.
+
+## 1. The short version
+
+Of **7,397** attachments on dev2, **4,879 have no parent post**. Parentless is
+*not* the same as unused: files can be embedded in content without ever being
+attached to it. After scanning everything that could hold a reference:
+
+| | count | what it means |
+|---|---|---|
+| **Dead** | 4,013 | no reference found in any source listed in §3 |
+| **Referenced** | 726 | in use somewhere despite having no parent |
+| **Uncertain** | 140 | needs a human look — see §4 |
+
+## 2. The single most important caveat
+
+**"Dead" means "no mention found in the places I looked."** It does not mean
+"provably unused". So the honest way to read the table is alongside §3, which
+lists exactly what was searched — and the first version of this audit proves
+why that matters: scanning WordPress alone produced **4,162 dead**, and adding
+the other sources rescued **143 files that were genuinely in use**. 116 of them
+were referenced *only* in the materialised article blobs, which is not a
+WordPress table at all.
+
+The matcher is deliberately **generous**: any mention of a filename anywhere
+counts as a reference. For a list that feeds a deletion decision, a false
+"referenced" costs nothing — the file is kept — while a false "dead" loses
+member content.
+
+## 3. What was searched
+
+WordPress: `post_content` and `post_excerpt` of every non-attachment post (all
+statuses, so drafts and trashed content count), all `postmeta` belonging to
+non-attachment posts (this is where the layout-v2 blocks live, PHP-serialised),
+`options`, `usermeta`, `comments`, `_thumbnail_id` (featured images), plus the
+BuddyBoss tables that are *not* posts — activity and its meta, private messages,
+xprofile fields, group descriptions and meta, reactions.
+
+Postgres: `discovery.article_blobs` (**the standalone article/video/sponsor
+pages render from here, not from WordPress**), `discovery.content_item`,
+`discovery.comments`, and every table in the `profile_app` database, which is
+where avatars, profile highlights and sponsor imagery live.
+
+**Attachment-owned rows were excluded on purpose.** An attachment carries its
+own filename in `guid`, `_wp_attached_file` and `_wp_attachment_metadata`
+(which also lists every generated size), so a naive scan finds every file
+referencing *itself* and cheerfully reports that all 4,879 are in use.
+
+## 4. What "uncertain" means
+
+Mostly **shared basenames**: two or more parentless uploads normalise to the
+same filename, so a text match proves *something* is referenced but not *which
+one*. Also included: attachments with no `_wp_attached_file` at all, so there is
+no filename to match on.
+
+## 5. The two 404 thumbnails — a different problem entirely
+
+`seth-thumb.jpg` and `vb.jpg` are **not orphaned media**. They are dead URLs
+baked into cached HTML: each appears 42 times in `article_blobs` inside related-
+post carousel entries, and **nowhere else** — no attachment row, nothing in
+`wp_posts` or `wp_postmeta`, and no object in the bucket.
+
+What happened: the blobs were materialised on **2026-07-22** carrying the then-
+current featured image. On **2026-07-26** a replacement image was uploaded
+(`seth-hero.jpg`, attachment 72180) and set as featured; the old file was
+removed. The 42 blobs were never re-materialised, so they still serve the dead
+URL. `seth-hero.jpg` is present, and 10 other blobs cite it correctly.
+
+**The general fault, not the two files:** the post's `post_modified` is
+2026-07-19 — *earlier* than both events. Swapping a featured image writes
+`_thumbnail_id` postmeta and does **not** bump `post_modified`, so anything
+deciding staleness from it never notices. The same class already bit the forum
+mirror. Two 404s are the visible symptom; the invisible one is that *any*
+featured-image swap can leave stale blobs behind.
+
+**Suggested action:** re-materialise those blobs, and decide separately whether
+meta-only changes should mark a blob stale. Re-uploading two files would paper
+over it.
+
+## 6. Where these numbers come from, and where they do not
+
+Everything here is **dev2** — its database and its bucket
+(`loothgroup-uploads-dev`). Ian will presumably be ruling on **live**, which is
+a different database and a different bucket. The corpora should be close, since
+dev2 is built from live's image, but they are not the same thing and this audit
+has not been run against live. Say the word and it can be, read-only.
+
+Two measurement notes:
+
+- **The uploads are not on local disk.** They are a Cloudflare R2 bucket mounted
+  over rclone FUSE, so `du` reports **0 bytes** and `find -type f` returns
+  **zero files** while `ls` works fine. Any size figure produced with those
+  tools would be confidently wrong. Sizes come from `rclone` against the bucket.
+- **The bucket also holds `_rzcache/`**, the image-resizer cache behind
+  `/img.php?w=`. That is derived data which regenerates itself, and it is
+  excluded from the figures — counting it as orphaned media would have inflated
+  them.
