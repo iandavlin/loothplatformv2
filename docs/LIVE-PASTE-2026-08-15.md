@@ -16,7 +16,7 @@ server-play + day-puzzle (two-stage, deliberately later), stripe fences.
 
     sudo -u ubuntu git -C /home/ubuntu/loothplatformv2-clean fetch origin
     sudo -u ubuntu git -C /home/ubuntu/loothplatformv2-clean show origin/main:archive-poc/sql/guitardle-claim.pg.sql > /tmp/guitardle-claim.sql
-    sudo -u postgres psql -d looth -f /tmp/guitardle-claim.sql
+    sudo -u postgres psql -d looth -v ON_ERROR_STOP=1 -f /tmp/guitardle-claim.sql
 
 Safe to re-run (adds two columns, relaxes two rules; deletes nothing).
 
@@ -53,3 +53,10 @@ claim, resume works), glance at sign-in in dark mode, open the featured dash.
 
 Step 2 only removes never-finished attempts — it cannot destroy a recorded
 score (gate 37 asserts this).
+
+## Post-mortem note (RAN 8/15 ~18:41)
+The DB step silently failed on first run (psql exits 0 on statement errors;
+the table lives in the discovery schema). Fixed live ~18:47 with search_path
++ ON_ERROR_STOP; both now baked into the sql file itself. RULE FOR EVERY
+FUTURE PASTE: psql always runs with -v ON_ERROR_STOP=1, and migrations name
+their schema.
