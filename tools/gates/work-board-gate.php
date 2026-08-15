@@ -295,6 +295,47 @@ is_($unsortedRows === count($ids), sprintf(
 is_(str_contains($html, 'class="donebox"'), "finished work collapses into a drawer rather than sitting in the list");
 
 /* ---------------------------------------------------------------------- */
+section("[5e] YOUR DESK — every line of the file reaches the strip");
+
+// Ian asked "is that on the wip list?" of something waiting on him, and it was
+// not on the page at all. docs/IAN-DESK.md is keeper-maintained and is the
+// truth; the board only renders it. So the assertion is the same one that
+// matters everywhere here: nothing the file says may be silently dropped.
+$DESK = $ROOT . '/docs/IAN-DESK.md';
+if (!is_readable($DESK)) {
+    ok("no IAN-DESK.md on this branch — strip is absent by design, nothing to assert");
+} else {
+    $draw = str_replace([ "\r\n", "\r" ], "\n", (string) file_get_contents($DESK));
+    $joined = (string) preg_replace('/\n(?!\s*[-#*]|\n)\s+/', ' ', $draw);
+    $bullets = 0;
+    foreach (explode("\n", $joined) as $l) { if (str_starts_with(ltrim($l), '- ')) { $bullets++; } }
+    is_($bullets > 0, sprintf("the desk file really has lines to render (%d)", $bullets));
+
+    $rendered = preg_match_all('/class="desk__i/', $html);
+    is_($rendered === $bullets, sprintf(
+        "every desk line reaches the strip (%d in the file, %d on the board)", $bullets, $rendered));
+    is_(str_contains($html, 'class="desk__t">Your desk'), "the strip is titled Your desk");
+
+    // It sits ABOVE the work, which is the whole point of a desk.
+    $pDesk = strpos($html, 'class="desk'); $pProj = strpos($html, '<details class="proj');
+    is_($pDesk !== false && $pProj !== false && $pDesk < $pProj, "and it sits above the project accordion");
+
+    // Empty file => the empty state, not a missing strip.
+    $tmpRepo = sys_get_temp_dir() . '/lgb-desk-' . getmypid();
+    @mkdir($tmpRepo . '/docs', 0755, true); @mkdir($tmpRepo . '/webroot', 0755, true);
+    @copy($BACK, $tmpRepo . '/docs/BACKLOG.md');
+    @copy($ROOT . '/docs/board-projects.php', $tmpRepo . '/docs/board-projects.php');
+    file_put_contents($tmpRepo . '/docs/IAN-DESK.md', "# Ian's desk\n\n*nothing here*\n");
+    @copy($PAGE, $tmpRepo . '/webroot/wip-board.php');
+    $emptyDesk = (string) shell_exec(PHP_BINARY . ' ' . escapeshellarg($tmpRepo . '/webroot/wip-board.php') . ' 2>/dev/null');
+    is_(str_contains($emptyDesk, 'Nothing waits on you'),
+        "an empty desk file renders the empty state, not a blank or a missing strip");
+    is_(!preg_match('/class="desk__i/', $emptyDesk), "...and lists nothing");
+    foreach (['BACKLOG.md', 'IAN-DESK.md', 'board-projects.php'] as $f) { @unlink($tmpRepo . '/docs/' . $f); }
+    @unlink($tmpRepo . '/webroot/wip-board.php'); @rmdir($tmpRepo . '/docs'); @rmdir($tmpRepo . '/webroot'); @rmdir($tmpRepo);
+}
+
+/* ---------------------------------------------------------------------- */
 section("[6] PHASE 1 CANNOT WRITE");
 
 // Read-only is the property that lets this ship without a flag, so it is
