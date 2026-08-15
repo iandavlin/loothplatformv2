@@ -77,7 +77,17 @@ echo "$(date +%s) $(date +%H:%M:%S) working=$W total=$T" > "$HOME/.sentinel-stat
     "$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo)" \
     "$(awk 'NR==2{print $4}' <(free -m) 2>/dev/null || free -m | awk '/Swap/{print $3}')" \
     "$(df / | awk 'NR==2{gsub(/%/,""); print $5}')"
-  echo "$LANES_RAW" | awk '{state=($2=="WORKING")?"working":"parked"; printf "%s{\"name\":\"%s\",\"state\":\"%s\"}", (NR>1?",":""), $1, state}'
+    SEP=""
+    echo "$LANES_RAW" | while read -r NAME REST; do
+    [ -n "$NAME" ] || continue
+    ST="parked"
+    case "$REST" in WORKING*) ST="working";; esac
+    case "$REST" in *shell*) ST="working";; esac
+    [ -f "$HOME/worktrees/$NAME/.lane-state/DONE" ] && ST="done"
+    [ -f "$HOME/worktrees/$NAME/.lane-state/BLOCKED" ] && ST="waiting"
+    [ -f "$HOME/worktrees/$NAME/.lane-state/QUESTION" ] && ST="question"
+    printf '%s{"name":"%s","state":"%s"}' "$SEP" "$NAME" "$ST"; SEP=","
+  done
   printf ']}\n'
 } > "$HOME/.sentinel-status.json.tmp" && mv "$HOME/.sentinel-status.json.tmp" "$HOME/.sentinel-status.json"
 exit 0
