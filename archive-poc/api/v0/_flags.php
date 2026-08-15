@@ -35,3 +35,22 @@ declare(strict_types=1);
 if (!defined('LG_GUITARDLE_DAILY_CLAIM')) {
     define('LG_GUITARDLE_DAILY_CLAIM', false);
 }
+
+/**
+ * The game's HOW TO PLAY overlay (Ian 2026-08-15, keeper split 2026-08-15).
+ *
+ * Deliberately its OWN flag rather than riding the fairness one. The rules are
+ * pure help copy with no data path, and the game shipped with NO rules surface
+ * at all -- the prototype's instructions overlay was dropped, assets/
+ * icon-question.svg went unreferenced, and Hardcore (which DOUBLES weekly
+ * points) was explained only by a title= tooltip, which touch never renders.
+ * Tying that to the attempt-claim work would have meant members could not read
+ * the rules until the fairness change was switched on, which is backwards: the
+ * instructions are the safer of the two and should be free to go first.
+ *
+ * OFF by default. OFF keeps the button display:none and the overlay unreachable,
+ * so the chrome is byte-identical -- asserted per state by gate 37.
+ */
+if (!defined('LG_GUITARDLE_HOW_TO_PLAY')) {
+    define('LG_GUITARDLE_HOW_TO_PLAY', false);
+}

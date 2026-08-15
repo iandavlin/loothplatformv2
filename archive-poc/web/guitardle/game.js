@@ -41,6 +41,11 @@ let claimEnabled = false;
 let claimTaken   = false;   // this device has taken (or found) today's allowance
 let claimSaveInFlight = false;
 
+// The rules overlay rides its OWN flag (LG_GUITARDLE_HOW_TO_PLAY). It is help
+// copy with no data path, and the game shipped with no rules surface at all, so
+// it must not have to wait for the fairness change to be switched on.
+let helpEnabled  = false;
+
 // Audience: the front-page block passes ?aud=m (member) / ?aud=p (logged-out)
 // from its SSR member check. Logged-out players get a DIFFERENT daily phrase
 // (Ian 6/11) — same shared sequence, day index shifted by half its length, so
@@ -236,17 +241,18 @@ function initScoreSync() {
             const res = await fetch(`${SCORE_API}?local_date=${todayString()}`, { credentials: 'same-origin' });
             if (res.ok) scoreAuth = await res.json();
             claimEnabled = !!(scoreAuth && scoreAuth.claim);
-            if (claimEnabled) {
-                // The rules overlay only becomes reachable under the flag, so
-                // OFF leaves the chrome exactly as it was.
+            helpEnabled  = !!(scoreAuth && scoreAuth.help);
+            if (helpEnabled) {
+                // The rules overlay only becomes reachable under its own flag,
+                // so OFF leaves the chrome exactly as it was.
                 const help = document.getElementById('btn-help');
                 if (help) help.style.display = '';
+            }
+            if (claimEnabled && !scoreAuth.authenticated) {
                 // Say the honest thing to logged-out players rather than let the
                 // Top 5 imply they are in it.
-                if (!scoreAuth.authenticated) {
-                    const note = document.getElementById('anon-note');
-                    if (note) note.style.display = '';
-                }
+                const note = document.getElementById('anon-note');
+                if (note) note.style.display = '';
             }
         } catch (e) { /* offline/anon — local play unaffected */ }
     })();

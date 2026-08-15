@@ -123,17 +123,18 @@ cookie = wp('$t = WP_Session_Tokens::get_instance(%d)->create(time()+3600);'
 def wipe():
     psql("DELETE FROM discovery.guitardle_results WHERE wp_user_id=%d;" % UID)
 
-def call(flag, method='GET', qs='', body=None, nonce=''):
+def call(flag, method='GET', qs='', body=None, nonce='', help_flag=False):
     env = dict(os.environ,
                GDLE_FLAG='1' if flag else '0',
+               GDLE_HELP='1' if help_flag else '0',
                GDLE_METHOD=method, GDLE_QS=qs,
                GDLE_BODY=json.dumps(body) if body else '',
                GDLE_NONCE=nonce, GDLE_ENDPOINT=ENDPOINT)
     if flag is not None:
         env['GDLE_COOKIE_NAME'] = cookie_name
         env['GDLE_COOKIE'] = cookie
-    keys = ('GDLE_FLAG GDLE_METHOD GDLE_QS GDLE_BODY GDLE_NONCE GDLE_ENDPOINT '
-            'GDLE_COOKIE_NAME GDLE_COOKIE').split()
+    keys = ('GDLE_FLAG GDLE_HELP GDLE_METHOD GDLE_QS GDLE_BODY GDLE_NONCE '
+            'GDLE_ENDPOINT GDLE_COOKIE_NAME GDLE_COOKIE').split()
     r = sh('sudo -u looth-dev env %s php %s' % (
         ' '.join('%s=%s' % (k, shlex.quote(env.get(k, ''))) for k in keys), PROBE))
     out = (r.stdout or '').strip().splitlines()
@@ -144,9 +145,9 @@ def call(flag, method='GET', qs='', body=None, nonce=''):
     except ValueError:
         cannot_run('probe did not return JSON: ' + out[-1][:300])
 
-def anon_call(flag):
-    env_bits = 'GDLE_FLAG=%s GDLE_METHOD=GET GDLE_ENDPOINT=%s' % (
-        '1' if flag else '0', shlex.quote(ENDPOINT))
+def anon_call(flag, help_flag=False):
+    env_bits = 'GDLE_FLAG=%s GDLE_HELP=%s GDLE_METHOD=GET GDLE_ENDPOINT=%s' % (
+        '1' if flag else '0', '1' if help_flag else '0', shlex.quote(ENDPOINT))
     r = sh('sudo -u looth-dev env %s php %s' % (env_bits, PROBE))
     return (r.stdout or '').strip().splitlines()[-1]
 
@@ -320,6 +321,24 @@ check(on_anon_html.count('sign in to claim') >= 6,
       'ON: the JS repaint carries the same words as the SSR (all five slots + the constant)',
       'occurrences=%d' % on_anon_html.count('sign in to claim'))
 
+# The split keeper asked for on 2026-08-15: the rules must be able to ship
+# WITHOUT the fairness change. "Independent" is only a word until both crossed
+# states are driven, so all four combinations are exercised here.
+both_off_anon = anon_call(False, False)
+check(both_off_anon == '{"authenticated":false}',
+      'BOTH flags OFF: anon payload is byte-identical to the legacy one', both_off_anon)
+claim_only = call(True, 'GET', 'local_date=' + PLAY_DATE, help_flag=False)
+check('claim' in claim_only and 'help' not in claim_only,
+      'claim ON / help OFF: the rules stay dark (the fairness flag does not drag them in)',
+      repr(list(claim_only.keys())))
+help_only = call(False, 'GET', 'local_date=' + PLAY_DATE, help_flag=True)
+check(list(help_only.keys()) == ['authenticated', 'wp_user_id', 'nonce', 'today', 'help'],
+      '*** help ON / claim OFF: the rules can ship ALONE — the split works ***',
+      repr(list(help_only.keys())))
+check(anon_call(False, True) == '{"authenticated":false,"help":true}',
+      'help ON reaches LOGGED-OUT players too (they are who the rules are for)',
+      anon_call(False, True))
+
 html = open(GAME_HTML).read()
 js = open(GAME_JS).read()
 check(re.search(r'id="btn-help"[^>]*style="display:none"', html) is not None,
@@ -329,7 +348,16 @@ check(re.search(r'id="anon-note"[^>]*style="display:none"', html) is not None,
 reveal = js[js.find('claimEnabled = !!'):]
 reveal = reveal[:reveal.find('} catch')]
 check("getElementById('btn-help')" in reveal and "getElementById('anon-note')" in reveal,
-      'both are revealed ONLY inside the claimEnabled branch')
+      'both are revealed only inside the flag-driven handshake block')
+help_branch = reveal[reveal.find('if (helpEnabled)'):]
+help_branch = help_branch[:help_branch.find('if (claimEnabled')]
+check("getElementById('btn-help')" in help_branch
+      and "getElementById('anon-note')" not in help_branch,
+      'the rules button hangs off helpEnabled, NOT claimEnabled')
+anon_branch = reveal[reveal.find('if (claimEnabled'):]
+check("getElementById('anon-note')" in anon_branch
+      and "getElementById('btn-help')" not in anon_branch,
+      'the logged-out line hangs off claimEnabled, NOT helpEnabled')
 check('Playing for fun' in html and 'sign in to compete for the Weekly Top 5' in html,
       "the game carries Ian's logged-out line verbatim")
 check('Hardcore' in html and 'locks at your first move' in html.lower(),

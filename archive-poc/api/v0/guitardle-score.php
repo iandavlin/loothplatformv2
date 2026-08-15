@@ -29,6 +29,11 @@
  * ever written, and every response above is byte-identical to what it was
  * before — asserted per state by tools/gates/guitardle-claim-gate.py.
  *
+ * A SECOND, INDEPENDENT flag LG_GUITARDLE_HOW_TO_PLAY adds `help:true` to the
+ * GET (both the member and the anon payload). It gates only the rules overlay,
+ * which is help copy with no data path — keeping it separate means members can
+ * be given the instructions without waiting for the fairness change.
+ *
  * IDOR-proof like the comment/reaction doors: the player is get_current_user_id()
  * — never client-supplied. One row per member per LOCAL day; the FIRST result
  * wins (ON CONFLICT DO NOTHING) so a replay from a cleared browser can't
@@ -105,7 +110,8 @@ if ($method === 'GET') {
         // for the Weekly Top 5."). OFF -> this stays a bare
         // {"authenticated":false}, byte for byte as before.
         $anon = ['authenticated' => false];
-        if (LG_GUITARDLE_DAILY_CLAIM) $anon['claim'] = true;
+        if (LG_GUITARDLE_DAILY_CLAIM)  $anon['claim'] = true;
+        if (LG_GUITARDLE_HOW_TO_PLAY)  $anon['help']  = true;
         lg_gdle_json($anon);
     }
 
@@ -160,6 +166,9 @@ if ($method === 'GET') {
         $out['claim']   = true;      // the client only takes the new path on this
         $out['pending'] = $pending;
     }
+    // Independent of the claim flag on purpose: the rules are help copy with no
+    // data path and must be free to ship without the fairness change.
+    if (LG_GUITARDLE_HOW_TO_PLAY) $out['help'] = true;
     lg_gdle_json($out);
 }
 

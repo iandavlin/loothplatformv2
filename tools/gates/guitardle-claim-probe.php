@@ -5,6 +5,11 @@
 if (getenv('GDLE_FLAG') !== '') {
     define('LG_GUITARDLE_DAILY_CLAIM', getenv('GDLE_FLAG') === '1');
 }
+// Separate knob: the rules overlay has its OWN flag, and the gate has to be able
+// to drive the two independently or "independent" is an untested word.
+if (getenv('GDLE_HELP') !== '') {
+    define('LG_GUITARDLE_HOW_TO_PLAY', getenv('GDLE_HELP') === '1');
+}
 $cn = getenv('GDLE_COOKIE_NAME');
 if ($cn && getenv('GDLE_COOKIE')) $_COOKIE[$cn] = getenv('GDLE_COOKIE');
 $_SERVER['REQUEST_METHOD'] = getenv('GDLE_METHOD') ?: 'GET';

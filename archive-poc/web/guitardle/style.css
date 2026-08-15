@@ -1293,7 +1293,7 @@ a.board-name:hover { text-decoration: underline; }
 }
 
 .help-list li + li {
-    margin-top: 7px;
+    margin-top: 9px;
 }
 
 .help-list strong {
@@ -1310,4 +1310,76 @@ a.board-name:hover { text-decoration: underline; }
     font-size: 0.85rem;
     color: var(--text-dark);
     text-align: center;
+}
+
+/* Ian 2026-08-15, looking at the preview: "can we spread the instructions a
+   little". On a phone this panel is right — one narrow column is how you read
+   rules on a 390px screen — so the compact shape is left alone below 500px and
+   everything here is additive above it. 500px is this stylesheet's existing
+   wide-host boundary (the .game-wrap card breakpoint), not a new number.
+   Spread means SPACE, not smaller type: the text gets bigger as it gets room. */
+@media (min-width: 500px) {
+    #overlay-help .overlay-panel {
+        max-width: 640px;
+        padding: 32px 2rem 26px;
+        gap: 16px;
+    }
+
+    #overlay-help .help-list {
+        font-size: 0.9375rem;
+        line-height: 1.6;
+        padding-left: 1.3em;
+    }
+
+    #overlay-help .help-list li + li {
+        margin-top: 13px;
+    }
+
+    #overlay-help .overlay-subheading {
+        font-size: 1rem;
+        margin-top: 4px;
+    }
+}
+
+/* Wide enough for two real columns.
+   EXPLICIT GRID, NOT `columns: 2`. Automatic column balancing was measured
+   first and looked like a bug: the three sections are uneven, so it packed
+   "The basics" alone into column one and stacked the other two in column two,
+   leaving a third of the panel visibly empty and still overflowing the fold.
+   Placing them says what we mean — the two long sections sit side by side and
+   the short one runs full width beneath, which fills the panel and removes the
+   scroll at a normal desktop height. */
+@media (min-width: 820px) {
+    #overlay-help .overlay-panel {
+        max-width: 820px;
+        padding: 34px 2.25rem 28px;
+    }
+
+    #overlay-help .help-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        column-gap: 40px;
+        align-items: start;
+    }
+
+    /* The Weekly Top 5 — shortest section, so it spans and closes the panel. */
+    #overlay-help .help-sec:nth-child(3) {
+        grid-column: 1 / -1;
+        margin-top: 4px;
+    }
+
+    #overlay-help .help-sec {
+        margin-bottom: 8px;
+    }
+
+    /* Every section now carries a heading, so they read as peers across the
+       two columns instead of one headed block trailing an unheaded one. */
+    #overlay-help .help-sec:first-child .overlay-subheading {
+        margin-top: 0;
+    }
+
+    #overlay-help .btn-overlay-close {
+        max-width: 260px;
+        align-self: center;
+    }
 }
