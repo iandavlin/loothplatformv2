@@ -139,10 +139,16 @@ Two measurement notes:
 
 ## 7. The list itself
 
-`final_sized.tsv` in the lane's scratchpad carries one row per parentless
+`docs/backlog-30/parentless-classified.tsv.gz` carries one row per parentless
 attachment: id, path, mime, upload date, class, which sources reference it, the
 bytes it would free and how many objects that is. It is a spreadsheet, not a
 verdict — the classes are mine, the ruling is Ian's.
+
+It is committed rather than left in the lane's scratchpad because that lives in
+`/tmp` and does not survive a reboot: the evidence behind a deletion ruling
+should outlast the seat that produced it. The snapshot is **as audited**, so it
+still lists the four videos Ian later ruled on — see
+`BACKLOG-30-DELETION-MANIFEST.md` for what was removed.
 
 ## 8. What I would check before deleting anything
 
