@@ -10,7 +10,7 @@ Phase 1 + 2 shipped and merged; see `handoffs/2026-08-15-guitardle-fairness.md`.
 | Backlog 24 | **DONE.** Gate **40** (keeper), registered, CRAFT-STANDARD row in |
 | Backlog 25 | **DONE.** Gate **41** (keeper), registered, row in |
 | Backlog 26 | **BUILT + GATED.** Gate **42** (pre-assigned), registered, row in. Stage ONE of two |
-| **STATE — PARKED 2026-08-15** | **Parked on keeper's fleet-quiet order** (Ian on dev2, load 15 on 2 cores). All three items are BUILT, GATED, RED-FIRST PROVEN and PUSHED — **nothing is half-finished**. The only thing outstanding is the *confirming* full-suite run, which I killed mid-flight to give the box back; gates 40, 41 and 42 each passed standalone immediately before. **To resume:** run `tools/gates/run-all.sh` (needs `source tools/gates/gate-env.sh` + `export LG_GATE_COOKIE="loothdev_auth=$LG_GATE_TOKEN"`, or gate 39 reports CANNOT RUN). |
+| **STATE — COMPLETE 2026-08-15** | **Parked on keeper's fleet-quiet order** (Ian on dev2, load 15 on 2 cores). All three items are BUILT, GATED, RED-FIRST PROVEN and PUSHED — **nothing is half-finished**. The only thing outstanding is the *confirming* full-suite run, which I killed mid-flight to give the box back; gates 40, 41 and 42 each passed standalone immediately before. **To resume:** run `tools/gates/run-all.sh` (needs `source tools/gates/gate-env.sh` + `export LG_GATE_COOKIE="loothdev_auth=$LG_GATE_TOKEN"`, or gate 39 reports CANNOT RUN). |
 | Flags | `_SCORE_RETRY`, `_SERVER_PLAY`, `_DAY_PUZZLE` added, all OFF. `_DAILY_CLAIM` and `_HOW_TO_PLAY` are ON in main. All five independent |
 
 ---
@@ -277,6 +277,40 @@ instrument. Same class as the known gate 1 / gate 17 load flake.
 Also 4 gates DEAD (exit 2) for environment reasons, incl. `featured-member`,
 which wants `LG_GATE_HOST` + `LG_GATE_COOKIE`. **Only that gate reads
 `LG_GATE_COOKIE`** — checked, so setting it did not cause the three 403s.
+
+## 10. A test fixture became the leaderboard champion (read this one)
+
+My gates take a per-run probe account and delete it at the **end** of a run —
+which does nothing if the run is **killed**. One of mine was, mid red-first, and
+it left its account *and* its row behind. That row was a **1-move hardcore win**,
+so against the exact query `guitardle-board.php` runs it became the **only entry
+on dev2's weekly board, at 20 points**. A test fixture had installed itself as
+the Weekly Top 5 champion on the box Ian looks at — and nothing about it was
+visible from a green gate, because the gate that created it reported GREEN and
+cleaned up everything it *knew* about.
+
+**Fixed:** all three account-using gates now **sweep on entry**. Anything
+matching the probe prefix and registered more than 30 minutes ago loses its rows
+and its account before the run starts. The 30-minute floor is what keeps it safe
+to run two gates at once — a live run's account is minutes old and untouched.
+Proven by planting exactly what a killed run leaves, then repeated over two more
+independent cycles.
+
+> **House-rule candidate:** cleanup that only runs on the SUCCESS path is not
+> cleanup. Any gate that writes member-visible rows should assume it will be
+> killed and repair on **entry**, not trust its own exit.
+
+### Two instrument lessons, both of which cost more than the bugs
+
+1. **I reported the sweep broken when it was not.** I filtered the gate through
+   `grep -E "swept|GATE 41"` and read a missing line as "it did not run". A grep
+   tells you a string was absent, never *why*, and hides everything you did not
+   think to ask for. Ungrepped, the line was right there.
+2. **The burst test for the reveal race passed on broken code** — each probe
+   spends ~2.5s booting WordPress against a sub-millisecond critical section.
+   **Launching** concurrently is not **overlapping**.
+
+Both times the code was fine and the way I was looking at it was not.
 
 ## 5. Open
 
