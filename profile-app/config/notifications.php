@@ -97,4 +97,24 @@ return array(
      */
     'dismiss_instead_of_delete' => false,
 
+	/**
+	 * BACKLOG 11.6 (Ian 8/1) — filter the bell by type, and clear one type at once.
+	 *
+	 * OFF: the endpoint ignores `type` entirely — GET returns the whole list and a
+	 *      typed bulk request is refused, so OFF is the pre-feature behaviour.
+	 * ON:  GET accepts ?type=<one of Notifications::FILTER_TYPES> and DELETE accepts
+	 *      the same, clearing ONLY that type and ONLY for the caller.
+	 *
+	 * ⚠️ READ THIS BEFORE SWITCHING IT ON. The weekly digest is built from these
+	 * rows and Ian's rule is "empty means send no email". Measured on live
+	 * 2026-08-15: 277 of the 325 members holding any notification hold only ONE
+	 * type, and 252 of those have unread rows — so for most members, clearing
+	 * "their" type empties the store and silently stops their weekly email.
+	 * Dismissal does NOT avoid this: Recap already excludes dismissed rows, so
+	 * dismissed and deleted are identical from the digest's side. Ian owes a ruling
+	 * on whether the digest gets a floor; the UI warning alone was not judged
+	 * enough. Do not flip this on before that lands.
+	 */
+	'filter_and_bulk_by_type' => false,
+
 );
