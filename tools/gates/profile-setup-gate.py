@@ -289,9 +289,12 @@ else:
 SCAN_DIRS = ["platform", "webroot", "archive-poc/web", "profile-app/web", "membership-pages/web"]
 SKIP_SUFFIX = (".md", ".png", ".jpg", ".webp", ".map")
 hits = []
+scanned = 0
+missing = []
 for d in SCAN_DIRS:
     base = os.path.join(ROOT, d)
     if not os.path.isdir(base):
+        missing.append(d)
         continue
     for dirpath, _dirnames, filenames in os.walk(base):
         for fn in filenames:
@@ -306,9 +309,24 @@ for d in SCAN_DIRS:
                 text = open(fp, encoding="utf-8", errors="ignore").read()
             except OSError:
                 continue
+            scanned += 1
             m2 = NUDGE.search(text)
             if m2:
                 hits.append(f"{os.path.relpath(fp, ROOT)}: {m2.group(0)[:60]!r}")
+
+# COVERAGE, BEFORE THE ABSENCE. The liveness probe above proves the DETECTOR
+# works; it says nothing about whether the walk reached any files. Rename or move
+# one of these trees and os.path.isdir goes false, the loop skips it in SILENCE,
+# and the assertion below still prints "5 member-facing trees" because it counts
+# the constant rather than the work. That is the same vacuous-pass this section
+# exists to prevent, one level up — an absence is only worth as much as the
+# ground it actually covered.
+if missing:
+    cannot("nudge scan tree(s) missing, so the absence check covers less than it "
+           "claims: " + ", ".join(missing))
+if scanned == 0:
+    cannot("the nudge scan read 0 files; the absence assertion would be vacuous")
+ok(f"COVERAGE — the scan really read {scanned} files across all {len(SCAN_DIRS)} trees")
 
 if not hits:
     ok(f"no nudge surface anywhere in {len(SCAN_DIRS)} member-facing trees")
