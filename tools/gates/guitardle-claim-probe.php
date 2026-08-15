@@ -13,6 +13,9 @@ if (getenv('GDLE_HELP') !== '') {
 if (getenv('GDLE_RETRY') !== '') {
     define('LG_GUITARDLE_SCORE_RETRY', getenv('GDLE_RETRY') === '1');
 }
+if (getenv('GDLE_SERVERPLAY') !== '') {
+    define('LG_GUITARDLE_SERVER_PLAY', getenv('GDLE_SERVERPLAY') === '1');
+}
 $cn = getenv('GDLE_COOKIE_NAME');
 if ($cn && getenv('GDLE_COOKIE')) $_COOKIE[$cn] = getenv('GDLE_COOKIE');
 $_SERVER['REQUEST_METHOD'] = getenv('GDLE_METHOD') ?: 'GET';

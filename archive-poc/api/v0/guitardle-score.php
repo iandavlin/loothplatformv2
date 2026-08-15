@@ -46,6 +46,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/_comments.php';   // lg_comments_pdo() + config.php
 require_once __DIR__ . '/_flags.php';      // LG_GUITARDLE_DAILY_CLAIM (backlog 22)
+require_once __DIR__ . '/_guitardle-puzzle.php';  // server-side puzzle (backlog 25)
 
 // Boot WordPress (looth-dev pool) for cookie/session + nonce.
 if (!isset($_SERVER['HTTP_HOST']))   $_SERVER['HTTP_HOST']   = LG_ARCHIVE_POC_HOST;
@@ -172,6 +173,40 @@ if ($method === 'GET') {
     // Backlog 24: tells the client it may re-fetch this nonce and retry once
     // when a POST comes back 403. Independent of the other two flags.
     if (LG_GUITARDLE_SCORE_RETRY) $out['retry'] = true;
+
+    // Backlog 25: under server-driven play the client is never told the phrase.
+    // It gets the board SHAPE (word lengths) so it can draw tiles, plus -- if it
+    // has a game in progress -- the letters it has ALREADY EARNED and where they
+    // sit. Nothing here identifies an unrevealed letter.
+    if (LG_GUITARDLE_SERVER_PLAY) {
+        $out['serverplay'] = true;
+        try {
+            $pd     = lg_gdle_local_date($_GET['local_date'] ?? null) ?? gmdate('Y-m-d');
+            $pid    = lg_gdle_phrase_id($pd, true);   // members only ever play the member track
+            $phrase = $pid === null ? null : lg_gdle_phrase($pid);
+            if ($phrase !== null) {
+                $out['puzzle'] = [
+                    'phrase_id' => $pid,
+                    'shape'     => lg_gdle_shape($phrase),
+                    'cap'       => lg_gdle_move_cap($phrase),
+                ];
+                if ($pending !== null) {
+                    $st2 = $pending['state'] ?? null;
+                    $rev = is_array($st2) && isset($st2['revealed']) ? $st2['revealed'] : [];
+                    $pur = is_array($st2) && isset($st2['purchased']) ? $st2['purchased'] : [];
+                    $map = [];
+                    foreach ($rev as $L) $map[$L] = lg_gdle_positions($phrase, $L);
+                    $out['puzzle']['position'] = [
+                        'revealed'  => $map,
+                        'purchased' => array_values($pur),
+                        'moves'     => lg_gdle_moves($rev, $pur),
+                    ];
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('[lg-guitardle] puzzle: ' . $e->getMessage());
+        }
+    }
     lg_gdle_json($out);
 }
 
@@ -212,6 +247,13 @@ $action = isset($body['action']) ? (string) $body['action'] : 'finish';
 if ($action === 'start' || $action === 'save') {
     if (!LG_GUITARDLE_DAILY_CLAIM) {
         lg_gdle_json(['ok' => false, 'error' => 'not_enabled'], 409);
+    }
+    // Under server-driven play the SERVER owns the position. Left open, 'save'
+    // would let a client write its own revealed/purchased sets -- and the move
+    // count is derived from exactly those, so this door would hand back the
+    // forgery that backlog 25 exists to close.
+    if ($action === 'save' && LG_GUITARDLE_SERVER_PLAY) {
+        lg_gdle_json(['ok' => false, 'error' => 'server_owns_state'], 409);
     }
     $claimPhrase = isset($body['phrase_id']) ? (int) $body['phrase_id'] : 0;
     if ($claimPhrase < 0 || $claimPhrase > 100000) {
@@ -254,6 +296,114 @@ if ($action === 'start' || $action === 'save') {
         error_log('[lg-guitardle] ' . $action . ': ' . $e->getMessage());
         lg_gdle_json(['ok' => false, 'error' => 'server_error'], 500);
     }
+}
+
+// ---- Server-driven play (backlog 25) ----------------------------------------
+// The whole point: after this block, moves / won / hardcore are what the SERVER
+// watched happen. Nothing the client sends about its score is read.
+if ($action === 'reveal' || $action === 'guess') {
+    if (!LG_GUITARDLE_SERVER_PLAY || !LG_GUITARDLE_DAILY_CLAIM) {
+        lg_gdle_json(['ok' => false, 'error' => 'not_enabled'], 409);
+    }
+    $playDate = lg_gdle_post_play_date($body['local_date'] ?? null);
+    $pid      = lg_gdle_phrase_id($playDate, true);
+    $phrase   = $pid === null ? null : lg_gdle_phrase($pid);
+    if ($phrase === null) lg_gdle_json(['ok' => false, 'error' => 'no_puzzle'], 500);
+
+    try {
+        $pdo = lg_comments_pdo();
+        // The claim row IS the play session. A player who guesses blind without
+        // revealing anything still has to spend the day's allowance to do it.
+        $ins = $pdo->prepare(
+            'INSERT INTO guitardle_results (wp_user_id, play_date, phrase_id, hardcore, claimed_at)
+             VALUES (?, ?::date, ?, ?, now())
+             ON CONFLICT (wp_user_id, play_date) DO NOTHING');
+        $ins->execute([$uid, $playDate, $pid, !empty($body['hardcore']) ? 'true' : 'false']);
+
+        $sel = $pdo->prepare(
+            'SELECT moves, hardcore, resume_state FROM guitardle_results
+             WHERE wp_user_id = ? AND play_date = ?::date');
+        $sel->execute([$uid, $playDate]);
+        $row = $sel->fetch(PDO::FETCH_ASSOC);
+        if (!$row) lg_gdle_json(['ok' => false, 'error' => 'no_session'], 500);
+        if ($row['moves'] !== null) {
+            // Already finished today. Never re-judged, never re-scored.
+            lg_gdle_json(['ok' => false, 'error' => 'already_played'], 409);
+        }
+
+        $state     = json_decode((string) ($row['resume_state'] ?? ''), true);
+        $revealed  = (is_array($state) && isset($state['revealed'])  && is_array($state['revealed']))  ? $state['revealed']  : [];
+        $purchased = (is_array($state) && isset($state['purchased']) && is_array($state['purchased'])) ? $state['purchased'] : [];
+        $hardcore  = (bool) $row['hardcore'];
+        $moves     = lg_gdle_moves($revealed, $purchased);
+
+        if ($action === 'reveal') {
+            $letter = strtoupper(trim((string) ($body['letter'] ?? '')));
+            if (!preg_match('/^[A-Z]$/', $letter)) {
+                lg_gdle_json(['ok' => false, 'error' => 'bad_request'], 400);
+            }
+            $isVowel = in_array($letter, LG_GDLE_VOWELS, true);
+            if (in_array($letter, $revealed, true)) {
+                lg_gdle_json(['ok' => false, 'error' => 'already_revealed'], 409);
+            }
+            // Hardcore's cap is enforced HERE, not in the browser, so claiming
+            // hardcore for the 2x and then over-revealing is not a thing.
+            if ($hardcore && $moves >= lg_gdle_move_cap($phrase)) {
+                lg_gdle_json(['ok' => true, 'capped' => true, 'moves' => $moves,
+                              'cap' => lg_gdle_move_cap($phrase)]);
+            }
+            $positions = [];
+            if ($isVowel && !in_array($letter, $purchased, true)) {
+                $purchased[] = $letter;                 // first tap: buy it
+            } else {
+                if ($isVowel) {
+                    $purchased = array_values(array_diff($purchased, [$letter]));
+                }
+                $revealed[]  = $letter;                 // consonant, or second tap
+                $positions   = lg_gdle_positions($phrase, $letter);
+            }
+            $moves = lg_gdle_moves($revealed, $purchased);
+            $up = $pdo->prepare(
+                'UPDATE guitardle_results SET resume_state = ?::jsonb
+                  WHERE wp_user_id = ? AND play_date = ?::date AND moves IS NULL');
+            $up->execute([json_encode(['revealed' => array_values($revealed),
+                                       'purchased' => array_values($purchased),
+                                       'moves' => $moves]), $uid, $playDate]);
+            lg_gdle_json(['ok' => true, 'letter' => $letter, 'positions' => $positions,
+                          'purchased' => array_values($purchased), 'moves' => $moves,
+                          'cap' => lg_gdle_move_cap($phrase), 'hardcore' => $hardcore]);
+        }
+
+        // ---- guess: the ONE place a result is decided ------------------------
+        $guess = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) ($body['guess'] ?? '')));
+        $moves = $moves + 1;                       // the guess itself costs a move
+        $won   = ($guess !== '' && $guess === lg_gdle_letters($phrase));
+        $fin = $pdo->prepare(
+            'UPDATE guitardle_results
+                SET won = ?, moves = ?, streak = ?, hardcore = ?, phrase_id = ?,
+                    resume_state = NULL
+              WHERE wp_user_id = ? AND play_date = ?::date AND moves IS NULL');
+        $fin->execute([$won ? 'true' : 'false', $moves,
+                       isset($body['streak']) ? max(0, (int) $body['streak']) : 0,
+                       $hardcore ? 'true' : 'false', $pid, $uid, $playDate]);
+        // streak stays client-reported: it is DISPLAY data the board never reads
+        // (guitardle-results.pg.sql says so), and a real streak is derivable from
+        // (wp_user_id, play_date, won) whenever the board wants one.
+        lg_gdle_json(['ok' => true, 'recorded' => $fin->rowCount() > 0,
+                      'won' => $won, 'moves' => $moves, 'hardcore' => $hardcore,
+                      'phrase' => $phrase]);   // revealed only now the game is over
+    } catch (Throwable $e) {
+        error_log('[lg-guitardle] ' . $action . ': ' . $e->getMessage());
+        lg_gdle_json(['ok' => false, 'error' => 'server_error'], 500);
+    }
+}
+
+// The legacy finish takes won/moves/hardcore from the body. With server-driven
+// play on, that door must be SHUT -- otherwise closing the front door and
+// leaving this one open would achieve nothing: a client could simply keep
+// posting its own score.
+if (LG_GUITARDLE_SERVER_PLAY) {
+    lg_gdle_json(['ok' => false, 'error' => 'use_guess_action'], 409);
 }
 
 $phraseId = isset($body['phrase_id']) ? (int) $body['phrase_id'] : 0;

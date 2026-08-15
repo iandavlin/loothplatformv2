@@ -31,6 +31,12 @@ foreach (['guitardle/game.js', 'guitardle/style.css', 'guitardle/index.html'] as
 }
 $gdle_src = '/archive-poc/guitardle/index.html?embed=1&aud=' . ($is_member ? 'm' : 'p')
           . '&v=' . $gdle_v;
+// Backlog 25: tell the game up front that the SERVER is driving, the same way
+// aud= already tells it which track it is on. It has to know before it renders,
+// because the legacy path fetches the phrase CSV to draw the board -- and that
+// CSV is the answer key. Learning it from the handshake would be too late.
+// Members only: server-driven play needs an account to key the session to.
+if (LG_GUITARDLE_SERVER_PLAY && $is_member) $gdle_src .= '&sp=1';
 
 // The board always shows FIVE slots (Ian 6/12): leaders fill from the top,
 // the rest render as open-spot placeholders — never a collapsed/empty card.
