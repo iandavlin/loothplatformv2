@@ -301,7 +301,8 @@ def wait_dark_resolved(s, deadline=8.0):
     return False
 
 
-def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_css=None):
+def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_css=None,
+            patience=1.0):
     """Arm anon, navigate into the requested dark state, and probe. Returns
     the raw probe result (theme, findings, truncated, ...). extra_css, when
     given, is appended as one more <style> tag right before probing — see
@@ -335,10 +336,10 @@ def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_
     # One extra navigation is allowed (this box's contention produces real,
     # transient misses); after that the surface is reported as unresolved and
     # its numbers are discarded rather than believed.
-    resolved = wait_dark_resolved(s)
+    resolved = wait_dark_resolved(s, deadline=8.0 * patience)
     if not resolved:
-        s.goto(url, settle=2.4)
-        resolved = wait_dark_resolved(s)
+        s.goto(url, settle=2.4 * patience)
+        resolved = wait_dark_resolved(s, deadline=8.0 * patience)
 
     if extra_css:
         s.js("""(function(css){
@@ -505,9 +506,12 @@ def verify_fixes(host, tok, probe_js):
     # vacuous pass this whole change exists to stop, and printing GREEN under it
     # is how it would get believed.
     if unresolved:
-        print(f"\nINCOMPLETE — nothing this wave targets is still red, but {len(unresolved)} "
-              f"surface(s) never resolved dark and were NOT verified. This is not a GREEN.")
-        sys.exit(1)
+        # Same doctrine as main(): no verdict is exit 2, never red. Nothing this
+        # wave targets is failing — some surfaces simply were not measured.
+        print(f"\nCANNOT RUN — nothing this wave targets is still red, but {len(unresolved)} "
+              f"surface(s) never resolved dark and were NOT verified. This is not a GREEN, "
+              f"and it is not a RED either: it is the absence of a measurement.")
+        sys.exit(2)
 
     print("\nGREEN over the fixed set — every finding this wave (icon + border-token) targets clears AA "
           "on gate 36's own surfaces once the queued fixes are active.")
@@ -717,10 +721,29 @@ def main():
                     # this change exists to end — but silently passing the
                     # surface would be worse, so it is called out by name.
                     if not data.get("resolved") or data.get("theme") != "dark":
-                        red.append(f"RED  {label}  DARK NEVER RESOLVED (theme={data.get('theme')}) "
-                                   f"— findings DISCARDED, not counted: this surface was measured "
-                                   f"mid-boot in LIGHT, so neither its zeros nor its findings are real. "
-                                   f"Re-run standalone before believing anything about this surface.")
+                        # ONE MORE TRY WITH DOUBLED PATIENCE, then NO VERDICT.
+                        # Keeper, 2026-08-15, after two surfaces reddened a whole
+                        # train under suite load: discarding the findings was
+                        # right, but exiting RED for it was not. run-all.sh reads
+                        # 0 green / 2 CANNOT RUN / anything else RED, and "the
+                        # page never got dark enough to measure" is not a defect
+                        # in the page — it is the absence of a measurement. Red
+                        # for it blocks every other lane for a box-load problem,
+                        # which is the same false-red disease one layer up.
+                        try:
+                            data = measure(s, tok, host, probe_js, key, path_tpl,
+                                           mode, device, metrics, patience=2.0)
+                        except Exception as e:                  # noqa: BLE001
+                            cannot_run.append(f"{label}: dark never resolved; retry errored ({str(e)[:60]})")
+                            print(f"  CANNOT RUN  {label}  dark never resolved, retry errored")
+                            continue
+                    if not data.get("resolved") or data.get("theme") != "dark":
+                        cannot_run.append(
+                            f"{label}: DARK NEVER RESOLVED (theme={data.get('theme')}) even at "
+                            f"doubled patience — findings DISCARDED, neither its zeros nor its "
+                            f"findings are real. NO VERDICT on this surface; re-run on a quieter box.")
+                        print(f"  CANNOT RUN  {label}  dark never resolved (theme={data.get('theme')}) "
+                              f"— no verdict, findings discarded")
                         continue
 
                     # RATCHET, not "any finding at all" — see BASELINE's own
@@ -756,13 +779,12 @@ def main():
     # inverse (reporting only "cannot run" while hiding 5 confirmed defects)
     # would understate a genuinely broken state.
     if cannot_run:
-        print(f"\n{len(cannot_run)} surface(s) COULD NOT BE MEASURED (connection failed twice each):")
+        print(f"\n{len(cannot_run)} surface(s) COULD NOT BE MEASURED:")
         for line in cannot_run:
             print(" ", line)
 
     if red:
-        print(f"\n{len(red)} line(s) — a surface regressed past its recorded BASELINE, "
-              f"or dark never resolved at all:\n")
+        print(f"\n{len(red)} line(s) — a surface regressed past its recorded BASELINE:\n")
         for line in red:
             print(line)
         sys.exit(1)
