@@ -206,14 +206,6 @@ body#lgpa .hl {
 }
 
 /* flow diagram */
-/* nowrap + its own horizontal scroll. Wrapping put "Front page" on a line of
-   its own behind a dangling arrow, which read as a broken diagram rather than a
-   sequence — the page body must never scroll sideways, but this strip may. */
-#lgpa .flow {
-  display: flex; flex-wrap: nowrap; align-items: stretch; gap: 0; margin: 4px 0 6px;
-  background: #fff; border: 1px solid #e3ddd0; border-radius: 12px; padding: 16px;
-  overflow-x: auto; -webkit-overflow-scrolling: touch;
-}
 #lgpa .step {
   flex: 0 0 auto; min-width: 128px; max-width: 168px; padding: 11px 13px;
   background: #faf9f5; border: 1px solid #e9e5d8; border-radius: 9px;
@@ -254,6 +246,18 @@ body#lgpa .hl {
   font: 500 12.5px/1.65 var(--lg-font-sans); color: #4c4f47;
 }
 #lgpa .hook b { color: #1a1d1a; }
+
+/* PHONE: stack each rail instead of scrolling it sideways. Measured at 390px —
+   horizontal scroll cut the BOTH row off mid-word ("make your profi…"), hiding
+   the single box the whole page is about behind a gesture nobody knows is
+   there. Ian reads this on his phone, so the key picture must be whole without
+   interaction. */
+@media (max-width: 700px) {
+  #lgpa .rail { flex-wrap: wrap; overflow-x: visible; }
+  #lgpa .rail__lbl { flex: 0 0 100%; padding: 0 0 7px; }
+  #lgpa .step, #lgpa .step--both { min-width: 0; max-width: none; flex: 1 1 100%; }
+  #lgpa .arrow { flex: 0 0 100%; padding: 4px 0; text-align: center; transform: rotate(90deg); }
+}
 #lgpa .hook code {
   background: #eceadf; border-radius: 4px; padding: 1px 5px;
   font: 600 11.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: #4a4d43;
