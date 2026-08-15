@@ -1,0 +1,388 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   profiles-alive lane — shared mock stylesheet (backlog 19).
+
+   Two parts, same split the featured-members lane used:
+     1. REAL tokens + REAL component CSS lifted verbatim from the running
+        surfaces, so what Ian sees is what the platform renders:
+          · tokens        ← lg-shared/site-header.css :root
+          · .dir-card*    ← profile-app/web/directory.css
+          · .wrap/.card/.pwrow/.go/.skip ← platform/mu-plugins/lgpo-set-password.php
+                                           (the real /patreon-password/ welcome page)
+     2. MOCK chrome (page frame, annotation callouts) — clearly not-the-product,
+        so nothing here can be mistaken for a shipped style.
+
+   ⚠️ DARK-INJECTION DEFENCE — inherited from the featured-members lane's
+   measured lesson (2026-08-12). Every page served from the dev2 docroot gets
+   the platform boot script injected; under a dark profile app-settings.js does
+   NOT merely repaint the body, it REDEFINES the brand tokens as inline style on
+   <html>. A mock is a FIXED artifact, so we pin BOTH:
+     · `body#lgpa{…!important}` — id (1,0,1) + !important beats the injected
+       attribute-qualified rule (0,1,2).
+     · the WHOLE token set re-declared on body, so token-driven component CSS
+       (everything below is token-driven by design) cannot invert.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ---------- REAL design tokens (lg-shared/site-header.css) ---------- */
+:root {
+  --lg-cream:      #fbfbf8;
+  --lg-sage:       #87986a;
+  --lg-sage-d:     #6b7c52;
+  --lg-sage-3:     #d4e0b8;
+  --lg-sage-tint:  #eef2e3;
+  --lg-amber:      #ecb351;
+  --lg-rust:       #c66845;
+  --lg-charcoal:   #1a1d1a;
+  --lg-ink:        #323532;
+  --lg-mute:       #6b6f6b;
+  --lg-line:       #e3ddd0;
+  --lg-font-serif: "Lora", Georgia, serif;
+  --lg-font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+/* ---------- TOKEN PIN (see header) ---------- */
+body#lgpa {
+  --lg-cream:      #fbfbf8 !important;
+  --lg-sage:       #87986a !important;
+  --lg-sage-d:     #6b7c52 !important;
+  --lg-sage-3:     #d4e0b8 !important;
+  --lg-sage-tint:  #eef2e3 !important;
+  --lg-amber:      #ecb351 !important;
+  --lg-rust:       #c66845 !important;
+  --lg-charcoal:   #1a1d1a !important;
+  --lg-ink:        #323532 !important;
+  --lg-mute:       #6b6f6b !important;
+  --lg-line:       #e3ddd0 !important;
+  /* --lg-card-bg is in the injected dark map (#1e2124). Nothing in this file
+     reads it today, but an unpinned token is a trap primed for whoever adds the
+     first component that does — caught by tools/mock-theme-proof.py, which
+     compares the token itself and not just the pixels it currently paints. */
+  --lg-card-bg:    #fff    !important;
+  --lg-font-serif: "Lora", Georgia, serif !important;
+  --lg-font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important;
+  --lg-read-scale: 1 !important;
+  --lguser-bg:     #fbfbf8 !important;
+  --lguser-card:   #fff    !important;
+  --lguser-accent: #87986a !important;
+  --lguser-accent-d:#6b7c52 !important;
+  --lguser-pill:   #eef2e3 !important;
+  background: #f2f1ec !important;
+  color: #26281f !important;
+  margin: 0;
+  font-family: var(--lg-font-sans);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   COMPONENT PIN — the THIRD half of the dark-injection defence, and the one
+   the featured-members lane's notes do not have. Measured here 2026-08-15.
+
+   Pinning the tokens is not enough either. `webroot/app-settings.js` (injected
+   into every docroot page) does not only redefine tokens on <html> — from
+   line 145 it also ships COMPONENT rules keyed on the REAL product class
+   names, with !important:
+
+     D = 'html[data-lguser-theme="dark"]'
+     D + ' .dir-card{background:#1e2124!important;border-color:#2c312d!important}'
+     D + ' … ,' + D + ' .hl, … {background:#243024!important;color:#b6c79a!important}'
+
+   So the very act of lifting real class names into a mock — which is the whole
+   point, it is what makes the mock honest — ALSO imports the platform's dark
+   repaint of them. No amount of token pinning touches this: the rule names a
+   colour literal, not a token.
+
+   Beaten on specificity, not luck: `body#lgpa .dir-card` is (1,1,1); the
+   injected `html[data-lguser-theme="dark"] .dir-card` is (0,2,1). An id
+   outranks any number of attributes/classes, so among !important declarations
+   ours wins. Verified by tools/mock-theme-proof.py, which caught all three of
+   these (dircard_bg, hl_bg, hl_fg) before Ian ever opened the page.
+
+   ⚠️ If you add a component here that borrows another real class name, check it
+   against the dark block first:
+     sed -n '145,305p' webroot/app-settings.js | grep -o '\.[a-zA-Z][a-zA-Z0-9_-]*' | sort -u
+   and intersect with the classes this mock uses.
+   ══════════════════════════════════════════════════════════════════════════ */
+body#lgpa .dir-card {
+  background: #fff !important;
+  border-color: var(--lg-line) !important;
+}
+body#lgpa .hl {
+  background: var(--lg-sage-tint) !important;
+  color: var(--lg-sage-d) !important;
+  border-color: transparent !important;
+}
+
+/* ══════════════════ MOCK CHROME (not the product) ══════════════════ */
+#lgpa .wrapper { max-width: 1180px; margin: 0 auto; padding: 26px 20px 80px; }
+
+#lgpa .mockhead { margin: 0 0 30px; }
+#lgpa .mockhead h1 {
+  margin: 0 0 10px; font: 400 32px/1.18 var(--lg-font-serif); color: #1a1d1a;
+}
+#lgpa .mockhead p {
+  margin: 0 0 12px; font: 500 14.5px/1.7 var(--lg-font-sans); color: #4c4f47; max-width: 860px;
+}
+#lgpa .mockhead p b { color: #1a1d1a; }
+#lgpa .tag {
+  display: inline-block; background: var(--lg-rust); color: #fff; border-radius: 999px;
+  padding: 4px 12px; font: 800 11px/1.5 var(--lg-font-sans);
+  letter-spacing: .06em; text-transform: uppercase; margin: 0 0 14px;
+}
+
+#lgpa .sec { margin: 0 0 34px; }
+#lgpa .sec__n {
+  display: inline-block; background: var(--lg-charcoal); color: #fff; border-radius: 999px;
+  padding: 3px 11px; font: 800 11px/1.5 var(--lg-font-sans);
+  letter-spacing: .06em; text-transform: uppercase;
+}
+#lgpa .sec__h { margin: 11px 0 7px; font: 400 23px/1.25 var(--lg-font-serif); color: #1a1d1a; }
+#lgpa .sec__p { margin: 0 0 16px; font: 500 13.5px/1.7 var(--lg-font-sans); color: #4c4f47; max-width: 860px; }
+#lgpa .sec__p b { color: #1a1d1a; }
+#lgpa .sec__p code {
+  background: #eceadf; border-radius: 4px; padding: 1px 5px;
+  font: 600 12.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: #4a4d43;
+}
+
+/* numbers row */
+#lgpa .nums { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 18px; }
+#lgpa .num {
+  background: #fff; border: 1px solid #e9e5d8; border-radius: 10px; padding: 12px 16px; min-width: 132px;
+}
+#lgpa .num b { display: block; font: 400 26px/1.1 var(--lg-font-serif); color: #1a1d1a; }
+#lgpa .num span { display: block; margin-top: 3px; font: 600 11.5px/1.45 var(--lg-font-sans); color: #6b6f6b; }
+#lgpa .num--bad b { color: var(--lg-rust); }
+
+/* the two-column option comparison */
+#lgpa .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+@media (max-width: 900px) { #lgpa .cols { grid-template-columns: 1fr; } }
+
+#lgpa .opt {
+  background: #fff; border: 1px solid #e3ddd0; border-radius: 14px; overflow: hidden;
+}
+#lgpa .opt--rec { border: 2px solid var(--lg-sage); }
+#lgpa .opt__head { padding: 15px 18px 13px; border-bottom: 1px solid #eee9dc; }
+#lgpa .opt--rec .opt__head { background: var(--lg-sage-tint); border-bottom-color: #d8e2c4; }
+#lgpa .opt__k {
+  display: inline-block; border-radius: 999px; padding: 3px 10px;
+  font: 800 10.5px/1.5 var(--lg-font-sans); letter-spacing: .05em; text-transform: uppercase;
+  background: #e6e2d5; color: #5a5e53;
+}
+#lgpa .opt--rec .opt__k { background: var(--lg-sage); color: #fff; }
+#lgpa .opt__h { margin: 9px 0 5px; font: 400 19px/1.25 var(--lg-font-serif); color: #1a1d1a; }
+#lgpa .opt__s { margin: 0; font: 500 12.8px/1.6 var(--lg-font-sans); color: #5c6055; }
+#lgpa .opt__body { padding: 18px; background: #faf9f5; }
+#lgpa .opt__note {
+  margin: 0; padding: 12px 18px 15px; font: 500 12.5px/1.65 var(--lg-font-sans); color: #5c6055;
+  border-top: 1px solid #eee9dc; background: #fff;
+}
+#lgpa .opt__note b { color: #1a1d1a; }
+
+/* pros / cons */
+#lgpa .pc { list-style: none; margin: 8px 0 0; padding: 0; }
+#lgpa .pc li {
+  position: relative; padding: 0 0 0 20px; margin: 0 0 6px;
+  font: 500 12.5px/1.6 var(--lg-font-sans); color: #4c4f47;
+}
+#lgpa .pc li::before {
+  position: absolute; left: 0; top: 0; font-weight: 800;
+}
+#lgpa .pc li.y::before { content: "+"; color: var(--lg-sage-d); }
+#lgpa .pc li.n::before { content: "\2212"; color: var(--lg-rust); }
+
+/* caption under a drawn screen */
+#lgpa .cap {
+  margin: 9px 0 0; font: 600 11.5px/1.5 var(--lg-font-sans); color: #7a7f72;
+}
+
+/* recommendation slab */
+#lgpa .rec {
+  background: var(--lg-sage-tint); color: #3f4a2f; border-radius: 11px; padding: 15px 18px;
+  font: 500 13.5px/1.7 var(--lg-font-sans); margin: 18px 0 0; border: 1px solid #d8e2c4;
+}
+#lgpa .rec b { color: #2f3a22; }
+
+/* a "what happens if you say nothing" line */
+#lgpa .ans {
+  margin: 14px 0 0; padding-top: 12px; border-top: 1px dashed #ddd9cc;
+  font: 700 13px/1.55 var(--lg-font-sans); color: #8a4a30;
+}
+
+/* flow diagram */
+/* nowrap + its own horizontal scroll. Wrapping put "Front page" on a line of
+   its own behind a dangling arrow, which read as a broken diagram rather than a
+   sequence — the page body must never scroll sideways, but this strip may. */
+#lgpa .flow {
+  display: flex; flex-wrap: nowrap; align-items: stretch; gap: 0; margin: 4px 0 6px;
+  background: #fff; border: 1px solid #e3ddd0; border-radius: 12px; padding: 16px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+#lgpa .step {
+  flex: 0 0 auto; min-width: 128px; max-width: 168px; padding: 11px 13px;
+  background: #faf9f5; border: 1px solid #e9e5d8; border-radius: 9px;
+}
+#lgpa .step b {
+  display: block; font: 700 12px/1.35 var(--lg-font-sans); color: #1a1d1a; margin-bottom: 3px;
+}
+#lgpa .step span { font: 500 11.5px/1.5 var(--lg-font-sans); color: #6b6f6b; }
+#lgpa .step--new { background: var(--lg-sage-tint); border-color: var(--lg-sage); }
+#lgpa .step--new b { color: #3f4a2f; }
+#lgpa .arrow {
+  flex: 0 0 auto; align-self: center; padding: 0 9px;
+  font: 700 17px/1 var(--lg-font-sans); color: #b9b5a5;
+}
+
+/* Dual-rail flow: Patreon and Stripe as separate lanes converging on one
+   shared step (Ian's standing ruling — both rails fire, identical experience). */
+#lgpa .rails {
+  background: #fff; border: 1px solid #e3ddd0; border-radius: 12px;
+  padding: 6px 16px 16px; margin: 4px 0 6px;
+}
+#lgpa .rail { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 0;
+  padding: 12px 0 0; overflow-x: auto; }
+#lgpa .rail--join { border-top: 1px dashed #ddd9cc; margin-top: 12px; padding-top: 15px; }
+#lgpa .rail__lbl {
+  flex: 0 0 74px; align-self: center; padding-right: 12px;
+  font: 800 10.5px/1.4 var(--lg-font-sans); letter-spacing: .05em;
+  text-transform: uppercase; color: #8b8f83;
+}
+#lgpa .rail__lbl--both { color: var(--lg-sage-d); }
+#lgpa .step--both {
+  background: var(--lg-sage-tint); border-color: var(--lg-sage); min-width: 200px; max-width: 260px;
+}
+#lgpa .step--both b { color: #3f4a2f; }
+#lgpa .hook {
+  margin: 12px 0 0; padding: 11px 14px; background: #faf9f5;
+  border: 1px solid #e9e5d8; border-left: 3px solid var(--lg-sage); border-radius: 8px;
+  font: 500 12.5px/1.65 var(--lg-font-sans); color: #4c4f47;
+}
+#lgpa .hook b { color: #1a1d1a; }
+#lgpa .hook code {
+  background: #eceadf; border-radius: 4px; padding: 1px 5px;
+  font: 600 11.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: #4a4d43;
+}
+
+/* device frame for a drawn screen */
+#lgpa .screen {
+  background: #f6f6f2; border: 1px solid #ddd9cc; border-radius: 10px; overflow: hidden;
+}
+#lgpa .screen__bar {
+  display: flex; align-items: center; gap: 6px; padding: 8px 11px;
+  background: #eceadf; border-bottom: 1px solid #ddd9cc;
+}
+#lgpa .screen__dot { width: 9px; height: 9px; border-radius: 50%; background: #c9c5b6; }
+#lgpa .screen__url {
+  margin-left: 6px; font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: #7a7f72;
+}
+#lgpa .screen__body { padding: 20px 18px 24px; }
+
+/* ══════════════════ REAL COMPONENT CSS ══════════════════
+   Lifted from platform/mu-plugins/lgpo-set-password.php — the actual
+   /patreon-password/ welcome page a new member sees. Class names kept so the
+   build can diff mock against product. */
+#lgpa .pw-wrap { max-width: 560px; margin: 0 auto; }
+#lgpa .pw-wrap h2 { margin: .2em 0 .6em; font: 700 22px/1.25 var(--lg-font-sans); color: #1A1E12; }
+#lgpa .pw-card {
+  padding: 1.4em 1.6em; background: #d4e0b8; border: 1px solid #87986A; border-radius: 8px;
+  color: #1A1E12;
+}
+#lgpa .pw-card p { margin: 0 0 .8em; font: 500 13.5px/1.65 var(--lg-font-sans); color: #1A1E12; }
+#lgpa .pw-card .pemail { margin: .2em 0 .9em; font-size: .95em; color: #3c4a28; }
+#lgpa .pw-card label {
+  font-size: .92em; font-weight: 600; display: block; margin-top: .5em; color: #1A1E12;
+}
+#lgpa .pwrow { position: relative; margin: .6em 0; }
+#lgpa .pwrow input, #lgpa .pw-card .fld {
+  width: 100%; box-sizing: border-box; padding: .7em .8em; border: 1px solid #87986A;
+  border-radius: 5px; font-size: 1em; background: #fff; color: #1A1E12;
+  font-family: var(--lg-font-sans);
+}
+#lgpa .pw-card .fld--ph { color: #8b8f83; }
+#lgpa .go {
+  margin-top: .7em; padding: .7em 1.3em; background: #1A1E12; color: #fff; border: 0;
+  border-radius: 5px; cursor: pointer; font-size: 1em; font-family: var(--lg-font-sans);
+}
+#lgpa .skip { display: inline-block; margin-top: 1.4em; color: #1A1E12;
+  font: 500 13.5px/1.5 var(--lg-font-sans); }
+
+/* Lifted from profile-app/web/directory.css — the real member card. */
+#lgpa .dir-card {
+  background: #fff; border: 1px solid var(--lg-line); border-radius: 16px;
+  padding: 18px; color: var(--lg-ink);
+}
+#lgpa .dir-card__main { display: flex; gap: 12px; align-items: flex-start;
+  text-decoration: none; color: inherit; }
+#lgpa .dir-card .avi-sm {
+  width: 48px; height: 48px; flex: 0 0 48px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font: 600 17px/1 var(--lg-font-serif); color: #fff; overflow: hidden;
+}
+#lgpa .avi-sm--real { background: linear-gradient(135deg, #c98a3b, #7b3a1a); }
+#lgpa .avi-sm--ph   { background: #d8d4c6; }
+#lgpa .avi-sm--ph svg { width: 30px; height: 30px; display: block; }
+#lgpa .dir-card .name {
+  font: 700 16px/1.2 var(--lg-font-serif); color: var(--lg-charcoal); text-decoration: none;
+}
+#lgpa .dir-card .loc-row {
+  color: var(--lg-mute); font: 500 12.5px/1.5 var(--lg-font-sans); margin-top: 3px;
+}
+#lgpa .dir-card .whatline {
+  color: var(--lg-ink); font: 500 12.8px/1.5 var(--lg-font-sans); margin-top: 4px;
+}
+#lgpa .dir-card .muted-none {
+  color: #b0aca0; font: 500 12.5px/1.5 var(--lg-font-sans); margin-top: 3px; font-style: italic;
+}
+#lgpa .dir-card .hl-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+#lgpa .dir-card .hl-chips .hl {
+  background: var(--lg-sage-tint); color: var(--lg-sage-d); font: 600 11px/1.5 var(--lg-font-sans);
+  padding: 2px 9px; border-radius: 999px;
+}
+#lgpa .dir-strip { display: grid; gap: 10px; }
+
+/* side-by-side before/after */
+#lgpa .ba { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+@media (max-width: 900px) { #lgpa .ba { grid-template-columns: 1fr; } }
+#lgpa .ba__h {
+  margin: 0 0 10px; font: 800 11.5px/1.4 var(--lg-font-sans);
+  letter-spacing: .05em; text-transform: uppercase; color: #6b6f6b;
+}
+#lgpa .ba__h--now { color: var(--lg-rust); }
+#lgpa .ba__h--after { color: var(--lg-sage-d); }
+
+/* the completeness meter, as the featured lane defined it */
+#lgpa .meter { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+#lgpa .meter__track {
+  flex: 1 1 auto; height: 8px; border-radius: 999px; background: #e6e2d5; overflow: hidden;
+}
+#lgpa .meter__fill { height: 100%; background: var(--lg-sage); border-radius: 999px; }
+#lgpa .meter__pct { font: 700 12px/1 var(--lg-font-sans); color: #5c6055; flex: 0 0 auto; }
+
+/* nudge card (option B) */
+#lgpa .nudge {
+  background: #fff; border: 1px solid var(--lg-line); border-left: 4px solid var(--lg-amber);
+  border-radius: 10px; padding: 15px 17px;
+}
+#lgpa .nudge h4 { margin: 0 0 5px; font: 700 14.5px/1.3 var(--lg-font-sans); color: #1a1d1a; }
+#lgpa .nudge p { margin: 0; font: 500 12.8px/1.6 var(--lg-font-sans); color: #5c6055; }
+#lgpa .nudge__row { display: flex; gap: 9px; margin-top: 12px; flex-wrap: wrap; }
+#lgpa .btn-sm {
+  display: inline-block; padding: .5em 1em; border-radius: 5px; text-decoration: none;
+  font: 600 12.5px/1.4 var(--lg-font-sans); border: 1px solid var(--lg-line); color: #4c4f47; background: #fff;
+}
+#lgpa .btn-sm--go { background: #1A1E12; color: #fff; border-color: #1A1E12; }
+
+/* three-field group for option A */
+#lgpa .fieldset { margin: 0; padding: 0; border: 0; }
+#lgpa .photorow { display: flex; align-items: center; gap: 12px; margin: .5em 0 .2em; }
+#lgpa .photorow .avi-sm { width: 56px; height: 56px; flex: 0 0 56px; }
+#lgpa .photobtn {
+  padding: .55em 1em; background: #fff; border: 1px solid #87986A; border-radius: 5px;
+  font: 600 12.5px/1.4 var(--lg-font-sans); color: #3c4a28; cursor: pointer;
+}
+
+/* footnote */
+#lgpa .foot {
+  margin-top: 40px; padding-top: 16px; border-top: 1px solid #ddd9cc;
+  font: 500 12px/1.65 var(--lg-font-sans); color: #7a7f72;
+}
+#lgpa .foot code {
+  background: #eceadf; border-radius: 4px; padding: 1px 5px;
+  font: 600 11.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: #4a4d43;
+}

@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>New members arrive alive — one decision</title>
+<link rel="stylesheet" href="_mock.css">
+</head>
+<body id="lgpa">
+<div class="wrapper">
+
+  <div class="mockhead">
+    <span class="tag">Backlog 19 &middot; nothing is built</span>
+    <h1>New members arrive as empty shells</h1>
+    <p>You saw it in the directory: rows of identical grey faces. This page is the
+       <b>one decision</b> that fixes it, with the picture under each option and a
+       recommendation. <b>Nothing below is built</b> &mdash; the build starts when you have ruled.</p>
+  </div>
+
+  <!-- ══════════════ THE FINDING ══════════════ -->
+  <div class="sec">
+    <span class="sec__n">First, the thing that changes the plan</span>
+    <h2 class="sec__h">There is no sign-up form to add a step to</h2>
+    <p class="sec__p">
+      The backlog line said &ldquo;a sign-up step <i>or</i> a first-login prompt&rdquo;. Having read the
+      real code: <b>a sign-up step cannot exist, because members never fill in a sign-up form.</b>
+      WordPress registration is switched off (<code>users_can_register = 0</code>) and the
+      sign-ups table is empty. Whichever rail they come in on, the account is built <i>for</i> them
+      &mdash; from what Patreon hands back, or from what they typed at checkout. Either way it is a
+      name, an email and a tier, and <b>nothing about who they are or what they do</b>.
+    </p>
+    <p class="sec__p">
+      So the platform gets <b>exactly one moment</b> with a brand-new member's attention: the
+      &ldquo;you're in&rdquo; screen at the end of joining. That moment already exists on
+      <b>both</b> rails &mdash; and today we spend all of it on a password or a receipt.
+    </p>
+
+    <p class="sec__p">
+      <b>Both rails, one experience.</b> People join two ways right now and will keep doing so,
+      so the new step hangs off <i>becoming a member</i> &mdash; not off anything Patreon-shaped or
+      Stripe-shaped. A Patreon joiner and a Stripe joiner get the identical screen:
+    </p>
+
+    <div class="rails">
+      <div class="rail">
+        <span class="rail__lbl">Patreon</span>
+        <div class="step"><b>Connect with Patreon</b><span>they click one button</span></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><b>We build the account</b><span>they type nothing</span></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><b>Logged straight in</b><span>then asked for a password</span></div>
+      </div>
+
+      <div class="rail">
+        <span class="rail__lbl">Stripe</span>
+        <div class="step"><b>Join and pay</b><span>they pick a tier</span></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><b>Checkout succeeds</b><span>membership granted</span></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><b>&ldquo;You're in!&rdquo;</b><span>the receipt page</span></div>
+      </div>
+
+      <div class="rail rail--join">
+        <span class="rail__lbl rail__lbl--both">Both</span>
+        <div class="step step--both"><b>The new step &mdash; make your profile look like you</b><span>photo &middot; city &middot; what you do &middot; skippable</span></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><b>Front page</b><span>profile no longer empty</span></div>
+      </div>
+    </div>
+    <p class="cap">The real flow, read out of the code today. The green box is the new step &mdash; one screen, reached from either rail.</p>
+
+    <p class="hook">
+      <b>Where it hooks:</b> on <b>membership becoming active</b>, which is the one thing both
+      rails already agree on &mdash; they each record who a member is in the same place
+      (<code>lg_role_sources</code>, with a <code>source</code> of <code>patreon</code> or
+      <code>stripe</code>). The step is deliberately <b>not</b> wired to the Patreon callback or the
+      Stripe webhook, so neither rail can end up with an experience the other one lacks &mdash;
+      and a third rail later inherits it for free.
+    </p>
+  </div>
+
+  <!-- ══════════════ THE NUMBERS ══════════════ -->
+  <div class="sec">
+    <span class="sec__n">What it costs us</span>
+    <h2 class="sec__h">Measured on the live site today</h2>
+    <p class="sec__p">
+      Older members look fuller only because of one-off backfills. Those stopped on
+      <b>30 June</b>. Everyone who has joined since gets nothing at all &mdash; so this is the
+      honest picture of what a new member brings today:
+    </p>
+
+    <div class="nums">
+      <div class="num"><b>33</b><span>joined since 1 July</span></div>
+      <div class="num num--bad"><b>28</b><span>have no photo &mdash; a grey placeholder face</span></div>
+      <div class="num num--bad"><b>23</b><span>have no location at all</span></div>
+      <div class="num num--bad"><b>30</b><span>never said what they do</span></div>
+    </div>
+
+    <p class="sec__p">
+      Widen it to everyone who joined since 26 May and the shape is the same:
+      <b>215 of 228 members sit at two items or fewer</b> out of the eight on the completeness
+      meter. 25 of them have <i>nothing</i> filled in.
+    </p>
+  </div>
+
+  <!-- ══════════════ THE PAYOFF ══════════════ -->
+  <div class="sec">
+    <span class="sec__n">Why it matters</span>
+    <h2 class="sec__h">The same three fields are the whole directory row</h2>
+    <p class="sec__p">
+      A directory row shows a photo, a name, a place, and a line about what they do. Miss those
+      three and the row is a grey circle with a name on it. This is the difference, drawn with the
+      real directory stylesheet:
+    </p>
+
+    <div class="ba">
+      <div>
+        <p class="ba__h ba__h--now">What a new member looks like now</p>
+        <div class="dir-strip">
+          <div class="dir-card">
+            <div class="dir-card__main">
+              <div class="avi-sm avi-sm--ph">
+                <svg viewBox="0 0 24 24" fill="#a9a496" aria-hidden="true"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5 0-9 2.5-9 5.5V22h18v-2.5c0-3-4-5.5-9-5.5Z"/></svg>
+              </div>
+              <div>
+                <div class="name">Marty Mackenzie</div>
+                <div class="muted-none">no location</div>
+                <div class="muted-none">nothing about what they do</div>
+              </div>
+            </div>
+          </div>
+          <div class="dir-card">
+            <div class="dir-card__main">
+              <div class="avi-sm avi-sm--ph">
+                <svg viewBox="0 0 24 24" fill="#a9a496" aria-hidden="true"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5 0-9 2.5-9 5.5V22h18v-2.5c0-3-4-5.5-9-5.5Z"/></svg>
+              </div>
+              <div>
+                <div class="name">Matt Brugger</div>
+                <div class="muted-none">no location</div>
+                <div class="muted-none">nothing about what they do</div>
+              </div>
+            </div>
+          </div>
+          <div class="dir-card">
+            <div class="dir-card__main">
+              <div class="avi-sm avi-sm--ph">
+                <svg viewBox="0 0 24 24" fill="#a9a496" aria-hidden="true"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5 0-9 2.5-9 5.5V22h18v-2.5c0-3-4-5.5-9-5.5Z"/></svg>
+              </div>
+              <div>
+                <div class="name">Chris Hartman</div>
+                <div class="muted-none">no location</div>
+                <div class="muted-none">nothing about what they do</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="cap">Real names of members who joined in the last few weeks. This is what a prospect sees.</p>
+      </div>
+
+      <div>
+        <p class="ba__h ba__h--after">What the same three answers buy</p>
+        <div class="dir-strip">
+          <div class="dir-card">
+            <div class="dir-card__main">
+              <div class="avi-sm avi-sm--real">MM</div>
+              <div>
+                <div class="name">Marty Mackenzie</div>
+                <div class="loc-row">Ballarat, Victoria</div>
+                <div class="whatline">Acoustic repairs and neck resets</div>
+                <div class="hl-chips"><span class="hl">Repair</span><span class="hl">Acoustic</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="dir-card">
+            <div class="dir-card__main">
+              <div class="avi-sm avi-sm--real">MB</div>
+              <div>
+                <div class="name">Matt Brugger</div>
+                <div class="loc-row">Milwaukee, Wisconsin</div>
+                <div class="whatline">Building archtops, one at a time</div>
+                <div class="hl-chips"><span class="hl">Building</span><span class="hl">Archtop</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="dir-card">
+            <div class="dir-card__main">
+              <div class="avi-sm avi-sm--real">CH</div>
+              <div>
+                <div class="name">Chris Hartman</div>
+                <div class="loc-row">Portland, Oregon</div>
+                <div class="whatline">Fretwork, setups, and a lot of coffee</div>
+                <div class="hl-chips"><span class="hl">Setup</span><span class="hl">Fretwork</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="cap">Same members, same card, three answers filled in. The chips come free from skills they pick later.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ THE DECISION ══════════════ -->
+  <div class="sec">
+    <span class="sec__n">The decision</span>
+    <h2 class="sec__h">Ask them during the welcome, or nudge them afterwards?</h2>
+    <p class="sec__p">
+      Both options ask for the same three things &mdash; <b>a photo, a city, and one line about what
+      they do</b> &mdash; and both are skippable. The difference is <i>when</i> we ask.
+    </p>
+
+    <div class="cols">
+
+      <!-- ─────── OPTION A ─────── -->
+      <div class="opt opt--rec">
+        <div class="opt__head">
+          <span class="opt__k">Option A &mdash; recommended</span>
+          <h3 class="opt__h">One more screen at the end of joining</h3>
+          <p class="opt__s">However they joined, the last thing they see before landing is this
+             &mdash; asked while they are still in the flow and still paying attention.</p>
+        </div>
+        <div class="opt__body">
+          <div class="screen">
+            <div class="screen__bar">
+              <span class="screen__dot"></span><span class="screen__dot"></span><span class="screen__dot"></span>
+              <span class="screen__url">/welcome/profile &nbsp;(same screen from either rail)</span>
+            </div>
+            <div class="screen__body">
+              <div class="pw-wrap">
+                <h2>Nearly there, Marty.</h2>
+                <div class="pw-card">
+                  <p>Your profile is live right now &mdash; it just looks empty. Three quick answers and
+                     people can actually find you.</p>
+
+                  <fieldset class="fieldset">
+                    <label>A photo of you</label>
+                    <div class="photorow">
+                      <div class="avi-sm avi-sm--ph">
+                        <svg viewBox="0 0 24 24" fill="#a9a496" aria-hidden="true"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5 0-9 2.5-9 5.5V22h18v-2.5c0-3-4-5.5-9-5.5Z"/></svg>
+                      </div>
+                      <button type="button" class="photobtn">Choose a photo</button>
+                    </div>
+
+                    <label for="a-city">Where are you?</label>
+                    <div class="pwrow">
+                      <div class="fld fld--ph" id="a-city">Start typing a town or city&hellip;</div>
+                    </div>
+
+                    <label for="a-what">What do you do? One line.</label>
+                    <div class="pwrow">
+                      <div class="fld fld--ph" id="a-what">Acoustic repairs and neck resets</div>
+                    </div>
+                  </fieldset>
+
+                  <button type="button" class="go">Save and finish</button>
+                </div>
+                <a class="skip" href="#">Skip &mdash; continue to my profile &rarr;</a>
+              </div>
+            </div>
+          </div>
+          <p class="cap">Drawn with the real welcome-page stylesheet, so this is how it would actually render.</p>
+
+          <ul class="pc">
+            <li class="y">Catches them at the only moment they are already stopped and answering things.</li>
+            <li class="y">One screen serves both rails, so Patreon and Stripe joiners cannot drift apart.</li>
+            <li class="y">Skipping already works and already goes to their profile.</li>
+            <li class="n">One more screen between joining and getting in. Some will skip it.</li>
+          </ul>
+        </div>
+        <p class="opt__note">
+          <b>Costs one extra screen.</b> Everything it needs &mdash; the chrome, the skip path, the
+          photo uploader, the city field &mdash; already exists somewhere in the platform, and both
+          rails already have a &ldquo;you're in&rdquo; page to hand off from.
+        </p>
+      </div>
+
+      <!-- ─────── OPTION B ─────── -->
+      <div class="opt">
+        <div class="opt__head">
+          <span class="opt__k">Option B &mdash; the alternative</span>
+          <h3 class="opt__h">Leave the welcome alone, nudge afterwards</h3>
+          <p class="opt__s">They land on the site as they do today, and a card follows them around
+             until the profile is filled in.</p>
+        </div>
+        <div class="opt__body">
+          <div class="screen">
+            <div class="screen__bar">
+              <span class="screen__dot"></span><span class="screen__dot"></span><span class="screen__dot"></span>
+              <span class="screen__url">/ &nbsp;(front page, signed in)</span>
+            </div>
+            <div class="screen__body">
+              <div class="nudge">
+                <h4>Your profile is nearly empty</h4>
+                <p>Add a photo, your city, and a line about what you do &mdash; that is all the
+                   directory needs to show you properly.</p>
+                <div class="meter">
+                  <div class="meter__track"><div class="meter__fill" style="width:12%"></div></div>
+                  <span class="meter__pct">12%</span>
+                </div>
+                <div class="nudge__row">
+                  <a class="btn-sm btn-sm--go" href="#">Fill it in</a>
+                  <a class="btn-sm" href="#">Not now</a>
+                </div>
+              </div>
+              <p style="margin:16px 0 0;font:500 12.5px/1.6 var(--lg-font-sans);color:#8b8f83">
+                &hellip; the rest of the front page carries on below.
+              </p>
+            </div>
+          </div>
+          <p class="cap">Uses the completeness meter the featured-members work already defines &mdash; same eight items.</p>
+
+          <ul class="pc">
+            <li class="y">Nothing stands between joining and getting into the community.</li>
+            <li class="y">Keeps asking, so it can catch them on a later visit.</li>
+            <li class="n">Asks at the moment they are least interested &mdash; they came to look around, not to do admin.</li>
+            <li class="n">It is a banner. People are extremely good at ignoring banners.</li>
+            <li class="n">Needs a new dismiss-and-remember rule, so it is more to build, not less.</li>
+          </ul>
+        </div>
+        <p class="opt__note">
+          <b>Costs a new surface.</b> And the front page is a bad host for it &mdash; it currently
+          wipes its own web address of any extra information the moment it loads, which is exactly
+          how a &ldquo;you just joined&rdquo; message would get lost.
+        </p>
+      </div>
+
+    </div>
+
+    <div class="rec">
+      <b>Recommendation: Option A.</b> We only get one moment of a new member's attention and we
+      are currently spending all of it on a password or a receipt. Adding one screen to a flow they
+      are already in is both the cheaper build and the one likely to actually get answers &mdash; and
+      because it is skippable, nobody is trapped. It is also the option that <b>keeps the two rails
+      identical</b>: one screen, reached from either, rather than a Patreon experience and a Stripe
+      experience that quietly drift apart. <b>Option A does not rule out Option B</b>: the nudge is
+      the natural follow-up later for the people who skip, and it reuses the same meter.
+    </div>
+
+    <p class="ans">If you say nothing, nothing changes &mdash; the next member joins tomorrow with a
+       grey face and no location, the same as the 33 before them.</p>
+  </div>
+
+  <div class="foot">
+    Numbers measured on the live site on 2026-08-15, read-only, from the profile database
+    (<code>tools/profile-completeness-report.sql</code> is the keeper of the same definitions).
+    The eight completeness items are the ones already locked on 14 Aug for the featured-members
+    work &mdash; this uses them, it does not redefine them.
+    The screens above are drawings that load the real product stylesheets, not photographs of a
+    running build; nothing here is built yet.
+  </div>
+
+</div>
+</body>
+</html>
