@@ -31,10 +31,14 @@ red=0
 dead=0
 run() {  # run <label> <command...>
   "${@:2}"
-  case $? in
+  local rc=$?
+  case $rc in
     0) ;;
     2) dead=$((dead+1)); echo "  ^^ $1 produced NO VERDICT (exit 2)";;
-    *) red=1;;
+    # Name the red HERE (8/15, fourth silent-red archaeology of the day): a
+    # gate that exits 1 without printing leaves the whole suite red with no
+    # culprit, and the final banner cannot say who.
+    *) red=1; RED_GATES="${RED_GATES:-}$1(exit $rc) "; echo "  ^^ $1 RED (exit $rc)";;
   esac
 }
 echo "=== GATE 1/35: visibility matrix (the privacy model) ==="
@@ -996,7 +1000,7 @@ echo "=== GATE 49: every copy of a paired feature flag agrees ==="
 # against the REAL live half-state before the fix, not a synthetic one.
 run "paired-flag-agreement" python3 "$(dirname "$0")/paired-flag-agreement-gate.py"
 
-if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
+if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; echo "RED GATES: ${RED_GATES:-unknown}"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
   echo "Nothing red, but $dead gate(s) reached no verdict, so this is NOT green."
