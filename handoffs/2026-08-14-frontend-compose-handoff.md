@@ -354,3 +354,101 @@ tree. Ian's no-iframe shape is BUILT but NOT PROVEN.
   already hit once; do not report the shape as done on the screenshot alone.
 * Still owed after that: gate 35 never-both-modals red-first, preview refresh,
   two pictures, board-ping.
+
+---
+
+# ADDENDUM 2 — 2026-08-15, the compose modal + dark mode
+
+**Branch `compose-loothprint-modal` off main, pushed. NOT merged. Flag still OFF.**
+Supersedes everything above about the compose *shape*: the standalone-page
+version (`fix-compose-modal-swap`) is dead — Ian moved on from it twice.
+
+## The shape, as Ian ruled it (four times, in order)
+
+1. 8/09 — a type toggle in the composer.
+2. 8/15a — *"I'd like the loothprint form not to share the modal"* → toggle
+   navigated to the standalone page.
+3. 8/15b — *"Cant it just replace the discussion modal ?"* → **current shape**:
+   tapping Loothprint closes `#ntm-overlay` and opens a dedicated `#lpm-overlay`.
+   Own chrome, nothing shared, toggle at the top of each. `/compose/` stays the
+   direct-URL surface.
+4. 8/15c — *"compose works well. Needs some dark mode love."* → shape APPROVED,
+   dark fixed (below).
+
+**NO IFRAME.** The form is fetched furniture-free (`?embed=1`) and injected.
+
+## ⚠️ I TOLD KEEPER THE NO-IFRAME RULING COULD NOT WORK. I WAS WRONG.
+
+I argued the hub cannot enqueue `acf-input`/`acf.js`/`select2`/`media-views`
+because bb-mirror has no WordPress. Carrying the assets across **does** work.
+The fault was **the order I ran them in**: WordPress prints a script's CONFIG as
+an inline block *between* the external files (`_wpMediaViewsL10n` sits
+immediately before `media-views.js` and is read at load time). Running all
+externals first left `wp.media.view.settings` an EMPTY OBJECT and `wp.Uploader`
+undefined → `wp.media()` threw `limitExceeded` and the photo picker did nothing.
+
+**In document order it all lives.** Verified: photo picker OPENS on a real
+click, chips toggle, 80 fields, and the discussion composer still works after.
+
+Three passes to get there; passes 1–2 blamed the right symptom for the wrong
+reason. If you touch the injection, re-test the PICKER, not the markup.
+
+## The defect that drove the whole rework was a RACE
+
+`ntmSetState('authed')` sets `ntmForm.hidden = false` **unconditionally**,
+knowing nothing about the active type, and the auth probe resolves **2–4s AFTER**
+the composer opens. Tap Loothprint inside that window and the wizard is re-shown
+under the form. **A check that waits before clicking calls it fine** — that is
+how it survived one of my verifications. Click INSIDE the auth window.
+
+## Dark mode — done, measured
+
+`tools/frontend-compose/dark-contrast-sweep.py` (new). Reads the RENDERED page,
+not a pair list, because the form's colours are ACF/WP stylesheets meeting the
+hub's dark tokens. Ratio maths imported from `tools/mock-contrast-check.py`.
+
+Fixed: the inactive toggle pill at **2.12:1** (`.ntm-typetoggle` painted
+`var(--bg-subtle,#f4f5ee)` with no dark override — light track, dark-muted
+label), ACF help text ×5 at 3.61:1, ACF "Add File" at 3.07:1, and **five white
+panels** (gallery 286×398, two toolbars, oEmbed, canvas).
+
+**GREEN at 1280 and 390: AA on 91 text elements, no bright surfaces.** Light
+verified unregressed by RENDERING (not just grep): 4.97:1 / 5.94:1.
+
+### Three tooling lessons now encoded, not remembered
+
+* **A contrast pass cannot see a wrong-coloured surface.** The sweep went GREEN
+  with a 286×398 WHITE dropzone in the dark modal — a panel with no text has no
+  pair, and dark-on-white scores well while not being dark mode. The SCREENSHOT
+  caught it. The sweep now flags bright surfaces separately.
+* **A screenshot can lie about its own theme.** My first dark picture was of a
+  LIGHT page and printed `theme= dark`. The shot script now asserts the dialog's
+  computed background and refuses to publish a mislabelled picture.
+* **Fixing from one instance broke three.** I set only `color` on ACF buttons;
+  several carry their own WHITE background, so "Add to gallery", "Close" and
+  "Update" went to 1.85:1. Set BOTH colours.
+
+## Gate 35 assertion 9
+
+Two separate overlays, no compose surface in the discussion modal, no iframe in
+either. Structural, so it cannot be raced. Reads the preview **as an allowed
+member** (flag-off emits no composer; anon sees none — either makes "no iframe"
+vacuously true). RED-FIRST proven on BOTH clauses, each with the mutation
+**verified to have landed first** — one earlier "MISS" was a silent no-op
+mutation whose anchor did not exist on this branch.
+
+⚠️ **The dark sweep is NOT gated and has no number.** Ian's note makes dark
+contrast a gated class; keeper mints numbers. **Asked, not yet answered.**
+
+## 🔧 BOX
+
+`/var/www/dev/wp-content/mu-plugins/lg-frontend-compose.php` → **this worktree**,
+so the preview serves the branch on both halves. Original:
+`/home/ubuntu/loothplatformv2-clean/platform/mu-plugins/lg-frontend-compose.php`.
+Revert on merge.
+
+## Load discipline (keeper, permanent, 8/15)
+
+Before ANY browser / suite / bulk-DB phase: `uptime`, and if 1-min load > 4,
+wait and retry. Code-writing needs no check. Used a background `until` loop six
+times this round — foreground `sleep` is blocked by the harness.
