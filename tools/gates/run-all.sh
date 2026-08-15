@@ -859,7 +859,7 @@ echo "=== GATE 41: the Guitardle board is scored on what the SERVER watched ==="
 # compared with the PHP resolver, on BOTH audience tracks.
 run "guitardle-serverplay" python3 "$(dirname "$0")/guitardle-serverplay-gate.py"
 echo
-# Gate number 42 PRE-ASSIGNED by keeper 2026-08-15 (46/47 since; next free 48).
+# Gate number 42 PRE-ASSIGNED by keeper 2026-08-15 (46/47 since; NEXT FREE IS 50).
 echo "=== GATE 42: the puzzle LIBRARY and SEQUENCE never reach a browser ==="
 # Backlog 26. Gate 41 stopped the phrase reaching server-driven MEMBERS, but
 # could not remove assets/guitardle_phrases.csv and assets/sequence.json,
@@ -879,8 +879,15 @@ echo "=== GATE 42: the puzzle LIBRARY and SEQUENCE never reach a browser ==="
 # before both flags are on everywhere is a blank board, not a degraded one.
 run "guitardle-daypuzzle" python3 "$(dirname "$0")/guitardle-daypuzzle-gate.py"
 echo
-# Gate numbers 46 and 47 MINTED BY KEEPER 2026-08-15 (next free 48). Numbers come
-# from keeper, never from a lane — two lanes once both minted "9/9" and collided.
+# Gate numbers 46 and 47 MINTED BY KEEPER 2026-08-15. Numbers come from keeper,
+# never from a lane and never from this file — two lanes once both minted "9/9"
+# and collided.
+#
+# ⚠️ NEXT FREE IS 50, NOT 48. These notes said 48 and were stale within hours:
+# rebasing onto main brought back a GATE 49 (paired flag agreement), and 48 is
+# spoken for by a lane that has not merged yet — so it is invisible here, which
+# is exactly how the "9/9" collision happened. Do not read the next free number
+# off this file; ask keeper. Keeper said 50 on 2026-08-15.
 echo "=== GATE 46: compose media — abandon leaves ZERO orphans, each post its own library ==="
 # Ian, 2026-08-15: no orphans ("obviously"), and "each post has its own library".
 #
