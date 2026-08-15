@@ -299,8 +299,12 @@ final class Notifications
     }
 
     /** Recent-first feed for the modal, with actor identity hydrated for render. */
-    public static function listFor(string $uuid, int $limit = 30, int $offset = 0): array
+    public static function listFor(string $uuid, int $limit = 30, int $offset = 0, ?string $type = null): array
     {
+        // BACKLOG 11.6: an unknown type narrows to NOTHING rather than falling back
+        // to the whole list — a filter that silently ignores what it was given is how
+        // a member ends up bulk-clearing rows they never saw.
+        $typeClause = $type !== null ? ' AND n.type = :type' : '';
         $st = Db::pg()->prepare(
             "SELECT n.id, n.type, n.thread_id, n.connection_id, n.is_read, n.created_at,
                     n.target_kind, n.target_id, n.anchor_id, n.target_url, n.actor_count,
@@ -308,10 +312,11 @@ final class Notifications
                     a.slug AS actor_slug, a.avatar_url AS actor_avatar
                FROM notifications n
                LEFT JOIN users a ON a.uuid = n.actor_uuid
-              WHERE n.user_uuid = :u" . self::liveClause('n.') . "
+              WHERE n.user_uuid = :u" . self::liveClause('n.') . $typeClause . "
               ORDER BY n.created_at DESC
               LIMIT :lim OFFSET :off"
         );
+        if ($type !== null) $st->bindValue(':type', $type);
         $st->bindValue(':u', $uuid);
         $st->bindValue(':lim', $limit, \PDO::PARAM_INT);
         $st->bindValue(':off', $offset, \PDO::PARAM_INT);
@@ -538,6 +543,87 @@ final class Notifications
         );
         $st->execute([':v' => $viewerUuid]);
         return $st->rowCount();
+    }
+
+    /**
+     * BACKLOG 11.6 — the types a member may filter by and bulk-clear.
+     *
+     * The union of TYPES (push) and HUB_TYPES (feed events), which is exactly the
+     * set `notifications_type_check` allows. It is written out rather than derived
+     * so a reader can see it; the gate asserts it still EQUALS the live constraint,
+     * because a type added to the database and not here would be invisible to the
+     * filter and therefore unclearable — the member would see rows they had no way
+     * to sweep.
+     */
+    public const FILTER_TYPES = [
+        'message',
+        'connection_request',
+        'connection_accept',
+        'forum.reply_to_topic',
+        'forum.reply_to_reply',
+        'forum.mention',
+        'reaction.on_post',
+        'forum.followed_topic',
+    ];
+
+    /** Is filter/bulk-by-type live? Member-visible, so OFF by default. */
+    public static function typeFilterEnabled(): bool
+    {
+        return Flags::bool('notifications', 'filter_and_bulk_by_type');
+    }
+
+    /**
+     * Validate a caller-supplied type. Returns the type, or NULL for absent/unknown.
+     *
+     * ⚠️ A NULL here must never be read as "all". The bulk endpoints below require a
+     * non-null type and 400 otherwise — the same rule the id-less DELETE already
+     * follows, and for the same reason: a malformed request must not be able to
+     * clear more than it named.
+     */
+    public static function filterType($t): ?string
+    {
+        return (is_string($t) && in_array($t, self::FILTER_TYPES, true)) ? $t : null;
+    }
+
+    /**
+     * DELETE every row of ONE type for ONE member. Owner-scoped and type-scoped in
+     * the same WHERE — there is no code path here that can widen to another member
+     * or another type, which is the property the gate exists to hold.
+     */
+    public static function deleteAllOfType(string $viewerUuid, string $type): int
+    {
+        if (self::filterType($type) === null) return 0;      // refuse, never widen
+        $st = Db::pg()->prepare(
+            'DELETE FROM notifications WHERE user_uuid = :v AND type = :t'
+        );
+        $st->execute([':v' => $viewerUuid, ':t' => $type]);
+        return $st->rowCount();
+    }
+
+    /** DISMISS every row of ONE type for ONE member — the ruled counterpart. */
+    public static function dismissAllOfType(string $viewerUuid, string $type): int
+    {
+        if (self::filterType($type) === null) return 0;      // refuse, never widen
+        $st = Db::pg()->prepare(
+            'UPDATE notifications SET dismissed_at = now()
+              WHERE user_uuid = :v AND type = :t AND dismissed_at IS NULL'
+        );
+        $st->execute([':v' => $viewerUuid, ':t' => $type]);
+        return $st->rowCount();
+    }
+
+    /** Per-type counts for the filter chips. Live rows only, same clause as the bell. */
+    public static function countsByType(string $viewerUuid): array
+    {
+        $st = Db::pg()->prepare(
+            "SELECT n.type, count(*) AS n FROM notifications n
+              WHERE n.user_uuid = :v" . self::liveClause('n.') . "
+              GROUP BY n.type"
+        );
+        $st->execute([':v' => $viewerUuid]);
+        $out = [];
+        foreach ($st->fetchAll() as $r) $out[(string)$r['type']] = (int)$r['n'];
+        return $out;
     }
 
     /**
