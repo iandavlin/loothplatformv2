@@ -50,6 +50,10 @@ return array(
 	 * /compose/ recorded BEFORE the feature existed — not against the weaker
 	 * "nothing was rendered".
 	 */
-	// ON 2026-08-15 late: Ian's item-5 'Do it' after his looks (light + dark passes)
-	'enabled' => true,
+	// Tracked default FALSE. dev2 runs compose ON via env[LG_FC_PREVIEW]=1 in
+	// the looth-dev FPM pool (Ian's item-5 'Do it' 8/15, light + dark passes) —
+	// kept out of this tracked file because ~1,820 live members hold the
+	// edit_posts+upload_files pair, so a live pull of a tracked true IS a
+	// member launch. The live flip is an explicit paste line, Ian's to run.
+	'enabled' => false,
 );
