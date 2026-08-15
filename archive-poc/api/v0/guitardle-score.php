@@ -320,14 +320,28 @@ if ($action === 'reveal' || $action === 'guess') {
              ON CONFLICT (wp_user_id, play_date) DO NOTHING');
         $ins->execute([$uid, $playDate, $pid, !empty($body['hardcore']) ? 'true' : 'false']);
 
+        // ── FOR UPDATE, and this is not belt-and-braces ──────────────────
+        // Read-modify-write on resume_state was racy, and the race was
+        // EXPLOITABLE: fire N reveals at once, every one reads the same state
+        // and every one returns ITS OWN positions -- so the player sees N
+        // letters -- but only the last write survives, so the server charges
+        // for ONE move. N reveals for the price of one is precisely the forgery
+        // this endpoint exists to stop. Locking the row serialises them, so each
+        // reveal reads the previous one's result and pays for itself.
+        $pdo->beginTransaction();
         $sel = $pdo->prepare(
             'SELECT moves, hardcore, resume_state FROM guitardle_results
-             WHERE wp_user_id = ? AND play_date = ?::date');
+             WHERE wp_user_id = ? AND play_date = ?::date
+             FOR UPDATE');
         $sel->execute([$uid, $playDate]);
         $row = $sel->fetch(PDO::FETCH_ASSOC);
-        if (!$row) lg_gdle_json(['ok' => false, 'error' => 'no_session'], 500);
+        if (!$row) {
+            $pdo->rollBack();
+            lg_gdle_json(['ok' => false, 'error' => 'no_session'], 500);
+        }
         if ($row['moves'] !== null) {
             // Already finished today. Never re-judged, never re-scored.
+            $pdo->rollBack();
             lg_gdle_json(['ok' => false, 'error' => 'already_played'], 409);
         }
 
@@ -340,15 +354,18 @@ if ($action === 'reveal' || $action === 'guess') {
         if ($action === 'reveal') {
             $letter = strtoupper(trim((string) ($body['letter'] ?? '')));
             if (!preg_match('/^[A-Z]$/', $letter)) {
+                $pdo->rollBack();
                 lg_gdle_json(['ok' => false, 'error' => 'bad_request'], 400);
             }
             $isVowel = in_array($letter, LG_GDLE_VOWELS, true);
             if (in_array($letter, $revealed, true)) {
+                $pdo->rollBack();
                 lg_gdle_json(['ok' => false, 'error' => 'already_revealed'], 409);
             }
             // Hardcore's cap is enforced HERE, not in the browser, so claiming
             // hardcore for the 2x and then over-revealing is not a thing.
             if ($hardcore && $moves >= lg_gdle_move_cap($phrase)) {
+                $pdo->rollBack();
                 lg_gdle_json(['ok' => true, 'capped' => true, 'moves' => $moves,
                               'cap' => lg_gdle_move_cap($phrase)]);
             }
@@ -369,6 +386,7 @@ if ($action === 'reveal' || $action === 'guess') {
             $up->execute([json_encode(['revealed' => array_values($revealed),
                                        'purchased' => array_values($purchased),
                                        'moves' => $moves]), $uid, $playDate]);
+            $pdo->commit();
             lg_gdle_json(['ok' => true, 'letter' => $letter, 'positions' => $positions,
                           'purchased' => array_values($purchased), 'moves' => $moves,
                           'cap' => lg_gdle_move_cap($phrase), 'hardcore' => $hardcore]);
@@ -386,6 +404,7 @@ if ($action === 'reveal' || $action === 'guess') {
         $fin->execute([$won ? 'true' : 'false', $moves,
                        isset($body['streak']) ? max(0, (int) $body['streak']) : 0,
                        $hardcore ? 'true' : 'false', $pid, $uid, $playDate]);
+        $pdo->commit();
         // streak stays client-reported: it is DISPLAY data the board never reads
         // (guitardle-results.pg.sql says so), and a real streak is derivable from
         // (wp_user_id, play_date, won) whenever the board wants one.
@@ -393,6 +412,7 @@ if ($action === 'reveal' || $action === 'guess') {
                       'won' => $won, 'moves' => $moves, 'hardcore' => $hardcore,
                       'phrase' => $phrase]);   // revealed only now the game is over
     } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
         error_log('[lg-guitardle] ' . $action . ': ' . $e->getMessage());
         lg_gdle_json(['ok' => false, 'error' => 'server_error'], 500);
     }
