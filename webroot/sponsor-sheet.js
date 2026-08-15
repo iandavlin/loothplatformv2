@@ -45,7 +45,7 @@
   // LG_DARK_BORDER_FIX — see app-settings.js for the full why (same value,
   // independent local copy per file; dark-anon-sweep lane, backlog 21, gate
   // 36). Held OFF pending Ian's phone pass.
-  var LG_DARK_BORDER_FIX = false;
+  var LG_DARK_BORDER_FIX = true;  // ON 2026-08-15: Ian phone pass "dark mode good" — completing the flip keeper began (gate 49)
   var DARK_BORDER = LG_DARK_BORDER_FIX ? '#767c76' : '#333833';
 
   var SHEET_ID = 'looth-spon-sheet';

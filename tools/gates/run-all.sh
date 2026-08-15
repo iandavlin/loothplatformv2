@@ -951,6 +951,50 @@ echo "=== GATE 43: wp-admin never renders the PWA offline shell ==="
 # failure must STILL get the shell, or "intercept nothing" scores full marks by
 # breaking offline support for everybody.
 run "sw-admin-bypass" python3 "$(dirname "$0")/sw-admin-bypass-gate.py"
+echo "=== GATE 45: contrast defects that fail in BOTH themes ==="
+# Number 45 ASSIGNED BY KEEPER 2026-08-15, verified free on origin/main before
+# use. Lanes do not mint gate numbers — two have collided doing it.
+#
+# WHY IT IS SEPARATE FROM 36. The dark-anon sweep kept surfacing findings that
+# were not dark defects at all: a near-white foreground on a HARDCODED mid-tone
+# fill with no dark variant, so it renders identically in either theme. Three
+# instances found with the same instrument — bb_mirror_avatar()'s crc32 palette
+# (3 of 8 colours fail), loothalong.js's crew avatars (#b98a3e at 2.85:1
+# against the 3:1 icon bar), and the PWA install button's LIGHT half (3.12:1)
+# whose dark half gate 36's wave already fixed. By the craft law a class found
+# twice becomes a gate; this reached three. Fixing any of it behind a flag
+# named "dark" would mislabel it permanently, which is the whole reason for a
+# second gate rather than a wider first one.
+#
+# Measures each surface TWICE — resolved light and resolved dark, same probe as
+# gate 36 and the sweep — and counts an element only when it fails in BOTH,
+# matched by selector. Owns the six anon surfaces gate 36 does not, so the two
+# gates never both own a page. Ratchet, same as 36: asserts no regression past
+# BASELINE rather than zero, because the class is larger than one wave and a
+# zero assertion would block every other lane's train for disclosed debt.
+run "theme-independent-contrast" python3 "$(dirname "$0")/theme-independent-contrast-gate.py"
+
+echo "=== GATE 49: every copy of a paired feature flag agrees ==="
+# Number 49 ASSIGNED BY KEEPER 2026-08-15, verified free on origin/main first.
+#
+# A DEFECT I DESIGNED IN. The dark-anon flags are per-file module-local vars,
+# not one shared window global — correct, and it stays: pwa.js documents that a
+# dynamically-injected defer script has no guaranteed order against the
+# sync-injected ones, so a shared window.LG_* would be read before it was
+# written on some loads. Local copies have no such race. What they DO have is
+# this: I defended the pattern with a comment calling it "one grep away from
+# flipping every copy at once", and on 2026-08-15 the flip happened without the
+# grep. LG_DARK_BORDER_FIX went true in app-settings.js and stayed false in four
+# other files, so dark mode served TWO border colours at once, side by side on
+# hub surfaces where both files style the same page. Worse than either whole
+# state. A design whose safety depends on a comment being obeyed is not safe;
+# this is that comment turned into a mechanical check.
+#
+# Asserts only that copies AGREE — never that a flag is on or off — so it stays
+# correct as flags flip in either direction and nobody edits it to ship a
+# feature. Static source read: no browser, no network, cannot flake. Red-fired
+# against the REAL live half-state before the fix, not a synthetic one.
+run "paired-flag-agreement" python3 "$(dirname "$0")/paired-flag-agreement-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
