@@ -48,8 +48,12 @@ if ( ! defined( 'LGPO_PLUGIN_URL' ) )  define( 'LGPO_PLUGIN_URL', plugin_dir_url
 // Light is deliberately untouched; #666 there is correct and moving it would
 // be an unmeasured change to a passing surface.
 //
-// Member-visible, so DEFAULTED OFF pending Ian's pass, consistent with every
-// other member-visible fix in this wave (cf. LG_DARK_BADGE_INK_FIX). OFF emits
+// DEFAULTED ON, 2026-08-15, on keeper's explicit call: all four states were
+// measured before the flip (OFF 1 finding at 2.92:1, ON 0 findings, theme=dark
+// confirmed on each), and Ian's standing dark mandate covers this family;
+// keeper carries the attribution. The flag is kept rather than inlined so the
+// fix can be switched off without a revert, and so gate 53 can assert BOTH
+// states rather than a hardcoded one. OFF emits
 // the empty string, and that it is a BYTE-IDENTICAL no-op was proven rather
 // than assumed: this exact template region was rendered under both flag states
 // and diffed against the same region rendered from HEAD (identical for OFF,
@@ -66,8 +70,10 @@ if ( ! defined( 'LG_DARK_ONBOARD_SUBTEXT_FIX' ) ) {
     if ( $lgpo_subtext_flag === false && isset( $_SERVER['LG_DARK_ONBOARD_SUBTEXT_FIX'] ) ) {
         $lgpo_subtext_flag = $_SERVER['LG_DARK_ONBOARD_SUBTEXT_FIX'];
     }
-    define( 'LG_DARK_ONBOARD_SUBTEXT_FIX', in_array( (string) $lgpo_subtext_flag, array( '1', 'true', 'on', 'yes' ), true ) );
-    unset( $lgpo_subtext_flag );
+    // Default ON; an explicit falsey env value is the only way to turn it off.
+    $lgpo_subtext_off = in_array( (string) $lgpo_subtext_flag, array( '0', 'false', 'off', 'no' ), true );
+    define( 'LG_DARK_ONBOARD_SUBTEXT_FIX', ! $lgpo_subtext_off );
+    unset( $lgpo_subtext_flag, $lgpo_subtext_off );
 }
 
 // Alias for the LGMS\* code paths (Stripe poller, arbiter, REST endpoints).
