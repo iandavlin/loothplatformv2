@@ -6,7 +6,9 @@ per-item alerts, a modal per item, and an embedded chat (§1b supersedes the
 earlier desk-plus-list). These are the things that decide the *build*, found
 while drawing it.
 
-Mocks: `/footer-mockups/wip-board/` (round 1, shape), `rank.html` (round 2,
+Mocks: **`concept.html` (the CONCEPT — the board as Ian's primary interface,
+the one to build toward)**, `/footer-mockups/wip-board/` (round 1, shape),
+`rank.html` (round 2,
 drag-to-rank), `board.html` (round 3, one surface) and
 **`final.html` (round 4 — THE ONE TO BUILD; supersedes 1–3)**.
 
@@ -56,6 +58,41 @@ awaiting Ian.
 
 ---
 
+## 0b. THE AMBITION RAISED — the board as Ian's primary interface
+
+Ian, 2026-08-15: *"a practical board that I would like to use to great effect.
+Maybe even transition away from vs."* That changes the target: not a status page
+but the place he works from. Concept drawn at `concept.html`; five principles,
+all visible on it:
+
+1. **The top answers three questions** before he scrolls — what waits on him,
+   who is working, and **what changed since he last looked**. The digest is
+   derived from git + board + stamp history, never typed.
+2. **Plain English everywhere.** Project names, not lane names. Relative times.
+   **No item numbers on the page at all** — they stay in the file, where they
+   are our problem and not his.
+3. **Every row wears its single next action** without a click, in words: *set
+   the price*, *look at it*, *being worked on*, *nothing needed*. The page is
+   readable without touching anything, which is what makes it a desk rather
+   than a dashboard.
+4. **The four things that would let VS Code go:** decision boxes as tappable
+   buttons on the desk (always with a *Something else…*), a chat per item,
+   pictures opening in the page, and live-command blocks with a copy button and
+   somewhere to paste the output back.
+5. **A trust chip** beside the stamp age — *all clear*, or the number red and
+   their names. A stale page must not be able to look healthy.
+
+**Build order, and why:** the desk and its buttons first. That is the part that
+changes his day; everything else is presentation of work he can already see.
+
+**Two judgement calls made in the drawing.** The desk comes first on the phone
+rather than the digest, because on a phone he is nearly always checking one
+thing. And the digest states what it filtered — *"81 changes reached the site
+today. These are the four you'd care about"* — rather than implying four is all
+that happened.
+
+---
+
 ## 1. The hard constraint: the board cannot commit the obvious way
 
 **`~/loothplatformv2-clean` is the SERVING CHECKOUT and only ever pulls.** That
@@ -96,6 +133,34 @@ Ian collapsed the desk-plus-list layout into **one surface**:
 3. clicking an item *"opens a modal with the work for me to do or the decisions
    for me to make"* — mockups, decision buttons, branches, notes, in the overlay;
 4. an **embedded Claude chat** in the page, *"like there is on vs code"*.
+
+### TWO CHATS, not one (Ian, 2026-08-15 — supersedes the shrunken button)
+
+His words: *"There should be a general chat on the page for overview and then
+sub chats on each board item/project."* So the side panel does **not** shrink to
+a button. There are two distinct surfaces, and they answer different questions:
+
+| | **General chat** | **Per-item threads** |
+|---|---|---|
+| Question it answers | *"How is everything?"* — overview, cross-cutting, "what should I look at first", anything with no obvious home | *"Why is THIS stuck?"* — bound to one item forever |
+| Where it lives | A full surface on the page, not a demoted control | A tab inside each item's modal |
+| What it leaves behind | A running conversation about the whole board | The item's own history, the way PR comments stay with the code |
+
+**Both bridge to keeper**, over the same `msg` relay, for the same reason: it is
+the brain already running the lanes, so it can answer *"how is everything"*
+without being briefed first.
+
+**Why two rather than one clever one.** A single chat would force every question
+to be about something, and *"how's it all going?"* is the question he actually
+asks most. A per-item thread cannot hold that, and a general chat cannot hold
+*"why did we point the archive door at the Map?"* — which needs to be findable
+from the item three months later. Round 4's mock demoted the general chat to a
+button on the assumption that the item threads absorbed it; that assumption was
+wrong, and he corrected it.
+
+**Consequence for the build:** the general chat needs its own durable store
+(one running thread), separate from the per-item threads, and both need the same
+write fences as everything else that writes.
 
 ### The chat bridges to KEEPER, not to a fresh session
 

@@ -1,0 +1,9 @@
+{
+  "_note": "Census fixture for gate 50's conservation assertion. Taken 2026-08-15 by the backlog census (docs/BACKLOG-CENSUS-2026-08-15.md). The board must NEVER render fewer rows than the file has index items; this records what the file held when that was last verified, so a SHRINKING file is visible as a change rather than mistaken for a healthy board. Id 9 was renumbered to 32 (Advanced search) on 2026-08-15, so there are no known duplicates left; a NEW one appearing is now a finding.",
+  "taken": "2026-08-15",
+  "index_rows": 49,
+  "rows_rendered": 49,
+  "live_detail_sections": 7,
+  "archive_sections_not_on_board": 30,
+  "known_duplicate_ids": []
+}

@@ -23,9 +23,11 @@ use Throwable;
  * guessed later from a string they typed into Stripe. The lifecycle ingest
  * absorbs it into customers.metadata, where IdentityMatcher reads it.
  *
- * SINGLE TIER, SINGLE PRICE: the session sells exactly the price in
- * lgms_stripe_price_id (the looth3/Pro price). The request body chooses
- * nothing — there is no second Stripe tier, so there is nothing to choose.
+ * SINGLE TIER, TWO CADENCES: the session sells the configured monthly or
+ * yearly price for the one membership. The body may name a CADENCE and
+ * nothing else — never a price id, which is still resolved server-side from
+ * what an admin configured. Same tier either way; the choice is how often
+ * they pay.
  *
  * A logged-OUT visitor never reaches this endpoint (REST auth fails).
  * That is design §3.2's other half: they must land on create-account /
@@ -67,10 +69,28 @@ final class CheckoutRestController
      */
     public static function createSession( $req )
     {
-        $price = (string) get_option( StripeLifecycle::PRICE_OPT, '' );
+        // ONE TIER, TWO CADENCES (Ian 2026-08-15: "We need a monthly and a
+        // yearly price etc."). The body may choose HOW OFTEN they pay — and
+        // nothing else.
+        //
+        // NOTE WHAT IS STILL REFUSED: the body cannot name a price id. It names
+        // a cadence, which is looked up against the prices an admin actually
+        // configured. A member who posts a price id gets nothing, because the
+        // id never comes from them — that was the point of the original
+        // "the request body chooses nothing" rule and it survives intact.
+        $cadence = strtolower( trim( (string) ( $req->get_param( 'cadence' ) ?? '' ) ) );
+        if ( $cadence === '' ) {
+            $configured = \LGMS\StripePrice::configuredCadences();
+            $cadence    = $configured[0] ?? 'month';   // one configured = no choice to make
+        }
+        if ( ! array_key_exists( $cadence, \LGMS\StripePrice::CADENCES ) ) {
+            return new \WP_REST_Response( [ 'error' => 'Unknown billing cadence.' ], 400 );
+        }
+
+        $price = \LGMS\StripePrice::currentPriceId( $cadence );
         if ( $price === '' ) {
             return new \WP_REST_Response(
-                [ 'error' => 'Stripe membership price not configured.' ],
+                [ 'error' => 'Stripe membership price not configured for that cadence.' ],
                 503,
             );
         }

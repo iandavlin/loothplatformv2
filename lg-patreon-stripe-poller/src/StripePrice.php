@@ -48,8 +48,29 @@ use Throwable;
  */
 final class StripePrice
 {
-    /** Where NEW joins are pointed. Read by Wp\CheckoutRestController. */
+    /**
+     * The LEGACY single-price option. Kept as a read-only fallback for the
+     * MONTHLY slot so a box configured before cadences existed keeps working;
+     * nothing writes it any more.
+     */
     public const PRICE_OPT = StripeLifecycle::PRICE_OPT;
+
+    /**
+     * ONE TIER, TWO CADENCES (Ian, 2026-08-15: "We need a monthly and a yearly
+     * price etc." — his Patreon shape, 5/month or 60/year).
+     *
+     * Still a single tier: both prices sit under the SAME product and grant the
+     * same membership. The choice a member makes is how often they pay, not
+     * what they get — which is why the grant is still a constant and the poller
+     * still needs no price logic.
+     */
+    public const CADENCES = [ 'month' => 'Monthly', 'year' => 'Yearly' ];
+
+    /** One option per cadence, so neither can quietly overwrite the other. */
+    public static function priceOpt( string $cadence ): string
+    {
+        return 'lgms_stripe_price_' . $cadence;
+    }
 
     /** The single tier. Same ruling as StripeLifecycle::TIER — not a lookup. */
     public const TIER = StripeLifecycle::TIER;
@@ -78,10 +99,31 @@ final class StripePrice
     /* Reading the current state                                          */
     /* ------------------------------------------------------------------ */
 
-    /** The price NEW joins are pointed at, or '' when none is set (the shipped state). */
-    public static function currentPriceId(): string
+    /**
+     * The price NEW joins are pointed at for one cadence, or '' when unset
+     * (the shipped state for both).
+     *
+     * The legacy single option answers for MONTHLY only, and only when the
+     * monthly slot is empty — so an older box keeps selling what it was
+     * selling, and a configured monthly price always wins over it.
+     */
+    public static function currentPriceId( string $cadence = 'month' ): string
     {
-        return trim( (string) get_option( self::PRICE_OPT, '' ) );
+        $v = trim( (string) get_option( self::priceOpt( $cadence ), '' ) );
+        if ( $v === '' && $cadence === 'month' ) {
+            $v = trim( (string) get_option( self::PRICE_OPT, '' ) );   // legacy
+        }
+        return $v;
+    }
+
+    /** Every cadence that currently has a price, in offer order. */
+    public static function configuredCadences(): array
+    {
+        $out = [];
+        foreach ( array_keys( self::CADENCES ) as $c ) {
+            if ( self::currentPriceId( $c ) !== '' ) { $out[] = $c; }
+        }
+        return $out;
     }
 
     /**
@@ -92,9 +134,9 @@ final class StripePrice
      *
      * @return array{stripe_price_id:string,unit_amount_cents:int,currency:string,interval:?string,product_name:string}|null
      */
-    public static function currentPrice(): ?array
+    public static function currentPrice( string $cadence = 'month' ): ?array
     {
-        $id = self::currentPriceId();
+        $id = self::currentPriceId( $cadence );
         if ( $id === '' ) {
             return null;
         }
@@ -124,9 +166,9 @@ final class StripePrice
     }
 
     /** True when the option points at a price our own table has never heard of. */
-    public static function currentPriceIsOrphaned(): bool
+    public static function currentPriceIsOrphaned( string $cadence = 'month' ): bool
     {
-        return self::currentPriceId() !== '' && self::currentPrice() === null;
+        return self::currentPriceId( $cadence ) !== '' && self::currentPrice( $cadence ) === null;
     }
 
     /**
@@ -322,7 +364,7 @@ final class StripePrice
         }
 
         /* 3. Only now do new joins move. */
-        update_option( self::PRICE_OPT, $priceId, false );
+        update_option( self::priceOpt( $interval ), $priceId, false );
 
         Log::line( sprintf( "[%s] price set: %s (%d %s/%s) under %s\n",
             gmdate( 'c' ), $priceId, $cents, $currency, $interval, $product['stripe_product_id'] ) );
