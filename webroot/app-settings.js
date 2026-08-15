@@ -220,6 +220,29 @@
   // independently. See the rule itself for the full reasoning.
   var LG_DARK_EVENTS_LANDING_FIX = false;
 
+  // ---- LG_DARK_BADGE_INK_FIX (same lane/backlog, gate 36) --------------------
+  //
+  // .lg-chrome__badge (the notification count pips) is color:var(--lg-ink) on
+  // background:var(--lg-amber). --lg-amber is #ecb351 in BOTH themes — the dark
+  // THEMES block above re-declares the identical value — while --lg-ink flips.
+  // So light gets DARK ink on amber (6.58:1, fine) and dark gets NEAR-WHITE ink
+  // on the same amber: 1.51:1. The line right below this file's .lg-chrome rule
+  // is what lands it there, pinning --lg-ink to #e5e7e1 inside the header.
+  //
+  // THIS IS THE INVERSE OF THE INSTALL BUTTON, and the distinction is worth
+  // keeping straight because the two look identical from the outside — both are
+  // "near-white on a mid-tone brand fill". There, the FILL moved between themes
+  // and the ink stayed put, so the fix was theme-independent. Here the INK moves
+  // and the fill stays put, so the fix is dark-scoped and light must not be
+  // touched. I initially recorded this one as "likely both themes" and it was
+  // wrong; checked, not assumed.
+  //
+  // Pins the badge ink back to the LIGHT theme's own #323532 rather than
+  // inventing a value: 6.58:1 on the unchanged amber.
+  // MEMBER-VISIBLE (the pips are a signed-in surface) — OFF pending Ian's pass,
+  // same as every other member-visible fix in this wave.
+  var LG_DARK_BADGE_INK_FIX = false;
+
   function ensureDarkStyle() {
     if (document.getElementById(DARK_STYLE_ID)) return;
     var D = 'html[data-lguser-theme="dark"]';
@@ -257,6 +280,9 @@
       // links + icon buttons light up. NOTE: do NOT touch --lg-charcoal here — it's the
       // DARK background for the Edit btn / ADMIN badge (+ footer), with white text on top.
       D + ' .lg-chrome{--lg-ink:#e5e7e1!important;--lg-mute:#9aa097!important;--lg-line:#2c312d!important}',
+      (LG_DARK_BADGE_INK_FIX
+        ? D + ' .lg-chrome__badge{color:#323532!important}'
+        : ''),
       D + ' .lg-chrome__account{background:#1e2124!important;border-color:#2c312d!important}',
       // Edit btn + ADMIN badge use var(--lg-charcoal) as bg; the picked-Dark theme set
       // that token light → light-bg + white text = invisible. Pin them to a dark chip.
