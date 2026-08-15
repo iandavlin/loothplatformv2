@@ -2628,6 +2628,25 @@ html[data-lguser-theme="dark"] .ntm-overlay {
      overruling it. */
   flex: 0 0 auto;
 }
+/* ── DEDICATED LOOTHPRINT MODAL (Ian 2026-08-15) ─────────────────────────────
+   Reuses the .ntm-overlay/.ntm-dialog shell so it IS the same modal idiom, with
+   its own id so its state is entirely separate — the two overlays share styling
+   and nothing else. */
+.lpm-dialog { display: flex; flex-direction: column; }
+.lpm-frame {
+  width: 100%;
+  border: 0;
+  display: block;
+  /* Starting height only — forums.js §type-toggle fit()s it to the content so
+     the DIALOG scrolls and the frame never does. One scrollbar, not two (Ian,
+     backlog 10), and nothing clipped below the fold. */
+  min-height: 320px;
+  background: transparent;
+  flex: 0 0 auto;
+}
+.lpm-row { justify-content: flex-end; }
+.lpm-dialog { max-height: 88vh; overflow-y: auto; }
+
 
 /* State panels */
 .ntm-state--loading {

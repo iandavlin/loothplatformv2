@@ -346,12 +346,13 @@ function bb_mirror_new_topic_modal(): void
       <button type="button" class="ntm-typetoggle__opt" data-ntm-type="loothprint"
               role="tab" aria-selected="false">Loothprint</button>
     </div>
-    <?php /* NO EMBEDDED FRAME. Ian 2026-08-15: the Loothprint form must not share
-             this modal. Tapping Loothprint navigates to the standalone /compose/
-             page (forums.js §type-toggle) — which removes the stacked-furniture
-             race (ntmSetState('authed') re-showing the discussion wizard under
-             the frame) and the signed-out-embed class in one move, rather than
-             tidying a surface that should not be here. */ ?>
+    <?php /* NOTHING LOOTHPRINT-SHAPED LIVES IN THIS MODAL. Ian 2026-08-15:
+             "Cant it just replace the discussion modal?" — tapping Loothprint
+             CLOSES this one and opens the dedicated #lpm-overlay below. The two
+             can never be open at once, which is what kills the stacked-furniture
+             race for good: ntmSetState('authed') re-shows THIS form on a timer
+             it does not coordinate with, so the only safe answer is that the
+             other surface is not in here to be stacked under. */ ?>
 <?php endif; ?>
 
     <div class="ntm-state ntm-state--loading" id="ntm-loading" hidden>
@@ -463,6 +464,45 @@ function bb_mirror_new_topic_modal(): void
     </form>
   </div>
 </div>
+
+<?php /* ── DEDICATED LOOTHPRINT MODAL (Ian 2026-08-15) ───────────────────────────
+     "Cant it just replace the discussion modal?" — so it does: the type toggle
+     closes one overlay and opens the other. Same modal idiom over the hub, its
+     own chrome, nothing shared with the wizard, and structurally impossible for
+     both to be open (forums.js §type-toggle hides the sibling before showing).
+
+     THE FORM IS AN IFRAME, and that is not the thing Ian objected to. His
+     objection was that the Loothprint form SHARED the discussion modal and left
+     wizard furniture stacked underneath; a dedicated overlay removes that.
+     Injecting the furniture-free markup instead would give a DEAD form:
+     measured, the embed=1 page depends on acf-input (28 refs), acf.js, select2,
+     media-views, acf-pro and jQuery, and the hub carries ZERO of them — it
+     cannot, being bb-mirror, a separate app with no WordPress to run wp_head().
+     The photo picker and the taxonomy chips would look right and do nothing.
+
+     Rendered only when both halves agree, same condition as the toggle, so with
+     the flag off this markup is ABSENT rather than hidden. */
+if (function_exists('lg_bb_mirror_can_post') && lg_bb_mirror_can_post()
+    && function_exists('lg_frontend_compose_enabled') && lg_frontend_compose_enabled()): ?>
+<div class="ntm-overlay lpm-overlay" id="lpm-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="lpm-heading">
+  <div class="ntm-backdrop" id="lpm-backdrop"></div>
+  <div class="ntm-dialog lpm-dialog">
+    <h2 class="ntm-heading" id="lpm-heading">New post</h2>
+    <div class="ntm-typetoggle" id="lpm-typetoggle" role="tablist" aria-label="What are you posting?"
+         data-compose-base="<?= htmlspecialchars(LG_FC_COMPOSE_BASE) ?>">
+      <button type="button" class="ntm-typetoggle__opt" data-lpm-type="discussion"
+              role="tab" aria-selected="false">Discussion</button>
+      <button type="button" class="ntm-typetoggle__opt is-on" data-lpm-type="loothprint"
+              role="tab" aria-selected="true">Loothprint</button>
+    </div>
+    <iframe class="lpm-frame" id="lpm-frame" title="Share a Loothprint"
+            referrerpolicy="same-origin"></iframe>
+    <div class="ntm-row lpm-row">
+      <button type="button" class="ntm-cancel" id="lpm-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 
 <!-- Feed reply modal — opened by a card's "Reply" button (see forums.js §4b). -->
 <div class="ntm-overlay" id="frm-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="frm-heading">

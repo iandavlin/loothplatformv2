@@ -6200,60 +6200,110 @@ function lgFollowEnabled() {
 /* ── COMPOSER TYPE TOGGLE — Discussion <-> Loothprint ─────────────────────────
  *
  * Ian 2026-08-09: "toggle between discussion and loothprint… two different forms."
- * Ian 2026-08-15, after seeing it: discussion stays the DEFAULT — "that is what
- * most posting will be" — and "I'd like the loothprint form not to share the
- * modal - or figure out how to make the modal not have them competing or
- * generating spacing even if vis 0".
+ * Ian 2026-08-15, seeing them share one dialog: "I'd like the loothprint form not
+ * to share the modal". Then, seeing it open a whole new page: "Cant it just
+ * replace the discussion modal ?"
  *
- * SO THE IFRAME IS GONE. Tapping Loothprint LEAVES the modal and opens the
- * standalone /compose/ page full-screen. That is not a workaround, it is the
- * repair: two surfaces sharing one dialog produced two defects that a tidier
- * embed would not have fixed.
+ * So it replaces it. Tapping Loothprint CLOSES #ntm-overlay and opens the
+ * dedicated #lpm-overlay; tapping Discussion does the reverse. Same modal idiom
+ * over the hub, its own chrome, nothing shared with the wizard.
  *
- *   1. STACKED FURNITURE. ntmSetState('authed') sets ntmForm.hidden = false
- *      unconditionally, knowing nothing about the active type. The auth probe
- *      resolves ~2-4s after the composer opens, so a member who taps Loothprint
- *      before it lands gets the discussion wizard RE-SHOWN underneath the frame:
- *      step rail, forum picker and Cancel/Next all visible with the Loothprint
- *      form. Measured on the live serve — tab reads "loothprint" while the
- *      discussion form, rail, footer and forum list are all visible at t+4s.
- *      That is Ian's screenshot. It is a race, which is why it looked fine to a
- *      test that waited before clicking.
- *   2. SIGNED-OUT EMBED. A frame is a separate navigation and does not always
- *      carry what the parent carries.
+ * SWAP, NEVER SHOW: every path hides the sibling BEFORE showing the target, so
+ * "both open" is not a state this code can reach. That is the whole point.
+ * The defect it retires: ntmSetState('authed') sets ntmForm.hidden = false
+ * unconditionally, knowing nothing about the active type, and the auth probe
+ * resolves 2-4s AFTER the composer opens — so tapping Loothprint inside that
+ * window used to RE-SHOW the discussion wizard under the Loothprint form (step
+ * rail, forum picker, Cancel/Next: Ian's screenshot). A surface that is not in
+ * that modal cannot be stacked under by a race.
  *
- * With no embedded surface there is nothing to stack, nothing to keep in sync
- * with an auth probe, and nothing to size. The standalone page is also the
- * surface already verified end-to-end.
+ * WHY THE FORM IS AN IFRAME AND NOT INJECTED MARKUP — measured, not assumed:
+ * the embed=1 page depends on acf-input (28 references), acf.js, select2,
+ * media-views, acf-pro and jQuery, and the hub carries ZERO of them. It cannot
+ * carry them: the hub is bb-mirror, a separate app with no WordPress to run
+ * wp_head(). Injected markup would render a photo picker and taxonomy chips
+ * that look right and do nothing — the nested-form failure this lane already hit
+ * once. The iframe was never what Ian objected to; SHARING THE MODAL was.
  *
- * WHY A FULL NAVIGATION AND NOT A ROUTE SWAP: the compose route prints ACF's
- * gallery, media modal and select2 via wp_head(); the hub has none of them.
- * Injecting that markup gives a photo picker that silently does nothing — the
- * failure this lane already hit once with the nested-form bug.
- *
- * Still self-contained: it touches the composer only through the DOM and never
- * reaches into its closure, so the discussion flow — the half that must not
- * regress — cannot be perturbed. Flag off, the markup is absent and every line
- * below no-ops on the first querySelector.
+ * Still self-contained: touches both composers only through the DOM, never their
+ * closures, so the discussion flow cannot be perturbed. Flag off, the markup is
+ * absent and every line below no-ops on the first querySelector.
  */
 (function () {
-  var wrap = document.getElementById('ntm-typetoggle');
-  if (!wrap) return;                              // flag off, or cannot post
+  var ntmWrap = document.getElementById('ntm-typetoggle');
+  var lpm     = document.getElementById('lpm-overlay');
+  if (!ntmWrap || !lpm) return;                   // flag off, or cannot post
 
-  var base = wrap.getAttribute('data-compose-base') || '/compose/';
+  var ntm    = document.getElementById('ntm-overlay');
+  var frame  = document.getElementById('lpm-frame');
+  var lpmTog = document.getElementById('lpm-typetoggle');
+  var cancel = document.getElementById('lpm-cancel');
+  var back   = document.getElementById('lpm-backdrop');
+  var base   = ntmWrap.getAttribute('data-compose-base') || '/compose/';
+  var loaded = false;
 
-  wrap.addEventListener('click', function (e) {
+  /* Size the frame to its CONTENT so the dialog scrolls, not the frame. A frame
+     that scrolls inside a scrolling dialog is Ian's cramped-modal complaint
+     (backlog 10) made worse — and at a fixed height the form is CLIPPED: the
+     licence and the Post button sit below the fold with no way to reach them.
+     Same-origin, so the height is read directly rather than negotiated over
+     postMessage. */
+  function fit() {
+    try {
+      var d = frame.contentDocument;
+      if (!d || !d.body) return;
+      var h = Math.max(d.body.scrollHeight, d.documentElement.scrollHeight);
+      if (h > 0) frame.style.height = h + 'px';
+    } catch (e) { /* same-origin here; never throw at the member */ }
+  }
+
+  function closeLoothprint() {
+    lpm.hidden = true;
+    document.body.classList.remove('ntm-active');
+  }
+
+  function openLoothprint() {
+    /* Hide the sibling FIRST. Showing first would open a window — however
+       short — in which both are up, which is the state this exists to prevent. */
+    if (ntm) ntm.hidden = true;
+    if (!loaded) {
+      /* embed=1 is the furniture-free variant: the form without the site chrome,
+         which is what belongs inside a modal. */
+      frame.src = base + '?type=loothprint&embed=1';
+      frame.addEventListener('load', fit);
+      loaded = true;
+    }
+    lpm.hidden = false;
+    document.body.classList.add('ntm-active');
+  }
+
+  function openDiscussion() {
+    closeLoothprint();
+    if (!ntm) return;
+    ntm.hidden = false;
+    document.body.classList.add('ntm-active');
+  }
+
+  ntmWrap.addEventListener('click', function (e) {
     var b = e.target.closest('.ntm-typetoggle__opt');
     if (!b) return;
     e.preventDefault();
-    if (b.getAttribute('data-ntm-type') !== 'loothprint') return;   // discussion IS the modal
-
-    /* Hand the standalone page the way BACK, so returning to Discussion reopens
-       the wizard where the member left it — and so it works unchanged under the
-       lane-preview prefix, where the hub is not at /hub/. Path only: the page
-       refuses anything with a scheme or host, so this cannot become an open
-       redirect. */
-    var back = location.pathname + (location.pathname.indexOf('?') > -1 ? '&' : '?') + 'compose=1';
-    location.href = base + '?type=loothprint&back=' + encodeURIComponent(back);
+    if (b.getAttribute('data-ntm-type') === 'loothprint') openLoothprint();
   });
+
+  if (lpmTog) lpmTog.addEventListener('click', function (e) {
+    var b = e.target.closest('.ntm-typetoggle__opt');
+    if (!b) return;
+    e.preventDefault();
+    if (b.getAttribute('data-lpm-type') === 'discussion') openDiscussion();
+  });
+
+  if (cancel) cancel.addEventListener('click', closeLoothprint);
+  if (back)   back.addEventListener('click', closeLoothprint);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !lpm.hidden) closeLoothprint();
+  });
+
+  /* The form grows as photos are added; re-measure only while it is on screen. */
+  setInterval(function () { if (!lpm.hidden) fit(); }, 700);
 })();

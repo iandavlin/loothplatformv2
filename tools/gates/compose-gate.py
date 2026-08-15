@@ -226,49 +226,58 @@ def main():
         c_allow = cookie_for(args.allowed)
         c_deny = cookie_for(args.denied)
 
-        # ---- 9. THE SWAP IS A NAVIGATION, NOT AN EMBED (Ian 2026-08-15).
+        # ---- 9. THE TWO COMPOSERS ARE SEPARATE MODALS (Ian 2026-08-15).
         #
-        # His screenshot IS the defect: with the Loothprint tab active, the discussion
-        # wizard's furniture — step rail, forum picker, Cancel/Next — was still on
-        # screen BELOW the embedded form. Both surfaces at once.
+        # "Cant it just replace the discussion modal ?" — so the Loothprint form
+        # lives in its OWN overlay, and the toggle closes one and opens the other.
         #
-        # Root cause was not layout. ntmSetState('authed') sets ntmForm.hidden = false
-        # unconditionally, knowing nothing about the active type, and the auth probe
-        # resolves 2-4s AFTER the composer opens. Tap Loothprint inside that window
-        # and the wizard is re-shown under the frame. Measured on the live serve: the
-        # tab reads "loothprint" while form, rail, footer and forum list are ALL
-        # visible at t+4s. It is a RACE — which is why it looked fine to a check that
-        # waited before clicking, and why asserting "the form is hidden" would have
-        # passed while Ian was staring at the bug.
+        # WHAT THIS IS DEFENDING. Ian's screenshot: with the Loothprint tab
+        # active, the discussion wizard's furniture — step rail, forum picker,
+        # Cancel/Next — was still on screen below the embedded form.
+        # ntmSetState('authed') sets ntmForm.hidden = false UNCONDITIONALLY,
+        # knowing nothing about the active type, and the auth probe resolves 2-4s
+        # AFTER the composer opens. Tap Loothprint inside that window and the
+        # wizard is re-shown under the form. Measured on the live serve: the tab
+        # read "loothprint" while form, rail, footer and forum list were ALL
+        # visible at t+4s. A RACE — which is why a check that waited before
+        # clicking called it fine, and why "the form is hidden" would have passed
+        # while Ian was looking at the bug.
         #
-        # So this is STRUCTURAL, not timing-dependent: the composer must ship NO
-        # embedded compose surface. With no second surface there is nothing to stack,
-        # nothing to sync with an auth probe, and no window where both are visible.
+        # So the assertion is STRUCTURAL and cannot be raced: the discussion
+        # overlay must contain NO compose surface of its own. A surface that is
+        # not inside that modal cannot be stacked under by a timer.
         #
-        # IT READS THE PREVIEW HUB, NOT /hub/. With the flag off the toggle is not
-        # emitted at all, so "no iframe" on /hub/ is TRUE ON A PAGE WITH NO COMPOSER
-        # — the vacuous-absence trap. The preview arms the flag, so it is the only
-        # surface where this assertion has a subject. No toggle ⇒ SKIPPED, not passed.
+        # AS AN ALLOWED MEMBER, on the PREVIEW: with the flag off no composer is
+        # emitted at all and an anon fetch sees none either, so "no iframe" would
+        # be true of a page with no composer — the vacuous-absence trap. No
+        # toggle ⇒ SKIPPED, never a pass.
         #
-        # RED-FIRST: run against the pre-8/15 markup (which carried
-        # <iframe id="ntm-lpframe"> beside the toggle) and this fails.
-        # AS AN ALLOWED MEMBER: the toggle only renders for someone who can post,
-        # so an anon fetch sees no toggle and the assertion skips itself into
-        # uselessness — the same vacuity it is written to avoid.
+        # RED-FIRST: put any compose frame back inside #ntm-overlay and this
+        # fails.
         hub_body, hub_code = fetch(env, "/preview/frontend-compose/hub/?compose=1", c_allow)
         if hub_code != 200:
             print(f"  [9] SKIPPED — the preview hub answered {hub_code}, not 200")
         elif "ntm-typetoggle" not in hub_body:
-            print("  [9] SKIPPED — no type toggle on the preview hub, so there is "
+            print("  [9] SKIPPED — no composer on the preview hub, so there is "
                   "nothing to assert (a pass here would be vacuous)")
-        elif "ntm-lpframe" in hub_body:
-            findings.append(
-                "[9] the composer still ships an EMBEDDED compose surface "
-                "(ntm-lpframe). Two surfaces in one modal is the stacked-furniture "
-                "defect: the auth probe re-shows the discussion wizard under it.")
         else:
-            print("  [9] toggle present and NO embedded surface — the swap is a navigation")
-
+            # The discussion overlay, from its id to the start of the next overlay.
+            i = hub_body.find('id="ntm-overlay"')
+            j = hub_body.find('id="lpm-overlay"')
+            disc = hub_body[i:j] if (i != -1 and j > i) else hub_body[i:i + 40000]
+            if "<iframe" in disc or "lpm-frame" in disc or "ntm-lpframe" in disc:
+                findings.append(
+                    "[9] the DISCUSSION modal still contains a compose surface "
+                    "(an iframe inside #ntm-overlay). That is the stacked-furniture "
+                    "defect: ntmSetState('authed') re-shows the wizard under it on "
+                    "a timer it does not coordinate with.")
+            elif j == -1:
+                findings.append(
+                    "[9] no dedicated Loothprint overlay (#lpm-overlay) — the two "
+                    "composers are not separate modals.")
+            else:
+                print("  [9] two SEPARATE overlays and no compose surface inside "
+                      "the discussion modal — they cannot be open together")
 
         # ── FLAG OFF / ABSENT: the ONLY correct behaviour is the before-state ──
         # Asserted for an ALLOWED user, not for anon. Anon is a 404 whether the
