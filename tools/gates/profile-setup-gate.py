@@ -575,6 +575,12 @@ print("\nH. the published snapshot shows what the code actually says")
 
 SNAP_DIR = os.path.join(ROOT, "footer-mockups", "profiles-alive", "built")
 SNAPS = [os.path.join(SNAP_DIR, "step.html"), os.path.join(SNAP_DIR, "skipped.html")]
+# saved.html pictures Ian's addition 2 — the post-save door. It is built by the
+# page's JAVASCRIPT, so it cannot be produced by the static builder and cannot be
+# checked by the server-markup comparison below; it is captured from the running
+# code with fetch stubbed (tools/capture-profile-setup-done.py). It gets the
+# INERTNESS check like the other two, plus its own phrase check against the JS.
+SAVED = os.path.join(SNAP_DIR, "saved.html")
 
 missing_snap = [os.path.relpath(f, ROOT) for f in SNAPS if not os.path.isfile(f)]
 if missing_snap:
@@ -663,8 +669,32 @@ else:
 
     # And it must stay inert. It is a picture, not a working form: the captured page
     # carried the live JS that POSTs to the real profile-api write endpoints.
+    # The post-save picture, checked against the JS that actually builds it.
+    if not os.path.isfile(SAVED):
+        bad("the post-save screen Ian is linked to is missing",
+            os.path.relpath(SAVED, ROOT))
+    else:
+        saved_txt = open(SAVED, encoding="utf-8", errors="ignore").read()
+        js_src = open(MU, encoding="utf-8", errors="ignore").read().split("<script>", 1)[-1]
+        js_phrases = set()
+        for m in re.findall(r"<h3>([^<>{}'\"]{4,60})</h3>", js_src):
+            js_phrases.add(m.strip())
+        for lit in ("Open the full profile editor", "Take me to the community"):
+            if lit in js_src:
+                js_phrases.add(lit)
+        if len(js_phrases) < 2:
+            bad(f"only {len(js_phrases)} phrases found in the post-save JS — "
+                "the picture cannot be checked against anything")
+        else:
+            gone = sorted(t for t in js_phrases if norm(t) not in norm(saved_txt))
+            if gone:
+                bad("the post-save picture is STALE against the code that builds it",
+                    "; ".join(repr(t) for t in gone[:3]))
+            else:
+                ok(f"the post-save picture matches all {len(js_phrases)} phrases in its JS")
+
     live = []
-    for f in SNAPS:
+    for f in SNAPS + [SAVED]:
         t = open(f, encoding="utf-8", errors="ignore").read()
         if re.search(r"<script", t, re.I):
             live.append(os.path.relpath(f, ROOT) + ": a <script> survived")
