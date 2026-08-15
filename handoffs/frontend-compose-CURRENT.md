@@ -1,4 +1,8 @@
-# SESSION HANDOFF — lane `frontend-compose`, **the layout-v2 lane**
+# HANDOFF — lane `frontend-compose`, **the layout-v2 lane** — CURRENT
+
+*Lives in `handoffs/` per the 2026-08-15 convention change: SESSION-HANDOFF.md is
+retired as shared state, per-lane handoffs live here. Supersede by rotating this
+to `handoffs/YYYY-MM-DD-<suffix>.md` and writing a fresh CURRENT.*
 
 **Written 2026-08-14. Assume you are a fresh lane with zero context: this is your
 charter. Everything below was measured on this box — where something is unproven
@@ -170,7 +174,23 @@ Red-first gate on the insert path."* — **implemented, commit `d7ac5db`.**
 
 ---
 
-## ⬜ ONE OPEN CHECK (was two — the second is now closed)
+## ✅ ALL CHECKS CLOSED
+
+**The picker has now been CLICKED** (commit `c59318c`), and it needed no
+maintenance window. `tools/frontend-compose/picker-test.py` builds a harness
+from the REAL artefacts — the renderer's own editor-mode output (block +
+`<lg-edit>` marker), the real `lg-fe-editor.js`/`.css`, the real
+`Licenses::picker_choices()` — and drives it with CDP, stubbing only the REST
+call so the SAVE PAYLOAD is observable. 6 assertions GREEN, including a real
+click saving exactly `{"code": ""}` to `blocks/update`.
+
+⚠️ **Four traps are encoded in that file and every one gave a WRONG ANSWER
+FIRST** — read its docstring before touching it. The worst: reverting the CSS
+fix left the test GREEN, which looked like a decorative assertion and was
+actually **Chrome caching the harness stylesheet by URL**. `Network.setCacheDisabled`
+is load-bearing; without it the harness silently re-tests stale assets.
+
+### (historical) the check that was open, and why it took a window to learn
 
 Both exist for the same reason: **the branch is not on the dev2 serve**, because
 `/var/www/dev/wp-content/plugins/lg-layout-v2` symlinks into
