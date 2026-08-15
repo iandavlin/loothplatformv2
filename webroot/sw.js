@@ -50,6 +50,38 @@ const BYPASS_PREFIXES = (SWQ.get('b') || '/footer-mockups/,/claim,/gatetest,/vsc
    and a "claim this device" page shown to a paying member would be a real defect. */
 const IS_DEV2 = self.location.hostname === 'dev2.loothgroup.com';
 
+/* ADMIN AND SIGN-IN SURFACES ARE NEVER OURS TO MEDIATE (backlog 28, Ian 2026-08-15).
+   A slow admin click showed him the game-like "You're offline" shell on a dashboard
+   URL. He is not offline and it is not our surface: wp-admin should fail the way
+   wp-admin fails, with the browser's own network error, so the symptom names the
+   actual problem.
+
+   THIS IS DELIBERATELY OUTSIDE isBypassed(). That function opens with
+   `if (!RESILIENT || !IS_DEV2) return false`, so it is inert on live and inert
+   whenever the pwa-sw flag is off — adding '/wp-admin' to BYPASS_PREFIXES would have
+   looked like a fix, passed on dev2, and done NOTHING on loothgroup.com. This check
+   is unconditional on purpose.
+
+   Why the worker sees these URLs at all: pwa.js registers with scope '/', so this
+   worker controls EVERY same-origin navigation. wp-admin never loads pwa.js and does
+   not need to — the registration made on a member page covers the whole origin. */
+const ADMIN_PATHS = ['/wp-admin', '/wp-login.php'];
+
+/* Matched as a whole path or a directory prefix, NOT with a bare indexOf: '/wp-admin'
+   as a loose prefix also swallows '/wp-adminfoo' and '/wp-admin-ish/', which are
+   member-facing URLs that would then silently lose the offline shell. Measured — both
+   were bypassed before this was tightened. '/hub/wp-admin/' was correctly untouched
+   either way, since the match is anchored at the start. */
+function isAdminSurface(url) {
+  if (!url || url.origin !== self.location.origin) return false;
+  const p = url.pathname;
+  for (let i = 0; i < ADMIN_PATHS.length; i++) {
+    const a = ADMIN_PATHS[i];
+    if (p === a || p.indexOf(a + '/') === 0) return true;
+  }
+  return false;
+}
+
 function isBypassed(url) {
   if (!RESILIENT || !IS_DEV2) return false;
   if (url.origin !== self.location.origin) return false;
@@ -170,6 +202,12 @@ self.addEventListener('fetch', (event) => {
   // included) — see docs/PWA-SW-AUDIT.md §2.
   let reqUrl = null;
   try { reqUrl = new URL(req.url); } catch (e) { reqUrl = null; }
+
+  // Admin/sign-in: return WITHOUT respondWith, so the browser does its own fetch and
+  // shows its own error. Checked before both navigation branches below, because both
+  // of them end at caches.match('/offline.html').
+  if (reqUrl && isAdminSurface(reqUrl)) return;
+
   if (reqUrl && isBypassed(reqUrl)) return;
 
   if (RESILIENT && req.mode === 'navigate') {

@@ -933,6 +933,25 @@ echo "=== GATE (unnumbered — pending keeper): author-search mask — backlog 2
 # instead of a name grep, and a fixture with a real tier mix).
 run "author-search-mask" python3 "$(dirname "$0")/author-search-mask-gate.py"
 
+echo "=== GATE 43: wp-admin never renders the PWA offline shell ==="
+# Backlog 28. Ian, 2026-08-15: a slow admin click showed him the game-like
+# "You're offline" page on a DASHBOARD url. He was not offline and it is not our
+# surface — wp-admin should fail the way wp-admin fails, with the browser's own
+# error, so the symptom names the real problem instead of blaming the network.
+#
+# Why the worker sees admin URLs at all: pwa.js registers with scope '/', so it
+# controls EVERY same-origin navigation. wp-admin never loads pwa.js and does not
+# need to — a registration made on a member page covers the whole origin.
+#
+# THE ASSERTION THAT EARNS IT runs every check on the LIVE hostname as well as
+# dev2. sw.js already had BYPASS_PREFIXES and the obvious fix was to add
+# '/wp-admin' to it — a fix that is INERT ON LIVE, because isBypassed() opens
+# with `if (!RESILIENT || !IS_DEV2) return false`. A dev2-only gate would have
+# blessed it. Paired with the opposite half: a MEMBER page under the same
+# failure must STILL get the shell, or "intercept nothing" scores full marks by
+# breaking offline support for everybody.
+run "sw-admin-bypass" python3 "$(dirname "$0")/sw-admin-bypass-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

@@ -15,6 +15,7 @@
  * then agree with itself), so this is a test OF sw.js, not of a paraphrase.
  *
  *   node sw-handler-harness.js <case> [--sw path] [--flags str] [--budget ms]
+ *                                       [--host h] [--url u]
  *
  * cases:
  *   hang            navigation whose fetch NEVER settles     -> must settle by budget
@@ -22,6 +23,7 @@
  *   slow-then-ok    fetch rejects once, then succeeds        -> must serve the PAGE
  *   ok              fetch succeeds immediately               -> must serve the PAGE
  *   dev-path        navigation to a dev-gated path           -> must NOT be handled
+ *   admin-path      navigation to /wp-admin under origin failure -> must NOT be handled
  *   gate-403        navigation the dev gate refuses (403)    -> reports what came back
  *   install-partial one shell asset 403s                     -> must still install
  *
@@ -39,6 +41,14 @@ const arg = (n, d) => { const i = argv.indexOf('--' + n); return i < 0 ? d : arg
 const SW = arg('sw', path.join(__dirname, '..', '..', '..', 'webroot', 'sw.js'));
 const FLAGS = arg('flags', '');            // what pwa.js would put in the register URL
 const BUDGET = parseInt(arg('budget', '9000'), 10);
+/* Backlog 28 additions, both OPTIONAL so the existing cases are untouched:
+   --host lets a case run as if sw.js were served from LIVE, which is the only way to
+   exercise code guarded by IS_DEV2; --url overrides the navigation target. Testing an
+   admin bypass only on dev2 would have hidden the whole defect — isBypassed() returns
+   false on live for everything, so a dev2-only test passes on a fix that does nothing
+   where it matters. */
+const HOST = arg('host', 'dev2.loothgroup.com');
+const NAV_URL = arg('url', '');
 
 /* ---- the stubbed worker global -------------------------------------------- */
 function makeResponse(body, status, url) {
@@ -99,7 +109,7 @@ function makeScope(fetchImpl) {
     skipWaiting: () => { notes.push('skipWaiting'); return Promise.resolve(); },
     clients: { claim: () => Promise.resolve(), matchAll: () => Promise.resolve([]) },
     registration: { showNotification: () => Promise.resolve() },
-    location: new URL('https://dev2.loothgroup.com/sw.js' + (FLAGS ? '?' + FLAGS : '')),
+    location: new URL('https://' + HOST + '/sw.js' + (FLAGS ? '?' + FLAGS : '')),
     caches, fetch: fetchImpl,
     __listeners: listeners,
   };
@@ -135,6 +145,10 @@ function fetchFor(kase) {
     switch (kase) {
       case 'hang':     return new Promise(() => {});                 // never settles
       case 'reject':   return Promise.reject(new TypeError('Failed to fetch'));
+      // admin-path: the origin fails exactly as in `reject`. The question is not what
+      // gets served but WHETHER THE WORKER ANSWERS AT ALL — an admin URL must fall
+      // through to the browser's own error, never our shell.
+      case 'admin-path': return Promise.reject(new TypeError('Failed to fetch'));
       case 'slow-then-ok':
         // navCalls, not calls: the FIRST navigation attempt must fail and the retry
         // must succeed, whatever install did beforehand.
@@ -177,9 +191,11 @@ function fire(type, event) {
     process.exit(0);
   }
 
-  const navUrl = kase === 'dev-path'
-    ? 'https://dev2.loothgroup.com/footer-mockups/post-back-nav/'
-    : 'https://dev2.loothgroup.com/hub/';
+  const navUrl = NAV_URL || (kase === 'dev-path'
+    ? 'https://' + HOST + '/footer-mockups/post-back-nav/'
+    : kase === 'admin-path'
+      ? 'https://' + HOST + '/wp-admin/index.php'
+      : 'https://' + HOST + '/hub/');
   const req = { url: navUrl, mode: 'navigate', method: 'GET', destination: 'document' };
 
   let responded = null;
