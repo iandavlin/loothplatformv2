@@ -111,7 +111,30 @@ Recording rather than silently skipping or silently widening scope:
    `#87986a` = **3.12:1**. Same button, same defect, light theme. This lane's
    charter is dark-anon, so only the dark half was fixed. Someone should take
    the light half.
-2. **The avatar initials palette fails regardless of theme.**
+2. **A PROBE LIMITATION blocks the next slice — do not just "fix" the fields.**
+   The remaining `field-borderless` findings (`input.hub-tsearch__in` 1.07:1,
+   `input.lgev-input` 1.06:1, `input#dir-loc` 1.0:1, shop `input#q` 1.0:1) look
+   like the obvious next fix and are a **trap**. `.hub-tsearch` is a wrapper
+   with `border:0` **by design** (forums.css — "a plain pill relying on its own
+   fill for shape") and the flagged `input` sits INSIDE it. The existing
+   `LG_DARK_SEARCH_WRAPPER_FIX` already borders the **wrapper**, which is the
+   correct visual fix — but `contrast-probe.js` measures the INPUT's own edge
+   and gives no credit for a bordered ancestor, so the finding will persist
+   even once that flag flips ON, and bordering the input itself would draw a
+   second border inside the first.
+   - The right fix is in the **probe**: when a field has no border of its own,
+     walk up a bounded number of ancestors for one that provides a visible edge
+     around it, and only then call it borderless.
+   - **NOT done now, deliberately.** Changing the probe re-measures all 24
+     surfaces and would invalidate the `BASELINE` pushed minutes earlier, while
+     a merge train was waiting on this branch. Sequence it: land the merge,
+     tighten the baseline, THEN change the probe and re-baseline in one commit.
+   - `input#dir-loc` also reads `#ffffff vs #ffffff` in one capture: that is the
+     map search, which is **deliberately light-locked in every theme** (it
+     floats over the always-light OSM tile — see `directory-desktop.js`). Its
+     fix is a LIGHT-mode border, not a dark one. Nearly "fixed" in wave 1 and
+     correctly left alone; do not regress that.
+3. **The avatar initials palette fails regardless of theme.**
    `bb_mirror_avatar()` (`bb-mirror/web/forums/_reply-render.php`) picks from a
    hardcoded 8-colour palette via `crc32($slug)` and writes it as an INLINE
    style, so there is no dark variant — it renders identically in both themes.
