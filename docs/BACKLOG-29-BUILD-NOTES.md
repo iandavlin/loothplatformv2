@@ -106,6 +106,36 @@ Consequences for the build:
   the same event, or the two views will disagree about what was decided;
 - the item's chat badge count comes from the thread — derived, per the rule below.
 
+### Ian's two extra rails — lane lights and server capacity
+
+Added to round 4: **a light per lane** (working / parked / waiting-on-Ian) and a
+**server capacity strip** — *"so we can see if we are maxing out."*
+
+Same law as the badges: **derived, never typed.** The source is the sentinel
+stamp at `~/.sentinel-status`, which the build widens into a small JSON (per-lane
+states + load/mem/swap/disk) that the page polls.
+
+**⚠ The stamp is not yet what the rail needs.** Verified at drawing time: the
+file exists and was 4 minutes old, but its content is
+`<epoch> <time> working=0` / `? total=6` — while `lanes` showed all six seats
+parked. So whatever it counts today is not the per-lane state this rail wants.
+**The build must widen the stamp, not merely read it**, and the widening belongs
+to whoever owns the sentinel — not to the board.
+
+**Thresholds to mark on the bars** (so a number means something without a
+legend): load **4.0** = the throttle line on 2 cores; swap **1 GB** = the stop
+line; disk red at **90%**.
+
+**Measured at drawing (dev2, 2026-08-15 15:44), not illustrative:** load 0.54 of
+2 cores · memory 2.0 GB free of 7.8 · swap 0.4 GB of 2.0 · **disk 91% used, 2.6
+GB free of 29**.
+
+**The disk figure is a live problem, not a mock detail.** 91% is already over the
+red line, so the first thing this rail would tell Ian is true and needs acting
+on — reported to keeper separately rather than left to surface as a design
+flourish. Rough split at the time: `/home` 11 GB, `/var` 7.7 GB, `/usr` 4.7 GB.
+Nothing deleted — what goes is not this lane's call.
+
 ### The badge must be DERIVED, never typed
 
 A badge reading "2 decisions" is only worth having if it is **counted from the
