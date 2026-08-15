@@ -191,6 +191,19 @@ is_($reds($hOk) === 0, "a healthy box shows NO red bar at all — otherwise red 
 is_(str_contains($hOk, 'probe-lane'), "the lane light renders the name the stamp gave it");
 
 /* ---------------------------------------------------------------------- */
+section("[5b] A MISSING BACKLOG IS LOUD, NOT A SILENT ZERO");
+
+// Found by accident: an early serve-test pointed the page at a tree with no
+// docs/ and it rendered "0 items". That is the same failure family as the
+// tick-byte bug — a board showing nothing looks exactly like a board with
+// nothing to show. It happens to be handled; it was not ASSERTED, so it could
+// have regressed silently.
+$noBack = render($PAGE, '/nonexistent/BACKLOG.md', null);
+is_(str_contains($noBack, 'class="err"'), "a missing backlog renders a visible error, not an empty list");
+is_(str_contains($noBack, 'not readable'), "...and says WHY it is empty");
+is_(str_contains($noBack, 'class="rail"'), "...while the sentinel half still renders — one dead source does not blank the page");
+
+/* ---------------------------------------------------------------------- */
 section("[6] PHASE 1 CANNOT WRITE");
 
 // Read-only is the property that lets this ship without a flag, so it is
@@ -220,7 +233,7 @@ echo "GREEN — nothing dropped, letter ids survive, a dead sentinel degrades ho
 exit(0);
 
 /* ======================================================================= *
- * RED-FIRST RECORD — measured, not asserted. Baseline: 24 passed, 0 failed.
+ * RED-FIRST RECORD — measured, not asserted. Baseline: 27 passed, 0 failed.
  *
  * Mutations applied to webroot/wip-board.php from a snapshot copy, gate run,
  * count recorded, file restored. Never `git checkout --`.
@@ -240,6 +253,13 @@ exit(0);
  *       A warning that always fires is decoration, and red stops meaning
  *       anything.
  *   W5  add a file_put_contents() to the page                      -> 1 RED
+ *   W6  make the missing-backlog path return no error, so the page shows an
+ *       empty list instead of saying why                          -> 2 RED
+ *       §5b was added AFTER an accidental serve-test rendered "0 items" from a
+ *       tree with no docs/. The behaviour was already correct; it simply was
+ *       not asserted, so it could have regressed in silence. Same family as the
+ *       tick-byte bug: a board showing nothing looks exactly like a board with
+ *       nothing to show.
  *       Phase 1's read-only property is what lets it ship without a flag, so
  *       it is asserted rather than assumed.
  *
