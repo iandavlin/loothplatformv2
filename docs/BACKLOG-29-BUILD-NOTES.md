@@ -16,6 +16,46 @@ drag-to-rank), `board.html` (round 3, one surface) and
 
 ---
 
+## 0. STATUS — phase 1 is BUILT (2026-08-15)
+
+Ian's nod: *"It's good enough to start building though. We can work through the
+issues as they come up."*
+
+**Shipped:** `webroot/wip-board.php` — read-only. `docs/BACKLOG.md` rendered as
+its own PRIORITY INDEX, badges derived from each entry's text, lane lights and a
+capacity strip off `~/.sentinel-status.json` (keeper's widened stamp, which
+landed and is being read live). No WordPress boot: the sources are a markdown
+file and a JSON stamp.
+
+**Gate:** `tools/gates/work-board-gate.php`, 24 assertions, five mutations
+measured. **Number still pending from keeper** — the ledger currently disagrees
+with itself ("next free 41" in one place, "next free 43" in another), so this
+lane has not minted one.
+
+### The bug phase 1 nearly shipped, because it is a good one
+
+The board **silently dropped every completed item**. Five P0 entries rendered as
+three, and nothing logged.
+
+Cause: `preg_split('/\R/', …)`. Without the `/u` flag, PCRE's `\R` also matches
+the single byte **0x85** (NEL) — and 0x85 is the **third byte of `✅`**
+(`E2 9C 85`). So the split cut in half every line containing a tick, leaving
+fragments that are not valid UTF-8; `preg_match` with `/u` then returns **false**
+on such a fragment *silently*, not as an error.
+
+Fixed by splitting on newlines explicitly, never with `\R`. The gate's §1 now
+asserts that **every** index line in the file reaches the render, checked against
+an independent parse — because "the parser works" is not the property that
+matters; "nothing is lost" is.
+
+A second, separate loss was caught the same way: the parser matched only numeric
+ids, dropping `E1`–`E5` and `S1`–`S3` — including a security item marked
+awaiting Ian.
+
+**Phase 2 is unchanged** and still carries everything below.
+
+---
+
 ## 1. The hard constraint: the board cannot commit the obvious way
 
 **`~/loothplatformv2-clean` is the SERVING CHECKOUT and only ever pulls.** That

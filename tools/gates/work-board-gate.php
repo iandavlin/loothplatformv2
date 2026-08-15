@@ -217,23 +217,33 @@ echo "GREEN — nothing dropped, letter ids survive, a dead sentinel degrades ho
 exit(0);
 
 /* ======================================================================= *
- * RED-FIRST RECORD — measured, not asserted. Baseline: see the run.
+ * RED-FIRST RECORD — measured, not asserted. Baseline: 24 passed, 0 failed.
  *
  * Mutations applied to webroot/wip-board.php from a snapshot copy, gate run,
  * count recorded, file restored. Never `git checkout --`.
  *
- *   W1  restore the original `preg_split('/\R/', …)` — THE BUG AS FIRST
- *       WRITTEN, and the only mutation here that reproduces a real past state.
- *       Ticked items vanish; §1 reddens and names every missing id.
- *   W2  restore the numeric-only item regex `^(\d+(?:\.\d+)?)`
- *       -> §2 reddens: E1…E5 and S1…S3 disappear, including a security item
- *          marked awaiting Ian.
- *   W3  make the missing-sentinel branch render zeros instead of saying so
- *       -> §3 reddens: the page invents a load and a disk figure.
- *   W4  drop the `$disk >= LGB_DISK_RED_PCT` condition so the warning always
- *       shows -> §5 reddens on the 74% case: a warning that always fires is
- *       decoration, and red stops meaning anything.
- *   W5  add a file_put_contents() to the page
- *       -> §6 reddens. Phase 1's read-only property is what lets it ship
- *          without a flag, so it is asserted rather than assumed.
+ *   W1  restore `preg_split('/\R/', …)` — THE BUG AS FIRST WRITTEN, and the
+ *       only mutation here that reproduces a real past state      -> 3 RED
+ *       Ticked items vanish. §1 names every missing id rather than just
+ *       reporting a wrong total, because "5 items became 3" is useless without
+ *       knowing WHICH three.
+ *   W2  numeric-only item ids                                     -> 3 RED
+ *       E1…E5 and S1…S3 disappear, including a security item marked awaiting
+ *       Ian. This was also a real bug, caught before shipping.
+ *   W3  missing sentinel renders zeros instead of saying so        -> 3 RED
+ *       The page invents a load, a disk figure and empty lane lights — the
+ *       comforting-zero failure the capacity strip exists to avoid.
+ *   W4  disk warning shows unconditionally                         -> 1 RED
+ *       A warning that always fires is decoration, and red stops meaning
+ *       anything.
+ *   W5  add a file_put_contents() to the page                      -> 1 RED
+ *       Phase 1's read-only property is what lets it ship without a flag, so
+ *       it is asserted rather than assumed.
+ *
+ * ONE MUTATION FOUND A HOLE IN THIS GATE RATHER THAN THE PAGE. The first cut of
+ * §5 matched the bare string "f--bad" — which is also in the STYLESHEET, on
+ * every render. So "load is drawn red" and "swap is drawn red" passed on pages
+ * with no red bar at all. Only the healthy-box case exposed it, by failing when
+ * it should have passed. The assertions now count `class="bar__f f--bad"`, the
+ * usage form. An assertion that cannot fail is not an assertion.
  * ======================================================================= */
