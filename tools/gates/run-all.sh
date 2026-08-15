@@ -859,7 +859,7 @@ echo "=== GATE 41: the Guitardle board is scored on what the SERVER watched ==="
 # compared with the PHP resolver, on BOTH audience tracks.
 run "guitardle-serverplay" python3 "$(dirname "$0")/guitardle-serverplay-gate.py"
 echo
-# Gate number 42 PRE-ASSIGNED by keeper 2026-08-15 (next free 43).
+# Gate number 42 PRE-ASSIGNED by keeper 2026-08-15 (46/47 since; next free 48).
 echo "=== GATE 42: the puzzle LIBRARY and SEQUENCE never reach a browser ==="
 # Backlog 26. Gate 41 stopped the phrase reaching server-driven MEMBERS, but
 # could not remove assets/guitardle_phrases.csv and assets/sequence.json,
@@ -878,6 +878,43 @@ echo "=== GATE 42: the puzzle LIBRARY and SEQUENCE never reach a browser ==="
 # the assets are STILL PRESENT: this is stage ONE of two, and pulling them
 # before both flags are on everywhere is a blank board, not a degraded one.
 run "guitardle-daypuzzle" python3 "$(dirname "$0")/guitardle-daypuzzle-gate.py"
+echo
+# Gate numbers 46 and 47 MINTED BY KEEPER 2026-08-15 (next free 48). Numbers come
+# from keeper, never from a lane — two lanes once both minted "9/9" and collided.
+echo "=== GATE 46: compose media — abandon leaves ZERO orphans, each post its own library ==="
+# Ian, 2026-08-15: no orphans ("obviously"), and "each post has its own library".
+#
+# MEASURED BEFORE IT EXISTED: uploading through the real picker and abandoning
+# left an attachment with post_parent 0, the file on disk, and nothing
+# referencing it. Neither our build nor WordPress core sweeps unattached media,
+# and a subscriber has upload_files — so an abandoning member could fill the
+# library indefinitely. That is the defect this gate stands over.
+#
+# Assertion 4 counts the SITE-WIDE unattached total across the whole cycle, not
+# just the rows the gate made: a gate that only counts its own rows cannot see
+# an orphan produced by a path it did not think to model, which is exactly the
+# blindness it most needs to avoid.
+#
+# Assertion 6 exists because WordPress's own wp_delete_auto_drafts removes the
+# post and LEAVES its attachments behind — the reaper has to take children
+# explicitly, and that is the half most likely to be quietly dropped later.
+run "compose-media" python3 "$(dirname "$0")/compose-media-gate.py"
+echo
+echo "=== GATE 47: the compose modal meets WCAG AA in DARK, and has no bright surfaces ==="
+# Ian, 2026-08-15: "compose works well. Needs some dark mode love." Dark contrast
+# has bitten this platform 3+ times, which is why it is a gated class.
+#
+# It reads the RENDERED page rather than a hex pair list, because the Loothprint
+# form is fetched from WordPress and its colours are ACF/WP stylesheets meeting
+# the hub's dark tokens — that pair list cannot be written down in advance. The
+# ratio maths is imported from tools/mock-contrast-check.py so there is ONE
+# definition of contrast in the tree.
+#
+# IT ALSO FLAGS BRIGHT SURFACES, and that half is not decoration: a text-only
+# contrast pass reported GREEN while a 286x398 WHITE dropzone sat in the middle
+# of the dark modal. An element with no text has no pair to measure, and where
+# there IS text, dark-on-white scores well — legible, and not dark mode.
+run "compose-dark" python3 "$(dirname "$0")/../frontend-compose/dark-contrast-sweep.py"
 
 # Gate number 36 assigned by keeper 2026-08-15 (ledger: 34 stripe, 35 compose/
 # v2, 36 dark-anon, 37 guitardle, 38 v2 insert path). Bare number, no "/N" —
