@@ -23,3 +23,6 @@
    - The EIGHT completeness items LOCKED as proposed (12.5% each): photo, location, what-you-do, bio, links, skills+instruments, work photos, banner.
    - Volunteering: ACCEPT ANY % — tick welcomed at any completeness, member shown their card preview, meter does the nudging. No floor.
    - Meter scope: THIS FEATURE ONLY (profile + tickbox flow + dash); site-wide push stays backlog 19.
+
+7. **V2 MAY INSERT a missing block into a stored page** ("Yes — may insert"): first the licence block on the 3 licence-invisible posts (72155/72146/71927), same principle covers the work-type block later. Only to surface what the author already declared.
+8. **4th seat = Guitardle fix** (backlog 22).
