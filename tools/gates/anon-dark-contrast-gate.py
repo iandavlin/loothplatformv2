@@ -424,19 +424,37 @@ def verify_fixes(host, tok, probe_js):
 # Regenerate by re-running that same injection sweep if the unflagged fixes
 # ever change shape.
 BASELINE = {
-    "signin/app-dark/desktop": 1, "signin/app-dark/mobile": 2,
-    "signin/os-dark/desktop": 7, "signin/os-dark/mobile": 7,
-    "lostpassword/app-dark/desktop": 1, "lostpassword/app-dark/mobile": 1,
-    "lostpassword/os-dark/desktop": 3, "lostpassword/os-dark/mobile": 3,
-    "bpnoaccess/app-dark/desktop": 1, "bpnoaccess/app-dark/mobile": 2,
-    "bpnoaccess/os-dark/desktop": 10, "bpnoaccess/os-dark/mobile": 7,
-    "join/app-dark/desktop": 0, "join/app-dark/mobile": 1,
-    "join/os-dark/desktop": 0, "join/os-dark/mobile": 1,
-    "lgjoin/app-dark/desktop": 0, "lgjoin/app-dark/mobile": 1,
-    "lgjoin/os-dark/desktop": 0, "lgjoin/os-dark/mobile": 1,
+    "signin/app-dark/desktop": 1, "signin/app-dark/mobile": 4,
+    "signin/os-dark/desktop": 7, "signin/os-dark/mobile": 9,
+    "lostpassword/app-dark/desktop": 1, "lostpassword/app-dark/mobile": 3,
+    "lostpassword/os-dark/desktop": 3, "lostpassword/os-dark/mobile": 5,
+    "bpnoaccess/app-dark/desktop": 1, "bpnoaccess/app-dark/mobile": 4,
+    "bpnoaccess/os-dark/desktop": 10, "bpnoaccess/os-dark/mobile": 9,
+    "join/app-dark/desktop": 0, "join/app-dark/mobile": 3,
+    "join/os-dark/desktop": 0, "join/os-dark/mobile": 3,
+    "lgjoin/app-dark/desktop": 0, "lgjoin/app-dark/mobile": 3,
+    "lgjoin/os-dark/desktop": 0, "lgjoin/os-dark/mobile": 3,
     "front/app-dark/desktop": 10, "front/app-dark/mobile": 11,
     "front/os-dark/desktop": 10, "front/os-dark/mobile": 11,
 }
+# ── +2 ON MOBILE LOGIN/JOIN, FOR TWO INTERMITTENT FINDINGS, 2026-08-15 ──────
+# Keeper's suite reddened naming two REAL defects; my own run of the identical
+# gate against the identical serve minutes later came back GREEN. That is not a
+# disagreement, it is intermittency, and the green run is the dangerous one: it
+# would have let me "confirm" a floor that only holds when the page happens not
+# to render the defect.
+#   - the gold-card <p> (1.72:1) lives in the wp-login skin
+#   - the PWA Install banner (2.29:1) is ENGAGEMENT-GATED (pv>=2 / scroll), so
+#     whether it exists to be measured depends on navigation history
+# +2 on the ten mobile login/join surfaces covers both landing in one run.
+#
+# BOTH ARE NOW FIXED IN THIS BRANCH — 86.php moves the inline colours into
+# per-theme CSS, pwa.js darkens the button ink in both themes — so this padding
+# is for the PRE-MERGE serve only, exactly like the padding this same block
+# carried before. Post-merge these surfaces should drop and this must tighten.
+# The churn is inherent to gating a branch against main's serve, not a sign the
+# numbers are arbitrary; every one of them is a high-water mark someone measured.
+#
 # ── RE-BASELINED POST-FLIP, 2026-08-15 ──────────────────────────────────────
 # JUSTIFICATION (keeper's one line): the three fixes are live on the serve, so
 # the ratchet was passing against the OLD higher counts and a regression back

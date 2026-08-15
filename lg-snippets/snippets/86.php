@@ -190,6 +190,16 @@ add_action('login_enqueue_scripts', function () {
 		box-shadow: 0 6px 20px rgba(0,0,0,0.08);
 	}
 	.lg-card--gold  { border-color: rgba(236,179,81,0.45); }
+
+	/* Gold-card note. These two lived as INLINE styles (color:#444 on the <p>,
+	   var(--lg-mint5) on the mail link) and that was the whole defect: an inline
+	   colour outranks every stylesheet rule, so the dark block below could never
+	   reach them and the paragraph sat at 1.72:1 on the dark card. Moved into CSS
+	   so both themes can own it. The link ALSO failed in LIGHT at 3.12:1, which
+	   is a gate-45 both-themes defect, so it is fixed on both sides here rather
+	   than only where dark happened to expose it. */
+	.lg-card-note { margin: 0; font-size: 0.95em; color: #444; }
+	.lg-card-note__link { color: #586b3f; font-weight: 700; }   /* was #87986a = 3.12:1 on white */
 	.lg-card--coral { border-color: rgba(254,106,79,0.45); }
 
 	.lg-card-head {
@@ -471,6 +481,8 @@ add_action('login_enqueue_scripts', function () {
 		border-color: var(--lg-dark-border);
 	}
 	html[data-lguser-theme='dark'] .lg-card--gold  { border-color: rgba(236,179,81,0.35); }
+	html[data-lguser-theme='dark'] .lg-card-note { color: var(--lg-dark-mute); }        /* 7.33:1 on the dark card */
+	html[data-lguser-theme='dark'] .lg-card-note__link { color: var(--lg-dark-link); }  /* 7.30:1 */
 	html[data-lguser-theme='dark'] .lg-card--coral { border-color: rgba(254,106,79,0.35); }
 	html[data-lguser-theme='dark'] .lg-card-head h2 { color: var(--lg-dark-ink); }
 	/* .lg-numcircle--* badges keep their own light gradient fill in every
@@ -618,10 +630,10 @@ add_action('login_footer', function () {
 					<div class="lg-numcircle lg-numcircle--gold">!</div>
 					<h2>Important</h2>
 				</div>
-				<p style="margin:0;font-size:0.95em;color:#444;">
+				<p class="lg-card-note">
 					Use the same email address you use for your paid Looth Group membership on Patreon.
 					Not sure which one? Email
-					<a href="mailto:<?php echo esc_attr($support_email); ?>" style="color:var(--lg-mint5);font-weight:700;"><?php echo esc_html($support_email); ?></a>.
+					<a href="mailto:<?php echo esc_attr($support_email); ?>" class="lg-card-note__link"><?php echo esc_html($support_email); ?></a>.
 				</p>
 			</div>
 
