@@ -76,12 +76,23 @@
       the Stripe webhook, so neither rail can end up with an experience the other one lacks &mdash;
       and a third rail later inherits it for free.
       <br><br>
-      <b>And that hook already exists.</b> The moment a membership goes live, whichever rail paid
-      for it, we already show a one-time &ldquo;Welcome &mdash; your membership is active&rdquo;
-      pop-up with two buttons on it. It fires once, it knows it has fired, and it is already
-      identical for a Patreon joiner and a Stripe joiner. <b>The three questions can go there</b>
-      &mdash; so this is less &ldquo;build a new screen&rdquo; than &ldquo;use the welcome moment we
-      already have for something more useful than two links&rdquo;.
+      <b>That hook is already built &mdash; and it is silently skipping every new member.</b> We
+      already have a one-time &ldquo;Welcome &mdash; your membership is active&rdquo; pop-up, and a
+      welcome email, both fired from the same rail-agnostic place. But a brand-new account is
+      created with its paid level already on it, so the code that watches for someone
+      <i>becoming</i> a paid member sees nothing change &mdash; and stays quiet.
+    </p>
+
+    <div class="nums" style="margin-top:14px">
+      <div class="num num--bad"><b>0</b><span>of the 33 new members got the welcome</span></div>
+      <div class="num"><b>21 Jun</b><span>last time a welcome email went out at all</span></div>
+      <div class="num"><b>16</b><span>welcomes ever sent, all to people upgrading</span></div>
+    </div>
+
+    <p class="hook">
+      So today a new member gets <b>no welcome pop-up, no welcome email, and an empty profile</b>.
+      That is one small fix away from working, and it is the same fix either option needs &mdash;
+      once that moment fires for new members, it is the natural place to ask the three questions.
     </p>
   </div>
 
@@ -275,8 +286,9 @@
         <p class="opt__note">
           <b>Cheaper than it looks.</b> Everything it needs &mdash; the photo uploader, the city
           field with its search, the one-line field &mdash; already exists and already saves to the
-          right place. And the once-only welcome pop-up described above is already built and already
-          fires for both rails, so this is mostly <b>changing what that moment asks for</b>.
+          right place. The once-only welcome moment is already built too; it just needs the small
+          fix above so it fires for new members, and then this is mostly
+          <b>changing what that moment asks for</b>.
         </p>
       </div>
 

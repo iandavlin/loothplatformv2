@@ -193,6 +193,48 @@ Today that moment renders a celebration with two links (Member Guide / See
 What's New). The three questions belong there, which makes Option A largely
 "change what the welcome moment asks for" rather than "build a new screen".
 
+### ⛔ …but it does NOT fire for new members. Measured, with the root cause.
+
+**Presence is not reachability** — the mechanism exists and is still never
+reached by the population this charter is about.
+
+Measured on live 2026-08-15:
+
+| | |
+|---|---|
+| `_lg_welcome_email_sent_at` rows (durable, never deleted) | **16 ever**, newest **2026-06-21** |
+| `_lg_pending_welcome` still pending | 118 — but 115 of them have not been active since before July, i.e. dormant upgraders, **not** a rendering defect |
+| Of the 33 members who joined since 1 July | **0 have either meta** |
+
+`_lg_welcome_email_sent_at` is the load-bearing evidence: `WelcomeMailer` sets it
+and never clears it (the dismiss endpoint only deletes `_lg_pending_welcome`), so
+its absence proves the welcome path never ran — it is not "fired and dismissed".
+
+**Root cause.** `lg-patreon-onboard.php:1553` creates the account with the paid
+role already applied:
+
+```php
+$user_id = wp_insert_user([ ..., 'role' => $wp_role ]);   // looth2/3 set HERE
+```
+
+`lgpo_apply_role_via_arbiter()` then runs `Arbiter::sync()`, which derives
+`$oldTier = self::currentTier((array) $user->roles)` (`Arbiter.php:56`) — already
+`looth2`. With `$winning` also `looth2`, `isUpgradeToPaid('looth2','looth2')` is
+`strcmp(...) > 0` → **false** (`Arbiter.php:157-169`), so line 113 never stamps.
+Note `isUpgradeToPaid(null, 'looth2')` *would* return true — the transition is
+real, it is just already over by the time anything looks.
+
+So the welcome fires **only for existing members who upgrade**, which is exactly
+what the 16/118 numbers show.
+
+**Consequence for this build:** the hook cannot simply be reused as-is. Either
+the arbiter must see the transition (capture `oldTier` before the role is
+applied, or create the user role-less and let the arbiter apply it), or the step
+hangs off its own activation signal. This is a **live member-facing gap in its
+own right** — new members currently get no welcome pop-up and no welcome email —
+and it is worth raising separately from backlog 19, because fixing it benefits
+both options and every future rail.
+
 ## 7. Phase 2 (only after Ian rules) — build shape
 
 - Member-facing → **flag, defaulted OFF**, copying `LG_AUTHOR_SOCIALS_ALL_MEMBERS`
