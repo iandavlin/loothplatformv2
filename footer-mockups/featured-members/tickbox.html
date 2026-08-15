@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Featured members — the profile tickbox (mock)</title>
+<link rel="stylesheet" href="_mock.css">
+<style>
+/* Dark-injection pin — see _mock.css header. Repeated inline so the page is
+   correct even if the stylesheet is cached stale. */
+body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
+</style>
+</head>
+<body id="lgfm">
+<div class="wrap">
+
+  <div class="mockhead">
+    <h1>1 &middot; The tickbox on a member's profile</h1>
+    <p>Where a member gives explicit permission to be considered. <b>Off by default. Never inferred.</b>
+       Drawn inside the real owner privacy slab from <code style="color:#cdd3c4">/u/&lt;slug&gt;</code> — the dark bar that already
+       carries <i>View as</i>, <i>Profile visibility</i> and <i>Discussion posts</i>.</p>
+    <nav class="crumbs">
+      <a href="decide.html" style="background:#c66845;color:#fff;border-color:transparent">★ Decisions</a>
+      <a href="./">&larr; Overview</a>
+      <a href="tickbox.html" aria-current="page">1 &middot; Tickbox</a>
+      <a href="dash.html">2 &middot; Admin dash</a>
+      <a href="frontpage.html">3 &middot; Front page</a>
+      <a href="completeness.html">4 &middot; Completeness</a>
+      <a href="desktop.html">Desktop L/D</a>
+    </nav>
+  </div>
+
+  <h2 class="sec">Pick one: A or B</h2>
+  <p class="secsub">Same consent, same words, two placements. Both are the member's own profile page, in edit/owner mode.</p>
+
+  <div class="two">
+
+    <!-- ══════════════════ VARIANT A ══════════════════ -->
+    <div>
+      <span class="stagelbl stagelbl--on">Variant A &mdash; a row in the privacy bar</span>
+      <span class="pill pill--rec">Recommended</span>
+
+      <div class="stage stage--dark">
+        <div class="lg-viewas">
+          <div class="lg-viewas__row">
+            <span class="lg-viewas__lbl">View as</span>
+            <span class="lg-viewas__seg">
+              <a href="#a">Public</a><a href="#a">Member</a><a href="#a" aria-current="true">Me</a>
+            </span>
+          </div>
+          <div class="lg-viewas__row">
+            <span class="lg-viewas__lbl">Profile visibility</span>
+            <span class="lg-vchip lg-vchip--public">Public</span>
+            <span class="lg-viewas__note">Public is the default for your whole profile &mdash; each section can override this to Members-only or Private with its own chip.</span>
+          </div>
+          <div class="lg-viewas__row">
+            <span class="lg-viewas__lbl">Discussion posts</span>
+            <span class="lg-disc-seg" role="radiogroup" aria-label="Who sees your identity on discussion posts">
+              <button type="button" role="radio" aria-checked="true">Public</button>
+              <button type="button" role="radio" aria-checked="false">Member-only</button>
+            </span>
+            <span class="lg-viewas__note">Your name &amp; avatar show on your discussion posts to everyone.</span>
+          </div>
+
+          <!-- ▼ THE NEW ROW ▼ -->
+          <div class="lg-viewas__row">
+            <span class="lg-viewas__lbl">Featured member</span>
+            <label class="lg-feat lg-feat--off">
+              <input type="checkbox" aria-label="Include me as a possible featured member">
+              <span class="lg-feat__txt">Include me as a possible featured member &mdash; the Looth Group may show my photo, name and what I do on the front page.</span>
+            </label>
+            <span class="lg-viewas__note">Off. You will never appear on the front page unless you tick this.</span>
+          </div>
+          <!-- ▲ THE NEW ROW ▲ -->
+
+          <div class="lg-viewas__hint">This IS your editor &mdash; click any field (name, tagline, the photo, the privacy chips) to edit it in place.</div>
+        </div>
+      </div>
+
+      <div class="stage stage--dark">
+        <span class="stagelbl stagelbl--on">Ticked &mdash; in the pool</span>
+        <div class="lg-viewas">
+          <div class="lg-viewas__row">
+            <span class="lg-viewas__lbl">Featured member</span>
+            <label class="lg-feat">
+              <input type="checkbox" checked aria-label="Include me as a possible featured member">
+              <span class="lg-feat__txt">Include me as a possible featured member &mdash; the Looth Group may show my photo, name and what I do on the front page.</span>
+            </label>
+            <span class="lg-viewas__note">You are in the pool. An admin may put you on the front page. Untick at any time &mdash; it takes you off immediately.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="note note--pick">
+        <b>Why this one.</b> It sits with the other three permission controls the member
+        already has, in the one bar they think of as &ldquo;who sees what about me&rdquo;. Nothing new to
+        find, nothing new to learn &mdash; and no new surface to build, gate or keep in step.
+      </div>
+    </div>
+
+    <!-- ══════════════════ VARIANT B ══════════════════ -->
+    <div>
+      <span class="stagelbl">Variant B &mdash; its own card under the bar</span>
+      <span class="pill pill--alt">Alternative</span>
+
+      <div class="stage stage--dark">
+        <div class="lg-viewas" style="margin-bottom:14px">
+          <div class="lg-viewas__row">
+            <span class="lg-viewas__lbl">View as</span>
+            <span class="lg-viewas__seg">
+              <a href="#b">Public</a><a href="#b">Member</a><a href="#b" aria-current="true">Me</a>
+            </span>
+          </div>
+          <div class="lg-viewas__row">
+            <span class="lg-viewas__lbl">Profile visibility</span>
+            <span class="lg-vchip lg-vchip--public">Public</span>
+            <span class="lg-viewas__note">Public is the default for your whole profile.</span>
+          </div>
+          <div class="lg-viewas__row">
+            <span class="lg-viewas__lbl">Discussion posts</span>
+            <span class="lg-disc-seg" role="radiogroup" aria-label="Who sees your identity on discussion posts">
+              <button type="button" role="radio" aria-checked="true">Public</button>
+              <button type="button" role="radio" aria-checked="false">Member-only</button>
+            </span>
+          </div>
+        </div>
+
+        <!-- ▼ THE NEW CARD ▼ -->
+        <div class="lg-featcard">
+          <h3 class="lg-featcard__h">Featured member</h3>
+          <p class="lg-featcard__p">Now and then we put one member on the front page &mdash; their photo, their name, what they
+             do, and a link to their profile. It is always someone who said yes first.</p>
+          <label class="lg-featcard__row">
+            <input type="checkbox" aria-label="Yes, include me as a possible featured member">
+            <span class="lg-featcard__lbl">Yes &mdash; include me as a possible featured member.</span>
+          </label>
+          <p class="lg-featcard__meta">You can untick this at any time. If you are on the front page when you do, you come off it straight away.</p>
+        </div>
+        <!-- ▲ THE NEW CARD ▲ -->
+      </div>
+
+      <div class="stage stage--dark">
+        <span class="stagelbl stagelbl--on">Ticked &mdash; in the pool</span>
+        <div class="lg-featcard lg-featcard--in">
+          <h3 class="lg-featcard__h">Featured member <span class="lg-vchip lg-vchip--public" style="margin-left:0">In the pool</span></h3>
+          <p class="lg-featcard__p">Now and then we put one member on the front page &mdash; their photo, their name, what they
+             do, and a link to their profile. It is always someone who said yes first.</p>
+          <label class="lg-featcard__row">
+            <input type="checkbox" checked aria-label="Yes, include me as a possible featured member">
+            <span class="lg-featcard__lbl">Yes &mdash; include me as a possible featured member.</span>
+          </label>
+          <p class="lg-featcard__meta">In the pool since <b>12 August 2026</b>. You can untick at any time &mdash; if you are on the front page when you do, you come off it straight away.</p>
+        </div>
+      </div>
+
+      <div class="note">
+        <b>What it buys.</b> Room for the full sentence and for state the member might want
+        (&ldquo;in the pool since&hellip;&rdquo;, &ldquo;you were featured in July&rdquo;).
+        <b>What it costs.</b> A fourth permission control that lives somewhere other than the
+        other three, plus its own block, its own visibility rules and its own gate.
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">The state that is easy to forget</h2>
+  <p class="secsub">A member whose profile is <b>Private</b> is owner-only &mdash; no directory card, no map pin, no search hit.
+     Featuring them on a public front page would undo that in one click, so the tickbox has to be unavailable, and say why.</p>
+
+  <div class="stage stage--dark">
+    <span class="stagelbl stagelbl--warn">Profile visibility = Private &rarr; consent unavailable</span>
+    <div class="lg-viewas">
+      <div class="lg-viewas__row">
+        <span class="lg-viewas__lbl">Profile visibility</span>
+        <span class="lg-vchip lg-vchip--private">Private</span>
+        <span class="lg-viewas__note">Only you (and site admins) can see your profile. You are removed from the directory, the map, and search until you switch back.</span>
+      </div>
+      <div class="lg-viewas__row">
+        <span class="lg-viewas__lbl">Featured member</span>
+        <label class="lg-feat lg-feat--disabled">
+          <input type="checkbox" disabled aria-label="Include me as a possible featured member">
+          <span class="lg-feat__txt">Include me as a possible featured member &mdash; the Looth Group may show my photo, name and what I do on the front page.</span>
+        </label>
+        <span class="lg-viewas__note">Unavailable while your profile is Private &mdash; the front page is public. Set your profile to Public to opt in.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="note note--q">
+    <b>Three things for you to rule on, Ian.</b>
+    <ul>
+      <li><b>A or B.</b> Row in the privacy bar (A, recommended), or its own card (B)?</li>
+      <li><b>The words.</b> The sentence above is the whole consent &mdash; it is what a member is
+          agreeing to and what we would quote back if anyone asked. Change any of it you like.</li>
+      <li><b>Untick while featured.</b> Drawn here as <i>off the front page immediately</i>. The
+          alternative is &ldquo;stays up until an admin swaps them out&rdquo; &mdash; cheaper to build, worse for the
+          member who just changed their mind. Recommend immediate.</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <b>Nothing here is built.</b> These are drawings on the real stylesheet. No column, no endpoint,
+    no checkbox exists yet &mdash; the build starts after your ruling, behind a flag defaulted off.
+  </div>
+
+</div>
+</body>
+</html>

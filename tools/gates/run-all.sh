@@ -750,6 +750,18 @@ run "compose" python3 "$(dirname "$0")/compose-gate.py" \
 echo "=== GATE 38: v2 insert path — OFF is identity, an insert only SURFACES declared meta ==="
 run "license-insert" python3 "$(dirname "$0")/license-insert-gate.py"
 
+echo "=== GATE 39: featured members — schema constraints, completeness parity, flag-off, no admin override ==="
+# Backlog 18 (Ian 8/11), rulings 2026-08-14. Roster number allocated by
+# keeper 2026-08-15 — first as 36, RENUMBERED to 39 the same night when
+# keeper caught a collision with dark-anon-sweep also wiring 36 (not minted
+# from this branch either time — exactly the two-lanes-both-mint-9/9 failure
+# this convention exists to avoid, caught by keeper instead of repeated). No "/N"
+# suite-total in the banner on purpose: that total is a cosmetic echo string
+# other lanes are concurrently bumping for their own gates tonight (34, 35),
+# and it feeds no counter in this script — see run(), which tracks red/dead
+# by exit code only.
+run "featured-member" python3 "$(dirname "$0")/featured-member-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

@@ -67,6 +67,12 @@ final class Auth
      * claim, and practice endpoints are deliberately NOT actable: admin edit
      * must never impersonate a member socially.
      */
+    // me-featured.php is DELIBERATELY ABSENT. Ian's featured-members ruling
+    // (backlog 18, 8/11 charter): opt-in consent is explicit and "never
+    // inferred" — no admin override, not even via the front-end edit feature.
+    // An admin acting ?as=<member> may edit their bio; ticking the featured
+    // box on their behalf is a different act (consent, not content) and it
+    // stays theirs alone. Do not add it here without a new ruling from Ian.
     public const ADMIN_EDIT_AS_ENDPOINTS = [
         'me-about.php', 'me-avatar.php', 'me-banner.php', 'me-catalog.php',
         'me-connect.php',            // the connect-INFO block (read + vis PATCH only)

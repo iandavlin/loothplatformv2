@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Featured members — mocks for Ian</title>
+<link rel="stylesheet" href="_mock.css">
+<style>
+body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
+#lgfm .flow { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin:0 0 8px; }
+@media (max-width:1080px){ #lgfm .flow{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:820px){ #lgfm .flow{ grid-template-columns:1fr; } }
+#lgfm .step {
+  background:#fff; color:#33362f; border:1px solid #e3ddd0; border-radius:12px;
+  padding:16px 17px; text-decoration:none; display:block; position:relative;
+}
+#lgfm .step:hover { border-color:var(--lg-sage); }
+#lgfm .step__n {
+  display:inline-block; width:23px; height:23px; border-radius:50%;
+  background:var(--lg-sage); color:#fff; text-align:center;
+  font:800 12px/23px var(--lg-font-sans); margin:0 0 9px;
+}
+#lgfm .step__h { margin:0 0 5px; font:400 18px/1.2 var(--lg-font-serif); color:#1a1d1a; }
+#lgfm .step__p { margin:0; font:500 12.5px/1.55 var(--lg-font-sans); color:#5e6158; }
+#lgfm .step__go { margin:11px 0 0; font:700 12px/1 var(--lg-font-sans); color:var(--lg-sage-d); }
+#lgfm .who__label { margin:9px 0 0; font:700 10px/1 var(--lg-font-sans); letter-spacing:.1em; text-transform:uppercase; }
+#lgfm .who--m { color:#55663c; }
+#lgfm .who--a { color:#8a6326; }
+#lgfm .who--p { color:#6b6f6b; }
+#lgfm ol.asks { margin:8px 0 0; padding-left:20px; }
+#lgfm ol.asks li { margin:9px 0; font:500 13.5px/1.6 var(--lg-font-sans); color:#33362f; }
+#lgfm ol.asks b { color:#1a1d1a; }
+</style>
+</head>
+<body id="lgfm">
+<div class="wrap">
+
+  <div class="mockhead">
+    <h1>Featured members &mdash; four drawings, nothing built</h1>
+    <p>Backlog item 18, your 11 August ask. A member ticks a box saying they are willing to be featured;
+       an admin picks one from the people who ticked; that member appears on the front page automatically.
+       Below is what each of those would look like &mdash; plus the profile-completeness percentage you asked for on 12 August. <b>No code has been written</b> &mdash; that starts
+       after you have ruled on these.</p>
+    <nav class="crumbs">
+      <a href="decide.html" style="background:#c66845;color:#fff;border-color:transparent">★ Decisions</a>
+      <a href="./" aria-current="page">Overview</a>
+      <a href="tickbox.html">1 &middot; Tickbox</a>
+      <a href="dash.html">2 &middot; Admin dash</a>
+      <a href="frontpage.html">3 &middot; Front page</a>
+      <a href="completeness.html">4 &middot; Completeness</a>
+      <a href="desktop.html">Desktop L/D</a>
+    </nav>
+  </div>
+
+  <div class="flow">
+    <a class="step" href="tickbox.html">
+      <span class="step__n">1</span>
+      <h2 class="step__h">The member says yes</h2>
+      <p class="step__p">A tickbox on their own profile, sitting with the privacy controls they already have.
+         Off for everybody until they tick it themselves.</p>
+      <p class="who__label who--m">Member-facing</p>
+      <p class="step__go">See the tickbox &rarr;</p>
+    </a>
+    <a class="step" href="dash.html">
+      <span class="step__n">2</span>
+      <h2 class="step__h">You pick one</h2>
+      <p class="step__p">An admin page listing everyone who ticked the box, who is on the front page now, and
+         everyone who has had a turn before.</p>
+      <p class="who__label who--a">Admin only</p>
+      <p class="step__go">See the dash &rarr;</p>
+    </a>
+    <a class="step" href="frontpage.html">
+      <span class="step__n">3</span>
+      <h2 class="step__h">They appear</h2>
+      <p class="step__p">The front-page band that already exists &mdash; but fed from that member&rsquo;s real profile
+         instead of hand-typed text. Deselect and it comes down.</p>
+      <p class="who__label who--p">Public</p>
+      <p class="step__go">See the card &rarr;</p>
+    </a>
+    <a class="step" href="completeness.html" style="border-left:4px solid var(--lg-amber)">
+      <span class="step__n">4</span>
+      <h2 class="step__h">&hellip; and the percentage</h2>
+      <p class="step__p">Your 12 August ruling. A profile-completeness meter: what it is made of, where a member
+         meets it, what the dash does with it &mdash; and the real state of profiles on live.</p>
+      <p class="who__label who--m">Member-facing &middot; NEW</p>
+      <p class="step__go">See the meter &rarr;</p>
+    </a>
+  </div>
+
+  <div class="note note--pick">
+    <b>One thing worth knowing before you look.</b> The front-page featured band is <b>already built and already
+    running</b> &mdash; it has said <i>Dan Erlewine</i> since June, typed by hand into a config file. So this job is
+    smaller than it sounds: we are not designing a new front-page thing, we are giving that band a source
+    (members who consented) and giving you a way to choose (the dash).
+  </div>
+
+  <div class="note note--q">
+    <b>A correction, and it is the reason your percentage ruling matters.</b> I first reported that ~1,477 members
+    could make a good featured card. <b>That was wrong.</b> It counted the <i>business name</i> field, which for
+    <b>97%</b> of members is just a slice of their own display name (&ldquo;Brian Kuchta&rdquo; &rarr; &ldquo;Kuchta&rdquo;),
+    not anything they wrote. Measured properly on live: <b>66</b> members could make a complete card today.
+    <b>978 members &mdash; 56% of everyone &mdash; have a photo and nothing else.</b>
+    <a href="completeness.html">The full picture, and what to do about it &rarr;</a>
+  </div>
+
+  <h2 class="sec">On your phone</h2>
+  <p class="secsub">The same three pages at phone width, rendering in your own browser. Tap any frame to open it full-size.</p>
+
+  <div class="phones">
+    <div class="phone">
+      <div class="phone__f"><iframe src="tickbox.html" title="Tickbox mock at phone width" loading="lazy"></iframe></div>
+      <p class="phone__c"><a href="tickbox.html">1 &middot; The tickbox</a></p>
+    </div>
+    <div class="phone">
+      <div class="phone__f"><iframe src="frontpage.html" title="Front-page card mock at phone width" loading="lazy"></iframe></div>
+      <p class="phone__c"><a href="frontpage.html">3 &middot; The front-page card</a></p>
+    </div>
+    <div class="phone">
+      <div class="phone__f"><iframe src="dash.html" title="Admin dash mock at phone width" loading="lazy"></iframe></div>
+      <p class="phone__c"><a href="dash.html">2 &middot; The admin dash</a></p>
+    </div>
+    <div class="phone">
+      <div class="phone__f"><iframe src="completeness.html" title="Completeness meter mock at phone width" loading="lazy"></iframe></div>
+      <p class="phone__c"><a href="completeness.html">4 &middot; The percentage</a></p>
+    </div>
+  </div>
+
+  <h2 class="sec">What we need from you</h2>
+  <p class="secsub">Everything else we can decide ourselves. One is now ruled; the rest still change what gets built.</p>
+
+  <div class="note note--q">
+    <ol class="asks">
+      <li><b>Tickbox: A or B?</b> A row in the privacy bar the member already has (recommended), or its own
+          card underneath it. <a href="tickbox.html">Drawn side by side &rarr;</a></li>
+      <li><b>The consent wording.</b> &ldquo;Include me as a possible featured member &mdash; the Looth Group may show
+          my photo, name and what I do on the front page.&rdquo; That sentence is the whole agreement. Change any of it.</li>
+      <li><b>Untick while featured.</b> Off the front page immediately (recommended), or stays up until you swap them out.</li>
+      <li style="opacity:.62"><b>One at a time, or a rotation?</b> &mdash; <b>RULED 12 Aug: one at a time.</b>
+          Built that way; no rotation, no running order.</li>
+      <li><b>Live or frozen?</b> Should the card follow their profile as they edit it (recommended), or keep
+          the details as they were when you picked them?</li>
+      <li><b>Can the dash ask people?</b> Drawn with no override and no invitations &mdash; the only way into the pool is
+          a member ticking their own box. A &ldquo;nudge them to opt in&rdquo; email would be a separate build.</li>
+      <li><b>What the button says.</b> &ldquo;See Beau&rsquo;s profile&rdquo;, or something else.</li>
+      <li><b>The profile-completeness percentage</b> &mdash; your 12 Aug answer to that question
+          (&ldquo;it should be more than that&rdquo;). Designed and drawn: the eight items, where a member meets it,
+          and what the dash does with it. It needs three rulings of its own.
+          <a href="completeness.html">See the meter &rarr;</a></li>
+    </ol>
+  </div>
+
+  <div class="note">
+    <b>How it would ship.</b> The tickbox is member-facing, so it merges behind a flag defaulted <b>off</b>: it
+    reaches the dev2 serve as a proven no-op, you look at the real running thing, and only then does it get
+    switched on. The dash is admin-only and the front-page band already exists.
+    Nobody appears on the front page at any point in that sequence without having ticked the box first.
+  </div>
+
+  <p style="margin:26px 0 0;font:500 12px/1.5 var(--lg-font-sans);color:#7a7f72">
+    featured-members lane &middot; mocks only, phase 1 &middot; 12 August 2026 &middot;
+    sample rows are real public profiles standing in for a pool that does not exist yet &mdash; nobody has been asked.
+  </p>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Featured members — desktop, light &amp; dark (mock)</title>
+<link rel="stylesheet" href="_mock.css">
+<style>
+body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
+</style>
+</head>
+<body id="lgfm">
+<div class="wrap wrap--wide">
+
+  <div class="mockhead">
+    <h1>Desktop &mdash; every surface, light and dark</h1>
+    <p>All five surfaces at desktop width, each drawn twice: once as a member with the <b>Light</b> theme sees it,
+       once as a member with <b>Dark</b> picked. Both tickbox variants are here &mdash; you have not chosen one yet.
+       Standing rulings applied throughout: <b>one featured member at a time</b>, and the
+       <b>%-complete meter</b> in place of the simple tagline ask.</p>
+    <nav class="crumbs">
+      <a href="decide.html" style="background:#c66845;color:#fff;border-color:transparent">★ Decisions</a>
+      <a href="./">&larr; Overview</a>
+      <a href="tickbox.html">1 &middot; Tickbox</a>
+      <a href="dash.html">2 &middot; Admin dash</a>
+      <a href="frontpage.html">3 &middot; Front page</a>
+      <a href="completeness.html">4 &middot; Completeness</a>
+      <a href="desktop.html" aria-current="page">Desktop L/D</a>
+    </nav>
+  </div>
+
+  <div class="note note--pick">
+    <b>The dark renderings are the real thing, not a guess.</b> They use the platform's own dark palette
+    (from the theme picker) plus the profile editor's existing dark rules &mdash; so the privacy bar stays a dark
+    slab rather than flipping white, exactly as it does today.
+    <b>Drawing them dark caught three faults in my own new pieces</b> (the consent card and the meter had
+    fixed light-grey text that would have gone near-invisible on a dark card). Fixed here, before they were built.
+  </div>
+
+  <!-- ═══════════════════ 1A ═══════════════════ -->
+  <h2 class="sec">1A &middot; Tickbox &mdash; Variant A, a row in the privacy bar <span class="pill pill--rec">Recommended</span></h2>
+  <p class="secsub">Shown in the real profile column width (760px), where it actually lives.</p>
+
+  <div class="tp tp--light" data-shot="1a-light">
+    <span class="tp__lbl">Light</span>
+    <div class="tp__shell">
+      <div class="lg-viewas">
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">View as</span>
+          <span class="lg-viewas__seg"><a href="#1a">Public</a><a href="#1a">Member</a><a href="#1a" aria-current="true">Me</a></span>
+        </div>
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">Profile visibility</span>
+          <span class="lg-vchip lg-vchip--public">Public</span>
+          <span class="lg-viewas__note">Public is the default for your whole profile.</span>
+        </div>
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">Discussion posts</span>
+          <span class="lg-disc-seg" role="radiogroup" aria-label="Who sees your identity on discussion posts">
+            <button type="button" role="radio" aria-checked="true">Public</button>
+            <button type="button" role="radio" aria-checked="false">Member-only</button>
+          </span>
+        </div>
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">Featured member</span>
+          <label class="lg-feat">
+            <input type="checkbox" checked aria-label="Include me as a possible featured member">
+            <span class="lg-feat__txt">Include me as a possible featured member &mdash; the Looth Group may show my photo, name and what I do on the front page.</span>
+          </label>
+          <span class="lg-viewas__note">You are in the pool. Untick at any time &mdash; it takes you off immediately.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tp tp--dark tp-dark" data-shot="1a-dark">
+    <span class="tp__lbl">Dark</span>
+    <div class="tp__shell">
+      <div class="lg-viewas">
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">View as</span>
+          <span class="lg-viewas__seg"><a href="#1ad">Public</a><a href="#1ad">Member</a><a href="#1ad" aria-current="true">Me</a></span>
+        </div>
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">Profile visibility</span>
+          <span class="lg-vchip lg-vchip--public">Public</span>
+          <span class="lg-viewas__note">Public is the default for your whole profile.</span>
+        </div>
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">Discussion posts</span>
+          <span class="lg-disc-seg" role="radiogroup" aria-label="Who sees your identity on discussion posts">
+            <button type="button" role="radio" aria-checked="true">Public</button>
+            <button type="button" role="radio" aria-checked="false">Member-only</button>
+          </span>
+        </div>
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">Featured member</span>
+          <label class="lg-feat">
+            <input type="checkbox" checked aria-label="Include me as a possible featured member">
+            <span class="lg-feat__txt">Include me as a possible featured member &mdash; the Looth Group may show my photo, name and what I do on the front page.</span>
+          </label>
+          <span class="lg-viewas__note">You are in the pool. Untick at any time &mdash; it takes you off immediately.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>Yes, those two look almost the same &mdash; that is correct.</b> The privacy bar is a
+    <i>deliberate</i> dark slab even in the light theme, and the profile editor already pins it so it stays dark
+    rather than flipping white when a member picks Dark. So Variant A barely moves between themes, which is a
+    quiet point in its favour: one rendering to design, one to maintain.
+  </div>
+
+  <!-- ═══════════════════ 1B ═══════════════════ -->
+  <h2 class="sec">1B &middot; Tickbox &mdash; Variant B, its own card <span class="pill pill--alt">Alternative</span></h2>
+  <p class="secsub">Same words, more room. Shown ticked, with the &ldquo;in the pool&rdquo; state it can carry.</p>
+
+  <div class="tp tp--light" data-shot="1b-light">
+    <span class="tp__lbl">Light</span>
+    <div class="tp__shell">
+      <div class="lg-featcard lg-featcard--in">
+        <h3 class="lg-featcard__h">Featured member <span class="lg-vchip lg-vchip--public" style="margin-left:0">In the pool</span></h3>
+        <p class="lg-featcard__p">Now and then we put one member on the front page &mdash; their photo, their name, what they
+           do, and a link to their profile. It is always someone who said yes first.</p>
+        <label class="lg-featcard__row">
+          <input type="checkbox" checked aria-label="Yes, include me as a possible featured member">
+          <span class="lg-featcard__lbl">Yes &mdash; include me as a possible featured member.</span>
+        </label>
+        <p class="lg-featcard__meta">In the pool since <b>12 August 2026</b>. You can untick at any time &mdash; if you are on the front page when you do, you come off it straight away.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="tp tp--dark tp-dark" data-shot="1b-dark">
+    <span class="tp__lbl">Dark</span>
+    <div class="tp__shell">
+      <div class="lg-featcard lg-featcard--in">
+        <h3 class="lg-featcard__h">Featured member <span class="lg-vchip lg-vchip--public" style="margin-left:0">In the pool</span></h3>
+        <p class="lg-featcard__p">Now and then we put one member on the front page &mdash; their photo, their name, what they
+           do, and a link to their profile. It is always someone who said yes first.</p>
+        <label class="lg-featcard__row">
+          <input type="checkbox" checked aria-label="Yes, include me as a possible featured member">
+          <span class="lg-featcard__lbl">Yes &mdash; include me as a possible featured member.</span>
+        </label>
+        <p class="lg-featcard__meta">In the pool since <b>12 August 2026</b>. You can untick at any time &mdash; if you are on the front page when you do, you come off it straight away.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>This pair is the clearest argument between A and B.</b> A keeps the consent with the other permission
+    controls and costs nothing new. B gets room for the sentence and for state (&ldquo;in the pool since&hellip;&rdquo;) &mdash;
+    at the price of a fourth control living somewhere else, with its own dark rules to maintain, as this page just showed.
+  </div>
+
+  <!-- ═══════════════════ 2 ═══════════════════ -->
+  <h2 class="sec">2 &middot; The %-complete meter</h2>
+  <p class="secsub">Your 12 August ruling. Where most members are today (25%), and a profile that is finished (100%).</p>
+
+  <div class="tp tp--light" data-shot="meter-light">
+    <span class="tp__lbl">Light</span>
+    <div class="two">
+      <div class="meter">
+        <div class="meter__top"><span class="meter__pct">25%</span><span class="meter__lbl">Profile complete</span></div>
+        <div class="meter__bar"><div class="meter__fill meter__fill--low" style="width:25%"></div></div>
+        <ul class="meter__list">
+          <li class="meter__item"><span class="meter__tick">&check;</span>A photo of you</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>Where you are</li>
+          <li class="meter__item meter__item--next"><span class="meter__tick">!</span>What you do &mdash; one line</li>
+          <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>A bit about you</li>
+          <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>A link or two</li>
+          <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>Skills &amp; instruments</li>
+          <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>Photos of your work</li>
+          <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>A banner image</li>
+        </ul>
+        <p class="meter__next"><b>Next:</b> tell people what you do &mdash; one line, like &ldquo;Acoustic guitar builder in St. Charles, MO&rdquo;.</p>
+      </div>
+      <div class="meter">
+        <div class="meter__top"><span class="meter__pct">100%</span><span class="meter__lbl">Profile complete</span></div>
+        <div class="meter__bar"><div class="meter__fill" style="width:100%"></div></div>
+        <ul class="meter__list">
+          <li class="meter__item"><span class="meter__tick">&check;</span>A photo of you</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>Where you are</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>What you do &mdash; one line</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>A bit about you</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>A link or two</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>Skills &amp; instruments</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>Photos of your work</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>A banner image</li>
+        </ul>
+        <p class="meter__next"><b>Done.</b> This is exactly the profile that makes a good featured card.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="tp tp--dark tp-dark" data-shot="meter-dark">
+    <span class="tp__lbl">Dark</span>
+    <div class="two">
+      <div class="meter">
+        <div class="meter__top"><span class="meter__pct">25%</span><span class="meter__lbl">Profile complete</span></div>
+        <div class="meter__bar"><div class="meter__fill meter__fill--low" style="width:25%"></div></div>
+        <ul class="meter__list">
+          <li class="meter__item"><span class="meter__tick">&check;</span>A photo of you</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>Where you are</li>
+          <li class="meter__item meter__item--next"><span class="meter__tick">!</span>What you do &mdash; one line</li>
+          <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>A bit about you</li>
+          <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>A link or two</li>
+          <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>Skills &amp; instruments</li>
+          <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>Photos of your work</li>
+          <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>A banner image</li>
+        </ul>
+        <p class="meter__next"><b>Next:</b> tell people what you do &mdash; one line, like &ldquo;Acoustic guitar builder in St. Charles, MO&rdquo;.</p>
+      </div>
+      <div class="meter">
+        <div class="meter__top"><span class="meter__pct">100%</span><span class="meter__lbl">Profile complete</span></div>
+        <div class="meter__bar"><div class="meter__fill" style="width:100%"></div></div>
+        <ul class="meter__list">
+          <li class="meter__item"><span class="meter__tick">&check;</span>A photo of you</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>Where you are</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>What you do &mdash; one line</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>A bit about you</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>A link or two</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>Skills &amp; instruments</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>Photos of your work</li>
+          <li class="meter__item"><span class="meter__tick">&check;</span>A banner image</li>
+        </ul>
+        <p class="meter__next"><b>Done.</b> This is exactly the profile that makes a good featured card.</p>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">2b &middot; The meter inside the tickbox flow</h2>
+  <p class="secsub">The moment a member volunteers, they are told plainly what their card would look like right now.</p>
+
+  <div class="tp tp--light" data-shot="flow-light">
+    <span class="tp__lbl">Light</span>
+    <div class="tp__shell">
+      <div class="lg-viewas">
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">Featured member</span>
+          <label class="lg-feat">
+            <input type="checkbox" checked aria-label="Include me as a possible featured member">
+            <span class="lg-feat__txt">Include me as a possible featured member &mdash; the Looth Group may show my photo, name and what I do on the front page.</span>
+          </label>
+        </div>
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl"></span>
+          <div class="meter meter--dark" style="flex:1 1 460px;min-width:300px">
+            <div class="meter__top"><span class="meter__pct">25%</span><span class="meter__lbl">complete</span></div>
+            <div class="meter__bar"><div class="meter__fill meter__fill--low" style="width:25%"></div></div>
+            <p class="meter__next" style="margin-top:9px"><b>Your card would be a photo and a name.</b>
+               You are missing the line about what you do &mdash; add it and your card is ready.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tp tp--dark tp-dark" data-shot="flow-dark">
+    <span class="tp__lbl">Dark</span>
+    <div class="tp__shell">
+      <div class="lg-viewas">
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">Featured member</span>
+          <label class="lg-feat">
+            <input type="checkbox" checked aria-label="Include me as a possible featured member">
+            <span class="lg-feat__txt">Include me as a possible featured member &mdash; the Looth Group may show my photo, name and what I do on the front page.</span>
+          </label>
+        </div>
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl"></span>
+          <div class="meter meter--dark" style="flex:1 1 460px;min-width:300px">
+            <div class="meter__top"><span class="meter__pct">25%</span><span class="meter__lbl">complete</span></div>
+            <div class="meter__bar"><div class="meter__fill meter__fill--low" style="width:25%"></div></div>
+            <p class="meter__next" style="margin-top:9px"><b>Your card would be a photo and a name.</b>
+               You are missing the line about what you do &mdash; add it and your card is ready.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ 3 ═══════════════════ -->
+  <h2 class="sec">3 &middot; The front-page featured card</h2>
+  <p class="secsub">One member at a time, per your ruling. Signed-in view; the logged-out view drops the location line.</p>
+
+  <div class="tp tp--light" data-shot="card-light">
+    <span class="tp__lbl">Light</span>
+    <div class="view-discover">
+      <section class="row row--featured-member">
+        <div class="lg-fm">
+          <span class="lg-fm__badge">Featured member</span>
+          <span class="lg-fm__avi"><img src="/profile-media/avatars/3aa726b4-2e73-59e9-9741-0894df80837a/3.webp?v=3" alt="" width="104" height="104" loading="lazy"></span>
+          <div class="lg-fm__body">
+            <h2 class="lg-fm__name">Beau Hannam</h2>
+            <div class="lg-fm__role">Guitar Maker and Repairer. Since 2003</div>
+            <div class="lg-fm__where">Grand Junction, Colorado</div>
+            <p class="lg-fm__bio">I studied lutherie at Gilet Guitars Sydney, Australia in 2003 (and latter worked there) and have been building high end guitars and ukuleles since then. As well as building, I have been repairing stringed instruments since 2013 when I moved to Grand Junction, Colorado.</p>
+          </div>
+          <div class="lg-fm__act"><a class="lg-fm__cta" href="#p">See Beau&rsquo;s profile</a></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="tp tp--dark tp-dark" data-shot="card-dark">
+    <span class="tp__lbl">Dark</span>
+    <div class="view-discover">
+      <section class="row row--featured-member">
+        <div class="lg-fm">
+          <span class="lg-fm__badge">Featured member</span>
+          <span class="lg-fm__avi"><img src="/profile-media/avatars/3aa726b4-2e73-59e9-9741-0894df80837a/3.webp?v=3" alt="" width="104" height="104" loading="lazy"></span>
+          <div class="lg-fm__body">
+            <h2 class="lg-fm__name">Beau Hannam</h2>
+            <div class="lg-fm__role">Guitar Maker and Repairer. Since 2003</div>
+            <div class="lg-fm__where">Grand Junction, Colorado</div>
+            <p class="lg-fm__bio">I studied lutherie at Gilet Guitars Sydney, Australia in 2003 (and latter worked there) and have been building high end guitars and ukuleles since then. As well as building, I have been repairing stringed instruments since 2013 when I moved to Grand Junction, Colorado.</p>
+          </div>
+          <div class="lg-fm__act"><a class="lg-fm__cta" href="#p">See Beau&rsquo;s profile</a></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <h2 class="sec">3b &middot; The same card for an ordinary profile</h2>
+  <p class="secsub">Only 7 members site-wide have a public About for a bio, so most cards run without one. This is the common shape.</p>
+
+  <div class="tp tp--light" data-shot="plain-light">
+    <span class="tp__lbl">Light</span>
+    <div class="view-discover">
+      <section class="row row--featured-member">
+        <div class="lg-fm">
+          <span class="lg-fm__badge">Featured member</span>
+          <span class="lg-fm__avi"><img src="/profile-media/avatars/143a8a92-c39c-5d8b-8891-d76d612071b1/3.webp?v=3" alt="" width="104" height="104" loading="lazy"></span>
+          <div class="lg-fm__body">
+            <h2 class="lg-fm__name">James Roadman</h2>
+            <div class="lg-fm__role">Full service independent repair shop, host of the Looth Group&rsquo;s 3d club</div>
+            <div class="lg-fm__where">San Antonio, Texas</div>
+          </div>
+          <div class="lg-fm__act"><a class="lg-fm__cta" href="#p">See James&rsquo;s profile</a></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="tp tp--dark tp-dark" data-shot="plain-dark">
+    <span class="tp__lbl">Dark</span>
+    <div class="view-discover">
+      <section class="row row--featured-member">
+        <div class="lg-fm">
+          <span class="lg-fm__badge">Featured member</span>
+          <span class="lg-fm__avi"><img src="/profile-media/avatars/143a8a92-c39c-5d8b-8891-d76d612071b1/3.webp?v=3" alt="" width="104" height="104" loading="lazy"></span>
+          <div class="lg-fm__body">
+            <h2 class="lg-fm__name">James Roadman</h2>
+            <div class="lg-fm__role">Full service independent repair shop, host of the Looth Group&rsquo;s 3d club</div>
+            <div class="lg-fm__where">San Antonio, Texas</div>
+          </div>
+          <div class="lg-fm__act"><a class="lg-fm__cta" href="#p">See James&rsquo;s profile</a></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ 4 ═══════════════════ -->
+  <h2 class="sec">4 &middot; The admin dash</h2>
+  <p class="secsub">With the %-complete column and the ready/not-ready rule, one featured member at a time.</p>
+
+  <div class="tp tp--light" data-shot="dash-light">
+    <span class="tp__lbl">Light &mdash; and the only rendering there is, see below</span>
+    <div class="wpwrap">
+      <h1>Featured Member</h1>
+      <p class="description">Members who ticked the box themselves. <b>Feature</b> is only offered when their card would look good.</p>
+      <div class="wpnotice wpnotice--ok" style="margin-top:12px"><b>On the front page now:</b> Beau Hannam, since 9 August 2026.</div>
+      <table class="wpt">
+        <thead>
+          <tr><th style="width:26%">Member</th><th>What they do</th><th style="width:13%">Profile</th><th style="width:14%">Card</th><th style="width:10%"></th></tr>
+        </thead>
+        <tbody>
+          <tr class="is-featured">
+            <td data-l="Member"><div class="who">
+              <img class="wpavi" src="/profile-media/avatars/3aa726b4-2e73-59e9-9741-0894df80837a/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">Beau Hannam</div><div class="who__s">/u/beau-hannam-beau-hannam-guitars</div></div></div></td>
+            <td data-l="What they do">Guitar Maker and Repairer. Since 2003</td>
+            <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill" style="width:100%"></span></span><span class="minimeter__n">100%</span></span></td>
+            <td data-l="Card"><span class="tag tag--live">Ready &middot; on now</span></td>
+            <td><a class="btn btn--del" href="#r">Remove</a></td>
+          </tr>
+          <tr>
+            <td data-l="Member"><div class="who">
+              <img class="wpavi" src="/profile-media/avatars/143a8a92-c39c-5d8b-8891-d76d612071b1/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">James Roadman</div><div class="who__s">/u/james-roadman-roadman-guitars</div></div></div></td>
+            <td data-l="What they do">Full service independent repair shop, host of the Looth Group&rsquo;s 3d club</td>
+            <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill" style="width:62%"></span></span><span class="minimeter__n">62%</span></span></td>
+            <td data-l="Card"><span class="tag tag--pool">Ready</span></td>
+            <td><a class="btn btn--pri" href="#f">Feature</a></td>
+          </tr>
+          <tr>
+            <td data-l="Member"><div class="who">
+              <img class="wpavi" src="/profile-media/avatars/e7399820-be30-59a2-b1cf-8b3024f23ee6/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+              <div style="min-width:0"><div class="who__n">Robert Owens</div><div class="who__s">/u/robert-owens</div></div></div></td>
+            <td data-l="What they do" class="muted">&mdash; no line yet &mdash;</td>
+            <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill minimeter__fill--low" style="width:25%"></span></span><span class="minimeter__n">25%</span></span></td>
+            <td data-l="Card"><span class="tag tag--past">Not ready</span></td>
+            <td><a class="btn" aria-disabled="true" href="#n">Feature</a></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="wpnotice" style="margin:12px 0 0"><b>One at a time</b> (your ruling): featuring James would take Beau down in the same click, and the history records both.</div>
+    </div>
+  </div>
+
+  <div class="note note--q">
+    <b>Why there is no dark version of the dash.</b> The dash is a WordPress <i>admin</i> page, and the member
+    theme picker does not reach WP admin &mdash; it styles the member-facing site only. So a dark rendering here would be
+    a fiction. If you want a dark admin, WordPress has its own admin colour schemes
+    (<i>Users &rarr; Profile &rarr; Admin Colour Scheme</i>) which apply site-wide to every admin page, not just this one.
+    Say the word and I will draw it in whichever scheme you use.
+  </div>
+
+  <div class="note">
+    <b>What the dark pass changed.</b> Three fixes, all in the new pieces and all made before anything is built:
+    the consent card's body text and its &ldquo;in the pool&rdquo; background, and the meter's item text, track and ticks
+    were all fixed light values that would have gone unreadable on a dark card. The existing surfaces
+    (privacy bar, front-page band) already had their dark handling and needed nothing.
+  </div>
+
+</div>
+</body>
+</html>

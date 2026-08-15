@@ -164,6 +164,28 @@ foreach ($allowed_keys as $k) {
             if (!is_string($mk)) continue;
             if (is_scalar($mv) || $mv === null) $clean[$mk] = $mv;
         }
+        // featured-members lane (backlog 18) — MERGE onto the existing map for
+        // THIS key only, never wholesale-replace. Found in review 2026-08-15:
+        // FeaturedMemberDash's Feature action sends only
+        // {enabled, member_uuid, name, role, chosen_by} — it deliberately
+        // does not cache avatar/where/bio/cta_href/cta_label, because
+        // index.php LIVE-resolves those from profile_app on every request
+        // rather than trusting a stale copy. A wholesale $merged[$k]=$clean
+        // would silently DELETE those keys from config.json on every Feature
+        // click. That is invisible while member_uuid is present (index.php's
+        // flag-on resolver ignores them entirely) but breaks the moment the
+        // flag is later turned back off: with member_uuid set the null
+        // fallback correctly blanks the band, but the ORIGINAL hand-typed
+        // card (avatar/bio/etc, unrelated to this feature) is now gone from
+        // config.json too — "flag off" stops meaning "exactly as before
+        // this feature ever existed" the first time an admin uses it.
+        // member_greeting is NOT changed here — no known caller sends a
+        // partial payload for it, and merging every assoc_key by default
+        // would be a wider, unreviewed behaviour change for a problem only
+        // featured_member actually has today.
+        if ($k === 'featured_member') {
+            $clean = $clean + (is_array($existing['featured_member'] ?? null) ? $existing['featured_member'] : []);
+        }
     } else {
         // Sponsor / CTA / Looth rows are flat key→scalar maps.
         $clean = [];
@@ -179,6 +201,45 @@ foreach ($allowed_keys as $k) {
     }
     $merged[$k] = $clean;
     $applied[] = $k . ':' . count($clean);
+}
+
+// Featured-member HISTORY (featured-members lane, backlog 18; ruling item 3:
+// "ONE at a time"). This is the ONE write path to `featured_member`, so it is
+// also the one place a transition can be observed — no second door, no drift
+// between config.json's "who is featured now" and featured_history's "who was,
+// and when". Fires only when `featured_member` was actually part of THIS
+// payload (not on every unrelated save, e.g. a sponsors edit).
+if (in_array('featured_member', $allowed_keys, true) && array_key_exists('featured_member', $payload)) {
+    $prevUuid = (string) ($existing['featured_member']['member_uuid'] ?? '');
+    $prevOn   = !empty($existing['featured_member']['enabled']) && $prevUuid !== '';
+    $nextUuid = (string) ($merged['featured_member']['member_uuid'] ?? '');
+    $nextOn   = !empty($merged['featured_member']['enabled']) && $nextUuid !== '';
+
+    if ($prevUuid !== $nextUuid || $prevOn !== $nextOn) {
+        try {
+            $hpdo = lg_archive_poc_pdo();
+            if ($hpdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql') {
+                if ($prevOn) {
+                    // Close whatever was open. Idempotent by construction —
+                    // if nothing is open this affects 0 rows, never errors.
+                    $hpdo->prepare('UPDATE discovery.featured_history SET ended_at = now() WHERE ended_at IS NULL')->execute();
+                }
+                if ($nextOn) {
+                    $name = (string) ($merged['featured_member']['name'] ?? '');
+                    $by   = $merged['featured_member']['chosen_by'] ?? null;
+                    $ins  = $hpdo->prepare(
+                        'INSERT INTO discovery.featured_history (member_uuid, display_name, chosen_by) VALUES (:u, :n, :b)'
+                    );
+                    $ins->execute([':u' => $nextUuid, ':n' => $name, ':b' => $by]);
+                }
+            }
+        } catch (Throwable $e) {
+            // History is a RECORD of the change, not a gate on it — config.json
+            // (the thing the front page actually reads) must still save even if
+            // the history write fails. Loud in the log, silent to the caller.
+            error_log('[featured-history] write failed: ' . $e->getMessage());
+        }
+    }
 }
 
 /**

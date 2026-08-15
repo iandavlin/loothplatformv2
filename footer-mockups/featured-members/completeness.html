@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Profile completeness — the percentage (mock)</title>
+<link rel="stylesheet" href="_mock.css">
+<style>
+body#lgfm { background:#f2f1ec !important; color:#26281f !important; }
+</style>
+</head>
+<body id="lgfm">
+<div class="wrap">
+
+  <div class="mockhead">
+    <h1>4 &middot; &ldquo;A percent completed of the profile&rdquo;</h1>
+    <p>Your 12 August ruling. I had asked whether the tickbox should also ask for a one-line blurb;
+       you said it should be more than that. Here is the meter, what it is made of, where a member meets it,
+       and what it changes about featuring &mdash; <b>with the real numbers from live underneath it</b>.</p>
+    <nav class="crumbs">
+      <a href="decide.html" style="background:#c66845;color:#fff;border-color:transparent">★ Decisions</a>
+      <a href="./">&larr; Overview</a>
+      <a href="tickbox.html">1 &middot; Tickbox</a>
+      <a href="dash.html">2 &middot; Admin dash</a>
+      <a href="frontpage.html">3 &middot; Front page</a>
+      <a href="completeness.html" aria-current="page">4 &middot; Completeness</a>
+      <a href="desktop.html">Desktop L/D</a>
+    </nav>
+  </div>
+
+  <div class="note note--q">
+    <b>First, a correction I owe you.</b> I told keeper that ~1,477 members could make a good featured card.
+    <b>That was wrong, and badly.</b> It counted the <code>business_name</code> field as &ldquo;what they do&rdquo; &mdash;
+    but for <b>97%</b> of members that field is just a slice of their own display name
+    (&ldquo;Brian Kuchta&rdquo; &rarr; &ldquo;Kuchta&rdquo;), not a business and not a description.
+    The real number of members who could make a complete card today is <b>66</b>.
+    That is the number this page is really about, and it is why your instinct here was right.
+  </div>
+
+  <h2 class="sec">The meter</h2>
+  <p class="secsub">Eight things, each worth 12.5%. Every one is a field that already exists &mdash; nothing new to invent,
+     and nothing that needs a member to write an essay.</p>
+
+  <div class="two">
+    <div>
+      <span class="stagelbl stagelbl--warn">Where most members are today</span>
+      <div class="stage">
+        <div class="meter">
+          <div class="meter__top">
+            <span class="meter__pct">25%</span>
+            <span class="meter__lbl">Profile complete</span>
+          </div>
+          <div class="meter__bar"><div class="meter__fill meter__fill--low" style="width:25%"></div></div>
+          <ul class="meter__list">
+            <li class="meter__item"><span class="meter__tick">&check;</span>A photo of you</li>
+            <li class="meter__item"><span class="meter__tick">&check;</span>Where you are</li>
+            <li class="meter__item meter__item--next"><span class="meter__tick">!</span>What you do &mdash; one line</li>
+            <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>A bit about you</li>
+            <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>A link or two (site, socials)</li>
+            <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>What you work on (skills, instruments)</li>
+            <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>A few photos of your work</li>
+            <li class="meter__item meter__item--todo"><span class="meter__tick">&check;</span>A banner image</li>
+          </ul>
+          <p class="meter__next"><b>Next:</b> tell people what you do &mdash; one line, like
+             &ldquo;Acoustic guitar builder in St. Charles, MO&rdquo;. It is the line that shows under your name everywhere on the site.</p>
+        </div>
+      </div>
+      <div class="note">
+        <b>The percentage alone is a scold; the next step is the useful part.</b> A member at 25% who is only told
+        &ldquo;25%&rdquo; learns nothing. Told <i>which one thing to do next, and why it matters</i>, they can be at 37% in a minute.
+      </div>
+    </div>
+
+    <div>
+      <span class="stagelbl stagelbl--on">A profile that is genuinely finished</span>
+      <div class="stage">
+        <div class="meter">
+          <div class="meter__top">
+            <span class="meter__pct">100%</span>
+            <span class="meter__lbl">Profile complete</span>
+          </div>
+          <div class="meter__bar"><div class="meter__fill" style="width:100%"></div></div>
+          <ul class="meter__list">
+            <li class="meter__item"><span class="meter__tick">&check;</span>A photo of you</li>
+            <li class="meter__item"><span class="meter__tick">&check;</span>Where you are</li>
+            <li class="meter__item"><span class="meter__tick">&check;</span>What you do &mdash; one line</li>
+            <li class="meter__item"><span class="meter__tick">&check;</span>A bit about you</li>
+            <li class="meter__item"><span class="meter__tick">&check;</span>A link or two (site, socials)</li>
+            <li class="meter__item"><span class="meter__tick">&check;</span>What you work on (skills, instruments)</li>
+            <li class="meter__item"><span class="meter__tick">&check;</span>A few photos of your work</li>
+            <li class="meter__item"><span class="meter__tick">&check;</span>A banner image</li>
+          </ul>
+          <p class="meter__next"><b>Done.</b> Nothing left to ask for &mdash; and this is exactly the profile that makes a good featured card.</p>
+        </div>
+      </div>
+      <div class="note note--pick">
+        <b>Five members on live are here.</b> Not five percent &mdash; five people. That is the honest state of the thing
+        this meter is measuring.
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">Where the member meets it</h2>
+  <p class="secsub">Two places, and the second one is your ruling: the tickbox flow says it out loud.</p>
+
+  <div class="stage stage--dark">
+    <span class="stagelbl">On their own profile, in the privacy bar &mdash; always visible to them, never to anyone else</span>
+    <div class="lg-viewas">
+      <div class="lg-viewas__row">
+        <span class="lg-viewas__lbl">View as</span>
+        <span class="lg-viewas__seg"><a href="#c">Public</a><a href="#c">Member</a><a href="#c" aria-current="true">Me</a></span>
+      </div>
+      <div class="lg-viewas__row">
+        <span class="lg-viewas__lbl">Your profile</span>
+        <div class="meter meter--dark" style="flex:1 1 320px;min-width:260px">
+          <div class="meter__top">
+            <span class="meter__pct">25%</span>
+            <span class="meter__lbl">complete &mdash; 2 of 8</span>
+          </div>
+          <div class="meter__bar"><div class="meter__fill meter__fill--low" style="width:25%"></div></div>
+          <p class="meter__next" style="margin-top:0;padding-top:0;border-top:0"><b>Next:</b> what you do &mdash; one line.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage stage--dark">
+    <span class="stagelbl stagelbl--warn">And in the tickbox flow &mdash; the moment they volunteer</span>
+    <div class="lg-viewas">
+      <div class="lg-viewas__row">
+        <span class="lg-viewas__lbl">Featured member</span>
+        <label class="lg-feat">
+          <input type="checkbox" checked aria-label="Include me as a possible featured member">
+          <span class="lg-feat__txt">Include me as a possible featured member &mdash; the Looth Group may show my photo, name and what I do on the front page.</span>
+        </label>
+        <span class="lg-viewas__note">You are in the pool. An admin may put you on the front page.</span>
+      </div>
+      <div class="lg-viewas__row">
+        <span class="lg-viewas__lbl"></span>
+        <div class="meter meter--dark" style="flex:1 1 420px;min-width:280px">
+          <div class="meter__top">
+            <span class="meter__pct">25%</span>
+            <span class="meter__lbl">complete</span>
+          </div>
+          <div class="meter__bar"><div class="meter__fill meter__fill--low" style="width:25%"></div></div>
+          <p class="meter__next" style="margin-top:9px">
+            <b>Your card would be a photo and a name.</b> Featured members get a card with their photo, their name,
+            one line about what they do, and where they are. You are missing the line about what you do &mdash;
+            add it and your card is ready.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note note--pick">
+    <b>Recommendation: the meter nudges, it does not refuse.</b> A member who wants to volunteer is allowed to
+    volunteer &mdash; we just tell them, plainly, what their card would look like right now. Blocking consent
+    behind a percentage would be a strange thing to do to someone who is trying to say yes, and it would
+    make the pool look empty for reasons nobody can see.
+  </div>
+
+  <h2 class="sec">What the dash does with it</h2>
+  <p class="secsub">This is where the percentage earns its keep: you pick a member and you can see, without clicking through,
+     whether their card will look good.</p>
+
+  <div class="wpwrap">
+    <h1>Featured Member</h1>
+    <p class="description">Members who ticked the box themselves. <b>Ready</b> means their card has all four lines: photo, name, what they do, where they are.</p>
+    <table class="wpt">
+      <thead>
+        <tr><th style="width:30%">Member</th><th style="width:20%">Profile</th><th style="width:18%">Card</th><th>What is missing</th><th style="width:10%"></th></tr>
+      </thead>
+      <tbody>
+        <tr class="is-featured">
+          <td data-l="Member"><div class="who">
+            <img class="wpavi" src="/profile-media/avatars/3aa726b4-2e73-59e9-9741-0894df80837a/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+            <div style="min-width:0"><div class="who__n">Beau Hannam</div><div class="who__s">/u/beau-hannam-beau-hannam-guitars</div></div></div></td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill" style="width:100%"></span></span><span class="minimeter__n">100%</span></span></td>
+          <td data-l="Card"><span class="tag tag--live">Ready &middot; on now</span></td>
+          <td data-l="What is missing" class="muted">&mdash;</td>
+          <td><a class="btn" aria-disabled="true" href="#f">Featured</a></td>
+        </tr>
+        <tr>
+          <td data-l="Member"><div class="who">
+            <img class="wpavi" src="/profile-media/avatars/143a8a92-c39c-5d8b-8891-d76d612071b1/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+            <div style="min-width:0"><div class="who__n">James Roadman</div><div class="who__s">/u/james-roadman-roadman-guitars</div></div></div></td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill" style="width:62%"></span></span><span class="minimeter__n">62%</span></span></td>
+          <td data-l="Card"><span class="tag tag--pool">Ready</span></td>
+          <td data-l="What is missing" class="muted">No gallery, no banner &mdash; the card does not use those</td>
+          <td><a class="btn btn--pri" href="#f">Feature</a></td>
+        </tr>
+        <tr>
+          <td data-l="Member"><div class="who">
+            <img class="wpavi" src="/profile-media/avatars/e7399820-be30-59a2-b1cf-8b3024f23ee6/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+            <div style="min-width:0"><div class="who__n">Robert Owens</div><div class="who__s">/u/robert-owens</div></div></div></td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill minimeter__fill--low" style="width:25%"></span></span><span class="minimeter__n">25%</span></span></td>
+          <td data-l="Card"><span class="tag tag--past">Not ready</span></td>
+          <td data-l="What is missing"><b>No line about what he does.</b> His card would be a photo and a name.</td>
+          <td><a class="btn" aria-disabled="true" href="#f">Feature</a></td>
+        </tr>
+        <tr>
+          <td data-l="Member"><div class="who">
+            <img class="wpavi" src="/profile-media/avatars/a8a06a20-b651-546b-86bc-f39e521fd7a9/3.webp?v=3" alt="" width="36" height="36" loading="lazy">
+            <div style="min-width:0"><div class="who__n">Mr fid l sticks</div><div class="who__s">/u/mr-fid-l-sticks</div></div></div></td>
+          <td data-l="Profile"><span class="minimeter"><span class="minimeter__bar"><span class="minimeter__fill minimeter__fill--low" style="width:37%"></span></span><span class="minimeter__n">37%</span></span></td>
+          <td data-l="Card"><span class="tag tag--past">Not ready</span></td>
+          <td data-l="What is missing">No location set</td>
+          <td><a class="btn" aria-disabled="true" href="#f">Feature</a></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="wpnotice" style="margin:14px 0 0">
+      <b>Two different measures, on purpose.</b> <b>Profile %</b> is the member&rsquo;s own progress, all eight items.
+      <b>Card status</b> is only about the four things the front-page card actually shows. A member can be at 62% and
+      make a perfect card; a member at 37% can be missing exactly the one line that matters.
+      <b>Feature is only offered on a ready card</b> &mdash; that is the one hard rule, and it protects the front page rather than the member.
+    </div>
+  </div>
+
+  <h2 class="sec">What the numbers say today</h2>
+  <p class="secsub">Measured on live, the whole public membership (1,743 members with a real profile). This is the case for the meter.</p>
+
+  <div class="stage">
+    <div class="dist">
+      <div class="dist__row"><span class="dist__k">0%</span><span class="dist__track"><span class="dist__b" style="width:2.6%"></span></span><span class="dist__v">25 members</span></div>
+      <div class="dist__row"><span class="dist__k">12%</span><span class="dist__track"><span class="dist__b" style="width:100%"></span></span><span class="dist__v"><b>978 members</b></span></div>
+      <div class="dist__row"><span class="dist__k">25%</span><span class="dist__track"><span class="dist__b" style="width:56.5%"></span></span><span class="dist__v"><b>553 members</b></span></div>
+      <div class="dist__row"><span class="dist__k">37%</span><span class="dist__track"><span class="dist__b" style="width:13.8%"></span></span><span class="dist__v">135 members</span></div>
+      <div class="dist__row"><span class="dist__k">50%</span><span class="dist__track"><span class="dist__b dist__b--hi" style="width:2.4%"></span></span><span class="dist__v">23 members</span></div>
+      <div class="dist__row"><span class="dist__k">62%</span><span class="dist__track"><span class="dist__b dist__b--hi" style="width:1%"></span></span><span class="dist__v">10 members</span></div>
+      <div class="dist__row"><span class="dist__k">75%</span><span class="dist__track"><span class="dist__b dist__b--hi" style="width:0.8%"></span></span><span class="dist__v">8 members</span></div>
+      <div class="dist__row"><span class="dist__k">87%</span><span class="dist__track"><span class="dist__b dist__b--hi" style="width:0.6%"></span></span><span class="dist__v">6 members</span></div>
+      <div class="dist__row"><span class="dist__k">100%</span><span class="dist__track"><span class="dist__b dist__b--hi" style="width:0.5%"></span></span><span class="dist__v">5 members</span></div>
+    </div>
+  </div>
+
+  <p class="secsub" style="margin-top:10px">Every figure on this page comes out of
+     <code>tools/profile-completeness-report.sql</code> &mdash; a read-only query anyone can re-run against live,
+     so none of it has to be taken on trust.</p>
+
+  <div class="note">
+    <b>Read that top bar again.</b> <b>978 members &mdash; 56% of everyone &mdash; are at 12%: a photo and nothing else.</b>
+    Another 553 are at 25%. So <b>88% of the membership is at a quarter-filled or worse</b>, and only <b>29 members</b>
+    are above 60%. Individual pieces: 98% have a photo, 41% have set a location, <b>9%</b> have added a single link,
+    and <b>under 5%</b> have written one line about what they do.
+    <ul>
+      <li><b>Why this happened:</b> a photo and a name came across automatically when profiles were created.
+          Everything else has to be typed by a member who was never asked to.</li>
+      <li><b>What it means for featuring:</b> only <b>66 members</b> could make a complete card today. The pool is
+          not limited by who consents &mdash; it is limited by who has filled anything in.</li>
+    </ul>
+  </div>
+
+  <div class="note note--q">
+    <b>Three things for you to rule on, Ian.</b>
+    <ul>
+      <li><b>The eight items.</b> Photo &middot; where you are &middot; what you do &middot; about you &middot; a link or two &middot;
+          skills/instruments &middot; photos of your work &middot; banner. Add, drop or reorder any of them &mdash; the
+          weighting is just &ldquo;one eighth each&rdquo; until you say otherwise.</li>
+      <li><b>Nudge or gate?</b> Drawn as a <b>nudge</b>: anyone may tick the box, but Feature is only offered
+          when the card would actually look good. The alternative is a hard floor (&ldquo;you must be 50% to volunteer&rdquo;),
+          which today would leave <b>52 members</b> able to opt in at all.</li>
+      <li><b>Does the meter go site-wide, or stay in this flow?</b> Drawn inside the profile + the tickbox flow only.
+          The bigger version &mdash; asking new members for this at sign-up &mdash; is backlog item 19, and is not this lane.
+          Say the word if you want them merged into one job.</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <b>Overlap with item 19, flagged not built.</b> Item 19 (&ldquo;new-member profiles arrive alive&rdquo;) asks for
+    photo + city + what-you-do at sign-up. That is the same first three items as this meter, which is a good sign:
+    the meter measures exactly what item 19 would fill in. They should share one definition of &ldquo;complete&rdquo;
+    rather than growing two. Nothing for 19 is built here.
+  </div>
+
+</div>
+</body>
+</html>

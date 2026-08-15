@@ -163,6 +163,34 @@ if ($isOwner || $adminEditing) {
     }
 }
 
+// Featured-member opt-in (backlog 18, Ian 8/11; design rulings 8/14 —
+// docs/IAN-RULINGS-2026-08-14.md item 6). Same defensive shape as
+// discussion_visibility above, same reason: this page must never fatal ahead
+// of the migration, and lights up automatically once it lands.
+//
+// Flag-gated (platform/config/featured-members.php) — OFF means this whole
+// block renders NOTHING, not a disabled variant, so the page is byte-for-byte
+// unchanged from before this feature existed. Same shape as back-pill.php.
+$lg_fmOptIn = false; $lg_fmOptInAt = null; $lg_fmCompleteness = null;
+$lg_fmCfg = @include __DIR__ . '/../../platform/config/featured-members.php';
+$lg_fmOn  = is_array($lg_fmCfg) && !empty($lg_fmCfg['enabled']);
+foreach ([getenv('LG_FEATURED_MEMBERS'), $_SERVER['LG_FEATURED_MEMBERS'] ?? false] as $lg_fmO) {
+    if ($lg_fmO !== false && $lg_fmO !== '') $lg_fmOn = ($lg_fmO === '1' || $lg_fmO === 'true');
+}
+if ($lg_fmOn && $isOwner) {
+    $fmColChk = $pg->query("SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='featured_opt_in' LIMIT 1");
+    if ($fmColChk && $fmColChk->fetchColumn()) {
+        $fmq = $pg->prepare('SELECT featured_opt_in, featured_opt_in_at FROM users WHERE id = :i');
+        $fmq->execute([':i' => $subjectId]);
+        $fmRow = $fmq->fetch();
+        if ($fmRow) {
+            $lg_fmOptIn   = (bool) $fmRow['featured_opt_in'];
+            $lg_fmOptInAt = $fmRow['featured_opt_in_at'];
+        }
+        $lg_fmCompleteness = \Looth\ProfileApp\Completeness::forUser($subjectId);
+    }
+}
+
 // ── SEO <head> data (dependency-free; covers up to 1,915 public profile URLs) ──
 // Location is deliberately OMITTED: location_visibility is 'members' for ~all
 // users, so surfacing it in the public head would leak a members-only field.
@@ -274,6 +302,31 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-disc-seg button{border:0;background:none;color:#cfd3cb;cursor:pointer;padding:6px 13px;font:700 calc(12px*var(--lg-read-scale,1))/1 var(--lg-font-sans)}
 .lg-disc-seg button[aria-checked="true"]{background:var(--lg-sage);color:#fff}
 .lg-disc-seg button:disabled{opacity:.6;cursor:wait}
+
+/* Featured member — Ian's Option B ruling 8/14: its own block, not a privacy-bar
+   row. Vocabulary borrowed straight from .lg-block (border/radius/padding) so it
+   reads as one more card, not an invented style. */
+.lg-featcard{background:var(--lg-card-bg,#fff);border:1px solid var(--lg-line);border-left:4px solid var(--lg-sage);border-radius:12px;padding:18px 20px;margin:0 0 16px}
+.lg-featcard--in{border-left-color:var(--lg-amber);background:#fffdf7}
+.lg-featcard__h{margin:0 0 6px;font:800 15px/1.3 var(--lg-font-sans);color:var(--lg-charcoal);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.lg-featcard__p{margin:0 0 13px;font:500 13px/1.6 var(--lg-font-sans);color:#4c4f47}
+.lg-featcard__row{display:flex;align-items:flex-start;gap:9px;cursor:pointer}
+.lg-featcard__row input[type=checkbox]{appearance:none;-webkit-appearance:none;flex:0 0 auto;width:18px;height:18px;margin:1px 0 0;border:1.5px solid #b9b4a3;border-radius:4px;background:#fff;cursor:pointer;position:relative}
+.lg-featcard__row input[type=checkbox]:checked{background:var(--lg-sage);border-color:var(--lg-sage)}
+.lg-featcard__row input[type=checkbox]:checked::after{content:"";position:absolute;left:5.5px;top:1.5px;width:4px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.lg-featcard__row input[type=checkbox]:disabled{background:#ecebe4;border-color:#cfcabb;cursor:not-allowed}
+.lg-featcard__lbl{font:600 13px/1.55 var(--lg-font-sans);color:#2c2f28}
+.lg-featcard__meta{margin:10px 0 0;padding-top:9px;border-top:1px solid #eceadf;font:500 11.5px/1.5 var(--lg-font-sans);color:#6b6f6b}
+.lg-featcard__meta b{color:#3d4038}
+.lg-fm-meter{margin-top:13px;padding-top:13px;border-top:1px solid #eceadf}
+.lg-fm-meter__top{display:flex;align-items:baseline;gap:9px;margin:0 0 8px}
+.lg-fm-meter__pct{font:400 22px/1 var(--lg-font-serif);color:var(--lg-charcoal)}
+.lg-fm-meter__lbl{font:700 11px/1.3 var(--lg-font-sans);color:#6b6f6b;letter-spacing:.03em;text-transform:uppercase}
+.lg-fm-meter__bar{height:7px;border-radius:999px;background:#ebe8dd;overflow:hidden;margin:0 0 10px}
+.lg-fm-meter__fill{height:100%;background:var(--lg-sage);border-radius:999px;display:block}
+.lg-fm-meter__fill--low{background:var(--lg-amber)}
+.lg-fm-meter__next{margin:0;font:500 12px/1.55 var(--lg-font-sans);color:#4c4f47}
+.lg-fm-meter__next b{color:var(--lg-charcoal)}
 
 /* Block shell */
 .lg-block{position:relative;background:var(--lg-card-bg,#fff);border:1px solid var(--lg-line);border-radius:16px;padding:22px 24px;margin:0 0 16px}
@@ -740,6 +793,28 @@ html[data-lguser-theme="dark"] .lg-link-form .ok{color:#15171a}
 html[data-lguser-theme="dark"] .lg-vchip--member{background:#3a3220;color:#ecb351}
 html[data-lguser-theme="dark"] .lg-vchip--private{background:#3a2a24;color:#d57a55}
 html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gradient(45deg,var(--lg-sage-tint) 0,var(--lg-sage-tint) 10px,#1e2124 10px,#1e2124 20px)}
+/* Featured member, dark — values proven against WCAG AA on the mock before this
+   was built (footer-mockups/featured-members/_mock.css .tp-dark rules); ported
+   verbatim rather than re-derived, incl. the fix for the meter's "not yet done"
+   text (was #7d837a/#8f948a/#8a8f83, 3.3-4.2:1 in various contexts — all FAIL;
+   now var(--lg-mute), proven >=5.1:1 everywhere it is used). */
+html[data-lguser-theme="dark"] .lg-featcard{background:var(--lg-card-bg);color:var(--lg-ink);border-color:var(--lg-line)}
+html[data-lguser-theme="dark"] .lg-featcard--in{background:#24211a;border-left-color:var(--lg-amber);color:var(--lg-ink)}
+html[data-lguser-theme="dark"] .lg-featcard__h{color:var(--lg-charcoal)}
+html[data-lguser-theme="dark"] .lg-featcard__p{color:#c3c8bd}
+html[data-lguser-theme="dark"] .lg-featcard__lbl{color:var(--lg-ink)}
+html[data-lguser-theme="dark"] .lg-featcard__meta{color:var(--lg-mute);border-top-color:var(--lg-line)}
+html[data-lguser-theme="dark"] .lg-featcard__meta b{color:var(--lg-ink)}
+html[data-lguser-theme="dark"] .lg-featcard__row input[type=checkbox]{background:#15171a;border-color:#4a504a}
+html[data-lguser-theme="dark"] .lg-featcard__row input[type=checkbox]:checked{background:var(--lg-sage);border-color:var(--lg-sage)}
+html[data-lguser-theme="dark"] .lg-featcard__row input[type=checkbox]:checked::after{border-color:#15171a}
+html[data-lguser-theme="dark"] .lg-featcard__row input[type=checkbox]:disabled{background:#23262a;border-color:#3a403a}
+html[data-lguser-theme="dark"] .lg-fm-meter{border-top-color:var(--lg-line)}
+html[data-lguser-theme="dark"] .lg-fm-meter__pct{color:var(--lg-charcoal)}
+html[data-lguser-theme="dark"] .lg-fm-meter__lbl{color:var(--lg-mute)}
+html[data-lguser-theme="dark"] .lg-fm-meter__bar{background:#2c312d}
+html[data-lguser-theme="dark"] .lg-fm-meter__next{color:#c3c8bd}
+html[data-lguser-theme="dark"] .lg-fm-meter__next b{color:var(--lg-charcoal)}
 </style>
 </head>
 <body class="mode-view">
@@ -818,6 +893,45 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
         <?php endif; /* /editing: hint */ ?>
       </div>
     <?php endif; /* /isOwner: View-as switcher */ ?>
+    <?php if ($lg_fmOn && $isOwner): ?>
+      <?php
+        // Featured member — Ian's OPTION B ruling 8/14: its own block, not a
+        // row in the privacy bar (Variant A, drawn alongside B, was not
+        // picked). "Accept any %% — tick welcomed at any completeness, show
+        // the card preview, meter nudges, no floor" (ruling item 3): the
+        // checkbox is never disabled by score; the meter is informational.
+        $lg_fmNextLabel = $lg_fmCompleteness['next'] ?? null;
+        $lg_fmNextLabel = $lg_fmNextLabel !== null
+            ? (\Looth\ProfileApp\Completeness::ITEM_LABELS[$lg_fmNextLabel] ?? null) : null;
+      ?>
+      <div class="lg-featcard<?= $lg_fmOptIn ? ' lg-featcard--in' : '' ?>" id="lg-featcard">
+        <h3 class="lg-featcard__h">Featured member<?php if ($lg_fmOptIn): ?> <span class="lg-vchip lg-vchip--public" style="margin-left:0">In the pool</span><?php endif; ?></h3>
+        <p class="lg-featcard__p">Now and then we put one member on the front page — their photo, their name, what they do, and a link to their profile. It is always someone who said yes first.</p>
+        <label class="lg-featcard__row">
+          <input type="checkbox" id="lg-featcard-cb" <?= $lg_fmOptIn ? 'checked' : '' ?> aria-label="Yes, include me as a possible featured member">
+          <span class="lg-featcard__lbl">Yes — include me as a possible featured member.</span>
+        </label>
+        <?php if ($lg_fmOptIn && $lg_fmOptInAt): ?>
+        <p class="lg-featcard__meta">In the pool since <b><?= looth_h(date('j F Y', strtotime((string)$lg_fmOptInAt))) ?></b>. You can untick at any time — if you are on the front page when you do, you come off it straight away.</p>
+        <?php else: ?>
+        <p class="lg-featcard__meta">You can untick this at any time. If you are on the front page when you do, you come off it straight away.</p>
+        <?php endif; ?>
+        <?php if ($lg_fmCompleteness): ?>
+        <div class="lg-fm-meter" id="lg-fm-meter">
+          <div class="lg-fm-meter__top">
+            <span class="lg-fm-meter__pct"><?= (int)$lg_fmCompleteness['pct'] ?>%</span>
+            <span class="lg-fm-meter__lbl">complete<?= $lg_fmCompleteness['card_ready'] ? ' — card ready' : '' ?></span>
+          </div>
+          <div class="lg-fm-meter__bar"><div class="lg-fm-meter__fill<?= $lg_fmCompleteness['pct'] < 50 ? ' lg-fm-meter__fill--low' : '' ?>" style="width:<?= (int)$lg_fmCompleteness['pct'] ?>%"></div></div>
+          <?php if ($lg_fmCompleteness['card_ready']): ?>
+          <p class="lg-fm-meter__next"><b>Your card is ready.</b> It would show your photo, name, what you do, and where you are.</p>
+          <?php elseif ($lg_fmNextLabel): ?>
+          <p class="lg-fm-meter__next"><b>Your card would be a photo and a name.</b> Next: <?= looth_h(lcfirst($lg_fmNextLabel)) ?>.</p>
+          <?php endif; ?>
+        </div>
+        <?php endif; ?>
+      </div>
+    <?php endif; /* /featured member card */ ?>
     <?php if ($editing): ?>
       <?php
         $available = Block::availableBlocks($subjectId);
@@ -1505,6 +1619,35 @@ window.lgSortable = function (container, opts) {
       btns.forEach(function (b) { b.setAttribute('aria-checked', b.getAttribute('data-disc') === cur ? 'true' : 'false'); b.disabled = false; });  // revert
       alert('Could not update discussion posting visibility.');
     });
+  });
+})();
+</script>
+
+<script>
+/* Featured member (owner) — the Option B card's tickbox. Same optimistic-PUT
+   shape as the discussion-visibility toggle above. Ian's ruling: "accept any
+   %% — tick welcomed at any completeness, no floor" — this never disables the
+   checkbox on score; the meter below it is informational only. */
+(function () {
+  var cb = document.getElementById('lg-featcard-cb');
+  if (!cb) return;
+  var card = document.getElementById('lg-featcard');
+  cb.addEventListener('change', function () {
+    var want = cb.checked;
+    cb.disabled = true;
+    fetch('/profile-api/v0/me/featured', {
+      method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ featured_opt_in: want })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        cb.disabled = false;
+        if (!res.ok) throw 0;
+        location.reload();   // meter/"in the pool" state + opted-in date are server-rendered
+      }).catch(function () {
+        cb.checked = !want; cb.disabled = false;
+        alert('Could not update your featured-member preference.');
+      });
   });
 })();
 </script>

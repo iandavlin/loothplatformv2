@@ -68,6 +68,11 @@ final class Plugin
            loopback webhook to write its config.json. */
         ArchivePocDash::boot();
 
+        /* Featured-member submenu (backlog 18, Ian 8/11) — pool + history +
+           feature/remove, reading profile-app's opt-in pool and writing
+           through the SAME archive-poc config webhook ArchivePocDash uses. */
+        FeaturedMemberDash::boot();
+
         /* Asset isolation: dequeue/demote everything not on v2's allowlist on
            v2-managed posts. Gated by LG_LAYOUT_V2_ISOLATE. */
         Isolate::boot();
