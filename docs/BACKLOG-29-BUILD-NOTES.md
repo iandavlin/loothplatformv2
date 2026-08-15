@@ -134,6 +134,34 @@ Ian collapsed the desk-plus-list layout into **one surface**:
    for me to make"* — mockups, decision buttons, branches, notes, in the overlay;
 4. an **embedded Claude chat** in the page, *"like there is on vs code"*.
 
+### TWO CHATS, not one (Ian, 2026-08-15 — supersedes the shrunken button)
+
+His words: *"There should be a general chat on the page for overview and then
+sub chats on each board item/project."* So the side panel does **not** shrink to
+a button. There are two distinct surfaces, and they answer different questions:
+
+| | **General chat** | **Per-item threads** |
+|---|---|---|
+| Question it answers | *"How is everything?"* — overview, cross-cutting, "what should I look at first", anything with no obvious home | *"Why is THIS stuck?"* — bound to one item forever |
+| Where it lives | A full surface on the page, not a demoted control | A tab inside each item's modal |
+| What it leaves behind | A running conversation about the whole board | The item's own history, the way PR comments stay with the code |
+
+**Both bridge to keeper**, over the same `msg` relay, for the same reason: it is
+the brain already running the lanes, so it can answer *"how is everything"*
+without being briefed first.
+
+**Why two rather than one clever one.** A single chat would force every question
+to be about something, and *"how's it all going?"* is the question he actually
+asks most. A per-item thread cannot hold that, and a general chat cannot hold
+*"why did we point the archive door at the Map?"* — which needs to be findable
+from the item three months later. Round 4's mock demoted the general chat to a
+button on the assumption that the item threads absorbed it; that assumption was
+wrong, and he corrected it.
+
+**Consequence for the build:** the general chat needs its own durable store
+(one running thread), separate from the per-item threads, and both need the same
+write fences as everything else that writes.
+
 ### The chat bridges to KEEPER, not to a fresh session
 
 Recommended, and drawn that way: the chat relays through the existing `msg`
