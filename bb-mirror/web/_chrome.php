@@ -346,12 +346,15 @@ function bb_mirror_new_topic_modal(): void
       <button type="button" class="ntm-typetoggle__opt" data-ntm-type="loothprint"
               role="tab" aria-selected="false">Loothprint</button>
     </div>
-    <?php /* NO EMBEDDED FRAME. Ian 2026-08-15: the Loothprint form must not share
-             this modal. Tapping Loothprint navigates to the standalone /compose/
-             page (forums.js §type-toggle) — which removes the stacked-furniture
-             race (ntmSetState('authed') re-showing the discussion wizard under
-             the frame) and the signed-out-embed class in one move, rather than
-             tidying a surface that should not be here. */ ?>
+    <?php /* NOTHING LOOTHPRINT-SHAPED LIVES IN THIS MODAL. Ian 2026-08-15:
+             "Cant it just replace the discussion modal ?" — tapping Loothprint
+             CLOSES this overlay and opens the dedicated #lpm-overlay below.
+             The two can never be open at once, which is what retires the
+             stacked-furniture race for good: ntmSetState('authed') re-shows
+             THIS form on a timer it does not coordinate with, so the only safe
+             answer is that the other surface is not in here to be stacked
+             under. Gate 35 assertion 9 fails if a compose surface reappears
+             here. */ ?>
 <?php endif; ?>
 
     <div class="ntm-state ntm-state--loading" id="ntm-loading" hidden>
