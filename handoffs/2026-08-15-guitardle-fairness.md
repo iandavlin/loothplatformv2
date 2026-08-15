@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| Branch | `guitardle-fairness`, tip **`0d3cb09`** (+ this handoff) |
-| Base | rebased on `origin/main` `bed6779` |
-| State | **merge-ready, flag OFF.** Nothing uncommitted, nothing session-only. |
+| Branch | `guitardle-fairness`, **pushed**, tip **`613c0ce`** |
+| Base | rebased on `origin/main` `b9c48ba` (after gate 38 was minted; 37 is in the ledger there) |
+| State | **MERGE-READY. Both flags OFF.** Nothing uncommitted, nothing session-only. |
 | Gates | **ALL GATES GREEN** — full `run-all.sh`, exit 0, zero NO-VERDICT. Gate 37 is this lane's, red-first proven. |
 | Ian | ruled 4× (8/14 backlog item, 8/15 "Agree — relabel only", the in-game line, the Hardcore instructions). Preview URL given; **not yet seen it.** |
 | Live | **needs the migration applied before the flag is ever flipped.** Ian's action. |
@@ -34,7 +34,13 @@ from honest play.
 average is 4.1; 197 sits at 2.7. Nobody else has that shape — 206 (34/34) and
 728 (17/17) average 6.5 and 7.1, which is normal, and I would not flag them.
 
-## 2. What shipped (all behind `LG_GUITARDLE_DAILY_CLAIM`, OFF)
+## 2. What shipped — TWO independent flags, both OFF
+
+`LG_GUITARDLE_DAILY_CLAIM` — the fairness change (1–4 below).
+`LG_GUITARDLE_HOW_TO_PLAY` — the rules overlay (5), split out by keeper on
+8/15 so members need not wait for the fairness flip to read the instructions.
+Gate 37 drives **all four combinations**; "independent" is only a word until
+both crossed states are exercised.
 
 1. **Claim at START.** New `start` action inserts `(user, play_date, phrase_id)`
    with the result NULL. The **existing** unique constraint does the work — no
@@ -104,17 +110,10 @@ Registered in `run-all.sh`; `docs/CRAFT-STANDARD.md` row 37 added.
    `DELETE FROM guitardle_results WHERE moves IS NULL;`. One step alone silently
    eats that day's results for anyone mid-game. Documented at the foot of the
    migration and gated.
-3. **The top-level `/guitardle` dir is dead weight** — no nginx route, no docroot
-   symlink, zero traffic in 7 days (live serves `archive-poc/web/guitardle`,
-   266 requests, and **zero** to anything else). It is a stale fork with no
-   score/board/hardcore/resume, and it still contains an instructions overlay the
-   real game lacks — which is precisely what made it dangerous: it is the copy
-   that answers "does Hardcore have instructions?" wrongly. **Recommend retiring
-   to `recycle/`. Untouched by this lane.**
-4. **The How to Play overlay currently rides the fairness flag**, so it cannot
-   ship until the fairness work is switched on. It is pure help copy with no data
-   path; splitting it onto its own flag (or unflagging) is trivial if Ian wants
-   it sooner.
+3. ~~Top-level `/guitardle` retirement~~ — **DONE** in `613c0ce` (12 files,
+   2777 lines), on keeper's instruction under Ian's standing prune mandate.
+   Evidence re-measured at deletion time, not quoted from notes.
+4. ~~Split the overlay onto its own flag~~ — **DONE** in `613c0ce`.
 5. **Not fixed, reported: ~8% of honest results are silently discarded.** 8 of
    101 finished games POSTed and got 403 on an expired WP nonce, across 8 distinct
    IPs and 6 days, and `postScore` ends in `.catch(() => {})` — the player sees
@@ -125,7 +124,25 @@ Registered in `run-all.sh`; `docs/CRAFT-STANDARD.md` row 37 added.
    anyone with their own nonce can POST a 20-point day. Closing the device hole
    does not touch this; it is the ceiling on how fair the board can be.
 
-## 6. Preview
+## 6. Ian's look-ruling, 8/15
+
+*"can we spread the instructions a little"* — the panel read as a cramped narrow
+column on desktop. Now: wider panel and more space as the screen grows, phones
+untouched (measured 340px/14px/9px before **and** after). Spread means SPACE,
+not smaller type — text goes **up** to 15px where there is room.
+
+**Explicit grid, not `columns: 2`.** Automatic balancing was measured first and
+looked like a bug: it packed "The basics" alone into column one, stacked the
+other two in column two, left a third of the panel empty and still overflowed
+the fold. The two long sections now sit side by side with the short one spanning
+beneath. The first list also gained the heading it never had, so the three
+sections read as peers.
+
+Verified in a browser at 390 / 700 / 1280 through the real iframe shape, and the
+Done button **hit-tests as itself** at all three — the panel is taller than a
+phone viewport, so "present" was not good enough.
+
+## 7. Preview
 
 <https://dev2.loothgroup.com/footer-mockups/guitardle-claim-preview/> — iframed
 to match production. `?preview=on` on the inner frame forces the flag-ON
