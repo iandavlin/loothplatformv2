@@ -181,6 +181,37 @@
   var LG_DARK_SEARCH_WRAPPER_FIX = false;
   var DARK_SEARCH_BORDER = LG_DARK_SEARCH_WRAPPER_FIX ? '#767c76' : '#2c312d';
 
+  // ---- LG_DARK_MUTED_INK_FIX (same lane/backlog/gate) ------------------------
+  //
+  // #80867d is the dark theme's MUTED-META ink (timestamps, "edited", the map
+  // attribution), repeated verbatim across this file and hub-polish.js. It is
+  // a HAIR under AA on the surfaces it actually lands on, which is why it read
+  // as several unrelated findings instead of one:
+  //     on #1e2124 feed card      4.33:1  (11 hits on a single /hub/ door page)
+  //     on #1b1e21 reply sheet    4.48:1
+  //     on #15171a page             4.81:1  (the only one that passed)
+  // #8a9087 keeps the same grey-green cast and clears all three (4.95 / 5.12 /
+  // 5.49). Lifting a muted ink on a DARK theme can only raise contrast, so the
+  // sites this token touches that the anon sweep never measured cannot be made
+  // worse by it.
+  //
+  // THE MAP ATTRIBUTION IS FIXED A DIFFERENT WAY, ON PURPOSE. It measured
+  // 2.98:1 — worst of the set — but the ink was never the real defect: the
+  // control paints rgba(21,23,26,.8) over an ALWAYS-LIGHT OSM tile, so its
+  // effective backdrop is whatever the map is showing (measured #333d41 over
+  // water). Chasing that with ink alone needs #a6aca3, which would drag all
+  // six unrelated muted sites visibly brighter to satisfy one control — and it
+  // still would not be a guarantee, because the next tile is a different
+  // colour. Making the control's own background OPAQUE removes the dependency
+  // entirely: the backdrop becomes #15171a no matter what is underneath, and
+  // the muted ink then clears AA deterministically (5.49:1). A contrast
+  // guarantee that depends on the map tile below it is not a guarantee.
+  //
+  // MEMBER-VISIBLE — OFF pending Ian's phone pass, same as the rest of the wave.
+  var LG_DARK_MUTED_INK_FIX = false;
+  var DARK_MUTED_INK = LG_DARK_MUTED_INK_FIX ? '#8a9087' : '#80867d';
+  var DARK_ATTRIB_BG = LG_DARK_MUTED_INK_FIX ? '#15171a' : 'rgba(21,23,26,.8)';
+
   function ensureDarkStyle() {
     if (document.getElementById(DARK_STYLE_ID)) return;
     var D = 'html[data-lguser-theme="dark"]';
@@ -249,7 +280,7 @@
       D + ' .replies-sort__btn.is-active{color:#15171a!important;background:#b0c693!important}',
       // inline comment-row Like/Reply was ~#65676b (2.5:1) → readable
       D + ' .lg-fb-act{color:#9aa097!important}',
-      D + ' .lg-fb-time{color:#80867d!important}',
+      D + ' .lg-fb-time{color:' + DARK_MUTED_INK + '!important}',
       // members directory (/directory/members/): the .dir-card is hardcoded white
       // → member NAMES (light token) were invisible in dark. Darken the card.
       D + ' .dir-card{background:#1e2124!important;border-color:#2c312d!important}',
@@ -266,7 +297,7 @@
       D + ' .leaflet-container{background:#15171a!important}',
       D + ' .leaflet-tile{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.65)}',
       D + ' .leaflet-control-zoom a{background:#262b30!important;color:#e5e7e1!important;border-color:#2c312d!important}',
-      D + ' .leaflet-control-attribution{background:rgba(21,23,26,.8)!important;color:#80867d!important}',
+      D + ' .leaflet-control-attribution{background:' + DARK_ATTRIB_BG + '!important;color:' + DARK_MUTED_INK + '!important}',
       D + ' .leaflet-control-attribution a{color:#9cb37d!important}',
       // reply-EDIT Quill toolbar stayed #fff (forums only patches hub-theme-dark, not
       // the app data-lguser-theme="dark"); darken the toolbar AND its icon strokes/fills

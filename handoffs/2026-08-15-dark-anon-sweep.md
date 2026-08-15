@@ -74,3 +74,50 @@ a request to proceed.
 
 Not blocked on anything for gate 36. For a next wave: blocked on keeper's
 go-ahead (same pattern as the icon/token/wrapper wave).
+
+## Wave 2 (keeper go-ahead 2026-08-15, "continue the fix wave, badness order")
+
+Landed, both flagged OFF, both verified by extracting the real conditional from
+the shipped source and eval-ing BOTH states (OFF proven byte-identical to the
+pre-change lines, not assumed):
+
+- **`LG_DARK_PWA_BANNER_FIX`** (`webroot/pwa.js`) — the Install / "Show me how"
+  buttons, **2.29:1**, the worst text ratio in the whole sweep, on 5+ surfaces
+  (hub-door, events, directory, shop, sponsors). Same shape as the "+" icon:
+  `--lg-sage` repoints LIGHT in dark (#87986a→#9cb37d) while the text stays
+  hardcoded `#fff`. Flips the ink dark instead of re-darkening the fill, so the
+  sage button still looks like the sage button — #15171a on #9cb37d = 7.83:1,
+  and 9.70:1 on the `:active` `--lg-sage-d`, so one rule covers both states.
+- **`LG_DARK_MUTED_INK_FIX`** (`app-settings.js` + `hub-polish.js`) — `#80867d`
+  is the dark theme's shared muted-meta ink, and it was the single root cause
+  behind TWO findings that looked unrelated: the hub-door timestamps (4.33:1,
+  11 hits on one page) and the directory's map attribution (2.98:1). Lifted to
+  `#8a9087` (4.95 / 5.12 / 5.49 on the three backdrops it lands on). Applied in
+  BOTH files in lockstep — a half-applied token change would leave dark mode
+  with two different "muted" inks, worse than the state being fixed.
+  - The map attribution is fixed a **different** way on purpose: its backdrop
+    is `rgba(21,23,26,.8)` over an always-light OSM tile, so its effective
+    contrast depends on which tile is underneath (measured #333d41 over water).
+    Matching that with ink alone needs #a6aca3, which would drag six unrelated
+    muted sites visibly brighter to satisfy one control — and still would not
+    be a guarantee, because the next tile is a different colour. Making the
+    control's own background opaque removes the dependency entirely.
+
+### Two real defects found that are OUT of this charter's scope — not fixed
+
+Recording rather than silently skipping or silently widening scope:
+
+1. **The install banner fails in LIGHT mode too** — `#fff` on `--lg-sage`
+   `#87986a` = **3.12:1**. Same button, same defect, light theme. This lane's
+   charter is dark-anon, so only the dark half was fixed. Someone should take
+   the light half.
+2. **The avatar initials palette fails regardless of theme.**
+   `bb_mirror_avatar()` (`bb-mirror/web/forums/_reply-render.php`) picks from a
+   hardcoded 8-colour palette via `crc32($slug)` and writes it as an INLINE
+   style, so there is no dark variant — it renders identically in both themes.
+   White text on 3 of the 8 fail AA: `#c66845` 3.84:1, `#87986a` 3.12:1,
+   `#a0714f` 4.23:1. It surfaced in the dark sweep (5-7 hits per page) only
+   because that is where the sweep was pointed; it is a theme-independent a11y
+   defect and fixing it under a dark-mode flag would be mislabelling it. Needs
+   its own decision: darken those 3 palette entries, or drop to a fixed
+   AA-safe pair.

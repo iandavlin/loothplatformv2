@@ -58,6 +58,13 @@
   var LG_DARK_BORDER_FIX = false;
   var DARK_BORDER = LG_DARK_BORDER_FIX ? '#767c76' : '#333833';
   var LG_DARK_SEARCH_WRAPPER_FIX = false;
+  // Muted-meta ink — this file's own copy of app-settings.js's
+  // LG_DARK_MUTED_INK_FIX (see that file for the measurements and why the map
+  // attribution is fixed by opacity instead). Kept in lockstep deliberately:
+  // a half-applied token change would leave the dark theme with TWO different
+  // "muted" inks, which is a worse state than the one being fixed.
+  var LG_DARK_MUTED_INK_FIX = false;
+  var DARK_MUTED_INK = LG_DARK_MUTED_INK_FIX ? '#8a9087' : '#80867d';
 
   var STYLE_ID = 'looth-hub-polish';
   var TAGLINE_CLASS = 'lg-hub-tagline';
@@ -2227,12 +2234,12 @@
       'html[data-lguser-dark="1"] body{background:#1b1e21!important;color:#e5e7e1!important}' +
       'html[data-lguser-dark="1"] .lgc-name,html[data-lguser-dark="1"] .lgc-name a{color:#f2f4ee!important}' +
       'html[data-lguser-dark="1"] .lgc-text{color:#e5e7e1!important}' +
-      'html[data-lguser-dark="1"] .lgc-time{color:#80867d!important}' +
+      'html[data-lguser-dark="1"] .lgc-time{color:' + DARK_MUTED_INK + '!important}' +
       'html[data-lguser-dark="1"] .lgc-body{border-top-color:#2c312d!important}' +
       'html[data-lguser-dark="1"] .lgc-children{border-left-color:#2c312d!important}' +
       'html[data-lguser-dark="1"] .lgc-reply,html[data-lguser-dark="1"] .lgc-edit{color:#9cb37d!important}' +
       'html[data-lguser-dark="1"] .lgc-del{color:#d98a6c!important}' +
-      'html[data-lguser-dark="1"] .lgc-edited{color:#80867d!important}' +
+      'html[data-lguser-dark="1"] .lgc-edited{color:' + DARK_MUTED_INK + '!important}' +
       'html[data-lguser-dark="1"] .lgc-empty,html[data-lguser-dark="1"] .lgc-login,html[data-lguser-dark="1"] .lgc-replyto{color:#9aa097!important}' +
       'html[data-lguser-dark="1"] .lgc-rx{background:#222629!important;border-color:' + DARK_BORDER + '!important;color:#cdd0ca!important}' +
       'html[data-lguser-dark="1"] .lgc-rx.is-mine{background:#2a341f!important;border-color:#3d5233!important;color:#b0c693!important}' +
@@ -3233,7 +3240,7 @@
       '#looth-rep-sheet .lrs-op__del[hidden]{display:none}',
       '#looth-rep-sheet .lrs-op__del:hover{background:rgba(193,51,51,.1);color:#c33}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__acts{border-top-color:#2c312d}',
-      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__del{color:#80867d}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__del{color:' + DARK_MUTED_INK + '}',
       // dark pass for the new pieces (the shell/bubbles/actions are already covered
       // by app-settings' dark style + the rules below)
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-grab::before{background:#3a403a}',
@@ -3241,7 +3248,7 @@
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-x{background:#262b30;color:#9cb37d}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op{border-bottom-color:#2c312d}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__id .fc-author,html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__id .fc-author__name{color:#f2f4ee}',
-      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__id .fc-time{color:#80867d}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__id .fc-time{color:' + DARK_MUTED_INK + '}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__body{color:#e5e7e1}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__body a{color:#9cb37d}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-note{color:#9aa097}',
