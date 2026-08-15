@@ -38,7 +38,7 @@ three registries pointing at nothing.
 | Size | What | Kind | Who rules |
 |---|---|---|---|
 | **2.9 GB** | `/var/lib/mysql` | **member data** — the live databases | **Nobody deletes this.** Listed only so the 26 GB adds up. |
-| **2.6 GB** | 79 orphaned worktrees (above) | worktree | **keeper** |
+| **1.5 GB** | 48 finished worktrees (verified above) | worktree | **keeper** |
 | **1.6 GB** | `/var/www/dev.bak-overlays-20260625-020312` | archive — a June docroot backup | **keeper** (Ian if he wants it kept) |
 | **1.4 GB** | `~/.local/share` — 888 MB `claude`, 461 MB `code-server` | cache / tooling | **keeper** |
 | **1.3 GB** | `~/dev1-import` | archive — carried over from retired dev1 | **Ian** — it is the dev1 history |
@@ -91,7 +91,12 @@ things (briefs, build notes, memory files) should be written first.
 
 ## How this was measured
 
-`du -xh --max-depth=1|2` over `/home`, `/var`, `/usr`, plus `git worktree list`
-against the directory listing to separate registered from orphaned. `-x` keeps
-each walk on one filesystem so nothing is double-counted. Sizes are as reported
-at 2026-08-15 16:30; they drift.
+`du -xh --max-depth=1|2` over `/home`, `/var`, `/usr`, all `nice`d and `ionice`d.
+`-x` keeps each walk on one filesystem so nothing is double-counted.
+
+For the worktrees, **each directory's own `.git` pointer** was read to find its
+parent repo — the first pass assumed a single parent and got the headline wrong.
+`origin/main` was then confirmed present in all three parents before any
+merged/unmerged verdict was trusted.
+
+Sizes are as reported at 2026-08-15 16:30; they drift.
