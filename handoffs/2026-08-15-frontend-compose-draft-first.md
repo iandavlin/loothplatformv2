@@ -34,8 +34,10 @@ GET /preview/frontend-compose/compose/?type=loothprint     200, 188,766 bytes
 post 73209: loothprint / auto-draft / author 1912 / _lg_fc_draft set
 ```
 
-**Lesson for the next seat, and it is the third time this lane has paid it:** a
-charter is a snapshot. Verify its premise against the running box before
+**Lesson for the next seat:** a charter is a snapshot. (There is at least one
+other recorded instance of this exact cost — a re-charter naming a handoff that
+did not exist sent a fresh seat to rebuild an already-pushed feature. I have not
+counted the rest, so treat this as "again", not as a tally.) Verify its premise against the running box before
 spending a day on it. Mine would have had me hunting a bug that a commit in my
 own branch history had already closed.
 
@@ -76,6 +78,38 @@ so the heal is exercised deterministically every run. Old code leaves 1 of 2 and
 
 Also: the gate collected `notes` and never printed them. A swallowed note reads
 exactly like a passed assertion. Now printed.
+
+### 2b. Gate 46's own cleanup could delete members' drafts
+
+Found while checking the gate could not collide with the browser loop, which
+shares its probe account. The cleanup was:
+
+```php
+foreach (SELECT p.ID ... WHERE m.meta_key='_lg_fc_draft') { delete children; delete post; }
+```
+
+**No author filter — that is every compose draft on the site, with the photos
+attached to it, force-deleted.** Harmless today only because the flag is off and
+nobody is composing, and the entire purpose of the flag is that it gets turned
+on. After that, one suite run would destroy every member's in-progress Loothprint
+and the images they had just uploaded to it. The gate that exists to prove
+nothing is destroyed was the most destructive thing in the tree for this feature.
+
+Proven both ways with a draft planted under **another** member (user 1881),
+carrying a child attachment:
+
+| | draft | photo |
+|---|---|---|
+| pre-fix, site-wide cleanup | **destroyed** | **destroyed** |
+| scoped to the probe account | survives | survives |
+
+⚠️ **It printed `GREEN — no orphans` in both runs.** The destruction is invisible
+to every assertion the gate makes about itself. That is why this had to be shown
+with a planted row and could not have been reasoned out of the output.
+
+The site-wide *unattached* count stays site-wide on purpose — assertion 4 has to
+see an orphan produced by a path the gate never modelled. **Reading the whole
+site is right; deleting across the whole site never was.**
 
 ### 3. The whole loop, driven in a real browser at both widths
 
