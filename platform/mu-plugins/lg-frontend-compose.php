@@ -224,6 +224,12 @@ function lg_fc_enabled(): bool
 
 const LG_FC_PATH = 'compose';
 
+/* The reaper's handle on a compose draft, and how long a never-returned one
+   survives. MARKING the row rather than inferring from status means the sweep
+   can never mistake an auto-draft made elsewhere — by wp-admin, say — for ours. */
+const LG_FC_DRAFT_META     = '_lg_fc_draft';
+const LG_FC_DRAFT_TTL_DAYS = 30;
+
 /* ──────────────────────────────────────────────── the per-type registry ───── */
 
 /**
@@ -448,6 +454,181 @@ function lg_fc_comment_status(): string
 
 add_action('template_redirect', 'lg_fc_route', -10);
 
+/**
+ * The member's WORKING DRAFT for this type — found, or created.
+ *
+ * Ian, 2026-08-15, on the media model: "Do what you recommend" — a hidden draft
+ * exists from compose-open, every upload parents to it FROM BIRTH, the picker
+ * queries by post_parent so each post literally has its own library, an
+ * abandoned compose leaves a resumable invisible draft, and a generous reaper
+ * clears the never-returned ones.
+ *
+ * ── WHY A REAL ROW HAS TO EXIST FIRST ───────────────────────────────────────
+ * Measured before this changed: with post_id => 'new_post' the post does not
+ * exist while the member fills the form, so an upload has nothing to parent to.
+ * It lands as post_parent = 0 and STAYS there — I uploaded through the real
+ * picker, abandoned, and the row survived with the file on disk and nothing
+ * referencing it. Neither our build nor WordPress core sweeps unattached media.
+ * A row that exists from the start is what makes both halves of the ruling
+ * possible at once: uploads have a parent, and "this post's library" is a real
+ * query rather than a wish.
+ *
+ * STATUS IS 'auto-draft' ON PURPOSE. It is excluded from the front end, from
+ * archives and from search, so a half-filled loothprint cannot surface. The
+ * status becomes the real one only on submit (lg_fc_promote_draft).
+ *
+ * REUSED, NOT RE-CREATED: a member who opens compose five times must not leave
+ * five drafts. Their newest un-promoted draft of this type is handed back.
+ */
+function lg_fc_working_draft(string $type, int $user_id): int
+{
+    if ($user_id <= 0) return 0;
+
+    $existing = get_posts([
+        'post_type'        => $type,
+        'post_status'      => 'auto-draft',
+        'author'           => $user_id,
+        'numberposts'      => 1,
+        'orderby'          => 'ID',
+        'order'            => 'DESC',
+        'fields'           => 'ids',
+        'meta_key'         => LG_FC_DRAFT_META,
+        'suppress_filters' => false,
+    ]);
+    if (!empty($existing[0])) return (int) $existing[0];
+
+    /* TITLE MUST NOT BE EMPTY. wp_insert_post() REFUSES a post with no title,
+       content and excerpt — wp_insert_post_empty_content — and returns an error
+       rather than a row. Measured: with post_title '' the draft was never
+       created, lg_fc_working_draft returned 0, and the form silently fell back
+       to 'new_post', i.e. straight back to the orphan behaviour this replaces.
+       'Auto Draft' is WordPress's own placeholder for exactly this row
+       (get_default_post_to_edit), and the member's real title overwrites it on
+       submit. */
+    $id = wp_insert_post([
+        'post_type'      => $type,
+        'post_status'    => 'auto-draft',
+        'post_author'    => $user_id,
+        'post_title'     => 'Auto Draft',
+        'comment_status' => lg_fc_comment_status(),
+    ], true);
+    if (is_wp_error($id) || !$id) {
+        /* Say WHY in the log rather than falling back mutely: the fallback is
+           the OLD unparented behaviour, so a silent one hides a regression that
+           looks exactly like nothing happening. */
+        error_log('lg-fc: could not create working draft for ' . $type . ': '
+            . (is_wp_error($id) ? $id->get_error_message() : 'insert returned 0'));
+        return 0;
+    }
+
+    /* The reaper's handle. Marking the row rather than inferring from status
+       means the sweep can never mistake somebody else's auto-draft — one made
+       by wp-admin, say — for ours. */
+    update_post_meta($id, LG_FC_DRAFT_META, time());
+    return (int) $id;
+}
+
+/**
+ * Promote the working draft to a real post on submit.
+ *
+ * acf_form()'s `new_post` argument only applies when post_id === 'new_post';
+ * we hand it a numeric id, so the status transition is ours to make. Doing it
+ * here rather than in `new_post` is what keeps the row invisible for the whole
+ * time the member is typing.
+ */
+function lg_fc_promote_draft($post_id): void
+{
+    $post_id = (int) $post_id;
+    if ($post_id <= 0) return;
+    if (!get_post_meta($post_id, LG_FC_DRAFT_META, true)) return;   // not ours
+
+    $post = get_post($post_id);
+    if (!$post || $post->post_status !== 'auto-draft') return;
+
+    wp_update_post([
+        'ID'             => $post_id,
+        'post_status'    => lg_fc_post_status($post->post_type, (int) $post->post_author),
+        'comment_status' => lg_fc_comment_status(),
+    ]);
+    delete_post_meta($post_id, LG_FC_DRAFT_META);   // no longer the reaper's business
+}
+add_action('acf/save_post', 'lg_fc_promote_draft', 25);   // after the fields are written
+
+/**
+ * EACH POST HAS ITS OWN LIBRARY (Ian). Both media fields are scoped to the post
+ * being composed, so the picker lists that post's uploads and nothing else.
+ *
+ * Forced HERE rather than in the ACF field config because the config is data in
+ * the database: an admin editing the field group could silently widen it back to
+ * the whole site, and nothing would fail. Measured before this: the photos field
+ * was already `uploadedTo`, but the PRINT FILES field was `all`.
+ */
+function lg_fc_scope_library(array $field): array
+{
+    $field['library'] = 'uploadedTo';
+    return $field;
+}
+add_filter('acf/load_field/name=loothprint_more_images', 'lg_fc_scope_library');
+add_filter('acf/load_field/name=loothprint_3d_file',     'lg_fc_scope_library');
+add_filter('acf/load_field/name=loothcut_cnc_file',      'lg_fc_scope_library');
+
+/**
+ * THE REAPER. A never-returned draft and everything uploaded into it, cleared
+ * after LG_FC_DRAFT_TTL_DAYS.
+ *
+ * Generous on purpose (Ian: "approx 30 days"): an abandoned compose is usually
+ * an interrupted one, and the draft is resumable until this runs.
+ *
+ * ⚠️ CHILDREN ARE DELETED EXPLICITLY. WordPress's own wp_delete_auto_drafts()
+ * removes the POST and leaves its attachments behind — which is the exact
+ * orphan this whole change exists to stop, and it would have failed silently
+ * had we assumed core handled it.
+ */
+function lg_fc_reap_drafts(): int
+{
+    $cut = time() - (LG_FC_DRAFT_TTL_DAYS * DAY_IN_SECONDS);
+    $ids = get_posts([
+        'post_type'        => array_keys(lg_fc_types()),
+        'post_status'      => 'auto-draft',
+        'numberposts'      => 200,
+        'fields'           => 'ids',
+        'meta_key'         => LG_FC_DRAFT_META,
+        'suppress_filters' => false,
+    ]);
+    $gone = 0;
+    foreach ($ids as $id) {
+        if ((int) get_post_meta($id, LG_FC_DRAFT_META, true) > $cut) continue;
+        foreach (get_children(['post_parent' => $id, 'post_type' => 'attachment', 'numberposts' => -1, 'fields' => 'ids']) as $att) {
+            wp_delete_attachment($att, true);
+        }
+        wp_delete_post($id, true);
+        $gone++;
+    }
+    return $gone;
+}
+add_action('lg_fc_reap_drafts_event', 'lg_fc_reap_drafts');
+
+/**
+ * Schedule the reaper — ONLY while the feature is on.
+ *
+ * With the flag off nothing is scheduled at all, so "flag OFF ⇒ no cron event"
+ * is a real assertion rather than a hopeful one. Unscheduling on the way down
+ * matters just as much: an event left armed after the feature is switched off
+ * would keep deleting rows for a feature nobody can reach, and it would do it
+ * from WP-cron, which carries no environment to explain itself.
+ */
+function lg_fc_sync_reaper_schedule(): void
+{
+    $on = lg_fc_enabled();
+    $next = wp_next_scheduled('lg_fc_reap_drafts_event');
+    if ($on && !$next) {
+        wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'lg_fc_reap_drafts_event');
+    } elseif (!$on && $next) {
+        wp_unschedule_event($next, 'lg_fc_reap_drafts_event');
+    }
+}
+add_action('init', 'lg_fc_sync_reaper_schedule');
+
 function lg_fc_route(): void
 {
     // Flag OFF: not merely "renders nothing" but "returns before anything is
@@ -464,6 +645,9 @@ function lg_fc_route(): void
 
     $types = lg_fc_types();
     $edit  = isset($_GET['id']) ? absint($_GET['id']) : 0;
+    /* Set for a NEW compose once type and permission are settled: the member's
+       hidden working draft, so uploads have a parent from birth. */
+    $draft = 0;
     // EMBED: the same form, without the page furniture, for the hub composer's
     // type toggle (Ian, 2026-08-09). See lg_fc_page_open() for why this is still
     // a complete document rather than a fragment.
@@ -510,6 +694,10 @@ function lg_fc_route(): void
             lg_fc_refuse($types[$type]['title'] ?? 'This form');
             exit;
         }
+
+        /* AFTER the permission gate, never before: creating the draft is a
+           write, and a refused visitor must not be able to make rows. */
+        $draft = lg_fc_working_draft($type, get_current_user_id());
     }
 
     // Registered so the settings never travel with the POST. Built here, on THIS
@@ -524,8 +712,14 @@ function lg_fc_route(): void
     // set either way, because the control is on screen either way.
     acf_register_form([
         'id'                 => 'lg-fc-' . $type,
-        'post_id'            => $edit ?: 'new_post',
-        'new_post'           => $edit ? [] : [
+        /* DRAFT-FIRST (Ian, 2026-08-15). A real row exists before the member
+           types anything, so uploads parent to it from birth and the picker's
+           `uploadedTo` scoping has something to scope to. `new_post` is kept
+           only as the fallback for the case where the draft could not be made —
+           the form still works, it just uploads unparented, which is the old
+           behaviour rather than a new failure. */
+        'post_id'            => $edit ?: ($draft ?: 'new_post'),
+        'new_post'           => ($edit || $draft) ? [] : [
             'post_type'      => $type,
             'post_status'    => lg_fc_post_status($type, $uid),
             'post_author'    => $uid,
