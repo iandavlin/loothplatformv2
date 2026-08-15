@@ -6197,82 +6197,63 @@ function lgFollowEnabled() {
   else boot();
 })();
 
-/* ── COMPOSER TYPE TOGGLE — Discussion <-> Loothprint (Ian 2026-08-09) ─────────
+/* ── COMPOSER TYPE TOGGLE — Discussion <-> Loothprint ─────────────────────────
  *
- * "part of the compose package in the new post in the hub… toggle between
- * discussion and loothprint… two different forms."
+ * Ian 2026-08-09: "toggle between discussion and loothprint… two different forms."
+ * Ian 2026-08-15, after seeing it: discussion stays the DEFAULT — "that is what
+ * most posting will be" — and "I'd like the loothprint form not to share the
+ * modal - or figure out how to make the modal not have them competing or
+ * generating spacing even if vis 0".
  *
- * SELF-CONTAINED ON PURPOSE. It touches the composer only through the DOM
- * (#ntm-form, #ntm-lpframe) and never reaches into the composer's closure, so it
- * cannot perturb the discussion flow — which is the half that must not regress.
- * With the flag off the markup is absent entirely and every line below no-ops on
- * the first querySelector.
+ * SO THE IFRAME IS GONE. Tapping Loothprint LEAVES the modal and opens the
+ * standalone /compose/ page full-screen. That is not a workaround, it is the
+ * repair: two surfaces sharing one dialog produced two defects that a tidier
+ * embed would not have fixed.
  *
- * WHY AN IFRAME AND NOT INJECTED MARKUP: ACF's gallery, media modal and select2
- * are printed by wp_head() on the compose route, and the hub has none of them.
- * Injected markup would render a photo picker that silently does nothing — the
- * failure class this lane already hit once with the nested-form bug.
+ *   1. STACKED FURNITURE. ntmSetState('authed') sets ntmForm.hidden = false
+ *      unconditionally, knowing nothing about the active type. The auth probe
+ *      resolves ~2-4s after the composer opens, so a member who taps Loothprint
+ *      before it lands gets the discussion wizard RE-SHOWN underneath the frame:
+ *      step rail, forum picker and Cancel/Next all visible with the Loothprint
+ *      form. Measured on the live serve — tab reads "loothprint" while the
+ *      discussion form, rail, footer and forum list are all visible at t+4s.
+ *      That is Ian's screenshot. It is a race, which is why it looked fine to a
+ *      test that waited before clicking.
+ *   2. SIGNED-OUT EMBED. A frame is a separate navigation and does not always
+ *      carry what the parent carries.
  *
- * The frame is SAME-ORIGIN, so its height is read directly from its own document
- * rather than negotiated over postMessage. One scrollbar (the dialog's), not two
- * — a frame that scrolls inside a scrolling dialog is Ian's cramped-modal
- * complaint (backlog 10) made worse.
+ * With no embedded surface there is nothing to stack, nothing to keep in sync
+ * with an auth probe, and nothing to size. The standalone page is also the
+ * surface already verified end-to-end.
+ *
+ * WHY A FULL NAVIGATION AND NOT A ROUTE SWAP: the compose route prints ACF's
+ * gallery, media modal and select2 via wp_head(); the hub has none of them.
+ * Injecting that markup gives a photo picker that silently does nothing — the
+ * failure this lane already hit once with the nested-form bug.
+ *
+ * Still self-contained: it touches the composer only through the DOM and never
+ * reaches into its closure, so the discussion flow — the half that must not
+ * regress — cannot be perturbed. Flag off, the markup is absent and every line
+ * below no-ops on the first querySelector.
  */
 (function () {
   var wrap = document.getElementById('ntm-typetoggle');
-  var frame = document.getElementById('ntm-lpframe');
-  if (!wrap || !frame) return;                    // flag off, or cannot post
+  if (!wrap) return;                              // flag off, or cannot post
 
-  var form = document.getElementById('ntm-form');
   var base = wrap.getAttribute('data-compose-base') || '/compose/';
-  var loaded = false;
-  var formWasHidden = null;
-
-  function fit() {
-    try {
-      var d = frame.contentDocument;
-      if (!d || !d.body) return;
-      var h = Math.max(d.body.scrollHeight, d.documentElement.scrollHeight);
-      if (h > 0) frame.style.height = h + 'px';
-    } catch (e) { /* cross-origin should be impossible here; never throw at the user */ }
-  }
-
-  function show(type) {
-    var lp = type === 'loothprint';
-    [].forEach.call(wrap.querySelectorAll('.ntm-typetoggle__opt'), function (b) {
-      var on = b.getAttribute('data-ntm-type') === type;
-      b.classList.toggle('is-on', on);
-      b.setAttribute('aria-selected', on ? 'true' : 'false');
-    });
-
-    if (lp) {
-      // Remember the form's state rather than assuming it was visible: the
-      // composer hides it while loading and for signed-out readers, and
-      // restoring it unconditionally would show a dead form over those states.
-      if (formWasHidden === null && form) formWasHidden = form.hidden;
-      if (form) form.hidden = true;
-      if (!loaded) {
-        frame.src = base + '?type=loothprint&embed=1';
-        frame.addEventListener('load', fit);
-        loaded = true;
-      }
-      frame.hidden = false;
-      fit();
-    } else {
-      frame.hidden = true;
-      if (form) form.hidden = (formWasHidden === null ? false : formWasHidden);
-      formWasHidden = null;
-    }
-  }
 
   wrap.addEventListener('click', function (e) {
     var b = e.target.closest('.ntm-typetoggle__opt');
     if (!b) return;
     e.preventDefault();
-    show(b.getAttribute('data-ntm-type'));
-  });
+    if (b.getAttribute('data-ntm-type') !== 'loothprint') return;   // discussion IS the modal
 
-  // The form grows as a member adds photos; re-measure while it is on screen.
-  // Cheap, and only while the Loothprint side is actually showing.
-  setInterval(function () { if (!frame.hidden) fit(); }, 700);
+    /* Hand the standalone page the way BACK, so returning to Discussion reopens
+       the wizard where the member left it — and so it works unchanged under the
+       lane-preview prefix, where the hub is not at /hub/. Path only: the page
+       refuses anything with a scheme or host, so this cannot become an open
+       redirect. */
+    var back = location.pathname + (location.pathname.indexOf('?') > -1 ? '&' : '?') + 'compose=1';
+    location.href = base + '?type=loothprint&back=' + encodeURIComponent(back);
+  });
 })();

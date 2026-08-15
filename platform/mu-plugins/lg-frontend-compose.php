@@ -691,6 +691,34 @@ function lg_fc_refuse(string $what): void
     lg_fc_page_close();
 }
 
+/**
+ * The way BACK to the hub composer, taken from ?back= and refused unless it is a
+ * bare same-site PATH.
+ *
+ * The hub hands this over when a member taps Loothprint (forums.js §type-toggle)
+ * so that switching back to Discussion reopens the wizard where they left it —
+ * and so the round trip works unchanged under the lane-preview prefix, where the
+ * hub is NOT at /hub/. Hard-coding /hub/ here would send a previewing Ian out of
+ * the preview and into the real site.
+ *
+ * OPEN-REDIRECT GUARD: a value carrying a scheme, a host, a backslash, or a
+ * leading `//` is discarded rather than sanitised. This lands in a Location-ish
+ * position on a page any member can reach, and "clean it up and use it anyway"
+ * is how those become exploitable.
+ */
+function lg_fc_back_path(): string
+{
+    $raw = isset($_GET['back']) && is_string($_GET['back']) ? wp_unslash($_GET['back']) : '';
+    if ($raw === '') return '';
+    $raw = trim($raw);
+    if ($raw[0] !== '/') return '';                 // must be a path
+    if (strpos($raw, '//') === 0) return '';        // protocol-relative
+    if (strpos($raw, '\\') !== false) return '';      // backslash tricks
+    if (preg_match('~^/[^/]*:~', $raw)) return '';  // scheme-ish
+    if (strpos($raw, "\n") !== false || strpos($raw, "\r") !== false) return '';
+    return esc_url_raw($raw);
+}
+
 function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
 {
     $t = lg_fc_types()[$type];
@@ -709,6 +737,19 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     lg_fc_page_open($t['title'], $embed);
     ?>
 <div class="lgfc__card">
+<?php /* TYPE TOGGLE — Ian 2026-08-15: discussion stays the default and the two
+         forms no longer share a modal, so the toggle has to exist on BOTH
+         surfaces or the trip is one-way. Rendered only when the hub told us
+         where it came from; a member who reached /compose/ directly gets no
+         half-working control. */
+      $lg_fc_back = lg_fc_back_path();
+      if ($lg_fc_back !== '' && !$edit && !$embed): ?>
+  <div class="lgfc__typetoggle" role="tablist" aria-label="What are you posting?">
+    <a class="lgfc__typeopt" role="tab" aria-selected="false"
+       href="<?php echo esc_url($lg_fc_back); ?>">Discussion</a>
+    <span class="lgfc__typeopt is-on" role="tab" aria-selected="true">Loothprint</span>
+  </div>
+<?php endif; ?>
   <div class="lgfc__h">
     <h1><?php echo esc_html($t['title']); ?></h1>
     <p class="lgfc__sub lgfc__sub--wide"><?php echo esc_html($t['sub']); ?></p>
@@ -895,6 +936,18 @@ function lg_fc_css(): string
 .lgfc__card{border:1px solid var(--lg-line,#e3ddd0);border-radius:16px;
   background:var(--lg-card-bg,#fff);overflow:hidden;box-shadow:0 10px 34px rgba(38,41,37,.06)}
 .lgfc__h{padding:19px 21px 15px;border-bottom:1px solid var(--lg-line,#e3ddd0)}
+/* TYPE TOGGLE (Ian 8/15) — the same pill pair the hub composer shows, so the
+   two surfaces read as one control rather than two designs. Discussion is an
+   <a> back to the hub; Loothprint is a <span> because it is where you already
+   are, and a button that does nothing is worse than no button. */
+.lgfc__typetoggle{display:flex;gap:6px;padding:14px 21px 0}
+.lgfc__typeopt{display:inline-block;padding:7px 15px;border-radius:999px;
+  border:1px solid var(--lg-line,#e3ddd0);background:var(--lg-card,#fff);
+  color:var(--lg-ink-soft,#565a55);font:600 13.5px/1 inherit;text-decoration:none;
+  cursor:pointer}
+.lgfc__typeopt:hover{border-color:var(--lg-sage,#87986a);color:var(--lg-ink,#262925)}
+.lgfc__typeopt.is-on{background:var(--lg-sage,#87986a);border-color:var(--lg-sage,#87986a);
+  color:#fff;cursor:default}
 .lgfc__h h1{margin:0;font:700 19px/1.25 var(--lg-font-serif,Lora,Georgia,serif);
   color:var(--lg-charcoal,#1a1d1a)}
 .lgfc__sub{margin:5px 0 0;color:var(--lg-mute,#6b6f6b);font-size:13.5px}

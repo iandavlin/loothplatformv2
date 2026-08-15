@@ -346,14 +346,12 @@ function bb_mirror_new_topic_modal(): void
       <button type="button" class="ntm-typetoggle__opt" data-ntm-type="loothprint"
               role="tab" aria-selected="false">Loothprint</button>
     </div>
-    <?php /* The Loothprint form is served by the compose route and shown in a
-             same-origin iframe. NOT injected as markup: ACF's gallery, media modal
-             and select2 are printed by wp_head() on that route and the hub has
-             none of them, so injected markup would give a photo picker that
-             silently does nothing. src is set by JS on first switch, so the flag
-             being on still costs a discussion-poster no request. */ ?>
-    <iframe class="ntm-lpframe" id="ntm-lpframe" hidden title="Share a Loothprint"
-            referrerpolicy="same-origin"></iframe>
+    <?php /* NO EMBEDDED FRAME. Ian 2026-08-15: the Loothprint form must not share
+             this modal. Tapping Loothprint navigates to the standalone /compose/
+             page (forums.js §type-toggle) — which removes the stacked-furniture
+             race (ntmSetState('authed') re-showing the discussion wizard under
+             the frame) and the signed-out-embed class in one move, rather than
+             tidying a surface that should not be here. */ ?>
 <?php endif; ?>
 
     <div class="ntm-state ntm-state--loading" id="ntm-loading" hidden>
