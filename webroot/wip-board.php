@@ -165,6 +165,44 @@ function lgb_item(string $id, string $text): array
     return compact('id', 'title', 'owner', 'done', 'needsIan', 'look', 'blocked', 'unowned') + ['raw' => $plain];
 }
 
+/**
+ * The DETAIL sections — everything below the index, keyed by item id.
+ *
+ * The file's own shape: `## <id> <title> …` headings, each running until the
+ * next `##`. The index says what the order is; these say what the work IS. The
+ * modal shows one, so an item can be opened without leaving the board or
+ * hunting through a 64 KB markdown file.
+ *
+ * @return array<string,array{heading:string,body:string}>
+ */
+function lgb_parse_details(string $path): array
+{
+    if (!is_readable($path)) { return []; }
+    $raw   = str_replace([ "\r\n", "\r" ], "\n", (string) file_get_contents($path));
+    $lines = explode("\n", $raw);
+
+    $out = []; $curId = null; $curHead = ''; $buf = [];
+    $flush = static function () use (&$out, &$curId, &$curHead, &$buf): void {
+        if ($curId !== null) {
+            $out[$curId] = ['heading' => $curHead, 'body' => trim(implode("\n", $buf))];
+        }
+    };
+    foreach ($lines as $line) {
+        if (str_starts_with($line, '## ')) {
+            $flush();
+            $head = trim(substr($line, 3));
+            // The id is the first token, after any leading tick.
+            $probe = ltrim($head, "✅ \t");
+            $curId = preg_match('/^([A-Z]?\d+(?:\.\d+)?)/u', $probe, $m) ? $m[1] : null;
+            $curHead = $head; $buf = [];
+            continue;
+        }
+        if ($curId !== null) { $buf[] = $line; }
+    }
+    $flush();
+    return $out;
+}
+
 /* ---------------------------------------------------------------------- *
  * The sentinel stamp → lane lights + capacity strip
  * ---------------------------------------------------------------------- */
@@ -191,6 +229,8 @@ const LGB_DISK_RED_PCT  = 90;
 function lgb_h(string $s): string { return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'); }
 
 $backlog  = lgb_parse_backlog($BACKLOG);
+$GLOBALS['LGB_ROW'] = 0;   // row keys; see the payload note below
+$details  = lgb_parse_details($BACKLOG);
 $sentinel = lgb_sentinel($SENTINEL);
 
 $totalItems = 0; $needsYou = 0;
@@ -270,6 +310,26 @@ header('X-Robots-Tag: noindex, nofollow');
   .bdg--unowned{background:#eee9df;color:var(--ink-mute)}
   .bdg--done{background:#e8efe2;color:var(--good)}
 
+  .row--open{cursor:pointer}
+  .row--open:hover{border-color:var(--accent);background:#fffdf8}
+  .row--open:focus{outline:2px solid var(--accent);outline-offset:1px}
+
+  /* the work modal — read-only in phase 1 */
+  .scrim{position:fixed;inset:0;background:rgba(31,29,26,.45);display:none;align-items:flex-start;
+         justify-content:center;padding:32px 18px;z-index:50;overflow:auto}
+  .scrim.on{display:flex}
+  .modal{background:#fff;border-radius:12px;max-width:760px;width:100%;box-shadow:0 18px 44px rgba(0,0,0,.3);
+         display:flex;flex-direction:column;max-height:calc(100vh - 64px)}
+  .modal__h{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
+  .modal__t{font-size:1rem;font-weight:700;line-height:1.35;flex:1}
+  .modal__x{border:0;background:none;color:var(--ink-mute);font-size:1.3rem;line-height:1;cursor:pointer;padding:0 2px}
+  .modal__b{padding:15px 18px;overflow:auto}
+  .modal__b pre{white-space:pre-wrap;word-wrap:break-word;font:13px/1.62 ui-monospace,Menlo,monospace;
+                margin:0;color:var(--ink-soft)}
+  .modal__b a{color:var(--accent)}
+  .modal__meta{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 12px}
+  .phase2{margin:14px 0 0;padding:10px 12px;background:#fbf8f2;border:1px solid var(--line-soft);
+          border-radius:8px;font-size:.79rem;color:var(--ink-mute)}
   .foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);font-size:.76rem;color:var(--ink-mute);line-height:1.6}
   .foot b{color:var(--ink-soft)}
   .err{background:#fdf3f0;border:1px solid #eccfc4;border-radius:9px;padding:12px 14px;color:#7a3a22;margin:0 0 14px}
@@ -380,7 +440,9 @@ header('X-Robots-Tag: noindex, nofollow');
       <span class="band__c"><?= count($band['items']) ?></span>
     </div>
     <?php foreach ($band['items'] as $it): ?>
-      <div class="row<?= $it['done'] ? ' row--done' : '' ?>" title="<?= lgb_h(mb_substr($it['raw'], 0, 400)) ?>">
+      <?php $rowKey = 'r' . (++$GLOBALS['LGB_ROW']); ?>
+      <div class="row row--open<?= $it['done'] ? ' row--done' : '' ?>"
+           data-item="<?= lgb_h($rowKey) ?>" tabindex="0" role="button" title="Open this item">
         <span class="row__n"><?= lgb_h($it['id']) ?></span>
         <span class="row__t"><?= lgb_h($it['title']) ?></span>
         <span class="row__b">
@@ -407,6 +469,93 @@ header('X-Robots-Tag: noindex, nofollow');
     the per-item work modal with its thread, and the keeper chat; all of those
     write, and get fenced as writes.
   </div>
+
+  <!-- The work modal. READ-ONLY in phase 1: it shows what an item IS. The
+       decisions, the per-item thread, images and "Other" are phase 2, and every
+       one of those writes. -->
+  <div class="scrim" id="lgb-scrim" role="dialog" aria-modal="true" aria-labelledby="lgb-title">
+    <div class="modal">
+      <div class="modal__h">
+        <div class="modal__t" id="lgb-title"></div>
+        <button class="modal__x" id="lgb-close" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="modal__b">
+        <div class="modal__meta" id="lgb-meta"></div>
+        <pre id="lgb-body"></pre>
+        <div class="phase2">Read-only for now. Answering decisions, the per-item
+          thread, images and drag-to-rank all write, so they come with phase 2.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail bodies, embedded rather than fetched: it keeps the page free of
+       query input (which the gate asserts, and which is a real property for a
+       surface with no auth of its own beyond the dev gate). -->
+  <script type="application/json" id="lgb-details"><?php
+    // ONE ENTRY PER ITEM, always. Only 7 of the file's 39 detail sections are
+    // id-headed — the other 30 are the date-headed shipped archive — so keying
+    // the modal on detail alone would have made 42 of 49 items unopenable.
+    // What every item DOES have is its full index line, which the row itself
+    // truncates to fit. So the modal always has something true to show, and the
+    // detail section is a bonus when the file carries one.
+    // KEYED PER ROW, NOT PER ID — because ids are not unique. The index really
+    // does carry "9" twice (Shop Layout Planner in P1, Advanced search in P2),
+    // so an id-keyed map silently collapses them and both rows open the second
+    // one's text. Two rows, one payload, wrong content, no error.
+    $payload = []; $n = 0;
+    foreach ($backlog['bands'] as $b) {
+        foreach ($b['items'] as $it) {
+            $d = $details[$it['id']] ?? null;
+            $payload['r' . (++$n)] = [
+                'heading' => $it['id'] . ' · ' . $it['title'],
+                'line'    => $it['raw'],
+                'band'    => $b['name'] !== '' ? $b['name'] : $b['label'],
+                'owner'   => $it['owner'],
+                'detail'  => $d['body']    ?? '',
+                'dhead'   => $d['heading'] ?? '',
+            ];
+        }
+    }
+    echo json_encode($payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
+  ?></script>
+  <script>
+  (function () {
+    var data = {};
+    try { data = JSON.parse(document.getElementById('lgb-details').textContent || '{}'); } catch (e) {}
+    var scrim = document.getElementById('lgb-scrim'),
+        title = document.getElementById('lgb-title'),
+        body  = document.getElementById('lgb-body'),
+        meta  = document.getElementById('lgb-meta');
+
+    function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+    function open(id, row) {
+      var d = data[id]; if (!d) return;
+      title.textContent = d.dhead || d.heading || id;
+      var text = d.line || '';
+      if (d.detail) { text += '\n\n────────\n\n' + d.detail; }
+      // Links are made clickable, everything else stays literal text.
+      body.innerHTML = esc(text).replace(
+        /(https?:\/\/[^\s<)]+|\/[a-z0-9][\w./-]*\/)/gi,
+        function (m) { return '<a href="' + m + '" target="_blank" rel="noopener">' + m + '</a>'; });
+      meta.innerHTML = '';
+      row.querySelectorAll('.bdg').forEach(function (b) { meta.appendChild(b.cloneNode(true)); });
+      scrim.classList.add('on');
+      document.getElementById('lgb-close').focus();
+    }
+    function close() { scrim.classList.remove('on'); }
+
+    document.querySelectorAll('.row[data-item]').forEach(function (row) {
+      row.addEventListener('click', function () { open(row.getAttribute('data-item'), row); });
+      row.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(row.getAttribute('data-item'), row); }
+      });
+    });
+    document.getElementById('lgb-close').addEventListener('click', close);
+    scrim.addEventListener('click', function (e) { if (e.target === scrim) close(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  })();
+  </script>
 </div>
 </body>
 </html>

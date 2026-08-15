@@ -204,6 +204,54 @@ is_(str_contains($noBack, 'not readable'), "...and says WHY it is empty");
 is_(str_contains($noBack, 'class="rail"'), "...while the sentinel half still renders — one dead source does not blank the page");
 
 /* ---------------------------------------------------------------------- */
+section("[5c] EVERY ROW OPENS ITS OWN ITEM — ids are NOT unique");
+
+// The read-only work modal. The trap here is real and was hit: the PRIORITY
+// INDEX carries the id "9" TWICE (Shop Layout Planner in P1, Advanced search in
+// P2). An id-keyed payload silently collapses them, so both rows open the
+// second one's text — two rows, one payload, wrong content, no error. Rows are
+// therefore keyed per ROW, and this asserts it stays that way.
+if (!preg_match_all('/data-item="([^"]+)"/', $html, $dm)) {
+    bad("no openable rows at all");
+} else {
+    $keys = $dm[1];
+    is_(count($keys) === count(array_unique($keys)), sprintf(
+        "every row carries a UNIQUE key (%d rows, %d unique)", count($keys), count(array_unique($keys))));
+    is_(count($keys) === count($ids), sprintf(
+        "and there is one openable row per index item (%d vs %d)", count($keys), count($ids)));
+
+    $payload = [];
+    if (preg_match('/id="lgb-details">(.*?)<\/script>/s', $html, $pm)) {
+        $payload = json_decode($pm[1], true) ?: [];
+    }
+    is_(count($payload) === count($keys), sprintf(
+        "the payload has an entry for every row (%d vs %d)", count($payload), count($keys)));
+    is_(array_diff($keys, array_keys($payload)) === [], "no row points at a payload entry that does not exist");
+
+    // The duplicate-id case specifically: if the file still has one, the two
+    // rows must carry DIFFERENT text.
+    $dupes = array_values(array_diff_assoc($ids, array_unique($ids)));
+    if ($dupes !== []) {
+        $seen = [];
+        foreach ($payload as $entry) {
+            $h = (string) ($entry['heading'] ?? '');
+            foreach ($dupes as $d) {
+                if (str_starts_with($h, $d . ' ')) { $seen[$d][] = $h; }
+            }
+        }
+        $collapsed = [];
+        foreach ($seen as $d => $headings) {
+            if (count(array_unique($headings)) < 2) { $collapsed[] = $d; }
+        }
+        is_($collapsed === [], sprintf(
+            "the duplicated id(s) %s open DIFFERENT items, not the same one twice (collapsed: %s)",
+            implode(',', $dupes), $collapsed === [] ? 'none' : implode(',', $collapsed)));
+    } else {
+        ok("no duplicate ids in the index today — nothing to collapse");
+    }
+}
+
+/* ---------------------------------------------------------------------- */
 section("[6] PHASE 1 CANNOT WRITE");
 
 // Read-only is the property that lets this ship without a flag, so it is
