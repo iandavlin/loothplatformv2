@@ -50,5 +50,6 @@ return array(
 	 * /compose/ recorded BEFORE the feature existed — not against the weaker
 	 * "nothing was rendered".
 	 */
-	'enabled' => false,
+	// ON 2026-08-15 late: Ian's item-5 'Do it' after his looks (light + dark passes)
+	'enabled' => true,
 );
