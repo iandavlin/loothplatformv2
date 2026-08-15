@@ -46,12 +46,42 @@ let claimSaveInFlight = false;
 // it must not have to wait for the fairness change to be switched on.
 let helpEnabled  = false;
 
+// Backlog 24: a WP nonce lives ~12h and this game sits in a front-page iframe
+// people leave open, so a tab opened last night carries a dead one. Measured on
+// live: 8 of 101 finished games came back 403 and were thrown away silently,
+// because every one of these calls ended in `.catch(() => {})` -- the player saw
+// their win card and it never reached the board.
+let retryEnabled = false;
+
+// Backlog 25 (option A): the phrase never reaches this file. The server hands
+// down only the board SHAPE, returns POSITIONS for a letter you have paid for,
+// and judges the guess. PHRASE/PHRASE_LETTERS stay empty for the whole game --
+// which is the point, because they used to be the answer key sitting in a
+// global, next to a `guessed === PHRASE_LETTERS` compare.
+let serverPlay = false;
+let SHAPE      = null;   // [[ 'letter' | 'hyphen', ... ], ...] one entry per word
+
 // Audience: the front-page block passes ?aud=m (member) / ?aud=p (logged-out)
 // from its SSR member check. Logged-out players get a DIFFERENT daily phrase
 // (Ian 6/11) — same shared sequence, day index shifted by half its length, so
 // the two tracks never collide on the same day. Cosmetic only: recording is
 // still server-gated, so spoofing ?aud only changes which puzzle you see.
 const AUD_MEMBER = new URLSearchParams(location.search).get('aud') === 'm';
+
+// Backlog 25: set by the front-page block when LG_GUITARDLE_SERVER_PLAY is on.
+// It must arrive in the URL rather than from the score handshake, because the
+// legacy path fetches the phrase CSV to draw the board and that CSV IS the
+// answer key -- by the time a handshake landed, the client would already have
+// downloaded the thing we are trying to withhold.
+const WANT_SERVER_PLAY = new URLSearchParams(location.search).has('sp');
+
+// Backlog 26: set by the front-page block for LOGGED-OUT players when
+// LG_GUITARDLE_DAY_PUZZLE is on. The logged-out game still judges its own
+// guess, so it genuinely needs today's phrase -- but it does not need the
+// LIBRARY or the SEQUENCE, and those are what make every future day, and the
+// member track, computable by anyone. So it asks for one day instead.
+const WANT_DAY_PUZZLE  = new URLSearchParams(location.search).has('dp');
+const PUZZLE_API = '/archive-api/v0/guitardle-puzzle';
 
 // Saved-game snapshot (Ian 6/12: refresh-PROOF, the forfeit rule is gone).
 // Written on every move, cleared on any end state. A reload mid-game restores
@@ -126,7 +156,32 @@ function formatDate() {
 // ─────────────────────────────────────────────────────────────────────────────
 //  PHRASE LOADING
 // ─────────────────────────────────────────────────────────────────────────────
+// One day, one track. config.json still comes from disk -- it is menu links and
+// a share URL, nothing about the puzzle.
+async function loadPhraseForDay() {
+    const [pzRes, cfgRes] = await Promise.all([
+        // No parameters, deliberately: the SERVER's clock picks the day. Passing
+        // one would imply it is negotiable, and the whole point of this endpoint
+        // is that no request shape can ask it about another day.
+        fetch(PUZZLE_API, { credentials: 'same-origin' }),
+        fetch('assets/config.json'),
+    ]);
+    const pz = await pzRes.json();
+    siteConfig = await cfgRes.json();
+
+    PHRASE         = String(pz.phrase || '').toUpperCase();
+    PHRASE_LETTERS = PHRASE.replace(/[-\s]/g, '');
+    PHRASE_ID      = pz.phrase_id | 0;
+
+    // Same budget the legacy path computes, from the phrase we now hold.
+    const distinct = new Set(PHRASE_LETTERS);
+    let revealCost = 0;
+    distinct.forEach(L => { revealCost += VOWELS.has(L) ? 2 : 1; });
+    MOVE_CAP = Math.max(revealCost - 3, 5);
+}
+
 async function loadPhrase() {
+    if (WANT_DAY_PUZZLE) return loadPhraseForDay();
     const [seqRes, csvRes, cfgRes] = await Promise.all([
         fetch('assets/sequence.json'),
         fetch('assets/guitardle_phrases.csv'),
@@ -242,6 +297,12 @@ function initScoreSync() {
             if (res.ok) scoreAuth = await res.json();
             claimEnabled = !!(scoreAuth && scoreAuth.claim);
             helpEnabled  = !!(scoreAuth && scoreAuth.help);
+            retryEnabled = !!(scoreAuth && scoreAuth.retry);
+            // Both halves must agree: the page was built for server play AND the
+            // server confirms it. A mismatch falls back to the legacy path
+            // rather than rendering an empty board.
+            serverPlay   = WANT_SERVER_PLAY
+                        && !!(scoreAuth && scoreAuth.serverplay && scoreAuth.puzzle);
             if (helpEnabled) {
                 // The rules overlay only becomes reachable under its own flag,
                 // so OFF leaves the chrome exactly as it was.
@@ -271,20 +332,46 @@ function postScore(won, streak) {
     const localDate = todayString();
     scoreSyncPromise.then(() => {
         if (!scoreAuth.authenticated || !scoreAuth.nonce) return;
-        return fetch(SCORE_API, {
-            method:      'POST',
-            credentials: 'same-origin',
-            headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
-            body: JSON.stringify({
-                phrase_id:  PHRASE_ID,
-                won:        !!won,
-                moves:      moves,
-                streak:     streak,
-                local_date: localDate,
-                hardcore:   HARDCORE,   // 2× points on the weekly board
-            }),
+        return postWithNonce({
+            phrase_id:  PHRASE_ID,
+            won:        !!won,
+            moves:      moves,
+            streak:     streak,
+            local_date: localDate,
+            hardcore:   HARDCORE,   // 2× points on the weekly board
         });
     }).catch(() => {});
+}
+
+// Fetch a fresh nonce and adopt it. Returns whether we got one.
+function refreshNonce() {
+    return fetch(`${SCORE_API}?local_date=${todayString()}`, { credentials: 'same-origin' })
+        .then(res => (res.ok ? res.json() : null))
+        .then(json => {
+            if (json && json.nonce) { scoreAuth.nonce = json.nonce; return true; }
+            return false;
+        })
+        .catch(() => false);
+}
+
+// The one door every nonce-bearing call goes through. With the flag OFF this is
+// exactly what each call did before: send it, swallow anything that comes back.
+// With it ON, a 403 (the expired-nonce answer) buys ONE fresh nonce and ONE
+// resend of the same body -- never a loop, so a genuinely rejected request
+// still costs a single extra request and then stops.
+function postWithNonce(body) {
+    const send = () => fetch(SCORE_API, {
+        method:      'POST',
+        credentials: 'same-origin',
+        headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
+        body:        JSON.stringify(body),
+    });
+    if (!retryEnabled) return send().catch(() => {});
+    return send()
+        .then(res => (res.status === 403
+            ? refreshNonce().then(got => (got ? send() : res))
+            : res))
+        .catch(() => {});
 }
 
 // Take today's allowance, then keep the position server-side. Fire-and-forget:
@@ -295,17 +382,15 @@ function claimAttempt() {
     if (!claimEnabled || !scoreAuth.authenticated || !scoreAuth.nonce) return;
     if (claimTaken) return;
     claimTaken = true;
-    fetch(SCORE_API, {
-        method:      'POST',
-        credentials: 'same-origin',
-        headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
-        body: JSON.stringify({
-            action:     'start',
-            phrase_id:  PHRASE_ID,
-            hardcore:   HARDCORE,
-            local_date: todayString(),
-        }),
-    }).catch(() => {});
+    // Worth retrying as much as the finish is: a start-claim lost to a stale
+    // nonce means the day is never claimed and the allowance fix silently does
+    // not apply to this game.
+    postWithNonce({
+        action:     'start',
+        phrase_id:  PHRASE_ID,
+        hardcore:   HARDCORE,
+        local_date: todayString(),
+    });
 }
 
 // Mirror the localStorage snapshot to the server so ANOTHER device can resume.
@@ -315,21 +400,17 @@ function saveGameRemote() {
     if (!claimEnabled || !scoreAuth.authenticated || !scoreAuth.nonce) return;
     if (state.gameOver || claimSaveInFlight) return;
     claimSaveInFlight = true;
-    fetch(SCORE_API, {
-        method:      'POST',
-        credentials: 'same-origin',
-        headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
-        body: JSON.stringify({
-            action:     'save',
-            hardcore:   HARDCORE,
-            local_date: todayString(),
-            state: {
-                moves:     state.moves,
-                revealed:  [...state.revealedLetters],
-                purchased: [...state.purchasedVowels],
-            },
-        }),
-    }).catch(() => {}).then(() => { claimSaveInFlight = false; });
+    postWithNonce({
+        action:     'save',
+        hardcore:   HARDCORE,
+        local_date: todayString(),
+        state: {
+            moves:     state.moves,
+            revealed:  [...state.revealedLetters],
+            purchased: [...state.purchasedVowels],
+        },
+    }).then(() => { claimSaveInFlight = false; },
+            () => { claimSaveInFlight = false; });
 }
 
 // Replay a server-held position onto the board. Same replay as
@@ -395,6 +476,45 @@ function initEmbedMode() {
 // ─────────────────────────────────────────────────────────────────────────────
 //  PHRASE RENDERING
 // ─────────────────────────────────────────────────────────────────────────────
+// Server-driven board: tiles are drawn from word lengths alone. Note what is
+// ABSENT -- no dataset.letter. In the legacy path every blank tile carries its
+// own answer in the DOM; here a tile learns its letter only when the server says
+// so, and `data-i` is its index into the phrase's letter run (the same index
+// space the server returns positions in).
+function renderPhraseFromShape(shape) {
+    const segLens = [];
+    shape.forEach(word => {
+        let run = 0;
+        word.forEach(slot => {
+            if (slot === 'hyphen') { segLens.push(run); run = 0; } else { run++; }
+        });
+        segLens.push(run);
+    });
+    document.documentElement.style.setProperty('--max-tiles', Math.max(...segLens, 1));
+
+    phraseRowEl.innerHTML = '';
+    let idx = 0;
+    shape.forEach(word => {
+        const wordEl = document.createElement('div');
+        wordEl.className = 'word';
+        word.forEach(slot => {
+            if (slot === 'hyphen') {
+                const hyphen = document.createElement('span');
+                hyphen.className = 'tile-hyphen';
+                hyphen.textContent = '-';
+                hyphen.setAttribute('aria-hidden', 'true');
+                wordEl.appendChild(hyphen);
+            } else {
+                const tile = document.createElement('div');
+                tile.className = 'tile blank';
+                tile.dataset.i = String(idx++);
+                wordEl.appendChild(tile);
+            }
+        });
+        phraseRowEl.appendChild(wordEl);
+    });
+}
+
 function renderPhrase() {
     const words = PHRASE.split(' ');
 
@@ -520,7 +640,57 @@ function revealTiles(letter) {
     });
 }
 
+// The server-driven twin: it is told WHERE, because it cannot know.
+function revealTilesAt(letter, positions) {
+    (positions || []).forEach(i => {
+        const tile = phraseRowEl.querySelector(`.tile[data-i="${i}"]`);
+        if (!tile) return;
+        tile.classList.remove('blank');
+        tile.classList.add('revealed');
+        tile.dataset.letter = letter;
+        tile.textContent = letter;
+    });
+}
+
+// One door for both key types under server play. The client no longer decides
+// what a tap costs or whether it is allowed -- it asks, and applies the answer.
+let revealInFlight = false;
+function serverReveal(letter, keyEl) {
+    if (revealInFlight || state.gameOver) return;
+    revealInFlight = true;
+    postWithNonce({ action: 'reveal', letter: letter, hardcore: HARDCORE,
+                    local_date: todayString() })
+        .then(res => (res && res.json ? res.json() : null))
+        .then(j => {
+            revealInFlight = false;
+            if (!j || !j.ok) {
+                // already_played / capped / anything else: leave the board alone.
+                if (j && j.error === 'already_played') showAlreadyPlayed();
+                return;
+            }
+            if (j.capped) { state.moves = j.moves; refreshCapState(); return; }
+            MOVE_CAP  = j.cap;
+            state.moves = j.moves;
+            if (j.positions && j.positions.length) {
+                state.revealedLetters.add(letter);
+                revealTilesAt(letter, j.positions);
+                keyEl.classList.remove('purchased');
+                keyEl.classList.add('used');
+                keyEl.disabled = true;
+            } else {
+                state.purchasedVowels.add(letter);
+                keyEl.classList.add('purchased');
+            }
+            renderMoves();
+            updateScoreBox(state.moves);
+            refreshCapState();
+            lockHardcoreToggle();
+        })
+        .catch(() => { revealInFlight = false; });
+}
+
 function handleConsonant(letter, keyEl) {
+    if (serverPlay) return serverReveal(letter, keyEl);
     if (outOfReveals()) return;
     if (state.revealedLetters.has(letter)) return;
     state.revealedLetters.add(letter);
@@ -531,6 +701,7 @@ function handleConsonant(letter, keyEl) {
 }
 
 function handleVowel(letter, keyEl) {
+    if (serverPlay) return serverReveal(letter, keyEl);
     if (outOfReveals()) return;
     if (state.revealedLetters.has(letter)) return;
 
@@ -668,6 +839,50 @@ function confirmGuess() {
     const guessed = [...phraseRowEl.querySelectorAll('.tile')]
         .map(t => t.textContent.trim().toUpperCase())
         .join('');
+
+    // Server-driven: we do not know the answer, so we cannot judge. Send the
+    // guess, take the verdict, and only then learn the phrase.
+    if (serverPlay) {
+        state.gameOver = true;
+        postWithNonce({ action: 'guess', guess: guessed,
+                        streak: parseInt(localStorage.getItem('guitardle_streak') || '0', 10),
+                        local_date: todayString() })
+            .then(res => (res && res.json ? res.json() : null))
+            .then(j => {
+                if (!j || !j.ok) { state.gameOver = false; return; }
+                state.moves = j.moves;
+                PHRASE         = j.phrase || '';
+                PHRASE_LETTERS = PHRASE.replace(/[-\s]/g, '');
+                // Fill in whatever is still blank now the phrase is known.
+                [...phraseRowEl.querySelectorAll('.tile')].forEach(t => {
+                    const i = parseInt(t.dataset.i, 10);
+                    if (!isNaN(i) && PHRASE_LETTERS[i]) t.dataset.letter = PHRASE_LETTERS[i];
+                });
+                renderMoves();
+                const streak = updateStreak(j.won);
+                if (j.won) {
+                    exitGuessMode(false);
+                    phraseRowEl.querySelectorAll('.tile.editable').forEach(tile => {
+                        tile.classList.remove('editable');
+                        tile.classList.add('revealed');
+                        tile.textContent = tile.dataset.letter;
+                    });
+                    clearSavedGame();
+                    showEndState(true, streak);
+                } else {
+                    exitGuessMode(false);
+                    phraseRowEl.querySelectorAll('.tile.blank, .tile.editable').forEach(tile => {
+                        tile.classList.remove('blank', 'editable');
+                        tile.classList.add('revealed-loss');
+                        tile.textContent = tile.dataset.letter;
+                    });
+                    clearSavedGame();
+                    showEndState(false, 0);
+                }
+            })
+            .catch(() => { state.gameOver = false; });
+        return;
+    }
 
     // The single guess attempt costs a move (brief: every distinct action — a
     // reveal, a vowel purchase, OR the guess — is one move). Counted here on
@@ -1152,9 +1367,24 @@ async function init() {
     initEmbedMode();
     initScoreSync();   // fire-and-forget; nonce arrives long before game end
     initBoard();       // fire-and-forget; crown chip pops in when it lands
-    await loadPhrase();
 
-    renderPhrase();
+    if (WANT_SERVER_PLAY) {
+        // The one place the handshake is awaited before rendering: the board
+        // shape only exists in that response. Costs one round trip, and saves
+        // the three asset fetches the legacy path makes.
+        await scoreSyncPromise;
+    }
+    if (serverPlay) {
+        SHAPE     = scoreAuth.puzzle.shape;
+        PHRASE_ID = scoreAuth.puzzle.phrase_id;
+        MOVE_CAP  = scoreAuth.puzzle.cap;
+        const cfg = await fetch('assets/config.json').then(r => r.json()).catch(() => ({}));
+        siteConfig = cfg;
+    } else {
+        await loadPhrase();
+    }
+
+    if (serverPlay) { renderPhraseFromShape(SHAPE); } else { renderPhrase(); }
     attachKeyboardListeners();
     initMenuBar();
     initBoardOverlay();

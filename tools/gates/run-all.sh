@@ -804,6 +804,66 @@ echo "=== GATE 39: featured members — schema constraints, completeness parity,
 # and it feeds no counter in this script — see run(), which tracks red/dead
 # by exit code only.
 run "featured-member" python3 "$(dirname "$0")/featured-member-gate.py"
+echo
+# Gate number 40 assigned by keeper 2026-08-15 (ledger: 38 v2 insert path,
+# 39 taken, 40 this — next free is 41).
+echo "=== GATE 40: a finished Guitardle result survives an EXPIRED NONCE ==="
+# Backlog 24. Live, 7 days: 101 finished games POSTed, 8 came back 403 across 8
+# IPs and 6 days. A WP nonce lives ~12h and the game sits in a front-page iframe
+# people leave open, so a tab opened last night carries a dead one — and every
+# call ended in `.catch(() => {})`, so the player saw their win card and it never
+# reached the board. ~1 game in 12, hitting the members who play most.
+#
+# TWO HALVES, because neither proves anything alone: the SERVER half shows a
+# stale nonce really is answered bad_csrf and records nothing, and that the same
+# result resent with a fresh nonce records with its real score; the CLIENT half
+# SLICES the shipped refreshNonce/postWithNonce out of game.js and evaluates that
+# source against a stubbed network.
+#
+# Deliberately NOT a browser test — a browser dep would flake on a 2-core box and
+# a DEAD gate blocks every lane. Slicing the real source rather than
+# re-implementing it means the harness cannot drift from what ships; if those
+# functions are renamed it reports CANNOT RUN instead of passing vacuously.
+run "guitardle-nonce-retry" python3 "$(dirname "$0")/guitardle-nonce-retry-gate.py"
+echo
+# Gate number 41 assigned by keeper 2026-08-15 (42 pre-assigned to backlog 26;
+# next free 43).
+echo "=== GATE 41: the Guitardle board is scored on what the SERVER watched ==="
+# Backlog 25, option A. Two facts drove the shape: moves/won/hardcore all came
+# out of the POST body and hardcore DOUBLES points, so anyone with their own
+# nonce could post a 20-point day; AND server-side scoring alone would not have
+# fixed it, because the answer was public. Not just "the CSV is on a public URL"
+# — measured in a browser, the legacy board put the phrase in the DOM: 18 tiles,
+# all 18 carrying data-letter, so "POLYURETHANEFINISH" read straight off the
+# BLANK tiles.
+#
+# THE ASSERTION MOST LIKELY TO SAVE SOMEONE IS NOT ABOUT THE EXPLOIT. Phase 2:
+# the server now carries its own copy of loadPhrase(), and if that ever drifts
+# from game.js the server judges a DIFFERENT PUZZLE than the player saw — every
+# honest player loses, which is worse than the hole being closed. So the phrase
+# id and letters are recomputed INDEPENDENTLY in Python from the raw assets and
+# compared with the PHP resolver, on BOTH audience tracks.
+run "guitardle-serverplay" python3 "$(dirname "$0")/guitardle-serverplay-gate.py"
+echo
+# Gate number 42 PRE-ASSIGNED by keeper 2026-08-15 (next free 43).
+echo "=== GATE 42: the puzzle LIBRARY and SEQUENCE never reach a browser ==="
+# Backlog 26. Gate 41 stopped the phrase reaching server-driven MEMBERS, but
+# could not remove assets/guitardle_phrases.csv and assets/sequence.json,
+# because the logged-out game still fetches them to draw its board and judge its
+# own guess. Those files are 285 phrases plus the FIXED order — every future
+# day, and the member track, computable by anyone who opens them. Quantified on
+# live: ~140 points a week against a real weekly leader on 62.
+#
+# It does NOT claim a logged-out board stops holding its own day's phrase — it
+# must, it judges its own guess, and an anon result is never recorded anyway.
+# What goes is the LIBRARY and the ORDER.
+#
+# TWO ASSERTIONS EARN THIS GATE. There is deliberately no aud= on the day
+# endpoint and it goes looking for one anyway (serving the member track there
+# would restore gate 41's hole through a door needing no login). And it asserts
+# the assets are STILL PRESENT: this is stage ONE of two, and pulling them
+# before both flags are on everywhere is a blank board, not a degraded one.
+run "guitardle-daypuzzle" python3 "$(dirname "$0")/guitardle-daypuzzle-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
