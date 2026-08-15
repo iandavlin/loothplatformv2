@@ -157,6 +157,8 @@ def call_many(bodies, nonce):
     return out
 
 
+src = open(ENDPOINT).read()
+
 print('=== GATE 41: the board is scored on what the SERVER watched ===')
 print('endpoint: %s' % ENDPOINT)
 print('probe member: wp_user_id=%d   play_date=%s\n' % (UID, PLAY_DATE))
@@ -263,36 +265,72 @@ replay = call(True, 'POST', body={'action': 'guess', 'guess': letters,
 check(replay.get('error') == 'already_played', 'the day cannot be replayed', repr(replay))
 print()
 
-# ── PHASE 3b — N reveals must cost N moves, even fired at once ───────────────
+# ── PHASE 3b — the reveal critical section is SERIALISED ────────────────────
 print('PHASE 3b — concurrent reveals cannot be had for the price of one')
+# The bug, found by self-review: reveal was a read-modify-write on resume_state,
+# so N simultaneous reveals each read the same state and each returned THEIR OWN
+# positions -- the player saw N letters -- while only the last write survived and
+# the server charged for ONE move. Fixed with SELECT ... FOR UPDATE.
+#
+# ⚠️ MY FIRST VERSION OF THIS PHASE WAS DECORATION, and the red-first is the only
+# reason I know. It fired four reveals through the probe and asserted the move
+# arithmetic -- and it PASSED with the FOR UPDATE stripped back out. Measured
+# why: each probe boots WordPress and takes ~2.5s, while the critical section is
+# sub-millisecond, so four processes launched in a loop never overlap. Collision
+# probability ≈ 0. A burst test cannot reach this bug, so the burst is kept only
+# as a smoke check and the REAL assertions are the two below it.
+src_rev = src[src.index("if ($action === 'reveal' || $action === 'guess')"):]
+src_rev = src_rev[:src_rev.index("// The legacy finish")]
+sel_at = src_rev.find('SELECT moves, hardcore, resume_state')
+txn_at = src_rev.find('beginTransaction')
+check(sel_at > 0 and 'FOR UPDATE' in src_rev[sel_at:sel_at + 400],
+      '*** the reveal SELECT takes the row lock (FOR UPDATE) ***')
+check(0 < txn_at < sel_at,
+      'and it is inside a transaction opened BEFORE the read — a lock outside '
+      'one is released immediately and serialises nothing')
+check(src_rev.count('commit()') >= 2,
+      'both success paths commit, so the lock is not held past the response')
+check(src_rev.count('rollBack()') >= 4,
+      'and every early exit inside the transaction releases it first')
+
+# Behavioural proof that the lock really serialises on THIS table: hold the row
+# in one session and prove a second session cannot take it. Deterministic, unlike
+# a burst.
 wipe()
-# Four DIFFERENT letters, fired simultaneously. Found by self-review, not by a
-# test failing: reveal was a read-modify-write on resume_state, so every
-# request read the same state and every one returned ITS OWN positions -- the
-# player saw four letters -- while only the last write survived and the server
-# charged for ONE move. Four reveals for the price of one is exactly the
-# forgery this endpoint exists to stop. SELECT ... FOR UPDATE serialises them.
+call(True, 'POST', body={'action': 'reveal', 'letter': letters[0],
+                         'local_date': PLAY_DATE}, nonce=NONCE)
+holder = subprocess.Popen(
+    'sudo -u postgres psql -tAd looth -c %s' % shlex.quote(
+        "BEGIN; SELECT 1 FROM discovery.guitardle_results WHERE wp_user_id=%d "
+        "FOR UPDATE; SELECT pg_sleep(4); COMMIT;" % UID),
+    shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+time.sleep(1.5)
+r = sh("sudo -u postgres psql -tAd looth -c %s" % shlex.quote(
+    "SELECT 1 FROM discovery.guitardle_results WHERE wp_user_id=%d FOR UPDATE NOWAIT;" % UID))
+blocked = 'could not obtain lock' in (r.stderr or '').lower() or r.returncode != 0
+check(blocked,
+      '*** a second session CANNOT take the row while the first holds it — the '
+      'lock genuinely serialises the critical section ***',
+      'psql rc=%s stderr=%r' % (r.returncode, (r.stderr or '')[:120]))
+holder.wait(timeout=15)
+free = sh("sudo -u postgres psql -tAd looth -c %s" % shlex.quote(
+    "SELECT 1 FROM discovery.guitardle_results WHERE wp_user_id=%d FOR UPDATE NOWAIT;" % UID))
+check(free.returncode == 0,
+      'and the row is takeable again once that transaction ends (no lock leak)')
+
+# Smoke only — see the note above: this CANNOT catch the race.
 burst = [c for c in dict.fromkeys(letters) if c not in VOWELS][:4]
-if len(burst) < 2:
-    print('  (today\'s phrase has fewer than 2 distinct consonants — skipped)')
-else:
+wipe()
+if len(burst) >= 2:
     res = call_many([{'action': 'reveal', 'letter': c, 'local_date': PLAY_DATE}
                      for c in burst], NONCE)
-    ok = [r for r in res if r and r.get('ok')]
     final = psql("SELECT (resume_state->>'moves') FROM discovery.guitardle_results "
                  "WHERE wp_user_id=%d;" % UID)
     want = sum(2 if c in VOWELS else 1 for c in burst)
-    check(len(ok) == len(burst),
-          'all %d concurrent reveals were served' % len(burst),
-          repr([r and r.get('error') for r in res]))
-    check(final == str(want),
-          '*** %d simultaneous reveals cost %d moves, not 1 — the race is closed ***'
-          % (len(burst), want),
-          'server recorded moves=%s, expected %d' % (final, want))
-    stored = psql("SELECT (resume_state->'revealed') FROM discovery.guitardle_results "
-                  "WHERE wp_user_id=%d;" % UID)
-    check(all(('"%s"' % c) in stored for c in burst),
-          'and every revealed letter survived — no write was lost', stored)
+    check(len([r for r in res if r and r.get('ok')]) == len(burst) and final == str(want),
+          'smoke: %d reveals in flight together still bill %d moves (evidence, '
+          'NOT proof — see the note above)' % (len(burst), want),
+          'moves=%s want=%d' % (final, want))
 wipe()
 print()
 
