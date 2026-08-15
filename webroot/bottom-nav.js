@@ -1282,10 +1282,32 @@
       '<span class="lt-notif-time">' + ntRel(n.created_at) + '</span></span>' +
       (n.is_read ? '' : '<span class="lt-notif-dot"></span>');
     var cls = 'lt-notif' + (n.is_read ? '' : ' is-unread');
+    // data-notif-type — the row's event type, needed because the LINK cannot tell a
+    // reply from a reaction: a reaction on a topic carries the same ?topic= deep link
+    // a reply does. Tap-to-reply (notif-quickreply) must open a composer for the
+    // former and not the latter — there is nothing to reply to when someone reacted.
+    // Inert on its own; the type has always been on the wire, it just was not rendered.
     return link
       ? '<a class="' + cls + '" href="' + ntEsc(link) + '" data-notif-link data-notif-id="' +
-        ntEsc(n.id) + '">' + inner + '</a>'
+        ntEsc(n.id) + '" data-notif-type="' + ntEsc(n.type || '') +
+        '" data-notif-actors="' + ntEsc(String(n.actor_count || 1)) + '">' + inner + '</a>'
       : '<button type="button" class="' + cls + '" data-notif data-notif-id="' + ntEsc(n.id) + '">' + inner + '</button>';
+  }
+  /* Which notification rows get tap-to-reply (notif-quickreply, Ian 7/30).
+     REPLY-SHAPED ONLY — the four rungs of the reply ladder in notify-bridge.php.
+     Deliberately excluded, and each for a reason rather than by omission:
+       reaction.on_post   — they reacted, they did not write anything to reply to;
+       message            — DMs have their own thread surface and their own composer;
+       connection_*       — a profile, not a discussion.
+     Kept as a LIST rather than a prefix test on 'forum.': a future forum.* event that
+     is not a reply (a moderation notice, say) would silently inherit a composer.
+     Mirrored in lg-shared/social-modals.js — if this list changes, change both. */
+  var LT_QUICKREPLY_TYPES = {
+    'forum.reply_to_topic': 1, 'forum.reply_to_reply': 1,
+    'forum.mention': 1, 'forum.followed_topic': 1
+  };
+  function ltNotifCanQuickReply(type) {
+    return !!(type && LT_QUICKREPLY_TYPES[type] === 1);
   }
   // Read-on-clickthrough (mobile twin of social-modals.js). keepalive so the POST
   // survives the navigation we deliberately do NOT prevent.
@@ -1333,6 +1355,19 @@
             if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey) return;
             markNotifReadOnNav(el.getAttribute('data-notif-id'));
             closeNotifSheet();     // the sheet must not sit over the modal we're opening
+            // TAP-TO-REPLY (notif-quickreply, Ian 7/30 layout A): on a reply-shaped
+            // row, the default action becomes the reply modal instead of the jump.
+            // Everything about this is opt-in and fails open — lgOpenNotifReply does
+            // not exist unless the flag is on AND a composer is on this page, and it
+            // returns false rather than throwing when it cannot act. So a false here
+            // means "navigate, exactly as before", which is also what every non-hub
+            // page does, since hub-polish.js (the composer) is only injected on /hub.
+            if (ltNotifCanQuickReply(el.getAttribute('data-notif-type')) &&
+                typeof window.lgOpenNotifReply === 'function' &&
+                window.lgOpenNotifReply({ link: el.getAttribute('href'),
+                                          actors: el.getAttribute('data-notif-actors') })) {
+              e.preventDefault();
+            }
           });
         });
         // ── Seeing them clears the indicator — but only the ones SEEN ───────────

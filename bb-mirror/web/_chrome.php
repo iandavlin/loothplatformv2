@@ -714,7 +714,7 @@ $lg_can_post = function_exists('lg_bb_mirror_can_post')
     ? lg_bb_mirror_can_post()
     : lg_bb_mirror_wp_logged_in();   // same cookie rule; _reply-render.php not loaded on every page
 ?>
-<body class="bb-mirror<?= !empty($GLOBALS['__bb_hub_rail']) ? ' hub-fmodal-page' : '' ?>" data-lg-can-post="<?= $lg_can_post ? '1' : '0' ?>" data-lg-follow="<?= (function_exists('lg_thread_follow_enabled') && lg_thread_follow_enabled()) ? '1' : '0' ?>" data-lg-post-follow="<?= (function_exists('lg_post_follow_enabled') && lg_post_follow_enabled()) ? '1' : '0' ?>"><?php /* PREVIEW-ONLY NOTE. Rendered only when the app is mounted under a lane
+<body class="bb-mirror<?= !empty($GLOBALS['__bb_hub_rail']) ? ' hub-fmodal-page' : '' ?>" data-lg-can-post="<?= $lg_can_post ? '1' : '0' ?>" data-lg-follow="<?= (function_exists('lg_thread_follow_enabled') && lg_thread_follow_enabled()) ? '1' : '0' ?>" data-lg-post-follow="<?= (function_exists('lg_post_follow_enabled') && lg_post_follow_enabled()) ? '1' : '0' ?>"<?= (function_exists('lg_notif_quickreply_enabled') && lg_notif_quickreply_enabled()) ? ' data-lg-notifreply="1"' : '' ?>><?php /* PREVIEW-ONLY NOTE. Rendered only when the app is mounted under a lane
          preview path (LG_BB_MIRROR_PUBLIC_PATH is overridden by the preview
          nginx conf; on /hub/ this is exactly "/hub" and nothing renders). It
          exists so Ian does not report a KNOWN GAP as a defect -- he picked

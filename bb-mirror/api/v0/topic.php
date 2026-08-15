@@ -93,6 +93,130 @@ $aslug      = $topic['author_slug'] ?? null;
 $rel        = $topic['created_at'] ? feed_rel_time((string)$topic['created_at']) : '';
 $avatar     = bb_mirror_avatar($author, $aslug ?: $author, 38, $topic['avatar_url'] ?? null);
 
+// ── ?reply_context= — the NOTIFICATION QUOTE (notif-quickreply lane, Ian 7/30) ──
+//    Tapping a notification opens a reply modal that quotes the reply which rang
+//    you. That quote is ONE reply's text, and nothing in the stack could return it:
+//    GET /bb-mirror-api/v0/reply?reply_id= gives media and nothing else, and its
+//    ?topic_id= sibling is author-gated for editing.
+//
+//    IT LIVES HERE, and not in a new endpoint, for two reasons that are not style:
+//      1. EVERY .php under /bb-mirror-api/v0/ needs its OWN nginx `location` block
+//         — there is no catch-all — so a new file would fall through the parent
+//         `alias` and be served as PHP SOURCE. That is the /archive-api/v0/ leak
+//         exactly. Adding one also needs an nginx reload, which a `git pull` does
+//         not do, so branch and deploy would have to land in the same window.
+//      2. This endpoint ALREADY enforces the four rules a quote must obey — public
+//         forum only, publish/closed only, anon masked, member-only masked. Writing
+//         a second reader means re-deriving all four, and getting one wrong leaks
+//         precisely what they exist to protect. The gate above has already run.
+//
+//    reply_context=<id> quotes that reply; reply_context=0 quotes the OPENING POST.
+//    The zero case is REAL, not defensive: an @mention in a brand-new discussion
+//    rings before any reply exists (lg_notify_on_topic passes no reply id), and dev2
+//    still holds a pre-anchor row (id 471, 2026-07-13) whose link has no &reply= at
+//    all. Both arrive here as 0 and both want the OP.
+//
+//    Returns a FRAGMENT, like the rest of this file. Deliberately NOT the member's
+//    own post above the reply — Ian picked layout A over B on 7/30: "do not render
+//    the member's own post for context".
+//    GATED ON THE FLAG, not merely uncalled. With LG_NOTIF_QUICKREPLY_ENABLED off
+//    this branch does not exist as far as any caller is concerned — the request falls
+//    through to the ordinary OP fragment, byte-for-byte what it returns today. "No
+//    client sends the parameter" is not a gate; this is.
+if (isset($_GET['reply_context']) && lg_notif_quickreply_enabled()) {
+    $rc_id = (int)$_GET['reply_context'];
+    $rc_author = $rc_slug = $rc_avatar_url = null;
+    $rc_html = '';
+    $rc_anon = 0;
+    $rc_vis  = 'member';
+    $rc_when = '';
+
+    if ($rc_id > 0) {
+        // Scoped to THIS topic on purpose: the topic came from the slugs, and the
+        // slugs went through the visibility gate. Taking a bare reply id would let a
+        // caller pair a public topic's slugs with a hidden forum's reply id and read
+        // straight past the gate that just ran.
+        $rq = $db->prepare("
+            SELECT r.id, r.content_html, r.created_at, r.is_anon::int AS is_anon,
+                   r.author_name, p.slug AS author_slug, p.avatar_url,
+                   COALESCE(p.discussion_visibility, 'member') AS discussion_visibility
+              FROM forums.reply r
+              LEFT JOIN forums.person p ON p.id = r.author_id
+             WHERE r.id = :rid AND r.topic_id = :tid AND r.status = 'publish'
+             LIMIT 1
+        ");
+        $rq->execute([':rid' => $rc_id, ':tid' => $tid]);
+        $rrow = $rq->fetch();
+        // A deleted / moved / mismatched reply falls back to the OP rather than
+        // 404ing the whole modal: the notification is still a true record of
+        // something that happened, and the discussion it points at still exists.
+        if ($rrow) {
+            lg_bb_mirror_mask_anon($rrow, $can_mod);
+            lg_bb_mirror_mask_visibility($rrow, $viewer_logged_in);
+            $rc_author     = $rrow['author_name'] ?: 'Anonymous';
+            $rc_slug       = $rrow['author_slug'] ?? null;
+            $rc_avatar_url = $rrow['avatar_url'] ?? null;
+            $rc_html       = (string)$rrow['content_html'];
+            $rc_when       = $rrow['created_at'] ? feed_rel_time((string)$rrow['created_at']) : '';
+        } else {
+            $rc_id = 0;
+        }
+    }
+
+    if ($rc_id === 0) {
+        // The OP as the quote. $topic is already masked by the two calls above, so
+        // the identity fields are taken from it rather than re-read. Only the body
+        // needs a fetch: the lookup query above deliberately does not select
+        // content_html (the OP path renders through _topic-body.php instead), and
+        // widening a query the whole endpoint depends on to serve one branch would
+        // make every OP request pay for it.
+        $bq = $db->prepare("SELECT content_html FROM forums.topic WHERE id = :tid LIMIT 1");
+        $bq->execute([':tid' => $tid]);
+        $rc_author     = $author;
+        $rc_slug       = $aslug;
+        $rc_avatar_url = $topic['avatar_url'] ?? null;
+        $rc_html       = (string)($bq->fetchColumn() ?: '');
+        $rc_when       = $rel;
+    }
+
+    // Same snippet formatter the feed teasers use, so a quoted reply reads exactly
+    // as it does on the card: mentions resolved to current display names, markup
+    // preserved, length capped. 420 chars is ~4 lines at phone width; the client
+    // clamps visually and offers "Show more".
+    $rc_snip = bb_mirror_format_snippet($rc_html, 420, $db, true);
+    // Logged-out contact scrub, matching _topic-body.php. A signed-out caller can
+    // reach this endpoint directly even though only a signed-in member ever sees
+    // the modal, so the scrub is applied on the same rule as everywhere else.
+    if (!$viewer_logged_in) $rc_snip = lg_scrub_anon_contacts($rc_snip);
+    $rc_avatar = bb_mirror_avatar((string)$rc_author, (string)($rc_slug ?: $rc_author), 34, $rc_avatar_url);
+    $rc_more   = mb_strlen(trim(strip_tags($rc_html))) > 420;
+    ?>
+<div class="lg-nqr-quote" data-kind="<?= $rc_id > 0 ? 'reply' : 'topic' ?>"
+     data-topic-id="<?= $tid ?>" data-forum-id="<?= $fid ?>"
+     data-reply-id="<?= $rc_id ?>"
+     data-topic-title="<?= htmlspecialchars($title, ENT_QUOTES) ?>"
+     data-author="<?= htmlspecialchars((string)$rc_author, ENT_QUOTES) ?>"
+     data-can-post="<?= $viewer_logged_in ? '1' : '0' ?>"
+     data-more="<?= $rc_more ? '1' : '0' ?>">
+  <?php /* WHICH DISCUSSION. Added after looking at a real screenshot rather than at
+           the assertions, which were all green: the modal showed who replied and what
+           they said, and never once named the thread. Ian has already been burned by
+           exactly this ("the modal that never says which discussion"), so it is a
+           known defect class here, not a nicety. */ ?>
+  <p class="lg-nqr-quote__where"><?= htmlspecialchars($title) ?></p>
+  <div class="lg-nqr-quote__q">
+    <div class="lg-nqr-quote__head">
+      <span class="lg-nqr-quote__avi"><?= $rc_avatar ?></span>
+      <span class="lg-nqr-quote__who"><?= htmlspecialchars((string)$rc_author) ?></span>
+      <?php if ($rc_when !== ''): ?><time class="lg-nqr-quote__time"><?= htmlspecialchars($rc_when) ?></time><?php endif; ?>
+    </div>
+    <div class="lg-nqr-quote__body"><?= $rc_snip !== '' ? $rc_snip : '<em class="lg-nqr-quote__empty">No text — open the discussion to see it.</em>' ?></div>
+  </div>
+</div>
+<?php
+    exit;
+}
+
 // ── OP body — reuse _topic-body.php verbatim (mention-resolve + attachments +
 //    logged-out contact scrub), captured. Re-checks forum visibility itself. ──
 $_GET['body'] = (string)$tid;
