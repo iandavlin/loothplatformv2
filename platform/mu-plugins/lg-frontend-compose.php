@@ -624,7 +624,15 @@ function lg_fc_sync_reaper_schedule(): void
     if ($on && !$next) {
         wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'lg_fc_reap_drafts_event');
     } elseif (!$on && $next) {
-        wp_unschedule_event($next, 'lg_fc_reap_drafts_event');
+        /* CLEAR THE HOOK, NOT "THE NEXT ONE". wp_unschedule_event() removes a
+           SINGLE timestamped occurrence, so if the cron array ever holds two
+           entries for this hook the flag going off leaves one of them armed —
+           and an armed reaper deletes drafts and their attachments daily for a
+           feature nobody can reach. Measured: with two entries planted, the old
+           line healed one and left the other, and gate 46's assertion 7 went
+           red on exactly that. wp_clear_scheduled_hook() takes them all, so one
+           WP load with the flag off is enough to disarm however many exist. */
+        wp_clear_scheduled_hook('lg_fc_reap_drafts_event');
     }
 }
 add_action('init', 'lg_fc_sync_reaper_schedule');
