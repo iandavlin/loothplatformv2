@@ -26,3 +26,5 @@
 
 7. **V2 MAY INSERT a missing block into a stored page** ("Yes — may insert"): first the licence block on the 3 licence-invisible posts (72155/72146/71927), same principle covers the work-type block later. Only to surface what the author already declared.
 8. **4th seat = Guitardle fix** (backlog 22).
+
+9. **Guitardle anon ruling** ("Agree — relabel only"): logged-out play stays free and untracked; the claim button becomes honest ("Sign in to claim a spot") for logged-out visitors; the member-side fix (account-tracked daily attempt, claimed at START, with RESUME) is the build.
