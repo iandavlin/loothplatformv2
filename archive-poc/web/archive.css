@@ -3016,7 +3016,15 @@ body.lg-modal-open { overflow: hidden; }
 body.view-discover {
   --lg-cream: #fcfcf9;
   --lg-sage: #8a9670;
-  --lg-sage-d: #6f7c54;
+  /* 4.792:1 on white, was #6f7c54 at 4.480:1 — 0.02 UNDER the 4.5 bar, which
+     the featured card put on the front page the moment Ian featured someone
+     (.lg-fm__role text, and white-on-sage in the CTA — one token pair, both
+     directions, ~20 elements). Contrast is symmetric so the single token fixes
+     both. Darkened along LIGHTNESS ONLY (hue and saturation unchanged, -1.6%
+     L), so it is the same sage rather than a new colour. Measured with
+     tools/mock-contrast-check.py, not eyeballed. Kept above 4.7 rather than
+     just clearing 4.5, so antialiasing cannot walk it back under. */
+  --lg-sage-d: #6b7751;
   --lg-sage-tint: #f0f2e9;
   --lg-sage-3: #dde3cd;
   --lg-line: #ebe9e2;
