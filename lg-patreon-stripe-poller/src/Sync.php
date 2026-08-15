@@ -17,6 +17,9 @@ use Throwable;
  *   3. Report (wp_user_id, 'stripe', tier) to lg_role_sources
  *   4. Run arbiter to write wp_capabilities
  *
+ * Steps 3-4 are FENCED by the soft-launch cohort while the lifecycle flag is
+ * on — this is the grant path a redeemed gift takes, and it is not the webhook.
+ *
  * Called from:
  *   - Tick::run() pass 2 (cron)
  *   - REST endpoint /sync-customer (Slim post-checkout)
@@ -43,6 +46,50 @@ final class Sync
         }
 
         $tier = EntitlementRepo::activeTier( $customerId );
+
+        // SOFT-LAUNCH FENCE (docs/STRIPE-SOFT-LAUNCH-ALLOWLIST.md: "Every grant
+        // path keeps the allowlist check — join, gift redemption, regional").
+        //
+        // This is the SECOND grant path and it was never fenced. StripeLifecycle
+        // gates the webhook; everything below gates the ENTITLEMENT sweep, which
+        // is how a redeemed gift becomes a role: the billing app writes an
+        // entitlement, pings /sync-customer (registered unconditionally, shared
+        // secret only), and this method reports a stripe opinion and runs the
+        // Arbiter. The five-minute cron reaches the same place on its own via
+        // Sync::all() — and lgms_stripe_frozen does NOT stop it, because that
+        // switch guards Tick's Stripe POLL, a different pass. So without this,
+        // a gift redeemed by somebody not on the list grants them the
+        // membership anyway, within minutes, and the soft launch is not a soft
+        // launch at all.
+        //
+        // OFF IS TODAY, EXACTLY. The fence only exists while the lifecycle flag
+        // is on, which is the documented interlock (identity gate on ->
+        // lifecycle on -> the list governs WHO). With the flag off — every box,
+        // right now — this branch cannot be entered and the sweep behaves as it
+        // always has.
+        //
+        // Out-of-cohort is FROZEN, not retracted, matching the webhook's
+        // semantics: no opinion is written and the Arbiter is not run, so a
+        // member pulled from the list keeps whatever they already had rather
+        // than being half-demoted by a sweep.
+        if ( StripeLifecycle::flagOn() && ! StripeLifecycle::inCohort( $wpUserId ) ) {
+            if ( $tier !== null ) {
+                // Only worth a line when something would ACTUALLY have been
+                // granted — the sweep visits every customer every five minutes
+                // and logging the empty-handed ones would bury the real ones.
+                Log::line( sprintf(
+                    "[%s] sync customer %d (wp #%d): SKIPPED %s — not in soft-launch cohort\n",
+                    gmdate( 'c' ), $customerId, $wpUserId, $tier,
+                ) );
+            }
+            return [
+                'ok'         => true,
+                'wp_user_id' => $wpUserId,
+                'tier'       => null,
+                'skipped'    => 'not in soft-launch cohort',
+            ];
+        }
+
         RoleSourceWriter::report( $wpUserId, 'stripe', $tier );
         $arb = Arbiter::sync( $wpUserId );
 

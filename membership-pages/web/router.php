@@ -42,6 +42,11 @@ require __DIR__ . '/_admin-gate.php';
  *
  * visibility value (each column):
  *   'admin'  — manage_options-only. The only enforced gate in this router.
+ *   'testgroup' — the soft launch (Ian 2026-08-14): administrators as before,
+ *              PLUS any signed-in member on the Stripe Test Group list. It is a
+ *              WIDENING of 'admin' and never a narrowing, so with the flag off
+ *              or the list empty it behaves exactly as 'admin' did — which is
+ *              what makes the off state byte-identical to today's site.
  *   'member' — logged-in audience; passes the router gate (the page gates its
  *              own member content). manage-subscription is the standing example.
  *   'public' — anyone past the dev cookie gate (Patreon funnel + the transient
@@ -64,16 +69,16 @@ const LG_MS_PAGES = [
     // connect instructions — it's the landing for "already a patron?" links.
     'connect-your-patreon'           => ['connect-your-patreon.php',           'public', 'public'],
     'affiliate-earnings'             => ['affiliate-earnings.php',             'admin',  'member'],
-    'request-refund'                 => ['request-refund.php',                 'admin',  'member'],
-    'welcome'                        => ['welcome.php',                        'admin',  'public'],  // transient post-checkout landing
-    'regional-pricing-not-available' => ['regional-pricing-not-available.php', 'admin',  'public'],  // transient
+    'request-refund'                 => ['request-refund.php',                 'testgroup', 'member'],
+    'welcome'                        => ['welcome.php',                        'testgroup', 'public'],  // transient post-checkout landing
+    'regional-pricing-not-available' => ['regional-pricing-not-available.php', 'testgroup', 'public'],  // transient
     'join'                           => ['join.php',                           'public', 'public'],  // already live; flag no-op
 
     // scaffolded surfaces (shell + gate live; verbatim body port pending)
-    'lgjoin'                         => ['lgjoin.php',                         'admin',  'public'],
-    'lggift-buy'                     => ['lggift-buy.php',                     'admin',  'public'],
-    'lggift'                         => ['lggift.php',                         'admin',  'public'],
-    'my-gifts'                       => ['my-gifts.php',                       'admin',  'member'],
+    'lgjoin'                         => ['lgjoin.php',                         'testgroup', 'public'],
+    'lggift-buy'                     => ['lggift-buy.php',                     'testgroup', 'public'],
+    'lggift'                         => ['lggift.php',                         'testgroup', 'public'],
+    'my-gifts'                       => ['my-gifts.php',                       'testgroup', 'member'],
     'test-checklist'                 => ['test-checklist.php',                 'admin',  'admin'],   // QA surface — admin ALWAYS
 ];
 
@@ -115,6 +120,11 @@ $visibility = lg_membership_stripe_pages_live() ? $live_vis : $prelaunch_vis;
 $ctx = lg_membership_header_ctx('');                 // §0a: no top-nav slot for membership
 if ($visibility === 'admin') {
     lg_membership_admin_gate_or_exit($ctx);          // non-admins get a stub page + exit
+} elseif ($visibility === 'testgroup') {
+    // Soft launch: admins as before, plus signed-in members on the Stripe Test
+    // Group. Falls back to the identical admin stub for everyone else, so with
+    // the flag off or the list empty this branch and the one above agree.
+    lg_membership_testgroup_gate_or_exit($ctx);
 }
 
 require $target;

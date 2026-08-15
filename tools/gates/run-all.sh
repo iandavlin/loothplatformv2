@@ -717,11 +717,44 @@ echo "=== GATE 37: ONE daily Guitardle allowance per MEMBER, claimed at START ==
 # and the flag-OFF promo render is compared BYTE-FOR-BYTE against origin/main.
 run "guitardle-claim" python3 "$(dirname "$0")/guitardle-claim-gate.py"
 
+# ── 34 ─────────────────────────────────────────────────────────────────────
+# The Stripe soft launch. Gate 34 has TWO halves because the feature does:
+#   * the GRANT — who Stripe's webhook may transition — lives in the WordPress
+#     plugin and is asserted by the poller's own red-first harness (39).
+#   * the PAGES — who can reach join / gift / refund / regional at all — live in
+#     the standalone membership-pages app, which never boots WordPress, so
+#     nothing the grant harness asserts says anything about what a URL serves.
+# Both address the SAME list (lgms_stripe_lifecycle_allowlist), which is why
+# they share a number. Neither needs the network or a browser.
+#
+# NOTE FOR WHOEVER READS THIS NEXT: the allowlist merged into main on 8/11 but
+# nobody wired its gate in, so it went un-run in every nightly until 8/15. A
+# merged gate that is not in this file does not exist.
+echo "=== GATE 34a/35: Stripe test-group — the GRANT (empty list = nobody) ==="
+run "stripe-testgroup-grant" php "$(dirname "$0")/../../lg-patreon-stripe-poller/deploy/remediation/test-soft-launch-allowlist.php"
+
+echo "=== GATE 34b/35: Stripe test-group — the PAGES (flag off = today's site) ==="
+run "stripe-testgroup-pages" php "$(dirname "$0")/stripe-testgroup-pages-gate.php"
+
+# 34c — the price control (Ian 2026-08-15: "I'd like to be able to set the
+# price. In the dash."). Setting a price is THREE writes and only the middle
+# one looks optional: create it in Stripe, record it in our own prices table,
+# repoint new joins. Skip the middle and an existing subscriber vanishes from
+# the join page's already-subscribed check, which offers them a second
+# subscription. Also asserts the charter's sandbox-only rule in code.
+echo "=== GATE 34c/35: Stripe price — one action or none, sandbox only ==="
+run "stripe-price-control" php "$(dirname "$0")/stripe-price-control-gate.php"
+
+# 34d — the OTHER grant path. The soft-launch list guarded the webhook only; a
+# redeemed gift reaches the same Arbiter write via the billing app -> the
+# unconditionally-registered /sync-customer route -> Sync::customer, and the
+# five-minute cron sweep gets there on its own regardless. lgms_stripe_frozen
+# does not stop it (that guards the Stripe POLL, a different pass). So before
+# this, a gift to somebody NOT on the list let them in anyway.
+echo "=== GATE 34d/35: Stripe test-group fences the SWEEP (the gift path) ==="
+run "stripe-testgroup-sweep" php "$(dirname "$0")/stripe-testgroup-sweep-gate.php"
+
 # ── 35 ─────────────────────────────────────────────────────────────────────
-# ⚠️ 34 IS DELIBERATELY ABSENT FROM THIS BRANCH. Keeper allocated it to the
-# stripe seat (soft-launch allowlist gate). Numbers come FROM KEEPER, never
-# minted by a lane — I minted 34 myself from main and it was already spoken for.
-# The gap closes when stripe merges; it is not a missing gate.
 # Front-end compose + edit (backlog 6; Ian ruled Option A 2026-08-03, all-members
 # and front-end edit 2026-08-09). PER-STATE, and that is the point: it READS the
 # feature's own lg_fc_enabled() off the box rather than assuming a state, so
@@ -745,7 +778,7 @@ run "compose" python3 "$(dirname "$0")/compose-gate.py" \
     --owner patreon_77159883 --stranger bangers --post 72155
 
 # THE GATE-NUMBER LEDGER (single source of truth; keeper mints, lanes never):
-#   34 stripe · 35 compose/v2 · 36 dark-anon · 37 guitardle claim · 38 insert
+#   34 stripe (34a webhook + 34b pages + 34c price + 34d sweep) · 35 compose/v2 · 36 dark-anon · 37 guitardle claim · 38 insert
 #   path · 39 featured-members · 40 guitardle score-integrity — NEXT FREE: 41.
 # Gate 38 runs on the real stored-layout corpus via direct mysql; needs
 # neither Redis nor a WP bootstrap.

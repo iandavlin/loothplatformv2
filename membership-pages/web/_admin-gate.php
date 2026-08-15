@@ -57,6 +57,41 @@ function lg_membership_admin_gate_or_exit(array $ctx): void
 }
 
 /**
+ * lg_membership_testgroup_gate_or_exit — the soft-launch gate.
+ *
+ * Ian, 2026-08-14: the Stripe soft launch runs through the EXISTING member
+ * pages, unlocked for a hand-picked list, instead of a bespoke page. This is
+ * that unlock, and it is deliberately a WIDENING of the admin gate rather than
+ * a replacement for it:
+ *
+ *   administrator            -> in, exactly as before (Ian keeps building
+ *                               privately, and must not lock himself out by
+ *                               forgetting to add himself to his own list)
+ *   on the Stripe Test Group -> in
+ *   everybody else           -> the same stub non-admins already get today
+ *
+ * Because it only ever ADDS people, the switched-off state is byte-identical
+ * to the admin-only behaviour that shipped before it — there is no state in
+ * which this gate turns somebody AWAY who could previously get in. Both locks
+ * (the flag and the list) live in lg_membership_in_stripe_test_group(); either
+ * one shut means this collapses back to the plain admin gate.
+ */
+if (!function_exists('lg_membership_testgroup_gate_or_exit')) {
+function lg_membership_testgroup_gate_or_exit(array $ctx): void
+{
+    if (($ctx['capabilities']['manage_options'] ?? false) === true) {
+        return; // admin — unchanged, and never gated behind the list
+    }
+    if (($ctx['authenticated'] ?? false) === true
+        && function_exists('lg_membership_in_stripe_test_group')
+        && lg_membership_in_stripe_test_group((int) ($ctx['wp_user_id'] ?? 0))) {
+        return; // a listed member, signed in — the whole point of the soft launch
+    }
+    lg_membership_admin_gate_or_exit($ctx); // everyone else: today's stub, verbatim
+}
+}
+
+/**
  * lg_membership_prelaunch_gate_or_exit — flag-aware gate for the Stripe purchase
  * pages. Admin-only WHILE the `lgms_stripe_pages_live` toggle is off (Ian builds
  * the Stripe op privately pre-launch); once he flips it on, this is a no-op and
