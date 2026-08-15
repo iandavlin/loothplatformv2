@@ -65,10 +65,18 @@ sections[] = {
 
 ```
 id, title, url, excerpt, thumb_url, date, post_type, type_label,
-tier_slug, tier_label, author_name, author_url
+tier_slug, tier_label
 ```
 
-Four properties of that payload matter more than the rest:
+**There is no author on a post-backed item.** `normalize_post()` emits exactly
+the ten fields above; `author_name` / `author_url` appear **only** on
+`manual_items`. The front page's `.rcard` puts the author in `.rcard__meta` and
+the mock's cards show it, so the block must take the author from
+`discovery.content_item.author_name` (where it already is) or drop the line —
+it will not arrive with the payload. Reading a field that is never set is the
+kind of thing that renders as a quietly missing byline rather than an error.
+
+Five properties of that payload matter more than the rest:
 
 1. **`url` is already hub-correct for forum content.** `LG_WD_Query::hub_url()`
    turns a bbPress topic into `/hub/?topic=<forum>/<topic>` instead of the legacy
@@ -124,24 +132,59 @@ week-old events list beside it would be both stale and duplicated.
 
 ---
 
-## 5. The leak rule, and it is the one thing that must not be got wrong
+## 5. Tiers: a slug mismatch, and where the excerpt risk actually is
 
-The payload carries a **full excerpt for every item regardless of tier**, because
-the email goes to people whose entitlement is decided at the click, not at the
-render. The front page's anon path does the opposite: `.rcard` gates on
-`content_item.tier` and drops the excerpt below the viewer's tier.
+### 5.1 `tier_slug` is NOT the value the front page's classes expect
 
-> **Excerpts for gated items must be stripped inside WordPress, before the
-> payload leaves it — never hidden by the front page.**
+Measured on dev2 — the `tier` taxonomy's terms are **`looth-lite`, `looth-pro`,
+`public`**, and a post with no term at all comes back as `''`. So
+`build_payload_from_issue()` emits:
 
-An endpoint that emits gated excerpts and trusts the caller to hide them is one
-CSS mistake away from a leak, and the mock's own measurements showed the front
-page ships markup the gate cannot see inside. Strip at source; send `tier_slug`
-so the block can draw the padlock.
+| payload `tier_slug` | what `discovery.content_item.tier` says | what `.rcard` / `.badge` expect |
+|---|---|---|
+| `looth-lite` | `lite` | `lite` |
+| `looth-pro` | `pro` | `pro` |
+| `public` or `''` | `public` | `public` |
 
-The live August issue makes this concrete: of its five videos, **one is `pro`,
-three are `lite`, one is `public`** — so four of five are gated for the visitor
-this feature is aimed at.
+**Map it explicitly.** Passing `tier_slug` straight into
+`badge--<tier>` / `rcard--gated-<tier>` yields `badge--looth-lite`, which
+matches no rule in archive.css — an unstyled badge and, worse, a **gated card
+with no padlock**, because `.rcard--gated-lite` is what draws it. It fails
+silently and looks like a card that simply is not gated. Verified on the dev2
+issue: three of its five items come back `looth-lite`, two come back `''`, and
+the discovery index calls those same five `lite,lite,lite,public,public`.
+
+### 5.2 The excerpt risk is real, but it lives in ONE section
+
+I had assumed the payload carries a full excerpt for every item regardless of
+tier. **Measured, that is not what happens**, and the true picture is more
+useful:
+
+| section kind | `post_content` | excerpt in payload |
+|---|---|---|
+| `card` — videos, loothprints, articles | **empty** (0 bytes; layout-v2 posts keep their content in `_lg_layout_v2` meta, videos are embeds) | **none** — every item on the dev2 issue came back `strlen 0` |
+| `forum` — topics | **real prose** (measured on live: 547 and 240 bytes) | **yes** |
+| `manual_items` | n/a | yes — hand-typed |
+
+So the rule stands, but pointed at the right place:
+
+> **The `forum` section and `manual_items` are the only things in an issue that
+> carry prose. Any gating must be applied to those, inside WordPress, before the
+> payload leaves it.**
+
+And note what this does NOT license: an "excerpts are always empty so gating is
+moot" conclusion would be a `clean_excerpt()` change away from false. Strip at
+source and send the mapped tier; do not rely on the store happening to be empty.
+
+Helpfully, the front page's existing discussion path already does the right
+thing for forum items — `archive_poc_run_discussions()` masks member-visibility
+authors for anon and drops gated excerpts below the viewer's tier. Rendering the
+issue's forum section through that existing path, rather than through a new one,
+inherits the masking instead of re-implementing it.
+
+For scale: of the live August issue's five videos the index calls **one `pro`,
+three `lite`, one `public`** — four of five gated for exactly the visitor this
+feature is aimed at.
 
 ---
 
@@ -204,10 +247,13 @@ Shared by both options:
 5. **Red-first gate** — number **from keeper**, never minted here. Assertions:
    flag absent / OFF / ON as three separate states off the served page (so
    flipping the default needs no gate edit); anon sees the block, a member does
-   not; **no gated excerpt in the served HTML** (the leak rule, asserted on the
-   bytes); no archived item; the block's contrast clears AA in light and dark at
-   both widths — `tools/preview/weekly-front-shots.py` already does that last
-   one and can be lifted.
+   not; **no gated excerpt in the served HTML** (§5.2, asserted on the bytes);
+   **a `lite`/`pro` item renders WITH its padlock** — this is the assertion that
+   catches the §5.1 slug mismatch, which otherwise fails silently as a gated
+   card that merely looks ungated, and "the badge is present" would not catch it;
+   no archived item; the block's contrast clears AA in light and dark at both
+   widths — `tools/preview/weekly-front-shots.py` already does that last one and
+   can be lifted.
 
 Option-specific: **A** needs the row layout in `_render-main-row.php` plus the
 `.wkiss` component already drawn and measured in
