@@ -27,6 +27,25 @@ const SCORE_API = '/archive-api/v0/guitardle-score';
 const BOARD_API = '/archive-api/v0/guitardle-board';
 let scoreAuth   = { authenticated: false, nonce: '' };
 
+// Backlog 22 (Ian 2026-08-14): the daily allowance is CLAIMED SERVER-SIDE at the
+// first move, against the member account, so a second device or an incognito
+// window gets the same day back instead of a fresh set of tries. The leak was
+// never the recording -- (wp_user_id, play_date) has always been unique -- it
+// was ABANDONING: nothing was written until the game ended, and the mid-game
+// snapshot lived in localStorage, i.e. per device. So you could read the phrase
+// on one device, close the tab leaving no trace, and solve it cold elsewhere.
+//
+// Everything below is inert unless the API says `claim:true` (the flag). That
+// one condition is what makes the OFF state a no-op.
+let claimEnabled = false;
+let claimTaken   = false;   // this device has taken (or found) today's allowance
+let claimSaveInFlight = false;
+
+// The rules overlay rides its OWN flag (LG_GUITARDLE_HOW_TO_PLAY). It is help
+// copy with no data path, and the game shipped with no rules surface at all, so
+// it must not have to wait for the fairness change to be switched on.
+let helpEnabled  = false;
+
 // Audience: the front-page block passes ?aud=m (member) / ?aud=p (logged-out)
 // from its SSR member check. Logged-out players get a DIFFERENT daily phrase
 // (Ian 6/11) — same shared sequence, day index shifted by half its length, so
@@ -221,6 +240,20 @@ function initScoreSync() {
             // postScore / guitardle-score.php).
             const res = await fetch(`${SCORE_API}?local_date=${todayString()}`, { credentials: 'same-origin' });
             if (res.ok) scoreAuth = await res.json();
+            claimEnabled = !!(scoreAuth && scoreAuth.claim);
+            helpEnabled  = !!(scoreAuth && scoreAuth.help);
+            if (helpEnabled) {
+                // The rules overlay only becomes reachable under its own flag,
+                // so OFF leaves the chrome exactly as it was.
+                const help = document.getElementById('btn-help');
+                if (help) help.style.display = '';
+            }
+            if (claimEnabled && !scoreAuth.authenticated) {
+                // Say the honest thing to logged-out players rather than let the
+                // Top 5 imply they are in it.
+                const note = document.getElementById('anon-note');
+                if (note) note.style.display = '';
+            }
         } catch (e) { /* offline/anon — local play unaffected */ }
     })();
 }
@@ -252,6 +285,83 @@ function postScore(won, streak) {
             }),
         });
     }).catch(() => {});
+}
+
+// Take today's allowance, then keep the position server-side. Fire-and-forget:
+// a failed claim must never block play (the finish POST still lands, and the
+// unique constraint still holds the line), and a failed save only costs the
+// resume, not the game.
+function claimAttempt() {
+    if (!claimEnabled || !scoreAuth.authenticated || !scoreAuth.nonce) return;
+    if (claimTaken) return;
+    claimTaken = true;
+    fetch(SCORE_API, {
+        method:      'POST',
+        credentials: 'same-origin',
+        headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
+        body: JSON.stringify({
+            action:     'start',
+            phrase_id:  PHRASE_ID,
+            hardcore:   HARDCORE,
+            local_date: todayString(),
+        }),
+    }).catch(() => {});
+}
+
+// Mirror the localStorage snapshot to the server so ANOTHER device can resume.
+// Same shape as saveGame()'s payload, minus the date/phrase the row already
+// carries. Skipped entirely when the flag is off.
+function saveGameRemote() {
+    if (!claimEnabled || !scoreAuth.authenticated || !scoreAuth.nonce) return;
+    if (state.gameOver || claimSaveInFlight) return;
+    claimSaveInFlight = true;
+    fetch(SCORE_API, {
+        method:      'POST',
+        credentials: 'same-origin',
+        headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
+        body: JSON.stringify({
+            action:     'save',
+            hardcore:   HARDCORE,
+            local_date: todayString(),
+            state: {
+                moves:     state.moves,
+                revealed:  [...state.revealedLetters],
+                purchased: [...state.purchasedVowels],
+            },
+        }),
+    }).catch(() => {}).then(() => { claimSaveInFlight = false; });
+}
+
+// Replay a server-held position onto the board. Same replay as
+// restoreSavedGame(), sourced from the row instead of localStorage -- this is
+// what makes a dead phone a non-event rather than a lost day.
+function restoreRemoteGame(pending) {
+    const snap = pending && pending.state;
+    HARDCORE = !!pending.hardcore;
+    const box = document.getElementById('hardcore-toggle');
+    if (box) box.checked = HARDCORE;
+    localStorage.setItem('guitardle_hardcore', HARDCORE ? '1' : '0');
+
+    if (snap) {
+        state.moves           = snap.moves | 0;
+        state.revealedLetters = new Set(snap.revealed  || []);
+        state.purchasedVowels = new Set(snap.purchased || []);
+        state.revealedLetters.forEach(letter => {
+            revealTiles(letter);
+            const keyEl = keyboardEl.querySelector(`.key[data-letter="${letter}"]`);
+            if (keyEl) { keyEl.classList.add('used'); keyEl.disabled = true; }
+        });
+        state.purchasedVowels.forEach(letter => {
+            const keyEl = keyboardEl.querySelector(`.key[data-letter="${letter}"]`);
+            if (keyEl) keyEl.classList.add('purchased');
+        });
+    }
+
+    renderMoves();
+    updateScoreBox(state.moves);
+    refreshCapState();
+    if (state.moves > 0) lockHardcoreToggle();
+    saveGame();   // mirror it locally so a refresh here is free
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -343,6 +453,10 @@ function incrementMoves() {
 //  SAVED GAME (refresh-proof)
 // ─────────────────────────────────────────────────────────────────────────────
 function saveGame() {
+    // The first move is what spends the day's allowance, and saveGame() is
+    // called on every move -- so this is the honest place to claim it.
+    claimAttempt();
+    saveGameRemote();
     localStorage.setItem(SAVE_KEY, JSON.stringify({
         date:      todayString(),
         phraseId:  PHRASE_ID,
@@ -945,6 +1059,23 @@ function closeBoard() {
     document.getElementById('overlay-board').style.display = 'none';
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  HOW TO PLAY
+// ─────────────────────────────────────────────────────────────────────────────
+// Reachable only when the flag is on (the button stays display:none otherwise),
+// so with the flag OFF the chrome is exactly what it was.
+function initHelpOverlay() {
+    const overlay = document.getElementById('overlay-help');
+    const openBtn = document.getElementById('btn-help');
+    const close   = document.getElementById('btn-help-close');
+    if (!overlay || !openBtn || !close) return;
+    openBtn.addEventListener('click', () => { overlay.style.display = 'flex'; });
+    close.addEventListener('click',   () => { overlay.style.display = 'none'; });
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.style.display = 'none';
+    });
+}
+
 function initBoardOverlay() {
     const overlay  = document.getElementById('overlay-board');
     document.getElementById('btn-board-close').addEventListener('click', closeBoard);
@@ -1027,6 +1158,7 @@ async function init() {
     attachKeyboardListeners();
     initMenuBar();
     initBoardOverlay();
+    initHelpOverlay();
     initStats();
     initHardcoreToggle();
     updateScoreBox(0);
@@ -1062,6 +1194,22 @@ async function init() {
             && !state.gameOver) {
             localStorage.setItem('guitardle_lastPlayed', todayString());
             showAlreadyPlayed(scoreAuth.today);
+            return;
+        }
+
+        // CLAIMED BUT UNFINISHED (backlog 22). The day is already spent, so this
+        // device does not get a fresh board -- but blocking outright would
+        // punish the honest case this feature will meet most often (a phone that
+        // died mid-game), so we RESUME instead. Only ever forward: if this
+        // device is somehow further along than the server, keep what is here and
+        // let the next move push it up.
+        if (claimEnabled && scoreAuth.pending
+            && scoreAuth.pending.phrase_id === PHRASE_ID
+            && !state.gameOver) {
+            claimTaken = true;                  // the allowance is already spent
+            const snap = scoreAuth.pending.state;
+            const remoteMoves = snap ? (snap.moves | 0) : 0;
+            if (remoteMoves > state.moves) restoreRemoteGame(scoreAuth.pending);
         }
     });
 }
