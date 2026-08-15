@@ -844,6 +844,26 @@ echo "=== GATE 41: the Guitardle board is scored on what the SERVER watched ==="
 # id and letters are recomputed INDEPENDENTLY in Python from the raw assets and
 # compared with the PHP resolver, on BOTH audience tracks.
 run "guitardle-serverplay" python3 "$(dirname "$0")/guitardle-serverplay-gate.py"
+echo
+# Gate number 42 PRE-ASSIGNED by keeper 2026-08-15 (next free 43).
+echo "=== GATE 42: the puzzle LIBRARY and SEQUENCE never reach a browser ==="
+# Backlog 26. Gate 41 stopped the phrase reaching server-driven MEMBERS, but
+# could not remove assets/guitardle_phrases.csv and assets/sequence.json,
+# because the logged-out game still fetches them to draw its board and judge its
+# own guess. Those files are 285 phrases plus the FIXED order — every future
+# day, and the member track, computable by anyone who opens them. Quantified on
+# live: ~140 points a week against a real weekly leader on 62.
+#
+# It does NOT claim a logged-out board stops holding its own day's phrase — it
+# must, it judges its own guess, and an anon result is never recorded anyway.
+# What goes is the LIBRARY and the ORDER.
+#
+# TWO ASSERTIONS EARN THIS GATE. There is deliberately no aud= on the day
+# endpoint and it goes looking for one anyway (serving the member track there
+# would restore gate 41's hole through a door needing no login). And it asserts
+# the assets are STILL PRESENT: this is stage ONE of two, and pulling them
+# before both flags are on everywhere is a blank board, not a degraded one.
+run "guitardle-daypuzzle" python3 "$(dirname "$0")/guitardle-daypuzzle-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then

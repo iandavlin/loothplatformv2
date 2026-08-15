@@ -110,3 +110,28 @@ if (!defined('LG_GUITARDLE_SCORE_RETRY')) {
 if (!defined('LG_GUITARDLE_SERVER_PLAY')) {
     define('LG_GUITARDLE_SERVER_PLAY', false);
 }
+
+/**
+ * Backlog 26 (keeper 2026-08-15) — the LOGGED-OUT game stops fetching the
+ * answer key too.
+ *
+ * Server play closed the member half, but it could not remove
+ * assets/sequence.json and guitardle_phrases.csv, because the logged-out game
+ * still fetches them to draw its board and judge its own guess. Those two files
+ * are 285 phrases plus the FIXED order, so a member who opens them solves in
+ * one move for a score the server now records HONESTLY -- ~140 points a week
+ * measured against a real weekly leader on 62. Server-side scoring did not fix
+ * that; only removing the files does.
+ *
+ * ON: the logged-out client asks guitardle-puzzle.php for ONE day's phrase on
+ * ITS OWN track. No sequence, no library, no other day, no member track.
+ *
+ * THIS FLAG DOES NOT DELETE THE FILES, and must not: it is stage one of two.
+ * The assets can only be removed once BOTH this and LG_GUITARDLE_SERVER_PLAY
+ * are on everywhere -- until then a member on the legacy path still needs its
+ * own track's letters to draw a board at all. Pulling them early is a blank
+ * game, not a degraded one.
+ */
+if (!defined('LG_GUITARDLE_DAY_PUZZLE')) {
+    define('LG_GUITARDLE_DAY_PUZZLE', false);
+}
