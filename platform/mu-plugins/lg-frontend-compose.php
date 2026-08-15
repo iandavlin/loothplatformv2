@@ -219,7 +219,23 @@ function lg_fc_enabled(): bool
         return $on = false;
     }
     $raw = require $path;
-    return $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+    $on  = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+
+    // Per-box override, gitignored, same pattern as archive-poc/_flags.local.php:
+    // dev2 runs compose ON via this file while the TRACKED default stays false,
+    // so a live pull can never launch the composer as a side effect. Sitting in
+    // this loader (not an FPM pool env) means wp-cli, FPM and gate 35 all read
+    // the SAME truth — the pool-env attempt made the gate and the serve disagree
+    // (gate saw OFF, members saw ON) and gate 35 rightly went red, 8/15 night.
+    $local = dirname(__DIR__) . '/config/frontend-compose.local.php';
+    if (is_readable($local)) {
+        $lraw = require $local;
+        if (is_array($lraw) && array_key_exists('enabled', $lraw)) {
+            $on = ($lraw['enabled'] === true);
+        }
+    }
+
+    return $on;
 }
 
 const LG_FC_PATH = 'compose';
