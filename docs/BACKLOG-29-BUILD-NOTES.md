@@ -136,6 +136,58 @@ on — reported to keeper separately rather than left to surface as a design
 flourish. Rough split at the time: `/home` 11 GB, `/var` 7.7 GB, `/usr` 4.7 GB.
 Nothing deleted — what goes is not this lane's call.
 
+### Image support in the item thread (Ian, 2026-08-15) — a build requirement
+
+Paste or drop a screenshot into any item's chat thread, as VS Code's chat does.
+**No new mock round** — it is an attach affordance on the input already drawn.
+
+*Why it matters, in Ian's pattern rather than as a feature:* his screenshots are
+the fleet's best bug reports. Every one of them currently arrives by a side
+channel and has to be described back into a lane. This puts the picture on the
+item, permanently, next to the decision it caused.
+
+**Spec as given:** upload endpoint dev-gated · stored in a board-media dir on the
+monorepo serving path, **never the WP media library** · size cap a few MB · the
+bridge message carries the **file path** so keeper reads the image natively · the
+thread renders it inline.
+
+#### The WP-media prohibition has a concrete reason — keep it
+
+A WordPress upload is not a private file: it gets an **attachment post** with its
+own public URL, and it surfaces in media search and galleries. A board screenshot
+— which may show an admin screen, a member's data, or an unreleased feature —
+would then be reachable from a member surface. *Board internals must not enter a
+member-facing store.*
+
+#### ⚠ "On the serving path" and "web-writable" are in tension — resolve it the way this box already does
+
+Verified: `~/loothplatformv2-clean/webroot` is `ubuntu:ubuntu`, mode `drwxrwxr-x`
+— **no write bit for others**, and every FPM pool runs as a non-ubuntu user. So
+the upload endpoint **cannot write into the serving checkout**, exactly as the
+ranking commits cannot (§1). And screenshots should not be committed to git
+anyway — binaries bloat the repo forever.
+
+The box already solves this shape: nginx serves several apps by `alias` to a path
+**outside** the checkout (`/srv/lg-stripe-billing/public`, `/srv/thumb-app/`,
+`/srv/lg-layout-v2/`). So:
+
+- serve `board-media` by **alias from a directory outside the repo**, not from a
+  folder inside the checkout;
+- own it so the **web user can write** and **`ubuntu` (keeper) can read** — the
+  bridge hands keeper a path, so keeper's own user must be able to open it;
+- keep it **out of git**. The repo's `.gitignore` already has a *"bulk /
+  non-source (not version-worthy)"* section for exactly this kind of content.
+
+#### Two more constraints worth writing down now
+
+- **Disk.** The box was at **91%** when this was specced. A few MB per screenshot
+  with no retention rule is a slow leak on a full disk — cap the file size *and*
+  decide a retention or a total budget at build time, not after.
+- **What the thread stores is the path, not the bytes.** That keeps the thread
+  cheap to render and lets keeper read the original natively; it also means a
+  deleted file must render as a clear "image no longer stored", never as a broken
+  image or a silent gap.
+
 ### The badge must be DERIVED, never typed
 
 A badge reading "2 decisions" is only worth having if it is **counted from the
