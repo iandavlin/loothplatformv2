@@ -464,6 +464,44 @@ function bb_mirror_new_topic_modal(): void
   </div>
 </div>
 
+<?php /* ── DEDICATED LOOTHPRINT MODAL (Ian 2026-08-15) ───────────────────────────
+     "Cant it just replace the discussion modal ?" — so the type toggle closes
+     the discussion overlay and opens THIS one. Same modal idiom over the hub,
+     its own chrome and state, nothing shared with the wizard, and both-open is
+     unreachable because every path hides the sibling BEFORE showing the target.
+
+     Ian also ruled NO IFRAME: the form is rendered furniture-free INTO this
+     shell. forums.js §type-toggle fetches /compose/?type=loothprint&embed=1 over
+     same-origin fetch and injects its markup AND the assets that page declares
+     (jQuery, acf-input, select2, media-views) — the hub cannot enqueue those
+     itself, having no WordPress. See that module for what is and is not proven
+     to survive the move.
+
+     Rendered only when both halves agree, same condition as the toggle, so with
+     the flag off this markup is ABSENT rather than hidden. */
+if (function_exists('lg_bb_mirror_can_post') && lg_bb_mirror_can_post()
+    && function_exists('lg_frontend_compose_enabled') && lg_frontend_compose_enabled()): ?>
+<div class="ntm-overlay lpm-overlay" id="lpm-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="lpm-heading">
+  <div class="ntm-backdrop" id="lpm-backdrop"></div>
+  <div class="ntm-dialog lpm-dialog">
+    <h2 class="ntm-heading" id="lpm-heading">New post</h2>
+    <div class="ntm-typetoggle" id="lpm-typetoggle" role="tablist" aria-label="What are you posting?"
+         data-compose-base="<?= htmlspecialchars(LG_FC_COMPOSE_BASE) ?>">
+      <button type="button" class="ntm-typetoggle__opt" data-lpm-type="discussion"
+              role="tab" aria-selected="false">Discussion</button>
+      <button type="button" class="ntm-typetoggle__opt is-on" data-lpm-type="loothprint"
+              role="tab" aria-selected="true">Loothprint</button>
+    </div>
+    <div class="lpm-body" id="lpm-body">
+      <div class="ntm-state ntm-state--loading" id="lpm-loading">Loading…</div>
+    </div>
+    <div class="ntm-row lpm-row">
+      <button type="button" class="ntm-cancel" id="lpm-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
+
 <!-- Feed reply modal — opened by a card's "Reply" button (see forums.js §4b). -->
 <div class="ntm-overlay" id="frm-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="frm-heading">
   <div class="ntm-backdrop" id="frm-backdrop"></div>

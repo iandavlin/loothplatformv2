@@ -334,3 +334,23 @@ command-substituted away before `msg` sees it. It cost this lane a gutted report
 (a `redis-cli` recovery command was replaced by the literal word "OK") and cost
 the hub-picker lane one on 7/08. Verify with `msg inbox` — note `msg thread`
 returns the OLDEST ~100 messages, so tailing it looks like nothing arrived.
+
+## 2026-08-15 — PARKED MID-BUILD on `compose-loothprint-modal` (fleet-quiet, Ian on the box)
+
+**State:** branch `compose-loothprint-modal` off main `1d2f613`, UNCOMMITTED working
+tree. Ian's no-iframe shape is BUILT but NOT PROVEN.
+
+* Built: dedicated `#lpm-overlay` (no iframe) + `forums.js` module that fetches
+  `?embed=1`, injects the markup, then loads the page's own assets **in order**
+  (jQuery before acf.js) and calls `acf.doAction('append', …)` so ACF wires the
+  appended fields.
+* Proven: markup + JS serve on the preview; the modal OPENS; never-both-open holds.
+* **NOT proven, and it is the whole question:** whether the PHOTO PICKER and the
+  TAXONOMY CHIPS actually work once injected. My measuring run reported
+  `modal_open:false` and is therefore INVALID — re-run
+  `scratchpad/noiframe.py` after the quiet lifts and read
+  `acf_loaded` / `acf_sees_fields` / `select2_alive` / `photo_field_present`.
+  Injected markup that looks right and does nothing is the failure this lane
+  already hit once; do not report the shape as done on the screenshot alone.
+* Still owed after that: gate 35 never-both-modals red-first, preview refresh,
+  two pictures, board-ping.

@@ -5853,3 +5853,11 @@ html[data-lguser-theme="dark"] .lg-fm__acct-badge { background: #9db07c; color: 
 @media (max-width: 640px) {
   #lg-dmodal:not([data-lg-ssr-fallback]) { display: none; }
 }
+
+/* ── DEDICATED LOOTHPRINT MODAL (Ian 2026-08-15) ─────────────────────────────
+   Reuses the .ntm-overlay/.ntm-dialog shell so it IS the same modal idiom; its
+   own id keeps its state entirely separate. The DIALOG scrolls (one scrollbar,
+   not two — Ian, backlog 10); the injected form is ordinary flow content. */
+.lpm-dialog { display: flex; flex-direction: column; max-height: 88vh; overflow-y: auto; }
+.lpm-body { flex: 1 1 auto; }
+.lpm-row { justify-content: flex-end; }

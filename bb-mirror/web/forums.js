@@ -6200,60 +6200,147 @@ function lgFollowEnabled() {
 /* ── COMPOSER TYPE TOGGLE — Discussion <-> Loothprint ─────────────────────────
  *
  * Ian 2026-08-09: "toggle between discussion and loothprint… two different forms."
- * Ian 2026-08-15, after seeing it: discussion stays the DEFAULT — "that is what
- * most posting will be" — and "I'd like the loothprint form not to share the
- * modal - or figure out how to make the modal not have them competing or
- * generating spacing even if vis 0".
+ * Ian 2026-08-15a: "I'd like the loothprint form not to share the modal".
+ * Ian 2026-08-15b: "Cant it just replace the discussion modal ?"  ← this shape.
  *
- * SO THE IFRAME IS GONE. Tapping Loothprint LEAVES the modal and opens the
- * standalone /compose/ page full-screen. That is not a workaround, it is the
- * repair: two surfaces sharing one dialog produced two defects that a tidier
- * embed would not have fixed.
+ * Tapping Loothprint CLOSES #ntm-overlay and opens the dedicated #lpm-overlay;
+ * Discussion does the reverse. Own chrome, own state, nothing shared.
  *
- *   1. STACKED FURNITURE. ntmSetState('authed') sets ntmForm.hidden = false
- *      unconditionally, knowing nothing about the active type. The auth probe
- *      resolves ~2-4s after the composer opens, so a member who taps Loothprint
- *      before it lands gets the discussion wizard RE-SHOWN underneath the frame:
- *      step rail, forum picker and Cancel/Next all visible with the Loothprint
- *      form. Measured on the live serve — tab reads "loothprint" while the
- *      discussion form, rail, footer and forum list are all visible at t+4s.
- *      That is Ian's screenshot. It is a race, which is why it looked fine to a
- *      test that waited before clicking.
- *   2. SIGNED-OUT EMBED. A frame is a separate navigation and does not always
- *      carry what the parent carries.
+ * SWAP, NEVER SHOW: every path hides the sibling BEFORE showing the target, so
+ * "both open" is not a state this code can reach. That is the point. The defect
+ * it retires was a RACE, not a layout slip: ntmSetState('authed') sets
+ * ntmForm.hidden = false UNCONDITIONALLY, knowing nothing about the active type,
+ * and the auth probe resolves 2-4s AFTER the composer opens — so tapping
+ * Loothprint inside that window used to re-show the wizard UNDER the form (rail,
+ * forum picker, Cancel/Next: Ian's screenshot). A surface that is not inside
+ * that modal cannot be stacked under by a timer.
  *
- * With no embedded surface there is nothing to stack, nothing to keep in sync
- * with an auth probe, and nothing to size. The standalone page is also the
- * surface already verified end-to-end.
+ * ── NO IFRAME (Ian's ruling), and what that costs ───────────────────────────
+ * The form is fetched furniture-free (?embed=1) and INJECTED into this shell.
+ * The hub cannot enqueue what that form needs — it is bb-mirror, a separate app
+ * with no WordPress to run wp_head() — so we also carry over the assets the
+ * fetched document declares, IN ORDER (jQuery must be running before acf.js),
+ * and then hand ACF the appended subtree so it initialises the new fields.
  *
- * WHY A FULL NAVIGATION AND NOT A ROUTE SWAP: the compose route prints ACF's
- * gallery, media modal and select2 via wp_head(); the hub has none of them.
- * Injecting that markup gives a photo picker that silently does nothing — the
- * failure this lane already hit once with the nested-form bug.
- *
- * Still self-contained: it touches the composer only through the DOM and never
- * reaches into its closure, so the discussion flow — the half that must not
- * regress — cannot be perturbed. Flag off, the markup is absent and every line
- * below no-ops on the first querySelector.
+ * Measured before writing this: the embed page pulls acf-input, acf.js,
+ * select2, media-views, acf-pro and jQuery, and the hub carries none of them.
+ * Whether the photo picker and the taxonomy chips survive the move is exactly
+ * what this has to be TESTED for after every change — injected markup that
+ * looks right and does nothing is the nested-form failure this lane already hit
+ * once, and the class Ian catches on his phone.
  */
 (function () {
-  var wrap = document.getElementById('ntm-typetoggle');
-  if (!wrap) return;                              // flag off, or cannot post
+  var ntmWrap = document.getElementById('ntm-typetoggle');
+  var lpm     = document.getElementById('lpm-overlay');
+  if (!ntmWrap || !lpm) return;                   // flag off, or cannot post
 
-  var base = wrap.getAttribute('data-compose-base') || '/compose/';
+  var ntm    = document.getElementById('ntm-overlay');
+  var bodyEl = document.getElementById('lpm-body');
+  var lpmTog = document.getElementById('lpm-typetoggle');
+  var cancel = document.getElementById('lpm-cancel');
+  var back   = document.getElementById('lpm-backdrop');
+  var base   = ntmWrap.getAttribute('data-compose-base') || '/compose/';
+  var loaded = false, loading = false;
 
-  wrap.addEventListener('click', function (e) {
+  /* Load one <script src> and RESOLVE ONLY WHEN IT HAS RUN. Sequential by
+     design: acf.js throws on a missing jQuery, and a parallel load wins that
+     race often enough to look intermittent. */
+  function loadScript(src) {
+    return new Promise(function (resolve) {
+      if (document.querySelector('script[src="' + src + '"]')) return resolve();
+      var s = document.createElement('script');
+      s.src = src; s.async = false;
+      s.onload = resolve; s.onerror = resolve;   // never strand the modal
+      document.head.appendChild(s);
+    });
+  }
+
+  function loadStyle(href) {
+    if (document.querySelector('link[href="' + href + '"]')) return;
+    var l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = href;
+    document.head.appendChild(l);
+  }
+
+  function loadForm() {
+    if (loaded || loading) return;
+    loading = true;
+    fetch(base + '?type=loothprint&embed=1', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.text() : Promise.reject('compose ' + r.status); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+
+        doc.querySelectorAll('link[rel="stylesheet"][href]').forEach(function (l) {
+          loadStyle(l.getAttribute('href'));
+        });
+
+        var card = doc.querySelector('.lgfc__card') || doc.querySelector('main.lgfc') || doc.body;
+        bodyEl.innerHTML = card ? card.innerHTML : '';
+
+        /* External scripts in document order, THEN the inline ones — an inline
+           acf.addAction(...) that runs before acf.js exists is a silent no-op. */
+        var ext = [].slice.call(doc.querySelectorAll('script[src]'));
+        var inline = [].slice.call(doc.querySelectorAll('script:not([src])'));
+        return ext.reduce(function (chain, sc) {
+          return chain.then(function () { return loadScript(sc.getAttribute('src')); });
+        }, Promise.resolve()).then(function () {
+          inline.forEach(function (sc) {
+            /* innerHTML does NOT execute a script; it has to be re-created. */
+            var s = document.createElement('script');
+            s.textContent = sc.textContent;
+            document.body.appendChild(s);
+          });
+          /* Hand ACF the appended subtree so it wires the fields it did not see
+             at DOM ready. Without this the markup is inert. */
+          try {
+            if (window.acf && window.jQuery) window.acf.doAction('append', window.jQuery(bodyEl));
+          } catch (e) { /* reported by the harness, never thrown at the member */ }
+          loaded = true; loading = false;
+        });
+      })
+      .catch(function () {
+        loading = false;
+        bodyEl.innerHTML = '<div class="ntm-state">Could not load the Loothprint form. ' +
+                           '<a href="' + base + '?type=loothprint">Open it on its own page</a>.</div>';
+      });
+  }
+
+  function closeLoothprint() {
+    lpm.hidden = true;
+    document.body.classList.remove('ntm-active');
+  }
+
+  function openLoothprint() {
+    if (ntm) ntm.hidden = true;      // sibling hidden FIRST — never both
+    lpm.hidden = false;
+    document.body.classList.add('ntm-active');
+    loadForm();
+  }
+
+  function openDiscussion() {
+    closeLoothprint();
+    if (!ntm) return;
+    ntm.hidden = false;
+    document.body.classList.add('ntm-active');
+  }
+
+  ntmWrap.addEventListener('click', function (e) {
     var b = e.target.closest('.ntm-typetoggle__opt');
     if (!b) return;
     e.preventDefault();
-    if (b.getAttribute('data-ntm-type') !== 'loothprint') return;   // discussion IS the modal
+    if (b.getAttribute('data-ntm-type') === 'loothprint') openLoothprint();
+  });
 
-    /* Hand the standalone page the way BACK, so returning to Discussion reopens
-       the wizard where the member left it — and so it works unchanged under the
-       lane-preview prefix, where the hub is not at /hub/. Path only: the page
-       refuses anything with a scheme or host, so this cannot become an open
-       redirect. */
-    var back = location.pathname + (location.pathname.indexOf('?') > -1 ? '&' : '?') + 'compose=1';
-    location.href = base + '?type=loothprint&back=' + encodeURIComponent(back);
+  if (lpmTog) lpmTog.addEventListener('click', function (e) {
+    var b = e.target.closest('.ntm-typetoggle__opt');
+    if (!b) return;
+    e.preventDefault();
+    if (b.getAttribute('data-lpm-type') === 'discussion') openDiscussion();
+  });
+
+  if (cancel) cancel.addEventListener('click', closeLoothprint);
+  if (back)   back.addEventListener('click', closeLoothprint);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !lpm.hidden) closeLoothprint();
   });
 })();
