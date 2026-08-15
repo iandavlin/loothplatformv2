@@ -64,7 +64,12 @@ function committer_path(): string
 
     if ($override !== false && $override !== '') {
         if (str_contains($override, '/worktrees/')) {
-            error_log('board-committer: PRE-MERGE — running from a worktree via BOARD_COMMITTER_BIN (' . $override . '). Delete /etc/default/board-committer once this branch is on main.');
+            // Name BOTH homes: the override can arrive from the systemd drop-in
+            // or the EnvironmentFile, and a warning that tells the reader to
+            // delete a file that is not the one in force is worse than none.
+            error_log('board-committer: PRE-MERGE — running from a worktree via BOARD_COMMITTER_BIN (' . $override
+                . '). Once this branch is on main, remove whichever set it: '
+                . '/etc/systemd/system/board-committer@.service.d/10-pre-merge.conf or /etc/default/board-committer, then daemon-reload.');
         }
         return $override;
     }
