@@ -234,6 +234,68 @@ is_( StripeLifecycle::inCohort( 999 ) === true,
      "the sweep and the webhook share ONE cohort predicate — no second copy to drift" );
 
 /* ---------------------------------------------------------------------- */
+section( "[6] NO THIRD ROAD — every stripe grant path goes through a fence" );
+
+// Tonight's lesson generalised, per CRAFT-STANDARD's law: a defect class found
+// twice becomes a gate. The list looked like a fence but was a gate on ONE
+// road; a second road (the sweep) went around it for months. The property that
+// actually matters is therefore not "the sweep is fenced" but "there is no
+// unfenced road at all" — so this asserts the SHAPE of the codebase, and a
+// third road cannot land without turning this red.
+$src   = __DIR__ . '/../../lg-patreon-stripe-poller/src';
+$files = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $src ) );
+$sites = [];
+foreach ( $files as $f ) {
+    if ( $f->isDir() || $f->getExtension() !== 'php' ) { continue; }
+    $body = (string) file_get_contents( $f->getPathname() );
+    foreach ( explode( "\n", $body ) as $i => $line ) {
+        // A stripe opinion written with the source as a LITERAL.
+        if ( preg_match( "/RoleSourceWriter::report\s*\(.*'stripe'/", $line ) ) {
+            $sites[] = basename( $f->getPathname() ) . ':' . ( $i + 1 );
+        }
+    }
+}
+sort( $sites );
+$expected = [ 'StripeLifecycle.php', 'Sync.php' ];
+$got      = array_values( array_unique( array_map(
+    static fn ( string $s ): string => explode( ':', $s )[0], $sites
+) ) );
+sort( $got );
+
+is_( $got === $expected, sprintf(
+    "exactly TWO files write a stripe opinion — the webhook and the sweep, both fenced (found: %s)",
+    $sites === [] ? 'none' : implode( ', ', $sites )
+) );
+
+// The latent one, kept latent on purpose. UserLifecycle::provision() takes a
+// CALLER-SUPPLIED source and would write an opinion + run the Arbiter with no
+// cohort check. It has no callers today, which is the only reason it is not a
+// third road. If somebody wires it up, this reddens and they must fence it —
+// that is the point, not an inconvenience.
+$repo    = __DIR__ . '/../..';
+$callers = [];
+foreach ( [ '/lg-patreon-stripe-poller/src', '/lg-patreon-stripe-poller/includes', '/membership-pages' ] as $dir ) {
+    if ( ! is_dir( $repo . $dir ) ) { continue; }
+    $it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $repo . $dir ) );
+    foreach ( $it as $f ) {
+        if ( $f->isDir() || $f->getExtension() !== 'php' ) { continue; }
+        if ( basename( $f->getPathname() ) === 'UserLifecycle.php' ) { continue; }
+        $body = (string) file_get_contents( $f->getPathname() );
+        if ( preg_match( '/UserLifecycle::provision\s*\(/', $body ) ) {
+            $callers[] = basename( $f->getPathname() );
+        }
+    }
+}
+// Textual, and deliberately so: it cannot tell a real call from a
+// commented-out one, and it reddens on either. That errs toward a
+// conversation, which is the safe direction for an unfenced grant path.
+is_( $callers === [], sprintf(
+    "UserLifecycle::provision() is still uncalled — it takes a caller-supplied source and is NOT fenced, "
+    . "so wiring it up needs the cohort check first (callers found: %s)",
+    $callers === [] ? 'none' : implode( ', ', $callers )
+) );
+
+/* ---------------------------------------------------------------------- */
 echo "\n$pass passed, $fail failed\n";
 if ( $fail > 0 ) { echo "RED — the entitlement sweep is not fenced by the Test Group.\n"; exit( 1 ); }
 echo "GREEN — off is today exactly, armed the list decides, an empty list is nobody, "
@@ -241,31 +303,33 @@ echo "GREEN — off is today exactly, armed the list decides, an empty list is n
 exit( 0 );
 
 /* ======================================================================= *
- * RED-FIRST RECORD — measured, not asserted. Baseline: 26 passed, 0 failed.
+ * RED-FIRST RECORD — measured, not asserted. Baseline: 28 passed, 0 failed.
  *
- * Mutations applied to src/Sync.php from a snapshot copy, the gate run, the
- * count recorded, the file restored. Never `git checkout --`.
+ * Mutations applied from a snapshot copy, gate run, count recorded, file
+ * restored. Never `git checkout --`.
  *
  *   S1  delete the fence entirely — i.e. THE DEFECT EXACTLY AS IT SHIPPED,
- *       which is the only mutation here that reproduces a real past state
- *                                                                  -> 14 RED
- *       Every unlisted grant goes straight through: the gift bypass.
- *   S2  drop `StripeLifecycle::flagOn() &&` from the condition      ->  4 RED
+ *       the only mutation here that reproduces a real past state  -> 14 RED
+ *   S2  drop `StripeLifecycle::flagOn() &&` from the condition    ->  4 RED
  *       The fence bites while the flag is OFF, so a box not running the soft
  *       launch silently stops syncing. §1's off-state assertions catch it —
- *       which is the whole reason a gate asserts the OFF state at all.
- *   S3  invert the cohort test                                      -> 18 RED
- *   S4  return "skipped" but still write the stripe opinion         ->  3 RED
+ *       which is what asserting an OFF state is for.
+ *   S3  invert the cohort test                                    -> 18 RED
+ *   S4  return "skipped" but still write the stripe opinion       ->  3 RED
  *       THE DANGEROUS NEAR-MISS: the return value says skipped while the
  *       member is written to NULL and demoted by the next Arbiter run. Caught
  *       only because "granted" is measured from the COLLABORATORS rather than
- *       from the return value — an assertion on `$res['tier'] === null` would
- *       have passed happily while the member lost their role.
- *   S5  return "skipped" but still run the Arbiter                  ->  3 RED
- *   S6  log every refusal instead of only the ones with something
- *       to grant                                                    ->  1 RED
- *       The sweep visits every customer every five minutes; the real refusals
- *       would be buried.
+ *       the return value — `$res['tier'] === null` would have passed happily.
+ *   S5  return "skipped" but still run the Arbiter                ->  3 RED
+ *   S6  log every refusal, not only the ones with something to
+ *       grant                                                     ->  1 RED
+ *   S7  add a THIRD file that writes a stripe opinion             ->  1 RED
+ *       The regression class itself: §6 exists because the list looked like a
+ *       fence while being a gate on ONE road, and a second road went around it
+ *       for months. A third cannot land silently now.
+ *   S8  wire up the latent UserLifecycle::provision() path        ->  1 RED
+ *       (Reddens on a commented reference too — see the note at that
+ *       assertion; over-eager in the safe direction.)
  * ======================================================================= */
 
 }
