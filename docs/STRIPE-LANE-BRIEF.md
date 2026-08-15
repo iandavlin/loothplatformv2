@@ -178,6 +178,14 @@ Everything below is a decision, not a task. Nothing here is blocked on code.
 4. **When to switch the pages on.** Flip order: identity gate on → lifecycle on
    → the list governs who → the pages flag on.
 
+5. **The Stripe keys — this now BLOCKS the rehearsal.** dev2 holds **no key of
+   ours at all**, so no checkout can be created, no price can be set, and the
+   money half of a soft launch (payment, gift purchase, regional pricing) cannot
+   be tested by anyone. Pasting the two **sandbox** values is his step one.
+   Meanwhile dev2 *does* hold a **live** payments key under the retired old
+   membership plugin — so the box has exactly the wrong key: a real one nobody
+   uses, and no sandbox one for the work we want. Both are fixed in one sitting.
+
 ### The two he must do himself
 
 - **Rotate the key.** He already has a real, charges-enabled Stripe account
@@ -196,6 +204,30 @@ Everything below is a decision, not a task. Nothing here is blocked on code.
 - **No tokened invite links.** Login plus the list is enough for the test, and a
   token that bypassed the list would defeat it. Revisit only if he wants
   pre-login invites.
+
+## 6b. The dress rehearsal (2026-08-15) — and what it caught
+
+Walked the pages on the real serve as a whitelisted member. **The unlock did not
+work at all**, and the reason is worth keeping:
+
+**These pages are gated TWICE.** The router decides who may reach a page, and
+then *every page file* calls `lg_membership_prelaunch_gate_or_exit()` and
+re-checks on its own authority. The first cut changed only the router, so the
+router admitted a listed member and their own page then refused them. The page's
+door now delegates to the same gate the router uses, rather than keeping a
+private copy of the rule.
+
+**Gate 34b was GREEN at 54 assertions while the feature was completely broken.**
+It asked the gate *function* what it would decide and read the router's *table*;
+it never asked whether a member could reach a page. That is
+presence-is-not-reachability. Section 8 now drives the page's own door per state,
+and mutation R1 (the bug as it shipped) reddens it.
+
+Access half: **working**, proven end to end with real sessions — listed member
+gets the real join/gift/refund pages, unlisted and anon get the stub.
+Money half: **blocked on Ian's keys** (see decision 5).
+
+---
 
 ## 7. Corrections to this lane's charter
 
