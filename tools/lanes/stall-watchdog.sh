@@ -38,7 +38,11 @@ while true; do
         echo "ALERT lost-instruction $L — parked with unsent composer text"; exit 0
       fi
     fi
-    if lanes 2>/dev/null | grep -E "^$L " | grep -q parked; then
+    L_LINE=$(lanes 2>/dev/null | grep -E "^$L ")
+    # A pane with live background shells is WORKING even at an idle prompt
+    # (8/15: two seats false-alarmed all day while running background jobs).
+    if echo "$L_LINE" | grep -q "shell" ; then rm -f "$STATED/$L"; continue; fi
+    if echo "$L_LINE" | grep -q parked; then
       # A lane parked ON A QUESTION is answered, not aged: escalate immediately
       # (Ian 8/15: "If it stops to ask a question, we should answer the question").
       QF="$HOME/worktrees/$L/.lane-state/QUESTION"
