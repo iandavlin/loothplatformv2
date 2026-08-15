@@ -161,3 +161,35 @@ Recording rather than silently skipping or silently widening scope:
    defect and fixing it under a dark-mode flag would be mislabelling it. Needs
    its own decision: darken those 3 palette entries, or drop to a fixed
    AA-safe pair.
+
+
+## Wave list — KNOWN-UNFIXED, recorded in BASELINE rather than hidden
+
+Both entered the baseline on 2026-08-15 as known-unfixed so tonight's train
+could ship; both are real defects and neither is closed. Fix as wave work.
+
+1. **Guitardle promo card, play-to-claim points text — 2.83:1**
+   (`#657154` on `#242a20`), `span.gdle-side-row__pts` / `__rank`.
+   NEW copy from the fairness lane, on a feature that is **ON**, so it is live
+   for anon right now. Note this is the same element family already disclosed
+   on the front page in CRAFT-STANDARD row 36 as "a different lane's surface" —
+   it has now spread to `bpnoaccess`, which makes it worth owning rather than
+   continuing to route around. Coordinate with the guitardle seat before
+   changing their palette.
+2. **`.lg-chrome__badge` count pips — 1.51:1** (`#e5e7e1` on `#ecb351`).
+   White-ish ink on the amber badge. RENDER-DEPENDENT on notification state, so
+   it appears in some runs and not others — which is exactly why it was missed
+   by earlier captures and why its surface needed headroom rather than a tight
+   floor. Same root shape as the Install button: a mid-tone brand fill under a
+   near-white foreground, and `--lg-amber` does not repoint enough in dark to
+   save it. Likely a BOTH-THEMES defect (gate 45), so check light before fixing
+   only dark — that mistake has now been made twice in this lane.
+
+### Also still open, from earlier in this lane
+- The probe's bordered-ancestor credit (gate 36) — the borderless-field
+  findings survive the wrapper flag flip. Sequenced after the merge.
+- Gate 45's position-free matching key — selectors carry `:nth-child()`, so the
+  mobile feed's variable card count makes the same defect miss its match and
+  under-report. Fix before tightening any gate-45 number.
+- The avatar-initials palette and `loothalong.js`'s crew avatars — both fail in
+  BOTH themes, gate 45's founding instances, still unfixed.
