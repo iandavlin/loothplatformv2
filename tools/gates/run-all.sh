@@ -745,6 +745,15 @@ run "stripe-testgroup-pages" php "$(dirname "$0")/stripe-testgroup-pages-gate.ph
 echo "=== GATE 34c/35: Stripe price — one action or none, sandbox only ==="
 run "stripe-price-control" php "$(dirname "$0")/stripe-price-control-gate.php"
 
+# 34d — the OTHER grant path. The soft-launch list guarded the webhook only; a
+# redeemed gift reaches the same Arbiter write via the billing app -> the
+# unconditionally-registered /sync-customer route -> Sync::customer, and the
+# five-minute cron sweep gets there on its own regardless. lgms_stripe_frozen
+# does not stop it (that guards the Stripe POLL, a different pass). So before
+# this, a gift to somebody NOT on the list let them in anyway.
+echo "=== GATE 34d/35: Stripe test-group fences the SWEEP (the gift path) ==="
+run "stripe-testgroup-sweep" php "$(dirname "$0")/stripe-testgroup-sweep-gate.php"
+
 # ── 35 ─────────────────────────────────────────────────────────────────────
 # Front-end compose + edit (backlog 6; Ian ruled Option A 2026-08-03, all-members
 # and front-end edit 2026-08-09). PER-STATE, and that is the point: it READS the
@@ -769,7 +778,7 @@ run "compose" python3 "$(dirname "$0")/compose-gate.py" \
     --owner patreon_77159883 --stranger bangers --post 72155
 
 # THE GATE-NUMBER LEDGER (single source of truth; keeper mints, lanes never):
-#   34 stripe (34a grant + 34b pages + 34c price) · 35 compose/v2 · 36 dark-anon · 37 guitardle claim · 38 insert
+#   34 stripe (34a webhook + 34b pages + 34c price + 34d sweep) · 35 compose/v2 · 36 dark-anon · 37 guitardle claim · 38 insert
 #   path · 39 featured-members · 40 guitardle score-integrity — NEXT FREE: 41.
 # Gate 38 runs on the real stored-layout corpus via direct mysql; needs
 # neither Redis nor a WP bootstrap.

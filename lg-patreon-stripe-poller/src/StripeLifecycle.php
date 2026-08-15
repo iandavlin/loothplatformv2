@@ -153,7 +153,15 @@ final class StripeLifecycle
         return $ids;
     }
 
-    private static function inCohort( int $wpUserId ): bool
+    /**
+     * PUBLIC because the cohort fences TWO grant paths, not one. This class
+     * guards the webhook; LGMS\Sync guards the entitlement sweep, which is how
+     * a redeemed gift and the five-minute cron reach the very same Arbiter
+     * write. One predicate, one normalization — a second copy of
+     * `isset( allowlist()[ $id ] )` elsewhere is exactly how the two ends of a
+     * fence drift apart.
+     */
+    public static function inCohort( int $wpUserId ): bool
     {
         return isset( self::allowlist()[ $wpUserId ] );
     }
