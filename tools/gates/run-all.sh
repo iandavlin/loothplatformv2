@@ -666,6 +666,17 @@ echo "=== GATE 32/33: retired pages 301 per-URL to a destination that ANSWERS ==
 # also rot later with nobody touching our code — a conf comment cannot catch
 # that; this can.
 run "stale-page-redirect" python3 "$(dirname "$0")/stale-page-redirect-gate.py"
+echo
+
+echo "=== GATE 36: featured members — schema constraints, completeness parity, flag-off, no admin override ==="
+# Backlog 18 (Ian 8/11), rulings 2026-08-14. Roster number allocated by
+# keeper 2026-08-15 (not minted from this branch — the two-lanes-both-mint-9/9
+# collision is exactly the failure this convention exists to avoid). No "/N"
+# suite-total in the banner on purpose: that total is a cosmetic echo string
+# other lanes are concurrently bumping for their own gates tonight (34, 35),
+# and it feeds no counter in this script — see run(), which tracks red/dead
+# by exit code only.
+run "featured-member" python3 "$(dirname "$0")/featured-member-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
