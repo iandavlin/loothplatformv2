@@ -19,8 +19,11 @@ set -u
 INPUT=$(cat 2>/dev/null || true)
 SESSION=$(tmux display-message -p '#S' 2>/dev/null || basename "$PWD")
 
-# Keeper-granted park?
-grep -qE "^$SESSION( |#|$)" "$HOME/.lane-park-ok" 2>/dev/null && exit 0
+# Keeper-granted park? Same rule as the watchdog (8/15): newest entry wins
+# and it must be UNEXPIRED — the naive any-line grep let stale entries
+# silently disarm this hook fleet-wide within hours of shipping it.
+OKEXP=$(awk -v l="$SESSION" '$1==l {print $2}' "$HOME/.lane-park-ok" 2>/dev/null | tail -1)
+if [ -n "$OKEXP" ] && [ "$OKEXP" -gt "$(date +%s)" ] 2>/dev/null; then exit 0; fi
 
 # Lane-declared done/blocked/question? A QUESTION is a first-class stop (Ian,
 # 2026-08-15: "If it stops to ask a question, we should answer the question")
