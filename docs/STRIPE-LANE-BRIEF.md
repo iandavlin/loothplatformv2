@@ -24,6 +24,14 @@ at before it is ever armed.
 2. **Nothing reaches members.** Every member-facing surface merges behind a
    switch defaulted OFF, and the OFF state is gated red-first.
 3. **Live is read-only.** Live writes are Ian's, handed to him through keeper.
+4. **BOTH RAILS FIRE, INDEFINITELY.** Ian, 2026-08-15, a permanent ruling:
+   *"Everything needs to fire for both for the foreseeable future… we are dual
+   wielding patreon and stripe for a while."* **Patreon does not sunset at the
+   Stripe launch.** The two rails run in parallel with no end date, so every
+   downstream flow keys on **membership activation**, never on one rail's
+   events. *"Does it fire for both rails?"* is a standing question for anything
+   this lane builds or reports — treat a Stripe-only answer as an unfinished
+   one.
 
 ---
 
@@ -91,7 +99,11 @@ cron reaches the same place on its own, and `lgms_stripe_frozen` does **not**
 stop it, because that option guards the Stripe *poll*, a different pass. So a
 gift to somebody not on the list let them in anyway, within minutes.
 
-Now fenced in `Sync::customer()` — the one choke point both roads pass through.
+Now fenced in `Sync::customer()` — the one choke point both roads pass through. It is
+provably **Stripe-only**: a refusal writes nothing and never runs the Arbiter, so
+a member paying on Patreon is untouched by a Stripe refusal — gate 34d §7 asserts
+exactly that, because under the dual-rail ruling the expensive mistake is not
+refusing a Stripe grant but disturbing the other rail while doing it.
 If you add a *third* road to a membership grant, it must pass through there too,
 or the fence has another hole. Gate 34d.
 

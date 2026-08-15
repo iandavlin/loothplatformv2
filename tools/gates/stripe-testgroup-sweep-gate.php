@@ -296,6 +296,39 @@ is_( $callers === [], sprintf(
 ) );
 
 /* ---------------------------------------------------------------------- */
+section( "[7] THE OTHER RAIL — Patreon is never touched by this fence" );
+
+// Ian's PERMANENT ruling, 2026-08-15: "Everything needs to fire for both for
+// the foreseeable future... we are dual wielding patreon and stripe for a
+// while." Patreon does NOT sunset at the Stripe launch; the two rails run in
+// parallel indefinitely, and every downstream flow keys on membership
+// ACTIVATION rather than on one rail's events.
+//
+// This fence therefore has to be provably Stripe-only. The danger is not that
+// it refuses a Stripe grant — that is its job — but that refusing also
+// disturbs a member's PATREON standing, which would demote somebody who is
+// paying on the other rail and has nothing to do with the soft launch.
+
+$r = sweep( true, $LIST, 'looth3', 999 );
+is_( $r['writes'] === [],
+     "a refused sweep writes NOTHING — so no patreon opinion is disturbed by a stripe refusal" );
+is_( $r['arbiter'] === 0,
+     "and the Arbiter is not run, so a dual-holder's winning tier is never recomputed by this path" );
+
+// Source-shape: this method may only ever express an opinion as 'stripe'. If it
+// ever wrote another source, the fence would be gating the wrong rail.
+$syncBody = (string) file_get_contents( __DIR__ . '/../../lg-patreon-stripe-poller/src/Sync.php' );
+preg_match_all( "/RoleSourceWriter::report\s*\([^;]*?'([a-z_]+)'/", $syncBody, $m );
+$sources = array_values( array_unique( $m[1] ?? [] ) );
+is_( $sources === [ 'stripe' ], sprintf(
+    "the swept opinion is ALWAYS 'stripe' and never another rail (found: %s)",
+    $sources === [] ? 'none' : implode( ', ', $sources ) ) );
+
+// And the patreon rail's own writer must live somewhere this fence cannot reach.
+is_( ! str_contains( $syncBody, "'patreon'" ),
+     "the patreon rail is written elsewhere entirely — this file cannot gate it even by accident" );
+
+/* ---------------------------------------------------------------------- */
 echo "\n$pass passed, $fail failed\n";
 if ( $fail > 0 ) { echo "RED — the entitlement sweep is not fenced by the Test Group.\n"; exit( 1 ); }
 echo "GREEN — off is today exactly, armed the list decides, an empty list is nobody, "
