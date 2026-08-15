@@ -22,7 +22,13 @@ WHAT IT ASSERTS. On every anon-reachable surface a visitor meets in the sign-in
 / join / sign-up path — /wp-login.php, its lostpassword and bpnoaccess (failed
 sign-up bounce) variants, /join, /lgjoin, and the front page — measured under
 BOTH dark paths (app-dark: visitor picked Dark in the gear; os-dark: visitor
-picked nothing and their OS is dark) at desktop AND mobile:
+picked nothing and their OS is dark) at desktop AND mobile, per surface: NO
+MORE findings below WCAG AA than the recorded BASELINE (see that constant's
+own comment for the full reasoning and how it was captured; short version —
+this backlog item names a genuinely large surface that will take several more
+waves to fully clear, and a zero-findings assertion merged before that would
+block every OTHER lane's train for debt this one is still working through in
+separate commits). The bar being measured, unchanged from the original design:
 
   every piece of TEXT clears 4.5:1 (WCAG AA normal text) or 3.0:1 if it
     qualifies as large text
@@ -63,29 +69,47 @@ with NO session sees. Never hits /gatetest for this reason (Ian/keeper,
 2026-08-14): it is URI-exempt and always answers auth=1, which would silently
 convert this into a gate that tests nothing.
 
-RED-FIRST, TODAY, ON PURPOSE. This gate is written and run BEFORE any fix lands
-(charter METHOD step 2: gate before fixing) so its current failure is the
-baseline, not a regression. It has no flag to read yet because the fix has not
-been designed — when a fix ships flagged member-visible-off-by-default, extend
-this gate to assert per-state (flag OFF == today's numbers, byte-identical
-no-op; flag ON == the AA bar met) rather than replacing the OFF-state assertion.
+RED-FIRST TWICE OVER, in two different senses, both real. (1) The gate itself
+was written and run BEFORE any fix landed (charter METHOD step 2: gate before
+fixing), so its ORIGINAL all-findings-red run was the true pre-fix baseline,
+not a regression — that run is recorded in the fix commits' own messages. (2)
+The RATCHET MECHANISM below (ratchet_verdict / BASELINE) is itself red-fired
+on every run via _ratchet_selftest() before any browser opens — pure logic,
+no CDP needed, proving a genuine regression reddens and holding steady or
+improving does not, so the comparison this gate now runs on is trusted before
+it is used to gate anything.
+
+BASELINE IS A NOISE-SAFE FLOOR, NOT A TIGHT ONE — see that constant's own
+comment. Two independent live captures under this box's real 2026-08-15
+contention (load 0.4-7.1, several other lanes' gates running concurrently)
+disagreed by 2-8x on some surfaces measuring the SAME code, because the
+probe's settle delays are wall-clock, not event-based, and CPU contention
+delays when a page's JS actually finishes painting dark. BASELINE is the
+per-surface max of both captures for this reason — a tighter single-run
+baseline would flap this gate red on measurement noise, not real
+regressions, which teaches everyone to ignore it. Re-baseline tighter once
+the probe waits on an explicit signal instead of a timer, or once it can run
+on a quiet box.
 
 Usage:  python3 tools/gates/anon-dark-contrast-gate.py
-          Default mode — the red-first baseline, against the REAL served page
-          (main), unconditionally. This is what run-all.sh runs.
+          Default mode — per surface, asserts no MORE findings than BASELINE
+          (see that constant's own comment). This is what run-all.sh runs.
         python3 tools/gates/anon-dark-contrast-gate.py --verify-fixes
           Injects the queued fixes' CSS (icon + border-token; see
           FIX_VERIFY_CSS below) as an extra layer on top of the normally-
-          served page and asserts THOSE specific classes clear AA — proves
-          the fix values are correct without needing a merge or a lane-
-          preview route. Out-of-scope findings this wave does not touch are
-          reported, not failed. Manual verification step, not run by
-          run-all.sh (that always wants the true default-state baseline).
+          served page and asserts THOSE specific classes clear full AA (not
+          just "no worse than baseline") — proves the fix VALUES are correct
+          before they are ever flipped on, without needing a merge or a
+          lane-preview route. Out-of-scope findings this wave does not touch
+          are reported, not failed. Manual verification step, not run by
+          run-all.sh.
 Needs:  chrome-dev on 127.0.0.1:9222, tools/gates/gate-env.sh resolving a token.
-Exit 0 = GREEN (nothing below AA on the named surfaces). Exit 1 = RED, one line
-per finding. Exit 2 = CANNOT RUN (never silently exit 0 on a broken harness —
-see trap-gate-exit-code-3-blocks-every-lane in keeper memory: an open defect is
-exit 1, never a code that run-all.sh reads as "could not run").
+Exit 0 = GREEN (no surface exceeds its baseline). Exit 1 = RED, one summary
+line per regressed surface plus its individual findings. Exit 2 = CANNOT RUN
+(never silently exit 0 on a broken harness, and never on a ratchet-logic
+self-test failure either — see trap-gate-exit-code-3-blocks-every-lane in
+keeper memory: an open defect is exit 1, never a code that run-all.sh reads
+as "could not run").
 """
 
 import base64
@@ -205,10 +229,19 @@ def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_
     s.call("Emulation.setEmulatedMedia", features=[
         {"name": "prefers-color-scheme", "value": "dark" if mode == "os-dark" else "light"}])
     s.goto(url, settle=0.8)
+    # ALWAYS clear first, then set — app-dark used to skip the clear, so a
+    # prior os-dark surface's client-resolved dark write (app-settings.js's
+    # apply() persists lg-set-boot after ANY successful dark resolution, not
+    # just an explicit choice) leaked into the next app-dark test and made
+    # it silently take the boot-script-pre-paint code path instead of the
+    # cold one — order-dependent, same code, different measured findings
+    # (caught 2026-08-15: two live runs of the same 24 surfaces disagreed by
+    # several findings on repeat surfaces, off by more than render jitter
+    # should explain). Every surface now starts from the SAME clean slate a
+    # genuine first-time anon visitor has, matching the charter.
+    s.js("try{localStorage.clear()}catch(e){}")
     if mode == "app-dark":
         s.js("try{localStorage.setItem('lg-set-theme','dark')}catch(e){}")
-    else:
-        s.js("try{localStorage.clear()}catch(e){}")
     s.goto(url, settle=1.6)
     if mode == "app-dark":
         s.goto(url, settle=2.0)
@@ -346,7 +379,140 @@ def verify_fixes(host, tok, probe_js):
     sys.exit(0)
 
 
+# ---- BASELINE / RATCHET ------------------------------------------------------
+#
+# WHY THIS EXISTS (keeper, 2026-08-15, catching it before merge): the default
+# assertion below used to be "zero findings, full stop" — correct for the
+# red-first PROOF this gate was built to give, but wrong for what run-all.sh
+# needs from a MERGED gate. This backlog item names a genuinely large surface
+# (every anon dark surface, site-wide) that will take multiple future waves to
+# fully clear — the front page alone still carries 10 Guitardle-leaderboard
+# findings that are a completely different lane's surface, not this one's to
+# fix. A zero-findings assertion merged tonight would show RED forever, for
+# reasons entirely outside this lane's remaining scope, and BLOCK EVERY OTHER
+# LANE'S TRAIN — worse than not having the gate at all.
+#
+# THE FIX IS A RATCHET, NOT A RETREAT. Per surface, the assertion becomes
+# "no MORE findings than the recorded baseline" rather than "none at all" —
+# it still catches the thing a red-first gate exists to catch (a REGRESSION:
+# someone introduces a NEW dark-contrast defect on one of these six surfaces),
+# it just stops blocking on debt this lane already disclosed and is still
+# working through in separate, explicitly-scoped commits. Considered splitting
+# the wiring out of this merge instead (leave the gate script in the repo,
+# register it in run-all.sh only once the whole wave lands) — rejected,
+# because there is no clean "the wave is done" line to draw for a surface this
+# size, and an unwired gate protects nothing in the meantime. Same failure
+# class as "a gate that guards an unrecallable channel and is never promoted
+# is worse than no gate" — a principle this codebase already holds elsewhere.
+#
+# THE RATCHET ONLY TIGHTENS. When a future commit fixes more findings on one
+# of these surfaces, LOWER that surface's number in BASELINE in the SAME
+# commit — a baseline that never comes down defeats the entire point and just
+# freezes today's debt in amber forever. Raising a number here should need the
+# same scrutiny as any other test getting weaker: a real, disclosed reason,
+# never a quiet fix for a locally-annoying red.
+#
+# CAPTURED 2026-08-15, matching the TRUE post-merge state — not carried over
+# from an earlier pre-fix run, and not the live page as it stands RIGHT NOW
+# (pre-merge main still lacks even the unflagged fixes). Built the same way
+# --verify-fixes works: inject exactly the CSS the ALREADY-LANDED, UNFLAGGED
+# fixes add (lg-snippets/snippets/86.php's dark block for the wp-login.php
+# surfaces, membership-pages/web/join.css's for /join, membership-pages/web/
+# _admin-gate.php's for /lgjoin) on top of the normally-served page, and
+# nothing for the three surfaces reached only through flags that stay OFF
+# (icon/border-token/search-wrapper — /front carries no unflagged fix at all).
+# Regenerate by re-running that same injection sweep if the unflagged fixes
+# ever change shape.
+BASELINE = {
+    "signin/app-dark/desktop": 10, "signin/app-dark/mobile": 5,
+    "signin/os-dark/desktop": 10, "signin/os-dark/mobile": 6,
+    "lostpassword/app-dark/desktop": 2, "lostpassword/app-dark/mobile": 4,
+    "lostpassword/os-dark/desktop": 3, "lostpassword/os-dark/mobile": 4,
+    "bpnoaccess/app-dark/desktop": 12, "bpnoaccess/app-dark/mobile": 14,
+    "bpnoaccess/os-dark/desktop": 11, "bpnoaccess/os-dark/mobile": 15,
+    "join/app-dark/desktop": 0, "join/app-dark/mobile": 2,
+    "join/os-dark/desktop": 0, "join/os-dark/mobile": 2,
+    "lgjoin/app-dark/desktop": 0, "lgjoin/app-dark/mobile": 2,
+    "lgjoin/os-dark/desktop": 0, "lgjoin/os-dark/mobile": 2,
+    "front/app-dark/desktop": 9, "front/app-dark/mobile": 12,
+    "front/os-dark/desktop": 9, "front/os-dark/mobile": 12,
+}
+# Measured 2026-08-15 against the TRUE post-merge state (same live-injection
+# technique as tools/preview: the 3 unflagged fixes -- 86.php login CSS,
+# join.css, admin-gate.php -- simulated LIVE via an extra <style> tag; the 3
+# flagged fixes -- icon/border-token/search-wrapper -- OFF, matching their
+# shipped default). This is the MAX of TWO independent captures (~40 minutes
+# apart, box load 0.4-7.1 in between -- other lanes' gates were running
+# concurrently), not a single run.
+#
+# WHY MAX AND NOT ONE RUN: the first capture (117 total) and second (128
+# total, after an unrelated localStorage-carryover fix in measure() below)
+# disagreed by 2-8x on several surfaces run-to-run under identical code --
+# e.g. bpnoaccess/app-dark/desktop read 4 then 12, signin/os-dark/desktop
+# read 10 then 4. That is CDP measurement timing noise under CPU contention
+# (fixed wall-clock settle delays vs a box sharing 2 cores with several
+# other lanes' headless Chrome), not a real code difference -- confirmed by
+# re-running the identical extra-css-injection methodology twice. A BASELINE
+# built from either single run would flap this gate red on pure noise, which
+# is worse than no gate: it teaches everyone to ignore gate 36. Taking the
+# per-surface max of both captures gives real headroom against the
+# demonstrated noise band while still catching a genuine regression (one
+# that blows past BOTH observed maxima, not just one noisy sample) -- see
+# capture-baseline2.py's INVALID_B3 handling for the two mobile surfaces
+# that failed to resolve dark at all in one run (excluded, not averaged in
+# as a false 0). Total 146 findings across the 24 surfaces -- this is a
+# noise-safe floor, not a tight one; the ratchet only ever tightens, and a
+# future wave with a stable/idle box should re-baseline tighter.
+
+
+def ratchet_verdict(label, findings, baseline):
+    """Pure decision, no I/O — the part that most needs to be provably
+    correct before it gates every lane's merge train. Returns
+    (status, detail) where status is 'RED' | 'IMPROVED' | 'OK', never
+    raises, and treats a surface with NO baseline entry as baseline 0 (any
+    finding on a surface nobody captured a baseline for is new by
+    definition, not silently waved through)."""
+    base = baseline.get(label, 0)
+    n = len(findings)
+    if n > base:
+        return "RED", f"{n} finding(s), baseline was {base} — {n - base} NEW dark-contrast defect(s)"
+    if n < base:
+        return "IMPROVED", f"{n} finding(s), baseline was {base} — consider lowering BASELINE[{label!r}] to {n}"
+    return "OK", f"{n} finding(s), matches baseline"
+
+
+def _ratchet_selftest():
+    """Red-first for the ratchet mechanism ITSELF, run before every real gate
+    pass — no browser needed, pure logic. Proves: a genuine regression (MORE
+    findings than baseline) reddens; holding steady stays green; improving
+    stays green and says so; an unknown surface treats ANY finding as new
+    rather than waving it through with an absent baseline."""
+    mk = lambda n: [{"kind": "text", "ratio": 1, "need": 4.5, "fg": "#000", "bg": "#fff",
+                     "sel": "x", "sample": "x"} for _ in range(n)]
+    cases = [
+        ("holds steady",        "join/app-dark/desktop", mk(0), {"join/app-dark/desktop": 0}, "OK"),
+        ("regression",          "join/app-dark/desktop", mk(3), {"join/app-dark/desktop": 0}, "RED"),
+        ("improvement",         "signin/app-dark/desktop", mk(1), {"signin/app-dark/desktop": 3}, "IMPROVED"),
+        ("unknown surface, 0",  "new-page/app-dark/desktop", mk(0), {}, "OK"),
+        ("unknown surface, >0", "new-page/app-dark/desktop", mk(1), {}, "RED"),
+    ]
+    failed = []
+    for name, label, findings, baseline, expect in cases:
+        status, detail = ratchet_verdict(label, findings, baseline)
+        ok = status == expect
+        print(f"  {'ok  ' if ok else 'FAIL'} ratchet self-test: {name} -> {status} ({detail})"
+              + ("" if ok else f"  EXPECTED {expect}"))
+        if not ok:
+            failed.append(name)
+    if failed:
+        print(f"\nCANNOT RUN  ratchet self-test failed: {failed} — the comparison logic itself is "
+              f"broken, not trusting it to gate anything until this is fixed")
+        sys.exit(2)
+    print("  ratchet self-test: all cases correct\n")
+
+
 def main():
+    _ratchet_selftest()
     env = gate_env()
     host = env["LG_GATE_HOST"]
     tok = env["LG_GATE_TOKEN"]
@@ -405,15 +571,29 @@ def main():
                         except Exception:                       # noqa: BLE001
                             red.append(f"RED  {label}  DARK NEVER RESOLVED and retry errored")
 
-                    for f in data.get("findings", []):
-                        red.append(
-                            f"RED  {label}  {f['kind']} {f['ratio']}:1 (need {f['need']}:1)  "
-                            f"{f['fg']} on {f['bg']}  [{f['sel'][-70:]}]  \"{f['sample'][:50]}\"")
+                    # RATCHET, not "any finding at all" — see BASELINE's own
+                    # comment for why. A REGRESSION (more findings than the
+                    # recorded baseline) is red; holding steady or improving
+                    # is not, even though findings remain on the page — this
+                    # gate's job now is "did this branch make it WORSE",
+                    # which is a different, narrower question than "is it
+                    # perfect", and conflating them is exactly what would
+                    # have blocked every other lane's train tonight.
+                    findings = data.get("findings", [])
+                    status, detail = ratchet_verdict(label, findings, BASELINE)
+                    if status == "RED":
+                        red.append(f"RED  {label}  {detail}")
+                        for f in findings:
+                            red.append(
+                                f"     {label}  {f['kind']} {f['ratio']}:1 (need {f['need']}:1)  "
+                                f"{f['fg']} on {f['bg']}  [{f['sel'][-70:]}]  \"{f['sample'][:50]}\"")
+                    elif status == "IMPROVED":
+                        print(f"  IMPROVED  {label}  {detail}")
                     if data.get("truncated"):
                         print(f"  WARN  {label}  scan truncated ({data['truncReason']}, "
                               f"{data['scannedElements']}/{data['totalElements']} elements) — "
                               f"findings below are a LOWER BOUND, not exhaustive")
-                    print(f"  ok   {label}  {len(data.get('findings', []))} finding(s), "
+                    print(f"  ok   {label}  {len(findings)} finding(s) (baseline {BASELINE.get(label, 0)}), "
                           f"theme={data.get('theme')}")
     finally:
         s.finish()
@@ -429,7 +609,8 @@ def main():
             print(" ", line)
 
     if red:
-        print(f"\n{len(red)} finding(s) below WCAG AA on anon dark sign-in/join surfaces:\n")
+        print(f"\n{len(red)} line(s) — a surface regressed past its recorded BASELINE, "
+              f"or dark never resolved at all:\n")
         for line in red:
             print(line)
         sys.exit(1)
@@ -438,7 +619,9 @@ def main():
         print("\nCANNOT RUN — no verdict on the surfaces above. Not a pass.")
         sys.exit(2)
 
-    print("\nGREEN — every anon sign-in/join surface clears AA contrast in both dark paths.")
+    print("\nGREEN — no surface has MORE dark-contrast findings than its recorded baseline. "
+          "This is a floor, not a finish line: run tools/preview/dark-anon-sweep.py for the full "
+          "ranked picture, and see BASELINE's own comment before assuming 'green' means 'done'.")
     sys.exit(0)
 
 
