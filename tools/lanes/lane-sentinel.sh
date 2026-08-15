@@ -62,7 +62,22 @@ done < "$MANIFEST"
 # Status stamp for Ian's VS Code status line (8/15: "build a time into the
 # vs code that I can see that is the cron for the lane checking"). One line,
 # overwritten every patrol; keeper-statusline.sh renders it.
-W=$(lanes 2>/dev/null | grep -c WORKING || echo "?")
-T=$(lanes 2>/dev/null | wc -l || echo "?")
+LANES_RAW=$(lanes 2>/dev/null)
+W=$(echo "$LANES_RAW" | grep -c WORKING || echo "?")
+T=$(echo "$LANES_RAW" | grep -c "^" || echo "?")
 echo "$(date +%s) $(date +%H:%M:%S) working=$W total=$T" > "$HOME/.sentinel-status"
+
+# Widened JSON stamp for the WIP board's lane lights + capacity strip (Ian
+# nodded the build 8/15: "good enough to start building"). Same patrol, same
+# truth; the board polls this file — nothing on the board is ever hand-typed.
+{
+  printf '{"ts":%s,"load1":%s,"mem_avail_mb":%s,"swap_used_mb":%s,"disk_pct":%s,"lanes":[' \
+    "$(date +%s)" \
+    "$(awk '{print $1}' /proc/loadavg)" \
+    "$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo)" \
+    "$(awk 'NR==2{print $4}' <(free -m) 2>/dev/null || free -m | awk '/Swap/{print $3}')" \
+    "$(df / | awk 'NR==2{gsub(/%/,""); print $5}')"
+  echo "$LANES_RAW" | awk '{state=($2=="WORKING")?"working":"parked"; printf "%s{\"name\":\"%s\",\"state\":\"%s\"}", (NR>1?",":""), $1, state}'
+  printf ']}\n'
+} > "$HOME/.sentinel-status.json.tmp" && mv "$HOME/.sentinel-status.json.tmp" "$HOME/.sentinel-status.json"
 exit 0
