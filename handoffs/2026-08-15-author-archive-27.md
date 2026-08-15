@@ -135,7 +135,36 @@ The name-matching caveat is the Hub's own: it matches authors **by name, not
 id**, and calls the id fix "a later cross-lane increment".
 
 ## 7. State
-- No code written for 27. Mock only, published behind the dev gate.
-- The two old screenshots were **deleted** rather than left stale beside a
-  rewritten page.
-- Blocked on Ian for Q1/Q2, and on keeper for whether §5 is its own item.
+
+**The §5 mask defect is now FIXED, gated and pushed** — keeper folded it into
+this charter, and it is the half that needs no ruling from Ian.
+
+- `platform/config/author-search-mask.php`, **flag OFF by default**. The
+  `discussion_visibility` condition moves into the **topic leg only**, matching
+  the feed. OFF proven byte-identical to main across six queries;
+  `forums.person.id` has zero duplicates, so the leg's new join cannot inflate a
+  count.
+- **GATE 48** (keeper-allocated), `author-search-mask-gate.py` + its probe.
+  Fixtures derived from the database, never hardcoded names. Its load-bearing
+  assertion is the negative one: flag ON must still **hide** a topic-only author
+  at `'member'` — surfacing content authors alone would also pass if the fix had
+  simply deleted the mask.
+- It fixes the §5 count wrinkle for free: an author now contributes only rows
+  this viewer can reach (Dan Erlewine reads **9**, his public-tier content, not
+  54 — verified as 9 public / 38 lite / 1 pro).
+- **Two of the six mutations passed on a BROKEN GATE first**, and fixing the
+  gate was the real work: `[F]` grepped the bare function name, which the
+  function's own *definition* satisfies, so replacing the guard with
+  `if (true)` sailed through (now a call-site check); and `[E]` used a fixture
+  whose rows were all public-tier, so deleting the tier gate changed nothing and
+  the assertion was decoration (fixture now requires a tier mix). The probe also
+  gained a CLI-only forced-off seam, because the `$_SERVER` override is one-way
+  and the gate would have broken the day the default flips ON.
+
+**Still not built:** the door itself (§4 Q1/Q2). Mock only, published behind the
+dev gate; the two old screenshots were deleted rather than left stale beside a
+rewritten page.
+
+**Blocked on Ian** for Q1 (P1/P2) and Q2 (D1/D2), and for whether the mask flag
+gets switched ON after he sees it on the serve. Flags stay OFF through the
+merge.

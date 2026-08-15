@@ -925,16 +925,20 @@ echo "=== GATE 44: directory location — backlog 20, no list surface prints mor
 # member and admin for exactly that reason.
 run "directory-location" python3 "$(dirname "$0")/directory-location-gate.py"
 
-echo "=== GATE (unnumbered — pending keeper): author-search mask — backlog 27, the search uses the FEED's mask ==="
+echo "=== GATE 48: author-search mask — backlog 27, the search uses the FEED's mask ==="
 # Ian 8/15 via keeper, folded into 27. The Hub author search was effectively dead
 # for LOGGED-OUT visitors: ?suggest=author&q=erlewine returned 0 on dev2 AND live
 # for a man with 54 posts, because the discussion_visibility condition was applied
 # to the whole union instead of the topic leg the FEED applies it to — so it hid
 # content authors whose bylines the feed prints by name on the front page.
-# Number NOT self-minted; asked keeper. Runs meanwhile: all six mutations of the
-# product code were run and each went red for its own reason, including the two
-# that only fire because the gate itself was fixed first (a call-site check
-# instead of a name grep, and a fixture with a real tier mix).
+# Number 48 ALLOCATED BY KEEPER 2026-08-15, never self-minted; ledger next 49.
+# Verified 45-49 were free on main before taking it rather than trusting the
+# ledger line, which under-counted by three the last time it was read.
+# All six mutations of the product code were run and each went red for its own
+# reason — including the two that only fire because THE GATE ITSELF was fixed
+# first (a call-site check instead of a bare-name grep, which the function's own
+# definition satisfied; and a fixture with a real public/non-public tier mix,
+# without which the count assertion could not fail).
 run "author-search-mask" python3 "$(dirname "$0")/author-search-mask-gate.py"
 
 echo "=== GATE 43: wp-admin never renders the PWA offline shell ==="
