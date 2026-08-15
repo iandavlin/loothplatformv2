@@ -914,7 +914,13 @@ echo "=== GATE 47: the compose modal meets WCAG AA in DARK, and has no bright su
 # contrast pass reported GREEN while a 286x398 WHITE dropzone sat in the middle
 # of the dark modal. An element with no text has no pair to measure, and where
 # there IS text, dark-on-white scores well — legible, and not dark mode.
-run "compose-dark" python3 "$(dirname "$0")/../frontend-compose/dark-contrast-sweep.py"
+# BOTH WIDTHS. The sweep takes --width and this called it once, at desktop, while
+# the branch's own history says "both widths" — and the last two visual defects on
+# this surface were both on the phone. Measured before registering the second run:
+# 390px is GREEN, 91 text elements, no bright surfaces, so this adds coverage
+# rather than a known red.
+run "compose-dark-1280" python3 "$(dirname "$0")/../frontend-compose/dark-contrast-sweep.py" --width 1280
+run "compose-dark-390"  python3 "$(dirname "$0")/../frontend-compose/dark-contrast-sweep.py" --width 390
 
 # Gate number 36 assigned by keeper 2026-08-15 (ledger: 34 stripe, 35 compose/
 # v2, 36 dark-anon, 37 guitardle, 38 v2 insert path). Bare number, no "/N" —
