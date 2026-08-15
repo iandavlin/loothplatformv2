@@ -113,6 +113,17 @@ class Session:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(REPO, "footer-mockups", "weekly-front", "shots"))
+    # ── MEASURE THE REAL PAGE, NOT ONLY THE MOCK ───────────────────────────
+    # The mock proved the component's colours before it existed. Once the block
+    # is actually on, the thing that matters is the SHIPPED rendering, which
+    # differs from the mock in ways that matter: it inherits the live token
+    # values (the mock pins its own), it sits in the real page's cascade, and
+    # its theme comes from the visitor's app-settings rather than a query
+    # string. --url points this at the real front page instead.
+    #   --url https://dev2.loothgroup.com/            (anon)
+    #   --url 'https://dev2.loothgroup.com/?as=public' (logged-in, viewed as anon)
+    ap.add_argument("--url", default=None,
+                    help="measure this URL's .wkiss block instead of the mock panels")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
@@ -132,20 +143,37 @@ def main():
         s.call("Network.setCookie", name="loothdev_auth", value=tok,
                domain="." + domain, path="/", secure=True)
 
-        for opt, theme, dev in STATES:
+        states = STATES
+        if args.url:
+            # The real page has no ?o= and no ?t=: it renders one state, the
+            # one the visitor's own theme gives it. So both widths, once each,
+            # and the theme is REPORTED rather than asserted — asserting a theme
+            # this run does not control is how a suite goes green having
+            # measured the wrong thing.
+            states = [("live", "as-served", d) for d in ("desktop", "phone")]
+
+        for opt, theme, dev in states:
             m = DESKTOP if dev == "desktop" else PHONE
             s.call("Emulation.setDeviceMetricsOverride", **m)
-            url = f"{host}/footer-mockups/weekly-front/panel.html?o={opt}&t={theme}"
+            url = args.url or f"{host}/footer-mockups/weekly-front/panel.html?o={opt}&t={theme}"
             boot_before = s.js("localStorage.getItem('lg-set-boot')", quiet=True)
             s.goto(url)
 
             # LIVENESS FIRST. A locked-out browser serves a styled 403 that is
             # identical in every state, and a visual run then passes having
             # measured nothing (lane memory, 2026-08-13).
-            alive = s.js("!!document.querySelector('.row--featured-member .lg-fm__name')")
+            # Liveness, and on the real page it must be the BLOCK ITSELF: a
+            # front page that renders fine but has the flag off would otherwise
+            # pass having measured nothing at all, which is the whole vacuous-
+            # green failure class this lane keeps meeting.
+            alive = s.js("!!document.querySelector('.wkiss__mast')") if args.url \
+                else s.js("!!document.querySelector('.row--featured-member .lg-fm__name')")
             if not alive:
-                print(f"CANNOT RUN  {opt}/{theme}/{dev}: front-page chrome absent "
-                      f"(gate cookie? 403 shell?) at {url}")
+                print(f"CANNOT RUN  {opt}/{theme}/{dev}: "
+                      + ("the .wkiss block is not on this page — flag off, member "
+                         "viewer, or no sent issue" if args.url
+                         else "front-page chrome absent (gate cookie? 403 shell?)")
+                      + f" at {url}")
                 sys.exit(2)
 
             # Is the theme the one that was asked for? Assert BOTH directions:
@@ -156,9 +184,11 @@ def main():
             bg = s.js("getComputedStyle(document.body).backgroundColor")
             is_dark = bg.replace(" ", "") == "rgb(21,23,26)"
             is_light = bg.replace(" ", "") == "rgb(252,252,249)"
-            if theme == "dark" and not is_dark:
+            if args.url:
+                pass                       # theme is reported, not asserted
+            elif theme == "dark" and not is_dark:
                 findings.append(f"{opt}/{dev}: ?t=dark did not render dark (body bg {bg})")
-            if theme == "light" and not is_light:
+            elif theme == "light" and not is_light:
                 findings.append(f"{opt}/{dev}: ?t=light did not render light (body bg {bg})")
 
             # AND that loading the panel did not CHANGE the shared browser's
@@ -174,7 +204,7 @@ def main():
             # this script is running. Testing the absolute value measured the
             # rest of the fleet; testing the delta measures the panel.
             boot_after = s.js("localStorage.getItem('lg-set-boot')", quiet=True)
-            if boot_before is not None and boot_after != boot_before:
+            if not args.url and boot_before is not None and boot_after != boot_before:
                 findings.append(f"{opt}/{theme}/{dev}: loading the panel CHANGED the shared chrome "
                                 f"profile's stored theme (lg-set-boot) — it must touch nothing "
                                 f"outside itself")
