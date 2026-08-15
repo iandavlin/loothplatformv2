@@ -5,12 +5,12 @@ Phase 1 + 2 shipped and merged; see `handoffs/2026-08-15-guitardle-fairness.md`.
 
 | | |
 |---|---|
-| Branch | `guitardle-score-integrity`, **pushed**, tip **`54bc9a3`** |
+| Branch | `guitardle-score-integrity`, **pushed**, tip **`afe3414`** |
 | Base | rebased onto `origin/main` `b9c48ba`. Phase 2 is merged and **both its flags are ON in main** |
 | Backlog 24 | **DONE.** Gate **40** (keeper), registered, CRAFT-STANDARD row in |
-| Backlog 25 | **BUILT + GATED GREEN, red-first proven.** Blocked only on a gate number (banner says `NN`) |
-| Backlog 26 | **JUDGED, not built.** Option A does *not* close the hole alone — see §6 |
-| Flags | `_SCORE_RETRY` and `_SERVER_PLAY` added, both OFF. `_DAILY_CLAIM` and `_HOW_TO_PLAY` are ON in main. All four independent |
+| Backlog 25 | **DONE.** Gate **41** (keeper), registered, row in |
+| Backlog 26 | **BUILT + GATED.** Gate **42** (pre-assigned), registered, row in. Stage ONE of two |
+| Flags | `_SCORE_RETRY`, `_SERVER_PLAY`, `_DAY_PUZZLE` added, all OFF. `_DAILY_CLAIM` and `_HOW_TO_PLAY` are ON in main. All five independent |
 
 ---
 
@@ -166,6 +166,40 @@ than the hole being fixed.
 - Shell env does not persist between tool calls (bit me again via `$LG_GATE_TOKEN`).
 - The armed dev-gate token is in box-local `/etc/nginx/conf.d/loothdev-auth.conf`,
   **not** what `gate-env.sh` exports.
+
+## 7. Backlog 26 — BUILT, and the deploy order is the whole risk
+
+The logged-out client no longer fetches `guitardle_phrases.csv` or
+`sequence.json`; it asks `guitardle-puzzle.php` for **one day on its own
+track**. Proven in a browser by resource timing: with `dp=1` it fetched
+**neither** file and still rendered a playable 18-tile board with the right
+phrase id, letters and cap.
+
+**What it does NOT claim.** A logged-out board still holds its own day's
+phrase — it must, it judges its own guess, and an anon result is never
+recorded. What goes is the **library and the order**: no other day, no other
+track, nothing to compute forward from.
+
+**`dp=1` is emitted for logged-out visitors ONLY.** A member sent to the day
+endpoint would get the *logged-out* track — a different phrase from the one
+their day is scored on — which is worse than the bug.
+
+### THE DEPLOY ORDER, three steps, and the last is Ian's
+
+1. `LG_GUITARDLE_SERVER_PLAY` ON for members. Confirm.
+2. `LG_GUITARDLE_DAY_PUZZLE` ON for anon. Confirm.
+3. **Only then** delete `assets/guitardle_phrases.csv` and
+   `assets/sequence.json`.
+
+Gate 42 asserts those files are **still present** precisely so a future tidy-up
+fails there rather than on Ian's phone: pulled early, a legacy member gets a
+**blank** board, not a degraded one.
+
+**Known limitation, flagged not buried:** the nginx route only goes live on
+merge + reload, because `/etc/nginx/snippets/strangler-archive-poc.conf` is
+symlinked to the **serving checkout**, not a worktree. On dev2 the route is
+asserted from the conf text and the endpoint exercised over a loopback
+`php -S`. It wants one real curl through the live route after merge.
 
 ## 5. Open
 
