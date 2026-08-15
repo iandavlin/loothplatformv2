@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GATE NN — the Guitardle leaderboard's inputs are what the SERVER watched, and
+GATE 41 — the Guitardle leaderboard's inputs are what the SERVER watched, and
 the answer never reaches the client.
 
 Backlog 25, option A (keeper 2026-08-15). Two facts drove the shape of this:
@@ -130,7 +130,7 @@ def php_puzzle(expr):
         cannot_run('puzzle resolver failed: ' + (r.stderr or '')[:300])
     return r.stdout.strip()
 
-print('=== GATE NN: the board is scored on what the SERVER watched ===')
+print('=== GATE 41: the board is scored on what the SERVER watched ===')
 print('endpoint: %s' % ENDPOINT)
 print('probe member: wp_user_id=%d   play_date=%s\n' % (UID, PLAY_DATE))
 
@@ -286,9 +286,9 @@ check(wp('$u = get_user_by("login","%s"); echo $u ? "STILL-THERE" : "gone";' % P
 
 print()
 if fails:
-    print('############ GATE NN RED — %d assertion(s) failed ############' % len(fails))
+    print('############ GATE 41 RED — %d assertion(s) failed ############' % len(fails))
     for f in fails:
         print('  - ' + f)
     sys.exit(1)
-print('############ GATE NN GREEN ############')
+print('############ GATE 41 GREEN ############')
 sys.exit(0)

@@ -782,6 +782,25 @@ echo "=== GATE 40: a finished Guitardle result survives an EXPIRED NONCE ==="
 # re-implementing it means the harness cannot drift from what ships; if those
 # functions are renamed it reports CANNOT RUN instead of passing vacuously.
 run "guitardle-nonce-retry" python3 "$(dirname "$0")/guitardle-nonce-retry-gate.py"
+echo
+# Gate number 41 assigned by keeper 2026-08-15 (42 pre-assigned to backlog 26;
+# next free 43).
+echo "=== GATE 41: the Guitardle board is scored on what the SERVER watched ==="
+# Backlog 25, option A. Two facts drove the shape: moves/won/hardcore all came
+# out of the POST body and hardcore DOUBLES points, so anyone with their own
+# nonce could post a 20-point day; AND server-side scoring alone would not have
+# fixed it, because the answer was public. Not just "the CSV is on a public URL"
+# — measured in a browser, the legacy board put the phrase in the DOM: 18 tiles,
+# all 18 carrying data-letter, so "POLYURETHANEFINISH" read straight off the
+# BLANK tiles.
+#
+# THE ASSERTION MOST LIKELY TO SAVE SOMEONE IS NOT ABOUT THE EXPLOIT. Phase 2:
+# the server now carries its own copy of loadPhrase(), and if that ever drifts
+# from game.js the server judges a DIFFERENT PUZZLE than the player saw — every
+# honest player loses, which is worse than the hole being closed. So the phrase
+# id and letters are recomputed INDEPENDENTLY in Python from the raw assets and
+# compared with the PHP resolver, on BOTH audience tracks.
+run "guitardle-serverplay" python3 "$(dirname "$0")/guitardle-serverplay-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
