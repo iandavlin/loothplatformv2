@@ -804,6 +804,27 @@ echo "=== GATE 39: featured members — schema constraints, completeness parity,
 # and it feeds no counter in this script — see run(), which tracks red/dead
 # by exit code only.
 run "featured-member" python3 "$(dirname "$0")/featured-member-gate.py"
+echo
+# Gate number 40 assigned by keeper 2026-08-15 (ledger: 38 v2 insert path,
+# 39 taken, 40 this — next free is 41).
+echo "=== GATE 40: a finished Guitardle result survives an EXPIRED NONCE ==="
+# Backlog 24. Live, 7 days: 101 finished games POSTed, 8 came back 403 across 8
+# IPs and 6 days. A WP nonce lives ~12h and the game sits in a front-page iframe
+# people leave open, so a tab opened last night carries a dead one — and every
+# call ended in `.catch(() => {})`, so the player saw their win card and it never
+# reached the board. ~1 game in 12, hitting the members who play most.
+#
+# TWO HALVES, because neither proves anything alone: the SERVER half shows a
+# stale nonce really is answered bad_csrf and records nothing, and that the same
+# result resent with a fresh nonce records with its real score; the CLIENT half
+# SLICES the shipped refreshNonce/postWithNonce out of game.js and evaluates that
+# source against a stubbed network.
+#
+# Deliberately NOT a browser test — a browser dep would flake on a 2-core box and
+# a DEAD gate blocks every lane. Slicing the real source rather than
+# re-implementing it means the harness cannot drift from what ships; if those
+# functions are renamed it reports CANNOT RUN instead of passing vacuously.
+run "guitardle-nonce-retry" python3 "$(dirname "$0")/guitardle-nonce-retry-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
