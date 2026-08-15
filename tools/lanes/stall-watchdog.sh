@@ -45,6 +45,18 @@ while true; do
         FIRST=$(cat "$STATED/$L")
         if [ $((NOW - FIRST)) -ge $PARK_LIMIT ]; then
           rm -f "$STATED/$L"
+          # Unacked-instruction check (2026-08-15): if keeper lane-said this
+          # lane AFTER its last board post, it parked ON an instruction rather
+          # than after answering one — say so, it changes keeper's response
+          # from "read their report" to "the message never got absorbed".
+          SENT="$HOME/.lane-say/sent-$L.ts"
+          if [ -f "$SENT" ]; then
+            LASTPOST=$(msg inbox 2>/dev/null | grep -F "$L -> keeper" | tail -1 | grep -oE '2026-[0-9-]+ [0-9:]+' | tail -1)
+            LASTPOST_TS=$(date -d "$LASTPOST" +%s 2>/dev/null || echo 0)
+            if [ "$(cat "$SENT")" -gt "${LASTPOST_TS:-0}" ] 2>/dev/null; then
+              echo "ALERT parked-long-UNACKED $L — parked over $((PARK_LIMIT/60)) min AND keeper's last instruction has no board answer; the message may never have been absorbed. Re-deliver, do not just read the pane."; exit 0
+            fi
+          fi
           echo "ALERT parked-long $L — parked over $((PARK_LIMIT/60)) min, sweep it"; exit 0
         fi
       else

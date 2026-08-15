@@ -140,6 +140,11 @@ verified() {
 deliver
 if verified; then
     say "lane-say: delivered to '$SESSION' on $BOX"
+    # Stamp the delivery so the watchdog can tell "parked having ANSWERED
+    # keeper" from "parked having gone quiet ON an instruction" — twice on
+    # 2026-08-15 a verified-delivered message was never absorbed and the lane
+    # idled on stale beliefs until a generic parked-long fired.
+    mkdir -p "$HOME/.lane-say" && date +%s > "$HOME/.lane-say/sent-$SESSION.ts"
     exit 0
 fi
 
@@ -147,6 +152,7 @@ say "lane-say: first attempt did not take on '$SESSION' — retrying once"
 deliver
 if verified; then
     say "lane-say: delivered to '$SESSION' on $BOX (second attempt)"
+    mkdir -p "$HOME/.lane-say" && date +%s > "$HOME/.lane-say/sent-$SESSION.ts"
     exit 0
 fi
 
