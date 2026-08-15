@@ -125,7 +125,26 @@ COLLECT = r"""(() => {
               text: txt.slice(0, 46), fg: hex(eff), bg: hex(bg), px: px,
               large: px >= 24 || (bold && px >= 18.66)});
   });
-  return {items: out, seen: seen};
+  /* BRIGHT SURFACES — the blind spot of a text-only contrast check.
+     An element with no text is never measured above, so a WHITE photo dropzone
+     inside a dark modal scores nothing and the sweep goes green while the thing
+     Ian is looking at is plainly wrong. Dark text on a white card is perfectly
+     legible; it is also not dark mode. Flag any surface of real size whose own
+     background is light while the theme is dark. */
+  const surfaces = [];
+  root.querySelectorAll('*').forEach(el => {
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return;
+    const r = el.getBoundingClientRect();
+    if (r.width < 40 || r.height < 24) return;
+    const c = parse(cs.backgroundColor);
+    if (!c || c.a < 0.9) return;                 /* transparent: inherits, fine */
+    if (lum(c) < 0.35) return;                   /* already dark enough */
+    surfaces.push({sel: el.tagName.toLowerCase() + (el.className && typeof el.className === 'string'
+                     ? '.' + el.className.trim().split(/\s+/).slice(0,2).join('.') : ''),
+                   bg: hex(c), w: Math.round(r.width), h: Math.round(r.height)});
+  });
+  return {items: out, seen: seen, surfaces: surfaces};
 })()"""
 
 
@@ -191,6 +210,7 @@ def main() -> int:
             print("CANNOT RUN: no text found in the modal — a pass here would be vacuous")
             return 3
 
+        surfaces = res.get("surfaces", [])
         fails = []
         for it in items:
             need = 3.0 if it["large"] else 4.5
@@ -202,10 +222,16 @@ def main() -> int:
         for r, need, it in sorted(fails, key=lambda f: f[0])[:25]:
             print(f"  ✗ {r}:1 (needs {need}) {it['fg']} on {it['bg']}  "
                   f"{it['px']:.0f}px  {it['sel']}  “{it['text']}”")
-        if fails:
-            print(f"\nRED — {len(fails)} of {seen} below WCAG AA in dark mode.")
+        if surfaces:
+            print(f"\n  BRIGHT SURFACES in dark mode ({len(surfaces)}) — no text, so the "
+                  f"contrast pass above never looked at them:")
+            for s_ in surfaces[:12]:
+                print(f"  ✗ {s_['bg']}  {s_['w']}x{s_['h']}  {s_['sel']}")
+        if fails or surfaces:
+            print(f"\nRED — {len(fails)} of {seen} below WCAG AA, "
+                  f"{len(surfaces)} bright surface(s) in dark mode.")
             return 1
-        print("\nGREEN — every measured element meets WCAG AA in dark mode.")
+        print("\nGREEN — AA on every text element, and no bright surfaces.")
         return 0
     finally:
         tab.close()
