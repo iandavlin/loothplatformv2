@@ -884,6 +884,40 @@ echo "=== GATE 42: the puzzle LIBRARY and SEQUENCE never reach a browser ==="
 # before both flags are on everywhere is a blank board, not a degraded one.
 run "guitardle-daypuzzle" python3 "$(dirname "$0")/guitardle-daypuzzle-gate.py"
 
+# Gate number 55 — requested from keeper 2026-08-15; 55 verified free on main
+# (54 is the weekly-front seat's, on an unmerged branch). Lanes never mint.
+echo "=== GATE 55: no player is served the same puzzle twice in a cycle ==="
+# Backlog 35. Ian caught this on LIVE 2026-08-15: members got DAN ERLEWINE on
+# day 12 (23 June) and again on day 65 (15 August).
+#
+# THE OBVIOUS DIAGNOSIS IS WRONG, AND THE WRONG FIX HERE IS DESTRUCTIVE.
+# sequence.json is a clean no-repeat permutation of all 285 ids and the
+# no-repeat-until-all-played mechanism works exactly as designed — reshuffling
+# it would re-serve phrases players have already had. What defeated it was one
+# PHRASE TEXT under TWO IDS: 180 and 233 were both "Dan Erlewine". The sequence
+# never repeated an id; it served two different ids that read the same.
+#
+# So the gated property is not "the sequence has no repeated id" — that was
+# true the whole time the bug was live. It is what a player experiences: walk
+# the FULL CYCLE ON BOTH TRACKS and see no phrase twice. Both tracks matter:
+# logged-out runs +142, so a duplicate can bite one track years before the
+# other, and this pair had already hit members twice while both entries were
+# still in the logged-out track's future. Gating one track calls it clean.
+#
+# It also asserts the library stays pure ASCII and free of any character PCRE
+# \R splits on but JS split("\n") does not (bare CR, \v, \f, U+0085, U+2028/9).
+# That is not housekeeping: _guitardle-puzzle.php splits the CSV on \R with no
+# /u flag, so such a character cuts a row in half for the SERVER while the
+# client parses it whole — the server would then judge a different puzzle than
+# the player's board was drawn from, silently.
+#
+# Static file read: no browser, no network, no WordPress — cannot flake.
+# Red-first: tools/gates/guitardle-phrase-uniqueness-redfirst.py breaks all
+# thirteen behaviours on a snapshot copy and requires each to redden, with an
+# unmutated control that must stay green and a loud failure on any no-op
+# mutation.
+run "guitardle-phrase-uniqueness" python3 "$(dirname "$0")/guitardle-phrase-uniqueness-gate.py"
+
 # Gate number 36 assigned by keeper 2026-08-15 (ledger: 34 stripe, 35 compose/
 # v2, 36 dark-anon, 37 guitardle, 38 v2 insert path). Bare number, no "/N" —
 # matching gate 38's own precedent rather than the old shared-denominator
