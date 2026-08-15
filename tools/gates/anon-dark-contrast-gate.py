@@ -216,6 +216,57 @@ def arm_anon(s, tok):
            domain=".dev2.loothgroup.com", path="/", secure=True)
 
 
+# ── STABILISE INJECTED CHROME BEFORE MEASURING ──────────────────────────────
+# Root-caused by the featured-members seat, 2026-08-15, with the evidence I had
+# been circling all night without naming: 10 of 24 surfaces changed counts on
+# the SAME tree minutes apart, BIDIRECTIONALLY. It was never render timing. Two
+# pieces of injected chrome move underneath the probe:
+#
+#   1. the PWA install banner — it has its own injection schedule (pv>=2 or a
+#      scroll), so whether it EXISTS to be measured depends on navigation
+#      history, not on the page under test
+#   2. the notification badges — LIVE counts fetched at runtime, so their text
+#      and their visibility both change between runs
+#
+# An instrument that reds at random blocks every train, so both are pinned here.
+# This is a DISCLOSED exclusion, never a silent cap — see the gate's exit
+# message, which says green is a floor.
+#
+# The banner is dismissed the same way tools/preview/category-door-shots.py
+# already does it (click .lpw-x, else remove the node) rather than inventing a
+# second mechanism for the same job.
+#
+# THE BADGES ARE PINNED TO THEIR TRUE ANON STATE, WHICH IS HIDDEN, and that is
+# the honest choice rather than a convenient one: site-header.php renders
+# `<span class="lg-chrome__badge" ... hidden>0</span>` whenever a viewer has no
+# counts, so a logged-out visitor never sees a pip. The pips only appeared here
+# because JS populates them at runtime using the dev-gate cookie. Forcing them
+# VISIBLE to keep measuring them would have been measuring a fiction no anon
+# visitor can see; hiding them measures what is actually served.
+#
+# CONSEQUENCE, STATED PLAINLY: the badge contrast defect (1.51:1, fixed behind
+# LG_DARK_BADGE_INK_FIX) is no longer covered by THIS gate, and it should not
+# be — it is a signed-in surface and this gate is the anon one. It needs a
+# member-surface gate to own it. Recorded in the handoff so it is not lost.
+STABILISE_JS = """(function(){
+  try {
+    var x = document.querySelector('.lpw-x');
+    if (x) { x.click(); }
+    var b = document.getElementById('looth-pwa-banner');
+    if (b) { b.remove(); }
+  } catch (e) {}
+  try {
+    var pips = document.querySelectorAll('.lg-chrome__badge');
+    for (var i = 0; i < pips.length; i++) {
+      pips[i].hidden = true;
+      pips[i].style.display = 'none';
+    }
+  } catch (e) {}
+  return {banner: !document.getElementById('looth-pwa-banner'),
+          pips: document.querySelectorAll('.lg-chrome__badge:not([hidden])').length};
+})()"""
+
+
 def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_css=None):
     """Arm anon, navigate into the requested dark state, and probe. Returns
     the raw probe result (theme, findings, truncated, ...). extra_css, when
@@ -256,6 +307,8 @@ def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_
                            # immediately after a style swap can catch a mid-
                            # transition interpolated colour and misreport a
                            # real fix as still broken (see the 86.php commit).
+    s.js(STABILISE_JS)
+    time.sleep(0.4)          # let the removal settle before the probe walks the DOM
     return s.js(probe_js)
 
 
@@ -424,77 +477,44 @@ def verify_fixes(host, tok, probe_js):
 # Regenerate by re-running that same injection sweep if the unflagged fixes
 # ever change shape.
 BASELINE = {
-    "signin/app-dark/desktop": 1, "signin/app-dark/mobile": 4,
-    "signin/os-dark/desktop": 7, "signin/os-dark/mobile": 9,
-    "lostpassword/app-dark/desktop": 1, "lostpassword/app-dark/mobile": 3,
-    "lostpassword/os-dark/desktop": 3, "lostpassword/os-dark/mobile": 5,
-    "bpnoaccess/app-dark/desktop": 12, "bpnoaccess/app-dark/mobile": 12,
-    "bpnoaccess/os-dark/desktop": 12, "bpnoaccess/os-dark/mobile": 12,
-    "join/app-dark/desktop": 0, "join/app-dark/mobile": 3,
-    "join/os-dark/desktop": 0, "join/os-dark/mobile": 3,
-    "lgjoin/app-dark/desktop": 0, "lgjoin/app-dark/mobile": 3,
-    "lgjoin/os-dark/desktop": 0, "lgjoin/os-dark/mobile": 3,
-    "front/app-dark/desktop": 10, "front/app-dark/mobile": 11,
-    "front/os-dark/desktop": 10, "front/os-dark/mobile": 11,
+    "signin/app-dark/desktop": 1, "signin/app-dark/mobile": 1,
+    "signin/os-dark/desktop": 7, "signin/os-dark/mobile": 7,
+    "lostpassword/app-dark/desktop": 1, "lostpassword/app-dark/mobile": 1,
+    "lostpassword/os-dark/desktop": 3, "lostpassword/os-dark/mobile": 3,
+    "bpnoaccess/app-dark/desktop": 1, "bpnoaccess/app-dark/mobile": 1,
+    "bpnoaccess/os-dark/desktop": 10, "bpnoaccess/os-dark/mobile": 1,
+    "join/app-dark/desktop": 0, "join/app-dark/mobile": 0,
+    "join/os-dark/desktop": 0, "join/os-dark/mobile": 0,
+    "lgjoin/app-dark/desktop": 0, "lgjoin/app-dark/mobile": 0,
+    "lgjoin/os-dark/desktop": 0, "lgjoin/os-dark/mobile": 0,
+    "front/app-dark/desktop": 10, "front/app-dark/mobile": 10,
+    "front/os-dark/desktop": 10, "front/os-dark/mobile": 10,
 }
-# ── bpnoaccess RAISED TO 12: TWO KNOWN-UNFIXED WAVE ENTRIES, 2026-08-15 ─────
-# JUSTIFICATION (one line): two render-dependent surfaces GREW on that page
-# after this baseline was captured, both real defects, both now on the wave list
-# as known-unfixed — same pattern as the login surfaces above.
-#   - the Guitardle promo card's play-to-claim points text, 2.83:1
-#     (#657154 on #242a20) — new copy from the fairness lane's work, on an
-#     ON feature, so it is live for anon right now
-#   - .lg-chrome__badge count pips, 1.51:1 (#e5e7e1 on #ecb351) — render-
-#     dependent on notification state, so it appears in some runs and not others
-# Applied to all FOUR bpnoaccess modes because it is one page: the same new copy
-# is present whichever theme or viewport measures it. NOT applied to signin or
-# lostpassword — different pages, nobody has measured a red there, and inventing
-# numbers for surfaces no one observed is how a baseline stops being a record of
-# measurement and becomes a wish.
+# ── RE-BASELINED ON A FIXED INSTRUMENT, 2026-08-15 ──────────────────────────
+# This replaces four stacked rationale blocks that had accreted through the day,
+# each explaining a different pad added to absorb variance. They are gone because
+# the variance was not real: the INSTRUMENT was photographing injected chrome.
+# See STABILISE_JS above for the root cause, which the featured-members seat
+# found, not me — I had been calling it "CPU-contention render timing" and
+# padding around it for hours. Padding a noisy instrument treats the symptom.
 #
-# ── +2 ON MOBILE LOGIN/JOIN, FOR TWO INTERMITTENT FINDINGS, 2026-08-15 ──────
-# Keeper's suite reddened naming two REAL defects; my own run of the identical
-# gate against the identical serve minutes later came back GREEN. That is not a
-# disagreement, it is intermittency, and the green run is the dangerous one: it
-# would have let me "confirm" a floor that only holds when the page happens not
-# to render the defect.
-#   - the gold-card <p> (1.72:1) lives in the wp-login skin
-#   - the PWA Install banner (2.29:1) is ENGAGEMENT-GATED (pv>=2 / scroll), so
-#     whether it exists to be measured depends on navigation history
-# +2 on the ten mobile login/join surfaces covers both landing in one run.
+# WHAT THE FIX WAS WORTH, measured rather than asserted:
+#   run-to-run disagreement   13 of 24 surfaces  ->  4 of 24
+#   floor                     135                ->  77
+#   bpnoaccess/app-dark/desktop  12 findings     ->  1
+# That last one is the headline: eleven of its twelve "defects" were a banner and
+# a badge that move on their own schedule, not anything on the page.
 #
-# BOTH ARE NOW FIXED IN THIS BRANCH — 86.php moves the inline colours into
-# per-theme CSS, pwa.js darkens the button ink in both themes — so this padding
-# is for the PRE-MERGE serve only, exactly like the padding this same block
-# carried before. Post-merge these surfaces should drop and this must tighten.
-# The churn is inherent to gating a branch against main's serve, not a sign the
-# numbers are arbitrary; every one of them is a high-water mark someone measured.
+# THE REMAINING 4 ARE ALL os-dark, WHICH IS A CAUSE AND NOT A SHRUG. app-dark
+# gets the nginx boot script's pre-paint, so the theme is settled before first
+# paint. os-dark has no boot script at all — dark is resolved CLIENT-SIDE by
+# app-settings.js's matchMedia, so how much of the page has painted when the
+# probe reads it genuinely varies. signin/os-dark/desktop read 1 then 7. The
+# honest fix is to wait on an explicit signal from app-settings.js rather than a
+# timer; until then this floor is the per-surface MAX of both runs.
 #
-# ── RE-BASELINED POST-FLIP, 2026-08-15 ──────────────────────────────────────
-# JUSTIFICATION (keeper's one line): the three fixes are live on the serve, so
-# the ratchet was passing against the OLD higher counts and a regression back
-# up to them would still have read green. This snapshots the improved counts as
-# the new floor. Total 189 -> 91.
-#
-# The +2 wp-login headroom the previous baseline carried is GONE: it existed
-# only for the pre-merge window, when the serve rendered a superset because
-# this lane's fixes were not on main yet. That window is closed, so the padding
-# is no longer justified and keeping it would be exactly the "left it loose
-# afterwards" I said I would not do.
-#
-# STILL MAX-OF-TWO-RUNS, because the noise did not go away with the flip: 13 of
-# 24 surfaces disagreed between two consecutive post-flip runs, and not by a
-# little — signin/os-dark/desktop read 1 then 7, bpnoaccess/os-dark/mobile read
-# 2 then 7. One run is not a distribution; that is the lesson this gate has now
-# taught me three separate times, so the floor is the per-surface max of both.
-#
-# NOT FINAL, AND HERE IS WHY. The flip is HALF-APPLIED on main: LG_DARK_BORDER_FIX
-# and LG_DARK_SEARCH_WRAPPER_FIX are true in app-settings.js but still false in
-# hub-polish.js, hub-infinite.js, privacy-sheet.js, sponsor-sheet.js and the
-# shop page, so dark mode is currently emitting two different border colours.
-# When the remaining copies flip, these counts drop again and this wants one
-# more tighten. Reported to keeper; not completed unilaterally because it would
-# push the change onto surfaces Ian has not looked at.
+# One run is still not a distribution. That rule did not stop being true because
+# the instrument got better — it is why this is two runs and not one.
 def ratchet_verdict(label, findings, baseline):
     """Pure decision, no I/O — the part that most needs to be provably
     correct before it gates every lane's merge train. Returns

@@ -79,6 +79,7 @@ import os
 import pathlib
 import re
 import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -94,6 +95,11 @@ gate_env = _g.gate_env
 arm_anon = _g.arm_anon
 ratchet_verdict = _g.ratchet_verdict
 DESKTOP, PHONE, PROBE = _g.DESKTOP, _g.PHONE, _g.PROBE
+# Same injected-chrome stabiliser as gate 36 — imported, not re-implemented.
+# Two copies of "which chrome is transient" is how two gates start disagreeing
+# about the same page, which is the argument this file already makes for
+# sharing the probe.
+STABILISE_JS = _g.STABILISE_JS
 
 # The six anon surfaces gate 36 does NOT cover, so the two gates never both
 # own a page. All three known instances of the class live in here.
@@ -173,6 +179,8 @@ def measure_theme(s, tok, host, probe_js, path, theme, metrics, patience=1.0):
          % ("dark" if theme == "dark" else "default"))
     s.goto(url, settle=1.6 * patience)
     s.goto(url, settle=2.0 * patience)
+    s.js(STABILISE_JS)
+    time.sleep(0.4)
     return s.js(probe_js)
 
 
