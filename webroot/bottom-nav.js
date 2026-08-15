@@ -154,6 +154,33 @@
     return LG_ANON_DASH_SIGNIN;
   }
 
+  // ---- LG_DARK_POST_ICON_FIX (dark-anon-sweep lane, backlog 21, gate 36) ----
+  //
+  // The "+" Post button's icon is a hardcoded white stroke (line ~208 below,
+  // '.lt-post-ico svg{...stroke:#fff...}') on a fill of var(--lg-sage-d). In
+  // LIGHT that token is the brand dark-sage (#52613d) — white reads fine. In
+  // DARK the SAME token REPOINTS to a light colour (app-settings.js's dark
+  // theme vars: --lg-sage-d: #b0c693) so the fill flips from dark to light
+  // while the icon's stroke has nothing telling it to follow — white-on-
+  // #b0c693 measures 1.85:1, confirmed live 2026-08-14 (the exact number
+  // named in this backlog item's own charter) and reproduced by
+  // tools/gates/lib/contrast-probe.js. Same defect class as the sign-in pill
+  // two functions up in this file, which ALREADY flips its ink for dark —
+  // this control was the one case that slipped through when that fix landed.
+  //
+  // MEMBER-VISIBLE (this button renders for every authenticated member, not
+  // just anon-with-the-signin-flag-off), so DEFAULTED OFF pending sign-off —
+  // same reasoning as LG_ANON_DASH_SIGNIN above: the dev2 serve serves main,
+  // so this can only be judged for real once merged, and merging OFF lets
+  // that happen harmlessly before anyone sees a different colour.
+  //
+  // Fix is a pure CSS ink-flip, zero behaviour change: in dark, the icon's
+  // stroke switches from the hardcoded white to #15171a — the SAME dark ink
+  // the sign-in pill already flips to two functions up, not a new colour —
+  // so it reads correctly against the now-light fill. 1.85:1 -> 9.70:1,
+  // checked with the same formula tools/gates/lib/contrast-probe.js uses.
+  var LG_DARK_POST_ICON_FIX = false;
+
   // Where the dash's Sign in slot points. Mirrors the shared header's canonical
   // sign-in URL, then makes sure the visitor comes BACK to the page they were
   // reading — signing in must not cost them their place, or we have punished the
@@ -373,7 +400,15 @@
       'html[data-lguser-theme="dark"] #looth-skel .sk{background:#1e2124;border-color:#2c312d}' +
       'html[data-lguser-theme="dark"] #looth-skel .sk-cover,html[data-lguser-theme="dark"] #looth-skel .sk-row{background:#2a2f2b}' +
       'html[data-lguser-theme="dark"] #looth-skel .sk::after{background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent)}' +
-      'html[data-lguser-theme="dark"][data-lguser-feed="immersive"] #looth-skel .sk{border-bottom-color:#2c312d}';
+      'html[data-lguser-theme="dark"][data-lguser-feed="immersive"] #looth-skel .sk{border-bottom-color:#2c312d}' +
+
+      // Gated addition, not a mid-string edit — see LG_DARK_POST_ICON_FIX
+      // above for the why. Empty string when OFF, so the OFF path is a byte-
+      // for-byte no-op: this line contributes nothing to `css` at all, not
+      // just a rule nothing selects.
+      (LG_DARK_POST_ICON_FIX
+        ? 'html[data-lguser-theme="dark"] #' + BAR_ID + ' .lt-post-ico svg{stroke:#15171a}'
+        : '');
     var s = document.createElement('style');
     s.id = STYLE_ID;
     s.textContent = css;

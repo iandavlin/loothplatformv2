@@ -140,6 +140,86 @@
   // force the key surfaces dark, gated on the chosen theme. Injected once; inert
   // unless data-lguser-theme="dark" (Buck 2026-06-08).
   var DARK_STYLE_ID = 'lg-dark-style';
+
+  // ---- LG_DARK_BORDER_FIX (dark-anon-sweep lane, backlog 21, gate 36) --------
+  //
+  // #333833 is used as a dark-mode form-field/pill BORDER colour throughout
+  // this function (and repeated verbatim in hub-polish.js, hub-infinite.js,
+  // privacy-sheet.js, sponsor-sheet.js, forums.css) — every input, the feed
+  // sort-bar, connections search, message reply input. Measured against every
+  // background it is actually paired with (#222629/#22262a/#1e2124/#15171a):
+  // 1.27-1.50:1, nowhere near the 3:1 UI-component bar. #767c76 (same green
+  // undertone, lifted) clears 3.56-4.20:1 against all of them — checked with
+  // the same formula tools/gates/lib/contrast-probe.js uses.
+  //
+  // SAME LOCAL PATTERN AS LG_DARK_POST_ICON_FIX (bottom-nav.js) and
+  // LG_ANON_DASH_SIGNIN (also bottom-nav.js) — a plain module-scoped var, not
+  // a shared cross-file global. Checked pwa.js's own injection order before
+  // choosing this: app-settings.js loads sync (ordered), but hub-infinite.js
+  // and the idle-queued files do NOT — dynamically-injected `defer` is a
+  // documented no-op in this codebase's own pwa.js (defer on a script created
+  // via createElement does nothing per spec; only parser-inserted scripts
+  // defer), so those files' load order relative to app-settings.js is NOT
+  // guaranteed. A shared `window.LG_X` flag would race. Each file gets its
+  // OWN identically-named local flag instead — no cross-file dependency, no
+  // race, one grep away from flipping every copy at once.
+  //
+  // MEMBER-VISIBLE EVERYWHERE (every form field, site-wide, in dark) — held
+  // OFF pending Ian's phone pass on the dev2 serve, same as the icon fix.
+  var LG_DARK_BORDER_FIX = false;
+  var DARK_BORDER = LG_DARK_BORDER_FIX ? '#767c76' : '#333833';
+
+  // ---- LG_DARK_SEARCH_WRAPPER_FIX (same lane/backlog/gate) -------------------
+  //
+  // .lg-hub-search/.lgdm-ubar/.lgev-ubar's border-color is #2c312d against a
+  // #1e2124 fill on a #15171a page — 1.35-1.69:1 depending on which backdrop,
+  // same "dark-on-dark" shape as LG_DARK_BORDER_FIX above but a DIFFERENT
+  // literal value, kept as its own flag because it is conceptually the search-
+  // wrapper fix keeper asked for separately, not the general field-border
+  // token. .hub-tsearch (forums.css) gets its own new border under this same
+  // flag from hub-polish.js, since forums.css is static and cannot self-gate.
+  var LG_DARK_SEARCH_WRAPPER_FIX = false;
+  var DARK_SEARCH_BORDER = LG_DARK_SEARCH_WRAPPER_FIX ? '#767c76' : '#2c312d';
+
+  // ---- LG_DARK_MUTED_INK_FIX (same lane/backlog/gate) ------------------------
+  //
+  // #80867d is the dark theme's MUTED-META ink (timestamps, "edited", the map
+  // attribution), repeated verbatim across this file and hub-polish.js. It is
+  // a HAIR under AA on the surfaces it actually lands on, which is why it read
+  // as several unrelated findings instead of one:
+  //     on #1e2124 feed card      4.33:1  (11 hits on a single /hub/ door page)
+  //     on #1b1e21 reply sheet    4.48:1
+  //     on #15171a page             4.81:1  (the only one that passed)
+  // #8a9087 keeps the same grey-green cast and clears all three (4.95 / 5.12 /
+  // 5.49). Lifting a muted ink on a DARK theme can only raise contrast, so the
+  // sites this token touches that the anon sweep never measured cannot be made
+  // worse by it.
+  //
+  // THE MAP ATTRIBUTION IS FIXED A DIFFERENT WAY, ON PURPOSE. It measured
+  // 2.98:1 — worst of the set — but the ink was never the real defect: the
+  // control paints rgba(21,23,26,.8) over an ALWAYS-LIGHT OSM tile, so its
+  // effective backdrop is whatever the map is showing (measured #333d41 over
+  // water). Chasing that with ink alone needs #a6aca3, which would drag all
+  // six unrelated muted sites visibly brighter to satisfy one control — and it
+  // still would not be a guarantee, because the next tile is a different
+  // colour. Making the control's own background OPAQUE removes the dependency
+  // entirely: the backdrop becomes #15171a no matter what is underneath, and
+  // the muted ink then clears AA deterministically (5.49:1). A contrast
+  // guarantee that depends on the map tile below it is not a guarantee.
+  //
+  // MEMBER-VISIBLE — OFF pending Ian's phone pass, same as the rest of the wave.
+  var LG_DARK_MUTED_INK_FIX = false;
+  var DARK_MUTED_INK = LG_DARK_MUTED_INK_FIX ? '#8a9087' : '#80867d';
+  var DARK_ATTRIB_BG = LG_DARK_MUTED_INK_FIX ? '#15171a' : 'rgba(21,23,26,.8)';
+
+  // ---- LG_DARK_EVENTS_LANDING_FIX (same lane/backlog/gate) -------------------
+  // The /events/ landing copy, 3.51:1 in dark. Kept as its own flag rather than
+  // folded into LG_DARK_MUTED_INK_FIX above: that one LIFTS a dark token that
+  // was already dark-aware, this one repoints a LIGHT value that dark never
+  // touched. Same symptom, different defect, so they should be flippable
+  // independently. See the rule itself for the full reasoning.
+  var LG_DARK_EVENTS_LANDING_FIX = false;
+
   function ensureDarkStyle() {
     if (document.getElementById(DARK_STYLE_ID)) return;
     var D = 'html[data-lguser-theme="dark"]';
@@ -153,7 +233,7 @@
       D + ' .lg-fb-bubble{background:#262b30!important;color:#e5e7e1!important}',
       D + ' .feed-sort-bar,' + D + ' .feed-toolbar{background:#15171a!important;border-color:#2c312d!important}',
       D + ' .lg-sort-pill,' + D + ' .feed-sort-bar a,' + D + ' .feed-sort-bar button{color:#cdd0ca}',
-      D + ' .lg-hub-search .ubar,' + D + ' .lg-hub-search input,' + D + ' .lgdm-ubar,' + D + ' .lgev-ubar{background:#1e2124!important;border-color:#2c312d!important;color:#e5e7e1!important}',
+      D + ' .lg-hub-search .ubar,' + D + ' .lg-hub-search input,' + D + ' .lgdm-ubar,' + D + ' .lgev-ubar{background:#1e2124!important;border-color:' + DARK_SEARCH_BORDER + '!important;color:#e5e7e1!important}',
       D + ' .lg-hub-search input::placeholder,' + D + ' input::placeholder{color:#7e857c!important}',
       D + ' #looth-tabbar{background:rgba(21,23,26,.92)!important;border-color:#2c312d!important}',
       D + ' .lt-sheet,' + D + ' .lt-sheet__row,' + D + ' .lg-set-opt{color:#e5e7e1}',
@@ -162,9 +242,9 @@
          those two selectors matched nothing. */
       D + ' .lt-sheet,' + D + ' #looth-rep-sheet .lrs-card,' + D + ' #looth-lp-sheet .llp-card,' + D + ' #lgdm-sheet,' + D + ' .lgdm-fsheet,' + D + ' #lgdm-suggest,' + D + ' .bb-layout__nav{background:#1b1e21!important;color:#e5e7e1!important}',
       D + ' .lt-sheet__name,' + D + ' .lrs-t,' + D + ' .llp-t{color:#f2f4ee!important}',
-      D + ' .lg-set-opt{background:#222629!important;border-color:#333833!important;color:#e5e7e1!important}',
+      D + ' .lg-set-opt{background:#222629!important;border-color:' + DARK_BORDER + '!important;color:#e5e7e1!important}',
       D + ' .lg-set-opt.is-on{background:#2a341f!important;border-color:#9cb37d!important}',
-      D + ' input,' + D + ' textarea,' + D + ' select{background:#222629!important;color:#e5e7e1!important;border-color:#333833!important}',
+      D + ' input,' + D + ' textarea,' + D + ' select{background:#222629!important;color:#e5e7e1!important;border-color:' + DARK_BORDER + '!important}',
       D + ' .feed-card__tags .tag-chip,' + D + ' .fc-tag,' + D + ' .hl,' + D + ' .fcr-chip{background:#243024!important;color:#b6c79a!important;border-color:transparent!important}',
       // ── dark-mode audit fixes (2026-06-08) ──
       // search bar: the WHITE slab is .lg-hub-search itself (mobile), not .ubar
@@ -194,7 +274,7 @@
       // bg rules missed → light text on a still-WHITE pill (1.41–1.56:1, audit
       // #19–22). Widen `> a` to descendant `a` (buttons on this line already are);
       // the more-specific .lg-newpost/.lg-filters-chip rules below still win.
-      D + ' .feed-sort-bar a,' + D + ' .feed-sort-bar button{background:#22262a!important;color:#d0d4cd!important;border:1px solid #333833!important;font-weight:600!important;transition:background .15s,color .15s!important}',
+      D + ' .feed-sort-bar a,' + D + ' .feed-sort-bar button{background:#22262a!important;color:#d0d4cd!important;border:1px solid ' + DARK_BORDER + '!important;font-weight:600!important;transition:background .15s,color .15s!important}',
       D + ' .feed-sort-bar a.active,' + D + ' .feed-sort-bar .is-active{background:#9cb37d!important;color:#15171a!important;border-color:#9cb37d!important;font-weight:700!important;box-shadow:0 1px 6px rgba(156,179,125,.35)!important}',
       D + ' .feed-sort-bar .lg-filters-chip{background:#9cb37d!important;color:#15171a!important}',   // dark text on sage
       D + ' .feed-sort-bar .lg-newpost{background:#243024!important;color:#e5e7e1!important}',
@@ -208,7 +288,7 @@
       D + ' .replies-sort__btn.is-active{color:#15171a!important;background:#b0c693!important}',
       // inline comment-row Like/Reply was ~#65676b (2.5:1) → readable
       D + ' .lg-fb-act{color:#9aa097!important}',
-      D + ' .lg-fb-time{color:#80867d!important}',
+      D + ' .lg-fb-time{color:' + DARK_MUTED_INK + '!important}',
       // members directory (/directory/members/): the .dir-card is hardcoded white
       // → member NAMES (light token) were invisible in dark. Darken the card.
       D + ' .dir-card{background:#1e2124!important;border-color:#2c312d!important}',
@@ -225,7 +305,7 @@
       D + ' .leaflet-container{background:#15171a!important}',
       D + ' .leaflet-tile{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.65)}',
       D + ' .leaflet-control-zoom a{background:#262b30!important;color:#e5e7e1!important;border-color:#2c312d!important}',
-      D + ' .leaflet-control-attribution{background:rgba(21,23,26,.8)!important;color:#80867d!important}',
+      D + ' .leaflet-control-attribution{background:' + DARK_ATTRIB_BG + '!important;color:' + DARK_MUTED_INK + '!important}',
       D + ' .leaflet-control-attribution a{color:#9cb37d!important}',
       // reply-EDIT Quill toolbar stayed #fff (forums only patches hub-theme-dark, not
       // the app data-lguser-theme="dark"); darken the toolbar AND its icon strokes/fills
@@ -267,7 +347,7 @@
       D + ' .lg-conn__item--pending{background:#243024!important}',
       D + ' .lg-conn__name,' + D + ' .lg-msg__name,' + D + ' .lg-notif__text,' + D + ' .lg-msg__msg-text{color:#e5e7e1!important}',
       D + ' .lg-conn__section-h,' + D + ' .lg-msg__preview,' + D + ' .lg-msg__meta,' + D + ' .lg-msg__msg-time,' + D + ' .lg-notif__time,' + D + ' .lg-sm__status,' + D + ' .lg-sm__empty{color:#9aa097!important}',
-      D + ' .lg-conn__search,' + D + ' .lg-msg__reply-input{background:#22262a!important;border-color:#333833!important;color:#e7ebe1!important}',
+      D + ' .lg-conn__search,' + D + ' .lg-msg__reply-input{background:#22262a!important;border-color:' + DARK_BORDER + '!important;color:#e7ebe1!important}',
       D + ' .lg-msg__thread--unread,' + D + ' .lg-msg__msg,' + D + ' .lg-notif__item--unread{background:#22262a!important}',
       D + ' .lg-msg__msg--mine{background:#2a341f!important}',
       // Side conversation dock + member card (dm-from-group): both ride
@@ -297,7 +377,24 @@
       // blackened ONLY the header when OS was dark with no picked theme — the
       // page stayed light = the "some headers and not others" mismatch. Two
       // explicit modes now; Dark is a deliberate pick, Light has no overrides.)
-      ''
+      //
+      // events/web/events.css is a 32-line static skin with NO dark block at
+      // all — the same shape as the login page's, written before dark mode
+      // existed. Its muted copy is #6b6f68, which is the LIGHT theme's mute
+      // (--lg-mute #6b6f6b) hardcoded and never repointed, so on the dark page
+      // it lands at 3.51:1. The fix is not a new colour, it is USING THE TOKEN
+      // THE THEME ALREADY DEFINES: dark's own --lg-mute is #a6ac9f = 7.72:1.
+      // Patched from here because a static stylesheet cannot self-gate a flag
+      // (same reason .hub-tsearch is patched from hub-polish.js). Covers
+      // .lg-evland__region too — it carries the identical hardcoded value and
+      // only escaped the sweep because it needs an event with a region to
+      // render. Sits in the array's existing trailing-'' slot ON PURPOSE, so
+      // the OFF state is byte-identical rather than adding a blank line.
+      // The events landing is public but members browse it too — MEMBER-VISIBLE,
+      // so OFF pending Ian's pass, unlike the login/join fixes which are not.
+      (LG_DARK_EVENTS_LANDING_FIX
+        ? D + ' .lg-evland__sub,' + D + ' .lg-evland__empty,' + D + ' .lg-evland__region{color:#a6ac9f!important}'
+        : '')
     ].join('\n');
     var s = document.createElement('style'); s.id = DARK_STYLE_ID; s.textContent = css;
     (document.head || document.documentElement).appendChild(s);

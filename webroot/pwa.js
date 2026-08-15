@@ -214,6 +214,34 @@
 
   var deferredPrompt = null;
 
+  // ---- LG_DARK_PWA_BANNER_FIX (dark-anon-sweep lane, backlog 21, gate 36) ----
+  //
+  // The Install / "Show me how" buttons are white text on var(--lg-sage). In
+  // DARK that token REPOINTS TO A LIGHT COLOUR (#87986a -> #9cb37d, see
+  // app-settings.js's THEMES) while the text stays hardcoded #fff — 2.29:1,
+  // the worst text ratio the anon sweep found anywhere. Identical shape to
+  // LG_DARK_POST_ICON_FIX (bottom-nav.js): a fill token that flips brightness
+  // with nothing on the foreground side to follow it. Flipping the INK dark
+  // rather than re-darkening the fill keeps the sage button looking like the
+  // sage button: #15171a on #9cb37d = 7.83:1, and on the :active state's
+  // --lg-sage-d (#b0c693 in dark) = 9.70:1, so one rule covers both states.
+  //
+  // No !important and no separate :active rule needed: this sits in the SAME
+  // stylesheet as the base rule, later in source order, at higher specificity
+  // (adds html[data-lguser-theme="dark"]), and the :active rule only changes
+  // background — the colour cascades from here. Nothing else in the codebase
+  // styles .lpw-install/.lpw-how (grepped: only bottom-nav.js, position only).
+  //
+  // LIGHT MODE ALSO FAILS THIS BUTTON (#fff on #87986a = 3.12:1) and is NOT
+  // touched here — that is a light-mode defect, outside this lane's dark-anon
+  // charter. Recorded in the handoff so it is not lost.
+  //
+  // Local module-scoped var, not a window global — same reasoning as the other
+  // flags in this wave (pwa.js's own injection order for dynamically-created
+  // scripts is not guaranteed, so a shared global would race).
+  // MEMBER-VISIBLE (the banner shows to members too) — OFF pending Ian's pass.
+  var LG_DARK_PWA_BANNER_FIX = false;
+
   function injectStyles() {
     if (document.getElementById('looth-pwa-style')) return;
     var css =
@@ -232,6 +260,10 @@
       '#looth-pwa-banner button{font:inherit;cursor:pointer;border-radius:10px;border:0}' +
       '#looth-pwa-banner .lpw-install,#looth-pwa-banner .lpw-how{background:var(--lg-sage,#87986a);color:#fff;font-weight:600;padding:9px 14px;white-space:nowrap}' +
       '#looth-pwa-banner .lpw-install:active,#looth-pwa-banner .lpw-how:active{background:var(--lg-sage-d,#6b7c52)}' +
+      (LG_DARK_PWA_BANNER_FIX
+        ? 'html[data-lguser-theme="dark"] #looth-pwa-banner .lpw-install,' +
+          'html[data-lguser-theme="dark"] #looth-pwa-banner .lpw-how{color:#15171a}'
+        : '') +
       '#looth-pwa-banner .lpw-x{background:transparent;color:var(--lg-mute,#6b6f6b);padding:8px 8px;font-size:20px;line-height:1}' +
       /* iOS step-by-step "Add to Home Screen" sheet (Buck 2026-06-08: make it super easy) */
       '#looth-ios-sheet{position:fixed;inset:0;z-index:3900;display:none}' +

@@ -405,6 +405,155 @@ add_action('login_enqueue_scripts', function () {
 		.lg-acc, .lg-acc-wrap, .lg-acc-body, .lg-acc-hint,
 		.lg-acc summary::after { transition: none !important; }
 	}
+
+	/* ===== DARK MODE (backlog 21, Ian 2026-08-14: 'the dark mode needs some
+	   love for the login stuff') =====
+	   This whole snippet predates dark mode: every card/field/accordion above
+	   is a fixed light palette with no override, so a visitor who picks Dark
+	   got the page background force-painted near-black (nginx's boot script,
+	   body{background/color:...!important}, unconditional on every page) while
+	   every card here stayed white — confirmed via anon-dark-contrast-gate.py,
+	   gate 36. body itself needs no override — the boot script's !important
+	   already wins there; only the CARD-LEVEL surfaces below need one.
+	   Palette matches the panel tokens already established elsewhere in the
+	   product (lg-shared/site-header.php's dark chrome/hubmenu block) rather
+	   than inventing a new one, so the login page reads as the same app. Every
+	   pairing below was checked against WCAG AA (4.5:1 text, 3:1 borders)
+	   before writing it, not tuned after the fact. */
+	html[data-lguser-theme='dark'] {
+		--lg-dark-card:   #1b1e21;
+		--lg-dark-border: #2c312d;
+		--lg-dark-ink:    #e5e7e1;
+		--lg-dark-mute:   #a8ada6;
+		--lg-dark-accent: #b0c693;
+		--lg-dark-link:   #9cb37d;
+		--lg-dark-field:  #101214;
+	}
+
+	html[data-lguser-theme='dark'] .login form {
+		background: var(--lg-dark-card);
+		box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+	}
+	html[data-lguser-theme='dark'] .login label { color: var(--lg-dark-ink); }
+	html[data-lguser-theme='dark'] .login form .input,
+	html[data-lguser-theme='dark'] .login input[type='text'],
+	html[data-lguser-theme='dark'] .login input[type='password'] {
+		background: var(--lg-dark-field);
+		border-color: var(--lg-dark-mute);
+		color: var(--lg-dark-ink);
+	}
+	html[data-lguser-theme='dark'] .login form .input:focus,
+	html[data-lguser-theme='dark'] .login input[type='text']:focus,
+	html[data-lguser-theme='dark'] .login input[type='password']:focus {
+		background: var(--lg-dark-field);
+		border-color: var(--lg-dark-accent);
+	}
+	html[data-lguser-theme='dark'] .login input[type='checkbox'] { border-color: var(--lg-dark-mute); }
+	html[data-lguser-theme='dark'] .login #backtoblog a { color: var(--lg-dark-link); }
+	html[data-lguser-theme='dark'] .login #backtoblog a:hover { color: var(--lg-dark-accent); }
+
+	/* The gold announce banner ('LOG IN WITH EMAIL AND PASSWORD') is a
+	   TRANSLUCENT gradient over the page background — fine over the light
+	   gradient this page used to always have, but the same low-opacity gold
+	   over a near-black page composites too dark for its own navy text to
+	   survive. Opaque, purpose-built dark fill instead of letting the
+	   translucency inherit whatever the boot script just changed underneath. */
+	html[data-lguser-theme='dark'] .lg-login-announce {
+		background: linear-gradient(135deg, #332c1a 0%, #2a2b1f 50%, #232821 100%);
+		border-color: rgba(176,198,147,0.35);
+		backdrop-filter: none;
+	}
+	html[data-lguser-theme='dark'] .lg-login-announce__title,
+	html[data-lguser-theme='dark'] .lg-login-announce__body { color: var(--lg-dark-ink); }
+
+	html[data-lguser-theme='dark'] .lg-card {
+		background: var(--lg-dark-card);
+		border-color: var(--lg-dark-border);
+	}
+	html[data-lguser-theme='dark'] .lg-card--gold  { border-color: rgba(236,179,81,0.35); }
+	html[data-lguser-theme='dark'] .lg-card--coral { border-color: rgba(254,106,79,0.35); }
+	html[data-lguser-theme='dark'] .lg-card-head h2 { color: var(--lg-dark-ink); }
+	/* .lg-numcircle--* badges keep their own light gradient fill in every
+	   theme (gold/sand, mint) with dark ink — self-contained, unaffected by
+	   the page around them, deliberately left alone. */
+
+	html[data-lguser-theme='dark'] .lg-acc {
+		background: var(--lg-dark-card);
+		border-color: var(--lg-dark-border);
+	}
+	html[data-lguser-theme='dark'] .lg-acc[open] {
+		background: var(--lg-dark-card);
+		border-color: var(--lg-dark-accent);
+	}
+	html[data-lguser-theme='dark'] .lg-acc summary { color: var(--lg-dark-ink); }
+	html[data-lguser-theme='dark'] .lg-acc summary::after {
+		border-right-color: var(--lg-dark-accent);
+		border-bottom-color: var(--lg-dark-accent);
+	}
+	html[data-lguser-theme='dark'] .lg-acc-body { color: var(--lg-dark-mute); }
+	html[data-lguser-theme='dark'] .lg-acc-body a { color: var(--lg-dark-link); }
+	html[data-lguser-theme='dark'] .lg-acc-body strong { color: var(--lg-dark-ink); }
+	html[data-lguser-theme='dark'] .lg-acc-hint {
+		color: var(--lg-dark-accent);
+		background: rgba(176,198,147,0.14);
+		border-color: rgba(176,198,147,0.35);
+	}
+	html[data-lguser-theme='dark'] .lg-acc[open] .lg-acc-hint {
+		color: #15171a;
+		background: var(--lg-dark-accent);
+		border-color: var(--lg-dark-accent);
+	}
+
+	html[data-lguser-theme='dark'] .lg-acc--gold {
+		background: #2a2418;
+		border-color: rgba(236,179,81,0.40);
+	}
+	html[data-lguser-theme='dark'] .lg-acc--gold[open] { border-color: #e8c073; }
+	html[data-lguser-theme='dark'] .lg-acc--gold .lg-acc-hint {
+		color: #e8c073;
+		background: rgba(232,192,115,0.15);
+		border-color: rgba(232,192,115,0.40);
+	}
+	html[data-lguser-theme='dark'] .lg-acc--gold[open] .lg-acc-hint {
+		background: #e8c073;
+		border-color: #e8c073;
+		color: #2a2418;
+	}
+	html[data-lguser-theme='dark'] .lg-acc--gold summary::after { border-color: #e8c073; }
+
+	html[data-lguser-theme='dark'] .lg-acc--coral {
+		background: #2a1c18;
+		border-color: rgba(254,106,79,0.40);
+	}
+	html[data-lguser-theme='dark'] .lg-acc--coral[open] { border-color: #e2895f; }
+	html[data-lguser-theme='dark'] .lg-acc--coral summary { color: #e2895f; }
+	html[data-lguser-theme='dark'] .lg-acc--coral .lg-acc-hint {
+		color: #fff;
+		background: #c85a3a;
+		border-color: #c85a3a;
+	}
+	html[data-lguser-theme='dark'] .lg-acc--coral summary::after { border-color: #e2895f; }
+
+	/* WP CORE — not this snippet's own markup, but rendered ON this same page
+	   and just as broken: the boot script's forced body ink bleeds onto any
+	   WP-core element that has no explicit colour of its own (the notice/
+	   error boxes), while their own hardcoded white BACKGROUND never moves —
+	   the exact 'text inherits dark, container doesn't' shape gate 36 also
+	   found on /join. The Terms/Privacy links keep WP's default admin blue,
+	   which measures 3.48:1 on the dark page body — under the 4.5:1 text bar. */
+	html[data-lguser-theme='dark'] .login .message,
+	html[data-lguser-theme='dark'] .login #login_error,
+	html[data-lguser-theme='dark'] .login .notice {
+		background: var(--lg-dark-card);
+		border-left-color: var(--lg-dark-accent);
+		color: var(--lg-dark-ink);
+	}
+	html[data-lguser-theme='dark'] .login #login_error {
+		border-left-color: #e2895f;
+	}
+	html[data-lguser-theme='dark'] .privacy-policy-page-link a {
+		color: var(--lg-dark-link);
+	}
 	";
 
 	wp_register_style('lg-login-enhancements', false);

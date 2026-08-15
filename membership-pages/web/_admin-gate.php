@@ -40,6 +40,14 @@ function lg_membership_admin_gate_or_exit(array $ctx): void
 .lg-gate__main { max-width: 640px; margin: 0 auto; padding: 4rem 1.25rem; text-align: center; }
 .lg-gate__main h1 { font-size: 1.5rem; margin: 0 0 .75rem; }
 .lg-gate__main p { color: #666; margin: 0; }
+/* gate 36 (backlog 21): this stub is shared by every pre-launch Stripe page,
+   so it is reached by anon AND non-admin members alike — #666 on the page's
+   forced-dark body (nginx boot script) measured 3.13:1, under the 4.5:1 text
+   bar. var(--lg-mute) matches the token app-settings.js already sets inline
+   on <html> in dark mode (checked: #a6ac9f on #15171a = 7.72:1); the #a6ac9f
+   fallback only applies if that token is somehow absent, not as a light-mode
+   value — this whole rule is scoped to the dark attribute already. */
+html[data-lguser-theme='dark'] .lg-gate__main p { color: var(--lg-mute, #a6ac9f); }
 </style>
 </head>
 <body class="lg-membership-page lg-gate">

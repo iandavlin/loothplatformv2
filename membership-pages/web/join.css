@@ -70,3 +70,27 @@
 .lg-join__steps { margin: 18px 0 22px; padding-left: 22px; display: grid; gap: 12px;
   font-size: 15.5px; line-height: 1.55; color: var(--lg-ink, #323532); }
 .lg-join__steps li::marker { font-weight: 700; color: var(--lg-sage-d, #6b7c52); }
+
+/* ===== DARK MODE (backlog 21, gate 36) =====
+   .lg-join__card{background:#fff} never moved with the theme, so .lg-join__
+   lede (no colour of its own) inherited the boot script's forced near-white
+   body ink onto a card that stayed white — #e5e7e1 on #ffffff, 1.25:1,
+   effectively invisible. Reusing the SAME dark tokens app-settings.js already
+   sets inline on <html> in dark mode (webroot/app-settings.js THEMES.dark.vars)
+   rather than inventing new ones, so this page tracks the rest of the app if
+   that palette is ever retuned. Every pairing checked against WCAG AA before
+   writing it. */
+html[data-lguser-theme='dark'] .lg-join__card {
+    background: var(--lg-card-bg, #1e2124);
+    border-color: var(--lg-line, #2c312d);
+}
+html[data-lguser-theme='dark'] .lg-join__pill {
+    background: var(--lg-sage-tint, #243024);
+    color: var(--lg-mute, #a6ac9f);
+}
+html[data-lguser-theme='dark'] .lg-join__pill--ok   { background: #1a3324; color: #7fd19a; }
+html[data-lguser-theme='dark'] .lg-join__pill--warn { background: #332818; color: #e8c073; }
+html[data-lguser-theme='dark'] .lg-join__secondary { color: var(--lg-mute, #a6ac9f); }
+html[data-lguser-theme='dark'] .lg-join__link { color: var(--lg-sage-d, #b0c693); }
+/* .lg-join__cta already sits on a near-black fill with white text — that
+   pairing does not change with the page theme, deliberately left alone. */

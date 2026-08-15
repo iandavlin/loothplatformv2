@@ -42,6 +42,12 @@
   if (!MOBILE.matches) return;
   try { if (window.top !== window.self) return; } catch (e) {}
 
+  // LG_DARK_BORDER_FIX — see app-settings.js for the full why (same value,
+  // independent local copy per file; dark-anon-sweep lane, backlog 21, gate
+  // 36). Held OFF pending Ian's phone pass.
+  var LG_DARK_BORDER_FIX = false;
+  var DARK_BORDER = LG_DARK_BORDER_FIX ? '#767c76' : '#333833';
+
   var SHEET_ID = 'looth-spon-sheet';
   var STYLE_ID = 'looth-spon-style';
   var PAGE_CSS_ID = 'looth-spon-pagecss';
@@ -124,7 +130,7 @@
         DK + L + ' .lg-whos-talking__title,' + DK + L + ' .lg-contact-form__title{color:#f2f4ee}',
       DK + L + ' .lg-whos-talking__link{background:#243024;color:#b6c79a!important}',
       DK + L + ' .lg-contact-form__form input[type=text],' + DK + L + ' .lg-contact-form__form input[type=email],' +
-        DK + L + ' .lg-contact-form__form textarea{background:#222629;border-color:#333833;color:#e5e7e1}',
+        DK + L + ' .lg-contact-form__form textarea{background:#222629;border-color:' + DARK_BORDER + ';color:#e5e7e1}',
       DK + L + ' .lg-brand-hero__cta-btn,' + DK + L + ' .lg-contact-form__submit,' +
         DK + L + ' .lg-contact-form__form button[type=submit]{background:var(--lg-sage-d,#6b7c52)}',
       // ── lg-layout-v2 standalone pages (Total Vise & co): the real design CSS is

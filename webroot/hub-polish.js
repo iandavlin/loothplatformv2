@@ -44,6 +44,28 @@
   if (window.__loothHubPolish) return;
   window.__loothHubPolish = true;
 
+  // ---- LG_DARK_BORDER_FIX / LG_DARK_SEARCH_WRAPPER_FIX (dark-anon-sweep
+  // lane, backlog 21, gate 36) — see the matching flags in app-settings.js
+  // for the full why. Local to THIS file on purpose, not a shared
+  // window.LG_X global: pwa.js loads hub-polish.js via the SAME ordered
+  // (sync=false, non-defer) path as app-settings.js and it runs right after,
+  // so the two happen to be sequenced here — but hub-infinite.js and the
+  // idle-queued files are not guaranteed ordered against app-settings.js
+  // (dynamically-injected `defer` is a documented no-op in this codebase),
+  // so every file keeps its own identically-named, independently-flippable
+  // copy rather than risk a race on a shared global. Both OFF pending Ian's
+  // phone pass on the dev2 serve.
+  var LG_DARK_BORDER_FIX = false;
+  var DARK_BORDER = LG_DARK_BORDER_FIX ? '#767c76' : '#333833';
+  var LG_DARK_SEARCH_WRAPPER_FIX = false;
+  // Muted-meta ink — this file's own copy of app-settings.js's
+  // LG_DARK_MUTED_INK_FIX (see that file for the measurements and why the map
+  // attribution is fixed by opacity instead). Kept in lockstep deliberately:
+  // a half-applied token change would leave the dark theme with TWO different
+  // "muted" inks, which is a worse state than the one being fixed.
+  var LG_DARK_MUTED_INK_FIX = false;
+  var DARK_MUTED_INK = LG_DARK_MUTED_INK_FIX ? '#8a9087' : '#80867d';
+
   var STYLE_ID = 'looth-hub-polish';
   var TAGLINE_CLASS = 'lg-hub-tagline';
   var TAGLINE_TEXT =
@@ -1289,7 +1311,7 @@
         'font:600 13.5px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",sans-serif)}' +
         '.lg-fbc .lg-fbc-addbtn:active{background:var(--lg-sage-tint,#eef2e3)}' +
         '.lg-fbc .lg-fbc-addbtn svg{width:18px;height:18px;flex:0 0 auto}' +
-        'html[data-lguser-theme="dark"] .lg-fbc .lg-fbc-addbtn{background:#222629;border-color:#333833;color:#e5e7e1}';
+        'html[data-lguser-theme="dark"] .lg-fbc .lg-fbc-addbtn{background:#222629;border-color:' + DARK_BORDER + ';color:#e5e7e1}';
       document.head.appendChild(addSt);
     }
     if (editor && editor.parentNode && !form.querySelector('.lg-fbc-add')) {
@@ -2212,16 +2234,16 @@
       'html[data-lguser-dark="1"] body{background:#1b1e21!important;color:#e5e7e1!important}' +
       'html[data-lguser-dark="1"] .lgc-name,html[data-lguser-dark="1"] .lgc-name a{color:#f2f4ee!important}' +
       'html[data-lguser-dark="1"] .lgc-text{color:#e5e7e1!important}' +
-      'html[data-lguser-dark="1"] .lgc-time{color:#80867d!important}' +
+      'html[data-lguser-dark="1"] .lgc-time{color:' + DARK_MUTED_INK + '!important}' +
       'html[data-lguser-dark="1"] .lgc-body{border-top-color:#2c312d!important}' +
       'html[data-lguser-dark="1"] .lgc-children{border-left-color:#2c312d!important}' +
       'html[data-lguser-dark="1"] .lgc-reply,html[data-lguser-dark="1"] .lgc-edit{color:#9cb37d!important}' +
       'html[data-lguser-dark="1"] .lgc-del{color:#d98a6c!important}' +
-      'html[data-lguser-dark="1"] .lgc-edited{color:#80867d!important}' +
+      'html[data-lguser-dark="1"] .lgc-edited{color:' + DARK_MUTED_INK + '!important}' +
       'html[data-lguser-dark="1"] .lgc-empty,html[data-lguser-dark="1"] .lgc-login,html[data-lguser-dark="1"] .lgc-replyto{color:#9aa097!important}' +
-      'html[data-lguser-dark="1"] .lgc-rx{background:#222629!important;border-color:#333833!important;color:#cdd0ca!important}' +
+      'html[data-lguser-dark="1"] .lgc-rx{background:#222629!important;border-color:' + DARK_BORDER + '!important;color:#cdd0ca!important}' +
       'html[data-lguser-dark="1"] .lgc-rx.is-mine{background:#2a341f!important;border-color:#3d5233!important;color:#b0c693!important}' +
-      'html[data-lguser-dark="1"] .lgc-rx-add{background:#222629!important;border-color:#333833!important;color:#9aa097!important}' +
+      'html[data-lguser-dark="1"] .lgc-rx-add{background:#222629!important;border-color:' + DARK_BORDER + '!important;color:#9aa097!important}' +
       'html[data-lguser-dark="1"] .lgc-rx-palette{background:#2a2e31!important;border-color:#3a3f3a!important}' +
       'html[data-lguser-dark="1"] .lgc-av{background:#2c312d!important}' +
       'html[data-lguser-dark="1"] .lgc-editbox textarea{background:#fff!important;color:#111!important}';
@@ -3218,7 +3240,7 @@
       '#looth-rep-sheet .lrs-op__del[hidden]{display:none}',
       '#looth-rep-sheet .lrs-op__del:hover{background:rgba(193,51,51,.1);color:#c33}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__acts{border-top-color:#2c312d}',
-      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__del{color:#80867d}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__del{color:' + DARK_MUTED_INK + '}',
       // dark pass for the new pieces (the shell/bubbles/actions are already covered
       // by app-settings' dark style + the rules below)
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-grab::before{background:#3a403a}',
@@ -3226,7 +3248,7 @@
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-x{background:#262b30;color:#9cb37d}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op{border-bottom-color:#2c312d}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__id .fc-author,html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__id .fc-author__name{color:#f2f4ee}',
-      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__id .fc-time{color:#80867d}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__id .fc-time{color:' + DARK_MUTED_INK + '}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__body{color:#e5e7e1}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__body a{color:#9cb37d}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-note{color:#9aa097}',
@@ -6390,18 +6412,28 @@
       D + ' .lgc-modal__frame{background:#1b1e21!important}' +
       // New-post composer: re-point the pinned-light tokens dark
       D + ' .ntm-overlay{--bg:#222629;--bg-card:#1b1e21;--fg:#e5e7e1;--fg-muted:#9aa097;' +
-        '--fg-soft:#7e857c;--border:#333833;--lg-sage-tint:#2a341f}' +
-      D + ' .ntm-overlay .ql-container.ql-snow{background:#222629!important;border-color:#333833!important;color:#e5e7e1!important}' +
+        '--fg-soft:#7e857c;--border:' + DARK_BORDER + ';--lg-sage-tint:#2a341f}' +
+      D + ' .ntm-overlay .ql-container.ql-snow{background:#222629!important;border-color:' + DARK_BORDER + '!important;color:#e5e7e1!important}' +
       D + ' .ntm-overlay .ql-editor{color:#e5e7e1!important}' +
       D + ' .ntm-overlay .ql-editor.ql-blank::before{color:#7e857c!important}' +
       D + ' .ntm-overlay .ntm-anon__tx{color:#cdd0ca!important}' +
       D + ' .ntm-overlay input[type="checkbox"]{accent-color:#87986a}' +
-      D + ' .ntm-overlay .ntm-cancel{background:#222629!important;border-color:#333833!important;color:#cdd0ca!important}' +
+      D + ' .ntm-overlay .ntm-cancel{background:#222629!important;border-color:' + DARK_BORDER + '!important;color:#cdd0ca!important}' +
       D + ' .lg-fbc-head .lg-fbc-name{color:#f2f4ee!important}' +
       // mobile forum picker (hidden by default, kept consistent if shown)
-      D + ' .lg-fbc #ntm-forum.ntm-forumlist,' + D + ' .lg-fbc #ntm-forum .ntm-fl__cat{background:#1b1e21!important;border-color:#333833!important}' +
+      D + ' .lg-fbc #ntm-forum.ntm-forumlist,' + D + ' .lg-fbc #ntm-forum .ntm-fl__cat{background:#1b1e21!important;border-color:' + DARK_BORDER + '!important}' +
       D + ' .lg-fbc #ntm-forum .ntm-fl__cat{color:#9cb37d!important}' +
-      D + ' .lg-fbc #ntm-forum .ntm-fl__leaf{color:#e5e7e1!important}';
+      D + ' .lg-fbc #ntm-forum .ntm-fl__leaf{color:#e5e7e1!important}' +
+      // .hub-tsearch (forums.css) has NO border at all (border:0, by design —
+      // it is a plain pill relying on its own fill for shape) and that fill
+      // is var(--bg-card), which on desktop the dark-mode token bridge
+      // repoints to a value barely distinguishable from the page it sits on
+      // — measured live 1.13:1 fill-vs-page, 1.22:1 the (nonexistent) border-
+      // vs-page reading. Gate 36 / backlog 21. Giving it a real border here,
+      // since forums.css is static and cannot self-gate a flag.
+      (LG_DARK_SEARCH_WRAPPER_FIX
+        ? D + ' .hub-tsearch{border:1px solid #767c76!important}'
+        : '');
     (document.head || document.documentElement).appendChild(st);
   }
 
