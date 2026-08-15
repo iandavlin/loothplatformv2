@@ -130,6 +130,33 @@ def php_puzzle(expr):
         cannot_run('puzzle resolver failed: ' + (r.stderr or '')[:300])
     return r.stdout.strip()
 
+def call_many(bodies, nonce):
+    """Fire several POSTs AT ONCE and wait for all of them.
+
+    Needed because the bug this covers only appears under concurrency: a
+    sequential loop can never reproduce it."""
+    procs = []
+    for body in bodies:
+        env = {'GDLE_FLAG': '1', 'GDLE_HELP': '0', 'GDLE_RETRY': '0',
+               'GDLE_SERVERPLAY': '1', 'GDLE_METHOD': 'POST',
+               'GDLE_QS': 'local_date=' + PLAY_DATE, 'GDLE_BODY': json.dumps(body),
+               'GDLE_NONCE': nonce, 'GDLE_ENDPOINT': ENDPOINT,
+               'GDLE_COOKIE_NAME': cookie_name, 'GDLE_COOKIE': cookie}
+        procs.append(subprocess.Popen(
+            'sudo -u looth-dev env %s php %s' % (
+                ' '.join('%s=%s' % (k, shlex.quote(v)) for k, v in env.items()), PROBE),
+            shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True))
+    out = []
+    for pr in procs:
+        so, _ = pr.communicate()
+        lines = (so or '').strip().splitlines()
+        try:
+            out.append(json.loads(lines[-1]) if lines else None)
+        except ValueError:
+            out.append(None)
+    return out
+
+
 print('=== GATE 41: the board is scored on what the SERVER watched ===')
 print('endpoint: %s' % ENDPOINT)
 print('probe member: wp_user_id=%d   play_date=%s\n' % (UID, PLAY_DATE))
@@ -234,6 +261,39 @@ check(row == 'false|%d|false' % (moves_before + 1),
 replay = call(True, 'POST', body={'action': 'guess', 'guess': letters,
                                   'local_date': PLAY_DATE}, nonce=NONCE)
 check(replay.get('error') == 'already_played', 'the day cannot be replayed', repr(replay))
+print()
+
+# ── PHASE 3b — N reveals must cost N moves, even fired at once ───────────────
+print('PHASE 3b — concurrent reveals cannot be had for the price of one')
+wipe()
+# Four DIFFERENT letters, fired simultaneously. Found by self-review, not by a
+# test failing: reveal was a read-modify-write on resume_state, so every
+# request read the same state and every one returned ITS OWN positions -- the
+# player saw four letters -- while only the last write survived and the server
+# charged for ONE move. Four reveals for the price of one is exactly the
+# forgery this endpoint exists to stop. SELECT ... FOR UPDATE serialises them.
+burst = [c for c in dict.fromkeys(letters) if c not in VOWELS][:4]
+if len(burst) < 2:
+    print('  (today\'s phrase has fewer than 2 distinct consonants — skipped)')
+else:
+    res = call_many([{'action': 'reveal', 'letter': c, 'local_date': PLAY_DATE}
+                     for c in burst], NONCE)
+    ok = [r for r in res if r and r.get('ok')]
+    final = psql("SELECT (resume_state->>'moves') FROM discovery.guitardle_results "
+                 "WHERE wp_user_id=%d;" % UID)
+    want = sum(2 if c in VOWELS else 1 for c in burst)
+    check(len(ok) == len(burst),
+          'all %d concurrent reveals were served' % len(burst),
+          repr([r and r.get('error') for r in res]))
+    check(final == str(want),
+          '*** %d simultaneous reveals cost %d moves, not 1 — the race is closed ***'
+          % (len(burst), want),
+          'server recorded moves=%s, expected %d' % (final, want))
+    stored = psql("SELECT (resume_state->'revealed') FROM discovery.guitardle_results "
+                  "WHERE wp_user_id=%d;" % UID)
+    check(all(('"%s"' % c) in stored for c in burst),
+          'and every revealed letter survived — no write was lost', stored)
+wipe()
 print()
 
 # ── PHASE 4 — every other door into the score ────────────────────────────────
