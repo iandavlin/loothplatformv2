@@ -313,6 +313,83 @@ them is looking for the exact words. Fixed. It is the class of thing that is
 invisible to every static assertion and obvious on Ian's phone, which is the
 whole argument for rendering the page.
 
+## 7b. Ian's additions after seeing the built screens (2026-08-15)
+
+Three, in his words, plus a testers allowlist relayed the same evening. His prior
+ruling is unchanged and still gated: optional, skip first-class, safe defaults on
+skip, no nudging, both rails identical.
+
+| # | His words | Built as |
+|---|---|---|
+| 1 | *"throw in some privacy stuff to get them thinking about that"* | Two dials on the step — who sees your profile, who sees where you are — pre-filled from the member's current values, sent only if moved |
+| 2 | *"ask them if they want to go to the full profile interface. Especially if we are doing a location"* | After saving, the step **asks** rather than redirecting; the editor is the primary door, and gains a line about placing the map pin when a location was set |
+| 3 | *"get their user name and gen their slug at this point too"* | The step collects the **name**; the handle derives from it server-side |
+| + | testers allowlist (via keeper) | `'testers' => array()` of WP user IDs — live limited testing before any public flip |
+
+### Addition 3 collides with Ian's own earlier ruling, and was resolved, not overridden
+
+There is a **numbered product ruling from Ian, 2026-07-25**, written into
+`me-slug.php`: handles are **display-only and derived from the profile name**,
+members do not edit them, and the endpoint is **GET-only** — there is no
+member-facing slug writer to call. So "gen their slug at this point too" is read
+as satisfied *by construction*: collect the name, and the handle generates itself.
+The step **shows** the resulting address so the generation is visible rather than a
+silent side effect, but builds **no slug editor** — that would reverse a numbered
+ruling on the strength of one sentence, and handle editing has link-hijack
+consequences. Gate 51 §J asserts the step never touches `me-slug.php` and never
+re-derives a slug client-side.
+
+His collision warning (11 of 436 names) needed no new code: the dedupe already
+exists in `Provision::maybeSyncSlugFromName`, checks live slugs **and** every other
+member's `slug_history` (a retired handle is never re-issued — a real link-hijack
+bug closed 7/25), and uses the `@steve`/`@steve2`/`@steve3` scheme with the suffix
+riding inside the 30-char cap. `me-name.php` already calls it and already returns
+the new slug, which is how the step can show the member their address.
+
+### The testers allowlist — three states, and the middle one is the point
+
+| `enabled` | `testers` | Result |
+|---|---|---|
+| `false` | `[]` | **Shipped state.** Total absence: the route is never registered, both rails untouched |
+| `false` | `[12,34]` | The step exists for those member IDs **only**; everyone else gets byte-identical OFF |
+| `true` | — | Everyone |
+
+Identity is the **WordPress login and nothing else** — no dev-gate token (it does
+not exist on live), no cookie of ours, no query parameter (which would make the
+list decorative the moment one was guessed). WordPress gives the mu-plugin
+`get_current_user_id()`; the standalone membership app reads `wp_user_id` from
+`lg_membership_header_ctx()`, itself derived from the `wordpress_logged_in_*`
+cookie. §I proves all three states by **running** the reader, and proves the
+negative half — a non-tester is refused — because "nobody got in" can be true by
+accident while "the list is the only discriminator" cannot.
+
+Measured end-to-end with the master switch OFF: tester (1881) renders 54,637
+bytes; a real non-tester (1833) renders **0 bytes** and the closure returns
+without rendering, so WordPress carries on to its own 404.
+
+### What red-first caught in this round
+
+Six of the new assertions were wrong before they were right:
+
+1. The me-slug check went RED against a **comment** in the mu-plugin that exists
+   to explain why the step must not call `me-slug.php`. Fourth instance in this
+   gate of an assertion reading prose. Now strips comments first.
+2. `visWas = j.` matched **`locvisWas = j.`** as a substring, so the mutation that
+   deletes the profile pre-fill sailed through green. `\b` anchors both.
+3. §H demanded wording from the **JS-built** "Saved." panel, which a
+   script-stripped snapshot structurally cannot hold — a permanent false RED.
+   Scoped to server-rendered markup.
+4. §H decoded `&mdash;` on the phrase side only, reporting a correctly-published
+   line as stale. Both sides normalised now.
+5. §H extracted only `<strong>`/`<h2>`/`<h3>` — and Ian's additions are mostly
+   **labels**, so every new question was free to go stale unnoticed. Extraction
+   widened; coverage went 4 → 10 phrases.
+6. A tester mutation was a **no-op**: `lg_profile_setup_testers()` already strips
+   non-positive IDs, so the `$userId <= 0` guard is defence-in-depth and weakening
+   it alone changes nothing. The harness flagged it as decoration; replaced with a
+   mutation that genuinely admits an anon.
+
+
 ## 8. Phase 2 (superseded — kept for the doctrine it records)
 
 - Member-facing → **flag, defaulted OFF**, copying `LG_AUTHOR_SOCIALS_ALL_MEMBERS`

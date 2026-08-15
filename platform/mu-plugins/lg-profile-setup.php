@@ -72,10 +72,40 @@ function lg_profile_setup_cfg(): array {
     return $cfg;
 }
 
-/** Is the step switched on? The single question every caller asks. */
+/** Is the step switched on FOR EVERYONE? */
 function lg_profile_setup_enabled(): bool {
     $c = lg_profile_setup_cfg();
     return !empty($c['enabled']);
+}
+
+/** The live-testing allowlist: WP user IDs, normalised to ints. */
+function lg_profile_setup_testers(): array {
+    $c = lg_profile_setup_cfg();
+    $t = $c['testers'] ?? array();
+    if (!is_array($t)) return array();
+    return array_values(array_filter(array_map('intval', $t), function ($i) { return $i > 0; }));
+}
+
+/**
+ * Does the step exist AT ALL on this box? The route is registered only if this
+ * is true, which is what keeps the shipped state (off, no testers) a genuine
+ * absence rather than a route that renders nothing.
+ */
+function lg_profile_setup_live(): bool {
+    return lg_profile_setup_enabled() || lg_profile_setup_testers() !== array();
+}
+
+/**
+ * Does THIS member get the step?
+ *
+ * Identity is the WordPress login and nothing else — no token, no cookie of our
+ * own, no query parameter. A non-tester must come out of here false and then
+ * receive the byte-identical OFF experience, which is the half the gate proves.
+ */
+function lg_profile_setup_visible_to(int $userId): bool {
+    if (lg_profile_setup_enabled()) return true;
+    if ($userId <= 0) return false;
+    return in_array($userId, lg_profile_setup_testers(), true);
 }
 
 /** Where the step lives, for the two rails that hand off to it. */
@@ -85,9 +115,10 @@ function lg_profile_setup_path(): string {
 }
 
 add_action('init', function () {
-    // FLAG OFF ⇒ the route is never registered. /profile-setup/ 404s exactly as
-    // it did before this file existed. This early return is the whole no-op.
-    if (!lg_profile_setup_enabled()) return;
+    // OFF AND NO TESTERS ⇒ the route is never registered. /profile-setup/ 404s
+    // exactly as it did before this file existed. This early return is the whole
+    // no-op, and it is why the shipped state is an absence and not an empty page.
+    if (!lg_profile_setup_live()) return;
 
     $path = strtok((string) ($_SERVER['REQUEST_URI'] ?? ''), '?');
     if (rtrim($path, '/') !== rtrim(lg_profile_setup_path(), '/')) return;
@@ -95,6 +126,11 @@ add_action('init', function () {
     if (!is_user_logged_in()) { wp_safe_redirect(home_url('/')); exit; }
 
     $uid  = get_current_user_id();
+    // A member outside the testers list gets EXACTLY what they get today: nothing
+    // here handled, so WordPress carries on to its own 404. Returning (rather than
+    // rendering an apology) is what makes "not a tester" byte-identical to "the
+    // feature does not exist".
+    if (!lg_profile_setup_visible_to($uid)) return;
     $u    = get_userdata($uid);
     $slug = (string) get_user_meta($uid, '_looth_slug', true);
     $mine = $slug !== '' ? '/u/' . rawurlencode($slug) : '/profile/edit';
@@ -159,6 +195,14 @@ add_action('init', function () {
   .msg{margin:.7em 0 0;min-height:1.1em;font-size:.92em}
   .msg.err{color:#b3361f}
   .msg.ok{color:#3f5c22}
+  .addr{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eef3e2;
+    padding:.05em .35em;border-radius:3px}
+  .privacy{margin-top:1.1em;padding:.9em 1em;background:#eef3e2;border:1px solid #c3d2a4;
+    border-radius:6px}
+  .privacy__h{font-weight:700;font-size:.94em;margin-bottom:.2em}
+  .privacy label{margin-top:.55em}
+  select{width:100%;box-sizing:border-box;padding:.6em .7em;border:1px solid #87986A;
+    border-radius:5px;font-size:1em;background:#fff;color:#1A1E12;font-family:inherit}
   .found{padding:1.2em 1.4em;background:#fff;border:1px solid #e3ddd0;border-radius:8px;margin-top:1em}
   .found h3{margin:0 0 .5em;font-size:1.02em}
   .found ol{margin:.4em 0 0;padding-left:1.2em}
@@ -195,6 +239,22 @@ add_action('init', function () {
 
   <div class="card">
     <form id="lg-ps-form" novalidate>
+      <?php /* Ian 8/15 addition 3: "get their user name and gen their slug at this
+               point too". The NAME is what we collect; the handle GENERATES from it.
+               That is not a shortcut — handles are display-only and derived, by Ian's
+               own numbered ruling of 7/25 (me-slug.php is GET-only, there is no member
+               writer to call). me-name.php runs Provision::maybeSyncSlugFromName, which
+               already dedupes against live slugs AND every other member's slug_history
+               (a retired handle is never re-issued — that was a real link-hijack bug)
+               with the @steve/@steve2/@steve3 suffix scheme riding inside the 30-char
+               cap. We reuse that and never re-derive it here: a client-side preview
+               would show "@steve" to somebody who is about to be given "@steve2". */ ?>
+      <label for="ps-name">Your name</label>
+      <div class="hint">How you appear to other members.<?php if ($slug !== ''): ?>
+        Your profile address is <span class="addr">/u/<?php echo esc_html($slug); ?></span>
+        &mdash; it follows your name, so changing this changes that too.<?php endif; ?></div>
+      <input type="text" id="ps-name" maxlength="71" value="<?php echo esc_attr($u->display_name); ?>">
+
       <label for="ps-photo-btn">A photo of you</label>
       <div class="hint">A face, a workbench, a headstock &mdash; anything but the default.</div>
       <div class="photorow">
@@ -208,6 +268,39 @@ add_action('init', function () {
       <label for="ps-city">Where are you?</label>
       <div class="hint">A town or city is plenty &mdash; this is what puts you on the member map.</div>
       <input type="text" id="ps-city" autocomplete="address-level2" placeholder="e.g. Milwaukee, Wisconsin">
+
+      <?php /* Ian 8/15 addition 1: "throw in some privacy stuff to get them thinking
+               about that", and addition 2 ties the location question to it. Two plain
+               questions, not a settings wall — the point is a moment of awareness at
+               the one time they are already thinking about what they are publishing.
+               Both dials ALREADY EXIST and are only wired here: the profile one is
+               me-header.php's `visibility`, which is the master switch (Ian 6/12, "ONE
+               DIAL"), and the location one is me-location.php's `location_visibility`.
+               Both are pre-filled from the member's CURRENT values and only sent when
+               actually changed, so Save cannot silently flip a setting the member never
+               touched — and Skip sends nothing at all, which is what keeps Ian's "safe
+               defaults on skip" true by construction rather than by promise. The block
+               hides itself if those values cannot be read: a privacy control showing a
+               state it failed to load is worse than no control. */ ?>
+      <div class="privacy" id="ps-privacy" hidden>
+        <div class="privacy__h">While you are here &mdash; who sees this?</div>
+        <label for="ps-vis">Your profile</label>
+        <select id="ps-vis">
+          <option value="public">Anyone on the web</option>
+          <option value="member">Members only</option>
+          <option value="private">Nobody but me</option>
+        </select>
+        <div class="locvis" id="ps-locvis-row" hidden>
+          <label for="ps-locvis">Where you are</label>
+          <select id="ps-locvis">
+            <option value="public">Anyone on the web</option>
+            <option value="members">Members only</option>
+            <option value="private">Nobody but me</option>
+          </select>
+          <div class="hint">Your town shows on the member map at this setting. You can
+            set the pin more precisely later in the full profile editor.</div>
+        </div>
+      </div>
 
       <label for="ps-what">What do you do? One line.</label>
       <div class="hint">Shown publicly next to your name, so keep it short and public-facing.</div>
@@ -249,13 +342,55 @@ add_action('init', function () {
 
   function say(text, kind){ msg.textContent = text; msg.className = 'msg' + (kind ? ' ' + kind : ''); }
 
+  // ── PRIVACY PRE-FILL ────────────────────────────────────────────────────────
+  // Read the member's CURRENT settings and preselect them, so Save can only send
+  // what they actually changed. The alternative — shipping a default in the
+  // markup — would let Save quietly rewrite a setting the member never looked at,
+  // which is the opposite of the awareness Ian asked for.
+  var priv = document.getElementById('ps-privacy');
+  var vis = document.getElementById('ps-vis'), locvis = document.getElementById('ps-locvis');
+  var locvisRow = document.getElementById('ps-locvis-row');
+  var visWas = null, locvisWas = null;
+
+  fetch(API + 'me-header.php', {credentials:'same-origin'})
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){
+      if (!j) return;
+      visWas = j.vis || null;   // Block::loadHeader returns 'vis', not 'visibility'
+      if (visWas) { vis.value = visWas; priv.hidden = false; }
+    }).catch(function(){ /* leave hidden: a control that failed to load its own state lies */ });
+
+  // 404 here is the NORMAL new-member answer (no location block yet), not an error.
+  fetch(API + 'me-location.php', {credentials:'same-origin'})
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){
+      if (!j) return;
+      locvisWas = j.location_visibility || null;
+      if (locvisWas) locvis.value = locvisWas;
+    }).catch(function(){});
+
+  // Ian: "Especially if we are doing a location." The location dial appears the
+  // moment they type one, so the question arrives attached to the thing it governs.
+  var cityEl = document.getElementById('ps-city');
+  cityEl.addEventListener('input', function(){
+    var has = cityEl.value.trim() !== '';
+    locvisRow.hidden = !has;
+    if (has) priv.hidden = false;
+  });
+
   form.addEventListener('submit', function(e){
     e.preventDefault();
     var city = document.getElementById('ps-city').value.trim();
     var what = document.getElementById('ps-what').value.trim();
     var file = photo.files && photo.files[0];
+    var nameEl = document.getElementById('ps-name');
+    var name = nameEl.value.trim();
+    var nameChanged = name !== '' && name !== nameEl.defaultValue;
+    // Only send a dial the member actually moved (see the pre-fill note above).
+    var visChanged = visWas !== null && vis.value !== visWas;
+    var locvisChanged = locvisWas !== null && locvis.value !== locvisWas;
 
-    if (!city && !what && !file) {
+    if (!city && !what && !file && !nameChanged && !visChanged && !locvisChanged) {
       say('Add at least one thing, or use Skip for now.', 'err');
       return;
     }
@@ -272,12 +407,26 @@ add_action('init', function () {
         method: 'POST', body: fd, credentials: 'same-origin'
       }).then(function(r){ if (!r.ok) throw new Error('photo'); }));
     }
-    if (city) {
+    if (city || locvisChanged) {
+      var locBody = {};
+      if (city) locBody.address = city;
+      if (locvisChanged) locBody.location_visibility = locvis.value;
       jobs.push(fetch(API + 'me-location.php', {
         method: 'PUT', credentials: 'same-origin',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ address: city })
+        body: JSON.stringify(locBody)
       }).then(function(r){ if (!r.ok) throw new Error('town'); }));
+    }
+    // The handle is generated server-side from the name; newSlug is what it became
+    // AFTER dedup, so it is the only address worth showing them.
+    var newSlug = null;
+    if (nameChanged) {
+      jobs.push(fetch(API + 'me-name.php', {
+        method: 'PATCH', credentials: 'same-origin',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ display_name: name })
+      }).then(function(r){ if (!r.ok) throw new Error('name'); return r.json(); })
+        .then(function(j){ if (j && j.slug) newSlug = j.slug; }));
     }
     if (what) {
       jobs.push(fetch(API + 'me-header.php', {
@@ -286,15 +435,40 @@ add_action('init', function () {
         body: JSON.stringify({ at_a_glance: what })
       }).then(function(r){ if (!r.ok) throw new Error('line'); }));
     }
+    if (visChanged) {
+      jobs.push(fetch(API + 'me-header.php', {
+        method: 'PATCH', credentials: 'same-origin',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ visibility: vis.value })
+      }).then(function(r){ if (!r.ok) throw new Error('privacy'); }));
+    }
 
     Promise.all(jobs).then(function(){
-      say('Saved — taking you to your profile…', 'ok');
-      window.location.href = mine;
+      // Ian 8/15 addition 2: "ask them if they want to go to the full profile
+      // interface. Especially if we are doing a location." So this ASKS rather than
+      // redirecting — and the editor is the primary door when a location was set,
+      // because that is where the map pin can actually be placed.
+      var addr = newSlug ? ('/u/' + newSlug) : mine;
+      var extra = city
+        ? '<p class="lede">You are on the member map now. The full editor is where you can '
+          + 'place your pin exactly and choose how closely it shows.</p>'
+        : '';
+      var slugLine = newSlug
+        ? '<p class="lede">Your profile address is now <span class="addr">/u/'
+          + newSlug.replace(/[<&]/g, '') + '</span>.</p>'
+        : '';
+      document.querySelector('.card').outerHTML =
+        '<div class="found" id="lg-ps-done"><h3>Saved.</h3>' + slugLine + extra
+        + '<p class="lede">Do you want to open the full profile interface and keep going, '
+        + 'or head into the community?</p><div class="actions">'
+        + '<a class="btn btn--go" href="' + addr + '">Open the full profile editor</a>'
+        + '<a class="btn btn--skip" href="/">Take me to the community</a></div></div>';
     }).catch(function(err){
       save.disabled = false;
       // Name the field that failed rather than a generic apology: the member can
       // retry just that one, and anything that already saved has saved.
-      var which = { photo:'your photo', town:'your town', line:'your one-liner' }[err && err.message] || 'that';
+      var which = { photo:'your photo', town:'your town', line:'your one-liner',
+                    name:'your name', privacy:'your privacy choice' }[err && err.message] || 'that';
       say('We could not save ' + which + '. You can try again, or skip and do it later.', 'err');
     });
   });

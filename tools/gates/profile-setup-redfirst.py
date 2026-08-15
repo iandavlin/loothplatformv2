@@ -40,8 +40,34 @@ MUTATIONS = [
     ("flag ships ON instead of OFF",
      CFG, "'enabled' => false,", "'enabled' => true,"),
 
-    ("route registered even when the flag is OFF",
-     MU, "if (!lg_profile_setup_enabled()) return;", "if (false) return;"),
+    ("route registered even when the step is not live",
+     MU, "if (!lg_profile_setup_live()) return;", "if (false) return;"),
+
+    # Ian's testers allowlist (8/15). The negative half is the one that matters:
+    # a member who is not on the list must get the byte-identical OFF experience.
+    ("the testers allowlist stops discriminating (everyone gets in)",
+     MU, "return in_array($userId, lg_profile_setup_testers(), true);", "return true;"),
+
+    # NOTE: weakening the `<= 0` guard alone is a NO-OP, and the harness caught it
+    # as decoration. lg_profile_setup_testers() already strips every non-positive
+    # id, so 0 can never be in the list and the guard is defence in depth on top of
+    # a filter that has already done the work. Kept as belt-and-braces; mutated
+    # here in the form that actually admits an anonymous visitor.
+    ("a logged-out visitor is admitted as a tester",
+     MU, "if ($userId <= 0) return false;", "if ($userId === 0) return true;"),
+
+    # Ian's three additions of 8/15.
+    ("the name field is gone (no handle would be generated)",
+     MU, 'id="ps-name"', 'id="ps-nameX"'),
+
+    ("privacy is written unconditionally — Save rewrites untouched settings",
+     MU, "if (visChanged) {", "if (true) {"),
+
+    ("the privacy dials stop being pre-filled from current values",
+     MU, "visWas = j.vis", "visWasX = j.vis"),
+
+    ("the full-profile door is gone",
+     MU, "Open the full profile editor", "Go to my profile"),
 
     ("Patreon OFF path no longer lands on the front page",
      PW, "$onboardDone = $psOn ? home_url($psPath) : home_url('/');",

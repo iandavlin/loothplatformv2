@@ -105,6 +105,19 @@ if ($kind !== 'gift') {
             $profileSetupPath = (string) ($psCfg['path'] ?? $profileSetupPath);
         }
     }
+    // TESTERS (Ian 8/15). Same list, same meaning as the WordPress side; identity
+    // is wp_user_id out of the header context, which comes from the
+    // wordpress_logged_in_* cookie — the WordPress login and nothing else. If the
+    // master switch is off, only a listed member sees the hand-off; everyone else
+    // gets the original single CTA, unchanged.
+    if (!$profileSetupOn && is_array($psCfg ?? null)) {
+        $psTesters = $psCfg['testers'] ?? array();
+        $psViewer  = (int) ($ctx['wp_user_id'] ?? 0);
+        if (is_array($psTesters) && $psViewer > 0) {
+            $psTesters = array_values(array_filter(array_map('intval', $psTesters)));
+            if (in_array($psViewer, $psTesters, true)) $profileSetupOn = true;
+        }
+    }
     foreach ([getenv('LG_PROFILE_SETUP'), $_SERVER['LG_PROFILE_SETUP'] ?? false] as $o) {
         if ($o !== false && $o !== '') $profileSetupOn = ($o === '1' || $o === 'true');
     }

@@ -36,7 +36,10 @@ add_action('init', function () {
      * (home_url('/') on a successful set, $cont on skip), so this file's
      * behaviour is byte-identical to before.
      */
-    $psOn        = function_exists('lg_profile_setup_enabled') && lg_profile_setup_enabled() && !isset($_GET['change']);
+    // Testers (Ian 8/15): the hand-off follows the same per-member answer the step
+    // itself uses, so a non-tester's end-of-join page is byte-identical to today's.
+    $psOn        = function_exists('lg_profile_setup_visible_to')
+                   && lg_profile_setup_visible_to($uid) && !isset($_GET['change']);
     $psPath      = $psOn && function_exists('lg_profile_setup_path') ? lg_profile_setup_path() : '';
     $onboardDone = $psOn ? home_url($psPath) : home_url('/');
     $onboardSkip = $psOn ? $psPath : $cont;

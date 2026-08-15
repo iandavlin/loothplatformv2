@@ -32,6 +32,14 @@
   .msg{margin:.7em 0 0;min-height:1.1em;font-size:.92em}
   .msg.err{color:#b3361f}
   .msg.ok{color:#3f5c22}
+  .addr{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eef3e2;
+    padding:.05em .35em;border-radius:3px}
+  .privacy{margin-top:1.1em;padding:.9em 1em;background:#eef3e2;border:1px solid #c3d2a4;
+    border-radius:6px}
+  .privacy__h{font-weight:700;font-size:.94em;margin-bottom:.2em}
+  .privacy label{margin-top:.55em}
+  select{width:100%;box-sizing:border-box;padding:.6em .7em;border:1px solid #87986A;
+    border-radius:5px;font-size:1em;background:#fff;color:#1A1E12;font-family:inherit}
   .found{padding:1.2em 1.4em;background:#fff;border:1px solid #e3ddd0;border-radius:8px;margin-top:1em}
   .found h3{margin:0 0 .5em;font-size:1.02em}
   .found ol{margin:.4em 0 0;padding-left:1.2em}
@@ -597,6 +605,11 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
 
   <div class="card">
     <form id="lg-ps-form" novalidate>
+            <label for="ps-name">Your name</label>
+      <div class="hint">How you appear to other members.        Your profile address is <span class="addr">/u/marty</span>
+        &mdash; it follows your name, so changing this changes that too.</div>
+      <input type="text" id="ps-name" maxlength="71" value="marty">
+
       <label for="ps-photo-btn">A photo of you</label>
       <div class="hint">A face, a workbench, a headstock &mdash; anything but the default.</div>
       <div class="photorow">
@@ -610,6 +623,26 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
       <label for="ps-city">Where are you?</label>
       <div class="hint">A town or city is plenty &mdash; this is what puts you on the member map.</div>
       <input type="text" id="ps-city" autocomplete="address-level2" placeholder="e.g. Milwaukee, Wisconsin">
+
+            <div class="privacy" id="ps-privacy">
+        <div class="privacy__h">While you are here &mdash; who sees this?</div><div class="hint"><em>Shown here so you can see them. On the live page these appear once your current settings load, and the location one appears as soon as you type a town. <strong>The value showing below is just the first option in the list, not a default we impose</strong> &mdash; each dial arrives pre-set to what you already have, and nothing is written unless you move it.</em></div>
+        <label for="ps-vis">Your profile</label>
+        <select id="ps-vis">
+          <option value="public">Anyone on the web</option>
+          <option value="member">Members only</option>
+          <option value="private">Nobody but me</option>
+        </select>
+        <div class="locvis" id="ps-locvis-row">
+          <label for="ps-locvis">Where you are</label>
+          <select id="ps-locvis">
+            <option value="public">Anyone on the web</option>
+            <option value="members">Members only</option>
+            <option value="private">Nobody but me</option>
+          </select>
+          <div class="hint">Your town shows on the member map at this setting. You can
+            set the pin more precisely later in the full profile editor.</div>
+        </div>
+      </div>
 
       <label for="ps-what">What do you do? One line.</label>
       <div class="hint">Shown publicly next to your name, so keep it short and public-facing.</div>

@@ -24,6 +24,24 @@ def build(src, dst, title):
     s=s.replace("<title>","<title>"+title+" — ",1)
     assert "</style>" in s, "no style block to pad"
     s=s.replace("</style>",PAD,1)
+    # The privacy block and the location dial are hidden until the page's own JS
+    # reveals them (on load, and when a location is typed). The snapshot has no JS
+    # by design, so leaving them hidden would show Ian a page with the privacy
+    # question missing — the exact thing he asked to see. Reveal them, and say so
+    # on the page rather than silently faking a state.
+    s = s.replace('<div class="privacy" id="ps-privacy" hidden>',
+                  '<div class="privacy" id="ps-privacy">')
+    s = s.replace('<div class="locvis" id="ps-locvis-row" hidden>',
+                  '<div class="locvis" id="ps-locvis-row">')
+    s = s.replace('<div class="privacy__h">While you are here &mdash; who sees this?</div>',
+                  '<div class="privacy__h">While you are here &mdash; who sees this?</div>'
+                  '<div class="hint"><em>Shown here so you can see them. On the live page '
+                  'these appear once your current settings load, and the location one appears '
+                  'as soon as you type a town. <strong>The value showing below is just the first '
+                  'option in the list, not a default we impose</strong> &mdash; each dial arrives '
+                  'pre-set to what you already have, and nothing is written unless you move '
+                  'it.</em></div>')
+
     # inert: no submit, no links that 404 on this box
     s=s.replace('<button type="submit" class="btn btn--go" id="ps-save">',
                 '<button type="button" class="btn btn--go" id="ps-save">')

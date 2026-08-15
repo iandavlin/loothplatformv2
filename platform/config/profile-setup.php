@@ -71,6 +71,35 @@ return array(
 	'enabled' => false,
 
 	/**
+	 * LIVE LIMITED TESTING — a list of WP user IDs, and nobody else.
+	 *
+	 * Ian, 2026-08-15: he wants to walk this on LIVE with a couple of named
+	 * members before it is switched on for everyone. Three states, and the first
+	 * one is the state we ship in:
+	 *
+	 *   enabled=false, testers=[]        TOTAL ABSENCE. The route is never
+	 *                                    registered, /profile-setup/ 404s exactly
+	 *                                    as it did before this feature existed,
+	 *                                    and NEITHER rail's end-of-join page is
+	 *                                    touched. This is today, and it is gated.
+	 *   enabled=false, testers=[12,34]   The step exists for those member IDs
+	 *                                    ONLY. Every other member — logged in or
+	 *                                    not, on either rail — gets byte-identical
+	 *                                    OFF behaviour.
+	 *   enabled=true                     Everyone. testers stops mattering.
+	 *
+	 * ⚠️ IDENTITY IS THE WORDPRESS LOGIN AND NOTHING ELSE. No dev-gate token, no
+	 * cookie of our own, no query parameter — not on live, not ever. The dev2 gate
+	 * token is a mock-hosting convenience that does not exist on live, and a
+	 * query-string opt-in would make this list decorative the moment anyone
+	 * guessed the parameter. Both rails resolve the viewer the same way: WordPress
+	 * gives the mu-plugin get_current_user_id(), and the standalone membership app
+	 * reads wp_user_id out of lg_membership_header_ctx(), which is itself derived
+	 * from the wordpress_logged_in_* cookie.
+	 */
+	'testers' => array(),
+
+	/**
 	 * The step's own URL. Root-relative and same-origin: both rails that hand off
 	 * to it are on this host, and the page is a WP mu-plugin route (the same
 	 * REQUEST_URI-on-init pattern /patreon-password/ has used since 6/16), so it
