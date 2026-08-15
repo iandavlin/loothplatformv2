@@ -213,6 +213,16 @@ def run_surface(s, probe_js, key, path, label, mode, device, outdir):
     title = s.js("document.title||''")
     is403 = s.js("!!document.body && /403|Forbidden/.test(document.body.innerText.slice(0,200))")
 
+    # FREEZE TRANSITIONS BEFORE PROBING — see the gate's STABILISE_JS for the
+    # full reasoning. Resolution is not settlement: this sweep probes sooner
+    # than the gate does, which is exactly why it reported 7 findings on
+    # bpnoaccess where the gate reported 1. The extra six were mid-animation
+    # frames (a 250ms card fade and a 50ms link-colour fade), not defects.
+    s.js("""(function(){try{var t=document.createElement('style');
+      t.textContent='*,*::before,*::after{transition:none !important;animation:none !important}';
+      document.head.appendChild(t);}catch(e){}})()""")
+    time.sleep(0.3)
+
     data = s.js(probe_js)
     data["surface"] = key
     data["label"] = label

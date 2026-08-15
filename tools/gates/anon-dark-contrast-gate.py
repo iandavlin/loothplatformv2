@@ -249,6 +249,26 @@ def arm_anon(s, tok):
 # be — it is a signed-in surface and this gate is the anon one. It needs a
 # member-surface gate to own it. Recorded in the handoff so it is not lost.
 STABILISE_JS = """(function(){
+  // FREEZE TRANSITIONS BEFORE MEASURING. Resolution is not settlement, and the
+  // precondition above returns the INSTANT the attribute appears — which made
+  // this worse, not better, by probing earlier. 86.php animates .lg-acc's
+  // background over 250ms (`transition: all .25s`) while its label colour snaps
+  // instantly, and the login links interpolate colour over 50ms. Read inside
+  // either window and you photograph an interpolated colour that no settled
+  // page ever shows: the accordion reads 1.21:1 and the ToS/Privacy links read
+  // 3.48:1, both of which are mid-animation frames, not states.
+  //
+  // Setting transition/animation to none snaps every in-flight property to its
+  // final computed value, so the probe reads the state a visitor actually ends
+  // up looking at. The USER-VISIBLE flash is a separate, real question — the
+  // accordion one is a genuine 250ms defect and is fixed at source in 86.php —
+  // but an instrument must measure a settled page or it cannot tell a defect
+  // from a frame.
+  try {
+    var _t = document.createElement('style');
+    _t.textContent = '*,*::before,*::after{transition:none !important;animation:none !important}';
+    document.head.appendChild(_t);
+  } catch (e) {}
   try {
     var x = document.querySelector('.lpw-x');
     if (x) { x.click(); }
