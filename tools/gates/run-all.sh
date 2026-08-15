@@ -764,6 +764,21 @@ echo "=== GATE 39: featured members — schema constraints, completeness parity,
 # by exit code only.
 run "featured-member" python3 "$(dirname "$0")/featured-member-gate.py"
 
+echo "=== GATE (unnumbered — pending keeper): directory location — backlog 20, no list surface prints more than City/State ==="
+# Ian 8/12, member safety. The number is ALLOCATED BY KEEPER and never
+# self-minted — the 36-vs-36 collision described above is exactly what that
+# rule exists to prevent, and the ledger's "NEXT FREE" is currently claimed by
+# an unmerged branch, so minting from it here would collide a third time.
+# It runs anyway: the assertions are real and every one of them has been
+# broken on purpose and watched go red.
+#
+# Scope note for whoever renumbers this: the leak was never just the 7 public
+# rows. Visibility::precisionForAudience() hands 'street' to the OWNER and to
+# every ADMIN unconditionally, so an admin's directory page rendered 15-16 full
+# street addresses per page across ~1,900 members. The gate covers anon,
+# member and admin for exactly that reason.
+run "directory-location" python3 "$(dirname "$0")/directory-location-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
