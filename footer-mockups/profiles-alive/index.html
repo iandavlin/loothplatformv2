@@ -72,11 +72,16 @@
 
     <p class="hook">
       <b>Where it hooks:</b> on <b>membership becoming active</b>, which is the one thing both
-      rails already agree on &mdash; they each record who a member is in the same place
-      (<code>lg_role_sources</code>, with a <code>source</code> of <code>patreon</code> or
-      <code>stripe</code>). The step is deliberately <b>not</b> wired to the Patreon callback or the
-      Stripe webhook, so neither rail can end up with an experience the other one lacks &mdash;
+      rails already agree on. The step is deliberately <b>not</b> wired to the Patreon callback or
+      the Stripe webhook, so neither rail can end up with an experience the other one lacks &mdash;
       and a third rail later inherits it for free.
+      <br><br>
+      <b>And that hook already exists.</b> The moment a membership goes live, whichever rail paid
+      for it, we already show a one-time &ldquo;Welcome &mdash; your membership is active&rdquo;
+      pop-up with two buttons on it. It fires once, it knows it has fired, and it is already
+      identical for a Patreon joiner and a Stripe joiner. <b>The three questions can go there</b>
+      &mdash; so this is less &ldquo;build a new screen&rdquo; than &ldquo;use the welcome moment we
+      already have for something more useful than two links&rdquo;.
     </p>
   </div>
 
@@ -268,9 +273,10 @@
           </ul>
         </div>
         <p class="opt__note">
-          <b>Costs one extra screen.</b> Everything it needs &mdash; the chrome, the skip path, the
-          photo uploader, the city field &mdash; already exists somewhere in the platform, and both
-          rails already have a &ldquo;you're in&rdquo; page to hand off from.
+          <b>Cheaper than it looks.</b> Everything it needs &mdash; the photo uploader, the city
+          field with its search, the one-line field &mdash; already exists and already saves to the
+          right place. And the once-only welcome pop-up described above is already built and already
+          fires for both rails, so this is mostly <b>changing what that moment asks for</b>.
         </p>
       </div>
 

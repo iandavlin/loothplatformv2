@@ -164,7 +164,36 @@ drop its own query string on load — `archive-poc/web/archive.js:582`,
 `history.replaceState(null, '', location.pathname)` inside `enterDiscover()`.
 That is the basis of the note against Option B in the mock.
 
-## 6. Phase 2 (only after Ian rules) — build shape
+## 6. The hook already exists — `_lg_pending_welcome` (found 2026-08-15)
+
+**Do not build a new activation trigger.** There is already a one-shot,
+rail-agnostic, member-facing welcome moment, and it is exactly the seam this
+feature needs:
+
+| Piece | Where |
+|---|---|
+| Stamped on upgrade-to-paid, off the **winning tier across all sources** | `lg-patreon-stripe-poller/src/Arbiter.php:113` — `update_user_meta($wpUserId, '_lg_pending_welcome', $winning)` inside `if (self::isUpgradeToPaid(...))` |
+| Rendered once, on the next front-end page load | `src/Plugin.php:657` `maybePrintWelcomeModal()` at `wp_footer` (bails on admin, ajax, logged-out) |
+| Consumed / dismissed | `src/Wp/RestController.php:1686` → `delete_user_meta(..., '_lg_pending_welcome')` |
+| Idempotent | re-running the Arbiter on a stable tier does not re-set it (`oldTier === winning`) |
+
+Because it is stamped by the **arbiter** off the winning tier — not by a
+callback or a webhook — it is dual-rail *by construction*, which is precisely
+what Ian's standing ruling requires. The `stripe-membership` lane independently
+audited the same property from the other direction on 2026-08-15 and reached the
+same conclusion ("the arbiter is what announces activation … off the winning tier
+across ALL sources"), and their **gate 34d** now actively forbids the Stripe leg
+from mailing, firing hooks, or stamping member data.
+
+⚠️ **That gate constrains this build.** The arrive-alive step must hang off the
+arbiter's announcement, **never** off the Stripe leg — wiring it into the Stripe
+leg would both break Ian's ruling and trip gate 34d.
+
+Today that moment renders a celebration with two links (Member Guide / See
+What's New). The three questions belong there, which makes Option A largely
+"change what the welcome moment asks for" rather than "build a new screen".
+
+## 7. Phase 2 (only after Ian rules) — build shape
 
 - Member-facing → **flag, defaulted OFF**, copying `LG_AUTHOR_SOCIALS_ALL_MEMBERS`
   (`platform/mu-plugins/lg-author-socials.php`). OFF must be a proven byte-identical

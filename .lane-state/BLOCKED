@@ -1,0 +1,34 @@
+BLOCKED ON: Ian's ruling, Option A vs Option B (backlog 19).
+
+Phase 1 is COMPLETE and pushed (branch profiles-alive, 3 commits, head c37be6f).
+The charter says no build until he rules from the pictures, and both options
+differ in WHICH surface gets built, so there is no honest way to start the build
+without the answer.
+
+WHAT UNBLOCKS ME: Ian picking A (one skippable screen at the end of joining —
+recommended) or B (front-page nudge), at
+https://dev2.loothgroup.com/footer-mockups/profiles-alive/
+
+DELIVERED IN PHASE 1
+ · The finding that changes the charter: there is NO sign-up form to add a step
+   to. WP self-registration is off, wp_signups is empty, and on BOTH rails the
+   account is built for the member — they type nothing about who they are. The
+   only moment we get is the "you're in" screen at the end of joining.
+ · Ian's dual-rail ruling baked in: one shared screen reached from either rail,
+   hooked on membership becoming active (lg_role_sources, source=patreon|stripe),
+   never on one rail's callback/webhook.
+ · Live numbers: backfills stopped 2026-06-30; of the 33 who joined since, 28
+   have no photo, 23 no location, 30 never said what they do.
+ · Verified (not assumed) that the write paths the mock promises Ian all exist:
+   me-avatar.php, me-location.php (+search), me-header.php — each writing
+   exactly the column Completeness::forUser() reads.
+ · Theme-proofed (44-53 computed values identical light/dark) and checked at
+   390px, where I found and fixed the dual-rail diagram cutting off the one box
+   the page is about.
+
+OPEN ASK FOR KEEPER (does not block me, answer whenever):
+ Do you want the mock dark-inversion check encoded as a NUMBERED gate? The class
+ has now bitten twice — featured-members 8/12 (injected token rewrite) and this
+ lane 8/15 (injected COMPONENT rules keyed on real product class names, which the
+ token pin does not cover) — so by the craft law it should be gated, and
+ tools/mock-theme-proof.py is already the encoding. I did not mint a number.
