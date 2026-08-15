@@ -37,6 +37,10 @@ $gdle_src = '/archive-poc/guitardle/index.html?embed=1&aud=' . ($is_member ? 'm'
 // CSV is the answer key. Learning it from the handshake would be too late.
 // Members only: server-driven play needs an account to key the session to.
 if (LG_GUITARDLE_SERVER_PLAY && $is_member) $gdle_src .= '&sp=1';
+// Backlog 26: LOGGED-OUT only. A member must never be pointed at the day
+// endpoint -- it serves the logged-out track, which is a DIFFERENT phrase from
+// the one their day is scored on, so it would hand them the wrong puzzle.
+if (LG_GUITARDLE_DAY_PUZZLE && !$is_member) $gdle_src .= '&dp=1';
 
 // The board always shows FIVE slots (Ian 6/12): leaders fill from the top,
 // the rest render as open-spot placeholders — never a collapsed/empty card.

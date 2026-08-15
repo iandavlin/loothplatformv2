@@ -75,6 +75,14 @@ const AUD_MEMBER = new URLSearchParams(location.search).get('aud') === 'm';
 // downloaded the thing we are trying to withhold.
 const WANT_SERVER_PLAY = new URLSearchParams(location.search).has('sp');
 
+// Backlog 26: set by the front-page block for LOGGED-OUT players when
+// LG_GUITARDLE_DAY_PUZZLE is on. The logged-out game still judges its own
+// guess, so it genuinely needs today's phrase -- but it does not need the
+// LIBRARY or the SEQUENCE, and those are what make every future day, and the
+// member track, computable by anyone. So it asks for one day instead.
+const WANT_DAY_PUZZLE  = new URLSearchParams(location.search).has('dp');
+const PUZZLE_API = '/archive-api/v0/guitardle-puzzle';
+
 // Saved-game snapshot (Ian 6/12: refresh-PROOF, the forfeit rule is gone).
 // Written on every move, cleared on any end state. A reload mid-game restores
 // the exact position. Keyed to date + phrase id, so a stale save from another
@@ -148,7 +156,29 @@ function formatDate() {
 // ─────────────────────────────────────────────────────────────────────────────
 //  PHRASE LOADING
 // ─────────────────────────────────────────────────────────────────────────────
+// One day, one track. config.json still comes from disk -- it is menu links and
+// a share URL, nothing about the puzzle.
+async function loadPhraseForDay() {
+    const [pzRes, cfgRes] = await Promise.all([
+        fetch(`${PUZZLE_API}?local_date=${todayString()}`, { credentials: 'same-origin' }),
+        fetch('assets/config.json'),
+    ]);
+    const pz = await pzRes.json();
+    siteConfig = await cfgRes.json();
+
+    PHRASE         = String(pz.phrase || '').toUpperCase();
+    PHRASE_LETTERS = PHRASE.replace(/[-\s]/g, '');
+    PHRASE_ID      = pz.phrase_id | 0;
+
+    // Same budget the legacy path computes, from the phrase we now hold.
+    const distinct = new Set(PHRASE_LETTERS);
+    let revealCost = 0;
+    distinct.forEach(L => { revealCost += VOWELS.has(L) ? 2 : 1; });
+    MOVE_CAP = Math.max(revealCost - 3, 5);
+}
+
 async function loadPhrase() {
+    if (WANT_DAY_PUZZLE) return loadPhraseForDay();
     const [seqRes, csvRes, cfgRes] = await Promise.all([
         fetch('assets/sequence.json'),
         fetch('assets/guitardle_phrases.csv'),
