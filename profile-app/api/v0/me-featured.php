@@ -32,7 +32,7 @@ use Looth\ProfileApp\Db;
 
 function me_featured_flag_on(): bool
 {
-    $cfg = @include __DIR__ . '/../../platform/config/featured-members.php';
+    $cfg = @include __DIR__ . '/../../../platform/config/featured-members.php';
     $on  = is_array($cfg) && !empty($cfg['enabled']);
     foreach ([getenv('LG_FEATURED_MEMBERS'), $_SERVER['LG_FEATURED_MEMBERS'] ?? false] as $o) {
         if ($o !== false && $o !== '') $on = ($o === '1' || $o === 'true');
