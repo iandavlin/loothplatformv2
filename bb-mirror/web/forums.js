@@ -6298,8 +6298,12 @@ function lgFollowEnabled() {
           loaded = true; loading = false;
         });
       })
-      .catch(function () {
+      .catch(function (err) {
         loading = false;
+        /* Keep the member-facing message plain, but RECORD the cause: a
+           fallback that hides why it fired sends the next person hunting the
+           fetch, which is not where the fault was. */
+        try { bodyEl.setAttribute('data-lpm-error', (err && err.message) || String(err)); } catch (e) {}
         bodyEl.innerHTML = '<div class="ntm-state">Could not load the Loothprint form. ' +
                            '<a href="' + base + '?type=loothprint">Open it on its own page</a>.</div>';
       });
