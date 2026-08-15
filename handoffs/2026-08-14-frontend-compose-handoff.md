@@ -334,3 +334,100 @@ command-substituted away before `msg` sees it. It cost this lane a gutted report
 (a `redis-cli` recovery command was replaced by the literal word "OK") and cost
 the hub-picker lane one on 7/08. Verify with `msg inbox` — note `msg thread`
 returns the OLDEST ~100 messages, so tailing it looks like nothing arrived.
+
+---
+
+# ADDENDUM — 2026-08-15, the compose-shape rework (post-merge)
+
+The four layout-v2 blocks are MERGED and gate 38 is registered. Everything below
+is the compose *surface* work that followed, and it is NOT merged.
+
+## Three branches waiting, in the order they should land
+
+| Branch | Tip | What |
+|---|---|---|
+| `frontend-compose-followup` | `956e037` | **Shared-harness fix — land this one first.** `tools/frontend-compose/shots.py` set WP cookies with no `sameSite`, so any lane photographing a page with an embedded frame captured the FRAME SIGNED OUT and could publish a false defect to Ian. Plus `file-picker-test.py` (block 2's last unexercised control). |
+| `fix-compose-modal-swap` | `188c19e` | The compose shape. **Its own earlier commit (`4dbb192`, standalone page) is superseded by `188c19e` (dedicated modal)** — same branch, read the later one. |
+
+## The shape, as Ian ruled it three times
+
+1. 8/09 — a type toggle in the composer.
+2. 8/15a — *"I'd like the loothprint form not to share the modal"* → the toggle
+   navigated to the standalone page.
+3. 8/15b — *"Cant it just replace the discussion modal ?"* → **current**: tapping
+   Loothprint closes `#ntm-overlay` and opens a dedicated `#lpm-overlay`. Own
+   chrome, nothing shared, toggle at the top of each. `/compose/` remains the
+   direct-URL surface.
+
+Every path hides the sibling BEFORE showing the target, so **both-open is not a
+reachable state**. That is deliberate — see the defect below.
+
+## ⚠️ THE DEFECT THAT DROVE ALL OF THIS WAS A RACE, NOT A LAYOUT SLIP
+
+`ntmSetState('authed')` sets `ntmForm.hidden = false` **unconditionally**,
+knowing nothing about the active type, and the auth probe resolves **2–4s AFTER**
+the composer opens. Tap Loothprint inside that window and the discussion wizard
+is re-shown UNDER the Loothprint form — rail, forum picker, Cancel/Next. That is
+Ian's screenshot.
+
+**It is why a check that waited before clicking called the preview fine**, and
+why "assert the form is hidden" would have passed while he was looking at the
+bug. Any future test of this must click INSIDE the auth window.
+
+I also nearly shipped a wrong fix for it: CSS specificity (`.ntm-form{display:flex}`
+outranking the UA `[hidden]`). Measured before shipping — the form was already
+`display:none`. It would have been a plausible no-op on a real bug.
+
+## ⬜ OPEN, NEEDS IAN — the only thing blocking this branch
+
+His ruling said *"no iframe — render the form furniture-free in the new modal
+shell"*. **Measured, that cannot hold:** the `embed=1` form depends on
+`acf-input` (28 refs), `acf.js`, `select2`, `media-views`, `acf-pro`, jQuery —
+and the hub carries **zero** of them, and cannot, being bb-mirror (a separate app
+with no WordPress to run `wp_head()`). Injected markup ⇒ a photo picker and
+taxonomy chips that look right and **do nothing**.
+
+So the form is an iframe INSIDE the dedicated modal. That meets every goal he
+named; it gives up only the literal "no iframe", and his objection was the form
+SHARING the wizard's modal. If he insists: keep the standalone page for that
+side (commit `4dbb192` shows it working), or teach bb-mirror to enqueue ACF
+assets — not small, do not start unasked.
+
+## What is verified, and how
+
+Preview at **1280 and 390**, real browser, real cookies, clicking inside the auth
+race: swap both ways, `BOTH_OPEN` false at every sample, wizard never visible
+while Loothprint is up, form loads in-frame. **Close paths all clean** — Cancel,
+backdrop, Escape each close both overlays and RELEASE the scroll lock, and
+reopening gives the discussion modal (no `ntm-active` leak).
+
+Frame **fit()s to content** so the dialog scrolls, not the frame. The first cut
+was fixed-height and CLIPPED the form at "What kind of print is it?" — licence
+and Post It unreachable. Caught by looking at the picture, not by a test.
+
+**Gate 35 assertion 9** (red-firsted): the discussion overlay must contain no
+compose surface AND `#lpm-overlay` must exist. Reads the preview **as an allowed
+member** — flag-off emits no composer and anon sees none, so either would make
+"no iframe" true of a page with no composer. No toggle ⇒ SKIPPED, never a pass.
+
+**Not tested:** submitting the form from inside the modal. It posts through the
+standalone page's own ACF handler, which is unchanged by this work.
+
+## 🔧 BOX CHANGE STILL IN PLACE — revert on merge
+
+`/var/www/dev/wp-content/mu-plugins/lg-frontend-compose.php` points at **this
+worktree** so the preview serves the branch on both halves (the hub half already
+did). Original: `/home/ubuntu/loothplatformv2-clean/platform/mu-plugins/lg-frontend-compose.php`.
+The compose route is flag-OFF everywhere except the preview, so nothing outside
+`/preview/frontend-compose/` changed — verified `/compose/` still 404s.
+
+## Browser-harness traps this round added
+
+* **A CDP cookie with no `sameSite` is withheld from an IFRAME navigation** while
+  still being sent on `fetch()`. It produced a 404 iframe beside a 200 fetch of
+  the same URL in the same page. Fixed in `shots.py` on the followup branch.
+* **`forums.js` is ~330KB** — a click timed off the clock fires before the
+  listener attaches and reads as "the swap is broken". Wait for the element the
+  handler binds, not a fixed sleep.
+* **Load hit 11.76 on 2 cores** and CDP dropped three times mid-run. Close leaked
+  tabs (`/json/close/<id>`); a dropped socket is not a finding.
