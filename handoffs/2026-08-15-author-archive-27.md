@@ -78,11 +78,13 @@ filter.
   feed leaking — a byline on published work is already public, and
   `discussion_visibility` is a *discussions* setting being used to hide the
   authors of articles and videos too.
-- **NOT VERIFIED:** the signed-in path. From the code a member viewer only gets
-  the `profile_visibility='private'` exclusion, so authors *should* be
-  suggestible for Ian — which would mean his complaint really is just the
-  missing door. I read that from the branch and did **not** measure it; it needs
-  a real hub session.
+- **NOW MEASURED** (was read-from-code; verified 2026-08-15 with minted
+  `looth_id` bearers): the signed-in path is **fine**. Same query, three
+  viewers — `q=erlewine`: anon **0**, member **1** (Dan Erlewine, n=54, avatar),
+  admin **1**. Across broad queries (`an`/`gu`/`ar`/`er`) anon gets **0–3** and a
+  member gets **8 every time**, 8 being the endpoint's own LIMIT. So the search
+  works for signed-in viewers and is dead only for anon — meaning **Ian has
+  never seen it broken**, and his complaint really is the missing door.
 
 **This decides D1.** An Authors index on that query shows a signed-out visitor
 4 people out of 432 — not an archive. Either D1 ships members-only, or the mask

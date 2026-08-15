@@ -904,13 +904,15 @@ echo "=== GATE 36: anon dark-mode contrast — sign-in/join/sign-up path clears 
 # dark-mode colour correction needs a flag at all.
 run "anon-dark-contrast" python3 "$(dirname "$0")/anon-dark-contrast-gate.py"
 
-echo "=== GATE (unnumbered — pending keeper): directory location — backlog 20, no list surface prints more than City/State ==="
-# Ian 8/12, member safety. The number is ALLOCATED BY KEEPER and never
-# self-minted — the 36-vs-36 collision described above is exactly what that
-# rule exists to prevent, and the ledger's "NEXT FREE" is currently claimed by
-# an unmerged branch, so minting from it here would collide a third time.
-# It runs anyway: the assertions are real and every one of them has been
-# broken on purpose and watched go red.
+echo "=== GATE 44: directory location — backlog 20, no list surface prints more than City/State ==="
+# Ian 8/12, member safety. Number 44 ALLOCATED BY KEEPER 2026-08-15, never
+# self-minted. Worth recording WHY it is not 41: the ledger line below still
+# read "NEXT FREE: 41" while 41 and 42 were already registered above (they
+# landed with guitardle score-integrity without the line being updated), and 43
+# was already spoken for by the offline-shell gate on an unmerged branch. So the
+# ledger under-counted by three, and minting from it would have collided with a
+# gate already on main. Keeper is correcting the line to next-free 45 separately
+# — deliberately NOT touched here, so the two edits cannot conflict.
 #
 # Scope note for whoever renumbers this: the leak was never just the 7 public
 # rows. Visibility::precisionForAudience() hands 'street' to the OWNER and to
