@@ -40,6 +40,7 @@ All of this is in `main` today (verified with `git merge-base --is-ancestor`):
 | **The member pages** (`membership-pages/`) | Built and serving, behind an admin-only pre-launch gate. |
 | **Test Group unlocks the pages** (gate 34b) | Built 8/15, **switched off**. Adds a `testgroup` visibility to the pages router. |
 | **Price in the dash** (gate 34c) | Built 8/15, **no price set**. Settings → LG Member Sync → Stripe Price. |
+| **The gift bypass, closed** (gate 34d) | Built 8/15, **switched off**. The list now fences the entitlement sweep, not just the webhook. |
 
 The bespoke private signup page that the 8/12 chat was building is **dead** —
 Ian superseded it on 8/14 in favour of reusing the existing pages, and it never
@@ -78,6 +79,21 @@ byte-identical to today's site. Its own switch is `lgms_stripe_testgroup_pages`,
 and **either** it or an empty list refuses everyone. An administrator is never
 held behind the list, deliberately: Ian must not be able to lock himself out of
 the pages he is building on by forgetting to add himself.
+
+---
+
+**The second thing that will trip you up: the list guarded ONE road, not all of
+them.** Until 8/15 the Test Group fenced only the Stripe webhook. A redeemed
+gift never touches the webhook — it goes through the separate billing app, which
+writes an entitlement and pings `/sync-customer` (a route registered
+unconditionally), and `Sync::customer()` turns that into a role. The five-minute
+cron reaches the same place on its own, and `lgms_stripe_frozen` does **not**
+stop it, because that option guards the Stripe *poll*, a different pass. So a
+gift to somebody not on the list let them in anyway, within minutes.
+
+Now fenced in `Sync::customer()` — the one choke point both roads pass through.
+If you add a *third* road to a membership grant, it must pass through there too,
+or the fence has another hole. Gate 34d.
 
 ---
 
