@@ -693,6 +693,29 @@ echo "=== GATE 32/35: retired pages 301 per-URL to a destination that ANSWERS ==
 # also rot later with nobody touching our code — a conf comment cannot catch
 # that; this can.
 run "stale-page-redirect" python3 "$(dirname "$0")/stale-page-redirect-gate.py"
+echo
+echo "=== GATE 37: ONE daily Guitardle allowance per MEMBER, claimed at START ==="
+# Backlog 22 (Ian 2026-08-14): "fixing the guitardle giving more chances on
+# different devices". The Weekly Top 5 has claimable spots, so this is fairness,
+# not a quirk.
+#
+# THE OBVIOUS GATE WOULD HAVE BEEN GREEN ON THE DEFECT. "A member cannot record
+# two results in one day" was already true — UNIQUE (wp_user_id, play_date) has
+# held since June, and 7 days of live traffic gave 93 successful POSTs and
+# exactly 93 rows. The leak was ABANDONING: nothing was written until the game
+# ended and the mid-game snapshot was per-DEVICE, so you could read the phrase
+# on one device, close the tab leaving no trace, and solve it cold elsewhere in
+# one move. One POST, one row, indistinguishable from honest play.
+#
+# So the assertion that bites is: a SECOND start-claim for the same member and
+# day must claim NOTHING. Proven red against origin/main's endpoint before the
+# fix landed (LG_GDLE_ENDPOINT re-runs that).
+#
+# It drives the WORKING TREE's endpoint with a real WP session cookie — curl
+# would reach /srv, i.e. the serving checkout, and test main. Phase 0 proves the
+# door answers as a known member before any "no row was written" is believed,
+# and the flag-OFF promo render is compared BYTE-FOR-BYTE against origin/main.
+run "guitardle-claim" python3 "$(dirname "$0")/guitardle-claim-gate.py"
 
 # ── 35 ─────────────────────────────────────────────────────────────────────
 # ⚠️ 34 IS DELIBERATELY ABSENT FROM THIS BRANCH. Keeper allocated it to the

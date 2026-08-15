@@ -20,6 +20,8 @@
  * teaser and shares deep-link /archive-poc/#guitardle (and #guitardle=play
  * auto-opens the modal).
  */
+require_once __DIR__ . '/../api/v0/_flags.php';   // LG_GUITARDLE_DAILY_CLAIM
+
 $gdle_compact = !empty($gdle_compact);
 // Bust the iframe cache on the NEWEST of the three game assets — editing
 // style.css or index.html alone (not game.js) must still reload the embed.
@@ -34,12 +36,18 @@ $gdle_src = '/archive-poc/guitardle/index.html?embed=1&aud=' . ($is_member ? 'm'
 // the rest render as open-spot placeholders — never a collapsed/empty card.
 // SSR'd here so the slots are visible even before (or without) the API call;
 // fillBoard() below repaints with live leaders and pads back to five.
+// "play to claim" is not true for a logged-out visitor: the score endpoint
+// rejects uid<=0, so anonymous play has never produced a row and never could
+// claim a spot. Ian 2026-08-15 ruled "Agree — relabel only": say so plainly
+// rather than build anon tracking. Flag-gated so OFF is byte-identical.
+$gdle_claim_cta = (LG_GUITARDLE_DAILY_CLAIM && !$is_member)
+    ? 'sign in to claim' : 'play to claim';
 $gdle_slots = '';
 for ($gdle_i = 1; $gdle_i <= 5; $gdle_i++) {
     $gdle_slots .= '<li class="gdle-side-row gdle-side-row--open">'
                  . '<span class="gdle-side-row__rank">' . $gdle_i . '</span>'
                  . '<span class="gdle-side-row__name">Open spot</span>'
-                 . '<span class="gdle-side-row__pts">play to claim</span></li>';
+                 . '<span class="gdle-side-row__pts">' . $gdle_claim_cta . '</span></li>';
 }
 ?>
 <div class="gdle-block<?= $gdle_compact ? ' gdle-block--stack' : '' ?>" id="guitardle">
@@ -117,7 +125,7 @@ for ($gdle_i = 1; $gdle_i <= 5; $gdle_i++) {
           name.textContent = 'Open spot';
           var pts = document.createElement('span');
           pts.className = 'gdle-side-row__pts';
-          pts.textContent = 'play to claim';
+          pts.textContent = '<?= $gdle_claim_cta ?>';
           li.append(rank, name, pts);
           return li;
       }

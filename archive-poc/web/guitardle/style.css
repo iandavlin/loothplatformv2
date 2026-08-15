@@ -1276,3 +1276,38 @@ a.board-name:hover { text-decoration: underline; }
 .overlay-panel a.board-name {
     color: var(--text-dark);
 }
+
+/* ── HOW TO PLAY + logged-out note (backlog 22, Ian 2026-08-15) ───────────────
+   The rules overlay reuses .overlay-backdrop/.overlay-panel/.overlay-title/
+   .overlay-subheading/.btn-overlay-close wholesale, so only the list and the
+   anon line need styling. Phone-first: this copy exists because the ONLY
+   explanation of Hardcore used to be a title= tooltip, which touch never shows. */
+.help-list {
+    margin: 10px 0 0 0;
+    padding: 0 0 0 1.15em;
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    line-height: 1.55;
+    text-align: left;
+}
+
+.help-list li + li {
+    margin-top: 7px;
+}
+
+.help-list strong {
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+/* Matches .champ-strip's warm band so the two read as one piece of chrome. */
+.anon-note {
+    margin: 0;
+    padding: 6px 12px;
+    background: #FBF3DF;
+    border-bottom: 1px solid var(--green-bg-2);
+    font-size: 0.85rem;
+    color: var(--text-dark);
+    text-align: center;
+}

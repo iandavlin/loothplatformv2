@@ -71,6 +71,47 @@
     </div>
 
 
+    <!-- HOW TO PLAY (backlog 22, Ian 2026-08-15). The served game shipped with
+         NO rules surface at all: the prototype's instructions overlay was
+         dropped, assets/icon-question.svg went unreferenced, and the only
+         explanation of Hardcore anywhere was the toggle's title= tooltip --
+         which does not exist on touch, i.e. invisible on the platform the brief
+         calls primary. Since Hardcore DOUBLES weekly points, the least-explained
+         control in the game had the largest effect on the leaderboard.
+         Reuses the board/stats overlay classes, so it needs almost no new CSS. -->
+    <div class="overlay-backdrop" id="overlay-help" style="display:none" role="dialog" aria-modal="true" aria-labelledby="help-title">
+        <div class="overlay-panel">
+            <h2 class="overlay-title" id="help-title">How to play</h2>
+
+            <ul class="help-list">
+                <li>Guess the hidden guitar phrase. Each box is one letter, and the gaps are spaces between words.</li>
+                <li>Tap any consonant to reveal it everywhere it appears in the phrase. That costs <strong>1 move</strong>. Y counts as a consonant.</li>
+                <li>Vowels cost <strong>2 moves</strong>: tap once to unlock the key, tap again to place the letter.</li>
+                <li>You get <strong>one guess</strong>. Tap Guess the Phrase, fill in the blanks, then confirm. A wrong guess ends the game there.</li>
+                <li><strong>Fewer moves is better.</strong></li>
+            </ul>
+
+            <h3 class="overlay-subheading">&#128293; Hardcore 2&times;</h3>
+            <ul class="help-list">
+                <li>Optional. Flip the switch at the top of the game <strong>before your first move</strong>.</li>
+                <li>Your reveals are <strong>capped</strong>, so you can never buy your way to the whole phrase &mdash; the guess is always a real guess. Harder phrases get a bigger allowance.</li>
+                <li>Running out of reveals does <strong>not</strong> end the game. You can still guess.</li>
+                <li>A win counts <strong>double points</strong> on the Weekly Top 5.</li>
+                <li>It <strong>locks at your first move</strong>. You cannot switch it on or off part-way through.</li>
+            </ul>
+
+            <h3 class="overlay-subheading">The Weekly Top 5</h3>
+            <ul class="help-list">
+                <li>Every win scores points &mdash; the fewer moves you used, the more you get. Hardcore wins are worth double.</li>
+                <li>Points add up Monday to Sunday. You need to be <strong>signed in</strong> for a win to count.</li>
+                <li><strong>One game a day</strong>, on any device you like. Start on your phone, finish on your laptop &mdash; it is the same game, and it picks up where you left off.</li>
+            </ul>
+
+            <button class="btn-overlay-close" type="button" id="btn-help-close">Done</button>
+        </div>
+    </div>
+
+
     <div class="game-wrap">
 
         <!-- Slim menu bar above the game header. The hamburger site-nav was
@@ -86,6 +127,14 @@
                     <span>&#128293; Hardcore <strong>2&times;</strong></span>
                 </label>
                 <div class="menu-icons-right">
+                    <!-- Hidden until the flag turns it on -- game.js reveals it. -->
+                    <button class="menu-icon-btn" id="btn-help" aria-label="How to play" style="display:none">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="9.25"/>
+                            <path d="M9.4 9.3a2.7 2.7 0 0 1 5.25.9c0 1.8-2.65 2.7-2.65 2.7"/>
+                            <path d="M12 17.1h.01"/>
+                        </svg>
+                    </button>
                     <button class="menu-icon-btn" id="btn-board" aria-label="Weekly leaderboard">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
@@ -122,6 +171,12 @@
             <span class="champ-text" id="champ-text"></span>
             <button class="champ-board-btn" type="button" id="btn-champ-board">Leaderboard</button>
         </div>
+
+        <!-- Honest line for logged-out players (Ian 2026-08-15). Sits with the
+             champion strip, above the fold on a phone, so the Top 5 never reads
+             as something an anonymous player is competing in. Shown by game.js
+             only when the API says we are anonymous AND the flag is on. -->
+        <p class="anon-note" id="anon-note" style="display:none">Playing for fun &mdash; sign in to compete for the Weekly Top 5.</p>
 
         <header class="game-header">
             <div class="header-inner">
