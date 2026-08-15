@@ -181,6 +181,45 @@ foreach ($allowed_keys as $k) {
     $applied[] = $k . ':' . count($clean);
 }
 
+// Featured-member HISTORY (featured-members lane, backlog 18; ruling item 3:
+// "ONE at a time"). This is the ONE write path to `featured_member`, so it is
+// also the one place a transition can be observed — no second door, no drift
+// between config.json's "who is featured now" and featured_history's "who was,
+// and when". Fires only when `featured_member` was actually part of THIS
+// payload (not on every unrelated save, e.g. a sponsors edit).
+if (in_array('featured_member', $allowed_keys, true) && array_key_exists('featured_member', $payload)) {
+    $prevUuid = (string) ($existing['featured_member']['member_uuid'] ?? '');
+    $prevOn   = !empty($existing['featured_member']['enabled']) && $prevUuid !== '';
+    $nextUuid = (string) ($merged['featured_member']['member_uuid'] ?? '');
+    $nextOn   = !empty($merged['featured_member']['enabled']) && $nextUuid !== '';
+
+    if ($prevUuid !== $nextUuid || $prevOn !== $nextOn) {
+        try {
+            $hpdo = lg_archive_poc_pdo();
+            if ($hpdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql') {
+                if ($prevOn) {
+                    // Close whatever was open. Idempotent by construction —
+                    // if nothing is open this affects 0 rows, never errors.
+                    $hpdo->prepare('UPDATE discovery.featured_history SET ended_at = now() WHERE ended_at IS NULL')->execute();
+                }
+                if ($nextOn) {
+                    $name = (string) ($merged['featured_member']['name'] ?? '');
+                    $by   = $merged['featured_member']['chosen_by'] ?? null;
+                    $ins  = $hpdo->prepare(
+                        'INSERT INTO discovery.featured_history (member_uuid, display_name, chosen_by) VALUES (:u, :n, :b)'
+                    );
+                    $ins->execute([':u' => $nextUuid, ':n' => $name, ':b' => $by]);
+                }
+            }
+        } catch (Throwable $e) {
+            // History is a RECORD of the change, not a gate on it — config.json
+            // (the thing the front page actually reads) must still save even if
+            // the history write fails. Loud in the log, silent to the caller.
+            error_log('[featured-history] write failed: ' . $e->getMessage());
+        }
+    }
+}
+
 /**
  * Normalize the front-page `rows` array:
  *   - drop rows without an `id` or `type`

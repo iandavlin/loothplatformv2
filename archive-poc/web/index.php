@@ -755,6 +755,86 @@ require __DIR__ . '/_chrome.php'; ?>
 // Featured-member band shows BOTH audiences (Ian 6/12) — it follows whichever
 // welcome promo the viewer got (member What's-New / public Classic Landing).
 $lg_fm = (defined('LG_FEATURED_MEMBER') && !empty(LG_FEATURED_MEMBER['enabled'])) ? LG_FEATURED_MEMBER : null;
+// Real-member resolution (featured-members lane, backlog 18; design rulings
+// 8/14 — docs/IAN-RULINGS-2026-08-14.md item 6). LG_FEATURED_MEMBER carries a
+// member_uuid once an admin has selected someone in the dash; when it does
+// (AND the flag is on), resolve the card from profile_app instead of the
+// hand-typed fields — "live, not frozen" (decision page §3's recommendation).
+//
+// FLAG OFF IS BYTE-IDENTICAL: member_uuid is ignored outright, so a stale
+// value left in config.json from a previous ON state cannot leak the
+// real-member path back on. The hand-typed band (Dan Erlewine, shipping since
+// June) is completely unaffected either way — this only intercepts the ONE
+// new case LG_FEATURED_MEMBER did not have before today.
+if ($lg_fm && !empty($lg_fm['member_uuid'])) {
+    $lg_fm_cfg = @include __DIR__ . '/../../platform/config/featured-members.php';
+    $lg_fm_on  = is_array($lg_fm_cfg) && !empty($lg_fm_cfg['enabled']);
+    foreach ([getenv('LG_FEATURED_MEMBERS'), $_SERVER['LG_FEATURED_MEMBERS'] ?? false] as $lg_fm_o) {
+        if ($lg_fm_o !== false && $lg_fm_o !== '') $lg_fm_on = ($lg_fm_o === '1' || $lg_fm_o === 'true');
+    }
+    $lg_fm = $lg_fm_on ? lg_resolve_featured_member((string) $lg_fm['member_uuid'], $is_member) : null;
+}
+
+/**
+ * Resolve the featured-member card from profile_app. Column-scoped grant:
+ * tools/cut/featured-member-grants.sql. Returns null if the member has since
+ * gone Private, untuck their consent, or the row is simply gone — the caller
+ * treats that exactly like "nothing selected" (no band), never a broken card.
+ */
+function lg_resolve_featured_member(string $uuid, bool $isMember): ?array {
+    static $pdo = null;
+    if ($pdo === null) {
+        $pdo = new PDO('pgsql:host=/var/run/postgresql;dbname=profile_app', null, null);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    }
+    $st = $pdo->prepare(
+        'SELECT id, slug, display_name, avatar_url, at_a_glance, business_name,
+                location_city, location_region, location_members_precision
+           FROM users
+          WHERE uuid = :u AND featured_opt_in = true AND profile_visibility = \'public\''
+    );
+    $st->execute([':u' => $uuid]);
+    $u = $st->fetch();
+    if (!$u) return null;   // opted out, went private, or the row is gone — no band, not a broken one
+
+    $role = trim((string) $u['at_a_glance']);
+    if ($role === '') {
+        $biz = str_replace(["\\'", '\\"'], ["'", '"'], (string) $u['business_name']);
+        if ($biz !== '' && !str_ends_with((string) $u['display_name'], $biz)) $role = $biz;
+    }
+
+    // Location: members only (pre-existing rule, unchanged — the template's
+    // own `!empty($lg_fm['where'])` check inside `if ($is_member)` still
+    // hides this from anon regardless), AND only when the member's OWN
+    // members-precision allows it — "not just is this a member" (the charter's
+    // own wording). 'private' or 'state'-only hides city; anything blank stays blank.
+    $where = '';
+    if ($isMember && in_array($u['location_members_precision'], ['city', 'street'], true)) {
+        $where = trim(implode(', ', array_filter([$u['location_city'], $u['location_region']])));
+    }
+
+    // Bio: ONLY an About section the member marked Public. A members-only or
+    // private About must never reach the open web through this card — see
+    // tools/cut/featured-member-grants.sql's own note on this same rule.
+    $bio = '';
+    $ab = $pdo->prepare("SELECT data->>'text' AS t FROM profile_sections WHERE user_id = :i AND key = 'about' AND visibility = 'public'");
+    $ab->execute([':i' => (int) $u['id']]);
+    $bioRow = $ab->fetch();
+    if ($bioRow && trim((string) $bioRow['t']) !== '') $bio = trim((string) $bioRow['t']);
+
+    $firstName = trim((string) explode(' ', trim((string) $u['display_name']))[0]);
+
+    return [
+        'enabled'   => true,
+        'avatar'    => (string) $u['avatar_url'],
+        'name'      => (string) $u['display_name'],
+        'role'      => $role,
+        'where'     => $where,
+        'bio'       => $bio,
+        'cta_href'  => '/u/' . rawurlencode((string) $u['slug']),
+        'cta_label' => $firstName !== '' ? "See {$firstName}\xE2\x80\x99s profile" : 'See profile',
+    ];
+}
 foreach ($main_rows as $row):
     $layout = $row['layout'] ?? 'rail';
     $row_id = $row['id'] ?? '';
