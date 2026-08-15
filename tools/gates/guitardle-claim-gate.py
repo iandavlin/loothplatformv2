@@ -360,6 +360,33 @@ check("getElementById('anon-note')" in anon_branch
       'the logged-out line hangs off claimEnabled, NOT helpEnabled')
 check('Playing for fun' in html and 'sign in to compete for the Weekly Top 5' in html,
       "the game carries Ian's logged-out line verbatim")
+
+# THE RESUME REPLAY. Everything above proves the SERVER hands back a position;
+# nothing above proves the CLIENT puts it on the board correctly, and that is
+# the whole point of the feature. Verified in a real browser on 2026-08-15: a
+# server-held snapshot replayed onto a fresh board revealed the most-REPEATED
+# letter in every one of its positions (2 of 2), disabled its key, marked the
+# purchased vowel, showed 4 moves, and locked hardcore.
+#
+# That check needs a browser, which would make this gate flaky on a 2-core box
+# and a DEAD gate blocks every lane — so what is gated here is the structural
+# guarantee underneath it: the remote path must replay through revealTiles(),
+# the same primitive the long-proven LOCAL restore uses. revealTiles is what
+# reveals a letter in ALL its positions; a hand-rolled loop that set one tile
+# would pass every server-side assertion in this file and still lose letters.
+remote = js[js.find('function restoreRemoteGame'):]
+remote = remote[:remote.find('\n}\n')]
+check('revealTiles(letter)' in remote,
+      'the cross-device resume replays through revealTiles() — a letter comes '
+      'back in EVERY position, not just the first')
+check('state.revealedLetters' in remote and 'state.purchasedVowels' in remote
+      and 'lockHardcoreToggle()' in remote,
+      'it restores the full position: revealed letters, purchased vowels, and '
+      'the hardcore lock (mode you started in is the mode you resume in)')
+local = js[js.find('function restoreSavedGame'):]
+local = local[:local.find('\n}\n')]
+check('revealTiles(letter)' in local,
+      'and the local restore still uses it too (the two paths have not drifted)')
 check('Hardcore' in html and 'locks at your first move' in html.lower(),
       'How-to-Play explains Hardcore in plain English (it had NO player-visible '
       'copy at all — only a title= tooltip, invisible on touch)')

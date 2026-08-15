@@ -100,7 +100,19 @@ Registered in `run-all.sh`; `docs/CRAFT-STANDARD.md` row 37 added.
   *vacuous PASS* — a member-vs-anon comparison passing on two empty strings while
   the renderer was fataling on an undefined `h()`.
 - Creates/reuses a `gdle_gate_probe` subscriber on dev2 WP; deletes every row it
-  writes and **asserts the cleanup**.
+  writes and **asserts the cleanup**. That account was audited: 0 hits in the
+  BuddyBoss directory, no `profiles` row, no `discovery.person` row, so it cannot
+  surface on any member-facing surface or on the board.
+- **The resume replay was the one path nothing covered.** Everything server-side
+  proves the API hands back a position; none of it proved the CLIENT puts it on
+  the board. Verified in a real browser 8/15: a server-held snapshot replayed
+  onto a fresh board revealed the most-**repeated** letter in *every* one of its
+  positions (2 of 2 — a letter appearing once cannot tell "all positions" from
+  "the first"), disabled its key, marked the purchased vowel, showed 4 moves and
+  locked hardcore. A browser check would make this gate flaky on a 2-core box and
+  a DEAD gate blocks every lane, so what is *gated* is the structural guarantee
+  underneath: both restore paths must replay through `revealTiles()`. Red-first
+  with a valid, still-parsing mutation (replay one tile instead of all).
 
 ## 5. Open, and NOT mine to close
 
