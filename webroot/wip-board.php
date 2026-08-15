@@ -237,6 +237,59 @@ function lgb_parse_details(string $path): array
     return $out;
 }
 
+/**
+ * THE SHIPPED ARCHIVE — the half of BACKLOG.md the board could not see.
+ *
+ * The census found it: below `## ✅ SHIPPED TO LIVE` the file carries 30
+ * date-headed sections, and none of them reached the board. Not dropped by
+ * accident either — `lgb_parse_details` takes the first token of a heading as
+ * the item id, and "2026-08-01 — …" yields "2026", so every archived section
+ * collapsed onto that one key and the last one silently won. No item has id
+ * 2026, so the whole lot was unreachable.
+ *
+ * That is the real content of Ian's "the board doesn't have all of the backlog":
+ * the board showed what is LEFT and nothing of what was DONE.
+ *
+ * Kept deliberately separate from lgb_parse_details rather than folded into it.
+ * The two answer different questions — "what is this item?" versus "what
+ * happened, and when?" — and the archive is keyed by DATE, which is not an id
+ * and must not be made to look like one.
+ *
+ * @return array<int,array{date:string,title:string,body:string}> newest first
+ */
+function lgb_parse_history(string $path): array
+{
+    if (!is_readable($path)) { return []; }
+    $raw   = str_replace([ "\r\n", "\r" ], "\n", (string) file_get_contents($path));
+    // Split on newlines EXPLICITLY, never \R — see lgb_parse_backlog.
+    $lines = explode("\n", $raw);
+
+    $out = []; $cur = null; $buf = [];
+    $flush = static function () use (&$out, &$cur, &$buf): void {
+        if ($cur !== null) { $cur['body'] = trim(implode("\n", $buf)); $out[] = $cur; }
+    };
+    foreach ($lines as $line) {
+        if (str_starts_with($line, '## ')) {
+            $flush(); $cur = null; $buf = [];
+            $head = trim(substr($line, 3));
+            $probe = ltrim($head, "✅ \t");
+            // A DATE heading, and only a date heading. An item id like "4.2"
+            // cannot match this, and a date cannot match the id parser — so a
+            // section belongs to exactly one of the two views, never both.
+            if (preg_match('/^(\d{4}-\d{2}-\d{2})\s*[—–-]\s*(.+)$/u', $probe, $m)) {
+                $cur = ['date' => $m[1], 'title' => trim($m[2]), 'body' => ''];
+            }
+            continue;
+        }
+        if ($cur !== null) { $buf[] = $line; }
+    }
+    $flush();
+
+    // Newest first — the question this view answers is "what happened lately".
+    usort($out, static fn (array $a, array $b): int => strcmp($b['date'], $a['date']));
+    return $out;
+}
+
 /* ---------------------------------------------------------------------- *
  * Ian's desk — the top strip
  *
@@ -617,6 +670,7 @@ function lgb_item_extras(string $backlogPath, string $id): array
 }
 
 $backlog  = lgb_parse_backlog($BACKLOG);
+$history  = lgb_parse_history($BACKLOG);
 $GLOBALS['LGB_ROW'] = 0;   // row keys; see the payload note below
 $details  = lgb_parse_details($BACKLOG);
 $projCfg  = lgb_projects($REPO);
@@ -1058,6 +1112,45 @@ header('X-Robots-Tag: noindex, nofollow');
     </details>
   <?php endforeach; ?>
 
+  <?php
+  /**
+   * WHAT SHIPPED — the archive, finally on the board.
+   *
+   * Ian: "the board doesn't have all of the backlog." This is the half that was
+   * missing. It is not a nice-to-have: a board that shows only what is LEFT
+   * makes a month of finished work look like nothing happened, and the question
+   * it answers — "what have you actually done for me lately" — is one he asks.
+   *
+   * Grouped by date, newest first, collapsed by default so it never competes
+   * with the open work above it. Counts are counted, never typed.
+   */
+  $byDate = [];
+  foreach ($history as $h) { $byDate[$h['date']][] = $h; }
+  ?>
+  <?php if ($history !== []): ?>
+    <details class="hist">
+      <summary class="hist__h">
+        <span class="hist__t">What shipped</span>
+        <span class="hist__c"><?= count($history) ?> items · <?= count($byDate) ?> days</span>
+      </summary>
+      <?php foreach ($byDate as $date => $items): ?>
+        <div class="hist__d">
+          <div class="hist__dh"><?= lgb_h($date) ?><span class="hist__dc"><?= count($items) ?></span></div>
+          <?php foreach ($items as $h): ?>
+            <details class="hist__i">
+              <summary><?= lgb_h($h['title']) ?></summary>
+              <pre class="hist__b"><?= lgb_h($h['body']) ?></pre>
+            </details>
+          <?php endforeach; ?>
+        </div>
+      <?php endforeach; ?>
+    </details>
+  <?php else: ?>
+    <!-- Said rather than drawn as an empty box: a missing source must never
+         render as a comforting zero. -->
+    <div class="hist hist--none">No shipped archive found in docs/BACKLOG.md.</div>
+  <?php endif; ?>
+
   <div class="foot">
     <b>Reading is derived; writing is fenced.</b> Everything here is read from
     <code>docs/BACKLOG.md</code> and the sentinel stamp at render time. Nothing on
@@ -1154,6 +1247,17 @@ header('X-Robots-Tag: noindex, nofollow');
     .w2__say--no{background:rgba(200,70,70,.16)}
     .ahead{font-size:12px;padding:6px 10px;border-radius:6px;margin:8px 0;
            background:rgba(74,158,255,.14)}
+    .hist{margin:18px 0 0;border-top:1px solid rgba(128,128,128,.25);padding-top:10px}
+    .hist__h{cursor:pointer;display:flex;gap:10px;align-items:baseline;font-weight:600;font-size:13px}
+    .hist__c{font-weight:400;opacity:.6;font-size:12px}
+    .hist__d{margin:10px 0 0 4px}
+    .hist__dh{font-size:12px;font-weight:600;opacity:.75;display:flex;gap:8px;align-items:baseline}
+    .hist__dc{font-weight:400;opacity:.6}
+    .hist__i{margin:3px 0 3px 10px;font-size:13px}
+    .hist__i summary{cursor:pointer;padding:2px 0}
+    .hist__b{white-space:pre-wrap;font-size:12px;margin:4px 0 8px;padding:8px;border-radius:6px;
+             background:rgba(128,128,128,.08);max-height:340px;overflow:auto}
+    .hist--none{font-size:12px;opacity:.7}
   </style>
   <script type="application/json" id="lgb-details"><?php
     // ONE ENTRY PER ITEM, always. Only 7 of the file's 39 detail sections are

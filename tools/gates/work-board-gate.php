@@ -462,6 +462,76 @@ is_(!preg_match('/XMLHttpRequest|navigator\.sendBeacon/', $html),
     '...and no second channel was smuggled in beside it');
 
 /* ---------------------------------------------------------------------- */
+section("[5g] THE SHIPPED ARCHIVE REACHES THE BOARD");
+
+/**
+ * The same conservation law the index gets, applied to the half that was
+ * missing. This is not a display nicety: the archive was invisible because
+ * lgb_parse_details reads the first token of a heading as an item id, and
+ * "2026-08-01 — …" yields "2026" — so all 30 sections collapsed onto one key
+ * and the last one silently won. Nothing errored; they simply were not there.
+ *
+ * Counted with an INDEPENDENT parse, deliberately not the page's own, or this
+ * would assert only that a function agrees with itself.
+ */
+$archTruth = [];
+foreach (explode("\n", (string) file_get_contents($BACK)) as $l) {
+    if (str_starts_with($l, '## ')) {
+        $probe = ltrim(trim(substr($l, 3)), "✅ \t");
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})\s*[—–-]\s*(.+)$/u', $probe, $m)) {
+            $archTruth[] = trim($m[2]);
+        }
+    }
+}
+is_(count($archTruth) >= 10, sprintf('the file really carries a shipped archive, so this is not vacuous (%d)', count($archTruth)));
+
+$histHtml = render($PAGE, $BACK);
+$missing = [];
+foreach ($archTruth as $t) {
+    // Compare on a distinctive slice — sliced by CHARACTER, not by byte.
+    // substr() cut straight through the middle of "🔴" and "—", producing a
+    // needle that is not valid UTF-8 and can never match the escaped render.
+    // Two headings then reported as MISSING from a board that was showing all
+    // thirty. Same family as the ✅ that halved the ticked items: a byte
+    // operation applied to text that is not bytes.
+    $needle = htmlspecialchars(mb_substr($t, 0, 40, 'UTF-8'), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
+    if (!str_contains($histHtml, $needle)) { $missing[] = mb_substr($t, 0, 40, 'UTF-8'); }
+}
+is_($missing === [], sprintf('every archived item reaches the board (%d in the file, missing: %s)',
+    count($archTruth), $missing === [] ? 'none' : implode(' | ', array_slice($missing, 0, 3))));
+
+$rendered = substr_count($histHtml, 'class="hist__i"');
+is_($rendered === count($archTruth),
+    sprintf('...and the board shows exactly that many, no more (%d rendered vs %d in the file)', $rendered, count($archTruth)));
+
+// The summary count is DERIVED — a hand-typed one would drift the first time
+// anything shipped, and a stale count is worse than none.
+is_((bool) preg_match('/class="hist__c">\s*' . count($archTruth) . ' items/', $histHtml),
+    'the archive\'s own count agrees with the file');
+
+// THE TWO VIEWS MUST BE DISJOINT. A date heading must never be read as an item
+// id (that is the bug), and an item id must never fall into the archive.
+$idsNow = truth($BACK);
+$overlap = array_intersect($idsNow, ['2026', '2026-08-01']);
+is_($overlap === [], 'no date leaked into the index as an item id');
+
+// A missing archive must SAY so rather than draw a comforting zero.
+$noArch = $tmp . '-noarch.md';
+$src = (string) file_get_contents($BACK);
+$cut = strpos($src, '## ✅ SHIPPED TO LIVE');
+file_put_contents($noArch, $cut === false ? $src : substr($src, 0, $cut));
+$noArchHtml = render($PAGE, $noArch);
+// Matched on the USAGE form and the words, not the bare class name — the
+// stylesheet carries `.hist--none` on every render, so a bare-string check is
+// true on a page that has no such element at all. This gate already learned
+// that once, with `f--bad` (see the footer); the mutation that should have
+// reddened this passed silently until it was written this way.
+is_(str_contains($noArchHtml, 'class="hist hist--none"')
+    && str_contains($noArchHtml, 'No shipped archive found'),
+    'with no archive in the file, the board says so rather than drawing an empty box');
+is_(!str_contains($noArchHtml, 'class="hist__i"'), '...and invents no entries');
+@unlink($noArch);
+
 section("[6a] THE BOARD SAYS WHICH COPY IT IS SHOWING");
 
 /**
@@ -691,8 +761,8 @@ is_(!preg_match('/XMLHttpRequest|sendBeacon/', $src),
 echo "\n$pass passed, $fail failed\n";
 if ($fail > 0) { echo "RED — the work board is not holding.\n"; exit(1); }
 echo "GREEN — nothing dropped, letter ids survive, a dead sentinel degrades honestly, "
-   . "thresholds are conditional, the board says which copy it is showing, and every write "
-   . "leaves this page through the committer and nowhere else.\n";
+   . "thresholds are conditional, the shipped archive reaches the board, it says which copy "
+   . "it is showing, and every write leaves this page through the committer and nowhere else.\n";
 exit(0);
 
 /* ======================================================================= *
