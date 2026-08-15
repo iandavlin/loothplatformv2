@@ -1,0 +1,268 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Two editors, one page — a decision (2026-08-11)</title>
+<style>
+/* Background defence, as on the sibling pages: the docroot injects
+   `html[data-lguser-theme="dark"] body` (0,1,2) into /footer-mockups/. An id on
+   <body> is (1,0,1) and wins. */
+body#lgfcfreeze{margin:0;padding:28px 18px 90px;background:#fbfbf8;color:#262925;
+  font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+.w{max-width:1180px;margin:0 auto}
+h1{font:800 30px/1.15 Lora,Georgia,serif;margin:0 0 8px;color:#1a1d1a}
+.lede{color:#565a55;margin:0 0 6px;max-width:78ch}
+h2{font:700 12.5px/1.2 inherit;letter-spacing:.08em;text-transform:uppercase;color:#565a55;
+   margin:50px 0 14px;padding-bottom:7px;border-bottom:1px solid #e4e7d8}
+p{max-width:80ch}
+.note{border-left:3px solid #c66845;padding:11px 0 11px 15px;margin:18px 0;color:#565a55;font-size:14.6px;max-width:80ch}
+.note strong{color:#262925}
+.note--ok{border-left-color:#586b3f}
+code{background:#f0f1ea;padding:1px 6px;border-radius:5px;font-size:12.6px}
+a{color:#586b3f}
+.cap{font:700 11px/1.2 inherit;letter-spacing:.07em;text-transform:uppercase;color:#565a55;margin:0 0 8px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:stretch}
+@media (max-width:940px){.cols,.three{grid-template-columns:1fr}}
+.shot{border:1px solid #e4e7d8;border-radius:12px;overflow:hidden;background:#fff;margin:0}
+.shot img{display:block;width:100%;height:auto}
+.shot figcaption{font-size:12.4px;color:#565a55;padding:9px 12px;border-top:1px solid #eceee2;background:#fcfcf9}
+.phone{max-width:330px}
+
+/* the flow diagram */
+.flow{border:1px solid #e4e7d8;border-radius:13px;background:#fff;padding:16px 18px}
+.flow b{display:block;font:700 13px/1.3 inherit;margin-bottom:9px}
+.step{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed #eceee2;font-size:13.6px}
+.step:last-child{border-bottom:0}
+.step i{flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:#eef2e3;color:#586b3f;
+  font:700 11.5px/22px inherit;text-align:center;font-style:normal}
+.step.bad i{background:#fbeee8;color:#b5442a}
+.step.bad{color:#b5442a}
+
+/* option cards */
+.opt{border:1px solid #e4e7d8;border-radius:13px;background:#fff;padding:16px 18px;display:flex;flex-direction:column}
+.opt h3{margin:0 0 4px;font:700 16px/1.25 Lora,Georgia,serif;color:#1a1d1a}
+.opt .tag{display:inline-block;font:700 10px/1 inherit;letter-spacing:.07em;text-transform:uppercase;
+  padding:4px 8px;border-radius:999px;margin-bottom:9px}
+.tag--rec{color:#586b3f;background:#eef2e3;border:1px solid #87986a}
+.tag--alt{color:#565a55;background:#f4f5ee;border:1px solid #e4e7d8}
+.opt p{font-size:13.8px;margin:0 0 9px}
+.opt ul{margin:0;padding-left:17px;font-size:13.4px;color:#565a55}
+.opt li{margin-bottom:4px}
+.opt .cost{margin-top:auto;padding-top:10px;font-size:13px;color:#b5442a;border-top:1px solid #eceee2}
+.opt .cost b{color:#b5442a}
+</style>
+<body id="lgfcfreeze">
+<div class="w">
+
+<h1>Two editors, one page — <span style="color:#586b3f">settled</span></h1>
+
+<div class="note note--ok" style="background:#f6f8ef;padding:14px 16px;border-radius:0 10px 10px 0">
+<p style="margin:0 0 8px"><strong>You ruled, 14 August:</strong> <em>“I want all the old posts and the new
+posts to be handled by layout-v2. I thought we made this decision.”</em></p>
+<p style="margin:0"><strong>So: the page belongs to layout-v2, for every Loothprint, old and new.</strong>
+The form is <strong>details only</strong> — licence, type and area, print files, title: exactly the things
+layout-v2 cannot reach. The two editors stop competing, and the freeze problem below dissolves. A/B/C is
+withdrawn; this page is kept as the record of how it got here.</p>
+</div>
+
+<p class="note"><strong>One wrinkle you asked to hear about before I build around it — and it is real.</strong>
+A layout-v2 page stores its content rather than looking it up. So once a post has a page, editing a detail in
+the form saves the detail but does <em>not</em> change the page:</p>
+
+<table style="margin-bottom:18px">
+  <tr><th>Detail edited in the form</th><th>Does the page follow?</th></tr>
+  <tr><td>Title</td><td class="y">yes — the header reads it live</td></tr>
+  <tr><td>Main photo / hero</td><td class="y">yes — same reason</td></tr>
+  <tr><td>Description</td><td class="n">no</td></tr>
+  <tr><td>Photos</td><td class="n">no</td></tr>
+  <tr><td><strong>Print files (the ZIP)</strong></td><td class="n"><strong>no — the page keeps offering the old download</strong></td></tr>
+  <tr><td>Licence</td><td class="n">no</td></tr>
+  <tr><td>Video / CAD / tip jar links</td><td class="n">no</td></tr>
+</table>
+
+<p class="note"><strong>The one that actually bites is the print files.</strong> A member replaces their ZIP,
+the form says saved, and the page carries on handing out the old file. That is the worst possible version of
+this because nobody notices — the download still works, it is just wrong.</p>
+
+<p class="note note--ok"><strong>What I would do about it, if you agree:</strong> when a member changes one of
+those details, update the matching piece of the page too — the download link, the licence line, the photos —
+and leave everything else in their page exactly as it is. That keeps your rule (layout-v2 owns the page)
+without the form quietly lying about the ZIP. <strong>I have not built it yet</strong>; you said tell you
+first, so I am telling you first.</p>
+
+<h2>How it got here (the record)</h2>
+<p>A Loothprint's page is <strong>built from its fields</strong>. You fill in the title, the photos, the
+files and the licence, and the page assembles itself. That is why this whole job was small.</p>
+<p>But every Loothprint already has an <strong>“Edit page”</strong> button for its author, which opens the
+block editor and lets them rearrange the page itself. The moment anyone uses it, that hand-made layout is
+saved — and from then on <strong>the page stops following the fields</strong>.</p>
+
+<div class="cols">
+  <div>
+    <div class="flow">
+      <b>Today, if a member never touches “Edit page”</b>
+      <div class="step"><i>1</i><span>Member edits their details in the form</span></div>
+      <div class="step"><i>2</i><span>The page rebuilds itself from the new fields</span></div>
+      <div class="step"><i>3</i><span>They see their change. Everything agrees.</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="flow">
+      <b>Today, once they have used “Edit page” even once</b>
+      <div class="step"><i>1</i><span>Member edits their details in the form</span></div>
+      <div class="step"><i>2</i><span>The details really are saved</span></div>
+      <div class="step bad"><i>✕</i><span>The page does not change. It is still showing the layout they
+        saved that day — and nothing tells them why.</span></div>
+    </div>
+  </div>
+</div>
+
+<p class="note"><strong>This is not something the new form introduces</strong> — it is true on your site
+today, between the page editor and the fields. The new form just makes it much easier to run into.</p>
+
+<h2>And it is not rare — I counted</h2>
+<p>I assumed this would affect a handful of posts. It does not.</p>
+<div style="display:flex;gap:22px;flex-wrap:wrap;margin:18px 0 6px">
+  <div style="background:#fff;border:1px solid #e4e7d8;border-radius:14px;padding:15px 19px;min-width:190px">
+    <b style="display:block;font:800 27px/1.1 Lora,Georgia,serif;color:#b5442a">169 of 170</b>
+    <span style="display:block;color:#565a55;font-size:13px;margin-top:4px">Loothprints already have a stored page</span></div>
+  <div style="background:#fff;border:1px solid #e4e7d8;border-radius:14px;padding:15px 19px;min-width:190px">
+    <b style="display:block;font:800 27px/1.1 Lora,Georgia,serif;color:#586b3f">24</b>
+    <span style="display:block;color:#565a55;font-size:13px;margin-top:4px">different page shapes between them</span></div>
+  <div style="background:#fff;border:1px solid #e4e7d8;border-radius:14px;padding:15px 19px;min-width:190px">
+    <b style="display:block;font:800 27px/1.1 Lora,Georgia,serif;color:#586b3f">228</b>
+    <span style="display:block;color:#565a55;font-size:13px;margin-top:4px">across all the types that build themselves</span></div>
+</div>
+<p>So the notice above would appear on <strong>almost every Loothprint anyone edits</strong>, not
+occasionally.</p>
+<p class="note"><strong>But those pages were almost certainly not hand-arranged one by one.</strong>
+Twenty-four shapes across a hundred and seventy posts is a machine's fingerprint, not a person's — 44 of
+them share one identical shape. They look like the output of the conversion that brought this content into
+the current page system, later opened in the admin editor. <strong>I have not proved who or what made
+them</strong> and I will not state it as fact — but it changes what Option A costs, so you should have it
+before you choose.</p>
+
+<h2>What the form does about it right now</h2>
+<p>Until you rule, it refuses to pretend. If a post's page has been customised, the form says so before you
+type anything:</p>
+<div class="cols">
+  <div>
+    <figure class="shot">
+      <img src="freeze-warning-desktop.png" width="1800" height="1400" alt="The edit form showing a notice that the page was customised">
+      <figcaption>Real screenshot of the edit form on a customised post.</figcaption>
+    </figure>
+  </div>
+  <div>
+    <figure class="shot phone">
+      <img src="freeze-warning-phone.png" width="780" height="1440" alt="The same notice on a phone">
+      <figcaption>Same, on a phone.</figcaption>
+    </figure>
+  </div>
+</div>
+<p class="note note--ok"><strong>That is a stopgap, not an answer.</strong> It stops the form lying, but it
+still leaves a member stuck with a page that ignores them. One of the three below is the actual fix.</p>
+
+<h2>Your question: can they just edit those with the page editor?</h2>
+<p>Yes — and I checked rather than assumed. On four real member-owned Loothprints with
+stored pages, the author does get the <strong>Edit page</strong> button and it opens.
+So those 169 posts are not stranded.</p>
+
+<p><strong>But it is a partial editor, and the gap is the part that matters.</strong>
+It edits the page's <em>words and pictures</em> — headings, body text, captions,
+labels, and swapping an image or a file shown on the page. It writes only the page.
+It never touches the post's own details.</p>
+
+<div class="cols">
+  <div class="flow">
+    <b>What a member CAN change with the page editor</b>
+    <div class="step"><i>✓</i><span>The wording anywhere on the page</span></div>
+    <div class="step"><i>✓</i><span>Pictures and files shown in the page's blocks</span></div>
+    <div class="step"><i>✓</i><span>How the page is laid out</span></div>
+  </div>
+  <div class="flow">
+    <b>What it CANNOT change at all</b>
+    <div class="step bad"><i>✕</i><span>The licence</span></div>
+    <div class="step bad"><i>✕</i><span>The type and the area of work</span></div>
+    <div class="step bad"><i>✕</i><span>The downloadable print files, as the post's own file</span></div>
+    <div class="step bad"><i>✕</i><span>The post's title itself</span></div>
+  </div>
+</div>
+
+<p class="note"><strong>So "they can already edit them" is true for the text and false for
+the details.</strong> A member who wants to correct a licence, re-file a print under the
+right type, or replace the ZIP has no front-end route to it today — and that is exactly
+what the new form does.</p>
+
+<h2>Does that make C a tidy split — old posts one way, new posts the other?</h2>
+<p>It is a reasonable thought, and I looked at it properly. <strong>It does not hold,
+for one specific reason: the split will not stay put.</strong></p>
+<p>The <em>Edit page</em> button is offered on <strong>every</strong> published Loothprint —
+including brand-new ones posted through the new form, which start with no stored page at
+all. I confirmed that on a fresh post. So the first time anyone opens the page editor on a
+new Loothprint, that post quietly joins the old group and its details stop showing.</p>
+<p class="note"><strong>Meaning a split is not a decision you can make once.</strong> It
+would drift: every post ends up in the "old" bucket eventually, one accidental click at a
+time, and nothing announces it. That is why I would still rather take A or B — those are
+stable — than adopt C as a permanent arrangement. C remains fine as a <em>holding</em>
+position while you decide; it is just not a resting place.</p>
+
+<h2>The three ways out — WITHDRAWN, kept for the record</h2>
+<div class="three">
+
+  <div class="opt">
+    <h3>A · One editor for Loothprints</h3>
+    <span class="tag tag--rec">what I'd pick</span>
+    <p>Take “Edit page” off Loothprints. The page <em>is</em> the fields, so there is nothing meaningful to
+    arrange by hand — and one editor cannot disagree with itself.</p>
+    <ul>
+      <li>Members get one obvious way to change their post</li>
+      <li>The clash becomes impossible, not managed</li>
+      <li>Nothing to explain to anyone</li>
+    </ul>
+    <div class="cost"><b>Cost — bigger than I first thought:</b> this replaces the stored page of
+    <b>169 Loothprints</b> with a freshly built one. If those stored pages are conversion output, that is
+    fine and probably an improvement. If any were tuned on purpose, that tuning goes. I would want to render
+    a handful both ways and show you the difference before doing it.</div>
+  </div>
+
+  <div class="opt">
+    <h3>B · Editing details wins</h3>
+    <span class="tag tag--alt">middle road</span>
+    <p>Keep both editors. When a member saves the form, the custom layout is dropped and the page goes back
+    to following the fields.</p>
+    <ul>
+      <li>Both tools stay available</li>
+      <li>The member's most recent action is the one that counts</li>
+    </ul>
+    <div class="cost"><b>Cost:</b> a member who spent time arranging their page loses it by editing a typo,
+    and would not expect that. It trades a silent failure for a surprising one.</div>
+  </div>
+
+  <div class="opt">
+    <h3>C · Leave it, keep the warning</h3>
+    <span class="tag tag--alt">do nothing</span>
+    <p>Both editors stay, the page stays frozen once customised, and the notice tells the member their
+    details will not show.</p>
+    <ul>
+      <li>Nobody loses work they did on purpose</li>
+      <li>No change to anything existing</li>
+    </ul>
+    <div class="cost"><b>Cost:</b> the member is told there is a problem and given no way to fix it — they
+    have to ask us. That is the state the notice is apologising for.</div>
+  </div>
+
+</div>
+
+<h2>What I still need from you</h2>
+<p><strong>Nothing — this is settled.</strong> The only open question is the wrinkle at the top: whether I
+should keep the page's download link, licence and photos in step when a member edits those details. Say yes
+and I will build it; say no and the form will save details that the page does not show, which I would rather
+you chose on purpose than discover.</p>
+
+<p class="note"><strong>Nothing is switched on.</strong> The compose and edit forms are behind a flag that
+is off; <code>/compose/</code> still answers 404 on the site. This decision only needs making before that
+flag goes on, not before anything ships. The other two pages:
+<a href="./">the form</a> · <a href="toggle.html">the toggle in the composer</a>.</p>
+
+</div>

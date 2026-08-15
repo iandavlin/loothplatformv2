@@ -233,6 +233,11 @@ CSS;
             'post_id'   => $post->ID,
             'manifests' => self::manifests_for_js(),
             'icons'     => Icons::all(),
+            /* The four Creative Commons licences, shipped from Licenses::
+               rather than restated in JS — the licence-choice picker offers
+               exactly what the renderer draws, or the editor would let someone
+               pick a licence the page cannot render. */
+            'licenses'  => Licenses::picker_choices(),
         ]) . ';', 'before');
     }
 

@@ -34,8 +34,34 @@ $url    = is_string($args['url']   ?? null) ? trim((string) $args['url'])   : ''
 $label  = is_string($args['label'] ?? null) ? trim((string) $args['label']) : '';
 $title  = array_key_exists('title', $args) ? trim((string) $args['title']) : 'Download';
 $depth  = (int) ($args['_depth'] ?? 1);
+$postId = (int) ($ctx['post_id'] ?? 0);
 
 $editorMode = !empty($ctx['editor_mode']);
+
+/* ── No file pinned? FOLLOW THE POST. ───────────────────────────────────────
+   A stored layout freezes whatever file_id it was built with. Today that is
+   harmless — measured: all 168 stored loothprint layouts still point at the
+   post's current file, zero drift. But the drift is only ever one upload away:
+   replacing a print file through the form creates a NEW attachment, the form
+   says saved, and the stored layout keeps pointing at the old one. The page
+   still downloads something, so nobody notices it is the wrong file.
+
+   With no file_id and no url, the block resolves the post's own print file at
+   render instead — the same live-read the licence block uses, and the same one
+   post-header uses for title/hero. That makes the drift structurally
+   impossible rather than merely absent today.
+
+   Guarded with function_exists() so the standalone/no-WP path degrades to "no
+   file" instead of fataling. */
+if ($url === '' && $fileId <= 0 && $postId > 0
+    && function_exists('get_post_meta') && function_exists('get_post_type')) {
+    $metaKey = match (get_post_type($postId)) {
+        'loothprint' => 'loothprint_3d_file',
+        'loothcuts'  => 'loothcut_cnc_file',
+        default      => '',
+    };
+    if ($metaKey !== '') $fileId = (int) get_post_meta($postId, $metaKey, true);
+}
 
 /* Resolve the file through the media map (url + metadata pre-baked at
    materialize). Explicit `url` on the block wins (off-site files). */

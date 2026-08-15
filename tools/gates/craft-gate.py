@@ -21,7 +21,8 @@ in docs/CRAFT-STANDARD.md before pushing. Run via tools/gates/run-all.sh.
 Run as ubuntu on dev (mints viewer cookies via sudo, drives chrome-dev:9222).
 """
 
-import asyncio, json, subprocess, sys, urllib.request, urllib.parse
+import asyncio
+import json, subprocess, sys, urllib.request, urllib.parse
 
 try:
     import websockets
@@ -76,6 +77,55 @@ PAGES = {
     # 178KB total / 40KB images with twelve rows rendered.
     "account": ("/manage-subscription/", ["member"]),
 }
+
+# Surfaces that only EXIST when a flag is on. CLAUDE.md requires every new content
+# surface to be registered here, but a flagged-off route is a 404 — and a 404 is
+# light, fast and image-free, so auditing it would PASS and register as coverage
+# this gate does not have. That is the same "pass over the wrong document" the
+# wdsignup note above was written about, so these are declared separately and
+# SKIPPED WITH A REASON until their flag is on, rather than quietly audited.
+#
+# The flag is READ off the box via the feature's own reader function, never
+# assumed, so flipping the default needs no edit here — the surface simply starts
+# being audited.
+FLAGGED_PAGES = {
+    # front-end compose (backlog 6, Ian's Option A). Member-only by construction:
+    # anon gets the branded 404, so an anon audit would measure that instead.
+    "compose": ("/compose/?type=loothprint", ["member"], "lg_fc_enabled"),
+}
+
+
+def _flag_is_on(reader):
+    """
+    Ask the feature's own READER FUNCTION off the box. Absent or unreadable =>
+    treat as OFF.
+
+    A function, not a constant: front-end compose moved its flag into a shared
+    tracked file so bb-mirror's toggle and the WordPress form cannot disagree, and
+    a constant check would have reported OFF forever — the page would have skipped
+    on every run and this entry would have been pure decoration while looking
+    like coverage.
+    """
+    try:
+        r = subprocess.run(
+            ["sudo", "-n", "wp", "--allow-root", "--path=/var/www/dev", "eval",
+             f"echo function_exists('{reader}') && {reader}() ? 'on' : 'off';"],
+            capture_output=True, text=True, timeout=60)
+        return r.returncode == 0 and r.stdout.strip().endswith("on")
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def active_pages():
+    """PAGES, plus any FLAGGED_PAGES whose flag is currently on."""
+    out = {k: v for k, v in PAGES.items()}
+    for name, (path, viewers, reader) in FLAGGED_PAGES.items():
+        if _flag_is_on(reader):
+            out[name] = (path, viewers)
+        else:
+            print(f"  SKIP  {name}: {reader}() is off — surface does not exist yet "
+                  f"(auditing its 404 would pass and mean nothing)")
+    return out
 
 OVERSIZE_RATIO   = 1.7        # natural px vs rendered px * dpr
 OVERSIZE_MIN_KB  = 40         # ignore tiny offenders
@@ -262,7 +312,7 @@ def main():
     gate = gate_token()
     member = member_cookies()
     fails, ok = [], 0
-    for name, (path, viewers) in PAGES.items():
+    for name, (path, viewers) in active_pages().items():
         if flt and flt not in name:
             continue
         for viewer in viewers:

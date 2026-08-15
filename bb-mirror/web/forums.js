@@ -6196,3 +6196,83 @@ function lgFollowEnabled() {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();
+
+/* ── COMPOSER TYPE TOGGLE — Discussion <-> Loothprint (Ian 2026-08-09) ─────────
+ *
+ * "part of the compose package in the new post in the hub… toggle between
+ * discussion and loothprint… two different forms."
+ *
+ * SELF-CONTAINED ON PURPOSE. It touches the composer only through the DOM
+ * (#ntm-form, #ntm-lpframe) and never reaches into the composer's closure, so it
+ * cannot perturb the discussion flow — which is the half that must not regress.
+ * With the flag off the markup is absent entirely and every line below no-ops on
+ * the first querySelector.
+ *
+ * WHY AN IFRAME AND NOT INJECTED MARKUP: ACF's gallery, media modal and select2
+ * are printed by wp_head() on the compose route, and the hub has none of them.
+ * Injected markup would render a photo picker that silently does nothing — the
+ * failure class this lane already hit once with the nested-form bug.
+ *
+ * The frame is SAME-ORIGIN, so its height is read directly from its own document
+ * rather than negotiated over postMessage. One scrollbar (the dialog's), not two
+ * — a frame that scrolls inside a scrolling dialog is Ian's cramped-modal
+ * complaint (backlog 10) made worse.
+ */
+(function () {
+  var wrap = document.getElementById('ntm-typetoggle');
+  var frame = document.getElementById('ntm-lpframe');
+  if (!wrap || !frame) return;                    // flag off, or cannot post
+
+  var form = document.getElementById('ntm-form');
+  var base = wrap.getAttribute('data-compose-base') || '/compose/';
+  var loaded = false;
+  var formWasHidden = null;
+
+  function fit() {
+    try {
+      var d = frame.contentDocument;
+      if (!d || !d.body) return;
+      var h = Math.max(d.body.scrollHeight, d.documentElement.scrollHeight);
+      if (h > 0) frame.style.height = h + 'px';
+    } catch (e) { /* cross-origin should be impossible here; never throw at the user */ }
+  }
+
+  function show(type) {
+    var lp = type === 'loothprint';
+    [].forEach.call(wrap.querySelectorAll('.ntm-typetoggle__opt'), function (b) {
+      var on = b.getAttribute('data-ntm-type') === type;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+
+    if (lp) {
+      // Remember the form's state rather than assuming it was visible: the
+      // composer hides it while loading and for signed-out readers, and
+      // restoring it unconditionally would show a dead form over those states.
+      if (formWasHidden === null && form) formWasHidden = form.hidden;
+      if (form) form.hidden = true;
+      if (!loaded) {
+        frame.src = base + '?type=loothprint&embed=1';
+        frame.addEventListener('load', fit);
+        loaded = true;
+      }
+      frame.hidden = false;
+      fit();
+    } else {
+      frame.hidden = true;
+      if (form) form.hidden = (formWasHidden === null ? false : formWasHidden);
+      formWasHidden = null;
+    }
+  }
+
+  wrap.addEventListener('click', function (e) {
+    var b = e.target.closest('.ntm-typetoggle__opt');
+    if (!b) return;
+    e.preventDefault();
+    show(b.getAttribute('data-ntm-type'));
+  });
+
+  // The form grows as a member adds photos; re-measure while it is on screen.
+  // Cheap, and only while the Loothprint side is actually showing.
+  setInterval(function () { if (!frame.hidden) fit(); }, 700);
+})();

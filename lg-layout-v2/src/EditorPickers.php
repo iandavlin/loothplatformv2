@@ -24,18 +24,27 @@ namespace LG\LayoutV2;
 
 final class EditorPickers
 {
-    /** Registered picker names. Keep alphabetized. The block-linter checks
-     *  manifest.editor.custom_picker against this list. */
-    public const KNOWN = ['image', 'rich-text'];
+    /** Registered picker names. Keep alphabetized. bin/lint-block.php reads
+     *  THIS list (M7) rather than keeping its own copy — three registries had
+     *  already drifted apart: the linter knew a 'gallery-items' that nothing
+     *  implements while rejecting the 'gallery' that blocks/gallery actually
+     *  declares and lg-fe-editor.js actually runs.
+     *
+     *  ⚠️ `gallery` and `embed-url` are FRONT-END-EDITOR ONLY: lg-fe-editor.js
+     *  runs them, but there is no render()/sanitize() arm below, so the admin
+     *  metabox cannot edit those props. Pre-existing gap, recorded not fixed. */
+    public const KNOWN = ['embed-url', 'file', 'gallery', 'image', 'license-choice', 'rich-text'];
 
     /** Manifest prop names a picker owns. These are excluded from the metabox's
      *  generic-field walker so the picker has exclusive control. */
     public static function owned_props(?string $name): array
     {
         return match ($name) {
-            'image'     => ['image_id', 'url'],
-            'rich-text' => ['html'],
-            default     => [],
+            'image'          => ['image_id', 'url'],
+            'rich-text'      => ['html'],
+            'license-choice' => ['code'],
+            'file'           => ['file_id', 'url'],
+            default          => [],
         };
     }
 
@@ -50,9 +59,11 @@ final class EditorPickers
     public static function render(string $name, array $block, string $namePrefix = 'lg_v2_blocks[0]', string $domSuffix = '0'): string
     {
         return match ($name) {
-            'image'     => self::render_image($block, $namePrefix, $domSuffix),
-            'rich-text' => self::render_rich_text($block, $namePrefix, $domSuffix),
-            default     => '',
+            'image'          => self::render_image($block, $namePrefix, $domSuffix),
+            'rich-text'      => self::render_rich_text($block, $namePrefix, $domSuffix),
+            'license-choice' => self::render_license_choice($block, $namePrefix, $domSuffix),
+            'file'           => self::render_file($block, $namePrefix, $domSuffix),
+            default          => '',
         };
     }
 
@@ -61,9 +72,11 @@ final class EditorPickers
     public static function sanitize(string $name, array $post): array
     {
         return match ($name) {
-            'image'     => self::sanitize_image($post),
-            'rich-text' => self::sanitize_rich_text($post),
-            default     => [],
+            'image'          => self::sanitize_image($post),
+            'rich-text'      => self::sanitize_rich_text($post),
+            'license-choice' => self::sanitize_license_choice($post),
+            'file'           => self::sanitize_file($post),
+            default          => [],
         };
     }
 
@@ -173,5 +186,113 @@ final class EditorPickers
         $clean = wp_kses_post(trim($raw));
         if ($clean === '') return [];
         return ['html' => $clean];
+    }
+
+    /* ── license-choice picker ────────────────────────────────────────── */
+
+    /**
+     * Licence chooser. The four Creative Commons licences as radio CHOICES,
+     * plus the default "follow the post" option that clears `code` back to ''.
+     *
+     * This picker is the reason the license block exists. The licence used to
+     * live in a callout's inline-editable `body`, which meant the only way to
+     * change it was to retype the sentence — so a typo silently became the
+     * licence, and nothing on the page knew what the licence meant.
+     */
+    private static function render_license_choice(array $block, string $namePrefix, string $domSuffix): string
+    {
+        $current = is_string($block['code'] ?? null) ? strtolower(trim((string) $block['code'])) : '';
+        if ($current !== '' && !Licenses::is_valid($current)) $current = '';
+
+        $field = $namePrefix . '[code]';
+        $group = 'lg_v2_license_' . $domSuffix;
+
+        ob_start();
+        ?>
+        <div class="lg-v2-mb-picker lg-v2-mb-picker--license" data-picker="license-choice">
+            <?php foreach (Licenses::picker_choices() as $choice):
+                $code = (string) $choice['code'];
+                $id   = $group . '_' . ($code === '' ? 'follow' : str_replace('-', '_', $code));
+            ?>
+                <p class="lg-v2-mb-license-choice">
+                    <label for="<?php echo esc_attr($id); ?>">
+                        <input type="radio"
+                               id="<?php echo esc_attr($id); ?>"
+                               name="<?php echo esc_attr($field); ?>"
+                               value="<?php echo esc_attr($code); ?>"
+                               <?php checked($current, $code); ?> />
+                        <strong><?php echo esc_html((string) $choice['label']); ?></strong>
+                        <span class="description"><?php echo esc_html((string) $choice['hint']); ?></span>
+                    </label>
+                </p>
+            <?php endforeach; ?>
+        </div>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    /**
+     * Read the chosen licence back. An unrecognized code collapses to '' —
+     * "follow the post" — rather than being stored: a bad code must never be
+     * persisted as if it were a licence.
+     */
+    private static function sanitize_license_choice(array $post): array
+    {
+        $code = isset($post['code']) && is_string($post['code']) ? strtolower(trim($post['code'])) : '';
+        if ($code !== '' && !Licenses::is_valid($code)) $code = '';
+        return ['code' => $code];
+    }
+
+    /* ── file picker ──────────────────────────────────────────────────── */
+
+    /**
+     * Attachment picker for the `download` block — any mime type, not just
+     * images. The block had NO editor affordance at all before this: empty
+     * inline_editable_props and a null picker, so the one control a member most
+     * needs (swap the print file) could not be reached from the page.
+     *
+     * Clearing the file is a real choice, not a mistake: an EMPTY file_id means
+     * "follow the post", and the download block then resolves the post's own
+     * print file at render. That is the state that cannot go stale, so the UI
+     * says so rather than treating empty as broken.
+     */
+    private static function render_file(array $block, string $namePrefix, string $domSuffix): string
+    {
+        $id   = (int) ($block['file_id'] ?? 0);
+        $name = $namePrefix . '[file_id]';
+
+        $filename = '';
+        if ($id > 0) {
+            $path = function_exists('get_attached_file') ? (string) get_attached_file($id) : '';
+            $filename = $path !== '' ? basename($path) : (string) get_the_title($id);
+        }
+
+        ob_start();
+        ?>
+        <div class="lg-v2-mb-picker lg-v2-mb-picker--file" data-picker="file">
+            <input type="hidden" name="<?php echo esc_attr($name); ?>" value="<?php echo esc_attr((string) $id); ?>" data-lg-file-id />
+            <p data-lg-file-label>
+                <?php if ($id > 0): ?>
+                    <strong><?php echo esc_html($filename); ?></strong>
+                <?php else: ?>
+                    <em>Following the post’s own file.</em>
+                <?php endif; ?>
+            </p>
+            <p>
+                <button type="button" class="button" data-lg-file-pick><?php echo $id > 0 ? 'Change file' : 'Choose a file'; ?></button>
+                <button type="button" class="button-link" data-lg-file-clear
+                        <?php echo $id > 0 ? '' : 'style="display:none"'; ?>>Follow the post instead</button>
+            </p>
+        </div>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    /** 0 is meaningful here — it is "follow the post" — so it is STORED, not
+     *  dropped the way the image picker drops an unset id. */
+    private static function sanitize_file(array $post): array
+    {
+        $id = isset($post['file_id']) ? (int) $post['file_id'] : 0;
+        return ['file_id' => max(0, $id)];
     }
 }

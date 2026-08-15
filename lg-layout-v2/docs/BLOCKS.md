@@ -45,6 +45,8 @@ New blocks:
 
 - **`pull-quote`** — Italic large-type aside. Variants for visual styling.
 - **`download`** — *New in v2.* File attachment (any mime type) + optional secondary link (e.g., Onshape, mirror) + optional tip jar URL + license indicator + title/description. Used by Loothprint, Loothcut, Document, Member Benefit posts.
+- **`license`** — *New in v2.* The Creative Commons licence a post carries, drawn as a CHOICE: licence name, a `rel="license"` link to the canonical deed, and one chip per clause it imposes (credit / non-commercial / share-alike / no-derivatives). With `code` empty — the default, and what the loothprint synthesizer emits — it resolves the licence LIVE from the post's `loothprint_creative_commons` meta, so changing it in the form changes the page instead of leaving baked prose behind. Variants: `note` (default), `compact`.
+- **`taxonomy`** — *New in v2.* The categories a post is filed under (Loothprint Type, Content Topic) as chips linking to their term archives. Reads the post's terms LIVE at render, so the page cannot drift from the form; declares no term picker on purpose, because the form owns the details. Variants: `chips` (default), `inline`. Renders nothing when a post carries no terms.
 - **`resource`** — Multi-variant container for related items: downloads, products, guests, generic links. Has `variant` prop selecting which sub-template to use. Items array of `{label, url, description, external, ...}`.
 - **`transcript`** — *New in v2.* Collapsible long-form transcript body wrapped in a native `<details>` / `<summary>` accordion. Body stays in the DOM at all times — crawlers index every word regardless of collapsed state. Used on video/podcast posts beneath the `embed`.
 
@@ -92,6 +94,8 @@ The design docs (initially) are stubs; they fill out as each block is implemente
 | carousel | [blocks/carousel.md](blocks/carousel.md) | stub |
 | pull-quote | [blocks/pull-quote.md](blocks/pull-quote.md) | stub |
 | download | [blocks/download.md](blocks/download.md) | stub |
+| license | [blocks/license.md](blocks/license.md) | implemented |
+| taxonomy | [blocks/taxonomy.md](blocks/taxonomy.md) | implemented |
 | resource | [blocks/resource.md](blocks/resource.md) | stub |
 | hero | [blocks/hero.md](blocks/hero.md) | stub |
 | byline | [blocks/byline.md](blocks/byline.md) | stub |

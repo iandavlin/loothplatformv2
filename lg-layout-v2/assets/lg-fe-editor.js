@@ -1078,7 +1078,109 @@
       openRichTextModal(host, path);
       return;
     }
+    if (picker === 'license-choice') {
+      openLicensePicker(path, host);
+      return;
+    }
+    if (picker === 'file') {
+      openFilePicker(path);
+      return;
+    }
     flashError('Unknown picker: ' + picker);
+  }
+
+  /* ── File picker (wp.media, any mime) ────────────────────────────────
+     The download block had no editor affordance at all — empty
+     inline_editable_props and a null picker — so the one control a member most
+     needs, "swap the print file", could not be reached from the page.
+
+     Not restricted to images: these are ZIP / DXF / STL / PDF. */
+  function openFilePicker(path) {
+    if (!window.wp || !window.wp.media) { flashError('wp.media not loaded'); return; }
+    var frame = window.wp.media({
+      title:    'Choose the file to offer',
+      button:   { text: 'Use this file' },
+      multiple: false,
+    });
+    frame.on('select', function () {
+      var a = frame.state().get('selection').first();
+      if (!a) return;
+      /* Clear any baked url at the same time: a stale explicit url would win
+         over the file_id being set here and the swap would look like a no-op. */
+      rest('update', { path: path, props: { file_id: a.id, url: '' } })
+        .then(reload, function (e) { flashError('File save failed: ' + e.message); });
+    });
+    frame.open();
+  }
+
+  /* ── Licence picker ──────────────────────────────────────────────────
+     The four Creative Commons licences as CHOICES. This picker is the whole
+     point of the license block: the licence used to live in a callout's
+     inline-editable body, so the only way to change it was to retype the
+     sentence — and a typo silently became the licence.
+
+     The options come from the server (LG_FE_EDITOR.licenses, built by
+     Licenses::picker_choices) so the editor can only ever offer a licence the
+     renderer knows how to draw.
+
+     The first option clears `code` back to '' — "follow the post's licence" —
+     which is the default and the one that keeps the page in step with the
+     form. Picking a specific licence PINS the block and stops it tracking. */
+  function openLicensePicker(path, host) {
+    var CHOICES = (window.LG_FE_EDITOR && LG_FE_EDITOR.licenses) || [];
+    if (!CHOICES.length) { flashError('No licences available'); return; }
+
+    document.querySelectorAll('.lg-tier-pop').forEach(function (n) { n.remove(); });
+
+    var pop = document.createElement('div');
+    pop.className = 'lg-tier-pop lg-license-pop';
+    pop.contentEditable = 'false';
+    pop.innerHTML = '<div class="lg-tier-pop__title">Licence</div>';
+
+    /* Current value is read off the rendered block rather than tracked in JS
+       state: the renderer resolves `code:""` against the post, so the DOM is
+       the only place that knows which licence is actually showing. */
+    var current = host.getAttribute('data-lg-license-code') || '';
+
+    CHOICES.forEach(function (opt) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'lg-tier-pop__opt' + (opt.code === current ? ' is-current' : '');
+      b.innerHTML = '<strong>' + esc(opt.label) + '</strong><span>' + esc(opt.hint) + '</span>';
+      b.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        pop.remove();
+        /* Reload rather than patch in place: changing the licence changes the
+           name, the deed link AND the clause chips, so re-rendering server-side
+           is both simpler and the only way to stay honest about what the
+           licence means. */
+        rest('update', { path: path, props: { code: opt.code } })
+          .then(reload, function (err) { flashError('Licence save failed: ' + err.message); });
+      });
+      pop.appendChild(b);
+    });
+
+    var pill = host.querySelector('.lg-edit-pill');
+    if (pill) pill.parentNode.insertBefore(pop, pill.nextSibling);
+    else host.appendChild(pop);
+
+    setTimeout(function () {
+      function dismiss(e) {
+        if (e.type === 'keydown' && e.key !== 'Escape') return;
+        if (e.type === 'click' && pop.contains(e.target)) return;
+        pop.remove();
+        document.removeEventListener('click', dismiss, true);
+        document.removeEventListener('keydown', dismiss, true);
+      }
+      document.addEventListener('click', dismiss, true);
+      document.addEventListener('keydown', dismiss, true);
+    }, 0);
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
   }
 
   /* ── Gallery picker (wp.media multi-select) ──────────────────────────

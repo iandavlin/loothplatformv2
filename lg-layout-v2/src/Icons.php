@@ -48,6 +48,18 @@ final class Icons
         /* Misc */
         'avatar'    => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>',
         'chevron'   => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>',
+        'external'  => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>',
+
+        /* Creative Commons — the mark and its four elements. Drawn in the same
+           24x24 / currentColor idiom as the rest of the palette rather than
+           hotlinked from creativecommons.org, so a licence never costs the page
+           an external asset request. Each is the recognizable CC glyph: a ring
+           around the element's symbol. */
+        'cc'        => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M10.1 9.9a2.7 2.7 0 1 0 0 4.2"/><path d="M16.4 9.9a2.7 2.7 0 1 0 0 4.2"/></svg>',
+        'cc-by'     => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8.4" r="1.9"/><path d="M8.6 17.6v-3a3.4 3.4 0 0 1 6.8 0v3"/></svg>',
+        'cc-nc'     => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M14.8 9.3a3 3 0 0 0-2.8-1.6c-1.6 0-2.7.9-2.7 2.1 0 2.9 6 1.5 6 4.4 0 1.3-1.2 2.2-2.9 2.2a3.2 3.2 0 0 1-3-1.7"/><path d="M12 6.2v11.6"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
+        'cc-sa'     => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16.8 12a4.8 4.8 0 0 1-8.2 3.4"/><path d="M7.2 12a4.8 4.8 0 0 1 8.2-3.4"/><path d="M15.4 5.4v3.2h-3.2"/><path d="M8.6 18.6v-3.2h3.2"/></svg>',
+        'cc-nd'     => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M7.6 10.2h8.8M7.6 13.8h8.8"/></svg>',
     ];
 
     public static function all(): array

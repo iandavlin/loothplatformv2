@@ -1,0 +1,62 @@
+{
+  "name": "taxonomy",
+  "version": 1,
+  "selector": ".lg-taxonomy",
+  "description": "The categories a post is filed under — Loothprint Type and Content Topic — as chips linking to their term archives. Reads the post's terms LIVE at render, so the page cannot drift from the form. Declares no term picker on purpose: the form owns the details, and a second editor for one value is how the two end up disagreeing.",
+  "inherits_global": false,
+  "schema": {
+    "props": {
+      "taxonomies": {
+        "type": "array",
+        "default": ["loothprint_type", "shared_category"],
+        "description": "Taxonomy slugs to show, in order. Unregistered ones and ones the post has no terms in are skipped silently rather than rendered as an empty row."
+      },
+      "title": {
+        "type": "string",
+        "default": "",
+        "description": "Optional uppercase eyebrow above the chips. Empty = no title row."
+      },
+      "link": {
+        "type": "bool",
+        "default": true,
+        "description": "Link each chip to its term archive. When false the chips are plain text — never a link-styled element that does nothing."
+      },
+      "variant": {
+        "type": "string",
+        "default": "chips",
+        "enum": ["chips", "inline"],
+        "description": "chips renders pills; inline renders a middot-separated run for dense pages."
+      }
+    },
+    "required": []
+  },
+  "vars": {
+    "container": ["padding", "margin-block", "bg", "radius"],
+    "text": ["title-color", "chip-bg", "chip-color", "chip-border"]
+  },
+  "defaults": {
+    "container": {
+      "padding": "0",
+      "margin-block": "20px",
+      "bg": "transparent",
+      "radius": "0"
+    },
+    "text": {
+      "title-color": "#8a8d84",
+      "chip-bg": "#f2f3ee",
+      "chip-color": "#4a5a35",
+      "chip-border": "#e0e3d6"
+    }
+  },
+  "variants": {
+    "chips":  { "extends": "defaults" },
+    "inline": { "extends": "defaults" }
+  },
+  "editor": {
+    "insertable": true,
+    "inline_editable_props": ["title"],
+    "custom_picker": null,
+    "variant_prop": "variant",
+    "pill_buttons": ["up", "down", "edit", "variant", "tier", "delete"]
+  }
+}

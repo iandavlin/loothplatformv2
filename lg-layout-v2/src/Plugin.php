@@ -272,7 +272,8 @@ final class Plugin
         $raw = get_post_meta($post_id, LG_LAYOUT_V2_META_KEY, true);
         if (!empty($raw)) {
             $data = is_array($raw) ? $raw : json_decode((string) $raw, true);
-            return is_array($data) ? $data : null;
+            if (!is_array($data)) return null;
+            return self::upgrade_stored_layout($data, $post_id);
         }
         $post = get_post($post_id);
         if (!$post instanceof \WP_Post) return null;
@@ -335,10 +336,175 @@ final class Plugin
     }
 
     /**
+     * Read-path upgrades for a STORED layout: swap what is stale, insert what is
+     * missing. Writes nothing — flags off and this is the identity function.
+     *
+     * Ian, 2026-08-15 (ruling 7): v2 MAY insert a missing block into a stored
+     * page, with the scope guard that an insert only ever SURFACES something the
+     * author already declared in the form, and never invents content. Both
+     * inserts below read the post first and bail if the author declared nothing.
+     */
+    private static function upgrade_stored_layout(array $layout, int $post_id): array
+    {
+        $layout = self::upgrade_license_callouts($layout);
+        $layout = self::insert_missing_blocks($layout, $post_id);
+        return $layout;
+    }
+
+    /**
+     * Insert blocks for details the author declared in the form but which no
+     * block on their stored page shows.
+     *
+     * Measured: 3 loothprints (72155, 72146, 71927) publish a licence chosen in
+     * the form that appears NOWHERE on the page, and 157 carry taxonomy terms
+     * that no block has ever rendered.
+     *
+     * ── the strict/loose asymmetry, which is the whole safety of this ────────
+     * Deciding to REPLACE a block demands certainty (an exact ACF choice string).
+     * Deciding NOT TO INSERT demands only suspicion: if anything licence-shaped
+     * is already on the page, adding a second licence is worse than adding none.
+     * Post 71142 is exactly that case — a hand-written "Creative Commons
+     * BY-NC-SA — credit the creator…" sentence that the strict recogniser will
+     * not touch, and which must still suppress the insert.
+     *
+     * Position: immediately before `post-footer`. The chips and the licence
+     * belong to the article, not to the site chrome that follows it.
+     */
+    private static function insert_missing_blocks(array $layout, int $post_id): array
+    {
+        if ($post_id <= 0 || empty($layout['blocks']) || !is_array($layout['blocks'])) return $layout;
+        if (!function_exists('get_post_meta')) return $layout;
+
+        $wantLicense  = self::license_block_enabled();
+        $wantTaxonomy = self::taxonomy_block_enabled();
+        if (!$wantLicense && !$wantTaxonomy) return $layout;
+
+        /* Read the post's OWN answers, then hand the decision to a pure
+           function. Splitting it this way is what makes the insert rule
+           testable without booting the plugin: plan_inserts() takes facts, not
+           a database. */
+        $declared = Licenses::from_meta((string) get_post_meta($post_id, 'loothprint_creative_commons', true));
+
+        $filed = false;
+        if (function_exists('get_the_terms')) {
+            foreach (['loothprint_type', 'shared_category'] as $tax) {
+                if (function_exists('taxonomy_exists') && !taxonomy_exists($tax)) continue;
+                $terms = get_the_terms($post_id, $tax);
+                if (is_array($terms) && $terms) { $filed = true; break; }
+            }
+        }
+
+        return LayoutUpgrade::plan_inserts($layout, $declared, $filed, $wantLicense, $wantTaxonomy);
+    }
+
+
+    /**
+     * Swap a legacy prose licence callout for the `license` block, on READ.
+     *
+     * ── why this exists, and why it is not a migration ──────────────────────
+     * Measured on dev2: 172 loothprints, 168 of them carry a STORED layout, and
+     * only 4 are synthesized. So changing the synthesizer alone would have
+     * reached 4 posts — the licence block would have been correct and invisible.
+     * 164 of the stored layouts hold the licence as a `callout` variant `note`
+     * whose body is exactly one of the four ACF choice strings.
+     *
+     * This runs on the read path and writes NOTHING. Flag off, or an
+     * unrecognised body, and the layout is returned byte-identical — so there
+     * is no migration to reverse, no half-migrated corpus if it is switched off
+     * mid-way, and no risk of rewriting 164 posts' stored content to find out
+     * whether Ian likes it.
+     *
+     * The recogniser is deliberately strict (an EXACT ACF choice string, via
+     * Licenses::from_exact_prose): a note callout that merely mentions a licence
+     * inside a longer paragraph must not be swallowed, because replacing it
+     * would drop the author's surrounding prose.
+     *
+     * The replacement carries NO `code`, so the block resolves the licence live
+     * from the post — which also closes the gap where a stored page's prose and
+     * the form's current answer could disagree. Measured today: all 164 agree,
+     * so switching this on changes how the licence LOOKS and never which
+     * licence a page states.
+     *
+     * `gated_tier` is carried across; dropping it would un-gate a gated block.
+     */
+    private static function upgrade_license_callouts(array $layout): array
+    {
+        if (!self::license_block_enabled()) return $layout;
+        if (empty($layout['blocks']) || !is_array($layout['blocks'])) return $layout;
+
+        foreach ($layout['blocks'] as $i => $b) {
+            if (!is_array($b)) continue;
+            if (($b['type'] ?? '') !== 'callout') continue;
+            if (($b['variant'] ?? '') !== 'note') continue;
+
+            $body = (string) ($b['body'] ?? '');
+            if ($body === '') continue;
+            $text = function_exists('wp_strip_all_tags') ? wp_strip_all_tags($body) : strip_tags($body);
+            if (Licenses::from_exact_prose($text) === '') continue;
+
+            $new = ['type' => 'license'];
+            if (isset($b['id']))          $new['id']          = $b['id'];
+            if (isset($b['title']))       $new['title']       = $b['title'];
+            if (isset($b['gated_tier']))  $new['gated_tier']  = $b['gated_tier'];
+            $layout['blocks'][$i] = $new;
+        }
+        return $layout;
+    }
+
+    /**
+     * Is the loothprint page's licence routed through the `license` block?
+     *
+     * Reads config/license-block.php relative to __DIR__ — the same file on
+     * disk in every runtime (FPM, WP-CLI, cron, the standalone renderer), which
+     * an env var would not be. Missing or unreadable config means OFF: a
+     * member-facing change must never switch itself on by accident.
+     *
+     * The env/$_SERVER overrides are how a lane preview or a gate run exercises
+     * the ON path without editing tracked config. Both are read because a
+     * fastcgi_param lands in $_SERVER but not reliably in getenv(), and reading
+     * only getenv() would serve the OFF path on the very preview URL built to
+     * show the ON one.
+     */
+    public static function license_block_enabled(): bool
+    {
+        return self::block_flag('license-block', 'LG_V2_LICENSE_BLOCK');
+    }
+
+    /** Is a synthesized page's print file routed through the `download` block? */
+    public static function download_block_enabled(): bool
+    {
+        return self::block_flag('download-block', 'LG_V2_DOWNLOAD_BLOCK');
+    }
+
+    /** Is a synthesized page showing its Loothprint Type / Content Topic? */
+    public static function taxonomy_block_enabled(): bool
+    {
+        return self::block_flag('taxonomy-block', 'LG_V2_TAXONOMY_BLOCK');
+    }
+
+    /** Shared reader for the config/<name>.php block flags. */
+    private static function block_flag(string $name, string $envVar): bool
+    {
+        static $cache = [];
+        if (isset($cache[$name])) return $cache[$name];
+
+        foreach ([getenv($envVar), $_SERVER[$envVar] ?? null] as $override) {
+            if ($override !== false && $override !== null && $override !== '') {
+                return $cache[$name] = in_array(strtolower((string) $override), ['1', 'true', 'on', 'yes'], true);
+            }
+        }
+
+        $path = dirname(__DIR__) . '/config/' . $name . '.php';
+        if (!is_readable($path)) return $cache[$name] = false;
+        $cfg = include $path;
+        return $cache[$name] = (is_array($cfg) && !empty($cfg['enabled']));
+    }
+
+    /**
      * Synthesize a loothprint layout from postmeta.
      * post-header → wysiwyg(desc) → gallery → embed(video) →
      * callout:files(download) → callout:links(onshape) →
-     * callout:note(license) → callout:links(bmc) → post-footer
+     * license OR callout:note(license) → callout:links(bmc) → post-footer
      */
     private static function default_loothprint_layout(\WP_Post $post): array
     {
@@ -374,11 +540,17 @@ final class Plugin
             $blocks[] = ['type' => 'embed', 'id' => 'lp_video', 'url' => $video];
         }
         if ($file_url !== '') {
-            $dl = [
-                'type' => 'callout', 'id' => 'lp_download', 'variant' => 'files',
-                'title' => 'Download',
-                'items' => [['icon' => 'file-zip', 'label' => $file_name ?: 'Download File', 'url' => $file_url]],
-            ];
+            if (self::download_block_enabled()) {
+                /* No file_id baked: the block resolves the post's own print file
+                   at render, so replacing it through the form changes the page. */
+                $dl = ['type' => 'download', 'id' => 'lp_download', 'title' => 'Download'];
+            } else {
+                $dl = [
+                    'type' => 'callout', 'id' => 'lp_download', 'variant' => 'files',
+                    'title' => 'Download',
+                    'items' => [['icon' => 'file-zip', 'label' => $file_name ?: 'Download File', 'url' => $file_url]],
+                ];
+            }
             if ($gate) $dl['gated_tier'] = $gate;
             $blocks[] = $dl;
         }
@@ -392,16 +564,31 @@ final class Plugin
             $blocks[] = $os;
         }
         if ($cc !== '') {
-            $blocks[] = [
-                'type' => 'callout', 'id' => 'lp_license', 'variant' => 'note',
-                'title' => 'License', 'body' => '<p>' . esc_html($cc) . '</p>',
-            ];
+            if (self::license_block_enabled()) {
+                /* No `code`: the block resolves the licence from this post's own
+                   meta at render, so changing it in the form changes the page.
+                   Baking the code here would reintroduce the staleness the
+                   block exists to remove. */
+                $blocks[] = ['type' => 'license', 'id' => 'lp_license'];
+            } else {
+                /* OFF — byte-identical to what shipped before the block existed. */
+                $blocks[] = [
+                    'type' => 'callout', 'id' => 'lp_license', 'variant' => 'note',
+                    'title' => 'License', 'body' => '<p>' . esc_html($cc) . '</p>',
+                ];
+            }
         }
         if ($bmc !== '') {
             $blocks[] = [
                 'type' => 'callout', 'id' => 'lp_bmc', 'variant' => 'links',
                 'items' => [['icon' => 'link', 'label' => 'Support the creator on Buy Me a Coffee', 'url' => $bmc]],
             ];
+        }
+        /* Filed-under chips sit ABOVE the footer: they belong to the article,
+           not to the site chrome that follows it. Nothing renders if the post
+           carries no terms, so this is not an empty row on an unfiled post. */
+        if (self::taxonomy_block_enabled()) {
+            $blocks[] = ['type' => 'taxonomy', 'id' => 'lp_filed', 'title' => 'Filed under'];
         }
         $blocks[] = ['type' => 'post-footer', 'id' => 'lp_footer'];
 

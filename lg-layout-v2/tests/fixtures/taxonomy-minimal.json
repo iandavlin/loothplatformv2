@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "_meta": {
+    "title": "taxonomy — minimal fixture",
+    "post_id": 1,
+    "post_type": "post-imgcap",
+    "fixture_purpose": "Both variants of the taxonomy block. The standalone harness has no WordPress, so there are no terms to read — which is the degradation path under test: the block must render NOTHING rather than an empty chip row."
+  },
+  "blocks": [
+    { "type": "wysiwyg", "id": "intro", "html": "<p>Two taxonomy blocks follow; with no WP to read terms from, neither renders.</p>" },
+    { "type": "taxonomy", "id": "t_chips" },
+    { "type": "taxonomy", "id": "t_inline", "variant": "inline", "title": "Filed under" },
+    { "type": "wysiwyg", "id": "outro", "html": "<p>End.</p>" }
+  ]
+}
