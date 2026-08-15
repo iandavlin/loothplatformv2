@@ -85,10 +85,11 @@
    and the dark panel stays dark for a light-themed one.  Ian sees both, in one
    page, whatever his own setting is.
 
-   Everything the panel renders is token-driven product CSS (.rcard reads
+   NEARLY everything the panel renders is token-driven product CSS (.rcard reads
    --lg-card-bg / --lg-ink / --lg-mute / --lg-rust / --fp-img-ph; .badge--kind
    reads --fp-badge-kind-bg), so re-pointing the tokens reproduces the real
-   rendering rather than approximating it.  The one exception is .badge--public
+   rendering rather than approximating it. The exceptions are handled explicitly
+   below — see the .dcard block, which tokens cannot reach.  The one exception is .badge--public
    / .badge--lite, which hardcode light greens in archive.css with no dark
    re-point of their own — they are shown here exactly as the platform would
    show them, not quietly corrected.
@@ -144,6 +145,25 @@ html[data-mock-theme="dark"] body#wkpanel {
   --fp-cta-hover-bg: #c3d6a8 !important;
   color-scheme: dark;
 }
+
+/* ── THE TWO CONTAINERS THAT TOKENS ALONE DO NOT REACH ────────────────────
+   Verbatim from archive.css:3213-3215, and required, not optional. Almost all
+   of the front page is token-driven, which is why re-pointing tokens on this
+   panel's body reproduces the real dark rendering — but .dcard and
+   .lg-bento__weekly HARDCODE a light background (`.dcard{background:#faf8f2}`),
+   so archive.css fixes them with an explicit rule gated on the THEME ATTRIBUTE
+   rather than on a token. This panel deliberately does not stamp that attribute
+   (see the script above), so without these two lines the fix never fires.
+
+   MEASURED, and it is exactly the failure archive.css's own comment predicts —
+   "they stayed light in dark mode (and their token-driven text auto-lightened
+   -> invisible)": the forum cards came back at 1.04:1, #f2f4ee title on #faf8f2,
+   i.e. white on white. Reproduced in the mock only; production stamps the
+   attribute and is fine. Caught by the contrast probe on the run that added the
+   forum section — a look at the dark panel would have shown two blank cards and
+   I would have gone hunting for a layout bug. */
+html[data-mock-theme="dark"] body#wkpanel .dcard,
+html[data-mock-theme="dark"] body#wkpanel .lg-bento__weekly { background: var(--lg-card-bg); }
 
 /* ── panel framing (mock-only: this is the slice of front page on show) ──── */
 html, body { margin: 0; }
@@ -456,6 +476,48 @@ html[data-mock-theme="dark"] .wkfr__mast { background: #241d14; border-bottom: 1
               <div class="rcard__meta"><span class="author">James Roadman</span>
               <span>Jul 12, 2026</span></div>
               <div class="rcard__foot"><span class="badge badge--public">Public</span><span class="badge badge--kind">Articles</span></div>
+            </div>
+          </a>
+
+        </div>
+      <!-- ── THE FORUM SECTION — added 2026-08-15 after the store study, because
+              the mock was WRONG WITHOUT IT.  The live August 10 issue carries a
+              "From The Forum" section of two topics, and the first draft of this
+              panel showed only videos/loothprints/articles: Ian would have been
+              deciding from a picture of a block narrower than the one he'd get.
+
+              These are the REAL two topics from that issue (forums.topic 72509
+              and 72559, measured on live), rendered with the front page's own
+              .dcard — which is what they must use, because forum topics are NOT
+              in discovery.content_item and .rcard would never find them.
+              Both are tier_gate 'public', so the excerpt shows: that is the real
+              state, not a convenience. ─────────────────────────────────────── -->
+        <div class="wkiss__sec">From the forum</div>
+        <div class="rail">
+
+          <a class="dcard" href="#">
+            <div class="dcard__head">
+              <span class="dcard__avatar dcard__avatar--ph" aria-hidden="true">J</span>
+              <span class="dcard__author">Jonathan Scott Chisels &amp; Picks</span>
+            </div>
+            <h3 class="dcard__title">L.R. Baggs Anthem Installation in a GS Mini</h3>
+            <p class="dcard__excerpt">Hey everyone, I was showing this to James Roadman on the Loothalong, and I thought I&rsquo;d share it here with anyone who might find it helpful.</p>
+            <div class="dcard__foot">
+              <span class="dcard__replies">&#128172; 3 replies</span>
+              <span class="dcard__badge dcard__badge--active">Active &middot; 2d</span>
+            </div>
+          </a>
+
+          <a class="dcard" href="#">
+            <div class="dcard__head">
+              <span class="dcard__avatar dcard__avatar--ph" aria-hidden="true">K</span>
+              <span class="dcard__author">Kalimar Maia</span>
+            </div>
+            <h3 class="dcard__title">Fretboard summit approacheth&hellip;</h3>
+            <p class="dcard__excerpt">Who&rsquo;s going to Fretboard Summit this year? I&rsquo;d love to meet you! I&rsquo;ll be wearing my trusty Looth Group hat for easy identification.</p>
+            <div class="dcard__foot">
+              <span class="dcard__replies">&#128172; 1 reply</span>
+              <span class="dcard__badge dcard__badge--active">Active &middot; 4d</span>
             </div>
           </a>
 
