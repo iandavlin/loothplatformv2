@@ -276,6 +276,50 @@ surface — excluded, leaving ~114 for this wave.
 **The login family is now clear**: signin, lostpassword, bpnoaccess, join and
 lgjoin all read 0 in all four states.
 
+### Root-cause diagnosis: the invisible search inputs (top of the worklist)
+
+Traced all five to source. **It is ONE PATTERN, not one root** — correcting my
+own earlier "plausibly one shared root", which was a guess. Five sites, five
+files, same shape:
+
+| surface | element | source | measured |
+|---|---|---|---|
+| shop | `input#q` | `fast-follow/loothtool-shop/shop-page-index.html:50` | `#0b2528` on `#0b2528` |
+| directory (desktop) | `#dir-loc` | `webroot/directory-desktop.js:130` | `#ffffff` on `#ffffff` |
+| directory (mobile) | `.lgdm-loc-input` | `webroot/directory-mobile.js:623` | `#1e2124` on `#1e2124` |
+| events | `.lgev-input` | `webroot/events-mobile.js:56` | `#222629` on `#1e2124` |
+| hub, hub-door | `.hub-tsearch__in` | `bb-mirror/web/forums.css:4141,4848` | `#222629` on `#262b30` |
+
+**The shape:** every one of these inputs sets `background: transparent` (or
+`none`) — often `!important` — and pairs it with an ink value chosen for the
+LIGHT theme (`color:#1a1d1a!important`, `color:var(--lg-ink,#323532)`,
+`color:var(--t-ink)!important`). The input therefore shows the *wrapper's* dark
+background through it while its own ink stays the light-theme value. Dark ink,
+dark fill, ratio ~1.
+
+`input#q` is the extreme case: foreground and background measure the **identical
+hex**, `#0b2528`. That is not low contrast, it is invisible — the wrapper's
+`var(--card)` and the ink's `var(--t-ink)` resolve to the same colour on that
+page.
+
+**Why a transparent background is the trap:** it decouples the ink from the
+surface it actually lands on. A normal input with its own `background` would
+have been caught by any "does this pair clear AA" check on the element itself;
+these only fail once you resolve the *effective* background by walking
+ancestors, which is exactly what the sweep's probe does and what a hand review
+does not.
+
+**Fix shape:** each site needs a dark-theme ink, scoped the way that file
+already scopes its dark rules (`html[data-lguser-theme="dark"]` in the webroot
+JS files; the shop page needs its own token to become theme-aware). Do NOT
+"fix" it by giving the inputs opaque backgrounds — the transparency is
+deliberate design (the wrapper draws the field), and changing it would alter the
+look on both themes.
+
+**Not started.** The diagnosis is complete and measured; the edit is five files
+and wants its own flag + per-state proof, same discipline as
+`LG_DARK_ONBOARD_SUBTEXT_FIX`.
+
 ## Next
 
 The ranked wave list (110+ remaining) is the standing charter — badness order,
