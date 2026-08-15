@@ -134,7 +134,24 @@ Recording rather than silently skipping or silently widening scope:
      floats over the always-light OSM tile — see `directory-desktop.js`). Its
      fix is a LIGHT-mode border, not a dark one. Nearly "fixed" in wave 1 and
      correctly left alone; do not regress that.
-3. **The avatar initials palette fails regardless of theme.**
+3. **A DEFECT CLASS, found three times — hardcoded palettes that fail in BOTH
+   themes.** Each instance below is a near-white foreground on a hardcoded
+   mid-tone fill with no dark variant, so it renders identically light and dark
+   and fixing it under a dark-mode flag would mislabel it. By the craft law
+   (`docs/CRAFT-STANDARD.md`: a class found twice becomes a gate) this now
+   wants encoding — but it is NOT dark-mode work, so it is not this lane's to
+   take unilaterally. **Question posted to keeper; see `.lane-state/QUESTION`.**
+   - `bb_mirror_avatar()` (`bb-mirror/web/forums/_reply-render.php`): 8-colour
+     palette picked by `crc32($slug)`, written as an INLINE style. White text
+     fails on 3 of 8 — `#c66845` 3.84:1, `#87986a` 3.12:1, `#a0714f` 4.23:1.
+   - `webroot/loothalong.js:170`: crew avatars `avatar('#6b7c52')`,
+     `('#c66845')`, `('#b98a3e')`, `('#7d8a5c')` under a near-white icon
+     (`fill:rgba(251,251,248,.95)`). `#b98a3e` = **2.85:1** against the 3:1
+     icon bar. Selector prefix is `'#' + EL_ID` — an id, not a theme scope,
+     confirming it is theme-independent.
+   - The PWA install button, same story from the other side: this lane fixed
+     its DARK half (2.29:1); its LIGHT half still fails at 3.12:1.
+4. **The avatar initials palette fails regardless of theme.**
    `bb_mirror_avatar()` (`bb-mirror/web/forums/_reply-render.php`) picks from a
    hardcoded 8-colour palette via `crc32($slug)` and writes it as an INLINE
    style, so there is no dark variant — it renders identically in both themes.
